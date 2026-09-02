@@ -1,0 +1,19 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+allowBuilds:
+  # esbuild télécharge son binaire natif via un script d'installation officiel — nécessaire, sans danger.
+  esbuild: true
+
+minimumReleaseAgeExclude:
+  - '@supabase/auth-js@2.114.0'
+  - '@supabase/functions-js@2.114.0'
+  - '@supabase/postgrest-js@2.114.0'
+  - '@supabase/realtime-js@2.114.0'
+  - '@supabase/storage-js@2.114.0'
+  - '@supabase/supabase-js@2.114.0'
+
+# Requis pour Expo/React Native : certains modules natifs ne résolvent pas
+# correctement avec le mode d'isolation strict par défaut de pnpm.
+nodeLinker: hoisted

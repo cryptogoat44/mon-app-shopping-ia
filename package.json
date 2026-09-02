@@ -1,0 +1,12 @@
+{
+  "name": "mon-app-shopping-ia",
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "backend:dev": "pnpm --filter backend dev",
+    "mobile:start": "pnpm --filter mobile start"
+  }
+}
