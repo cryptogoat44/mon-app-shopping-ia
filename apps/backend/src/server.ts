@@ -8,6 +8,9 @@ import meRoutes from "./routes/me.js";
 import searchesRoutes from "./routes/searches.js";
 import productMatchesRoutes from "./routes/productMatches.js";
 import vaultRoutes from "./routes/vault.js";
+import usersRoutes from "./routes/users.js";
+import followsRoutes from "./routes/follows.js";
+import postsRoutes from "./routes/posts.js";
 
 const fastify = Fastify({ logger: true });
 
@@ -19,6 +22,9 @@ await fastify.register(meRoutes);
 await fastify.register(searchesRoutes);
 await fastify.register(productMatchesRoutes);
 await fastify.register(vaultRoutes);
+await fastify.register(usersRoutes);
+await fastify.register(followsRoutes);
+await fastify.register(postsRoutes);
 
 fastify.get("/health", async () => ({ status: "ok" }));
 

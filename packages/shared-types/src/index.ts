@@ -84,3 +84,44 @@ export interface UpdateVaultItemRequest {
   category?: VaultCategory;
   privacy?: PrivacyLevel;
 }
+
+export interface PublicProfile {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  isFollowing: boolean;
+}
+
+export type PostType = "lifestyle" | "purchase";
+
+export interface PostAuthor {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+export interface PostVaultItem {
+  id: string;
+  title: string;
+  verified: boolean;
+}
+
+export interface Post {
+  id: string;
+  type: PostType;
+  caption: string | null;
+  mediaUrl: string;
+  privacy: PrivacyLevel;
+  createdAt: string;
+  author: PostAuthor;
+  vaultItem: PostVaultItem | null;
+  reactionCount: number;
+  viewerHasReacted: boolean;
+}
+
+export interface ReactToPostResponse {
+  reactionCount: number;
+  viewerHasReacted: boolean;
+}

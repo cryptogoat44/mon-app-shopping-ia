@@ -3,8 +3,8 @@ import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Tex
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { PrivacyLevel, VaultItem } from "@monapp/shared-types";
-import { ChipSelector, FormError } from "@/components/form";
-import { ApiError, deleteVaultItem, fetchVaultItem, updateVaultItem } from "@/lib/api";
+import { ChipSelector, FormError, PrimaryButton } from "@/components/form";
+import { ApiError, deleteVaultItem, fetchVaultItem, sharePurchasePost, updateVaultItem } from "@/lib/api";
 import { PRIVACY_LABELS, PRIVACY_LEVELS, VAULT_CATEGORY_LABELS } from "@/lib/vault-labels";
 import { theme } from "@/lib/theme";
 
@@ -15,6 +15,8 @@ export default function VaultItemDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [shared, setShared] = useState(false);
 
   useEffect(() => {
     fetchVaultItem(id)
@@ -33,6 +35,20 @@ export default function VaultItemDetailScreen() {
       setError(e instanceof ApiError ? e.message : "La mise à jour a échoué.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleShare() {
+    if (!item) return;
+    setSharing(true);
+    setError(null);
+    try {
+      await sharePurchasePost(item.id);
+      setShared(true);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Le partage a échoué.");
+    } finally {
+      setSharing(false);
     }
   }
 
@@ -86,6 +102,12 @@ export default function VaultItemDetailScreen() {
           options={PRIVACY_LEVELS}
           labels={PRIVACY_LABELS}
           onChange={handlePrivacyChange}
+        />
+
+        <PrimaryButton
+          label={shared ? "Partagé dans le fil ✓" : sharing ? "Partage…" : "Partager dans mon fil"}
+          onPress={handleShare}
+          disabled={sharing || shared}
         />
 
         {!confirmingDelete ? (

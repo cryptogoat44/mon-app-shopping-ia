@@ -1,9 +1,12 @@
 import type {
   ApiErrorBody,
   CreateSearchRequest,
+  Post,
   Profile,
   ProductMatchClickResponse,
   ProductSearch,
+  PublicProfile,
+  ReactToPostResponse,
   UpdateMeRequest,
   UpdateVaultItemRequest,
   VaultCategory,
@@ -161,4 +164,51 @@ export async function updateVaultItem(id: string, payload: UpdateVaultItemReques
 
 export async function deleteVaultItem(id: string): Promise<void> {
   await authorizedFetch(`/api/vault/${id}`, { method: "DELETE" });
+}
+
+export async function searchUsers(query: string): Promise<PublicProfile[]> {
+  const response = await authorizedFetch(`/api/users/search?q=${encodeURIComponent(query)}`);
+  return response.json();
+}
+
+export async function followUser(userId: string): Promise<void> {
+  await authorizedFetch(`/api/follows/${userId}`, { method: "POST" });
+}
+
+export async function unfollowUser(userId: string): Promise<void> {
+  await authorizedFetch(`/api/follows/${userId}`, { method: "DELETE" });
+}
+
+export async function fetchFeed(): Promise<Post[]> {
+  const response = await authorizedFetch("/api/feed");
+  return response.json();
+}
+
+export async function createLifestylePost(params: {
+  caption: string;
+  imageUri: string;
+  privacy?: string;
+}): Promise<Post> {
+  const formData = new FormData();
+  formData.append("type", "lifestyle");
+  if (params.caption) formData.append("caption", params.caption);
+  if (params.privacy) formData.append("privacy", params.privacy);
+  appendImageFile(formData, "file", params.imageUri);
+
+  const response = await authorizedFetch("/api/posts", { method: "POST", body: formData });
+  return response.json();
+}
+
+export async function sharePurchasePost(vaultItemId: string): Promise<Post> {
+  const formData = new FormData();
+  formData.append("type", "purchase");
+  formData.append("vaultItemId", vaultItemId);
+
+  const response = await authorizedFetch("/api/posts", { method: "POST", body: formData });
+  return response.json();
+}
+
+export async function reactToPost(postId: string): Promise<ReactToPostResponse> {
+  const response = await authorizedFetch(`/api/posts/${postId}/react`, { method: "POST" });
+  return response.json();
 }
