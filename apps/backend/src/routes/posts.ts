@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Post, PostType, PrivacyLevel } from "@monapp/shared-types";
+import { isFileTooLargeError } from "../lib/multipartErrors.js";
 
 const POST_TYPES: PostType[] = ["lifestyle", "purchase"];
 const PRIVACY_LEVELS: PrivacyLevel[] = ["public", "followers", "private"];
@@ -122,13 +123,20 @@ export default async function postsRoutes(fastify: FastifyInstance) {
     let fileBuffer: Buffer | null = null;
     let fileMimetype: string | null = null;
 
-    for await (const part of request.parts()) {
-      if (part.type === "file") {
-        fileBuffer = await part.toBuffer();
-        fileMimetype = part.mimetype;
-      } else {
-        fields[part.fieldname] = String(part.value);
+    try {
+      for await (const part of request.parts()) {
+        if (part.type === "file") {
+          fileBuffer = await part.toBuffer();
+          fileMimetype = part.mimetype;
+        } else {
+          fields[part.fieldname] = String(part.value);
+        }
       }
+    } catch (error) {
+      if (isFileTooLargeError(error)) {
+        return reply.code(413).send({ error: "file_too_large", message: "Le fichier est trop volumineux (10 Mo maximum)." });
+      }
+      throw error;
     }
 
     const type = fields.type as PostType | undefined;
@@ -139,6 +147,10 @@ export default async function postsRoutes(fastify: FastifyInstance) {
     let mediaUrl: string;
     let vaultItemId: string | null = null;
     let caption = fields.caption?.trim() || null;
+
+    if (caption && caption.length > 280) {
+      return reply.code(400).send({ error: "invalid_body", message: "Le texte est trop long (280 caractères maximum)." });
+    }
 
     if (type === "purchase") {
       vaultItemId = fields.vaultItemId ?? null;

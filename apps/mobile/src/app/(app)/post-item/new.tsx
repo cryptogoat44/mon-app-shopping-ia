@@ -73,6 +73,7 @@ export default function NewPostScreen() {
           onChangeText={setCaption}
           autoCapitalize="sentences"
           multiline
+          maxLength={280}
         />
 
         <ChipSelector

@@ -33,6 +33,9 @@ interface SerpApiLensResponse {
 
 const SERPAPI_ENDPOINT = "https://serpapi.com/search";
 const MAX_MATCHES = 8;
+// SerpApi lente ou muette ne doit jamais laisser une recherche bloquée en
+// "processing" indéfiniment côté mobile.
+const SERPAPI_TIMEOUT_MS = 15_000;
 
 /** Interroge Google Lens (via SerpApi) à partir d'une image publiquement
  * accessible et renvoie une liste normalisée de produits candidats. */
@@ -43,7 +46,9 @@ export async function searchProductsByImageUrl(imageUrl: string): Promise<Visual
     api_key: env.SERPAPI_KEY,
   });
 
-  const response = await fetch(`${SERPAPI_ENDPOINT}?${params.toString()}`);
+  const response = await fetch(`${SERPAPI_ENDPOINT}?${params.toString()}`, {
+    signal: AbortSignal.timeout(SERPAPI_TIMEOUT_MS),
+  });
   if (!response.ok) {
     throw new Error(`SerpApi a répondu ${response.status}`);
   }

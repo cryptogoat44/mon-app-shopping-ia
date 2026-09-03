@@ -56,8 +56,15 @@ export default function CompleteProfileScreen() {
 
         <FormError message={error} />
 
-        <FormField label="Nom d'utilisateur" placeholder="ex. camille_l" value={username} onChangeText={setUsername} />
-        <FormField label="Nom affiché" placeholder="ex. Camille L." value={displayName} onChangeText={setDisplayName} autoCapitalize="words" />
+        <FormField label="Nom d'utilisateur" placeholder="ex. camille_l" value={username} onChangeText={setUsername} maxLength={20} />
+        <FormField
+          label="Nom affiché"
+          placeholder="ex. Camille L."
+          value={displayName}
+          onChangeText={setDisplayName}
+          autoCapitalize="words"
+          maxLength={60}
+        />
 
         <PrimaryButton
           label={submitting ? "Enregistrement…" : "Continuer"}

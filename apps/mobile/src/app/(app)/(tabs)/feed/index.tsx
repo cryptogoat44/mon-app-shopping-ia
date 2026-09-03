@@ -76,7 +76,10 @@ export default function FeedScreen() {
       let cancelled = false;
       fetchFeed()
         .then((data) => {
-          if (!cancelled) setPosts(data);
+          if (!cancelled) {
+            setPosts(data);
+            setError(null);
+          }
         })
         .catch((e) => {
           if (!cancelled) setError(e instanceof ApiError ? e.message : "Impossible de charger le fil.");

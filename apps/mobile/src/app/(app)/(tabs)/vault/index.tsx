@@ -41,7 +41,10 @@ export default function VaultScreen() {
       let cancelled = false;
       fetchVault()
         .then((data) => {
-          if (!cancelled) setItems(data);
+          if (!cancelled) {
+            setItems(data);
+            setError(null);
+          }
         })
         .catch((e) => {
           if (!cancelled) setError(e instanceof ApiError ? e.message : "Impossible de charger le vault.");

@@ -71,7 +71,14 @@ export default function NewVaultItemScreen() {
           )}
         </Pressable>
 
-        <FormField label="Titre" placeholder="ex. Montre en acier" value={title} onChangeText={setTitle} autoCapitalize="sentences" />
+        <FormField
+          label="Titre"
+          placeholder="ex. Montre en acier"
+          value={title}
+          onChangeText={setTitle}
+          autoCapitalize="sentences"
+          maxLength={120}
+        />
 
         <ChipSelector
           label="Catégorie"

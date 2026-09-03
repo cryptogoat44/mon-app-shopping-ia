@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { PlatformSource, ProductSearch, RecognitionMethod, SearchStatus } from "@monapp/shared-types";
 import { detectPlatform, fetchOfficialThumbnail } from "../services/oembed.js";
 import { searchProductsByImageUrl, type VisualMatch } from "../services/visualSearch.js";
+import { isFileTooLargeError } from "../lib/multipartErrors.js";
 
 const createSearchSchema = z.object({
   sourceUrl: z.string().url(),
@@ -214,7 +215,15 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: "invalid_file", message: "Merci d'envoyer une image." });
     }
 
-    const buffer = await file.toBuffer();
+    let buffer: Buffer;
+    try {
+      buffer = await file.toBuffer();
+    } catch (error) {
+      if (isFileTooLargeError(error)) {
+        return reply.code(413).send({ error: "file_too_large", message: "Le fichier est trop volumineux (10 Mo maximum)." });
+      }
+      throw error;
+    }
     const extension = file.mimetype.split("/")[1] ?? "jpg";
     const storagePath = `${userId}/${id}.${extension}`;
 

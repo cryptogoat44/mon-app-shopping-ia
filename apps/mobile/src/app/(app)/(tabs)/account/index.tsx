@@ -36,6 +36,7 @@ async function shareExportedData(data: unknown) {
 export default function AccountScreen() {
   const { profile, signOut } = useAuth();
   const [consents, setConsents] = useState<ConsentStatus[] | null>(null);
+  const [consentsFailed, setConsentsFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -43,9 +44,10 @@ export default function AccountScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      setConsentsFailed(false);
       fetchConsentStatus()
         .then(setConsents)
-        .catch(() => {});
+        .catch(() => setConsentsFailed(true));
     }, [])
   );
 
@@ -93,7 +95,9 @@ export default function AccountScreen() {
           <Text style={styles.sectionBody}>
             {termsGrantedAt
               ? `Conditions d'Utilisation acceptées le ${formatDate(termsGrantedAt)}.`
-              : "Statut du consentement en cours de chargement…"}
+              : consentsFailed
+                ? "Statut du consentement indisponible pour le moment."
+                : "Statut du consentement en cours de chargement…"}
           </Text>
           <Pressable onPress={handleExport} disabled={exporting} hitSlop={4}>
             <Text style={styles.link}>{exporting ? "Préparation de l'export…" : "Exporter mes données"}</Text>

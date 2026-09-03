@@ -2,6 +2,7 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { Link } from "expo-router";
 import { Checkbox, FormError, FormField, PrimaryButton } from "@/components/form";
+import { translateAuthError } from "@/lib/auth-errors";
 import { supabase } from "@/lib/supabase";
 import { theme } from "@/lib/theme";
 
@@ -35,7 +36,7 @@ export default function SignUpScreen() {
     setSubmitting(false);
 
     if (signUpError) {
-      setError(signUpError.message);
+      setError(translateAuthError(signUpError.message));
       return;
     }
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { Link } from "expo-router";
 import { FormError, FormField, PrimaryButton } from "@/components/form";
+import { translateAuthError } from "@/lib/auth-errors";
 import { supabase } from "@/lib/supabase";
 import { theme } from "@/lib/theme";
 
@@ -18,11 +19,7 @@ export default function SignInScreen() {
     setSubmitting(false);
 
     if (signInError) {
-      setError(
-        signInError.message === "Invalid login credentials"
-          ? "Email ou mot de passe incorrect."
-          : signInError.message
-      );
+      setError(translateAuthError(signInError.message));
     }
     // Si succès : onAuthStateChange met à jour la session, le layout racine redirige automatiquement.
   }

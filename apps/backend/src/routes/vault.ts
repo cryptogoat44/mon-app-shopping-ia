@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { PrivacyLevel, VaultCategory, VaultItem } from "@monapp/shared-types";
+import { isFileTooLargeError } from "../lib/multipartErrors.js";
 
 const VAULT_CATEGORIES: VaultCategory[] = [
   "clothing",
@@ -92,13 +93,20 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
     let fileBuffer: Buffer | null = null;
     let fileMimetype: string | null = null;
 
-    for await (const part of request.parts()) {
-      if (part.type === "file") {
-        fileBuffer = await part.toBuffer();
-        fileMimetype = part.mimetype;
-      } else {
-        fields[part.fieldname] = String(part.value);
+    try {
+      for await (const part of request.parts()) {
+        if (part.type === "file") {
+          fileBuffer = await part.toBuffer();
+          fileMimetype = part.mimetype;
+        } else {
+          fields[part.fieldname] = String(part.value);
+        }
       }
+    } catch (error) {
+      if (isFileTooLargeError(error)) {
+        return reply.code(413).send({ error: "file_too_large", message: "Le fichier est trop volumineux (10 Mo maximum)." });
+      }
+      throw error;
     }
 
     const title = fields.title?.trim();
@@ -106,6 +114,9 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
 
     if (!title || !category || !VAULT_CATEGORIES.includes(category)) {
       return reply.code(400).send({ error: "invalid_body", message: "Titre et catégorie sont obligatoires." });
+    }
+    if (title.length > 120) {
+      return reply.code(400).send({ error: "invalid_body", message: "Le titre est trop long (120 caractères maximum)." });
     }
 
     if (!fileBuffer && !fields.imageUrl) {

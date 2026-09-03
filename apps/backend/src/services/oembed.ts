@@ -18,9 +18,14 @@ interface OEmbedResult {
   thumbnailUrl: string;
 }
 
+// Un service oEmbed externe lent ou muet ne doit jamais bloquer une
+// recherche indéfiniment — au-delà de ce délai on abandonne et on retombe
+// sur le repli "capture manuelle" comme pour toute autre erreur.
+const OEMBED_TIMEOUT_MS = 8_000;
+
 async function fetchTikTokOEmbed(sourceUrl: string): Promise<OEmbedResult | null> {
   const endpoint = `https://www.tiktok.com/oembed?url=${encodeURIComponent(sourceUrl)}`;
-  const response = await fetch(endpoint);
+  const response = await fetch(endpoint, { signal: AbortSignal.timeout(OEMBED_TIMEOUT_MS) });
   if (!response.ok) return null;
 
   const data = (await response.json()) as { thumbnail_url?: string };
@@ -33,7 +38,7 @@ async function fetchInstagramOEmbed(sourceUrl: string): Promise<OEmbedResult | n
   if (!env.META_OEMBED_ACCESS_TOKEN) return null;
 
   const endpoint = `https://graph.facebook.com/v21.0/instagram_oembed?url=${encodeURIComponent(sourceUrl)}&access_token=${env.META_OEMBED_ACCESS_TOKEN}`;
-  const response = await fetch(endpoint);
+  const response = await fetch(endpoint, { signal: AbortSignal.timeout(OEMBED_TIMEOUT_MS) });
   if (!response.ok) return null;
 
   const data = (await response.json()) as { thumbnail_url?: string };

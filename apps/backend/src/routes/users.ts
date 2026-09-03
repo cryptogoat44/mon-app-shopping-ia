@@ -22,21 +22,44 @@ export default async function usersRoutes(fastify: FastifyInstance) {
 
     const userId = request.user!.id;
     const query = parsed.data.q.toLowerCase();
+    const pattern = `%${query}%`;
 
-    const { data: profiles, error } = await fastify.supabaseAdmin
-      .from("profiles")
-      .select("id, username, display_name, avatar_url")
-      .not("username", "is", null)
-      .neq("id", userId)
-      .or(`username.ilike.%${query}%,display_name.ilike.%${query}%`)
-      .limit(20);
+    // Deux requêtes séparées et paramétrées plutôt qu'un .or() construit par
+    // interpolation de chaîne : la syntaxe de filtre PostgREST donne un sens
+    // spécial à la virgule et aux parenthèses, donc injecter le texte tapé
+    // par l'utilisateur directement dedans permettrait de manipuler le
+    // filtre plutôt que de simplement chercher ce texte.
+    const [byUsername, byDisplayName] = await Promise.all([
+      fastify.supabaseAdmin
+        .from("profiles")
+        .select("id, username, display_name, avatar_url")
+        .not("username", "is", null)
+        .neq("id", userId)
+        .ilike("username", pattern)
+        .limit(20),
+      fastify.supabaseAdmin
+        .from("profiles")
+        .select("id, username, display_name, avatar_url")
+        .not("username", "is", null)
+        .neq("id", userId)
+        .ilike("display_name", pattern)
+        .limit(20),
+    ]);
 
-    if (error) {
-      request.log.error({ error }, "Échec de recherche de profils");
+    if (byUsername.error || byDisplayName.error) {
+      request.log.error({ error: byUsername.error ?? byDisplayName.error }, "Échec de recherche de profils");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    const rows = (profiles as ProfileRow[]) ?? [];
+    const seen = new Set<string>();
+    const rows: ProfileRow[] = [];
+    for (const row of [...(byUsername.data ?? []), ...(byDisplayName.data ?? [])] as ProfileRow[]) {
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      rows.push(row);
+      if (rows.length >= 20) break;
+    }
+
     const profileIds = rows.map((p) => p.id);
 
     let followingIds = new Set<string>();
