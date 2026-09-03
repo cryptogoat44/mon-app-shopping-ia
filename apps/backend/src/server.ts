@@ -7,6 +7,7 @@ import authPlugin from "./plugins/auth.js";
 import meRoutes from "./routes/me.js";
 import searchesRoutes from "./routes/searches.js";
 import productMatchesRoutes from "./routes/productMatches.js";
+import vaultRoutes from "./routes/vault.js";
 
 const fastify = Fastify({ logger: true });
 
@@ -17,6 +18,7 @@ await fastify.register(authPlugin);
 await fastify.register(meRoutes);
 await fastify.register(searchesRoutes);
 await fastify.register(productMatchesRoutes);
+await fastify.register(vaultRoutes);
 
 fastify.get("/health", async () => ({ status: "ok" }));
 

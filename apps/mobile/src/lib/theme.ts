@@ -12,6 +12,8 @@ export const theme = {
     accentInk: "#6B5236",
     danger: "#9C5A3C",
     dangerSoft: "#F3E4DA",
+    verified: "#4B5A43",
+    verifiedSoft: "#E7EBE1",
   },
   space: { xs: 6, sm: 10, md: 16, lg: 24, xl: 36 },
   radius: { md: 10, lg: 14 },

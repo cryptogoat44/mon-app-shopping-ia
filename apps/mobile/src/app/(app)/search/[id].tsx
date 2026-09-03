@@ -14,7 +14,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { ProductMatch, ProductSearch } from "@monapp/shared-types";
 import { PrimaryButton } from "@/components/form";
-import { ApiError, fetchSearch, trackProductMatchClick, uploadSearchScreenshot } from "@/lib/api";
+import { ApiError, addVaultItemFromMatch, fetchSearch, trackProductMatchClick, uploadSearchScreenshot } from "@/lib/api";
 import { theme } from "@/lib/theme";
 
 function formatPrice(match: ProductMatch): string | null {
@@ -26,6 +26,8 @@ function formatPrice(match: ProductMatch): string | null {
 function MatchCard({ match, onError }: { match: ProductMatch; onError: (message: string) => void }) {
   const price = formatPrice(match);
   const [opening, setOpening] = useState(false);
+  const [addingToVault, setAddingToVault] = useState(false);
+  const [addedToVault, setAddedToVault] = useState(false);
 
   async function handleOpen() {
     setOpening(true);
@@ -36,6 +38,23 @@ function MatchCard({ match, onError }: { match: ProductMatch; onError: (message:
       onError("Impossible d'ouvrir ce lien, réessayez.");
     } finally {
       setOpening(false);
+    }
+  }
+
+  async function handleAddToVault() {
+    setAddingToVault(true);
+    try {
+      await addVaultItemFromMatch({
+        title: match.productName.slice(0, 120),
+        imageUrl: match.imageUrl,
+        category: "other",
+        productMatchId: match.id,
+      });
+      setAddedToVault(true);
+    } catch {
+      onError("Impossible d'ajouter au vault, réessayez.");
+    } finally {
+      setAddingToVault(false);
     }
   }
 
@@ -50,9 +69,16 @@ function MatchCard({ match, onError }: { match: ProductMatch; onError: (message:
           {match.merchantName ? <Text style={styles.cardMeta}>{match.merchantName}</Text> : null}
           {price ? <Text style={styles.cardPrice}>{price}</Text> : null}
         </View>
-        <Pressable onPress={handleOpen} disabled={opening} hitSlop={4}>
-          <Text style={styles.cardLink}>{opening ? "Ouverture…" : "Voir chez le marchand →"}</Text>
-        </Pressable>
+        <View style={styles.cardActions}>
+          <Pressable onPress={handleOpen} disabled={opening} hitSlop={4}>
+            <Text style={styles.cardLink}>{opening ? "Ouverture…" : "Voir chez le marchand →"}</Text>
+          </Pressable>
+          <Pressable onPress={handleAddToVault} disabled={addingToVault || addedToVault} hitSlop={4}>
+            <Text style={styles.cardVaultLink}>
+              {addedToVault ? "Ajouté ✓" : addingToVault ? "Ajout…" : "+ Vault"}
+            </Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -171,7 +197,7 @@ export default function SearchResultScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.color.ground },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
-  content: { padding: theme.space.lg, paddingBottom: theme.space.xl },
+  content: { padding: theme.space.lg, paddingBottom: theme.space.xl, maxWidth: 480, alignSelf: "center", width: "100%" },
   back: { marginBottom: theme.space.lg },
   backLabel: { color: theme.color.accentInk, fontSize: theme.font.small },
   title: { fontSize: theme.font.title, fontWeight: "700", color: theme.color.ink, marginBottom: theme.space.sm },
@@ -208,5 +234,7 @@ const styles = StyleSheet.create({
   cardMetaRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: theme.space.xs },
   cardMeta: { fontSize: theme.font.small, color: theme.color.muted },
   cardPrice: { fontSize: theme.font.small, color: theme.color.ink, fontWeight: "600" },
+  cardActions: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   cardLink: { fontSize: theme.font.small, color: theme.color.accentInk },
+  cardVaultLink: { fontSize: theme.font.small, color: theme.color.muted, fontWeight: "600" },
 });

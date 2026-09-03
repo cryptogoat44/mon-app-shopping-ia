@@ -65,3 +65,22 @@ export interface CreateSearchRequest {
 export interface ProductMatchClickResponse {
   url: string;
 }
+
+export type VaultCategory = "clothing" | "watches" | "accessories" | "shoes" | "bags" | "home" | "other";
+
+export interface VaultItem {
+  id: string;
+  title: string;
+  imageUrl: string;
+  category: VaultCategory;
+  privacy: PrivacyLevel;
+  verified: boolean;
+  productMatchId: string | null;
+  createdAt: string;
+}
+
+export interface UpdateVaultItemRequest {
+  title?: string;
+  category?: VaultCategory;
+  privacy?: PrivacyLevel;
+}

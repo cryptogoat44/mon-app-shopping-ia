@@ -80,6 +80,13 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: theme.font.small, color: theme.color.accentInk, letterSpacing: 0.3, marginBottom: theme.space.xs },
   title: { fontSize: theme.font.title, fontWeight: "700", color: theme.color.ink },
   logout: { fontSize: theme.font.small, color: theme.color.muted },
-  content: { flex: 1, justifyContent: "center", paddingHorizontal: theme.space.lg },
+  content: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: theme.space.lg,
+    maxWidth: 480,
+    alignSelf: "center",
+    width: "100%",
+  },
   subtitle: { fontSize: theme.font.body, color: theme.color.muted, marginBottom: theme.space.lg },
 });

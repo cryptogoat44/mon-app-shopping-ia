@@ -49,6 +49,40 @@ export function LinkButton({ label, onPress }: { label: string; onPress: () => v
   );
 }
 
+export function ChipSelector<T extends string>({
+  label,
+  value,
+  options,
+  labels,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: readonly T[];
+  labels: Record<T, string>;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.label}>{label}</Text>
+      <View style={styles.chipRow}>
+        {options.map((option) => {
+          const selected = option === value;
+          return (
+            <Pressable
+              key={option}
+              onPress={() => onChange(option)}
+              style={[styles.chip, selected ? styles.chipSelected : null]}
+            >
+              <Text style={[styles.chipLabel, selected ? styles.chipLabelSelected : null]}>{labels[option]}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 export function FormError({ message }: { message: string | null }) {
   if (!message) return null;
   return (
@@ -96,4 +130,16 @@ const styles = StyleSheet.create({
     marginBottom: theme.space.md,
   },
   bannerText: { color: theme.color.danger, fontSize: theme.font.small },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.space.xs },
+  chip: {
+    borderWidth: 1,
+    borderColor: theme.color.line,
+    backgroundColor: theme.color.surface,
+    borderRadius: 100,
+    paddingHorizontal: theme.space.md,
+    paddingVertical: 8,
+  },
+  chipSelected: { backgroundColor: theme.color.ink, borderColor: theme.color.ink },
+  chipLabel: { fontSize: theme.font.small, color: theme.color.ink },
+  chipLabelSelected: { color: theme.color.ground, fontWeight: "600" },
 });
