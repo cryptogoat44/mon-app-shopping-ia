@@ -6,7 +6,7 @@ reviendra de temps en temps).
 
 > **Déjà fait pour vous** (session du 2026-09-03) : le projet Supabase
 > `mon-app-shopping-ia` est créé (compte `aifans1.0@outlook.fr`, région
-> `eu-west-1`), les migrations `0001` à `0004` sont exécutées, un compte
+> `eu-west-1`), les migrations `0001` à `0005` sont exécutées, un compte
 > SerpApi est créé (même compte `aifans1.0@outlook.fr`), et les fichiers
 > `.env` sont remplis (Supabase + SerpApi). Les étapes 1 à 3 ci-dessous ne
 > sont donc à relire que si vous changez de machine ou perdez ces fichiers.
