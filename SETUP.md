@@ -4,6 +4,12 @@ Ce document explique comment faire tourner le projet en local. Vous n'aurez
 à refaire ces étapes qu'une fois (sauf la section "à chaque nouveau bloc" qui
 reviendra de temps en temps).
 
+> **Déjà fait pour vous** (session du 2026-09-03) : le projet Supabase
+> `mon-app-shopping-ia` est créé (compte `aifans1.0@outlook.fr`, région
+> `eu-west-1`), les migrations `0001` et `0002` sont exécutées, et les
+> fichiers `.env` sont remplis. Les étapes 1 à 3 ci-dessous ne sont donc
+> à relire que si vous changez de machine ou perdez ces fichiers.
+
 ## 0. Outils déjà installés sur cette machine
 
 Node.js et pnpm ont été installés via Homebrew pendant la session de mise en
@@ -18,10 +24,10 @@ pnpm -v
 
 1. Allez sur [supabase.com](https://supabase.com) et créez un compte (gratuit pour démarrer).
 2. Cliquez sur **New project**. Choisissez un nom (ex. `mon-app-shopping-ia`), une région proche de vos futurs utilisateurs (Europe), et un mot de passe de base de données que vous conservez précieusement (un gestionnaire de mots de passe, pas un fichier texte).
-3. Une fois le projet créé (1-2 minutes), allez dans **Project Settings > API**. Notez trois valeurs, vous en aurez besoin juste après :
-   - **Project URL**
-   - **anon public key**
-   - **service_role key** (⚠️ à garder strictement secrète — jamais dans l'app mobile)
+3. Une fois le projet créé (1-2 minutes), allez dans **Project Settings > API Keys**. Notez trois valeurs, vous en aurez besoin juste après :
+   - **Project URL** (Project Settings > General > Project ID, sous la forme `https://<project-id>.supabase.co`)
+   - **Publishable key**
+   - **Secret key** (⚠️ à garder strictement secrète — jamais dans l'app mobile)
 
 ## 2. Exécuter le schéma de base de données
 
@@ -43,7 +49,7 @@ cp apps/backend/.env.example apps/backend/.env
 ```
 
 Puis ouvrez `apps/backend/.env` et collez votre `Project URL` et votre
-`service_role key` récupérés à l'étape 1.
+`Secret key` récupérés à l'étape 1.
 
 **Mobile** — créez `apps/mobile/.env` à partir de `apps/mobile/.env.example` :
 
@@ -51,7 +57,7 @@ Puis ouvrez `apps/backend/.env` et collez votre `Project URL` et votre
 cp apps/mobile/.env.example apps/mobile/.env
 ```
 
-Collez votre `Project URL` et votre `anon public key`. Pour `EXPO_PUBLIC_API_URL`,
+Collez votre `Project URL` et votre `Publishable key`. Pour `EXPO_PUBLIC_API_URL`,
 gardez `http://localhost:3000` si vous testez dans le simulateur ou sur le web ;
 si vous testez sur un téléphone physique via l'app Expo Go, remplacez
 `localhost` par l'adresse IP locale de votre ordinateur (visible dans
