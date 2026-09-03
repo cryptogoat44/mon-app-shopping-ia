@@ -11,6 +11,7 @@ import vaultRoutes from "./routes/vault.js";
 import usersRoutes from "./routes/users.js";
 import followsRoutes from "./routes/follows.js";
 import postsRoutes from "./routes/posts.js";
+import accountRoutes from "./routes/account.js";
 
 const fastify = Fastify({ logger: true });
 
@@ -25,6 +26,7 @@ await fastify.register(vaultRoutes);
 await fastify.register(usersRoutes);
 await fastify.register(followsRoutes);
 await fastify.register(postsRoutes);
+await fastify.register(accountRoutes);
 
 fastify.get("/health", async () => ({ status: "ok" }));
 

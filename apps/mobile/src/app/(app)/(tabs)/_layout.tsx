@@ -18,6 +18,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="index" options={{ title: "Rechercher" }} />
       <Tabs.Screen name="feed" options={{ title: "Fil" }} />
       <Tabs.Screen name="vault" options={{ title: "Vault" }} />
+      <Tabs.Screen name="account" options={{ title: "Compte" }} />
     </Tabs>
   );
 }

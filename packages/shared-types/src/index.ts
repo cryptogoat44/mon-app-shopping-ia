@@ -125,3 +125,14 @@ export interface ReactToPostResponse {
   reactionCount: number;
   viewerHasReacted: boolean;
 }
+
+export type ConsentType = "terms" | "privacy_policy" | "marketing_email";
+
+export interface ConsentStatus {
+  type: ConsentType;
+  grantedAt: string | null;
+}
+
+export interface RecordConsentsRequest {
+  types: ConsentType[];
+}

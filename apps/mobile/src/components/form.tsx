@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, TextInput, type TextInputProps, View } from "react-native";
 import { theme } from "@/lib/theme";
 
@@ -83,6 +84,25 @@ export function ChipSelector<T extends string>({
   );
 }
 
+export function Checkbox({
+  checked,
+  onToggle,
+  children,
+}: {
+  checked: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Pressable onPress={onToggle} style={styles.checkboxRow} hitSlop={4}>
+      <View style={[styles.checkboxBox, checked ? styles.checkboxBoxChecked : null]}>
+        {checked ? <Text style={styles.checkboxMark}>✓</Text> : null}
+      </View>
+      <Text style={styles.checkboxLabel}>{children}</Text>
+    </Pressable>
+  );
+}
+
 export function FormError({ message }: { message: string | null }) {
   if (!message) return null;
   return (
@@ -142,4 +162,19 @@ const styles = StyleSheet.create({
   chipSelected: { backgroundColor: theme.color.ink, borderColor: theme.color.ink },
   chipLabel: { fontSize: theme.font.small, color: theme.color.ink },
   chipLabelSelected: { color: theme.color.ground, fontWeight: "600" },
+  checkboxRow: { flexDirection: "row", alignItems: "flex-start", gap: theme.space.sm, marginBottom: theme.space.md },
+  checkboxBox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: theme.color.line,
+    backgroundColor: theme.color.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  checkboxBoxChecked: { backgroundColor: theme.color.ink, borderColor: theme.color.ink },
+  checkboxMark: { color: theme.color.ground, fontSize: 13, fontWeight: "700", lineHeight: 14 },
+  checkboxLabel: { flex: 1, fontSize: theme.font.small, color: theme.color.ink, lineHeight: 18 },
 });

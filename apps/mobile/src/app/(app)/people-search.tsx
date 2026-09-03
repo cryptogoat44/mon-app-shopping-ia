@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import type { PublicProfile } from "@monapp/shared-types";
@@ -49,23 +49,45 @@ export default function PeopleSearchScreen() {
   const [results, setResults] = useState<PublicProfile[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestIdRef = useRef(0);
 
-  async function handleSearch(text: string) {
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  function handleSearch(text: string) {
     setQuery(text);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
     if (!text.trim()) {
       setResults(null);
+      setLoading(false);
       return;
     }
+
     setLoading(true);
     setError(null);
-    try {
-      const data = await searchUsers(text.trim());
-      setResults(data);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "La recherche a échoué.");
-    } finally {
-      setLoading(false);
-    }
+    debounceRef.current = setTimeout(async () => {
+      const thisRequestId = ++requestIdRef.current;
+      try {
+        const data = await searchUsers(text.trim());
+        // Ignore les réponses obsolètes si l'utilisateur a retapé entre-temps.
+        if (thisRequestId === requestIdRef.current) {
+          setResults(data);
+        }
+      } catch (e) {
+        if (thisRequestId === requestIdRef.current) {
+          setError(e instanceof ApiError ? e.message : "La recherche a échoué.");
+        }
+      } finally {
+        if (thisRequestId === requestIdRef.current) {
+          setLoading(false);
+        }
+      }
+    }, 350);
   }
 
   return (

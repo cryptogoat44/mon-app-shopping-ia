@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { Link } from "expo-router";
-import { FormError, FormField, PrimaryButton } from "@/components/form";
+import { Checkbox, FormError, FormField, PrimaryButton } from "@/components/form";
 import { supabase } from "@/lib/supabase";
 import { theme } from "@/lib/theme";
 
@@ -9,6 +9,7 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [consentChecked, setConsentChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [confirmationSent, setConfirmationSent] = useState(false);
@@ -22,6 +23,10 @@ export default function SignUpScreen() {
     }
     if (password !== confirmPassword) {
       setError("Les deux mots de passe ne correspondent pas.");
+      return;
+    }
+    if (!consentChecked) {
+      setError("Merci d'accepter les Conditions d'Utilisation pour continuer.");
       return;
     }
 
@@ -71,10 +76,14 @@ export default function SignUpScreen() {
         <FormField label="Mot de passe" secureTextEntry textContentType="newPassword" value={password} onChangeText={setPassword} />
         <FormField label="Confirmez le mot de passe" secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword} />
 
+        <Checkbox checked={consentChecked} onToggle={() => setConsentChecked((c) => !c)}>
+          J'accepte les Conditions d'Utilisation et la Politique de Confidentialité.
+        </Checkbox>
+
         <PrimaryButton
           label={submitting ? "Création…" : "Créer mon compte"}
           onPress={handleSignUp}
-          disabled={submitting || !email || !password || !confirmPassword}
+          disabled={submitting || !email || !password || !confirmPassword || !consentChecked}
         />
 
         <Link href="/sign-in" asChild>

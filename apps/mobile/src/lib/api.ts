@@ -1,5 +1,7 @@
 import type {
   ApiErrorBody,
+  ConsentStatus,
+  ConsentType,
   CreateSearchRequest,
   Post,
   Profile,
@@ -211,4 +213,22 @@ export async function sharePurchasePost(vaultItemId: string): Promise<Post> {
 export async function reactToPost(postId: string): Promise<ReactToPostResponse> {
   const response = await authorizedFetch(`/api/posts/${postId}/react`, { method: "POST" });
   return response.json();
+}
+
+export async function fetchConsentStatus(): Promise<ConsentStatus[]> {
+  const response = await authorizedFetch("/api/consents");
+  return response.json();
+}
+
+export async function recordConsents(types: ConsentType[]): Promise<void> {
+  await authorizedFetch("/api/consents", { method: "POST", body: JSON.stringify({ types }) });
+}
+
+export async function exportMyData(): Promise<unknown> {
+  const response = await authorizedFetch("/api/me/export");
+  return response.json();
+}
+
+export async function deleteMyAccount(): Promise<void> {
+  await authorizedFetch("/api/me", { method: "DELETE" });
 }

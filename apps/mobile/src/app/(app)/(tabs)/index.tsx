@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { FormError, FormField, PrimaryButton } from "@/components/form";
 import { useAuth } from "@/lib/auth-context";
@@ -7,7 +7,7 @@ import { createSearch, ApiError } from "@/lib/api";
 import { theme } from "@/lib/theme";
 
 export default function HomeScreen() {
-  const { profile, signOut } = useAuth();
+  const { profile } = useAuth();
   const router = useRouter();
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -31,13 +31,8 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.screen}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.header}>
-          <View>
-            <Text style={styles.eyebrow}>Bonjour {profile?.displayName ?? ""}</Text>
-            <Text style={styles.title}>Identifier un produit</Text>
-          </View>
-          <Pressable onPress={signOut} hitSlop={8}>
-            <Text style={styles.logout}>Se déconnecter</Text>
-          </Pressable>
+          <Text style={styles.eyebrow}>Bonjour {profile?.displayName ?? ""}</Text>
+          <Text style={styles.title}>Identifier un produit</Text>
         </View>
 
         <View style={styles.content}>
@@ -71,15 +66,11 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.color.ground },
   flex: { flex: 1 },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
     paddingHorizontal: theme.space.lg,
     paddingTop: theme.space.md,
   },
   eyebrow: { fontSize: theme.font.small, color: theme.color.accentInk, letterSpacing: 0.3, marginBottom: theme.space.xs },
   title: { fontSize: theme.font.title, fontWeight: "700", color: theme.color.ink },
-  logout: { fontSize: theme.font.small, color: theme.color.muted },
   content: {
     flex: 1,
     justifyContent: "center",

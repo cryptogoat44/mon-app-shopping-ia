@@ -2,7 +2,7 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { FormError, FormField, PrimaryButton } from "@/components/form";
 import { useAuth } from "@/lib/auth-context";
-import { ApiError, updateMyProfile } from "@/lib/api";
+import { ApiError, recordConsents, updateMyProfile } from "@/lib/api";
 import { theme } from "@/lib/theme";
 
 const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
@@ -30,6 +30,11 @@ export default function CompleteProfileScreen() {
     setSubmitting(true);
     try {
       await updateMyProfile({ username: normalizedUsername, displayName: displayName.trim() });
+      // Le consentement a déjà été donné explicitement à l'écran d'inscription
+      // (case à cocher obligatoire) — on l'enregistre ici côté serveur, au
+      // premier moment où une session authentifiée existe. Best-effort : un
+      // échec réseau ici ne doit pas bloquer l'accès à l'app.
+      recordConsents(["terms", "privacy_policy"]).catch(() => {});
       await refreshProfile();
       // Le layout racine redirige automatiquement vers (app) une fois le profil complet.
     } catch (e) {
