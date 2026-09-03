@@ -1,4 +1,11 @@
-import type { ApiErrorBody, CreateSearchRequest, Profile, ProductSearch, UpdateMeRequest } from "@monapp/shared-types";
+import type {
+  ApiErrorBody,
+  CreateSearchRequest,
+  Profile,
+  ProductMatchClickResponse,
+  ProductSearch,
+  UpdateMeRequest,
+} from "@monapp/shared-types";
 import { supabase } from "./supabase";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -22,11 +29,14 @@ async function authorizedFetch(path: string, init?: RequestInit): Promise<Respon
   }
 
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
+  // Ne pas envoyer Content-Type: application/json sans corps — Fastify
+  // refuse un JSON body parser sur une requête vide (ex. POST sans body).
+  const hasJsonBody = !isFormData && init?.body !== undefined;
 
   const response = await fetch(`${apiUrl}${path}`, {
     ...init,
     headers: {
-      ...(isFormData ? {} : { "Content-Type": "application/json" }),
+      ...(hasJsonBody ? { "Content-Type": "application/json" } : {}),
       ...init?.headers,
       Authorization: `Bearer ${token}`,
     },
@@ -82,5 +92,10 @@ export async function uploadSearchScreenshot(searchId: string, imageUri: string)
 
 export async function fetchSearch(searchId: string): Promise<ProductSearch> {
   const response = await authorizedFetch(`/api/searches/${searchId}`);
+  return response.json();
+}
+
+export async function trackProductMatchClick(matchId: string): Promise<ProductMatchClickResponse> {
+  const response = await authorizedFetch(`/api/product-matches/${matchId}/click`, { method: "POST" });
   return response.json();
 }

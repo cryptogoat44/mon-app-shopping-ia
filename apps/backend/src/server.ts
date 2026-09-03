@@ -6,6 +6,7 @@ import supabasePlugin from "./plugins/supabase.js";
 import authPlugin from "./plugins/auth.js";
 import meRoutes from "./routes/me.js";
 import searchesRoutes from "./routes/searches.js";
+import productMatchesRoutes from "./routes/productMatches.js";
 
 const fastify = Fastify({ logger: true });
 
@@ -15,6 +16,7 @@ await fastify.register(supabasePlugin);
 await fastify.register(authPlugin);
 await fastify.register(meRoutes);
 await fastify.register(searchesRoutes);
+await fastify.register(productMatchesRoutes);
 
 fastify.get("/health", async () => ({ status: "ok" }));
 

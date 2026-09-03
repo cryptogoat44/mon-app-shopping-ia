@@ -61,3 +61,7 @@ export interface ProductSearch {
 export interface CreateSearchRequest {
   sourceUrl: string;
 }
+
+export interface ProductMatchClickResponse {
+  url: string;
+}

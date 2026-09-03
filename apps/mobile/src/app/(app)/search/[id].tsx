@@ -14,7 +14,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { ProductMatch, ProductSearch } from "@monapp/shared-types";
 import { PrimaryButton } from "@/components/form";
-import { ApiError, fetchSearch, uploadSearchScreenshot } from "@/lib/api";
+import { ApiError, fetchSearch, trackProductMatchClick, uploadSearchScreenshot } from "@/lib/api";
 import { theme } from "@/lib/theme";
 
 function formatPrice(match: ProductMatch): string | null {
@@ -23,8 +23,22 @@ function formatPrice(match: ProductMatch): string | null {
   return `${match.priceMin.toFixed(2)} ${currency}`.trim();
 }
 
-function MatchCard({ match }: { match: ProductMatch }) {
+function MatchCard({ match, onError }: { match: ProductMatch; onError: (message: string) => void }) {
   const price = formatPrice(match);
+  const [opening, setOpening] = useState(false);
+
+  async function handleOpen() {
+    setOpening(true);
+    try {
+      const { url } = await trackProductMatchClick(match.id);
+      await Linking.openURL(url);
+    } catch {
+      onError("Impossible d'ouvrir ce lien, réessayez.");
+    } finally {
+      setOpening(false);
+    }
+  }
+
   return (
     <View style={styles.card}>
       <Image source={{ uri: match.imageUrl }} style={styles.cardImage} contentFit="cover" />
@@ -36,8 +50,8 @@ function MatchCard({ match }: { match: ProductMatch }) {
           {match.merchantName ? <Text style={styles.cardMeta}>{match.merchantName}</Text> : null}
           {price ? <Text style={styles.cardPrice}>{price}</Text> : null}
         </View>
-        <Pressable onPress={() => Linking.openURL(match.merchantUrl)}>
-          <Text style={styles.cardLink}>Voir chez le marchand →</Text>
+        <Pressable onPress={handleOpen} disabled={opening} hitSlop={4}>
+          <Text style={styles.cardLink}>{opening ? "Ouverture…" : "Voir chez le marchand →"}</Text>
         </Pressable>
       </View>
     </View>
@@ -121,8 +135,14 @@ export default function SearchResultScreen() {
         {hasMatches ? (
           <>
             <Text style={styles.title}>Produits identifiés</Text>
+            <View style={styles.disclosure}>
+              <Text style={styles.disclosureText}>
+                Certains liens ci-dessous sont des liens affiliés : nous pouvons percevoir une commission si vous
+                achetez via ces liens, sans coût supplémentaire pour vous.
+              </Text>
+            </View>
             {search!.matches.map((match) => (
-              <MatchCard key={match.id} match={match} />
+              <MatchCard key={match.id} match={match} onError={setError} />
             ))}
           </>
         ) : null}
@@ -163,6 +183,15 @@ const styles = StyleSheet.create({
     marginBottom: theme.space.md,
   },
   errorText: { color: theme.color.danger, fontSize: theme.font.small },
+  disclosure: {
+    backgroundColor: theme.color.surface,
+    borderWidth: 1,
+    borderColor: theme.color.line,
+    borderRadius: theme.radius.md,
+    padding: theme.space.sm,
+    marginBottom: theme.space.md,
+  },
+  disclosureText: { fontSize: theme.font.small, color: theme.color.muted, lineHeight: 18 },
   fallback: { marginTop: theme.space.md },
   card: {
     flexDirection: "row",

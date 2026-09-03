@@ -86,6 +86,34 @@ async function saveMatches(
 
   if (error) {
     fastify.log.error({ error }, "Échec d'enregistrement des product_matches");
+    return;
+  }
+
+  // Un lien affilié par produit identifié. Pour l'instant "direct" (aucun
+  // réseau d'affiliation rejoint) : le lien pointe tel quel vers le
+  // marchand, sans commission. Le tracking de clic est déjà en place pour
+  // qu'il suffise de changer affiliate_url le jour où un programme
+  // d'affiliation (Awin, Rakuten, CJ...) est rejoint pour ce marchand.
+  const { data: insertedMatches, error: fetchError } = await fastify.supabaseAdmin
+    .from("product_matches")
+    .select("id, merchant_url")
+    .eq("search_id", searchId);
+
+  if (fetchError || !insertedMatches) {
+    fastify.log.error({ fetchError }, "Impossible de relire les product_matches pour créer les liens affiliés");
+    return;
+  }
+
+  const { error: linksError } = await fastify.supabaseAdmin.from("affiliate_links").insert(
+    (insertedMatches as { id: string; merchant_url: string }[]).map((m) => ({
+      product_match_id: m.id,
+      network: "direct",
+      affiliate_url: m.merchant_url,
+    }))
+  );
+
+  if (linksError) {
+    fastify.log.error({ linksError }, "Échec d'enregistrement des affiliate_links");
   }
 }
 
