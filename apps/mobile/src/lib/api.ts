@@ -1,4 +1,4 @@
-import type { ApiErrorBody, Profile, UpdateMeRequest } from "@monapp/shared-types";
+import type { ApiErrorBody, CreateSearchRequest, Profile, ProductSearch, UpdateMeRequest } from "@monapp/shared-types";
 import { supabase } from "./supabase";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -21,12 +21,14 @@ async function authorizedFetch(path: string, init?: RequestInit): Promise<Respon
     throw new Error("Aucune session active — impossible d'appeler le backend.");
   }
 
+  const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
+
   const response = await fetch(`${apiUrl}${path}`, {
     ...init,
     headers: {
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...init?.headers,
       Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
     },
   });
 
@@ -48,5 +50,37 @@ export async function updateMyProfile(payload: UpdateMeRequest): Promise<Profile
     method: "PATCH",
     body: JSON.stringify(payload),
   });
+  return response.json();
+}
+
+export async function createSearch(payload: CreateSearchRequest): Promise<ProductSearch> {
+  const response = await authorizedFetch("/api/searches", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return response.json();
+}
+
+export async function uploadSearchScreenshot(searchId: string, imageUri: string): Promise<ProductSearch> {
+  const filename = imageUri.split("/").pop() ?? "screenshot.jpg";
+  const extensionMatch = /\.(\w+)$/.exec(filename);
+  const extension = extensionMatch?.[1]?.toLowerCase() ?? "jpg";
+  const mimeType = extension === "png" ? "image/png" : "image/jpeg";
+
+  const formData = new FormData();
+  // React Native's fetch accepts this { uri, name, type } shape for files —
+  // it is not a real Blob/File, but RN's FormData polyfill knows how to
+  // stream it from the uri.
+  formData.append("file", { uri: imageUri, name: filename, type: mimeType } as unknown as Blob);
+
+  const response = await authorizedFetch(`/api/searches/${searchId}/screenshot`, {
+    method: "POST",
+    body: formData,
+  });
+  return response.json();
+}
+
+export async function fetchSearch(searchId: string): Promise<ProductSearch> {
+  const response = await authorizedFetch(`/api/searches/${searchId}`);
   return response.json();
 }

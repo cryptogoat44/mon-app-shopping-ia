@@ -28,3 +28,36 @@ export interface ApiErrorBody {
   error: string;
   message: string;
 }
+
+export type PlatformSource = "tiktok" | "instagram" | "other";
+export type RecognitionMethod = "oembed" | "manual_screenshot";
+export type SearchStatus = "pending" | "processing" | "completed" | "failed";
+
+export interface ProductMatch {
+  id: string;
+  rank: number;
+  productName: string;
+  brand: string | null;
+  imageUrl: string;
+  priceMin: number | null;
+  priceMax: number | null;
+  currency: string | null;
+  merchantName: string | null;
+  merchantUrl: string;
+}
+
+export interface ProductSearch {
+  id: string;
+  sourceUrl: string;
+  sourcePlatform: PlatformSource;
+  method: RecognitionMethod;
+  thumbnailUrl: string | null;
+  status: SearchStatus;
+  errorMessage: string | null;
+  createdAt: string;
+  matches: ProductMatch[];
+}
+
+export interface CreateSearchRequest {
+  sourceUrl: string;
+}

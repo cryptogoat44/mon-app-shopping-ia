@@ -4,6 +4,10 @@ import { z } from "zod";
 const envSchema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+  SERPAPI_KEY: z.string().min(1),
+  // Non requis pour que l'app démarre : sans jeton Meta, la reconnaissance
+  // automatique Instagram est simplement sautée au profit du repli manuel.
+  META_OEMBED_ACCESS_TOKEN: z.string().min(1).optional(),
   PORT: z.coerce.number().default(3000),
 });
 
