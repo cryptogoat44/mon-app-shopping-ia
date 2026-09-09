@@ -86,3 +86,25 @@ avec l'app **Expo Go** sur votre téléphone (iOS/Android).
 2. `pnpm install` si de nouvelles dépendances ont été ajoutées.
 3. Exécuter les nouvelles migrations SQL listées dans `apps/backend/supabase/migrations/` (celles que vous n'avez pas encore passées).
 4. Relancer `pnpm backend:dev` et `pnpm mobile:start`.
+
+## Version en ligne (déployée sur Render, session du 2026-09-09)
+
+L'app tourne aussi en ligne, accessible depuis n'importe quel ordinateur ou
+téléphone, sans rien installer :
+
+- **App (version web)** : https://mon-app-shopping-ia-web.onrender.com
+- **Backend** : https://mon-app-shopping-ia.onrender.com (pas besoin d'y aller directement, c'est l'app qui l'appelle)
+- **Code source** : https://github.com/cryptogoat44/mon-app-shopping-ia (dépôt public)
+- **Tableau de bord Render** : https://dashboard.render.com (compte créé avec votre GitHub)
+
+Ces deux services sont sur le plan gratuit de Render : le backend
+"s'endort" après un moment sans trafic, donc la première requête après une
+pause peut prendre jusqu'à 50 secondes avant de répondre — c'est normal, pas
+un bug. Suffisant pour tester, pas pour de vrais utilisateurs (à revoir le
+jour où on passe en production).
+
+**Pour republier une mise à jour** : chaque fois que du code est poussé sur
+la branche `main` du dépôt GitHub, Render reconstruit et republie
+automatiquement les deux services — rien à faire manuellement. Si vous
+changez une valeur secrète (clé Supabase, clé SerpApi), il faut la mettre à
+jour à la main dans Render : ouvrez le service concerné > **Environment**.
