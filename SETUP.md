@@ -108,3 +108,26 @@ la branche `main` du dépôt GitHub, Render reconstruit et republie
 automatiquement les deux services — rien à faire manuellement. Si vous
 changez une valeur secrète (clé Supabase, clé SerpApi), il faut la mettre à
 jour à la main dans Render : ouvrez le service concerné > **Environment**.
+
+## Envoi d'emails (SMTP, session du 2026-09-09)
+
+Par défaut, Supabase n'autorise qu'un tout petit nombre d'emails de
+confirmation par heure — suffisant pour un usage ponctuel, pas pour des
+tests répétés ni pour de vrais utilisateurs. Un vrai fournisseur d'envoi
+d'emails a donc été branché :
+
+- **Compte Gmail dédié à l'app** : `monappshoppingia@gmail.com` (mot de
+  passe créé par vous, à noter dans votre gestionnaire de mots de passe si
+  pas déjà fait). C'est l'adresse "expéditeur" que verront vos utilisateurs.
+- **Compte SendGrid** (fournisseur d'envoi, via Twilio) : même adresse
+  `monappshoppingia@gmail.com`, essai gratuit jusqu'au 8 novembre 2026.
+  Tableau de bord : https://app.sendgrid.com
+- Configuré dans Supabase (**Authentication > Emails > SMTP Settings**) :
+  activé, ce qui fait passer la limite de Supabase de quelques emails/heure
+  à 30/heure.
+
+**Avant la fin de l'essai gratuit SendGrid (8 novembre 2026)**, il faudra
+soit passer sur un plan payant SendGrid (quelques dollars/mois selon le
+volume), soit changer de fournisseur — sans quoi les emails de confirmation
+s'arrêteront à nouveau. Je peux m'en occuper si vous me le rappelez avant
+cette date.
