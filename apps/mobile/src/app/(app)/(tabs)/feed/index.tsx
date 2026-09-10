@@ -4,7 +4,8 @@ import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import type { Post } from "@monapp/shared-types";
 import { ApiError, fetchFeed, reactToPost } from "@/lib/api";
-import { theme } from "@/lib/theme";
+import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { HeartIcon, PersonIcon, VerifiedIcon } from "@/components/icons";
 
 function timeAgo(iso: string): string {
   const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
@@ -17,14 +18,13 @@ function timeAgo(iso: string): string {
   return `il y a ${days} j`;
 }
 
-function PostCard({ post }: { post: Post }) {
+function PostRow({ post }: { post: Post }) {
   const [reactionCount, setReactionCount] = useState(post.reactionCount);
   const [reacted, setReacted] = useState(post.viewerHasReacted);
   const [busy, setBusy] = useState(false);
 
   async function handleReact() {
     setBusy(true);
-    // Mise à jour optimiste — plus réactif pour un simple like.
     setReacted((r) => !r);
     setReactionCount((c) => c + (reacted ? -1 : 1));
     try {
@@ -40,26 +40,22 @@ function PostCard({ post }: { post: Post }) {
   }
 
   return (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <View style={styles.avatar} />
-        <View style={styles.cardHeaderText}>
-          <Text style={styles.authorName}>{post.author.displayName}</Text>
-          <Text style={styles.timestamp}>{timeAgo(post.createdAt)}</Text>
+    <View style={styles.post}>
+      <View style={styles.author}>
+        <View style={styles.avatar}>
+          <PersonIcon size={16} tint={color.acier} />
         </View>
-        {post.vaultItem?.verified ? (
-          <View style={styles.verifiedBadge}>
-            <Text style={styles.verifiedBadgeText}>Achat vérifié</Text>
-          </View>
-        ) : null}
+        <Text style={styles.authorName}>{post.author.displayName}</Text>
+        {post.vaultItem?.verified ? <VerifiedIcon size={13} /> : null}
+        <Text style={styles.timestamp}>{timeAgo(post.createdAt)}</Text>
       </View>
 
-      <Image source={{ uri: post.mediaUrl }} style={styles.cardImage} contentFit="cover" />
+      <Image source={{ uri: post.mediaUrl }} style={styles.media} contentFit="cover" />
 
       {post.caption ? <Text style={styles.caption}>{post.caption}</Text> : null}
 
       <Pressable onPress={handleReact} disabled={busy} style={styles.reactRow} hitSlop={8}>
-        <Text style={[styles.reactIcon, reacted ? styles.reactIconActive : null]}>{reacted ? "♥" : "♡"}</Text>
+        <HeartIcon size={19} tint={reacted ? color.encre : color.acier} filled={reacted} />
         <Text style={styles.reactCount}>{reactionCount}</Text>
       </Pressable>
     </View>
@@ -94,27 +90,18 @@ export default function FeedScreen() {
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.title}>Fil</Text>
-        <View style={styles.headerActions}>
-          <Pressable onPress={() => router.push("/people-search")} hitSlop={8}>
-            <Text style={styles.headerLink}>Profils</Text>
-          </Pressable>
-          <Pressable onPress={() => router.push("/post-item/new")} hitSlop={8}>
-            <Text style={styles.headerLink}>+ Publier</Text>
-          </Pressable>
-        </View>
+        <Pressable onPress={() => router.push("/people-search")} hitSlop={8}>
+          <Text style={styles.headerLink}>Profils</Text>
+        </Pressable>
       </View>
 
       {posts === null && !error ? (
         <View style={styles.centered}>
-          <ActivityIndicator color={theme.color.accent} />
+          <ActivityIndicator color={color.encre} />
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
-          {error ? (
-            <View style={styles.errorBanner}>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
           {posts?.length === 0 ? (
             <View style={styles.empty}>
@@ -122,13 +109,16 @@ export default function FeedScreen() {
                 Votre fil est vide. Suivez des profils pour voir leurs achats et leurs publications ici.
               </Text>
               <Pressable onPress={() => router.push("/people-search")}>
-                <Text style={styles.emptyLink}>Rechercher des profils →</Text>
+                <Text style={styles.emptyLink}>Rechercher des profils</Text>
               </Pressable>
             </View>
           ) : null}
 
-          {posts?.map((post) => (
-            <PostCard key={post.id} post={post} />
+          {posts?.map((post, index) => (
+            <View key={post.id}>
+              <PostRow post={post} />
+              {index < posts.length - 1 ? <View style={styles.divider} /> : null}
+            </View>
           ))}
         </ScrollView>
       )}
@@ -137,54 +127,31 @@ export default function FeedScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.color.ground },
+  screen: { flex: 1, backgroundColor: color.porcelaine },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: theme.space.lg,
-    paddingTop: theme.space.md,
-    paddingBottom: theme.space.sm,
+    paddingHorizontal: space.lg,
+    paddingTop: space.md,
+    paddingBottom: space.sm,
   },
-  title: { fontSize: theme.font.title, fontWeight: "700", color: theme.color.ink },
-  headerActions: { flexDirection: "row", gap: theme.space.lg },
-  headerLink: { fontSize: theme.font.small, color: theme.color.accentInk, fontWeight: "600" },
-  content: { padding: theme.space.lg, paddingTop: theme.space.sm, maxWidth: 480, alignSelf: "center", width: "100%" },
-  errorBanner: {
-    backgroundColor: theme.color.dangerSoft,
-    borderRadius: theme.radius.md,
-    padding: theme.space.sm,
-    marginBottom: theme.space.md,
-  },
-  errorText: { color: theme.color.danger, fontSize: theme.font.small },
-  empty: { alignItems: "center", marginTop: theme.space.xl },
-  emptyText: { fontSize: theme.font.body, color: theme.color.muted, textAlign: "center", marginBottom: theme.space.md },
-  emptyLink: { fontSize: theme.font.small, color: theme.color.accentInk, fontWeight: "600" },
-  card: {
-    backgroundColor: theme.color.surface,
-    borderWidth: 1,
-    borderColor: theme.color.line,
-    borderRadius: theme.radius.lg,
-    marginBottom: theme.space.md,
-    overflow: "hidden",
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: theme.space.sm,
-    gap: theme.space.sm,
-  },
-  avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: theme.color.line },
-  cardHeaderText: { flex: 1 },
-  authorName: { fontSize: theme.font.small, fontWeight: "700", color: theme.color.ink },
-  timestamp: { fontSize: 11, color: theme.color.muted },
-  verifiedBadge: { backgroundColor: theme.color.verifiedSoft, borderRadius: 100, paddingHorizontal: 8, paddingVertical: 2 },
-  verifiedBadgeText: { color: theme.color.verified, fontSize: 10, fontWeight: "700" },
-  cardImage: { width: "100%", aspectRatio: 1, backgroundColor: theme.color.line },
-  caption: { fontSize: theme.font.small, color: theme.color.ink, padding: theme.space.sm, paddingBottom: 0 },
-  reactRow: { flexDirection: "row", alignItems: "center", gap: 6, padding: theme.space.sm },
-  reactIcon: { fontSize: 18, color: theme.color.muted },
-  reactIconActive: { color: theme.color.danger },
-  reactCount: { fontSize: theme.font.small, color: theme.color.muted },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, color: color.encre },
+  headerLink: { fontSize: font.secondary, color: color.acier, fontWeight: "600" },
+  content: { paddingTop: space.sm, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
+  errorText: { color: color.acier, fontSize: font.secondary, paddingHorizontal: space.lg, marginBottom: space.md },
+  empty: { alignItems: "center", marginTop: space.xl, paddingHorizontal: space.lg },
+  emptyText: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginBottom: space.md, lineHeight: 20 },
+  emptyLink: { fontSize: font.body, color: color.vert, fontWeight: "600" },
+  post: { paddingHorizontal: space.lg, paddingBottom: 26 },
+  author: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
+  avatar: { width: 32, height: 32, borderRadius: radius.full, backgroundColor: color.plinthe, alignItems: "center", justifyContent: "center" },
+  authorName: { fontSize: 14, fontWeight: "600", color: color.encre },
+  timestamp: { fontSize: 12, color: color.acier, marginLeft: "auto" },
+  media: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe, borderRadius: radius.sm },
+  caption: { fontSize: 14.5, color: color.encre, marginTop: 12, lineHeight: 20 },
+  reactRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12 },
+  reactCount: { fontSize: font.secondary, color: color.acier },
+  divider: { height: 1, backgroundColor: color.filet, marginHorizontal: space.lg, marginBottom: 26 },
 });

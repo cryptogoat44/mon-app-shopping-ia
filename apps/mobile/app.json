@@ -39,7 +39,9 @@
           "photosPermission": "Utilisée pour importer la capture d'écran d'une vidéo quand la reconnaissance automatique ne suffit pas."
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "expo-font",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

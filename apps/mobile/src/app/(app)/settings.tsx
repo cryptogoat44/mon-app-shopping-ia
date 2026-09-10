@@ -1,11 +1,11 @@
 import { useCallback, useState } from "react";
 import { Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import type { ConsentStatus } from "@monapp/shared-types";
-import { FormError, PrimaryButton } from "@/components/form";
+import { color, font, serifFont, space } from "@/theme/tokens";
+import { fr } from "@/i18n/fr";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, deleteMyAccount, exportMyData, fetchConsentStatus } from "@/lib/api";
-import { theme } from "@/lib/theme";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
@@ -13,10 +13,7 @@ function formatDate(iso: string): string {
 
 async function shareExportedData(data: unknown) {
   const json = JSON.stringify(data, null, 2);
-
   if (Platform.OS === "web") {
-    // Sur le web, expo-sharing n'est pas disponible : on déclenche un
-    // téléchargement classique via le navigateur.
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -26,15 +23,15 @@ async function shareExportedData(data: unknown) {
     URL.revokeObjectURL(url);
     return;
   }
-
   const [{ File, Paths }, Sharing] = await Promise.all([import("expo-file-system"), import("expo-sharing")]);
   const file = new File(Paths.cache, `mes-donnees-${Date.now()}.json`);
   file.write(json);
   await Sharing.shareAsync(file.uri);
 }
 
-export default function AccountScreen() {
-  const { profile, signOut } = useAuth();
+export default function SettingsScreen() {
+  const router = useRouter();
+  const { signOut } = useAuth();
   const [consents, setConsents] = useState<ConsentStatus[] | null>(null);
   const [consentsFailed, setConsentsFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,18 +77,18 @@ export default function AccountScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
+      <View style={styles.nav}>
+        <Pressable onPress={() => router.back()} hitSlop={8}>
+          <Text style={styles.back}>‹</Text>
+        </Pressable>
+      </View>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Compte</Text>
+        <Text style={styles.title}>{fr.settings.title}</Text>
 
-        <FormError message={error} />
-
-        <View style={styles.card}>
-          <Text style={styles.displayName}>{profile?.displayName}</Text>
-          <Text style={styles.username}>@{profile?.username}</Text>
-        </View>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Vos données</Text>
+          <Text style={styles.sectionLabel}>Vos données</Text>
           <Text style={styles.sectionBody}>
             {termsGrantedAt
               ? `Conditions d'Utilisation acceptées le ${formatDate(termsGrantedAt)}.`
@@ -100,27 +97,24 @@ export default function AccountScreen() {
                 : "Statut du consentement en cours de chargement…"}
           </Text>
           <Pressable onPress={handleExport} disabled={exporting} hitSlop={4}>
-            <Text style={styles.link}>{exporting ? "Préparation de l'export…" : "Exporter mes données"}</Text>
+            <Text style={styles.link}>{exporting ? "Préparation de l'export…" : fr.settings.exportData}</Text>
           </Pressable>
         </View>
 
         <Pressable onPress={signOut} hitSlop={4} style={styles.section}>
-          <Text style={styles.link}>Se déconnecter</Text>
+          <Text style={styles.link}>{fr.settings.signOut}</Text>
         </Pressable>
 
         <View style={styles.dangerSection}>
-          <Text style={styles.sectionTitle}>Zone sensible</Text>
+          <Text style={styles.sectionLabel}>Zone sensible</Text>
           {!confirmingDelete ? (
             <Pressable onPress={() => setConfirmingDelete(true)} hitSlop={4}>
-              <Text style={styles.deleteLabel}>Supprimer mon compte</Text>
+              <Text style={styles.deleteLabel}>{fr.settings.deleteAccount}</Text>
             </Pressable>
           ) : (
             <View>
-              <Text style={styles.sectionBody}>
-                Cette action est définitive : votre profil, votre vault, vos publications et toutes vos données
-                seront supprimés sans possibilité de récupération.
-              </Text>
-              <View style={styles.confirmButtons}>
+              <Text style={styles.sectionBody}>{fr.settings.deleteConfirm}</Text>
+              <View style={styles.confirmRow}>
                 <Pressable onPress={() => setConfirmingDelete(false)} disabled={deleting} hitSlop={8}>
                   <Text style={styles.cancelLabel}>Annuler</Text>
                 </Pressable>
@@ -137,36 +131,18 @@ export default function AccountScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.color.ground },
-  content: { padding: theme.space.lg, paddingTop: theme.space.md, maxWidth: 480, alignSelf: "center", width: "100%" },
-  title: { fontSize: theme.font.title, fontWeight: "700", color: theme.color.ink, marginBottom: theme.space.lg },
-  card: {
-    backgroundColor: theme.color.surface,
-    borderWidth: 1,
-    borderColor: theme.color.line,
-    borderRadius: theme.radius.lg,
-    padding: theme.space.md,
-    marginBottom: theme.space.lg,
-  },
-  displayName: { fontSize: theme.font.body, fontWeight: "700", color: theme.color.ink },
-  username: { fontSize: theme.font.small, color: theme.color.muted },
-  section: { marginBottom: theme.space.lg },
-  sectionTitle: {
-    fontSize: theme.font.small,
-    fontWeight: "600",
-    color: theme.color.muted,
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-    marginBottom: theme.space.sm,
-  },
-  sectionBody: { fontSize: theme.font.small, color: theme.color.muted, marginBottom: theme.space.sm, lineHeight: 18 },
-  link: { fontSize: theme.font.small, color: theme.color.accentInk, fontWeight: "600" },
-  dangerSection: {
-    borderTopWidth: 1,
-    borderTopColor: theme.color.line,
-    paddingTop: theme.space.lg,
-  },
-  deleteLabel: { color: theme.color.danger, fontSize: theme.font.small, fontWeight: "600" },
-  confirmButtons: { flexDirection: "row", gap: theme.space.lg, marginTop: theme.space.xs },
-  cancelLabel: { color: theme.color.muted, fontSize: theme.font.small, fontWeight: "600" },
+  screen: { flex: 1, backgroundColor: color.porcelaine },
+  nav: { height: 47, justifyContent: "center", paddingHorizontal: 12 },
+  back: { fontSize: 26, color: color.encre },
+  content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, marginBottom: space.lg },
+  error: { fontSize: font.secondary, color: color.acier, marginBottom: space.md },
+  section: { marginBottom: space.lg },
+  sectionLabel: { fontSize: font.caption, fontWeight: "600", color: color.acier, marginBottom: space.sm },
+  sectionBody: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm, lineHeight: 19 },
+  link: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  dangerSection: { borderTopWidth: 1, borderTopColor: color.filet, paddingTop: space.lg },
+  deleteLabel: { color: "#B3432B", fontSize: font.secondary, fontWeight: "600" },
+  confirmRow: { flexDirection: "row", gap: space.lg, marginTop: space.xs },
+  cancelLabel: { color: color.acier, fontSize: font.secondary, fontWeight: "600" },
 });

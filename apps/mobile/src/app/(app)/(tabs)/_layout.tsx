@@ -1,24 +1,38 @@
 import { Tabs } from "expo-router";
-import { theme } from "@/lib/theme";
+import { color } from "@/theme/tokens";
+import { fr } from "@/i18n/fr";
+import { BookmarkIcon, FeedIcon, PersonIcon, SearchIcon } from "@/components/icons";
 
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: theme.color.ink,
-        tabBarInactiveTintColor: theme.color.muted,
+        tabBarActiveTintColor: color.encre,
+        tabBarInactiveTintColor: color.acier,
         tabBarStyle: {
-          backgroundColor: theme.color.ground,
-          borderTopColor: theme.color.line,
+          backgroundColor: color.porcelaine,
+          borderTopColor: color.filet,
         },
-        tabBarLabelStyle: { fontSize: theme.font.small, fontWeight: "600" },
+        tabBarLabelStyle: { fontSize: 10.5, fontWeight: "600" },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: "Rechercher" }} />
-      <Tabs.Screen name="feed" options={{ title: "Fil" }} />
-      <Tabs.Screen name="vault" options={{ title: "Vault" }} />
-      <Tabs.Screen name="account" options={{ title: "Compte" }} />
+      <Tabs.Screen
+        name="index"
+        options={{ title: fr.spotter.title, tabBarIcon: ({ color: tint }) => <SearchIcon tint={String(tint)} /> }}
+      />
+      <Tabs.Screen
+        name="feed"
+        options={{ title: "Fil", tabBarIcon: ({ color: tint }) => <FeedIcon tint={String(tint)} /> }}
+      />
+      <Tabs.Screen
+        name="wishlist"
+        options={{ title: fr.wishlist.title, tabBarIcon: ({ color: tint }) => <BookmarkIcon tint={String(tint)} /> }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{ title: "Profil", tabBarIcon: ({ color: tint }) => <PersonIcon tint={String(tint)} /> }}
+      />
     </Tabs>
   );
 }
