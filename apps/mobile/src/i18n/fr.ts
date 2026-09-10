@@ -60,6 +60,9 @@ export const fr = {
     piecesLabel: "Pièces identifiées",
     addPiece: "Identifier une pièce",
     published: "Publié",
+    visibility: "Qui peut voir cette publication",
+    noRecentPieces: "Aucune pièce récente. Spottez-en une d'abord depuis l'onglet Spotter.",
+    closePicker: "Fermer",
   },
   settings: {
     title: "Réglages",
