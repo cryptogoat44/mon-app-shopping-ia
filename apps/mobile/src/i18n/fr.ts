@@ -7,6 +7,7 @@ export const fr = {
     baseline: "L'identification discrète des pièces qui comptent.",
     explain: "Collez un lien ou une photo. Spotto retrouve la pièce et vous dit où l'acheter.",
     cta: "Commencer",
+    login: "Déjà un compte ? Se connecter",
     legal: "Conditions d'utilisation · Confidentialité",
   },
   spotter: {
