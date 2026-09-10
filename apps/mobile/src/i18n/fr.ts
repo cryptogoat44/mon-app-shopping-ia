@@ -79,5 +79,27 @@ export const fr = {
   auth: {
     continueWithApple: "Continuer avec Apple",
     continueWithEmail: "Continuer avec un e-mail",
+    email: "Email",
+    password: "Mot de passe",
+    signIn: {
+      title: "Bon retour",
+      subtitle: "Connectez-vous pour retrouver votre vault.",
+      cta: "Se connecter",
+      ctaLoading: "Connexion…",
+      noAccount: "Pas encore de compte ? Créez-en un",
+    },
+    signUp: {
+      title: "Créer un compte",
+      subtitle: "Votre vault personnel vous attend.",
+      confirmPassword: "Confirmez le mot de passe",
+      consent: "J'accepte les Conditions d'Utilisation et la Politique de Confidentialité.",
+      cta: "Créer mon compte",
+      ctaLoading: "Création…",
+      hasAccount: "Déjà un compte ? Connectez-vous",
+      confirmTitle: "Vérifiez votre boîte mail",
+      confirmBody: (email: string) =>
+        `Nous avons envoyé un lien de confirmation à ${email}. Cliquez dessus pour activer votre compte, puis revenez vous connecter.`,
+      backToSignIn: "Retour à la connexion",
+    },
   },
 } as const;
