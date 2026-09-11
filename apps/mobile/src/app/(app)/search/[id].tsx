@@ -148,7 +148,7 @@ export default function SearchResultScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Pressable onPress={() => router.back()} hitSlop={8} style={styles.back}>
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} hitSlop={8} style={styles.back}>
           <Text style={styles.backLabel}>← Nouvelle recherche</Text>
         </Pressable>
 

@@ -11,6 +11,12 @@ import { theme } from "@/lib/theme";
 export default function VaultItemDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+
+  function safeBack() {
+    if (router.canGoBack()) router.back();
+    else router.replace("/profile");
+  }
+
   const [item, setItem] = useState<VaultItem | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -58,7 +64,7 @@ export default function VaultItemDetailScreen() {
     setError(null);
     try {
       await deleteVaultItem(item.id);
-      router.back();
+      safeBack();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "La suppression a échoué.");
       setBusy(false);
@@ -78,7 +84,7 @@ export default function VaultItemDetailScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Pressable onPress={() => router.back()} hitSlop={8} style={styles.back}>
+        <Pressable onPress={safeBack} hitSlop={8} style={styles.back}>
           <Text style={styles.backLabel}>← Vault</Text>
         </Pressable>
 

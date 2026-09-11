@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import type { PublicProfile } from "@monapp/shared-types";
-import { FormError, FormField } from "@/components/form";
 import { ApiError, followUser, searchUsers, unfollowUser } from "@/lib/api";
-import { theme } from "@/lib/theme";
+import { color, font, radius, space } from "@/theme/tokens";
+import { PersonIcon, SearchIcon } from "@/components/icons";
 
 function PersonRow({ person, onToggle }: { person: PublicProfile; onToggle: (id: string) => void }) {
   const [following, setFollowing] = useState(person.isFollowing);
@@ -29,7 +29,9 @@ function PersonRow({ person, onToggle }: { person: PublicProfile; onToggle: (id:
 
   return (
     <View style={styles.row}>
-      <View style={styles.avatar} />
+      <View style={styles.avatar}>
+        <PersonIcon size={20} tint={color.acier} />
+      </View>
       <View style={styles.rowText}>
         <Text style={styles.displayName}>{person.displayName}</Text>
         <Text style={styles.username}>@{person.username}</Text>
@@ -92,23 +94,28 @@ export default function PeopleSearchScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Pressable onPress={() => router.back()} hitSlop={8} style={styles.back}>
-          <Text style={styles.backLabel}>← Fil</Text>
+      <View style={styles.nav}>
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/feed"))} hitSlop={8}>
+          <Text style={styles.back}>‹</Text>
         </Pressable>
+      </View>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.searchBar}>
+          <SearchIcon size={18} tint={color.acier} strokeWidth={1.6} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Rechercher"
+            placeholderTextColor={color.acier}
+            value={query}
+            onChangeText={handleSearch}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
 
-        <Text style={styles.title}>Rechercher des profils</Text>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <FormError message={error} />
-
-        <FormField
-          label="Nom d'utilisateur"
-          placeholder="ex. camille_l"
-          value={query}
-          onChangeText={handleSearch}
-        />
-
-        {loading ? <ActivityIndicator color={theme.color.accent} style={styles.loader} /> : null}
+        {loading ? <ActivityIndicator color={color.encre} style={styles.loader} /> : null}
 
         {results?.length === 0 ? <Text style={styles.empty}>Aucun profil trouvé.</Text> : null}
 
@@ -121,33 +128,44 @@ export default function PeopleSearchScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.color.ground },
-  content: { padding: theme.space.lg, paddingBottom: theme.space.xl, maxWidth: 480, alignSelf: "center", width: "100%" },
-  back: { marginBottom: theme.space.lg },
-  backLabel: { color: theme.color.accentInk, fontSize: theme.font.small },
-  title: { fontSize: theme.font.title, fontWeight: "700", color: theme.color.ink, marginBottom: theme.space.lg },
-  loader: { marginTop: theme.space.md },
-  empty: { fontSize: theme.font.body, color: theme.color.muted, textAlign: "center", marginTop: theme.space.lg },
+  screen: { flex: 1, backgroundColor: color.porcelaine },
+  nav: { height: 47, justifyContent: "center", paddingHorizontal: 12 },
+  back: { fontSize: 26, color: color.encre },
+  content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: color.plinthe,
+    borderRadius: radius.full,
+    paddingHorizontal: space.md,
+    paddingVertical: 10,
+    marginBottom: space.lg,
+  },
+  searchInput: { flex: 1, fontSize: font.body, color: color.encre, padding: 0 },
+  error: { fontSize: font.caption, color: color.acier, marginBottom: space.md },
+  loader: { marginTop: space.md },
+  empty: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginTop: space.lg },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.space.sm,
-    paddingVertical: theme.space.sm,
+    gap: space.sm,
+    paddingVertical: space.sm,
     borderBottomWidth: 1,
-    borderBottomColor: theme.color.line,
+    borderBottomColor: color.filet,
   },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.color.line },
+  avatar: { width: 40, height: 40, borderRadius: radius.full, backgroundColor: color.plinthe, alignItems: "center", justifyContent: "center" },
   rowText: { flex: 1 },
-  displayName: { fontSize: theme.font.body, fontWeight: "600", color: theme.color.ink },
-  username: { fontSize: theme.font.small, color: theme.color.muted },
+  displayName: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
+  username: { fontSize: font.caption, color: color.acier },
   followButton: {
     borderWidth: 1,
-    borderColor: theme.color.ink,
-    borderRadius: 100,
-    paddingHorizontal: theme.space.md,
+    borderColor: color.encre,
+    borderRadius: radius.full,
+    paddingHorizontal: space.md,
     paddingVertical: 6,
   },
-  followingButton: { backgroundColor: theme.color.ink },
-  followButtonLabel: { fontSize: theme.font.small, fontWeight: "600", color: theme.color.ink },
-  followingButtonLabel: { color: theme.color.ground },
+  followingButton: { backgroundColor: color.encre },
+  followButtonLabel: { fontSize: font.caption, fontWeight: "600", color: color.encre },
+  followingButtonLabel: { color: color.blanc },
 });

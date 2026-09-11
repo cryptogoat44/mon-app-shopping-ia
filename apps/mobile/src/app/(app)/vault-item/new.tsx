@@ -12,6 +12,12 @@ import { theme } from "@/lib/theme";
 export default function NewVaultItemScreen() {
   const router = useRouter();
   const { profile } = useAuth();
+
+  function safeBack() {
+    if (router.canGoBack()) router.back();
+    else router.replace("/profile");
+  }
+
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<VaultCategory>("other");
   const [privacy, setPrivacy] = useState<PrivacyLevel>(profile?.defaultPrivacy ?? "followers");
@@ -44,7 +50,7 @@ export default function NewVaultItemScreen() {
     setSubmitting(true);
     try {
       await addVaultItemFromPhoto({ title: title.trim(), category, imageUri, privacy });
-      router.back();
+      safeBack();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "L'ajout a échoué, réessayez.");
     } finally {
@@ -55,7 +61,7 @@ export default function NewVaultItemScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Pressable onPress={() => router.back()} hitSlop={8} style={styles.back}>
+        <Pressable onPress={safeBack} hitSlop={8} style={styles.back}>
           <Text style={styles.backLabel}>← Annuler</Text>
         </Pressable>
 

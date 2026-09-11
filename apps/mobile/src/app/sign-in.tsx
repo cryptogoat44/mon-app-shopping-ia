@@ -27,7 +27,7 @@ export default function SignInScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <Pressable onPress={() => router.back()} hitSlop={8} style={styles.nav}>
+      <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/bienvenue"))} hitSlop={8} style={styles.nav}>
         <Text style={styles.back}>‹</Text>
       </Pressable>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>

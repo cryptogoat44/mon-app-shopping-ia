@@ -15,6 +15,11 @@ import { CameraIcon } from "@/components/icons";
 export default function NewPostScreen() {
   const router = useRouter();
   const { profile } = useAuth();
+
+  function safeBack() {
+    if (router.canGoBack()) router.back();
+    else router.replace("/profile");
+  }
   const [caption, setCaption] = useState("");
   const [privacy, setPrivacy] = useState<PrivacyLevel>(profile?.defaultPrivacy ?? "followers");
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -63,7 +68,7 @@ export default function NewPostScreen() {
     setSubmitting(true);
     try {
       await createLifestylePost({ caption: caption.trim(), imageUri, privacy });
-      router.back();
+      safeBack();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "La publication a échoué, réessayez.");
     } finally {
@@ -75,7 +80,7 @@ export default function NewPostScreen() {
     <View style={styles.sheet}>
       <View style={styles.handle} />
       <View style={styles.nav}>
-        <Pressable onPress={() => router.back()} hitSlop={8} style={styles.navSide}>
+        <Pressable onPress={safeBack} hitSlop={8} style={styles.navSide}>
           <Text style={styles.cancel}>{fr.publish.cancel}</Text>
         </Pressable>
         <Text style={styles.navTitle}>{fr.publish.title}</Text>

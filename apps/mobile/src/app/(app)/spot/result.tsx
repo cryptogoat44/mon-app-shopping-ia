@@ -62,7 +62,7 @@ export default function ResultScreen() {
     return (
       <SafeAreaView style={styles.screen}>
         <View style={styles.nav}>
-          <Pressable onPress={() => router.back()} hitSlop={8}>
+          <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} hitSlop={8}>
             <Text style={styles.back}>‹</Text>
           </Pressable>
         </View>
