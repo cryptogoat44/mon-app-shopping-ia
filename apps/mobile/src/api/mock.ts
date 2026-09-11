@@ -1,14 +1,8 @@
-import type { Piece, Profile, SpotResult, VaultItem, WishlistItem } from "./types";
+import type { Piece, Profile, VaultItem, WishlistItem } from "./types";
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-
-function randomLatency(): number {
-  return 2000 + Math.random() * 3000; // 2 à 5 secondes, comme demandé
-}
-
-const FAILURE_RATE = 0.1;
 
 const PIECE_CATALOG: Piece[] = [
   {
@@ -77,26 +71,6 @@ function byId(id: string): Piece {
   const piece = PIECE_CATALOG.find((p) => p.id === id);
   if (!piece) throw new Error(`Pièce introuvable dans le mock : ${id}`);
   return piece;
-}
-
-export async function spot(_source: { type: "link"; url: string } | { type: "photo"; uri: string }): Promise<SpotResult> {
-  await wait(randomLatency());
-
-  if (Math.random() < FAILURE_RATE) {
-    return { status: "failed", pieces: [], similarPieces: [] };
-  }
-
-  // Un tirage sur trois simule une image avec plusieurs pièces détectées.
-  const multi = Math.random() < 0.33;
-  const pieces = multi
-    ? [byId("bottega-bounce"), byId("kelly-25"), byId("tank-louis-cartier")]
-    : [byId("tank-louis-cartier")];
-
-  return {
-    status: "success",
-    pieces,
-    similarPieces: [byId("tank-must")],
-  };
 }
 
 export async function getRecentlySpotted(): Promise<Piece[]> {

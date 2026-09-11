@@ -29,7 +29,7 @@ export interface ApiErrorBody {
   message: string;
 }
 
-export type PlatformSource = "tiktok" | "instagram" | "other";
+export type PlatformSource = "tiktok" | "instagram" | "other" | "photo";
 export type RecognitionMethod = "oembed" | "manual_screenshot";
 export type SearchStatus = "pending" | "processing" | "completed" | "failed";
 
@@ -48,7 +48,7 @@ export interface ProductMatch {
 
 export interface ProductSearch {
   id: string;
-  sourceUrl: string;
+  sourceUrl: string | null;
   sourcePlatform: PlatformSource;
   method: RecognitionMethod;
   thumbnailUrl: string | null;
@@ -59,7 +59,7 @@ export interface ProductSearch {
 }
 
 export interface CreateSearchRequest {
-  sourceUrl: string;
+  sourceUrl?: string;
 }
 
 export interface ProductMatchClickResponse {

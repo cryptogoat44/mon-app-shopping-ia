@@ -15,11 +15,17 @@ export interface Piece {
 
 export type SpotStatus = "success" | "failed";
 
+/** "needs_photo" : le lien n'a pas de miniature officielle exploitable,
+ * l'utilisateur doit réessayer avec "Importer une photo". "no_match" :
+ * l'analyse a eu lieu mais n'a identifié aucune pièce. */
+export type SpotFailReason = "no_match" | "needs_photo";
+
 export interface SpotResult {
   status: SpotStatus;
   /** Une entrée par pièce détectée dans l'image. Vide si status === "failed". */
   pieces: Piece[];
   similarPieces: Piece[];
+  failReason?: SpotFailReason;
 }
 
 export type VaultVerificationState = "pending" | "verified" | "refused";

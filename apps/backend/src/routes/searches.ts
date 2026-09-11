@@ -6,7 +6,7 @@ import { searchProductsByImageUrl, type VisualMatch } from "../services/visualSe
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 
 const createSearchSchema = z.object({
-  sourceUrl: z.string().url(),
+  sourceUrl: z.string().url().optional(),
 });
 
 const SIGNED_URL_TTL_SECONDS = 300;
@@ -14,7 +14,7 @@ const SIGNED_URL_TTL_SECONDS = 300;
 interface ProductSearchRow {
   id: string;
   user_id: string;
-  source_url: string;
+  source_url: string | null;
   source_platform: PlatformSource;
   method: RecognitionMethod;
   thumbnail_url: string | null;
@@ -130,6 +130,31 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
 
     const userId = request.user!.id;
     const { sourceUrl } = parsed.data;
+
+    if (!sourceUrl) {
+      // Flux "Importer une photo" : pas de lien source, la recherche attend
+      // l'upload de la photo via /screenshot pour être traitée.
+      const { data: inserted, error: insertError } = await fastify.supabaseAdmin
+        .from("product_searches")
+        .insert({
+          user_id: userId,
+          source_url: null,
+          source_platform: "photo",
+          method: "manual_screenshot",
+          thumbnail_url: null,
+          status: "pending",
+        })
+        .select("*")
+        .single();
+
+      if (insertError || !inserted) {
+        request.log.error({ insertError }, "Échec de création de product_searches (photo)");
+        return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+      }
+
+      return reply.send(toProductSearch(inserted as ProductSearchRow, []));
+    }
+
     const platform = detectPlatform(sourceUrl);
 
     const thumbnail = await fetchOfficialThumbnail(sourceUrl, platform);

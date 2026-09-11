@@ -35,6 +35,7 @@ export const fr = {
     affiliateDisclosure: "Lien affilié",
     failTitle: "Nous n'avons pas pu identifier cette pièce.",
     failTip: "Essayez une image plus nette, ou recadrez sur la pièce uniquement.",
+    failTipNeedsPhoto: "Ce lien n'a pas de miniature exploitable. Essayez plutôt \"Importer une photo\" depuis Spotter.",
     retry: "Réessayer",
   },
   wishlist: {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Pressable, SafeAreaView, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import * as Haptics from "expo-haptics";
@@ -59,6 +60,7 @@ export default function ResultScreen() {
   }
 
   if (!result || result.status === "failed") {
+    const needsPhoto = result?.failReason === "needs_photo";
     return (
       <SafeAreaView style={styles.screen}>
         <View style={styles.nav}>
@@ -71,9 +73,12 @@ export default function ResultScreen() {
             <NotFoundIcon size={44} />
           </View>
           <Text style={styles.failTitle}>{fr.result.failTitle}</Text>
-          <Text style={styles.failTip}>{fr.result.failTip}</Text>
-          <Pressable style={styles.retryCta} onPress={handleRetry}>
-            <Text style={styles.retryLabel}>{fr.result.retry}</Text>
+          <Text style={styles.failTip}>{needsPhoto ? fr.result.failTipNeedsPhoto : fr.result.failTip}</Text>
+          <Pressable
+            style={styles.retryCta}
+            onPress={needsPhoto ? () => router.replace("/") : handleRetry}
+          >
+            <Text style={styles.retryLabel}>{needsPhoto ? "Retour à Spotter" : fr.result.retry}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -91,7 +96,11 @@ export default function ResultScreen() {
       </View>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.frame}>
-          <ClockIcon size={100} tint={color.encre} />
+          {piece.imageUrl ? (
+            <Image source={{ uri: piece.imageUrl }} style={styles.frameImage} contentFit="cover" />
+          ) : (
+            <ClockIcon size={100} tint={color.encre} />
+          )}
         </View>
 
         {result.pieces.length > 1 ? (
@@ -102,7 +111,11 @@ export default function ResultScreen() {
                 style={[styles.pk, index === selectedIndex ? styles.pkActive : null]}
                 onPress={() => setSelectedIndex(index)}
               >
-                <ClockIcon size={22} tint={color.encre} />
+                {p.imageUrl ? (
+                  <Image source={{ uri: p.imageUrl }} style={styles.pkImage} contentFit="cover" />
+                ) : (
+                  <ClockIcon size={22} tint={color.encre} />
+                )}
               </Pressable>
             ))}
           </View>
@@ -170,9 +183,11 @@ const styles = StyleSheet.create({
   nav: { height: 47, justifyContent: "center", paddingHorizontal: 12 },
   back: { fontSize: 26, color: color.encre },
   scroll: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
-  frame: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe, borderRadius: radius.sm, alignItems: "center", justifyContent: "center", marginBottom: space.md },
+  frame: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe, borderRadius: radius.sm, alignItems: "center", justifyContent: "center", marginBottom: space.md, overflow: "hidden" },
+  frameImage: { width: "100%", height: "100%" },
   picker: { flexDirection: "row", gap: 9, marginBottom: 6 },
-  pk: { width: 52, height: 52, borderRadius: radius.sm, backgroundColor: color.plinthe, alignItems: "center", justifyContent: "center" },
+  pk: { width: 52, height: 52, borderRadius: radius.sm, backgroundColor: color.plinthe, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  pkImage: { width: "100%", height: "100%" },
   pkActive: { borderWidth: 1.5, borderColor: color.encre },
   hint: { fontSize: font.caption, color: color.acier, marginBottom: space.lg },
   match: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
