@@ -22,7 +22,7 @@ function matchToPiece(match: ProductMatch): Piece {
     reference: match.brand,
     material: null,
     imageUrl: match.imageUrl,
-    confidence: match.rank === 0 ? "exact" : "similar",
+    confidence: match.rank === 1 ? "exact" : "similar",
     priceFrom: match.priceMin,
     currency: match.currency,
     merchantName: match.merchantName,
