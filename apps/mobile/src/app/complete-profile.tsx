@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
-import { FormError, FormField, PrimaryButton } from "@/components/form";
+import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, recordConsents, updateMyProfile } from "@/lib/api";
-import { theme } from "@/lib/theme";
+import { color, font, radius, serifFont, space } from "@/theme/tokens";
 
 const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
 
@@ -49,36 +48,60 @@ export default function CompleteProfileScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Dernière étape</Text>
-        <Text style={styles.subtitle}>Choisissez comment on vous reconnaît sur l'app.</Text>
+    <SafeAreaView style={styles.screen}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <View style={styles.content}>
+          <Text style={styles.title}>Dernière étape</Text>
+          <Text style={styles.subtitle}>Choisissez comment on vous reconnaît sur l'app.</Text>
 
-        <FormError message={error} />
+          {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <FormField label="Nom d'utilisateur" placeholder="ex. camille_l" value={username} onChangeText={setUsername} maxLength={20} />
-        <FormField
-          label="Nom affiché"
-          placeholder="ex. Camille L."
-          value={displayName}
-          onChangeText={setDisplayName}
-          autoCapitalize="words"
-          maxLength={60}
-        />
+          <View style={styles.field}>
+            <Text style={styles.label}>Nom d'utilisateur</Text>
+            <TextInput
+              style={styles.input}
+              autoCapitalize="none"
+              autoCorrect={false}
+              value={username}
+              onChangeText={setUsername}
+              maxLength={20}
+            />
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Nom affiché</Text>
+            <TextInput
+              style={styles.input}
+              autoCapitalize="words"
+              value={displayName}
+              onChangeText={setDisplayName}
+              maxLength={60}
+            />
+          </View>
 
-        <PrimaryButton
-          label={submitting ? "Enregistrement…" : "Continuer"}
-          onPress={handleSubmit}
-          disabled={submitting || !username || !displayName}
-        />
-      </View>
-    </KeyboardAvoidingView>
+          <Pressable
+            style={[styles.cta, (submitting || !username || !displayName) ? styles.ctaDisabled : null]}
+            onPress={handleSubmit}
+            disabled={submitting || !username || !displayName}
+          >
+            <Text style={styles.ctaLabel}>{submitting ? "Enregistrement…" : "Continuer"}</Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.color.ground },
-  content: { flex: 1, justifyContent: "center", paddingHorizontal: theme.space.lg },
-  title: { fontSize: theme.font.display, fontWeight: "700", color: theme.color.ink, marginBottom: theme.space.xs },
-  subtitle: { fontSize: theme.font.body, color: theme.color.muted, marginBottom: theme.space.lg },
+  screen: { flex: 1, backgroundColor: color.porcelaine },
+  flex: { flex: 1 },
+  content: { flex: 1, justifyContent: "center", paddingHorizontal: space.xl, maxWidth: 480, alignSelf: "center", width: "100%" },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, color: color.encre },
+  subtitle: { fontSize: font.secondary, color: color.acier, marginTop: space.xs, marginBottom: space.xl, lineHeight: 20 },
+  error: { fontSize: font.caption, color: color.acier, marginBottom: space.md },
+  field: { marginBottom: space.md },
+  label: { fontSize: font.caption, color: color.acier, marginBottom: space.xs },
+  input: { borderBottomWidth: 1, borderBottomColor: color.filet, paddingVertical: 10, fontSize: font.body, color: color.encre },
+  cta: { backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", marginTop: space.lg },
+  ctaDisabled: { opacity: 0.5 },
+  ctaLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
 });

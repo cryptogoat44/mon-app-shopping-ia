@@ -8,6 +8,7 @@ import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
 import { addToVaultFromPiece, addToWishlist } from "@/api/client";
 import { getLastSpotResult } from "@/api/spotSession";
+import { addVaultItemFromMatch } from "@/lib/api";
 import type { Piece, SpotResult } from "@/api/types";
 import { ClockIcon, NotFoundIcon, VerifiedIcon } from "@/components/icons";
 
@@ -51,7 +52,24 @@ export default function ResultScreen() {
   async function handleMarkBought() {
     if (!piece || bought) return;
     setBought(true);
-    await addToVaultFromPiece(piece).catch(() => setBought(false));
+    try {
+      if (piece.real) {
+        // Pièce issue d'une vraie recherche IA : on l'ajoute pour de vrai
+        // au vault (même endpoint que l'ancien écran de recherche réel).
+        await addVaultItemFromMatch({
+          title: piece.name.slice(0, 120),
+          imageUrl: piece.imageUrl,
+          category: "other",
+          productMatchId: piece.id,
+        });
+      } else {
+        // Pièce de démonstration (catalogue mock) : pas de product_match
+        // réel à référencer, donc pas d'ajout serveur possible pour l'instant.
+        await addToVaultFromPiece(piece);
+      }
+    } catch {
+      setBought(false);
+    }
   }
 
   async function handleShare() {

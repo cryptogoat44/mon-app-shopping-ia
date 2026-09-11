@@ -27,6 +27,7 @@ function matchToPiece(match: ProductMatch): Piece {
     currency: match.currency,
     merchantName: match.merchantName,
     merchantUrl: match.merchantUrl,
+    real: true,
   };
 }
 

@@ -11,6 +11,10 @@ export interface Piece {
   currency: string | null;
   merchantName: string | null;
   merchantUrl: string | null;
+  /** true seulement pour une pièce issue d'une vraie recherche IA (id =
+   * l'id réel d'un product_match côté serveur) — permet de distinguer
+   * une pièce réelle d'une pièce de démonstration (catalogue mock). */
+  real?: boolean;
 }
 
 export type SpotStatus = "success" | "failed";
