@@ -73,11 +73,6 @@ function byId(id: string): Piece {
   return piece;
 }
 
-export async function getRecentlySpotted(): Promise<Piece[]> {
-  await wait(300);
-  return [byId("tank-louis-cartier"), byId("kelly-25"), byId("bottega-bounce")];
-}
-
 export async function getVaultItems(): Promise<VaultItem[]> {
   await wait(300);
   return [

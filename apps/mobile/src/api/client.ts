@@ -1,5 +1,5 @@
 import type { ProductMatch, ProductSearch, WishlistItem as RemoteWishlistItem } from "@monapp/shared-types";
-import { addWishlistItem, createSearch, fetchWishlist, uploadSearchScreenshot } from "@/lib/api";
+import { addWishlistItem, createSearch, fetchWishlist, listRecentSearches, uploadSearchScreenshot } from "@/lib/api";
 import * as mock from "./mock";
 import type { Piece, Profile, SpotResult, VaultItem, WishlistItem } from "./types";
 
@@ -74,9 +74,11 @@ export async function spot(source: { type: "link"; url: string } | { type: "phot
   }
 }
 
+// Branché sur le vrai historique de recherches (table product_searches) —
+// même logique de reconnexion que getWishlist.
 export async function getRecentlySpotted(): Promise<Piece[]> {
-  if (USE_MOCK) return mock.getRecentlySpotted();
-  notImplemented();
+  const searches = await listRecentSearches();
+  return searches.filter((search) => search.matches.length > 0).map((search) => matchToPiece(search.matches[0]));
 }
 
 // Branché sur le vrai backend (table wishlist_items) — "Garder" persiste

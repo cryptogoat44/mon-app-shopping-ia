@@ -109,6 +109,12 @@ export async function fetchSearch(searchId: string): Promise<ProductSearch> {
   return response.json();
 }
 
+export async function listRecentSearches(limit?: number): Promise<ProductSearch[]> {
+  const query = limit ? `?limit=${limit}` : "";
+  const response = await authorizedFetch(`/api/searches${query}`);
+  return response.json();
+}
+
 export async function trackProductMatchClick(matchId: string): Promise<ProductMatchClickResponse> {
   const response = await authorizedFetch(`/api/product-matches/${matchId}/click`, { method: "POST" });
   return response.json();

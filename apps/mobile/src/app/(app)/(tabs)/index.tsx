@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
@@ -17,7 +18,11 @@ function RecentItem({ piece }: { piece: Piece }) {
   return (
     <View style={styles.recentItem}>
       <View style={styles.recentThumb}>
-        <ClockIcon size={30} tint={color.encre} />
+        {piece.imageUrl ? (
+          <Image source={{ uri: piece.imageUrl }} style={styles.recentThumbImage} contentFit="cover" />
+        ) : (
+          <ClockIcon size={30} tint={color.encre} />
+        )}
       </View>
       <Text style={styles.recentName} numberOfLines={1}>
         {piece.name}
@@ -132,6 +137,8 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
+  recentThumbImage: { width: "100%", height: "100%" },
   recentName: { fontSize: font.caption, color: color.acier, marginTop: 7, lineHeight: 16 },
 });

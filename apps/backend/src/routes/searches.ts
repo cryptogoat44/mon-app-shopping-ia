@@ -26,6 +26,7 @@ interface ProductSearchRow {
 
 interface ProductMatchRow {
   id: string;
+  search_id?: string;
   rank: number;
   product_name: string;
   brand: string | null;
@@ -118,7 +119,65 @@ async function saveMatches(
   }
 }
 
+const RECENT_SEARCHES_DEFAULT_LIMIT = 6;
+const RECENT_SEARCHES_MAX_LIMIT = 20;
+
 export default async function searchesRoutes(fastify: FastifyInstance) {
+  // Alimente "Récemment spottées" (Spotter et le sélecteur de pièces de
+  // Publier) : les recherches réussies les plus récentes, avec seulement
+  // leur meilleur résultat (rank 1) — le mobile n'affiche qu'une vignette
+  // par recherche, pas la liste complète des correspondances.
+  fastify.get("/api/searches", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    const userId = request.user!.id;
+    const requestedLimit = Number((request.query as { limit?: string }).limit);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, RECENT_SEARCHES_MAX_LIMIT)
+      : RECENT_SEARCHES_DEFAULT_LIMIT;
+
+    const { data: searches, error } = await fastify.supabaseAdmin
+      .from("product_searches")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("status", "completed")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      request.log.error({ error }, "Échec de lecture de l'historique des recherches");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+
+    const rows = (searches as ProductSearchRow[]) ?? [];
+    if (rows.length === 0) {
+      return reply.send([]);
+    }
+
+    const { data: matchRows, error: matchError } = await fastify.supabaseAdmin
+      .from("product_matches")
+      .select("*")
+      .in("search_id", rows.map((row) => row.id))
+      .eq("rank", 1);
+
+    if (matchError) {
+      request.log.error({ matchError }, "Échec de lecture des meilleurs résultats de l'historique");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+
+    const topMatchBySearch = new Map<string, ProductMatchRow>();
+    for (const match of (matchRows as ProductMatchRow[]) ?? []) {
+      if (match.search_id) topMatchBySearch.set(match.search_id, match);
+    }
+
+    return reply.send(
+      rows
+        .map((row) => {
+          const topMatch = topMatchBySearch.get(row.id);
+          return topMatch ? toProductSearch(row, [topMatch]) : null;
+        })
+        .filter((search): search is ProductSearch => search !== null)
+    );
+  });
+
   // Étape 1 : voie officielle (oEmbed). Si elle échoue ou ne donne rien
   // d'exploitable, la recherche reste en statut "failed" avec method
   // "manual_screenshot" : le mobile propose alors l'import d'une capture.
