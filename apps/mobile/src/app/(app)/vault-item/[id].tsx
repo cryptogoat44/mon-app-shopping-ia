@@ -2,16 +2,19 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
 import type { PrivacyLevel, VaultItem } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
 import { ApiError, deleteVaultItem, fetchVaultItem, sharePurchasePost, updateVaultItem } from "@/lib/api";
 import { PRIVACY_LABELS, PRIVACY_LEVELS, VAULT_CATEGORY_LABELS } from "@/lib/vault-labels";
 import { VerifiedIcon } from "@/components/icons";
+import { useToast } from "@/lib/toast-context";
 
 export default function VaultItemDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { showToast } = useToast();
 
   function safeBack() {
     if (router.canGoBack()) router.back();
@@ -32,9 +35,10 @@ export default function VaultItemDetailScreen() {
   }, [id]);
 
   async function handlePrivacyChange(privacy: PrivacyLevel) {
-    if (!item) return;
+    if (!item || item.privacy === privacy) return;
     setBusy(true);
     setError(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
       const updated = await updateVaultItem(item.id, { privacy });
       setItem(updated);
@@ -51,6 +55,7 @@ export default function VaultItemDetailScreen() {
     setError(null);
     try {
       await sharePurchasePost(item.id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setShared(true);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : fr.vaultItem.shareError);
@@ -65,6 +70,8 @@ export default function VaultItemDetailScreen() {
     setError(null);
     try {
       await deleteVaultItem(item.id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      showToast(fr.vaultItem.removedToast);
       safeBack();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : fr.vaultItem.removeError);

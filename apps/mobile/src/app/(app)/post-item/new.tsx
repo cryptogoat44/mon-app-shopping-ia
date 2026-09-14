@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
 import type { PrivacyLevel } from "@monapp/shared-types";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, createLifestylePost } from "@/lib/api";
@@ -11,10 +12,12 @@ import { fr } from "@/i18n/fr";
 import { getRecentlySpotted } from "@/api/client";
 import type { Piece } from "@/api/types";
 import { CameraIcon } from "@/components/icons";
+import { useToast } from "@/lib/toast-context";
 
 export default function NewPostScreen() {
   const router = useRouter();
   const { profile } = useAuth();
+  const { showToast } = useToast();
 
   function safeBack() {
     if (router.canGoBack()) router.back();
@@ -68,6 +71,8 @@ export default function NewPostScreen() {
     setSubmitting(true);
     try {
       await createLifestylePost({ caption: caption.trim(), imageUri, privacy });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      showToast(fr.publish.published);
       safeBack();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "La publication a échoué, réessayez.");

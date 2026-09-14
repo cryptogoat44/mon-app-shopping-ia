@@ -46,12 +46,14 @@ export default function ResultScreen() {
   async function handleKeep() {
     if (!piece || kept) return;
     setKept(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     await addToWishlist(piece).catch(() => setKept(false));
   }
 
   async function handleMarkBought() {
     if (!piece || bought) return;
     setBought(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
       if (piece.real) {
         // Pièce issue d'une vraie recherche IA : on l'ajoute pour de vrai

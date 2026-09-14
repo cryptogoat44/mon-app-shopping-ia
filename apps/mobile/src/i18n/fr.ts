@@ -64,6 +64,7 @@ export const fr = {
     shared: "Partagé dans le fil ✓",
     remove: "Retirer du vault",
     removeConfirm: "Retirer définitivement cet objet ?",
+    removedToast: "Retiré du vault",
     removing: "Suppression…",
     confirm: "Confirmer",
     cancel: "Annuler",

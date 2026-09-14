@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
 import type { Post } from "@monapp/shared-types";
 import { ApiError, fetchFeed, reactToPost } from "@/lib/api";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
@@ -29,6 +30,7 @@ function PostRow({ post }: { post: Post }) {
 
   async function like() {
     if (reacted) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setReacted(true);
     setReactionCount((c) => c + 1);
     try {
@@ -43,6 +45,7 @@ function PostRow({ post }: { post: Post }) {
 
   async function handleReactButton() {
     setBusy(true);
+    if (!reacted) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setReacted((r) => !r);
     setReactionCount((c) => c + (reacted ? -1 : 1));
     try {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
 import type { PublicProfile } from "@monapp/shared-types";
 import { ApiError, followUser, searchUsers, unfollowUser } from "@/lib/api";
 import { color, font, radius, space } from "@/theme/tokens";
@@ -12,6 +13,7 @@ function PersonRow({ person, onToggle }: { person: PublicProfile; onToggle: (id:
 
   async function handleToggle() {
     setBusy(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
       if (following) {
         await unfollowUser(person.id);

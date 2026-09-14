@@ -3,6 +3,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { ToastProvider } from "@/lib/toast-context";
 import { isProfileComplete } from "@monapp/shared-types";
 
 SplashScreen.preventAutoHideAsync();
@@ -41,8 +42,10 @@ function RootNavigator() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <StatusBar style="dark" />
-      <RootNavigator />
+      <ToastProvider>
+        <StatusBar style="dark" />
+        <RootNavigator />
+      </ToastProvider>
     </AuthProvider>
   );
 }
