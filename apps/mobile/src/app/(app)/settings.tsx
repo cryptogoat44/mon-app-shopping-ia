@@ -93,6 +93,13 @@ export default function SettingsScreen() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <View style={styles.section}>
+          <Text style={styles.sectionLabel}>{fr.settings.account}</Text>
+          <Pressable onPress={() => router.push("/edit-profile")} hitSlop={4}>
+            <Text style={styles.link}>{fr.settings.editProfile}</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionLabel}>Vos données</Text>
           <Text style={styles.sectionBody}>
             {termsGrantedAt

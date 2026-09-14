@@ -93,6 +93,7 @@ export const fr = {
   settings: {
     title: "Réglages",
     account: "Compte",
+    editProfile: "Modifier le profil",
     privacy: "Profil public ou privé",
     exportData: "Exporter mes données",
     deleteAccount: "Supprimer mon compte",
@@ -101,6 +102,20 @@ export const fr = {
     privacyPolicy: "Politique de confidentialité",
     howWeEarn: "Comment Spotto se rémunère",
     signOut: "Se déconnecter",
+  },
+  editProfile: {
+    title: "Modifier le profil",
+    username: "Nom d'utilisateur",
+    displayName: "Nom affiché",
+    bio: "Bio",
+    bioPlaceholder: "Quelques mots sur vous…",
+    save: "Enregistrer",
+    saving: "Enregistrement…",
+    saved: "Profil mis à jour",
+    usernameError: "Le nom d'utilisateur doit faire 3 à 20 caractères : lettres minuscules, chiffres, underscore.",
+    usernameTaken: "Ce nom d'utilisateur est déjà pris.",
+    displayNameError: "Le nom affiché est obligatoire.",
+    saveError: "Une erreur est survenue, réessayez.",
   },
   auth: {
     continueWithApple: "Continuer avec Apple",
