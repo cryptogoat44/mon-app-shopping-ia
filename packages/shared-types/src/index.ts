@@ -162,3 +162,13 @@ export interface ConsentStatus {
 export interface RecordConsentsRequest {
   types: ConsentType[];
 }
+
+export type NotificationType = "follow" | "like";
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  actor: PostAuthor;
+  createdAt: string;
+  read: boolean;
+}

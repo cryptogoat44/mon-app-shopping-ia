@@ -117,6 +117,13 @@ export const fr = {
     displayNameError: "Le nom affiché est obligatoire.",
     saveError: "Une erreur est survenue, réessayez.",
   },
+  notifications: {
+    title: "Notifications",
+    empty: "Aucune notification pour l'instant.",
+    follow: "a commencé à vous suivre.",
+    like: "a aimé votre publication.",
+    loadError: "Impossible de charger les notifications.",
+  },
   auth: {
     continueWithApple: "Continuer avec Apple",
     continueWithEmail: "Continuer avec un e-mail",

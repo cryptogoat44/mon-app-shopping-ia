@@ -123,6 +123,20 @@ export function PlusIcon({ size = 24, tint = color.blanc, strokeWidth = 1.6 }: I
   );
 }
 
+export function BellIcon({ size = 24, tint = color.encre, strokeWidth = 1.4 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M6 10.5a6 6 0 0 1 12 0v3.8l1.6 2.7H4.4L6 14.3v-3.8Z"
+        stroke={tint}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+      <Path d="M10 19.5a2 2 0 0 0 4 0" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 export function NotFoundIcon({ size = 44, tint = color.acier, strokeWidth = 1.3 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">

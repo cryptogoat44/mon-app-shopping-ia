@@ -1,5 +1,6 @@
 import type {
   ApiErrorBody,
+  AppNotification,
   ConsentStatus,
   ConsentType,
   CreateSearchRequest,
@@ -218,6 +219,21 @@ export async function fetchFeed(): Promise<Post[]> {
 export async function fetchMyLifestylePosts(): Promise<Post[]> {
   const response = await authorizedFetch("/api/posts/mine");
   return response.json();
+}
+
+export async function fetchNotifications(): Promise<AppNotification[]> {
+  const response = await authorizedFetch("/api/notifications");
+  return response.json();
+}
+
+export async function fetchUnreadNotificationCount(): Promise<number> {
+  const response = await authorizedFetch("/api/notifications/unread-count");
+  const data = (await response.json()) as { count: number };
+  return data.count;
+}
+
+export async function markNotificationsRead(): Promise<void> {
+  await authorizedFetch("/api/notifications/read-all", { method: "POST" });
 }
 
 export async function createLifestylePost(params: {

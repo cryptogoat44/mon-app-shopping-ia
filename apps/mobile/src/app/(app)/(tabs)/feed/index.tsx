@@ -4,10 +4,11 @@ import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import type { Post } from "@monapp/shared-types";
-import { ApiError, fetchFeed, reactToPost } from "@/lib/api";
+import { ApiError, fetchFeed, fetchUnreadNotificationCount, reactToPost } from "@/lib/api";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
-import { HeartIcon, PersonIcon, VerifiedIcon } from "@/components/icons";
+import { BellIcon, HeartIcon, PersonIcon, VerifiedIcon } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
+import { timeAgo } from "@/lib/time";
 
 const DOUBLE_TAP_DELAY_MS = 300;
 
@@ -22,17 +23,6 @@ function FeedSkeletonRow() {
       <Skeleton style={{ width: "70%", height: 12, marginTop: 12 }} />
     </View>
   );
-}
-
-function timeAgo(iso: string): string {
-  const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
-  if (seconds < 60) return "à l'instant";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `il y a ${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `il y a ${hours} h`;
-  const days = Math.floor(hours / 24);
-  return `il y a ${days} j`;
 }
 
 function PostRow({ post }: { post: Post }) {
@@ -140,6 +130,7 @@ export default function FeedScreen() {
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -164,6 +155,11 @@ export default function FeedScreen() {
         .catch((e) => {
           if (!cancelled) setError(e instanceof ApiError ? e.message : "Impossible de charger le fil.");
         });
+      fetchUnreadNotificationCount()
+        .then((count) => {
+          if (!cancelled) setUnreadCount(count);
+        })
+        .catch(() => {});
       return () => {
         cancelled = true;
       };
@@ -180,9 +176,22 @@ export default function FeedScreen() {
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.title}>Fil</Text>
-        <Pressable onPress={() => router.push("/people-search")} hitSlop={8}>
-          <Text style={styles.headerLink}>Profils</Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => router.push("/notifications")}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={unreadCount > 0 ? `Notifications, ${unreadCount} non lues` : "Notifications"}
+          >
+            <View>
+              <BellIcon size={21} tint={color.encre} />
+              {unreadCount > 0 ? <View style={styles.badge} /> : null}
+            </View>
+          </Pressable>
+          <Pressable onPress={() => router.push("/people-search")} hitSlop={8}>
+            <Text style={styles.headerLink}>Profils</Text>
+          </Pressable>
+        </View>
       </View>
 
       {posts === null && !error ? (
@@ -232,7 +241,19 @@ const styles = StyleSheet.create({
     paddingBottom: space.sm,
   },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, color: color.encre },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: space.md },
   headerLink: { fontSize: font.secondary, color: color.acier, fontWeight: "600" },
+  badge: {
+    position: "absolute",
+    top: -1,
+    right: -1,
+    width: 8,
+    height: 8,
+    borderRadius: radius.full,
+    backgroundColor: color.vert,
+    borderWidth: 1.5,
+    borderColor: color.porcelaine,
+  },
   content: { paddingTop: space.sm, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   errorText: { color: color.acier, fontSize: font.secondary, paddingHorizontal: space.lg, marginBottom: space.md },
   empty: { alignItems: "center", marginTop: space.xl, paddingHorizontal: space.lg },

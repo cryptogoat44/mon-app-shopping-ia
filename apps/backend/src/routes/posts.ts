@@ -287,6 +287,12 @@ export default async function postsRoutes(fastify: FastifyInstance) {
       await fastify.supabaseAdmin.from("post_reactions").delete().eq("post_id", id).eq("user_id", userId);
     } else {
       await fastify.supabaseAdmin.from("post_reactions").insert({ post_id: id, user_id: userId });
+      // Jamais de notification pour un like sur sa propre publication.
+      if (post.user_id !== userId) {
+        await fastify.supabaseAdmin
+          .from("notifications")
+          .insert({ user_id: post.user_id, actor_id: userId, type: "like", post_id: id });
+      }
     }
 
     const { count } = await fastify.supabaseAdmin
