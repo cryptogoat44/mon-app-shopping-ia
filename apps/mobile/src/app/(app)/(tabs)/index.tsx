@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
@@ -35,14 +35,21 @@ export default function SpotterScreen() {
   const router = useRouter();
   const [recent, setRecent] = useState<Piece[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadRecent = useCallback(() => getRecentlySpotted().then(setRecent).catch(() => {}), []);
 
   useFocusEffect(
     useCallback(() => {
-      getRecentlySpotted()
-        .then(setRecent)
-        .catch(() => {});
-    }, [])
+      loadRecent();
+    }, [loadRecent])
   );
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await loadRecent();
+    setRefreshing(false);
+  }
 
   async function handlePasteLink() {
     setError(null);
@@ -68,7 +75,10 @@ export default function SpotterScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>{fr.spotter.title}</Text>
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
+      >
         <Text style={styles.question}>{fr.spotter.question}</Text>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}

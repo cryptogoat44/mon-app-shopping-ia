@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
@@ -19,14 +19,23 @@ export default function ProfileScreen() {
   const [items, setItems] = useState<VaultItem[]>([]);
   const [segment, setSegment] = useState<"vault" | "lifestyle">("vault");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(() => fetchVault().then(setItems).catch(() => {}), []);
 
   useFocusEffect(
     useCallback(() => {
-      fetchVault()
-        .then(setItems)
-        .catch(() => {});
-    }, [])
+      load();
+    }, [load])
   );
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await Promise.all([load(), refreshProfile()]);
+    setRefreshing(false);
+  }
+
+  const isEmptyVault = segment === "vault" && items.length === 0;
 
   async function handlePickAvatar() {
     if (uploadingAvatar) return;
@@ -108,45 +117,48 @@ export default function ProfileScreen() {
         </Pressable>
       </View>
 
-      {segment === "vault" && items.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyText}>{fr.profile.emptyVault}</Text>
-          <Pressable onPress={() => router.push("/(app)/(tabs)")}>
-            <Text style={styles.emptyCta}>{fr.profile.emptyVaultCta}</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <ScrollView contentContainerStyle={styles.grid}>
-          {segment === "vault"
-            ? items.map((item) => (
-                <Pressable
-                  key={item.id}
-                  style={styles.piece}
-                  onPress={() => router.push({ pathname: "/vault-item/[id]", params: { id: item.id } })}
-                >
-                  <View style={styles.thumb}>
-                    {item.imageUrl ? (
-                      <Image source={{ uri: item.imageUrl }} style={styles.thumbImage} contentFit="cover" />
-                    ) : (
-                      <ClockIcon size={30} tint={color.encre} />
-                    )}
+      <ScrollView
+        contentContainerStyle={isEmptyVault ? styles.emptyContent : styles.grid}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
+      >
+        {segment === "vault" ? (
+          isEmptyVault ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>{fr.profile.emptyVault}</Text>
+              <Pressable onPress={() => router.push("/(app)/(tabs)")}>
+                <Text style={styles.emptyCta}>{fr.profile.emptyVaultCta}</Text>
+              </Pressable>
+            </View>
+          ) : (
+            items.map((item) => (
+              <Pressable
+                key={item.id}
+                style={styles.piece}
+                onPress={() => router.push({ pathname: "/vault-item/[id]", params: { id: item.id } })}
+              >
+                <View style={styles.thumb}>
+                  {item.imageUrl ? (
+                    <Image source={{ uri: item.imageUrl }} style={styles.thumbImage} contentFit="cover" />
+                  ) : (
+                    <ClockIcon size={30} tint={color.encre} />
+                  )}
+                </View>
+                {item.verified ? (
+                  <View style={styles.verifiedBadge}>
+                    <VerifiedIcon size={16} />
                   </View>
-                  {item.verified ? (
-                    <View style={styles.verifiedBadge}>
-                      <VerifiedIcon size={16} />
-                    </View>
-                  ) : null}
-                  <Text style={styles.pname} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  {!item.verified ? <Text style={styles.pstate}>{fr.profile.pendingVerification}</Text> : null}
-                </Pressable>
-              ))
-            : (
-                <Text style={styles.emptyLifestyle}>Rien à afficher pour l'instant.</Text>
-              )}
-        </ScrollView>
-      )}
+                ) : null}
+                <Text style={styles.pname} numberOfLines={1}>
+                  {item.title}
+                </Text>
+                {!item.verified ? <Text style={styles.pstate}>{fr.profile.pendingVerification}</Text> : null}
+              </Pressable>
+            ))
+          )
+        ) : (
+          <Text style={styles.emptyLifestyle}>Rien à afficher pour l'instant.</Text>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -210,6 +222,7 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     width: "100%",
   },
+  emptyContent: { flexGrow: 1 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl, marginTop: -60 },
   emptyText: { fontSize: font.secondary, color: color.acier, textAlign: "center", lineHeight: 20, marginBottom: space.md },
   emptyCta: { fontSize: font.body, color: color.vert, fontWeight: "600" },
