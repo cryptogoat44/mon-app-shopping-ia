@@ -57,6 +57,8 @@ export const fr = {
     emptyVaultCta: "Spotter une pièce",
     avatarUpdated: "Photo de profil mise à jour",
     avatarError: "L'envoi de la photo a échoué.",
+    emptyLifestyle: "Aucune publication lifestyle pour l'instant.",
+    emptyLifestyleCta: "Publier une photo",
   },
   vaultItem: {
     back: "Vault",

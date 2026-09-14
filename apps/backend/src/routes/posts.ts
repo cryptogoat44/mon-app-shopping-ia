@@ -113,6 +113,30 @@ export default async function postsRoutes(fastify: FastifyInstance) {
     return reply.send(hydrated);
   });
 
+  // Alimente le segment "Lifestyle" du profil : uniquement les publications
+  // de type "lifestyle" de l'utilisateur (les posts "achat" sont déjà
+  // visibles via le segment Vault, pas la peine de les dupliquer ici).
+  // Aucun filtre de confidentialité : c'est le propriétaire qui consulte
+  // son propre profil, il voit tout ce qu'il a publié.
+  fastify.get("/api/posts/mine", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    const userId = request.user!.id;
+
+    const { data: posts, error } = await fastify.supabaseAdmin
+      .from("posts")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("type", "lifestyle")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      request.log.error({ error }, "Échec de lecture des publications lifestyle");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+
+    const hydrated = await hydratePosts(fastify, (posts as PostRow[]) ?? [], userId);
+    return reply.send(hydrated);
+  });
+
   // multipart toujours, comme /api/vault : soit une photo importée (post
   // "lifestyle"), soit une référence à un objet du vault dont on reprend
   // la photo et le titre (post "achat").

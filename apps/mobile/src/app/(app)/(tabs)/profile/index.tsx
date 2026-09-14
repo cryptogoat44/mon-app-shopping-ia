@@ -7,8 +7,8 @@ import * as Haptics from "expo-haptics";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
 import { useAuth } from "@/lib/auth-context";
-import { ApiError, fetchVault, uploadAvatar } from "@/lib/api";
-import type { VaultItem } from "@monapp/shared-types";
+import { ApiError, fetchMyLifestylePosts, fetchVault, uploadAvatar } from "@/lib/api";
+import type { Post, VaultItem } from "@monapp/shared-types";
 import { CameraIcon, ClockIcon, GearIcon, PersonIcon, VerifiedIcon } from "@/components/icons";
 import { useToast } from "@/lib/toast-context";
 
@@ -17,11 +17,19 @@ export default function ProfileScreen() {
   const { profile, refreshProfile } = useAuth();
   const { showToast } = useToast();
   const [items, setItems] = useState<VaultItem[]>([]);
+  const [lifestylePosts, setLifestylePosts] = useState<Post[]>([]);
   const [segment, setSegment] = useState<"vault" | "lifestyle">("vault");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(() => fetchVault().then(setItems).catch(() => {}), []);
+  const load = useCallback(
+    () =>
+      Promise.all([
+        fetchVault().then(setItems).catch(() => {}),
+        fetchMyLifestylePosts().then(setLifestylePosts).catch(() => {}),
+      ]),
+    []
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -36,6 +44,8 @@ export default function ProfileScreen() {
   }
 
   const isEmptyVault = segment === "vault" && items.length === 0;
+  const isEmptyLifestyle = segment === "lifestyle" && lifestylePosts.length === 0;
+  const isEmpty = isEmptyVault || isEmptyLifestyle;
 
   async function handlePickAvatar() {
     if (uploadingAvatar) return;
@@ -118,7 +128,7 @@ export default function ProfileScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={isEmptyVault ? styles.emptyContent : styles.grid}
+        contentContainerStyle={isEmpty ? styles.emptyContent : styles.grid}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
       >
         {segment === "vault" ? (
@@ -155,8 +165,21 @@ export default function ProfileScreen() {
               </Pressable>
             ))
           )
+        ) : isEmptyLifestyle ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyText}>{fr.profile.emptyLifestyle}</Text>
+            <Pressable onPress={() => router.push("/post-item/new")}>
+              <Text style={styles.emptyCta}>{fr.profile.emptyLifestyleCta}</Text>
+            </Pressable>
+          </View>
         ) : (
-          <Text style={styles.emptyLifestyle}>Rien à afficher pour l'instant.</Text>
+          lifestylePosts.map((post) => (
+            <View key={post.id} style={styles.piece}>
+              <View style={styles.thumb}>
+                <Image source={{ uri: post.mediaUrl }} style={styles.thumbImage} contentFit="cover" />
+              </View>
+            </View>
+          ))
         )}
       </ScrollView>
     </SafeAreaView>
@@ -249,5 +272,4 @@ const styles = StyleSheet.create({
   },
   pname: { fontSize: font.caption, color: color.encre, marginTop: space.xs },
   pstate: { fontSize: 11, color: color.acier, marginTop: 1 },
-  emptyLifestyle: { fontSize: font.secondary, color: color.acier, paddingTop: space.xl, textAlign: "center", width: "100%" },
 });

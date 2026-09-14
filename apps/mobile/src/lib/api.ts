@@ -215,6 +215,11 @@ export async function fetchFeed(): Promise<Post[]> {
   return response.json();
 }
 
+export async function fetchMyLifestylePosts(): Promise<Post[]> {
+  const response = await authorizedFetch("/api/posts/mine");
+  return response.json();
+}
+
 export async function createLifestylePost(params: {
   caption: string;
   imageUri: string;
