@@ -115,6 +115,14 @@ export function GearIcon({ size = 22, tint = color.encre, strokeWidth = 1.3 }: I
   );
 }
 
+export function PlusIcon({ size = 24, tint = color.blanc, strokeWidth = 1.6 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M12 5v14M5 12h14" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 export function NotFoundIcon({ size = 44, tint = color.acier, strokeWidth = 1.3 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">

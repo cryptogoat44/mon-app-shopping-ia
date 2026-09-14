@@ -51,6 +51,8 @@ export const fr = {
     publish: "Publier",
     follow: "Suivre",
     following: "Abonné",
+    followers: "Abonnés",
+    followingCount: "Abonnements",
   },
   publish: {
     title: "Nouvelle publication",

@@ -25,11 +25,9 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.nav}>
+        <Text style={styles.navHandle}>@{profile?.username}</Text>
         <Pressable onPress={() => router.push("/settings")} hitSlop={8}>
           <GearIcon size={21} tint={color.encre} />
-        </Pressable>
-        <Pressable onPress={() => router.push("/post-item/new")} hitSlop={8}>
-          <Text style={styles.publish}>{fr.profile.publish}</Text>
         </Pressable>
       </View>
 
@@ -37,12 +35,25 @@ export default function ProfileScreen() {
         <View style={styles.avatar}>
           <PersonIcon size={26} tint={color.encre} />
         </View>
-        <View style={styles.who}>
-          <Text style={styles.name}>{profile?.displayName}</Text>
-          <Text style={styles.handle}>@{profile?.username}</Text>
+        <View style={styles.stats}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{items.length}</Text>
+            <Text style={styles.statLabel}>{fr.profile.vault}</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{profile?.followersCount ?? 0}</Text>
+            <Text style={styles.statLabel}>{fr.profile.followers}</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{profile?.followingCount ?? 0}</Text>
+            <Text style={styles.statLabel}>{fr.profile.followingCount}</Text>
+          </View>
         </View>
       </View>
-      {profile?.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
+      <View style={styles.who}>
+        <Text style={styles.name}>{profile?.displayName}</Text>
+        {profile?.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
+      </View>
 
       <View style={styles.seg}>
         <Pressable onPress={() => setSegment("vault")}>
@@ -86,13 +97,16 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.lg },
-  publish: { fontSize: font.secondary, fontWeight: "600", color: color.vert },
-  head: { paddingHorizontal: space.lg, flexDirection: "row", gap: 14, alignItems: "center" },
-  avatar: { width: 64, height: 64, borderRadius: radius.full, backgroundColor: color.plinthe, alignItems: "center", justifyContent: "center" },
-  who: { flex: 1 },
+  navHandle: { fontSize: font.body, fontWeight: "600", color: color.encre },
+  head: { paddingHorizontal: space.lg, flexDirection: "row", gap: space.xl, alignItems: "center" },
+  avatar: { width: 72, height: 72, borderRadius: radius.full, backgroundColor: color.plinthe, alignItems: "center", justifyContent: "center" },
+  stats: { flex: 1, flexDirection: "row", justifyContent: "space-around" },
+  statItem: { alignItems: "center" },
+  statNumber: { fontSize: font.body, fontWeight: "600", color: color.encre },
+  statLabel: { fontSize: font.caption, color: color.acier, marginTop: 2 },
+  who: { paddingHorizontal: space.lg, paddingTop: space.md },
   name: { fontSize: font.body, fontWeight: "600", color: color.encre },
-  handle: { fontSize: font.secondary, color: color.acier, marginTop: 1 },
-  bio: { fontSize: font.secondary, color: color.acier, paddingHorizontal: space.lg, paddingTop: space.md, lineHeight: 19 },
+  bio: { fontSize: font.secondary, color: color.acier, marginTop: 4, lineHeight: 19 },
   seg: { flexDirection: "row", gap: 22, paddingHorizontal: space.lg, paddingTop: space.lg, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: color.filet },
   segItem: { fontSize: 14.5, color: color.acier, paddingBottom: 12 },
   segItemActive: { color: color.encre, fontWeight: "600" },

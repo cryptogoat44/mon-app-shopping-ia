@@ -1,9 +1,12 @@
-import { Tabs } from "expo-router";
-import { color } from "@/theme/tokens";
+import { View } from "react-native";
+import { Tabs, useRouter } from "expo-router";
+import { color, radius } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
-import { BookmarkIcon, FeedIcon, PersonIcon, SearchIcon } from "@/components/icons";
+import { BookmarkIcon, FeedIcon, PersonIcon, PlusIcon, SearchIcon } from "@/components/icons";
 
 export default function TabsLayout() {
+  const router = useRouter();
+
   return (
     <Tabs
       screenOptions={{
@@ -24,6 +27,34 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="feed"
         options={{ title: "Fil", tabBarIcon: ({ color: tint }) => <FeedIcon tint={String(tint)} /> }}
+      />
+      <Tabs.Screen
+        name="publish"
+        options={{
+          title: fr.profile.publish,
+          tabBarLabel: () => null,
+          tabBarIcon: () => (
+            <View
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: radius.full,
+                backgroundColor: color.vert,
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: -6,
+              }}
+            >
+              <PlusIcon size={18} tint={color.blanc} />
+            </View>
+          ),
+        }}
+        listeners={{
+          tabPress: (e) => {
+            e.preventDefault();
+            router.push("/post-item/new");
+          },
+        }}
       />
       <Tabs.Screen
         name="wishlist"

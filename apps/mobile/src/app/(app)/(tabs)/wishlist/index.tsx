@@ -1,11 +1,18 @@
 import { useCallback, useState } from "react";
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
 import { getWishlist } from "@/api/client";
-import type { WishlistItem } from "@/api/types";
+import type { Piece, WishlistItem } from "@/api/types";
 import { ClockIcon } from "@/components/icons";
+
+function formatPrice(item: Piece): string | null {
+  if (item.priceFrom === null) return null;
+  const currency = item.currency === "EUR" ? "€" : (item.currency ?? "");
+  return `${item.priceFrom.toLocaleString("fr-FR")} ${currency}`.trim();
+}
 
 export default function WishlistScreen() {
   const router = useRouter();
@@ -36,11 +43,16 @@ export default function WishlistScreen() {
           {(items ?? []).map((item) => (
             <View key={item.id} style={styles.card}>
               <View style={styles.thumb}>
-                <ClockIcon size={30} tint={color.encre} />
+                {item.imageUrl ? (
+                  <Image source={{ uri: item.imageUrl }} style={styles.thumbImage} contentFit="cover" />
+                ) : (
+                  <ClockIcon size={30} tint={color.encre} />
+                )}
               </View>
               <Text style={styles.name} numberOfLines={1}>
                 {item.name}
               </Text>
+              {formatPrice(item) ? <Text style={styles.price}>{formatPrice(item)}</Text> : null}
             </View>
           ))}
         </ScrollView>
@@ -68,6 +80,8 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   card: { width: "31%" },
-  thumb: { backgroundColor: color.plinthe, borderRadius: radius.sm, aspectRatio: 1, alignItems: "center", justifyContent: "center", marginBottom: space.xs },
+  thumb: { backgroundColor: color.plinthe, borderRadius: radius.sm, aspectRatio: 1, alignItems: "center", justifyContent: "center", marginBottom: space.xs, overflow: "hidden" },
+  thumbImage: { width: "100%", height: "100%" },
   name: { fontSize: font.caption, color: color.encre },
+  price: { fontSize: 11, color: color.acier, marginTop: 2 },
 });

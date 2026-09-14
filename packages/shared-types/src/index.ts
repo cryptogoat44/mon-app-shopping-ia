@@ -8,6 +8,8 @@ export interface Profile {
   bio: string | null;
   locale: string;
   defaultPrivacy: PrivacyLevel;
+  followersCount: number;
+  followingCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -83,6 +85,30 @@ export interface UpdateVaultItemRequest {
   title?: string;
   category?: VaultCategory;
   privacy?: PrivacyLevel;
+}
+
+export interface WishlistItem {
+  id: string;
+  title: string;
+  imageUrl: string;
+  reference: string | null;
+  priceMin: number | null;
+  currency: string | null;
+  merchantName: string | null;
+  merchantUrl: string | null;
+  productMatchId: string | null;
+  createdAt: string;
+}
+
+export interface CreateWishlistItemRequest {
+  title: string;
+  imageUrl: string;
+  reference?: string | null;
+  priceMin?: number | null;
+  currency?: string | null;
+  merchantName?: string | null;
+  merchantUrl?: string | null;
+  productMatchId?: string | null;
 }
 
 export interface PublicProfile {

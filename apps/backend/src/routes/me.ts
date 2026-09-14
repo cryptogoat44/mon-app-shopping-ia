@@ -26,7 +26,7 @@ interface ProfileRow {
   updated_at: string;
 }
 
-function toProfile(row: ProfileRow): Profile {
+function toProfile(row: ProfileRow, followersCount: number, followingCount: number): Profile {
   return {
     id: row.id,
     username: row.username,
@@ -35,6 +35,8 @@ function toProfile(row: ProfileRow): Profile {
     bio: row.bio,
     locale: row.locale,
     defaultPrivacy: row.default_privacy,
+    followersCount,
+    followingCount,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -44,18 +46,18 @@ export default async function meRoutes(fastify: FastifyInstance) {
   fastify.get("/api/me", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const userId = request.user!.id;
 
-    const { data, error } = await fastify.supabaseAdmin
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single();
+    const [{ data, error }, followers, following] = await Promise.all([
+      fastify.supabaseAdmin.from("profiles").select("*").eq("id", userId).single(),
+      fastify.supabaseAdmin.from("follows").select("*", { count: "exact", head: true }).eq("followee_id", userId),
+      fastify.supabaseAdmin.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", userId),
+    ]);
 
     if (error || !data) {
       request.log.error({ error }, "Profil introuvable pour un utilisateur authentifié");
       return reply.code(404).send({ error: "profile_not_found", message: "Profil introuvable." });
     }
 
-    return reply.send(toProfile(data as ProfileRow));
+    return reply.send(toProfile(data as ProfileRow, followers.count ?? 0, following.count ?? 0));
   });
 
   fastify.patch("/api/me", { preHandler: fastify.requireAuth }, async (request, reply) => {
@@ -87,6 +89,8 @@ export default async function meRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    return reply.send(toProfile(data as ProfileRow));
+    // Un profil qu'on vient de compléter n'a par construction encore
+    // aucun abonné/abonnement — pas besoin de requêter les compteurs ici.
+    return reply.send(toProfile(data as ProfileRow, 0, 0));
   });
 }

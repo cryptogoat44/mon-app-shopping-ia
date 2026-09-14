@@ -1,5 +1,5 @@
-import type { ProductMatch, ProductSearch } from "@monapp/shared-types";
-import { createSearch, uploadSearchScreenshot } from "@/lib/api";
+import type { ProductMatch, ProductSearch, WishlistItem as RemoteWishlistItem } from "@monapp/shared-types";
+import { addWishlistItem, createSearch, fetchWishlist, uploadSearchScreenshot } from "@/lib/api";
 import * as mock from "./mock";
 import type { Piece, Profile, SpotResult, VaultItem, WishlistItem } from "./types";
 
@@ -28,6 +28,23 @@ function matchToPiece(match: ProductMatch): Piece {
     merchantName: match.merchantName,
     merchantUrl: match.merchantUrl,
     real: true,
+  };
+}
+
+function wishlistRowToItem(row: RemoteWishlistItem): WishlistItem {
+  return {
+    id: row.id,
+    name: row.title,
+    reference: row.reference,
+    material: null,
+    imageUrl: row.imageUrl,
+    confidence: "exact",
+    priceFrom: row.priceMin,
+    currency: row.currency,
+    merchantName: row.merchantName,
+    merchantUrl: row.merchantUrl,
+    real: true,
+    addedAt: row.createdAt,
   };
 }
 
@@ -62,9 +79,11 @@ export async function getRecentlySpotted(): Promise<Piece[]> {
   notImplemented();
 }
 
+// Branché sur le vrai backend (table wishlist_items) — "Garder" persiste
+// vraiment pour les pièces issues d'une recherche réelle.
 export async function getWishlist(): Promise<WishlistItem[]> {
-  if (USE_MOCK) return mock.getWishlist();
-  notImplemented();
+  const rows = await fetchWishlist();
+  return rows.map(wishlistRowToItem);
 }
 
 export async function getVaultItems(): Promise<VaultItem[]> {
@@ -78,8 +97,21 @@ export async function getMyProfile(): Promise<Profile> {
 }
 
 export async function addToWishlist(piece: Piece): Promise<void> {
-  if (USE_MOCK) return mock.addToWishlist(piece);
-  notImplemented();
+  if (!piece.real) {
+    // Pièce de démonstration (catalogue mock) : pas de vraie pièce à
+    // référencer, l'ajout reste local/factice.
+    return mock.addToWishlist(piece);
+  }
+  await addWishlistItem({
+    title: piece.name,
+    imageUrl: piece.imageUrl,
+    reference: piece.reference,
+    priceMin: piece.priceFrom,
+    currency: piece.currency,
+    merchantName: piece.merchantName,
+    merchantUrl: piece.merchantUrl,
+    productMatchId: piece.id,
+  });
 }
 
 export async function addToVaultFromPiece(piece: Piece): Promise<void> {

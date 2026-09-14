@@ -1,11 +1,13 @@
-import { useCallback, useState } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useRef, useState } from "react";
+import { ActivityIndicator, Animated, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import type { Post } from "@monapp/shared-types";
 import { ApiError, fetchFeed, reactToPost } from "@/lib/api";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { HeartIcon, PersonIcon, VerifiedIcon } from "@/components/icons";
+
+const DOUBLE_TAP_DELAY_MS = 300;
 
 function timeAgo(iso: string): string {
   const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
@@ -22,8 +24,24 @@ function PostRow({ post }: { post: Post }) {
   const [reactionCount, setReactionCount] = useState(post.reactionCount);
   const [reacted, setReacted] = useState(post.viewerHasReacted);
   const [busy, setBusy] = useState(false);
+  const lastTapRef = useRef(0);
+  const heartPop = useRef(new Animated.Value(0)).current;
 
-  async function handleReact() {
+  async function like() {
+    if (reacted) return;
+    setReacted(true);
+    setReactionCount((c) => c + 1);
+    try {
+      const result = await reactToPost(post.id);
+      setReacted(result.viewerHasReacted);
+      setReactionCount(result.reactionCount);
+    } catch {
+      setReacted(false);
+      setReactionCount((c) => c - 1);
+    }
+  }
+
+  async function handleReactButton() {
     setBusy(true);
     setReacted((r) => !r);
     setReactionCount((c) => c + (reacted ? -1 : 1));
@@ -39,6 +57,19 @@ function PostRow({ post }: { post: Post }) {
     }
   }
 
+  function handleMediaPress() {
+    const now = Date.now();
+    if (now - lastTapRef.current < DOUBLE_TAP_DELAY_MS) {
+      like();
+      heartPop.setValue(0);
+      Animated.sequence([
+        Animated.spring(heartPop, { toValue: 1, useNativeDriver: true, friction: 4 }),
+        Animated.timing(heartPop, { toValue: 0, duration: 220, delay: 300, useNativeDriver: true }),
+      ]).start();
+    }
+    lastTapRef.current = now;
+  }
+
   return (
     <View style={styles.post}>
       <View style={styles.author}>
@@ -50,11 +81,25 @@ function PostRow({ post }: { post: Post }) {
         <Text style={styles.timestamp}>{timeAgo(post.createdAt)}</Text>
       </View>
 
-      <Image source={{ uri: post.mediaUrl }} style={styles.media} contentFit="cover" />
+      <Pressable onPress={handleMediaPress}>
+        <Image source={{ uri: post.mediaUrl }} style={styles.media} contentFit="cover" />
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.heartOverlay,
+            {
+              opacity: heartPop,
+              transform: [{ scale: heartPop.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.15] }) }],
+            },
+          ]}
+        >
+          <HeartIcon size={64} tint={color.blanc} filled />
+        </Animated.View>
+      </Pressable>
 
       {post.caption ? <Text style={styles.caption}>{post.caption}</Text> : null}
 
-      <Pressable onPress={handleReact} disabled={busy} style={styles.reactRow} hitSlop={8}>
+      <Pressable onPress={handleReactButton} disabled={busy} style={styles.reactRow} hitSlop={8}>
         <HeartIcon size={19} tint={reacted ? color.encre : color.acier} filled={reacted} />
         <Text style={styles.reactCount}>{reactionCount}</Text>
       </Pressable>
@@ -66,6 +111,17 @@ export default function FeedScreen() {
   const router = useRouter();
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const data = await fetchFeed();
+      setPosts(data);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Impossible de charger le fil.");
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -86,6 +142,12 @@ export default function FeedScreen() {
     }, [])
   );
 
+  async function handleRefresh() {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }
+
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
@@ -100,7 +162,10 @@ export default function FeedScreen() {
           <ActivityIndicator color={color.encre} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
+        >
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
           {posts?.length === 0 ? (
@@ -150,6 +215,7 @@ const styles = StyleSheet.create({
   authorName: { fontSize: 14, fontWeight: "600", color: color.encre },
   timestamp: { fontSize: 12, color: color.acier, marginLeft: "auto" },
   media: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe, borderRadius: radius.sm },
+  heartOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
   caption: { fontSize: 14.5, color: color.encre, marginTop: 12, lineHeight: 20 },
   reactRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12 },
   reactCount: { fontSize: font.secondary, color: color.acier },

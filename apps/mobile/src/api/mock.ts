@@ -1,4 +1,4 @@
-import type { Piece, Profile, VaultItem, WishlistItem } from "./types";
+import type { Piece, Profile, VaultItem } from "./types";
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -76,14 +76,6 @@ function byId(id: string): Piece {
 export async function getRecentlySpotted(): Promise<Piece[]> {
   await wait(300);
   return [byId("tank-louis-cartier"), byId("kelly-25"), byId("bottega-bounce")];
-}
-
-export async function getWishlist(): Promise<WishlistItem[]> {
-  await wait(300);
-  return [
-    { ...byId("tank-must"), addedAt: "2026-09-02T10:00:00.000Z" },
-    { ...byId("ceinture-h"), addedAt: "2026-08-28T14:30:00.000Z" },
-  ];
 }
 
 export async function getVaultItems(): Promise<VaultItem[]> {

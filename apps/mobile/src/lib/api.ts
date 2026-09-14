@@ -3,6 +3,7 @@ import type {
   ConsentStatus,
   ConsentType,
   CreateSearchRequest,
+  CreateWishlistItemRequest,
   Post,
   Profile,
   ProductMatchClickResponse,
@@ -13,6 +14,7 @@ import type {
   UpdateVaultItemRequest,
   VaultCategory,
   VaultItem,
+  WishlistItem,
 } from "@monapp/shared-types";
 import { supabase } from "./supabase";
 
@@ -166,6 +168,19 @@ export async function updateVaultItem(id: string, payload: UpdateVaultItemReques
 
 export async function deleteVaultItem(id: string): Promise<void> {
   await authorizedFetch(`/api/vault/${id}`, { method: "DELETE" });
+}
+
+export async function fetchWishlist(): Promise<WishlistItem[]> {
+  const response = await authorizedFetch("/api/wishlist");
+  return response.json();
+}
+
+export async function addWishlistItem(payload: CreateWishlistItemRequest): Promise<WishlistItem> {
+  const response = await authorizedFetch("/api/wishlist", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return response.json();
 }
 
 export async function searchUsers(query: string): Promise<PublicProfile[]> {
