@@ -7,6 +7,7 @@ import { fr } from "@/i18n/fr";
 import { getWishlist } from "@/api/client";
 import type { Piece, WishlistItem } from "@/api/types";
 import { ClockIcon } from "@/components/icons";
+import { Skeleton } from "@/components/skeleton";
 
 function formatPrice(item: Piece): string | null {
   if (item.priceFrom === null) return null;
@@ -33,6 +34,7 @@ export default function WishlistScreen() {
     setRefreshing(false);
   }
 
+  const loading = items === null;
   const isEmpty = items?.length === 0;
 
   return (
@@ -44,7 +46,14 @@ export default function WishlistScreen() {
         contentContainerStyle={isEmpty ? styles.emptyContent : styles.grid}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
       >
-        {isEmpty ? (
+        {loading ? (
+          [0, 1, 2].map((i) => (
+            <View key={i} style={styles.card}>
+              <Skeleton style={styles.thumb} />
+              <Skeleton style={{ width: "80%", height: 11 }} />
+            </View>
+          ))
+        ) : isEmpty ? (
           <View style={styles.empty}>
             <Text style={styles.emptyText}>{fr.wishlist.empty}</Text>
             <Pressable onPress={() => router.push("/(app)/(tabs)")}>

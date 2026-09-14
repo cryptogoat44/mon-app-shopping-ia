@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -7,8 +7,22 @@ import type { Post } from "@monapp/shared-types";
 import { ApiError, fetchFeed, reactToPost } from "@/lib/api";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { HeartIcon, PersonIcon, VerifiedIcon } from "@/components/icons";
+import { Skeleton } from "@/components/skeleton";
 
 const DOUBLE_TAP_DELAY_MS = 300;
+
+function FeedSkeletonRow() {
+  return (
+    <View style={styles.post}>
+      <View style={styles.author}>
+        <Skeleton style={styles.avatar} />
+        <Skeleton style={{ width: 100, height: 12 }} />
+      </View>
+      <Skeleton style={styles.media} />
+      <Skeleton style={{ width: "70%", height: 12, marginTop: 12 }} />
+    </View>
+  );
+}
 
 function timeAgo(iso: string): string {
   const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
@@ -172,8 +186,10 @@ export default function FeedScreen() {
       </View>
 
       {posts === null && !error ? (
-        <View style={styles.centered}>
-          <ActivityIndicator color={color.encre} />
+        <View style={styles.content}>
+          <FeedSkeletonRow />
+          <View style={styles.divider} />
+          <FeedSkeletonRow />
         </View>
       ) : (
         <ScrollView
@@ -207,7 +223,6 @@ export default function FeedScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.porcelaine },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",

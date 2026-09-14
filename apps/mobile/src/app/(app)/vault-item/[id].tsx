@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -10,6 +10,7 @@ import { ApiError, deleteVaultItem, fetchVaultItem, sharePurchasePost, updateVau
 import { PRIVACY_LABELS, PRIVACY_LEVELS, VAULT_CATEGORY_LABELS } from "@/lib/vault-labels";
 import { VerifiedIcon } from "@/components/icons";
 import { useToast } from "@/lib/toast-context";
+import { Skeleton } from "@/components/skeleton";
 
 export default function VaultItemDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -82,8 +83,16 @@ export default function VaultItemDetailScreen() {
   if (!item) {
     return (
       <SafeAreaView style={styles.screen}>
-        <View style={styles.centered}>
-          {error ? <Text style={styles.errorText}>{error}</Text> : <ActivityIndicator color={color.encre} />}
+        <View style={styles.content}>
+          {error ? (
+            <Text style={styles.errorText}>{error}</Text>
+          ) : (
+            <>
+              <Skeleton style={styles.image} />
+              <Skeleton style={{ width: "60%", height: 20, marginBottom: space.xs }} />
+              <Skeleton style={{ width: "35%", height: 14, marginBottom: space.lg }} />
+            </>
+          )}
         </View>
       </SafeAreaView>
     );
@@ -169,7 +178,6 @@ export default function VaultItemDetailScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.porcelaine },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: space.lg },
   content: { padding: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   back: { marginBottom: space.lg },
   backLabel: { color: color.encre, fontSize: font.secondary },

@@ -11,6 +11,7 @@ import { ApiError, fetchMyLifestylePosts, fetchVault, uploadAvatar } from "@/lib
 import type { Post, VaultItem } from "@monapp/shared-types";
 import { CameraIcon, ClockIcon, GearIcon, PersonIcon, VerifiedIcon } from "@/components/icons";
 import { useToast } from "@/lib/toast-context";
+import { Skeleton } from "@/components/skeleton";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -21,13 +22,14 @@ export default function ProfileScreen() {
   const [segment, setSegment] = useState<"vault" | "lifestyle">("vault");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(
     () =>
       Promise.all([
         fetchVault().then(setItems).catch(() => {}),
         fetchMyLifestylePosts().then(setLifestylePosts).catch(() => {}),
-      ]),
+      ]).finally(() => setLoading(false)),
     []
   );
 
@@ -45,7 +47,7 @@ export default function ProfileScreen() {
 
   const isEmptyVault = segment === "vault" && items.length === 0;
   const isEmptyLifestyle = segment === "lifestyle" && lifestylePosts.length === 0;
-  const isEmpty = isEmptyVault || isEmptyLifestyle;
+  const isEmpty = !loading && (isEmptyVault || isEmptyLifestyle);
 
   async function handlePickAvatar() {
     if (uploadingAvatar) return;
@@ -145,7 +147,14 @@ export default function ProfileScreen() {
         contentContainerStyle={isEmpty ? styles.emptyContent : styles.grid}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
       >
-        {segment === "vault" ? (
+        {loading ? (
+          [0, 1, 2].map((i) => (
+            <View key={i} style={styles.piece}>
+              <Skeleton style={styles.thumb} />
+              <Skeleton style={{ width: "80%", height: 11, marginTop: space.xs }} />
+            </View>
+          ))
+        ) : segment === "vault" ? (
           isEmptyVault ? (
             <View style={styles.empty}>
               <Text style={styles.emptyText}>{fr.profile.emptyVault}</Text>
