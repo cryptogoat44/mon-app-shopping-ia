@@ -73,6 +73,14 @@ export async function updateMyProfile(payload: UpdateMeRequest): Promise<Profile
   return response.json();
 }
 
+export async function uploadAvatar(imageUri: string): Promise<Profile> {
+  const formData = new FormData();
+  appendImageFile(formData, "file", imageUri);
+
+  const response = await authorizedFetch("/api/me/avatar", { method: "POST", body: formData });
+  return response.json();
+}
+
 export async function createSearch(payload: CreateSearchRequest): Promise<ProductSearch> {
   const response = await authorizedFetch("/api/searches", {
     method: "POST",

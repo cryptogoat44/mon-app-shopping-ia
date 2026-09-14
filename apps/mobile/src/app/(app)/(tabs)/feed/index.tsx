@@ -77,7 +77,11 @@ function PostRow({ post }: { post: Post }) {
     <View style={styles.post}>
       <View style={styles.author}>
         <View style={styles.avatar}>
-          <PersonIcon size={16} tint={color.acier} />
+          {post.author.avatarUrl ? (
+            <Image source={{ uri: post.author.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+          ) : (
+            <PersonIcon size={16} tint={color.acier} />
+          )}
         </View>
         <Text style={styles.authorName}>{post.author.displayName}</Text>
         {post.vaultItem?.verified ? <VerifiedIcon size={13} /> : null}
@@ -214,7 +218,16 @@ const styles = StyleSheet.create({
   emptyLink: { fontSize: font.body, color: color.vert, fontWeight: "600" },
   post: { paddingHorizontal: space.lg, paddingBottom: 26 },
   author: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
-  avatar: { width: 32, height: 32, borderRadius: radius.full, backgroundColor: color.plinthe, alignItems: "center", justifyContent: "center" },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.full,
+    backgroundColor: color.plinthe,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  avatarImage: { width: "100%", height: "100%" },
   authorName: { fontSize: 14, fontWeight: "600", color: color.encre },
   timestamp: { fontSize: 12, color: color.acier, marginLeft: "auto" },
   media: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe, borderRadius: radius.sm },

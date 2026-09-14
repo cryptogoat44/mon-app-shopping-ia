@@ -55,6 +55,8 @@ export const fr = {
     followingCount: "Abonnements",
     emptyVault: "Aucune pièce dans votre vault. Confirmez un achat depuis Spotter pour l'ajouter ici.",
     emptyVaultCta: "Spotter une pièce",
+    avatarUpdated: "Photo de profil mise à jour",
+    avatarError: "L'envoi de la photo a échoué.",
   },
   vaultItem: {
     back: "Vault",

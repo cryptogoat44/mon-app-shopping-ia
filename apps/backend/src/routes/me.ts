@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Profile } from "@monapp/shared-types";
+import { isFileTooLargeError } from "../lib/multipartErrors.js";
 
 const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
 
@@ -42,14 +44,24 @@ function toProfile(row: ProfileRow, followersCount: number, followingCount: numb
   };
 }
 
+async function fetchFollowCounts(
+  fastify: FastifyInstance,
+  userId: string
+): Promise<{ followersCount: number; followingCount: number }> {
+  const [followers, following] = await Promise.all([
+    fastify.supabaseAdmin.from("follows").select("*", { count: "exact", head: true }).eq("followee_id", userId),
+    fastify.supabaseAdmin.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", userId),
+  ]);
+  return { followersCount: followers.count ?? 0, followingCount: following.count ?? 0 };
+}
+
 export default async function meRoutes(fastify: FastifyInstance) {
   fastify.get("/api/me", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const userId = request.user!.id;
 
-    const [{ data, error }, followers, following] = await Promise.all([
+    const [{ data, error }, counts] = await Promise.all([
       fastify.supabaseAdmin.from("profiles").select("*").eq("id", userId).single(),
-      fastify.supabaseAdmin.from("follows").select("*", { count: "exact", head: true }).eq("followee_id", userId),
-      fastify.supabaseAdmin.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", userId),
+      fetchFollowCounts(fastify, userId),
     ]);
 
     if (error || !data) {
@@ -57,7 +69,60 @@ export default async function meRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "profile_not_found", message: "Profil introuvable." });
     }
 
-    return reply.send(toProfile(data as ProfileRow, followers.count ?? 0, following.count ?? 0));
+    return reply.send(toProfile(data as ProfileRow, counts.followersCount, counts.followingCount));
+  });
+
+  fastify.post("/api/me/avatar", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    const userId = request.user!.id;
+
+    const file = await request.file();
+    if (!file || !file.mimetype.startsWith("image/")) {
+      return reply.code(400).send({ error: "invalid_file", message: "Merci d'envoyer une image." });
+    }
+
+    let buffer: Buffer;
+    try {
+      buffer = await file.toBuffer();
+    } catch (error) {
+      if (isFileTooLargeError(error)) {
+        return reply.code(413).send({ error: "file_too_large", message: "Le fichier est trop volumineux (10 Mo maximum)." });
+      }
+      throw error;
+    }
+
+    const extension = file.mimetype.split("/")[1] ?? "jpg";
+    // upsert avec un nom fixe par utilisateur : une photo de profil n'a
+    // qu'une seule version à la fois, contrairement aux photos du vault.
+    const path = `${userId}/avatar.${extension}`;
+
+    const { error: uploadError } = await fastify.supabaseAdmin.storage
+      .from("avatars")
+      .upload(path, buffer, { contentType: file.mimetype, upsert: true });
+
+    if (uploadError) {
+      request.log.error({ uploadError }, "Échec d'upload de la photo de profil");
+      return reply.code(500).send({ error: "upload_failed", message: "L'envoi de la photo a échoué." });
+    }
+
+    // Un paramètre anti-cache : upsert écrase le même chemin, donc le CDN /
+    // le cache navigateur doit être invité à revalider plutôt que resservir
+    // l'ancienne image sous la même URL.
+    const publicUrl = `${fastify.supabaseAdmin.storage.from("avatars").getPublicUrl(path).data.publicUrl}?v=${randomUUID()}`;
+
+    const { data: updated, error: updateError } = await fastify.supabaseAdmin
+      .from("profiles")
+      .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
+      .eq("id", userId)
+      .select("*")
+      .single();
+
+    if (updateError || !updated) {
+      request.log.error({ updateError }, "Échec de mise à jour de avatar_url");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+
+    const counts = await fetchFollowCounts(fastify, userId);
+    return reply.send(toProfile(updated as ProfileRow, counts.followersCount, counts.followingCount));
   });
 
   fastify.patch("/api/me", { preHandler: fastify.requireAuth }, async (request, reply) => {

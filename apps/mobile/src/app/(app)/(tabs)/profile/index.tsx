@@ -1,19 +1,24 @@
 import { useCallback, useState } from "react";
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
+import * as Haptics from "expo-haptics";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
 import { useAuth } from "@/lib/auth-context";
-import { fetchVault } from "@/lib/api";
+import { ApiError, fetchVault, uploadAvatar } from "@/lib/api";
 import type { VaultItem } from "@monapp/shared-types";
-import { ClockIcon, GearIcon, PersonIcon, VerifiedIcon } from "@/components/icons";
+import { CameraIcon, ClockIcon, GearIcon, PersonIcon, VerifiedIcon } from "@/components/icons";
+import { useToast } from "@/lib/toast-context";
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
+  const { showToast } = useToast();
   const [items, setItems] = useState<VaultItem[]>([]);
   const [segment, setSegment] = useState<"vault" | "lifestyle">("vault");
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -22,6 +27,31 @@ export default function ProfileScreen() {
         .catch(() => {});
     }, [])
   );
+
+  async function handlePickAvatar() {
+    if (uploadingAvatar) return;
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.8,
+      allowsEditing: true,
+      aspect: [1, 1],
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    setUploadingAvatar(true);
+    try {
+      await uploadAvatar(result.assets[0].uri);
+      await refreshProfile();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      showToast(fr.profile.avatarUpdated);
+    } catch (e) {
+      showToast(e instanceof ApiError ? e.message : fr.profile.avatarError);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -33,9 +63,22 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.head}>
-        <View style={styles.avatar}>
-          <PersonIcon size={26} tint={color.encre} />
-        </View>
+        <Pressable style={styles.avatar} onPress={handlePickAvatar} disabled={uploadingAvatar}>
+          {profile?.avatarUrl ? (
+            <Image source={{ uri: profile.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+          ) : (
+            <PersonIcon size={26} tint={color.encre} />
+          )}
+          {uploadingAvatar ? (
+            <View style={styles.avatarOverlay}>
+              <ActivityIndicator color={color.blanc} size="small" />
+            </View>
+          ) : (
+            <View style={styles.avatarBadge}>
+              <CameraIcon size={12} tint={color.blanc} strokeWidth={1.6} />
+            </View>
+          )}
+        </Pressable>
         <View style={styles.stats}>
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>{items.length}</Text>
@@ -113,7 +156,39 @@ const styles = StyleSheet.create({
   nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.lg },
   navHandle: { fontSize: font.body, fontWeight: "600", color: color.encre },
   head: { paddingHorizontal: space.lg, flexDirection: "row", gap: space.xl, alignItems: "center" },
-  avatar: { width: 72, height: 72, borderRadius: radius.full, backgroundColor: color.plinthe, alignItems: "center", justifyContent: "center" },
+  avatar: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.full,
+    backgroundColor: color.plinthe,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  avatarImage: { width: "100%", height: "100%" },
+  avatarOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(29,29,31,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 22,
+    height: 22,
+    borderRadius: radius.full,
+    backgroundColor: color.vert,
+    borderWidth: 2,
+    borderColor: color.porcelaine,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   stats: { flex: 1, flexDirection: "row", justifyContent: "space-around" },
   statItem: { alignItems: "center" },
   statNumber: { fontSize: font.body, fontWeight: "600", color: color.encre },

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import type { PublicProfile } from "@monapp/shared-types";
@@ -32,7 +33,11 @@ function PersonRow({ person, onToggle }: { person: PublicProfile; onToggle: (id:
   return (
     <View style={styles.row}>
       <View style={styles.avatar}>
-        <PersonIcon size={20} tint={color.acier} />
+        {person.avatarUrl ? (
+          <Image source={{ uri: person.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+        ) : (
+          <PersonIcon size={20} tint={color.acier} />
+        )}
       </View>
       <View style={styles.rowText}>
         <Text style={styles.displayName}>{person.displayName}</Text>
@@ -156,7 +161,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: color.filet,
   },
-  avatar: { width: 40, height: 40, borderRadius: radius.full, backgroundColor: color.plinthe, alignItems: "center", justifyContent: "center" },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    backgroundColor: color.plinthe,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  avatarImage: { width: "100%", height: "100%" },
   rowText: { flex: 1 },
   displayName: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   username: { fontSize: font.caption, color: color.acier },
