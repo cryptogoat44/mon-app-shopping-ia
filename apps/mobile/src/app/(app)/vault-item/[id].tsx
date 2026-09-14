@@ -92,7 +92,13 @@ export default function VaultItemDetailScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Pressable onPress={safeBack} hitSlop={8} style={styles.back}>
+        <Pressable
+          onPress={safeBack}
+          hitSlop={8}
+          style={styles.back}
+          accessibilityRole="button"
+          accessibilityLabel="Retour au vault"
+        >
           <Text style={styles.backLabel}>‹ {fr.vaultItem.back}</Text>
         </Pressable>
 
@@ -119,6 +125,8 @@ export default function VaultItemDetailScreen() {
               style={[styles.privacyPill, item.privacy === level ? styles.privacyPillActive : null]}
               onPress={() => handlePrivacyChange(level)}
               disabled={busy}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: item.privacy === level }}
             >
               <Text style={[styles.privacyLabel, item.privacy === level ? styles.privacyLabelActive : null]}>
                 {PRIVACY_LABELS[level]}

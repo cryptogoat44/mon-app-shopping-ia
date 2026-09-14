@@ -67,7 +67,13 @@ export default function SignUpScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/bienvenue"))} hitSlop={8} style={styles.nav}>
+      <Pressable
+        onPress={() => (router.canGoBack() ? router.back() : router.replace("/bienvenue"))}
+        hitSlop={8}
+        style={styles.nav}
+        accessibilityRole="button"
+        accessibilityLabel="Retour"
+      >
         <Text style={styles.back}>‹</Text>
       </Pressable>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -88,6 +94,7 @@ export default function SignUpScreen() {
               autoCorrect={false}
               value={email}
               onChangeText={setEmail}
+              accessibilityLabel={fr.auth.email}
             />
           </View>
           <View style={styles.field}>
@@ -101,6 +108,7 @@ export default function SignUpScreen() {
               autoCorrect={false}
               value={password}
               onChangeText={setPassword}
+              accessibilityLabel={fr.auth.password}
             />
           </View>
           <View style={styles.field}>
@@ -113,10 +121,18 @@ export default function SignUpScreen() {
               autoCorrect={false}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
+              accessibilityLabel={fr.auth.signUp.confirmPassword}
             />
           </View>
 
-          <Pressable style={styles.consentRow} onPress={() => setConsentChecked((c) => !c)} hitSlop={4}>
+          <Pressable
+            style={styles.consentRow}
+            onPress={() => setConsentChecked((c) => !c)}
+            hitSlop={4}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: consentChecked }}
+            accessibilityLabel={fr.auth.signUp.consent}
+          >
             <View style={[styles.checkbox, consentChecked ? styles.checkboxChecked : null]}>
               {consentChecked ? <Text style={styles.checkmark}>✓</Text> : null}
             </View>

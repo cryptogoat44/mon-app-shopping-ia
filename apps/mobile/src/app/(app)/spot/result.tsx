@@ -84,7 +84,12 @@ export default function ResultScreen() {
     return (
       <SafeAreaView style={styles.screen}>
         <View style={styles.nav}>
-          <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} hitSlop={8}>
+          <Pressable
+            onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Retour"
+          >
             <Text style={styles.back}>‹</Text>
           </Pressable>
         </View>
@@ -110,7 +115,7 @@ export default function ResultScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.nav}>
-        <Pressable onPress={() => router.back()} hitSlop={8}>
+        <Pressable onPress={() => router.back()} hitSlop={8} accessibilityRole="button" accessibilityLabel="Retour">
           <Text style={styles.back}>‹</Text>
         </Pressable>
       </View>
@@ -130,6 +135,9 @@ export default function ResultScreen() {
                 key={p.id}
                 style={[styles.pk, index === selectedIndex ? styles.pkActive : null]}
                 onPress={() => setSelectedIndex(index)}
+                accessibilityRole="button"
+                accessibilityLabel={p.name}
+                accessibilityState={{ selected: index === selectedIndex }}
               >
                 {p.imageUrl ? (
                   <Image source={{ uri: p.imageUrl }} style={styles.pkImage} contentFit="cover" />

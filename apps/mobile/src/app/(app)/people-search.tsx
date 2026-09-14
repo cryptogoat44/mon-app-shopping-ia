@@ -102,7 +102,12 @@ export default function PeopleSearchScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.nav}>
-        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/feed"))} hitSlop={8}>
+        <Pressable
+          onPress={() => (router.canGoBack() ? router.back() : router.replace("/feed"))}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Retour"
+        >
           <Text style={styles.back}>‹</Text>
         </Pressable>
       </View>
@@ -117,6 +122,7 @@ export default function PeopleSearchScreen() {
             onChangeText={handleSearch}
             autoCapitalize="none"
             autoCorrect={false}
+            accessibilityLabel="Rechercher un profil"
           />
         </View>
 

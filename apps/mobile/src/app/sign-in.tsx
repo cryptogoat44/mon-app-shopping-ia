@@ -27,7 +27,13 @@ export default function SignInScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/bienvenue"))} hitSlop={8} style={styles.nav}>
+      <Pressable
+        onPress={() => (router.canGoBack() ? router.back() : router.replace("/bienvenue"))}
+        hitSlop={8}
+        style={styles.nav}
+        accessibilityRole="button"
+        accessibilityLabel="Retour"
+      >
         <Text style={styles.back}>‹</Text>
       </Pressable>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -48,6 +54,7 @@ export default function SignInScreen() {
               autoCorrect={false}
               value={email}
               onChangeText={setEmail}
+              accessibilityLabel={fr.auth.email}
             />
           </View>
           <View style={styles.field}>
@@ -61,6 +68,7 @@ export default function SignInScreen() {
               autoCorrect={false}
               value={password}
               onChangeText={setPassword}
+              accessibilityLabel={fr.auth.password}
             />
           </View>
 

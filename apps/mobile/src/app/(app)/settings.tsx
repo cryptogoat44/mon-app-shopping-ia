@@ -78,7 +78,12 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.nav}>
-        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/profile"))} hitSlop={8}>
+        <Pressable
+          onPress={() => (router.canGoBack() ? router.back() : router.replace("/profile"))}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Retour"
+        >
           <Text style={styles.back}>‹</Text>
         </Pressable>
       </View>

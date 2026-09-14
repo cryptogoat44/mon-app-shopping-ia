@@ -89,7 +89,14 @@ export default function NewPostScreen() {
           <Text style={styles.cancel}>{fr.publish.cancel}</Text>
         </Pressable>
         <Text style={styles.navTitle}>{fr.publish.title}</Text>
-        <Pressable onPress={handleSubmit} disabled={submitting || !imageUri} hitSlop={8} style={[styles.navSide, styles.navSideRight]}>
+        <Pressable
+          onPress={handleSubmit}
+          disabled={submitting || !imageUri}
+          hitSlop={8}
+          style={[styles.navSide, styles.navSideRight]}
+          accessibilityRole="button"
+          accessibilityLabel={submitting ? "Publication en cours" : fr.publish.publish}
+        >
           <Text style={[styles.publishLabel, (submitting || !imageUri) ? styles.publishLabelDisabled : null]}>
             {submitting ? "…" : fr.publish.publish}
           </Text>
@@ -99,7 +106,12 @@ export default function NewPostScreen() {
       <ScrollView contentContainerStyle={styles.body}>
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <Pressable style={styles.photo} onPress={handlePickPhoto}>
+        <Pressable
+          style={styles.photo}
+          onPress={handlePickPhoto}
+          accessibilityRole="button"
+          accessibilityLabel={imageUri ? "Changer la photo" : fr.publish.addPhoto}
+        >
           {imageUri ? (
             <Image source={{ uri: imageUri }} style={styles.photoPreview} />
           ) : (
@@ -118,6 +130,7 @@ export default function NewPostScreen() {
           onChangeText={setCaption}
           multiline
           maxLength={280}
+          accessibilityLabel="Légende de la publication"
         />
 
         <Text style={styles.label}>{fr.publish.piecesLabel}</Text>
@@ -126,7 +139,12 @@ export default function NewPostScreen() {
             <View key={piece.id} style={styles.tag}>
               <View style={styles.tagDot} />
               <Text style={styles.tagLabel}>{piece.name}</Text>
-              <Pressable onPress={() => removePieceTag(piece.id)} hitSlop={8}>
+              <Pressable
+                onPress={() => removePieceTag(piece.id)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`Retirer ${piece.name}`}
+              >
                 <Text style={styles.tagRemove}>×</Text>
               </Pressable>
             </View>
@@ -139,7 +157,13 @@ export default function NewPostScreen() {
         <Text style={styles.label}>{fr.publish.visibility}</Text>
         <View style={styles.tags}>
           {PRIVACY_LEVELS.map((level) => (
-            <Pressable key={level} style={[styles.privacyPill, privacy === level ? styles.privacyPillActive : null]} onPress={() => setPrivacy(level)}>
+            <Pressable
+              key={level}
+              style={[styles.privacyPill, privacy === level ? styles.privacyPillActive : null]}
+              onPress={() => setPrivacy(level)}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: privacy === level }}
+            >
               <Text style={[styles.privacyLabel, privacy === level ? styles.privacyLabelActive : null]}>{PRIVACY_LABELS[level]}</Text>
             </Pressable>
           ))}
@@ -147,7 +171,12 @@ export default function NewPostScreen() {
       </ScrollView>
 
       <Modal visible={pickerOpen} animationType="slide" transparent onRequestClose={() => setPickerOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setPickerOpen(false)} />
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setPickerOpen(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Fermer"
+        />
         <View style={styles.modalSheet}>
           <View style={styles.modalNav}>
             <Text style={styles.navTitle}>{fr.publish.addPiece}</Text>

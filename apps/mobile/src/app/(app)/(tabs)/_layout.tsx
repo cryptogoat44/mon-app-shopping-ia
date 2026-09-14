@@ -33,6 +33,7 @@ export default function TabsLayout() {
         options={{
           title: fr.profile.publish,
           tabBarLabel: () => null,
+          tabBarAccessibilityLabel: fr.profile.publish,
           tabBarIcon: () => (
             <View
               style={{

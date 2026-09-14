@@ -106,7 +106,14 @@ function PostRow({ post }: { post: Post }) {
 
       {post.caption ? <Text style={styles.caption}>{post.caption}</Text> : null}
 
-      <Pressable onPress={handleReactButton} disabled={busy} style={styles.reactRow} hitSlop={8}>
+      <Pressable
+        onPress={handleReactButton}
+        disabled={busy}
+        style={styles.reactRow}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={reacted ? "Je n'aime plus" : "Aimer"}
+      >
         <HeartIcon size={19} tint={reacted ? color.encre : color.acier} filled={reacted} />
         <Text style={styles.reactCount}>{reactionCount}</Text>
       </Pressable>

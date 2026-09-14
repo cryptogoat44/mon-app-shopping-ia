@@ -76,13 +76,19 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.screen}>
       <View style={styles.nav}>
         <Text style={styles.navHandle}>@{profile?.username}</Text>
-        <Pressable onPress={() => router.push("/settings")} hitSlop={8}>
+        <Pressable onPress={() => router.push("/settings")} hitSlop={8} accessibilityRole="button" accessibilityLabel="Réglages">
           <GearIcon size={21} tint={color.encre} />
         </Pressable>
       </View>
 
       <View style={styles.head}>
-        <Pressable style={styles.avatar} onPress={handlePickAvatar} disabled={uploadingAvatar}>
+        <Pressable
+          style={styles.avatar}
+          onPress={handlePickAvatar}
+          disabled={uploadingAvatar}
+          accessibilityRole="button"
+          accessibilityLabel="Changer la photo de profil"
+        >
           {profile?.avatarUrl ? (
             <Image source={{ uri: profile.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
           ) : (
@@ -119,10 +125,18 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.seg}>
-        <Pressable onPress={() => setSegment("vault")}>
+        <Pressable
+          onPress={() => setSegment("vault")}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: segment === "vault" }}
+        >
           <Text style={[styles.segItem, segment === "vault" ? styles.segItemActive : null]}>{fr.profile.vault}</Text>
         </Pressable>
-        <Pressable onPress={() => setSegment("lifestyle")}>
+        <Pressable
+          onPress={() => setSegment("lifestyle")}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: segment === "lifestyle" }}
+        >
           <Text style={[styles.segItem, segment === "lifestyle" ? styles.segItemActive : null]}>{fr.profile.lifestyle}</Text>
         </Pressable>
       </View>

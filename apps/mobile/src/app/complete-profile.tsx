@@ -65,6 +65,7 @@ export default function CompleteProfileScreen() {
               value={username}
               onChangeText={setUsername}
               maxLength={20}
+              accessibilityLabel="Nom d'utilisateur"
             />
           </View>
           <View style={styles.field}>
@@ -75,6 +76,7 @@ export default function CompleteProfileScreen() {
               value={displayName}
               onChangeText={setDisplayName}
               maxLength={60}
+              accessibilityLabel="Nom affiché"
             />
           </View>
 
