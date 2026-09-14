@@ -11,6 +11,7 @@ export const color = {
   filet: "#E4E4E0", // séparateurs, bordures fines
   vert: "#1E3D32", // seul accent : action principale et marque « vérifié ». Nulle part ailleurs.
   blanc: "#FFFFFF",
+  danger: "#B3432B", // suppression de compte, retrait du vault — jamais utilisé ailleurs
 } as const;
 
 // Cinq tailles maximum, comme validé dans les maquettes.

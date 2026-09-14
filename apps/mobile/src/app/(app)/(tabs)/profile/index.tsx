@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
@@ -64,32 +65,45 @@ export default function ProfileScreen() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.grid}>
-        {segment === "vault"
-          ? items.map((item) => (
-              <Pressable
-                key={item.id}
-                style={styles.piece}
-                onPress={() => router.push({ pathname: "/vault-item/[id]", params: { id: item.id } })}
-              >
-                <View style={styles.thumb}>
-                  <ClockIcon size={30} tint={color.encre} />
-                </View>
-                {item.verified ? (
-                  <View style={styles.verifiedBadge}>
-                    <VerifiedIcon size={16} />
+      {segment === "vault" && items.length === 0 ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyText}>{fr.profile.emptyVault}</Text>
+          <Pressable onPress={() => router.push("/(app)/(tabs)")}>
+            <Text style={styles.emptyCta}>{fr.profile.emptyVaultCta}</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.grid}>
+          {segment === "vault"
+            ? items.map((item) => (
+                <Pressable
+                  key={item.id}
+                  style={styles.piece}
+                  onPress={() => router.push({ pathname: "/vault-item/[id]", params: { id: item.id } })}
+                >
+                  <View style={styles.thumb}>
+                    {item.imageUrl ? (
+                      <Image source={{ uri: item.imageUrl }} style={styles.thumbImage} contentFit="cover" />
+                    ) : (
+                      <ClockIcon size={30} tint={color.encre} />
+                    )}
                   </View>
-                ) : null}
-                <Text style={styles.pname} numberOfLines={1}>
-                  {item.title}
-                </Text>
-                {!item.verified ? <Text style={styles.pstate}>{fr.profile.pendingVerification}</Text> : null}
-              </Pressable>
-            ))
-          : (
-              <Text style={styles.emptyLifestyle}>Rien à afficher pour l'instant.</Text>
-            )}
-      </ScrollView>
+                  {item.verified ? (
+                    <View style={styles.verifiedBadge}>
+                      <VerifiedIcon size={16} />
+                    </View>
+                  ) : null}
+                  <Text style={styles.pname} numberOfLines={1}>
+                    {item.title}
+                  </Text>
+                  {!item.verified ? <Text style={styles.pstate}>{fr.profile.pendingVerification}</Text> : null}
+                </Pressable>
+              ))
+            : (
+                <Text style={styles.emptyLifestyle}>Rien à afficher pour l'instant.</Text>
+              )}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -121,8 +135,19 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     width: "100%",
   },
+  empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl, marginTop: -60 },
+  emptyText: { fontSize: font.secondary, color: color.acier, textAlign: "center", lineHeight: 20, marginBottom: space.md },
+  emptyCta: { fontSize: font.body, color: color.vert, fontWeight: "600" },
   piece: { width: "31%" },
-  thumb: { backgroundColor: color.plinthe, borderRadius: radius.sm, aspectRatio: 1, alignItems: "center", justifyContent: "center" },
+  thumb: {
+    backgroundColor: color.plinthe,
+    borderRadius: radius.sm,
+    aspectRatio: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  thumbImage: { width: "100%", height: "100%" },
   verifiedBadge: {
     position: "absolute",
     top: 8,

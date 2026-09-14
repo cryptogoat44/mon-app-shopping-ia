@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
   sectionBody: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm, lineHeight: 19 },
   link: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   dangerSection: { borderTopWidth: 1, borderTopColor: color.filet, paddingTop: space.lg },
-  deleteLabel: { color: "#B3432B", fontSize: font.secondary, fontWeight: "600" },
+  deleteLabel: { color: color.danger, fontSize: font.secondary, fontWeight: "600" },
   confirmRow: { flexDirection: "row", gap: space.lg, marginTop: space.xs },
   cancelLabel: { color: color.acier, fontSize: font.secondary, fontWeight: "600" },
 });

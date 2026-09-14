@@ -3,10 +3,11 @@ import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Tex
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { PrivacyLevel, VaultItem } from "@monapp/shared-types";
-import { ChipSelector, FormError, PrimaryButton } from "@/components/form";
+import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { fr } from "@/i18n/fr";
 import { ApiError, deleteVaultItem, fetchVaultItem, sharePurchasePost, updateVaultItem } from "@/lib/api";
 import { PRIVACY_LABELS, PRIVACY_LEVELS, VAULT_CATEGORY_LABELS } from "@/lib/vault-labels";
-import { theme } from "@/lib/theme";
+import { VerifiedIcon } from "@/components/icons";
 
 export default function VaultItemDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -27,7 +28,7 @@ export default function VaultItemDetailScreen() {
   useEffect(() => {
     fetchVaultItem(id)
       .then(setItem)
-      .catch((e) => setError(e instanceof ApiError ? e.message : "Impossible de charger cet objet."));
+      .catch((e) => setError(e instanceof ApiError ? e.message : fr.vaultItem.loadError));
   }, [id]);
 
   async function handlePrivacyChange(privacy: PrivacyLevel) {
@@ -38,7 +39,7 @@ export default function VaultItemDetailScreen() {
       const updated = await updateVaultItem(item.id, { privacy });
       setItem(updated);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "La mise à jour a échoué.");
+      setError(e instanceof ApiError ? e.message : fr.vaultItem.updateError);
     } finally {
       setBusy(false);
     }
@@ -52,7 +53,7 @@ export default function VaultItemDetailScreen() {
       await sharePurchasePost(item.id);
       setShared(true);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Le partage a échoué.");
+      setError(e instanceof ApiError ? e.message : fr.vaultItem.shareError);
     } finally {
       setSharing(false);
     }
@@ -66,7 +67,7 @@ export default function VaultItemDetailScreen() {
       await deleteVaultItem(item.id);
       safeBack();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "La suppression a échoué.");
+      setError(e instanceof ApiError ? e.message : fr.vaultItem.removeError);
       setBusy(false);
     }
   }
@@ -75,7 +76,7 @@ export default function VaultItemDetailScreen() {
     return (
       <SafeAreaView style={styles.screen}>
         <View style={styles.centered}>
-          {error ? <Text style={styles.errorText}>{error}</Text> : <ActivityIndicator color={theme.color.accent} />}
+          {error ? <Text style={styles.errorText}>{error}</Text> : <ActivityIndicator color={color.encre} />}
         </View>
       </SafeAreaView>
     );
@@ -85,10 +86,10 @@ export default function VaultItemDetailScreen() {
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <Pressable onPress={safeBack} hitSlop={8} style={styles.back}>
-          <Text style={styles.backLabel}>← Vault</Text>
+          <Text style={styles.backLabel}>‹ {fr.vaultItem.back}</Text>
         </Pressable>
 
-        <FormError message={error} />
+        {error ? <Text style={styles.banner}>{error}</Text> : null}
 
         <Image source={{ uri: item.imageUrl }} style={styles.image} contentFit="cover" />
 
@@ -96,39 +97,52 @@ export default function VaultItemDetailScreen() {
           <Text style={styles.title}>{item.title}</Text>
           {item.verified ? (
             <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedBadgeText}>Achat vérifié</Text>
+              <VerifiedIcon size={13} tint={color.vert} />
+              <Text style={styles.verifiedBadgeText}>{fr.profile.verified}</Text>
             </View>
           ) : null}
         </View>
         <Text style={styles.subtitle}>{VAULT_CATEGORY_LABELS[item.category]}</Text>
 
-        <ChipSelector
-          label="Qui peut voir cet objet"
-          value={item.privacy}
-          options={PRIVACY_LEVELS}
-          labels={PRIVACY_LABELS}
-          onChange={handlePrivacyChange}
-        />
+        <Text style={styles.label}>{fr.vaultItem.visibility}</Text>
+        <View style={styles.pillRow}>
+          {PRIVACY_LEVELS.map((level) => (
+            <Pressable
+              key={level}
+              style={[styles.privacyPill, item.privacy === level ? styles.privacyPillActive : null]}
+              onPress={() => handlePrivacyChange(level)}
+              disabled={busy}
+            >
+              <Text style={[styles.privacyLabel, item.privacy === level ? styles.privacyLabelActive : null]}>
+                {PRIVACY_LABELS[level]}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
 
-        <PrimaryButton
-          label={shared ? "Partagé dans le fil ✓" : sharing ? "Partage…" : "Partager dans mon fil"}
+        <Pressable
+          style={[styles.shareButton, sharing || shared ? styles.shareButtonDisabled : null]}
           onPress={handleShare}
           disabled={sharing || shared}
-        />
+        >
+          <Text style={styles.shareLabel}>
+            {shared ? fr.vaultItem.shared : sharing ? fr.vaultItem.sharing : fr.vaultItem.share}
+          </Text>
+        </Pressable>
 
         {!confirmingDelete ? (
-          <Pressable onPress={() => setConfirmingDelete(true)} disabled={busy} hitSlop={8}>
-            <Text style={styles.deleteLabel}>Retirer du vault</Text>
+          <Pressable onPress={() => setConfirmingDelete(true)} disabled={busy} hitSlop={8} style={styles.removeRow}>
+            <Text style={styles.deleteLabel}>{fr.vaultItem.remove}</Text>
           </Pressable>
         ) : (
           <View style={styles.confirmRow}>
-            <Text style={styles.confirmText}>Retirer définitivement cet objet ?</Text>
+            <Text style={styles.confirmText}>{fr.vaultItem.removeConfirm}</Text>
             <View style={styles.confirmButtons}>
               <Pressable onPress={() => setConfirmingDelete(false)} disabled={busy} hitSlop={8}>
-                <Text style={styles.cancelLabel}>Annuler</Text>
+                <Text style={styles.cancelLabel}>{fr.vaultItem.cancel}</Text>
               </Pressable>
               <Pressable onPress={handleDelete} disabled={busy} hitSlop={8}>
-                <Text style={styles.deleteLabel}>{busy ? "Suppression…" : "Confirmer"}</Text>
+                <Text style={styles.deleteLabel}>{busy ? fr.vaultItem.removing : fr.vaultItem.confirm}</Text>
               </Pressable>
             </View>
           </View>
@@ -139,34 +153,58 @@ export default function VaultItemDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.color.ground },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: theme.space.lg },
-  content: { padding: theme.space.lg, paddingBottom: theme.space.xl, maxWidth: 480, alignSelf: "center", width: "100%" },
-  back: { marginBottom: theme.space.lg },
-  backLabel: { color: theme.color.accentInk, fontSize: theme.font.small },
-  errorText: { color: theme.color.danger, fontSize: theme.font.body, textAlign: "center" },
+  screen: { flex: 1, backgroundColor: color.porcelaine },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: space.lg },
+  content: { padding: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
+  back: { marginBottom: space.lg },
+  backLabel: { color: color.encre, fontSize: font.secondary },
+  errorText: { color: color.danger, fontSize: font.body, textAlign: "center" },
+  banner: { fontSize: font.secondary, color: color.danger, marginBottom: space.md },
   image: {
     width: "100%",
     maxWidth: 320,
     aspectRatio: 1,
     alignSelf: "center",
-    borderRadius: theme.radius.lg,
-    backgroundColor: theme.color.line,
-    marginBottom: theme.space.md,
+    borderRadius: radius.sm,
+    backgroundColor: color.plinthe,
+    marginBottom: space.md,
   },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: theme.space.sm, marginBottom: theme.space.xs },
-  title: { fontSize: theme.font.title, fontWeight: "700", color: theme.color.ink },
-  subtitle: { fontSize: theme.font.body, color: theme.color.muted, marginBottom: theme.space.lg },
-  verifiedBadge: { backgroundColor: theme.color.verifiedSoft, borderRadius: 100, paddingHorizontal: 10, paddingVertical: 3 },
-  verifiedBadgeText: { color: theme.color.verified, fontSize: theme.font.small, fontWeight: "600" },
-  deleteLabel: { color: theme.color.danger, fontSize: theme.font.small, fontWeight: "600" },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: space.sm, marginBottom: space.xs },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, flexShrink: 1 },
+  subtitle: { fontSize: font.secondary, color: color.acier, marginBottom: space.lg },
+  verifiedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: color.plinthe,
+    borderRadius: radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  verifiedBadgeText: { color: color.vert, fontSize: font.caption, fontWeight: "600" },
+  label: { fontSize: font.caption, color: color.acier, marginBottom: 10 },
+  pillRow: { flexDirection: "row", flexWrap: "wrap", gap: space.xs, marginBottom: space.lg },
+  privacyPill: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.full, paddingVertical: 6, paddingHorizontal: 12 },
+  privacyPillActive: { backgroundColor: color.vert, borderColor: color.vert },
+  privacyLabel: { fontSize: font.caption, color: color.acier },
+  privacyLabelActive: { color: color.blanc, fontWeight: "600" },
+  shareButton: {
+    backgroundColor: color.vert,
+    borderRadius: radius.md,
+    paddingVertical: 14,
+    alignItems: "center",
+    marginBottom: space.lg,
+  },
+  shareButtonDisabled: { opacity: 0.6 },
+  shareLabel: { color: color.blanc, fontSize: font.secondary, fontWeight: "600" },
+  removeRow: { alignItems: "center" },
+  deleteLabel: { color: color.danger, fontSize: font.secondary, fontWeight: "600" },
   confirmRow: {
-    backgroundColor: theme.color.dangerSoft,
-    borderRadius: theme.radius.md,
-    padding: theme.space.md,
-    marginTop: theme.space.sm,
+    backgroundColor: color.plinthe,
+    borderRadius: radius.md,
+    padding: space.md,
   },
-  confirmText: { fontSize: theme.font.small, color: theme.color.ink, marginBottom: theme.space.sm },
-  confirmButtons: { flexDirection: "row", gap: theme.space.lg },
-  cancelLabel: { color: theme.color.muted, fontSize: theme.font.small, fontWeight: "600" },
+  confirmText: { fontSize: font.secondary, color: color.encre, marginBottom: space.sm },
+  confirmButtons: { flexDirection: "row", gap: space.lg },
+  cancelLabel: { color: color.acier, fontSize: font.secondary, fontWeight: "600" },
 });
