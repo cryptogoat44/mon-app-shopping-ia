@@ -6,6 +6,7 @@ import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
 import { getWishlist } from "@/api/client";
 import type { Piece, WishlistItem } from "@/api/types";
+import { ApiError } from "@/lib/api";
 import { ClockIcon } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
 
@@ -18,9 +19,22 @@ function formatPrice(item: Piece): string | null {
 export default function WishlistScreen() {
   const router = useRouter();
   const [items, setItems] = useState<WishlistItem[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(() => getWishlist().then(setItems).catch(() => setItems([])), []);
+  const load = useCallback(
+    () =>
+      getWishlist()
+        .then((data) => {
+          setItems(data);
+          setError(null);
+        })
+        .catch((e) => {
+          setItems([]);
+          setError(e instanceof ApiError ? e.message : fr.wishlist.loadError);
+        }),
+    []
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -35,7 +49,7 @@ export default function WishlistScreen() {
   }
 
   const loading = items === null;
-  const isEmpty = items?.length === 0;
+  const isEmpty = !error && items?.length === 0;
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -43,7 +57,7 @@ export default function WishlistScreen() {
         <Text style={styles.title}>{fr.wishlist.title}</Text>
       </View>
       <ScrollView
-        contentContainerStyle={isEmpty ? styles.emptyContent : styles.grid}
+        contentContainerStyle={isEmpty || error ? styles.emptyContent : styles.grid}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
       >
         {loading ? (
@@ -53,6 +67,10 @@ export default function WishlistScreen() {
               <Skeleton style={{ width: "80%", height: 11 }} />
             </View>
           ))
+        ) : error ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyText}>{error}</Text>
+          </View>
         ) : isEmpty ? (
           <View style={styles.empty}>
             <Text style={styles.emptyText}>{fr.wishlist.empty}</Text>

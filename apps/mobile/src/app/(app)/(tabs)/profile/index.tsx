@@ -19,6 +19,8 @@ export default function ProfileScreen() {
   const { showToast } = useToast();
   const [items, setItems] = useState<VaultItem[]>([]);
   const [lifestylePosts, setLifestylePosts] = useState<Post[]>([]);
+  const [vaultError, setVaultError] = useState<string | null>(null);
+  const [lifestyleError, setLifestyleError] = useState<string | null>(null);
   const [segment, setSegment] = useState<"vault" | "lifestyle">("vault");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -27,8 +29,18 @@ export default function ProfileScreen() {
   const load = useCallback(
     () =>
       Promise.all([
-        fetchVault().then(setItems).catch(() => {}),
-        fetchMyLifestylePosts().then(setLifestylePosts).catch(() => {}),
+        fetchVault()
+          .then((data) => {
+            setItems(data);
+            setVaultError(null);
+          })
+          .catch((e) => setVaultError(e instanceof ApiError ? e.message : fr.profile.loadError)),
+        fetchMyLifestylePosts()
+          .then((data) => {
+            setLifestylePosts(data);
+            setLifestyleError(null);
+          })
+          .catch((e) => setLifestyleError(e instanceof ApiError ? e.message : fr.profile.loadError)),
       ]).finally(() => setLoading(false)),
     []
   );
@@ -45,9 +57,10 @@ export default function ProfileScreen() {
     setRefreshing(false);
   }
 
-  const isEmptyVault = segment === "vault" && items.length === 0;
-  const isEmptyLifestyle = segment === "lifestyle" && lifestylePosts.length === 0;
-  const isEmpty = !loading && (isEmptyVault || isEmptyLifestyle);
+  const isEmptyVault = segment === "vault" && !vaultError && items.length === 0;
+  const isEmptyLifestyle = segment === "lifestyle" && !lifestyleError && lifestylePosts.length === 0;
+  const hasSegmentError = segment === "vault" ? !!vaultError : !!lifestyleError;
+  const isEmpty = !loading && (isEmptyVault || isEmptyLifestyle || hasSegmentError);
 
   async function handlePickAvatar() {
     if (uploadingAvatar) return;
@@ -155,7 +168,11 @@ export default function ProfileScreen() {
             </View>
           ))
         ) : segment === "vault" ? (
-          isEmptyVault ? (
+          vaultError ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>{vaultError}</Text>
+            </View>
+          ) : isEmptyVault ? (
             <View style={styles.empty}>
               <Text style={styles.emptyText}>{fr.profile.emptyVault}</Text>
               <Pressable onPress={() => router.push("/(app)/(tabs)")}>
@@ -188,6 +205,10 @@ export default function ProfileScreen() {
               </Pressable>
             ))
           )
+        ) : lifestyleError ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyText}>{lifestyleError}</Text>
+          </View>
         ) : isEmptyLifestyle ? (
           <View style={styles.empty}>
             <Text style={styles.emptyText}>{fr.profile.emptyLifestyle}</Text>

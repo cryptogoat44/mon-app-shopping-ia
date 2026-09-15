@@ -1,8 +1,10 @@
 import type {
   ApiErrorBody,
   AppNotification,
+  BlockedUser,
   ConsentStatus,
   ConsentType,
+  CreateReportRequest,
   CreateSearchRequest,
   CreateWishlistItemRequest,
   Post,
@@ -234,6 +236,23 @@ export async function fetchUnreadNotificationCount(): Promise<number> {
 
 export async function markNotificationsRead(): Promise<void> {
   await authorizedFetch("/api/notifications/read-all", { method: "POST" });
+}
+
+export async function blockUser(userId: string): Promise<void> {
+  await authorizedFetch(`/api/blocks/${userId}`, { method: "POST" });
+}
+
+export async function unblockUser(userId: string): Promise<void> {
+  await authorizedFetch(`/api/blocks/${userId}`, { method: "DELETE" });
+}
+
+export async function fetchBlockedUsers(): Promise<BlockedUser[]> {
+  const response = await authorizedFetch("/api/blocks");
+  return response.json();
+}
+
+export async function reportContent(payload: CreateReportRequest): Promise<void> {
+  await authorizedFetch("/api/reports", { method: "POST", body: JSON.stringify(payload) });
 }
 
 export async function createLifestylePost(params: {

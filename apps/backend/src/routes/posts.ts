@@ -260,6 +260,13 @@ export default async function postsRoutes(fastify: FastifyInstance) {
     }
 
     if (post.user_id !== userId) {
+      const [{ data: blockedByMe }, { data: blockedByAuthor }] = await Promise.all([
+        fastify.supabaseAdmin.from("blocks").select("blocker_id").eq("blocker_id", userId).eq("blocked_id", post.user_id).maybeSingle(),
+        fastify.supabaseAdmin.from("blocks").select("blocker_id").eq("blocker_id", post.user_id).eq("blocked_id", userId).maybeSingle(),
+      ]);
+      if (blockedByMe || blockedByAuthor) {
+        return reply.code(404).send({ error: "post_not_found", message: "Publication introuvable." });
+      }
       if (post.privacy === "private") {
         return reply.code(404).send({ error: "post_not_found", message: "Publication introuvable." });
       }

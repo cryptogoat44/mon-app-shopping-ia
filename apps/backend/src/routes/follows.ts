@@ -14,6 +14,14 @@ export default async function followsRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "user_not_found", message: "Profil introuvable." });
     }
 
+    const [{ data: blockedByMe }, { data: blockedByThem }] = await Promise.all([
+      fastify.supabaseAdmin.from("blocks").select("blocker_id").eq("blocker_id", followerId).eq("blocked_id", followeeId).maybeSingle(),
+      fastify.supabaseAdmin.from("blocks").select("blocker_id").eq("blocker_id", followeeId).eq("blocked_id", followerId).maybeSingle(),
+    ]);
+    if (blockedByMe || blockedByThem) {
+      return reply.code(403).send({ error: "blocked", message: "Action impossible entre ces deux comptes." });
+    }
+
     const { data: existing } = await fastify.supabaseAdmin
       .from("follows")
       .select("follower_id")

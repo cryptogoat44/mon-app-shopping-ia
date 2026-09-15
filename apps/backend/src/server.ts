@@ -14,6 +14,8 @@ import followsRoutes from "./routes/follows.js";
 import postsRoutes from "./routes/posts.js";
 import notificationsRoutes from "./routes/notifications.js";
 import accountRoutes from "./routes/account.js";
+import blocksRoutes from "./routes/blocks.js";
+import reportsRoutes from "./routes/reports.js";
 
 const fastify = Fastify({ logger: true });
 
@@ -31,6 +33,8 @@ await fastify.register(followsRoutes);
 await fastify.register(postsRoutes);
 await fastify.register(notificationsRoutes);
 await fastify.register(accountRoutes);
+await fastify.register(blocksRoutes);
+await fastify.register(reportsRoutes);
 
 fastify.get("/health", async () => ({ status: "ok" }));
 

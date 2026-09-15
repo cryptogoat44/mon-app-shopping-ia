@@ -97,6 +97,9 @@ export default function SettingsScreen() {
           <Pressable onPress={() => router.push("/edit-profile")} hitSlop={4}>
             <Text style={styles.link}>{fr.settings.editProfile}</Text>
           </Pressable>
+          <Pressable onPress={() => router.push("/blocked-users")} hitSlop={4} style={styles.secondLink}>
+            <Text style={styles.link}>{fr.blockedUsers.title}</Text>
+          </Pressable>
         </View>
 
         <View style={styles.section}>
@@ -153,6 +156,7 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: font.caption, fontWeight: "600", color: color.acier, marginBottom: space.sm },
   sectionBody: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm, lineHeight: 19 },
   link: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  secondLink: { marginTop: space.sm },
   dangerSection: { borderTopWidth: 1, borderTopColor: color.filet, paddingTop: space.lg },
   deleteLabel: { color: color.danger, fontSize: font.secondary, fontWeight: "600" },
   confirmRow: { flexDirection: "row", gap: space.lg, marginTop: space.xs },

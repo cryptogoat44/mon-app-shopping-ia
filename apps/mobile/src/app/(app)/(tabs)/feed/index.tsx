@@ -6,9 +6,10 @@ import * as Haptics from "expo-haptics";
 import type { Post } from "@monapp/shared-types";
 import { ApiError, fetchFeed, fetchUnreadNotificationCount, reactToPost } from "@/lib/api";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
-import { BellIcon, HeartIcon, PersonIcon, VerifiedIcon } from "@/components/icons";
+import { BellIcon, HeartIcon, MoreIcon, PersonIcon, VerifiedIcon } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
 import { timeAgo } from "@/lib/time";
+import { ReportBlockMenu } from "@/components/report-block-menu";
 
 const DOUBLE_TAP_DELAY_MS = 300;
 
@@ -25,7 +26,7 @@ function FeedSkeletonRow() {
   );
 }
 
-function PostRow({ post }: { post: Post }) {
+function PostRow({ post, onOpenMenu }: { post: Post; onOpenMenu: () => void }) {
   const [reactionCount, setReactionCount] = useState(post.reactionCount);
   const [reacted, setReacted] = useState(post.viewerHasReacted);
   const [busy, setBusy] = useState(false);
@@ -90,6 +91,9 @@ function PostRow({ post }: { post: Post }) {
         <Text style={styles.authorName}>{post.author.displayName}</Text>
         {post.vaultItem?.verified ? <VerifiedIcon size={13} /> : null}
         <Text style={styles.timestamp}>{timeAgo(post.createdAt)}</Text>
+        <Pressable onPress={onOpenMenu} hitSlop={8} style={styles.moreButton} accessibilityRole="button" accessibilityLabel="Plus d'options">
+          <MoreIcon size={18} tint={color.acier} />
+        </Pressable>
       </View>
 
       <Pressable onPress={handleMediaPress}>
@@ -131,6 +135,11 @@ export default function FeedScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [menuTarget, setMenuTarget] = useState<{ userId: string; postId: string } | null>(null);
+
+  function handleBlocked(userId: string) {
+    setPosts((prev) => (prev ? prev.filter((p) => p.author.id !== userId) : prev));
+  }
 
   const load = useCallback(async () => {
     try {
@@ -220,12 +229,20 @@ export default function FeedScreen() {
 
           {posts?.map((post, index) => (
             <View key={post.id}>
-              <PostRow post={post} />
+              <PostRow post={post} onOpenMenu={() => setMenuTarget({ userId: post.author.id, postId: post.id })} />
               {index < posts.length - 1 ? <View style={styles.divider} /> : null}
             </View>
           ))}
         </ScrollView>
       )}
+
+      <ReportBlockMenu
+        visible={menuTarget !== null}
+        onClose={() => setMenuTarget(null)}
+        userId={menuTarget?.userId ?? ""}
+        postId={menuTarget?.postId}
+        onBlocked={handleBlocked}
+      />
     </SafeAreaView>
   );
 }
@@ -273,6 +290,7 @@ const styles = StyleSheet.create({
   avatarImage: { width: "100%", height: "100%" },
   authorName: { fontSize: 14, fontWeight: "600", color: color.encre },
   timestamp: { fontSize: 12, color: color.acier, marginLeft: "auto" },
+  moreButton: { marginLeft: space.xs, padding: 2 },
   media: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe, borderRadius: radius.sm },
   heartOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
   caption: { fontSize: 14.5, color: color.encre, marginTop: 12, lineHeight: 20 },

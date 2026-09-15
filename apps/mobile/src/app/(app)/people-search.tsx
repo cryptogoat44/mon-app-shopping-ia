@@ -6,9 +6,18 @@ import * as Haptics from "expo-haptics";
 import type { PublicProfile } from "@monapp/shared-types";
 import { ApiError, followUser, searchUsers, unfollowUser } from "@/lib/api";
 import { color, font, radius, space } from "@/theme/tokens";
-import { PersonIcon, SearchIcon } from "@/components/icons";
+import { MoreIcon, PersonIcon, SearchIcon } from "@/components/icons";
+import { ReportBlockMenu } from "@/components/report-block-menu";
 
-function PersonRow({ person, onToggle }: { person: PublicProfile; onToggle: (id: string) => void }) {
+function PersonRow({
+  person,
+  onToggle,
+  onOpenMenu,
+}: {
+  person: PublicProfile;
+  onToggle: (id: string) => void;
+  onOpenMenu: () => void;
+}) {
   const [following, setFollowing] = useState(person.isFollowing);
   const [busy, setBusy] = useState(false);
 
@@ -48,6 +57,9 @@ function PersonRow({ person, onToggle }: { person: PublicProfile; onToggle: (id:
           {following ? "Suivi(e)" : "Suivre"}
         </Text>
       </Pressable>
+      <Pressable onPress={onOpenMenu} hitSlop={8} style={styles.moreButton} accessibilityRole="button" accessibilityLabel="Plus d'options">
+        <MoreIcon size={18} tint={color.acier} />
+      </Pressable>
     </View>
   );
 }
@@ -60,6 +72,11 @@ export default function PeopleSearchScreen() {
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
+  const [menuUserId, setMenuUserId] = useState<string | null>(null);
+
+  function handleBlocked(blockedId: string) {
+    setResults((prev) => (prev ? prev.filter((p) => p.id !== blockedId) : prev));
+  }
 
   useEffect(() => {
     return () => {
@@ -133,9 +150,16 @@ export default function PeopleSearchScreen() {
         {results?.length === 0 ? <Text style={styles.empty}>Aucun profil trouvé.</Text> : null}
 
         {results?.map((person) => (
-          <PersonRow key={person.id} person={person} onToggle={() => {}} />
+          <PersonRow key={person.id} person={person} onToggle={() => {}} onOpenMenu={() => setMenuUserId(person.id)} />
         ))}
       </ScrollView>
+
+      <ReportBlockMenu
+        visible={menuUserId !== null}
+        onClose={() => setMenuUserId(null)}
+        userId={menuUserId ?? ""}
+        onBlocked={handleBlocked}
+      />
     </SafeAreaView>
   );
 }
@@ -190,4 +214,5 @@ const styles = StyleSheet.create({
   followingButton: { backgroundColor: color.encre },
   followButtonLabel: { fontSize: font.caption, fontWeight: "600", color: color.encre },
   followingButtonLabel: { color: color.blanc },
+  moreButton: { marginLeft: space.sm, padding: 2 },
 });

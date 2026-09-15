@@ -172,3 +172,21 @@ export interface AppNotification {
   createdAt: string;
   read: boolean;
 }
+
+export type ReportTargetType = "user" | "post";
+export type ReportReason = "spam" | "inappropriate" | "harassment" | "other";
+
+export interface CreateReportRequest {
+  targetType: ReportTargetType;
+  targetId: string;
+  reason: ReportReason;
+  note?: string;
+}
+
+export interface BlockedUser {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  blockedAt: string;
+}

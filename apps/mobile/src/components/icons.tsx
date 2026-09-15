@@ -137,6 +137,16 @@ export function BellIcon({ size = 24, tint = color.encre, strokeWidth = 1.4 }: I
   );
 }
 
+export function MoreIcon({ size = 20, tint = color.acier }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={5} cy={12} r={1.6} fill={tint} />
+      <Circle cx={12} cy={12} r={1.6} fill={tint} />
+      <Circle cx={19} cy={12} r={1.6} fill={tint} />
+    </Svg>
+  );
+}
+
 export function NotFoundIcon({ size = 44, tint = color.acier, strokeWidth = 1.3 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">

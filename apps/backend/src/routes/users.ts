@@ -51,15 +51,32 @@ export default async function usersRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    const seen = new Set<string>();
-    const rows: ProfileRow[] = [];
+    const seenIds = new Set<string>();
+    const candidateRows: ProfileRow[] = [];
     for (const row of [...(byUsername.data ?? []), ...(byDisplayName.data ?? [])] as ProfileRow[]) {
-      if (seen.has(row.id)) continue;
-      seen.add(row.id);
-      rows.push(row);
-      if (rows.length >= 20) break;
+      if (seenIds.has(row.id)) continue;
+      seenIds.add(row.id);
+      candidateRows.push(row);
+      if (candidateRows.length >= 20) break;
     }
 
+    const candidateIds = candidateRows.map((p) => p.id);
+
+    // Invisibilité mutuelle : un profil bloqué par moi, ou qui m'a bloqué,
+    // ne doit apparaître dans aucune recherche.
+    let blockedIds = new Set<string>();
+    if (candidateIds.length > 0) {
+      const [{ data: blockedByMe }, { data: blockingMe }] = await Promise.all([
+        fastify.supabaseAdmin.from("blocks").select("blocked_id").eq("blocker_id", userId).in("blocked_id", candidateIds),
+        fastify.supabaseAdmin.from("blocks").select("blocker_id").eq("blocked_id", userId).in("blocker_id", candidateIds),
+      ]);
+      blockedIds = new Set([
+        ...(blockedByMe ?? []).map((b) => b.blocked_id as string),
+        ...(blockingMe ?? []).map((b) => b.blocker_id as string),
+      ]);
+    }
+
+    const rows = candidateRows.filter((row) => !blockedIds.has(row.id));
     const profileIds = rows.map((p) => p.id);
 
     let followingIds = new Set<string>();
