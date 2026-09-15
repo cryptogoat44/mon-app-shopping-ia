@@ -152,6 +152,11 @@ export interface ReactToPostResponse {
   viewerHasReacted: boolean;
 }
 
+export interface FeedPage {
+  posts: Post[];
+  nextCursor: string | null;
+}
+
 export type ConsentType = "terms" | "privacy_policy" | "marketing_email";
 
 export interface ConsentStatus {

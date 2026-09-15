@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Animated, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Animated, FlatList, Pressable, RefreshControl, SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -132,8 +132,10 @@ function PostRow({ post, onOpenMenu }: { post: Post; onOpenMenu: () => void }) {
 export default function FeedScreen() {
   const router = useRouter();
   const [posts, setPosts] = useState<Post[] | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [menuTarget, setMenuTarget] = useState<{ userId: string; postId: string } | null>(null);
 
@@ -143,8 +145,9 @@ export default function FeedScreen() {
 
   const load = useCallback(async () => {
     try {
-      const data = await fetchFeed();
-      setPosts(data);
+      const page = await fetchFeed();
+      setPosts(page.posts);
+      setNextCursor(page.nextCursor);
       setError(null);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Impossible de charger le fil.");
@@ -155,9 +158,10 @@ export default function FeedScreen() {
     useCallback(() => {
       let cancelled = false;
       fetchFeed()
-        .then((data) => {
+        .then((page) => {
           if (!cancelled) {
-            setPosts(data);
+            setPosts(page.posts);
+            setNextCursor(page.nextCursor);
             setError(null);
           }
         })
@@ -179,6 +183,20 @@ export default function FeedScreen() {
     setRefreshing(true);
     await load();
     setRefreshing(false);
+  }
+
+  async function handleLoadMore() {
+    if (!nextCursor || loadingMore || refreshing) return;
+    setLoadingMore(true);
+    try {
+      const page = await fetchFeed(nextCursor);
+      setPosts((prev) => (prev ? [...prev, ...page.posts] : page.posts));
+      setNextCursor(page.nextCursor);
+    } catch {
+      // silencieux : re-scroller vers le bas redéclenche onEndReached
+    } finally {
+      setLoadingMore(false);
+    }
   }
 
   return (
@@ -210,30 +228,32 @@ export default function FeedScreen() {
           <FeedSkeletonRow />
         </View>
       ) : (
-        <ScrollView
+        <FlatList
+          data={posts ?? []}
+          keyExtractor={(post) => post.id}
           contentContainerStyle={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
-        >
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-          {posts?.length === 0 ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyText}>
-                Votre fil est vide. Suivez des profils pour voir leurs achats et leurs publications ici.
-              </Text>
-              <Pressable onPress={() => router.push("/people-search")}>
-                <Text style={styles.emptyLink}>Rechercher des profils</Text>
-              </Pressable>
-            </View>
-          ) : null}
-
-          {posts?.map((post, index) => (
-            <View key={post.id}>
-              <PostRow post={post} onOpenMenu={() => setMenuTarget({ userId: post.author.id, postId: post.id })} />
-              {index < posts.length - 1 ? <View style={styles.divider} /> : null}
-            </View>
-          ))}
-        </ScrollView>
+          renderItem={({ item: post }) => (
+            <PostRow post={post} onOpenMenu={() => setMenuTarget({ userId: post.author.id, postId: post.id })} />
+          )}
+          ItemSeparatorComponent={() => <View style={styles.divider} />}
+          ListHeaderComponent={error ? <Text style={styles.errorText}>{error}</Text> : null}
+          ListEmptyComponent={
+            posts !== null && !error ? (
+              <View style={styles.empty}>
+                <Text style={styles.emptyText}>
+                  Votre fil est vide. Suivez des profils pour voir leurs achats et leurs publications ici.
+                </Text>
+                <Pressable onPress={() => router.push("/people-search")}>
+                  <Text style={styles.emptyLink}>Rechercher des profils</Text>
+                </Pressable>
+              </View>
+            ) : null
+          }
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={loadingMore ? <ActivityIndicator color={color.encre} style={styles.footerLoader} /> : null}
+        />
       )}
 
       <ReportBlockMenu
@@ -297,4 +317,5 @@ const styles = StyleSheet.create({
   reactRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12 },
   reactCount: { fontSize: font.secondary, color: color.acier },
   divider: { height: 1, backgroundColor: color.filet, marginHorizontal: space.lg, marginBottom: 26 },
+  footerLoader: { paddingVertical: space.lg },
 });

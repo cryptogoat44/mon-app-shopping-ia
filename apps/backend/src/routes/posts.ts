@@ -78,13 +78,30 @@ async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], viewerId:
   });
 }
 
+const FEED_PAGE_SIZE = 15;
+
 export default async function postsRoutes(fastify: FastifyInstance) {
   // Fil d'activité : uniquement les publications des comptes suivis
   // (jamais les siennes), jamais les publications "privé" — même pour un
   // abonné, "privé" veut dire visible nulle part en dehors du profil de
   // son auteur.
+  //
+  // Pagination par curseur (created_at de la dernière publication reçue) au
+  // lieu d'offset : reste correct même si de nouvelles publications
+  // arrivent entre deux pages. On demande une page de plus que nécessaire
+  // pour savoir s'il reste du contenu, sans jamais l'envoyer au client.
   fastify.get("/api/feed", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const userId = request.user!.id;
+    const { cursor } = request.query as { cursor?: string };
+
+    let cursorDate: string | undefined;
+    if (cursor) {
+      const parsed = new Date(cursor);
+      if (Number.isNaN(parsed.getTime())) {
+        return reply.code(400).send({ error: "invalid_query", message: "Curseur de pagination invalide." });
+      }
+      cursorDate = parsed.toISOString();
+    }
 
     const { data: follows } = await fastify.supabaseAdmin
       .from("follows")
@@ -93,24 +110,35 @@ export default async function postsRoutes(fastify: FastifyInstance) {
 
     const followeeIds = (follows ?? []).map((f) => f.followee_id as string);
     if (followeeIds.length === 0) {
-      return reply.send([]);
+      return reply.send({ posts: [], nextCursor: null });
     }
 
-    const { data: posts, error } = await fastify.supabaseAdmin
+    let query = fastify.supabaseAdmin
       .from("posts")
       .select("*")
       .in("user_id", followeeIds)
       .in("privacy", ["public", "followers"])
       .order("created_at", { ascending: false })
-      .limit(50);
+      .limit(FEED_PAGE_SIZE + 1);
+
+    if (cursorDate) {
+      query = query.lt("created_at", cursorDate);
+    }
+
+    const { data: posts, error } = await query;
 
     if (error) {
       request.log.error({ error }, "Échec de lecture du fil");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    const hydrated = await hydratePosts(fastify, (posts as PostRow[]) ?? [], userId);
-    return reply.send(hydrated);
+    const rows = (posts as PostRow[]) ?? [];
+    const hasMore = rows.length > FEED_PAGE_SIZE;
+    const pageRows = hasMore ? rows.slice(0, FEED_PAGE_SIZE) : rows;
+    const nextCursor = hasMore ? (pageRows.at(-1)?.created_at ?? null) : null;
+
+    const hydrated = await hydratePosts(fastify, pageRows, userId);
+    return reply.send({ posts: hydrated, nextCursor });
   });
 
   // Alimente le segment "Lifestyle" du profil : uniquement les publications

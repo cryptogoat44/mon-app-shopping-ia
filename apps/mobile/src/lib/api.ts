@@ -7,6 +7,7 @@ import type {
   CreateReportRequest,
   CreateSearchRequest,
   CreateWishlistItemRequest,
+  FeedPage,
   Post,
   Profile,
   ProductMatchClickResponse,
@@ -213,8 +214,9 @@ export async function unfollowUser(userId: string): Promise<void> {
   await authorizedFetch(`/api/follows/${userId}`, { method: "DELETE" });
 }
 
-export async function fetchFeed(): Promise<Post[]> {
-  const response = await authorizedFetch("/api/feed");
+export async function fetchFeed(cursor?: string): Promise<FeedPage> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  const response = await authorizedFetch(`/api/feed${query}`);
   return response.json();
 }
 
