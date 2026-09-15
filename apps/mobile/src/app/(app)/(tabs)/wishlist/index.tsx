@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
@@ -16,21 +16,31 @@ function formatPrice(item: Piece): string | null {
   return `${item.priceFrom.toLocaleString("fr-FR")} ${currency}`.trim();
 }
 
+function chunk<T>(items: T[], size: number): T[][] {
+  const rows: T[][] = [];
+  for (let i = 0; i < items.length; i += size) rows.push(items.slice(i, i + size));
+  return rows;
+}
+
 export default function WishlistScreen() {
   const router = useRouter();
   const [items, setItems] = useState<WishlistItem[] | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const load = useCallback(
     () =>
       getWishlist()
-        .then((data) => {
-          setItems(data);
+        .then((page) => {
+          setItems(page.items);
+          setNextCursor(page.nextCursor);
           setError(null);
         })
         .catch((e) => {
           setItems([]);
+          setNextCursor(null);
           setError(e instanceof ApiError ? e.message : fr.wishlist.loadError);
         }),
     []
@@ -48,6 +58,20 @@ export default function WishlistScreen() {
     setRefreshing(false);
   }
 
+  async function handleLoadMore() {
+    if (!nextCursor || loadingMore || refreshing) return;
+    setLoadingMore(true);
+    try {
+      const page = await getWishlist(nextCursor);
+      setItems((prev) => (prev ? [...prev, ...page.items] : page.items));
+      setNextCursor(page.nextCursor);
+    } catch {
+      // silencieux : re-scroller vers le bas redéclenche onEndReached
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
   const loading = items === null;
   const isEmpty = !error && items?.length === 0;
 
@@ -56,46 +80,56 @@ export default function WishlistScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>{fr.wishlist.title}</Text>
       </View>
-      <ScrollView
-        contentContainerStyle={isEmpty || error ? styles.emptyContent : styles.grid}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
-      >
-        {loading ? (
-          [0, 1, 2].map((i) => (
+      {loading ? (
+        <View style={styles.grid}>
+          {[0, 1, 2].map((i) => (
             <View key={i} style={styles.card}>
               <Skeleton style={styles.thumb} />
               <Skeleton style={{ width: "80%", height: 11 }} />
             </View>
-          ))
-        ) : error ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>{error}</Text>
-          </View>
-        ) : isEmpty ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>{fr.wishlist.empty}</Text>
-            <Pressable onPress={() => router.push("/(app)/(tabs)")}>
-              <Text style={styles.emptyCta}>{fr.wishlist.emptyCta}</Text>
-            </Pressable>
-          </View>
-        ) : (
-          (items ?? []).map((item) => (
-            <View key={item.id} style={styles.card}>
-              <View style={styles.thumb}>
-                {item.imageUrl ? (
-                  <Image source={{ uri: item.imageUrl }} style={styles.thumbImage} contentFit="cover" />
-                ) : (
-                  <ClockIcon size={30} tint={color.encre} />
-                )}
-              </View>
-              <Text style={styles.name} numberOfLines={1}>
-                {item.name}
-              </Text>
-              {formatPrice(item) ? <Text style={styles.price}>{formatPrice(item)}</Text> : null}
+          ))}
+        </View>
+      ) : (
+        <FlatList
+          data={chunk(items ?? [], 3)}
+          keyExtractor={(row) => row.map((item) => item.id).join("-")}
+          contentContainerStyle={isEmpty || error ? styles.emptyContent : styles.gridContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
+          renderItem={({ item: row }) => (
+            <View style={styles.gridRow}>
+              {row.map((item) => (
+                <View key={item.id} style={styles.card}>
+                  <View style={styles.thumb}>
+                    {item.imageUrl ? (
+                      <Image source={{ uri: item.imageUrl }} style={styles.thumbImage} contentFit="cover" />
+                    ) : (
+                      <ClockIcon size={30} tint={color.encre} />
+                    )}
+                  </View>
+                  <Text style={styles.name} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  {formatPrice(item) ? <Text style={styles.price}>{formatPrice(item)}</Text> : null}
+                </View>
+              ))}
             </View>
-          ))
-        )}
-      </ScrollView>
+          )}
+          ListHeaderComponent={error ? <Text style={styles.emptyText}>{error}</Text> : null}
+          ListEmptyComponent={
+            !error ? (
+              <View style={styles.empty}>
+                <Text style={styles.emptyText}>{fr.wishlist.empty}</Text>
+                <Pressable onPress={() => router.push("/(app)/(tabs)")}>
+                  <Text style={styles.emptyCta}>{fr.wishlist.emptyCta}</Text>
+                </Pressable>
+              </View>
+            ) : null
+          }
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={loadingMore ? <ActivityIndicator color={color.encre} style={styles.footerLoader} /> : null}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -119,9 +153,19 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     width: "100%",
   },
+  gridContent: {
+    paddingHorizontal: space.lg,
+    paddingTop: space.sm,
+    paddingBottom: space.xxl,
+    maxWidth: 640,
+    alignSelf: "center",
+    width: "100%",
+  },
+  gridRow: { flexDirection: "row", gap: space.md, marginBottom: space.md },
   card: { width: "31%" },
   thumb: { backgroundColor: color.plinthe, borderRadius: radius.sm, aspectRatio: 1, alignItems: "center", justifyContent: "center", marginBottom: space.xs, overflow: "hidden" },
   thumbImage: { width: "100%", height: "100%" },
   name: { fontSize: font.caption, color: color.encre },
   price: { fontSize: 11, color: color.acier, marginTop: 2 },
+  footerLoader: { paddingVertical: space.lg },
 });

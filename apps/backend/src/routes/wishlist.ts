@@ -41,22 +41,48 @@ function toWishlistItem(row: WishlistItemRow): WishlistItem {
   };
 }
 
+const WISHLIST_PAGE_SIZE = 24;
+
 export default async function wishlistRoutes(fastify: FastifyInstance) {
+  // Pagination par curseur (created_at du dernier objet reçu), même
+  // logique que le fil et le vault.
   fastify.get("/api/wishlist", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const userId = request.user!.id;
+    const { cursor } = request.query as { cursor?: string };
 
-    const { data, error } = await fastify.supabaseAdmin
+    let cursorDate: string | undefined;
+    if (cursor) {
+      const parsed = new Date(cursor);
+      if (Number.isNaN(parsed.getTime())) {
+        return reply.code(400).send({ error: "invalid_query", message: "Curseur de pagination invalide." });
+      }
+      cursorDate = parsed.toISOString();
+    }
+
+    let query = fastify.supabaseAdmin
       .from("wishlist_items")
       .select("*")
       .eq("user_id", userId)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(WISHLIST_PAGE_SIZE + 1);
+
+    if (cursorDate) {
+      query = query.lt("created_at", cursorDate);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       request.log.error({ error }, "Échec de lecture de wishlist_items");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    return reply.send((data as WishlistItemRow[]).map(toWishlistItem));
+    const rows = (data as WishlistItemRow[]) ?? [];
+    const hasMore = rows.length > WISHLIST_PAGE_SIZE;
+    const pageRows = hasMore ? rows.slice(0, WISHLIST_PAGE_SIZE) : rows;
+    const nextCursor = hasMore ? (pageRows.at(-1)?.created_at ?? null) : null;
+
+    return reply.send({ items: pageRows.map(toWishlistItem), nextCursor });
   });
 
   fastify.post("/api/wishlist", { preHandler: fastify.requireAuth }, async (request, reply) => {

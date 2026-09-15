@@ -87,6 +87,14 @@ export interface UpdateVaultItemRequest {
   privacy?: PrivacyLevel;
 }
 
+export interface VaultPage {
+  items: VaultItem[];
+  nextCursor: string | null;
+  /** Nombre total d'objets, tous les toutes pages confondues — seulement
+   * calculé pour la première page (sans curseur), `null` au-delà. */
+  totalCount: number | null;
+}
+
 export interface WishlistItem {
   id: string;
   title: string;
@@ -109,6 +117,11 @@ export interface CreateWishlistItemRequest {
   merchantName?: string | null;
   merchantUrl?: string | null;
   productMatchId?: string | null;
+}
+
+export interface WishlistPage {
+  items: WishlistItem[];
+  nextCursor: string | null;
 }
 
 export interface PublicProfile {

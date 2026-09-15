@@ -83,9 +83,9 @@ export async function getRecentlySpotted(): Promise<Piece[]> {
 
 // Branché sur le vrai backend (table wishlist_items) — "Garder" persiste
 // vraiment pour les pièces issues d'une recherche réelle.
-export async function getWishlist(): Promise<WishlistItem[]> {
-  const rows = await fetchWishlist();
-  return rows.map(wishlistRowToItem);
+export async function getWishlist(cursor?: string): Promise<{ items: WishlistItem[]; nextCursor: string | null }> {
+  const page = await fetchWishlist(cursor);
+  return { items: page.items.map(wishlistRowToItem), nextCursor: page.nextCursor };
 }
 
 export async function getVaultItems(): Promise<VaultItem[]> {

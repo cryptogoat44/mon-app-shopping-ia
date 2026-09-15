@@ -18,7 +18,9 @@ import type {
   UpdateVaultItemRequest,
   VaultCategory,
   VaultItem,
+  VaultPage,
   WishlistItem,
+  WishlistPage,
 } from "@monapp/shared-types";
 import { supabase } from "./supabase";
 
@@ -132,8 +134,9 @@ export async function trackProductMatchClick(matchId: string): Promise<ProductMa
   return response.json();
 }
 
-export async function fetchVault(): Promise<VaultItem[]> {
-  const response = await authorizedFetch("/api/vault");
+export async function fetchVault(cursor?: string): Promise<VaultPage> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  const response = await authorizedFetch(`/api/vault${query}`);
   return response.json();
 }
 
@@ -188,8 +191,9 @@ export async function deleteVaultItem(id: string): Promise<void> {
   await authorizedFetch(`/api/vault/${id}`, { method: "DELETE" });
 }
 
-export async function fetchWishlist(): Promise<WishlistItem[]> {
-  const response = await authorizedFetch("/api/wishlist");
+export async function fetchWishlist(cursor?: string): Promise<WishlistPage> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  const response = await authorizedFetch(`/api/wishlist${query}`);
   return response.json();
 }
 

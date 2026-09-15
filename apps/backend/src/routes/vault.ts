@@ -46,23 +46,53 @@ function toVaultItem(row: VaultItemRow): VaultItem {
 }
 
 const VAULT_MEDIA_PUBLIC_PREFIX = "/storage/v1/object/public/vault-media/";
+const VAULT_PAGE_SIZE = 24;
 
 export default async function vaultRoutes(fastify: FastifyInstance) {
+  // Pagination par curseur (created_at du dernier objet reçu), comme le
+  // fil — reste correct même si de nouveaux objets sont ajoutés entre deux
+  // pages. `count: "exact"` compte les lignes qui passent TOUS les filtres
+  // de la requête, curseur inclus — demandé uniquement sur la première page
+  // (sans curseur), sinon il ne compterait que les objets restants, pas le
+  // vrai total. Utilisé pour le compteur "Vault" du profil.
   fastify.get("/api/vault", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const userId = request.user!.id;
+    const { cursor } = request.query as { cursor?: string };
 
-    const { data, error } = await fastify.supabaseAdmin
+    let cursorDate: string | undefined;
+    if (cursor) {
+      const parsed = new Date(cursor);
+      if (Number.isNaN(parsed.getTime())) {
+        return reply.code(400).send({ error: "invalid_query", message: "Curseur de pagination invalide." });
+      }
+      cursorDate = parsed.toISOString();
+    }
+
+    let query = fastify.supabaseAdmin
       .from("vault_items")
-      .select("*")
+      .select("*", cursorDate ? undefined : { count: "exact" })
       .eq("user_id", userId)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(VAULT_PAGE_SIZE + 1);
+
+    if (cursorDate) {
+      query = query.lt("created_at", cursorDate);
+    }
+
+    const { data, error, count } = await query;
 
     if (error) {
       request.log.error({ error }, "Échec de lecture du vault");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    return reply.send((data as VaultItemRow[]).map(toVaultItem));
+    const rows = (data as VaultItemRow[]) ?? [];
+    const hasMore = rows.length > VAULT_PAGE_SIZE;
+    const pageRows = hasMore ? rows.slice(0, VAULT_PAGE_SIZE) : rows;
+    const nextCursor = hasMore ? (pageRows.at(-1)?.created_at ?? null) : null;
+
+    const totalCount = cursorDate ? null : (count ?? pageRows.length);
+    return reply.send({ items: pageRows.map(toVaultItem), nextCursor, totalCount });
   });
 
   fastify.get("/api/vault/:id", { preHandler: fastify.requireAuth }, async (request, reply) => {

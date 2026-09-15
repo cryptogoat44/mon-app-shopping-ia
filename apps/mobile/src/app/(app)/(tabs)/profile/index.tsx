@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
@@ -13,11 +13,20 @@ import { CameraIcon, ClockIcon, GearIcon, PersonIcon, VerifiedIcon } from "@/com
 import { useToast } from "@/lib/toast-context";
 import { Skeleton } from "@/components/skeleton";
 
+function chunk<T>(items: T[], size: number): T[][] {
+  const rows: T[][] = [];
+  for (let i = 0; i < items.length; i += size) rows.push(items.slice(i, i + size));
+  return rows;
+}
+
 export default function ProfileScreen() {
   const router = useRouter();
   const { profile, refreshProfile } = useAuth();
   const { showToast } = useToast();
   const [items, setItems] = useState<VaultItem[]>([]);
+  const [vaultTotal, setVaultTotal] = useState(0);
+  const [vaultNextCursor, setVaultNextCursor] = useState<string | null>(null);
+  const [vaultLoadingMore, setVaultLoadingMore] = useState(false);
   const [lifestylePosts, setLifestylePosts] = useState<Post[]>([]);
   const [vaultError, setVaultError] = useState<string | null>(null);
   const [lifestyleError, setLifestyleError] = useState<string | null>(null);
@@ -30,8 +39,10 @@ export default function ProfileScreen() {
     () =>
       Promise.all([
         fetchVault()
-          .then((data) => {
-            setItems(data);
+          .then((page) => {
+            setItems(page.items);
+            setVaultNextCursor(page.nextCursor);
+            setVaultTotal(page.totalCount ?? page.items.length);
             setVaultError(null);
           })
           .catch((e) => setVaultError(e instanceof ApiError ? e.message : fr.profile.loadError)),
@@ -57,10 +68,22 @@ export default function ProfileScreen() {
     setRefreshing(false);
   }
 
+  async function handleLoadMoreVault() {
+    if (!vaultNextCursor || vaultLoadingMore || refreshing) return;
+    setVaultLoadingMore(true);
+    try {
+      const page = await fetchVault(vaultNextCursor);
+      setItems((prev) => [...prev, ...page.items]);
+      setVaultNextCursor(page.nextCursor);
+    } catch {
+      // silencieux : re-scroller vers le bas redéclenche onEndReached
+    } finally {
+      setVaultLoadingMore(false);
+    }
+  }
+
   const isEmptyVault = segment === "vault" && !vaultError && items.length === 0;
   const isEmptyLifestyle = segment === "lifestyle" && !lifestyleError && lifestylePosts.length === 0;
-  const hasSegmentError = segment === "vault" ? !!vaultError : !!lifestyleError;
-  const isEmpty = !loading && (isEmptyVault || isEmptyLifestyle || hasSegmentError);
 
   async function handlePickAvatar() {
     if (uploadingAvatar) return;
@@ -121,7 +144,7 @@ export default function ProfileScreen() {
         </Pressable>
         <View style={styles.stats}>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{items.length}</Text>
+            <Text style={styles.statNumber}>{vaultTotal}</Text>
             <Text style={styles.statLabel}>{fr.profile.vault}</Text>
           </View>
           <View style={styles.statItem}>
@@ -156,76 +179,91 @@ export default function ProfileScreen() {
         </Pressable>
       </View>
 
-      <ScrollView
-        contentContainerStyle={isEmpty ? styles.emptyContent : styles.grid}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
-      >
-        {loading ? (
-          [0, 1, 2].map((i) => (
+      {loading ? (
+        <View style={styles.grid}>
+          {[0, 1, 2].map((i) => (
             <View key={i} style={styles.piece}>
               <Skeleton style={styles.thumb} />
               <Skeleton style={{ width: "80%", height: 11, marginTop: space.xs }} />
             </View>
-          ))
-        ) : segment === "vault" ? (
-          vaultError ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyText}>{vaultError}</Text>
+          ))}
+        </View>
+      ) : segment === "vault" ? (
+        <FlatList
+          data={chunk(items, 3)}
+          keyExtractor={(row) => row.map((item) => item.id).join("-")}
+          contentContainerStyle={vaultError || isEmptyVault ? styles.emptyContent : styles.gridContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
+          renderItem={({ item: row }) => (
+            <View style={styles.gridRow}>
+              {row.map((item) => (
+                <Pressable
+                  key={item.id}
+                  style={styles.piece}
+                  onPress={() => router.push({ pathname: "/vault-item/[id]", params: { id: item.id } })}
+                >
+                  <View style={styles.thumb}>
+                    {item.imageUrl ? (
+                      <Image source={{ uri: item.imageUrl }} style={styles.thumbImage} contentFit="cover" />
+                    ) : (
+                      <ClockIcon size={30} tint={color.encre} />
+                    )}
+                  </View>
+                  {item.verified ? (
+                    <View style={styles.verifiedBadge}>
+                      <VerifiedIcon size={16} />
+                    </View>
+                  ) : null}
+                  <Text style={styles.pname} numberOfLines={1}>
+                    {item.title}
+                  </Text>
+                  {!item.verified ? <Text style={styles.pstate}>{fr.profile.pendingVerification}</Text> : null}
+                </Pressable>
+              ))}
             </View>
-          ) : isEmptyVault ? (
+          )}
+          ListHeaderComponent={vaultError ? <Text style={styles.emptyText}>{vaultError}</Text> : null}
+          ListEmptyComponent={
+            !vaultError ? (
+              <View style={styles.empty}>
+                <Text style={styles.emptyText}>{fr.profile.emptyVault}</Text>
+                <Pressable onPress={() => router.push("/(app)/(tabs)")}>
+                  <Text style={styles.emptyCta}>{fr.profile.emptyVaultCta}</Text>
+                </Pressable>
+              </View>
+            ) : null
+          }
+          onEndReached={handleLoadMoreVault}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={vaultLoadingMore ? <ActivityIndicator color={color.encre} style={styles.footerLoader} /> : null}
+        />
+      ) : (
+        <ScrollView
+          contentContainerStyle={isEmptyLifestyle || lifestyleError ? styles.emptyContent : styles.grid}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
+        >
+          {lifestyleError ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyText}>{fr.profile.emptyVault}</Text>
-              <Pressable onPress={() => router.push("/(app)/(tabs)")}>
-                <Text style={styles.emptyCta}>{fr.profile.emptyVaultCta}</Text>
+              <Text style={styles.emptyText}>{lifestyleError}</Text>
+            </View>
+          ) : isEmptyLifestyle ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>{fr.profile.emptyLifestyle}</Text>
+              <Pressable onPress={() => router.push("/post-item/new")}>
+                <Text style={styles.emptyCta}>{fr.profile.emptyLifestyleCta}</Text>
               </Pressable>
             </View>
           ) : (
-            items.map((item) => (
-              <Pressable
-                key={item.id}
-                style={styles.piece}
-                onPress={() => router.push({ pathname: "/vault-item/[id]", params: { id: item.id } })}
-              >
+            lifestylePosts.map((post) => (
+              <View key={post.id} style={styles.piece}>
                 <View style={styles.thumb}>
-                  {item.imageUrl ? (
-                    <Image source={{ uri: item.imageUrl }} style={styles.thumbImage} contentFit="cover" />
-                  ) : (
-                    <ClockIcon size={30} tint={color.encre} />
-                  )}
+                  <Image source={{ uri: post.mediaUrl }} style={styles.thumbImage} contentFit="cover" />
                 </View>
-                {item.verified ? (
-                  <View style={styles.verifiedBadge}>
-                    <VerifiedIcon size={16} />
-                  </View>
-                ) : null}
-                <Text style={styles.pname} numberOfLines={1}>
-                  {item.title}
-                </Text>
-                {!item.verified ? <Text style={styles.pstate}>{fr.profile.pendingVerification}</Text> : null}
-              </Pressable>
-            ))
-          )
-        ) : lifestyleError ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>{lifestyleError}</Text>
-          </View>
-        ) : isEmptyLifestyle ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>{fr.profile.emptyLifestyle}</Text>
-            <Pressable onPress={() => router.push("/post-item/new")}>
-              <Text style={styles.emptyCta}>{fr.profile.emptyLifestyleCta}</Text>
-            </Pressable>
-          </View>
-        ) : (
-          lifestylePosts.map((post) => (
-            <View key={post.id} style={styles.piece}>
-              <View style={styles.thumb}>
-                <Image source={{ uri: post.mediaUrl }} style={styles.thumbImage} contentFit="cover" />
               </View>
-            </View>
-          ))
-        )}
-      </ScrollView>
+            ))
+          )}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -289,6 +327,16 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     width: "100%",
   },
+  gridContent: {
+    paddingHorizontal: space.lg,
+    paddingTop: space.md,
+    paddingBottom: space.xxl,
+    maxWidth: 640,
+    alignSelf: "center",
+    width: "100%",
+  },
+  gridRow: { flexDirection: "row", gap: space.md, marginBottom: space.md },
+  footerLoader: { paddingVertical: space.lg },
   emptyContent: { flexGrow: 1 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl, marginTop: -60 },
   emptyText: { fontSize: font.secondary, color: color.acier, textAlign: "center", lineHeight: 20, marginBottom: space.md },
