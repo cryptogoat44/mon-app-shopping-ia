@@ -8,3 +8,7 @@ build/
 .DS_Store
 .turbo/
 coverage/
+
+# Dépôt public : ces fichiers décrivent les faiblesses de l'app, restent locaux uniquement
+CLAUDE.md
+docs/
