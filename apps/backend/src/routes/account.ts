@@ -1,27 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { ConsentStatus, ConsentType } from "@monapp/shared-types";
+import { deleteUserStorageFiles } from "../lib/storage.js";
 
 const CONSENT_TYPES: ConsentType[] = ["terms", "privacy_policy", "marketing_email"];
 
 const recordConsentsSchema = z.object({
   types: z.array(z.enum(CONSENT_TYPES as [ConsentType, ...ConsentType[]])).min(1),
 });
-
-// Buckets de stockage qui contiennent des fichiers rangés sous
-// `${userId}/...` — à vider quand un compte est supprimé, sans quoi les
-// fichiers restent orphelins sur le stockage malgré la suppression en base.
-const USER_STORAGE_BUCKETS = ["screenshots", "vault-media", "post-media"];
-
-async function deleteUserStorageFiles(fastify: FastifyInstance, userId: string): Promise<void> {
-  for (const bucket of USER_STORAGE_BUCKETS) {
-    const { data: files, error } = await fastify.supabaseAdmin.storage.from(bucket).list(userId);
-    if (error || !files || files.length === 0) continue;
-
-    const paths = files.map((f) => `${userId}/${f.name}`);
-    await fastify.supabaseAdmin.storage.from(bucket).remove(paths);
-  }
-}
 
 export default async function accountRoutes(fastify: FastifyInstance) {
   // Statut de consentement courant (le dernier événement par type) — sert à

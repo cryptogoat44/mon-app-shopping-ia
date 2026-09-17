@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { authHeaders, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
+import { USER_STORAGE_BUCKETS } from "../src/lib/storage.js";
 
 describe("account consents and export", () => {
   let app: FastifyInstance;
@@ -85,5 +86,25 @@ describe("account deletion", () => {
 
     const { data } = await app.supabaseAdmin.from("profiles").select("id").eq("id", user.id).maybeSingle();
     expect(data).toBeNull();
+  });
+
+  it("removes files from every storage bucket, including avatars", async () => {
+    const storageUser = await createTestUser(app, "accs");
+    const content = Buffer.from("fichier de test");
+
+    for (const bucket of USER_STORAGE_BUCKETS) {
+      const { error } = await app.supabaseAdmin.storage
+        .from(bucket)
+        .upload(`${storageUser.id}/test.txt`, content, { contentType: "text/plain", upsert: true });
+      expect(error).toBeNull();
+    }
+
+    const del = await app.inject({ method: "DELETE", url: "/api/me", headers: authHeaders(storageUser.token) });
+    expect(del.statusCode).toBe(204);
+
+    for (const bucket of USER_STORAGE_BUCKETS) {
+      const { data: remaining } = await app.supabaseAdmin.storage.from(bucket).list(storageUser.id);
+      expect(remaining ?? []).toHaveLength(0);
+    }
   });
 });
