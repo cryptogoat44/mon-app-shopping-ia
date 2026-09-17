@@ -1,9 +1,7 @@
-import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
+import type { MerchantLinkContext } from "@monapp/shared-types";
 
-function hashIp(ip: string): string {
-  return createHash("sha256").update(ip).digest("hex");
-}
+const CONTEXTS: MerchantLinkContext[] = ["result", "similar", "vault", "wishlist", "post", "price_alert"];
 
 export default async function productMatchesRoutes(fastify: FastifyInstance) {
   // Enregistre le clic sortant vers le marchand (pour le calcul futur des
@@ -12,6 +10,12 @@ export default async function productMatchesRoutes(fastify: FastifyInstance) {
   fastify.post("/api/product-matches/:id/click", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const userId = request.user!.id;
+    const body = request.body as { context?: string } | undefined;
+
+    if (body?.context !== undefined && !CONTEXTS.includes(body.context as MerchantLinkContext)) {
+      return reply.code(400).send({ error: "invalid_body", message: "Contexte de clic invalide." });
+    }
+    const context = (body?.context as MerchantLinkContext | undefined) ?? null;
 
     const { data: match, error: matchError } = await fastify.supabaseAdmin
       .from("product_matches")
@@ -48,11 +52,10 @@ export default async function productMatchesRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "link_not_found", message: "Lien marchand introuvable." });
     }
 
-    const ip = request.ip;
     const { error: clickError } = await fastify.supabaseAdmin.from("affiliate_clicks").insert({
       affiliate_link_id: link.id,
       user_id: userId,
-      ip_hash: ip ? hashIp(ip) : null,
+      context,
       user_agent: request.headers["user-agent"] ?? null,
     });
 

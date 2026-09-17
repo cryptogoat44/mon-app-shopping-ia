@@ -8,6 +8,7 @@ import type {
   CreateSearchRequest,
   CreateWishlistItemRequest,
   FeedPage,
+  MerchantLinkContext,
   Post,
   Profile,
   ProductMatchClickResponse,
@@ -129,8 +130,14 @@ export async function listRecentSearches(limit?: number): Promise<ProductSearch[
   return response.json();
 }
 
-export async function trackProductMatchClick(matchId: string): Promise<ProductMatchClickResponse> {
-  const response = await authorizedFetch(`/api/product-matches/${matchId}/click`, { method: "POST" });
+export async function trackProductMatchClick(
+  matchId: string,
+  context: MerchantLinkContext
+): Promise<ProductMatchClickResponse> {
+  const response = await authorizedFetch(`/api/product-matches/${matchId}/click`, {
+    method: "POST",
+    body: JSON.stringify({ context }),
+  });
   return response.json();
 }
 

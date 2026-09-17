@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import { Pressable, SafeAreaView, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
 import * as Haptics from "expo-haptics";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
 import { addToVaultFromPiece, addToWishlist } from "@/api/client";
 import { getLastSpotResult } from "@/api/spotSession";
 import { addVaultItemFromMatch } from "@/lib/api";
+import { openMerchantLink } from "@/lib/merchant-links";
 import type { Piece, SpotResult } from "@/api/types";
 import { ClockIcon, NotFoundIcon, VerifiedIcon } from "@/components/icons";
 
@@ -40,7 +40,11 @@ export default function ResultScreen() {
 
   async function handleOpenMerchant() {
     if (!piece?.merchantUrl) return;
-    await WebBrowser.openBrowserAsync(piece.merchantUrl);
+    await openMerchantLink({
+      matchId: piece.real ? piece.id : null,
+      fallbackUrl: piece.merchantUrl,
+      context: "result",
+    });
   }
 
   async function handleKeep() {

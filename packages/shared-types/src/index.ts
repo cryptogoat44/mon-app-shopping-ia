@@ -68,6 +68,15 @@ export interface ProductMatchClickResponse {
   url: string;
 }
 
+/** D'où l'utilisateur a ouvert un lien marchand — sert à mesurer l'usage
+ * réel des différentes surfaces sans identifier personne (remplace l'IP
+ * hachée, retirée de `affiliate_clicks`). */
+export type MerchantLinkContext = "result" | "similar" | "vault" | "wishlist" | "post" | "price_alert";
+
+export interface TrackProductMatchClickRequest {
+  context?: MerchantLinkContext;
+}
+
 export type VaultCategory = "clothing" | "watches" | "accessories" | "shoes" | "bags" | "home" | "other";
 
 export interface VaultItem {
