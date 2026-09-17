@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "pnpm@11.25.0",
   "engines": {
-    "node": ">=20"
+    "node": ">=26.0.0 <27.0.0"
   },
   "scripts": {
     "backend:dev": "pnpm --filter backend dev",
