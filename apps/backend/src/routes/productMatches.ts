@@ -1,7 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { MerchantLinkContext } from "@monapp/shared-types";
-
-const CONTEXTS: MerchantLinkContext[] = ["result", "similar", "vault", "wishlist", "post", "price_alert"];
+import { MERCHANT_LINK_CONTEXTS, type MerchantLinkContext } from "@monapp/shared-types";
 
 export default async function productMatchesRoutes(fastify: FastifyInstance) {
   // Enregistre le clic sortant vers le marchand (pour le calcul futur des
@@ -12,7 +10,7 @@ export default async function productMatchesRoutes(fastify: FastifyInstance) {
     const userId = request.user!.id;
     const body = request.body as { context?: string } | undefined;
 
-    if (body?.context !== undefined && !CONTEXTS.includes(body.context as MerchantLinkContext)) {
+    if (body?.context !== undefined && !MERCHANT_LINK_CONTEXTS.includes(body.context as MerchantLinkContext)) {
       return reply.code(400).send({ error: "invalid_body", message: "Contexte de clic invalide." });
     }
     const context = (body?.context as MerchantLinkContext | undefined) ?? null;

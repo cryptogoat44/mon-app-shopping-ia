@@ -70,8 +70,11 @@ export interface ProductMatchClickResponse {
 
 /** D'où l'utilisateur a ouvert un lien marchand — sert à mesurer l'usage
  * réel des différentes surfaces sans identifier personne (remplace l'IP
- * hachée, retirée de `affiliate_clicks`). */
-export type MerchantLinkContext = "result" | "similar" | "vault" | "wishlist" | "post" | "price_alert";
+ * hachée, retirée de `affiliate_clicks`). Source unique : le mobile et le
+ * backend importent `MERCHANT_LINK_CONTEXTS` plutôt que de dupliquer la
+ * liste, pour qu'une faute de frappe ou un contexte oublié soit impossible. */
+export const MERCHANT_LINK_CONTEXTS = ["result", "similar", "vault", "wishlist", "post", "price_alert"] as const;
+export type MerchantLinkContext = (typeof MERCHANT_LINK_CONTEXTS)[number];
 
 export interface TrackProductMatchClickRequest {
   context?: MerchantLinkContext;
