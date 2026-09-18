@@ -181,7 +181,13 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
   // Étape 1 : voie officielle (oEmbed). Si elle échoue ou ne donne rien
   // d'exploitable, la recherche reste en statut "failed" avec method
   // "manual_screenshot" : le mobile propose alors l'import d'une capture.
-  fastify.post("/api/searches", { preHandler: fastify.requireAuth }, async (request, reply) => {
+  fastify.post(
+    "/api/searches",
+    {
+      preHandler: [fastify.requireAuth, fastify.rateLimit("searchCreate")],
+      config: { rateLimitName: "searchCreate" },
+    },
+    async (request, reply) => {
     const parsed = createSearchSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "invalid_body", message: "URL manquante ou invalide." });
@@ -275,11 +281,18 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
         toProductSearch({ ...row, status: "failed", error_message: "La recherche visuelle a échoué." }, [])
       );
     }
-  });
+    }
+  );
 
   // Étape 2 (repli) : l'utilisateur importe une capture d'écran du bon
   // instant de la vidéo, on l'envoie à la recherche visuelle à sa place.
-  fastify.post("/api/searches/:id/screenshot", { preHandler: fastify.requireAuth }, async (request, reply) => {
+  fastify.post(
+    "/api/searches/:id/screenshot",
+    {
+      preHandler: [fastify.requireAuth, fastify.rateLimit("searchCreate")],
+      config: { rateLimitName: "searchCreate" },
+    },
+    async (request, reply) => {
     const { id } = request.params as { id: string };
     const userId = request.user!.id;
 

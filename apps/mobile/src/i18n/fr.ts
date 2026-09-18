@@ -36,6 +36,8 @@ export const fr = {
     failTitle: "Nous n'avons pas pu identifier cette pièce.",
     failTip: "Essayez une image plus nette, ou recadrez sur la pièce uniquement.",
     failTipNeedsPhoto: "Ce lien n'a pas de miniature exploitable. Essayez plutôt \"Importer une photo\" depuis Spotter.",
+    failTitleRateLimited: "Trop de recherches d'un coup",
+    failTipRateLimited: "Trop de tentatives en peu de temps. Réessaie dans quelques instants.",
     retry: "Réessayer",
   },
   wishlist: {

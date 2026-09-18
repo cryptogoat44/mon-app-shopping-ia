@@ -1,5 +1,5 @@
 import type { ProductMatch, ProductSearch, WishlistItem as RemoteWishlistItem } from "@monapp/shared-types";
-import { addWishlistItem, createSearch, fetchWishlist, listRecentSearches, uploadSearchScreenshot } from "@/lib/api";
+import { addWishlistItem, ApiError, createSearch, fetchWishlist, listRecentSearches, uploadSearchScreenshot } from "@/lib/api";
 import * as mock from "./mock";
 import type { Piece, Profile, SpotResult, VaultItem, WishlistItem } from "./types";
 
@@ -69,7 +69,13 @@ export async function spot(source: { type: "link"; url: string } | { type: "phot
     const created = await createSearch({});
     const search = await uploadSearchScreenshot(created.id, source.uri);
     return toSpotResult(search);
-  } catch {
+  } catch (error) {
+    // Une limite de débit (429) a un message précis à montrer — les autres
+    // erreurs (réseau, panne...) restent ramenées à un simple "no_match"
+    // pour qu'analysis.tsx n'ait rien d'autre à connaître.
+    if (error instanceof ApiError && error.status === 429) {
+      return { status: "failed", pieces: [], similarPieces: [], failReason: "rate_limited" };
+    }
     return { status: "failed", pieces: [], similarPieces: [], failReason: "no_match" };
   }
 }

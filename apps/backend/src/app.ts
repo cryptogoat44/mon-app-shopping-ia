@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import supabasePlugin from "./plugins/supabase.js";
 import authPlugin from "./plugins/auth.js";
+import rateLimitPlugin from "./plugins/rateLimit.js";
 import meRoutes from "./routes/me.js";
 import searchesRoutes from "./routes/searches.js";
 import productMatchesRoutes from "./routes/productMatches.js";
@@ -25,6 +26,7 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
   await fastify.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
   await fastify.register(supabasePlugin);
   await fastify.register(authPlugin);
+  await fastify.register(rateLimitPlugin);
   await fastify.register(meRoutes);
   await fastify.register(searchesRoutes);
   await fastify.register(productMatchesRoutes);
@@ -38,7 +40,9 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
   await fastify.register(blocksRoutes);
   await fastify.register(reportsRoutes);
 
-  fastify.get("/health", async () => ({ status: "ok" }));
+  // Exclue du filet anti-abus "default" : les sondes de disponibilité de
+  // Render l'appellent très régulièrement, ça n'a rien à voir avec un abus.
+  fastify.get("/health", { config: { skipDefaultRateLimit: true } }, async () => ({ status: "ok" }));
 
   // Filet de sécurité : sans ça, une erreur non anticipée (fichier trop
   // volumineux, JSON malformé, exception inattendue...) renvoie le format

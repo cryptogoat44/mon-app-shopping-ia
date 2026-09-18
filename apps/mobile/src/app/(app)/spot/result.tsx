@@ -85,6 +85,13 @@ export default function ResultScreen() {
 
   if (!result || result.status === "failed") {
     const needsPhoto = result?.failReason === "needs_photo";
+    const rateLimited = result?.failReason === "rate_limited";
+    const title = rateLimited ? fr.result.failTitleRateLimited : fr.result.failTitle;
+    const tip = rateLimited
+      ? fr.result.failTipRateLimited
+      : needsPhoto
+        ? fr.result.failTipNeedsPhoto
+        : fr.result.failTip;
     return (
       <SafeAreaView style={styles.screen}>
         <View style={styles.nav}>
@@ -101,8 +108,8 @@ export default function ResultScreen() {
           <View style={styles.failFrame}>
             <NotFoundIcon size={44} />
           </View>
-          <Text style={styles.failTitle}>{fr.result.failTitle}</Text>
-          <Text style={styles.failTip}>{needsPhoto ? fr.result.failTipNeedsPhoto : fr.result.failTip}</Text>
+          <Text style={styles.failTitle}>{title}</Text>
+          <Text style={styles.failTip}>{tip}</Text>
           <Pressable
             style={styles.retryCta}
             onPress={needsPhoto ? () => router.replace("/") : handleRetry}

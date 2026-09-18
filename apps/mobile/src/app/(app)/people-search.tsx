@@ -8,6 +8,7 @@ import { ApiError, followUser, searchUsers, unfollowUser } from "@/lib/api";
 import { color, font, radius, space } from "@/theme/tokens";
 import { MoreIcon, PersonIcon, SearchIcon } from "@/components/icons";
 import { ReportBlockMenu } from "@/components/report-block-menu";
+import { useToast } from "@/lib/toast-context";
 
 function PersonRow({
   person,
@@ -20,6 +21,7 @@ function PersonRow({
 }) {
   const [following, setFollowing] = useState(person.isFollowing);
   const [busy, setBusy] = useState(false);
+  const { showToast } = useToast();
 
   async function handleToggle() {
     setBusy(true);
@@ -32,8 +34,14 @@ function PersonRow({
       }
       setFollowing((f) => !f);
       onToggle(person.id);
-    } catch {
-      // silencieux : l'état local ne change pas, l'utilisateur peut réessayer
+    } catch (e) {
+      // Silencieux pour la plupart des erreurs (l'état local ne change pas,
+      // l'utilisateur peut simplement retoucher le bouton) — sauf une
+      // limite de débit dépassée, qui mérite un message clair plutôt
+      // qu'un bouton qui semble ne rien faire.
+      if (e instanceof ApiError && e.status === 429) {
+        showToast(e.message);
+      }
     } finally {
       setBusy(false);
     }

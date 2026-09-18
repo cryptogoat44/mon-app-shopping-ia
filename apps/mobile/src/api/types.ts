@@ -21,8 +21,9 @@ export type SpotStatus = "success" | "failed";
 
 /** "needs_photo" : le lien n'a pas de miniature officielle exploitable,
  * l'utilisateur doit réessayer avec "Importer une photo". "no_match" :
- * l'analyse a eu lieu mais n'a identifié aucune pièce. */
-export type SpotFailReason = "no_match" | "needs_photo";
+ * l'analyse a eu lieu mais n'a identifié aucune pièce. "rate_limited" :
+ * trop d'identifications lancées en peu de temps (429 du backend). */
+export type SpotFailReason = "no_match" | "needs_photo" | "rate_limited";
 
 export interface SpotResult {
   status: SpotStatus;
