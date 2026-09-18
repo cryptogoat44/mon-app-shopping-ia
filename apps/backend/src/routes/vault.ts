@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { PrivacyLevel, VaultCategory, VaultItem } from "@monapp/shared-types";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
+import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.js";
 
 const VAULT_CATEGORIES: VaultCategory[] = [
   "clothing",
@@ -45,7 +46,6 @@ function toVaultItem(row: VaultItemRow): VaultItem {
   };
 }
 
-const VAULT_MEDIA_PUBLIC_PREFIX = "/storage/v1/object/public/vault-media/";
 const VAULT_PAGE_SIZE = 24;
 
 export default async function vaultRoutes(fastify: FastifyInstance) {
@@ -149,11 +149,7 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: "invalid_body", message: "Le titre est trop long (120 caractères maximum)." });
     }
 
-    if (!fileBuffer && !fields.imageUrl) {
-      return reply.code(400).send({ error: "invalid_body", message: "Une photo est obligatoire." });
-    }
-
-    let imageUrl = fields.imageUrl ?? null;
+    let imageUrl: string;
 
     if (fileBuffer) {
       if (!fileMimetype?.startsWith("image/")) {
@@ -172,6 +168,48 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       }
 
       imageUrl = fastify.supabaseAdmin.storage.from("vault-media").getPublicUrl(path).data.publicUrl;
+    } else if (fields.productMatchId) {
+      // Ajout depuis un produit identifié : l'image vient de la recherche
+      // visuelle, potentiellement hébergée par le marchand (donc jamais
+      // dans notre propre bucket) — impossible de la limiter au préfixe de
+      // l'utilisateur. On va donc la chercher nous-mêmes en base plutôt que
+      // de faire confiance à l'URL envoyée par le client, et on vérifie au
+      // passage que ce produit appartient bien à une recherche de cet
+      // utilisateur (même contrôle que POST /api/product-matches/:id/click).
+      const { data: match } = await fastify.supabaseAdmin
+        .from("product_matches")
+        .select("id, search_id, image_url")
+        .eq("id", fields.productMatchId)
+        .maybeSingle();
+
+      if (!match) {
+        return reply.code(404).send({ error: "product_match_not_found", message: "Produit introuvable." });
+      }
+
+      const { data: search } = await fastify.supabaseAdmin
+        .from("product_searches")
+        .select("id")
+        .eq("id", match.search_id)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (!search) {
+        return reply.code(404).send({ error: "product_match_not_found", message: "Produit introuvable." });
+      }
+
+      imageUrl = match.image_url as string;
+    } else if (fields.imageUrl) {
+      // Ni fichier envoyé ni produit identifié : la seule URL qu'on accepte
+      // est celle d'un fichier qui nous appartient déjà, dans le dossier de
+      // cet utilisateur — une vraie analyse de l'URL (origine + chemin),
+      // jamais une recherche de texte. Toute autre valeur est refusée.
+      const path = extractOwnedStoragePath(fields.imageUrl, "vault-media", userId);
+      if (!path) {
+        return reply.code(400).send({ error: "invalid_body", message: "Cette image n'est pas autorisée." });
+      }
+      imageUrl = fields.imageUrl;
+    } else {
+      return reply.code(400).send({ error: "invalid_body", message: "Une photo est obligatoire." });
     }
 
     let privacy = fields.privacy as PrivacyLevel | undefined;
@@ -260,14 +298,13 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    // Best-effort : si la photo était hébergée par nous (ajout manuel),
-    // on la supprime aussi. Une image externe (venue d'un produit
-    // identifié) n'est jamais touchée.
-    const publicUrlIndex = (existing.image_url as string).indexOf(VAULT_MEDIA_PUBLIC_PREFIX);
-    if (publicUrlIndex !== -1) {
-      const path = (existing.image_url as string).slice(publicUrlIndex + VAULT_MEDIA_PUBLIC_PREFIX.length);
-      await fastify.supabaseAdmin.storage.from("vault-media").remove([path]);
-    }
+    // Best-effort : si la photo était hébergée par nous (ajout manuel), on
+    // la supprime aussi — mais seulement si son URL prouve qu'elle nous
+    // appartient bien, dans le dossier de CET utilisateur (voir
+    // extractOwnedStoragePath). Une image externe (venue d'un produit
+    // identifié), une URL inattendue, ou un chemin qui n'est pas le sien
+    // n'entraîne aucune suppression.
+    await deleteOwnedStorageFile(fastify, "vault-media", userId, existing.image_url as string);
 
     return reply.code(204).send();
   });

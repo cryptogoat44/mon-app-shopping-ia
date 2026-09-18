@@ -76,3 +76,32 @@ export async function deleteTestUser(app: FastifyInstance, userId: string): Prom
 export function authHeaders(token: string): { authorization: string } {
   return { authorization: `Bearer ${token}` };
 }
+
+// Construit un corps multipart/form-data à la main — aucune route testée
+// ici ne l'exige typiquement via une bibliothèque cliente, mais les routes
+// d'upload du backend (vault, posts, avatar...) n'acceptent que ce format.
+export function buildMultipart(
+  fields: Record<string, string>,
+  file?: { fieldname: string; filename: string; contentType: string; data: Buffer }
+): { payload: Buffer; headers: { "content-type": string } } {
+  const boundary = `testboundary${uniqueSuffix()}`;
+  const parts: Buffer[] = [];
+
+  for (const [name, value] of Object.entries(fields)) {
+    parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`));
+  }
+
+  if (file) {
+    parts.push(
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="${file.fieldname}"; filename="${file.filename}"\r\nContent-Type: ${file.contentType}\r\n\r\n`
+      )
+    );
+    parts.push(file.data);
+    parts.push(Buffer.from("\r\n"));
+  }
+
+  parts.push(Buffer.from(`--${boundary}--\r\n`));
+
+  return { payload: Buffer.concat(parts), headers: { "content-type": `multipart/form-data; boundary=${boundary}` } };
+}
