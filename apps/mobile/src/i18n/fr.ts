@@ -39,6 +39,7 @@ export const fr = {
     failTitleRateLimited: "Trop de recherches d'un coup",
     failTipRateLimited: "Trop de tentatives en peu de temps. Réessaie dans quelques instants.",
     retry: "Réessayer",
+    merchantLinkBlocked: "Votre navigateur a bloqué l'ouverture. Touchez ici pour continuer vers le marchand.",
   },
   wishlist: {
     title: "Envies",

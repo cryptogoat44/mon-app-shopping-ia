@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Pressable, SafeAreaView, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import * as Haptics from "expo-haptics";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
@@ -25,6 +26,7 @@ export default function ResultScreen() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [kept, setKept] = useState(false);
   const [bought, setBought] = useState(false);
+  const [blockedMerchantUrl, setBlockedMerchantUrl] = useState<string | null>(null);
 
   const piece = result?.pieces[selectedIndex] ?? null;
 
@@ -40,11 +42,21 @@ export default function ResultScreen() {
 
   async function handleOpenMerchant() {
     if (!piece?.merchantUrl) return;
-    await openMerchantLink({
+    setBlockedMerchantUrl(null);
+    const outcome = await openMerchantLink({
       matchId: piece.real ? piece.id : null,
       fallbackUrl: piece.merchantUrl,
       context: "result",
     });
+    if (outcome.blocked) setBlockedMerchantUrl(outcome.url ?? piece.merchantUrl);
+  }
+
+  function handleOpenBlockedMerchantLink() {
+    if (!blockedMerchantUrl) return;
+    // Ce clic est direct et synchrone : contrairement à handleOpenMerchant,
+    // aucun bloqueur de pop-up ne peut l'empêcher.
+    WebBrowser.openBrowserAsync(blockedMerchantUrl).catch(() => {});
+    setBlockedMerchantUrl(null);
   }
 
   async function handleKeep() {
@@ -180,6 +192,11 @@ export default function ResultScreen() {
             <Text style={styles.ctaLabel}>{fr.result.viewAt(piece.merchantName ?? "")}</Text>
           </Pressable>
         ) : null}
+        {blockedMerchantUrl ? (
+          <Pressable onPress={handleOpenBlockedMerchantLink} accessibilityRole="link">
+            <Text style={styles.blockedLink}>{fr.result.merchantLinkBlocked}</Text>
+          </Pressable>
+        ) : null}
         <Text style={styles.disclosure}>{fr.result.affiliateDisclosure}</Text>
 
         <View style={styles.actions}>
@@ -237,6 +254,7 @@ const styles = StyleSheet.create({
   cta: { backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", marginTop: space.lg },
   ctaLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
   disclosure: { textAlign: "center", fontSize: 11.5, color: color.acier, marginTop: 10, textDecorationLine: "underline" },
+  blockedLink: { textAlign: "center", fontSize: font.caption, color: color.vert, fontWeight: "600", marginTop: 10, textDecorationLine: "underline" },
   actions: { flexDirection: "row", justifyContent: "space-around", marginTop: space.lg },
   action: { paddingVertical: 6, paddingHorizontal: 4 },
   actionLabel: { fontSize: 11.5, color: color.acier },
