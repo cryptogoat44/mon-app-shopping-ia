@@ -1,4 +1,5 @@
 import { env } from "../env.js";
+import { safeFetch } from "../lib/safeFetch.js";
 
 export interface VisualMatch {
   rank: number;
@@ -46,7 +47,8 @@ export async function searchProductsByImageUrl(imageUrl: string): Promise<Visual
     api_key: env.SERPAPI_KEY,
   });
 
-  const response = await fetch(`${SERPAPI_ENDPOINT}?${params.toString()}`, {
+  const response = await safeFetch(`${SERPAPI_ENDPOINT}?${params.toString()}`, {
+    allowedHosts: ["serpapi.com"],
     signal: AbortSignal.timeout(SERPAPI_TIMEOUT_MS),
   });
   if (!response.ok) {

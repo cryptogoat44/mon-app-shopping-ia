@@ -1,5 +1,13 @@
 import type { PlatformSource } from "@monapp/shared-types";
 import { env } from "../env.js";
+import { safeFetch } from "../lib/safeFetch.js";
+
+// Vraie correspondance de domaine (exact ou sous-domaine), pas une simple
+// recherche de texte — "notre-tiktok.com.exemple.com" contient "tiktok.com"
+// mais n'est pas TikTok.
+function hostMatches(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
 
 export function detectPlatform(sourceUrl: string): PlatformSource {
   let host: string;
@@ -9,8 +17,8 @@ export function detectPlatform(sourceUrl: string): PlatformSource {
     return "other";
   }
 
-  if (host.includes("tiktok.com")) return "tiktok";
-  if (host.includes("instagram.com")) return "instagram";
+  if (hostMatches(host, "tiktok.com")) return "tiktok";
+  if (hostMatches(host, "instagram.com")) return "instagram";
   return "other";
 }
 
@@ -25,7 +33,10 @@ const OEMBED_TIMEOUT_MS = 8_000;
 
 async function fetchTikTokOEmbed(sourceUrl: string): Promise<OEmbedResult | null> {
   const endpoint = `https://www.tiktok.com/oembed?url=${encodeURIComponent(sourceUrl)}`;
-  const response = await fetch(endpoint, { signal: AbortSignal.timeout(OEMBED_TIMEOUT_MS) });
+  const response = await safeFetch(endpoint, {
+    allowedHosts: ["tiktok.com"],
+    signal: AbortSignal.timeout(OEMBED_TIMEOUT_MS),
+  });
   if (!response.ok) return null;
 
   const data = (await response.json()) as { thumbnail_url?: string };
@@ -38,7 +49,10 @@ async function fetchInstagramOEmbed(sourceUrl: string): Promise<OEmbedResult | n
   if (!env.META_OEMBED_ACCESS_TOKEN) return null;
 
   const endpoint = `https://graph.facebook.com/v21.0/instagram_oembed?url=${encodeURIComponent(sourceUrl)}&access_token=${env.META_OEMBED_ACCESS_TOKEN}`;
-  const response = await fetch(endpoint, { signal: AbortSignal.timeout(OEMBED_TIMEOUT_MS) });
+  const response = await safeFetch(endpoint, {
+    allowedHosts: ["facebook.com"],
+    signal: AbortSignal.timeout(OEMBED_TIMEOUT_MS),
+  });
   if (!response.ok) return null;
 
   const data = (await response.json()) as { thumbnail_url?: string };
