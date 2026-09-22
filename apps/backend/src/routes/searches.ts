@@ -284,7 +284,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const matches = await searchProductsByImageUrl(thumbnail.thumbnailUrl);
+      const matches = await searchProductsByImageUrl(fastify, thumbnail.thumbnailUrl);
       await saveMatches(fastify, row.id, matches);
 
       const finalStatus: SearchStatus = matches.length > 0 ? "completed" : "failed";
@@ -382,7 +382,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     let matches: VisualMatch[] = [];
 
     try {
-      matches = await searchProductsByImageUrl(signedUrlData.signedUrl);
+      matches = await searchProductsByImageUrl(fastify, signedUrlData.signedUrl);
       if (matches.length === 0) {
         finalStatus = "failed";
         errorMessage = "Aucun produit identifié sur cette image.";
