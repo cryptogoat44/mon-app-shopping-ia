@@ -41,14 +41,15 @@ export default function ResultScreen() {
   }
 
   async function handleOpenMerchant() {
-    if (!piece?.merchantUrl) return;
+    const url = piece?.affiliateUrl ?? piece?.merchantUrl;
+    if (!url) return;
     setBlockedMerchantUrl(null);
     const outcome = await openMerchantLink({
-      matchId: piece.real ? piece.id : null,
-      fallbackUrl: piece.merchantUrl,
+      matchId: piece?.real ? piece.id : null,
+      url,
       context: "result",
     });
-    if (outcome.blocked) setBlockedMerchantUrl(outcome.url ?? piece.merchantUrl);
+    if (outcome.blocked) setBlockedMerchantUrl(outcome.url ?? url);
   }
 
   function handleOpenBlockedMerchantLink() {

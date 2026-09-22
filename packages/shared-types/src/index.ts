@@ -46,6 +46,11 @@ export interface ProductMatch {
   currency: string | null;
   merchantName: string | null;
   merchantUrl: string;
+  /** Lien à ouvrir au clic — affilié si un programme d'affiliation est
+   * rejoint pour ce marchand, sinon identique à `merchantUrl`. Renvoyé dès
+   * les résultats de recherche pour que l'app puisse l'ouvrir immédiatement,
+   * sans attendre un aller-retour serveur au moment du clic. */
+  affiliateUrl: string;
 }
 
 export interface ProductSearch {

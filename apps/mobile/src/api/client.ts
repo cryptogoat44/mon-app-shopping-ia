@@ -27,6 +27,7 @@ function matchToPiece(match: ProductMatch): Piece {
     currency: match.currency,
     merchantName: match.merchantName,
     merchantUrl: match.merchantUrl,
+    affiliateUrl: match.affiliateUrl,
     real: true,
   };
 }
@@ -43,6 +44,9 @@ function wishlistRowToItem(row: RemoteWishlistItem): WishlistItem {
     currency: row.currency,
     merchantName: row.merchantName,
     merchantUrl: row.merchantUrl,
+    // Les Envies ne passent pas par un product_match : pas de lien affilié
+    // distinct connu, on rouvre l'URL marchande telle quelle.
+    affiliateUrl: row.merchantUrl,
     real: true,
     addedAt: row.createdAt,
   };

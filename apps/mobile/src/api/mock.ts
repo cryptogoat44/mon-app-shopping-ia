@@ -16,6 +16,7 @@ const PIECE_CATALOG: Piece[] = [
     currency: "EUR",
     merchantName: "Cartier",
     merchantUrl: "https://www.cartier.com",
+    affiliateUrl: "https://www.cartier.com",
   },
   {
     id: "tank-must",
@@ -28,6 +29,7 @@ const PIECE_CATALOG: Piece[] = [
     currency: "EUR",
     merchantName: "Cartier",
     merchantUrl: "https://www.cartier.com",
+    affiliateUrl: "https://www.cartier.com",
   },
   {
     id: "kelly-25",
@@ -40,6 +42,7 @@ const PIECE_CATALOG: Piece[] = [
     currency: "EUR",
     merchantName: "Hermès",
     merchantUrl: "https://www.hermes.com",
+    affiliateUrl: "https://www.hermes.com",
   },
   {
     id: "bottega-bounce",
@@ -52,6 +55,7 @@ const PIECE_CATALOG: Piece[] = [
     currency: "EUR",
     merchantName: "Bottega Veneta",
     merchantUrl: "https://www.bottegaveneta.com",
+    affiliateUrl: "https://www.bottegaveneta.com",
   },
   {
     id: "ceinture-h",
@@ -64,6 +68,7 @@ const PIECE_CATALOG: Piece[] = [
     currency: "EUR",
     merchantName: "Hermès",
     merchantUrl: "https://www.hermes.com",
+    affiliateUrl: "https://www.hermes.com",
   },
 ];
 

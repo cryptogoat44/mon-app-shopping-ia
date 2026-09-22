@@ -137,6 +137,10 @@ export async function trackProductMatchClick(
   const response = await authorizedFetch(`/api/product-matches/${matchId}/click`, {
     method: "POST",
     body: JSON.stringify({ context }),
+    // Ce suivi est envoyé en arrière-plan, jamais attendu avant d'ouvrir le
+    // lien marchand (voir merchant-links.ts) — keepalive laisse la requête
+    // se terminer même si l'onglet/la page d'origine se ferme juste après.
+    keepalive: true,
   });
   return response.json();
 }

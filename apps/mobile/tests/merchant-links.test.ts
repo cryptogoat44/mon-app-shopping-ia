@@ -20,7 +20,7 @@ vi.mock("expo-web-browser", () => ({
 import { Platform } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import { trackProductMatchClick } from "../src/lib/api";
-import { openMerchantLink, openMerchantLinkWeb, resolveTrackedUrl } from "../src/lib/merchant-links";
+import { openMerchantLink, openMerchantLinkWeb } from "../src/lib/merchant-links";
 
 const trackMock = vi.mocked(trackProductMatchClick);
 const openBrowserMock = vi.mocked(WebBrowser.openBrowserAsync);
@@ -30,99 +30,85 @@ interface FakeWindow {
 }
 
 function createFakeTab() {
-  return {
-    opener: {} as unknown,
-    document: { write: vi.fn(), close: vi.fn() },
-    location: { href: "" },
-  };
+  return { opener: {} as unknown };
 }
 
 beforeEach(() => {
   Platform.OS = "web";
   trackMock.mockReset();
+  trackMock.mockResolvedValue({ url: "https://marchand.example/affilie" });
   openBrowserMock.mockClear();
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  vi.useRealTimers();
-});
-
-describe("resolveTrackedUrl", () => {
-  it("returns the tracked URL when tracking succeeds in time", async () => {
-    trackMock.mockResolvedValue({ url: "https://marchand.example/affilie" });
-    const url = await resolveTrackedUrl("match-1", "result", "https://marchand.example/brut");
-    expect(url).toBe("https://marchand.example/affilie");
-  });
-
-  it("falls back to fallbackUrl when tracking rejects (not logged in, network error...)", async () => {
-    trackMock.mockRejectedValue(new Error("Aucune session active"));
-    const url = await resolveTrackedUrl("match-1", "result", "https://marchand.example/brut");
-    expect(url).toBe("https://marchand.example/brut");
-  });
-
-  it("falls back to fallbackUrl when tracking takes longer than the timeout", async () => {
-    vi.useFakeTimers();
-    trackMock.mockImplementation(() => new Promise(() => {})); // ne se résout jamais
-    const promise = resolveTrackedUrl("match-1", "result", "https://marchand.example/brut");
-    await vi.advanceTimersByTimeAsync(1500);
-    await expect(promise).resolves.toBe("https://marchand.example/brut");
-  });
 });
 
 describe("openMerchantLinkWeb", () => {
-  it("opens a blank tab synchronously, strips the opener, then redirects to the tracked URL", async () => {
+  it("opens the given URL synchronously (no noopener flag) and nulls out win.opener", () => {
     const tab = createFakeTab();
     const openFn = vi.fn(() => tab);
     vi.stubGlobal("window", { open: openFn } satisfies FakeWindow);
-    trackMock.mockResolvedValue({ url: "https://marchand.example/affilie" });
 
-    const result = await openMerchantLinkWeb({
+    const result = openMerchantLinkWeb({
       matchId: "match-1",
-      fallbackUrl: "https://marchand.example/brut",
+      url: "https://marchand.example/affilie",
       context: "result",
     });
 
-    expect(openFn).toHaveBeenCalledWith("about:blank", "_blank", "noopener");
+    // Pas de "noopener" : c'est justement ce qui empêchait de récupérer une
+    // référence utilisable (voir merchant-links.ts) et cassait le premier
+    // correctif — window.open() renvoie null dès que "noopener" est passé,
+    // que l'ouverture soit bloquée ou non.
+    expect(openFn).toHaveBeenCalledWith("https://marchand.example/affilie", "_blank");
     expect(tab.opener).toBeNull();
-    expect(tab.document.write).toHaveBeenCalledOnce();
-    expect(tab.document.write.mock.calls[0][0]).toContain("Redirection");
-    expect(tab.document.close).toHaveBeenCalledOnce();
-    expect(tab.location.href).toBe("https://marchand.example/affilie");
     expect(result).toEqual({ blocked: false });
   });
 
-  it("redirects straight to fallbackUrl without tracking when there is no matchId", async () => {
+  it("opens the URL immediately without waiting for the click-tracking call to resolve", () => {
     const tab = createFakeTab();
-    vi.stubGlobal("window", { open: vi.fn(() => tab) } satisfies FakeWindow);
+    const openFn = vi.fn(() => tab);
+    vi.stubGlobal("window", { open: openFn } satisfies FakeWindow);
+    // Le suivi ne se résout jamais — s'il était attendu, ce test resterait bloqué.
+    trackMock.mockImplementation(() => new Promise(() => {}));
 
-    await openMerchantLinkWeb({ matchId: null, fallbackUrl: "https://marchand.example/mock", context: "result" });
+    const result = openMerchantLinkWeb({ matchId: "match-1", url: "https://marchand.example/affilie", context: "result" });
+
+    expect(result).toEqual({ blocked: false });
+    expect(openFn).toHaveBeenCalledOnce();
+  });
+
+  it("tracks the click in the background when matchId is present", () => {
+    vi.stubGlobal("window", { open: vi.fn(() => createFakeTab()) } satisfies FakeWindow);
+
+    openMerchantLinkWeb({ matchId: "match-1", url: "https://marchand.example/affilie", context: "result" });
+
+    expect(trackMock).toHaveBeenCalledWith("match-1", "result");
+  });
+
+  it("does not track when there is no matchId (demo/mock piece)", () => {
+    vi.stubGlobal("window", { open: vi.fn(() => createFakeTab()) } satisfies FakeWindow);
+
+    openMerchantLinkWeb({ matchId: null, url: "https://marchand.example/mock", context: "result" });
 
     expect(trackMock).not.toHaveBeenCalled();
-    expect(tab.location.href).toBe("https://marchand.example/mock");
   });
 
-  it("redirects to fallbackUrl when tracking errors (e.g. not logged in)", async () => {
-    const tab = createFakeTab();
-    vi.stubGlobal("window", { open: vi.fn(() => tab) } satisfies FakeWindow);
+  it("does not throw when the background tracking call rejects (e.g. not logged in)", () => {
+    vi.stubGlobal("window", { open: vi.fn(() => createFakeTab()) } satisfies FakeWindow);
     trackMock.mockRejectedValue(new Error("Aucune session active"));
 
-    await openMerchantLinkWeb({
-      matchId: "match-1",
-      fallbackUrl: "https://marchand.example/brut",
-      context: "result",
-    });
-
-    expect(tab.location.href).toBe("https://marchand.example/brut");
+    expect(() =>
+      openMerchantLinkWeb({ matchId: "match-1", url: "https://marchand.example/affilie", context: "result" })
+    ).not.toThrow();
   });
 
-  it("reports blocked instead of throwing when window.open returns null", async () => {
+  it("reports blocked (without throwing) when window.open returns null — a genuine popup block", () => {
     vi.stubGlobal("window", { open: vi.fn(() => null) } satisfies FakeWindow);
-    trackMock.mockResolvedValue({ url: "https://marchand.example/affilie" });
 
-    const result = await openMerchantLinkWeb({
+    const result = openMerchantLinkWeb({
       matchId: "match-1",
-      fallbackUrl: "https://marchand.example/brut",
+      url: "https://marchand.example/affilie",
       context: "result",
     });
 
@@ -135,9 +121,8 @@ describe("openMerchantLink (dispatch + anti-double-clic)", () => {
     const tab = createFakeTab();
     const openFn = vi.fn(() => tab);
     vi.stubGlobal("window", { open: openFn } satisfies FakeWindow);
-    trackMock.mockResolvedValue({ url: "https://marchand.example/affilie" });
 
-    const options = { matchId: "match-debounce", fallbackUrl: "https://marchand.example/brut", context: "result" as const };
+    const options = { matchId: "match-debounce", url: "https://marchand.example/affilie", context: "result" as const };
     await openMerchantLink(options);
     await openMerchantLink(options);
 
@@ -145,17 +130,18 @@ describe("openMerchantLink (dispatch + anti-double-clic)", () => {
     expect(trackMock).toHaveBeenCalledOnce();
   });
 
-  it("uses the native browser view on mobile, unaffected by the web fix", async () => {
+  it("uses the native in-app browser on mobile, opened immediately, tracked in background", async () => {
     Platform.OS = "ios";
-    trackMock.mockResolvedValue({ url: "https://marchand.example/affilie" });
+    trackMock.mockImplementation(() => new Promise(() => {})); // ne se résout jamais
 
     const result = await openMerchantLink({
       matchId: "match-native",
-      fallbackUrl: "https://marchand.example/brut",
+      url: "https://marchand.example/affilie",
       context: "result",
     });
 
     expect(openBrowserMock).toHaveBeenCalledWith("https://marchand.example/affilie");
+    expect(trackMock).toHaveBeenCalledWith("match-native", "result");
     expect(result).toEqual({ blocked: false });
   });
 });

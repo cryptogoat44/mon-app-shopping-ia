@@ -38,7 +38,11 @@ interface ProductMatchRow {
   merchant_url: string;
 }
 
-function toProductSearch(row: ProductSearchRow, matches: ProductMatchRow[]): ProductSearch {
+function toProductSearch(
+  row: ProductSearchRow,
+  matches: ProductMatchRow[],
+  affiliateUrlByMatchId: Map<string, string>
+): ProductSearch {
   return {
     id: row.id,
     sourceUrl: row.source_url,
@@ -61,8 +65,32 @@ function toProductSearch(row: ProductSearchRow, matches: ProductMatchRow[]): Pro
         currency: m.currency,
         merchantName: m.merchant_name,
         merchantUrl: m.merchant_url,
+        // Repli sur merchant_url si le lien affilié manque (échec d'écriture
+        // ponctuel dans saveMatches) — toujours une URL valide à ouvrir.
+        affiliateUrl: affiliateUrlByMatchId.get(m.id) ?? m.merchant_url,
       })),
   };
+}
+
+/** Un lien affilié par product_match (voir saveMatches). Renvoie une table
+ * de correspondance plutôt qu'un tableau pour un accès direct par id lors
+ * de la construction de la réponse. */
+async function fetchAffiliateUrls(fastify: FastifyInstance, matchIds: string[]): Promise<Map<string, string>> {
+  if (matchIds.length === 0) return new Map();
+
+  const { data, error } = await fastify.supabaseAdmin
+    .from("affiliate_links")
+    .select("product_match_id, affiliate_url")
+    .in("product_match_id", matchIds);
+
+  if (error || !data) {
+    fastify.log.error({ error }, "Échec de lecture des liens affiliés");
+    return new Map();
+  }
+
+  return new Map(
+    (data as { product_match_id: string; affiliate_url: string }[]).map((l) => [l.product_match_id, l.affiliate_url])
+  );
 }
 
 async function saveMatches(
@@ -168,11 +196,16 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       if (match.search_id) topMatchBySearch.set(match.search_id, match);
     }
 
+    const affiliateUrlByMatchId = await fetchAffiliateUrls(
+      fastify,
+      Array.from(topMatchBySearch.values()).map((m) => m.id)
+    );
+
     return reply.send(
       rows
         .map((row) => {
           const topMatch = topMatchBySearch.get(row.id);
-          return topMatch ? toProductSearch(row, [topMatch]) : null;
+          return topMatch ? toProductSearch(row, [topMatch], affiliateUrlByMatchId) : null;
         })
         .filter((search): search is ProductSearch => search !== null)
     );
@@ -217,7 +250,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
         return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
       }
 
-      return reply.send(toProductSearch(inserted as ProductSearchRow, []));
+      return reply.send(toProductSearch(inserted as ProductSearchRow, [], new Map()));
     }
 
     const platform = detectPlatform(sourceUrl);
@@ -247,7 +280,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     if (!thumbnail) {
       // Pas de voie officielle disponible pour ce lien : on s'arrête ici,
       // le mobile va appeler /screenshot avec une capture importée par l'utilisateur.
-      return reply.send(toProductSearch(row, []));
+      return reply.send(toProductSearch(row, [], new Map()));
     }
 
     try {
@@ -269,7 +302,10 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
         .select("*")
         .eq("search_id", row.id);
 
-      return reply.send(toProductSearch((updated as ProductSearchRow) ?? row, (matchRows as ProductMatchRow[]) ?? []));
+      const rowsForSearch = (matchRows as ProductMatchRow[]) ?? [];
+      const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, rowsForSearch.map((m) => m.id));
+
+      return reply.send(toProductSearch((updated as ProductSearchRow) ?? row, rowsForSearch, affiliateUrlByMatchId));
     } catch (error) {
       request.log.error({ error }, "Échec de l'appel à l'API de recherche visuelle");
       await fastify.supabaseAdmin
@@ -278,7 +314,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
         .eq("id", row.id);
 
       return reply.send(
-        toProductSearch({ ...row, status: "failed", error_message: "La recherche visuelle a échoué." }, [])
+        toProductSearch({ ...row, status: "failed", error_message: "La recherche visuelle a échoué." }, [], new Map())
       );
     }
     }
@@ -367,9 +403,11 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       .single();
 
     const { data: matchRows } = await fastify.supabaseAdmin.from("product_matches").select("*").eq("search_id", id);
+    const rowsForSearch = (matchRows as ProductMatchRow[]) ?? [];
+    const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, rowsForSearch.map((m) => m.id));
 
     return reply.send(
-      toProductSearch((updated as ProductSearchRow) ?? search, (matchRows as ProductMatchRow[]) ?? [])
+      toProductSearch((updated as ProductSearchRow) ?? search, rowsForSearch, affiliateUrlByMatchId)
     );
   });
 
@@ -389,7 +427,9 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     }
 
     const { data: matchRows } = await fastify.supabaseAdmin.from("product_matches").select("*").eq("search_id", id);
+    const rowsForSearch = (matchRows as ProductMatchRow[]) ?? [];
+    const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, rowsForSearch.map((m) => m.id));
 
-    return reply.send(toProductSearch(search as ProductSearchRow, (matchRows as ProductMatchRow[]) ?? []));
+    return reply.send(toProductSearch(search as ProductSearchRow, rowsForSearch, affiliateUrlByMatchId));
   });
 }

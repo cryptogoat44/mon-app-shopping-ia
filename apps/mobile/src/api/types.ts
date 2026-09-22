@@ -11,6 +11,10 @@ export interface Piece {
   currency: string | null;
   merchantName: string | null;
   merchantUrl: string | null;
+  /** Lien à ouvrir au clic (affilié si connu, sinon identique à
+   * merchantUrl) — déjà résolu par le backend, aucun appel réseau
+   * supplémentaire n'est nécessaire pour l'ouvrir. */
+  affiliateUrl: string | null;
   /** true seulement pour une pièce issue d'une vraie recherche IA (id =
    * l'id réel d'un product_match côté serveur) — permet de distinguer
    * une pièce réelle d'une pièce de démonstration (catalogue mock). */
