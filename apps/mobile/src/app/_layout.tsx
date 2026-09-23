@@ -1,16 +1,26 @@
 import { Stack } from "expo-router";
+import Head from "expo-router/head";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { ToastProvider } from "@/lib/toast-context";
 import { resolveRootRoute } from "@/lib/root-route";
+import { useAppFonts } from "@/theme/fonts";
+import { APP_NAME_DISPLAY } from "@/constants/brand";
 
 SplashScreen.preventAutoHideAsync();
 
 function RootNavigator() {
   const { session, profile, profileStatus } = useAuth();
-  const route = resolveRootRoute({ session, profileStatus, profile });
+  // La police éditoriale (Newsreader) n'était jamais chargée : tous les
+  // titres tombaient dans une police par défaut (audit Lot Q, UX-01). On
+  // garde l'écran de démarrage tant qu'elle n'est pas prête — sauf en cas
+  // d'échec de chargement, où l'app démarre quand même avec la police de
+  // secours plutôt que de rester bloquée.
+  const [fontsLoaded, fontError] = useAppFonts();
+  const fontsReady = fontsLoaded || fontError !== null;
+  const route = fontsReady ? resolveRootRoute({ session, profileStatus, profile }) : "splash";
 
   useEffect(() => {
     if (route !== "splash") SplashScreen.hideAsync();
@@ -44,6 +54,10 @@ function RootNavigator() {
 export default function RootLayout() {
   return (
     <AuthProvider>
+      {/* Titre de l'onglet sur le web (sans effet sur iPhone). */}
+      <Head>
+        <title>{APP_NAME_DISPLAY}</title>
+      </Head>
       <ToastProvider>
         <StatusBar style="dark" />
         <RootNavigator />
