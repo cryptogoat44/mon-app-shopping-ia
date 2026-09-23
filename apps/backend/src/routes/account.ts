@@ -70,60 +70,110 @@ export default async function accountRoutes(fastify: FastifyInstance) {
     return reply.code(204).send();
   });
 
-  // Export RGPD : un instantané JSON de toutes les données personnelles de
-  // l'utilisateur. Servi directement dans la réponse (pas de génération
-  // asynchrone ni d'email) — suffisant vu le volume de données en Phase 1.
+  // Export RGPD (droit d'accès et de portabilité) : un instantané JSON de
+  // TOUTES les données personnelles de l'utilisateur. Toute nouvelle table
+  // contenant des données personnelles doit être ajoutée ici (règle 10 du
+  // programme) — le test tests/exportCompleteness.test.ts vérifie chaque
+  // section. Si une seule lecture échoue, l'export entier échoue : un export
+  // partiel présenté comme complet serait pire qu'une erreur (audit Lot Q,
+  // SEC-01).
   fastify.get("/api/me/export", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const userId = request.user!.id;
     const db = fastify.supabaseAdmin;
 
-    // Les product_matches n'ont pas de user_id direct (ils appartiennent à
-    // une recherche) : on récupère d'abord les recherches, puis leurs
-    // résultats par search_id — plus simple et plus sûr qu'un filtre sur
-    // une ressource jointe.
-    const searches = await db.from("product_searches").select("*").eq("user_id", userId);
-    const searchIds = (searches.data ?? []).map((s) => s.id as string);
+    const failures: string[] = [];
+    function rows<T>(section: string, result: { data: T[] | null; error: unknown }): T[] {
+      if (result.error) failures.push(section);
+      return result.data ?? [];
+    }
 
-    const [matches, vaultItems, posts, followers, following, consents, clicks, profile] = await Promise.all([
-      searchIds.length > 0
-        ? db.from("product_matches").select("*").in("search_id", searchIds)
-        : Promise.resolve({ data: [] as unknown[] }),
-      db.from("vault_items").select("*").eq("user_id", userId),
+    // Tables sans user_id direct (product_matches, post_tagged_pieces,
+    // affiliate_conversions) : on récupère d'abord les lignes parentes de
+    // l'utilisateur, puis leurs enfants par identifiant — plus simple et
+    // plus sûr qu'un filtre sur une ressource jointe.
+    const [searchesRes, postsRes, clicksRes] = await Promise.all([
+      db.from("product_searches").select("*").eq("user_id", userId),
       db.from("posts").select("*").eq("user_id", userId),
+      db.from("affiliate_clicks").select("*").eq("user_id", userId),
+    ]);
+    const productSearches = rows("productSearches", searchesRes);
+    const posts = rows("posts", postsRes);
+    const affiliateClicks = rows("affiliateClicks", clicksRes);
+
+    const searchIds = productSearches.map((s) => s.id as string);
+    const postIds = posts.map((p) => p.id as string);
+    const clickIds = affiliateClicks.map((c) => c.id as string);
+    const empty = Promise.resolve({ data: [] as Record<string, unknown>[], error: null });
+
+    const [
+      profileRes,
+      matchesRes,
+      taggedRes,
+      conversionsRes,
+      vaultRes,
+      wishlistRes,
+      followersRes,
+      followingRes,
+      reactionsRes,
+      notificationsRes,
+      blocksRes,
+      reportsRes,
+      consentsRes,
+      exportRequestsRes,
+    ] = await Promise.all([
+      db.from("profiles").select("*").eq("id", userId).maybeSingle(),
+      searchIds.length > 0 ? db.from("product_matches").select("*").in("search_id", searchIds) : empty,
+      postIds.length > 0 ? db.from("post_tagged_pieces").select("*").in("post_id", postIds) : empty,
+      clickIds.length > 0 ? db.from("affiliate_conversions").select("*").in("affiliate_click_id", clickIds) : empty,
+      db.from("vault_items").select("*").eq("user_id", userId),
+      db.from("wishlist_items").select("*").eq("user_id", userId),
       db.from("follows").select("follower_id, created_at").eq("followee_id", userId),
       db.from("follows").select("followee_id, created_at").eq("follower_id", userId),
-      db.from("consents").select("type, granted_at, revoked_at, created_at").eq("user_id", userId),
-      db.from("affiliate_clicks").select("affiliate_link_id, clicked_at").eq("user_id", userId),
-      db.from("profiles").select("*").eq("id", userId).single(),
+      db.from("post_reactions").select("post_id, created_at").eq("user_id", userId),
+      db.from("notifications").select("*").eq("user_id", userId),
+      db.from("blocks").select("blocked_id, created_at").eq("blocker_id", userId),
+      db.from("reports").select("*").eq("reporter_id", userId),
+      db.from("consents").select("*").eq("user_id", userId),
+      db.from("data_export_requests").select("*").eq("user_id", userId),
     ]);
 
-    // post_tagged_pieces n'a pas de user_id direct non plus (il appartient à
-    // une publication) : même logique que product_matches ci-dessus.
-    const postIds = (posts.data ?? []).map((p) => p.id as string);
-    const taggedPieces =
-      postIds.length > 0
-        ? await db.from("post_tagged_pieces").select("*").in("post_id", postIds)
-        : { data: [] as unknown[] };
+    if (profileRes.error) failures.push("profile");
+    const exported = {
+      exportedAt: new Date().toISOString(),
+      profile: profileRes.data ?? null,
+      productSearches,
+      productMatches: rows("productMatches", matchesRes),
+      vaultItems: rows("vaultItems", vaultRes),
+      wishlistItems: rows("wishlistItems", wishlistRes),
+      posts,
+      postTaggedPieces: rows("postTaggedPieces", taggedRes),
+      reactionsGiven: rows("reactionsGiven", reactionsRes),
+      followers: rows("followers", followersRes),
+      following: rows("following", followingRes),
+      blockedAccounts: rows("blockedAccounts", blocksRes),
+      reportsSubmitted: rows("reportsSubmitted", reportsRes),
+      notifications: rows("notifications", notificationsRes),
+      affiliateClicks,
+      affiliateConversions: rows("affiliateConversions", conversionsRes),
+      consents: rows("consents", consentsRes),
+      dataExportRequests: rows("dataExportRequests", exportRequestsRes),
+    };
 
-    await db.from("data_export_requests").insert({
+    if (failures.length > 0) {
+      request.log.error({ failures }, "Export RGPD incomplet — échec de lecture");
+      return reply.code(500).send({ error: "export_failed", message: "L'export a échoué, réessayez." });
+    }
+
+    const { error: requestLogError } = await db.from("data_export_requests").insert({
       user_id: userId,
       status: "ready",
       completed_at: new Date().toISOString(),
     });
+    if (requestLogError) {
+      request.log.error({ requestLogError }, "Échec d'enregistrement de la demande d'export");
+    }
 
-    return reply.send({
-      exportedAt: new Date().toISOString(),
-      profile: profile.data ?? null,
-      productSearches: searches.data ?? [],
-      productMatches: matches.data ?? [],
-      vaultItems: vaultItems.data ?? [],
-      posts: posts.data ?? [],
-      postTaggedPieces: taggedPieces.data ?? [],
-      followers: followers.data ?? [],
-      following: following.data ?? [],
-      consents: consents.data ?? [],
-      affiliateClicks: clicks.data ?? [],
-    });
+    return reply.send(exported);
   });
 
   // Suppression réelle de compte : supprime l'utilisateur Supabase Auth (les
