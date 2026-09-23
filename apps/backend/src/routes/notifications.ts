@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { AppNotification, NotificationType, PostAuthor } from "@monapp/shared-types";
+import { fetchBlockedUserIds } from "../lib/blocks.js";
 
 interface NotificationRow {
   id: string;
@@ -16,16 +17,29 @@ interface ProfileRow {
   avatar_url: string | null;
 }
 
+// Filtre PostgREST excluant les auteurs bloqués (dans un sens ou dans
+// l'autre). Les identifiants viennent de notre propre base, jamais du client.
+function excludedActorsFilter(blockedIds: Set<string>): string | null {
+  return blockedIds.size > 0 ? `(${[...blockedIds].join(",")})` : null;
+}
+
 export default async function notificationsRoutes(fastify: FastifyInstance) {
   fastify.get("/api/notifications", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const userId = request.user!.id;
 
-    const { data: rows, error } = await fastify.supabaseAdmin
+    // Un compte bloqué n'apparaît jamais, y compris dans les notifications
+    // reçues avant le blocage (audit Lot Q, SEC-04).
+    const excluded = excludedActorsFilter(await fetchBlockedUserIds(fastify, userId));
+
+    let query = fastify.supabaseAdmin
       .from("notifications")
       .select("*")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(50);
+    if (excluded) query = query.not("actor_id", "in", excluded);
+
+    const { data: rows, error } = await query;
 
     if (error) {
       request.log.error({ error }, "Échec de lecture des notifications");
@@ -67,12 +81,16 @@ export default async function notificationsRoutes(fastify: FastifyInstance) {
 
   fastify.get("/api/notifications/unread-count", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const userId = request.user!.id;
+    const excluded = excludedActorsFilter(await fetchBlockedUserIds(fastify, userId));
 
-    const { count, error } = await fastify.supabaseAdmin
+    let query = fastify.supabaseAdmin
       .from("notifications")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
       .is("read_at", null);
+    if (excluded) query = query.not("actor_id", "in", excluded);
+
+    const { count, error } = await query;
 
     if (error) {
       request.log.error({ error }, "Échec de lecture du compteur de notifications");

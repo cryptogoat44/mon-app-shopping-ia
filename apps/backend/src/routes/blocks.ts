@@ -41,6 +41,12 @@ export default async function blocksRoutes(fastify: FastifyInstance) {
     await fastify.supabaseAdmin.from("follows").delete().eq("follower_id", blockerId).eq("followee_id", blockedId);
     await fastify.supabaseAdmin.from("follows").delete().eq("follower_id", blockedId).eq("followee_id", blockerId);
 
+    // Et efface les notifications échangées entre les deux comptes : un
+    // compte bloqué ne doit plus apparaître nulle part (audit Lot Q, SEC-04 —
+    // la lecture des notifications les filtre aussi, par sécurité).
+    await fastify.supabaseAdmin.from("notifications").delete().eq("user_id", blockerId).eq("actor_id", blockedId);
+    await fastify.supabaseAdmin.from("notifications").delete().eq("user_id", blockedId).eq("actor_id", blockerId);
+
     return reply.code(204).send();
   });
 

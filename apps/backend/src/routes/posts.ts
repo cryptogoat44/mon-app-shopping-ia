@@ -548,15 +548,34 @@ export default async function postsRoutes(fastify: FastifyInstance) {
       .eq("user_id", userId)
       .single();
 
+    // Anti-spam (audit Lot Q, ROB-05) : « je n'aime plus » retire la
+    // notification correspondante, et un nouveau « j'aime » n'en crée une que
+    // s'il n'en existe pas déjà — aimer/ne plus aimer en boucle laisse au
+    // plus UNE notification, toujours vraie.
     if (existing) {
       await fastify.supabaseAdmin.from("post_reactions").delete().eq("post_id", id).eq("user_id", userId);
+      await fastify.supabaseAdmin
+        .from("notifications")
+        .delete()
+        .eq("type", "like")
+        .eq("post_id", id)
+        .eq("actor_id", userId);
     } else {
       await fastify.supabaseAdmin.from("post_reactions").insert({ post_id: id, user_id: userId });
       // Jamais de notification pour un like sur sa propre publication.
       if (post.user_id !== userId) {
-        await fastify.supabaseAdmin
+        const { data: alreadyNotified } = await fastify.supabaseAdmin
           .from("notifications")
-          .insert({ user_id: post.user_id, actor_id: userId, type: "like", post_id: id });
+          .select("id")
+          .eq("type", "like")
+          .eq("post_id", id)
+          .eq("actor_id", userId)
+          .limit(1);
+        if (!alreadyNotified || alreadyNotified.length === 0) {
+          await fastify.supabaseAdmin
+            .from("notifications")
+            .insert({ user_id: post.user_id, actor_id: userId, type: "like", post_id: id });
+        }
       }
     }
 
