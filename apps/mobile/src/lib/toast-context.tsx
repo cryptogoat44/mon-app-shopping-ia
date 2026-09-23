@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
-import { Animated, StyleSheet, Text } from "react-native";
+import { AccessibilityInfo, Animated, Platform, StyleSheet, Text } from "react-native";
 import { color, font, radius, space } from "@/theme/tokens";
 
 // Petite confirmation flottante pour les actions qui n'ont pas déjà leur
@@ -24,6 +24,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (text: string) => {
       if (hideTimer.current) clearTimeout(hideTimer.current);
       setMessage(text);
+      // Les lecteurs d'écran ne voyaient pas passer ces confirmations
+      // (audit Lot Q, A11Y-03). Sur le web, la zone annoncée ci-dessous (aria-live)
+      // s'en charge.
+      if (Platform.OS !== "web") AccessibilityInfo.announceForAccessibility(text);
       opacity.setValue(0);
       Animated.timing(opacity, { toValue: 1, duration: FADE_IN_MS, useNativeDriver: true }).start();
       hideTimer.current = setTimeout(() => {
@@ -40,7 +44,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       {message ? (
         <Animated.View pointerEvents="none" style={[styles.toast, { opacity }]}>
-          <Text style={styles.toastText}>{message}</Text>
+          <Text style={styles.toastText} accessibilityLiveRegion="polite">
+            {message}
+          </Text>
         </Animated.View>
       ) : null}
     </ToastContext.Provider>

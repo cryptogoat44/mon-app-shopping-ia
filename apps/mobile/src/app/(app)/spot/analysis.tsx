@@ -61,7 +61,7 @@ export default function AnalysisScreen() {
         </View>
         <Text style={styles.status}>{showReassurance ? fr.analysis.reassurance : fr.analysis.status}</Text>
       </View>
-      <Pressable style={styles.cancel} onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}>
+      <Pressable accessibilityRole="button" style={styles.cancel} onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}>
         <Text style={styles.cancelLabel}>{fr.analysis.cancel}</Text>
       </Pressable>
     </SafeAreaView>

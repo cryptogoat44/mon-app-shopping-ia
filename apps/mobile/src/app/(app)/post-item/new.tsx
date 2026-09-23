@@ -13,6 +13,7 @@ import { getRecentlySpotted } from "@/api/client";
 import type { Piece } from "@/api/types";
 import { CameraIcon } from "@/components/icons";
 import { useToast } from "@/lib/toast-context";
+import { ErrorMessage } from "@/components/error-message";
 
 export default function NewPostScreen() {
   const router = useRouter();
@@ -90,14 +91,14 @@ export default function NewPostScreen() {
     <View style={styles.sheet}>
       <View style={styles.handle} />
       <View style={styles.nav}>
-        <Pressable onPress={safeBack} hitSlop={8} style={styles.navSide}>
+        <Pressable accessibilityRole="button" onPress={safeBack} hitSlop={12} style={styles.navSide}>
           <Text style={styles.cancel}>{fr.publish.cancel}</Text>
         </Pressable>
-        <Text style={styles.navTitle}>{fr.publish.title}</Text>
+        <Text style={styles.navTitle} accessibilityRole="header">{fr.publish.title}</Text>
         <Pressable
           onPress={handleSubmit}
           disabled={submitting || !imageUri}
-          hitSlop={8}
+          hitSlop={12}
           style={[styles.navSide, styles.navSideRight]}
           accessibilityRole="button"
           accessibilityLabel={submitting ? "Publication en cours" : fr.publish.publish}
@@ -109,7 +110,7 @@ export default function NewPostScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
         <Pressable
           style={styles.photo}
@@ -118,7 +119,7 @@ export default function NewPostScreen() {
           accessibilityLabel={imageUri ? "Changer la photo" : fr.publish.addPhoto}
         >
           {imageUri ? (
-            <Image source={{ uri: imageUri }} style={styles.photoPreview} />
+            <Image source={{ uri: imageUri }} style={styles.photoPreview} accessibilityLabel={fr.publish.selectedPhoto} />
           ) : (
             <>
               <CameraIcon size={30} tint={color.acier} />
@@ -146,7 +147,7 @@ export default function NewPostScreen() {
               <Text style={styles.tagLabel}>{piece.name}</Text>
               <Pressable
                 onPress={() => removePieceTag(piece.id)}
-                hitSlop={8}
+                hitSlop={12}
                 accessibilityRole="button"
                 accessibilityLabel={`Retirer ${piece.name}`}
               >
@@ -154,7 +155,7 @@ export default function NewPostScreen() {
               </Pressable>
             </View>
           ))}
-          <Pressable style={styles.addTag} onPress={openPicker}>
+          <Pressable accessibilityRole="button" style={styles.addTag} onPress={openPicker}>
             <Text style={styles.addTagLabel}>+ {fr.publish.addPiece}</Text>
           </Pressable>
         </View>
@@ -164,6 +165,7 @@ export default function NewPostScreen() {
           {PRIVACY_LEVELS.map((level) => (
             <Pressable
               key={level}
+              hitSlop={{ top: 8, bottom: 8, left: 2, right: 2 }}
               style={[styles.privacyPill, privacy === level ? styles.privacyPillActive : null]}
               onPress={() => setPrivacy(level)}
               accessibilityRole="radio"
@@ -184,8 +186,8 @@ export default function NewPostScreen() {
         />
         <View style={styles.modalSheet}>
           <View style={styles.modalNav}>
-            <Text style={styles.navTitle}>{fr.publish.addPiece}</Text>
-            <Pressable onPress={() => setPickerOpen(false)} hitSlop={8}>
+            <Text style={styles.navTitle} accessibilityRole="header">{fr.publish.addPiece}</Text>
+            <Pressable accessibilityRole="button" onPress={() => setPickerOpen(false)} hitSlop={12}>
               <Text style={styles.cancel}>{fr.publish.closePicker}</Text>
             </Pressable>
           </View>
@@ -193,7 +195,7 @@ export default function NewPostScreen() {
             <Text style={styles.emptyPicker}>{fr.publish.noRecentPieces}</Text>
           ) : (
             recentPieces?.map((piece) => (
-              <Pressable key={piece.id} style={styles.pickerRow} onPress={() => addPieceTag(piece)}>
+              <Pressable accessibilityRole="button" key={piece.id} style={styles.pickerRow} onPress={() => addPieceTag(piece)}>
                 <View style={styles.tagDot} />
                 <View>
                   <Text style={styles.pickerRowName}>{piece.name}</Text>

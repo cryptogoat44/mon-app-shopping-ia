@@ -6,6 +6,7 @@ import { color, font, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, deleteMyAccount, exportMyData, fetchConsentStatus } from "@/lib/api";
+import { ErrorMessage } from "@/components/error-message";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
@@ -80,7 +81,7 @@ export default function SettingsScreen() {
       <View style={styles.nav}>
         <Pressable
           onPress={() => (router.canGoBack() ? router.back() : router.replace("/profile"))}
-          hitSlop={8}
+          hitSlop={12}
           accessibilityRole="button"
           accessibilityLabel="Retour"
         >
@@ -88,16 +89,16 @@ export default function SettingsScreen() {
         </Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>{fr.settings.title}</Text>
+        <Text style={styles.title} accessibilityRole="header">{fr.settings.title}</Text>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>{fr.settings.account}</Text>
-          <Pressable onPress={() => router.push("/edit-profile")} hitSlop={4}>
+          <Pressable accessibilityRole="button" onPress={() => router.push("/edit-profile")} hitSlop={12}>
             <Text style={styles.link}>{fr.settings.editProfile}</Text>
           </Pressable>
-          <Pressable onPress={() => router.push("/blocked-users")} hitSlop={4} style={styles.secondLink}>
+          <Pressable accessibilityRole="button" onPress={() => router.push("/blocked-users")} hitSlop={12} style={styles.secondLink}>
             <Text style={styles.link}>{fr.blockedUsers.title}</Text>
           </Pressable>
         </View>
@@ -111,29 +112,29 @@ export default function SettingsScreen() {
                 ? "Statut du consentement indisponible pour le moment."
                 : "Statut du consentement en cours de chargement…"}
           </Text>
-          <Pressable onPress={handleExport} disabled={exporting} hitSlop={4}>
+          <Pressable accessibilityRole="button" onPress={handleExport} disabled={exporting} hitSlop={12}>
             <Text style={styles.link}>{exporting ? "Préparation de l'export…" : fr.settings.exportData}</Text>
           </Pressable>
         </View>
 
-        <Pressable onPress={signOut} hitSlop={4} style={styles.section}>
+        <Pressable accessibilityRole="button" onPress={signOut} hitSlop={12} style={styles.section}>
           <Text style={styles.link}>{fr.settings.signOut}</Text>
         </Pressable>
 
         <View style={styles.dangerSection}>
           <Text style={styles.sectionLabel}>Zone sensible</Text>
           {!confirmingDelete ? (
-            <Pressable onPress={() => setConfirmingDelete(true)} hitSlop={4}>
+            <Pressable accessibilityRole="button" onPress={() => setConfirmingDelete(true)} hitSlop={12}>
               <Text style={styles.deleteLabel}>{fr.settings.deleteAccount}</Text>
             </Pressable>
           ) : (
             <View>
               <Text style={styles.sectionBody}>{fr.settings.deleteConfirm}</Text>
               <View style={styles.confirmRow}>
-                <Pressable onPress={() => setConfirmingDelete(false)} disabled={deleting} hitSlop={8}>
+                <Pressable accessibilityRole="button" onPress={() => setConfirmingDelete(false)} disabled={deleting} hitSlop={12}>
                   <Text style={styles.cancelLabel}>Annuler</Text>
                 </Pressable>
-                <Pressable onPress={handleDelete} disabled={deleting} hitSlop={8}>
+                <Pressable accessibilityRole="button" onPress={handleDelete} disabled={deleting} hitSlop={12}>
                   <Text style={styles.deleteLabel}>{deleting ? "Suppression…" : "Confirmer la suppression"}</Text>
                 </Pressable>
               </View>

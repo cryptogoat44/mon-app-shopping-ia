@@ -9,6 +9,7 @@ import { fr } from "@/i18n/fr";
 import { getRecentlySpotted } from "@/api/client";
 import type { Piece } from "@/api/types";
 import { CameraIcon, ClockIcon, LinkIcon } from "@/components/icons";
+import { ErrorMessage } from "@/components/error-message";
 
 function isLikelyUrl(text: string): boolean {
   return /^https?:\/\/\S+$/i.test(text.trim());
@@ -19,7 +20,7 @@ function RecentItem({ piece }: { piece: Piece }) {
     <View style={styles.recentItem}>
       <View style={styles.recentThumb}>
         {piece.imageUrl ? (
-          <Image source={{ uri: piece.imageUrl }} style={styles.recentThumbImage} contentFit="cover" />
+          <Image source={{ uri: piece.imageUrl }} style={styles.recentThumbImage} contentFit="cover" accessibilityLabel={piece.name} />
         ) : (
           <ClockIcon size={30} tint={color.encre} />
         )}
@@ -73,7 +74,7 @@ export default function SpotterScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title}>{fr.spotter.title}</Text>
+        <Text style={styles.title} accessibilityRole="header">{fr.spotter.title}</Text>
       </View>
       <ScrollView
         contentContainerStyle={styles.content}
@@ -81,14 +82,14 @@ export default function SpotterScreen() {
       >
         <Text style={styles.question}>{fr.spotter.question}</Text>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
-        <Pressable style={styles.primary} onPress={handlePasteLink}>
+        <Pressable accessibilityRole="button" style={styles.primary} onPress={handlePasteLink}>
           <LinkIcon size={18} tint={color.blanc} />
           <Text style={styles.primaryLabel}>{fr.spotter.pasteLink}</Text>
         </Pressable>
 
-        <Pressable style={styles.secondary} onPress={handleImportPhoto}>
+        <Pressable accessibilityRole="button" style={styles.secondary} onPress={handleImportPhoto}>
           <CameraIcon size={18} tint={color.encre} />
           <Text style={styles.secondaryLabel}>{fr.spotter.importPhoto}</Text>
         </Pressable>

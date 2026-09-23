@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, StyleSheet, Te
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, recordConsents, updateMyProfile } from "@/lib/api";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { ErrorMessage } from "@/components/error-message";
 
 const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
 
@@ -51,10 +52,10 @@ export default function CompleteProfileScreen() {
     <SafeAreaView style={styles.screen}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.content}>
-          <Text style={styles.title}>Dernière étape</Text>
+          <Text style={styles.title} accessibilityRole="header">Dernière étape</Text>
           <Text style={styles.subtitle}>Choisissez comment on vous reconnaît sur l'app.</Text>
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
           <View style={styles.field}>
             <Text style={styles.label}>Nom d'utilisateur</Text>
@@ -80,7 +81,7 @@ export default function CompleteProfileScreen() {
             />
           </View>
 
-          <Pressable
+          <Pressable accessibilityRole="button"
             style={[styles.cta, (submitting || !username || !displayName) ? styles.ctaDisabled : null]}
             onPress={handleSubmit}
             disabled={submitting || !username || !displayName}

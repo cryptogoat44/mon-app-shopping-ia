@@ -6,6 +6,7 @@ import { ApiError, updateMyProfile } from "@/lib/api";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
 import { useToast } from "@/lib/toast-context";
+import { ErrorMessage } from "@/components/error-message";
 
 const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
 
@@ -62,15 +63,15 @@ export default function EditProfileScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.nav}>
-        <Pressable onPress={safeBack} hitSlop={8} accessibilityRole="button" accessibilityLabel="Retour">
+        <Pressable onPress={safeBack} hitSlop={12} accessibilityRole="button" accessibilityLabel="Retour">
           <Text style={styles.back}>‹</Text>
         </Pressable>
       </View>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.title}>{fr.editProfile.title}</Text>
+          <Text style={styles.title} accessibilityRole="header">{fr.editProfile.title}</Text>
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
           <View style={styles.field}>
             <Text style={styles.label}>{fr.editProfile.username}</Text>

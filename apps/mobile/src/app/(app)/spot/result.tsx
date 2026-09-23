@@ -169,7 +169,7 @@ export default function ResultScreen() {
         <View style={styles.nav}>
           <Pressable
             onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
-            hitSlop={8}
+            hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel="Retour"
           >
@@ -180,9 +180,9 @@ export default function ResultScreen() {
           <View style={styles.failFrame}>
             <NotFoundIcon size={44} />
           </View>
-          <Text style={styles.failTitle}>{title}</Text>
+          <Text style={styles.failTitle} accessibilityRole="header">{title}</Text>
           <Text style={styles.failTip}>{tip}</Text>
-          <Pressable
+          <Pressable accessibilityRole="button"
             style={styles.retryCta}
             onPress={needsPhoto ? () => router.replace("/") : handleRetry}
           >
@@ -198,14 +198,14 @@ export default function ResultScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.nav}>
-        <Pressable onPress={() => router.back()} hitSlop={8} accessibilityRole="button" accessibilityLabel="Retour">
+        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button" accessibilityLabel="Retour">
           <Text style={styles.back}>‹</Text>
         </Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.frame}>
           {piece.imageUrl ? (
-            <Image source={{ uri: piece.imageUrl }} style={styles.frameImage} contentFit="cover" />
+            <Image source={{ uri: piece.imageUrl }} style={styles.frameImage} contentFit="cover" accessibilityLabel={piece.name} />
           ) : (
             <ClockIcon size={100} tint={color.encre} />
           )}
@@ -236,14 +236,14 @@ export default function ResultScreen() {
         ) : null}
 
         <Text style={styles.matchLabel}>{selectedIndex === 0 ? fr.result.bestProposal : fr.result.otherProposal}</Text>
-        <Text style={styles.name}>{piece.name}</Text>
+        <Text style={styles.name} accessibilityRole="header">{piece.name}</Text>
         {piece.reference || piece.material ? (
           <Text style={styles.ref}>{[piece.reference, piece.material].filter(Boolean).join(" · ")}</Text>
         ) : null}
         {formatPrice(piece) ? <Text style={styles.price}>{formatPrice(piece)}</Text> : null}
 
         {piece.merchantUrl ? (
-          <Pressable style={styles.cta} onPress={handleOpenMerchant}>
+          <Pressable accessibilityRole="button" style={styles.cta} onPress={handleOpenMerchant}>
             <Text style={styles.ctaLabel}>{fr.result.viewAt(piece.merchantName ?? "")}</Text>
           </Pressable>
         ) : null}
@@ -255,13 +255,13 @@ export default function ResultScreen() {
         <Text style={styles.disclosure}>{fr.result.affiliateDisclosure}</Text>
 
         <View style={styles.actions}>
-          <Pressable style={styles.action} onPress={handleKeep} disabled={kept}>
+          <Pressable accessibilityRole="button" style={styles.action} onPress={handleKeep} disabled={kept}>
             <Text style={styles.actionLabel}>{kept ? "Gardée ✓" : fr.result.keep}</Text>
           </Pressable>
-          <Pressable style={styles.action} onPress={handleMarkBought} disabled={bought}>
+          <Pressable accessibilityRole="button" style={styles.action} onPress={handleMarkBought} disabled={bought}>
             <Text style={styles.actionLabel}>{bought ? "Ajoutée ✓" : fr.result.markAsBought}</Text>
           </Pressable>
-          <Pressable style={styles.action} onPress={handleShare}>
+          <Pressable accessibilityRole="button" style={styles.action} onPress={handleShare}>
             <Text style={styles.actionLabel}>{fr.result.share}</Text>
           </Pressable>
         </View>
@@ -312,8 +312,8 @@ const styles = StyleSheet.create({
   disclosure: { textAlign: "center", fontSize: 11.5, color: color.acier, marginTop: 10, textDecorationLine: "underline" },
   blockedLink: { textAlign: "center", fontSize: font.caption, color: color.vert, fontWeight: "600", marginTop: 10, textDecorationLine: "underline" },
   actions: { flexDirection: "row", justifyContent: "space-around", marginTop: space.lg },
-  action: { paddingVertical: 6, paddingHorizontal: 4 },
-  actionLabel: { fontSize: 11.5, color: color.acier },
+  action: { minHeight: 44, justifyContent: "center", paddingHorizontal: space.sm },
+  actionLabel: { fontSize: font.caption, color: color.acier, fontWeight: "500" },
   divider: { height: 1, backgroundColor: color.filet, marginTop: space.xl, marginBottom: space.lg },
   sectionTitle: { fontSize: font.body, fontWeight: "600", color: color.encre, marginBottom: space.md },
   similarRow: { flexDirection: "row", gap: space.md },

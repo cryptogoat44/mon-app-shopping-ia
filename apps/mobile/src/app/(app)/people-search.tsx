@@ -9,6 +9,7 @@ import { color, font, radius, space } from "@/theme/tokens";
 import { MoreIcon, PersonIcon, SearchIcon } from "@/components/icons";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { useToast } from "@/lib/toast-context";
+import { ErrorMessage } from "@/components/error-message";
 
 function PersonRow({
   person,
@@ -60,12 +61,12 @@ function PersonRow({
         <Text style={styles.displayName}>{person.displayName}</Text>
         <Text style={styles.username}>@{person.username}</Text>
       </View>
-      <Pressable onPress={handleToggle} disabled={busy} style={[styles.followButton, following ? styles.followingButton : null]}>
+      <Pressable accessibilityRole="button" onPress={handleToggle} disabled={busy} style={[styles.followButton, following ? styles.followingButton : null]}>
         <Text style={[styles.followButtonLabel, following ? styles.followingButtonLabel : null]}>
           {following ? "Suivi(e)" : "Suivre"}
         </Text>
       </Pressable>
-      <Pressable onPress={onOpenMenu} hitSlop={8} style={styles.moreButton} accessibilityRole="button" accessibilityLabel="Plus d'options">
+      <Pressable onPress={onOpenMenu} hitSlop={11} style={styles.moreButton} accessibilityRole="button" accessibilityLabel="Plus d'options">
         <MoreIcon size={18} tint={color.acier} />
       </Pressable>
     </View>
@@ -129,7 +130,7 @@ export default function PeopleSearchScreen() {
       <View style={styles.nav}>
         <Pressable
           onPress={() => (router.canGoBack() ? router.back() : router.replace("/feed"))}
-          hitSlop={8}
+          hitSlop={12}
           accessibilityRole="button"
           accessibilityLabel="Retour"
         >
@@ -151,7 +152,7 @@ export default function PeopleSearchScreen() {
           />
         </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
         {loading ? <ActivityIndicator color={color.encre} style={styles.loader} /> : null}
 

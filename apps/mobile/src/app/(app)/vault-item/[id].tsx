@@ -11,6 +11,7 @@ import { PRIVACY_LABELS, PRIVACY_LEVELS, VAULT_CATEGORY_LABELS } from "@/lib/vau
 import { VerifiedIcon } from "@/components/icons";
 import { useToast } from "@/lib/toast-context";
 import { Skeleton } from "@/components/skeleton";
+import { ErrorMessage } from "@/components/error-message";
 
 // Décision du fondateur (journal, 2026-09-23, décision 1) : retirer un
 // objet partagé supprime aussi ses publications "achat" — on le dit avant
@@ -97,7 +98,7 @@ export default function VaultItemDetailScreen() {
       <SafeAreaView style={styles.screen}>
         <View style={styles.content}>
           {error ? (
-            <Text style={styles.errorText}>{error}</Text>
+            <ErrorMessage style={styles.errorText}>{error}</ErrorMessage>
           ) : (
             <>
               <Skeleton style={styles.image} />
@@ -115,7 +116,7 @@ export default function VaultItemDetailScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Pressable
           onPress={safeBack}
-          hitSlop={8}
+          hitSlop={12}
           style={styles.back}
           accessibilityRole="button"
           accessibilityLabel="Retour au vault"
@@ -123,12 +124,12 @@ export default function VaultItemDetailScreen() {
           <Text style={styles.backLabel}>‹ {fr.vaultItem.back}</Text>
         </Pressable>
 
-        {error ? <Text style={styles.banner}>{error}</Text> : null}
+        {error ? <ErrorMessage style={styles.banner}>{error}</ErrorMessage> : null}
 
-        <Image source={{ uri: item.imageUrl }} style={styles.image} contentFit="cover" />
+        <Image source={{ uri: item.imageUrl }} style={styles.image} contentFit="cover" accessibilityLabel={item.title} />
 
         <View style={styles.titleRow}>
-          <Text style={styles.title}>{item.title}</Text>
+          <Text style={styles.title} accessibilityRole="header">{item.title}</Text>
           {item.verified ? (
             <View style={styles.verifiedBadge}>
               <VerifiedIcon size={13} tint={color.vert} />
@@ -143,6 +144,7 @@ export default function VaultItemDetailScreen() {
           {PRIVACY_LEVELS.map((level) => (
             <Pressable
               key={level}
+              hitSlop={{ top: 8, bottom: 8, left: 2, right: 2 }}
               style={[styles.privacyPill, item.privacy === level ? styles.privacyPillActive : null]}
               onPress={() => handlePrivacyChange(level)}
               disabled={busy}
@@ -156,7 +158,7 @@ export default function VaultItemDetailScreen() {
           ))}
         </View>
 
-        <Pressable
+        <Pressable accessibilityRole="button"
           style={[styles.shareButton, sharing || shared ? styles.shareButtonDisabled : null]}
           onPress={handleShare}
           disabled={sharing || shared}
@@ -167,7 +169,7 @@ export default function VaultItemDetailScreen() {
         </Pressable>
 
         {!confirmingDelete ? (
-          <Pressable onPress={() => setConfirmingDelete(true)} disabled={busy} hitSlop={8} style={styles.removeRow}>
+          <Pressable accessibilityRole="button" onPress={() => setConfirmingDelete(true)} disabled={busy} hitSlop={12} style={styles.removeRow}>
             <Text style={styles.deleteLabel}>{fr.vaultItem.remove}</Text>
           </Pressable>
         ) : (
@@ -176,10 +178,10 @@ export default function VaultItemDetailScreen() {
               {removeConfirmText(item.purchasePostCount)}
             </Text>
             <View style={styles.confirmButtons}>
-              <Pressable onPress={() => setConfirmingDelete(false)} disabled={busy} hitSlop={8}>
+              <Pressable accessibilityRole="button" onPress={() => setConfirmingDelete(false)} disabled={busy} hitSlop={12}>
                 <Text style={styles.cancelLabel}>{fr.vaultItem.cancel}</Text>
               </Pressable>
-              <Pressable onPress={handleDelete} disabled={busy} hitSlop={8}>
+              <Pressable accessibilityRole="button" onPress={handleDelete} disabled={busy} hitSlop={12}>
                 <Text style={styles.deleteLabel}>{busy ? fr.vaultItem.removing : fr.vaultItem.confirm}</Text>
               </Pressable>
             </View>

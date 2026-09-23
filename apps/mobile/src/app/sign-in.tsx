@@ -5,6 +5,7 @@ import { translateAuthError } from "@/lib/auth-errors";
 import { supabase } from "@/lib/supabase";
 import { fr } from "@/i18n/fr";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { ErrorMessage } from "@/components/error-message";
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -29,7 +30,7 @@ export default function SignInScreen() {
     <SafeAreaView style={styles.screen}>
       <Pressable
         onPress={() => (router.canGoBack() ? router.back() : router.replace("/bienvenue"))}
-        hitSlop={8}
+        hitSlop={12}
         style={styles.nav}
         accessibilityRole="button"
         accessibilityLabel="Retour"
@@ -38,10 +39,10 @@ export default function SignInScreen() {
       </Pressable>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.content}>
-          <Text style={styles.title}>{fr.auth.signIn.title}</Text>
+          <Text style={styles.title} accessibilityRole="header">{fr.auth.signIn.title}</Text>
           <Text style={styles.subtitle}>{fr.auth.signIn.subtitle}</Text>
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
           <View style={styles.field}>
             <Text style={styles.label}>{fr.auth.email}</Text>
@@ -72,7 +73,7 @@ export default function SignInScreen() {
             />
           </View>
 
-          <Pressable
+          <Pressable accessibilityRole="button"
             style={[styles.cta, (submitting || !email || !password) ? styles.ctaDisabled : null]}
             onPress={handleSignIn}
             disabled={submitting || !email || !password}
@@ -81,7 +82,7 @@ export default function SignInScreen() {
           </Pressable>
 
           <Link href="/sign-up" asChild>
-            <Pressable hitSlop={8}>
+            <Pressable accessibilityRole="button" hitSlop={12}>
               <Text style={styles.link}>{fr.auth.signIn.noAccount}</Text>
             </Pressable>
           </Link>

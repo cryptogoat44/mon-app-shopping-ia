@@ -5,6 +5,7 @@ import { translateAuthError } from "@/lib/auth-errors";
 import { supabase } from "@/lib/supabase";
 import { fr } from "@/i18n/fr";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { ErrorMessage } from "@/components/error-message";
 
 export default function SignUpScreen() {
   const router = useRouter();
@@ -53,10 +54,10 @@ export default function SignUpScreen() {
     return (
       <SafeAreaView style={styles.screen}>
         <View style={styles.content}>
-          <Text style={styles.title}>{fr.auth.signUp.confirmTitle}</Text>
+          <Text style={styles.title} accessibilityRole="header">{fr.auth.signUp.confirmTitle}</Text>
           <Text style={styles.subtitle}>{fr.auth.signUp.confirmBody(email.trim())}</Text>
           <Link href="/sign-in" asChild>
-            <Pressable hitSlop={8}>
+            <Pressable accessibilityRole="button" hitSlop={12}>
               <Text style={styles.link}>{fr.auth.signUp.backToSignIn}</Text>
             </Pressable>
           </Link>
@@ -69,7 +70,7 @@ export default function SignUpScreen() {
     <SafeAreaView style={styles.screen}>
       <Pressable
         onPress={() => (router.canGoBack() ? router.back() : router.replace("/bienvenue"))}
-        hitSlop={8}
+        hitSlop={12}
         style={styles.nav}
         accessibilityRole="button"
         accessibilityLabel="Retour"
@@ -78,10 +79,10 @@ export default function SignUpScreen() {
       </Pressable>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.content}>
-          <Text style={styles.title}>{fr.auth.signUp.title}</Text>
+          <Text style={styles.title} accessibilityRole="header">{fr.auth.signUp.title}</Text>
           <Text style={styles.subtitle}>{fr.auth.signUp.subtitle}</Text>
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
           <View style={styles.field}>
             <Text style={styles.label}>{fr.auth.email}</Text>
@@ -128,7 +129,7 @@ export default function SignUpScreen() {
           <Pressable
             style={styles.consentRow}
             onPress={() => setConsentChecked((c) => !c)}
-            hitSlop={4}
+            hitSlop={12}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: consentChecked }}
             accessibilityLabel={fr.auth.signUp.consent}
@@ -139,7 +140,7 @@ export default function SignUpScreen() {
             <Text style={styles.consentLabel}>{fr.auth.signUp.consent}</Text>
           </Pressable>
 
-          <Pressable
+          <Pressable accessibilityRole="button"
             style={[styles.cta, (submitting || !email || !password || !confirmPassword || !consentChecked) ? styles.ctaDisabled : null]}
             onPress={handleSignUp}
             disabled={submitting || !email || !password || !confirmPassword || !consentChecked}
@@ -148,7 +149,7 @@ export default function SignUpScreen() {
           </Pressable>
 
           <Link href="/sign-in" asChild>
-            <Pressable hitSlop={8}>
+            <Pressable accessibilityRole="button" hitSlop={12}>
               <Text style={styles.link}>{fr.auth.signUp.hasAccount}</Text>
             </Pressable>
           </Link>

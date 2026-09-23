@@ -9,6 +9,7 @@ import { ApiError, fetchNotifications, markNotificationsRead } from "@/lib/api";
 import { timeAgo } from "@/lib/time";
 import { PersonIcon } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
+import { ErrorMessage } from "@/components/error-message";
 
 function actionText(notification: AppNotification): string {
   return notification.type === "follow" ? fr.notifications.follow : fr.notifications.like;
@@ -70,13 +71,13 @@ export default function NotificationsScreen() {
       <View style={styles.nav}>
         <Pressable
           onPress={() => (router.canGoBack() ? router.back() : router.replace("/feed"))}
-          hitSlop={8}
+          hitSlop={12}
           accessibilityRole="button"
           accessibilityLabel="Retour"
         >
           <Text style={styles.back}>‹</Text>
         </Pressable>
-        <Text style={styles.title}>{fr.notifications.title}</Text>
+        <Text style={styles.title} accessibilityRole="header">{fr.notifications.title}</Text>
         <View style={styles.navSpacer} />
       </View>
 
@@ -97,7 +98,7 @@ export default function NotificationsScreen() {
           contentContainerStyle={isEmpty ? styles.emptyContent : styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
         >
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {error ? <ErrorMessage style={styles.errorText}>{error}</ErrorMessage> : null}
           {isEmpty ? (
             <View style={styles.empty}>
               <Text style={styles.emptyText}>{fr.notifications.empty}</Text>

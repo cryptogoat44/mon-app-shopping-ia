@@ -9,6 +9,7 @@ import { ApiError, fetchBlockedUsers, unblockUser } from "@/lib/api";
 import { PersonIcon } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
 import { useToast } from "@/lib/toast-context";
+import { ErrorMessage } from "@/components/error-message";
 
 function BlockedUserRow({ user, onUnblocked }: { user: BlockedUser; onUnblocked: (id: string) => void }) {
   const { showToast } = useToast();
@@ -39,7 +40,7 @@ function BlockedUserRow({ user, onUnblocked }: { user: BlockedUser; onUnblocked:
         <Text style={styles.displayName}>{user.displayName}</Text>
         <Text style={styles.username}>@{user.username}</Text>
       </View>
-      <Pressable onPress={handleUnblock} disabled={busy} hitSlop={4}>
+      <Pressable accessibilityRole="button" onPress={handleUnblock} disabled={busy} hitSlop={12}>
         <Text style={styles.unblockLabel}>{fr.blockedUsers.unblock}</Text>
       </Pressable>
     </View>
@@ -73,13 +74,13 @@ export default function BlockedUsersScreen() {
       <View style={styles.nav}>
         <Pressable
           onPress={() => (router.canGoBack() ? router.back() : router.replace("/settings"))}
-          hitSlop={8}
+          hitSlop={12}
           accessibilityRole="button"
           accessibilityLabel="Retour"
         >
           <Text style={styles.back}>‹</Text>
         </Pressable>
-        <Text style={styles.title}>{fr.blockedUsers.title}</Text>
+        <Text style={styles.title} accessibilityRole="header">{fr.blockedUsers.title}</Text>
         <View style={styles.navSpacer} />
       </View>
 
@@ -94,7 +95,7 @@ export default function BlockedUsersScreen() {
             </View>
           ))
         ) : error ? (
-          <Text style={styles.error}>{error}</Text>
+          <ErrorMessage style={styles.error}>{error}</ErrorMessage>
         ) : isEmpty ? (
           <Text style={styles.empty}>{fr.blockedUsers.empty}</Text>
         ) : (

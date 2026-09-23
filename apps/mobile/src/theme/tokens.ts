@@ -11,7 +11,8 @@ export const color = {
   filet: "#E4E4E0", // séparateurs, bordures fines
   vert: "#1E3D32", // seul accent : action principale et marque « vérifié ». Nulle part ailleurs.
   blanc: "#FFFFFF",
-  danger: "#B3432B", // suppression de compte, retrait du vault — jamais utilisé ailleurs
+  danger: "#B3432B", // actions destructrices (suppression de compte, retrait du vault) — jamais utilisé ailleurs
+  erreur: "#B3432B", // messages d'erreur uniquement — même teinte que danger, rôle distinct (5,4:1 sur porcelaine, 4,9:1 sur plinthe — AA)
 } as const;
 
 // Cinq tailles maximum, comme validé dans les maquettes.

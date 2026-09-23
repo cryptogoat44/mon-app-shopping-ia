@@ -11,6 +11,7 @@ import { BellIcon, HeartIcon, MoreIcon, PersonIcon, VerifiedIcon } from "@/compo
 import { Skeleton } from "@/components/skeleton";
 import { timeAgo } from "@/lib/time";
 import { ReportBlockMenu } from "@/components/report-block-menu";
+import { ErrorMessage } from "@/components/error-message";
 
 const DOUBLE_TAP_DELAY_MS = 300;
 
@@ -92,12 +93,16 @@ function PostRow({ post, onOpenMenu }: { post: Post; onOpenMenu: () => void }) {
         <Text style={styles.authorName}>{post.author.displayName}</Text>
         {post.vaultItem?.verified ? <VerifiedIcon size={13} /> : null}
         <Text style={styles.timestamp}>{timeAgo(post.createdAt)}</Text>
-        <Pressable onPress={onOpenMenu} hitSlop={8} style={styles.moreButton} accessibilityRole="button" accessibilityLabel="Plus d'options">
+        <Pressable onPress={onOpenMenu} hitSlop={11} style={styles.moreButton} accessibilityRole="button" accessibilityLabel="Plus d'options">
           <MoreIcon size={18} tint={color.acier} />
         </Pressable>
       </View>
 
-      <Pressable onPress={handleMediaPress}>
+      <Pressable
+        onPress={handleMediaPress}
+        accessibilityRole="image"
+        accessibilityLabel={`Photo publiée par ${post.author.displayName}`}
+      >
         <Image source={{ uri: post.mediaUrl }} style={styles.media} contentFit="cover" />
         <Animated.View
           pointerEvents="none"
@@ -122,6 +127,7 @@ function PostRow({ post, onOpenMenu }: { post: Post; onOpenMenu: () => void }) {
               <Pressable
                 key={piece.id}
                 style={styles.tagChip}
+                hitSlop={{ top: 9, bottom: 9 }}
                 onPress={() =>
                   openMerchantLink({ matchId: piece.productMatchId, url: piece.merchantUrl!, context: "post" })
                 }
@@ -145,7 +151,7 @@ function PostRow({ post, onOpenMenu }: { post: Post; onOpenMenu: () => void }) {
         onPress={handleReactButton}
         disabled={busy}
         style={styles.reactRow}
-        hitSlop={8}
+        hitSlop={12}
         accessibilityRole="button"
         accessibilityLabel={reacted ? "Je n'aime plus" : "Aimer"}
       >
@@ -229,11 +235,11 @@ export default function FeedScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title}>Fil</Text>
+        <Text style={styles.title} accessibilityRole="header">Fil</Text>
         <View style={styles.headerActions}>
           <Pressable
             onPress={() => router.push("/notifications")}
-            hitSlop={8}
+            hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel={unreadCount > 0 ? `Notifications, ${unreadCount} non lues` : "Notifications"}
           >
@@ -242,7 +248,7 @@ export default function FeedScreen() {
               {unreadCount > 0 ? <View style={styles.badge} /> : null}
             </View>
           </Pressable>
-          <Pressable onPress={() => router.push("/people-search")} hitSlop={8}>
+          <Pressable accessibilityRole="button" onPress={() => router.push("/people-search")} hitSlop={12}>
             <Text style={styles.headerLink}>Profils</Text>
           </Pressable>
         </View>
@@ -264,14 +270,14 @@ export default function FeedScreen() {
             <PostRow post={post} onOpenMenu={() => setMenuTarget({ userId: post.author.id, postId: post.id })} />
           )}
           ItemSeparatorComponent={() => <View style={styles.divider} />}
-          ListHeaderComponent={error ? <Text style={styles.errorText}>{error}</Text> : null}
+          ListHeaderComponent={error ? <ErrorMessage style={styles.errorText}>{error}</ErrorMessage> : null}
           ListEmptyComponent={
             posts !== null && !error ? (
               <View style={styles.empty}>
                 <Text style={styles.emptyText}>
                   Votre fil est vide. Suivez des profils pour voir leurs achats et leurs publications ici.
                 </Text>
-                <Pressable onPress={() => router.push("/people-search")}>
+                <Pressable accessibilityRole="button" onPress={() => router.push("/people-search")}>
                   <Text style={styles.emptyLink}>Rechercher des profils</Text>
                 </Pressable>
               </View>

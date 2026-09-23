@@ -12,6 +12,7 @@ import type { Post, VaultItem } from "@monapp/shared-types";
 import { CameraIcon, ClockIcon, GearIcon, PersonIcon, TagIcon, VerifiedIcon } from "@/components/icons";
 import { useToast } from "@/lib/toast-context";
 import { Skeleton } from "@/components/skeleton";
+import { ErrorMessage } from "@/components/error-message";
 
 function chunk<T>(items: T[], size: number): T[][] {
   const rows: T[][] = [];
@@ -114,7 +115,7 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.screen}>
       <View style={styles.nav}>
         <Text style={styles.navHandle}>@{profile?.username}</Text>
-        <Pressable onPress={() => router.push("/settings")} hitSlop={8} accessibilityRole="button" accessibilityLabel="Réglages">
+        <Pressable onPress={() => router.push("/settings")} hitSlop={12} accessibilityRole="button" accessibilityLabel="Réglages">
           <GearIcon size={21} tint={color.encre} />
         </Pressable>
       </View>
@@ -158,7 +159,7 @@ export default function ProfileScreen() {
         </View>
       </View>
       <View style={styles.who}>
-        <Text style={styles.name}>{profile?.displayName}</Text>
+        <Text style={styles.name} accessibilityRole="header">{profile?.displayName}</Text>
         {profile?.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
       </View>
 
@@ -197,14 +198,14 @@ export default function ProfileScreen() {
           renderItem={({ item: row }) => (
             <View style={styles.gridRow}>
               {row.map((item) => (
-                <Pressable
+                <Pressable accessibilityRole="button"
                   key={item.id}
                   style={styles.piece}
                   onPress={() => router.push({ pathname: "/vault-item/[id]", params: { id: item.id } })}
                 >
                   <View style={styles.thumb}>
                     {item.imageUrl ? (
-                      <Image source={{ uri: item.imageUrl }} style={styles.thumbImage} contentFit="cover" />
+                      <Image source={{ uri: item.imageUrl }} style={styles.thumbImage} contentFit="cover" accessibilityLabel={item.title} />
                     ) : (
                       <ClockIcon size={30} tint={color.encre} />
                     )}
@@ -221,12 +222,12 @@ export default function ProfileScreen() {
               ))}
             </View>
           )}
-          ListHeaderComponent={vaultError ? <Text style={styles.emptyText}>{vaultError}</Text> : null}
+          ListHeaderComponent={vaultError ? <ErrorMessage style={styles.emptyText}>{vaultError}</ErrorMessage> : null}
           ListEmptyComponent={
             !vaultError ? (
               <View style={styles.empty}>
                 <Text style={styles.emptyText}>{fr.profile.emptyVault}</Text>
-                <Pressable onPress={() => router.push("/(app)/(tabs)")}>
+                <Pressable accessibilityRole="button" onPress={() => router.push("/(app)/(tabs)")}>
                   <Text style={styles.emptyCta}>{fr.profile.emptyVaultCta}</Text>
                 </Pressable>
               </View>
@@ -243,12 +244,12 @@ export default function ProfileScreen() {
         >
           {lifestyleError ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyText}>{lifestyleError}</Text>
+              <ErrorMessage style={styles.emptyText}>{lifestyleError}</ErrorMessage>
             </View>
           ) : isEmptyLifestyle ? (
             <View style={styles.empty}>
               <Text style={styles.emptyText}>{fr.profile.emptyLifestyle}</Text>
-              <Pressable onPress={() => router.push("/post-item/new")}>
+              <Pressable accessibilityRole="button" onPress={() => router.push("/post-item/new")}>
                 <Text style={styles.emptyCta}>{fr.profile.emptyLifestyleCta}</Text>
               </Pressable>
             </View>
@@ -256,7 +257,12 @@ export default function ProfileScreen() {
             lifestylePosts.map((post) => (
               <View key={post.id} style={styles.piece}>
                 <View style={styles.thumb}>
-                  <Image source={{ uri: post.mediaUrl }} style={styles.thumbImage} contentFit="cover" />
+                  <Image
+                    source={{ uri: post.mediaUrl }}
+                    style={styles.thumbImage}
+                    contentFit="cover"
+                    accessibilityLabel={post.caption ?? fr.profile.lifestylePhoto}
+                  />
                 </View>
                 {post.taggedPieces.length > 0 ? (
                   <View style={styles.tagBadge}>

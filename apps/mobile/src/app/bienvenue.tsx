@@ -11,16 +11,16 @@ export default function BienvenueScreen() {
     <SafeAreaView style={styles.screen}>
       <View style={styles.center}>
         <View style={styles.ring} />
-        <Text style={styles.mark}>{APP_NAME}</Text>
+        <Text style={styles.mark} accessibilityRole="header">{APP_NAME}</Text>
         <Text style={styles.baseline}>{fr.welcome.baseline}</Text>
         <Text style={styles.explain}>{fr.welcome.explain}</Text>
       </View>
 
       <View style={styles.footer}>
-        <Pressable style={styles.cta} onPress={() => router.push("/sign-up")}>
+        <Pressable accessibilityRole="button" style={styles.cta} onPress={() => router.push("/sign-up")}>
           <Text style={styles.ctaLabel}>{fr.welcome.cta}</Text>
         </Pressable>
-        <Pressable onPress={() => router.push("/sign-in")} hitSlop={8}>
+        <Pressable accessibilityRole="button" onPress={() => router.push("/sign-in")} hitSlop={12}>
           <Text style={styles.loginLink}>{fr.welcome.login}</Text>
         </Pressable>
         <Text style={styles.legal}>{fr.welcome.legal}</Text>

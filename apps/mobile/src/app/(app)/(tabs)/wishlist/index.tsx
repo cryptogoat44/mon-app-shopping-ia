@@ -9,6 +9,7 @@ import type { Piece, WishlistItem } from "@/api/types";
 import { ApiError } from "@/lib/api";
 import { ClockIcon } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
+import { ErrorMessage } from "@/components/error-message";
 
 function formatPrice(item: Piece): string | null {
   if (item.priceFrom === null) return null;
@@ -78,7 +79,7 @@ export default function WishlistScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title}>{fr.wishlist.title}</Text>
+        <Text style={styles.title} accessibilityRole="header">{fr.wishlist.title}</Text>
       </View>
       {loading ? (
         <View style={styles.grid}>
@@ -101,7 +102,7 @@ export default function WishlistScreen() {
                 <View key={item.id} style={styles.card}>
                   <View style={styles.thumb}>
                     {item.imageUrl ? (
-                      <Image source={{ uri: item.imageUrl }} style={styles.thumbImage} contentFit="cover" />
+                      <Image source={{ uri: item.imageUrl }} style={styles.thumbImage} contentFit="cover" accessibilityLabel={item.name} />
                     ) : (
                       <ClockIcon size={30} tint={color.encre} />
                     )}
@@ -114,12 +115,12 @@ export default function WishlistScreen() {
               ))}
             </View>
           )}
-          ListHeaderComponent={error ? <Text style={styles.emptyText}>{error}</Text> : null}
+          ListHeaderComponent={error ? <ErrorMessage style={styles.emptyText}>{error}</ErrorMessage> : null}
           ListEmptyComponent={
             !error ? (
               <View style={styles.empty}>
                 <Text style={styles.emptyText}>{fr.wishlist.empty}</Text>
-                <Pressable onPress={() => router.push("/(app)/(tabs)")}>
+                <Pressable accessibilityRole="button" onPress={() => router.push("/(app)/(tabs)")}>
                   <Text style={styles.emptyCta}>{fr.wishlist.emptyCta}</Text>
                 </Pressable>
               </View>
