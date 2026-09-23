@@ -1,12 +1,9 @@
-export type MatchConfidence = "exact" | "similar";
-
 export interface Piece {
   id: string;
   name: string;
   reference: string | null;
   material: string | null;
   imageUrl: string;
-  confidence: MatchConfidence;
   priceFrom: number | null;
   currency: string | null;
   merchantName: string | null;

@@ -24,9 +24,12 @@ export const fr = {
     cancel: "Annuler",
   },
   result: {
-    exactMatch: "Correspondance exacte",
-    similarPiece: "Pièce similaire",
-    multiplePiecesHint: "pièces repérées dans cette image — touchez pour changer.",
+    // Google Lens renvoie une liste de propositions classées pour UNE pièce,
+    // sans garantie d'identité exacte (audit Lot Q, PRO-02) : on ne promet
+    // jamais une "correspondance exacte" que rien ne vérifie.
+    bestProposal: "Meilleure proposition",
+    otherProposal: "Autre proposition",
+    proposalsHint: (count: number) => `${count} propositions pour cette pièce — touchez pour comparer.`,
     viewAt: (merchant: string) => `Voir chez ${merchant}`,
     keep: "Garder",
     markAsBought: "Je l'ai achetée",
@@ -51,7 +54,6 @@ export const fr = {
     vault: "Vault",
     lifestyle: "Lifestyle",
     verified: "Achat vérifié",
-    pendingVerification: "En cours de vérification",
     publish: "Publier",
     follow: "Suivre",
     following: "Abonné",

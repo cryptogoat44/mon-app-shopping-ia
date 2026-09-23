@@ -217,7 +217,6 @@ export default function ProfileScreen() {
                   <Text style={styles.pname} numberOfLines={1}>
                     {item.title}
                   </Text>
-                  {!item.verified ? <Text style={styles.pstate}>{fr.profile.pendingVerification}</Text> : null}
                 </Pressable>
               ))}
             </View>
@@ -379,5 +378,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   pname: { fontSize: font.caption, color: color.encre, marginTop: space.xs },
-  pstate: { fontSize: 11, color: color.acier, marginTop: 1 },
 });

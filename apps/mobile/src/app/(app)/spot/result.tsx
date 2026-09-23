@@ -11,7 +11,7 @@ import { getLastSpotResult } from "@/api/spotSession";
 import { addVaultItemFromMatch } from "@/lib/api";
 import { openMerchantLink } from "@/lib/merchant-links";
 import type { Piece, SpotResult } from "@/api/types";
-import { ClockIcon, NotFoundIcon, VerifiedIcon } from "@/components/icons";
+import { ClockIcon, NotFoundIcon } from "@/components/icons";
 
 function formatPrice(piece: Piece): string | null {
   if (piece.priceFrom === null) return null;
@@ -173,15 +173,10 @@ export default function ResultScreen() {
           </View>
         ) : null}
         {result.pieces.length > 1 ? (
-          <Text style={styles.hint}>
-            {result.pieces.length} {fr.result.multiplePiecesHint}
-          </Text>
+          <Text style={styles.hint}>{fr.result.proposalsHint(result.pieces.length)}</Text>
         ) : null}
 
-        <View style={styles.match}>
-          <VerifiedIcon size={13} />
-          <Text style={styles.matchLabel}>{piece.confidence === "exact" ? fr.result.exactMatch : fr.result.similarPiece}</Text>
-        </View>
+        <Text style={styles.matchLabel}>{selectedIndex === 0 ? fr.result.bestProposal : fr.result.otherProposal}</Text>
         <Text style={styles.name}>{piece.name}</Text>
         {piece.reference || piece.material ? (
           <Text style={styles.ref}>{[piece.reference, piece.material].filter(Boolean).join(" · ")}</Text>
@@ -247,8 +242,9 @@ const styles = StyleSheet.create({
   pkImage: { width: "100%", height: "100%" },
   pkActive: { borderWidth: 1.5, borderColor: color.encre },
   hint: { fontSize: font.caption, color: color.acier, marginBottom: space.lg },
-  match: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
-  matchLabel: { fontSize: font.caption, color: color.vert, fontWeight: "600" },
+  // Acier, jamais le vert : le vert est réservé à l'action principale et à
+  // la marque « vérifié » (tokens.ts) — une proposition n'est pas vérifiée.
+  matchLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600", marginBottom: 8 },
   name: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 28 },
   ref: { fontSize: font.secondary, color: color.acier, marginTop: 4 },
   price: { fontSize: font.caption, color: color.acier, marginTop: 10 },
