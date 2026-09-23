@@ -27,6 +27,10 @@ export type SpotStatus = "success" | "failed";
 export type SpotFailReason = "no_match" | "needs_photo" | "rate_limited";
 
 export interface SpotResult {
+  /** Identifiant de la recherche côté serveur — null si elle n'a pas pu
+   * être créée (limite atteinte, réseau...). Permet à l'écran Résultat de
+   * la relire après un rechargement de page. */
+  searchId: string | null;
   status: SpotStatus;
   /** Une entrée par pièce détectée dans l'image. Vide si status === "failed". */
   pieces: Piece[];

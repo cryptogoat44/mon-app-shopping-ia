@@ -6,11 +6,13 @@ import * as WebBrowser from "expo-web-browser";
 import * as Haptics from "expo-haptics";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
-import { addToVaultFromPiece, addToWishlist } from "@/api/client";
+import { addToVaultFromPiece, addToWishlist, loadSpotResult } from "@/api/client";
 import { getLastSpotResult } from "@/api/spotSession";
 import { addVaultItemFromMatch } from "@/lib/api";
 import { openMerchantLink } from "@/lib/merchant-links";
-import type { Piece, SpotResult } from "@/api/types";
+import type { Piece } from "@/api/types";
+import { chooseInitialResult, type InitialResultState } from "@/lib/spot-result";
+import { Skeleton } from "@/components/skeleton";
 import { ClockIcon, NotFoundIcon } from "@/components/icons";
 
 function formatPrice(piece: Piece): string | null {
@@ -21,8 +23,11 @@ function formatPrice(piece: Piece): string | null {
 
 export default function ResultScreen() {
   const router = useRouter();
-  const { type, value } = useLocalSearchParams<{ type: "link" | "photo"; value: string }>();
-  const [result] = useState<SpotResult | null>(() => getLastSpotResult());
+  const { type, value, searchId } = useLocalSearchParams<{ type: "link" | "photo"; value: string; searchId?: string }>();
+  const [state, setState] = useState<InitialResultState | { kind: "error"; searchId: string }>(() =>
+    chooseInitialResult(getLastSpotResult(), searchId)
+  );
+  const result = state.kind === "ready" ? state.result : null;
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [kept, setKept] = useState(false);
   const [bought, setBought] = useState(false);
@@ -35,6 +40,24 @@ export default function ResultScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     }
   }, [result?.status]);
+
+  // Résultat absent de la mémoire (page rechargée, lien rouvert) : on le
+  // relit sur le serveur, sans relancer d'identification.
+  const pendingSearchId = state.kind === "loading" ? state.searchId : null;
+  useEffect(() => {
+    if (!pendingSearchId) return;
+    let cancelled = false;
+    loadSpotResult(pendingSearchId)
+      .then((loaded) => {
+        if (!cancelled) setState({ kind: "ready", result: loaded });
+      })
+      .catch(() => {
+        if (!cancelled) setState({ kind: "error", searchId: pendingSearchId });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingSearchId]);
 
   function handleRetry() {
     router.replace({ pathname: "/spot/analysis", params: { type, value } });
@@ -96,6 +119,42 @@ export default function ResultScreen() {
     await Share.share({ message: `${piece.name} — repéré avec Spotto` }).catch(() => {});
   }
 
+  if (state.kind === "loading") {
+    return (
+      <SafeAreaView style={styles.screen}>
+        <View style={styles.nav} />
+        <View style={styles.scroll} accessibilityLabel={fr.result.loading}>
+          <Skeleton style={styles.frame} />
+          <Skeleton style={{ width: "40%", height: 12, marginBottom: 12 }} />
+          <Skeleton style={{ width: "75%", height: 22 }} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (state.kind === "error" || state.kind === "missing") {
+    const isError = state.kind === "error";
+    return (
+      <SafeAreaView style={styles.screen}>
+        <View style={styles.failContent}>
+          <Text style={styles.failTitle} accessibilityRole="header">
+            {isError ? fr.result.loadErrorTitle : fr.result.missingTitle}
+          </Text>
+          <Text style={styles.failTip}>{isError ? fr.result.loadErrorTip : fr.result.missingTip}</Text>
+          <Pressable
+            style={styles.retryCta}
+            accessibilityRole="button"
+            onPress={() =>
+              state.kind === "error" ? setState({ kind: "loading", searchId: state.searchId }) : router.replace("/")
+            }
+          >
+            <Text style={styles.retryLabel}>{isError ? fr.result.retry : fr.result.backToSpotter}</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (!result || result.status === "failed") {
     const needsPhoto = result?.failReason === "needs_photo";
     const rateLimited = result?.failReason === "rate_limited";
@@ -127,7 +186,7 @@ export default function ResultScreen() {
             style={styles.retryCta}
             onPress={needsPhoto ? () => router.replace("/") : handleRetry}
           >
-            <Text style={styles.retryLabel}>{needsPhoto ? "Retour à Spotter" : fr.result.retry}</Text>
+            <Text style={styles.retryLabel}>{needsPhoto ? fr.result.backToSpotter : fr.result.retry}</Text>
           </Pressable>
         </View>
       </SafeAreaView>

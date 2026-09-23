@@ -42,6 +42,12 @@ export const fr = {
     failTitleRateLimited: "Trop de recherches d'un coup",
     failTipRateLimited: "Trop de tentatives en peu de temps. Réessaie dans quelques instants.",
     retry: "Réessayer",
+    backToSpotter: "Retour à Spotter",
+    loading: "Chargement du résultat",
+    loadErrorTitle: "Impossible d'afficher ce résultat.",
+    loadErrorTip: "Vérifiez votre connexion, puis réessayez. Aucune nouvelle recherche ne sera lancée.",
+    missingTitle: "Ce résultat n'est plus disponible.",
+    missingTip: "Relancez une identification depuis Spotter.",
     merchantLinkBlocked: "Votre navigateur a bloqué l'ouverture. Touchez ici pour continuer vers le marchand.",
   },
   wishlist: {

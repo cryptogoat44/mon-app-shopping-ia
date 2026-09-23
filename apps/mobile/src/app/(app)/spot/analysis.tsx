@@ -35,7 +35,10 @@ export default function AnalysisScreen() {
     spot(source).then((result) => {
       if (cancelled.current) return;
       setLastSpotResult(result);
-      router.replace({ pathname: "/spot/result", params: { type, value } });
+      router.replace({
+        pathname: "/spot/result",
+        params: result.searchId ? { type, value, searchId: result.searchId } : { type, value },
+      });
     });
 
     return () => {

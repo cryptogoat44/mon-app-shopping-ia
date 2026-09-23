@@ -1,5 +1,6 @@
-import type { ProductMatch, ProductSearch, WishlistItem as RemoteWishlistItem } from "@monapp/shared-types";
-import { addWishlistItem, ApiError, createSearch, fetchWishlist, listRecentSearches, uploadSearchScreenshot } from "@/lib/api";
+import type { WishlistItem as RemoteWishlistItem } from "@monapp/shared-types";
+import { addWishlistItem, ApiError, createSearch, fetchSearch, fetchWishlist, listRecentSearches, uploadSearchScreenshot } from "@/lib/api";
+import { matchToPiece, toSpotResult } from "@/lib/spot-result";
 import * as mock from "./mock";
 import type { Piece, Profile, SpotResult, VaultItem, WishlistItem } from "./types";
 
@@ -13,22 +14,6 @@ function notImplemented(): never {
   throw new Error(
     "Le vrai backend n'est pas encore branché pour ce nouveau design (USE_MOCK=false). Voir src/api/client.ts."
   );
-}
-
-function matchToPiece(match: ProductMatch): Piece {
-  return {
-    id: match.id,
-    name: match.productName,
-    reference: match.brand,
-    material: null,
-    imageUrl: match.imageUrl,
-    priceFrom: match.priceMin,
-    currency: match.currency,
-    merchantName: match.merchantName,
-    merchantUrl: match.merchantUrl,
-    affiliateUrl: match.affiliateUrl,
-    real: true,
-  };
 }
 
 function wishlistRowToItem(row: RemoteWishlistItem): WishlistItem {
@@ -50,14 +35,6 @@ function wishlistRowToItem(row: RemoteWishlistItem): WishlistItem {
   };
 }
 
-function toSpotResult(search: ProductSearch): SpotResult {
-  if (search.matches.length === 0) {
-    const needsPhoto = search.method === "manual_screenshot" && search.status === "pending";
-    return { status: "failed", pieces: [], similarPieces: [], failReason: needsPhoto ? "needs_photo" : "no_match" };
-  }
-  return { status: "success", pieces: search.matches.map(matchToPiece), similarPieces: [] };
-}
-
 // Branché sur le vrai pipeline de reconnaissance (oEmbed + SerpApi côté
 // backend) — seule fonction de ce fichier à ne plus dépendre de USE_MOCK.
 // Les erreurs réseau/API sont ramenées à un résultat "failed" ordinaire
@@ -76,10 +53,16 @@ export async function spot(source: { type: "link"; url: string } | { type: "phot
     // erreurs (réseau, panne...) restent ramenées à un simple "no_match"
     // pour qu'analysis.tsx n'ait rien d'autre à connaître.
     if (error instanceof ApiError && error.status === 429) {
-      return { status: "failed", pieces: [], similarPieces: [], failReason: "rate_limited" };
+      return { searchId: null, status: "failed", pieces: [], similarPieces: [], failReason: "rate_limited" };
     }
-    return { status: "failed", pieces: [], similarPieces: [], failReason: "no_match" };
+    return { searchId: null, status: "failed", pieces: [], similarPieces: [], failReason: "no_match" };
   }
+}
+
+// Relit une recherche déjà faite (écran Résultat rouvert ou rechargé) —
+// aucun nouvel appel SerpApi, seulement la lecture de ce qui est en base.
+export async function loadSpotResult(searchId: string): Promise<SpotResult> {
+  return toSpotResult(await fetchSearch(searchId));
 }
 
 // Branché sur le vrai historique de recherches (table product_searches) —
