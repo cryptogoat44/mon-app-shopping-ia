@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { BlockedUser } from "@monapp/shared-types";
+import { INVALID_ID, parseInput, userIdParamsSchema } from "../lib/validation.js";
 
 interface ProfileRow {
   id: string;
@@ -10,7 +11,9 @@ interface ProfileRow {
 
 export default async function blocksRoutes(fastify: FastifyInstance) {
   fastify.post("/api/blocks/:userId", { preHandler: fastify.requireAuth }, async (request, reply) => {
-    const { userId: blockedId } = request.params as { userId: string };
+    const params = parseInput(userIdParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const blockedId = params.userId;
     const blockerId = request.user!.id;
 
     if (blockedId === blockerId) {
@@ -42,7 +45,9 @@ export default async function blocksRoutes(fastify: FastifyInstance) {
   });
 
   fastify.delete("/api/blocks/:userId", { preHandler: fastify.requireAuth }, async (request, reply) => {
-    const { userId: blockedId } = request.params as { userId: string };
+    const params = parseInput(userIdParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const blockedId = params.userId;
     const blockerId = request.user!.id;
 
     const { error } = await fastify.supabaseAdmin

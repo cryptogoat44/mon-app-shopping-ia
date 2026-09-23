@@ -1,8 +1,17 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import type { ReportReason, ReportTargetType } from "@monapp/shared-types";
+import { parseInput } from "../lib/validation.js";
 
-const TARGET_TYPES: ReportTargetType[] = ["user", "post"];
-const REASONS: ReportReason[] = ["spam", "inappropriate", "harassment", "other"];
+const TARGET_TYPES: [ReportTargetType, ...ReportTargetType[]] = ["user", "post"];
+const REASONS: [ReportReason, ...ReportReason[]] = ["spam", "inappropriate", "harassment", "other"];
+
+const createReportSchema = z.object({
+  targetType: z.enum(TARGET_TYPES),
+  targetId: z.string().uuid(),
+  reason: z.enum(REASONS),
+  note: z.string().max(2000).optional(),
+});
 
 // Pas d'interface de modération pour l'instant — les signalements sont
 // simplement enregistrés pour une revue manuelle. Voir la table `reports`.
@@ -15,17 +24,13 @@ export default async function reportsRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const reporterId = request.user!.id;
-      const body = request.body as { targetType?: string; targetId?: string; reason?: string; note?: string };
-
-      if (!body.targetType || !TARGET_TYPES.includes(body.targetType as ReportTargetType)) {
-        return reply.code(400).send({ error: "invalid_body", message: "Type de signalement invalide." });
-      }
-      if (!body.targetId) {
-        return reply.code(400).send({ error: "invalid_body", message: "Cible du signalement manquante." });
-      }
-      if (!body.reason || !REASONS.includes(body.reason as ReportReason)) {
-        return reply.code(400).send({ error: "invalid_body", message: "Motif de signalement invalide." });
-      }
+      // Un corps absent faisait planter la route (500) : tout passe
+      // désormais par le schéma (audit Lot Q, SEC-03).
+      const body = parseInput(createReportSchema, request.body, reply, {
+        error: "invalid_body",
+        message: "Signalement invalide.",
+      });
+      if (!body) return;
 
       const note = body.note?.trim().slice(0, 500) || null;
 

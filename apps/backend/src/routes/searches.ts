@@ -5,9 +5,10 @@ import { detectPlatform, fetchOfficialThumbnail } from "../services/oembed.js";
 import { searchProductsByImageUrl, type VisualMatch } from "../services/visualSearch.js";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
+import { INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
 
 const createSearchSchema = z.object({
-  sourceUrl: z.string().url().optional(),
+  sourceUrl: z.string().url().max(2048).optional(),
 });
 
 const SIGNED_URL_TTL_SECONDS = 300;
@@ -130,6 +131,10 @@ async function saveMatches(
 const RECENT_SEARCHES_DEFAULT_LIMIT = 6;
 const RECENT_SEARCHES_MAX_LIMIT = 20;
 
+const recentSearchesQuerySchema = z.object({
+  limit: z.coerce.number().int().positive().optional(),
+});
+
 export default async function searchesRoutes(fastify: FastifyInstance) {
   // Alimente "Récemment spottées" (Spotter et le sélecteur de pièces de
   // Publier) : les recherches réussies les plus récentes, avec seulement
@@ -137,10 +142,12 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
   // par recherche, pas la liste complète des correspondances.
   fastify.get("/api/searches", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const userId = request.user!.id;
-    const requestedLimit = Number((request.query as { limit?: string }).limit);
-    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
-      ? Math.min(requestedLimit, RECENT_SEARCHES_MAX_LIMIT)
-      : RECENT_SEARCHES_DEFAULT_LIMIT;
+    const query = parseInput(recentSearchesQuerySchema, request.query, reply, {
+      error: "invalid_query",
+      message: "Paramètre de liste invalide.",
+    });
+    if (!query) return;
+    const limit = Math.min(query.limit ?? RECENT_SEARCHES_DEFAULT_LIMIT, RECENT_SEARCHES_MAX_LIMIT);
 
     const { data: searches, error } = await fastify.supabaseAdmin
       .from("product_searches")
@@ -309,7 +316,9 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       config: { rateLimitName: "searchCreate" },
     },
     async (request, reply) => {
-    const { id } = request.params as { id: string };
+    const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const { id } = params;
     const userId = request.user!.id;
 
     const { data: search, error: fetchError } = await fastify.supabaseAdmin
@@ -392,7 +401,9 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get("/api/searches/:id", { preHandler: fastify.requireAuth }, async (request, reply) => {
-    const { id } = request.params as { id: string };
+    const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const { id } = params;
     const userId = request.user!.id;
 
     const { data: search, error } = await fastify.supabaseAdmin

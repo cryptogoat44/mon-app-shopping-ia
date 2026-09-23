@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { PrivacyLevel, VaultCategory, VaultItem, VaultItemDetail } from "@monapp/shared-types";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.js";
+import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput } from "../lib/validation.js";
 
 const VAULT_CATEGORIES: VaultCategory[] = [
   "clothing",
@@ -16,11 +17,19 @@ const VAULT_CATEGORIES: VaultCategory[] = [
 ];
 const PRIVACY_LEVELS: PrivacyLevel[] = ["public", "followers", "private"];
 
+const vaultOptionalFieldsSchema = z.object({
+  productMatchId: z.string().uuid().optional(),
+  imageUrl: z.string().url().max(2048).optional(),
+  privacy: z.enum(PRIVACY_LEVELS as [PrivacyLevel, ...PrivacyLevel[]]).optional(),
+});
+
 const updateVaultItemSchema = z.object({
   title: z.string().trim().min(1).max(120).optional(),
   category: z.enum(VAULT_CATEGORIES as [VaultCategory, ...VaultCategory[]]).optional(),
   privacy: z.enum(PRIVACY_LEVELS as [PrivacyLevel, ...PrivacyLevel[]]).optional(),
-});
+})
+  // Un corps vide passait jusqu'à la base et revenait en 404 trompeur.
+  .refine((body) => Object.keys(body).length > 0);
 
 interface VaultItemRow {
   id: string;
@@ -57,16 +66,9 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
   // vrai total. Utilisé pour le compteur "Vault" du profil.
   fastify.get("/api/vault", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const userId = request.user!.id;
-    const { cursor } = request.query as { cursor?: string };
-
-    let cursorDate: string | undefined;
-    if (cursor) {
-      const parsed = new Date(cursor);
-      if (Number.isNaN(parsed.getTime())) {
-        return reply.code(400).send({ error: "invalid_query", message: "Curseur de pagination invalide." });
-      }
-      cursorDate = parsed.toISOString();
-    }
+    const pageQuery = parseInput(cursorQuerySchema, request.query, reply, INVALID_CURSOR);
+    if (!pageQuery) return;
+    const cursorDate = pageQuery.cursor;
 
     let query = fastify.supabaseAdmin
       .from("vault_items")
@@ -96,7 +98,9 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get("/api/vault/:id", { preHandler: fastify.requireAuth }, async (request, reply) => {
-    const { id } = request.params as { id: string };
+    const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const { id } = params;
     const userId = request.user!.id;
 
     const { data, error } = await fastify.supabaseAdmin
@@ -164,6 +168,17 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: "invalid_body", message: "Le titre est trop long (120 caractères maximum)." });
     }
 
+    // Champs facultatifs, validés eux aussi (audit Lot Q, SEC-03) : un
+    // identifiant ou une confidentialité fantaisistes sont refusés au lieu
+    // d'être transmis tels quels à la base.
+    const optionalFields = parseInput(
+      vaultOptionalFieldsSchema,
+      { productMatchId: fields.productMatchId, imageUrl: fields.imageUrl, privacy: fields.privacy },
+      reply,
+      { error: "invalid_body", message: "Données invalides." }
+    );
+    if (!optionalFields) return;
+
     let imageUrl: string;
 
     if (fileBuffer) {
@@ -183,7 +198,7 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       }
 
       imageUrl = fastify.supabaseAdmin.storage.from("vault-media").getPublicUrl(path).data.publicUrl;
-    } else if (fields.productMatchId) {
+    } else if (optionalFields.productMatchId) {
       // Ajout depuis un produit identifié : l'image vient de la recherche
       // visuelle, potentiellement hébergée par le marchand (donc jamais
       // dans notre propre bucket) — impossible de la limiter au préfixe de
@@ -194,7 +209,7 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       const { data: match } = await fastify.supabaseAdmin
         .from("product_matches")
         .select("id, search_id, image_url")
-        .eq("id", fields.productMatchId)
+        .eq("id", optionalFields.productMatchId)
         .maybeSingle();
 
       if (!match) {
@@ -213,22 +228,22 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       }
 
       imageUrl = match.image_url as string;
-    } else if (fields.imageUrl) {
+    } else if (optionalFields.imageUrl) {
       // Ni fichier envoyé ni produit identifié : la seule URL qu'on accepte
       // est celle d'un fichier qui nous appartient déjà, dans le dossier de
       // cet utilisateur — une vraie analyse de l'URL (origine + chemin),
       // jamais une recherche de texte. Toute autre valeur est refusée.
-      const path = extractOwnedStoragePath(fields.imageUrl, "vault-media", userId);
+      const path = extractOwnedStoragePath(optionalFields.imageUrl, "vault-media", userId);
       if (!path) {
         return reply.code(400).send({ error: "invalid_body", message: "Cette image n'est pas autorisée." });
       }
-      imageUrl = fields.imageUrl;
+      imageUrl = optionalFields.imageUrl;
     } else {
       return reply.code(400).send({ error: "invalid_body", message: "Une photo est obligatoire." });
     }
 
-    let privacy = fields.privacy as PrivacyLevel | undefined;
-    if (!privacy || !PRIVACY_LEVELS.includes(privacy)) {
+    let privacy = optionalFields.privacy;
+    if (!privacy) {
       const { data: profile } = await fastify.supabaseAdmin
         .from("profiles")
         .select("default_privacy")
@@ -245,7 +260,7 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
         image_url: imageUrl,
         category,
         privacy,
-        product_match_id: fields.productMatchId || null,
+        product_match_id: optionalFields.productMatchId ?? null,
         // Aucune vérification automatique pour l'instant : ça nécessite un
         // webhook de conversion d'un vrai programme d'affiliation, pas
         // encore rejoint. Voir la note du bloc 3.
@@ -263,7 +278,9 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
   });
 
   fastify.patch("/api/vault/:id", { preHandler: fastify.requireAuth }, async (request, reply) => {
-    const { id } = request.params as { id: string };
+    const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const { id } = params;
     const userId = request.user!.id;
 
     const parsed = updateVaultItemSchema.safeParse(request.body);
@@ -292,7 +309,9 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
   });
 
   fastify.delete("/api/vault/:id", { preHandler: fastify.requireAuth }, async (request, reply) => {
-    const { id } = request.params as { id: string };
+    const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const { id } = params;
     const userId = request.user!.id;
 
     const { data: existing } = await fastify.supabaseAdmin

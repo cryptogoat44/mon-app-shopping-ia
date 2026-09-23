@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Post, PostTaggedPiece, PostType, PrivacyLevel, TaggedPieceInput } from "@monapp/shared-types";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
+import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput } from "../lib/validation.js";
 
 const POST_TYPES: PostType[] = ["lifestyle", "purchase"];
 const PRIVACY_LEVELS: PrivacyLevel[] = ["public", "followers", "private"];
@@ -17,6 +18,11 @@ const taggedPieceInputSchema = z.union([
   z.object({ vaultItemId: z.string().uuid() }).strict(),
   z.object({ productMatchId: z.string().uuid() }).strict(),
 ]);
+const postOptionalFieldsSchema = z.object({
+  vaultItemId: z.string().uuid().optional(),
+  privacy: z.enum(PRIVACY_LEVELS as [PrivacyLevel, ...PrivacyLevel[]]).optional(),
+});
+
 const taggedPiecesInputSchema = z.array(taggedPieceInputSchema).max(MAX_TAGGED_PIECES);
 
 interface PostRow {
@@ -263,16 +269,9 @@ export default async function postsRoutes(fastify: FastifyInstance) {
   // pour savoir s'il reste du contenu, sans jamais l'envoyer au client.
   fastify.get("/api/feed", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const userId = request.user!.id;
-    const { cursor } = request.query as { cursor?: string };
-
-    let cursorDate: string | undefined;
-    if (cursor) {
-      const parsed = new Date(cursor);
-      if (Number.isNaN(parsed.getTime())) {
-        return reply.code(400).send({ error: "invalid_query", message: "Curseur de pagination invalide." });
-      }
-      cursorDate = parsed.toISOString();
-    }
+    const pageQuery = parseInput(cursorQuerySchema, request.query, reply, INVALID_CURSOR);
+    if (!pageQuery) return;
+    const cursorDate = pageQuery.cursor;
 
     const { data: follows } = await fastify.supabaseAdmin
       .from("follows")
@@ -406,8 +405,16 @@ export default async function postsRoutes(fastify: FastifyInstance) {
         resolvedTaggedPieces = resolved;
       }
 
+      const optionalFields = parseInput(
+        postOptionalFieldsSchema,
+        { vaultItemId: fields.vaultItemId, privacy: fields.privacy },
+        reply,
+        { error: "invalid_body", message: "Données invalides." }
+      );
+      if (!optionalFields) return;
+
       if (type === "purchase") {
-        vaultItemId = fields.vaultItemId ?? null;
+        vaultItemId = optionalFields.vaultItemId ?? null;
         if (!vaultItemId) {
           return reply.code(400).send({ error: "invalid_body", message: "Objet du vault manquant." });
         }
@@ -442,8 +449,8 @@ export default async function postsRoutes(fastify: FastifyInstance) {
         mediaUrl = fastify.supabaseAdmin.storage.from("post-media").getPublicUrl(path).data.publicUrl;
       }
 
-      let privacy = fields.privacy as PrivacyLevel | undefined;
-      if (!privacy || !PRIVACY_LEVELS.includes(privacy)) {
+      let privacy = optionalFields.privacy;
+      if (!privacy) {
         const { data: profile } = await fastify.supabaseAdmin
           .from("profiles")
           .select("default_privacy")
@@ -495,7 +502,9 @@ export default async function postsRoutes(fastify: FastifyInstance) {
   );
 
   fastify.post("/api/posts/:id/react", { preHandler: fastify.requireAuth }, async (request, reply) => {
-    const { id } = request.params as { id: string };
+    const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const { id } = params;
     const userId = request.user!.id;
 
     const { data: post } = await fastify.supabaseAdmin

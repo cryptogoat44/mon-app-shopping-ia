@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { INVALID_ID, parseInput, userIdParamsSchema } from "../lib/validation.js";
 
 export default async function followsRoutes(fastify: FastifyInstance) {
   fastify.post(
@@ -8,7 +9,9 @@ export default async function followsRoutes(fastify: FastifyInstance) {
       config: { rateLimitName: "follow" },
     },
     async (request, reply) => {
-      const { userId: followeeId } = request.params as { userId: string };
+      const params = parseInput(userIdParamsSchema, request.params, reply, INVALID_ID);
+      if (!params) return;
+      const followeeId = params.userId;
       const followerId = request.user!.id;
 
       if (followeeId === followerId) {
@@ -57,7 +60,9 @@ export default async function followsRoutes(fastify: FastifyInstance) {
   );
 
   fastify.delete("/api/follows/:userId", { preHandler: fastify.requireAuth }, async (request, reply) => {
-    const { userId: followeeId } = request.params as { userId: string };
+    const params = parseInput(userIdParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const followeeId = params.userId;
     const followerId = request.user!.id;
 
     const { error } = await fastify.supabaseAdmin

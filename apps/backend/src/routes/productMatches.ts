@@ -1,19 +1,24 @@
 import type { FastifyInstance } from "fastify";
-import { MERCHANT_LINK_CONTEXTS, type MerchantLinkContext } from "@monapp/shared-types";
+import { z } from "zod";
+import { MERCHANT_LINK_CONTEXTS } from "@monapp/shared-types";
+import { INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
+
+const clickBodySchema = z.object({ context: z.enum(MERCHANT_LINK_CONTEXTS).optional() }).optional();
 
 export default async function productMatchesRoutes(fastify: FastifyInstance) {
   // Enregistre le clic sortant vers le marchand (pour le calcul futur des
   // commissions) puis renvoie l'URL à ouvrir. Le mobile appelle cette route
   // avant d'ouvrir le lien, plutôt que d'ouvrir merchant_url directement.
   fastify.post("/api/product-matches/:id/click", { preHandler: fastify.requireAuth }, async (request, reply) => {
-    const { id } = request.params as { id: string };
+    const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const { id } = params;
     const userId = request.user!.id;
-    const body = request.body as { context?: string } | undefined;
-
-    if (body?.context !== undefined && !MERCHANT_LINK_CONTEXTS.includes(body.context as MerchantLinkContext)) {
+    const parsedBody = clickBodySchema.safeParse(request.body);
+    if (!parsedBody.success) {
       return reply.code(400).send({ error: "invalid_body", message: "Contexte de clic invalide." });
     }
-    const context = (body?.context as MerchantLinkContext | undefined) ?? null;
+    const context = parsedBody.data?.context ?? null;
 
     const { data: match, error: matchError } = await fastify.supabaseAdmin
       .from("product_matches")

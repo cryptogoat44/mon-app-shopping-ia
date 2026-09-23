@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { WishlistItem } from "@monapp/shared-types";
+import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput } from "../lib/validation.js";
 
 const createWishlistItemSchema = z.object({
   title: z.string().trim().min(1).max(120),
@@ -48,16 +49,9 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
   // logique que le fil et le vault.
   fastify.get("/api/wishlist", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const userId = request.user!.id;
-    const { cursor } = request.query as { cursor?: string };
-
-    let cursorDate: string | undefined;
-    if (cursor) {
-      const parsed = new Date(cursor);
-      if (Number.isNaN(parsed.getTime())) {
-        return reply.code(400).send({ error: "invalid_query", message: "Curseur de pagination invalide." });
-      }
-      cursorDate = parsed.toISOString();
-    }
+    const pageQuery = parseInput(cursorQuerySchema, request.query, reply, INVALID_CURSOR);
+    if (!pageQuery) return;
+    const cursorDate = pageQuery.cursor;
 
     let query = fastify.supabaseAdmin
       .from("wishlist_items")
@@ -120,7 +114,9 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
   });
 
   fastify.delete("/api/wishlist/:id", { preHandler: fastify.requireAuth }, async (request, reply) => {
-    const { id } = request.params as { id: string };
+    const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const { id } = params;
     const userId = request.user!.id;
 
     await fastify.supabaseAdmin.from("wishlist_items").delete().eq("id", id).eq("user_id", userId);
