@@ -124,6 +124,48 @@ describe("retrait d'un objet du vault déjà partagé", () => {
     expect(await listVaultFiles(app, owner.id)).not.toContain(fileName);
   });
 
+  // Aujourd'hui une publication achat réutilise la photo de l'objet (même
+  // fichier, dans vault-media). Si elle avait un jour sa propre photo dans
+  // post-media, la cascade Postgres ne toucherait pas au stockage : la route
+  // doit la supprimer elle-même — uniquement dans le dossier du propriétaire.
+  it("supprime aussi une photo propre à la publication achat dans post-media (dossier du propriétaire)", async () => {
+    const item = await createVaultItemWithPhoto(app, owner);
+    const postId = await sharePurchase(app, owner, item.id);
+
+    const path = `${owner.id}/purchase-${Date.now()}.png`;
+    const { error: uploadError } = await app.supabaseAdmin.storage
+      .from("post-media")
+      .upload(path, PNG, { contentType: "image/png" });
+    expect(uploadError).toBeNull();
+    const mediaUrl = app.supabaseAdmin.storage.from("post-media").getPublicUrl(path).data.publicUrl;
+    await app.supabaseAdmin.from("posts").update({ media_url: mediaUrl }).eq("id", postId);
+
+    const del = await app.inject({ method: "DELETE", url: `/api/vault/${item.id}`, headers: authHeaders(owner.token) });
+    expect(del.statusCode).toBe(204);
+
+    const { data: files } = await app.supabaseAdmin.storage.from("post-media").list(owner.id);
+    expect((files ?? []).map((f) => f.name)).not.toContain(path.split("/")[1]);
+  });
+
+  it("ne supprime jamais une photo post-media hors du dossier du propriétaire, même référencée par sa publication", async () => {
+    const item = await createVaultItemWithPhoto(app, owner);
+    const postId = await sharePurchase(app, owner, item.id);
+
+    // Ligne délibérément corrompue : la publication pointe vers un fichier
+    // de l'ami. Il doit survivre au retrait.
+    const path = `${friend.id}/victime-${Date.now()}.png`;
+    await app.supabaseAdmin.storage.from("post-media").upload(path, PNG, { contentType: "image/png" });
+    const mediaUrl = app.supabaseAdmin.storage.from("post-media").getPublicUrl(path).data.publicUrl;
+    await app.supabaseAdmin.from("posts").update({ media_url: mediaUrl }).eq("id", postId);
+
+    const del = await app.inject({ method: "DELETE", url: `/api/vault/${item.id}`, headers: authHeaders(owner.token) });
+    expect(del.statusCode).toBe(204);
+
+    const { data: files } = await app.supabaseAdmin.storage.from("post-media").list(friend.id);
+    expect((files ?? []).map((f) => f.name)).toContain(path.split("/")[1]);
+    await app.supabaseAdmin.storage.from("post-media").remove([path]);
+  });
+
   it("ne supprime jamais l'objet ni la publication d'un autre utilisateur", async () => {
     const item = await createVaultItemWithPhoto(app, owner);
     const postId = await sharePurchase(app, owner, item.id);
