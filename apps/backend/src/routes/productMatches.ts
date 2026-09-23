@@ -1,9 +1,53 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { MERCHANT_LINK_CONTEXTS } from "@monapp/shared-types";
+import { MERCHANT_LINK_CONTEXTS, type PrivacyLevel } from "@monapp/shared-types";
+import { fetchBlockedUserIds } from "../lib/blocks.js";
 import { INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
 
 const clickBodySchema = z.object({ context: z.enum(MERCHANT_LINK_CONTEXTS).optional() }).optional();
+
+async function isOwnSearchMatch(fastify: FastifyInstance, searchId: string, userId: string): Promise<boolean> {
+  const { data } = await fastify.supabaseAdmin
+    .from("product_searches")
+    .select("id")
+    .eq("id", searchId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  return !!data;
+}
+
+/** Vrai si le produit est tagué dans au moins une publication visible par
+ * `viewerId`, selon les mêmes règles que le fil : la sienne, ou une
+ * publication publique, ou "abonnés" d'un compte qu'il suit — jamais une
+ * publication privée d'un autre, jamais en cas de blocage. */
+async function isTaggedInVisiblePost(fastify: FastifyInstance, matchId: string, viewerId: string): Promise<boolean> {
+  const { data: tags } = await fastify.supabaseAdmin
+    .from("post_tagged_pieces")
+    .select("post_id")
+    .eq("product_match_id", matchId);
+  const postIds = [...new Set((tags ?? []).map((t) => t.post_id as string))];
+  if (postIds.length === 0) return false;
+
+  const { data: posts } = await fastify.supabaseAdmin
+    .from("posts")
+    .select("user_id, privacy")
+    .in("id", postIds);
+  const candidates = (posts ?? []) as { user_id: string; privacy: PrivacyLevel }[];
+  if (candidates.some((p) => p.user_id === viewerId)) return true;
+
+  const blocked = await fetchBlockedUserIds(fastify, viewerId);
+  const visibleCandidates = candidates.filter((p) => !blocked.has(p.user_id) && p.privacy !== "private");
+  if (visibleCandidates.some((p) => p.privacy === "public")) return true;
+
+  const followersOnlyAuthors = visibleCandidates.filter((p) => p.privacy === "followers").map((p) => p.user_id);
+  if (followersOnlyAuthors.length === 0) return false;
+  const { data: follows } = await fastify.supabaseAdmin
+    .from("follows")
+    .select("followee_id")
+    .eq("follower_id", viewerId)
+    .in("followee_id", followersOnlyAuthors);
+  return (follows ?? []).length > 0;
+}
 
 export default async function productMatchesRoutes(fastify: FastifyInstance) {
   // Enregistre le clic sortant vers le marchand (pour le calcul futur des
@@ -30,17 +74,18 @@ export default async function productMatchesRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "match_not_found", message: "Produit introuvable." });
     }
 
-    // Vérifie que la recherche parente appartient bien à l'utilisateur
-    // authentifié, pour ne pas laisser quelqu'un tracker un clic (ou
-    // découvrir un lien) sur les recherches d'un autre utilisateur.
-    const { data: search, error: searchError } = await fastify.supabaseAdmin
-      .from("product_searches")
-      .select("id")
-      .eq("id", match.search_id)
-      .eq("user_id", userId)
-      .single();
+    // Deux façons légitimes de cliquer sur ce produit : il vient d'une de
+    // SES recherches, ou il est tagué dans une publication qu'il a le droit
+    // de voir. Avant, seul le premier cas était accepté : les clics sur les
+    // pièces taguées des AUTRES (le cas normal du contexte "post") étaient
+    // refusés et jamais enregistrés (audit Lot Q, DON-02). Dans tous les
+    // autres cas, 404 : on ne laisse ni tracer un clic, ni découvrir un lien
+    // sur une recherche ou une publication invisible.
+    const allowed =
+      (await isOwnSearchMatch(fastify, match.search_id as string, userId)) ||
+      (await isTaggedInVisiblePost(fastify, id, userId));
 
-    if (searchError || !search) {
+    if (!allowed) {
       return reply.code(404).send({ error: "match_not_found", message: "Produit introuvable." });
     }
 
