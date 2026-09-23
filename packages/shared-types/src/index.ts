@@ -98,6 +98,13 @@ export interface VaultItem {
   createdAt: string;
 }
 
+/** Détail d'un objet (GET /api/vault/:id) — ajoute le nombre de
+ * publications "achat" qui le montrent, pour avertir l'utilisateur avant
+ * un retrait qui les supprimerait aussi. */
+export interface VaultItemDetail extends VaultItem {
+  purchasePostCount: number;
+}
+
 export interface UpdateVaultItemRequest {
   title?: string;
   category?: VaultCategory;

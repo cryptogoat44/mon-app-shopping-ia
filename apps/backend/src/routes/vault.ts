@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import type { PrivacyLevel, VaultCategory, VaultItem } from "@monapp/shared-types";
+import type { PrivacyLevel, VaultCategory, VaultItem, VaultItemDetail } from "@monapp/shared-types";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.js";
 
@@ -110,7 +110,22 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "vault_item_not_found", message: "Objet introuvable." });
     }
 
-    return reply.send(toVaultItem(data as VaultItemRow));
+    // Publications "achat" qui montrent cet objet : le retirer les
+    // supprimerait aussi (cascade, migration 0014) — le mobile s'en sert
+    // pour avertir avant confirmation.
+    const { count, error: countError } = await fastify.supabaseAdmin
+      .from("posts")
+      .select("id", { count: "exact", head: true })
+      .eq("vault_item_id", id)
+      .eq("user_id", userId);
+
+    if (countError) {
+      request.log.error({ countError }, "Échec du comptage des publications d'un objet du vault");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+
+    const detail: VaultItemDetail = { ...toVaultItem(data as VaultItemRow), purchasePostCount: count ?? 0 };
+    return reply.send(detail);
   });
 
   // multipart toujours : soit un fichier (ajout manuel, photo importée
@@ -291,6 +306,21 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "vault_item_not_found", message: "Objet introuvable." });
     }
 
+    // Publications "achat" qui montrent cet objet : supprimées avec lui par
+    // la base (cascade, migration 0014 — avec leurs pièces taguées, j'aime
+    // et notifications), en une seule instruction atomique. On relève
+    // leurs fichiers avant, pour pouvoir les nettoyer du stockage après.
+    const { data: purchasePosts, error: postsError } = await fastify.supabaseAdmin
+      .from("posts")
+      .select("media_url")
+      .eq("vault_item_id", id)
+      .eq("user_id", userId);
+
+    if (postsError) {
+      request.log.error({ postsError }, "Échec de lecture des publications liées à un objet du vault");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+
     const { error } = await fastify.supabaseAdmin.from("vault_items").delete().eq("id", id).eq("user_id", userId);
 
     if (error) {
@@ -305,6 +335,15 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
     // identifié), une URL inattendue, ou un chemin qui n'est pas le sien
     // n'entraîne aucune suppression.
     await deleteOwnedStorageFile(fastify, "vault-media", userId, existing.image_url as string);
+
+    // Une publication "achat" réutilise la photo de l'objet (déjà supprimée
+    // ci-dessus) : on ne touche qu'à un éventuel fichier distinct, et
+    // seulement s'il est dans le dossier de l'utilisateur (post-media).
+    for (const post of (purchasePosts as { media_url: string | null }[]) ?? []) {
+      if (post.media_url && post.media_url !== existing.image_url) {
+        await deleteOwnedStorageFile(fastify, "post-media", userId, post.media_url);
+      }
+    }
 
     return reply.code(204).send();
   });

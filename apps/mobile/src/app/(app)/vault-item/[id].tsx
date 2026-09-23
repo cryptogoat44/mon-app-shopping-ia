@@ -3,7 +3,7 @@ import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "rea
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import type { PrivacyLevel, VaultItem } from "@monapp/shared-types";
+import type { PrivacyLevel, VaultItemDetail } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
 import { ApiError, deleteVaultItem, fetchVaultItem, sharePurchasePost, updateVaultItem } from "@/lib/api";
@@ -11,6 +11,15 @@ import { PRIVACY_LABELS, PRIVACY_LEVELS, VAULT_CATEGORY_LABELS } from "@/lib/vau
 import { VerifiedIcon } from "@/components/icons";
 import { useToast } from "@/lib/toast-context";
 import { Skeleton } from "@/components/skeleton";
+
+// Décision du fondateur (journal, 2026-09-23, décision 1) : retirer un
+// objet partagé supprime aussi ses publications "achat" — on le dit avant
+// la confirmation, jamais après.
+function removeConfirmText(purchasePostCount: number): string {
+  if (purchasePostCount === 0) return fr.vaultItem.removeConfirm;
+  if (purchasePostCount === 1) return fr.vaultItem.removeConfirmWithPost;
+  return fr.vaultItem.removeConfirmWithPosts(purchasePostCount);
+}
 
 export default function VaultItemDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -22,7 +31,7 @@ export default function VaultItemDetailScreen() {
     else router.replace("/profile");
   }
 
-  const [item, setItem] = useState<VaultItem | null>(null);
+  const [item, setItem] = useState<VaultItemDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -42,7 +51,7 @@ export default function VaultItemDetailScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
       const updated = await updateVaultItem(item.id, { privacy });
-      setItem(updated);
+      setItem((current) => (current ? { ...updated, purchasePostCount: current.purchasePostCount } : current));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : fr.vaultItem.updateError);
     } finally {
@@ -58,6 +67,9 @@ export default function VaultItemDetailScreen() {
       await sharePurchasePost(item.id);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setShared(true);
+      // Le retrait de l'objet supprimerait désormais aussi cette publication :
+      // l'avertissement doit en tenir compte sans recharger l'écran.
+      setItem((current) => (current ? { ...current, purchasePostCount: current.purchasePostCount + 1 } : current));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : fr.vaultItem.shareError);
     } finally {
@@ -160,7 +172,9 @@ export default function VaultItemDetailScreen() {
           </Pressable>
         ) : (
           <View style={styles.confirmRow}>
-            <Text style={styles.confirmText}>{fr.vaultItem.removeConfirm}</Text>
+            <Text style={styles.confirmText} accessibilityRole="alert">
+              {removeConfirmText(item.purchasePostCount)}
+            </Text>
             <View style={styles.confirmButtons}>
               <Pressable onPress={() => setConfirmingDelete(false)} disabled={busy} hitSlop={8}>
                 <Text style={styles.cancelLabel}>{fr.vaultItem.cancel}</Text>

@@ -73,6 +73,9 @@ export const fr = {
     shared: "Partagé dans le fil ✓",
     remove: "Retirer du vault",
     removeConfirm: "Retirer définitivement cet objet ?",
+    removeConfirmWithPost: "Cet objet apparaît dans une publication. Le retirer supprimera aussi cette publication.",
+    removeConfirmWithPosts: (count: number) =>
+      `Cet objet apparaît dans ${count} publications. Le retirer supprimera aussi ces publications.`,
     removedToast: "Retiré du vault",
     removing: "Suppression…",
     confirm: "Confirmer",

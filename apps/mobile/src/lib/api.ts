@@ -20,6 +20,7 @@ import type {
   UpdateVaultItemRequest,
   VaultCategory,
   VaultItem,
+  VaultItemDetail,
   VaultPage,
   WishlistItem,
   WishlistPage,
@@ -152,7 +153,7 @@ export async function fetchVault(cursor?: string): Promise<VaultPage> {
   return response.json();
 }
 
-export async function fetchVaultItem(id: string): Promise<VaultItem> {
+export async function fetchVaultItem(id: string): Promise<VaultItemDetail> {
   const response = await authorizedFetch(`/api/vault/${id}`);
   return response.json();
 }
