@@ -19,7 +19,6 @@ const PRIVACY_LEVELS: PrivacyLevel[] = ["public", "followers", "private"];
 
 const vaultOptionalFieldsSchema = z.object({
   productMatchId: z.string().uuid().optional(),
-  imageUrl: z.string().url().max(2048).optional(),
   privacy: z.enum(PRIVACY_LEVELS as [PrivacyLevel, ...PrivacyLevel[]]).optional(),
 });
 
@@ -173,7 +172,7 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
     // d'être transmis tels quels à la base.
     const optionalFields = parseInput(
       vaultOptionalFieldsSchema,
-      { productMatchId: fields.productMatchId, imageUrl: fields.imageUrl, privacy: fields.privacy },
+      { productMatchId: fields.productMatchId, privacy: fields.privacy },
       reply,
       { error: "invalid_body", message: "Données invalides." }
     );
@@ -228,16 +227,20 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       }
 
       imageUrl = match.image_url as string;
-    } else if (optionalFields.imageUrl) {
+    } else if (fields.imageUrl) {
+      // `imageUrl` n'est lue (et donc vérifiée) QUE dans ce cas : lors d'un
+      // ajout depuis un produit identifié, l'app l'envoie encore mais le
+      // serveur l'ignore — la refuser là casserait « Je l'ai achetée » pour
+      // une adresse que personne n'utilise.
       // Ni fichier envoyé ni produit identifié : la seule URL qu'on accepte
       // est celle d'un fichier qui nous appartient déjà, dans le dossier de
       // cet utilisateur — une vraie analyse de l'URL (origine + chemin),
       // jamais une recherche de texte. Toute autre valeur est refusée.
-      const path = extractOwnedStoragePath(optionalFields.imageUrl, "vault-media", userId);
+      const path = extractOwnedStoragePath(fields.imageUrl, "vault-media", userId);
       if (!path) {
         return reply.code(400).send({ error: "invalid_body", message: "Cette image n'est pas autorisée." });
       }
-      imageUrl = optionalFields.imageUrl;
+      imageUrl = fields.imageUrl;
     } else {
       return reply.code(400).send({ error: "invalid_body", message: "Une photo est obligatoire." });
     }

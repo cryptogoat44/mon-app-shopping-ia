@@ -103,6 +103,24 @@ describe("validation des entrées et filet d'erreurs", () => {
     expectContract(res);
   });
 
+  it("« Je l'ai achetée » reste accepté même avec une imageUrl inutilisable (compatibilité ancien site)", async () => {
+    const { data: search } = await app.supabaseAdmin
+      .from("product_searches")
+      .insert({ user_id: user.id, source_url: "https://www.tiktok.com/@x/video/1", source_platform: "tiktok", method: "oembed", status: "completed" })
+      .select("id")
+      .single();
+    const { data: match } = await app.supabaseAdmin
+      .from("product_matches")
+      .insert({ search_id: search!.id, rank: 1, product_name: "Sac", image_url: "https://example.com/sac.jpg", merchant_url: "https://example.com/p" })
+      .select("id")
+      .single();
+
+    const mp = buildMultipart({ title: "Sac", category: "bags", productMatchId: match!.id, imageUrl: "x".repeat(3000) });
+    const res = await app.inject({ method: "POST", url: "/api/vault", headers: { ...authHeaders(user.token), ...mp.headers }, payload: mp.payload });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().imageUrl).toBe("https://example.com/sac.jpg");
+  });
+
   it("une confidentialité inconnue est refusée au lieu d'être remplacée en silence", async () => {
     const mp = buildMultipart(
       { type: "lifestyle", privacy: "tout-le-monde" },
