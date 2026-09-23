@@ -155,6 +155,14 @@ export const fr = {
     unblockError: "Le déblocage a échoué.",
     loadError: "Impossible de charger les comptes bloqués.",
   },
+  connection: {
+    connectingTitle: "Connexion à Spotto…",
+    connectingBody: "Le service démarre, cela peut prendre jusqu'à une minute.",
+    failedTitle: "Spotto est momentanément injoignable.",
+    failedBody: "Vérifiez votre connexion internet, puis réessayez. Vos données sont intactes.",
+    retry: "Réessayer",
+    signOut: "Se déconnecter",
+  },
   auth: {
     continueWithApple: "Continuer avec Apple",
     continueWithEmail: "Continuer avec un e-mail",
