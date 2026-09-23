@@ -110,3 +110,40 @@ describe("search results carry the affiliate link", () => {
     expect(body.matches[0].affiliateUrl).toBe("https://marchand.example.com/sac");
   });
 });
+
+// Audit Lot Q, ROB-04 : une recherche réussie dont les rangs ne commencent
+// pas à 1 (premier résultat Google filtré car réseau social) disparaissait
+// de « Récemment spottées ».
+describe("recherches récentes : meilleur rang existant", () => {
+  let app: FastifyInstance;
+  let owner: TestUser;
+
+  beforeAll(async () => {
+    app = await buildTestApp();
+    owner = await createTestUser(app, "srank");
+  });
+
+  afterAll(async () => {
+    await deleteTestUser(app, owner.id);
+    await app.close();
+  });
+
+  it("garde une recherche sans rang 1, avec son meilleur résultat", async () => {
+    const { data: search } = await app.supabaseAdmin
+      .from("product_searches")
+      .insert({ user_id: owner.id, source_url: "https://example.com/video", source_platform: "tiktok", method: "oembed", status: "completed" })
+      .select("id")
+      .single();
+    await app.supabaseAdmin.from("product_matches").insert([
+      { search_id: search!.id, rank: 4, product_name: "Moins bon", image_url: "https://example.com/b.jpg", merchant_url: "https://example.com/b" },
+      { search_id: search!.id, rank: 2, product_name: "Meilleur", image_url: "https://example.com/a.jpg", merchant_url: "https://example.com/a" },
+    ]);
+
+    const res = await app.inject({ method: "GET", url: "/api/searches", headers: authHeaders(owner.token) });
+    expect(res.statusCode).toBe(200);
+    const entry = (res.json() as { id: string; matches: { productName: string }[] }[]).find((s) => s.id === search!.id);
+    expect(entry).toBeDefined();
+    expect(entry!.matches).toHaveLength(1);
+    expect(entry!.matches[0]!.productName).toBe("Meilleur");
+  });
+});

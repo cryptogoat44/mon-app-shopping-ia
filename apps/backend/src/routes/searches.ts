@@ -138,7 +138,7 @@ const recentSearchesQuerySchema = z.object({
 export default async function searchesRoutes(fastify: FastifyInstance) {
   // Alimente "Récemment spottées" (Spotter et le sélecteur de pièces de
   // Publier) : les recherches réussies les plus récentes, avec seulement
-  // leur meilleur résultat (rank 1) — le mobile n'affiche qu'une vignette
+  // leur meilleur résultat (plus petit rang) — le mobile n'affiche qu'une vignette
   // par recherche, pas la liste complète des correspondances.
   fastify.get("/api/searches", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const userId = request.user!.id;
@@ -171,16 +171,21 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       .from("product_matches")
       .select("*")
       .in("search_id", rows.map((row) => row.id))
-      .eq("rank", 1);
+      .order("rank", { ascending: true });
 
     if (matchError) {
       request.log.error({ matchError }, "Échec de lecture des meilleurs résultats de l'historique");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
+    // Meilleur résultat = le plus petit rang EXISTANT de chaque recherche,
+    // pas forcément le rang 1 : les rangs viennent de Google Lens avant le
+    // filtrage des réseaux sociaux, et une recherche dont le 1ᵉʳ résultat
+    // était un TikTok disparaissait de « Récemment spottées » et du
+    // sélecteur de pièces de Publier (audit Lot Q, ROB-04).
     const topMatchBySearch = new Map<string, ProductMatchRow>();
     for (const match of (matchRows as ProductMatchRow[]) ?? []) {
-      if (match.search_id) topMatchBySearch.set(match.search_id, match);
+      if (match.search_id && !topMatchBySearch.has(match.search_id)) topMatchBySearch.set(match.search_id, match);
     }
 
     const affiliateUrlByMatchId = await fetchAffiliateUrls(
