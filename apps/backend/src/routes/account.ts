@@ -97,6 +97,14 @@ export default async function accountRoutes(fastify: FastifyInstance) {
       db.from("profiles").select("*").eq("id", userId).single(),
     ]);
 
+    // post_tagged_pieces n'a pas de user_id direct non plus (il appartient à
+    // une publication) : même logique que product_matches ci-dessus.
+    const postIds = (posts.data ?? []).map((p) => p.id as string);
+    const taggedPieces =
+      postIds.length > 0
+        ? await db.from("post_tagged_pieces").select("*").in("post_id", postIds)
+        : { data: [] as unknown[] };
+
     await db.from("data_export_requests").insert({
       user_id: userId,
       status: "ready",
@@ -110,6 +118,7 @@ export default async function accountRoutes(fastify: FastifyInstance) {
       productMatches: matches.data ?? [],
       vaultItems: vaultItems.data ?? [],
       posts: posts.data ?? [],
+      postTaggedPieces: taggedPieces.data ?? [],
       followers: followers.data ?? [],
       following: following.data ?? [],
       consents: consents.data ?? [],

@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import type { Post } from "@monapp/shared-types";
 import { ApiError, fetchFeed, fetchUnreadNotificationCount, reactToPost } from "@/lib/api";
+import { openMerchantLink } from "@/lib/merchant-links";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { BellIcon, HeartIcon, MoreIcon, PersonIcon, VerifiedIcon } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
@@ -113,6 +114,32 @@ function PostRow({ post, onOpenMenu }: { post: Post; onOpenMenu: () => void }) {
       </Pressable>
 
       {post.caption ? <Text style={styles.caption}>{post.caption}</Text> : null}
+
+      {post.taggedPieces.length > 0 ? (
+        <View style={styles.tagRow}>
+          {post.taggedPieces.map((piece) =>
+            piece.merchantUrl ? (
+              <Pressable
+                key={piece.id}
+                style={styles.tagChip}
+                onPress={() =>
+                  openMerchantLink({ matchId: piece.productMatchId, url: piece.merchantUrl!, context: "post" })
+                }
+                accessibilityRole="button"
+                accessibilityLabel={
+                  piece.merchantName ? `Voir ${piece.productName} chez ${piece.merchantName}` : piece.productName
+                }
+              >
+                <Text style={styles.tagChipLabel}>{piece.productName}</Text>
+              </Pressable>
+            ) : (
+              <View key={piece.id} style={styles.tagChip}>
+                <Text style={styles.tagChipLabel}>{piece.productName}</Text>
+              </View>
+            )
+          )}
+        </View>
+      ) : null}
 
       <Pressable
         onPress={handleReactButton}
@@ -314,6 +341,9 @@ const styles = StyleSheet.create({
   media: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe, borderRadius: radius.sm },
   heartOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
   caption: { fontSize: 14.5, color: color.encre, marginTop: 12, lineHeight: 20 },
+  tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+  tagChip: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.full, paddingVertical: 5, paddingHorizontal: 11 },
+  tagChipLabel: { fontSize: font.caption, color: color.encre },
   reactRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12 },
   reactCount: { fontSize: font.secondary, color: color.acier },
   divider: { height: 1, backgroundColor: color.filet, marginHorizontal: space.lg, marginBottom: 26 },

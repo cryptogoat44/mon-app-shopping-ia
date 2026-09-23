@@ -147,6 +147,20 @@ export function MoreIcon({ size = 20, tint = color.acier }: IconProps) {
   );
 }
 
+export function TagIcon({ size = 16, tint = color.encre, strokeWidth = 1.4 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M11 4.5h5a1.5 1.5 0 011.5 1.5v5a1.5 1.5 0 01-.44 1.06l-7 7a1.5 1.5 0 01-2.12 0l-5-5a1.5 1.5 0 010-2.12l7-7c.28-.28.66-.44 1.06-.44z"
+        stroke={tint}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+      <Circle cx={15} cy={9} r={1.3} fill={tint} />
+    </Svg>
+  );
+}
+
 export function NotFoundIcon({ size = 44, tint = color.acier, strokeWidth = 1.3 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">

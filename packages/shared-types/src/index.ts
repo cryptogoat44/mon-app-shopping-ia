@@ -164,6 +164,23 @@ export interface PostVaultItem {
   verified: boolean;
 }
 
+/** Une pièce taguée sur une publication (étape 1.E) — issue soit d'un objet
+ * du Vault de l'auteur, soit d'un `product_match` d'une de ses recherches
+ * récentes. `merchantUrl`/`merchantName` restent `null` pour une pièce
+ * d'origine Vault (aucun lien marchand associé dans ce cas). */
+export interface PostTaggedPiece {
+  id: string;
+  productName: string;
+  imageUrl: string;
+  merchantName: string | null;
+  merchantUrl: string | null;
+  productMatchId: string | null;
+}
+
+/** Entrée envoyée par le client pour taguer une pièce à la création d'une
+ * publication : exactement l'une des deux origines. */
+export type TaggedPieceInput = { vaultItemId: string } | { productMatchId: string };
+
 export interface Post {
   id: string;
   type: PostType;
@@ -173,6 +190,7 @@ export interface Post {
   createdAt: string;
   author: PostAuthor;
   vaultItem: PostVaultItem | null;
+  taggedPieces: PostTaggedPiece[];
   reactionCount: number;
   viewerHasReacted: boolean;
 }

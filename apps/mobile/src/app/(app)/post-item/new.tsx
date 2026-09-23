@@ -70,7 +70,12 @@ export default function NewPostScreen() {
 
     setSubmitting(true);
     try {
-      await createLifestylePost({ caption: caption.trim(), imageUri, privacy });
+      // Les pièces de ce picker proviennent toujours d'une recherche
+      // récente (getRecentlySpotted), jamais du Vault — voir
+      // docs/points-de-vigilance.md pour le sélecteur Vault, pas encore
+      // ajouté à cette étape.
+      const taggedPieces = pieces.map((piece) => ({ productMatchId: piece.id }));
+      await createLifestylePost({ caption: caption.trim(), imageUri, privacy, taggedPieces });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       showToast(fr.publish.published);
       safeBack();

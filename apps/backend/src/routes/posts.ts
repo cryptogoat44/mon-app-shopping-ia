@@ -1,10 +1,23 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
-import type { Post, PostType, PrivacyLevel } from "@monapp/shared-types";
+import { z } from "zod";
+import type { Post, PostTaggedPiece, PostType, PrivacyLevel, TaggedPieceInput } from "@monapp/shared-types";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
+import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 
 const POST_TYPES: PostType[] = ["lifestyle", "purchase"];
 const PRIVACY_LEVELS: PrivacyLevel[] = ["public", "followers", "private"];
+
+// Une publication ne peut pas devenir une liste sans fin de tags — reste
+// large pour un usage légitime (plusieurs pièces sur une même tenue) sans
+// ouvrir la porte à un abus.
+const MAX_TAGGED_PIECES = 10;
+
+const taggedPieceInputSchema = z.union([
+  z.object({ vaultItemId: z.string().uuid() }).strict(),
+  z.object({ productMatchId: z.string().uuid() }).strict(),
+]);
+const taggedPiecesInputSchema = z.array(taggedPieceInputSchema).max(MAX_TAGGED_PIECES);
 
 interface PostRow {
   id: string;
@@ -30,6 +43,94 @@ interface VaultItemRow {
   verified: boolean;
 }
 
+interface TaggedVaultItemRow {
+  id: string;
+  title: string;
+  image_url: string;
+}
+
+interface TaggedProductMatchRow {
+  id: string;
+  product_name: string;
+  image_url: string;
+  merchant_name: string | null;
+  merchant_url: string;
+}
+
+interface PostTaggedPieceRow {
+  id: string;
+  post_id: string;
+  vault_item_id: string | null;
+  product_match_id: string | null;
+  position: number;
+}
+
+/** Résultat d'une pièce taguée déjà validée (propriétaire confirmé),
+ * prête à insérer dans post_tagged_pieces. */
+interface ResolvedTaggedPiece {
+  vaultItemId: string | null;
+  productMatchId: string | null;
+}
+
+/** Vérifie côté serveur que chaque pièce à taguer appartient bien à
+ * l'utilisateur — une pièce d'origine Vault OU d'une recherche récente,
+ * jamais les deux à la fois (voir le schéma de post_tagged_pieces). Ne
+ * fait jamais confiance à l'origine déclarée par le client sans vérifier
+ * la propriété réelle en base, comme pour vaultItemId sur un post "achat"
+ * ou productMatchId sur POST /api/vault. Renvoie `null` si une seule
+ * pièce échoue — dans ce cas, aucune n'est insérée. */
+async function resolveTaggedPieces(
+  fastify: FastifyInstance,
+  userId: string,
+  inputs: TaggedPieceInput[]
+): Promise<ResolvedTaggedPiece[] | null> {
+  const seen = new Set<string>();
+  const resolved: ResolvedTaggedPiece[] = [];
+
+  for (const input of inputs) {
+    if ("vaultItemId" in input) {
+      const key = `vault:${input.vaultItemId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const { data: vaultItem } = await fastify.supabaseAdmin
+        .from("vault_items")
+        .select("id")
+        .eq("id", input.vaultItemId)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (!vaultItem) return null;
+
+      resolved.push({ vaultItemId: input.vaultItemId, productMatchId: null });
+    } else {
+      const key = `match:${input.productMatchId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      // Même logique que POST /api/vault : un product_match n'a pas de
+      // user_id direct, la propriété passe par sa recherche parente.
+      const { data: match } = await fastify.supabaseAdmin
+        .from("product_matches")
+        .select("id, search_id")
+        .eq("id", input.productMatchId)
+        .maybeSingle();
+      if (!match) return null;
+
+      const { data: search } = await fastify.supabaseAdmin
+        .from("product_searches")
+        .select("id")
+        .eq("id", match.search_id)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (!search) return null;
+
+      resolved.push({ vaultItemId: null, productMatchId: input.productMatchId });
+    }
+  }
+
+  return resolved;
+}
+
 async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], viewerId: string): Promise<Post[]> {
   if (rows.length === 0) return [];
 
@@ -37,12 +138,17 @@ async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], viewerId:
   const vaultItemIds = [...new Set(rows.map((r) => r.vault_item_id).filter((id): id is string => !!id))];
   const postIds = rows.map((r) => r.id);
 
-  const [{ data: profiles }, { data: vaultItems }, { data: reactions }] = await Promise.all([
+  const [{ data: profiles }, { data: vaultItems }, { data: reactions }, { data: tagRows }] = await Promise.all([
     fastify.supabaseAdmin.from("profiles").select("id, username, display_name, avatar_url").in("id", authorIds),
     vaultItemIds.length > 0
       ? fastify.supabaseAdmin.from("vault_items").select("id, title, verified").in("id", vaultItemIds)
       : Promise.resolve({ data: [] as VaultItemRow[] }),
     fastify.supabaseAdmin.from("post_reactions").select("post_id, user_id").in("post_id", postIds),
+    fastify.supabaseAdmin
+      .from("post_tagged_pieces")
+      .select("id, post_id, vault_item_id, product_match_id, position")
+      .in("post_id", postIds)
+      .order("position", { ascending: true }),
   ]);
 
   const profileById = new Map(((profiles as ProfileRow[]) ?? []).map((p) => [p.id, p]));
@@ -53,6 +159,70 @@ async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], viewerId:
   for (const r of (reactions as { post_id: string; user_id: string }[]) ?? []) {
     reactionCountByPost.set(r.post_id, (reactionCountByPost.get(r.post_id) ?? 0) + 1);
     if (r.user_id === viewerId) viewerReactedPosts.add(r.post_id);
+  }
+
+  const tags = (tagRows as PostTaggedPieceRow[]) ?? [];
+  const taggedVaultItemIds = [...new Set(tags.map((t) => t.vault_item_id).filter((id): id is string => !!id))];
+  const taggedMatchIds = [...new Set(tags.map((t) => t.product_match_id).filter((id): id is string => !!id))];
+
+  const [{ data: taggedVaultItems }, { data: taggedMatches }, affiliateUrlByMatchId] = await Promise.all([
+    taggedVaultItemIds.length > 0
+      ? fastify.supabaseAdmin.from("vault_items").select("id, title, image_url").in("id", taggedVaultItemIds)
+      : Promise.resolve({ data: [] as TaggedVaultItemRow[] }),
+    taggedMatchIds.length > 0
+      ? fastify.supabaseAdmin
+          .from("product_matches")
+          .select("id, product_name, image_url, merchant_name, merchant_url")
+          .in("id", taggedMatchIds)
+      : Promise.resolve({ data: [] as TaggedProductMatchRow[] }),
+    fetchAffiliateUrls(fastify, taggedMatchIds),
+  ]);
+
+  const taggedVaultItemById = new Map(((taggedVaultItems as TaggedVaultItemRow[]) ?? []).map((v) => [v.id, v]));
+  const taggedMatchById = new Map(((taggedMatches as TaggedProductMatchRow[]) ?? []).map((m) => [m.id, m]));
+
+  const taggedPiecesByPost = new Map<string, PostTaggedPiece[]>();
+  for (const tag of tags) {
+    let piece: PostTaggedPiece | null = null;
+
+    if (tag.vault_item_id) {
+      // Pièce d'origine Vault : titre/image uniquement, jamais de lien
+      // marchand (voir docs/journal-decisions.md, 2026-09-23, Décision 1 —
+      // la confidentialité de la pièce dans le Vault n'a aucun effet ici,
+      // c'est un choix mobile qui n'implique aucune logique côté serveur).
+      const v = taggedVaultItemById.get(tag.vault_item_id);
+      if (v) {
+        piece = {
+          id: tag.id,
+          productName: v.title,
+          imageUrl: v.image_url,
+          merchantName: null,
+          merchantUrl: null,
+          productMatchId: null,
+        };
+      }
+    } else if (tag.product_match_id) {
+      const m = taggedMatchById.get(tag.product_match_id);
+      if (m) {
+        piece = {
+          id: tag.id,
+          productName: m.product_name,
+          imageUrl: m.image_url,
+          merchantName: m.merchant_name,
+          merchantUrl: affiliateUrlByMatchId.get(tag.product_match_id) ?? m.merchant_url,
+          productMatchId: tag.product_match_id,
+        };
+      }
+    }
+
+    // La ligne référencée a disparu entre l'insertion du tag et cette
+    // lecture (cas normalement impossible : suppression en cascade des
+    // deux côtés) — ignorée plutôt que de faire échouer toute la page.
+    if (!piece) continue;
+
+    const list = taggedPiecesByPost.get(tag.post_id) ?? [];
+    list.push(piece);
+    taggedPiecesByPost.set(tag.post_id, list);
   }
 
   return rows.map((row) => {
@@ -72,6 +242,7 @@ async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], viewerId:
         avatarUrl: author?.avatar_url ?? null,
       },
       vaultItem: vaultItem ? { id: vaultItem.id, title: vaultItem.title, verified: vaultItem.verified } : null,
+      taggedPieces: taggedPiecesByPost.get(row.id) ?? [],
       reactionCount: reactionCountByPost.get(row.id) ?? 0,
       viewerHasReacted: viewerReactedPosts.has(row.id),
     };
@@ -167,111 +338,161 @@ export default async function postsRoutes(fastify: FastifyInstance) {
 
   // multipart toujours, comme /api/vault : soit une photo importée (post
   // "lifestyle"), soit une référence à un objet du vault dont on reprend
-  // la photo et le titre (post "achat").
-  fastify.post("/api/posts", { preHandler: fastify.requireAuth }, async (request, reply) => {
-    const userId = request.user!.id;
+  // la photo et le titre (post "achat"). "pieceTag" limite les publications
+  // taguées comme les autres actions sensibles à l'abus (voir rateLimits.ts).
+  fastify.post(
+    "/api/posts",
+    { preHandler: [fastify.requireAuth, fastify.rateLimit("pieceTag")], config: { rateLimitName: "pieceTag" } },
+    async (request, reply) => {
+      const userId = request.user!.id;
 
-    const fields: Record<string, string> = {};
-    let fileBuffer: Buffer | null = null;
-    let fileMimetype: string | null = null;
+      const fields: Record<string, string> = {};
+      let fileBuffer: Buffer | null = null;
+      let fileMimetype: string | null = null;
 
-    try {
-      for await (const part of request.parts()) {
-        if (part.type === "file") {
-          fileBuffer = await part.toBuffer();
-          fileMimetype = part.mimetype;
-        } else {
-          fields[part.fieldname] = String(part.value);
+      try {
+        for await (const part of request.parts()) {
+          if (part.type === "file") {
+            fileBuffer = await part.toBuffer();
+            fileMimetype = part.mimetype;
+          } else {
+            fields[part.fieldname] = String(part.value);
+          }
+        }
+      } catch (error) {
+        if (isFileTooLargeError(error)) {
+          return reply.code(413).send({ error: "file_too_large", message: "Le fichier est trop volumineux (10 Mo maximum)." });
+        }
+        throw error;
+      }
+
+      const type = fields.type as PostType | undefined;
+      if (!type || !POST_TYPES.includes(type)) {
+        return reply.code(400).send({ error: "invalid_body", message: "Type de publication invalide." });
+      }
+
+      let mediaUrl: string;
+      let vaultItemId: string | null = null;
+      let caption = fields.caption?.trim() || null;
+
+      if (caption && caption.length > 280) {
+        return reply.code(400).send({ error: "invalid_body", message: "Le texte est trop long (280 caractères maximum)." });
+      }
+
+      // Pièces taguées (étape 1.E) : origine Vault ou recherche récente,
+      // validée côté serveur ci-dessous — jamais de confiance dans
+      // l'origine déclarée par le client seule.
+      let taggedPiecesInput: TaggedPieceInput[] = [];
+      if (fields.taggedPieces) {
+        let raw: unknown;
+        try {
+          raw = JSON.parse(fields.taggedPieces);
+        } catch {
+          return reply.code(400).send({ error: "invalid_body", message: "Pièces taguées invalides." });
+        }
+        const parsed = taggedPiecesInputSchema.safeParse(raw);
+        if (!parsed.success) {
+          return reply.code(400).send({ error: "invalid_body", message: "Pièces taguées invalides." });
+        }
+        taggedPiecesInput = parsed.data;
+      }
+
+      let resolvedTaggedPieces: ResolvedTaggedPiece[] = [];
+      if (taggedPiecesInput.length > 0) {
+        const resolved = await resolveTaggedPieces(fastify, userId, taggedPiecesInput);
+        if (!resolved) {
+          return reply.code(404).send({ error: "piece_not_found", message: "Une pièce taguée est introuvable." });
+        }
+        resolvedTaggedPieces = resolved;
+      }
+
+      if (type === "purchase") {
+        vaultItemId = fields.vaultItemId ?? null;
+        if (!vaultItemId) {
+          return reply.code(400).send({ error: "invalid_body", message: "Objet du vault manquant." });
+        }
+        const { data: vaultItem } = await fastify.supabaseAdmin
+          .from("vault_items")
+          .select("id, title, image_url")
+          .eq("id", vaultItemId)
+          .eq("user_id", userId)
+          .single();
+
+        if (!vaultItem) {
+          return reply.code(404).send({ error: "vault_item_not_found", message: "Objet du vault introuvable." });
+        }
+        mediaUrl = vaultItem.image_url;
+        caption = caption ?? vaultItem.title;
+      } else {
+        if (!fileBuffer || !fileMimetype?.startsWith("image/")) {
+          return reply.code(400).send({ error: "invalid_file", message: "Une photo est obligatoire." });
+        }
+        const extension = fileMimetype.split("/")[1] ?? "jpg";
+        const path = `${userId}/${randomUUID()}.${extension}`;
+
+        const { error: uploadError } = await fastify.supabaseAdmin.storage
+          .from("post-media")
+          .upload(path, fileBuffer, { contentType: fileMimetype, upsert: false });
+
+        if (uploadError) {
+          request.log.error({ uploadError }, "Échec d'upload de la photo du post");
+          return reply.code(500).send({ error: "upload_failed", message: "L'envoi de la photo a échoué." });
+        }
+
+        mediaUrl = fastify.supabaseAdmin.storage.from("post-media").getPublicUrl(path).data.publicUrl;
+      }
+
+      let privacy = fields.privacy as PrivacyLevel | undefined;
+      if (!privacy || !PRIVACY_LEVELS.includes(privacy)) {
+        const { data: profile } = await fastify.supabaseAdmin
+          .from("profiles")
+          .select("default_privacy")
+          .eq("id", userId)
+          .single();
+        privacy = (profile?.default_privacy as PrivacyLevel | undefined) ?? "followers";
+      }
+
+      const { data: inserted, error: insertError } = await fastify.supabaseAdmin
+        .from("posts")
+        .insert({
+          user_id: userId,
+          type,
+          vault_item_id: vaultItemId,
+          caption,
+          media_kind: "photo",
+          media_url: mediaUrl,
+          privacy,
+        })
+        .select("*")
+        .single();
+
+      if (insertError || !inserted) {
+        request.log.error({ insertError }, "Échec de création du post");
+        return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+      }
+
+      if (resolvedTaggedPieces.length > 0) {
+        const { error: tagError } = await fastify.supabaseAdmin.from("post_tagged_pieces").insert(
+          resolvedTaggedPieces.map((piece, index) => ({
+            post_id: inserted.id,
+            vault_item_id: piece.vaultItemId,
+            product_match_id: piece.productMatchId,
+            position: index,
+          }))
+        );
+        // Best-effort : le post existe déjà et reste valide même si
+        // l'enregistrement des tags échoue — on journalise pour pouvoir
+        // repérer une éventuelle panne récurrente, sans faire échouer une
+        // publication déjà créée avec succès.
+        if (tagError) {
+          request.log.error({ tagError }, "Échec d'enregistrement des pièces taguées");
         }
       }
-    } catch (error) {
-      if (isFileTooLargeError(error)) {
-        return reply.code(413).send({ error: "file_too_large", message: "Le fichier est trop volumineux (10 Mo maximum)." });
-      }
-      throw error;
+
+      const [hydrated] = await hydratePosts(fastify, [inserted as PostRow], userId);
+      return reply.send(hydrated);
     }
-
-    const type = fields.type as PostType | undefined;
-    if (!type || !POST_TYPES.includes(type)) {
-      return reply.code(400).send({ error: "invalid_body", message: "Type de publication invalide." });
-    }
-
-    let mediaUrl: string;
-    let vaultItemId: string | null = null;
-    let caption = fields.caption?.trim() || null;
-
-    if (caption && caption.length > 280) {
-      return reply.code(400).send({ error: "invalid_body", message: "Le texte est trop long (280 caractères maximum)." });
-    }
-
-    if (type === "purchase") {
-      vaultItemId = fields.vaultItemId ?? null;
-      if (!vaultItemId) {
-        return reply.code(400).send({ error: "invalid_body", message: "Objet du vault manquant." });
-      }
-      const { data: vaultItem } = await fastify.supabaseAdmin
-        .from("vault_items")
-        .select("id, title, image_url")
-        .eq("id", vaultItemId)
-        .eq("user_id", userId)
-        .single();
-
-      if (!vaultItem) {
-        return reply.code(404).send({ error: "vault_item_not_found", message: "Objet du vault introuvable." });
-      }
-      mediaUrl = vaultItem.image_url;
-      caption = caption ?? vaultItem.title;
-    } else {
-      if (!fileBuffer || !fileMimetype?.startsWith("image/")) {
-        return reply.code(400).send({ error: "invalid_file", message: "Une photo est obligatoire." });
-      }
-      const extension = fileMimetype.split("/")[1] ?? "jpg";
-      const path = `${userId}/${randomUUID()}.${extension}`;
-
-      const { error: uploadError } = await fastify.supabaseAdmin.storage
-        .from("post-media")
-        .upload(path, fileBuffer, { contentType: fileMimetype, upsert: false });
-
-      if (uploadError) {
-        request.log.error({ uploadError }, "Échec d'upload de la photo du post");
-        return reply.code(500).send({ error: "upload_failed", message: "L'envoi de la photo a échoué." });
-      }
-
-      mediaUrl = fastify.supabaseAdmin.storage.from("post-media").getPublicUrl(path).data.publicUrl;
-    }
-
-    let privacy = fields.privacy as PrivacyLevel | undefined;
-    if (!privacy || !PRIVACY_LEVELS.includes(privacy)) {
-      const { data: profile } = await fastify.supabaseAdmin
-        .from("profiles")
-        .select("default_privacy")
-        .eq("id", userId)
-        .single();
-      privacy = (profile?.default_privacy as PrivacyLevel | undefined) ?? "followers";
-    }
-
-    const { data: inserted, error: insertError } = await fastify.supabaseAdmin
-      .from("posts")
-      .insert({
-        user_id: userId,
-        type,
-        vault_item_id: vaultItemId,
-        caption,
-        media_kind: "photo",
-        media_url: mediaUrl,
-        privacy,
-      })
-      .select("*")
-      .single();
-
-    if (insertError || !inserted) {
-      request.log.error({ insertError }, "Échec de création du post");
-      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
-    }
-
-    const [hydrated] = await hydratePosts(fastify, [inserted as PostRow], userId);
-    return reply.send(hydrated);
-  });
+  );
 
   fastify.post("/api/posts/:id/react", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };

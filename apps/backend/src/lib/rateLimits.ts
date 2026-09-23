@@ -24,13 +24,15 @@ export const RATE_LIMITS = {
   // Abonnement à un autre utilisateur — limite un usage abusif type bot de
   // masse-follow.
   follow: { max: 60, windowMs: HOUR },
+  // Création d'une publication avec pièces taguées (POST /api/posts) —
+  // compte chaque publication, pas chaque pièce à l'intérieur (une
+  // publication contient jusqu'à MAX_TAGGED_PIECES pièces en un seul appel).
+  pieceTag: { max: 30, windowMs: HOUR },
 
   // ---- Réservées au Lot 5, pas encore branchées sur une route ----
 
   // Commentaire sous une publication.
   comment: { max: 30, windowMs: HOUR },
-  // Ajout d'un tag de pièce sur une publication.
-  pieceTag: { max: 30, windowMs: HOUR },
 
   // ---- Limite large, appliquée automatiquement à toutes les autres routes ----
   // Sert de simple filet anti-script — je préfère être trop permissif que

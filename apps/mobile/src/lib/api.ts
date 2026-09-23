@@ -15,6 +15,7 @@ import type {
   ProductSearch,
   PublicProfile,
   ReactToPostResponse,
+  TaggedPieceInput,
   UpdateMeRequest,
   UpdateVaultItemRequest,
   VaultCategory,
@@ -276,11 +277,15 @@ export async function createLifestylePost(params: {
   caption: string;
   imageUri: string;
   privacy?: string;
+  taggedPieces?: TaggedPieceInput[];
 }): Promise<Post> {
   const formData = new FormData();
   formData.append("type", "lifestyle");
   if (params.caption) formData.append("caption", params.caption);
   if (params.privacy) formData.append("privacy", params.privacy);
+  if (params.taggedPieces && params.taggedPieces.length > 0) {
+    formData.append("taggedPieces", JSON.stringify(params.taggedPieces));
+  }
   appendImageFile(formData, "file", params.imageUri);
 
   const response = await authorizedFetch("/api/posts", { method: "POST", body: formData });

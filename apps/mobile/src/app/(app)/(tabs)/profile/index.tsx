@@ -9,7 +9,7 @@ import { fr } from "@/i18n/fr";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, fetchMyLifestylePosts, fetchVault, uploadAvatar } from "@/lib/api";
 import type { Post, VaultItem } from "@monapp/shared-types";
-import { CameraIcon, ClockIcon, GearIcon, PersonIcon, VerifiedIcon } from "@/components/icons";
+import { CameraIcon, ClockIcon, GearIcon, PersonIcon, TagIcon, VerifiedIcon } from "@/components/icons";
 import { useToast } from "@/lib/toast-context";
 import { Skeleton } from "@/components/skeleton";
 
@@ -259,6 +259,11 @@ export default function ProfileScreen() {
                 <View style={styles.thumb}>
                   <Image source={{ uri: post.mediaUrl }} style={styles.thumbImage} contentFit="cover" />
                 </View>
+                {post.taggedPieces.length > 0 ? (
+                  <View style={styles.tagBadge}>
+                    <TagIcon size={12} tint={color.blanc} />
+                  </View>
+                ) : null}
               </View>
             ))
           )}
@@ -359,6 +364,17 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: radius.full,
     backgroundColor: color.blanc,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tagBadge: {
+    position: "absolute",
+    bottom: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    borderRadius: radius.full,
+    backgroundColor: "rgba(28,28,28,0.55)",
     alignItems: "center",
     justifyContent: "center",
   },
