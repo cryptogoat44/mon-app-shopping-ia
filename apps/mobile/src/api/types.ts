@@ -55,6 +55,8 @@ export interface VaultItem extends Piece {
 
 export interface WishlistItem extends Piece {
   addedAt: string;
+  /** Pièce identifiée d'origine (suivi du clic marchand), si elle existe. */
+  productMatchId: string | null;
 }
 
 export interface Profile {

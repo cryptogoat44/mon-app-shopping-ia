@@ -12,6 +12,7 @@ import { VerifiedIcon } from "@/components/icons";
 import { useToast } from "@/lib/toast-context";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
+import { MerchantLinkButton } from "@/components/merchant-link-button";
 
 // Décision du fondateur (journal, 2026-09-23, décision 1) : retirer un
 // objet partagé supprime aussi ses publications "achat" — on le dit avant
@@ -52,7 +53,8 @@ export default function VaultItemDetailScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
       const updated = await updateVaultItem(item.id, { privacy });
-      setItem((current) => (current ? { ...updated, purchasePostCount: current.purchasePostCount } : current));
+      // Le lien marchand et le compte de publications ne changent pas.
+      setItem((current) => (current ? { ...current, ...updated } : current));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : fr.vaultItem.updateError);
     } finally {
@@ -139,6 +141,18 @@ export default function VaultItemDetailScreen() {
         </View>
         <Text style={styles.subtitle}>{VAULT_CATEGORY_LABELS[item.category]}</Text>
 
+        {item.merchantUrl ? (
+          <View style={styles.merchant}>
+            <MerchantLinkButton
+              url={item.affiliateUrl ?? item.merchantUrl}
+              merchantName={item.merchantName}
+              matchId={item.productMatchId}
+              context="vault"
+              isAffiliate={item.affiliateUrl !== null}
+            />
+          </View>
+        ) : null}
+
         <Text style={styles.label}>{fr.vaultItem.visibility}</Text>
         <View style={styles.pillRow}>
           {PRIVACY_LEVELS.map((level) => (
@@ -211,6 +225,7 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: "row", alignItems: "center", gap: space.sm, marginBottom: space.xs },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, flexShrink: 1 },
   subtitle: { fontSize: font.secondary, color: color.acier, marginBottom: space.lg },
+  merchant: { marginBottom: space.lg },
   verifiedBadge: {
     flexDirection: "row",
     alignItems: "center",

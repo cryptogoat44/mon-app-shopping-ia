@@ -11,6 +11,7 @@ import type {
   FeedPage,
   MerchantLinkContext,
   Post,
+  PreviewIssue,
   Profile,
   ProductMatchClickResponse,
   ProductSearch,
@@ -94,7 +95,7 @@ export async function uploadAvatar(imageUri: string): Promise<Profile> {
 
 /** Temps 1 du Spotter — gratuit : crée la recherche et renvoie l'image qui
  * sera analysée (`thumbnailUrl`), sans aucun appel SerpApi. */
-export async function prepareSearch(payload: CreateSearchRequest): Promise<ProductSearch> {
+export async function prepareSearch(payload: CreateSearchRequest): Promise<ProductSearch & { previewIssue?: PreviewIssue | null }> {
   const response = await authorizedFetch("/api/searches/prepare", {
     method: "POST",
     body: JSON.stringify(payload),

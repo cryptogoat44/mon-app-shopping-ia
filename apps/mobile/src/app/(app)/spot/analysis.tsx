@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
+import { closeSpotter } from "@/lib/spot-navigation";
 import { CheckIcon } from "@/components/icons";
 import { ApiError, runSearch } from "@/lib/api";
 import { croppedView } from "@/lib/crop-geometry";
@@ -60,7 +61,7 @@ export default function AnalysisScreen() {
 
   useEffect(() => {
     if (!draft || !imageUri) {
-      router.replace("/");
+      closeSpotter(router);
       return;
     }
     const abort = new AbortController();
@@ -110,6 +111,11 @@ export default function AnalysisScreen() {
     router.back();
   }
 
+  function handleClose() {
+    controller.current?.abort();
+    closeSpotter(router);
+  }
+
   if (!draft || !imageUri) return <View style={styles.screen} />;
 
   const frameWidth = Math.min(windowWidth - space.lg * 2, 432);
@@ -121,6 +127,11 @@ export default function AnalysisScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar style="light" />
+      <View style={styles.nav}>
+        <Pressable onPress={handleClose} hitSlop={12} style={styles.navClose} accessibilityRole="button">
+          <Text style={styles.close}>{fr.spotter.close}</Text>
+        </Pressable>
+      </View>
       <View style={styles.content}>
         <View style={[styles.frame, { width: view ? view.frame.width : frameWidth, height: frameHeight }]}>
           {view ? (
@@ -161,7 +172,10 @@ export default function AnalysisScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.nuit },
-  content: { flex: 1, paddingHorizontal: space.lg, paddingTop: space.lg, maxWidth: 480, alignSelf: "center", width: "100%" },
+  nav: { height: 47, flexDirection: "row", justifyContent: "flex-end", alignItems: "center", paddingHorizontal: 12 },
+  navClose: { minWidth: 44, height: 44, justifyContent: "center", alignItems: "flex-end" },
+  close: { fontSize: font.secondary, color: color.surNuit, fontWeight: "600" },
+  content: { flex: 1, paddingHorizontal: space.lg, paddingTop: space.xs, maxWidth: 480, alignSelf: "center", width: "100%" },
   frame: { alignSelf: "center", borderRadius: radius.sm, overflow: "hidden", backgroundColor: "#1E1C1A" },
   absolute: { position: "absolute" },
   fill: { width: "100%", height: "100%" },

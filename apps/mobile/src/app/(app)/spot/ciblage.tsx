@@ -15,6 +15,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SEARCH_QUERY_MAX_LENGTH, type CropRect } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
+import { closeSpotter } from "@/lib/spot-navigation";
 import { CropSelector } from "@/components/crop-selector";
 import { DEFAULT_CROP } from "@/lib/crop-geometry";
 import { draftImageUri, getDraft, updateDraft } from "@/lib/spot-draft";
@@ -40,7 +41,7 @@ export default function TargetingScreen() {
       <SafeAreaView style={styles.screen}>
         <View style={styles.centered}>
           <Text style={styles.lead}>{fr.preview.missing}</Text>
-          <Pressable style={styles.primary} onPress={() => router.replace("/")} accessibilityRole="button">
+          <Pressable style={styles.primary} onPress={() => closeSpotter(router)} accessibilityRole="button">
             <Text style={styles.primaryLabel}>{fr.preview.back}</Text>
           </Pressable>
         </View>
@@ -62,7 +63,9 @@ export default function TargetingScreen() {
           <Text style={styles.back}>‹</Text>
         </Pressable>
         <Text style={styles.step}>{fr.targeting.step}</Text>
-        <View style={styles.navSide} />
+        <Pressable onPress={() => closeSpotter(router)} hitSlop={12} style={[styles.navSide, styles.navRight]} accessibilityRole="button">
+          <Text style={styles.close}>{fr.spotter.close}</Text>
+        </Pressable>
       </View>
 
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -123,7 +126,9 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   centered: { flex: 1, justifyContent: "center", paddingHorizontal: space.xl, gap: space.lg },
   nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 },
-  navSide: { width: 44, height: 44, justifyContent: "center" },
+  navSide: { minWidth: 44, height: 44, justifyContent: "center" },
+  navRight: { alignItems: "flex-end" },
+  close: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   back: { fontSize: 26, color: color.encre },
   step: { fontSize: font.caption, color: color.acier },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },

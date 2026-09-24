@@ -1,4 +1,4 @@
-import { prepareSearch } from "./api";
+import { ApiError, prepareSearch } from "./api";
 import { getDraft, startDraft, updateDraft, type ImageSize, type SpotDraft } from "./spot-draft";
 import type { LinkPlatform } from "./link-detection";
 
@@ -12,6 +12,7 @@ export async function beginFromLink(url: string, platform: LinkPlatform): Promis
     sourceUrl: url,
     platform,
     previewUrl: search.thumbnailUrl,
+    previewIssue: search.previewIssue ?? null,
     localImageUri: null,
   });
 }
@@ -44,3 +45,11 @@ export function markSearchUsed(): void {
 }
 
 export { getDraft };
+
+/** Message quand « préparer » échoue : réseau coupé côté utilisateur, ou
+ * serveur Spotto indisponible (panne, ou réveil du serveur gratuit). */
+export function prepareFailureKind(error: unknown): "network" | "server" | "other" {
+  if (error instanceof ApiError) return error.status >= 500 ? "server" : "other";
+  // fetch échoue sans réponse (hors ligne, serveur injoignable).
+  return error instanceof TypeError ? "network" : "other";
+}

@@ -31,6 +31,29 @@ describe("reconnaissance du lien", () => {
     expect(detectLink("veste marron")).toEqual({ kind: "not_a_link" });
     expect(detectLink("https://www.zara.com/fr/veste")).toMatchObject({ kind: "unsupported" });
   });
+
+  it.each([
+    ["https://www.tiktok.com/", "tiktok"],
+    ["https://www.tiktok.com/@mayelasjourney", "tiktok"],
+    ["https://www.tiktok.com/tag/outfit", "tiktok"],
+    ["https://www.instagram.com/", "instagram"],
+    ["https://www.instagram.com/zara/", "instagram"],
+    ["https://fr.pinterest.com/", "pinterest"],
+    ["https://fr.pinterest.com/marie/tenues-automne/", "pinterest"],
+  ])("repère %s comme un lien %s qui ne mène pas à un contenu", (text, platform) => {
+    expect(detectLink(text)).toMatchObject({ kind: "not_a_video", platform });
+  });
+
+  it.each([
+    "https://www.tiktok.com/t/ZT8abc/",
+    "https://vt.tiktok.com/ZSabc/",
+    "https://m.tiktok.com/v/7554393000504266014.html",
+    "https://www.tiktok.com/@x/photo/7554393000504266014",
+    "https://www.instagram.com/p/C1abc/",
+    "https://www.instagram.com/reels/C1abc/",
+  ])("accepte le format de contenu %s", (text) => {
+    expect(detectLink(text)).toMatchObject({ kind: "supported" });
+  });
 });
 
 describe("géométrie du recadrage", () => {

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
+import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { z } from "zod";
 import type { PrivacyLevel, VaultCategory, VaultItem, VaultItemDetail } from "@monapp/shared-types";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
@@ -127,7 +128,31 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    const detail: VaultItemDetail = { ...toVaultItem(data as VaultItemRow), purchasePostCount: count ?? 0 };
+    // Lien marchand : celui de la pièce identifiée d'origine (Spotter),
+    // jamais pour une pièce ajoutée à la main.
+    const item = toVaultItem(data as VaultItemRow);
+    let merchant: { merchantName: string | null; merchantUrl: string | null; affiliateUrl: string | null } = {
+      merchantName: null,
+      merchantUrl: null,
+      affiliateUrl: null,
+    };
+    if (item.productMatchId) {
+      const { data: match } = await fastify.supabaseAdmin
+        .from("product_matches")
+        .select("merchant_name, merchant_url")
+        .eq("id", item.productMatchId)
+        .maybeSingle();
+      if (match?.merchant_url) {
+        const affiliateUrls = await fetchAffiliateUrls(fastify, [item.productMatchId]);
+        merchant = {
+          merchantName: match.merchant_name ?? null,
+          merchantUrl: match.merchant_url,
+          affiliateUrl: affiliateUrls.get(item.productMatchId) ?? null,
+        };
+      }
+    }
+
+    const detail: VaultItemDetail = { ...item, purchasePostCount: count ?? 0, ...merchant };
     return reply.send(detail);
   });
 

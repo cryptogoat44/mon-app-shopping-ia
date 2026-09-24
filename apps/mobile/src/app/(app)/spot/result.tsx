@@ -7,6 +7,7 @@ import * as Haptics from "expo-haptics";
 import type { VaultCategory } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
+import { closeSpotter } from "@/lib/spot-navigation";
 import { addToWishlist, loadSpotResult } from "@/api/client";
 import { getLastSpotResult } from "@/api/spotSession";
 import type { Piece, SpotFailReason } from "@/api/types";
@@ -189,14 +190,8 @@ export default function ResultScreen() {
 
   const nav = (
     <View style={styles.nav}>
-      <Pressable
-        onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
-        hitSlop={12}
-        style={styles.navSide}
-        accessibilityRole="button"
-        accessibilityLabel="Retour"
-      >
-        <Text style={styles.back}>‹</Text>
+      <Pressable onPress={() => closeSpotter(router)} hitSlop={12} style={styles.navSide} accessibilityRole="button">
+        <Text style={styles.close}>{fr.spotter.close}</Text>
       </Pressable>
       <Text style={styles.navTitle}>{fr.result.title}</Text>
       {result?.status === "success" && canReframe ? (
@@ -235,7 +230,7 @@ export default function ResultScreen() {
           <Pressable
             style={styles.primary}
             accessibilityRole="button"
-            onPress={() => (state.kind === "error" ? setState({ kind: "loading", searchId: state.searchId }) : router.replace("/"))}
+            onPress={() => (state.kind === "error" ? setState({ kind: "loading", searchId: state.searchId }) : closeSpotter(router))}
           >
             <Text style={styles.primaryLabel}>{isError ? fr.result.retry : fr.result.backToSpotter}</Text>
           </Pressable>
@@ -254,7 +249,7 @@ export default function ResultScreen() {
           onReframe={handleReframe}
           onImportCapture={handleImportCapture}
           onRetry={handleRetry}
-          onBack={() => router.replace("/")}
+          onBack={() => closeSpotter(router)}
           error={actionError}
         />
       </SafeAreaView>
@@ -456,7 +451,7 @@ const styles = StyleSheet.create({
   nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 },
   navSide: { minWidth: 44, height: 44, justifyContent: "center" },
   navRight: { alignItems: "flex-end" },
-  back: { fontSize: 26, color: color.encre },
+  close: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   navTitle: { fontSize: font.caption, color: color.acier },
   navAction: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },

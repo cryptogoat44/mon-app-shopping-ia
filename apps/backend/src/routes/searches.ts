@@ -8,7 +8,7 @@ import {
   type RecognitionMethod,
   type SearchStatus,
 } from "@monapp/shared-types";
-import { detectPlatform, fetchOfficialThumbnail } from "../services/oembed.js";
+import { detectPlatform, fetchOfficialPreview, fetchOfficialThumbnail } from "../services/oembed.js";
 import { searchProductsByImageUrl, type VisualMatch } from "../services/visualSearch.js";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
@@ -474,7 +474,8 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     const userId = request.user!.id;
     const sourceUrl = body.sourceUrl ?? null;
     const platform: PlatformSource = sourceUrl ? detectPlatform(sourceUrl) : "photo";
-    const thumbnail = sourceUrl ? await fetchOfficialThumbnail(sourceUrl, platform) : null;
+    const preview = sourceUrl ? await fetchOfficialPreview(sourceUrl, platform) : null;
+    const thumbnail = preview?.ok ? { thumbnailUrl: preview.thumbnailUrl } : null;
 
     const { data: inserted, error } = await fastify.supabaseAdmin
       .from("product_searches")
@@ -494,7 +495,9 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    return reply.send(toProductSearch(inserted as ProductSearchRow, [], new Map()));
+    // Sans image : la raison précise, pour que l'app dise quoi faire.
+    const previewIssue = preview && !preview.ok ? preview.issue : null;
+    return reply.send({ ...toProductSearch(inserted as ProductSearchRow, [], new Map()), previewIssue });
   });
 
   // Temps 2 — LANCER (1 crédit SerpApi, une seule fois par recherche) :

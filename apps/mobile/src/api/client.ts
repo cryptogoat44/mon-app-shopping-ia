@@ -27,11 +27,12 @@ function wishlistRowToItem(row: RemoteWishlistItem): WishlistItem {
     currency: row.currency,
     merchantName: row.merchantName,
     merchantUrl: row.merchantUrl,
-    // Les Envies ne passent pas par un product_match : pas de lien affilié
-    // distinct connu, on rouvre l'URL marchande telle quelle.
-    affiliateUrl: row.merchantUrl,
+    // Lien affilié de la pièce identifiée d'origine s'il existe, sinon le
+    // lien marchand tel quel.
+    affiliateUrl: row.affiliateUrl ?? row.merchantUrl,
     real: true,
     addedAt: row.createdAt,
+    productMatchId: row.productMatchId,
   };
 }
 

@@ -85,6 +85,17 @@ export interface CropRect {
 /** Longueur maximale du texte « Que cherchez-vous ? ». */
 export const SEARCH_QUERY_MAX_LENGTH = 60;
 
+/** Pourquoi l'image d'un lien n'a pas pu être récupérée à la préparation
+ * (Spotter, Lot S2) — l'app affiche un message précis et la suite à donner.
+ * - unavailable : la plateforme ne trouve pas le contenu (vidéo privée,
+ *   supprimée, ou lien incomplet — TikTok ne distingue pas ces cas) ;
+ * - not_a_video : le lien mène à un profil ou une page, pas à une vidéo ;
+ * - service_down : la plateforme ne répond pas (lente, en panne) ;
+ * - no_official_access : aucune voie officielle pour ce site (Instagram
+ *   sans jeton Meta, Pinterest) — seule la capture d'écran est possible ;
+ * - unsupported_site : site qui n'est ni TikTok, ni Instagram, ni Pinterest. */
+export type PreviewIssue = "unavailable" | "not_a_video" | "service_down" | "no_official_access" | "unsupported_site";
+
 /** Messages enregistrés par le serveur quand une recherche échoue : l'app
  * s'en sert pour distinguer « rien trouvé » (proposer de recadrer) d'une
  * panne (proposer de réessayer). Source unique pour les deux côtés. */
@@ -131,6 +142,11 @@ export interface VaultItem {
  * un retrait qui les supprimerait aussi. */
 export interface VaultItemDetail extends VaultItem {
   purchasePostCount: number;
+  /** Marchand de la pièce identifiée d'origine — null pour une pièce
+   * ajoutée à la main (aucun bouton « Voir chez le marchand »). */
+  merchantName: string | null;
+  merchantUrl: string | null;
+  affiliateUrl: string | null;
 }
 
 export interface UpdateVaultItemRequest {
@@ -156,6 +172,8 @@ export interface WishlistItem {
   currency: string | null;
   merchantName: string | null;
   merchantUrl: string | null;
+  /** Lien affilié de la pièce identifiée d'origine, s'il existe. */
+  affiliateUrl: string | null;
   productMatchId: string | null;
   createdAt: string;
 }

@@ -9,6 +9,7 @@ vi.mock("../src/services/visualSearch.js", () => ({ searchProductsByImageUrl: vi
 vi.mock("../src/services/oembed.js", () => ({
   detectPlatform: () => "tiktok",
   fetchOfficialThumbnail: vi.fn(async () => ({ thumbnailUrl: "https://p16-common-sign.tiktokcdn-eu.com/vignette.jpeg" })),
+  fetchOfficialPreview: vi.fn(async () => ({ ok: true, thumbnailUrl: "https://p16-common-sign.tiktokcdn-eu.com/vignette.jpeg" })),
 }));
 vi.mock("../src/lib/imageProcessing.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/lib/imageProcessing.js")>();
@@ -90,6 +91,15 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     expect(search.method).toBe("oembed");
     expect(search.thumbnailUrl).toContain("tiktokcdn-eu.com");
     expect(searchMock).not.toHaveBeenCalled();
+  });
+
+  it("préparer un lien dont l'image manque renvoie la raison précise (vidéo introuvable)", async () => {
+    const { fetchOfficialPreview } = await import("../src/services/oembed.js");
+    vi.mocked(fetchOfficialPreview).mockResolvedValueOnce({ ok: false, issue: "unavailable" });
+    const search = await prepare("https://www.tiktok.com/@x/video/404");
+    expect(search.status).toBe("pending");
+    expect(search.thumbnailUrl).toBeNull();
+    expect(search.previewIssue).toBe("unavailable");
   });
 
   it("préparer sans lien crée une recherche « photo » en attente d'image", async () => {

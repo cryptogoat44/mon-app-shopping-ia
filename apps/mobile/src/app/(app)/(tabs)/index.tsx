@@ -22,7 +22,7 @@ import type { Piece } from "@/api/types";
 import { CameraIcon, ClipboardIcon, ClockIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
 import { detectLink, type LinkDetection } from "@/lib/link-detection";
-import { beginFromLink, beginFromPhoto } from "@/lib/spot-flow";
+import { beginFromLink, beginFromPhoto, prepareFailureKind } from "@/lib/spot-flow";
 import { importPhotoForSpotter } from "@/lib/image-import";
 
 function DetectionCard({ detection }: { detection: LinkDetection }) {
@@ -38,7 +38,13 @@ function DetectionCard({ detection }: { detection: LinkDetection }) {
   }
   if (detection.kind === "unsupported") return <ErrorMessage style={styles.feedback}>{fr.spotter.unsupportedLink}</ErrorMessage>;
   if (detection.kind === "not_a_link") return <ErrorMessage style={styles.feedback}>{fr.spotter.notALink}</ErrorMessage>;
+  if (detection.kind === "not_a_video") return <ErrorMessage style={styles.feedback}>{fr.spotter.notAVideo[detection.platform]}</ErrorMessage>;
   return null;
+}
+
+function prepareErrorMessage(error: unknown): string {
+  const kind = prepareFailureKind(error);
+  return kind === "network" ? fr.spotter.networkError : kind === "server" ? fr.spotter.serverError : fr.spotter.prepareError;
 }
 
 export default function SpotterScreen() {
@@ -87,8 +93,8 @@ export default function SpotterScreen() {
     try {
       const draft = await beginFromLink(detection.url, detection.platform);
       router.push({ pathname: "/spot/apercu", params: { searchId: draft.searchId ?? "" } });
-    } catch {
-      setMessage(fr.spotter.prepareError);
+    } catch (error) {
+      setMessage(prepareErrorMessage(error));
     } finally {
       setBusy(null);
     }
@@ -106,8 +112,8 @@ export default function SpotterScreen() {
     try {
       const draft = await beginFromPhoto(picked.uri, { width: picked.width, height: picked.height });
       router.push({ pathname: "/spot/ciblage", params: { searchId: draft.searchId ?? "" } });
-    } catch {
-      setMessage(fr.spotter.prepareError);
+    } catch (error) {
+      setMessage(prepareErrorMessage(error));
     } finally {
       setBusy(null);
     }

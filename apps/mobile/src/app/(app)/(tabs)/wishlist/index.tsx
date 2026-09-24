@@ -10,6 +10,7 @@ import { ApiError } from "@/lib/api";
 import { ClockIcon } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
+import { MerchantLinkButton } from "@/components/merchant-link-button";
 
 function formatPrice(item: Piece): string | null {
   if (item.priceFrom === null) return null;
@@ -111,6 +112,16 @@ export default function WishlistScreen() {
                     {item.name}
                   </Text>
                   {formatPrice(item) ? <Text style={styles.price}>{formatPrice(item)}</Text> : null}
+                  {item.merchantUrl ? (
+                    <MerchantLinkButton
+                      url={item.affiliateUrl ?? item.merchantUrl}
+                      merchantName={item.merchantName}
+                      matchId={item.productMatchId}
+                      context="wishlist"
+                      isAffiliate={item.affiliateUrl !== null && item.affiliateUrl !== item.merchantUrl}
+                      compact
+                    />
+                  ) : null}
                 </View>
               ))}
             </View>

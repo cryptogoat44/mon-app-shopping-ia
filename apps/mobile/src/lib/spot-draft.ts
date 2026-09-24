@@ -3,7 +3,7 @@
 // recherche passe aussi dans l'adresse de chaque écran : après un
 // rechargement de page (web), l'écran relit la recherche sur le serveur
 // quand c'est possible, ou renvoie proprement vers Spotter.
-import type { CropRect } from "@monapp/shared-types";
+import type { CropRect, PreviewIssue } from "@monapp/shared-types";
 import type { LinkPlatform } from "./link-detection";
 
 export interface ImageSize {
@@ -20,6 +20,8 @@ export interface SpotDraft {
   platform: LinkPlatform | "photo";
   /** Vignette officielle renvoyée par « préparer », si elle existe. */
   previewUrl: string | null;
+  /** Pourquoi la vignette manque, quand on le sait (message précis). */
+  previewIssue?: PreviewIssue | null;
   /** Photo ou capture importée : remplace la vignette. */
   localImageUri: string | null;
   /** Taille de l'image affichée, connue une fois chargée. */

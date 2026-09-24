@@ -10,8 +10,12 @@ export const fr = {
     login: "Déjà un compte ? Se connecter",
     legal: "Conditions d'utilisation · Confidentialité",
   },
+  merchant: {
+    viewAt: (merchant: string | null) => (merchant ? `Voir chez ${merchant}` : "Voir chez le marchand"),
+  },
   spotter: {
     title: "Spotter",
+    close: "Fermer",
     lead: "Retrouvez une pièce vue dans une vidéo ou sur une photo.",
     linkLabel: "Lien TikTok, Instagram ou Pinterest",
     linkPlaceholder: "Collez ou tapez un lien",
@@ -30,10 +34,17 @@ export const fr = {
       pinterest: "Épingle Pinterest reconnue",
     },
     platformName: { tiktok: "TikTok", instagram: "Instagram", pinterest: "Pinterest" },
-    notALink: "Ce texte ne ressemble pas à un lien.",
+    notALink: "Ce texte n'est pas un lien. Dans TikTok, Instagram ou Pinterest, touchez « Partager » puis « Copier le lien », et collez-le ici.",
+    notAVideo: {
+      tiktok: "Ce lien mène à un profil ou à une page TikTok, pas à une vidéo. Ouvrez la vidéo, touchez « Partager » puis « Copier le lien ».",
+      instagram: "Ce lien mène à un profil ou à une page Instagram, pas à une publication. Ouvrez la publication ou le reel, touchez « Partager » puis « Copier le lien ».",
+      pinterest: "Ce lien mène à un tableau ou à une page Pinterest, pas à une épingle. Ouvrez l'épingle, touchez « Partager » puis « Copier le lien ».",
+    },
     unsupportedLink:
       "Ce lien n'est pas pris en charge. Spotto reconnaît les liens TikTok, Instagram et Pinterest ; pour tout autre site, importez une capture d'écran.",
     prepareError: "La préparation a échoué. Vérifiez votre connexion, puis réessayez.",
+    networkError: "Connexion impossible. Vérifiez votre connexion internet, puis réessayez.",
+    serverError: "Spotto ne répond pas pour le moment. Réessayez dans une minute.",
   },
   preview: {
     step: "Étape 1 sur 3 · Aperçu",
@@ -41,12 +52,48 @@ export const fr = {
     caption: (platform: string) => `Image de couverture de la ${platform === "TikTok" ? "vidéo" : "publication"} ${platform}.`,
     captureCaption: "Votre capture d'écran.",
     notOnImageTitle: "La pièce n'apparaît pas sur cette image ?",
-    notOnImageBody: "Faites une capture d'écran au bon moment de la vidéo, puis importez-la.",
+    notOnImageWhy: (platform: string) =>
+      `${platform} ne donne accès qu'à cette image de couverture, pas au reste de la vidéo. Montrez à Spotto le bon moment avec une capture d'écran :`,
+    captureSteps: (platform: string, shortcut: string) => [
+      `Ouvrez la vidéo dans ${platform}.`,
+      "Mettez-la en pause quand la pièce est bien visible.",
+      `Faites une capture d'écran (${shortcut}).`,
+      "Revenez ici et touchez « Importer une capture ».",
+    ],
+    screenshotShortcut: {
+      ios: "bouton latéral + bouton volume haut",
+      android: "bouton marche + bouton volume bas",
+      web: "Cmd + Maj + 4 sur Mac, Windows + Maj + S sur PC",
+    },
     importCapture: "Importer une capture",
     target: "Cibler la pièce",
     noPreviewTitle: "Importez une capture de la pièce",
     noPreviewBody: (platform: string) =>
       `Spotto ne peut pas récupérer l'image de ce lien ${platform}. Faites une capture d'écran au moment où la pièce est bien visible, puis importez-la.`,
+    // Raisons précises (voir PreviewIssue) : chaque message dit quoi faire.
+    issue: {
+      unavailable: {
+        title: (content: string) => `${content[0]!.toUpperCase()}${content.slice(1)} introuvable`,
+        body: (platform: string, content: string) =>
+          `${platform} ne trouve pas cette ${content} : elle est peut-être privée ou a été supprimée, ou le lien est incomplet. Vérifiez qu'elle s'ouvre bien dans ${platform}, puis recopiez son lien. Si elle s'affiche chez vous, vous pouvez aussi en importer une capture d'écran.`,
+      },
+      notAVideo: {
+        title: (content: string) => `Ce lien ne mène pas à une ${content}`,
+        body: (platform: string, content: string) =>
+          `Il ouvre un profil ou une page ${platform}. Ouvrez la ${content}, touchez « Partager » puis « Copier le lien », et collez ce lien dans Spotter.`,
+      },
+      serviceDown: {
+        title: (platform: string) => `${platform} ne répond pas pour le moment`,
+        body: "Réessayez dans quelques minutes. Vous pouvez aussi importer une capture d'écran de la pièce.",
+      },
+      noAccess: {
+        title: "Importez une capture de la pièce",
+        body: (platform: string) => `${platform} ne permet pas à Spotto de récupérer l'image de ce lien. Montrez-lui la pièce avec une capture d'écran :`,
+      },
+    },
+    content: { tiktok: "vidéo", instagram: "publication", pinterest: "épingle" },
+    fixLink: "Corriger le lien",
+    retry: "Réessayer",
     missing: "Ce parcours n'est plus disponible. Recommencez depuis Spotter.",
     back: "Retour à Spotter",
   },
