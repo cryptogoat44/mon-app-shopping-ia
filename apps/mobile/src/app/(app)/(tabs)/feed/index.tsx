@@ -9,6 +9,8 @@ import { Skeleton } from "@/components/skeleton";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { ErrorMessage } from "@/components/error-message";
 import { PostCard } from "@/components/post-card";
+import { useAuth } from "@/lib/auth-context";
+import { fr } from "@/i18n/fr";
 
 function FeedSkeletonRow() {
   return (
@@ -25,6 +27,8 @@ function FeedSkeletonRow() {
 
 export default function FeedScreen() {
   const router = useRouter();
+  const { session } = useAuth();
+  const myId = session?.user.id;
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -130,20 +134,31 @@ export default function FeedScreen() {
           renderItem={({ item: post }) => (
             <PostCard
               post={post}
-              onOpenMenu={() => setMenuTarget({ userId: post.author.id, postId: post.id })}
-              onPressAuthor={() => router.push({ pathname: "/profil", params: { id: post.author.id } })}
+              // Ses propres publications (Lot F) : pas de « signaler / bloquer ».
+              onOpenMenu={post.author.id === myId ? undefined : () => setMenuTarget({ userId: post.author.id, postId: post.id })}
+              onPressAuthor={() =>
+                post.author.id === myId ? router.push("/profile") : router.push({ pathname: "/profil", params: { id: post.author.id } })
+              }
+              onOpenComments={() => router.push({ pathname: "/publication", params: { id: post.id } })}
             />
           )}
           ItemSeparatorComponent={() => <View style={styles.divider} />}
           ListHeaderComponent={error ? <ErrorMessage style={styles.errorText}>{error}</ErrorMessage> : null}
           ListEmptyComponent={
             posts !== null && !error ? (
+              // Fil vide (Lot F) : expliquer quoi faire, avec des boutons. Les
+              // vraies suggestions de comptes viendront au lot 7.
               <View style={styles.empty}>
-                <Text style={styles.emptyText}>
-                  Votre fil est vide. Suivez des profils pour voir leurs achats et leurs publications ici.
-                </Text>
-                <Pressable accessibilityRole="button" onPress={() => router.push("/people-search")}>
-                  <Text style={styles.emptyLink}>Rechercher des profils</Text>
+                <Text style={styles.emptyTitle} accessibilityRole="header">{fr.feed.emptyTitle}</Text>
+                <Text style={styles.emptyText}>{fr.feed.emptyBody}</Text>
+                <Pressable style={styles.emptyPrimary} onPress={() => router.push("/")} accessibilityRole="button">
+                  <Text style={styles.emptyPrimaryLabel}>{fr.feed.emptySpot}</Text>
+                </Pressable>
+                <Pressable style={styles.emptySecondary} onPress={() => router.push("/post-item/new")} accessibilityRole="button">
+                  <Text style={styles.emptySecondaryLabel}>{fr.feed.emptyPublish}</Text>
+                </Pressable>
+                <Pressable style={styles.emptySecondary} onPress={() => router.push("/people-search")} accessibilityRole="button">
+                  <Text style={styles.emptySecondaryLabel}>{fr.feed.emptyFind}</Text>
                 </Pressable>
               </View>
             ) : null
@@ -192,8 +207,12 @@ const styles = StyleSheet.create({
   content: { paddingTop: space.sm, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   errorText: { color: color.acier, fontSize: font.secondary, paddingHorizontal: space.lg, marginBottom: space.md },
   empty: { alignItems: "center", marginTop: space.xl, paddingHorizontal: space.lg },
-  emptyText: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginBottom: space.md, lineHeight: 20 },
-  emptyLink: { fontSize: font.body, color: color.vert, fontWeight: "600" },
+  emptyTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, textAlign: "center", marginBottom: space.sm },
+  emptyText: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginBottom: space.lg, lineHeight: 20 },
+  emptyPrimary: { alignSelf: "stretch", minHeight: 50, borderRadius: radius.md, backgroundColor: color.vert, alignItems: "center", justifyContent: "center" },
+  emptyPrimaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
+  emptySecondary: { alignSelf: "stretch", minHeight: 50, borderRadius: radius.md, borderWidth: 1, borderColor: color.filet, alignItems: "center", justifyContent: "center", marginTop: space.sm },
+  emptySecondaryLabel: { color: color.encre, fontSize: font.body, fontWeight: "600" },
   // Squelette de chargement (mêmes proportions qu'une publication).
   post: { paddingHorizontal: space.lg, paddingBottom: 26 },
   author: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },

@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import type { PrivacyLevel } from "@monapp/shared-types";
+import type { PrivacyLevel, VaultItem } from "@monapp/shared-types";
 import { useAuth } from "@/lib/auth-context";
-import { ApiError, createLifestylePost } from "@/lib/api";
+import { ApiError, createLifestylePost, fetchVault, sharePurchasePost } from "@/lib/api";
+import { SpotImage } from "@/components/spot-image";
 import { PRIVACY_LABELS, PRIVACY_LEVELS } from "@/lib/vault-labels";
 import { color, font, radius, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
@@ -32,6 +33,24 @@ export default function NewPostScreen() {
   const [recentPieces, setRecentPieces] = useState<Piece[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Lot F : une publication « achat » se fait aussi d'ici, à partir d'une
+  // pièce du Vault (auparavant seulement depuis le détail de la pièce).
+  const [mode, setMode] = useState<"photo" | "vault">("photo");
+  const [vaultItems, setVaultItems] = useState<VaultItem[] | null>(null);
+  const [vaultItemId, setVaultItemId] = useState<string | null>(null);
+
+  function chooseMode(next: "photo" | "vault") {
+    setMode(next);
+    setError(null);
+    if (next === "vault" && vaultItems === null) {
+      fetchVault()
+        .then((page) => setVaultItems(page.items))
+        .catch(() => {
+          setVaultItems([]);
+          setError(fr.publish.vaultLoadError);
+        });
+    }
+  }
 
   async function handlePickPhoto() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -64,6 +83,24 @@ export default function NewPostScreen() {
 
   async function handleSubmit() {
     setError(null);
+    if (mode === "vault") {
+      if (!vaultItemId) {
+        setError(fr.publish.choosePiece);
+        return;
+      }
+      setSubmitting(true);
+      try {
+        await sharePurchasePost(vaultItemId, privacy, caption.trim() || undefined);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        showToast(fr.publish.published);
+        safeBack();
+      } catch (e) {
+        setError(e instanceof ApiError ? e.message : "La publication a échoué, réessayez.");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
     if (!imageUri) {
       setError("Ajoutez une photo.");
       return;
@@ -97,13 +134,13 @@ export default function NewPostScreen() {
         <Text style={styles.navTitle} accessibilityRole="header">{fr.publish.title}</Text>
         <Pressable
           onPress={handleSubmit}
-          disabled={submitting || !imageUri}
+          disabled={submitting || (mode === "photo" ? !imageUri : !vaultItemId)}
           hitSlop={12}
           style={[styles.navSide, styles.navSideRight]}
           accessibilityRole="button"
           accessibilityLabel={submitting ? "Publication en cours" : fr.publish.publish}
         >
-          <Text style={[styles.publishLabel, (submitting || !imageUri) ? styles.publishLabelDisabled : null]}>
+          <Text style={[styles.publishLabel, (submitting || (mode === "photo" ? !imageUri : !vaultItemId)) ? styles.publishLabelDisabled : null]}>
             {submitting ? "…" : fr.publish.publish}
           </Text>
         </Pressable>
@@ -112,6 +149,50 @@ export default function NewPostScreen() {
       <ScrollView contentContainerStyle={styles.body}>
         {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
+        <View style={styles.modes} accessibilityRole="radiogroup">
+          {(["photo", "vault"] as const).map((value) => (
+            <Pressable
+              key={value}
+              style={[styles.mode, mode === value ? styles.modeActive : null]}
+              onPress={() => chooseMode(value)}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: mode === value }}
+            >
+              <Text style={[styles.modeLabel, mode === value ? styles.modeLabelActive : null]}>
+                {value === "photo" ? fr.publish.modePhoto : fr.publish.modeVault}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {mode === "vault" ? (
+          <>
+            <Text style={styles.hint}>{fr.publish.vaultHint}</Text>
+            {vaultItems === null ? (
+              <ActivityIndicator color={color.encre} style={styles.vaultLoader} />
+            ) : vaultItems.length === 0 ? (
+              <Text style={styles.emptyPicker}>{fr.publish.vaultEmpty}</Text>
+            ) : (
+              <View style={styles.vaultGrid}>
+                {vaultItems.map((item) => (
+                  <Pressable
+                    key={item.id}
+                    style={[styles.vaultCell, vaultItemId === item.id ? styles.vaultCellActive : null]}
+                    onPress={() => setVaultItemId(item.id)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: vaultItemId === item.id }}
+                    accessibilityLabel={item.title}
+                  >
+                    <View style={styles.vaultThumb}>
+                      <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.photoPreview} fit="cover" />
+                    </View>
+                    <Text style={styles.vaultTitle} numberOfLines={1}>{item.title}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </>
+        ) : (
         <Pressable
           style={styles.photo}
           onPress={handlePickPhoto}
@@ -127,6 +208,7 @@ export default function NewPostScreen() {
             </>
           )}
         </Pressable>
+        )}
 
         <TextInput
           style={styles.caption}
@@ -139,6 +221,8 @@ export default function NewPostScreen() {
           accessibilityLabel="Légende de la publication"
         />
 
+        {mode === "photo" ? (
+        <>
         <Text style={styles.label}>{fr.publish.piecesLabel}</Text>
         <View style={styles.tags}>
           {pieces.map((piece) => (
@@ -159,6 +243,8 @@ export default function NewPostScreen() {
             <Text style={styles.addTagLabel}>+ {fr.publish.addPiece}</Text>
           </Pressable>
         </View>
+        </>
+        ) : null}
 
         <Text style={styles.label}>{fr.publish.visibility}</Text>
         <View style={styles.tags}>
@@ -222,6 +308,18 @@ const styles = StyleSheet.create({
   publishLabelDisabled: { color: color.acier, opacity: 0.5 },
   body: { paddingHorizontal: space.md, paddingTop: 18, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   error: { fontSize: font.caption, color: color.acier, marginBottom: space.md },
+  modes: { flexDirection: "row", gap: 8, marginBottom: space.md },
+  mode: { flex: 1, minHeight: 40, borderRadius: radius.full, borderWidth: 1, borderColor: color.filet, alignItems: "center", justifyContent: "center" },
+  modeActive: { backgroundColor: color.encre, borderColor: color.encre },
+  modeLabel: { fontSize: font.caption, color: color.encre, fontWeight: "600" },
+  modeLabelActive: { color: color.blanc },
+  hint: { fontSize: font.caption, color: color.acier, marginBottom: space.sm, lineHeight: 18 },
+  vaultLoader: { marginVertical: space.lg },
+  vaultGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  vaultCell: { width: "31.5%", borderRadius: radius.sm, borderWidth: 2, borderColor: "transparent", padding: 2 },
+  vaultCellActive: { borderColor: color.vert },
+  vaultThumb: { width: "100%", aspectRatio: 1, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
+  vaultTitle: { fontSize: 11.5, color: color.encre, marginTop: 4 },
   photo: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe, borderRadius: radius.sm, alignItems: "center", justifyContent: "center", gap: 8, overflow: "hidden" },
   photoPreview: { width: "100%", height: "100%" },
   photoLabel: { fontSize: font.caption, color: color.acier },

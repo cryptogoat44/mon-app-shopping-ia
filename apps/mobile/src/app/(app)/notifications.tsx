@@ -12,7 +12,9 @@ import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 
 function actionText(notification: AppNotification): string {
-  return notification.type === "follow" ? fr.notifications.follow : fr.notifications.like;
+  if (notification.type === "follow") return fr.notifications.follow;
+  if (notification.type === "comment") return fr.notifications.comment;
+  return fr.notifications.like;
 }
 
 function NotificationRow({ notification, onPress }: { notification: AppNotification; onPress: () => void }) {
@@ -109,7 +111,12 @@ export default function NotificationsScreen() {
               <Text style={styles.emptyText}>{fr.notifications.empty}</Text>
             </View>
           ) : (
-            notifications?.map((notification) => <NotificationRow key={notification.id} notification={notification} onPress={() => router.push({ pathname: "/profil", params: { id: notification.actor.id } })} />)
+            notifications?.map((notification) => <NotificationRow key={notification.id} notification={notification} onPress={() =>
+                  // « J'aime » et commentaire : la publication ; abonnement : le profil.
+                  notification.postId
+                    ? router.push({ pathname: "/publication", params: { id: notification.postId } })
+                    : router.push({ pathname: "/profil", params: { id: notification.actor.id } })
+                } />)
           )}
         </ScrollView>
       )}

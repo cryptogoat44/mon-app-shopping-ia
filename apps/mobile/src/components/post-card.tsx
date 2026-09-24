@@ -6,7 +6,10 @@ import type { Post } from "@monapp/shared-types";
 import { reactToPost } from "@/lib/api";
 import { openMerchantLink } from "@/lib/merchant-links";
 import { color, font, radius, space } from "@/theme/tokens";
-import { HeartIcon, MoreIcon, PersonIcon, VerifiedIcon } from "@/components/icons";
+import { CommentIcon, HeartIcon, MoreIcon, PersonIcon, ShareIcon, VerifiedIcon } from "@/components/icons";
+import { sharePost } from "@/lib/share-post";
+import { useToast } from "@/lib/toast-context";
+import { fr } from "@/i18n/fr";
 import { timeAgo } from "@/lib/time";
 
 const DOUBLE_TAP_DELAY_MS = 300;
@@ -17,11 +20,18 @@ export function PostCard({
   post,
   onOpenMenu,
   onPressAuthor,
+  onOpenComments,
+  commentCount,
 }: {
   post: Post;
   onOpenMenu?: () => void;
   onPressAuthor?: () => void;
+  /** Ouvre la publication et ses commentaires (absent : déjà dessus). */
+  onOpenComments?: () => void;
+  /** Nombre à afficher quand l'écran le tient à jour lui-même. */
+  commentCount?: number;
 }) {
+  const { showToast } = useToast();
   const [reactionCount, setReactionCount] = useState(post.reactionCount);
   const [reacted, setReacted] = useState(post.viewerHasReacted);
   const [busy, setBusy] = useState(false);
@@ -150,17 +160,42 @@ export function PostCard({
         </View>
       ) : null}
 
-      <Pressable
-        onPress={handleReactButton}
-        disabled={busy}
-        style={styles.reactRow}
-        hitSlop={12}
-        accessibilityRole="button"
-        accessibilityLabel={reacted ? "Je n'aime plus" : "Aimer"}
-      >
-        <HeartIcon size={19} tint={reacted ? color.encre : color.acier} filled={reacted} />
-        <Text style={styles.reactCount}>{reactionCount}</Text>
-      </Pressable>
+      <View style={styles.actions}>
+        <Pressable
+          onPress={handleReactButton}
+          disabled={busy}
+          style={styles.reactRow}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={reacted ? "Je n'aime plus" : "Aimer"}
+        >
+          <HeartIcon size={19} tint={reacted ? color.encre : color.acier} filled={reacted} />
+          <Text style={styles.reactCount}>{reactionCount}</Text>
+        </Pressable>
+        <Pressable
+          onPress={onOpenComments}
+          disabled={!onOpenComments}
+          style={styles.reactRow}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={fr.comments.countLabel(commentCount ?? post.commentCount)}
+        >
+          <CommentIcon size={19} />
+          <Text style={styles.reactCount}>{commentCount ?? post.commentCount}</Text>
+        </Pressable>
+        <Pressable
+          onPress={async () => {
+            const outcome = await sharePost(post);
+            if (outcome === "copied") showToast(fr.comments.linkCopied);
+          }}
+          style={[styles.reactRow, styles.shareButton]}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={fr.comments.share}
+        >
+          <ShareIcon size={19} />
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -187,7 +222,9 @@ const styles = StyleSheet.create({
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
   tagChip: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.full, paddingVertical: 5, paddingHorizontal: 11 },
   tagChipLabel: { fontSize: font.caption, color: color.encre },
-  reactRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12 },
+  actions: { flexDirection: "row", alignItems: "center", gap: space.lg, marginTop: 12 },
+  reactRow: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 32 },
+  shareButton: { marginLeft: "auto" },
   reactCount: { fontSize: font.secondary, color: color.acier },
   authorLink: { flexDirection: "row", alignItems: "center", gap: 10, flexShrink: 1 },
 });

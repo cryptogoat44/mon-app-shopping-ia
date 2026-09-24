@@ -28,6 +28,8 @@ import type {
   WishlistItem,
   WishlistPage,
   UserProfile,
+  CommentsPage,
+  PostComment,
 } from "@monapp/shared-types";
 import { Platform } from "react-native";
 import { supabase } from "./supabase";
@@ -278,6 +280,21 @@ export async function deletePost(id: string): Promise<void> {
   await authorizedFetch(`/api/posts/${id}`, { method: "DELETE" });
 }
 
+export async function fetchComments(postId: string, cursor?: string): Promise<CommentsPage> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  const response = await authorizedFetch(`/api/posts/${postId}/comments${query}`);
+  return response.json();
+}
+
+export async function createComment(postId: string, body: string): Promise<PostComment> {
+  const response = await authorizedFetch(`/api/posts/${postId}/comments`, { method: "POST", body: JSON.stringify({ body }) });
+  return response.json();
+}
+
+export async function deleteComment(commentId: string): Promise<void> {
+  await authorizedFetch(`/api/comments/${commentId}`, { method: "DELETE" });
+}
+
 export async function fetchUserProfile(userId: string): Promise<UserProfile> {
   const response = await authorizedFetch(`/api/users/${userId}`);
   return response.json();
@@ -349,11 +366,12 @@ export async function createLifestylePost(params: {
   return response.json();
 }
 
-export async function sharePurchasePost(vaultItemId: string, privacy: PrivacyLevel): Promise<Post> {
+export async function sharePurchasePost(vaultItemId: string, privacy: PrivacyLevel, caption?: string): Promise<Post> {
   const formData = new FormData();
   formData.append("type", "purchase");
   formData.append("vaultItemId", vaultItemId);
   formData.append("privacy", privacy);
+  if (caption) formData.append("caption", caption);
 
   const response = await authorizedFetch("/api/posts", { method: "POST", body: formData });
   return response.json();

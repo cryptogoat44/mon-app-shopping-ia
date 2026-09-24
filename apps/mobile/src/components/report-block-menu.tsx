@@ -23,10 +23,12 @@ interface ReportBlockMenuProps {
   onClose: () => void;
   userId: string;
   postId?: string;
+  /** Signaler un commentaire précis (Lot F) plutôt que la publication. */
+  commentId?: string;
   onBlocked?: (userId: string) => void;
 }
 
-export function ReportBlockMenu({ visible, onClose, userId, postId, onBlocked }: ReportBlockMenuProps) {
+export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, onBlocked }: ReportBlockMenuProps) {
   const [step, setStep] = useState<Step>("root");
   const { showToast } = useToast();
 
@@ -38,7 +40,11 @@ export function ReportBlockMenu({ visible, onClose, userId, postId, onBlocked }:
   async function handleReport(reason: ReportReason) {
     close();
     try {
-      await reportContent({ targetType: postId ? "post" : "user", targetId: postId ?? userId, reason });
+      await reportContent(
+        commentId
+          ? { targetType: "comment", targetId: commentId, reason }
+          : { targetType: postId ? "post" : "user", targetId: postId ?? userId, reason }
+      );
       showToast(fr.moderation.reportSuccess);
     } catch (e) {
       showToast(e instanceof ApiError ? e.message : fr.moderation.reportError);

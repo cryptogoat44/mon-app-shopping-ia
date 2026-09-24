@@ -13,3 +13,7 @@ export const LEGAL_LINKS = {
   terms: null as string | null,
   privacy: null as string | null,
 };
+
+// Adresse publique du site : sert aux liens partagés vers une publication
+// (Lot F). Sur le web, l'adresse du site en cours est utilisée à la place.
+export const PUBLIC_WEB_URL = process.env.EXPO_PUBLIC_WEB_URL ?? "https://mon-app-shopping-ia-web.onrender.com";

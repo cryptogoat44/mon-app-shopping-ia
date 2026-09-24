@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { Post } from "@monapp/shared-types";
 import { ApiError, deletePost, fetchPost } from "@/lib/api";
@@ -8,6 +8,7 @@ import { useToast } from "@/lib/toast-context";
 import { color, font, radius, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
 import { PostCard } from "@/components/post-card";
+import { CommentsSection } from "@/components/comments-section";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { ErrorMessage } from "@/components/error-message";
 
@@ -26,6 +27,7 @@ export default function PostDetailScreen() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [commentCount, setCommentCount] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -89,11 +91,13 @@ export default function PostDetailScreen() {
           )}
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.content}>
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <PostCard
             post={post}
             onOpenMenu={isMine ? undefined : () => setMenuOpen(true)}
             onPressAuthor={isMine ? undefined : () => router.push({ pathname: "/profil", params: { id: post.author.id } })}
+            commentCount={commentCount ?? post.commentCount}
           />
 
           {isMine ? (
@@ -120,7 +124,15 @@ export default function PostDetailScreen() {
               )}
             </View>
           ) : null}
+
+          <CommentsSection
+            postId={post.id}
+            viewerId={session?.user.id}
+            onCountChange={setCommentCount}
+            onOpenProfile={(userId) => router.push({ pathname: "/profil", params: { id: userId } })}
+          />
         </ScrollView>
+        </KeyboardAvoidingView>
       )}
 
       {post && !isMine ? (
@@ -132,6 +144,7 @@ export default function PostDetailScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.porcelaine },
+  flex: { flex: 1 },
   nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 },
   navSide: { minWidth: 44, height: 44, justifyContent: "center" },
   navTitle: { fontSize: font.caption, color: color.acier },

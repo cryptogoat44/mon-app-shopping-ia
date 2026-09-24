@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import type { PrivacyLevel, VaultItemDetail } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
@@ -66,25 +66,36 @@ export default function VaultItemDetailScreen() {
   const { profile } = useAuth();
   const [sharePrivacy, setSharePrivacy] = useState<PrivacyLevel>(profile?.defaultPrivacy ?? "followers");
   const [sharing, setSharing] = useState(false);
-  const [shared, setShared] = useState(false);
 
-  useEffect(() => {
-    fetchVaultItem(id)
-      .then(setItem)
-      .catch((e) => setError(e instanceof ApiError ? e.message : fr.vaultItem.loadError));
-  }, [id]);
+  // Relu à chaque retour sur l'écran : une publication supprimée depuis son
+  // détail rend la pièce de nouveau partageable (Lot F).
+  useFocusEffect(
+    useCallback(() => {
+      fetchVaultItem(id)
+        .then(setItem)
+        .catch((e) => setError(e instanceof ApiError ? e.message : fr.vaultItem.loadError));
+    }, [id])
+  );
 
   async function handleShare() {
     if (!item) return;
     setSharing(true);
     setError(null);
     try {
-      await sharePurchasePost(item.id, sharePrivacy);
+      const post = await sharePurchasePost(item.id, sharePrivacy);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      setShared(true);
-      // Le retrait de l'objet supprimerait désormais aussi cette publication :
-      // l'avertissement doit en tenir compte sans recharger l'écran.
-      setItem((current) => (current ? { ...current, purchasePostCount: current.purchasePostCount + 1 } : current));
+      showToast(fr.vaultItem.shared);
+      // L'état du partage s'affiche tout de suite ; le retrait de l'objet
+      // supprimerait désormais aussi cette publication (avertissement).
+      setItem((current) =>
+        current
+          ? {
+              ...current,
+              purchasePostCount: current.purchasePostCount + 1,
+              sharedPost: { id: post.id, privacy: post.privacy, createdAt: post.createdAt },
+            }
+          : current
+      );
     } catch (e) {
       setError(e instanceof ApiError ? e.message : fr.vaultItem.shareError);
     } finally {
@@ -181,7 +192,23 @@ export default function VaultItemDetailScreen() {
             de montrer une pièce est de la partager, avec la confidentialité
             choisie pour cette publication. */}
         <Text style={styles.privateNote}>{fr.vaultItem.privateNote}</Text>
-        {shared ? null : (
+        {item.sharedPost ? (
+          // Déjà partagée (Lot F) : l'état réel, jamais un choix reproposé
+          // comme si rien ne s'était passé. Une pièce ne se partage qu'une
+          // fois à la fois : pour la montrer autrement, on supprime d'abord
+          // la publication (depuis son détail).
+          <View style={styles.sharedBox}>
+            <Text style={styles.sharedTitle}>{fr.vaultItem.sharedState(PRIVACY_LABELS[item.sharedPost.privacy])}</Text>
+            <Pressable
+              onPress={() => router.push({ pathname: "/publication", params: { id: item.sharedPost!.id } })}
+              hitSlop={8}
+              accessibilityRole="link"
+            >
+              <Text style={styles.sharedLink}>{fr.vaultItem.viewPost}</Text>
+            </Pressable>
+            <Text style={styles.sharedHint}>{fr.vaultItem.shareAgainHint}</Text>
+          </View>
+        ) : (
           <>
             <Text style={styles.label}>{fr.vaultItem.shareVisibility}</Text>
             <View style={styles.pillRow} accessibilityRole="radiogroup">
@@ -201,18 +228,16 @@ export default function VaultItemDetailScreen() {
                 </Pressable>
               ))}
             </View>
+            <Pressable
+              accessibilityRole="button"
+              style={[styles.shareButton, sharing ? styles.shareButtonDisabled : null]}
+              onPress={handleShare}
+              disabled={sharing}
+            >
+              <Text style={styles.shareLabel}>{sharing ? fr.vaultItem.sharing : fr.vaultItem.share}</Text>
+            </Pressable>
           </>
         )}
-
-        <Pressable accessibilityRole="button"
-          style={[styles.shareButton, sharing || shared ? styles.shareButtonDisabled : null]}
-          onPress={handleShare}
-          disabled={sharing || shared}
-        >
-          <Text style={styles.shareLabel}>
-            {shared ? fr.vaultItem.shared : sharing ? fr.vaultItem.sharing : fr.vaultItem.share}
-          </Text>
-        </Pressable>
 
         {!confirmingDelete ? (
           <Pressable accessibilityRole="button" onPress={() => setConfirmingDelete(true)} disabled={busy} hitSlop={12} style={styles.removeRow}>
@@ -272,6 +297,10 @@ const styles = StyleSheet.create({
   },
   verifiedBadgeText: { color: color.vert, fontSize: font.caption, fontWeight: "600" },
   label: { fontSize: font.caption, color: color.acier, marginBottom: 10 },
+  sharedBox: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, marginBottom: space.lg, gap: 6 },
+  sharedTitle: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
+  sharedLink: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  sharedHint: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
   privateNote: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginBottom: space.md },
   pillRow: { flexDirection: "row", flexWrap: "wrap", gap: space.xs, marginBottom: space.lg },
   privacyPill: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.full, paddingVertical: 6, paddingHorizontal: 12 },
