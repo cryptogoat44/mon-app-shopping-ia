@@ -124,7 +124,11 @@ export default function AnalysisScreen() {
       <View style={styles.content}>
         <View style={[styles.frame, { width: view ? view.frame.width : frameWidth, height: frameHeight }]}>
           {view ? (
-            <Image source={{ uri: imageUri }} style={[styles.absolute, view.image]} contentFit="fill" accessibilityIgnoresInvertColors />
+            // Le positionnement est porté par une View : sur le web, expo-image
+            // ignore un décalage négatif posé directement sur l'image.
+            <View style={[styles.absolute, view.image]}>
+              <Image source={{ uri: imageUri }} style={styles.fill} contentFit="fill" accessibilityIgnoresInvertColors />
+            </View>
           ) : (
             <Image source={{ uri: imageUri }} style={styles.fill} contentFit="contain" />
           )}

@@ -190,7 +190,7 @@ export default function SpotterScreen() {
                   >
                     <View style={styles.recentThumb}>
                       {piece.imageUrl ? (
-                        <Image source={{ uri: piece.imageHdUrl ?? piece.imageUrl }} placeholder={{ uri: piece.imageUrl }} style={styles.fill} contentFit="cover" />
+                        <Image source={{ uri: piece.imageUrl }} style={styles.fill} contentFit="cover" />
                       ) : (
                         <ClockIcon size={26} tint={color.acier} />
                       )}

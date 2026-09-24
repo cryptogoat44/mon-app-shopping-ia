@@ -6,6 +6,8 @@ import { Image } from "expo-image";
 // priorité, et la petite vignette de Google si elle ne se charge pas —
 // certains marchands bloquent l'affichage de leurs images hors de leur site
 // (constaté : refus 403). Toujours « contenue » : jamais rognée ni déformée.
+// Pendant le chargement, le fond du cadre (plinthe) suffit : une vignette
+// d'attente restait superposée à l'image finale sur le web.
 export function SpotImage({
   hdUri,
   fallbackUri,
@@ -26,10 +28,8 @@ export function SpotImage({
   return (
     <Image
       source={{ uri: useFallback || !hdUri ? fallbackUri : hdUri }}
-      placeholder={{ uri: fallbackUri }}
       style={style}
       contentFit="contain"
-      transition={180}
       onError={() => setUseFallback(true)}
       accessibilityLabel={accessibilityLabel}
     />
