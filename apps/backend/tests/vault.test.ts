@@ -14,7 +14,6 @@ async function insertVaultItem(
       title: "vault test item",
       image_url: "https://example.com/fake.jpg",
       category: "other",
-      privacy: "private",
       verified: false,
       ...overrides,
     })
@@ -104,7 +103,7 @@ describe("vault", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("updates title/category/privacy", async () => {
+  it("updates title/category", async () => {
     const id = await insertVaultItem(app, user.id, { title: "before" });
     itemIds.push(id);
 
@@ -112,12 +111,34 @@ describe("vault", () => {
       method: "PATCH",
       url: `/api/vault/${id}`,
       headers: authHeaders(user.token),
-      payload: { title: "after", category: "watches", privacy: "public" },
+      payload: { title: "after", category: "watches" },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().title).toBe("after");
     expect(res.json().category).toBe("watches");
-    expect(res.json().privacy).toBe("public");
+    expect(res.json()).not.toHaveProperty("privacy");
+  });
+
+  // Décision 5 du Lot Q : le Vault est toujours entièrement privé.
+  it("Vault toujours privé : aucune confidentialité par pièce, et un autre utilisateur n'accède à rien", async () => {
+    const id = await insertVaultItem(app, user.id, { title: "privée" });
+    itemIds.push(id);
+
+    // Un ancien client qui envoie encore « privacy » : ignoré (corps vide → 400).
+    const onlyPrivacy = await app.inject({ method: "PATCH", url: `/api/vault/${id}`, headers: authHeaders(user.token), payload: { privacy: "public" } });
+    expect(onlyPrivacy.statusCode).toBe(400);
+
+    const asOther = (method: "GET" | "PATCH" | "DELETE" | "POST", url: string, payload?: object) =>
+      app.inject({ method, url, headers: authHeaders(other.token), ...(payload ? { payload } : {}) });
+    expect((await asOther("GET", `/api/vault/${id}`)).statusCode).toBe(404);
+    expect((await asOther("PATCH", `/api/vault/${id}`, { title: "piratée" })).statusCode).toBe(404);
+    expect((await asOther("DELETE", `/api/vault/${id}`)).statusCode).toBe(404);
+    expect((await asOther("POST", `/api/vault/${id}/photo`)).statusCode).toBe(404);
+    const list = await asOther("GET", "/api/vault");
+    expect(list.json().items.map((item: { id: string }) => item.id)).not.toContain(id);
+
+    const still = await app.inject({ method: "GET", url: `/api/vault/${id}`, headers: authHeaders(user.token) });
+    expect(still.json().title).toBe("privée");
   });
 
   it("rejects an update from a non-owner", async () => {

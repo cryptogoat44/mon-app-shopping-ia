@@ -113,7 +113,6 @@ describe("vault storage ownership", () => {
         title: "ligne corrompue",
         image_url: victimImageUrl,
         category: "other",
-        privacy: "private",
         verified: false,
       })
       .select("id")

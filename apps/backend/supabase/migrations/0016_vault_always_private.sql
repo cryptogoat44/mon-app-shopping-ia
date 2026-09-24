@@ -1,0 +1,11 @@
+-- Lot Q, bloc 3 — décision 5 du fondateur (2026-09-23) : le Vault est
+-- TOUJOURS entièrement privé. Seul son propriétaire le voit ; pour montrer
+-- une pièce, on la partage en publication « achat », avec la
+-- confidentialité de son choix. Le réglage de confidentialité par pièce
+-- n'a jamais eu d'effet (aucune route ne montrait le Vault d'un autre) :
+-- la colonne est retirée. Le type privacy_level reste utilisé par les
+-- publications et le réglage par défaut du profil.
+--
+-- Ordre de mise en ligne : APRÈS le déploiement du serveur qui n'écrit
+-- plus cette colonne (l'ancien serveur la remplit à chaque ajout).
+alter table vault_items drop column if exists privacy;

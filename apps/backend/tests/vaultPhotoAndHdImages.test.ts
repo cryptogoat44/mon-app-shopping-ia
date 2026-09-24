@@ -82,6 +82,10 @@ describe("images des pièces gardées", () => {
     const created = await app.inject({ method: "POST", url: "/api/posts", headers: { ...authHeaders(user.token), ...post.headers }, payload: post.payload });
     expect(created.statusCode).toBe(200);
 
+    // Partage « achat » : la confidentialité choisie au partage est respectée
+    // (le Vault lui-même reste privé, décision 5).
+    expect(created.json().privacy).toBe("public");
+
     const res = await changePhoto(item.id);
     expect(res.statusCode).toBe(200);
     const updated = res.json();

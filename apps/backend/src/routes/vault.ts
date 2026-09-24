@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { z } from "zod";
-import type { PrivacyLevel, VaultCategory, VaultItem, VaultItemDetail } from "@monapp/shared-types";
+import type { VaultCategory, VaultItem, VaultItemDetail } from "@monapp/shared-types";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.js";
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
@@ -17,17 +17,17 @@ const VAULT_CATEGORIES: VaultCategory[] = [
   "home",
   "other",
 ];
-const PRIVACY_LEVELS: PrivacyLevel[] = ["public", "followers", "private"];
-
+// Le Vault est toujours entièrement privé (décision 5 du Lot Q) : seul son
+// propriétaire le voit — chaque route ci-dessous filtre sur user_id. Aucune
+// confidentialité par pièce ; un champ « privacy » encore envoyé par un
+// ancien client est simplement ignoré.
 const vaultOptionalFieldsSchema = z.object({
   productMatchId: z.string().uuid().optional(),
-  privacy: z.enum(PRIVACY_LEVELS as [PrivacyLevel, ...PrivacyLevel[]]).optional(),
 });
 
 const updateVaultItemSchema = z.object({
   title: z.string().trim().min(1).max(120).optional(),
   category: z.enum(VAULT_CATEGORIES as [VaultCategory, ...VaultCategory[]]).optional(),
-  privacy: z.enum(PRIVACY_LEVELS as [PrivacyLevel, ...PrivacyLevel[]]).optional(),
 })
   // Un corps vide passait jusqu'à la base et revenait en 404 trompeur.
   .refine((body) => Object.keys(body).length > 0);
@@ -37,7 +37,6 @@ interface VaultItemRow {
   title: string;
   image_url: string;
   category: VaultCategory;
-  privacy: PrivacyLevel;
   verified: boolean;
   product_match_id: string | null;
   created_at: string;
@@ -50,7 +49,6 @@ function toVaultItem(row: VaultItemRow, imageHdUrl: string | null = null): Vault
     imageUrl: row.image_url,
     imageHdUrl,
     category: row.category,
-    privacy: row.privacy,
     verified: row.verified,
     productMatchId: row.product_match_id,
     createdAt: row.created_at,
@@ -201,7 +199,7 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
     // d'être transmis tels quels à la base.
     const optionalFields = parseInput(
       vaultOptionalFieldsSchema,
-      { productMatchId: fields.productMatchId, privacy: fields.privacy },
+      { productMatchId: fields.productMatchId },
       reply,
       { error: "invalid_body", message: "Données invalides." }
     );
@@ -274,16 +272,6 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: "invalid_body", message: "Une photo est obligatoire." });
     }
 
-    let privacy = optionalFields.privacy;
-    if (!privacy) {
-      const { data: profile } = await fastify.supabaseAdmin
-        .from("profiles")
-        .select("default_privacy")
-        .eq("id", userId)
-        .single();
-      privacy = (profile?.default_privacy as PrivacyLevel | undefined) ?? "followers";
-    }
-
     const { data: inserted, error: insertError } = await fastify.supabaseAdmin
       .from("vault_items")
       .insert({
@@ -291,7 +279,6 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
         title,
         image_url: imageUrl,
         category,
-        privacy,
         product_match_id: optionalFields.productMatchId ?? null,
         // Aucune vérification automatique pour l'instant : ça nécessite un
         // webhook de conversion d'un vrai programme d'affiliation, pas
@@ -324,7 +311,6 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
     const updates: Record<string, string> = {};
     if (parsed.data.title !== undefined) updates.title = parsed.data.title;
     if (parsed.data.category !== undefined) updates.category = parsed.data.category;
-    if (parsed.data.privacy !== undefined) updates.privacy = parsed.data.privacy;
 
     const { data: updated, error } = await fastify.supabaseAdmin
       .from("vault_items")

@@ -135,7 +135,6 @@ export interface VaultItem {
    * `imageUrl`. Null pour une photo personnelle. */
   imageHdUrl: string | null;
   category: VaultCategory;
-  privacy: PrivacyLevel;
   verified: boolean;
   productMatchId: string | null;
   createdAt: string;
@@ -153,10 +152,12 @@ export interface VaultItemDetail extends VaultItem {
   affiliateUrl: string | null;
 }
 
+// Le Vault est toujours entièrement privé (décision 5 du Lot Q) : aucune
+// confidentialité par pièce. Pour montrer une pièce, on la partage en
+// publication « achat », avec la confidentialité de son choix.
 export interface UpdateVaultItemRequest {
   title?: string;
   category?: VaultCategory;
-  privacy?: PrivacyLevel;
 }
 
 export interface VaultPage {

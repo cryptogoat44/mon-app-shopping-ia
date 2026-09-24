@@ -5,12 +5,13 @@ import * as Haptics from "expo-haptics";
 import type { PrivacyLevel, VaultItemDetail } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
-import { ApiError, changeVaultItemPhoto, deleteVaultItem, fetchVaultItem, sharePurchasePost, updateVaultItem } from "@/lib/api";
+import { ApiError, changeVaultItemPhoto, deleteVaultItem, fetchVaultItem, sharePurchasePost } from "@/lib/api";
 import { importPhotoForSpotter } from "@/lib/image-import";
 import { SpotImage } from "@/components/spot-image";
 import { PRIVACY_LABELS, PRIVACY_LEVELS, VAULT_CATEGORY_LABELS } from "@/lib/vault-labels";
 import { VerifiedIcon } from "@/components/icons";
 import { useToast } from "@/lib/toast-context";
+import { useAuth } from "@/lib/auth-context";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
@@ -62,6 +63,8 @@ export default function VaultItemDetailScreen() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [changingPhoto, setChangingPhoto] = useState(false);
+  const { profile } = useAuth();
+  const [sharePrivacy, setSharePrivacy] = useState<PrivacyLevel>(profile?.defaultPrivacy ?? "followers");
   const [sharing, setSharing] = useState(false);
   const [shared, setShared] = useState(false);
 
@@ -71,28 +74,12 @@ export default function VaultItemDetailScreen() {
       .catch((e) => setError(e instanceof ApiError ? e.message : fr.vaultItem.loadError));
   }, [id]);
 
-  async function handlePrivacyChange(privacy: PrivacyLevel) {
-    if (!item || item.privacy === privacy) return;
-    setBusy(true);
-    setError(null);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    try {
-      const updated = await updateVaultItem(item.id, { privacy });
-      // Le lien marchand et le compte de publications ne changent pas.
-      setItem((current) => (current ? { ...current, ...updated } : current));
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : fr.vaultItem.updateError);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function handleShare() {
     if (!item) return;
     setSharing(true);
     setError(null);
     try {
-      await sharePurchasePost(item.id);
+      await sharePurchasePost(item.id, sharePrivacy);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setShared(true);
       // Le retrait de l'objet supprimerait désormais aussi cette publication :
@@ -190,24 +177,32 @@ export default function VaultItemDetailScreen() {
           </View>
         ) : null}
 
-        <Text style={styles.label}>{fr.vaultItem.visibility}</Text>
-        <View style={styles.pillRow}>
-          {PRIVACY_LEVELS.map((level) => (
-            <Pressable
-              key={level}
-              hitSlop={{ top: 8, bottom: 8, left: 2, right: 2 }}
-              style={[styles.privacyPill, item.privacy === level ? styles.privacyPillActive : null]}
-              onPress={() => handlePrivacyChange(level)}
-              disabled={busy}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: item.privacy === level }}
-            >
-              <Text style={[styles.privacyLabel, item.privacy === level ? styles.privacyLabelActive : null]}>
-                {PRIVACY_LABELS[level]}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        {/* Décision 5 du Lot Q : le Vault est toujours privé. La seule façon
+            de montrer une pièce est de la partager, avec la confidentialité
+            choisie pour cette publication. */}
+        <Text style={styles.privateNote}>{fr.vaultItem.privateNote}</Text>
+        {shared ? null : (
+          <>
+            <Text style={styles.label}>{fr.vaultItem.shareVisibility}</Text>
+            <View style={styles.pillRow} accessibilityRole="radiogroup">
+              {PRIVACY_LEVELS.map((level) => (
+                <Pressable
+                  key={level}
+                  hitSlop={{ top: 8, bottom: 8, left: 2, right: 2 }}
+                  style={[styles.privacyPill, sharePrivacy === level ? styles.privacyPillActive : null]}
+                  onPress={() => setSharePrivacy(level)}
+                  disabled={sharing}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: sharePrivacy === level }}
+                >
+                  <Text style={[styles.privacyLabel, sharePrivacy === level ? styles.privacyLabelActive : null]}>
+                    {PRIVACY_LABELS[level]}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        )}
 
         <Pressable accessibilityRole="button"
           style={[styles.shareButton, sharing || shared ? styles.shareButtonDisabled : null]}
@@ -277,6 +272,7 @@ const styles = StyleSheet.create({
   },
   verifiedBadgeText: { color: color.vert, fontSize: font.caption, fontWeight: "600" },
   label: { fontSize: font.caption, color: color.acier, marginBottom: 10 },
+  privateNote: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginBottom: space.md },
   pillRow: { flexDirection: "row", flexWrap: "wrap", gap: space.xs, marginBottom: space.lg },
   privacyPill: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.full, paddingVertical: 6, paddingHorizontal: 12 },
   privacyPillActive: { backgroundColor: color.vert, borderColor: color.vert },

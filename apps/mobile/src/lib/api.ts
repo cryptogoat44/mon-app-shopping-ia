@@ -12,6 +12,7 @@ import type {
   MerchantLinkContext,
   Post,
   PreviewIssue,
+  PrivacyLevel,
   Profile,
   ProductMatchClickResponse,
   ProductSearch,
@@ -184,14 +185,12 @@ export async function addVaultItemFromMatch(params: {
   imageUrl: string;
   category: VaultCategory;
   productMatchId: string;
-  privacy?: string;
 }): Promise<VaultItem> {
   const formData = new FormData();
   formData.append("title", params.title);
   formData.append("category", params.category);
   formData.append("imageUrl", params.imageUrl);
   formData.append("productMatchId", params.productMatchId);
-  if (params.privacy) formData.append("privacy", params.privacy);
 
   const response = await authorizedFetch("/api/vault", { method: "POST", body: formData });
   return response.json();
@@ -201,12 +200,10 @@ export async function addVaultItemFromPhoto(params: {
   title: string;
   category: VaultCategory;
   imageUri: string;
-  privacy?: string;
 }): Promise<VaultItem> {
   const formData = new FormData();
   formData.append("title", params.title);
   formData.append("category", params.category);
-  if (params.privacy) formData.append("privacy", params.privacy);
   await appendImageFile(formData, "file", params.imageUri);
 
   const response = await authorizedFetch("/api/vault", { method: "POST", body: formData });
@@ -322,10 +319,11 @@ export async function createLifestylePost(params: {
   return response.json();
 }
 
-export async function sharePurchasePost(vaultItemId: string): Promise<Post> {
+export async function sharePurchasePost(vaultItemId: string, privacy: PrivacyLevel): Promise<Post> {
   const formData = new FormData();
   formData.append("type", "purchase");
   formData.append("vaultItemId", vaultItemId);
+  formData.append("privacy", privacy);
 
   const response = await authorizedFetch("/api/posts", { method: "POST", body: formData });
   return response.json();
