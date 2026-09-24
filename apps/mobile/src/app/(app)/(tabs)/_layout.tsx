@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { View } from "react-native";
+import { Platform, View } from "react-native";
 import { Tabs, usePathname, useRouter } from "expo-router";
 import { color, radius } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
 import { BellIcon, FeedIcon, PersonIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { fetchUnreadNotificationCount } from "@/lib/api";
+import { onUnreadChanged } from "@/lib/unread-notifications";
 
 // Barre de navigation (Lot F, proposition A validée par le fondateur) :
 // Spotter · Fil · + · Activité · Profil. Les Envies sont devenues un onglet
@@ -22,6 +23,16 @@ export default function TabsLayout() {
       .then(setUnread)
       .catch(() => {});
   }, [pathname]);
+  // … et tout de suite quand l'écran Activité a tout marqué comme lu.
+  useEffect(
+    () =>
+      onUnreadChanged(() => {
+        fetchUnreadNotificationCount()
+          .then(setUnread)
+          .catch(() => {});
+      }),
+    []
+  );
 
   return (
     <Tabs
@@ -32,6 +43,9 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: color.porcelaine,
           borderTopColor: color.filet,
+          // Sur le site, les libellés étaient légèrement coupés en bas
+          // (constaté sur les captures du Lot F).
+          ...(Platform.OS === "web" ? { height: 62, paddingBottom: 8 } : null),
         },
         tabBarLabelStyle: { fontSize: 10.5, fontWeight: "600" },
       }}

@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import type { AppNotification } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
+import { unreadChanged } from "@/lib/unread-notifications";
 import { ApiError, fetchNotifications, markNotificationsRead } from "@/lib/api";
 import { timeAgo } from "@/lib/time";
 import { PersonIcon } from "@/components/icons";
@@ -61,7 +62,11 @@ export default function NotificationsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      load().then(() => markNotificationsRead().catch(() => {}));
+      load().then(() =>
+        markNotificationsRead()
+          .then(unreadChanged)
+          .catch(() => {})
+      );
     }, [load])
   );
 

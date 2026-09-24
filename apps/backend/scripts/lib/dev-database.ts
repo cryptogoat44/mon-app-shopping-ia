@@ -44,3 +44,23 @@ export function assertDevDatabaseUrl(url: string | undefined): URL {
 export function describeDevDatabase(url: URL): string {
   return `spotto-dev (${url.hostname})`;
 }
+
+/** Vérifie qu'une adresse de projet Supabase (https://<ref>.supabase.co)
+ * désigne bien spotto-dev — même protection que pour la base (parcours à
+ * l'écran, Lot F). */
+export function assertDevSupabaseUrl(url: string | undefined, origine: string): URL {
+  if (!url) throw new DevDatabaseGuardError(`Adresse Supabase absente (${origine}).`);
+  if (url.includes(PROD_PROJECT_REF)) {
+    throw new DevDatabaseGuardError(`${origine} désigne la PRODUCTION : refusé.`);
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new DevDatabaseGuardError(`Adresse Supabase illisible (${origine}).`);
+  }
+  if (parsed.hostname.toLowerCase() !== `${DEV_PROJECT_REF}.supabase.co`) {
+    throw new DevDatabaseGuardError(`${origine} ne désigne pas spotto-dev (${DEV_PROJECT_REF}) : refusé.`);
+  }
+  return parsed;
+}

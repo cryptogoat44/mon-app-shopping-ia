@@ -14,7 +14,8 @@
     "test:coverage": "vitest run --coverage",
     "nettoyer-captures": "tsx scripts/nettoyer-captures.ts",
     "configurer-base-dev": "tsx scripts/configurer-base-dev.ts",
-    "migrer-dev": "tsx scripts/migrer-dev.ts"
+    "migrer-dev": "tsx scripts/migrer-dev.ts",
+    "parcours-ecran": "tsx scripts/parcours-ecran/index.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
@@ -32,6 +33,7 @@
     "@types/pg": "^8.23.1",
     "@vitest/coverage-v8": "^2.1.4",
     "pg": "^8.23.0",
+    "playwright-core": "^1.63.0",
     "tsx": "^4.19.1",
     "typescript": "^5.6.2",
     "vitest": "^2.1.4"

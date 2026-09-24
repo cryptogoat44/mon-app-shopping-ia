@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertDevDatabaseUrl } from "../scripts/lib/dev-database.js";
+import { assertDevDatabaseUrl, assertDevSupabaseUrl } from "../scripts/lib/dev-database.js";
 
 // Le script de migration automatique ne doit JAMAIS pouvoir viser la
 // production (décision du fondateur, 2026-09-24).
@@ -33,5 +33,12 @@ describe("garde-fou des migrations de spotto-dev", () => {
     expect(() => assertDevDatabaseUrl("n'importe quoi")).toThrow(/illisible/);
     expect(() => assertDevDatabaseUrl("postgresql://postgres.sbtwsmxfdfxzgcohbznd:[YOUR-PASSWORD]@aws-0.pooler.supabase.com:5432/postgres")).toThrow(/mot de passe/);
     expect(() => assertDevDatabaseUrl("https://sbtwsmxfdfxzgcohbznd.supabase.co")).toThrow(/Postgres/);
+  });
+
+  it("adresse du projet Supabase (parcours à l'écran) : spotto-dev seulement", () => {
+    expect(assertDevSupabaseUrl("https://sbtwsmxfdfxzgcohbznd.supabase.co", "test").hostname).toBe("sbtwsmxfdfxzgcohbznd.supabase.co");
+    expect(() => assertDevSupabaseUrl("https://qcwnlqkxnhqpyjpkooiw.supabase.co", "test")).toThrow(/PRODUCTION/);
+    expect(() => assertDevSupabaseUrl("https://autre.supabase.co/sbtwsmxfdfxzgcohbznd", "test")).toThrow(/ne désigne pas spotto-dev/);
+    expect(() => assertDevSupabaseUrl(undefined, "test")).toThrow(/absente/);
   });
 });
