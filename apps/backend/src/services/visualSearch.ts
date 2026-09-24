@@ -5,7 +5,10 @@ import { safeFetch } from "../lib/safeFetch.js";
 export interface VisualMatch {
   rank: number;
   productName: string;
+  /** Petite vignette hébergée par Google — toujours présente, sert de repli. */
   imageUrl: string;
+  /** Image originale du marchand (haute définition), quand fournie. */
+  imageHdUrl: string | null;
   merchantName: string | null;
   merchantUrl: string;
   priceValue: number | null;
@@ -34,7 +37,9 @@ interface SerpApiLensResponse {
 }
 
 const SERPAPI_ENDPOINT = "https://serpapi.com/search";
-const MAX_MATCHES = 8;
+// Nombre de propositions gardées (Lot S, décision du fondateur : jusqu'à 20
+// « autres propositions » ; SerpApi en renvoie ~60, dont beaucoup sans prix).
+const MAX_MATCHES = 20;
 // SerpApi lente ou muette ne doit jamais laisser une recherche bloquée en
 // "processing" indéfiniment côté mobile.
 const SERPAPI_TIMEOUT_MS = 15_000;
@@ -69,10 +74,8 @@ export interface SearchLocale {
 const DEFAULT_LOCALE: SearchLocale = { country: "fr", hl: "fr" };
 
 // Un lien vers une simple publication n'est jamais un endroit où acheter
-// la pièce. "type=products" les élimine déjà la plupart du temps, mais le
-// repli en "type=all" (voir searchProductsByImageUrl) ne filtre rien par
-// lui-même — cette liste s'applique après coup, dans les deux cas, pour ne
-// dépendre d'aucun des deux mécanismes.
+// la pièce. "type=products" les élimine déjà la plupart du temps ; cette
+// liste s'applique en plus, après coup, pour ne pas en dépendre.
 const EXCLUDED_MERCHANT_DOMAINS = [
   "tiktok.com",
   "instagram.com",
@@ -94,18 +97,20 @@ function isExcludedMerchant(link: string): boolean {
   return EXCLUDED_MERCHANT_DOMAINS.some((domain) => host === domain || host.endsWith(`.${domain}`));
 }
 
-/** Un seul appel SerpApi. `type: null` omet le paramètre "type" (Google
- * Lens retombe alors sur son propre défaut, "all") — c'est le repli utilisé
- * par searchProductsByImageUrl. */
-async function callSerpApi(imageUrl: string, locale: SearchLocale, type: string | null): Promise<SerpApiLensResponse> {
+/** Un seul appel SerpApi. `query` (texte « Que cherchez-vous ? ») n'est
+ * transmis que s'il est rempli : sur une image recadrée il écarte les pièces
+ * voisines, mais sur une image entière il avait dégradé le résultat (essais
+ * du 2026-09-22 et du 2026-09-24, docs/lot-s-design/README.md). */
+async function callSerpApi(imageUrl: string, locale: SearchLocale, query: string | null): Promise<SerpApiLensResponse> {
   const params = new URLSearchParams({
     engine: "google_lens",
     url: imageUrl,
     country: locale.country,
     hl: locale.hl,
+    type: SEARCH_TYPE,
     api_key: env.SERPAPI_KEY,
   });
-  if (type) params.set("type", type);
+  if (query) params.set("q", query);
 
   const response = await safeFetch(`${SERPAPI_ENDPOINT}?${params.toString()}`, {
     allowedHosts: ["serpapi.com"],
@@ -116,7 +121,9 @@ async function callSerpApi(imageUrl: string, locale: SearchLocale, type: string 
   }
 
   const data = (await response.json()) as SerpApiLensResponse;
-  if (data.error) {
+  // "Google Lens hasn't returned any results" arrive sous forme d'erreur
+  // alors que c'est simplement une recherche vide : on la traite comme telle.
+  if (data.error && !/hasn't returned any results/i.test(data.error)) {
     throw new Error(`SerpApi : ${data.error}`);
   }
   return data;
@@ -128,10 +135,14 @@ function toVisualMatches(matches: SerpApiVisualMatch[]): VisualMatch[] {
       (match) => match.title && match.link && (match.thumbnail || match.image) && !isExcludedMerchant(match.link)
     )
     .slice(0, MAX_MATCHES)
+    // Rang renuméroté APRÈS filtrage : le rang de Google compte aussi les
+    // réseaux sociaux écartés, et une liste qui commençait au rang 2 posait
+    // problème ailleurs (audit Lot Q, ROB-04).
     .map((match, index) => ({
-      rank: match.position ?? index + 1,
+      rank: index + 1,
       productName: match.title!,
       imageUrl: (match.thumbnail ?? match.image)!,
+      imageHdUrl: match.image ?? null,
       merchantName: match.source ?? null,
       merchantUrl: match.link!,
       priceValue: match.price?.extracted_value ?? null,
@@ -139,32 +150,29 @@ function toVisualMatches(matches: SerpApiVisualMatch[]): VisualMatch[] {
     }));
 }
 
+export interface VisualSearchOptions {
+  /** Texte « Que cherchez-vous ? » — ignoré s'il est vide. */
+  query?: string | null;
+  locale?: SearchLocale;
+}
+
 /** Interroge Google Lens (via SerpApi) à partir d'une image publiquement
  * accessible et renvoie une liste normalisée de produits candidats.
  *
- * Restreint d'abord aux résultats "produit" (`SEARCH_TYPE`). Si cette
- * restriction ne renvoie AUCUN résultat — pièce trop rare pour avoir des
- * correspondances marchandes connues de Google — un seul repli est tenté
- * sans restriction de type. Jamais plus d'un repli : le second appel n'est
- * déclenché que par ce test précis, il n'y a pas de boucle possible même si
- * le repli est lui aussi vide. Chaque repli est journalisé pour surveiller
- * sa fréquence réelle. */
+ * Exactement UN appel SerpApi (1 crédit), jamais de repli : l'ancien repli
+ * en type=all doublait le coût de chaque échec pour un résultat
+ * généralement aussi vide sur une image non recadrée (Lot S, décision du
+ * fondateur). Un échec se traite désormais en recadrant, pas en relançant. */
 export async function searchProductsByImageUrl(
   fastify: FastifyInstance,
   imageUrl: string,
-  locale: SearchLocale = DEFAULT_LOCALE
+  options: VisualSearchOptions = {}
 ): Promise<VisualMatch[]> {
-  const data = await callSerpApi(imageUrl, locale, SEARCH_TYPE);
-  let matches = data.visual_matches ?? [];
-
+  const query = options.query?.trim() || null;
+  const data = await callSerpApi(imageUrl, options.locale ?? DEFAULT_LOCALE, query);
+  const matches = toVisualMatches(data.visual_matches ?? []);
   if (matches.length === 0) {
-    fastify.log.warn(
-      { imageUrl, type: SEARCH_TYPE },
-      "SerpApi n'a renvoyé aucun résultat en type=products — repli en type=all (un seul essai)"
-    );
-    const fallback = await callSerpApi(imageUrl, locale, null);
-    matches = fallback.visual_matches ?? [];
+    fastify.log.info({ type: SEARCH_TYPE, withQuery: query !== null }, "Recherche visuelle sans résultat");
   }
-
-  return toVisualMatches(matches);
+  return matches;
 }

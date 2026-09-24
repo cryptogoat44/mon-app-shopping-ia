@@ -46,6 +46,11 @@ export interface ProductMatch {
   currency: string | null;
   merchantName: string | null;
   merchantUrl: string;
+  /** Image originale du marchand (haute définition), quand Google Lens la
+   * fournit — à afficher en priorité, avec repli sur `imageUrl` (petite
+   * vignette) si elle ne se charge pas : certains marchands bloquent
+   * l'affichage de leurs images hors de leur site. */
+  imageHdUrl: string | null;
   /** Lien à ouvrir au clic — affilié si un programme d'affiliation est
    * rejoint pour ce marchand, sinon identique à `merchantUrl`. Renvoyé dès
    * les résultats de recherche pour que l'app puisse l'ouvrir immédiatement,
@@ -61,9 +66,24 @@ export interface ProductSearch {
   thumbnailUrl: string | null;
   status: SearchStatus;
   errorMessage: string | null;
+  /** Texte « Que cherchez-vous ? » saisi au lancement, s'il y en a un. */
+  query: string | null;
   createdAt: string;
   matches: ProductMatch[];
 }
+
+/** Zone choisie par l'utilisateur sur l'image, en proportions (0 à 1) de
+ * la largeur et de la hauteur de l'image : indépendante de la taille à
+ * laquelle l'image est affichée à l'écran. Seule cette zone est analysée. */
+export interface CropRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Longueur maximale du texte « Que cherchez-vous ? ». */
+export const SEARCH_QUERY_MAX_LENGTH = 60;
 
 export interface CreateSearchRequest {
   sourceUrl?: string;
