@@ -13,11 +13,13 @@ export function askHidden(question: string): Promise<string> {
       reject(new Error("Lancez ce script depuis un Terminal (saisie masquée impossible)."));
       return;
     }
-    process.stdout.write(question);
-    let value = "";
+    // Masquage activé AVANT d'afficher la question : un collage très rapide
+    // ne doit jamais apparaître à l'écran.
     stdin.setRawMode(true);
     stdin.resume();
     stdin.setEncoding("utf8");
+    process.stdout.write(question);
+    let value = "";
     const onData = (chunk: string) => {
       for (const char of chunk) {
         if (char === "\r" || char === "\n") {
