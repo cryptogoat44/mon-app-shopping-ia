@@ -12,6 +12,9 @@ export const color = {
   vert: "#1E3D32", // seul accent : action principale et marque « vérifié ». Nulle part ailleurs.
   blanc: "#FFFFFF",
   danger: "#B3432B", // actions destructrices (suppression de compte, retrait du vault) — jamais utilisé ailleurs
+  nuit: "#141312", // fond de l'écran d'attente du Spotter (seul écran sombre) — brun très profond, jamais du noir pur
+  surNuit: "#F4F2EE", // texte principal sur nuit (16,6:1)
+  brume: "#A9A6A0", // texte secondaire sur nuit (7,6:1 — AA)
   erreur: "#B3432B", // messages d'erreur uniquement — même teinte que danger, rôle distinct (5,4:1 sur porcelaine, 4,9:1 sur plinthe — AA)
 } as const;
 

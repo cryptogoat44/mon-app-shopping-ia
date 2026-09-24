@@ -85,6 +85,14 @@ export interface CropRect {
 /** Longueur maximale du texte « Que cherchez-vous ? ». */
 export const SEARCH_QUERY_MAX_LENGTH = 60;
 
+/** Messages enregistrés par le serveur quand une recherche échoue : l'app
+ * s'en sert pour distinguer « rien trouvé » (proposer de recadrer) d'une
+ * panne (proposer de réessayer). Source unique pour les deux côtés. */
+export const SEARCH_FAILURE_MESSAGES = {
+  noMatch: "Aucun produit identifié sur cette image.",
+  technical: "La recherche visuelle a échoué.",
+} as const;
+
 export interface CreateSearchRequest {
   sourceUrl?: string;
 }

@@ -1,4 +1,4 @@
-import type { ProductMatch, ProductSearch } from "@monapp/shared-types";
+import { SEARCH_FAILURE_MESSAGES, type ProductMatch, type ProductSearch } from "@monapp/shared-types";
 import type { Piece, SpotResult } from "@/api/types";
 
 export function matchToPiece(match: ProductMatch): Piece {
@@ -8,6 +8,7 @@ export function matchToPiece(match: ProductMatch): Piece {
     reference: match.brand,
     material: null,
     imageUrl: match.imageUrl,
+    imageHdUrl: match.imageHdUrl ?? null,
     priceFrom: match.priceMin,
     currency: match.currency,
     merchantName: match.merchantName,
@@ -20,16 +21,22 @@ export function matchToPiece(match: ProductMatch): Piece {
 /** Traduit une recherche renvoyée par le serveur en résultat affichable. */
 export function toSpotResult(search: ProductSearch): SpotResult {
   if (search.matches.length === 0) {
-    const needsPhoto = search.method === "manual_screenshot" && search.status === "pending";
-    return {
-      searchId: search.id,
-      status: "failed",
-      pieces: [],
-      similarPieces: [],
-      failReason: needsPhoto ? "needs_photo" : "no_match",
-    };
+    const failReason =
+      search.status === "pending"
+        ? "needs_photo"
+        : search.errorMessage === SEARCH_FAILURE_MESSAGES.technical
+          ? "technical"
+          : "no_match";
+    return { searchId: search.id, query: search.query, sourceUrl: search.sourceUrl, status: "failed", pieces: [], similarPieces: [], failReason };
   }
-  return { searchId: search.id, status: "success", pieces: search.matches.map(matchToPiece), similarPieces: [] };
+  return {
+    searchId: search.id,
+    query: search.query,
+    sourceUrl: search.sourceUrl,
+    status: "success",
+    pieces: search.matches.map(matchToPiece),
+    similarPieces: [],
+  };
 }
 
 export type InitialResultState =

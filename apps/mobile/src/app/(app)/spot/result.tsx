@@ -1,132 +1,216 @@
-import { useEffect, useState } from "react";
-import { Pressable, SafeAreaView, ScrollView, Share, StyleSheet, Text, View } from "react-native";
-import { Image } from "expo-image";
+import { useEffect, useRef, useState } from "react";
+import { Modal, Platform, Pressable, SafeAreaView, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
 import * as Haptics from "expo-haptics";
+import type { VaultCategory } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
-import { addToVaultFromPiece, addToWishlist, loadSpotResult } from "@/api/client";
+import { addToWishlist, loadSpotResult } from "@/api/client";
 import { getLastSpotResult } from "@/api/spotSession";
+import type { Piece, SpotFailReason } from "@/api/types";
 import { addVaultItemFromMatch } from "@/lib/api";
 import { openMerchantLink } from "@/lib/merchant-links";
-import type { Piece } from "@/api/types";
 import { chooseInitialResult, type InitialResultState } from "@/lib/spot-result";
+import { getDraft, updateDraft } from "@/lib/spot-draft";
+import { beginFromLink, beginFromPhoto } from "@/lib/spot-flow";
+import { detectLink } from "@/lib/link-detection";
+import { importPhotoForSpotter } from "@/lib/image-import";
+import { VAULT_CATEGORIES, VAULT_CATEGORY_LABELS } from "@/lib/vault-labels";
+import { useToast } from "@/lib/toast-context";
 import { Skeleton } from "@/components/skeleton";
-import { ClockIcon, NotFoundIcon } from "@/components/icons";
+import { SpotImage } from "@/components/spot-image";
+import { ErrorMessage } from "@/components/error-message";
+import { CameraIcon } from "@/components/icons";
 
-function formatPrice(piece: Piece): string | null {
-  if (piece.priceFrom === null) return null;
+function formatPrice(piece: Piece): string {
+  if (piece.priceFrom === null) return fr.result.priceOnSite;
   const currency = piece.currency === "EUR" ? "€" : (piece.currency ?? "");
-  return `à partir de ${piece.priceFrom.toLocaleString("fr-FR")} ${currency}`.trim();
+  return `${piece.priceFrom.toLocaleString("fr-FR")} ${currency}`.trim();
 }
+
+type ScreenState = InitialResultState | { kind: "error"; searchId: string };
 
 export default function ResultScreen() {
   const router = useRouter();
-  const { type, value, searchId } = useLocalSearchParams<{ type: "link" | "photo"; value: string; searchId?: string }>();
-  const [state, setState] = useState<InitialResultState | { kind: "error"; searchId: string }>(() =>
-    chooseInitialResult(getLastSpotResult(), searchId)
-  );
-  const result = state.kind === "ready" ? state.result : null;
+  const { showToast } = useToast();
+  const { searchId } = useLocalSearchParams<{ searchId?: string }>();
+  const [state, setState] = useState<ScreenState>(() => chooseInitialResult(getLastSpotResult(), searchId));
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [kept, setKept] = useState(false);
-  const [bought, setBought] = useState(false);
+  const [kept, setKept] = useState<Set<string>>(new Set());
+  const [bought, setBought] = useState<Set<string>>(new Set());
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [blockedMerchantUrl, setBlockedMerchantUrl] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
 
+  const result = state.kind === "ready" ? state.result : null;
   const piece = result?.pieces[selectedIndex] ?? null;
 
-  useEffect(() => {
-    if (result?.status === "success") {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    }
-  }, [result?.status]);
-
-  // Résultat absent de la mémoire (page rechargée, lien rouvert) : on le
-  // relit sur le serveur, sans relancer d'identification.
+  // Résultat absent de la mémoire (rouvert depuis « Récemment spottées »,
+  // page rechargée) : relu sur le serveur, sans relancer d'identification.
   const pendingSearchId = state.kind === "loading" ? state.searchId : null;
   useEffect(() => {
     if (!pendingSearchId) return;
     let cancelled = false;
     loadSpotResult(pendingSearchId)
-      .then((loaded) => {
-        if (!cancelled) setState({ kind: "ready", result: loaded });
-      })
-      .catch(() => {
-        if (!cancelled) setState({ kind: "error", searchId: pendingSearchId });
-      });
+      .then((loaded) => !cancelled && setState({ kind: "ready", result: loaded }))
+      .catch(() => !cancelled && setState({ kind: "error", searchId: pendingSearchId }));
     return () => {
       cancelled = true;
     };
   }, [pendingSearchId]);
 
-  function handleRetry() {
-    router.replace({ pathname: "/spot/analysis", params: { type, value } });
+  useEffect(() => {
+    if (result?.status === "success") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  }, [result?.status]);
+
+  // ---- Reprendre le parcours (recadrer, importer une capture, réessayer) ----
+
+  const draft = getDraft();
+  const canReframe = Boolean(draft) || Boolean(result?.sourceUrl);
+
+  async function handleReframe() {
+    if (draft) {
+      router.replace({ pathname: "/spot/ciblage", params: {} });
+      return;
+    }
+    const detection = result?.sourceUrl ? detectLink(result.sourceUrl) : null;
+    if (detection?.kind !== "supported") return;
+    try {
+      const next = await beginFromLink(detection.url, detection.platform);
+      router.replace({ pathname: "/spot/apercu", params: { searchId: next.searchId ?? "" } });
+    } catch {
+      setActionError(fr.spotter.prepareError);
+    }
   }
+
+  async function handleImportCapture() {
+    setActionError(null);
+    const picked = await importPhotoForSpotter();
+    if (picked.kind === "denied") return setActionError(fr.spotter.photoDenied);
+    if (picked.kind !== "picked") return;
+    const size = { width: picked.width, height: picked.height };
+    try {
+      if (draft) {
+        updateDraft({ localImageUri: picked.uri, imageSize: size, crop: null });
+      } else {
+        const detection = result?.sourceUrl ? detectLink(result.sourceUrl) : null;
+        if (detection?.kind === "supported") {
+          await beginFromLink(detection.url, detection.platform);
+          updateDraft({ localImageUri: picked.uri, imageSize: size });
+        } else {
+          await beginFromPhoto(picked.uri, size);
+        }
+      }
+      router.replace({ pathname: "/spot/ciblage", params: {} });
+    } catch {
+      setActionError(fr.spotter.prepareError);
+    }
+  }
+
+  function handleRetry() {
+    if (draft) router.replace({ pathname: "/spot/analysis", params: {} });
+    else handleReframe();
+  }
+
+  // ---- Actions sur une proposition ----
 
   async function handleOpenMerchant() {
     const url = piece?.affiliateUrl ?? piece?.merchantUrl;
-    if (!url) return;
+    if (!piece || !url) return;
     setBlockedMerchantUrl(null);
-    const outcome = await openMerchantLink({
-      matchId: piece?.real ? piece.id : null,
-      url,
-      context: "result",
-    });
+    const outcome = await openMerchantLink({ matchId: piece.real ? piece.id : null, url, context: "result" });
     if (outcome.blocked) setBlockedMerchantUrl(outcome.url ?? url);
   }
 
-  function handleOpenBlockedMerchantLink() {
-    if (!blockedMerchantUrl) return;
-    // Ce clic est direct et synchrone : contrairement à handleOpenMerchant,
-    // aucun bloqueur de pop-up ne peut l'empêcher.
-    WebBrowser.openBrowserAsync(blockedMerchantUrl).catch(() => {});
-    setBlockedMerchantUrl(null);
-  }
-
   async function handleKeep() {
-    if (!piece || kept) return;
-    setKept(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    await addToWishlist(piece).catch(() => setKept(false));
-  }
-
-  async function handleMarkBought() {
-    if (!piece || bought) return;
-    setBought(true);
+    if (!piece || kept.has(piece.id)) return;
+    setActionError(null);
+    setKept((prev) => new Set(prev).add(piece.id));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
-      if (piece.real) {
-        // Pièce issue d'une vraie recherche IA : on l'ajoute pour de vrai
-        // au vault (même endpoint que l'ancien écran de recherche réel).
-        await addVaultItemFromMatch({
-          title: piece.name.slice(0, 120),
-          imageUrl: piece.imageUrl,
-          category: "other",
-          productMatchId: piece.id,
-        });
-      } else {
-        // Pièce de démonstration (catalogue mock) : pas de product_match
-        // réel à référencer, donc pas d'ajout serveur possible pour l'instant.
-        await addToVaultFromPiece(piece);
-      }
+      await addToWishlist(piece);
     } catch {
-      setBought(false);
+      setKept((prev) => {
+        const next = new Set(prev);
+        next.delete(piece.id);
+        return next;
+      });
+      setActionError(fr.result.keepError);
+    }
+  }
+
+  async function handleBought(category: VaultCategory) {
+    setCategoryOpen(false);
+    if (!piece || bought.has(piece.id)) return;
+    setActionError(null);
+    try {
+      await addVaultItemFromMatch({ title: piece.name.slice(0, 120), imageUrl: piece.imageUrl, category, productMatchId: piece.id });
+      setBought((prev) => new Set(prev).add(piece.id));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      showToast(fr.result.boughtToast);
+    } catch {
+      setActionError(fr.result.boughtError);
     }
   }
 
   async function handleShare() {
     if (!piece) return;
-    await Share.share({ message: `${piece.name} — repéré avec Spotto` }).catch(() => {});
+    const url = piece.affiliateUrl ?? piece.merchantUrl ?? "";
+    const message = fr.result.shareMessage(piece.name, url);
+    try {
+      if (Platform.OS === "web" && !(typeof navigator !== "undefined" && "share" in navigator)) {
+        await Clipboard.setStringAsync(url);
+        showToast(fr.result.linkCopied);
+        return;
+      }
+      await Share.share({ message });
+    } catch {
+      // Partage annulé par l'utilisateur : rien à signaler.
+    }
   }
+
+  function selectPiece(index: number) {
+    setSelectedIndex(index);
+    setBlockedMerchantUrl(null);
+    setActionError(null);
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }
+
+  // ---- Rendus ----
+
+  const nav = (
+    <View style={styles.nav}>
+      <Pressable
+        onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
+        hitSlop={12}
+        style={styles.navSide}
+        accessibilityRole="button"
+        accessibilityLabel="Retour"
+      >
+        <Text style={styles.back}>‹</Text>
+      </Pressable>
+      <Text style={styles.navTitle}>{fr.result.title}</Text>
+      {result?.status === "success" && canReframe ? (
+        <Pressable onPress={handleReframe} hitSlop={12} style={[styles.navSide, styles.navRight]} accessibilityRole="button">
+          <Text style={styles.navAction}>{fr.result.reframe}</Text>
+        </Pressable>
+      ) : (
+        <View style={styles.navSide} />
+      )}
+    </View>
+  );
 
   if (state.kind === "loading") {
     return (
       <SafeAreaView style={styles.screen}>
-        <View style={styles.nav} />
-        <View style={styles.scroll} accessibilityLabel={fr.result.loading}>
-          <Skeleton style={styles.frame} />
-          <Skeleton style={{ width: "40%", height: 12, marginBottom: 12 }} />
-          <Skeleton style={{ width: "75%", height: 22 }} />
+        {nav}
+        <View style={styles.content} accessibilityLabel={fr.result.loading}>
+          <Skeleton style={styles.hero} />
+          <Skeleton style={{ width: "35%", height: 12, marginTop: space.md }} />
+          <Skeleton style={{ width: "80%", height: 22, marginTop: space.sm }} />
         </View>
       </SafeAreaView>
     );
@@ -136,194 +220,251 @@ export default function ResultScreen() {
     const isError = state.kind === "error";
     return (
       <SafeAreaView style={styles.screen}>
+        {nav}
         <View style={styles.failContent}>
           <Text style={styles.failTitle} accessibilityRole="header">
             {isError ? fr.result.loadErrorTitle : fr.result.missingTitle}
           </Text>
           <Text style={styles.failTip}>{isError ? fr.result.loadErrorTip : fr.result.missingTip}</Text>
           <Pressable
-            style={styles.retryCta}
+            style={styles.primary}
             accessibilityRole="button"
-            onPress={() =>
-              state.kind === "error" ? setState({ kind: "loading", searchId: state.searchId }) : router.replace("/")
-            }
+            onPress={() => (state.kind === "error" ? setState({ kind: "loading", searchId: state.searchId }) : router.replace("/"))}
           >
-            <Text style={styles.retryLabel}>{isError ? fr.result.retry : fr.result.backToSpotter}</Text>
+            <Text style={styles.primaryLabel}>{isError ? fr.result.retry : fr.result.backToSpotter}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
     );
   }
 
-  if (!result || result.status === "failed") {
-    const needsPhoto = result?.failReason === "needs_photo";
-    const rateLimited = result?.failReason === "rate_limited";
-    const title = rateLimited ? fr.result.failTitleRateLimited : fr.result.failTitle;
-    const tip = rateLimited
-      ? fr.result.failTipRateLimited
-      : needsPhoto
-        ? fr.result.failTipNeedsPhoto
-        : fr.result.failTip;
+  if (!result || result.status === "failed" || !piece) {
     return (
       <SafeAreaView style={styles.screen}>
-        <View style={styles.nav}>
-          <Pressable
-            onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="Retour"
-          >
-            <Text style={styles.back}>‹</Text>
-          </Pressable>
-        </View>
-        <View style={styles.failContent}>
-          <View style={styles.failFrame}>
-            <NotFoundIcon size={44} />
-          </View>
-          <Text style={styles.failTitle} accessibilityRole="header">{title}</Text>
-          <Text style={styles.failTip}>{tip}</Text>
-          <Pressable accessibilityRole="button"
-            style={styles.retryCta}
-            onPress={needsPhoto ? () => router.replace("/") : handleRetry}
-          >
-            <Text style={styles.retryLabel}>{needsPhoto ? fr.result.backToSpotter : fr.result.retry}</Text>
-          </Pressable>
-        </View>
+        {nav}
+        <FailureView
+          reason={result?.failReason ?? "no_match"}
+          canReframe={canReframe}
+          onReframe={handleReframe}
+          onImportCapture={handleImportCapture}
+          onRetry={handleRetry}
+          onBack={() => router.replace("/")}
+          error={actionError}
+        />
       </SafeAreaView>
     );
   }
 
-  if (!piece) return null;
+  const others = result.pieces.map((p, index) => ({ p, index })).filter(({ index }) => index !== selectedIndex);
 
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={styles.nav}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button" accessibilityLabel="Retour">
-          <Text style={styles.back}>‹</Text>
-        </Pressable>
-      </View>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.frame}>
-          {piece.imageUrl ? (
-            <Image source={{ uri: piece.imageUrl }} style={styles.frameImage} contentFit="cover" accessibilityLabel={piece.name} />
-          ) : (
-            <ClockIcon size={100} tint={color.encre} />
-          )}
+      {nav}
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
+        <Text style={styles.count}>{fr.result.count(result.pieces.length, result.query)}</Text>
+
+        <View style={styles.hero}>
+          <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} accessibilityLabel={piece.name} />
         </View>
 
-        {result.pieces.length > 1 ? (
-          <View style={styles.picker}>
-            {result.pieces.map((p, index) => (
-              <Pressable
-                key={p.id}
-                style={[styles.pk, index === selectedIndex ? styles.pkActive : null]}
-                onPress={() => setSelectedIndex(index)}
-                accessibilityRole="button"
-                accessibilityLabel={p.name}
-                accessibilityState={{ selected: index === selectedIndex }}
-              >
-                {p.imageUrl ? (
-                  <Image source={{ uri: p.imageUrl }} style={styles.pkImage} contentFit="cover" />
-                ) : (
-                  <ClockIcon size={22} tint={color.encre} />
-                )}
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
-        {result.pieces.length > 1 ? (
-          <Text style={styles.hint}>{fr.result.proposalsHint(result.pieces.length)}</Text>
-        ) : null}
-
-        <Text style={styles.matchLabel}>{selectedIndex === 0 ? fr.result.bestProposal : fr.result.otherProposal}</Text>
-        <Text style={styles.name} accessibilityRole="header">{piece.name}</Text>
-        {piece.reference || piece.material ? (
-          <Text style={styles.ref}>{[piece.reference, piece.material].filter(Boolean).join(" · ")}</Text>
-        ) : null}
-        {formatPrice(piece) ? <Text style={styles.price}>{formatPrice(piece)}</Text> : null}
+        <Text style={styles.rankLabel}>{selectedIndex === 0 ? fr.result.bestProposal : fr.result.otherProposal}</Text>
+        <Text style={styles.name} accessibilityRole="header">
+          {piece.name}
+        </Text>
+        <Text style={styles.meta}>
+          {[piece.merchantName, formatPrice(piece)].filter(Boolean).join(" · ")}
+        </Text>
 
         {piece.merchantUrl ? (
-          <Pressable accessibilityRole="button" style={styles.cta} onPress={handleOpenMerchant}>
-            <Text style={styles.ctaLabel}>{fr.result.viewAt(piece.merchantName ?? "")}</Text>
+          <Pressable style={styles.primary} onPress={handleOpenMerchant} accessibilityRole="link">
+            <Text style={styles.primaryLabel}>{fr.result.viewAt(piece.merchantName ?? "")}</Text>
           </Pressable>
         ) : null}
         {blockedMerchantUrl ? (
-          <Pressable onPress={handleOpenBlockedMerchantLink} accessibilityRole="link">
+          <Pressable
+            onPress={() => {
+              WebBrowser.openBrowserAsync(blockedMerchantUrl).catch(() => {});
+              setBlockedMerchantUrl(null);
+            }}
+            accessibilityRole="link"
+          >
             <Text style={styles.blockedLink}>{fr.result.merchantLinkBlocked}</Text>
           </Pressable>
         ) : null}
         <Text style={styles.disclosure}>{fr.result.affiliateDisclosure}</Text>
 
         <View style={styles.actions}>
-          <Pressable accessibilityRole="button" style={styles.action} onPress={handleKeep} disabled={kept}>
-            <Text style={styles.actionLabel}>{kept ? "Gardée ✓" : fr.result.keep}</Text>
+          <Pressable style={styles.action} onPress={handleKeep} disabled={kept.has(piece.id)} accessibilityRole="button">
+            <Text style={styles.actionLabel}>{kept.has(piece.id) ? fr.result.kept : fr.result.keep}</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" style={styles.action} onPress={handleMarkBought} disabled={bought}>
-            <Text style={styles.actionLabel}>{bought ? "Ajoutée ✓" : fr.result.markAsBought}</Text>
+          <Pressable
+            style={styles.action}
+            onPress={() => setCategoryOpen(true)}
+            disabled={bought.has(piece.id)}
+            accessibilityRole="button"
+          >
+            <Text style={styles.actionLabel}>{bought.has(piece.id) ? fr.result.bought : fr.result.markAsBought}</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" style={styles.action} onPress={handleShare}>
+          <Pressable style={styles.action} onPress={handleShare} accessibilityRole="button">
             <Text style={styles.actionLabel}>{fr.result.share}</Text>
           </Pressable>
         </View>
+        {actionError ? <ErrorMessage style={styles.actionError}>{actionError}</ErrorMessage> : null}
 
-        {result.similarPieces.length > 0 ? (
+        {others.length > 0 ? (
           <>
-            <View style={styles.divider} />
-            <Text style={styles.sectionTitle}>{fr.result.similarPieces}</Text>
-            <View style={styles.similarRow}>
-              {result.similarPieces.map((p) => (
-                <View key={p.id} style={styles.similarItem}>
-                  <View style={styles.similarThumb}>
-                    <ClockIcon size={28} tint={color.encre} />
+            <Text style={styles.sectionTitle} accessibilityRole="header">
+              {fr.result.otherProposals}
+            </Text>
+            <View style={styles.grid}>
+              {others.map(({ p, index }) => (
+                <Pressable
+                  key={p.id}
+                  style={styles.card}
+                  onPress={() => selectPiece(index)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${p.name}${p.merchantName ? `, ${p.merchantName}` : ""}`}
+                >
+                  <View style={styles.cardImage}>
+                    <SpotImage hdUri={p.imageHdUrl} fallbackUri={p.imageUrl} style={styles.fill} />
                   </View>
-                  <Text style={styles.similarName} numberOfLines={1}>
+                  <Text style={styles.cardName} numberOfLines={2}>
                     {p.name}
                   </Text>
-                </View>
+                  <Text style={styles.cardMeta} numberOfLines={1}>
+                    {[p.merchantName, p.priceFrom !== null ? formatPrice(p) : null].filter(Boolean).join(" · ")}
+                  </Text>
+                </Pressable>
               ))}
             </View>
           </>
         ) : null}
       </ScrollView>
+
+      <Modal visible={categoryOpen} transparent animationType="slide" onRequestClose={() => setCategoryOpen(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setCategoryOpen(false)} accessibilityRole="button" accessibilityLabel="Fermer" />
+        <View style={styles.sheet}>
+          <View style={styles.grab} />
+          <Text style={styles.sheetTitle} accessibilityRole="header">
+            {fr.result.categoryTitle}
+          </Text>
+          {VAULT_CATEGORIES.map((category) => (
+            <Pressable key={category} style={styles.sheetRow} onPress={() => handleBought(category)} accessibilityRole="button">
+              <Text style={styles.sheetRowLabel}>{VAULT_CATEGORY_LABELS[category]}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </Modal>
     </SafeAreaView>
+  );
+}
+
+function FailureView({
+  reason,
+  canReframe,
+  onReframe,
+  onImportCapture,
+  onRetry,
+  onBack,
+  error,
+}: {
+  reason: SpotFailReason;
+  canReframe: boolean;
+  onReframe: () => void;
+  onImportCapture: () => void;
+  onRetry: () => void;
+  onBack: () => void;
+  error: string | null;
+}) {
+  const copy = {
+    no_match: [fr.result.noMatchTitle, fr.result.noMatchTip],
+    technical: [fr.result.technicalTitle, fr.result.technicalTip],
+    rate_limited: [fr.result.rateLimitedTitle, fr.result.rateLimitedTip],
+    needs_photo: [fr.result.previewUnavailableTitle, fr.result.previewUnavailableTip],
+  }[reason];
+
+  // Ordre des actions selon la cause : après « rien trouvé », recadrer
+  // d'abord (réessayer à l'identique redonnerait le même résultat) ; après
+  // une panne, réessayer d'abord.
+  const reframe = canReframe ? { label: fr.result.reframe, onPress: onReframe } : null;
+  const capture = { label: fr.result.importCapture, onPress: onImportCapture, icon: true };
+  const retry = { label: fr.result.retry, onPress: onRetry };
+  const actions =
+    reason === "technical"
+      ? [retry, reframe]
+      : reason === "needs_photo"
+        ? [capture]
+        : reason === "rate_limited"
+          ? []
+          : [reframe, capture, retry];
+  const [first, ...rest] = actions.filter((a): a is NonNullable<typeof a> => a !== null);
+
+  return (
+    <View style={styles.failContent}>
+      <Text style={styles.failTitle} accessibilityRole="header">
+        {copy[0]}
+      </Text>
+      <Text style={styles.failTip}>{copy[1]}</Text>
+      {error ? <ErrorMessage style={styles.actionError}>{error}</ErrorMessage> : null}
+      {first ? (
+        <Pressable style={styles.primary} onPress={first.onPress} accessibilityRole="button">
+          {"icon" in first ? <CameraIcon size={18} tint={color.blanc} /> : null}
+          <Text style={styles.primaryLabel}>{first.label}</Text>
+        </Pressable>
+      ) : null}
+      {rest.map((action) => (
+        <Pressable key={action.label} style={styles.secondary} onPress={action.onPress} accessibilityRole="button">
+          {"icon" in action ? <CameraIcon size={18} tint={color.encre} /> : null}
+          <Text style={styles.secondaryLabel}>{action.label}</Text>
+        </Pressable>
+      ))}
+      <Pressable style={styles.textButton} onPress={onBack} accessibilityRole="button">
+        <Text style={styles.textButtonLabel}>{fr.result.backToSpotter}</Text>
+      </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.porcelaine },
-  nav: { height: 47, justifyContent: "center", paddingHorizontal: 12 },
+  nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 },
+  navSide: { minWidth: 44, height: 44, justifyContent: "center" },
+  navRight: { alignItems: "flex-end" },
   back: { fontSize: 26, color: color.encre },
-  scroll: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
-  frame: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe, borderRadius: radius.sm, alignItems: "center", justifyContent: "center", marginBottom: space.md, overflow: "hidden" },
-  frameImage: { width: "100%", height: "100%" },
-  picker: { flexDirection: "row", gap: 9, marginBottom: 6 },
-  pk: { width: 52, height: 52, borderRadius: radius.sm, backgroundColor: color.plinthe, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  pkImage: { width: "100%", height: "100%" },
-  pkActive: { borderWidth: 1.5, borderColor: color.encre },
-  hint: { fontSize: font.caption, color: color.acier, marginBottom: space.lg },
-  // Acier, jamais le vert : le vert est réservé à l'action principale et à
-  // la marque « vérifié » (tokens.ts) — une proposition n'est pas vérifiée.
-  matchLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600", marginBottom: 8 },
-  name: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 28 },
-  ref: { fontSize: font.secondary, color: color.acier, marginTop: 4 },
-  price: { fontSize: font.caption, color: color.acier, marginTop: 10 },
-  cta: { backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", marginTop: space.lg },
-  ctaLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
-  disclosure: { textAlign: "center", fontSize: 11.5, color: color.acier, marginTop: 10, textDecorationLine: "underline" },
+  navTitle: { fontSize: font.caption, color: color.acier },
+  navAction: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
+  count: { fontSize: font.caption, color: color.acier, marginBottom: space.sm },
+  hero: { width: "100%", aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.sm, overflow: "hidden" },
+  fill: { width: "100%", height: "100%" },
+  rankLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600", marginTop: space.md },
+  name: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 28, marginTop: 4 },
+  meta: { fontSize: font.secondary, color: color.acier, marginTop: 4 },
+  primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: space.lg },
+  primaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
+  secondary: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: space.sm },
+  secondaryLabel: { color: color.encre, fontSize: font.body, fontWeight: "500" },
+  textButton: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: space.sm },
+  textButtonLabel: { fontSize: font.secondary, color: color.acier, fontWeight: "600" },
   blockedLink: { textAlign: "center", fontSize: font.caption, color: color.vert, fontWeight: "600", marginTop: 10, textDecorationLine: "underline" },
-  actions: { flexDirection: "row", justifyContent: "space-around", marginTop: space.lg },
-  action: { minHeight: 44, justifyContent: "center", paddingHorizontal: space.sm },
-  actionLabel: { fontSize: font.caption, color: color.acier, fontWeight: "500" },
-  divider: { height: 1, backgroundColor: color.filet, marginTop: space.xl, marginBottom: space.lg },
-  sectionTitle: { fontSize: font.body, fontWeight: "600", color: color.encre, marginBottom: space.md },
-  similarRow: { flexDirection: "row", gap: space.md },
-  similarItem: { flex: 1 },
-  similarThumb: { backgroundColor: color.plinthe, borderRadius: radius.sm, aspectRatio: 1, alignItems: "center", justifyContent: "center" },
-  similarName: { fontSize: font.caption, color: color.acier, marginTop: 7 },
-  failContent: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl, marginTop: -40 },
-  failFrame: { width: 120, height: 120, borderRadius: radius.full, backgroundColor: color.plinthe, alignItems: "center", justifyContent: "center", marginBottom: space.lg },
-  failTitle: { fontSize: font.body, fontWeight: "600", color: color.encre, textAlign: "center", marginBottom: 10 },
-  failTip: { fontSize: font.secondary, color: color.acier, textAlign: "center", lineHeight: 20, marginBottom: space.xl },
-  retryCta: { backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 15, paddingHorizontal: 34 },
-  retryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
+  disclosure: { textAlign: "center", fontSize: 11.5, color: color.acier, marginTop: 8 },
+  actions: { flexDirection: "row", gap: 10, marginTop: space.md },
+  action: { flex: 1, minHeight: 44, borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
+  actionLabel: { fontSize: font.caption, color: color.encre, fontWeight: "500", textAlign: "center" },
+  actionError: { fontSize: font.caption, marginTop: space.sm },
+  sectionTitle: { fontSize: font.body, fontWeight: "600", color: color.encre, marginTop: space.xl, marginBottom: space.md },
+  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.lg },
+  card: { width: "48%" },
+  cardImage: { width: "100%", aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.sm, overflow: "hidden" },
+  cardName: { fontSize: font.caption, color: color.encre, marginTop: 8, lineHeight: 17 },
+  cardMeta: { fontSize: 12, color: color.acier, marginTop: 2 },
+  failContent: { flex: 1, justifyContent: "center", paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
+  failTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 29 },
+  failTip: { fontSize: font.secondary, color: color.acier, lineHeight: 21, marginTop: space.sm },
+  backdrop: { flex: 1, backgroundColor: "rgba(20,19,18,0.35)" },
+  sheet: { backgroundColor: color.porcelaine, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingHorizontal: space.lg, paddingTop: 10, paddingBottom: space.xl },
+  grab: { width: 36, height: 5, borderRadius: 3, backgroundColor: color.filet, alignSelf: "center", marginBottom: space.md },
+  sheetTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, marginBottom: space.sm },
+  sheetRow: { minHeight: 48, justifyContent: "center", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.filet },
+  sheetRowLabel: { fontSize: font.body, color: color.encre },
 });

@@ -1,45 +1,58 @@
 import { useCallback, useState } from "react";
-import { Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
-import * as ImagePicker from "expo-image-picker";
-import { color, font, radius, space, serifFont } from "@/theme/tokens";
+import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
-import { getRecentlySpotted } from "@/api/client";
+import { getRecentSearches } from "@/api/client";
 import type { Piece } from "@/api/types";
-import { CameraIcon, ClockIcon, LinkIcon } from "@/components/icons";
+import { CameraIcon, ClipboardIcon, ClockIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
+import { detectLink, type LinkDetection } from "@/lib/link-detection";
+import { beginFromLink, beginFromPhoto } from "@/lib/spot-flow";
+import { importPhotoForSpotter } from "@/lib/image-import";
 
-function isLikelyUrl(text: string): boolean {
-  return /^https?:\/\/\S+$/i.test(text.trim());
-}
-
-function RecentItem({ piece }: { piece: Piece }) {
-  return (
-    <View style={styles.recentItem}>
-      <View style={styles.recentThumb}>
-        {piece.imageUrl ? (
-          <Image source={{ uri: piece.imageUrl }} style={styles.recentThumbImage} contentFit="cover" accessibilityLabel={piece.name} />
-        ) : (
-          <ClockIcon size={30} tint={color.encre} />
-        )}
+function DetectionCard({ detection }: { detection: LinkDetection }) {
+  if (detection.kind === "supported") {
+    return (
+      <View style={styles.detected} accessibilityLiveRegion="polite">
+        <View style={styles.platformChip}>
+          <Text style={styles.platformChipLabel}>{fr.spotter.platformName[detection.platform]}</Text>
+        </View>
+        <Text style={styles.detectedLabel}>{fr.spotter.detected[detection.platform]}</Text>
       </View>
-      <Text style={styles.recentName} numberOfLines={1}>
-        {piece.name}
-      </Text>
-    </View>
-  );
+    );
+  }
+  if (detection.kind === "unsupported") return <ErrorMessage style={styles.feedback}>{fr.spotter.unsupportedLink}</ErrorMessage>;
+  if (detection.kind === "not_a_link") return <ErrorMessage style={styles.feedback}>{fr.spotter.notALink}</ErrorMessage>;
+  return null;
 }
 
 export default function SpotterScreen() {
   const router = useRouter();
-  const [recent, setRecent] = useState<Piece[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [link, setLink] = useState("");
+  const [recent, setRecent] = useState<{ searchId: string; piece: Piece }[]>([]);
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState<"link" | "photo" | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadRecent = useCallback(() => getRecentlySpotted().then(setRecent).catch(() => {}), []);
+  const detection = detectLink(link);
+  const canContinue = detection.kind === "supported" && busy === null;
 
+  const loadRecent = useCallback(() => getRecentSearches().then(setRecent).catch(() => {}), []);
   useFocusEffect(
     useCallback(() => {
       loadRecent();
@@ -52,104 +65,179 @@ export default function SpotterScreen() {
     setRefreshing(false);
   }
 
-  async function handlePasteLink() {
-    setError(null);
-    const text = await Clipboard.getStringAsync();
-    if (!text || !isLikelyUrl(text)) {
-      setError(fr.spotter.unsupportedLink);
-      return;
+  async function handlePaste() {
+    setMessage(null);
+    try {
+      const text = await Clipboard.getStringAsync();
+      if (!text || detectLink(text).kind === "not_a_link") {
+        setMessage(fr.spotter.pasteEmpty);
+        return;
+      }
+      setLink(text.trim());
+    } catch {
+      // Web : le navigateur a refusé la lecture du presse-papiers.
+      setMessage(fr.spotter.pasteDenied);
     }
-    router.push({ pathname: "/spot/analysis", params: { type: "link", value: text.trim() } });
+  }
+
+  async function handleContinue() {
+    if (detection.kind !== "supported") return;
+    setMessage(null);
+    setBusy("link");
+    try {
+      const draft = await beginFromLink(detection.url, detection.platform);
+      router.push({ pathname: "/spot/apercu", params: { searchId: draft.searchId ?? "" } });
+    } catch {
+      setMessage(fr.spotter.prepareError);
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function handleImportPhoto() {
-    setError(null);
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) return;
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.85 });
-    if (result.canceled || !result.assets[0]) return;
-    router.push({ pathname: "/spot/analysis", params: { type: "photo", value: result.assets[0].uri } });
+    setMessage(null);
+    const picked = await importPhotoForSpotter();
+    if (picked.kind === "denied") {
+      setMessage(fr.spotter.photoDenied);
+      return;
+    }
+    if (picked.kind !== "picked") return;
+    setBusy("photo");
+    try {
+      const draft = await beginFromPhoto(picked.uri, { width: picked.width, height: picked.height });
+      router.push({ pathname: "/spot/ciblage", params: { searchId: draft.searchId ?? "" } });
+    } catch {
+      setMessage(fr.spotter.prepareError);
+    } finally {
+      setBusy(null);
+    }
   }
 
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.title} accessibilityRole="header">{fr.spotter.title}</Text>
-      </View>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
-      >
-        <Text style={styles.question}>{fr.spotter.question}</Text>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
+        >
+          <Text style={styles.title} accessibilityRole="header">
+            {fr.spotter.title}
+          </Text>
+          <Text style={styles.lead}>{fr.spotter.lead}</Text>
 
-        {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
-
-        <Pressable accessibilityRole="button" style={styles.primary} onPress={handlePasteLink}>
-          <LinkIcon size={18} tint={color.blanc} />
-          <Text style={styles.primaryLabel}>{fr.spotter.pasteLink}</Text>
-        </Pressable>
-
-        <Pressable accessibilityRole="button" style={styles.secondary} onPress={handleImportPhoto}>
-          <CameraIcon size={18} tint={color.encre} />
-          <Text style={styles.secondaryLabel}>{fr.spotter.importPhoto}</Text>
-        </Pressable>
-
-        {recent.length > 0 ? (
-          <View style={styles.recentSection}>
-            <Text style={styles.recentTitle}>{fr.spotter.recentlySpotted}</Text>
-            <View style={styles.recentRow}>
-              {recent.map((piece) => (
-                <RecentItem key={piece.id} piece={piece} />
-              ))}
-            </View>
+          <Text style={styles.label}>{fr.spotter.linkLabel}</Text>
+          <View style={styles.field}>
+            <TextInput
+              style={styles.input}
+              value={link}
+              onChangeText={(text) => {
+                setLink(text);
+                setMessage(null);
+              }}
+              placeholder={fr.spotter.linkPlaceholder}
+              placeholderTextColor={color.acier}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              returnKeyType="go"
+              onSubmitEditing={handleContinue}
+              accessibilityLabel={fr.spotter.linkLabel}
+            />
+            <Pressable onPress={handlePaste} hitSlop={10} style={styles.pasteButton} accessibilityRole="button">
+              <ClipboardIcon size={16} tint={color.vert} />
+              <Text style={styles.pasteLabel}>{fr.spotter.paste}</Text>
+            </Pressable>
           </View>
-        ) : null}
-      </ScrollView>
+
+          <DetectionCard detection={detection} />
+          {message ? <ErrorMessage style={styles.feedback}>{message}</ErrorMessage> : null}
+
+          <Pressable
+            style={[styles.primary, !canContinue ? styles.primaryDisabled : null]}
+            onPress={handleContinue}
+            disabled={!canContinue}
+            accessibilityRole="button"
+          >
+            {busy === "link" ? <ActivityIndicator color={color.blanc} /> : null}
+            <Text style={styles.primaryLabel}>{busy === "link" ? fr.spotter.preparing : fr.spotter.continue}</Text>
+          </Pressable>
+
+          <View style={styles.or}>
+            <View style={styles.orLine} />
+            <Text style={styles.orLabel}>{fr.spotter.or}</Text>
+            <View style={styles.orLine} />
+          </View>
+
+          <Pressable style={styles.secondary} onPress={handleImportPhoto} disabled={busy !== null} accessibilityRole="button">
+            {busy === "photo" ? <ActivityIndicator color={color.encre} /> : <CameraIcon size={18} tint={color.encre} />}
+            <Text style={styles.secondaryLabel}>{fr.spotter.importPhoto}</Text>
+          </Pressable>
+
+          {recent.length > 0 ? (
+            <View style={styles.recentSection}>
+              <Text style={styles.recentTitle} accessibilityRole="header">
+                {fr.spotter.recentlySpotted}
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentRow}>
+                {recent.map(({ searchId, piece }) => (
+                  <Pressable
+                    key={searchId}
+                    style={styles.recentItem}
+                    onPress={() => router.push({ pathname: "/spot/result", params: { searchId } })}
+                    accessibilityRole="button"
+                    accessibilityLabel={piece.name}
+                  >
+                    <View style={styles.recentThumb}>
+                      {piece.imageUrl ? (
+                        <Image source={{ uri: piece.imageHdUrl ?? piece.imageUrl }} placeholder={{ uri: piece.imageUrl }} style={styles.fill} contentFit="cover" />
+                      ) : (
+                        <ClockIcon size={26} tint={color.acier} />
+                      )}
+                    </View>
+                    <Text style={styles.recentName} numberOfLines={1}>
+                      {piece.name}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.porcelaine },
-  header: { paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.xs },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, color: color.encre },
+  flex: { flex: 1 },
   content: { paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
-  question: { fontSize: font.body, color: color.encre, marginBottom: space.md },
-  error: { fontSize: font.secondary, color: color.acier, marginBottom: space.md, lineHeight: 20 },
-  primary: {
-    backgroundColor: color.vert,
-    borderRadius: radius.md,
-    paddingVertical: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 9,
-  },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, color: color.encre },
+  lead: { fontSize: font.secondary, color: color.acier, marginTop: space.xs, lineHeight: 21 },
+  label: { fontSize: font.caption, color: color.acier, marginTop: space.xl },
+  field: { flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: color.filet, gap: space.sm },
+  input: { flex: 1, fontSize: font.body, color: color.encre, paddingVertical: 12 },
+  pasteButton: { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 44 },
+  pasteLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  detected: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.md },
+  platformChip: { backgroundColor: color.encre, borderRadius: radius.full, paddingHorizontal: 11, height: 26, justifyContent: "center" },
+  platformChipLabel: { color: color.blanc, fontSize: font.caption, fontWeight: "600" },
+  detectedLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  feedback: { fontSize: font.caption, marginTop: space.sm, lineHeight: 18 },
+  primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, marginTop: space.lg },
+  primaryDisabled: { opacity: 0.45 },
   primaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
-  secondary: {
-    borderWidth: 1,
-    borderColor: color.filet,
-    borderRadius: radius.md,
-    paddingVertical: 15,
-    marginTop: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 9,
-  },
+  or: { flexDirection: "row", alignItems: "center", gap: 14, marginVertical: space.lg },
+  orLine: { flex: 1, height: 1, backgroundColor: color.filet },
+  orLabel: { fontSize: font.caption, color: color.acier },
+  secondary: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9 },
   secondaryLabel: { color: color.encre, fontSize: font.body, fontWeight: "500" },
   recentSection: { marginTop: space.xxl - space.xs },
   recentTitle: { fontSize: font.body, fontWeight: "600", color: color.encre, marginBottom: space.md },
-  recentRow: { flexDirection: "row", gap: space.md },
-  recentItem: { flex: 1 },
-  recentThumb: {
-    backgroundColor: color.plinthe,
-    borderRadius: radius.sm,
-    aspectRatio: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  recentThumbImage: { width: "100%", height: "100%" },
+  recentRow: { gap: space.md },
+  recentItem: { width: 104 },
+  recentThumb: { width: 104, height: 104, backgroundColor: color.plinthe, borderRadius: radius.sm, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  fill: { width: "100%", height: "100%" },
   recentName: { fontSize: font.caption, color: color.acier, marginTop: 7, lineHeight: 16 },
 });

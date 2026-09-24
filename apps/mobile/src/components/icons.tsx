@@ -170,3 +170,25 @@ export function NotFoundIcon({ size = 44, tint = color.acier, strokeWidth = 1.3 
     </Svg>
   );
 }
+
+export function ClipboardIcon({ size = 16, tint = color.encre, strokeWidth = 1.6 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x={7.5} y={3.5} width={9} height={4} rx={1} stroke={tint} strokeWidth={strokeWidth} />
+      <Path
+        d="M7.5 5.5H6a1 1 0 00-1 1v13a1 1 0 001 1h12a1 1 0 001-1v-13a1 1 0 00-1-1h-1.5"
+        stroke={tint}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
+export function CheckIcon({ size = 12, tint = color.blanc, strokeWidth = 3 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M5 12l5 5L20 7" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}

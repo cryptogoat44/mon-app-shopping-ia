@@ -1,5 +1,5 @@
 import type { WishlistItem as RemoteWishlistItem } from "@monapp/shared-types";
-import { addWishlistItem, ApiError, createSearch, fetchSearch, fetchWishlist, listRecentSearches, uploadSearchScreenshot } from "@/lib/api";
+import { addWishlistItem, fetchSearch, fetchWishlist, listRecentSearches } from "@/lib/api";
 import { matchToPiece, toSpotResult } from "@/lib/spot-result";
 import * as mock from "./mock";
 import type { Piece, Profile, SpotResult, VaultItem, WishlistItem } from "./types";
@@ -35,30 +35,6 @@ function wishlistRowToItem(row: RemoteWishlistItem): WishlistItem {
   };
 }
 
-// Branché sur le vrai pipeline de reconnaissance (oEmbed + SerpApi côté
-// backend) — seule fonction de ce fichier à ne plus dépendre de USE_MOCK.
-// Les erreurs réseau/API sont ramenées à un résultat "failed" ordinaire
-// pour qu'analysis.tsx n'ait rien à connaître de cette distinction.
-export async function spot(source: { type: "link"; url: string } | { type: "photo"; uri: string }): Promise<SpotResult> {
-  try {
-    if (source.type === "link") {
-      const search = await createSearch({ sourceUrl: source.url });
-      return toSpotResult(search);
-    }
-    const created = await createSearch({});
-    const search = await uploadSearchScreenshot(created.id, source.uri);
-    return toSpotResult(search);
-  } catch (error) {
-    // Une limite de débit (429) a un message précis à montrer — les autres
-    // erreurs (réseau, panne...) restent ramenées à un simple "no_match"
-    // pour qu'analysis.tsx n'ait rien d'autre à connaître.
-    if (error instanceof ApiError && error.status === 429) {
-      return { searchId: null, status: "failed", pieces: [], similarPieces: [], failReason: "rate_limited" };
-    }
-    return { searchId: null, status: "failed", pieces: [], similarPieces: [], failReason: "no_match" };
-  }
-}
-
 // Relit une recherche déjà faite (écran Résultat rouvert ou rechargé) —
 // aucun nouvel appel SerpApi, seulement la lecture de ce qui est en base.
 export async function loadSpotResult(searchId: string): Promise<SpotResult> {
@@ -68,8 +44,17 @@ export async function loadSpotResult(searchId: string): Promise<SpotResult> {
 // Branché sur le vrai historique de recherches (table product_searches) —
 // même logique de reconnexion que getWishlist.
 export async function getRecentlySpotted(): Promise<Piece[]> {
+  return (await getRecentSearches()).map((entry) => entry.piece);
+}
+
+/** Recherches récentes avec leur meilleure proposition — pour rouvrir un
+ * résultat depuis « Récemment spottées ». */
+export async function getRecentSearches(): Promise<{ searchId: string; piece: Piece }[]> {
   const searches = await listRecentSearches();
-  return searches.filter((search) => search.matches.length > 0).map((search) => matchToPiece(search.matches[0]));
+  return searches.flatMap((search) => {
+    const best = search.matches[0];
+    return best ? [{ searchId: search.id, piece: matchToPiece(best) }] : [];
+  });
 }
 
 // Branché sur le vrai backend (table wishlist_items) — "Garder" persiste

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
+  SEARCH_FAILURE_MESSAGES,
   SEARCH_QUERY_MAX_LENGTH,
   type PlatformSource,
   type ProductSearch,
@@ -20,10 +21,8 @@ const createSearchSchema = z.object({
 
 const SIGNED_URL_TTL_SECONDS = 300;
 
-// Messages enregistrés en cas d'échec ; l'app distingue « rien trouvé »
-// (proposer de recadrer) d'une panne (proposer de réessayer).
-export const NO_MATCH_MESSAGE = "Aucun produit identifié sur cette image.";
-export const TECHNICAL_FAILURE_MESSAGE = "La recherche visuelle a échoué.";
+const NO_MATCH_MESSAGE = SEARCH_FAILURE_MESSAGES.noMatch;
+const TECHNICAL_FAILURE_MESSAGE = SEARCH_FAILURE_MESSAGES.technical;
 
 const cropSchema = z
   .object({

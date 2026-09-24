@@ -1,95 +1,191 @@
 import { useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, Animated, Easing, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { color, font, radius, space } from "@/theme/tokens";
+import { AccessibilityInfo, Animated, Easing, Pressable, SafeAreaView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Image } from "expo-image";
+import { StatusBar } from "expo-status-bar";
+import { useRouter } from "expo-router";
+import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
-import { spot } from "@/api/client";
+import { CheckIcon } from "@/components/icons";
+import { ApiError, runSearch } from "@/lib/api";
+import { croppedView } from "@/lib/crop-geometry";
+import { draftImageUri, getDraft } from "@/lib/spot-draft";
+import { freshSearchId, markSearchUsed } from "@/lib/spot-flow";
+import { toSpotResult } from "@/lib/spot-result";
 import { setLastSpotResult } from "@/api/spotSession";
-import { ClockIcon } from "@/components/icons";
+import type { SpotFailReason } from "@/api/types";
 
+const SLOW_AFTER_MS = 20_000;
+type Step = 0 | 1 | 2;
+
+function StepRow({ label, state }: { label: string; state: "done" | "now" | "next" }) {
+  return (
+    <View style={styles.stepRow} accessibilityState={{ busy: state === "now" }}>
+      <View style={[styles.dot, state === "done" ? styles.dotDone : state === "now" ? styles.dotNow : styles.dotNext]}>
+        {state === "done" ? <CheckIcon size={11} tint={color.blanc} /> : state === "now" ? <View style={styles.dotInner} /> : null}
+      </View>
+      <Text style={[styles.stepLabel, state === "next" ? styles.stepLabelNext : null]}>{label}</Text>
+    </View>
+  );
+}
+
+// Étape 3 : l'identification (1 crédit SerpApi). Écran sombre, seul du
+// parcours : la zone choisie en grand, parcourue par une fine ligne de
+// lumière (fixe si « Réduire les animations » est activé). « Annuler »
+// abandonne vraiment la requête côté app ; il ne promet rien sur le crédit,
+// qui peut déjà être engagé côté serveur.
 export default function AnalysisScreen() {
   const router = useRouter();
-  const { type, value } = useLocalSearchParams<{ type: "link" | "photo"; value: string }>();
-  const [showReassurance, setShowReassurance] = useState(false);
-  const pulse = useRef(new Animated.Value(0)).current;
-  const cancelled = useRef(false);
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const draft = getDraft();
+  const imageUri = draft ? draftImageUri(draft) : null;
+
+  const [step, setStep] = useState<Step>(0);
+  const [slow, setSlow] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const scan = useRef(new Animated.Value(0)).current;
+  const controller = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    let loopAnim: Animated.CompositeAnimation | null = null;
-
-    AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
-      if (reduced || cancelled.current) return;
-      loopAnim = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulse, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-          Animated.timing(pulse, { toValue: 0, duration: 1100, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        ])
-      );
-      loopAnim.start();
-    });
-
-    const reassuranceTimer = setTimeout(() => setShowReassurance(true), 8000);
-
-    const source = type === "photo" ? ({ type: "photo", uri: value } as const) : ({ type: "link", url: value } as const);
-
-    spot(source).then((result) => {
-      if (cancelled.current) return;
-      setLastSpotResult(result);
-      router.replace({
-        pathname: "/spot/result",
-        params: result.searchId ? { type, value, searchId: result.searchId } : { type, value },
-      });
-    });
-
-    return () => {
-      cancelled.current = true;
-      loopAnim?.stop();
-      clearTimeout(reassuranceTimer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
   }, []);
 
-  const ringOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.85] });
-  const ringScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.04] });
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(
+      Animated.timing(scan, { toValue: 1, duration: 2600, easing: Easing.inOut(Easing.quad), useNativeDriver: true })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [reduceMotion, scan]);
+
+  useEffect(() => {
+    if (!draft || !imageUri) {
+      router.replace("/");
+      return;
+    }
+    const abort = new AbortController();
+    controller.current = abort;
+    const stepTimer = setTimeout(() => setStep(1), 1200);
+    const slowTimer = setTimeout(() => setSlow(true), SLOW_AFTER_MS);
+
+    const finish = (searchId: string | null, failReason: SpotFailReason) => {
+      setLastSpotResult({ searchId, status: "failed", pieces: [], similarPieces: [], failReason, query: draft.query });
+      router.replace({ pathname: "/spot/result", params: searchId ? { searchId } : {} });
+    };
+
+    (async () => {
+      let searchId: string | null = null;
+      try {
+        searchId = await freshSearchId(draft);
+        markSearchUsed();
+        const search = await runSearch(
+          searchId,
+          { crop: draft.crop, query: draft.query, imageUri: draft.localImageUri },
+          abort.signal
+        );
+        if (abort.signal.aborted) return;
+        setStep(2);
+        setLastSpotResult(toSpotResult(search));
+        setTimeout(() => router.replace({ pathname: "/spot/result", params: { searchId: search.id } }), 350);
+      } catch (error) {
+        if (abort.signal.aborted) return; // annulé par l'utilisateur : rien à afficher
+        if (error instanceof ApiError && error.status === 429) return finish(null, "rate_limited");
+        if (error instanceof ApiError && error.body.error === "preview_unavailable") return finish(null, "needs_photo");
+        // Réseau coupé, serveur injoignable, panne : jamais présenté comme
+        // « pièce introuvable » (audit Lot Q, ROB-02).
+        finish(null, "technical");
+      }
+    })();
+
+    return () => {
+      clearTimeout(stepTimer);
+      clearTimeout(slowTimer);
+      abort.abort();
+    };
+    // Une seule identification par ouverture de l'écran.
+  }, []);
+
+  function handleCancel() {
+    controller.current?.abort();
+    router.back();
+  }
+
+  if (!draft || !imageUri) return <View style={styles.screen} />;
+
+  const frameWidth = Math.min(windowWidth - space.lg * 2, 432);
+  const maxHeight = Math.min(windowHeight * 0.5, 440);
+  const view = draft.imageSize && draft.crop ? croppedView(draft.imageSize, draft.crop, frameWidth, maxHeight) : null;
+  const frameHeight = view ? view.frame.height : maxHeight;
+  const translateY = scan.interpolate({ inputRange: [0, 1], outputRange: [0, frameHeight] });
 
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={styles.center}>
-        <View style={styles.frame}>
-          <ClockIcon size={64} tint={color.encre} />
-          <Animated.View style={[styles.ring, { opacity: ringOpacity, transform: [{ scale: ringScale }] }]} />
+      <StatusBar style="light" />
+      <View style={styles.content}>
+        <View style={[styles.frame, { width: view ? view.frame.width : frameWidth, height: frameHeight }]}>
+          {view ? (
+            <Image source={{ uri: imageUri }} style={[styles.absolute, view.image]} contentFit="fill" accessibilityIgnoresInvertColors />
+          ) : (
+            <Image source={{ uri: imageUri }} style={styles.fill} contentFit="contain" />
+          )}
+          {reduceMotion ? null : <Animated.View pointerEvents="none" style={[styles.scanLine, { transform: [{ translateY }] }]} />}
         </View>
-        <Text style={styles.status}>{showReassurance ? fr.analysis.reassurance : fr.analysis.status}</Text>
+
+        <Text style={styles.title} accessibilityRole="header" accessibilityLiveRegion="polite">
+          {fr.analysis.title}
+        </Text>
+        {draft.query ? <Text style={styles.query}>« {draft.query} »</Text> : null}
+
+        <View style={styles.steps}>
+          <StepRow label={fr.analysis.stepZone} state={step >= 1 ? "done" : "now"} />
+          <StepRow label={fr.analysis.stepSearch} state={step >= 2 ? "done" : step === 1 ? "now" : "next"} />
+          <StepRow label={fr.analysis.stepSelect} state={step === 2 ? "now" : "next"} />
+        </View>
+        <Text style={styles.note} accessibilityLiveRegion="polite">
+          {slow ? fr.analysis.slow : fr.analysis.usual}
+        </Text>
       </View>
-      <Pressable accessibilityRole="button" style={styles.cancel} onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}>
-        <Text style={styles.cancelLabel}>{fr.analysis.cancel}</Text>
-      </Pressable>
+
+      <View style={styles.footer}>
+        <Pressable style={styles.cancel} onPress={handleCancel} accessibilityRole="button">
+          <Text style={styles.cancelLabel}>{fr.analysis.cancel}</Text>
+        </Pressable>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: color.porcelaine },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  frame: {
-    width: 220,
-    height: 220,
-    borderRadius: radius.sm,
-    backgroundColor: color.plinthe,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  ring: {
+  screen: { flex: 1, backgroundColor: color.nuit },
+  content: { flex: 1, paddingHorizontal: space.lg, paddingTop: space.lg, maxWidth: 480, alignSelf: "center", width: "100%" },
+  frame: { alignSelf: "center", borderRadius: radius.sm, overflow: "hidden", backgroundColor: "#1E1C1A" },
+  absolute: { position: "absolute" },
+  fill: { width: "100%", height: "100%" },
+  scanLine: {
     position: "absolute",
-    top: -1,
-    left: -1,
-    right: -1,
-    bottom: -1,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: color.filet,
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.85)",
+    shadowColor: "#FFFFFF",
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
   },
-  status: { fontSize: font.secondary, color: color.acier, marginTop: space.lg, textAlign: "center" },
-  cancel: { position: "absolute", bottom: 64, left: 0, right: 0, alignItems: "center" },
-  cancelLabel: { fontSize: font.body, color: color.acier },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.surNuit, marginTop: space.lg, lineHeight: 29 },
+  query: { fontSize: font.secondary, color: color.brume, marginTop: 4 },
+  steps: { marginTop: space.md, gap: 4 },
+  stepRow: { flexDirection: "row", alignItems: "center", gap: 14, minHeight: 32 },
+  dot: { width: 20, height: 20, borderRadius: radius.full, alignItems: "center", justifyContent: "center" },
+  dotDone: { backgroundColor: color.vert },
+  dotNow: { borderWidth: 1.5, borderColor: color.surNuit },
+  dotNext: { borderWidth: 1.5, borderColor: "#4A4744" },
+  dotInner: { width: 8, height: 8, borderRadius: radius.full, backgroundColor: color.surNuit },
+  stepLabel: { fontSize: font.secondary, color: color.surNuit },
+  stepLabelNext: { color: color.brume },
+  note: { fontSize: font.caption, color: color.brume, marginTop: space.md, lineHeight: 18 },
+  footer: { paddingHorizontal: space.lg, paddingBottom: space.lg, maxWidth: 480, alignSelf: "center", width: "100%" },
+  cancel: { minHeight: 52, borderRadius: radius.md, borderWidth: 1, borderColor: "#3A3734", alignItems: "center", justifyContent: "center" },
+  cancelLabel: { fontSize: font.body, color: color.surNuit, fontWeight: "600" },
 });

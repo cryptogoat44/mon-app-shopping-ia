@@ -12,6 +12,7 @@ function search(overrides: Partial<ProductSearch> = {}): ProductSearch {
     thumbnailUrl: null,
     status: "completed",
     errorMessage: null,
+    query: null,
     createdAt: "2026-09-23T00:00:00.000Z",
     matches: [
       {
@@ -26,6 +27,7 @@ function search(overrides: Partial<ProductSearch> = {}): ProductSearch {
         merchantName: "Boutique",
         merchantUrl: "https://example.com/p",
         affiliateUrl: "https://example.com/p?aff",
+        imageHdUrl: "https://example.com/hd.jpg",
       },
     ],
     ...overrides,
@@ -71,7 +73,16 @@ describe("toSpotResult", () => {
   });
 
   it("signale une pièce non identifiée quand l'analyse n'a rien trouvé", () => {
-    const result = toSpotResult(search({ matches: [], status: "failed" }));
+    const result = toSpotResult(search({ matches: [], status: "failed", errorMessage: "Aucun produit identifié sur cette image." }));
     expect(result).toMatchObject({ status: "failed", failReason: "no_match" });
+  });
+
+  it("distingue une panne du service d'une recherche sans résultat", () => {
+    const result = toSpotResult(search({ matches: [], status: "failed", errorMessage: "La recherche visuelle a échoué." }));
+    expect(result).toMatchObject({ status: "failed", failReason: "technical" });
+  });
+
+  it("garde l'image haute définition des propositions", () => {
+    expect(toSpotResult(search()).pieces[0]?.imageHdUrl).toBe("https://example.com/hd.jpg");
   });
 });

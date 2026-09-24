@@ -7,6 +7,7 @@ import type {
   CreateReportRequest,
   CreateSearchRequest,
   CreateWishlistItemRequest,
+  CropRect,
   FeedPage,
   MerchantLinkContext,
   Post,
@@ -25,6 +26,7 @@ import type {
   WishlistItem,
   WishlistPage,
 } from "@monapp/shared-types";
+import { Platform } from "react-native";
 import { supabase } from "./supabase";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -84,41 +86,59 @@ export async function updateMyProfile(payload: UpdateMeRequest): Promise<Profile
 
 export async function uploadAvatar(imageUri: string): Promise<Profile> {
   const formData = new FormData();
-  appendImageFile(formData, "file", imageUri);
+  await appendImageFile(formData, "file", imageUri);
 
   const response = await authorizedFetch("/api/me/avatar", { method: "POST", body: formData });
   return response.json();
 }
 
-export async function createSearch(payload: CreateSearchRequest): Promise<ProductSearch> {
-  const response = await authorizedFetch("/api/searches", {
+/** Temps 1 du Spotter — gratuit : crée la recherche et renvoie l'image qui
+ * sera analysée (`thumbnailUrl`), sans aucun appel SerpApi. */
+export async function prepareSearch(payload: CreateSearchRequest): Promise<ProductSearch> {
+  const response = await authorizedFetch("/api/searches/prepare", {
     method: "POST",
     body: JSON.stringify(payload),
   });
   return response.json();
 }
 
-function appendImageFile(formData: FormData, fieldName: string, imageUri: string): void {
-  const filename = imageUri.split("/").pop() ?? "photo.jpg";
+/** Temps 2 du Spotter — 1 crédit SerpApi : lance l'identification sur la
+ * zone choisie. `imageUri` (capture ou photo importée) remplace l'image
+ * préparée. `signal` permet d'abandonner la requête (bouton « Annuler »). */
+export async function runSearch(
+  searchId: string,
+  params: { crop: CropRect | null; query: string; imageUri: string | null },
+  signal?: AbortSignal
+): Promise<ProductSearch> {
+  const formData = new FormData();
+  if (params.crop) formData.append("crop", JSON.stringify(params.crop));
+  if (params.query.trim()) formData.append("query", params.query.trim());
+  if (params.imageUri) await appendImageFile(formData, "file", params.imageUri);
+
+  const response = await authorizedFetch(`/api/searches/${searchId}/run`, { method: "POST", body: formData, signal });
+  return response.json();
+}
+
+async function appendImageFile(formData: FormData, fieldName: string, imageUri: string): Promise<void> {
+  const filename = imageUri.split("/").pop()?.split("?")[0] || "photo.jpg";
   const extensionMatch = /\.(\w+)$/.exec(filename);
   const extension = extensionMatch?.[1]?.toLowerCase() ?? "jpg";
   const mimeType = extension === "png" ? "image/png" : "image/jpeg";
 
-  // React Native's fetch accepts this { uri, name, type } shape for files —
-  // it is not a real Blob/File, but RN's FormData polyfill knows how to
-  // stream it from the uri.
+  if (Platform.OS === "web") {
+    // Sur le web, le sélecteur de photos renvoie une adresse blob:/data: et
+    // le FormData du navigateur n'accepte qu'un vrai fichier : l'objet
+    // { uri, name, type } propre à React Native y devenait le texte
+    // « [object Object] », et aucune photo n'arrivait au serveur.
+    const blob = await (await fetch(imageUri)).blob();
+    formData.append(fieldName, blob, /\.\w+$/.test(filename) ? filename : `photo.${blob.type === "image/png" ? "png" : "jpg"}`);
+    return;
+  }
+
+  // Sur iPhone/Android, le fetch de React Native accepte cette forme
+  // { uri, name, type } : ce n'est pas un vrai Blob, mais son FormData sait
+  // lire le fichier depuis l'uri.
   formData.append(fieldName, { uri: imageUri, name: filename, type: mimeType } as unknown as Blob);
-}
-
-export async function uploadSearchScreenshot(searchId: string, imageUri: string): Promise<ProductSearch> {
-  const formData = new FormData();
-  appendImageFile(formData, "file", imageUri);
-
-  const response = await authorizedFetch(`/api/searches/${searchId}/screenshot`, {
-    method: "POST",
-    body: formData,
-  });
-  return response.json();
 }
 
 export async function fetchSearch(searchId: string): Promise<ProductSearch> {
@@ -186,7 +206,7 @@ export async function addVaultItemFromPhoto(params: {
   formData.append("title", params.title);
   formData.append("category", params.category);
   if (params.privacy) formData.append("privacy", params.privacy);
-  appendImageFile(formData, "file", params.imageUri);
+  await appendImageFile(formData, "file", params.imageUri);
 
   const response = await authorizedFetch("/api/vault", { method: "POST", body: formData });
   return response.json();
@@ -287,7 +307,7 @@ export async function createLifestylePost(params: {
   if (params.taggedPieces && params.taggedPieces.length > 0) {
     formData.append("taggedPieces", JSON.stringify(params.taggedPieces));
   }
-  appendImageFile(formData, "file", params.imageUri);
+  await appendImageFile(formData, "file", params.imageUri);
 
   const response = await authorizedFetch("/api/posts", { method: "POST", body: formData });
   return response.json();
