@@ -30,9 +30,7 @@ export const RATE_LIMITS = {
   // publication contient jusqu'à MAX_TAGGED_PIECES pièces en un seul appel).
   pieceTag: { max: 30, windowMs: HOUR },
 
-  // ---- Réservées au Lot 5, pas encore branchées sur une route ----
-
-  // Commentaire sous une publication.
+  // Commentaire sous une publication (POST /api/posts/:id/comments, Lot F).
   comment: { max: 30, windowMs: HOUR },
 
   // ---- Limite large, appliquée automatiquement à toutes les autres routes ----

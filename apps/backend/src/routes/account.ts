@@ -118,6 +118,7 @@ export default async function accountRoutes(fastify: FastifyInstance) {
       notificationsRes,
       blocksRes,
       reportsRes,
+      commentsRes,
       consentsRes,
       exportRequestsRes,
     ] = await Promise.all([
@@ -133,6 +134,7 @@ export default async function accountRoutes(fastify: FastifyInstance) {
       db.from("notifications").select("*").eq("user_id", userId),
       db.from("blocks").select("blocked_id, created_at").eq("blocker_id", userId),
       db.from("reports").select("*").eq("reporter_id", userId),
+      db.from("comments").select("*").eq("user_id", userId),
       db.from("consents").select("*").eq("user_id", userId),
       db.from("data_export_requests").select("*").eq("user_id", userId),
     ]);
@@ -152,6 +154,7 @@ export default async function accountRoutes(fastify: FastifyInstance) {
       following: rows("following", followingRes),
       blockedAccounts: rows("blockedAccounts", blocksRes),
       reportsSubmitted: rows("reportsSubmitted", reportsRes),
+      comments: rows("comments", commentsRes),
       notifications: rows("notifications", notificationsRes),
       affiliateClicks,
       affiliateConversions: rows("affiliateConversions", conversionsRes),

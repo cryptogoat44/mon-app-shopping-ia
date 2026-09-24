@@ -6,6 +6,7 @@ interface NotificationRow {
   id: string;
   type: NotificationType;
   actor_id: string;
+  post_id: string | null;
   created_at: string;
   read_at: string | null;
 }
@@ -73,6 +74,7 @@ export default async function notificationsRoutes(fastify: FastifyInstance) {
         actor: actorInfo,
         createdAt: row.created_at,
         read: row.read_at !== null,
+        postId: row.post_id ?? null,
       };
     });
 

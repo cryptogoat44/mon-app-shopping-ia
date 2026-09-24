@@ -16,6 +16,7 @@ import notificationsRoutes from "./routes/notifications.js";
 import accountRoutes from "./routes/account.js";
 import blocksRoutes from "./routes/blocks.js";
 import reportsRoutes from "./routes/reports.js";
+import commentsRoutes from "./routes/comments.js";
 
 // Séparé de server.ts pour que les tests puissent construire l'app et
 // l'interroger via `.inject()` sans jamais ouvrir de vrai port réseau.
@@ -65,6 +66,7 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
   await fastify.register(accountRoutes);
   await fastify.register(blocksRoutes);
   await fastify.register(reportsRoutes);
+  await fastify.register(commentsRoutes);
 
   // Exclue du filet anti-abus "default" : les sondes de disponibilité de
   // Render l'appellent très régulièrement, ça n'a rien à voir avec un abus.

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { z } from "zod";
-import type { VaultCategory, VaultItem, VaultItemDetail } from "@monapp/shared-types";
+import type { PrivacyLevel, VaultCategory, VaultItem, VaultItemDetail } from "@monapp/shared-types";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.js";
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
@@ -154,7 +154,24 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       }
     }
 
-    const detail: VaultItemDetail = { ...item, purchasePostCount: count ?? 0, ...merchant };
+    // État du partage (Lot F) : la publication « achat » la plus récente qui
+    // montre cette pièce, pour afficher « Partagée dans votre fil · … ».
+    const { data: sharedRows } = await fastify.supabaseAdmin
+      .from("posts")
+      .select("id, privacy, created_at")
+      .eq("user_id", userId)
+      .eq("type", "purchase")
+      .eq("vault_item_id", id)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const shared = (sharedRows as { id: string; privacy: PrivacyLevel; created_at: string }[] | null)?.[0];
+
+    const detail: VaultItemDetail = {
+      ...item,
+      purchasePostCount: count ?? 0,
+      ...merchant,
+      sharedPost: shared ? { id: shared.id, privacy: shared.privacy, createdAt: shared.created_at } : null,
+    };
     return reply.send(detail);
   });
 

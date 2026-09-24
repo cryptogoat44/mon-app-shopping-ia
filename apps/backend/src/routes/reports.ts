@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { ReportReason, ReportTargetType } from "@monapp/shared-types";
 import { parseInput } from "../lib/validation.js";
 
-const TARGET_TYPES: [ReportTargetType, ...ReportTargetType[]] = ["user", "post"];
+const TARGET_TYPES: [ReportTargetType, ...ReportTargetType[]] = ["user", "post", "comment"];
 const REASONS: [ReportReason, ...ReportReason[]] = ["spam", "inappropriate", "harassment", "other"];
 
 const createReportSchema = z.object({

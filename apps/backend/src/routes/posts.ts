@@ -146,7 +146,7 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
   const vaultItemIds = [...new Set(rows.map((r) => r.vault_item_id).filter((id): id is string => !!id))];
   const postIds = rows.map((r) => r.id);
 
-  const [{ data: profiles }, { data: vaultItems }, { data: reactions }, { data: tagRows }] = await Promise.all([
+  const [{ data: profiles }, { data: vaultItems }, { data: reactions }, { data: tagRows }, { data: commentRows }] = await Promise.all([
     fastify.supabaseAdmin.from("profiles").select("id, username, display_name, avatar_url").in("id", authorIds),
     vaultItemIds.length > 0
       ? fastify.supabaseAdmin.from("vault_items").select("id, title, verified").in("id", vaultItemIds)
@@ -157,7 +157,13 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
       .select("id, post_id, vault_item_id, product_match_id, position")
       .in("post_id", postIds)
       .order("position", { ascending: true }),
+    fastify.supabaseAdmin.from("comments").select("post_id").in("post_id", postIds).is("hidden_at", null),
   ]);
+
+  const commentCountByPost = new Map<string, number>();
+  for (const c of (commentRows as { post_id: string }[]) ?? []) {
+    commentCountByPost.set(c.post_id, (commentCountByPost.get(c.post_id) ?? 0) + 1);
+  }
 
   const profileById = new Map(((profiles as ProfileRow[]) ?? []).map((p) => [p.id, p]));
   const vaultItemById = new Map(((vaultItems as VaultItemRow[]) ?? []).map((v) => [v.id, v]));
@@ -253,6 +259,7 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
       taggedPieces: taggedPiecesByPost.get(row.id) ?? [],
       reactionCount: reactionCountByPost.get(row.id) ?? 0,
       viewerHasReacted: viewerReactedPosts.has(row.id),
+      commentCount: commentCountByPost.get(row.id) ?? 0,
     };
   });
 }
@@ -280,16 +287,21 @@ export default async function postsRoutes(fastify: FastifyInstance) {
       .select("followee_id")
       .eq("follower_id", userId);
 
+    // Lot F (décision du fondateur) : le fil montre AUSSI ses propres
+    // publications (toutes, même privées), mêlées à celles des comptes suivis
+    // (publiques et « abonnés »), par ordre chronologique. Les identifiants
+    // viennent de notre base, jamais du client. Un blocage retire l'abonnement
+    // (routes/blocks.ts) : un compte bloqué n'est jamais dans cette liste.
     const followeeIds = (follows ?? []).map((f) => f.followee_id as string);
-    if (followeeIds.length === 0) {
-      return reply.send({ posts: [], nextCursor: null });
-    }
+    const visibility =
+      followeeIds.length > 0
+        ? `user_id.eq.${userId},and(user_id.in.(${followeeIds.join(",")}),privacy.in.(public,followers))`
+        : `user_id.eq.${userId}`;
 
     let query = fastify.supabaseAdmin
       .from("posts")
       .select("*")
-      .in("user_id", followeeIds)
-      .in("privacy", ["public", "followers"])
+      .or(visibility)
       .order("created_at", { ascending: false })
       .limit(FEED_PAGE_SIZE + 1);
 
@@ -429,6 +441,22 @@ export default async function postsRoutes(fastify: FastifyInstance) {
 
         if (!vaultItem) {
           return reply.code(404).send({ error: "vault_item_not_found", message: "Objet du vault introuvable." });
+        }
+        // Une pièce ne se partage qu'une fois à la fois (Lot F, décision
+        // documentée dans docs/journal-decisions.md) : pour la montrer
+        // autrement, on supprime d'abord sa publication.
+        const { data: alreadyShared } = await fastify.supabaseAdmin
+          .from("posts")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("type", "purchase")
+          .eq("vault_item_id", vaultItemId)
+          .limit(1);
+        if (alreadyShared && alreadyShared.length > 0) {
+          return reply.code(409).send({
+            error: "already_shared",
+            message: "Cette pièce est déjà partagée dans votre fil. Pour la partager autrement, supprimez d'abord cette publication.",
+          });
         }
         mediaUrl = vaultItem.image_url;
         caption = caption ?? vaultItem.title;

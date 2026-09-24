@@ -22,6 +22,7 @@ const NON_EMPTY_SECTIONS = [
   "following",
   "blockedAccounts",
   "reportsSubmitted",
+  "comments",
   "notifications",
   "affiliateClicks",
   "consents",
@@ -80,6 +81,8 @@ describe("export RGPD complet", () => {
       await app.inject({ method: "POST", url: "/api/posts", headers: { ...authHeaders(friend.token), ...friendPost.headers }, payload: friendPost.payload })
     ).json().id;
     await app.inject({ method: "POST", url: `/api/posts/${friendPostId}/react`, headers: authHeaders(user.token) });
+    // Commentaire sur la publication de l'ami (Lot F).
+    await app.inject({ method: "POST", url: `/api/posts/${friendPostId}/comments`, headers: authHeaders(user.token), payload: { body: "Superbe" } });
 
     // Vault, Envie, blocage, signalement, consentement.
     await app.supabaseAdmin.from("vault_items").insert({ user_id: user.id, title: "Montre", image_url: "https://example.com/m.jpg", category: "watches" });

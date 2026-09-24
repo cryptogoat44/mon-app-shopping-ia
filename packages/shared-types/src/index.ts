@@ -150,6 +150,9 @@ export interface VaultItemDetail extends VaultItem {
   merchantName: string | null;
   merchantUrl: string | null;
   affiliateUrl: string | null;
+  /** Publication « achat » qui montre déjà cette pièce (la plus récente),
+   * ou null. Une pièce ne se partage qu'une fois à la fois (Lot F). */
+  sharedPost: { id: string; privacy: PrivacyLevel; createdAt: string } | null;
 }
 
 // Le Vault est toujours entièrement privé (décision 5 du Lot Q) : aucune
@@ -269,6 +272,27 @@ export interface Post {
   taggedPieces: PostTaggedPiece[];
   reactionCount: number;
   viewerHasReacted: boolean;
+  /** Commentaires visibles (Lot F). */
+  commentCount: number;
+}
+
+// Commentaires (Lot F, section 5.A du programme) : à plat, 1 000 caractères
+// au plus ; le compteur de caractères ne s'affiche qu'à partir de 900.
+export const COMMENT_MAX_LENGTH = 1000;
+export const COMMENT_COUNTER_FROM = 900;
+
+export interface PostComment {
+  id: string;
+  body: string;
+  createdAt: string;
+  author: PostAuthor;
+  /** Son propre commentaire, ou un commentaire sous sa propre publication. */
+  canDelete: boolean;
+}
+
+export interface CommentsPage {
+  comments: PostComment[];
+  nextCursor: string | null;
 }
 
 export interface ReactToPostResponse {
@@ -292,7 +316,7 @@ export interface RecordConsentsRequest {
   types: ConsentType[];
 }
 
-export type NotificationType = "follow" | "like";
+export type NotificationType = "follow" | "like" | "comment";
 
 export interface AppNotification {
   id: string;
@@ -300,9 +324,11 @@ export interface AppNotification {
   actor: PostAuthor;
   createdAt: string;
   read: boolean;
+  /** Publication concernée (« j'aime », commentaire), sinon null. */
+  postId: string | null;
 }
 
-export type ReportTargetType = "user" | "post";
+export type ReportTargetType = "user" | "post" | "comment";
 export type ReportReason = "spam" | "inappropriate" | "harassment" | "other";
 
 export interface CreateReportRequest {

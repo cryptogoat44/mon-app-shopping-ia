@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { authHeaders, buildMultipart, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
 
@@ -88,6 +88,12 @@ describe("POST /api/posts — pièces taguées (étape 1.E)", () => {
     await deleteTestUser(app, owner.id);
     await deleteTestUser(app, stranger.id);
     await app.close();
+  });
+
+  // Une pièce ne se partage qu'une fois à la fois (Lot F) : chaque test
+  // publie une pièce neuve.
+  beforeEach(async () => {
+    ownPurchaseVaultItemId = await insertVaultItem(app, owner.id, { title: "Objet acheté" });
   });
 
   function purchasePayload(vaultItemId: string, taggedPieces?: unknown) {
