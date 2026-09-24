@@ -51,7 +51,6 @@ async function insertVaultItem(app: FastifyInstance, userId: string, overrides: 
       title: "vault test item",
       image_url: "https://example.com/fake.jpg",
       category: "other",
-      privacy: "private",
       verified: false,
       ...overrides,
     })
@@ -79,7 +78,7 @@ describe("POST /api/posts — pièces taguées (étape 1.E)", () => {
 
     match = await createMatchFixture(app, owner.id);
     strangerMatch = await createMatchFixture(app, stranger.id);
-    ownVaultItemId = await insertVaultItem(app, owner.id, { title: "Sac privé", privacy: "private" });
+    ownVaultItemId = await insertVaultItem(app, owner.id, { title: "Sac privé" });
     ownPurchaseVaultItemId = await insertVaultItem(app, owner.id, { title: "Objet acheté" });
     strangerVaultItemId = await insertVaultItem(app, stranger.id, { title: "Pas à toi" });
   });
