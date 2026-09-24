@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
 import { getWishlist } from "@/api/client";
 import type { Piece, WishlistItem } from "@/api/types";
@@ -24,7 +24,10 @@ function chunk<T>(items: T[], size: number): T[][] {
   return rows;
 }
 
-export default function WishlistScreen() {
+// Envies (Lot F) : un onglet du Profil (Vault · Lifestyle · Envies), plus
+// dans la barre de navigation. Strictement privées : n'apparaissent que sur
+// son propre profil, jamais sur le profil vu par quelqu'un d'autre.
+export function WishlistPanel() {
   const router = useRouter();
   const [items, setItems] = useState<WishlistItem[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -78,10 +81,8 @@ export default function WishlistScreen() {
   const isEmpty = !error && items?.length === 0;
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.title} accessibilityRole="header">{fr.wishlist.title}</Text>
-      </View>
+    <>
+      <Text style={styles.privateNote}>{fr.wishlist.privateNote}</Text>
       {loading ? (
         <View style={styles.grid}>
           {[0, 1, 2].map((i) => (
@@ -137,7 +138,7 @@ export default function WishlistScreen() {
             !error ? (
               <View style={styles.empty}>
                 <Text style={styles.emptyText}>{fr.wishlist.empty}</Text>
-                <Pressable accessibilityRole="button" onPress={() => router.push("/(app)/(tabs)")}>
+                <Pressable accessibilityRole="button" onPress={() => router.push("/")}>
                   <Text style={styles.emptyCta}>{fr.wishlist.emptyCta}</Text>
                 </Pressable>
               </View>
@@ -148,14 +149,12 @@ export default function WishlistScreen() {
           ListFooterComponent={loadingMore ? <ActivityIndicator color={color.encre} style={styles.footerLoader} /> : null}
         />
       )}
-    </SafeAreaView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: color.porcelaine },
-  header: { paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.sm },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, color: color.encre },
+  privateNote: { fontSize: font.caption, color: color.acier, paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.xs, maxWidth: 640, alignSelf: "center", width: "100%" },
   emptyContent: { flexGrow: 1 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl, marginTop: -60 },
   emptyText: { fontSize: font.secondary, color: color.acier, textAlign: "center", lineHeight: 20, marginBottom: space.md },

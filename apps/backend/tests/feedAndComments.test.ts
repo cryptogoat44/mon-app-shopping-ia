@@ -163,6 +163,7 @@ describe("partager une pièce du Vault (Lot F)", () => {
     const second = await share();
     expect(second.statusCode).toBe(409);
     expect(second.json().error).toBe("already_shared");
+    expect(second.json().message).toContain("modifiez la visibilité");
 
     // Le partage apparaît dans son propre fil.
     const feed = (await app.inject({ method: "GET", url: "/api/feed", headers: authHeaders(owner.token) })).json();

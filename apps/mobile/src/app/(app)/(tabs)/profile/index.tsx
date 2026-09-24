@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { SpotImage } from "@/components/spot-image";
+import { WishlistPanel } from "@/components/wishlist-panel";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
@@ -32,7 +33,7 @@ export default function ProfileScreen() {
   const [lifestylePosts, setLifestylePosts] = useState<Post[]>([]);
   const [vaultError, setVaultError] = useState<string | null>(null);
   const [lifestyleError, setLifestyleError] = useState<string | null>(null);
-  const [segment, setSegment] = useState<"vault" | "lifestyle">("vault");
+  const [segment, setSegment] = useState<"vault" | "lifestyle" | "wishlist">("vault");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -179,6 +180,13 @@ export default function ProfileScreen() {
         >
           <Text style={[styles.segItem, segment === "lifestyle" ? styles.segItemActive : null]}>{fr.profile.lifestyle}</Text>
         </Pressable>
+        <Pressable
+          onPress={() => setSegment("wishlist")}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: segment === "wishlist" }}
+        >
+          <Text style={[styles.segItem, segment === "wishlist" ? styles.segItemActive : null]}>{fr.wishlist.title}</Text>
+        </Pressable>
       </View>
 
       {loading ? (
@@ -190,6 +198,8 @@ export default function ProfileScreen() {
             </View>
           ))}
         </View>
+      ) : segment === "wishlist" ? (
+        <WishlistPanel />
       ) : segment === "vault" ? (
         <FlatList
           data={chunk(items, 3)}

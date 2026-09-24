@@ -276,6 +276,11 @@ export async function fetchPost(id: string): Promise<Post> {
   return response.json();
 }
 
+export async function updatePostPrivacy(id: string, privacy: PrivacyLevel): Promise<Post> {
+  const response = await authorizedFetch(`/api/posts/${id}`, { method: "PATCH", body: JSON.stringify({ privacy }) });
+  return response.json();
+}
+
 export async function deletePost(id: string): Promise<void> {
   await authorizedFetch(`/api/posts/${id}`, { method: "DELETE" });
 }

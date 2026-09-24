@@ -2,9 +2,8 @@ import { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import type { Post } from "@monapp/shared-types";
-import { ApiError, fetchFeed, fetchUnreadNotificationCount } from "@/lib/api";
+import { ApiError, fetchFeed } from "@/lib/api";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
-import { BellIcon } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { ErrorMessage } from "@/components/error-message";
@@ -34,7 +33,6 @@ export default function FeedScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [menuTarget, setMenuTarget] = useState<{ userId: string; postId: string } | null>(null);
 
   function handleBlocked(userId: string) {
@@ -66,11 +64,6 @@ export default function FeedScreen() {
         .catch((e) => {
           if (!cancelled) setError(e instanceof ApiError ? e.message : "Impossible de charger le fil.");
         });
-      fetchUnreadNotificationCount()
-        .then((count) => {
-          if (!cancelled) setUnreadCount(count);
-        })
-        .catch(() => {});
       return () => {
         cancelled = true;
       };
@@ -102,17 +95,6 @@ export default function FeedScreen() {
       <View style={styles.header}>
         <Text style={styles.title} accessibilityRole="header">Fil</Text>
         <View style={styles.headerActions}>
-          <Pressable
-            onPress={() => router.push("/notifications")}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel={unreadCount > 0 ? `Notifications, ${unreadCount} non lues` : "Notifications"}
-          >
-            <View>
-              <BellIcon size={21} tint={color.encre} />
-              {unreadCount > 0 ? <View style={styles.badge} /> : null}
-            </View>
-          </Pressable>
           <Pressable accessibilityRole="button" onPress={() => router.push("/people-search")} hitSlop={12}>
             <Text style={styles.headerLink}>Profils</Text>
           </Pressable>
@@ -193,17 +175,6 @@ const styles = StyleSheet.create({
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, color: color.encre },
   headerActions: { flexDirection: "row", alignItems: "center", gap: space.md },
   headerLink: { fontSize: font.secondary, color: color.acier, fontWeight: "600" },
-  badge: {
-    position: "absolute",
-    top: -1,
-    right: -1,
-    width: 8,
-    height: 8,
-    borderRadius: radius.full,
-    backgroundColor: color.vert,
-    borderWidth: 1.5,
-    borderColor: color.porcelaine,
-  },
   content: { paddingTop: space.sm, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   errorText: { color: color.acier, fontSize: font.secondary, paddingHorizontal: space.lg, marginBottom: space.md },
   empty: { alignItems: "center", marginTop: space.xl, paddingHorizontal: space.lg },

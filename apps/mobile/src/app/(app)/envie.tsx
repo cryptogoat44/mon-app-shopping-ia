@@ -45,7 +45,7 @@ export default function WishlistItemScreen() {
 
   function goBack() {
     if (router.canGoBack()) router.back();
-    else router.replace("/wishlist");
+    else router.replace("/profile");
   }
 
   async function handleRemove() {

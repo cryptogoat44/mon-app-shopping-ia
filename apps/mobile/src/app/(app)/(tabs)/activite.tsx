@@ -75,17 +75,10 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={styles.nav}>
-        <Pressable
-          onPress={() => (router.canGoBack() ? router.back() : router.replace("/feed"))}
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel="Retour"
-        >
-          <Text style={styles.back}>‹</Text>
-        </Pressable>
-        <Text style={styles.title} accessibilityRole="header">{fr.notifications.title}</Text>
-        <View style={styles.navSpacer} />
+      {/* Onglet « Activité » de la barre (Lot F, barre A) : j'aime,
+          commentaires et abonnements. */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle} accessibilityRole="header">{fr.notifications.title}</Text>
       </View>
 
       {notifications === null && !error ? (
@@ -125,6 +118,8 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
+  header: { paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.sm },
+  headerTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, color: color.encre },
   screen: { flex: 1, backgroundColor: color.porcelaine },
   nav: {
     height: 47,

@@ -27,6 +27,10 @@ const postOptionalFieldsSchema = z.object({
 
 const taggedPiecesInputSchema = z.array(taggedPieceInputSchema).max(MAX_TAGGED_PIECES);
 
+const updatePostSchema = z.object({
+  privacy: z.enum(PRIVACY_LEVELS as [PrivacyLevel, ...PrivacyLevel[]]),
+});
+
 export interface PostRow {
   id: string;
   user_id: string;
@@ -455,7 +459,8 @@ export default async function postsRoutes(fastify: FastifyInstance) {
         if (alreadyShared && alreadyShared.length > 0) {
           return reply.code(409).send({
             error: "already_shared",
-            message: "Cette pièce est déjà partagée dans votre fil. Pour la partager autrement, supprimez d'abord cette publication.",
+            message:
+              "Cette pièce est déjà partagée dans votre fil. Pour changer qui la voit, modifiez la visibilité de cette publication (depuis la publication).",
           });
         }
         mediaUrl = vaultItem.image_url;
@@ -544,6 +549,31 @@ export default async function postsRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "post_not_found", message: "Publication introuvable." });
     }
     const [hydrated] = await hydratePosts(fastify, [post as PostRow], userId);
+    return reply.send(hydrated);
+  });
+
+  // Modifier la visibilité de SA publication (Lot F), sans la supprimer :
+  // « j'aime » et commentaires sont conservés. Toutes les règles (fil,
+  // profil, détail, commentaires, liens partagés) lisent la confidentialité
+  // à chaque requête : la nouvelle valeur s'applique immédiatement.
+  fastify.patch("/api/posts/:id", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const body = parseInput(updatePostSchema, request.body, reply, { error: "invalid_body", message: "Visibilité invalide." });
+    if (!body) return;
+    const userId = request.user!.id;
+
+    const { data: updated } = await fastify.supabaseAdmin
+      .from("posts")
+      .update({ privacy: body.privacy })
+      .eq("id", params.id)
+      .eq("user_id", userId)
+      .select("*")
+      .maybeSingle();
+    if (!updated) {
+      return reply.code(404).send({ error: "post_not_found", message: "Publication introuvable." });
+    }
+    const [hydrated] = await hydratePosts(fastify, [updated as PostRow], userId);
     return reply.send(hydrated);
   });
 

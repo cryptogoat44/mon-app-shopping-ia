@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import type { Post } from "@monapp/shared-types";
-import { ApiError, deletePost, fetchPost } from "@/lib/api";
+import type { Post, PrivacyLevel } from "@monapp/shared-types";
+import { ApiError, deletePost, fetchPost, updatePostPrivacy } from "@/lib/api";
+import { PRIVACY_LABELS, PRIVACY_LEVELS } from "@/lib/vault-labels";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { color, font, radius, space } from "@/theme/tokens";
@@ -28,6 +29,7 @@ export default function PostDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [commentCount, setCommentCount] = useState<number | null>(null);
+  const [changingPrivacy, setChangingPrivacy] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -47,6 +49,21 @@ export default function PostDetailScreen() {
   function goBack() {
     if (router.canGoBack()) router.back();
     else router.replace("/profile");
+  }
+
+  async function handlePrivacy(privacy: PrivacyLevel) {
+    if (!post || post.privacy === privacy) return;
+    setChangingPrivacy(true);
+    setError(null);
+    try {
+      const updated = await updatePostPrivacy(post.id, privacy);
+      setPost(updated);
+      showToast(fr.postDetail.visibilityChanged(PRIVACY_LABELS[privacy]));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : fr.postDetail.visibilityError);
+    } finally {
+      setChangingPrivacy(false);
+    }
   }
 
   async function handleDelete() {
@@ -102,6 +119,24 @@ export default function PostDetailScreen() {
 
           {isMine ? (
             <View style={styles.owner}>
+              {/* Lot F : l'auteur change la visibilité sans supprimer la
+                  publication (« j'aime » et commentaires conservés). */}
+              <Text style={styles.label}>{fr.postDetail.visibility}</Text>
+              <View style={styles.pillRow} accessibilityRole="radiogroup">
+                {PRIVACY_LEVELS.map((level) => (
+                  <Pressable
+                    key={level}
+                    hitSlop={{ top: 8, bottom: 8, left: 2, right: 2 }}
+                    style={[styles.pill, post.privacy === level ? styles.pillActive : null]}
+                    onPress={() => handlePrivacy(level)}
+                    disabled={changingPrivacy}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: post.privacy === level }}
+                  >
+                    <Text style={[styles.pillLabel, post.privacy === level ? styles.pillLabelActive : null]}>{PRIVACY_LABELS[level]}</Text>
+                  </Pressable>
+                ))}
+              </View>
               {error ? <ErrorMessage style={styles.message}>{error}</ErrorMessage> : null}
               {!confirming ? (
                 <Pressable onPress={() => setConfirming(true)} hitSlop={12} style={styles.deleteRow} accessibilityRole="button">
@@ -155,6 +190,12 @@ const styles = StyleSheet.create({
   retryLabel: { fontSize: font.body, color: color.vert, fontWeight: "600" },
   content: { paddingTop: space.sm, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   owner: { paddingHorizontal: space.lg },
+  label: { fontSize: font.caption, color: color.acier, marginBottom: 10 },
+  pillRow: { flexDirection: "row", flexWrap: "wrap", gap: space.xs, marginBottom: space.md },
+  pill: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.full, paddingVertical: 6, paddingHorizontal: 12 },
+  pillActive: { backgroundColor: color.vert, borderColor: color.vert },
+  pillLabel: { fontSize: font.caption, color: color.acier },
+  pillLabelActive: { color: color.blanc, fontWeight: "600" },
   deleteRow: { alignItems: "center", minHeight: 44, justifyContent: "center" },
   deleteLabel: { color: color.danger, fontSize: font.secondary, fontWeight: "600" },
   confirm: { backgroundColor: color.plinthe, borderRadius: radius.md, padding: space.md },

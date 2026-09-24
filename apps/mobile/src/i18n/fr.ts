@@ -199,6 +199,9 @@ export const fr = {
   },
   postDetail: {
     title: "Publication",
+    visibility: "Qui peut voir cette publication",
+    visibilityChanged: (label: string) => `Visibilité : ${label}`,
+    visibilityError: "La modification a échoué. Réessayez.",
     delete: "Supprimer la publication",
     deleteConfirm: "Supprimer définitivement cette publication ? Ses « j'aime » seront aussi supprimés.",
     deleteConfirmPurchase: "Supprimer définitivement cette publication ? La pièce restera dans votre Vault.",
@@ -226,6 +229,7 @@ export const fr = {
     empty: "Aucune envie pour l'instant. Spottez une première pièce pour commencer.",
     emptyCta: "Spotter une pièce",
     loadError: "Impossible de charger vos envies.",
+    privateNote: "Vos Envies sont privées : personne d'autre que vous ne les voit.",
   },
   profile: {
     vault: "Vault",
@@ -258,7 +262,7 @@ export const fr = {
     shared: "Partagée dans votre fil",
     sharedState: (visibility: string) => `Partagée dans votre fil · ${visibility}`,
     viewPost: "Voir la publication",
-    shareAgainHint: "Pour la partager avec une autre visibilité, supprimez d'abord cette publication depuis son détail.",
+    shareAgainHint: "Pour changer qui la voit, modifiez la visibilité depuis la publication.",
     remove: "Retirer du vault",
     removeConfirm: "Retirer définitivement cet objet ?",
     removeConfirmWithPost: "Cet objet apparaît dans une publication. Le retirer supprimera aussi cette publication.",
@@ -321,7 +325,7 @@ export const fr = {
     saveError: "Une erreur est survenue, réessayez.",
   },
   notifications: {
-    title: "Notifications",
+    title: "Activité",
     empty: "Aucune notification pour l'instant.",
     follow: "a commencé à vous suivre.",
     like: "a aimé votre publication.",
