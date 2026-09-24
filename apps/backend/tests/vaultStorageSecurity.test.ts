@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
+import sharp from "sharp";
 import {
   authHeaders,
   buildMultipart,
@@ -29,7 +30,7 @@ describe("vault storage ownership", () => {
 
     const { payload, headers } = buildMultipart(
       { title: "photo de la victime", category: "other" },
-      { fieldname: "file", filename: "victim.jpg", contentType: "image/jpeg", data: Buffer.from("fake-image-bytes") }
+      { fieldname: "file", filename: "victim.jpg", contentType: "image/jpeg", data: await sharp({ create: { width: 8, height: 8, channels: 3, background: "#999" } }).jpeg().toBuffer() }
     );
     const res = await app.inject({
       method: "POST",
@@ -79,7 +80,7 @@ describe("vault storage ownership", () => {
   it("deletes its own file normally", async () => {
     const { payload, headers } = buildMultipart(
       { title: "à supprimer", category: "other" },
-      { fieldname: "file", filename: "todelete.jpg", contentType: "image/jpeg", data: Buffer.from("bytes-to-delete") }
+      { fieldname: "file", filename: "todelete.jpg", contentType: "image/jpeg", data: await sharp({ create: { width: 8, height: 8, channels: 3, background: "#777" } }).jpeg().toBuffer() }
     );
     const created = await app.inject({
       method: "POST",
