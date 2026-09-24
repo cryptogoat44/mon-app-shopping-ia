@@ -71,7 +71,7 @@ describe("rate limit enforcement on a real route", () => {
     expect(blocked.headers["retry-after"]).toBeDefined();
     expect(blocked.json()).toEqual({
       error: "rate_limited",
-      message: "Trop de tentatives en peu de temps. Réessaie dans quelques instants.",
+      message: "Trop de tentatives en peu de temps. Réessayez dans quelques instants.",
     });
   });
 });

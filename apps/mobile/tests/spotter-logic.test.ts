@@ -87,3 +87,11 @@ describe("géométrie du recadrage", () => {
     expect(huge).toEqual({ x: 0, y: 0, width: 1, height: 1 });
   });
 });
+
+describe("partage d'une proposition", () => {
+  it("le lien partagé est toujours accompagné de la mention « lien affilié »", async () => {
+    const { fr } = await import("../src/i18n/fr");
+    const message = fr.result.shareMessage("Veste en daim", "https://marchand.example/veste");
+    expect(message).toContain("https://marchand.example/veste (lien affilié)");
+  });
+});

@@ -104,6 +104,17 @@ function toProductSearch(
   };
 }
 
+// RGPD : l'image analysée (capture importée ou zone recadrée) n'est
+// stockée que le temps que SerpApi la lise, via une adresse temporaire
+// signée. Elle est supprimée dès la réponse, que la recherche réussisse ou
+// échoue : rien ne la réutilise ensuite (l'app garde sa propre copie pour
+// « Recadrer », l'historique affiche les images des produits). Un échec de
+// suppression est journalisé sans bloquer l'utilisateur.
+async function discardAnalysisImage(fastify: FastifyInstance, storagePath: string): Promise<void> {
+  const { error } = await fastify.supabaseAdmin.storage.from("screenshots").remove([storagePath]);
+  if (error) fastify.log.warn({ error, storagePath }, "Image analysée non supprimée après la recherche");
+}
+
 async function saveMatches(
   fastify: FastifyInstance,
   searchId: string,
@@ -240,7 +251,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
   fastify.post(
     "/api/searches",
     {
-      preHandler: [fastify.requireAuth, fastify.rateLimit("searchCreate")],
+      preHandler: [fastify.requireAuth, fastify.rateLimitCheck("searchCreate")],
       config: { rateLimitName: "searchCreate" },
     },
     async (request, reply) => {
@@ -307,6 +318,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     }
 
     try {
+      fastify.countRateLimitHit(request, "searchCreate");
       const matches = await searchProductsByImageUrl(fastify, thumbnail.thumbnailUrl);
       await saveMatches(fastify, row.id, matches);
 
@@ -348,7 +360,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
   fastify.post(
     "/api/searches/:id/screenshot",
     {
-      preHandler: [fastify.requireAuth, fastify.rateLimit("searchCreate")],
+      preHandler: [fastify.requireAuth, fastify.rateLimitCheck("searchCreate")],
       config: { rateLimitName: "searchCreate" },
     },
     async (request, reply) => {
@@ -399,6 +411,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
 
     if (signedUrlError || !signedUrlData) {
+      await discardAnalysisImage(fastify, storagePath);
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
@@ -406,6 +419,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     let errorMessage: string | null = null;
     let matches: VisualMatch[] = [];
 
+    fastify.countRateLimitHit(request, "searchCreate");
     try {
       matches = await searchProductsByImageUrl(fastify, signedUrlData.signedUrl);
       if (matches.length === 0) {
@@ -418,11 +432,12 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       errorMessage = "La recherche visuelle a échoué.";
     }
 
+    await discardAnalysisImage(fastify, storagePath);
     await saveMatches(fastify, id, matches);
 
     const { data: updated } = await fastify.supabaseAdmin
       .from("product_searches")
-      .update({ screenshot_url: storagePath, status: finalStatus, error_message: errorMessage })
+      .update({ screenshot_url: null, status: finalStatus, error_message: errorMessage })
       .eq("id", id)
       .select("*")
       .single();
@@ -492,7 +507,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
   fastify.post(
     "/api/searches/:id/run",
     {
-      preHandler: [fastify.requireAuth, fastify.rateLimit("searchCreate")],
+      preHandler: [fastify.requireAuth, fastify.rateLimitCheck("searchCreate")],
       config: { rateLimitName: "searchCreate" },
     },
     async (request, reply) => {
@@ -602,6 +617,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
         : await fastify.supabaseAdmin.storage.from("screenshots").createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
       if (uploadError || !signed?.data) {
         request.log.error({ uploadError }, "Échec d'envoi de l'image recadrée");
+        if (!uploadError) await discardAnalysisImage(fastify, storagePath);
         await fastify.supabaseAdmin.from("product_searches").update({ status: "pending" }).eq("id", id);
         return reply.code(500).send({ error: "upload_failed", message: "L'envoi de l'image a échoué, réessayez." });
       }
@@ -611,6 +627,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       // recherche redevient lançable. Passé ce point, le crédit est engagé
       // — l'app ne promet jamais de le rembourser.
       if (request.raw.socket?.destroyed) {
+        await discardAnalysisImage(fastify, storagePath);
         await fastify.supabaseAdmin.from("product_searches").update({ status: "pending" }).eq("id", id);
         return;
       }
@@ -618,6 +635,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       let finalStatus: SearchStatus = "completed";
       let errorMessage: string | null = null;
       let matches: VisualMatch[] = [];
+      fastify.countRateLimitHit(request, "searchCreate");
       try {
         matches = await searchProductsByImageUrl(fastify, signed.data.signedUrl, { query });
         if (matches.length === 0) {
@@ -630,11 +648,12 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
         errorMessage = TECHNICAL_FAILURE_MESSAGE;
       }
 
+      await discardAnalysisImage(fastify, storagePath);
       await saveMatches(fastify, id, matches);
 
       const { data: updated } = await fastify.supabaseAdmin
         .from("product_searches")
-        .update({ screenshot_url: storagePath, status: finalStatus, error_message: errorMessage })
+        .update({ screenshot_url: null, status: finalStatus, error_message: errorMessage })
         .eq("id", id)
         .select("*")
         .single();

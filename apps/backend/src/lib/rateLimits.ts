@@ -15,9 +15,10 @@ const HOUR = 60 * MINUTE;
 export const RATE_LIMITS = {
   // ---- Limites strictes : actions coûteuses ou sensibles à l'abus ----
 
-  // Lancement d'une identification visuelle (POST /api/searches et
-  // POST /api/searches/:id/screenshot) — chacune peut déclencher un appel
-  // SerpApi payant.
+  // Identification visuelle : seuls les appels SerpApi réellement envoyés
+  // (1 crédit chacun) comptent. Une préparation, un lancement refusé (image
+  // illisible, recherche déjà lancée…) ou annulé avant l'appel ne comptent
+  // pas (voir `rateLimitCheck` / `countRateLimitHit`).
   searchCreate: { max: 10, windowMs: HOUR },
   // Signalement d'un utilisateur ou d'une publication.
   report: { max: 20, windowMs: HOUR },

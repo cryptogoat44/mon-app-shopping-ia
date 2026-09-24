@@ -100,6 +100,13 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
 
   it("lancer recadre la vignette, transmet le texte, enregistre l'image HD — un seul appel SerpApi", async () => {
     const search = await prepare("https://www.tiktok.com/@x/video/1");
+    // L'image n'existe que pendant l'appel SerpApi : on la lit à ce moment-là.
+    let analysed: Buffer | null = null;
+    searchMock.mockImplementationOnce(async () => {
+      const { data } = await app.supabaseAdmin.storage.from("screenshots").download(`${user.id}/${search.id}.jpg`);
+      analysed = Buffer.from(await data!.arrayBuffer());
+      return [MATCH];
+    });
     const res = await run(search.id, {
       crop: JSON.stringify({ x: 0.25, y: 0.5, width: 0.5, height: 0.25 }),
       query: "  veste en daim marron  ",
@@ -117,10 +124,55 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
 
     // L'image réellement envoyée à l'analyse est bien la zone choisie :
     // 50 % × 25 % d'une image 400 × 600 = 200 × 150.
-    const { data } = await app.supabaseAdmin.storage.from("screenshots").download(`${user.id}/${search.id}.jpg`);
-    const meta = await sharp(Buffer.from(await data!.arrayBuffer())).metadata();
+    const meta = await sharp(analysed!).metadata();
     expect([meta.width, meta.height]).toEqual([200, 150]);
   });
+
+  it("RGPD : l'image analysée est supprimée dès la réponse de SerpApi, succès comme échec", async () => {
+    const ok = await prepare("https://www.tiktok.com/@x/video/1");
+    await run(ok.id, {});
+    searchMock.mockRejectedValueOnce(new Error("SerpApi en panne"));
+    const ko = await prepare("https://www.tiktok.com/@x/video/1");
+    expect((await run(ko.id, {})).json().status).toBe("failed");
+
+    const { data } = await app.supabaseAdmin.storage.from("screenshots").list(user.id);
+    const names = (data ?? []).map((f) => f.name);
+    expect(names).not.toContain(`${ok.id}.jpg`);
+    expect(names).not.toContain(`${ko.id}.jpg`);
+    const { data: row } = await app.supabaseAdmin.from("product_searches").select("screenshot_url").eq("id", ok.id).single();
+    expect(row!.screenshot_url).toBeNull();
+  });
+
+  it("limite horaire : seuls les appels SerpApi réellement envoyés comptent", async () => {
+    const counted = await createTestUser(app, "sfl");
+    const previousEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "development"; // la limite est coupée sous Vitest par défaut
+    try {
+      const prepareFor = async () =>
+        (await app.inject({ method: "POST", url: "/api/searches/prepare", headers: authHeaders(counted.token), payload: { sourceUrl: "https://www.tiktok.com/@x/video/1" } })).json();
+
+      // 12 lancements refusés avant tout appel (zone invalide) : aucun ne compte.
+      for (let i = 0; i < 12; i++) {
+        const search = await prepareFor();
+        const res = await run(search.id, { crop: JSON.stringify({ x: 0.9, y: 0.9, width: 0.5, height: 0.5 }) }, undefined, counted.token);
+        expect(res.statusCode).toBe(400);
+      }
+      // 10 vrais lancements passent…
+      for (let i = 0; i < 10; i++) {
+        const search = await prepareFor();
+        expect((await run(search.id, {}, undefined, counted.token)).statusCode).toBe(200);
+      }
+      // … le 11ᵉ est refusé AVANT l'appel SerpApi.
+      const search = await prepareFor();
+      const blocked = await run(search.id, {}, undefined, counted.token);
+      expect(blocked.statusCode).toBe(429);
+      expect(blocked.json().message).toContain("Réessayez");
+      expect(searchMock).toHaveBeenCalledTimes(10);
+    } finally {
+      process.env.NODE_ENV = previousEnv;
+      await deleteTestUser(app, counted.id);
+    }
+  }, 60_000);
 
   it("un texte vide n'est jamais transmis", async () => {
     const search = await prepare("https://www.tiktok.com/@x/video/1");

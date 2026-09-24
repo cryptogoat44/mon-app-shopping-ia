@@ -30,6 +30,8 @@ function formatPrice(piece: Piece): string {
   return `${piece.priceFrom.toLocaleString("fr-FR")} ${currency}`.trim();
 }
 
+const OTHERS_SHOWN_FIRST = 11;
+
 type ScreenState = InitialResultState | { kind: "error"; searchId: string };
 
 export default function ResultScreen() {
@@ -43,6 +45,8 @@ export default function ResultScreen() {
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [blockedMerchantUrl, setBlockedMerchantUrl] = useState<string | null>(null);
+  const [showAllOthers, setShowAllOthers] = useState(false);
+  const [affiliateInfoOpen, setAffiliateInfoOpen] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   const result = state.kind === "ready" ? state.result : null;
@@ -162,7 +166,9 @@ export default function ResultScreen() {
     const message = fr.result.shareMessage(piece.name, url);
     try {
       if (Platform.OS === "web" && !(typeof navigator !== "undefined" && "share" in navigator)) {
-        await Clipboard.setStringAsync(url);
+        // Le message entier, pas le lien seul : la mention « lien affilié »
+        // doit accompagner le lien partout où il circule.
+        await Clipboard.setStringAsync(message);
         showToast(fr.result.linkCopied);
         return;
       }
@@ -256,6 +262,10 @@ export default function ResultScreen() {
   }
 
   const others = result.pieces.map((p, index) => ({ p, index })).filter(({ index }) => index !== selectedIndex);
+  // 11 autres propositions d'emblée (la meilleure + 11 = 12 images à
+  // charger), le reste — jusqu'à 30 au total — sur demande.
+  const visibleOthers = showAllOthers ? others : others.slice(0, OTHERS_SHOWN_FIRST);
+  const hiddenCount = others.length - visibleOthers.length;
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -291,7 +301,18 @@ export default function ResultScreen() {
             <Text style={styles.blockedLink}>{fr.result.merchantLinkBlocked}</Text>
           </Pressable>
         ) : null}
-        <Text style={styles.disclosure}>{fr.result.affiliateDisclosure}</Text>
+        <Pressable
+          onPress={() => setAffiliateInfoOpen((open) => !open)}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: affiliateInfoOpen }}
+          accessibilityHint={fr.result.affiliateHint}
+        >
+          <Text style={styles.disclosure}>
+            {fr.result.affiliateDisclosure} <Text style={styles.disclosureMore}>{affiliateInfoOpen ? "–" : "ⓘ"}</Text>
+          </Text>
+        </Pressable>
+        {affiliateInfoOpen ? <Text style={styles.disclosureText}>{fr.result.affiliateExplanation}</Text> : null}
 
         <View style={styles.actions}>
           <Pressable style={styles.action} onPress={handleKeep} disabled={kept.has(piece.id)} accessibilityRole="button">
@@ -317,7 +338,7 @@ export default function ResultScreen() {
               {fr.result.otherProposals}
             </Text>
             <View style={styles.grid}>
-              {others.map(({ p, index }) => (
+              {visibleOthers.map(({ p, index }) => (
                 <Pressable
                   key={p.id}
                   style={styles.card}
@@ -337,6 +358,11 @@ export default function ResultScreen() {
                 </Pressable>
               ))}
             </View>
+            {hiddenCount > 0 ? (
+              <Pressable style={styles.secondary} onPress={() => setShowAllOthers(true)} accessibilityRole="button">
+                <Text style={styles.secondaryLabel}>{fr.result.showMore(hiddenCount)}</Text>
+              </Pressable>
+            ) : null}
           </>
         ) : null}
       </ScrollView>
@@ -447,7 +473,9 @@ const styles = StyleSheet.create({
   textButton: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: space.sm },
   textButtonLabel: { fontSize: font.secondary, color: color.acier, fontWeight: "600" },
   blockedLink: { textAlign: "center", fontSize: font.caption, color: color.vert, fontWeight: "600", marginTop: 10, textDecorationLine: "underline" },
-  disclosure: { textAlign: "center", fontSize: 11.5, color: color.acier, marginTop: 8 },
+  disclosure: { textAlign: "center", fontSize: 11.5, color: color.acier, marginTop: 8, minHeight: 24, lineHeight: 24 },
+  disclosureMore: { fontSize: 12 },
+  disclosureText: { textAlign: "center", fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: 2, paddingHorizontal: space.md },
   actions: { flexDirection: "row", gap: 10, marginTop: space.md },
   action: { flex: 1, minHeight: 44, borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   actionLabel: { fontSize: font.caption, color: color.encre, fontWeight: "500", textAlign: "center" },

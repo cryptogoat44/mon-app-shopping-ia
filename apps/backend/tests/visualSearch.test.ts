@@ -113,7 +113,7 @@ describe("searchProductsByImageUrl", () => {
 
   it("garde l'image haute définition quand elle existe, la vignette sinon", async () => {
     safeFetchMock.mockResolvedValueOnce(
-      jsonResponse({ visual_matches: [{ ...PRODUCT_MATCH, image: "https://marchand.example/hd.jpg" }, { ...PRODUCT_MATCH, position: 2 }] })
+      jsonResponse({ visual_matches: [{ ...PRODUCT_MATCH, image: "https://marchand.example/hd.jpg" }, { ...PRODUCT_MATCH, position: 2, link: "https://marchand.example/autre" }] })
     );
 
     const fastify = fakeFastify();
@@ -143,11 +143,30 @@ describe("searchProductsByImageUrl", () => {
     expect(matches.map((m) => m.rank)).toEqual([1]);
   });
 
-  it("garde jusqu'à 20 propositions", async () => {
-    const many = Array.from({ length: 30 }, (_, i) => ({ ...PRODUCT_MATCH, position: i + 1, link: `https://marchand.example/${i}` }));
+  it("garde jusqu'à 30 propositions", async () => {
+    const many = Array.from({ length: 60 }, (_, i) => ({ ...PRODUCT_MATCH, position: i + 1, link: `https://marchand.example/${i}` }));
     safeFetchMock.mockResolvedValueOnce(jsonResponse({ visual_matches: many }));
 
     const fastify = fakeFastify();
-    expect(await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg")).toHaveLength(20);
+    expect(await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg")).toHaveLength(30);
+  });
+
+  it("retire les doublons (même page produit), en gardant la première", async () => {
+    safeFetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        visual_matches: [
+          { ...PRODUCT_MATCH, position: 1, title: "Première" },
+          { ...PRODUCT_MATCH, position: 2, title: "Doublon", link: `${PRODUCT_MATCH.link}#avis` },
+          { ...PRODUCT_MATCH, position: 3, title: "Doublon 2", link: `${PRODUCT_MATCH.link}/` },
+          { ...PRODUCT_MATCH, position: 4, title: "Autre", link: "https://marchand.example/autre" },
+        ],
+      })
+    );
+
+    const matches = await searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg");
+    expect(matches.map((m) => [m.rank, m.productName])).toEqual([
+      [1, "Première"],
+      [2, "Autre"],
+    ]);
   });
 });
