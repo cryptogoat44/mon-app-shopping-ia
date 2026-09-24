@@ -189,4 +189,42 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     expect(res.json().error).toBe("preview_unavailable");
     expect(searchMock).not.toHaveBeenCalled();
   });
+
+  // Entre le déploiement du serveur et celui du site, l'ANCIEN site appelle
+  // encore ces deux routes : elles doivent continuer de répondre comme avant.
+  it("ancien site : POST /api/searches (lien) identifie toujours, en un seul appel", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/searches",
+      headers: authHeaders(user.token),
+      payload: { sourceUrl: "https://www.tiktok.com/@x/video/2" },
+    });
+    expect(res.statusCode).toBe(200);
+    const search = res.json();
+    expect(search.status).toBe("completed");
+    expect(search.matches[0].productName).toBe("Veste en daim marron");
+    expect(searchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("ancien site : POST /api/searches/:id/screenshot identifie toujours une capture", async () => {
+    const { fetchOfficialThumbnail } = await import("../src/services/oembed.js");
+    vi.mocked(fetchOfficialThumbnail).mockResolvedValueOnce(null);
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/searches",
+      headers: authHeaders(user.token),
+      payload: { sourceUrl: "https://www.tiktok.com/@x/video/3" },
+    });
+    expect(created.json().status).toBe("pending");
+    const mp = buildMultipart({}, { fieldname: "file", filename: "capture.jpg", contentType: "image/jpeg", data: IMAGE });
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/searches/${created.json().id}/screenshot`,
+      headers: { ...authHeaders(user.token), ...mp.headers },
+      payload: mp.payload,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().status).toBe("completed");
+    expect(res.json().matches).toHaveLength(1);
+  });
 });
