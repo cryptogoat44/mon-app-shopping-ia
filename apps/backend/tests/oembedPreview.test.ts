@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../src/lib/safeFetch.js", () => ({ safeFetch: vi.fn() }));
 
 import { safeFetch } from "../src/lib/safeFetch.js";
-import { fetchOfficialPreview, fetchOfficialThumbnail } from "../src/services/oembed.js";
+import { fetchOfficialPreview } from "../src/services/oembed.js";
 
 const safeFetchMock = vi.mocked(safeFetch);
 const VIDEO = "https://www.tiktok.com/@x/video/7554393000504266014";
@@ -46,10 +46,5 @@ describe("image officielle d'un lien : la raison précise quand elle manque", ()
     expect(await fetchOfficialPreview("https://www.instagram.com/p/abc/", "instagram")).toEqual({ ok: false, issue: "no_official_access" });
     expect(await fetchOfficialPreview("https://www.zara.com/fr/veste", "other")).toEqual({ ok: false, issue: "unsupported_site" });
     expect(safeFetchMock).not.toHaveBeenCalled();
-  });
-
-  it("l'ancienne forme (routes historiques) renvoie toujours l'image ou null", async () => {
-    safeFetchMock.mockResolvedValueOnce(json({}, 400));
-    expect(await fetchOfficialThumbnail(VIDEO, "tiktok")).toBeNull();
   });
 });

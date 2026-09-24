@@ -22,10 +22,6 @@ export function detectPlatform(sourceUrl: string): PlatformSource {
   return "other";
 }
 
-interface OEmbedResult {
-  thumbnailUrl: string;
-}
-
 export type OfficialPreview = { ok: true; thumbnailUrl: string } | { ok: false; issue: PreviewIssue };
 
 // Un service oEmbed externe lent ou muet ne doit jamais bloquer une
@@ -91,10 +87,4 @@ export async function fetchOfficialPreview(sourceUrl: string, platform: Platform
     // Délai dépassé, réseau coupé, réponse illisible.
     return { ok: false, issue: "service_down" };
   }
-}
-
-/** Ancienne forme (routes historiques) : l'image, ou null. */
-export async function fetchOfficialThumbnail(sourceUrl: string, platform: PlatformSource): Promise<OEmbedResult | null> {
-  const preview = await fetchOfficialPreview(sourceUrl, platform);
-  return preview.ok ? { thumbnailUrl: preview.thumbnailUrl } : null;
 }

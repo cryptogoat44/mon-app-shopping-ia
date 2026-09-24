@@ -8,7 +8,6 @@ import sharp from "sharp";
 vi.mock("../src/services/visualSearch.js", () => ({ searchProductsByImageUrl: vi.fn() }));
 vi.mock("../src/services/oembed.js", () => ({
   detectPlatform: () => "tiktok",
-  fetchOfficialThumbnail: vi.fn(async () => ({ thumbnailUrl: "https://p16-common-sign.tiktokcdn-eu.com/vignette.jpeg" })),
   fetchOfficialPreview: vi.fn(async () => ({ ok: true, thumbnailUrl: "https://p16-common-sign.tiktokcdn-eu.com/vignette.jpeg" })),
 }));
 vi.mock("../src/lib/imageProcessing.js", async (importOriginal) => {
@@ -252,41 +251,11 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     expect(searchMock).not.toHaveBeenCalled();
   });
 
-  // Entre le déploiement du serveur et celui du site, l'ANCIEN site appelle
-  // encore ces deux routes : elles doivent continuer de répondre comme avant.
-  it("ancien site : POST /api/searches (lien) identifie toujours, en un seul appel", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/searches",
-      headers: authHeaders(user.token),
-      payload: { sourceUrl: "https://www.tiktok.com/@x/video/2" },
-    });
-    expect(res.statusCode).toBe(200);
-    const search = res.json();
-    expect(search.status).toBe("completed");
-    expect(search.matches[0].productName).toBe("Veste en daim marron");
-    expect(searchMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("ancien site : POST /api/searches/:id/screenshot identifie toujours une capture", async () => {
-    const { fetchOfficialThumbnail } = await import("../src/services/oembed.js");
-    vi.mocked(fetchOfficialThumbnail).mockResolvedValueOnce(null);
-    const created = await app.inject({
-      method: "POST",
-      url: "/api/searches",
-      headers: authHeaders(user.token),
-      payload: { sourceUrl: "https://www.tiktok.com/@x/video/3" },
-    });
-    expect(created.json().status).toBe("pending");
-    const mp = buildMultipart({}, { fieldname: "file", filename: "capture.jpg", contentType: "image/jpeg", data: IMAGE });
-    const res = await app.inject({
-      method: "POST",
-      url: `/api/searches/${created.json().id}/screenshot`,
-      headers: { ...authHeaders(user.token), ...mp.headers },
-      payload: mp.payload,
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().status).toBe("completed");
-    expect(res.json().matches).toHaveLength(1);
+  it("les anciennes routes du Spotter n'existent plus (retirées au bloc 3 du Lot Q)", async () => {
+    const legacy = await app.inject({ method: "POST", url: "/api/searches", headers: authHeaders(user.token), payload: { sourceUrl: "https://www.tiktok.com/@x/video/2" } });
+    expect(legacy.statusCode).toBe(404);
+    const screenshot = await app.inject({ method: "POST", url: "/api/searches/00000000-0000-0000-0000-000000000000/screenshot", headers: authHeaders(user.token) });
+    expect(screenshot.statusCode).toBe(404);
+    expect(searchMock).not.toHaveBeenCalled();
   });
 });
