@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, SafeAreaView, StyleSheet, Text, View } from "react-native";
-import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
@@ -11,6 +10,7 @@ import { ClockIcon } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
+import { SpotImage } from "@/components/spot-image";
 
 function formatPrice(item: Piece): string | null {
   if (item.priceFrom === null) return null;
@@ -103,7 +103,7 @@ export default function WishlistScreen() {
                 <View key={item.id} style={styles.card}>
                   <View style={styles.thumb}>
                     {item.imageUrl ? (
-                      <Image source={{ uri: item.imageUrl }} style={styles.thumbImage} contentFit="cover" accessibilityLabel={item.name} />
+                      <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.thumbImage} fit="cover" accessibilityLabel={item.name} />
                     ) : (
                       <ClockIcon size={30} tint={color.encre} />
                     )}

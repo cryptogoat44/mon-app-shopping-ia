@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { PrivacyLevel, VaultCategory, VaultItem, VaultItemDetail } from "@monapp/shared-types";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.js";
+import { fetchHdImageUrls } from "../lib/pieceImages.js";
 import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput } from "../lib/validation.js";
 
 const VAULT_CATEGORIES: VaultCategory[] = [
@@ -42,11 +43,12 @@ interface VaultItemRow {
   created_at: string;
 }
 
-function toVaultItem(row: VaultItemRow): VaultItem {
+function toVaultItem(row: VaultItemRow, imageHdUrl: string | null = null): VaultItem {
   return {
     id: row.id,
     title: row.title,
     imageUrl: row.image_url,
+    imageHdUrl,
     category: row.category,
     privacy: row.privacy,
     verified: row.verified,
@@ -94,7 +96,8 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
     const nextCursor = hasMore ? (pageRows.at(-1)?.created_at ?? null) : null;
 
     const totalCount = cursorDate ? null : (count ?? pageRows.length);
-    return reply.send({ items: pageRows.map(toVaultItem), nextCursor, totalCount });
+    const hdUrls = await fetchHdImageUrls(fastify, pageRows);
+    return reply.send({ items: pageRows.map((row, index) => toVaultItem(row, hdUrls[index])), nextCursor, totalCount });
   });
 
   fastify.get("/api/vault/:id", { preHandler: fastify.requireAuth }, async (request, reply) => {
@@ -130,7 +133,8 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
 
     // Lien marchand : celui de la pièce identifiée d'origine (Spotter),
     // jamais pour une pièce ajoutée à la main.
-    const item = toVaultItem(data as VaultItemRow);
+    const [imageHdUrl] = await fetchHdImageUrls(fastify, [data as VaultItemRow]);
+    const item = toVaultItem(data as VaultItemRow, imageHdUrl ?? null);
     let merchant: { merchantName: string | null; merchantUrl: string | null; affiliateUrl: string | null } = {
       merchantName: null,
       merchantUrl: null,
@@ -302,7 +306,8 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    return reply.send(toVaultItem(inserted as VaultItemRow));
+    const [imageHdUrl] = await fetchHdImageUrls(fastify, [inserted as VaultItemRow]);
+    return reply.send(toVaultItem(inserted as VaultItemRow, imageHdUrl ?? null));
   });
 
   fastify.patch("/api/vault/:id", { preHandler: fastify.requireAuth }, async (request, reply) => {
@@ -331,6 +336,86 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
 
     if (error || !updated) {
       return reply.code(404).send({ error: "vault_item_not_found", message: "Objet introuvable." });
+    }
+
+    const [imageHdUrl] = await fetchHdImageUrls(fastify, [updated as VaultItemRow]);
+    return reply.send(toVaultItem(updated as VaultItemRow, imageHdUrl ?? null));
+  });
+
+  // « Changer la photo » (Lot S2) : la nouvelle photo va dans le dossier de
+  // l'utilisateur (vault-media/<userId>/…). L'ancienne n'est supprimée que
+  // si c'était une photo personnelle à lui (deleteOwnedStorageFile) — une
+  // image de marchand n'est jamais concernée. Les publications « achat »
+  // qui montraient l'ancienne photo passent à la nouvelle, pour ne jamais
+  // pointer vers un fichier supprimé.
+  fastify.post("/api/vault/:id/photo", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const { id } = params;
+    const userId = request.user!.id;
+
+    const { data: existing } = await fastify.supabaseAdmin
+      .from("vault_items")
+      .select("*")
+      .eq("id", id)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!existing) {
+      return reply.code(404).send({ error: "vault_item_not_found", message: "Objet introuvable." });
+    }
+
+    let fileBuffer: Buffer;
+    let fileMimetype: string;
+    try {
+      const file = await request.file();
+      if (!file || !file.mimetype.startsWith("image/")) {
+        return reply.code(400).send({ error: "invalid_file", message: "Le fichier doit être une image." });
+      }
+      fileBuffer = await file.toBuffer();
+      fileMimetype = file.mimetype;
+    } catch (error) {
+      if (isFileTooLargeError(error)) {
+        return reply.code(413).send({ error: "file_too_large", message: "Le fichier est trop volumineux (10 Mo maximum)." });
+      }
+      throw error;
+    }
+
+    const extension = fileMimetype.split("/")[1] ?? "jpg";
+    const path = `${userId}/${randomUUID()}.${extension}`;
+    const { error: uploadError } = await fastify.supabaseAdmin.storage
+      .from("vault-media")
+      .upload(path, fileBuffer, { contentType: fileMimetype, upsert: false });
+    if (uploadError) {
+      request.log.error({ uploadError }, "Échec d'upload de la nouvelle photo du vault");
+      return reply.code(500).send({ error: "upload_failed", message: "L'envoi de la photo a échoué." });
+    }
+    const newUrl = fastify.supabaseAdmin.storage.from("vault-media").getPublicUrl(path).data.publicUrl;
+    const oldUrl = (existing as VaultItemRow).image_url;
+
+    const { data: updated, error: updateError } = await fastify.supabaseAdmin
+      .from("vault_items")
+      .update({ image_url: newUrl })
+      .eq("id", id)
+      .eq("user_id", userId)
+      .select("*")
+      .single();
+    if (updateError || !updated) {
+      request.log.error({ updateError }, "Échec du changement de photo du vault");
+      await fastify.supabaseAdmin.storage.from("vault-media").remove([path]);
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+
+    await fastify.supabaseAdmin
+      .from("posts")
+      .update({ media_url: newUrl })
+      .eq("vault_item_id", id)
+      .eq("user_id", userId)
+      .eq("media_url", oldUrl);
+
+    // Ancienne photo : supprimée seulement si elle était à lui, dans son
+    // dossier (sinon, image de marchand : rien à supprimer, sans alerte).
+    if (extractOwnedStoragePath(oldUrl, "vault-media", userId)) {
+      await deleteOwnedStorageFile(fastify, "vault-media", userId, oldUrl);
     }
 
     return reply.send(toVaultItem(updated as VaultItemRow));

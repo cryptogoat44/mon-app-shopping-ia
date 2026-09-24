@@ -5,7 +5,8 @@ import { Image } from "expo-image";
 // Image d'une proposition : l'originale du marchand (haute définition) en
 // priorité, et la petite vignette de Google si elle ne se charge pas —
 // certains marchands bloquent l'affichage de leurs images hors de leur site
-// (constaté : refus 403). Toujours « contenue » : jamais rognée ni déformée.
+// (constaté : refus 403). « Contenue » par défaut (jamais rognée ni
+// déformée) ; « cover » pour les grilles carrées (Vault, Envies, récentes).
 // Pendant le chargement, le fond du cadre (plinthe) suffit : une vignette
 // d'attente restait superposée à l'image finale sur le web.
 export function SpotImage({
@@ -13,11 +14,13 @@ export function SpotImage({
   fallbackUri,
   style,
   accessibilityLabel,
+  fit = "contain",
 }: {
   hdUri?: string | null;
   fallbackUri: string;
   style?: StyleProp<ImageStyle>;
   accessibilityLabel?: string;
+  fit?: "contain" | "cover";
 }) {
   const [useFallback, setUseFallback] = useState(!hdUri);
 
@@ -29,7 +32,7 @@ export function SpotImage({
     <Image
       source={{ uri: useFallback || !hdUri ? fallbackUri : hdUri }}
       style={style}
-      contentFit="contain"
+      contentFit={fit}
       onError={() => setUseFallback(true)}
       accessibilityLabel={accessibilityLabel}
     />

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
+import { fetchHdImageUrls } from "../lib/pieceImages.js";
 import { z } from "zod";
 import type { WishlistItem } from "@monapp/shared-types";
 import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput } from "../lib/validation.js";
@@ -28,11 +29,16 @@ interface WishlistItemRow {
   created_at: string;
 }
 
-function toWishlistItem(row: WishlistItemRow, affiliateUrls: Map<string, string> = new Map()): WishlistItem {
+function toWishlistItem(
+  row: WishlistItemRow,
+  affiliateUrls: Map<string, string> = new Map(),
+  imageHdUrl: string | null = null
+): WishlistItem {
   return {
     id: row.id,
     title: row.title,
     imageUrl: row.image_url,
+    imageHdUrl,
     reference: row.reference,
     priceMin: row.price_min !== null ? Number(row.price_min) : null,
     currency: row.currency,
@@ -82,7 +88,8 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
       fastify,
       pageRows.map((row) => row.product_match_id).filter((id): id is string => id !== null)
     );
-    return reply.send({ items: pageRows.map((row) => toWishlistItem(row, affiliateUrls)), nextCursor });
+    const hdUrls = await fetchHdImageUrls(fastify, pageRows);
+    return reply.send({ items: pageRows.map((row, index) => toWishlistItem(row, affiliateUrls, hdUrls[index])), nextCursor });
   });
 
   fastify.post("/api/wishlist", { preHandler: fastify.requireAuth }, async (request, reply) => {

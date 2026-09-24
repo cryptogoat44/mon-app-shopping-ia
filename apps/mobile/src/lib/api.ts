@@ -221,6 +221,14 @@ export async function updateVaultItem(id: string, payload: UpdateVaultItemReques
   return response.json();
 }
 
+/** « Changer la photo » d'une pièce du Vault (photo prise ou importée). */
+export async function changeVaultItemPhoto(id: string, imageUri: string): Promise<VaultItem> {
+  const formData = new FormData();
+  await appendImageFile(formData, "file", imageUri);
+  const response = await authorizedFetch(`/api/vault/${id}/photo`, { method: "POST", body: formData });
+  return response.json();
+}
+
 export async function deleteVaultItem(id: string): Promise<void> {
   await authorizedFetch(`/api/vault/${id}`, { method: "DELETE" });
 }

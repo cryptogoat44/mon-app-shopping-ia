@@ -130,6 +130,10 @@ export interface VaultItem {
   id: string;
   title: string;
   imageUrl: string;
+  /** Image haute définition du marchand, quand la pièce vient du Spotter et
+   * garde son image d'origine — à afficher en priorité, avec repli sur
+   * `imageUrl`. Null pour une photo personnelle. */
+  imageHdUrl: string | null;
   category: VaultCategory;
   privacy: PrivacyLevel;
   verified: boolean;
@@ -167,6 +171,9 @@ export interface WishlistItem {
   id: string;
   title: string;
   imageUrl: string;
+  /** Image haute définition du marchand (pièce venue du Spotter), avec
+   * repli sur `imageUrl`. */
+  imageHdUrl: string | null;
   reference: string | null;
   priceMin: number | null;
   currency: string | null;

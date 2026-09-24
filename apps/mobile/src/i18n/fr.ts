@@ -188,6 +188,10 @@ export const fr = {
   },
   vaultItem: {
     back: "Vault",
+    changePhoto: "Changer la photo",
+    changingPhoto: "Envoi de la photo…",
+    photoChanged: "Photo mise à jour",
+    changePhotoError: "Le changement de photo a échoué. Réessayez.",
     visibility: "Qui peut voir cet objet",
     share: "Partager dans mon fil",
     sharing: "Partage…",

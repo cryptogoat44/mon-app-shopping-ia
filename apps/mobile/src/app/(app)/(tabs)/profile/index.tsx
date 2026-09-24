@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
+import { SpotImage } from "@/components/spot-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
@@ -205,7 +206,7 @@ export default function ProfileScreen() {
                 >
                   <View style={styles.thumb}>
                     {item.imageUrl ? (
-                      <Image source={{ uri: item.imageUrl }} style={styles.thumbImage} contentFit="cover" accessibilityLabel={item.title} />
+                      <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.thumbImage} fit="cover" accessibilityLabel={item.title} />
                     ) : (
                       <ClockIcon size={30} tint={color.encre} />
                     )}

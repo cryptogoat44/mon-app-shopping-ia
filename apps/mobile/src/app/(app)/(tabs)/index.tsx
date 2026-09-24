@@ -12,7 +12,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
@@ -21,6 +20,7 @@ import { getRecentSearches } from "@/api/client";
 import type { Piece } from "@/api/types";
 import { CameraIcon, ClipboardIcon, ClockIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
+import { SpotImage } from "@/components/spot-image";
 import { detectLink, type LinkDetection } from "@/lib/link-detection";
 import { beginFromLink, beginFromPhoto, prepareFailureKind } from "@/lib/spot-flow";
 import { importPhotoForSpotter } from "@/lib/image-import";
@@ -196,7 +196,7 @@ export default function SpotterScreen() {
                   >
                     <View style={styles.recentThumb}>
                       {piece.imageUrl ? (
-                        <Image source={{ uri: piece.imageUrl }} style={styles.fill} contentFit="cover" />
+                        <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} fit="cover" />
                       ) : (
                         <ClockIcon size={26} tint={color.acier} />
                       )}

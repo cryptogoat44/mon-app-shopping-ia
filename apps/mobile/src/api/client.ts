@@ -23,6 +23,7 @@ function wishlistRowToItem(row: RemoteWishlistItem): WishlistItem {
     reference: row.reference,
     material: null,
     imageUrl: row.imageUrl,
+    imageHdUrl: row.imageHdUrl,
     priceFrom: row.priceMin,
     currency: row.currency,
     merchantName: row.merchantName,

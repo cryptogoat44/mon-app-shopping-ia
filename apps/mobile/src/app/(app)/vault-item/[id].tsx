@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import type { PrivacyLevel, VaultItemDetail } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
-import { ApiError, deleteVaultItem, fetchVaultItem, sharePurchasePost, updateVaultItem } from "@/lib/api";
+import { ApiError, changeVaultItemPhoto, deleteVaultItem, fetchVaultItem, sharePurchasePost, updateVaultItem } from "@/lib/api";
+import { importPhotoForSpotter } from "@/lib/image-import";
+import { SpotImage } from "@/components/spot-image";
 import { PRIVACY_LABELS, PRIVACY_LEVELS, VAULT_CATEGORY_LABELS } from "@/lib/vault-labels";
 import { VerifiedIcon } from "@/components/icons";
 import { useToast } from "@/lib/toast-context";
@@ -28,6 +29,29 @@ export default function VaultItemDetailScreen() {
   const router = useRouter();
   const { showToast } = useToast();
 
+  // La nouvelle photo remplace l'ancienne (supprimée côté serveur si c'était
+  // une photo personnelle) ; les publications « achat » suivent.
+  async function handleChangePhoto() {
+    if (!item) return;
+    setError(null);
+    const picked = await importPhotoForSpotter();
+    if (picked.kind === "denied") {
+      setError(fr.spotter.photoDenied);
+      return;
+    }
+    if (picked.kind !== "picked") return;
+    setChangingPhoto(true);
+    try {
+      const updated = await changeVaultItemPhoto(item.id, picked.uri);
+      setItem((current) => (current ? { ...current, ...updated } : current));
+      showToast(fr.vaultItem.photoChanged);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : fr.vaultItem.changePhotoError);
+    } finally {
+      setChangingPhoto(false);
+    }
+  }
+
   function safeBack() {
     if (router.canGoBack()) router.back();
     else router.replace("/profile");
@@ -37,6 +61,7 @@ export default function VaultItemDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [changingPhoto, setChangingPhoto] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [shared, setShared] = useState(false);
 
@@ -128,7 +153,19 @@ export default function VaultItemDetailScreen() {
 
         {error ? <ErrorMessage style={styles.banner}>{error}</ErrorMessage> : null}
 
-        <Image source={{ uri: item.imageUrl }} style={styles.image} contentFit="cover" accessibilityLabel={item.title} />
+        {/* Image entière (jamais rognée), en haute définition quand elle existe. */}
+        <View style={styles.image}>
+          <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.fill} accessibilityLabel={item.title} />
+        </View>
+        <Pressable
+          onPress={handleChangePhoto}
+          disabled={changingPhoto || busy}
+          hitSlop={8}
+          style={styles.changePhoto}
+          accessibilityRole="button"
+        >
+          <Text style={styles.changePhotoLabel}>{changingPhoto ? fr.vaultItem.changingPhoto : fr.vaultItem.changePhoto}</Text>
+        </Pressable>
 
         <View style={styles.titleRow}>
           <Text style={styles.title} accessibilityRole="header">{item.title}</Text>
@@ -215,13 +252,16 @@ const styles = StyleSheet.create({
   banner: { fontSize: font.secondary, color: color.danger, marginBottom: space.md },
   image: {
     width: "100%",
-    maxWidth: 320,
-    aspectRatio: 1,
+    maxWidth: 360,
+    aspectRatio: 4 / 5,
     alignSelf: "center",
     borderRadius: radius.sm,
     backgroundColor: color.plinthe,
-    marginBottom: space.md,
+    overflow: "hidden",
   },
+  fill: { width: "100%", height: "100%" },
+  changePhoto: { alignSelf: "center", minHeight: 40, justifyContent: "center", marginBottom: space.sm },
+  changePhotoLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600" },
   titleRow: { flexDirection: "row", alignItems: "center", gap: space.sm, marginBottom: space.xs },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, flexShrink: 1 },
   subtitle: { fontSize: font.secondary, color: color.acier, marginBottom: space.lg },
