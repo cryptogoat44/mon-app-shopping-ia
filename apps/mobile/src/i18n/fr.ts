@@ -213,6 +213,7 @@ export const fr = {
     confirm: "Supprimer",
   },
   userProfile: {
+    posts_count: (n: number) => `${n} publication${n > 1 ? "s" : ""}`,
     followers: (n: number) => `${n} abonné${n > 1 ? "s" : ""}`,
     following: (n: number) => `${n} abonnement${n > 1 ? "s" : ""}`,
     follow: "Suivre",
@@ -234,6 +235,7 @@ export const fr = {
   profile: {
     vault: "Vault",
     lifestyle: "Lifestyle",
+    posts: "Publications",
     verified: "Achat vérifié",
     publish: "Publier",
     follow: "Suivre",

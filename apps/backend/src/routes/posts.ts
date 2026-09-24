@@ -6,6 +6,8 @@ import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput } from "../lib/validation.js";
 import { canViewPost } from "../lib/visibility.js";
+import { fetchHdImageUrls } from "../lib/pieceImages.js";
+import { PHOTO_SIZES, optimizePhoto } from "../lib/photos.js";
 import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.js";
 
 const POST_TYPES: PostType[] = ["lifestyle", "purchase"];
@@ -38,6 +40,7 @@ export interface PostRow {
   vault_item_id: string | null;
   caption: string | null;
   media_url: string | null;
+  media_thumb_url?: string | null;
   privacy: PrivacyLevel;
   created_at: string;
 }
@@ -53,6 +56,8 @@ interface VaultItemRow {
   id: string;
   title: string;
   verified: boolean;
+  image_url: string;
+  product_match_id: string | null;
 }
 
 interface TaggedVaultItemRow {
@@ -153,7 +158,7 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
   const [{ data: profiles }, { data: vaultItems }, { data: reactions }, { data: tagRows }, { data: commentRows }] = await Promise.all([
     fastify.supabaseAdmin.from("profiles").select("id, username, display_name, avatar_url").in("id", authorIds),
     vaultItemIds.length > 0
-      ? fastify.supabaseAdmin.from("vault_items").select("id, title, verified").in("id", vaultItemIds)
+      ? fastify.supabaseAdmin.from("vault_items").select("id, title, verified, image_url, product_match_id").in("id", vaultItemIds)
       : Promise.resolve({ data: [] as VaultItemRow[] }),
     fastify.supabaseAdmin.from("post_reactions").select("post_id, user_id").in("post_id", postIds),
     fastify.supabaseAdmin
@@ -243,14 +248,26 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
     taggedPiecesByPost.set(tag.post_id, list);
   }
 
+  // Publications « achat » : image haute définition de la pièce venue du
+  // Spotter (même mécanisme que le Vault), si la pièce affiche encore
+  // l'image du résultat d'origine. Avant : la miniature de Google, floue.
+  const purchaseVaultItems = [...vaultItemById.values()];
+  const hdByVaultItem = new Map<string, string | null>();
+  const hdUrls = await fetchHdImageUrls(fastify, purchaseVaultItems);
+  purchaseVaultItems.forEach((item, index) => hdByVaultItem.set(item.id, hdUrls[index] ?? null));
+
   return rows.map((row) => {
     const author = profileById.get(row.user_id);
     const vaultItem = row.vault_item_id ? vaultItemById.get(row.vault_item_id) : undefined;
+    const mediaHdUrl =
+      vaultItem && row.media_url === vaultItem.image_url ? (hdByVaultItem.get(vaultItem.id) ?? null) : null;
     return {
       id: row.id,
       type: row.type,
       caption: row.caption,
       mediaUrl: row.media_url!,
+      mediaHdUrl,
+      mediaThumbUrl: row.media_thumb_url ?? null,
       privacy: row.privacy,
       createdAt: row.created_at,
       author: {
@@ -271,10 +288,8 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
 const FEED_PAGE_SIZE = 15;
 
 export default async function postsRoutes(fastify: FastifyInstance) {
-  // Fil d'activité : uniquement les publications des comptes suivis
-  // (jamais les siennes), jamais les publications "privé" — même pour un
-  // abonné, "privé" veut dire visible nulle part en dehors du profil de
-  // son auteur.
+  // Fil d'activité : ses propres publications (toutes) et celles des
+  // comptes suivis (publiques et « abonnés ») — décision du Lot F.
   //
   // Pagination par curseur (created_at de la dernière publication reçue) au
   // lieu d'offset : reste correct même si de nouvelles publications
@@ -389,6 +404,7 @@ export default async function postsRoutes(fastify: FastifyInstance) {
       }
 
       let mediaUrl: string;
+      let mediaThumbUrl: string | null = null;
       let vaultItemId: string | null = null;
       let caption = fields.caption?.trim() || null;
 
@@ -469,19 +485,32 @@ export default async function postsRoutes(fastify: FastifyInstance) {
         if (!fileBuffer || !fileMimetype?.startsWith("image/")) {
           return reply.code(400).send({ error: "invalid_file", message: "Une photo est obligatoire." });
         }
-        const extension = fileMimetype.split("/")[1] ?? "jpg";
-        const path = `${userId}/${randomUUID()}.${extension}`;
+        // Photo optimisée (lib/photos.ts) : version d'affichage + miniature.
+        let display: Buffer;
+        let thumb: Buffer;
+        try {
+          [display, thumb] = await Promise.all([
+            optimizePhoto(fileBuffer, PHOTO_SIZES.display),
+            optimizePhoto(fileBuffer, PHOTO_SIZES.thumb, 78),
+          ]);
+        } catch {
+          return reply.code(400).send({ error: "invalid_file", message: "Cette photo n'a pas pu être lue." });
+        }
+        const base = `${userId}/${randomUUID()}`;
+        const bucket = fastify.supabaseAdmin.storage.from("post-media");
+        const [displayUpload, thumbUpload] = await Promise.all([
+          bucket.upload(`${base}.jpg`, display, { contentType: "image/jpeg", upsert: false }),
+          bucket.upload(`${base}-mini.jpg`, thumb, { contentType: "image/jpeg", upsert: false }),
+        ]);
 
-        const { error: uploadError } = await fastify.supabaseAdmin.storage
-          .from("post-media")
-          .upload(path, fileBuffer, { contentType: fileMimetype, upsert: false });
-
-        if (uploadError) {
-          request.log.error({ uploadError }, "Échec d'upload de la photo du post");
+        if (displayUpload.error || thumbUpload.error) {
+          request.log.error({ uploadError: displayUpload.error ?? thumbUpload.error }, "Échec d'upload de la photo du post");
+          await bucket.remove([`${base}.jpg`, `${base}-mini.jpg`]);
           return reply.code(500).send({ error: "upload_failed", message: "L'envoi de la photo a échoué." });
         }
 
-        mediaUrl = fastify.supabaseAdmin.storage.from("post-media").getPublicUrl(path).data.publicUrl;
+        mediaUrl = bucket.getPublicUrl(`${base}.jpg`).data.publicUrl;
+        mediaThumbUrl = bucket.getPublicUrl(`${base}-mini.jpg`).data.publicUrl;
       }
 
       let privacy = optionalFields.privacy;
@@ -503,6 +532,7 @@ export default async function postsRoutes(fastify: FastifyInstance) {
           caption,
           media_kind: "photo",
           media_url: mediaUrl,
+          media_thumb_url: mediaThumbUrl,
           privacy,
         })
         .select("*")
@@ -589,7 +619,7 @@ export default async function postsRoutes(fastify: FastifyInstance) {
 
     const { data: post } = await fastify.supabaseAdmin
       .from("posts")
-      .select("id, media_url")
+      .select("id, media_url, media_thumb_url")
       .eq("id", params.id)
       .eq("user_id", userId)
       .maybeSingle();
@@ -604,8 +634,10 @@ export default async function postsRoutes(fastify: FastifyInstance) {
     }
 
     const mediaUrl = post.media_url as string | null;
-    if (mediaUrl && extractOwnedStoragePath(mediaUrl, "post-media", userId)) {
-      await deleteOwnedStorageFile(fastify, "post-media", userId, mediaUrl);
+    for (const url of [mediaUrl, post.media_thumb_url as string | null]) {
+      if (url && extractOwnedStoragePath(url, "post-media", userId)) {
+        await deleteOwnedStorageFile(fastify, "post-media", userId, url);
+      }
     }
     return reply.code(204).send();
   });

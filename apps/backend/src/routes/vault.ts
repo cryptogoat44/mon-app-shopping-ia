@@ -6,6 +6,7 @@ import type { PrivacyLevel, VaultCategory, VaultItem, VaultItemDetail } from "@m
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.js";
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
+import { PHOTO_SIZES, optimizePhoto } from "../lib/photos.js";
 import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput } from "../lib/validation.js";
 
 const VAULT_CATEGORIES: VaultCategory[] = [
@@ -228,12 +229,17 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       if (!fileMimetype?.startsWith("image/")) {
         return reply.code(400).send({ error: "invalid_file", message: "Le fichier doit être une image." });
       }
-      const extension = fileMimetype.split("/")[1] ?? "jpg";
-      const path = `${userId}/${randomUUID()}.${extension}`;
+      let optimized: Buffer;
+      try {
+        optimized = await optimizePhoto(fileBuffer, PHOTO_SIZES.display);
+      } catch {
+        return reply.code(400).send({ error: "invalid_file", message: "Cette photo n'a pas pu être lue." });
+      }
+      const path = `${userId}/${randomUUID()}.jpg`;
 
       const { error: uploadError } = await fastify.supabaseAdmin.storage
         .from("vault-media")
-        .upload(path, fileBuffer, { contentType: fileMimetype, upsert: false });
+        .upload(path, optimized, { contentType: "image/jpeg", upsert: false });
 
       if (uploadError) {
         request.log.error({ uploadError }, "Échec d'upload de la photo du vault");
@@ -383,11 +389,16 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       throw error;
     }
 
-    const extension = fileMimetype.split("/")[1] ?? "jpg";
-    const path = `${userId}/${randomUUID()}.${extension}`;
+    let optimized: Buffer;
+    try {
+      optimized = await optimizePhoto(fileBuffer, PHOTO_SIZES.display);
+    } catch {
+      return reply.code(400).send({ error: "invalid_file", message: "Cette photo n'a pas pu être lue." });
+    }
+    const path = `${userId}/${randomUUID()}.jpg`;
     const { error: uploadError } = await fastify.supabaseAdmin.storage
       .from("vault-media")
-      .upload(path, fileBuffer, { contentType: fileMimetype, upsert: false });
+      .upload(path, optimized, { contentType: "image/jpeg", upsert: false });
     if (uploadError) {
       request.log.error({ uploadError }, "Échec d'upload de la nouvelle photo du vault");
       return reply.code(500).send({ error: "upload_failed", message: "L'envoi de la photo a échoué." });

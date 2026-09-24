@@ -10,7 +10,7 @@
 // - supprime TOUJOURS les comptes à la fin, même en cas d'échec ou de Ctrl+C.
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { extname, join, resolve } from "node:path";
@@ -49,12 +49,37 @@ export interface TestAccount {
   readonly signIn: (page: Page) => Promise<void>;
 }
 
+export interface ImageStats {
+  count: number;
+  totalKo: number;
+  maxConcurrent: number;
+  largest: { host: string; ko: number }[];
+}
+
+export interface ScrollStats {
+  frames: number;
+  slowFrames: number; // images de plus de 50 ms (saccade visible)
+  longTasks: number;
+  longTasksMs: number;
+  worstFrameMs: number;
+}
+
 export interface Parcours {
   siteUrl: string;
   apiUrl: string;
   outputDir: string;
+  /** Arguments supplémentaires de la ligne de commande (ex. « avant »). */
+  args: string[];
+  /** Client d'administration de spotto-dev, pour préparer des données. */
+  admin: SupabaseClient;
   createAccount(label: string, displayName: string): Promise<TestAccount>;
-  newPhone(): Promise<Page>;
+  /** Téléphone au format iPhone ; `desktop: true` pour un écran d'ordinateur. */
+  newPhone(options?: { desktop?: boolean }): Promise<Page>;
+  /** Suit les images chargées par la page à partir de maintenant. */
+  trackImages(page: Page): () => ImageStats;
+  /** Fait défiler la page et mesure la fluidité (Chrome invisible : indicatif). */
+  measureScroll(page: Page, distancePx: number): Promise<ScrollStats>;
+  writeReport(fileName: string, content: string): void;
   capture(page: Page, name: string): Promise<void>;
   api(account: TestAccount, method: string, path: string, body?: unknown): Promise<Response>;
   step<T>(title: string, fn: () => Promise<T>): Promise<T>;
@@ -134,7 +159,12 @@ function run(command: string, args: string[], cwd: string, env: NodeJS.ProcessEn
 
 /** Lance un parcours. `scenario` reçoit la boîte à outils ; tout ce qui a
  * été créé est nettoyé ensuite, quoi qu'il arrive. */
-export async function runParcours(name: string, outputDirName: string, scenario: (p: Parcours) => Promise<void>): Promise<void> {
+export async function runParcours(
+  name: string,
+  outputDirName: string,
+  scenario: (p: Parcours) => Promise<void>,
+  extraArgs: string[] = []
+): Promise<void> {
   loadEnv({ path: join(BACKEND_DIR, ".env") });
   const mobileEnv = loadEnv({ path: join(MOBILE_DIR, ".env"), processEnv: {} }).parsed ?? {};
 
@@ -212,6 +242,8 @@ export async function runParcours(name: string, outputDirName: string, scenario:
       siteUrl,
       apiUrl,
       outputDir,
+      args: extraArgs,
+      admin,
       async createAccount(label, displayName) {
         const suffix = randomBytes(3).toString("hex");
         const email = `ecran-${label}-${suffix}@example.com`;
@@ -241,11 +273,82 @@ export async function runParcours(name: string, outputDirName: string, scenario:
         log(`  compte de test créé : ${username} (${displayName})`);
         return account;
       },
-      async newPhone() {
-        const context = await browser!.newContext(IPHONE);
+      async newPhone(options) {
+        const context = await browser!.newContext(
+          options?.desktop ? { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2, locale: "fr-FR" } : IPHONE
+        );
         await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: siteUrl });
         contexts.push(context);
         return context.newPage();
+      },
+      trackImages(page) {
+        const done: { host: string; bytes: number }[] = [];
+        let inFlight = 0;
+        let maxConcurrent = 0;
+        page.on("request", (request) => {
+          if (request.resourceType() !== "image") return;
+          inFlight += 1;
+          maxConcurrent = Math.max(maxConcurrent, inFlight);
+        });
+        const finish = async (request: import("playwright-core").Request) => {
+          if (request.resourceType() !== "image") return;
+          inFlight = Math.max(0, inFlight - 1);
+          const response = await request.response().catch(() => null);
+          const body = response ? await response.body().catch(() => null) : null;
+          let host = "?";
+          try {
+            host = new URL(request.url()).hostname;
+          } catch {
+            // data: ou blob:
+          }
+          done.push({ host, bytes: body?.length ?? 0 });
+        };
+        page.on("requestfinished", (r) => void finish(r));
+        page.on("requestfailed", (r) => void finish(r));
+        return () => ({
+          count: done.length,
+          totalKo: Math.round(done.reduce((sum, d) => sum + d.bytes, 0) / 1024),
+          maxConcurrent,
+          largest: [...done]
+            .sort((x, y) => y.bytes - x.bytes)
+            .slice(0, 5)
+            .map((d) => ({ host: d.host, ko: Math.round(d.bytes / 1024) })),
+        });
+      },
+      async measureScroll(page, distancePx) {
+        // Code envoyé au navigateur sous forme de texte (voir lot-f.ts).
+        await page.evaluate(`(() => {
+          window.__mesure = { frames: [], longTasks: [] };
+          let last = performance.now();
+          const tick = (now) => { window.__mesure.frames.push(now - last); last = now; if (window.__mesure.running) requestAnimationFrame(tick); };
+          window.__mesure.running = true;
+          requestAnimationFrame(tick);
+          try {
+            new PerformanceObserver((list) => { for (const e of list.getEntries()) window.__mesure.longTasks.push(e.duration); }).observe({ type: "longtask", buffered: false });
+          } catch (e) {}
+        })()`);
+        const steps = Math.ceil(distancePx / 200);
+        for (let i = 0; i < steps; i += 1) {
+          await page.mouse.wheel(0, 200);
+          await page.waitForTimeout(60);
+        }
+        await page.waitForTimeout(800);
+        const raw = (await page.evaluate(`(() => { window.__mesure.running = false; return window.__mesure; })()`)) as {
+          frames: number[];
+          longTasks: number[];
+        };
+        const frames = raw.frames.slice(1);
+        return {
+          frames: frames.length,
+          slowFrames: frames.filter((f) => f > 50).length,
+          longTasks: raw.longTasks.length,
+          longTasksMs: Math.round(raw.longTasks.reduce((s, d) => s + d, 0)),
+          worstFrameMs: Math.round(Math.max(0, ...frames)),
+        };
+      },
+      writeReport(fileName, content) {
+        writeFileSync(join(outputDir, fileName), content);
+        log(`  📝 ${fileName}`);
       },
       async capture(page, captureName) {
         await page.waitForTimeout(600); // animations et images

@@ -14,6 +14,7 @@ function profile(username: string | null): Profile {
     defaultPrivacy: "followers",
     followersCount: 0,
     followingCount: 0,
+    postsCount: 0,
     createdAt: "2026-09-01T00:00:00.000Z",
     updatedAt: "2026-09-01T00:00:00.000Z",
   };

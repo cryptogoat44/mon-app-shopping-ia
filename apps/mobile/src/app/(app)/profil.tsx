@@ -9,6 +9,7 @@ import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
 import { MoreIcon, PersonIcon } from "@/components/icons";
 import { ReportBlockMenu } from "@/components/report-block-menu";
+import { SpotImage } from "@/components/spot-image";
 import { ErrorMessage } from "@/components/error-message";
 import { useToast } from "@/lib/toast-context";
 
@@ -144,7 +145,7 @@ export default function UserProfileScreen() {
       <Text style={styles.handle}>@{profile.username}</Text>
       {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
       <Text style={styles.counts}>
-        {fr.userProfile.followers(profile.followersCount)} · {fr.userProfile.following(profile.followingCount)}
+        {fr.userProfile.posts_count(profile.postsCount)} · {fr.userProfile.followers(profile.followersCount)} · {fr.userProfile.following(profile.followingCount)}
       </Text>
       <Pressable
         style={[styles.follow, profile.isFollowing ? styles.following : null, followBusy ? styles.busy : null]}
@@ -178,7 +179,15 @@ export default function UserProfileScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={post.caption ?? fr.postDetail.title}
               >
-                <Image source={{ uri: post.mediaUrl }} style={styles.fill} contentFit="cover" />
+                {/* Grille : miniature (480 px) d'une photo publiée ; image HD du
+                    marchand pour un « achat » ; repli sur l'image d'origine. */}
+                <SpotImage
+                  hdUri={post.mediaThumbUrl ?? post.mediaHdUrl}
+                  fallbackUri={post.mediaUrl}
+                  style={styles.fill}
+                  fit="cover"
+                  recyclingKey={post.id}
+                />
               </Pressable>
             ))}
           </View>

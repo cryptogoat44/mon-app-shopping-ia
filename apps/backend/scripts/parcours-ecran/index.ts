@@ -14,6 +14,7 @@ interface Scenario {
 
 const SCENARIOS: Record<string, () => Promise<Scenario>> = {
   "lot-f": () => import("./scenarios/lot-f.js"),
+  images: () => import("./scenarios/images.js"),
 };
 
 async function main() {
@@ -23,7 +24,7 @@ async function main() {
     throw new Error(`Indiquez un scénario : ${Object.keys(SCENARIOS).join(", ")}.`);
   }
   const scenario = await load();
-  await runParcours(scenario.name, scenario.outputDir, scenario.run);
+  await runParcours(scenario.name, scenario.outputDir, scenario.run, process.argv.slice(3));
 }
 
 main().catch((error: unknown) => {

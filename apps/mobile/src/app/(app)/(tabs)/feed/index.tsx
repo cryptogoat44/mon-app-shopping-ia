@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Platform, Pressable, RefreshControl, SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import type { Post } from "@monapp/shared-types";
 import { ApiError, fetchFeed } from "@/lib/api";
@@ -111,6 +111,13 @@ export default function FeedScreen() {
         <FlatList
           data={posts ?? []}
           keyExtractor={(post) => post.id}
+          // Fluidité (lot « images et fluidité ») : peu de publications
+          // préparées à la fois, les autres au fil du défilement ; celles
+          // sorties de l'écran sont libérées sur téléphone.
+          initialNumToRender={3}
+          maxToRenderPerBatch={3}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS !== "web"}
           contentContainerStyle={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
           renderItem={({ item: post }) => (

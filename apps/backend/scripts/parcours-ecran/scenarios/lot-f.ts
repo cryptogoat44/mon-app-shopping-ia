@@ -25,7 +25,7 @@ async function addVaultPiece(p: Parcours, account: TestAccount, title: string, c
   const form = new FormData();
   form.append("title", title);
   form.append("category", category);
-  form.append("file", new Blob([await demoImage(title, background)], { type: "image/jpeg" }), "piece.jpg");
+  form.append("file", new Blob([new Uint8Array(await demoImage(title, background))], { type: "image/jpeg" }), "piece.jpg");
   const res = await p.api(account, "POST", "/api/vault", form);
   if (!res.ok) throw new Error(`Ajout au Vault impossible (${res.status})`);
   return (await res.json()) as { id: string; imageUrl: string };

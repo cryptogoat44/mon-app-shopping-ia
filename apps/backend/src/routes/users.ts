@@ -126,10 +126,17 @@ export default async function usersRoutes(fastify: FastifyInstance) {
     const isMe = targetId === viewerId;
     if (!isMe && (await isBlockedEitherWay(fastify, viewerId, targetId))) return notFound();
 
-    const [followers, following, viewerFollows] = await Promise.all([
+    const viewerFollows = isMe ? false : await isFollowing(fastify, viewerId, targetId);
+    const [followers, following, posts] = await Promise.all([
       fastify.supabaseAdmin.from("follows").select("*", { count: "exact", head: true }).eq("followee_id", targetId),
       fastify.supabaseAdmin.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", targetId),
-      isMe ? Promise.resolve(false) : isFollowing(fastify, viewerId, targetId),
+      // Nombre de publications que CE visiteur peut voir (le même que la
+      // grille) : ne révèle jamais l'existence de publications privées.
+      fastify.supabaseAdmin
+        .from("posts")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", targetId)
+        .in("privacy", visiblePrivacies(isMe, viewerFollows)),
     ]);
 
     const profile: UserProfile = {
@@ -140,6 +147,7 @@ export default async function usersRoutes(fastify: FastifyInstance) {
       bio: (row.bio as string | null) ?? null,
       followersCount: followers.count ?? 0,
       followingCount: following.count ?? 0,
+      postsCount: posts.count ?? 0,
       isFollowing: viewerFollows,
       isMe,
     };

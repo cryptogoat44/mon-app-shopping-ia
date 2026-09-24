@@ -8,6 +8,7 @@ import { openMerchantLink } from "@/lib/merchant-links";
 import { color, font, radius, space } from "@/theme/tokens";
 import { CommentIcon, HeartIcon, MoreIcon, PersonIcon, ShareIcon, VerifiedIcon } from "@/components/icons";
 import { sharePost } from "@/lib/share-post";
+import { SpotImage } from "@/components/spot-image";
 import { useToast } from "@/lib/toast-context";
 import { fr } from "@/i18n/fr";
 import { timeAgo } from "@/lib/time";
@@ -116,7 +117,9 @@ export function PostCard({
         accessibilityRole="image"
         accessibilityLabel={`Photo publiée par ${post.author.displayName}`}
       >
-        <Image source={{ uri: post.mediaUrl }} style={styles.media} contentFit="cover" />
+        {/* « Achat » venu du Spotter : image HD du marchand, repli sur la
+            miniature ; photo publiée : version d'affichage (1 600 px). */}
+        <SpotImage hdUri={post.mediaHdUrl} fallbackUri={post.mediaUrl} style={styles.media} fit="cover" recyclingKey={post.id} />
         <Animated.View
           pointerEvents="none"
           style={[

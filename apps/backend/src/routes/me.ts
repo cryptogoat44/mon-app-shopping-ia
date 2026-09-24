@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
+import { PHOTO_SIZES, optimizePhoto } from "../lib/photos.js";
 import { z } from "zod";
 import type { Profile } from "@monapp/shared-types";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
@@ -28,7 +29,7 @@ interface ProfileRow {
   updated_at: string;
 }
 
-function toProfile(row: ProfileRow, followersCount: number, followingCount: number): Profile {
+function toProfile(row: ProfileRow, followersCount: number, followingCount: number, postsCount: number): Profile {
   return {
     id: row.id,
     username: row.username,
@@ -39,6 +40,7 @@ function toProfile(row: ProfileRow, followersCount: number, followingCount: numb
     defaultPrivacy: row.default_privacy,
     followersCount,
     followingCount,
+    postsCount,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -47,12 +49,14 @@ function toProfile(row: ProfileRow, followersCount: number, followingCount: numb
 async function fetchFollowCounts(
   fastify: FastifyInstance,
   userId: string
-): Promise<{ followersCount: number; followingCount: number }> {
-  const [followers, following] = await Promise.all([
+): Promise<{ followersCount: number; followingCount: number; postsCount: number }> {
+  const [followers, following, posts] = await Promise.all([
     fastify.supabaseAdmin.from("follows").select("*", { count: "exact", head: true }).eq("followee_id", userId),
     fastify.supabaseAdmin.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", userId),
+    // Son propre nombre de publications (toutes, y compris privées).
+    fastify.supabaseAdmin.from("posts").select("id", { count: "exact", head: true }).eq("user_id", userId),
   ]);
-  return { followersCount: followers.count ?? 0, followingCount: following.count ?? 0 };
+  return { followersCount: followers.count ?? 0, followingCount: following.count ?? 0, postsCount: posts.count ?? 0 };
 }
 
 export default async function meRoutes(fastify: FastifyInstance) {
@@ -69,7 +73,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "profile_not_found", message: "Profil introuvable." });
     }
 
-    return reply.send(toProfile(data as ProfileRow, counts.followersCount, counts.followingCount));
+    return reply.send(toProfile(data as ProfileRow, counts.followersCount, counts.followingCount, counts.postsCount));
   });
 
   fastify.post("/api/me/avatar", { preHandler: fastify.requireAuth }, async (request, reply) => {
@@ -90,14 +94,20 @@ export default async function meRoutes(fastify: FastifyInstance) {
       throw error;
     }
 
-    const extension = file.mimetype.split("/")[1] ?? "jpg";
+    // Avatar optimisé (512 px, sans métadonnées) — lot « images et fluidité ».
+    let optimized: Buffer;
+    try {
+      optimized = await optimizePhoto(buffer, PHOTO_SIZES.avatar);
+    } catch {
+      return reply.code(400).send({ error: "invalid_file", message: "Cette photo n'a pas pu être lue." });
+    }
     // upsert avec un nom fixe par utilisateur : une photo de profil n'a
     // qu'une seule version à la fois, contrairement aux photos du vault.
-    const path = `${userId}/avatar.${extension}`;
+    const path = `${userId}/avatar.jpg`;
 
     const { error: uploadError } = await fastify.supabaseAdmin.storage
       .from("avatars")
-      .upload(path, buffer, { contentType: file.mimetype, upsert: true });
+      .upload(path, optimized, { contentType: "image/jpeg", upsert: true });
 
     if (uploadError) {
       request.log.error({ uploadError }, "Échec d'upload de la photo de profil");
@@ -122,7 +132,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
     }
 
     const counts = await fetchFollowCounts(fastify, userId);
-    return reply.send(toProfile(updated as ProfileRow, counts.followersCount, counts.followingCount));
+    return reply.send(toProfile(updated as ProfileRow, counts.followersCount, counts.followingCount, counts.postsCount));
   });
 
   fastify.patch("/api/me", { preHandler: fastify.requireAuth }, async (request, reply) => {
@@ -155,7 +165,8 @@ export default async function meRoutes(fastify: FastifyInstance) {
     }
 
     // Un profil qu'on vient de compléter n'a par construction encore
-    // aucun abonné/abonnement — pas besoin de requêter les compteurs ici.
-    return reply.send(toProfile(data as ProfileRow, 0, 0));
+    // aucun abonné, abonnement ni publication — pas besoin de requêter les
+    // compteurs ici.
+    return reply.send(toProfile(data as ProfileRow, 0, 0, 0));
   });
 }

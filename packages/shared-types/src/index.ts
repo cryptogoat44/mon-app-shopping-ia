@@ -10,6 +10,9 @@ export interface Profile {
   defaultPrivacy: PrivacyLevel;
   followersCount: number;
   followingCount: number;
+  /** Ses publications (toutes). Le nombre de pièces du Vault n'est jamais
+   * exposé ici : il ne s'affiche que sur son propre profil. */
+  postsCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -223,6 +226,8 @@ export interface UserProfile {
   bio: string | null;
   followersCount: number;
   followingCount: number;
+  /** Publications que le visiteur peut voir (jamais le Vault). */
+  postsCount: number;
   isFollowing: boolean;
   /** true quand c'est le profil de la personne connectée elle-même. */
   isMe: boolean;
@@ -265,6 +270,12 @@ export interface Post {
   type: PostType;
   caption: string | null;
   mediaUrl: string;
+  /** « Achat » venu du Spotter : image haute définition du marchand, avec
+   * repli sur `mediaUrl`. Null sinon. */
+  mediaHdUrl: string | null;
+  /** Photo publiée : miniature (480 px) pour les grilles. Null pour un
+   * « achat » ou une photo publiée avant l'optimisation. */
+  mediaThumbUrl: string | null;
   privacy: PrivacyLevel;
   createdAt: string;
   author: PostAuthor;

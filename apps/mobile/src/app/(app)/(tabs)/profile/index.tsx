@@ -62,7 +62,9 @@ export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load])
+      // Compteurs (publications, abonnés) à jour à chaque retour sur l'écran.
+      refreshProfile().catch(() => {});
+    }, [load, refreshProfile])
   );
 
   async function handleRefresh() {
@@ -145,24 +147,30 @@ export default function ProfileScreen() {
             </View>
           )}
         </Pressable>
-        <View style={styles.stats}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{vaultTotal}</Text>
-            <Text style={styles.statLabel}>{fr.profile.vault}</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{profile?.followersCount ?? 0}</Text>
-            <Text style={styles.statLabel}>{fr.profile.followers}</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{profile?.followingCount ?? 0}</Text>
-            <Text style={styles.statLabel}>{fr.profile.followingCount}</Text>
-          </View>
+        <View style={styles.who}>
+          <Text style={styles.name} accessibilityRole="header">{profile?.displayName}</Text>
+          {profile?.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
         </View>
       </View>
-      <View style={styles.who}>
-        <Text style={styles.name} accessibilityRole="header">{profile?.displayName}</Text>
-        {profile?.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
+      <View style={styles.stats}>
+        {/* Nombre de pièces du Vault : seulement ici, sur son propre profil
+            (décision 5 du Lot Q) ; jamais sur le profil vu par un autre. */}
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{vaultTotal}</Text>
+          <Text style={styles.statLabel}>{fr.profile.vault}</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{profile?.postsCount ?? 0}</Text>
+          <Text style={styles.statLabel}>{fr.profile.posts}</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{profile?.followersCount ?? 0}</Text>
+          <Text style={styles.statLabel}>{fr.profile.followers}</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{profile?.followingCount ?? 0}</Text>
+          <Text style={styles.statLabel}>{fr.profile.followingCount}</Text>
+        </View>
       </View>
 
       <View style={styles.seg}>
@@ -274,10 +282,12 @@ export default function ProfileScreen() {
                 accessibilityLabel={post.caption ?? fr.profile.lifestylePhoto}
               >
                 <View style={styles.thumb}>
-                  <Image
-                    source={{ uri: post.mediaUrl }}
+                  <SpotImage
+                    hdUri={post.mediaThumbUrl}
+                    fallbackUri={post.mediaUrl}
                     style={styles.thumbImage}
-                    contentFit="cover"
+                    fit="cover"
+                    recyclingKey={post.id}
                     accessibilityLabel={post.caption ?? fr.profile.lifestylePhoto}
                   />
                 </View>
@@ -299,7 +309,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.lg },
   navHandle: { fontSize: font.body, fontWeight: "600", color: color.encre },
-  head: { paddingHorizontal: space.lg, flexDirection: "row", gap: space.xl, alignItems: "center" },
+  head: { paddingHorizontal: space.lg, flexDirection: "row", gap: space.lg, alignItems: "center" },
   avatar: {
     width: 72,
     height: 72,
@@ -333,11 +343,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  stats: { flex: 1, flexDirection: "row", justifyContent: "space-around" },
-  statItem: { alignItems: "center" },
+  // Compteurs sur toute la largeur, sous la photo et le nom : quatre
+  // colonnes égales (les libellés se chevauchaient à côté de la photo).
+  stats: { flexDirection: "row", paddingHorizontal: space.lg, paddingTop: space.md },
+  statItem: { flex: 1, alignItems: "center" },
   statNumber: { fontSize: font.body, fontWeight: "600", color: color.encre },
   statLabel: { fontSize: font.caption, color: color.acier, marginTop: 2 },
-  who: { paddingHorizontal: space.lg, paddingTop: space.md },
+  who: { flex: 1 },
   name: { fontSize: font.body, fontWeight: "600", color: color.encre },
   bio: { fontSize: font.secondary, color: color.acier, marginTop: 4, lineHeight: 19 },
   seg: { flexDirection: "row", gap: 22, paddingHorizontal: space.lg, paddingTop: space.lg, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: color.filet },
@@ -349,7 +361,10 @@ const styles = StyleSheet.create({
     paddingBottom: space.xxl,
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: space.md,
+    // 3 colonnes de 31 % : un écart horizontal de 16 points faisait passer
+    // la 3ᵉ photo à la ligne sur iPhone (constaté sur les captures).
+    columnGap: space.sm,
+    rowGap: space.md,
     maxWidth: 640,
     alignSelf: "center",
     width: "100%",

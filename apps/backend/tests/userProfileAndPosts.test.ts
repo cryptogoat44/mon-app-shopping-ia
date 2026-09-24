@@ -51,9 +51,20 @@ describe("profil d'un autre utilisateur", () => {
     const profile = res.json();
     expect(profile).toMatchObject({ id: author.id, followersCount: 1, followingCount: 0, isFollowing: true, isMe: false });
     expect(Object.keys(profile).sort()).toEqual(
-      ["avatarUrl", "bio", "displayName", "followersCount", "followingCount", "id", "isFollowing", "isMe", "username"].sort()
+      ["avatarUrl", "bio", "displayName", "followersCount", "followingCount", "id", "isFollowing", "isMe", "postsCount", "username"].sort()
     );
     expect(JSON.stringify(profile)).not.toMatch(/vault|Montre secrète/i);
+  });
+
+  it("nombre de publications : celles que le visiteur peut voir ; jamais le nombre de pièces du Vault", async () => {
+    const count = async (viewer: TestUser) =>
+      (await app.inject({ method: "GET", url: `/api/users/${author.id}`, headers: authHeaders(viewer.token) })).json().postsCount;
+    expect(await count(follower)).toBe(2); // publique + abonnés
+    expect(await count(stranger)).toBe(1); // publique
+    expect(await count(author)).toBe(3); // tout
+    const me = (await app.inject({ method: "GET", url: "/api/me", headers: authHeaders(author.token) })).json();
+    expect(me.postsCount).toBe(3);
+    expect(JSON.stringify(me)).not.toMatch(/vault/i);
   });
 
   const cases: [string, () => TestUser, ("public" | "followers" | "private")[]][] = [
