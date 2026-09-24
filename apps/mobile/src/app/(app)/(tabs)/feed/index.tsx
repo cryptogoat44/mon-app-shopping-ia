@@ -1,19 +1,14 @@
-import { useCallback, useRef, useState } from "react";
-import { ActivityIndicator, Animated, FlatList, Pressable, RefreshControl, SafeAreaView, StyleSheet, Text, View } from "react-native";
-import { Image } from "expo-image";
+import { useCallback, useState } from "react";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import * as Haptics from "expo-haptics";
 import type { Post } from "@monapp/shared-types";
-import { ApiError, fetchFeed, fetchUnreadNotificationCount, reactToPost } from "@/lib/api";
-import { openMerchantLink } from "@/lib/merchant-links";
+import { ApiError, fetchFeed, fetchUnreadNotificationCount } from "@/lib/api";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
-import { BellIcon, HeartIcon, MoreIcon, PersonIcon, VerifiedIcon } from "@/components/icons";
+import { BellIcon } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
-import { timeAgo } from "@/lib/time";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { ErrorMessage } from "@/components/error-message";
-
-const DOUBLE_TAP_DELAY_MS = 300;
+import { PostCard } from "@/components/post-card";
 
 function FeedSkeletonRow() {
   return (
@@ -24,140 +19,6 @@ function FeedSkeletonRow() {
       </View>
       <Skeleton style={styles.media} />
       <Skeleton style={{ width: "70%", height: 12, marginTop: 12 }} />
-    </View>
-  );
-}
-
-function PostRow({ post, onOpenMenu }: { post: Post; onOpenMenu: () => void }) {
-  const [reactionCount, setReactionCount] = useState(post.reactionCount);
-  const [reacted, setReacted] = useState(post.viewerHasReacted);
-  const [busy, setBusy] = useState(false);
-  const lastTapRef = useRef(0);
-  const heartPop = useRef(new Animated.Value(0)).current;
-
-  async function like() {
-    if (reacted) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    setReacted(true);
-    setReactionCount((c) => c + 1);
-    try {
-      const result = await reactToPost(post.id);
-      setReacted(result.viewerHasReacted);
-      setReactionCount(result.reactionCount);
-    } catch {
-      setReacted(false);
-      setReactionCount((c) => c - 1);
-    }
-  }
-
-  async function handleReactButton() {
-    setBusy(true);
-    if (!reacted) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    setReacted((r) => !r);
-    setReactionCount((c) => c + (reacted ? -1 : 1));
-    try {
-      const result = await reactToPost(post.id);
-      setReacted(result.viewerHasReacted);
-      setReactionCount(result.reactionCount);
-    } catch {
-      setReacted(post.viewerHasReacted);
-      setReactionCount(post.reactionCount);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function handleMediaPress() {
-    const now = Date.now();
-    if (now - lastTapRef.current < DOUBLE_TAP_DELAY_MS) {
-      like();
-      heartPop.setValue(0);
-      Animated.sequence([
-        Animated.spring(heartPop, { toValue: 1, useNativeDriver: true, friction: 4 }),
-        Animated.timing(heartPop, { toValue: 0, duration: 220, delay: 300, useNativeDriver: true }),
-      ]).start();
-    }
-    lastTapRef.current = now;
-  }
-
-  return (
-    <View style={styles.post}>
-      <View style={styles.author}>
-        <View style={styles.avatar}>
-          {post.author.avatarUrl ? (
-            <Image source={{ uri: post.author.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
-          ) : (
-            <PersonIcon size={16} tint={color.acier} />
-          )}
-        </View>
-        <Text style={styles.authorName}>{post.author.displayName}</Text>
-        {post.vaultItem?.verified ? <VerifiedIcon size={13} /> : null}
-        <Text style={styles.timestamp}>{timeAgo(post.createdAt)}</Text>
-        <Pressable onPress={onOpenMenu} hitSlop={11} style={styles.moreButton} accessibilityRole="button" accessibilityLabel="Plus d'options">
-          <MoreIcon size={18} tint={color.acier} />
-        </Pressable>
-      </View>
-
-      <Pressable
-        onPress={handleMediaPress}
-        accessibilityRole="image"
-        accessibilityLabel={`Photo publiée par ${post.author.displayName}`}
-      >
-        <Image source={{ uri: post.mediaUrl }} style={styles.media} contentFit="cover" />
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.heartOverlay,
-            {
-              opacity: heartPop,
-              transform: [{ scale: heartPop.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.15] }) }],
-            },
-          ]}
-        >
-          <HeartIcon size={64} tint={color.blanc} filled />
-        </Animated.View>
-      </Pressable>
-
-      {post.caption ? <Text style={styles.caption}>{post.caption}</Text> : null}
-
-      {post.taggedPieces.length > 0 ? (
-        <View style={styles.tagRow}>
-          {post.taggedPieces.map((piece) =>
-            piece.merchantUrl ? (
-              <Pressable
-                key={piece.id}
-                style={styles.tagChip}
-                hitSlop={{ top: 9, bottom: 9 }}
-                onPress={() =>
-                  openMerchantLink({ matchId: piece.productMatchId, url: piece.merchantUrl!, context: "post" })
-                }
-                accessibilityRole="button"
-                accessibilityLabel={
-                  piece.merchantName ? `Voir ${piece.productName} chez ${piece.merchantName}` : piece.productName
-                }
-              >
-                <Text style={styles.tagChipLabel}>{piece.productName}</Text>
-              </Pressable>
-            ) : (
-              <View key={piece.id} style={styles.tagChip}>
-                <Text style={styles.tagChipLabel}>{piece.productName}</Text>
-              </View>
-            )
-          )}
-        </View>
-      ) : null}
-
-      <Pressable
-        onPress={handleReactButton}
-        disabled={busy}
-        style={styles.reactRow}
-        hitSlop={12}
-        accessibilityRole="button"
-        accessibilityLabel={reacted ? "Je n'aime plus" : "Aimer"}
-      >
-        <HeartIcon size={19} tint={reacted ? color.encre : color.acier} filled={reacted} />
-        <Text style={styles.reactCount}>{reactionCount}</Text>
-      </Pressable>
     </View>
   );
 }
@@ -267,7 +128,11 @@ export default function FeedScreen() {
           contentContainerStyle={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
           renderItem={({ item: post }) => (
-            <PostRow post={post} onOpenMenu={() => setMenuTarget({ userId: post.author.id, postId: post.id })} />
+            <PostCard
+              post={post}
+              onOpenMenu={() => setMenuTarget({ userId: post.author.id, postId: post.id })}
+              onPressAuthor={() => router.push({ pathname: "/profil", params: { id: post.author.id } })}
+            />
           )}
           ItemSeparatorComponent={() => <View style={styles.divider} />}
           ListHeaderComponent={error ? <ErrorMessage style={styles.errorText}>{error}</ErrorMessage> : null}
@@ -329,29 +194,11 @@ const styles = StyleSheet.create({
   empty: { alignItems: "center", marginTop: space.xl, paddingHorizontal: space.lg },
   emptyText: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginBottom: space.md, lineHeight: 20 },
   emptyLink: { fontSize: font.body, color: color.vert, fontWeight: "600" },
+  // Squelette de chargement (mêmes proportions qu'une publication).
   post: { paddingHorizontal: space.lg, paddingBottom: 26 },
   author: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.full,
-    backgroundColor: color.plinthe,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  avatarImage: { width: "100%", height: "100%" },
-  authorName: { fontSize: 14, fontWeight: "600", color: color.encre },
-  timestamp: { fontSize: 12, color: color.acier, marginLeft: "auto" },
-  moreButton: { marginLeft: space.xs, padding: 2 },
-  media: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe, borderRadius: radius.sm },
-  heartOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
-  caption: { fontSize: 14.5, color: color.encre, marginTop: 12, lineHeight: 20 },
-  tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
-  tagChip: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.full, paddingVertical: 5, paddingHorizontal: 11 },
-  tagChipLabel: { fontSize: font.caption, color: color.encre },
-  reactRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12 },
-  reactCount: { fontSize: font.secondary, color: color.acier },
+  avatar: { width: 32, height: 32, borderRadius: radius.full },
+  media: { width: "100%", aspectRatio: 1, borderRadius: radius.sm },
   divider: { height: 1, backgroundColor: color.filet, marginHorizontal: space.lg, marginBottom: 26 },
   footerLoader: { paddingVertical: space.lg },
 });

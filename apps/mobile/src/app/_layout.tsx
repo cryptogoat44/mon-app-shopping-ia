@@ -8,6 +8,9 @@ import { ToastProvider } from "@/lib/toast-context";
 import { resolveRootRoute } from "@/lib/root-route";
 import { useAppFonts } from "@/theme/fonts";
 import { APP_NAME_DISPLAY } from "@/constants/brand";
+// Capture l'adresse d'arrivée (jetons du lien « mot de passe oublié ») avant
+// que la navigation ne la réécrive.
+import "@/lib/initial-url";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -46,7 +49,11 @@ function RootNavigator() {
         <Stack.Screen name="bienvenue" />
         <Stack.Screen name="sign-in" />
         <Stack.Screen name="sign-up" />
+        <Stack.Screen name="mot-de-passe-oublie" />
       </Stack.Protected>
+
+      {/* Ouvert depuis l'e-mail de réinitialisation, avec ou sans session. */}
+      <Stack.Screen name="nouveau-mot-de-passe" />
     </Stack>
   );
 }

@@ -101,17 +101,23 @@ export default function WishlistScreen() {
             <View style={styles.gridRow}>
               {row.map((item) => (
                 <View key={item.id} style={styles.card}>
-                  <View style={styles.thumb}>
-                    {item.imageUrl ? (
-                      <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.thumbImage} fit="cover" accessibilityLabel={item.name} />
-                    ) : (
-                      <ClockIcon size={30} tint={color.encre} />
-                    )}
-                  </View>
-                  <Text style={styles.name} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  {formatPrice(item) ? <Text style={styles.price}>{formatPrice(item)}</Text> : null}
+                  <Pressable
+                    onPress={() => router.push({ pathname: "/envie", params: { id: item.id } })}
+                    accessibilityRole="button"
+                    accessibilityLabel={item.name}
+                  >
+                    <View style={styles.thumb}>
+                      {item.imageUrl ? (
+                        <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.thumbImage} fit="cover" accessibilityLabel={item.name} />
+                      ) : (
+                        <ClockIcon size={30} tint={color.encre} />
+                      )}
+                    </View>
+                    <Text style={styles.name} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    {formatPrice(item) ? <Text style={styles.price}>{formatPrice(item)}</Text> : null}
+                  </Pressable>
                   {item.merchantUrl ? (
                     <MerchantLinkButton
                       url={item.affiliateUrl ?? item.merchantUrl}

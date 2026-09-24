@@ -5,6 +5,8 @@ import type { Post, PostTaggedPiece, PostType, PrivacyLevel, TaggedPieceInput } 
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput } from "../lib/validation.js";
+import { canViewPost } from "../lib/visibility.js";
+import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.js";
 
 const POST_TYPES: PostType[] = ["lifestyle", "purchase"];
 const PRIVACY_LEVELS: PrivacyLevel[] = ["public", "followers", "private"];
@@ -25,7 +27,7 @@ const postOptionalFieldsSchema = z.object({
 
 const taggedPiecesInputSchema = z.array(taggedPieceInputSchema).max(MAX_TAGGED_PIECES);
 
-interface PostRow {
+export interface PostRow {
   id: string;
   user_id: string;
   type: PostType;
@@ -137,7 +139,7 @@ async function resolveTaggedPieces(
   return resolved;
 }
 
-async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], viewerId: string): Promise<Post[]> {
+export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], viewerId: string): Promise<Post[]> {
   if (rows.length === 0) return [];
 
   const authorIds = [...new Set(rows.map((r) => r.user_id))];
@@ -501,6 +503,55 @@ export default async function postsRoutes(fastify: FastifyInstance) {
     }
   );
 
+  // Détail d'une publication (Lot Q, bloc 3) : visible selon sa propre
+  // confidentialité et les blocages (voir lib/visibility.ts) ; sinon 404,
+  // sans distinguer « n'existe pas » de « pas pour vous ».
+  fastify.get("/api/posts/:id", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const userId = request.user!.id;
+
+    const { data: post } = await fastify.supabaseAdmin.from("posts").select("*").eq("id", params.id).maybeSingle();
+    if (!post || !(await canViewPost(fastify, userId, post as PostRow))) {
+      return reply.code(404).send({ error: "post_not_found", message: "Publication introuvable." });
+    }
+    const [hydrated] = await hydratePosts(fastify, [post as PostRow], userId);
+    return reply.send(hydrated);
+  });
+
+  // Supprimer SA publication (Lot Q, bloc 3, UX-03). La base supprime en
+  // cascade ses « j'aime », pièces taguées et notifications. Le fichier
+  // n'est supprimé que s'il est dans le dossier de l'auteur (post-media) :
+  // une publication « achat » montre la photo de la pièce du Vault, qui
+  // reste dans le Vault.
+  fastify.delete("/api/posts/:id", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const userId = request.user!.id;
+
+    const { data: post } = await fastify.supabaseAdmin
+      .from("posts")
+      .select("id, media_url")
+      .eq("id", params.id)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!post) {
+      return reply.code(404).send({ error: "post_not_found", message: "Publication introuvable." });
+    }
+
+    const { error } = await fastify.supabaseAdmin.from("posts").delete().eq("id", params.id).eq("user_id", userId);
+    if (error) {
+      request.log.error({ error }, "Échec de suppression d'une publication");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+
+    const mediaUrl = post.media_url as string | null;
+    if (mediaUrl && extractOwnedStoragePath(mediaUrl, "post-media", userId)) {
+      await deleteOwnedStorageFile(fastify, "post-media", userId, mediaUrl);
+    }
+    return reply.code(204).send();
+  });
+
   fastify.post("/api/posts/:id/react", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
     if (!params) return;
@@ -517,28 +568,8 @@ export default async function postsRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "post_not_found", message: "Publication introuvable." });
     }
 
-    if (post.user_id !== userId) {
-      const [{ data: blockedByMe }, { data: blockedByAuthor }] = await Promise.all([
-        fastify.supabaseAdmin.from("blocks").select("blocker_id").eq("blocker_id", userId).eq("blocked_id", post.user_id).maybeSingle(),
-        fastify.supabaseAdmin.from("blocks").select("blocker_id").eq("blocker_id", post.user_id).eq("blocked_id", userId).maybeSingle(),
-      ]);
-      if (blockedByMe || blockedByAuthor) {
-        return reply.code(404).send({ error: "post_not_found", message: "Publication introuvable." });
-      }
-      if (post.privacy === "private") {
-        return reply.code(404).send({ error: "post_not_found", message: "Publication introuvable." });
-      }
-      if (post.privacy === "followers") {
-        const { data: rel } = await fastify.supabaseAdmin
-          .from("follows")
-          .select("follower_id")
-          .eq("follower_id", userId)
-          .eq("followee_id", post.user_id)
-          .single();
-        if (!rel) {
-          return reply.code(404).send({ error: "post_not_found", message: "Publication introuvable." });
-        }
-      }
+    if (!(await canViewPost(fastify, userId, post as { user_id: string; privacy: PrivacyLevel }))) {
+      return reply.code(404).send({ error: "post_not_found", message: "Publication introuvable." });
     }
 
     const { data: existing } = await fastify.supabaseAdmin

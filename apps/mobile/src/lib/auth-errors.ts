@@ -8,6 +8,8 @@ const KNOWN_PATTERNS: Array<{ match: RegExp; message: string }> = [
   { match: /email not confirmed/i, message: "Confirmez votre email avant de vous connecter (vérifiez votre boîte de réception, y compris les spams)." },
   { match: /user already registered/i, message: "Un compte existe déjà avec cet email." },
   { match: /password should be at least/i, message: "Le mot de passe est trop court." },
+  { match: /should be different from the old password/i, message: "Choisissez un mot de passe différent de l'ancien." },
+  { match: /auth session missing|session.*expired|jwt expired/i, message: "Ce lien n'est plus valable. Demandez un nouveau lien." },
   { match: /unable to validate email address/i, message: "Adresse email invalide." },
   { match: /rate limit/i, message: "Trop de tentatives, réessayez dans quelques minutes." },
   { match: /network request failed/i, message: "Connexion impossible, vérifiez votre réseau." },

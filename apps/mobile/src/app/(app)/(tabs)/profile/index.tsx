@@ -256,7 +256,13 @@ export default function ProfileScreen() {
             </View>
           ) : (
             lifestylePosts.map((post) => (
-              <View key={post.id} style={styles.piece}>
+              <Pressable
+                key={post.id}
+                style={styles.piece}
+                onPress={() => router.push({ pathname: "/publication", params: { id: post.id } })}
+                accessibilityRole="button"
+                accessibilityLabel={post.caption ?? fr.profile.lifestylePhoto}
+              >
                 <View style={styles.thumb}>
                   <Image
                     source={{ uri: post.mediaUrl }}
@@ -270,7 +276,7 @@ export default function ProfileScreen() {
                     <TagIcon size={12} tint={color.blanc} />
                   </View>
                 ) : null}
-              </View>
+              </Pressable>
             ))
           )}
         </ScrollView>

@@ -27,6 +27,7 @@ import type {
   VaultPage,
   WishlistItem,
   WishlistPage,
+  UserProfile,
 } from "@monapp/shared-types";
 import { Platform } from "react-native";
 import { supabase } from "./supabase";
@@ -266,6 +267,35 @@ export async function fetchFeed(cursor?: string): Promise<FeedPage> {
 export async function fetchMyLifestylePosts(): Promise<Post[]> {
   const response = await authorizedFetch("/api/posts/mine");
   return response.json();
+}
+
+export async function fetchPost(id: string): Promise<Post> {
+  const response = await authorizedFetch(`/api/posts/${id}`);
+  return response.json();
+}
+
+export async function deletePost(id: string): Promise<void> {
+  await authorizedFetch(`/api/posts/${id}`, { method: "DELETE" });
+}
+
+export async function fetchUserProfile(userId: string): Promise<UserProfile> {
+  const response = await authorizedFetch(`/api/users/${userId}`);
+  return response.json();
+}
+
+export async function fetchUserPosts(userId: string, cursor?: string): Promise<FeedPage> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  const response = await authorizedFetch(`/api/users/${userId}/posts${query}`);
+  return response.json();
+}
+
+export async function fetchWishlistItem(id: string): Promise<WishlistItem> {
+  const response = await authorizedFetch(`/api/wishlist/${id}`);
+  return response.json();
+}
+
+export async function deleteWishlistItem(id: string): Promise<void> {
+  await authorizedFetch(`/api/wishlist/${id}`, { method: "DELETE" });
 }
 
 export async function fetchNotifications(): Promise<AppNotification[]> {

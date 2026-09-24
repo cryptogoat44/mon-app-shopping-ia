@@ -126,6 +126,29 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
     return reply.send(toWishlistItem(inserted as WishlistItemRow));
   });
 
+  // Détail d'une Envie (Lot Q, bloc 3, UX-04) — seulement la sienne.
+  fastify.get("/api/wishlist/:id", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const userId = request.user!.id;
+
+    const { data } = await fastify.supabaseAdmin
+      .from("wishlist_items")
+      .select("*")
+      .eq("id", params.id)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!data) {
+      return reply.code(404).send({ error: "wishlist_item_not_found", message: "Envie introuvable." });
+    }
+    const row = data as WishlistItemRow;
+    const [affiliateUrls, hdUrls] = await Promise.all([
+      fetchAffiliateUrls(fastify, row.product_match_id ? [row.product_match_id] : []),
+      fetchHdImageUrls(fastify, [row]),
+    ]);
+    return reply.send(toWishlistItem(row, affiliateUrls, hdUrls[0] ?? null));
+  });
+
   fastify.delete("/api/wishlist/:id", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
     if (!params) return;

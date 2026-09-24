@@ -210,6 +210,21 @@ export interface PublicProfile {
   isFollowing: boolean;
 }
 
+/** Profil d'un autre utilisateur (Lot Q, décision 6). Jamais son Vault,
+ * ni même le nombre de pièces qu'il contient. */
+export interface UserProfile {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  bio: string | null;
+  followersCount: number;
+  followingCount: number;
+  isFollowing: boolean;
+  /** true quand c'est le profil de la personne connectée elle-même. */
+  isMe: boolean;
+}
+
 export type PostType = "lifestyle" | "purchase";
 
 export interface PostAuthor {

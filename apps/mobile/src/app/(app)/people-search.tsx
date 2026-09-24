@@ -15,10 +15,12 @@ function PersonRow({
   person,
   onToggle,
   onOpenMenu,
+  onOpenProfile,
 }: {
   person: PublicProfile;
   onToggle: (id: string) => void;
   onOpenMenu: () => void;
+  onOpenProfile: () => void;
 }) {
   const [following, setFollowing] = useState(person.isFollowing);
   const [busy, setBusy] = useState(false);
@@ -50,17 +52,24 @@ function PersonRow({
 
   return (
     <View style={styles.row}>
-      <View style={styles.avatar}>
-        {person.avatarUrl ? (
-          <Image source={{ uri: person.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
-        ) : (
-          <PersonIcon size={20} tint={color.acier} />
-        )}
-      </View>
-      <View style={styles.rowText}>
-        <Text style={styles.displayName}>{person.displayName}</Text>
-        <Text style={styles.username}>@{person.username}</Text>
-      </View>
+      <Pressable
+        onPress={onOpenProfile}
+        style={styles.personLink}
+        accessibilityRole="link"
+        accessibilityLabel={`Voir le profil de ${person.displayName}`}
+      >
+        <View style={styles.avatar}>
+          {person.avatarUrl ? (
+            <Image source={{ uri: person.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+          ) : (
+            <PersonIcon size={20} tint={color.acier} />
+          )}
+        </View>
+        <View style={styles.rowText}>
+          <Text style={styles.displayName}>{person.displayName}</Text>
+          <Text style={styles.username}>@{person.username}</Text>
+        </View>
+      </Pressable>
       <Pressable accessibilityRole="button" onPress={handleToggle} disabled={busy} style={[styles.followButton, following ? styles.followingButton : null]}>
         <Text style={[styles.followButtonLabel, following ? styles.followingButtonLabel : null]}>
           {following ? "Suivi(e)" : "Suivre"}
@@ -159,7 +168,13 @@ export default function PeopleSearchScreen() {
         {results?.length === 0 ? <Text style={styles.empty}>Aucun profil trouvé.</Text> : null}
 
         {results?.map((person) => (
-          <PersonRow key={person.id} person={person} onToggle={() => {}} onOpenMenu={() => setMenuUserId(person.id)} />
+          <PersonRow
+            key={person.id}
+            person={person}
+            onToggle={() => {}}
+            onOpenMenu={() => setMenuUserId(person.id)}
+            onOpenProfile={() => router.push({ pathname: "/profil", params: { id: person.id } })}
+          />
         ))}
       </ScrollView>
 
@@ -211,6 +226,7 @@ const styles = StyleSheet.create({
   },
   avatarImage: { width: "100%", height: "100%" },
   rowText: { flex: 1 },
+  personLink: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.sm, minHeight: 44 },
   displayName: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   username: { fontSize: font.caption, color: color.acier },
   followButton: {

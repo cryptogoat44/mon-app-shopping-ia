@@ -73,6 +73,12 @@ export default function SignInScreen() {
             />
           </View>
 
+          <Link href="/mot-de-passe-oublie" asChild>
+            <Pressable accessibilityRole="button" hitSlop={8} style={styles.forgot}>
+              <Text style={styles.forgotLabel}>{fr.auth.signIn.forgot}</Text>
+            </Pressable>
+          </Link>
+
           <Pressable accessibilityRole="button"
             style={[styles.cta, (submitting || !email || !password) ? styles.ctaDisabled : null]}
             onPress={handleSignIn}
@@ -107,5 +113,7 @@ const styles = StyleSheet.create({
   cta: { backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", marginTop: space.lg },
   ctaDisabled: { opacity: 0.5 },
   ctaLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
+  forgot: { alignSelf: "flex-end", minHeight: 32, justifyContent: "center" },
+  forgotLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600" },
   link: { fontSize: font.secondary, color: color.acier, fontWeight: "600", textAlign: "center", marginTop: space.lg },
 });

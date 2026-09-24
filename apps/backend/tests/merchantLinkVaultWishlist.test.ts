@@ -77,5 +77,13 @@ describe("lien marchand d'une pièce du Vault et d'une Envie", () => {
     const byTitle = Object.fromEntries(res.json().items.map((item: { title: string }) => [item.title, item]));
     expect(byTitle["Veste"]).toMatchObject({ merchantUrl: "https://marchand.example/veste", affiliateUrl: "https://affilie.example/veste" });
     expect(byTitle["Sans origine"]).toMatchObject({ merchantUrl: null, affiliateUrl: null });
+
+    // Détail d'une Envie : la sienne seulement.
+    const detail = await app.inject({ method: "GET", url: `/api/wishlist/${byTitle["Veste"].id}`, headers: authHeaders(user.token) });
+    expect(detail.json()).toMatchObject({ title: "Veste", affiliateUrl: "https://affilie.example/veste" });
+    const stranger = await createTestUser(app, "mlx");
+    const denied = await app.inject({ method: "GET", url: `/api/wishlist/${byTitle["Veste"].id}`, headers: authHeaders(stranger.token) });
+    expect(denied.statusCode).toBe(404);
+    await deleteTestUser(app, stranger.id);
   });
 });

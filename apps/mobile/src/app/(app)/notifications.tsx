@@ -15,9 +15,14 @@ function actionText(notification: AppNotification): string {
   return notification.type === "follow" ? fr.notifications.follow : fr.notifications.like;
 }
 
-function NotificationRow({ notification }: { notification: AppNotification }) {
+function NotificationRow({ notification, onPress }: { notification: AppNotification; onPress: () => void }) {
   return (
-    <View style={[styles.row, !notification.read ? styles.rowUnread : null]}>
+    <Pressable
+      onPress={onPress}
+      style={[styles.row, !notification.read ? styles.rowUnread : null]}
+      accessibilityRole="link"
+      accessibilityLabel={`${notification.actor.displayName} ${actionText(notification)}`}
+    >
       <View style={styles.avatar}>
         {notification.actor.avatarUrl ? (
           <Image source={{ uri: notification.actor.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
@@ -31,7 +36,7 @@ function NotificationRow({ notification }: { notification: AppNotification }) {
         </Text>
         <Text style={styles.rowTime}>{timeAgo(notification.createdAt)}</Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -104,7 +109,7 @@ export default function NotificationsScreen() {
               <Text style={styles.emptyText}>{fr.notifications.empty}</Text>
             </View>
           ) : (
-            notifications?.map((notification) => <NotificationRow key={notification.id} notification={notification} />)
+            notifications?.map((notification) => <NotificationRow key={notification.id} notification={notification} onPress={() => router.push({ pathname: "/profil", params: { id: notification.actor.id } })} />)
           )}
         </ScrollView>
       )}
