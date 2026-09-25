@@ -63,7 +63,10 @@ describe("modifier la visibilité d'une publication", () => {
     const backToPublic = await setPrivacy(author, "public");
     expect(backToPublic.json()).toMatchObject({ privacy: "public", reactionCount: 1, commentCount: 1 });
     expect(await sees(stranger)).toEqual({ feed: false, profile: true, detail: true, comments: true });
-  });
+    // Scénario de ~30 requêtes enchaînées : ~10 s sur le Mac, ~18 s depuis
+    // les serveurs de GitHub (plus loin de spotto-dev) — la limite générale
+    // de 20 s était trop juste (échec le 2026-09-25).
+  }, 60_000);
 
   it("seul l'auteur peut la modifier ; valeur invalide refusée", async () => {
     expect((await setPrivacy(follower, "private")).statusCode).toBe(404);

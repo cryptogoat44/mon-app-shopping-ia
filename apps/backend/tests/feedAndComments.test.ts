@@ -96,7 +96,9 @@ describe("le fil vivant (Lot F)", () => {
     // A supprime son propre commentaire.
     const own = (await comment(a, bPosts.public, "À supprimer")).json();
     expect((await app.inject({ method: "DELETE", url: `/api/comments/${own.id}`, headers: authHeaders(a.token) })).statusCode).toBe(204);
-  });
+    // Long scénario : ~13 s depuis les serveurs de GitHub, proche de la
+    // limite générale de 20 s (voir postPrivacyChange, 2026-09-25).
+  }, 60_000);
 
   it("signaler un commentaire ; l'export RGPD contient ses commentaires", async () => {
     const own = (await comment(c, bPosts.public, "Commentaire exporté")).json();
