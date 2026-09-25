@@ -4,6 +4,7 @@
 // champs « [À compléter : …] » sont à remplir par le fondateur. Toute
 // modification du texte ⇒ changer la version dans LEGAL_DOCUMENT_VERSIONS
 // (packages/shared-types).
+import { HOSTS, PUBLISHER } from "./publisher";
 import type { LegalDocument } from "./types";
 
 export const termsOfUse: LegalDocument = {
@@ -13,11 +14,11 @@ export const termsOfUse: LegalDocument = {
     {
       title: "Qui édite Spotto",
       blocks: [
-        "Spotto est édité par [À compléter : nom et prénom, ou dénomination et forme juridique de la société, capital le cas échéant, adresse du domicile ou du siège social, numéro d'immatriculation (RCS ou répertoire des métiers) ou SIRET].",
-        "Directeur de la publication : [À compléter : nom et prénom].",
-        "Contact : [À compléter : adresse e-mail de contact] — téléphone : [À compléter : numéro de téléphone].",
-        "Hébergement du serveur et du site : Render Services, Inc., [À compléter : adresse et numéro de téléphone de Render].",
-        "Hébergement des données et des photos : Supabase, Inc., [À compléter : adresse et numéro de téléphone de Supabase] ; données stockées en Irlande.",
+        `Spotto est édité par ${PUBLISHER.name}, ${PUBLISHER.status}, ${PUBLISHER.address}.`,
+        `Directeur de la publication : ${PUBLISHER.name}.`,
+        `Contact : ${PUBLISHER.email} — téléphone : ${PUBLISHER.phone}.`,
+        `Hébergement du serveur et du site : ${HOSTS.render}.`,
+        `Hébergement des données et des photos : ${HOSTS.supabase} ; données stockées en Irlande.`,
       ],
     },
     {
@@ -108,7 +109,7 @@ export const termsOfUse: LegalDocument = {
     {
       title: "Droit applicable et litiges",
       blocks: [
-        "Ces conditions sont soumises au droit français. En cas de litige, contactez-nous d'abord : [À compléter : adresse e-mail de contact]. [À vérifier : médiateur de la consommation éventuel et tribunal compétent.]",
+        `Ces conditions sont soumises au droit français. En cas de litige, contactez-nous d'abord : ${PUBLISHER.email}. [À vérifier : médiateur de la consommation éventuel et tribunal compétent.]`,
       ],
     },
   ],

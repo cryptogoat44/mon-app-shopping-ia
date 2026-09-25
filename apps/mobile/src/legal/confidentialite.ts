@@ -4,6 +4,7 @@
 // n'est inventée : les champs « [À compléter : …] » sont à remplir par le
 // fondateur. Toute modification du texte ⇒ changer la version dans
 // LEGAL_DOCUMENT_VERSIONS (packages/shared-types).
+import { PUBLISHER } from "./publisher";
 import type { LegalDocument } from "./types";
 
 export const privacyPolicy: LegalDocument = {
@@ -25,8 +26,8 @@ export const privacyPolicy: LegalDocument = {
     {
       title: "Qui est responsable de vos données",
       blocks: [
-        "Le responsable du traitement est l'éditeur de Spotto : [À compléter : nom et prénom, ou dénomination et forme juridique de la société, adresse du domicile ou du siège social, numéro d'immatriculation ou SIRET].",
-        "Pour toute question sur vos données ou pour exercer vos droits : [À compléter : adresse e-mail de contact].",
+        `Le responsable du traitement est l'éditeur de Spotto : ${PUBLISHER.name}, ${PUBLISHER.status}, ${PUBLISHER.address}.`,
+        `Pour toute question sur vos données ou pour exercer vos droits : ${PUBLISHER.email}.`,
       ],
     },
     {
@@ -71,8 +72,8 @@ export const privacyPolicy: LegalDocument = {
       blocks: [
         "Nous faisons appel à des prestataires qui traitent des données pour notre compte, uniquement pour faire fonctionner Spotto :",
         [
-          "Supabase (Supabase, Inc., États-Unis) : base de données, stockage des photos et authentification. Vos données y sont hébergées dans l'Union européenne (Irlande).",
-          "Render (Render Services, Inc., États-Unis) : hébergement de notre serveur et du site. Toutes les requêtes de l'app passent par ce serveur. [À vérifier : région d'hébergement du serveur.]",
+          "Supabase (Supabase Pte. Ltd., Singapour) : base de données, stockage des photos et authentification. Vos données y sont hébergées dans l'Union européenne (Irlande).",
+          "Render (Render Services, Inc., États-Unis) : hébergement de notre serveur, situé aux États-Unis (Oregon), et du site. Toutes les requêtes de l'app passent par ce serveur.",
           "SerpApi (SerpApi, LLC, États-Unis) : reçoit un lien temporaire (valable 5 minutes) vers l'image à analyser, et le texte éventuellement ajouté ; il les transmet à la recherche visuelle de Google (Google Lens, Google LLC, États-Unis), qui télécharge l'image pour trouver les pièces correspondantes. Aucune autre donnée vous concernant (nom, e-mail, identifiant) ne leur est transmise.",
         ],
         "Quand vous collez un lien TikTok ou Instagram, notre serveur demande à TikTok ou à Meta l'aperçu public de la vidéo : seul le lien leur est transmis, jamais votre identité.",
@@ -86,8 +87,8 @@ export const privacyPolicy: LegalDocument = {
         "Certaines données quittent ou peuvent quitter l'Union européenne :",
         [
           "l'image que vous faites analyser et le texte éventuellement ajouté : envoyés à SerpApi puis à Google, aux États-Unis ;",
-          "les données traitées par notre serveur (toutes les requêtes de l'app, dont votre adresse IP) : chez Render, société américaine [À vérifier : région d'hébergement du serveur — si elle est hors de l'Union européenne, toutes ces données y transitent] ;",
-          "les données hébergées chez Supabase : stockées en Irlande, mais Supabase étant une société américaine, un accès depuis les États-Unis (maintenance, assistance) ne peut pas être exclu ;",
+          "toutes les données qui passent par notre serveur, situé aux États-Unis (Oregon) chez Render : chaque requête de l'app, avec votre adresse IP, et les données que vous consultez ou envoyez (compte, profil, recherches, Vault, Envies, publications, commentaires, photos). Elles y sont traitées le temps de la requête avant d'être enregistrées en Irlande ; les journaux techniques du serveur (adresse IP, informations de la requête) restent, eux, chez Render (voir « Combien de temps ») ;",
+          "les données hébergées chez Supabase : stockées en Irlande, mais Supabase étant une société établie à Singapour, un accès depuis l'extérieur de l'Union européenne (maintenance, assistance) ne peut pas être exclu ;",
           "votre adresse IP : reçue par les sites des marchands et par Google lorsque l'app affiche leurs images, où qu'ils soient établis.",
         ],
         "[À vérifier : garanties encadrant chacun de ces transferts — certification « Data Privacy Framework » de la société, ou clauses contractuelles types de la Commission européenne signées avec elle — et situation de Google, qui reçoit l'image par l'intermédiaire de SerpApi sans contrat direct avec l'éditeur.]",
@@ -121,7 +122,7 @@ export const privacyPolicy: LegalDocument = {
           "Télécharger toutes vos données (fichier lisible par un ordinateur) : Réglages → Exporter mes données.",
           "Corriger votre profil : Réglages → Modifier le profil.",
           "Tout effacer : Réglages → Supprimer mon compte.",
-          "Pour toute autre demande : [À compléter : adresse e-mail de contact].",
+          `Pour toute autre demande : ${PUBLISHER.email}.`,
         ],
         "Si vous estimez que vos droits ne sont pas respectés, vous pouvez adresser une réclamation à la CNIL (cnil.fr).",
       ],

@@ -1,8 +1,11 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { LEGAL_DOCUMENT_VERSIONS } from "@monapp/shared-types";
 import { consentFor, formatLongDate, parseLegalVersion, pendingConsents, splitPlaceholders } from "../src/lib/legal";
 import { termsOfUse } from "../src/legal/conditions";
 import { privacyPolicy } from "../src/legal/confidentialite";
+import { PUBLISHER, readPublisher } from "../src/legal/publisher";
 
 describe("documents juridiques", () => {
   it("lit la version d'un projet", () => {
@@ -52,10 +55,37 @@ describe("documents juridiques", () => {
     }
   });
 
-  it("n'invente aucune information sur l'éditeur et vouvoie partout", () => {
+  it("identité de l'éditeur : « À compléter » si une variable manque ou est vide, jamais d'erreur", () => {
+    expect(readPublisher({})).toEqual({
+      name: "[À compléter : nom de l'éditeur]",
+      status: "[À compléter : statut de l'éditeur]",
+      address: "[À compléter : adresse postale]",
+      email: "[À compléter : adresse e-mail de contact]",
+      phone: "[À compléter : numéro de téléphone]",
+    });
+    const filled = readPublisher({ name: " Nom Exemple ", address: "   ", email: "contact@example.com" });
+    expect(filled.name).toBe("Nom Exemple");
+    expect(filled.address).toBe("[À compléter : adresse postale]");
+    expect(filled.email).toBe("contact@example.com");
+    // Mis en évidence à l'écran comme les autres champs à compléter.
+    expect(splitPlaceholders(`Adresse : ${readPublisher({}).address}.`)[1]).toEqual({ text: "[À compléter : adresse postale]", placeholder: true });
+  });
+
+  it("aucune coordonnée personnelle dans le code des documents (dépôt public)", () => {
+    const dir = join(__dirname, "../src/legal");
+    for (const file of readdirSync(dir)) {
+      const source = readFileSync(join(dir, file), "utf8");
+      expect(source, file).not.toMatch(/[\w.+-]+@[\w-]+\.[a-z]{2,}/i);
+      expect(source, file).not.toMatch(/\b0[1-9](?:[ .]?\d{2}){4}\b/);
+    }
+  });
+
+  it("reprend l'identité de l'éditeur d'une seule source, et vouvoie partout", () => {
     for (const doc of [termsOfUse, privacyPolicy]) {
       const text = doc.sections.flatMap((s) => [s.title, ...s.blocks.flat()]).join("\n");
-      expect(text).toMatch(/\[À compléter : nom et prénom, ou dénomination/);
+      expect(text).toContain(PUBLISHER.name);
+      expect(text).toContain(PUBLISHER.email);
+      expect(text).toContain(PUBLISHER.address);
       expect(text).not.toMatch(/SIRET\s*:?\s*\d/);
       // Limites de mot tenant compte des lettres accentuées (« incomplètes »).
       expect(text).not.toMatch(/(?<!\p{L})(tu|ton|ta|tes|toi|te)(?!\p{L})/iu);
