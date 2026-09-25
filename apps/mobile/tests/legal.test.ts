@@ -40,7 +40,7 @@ describe("documents juridiques", () => {
   it("n'invente aucune information sur l'éditeur et vouvoie partout", () => {
     for (const doc of [termsOfUse, privacyPolicy]) {
       const text = doc.sections.flatMap((s) => [s.title, ...s.blocks.flat()]).join("\n");
-      expect(text).toMatch(/\[À compléter : nom ou raison sociale/);
+      expect(text).toMatch(/\[À compléter : nom et prénom, ou dénomination/);
       expect(text).not.toMatch(/SIRET\s*:?\s*\d/);
       // Limites de mot tenant compte des lettres accentuées (« incomplètes »).
       expect(text).not.toMatch(/(?<!\p{L})(tu|ton|ta|tes|toi|te)(?!\p{L})/iu);
