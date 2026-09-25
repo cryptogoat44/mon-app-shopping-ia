@@ -435,6 +435,7 @@ export const fr = {
       confirmPassword: "Confirmez le mot de passe",
       consent: "J'accepte les conditions d'utilisation et la politique de confidentialité.",
       ageDeclaration: `Je certifie avoir au moins ${MINIMUM_AGE} ans.`,
+      consentRequired: "Merci d'accepter les conditions d'utilisation et la politique de confidentialité pour continuer.",
       ageRequired: `Spotto est réservé aux personnes âgées d'au moins ${MINIMUM_AGE} ans : merci de le certifier pour continuer.`,
       cta: "Créer mon compte",
       ctaLoading: "Création…",

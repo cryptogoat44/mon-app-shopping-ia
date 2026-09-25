@@ -74,8 +74,17 @@ export async function run(p: Parcours): Promise<void> {
     check((await consentRows(p, nouvelle.id)).length === 0, "aucun consentement avant la Dernière étape");
     await phone.getByLabel("Nom d'utilisateur").fill(nouvelle.username);
     await phone.getByLabel("Nom affiché").fill("Nouvelle (test)");
-    await p.capture(phone, "07-derniere-etape");
-    await phone.getByRole("button", { name: "Continuer" }).click();
+    // Compte créé hors de l'inscription (comme depuis le tableau de bord
+    // Supabase) : les cases sont affichées et obligatoires.
+    const continuer = phone.getByRole("button", { name: "Continuer" });
+    check(await continuer.isDisabled(), "Dernière étape : impossible de continuer sans les cases");
+    await p.capture(phone, "07-derniere-etape-cases");
+    await phone.getByRole("checkbox", { name: "Je certifie avoir au moins 15 ans." }).click();
+    check(await continuer.isDisabled(), "Dernière étape : la case d'âge seule ne suffit pas");
+    await phone.getByRole("checkbox", { name: "J'accepte les conditions d'utilisation et la politique de confidentialité." }).click();
+    check((await consentRows(p, nouvelle.id)).length === 0, "rien d'enregistré avant « Continuer »");
+    await p.capture(phone, "07b-derniere-etape-cochees");
+    await continuer.click();
     await phone.getByText("Retrouvez une pièce vue dans une vidéo ou sur une photo.").waitFor({ timeout: 30_000 });
     const rows = await consentRows(p, nouvelle.id);
     check(rows.length === 3, `trois consentements enregistrés : documents et âge (obtenu : ${rows.length})`);

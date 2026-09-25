@@ -2,6 +2,7 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { translateAuthError } from "@/lib/auth-errors";
+import { forgetSignupConsents, rememberSignupConsents } from "@/lib/signup-consents";
 import { supabase } from "@/lib/supabase";
 import { fr } from "@/i18n/fr";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
@@ -35,15 +36,19 @@ export default function SignUpScreen() {
       return;
     }
     if (!consentChecked) {
-      setError("Merci d'accepter les conditions d'utilisation et la politique de confidentialité pour continuer.");
+      setError(fr.auth.signUp.consentRequired);
       return;
     }
 
     setSubmitting(true);
+    // Mémorisé AVANT l'appel : la session peut s'ouvrir (et la « Dernière
+    // étape » s'afficher) avant la fin de l'appel. Effacé en cas d'échec.
+    rememberSignupConsents(email);
     const { data, error: signUpError } = await supabase.auth.signUp({ email: email.trim(), password });
     setSubmitting(false);
 
     if (signUpError) {
+      forgetSignupConsents();
       setError(translateAuthError(signUpError.message));
       return;
     }
@@ -53,7 +58,7 @@ export default function SignUpScreen() {
     if (!data.session) {
       setConfirmationSent(true);
     }
-    // Sinon : onAuthStateChange ouvre la session, le layout racine redirige vers "complète ton profil".
+    // Sinon : onAuthStateChange ouvre la session, le layout racine redirige vers la « Dernière étape ».
   }
 
   if (confirmationSent) {
