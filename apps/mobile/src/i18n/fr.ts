@@ -8,7 +8,8 @@ export const fr = {
     explain: "Collez un lien ou une photo. Spotto retrouve la pièce et vous dit où l'acheter.",
     cta: "Commencer",
     login: "Déjà un compte ? Se connecter",
-    legal: "Conditions d'utilisation · Confidentialité",
+    terms: "Conditions d'utilisation",
+    privacy: "Confidentialité",
   },
   merchant: {
     viewAt: (merchant: string | null) => (merchant ? `Voir chez ${merchant}` : "Voir chez le marchand"),
@@ -129,9 +130,10 @@ export const fr = {
     priceOnSite: "prix affiché sur le site",
     viewAt: (merchant: string) => (merchant ? `Voir chez ${merchant}` : "Voir la pièce"),
     affiliateDisclosure: "Lien affilié",
-    // Texte provisoire — à faire valider avec les CGU (bloc 5 du Lot Q).
+    // Aligné sur les conditions d'utilisation (projet, bloc 5 du Lot Q) —
+    // à revoir le jour où un programme d'affiliation sera actif.
     affiliateExplanation:
-      "Si vous achetez en passant par ce lien, Spotto peut percevoir une commission du marchand. Le prix reste le même pour vous.",
+      "Si vous achetez en passant par ce lien, Spotto pourra à l'avenir percevoir une commission du marchand, sans surcoût pour vous. Aucun programme d'affiliation n'est actif à ce jour.",
     affiliateHint: "Affiche ce que signifie « lien affilié ».",
     keep: "Garder",
     kept: "Gardée",
@@ -311,6 +313,25 @@ export const fr = {
     privacyPolicy: "Politique de confidentialité",
     howWeEarn: "Comment Spotto se rémunère",
     signOut: "Se déconnecter",
+    documents: "Documents",
+    consentLoading: "Statut de votre acceptation en cours de chargement…",
+    consentFailed: "Statut de votre acceptation indisponible pour le moment.",
+    acceptedOn: (date: string) => `Version en vigueur acceptée le ${date}.`,
+    notAccepted: "Version en vigueur pas encore acceptée : ouvrez le document pour la lire et l'accepter.",
+  },
+  legal: {
+    draftBanner: "Projet — à faire valider par un professionnel.",
+    version: (label: string) => `Version : ${label}`,
+    draftVersion: (date: string) => `projet du ${date}`,
+    accept: "J'accepte cette version",
+    accepting: "Enregistrement…",
+    accepted: (date: string) => `Vous avez accepté cette version le ${date}.`,
+    acceptedToast: "Votre acceptation est enregistrée.",
+    acceptFailed: "Votre acceptation n'a pas pu être enregistrée. Réessayez.",
+    statusFailed: "Impossible de vérifier votre acceptation de ce document.",
+    retry: "Réessayer",
+    readTerms: "Lire les conditions d'utilisation",
+    readPrivacy: "Lire la politique de confidentialité",
   },
   editProfile: {
     title: "Modifier le profil",
@@ -409,7 +430,7 @@ export const fr = {
       title: "Créer un compte",
       subtitle: "Votre vault personnel vous attend.",
       confirmPassword: "Confirmez le mot de passe",
-      consent: "J'accepte les Conditions d'Utilisation et la Politique de Confidentialité.",
+      consent: "J'accepte les conditions d'utilisation et la politique de confidentialité.",
       cta: "Créer mon compte",
       ctaLoading: "Création…",
       hasAccount: "Déjà un compte ? Connectez-vous",

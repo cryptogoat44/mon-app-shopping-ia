@@ -23,7 +23,15 @@ export default function BienvenueScreen() {
         <Pressable accessibilityRole="button" onPress={() => router.push("/sign-in")} hitSlop={12}>
           <Text style={styles.loginLink}>{fr.welcome.login}</Text>
         </Pressable>
-        <Text style={styles.legal}>{fr.welcome.legal}</Text>
+        <View style={styles.legalRow}>
+          <Pressable accessibilityRole="link" onPress={() => router.push("/conditions")} hitSlop={12}>
+            <Text style={styles.legal}>{fr.welcome.terms}</Text>
+          </Pressable>
+          <Text style={styles.legal} importantForAccessibility="no">·</Text>
+          <Pressable accessibilityRole="link" onPress={() => router.push("/confidentialite")} hitSlop={12}>
+            <Text style={styles.legal}>{fr.welcome.privacy}</Text>
+          </Pressable>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -49,5 +57,6 @@ const styles = StyleSheet.create({
   cta: { alignSelf: "stretch", backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center" },
   ctaLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
   loginLink: { fontSize: font.secondary, color: color.acier, fontWeight: "600", marginTop: space.lg },
-  legal: { fontSize: 11, color: color.acier, marginTop: space.xl, textAlign: "center" },
+  legalRow: { flexDirection: "row", gap: space.sm, marginTop: space.xl },
+  legal: { fontSize: font.caption, color: color.acier, textDecorationLine: "underline", paddingVertical: space.xs },
 });

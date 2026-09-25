@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useAuth } from "@/lib/auth-context";
-import { ApiError, recordConsents, updateMyProfile } from "@/lib/api";
+import { ApiError, acceptLegalDocuments, updateMyProfile } from "@/lib/api";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
 
@@ -29,12 +29,12 @@ export default function CompleteProfileScreen() {
 
     setSubmitting(true);
     try {
+      // Le consentement a été donné à l'inscription (case à cocher
+      // obligatoire) ; il est enregistré ici, premier moment où une session
+      // existe, AVANT d'ouvrir l'app : sans preuve enregistrée (avec la
+      // version acceptée), pas d'accès (audit Lot Q, PRO-04).
+      await acceptLegalDocuments(["terms", "privacy_policy"]);
       await updateMyProfile({ username: normalizedUsername, displayName: displayName.trim() });
-      // Le consentement a déjà été donné explicitement à l'écran d'inscription
-      // (case à cocher obligatoire) — on l'enregistre ici côté serveur, au
-      // premier moment où une session authentifiée existe. Best-effort : un
-      // échec réseau ici ne doit pas bloquer l'accès à l'app.
-      recordConsents(["terms", "privacy_policy"]).catch(() => {});
       await refreshProfile();
       // Le layout racine redirige automatiquement vers (app) une fois le profil complet.
     } catch (e) {

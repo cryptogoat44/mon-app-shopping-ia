@@ -7,10 +7,7 @@ import { fr } from "@/i18n/fr";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, deleteMyAccount, exportMyData, fetchConsentStatus } from "@/lib/api";
 import { ErrorMessage } from "@/components/error-message";
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
-}
+import { consentFor, formatLongDate } from "@/lib/legal";
 
 async function shareExportedData(data: unknown) {
   const json = JSON.stringify(data, null, 2);
@@ -74,7 +71,12 @@ export default function SettingsScreen() {
     }
   }
 
-  const termsGrantedAt = consents?.find((c) => c.type === "terms")?.grantedAt ?? null;
+  function consentLine(type: "terms" | "privacy_policy"): string {
+    if (consentsFailed) return fr.settings.consentFailed;
+    if (!consents) return fr.settings.consentLoading;
+    const consent = consentFor(consents, type);
+    return consent?.isCurrent && consent.grantedAt ? fr.settings.acceptedOn(formatLongDate(consent.grantedAt)) : fr.settings.notAccepted;
+  }
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -104,14 +106,19 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionLabel}>{fr.settings.documents}</Text>
+          <Pressable accessibilityRole="link" onPress={() => router.push("/conditions")} hitSlop={12}>
+            <Text style={styles.link}>{fr.settings.terms}</Text>
+          </Pressable>
+          <Text style={styles.sectionBody}>{consentLine("terms")}</Text>
+          <Pressable accessibilityRole="link" onPress={() => router.push("/confidentialite")} hitSlop={12}>
+            <Text style={styles.link}>{fr.settings.privacyPolicy}</Text>
+          </Pressable>
+          <Text style={styles.sectionBody}>{consentLine("privacy_policy")}</Text>
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionLabel}>Vos données</Text>
-          <Text style={styles.sectionBody}>
-            {termsGrantedAt
-              ? `Conditions d'Utilisation acceptées le ${formatDate(termsGrantedAt)}.`
-              : consentsFailed
-                ? "Statut du consentement indisponible pour le moment."
-                : "Statut du consentement en cours de chargement…"}
-          </Text>
           <Pressable accessibilityRole="button" onPress={handleExport} disabled={exporting} hitSlop={12}>
             <Text style={styles.link}>{exporting ? "Préparation de l'export…" : fr.settings.exportData}</Text>
           </Pressable>

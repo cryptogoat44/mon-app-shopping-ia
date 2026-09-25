@@ -3,7 +3,8 @@ import type {
   AppNotification,
   BlockedUser,
   ConsentStatus,
-  ConsentType,
+  LegalDocumentType,
+  RecordConsentsRequest,
   CreateReportRequest,
   CreateSearchRequest,
   CreateWishlistItemRequest,
@@ -31,6 +32,7 @@ import type {
   CommentsPage,
   PostComment,
 } from "@monapp/shared-types";
+import { LEGAL_DOCUMENT_VERSIONS } from "@monapp/shared-types";
 import { Platform } from "react-native";
 import { supabase } from "./supabase";
 
@@ -392,8 +394,11 @@ export async function fetchConsentStatus(): Promise<ConsentStatus[]> {
   return response.json();
 }
 
-export async function recordConsents(types: ConsentType[]): Promise<void> {
-  await authorizedFetch("/api/consents", { method: "POST", body: JSON.stringify({ types }) });
+/** Enregistre l'acceptation des documents juridiques, dans la version en
+ * vigueur affichée par l'app (le serveur refuse toute autre version). */
+export async function acceptLegalDocuments(types: LegalDocumentType[]): Promise<void> {
+  const body: RecordConsentsRequest = { consents: types.map((type) => ({ type, version: LEGAL_DOCUMENT_VERSIONS[type] })) };
+  await authorizedFetch("/api/consents", { method: "POST", body: JSON.stringify(body) });
 }
 
 export async function exportMyData(): Promise<unknown> {

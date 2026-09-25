@@ -54,6 +54,10 @@ function RootNavigator() {
 
       {/* Ouvert depuis l'e-mail de réinitialisation, avec ou sans session. */}
       <Stack.Screen name="nouveau-mot-de-passe" />
+
+      {/* Documents juridiques : lisibles par tous, connecté ou non (bloc 5). */}
+      <Stack.Screen name="conditions" />
+      <Stack.Screen name="confidentialite" />
     </Stack>
   );
 }

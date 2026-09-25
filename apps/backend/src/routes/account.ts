@@ -1,13 +1,25 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import type { ConsentStatus, ConsentType } from "@monapp/shared-types";
+import { LEGAL_DOCUMENT_VERSIONS, type ConsentStatus, type ConsentType, type LegalDocumentType } from "@monapp/shared-types";
 import { deleteUserStorageFiles } from "../lib/storage.js";
 
 const CONSENT_TYPES: ConsentType[] = ["terms", "privacy_policy", "marketing_email"];
 
 const recordConsentsSchema = z.object({
-  types: z.array(z.enum(CONSENT_TYPES as [ConsentType, ...ConsentType[]])).min(1),
+  consents: z
+    .array(
+      z.object({
+        type: z.enum(CONSENT_TYPES as [ConsentType, ...ConsentType[]]),
+        version: z.string().trim().min(1).max(40).optional(),
+      })
+    )
+    .min(1)
+    .max(CONSENT_TYPES.length),
 });
+
+function isLegalDocument(type: ConsentType): type is LegalDocumentType {
+  return type in LEGAL_DOCUMENT_VERSIONS;
+}
 
 export default async function accountRoutes(fastify: FastifyInstance) {
   // Statut de consentement courant (le dernier événement par type) — sert à
@@ -17,7 +29,7 @@ export default async function accountRoutes(fastify: FastifyInstance) {
 
     const { data, error } = await fastify.supabaseAdmin
       .from("consents")
-      .select("type, granted_at")
+      .select("type, granted_at, document_version")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
 
@@ -28,15 +40,18 @@ export default async function accountRoutes(fastify: FastifyInstance) {
 
     // On ne garde que l'événement le plus récent par type (déjà trié par
     // created_at décroissant ci-dessus).
-    const latestByType = new Map<ConsentType, string | null>();
-    for (const row of (data as { type: ConsentType; granted_at: string | null }[]) ?? []) {
-      if (!latestByType.has(row.type)) latestByType.set(row.type, row.granted_at);
+    const latestByType = new Map<ConsentType, { grantedAt: string | null; version: string | null }>();
+    for (const row of (data as { type: ConsentType; granted_at: string | null; document_version: string | null }[]) ?? []) {
+      if (!latestByType.has(row.type)) latestByType.set(row.type, { grantedAt: row.granted_at, version: row.document_version });
     }
 
-    const statuses: ConsentStatus[] = CONSENT_TYPES.map((type) => ({
-      type,
-      grantedAt: latestByType.get(type) ?? null,
-    }));
+    const statuses: ConsentStatus[] = CONSENT_TYPES.map((type) => {
+      const latest = latestByType.get(type);
+      const grantedAt = latest?.grantedAt ?? null;
+      const version = latest?.version ?? null;
+      const isCurrent = grantedAt !== null && (!isLegalDocument(type) || version === LEGAL_DOCUMENT_VERSIONS[type]);
+      return { type, grantedAt, version, isCurrent };
+    });
 
     return reply.send(statuses);
   });
@@ -51,14 +66,27 @@ export default async function accountRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: "invalid_body", message: "Requête invalide." });
     }
 
+    // Un document juridique n'est accepté que dans sa version en vigueur :
+    // l'historique doit montrer précisément quel texte a été accepté.
+    const outdated = parsed.data.consents.find(
+      (consent) => isLegalDocument(consent.type) && consent.version !== LEGAL_DOCUMENT_VERSIONS[consent.type]
+    );
+    if (outdated) {
+      return reply.code(409).send({
+        error: "outdated_document",
+        message: "Ce document a été mis à jour. Relisez-le, puis acceptez-le à nouveau.",
+      });
+    }
+
     const userId = request.user!.id;
     const now = new Date().toISOString();
 
     const { error } = await fastify.supabaseAdmin.from("consents").insert(
-      parsed.data.types.map((type) => ({
+      parsed.data.consents.map((consent) => ({
         user_id: userId,
-        type,
+        type: consent.type,
         granted_at: now,
+        document_version: isLegalDocument(consent.type) ? LEGAL_DOCUMENT_VERSIONS[consent.type] : null,
       }))
     );
 

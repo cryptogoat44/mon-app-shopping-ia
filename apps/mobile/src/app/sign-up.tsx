@@ -29,7 +29,7 @@ export default function SignUpScreen() {
       return;
     }
     if (!consentChecked) {
-      setError("Merci d'accepter les Conditions d'Utilisation pour continuer.");
+      setError("Merci d'accepter les conditions d'utilisation et la politique de confidentialité pour continuer.");
       return;
     }
 
@@ -139,6 +139,18 @@ export default function SignUpScreen() {
             </View>
             <Text style={styles.consentLabel}>{fr.auth.signUp.consent}</Text>
           </Pressable>
+          <View style={styles.legalLinks}>
+            <Link href="/conditions" asChild>
+              <Pressable accessibilityRole="link" hitSlop={12}>
+                <Text style={styles.legalLink}>{fr.legal.readTerms}</Text>
+              </Pressable>
+            </Link>
+            <Link href="/confidentialite" asChild>
+              <Pressable accessibilityRole="link" hitSlop={12}>
+                <Text style={styles.legalLink}>{fr.legal.readPrivacy}</Text>
+              </Pressable>
+            </Link>
+          </View>
 
           <Pressable accessibilityRole="button"
             style={[styles.cta, (submitting || !email || !password || !confirmPassword || !consentChecked) ? styles.ctaDisabled : null]}
@@ -175,6 +187,8 @@ const styles = StyleSheet.create({
   checkbox: { width: 20, height: 20, borderRadius: 4, borderWidth: 1, borderColor: color.filet, alignItems: "center", justifyContent: "center", marginTop: 1 },
   checkboxChecked: { backgroundColor: color.vert, borderColor: color.vert },
   checkmark: { color: color.blanc, fontSize: 13, fontWeight: "700", lineHeight: 14 },
+  legalLinks: { marginLeft: 20 + space.sm, marginTop: space.xs, gap: space.sm },
+  legalLink: { fontSize: font.caption, color: color.vert, fontWeight: "600", minHeight: 20 },
   consentLabel: { flex: 1, fontSize: font.caption, color: color.acier, lineHeight: 18 },
   cta: { backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", marginTop: space.lg },
   ctaDisabled: { opacity: 0.5 },

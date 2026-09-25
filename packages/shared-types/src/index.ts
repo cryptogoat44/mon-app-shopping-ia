@@ -318,13 +318,34 @@ export interface FeedPage {
 
 export type ConsentType = "terms" | "privacy_policy" | "marketing_email";
 
+/** Documents juridiques dont l'acceptation est enregistrée avec sa version. */
+export type LegalDocumentType = "terms" | "privacy_policy";
+
+/** Version en vigueur de chaque document (Lot Q, bloc 5). À changer à
+ * chaque modification du texte : le serveur refuse l'acceptation d'une
+ * autre version, et l'historique garde la version acceptée. */
+export const LEGAL_DOCUMENT_VERSIONS: Record<LegalDocumentType, string> = {
+  terms: "projet-2026-09-25",
+  privacy_policy: "projet-2026-09-25",
+};
+
 export interface ConsentStatus {
   type: ConsentType;
   grantedAt: string | null;
+  /** Version du document acceptée (null : consentement antérieur au suivi des versions). */
+  version: string | null;
+  /** Vrai si la version acceptée est celle en vigueur. */
+  isCurrent: boolean;
+}
+
+export interface ConsentInput {
+  type: ConsentType;
+  /** Obligatoire (et égale à la version en vigueur) pour les documents juridiques. */
+  version?: string;
 }
 
 export interface RecordConsentsRequest {
-  types: ConsentType[];
+  consents: ConsentInput[];
 }
 
 export type NotificationType = "follow" | "like" | "comment";

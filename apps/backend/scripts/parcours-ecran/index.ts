@@ -15,6 +15,7 @@ interface Scenario {
 const SCENARIOS: Record<string, () => Promise<Scenario>> = {
   "lot-f": () => import("./scenarios/lot-f.js"),
   images: () => import("./scenarios/images.js"),
+  "bloc-5": () => import("./scenarios/bloc-5.js"),
 };
 
 async function main() {

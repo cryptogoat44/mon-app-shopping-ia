@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
+import { LEGAL_DOCUMENT_VERSIONS } from "@monapp/shared-types";
 import { authHeaders, buildMultipart, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
 
 const PNG = Buffer.from(
@@ -89,7 +90,7 @@ describe("export RGPD complet", () => {
     await app.inject({ method: "POST", url: "/api/wishlist", headers: authHeaders(user.token), payload: { title: "Envie", imageUrl: "https://example.com/e.jpg" } });
     await app.inject({ method: "POST", url: `/api/blocks/${stranger.id}`, headers: authHeaders(user.token) });
     await app.inject({ method: "POST", url: "/api/reports", headers: authHeaders(user.token), payload: { targetType: "user", targetId: stranger.id, reason: "spam" } });
-    await app.inject({ method: "POST", url: "/api/consents", headers: authHeaders(user.token), payload: { types: ["terms"] } });
+    await app.inject({ method: "POST", url: "/api/consents", headers: authHeaders(user.token), payload: { consents: [{ type: "terms", version: LEGAL_DOCUMENT_VERSIONS.terms }] } });
 
     // Un premier export, pour que le second contienne cette demande.
     await app.inject({ method: "GET", url: "/api/me/export", headers: authHeaders(user.token) });
@@ -119,6 +120,11 @@ describe("export RGPD complet", () => {
     const body = (await app.inject({ method: "GET", url: "/api/me/export", headers: authHeaders(user.token) })).json();
     expect(body.affiliateClicks[0].context).toBe("result");
     expect(body.affiliateClicks[0].user_agent).toBe("test-agent");
+  });
+
+  it("inclut la version des documents acceptés", async () => {
+    const body = (await app.inject({ method: "GET", url: "/api/me/export", headers: authHeaders(user.token) })).json();
+    expect(body.consents[0].document_version).toBe(LEGAL_DOCUMENT_VERSIONS.terms);
   });
 
   it("ne contient que les données de l'utilisateur lui-même", async () => {

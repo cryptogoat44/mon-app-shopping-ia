@@ -72,7 +72,9 @@ export interface Parcours {
   args: string[];
   /** Client d'administration de spotto-dev, pour préparer des données. */
   admin: SupabaseClient;
-  createAccount(label: string, displayName: string): Promise<TestAccount>;
+  /** `incompleteProfile` : compte sans nom d'utilisateur, qui arrive sur
+   * « Dernière étape » à la connexion (comme un compte tout juste créé). */
+  createAccount(label: string, displayName: string, options?: { incompleteProfile?: boolean }): Promise<TestAccount>;
   /** Téléphone au format iPhone ; `desktop: true` pour un écran d'ordinateur. */
   newPhone(options?: { desktop?: boolean }): Promise<Page>;
   /** Suit les images chargées par la page à partir de maintenant. */
@@ -244,7 +246,7 @@ export async function runParcours(
       outputDir,
       args: extraArgs,
       admin,
-      async createAccount(label, displayName) {
+      async createAccount(label, displayName, options) {
         const suffix = randomBytes(3).toString("hex");
         const email = `ecran-${label}-${suffix}@example.com`;
         const username = `ecran_${label}_${suffix}`.slice(0, 20);
@@ -252,7 +254,9 @@ export async function runParcours(
         const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
         if (error || !data.user) throw new Error(`Création du compte de test impossible : ${error?.message ?? "inconnue"}`);
         const id = data.user.id;
-        await admin.from("profiles").update({ username, display_name: displayName }).eq("id", id);
+        if (!options?.incompleteProfile) {
+          await admin.from("profiles").update({ username, display_name: displayName }).eq("id", id);
+        }
         const session = await anon.auth.signInWithPassword({ email, password });
         if (session.error || !session.data.session) throw new Error("Connexion du compte de test impossible.");
         const account: TestAccount = {
@@ -266,7 +270,8 @@ export async function runParcours(
             await page.getByLabel("Email", { exact: true }).fill(email);
             await page.getByLabel("Mot de passe", { exact: true }).fill(password);
             await page.getByRole("button", { name: "Se connecter" }).click();
-            await page.getByText("Retrouvez une pièce vue dans une vidéo ou sur une photo.").waitFor({ timeout: 30_000 });
+            const landing = options?.incompleteProfile ? "Dernière étape" : "Retrouvez une pièce vue dans une vidéo ou sur une photo.";
+            await page.getByText(landing).waitFor({ timeout: 30_000 });
           },
         };
         accounts.push(account);
