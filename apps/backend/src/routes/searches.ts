@@ -11,6 +11,7 @@ import {
 import { detectPlatform, fetchOfficialPreview } from "../services/oembed.js";
 import { searchProductsByImageUrl, type VisualMatch } from "../services/visualSearch.js";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
+import { purgeExpiredSearches } from "../lib/searchRetention.js";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
 import { ImageSourceError, downloadThumbnail, prepareImageForAnalysis } from "../lib/imageProcessing.js";
@@ -285,6 +286,15 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     if (error || !inserted) {
       request.log.error({ error }, "Échec de préparation d'une recherche");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+
+    // Conservation de l'historique : 12 mois (lib/searchRetention.ts). Un
+    // échec est journalisé sans bloquer la recherche demandée ; le nettoyage
+    // sera refait à la recherche suivante.
+    try {
+      await purgeExpiredSearches(fastify, userId);
+    } catch (purgeError) {
+      request.log.error({ purgeError }, "Échec de la suppression des recherches de plus de 12 mois");
     }
 
     // Sans image : la raison précise, pour que l'app dise quoi faire.

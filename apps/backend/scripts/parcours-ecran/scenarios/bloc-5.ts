@@ -5,7 +5,7 @@
 // antérieure au suivi des versions.
 //
 //   pnpm --filter backend parcours-ecran bloc-5
-import { LEGAL_DOCUMENT_VERSIONS } from "@monapp/shared-types";
+import { CONSENT_VERSIONS } from "@monapp/shared-types";
 import type { Page } from "playwright-core";
 import type { Parcours } from "../boite-a-outils.js";
 
@@ -46,6 +46,18 @@ export async function run(p: Parcours): Promise<void> {
   await p.step("Sans compte : liens de l'inscription et adresse directe", async () => {
     await open(visitor, `${p.siteUrl}/sign-up`);
     await p.capture(visitor, "04-inscription-liens");
+    // Deux cases obligatoires : sans « au moins 15 ans », pas d'inscription
+    // possible (le formulaire n'est jamais envoyé : aucun compte créé ici).
+    await visitor.getByLabel("Email", { exact: true }).fill("jamais-envoye@example.com");
+    await visitor.getByLabel("Mot de passe", { exact: true }).fill("motdepasse-factice");
+    await visitor.getByLabel("Confirmez le mot de passe", { exact: true }).fill("motdepasse-factice");
+    await visitor.getByRole("checkbox", { name: "J'accepte les conditions d'utilisation et la politique de confidentialité." }).click();
+    const create = visitor.getByRole("button", { name: "Créer mon compte" });
+    check(await create.isDisabled(), "inscription impossible sans la déclaration d'âge");
+    await p.capture(visitor, "04b-inscription-sans-age");
+    await visitor.getByRole("checkbox", { name: "Je certifie avoir au moins 15 ans." }).click();
+    check(await create.isEnabled(), "inscription possible avec les deux cases");
+    await p.capture(visitor, "04c-inscription-deux-cases");
     await visitor.getByRole("link", { name: "Lire la politique de confidentialité" }).click();
     await visitor.getByText("Qui peut voir quoi dans Spotto").waitFor();
     await p.capture(visitor, "05-confidentialite-haut");
@@ -66,9 +78,9 @@ export async function run(p: Parcours): Promise<void> {
     await phone.getByRole("button", { name: "Continuer" }).click();
     await phone.getByText("Retrouvez une pièce vue dans une vidéo ou sur une photo.").waitFor({ timeout: 30_000 });
     const rows = await consentRows(p, nouvelle.id);
-    check(rows.length === 2, `deux consentements enregistrés (obtenu : ${rows.length})`);
+    check(rows.length === 3, `trois consentements enregistrés : documents et âge (obtenu : ${rows.length})`);
     for (const row of rows) {
-      const expected = LEGAL_DOCUMENT_VERSIONS[row.type as "terms" | "privacy_policy"];
+      const expected = CONSENT_VERSIONS[row.type as "terms" | "privacy_policy" | "age_declaration"];
       check(row.document_version === expected, `version ${row.type} = ${expected}`);
     }
     await open(phone, `${p.siteUrl}/settings`);
@@ -99,12 +111,35 @@ export async function run(p: Parcours): Promise<void> {
     await p.capture(phone, "12-confidentialite-acceptee");
     const rows = await consentRows(p, ancienne.id);
     check(
-      rows.some((row) => row.type === "privacy_policy" && row.document_version === LEGAL_DOCUMENT_VERSIONS.privacy_policy),
+      rows.some((row) => row.type === "privacy_policy" && row.document_version === CONSENT_VERSIONS.privacy_policy),
       "nouvelle acceptation de la politique enregistrée avec sa version"
     );
     check(rows.length === 3, `l'ancienne acceptation est conservée dans l'historique (obtenu : ${rows.length} lignes)`);
     await phone.getByRole("button", { name: "Retour" }).click();
     await phone.getByText("Version en vigueur acceptée le", { exact: false }).first().waitFor();
     await p.capture(phone, "13-reglages-apres-acceptation");
+
+    // Conditions : la déclaration d'âge se confirme en même temps.
+    await phone.getByRole("link", { name: "Conditions d'utilisation" }).click();
+    const acceptTerms = phone.getByRole("button", { name: "J'accepte cette version" });
+    await acceptTerms.scrollIntoViewIfNeeded();
+    check(await acceptTerms.isDisabled(), "conditions : bouton inactif tant que l'âge n'est pas certifié");
+    await p.capture(phone, "14-conditions-case-age");
+    await phone.getByRole("checkbox", { name: "Je certifie avoir au moins 15 ans." }).click();
+    await acceptTerms.click();
+    await phone.getByText("Vous avez accepté cette version le", { exact: false }).waitFor();
+    await p.capture(phone, "15-conditions-acceptees-avec-age");
+    const after = await consentRows(p, ancienne.id);
+    for (const type of ["terms", "age_declaration"] as const) {
+      check(
+        after.some((row) => row.type === type && row.document_version === CONSENT_VERSIONS[type]),
+        `${type} enregistré avec sa version`
+      );
+    }
+    await phone.getByRole("button", { name: "Retour" }).click();
+    // Les Réglages rechargent l'état à l'affichage : attendre la mise à jour.
+    await phone.getByText("Version en vigueur pas encore acceptée", { exact: false }).first().waitFor({ state: "hidden", timeout: 15_000 });
+    check((await phone.getByText("Version en vigueur acceptée le", { exact: false }).count()) === 2, "Réglages : les deux documents à jour");
+    await p.capture(phone, "16-reglages-tout-a-jour");
   });
 }

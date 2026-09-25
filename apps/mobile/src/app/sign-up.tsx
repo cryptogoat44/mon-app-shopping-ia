@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { fr } from "@/i18n/fr";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
+import { CHECKBOX_SIZE, CheckboxRow } from "@/components/checkbox-row";
 
 export default function SignUpScreen() {
   const router = useRouter();
@@ -13,6 +14,7 @@ export default function SignUpScreen() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [consentChecked, setConsentChecked] = useState(false);
+  const [ageChecked, setAgeChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [confirmationSent, setConfirmationSent] = useState(false);
@@ -26,6 +28,10 @@ export default function SignUpScreen() {
     }
     if (password !== confirmPassword) {
       setError("Les deux mots de passe ne correspondent pas.");
+      return;
+    }
+    if (!ageChecked) {
+      setError(fr.auth.signUp.ageRequired);
       return;
     }
     if (!consentChecked) {
@@ -126,19 +132,18 @@ export default function SignUpScreen() {
             />
           </View>
 
-          <Pressable
+          <CheckboxRow
             style={styles.consentRow}
-            onPress={() => setConsentChecked((c) => !c)}
-            hitSlop={12}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: consentChecked }}
-            accessibilityLabel={fr.auth.signUp.consent}
-          >
-            <View style={[styles.checkbox, consentChecked ? styles.checkboxChecked : null]}>
-              {consentChecked ? <Text style={styles.checkmark}>✓</Text> : null}
-            </View>
-            <Text style={styles.consentLabel}>{fr.auth.signUp.consent}</Text>
-          </Pressable>
+            label={fr.auth.signUp.ageDeclaration}
+            checked={ageChecked}
+            onToggle={() => setAgeChecked((c) => !c)}
+          />
+          <CheckboxRow
+            style={styles.consentRow}
+            label={fr.auth.signUp.consent}
+            checked={consentChecked}
+            onToggle={() => setConsentChecked((c) => !c)}
+          />
           <View style={styles.legalLinks}>
             <Link href="/conditions" asChild>
               <Pressable accessibilityRole="link" hitSlop={12}>
@@ -153,9 +158,9 @@ export default function SignUpScreen() {
           </View>
 
           <Pressable accessibilityRole="button"
-            style={[styles.cta, (submitting || !email || !password || !confirmPassword || !consentChecked) ? styles.ctaDisabled : null]}
+            style={[styles.cta, (submitting || !email || !password || !confirmPassword || !consentChecked || !ageChecked) ? styles.ctaDisabled : null]}
             onPress={handleSignUp}
-            disabled={submitting || !email || !password || !confirmPassword || !consentChecked}
+            disabled={submitting || !email || !password || !confirmPassword || !consentChecked || !ageChecked}
           >
             <Text style={styles.ctaLabel}>{submitting ? fr.auth.signUp.ctaLoading : fr.auth.signUp.cta}</Text>
           </Pressable>
@@ -183,13 +188,9 @@ const styles = StyleSheet.create({
   field: { marginBottom: space.md },
   label: { fontSize: font.caption, color: color.acier, marginBottom: space.xs },
   input: { borderBottomWidth: 1, borderBottomColor: color.filet, paddingVertical: 10, fontSize: font.body, color: color.encre },
-  consentRow: { flexDirection: "row", alignItems: "flex-start", gap: space.sm, marginTop: space.sm },
-  checkbox: { width: 20, height: 20, borderRadius: 4, borderWidth: 1, borderColor: color.filet, alignItems: "center", justifyContent: "center", marginTop: 1 },
-  checkboxChecked: { backgroundColor: color.vert, borderColor: color.vert },
-  checkmark: { color: color.blanc, fontSize: 13, fontWeight: "700", lineHeight: 14 },
-  legalLinks: { marginLeft: 20 + space.sm, marginTop: space.xs, gap: space.sm },
+  consentRow: { marginTop: space.sm },
+  legalLinks: { marginLeft: CHECKBOX_SIZE + space.sm, marginTop: space.xs, gap: space.sm },
   legalLink: { fontSize: font.caption, color: color.vert, fontWeight: "600", minHeight: 20 },
-  consentLabel: { flex: 1, fontSize: font.caption, color: color.acier, lineHeight: 18 },
   cta: { backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", marginTop: space.lg },
   ctaDisabled: { opacity: 0.5 },
   ctaLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },

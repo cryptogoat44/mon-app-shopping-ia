@@ -7,7 +7,7 @@ import { fr } from "@/i18n/fr";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, deleteMyAccount, exportMyData, fetchConsentStatus } from "@/lib/api";
 import { ErrorMessage } from "@/components/error-message";
-import { consentFor, formatLongDate } from "@/lib/legal";
+import { consentFor, formatLongDate, pendingConsents } from "@/lib/legal";
 
 async function shareExportedData(data: unknown) {
   const json = JSON.stringify(data, null, 2);
@@ -75,7 +75,9 @@ export default function SettingsScreen() {
     if (consentsFailed) return fr.settings.consentFailed;
     if (!consents) return fr.settings.consentLoading;
     const consent = consentFor(consents, type);
-    return consent?.isCurrent && consent.grantedAt ? fr.settings.acceptedOn(formatLongDate(consent.grantedAt)) : fr.settings.notAccepted;
+    return pendingConsents(consents, type).length === 0 && consent?.grantedAt
+      ? fr.settings.acceptedOn(formatLongDate(consent.grantedAt))
+      : fr.settings.notAccepted;
   }
 
   return (

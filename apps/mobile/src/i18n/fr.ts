@@ -2,6 +2,8 @@
 // Vouvoiement, phrases courtes, verbes d'action. Voir la section 6 du brief
 // pour les règles complètes.
 
+import { MINIMUM_AGE } from "@monapp/shared-types";
+
 export const fr = {
   welcome: {
     baseline: "L'identification discrète des pièces qui comptent.",
@@ -324,6 +326,7 @@ export const fr = {
     version: (label: string) => `Version : ${label}`,
     draftVersion: (date: string) => `projet du ${date}`,
     accept: "J'accepte cette version",
+    ageDeclaration: `Je certifie avoir au moins ${MINIMUM_AGE} ans.`,
     accepting: "Enregistrement…",
     accepted: (date: string) => `Vous avez accepté cette version le ${date}.`,
     acceptedToast: "Votre acceptation est enregistrée.",
@@ -431,6 +434,8 @@ export const fr = {
       subtitle: "Votre vault personnel vous attend.",
       confirmPassword: "Confirmez le mot de passe",
       consent: "J'accepte les conditions d'utilisation et la politique de confidentialité.",
+      ageDeclaration: `Je certifie avoir au moins ${MINIMUM_AGE} ans.`,
+      ageRequired: `Spotto est réservé aux personnes âgées d'au moins ${MINIMUM_AGE} ans : merci de le certifier pour continuer.`,
       cta: "Créer mon compte",
       ctaLoading: "Création…",
       hasAccount: "Déjà un compte ? Connectez-vous",

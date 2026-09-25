@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { authHeaders, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
-import { LEGAL_DOCUMENT_VERSIONS } from "@monapp/shared-types";
+import { CONSENT_VERSIONS, LEGAL_DOCUMENT_VERSIONS } from "@monapp/shared-types";
 import { USER_STORAGE_BUCKETS } from "../src/lib/storage.js";
 
 describe("account consents and export", () => {
@@ -92,6 +92,33 @@ describe("account consents and export", () => {
     const { data: rows } = await app.supabaseAdmin.from("consents").select("type, document_version").eq("user_id", user.id);
     expect(rows).toHaveLength(2);
     expect(rows!.every((row) => row.document_version === LEGAL_DOCUMENT_VERSIONS[row.type as "terms" | "privacy_policy"])).toBe(true);
+  });
+
+  it("records the age declaration (15 years) with its version, and refuses it without", async () => {
+    const other = await createTestUser(app, "acag");
+    try {
+      for (const consents of [[{ type: "age_declaration" }], [{ type: "age_declaration", version: "13-ans" }]]) {
+        const refused = await app.inject({ method: "POST", url: "/api/consents", headers: authHeaders(other.token), payload: { consents } });
+        expect(refused.statusCode).toBe(409);
+      }
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/consents",
+        headers: authHeaders(other.token),
+        payload: { consents: [{ type: "age_declaration", version: CONSENT_VERSIONS.age_declaration }] },
+      });
+      expect(res.statusCode).toBe(204);
+      expect(CONSENT_VERSIONS.age_declaration).toMatch(/^15-ans-/);
+      const status = await app.inject({ method: "GET", url: "/api/consents", headers: authHeaders(other.token) });
+      const age = status.json().find((c: { type: string }) => c.type === "age_declaration");
+      expect(age.version).toBe(CONSENT_VERSIONS.age_declaration);
+      expect(age.isCurrent).toBe(true);
+      const { data: rows } = await app.supabaseAdmin.from("consents").select("type, granted_at, document_version").eq("user_id", other.id);
+      expect(rows).toHaveLength(1);
+      expect(rows![0]!.granted_at).not.toBeNull();
+    } finally {
+      await deleteTestUser(app, other.id);
+    }
   });
 
   it("reports an acceptance given before version tracking as not current", async () => {

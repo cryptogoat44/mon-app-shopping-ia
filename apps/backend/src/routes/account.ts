@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { LEGAL_DOCUMENT_VERSIONS, type ConsentStatus, type ConsentType, type LegalDocumentType } from "@monapp/shared-types";
+import { CONSENT_VERSIONS, type ConsentStatus, type ConsentType, type VersionedConsentType } from "@monapp/shared-types";
 import { deleteUserStorageFiles } from "../lib/storage.js";
 
-const CONSENT_TYPES: ConsentType[] = ["terms", "privacy_policy", "marketing_email"];
+const CONSENT_TYPES: ConsentType[] = ["terms", "privacy_policy", "age_declaration", "marketing_email"];
 
 const recordConsentsSchema = z.object({
   consents: z
@@ -17,8 +17,8 @@ const recordConsentsSchema = z.object({
     .max(CONSENT_TYPES.length),
 });
 
-function isLegalDocument(type: ConsentType): type is LegalDocumentType {
-  return type in LEGAL_DOCUMENT_VERSIONS;
+function isVersioned(type: ConsentType): type is VersionedConsentType {
+  return type in CONSENT_VERSIONS;
 }
 
 export default async function accountRoutes(fastify: FastifyInstance) {
@@ -49,7 +49,7 @@ export default async function accountRoutes(fastify: FastifyInstance) {
       const latest = latestByType.get(type);
       const grantedAt = latest?.grantedAt ?? null;
       const version = latest?.version ?? null;
-      const isCurrent = grantedAt !== null && (!isLegalDocument(type) || version === LEGAL_DOCUMENT_VERSIONS[type]);
+      const isCurrent = grantedAt !== null && (!isVersioned(type) || version === CONSENT_VERSIONS[type]);
       return { type, grantedAt, version, isCurrent };
     });
 
@@ -66,10 +66,11 @@ export default async function accountRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: "invalid_body", message: "Requête invalide." });
     }
 
-    // Un document juridique n'est accepté que dans sa version en vigueur :
-    // l'historique doit montrer précisément quel texte a été accepté.
+    // Un texte (document juridique, déclaration d'âge) n'est accepté que
+    // dans sa version en vigueur : l'historique doit montrer précisément
+    // quel texte a été accepté.
     const outdated = parsed.data.consents.find(
-      (consent) => isLegalDocument(consent.type) && consent.version !== LEGAL_DOCUMENT_VERSIONS[consent.type]
+      (consent) => isVersioned(consent.type) && consent.version !== CONSENT_VERSIONS[consent.type]
     );
     if (outdated) {
       return reply.code(409).send({
@@ -86,7 +87,7 @@ export default async function accountRoutes(fastify: FastifyInstance) {
         user_id: userId,
         type: consent.type,
         granted_at: now,
-        document_version: isLegalDocument(consent.type) ? LEGAL_DOCUMENT_VERSIONS[consent.type] : null,
+        document_version: isVersioned(consent.type) ? CONSENT_VERSIONS[consent.type] : null,
       }))
     );
 

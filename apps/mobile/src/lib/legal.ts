@@ -1,7 +1,7 @@
 // Logique pure des documents juridiques (Lot Q, bloc 5) : dates, versions,
 // repérage des champs laissés au fondateur. Imports relatifs : ce fichier
 // est testé par vitest, qui ne connaît pas l'alias « @/ ».
-import type { ConsentStatus, LegalDocumentType } from "@monapp/shared-types";
+import type { ConsentStatus, LegalDocumentType, VersionedConsentType } from "@monapp/shared-types";
 import { PLACEHOLDER_PATTERN } from "../legal/types";
 
 export function formatLongDate(isoOrDay: string): string {
@@ -30,7 +30,16 @@ export function splitPlaceholders(text: string): TextPart[] {
     .map((part) => ({ text: part, placeholder: PLACEHOLDER_PATTERN.test(part) }));
 }
 
-/** Statut de consentement d'un document, ou null s'il est absent. */
-export function consentFor(statuses: readonly ConsentStatus[], type: LegalDocumentType): ConsentStatus | null {
+/** Statut d'un consentement, ou null s'il est absent. */
+export function consentFor(statuses: readonly ConsentStatus[], type: VersionedConsentType): ConsentStatus | null {
   return statuses.find((status) => status.type === type) ?? null;
+}
+
+/** Ce qu'il reste à accepter pour être à jour sur un document. Les
+ * conditions d'utilisation vont avec la déclaration d'âge : les comptes qui
+ * ne l'ont pas encore faite la confirment en même temps (décision du
+ * fondateur, 2026-09-25). */
+export function pendingConsents(statuses: readonly ConsentStatus[], document: LegalDocumentType): VersionedConsentType[] {
+  const required: VersionedConsentType[] = document === "terms" ? ["terms", "age_declaration"] : [document];
+  return required.filter((type) => !consentFor(statuses, type)?.isCurrent);
 }

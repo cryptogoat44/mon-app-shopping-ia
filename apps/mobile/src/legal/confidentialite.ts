@@ -34,11 +34,11 @@ export const privacyPolicy: LegalDocument = {
       blocks: [
         "Votre compte : votre adresse e-mail et votre mot de passe. Le mot de passe n'est jamais conservé en clair : nous ne le connaissons pas.",
         "Votre profil : nom d'utilisateur, nom affiché, bio, photo de profil, vos abonnés et vos abonnements.",
-        "Vos recherches (Spotter) : l'image ou le lien (TikTok, Instagram, Pinterest) que vous soumettez, la zone que vous sélectionnez, le texte que vous ajoutez éventuellement, puis les résultats proposés (nom de la pièce, image, prix, marchand, lien). L'historique de vos recherches est conservé pour vous les remontrer (« Récemment spottées »).",
+        "Vos recherches (Spotter) : l'image ou le lien (TikTok, Instagram, Pinterest) que vous soumettez, la zone que vous sélectionnez, le texte que vous ajoutez éventuellement, puis les résultats proposés (nom de la pièce, image, prix, marchand, lien). L'historique de vos recherches vous est remontré (« Récemment spottées ») ; il est conservé 12 mois (voir « Combien de temps »).",
         "Votre Vault et vos Envies : les pièces que vous y ajoutez (nom, catégorie, photo, lien vers la pièce d'origine).",
         "Vos publications et interactions : photos, légendes, visibilité choisie, commentaires, « j'aime », notifications, comptes bloqués et signalements que vous faites.",
         "Vos clics vers les marchands : la pièce concernée, l'endroit de l'app d'où vous avez cliqué, la date, et l'identification technique de votre navigateur ou de votre téléphone (« user agent »).",
-        "Vos consentements : la date et la version des documents que vous avez acceptés.",
+        "Vos consentements : la date et la version des documents que vous avez acceptés, et votre déclaration d'avoir au moins 15 ans.",
         "Des données techniques : comme tout serveur web, le nôtre reçoit votre adresse IP et des informations techniques à chaque requête ; elles figurent dans ses journaux, utilisés pour la sécurité et la correction des erreurs.",
         "Les photos que vous envoyez sont réduites et débarrassées de leurs métadonnées, y compris la position GPS éventuellement enregistrée par votre téléphone.",
       ],
@@ -98,7 +98,9 @@ export const privacyPolicy: LegalDocument = {
       blocks: [
         [
           "L'image que vous faites analyser : supprimée de nos serveurs dès la réponse de la recherche, qu'elle ait réussi ou non (quelques secondes).",
-          "Votre compte et tout ce qui s'y rattache : tant que votre compte existe. [À décider : durée de conservation de l'historique des recherches, et sort des comptes inactifs.]",
+          "L'historique de vos recherches (image analysée exceptée, voir ci-dessus) : 12 mois. Les recherches plus anciennes sont supprimées, avec leurs résultats et vos clics vers les marchands qui en dépendent, lors de votre recherche suivante. Exception : une recherche dont vous avez gardé une pièce (Vault, Envies, pièce montrée dans une publication) est conservée tant que cette pièce l'est.",
+          "Votre compte et tout ce qui s'y rattache : tant que votre compte existe.",
+          "Un compte sans aucune connexion pendant 3 ans est supprimé, avec toutes ses données. Un e-mail vous prévient avant la suppression.",
           "Les journaux techniques du serveur : [À vérifier : durée de conservation chez notre hébergeur].",
         ],
         "Quand vous supprimez votre compte, vos données et vos photos sont effacées immédiatement et définitivement : profil, recherches, Vault, Envies, publications, commentaires, « j'aime », abonnements, notifications, clics vers les marchands, consentements.",
@@ -126,7 +128,9 @@ export const privacyPolicy: LegalDocument = {
     },
     {
       title: "Âge minimum",
-      blocks: ["Spotto est réservé aux personnes âgées d'au moins [À décider : âge minimum — 15 ans proposé, âge du consentement numérique en France]."],
+      blocks: [
+        "Spotto est réservé aux personnes âgées d'au moins 15 ans. Vous le certifiez à l'inscription, et cette déclaration est enregistrée avec sa date ; aucune vérification d'âge n'est effectuée.",
+      ],
     },
     {
       title: "Sécurité",

@@ -316,7 +316,7 @@ export interface FeedPage {
   nextCursor: string | null;
 }
 
-export type ConsentType = "terms" | "privacy_policy" | "marketing_email";
+export type ConsentType = "terms" | "privacy_policy" | "age_declaration" | "marketing_email";
 
 /** Documents juridiques dont l'acceptation est enregistrée avec sa version. */
 export type LegalDocumentType = "terms" | "privacy_policy";
@@ -327,6 +327,19 @@ export type LegalDocumentType = "terms" | "privacy_policy";
 export const LEGAL_DOCUMENT_VERSIONS: Record<LegalDocumentType, string> = {
   terms: "projet-2026-09-25",
   privacy_policy: "projet-2026-09-25",
+};
+
+/** Âge minimum pour utiliser Spotto (décision du fondateur, 2026-09-25) :
+ * simple déclaration à l'inscription, aucune vérification d'âge. */
+export const MINIMUM_AGE = 15;
+
+/** Consentements enregistrés avec la version du texte accepté : les deux
+ * documents, et la déclaration d'âge (« Je certifie avoir au moins 15 ans »). */
+export type VersionedConsentType = LegalDocumentType | "age_declaration";
+
+export const CONSENT_VERSIONS: Record<VersionedConsentType, string> = {
+  ...LEGAL_DOCUMENT_VERSIONS,
+  age_declaration: `${MINIMUM_AGE}-ans-2026-09-25`,
 };
 
 export interface ConsentStatus {
@@ -340,7 +353,8 @@ export interface ConsentStatus {
 
 export interface ConsentInput {
   type: ConsentType;
-  /** Obligatoire (et égale à la version en vigueur) pour les documents juridiques. */
+  /** Obligatoire (et égale à la version en vigueur, CONSENT_VERSIONS) pour
+   * les documents juridiques et la déclaration d'âge. */
   version?: string;
 }
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useAuth } from "@/lib/auth-context";
-import { ApiError, acceptLegalDocuments, updateMyProfile } from "@/lib/api";
+import { ApiError, acceptConsents, updateMyProfile } from "@/lib/api";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
 
@@ -29,11 +29,12 @@ export default function CompleteProfileScreen() {
 
     setSubmitting(true);
     try {
-      // Le consentement a été donné à l'inscription (case à cocher
-      // obligatoire) ; il est enregistré ici, premier moment où une session
-      // existe, AVANT d'ouvrir l'app : sans preuve enregistrée (avec la
-      // version acceptée), pas d'accès (audit Lot Q, PRO-04).
-      await acceptLegalDocuments(["terms", "privacy_policy"]);
+      // Les consentements ont été donnés à l'inscription (cases à cocher
+      // obligatoires : documents et « au moins 15 ans ») ; ils sont
+      // enregistrés ici, premier moment où une session existe, AVANT
+      // d'ouvrir l'app : sans preuve enregistrée (avec la version acceptée),
+      // pas d'accès (audit Lot Q, PRO-04).
+      await acceptConsents(["terms", "privacy_policy", "age_declaration"]);
       await updateMyProfile({ username: normalizedUsername, displayName: displayName.trim() });
       await refreshProfile();
       // Le layout racine redirige automatiquement vers (app) une fois le profil complet.

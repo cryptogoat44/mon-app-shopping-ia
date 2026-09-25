@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LEGAL_DOCUMENT_VERSIONS } from "@monapp/shared-types";
-import { consentFor, formatLongDate, parseLegalVersion, splitPlaceholders } from "../src/lib/legal";
+import { consentFor, formatLongDate, parseLegalVersion, pendingConsents, splitPlaceholders } from "../src/lib/legal";
 import { termsOfUse } from "../src/legal/conditions";
 import { privacyPolicy } from "../src/legal/confidentialite";
 
@@ -26,6 +26,21 @@ describe("documents juridiques", () => {
     const statuses = [{ type: "terms" as const, grantedAt: "2026-09-25T10:00:00Z", version: "v", isCurrent: false }];
     expect(consentFor(statuses, "terms")?.version).toBe("v");
     expect(consentFor(statuses, "privacy_policy")).toBeNull();
+  });
+
+  it("les conditions se confirment avec la déclaration d'âge", () => {
+    const status = (type: "terms" | "privacy_policy" | "age_declaration", isCurrent: boolean) => ({
+      type,
+      grantedAt: "2026-09-25T10:00:00Z",
+      version: "v",
+      isCurrent,
+    });
+    expect(pendingConsents([], "terms")).toEqual(["terms", "age_declaration"]);
+    expect(pendingConsents([status("terms", true)], "terms")).toEqual(["age_declaration"]);
+    expect(pendingConsents([status("terms", true), status("age_declaration", true)], "terms")).toEqual([]);
+    expect(pendingConsents([status("terms", false), status("age_declaration", true)], "terms")).toEqual(["terms"]);
+    // La politique de confidentialité ne demande pas l'âge.
+    expect(pendingConsents([], "privacy_policy")).toEqual(["privacy_policy"]);
   });
 
   it("les deux documents sont des projets, datés, et correspondent aux versions en vigueur", () => {

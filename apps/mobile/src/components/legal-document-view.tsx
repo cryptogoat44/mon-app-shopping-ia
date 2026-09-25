@@ -2,16 +2,17 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, type StyleProp, type TextStyle } from "react-native";
 import { useRouter } from "expo-router";
 import Head from "expo-router/head";
-import { LEGAL_DOCUMENT_VERSIONS, isProfileComplete, type ConsentStatus } from "@monapp/shared-types";
-import { acceptLegalDocuments, fetchConsentStatus } from "@/lib/api";
+import { LEGAL_DOCUMENT_VERSIONS, isProfileComplete, type ConsentStatus, type VersionedConsentType } from "@monapp/shared-types";
+import { acceptConsents, fetchConsentStatus } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
-import { consentFor, formatLongDate, parseLegalVersion, splitPlaceholders } from "@/lib/legal";
+import { consentFor, formatLongDate, parseLegalVersion, pendingConsents, splitPlaceholders } from "@/lib/legal";
 import type { LegalDocument } from "@/legal/types";
 import { APP_NAME_DISPLAY } from "@/constants/brand";
 import { fr } from "@/i18n/fr";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
+import { CheckboxRow } from "@/components/checkbox-row";
 
 // Affiche un document juridique (Lot Q, bloc 5). Lisible par tous, connecté
 // ou non (lien depuis l'inscription, adresse publique du site). Pour une
@@ -37,28 +38,31 @@ function Paragraph({ text, style }: { text: string; style: StyleProp<TextStyle> 
 type AcceptanceState =
   | { kind: "loading" }
   | { kind: "failed" }
-  | { kind: "ready"; consent: ConsentStatus | null };
+  | { kind: "ready"; consent: ConsentStatus | null; pending: VersionedConsentType[] };
 
 function Acceptance({ document }: { document: LegalDocument }) {
   const { showToast } = useToast();
   const [state, setState] = useState<AcceptanceState>({ kind: "loading" });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
+  const [ageChecked, setAgeChecked] = useState(false);
 
   const load = useCallback(() => {
     setState({ kind: "loading" });
     fetchConsentStatus()
-      .then((statuses) => setState({ kind: "ready", consent: consentFor(statuses, document.type) }))
+      .then((statuses) =>
+        setState({ kind: "ready", consent: consentFor(statuses, document.type), pending: pendingConsents(statuses, document.type) })
+      )
       .catch(() => setState({ kind: "failed" }));
   }, [document.type]);
 
   useEffect(load, [load]);
 
-  async function accept() {
+  async function accept(pending: VersionedConsentType[]) {
     setSaving(true);
     setSaveError(false);
     try {
-      await acceptLegalDocuments([document.type]);
+      await acceptConsents(pending);
       showToast(fr.legal.acceptedToast);
       load();
     } catch {
@@ -79,13 +83,24 @@ function Acceptance({ document }: { document: LegalDocument }) {
       </View>
     );
   }
-  if (state.consent?.isCurrent && state.consent.grantedAt) {
+  if (state.pending.length === 0 && state.consent?.grantedAt) {
     return <Text style={[styles.body, styles.acceptance]}>{fr.legal.accepted(formatLongDate(state.consent.grantedAt))}</Text>;
   }
+  const pending = state.pending;
+  const needsAge = pending.includes("age_declaration");
+  const disabled = saving || (needsAge && !ageChecked);
   return (
     <View style={styles.acceptance}>
       {saveError ? <ErrorMessage style={styles.body}>{fr.legal.acceptFailed}</ErrorMessage> : null}
-      <Pressable accessibilityRole="button" style={[styles.cta, saving ? styles.ctaDisabled : null]} onPress={accept} disabled={saving}>
+      {needsAge ? (
+        <CheckboxRow style={styles.ageRow} label={fr.legal.ageDeclaration} checked={ageChecked} onToggle={() => setAgeChecked((c) => !c)} />
+      ) : null}
+      <Pressable
+        accessibilityRole="button"
+        style={[styles.cta, disabled ? styles.ctaDisabled : null]}
+        onPress={() => accept(pending)}
+        disabled={disabled}
+      >
         <Text style={styles.ctaLabel}>{saving ? fr.legal.accepting : fr.legal.accept}</Text>
       </Pressable>
     </View>
@@ -173,6 +188,7 @@ const styles = StyleSheet.create({
   listItem: { flexDirection: "row", gap: space.sm },
   listText: { flex: 1 },
   acceptance: { marginTop: space.xl },
+  ageRow: { marginBottom: space.md },
   link: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   cta: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 48, alignItems: "center", justifyContent: "center" },
   ctaDisabled: { opacity: 0.5 },

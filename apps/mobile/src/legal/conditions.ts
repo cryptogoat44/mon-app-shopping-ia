@@ -30,9 +30,10 @@ export const termsOfUse: LegalDocument = {
       title: "Votre compte",
       blocks: [
         [
-          "Vous devez avoir au moins [À décider : âge minimum — 15 ans proposé] pour créer un compte.",
+          "Vous devez avoir au moins 15 ans pour créer un compte. Vous le certifiez à l'inscription ; aucune vérification d'âge n'est effectuée.",
           "Les informations que vous donnez doivent être exactes. Votre mot de passe est personnel : gardez-le confidentiel.",
           "Vous pouvez supprimer votre compte à tout moment : Réglages → Supprimer mon compte. La suppression est immédiate et définitive.",
+          "Un compte sans aucune connexion pendant 3 ans est supprimé, après un e-mail d'avertissement.",
         ],
       ],
     },
