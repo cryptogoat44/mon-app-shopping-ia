@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:ci": "tsx scripts/tests-ci.ts",
     "nettoyer-captures": "tsx scripts/nettoyer-captures.ts",
     "configurer-base-dev": "tsx scripts/configurer-base-dev.ts",
     "migrer-dev": "tsx scripts/migrer-dev.ts",
