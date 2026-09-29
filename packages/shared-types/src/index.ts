@@ -316,7 +316,11 @@ export interface FeedPage {
   nextCursor: string | null;
 }
 
-export type ConsentType = "terms" | "privacy_policy" | "age_declaration" | "marketing_email";
+export type ConsentType = "terms" | "privacy_policy" | "age_declaration" | "analytics" | "marketing_email";
+
+/** Consentements facultatifs : ils peuvent être refusés ou retirés à tout
+ * moment (chaque choix est un nouvel événement daté). */
+export const OPTIONAL_CONSENTS: readonly ConsentType[] = ["analytics"];
 
 /** Documents juridiques dont l'acceptation est enregistrée avec sa version. */
 export type LegalDocumentType = "terms" | "privacy_policy";
@@ -337,11 +341,13 @@ export const MINIMUM_AGE = 15;
 
 /** Consentements enregistrés avec la version du texte accepté : les deux
  * documents, et la déclaration d'âge (« Je certifie avoir au moins 15 ans »). */
-export type VersionedConsentType = LegalDocumentType | "age_declaration";
+export type VersionedConsentType = LegalDocumentType | "age_declaration" | "analytics";
 
 export const CONSENT_VERSIONS: Record<VersionedConsentType, string> = {
   ...LEGAL_DOCUMENT_VERSIONS,
   age_declaration: `${MINIMUM_AGE}-ans-2026-09-25`,
+  // Texte de la case « statistiques d'usage » (lot 2).
+  analytics: "statistiques-2026-09-30",
 };
 
 /** Versions dont l'acceptation reste valable. Une mise à jour qui demande
@@ -355,6 +361,7 @@ export const ACCEPTED_CONSENT_VERSIONS: Record<VersionedConsentType, readonly st
   terms: ["projet-2026-09-25"],
   privacy_policy: ["projet-2026-09-25", "projet-2026-09-29"],
   age_declaration: [CONSENT_VERSIONS.age_declaration],
+  analytics: [CONSENT_VERSIONS.analytics],
 };
 
 /** Information à montrer une fois aux personnes connectées après une mise à
@@ -369,7 +376,10 @@ export const POLICY_UPDATE_NOTICE = {
 
 export interface ConsentStatus {
   type: ConsentType;
+  /** Date de l'accord, si le dernier choix est un accord ; sinon null. */
   grantedAt: string | null;
+  /** Date du dernier choix (accord, refus ou retrait) ; null si jamais demandé. */
+  decidedAt: string | null;
   /** Version du document acceptée (null : consentement antérieur au suivi des versions). */
   version: string | null;
   /** Vrai si la version acceptée est celle en vigueur. */
@@ -378,6 +388,8 @@ export interface ConsentStatus {
 
 export interface ConsentInput {
   type: ConsentType;
+  /** false = refus ou retrait (consentements facultatifs seulement). Par défaut : accord. */
+  granted?: boolean;
   /** Obligatoire (et égale à la version en vigueur, CONSENT_VERSIONS) pour
    * les documents juridiques et la déclaration d'âge. */
   version?: string;

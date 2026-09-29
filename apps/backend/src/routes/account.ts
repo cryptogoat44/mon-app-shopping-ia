@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { ACCEPTED_CONSENT_VERSIONS, CONSENT_VERSIONS, type ConsentStatus, type ConsentType, type VersionedConsentType } from "@monapp/shared-types";
+import { ACCEPTED_CONSENT_VERSIONS, CONSENT_VERSIONS, OPTIONAL_CONSENTS, type ConsentStatus, type ConsentType, type VersionedConsentType } from "@monapp/shared-types";
 import { deleteUserStorageFiles } from "../lib/storage.js";
 
-const CONSENT_TYPES: ConsentType[] = ["terms", "privacy_policy", "age_declaration", "marketing_email"];
+const CONSENT_TYPES: ConsentType[] = ["terms", "privacy_policy", "age_declaration", "analytics", "marketing_email"];
 
 const recordConsentsSchema = z.object({
   consents: z
@@ -11,6 +11,7 @@ const recordConsentsSchema = z.object({
       z.object({
         type: z.enum(CONSENT_TYPES as [ConsentType, ...ConsentType[]]),
         version: z.string().trim().min(1).max(40).optional(),
+        granted: z.boolean().optional(),
       })
     )
     .min(1)
@@ -29,7 +30,7 @@ export default async function accountRoutes(fastify: FastifyInstance) {
 
     const { data, error } = await fastify.supabaseAdmin
       .from("consents")
-      .select("type, granted_at, document_version")
+      .select("type, granted_at, revoked_at, document_version")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
 
@@ -40,17 +41,21 @@ export default async function accountRoutes(fastify: FastifyInstance) {
 
     // On ne garde que l'événement le plus récent par type (déjà trié par
     // created_at décroissant ci-dessus).
-    const latestByType = new Map<ConsentType, { grantedAt: string | null; version: string | null }>();
-    for (const row of (data as { type: ConsentType; granted_at: string | null; document_version: string | null }[]) ?? []) {
-      if (!latestByType.has(row.type)) latestByType.set(row.type, { grantedAt: row.granted_at, version: row.document_version });
+    type Row = { type: ConsentType; granted_at: string | null; revoked_at: string | null; document_version: string | null };
+    const latestByType = new Map<ConsentType, Row>();
+    for (const row of (data as Row[]) ?? []) {
+      if (!latestByType.has(row.type)) latestByType.set(row.type, row);
     }
 
+    // Dernier événement par type : un accord (granted_at) ou, pour un
+    // consentement facultatif, un refus / retrait (revoked_at).
     const statuses: ConsentStatus[] = CONSENT_TYPES.map((type) => {
       const latest = latestByType.get(type);
-      const grantedAt = latest?.grantedAt ?? null;
-      const version = latest?.version ?? null;
+      const grantedAt = latest?.granted_at ?? null;
+      const decidedAt = grantedAt ?? latest?.revoked_at ?? null;
+      const version = latest?.document_version ?? null;
       const isCurrent = grantedAt !== null && (!isVersioned(type) || (version !== null && ACCEPTED_CONSENT_VERSIONS[type].includes(version)));
-      return { type, grantedAt, version, isCurrent };
+      return { type, grantedAt, decidedAt, version, isCurrent };
     });
 
     return reply.send(statuses);
@@ -79,16 +84,27 @@ export default async function accountRoutes(fastify: FastifyInstance) {
       });
     }
 
+    // Refuser ou retirer n'a de sens que pour un consentement facultatif :
+    // les documents obligatoires ne se « retirent » pas (on supprime son
+    // compte pour cela).
+    if (parsed.data.consents.some((consent) => consent.granted === false && !OPTIONAL_CONSENTS.includes(consent.type))) {
+      return reply.code(400).send({ error: "invalid_body", message: "Seul un consentement facultatif peut être refusé ou retiré." });
+    }
+
     const userId = request.user!.id;
     const now = new Date().toISOString();
 
     const { error } = await fastify.supabaseAdmin.from("consents").insert(
-      parsed.data.consents.map((consent) => ({
-        user_id: userId,
-        type: consent.type,
-        granted_at: now,
-        document_version: isVersioned(consent.type) ? CONSENT_VERSIONS[consent.type] : null,
-      }))
+      parsed.data.consents.map((consent) => {
+        const granted = consent.granted !== false;
+        return {
+          user_id: userId,
+          type: consent.type,
+          granted_at: granted ? now : null,
+          revoked_at: granted ? null : now,
+          document_version: isVersioned(consent.type) ? CONSENT_VERSIONS[consent.type] : null,
+        };
+      })
     );
 
     if (error) {

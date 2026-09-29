@@ -26,7 +26,7 @@ describe("documents juridiques", () => {
   });
 
   it("retrouve le statut d'un document", () => {
-    const statuses = [{ type: "terms" as const, grantedAt: "2026-09-25T10:00:00Z", version: "v", isCurrent: false }];
+    const statuses = [{ type: "terms" as const, grantedAt: "2026-09-25T10:00:00Z", decidedAt: "2026-09-25T10:00:00Z", version: "v", isCurrent: false }];
     expect(consentFor(statuses, "terms")?.version).toBe("v");
     expect(consentFor(statuses, "privacy_policy")).toBeNull();
   });
@@ -35,6 +35,7 @@ describe("documents juridiques", () => {
     const status = (type: "terms" | "privacy_policy" | "age_declaration", isCurrent: boolean) => ({
       type,
       grantedAt: "2026-09-25T10:00:00Z",
+      decidedAt: "2026-09-25T10:00:00Z",
       version: "v",
       isCurrent,
     });

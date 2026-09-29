@@ -3,7 +3,7 @@ import { ACCEPTED_CONSENT_VERSIONS, LEGAL_DOCUMENT_VERSIONS, POLICY_UPDATE_NOTIC
 import { parseSeenNotices, seenNoticesKey, shouldShowNotice } from "../src/lib/policy-notice";
 
 const notice = { id: "info-test", document: "privacy_policy" as const, version: "v2" };
-const accepted = (version: string | null) => [{ type: "privacy_policy" as const, grantedAt: "2026-09-25T10:00:00Z", version, isCurrent: true }];
+const accepted = (version: string | null) => [{ type: "privacy_policy" as const, grantedAt: "2026-09-25T10:00:00Z", decidedAt: "2026-09-25T10:00:00Z", version, isCurrent: true }];
 
 describe("information de mise à jour (sans nouvelle acceptation)", () => {
   it("montrée une fois à qui a accepté une version antérieure", () => {

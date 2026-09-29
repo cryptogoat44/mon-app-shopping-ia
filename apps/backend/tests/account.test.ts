@@ -149,6 +149,50 @@ describe("account consents and export", () => {
     }
   });
 
+  it("statistiques d'usage : accord, retrait et refus sont des événements datés, versionnés", async () => {
+    const other = await createTestUser(app, "acan");
+    try {
+      const post = (consents: unknown) =>
+        app.inject({ method: "POST", url: "/api/consents", headers: authHeaders(other.token), payload: { consents } });
+      const status = async () =>
+        (await app.inject({ method: "GET", url: "/api/consents", headers: authHeaders(other.token) }))
+          .json()
+          .find((c: { type: string }) => c.type === "analytics");
+
+      // Jamais demandé.
+      expect(await status()).toMatchObject({ grantedAt: null, decidedAt: null, isCurrent: false });
+      // Texte d'une autre version : refusé.
+      expect((await post([{ type: "analytics", version: "ancienne" }])).statusCode).toBe(409);
+      // Accord.
+      expect((await post([{ type: "analytics", version: CONSENT_VERSIONS.analytics }])).statusCode).toBe(204);
+      const granted = await status();
+      expect(granted.grantedAt).not.toBeNull();
+      expect(granted.isCurrent).toBe(true);
+      expect(granted.version).toBe(CONSENT_VERSIONS.analytics);
+      // Retrait : nouvel événement, l'accord reste dans l'historique.
+      expect((await post([{ type: "analytics", version: CONSENT_VERSIONS.analytics, granted: false }])).statusCode).toBe(204);
+      const withdrawn = await status();
+      expect(withdrawn.grantedAt).toBeNull();
+      expect(withdrawn.decidedAt).not.toBeNull();
+      expect(withdrawn.isCurrent).toBe(false);
+      const { data: rows } = await app.supabaseAdmin
+        .from("consents")
+        .select("granted_at, revoked_at, document_version")
+        .eq("user_id", other.id)
+        .eq("type", "analytics");
+      expect(rows).toHaveLength(2);
+      expect(rows!.filter((r) => r.granted_at !== null && r.revoked_at === null)).toHaveLength(1);
+      expect(rows!.filter((r) => r.revoked_at !== null && r.granted_at === null)).toHaveLength(1);
+      // Les documents obligatoires ne se « retirent » pas.
+      expect((await post([{ type: "terms", version: LEGAL_DOCUMENT_VERSIONS.terms, granted: false }])).statusCode).toBe(400);
+      // L'export contient tout l'historique des choix.
+      const exported = (await app.inject({ method: "GET", url: "/api/me/export", headers: authHeaders(other.token) })).json();
+      expect(exported.consents.filter((c: { type: string }) => c.type === "analytics")).toHaveLength(2);
+    } finally {
+      await deleteTestUser(app, other.id);
+    }
+  });
+
   it("reports an acceptance given before version tracking as not current", async () => {
     const other = await createTestUser(app, "accv");
     try {
