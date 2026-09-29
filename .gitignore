@@ -15,3 +15,21 @@ docs/
 
 # Clé d'API Render (script bridé render-bride) : secrète, locale uniquement
 .render-api-key
+
+# Protection contre les fuites accidentelles (décision du fondateur, 2026-09-29)
+# Documents bureautiques et fichiers temporaires de Word
+*.docx
+*.xlsx
+*.pages
+*.numbers
+~$*
+# Tout fichier dont le nom contient key / secret / password (toutes casses)
+*[Kk][Ee][Yy]*
+*[Ss][Ee][Cc][Rr][Ee][Tt]*
+*[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]*
+# … sauf le code source, pour ne jamais perdre un fichier utile en silence
+# (ex. password-recovery.ts, un futur écran lié au clavier « keyboard »).
+# Un secret ne s'écrit jamais dans le code (règle « Secrets » de CLAUDE.md).
+!*.ts
+!*.tsx
+!*.sql
