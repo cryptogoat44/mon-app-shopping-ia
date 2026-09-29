@@ -12,3 +12,6 @@ coverage/
 # Dépôt public : ces fichiers décrivent les faiblesses de l'app, restent locaux uniquement
 CLAUDE.md
 docs/
+
+# Clé d'API Render (script bridé render-bride) : secrète, locale uniquement
+.render-api-key

@@ -17,6 +17,8 @@
     "configurer-base-dev": "tsx scripts/configurer-base-dev.ts",
     "migrer-dev": "tsx scripts/migrer-dev.ts",
     "nettoyer-comptes-test-dev": "tsx scripts/nettoyer-comptes-test-dev.ts",
+    "render-bride": "tsx scripts/render-bride.ts",
+    "configurer-render": "tsx scripts/configurer-render.ts",
     "parcours-ecran": "tsx scripts/parcours-ecran/index.ts"
   },
   "dependencies": {
