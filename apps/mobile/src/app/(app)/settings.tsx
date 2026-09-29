@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import type { ConsentStatus } from "@monapp/shared-types";
+import { LEGAL_DOCUMENT_VERSIONS, type ConsentStatus } from "@monapp/shared-types";
 import { color, font, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
 import { useAuth } from "@/lib/auth-context";
@@ -75,9 +75,9 @@ export default function SettingsScreen() {
     if (consentsFailed) return fr.settings.consentFailed;
     if (!consents) return fr.settings.consentLoading;
     const consent = consentFor(consents, type);
-    return pendingConsents(consents, type).length === 0 && consent?.grantedAt
-      ? fr.settings.acceptedOn(formatLongDate(consent.grantedAt))
-      : fr.settings.notAccepted;
+    if (pendingConsents(consents, type).length > 0 || !consent?.grantedAt) return fr.settings.notAccepted;
+    const date = formatLongDate(consent.grantedAt);
+    return consent.version === LEGAL_DOCUMENT_VERSIONS[type] ? fr.settings.acceptedOn(date) : fr.settings.acceptedEarlier(date);
   }
 
   return (

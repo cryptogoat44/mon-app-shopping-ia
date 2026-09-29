@@ -108,6 +108,10 @@ export async function run(p: Parcours): Promise<void> {
     ]);
     const phone = await p.newPhone();
     await ancienne.signIn(phone);
+    // Compte antérieur à la mise à jour « serveur en Europe » : il voit
+    // d'abord l'information (scénario francfort) ; on la ferme.
+    const close = phone.getByRole("button", { name: "Fermer cette information" });
+    if (await close.waitFor({ timeout: 6000 }).then(() => true).catch(() => false)) await close.click();
     await open(phone, `${p.siteUrl}/settings`);
     await phone.getByText("Version en vigueur pas encore acceptée", { exact: false }).first().waitFor();
     await p.capture(phone, "10-reglages-a-accepter");

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { CONSENT_VERSIONS, type ConsentStatus, type ConsentType, type VersionedConsentType } from "@monapp/shared-types";
+import { ACCEPTED_CONSENT_VERSIONS, CONSENT_VERSIONS, type ConsentStatus, type ConsentType, type VersionedConsentType } from "@monapp/shared-types";
 import { deleteUserStorageFiles } from "../lib/storage.js";
 
 const CONSENT_TYPES: ConsentType[] = ["terms", "privacy_policy", "age_declaration", "marketing_email"];
@@ -49,7 +49,7 @@ export default async function accountRoutes(fastify: FastifyInstance) {
       const latest = latestByType.get(type);
       const grantedAt = latest?.grantedAt ?? null;
       const version = latest?.version ?? null;
-      const isCurrent = grantedAt !== null && (!isVersioned(type) || version === CONSENT_VERSIONS[type]);
+      const isCurrent = grantedAt !== null && (!isVersioned(type) || (version !== null && ACCEPTED_CONSENT_VERSIONS[type].includes(version)));
       return { type, grantedAt, version, isCurrent };
     });
 

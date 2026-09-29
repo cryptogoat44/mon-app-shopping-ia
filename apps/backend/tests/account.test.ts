@@ -121,6 +121,34 @@ describe("account consents and export", () => {
     }
   });
 
+  it("une mise à jour d'information garde valable la version déjà acceptée", async () => {
+    const other = await createTestUser(app, "acin");
+    try {
+      // Politique acceptée dans sa version précédente (avant le déménagement à Francfort).
+      await app.supabaseAdmin.from("consents").insert([
+        { user_id: other.id, type: "privacy_policy", granted_at: new Date().toISOString(), document_version: "projet-2026-09-25" },
+        { user_id: other.id, type: "terms", granted_at: new Date().toISOString(), document_version: "une-version-inconnue" },
+      ]);
+      const status = (await app.inject({ method: "GET", url: "/api/consents", headers: authHeaders(other.token) })).json();
+      const privacy = status.find((c: { type: string }) => c.type === "privacy_policy");
+      const terms = status.find((c: { type: string }) => c.type === "terms");
+      expect(LEGAL_DOCUMENT_VERSIONS.privacy_policy).not.toBe("projet-2026-09-25");
+      expect(privacy.version).toBe("projet-2026-09-25");
+      expect(privacy.isCurrent).toBe(true);
+      expect(terms.isCurrent).toBe(false);
+      // Une nouvelle acceptation se fait toujours dans la version en vigueur.
+      const old = await app.inject({
+        method: "POST",
+        url: "/api/consents",
+        headers: authHeaders(other.token),
+        payload: { consents: [{ type: "privacy_policy", version: "projet-2026-09-25" }] },
+      });
+      expect(old.statusCode).toBe(409);
+    } finally {
+      await deleteTestUser(app, other.id);
+    }
+  });
+
   it("reports an acceptance given before version tracking as not current", async () => {
     const other = await createTestUser(app, "accv");
     try {

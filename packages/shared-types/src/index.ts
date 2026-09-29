@@ -326,7 +326,9 @@ export type LegalDocumentType = "terms" | "privacy_policy";
  * autre version, et l'historique garde la version acceptée. */
 export const LEGAL_DOCUMENT_VERSIONS: Record<LegalDocumentType, string> = {
   terms: "projet-2026-09-25",
-  privacy_policy: "projet-2026-09-25",
+  // 2026-09-29 : serveur déménagé à Francfort (UE) — simple information,
+  // pas de nouvelle acceptation (décision du fondateur).
+  privacy_policy: "projet-2026-09-29",
 };
 
 /** Âge minimum pour utiliser Spotto (décision du fondateur, 2026-09-25) :
@@ -341,6 +343,29 @@ export const CONSENT_VERSIONS: Record<VersionedConsentType, string> = {
   ...LEGAL_DOCUMENT_VERSIONS,
   age_declaration: `${MINIMUM_AGE}-ans-2026-09-25`,
 };
+
+/** Versions dont l'acceptation reste valable. Une mise à jour qui demande
+ * seulement d'INFORMER (ex. lieu d'hébergement) garde les versions
+ * précédentes dans la liste : personne n'a à accepter de nouveau. Une mise à
+ * jour qui demande une nouvelle acceptation remet la liste à la seule
+ * version en vigueur. Une nouvelle acceptation se fait toujours dans la
+ * version en vigueur (CONSENT_VERSIONS). À faire valider par le juriste :
+ * quels changements relèvent de l'un ou de l'autre. */
+export const ACCEPTED_CONSENT_VERSIONS: Record<VersionedConsentType, readonly string[]> = {
+  terms: ["projet-2026-09-25"],
+  privacy_policy: ["projet-2026-09-25", "projet-2026-09-29"],
+  age_declaration: [CONSENT_VERSIONS.age_declaration],
+};
+
+/** Information à montrer une fois aux personnes connectées après une mise à
+ * jour qui ne demande pas de nouvelle acceptation (un identifiant par
+ * information, pour ne la montrer qu'une fois). */
+export const POLICY_UPDATE_NOTICE = {
+  id: "politique-2026-09-29-serveur-europe",
+  document: "privacy_policy" as LegalDocumentType,
+  /** Montrée à qui a accepté une version antérieure à celle-ci. */
+  version: "projet-2026-09-29",
+} as const;
 
 export interface ConsentStatus {
   type: ConsentType;

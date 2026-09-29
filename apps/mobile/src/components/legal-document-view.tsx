@@ -84,7 +84,9 @@ function Acceptance({ document }: { document: LegalDocument }) {
     );
   }
   if (state.pending.length === 0 && state.consent?.grantedAt) {
-    return <Text style={[styles.body, styles.acceptance]}>{fr.legal.accepted(formatLongDate(state.consent.grantedAt))}</Text>;
+    const date = formatLongDate(state.consent.grantedAt);
+    const label = state.consent.version === LEGAL_DOCUMENT_VERSIONS[document.type] ? fr.legal.accepted(date) : fr.legal.acceptedEarlier(date);
+    return <Text style={[styles.body, styles.acceptance]}>{label}</Text>;
   }
   const pending = state.pending;
   const needsAge = pending.includes("age_declaration");

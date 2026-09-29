@@ -73,7 +73,7 @@ export const privacyPolicy: LegalDocument = {
         "Nous faisons appel à des prestataires qui traitent des données pour notre compte, uniquement pour faire fonctionner Spotto :",
         [
           "Supabase (Supabase Pte. Ltd., Singapour) : base de données, stockage des photos et authentification. Vos données y sont hébergées dans l'Union européenne (Irlande).",
-          "Render (Render Services, Inc., États-Unis) : hébergement de notre serveur, situé aux États-Unis (Oregon), et du site. Toutes les requêtes de l'app passent par ce serveur.",
+          "Render (Render Services, Inc., États-Unis) : hébergement de notre serveur, situé dans l'Union européenne (Francfort, Allemagne), et du site. Toutes les requêtes de l'app passent par ce serveur.",
           "SerpApi (SerpApi, LLC, États-Unis) : reçoit un lien temporaire (valable 5 minutes) vers l'image à analyser, et le texte éventuellement ajouté ; il les transmet à la recherche visuelle de Google (Google Lens, Google LLC, États-Unis), qui télécharge l'image pour trouver les pièces correspondantes. Aucune autre donnée vous concernant (nom, e-mail, identifiant) ne leur est transmise.",
         ],
         "Quand vous collez un lien TikTok ou Instagram, notre serveur demande à TikTok ou à Meta l'aperçu public de la vidéo : seul le lien leur est transmis, jamais votre identité.",
@@ -87,7 +87,7 @@ export const privacyPolicy: LegalDocument = {
         "Certaines données quittent ou peuvent quitter l'Union européenne :",
         [
           "l'image que vous faites analyser et le texte éventuellement ajouté : envoyés à SerpApi puis à Google, aux États-Unis ;",
-          "toutes les données qui passent par notre serveur, situé aux États-Unis (Oregon) chez Render : chaque requête de l'app, avec votre adresse IP, et les données que vous consultez ou envoyez (compte, profil, recherches, Vault, Envies, publications, commentaires, photos). Elles y sont traitées le temps de la requête avant d'être enregistrées en Irlande ; les journaux techniques du serveur (adresse IP, informations de la requête) restent, eux, chez Render (voir « Combien de temps ») ;",
+          "les données qui passent par notre serveur (chaque requête de l'app, avec votre adresse IP, et les données que vous consultez ou envoyez) : le serveur est situé dans l'Union européenne (Francfort), mais Render étant une société américaine, un accès depuis les États-Unis (maintenance, assistance) ne peut pas être exclu ; il en va de même pour les journaux techniques du serveur (adresse IP, informations de la requête), conservés chez Render (voir « Combien de temps ») ;",
           "les données hébergées chez Supabase : stockées en Irlande, mais Supabase étant une société établie à Singapour, un accès depuis l'extérieur de l'Union européenne (maintenance, assistance) ne peut pas être exclu ;",
           "votre adresse IP : reçue par les sites des marchands et par Google lorsque l'app affiche leurs images, où qu'ils soient établis.",
         ],
@@ -110,7 +110,7 @@ export const privacyPolicy: LegalDocument = {
     {
       title: "Sur votre téléphone ou dans votre navigateur",
       blocks: [
-        "Spotto enregistre sur votre appareil votre session de connexion, pour que vous n'ayez pas à vous reconnecter, ainsi qu'une copie des images déjà affichées, pour les montrer plus vite. Ces éléments sont indispensables au fonctionnement de l'app.",
+        "Spotto enregistre sur votre appareil votre session de connexion, pour que vous n'ayez pas à vous reconnecter, ainsi qu'une copie des images déjà affichées, pour les montrer plus vite, et le fait que vous avez déjà vu une information de mise à jour, pour ne pas vous la remontrer. Ces éléments sont indispensables au fonctionnement de l'app.",
         "Spotto n'utilise à ce jour aucun outil de mesure d'audience, aucun traceur publicitaire et aucun cookie publicitaire.",
       ],
     },
@@ -142,7 +142,7 @@ export const privacyPolicy: LegalDocument = {
     {
       title: "Modifications",
       blocks: [
-        "Nous pouvons faire évoluer cette politique. Chaque version est datée ; l'app enregistre la version que vous avez acceptée et vous signale, dans les Réglages, lorsqu'une nouvelle version est en vigueur.",
+        "Nous pouvons faire évoluer cette politique. Chaque version est datée, et l'app enregistre la version que vous avez acceptée. Lorsqu'un changement demande votre accord, l'app vous le signale dans les Réglages. Lorsqu'il s'agit d'une simple information (par exemple un changement du lieu d'hébergement), un court message vous en informe, avec un lien vers cette page. [À vérifier : quels changements exigent une nouvelle acceptation, et lesquels une simple information.]",
       ],
     },
   ],
