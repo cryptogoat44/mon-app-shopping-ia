@@ -20,6 +20,19 @@ export function shouldShowNotice(statuses: readonly ConsentStatus[], seenIds: re
   return accepted?.version !== notice.version;
 }
 
+/** Demande « statistiques d'usage » : une seule fois, tant qu'aucun choix
+ * (accord ou refus) n'a été enregistré pour ce compte. Le choix est gardé
+ * sur le serveur : la demande ne revient sur aucun appareil. */
+export function shouldAskAnalytics(statuses: readonly ConsentStatus[]): boolean {
+  const analytics = statuses.find((status) => status.type === "analytics");
+  return !analytics?.decidedAt;
+}
+
+/** Consentement « statistiques d'usage » en vigueur (accord, texte actuel). */
+export function hasAnalyticsConsent(statuses: readonly ConsentStatus[]): boolean {
+  return statuses.find((status) => status.type === "analytics")?.isCurrent === true;
+}
+
 /** Clé de stockage propre à chaque compte (un appareil partagé). */
 export function seenNoticesKey(userId: string): string {
   return `spotto.informations-vues.${userId}`;

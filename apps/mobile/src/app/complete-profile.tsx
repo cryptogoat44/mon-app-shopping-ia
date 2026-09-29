@@ -2,8 +2,9 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Link } from "expo-router";
 import { useAuth } from "@/lib/auth-context";
-import { ApiError, acceptConsents, updateMyProfile } from "@/lib/api";
-import { forgetSignupConsents, hasSignupConsents } from "@/lib/signup-consents";
+import { ApiError, acceptConsents, recordAnalyticsChoice, updateMyProfile } from "@/lib/api";
+import { forgetSignupConsents, hasSignupConsents, signupAnalyticsChoice } from "@/lib/signup-consents";
+import { setAnalyticsUser, track } from "@/lib/analytics";
 import { fr } from "@/i18n/fr";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
@@ -19,6 +20,8 @@ export default function CompleteProfileScreen() {
   const [needsConsents] = useState(() => !hasSignupConsents(session?.user.email));
   const [ageChecked, setAgeChecked] = useState(false);
   const [documentsChecked, setDocumentsChecked] = useState(false);
+  // Facultatif : choix de l'inscription si elle vient d'avoir lieu, sinon décoché.
+  const [analyticsChecked, setAnalyticsChecked] = useState(() => signupAnalyticsChoice(session?.user.email));
   const consentsMissing = needsConsents && (!ageChecked || !documentsChecked);
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState(profile?.displayName ?? "");
@@ -53,8 +56,15 @@ export default function CompleteProfileScreen() {
       // AVANT d'ouvrir l'app : sans preuve enregistrée (avec la version
       // acceptée), pas d'accès (audit Lot Q, PRO-04).
       await acceptConsents(["terms", "privacy_policy", "age_declaration"]);
+      // Choix « statistiques d'usage » toujours enregistré (accord ou refus) :
+      // la demande discrète ne sera donc jamais montrée à ce compte.
+      await recordAnalyticsChoice(analyticsChecked);
       forgetSignupConsents();
       await updateMyProfile({ username: normalizedUsername, displayName: displayName.trim() });
+      if (session?.user.id) {
+        setAnalyticsUser(session.user.id, analyticsChecked);
+        track("signup_completed", { locale: "fr" });
+      }
       await refreshProfile();
       // Le layout racine redirige automatiquement vers (app) une fois le profil complet.
     } catch (e) {
@@ -109,6 +119,12 @@ export default function CompleteProfileScreen() {
                 label={fr.auth.signUp.consent}
                 checked={documentsChecked}
                 onToggle={() => setDocumentsChecked((c) => !c)}
+              />
+              <CheckboxRow
+                style={styles.consentRow}
+                label={fr.auth.signUp.analyticsConsent}
+                checked={analyticsChecked}
+                onToggle={() => setAnalyticsChecked((c) => !c)}
               />
               <View style={styles.legalLinks}>
                 <Link href="/conditions" asChild>

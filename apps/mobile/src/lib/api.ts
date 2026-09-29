@@ -35,6 +35,7 @@ import type {
 import { CONSENT_VERSIONS } from "@monapp/shared-types";
 import { Platform } from "react-native";
 import { supabase } from "./supabase";
+import { setAnalyticsConsent } from "./analytics";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -400,6 +401,14 @@ export async function fetchConsentStatus(): Promise<ConsentStatus[]> {
 export async function acceptConsents(types: VersionedConsentType[]): Promise<void> {
   const body: RecordConsentsRequest = { consents: types.map((type) => ({ type, version: CONSENT_VERSIONS[type] })) };
   await authorizedFetch("/api/consents", { method: "POST", body: JSON.stringify(body) });
+}
+
+/** Accord (true) ou refus / retrait (false) des statistiques d'usage ; effet
+ * immédiat sur la collecte dès que le serveur a enregistré le choix. */
+export async function recordAnalyticsChoice(granted: boolean): Promise<void> {
+  const body: RecordConsentsRequest = { consents: [{ type: "analytics", version: CONSENT_VERSIONS.analytics, granted }] };
+  await authorizedFetch("/api/consents", { method: "POST", body: JSON.stringify(body) });
+  setAnalyticsConsent(granted);
 }
 
 export async function exportMyData(): Promise<unknown> {

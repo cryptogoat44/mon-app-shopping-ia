@@ -16,6 +16,8 @@ export default function SignUpScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [consentChecked, setConsentChecked] = useState(false);
   const [ageChecked, setAgeChecked] = useState(false);
+  // Facultatif, décoché par défaut (lot 2).
+  const [analyticsChecked, setAnalyticsChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [confirmationSent, setConfirmationSent] = useState(false);
@@ -43,7 +45,7 @@ export default function SignUpScreen() {
     setSubmitting(true);
     // Mémorisé AVANT l'appel : la session peut s'ouvrir (et la « Dernière
     // étape » s'afficher) avant la fin de l'appel. Effacé en cas d'échec.
-    rememberSignupConsents(email);
+    rememberSignupConsents(email, analyticsChecked);
     const { data, error: signUpError } = await supabase.auth.signUp({ email: email.trim(), password });
     setSubmitting(false);
 
@@ -148,6 +150,12 @@ export default function SignUpScreen() {
             label={fr.auth.signUp.consent}
             checked={consentChecked}
             onToggle={() => setConsentChecked((c) => !c)}
+          />
+          <CheckboxRow
+            style={styles.consentRow}
+            label={fr.auth.signUp.analyticsConsent}
+            checked={analyticsChecked}
+            onToggle={() => setAnalyticsChecked((c) => !c)}
           />
           <View style={styles.legalLinks}>
             <Link href="/conditions" asChild>

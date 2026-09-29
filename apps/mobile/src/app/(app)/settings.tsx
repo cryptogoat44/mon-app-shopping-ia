@@ -1,11 +1,12 @@
 import { useCallback, useState } from "react";
-import { Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { LEGAL_DOCUMENT_VERSIONS, type ConsentStatus } from "@monapp/shared-types";
 import { color, font, serifFont, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
 import { useAuth } from "@/lib/auth-context";
-import { ApiError, deleteMyAccount, exportMyData, fetchConsentStatus } from "@/lib/api";
+import { ApiError, deleteMyAccount, exportMyData, fetchConsentStatus, recordAnalyticsChoice } from "@/lib/api";
+import { hasAnalyticsConsent } from "@/lib/policy-notice";
 import { ErrorMessage } from "@/components/error-message";
 import { consentFor, formatLongDate, pendingConsents } from "@/lib/legal";
 
@@ -36,6 +37,22 @@ export default function SettingsScreen() {
   const [exporting, setExporting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [analyticsSaving, setAnalyticsSaving] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState(false);
+
+  // Statistiques d'usage : chaque changement est un événement daté, effet immédiat.
+  async function toggleAnalytics(granted: boolean) {
+    setAnalyticsSaving(true);
+    setAnalyticsError(false);
+    try {
+      await recordAnalyticsChoice(granted);
+      setConsents(await fetchConsentStatus());
+    } catch {
+      setAnalyticsError(true);
+    } finally {
+      setAnalyticsSaving(false);
+    }
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -121,6 +138,26 @@ export default function SettingsScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Vos données</Text>
+          <View style={styles.analyticsRow}>
+            <Text style={styles.analyticsTitle}>{fr.settings.analyticsTitle}</Text>
+            <Switch
+              accessibilityLabel={fr.settings.analyticsSwitchLabel}
+              value={consents ? hasAnalyticsConsent(consents) : false}
+              disabled={!consents || analyticsSaving}
+              onValueChange={toggleAnalytics}
+              trackColor={{ true: color.vert, false: color.filet }}
+            />
+          </View>
+          <Text style={styles.sectionBody}>
+            {consentsFailed
+              ? fr.settings.consentFailed
+              : !consents
+                ? fr.settings.analyticsLoading
+                : hasAnalyticsConsent(consents)
+                  ? fr.settings.analyticsOn
+                  : fr.settings.analyticsOff}
+          </Text>
+          {analyticsError ? <ErrorMessage style={styles.sectionBody}>{fr.settings.analyticsFailed}</ErrorMessage> : null}
           <Pressable accessibilityRole="button" onPress={handleExport} disabled={exporting} hitSlop={12}>
             <Text style={styles.link}>{exporting ? "Préparation de l'export…" : fr.settings.exportData}</Text>
           </Pressable>
@@ -164,6 +201,8 @@ const styles = StyleSheet.create({
   error: { fontSize: font.secondary, color: color.acier, marginBottom: space.md },
   section: { marginBottom: space.lg },
   sectionLabel: { fontSize: font.caption, fontWeight: "600", color: color.acier, marginBottom: space.sm },
+  analyticsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44 },
+  analyticsTitle: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   sectionBody: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm, lineHeight: 19 },
   link: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   secondLink: { marginTop: space.sm },

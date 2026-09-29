@@ -11,14 +11,22 @@
 // rien n'est écrit sur l'appareil.
 
 let givenFor: string | null = null;
+// Case facultative « statistiques d'usage » cochée ou non à l'inscription.
+let analyticsChoice = false;
 
 function normalize(email: string): string {
   return email.trim().toLowerCase();
 }
 
 /** À appeler quand l'inscription a été acceptée avec les cases cochées. */
-export function rememberSignupConsents(email: string): void {
+export function rememberSignupConsents(email: string, analytics = false): void {
   givenFor = normalize(email);
+  analyticsChoice = analytics;
+}
+
+/** Choix « statistiques d'usage » fait à l'inscription (faux par défaut). */
+export function signupAnalyticsChoice(email: string | null | undefined): boolean {
+  return hasSignupConsents(email) && analyticsChoice;
 }
 
 /** Vrai si les cases viennent d'être cochées à l'inscription pour cet e-mail. */
@@ -29,4 +37,5 @@ export function hasSignupConsents(email: string | null | undefined): boolean {
 /** Après enregistrement (ou déconnexion) : la mémoire ne sert qu'une fois. */
 export function forgetSignupConsents(): void {
   givenFor = null;
+  analyticsChoice = false;
 }

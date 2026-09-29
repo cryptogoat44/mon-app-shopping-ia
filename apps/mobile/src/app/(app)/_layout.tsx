@@ -1,5 +1,5 @@
 import { Stack } from "expo-router";
-import { PolicyUpdateNotice } from "@/components/policy-update-notice";
+import { AppNotices } from "@/components/app-notices";
 
 export default function AppLayout() {
   return (
@@ -8,8 +8,8 @@ export default function AppLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="post-item/new" options={{ presentation: "modal" }} />
       </Stack>
-      {/* Information unique après une mise à jour de la politique (bloc Francfort). */}
-      <PolicyUpdateNotice />
+      {/* Messages discrets (information de mise à jour, demande « statistiques ») et réglage de la collecte. */}
+      <AppNotices />
     </>
   );
 }
