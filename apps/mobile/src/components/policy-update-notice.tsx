@@ -57,23 +57,28 @@ export function PolicyUpdateNotice() {
 
   if (!visible) return null;
   return (
-    <View style={[styles.banner, { bottom: insets.bottom + TAB_BAR_CLEARANCE }]} accessibilityRole="alert" accessibilityLiveRegion="polite">
-      <Text style={styles.text}>{fr.legal.updateNotice}</Text>
-      <View style={styles.actions}>
-        <Pressable
-          accessibilityRole="link"
-          hitSlop={12}
-          style={styles.action}
-          onPress={() => {
-            markSeen();
-            router.push("/confidentialite");
-          }}
-        >
-          <Text style={styles.link}>{fr.legal.updateNoticeRead}</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel={fr.legal.updateNoticeDismissLabel} hitSlop={12} style={styles.action} onPress={markSeen}>
-          <Text style={styles.dismiss}>{fr.legal.updateNoticeDismiss}</Text>
-        </Pressable>
+    // Conteneur pleine largeur (positionné) + carte centrée dedans : un
+    // élément positionné ignore « alignSelf », d'où le calage à gauche sur
+    // écran large (corrigé au lot 2).
+    <View style={[styles.wrapper, { bottom: insets.bottom + TAB_BAR_CLEARANCE }]} pointerEvents="box-none">
+      <View style={styles.banner} accessibilityRole="alert" accessibilityLiveRegion="polite">
+        <Text style={styles.text}>{fr.legal.updateNotice}</Text>
+        <View style={styles.actions}>
+          <Pressable
+            accessibilityRole="link"
+            hitSlop={12}
+            style={styles.action}
+            onPress={() => {
+              markSeen();
+              router.push("/confidentialite");
+            }}
+          >
+            <Text style={styles.link}>{fr.legal.updateNoticeRead}</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={fr.legal.updateNoticeDismissLabel} hitSlop={12} style={styles.action} onPress={markSeen}>
+            <Text style={styles.dismiss}>{fr.legal.updateNoticeDismiss}</Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -84,18 +89,15 @@ export function PolicyUpdateNotice() {
 const TAB_BAR_CLEARANCE = 72;
 
 const styles = StyleSheet.create({
+  wrapper: { position: "absolute", left: space.md, right: space.md, alignItems: "center", zIndex: 10 },
   banner: {
-    position: "absolute",
-    left: space.md,
-    right: space.md,
+    width: "100%",
     maxWidth: 480,
-    alignSelf: "center",
     backgroundColor: color.blanc,
     borderColor: color.filet,
     borderWidth: 1,
     borderRadius: radius.md,
     padding: space.md,
-    zIndex: 10,
     shadowColor: color.encre,
     shadowOpacity: 0.08,
     shadowRadius: 12,
