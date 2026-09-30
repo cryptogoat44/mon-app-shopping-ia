@@ -13,6 +13,7 @@ import { searchProductsByImageUrl, type VisualMatch } from "../services/visualSe
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { purgeExpiredSearches } from "../lib/searchRetention.js";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
+import { searchLocaleFor } from "../lib/locale.js";
 import { INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
 import { ImageSourceError, downloadThumbnail, prepareImageForAnalysis } from "../lib/imageProcessing.js";
 
@@ -442,7 +443,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       let matches: VisualMatch[] = [];
       fastify.countRateLimitHit(request, "searchCreate");
       try {
-        matches = await searchProductsByImageUrl(fastify, signed.data.signedUrl, { query });
+        matches = await searchProductsByImageUrl(fastify, signed.data.signedUrl, { query, locale: searchLocaleFor(request) });
         if (matches.length === 0) {
           finalStatus = "failed";
           errorMessage = NO_MATCH_MESSAGE;

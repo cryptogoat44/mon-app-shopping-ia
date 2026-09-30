@@ -23,6 +23,14 @@ export function isProfileComplete(profile: Profile): boolean {
   return profile.username !== null;
 }
 
+/** Langues de l'interface (lot 3) — colonne profiles.locale. */
+export const APP_LOCALES = ["fr", "en"] as const;
+export type AppLocale = (typeof APP_LOCALES)[number];
+
+export interface UpdateLocaleRequest {
+  locale: AppLocale;
+}
+
 export interface UpdateMeRequest {
   username: string;
   displayName: string;

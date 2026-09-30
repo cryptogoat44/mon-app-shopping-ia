@@ -71,13 +71,8 @@ export interface SearchLocale {
   hl: string;
 }
 
-/** Localisation par défaut des recherches visuelles, fixée en dur tant
- * qu'elle n'est pas branchée sur la langue/le pays réels de l'utilisateur
- * (prévu au Lot 3 — voir docs/points-de-vigilance.md). Le paramètre
- * `locale` de `searchProductsByImageUrl` existe déjà pour que ce
- * branchement futur n'ait pas besoin de toucher ce fichier : il suffira
- * d'appeler la fonction avec la locale réelle de l'utilisateur au lieu de
- * laisser la valeur par défaut. */
+/** Localisation par défaut (français) ; la route de recherche transmet
+ * celle de l'utilisateur — voir lib/locale.ts (lot 3). */
 const DEFAULT_LOCALE: SearchLocale = { country: "fr", hl: "fr" };
 
 // Un lien vers une simple publication n'est jamais un endroit où acheter

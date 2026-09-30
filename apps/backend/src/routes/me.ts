@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { PHOTO_SIZES, optimizePhoto } from "../lib/photos.js";
 import { z } from "zod";
-import type { Profile } from "@monapp/shared-types";
+import { APP_LOCALES, type Profile } from "@monapp/shared-types";
+import { parseInput } from "../lib/validation.js";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 
 const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
@@ -15,6 +16,8 @@ const updateMeSchema = z.object({
   displayName: z.string().trim().min(1).max(60),
   bio: z.string().trim().max(280).optional(),
 });
+
+const updateLocaleSchema = z.object({ locale: z.enum(APP_LOCALES) });
 
 // Ligne brute de la table `profiles` (colonnes en snake_case, cf. schema.sql)
 interface ProfileRow {
@@ -168,5 +171,21 @@ export default async function meRoutes(fastify: FastifyInstance) {
     // aucun abonné, abonnement ni publication — pas besoin de requêter les
     // compteurs ici.
     return reply.send(toProfile(data as ProfileRow, 0, 0, 0));
+  });
+
+  // Langue de l'interface (lot 3) : choisie sur l'écran Bienvenue ou dans les
+  // Réglages, elle fixe aussi la langue des messages du serveur.
+  fastify.put("/api/me/locale", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    const body = parseInput(updateLocaleSchema, request.body, reply, { error: "invalid_body" });
+    if (!body) return;
+    const { error } = await fastify.supabaseAdmin
+      .from("profiles")
+      .update({ locale: body.locale, updated_at: new Date().toISOString() })
+      .eq("id", request.user!.id);
+    if (error) {
+      request.log.error({ error }, "Échec de mise à jour de la langue");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+    return reply.code(204).send();
   });
 }

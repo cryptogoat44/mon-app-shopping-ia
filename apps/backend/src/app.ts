@@ -18,6 +18,8 @@ import blocksRoutes from "./routes/blocks.js";
 import reportsRoutes from "./routes/reports.js";
 import commentsRoutes from "./routes/comments.js";
 import { captureServerError, captureServerFailure } from "./lib/sentry.js";
+import { isErrorBody, localizeMessage } from "./lib/messages.js";
+import { requestLocale } from "./lib/locale.js";
 
 // Requêtes dont l'erreur a déjà été transmise à Sentry (évite un doublon).
 const reportedToSentry = new Set<string>();
@@ -64,6 +66,12 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
     if (reply.statusCode >= 500) {
       captureServerFailure(request.method, request.routeOptions.url ?? "route inconnue", reply.statusCode, request.user?.id);
     }
+  });
+
+  // Messages d'erreur dans la langue de l'utilisateur (lot 3) — voir lib/messages.ts.
+  fastify.addHook("preSerialization", async (request, reply, payload) => {
+    if (reply.statusCode < 400 || !isErrorBody(payload)) return payload;
+    return { ...payload, message: localizeMessage(payload.message, reply.statusCode, requestLocale(request)) };
   });
 
   await fastify.register(supabasePlugin);

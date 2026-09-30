@@ -75,4 +75,24 @@ describe("me", () => {
     });
     expect(res.statusCode).toBe(409);
   });
+
+  it("records the interface language (lot 3)", async () => {
+    const res = await app.inject({ method: "PUT", url: "/api/me/locale", headers: authHeaders(user.token), payload: { locale: "en" } });
+    expect(res.statusCode).toBe(204);
+    const me = await app.inject({ method: "GET", url: "/api/me", headers: authHeaders(user.token) });
+    expect(me.json().locale).toBe("en");
+    const back = await app.inject({ method: "PUT", url: "/api/me/locale", headers: authHeaders(user.token), payload: { locale: "fr" } });
+    expect(back.statusCode).toBe(204);
+  });
+
+  it("rejects an unsupported or missing language, and an anonymous request", async () => {
+    for (const payload of [{ locale: "de" }, { locale: 1 }, {}]) {
+      const res = await app.inject({ method: "PUT", url: "/api/me/locale", headers: authHeaders(user.token), payload });
+      expect(res.statusCode).toBe(400);
+    }
+    const anonymous = await app.inject({ method: "PUT", url: "/api/me/locale", payload: { locale: "en" } });
+    expect(anonymous.statusCode).toBe(401);
+    const me = await app.inject({ method: "GET", url: "/api/me", headers: authHeaders(user.token) });
+    expect(me.json().locale).toBe("fr");
+  });
 });

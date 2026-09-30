@@ -74,12 +74,12 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     return res.json();
   }
 
-  function run(searchId: string, fields: Record<string, string>, file?: Buffer, token = user.token) {
+  function run(searchId: string, fields: Record<string, string>, file?: Buffer, token = user.token, language?: string) {
     const mp = buildMultipart(fields, file ? { fieldname: "file", filename: "capture.jpg", contentType: "image/jpeg", data: file } : undefined);
     return app.inject({
       method: "POST",
       url: `/api/searches/${searchId}/run`,
-      headers: { ...authHeaders(token), ...mp.headers },
+      headers: { ...authHeaders(token), ...mp.headers, ...(language ? { "accept-language": language } : {}) },
       payload: mp.payload,
     });
   }
@@ -129,7 +129,7 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     expect(body.matches[0].imageUrl).toBe(MATCH.imageUrl);
 
     expect(searchMock).toHaveBeenCalledOnce();
-    expect(searchMock.mock.calls[0]![2]).toEqual({ query: "veste en daim marron" });
+    expect(searchMock.mock.calls[0]![2]).toEqual({ query: "veste en daim marron", locale: { hl: "fr", country: "fr" } });
 
     // L'image réellement envoyée à l'analyse est bien la zone choisie :
     // 50 % × 25 % d'une image 400 × 600 = 200 × 150.
@@ -186,7 +186,7 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
   it("un texte vide n'est jamais transmis", async () => {
     const search = await prepare("https://www.tiktok.com/@x/video/1");
     await run(search.id, { query: "   " });
-    expect(searchMock.mock.calls[0]![2]).toEqual({ query: null });
+    expect(searchMock.mock.calls[0]![2]).toEqual({ query: null, locale: { hl: "fr", country: "fr" } });
   });
 
   it("une recherche ne peut être lancée qu'une fois : pas de second crédit", async () => {
@@ -249,6 +249,30 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     expect(res.statusCode).toBe(422);
     expect(res.json().error).toBe("preview_unavailable");
     expect(searchMock).not.toHaveBeenCalled();
+  });
+
+  it("recherche dans la langue de l'utilisateur : fr/fr en français, anglais avec le pays de l'appareil (lot 3)", async () => {
+    const french = await prepare("https://www.tiktok.com/@x/video/1");
+    await run(french.id, {}, undefined, user.token, "fr");
+    expect(searchMock.mock.calls.at(-1)?.[2]?.locale).toEqual({ hl: "fr", country: "fr" });
+    const english = await prepare("https://www.tiktok.com/@x/video/1");
+    await run(english.id, {}, undefined, user.token, "en-GB");
+    expect(searchMock.mock.calls.at(-1)?.[2]?.locale).toEqual({ hl: "en", country: "gb" });
+    const noRegion = await prepare("https://www.tiktok.com/@x/video/1");
+    await run(noRegion.id, {}, undefined, user.token, "en");
+    expect(searchMock.mock.calls.at(-1)?.[2]?.locale).toEqual({ hl: "en", country: "us" });
+    const noHeader = await prepare("https://www.tiktok.com/@x/video/1");
+    await run(noHeader.id, {});
+    expect(searchMock.mock.calls.at(-1)?.[2]?.locale).toEqual({ hl: "fr", country: "fr" });
+  });
+
+  it("les messages d'erreur suivent la langue de l'utilisateur (lot 3)", async () => {
+    const search = await prepare();
+    const fr = await run(search.id, {}, undefined, user.token, "fr");
+    expect(fr.json().message).toBe("Importez une capture de la pièce.");
+    const en = await run(search.id, {}, undefined, user.token, "en-US");
+    expect(en.statusCode).toBe(400);
+    expect(en.json()).toEqual({ error: fr.json().error, message: "Please import a screenshot of the piece." });
   });
 
   it("les anciennes routes du Spotter n'existent plus (retirées au bloc 3 du Lot Q)", async () => {
