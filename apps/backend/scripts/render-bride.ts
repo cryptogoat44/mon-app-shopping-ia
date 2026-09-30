@@ -4,13 +4,16 @@
 //   pnpm --filter backend render-bride deployer <spotto-api|site> [--confirmer]
 //   pnpm --filter backend render-bride suivre   <spotto-api|site> <dep-…>
 //   pnpm --filter backend render-bride api-url  https://spotto-api.onrender.com [--confirmer]
+//   pnpm --filter backend render-bride variable <spotto-api|site> <NOM> <valeur> [--confirmer]
 //
 // Règles (voir scripts/lib/render-guard.ts) :
 // - deux services seulement : spotto-api et le site ; l'ancien serveur
 //   (Oregon) et tout autre service sont refusés ;
-// - trois actions seulement : lancer un déploiement, suivre son statut,
-//   modifier EXPO_PUBLIC_API_URL du site (une seule variable, jamais la
-//   liste entière, jamais le groupe de variables des coordonnées) ;
+// - quatre actions seulement : lancer un déploiement, suivre son statut,
+//   modifier une variable de la liste fermée EXPO_PUBLIC_API_URL (raccourci
+//   « api-url ») ou les variables publiques du lot 2 (Sentry, PostHog,
+//   environnement) — une variable à la fois, jamais la liste entière, jamais
+//   un secret, jamais le groupe de variables des coordonnées ;
 // - aucune suppression ;
 // - chaque action qui change quelque chose est d'abord ANNONCÉE ; elle n'est
 //   lancée qu'avec --confirmer ;
@@ -19,10 +22,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import {
   RENDER_KEY_PATH as KEY_PATH,
-  EDITABLE_VARIABLE,
+  assertEditableVariable,
   FINAL_DEPLOY_STATUSES,
   RenderGuardError,
-  assertApiUrl,
   assertDeployId,
   resolveService,
 } from "./lib/render-guard.js";
@@ -38,6 +40,8 @@ function readKey(): string {
   return key;
 }
 
+class NotFound extends Error {}
+
 async function render(key: string, method: "GET" | "POST" | "PUT", path: string, body?: unknown): Promise<unknown> {
   const response = await fetch(`${API}${path}`, {
     method,
@@ -45,6 +49,7 @@ async function render(key: string, method: "GET" | "POST" | "PUT", path: string,
     body: body ? JSON.stringify(body) : undefined,
   });
   const text = await response.text();
+  if (response.status === 404 && method === "GET") throw new NotFound();
   if (!response.ok) throw new Error(`Render a répondu ${response.status}${text ? ` : ${text.slice(0, 200)}` : ""}`);
   return text ? JSON.parse(text) : null;
 }
@@ -95,28 +100,34 @@ async function follow(args: string[]): Promise<void> {
   }
 }
 
-async function setApiUrl(args: string[], confirm: boolean): Promise<void> {
-  const value = assertApiUrl(args[0]);
-  const service = resolveService(EDITABLE_VARIABLE.service);
-  const path = `/services/${service.id}/env-vars/${EDITABLE_VARIABLE.key}`;
+async function setVariable(args: string[], confirm: boolean): Promise<void> {
+  const service = resolveService(args[0]);
+  const variable = assertEditableVariable(service.name, args[1], args[2]);
+  const path = `/services/${service.id}/env-vars/${variable.key}`;
   const key = readKey();
-  // Lecture de la seule variable concernée (adresse publique, pas un secret).
-  const before = (await render(key, "GET", path)) as { key: string; value: string };
-  console.log(`Valeur actuelle de ${EDITABLE_VARIABLE.key} sur « ${service.name} » : ${before.value}`);
-  if (before.value === value) {
+  // Lecture de la seule variable concernée (valeur publique, jamais un secret).
+  let before: string | null = null;
+  try {
+    before = ((await render(key, "GET", path)) as { key: string; value: string }).value;
+  } catch (error) {
+    if (!(error instanceof NotFound)) throw error;
+  }
+  if (before === null && variable.mustExist) throw new RenderGuardError(`${variable.key} n'existe pas sur « ${service.name} » : refus de la créer.`);
+  console.log(`Valeur actuelle de ${variable.key} sur « ${service.name} » : ${before ?? "(absente)"}`);
+  if (before === variable.value) {
     console.log("Déjà à jour : rien à faire.");
     return;
   }
-  console.log(`ACTION ANNONCÉE : remplacer ${EDITABLE_VARIABLE.key} par ${value} sur « ${service.name} » (${service.id}), sans déployer.`);
+  console.log(`ACTION ANNONCÉE : ${before === null ? "créer" : "remplacer"} ${variable.key} = ${variable.value} sur « ${service.name} » (${service.id}), sans déployer.`);
   if (!confirm) {
     console.log("Rien n'est modifié. Relancer avec --confirmer pour appliquer.");
     return;
   }
-  await render(key, "PUT", path, { value });
-  const after = (await render(key, "GET", path)) as { key: string; value: string };
-  console.log(`Nouvelle valeur vérifiée : ${after.value}`);
-  if (after.value !== value) throw new Error("La valeur relue ne correspond pas : à vérifier dans le tableau de bord.");
-  console.log("Aucun déploiement lancé : le site prendra cette valeur au prochain déploiement.");
+  await render(key, "PUT", path, { value: variable.value });
+  const after = ((await render(key, "GET", path)) as { key: string; value: string }).value;
+  console.log(`Nouvelle valeur vérifiée : ${after}`);
+  if (after !== variable.value) throw new Error("La valeur relue ne correspond pas : à vérifier dans le tableau de bord.");
+  console.log("Aucun déploiement lancé : la valeur sera prise au prochain déploiement.");
 }
 
 async function main(): Promise<void> {
@@ -125,8 +136,9 @@ async function main(): Promise<void> {
   const args = rest.filter((arg) => arg !== "--confirmer");
   if (action === "deployer") return deploy(args, confirm);
   if (action === "suivre") return follow(args);
-  if (action === "api-url") return setApiUrl(args, confirm);
-  throw new RenderGuardError("Action refusée : seules « deployer », « suivre » et « api-url » existent.");
+  if (action === "api-url") return setVariable(["site", "EXPO_PUBLIC_API_URL", args[0] ?? ""], confirm);
+  if (action === "variable") return setVariable(args, confirm);
+  throw new RenderGuardError("Action refusée : seules « deployer », « suivre », « api-url » et « variable » existent.");
 }
 
 main().catch((error: unknown) => {
