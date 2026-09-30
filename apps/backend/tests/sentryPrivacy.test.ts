@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ErrorEvent } from "@sentry/node";
 import { NO_PERSONAL_DATA, SENTRY_EU_DSN_PATTERN, captureServerError, captureServerFailure, scrubEvent } from "../src/lib/sentry.js";
-import { env } from "../src/env.js";
+import * as Sentry from "@sentry/node";
 
 // Suivi des erreurs (lot 2) : aucune donnée personnelle ne part vers Sentry,
 // et seule la région UE est acceptée.
@@ -40,8 +40,9 @@ describe("Sentry côté serveur : protection des données", () => {
     expect(SENTRY_EU_DSN_PATTERN.test("https://0123abcd@o4500000000000000.ingest.sentry.io/4500000000000001")).toBe(false);
   });
 
-  it("aucun envoi pendant les tests (pas d'adresse Sentry configurée)", () => {
-    expect(env.SENTRY_DSN).toBeUndefined();
+  it("aucun envoi pendant les tests : Sentry n'est jamais initialisé hors du vrai serveur", () => {
+    // initSentry n'est appelé que par instrument.ts (server.ts), jamais par buildApp.
+    expect(Sentry.getClient()).toBeUndefined();
     expect(() => captureServerError(new Error("test"), "u-1")).not.toThrow();
     expect(() => captureServerFailure("GET", "/api/x", 500, undefined)).not.toThrow();
   });
