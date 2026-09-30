@@ -37,8 +37,8 @@ async function open(page: Page, url: string) {
 }
 
 export async function run(p: Parcours): Promise<void> {
-  const louise = await p.createAccount("b", "Louise (test)");
-  const camille = await p.createAccount("a", "Camille (test)");
+  const louise = await p.createAccount("b", "Louise (test)", { settled: true });
+  const camille = await p.createAccount("a", "Camille (test)", { settled: true });
 
   // Données de départ, par l'API (rapide, sans crédit) : deux pièces dans le
   // Vault de Louise, une Envie pour Camille, une photo à publier.

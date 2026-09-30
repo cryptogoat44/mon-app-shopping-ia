@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
+import { CONSENT_VERSIONS } from "@monapp/shared-types";
 import { assertDevSupabaseUrl } from "../lib/dev-database.js";
 
 const ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
@@ -74,7 +75,7 @@ export interface Parcours {
   admin: SupabaseClient;
   /** `incompleteProfile` : compte sans nom d'utilisateur, qui arrive sur
    * « Dernière étape » à la connexion (comme un compte tout juste créé). */
-  createAccount(label: string, displayName: string, options?: { incompleteProfile?: boolean }): Promise<TestAccount>;
+  createAccount(label: string, displayName: string, options?: { incompleteProfile?: boolean; settled?: boolean }): Promise<TestAccount>;
   /** Téléphone au format iPhone ; `desktop: true` pour un écran d'ordinateur.
    * `locale` : langue du navigateur (défaut fr-FR) ; `colorScheme` : thème
    * clair ou sombre de l'appareil (lot 3). */
@@ -268,6 +269,18 @@ export async function runParcours(
         const id = data.user.id;
         if (!options?.incompleteProfile) {
           await admin.from("profiles").update({ username, display_name: displayName }).eq("id", id);
+        }
+        // `settled` : documents en vigueur acceptés et choix « statistiques »
+        // (refus) enregistré — aucun message en bas d'écran (depuis le lot 2).
+        if (options?.settled) {
+          const now = new Date().toISOString();
+          const { error: consentError } = await admin.from("consents").insert([
+            { user_id: id, type: "terms", granted_at: now, document_version: CONSENT_VERSIONS.terms },
+            { user_id: id, type: "age_declaration", granted_at: now, document_version: CONSENT_VERSIONS.age_declaration },
+            { user_id: id, type: "privacy_policy", granted_at: now, document_version: CONSENT_VERSIONS.privacy_policy },
+            { user_id: id, type: "analytics", revoked_at: now, document_version: CONSENT_VERSIONS.analytics },
+          ]);
+          if (consentError) throw new Error(`Acceptations du compte de test impossibles : ${consentError.message}`);
         }
         const session = await anon.auth.signInWithPassword({ email, password });
         if (session.error || !session.data.session) throw new Error("Connexion du compte de test impossible.");

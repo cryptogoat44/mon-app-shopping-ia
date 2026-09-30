@@ -76,8 +76,8 @@ export async function run(p: Parcours): Promise<void> {
   if (!existsSync(ESSAI)) throw new Error("Fichier d'essai SerpApi introuvable (docs/lot-s-design/essais-serpapi/).");
   const essai = (JSON.parse(readFileSync(ESSAI, "utf8")) as EssaiMatch[]).filter((m) => m.image && m.thumbnail).slice(0, 12);
 
-  const camille = await p.createAccount("a", "Camille (test)");
-  const louise = await p.createAccount("b", "Louise (test)");
+  const camille = await p.createAccount("a", "Camille (test)", { settled: true });
+  const louise = await p.createAccount("b", "Louise (test)", { settled: true });
 
   // Recherche « Spotter » de Camille, avec les vraies images de l'essai.
   const { data: search } = await p.admin
