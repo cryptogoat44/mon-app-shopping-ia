@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -15,6 +15,7 @@ import type { Piece } from "@/api/types";
 import { CameraIcon } from "@/components/icons";
 import { useToast } from "@/lib/toast-context";
 import { ErrorMessage } from "@/components/error-message";
+import { themedStyles } from "@/theme/themed-styles";
 
 export default function NewPostScreen() {
   const router = useRouter();
@@ -296,7 +297,7 @@ export default function NewPostScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   sheet: { flex: 1, backgroundColor: color.porcelaine },
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: color.filet, alignSelf: "center", marginTop: 9 },
   nav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.md, paddingTop: 14, paddingBottom: 6 },
@@ -343,4 +344,4 @@ const styles = StyleSheet.create({
   pickerRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: space.md, paddingVertical: space.md, borderBottomWidth: 1, borderBottomColor: color.filet },
   pickerRowName: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   pickerRowMaterial: { fontSize: font.caption, color: color.acier, marginTop: 2 },
-});
+}));

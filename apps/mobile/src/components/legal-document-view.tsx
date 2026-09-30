@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, type StyleProp, type TextStyle } from "react-native";
+import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, Text, View, type StyleProp, type TextStyle } from "react-native";
 import { useRouter } from "expo-router";
 import Head from "expo-router/head";
 import { LEGAL_DOCUMENT_VERSIONS, isProfileComplete, type ConsentStatus, type VersionedConsentType } from "@monapp/shared-types";
@@ -13,6 +13,7 @@ import { fr } from "@/i18n/fr";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
 import { CheckboxRow } from "@/components/checkbox-row";
+import { themedStyles } from "@/theme/themed-styles";
 
 // Affiche un document juridique (Lot Q, bloc 5). Lisible par tous, connecté
 // ou non (lien depuis l'inscription, adresse publique du site). Pour une
@@ -173,7 +174,7 @@ export function LegalDocumentView({ document }: { document: LegalDocument }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   nav: { height: 47, justifyContent: "center", paddingHorizontal: 12 },
   back: { fontSize: 26, color: color.encre },
@@ -195,4 +196,4 @@ const styles = StyleSheet.create({
   cta: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 48, alignItems: "center", justifyContent: "center" },
   ctaDisabled: { opacity: 0.5 },
   ctaLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
-});
+}));

@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import type { ReportReason } from "@monapp/shared-types";
 import { ApiError, blockUser, reportContent } from "@/lib/api";
 import { color, font, radius, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
 import { useToast } from "@/lib/toast-context";
+import { themedStyles } from "@/theme/themed-styles";
 
 const REASONS: ReportReason[] = ["spam", "inappropriate", "harassment", "other"];
 
@@ -120,7 +121,7 @@ export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, o
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)" },
   sheet: { backgroundColor: color.porcelaine, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingBottom: space.xl },
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: color.filet, alignSelf: "center", marginTop: 9, marginBottom: space.sm },
@@ -138,4 +139,4 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   cancelLabel: { fontSize: font.body, color: color.encre, fontWeight: "600" },
-});
+}));

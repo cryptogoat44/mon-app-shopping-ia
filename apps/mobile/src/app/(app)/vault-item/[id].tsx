@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import type { PrivacyLevel, VaultItemDetail } from "@monapp/shared-types";
@@ -15,6 +15,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
+import { themedStyles } from "@/theme/themed-styles";
 
 // Décision du fondateur (journal, 2026-09-23, décision 1) : retirer un
 // objet partagé supprime aussi ses publications "achat" — on le dit avant
@@ -263,7 +264,7 @@ export default function VaultItemDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   content: { padding: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   back: { marginBottom: space.lg },
@@ -326,4 +327,4 @@ const styles = StyleSheet.create({
   confirmText: { fontSize: font.secondary, color: color.encre, marginBottom: space.sm },
   confirmButtons: { flexDirection: "row", gap: space.lg },
   cancelLabel: { color: color.acier, fontSize: font.secondary, fontWeight: "600" },
-});
+}));

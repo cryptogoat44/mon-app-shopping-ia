@@ -1,7 +1,8 @@
 import { useEffect } from "react";
-import { AccessibilityInfo, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { AccessibilityInfo, Platform, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { color, font, radius, space } from "@/theme/tokens";
+import { themedStyles } from "@/theme/themed-styles";
 
 // Bandeau discret en bas de l'écran, au-dessus de la barre d'onglets (en
 // haut, il masquerait le bouton « Retour »). Conteneur pleine largeur +
@@ -57,7 +58,7 @@ export function NoticeBanner({ message, actions, error }: { message: string; act
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   wrapper: { position: "absolute", left: space.md, right: space.md, alignItems: "center", zIndex: 10 },
   banner: {
     width: "100%",
@@ -79,4 +80,4 @@ const styles = StyleSheet.create({
   action: { minHeight: 44, justifyContent: "center" },
   emphasis: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   plain: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
-});
+}));

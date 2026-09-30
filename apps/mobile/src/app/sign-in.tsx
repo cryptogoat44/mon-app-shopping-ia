@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, Text, TextInput, View } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { translateAuthError } from "@/lib/auth-errors";
 import { supabase } from "@/lib/supabase";
 import { fr } from "@/i18n/fr";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
+import { themedStyles } from "@/theme/themed-styles";
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -98,7 +99,7 @@ export default function SignInScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   flex: { flex: 1 },
   nav: { height: 47, justifyContent: "center", paddingHorizontal: 12 },
@@ -116,4 +117,4 @@ const styles = StyleSheet.create({
   forgot: { alignSelf: "flex-end", minHeight: 32, justifyContent: "center" },
   forgotLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600" },
   link: { fontSize: font.secondary, color: color.acier, fontWeight: "600", textAlign: "center", marginTop: space.lg },
-});
+}));

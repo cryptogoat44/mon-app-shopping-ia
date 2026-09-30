@@ -1,5 +1,6 @@
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { color, font, space } from "@/theme/tokens";
+import { themedStyles } from "@/theme/themed-styles";
 
 // Case à cocher avec son libellé (consentements : inscription, nouvelle
 // version des conditions). Toute la ligne est touchable.
@@ -31,7 +32,7 @@ export function CheckboxRow({
 
 export const CHECKBOX_SIZE = 20;
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   row: { flexDirection: "row", alignItems: "flex-start", gap: space.sm, minHeight: 24 },
   box: {
     width: CHECKBOX_SIZE,
@@ -46,4 +47,4 @@ const styles = StyleSheet.create({
   boxChecked: { backgroundColor: color.vert, borderColor: color.vert },
   mark: { color: color.blanc, fontSize: font.caption, fontWeight: "700", lineHeight: 14 },
   label: { flex: 1, fontSize: font.caption, color: color.acier, lineHeight: 18 },
-});
+}));

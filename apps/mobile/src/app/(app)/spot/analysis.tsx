@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, Animated, Easing, Pressable, SafeAreaView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { AccessibilityInfo, Animated, Easing, Pressable, SafeAreaView, Text, View, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
@@ -15,6 +15,7 @@ import { toSpotResult } from "@/lib/spot-result";
 import { setLastSpotResult } from "@/api/spotSession";
 import type { SpotFailReason } from "@/api/types";
 import { track } from "@/lib/analytics";
+import { themedStyles } from "@/theme/themed-styles";
 
 const SLOW_AFTER_MS = 20_000;
 type Step = 0 | 1 | 2;
@@ -172,7 +173,7 @@ export default function AnalysisScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.nuit },
   nav: { height: 47, flexDirection: "row", justifyContent: "flex-end", alignItems: "center", paddingHorizontal: 12 },
   navClose: { minWidth: 44, height: 44, justifyContent: "center", alignItems: "flex-end" },
@@ -208,4 +209,4 @@ const styles = StyleSheet.create({
   footer: { paddingHorizontal: space.lg, paddingBottom: space.lg, maxWidth: 480, alignSelf: "center", width: "100%" },
   cancel: { minHeight: 52, borderRadius: radius.md, borderWidth: 1, borderColor: "#3A3734", alignItems: "center", justifyContent: "center" },
   cancelLabel: { fontSize: font.body, color: color.surNuit, fontWeight: "600" },
-});
+}));

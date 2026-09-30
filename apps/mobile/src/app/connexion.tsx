@@ -1,7 +1,8 @@
-import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, SafeAreaView, Text, View } from "react-native";
 import { useAuth } from "@/lib/auth-context";
 import { fr } from "@/i18n/fr";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { themedStyles } from "@/theme/themed-styles";
 
 // Affiché quand la personne est connectée mais que son profil n'a pas pu
 // être chargé (serveur qui se réveille, réseau coupé...). Remplace l'ancien
@@ -37,7 +38,7 @@ export default function ConnexionScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   content: { flex: 1, justifyContent: "center", paddingHorizontal: space.xl, maxWidth: 480, alignSelf: "center", width: "100%" },
   spinner: { alignSelf: "flex-start", marginBottom: space.lg },
@@ -47,4 +48,4 @@ const styles = StyleSheet.create({
   ctaLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
   secondary: { minHeight: 44, justifyContent: "center", alignItems: "center", marginTop: space.md },
   secondaryLabel: { fontSize: font.secondary, color: color.acier, fontWeight: "600" },
-});
+}));

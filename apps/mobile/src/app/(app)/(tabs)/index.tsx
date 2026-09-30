@@ -7,7 +7,6 @@ import {
   RefreshControl,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -24,6 +23,7 @@ import { SpotImage } from "@/components/spot-image";
 import { detectLink, type LinkDetection } from "@/lib/link-detection";
 import { beginFromLink, beginFromPhoto, prepareFailureKind } from "@/lib/spot-flow";
 import { importPhotoForSpotter } from "@/lib/image-import";
+import { themedStyles } from "@/theme/themed-styles";
 
 function DetectionCard({ detection }: { detection: LinkDetection }) {
   if (detection.kind === "supported") {
@@ -215,7 +215,7 @@ export default function SpotterScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   flex: { flex: 1 },
   content: { paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
@@ -246,4 +246,4 @@ const styles = StyleSheet.create({
   recentThumb: { width: 104, height: 104, backgroundColor: color.plinthe, borderRadius: radius.sm, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   fill: { width: "100%", height: "100%" },
   recentName: { fontSize: font.caption, color: color.acier, marginTop: 7, lineHeight: 16 },
-});
+}));

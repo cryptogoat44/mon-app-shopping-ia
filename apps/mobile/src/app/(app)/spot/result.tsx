@@ -25,6 +25,7 @@ import { SpotImage } from "@/components/spot-image";
 import { ErrorMessage } from "@/components/error-message";
 import { CameraIcon } from "@/components/icons";
 import { track } from "@/lib/analytics";
+import { themedStyles } from "@/theme/themed-styles";
 
 function formatPrice(piece: Piece): string {
   if (piece.priceFrom === null) return fr.result.priceOnSite;
@@ -454,7 +455,7 @@ function FailureView({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 },
   navSide: { minWidth: 44, height: 44, justifyContent: "center" },
@@ -498,4 +499,4 @@ const styles = StyleSheet.create({
   sheetTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, marginBottom: space.sm },
   sheetRow: { minHeight: 48, justifyContent: "center", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.filet },
   sheetRowLabel: { fontSize: font.body, color: color.encre },
-});
+}));

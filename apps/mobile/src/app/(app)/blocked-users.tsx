@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import type { BlockedUser } from "@monapp/shared-types";
@@ -10,6 +10,7 @@ import { PersonIcon } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
 import { useToast } from "@/lib/toast-context";
 import { ErrorMessage } from "@/components/error-message";
+import { themedStyles } from "@/theme/themed-styles";
 
 function BlockedUserRow({ user, onUnblocked }: { user: BlockedUser; onUnblocked: (id: string) => void }) {
   const { showToast } = useToast();
@@ -106,7 +107,7 @@ export default function BlockedUsersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.lg },
   back: { fontSize: 26, color: color.encre },
@@ -137,4 +138,4 @@ const styles = StyleSheet.create({
   displayName: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   username: { fontSize: font.caption, color: color.acier },
   unblockLabel: { fontSize: font.caption, fontWeight: "600", color: color.vert },
-});
+}));

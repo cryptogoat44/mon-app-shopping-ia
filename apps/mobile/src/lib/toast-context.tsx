@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
-import { AccessibilityInfo, Animated, Platform, StyleSheet, Text } from "react-native";
+import { AccessibilityInfo, Animated, Platform, Text } from "react-native";
 import { color, font, radius, space } from "@/theme/tokens";
+import { themedStyles } from "@/theme/themed-styles";
 
 // Petite confirmation flottante pour les actions qui n'ont pas déjà leur
 // propre retour visuel (ex. un bouton qui change de libellé). Un seul
@@ -59,7 +60,7 @@ export function useToast(): ToastContextValue {
   return ctx;
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   toast: {
     position: "absolute",
     left: space.xl,
@@ -72,4 +73,4 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   toastText: { color: color.blanc, fontSize: font.secondary, fontWeight: "600" },
-});
+}));

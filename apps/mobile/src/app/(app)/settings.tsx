@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { Platform, Pressable, SafeAreaView, ScrollView, Switch, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { LEGAL_DOCUMENT_VERSIONS, type ConsentStatus } from "@monapp/shared-types";
 import { color, font, serifFont, space } from "@/theme/tokens";
@@ -9,6 +9,7 @@ import { ApiError, deleteMyAccount, exportMyData, fetchConsentStatus, recordAnal
 import { hasAnalyticsConsent } from "@/lib/policy-notice";
 import { ErrorMessage } from "@/components/error-message";
 import { consentFor, formatLongDate, pendingConsents } from "@/lib/legal";
+import { themedStyles } from "@/theme/themed-styles";
 
 async function shareExportedData(data: unknown) {
   const json = JSON.stringify(data, null, 2);
@@ -192,7 +193,7 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   nav: { height: 47, justifyContent: "center", paddingHorizontal: 12 },
   back: { fontSize: 26, color: color.encre },
@@ -210,4 +211,4 @@ const styles = StyleSheet.create({
   deleteLabel: { color: color.danger, fontSize: font.secondary, fontWeight: "600" },
   confirmRow: { flexDirection: "row", gap: space.lg, marginTop: space.xs },
   cancelLabel: { color: color.acier, fontSize: font.secondary, fontWeight: "600" },
-});
+}));

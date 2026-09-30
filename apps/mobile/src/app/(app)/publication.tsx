@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { Post, PrivacyLevel } from "@monapp/shared-types";
 import { ApiError, deletePost, fetchPost, updatePostPrivacy } from "@/lib/api";
@@ -12,6 +12,7 @@ import { PostCard } from "@/components/post-card";
 import { CommentsSection } from "@/components/comments-section";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { ErrorMessage } from "@/components/error-message";
+import { themedStyles } from "@/theme/themed-styles";
 
 // Détail d'une publication (Lot Q, bloc 3, UX-03) : la sienne peut être
 // supprimée (après confirmation) ; celle d'un autre se signale ou mène à
@@ -177,7 +178,7 @@ export default function PostDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   flex: { flex: 1 },
   nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 },
@@ -202,4 +203,4 @@ const styles = StyleSheet.create({
   confirmText: { fontSize: font.secondary, color: color.encre, marginBottom: space.sm, lineHeight: 20 },
   confirmButtons: { flexDirection: "row", gap: space.lg },
   cancelLabel: { color: color.acier, fontSize: font.secondary, fontWeight: "600" },
-});
+}));

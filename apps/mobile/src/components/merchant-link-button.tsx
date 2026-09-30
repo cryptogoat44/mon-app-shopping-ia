@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text } from "react-native";
+import { Pressable, Text } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import type { MerchantLinkContext } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
 import { openMerchantLink } from "@/lib/merchant-links";
+import { themedStyles } from "@/theme/themed-styles";
 
 // « Voir chez le marchand » pour une pièce déjà gardée (Vault, Envies).
 // Toujours via openMerchantLink (point de passage unique, contexte suivi).
@@ -64,7 +65,7 @@ export function MerchantLinkButton({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   button: {
     borderWidth: 1,
     borderColor: color.encre,
@@ -79,4 +80,4 @@ const styles = StyleSheet.create({
   compactLabel: { fontSize: 11.5, color: color.vert, fontWeight: "600" },
   disclosure: { textAlign: "center", fontSize: 11.5, color: color.acier, marginTop: 6 },
   blocked: { fontSize: font.caption, color: color.vert, marginTop: 6 },
-});
+}));

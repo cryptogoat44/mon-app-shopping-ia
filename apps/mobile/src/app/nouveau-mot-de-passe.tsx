@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
@@ -10,6 +10,7 @@ import { useToast } from "@/lib/toast-context";
 import { fr } from "@/i18n/fr";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
+import { themedStyles } from "@/theme/themed-styles";
 
 type Phase = "checking" | "ready" | "expired" | "invalid";
 
@@ -138,7 +139,7 @@ export default function NewPasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   flex: { flex: 1 },
   content: { flex: 1, justifyContent: "center", paddingHorizontal: space.xl, maxWidth: 480, alignSelf: "center", width: "100%" },
@@ -152,4 +153,4 @@ const styles = StyleSheet.create({
   cta: { backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", marginTop: space.lg },
   ctaDisabled: { opacity: 0.5 },
   ctaLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
-});
+}));

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
@@ -12,6 +12,7 @@ import { getDraft, startDraft, updateDraft, type SpotDraft } from "@/lib/spot-dr
 import { detectLink } from "@/lib/link-detection";
 import { importPhotoForSpotter } from "@/lib/image-import";
 import { beginFromLink, prepareFailureKind } from "@/lib/spot-flow";
+import { themedStyles } from "@/theme/themed-styles";
 
 // Le geste pour montrer le bon moment de la vidéo : pause, capture,
 // import. (Le partage direct d'une capture vers Spotto, lot 4, le
@@ -269,7 +270,7 @@ export default function PreviewScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   centered: { flex: 1, justifyContent: "center", paddingHorizontal: space.xl, gap: space.lg },
   nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 },
@@ -300,4 +301,4 @@ const styles = StyleSheet.create({
   feedback: { fontSize: font.caption, marginTop: space.sm },
   primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: space.lg },
   primaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
-});
+}));

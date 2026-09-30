@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { color, font, radius, space } from "@/theme/tokens";
 import { fr } from "@/i18n/fr";
@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { SpotImage } from "@/components/spot-image";
+import { themedStyles } from "@/theme/themed-styles";
 
 function formatPrice(item: Piece): string | null {
   if (item.priceFrom === null) return null;
@@ -153,7 +154,7 @@ export function WishlistPanel() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   privateNote: { fontSize: font.caption, color: color.acier, paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.xs, maxWidth: 640, alignSelf: "center", width: "100%" },
   emptyContent: { flexGrow: 1 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl, marginTop: -60 },
@@ -185,4 +186,4 @@ const styles = StyleSheet.create({
   name: { fontSize: font.caption, color: color.encre },
   price: { fontSize: 11, color: color.acier, marginTop: 2 },
   footerLoader: { paddingVertical: space.lg },
-});
+}));

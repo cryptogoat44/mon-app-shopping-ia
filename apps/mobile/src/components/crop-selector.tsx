@@ -4,6 +4,7 @@ import { Image } from "expo-image";
 import type { CropRect } from "@monapp/shared-types";
 import { color } from "@/theme/tokens";
 import { containBox, cropToBox, moveCrop, resizeCrop, scaleCrop, type Corner, type Size } from "@/lib/crop-geometry";
+import { themedStyles } from "@/theme/themed-styles";
 
 const HANDLE_TOUCH = 44; // zone tactile d'un coin (norme Apple)
 const HANDLE_ARM = 22; // longueur visible des équerres
@@ -147,11 +148,11 @@ export function CropSelector({ uri, crop, onChange, onImageSize, onDragChange, h
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   container: { width: "100%", backgroundColor: color.plinthe, borderRadius: 4, overflow: "hidden" },
   dim: { position: "absolute", backgroundColor: "rgba(20,19,18,0.58)" },
   frame: { position: "absolute", borderWidth: 1, borderColor: "rgba(255,255,255,0.9)" },
   grid: { position: "absolute", backgroundColor: "rgba(255,255,255,0.3)" },
   handle: { position: "absolute", width: HANDLE_TOUCH, height: HANDLE_TOUCH },
   arm: { position: "absolute", width: HANDLE_ARM, height: HANDLE_ARM, borderColor: color.blanc },
-});
+}));

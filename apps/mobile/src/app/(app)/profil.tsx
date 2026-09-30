@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, SafeAreaView, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -12,6 +12,7 @@ import { ReportBlockMenu } from "@/components/report-block-menu";
 import { SpotImage } from "@/components/spot-image";
 import { ErrorMessage } from "@/components/error-message";
 import { useToast } from "@/lib/toast-context";
+import { themedStyles } from "@/theme/themed-styles";
 
 function chunk<T>(items: T[], size: number): T[][] {
   const rows: T[][] = [];
@@ -207,7 +208,7 @@ export default function UserProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 },
   navSide: { minWidth: 44, height: 44, justifyContent: "center" },
@@ -235,4 +236,4 @@ const styles = StyleSheet.create({
   cell: { width: "32%", aspectRatio: 1, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
   empty: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginTop: space.md },
   footer: { paddingVertical: space.lg },
-});
+}));

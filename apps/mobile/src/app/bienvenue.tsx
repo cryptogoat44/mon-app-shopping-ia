@@ -1,8 +1,9 @@
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { Pressable, SafeAreaView, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { APP_NAME } from "@/constants/brand";
 import { fr } from "@/i18n/fr";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { themedStyles } from "@/theme/themed-styles";
 
 export default function BienvenueScreen() {
   const router = useRouter();
@@ -39,7 +40,7 @@ export default function BienvenueScreen() {
 
 const RING_SIZE = 280;
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   center: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl },
   ring: {
@@ -59,4 +60,4 @@ const styles = StyleSheet.create({
   loginLink: { fontSize: font.secondary, color: color.acier, fontWeight: "600", marginTop: space.lg },
   legalRow: { flexDirection: "row", gap: space.sm, marginTop: space.xl },
   legal: { fontSize: font.caption, color: color.acier, textDecorationLine: "underline", paddingVertical: space.xs },
-});
+}));

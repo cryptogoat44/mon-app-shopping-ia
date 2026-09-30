@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, FlatList, Platform, Pressable, RefreshControl, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Platform, Pressable, RefreshControl, SafeAreaView, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import type { Post } from "@monapp/shared-types";
 import { ApiError, fetchFeed } from "@/lib/api";
@@ -10,6 +10,7 @@ import { ErrorMessage } from "@/components/error-message";
 import { PostCard } from "@/components/post-card";
 import { useAuth } from "@/lib/auth-context";
 import { fr } from "@/i18n/fr";
+import { themedStyles } from "@/theme/themed-styles";
 
 function FeedSkeletonRow() {
   return (
@@ -169,7 +170,7 @@ export default function FeedScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   header: {
     flexDirection: "row",
@@ -198,4 +199,4 @@ const styles = StyleSheet.create({
   media: { width: "100%", aspectRatio: 1, borderRadius: radius.sm },
   divider: { height: 1, backgroundColor: color.filet, marginHorizontal: space.lg, marginBottom: 26 },
   footerLoader: { paddingVertical: space.lg },
-});
+}));

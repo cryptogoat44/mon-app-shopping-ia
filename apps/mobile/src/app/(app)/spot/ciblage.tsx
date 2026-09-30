@@ -5,7 +5,6 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -19,6 +18,7 @@ import { closeSpotter } from "@/lib/spot-navigation";
 import { CropSelector } from "@/components/crop-selector";
 import { DEFAULT_CROP } from "@/lib/crop-geometry";
 import { draftImageUri, getDraft, updateDraft } from "@/lib/spot-draft";
+import { themedStyles } from "@/theme/themed-styles";
 
 // Étape 2 : l'utilisateur entoure la pièce (seule cette zone part à
 // l'analyse) et peut préciser ce qu'il cherche. Toujours aucun crédit
@@ -121,7 +121,7 @@ export default function TargetingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   flex: { flex: 1 },
   centered: { flex: 1, justifyContent: "center", paddingHorizontal: space.xl, gap: space.lg },
@@ -145,4 +145,4 @@ const styles = StyleSheet.create({
   counter: { fontSize: font.caption, color: color.acier },
   primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, alignItems: "center", justifyContent: "center", marginTop: space.lg },
   primaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
-});
+}));

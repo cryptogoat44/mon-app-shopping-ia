@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
 import { COMMENT_COUNTER_FROM, COMMENT_MAX_LENGTH, type PostComment } from "@monapp/shared-types";
 import { ApiError, createComment, deleteComment, fetchComments } from "@/lib/api";
@@ -10,6 +10,7 @@ import { fr } from "@/i18n/fr";
 import { MoreIcon, PersonIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
 import { ReportBlockMenu } from "@/components/report-block-menu";
+import { themedStyles } from "@/theme/themed-styles";
 
 // Commentaires d'une publication (Lot F, section 5.A) : à plat, ordre
 // chronologique ; compteur de caractères visible seulement à partir de 900,
@@ -200,7 +201,7 @@ export function CommentsSection({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   section: { paddingHorizontal: space.lg, paddingTop: space.sm },
   title: { fontSize: font.body, fontWeight: "600", color: color.encre, marginBottom: space.sm },
   loader: { marginVertical: space.md },
@@ -224,4 +225,4 @@ const styles = StyleSheet.create({
   sendDisabled: { opacity: 0.5 },
   sendLabel: { color: color.blanc, fontSize: font.secondary, fontWeight: "600" },
   counter: { fontSize: font.caption, color: color.acier, textAlign: "right", marginTop: 4 },
-});
+}));

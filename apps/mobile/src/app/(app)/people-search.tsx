@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -10,6 +10,7 @@ import { MoreIcon, PersonIcon, SearchIcon } from "@/components/icons";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { useToast } from "@/lib/toast-context";
 import { ErrorMessage } from "@/components/error-message";
+import { themedStyles } from "@/theme/themed-styles";
 
 function PersonRow({
   person,
@@ -188,7 +189,7 @@ export default function PeopleSearchScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   nav: { height: 47, justifyContent: "center", paddingHorizontal: 12 },
   back: { fontSize: 26, color: color.encre },
@@ -240,4 +241,4 @@ const styles = StyleSheet.create({
   followButtonLabel: { fontSize: font.caption, fontWeight: "600", color: color.encre },
   followingButtonLabel: { color: color.blanc },
   moreButton: { marginLeft: space.sm, padding: 2 },
-});
+}));

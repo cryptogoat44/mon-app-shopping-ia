@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Pressable, Text, View } from "react-native";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import type { Post } from "@monapp/shared-types";
@@ -12,6 +12,7 @@ import { SpotImage } from "@/components/spot-image";
 import { useToast } from "@/lib/toast-context";
 import { fr } from "@/i18n/fr";
 import { timeAgo } from "@/lib/time";
+import { themedStyles } from "@/theme/themed-styles";
 
 const DOUBLE_TAP_DELAY_MS = 300;
 
@@ -203,7 +204,7 @@ export function PostCard({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   post: { paddingHorizontal: space.lg, paddingBottom: 26 },
   author: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
   avatar: {
@@ -230,4 +231,4 @@ const styles = StyleSheet.create({
   shareButton: { marginLeft: "auto" },
   reactCount: { fontSize: font.secondary, color: color.acier },
   authorLink: { flexDirection: "row", alignItems: "center", gap: 10, flexShrink: 1 },
-});
+}));

@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, SafeAreaView, ScrollView, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { SpotImage } from "@/components/spot-image";
 import { WishlistPanel } from "@/components/wishlist-panel";
@@ -15,6 +15,7 @@ import { CameraIcon, ClockIcon, GearIcon, PersonIcon, TagIcon, VerifiedIcon } fr
 import { useToast } from "@/lib/toast-context";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
+import { themedStyles } from "@/theme/themed-styles";
 
 function chunk<T>(items: T[], size: number): T[][] {
   const rows: T[][] = [];
@@ -305,7 +306,7 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.lg },
   navHandle: { fontSize: font.body, fontWeight: "600", color: color.encre },
@@ -416,4 +417,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   pname: { fontSize: font.caption, color: color.encre, marginTop: space.xs },
-});
+}));

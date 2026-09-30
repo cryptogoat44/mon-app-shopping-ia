@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
@@ -8,6 +8,7 @@ import { RECOVERY_PATH } from "@/lib/password-recovery";
 import { fr } from "@/i18n/fr";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
+import { themedStyles } from "@/theme/themed-styles";
 
 // Adresse où ramène le lien de l'e-mail : le site (web) ou l'app (iPhone).
 // Elle doit figurer dans les « Redirect URLs » autorisées du projet Supabase.
@@ -96,7 +97,7 @@ export default function ForgotPasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   flex: { flex: 1 },
   nav: { height: 47, justifyContent: "center", paddingHorizontal: 12 },
@@ -111,4 +112,4 @@ const styles = StyleSheet.create({
   cta: { backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", marginTop: space.lg },
   ctaDisabled: { opacity: 0.5 },
   ctaLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
-});
+}));

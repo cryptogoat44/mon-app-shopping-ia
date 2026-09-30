@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { WishlistItem } from "@monapp/shared-types";
 import { ApiError, deleteWishlistItem, fetchWishlistItem } from "@/lib/api";
@@ -9,6 +9,7 @@ import { fr } from "@/i18n/fr";
 import { SpotImage } from "@/components/spot-image";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { ErrorMessage } from "@/components/error-message";
+import { themedStyles } from "@/theme/themed-styles";
 
 function formatPrice(item: WishlistItem): string | null {
   if (item.priceMin === null) return null;
@@ -129,7 +130,7 @@ export default function WishlistItemScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   nav: { height: 47, justifyContent: "center", paddingHorizontal: space.lg },
   navBack: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
@@ -150,4 +151,4 @@ const styles = StyleSheet.create({
   confirmText: { fontSize: font.secondary, color: color.encre, marginBottom: space.sm },
   confirmButtons: { flexDirection: "row", gap: space.lg },
   cancelLabel: { color: color.acier, fontSize: font.secondary, fontWeight: "600" },
-});
+}));

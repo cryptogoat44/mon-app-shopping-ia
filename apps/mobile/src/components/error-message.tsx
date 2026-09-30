@@ -1,6 +1,7 @@
 import { useEffect } from "react";
-import { AccessibilityInfo, Platform, StyleSheet, Text, type StyleProp, type TextStyle } from "react-native";
+import { AccessibilityInfo, Platform, Text, type StyleProp, type TextStyle } from "react-native";
 import { color } from "@/theme/tokens";
+import { themedStyles } from "@/theme/themed-styles";
 
 // Message d'erreur affiché à l'écran. Avant, les erreurs utilisaient le même
 // gris que les libellés et n'étaient jamais annoncées aux lecteurs d'écran
@@ -18,6 +19,6 @@ export function ErrorMessage({ children, style }: { children: string; style?: St
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   error: { color: color.erreur },
-});
+}));

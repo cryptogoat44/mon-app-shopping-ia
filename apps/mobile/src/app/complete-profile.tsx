@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from "react-native";
 import { Link } from "expo-router";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, acceptConsents, recordAnalyticsChoice, updateMyProfile } from "@/lib/api";
@@ -9,6 +9,7 @@ import { fr } from "@/i18n/fr";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
 import { CHECKBOX_SIZE, CheckboxRow } from "@/components/checkbox-row";
+import { themedStyles } from "@/theme/themed-styles";
 
 const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
 
@@ -154,7 +155,7 @@ export default function CompleteProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   flex: { flex: 1 },
   content: { flexGrow: 1, justifyContent: "center", paddingVertical: space.lg, paddingHorizontal: space.xl, maxWidth: 480, alignSelf: "center", width: "100%" },
@@ -171,4 +172,4 @@ const styles = StyleSheet.create({
   cta: { backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", marginTop: space.lg },
   ctaDisabled: { opacity: 0.5 },
   ctaLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
-});
+}));

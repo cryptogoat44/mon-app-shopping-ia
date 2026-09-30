@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, SafeAreaView, ScrollView, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import type { AppNotification } from "@monapp/shared-types";
@@ -11,6 +11,7 @@ import { timeAgo } from "@/lib/time";
 import { PersonIcon } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
+import { themedStyles } from "@/theme/themed-styles";
 
 function actionText(notification: AppNotification): string {
   if (notification.type === "follow") return fr.notifications.follow;
@@ -122,7 +123,7 @@ export default function NotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   header: { paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.sm },
   headerTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, color: color.encre },
   screen: { flex: 1, backgroundColor: color.porcelaine },
@@ -163,4 +164,4 @@ const styles = StyleSheet.create({
   rowLine: { fontSize: font.secondary, color: color.encre, lineHeight: 19 },
   rowName: { fontWeight: "600" },
   rowTime: { fontSize: font.caption, color: color.acier, marginTop: 2 },
-});
+}));
