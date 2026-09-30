@@ -335,6 +335,10 @@ export const LEGAL_DOCUMENT_VERSIONS: Record<LegalDocumentType, string> = {
   privacy_policy: "projet-2026-09-29",
 };
 
+/** Suivi des erreurs (lot 2) : seule adresse Sentry admise, région UE
+ * (Francfort) — serveur comme site. */
+export const SENTRY_EU_DSN_PATTERN = /^https:\/\/[a-f0-9]+@o\d+\.ingest\.de\.sentry\.io\/\d+$/;
+
 /** Âge minimum pour utiliser Spotto (décision du fondateur, 2026-09-25) :
  * simple déclaration à l'inscription, aucune vérification d'âge. */
 export const MINIMUM_AGE = 15;

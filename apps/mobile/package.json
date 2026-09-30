@@ -7,6 +7,7 @@
     "@expo/ui": "~57.0.15",
     "@monapp/shared-types": "workspace:*",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@sentry/react": "11.1.0",
     "@supabase/supabase-js": "^2.114.0",
     "expo": "~57.0.19",
     "expo-clipboard": "~57.0.1",

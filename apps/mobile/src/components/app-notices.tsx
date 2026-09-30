@@ -5,6 +5,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { POLICY_UPDATE_NOTICE } from "@monapp/shared-types";
 import { fetchConsentStatus, recordAnalyticsChoice } from "@/lib/api";
 import { setAnalyticsPlatform, setAnalyticsUser } from "@/lib/analytics";
+import { setWebSentryUser } from "@/lib/sentry-web";
 import { useAuth } from "@/lib/auth-context";
 import { hasAnalyticsConsent, parseSeenNotices, seenNoticesKey, shouldAskAnalytics, shouldShowNotice } from "@/lib/policy-notice";
 import { fr } from "@/i18n/fr";
@@ -32,6 +33,7 @@ export function AppNotices() {
   useEffect(() => {
     setAnalyticsPlatform(Platform.OS);
     setAnalyticsUser(null, false);
+    setWebSentryUser(userId);
     setQueue([]);
     if (!userId) return;
     let cancelled = false;
@@ -53,6 +55,7 @@ export function AppNotices() {
       cancelled = true;
       // Sortie de l'app connectée (déconnexion, compte supprimé) : collecte coupée.
       setAnalyticsUser(null, false);
+      setWebSentryUser(null);
     };
   }, [userId]);
 

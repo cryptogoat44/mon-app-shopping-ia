@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { z } from "zod";
+import { SENTRY_EU_DSN_PATTERN } from "./lib/sentry.js";
 
 const envSchema = z.object({
   SUPABASE_URL: z.string().url(),
@@ -13,6 +14,13 @@ const envSchema = z.object({
   // test via mot de passe. Clé publique, sans risque à exiger.
   SUPABASE_ANON_KEY: z.string().min(1).optional(),
   PORT: z.coerce.number().default(3000),
+  // Suivi des erreurs (lot 2) : facultatif ; sans DSN, rien n'est envoyé.
+  // La région UE est imposée : adresse d'envoi en « ingest.de.sentry.io ».
+  SENTRY_DSN: z
+    .string()
+    .regex(SENTRY_EU_DSN_PATTERN, "SENTRY_DSN doit être une adresse Sentry de la région UE (ingest.de.sentry.io).")
+    .optional(),
+  SENTRY_ENVIRONMENT: z.enum(["development", "production"]).default("development"),
 });
 
 const parsed = envSchema.safeParse(process.env);

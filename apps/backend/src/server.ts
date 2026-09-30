@@ -1,3 +1,5 @@
+// Sentry d'abord (voir instrument.ts).
+import "./instrument.js";
 import { env } from "./env.js";
 import { buildApp } from "./app.js";
 

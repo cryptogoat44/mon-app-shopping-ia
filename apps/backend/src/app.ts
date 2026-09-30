@@ -17,6 +17,10 @@ import accountRoutes from "./routes/account.js";
 import blocksRoutes from "./routes/blocks.js";
 import reportsRoutes from "./routes/reports.js";
 import commentsRoutes from "./routes/comments.js";
+import { captureServerError, captureServerFailure } from "./lib/sentry.js";
+
+// Requêtes dont l'erreur a déjà été transmise à Sentry (évite un doublon).
+const reportedToSentry = new Set<string>();
 
 // Séparé de server.ts pour que les tests puissent construire l'app et
 // l'interroger via `.inject()` sans jamais ouvrir de vrai port réseau.
@@ -48,7 +52,18 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
     }
 
     request.log.error({ error }, "Erreur non gérée");
+    captureServerError(error, request.user?.id);
+    reportedToSentry.add(request.id);
     return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue, réessayez." });
+  });
+
+  // Toute autre réponse 500 (renvoyée par une route après avoir géré
+  // l'erreur elle-même) est aussi signalée à Sentry, sans doublon.
+  fastify.addHook("onResponse", async (request, reply) => {
+    if (reportedToSentry.delete(request.id)) return;
+    if (reply.statusCode >= 500) {
+      captureServerFailure(request.method, request.routeOptions.url ?? "route inconnue", reply.statusCode, request.user?.id);
+    }
   });
 
   await fastify.register(supabasePlugin);

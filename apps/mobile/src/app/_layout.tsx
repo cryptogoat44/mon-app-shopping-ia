@@ -11,6 +11,10 @@ import { APP_NAME_DISPLAY } from "@/constants/brand";
 // Capture l'adresse d'arrivée (jetons du lien « mot de passe oublié ») avant
 // que la navigation ne la réécrive.
 import "@/lib/initial-url";
+import { initWebSentry } from "@/lib/sentry-web";
+
+// Suivi des erreurs du site (lot 2) : actif seulement avec une adresse Sentry UE.
+initWebSentry();
 
 SplashScreen.preventAutoHideAsync();
 
