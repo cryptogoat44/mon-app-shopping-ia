@@ -165,8 +165,14 @@ export async function runParcours(
   name: string,
   outputDirName: string,
   scenario: (p: Parcours) => Promise<void>,
-  extraArgs: string[] = []
+  extraArgs: string[] = [],
+  buildEnv: Record<string, string> = {}
 ): Promise<void> {
+  // Variables de construction propres au scénario : liste fermée (jamais
+  // l'adresse du serveur ni celle de Supabase, protégées plus bas).
+  for (const key of Object.keys(buildEnv)) {
+    if (!["EXPO_PUBLIC_POSTHOG_KEY", "EXPO_PUBLIC_ENVIRONMENT"].includes(key)) throw new Error(`Variable de construction refusée : ${key}.`);
+  }
   loadEnv({ path: join(BACKEND_DIR, ".env") });
   const mobileEnv = loadEnv({ path: join(MOBILE_DIR, ".env"), processEnv: {} }).parsed ?? {};
 
@@ -227,7 +233,11 @@ export async function runParcours(
   try {
     log(`Parcours « ${name} » — spotto-dev uniquement, aucun crédit SerpApi.`);
     log("Compilation du site local (≈ 1 min)…");
-    await run("npx", ["expo", "export", "--platform", "web", "--output-dir", buildDir], MOBILE_DIR);
+    // Variables propres au scénario : construction SANS cache, sinon Expo peut
+    // réutiliser un fichier déjà construit avec d'anciennes valeurs (constaté
+    // au lot 2 : clé PostHog restée vide).
+    const clear = Object.keys(buildEnv).length > 0 ? ["--clear"] : [];
+    await run("npx", ["expo", "export", "--platform", "web", ...clear, "--output-dir", buildDir], MOBILE_DIR, { ...process.env, ...buildEnv });
     site = await serveStatic(buildDir, SITE_PORT);
 
     log("Démarrage du serveur local…");

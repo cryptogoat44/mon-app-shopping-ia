@@ -1,7 +1,9 @@
 // Accès BRIDÉ à l'API de Render (décision du fondateur, 2026-09-29), pour
 // les déploiements sans navigateur.
 //
-//   pnpm --filter backend render-bride deployer <spotto-api|site> [--confirmer]
+//   pnpm --filter backend render-bride deployer <spotto-api|site> [--vider-cache] [--confirmer]
+//     (--vider-cache : obligatoire pour le site après un changement de variable,
+//      sinon la construction peut réutiliser l'ancienne valeur — constaté au lot 2)
 //   pnpm --filter backend render-bride suivre   <spotto-api|site> <dep-…>
 //   pnpm --filter backend render-bride api-url  https://spotto-api.onrender.com [--confirmer]
 //   pnpm --filter backend render-bride variable <spotto-api|site> <NOM> <valeur> [--confirmer]
@@ -66,14 +68,15 @@ function describeDeploy(deploy: Deploy): string {
 }
 
 async function deploy(args: string[], confirm: boolean): Promise<void> {
-  const service = resolveService(args[0]);
-  console.log(`ACTION ANNONCÉE : déployer le dernier commit de main sur « ${service.name} » (${service.id}).`);
+  const service = resolveService(args.find((arg) => !arg.startsWith("--")));
+  const clearCache = args.includes("--vider-cache");
+  console.log(`ACTION ANNONCÉE : déployer le dernier commit de main sur « ${service.name} » (${service.id})${clearCache ? ", cache de construction vidé" : ""}.`);
   if (!confirm) {
     console.log("Rien n'est lancé. Relancer avec --confirmer pour déployer.");
     return;
   }
   const key = readKey();
-  const created = (await render(key, "POST", `/services/${service.id}/deploys`, { clearCache: "do_not_clear" })) as Deploy;
+  const created = (await render(key, "POST", `/services/${service.id}/deploys`, { clearCache: clearCache ? "clear" : "do_not_clear" })) as Deploy;
   console.log(`Déploiement lancé : ${describeDeploy(created)}`);
   console.log(`Suivi : pnpm --filter backend render-bride suivre ${service.name} ${created.id}`);
 }

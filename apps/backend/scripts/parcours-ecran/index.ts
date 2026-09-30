@@ -10,6 +10,8 @@ interface Scenario {
   name: string;
   outputDir: string;
   run: (parcours: Parcours) => Promise<void>;
+  /** Variables de construction du site propres au scénario (liste fermée). */
+  buildEnv?: Record<string, string>;
 }
 
 const SCENARIOS: Record<string, () => Promise<Scenario>> = {
@@ -17,6 +19,7 @@ const SCENARIOS: Record<string, () => Promise<Scenario>> = {
   images: () => import("./scenarios/images.js"),
   "bloc-5": () => import("./scenarios/bloc-5.js"),
   francfort: () => import("./scenarios/francfort.js"),
+  "lot-2": () => import("./scenarios/lot-2.js"),
 };
 
 async function main() {
@@ -26,7 +29,7 @@ async function main() {
     throw new Error(`Indiquez un scénario : ${Object.keys(SCENARIOS).join(", ")}.`);
   }
   const scenario = await load();
-  await runParcours(scenario.name, scenario.outputDir, scenario.run, process.argv.slice(3));
+  await runParcours(scenario.name, scenario.outputDir, scenario.run, process.argv.slice(3), scenario.buildEnv ?? {});
 }
 
 main().catch((error: unknown) => {

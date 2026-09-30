@@ -87,9 +87,12 @@ export async function run(p: Parcours): Promise<void> {
     await continuer.click();
     await phone.getByText("Retrouvez une pièce vue dans une vidéo ou sur une photo.").waitFor({ timeout: 30_000 });
     const rows = await consentRows(p, nouvelle.id);
-    check(rows.length === 3, `trois consentements enregistrés : documents et âge (obtenu : ${rows.length})`);
+    // Documents, âge, et (depuis le lot 2) le choix « statistiques d'usage »,
+    // ici un refus puisque la case facultative est laissée décochée.
+    check(rows.length === 4, `quatre consentements enregistrés : documents, âge, statistiques (obtenu : ${rows.length})`);
+    check(rows.some((row) => row.type === "analytics"), "choix « statistiques » enregistré");
     for (const row of rows) {
-      const expected = CONSENT_VERSIONS[row.type as "terms" | "privacy_policy" | "age_declaration"];
+      const expected = CONSENT_VERSIONS[row.type as "terms" | "privacy_policy" | "age_declaration" | "analytics"];
       check(row.document_version === expected, `version ${row.type} = ${expected}`);
     }
     await open(phone, `${p.siteUrl}/settings`);
