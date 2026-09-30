@@ -11,7 +11,8 @@ import type { Parcours, TestAccount } from "../boite-a-outils.js";
 export const name = "Francfort — information de mise à jour de la politique";
 export const outputDir = "francfort-captures";
 
-const NOTICE = "Notre politique de confidentialité a été mise à jour : votre serveur est désormais en Europe.";
+// Début du message (il couvre aussi, depuis le lot 2, erreurs et statistiques).
+const NOTICE = "Notre politique de confidentialité a été mise à jour : votre serveur est désormais en Europe";
 const SPOTTER = "Retrouvez une pièce vue dans une vidéo ou sur une photo.";
 
 function check(condition: boolean, message: string): void {

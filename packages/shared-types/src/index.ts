@@ -330,9 +330,11 @@ export type LegalDocumentType = "terms" | "privacy_policy";
  * autre version, et l'historique garde la version acceptée. */
 export const LEGAL_DOCUMENT_VERSIONS: Record<LegalDocumentType, string> = {
   terms: "projet-2026-09-25",
-  // 2026-09-29 : serveur déménagé à Francfort (UE) — simple information,
-  // pas de nouvelle acceptation (décision du fondateur).
-  privacy_policy: "projet-2026-09-29",
+  // 2026-09-29 : serveur déménagé à Francfort (UE) ; 2026-09-30 : rapports
+  // d'erreur (Sentry) et statistiques d'usage facultatives (PostHog) —
+  // simples informations, pas de nouvelle acceptation (décisions du
+  // fondateur) ; pour PostHog, c'est le consentement « statistiques » qui fait foi.
+  privacy_policy: "projet-2026-09-30",
 };
 
 /** Suivi des erreurs (lot 2) : seule adresse Sentry admise, région UE
@@ -363,7 +365,7 @@ export const CONSENT_VERSIONS: Record<VersionedConsentType, string> = {
  * quels changements relèvent de l'un ou de l'autre. */
 export const ACCEPTED_CONSENT_VERSIONS: Record<VersionedConsentType, readonly string[]> = {
   terms: ["projet-2026-09-25"],
-  privacy_policy: ["projet-2026-09-25", "projet-2026-09-29"],
+  privacy_policy: ["projet-2026-09-25", "projet-2026-09-29", "projet-2026-09-30"],
   age_declaration: [CONSENT_VERSIONS.age_declaration],
   analytics: [CONSENT_VERSIONS.analytics],
 };
@@ -372,10 +374,12 @@ export const ACCEPTED_CONSENT_VERSIONS: Record<VersionedConsentType, readonly st
  * jour qui ne demande pas de nouvelle acceptation (un identifiant par
  * information, pour ne la montrer qu'une fois). */
 export const POLICY_UPDATE_NOTICE = {
-  id: "politique-2026-09-29-serveur-europe",
+  // Remplace l'information du 2026-09-29 (serveur en Europe) : le message
+  // couvre les deux mises à jour, une seule fois.
+  id: "politique-2026-09-30-erreurs-statistiques",
   document: "privacy_policy" as LegalDocumentType,
   /** Montrée à qui a accepté une version antérieure à celle-ci. */
-  version: "projet-2026-09-29",
+  version: "projet-2026-09-30",
 } as const;
 
 export interface ConsentStatus {

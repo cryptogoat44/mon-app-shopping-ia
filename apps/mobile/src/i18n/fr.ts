@@ -346,7 +346,8 @@ export const fr = {
       "Aidez-nous à améliorer Spotto : acceptez-vous de partager des statistiques d'usage ? Jamais vos contenus, votre nom ni votre e-mail. Modifiable à tout moment dans les Réglages.",
     analyticsPromptYes: "Oui, volontiers",
     analyticsPromptNo: "Non merci",
-    updateNotice: "Notre politique de confidentialité a été mise à jour : votre serveur est désormais en Europe.",
+    updateNotice:
+      "Notre politique de confidentialité a été mise à jour : votre serveur est désormais en Europe, et elle décrit le suivi des erreurs et les statistiques d'usage (facultatives).",
     updateNoticeRead: "Lire la politique",
     updateNoticeDismiss: "OK",
     updateNoticeDismissLabel: "Fermer cette information",
