@@ -3,7 +3,7 @@
 // Imports relatifs : fichier testé par vitest.
 import type { Locale } from "./preferences";
 
-const INTL: Record<Locale, string> = { fr: "fr-FR", en: "en-GB" };
+const INTL: Record<Locale, string> = { fr: "fr-FR", en: "en-US" };
 
 export function formatLongDate(isoOrDay: string, locale: Locale): string {
   // « 2026-09-25 » seul est lu à midi pour ne jamais changer de jour selon le fuseau.

@@ -78,7 +78,7 @@ export const privacyPolicyEn: LegalDocument = {
         [
           "Supabase (Supabase Pte. Ltd., Singapore): database, photo storage and authentication. Your data is hosted there in the European Union (Ireland).",
           "Render (Render Services, Inc., United States): hosting of our server, located in the European Union (Frankfurt, Germany), and of the website. All requests from the app go through this server.",
-          "SerpApi (SerpApi, LLC, United States): receives a temporary link (valid for 5 minutes) to the image to be analysed, and any text you added; it passes them to Google's visual search (Google Lens, Google LLC, United States), which downloads the image to find matching pieces. No other data about you (name, email, identifier) is passed to them.",
+          "SerpApi (SerpApi, LLC, United States): receives a temporary link (valid for 5 minutes) to the image to be analyzed, and any text you added; it passes them to Google's visual search (Google Lens, Google LLC, United States), which downloads the image to find matching pieces. No other data about you (name, email, identifier) is passed to them.",
           "Sentry (Functional Software, Inc., United States): error reports from the app and the server. Data hosted in the European Union (Frankfurt, Germany).",
           "PostHog (PostHog Inc., United States): usage statistics, only with your consent. Data hosted in the European Union (Frankfurt, Germany).",
         ],
@@ -106,7 +106,7 @@ export const privacyPolicyEn: LegalDocument = {
       blocks: [
         [
           "The image you submit for analysis: deleted from our servers as soon as the search responds, whether it succeeded or not (a few seconds).",
-          "Your search history (except the analysed image, see above): 12 months. Older searches are deleted, together with their results and the clicks to retailers that depend on them, at your next search. Exception: a search from which you kept a piece (Vault, Wishlist, piece shown in a post) is kept for as long as that piece is.",
+          "Your search history (except the analyzed image, see above): 12 months. Older searches are deleted, together with their results and the clicks to retailers that depend on them, at your next search. Exception: a search from which you kept a piece (Vault, Wishlist, piece shown in a post) is kept for as long as that piece is.",
           "Your account and everything attached to it: for as long as your account exists.",
           "An account with no sign-in for 3 years is deleted, with all its data. An email warns you before deletion.",
           "The server's technical logs: [To be verified: retention period at our hosting provider].",
@@ -118,7 +118,7 @@ export const privacyPolicyEn: LegalDocument = {
     {
       title: "On your phone or in your browser",
       blocks: [
-        "Spotto stores on your device your sign-in session, so that you do not have to sign in again, a copy of images already displayed, to show them faster, and the fact that you have already seen an update notice, so as not to show it again. These items are essential for the app to work.",
+        "Spotto stores on your device your sign-in session, so that you do not have to sign in again, a copy of images already displayed, to show them faster, the fact that you have already seen an update notice, so as not to show it again, and the language and theme (light, dark or your device's) you have chosen. These items are essential for the app to work.",
         "Spotto uses no advertising trackers and no advertising cookies. Usage statistics, if you accept them, are sent directly, without cookies or storage on your device, and without IP-based geolocation.",
       ],
     },

@@ -40,12 +40,20 @@ const PLACEHOLDERS: Record<Locale, Publisher> = {
   },
 };
 
+// Statuts juridiques connus, traduits pour la version anglaise (décision du
+// fondateur, 2026-09-30). Un statut inconnu est affiché tel quel.
+const STATUS_EN: Readonly<Record<string, string>> = {
+  "personne physique non immatriculée": "individual, not registered",
+};
+
 /** Complète chaque champ absent ou vide par son « [À compléter : …] » (ou
  * « [To be completed: …] » en anglais). Les valeurs sont les mêmes dans les
- * deux langues : seules les mentions manquantes changent. */
+ * deux langues, sauf un statut connu, traduit en anglais. */
 export function readPublisher(values: Partial<Record<keyof Publisher, string | undefined>>, locale: Locale = "fr"): Publisher {
   const pick = (key: keyof Publisher) => values[key]?.trim() || PLACEHOLDERS[locale][key];
-  return { name: pick("name"), status: pick("status"), address: pick("address"), email: pick("email"), phone: pick("phone") };
+  const status = pick("status");
+  const translated = locale === "en" ? STATUS_EN[status.toLowerCase()] : undefined;
+  return { name: pick("name"), status: translated ?? status, address: pick("address"), email: pick("email"), phone: pick("phone") };
 }
 
 // Chaque variable est écrite en entier : Expo ne remplace, à la

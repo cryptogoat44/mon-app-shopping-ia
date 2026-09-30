@@ -78,6 +78,9 @@ describe("documents juridiques en anglais (lot 3)", () => {
       expect(joined).toContain(PUBLISHER_EN.email);
       expect(joined).not.toContain("[À ");
     }
+    expect(readPublisher({ status: "Personne physique non immatriculée" }, "en").status).toBe("individual, not registered");
+    expect(readPublisher({ status: "personne physique non immatriculée" }, "fr").status).toBe("personne physique non immatriculée");
+    expect(readPublisher({ status: "SAS au capital de 1 000 €" }, "en").status).toBe("SAS au capital de 1 000 €");
     const placeholders = readPublisher({}, "en");
     expect(placeholders.address).toBe("[To be completed: postal address]");
     expect(splitPlaceholders(`Address: ${placeholders.address}.`)[1]).toEqual({ text: "[To be completed: postal address]", placeholder: true });

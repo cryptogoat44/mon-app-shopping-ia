@@ -48,14 +48,14 @@ export const termsOfUseEn: LegalDocument = {
     {
       title: "Links to retailers",
       blocks: [
-        "Links marked “Affiliate link” may, in the future, earn Spotto a commission when you make a purchase, at no extra cost to you. As of this version, no affiliate programme is active: Spotto receives no commission.",
+        "Links marked “Affiliate link” may, in the future, earn Spotto a commission when you make a purchase, at no extra cost to you. As of this version, no affiliate program is active: Spotto receives no commission.",
       ],
     },
     {
       title: "Your content",
       blocks: [
         "You remain the owner of the photos, texts and comments you publish. So that Spotto can host them and show them to the people you have chosen, you grant the publisher, free of charge and worldwide, the right to store, reproduce (including in reduced size) and display them within Spotto, according to the visibility you have chosen. This right ends when you delete the content or your account.",
-        "You guarantee that you hold the necessary rights to what you publish, in particular the consent of any recognisable person in your photos.",
+        "You guarantee that you hold the necessary rights to what you publish, in particular the consent of any recognizable person in your photos.",
       ],
     },
     {

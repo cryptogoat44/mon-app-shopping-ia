@@ -7,17 +7,18 @@ import type { ConsentStatus, LegalDocumentType } from "@monapp/shared-types";
 export interface PolicyNotice {
   id: string;
   document: LegalDocumentType;
-  version: string;
+  /** Versions dont le texte contient déjà l'information. */
+  alreadyCovered: readonly string[];
 }
 
-/** Vrai si la personne doit voir l'information : elle n'a pas accepté la
- * version qui l'accompagne (compte antérieur à la mise à jour) et ne l'a
- * pas encore vue sur cet appareil. Un compte créé après la mise à jour a
- * accepté la nouvelle version : il n'a rien à apprendre. */
+/** Vrai si la personne doit voir l'information : elle a accepté une version
+ * qui ne la contenait pas encore (compte antérieur à la mise à jour) et ne
+ * l'a pas encore vue sur cet appareil. Un compte créé après la mise à jour a
+ * accepté une version qui la contient : il n'a rien à apprendre. */
 export function shouldShowNotice(statuses: readonly ConsentStatus[], seenIds: readonly string[], notice: PolicyNotice): boolean {
   if (seenIds.includes(notice.id)) return false;
   const accepted = statuses.find((status) => status.type === notice.document);
-  return accepted?.version !== notice.version;
+  return !accepted?.version || !notice.alreadyCovered.includes(accepted.version);
 }
 
 /** Demande « statistiques d'usage » : une seule fois, tant qu'aucun choix

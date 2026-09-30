@@ -8,14 +8,14 @@ const plain = (text: string) => text.replace(/[  ]/g, " ");
 describe("formats selon la langue (lot 3)", () => {
   it("écrit les dates longues dans la langue choisie", () => {
     expect(formatLongDate("2026-09-25", "fr")).toBe("25 septembre 2026");
-    expect(formatLongDate("2026-09-25", "en")).toBe("25 September 2026");
+    expect(formatLongDate("2026-09-25", "en")).toBe("September 25, 2026");
   });
 
   it("formate un prix sans jamais convertir la devise", () => {
     expect(plain(formatPrice(1250, "EUR", "fr"))).toBe("1 250 €");
     expect(formatPrice(1250, "EUR", "en")).toBe("€1,250");
     expect(plain(formatPrice(89.5, "USD", "fr"))).toBe("89,50 $US");
-    expect(formatPrice(89.5, "USD", "en")).toBe("US$89.50");
+    expect(formatPrice(89.5, "USD", "en")).toBe("$89.50");
     expect(formatPrice(40, null, "en")).toBe("40");
     expect(plain(formatPrice(40, "eur?", "fr"))).toBe("40 eur?");
   });

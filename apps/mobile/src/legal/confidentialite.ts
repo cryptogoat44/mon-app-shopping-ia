@@ -119,7 +119,7 @@ export const privacyPolicy: LegalDocument = {
     {
       title: "Sur votre téléphone ou dans votre navigateur",
       blocks: [
-        "Spotto enregistre sur votre appareil votre session de connexion, pour que vous n'ayez pas à vous reconnecter, ainsi qu'une copie des images déjà affichées, pour les montrer plus vite, et le fait que vous avez déjà vu une information de mise à jour, pour ne pas vous la remontrer. Ces éléments sont indispensables au fonctionnement de l'app.",
+        "Spotto enregistre sur votre appareil votre session de connexion, pour que vous n'ayez pas à vous reconnecter, une copie des images déjà affichées, pour les montrer plus vite, le fait que vous avez déjà vu une information de mise à jour, pour ne pas vous la remontrer, ainsi que la langue et le thème (clair, sombre ou celui de l'appareil) que vous avez choisis. Ces éléments sont indispensables au fonctionnement de l'app.",
         "Spotto n'utilise aucun traceur publicitaire ni aucun cookie publicitaire. Les statistiques d'usage, si vous les acceptez, sont envoyées directement, sans cookie ni stockage sur votre appareil, et sans géolocalisation par votre adresse IP.",
       ],
     },

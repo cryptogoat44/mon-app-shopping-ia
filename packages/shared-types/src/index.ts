@@ -342,7 +342,9 @@ export const LEGAL_DOCUMENT_VERSIONS: Record<LegalDocumentType, string> = {
   // d'erreur (Sentry) et statistiques d'usage facultatives (PostHog) —
   // simples informations, pas de nouvelle acceptation (décisions du
   // fondateur) ; pour PostHog, c'est le consentement « statistiques » qui fait foi.
-  privacy_policy: "projet-2026-09-30",
+  // « projet-2026-09-30-b » (lot 3) : langue et thème enregistrés sur
+  // l'appareil — simple information, sans nouvelle acceptation ni message.
+  privacy_policy: "projet-2026-09-30-b",
 };
 
 /** Suivi des erreurs (lot 2) : seule adresse Sentry admise, région UE
@@ -373,7 +375,7 @@ export const CONSENT_VERSIONS: Record<VersionedConsentType, string> = {
  * quels changements relèvent de l'un ou de l'autre. */
 export const ACCEPTED_CONSENT_VERSIONS: Record<VersionedConsentType, readonly string[]> = {
   terms: ["projet-2026-09-25"],
-  privacy_policy: ["projet-2026-09-25", "projet-2026-09-29", "projet-2026-09-30"],
+  privacy_policy: ["projet-2026-09-25", "projet-2026-09-29", "projet-2026-09-30", "projet-2026-09-30-b"],
   age_declaration: [CONSENT_VERSIONS.age_declaration],
   analytics: [CONSENT_VERSIONS.analytics],
 };
@@ -386,8 +388,9 @@ export const POLICY_UPDATE_NOTICE = {
   // couvre les deux mises à jour, une seule fois.
   id: "politique-2026-09-30-erreurs-statistiques",
   document: "privacy_policy" as LegalDocumentType,
-  /** Montrée à qui a accepté une version antérieure à celle-ci. */
-  version: "projet-2026-09-30",
+  /** Versions dont le texte contient déjà cette information : la
+   * personne qui en a accepté une ne voit pas le message. */
+  alreadyCovered: ["projet-2026-09-30", "projet-2026-09-30-b"] as readonly string[],
 } as const;
 
 export interface ConsentStatus {

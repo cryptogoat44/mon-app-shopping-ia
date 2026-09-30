@@ -56,7 +56,7 @@ export const en: Catalog = {
     shareMessage: (name: string, caption: string | null) => `${name} on Spotto${caption ? `: “${caption}”` : ""}`,
   },
   crop: {
-    label: "Area to analyse",
+    label: "Area to analyze",
     hint: "Drag the frame or its corners. Swipe up or down to enlarge or reduce it.",
     value: (width: number, height: number) => `${width}% of the width, ${height}% of the height`,
   },
@@ -69,7 +69,7 @@ export const en: Catalog = {
   },
   completeProfile: {
     title: "One last step",
-    subtitle: "Choose how others will recognise you.",
+    subtitle: "Choose how others will recognize you.",
     continue: "Continue",
   },
   merchant: {
@@ -91,9 +91,9 @@ export const en: Catalog = {
     photoDenied: "Allow access to your photos to import an image.",
     recentlySpotted: "Recently spotted",
     detected: {
-      tiktok: "TikTok video recognised",
-      instagram: "Instagram post recognised",
-      pinterest: "Pinterest Pin recognised",
+      tiktok: "TikTok video recognized",
+      instagram: "Instagram post recognized",
+      pinterest: "Pinterest Pin recognized",
     },
     platformName: { tiktok: "TikTok", instagram: "Instagram", pinterest: "Pinterest" },
     notALink:
@@ -105,14 +105,14 @@ export const en: Catalog = {
       pinterest: "This link leads to a Pinterest board or page, not a Pin. Open the Pin, tap “Share”, then “Copy link”.",
     },
     unsupportedLink:
-      "This link isn't supported. Spotto recognises TikTok, Instagram and Pinterest links; for any other site, import a screenshot.",
+      "This link isn't supported. Spotto recognizes TikTok, Instagram and Pinterest links; for any other site, import a screenshot.",
     prepareError: "Preparation didn't go through. Check your connection, then try again.",
     networkError: "Unable to connect. Check your internet connection, then try again.",
     serverError: "Spotto isn't responding right now. Please try again in a minute.",
   },
   preview: {
     step: "Step 1 of 3 · Preview",
-    title: "This is the image that will be analysed",
+    title: "This is the image that will be analyzed",
     caption: (platform: string) => `Cover image of the ${platform} ${platform === "TikTok" ? "video" : "post"}.`,
     captureCaption: "Your screenshot.",
     notOnImageTitle: "The piece isn't in this image?",
@@ -164,11 +164,11 @@ export const en: Catalog = {
   targeting: {
     step: "Step 2 of 3 · Framing",
     title: "Frame the piece",
-    caption: "Only the selected area will be analysed. Drag the frame or its corners.",
+    caption: "Only the selected area will be analyzed. Drag the frame or its corners.",
     queryLabel: "What are you looking for?",
     queryOptional: "(optional)",
     queryPlaceholder: "e.g. brown suede jacket",
-    queryHint: "A few precise words help set similar pieces aside.",
+    queryHint: "A few precise words help narrow the results.",
     reset: "Reset the frame",
     launch: "Identify the piece",
   },
@@ -194,7 +194,7 @@ export const en: Catalog = {
     viewAt: (merchant: string) => (merchant ? `View at ${merchant}` : "View the piece"),
     affiliateDisclosure: "Affiliate link",
     affiliateExplanation:
-      "If you buy through this link, Spotto may in the future receive a commission from the retailer, at no extra cost to you. No affiliate programme is active at this time.",
+      "If you buy through this link, Spotto may in the future receive a commission from the retailer, at no extra cost to you. No affiliate program is active at this time.",
     affiliateHint: "Explains what “affiliate link” means.",
     keep: "Save",
     kept: "Saved",
@@ -403,7 +403,7 @@ export const en: Catalog = {
     dataSection: "Your data",
     exporting: "Preparing the export…",
     exportError: "The export didn't go through. Please try again.",
-    dangerZone: "Sensitive area",
+    dangerZone: "Danger zone",
     deleting: "Deleting…",
     confirmDelete: "Confirm deletion",
     deleteError: "The account couldn't be deleted.",
@@ -513,7 +513,7 @@ export const en: Catalog = {
       forgot: "Forgot your password?",
     },
     forgot: {
-      title: "Forgotten password",
+      title: "Forgot password",
       subtitle: "Enter the email address of your account: we'll send you a link to choose a new password.",
       cta: "Send the link",
       ctaLoading: "Sending…",
