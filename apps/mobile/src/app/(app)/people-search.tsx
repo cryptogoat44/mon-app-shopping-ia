@@ -11,6 +11,7 @@ import { ReportBlockMenu } from "@/components/report-block-menu";
 import { useToast } from "@/lib/toast-context";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
+import { t } from "@/i18n";
 
 function PersonRow({
   person,
@@ -57,7 +58,7 @@ function PersonRow({
         onPress={onOpenProfile}
         style={styles.personLink}
         accessibilityRole="link"
-        accessibilityLabel={`Voir le profil de ${person.displayName}`}
+        accessibilityLabel={t.common.viewProfile(person.displayName)}
       >
         <View style={styles.avatar}>
           {person.avatarUrl ? (
@@ -73,10 +74,10 @@ function PersonRow({
       </Pressable>
       <Pressable accessibilityRole="button" onPress={handleToggle} disabled={busy} style={[styles.followButton, following ? styles.followingButton : null]}>
         <Text style={[styles.followButtonLabel, following ? styles.followingButtonLabel : null]}>
-          {following ? "Suivi(e)" : "Suivre"}
+          {following ? t.peopleSearch.following : t.userProfile.follow}
         </Text>
       </Pressable>
-      <Pressable onPress={onOpenMenu} hitSlop={11} style={styles.moreButton} accessibilityRole="button" accessibilityLabel="Plus d'options">
+      <Pressable onPress={onOpenMenu} hitSlop={11} style={styles.moreButton} accessibilityRole="button" accessibilityLabel={t.common.moreOptions}>
         <MoreIcon size={18} tint={color.acier} />
       </Pressable>
     </View>
@@ -125,7 +126,7 @@ export default function PeopleSearchScreen() {
         }
       } catch (e) {
         if (thisRequestId === requestIdRef.current) {
-          setError(e instanceof ApiError ? e.message : "La recherche a échoué.");
+          setError(e instanceof ApiError ? e.message : t.peopleSearch.error);
         }
       } finally {
         if (thisRequestId === requestIdRef.current) {
@@ -142,7 +143,7 @@ export default function PeopleSearchScreen() {
           onPress={() => (router.canGoBack() ? router.back() : router.replace("/feed"))}
           hitSlop={12}
           accessibilityRole="button"
-          accessibilityLabel="Retour"
+          accessibilityLabel={t.common.back}
         >
           <Text style={styles.back}>‹</Text>
         </Pressable>
@@ -152,13 +153,13 @@ export default function PeopleSearchScreen() {
           <SearchIcon size={18} tint={color.acier} strokeWidth={1.6} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Rechercher"
+            placeholder={t.peopleSearch.placeholder}
             placeholderTextColor={color.acier}
             value={query}
             onChangeText={handleSearch}
             autoCapitalize="none"
             autoCorrect={false}
-            accessibilityLabel="Rechercher un profil"
+            accessibilityLabel={t.peopleSearch.label}
           />
         </View>
 
@@ -166,7 +167,7 @@ export default function PeopleSearchScreen() {
 
         {loading ? <ActivityIndicator color={color.encre} style={styles.loader} /> : null}
 
-        {results?.length === 0 ? <Text style={styles.empty}>Aucun profil trouvé.</Text> : null}
+        {results?.length === 0 ? <Text style={styles.empty}>{t.peopleSearch.empty}</Text> : null}
 
         {results?.map((person) => (
           <PersonRow

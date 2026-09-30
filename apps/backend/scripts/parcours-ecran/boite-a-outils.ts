@@ -75,8 +75,10 @@ export interface Parcours {
   /** `incompleteProfile` : compte sans nom d'utilisateur, qui arrive sur
    * « Dernière étape » à la connexion (comme un compte tout juste créé). */
   createAccount(label: string, displayName: string, options?: { incompleteProfile?: boolean }): Promise<TestAccount>;
-  /** Téléphone au format iPhone ; `desktop: true` pour un écran d'ordinateur. */
-  newPhone(options?: { desktop?: boolean }): Promise<Page>;
+  /** Téléphone au format iPhone ; `desktop: true` pour un écran d'ordinateur.
+   * `locale` : langue du navigateur (défaut fr-FR) ; `colorScheme` : thème
+   * clair ou sombre de l'appareil (lot 3). */
+  newPhone(options?: { desktop?: boolean; locale?: string; colorScheme?: "light" | "dark" }): Promise<Page>;
   /** Suit les images chargées par la page à partir de maintenant. */
   trackImages(page: Page): () => ImageStats;
   /** Fait défiler la page et mesure la fluidité (Chrome invisible : indicatif). */
@@ -277,10 +279,15 @@ export async function runParcours(
           token: session.data.session.access_token,
           signIn: async (page: Page) => {
             await page.goto(`${siteUrl}/sign-in`);
+            await page.getByLabel("Email", { exact: true }).waitFor();
+            // Écran en français ou en anglais selon la langue du site (lot 3).
+            const english = (await page.evaluate("document.documentElement.lang")) === "en";
             await page.getByLabel("Email", { exact: true }).fill(email);
-            await page.getByLabel("Mot de passe", { exact: true }).fill(password);
-            await page.getByRole("button", { name: "Se connecter" }).click();
-            const landing = options?.incompleteProfile ? "Dernière étape" : "Retrouvez une pièce vue dans une vidéo ou sur une photo.";
+            await page.getByLabel(english ? "Password" : "Mot de passe", { exact: true }).fill(password);
+            await page.getByRole("button", { name: english ? "Sign in" : "Se connecter", exact: true }).click();
+            const landing = options?.incompleteProfile
+              ? english ? "One last step" : "Dernière étape"
+              : english ? "Find a piece you saw in a video or a photo." : "Retrouvez une pièce vue dans une vidéo ou sur une photo.";
             await page.getByText(landing).waitFor({ timeout: 30_000 });
           },
         };
@@ -289,9 +296,12 @@ export async function runParcours(
         return account;
       },
       async newPhone(options) {
-        const context = await browser!.newContext(
-          options?.desktop ? { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2, locale: "fr-FR" } : IPHONE
-        );
+        const base = options?.desktop ? { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2, locale: "fr-FR" } : IPHONE;
+        const context = await browser!.newContext({
+          ...base,
+          ...(options?.locale ? { locale: options.locale } : {}),
+          colorScheme: options?.colorScheme ?? "light",
+        });
         await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: siteUrl });
         contexts.push(context);
         return context.newPage();

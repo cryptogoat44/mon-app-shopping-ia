@@ -3,11 +3,11 @@ import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, SafeAreaV
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { Post, PrivacyLevel } from "@monapp/shared-types";
 import { ApiError, deletePost, fetchPost, updatePostPrivacy } from "@/lib/api";
-import { PRIVACY_LABELS, PRIVACY_LEVELS } from "@/lib/vault-labels";
+import { PRIVACY_LEVELS } from "@/lib/vault-labels";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { color, font, radius, space } from "@/theme/tokens";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { PostCard } from "@/components/post-card";
 import { CommentsSection } from "@/components/comments-section";
 import { ReportBlockMenu } from "@/components/report-block-menu";
@@ -59,9 +59,9 @@ export default function PostDetailScreen() {
     try {
       const updated = await updatePostPrivacy(post.id, privacy);
       setPost(updated);
-      showToast(fr.postDetail.visibilityChanged(PRIVACY_LABELS[privacy]));
+      showToast(t.postDetail.visibilityChanged(t.vaultLabels.privacy[privacy]));
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : fr.postDetail.visibilityError);
+      setError(e instanceof ApiError ? e.message : t.postDetail.visibilityError);
     } finally {
       setChangingPrivacy(false);
     }
@@ -73,10 +73,10 @@ export default function PostDetailScreen() {
     setError(null);
     try {
       await deletePost(post.id);
-      showToast(fr.postDetail.deleted);
+      showToast(t.postDetail.deleted);
       goBack();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : fr.postDetail.deleteError);
+      setError(e instanceof ApiError ? e.message : t.postDetail.deleteError);
       setDeleting(false);
     }
   }
@@ -86,10 +86,10 @@ export default function PostDetailScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.nav}>
-        <Pressable onPress={goBack} hitSlop={12} style={styles.navSide} accessibilityRole="button" accessibilityLabel="Retour">
+        <Pressable onPress={goBack} hitSlop={12} style={styles.navSide} accessibilityRole="button" accessibilityLabel={t.common.back}>
           <Text style={styles.back}>‹</Text>
         </Pressable>
-        <Text style={styles.navTitle}>{fr.postDetail.title}</Text>
+        <Text style={styles.navTitle}>{t.postDetail.title}</Text>
         <View style={styles.navSide} />
       </View>
 
@@ -99,10 +99,10 @@ export default function PostDetailScreen() {
             <ActivityIndicator color={color.encre} />
           ) : (
             <>
-              <ErrorMessage style={styles.message}>{state === "not_found" ? fr.postDetail.notFound : fr.userProfile.loadError}</ErrorMessage>
+              <ErrorMessage style={styles.message}>{state === "not_found" ? t.postDetail.notFound : t.userProfile.loadError}</ErrorMessage>
               {state === "error" ? (
                 <Pressable onPress={load} style={styles.retry} accessibilityRole="button">
-                  <Text style={styles.retryLabel}>Réessayer</Text>
+                  <Text style={styles.retryLabel}>{t.common.retry}</Text>
                 </Pressable>
               ) : null}
             </>
@@ -122,7 +122,7 @@ export default function PostDetailScreen() {
             <View style={styles.owner}>
               {/* Lot F : l'auteur change la visibilité sans supprimer la
                   publication (« j'aime » et commentaires conservés). */}
-              <Text style={styles.label}>{fr.postDetail.visibility}</Text>
+              <Text style={styles.label}>{t.postDetail.visibility}</Text>
               <View style={styles.pillRow} accessibilityRole="radiogroup">
                 {PRIVACY_LEVELS.map((level) => (
                   <Pressable
@@ -134,26 +134,26 @@ export default function PostDetailScreen() {
                     accessibilityRole="radio"
                     accessibilityState={{ selected: post.privacy === level }}
                   >
-                    <Text style={[styles.pillLabel, post.privacy === level ? styles.pillLabelActive : null]}>{PRIVACY_LABELS[level]}</Text>
+                    <Text style={[styles.pillLabel, post.privacy === level ? styles.pillLabelActive : null]}>{t.vaultLabels.privacy[level]}</Text>
                   </Pressable>
                 ))}
               </View>
               {error ? <ErrorMessage style={styles.message}>{error}</ErrorMessage> : null}
               {!confirming ? (
                 <Pressable onPress={() => setConfirming(true)} hitSlop={12} style={styles.deleteRow} accessibilityRole="button">
-                  <Text style={styles.deleteLabel}>{fr.postDetail.delete}</Text>
+                  <Text style={styles.deleteLabel}>{t.postDetail.delete}</Text>
                 </Pressable>
               ) : (
                 <View style={styles.confirm}>
                   <Text style={styles.confirmText} accessibilityRole="alert">
-                    {post.type === "purchase" ? fr.postDetail.deleteConfirmPurchase : fr.postDetail.deleteConfirm}
+                    {post.type === "purchase" ? t.postDetail.deleteConfirmPurchase : t.postDetail.deleteConfirm}
                   </Text>
                   <View style={styles.confirmButtons}>
                     <Pressable onPress={() => setConfirming(false)} disabled={deleting} hitSlop={12} accessibilityRole="button">
-                      <Text style={styles.cancelLabel}>{fr.postDetail.cancel}</Text>
+                      <Text style={styles.cancelLabel}>{t.postDetail.cancel}</Text>
                     </Pressable>
                     <Pressable onPress={handleDelete} disabled={deleting} hitSlop={12} accessibilityRole="button">
-                      <Text style={styles.deleteLabel}>{deleting ? fr.postDetail.deleting : fr.postDetail.confirm}</Text>
+                      <Text style={styles.deleteLabel}>{deleting ? t.postDetail.deleting : t.postDetail.confirm}</Text>
                     </Pressable>
                   </View>
                 </View>

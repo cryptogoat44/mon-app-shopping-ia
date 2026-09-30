@@ -3,7 +3,7 @@ import { Pressable, Text } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import type { MerchantLinkContext } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { openMerchantLink } from "@/lib/merchant-links";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -27,7 +27,7 @@ export function MerchantLinkButton({
   compact?: boolean;
 }) {
   const [blockedUrl, setBlockedUrl] = useState<string | null>(null);
-  const label = fr.merchant.viewAt(merchantName);
+  const label = t.merchant.viewAt(merchantName);
 
   async function handlePress() {
     setBlockedUrl(null);
@@ -42,14 +42,14 @@ export function MerchantLinkButton({
         hitSlop={compact ? 10 : 0}
         style={compact ? styles.compact : styles.button}
         accessibilityRole="link"
-        accessibilityLabel={isAffiliate ? `${label}, ${fr.result.affiliateDisclosure}` : label}
+        accessibilityLabel={isAffiliate ? `${label}, ${t.result.affiliateDisclosure}` : label}
       >
         <Text style={compact ? styles.compactLabel : styles.buttonLabel} numberOfLines={compact ? 2 : 1}>
           {label}
           {compact ? " ›" : ""}
         </Text>
       </Pressable>
-      {!compact && isAffiliate ? <Text style={styles.disclosure}>{fr.result.affiliateDisclosure}</Text> : null}
+      {!compact && isAffiliate ? <Text style={styles.disclosure}>{t.result.affiliateDisclosure}</Text> : null}
       {blockedUrl ? (
         <Pressable
           onPress={() => {
@@ -58,7 +58,7 @@ export function MerchantLinkButton({
           }}
           accessibilityRole="link"
         >
-          <Text style={styles.blocked}>{fr.result.merchantLinkBlocked}</Text>
+          <Text style={styles.blocked}>{t.result.merchantLinkBlocked}</Text>
         </Pressable>
       ) : null}
     </>

@@ -4,7 +4,7 @@ import { Link, useRouter } from "expo-router";
 import { translateAuthError } from "@/lib/auth-errors";
 import { forgetSignupConsents, rememberSignupConsents } from "@/lib/signup-consents";
 import { supabase } from "@/lib/supabase";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
 import { CHECKBOX_SIZE, CheckboxRow } from "@/components/checkbox-row";
@@ -27,19 +27,19 @@ export default function SignUpScreen() {
     setError(null);
 
     if (password.length < 8) {
-      setError("Le mot de passe doit contenir au moins 8 caractères.");
+      setError(t.auth.reset.tooShort);
       return;
     }
     if (password !== confirmPassword) {
-      setError("Les deux mots de passe ne correspondent pas.");
+      setError(t.auth.reset.mismatch);
       return;
     }
     if (!ageChecked) {
-      setError(fr.auth.signUp.ageRequired);
+      setError(t.auth.signUp.ageRequired);
       return;
     }
     if (!consentChecked) {
-      setError(fr.auth.signUp.consentRequired);
+      setError(t.auth.signUp.consentRequired);
       return;
     }
 
@@ -68,11 +68,11 @@ export default function SignUpScreen() {
     return (
       <SafeAreaView style={styles.screen}>
         <View style={styles.content}>
-          <Text style={styles.title} accessibilityRole="header">{fr.auth.signUp.confirmTitle}</Text>
-          <Text style={styles.subtitle}>{fr.auth.signUp.confirmBody(email.trim())}</Text>
+          <Text style={styles.title} accessibilityRole="header">{t.auth.signUp.confirmTitle}</Text>
+          <Text style={styles.subtitle}>{t.auth.signUp.confirmBody(email.trim())}</Text>
           <Link href="/sign-in" asChild>
             <Pressable accessibilityRole="button" hitSlop={12}>
-              <Text style={styles.link}>{fr.auth.signUp.backToSignIn}</Text>
+              <Text style={styles.link}>{t.auth.signUp.backToSignIn}</Text>
             </Pressable>
           </Link>
         </View>
@@ -87,19 +87,19 @@ export default function SignUpScreen() {
         hitSlop={12}
         style={styles.nav}
         accessibilityRole="button"
-        accessibilityLabel="Retour"
+        accessibilityLabel={t.common.back}
       >
         <Text style={styles.back}>‹</Text>
       </Pressable>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.content}>
-          <Text style={styles.title} accessibilityRole="header">{fr.auth.signUp.title}</Text>
-          <Text style={styles.subtitle}>{fr.auth.signUp.subtitle}</Text>
+          <Text style={styles.title} accessibilityRole="header">{t.auth.signUp.title}</Text>
+          <Text style={styles.subtitle}>{t.auth.signUp.subtitle}</Text>
 
           {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
           <View style={styles.field}>
-            <Text style={styles.label}>{fr.auth.email}</Text>
+            <Text style={styles.label}>{t.auth.email}</Text>
             <TextInput
               style={styles.input}
               placeholderTextColor={color.acier}
@@ -109,11 +109,11 @@ export default function SignUpScreen() {
               autoCorrect={false}
               value={email}
               onChangeText={setEmail}
-              accessibilityLabel={fr.auth.email}
+              accessibilityLabel={t.auth.email}
             />
           </View>
           <View style={styles.field}>
-            <Text style={styles.label}>{fr.auth.password}</Text>
+            <Text style={styles.label}>{t.auth.password}</Text>
             <TextInput
               style={styles.input}
               placeholderTextColor={color.acier}
@@ -123,11 +123,11 @@ export default function SignUpScreen() {
               autoCorrect={false}
               value={password}
               onChangeText={setPassword}
-              accessibilityLabel={fr.auth.password}
+              accessibilityLabel={t.auth.password}
             />
           </View>
           <View style={styles.field}>
-            <Text style={styles.label}>{fr.auth.signUp.confirmPassword}</Text>
+            <Text style={styles.label}>{t.auth.signUp.confirmPassword}</Text>
             <TextInput
               style={styles.input}
               placeholderTextColor={color.acier}
@@ -136,37 +136,37 @@ export default function SignUpScreen() {
               autoCorrect={false}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
-              accessibilityLabel={fr.auth.signUp.confirmPassword}
+              accessibilityLabel={t.auth.signUp.confirmPassword}
             />
           </View>
 
           <CheckboxRow
             style={styles.consentRow}
-            label={fr.auth.signUp.ageDeclaration}
+            label={t.auth.signUp.ageDeclaration}
             checked={ageChecked}
             onToggle={() => setAgeChecked((c) => !c)}
           />
           <CheckboxRow
             style={styles.consentRow}
-            label={fr.auth.signUp.consent}
+            label={t.auth.signUp.consent}
             checked={consentChecked}
             onToggle={() => setConsentChecked((c) => !c)}
           />
           <CheckboxRow
             style={styles.consentRow}
-            label={fr.auth.signUp.analyticsConsent}
+            label={t.auth.signUp.analyticsConsent}
             checked={analyticsChecked}
             onToggle={() => setAnalyticsChecked((c) => !c)}
           />
           <View style={styles.legalLinks}>
             <Link href="/conditions" asChild>
               <Pressable accessibilityRole="link" hitSlop={12}>
-                <Text style={styles.legalLink}>{fr.legal.readTerms}</Text>
+                <Text style={styles.legalLink}>{t.legal.readTerms}</Text>
               </Pressable>
             </Link>
             <Link href="/confidentialite" asChild>
               <Pressable accessibilityRole="link" hitSlop={12}>
-                <Text style={styles.legalLink}>{fr.legal.readPrivacy}</Text>
+                <Text style={styles.legalLink}>{t.legal.readPrivacy}</Text>
               </Pressable>
             </Link>
           </View>
@@ -176,12 +176,12 @@ export default function SignUpScreen() {
             onPress={handleSignUp}
             disabled={submitting || !email || !password || !confirmPassword || !consentChecked || !ageChecked}
           >
-            <Text style={styles.ctaLabel}>{submitting ? fr.auth.signUp.ctaLoading : fr.auth.signUp.cta}</Text>
+            <Text style={styles.ctaLabel}>{submitting ? t.auth.signUp.ctaLoading : t.auth.signUp.cta}</Text>
           </Pressable>
 
           <Link href="/sign-in" asChild>
             <Pressable accessibilityRole="button" hitSlop={12}>
-              <Text style={styles.link}>{fr.auth.signUp.hasAccount}</Text>
+              <Text style={styles.link}>{t.auth.signUp.hasAccount}</Text>
             </Pressable>
           </Link>
         </View>

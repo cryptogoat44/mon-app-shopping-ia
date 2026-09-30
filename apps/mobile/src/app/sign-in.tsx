@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, Text, TextInpu
 import { Link, useRouter } from "expo-router";
 import { translateAuthError } from "@/lib/auth-errors";
 import { supabase } from "@/lib/supabase";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
@@ -34,19 +34,19 @@ export default function SignInScreen() {
         hitSlop={12}
         style={styles.nav}
         accessibilityRole="button"
-        accessibilityLabel="Retour"
+        accessibilityLabel={t.common.back}
       >
         <Text style={styles.back}>‹</Text>
       </Pressable>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.content}>
-          <Text style={styles.title} accessibilityRole="header">{fr.auth.signIn.title}</Text>
-          <Text style={styles.subtitle}>{fr.auth.signIn.subtitle}</Text>
+          <Text style={styles.title} accessibilityRole="header">{t.auth.signIn.title}</Text>
+          <Text style={styles.subtitle}>{t.auth.signIn.subtitle}</Text>
 
           {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
           <View style={styles.field}>
-            <Text style={styles.label}>{fr.auth.email}</Text>
+            <Text style={styles.label}>{t.auth.email}</Text>
             <TextInput
               style={styles.input}
               placeholderTextColor={color.acier}
@@ -56,11 +56,11 @@ export default function SignInScreen() {
               autoCorrect={false}
               value={email}
               onChangeText={setEmail}
-              accessibilityLabel={fr.auth.email}
+              accessibilityLabel={t.auth.email}
             />
           </View>
           <View style={styles.field}>
-            <Text style={styles.label}>{fr.auth.password}</Text>
+            <Text style={styles.label}>{t.auth.password}</Text>
             <TextInput
               style={styles.input}
               placeholderTextColor={color.acier}
@@ -70,13 +70,13 @@ export default function SignInScreen() {
               autoCorrect={false}
               value={password}
               onChangeText={setPassword}
-              accessibilityLabel={fr.auth.password}
+              accessibilityLabel={t.auth.password}
             />
           </View>
 
           <Link href="/mot-de-passe-oublie" asChild>
             <Pressable accessibilityRole="button" hitSlop={8} style={styles.forgot}>
-              <Text style={styles.forgotLabel}>{fr.auth.signIn.forgot}</Text>
+              <Text style={styles.forgotLabel}>{t.auth.signIn.forgot}</Text>
             </Pressable>
           </Link>
 
@@ -85,12 +85,12 @@ export default function SignInScreen() {
             onPress={handleSignIn}
             disabled={submitting || !email || !password}
           >
-            <Text style={styles.ctaLabel}>{submitting ? fr.auth.signIn.ctaLoading : fr.auth.signIn.cta}</Text>
+            <Text style={styles.ctaLabel}>{submitting ? t.auth.signIn.ctaLoading : t.auth.signIn.cta}</Text>
           </Pressable>
 
           <Link href="/sign-up" asChild>
             <Pressable accessibilityRole="button" hitSlop={12}>
-              <Text style={styles.link}>{fr.auth.signIn.noAccount}</Text>
+              <Text style={styles.link}>{t.auth.signIn.noAccount}</Text>
             </Pressable>
           </Link>
         </View>

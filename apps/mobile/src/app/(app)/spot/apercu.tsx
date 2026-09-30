@@ -3,7 +3,7 @@ import { ActivityIndicator, Platform, Pressable, SafeAreaView, ScrollView, Text,
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { CameraIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
@@ -18,10 +18,10 @@ import { themedStyles } from "@/theme/themed-styles";
 // import. (Le partage direct d'une capture vers Spotto, lot 4, le
 // simplifiera.)
 function CaptureSteps({ platformName }: { platformName: string }) {
-  const shortcut = fr.preview.screenshotShortcut[Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "web"];
+  const shortcut = t.preview.screenshotShortcut[Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "web"];
   return (
     <View style={styles.steps}>
-      {fr.preview.captureSteps(platformName || "l'application", shortcut).map((text, index) => (
+      {t.preview.captureSteps(platformName || t.preview.theApp, shortcut).map((text, index) => (
         <View key={index} style={styles.stepRow}>
           <Text style={styles.stepNumber}>{index + 1}</Text>
           <Text style={styles.stepText}>{text}</Text>
@@ -50,32 +50,32 @@ function NoPreview({
   onFixLink: () => void;
   onRetry: () => void;
 }) {
-  const content = draft.platform === "photo" ? "vidéo" : fr.preview.content[draft.platform];
+  const content = t.preview.content[draft.platform === "photo" ? "tiktok" : draft.platform];
   const issue = draft.previewIssue ?? null;
 
-  let title: string = fr.preview.noPreviewTitle;
-  let body: string = fr.preview.noPreviewBody(platformName);
+  let title: string = t.preview.noPreviewTitle;
+  let body: string = t.preview.noPreviewBody(platformName);
   let showSteps = false;
-  let primary: { label: string; onPress: () => void; busy?: boolean } = { label: fr.preview.importCapture, onPress: onImportCapture };
+  let primary: { label: string; onPress: () => void; busy?: boolean } = { label: t.preview.importCapture, onPress: onImportCapture };
   let secondary: { label: string; onPress: () => void } | null = null;
 
   if (issue === "unavailable") {
-    title = fr.preview.issue.unavailable.title(content);
-    body = fr.preview.issue.unavailable.body(platformName, content);
-    primary = { label: fr.preview.fixLink, onPress: onFixLink };
-    secondary = { label: fr.preview.importCapture, onPress: onImportCapture };
+    title = t.preview.issue.unavailable.title(content);
+    body = t.preview.issue.unavailable.body(platformName, content);
+    primary = { label: t.preview.fixLink, onPress: onFixLink };
+    secondary = { label: t.preview.importCapture, onPress: onImportCapture };
   } else if (issue === "not_a_video") {
-    title = fr.preview.issue.notAVideo.title(content);
-    body = fr.preview.issue.notAVideo.body(platformName, content);
-    primary = { label: fr.preview.fixLink, onPress: onFixLink };
+    title = t.preview.issue.notAVideo.title(content);
+    body = t.preview.issue.notAVideo.body(platformName, content);
+    primary = { label: t.preview.fixLink, onPress: onFixLink };
   } else if (issue === "service_down") {
-    title = fr.preview.issue.serviceDown.title(platformName);
-    body = fr.preview.issue.serviceDown.body;
-    primary = { label: fr.preview.retry, onPress: onRetry, busy: retrying };
-    secondary = { label: fr.preview.importCapture, onPress: onImportCapture };
+    title = t.preview.issue.serviceDown.title(platformName);
+    body = t.preview.issue.serviceDown.body;
+    primary = { label: t.preview.retry, onPress: onRetry, busy: retrying };
+    secondary = { label: t.preview.importCapture, onPress: onImportCapture };
   } else if (issue === "no_official_access") {
-    title = fr.preview.issue.noAccess.title;
-    body = fr.preview.issue.noAccess.body(platformName);
+    title = t.preview.issue.noAccess.title;
+    body = t.preview.issue.noAccess.body(platformName);
     showSteps = true;
   }
 
@@ -88,7 +88,7 @@ function NoPreview({
       {showSteps ? <CaptureSteps platformName={platformName} /> : null}
       {message ? <ErrorMessage style={styles.feedback}>{message}</ErrorMessage> : null}
       <Pressable style={styles.primary} onPress={primary.onPress} disabled={primary.busy} accessibilityRole="button">
-        {primary.busy ? <ActivityIndicator color={color.blanc} /> : primary.label === fr.preview.importCapture ? <CameraIcon size={18} tint={color.blanc} /> : null}
+        {primary.busy ? <ActivityIndicator color={color.blanc} /> : primary.label === t.preview.importCapture ? <CameraIcon size={18} tint={color.blanc} /> : null}
         <Text style={styles.primaryLabel}>{primary.label}</Text>
       </Pressable>
       {secondary ? (
@@ -145,7 +145,7 @@ export default function PreviewScreen() {
     setMessage(null);
     const picked = await importPhotoForSpotter();
     if (picked.kind === "denied") {
-      setMessage(fr.spotter.photoDenied);
+      setMessage(t.spotter.photoDenied);
       return;
     }
     if (picked.kind !== "picked") return;
@@ -165,7 +165,7 @@ export default function PreviewScreen() {
       router.setParams({ searchId: next.searchId ?? "" });
     } catch (error) {
       const kind = prepareFailureKind(error);
-      setMessage(kind === "network" ? fr.spotter.networkError : kind === "server" ? fr.spotter.serverError : fr.spotter.prepareError);
+      setMessage(kind === "network" ? t.spotter.networkError : kind === "server" ? t.spotter.serverError : t.spotter.prepareError);
     } finally {
       setRetrying(false);
     }
@@ -179,9 +179,9 @@ export default function PreviewScreen() {
     return (
       <SafeAreaView style={styles.screen}>
         <View style={styles.centered}>
-          <Text style={styles.lead}>{fr.preview.missing}</Text>
+          <Text style={styles.lead}>{t.preview.missing}</Text>
           <Pressable style={styles.primary} onPress={() => closeSpotter(router)} accessibilityRole="button">
-            <Text style={styles.primaryLabel}>{fr.preview.back}</Text>
+            <Text style={styles.primaryLabel}>{t.preview.back}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -198,18 +198,18 @@ export default function PreviewScreen() {
     );
   }
 
-  const platformName = draft.platform === "photo" ? "" : fr.spotter.platformName[draft.platform];
+  const platformName = draft.platform === "photo" ? "" : t.spotter.platformName[draft.platform];
   const imageUri = draft.localImageUri ?? draft.previewUrl;
 
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.nav}>
-        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.navSide} accessibilityRole="button" accessibilityLabel="Retour">
+        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.navSide} accessibilityRole="button" accessibilityLabel={t.common.back}>
           <Text style={styles.back}>‹</Text>
         </Pressable>
-        <Text style={styles.step}>{fr.preview.step}</Text>
+        <Text style={styles.step}>{t.preview.step}</Text>
         <Pressable onPress={() => closeSpotter(router)} hitSlop={12} style={[styles.navSide, styles.navRight]} accessibilityRole="button">
-          <Text style={styles.close}>{fr.spotter.close}</Text>
+          <Text style={styles.close}>{t.spotter.close}</Text>
         </Pressable>
       </View>
 
@@ -217,11 +217,11 @@ export default function PreviewScreen() {
         {imageUri ? (
           <>
             <Text style={styles.title} accessibilityRole="header">
-              {fr.preview.title}
+              {t.preview.title}
             </Text>
-            <Text style={styles.caption}>{draft.localImageUri ? fr.preview.captureCaption : fr.preview.caption(platformName)}</Text>
+            <Text style={styles.caption}>{draft.localImageUri ? t.preview.captureCaption : t.preview.caption(platformName)}</Text>
             <View style={styles.frame}>
-              <Image source={{ uri: imageUri }} style={styles.fill} contentFit="contain" accessibilityLabel={fr.preview.title} />
+              <Image source={{ uri: imageUri }} style={styles.fill} contentFit="contain" accessibilityLabel={t.preview.title} />
             </View>
 
             {draft.localImageUri ? null : (
@@ -232,16 +232,16 @@ export default function PreviewScreen() {
                   accessibilityRole="button"
                   accessibilityState={{ expanded: stepsOpen }}
                 >
-                  <Text style={styles.noticeTitle}>{fr.preview.notOnImageTitle}</Text>
+                  <Text style={styles.noticeTitle}>{t.preview.notOnImageTitle}</Text>
                   <Text style={styles.noticeChevron}>{stepsOpen ? "–" : "+"}</Text>
                 </Pressable>
                 {stepsOpen ? (
                   <>
-                    <Text style={styles.caption}>{fr.preview.notOnImageWhy(platformName)}</Text>
+                    <Text style={styles.caption}>{t.preview.notOnImageWhy(platformName)}</Text>
                     <CaptureSteps platformName={platformName} />
                     <Pressable onPress={handleImportCapture} style={styles.inlineAction} accessibilityRole="button">
                       <CameraIcon size={17} tint={color.vert} />
-                      <Text style={styles.inlineActionLabel}>{fr.preview.importCapture}</Text>
+                      <Text style={styles.inlineActionLabel}>{t.preview.importCapture}</Text>
                     </Pressable>
                   </>
                 ) : null}
@@ -251,7 +251,7 @@ export default function PreviewScreen() {
             {message ? <ErrorMessage style={styles.feedback}>{message}</ErrorMessage> : null}
 
             <Pressable style={styles.primary} onPress={handleTarget} accessibilityRole="button">
-              <Text style={styles.primaryLabel}>{fr.preview.target}</Text>
+              <Text style={styles.primaryLabel}>{t.preview.target}</Text>
             </Pressable>
           </>
         ) : (

@@ -6,10 +6,11 @@ import { LEGAL_DOCUMENT_VERSIONS, isProfileComplete, type ConsentStatus, type Ve
 import { acceptConsents, fetchConsentStatus } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
-import { consentFor, formatLongDate, parseLegalVersion, pendingConsents, splitPlaceholders } from "@/lib/legal";
+import { formatLongDate } from "@/lib/format";
+import { consentFor, parseLegalVersion, pendingConsents, splitPlaceholders } from "@/lib/legal";
 import type { LegalDocument } from "@/legal/types";
 import { APP_NAME_DISPLAY } from "@/constants/brand";
-import { fr } from "@/i18n/fr";
+import { getActiveLocale, t } from "@/i18n";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
 import { CheckboxRow } from "@/components/checkbox-row";
@@ -64,7 +65,7 @@ function Acceptance({ document }: { document: LegalDocument }) {
     setSaveError(false);
     try {
       await acceptConsents(pending);
-      showToast(fr.legal.acceptedToast);
+      showToast(t.legal.acceptedToast);
       load();
     } catch {
       setSaveError(true);
@@ -77,16 +78,16 @@ function Acceptance({ document }: { document: LegalDocument }) {
   if (state.kind === "failed") {
     return (
       <View style={styles.acceptance}>
-        <ErrorMessage style={styles.body}>{fr.legal.statusFailed}</ErrorMessage>
+        <ErrorMessage style={styles.body}>{t.legal.statusFailed}</ErrorMessage>
         <Pressable accessibilityRole="button" onPress={load} hitSlop={12}>
-          <Text style={styles.link}>{fr.legal.retry}</Text>
+          <Text style={styles.link}>{t.legal.retry}</Text>
         </Pressable>
       </View>
     );
   }
   if (state.pending.length === 0 && state.consent?.grantedAt) {
-    const date = formatLongDate(state.consent.grantedAt);
-    const label = state.consent.version === LEGAL_DOCUMENT_VERSIONS[document.type] ? fr.legal.accepted(date) : fr.legal.acceptedEarlier(date);
+    const date = formatLongDate(state.consent.grantedAt, getActiveLocale());
+    const label = state.consent.version === LEGAL_DOCUMENT_VERSIONS[document.type] ? t.legal.accepted(date) : t.legal.acceptedEarlier(date);
     return <Text style={[styles.body, styles.acceptance]}>{label}</Text>;
   }
   const pending = state.pending;
@@ -94,9 +95,9 @@ function Acceptance({ document }: { document: LegalDocument }) {
   const disabled = saving || (needsAge && !ageChecked);
   return (
     <View style={styles.acceptance}>
-      {saveError ? <ErrorMessage style={styles.body}>{fr.legal.acceptFailed}</ErrorMessage> : null}
+      {saveError ? <ErrorMessage style={styles.body}>{t.legal.acceptFailed}</ErrorMessage> : null}
       {needsAge ? (
-        <CheckboxRow style={styles.ageRow} label={fr.legal.ageDeclaration} checked={ageChecked} onToggle={() => setAgeChecked((c) => !c)} />
+        <CheckboxRow style={styles.ageRow} label={t.legal.ageDeclaration} checked={ageChecked} onToggle={() => setAgeChecked((c) => !c)} />
       ) : null}
       <Pressable
         accessibilityRole="button"
@@ -104,7 +105,7 @@ function Acceptance({ document }: { document: LegalDocument }) {
         onPress={() => accept(pending)}
         disabled={disabled}
       >
-        <Text style={styles.ctaLabel}>{saving ? fr.legal.accepting : fr.legal.accept}</Text>
+        <Text style={styles.ctaLabel}>{saving ? t.legal.accepting : t.legal.accept}</Text>
       </Pressable>
     </View>
   );
@@ -116,8 +117,8 @@ export function LegalDocumentView({ document }: { document: LegalDocument }) {
   const version = parseLegalVersion(LEGAL_DOCUMENT_VERSIONS[document.type]);
   const versionLabel = version.day
     ? version.isDraft
-      ? fr.legal.draftVersion(formatLongDate(version.day))
-      : formatLongDate(version.day)
+      ? t.legal.draftVersion(formatLongDate(version.day, getActiveLocale()))
+      : formatLongDate(version.day, getActiveLocale())
     : LEGAL_DOCUMENT_VERSIONS[document.type];
 
   return (
@@ -130,7 +131,7 @@ export function LegalDocumentView({ document }: { document: LegalDocument }) {
           onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
           hitSlop={12}
           accessibilityRole="button"
-          accessibilityLabel="Retour"
+          accessibilityLabel={t.common.back}
         >
           <Text style={styles.back}>‹</Text>
         </Pressable>
@@ -139,10 +140,10 @@ export function LegalDocumentView({ document }: { document: LegalDocument }) {
         <Text style={styles.title} accessibilityRole="header">
           {document.title}
         </Text>
-        <Text style={styles.meta}>{fr.legal.version(versionLabel)}</Text>
+        <Text style={styles.meta}>{t.legal.version(versionLabel)}</Text>
         {version.isDraft ? (
           <View style={styles.banner}>
-            <Text style={styles.bannerText}>{fr.legal.draftBanner}</Text>
+            <Text style={styles.bannerText}>{t.legal.draftBanner}</Text>
           </View>
         ) : null}
 

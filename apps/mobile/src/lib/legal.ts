@@ -4,12 +4,6 @@
 import type { ConsentStatus, LegalDocumentType, VersionedConsentType } from "@monapp/shared-types";
 import { PLACEHOLDER_PATTERN } from "../legal/types";
 
-export function formatLongDate(isoOrDay: string): string {
-  // « 2026-09-25 » seul est lu à midi pour ne jamais changer de jour selon le fuseau.
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(isoOrDay) ? new Date(`${isoOrDay}T12:00:00`) : new Date(isoOrDay);
-  return date.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
-}
-
 /** « projet-2026-09-25 » → { isDraft: true, day: "2026-09-25" }. */
 export function parseLegalVersion(version: string): { isDraft: boolean; day: string | null } {
   const day = version.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? null;

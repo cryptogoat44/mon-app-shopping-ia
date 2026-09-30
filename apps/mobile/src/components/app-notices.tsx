@@ -8,7 +8,7 @@ import { setAnalyticsPlatform, setAnalyticsUser } from "@/lib/analytics";
 import { setWebSentryUser } from "@/lib/sentry-web";
 import { useAuth } from "@/lib/auth-context";
 import { hasAnalyticsConsent, parseSeenNotices, seenNoticesKey, shouldAskAnalytics, shouldShowNotice } from "@/lib/policy-notice";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { NoticeBanner } from "@/components/notice-banner";
 
 // Messages discrets de l'app connectée, un seul à la fois :
@@ -84,7 +84,7 @@ export function AppNotices() {
       await recordAnalyticsChoice(granted);
       next();
     } catch {
-      setError(fr.settings.analyticsFailed);
+      setError(t.settings.analyticsFailed);
     } finally {
       setSaving(false);
     }
@@ -93,10 +93,10 @@ export function AppNotices() {
   if (current === "policy") {
     return (
       <NoticeBanner
-        message={fr.legal.updateNotice}
+        message={t.legal.updateNotice}
         actions={[
           {
-            label: fr.legal.updateNoticeRead,
+            label: t.legal.updateNoticeRead,
             role: "link",
             emphasis: true,
             onPress: () => {
@@ -104,7 +104,7 @@ export function AppNotices() {
               router.push("/confidentialite");
             },
           },
-          { label: fr.legal.updateNoticeDismiss, accessibilityLabel: fr.legal.updateNoticeDismissLabel, role: "button", onPress: markPolicySeen },
+          { label: t.legal.updateNoticeDismiss, accessibilityLabel: t.legal.updateNoticeDismissLabel, role: "button", onPress: markPolicySeen },
         ]}
       />
     );
@@ -112,11 +112,11 @@ export function AppNotices() {
   if (current === "analytics") {
     return (
       <NoticeBanner
-        message={fr.legal.analyticsPrompt}
+        message={t.legal.analyticsPrompt}
         error={error}
         actions={[
-          { label: fr.legal.analyticsPromptNo, role: "button", disabled: saving, onPress: () => answerAnalytics(false) },
-          { label: fr.legal.analyticsPromptYes, role: "button", emphasis: true, disabled: saving, onPress: () => answerAnalytics(true) },
+          { label: t.legal.analyticsPromptNo, role: "button", disabled: saving, onPress: () => answerAnalytics(false) },
+          { label: t.legal.analyticsPromptYes, role: "button", emphasis: true, disabled: saving, onPress: () => answerAnalytics(true) },
         ]}
       />
     );

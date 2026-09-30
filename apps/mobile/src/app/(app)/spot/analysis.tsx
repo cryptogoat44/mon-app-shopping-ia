@@ -4,7 +4,7 @@ import { Image } from "expo-image";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { CheckIcon } from "@/components/icons";
 import { ApiError, runSearch } from "@/lib/api";
@@ -132,7 +132,7 @@ export default function AnalysisScreen() {
       <StatusBar style="light" />
       <View style={styles.nav}>
         <Pressable onPress={handleClose} hitSlop={12} style={styles.navClose} accessibilityRole="button">
-          <Text style={styles.close}>{fr.spotter.close}</Text>
+          <Text style={styles.close}>{t.spotter.close}</Text>
         </Pressable>
       </View>
       <View style={styles.content}>
@@ -150,23 +150,23 @@ export default function AnalysisScreen() {
         </View>
 
         <Text style={styles.title} accessibilityRole="header" accessibilityLiveRegion="polite">
-          {fr.analysis.title}
+          {t.analysis.title}
         </Text>
         {draft.query ? <Text style={styles.query}>« {draft.query} »</Text> : null}
 
         <View style={styles.steps}>
-          <StepRow label={fr.analysis.stepZone} state={step >= 1 ? "done" : "now"} />
-          <StepRow label={fr.analysis.stepSearch} state={step >= 2 ? "done" : step === 1 ? "now" : "next"} />
-          <StepRow label={fr.analysis.stepSelect} state={step === 2 ? "now" : "next"} />
+          <StepRow label={t.analysis.stepZone} state={step >= 1 ? "done" : "now"} />
+          <StepRow label={t.analysis.stepSearch} state={step >= 2 ? "done" : step === 1 ? "now" : "next"} />
+          <StepRow label={t.analysis.stepSelect} state={step === 2 ? "now" : "next"} />
         </View>
         <Text style={styles.note} accessibilityLiveRegion="polite">
-          {slow ? fr.analysis.slow : fr.analysis.usual}
+          {slow ? t.analysis.slow : t.analysis.usual}
         </Text>
       </View>
 
       <View style={styles.footer}>
         <Pressable style={styles.cancel} onPress={handleCancel} accessibilityRole="button">
-          <Text style={styles.cancelLabel}>{fr.analysis.cancel}</Text>
+          <Text style={styles.cancelLabel}>{t.analysis.cancel}</Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -179,7 +179,7 @@ const styles = themedStyles(() => ({
   navClose: { minWidth: 44, height: 44, justifyContent: "center", alignItems: "flex-end" },
   close: { fontSize: font.secondary, color: color.surNuit, fontWeight: "600" },
   content: { flex: 1, paddingHorizontal: space.lg, paddingTop: space.xs, maxWidth: 480, alignSelf: "center", width: "100%" },
-  frame: { alignSelf: "center", borderRadius: radius.sm, overflow: "hidden", backgroundColor: "#1E1C1A" },
+  frame: { alignSelf: "center", borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.nuitCadre },
   absolute: { position: "absolute" },
   fill: { width: "100%", height: "100%" },
   scanLine: {
@@ -188,8 +188,8 @@ const styles = themedStyles(() => ({
     right: 0,
     top: 0,
     height: 1,
-    backgroundColor: "rgba(255,255,255,0.85)",
-    shadowColor: "#FFFFFF",
+    backgroundColor: color.lueur,
+    shadowColor: color.surImage,
     shadowOpacity: 0.5,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 0 },
@@ -201,12 +201,12 @@ const styles = themedStyles(() => ({
   dot: { width: 20, height: 20, borderRadius: radius.full, alignItems: "center", justifyContent: "center" },
   dotDone: { backgroundColor: color.vert },
   dotNow: { borderWidth: 1.5, borderColor: color.surNuit },
-  dotNext: { borderWidth: 1.5, borderColor: "#4A4744" },
+  dotNext: { borderWidth: 1.5, borderColor: color.nuitFilet },
   dotInner: { width: 8, height: 8, borderRadius: radius.full, backgroundColor: color.surNuit },
   stepLabel: { fontSize: font.secondary, color: color.surNuit },
   stepLabelNext: { color: color.brume },
   note: { fontSize: font.caption, color: color.brume, marginTop: space.md, lineHeight: 18 },
   footer: { paddingHorizontal: space.lg, paddingBottom: space.lg, maxWidth: 480, alignSelf: "center", width: "100%" },
-  cancel: { minHeight: 52, borderRadius: radius.md, borderWidth: 1, borderColor: "#3A3734", alignItems: "center", justifyContent: "center" },
+  cancel: { minHeight: 52, borderRadius: radius.md, borderWidth: 1, borderColor: color.nuitFilet, alignItems: "center", justifyContent: "center" },
   cancelLabel: { fontSize: font.body, color: color.surNuit, fontWeight: "600" },
 }));

@@ -1,3 +1,4 @@
+import { formatPrice } from "@/lib/format";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -5,16 +6,15 @@ import type { WishlistItem } from "@monapp/shared-types";
 import { ApiError, deleteWishlistItem, fetchWishlistItem } from "@/lib/api";
 import { useToast } from "@/lib/toast-context";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
-import { fr } from "@/i18n/fr";
+import { getActiveLocale, t } from "@/i18n";
 import { SpotImage } from "@/components/spot-image";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
 
-function formatPrice(item: WishlistItem): string | null {
+function displayPrice(item: WishlistItem): string | null {
   if (item.priceMin === null) return null;
-  const currency = item.currency === "EUR" ? "€" : (item.currency ?? "");
-  return `${item.priceMin.toLocaleString("fr-FR")} ${currency}`.trim();
+  return formatPrice(item.priceMin, item.currency, getActiveLocale());
 }
 
 // Détail d'une Envie (Lot Q, bloc 3, UX-04) : l'image entière, « Voir chez
@@ -55,10 +55,10 @@ export default function WishlistItemScreen() {
     setError(null);
     try {
       await deleteWishlistItem(item.id);
-      showToast(fr.wishlistItem.removed);
+      showToast(t.wishlistItem.removed);
       goBack();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : fr.wishlistItem.removeError);
+      setError(e instanceof ApiError ? e.message : t.wishlistItem.removeError);
       setRemoving(false);
     }
   }
@@ -66,8 +66,8 @@ export default function WishlistItemScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.nav}>
-        <Pressable onPress={goBack} hitSlop={12} style={styles.navBack} accessibilityRole="button" accessibilityLabel="Retour aux Envies">
-          <Text style={styles.backLabel}>‹ {fr.wishlistItem.back}</Text>
+        <Pressable onPress={goBack} hitSlop={12} style={styles.navBack} accessibilityRole="button" accessibilityLabel={t.wishlistItem.backLabel}>
+          <Text style={styles.backLabel}>‹ {t.wishlistItem.back}</Text>
         </Pressable>
       </View>
 
@@ -77,10 +77,10 @@ export default function WishlistItemScreen() {
             <ActivityIndicator color={color.encre} />
           ) : (
             <>
-              <ErrorMessage style={styles.message}>{state === "not_found" ? fr.wishlistItem.notFound : fr.wishlist.loadError}</ErrorMessage>
+              <ErrorMessage style={styles.message}>{state === "not_found" ? t.wishlistItem.notFound : t.wishlist.loadError}</ErrorMessage>
               {state === "error" ? (
                 <Pressable onPress={load} style={styles.retry} accessibilityRole="button">
-                  <Text style={styles.retryLabel}>Réessayer</Text>
+                  <Text style={styles.retryLabel}>{t.common.retry}</Text>
                 </Pressable>
               ) : null}
             </>
@@ -92,7 +92,7 @@ export default function WishlistItemScreen() {
             <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.fill} accessibilityLabel={item.title} />
           </View>
           <Text style={styles.title} accessibilityRole="header">{item.title}</Text>
-          <Text style={styles.meta}>{[item.merchantName, formatPrice(item)].filter(Boolean).join(" · ")}</Text>
+          <Text style={styles.meta}>{[item.merchantName, displayPrice(item)].filter(Boolean).join(" · ")}</Text>
 
           {item.merchantUrl ? (
             <View style={styles.merchant}>
@@ -109,17 +109,17 @@ export default function WishlistItemScreen() {
           {error ? <ErrorMessage style={styles.message}>{error}</ErrorMessage> : null}
           {!confirming ? (
             <Pressable onPress={() => setConfirming(true)} hitSlop={12} style={styles.removeRow} accessibilityRole="button">
-              <Text style={styles.removeLabel}>{fr.wishlistItem.remove}</Text>
+              <Text style={styles.removeLabel}>{t.wishlistItem.remove}</Text>
             </Pressable>
           ) : (
             <View style={styles.confirm}>
-              <Text style={styles.confirmText} accessibilityRole="alert">{fr.wishlistItem.removeConfirm}</Text>
+              <Text style={styles.confirmText} accessibilityRole="alert">{t.wishlistItem.removeConfirm}</Text>
               <View style={styles.confirmButtons}>
                 <Pressable onPress={() => setConfirming(false)} disabled={removing} hitSlop={12} accessibilityRole="button">
-                  <Text style={styles.cancelLabel}>{fr.wishlistItem.cancel}</Text>
+                  <Text style={styles.cancelLabel}>{t.wishlistItem.cancel}</Text>
                 </Pressable>
                 <Pressable onPress={handleRemove} disabled={removing} hitSlop={12} accessibilityRole="button">
-                  <Text style={styles.removeLabel}>{removing ? fr.wishlistItem.removing : fr.wishlistItem.confirm}</Text>
+                  <Text style={styles.removeLabel}>{removing ? t.wishlistItem.removing : t.wishlistItem.confirm}</Text>
                 </Pressable>
               </View>
             </View>

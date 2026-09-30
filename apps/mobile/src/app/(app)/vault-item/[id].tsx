@@ -4,11 +4,11 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import type { PrivacyLevel, VaultItemDetail } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { ApiError, changeVaultItemPhoto, deleteVaultItem, fetchVaultItem, sharePurchasePost } from "@/lib/api";
 import { importPhotoForSpotter } from "@/lib/image-import";
 import { SpotImage } from "@/components/spot-image";
-import { PRIVACY_LABELS, PRIVACY_LEVELS, VAULT_CATEGORY_LABELS } from "@/lib/vault-labels";
+import { PRIVACY_LEVELS } from "@/lib/vault-labels";
 import { VerifiedIcon } from "@/components/icons";
 import { useToast } from "@/lib/toast-context";
 import { useAuth } from "@/lib/auth-context";
@@ -21,9 +21,9 @@ import { themedStyles } from "@/theme/themed-styles";
 // objet partagé supprime aussi ses publications "achat" — on le dit avant
 // la confirmation, jamais après.
 function removeConfirmText(purchasePostCount: number): string {
-  if (purchasePostCount === 0) return fr.vaultItem.removeConfirm;
-  if (purchasePostCount === 1) return fr.vaultItem.removeConfirmWithPost;
-  return fr.vaultItem.removeConfirmWithPosts(purchasePostCount);
+  if (purchasePostCount === 0) return t.vaultItem.removeConfirm;
+  if (purchasePostCount === 1) return t.vaultItem.removeConfirmWithPost;
+  return t.vaultItem.removeConfirmWithPosts(purchasePostCount);
 }
 
 export default function VaultItemDetailScreen() {
@@ -38,7 +38,7 @@ export default function VaultItemDetailScreen() {
     setError(null);
     const picked = await importPhotoForSpotter();
     if (picked.kind === "denied") {
-      setError(fr.spotter.photoDenied);
+      setError(t.spotter.photoDenied);
       return;
     }
     if (picked.kind !== "picked") return;
@@ -46,9 +46,9 @@ export default function VaultItemDetailScreen() {
     try {
       const updated = await changeVaultItemPhoto(item.id, picked.uri);
       setItem((current) => (current ? { ...current, ...updated } : current));
-      showToast(fr.vaultItem.photoChanged);
+      showToast(t.vaultItem.photoChanged);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : fr.vaultItem.changePhotoError);
+      setError(e instanceof ApiError ? e.message : t.vaultItem.changePhotoError);
     } finally {
       setChangingPhoto(false);
     }
@@ -74,7 +74,7 @@ export default function VaultItemDetailScreen() {
     useCallback(() => {
       fetchVaultItem(id)
         .then(setItem)
-        .catch((e) => setError(e instanceof ApiError ? e.message : fr.vaultItem.loadError));
+        .catch((e) => setError(e instanceof ApiError ? e.message : t.vaultItem.loadError));
     }, [id])
   );
 
@@ -85,7 +85,7 @@ export default function VaultItemDetailScreen() {
     try {
       const post = await sharePurchasePost(item.id, sharePrivacy);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      showToast(fr.vaultItem.shared);
+      showToast(t.vaultItem.shared);
       // L'état du partage s'affiche tout de suite ; le retrait de l'objet
       // supprimerait désormais aussi cette publication (avertissement).
       setItem((current) =>
@@ -98,7 +98,7 @@ export default function VaultItemDetailScreen() {
           : current
       );
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : fr.vaultItem.shareError);
+      setError(e instanceof ApiError ? e.message : t.vaultItem.shareError);
     } finally {
       setSharing(false);
     }
@@ -111,10 +111,10 @@ export default function VaultItemDetailScreen() {
     try {
       await deleteVaultItem(item.id);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      showToast(fr.vaultItem.removedToast);
+      showToast(t.vaultItem.removedToast);
       safeBack();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : fr.vaultItem.removeError);
+      setError(e instanceof ApiError ? e.message : t.vaultItem.removeError);
       setBusy(false);
     }
   }
@@ -145,9 +145,9 @@ export default function VaultItemDetailScreen() {
           hitSlop={12}
           style={styles.back}
           accessibilityRole="button"
-          accessibilityLabel="Retour au vault"
+          accessibilityLabel={t.vaultItem.backLabel}
         >
-          <Text style={styles.backLabel}>‹ {fr.vaultItem.back}</Text>
+          <Text style={styles.backLabel}>‹ {t.vaultItem.back}</Text>
         </Pressable>
 
         {error ? <ErrorMessage style={styles.banner}>{error}</ErrorMessage> : null}
@@ -163,7 +163,7 @@ export default function VaultItemDetailScreen() {
           style={styles.changePhoto}
           accessibilityRole="button"
         >
-          <Text style={styles.changePhotoLabel}>{changingPhoto ? fr.vaultItem.changingPhoto : fr.vaultItem.changePhoto}</Text>
+          <Text style={styles.changePhotoLabel}>{changingPhoto ? t.vaultItem.changingPhoto : t.vaultItem.changePhoto}</Text>
         </Pressable>
 
         <View style={styles.titleRow}>
@@ -171,11 +171,11 @@ export default function VaultItemDetailScreen() {
           {item.verified ? (
             <View style={styles.verifiedBadge}>
               <VerifiedIcon size={13} tint={color.vert} />
-              <Text style={styles.verifiedBadgeText}>{fr.profile.verified}</Text>
+              <Text style={styles.verifiedBadgeText}>{t.profile.verified}</Text>
             </View>
           ) : null}
         </View>
-        <Text style={styles.subtitle}>{VAULT_CATEGORY_LABELS[item.category]}</Text>
+        <Text style={styles.subtitle}>{t.vaultLabels.categories[item.category]}</Text>
 
         {item.merchantUrl ? (
           <View style={styles.merchant}>
@@ -192,26 +192,26 @@ export default function VaultItemDetailScreen() {
         {/* Décision 5 du Lot Q : le Vault est toujours privé. La seule façon
             de montrer une pièce est de la partager, avec la confidentialité
             choisie pour cette publication. */}
-        <Text style={styles.privateNote}>{fr.vaultItem.privateNote}</Text>
+        <Text style={styles.privateNote}>{t.vaultItem.privateNote}</Text>
         {item.sharedPost ? (
           // Déjà partagée (Lot F) : l'état réel, jamais un choix reproposé
           // comme si rien ne s'était passé. Une pièce ne se partage qu'une
           // fois à la fois : pour la montrer autrement, on supprime d'abord
           // la publication (depuis son détail).
           <View style={styles.sharedBox}>
-            <Text style={styles.sharedTitle}>{fr.vaultItem.sharedState(PRIVACY_LABELS[item.sharedPost.privacy])}</Text>
+            <Text style={styles.sharedTitle}>{t.vaultItem.sharedState(t.vaultLabels.privacy[item.sharedPost.privacy])}</Text>
             <Pressable
               onPress={() => router.push({ pathname: "/publication", params: { id: item.sharedPost!.id } })}
               hitSlop={8}
               accessibilityRole="link"
             >
-              <Text style={styles.sharedLink}>{fr.vaultItem.viewPost}</Text>
+              <Text style={styles.sharedLink}>{t.vaultItem.viewPost}</Text>
             </Pressable>
-            <Text style={styles.sharedHint}>{fr.vaultItem.shareAgainHint}</Text>
+            <Text style={styles.sharedHint}>{t.vaultItem.shareAgainHint}</Text>
           </View>
         ) : (
           <>
-            <Text style={styles.label}>{fr.vaultItem.shareVisibility}</Text>
+            <Text style={styles.label}>{t.vaultItem.shareVisibility}</Text>
             <View style={styles.pillRow} accessibilityRole="radiogroup">
               {PRIVACY_LEVELS.map((level) => (
                 <Pressable
@@ -224,7 +224,7 @@ export default function VaultItemDetailScreen() {
                   accessibilityState={{ selected: sharePrivacy === level }}
                 >
                   <Text style={[styles.privacyLabel, sharePrivacy === level ? styles.privacyLabelActive : null]}>
-                    {PRIVACY_LABELS[level]}
+                    {t.vaultLabels.privacy[level]}
                   </Text>
                 </Pressable>
               ))}
@@ -235,14 +235,14 @@ export default function VaultItemDetailScreen() {
               onPress={handleShare}
               disabled={sharing}
             >
-              <Text style={styles.shareLabel}>{sharing ? fr.vaultItem.sharing : fr.vaultItem.share}</Text>
+              <Text style={styles.shareLabel}>{sharing ? t.vaultItem.sharing : t.vaultItem.share}</Text>
             </Pressable>
           </>
         )}
 
         {!confirmingDelete ? (
           <Pressable accessibilityRole="button" onPress={() => setConfirmingDelete(true)} disabled={busy} hitSlop={12} style={styles.removeRow}>
-            <Text style={styles.deleteLabel}>{fr.vaultItem.remove}</Text>
+            <Text style={styles.deleteLabel}>{t.vaultItem.remove}</Text>
           </Pressable>
         ) : (
           <View style={styles.confirmRow}>
@@ -251,10 +251,10 @@ export default function VaultItemDetailScreen() {
             </Text>
             <View style={styles.confirmButtons}>
               <Pressable accessibilityRole="button" onPress={() => setConfirmingDelete(false)} disabled={busy} hitSlop={12}>
-                <Text style={styles.cancelLabel}>{fr.vaultItem.cancel}</Text>
+                <Text style={styles.cancelLabel}>{t.vaultItem.cancel}</Text>
               </Pressable>
               <Pressable accessibilityRole="button" onPress={handleDelete} disabled={busy} hitSlop={12}>
-                <Text style={styles.deleteLabel}>{busy ? fr.vaultItem.removing : fr.vaultItem.confirm}</Text>
+                <Text style={styles.deleteLabel}>{busy ? t.vaultItem.removing : t.vaultItem.confirm}</Text>
               </Pressable>
             </View>
           </View>

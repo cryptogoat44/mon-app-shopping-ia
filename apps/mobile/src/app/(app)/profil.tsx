@@ -6,7 +6,7 @@ import * as Haptics from "expo-haptics";
 import type { Post, UserProfile } from "@monapp/shared-types";
 import { ApiError, fetchUserPosts, fetchUserProfile, followUser, unfollowUser } from "@/lib/api";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { MoreIcon, PersonIcon } from "@/components/icons";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { SpotImage } from "@/components/spot-image";
@@ -87,7 +87,7 @@ export default function UserProfileScreen() {
       setPosts(page.posts);
       setNextCursor(page.nextCursor);
     } catch (e) {
-      showToast(e instanceof ApiError ? e.message : fr.userProfile.followError);
+      showToast(e instanceof ApiError ? e.message : t.userProfile.followError);
     } finally {
       setFollowBusy(false);
     }
@@ -100,11 +100,11 @@ export default function UserProfileScreen() {
 
   const nav = (
     <View style={styles.nav}>
-      <Pressable onPress={goBack} hitSlop={12} style={styles.navSide} accessibilityRole="button" accessibilityLabel="Retour">
+      <Pressable onPress={goBack} hitSlop={12} style={styles.navSide} accessibilityRole="button" accessibilityLabel={t.common.back}>
         <Text style={styles.back}>‹</Text>
       </Pressable>
       {profile ? (
-        <Pressable onPress={() => setMenuOpen(true)} hitSlop={12} style={[styles.navSide, styles.navRight]} accessibilityRole="button" accessibilityLabel={fr.userProfile.more}>
+        <Pressable onPress={() => setMenuOpen(true)} hitSlop={12} style={[styles.navSide, styles.navRight]} accessibilityRole="button" accessibilityLabel={t.userProfile.more}>
           <MoreIcon size={20} tint={color.encre} />
         </Pressable>
       ) : null}
@@ -120,10 +120,10 @@ export default function UserProfileScreen() {
             <ActivityIndicator color={color.encre} />
           ) : (
             <>
-              <ErrorMessage style={styles.message}>{state === "not_found" ? fr.userProfile.notFound : fr.userProfile.loadError}</ErrorMessage>
+              <ErrorMessage style={styles.message}>{state === "not_found" ? t.userProfile.notFound : t.userProfile.loadError}</ErrorMessage>
               {state === "error" ? (
                 <Pressable onPress={load} style={styles.retry} accessibilityRole="button">
-                  <Text style={styles.retryLabel}>Réessayer</Text>
+                  <Text style={styles.retryLabel}>{t.common.retry}</Text>
                 </Pressable>
               ) : null}
             </>
@@ -146,7 +146,7 @@ export default function UserProfileScreen() {
       <Text style={styles.handle}>@{profile.username}</Text>
       {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
       <Text style={styles.counts}>
-        {fr.userProfile.posts_count(profile.postsCount)} · {fr.userProfile.followers(profile.followersCount)} · {fr.userProfile.following(profile.followingCount)}
+        {t.userProfile.posts_count(profile.postsCount)} · {t.userProfile.followers(profile.followersCount)} · {t.userProfile.following(profile.followingCount)}
       </Text>
       <Pressable
         style={[styles.follow, profile.isFollowing ? styles.following : null, followBusy ? styles.busy : null]}
@@ -155,10 +155,10 @@ export default function UserProfileScreen() {
         accessibilityRole="button"
       >
         <Text style={[styles.followLabel, profile.isFollowing ? styles.followingLabel : null]}>
-          {profile.isFollowing ? fr.userProfile.unfollow : fr.userProfile.follow}
+          {profile.isFollowing ? t.userProfile.unfollow : t.userProfile.follow}
         </Text>
       </Pressable>
-      <Text style={styles.sectionTitle}>{fr.userProfile.posts}</Text>
+      <Text style={styles.sectionTitle}>{t.userProfile.posts}</Text>
     </View>
   );
 
@@ -178,7 +178,7 @@ export default function UserProfileScreen() {
                 style={styles.cell}
                 onPress={() => router.push({ pathname: "/publication", params: { id: post.id } })}
                 accessibilityRole="button"
-                accessibilityLabel={post.caption ?? fr.postDetail.title}
+                accessibilityLabel={post.caption ?? t.postDetail.title}
               >
                 {/* Grille : miniature (480 px) d'une photo publiée ; image HD du
                     marchand pour un « achat » ; repli sur l'image d'origine. */}
@@ -193,7 +193,7 @@ export default function UserProfileScreen() {
             ))}
           </View>
         )}
-        ListEmptyComponent={<Text style={styles.empty}>{fr.userProfile.noPosts}</Text>}
+        ListEmptyComponent={<Text style={styles.empty}>{t.userProfile.noPosts}</Text>}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.4}
         ListFooterComponent={loadingMore ? <ActivityIndicator color={color.encre} style={styles.footer} /> : null}

@@ -4,9 +4,9 @@ import { Image } from "expo-image";
 import { COMMENT_COUNTER_FROM, COMMENT_MAX_LENGTH, type PostComment } from "@monapp/shared-types";
 import { ApiError, createComment, deleteComment, fetchComments } from "@/lib/api";
 import { useToast } from "@/lib/toast-context";
-import { timeAgo } from "@/lib/time";
+import { timeAgo } from "@/lib/format";
 import { color, font, radius, space } from "@/theme/tokens";
-import { fr } from "@/i18n/fr";
+import { getActiveLocale, t } from "@/i18n";
 import { MoreIcon, PersonIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
 import { ReportBlockMenu } from "@/components/report-block-menu";
@@ -63,7 +63,7 @@ export function CommentsSection({
       setComments((prev) => [...(prev ?? []), ...page.comments]);
       setNextCursor(page.nextCursor);
     } catch {
-      showToast(fr.comments.loadError);
+      showToast(t.comments.loadError);
     }
   }
 
@@ -77,7 +77,7 @@ export function CommentsSection({
       setComments((prev) => [...(prev ?? []), created]);
       setDraft("");
     } catch (e) {
-      setSendError(e instanceof ApiError ? e.message : fr.comments.error);
+      setSendError(e instanceof ApiError ? e.message : t.comments.error);
     } finally {
       setSending(false);
     }
@@ -88,9 +88,9 @@ export function CommentsSection({
     try {
       await deleteComment(commentId);
       setComments((prev) => (prev ?? []).filter((c) => c.id !== commentId));
-      showToast(fr.comments.deleted);
+      showToast(t.comments.deleted);
     } catch (e) {
-      showToast(e instanceof ApiError ? e.message : fr.comments.error);
+      showToast(e instanceof ApiError ? e.message : t.comments.error);
     }
   }
 
@@ -98,15 +98,15 @@ export function CommentsSection({
 
   return (
     <View style={styles.section}>
-      <Text style={styles.title} accessibilityRole="header">{fr.comments.title}</Text>
+      <Text style={styles.title} accessibilityRole="header">{t.comments.title}</Text>
 
       {comments === null && !loadError ? <ActivityIndicator color={color.encre} style={styles.loader} /> : null}
       {loadError ? (
         <Pressable onPress={load} accessibilityRole="button">
-          <ErrorMessage style={styles.message}>{fr.comments.loadError}</ErrorMessage>
+          <ErrorMessage style={styles.message}>{t.comments.loadError}</ErrorMessage>
         </Pressable>
       ) : null}
-      {comments !== null && comments.length === 0 ? <Text style={styles.empty}>{fr.comments.empty}</Text> : null}
+      {comments !== null && comments.length === 0 ? <Text style={styles.empty}>{t.comments.empty}</Text> : null}
 
       {(comments ?? []).map((comment) => (
         <View key={comment.id} style={styles.comment}>
@@ -115,7 +115,7 @@ export function CommentsSection({
             disabled={!onOpenProfile || comment.author.id === viewerId}
             style={styles.avatar}
             accessibilityRole="link"
-            accessibilityLabel={`Voir le profil de ${comment.author.displayName}`}
+            accessibilityLabel={t.common.viewProfile(comment.author.displayName)}
           >
             {comment.author.avatarUrl ? (
               <Image source={{ uri: comment.author.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
@@ -129,28 +129,28 @@ export function CommentsSection({
               {comment.body}
             </Text>
             <View style={styles.commentMeta}>
-              <Text style={styles.time}>{timeAgo(comment.createdAt)}</Text>
+              <Text style={styles.time}>{timeAgo(comment.createdAt, getActiveLocale())}</Text>
               {comment.canDelete ? (
                 confirmingId === comment.id ? (
                   <>
-                    <Text style={styles.time}>{fr.comments.deleteConfirm}</Text>
+                    <Text style={styles.time}>{t.comments.deleteConfirm}</Text>
                     <Pressable onPress={() => handleDelete(comment.id)} hitSlop={8} accessibilityRole="button">
-                      <Text style={styles.danger}>{fr.comments.delete}</Text>
+                      <Text style={styles.danger}>{t.comments.delete}</Text>
                     </Pressable>
                     <Pressable onPress={() => setConfirmingId(null)} hitSlop={8} accessibilityRole="button">
-                      <Text style={styles.metaAction}>{fr.postDetail.cancel}</Text>
+                      <Text style={styles.metaAction}>{t.postDetail.cancel}</Text>
                     </Pressable>
                   </>
                 ) : (
                   <Pressable onPress={() => setConfirmingId(comment.id)} hitSlop={8} accessibilityRole="button">
-                    <Text style={styles.metaAction}>{fr.comments.delete}</Text>
+                    <Text style={styles.metaAction}>{t.comments.delete}</Text>
                   </Pressable>
                 )
               ) : null}
             </View>
           </View>
           {comment.author.id !== viewerId ? (
-            <Pressable onPress={() => setMenuFor(comment)} hitSlop={10} style={styles.more} accessibilityRole="button" accessibilityLabel={fr.comments.more}>
+            <Pressable onPress={() => setMenuFor(comment)} hitSlop={10} style={styles.more} accessibilityRole="button" accessibilityLabel={t.comments.more}>
               <MoreIcon size={16} tint={color.acier} />
             </Pressable>
           ) : null}
@@ -159,7 +159,7 @@ export function CommentsSection({
 
       {nextCursor ? (
         <Pressable onPress={loadMore} style={styles.loadMore} accessibilityRole="button">
-          <Text style={styles.metaAction}>Voir les commentaires suivants</Text>
+          <Text style={styles.metaAction}>{t.comments.showMore}</Text>
         </Pressable>
       ) : null}
 
@@ -168,11 +168,11 @@ export function CommentsSection({
           style={styles.input}
           value={draft}
           onChangeText={setDraft}
-          placeholder={fr.comments.placeholder}
+          placeholder={t.comments.placeholder}
           placeholderTextColor={color.acier}
           multiline
           maxLength={COMMENT_MAX_LENGTH}
-          accessibilityLabel={fr.comments.placeholder}
+          accessibilityLabel={t.comments.placeholder}
         />
         <Pressable
           onPress={handleSend}
@@ -180,7 +180,7 @@ export function CommentsSection({
           style={[styles.send, sending || !draft.trim() ? styles.sendDisabled : null]}
           accessibilityRole="button"
         >
-          <Text style={styles.sendLabel}>{sending ? fr.comments.sending : fr.comments.send}</Text>
+          <Text style={styles.sendLabel}>{sending ? t.comments.sending : t.comments.send}</Text>
         </Pressable>
       </View>
       {showCounter ? (

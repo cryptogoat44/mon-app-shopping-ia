@@ -13,7 +13,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SEARCH_QUERY_MAX_LENGTH, type CropRect } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { CropSelector } from "@/components/crop-selector";
 import { DEFAULT_CROP } from "@/lib/crop-geometry";
@@ -40,9 +40,9 @@ export default function TargetingScreen() {
     return (
       <SafeAreaView style={styles.screen}>
         <View style={styles.centered}>
-          <Text style={styles.lead}>{fr.preview.missing}</Text>
+          <Text style={styles.lead}>{t.preview.missing}</Text>
           <Pressable style={styles.primary} onPress={() => closeSpotter(router)} accessibilityRole="button">
-            <Text style={styles.primaryLabel}>{fr.preview.back}</Text>
+            <Text style={styles.primaryLabel}>{t.preview.back}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -59,21 +59,21 @@ export default function TargetingScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.nav}>
-        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.navSide} accessibilityRole="button" accessibilityLabel="Retour">
+        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.navSide} accessibilityRole="button" accessibilityLabel={t.common.back}>
           <Text style={styles.back}>‹</Text>
         </Pressable>
-        <Text style={styles.step}>{fr.targeting.step}</Text>
+        <Text style={styles.step}>{t.targeting.step}</Text>
         <Pressable onPress={() => closeSpotter(router)} hitSlop={12} style={[styles.navSide, styles.navRight]} accessibilityRole="button">
-          <Text style={styles.close}>{fr.spotter.close}</Text>
+          <Text style={styles.close}>{t.spotter.close}</Text>
         </Pressable>
       </View>
 
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content} scrollEnabled={!dragging} keyboardShouldPersistTaps="handled">
           <Text style={styles.title} accessibilityRole="header">
-            {fr.targeting.title}
+            {t.targeting.title}
           </Text>
-          <Text style={styles.caption}>{fr.targeting.caption}</Text>
+          <Text style={styles.caption}>{t.targeting.caption}</Text>
 
           <View style={styles.cropArea}>
             <CropSelector
@@ -86,23 +86,23 @@ export default function TargetingScreen() {
             />
           </View>
           <Pressable onPress={() => setCrop(DEFAULT_CROP)} style={styles.reset} hitSlop={8} accessibilityRole="button">
-            <Text style={styles.resetLabel}>{fr.targeting.reset}</Text>
+            <Text style={styles.resetLabel}>{t.targeting.reset}</Text>
           </Pressable>
 
           <Text style={styles.label}>
-            {fr.targeting.queryLabel} <Text style={styles.optional}>{fr.targeting.queryOptional}</Text>
+            {t.targeting.queryLabel} <Text style={styles.optional}>{t.targeting.queryOptional}</Text>
           </Text>
           <View style={styles.field}>
             <TextInput
               style={styles.input}
               value={query}
               onChangeText={setQuery}
-              placeholder={fr.targeting.queryPlaceholder}
-              placeholderTextColor="#A3A3A8"
+              placeholder={t.targeting.queryPlaceholder}
+              placeholderTextColor={color.acier}
               maxLength={SEARCH_QUERY_MAX_LENGTH}
               returnKeyType="search"
               onSubmitEditing={handleLaunch}
-              accessibilityLabel={`${fr.targeting.queryLabel} ${fr.targeting.queryOptional}`}
+              accessibilityLabel={`${t.targeting.queryLabel} ${t.targeting.queryOptional}`}
             />
             {query.length > 0 ? (
               <Text style={styles.counter}>
@@ -110,10 +110,10 @@ export default function TargetingScreen() {
               </Text>
             ) : null}
           </View>
-          <Text style={styles.caption}>{fr.targeting.queryHint}</Text>
+          <Text style={styles.caption}>{t.targeting.queryHint}</Text>
 
           <Pressable style={styles.primary} onPress={handleLaunch} accessibilityRole="button">
-            <Text style={styles.primaryLabel}>{fr.targeting.launch}</Text>
+            <Text style={styles.primaryLabel}>{t.targeting.launch}</Text>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>

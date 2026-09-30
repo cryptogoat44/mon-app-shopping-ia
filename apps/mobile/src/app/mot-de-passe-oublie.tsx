@@ -5,7 +5,7 @@ import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
 import { translateAuthError } from "@/lib/auth-errors";
 import { RECOVERY_PATH } from "@/lib/password-recovery";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
@@ -48,26 +48,26 @@ export default function ForgotPasswordScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <Pressable onPress={goBack} hitSlop={12} style={styles.nav} accessibilityRole="button" accessibilityLabel="Retour">
+      <Pressable onPress={goBack} hitSlop={12} style={styles.nav} accessibilityRole="button" accessibilityLabel={t.common.back}>
         <Text style={styles.back}>‹</Text>
       </Pressable>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.content}>
           {sentTo ? (
             <>
-              <Text style={styles.title} accessibilityRole="header">{fr.auth.forgot.sentTitle}</Text>
-              <Text style={styles.subtitle} accessibilityLiveRegion="polite">{fr.auth.forgot.sentBody(sentTo)}</Text>
+              <Text style={styles.title} accessibilityRole="header">{t.auth.forgot.sentTitle}</Text>
+              <Text style={styles.subtitle} accessibilityLiveRegion="polite">{t.auth.forgot.sentBody(sentTo)}</Text>
               <Pressable style={styles.cta} onPress={() => router.replace("/sign-in")} accessibilityRole="button">
-                <Text style={styles.ctaLabel}>{fr.auth.forgot.back}</Text>
+                <Text style={styles.ctaLabel}>{t.auth.forgot.back}</Text>
               </Pressable>
             </>
           ) : (
             <>
-              <Text style={styles.title} accessibilityRole="header">{fr.auth.forgot.title}</Text>
-              <Text style={styles.subtitle}>{fr.auth.forgot.subtitle}</Text>
+              <Text style={styles.title} accessibilityRole="header">{t.auth.forgot.title}</Text>
+              <Text style={styles.subtitle}>{t.auth.forgot.subtitle}</Text>
               {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
               <View style={styles.field}>
-                <Text style={styles.label}>{fr.auth.email}</Text>
+                <Text style={styles.label}>{t.auth.email}</Text>
                 <TextInput
                   style={styles.input}
                   keyboardType="email-address"
@@ -78,7 +78,7 @@ export default function ForgotPasswordScreen() {
                   onChangeText={setEmail}
                   onSubmitEditing={handleSend}
                   returnKeyType="send"
-                  accessibilityLabel={fr.auth.email}
+                  accessibilityLabel={t.auth.email}
                 />
               </View>
               <Pressable
@@ -87,7 +87,7 @@ export default function ForgotPasswordScreen() {
                 disabled={submitting || !email.trim()}
                 accessibilityRole="button"
               >
-                <Text style={styles.ctaLabel}>{submitting ? fr.auth.forgot.ctaLoading : fr.auth.forgot.cta}</Text>
+                <Text style={styles.ctaLabel}>{submitting ? t.auth.forgot.ctaLoading : t.auth.forgot.cta}</Text>
               </Pressable>
             </>
           )}

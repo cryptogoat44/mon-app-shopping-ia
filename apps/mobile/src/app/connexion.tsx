@@ -1,6 +1,6 @@
 import { ActivityIndicator, Pressable, SafeAreaView, Text, View } from "react-native";
 import { useAuth } from "@/lib/auth-context";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -18,20 +18,20 @@ export default function ConnexionScreen() {
       <View style={styles.content}>
         {failed ? null : <ActivityIndicator color={color.encre} style={styles.spinner} />}
         <Text style={styles.title} accessibilityRole="header">
-          {failed ? fr.connection.failedTitle : fr.connection.connectingTitle}
+          {failed ? t.connection.failedTitle : t.connection.connectingTitle}
         </Text>
         <Text style={styles.body} accessibilityLiveRegion="polite">
-          {failed ? fr.connection.failedBody : fr.connection.connectingBody}
+          {failed ? t.connection.failedBody : t.connection.connectingBody}
         </Text>
 
         {failed ? (
           <Pressable style={styles.cta} onPress={retryProfile} accessibilityRole="button">
-            <Text style={styles.ctaLabel}>{fr.connection.retry}</Text>
+            <Text style={styles.ctaLabel}>{t.connection.retry}</Text>
           </Pressable>
         ) : null}
 
         <Pressable onPress={signOut} style={styles.secondary} accessibilityRole="button">
-          <Text style={styles.secondaryLabel}>{fr.connection.signOut}</Text>
+          <Text style={styles.secondaryLabel}>{t.connection.signOut}</Text>
         </Pressable>
       </View>
     </SafeAreaView>

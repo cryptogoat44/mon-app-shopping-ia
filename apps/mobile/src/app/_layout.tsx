@@ -1,12 +1,13 @@
-import { Stack } from "expo-router";
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, type Theme } from "expo-router";
 import Head from "expo-router/head";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { ToastProvider } from "@/lib/toast-context";
+import { PreferencesProvider } from "@/lib/preferences-context";
 import { resolveRootRoute } from "@/lib/root-route";
 import { useAppFonts } from "@/theme/fonts";
+import { color, getActiveScheme } from "@/theme/tokens";
 import { APP_NAME_DISPLAY } from "@/constants/brand";
 // Capture l'adresse d'arrivée (jetons du lien « mot de passe oublié ») avant
 // que la navigation ne la réécrive.
@@ -17,6 +18,16 @@ import { initWebSentry } from "@/lib/sentry-web";
 initWebSentry();
 
 SplashScreen.preventAutoHideAsync();
+
+// Couleurs de la navigation (fond des transitions entre écrans) selon le
+// thème actif — lot 3.
+function navigationTheme(): Theme {
+  const base = getActiveScheme() === "dark" ? DarkTheme : DefaultTheme;
+  return {
+    ...base,
+    colors: { ...base.colors, background: color.porcelaine, card: color.porcelaine, text: color.encre, border: color.filet, primary: color.vert },
+  };
+}
 
 function RootNavigator() {
   const { session, profile, profileStatus } = useAuth();
@@ -36,33 +47,35 @@ function RootNavigator() {
   if (route === "splash") return null;
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={route === "app"}>
-        <Stack.Screen name="(app)" />
-      </Stack.Protected>
+    <ThemeProvider value={navigationTheme()}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Protected guard={route === "app"}>
+          <Stack.Screen name="(app)" />
+        </Stack.Protected>
 
-      <Stack.Protected guard={route === "complete-profile"}>
-        <Stack.Screen name="complete-profile" />
-      </Stack.Protected>
+        <Stack.Protected guard={route === "complete-profile"}>
+          <Stack.Screen name="complete-profile" />
+        </Stack.Protected>
 
-      <Stack.Protected guard={route === "unavailable"}>
-        <Stack.Screen name="connexion" />
-      </Stack.Protected>
+        <Stack.Protected guard={route === "unavailable"}>
+          <Stack.Screen name="connexion" />
+        </Stack.Protected>
 
-      <Stack.Protected guard={route === "welcome"}>
-        <Stack.Screen name="bienvenue" />
-        <Stack.Screen name="sign-in" />
-        <Stack.Screen name="sign-up" />
-        <Stack.Screen name="mot-de-passe-oublie" />
-      </Stack.Protected>
+        <Stack.Protected guard={route === "welcome"}>
+          <Stack.Screen name="bienvenue" />
+          <Stack.Screen name="sign-in" />
+          <Stack.Screen name="sign-up" />
+          <Stack.Screen name="mot-de-passe-oublie" />
+        </Stack.Protected>
 
-      {/* Ouvert depuis l'e-mail de réinitialisation, avec ou sans session. */}
-      <Stack.Screen name="nouveau-mot-de-passe" />
+        {/* Ouvert depuis l'e-mail de réinitialisation, avec ou sans session. */}
+        <Stack.Screen name="nouveau-mot-de-passe" />
 
-      {/* Documents juridiques : lisibles par tous, connecté ou non (bloc 5). */}
-      <Stack.Screen name="conditions" />
-      <Stack.Screen name="confidentialite" />
-    </Stack>
+        {/* Documents juridiques : lisibles par tous, connecté ou non (bloc 5). */}
+        <Stack.Screen name="conditions" />
+        <Stack.Screen name="confidentialite" />
+      </Stack>
+    </ThemeProvider>
   );
 }
 
@@ -73,10 +86,11 @@ export default function RootLayout() {
       <Head>
         <title>{APP_NAME_DISPLAY}</title>
       </Head>
-      <ToastProvider>
-        <StatusBar style="dark" />
-        <RootNavigator />
-      </ToastProvider>
+      <PreferencesProvider>
+        <ToastProvider>
+          <RootNavigator />
+        </ToastProvider>
+      </PreferencesProvider>
     </AuthProvider>
   );
 }

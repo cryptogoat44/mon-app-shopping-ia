@@ -32,6 +32,9 @@ export const ANALYTICS_EVENTS = {
   follow_added: { context: oneOf(["search", "profile"]) },
   report_submitted: { target_type: oneOf(["user", "post", "comment"]) },
   photo_changed: { target: oneOf(["vault", "avatar"]) },
+  // Lot 3 : préférences d'affichage.
+  language_changed: { locale: oneOf(["fr", "en"]), context: oneOf(["welcome", "settings"]) },
+  theme_changed: { theme: oneOf(["system", "light", "dark"]) },
 } as const satisfies Record<string, Record<string, Rule>>;
 
 export type AnalyticsEvent = keyof typeof ANALYTICS_EVENTS;

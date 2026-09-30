@@ -9,7 +9,7 @@ import { ReportBlockMenu } from "@/components/report-block-menu";
 import { ErrorMessage } from "@/components/error-message";
 import { PostCard } from "@/components/post-card";
 import { useAuth } from "@/lib/auth-context";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { themedStyles } from "@/theme/themed-styles";
 
 function FeedSkeletonRow() {
@@ -47,7 +47,7 @@ export default function FeedScreen() {
       setNextCursor(page.nextCursor);
       setError(null);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Impossible de charger le fil.");
+      setError(e instanceof ApiError ? e.message : t.feed.loadError);
     }
   }, []);
 
@@ -63,7 +63,7 @@ export default function FeedScreen() {
           }
         })
         .catch((e) => {
-          if (!cancelled) setError(e instanceof ApiError ? e.message : "Impossible de charger le fil.");
+          if (!cancelled) setError(e instanceof ApiError ? e.message : t.feed.loadError);
         });
       return () => {
         cancelled = true;
@@ -94,10 +94,10 @@ export default function FeedScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title} accessibilityRole="header">Fil</Text>
+        <Text style={styles.title} accessibilityRole="header">{t.feed.title}</Text>
         <View style={styles.headerActions}>
           <Pressable accessibilityRole="button" onPress={() => router.push("/people-search")} hitSlop={12}>
-            <Text style={styles.headerLink}>Profils</Text>
+            <Text style={styles.headerLink}>{t.feed.profiles}</Text>
           </Pressable>
         </View>
       </View>
@@ -139,16 +139,16 @@ export default function FeedScreen() {
               // Fil vide (Lot F) : expliquer quoi faire, avec des boutons. Les
               // vraies suggestions de comptes viendront au lot 7.
               <View style={styles.empty}>
-                <Text style={styles.emptyTitle} accessibilityRole="header">{fr.feed.emptyTitle}</Text>
-                <Text style={styles.emptyText}>{fr.feed.emptyBody}</Text>
+                <Text style={styles.emptyTitle} accessibilityRole="header">{t.feed.emptyTitle}</Text>
+                <Text style={styles.emptyText}>{t.feed.emptyBody}</Text>
                 <Pressable style={styles.emptyPrimary} onPress={() => router.push("/")} accessibilityRole="button">
-                  <Text style={styles.emptyPrimaryLabel}>{fr.feed.emptySpot}</Text>
+                  <Text style={styles.emptyPrimaryLabel}>{t.feed.emptySpot}</Text>
                 </Pressable>
                 <Pressable style={styles.emptySecondary} onPress={() => router.push("/post-item/new")} accessibilityRole="button">
-                  <Text style={styles.emptySecondaryLabel}>{fr.feed.emptyPublish}</Text>
+                  <Text style={styles.emptySecondaryLabel}>{t.feed.emptyPublish}</Text>
                 </Pressable>
                 <Pressable style={styles.emptySecondary} onPress={() => router.push("/people-search")} accessibilityRole="button">
-                  <Text style={styles.emptySecondaryLabel}>{fr.feed.emptyFind}</Text>
+                  <Text style={styles.emptySecondaryLabel}>{t.feed.emptyFind}</Text>
                 </Pressable>
               </View>
             ) : null

@@ -21,6 +21,8 @@ import type {
   ReactToPostResponse,
   TaggedPieceInput,
   UpdateMeRequest,
+  UpdateLocaleRequest,
+  AppLocale,
   UpdateVaultItemRequest,
   VaultCategory,
   VaultItem,
@@ -36,6 +38,7 @@ import { CONSENT_VERSIONS } from "@monapp/shared-types";
 import { Platform } from "react-native";
 import { supabase } from "./supabase";
 import { setAnalyticsConsent, track } from "./analytics";
+import { acceptLanguage, t } from "@/i18n";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -67,13 +70,14 @@ async function authorizedFetch(path: string, init?: RequestInit): Promise<Respon
     headers: {
       ...(hasJsonBody ? { "Content-Type": "application/json" } : {}),
       ...init?.headers,
+      "Accept-Language": acceptLanguage(),
       Authorization: `Bearer ${token}`,
     },
   });
 
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as ApiErrorBody | null;
-    throw new ApiError(response.status, body ?? { error: "unknown", message: "Erreur inconnue du serveur." });
+    throw new ApiError(response.status, body ?? { error: "unknown", message: t.common.unknownServerError });
   }
 
   return response;
@@ -90,6 +94,11 @@ export async function updateMyProfile(payload: UpdateMeRequest): Promise<Profile
     body: JSON.stringify(payload),
   });
   return response.json();
+}
+
+export async function updateMyLocale(locale: AppLocale): Promise<void> {
+  const payload: UpdateLocaleRequest = { locale };
+  await authorizedFetch("/api/me/locale", { method: "PUT", body: JSON.stringify(payload) });
 }
 
 export async function uploadAvatar(imageUri: string): Promise<Profile> {

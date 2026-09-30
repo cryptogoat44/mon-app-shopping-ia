@@ -10,8 +10,8 @@ import { CommentIcon, HeartIcon, MoreIcon, PersonIcon, ShareIcon, VerifiedIcon }
 import { sharePost } from "@/lib/share-post";
 import { SpotImage } from "@/components/spot-image";
 import { useToast } from "@/lib/toast-context";
-import { fr } from "@/i18n/fr";
-import { timeAgo } from "@/lib/time";
+import { getActiveLocale, t } from "@/i18n";
+import { timeAgo } from "@/lib/format";
 import { themedStyles } from "@/theme/themed-styles";
 
 const DOUBLE_TAP_DELAY_MS = 300;
@@ -93,7 +93,7 @@ export function PostCard({
           disabled={!onPressAuthor}
           style={styles.authorLink}
           accessibilityRole={onPressAuthor ? "link" : undefined}
-          accessibilityLabel={onPressAuthor ? `Voir le profil de ${post.author.displayName}` : undefined}
+          accessibilityLabel={onPressAuthor ? t.common.viewProfile(post.author.displayName) : undefined}
         >
           <View style={styles.avatar}>
             {post.author.avatarUrl ? (
@@ -105,9 +105,9 @@ export function PostCard({
           <Text style={styles.authorName}>{post.author.displayName}</Text>
         </Pressable>
         {post.vaultItem?.verified ? <VerifiedIcon size={13} /> : null}
-        <Text style={styles.timestamp}>{timeAgo(post.createdAt)}</Text>
+        <Text style={styles.timestamp}>{timeAgo(post.createdAt, getActiveLocale())}</Text>
         {onOpenMenu ? (
-          <Pressable onPress={onOpenMenu} hitSlop={11} style={styles.moreButton} accessibilityRole="button" accessibilityLabel="Plus d'options">
+          <Pressable onPress={onOpenMenu} hitSlop={11} style={styles.moreButton} accessibilityRole="button" accessibilityLabel={t.common.moreOptions}>
             <MoreIcon size={18} tint={color.acier} />
           </Pressable>
         ) : null}
@@ -116,7 +116,7 @@ export function PostCard({
       <Pressable
         onPress={handleMediaPress}
         accessibilityRole="image"
-        accessibilityLabel={`Photo publiée par ${post.author.displayName}`}
+        accessibilityLabel={t.post.photoBy(post.author.displayName)}
       >
         {/* « Achat » venu du Spotter : image HD du marchand, repli sur la
             miniature ; photo publiée : version d'affichage (1 600 px). */}
@@ -131,7 +131,7 @@ export function PostCard({
             },
           ]}
         >
-          <HeartIcon size={64} tint={color.blanc} filled />
+          <HeartIcon size={64} tint={color.surImage} filled />
         </Animated.View>
       </Pressable>
 
@@ -150,7 +150,7 @@ export function PostCard({
                 }
                 accessibilityRole="button"
                 accessibilityLabel={
-                  piece.merchantName ? `Voir ${piece.productName} chez ${piece.merchantName}` : piece.productName
+                  piece.merchantName ? t.post.viewPieceAt(piece.productName, piece.merchantName) : piece.productName
                 }
               >
                 <Text style={styles.tagChipLabel}>{piece.productName}</Text>
@@ -171,7 +171,7 @@ export function PostCard({
           style={styles.reactRow}
           hitSlop={12}
           accessibilityRole="button"
-          accessibilityLabel={reacted ? "Je n'aime plus" : "Aimer"}
+          accessibilityLabel={reacted ? t.post.unlike : t.post.like}
         >
           <HeartIcon size={19} tint={reacted ? color.encre : color.acier} filled={reacted} />
           <Text style={styles.reactCount}>{reactionCount}</Text>
@@ -182,7 +182,7 @@ export function PostCard({
           style={styles.reactRow}
           hitSlop={12}
           accessibilityRole="button"
-          accessibilityLabel={fr.comments.countLabel(commentCount ?? post.commentCount)}
+          accessibilityLabel={t.comments.countLabel(commentCount ?? post.commentCount)}
         >
           <CommentIcon size={19} />
           <Text style={styles.reactCount}>{commentCount ?? post.commentCount}</Text>
@@ -190,12 +190,12 @@ export function PostCard({
         <Pressable
           onPress={async () => {
             const outcome = await sharePost(post);
-            if (outcome === "copied") showToast(fr.comments.linkCopied);
+            if (outcome === "copied") showToast(t.comments.linkCopied);
           }}
           style={[styles.reactRow, styles.shareButton]}
           hitSlop={12}
           accessibilityRole="button"
-          accessibilityLabel={fr.comments.share}
+          accessibilityLabel={t.comments.share}
         >
           <ShareIcon size={19} />
         </Pressable>

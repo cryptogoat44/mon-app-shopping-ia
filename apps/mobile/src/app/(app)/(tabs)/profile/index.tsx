@@ -7,7 +7,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, fetchMyLifestylePosts, fetchVault, uploadAvatar } from "@/lib/api";
 import type { Post, VaultItem } from "@monapp/shared-types";
@@ -49,13 +49,13 @@ export default function ProfileScreen() {
             setVaultTotal(page.totalCount ?? page.items.length);
             setVaultError(null);
           })
-          .catch((e) => setVaultError(e instanceof ApiError ? e.message : fr.profile.loadError)),
+          .catch((e) => setVaultError(e instanceof ApiError ? e.message : t.profile.loadError)),
         fetchMyLifestylePosts()
           .then((data) => {
             setLifestylePosts(data);
             setLifestyleError(null);
           })
-          .catch((e) => setLifestyleError(e instanceof ApiError ? e.message : fr.profile.loadError)),
+          .catch((e) => setLifestyleError(e instanceof ApiError ? e.message : t.profile.loadError)),
       ]).finally(() => setLoading(false)),
     []
   );
@@ -108,9 +108,9 @@ export default function ProfileScreen() {
       await uploadAvatar(result.assets[0].uri);
       await refreshProfile();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      showToast(fr.profile.avatarUpdated);
+      showToast(t.profile.avatarUpdated);
     } catch (e) {
-      showToast(e instanceof ApiError ? e.message : fr.profile.avatarError);
+      showToast(e instanceof ApiError ? e.message : t.profile.avatarError);
     } finally {
       setUploadingAvatar(false);
     }
@@ -120,7 +120,7 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.screen}>
       <View style={styles.nav}>
         <Text style={styles.navHandle}>@{profile?.username}</Text>
-        <Pressable onPress={() => router.push("/settings")} hitSlop={12} accessibilityRole="button" accessibilityLabel="Réglages">
+        <Pressable onPress={() => router.push("/settings")} hitSlop={12} accessibilityRole="button" accessibilityLabel={t.settings.title}>
           <GearIcon size={21} tint={color.encre} />
         </Pressable>
       </View>
@@ -131,7 +131,7 @@ export default function ProfileScreen() {
           onPress={handlePickAvatar}
           disabled={uploadingAvatar}
           accessibilityRole="button"
-          accessibilityLabel="Changer la photo de profil"
+          accessibilityLabel={t.profile.changeAvatar}
         >
           {profile?.avatarUrl ? (
             <Image source={{ uri: profile.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
@@ -140,7 +140,7 @@ export default function ProfileScreen() {
           )}
           {uploadingAvatar ? (
             <View style={styles.avatarOverlay}>
-              <ActivityIndicator color={color.blanc} size="small" />
+              <ActivityIndicator color={color.surImage} size="small" />
             </View>
           ) : (
             <View style={styles.avatarBadge}>
@@ -158,19 +158,19 @@ export default function ProfileScreen() {
             (décision 5 du Lot Q) ; jamais sur le profil vu par un autre. */}
         <View style={styles.statItem}>
           <Text style={styles.statNumber}>{vaultTotal}</Text>
-          <Text style={styles.statLabel}>{fr.profile.vault}</Text>
+          <Text style={styles.statLabel}>{t.profile.vault}</Text>
         </View>
         <View style={styles.statItem}>
           <Text style={styles.statNumber}>{profile?.postsCount ?? 0}</Text>
-          <Text style={styles.statLabel}>{fr.profile.posts}</Text>
+          <Text style={styles.statLabel}>{t.profile.posts}</Text>
         </View>
         <View style={styles.statItem}>
           <Text style={styles.statNumber}>{profile?.followersCount ?? 0}</Text>
-          <Text style={styles.statLabel}>{fr.profile.followers}</Text>
+          <Text style={styles.statLabel}>{t.profile.followers}</Text>
         </View>
         <View style={styles.statItem}>
           <Text style={styles.statNumber}>{profile?.followingCount ?? 0}</Text>
-          <Text style={styles.statLabel}>{fr.profile.followingCount}</Text>
+          <Text style={styles.statLabel}>{t.profile.followingCount}</Text>
         </View>
       </View>
 
@@ -180,21 +180,21 @@ export default function ProfileScreen() {
           accessibilityRole="tab"
           accessibilityState={{ selected: segment === "vault" }}
         >
-          <Text style={[styles.segItem, segment === "vault" ? styles.segItemActive : null]}>{fr.profile.vault}</Text>
+          <Text style={[styles.segItem, segment === "vault" ? styles.segItemActive : null]}>{t.profile.vault}</Text>
         </Pressable>
         <Pressable
           onPress={() => setSegment("lifestyle")}
           accessibilityRole="tab"
           accessibilityState={{ selected: segment === "lifestyle" }}
         >
-          <Text style={[styles.segItem, segment === "lifestyle" ? styles.segItemActive : null]}>{fr.profile.lifestyle}</Text>
+          <Text style={[styles.segItem, segment === "lifestyle" ? styles.segItemActive : null]}>{t.profile.lifestyle}</Text>
         </Pressable>
         <Pressable
           onPress={() => setSegment("wishlist")}
           accessibilityRole="tab"
           accessibilityState={{ selected: segment === "wishlist" }}
         >
-          <Text style={[styles.segItem, segment === "wishlist" ? styles.segItemActive : null]}>{fr.wishlist.title}</Text>
+          <Text style={[styles.segItem, segment === "wishlist" ? styles.segItemActive : null]}>{t.wishlist.title}</Text>
         </Pressable>
       </View>
 
@@ -246,9 +246,9 @@ export default function ProfileScreen() {
           ListEmptyComponent={
             !vaultError ? (
               <View style={styles.empty}>
-                <Text style={styles.emptyText}>{fr.profile.emptyVault}</Text>
+                <Text style={styles.emptyText}>{t.profile.emptyVault}</Text>
                 <Pressable accessibilityRole="button" onPress={() => router.push("/(app)/(tabs)")}>
-                  <Text style={styles.emptyCta}>{fr.profile.emptyVaultCta}</Text>
+                  <Text style={styles.emptyCta}>{t.profile.emptyVaultCta}</Text>
                 </Pressable>
               </View>
             ) : null
@@ -268,9 +268,9 @@ export default function ProfileScreen() {
             </View>
           ) : isEmptyLifestyle ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyText}>{fr.profile.emptyLifestyle}</Text>
+              <Text style={styles.emptyText}>{t.profile.emptyLifestyle}</Text>
               <Pressable accessibilityRole="button" onPress={() => router.push("/post-item/new")}>
-                <Text style={styles.emptyCta}>{fr.profile.emptyLifestyleCta}</Text>
+                <Text style={styles.emptyCta}>{t.profile.emptyLifestyleCta}</Text>
               </Pressable>
             </View>
           ) : (
@@ -280,7 +280,7 @@ export default function ProfileScreen() {
                 style={styles.piece}
                 onPress={() => router.push({ pathname: "/publication", params: { id: post.id } })}
                 accessibilityRole="button"
-                accessibilityLabel={post.caption ?? fr.profile.lifestylePhoto}
+                accessibilityLabel={post.caption ?? t.profile.lifestylePhoto}
               >
                 <View style={styles.thumb}>
                   <SpotImage
@@ -289,12 +289,12 @@ export default function ProfileScreen() {
                     style={styles.thumbImage}
                     fit="cover"
                     recyclingKey={post.id}
-                    accessibilityLabel={post.caption ?? fr.profile.lifestylePhoto}
+                    accessibilityLabel={post.caption ?? t.profile.lifestylePhoto}
                   />
                 </View>
                 {post.taggedPieces.length > 0 ? (
                   <View style={styles.tagBadge}>
-                    <TagIcon size={12} tint={color.blanc} />
+                    <TagIcon size={12} tint={color.surImage} />
                   </View>
                 ) : null}
               </Pressable>
@@ -327,7 +327,7 @@ const styles = themedStyles(() => ({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(29,29,31,0.45)",
+    backgroundColor: color.voileImage,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -401,7 +401,7 @@ const styles = themedStyles(() => ({
     width: 18,
     height: 18,
     borderRadius: radius.full,
-    backgroundColor: color.blanc,
+    backgroundColor: color.surface,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -412,7 +412,7 @@ const styles = themedStyles(() => ({
     width: 20,
     height: 20,
     borderRadius: radius.full,
-    backgroundColor: "rgba(28,28,28,0.55)",
+    backgroundColor: color.voileImage,
     alignItems: "center",
     justifyContent: "center",
   },

@@ -4,19 +4,19 @@ import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import type { AppNotification } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
-import { fr } from "@/i18n/fr";
+import { getActiveLocale, t } from "@/i18n";
 import { unreadChanged } from "@/lib/unread-notifications";
 import { ApiError, fetchNotifications, markNotificationsRead } from "@/lib/api";
-import { timeAgo } from "@/lib/time";
+import { timeAgo } from "@/lib/format";
 import { PersonIcon } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
 
 function actionText(notification: AppNotification): string {
-  if (notification.type === "follow") return fr.notifications.follow;
-  if (notification.type === "comment") return fr.notifications.comment;
-  return fr.notifications.like;
+  if (notification.type === "follow") return t.notifications.follow;
+  if (notification.type === "comment") return t.notifications.comment;
+  return t.notifications.like;
 }
 
 function NotificationRow({ notification, onPress }: { notification: AppNotification; onPress: () => void }) {
@@ -38,7 +38,7 @@ function NotificationRow({ notification, onPress }: { notification: AppNotificat
         <Text style={styles.rowLine}>
           <Text style={styles.rowName}>{notification.actor.displayName}</Text> {actionText(notification)}
         </Text>
-        <Text style={styles.rowTime}>{timeAgo(notification.createdAt)}</Text>
+        <Text style={styles.rowTime}>{timeAgo(notification.createdAt, getActiveLocale())}</Text>
       </View>
     </Pressable>
   );
@@ -57,7 +57,7 @@ export default function NotificationsScreen() {
           setNotifications(data);
           setError(null);
         })
-        .catch((e) => setError(e instanceof ApiError ? e.message : fr.notifications.loadError)),
+        .catch((e) => setError(e instanceof ApiError ? e.message : t.notifications.loadError)),
     []
   );
 
@@ -84,7 +84,7 @@ export default function NotificationsScreen() {
       {/* Onglet « Activité » de la barre (Lot F, barre A) : j'aime,
           commentaires et abonnements. */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle} accessibilityRole="header">{fr.notifications.title}</Text>
+        <Text style={styles.headerTitle} accessibilityRole="header">{t.notifications.title}</Text>
       </View>
 
       {notifications === null && !error ? (
@@ -107,7 +107,7 @@ export default function NotificationsScreen() {
           {error ? <ErrorMessage style={styles.errorText}>{error}</ErrorMessage> : null}
           {isEmpty ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyText}>{fr.notifications.empty}</Text>
+              <Text style={styles.emptyText}>{t.notifications.empty}</Text>
             </View>
           ) : (
             notifications?.map((notification) => <NotificationRow key={notification.id} notification={notification} onPress={() =>

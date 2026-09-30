@@ -15,5 +15,6 @@ export interface LegalDocument {
 }
 
 /** Repère, dans un texte, les champs laissés au fondateur :
- * « [À compléter : …] », « [À décider : …] », « [À vérifier : …] ». */
-export const PLACEHOLDER_PATTERN = /(\[À (?:compléter|décider|vérifier)[^\]]*\])/;
+ * « [À compléter : …] », « [À décider : …] », « [À vérifier : …] », et
+ * leurs équivalents anglais « [To be completed/decided/verified: …] ». */
+export const PLACEHOLDER_PATTERN = /(\[(?:À (?:compléter|décider|vérifier)|To be (?:completed|decided|verified))[^\]]*\])/;

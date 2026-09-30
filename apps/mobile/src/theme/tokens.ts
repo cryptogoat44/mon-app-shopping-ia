@@ -21,6 +21,13 @@ export interface Palette {
   nuit: string; // fond de l'écran d'attente du Spotter (sombre dans les deux thèmes)
   surNuit: string; // texte principal sur nuit
   brume: string; // texte secondaire sur nuit
+  nuitCadre: string; // cadre de l'image sur nuit
+  nuitFilet: string; // bordures et étapes à venir sur nuit
+  lueur: string; // ligne de balayage de l'analyse (sur nuit)
+  voile: string; // fond assombri derrière une feuille ou un menu
+  voileImage: string; // voile posé sur une photo (zone hors recadrage, badges)
+  cadreImage: string; // trait du cadre de recadrage sur la photo
+  grilleImage: string; // grille discrète du recadrage
 }
 
 export const lightPalette: Palette = {
@@ -39,6 +46,13 @@ export const lightPalette: Palette = {
   nuit: "#141312",
   surNuit: "#F4F2EE", // 16,6:1 sur nuit
   brume: "#A9A6A0", // 7,6:1 sur nuit
+  nuitCadre: "#1E1C1A",
+  nuitFilet: "#4A4744",
+  lueur: "rgba(255,255,255,0.85)",
+  voile: "rgba(20,19,18,0.35)",
+  voileImage: "rgba(20,19,18,0.55)",
+  cadreImage: "rgba(255,255,255,0.9)",
+  grilleImage: "rgba(255,255,255,0.3)",
 };
 
 export const darkPalette: Palette = {
@@ -57,6 +71,13 @@ export const darkPalette: Palette = {
   nuit: "#141312",
   surNuit: "#F4F2EE",
   brume: "#A9A6A0",
+  nuitCadre: "#1E1C1A",
+  nuitFilet: "#4A4744",
+  lueur: "rgba(255,255,255,0.85)",
+  voile: "rgba(0,0,0,0.6)",
+  voileImage: "rgba(20,19,18,0.6)",
+  cadreImage: "rgba(255,255,255,0.9)",
+  grilleImage: "rgba(255,255,255,0.3)",
 };
 
 export type ColorScheme = "light" | "dark";

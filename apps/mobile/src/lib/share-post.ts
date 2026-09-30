@@ -3,6 +3,7 @@ import * as Clipboard from "expo-clipboard";
 import type { Post } from "@monapp/shared-types";
 import { PUBLIC_WEB_URL } from "../constants/brand";
 import { track } from "./analytics";
+import { t } from "../i18n";
 
 // Lien vers une publication (Lot F). La confidentialité est respectée à
 // l'ouverture : le serveur ne renvoie la publication qu'aux personnes qui
@@ -13,8 +14,7 @@ export function postLink(postId: string): string {
 }
 
 export function postShareMessage(post: Pick<Post, "id" | "caption" | "author">): string {
-  const caption = post.caption ? ` : « ${post.caption} »` : "";
-  return `${post.author.displayName} sur Spotto${caption}\n${postLink(post.id)}`;
+  return `${t.post.shareMessage(post.author.displayName, post.caption)}\n${postLink(post.id)}`;
 }
 
 /** Partage du système ; sur un navigateur sans partage, copie le lien.

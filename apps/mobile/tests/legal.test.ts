@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { LEGAL_DOCUMENT_VERSIONS } from "@monapp/shared-types";
-import { consentFor, formatLongDate, parseLegalVersion, pendingConsents, splitPlaceholders } from "../src/lib/legal";
+import { consentFor, parseLegalVersion, pendingConsents, splitPlaceholders } from "../src/lib/legal";
 import { termsOfUse } from "../src/legal/conditions";
 import { privacyPolicy } from "../src/legal/confidentialite";
 import { PUBLISHER, readPublisher } from "../src/legal/publisher";
@@ -11,7 +11,6 @@ describe("documents juridiques", () => {
   it("lit la version d'un projet", () => {
     expect(parseLegalVersion("projet-2026-09-25")).toEqual({ isDraft: true, day: "2026-09-25" });
     expect(parseLegalVersion("2027-01-10")).toEqual({ isDraft: false, day: "2027-01-10" });
-    expect(formatLongDate("2026-09-25")).toBe("25 septembre 2026");
   });
 
   it("isole les champs à compléter, à décider ou à vérifier", () => {

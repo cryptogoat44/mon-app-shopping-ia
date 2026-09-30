@@ -13,6 +13,8 @@
 // Hébergeurs : informations publiques, relevées sur leurs pages officielles
 // le 2026-09-25 (sources dans docs/journal-decisions.md).
 
+import type { Locale } from "../lib/preferences";
+
 export interface Publisher {
   name: string;
   status: string;
@@ -21,29 +23,43 @@ export interface Publisher {
   phone: string;
 }
 
-const PLACEHOLDERS: Publisher = {
-  name: "[À compléter : nom de l'éditeur]",
-  status: "[À compléter : statut de l'éditeur]",
-  address: "[À compléter : adresse postale]",
-  email: "[À compléter : adresse e-mail de contact]",
-  phone: "[À compléter : numéro de téléphone]",
+const PLACEHOLDERS: Record<Locale, Publisher> = {
+  fr: {
+    name: "[À compléter : nom de l'éditeur]",
+    status: "[À compléter : statut de l'éditeur]",
+    address: "[À compléter : adresse postale]",
+    email: "[À compléter : adresse e-mail de contact]",
+    phone: "[À compléter : numéro de téléphone]",
+  },
+  en: {
+    name: "[To be completed: publisher's name]",
+    status: "[To be completed: publisher's legal status]",
+    address: "[To be completed: postal address]",
+    email: "[To be completed: contact email address]",
+    phone: "[To be completed: telephone number]",
+  },
 };
 
-/** Complète chaque champ absent ou vide par son « [À compléter : …] ». */
-export function readPublisher(values: Partial<Record<keyof Publisher, string | undefined>>): Publisher {
-  const pick = (key: keyof Publisher) => values[key]?.trim() || PLACEHOLDERS[key];
+/** Complète chaque champ absent ou vide par son « [À compléter : …] » (ou
+ * « [To be completed: …] » en anglais). Les valeurs sont les mêmes dans les
+ * deux langues : seules les mentions manquantes changent. */
+export function readPublisher(values: Partial<Record<keyof Publisher, string | undefined>>, locale: Locale = "fr"): Publisher {
+  const pick = (key: keyof Publisher) => values[key]?.trim() || PLACEHOLDERS[locale][key];
   return { name: pick("name"), status: pick("status"), address: pick("address"), email: pick("email"), phone: pick("phone") };
 }
 
 // Chaque variable est écrite en entier : Expo ne remplace, à la
 // construction, que les accès littéraux « process.env.EXPO_PUBLIC_… ».
-export const PUBLISHER = readPublisher({
+const PUBLISHER_VALUES = {
   name: process.env.EXPO_PUBLIC_PUBLISHER_NAME,
   status: process.env.EXPO_PUBLIC_PUBLISHER_STATUS,
   address: process.env.EXPO_PUBLIC_PUBLISHER_ADDRESS,
   email: process.env.EXPO_PUBLIC_PUBLISHER_EMAIL,
   phone: process.env.EXPO_PUBLIC_PUBLISHER_PHONE,
-});
+};
+
+export const PUBLISHER = readPublisher(PUBLISHER_VALUES, "fr");
+export const PUBLISHER_EN = readPublisher(PUBLISHER_VALUES, "en");
 
 export const HOSTS = {
   // Conditions d'utilisation de Render (render.com/terms), section de l'agent DMCA.
@@ -53,4 +69,10 @@ export const HOSTS = {
   // contact, société, DPA) : point signalé au juriste.
   supabase:
     "Supabase Pte. Ltd., 65 Chulia Street #38-02/03, OCBC Centre, Singapour 049513 — [À compléter : téléphone, absent des pages officielles de Supabase]",
+} as const;
+
+export const HOSTS_EN = {
+  render: "Render Services, Inc., 525 Brannan Street, Suite 300, San Francisco, CA 94107, United States — telephone: +1 415 319 8186",
+  supabase:
+    "Supabase Pte. Ltd., 65 Chulia Street #38-02/03, OCBC Centre, Singapore 049513 — [To be completed: telephone, not listed on Supabase's official pages]",
 } as const;

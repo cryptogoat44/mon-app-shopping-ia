@@ -63,7 +63,7 @@ const styles = themedStyles(() => ({
   banner: {
     width: "100%",
     maxWidth: 480,
-    backgroundColor: color.blanc,
+    backgroundColor: color.surface,
     borderColor: color.filet,
     borderWidth: 1,
     borderRadius: radius.md,

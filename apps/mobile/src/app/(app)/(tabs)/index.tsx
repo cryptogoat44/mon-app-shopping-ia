@@ -14,7 +14,7 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { getRecentSearches } from "@/api/client";
 import type { Piece } from "@/api/types";
 import { CameraIcon, ClipboardIcon, ClockIcon } from "@/components/icons";
@@ -30,21 +30,21 @@ function DetectionCard({ detection }: { detection: LinkDetection }) {
     return (
       <View style={styles.detected} accessibilityLiveRegion="polite">
         <View style={styles.platformChip}>
-          <Text style={styles.platformChipLabel}>{fr.spotter.platformName[detection.platform]}</Text>
+          <Text style={styles.platformChipLabel}>{t.spotter.platformName[detection.platform]}</Text>
         </View>
-        <Text style={styles.detectedLabel}>{fr.spotter.detected[detection.platform]}</Text>
+        <Text style={styles.detectedLabel}>{t.spotter.detected[detection.platform]}</Text>
       </View>
     );
   }
-  if (detection.kind === "unsupported") return <ErrorMessage style={styles.feedback}>{fr.spotter.unsupportedLink}</ErrorMessage>;
-  if (detection.kind === "not_a_link") return <ErrorMessage style={styles.feedback}>{fr.spotter.notALink}</ErrorMessage>;
-  if (detection.kind === "not_a_video") return <ErrorMessage style={styles.feedback}>{fr.spotter.notAVideo[detection.platform]}</ErrorMessage>;
+  if (detection.kind === "unsupported") return <ErrorMessage style={styles.feedback}>{t.spotter.unsupportedLink}</ErrorMessage>;
+  if (detection.kind === "not_a_link") return <ErrorMessage style={styles.feedback}>{t.spotter.notALink}</ErrorMessage>;
+  if (detection.kind === "not_a_video") return <ErrorMessage style={styles.feedback}>{t.spotter.notAVideo[detection.platform]}</ErrorMessage>;
   return null;
 }
 
 function prepareErrorMessage(error: unknown): string {
   const kind = prepareFailureKind(error);
-  return kind === "network" ? fr.spotter.networkError : kind === "server" ? fr.spotter.serverError : fr.spotter.prepareError;
+  return kind === "network" ? t.spotter.networkError : kind === "server" ? t.spotter.serverError : t.spotter.prepareError;
 }
 
 export default function SpotterScreen() {
@@ -76,13 +76,13 @@ export default function SpotterScreen() {
     try {
       const text = await Clipboard.getStringAsync();
       if (!text || detectLink(text).kind === "not_a_link") {
-        setMessage(fr.spotter.pasteEmpty);
+        setMessage(t.spotter.pasteEmpty);
         return;
       }
       setLink(text.trim());
     } catch {
       // Web : le navigateur a refusé la lecture du presse-papiers.
-      setMessage(fr.spotter.pasteDenied);
+      setMessage(t.spotter.pasteDenied);
     }
   }
 
@@ -104,7 +104,7 @@ export default function SpotterScreen() {
     setMessage(null);
     const picked = await importPhotoForSpotter();
     if (picked.kind === "denied") {
-      setMessage(fr.spotter.photoDenied);
+      setMessage(t.spotter.photoDenied);
       return;
     }
     if (picked.kind !== "picked") return;
@@ -128,11 +128,11 @@ export default function SpotterScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
         >
           <Text style={styles.title} accessibilityRole="header">
-            {fr.spotter.title}
+            {t.spotter.title}
           </Text>
-          <Text style={styles.lead}>{fr.spotter.lead}</Text>
+          <Text style={styles.lead}>{t.spotter.lead}</Text>
 
-          <Text style={styles.label}>{fr.spotter.linkLabel}</Text>
+          <Text style={styles.label}>{t.spotter.linkLabel}</Text>
           <View style={styles.field}>
             <TextInput
               style={styles.input}
@@ -141,18 +141,18 @@ export default function SpotterScreen() {
                 setLink(text);
                 setMessage(null);
               }}
-              placeholder={fr.spotter.linkPlaceholder}
+              placeholder={t.spotter.linkPlaceholder}
               placeholderTextColor={color.acier}
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="url"
               returnKeyType="go"
               onSubmitEditing={handleContinue}
-              accessibilityLabel={fr.spotter.linkLabel}
+              accessibilityLabel={t.spotter.linkLabel}
             />
             <Pressable onPress={handlePaste} hitSlop={10} style={styles.pasteButton} accessibilityRole="button">
               <ClipboardIcon size={16} tint={color.vert} />
-              <Text style={styles.pasteLabel}>{fr.spotter.paste}</Text>
+              <Text style={styles.pasteLabel}>{t.spotter.paste}</Text>
             </Pressable>
           </View>
 
@@ -166,24 +166,24 @@ export default function SpotterScreen() {
             accessibilityRole="button"
           >
             {busy === "link" ? <ActivityIndicator color={color.blanc} /> : null}
-            <Text style={styles.primaryLabel}>{busy === "link" ? fr.spotter.preparing : fr.spotter.continue}</Text>
+            <Text style={styles.primaryLabel}>{busy === "link" ? t.spotter.preparing : t.spotter.continue}</Text>
           </Pressable>
 
           <View style={styles.or}>
             <View style={styles.orLine} />
-            <Text style={styles.orLabel}>{fr.spotter.or}</Text>
+            <Text style={styles.orLabel}>{t.spotter.or}</Text>
             <View style={styles.orLine} />
           </View>
 
           <Pressable style={styles.secondary} onPress={handleImportPhoto} disabled={busy !== null} accessibilityRole="button">
             {busy === "photo" ? <ActivityIndicator color={color.encre} /> : <CameraIcon size={18} tint={color.encre} />}
-            <Text style={styles.secondaryLabel}>{fr.spotter.importPhoto}</Text>
+            <Text style={styles.secondaryLabel}>{t.spotter.importPhoto}</Text>
           </Pressable>
 
           {recent.length > 0 ? (
             <View style={styles.recentSection}>
               <Text style={styles.recentTitle} accessibilityRole="header">
-                {fr.spotter.recentlySpotted}
+                {t.spotter.recentlySpotted}
               </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentRow}>
                 {recent.map(({ searchId, piece }) => (

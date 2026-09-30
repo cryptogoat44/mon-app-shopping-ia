@@ -1,3 +1,4 @@
+import { formatPrice } from "@/lib/format";
 import { useEffect, useRef, useState } from "react";
 import { Modal, Platform, Pressable, SafeAreaView, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -6,7 +7,7 @@ import * as WebBrowser from "expo-web-browser";
 import * as Haptics from "expo-haptics";
 import type { VaultCategory } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
-import { fr } from "@/i18n/fr";
+import { getActiveLocale, t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { addToWishlist, loadSpotResult } from "@/api/client";
 import { getLastSpotResult } from "@/api/spotSession";
@@ -18,7 +19,7 @@ import { getDraft, updateDraft } from "@/lib/spot-draft";
 import { beginFromLink, beginFromPhoto } from "@/lib/spot-flow";
 import { detectLink } from "@/lib/link-detection";
 import { importPhotoForSpotter } from "@/lib/image-import";
-import { VAULT_CATEGORIES, VAULT_CATEGORY_LABELS } from "@/lib/vault-labels";
+import { VAULT_CATEGORIES } from "@/lib/vault-labels";
 import { useToast } from "@/lib/toast-context";
 import { Skeleton } from "@/components/skeleton";
 import { SpotImage } from "@/components/spot-image";
@@ -27,10 +28,9 @@ import { CameraIcon } from "@/components/icons";
 import { track } from "@/lib/analytics";
 import { themedStyles } from "@/theme/themed-styles";
 
-function formatPrice(piece: Piece): string {
-  if (piece.priceFrom === null) return fr.result.priceOnSite;
-  const currency = piece.currency === "EUR" ? "€" : (piece.currency ?? "");
-  return `${piece.priceFrom.toLocaleString("fr-FR")} ${currency}`.trim();
+function displayPrice(piece: Piece): string {
+  if (piece.priceFrom === null) return t.result.priceOnSite;
+  return formatPrice(piece.priceFrom, piece.currency, getActiveLocale());
 }
 
 const OTHERS_SHOWN_FIRST = 11;
@@ -89,14 +89,14 @@ export default function ResultScreen() {
       const next = await beginFromLink(detection.url, detection.platform);
       router.replace({ pathname: "/spot/apercu", params: { searchId: next.searchId ?? "" } });
     } catch {
-      setActionError(fr.spotter.prepareError);
+      setActionError(t.spotter.prepareError);
     }
   }
 
   async function handleImportCapture() {
     setActionError(null);
     const picked = await importPhotoForSpotter();
-    if (picked.kind === "denied") return setActionError(fr.spotter.photoDenied);
+    if (picked.kind === "denied") return setActionError(t.spotter.photoDenied);
     if (picked.kind !== "picked") return;
     const size = { width: picked.width, height: picked.height };
     try {
@@ -113,7 +113,7 @@ export default function ResultScreen() {
       }
       router.replace({ pathname: "/spot/ciblage", params: {} });
     } catch {
-      setActionError(fr.spotter.prepareError);
+      setActionError(t.spotter.prepareError);
     }
   }
 
@@ -145,7 +145,7 @@ export default function ResultScreen() {
         next.delete(piece.id);
         return next;
       });
-      setActionError(fr.result.keepError);
+      setActionError(t.result.keepError);
     }
   }
 
@@ -157,22 +157,22 @@ export default function ResultScreen() {
       await addVaultItemFromMatch({ title: piece.name.slice(0, 120), imageUrl: piece.imageUrl, category, productMatchId: piece.id });
       setBought((prev) => new Set(prev).add(piece.id));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      showToast(fr.result.boughtToast);
+      showToast(t.result.boughtToast);
     } catch {
-      setActionError(fr.result.boughtError);
+      setActionError(t.result.boughtError);
     }
   }
 
   async function handleShare() {
     if (!piece) return;
     const url = piece.affiliateUrl ?? piece.merchantUrl ?? "";
-    const message = fr.result.shareMessage(piece.name, url);
+    const message = t.result.shareMessage(piece.name, url);
     try {
       if (Platform.OS === "web" && !(typeof navigator !== "undefined" && "share" in navigator)) {
         // Le message entier, pas le lien seul : la mention « lien affilié »
         // doit accompagner le lien partout où il circule.
         await Clipboard.setStringAsync(message);
-        showToast(fr.result.linkCopied);
+        showToast(t.result.linkCopied);
         return;
       }
       await Share.share({ message });
@@ -193,12 +193,12 @@ export default function ResultScreen() {
   const nav = (
     <View style={styles.nav}>
       <Pressable onPress={() => closeSpotter(router)} hitSlop={12} style={styles.navSide} accessibilityRole="button">
-        <Text style={styles.close}>{fr.spotter.close}</Text>
+        <Text style={styles.close}>{t.spotter.close}</Text>
       </Pressable>
-      <Text style={styles.navTitle}>{fr.result.title}</Text>
+      <Text style={styles.navTitle}>{t.result.title}</Text>
       {result?.status === "success" && canReframe ? (
         <Pressable onPress={handleReframe} hitSlop={12} style={[styles.navSide, styles.navRight]} accessibilityRole="button">
-          <Text style={styles.navAction}>{fr.result.reframe}</Text>
+          <Text style={styles.navAction}>{t.result.reframe}</Text>
         </Pressable>
       ) : (
         <View style={styles.navSide} />
@@ -210,7 +210,7 @@ export default function ResultScreen() {
     return (
       <SafeAreaView style={styles.screen}>
         {nav}
-        <View style={styles.content} accessibilityLabel={fr.result.loading}>
+        <View style={styles.content} accessibilityLabel={t.result.loading}>
           <Skeleton style={styles.hero} />
           <Skeleton style={{ width: "35%", height: 12, marginTop: space.md }} />
           <Skeleton style={{ width: "80%", height: 22, marginTop: space.sm }} />
@@ -226,15 +226,15 @@ export default function ResultScreen() {
         {nav}
         <View style={styles.failContent}>
           <Text style={styles.failTitle} accessibilityRole="header">
-            {isError ? fr.result.loadErrorTitle : fr.result.missingTitle}
+            {isError ? t.result.loadErrorTitle : t.result.missingTitle}
           </Text>
-          <Text style={styles.failTip}>{isError ? fr.result.loadErrorTip : fr.result.missingTip}</Text>
+          <Text style={styles.failTip}>{isError ? t.result.loadErrorTip : t.result.missingTip}</Text>
           <Pressable
             style={styles.primary}
             accessibilityRole="button"
             onPress={() => (state.kind === "error" ? setState({ kind: "loading", searchId: state.searchId }) : closeSpotter(router))}
           >
-            <Text style={styles.primaryLabel}>{isError ? fr.result.retry : fr.result.backToSpotter}</Text>
+            <Text style={styles.primaryLabel}>{isError ? t.result.retry : t.result.backToSpotter}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -268,23 +268,23 @@ export default function ResultScreen() {
     <SafeAreaView style={styles.screen}>
       {nav}
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
-        <Text style={styles.count}>{fr.result.count(result.pieces.length, result.query)}</Text>
+        <Text style={styles.count}>{t.result.count(result.pieces.length, result.query)}</Text>
 
         <View style={styles.hero}>
           <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} accessibilityLabel={piece.name} />
         </View>
 
-        <Text style={styles.rankLabel}>{selectedIndex === 0 ? fr.result.bestProposal : fr.result.otherProposal}</Text>
+        <Text style={styles.rankLabel}>{selectedIndex === 0 ? t.result.bestProposal : t.result.otherProposal}</Text>
         <Text style={styles.name} accessibilityRole="header">
           {piece.name}
         </Text>
         <Text style={styles.meta}>
-          {[piece.merchantName, formatPrice(piece)].filter(Boolean).join(" · ")}
+          {[piece.merchantName, displayPrice(piece)].filter(Boolean).join(" · ")}
         </Text>
 
         {piece.merchantUrl ? (
           <Pressable style={styles.primary} onPress={handleOpenMerchant} accessibilityRole="link">
-            <Text style={styles.primaryLabel}>{fr.result.viewAt(piece.merchantName ?? "")}</Text>
+            <Text style={styles.primaryLabel}>{t.result.viewAt(piece.merchantName ?? "")}</Text>
           </Pressable>
         ) : null}
         {blockedMerchantUrl ? (
@@ -295,7 +295,7 @@ export default function ResultScreen() {
             }}
             accessibilityRole="link"
           >
-            <Text style={styles.blockedLink}>{fr.result.merchantLinkBlocked}</Text>
+            <Text style={styles.blockedLink}>{t.result.merchantLinkBlocked}</Text>
           </Pressable>
         ) : null}
         <Pressable
@@ -303,17 +303,17 @@ export default function ResultScreen() {
           hitSlop={10}
           accessibilityRole="button"
           accessibilityState={{ expanded: affiliateInfoOpen }}
-          accessibilityHint={fr.result.affiliateHint}
+          accessibilityHint={t.result.affiliateHint}
         >
           <Text style={styles.disclosure}>
-            {fr.result.affiliateDisclosure} <Text style={styles.disclosureMore}>{affiliateInfoOpen ? "–" : "ⓘ"}</Text>
+            {t.result.affiliateDisclosure} <Text style={styles.disclosureMore}>{affiliateInfoOpen ? "–" : "ⓘ"}</Text>
           </Text>
         </Pressable>
-        {affiliateInfoOpen ? <Text style={styles.disclosureText}>{fr.result.affiliateExplanation}</Text> : null}
+        {affiliateInfoOpen ? <Text style={styles.disclosureText}>{t.result.affiliateExplanation}</Text> : null}
 
         <View style={styles.actions}>
           <Pressable style={styles.action} onPress={handleKeep} disabled={kept.has(piece.id)} accessibilityRole="button">
-            <Text style={styles.actionLabel}>{kept.has(piece.id) ? fr.result.kept : fr.result.keep}</Text>
+            <Text style={styles.actionLabel}>{kept.has(piece.id) ? t.result.kept : t.result.keep}</Text>
           </Pressable>
           <Pressable
             style={styles.action}
@@ -321,10 +321,10 @@ export default function ResultScreen() {
             disabled={bought.has(piece.id)}
             accessibilityRole="button"
           >
-            <Text style={styles.actionLabel}>{bought.has(piece.id) ? fr.result.bought : fr.result.markAsBought}</Text>
+            <Text style={styles.actionLabel}>{bought.has(piece.id) ? t.result.bought : t.result.markAsBought}</Text>
           </Pressable>
           <Pressable style={styles.action} onPress={handleShare} accessibilityRole="button">
-            <Text style={styles.actionLabel}>{fr.result.share}</Text>
+            <Text style={styles.actionLabel}>{t.result.share}</Text>
           </Pressable>
         </View>
         {actionError ? <ErrorMessage style={styles.actionError}>{actionError}</ErrorMessage> : null}
@@ -332,7 +332,7 @@ export default function ResultScreen() {
         {others.length > 0 ? (
           <>
             <Text style={styles.sectionTitle} accessibilityRole="header">
-              {fr.result.otherProposals}
+              {t.result.otherProposals}
             </Text>
             <View style={styles.grid}>
               {visibleOthers.map(({ p, index }) => (
@@ -350,7 +350,7 @@ export default function ResultScreen() {
                     {p.name}
                   </Text>
                   <Text style={styles.cardMeta} numberOfLines={1}>
-                    {[p.merchantName, p.priceFrom !== null ? formatPrice(p) : null].filter(Boolean).join(" · ")}
+                    {[p.merchantName, p.priceFrom !== null ? displayPrice(p) : null].filter(Boolean).join(" · ")}
                   </Text>
                 </Pressable>
               ))}
@@ -364,7 +364,7 @@ export default function ResultScreen() {
                 }}
                 accessibilityRole="button"
               >
-                <Text style={styles.secondaryLabel}>{fr.result.showMore(hiddenCount)}</Text>
+                <Text style={styles.secondaryLabel}>{t.result.showMore(hiddenCount)}</Text>
               </Pressable>
             ) : null}
           </>
@@ -372,15 +372,15 @@ export default function ResultScreen() {
       </ScrollView>
 
       <Modal visible={categoryOpen} transparent animationType="slide" onRequestClose={() => setCategoryOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setCategoryOpen(false)} accessibilityRole="button" accessibilityLabel="Fermer" />
+        <Pressable style={styles.backdrop} onPress={() => setCategoryOpen(false)} accessibilityRole="button" accessibilityLabel={t.common.close} />
         <View style={styles.sheet}>
           <View style={styles.grab} />
           <Text style={styles.sheetTitle} accessibilityRole="header">
-            {fr.result.categoryTitle}
+            {t.result.categoryTitle}
           </Text>
           {VAULT_CATEGORIES.map((category) => (
             <Pressable key={category} style={styles.sheetRow} onPress={() => handleBought(category)} accessibilityRole="button">
-              <Text style={styles.sheetRowLabel}>{VAULT_CATEGORY_LABELS[category]}</Text>
+              <Text style={styles.sheetRowLabel}>{t.vaultLabels.categories[category]}</Text>
             </Pressable>
           ))}
         </View>
@@ -407,18 +407,18 @@ function FailureView({
   error: string | null;
 }) {
   const copy = {
-    no_match: [fr.result.noMatchTitle, fr.result.noMatchTip],
-    technical: [fr.result.technicalTitle, fr.result.technicalTip],
-    rate_limited: [fr.result.rateLimitedTitle, fr.result.rateLimitedTip],
-    needs_photo: [fr.result.previewUnavailableTitle, fr.result.previewUnavailableTip],
+    no_match: [t.result.noMatchTitle, t.result.noMatchTip],
+    technical: [t.result.technicalTitle, t.result.technicalTip],
+    rate_limited: [t.result.rateLimitedTitle, t.result.rateLimitedTip],
+    needs_photo: [t.result.previewUnavailableTitle, t.result.previewUnavailableTip],
   }[reason];
 
   // Ordre des actions selon la cause : après « rien trouvé », recadrer
   // d'abord (réessayer à l'identique redonnerait le même résultat) ; après
   // une panne, réessayer d'abord.
-  const reframe = canReframe ? { label: fr.result.reframe, onPress: onReframe } : null;
-  const capture = { label: fr.result.importCapture, onPress: onImportCapture, icon: true };
-  const retry = { label: fr.result.retry, onPress: onRetry };
+  const reframe = canReframe ? { label: t.result.reframe, onPress: onReframe } : null;
+  const capture = { label: t.result.importCapture, onPress: onImportCapture, icon: true };
+  const retry = { label: t.result.retry, onPress: onRetry };
   const actions =
     reason === "technical"
       ? [retry, reframe]
@@ -449,7 +449,7 @@ function FailureView({
         </Pressable>
       ))}
       <Pressable style={styles.textButton} onPress={onBack} accessibilityRole="button">
-        <Text style={styles.textButtonLabel}>{fr.result.backToSpotter}</Text>
+        <Text style={styles.textButtonLabel}>{t.result.backToSpotter}</Text>
       </Pressable>
     </View>
   );
@@ -493,7 +493,7 @@ const styles = themedStyles(() => ({
   failContent: { flex: 1, justifyContent: "center", paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   failTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 29 },
   failTip: { fontSize: font.secondary, color: color.acier, lineHeight: 21, marginTop: space.sm },
-  backdrop: { flex: 1, backgroundColor: "rgba(20,19,18,0.35)" },
+  backdrop: { flex: 1, backgroundColor: color.voile },
   sheet: { backgroundColor: color.porcelaine, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingHorizontal: space.lg, paddingTop: 10, paddingBottom: space.xl },
   grab: { width: 36, height: 5, borderRadius: 3, backgroundColor: color.filet, alignSelf: "center", marginBottom: space.md },
   sheetTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, marginBottom: space.sm },

@@ -7,9 +7,9 @@ import type { PrivacyLevel, VaultItem } from "@monapp/shared-types";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, createLifestylePost, fetchVault, sharePurchasePost } from "@/lib/api";
 import { SpotImage } from "@/components/spot-image";
-import { PRIVACY_LABELS, PRIVACY_LEVELS } from "@/lib/vault-labels";
+import { PRIVACY_LEVELS } from "@/lib/vault-labels";
 import { color, font, radius, space } from "@/theme/tokens";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { getRecentlySpotted } from "@/api/client";
 import type { Piece } from "@/api/types";
 import { CameraIcon } from "@/components/icons";
@@ -48,7 +48,7 @@ export default function NewPostScreen() {
         .then((page) => setVaultItems(page.items))
         .catch(() => {
           setVaultItems([]);
-          setError(fr.publish.vaultLoadError);
+          setError(t.publish.vaultLoadError);
         });
     }
   }
@@ -56,7 +56,7 @@ export default function NewPostScreen() {
   async function handlePickPhoto() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      setError("Autorisez l'accès à vos photos pour publier.");
+      setError(t.publish.photoDenied);
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
@@ -86,24 +86,24 @@ export default function NewPostScreen() {
     setError(null);
     if (mode === "vault") {
       if (!vaultItemId) {
-        setError(fr.publish.choosePiece);
+        setError(t.publish.choosePiece);
         return;
       }
       setSubmitting(true);
       try {
         await sharePurchasePost(vaultItemId, privacy, caption.trim() || undefined);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        showToast(fr.publish.published);
+        showToast(t.publish.published);
         safeBack();
       } catch (e) {
-        setError(e instanceof ApiError ? e.message : "La publication a échoué, réessayez.");
+        setError(e instanceof ApiError ? e.message : t.publish.error);
       } finally {
         setSubmitting(false);
       }
       return;
     }
     if (!imageUri) {
-      setError("Ajoutez une photo.");
+      setError(t.publish.photoRequired);
       return;
     }
 
@@ -116,10 +116,10 @@ export default function NewPostScreen() {
       const taggedPieces = pieces.map((piece) => ({ productMatchId: piece.id }));
       await createLifestylePost({ caption: caption.trim(), imageUri, privacy, taggedPieces });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      showToast(fr.publish.published);
+      showToast(t.publish.published);
       safeBack();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "La publication a échoué, réessayez.");
+      setError(e instanceof ApiError ? e.message : t.publish.error);
     } finally {
       setSubmitting(false);
     }
@@ -130,19 +130,19 @@ export default function NewPostScreen() {
       <View style={styles.handle} />
       <View style={styles.nav}>
         <Pressable accessibilityRole="button" onPress={safeBack} hitSlop={12} style={styles.navSide}>
-          <Text style={styles.cancel}>{fr.publish.cancel}</Text>
+          <Text style={styles.cancel}>{t.publish.cancel}</Text>
         </Pressable>
-        <Text style={styles.navTitle} accessibilityRole="header">{fr.publish.title}</Text>
+        <Text style={styles.navTitle} accessibilityRole="header">{t.publish.title}</Text>
         <Pressable
           onPress={handleSubmit}
           disabled={submitting || (mode === "photo" ? !imageUri : !vaultItemId)}
           hitSlop={12}
           style={[styles.navSide, styles.navSideRight]}
           accessibilityRole="button"
-          accessibilityLabel={submitting ? "Publication en cours" : fr.publish.publish}
+          accessibilityLabel={submitting ? t.publish.publishing : t.publish.publish}
         >
           <Text style={[styles.publishLabel, (submitting || (mode === "photo" ? !imageUri : !vaultItemId)) ? styles.publishLabelDisabled : null]}>
-            {submitting ? "…" : fr.publish.publish}
+            {submitting ? "…" : t.publish.publish}
           </Text>
         </Pressable>
       </View>
@@ -160,7 +160,7 @@ export default function NewPostScreen() {
               accessibilityState={{ selected: mode === value }}
             >
               <Text style={[styles.modeLabel, mode === value ? styles.modeLabelActive : null]}>
-                {value === "photo" ? fr.publish.modePhoto : fr.publish.modeVault}
+                {value === "photo" ? t.publish.modePhoto : t.publish.modeVault}
               </Text>
             </Pressable>
           ))}
@@ -168,11 +168,11 @@ export default function NewPostScreen() {
 
         {mode === "vault" ? (
           <>
-            <Text style={styles.hint}>{fr.publish.vaultHint}</Text>
+            <Text style={styles.hint}>{t.publish.vaultHint}</Text>
             {vaultItems === null ? (
               <ActivityIndicator color={color.encre} style={styles.vaultLoader} />
             ) : vaultItems.length === 0 ? (
-              <Text style={styles.emptyPicker}>{fr.publish.vaultEmpty}</Text>
+              <Text style={styles.emptyPicker}>{t.publish.vaultEmpty}</Text>
             ) : (
               <View style={styles.vaultGrid}>
                 {vaultItems.map((item) => (
@@ -198,14 +198,14 @@ export default function NewPostScreen() {
           style={styles.photo}
           onPress={handlePickPhoto}
           accessibilityRole="button"
-          accessibilityLabel={imageUri ? "Changer la photo" : fr.publish.addPhoto}
+          accessibilityLabel={imageUri ? t.publish.changePhoto : t.publish.addPhoto}
         >
           {imageUri ? (
-            <Image source={{ uri: imageUri }} style={styles.photoPreview} accessibilityLabel={fr.publish.selectedPhoto} />
+            <Image source={{ uri: imageUri }} style={styles.photoPreview} accessibilityLabel={t.publish.selectedPhoto} />
           ) : (
             <>
               <CameraIcon size={30} tint={color.acier} />
-              <Text style={styles.photoLabel}>{fr.publish.addPhoto}</Text>
+              <Text style={styles.photoLabel}>{t.publish.addPhoto}</Text>
             </>
           )}
         </Pressable>
@@ -213,18 +213,18 @@ export default function NewPostScreen() {
 
         <TextInput
           style={styles.caption}
-          placeholder={fr.publish.captionPlaceholder}
+          placeholder={t.publish.captionPlaceholder}
           placeholderTextColor={color.acier}
           value={caption}
           onChangeText={setCaption}
           multiline
           maxLength={280}
-          accessibilityLabel="Légende de la publication"
+          accessibilityLabel={t.publish.captionLabel}
         />
 
         {mode === "photo" ? (
         <>
-        <Text style={styles.label}>{fr.publish.piecesLabel}</Text>
+        <Text style={styles.label}>{t.publish.piecesLabel}</Text>
         <View style={styles.tags}>
           {pieces.map((piece) => (
             <View key={piece.id} style={styles.tag}>
@@ -234,20 +234,20 @@ export default function NewPostScreen() {
                 onPress={() => removePieceTag(piece.id)}
                 hitSlop={12}
                 accessibilityRole="button"
-                accessibilityLabel={`Retirer ${piece.name}`}
+                accessibilityLabel={t.publish.removePiece(piece.name)}
               >
                 <Text style={styles.tagRemove}>×</Text>
               </Pressable>
             </View>
           ))}
           <Pressable accessibilityRole="button" style={styles.addTag} onPress={openPicker}>
-            <Text style={styles.addTagLabel}>+ {fr.publish.addPiece}</Text>
+            <Text style={styles.addTagLabel}>+ {t.publish.addPiece}</Text>
           </Pressable>
         </View>
         </>
         ) : null}
 
-        <Text style={styles.label}>{fr.publish.visibility}</Text>
+        <Text style={styles.label}>{t.publish.visibility}</Text>
         <View style={styles.tags}>
           {PRIVACY_LEVELS.map((level) => (
             <Pressable
@@ -258,7 +258,7 @@ export default function NewPostScreen() {
               accessibilityRole="radio"
               accessibilityState={{ selected: privacy === level }}
             >
-              <Text style={[styles.privacyLabel, privacy === level ? styles.privacyLabelActive : null]}>{PRIVACY_LABELS[level]}</Text>
+              <Text style={[styles.privacyLabel, privacy === level ? styles.privacyLabelActive : null]}>{t.vaultLabels.privacy[level]}</Text>
             </Pressable>
           ))}
         </View>
@@ -269,17 +269,17 @@ export default function NewPostScreen() {
           style={styles.modalBackdrop}
           onPress={() => setPickerOpen(false)}
           accessibilityRole="button"
-          accessibilityLabel="Fermer"
+          accessibilityLabel={t.common.close}
         />
         <View style={styles.modalSheet}>
           <View style={styles.modalNav}>
-            <Text style={styles.navTitle} accessibilityRole="header">{fr.publish.addPiece}</Text>
+            <Text style={styles.navTitle} accessibilityRole="header">{t.publish.addPiece}</Text>
             <Pressable accessibilityRole="button" onPress={() => setPickerOpen(false)} hitSlop={12}>
-              <Text style={styles.cancel}>{fr.publish.closePicker}</Text>
+              <Text style={styles.cancel}>{t.publish.closePicker}</Text>
             </Pressable>
           </View>
           {recentPieces?.length === 0 ? (
-            <Text style={styles.emptyPicker}>{fr.publish.noRecentPieces}</Text>
+            <Text style={styles.emptyPicker}>{t.publish.noRecentPieces}</Text>
           ) : (
             recentPieces?.map((piece) => (
               <Pressable accessibilityRole="button" key={piece.id} style={styles.pickerRow} onPress={() => addPieceTag(piece)}>
@@ -337,7 +337,7 @@ const styles = themedStyles(() => ({
   privacyPillActive: { backgroundColor: color.vert, borderColor: color.vert },
   privacyLabel: { fontSize: font.caption, color: color.acier },
   privacyLabelActive: { color: color.blanc, fontWeight: "600" },
-  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)" },
+  modalBackdrop: { flex: 1, backgroundColor: color.voile },
   modalSheet: { backgroundColor: color.porcelaine, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingBottom: space.xl, maxHeight: "70%" },
   modalNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: space.md, borderBottomWidth: 1, borderBottomColor: color.filet },
   emptyPicker: { fontSize: font.secondary, color: color.acier, textAlign: "center", padding: space.xl, lineHeight: 20 },

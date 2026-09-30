@@ -7,7 +7,7 @@ import { translateAuthError } from "@/lib/auth-errors";
 import { INITIAL_WEB_URL } from "@/lib/initial-url";
 import { newPasswordProblem, parseRecoveryUrl } from "@/lib/password-recovery";
 import { useToast } from "@/lib/toast-context";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
@@ -56,7 +56,7 @@ export default function NewPasswordScreen() {
   async function handleSave() {
     const problem = newPasswordProblem(password, confirmation);
     if (problem) {
-      setError(problem === "too_short" ? fr.auth.reset.tooShort : fr.auth.reset.mismatch);
+      setError(problem === "too_short" ? t.auth.reset.tooShort : t.auth.reset.mismatch);
       return;
     }
     setError(null);
@@ -67,7 +67,7 @@ export default function NewPasswordScreen() {
       setError(translateAuthError(updateError.message));
       return;
     }
-    showToast(fr.auth.reset.done);
+    showToast(t.auth.reset.done);
     router.replace("/");
   }
 
@@ -76,16 +76,16 @@ export default function NewPasswordScreen() {
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.content}>
           {phase === "checking" ? (
-            <View style={styles.centered} accessibilityLabel={fr.auth.reset.checking}>
+            <View style={styles.centered} accessibilityLabel={t.auth.reset.checking}>
               <ActivityIndicator color={color.encre} />
             </View>
           ) : phase === "ready" ? (
             <>
-              <Text style={styles.title} accessibilityRole="header">{fr.auth.reset.title}</Text>
-              <Text style={styles.subtitle}>{fr.auth.reset.subtitle}</Text>
+              <Text style={styles.title} accessibilityRole="header">{t.auth.reset.title}</Text>
+              <Text style={styles.subtitle}>{t.auth.reset.subtitle}</Text>
               {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
               <View style={styles.field}>
-                <Text style={styles.label}>{fr.auth.reset.password}</Text>
+                <Text style={styles.label}>{t.auth.reset.password}</Text>
                 <TextInput
                   style={styles.input}
                   secureTextEntry
@@ -95,11 +95,11 @@ export default function NewPasswordScreen() {
                   autoCorrect={false}
                   value={password}
                   onChangeText={setPassword}
-                  accessibilityLabel={fr.auth.reset.password}
+                  accessibilityLabel={t.auth.reset.password}
                 />
               </View>
               <View style={styles.field}>
-                <Text style={styles.label}>{fr.auth.reset.confirm}</Text>
+                <Text style={styles.label}>{t.auth.reset.confirm}</Text>
                 <TextInput
                   style={styles.input}
                   secureTextEntry
@@ -110,7 +110,7 @@ export default function NewPasswordScreen() {
                   value={confirmation}
                   onChangeText={setConfirmation}
                   onSubmitEditing={handleSave}
-                  accessibilityLabel={fr.auth.reset.confirm}
+                  accessibilityLabel={t.auth.reset.confirm}
                 />
               </View>
               <Pressable
@@ -119,17 +119,17 @@ export default function NewPasswordScreen() {
                 disabled={submitting || !password || !confirmation}
                 accessibilityRole="button"
               >
-                <Text style={styles.ctaLabel}>{submitting ? fr.auth.reset.ctaLoading : fr.auth.reset.cta}</Text>
+                <Text style={styles.ctaLabel}>{submitting ? t.auth.reset.ctaLoading : t.auth.reset.cta}</Text>
               </Pressable>
             </>
           ) : (
             <>
               <Text style={styles.title} accessibilityRole="header">
-                {phase === "expired" ? fr.auth.reset.expiredTitle : fr.auth.reset.invalidTitle}
+                {phase === "expired" ? t.auth.reset.expiredTitle : t.auth.reset.invalidTitle}
               </Text>
-              <Text style={styles.subtitle}>{phase === "expired" ? fr.auth.reset.expiredBody : fr.auth.reset.invalidBody}</Text>
+              <Text style={styles.subtitle}>{phase === "expired" ? t.auth.reset.expiredBody : t.auth.reset.invalidBody}</Text>
               <Pressable style={styles.cta} onPress={() => router.replace("/mot-de-passe-oublie")} accessibilityRole="button">
-                <Text style={styles.ctaLabel}>{fr.auth.reset.newLink}</Text>
+                <Text style={styles.ctaLabel}>{t.auth.reset.newLink}</Text>
               </Pressable>
             </>
           )}

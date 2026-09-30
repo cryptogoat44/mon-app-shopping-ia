@@ -4,17 +4,17 @@ import * as Haptics from "expo-haptics";
 import type { ReportReason } from "@monapp/shared-types";
 import { ApiError, blockUser, reportContent } from "@/lib/api";
 import { color, font, radius, space } from "@/theme/tokens";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { useToast } from "@/lib/toast-context";
 import { themedStyles } from "@/theme/themed-styles";
 
 const REASONS: ReportReason[] = ["spam", "inappropriate", "harassment", "other"];
 
 const REASON_LABELS: Record<ReportReason, string> = {
-  spam: fr.moderation.reasonSpam,
-  inappropriate: fr.moderation.reasonInappropriate,
-  harassment: fr.moderation.reasonHarassment,
-  other: fr.moderation.reasonOther,
+  spam: t.moderation.reasonSpam,
+  inappropriate: t.moderation.reasonInappropriate,
+  harassment: t.moderation.reasonHarassment,
+  other: t.moderation.reasonOther,
 };
 
 type Step = "root" | "report" | "confirmBlock";
@@ -46,9 +46,9 @@ export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, o
           ? { targetType: "comment", targetId: commentId, reason }
           : { targetType: postId ? "post" : "user", targetId: postId ?? userId, reason }
       );
-      showToast(fr.moderation.reportSuccess);
+      showToast(t.moderation.reportSuccess);
     } catch (e) {
-      showToast(e instanceof ApiError ? e.message : fr.moderation.reportError);
+      showToast(e instanceof ApiError ? e.message : t.moderation.reportError);
     }
   }
 
@@ -57,16 +57,16 @@ export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, o
     try {
       await blockUser(userId);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      showToast(fr.moderation.blockSuccess);
+      showToast(t.moderation.blockSuccess);
       onBlocked?.(userId);
     } catch (e) {
-      showToast(e instanceof ApiError ? e.message : fr.moderation.blockError);
+      showToast(e instanceof ApiError ? e.message : t.moderation.blockError);
     }
   }
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
-      <Pressable style={styles.backdrop} onPress={close} accessibilityRole="button" accessibilityLabel={fr.moderation.cancel} />
+      <Pressable style={styles.backdrop} onPress={close} accessibilityRole="button" accessibilityLabel={t.moderation.cancel} />
       <View style={styles.sheet}>
         <View style={styles.handle} />
         {step === "root" ? (
@@ -75,17 +75,17 @@ export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, o
               style={[styles.item, styles.itemBorder]}
               onPress={() => setStep("report")}
               accessibilityRole="button"
-              accessibilityLabel={postId ? fr.moderation.reportPost : fr.moderation.reportUser}
+              accessibilityLabel={postId ? t.moderation.reportPost : t.moderation.reportUser}
             >
-              <Text style={styles.itemLabel}>{postId ? fr.moderation.reportPost : fr.moderation.reportUser}</Text>
+              <Text style={styles.itemLabel}>{postId ? t.moderation.reportPost : t.moderation.reportUser}</Text>
             </Pressable>
             <Pressable
               style={styles.item}
               onPress={() => setStep("confirmBlock")}
               accessibilityRole="button"
-              accessibilityLabel={fr.moderation.block}
+              accessibilityLabel={t.moderation.block}
             >
-              <Text style={[styles.itemLabel, styles.itemLabelDestructive]}>{fr.moderation.block}</Text>
+              <Text style={[styles.itemLabel, styles.itemLabelDestructive]}>{t.moderation.block}</Text>
             </Pressable>
           </>
         ) : step === "report" ? (
@@ -102,19 +102,19 @@ export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, o
           ))
         ) : (
           <>
-            <Text style={styles.confirmText}>{fr.moderation.blockConfirm}</Text>
+            <Text style={styles.confirmText}>{t.moderation.blockConfirm}</Text>
             <Pressable
               style={[styles.item, styles.itemBorder]}
               onPress={handleBlock}
               accessibilityRole="button"
-              accessibilityLabel={fr.moderation.blockConfirmCta}
+              accessibilityLabel={t.moderation.blockConfirmCta}
             >
-              <Text style={[styles.itemLabel, styles.itemLabelDestructive]}>{fr.moderation.blockConfirmCta}</Text>
+              <Text style={[styles.itemLabel, styles.itemLabelDestructive]}>{t.moderation.blockConfirmCta}</Text>
             </Pressable>
           </>
         )}
-        <Pressable style={styles.cancel} onPress={close} accessibilityRole="button" accessibilityLabel={fr.moderation.cancel}>
-          <Text style={styles.cancelLabel}>{fr.moderation.cancel}</Text>
+        <Pressable style={styles.cancel} onPress={close} accessibilityRole="button" accessibilityLabel={t.moderation.cancel}>
+          <Text style={styles.cancelLabel}>{t.moderation.cancel}</Text>
         </Pressable>
       </View>
     </Modal>
@@ -122,7 +122,7 @@ export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, o
 }
 
 const styles = themedStyles(() => ({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)" },
+  backdrop: { flex: 1, backgroundColor: color.voile },
   sheet: { backgroundColor: color.porcelaine, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingBottom: space.xl },
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: color.filet, alignSelf: "center", marginTop: 9, marginBottom: space.sm },
   item: { paddingVertical: space.md, paddingHorizontal: space.lg, alignItems: "center" },

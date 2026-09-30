@@ -5,6 +5,7 @@ import type { CropRect } from "@monapp/shared-types";
 import { color } from "@/theme/tokens";
 import { containBox, cropToBox, moveCrop, resizeCrop, scaleCrop, type Corner, type Size } from "@/lib/crop-geometry";
 import { themedStyles } from "@/theme/themed-styles";
+import { t } from "@/i18n";
 
 const HANDLE_TOUCH = 44; // zone tactile d'un coin (norme Apple)
 const HANDLE_ARM = 22; // longueur visible des équerres
@@ -98,9 +99,9 @@ export function CropSelector({ uri, crop, onChange, onImageSize, onDragChange, h
             style={[styles.frame, { left: frame.left, top: frame.top, width: frame.width, height: frame.height }]}
             accessible
             accessibilityRole="adjustable"
-            accessibilityLabel="Zone analysée"
-            accessibilityHint="Faites glisser le cadre ou ses coins. Balayez vers le haut ou le bas pour l'agrandir ou le réduire."
-            accessibilityValue={{ text: `${Math.round(crop.width * 100)} % de la largeur, ${Math.round(crop.height * 100)} % de la hauteur` }}
+            accessibilityLabel={t.crop.label}
+            accessibilityHint={t.crop.hint}
+            accessibilityValue={{ text: t.crop.value(Math.round(crop.width * 100), Math.round(crop.height * 100)) }}
             accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
             onAccessibilityAction={(event) =>
               onChange(scaleCrop(crop, event.nativeEvent.actionName === "increment" ? 1.15 : 1 / 1.15))
@@ -150,9 +151,9 @@ export function CropSelector({ uri, crop, onChange, onImageSize, onDragChange, h
 
 const styles = themedStyles(() => ({
   container: { width: "100%", backgroundColor: color.plinthe, borderRadius: 4, overflow: "hidden" },
-  dim: { position: "absolute", backgroundColor: "rgba(20,19,18,0.58)" },
-  frame: { position: "absolute", borderWidth: 1, borderColor: "rgba(255,255,255,0.9)" },
-  grid: { position: "absolute", backgroundColor: "rgba(255,255,255,0.3)" },
+  dim: { position: "absolute", backgroundColor: color.voileImage },
+  frame: { position: "absolute", borderWidth: 1, borderColor: color.cadreImage },
+  grid: { position: "absolute", backgroundColor: color.grilleImage },
   handle: { position: "absolute", width: HANDLE_TOUCH, height: HANDLE_TOUCH },
-  arm: { position: "absolute", width: HANDLE_ARM, height: HANDLE_ARM, borderColor: color.blanc },
+  arm: { position: "absolute", width: HANDLE_ARM, height: HANDLE_ARM, borderColor: color.surImage },
 }));

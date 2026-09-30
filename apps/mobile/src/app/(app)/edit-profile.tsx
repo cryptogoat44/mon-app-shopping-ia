@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, updateMyProfile } from "@/lib/api";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { useToast } from "@/lib/toast-context";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
@@ -32,11 +32,11 @@ export default function EditProfileScreen() {
 
     const normalizedUsername = username.trim().toLowerCase();
     if (!USERNAME_REGEX.test(normalizedUsername)) {
-      setError(fr.editProfile.usernameError);
+      setError(t.editProfile.usernameError);
       return;
     }
     if (!displayName.trim()) {
-      setError(fr.editProfile.displayNameError);
+      setError(t.editProfile.displayNameError);
       return;
     }
 
@@ -48,13 +48,13 @@ export default function EditProfileScreen() {
         bio: bio.trim() || undefined,
       });
       await refreshProfile();
-      showToast(fr.editProfile.saved);
+      showToast(t.editProfile.saved);
       safeBack();
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
-        setError(fr.editProfile.usernameTaken);
+        setError(t.editProfile.usernameTaken);
       } else {
-        setError(e instanceof ApiError ? e.message : fr.editProfile.saveError);
+        setError(e instanceof ApiError ? e.message : t.editProfile.saveError);
       }
     } finally {
       setSubmitting(false);
@@ -64,18 +64,18 @@ export default function EditProfileScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.nav}>
-        <Pressable onPress={safeBack} hitSlop={12} accessibilityRole="button" accessibilityLabel="Retour">
+        <Pressable onPress={safeBack} hitSlop={12} accessibilityRole="button" accessibilityLabel={t.common.back}>
           <Text style={styles.back}>‹</Text>
         </Pressable>
       </View>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.title} accessibilityRole="header">{fr.editProfile.title}</Text>
+          <Text style={styles.title} accessibilityRole="header">{t.editProfile.title}</Text>
 
           {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
           <View style={styles.field}>
-            <Text style={styles.label}>{fr.editProfile.username}</Text>
+            <Text style={styles.label}>{t.editProfile.username}</Text>
             <TextInput
               style={styles.input}
               placeholderTextColor={color.acier}
@@ -84,11 +84,11 @@ export default function EditProfileScreen() {
               value={username}
               onChangeText={setUsername}
               maxLength={20}
-              accessibilityLabel={fr.editProfile.username}
+              accessibilityLabel={t.editProfile.username}
             />
           </View>
           <View style={styles.field}>
-            <Text style={styles.label}>{fr.editProfile.displayName}</Text>
+            <Text style={styles.label}>{t.editProfile.displayName}</Text>
             <TextInput
               style={styles.input}
               placeholderTextColor={color.acier}
@@ -96,20 +96,20 @@ export default function EditProfileScreen() {
               value={displayName}
               onChangeText={setDisplayName}
               maxLength={60}
-              accessibilityLabel={fr.editProfile.displayName}
+              accessibilityLabel={t.editProfile.displayName}
             />
           </View>
           <View style={styles.field}>
-            <Text style={styles.label}>{fr.editProfile.bio}</Text>
+            <Text style={styles.label}>{t.editProfile.bio}</Text>
             <TextInput
               style={[styles.input, styles.bioInput]}
               placeholderTextColor={color.acier}
-              placeholder={fr.editProfile.bioPlaceholder}
+              placeholder={t.editProfile.bioPlaceholder}
               value={bio}
               onChangeText={setBio}
               maxLength={280}
               multiline
-              accessibilityLabel={fr.editProfile.bio}
+              accessibilityLabel={t.editProfile.bio}
             />
           </View>
 
@@ -118,9 +118,9 @@ export default function EditProfileScreen() {
             onPress={handleSubmit}
             disabled={submitting || !username || !displayName}
             accessibilityRole="button"
-            accessibilityLabel={fr.editProfile.save}
+            accessibilityLabel={t.editProfile.save}
           >
-            <Text style={styles.ctaLabel}>{submitting ? fr.editProfile.saving : fr.editProfile.save}</Text>
+            <Text style={styles.ctaLabel}>{submitting ? t.editProfile.saving : t.editProfile.save}</Text>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>

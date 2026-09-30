@@ -4,7 +4,7 @@ import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import type { BlockedUser } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { ApiError, fetchBlockedUsers, unblockUser } from "@/lib/api";
 import { PersonIcon } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
@@ -22,7 +22,7 @@ function BlockedUserRow({ user, onUnblocked }: { user: BlockedUser; onUnblocked:
       await unblockUser(user.id);
       onUnblocked(user.id);
     } catch (e) {
-      showToast(e instanceof ApiError ? e.message : fr.blockedUsers.unblockError);
+      showToast(e instanceof ApiError ? e.message : t.blockedUsers.unblockError);
     } finally {
       setBusy(false);
     }
@@ -42,7 +42,7 @@ function BlockedUserRow({ user, onUnblocked }: { user: BlockedUser; onUnblocked:
         <Text style={styles.username}>@{user.username}</Text>
       </View>
       <Pressable accessibilityRole="button" onPress={handleUnblock} disabled={busy} hitSlop={12}>
-        <Text style={styles.unblockLabel}>{fr.blockedUsers.unblock}</Text>
+        <Text style={styles.unblockLabel}>{t.blockedUsers.unblock}</Text>
       </Pressable>
     </View>
   );
@@ -60,7 +60,7 @@ export default function BlockedUsersScreen() {
           setUsers(data);
           setError(null);
         })
-        .catch((e) => setError(e instanceof ApiError ? e.message : fr.blockedUsers.loadError));
+        .catch((e) => setError(e instanceof ApiError ? e.message : t.blockedUsers.loadError));
     }, [])
   );
 
@@ -77,11 +77,11 @@ export default function BlockedUsersScreen() {
           onPress={() => (router.canGoBack() ? router.back() : router.replace("/settings"))}
           hitSlop={12}
           accessibilityRole="button"
-          accessibilityLabel="Retour"
+          accessibilityLabel={t.common.back}
         >
           <Text style={styles.back}>‹</Text>
         </Pressable>
-        <Text style={styles.title} accessibilityRole="header">{fr.blockedUsers.title}</Text>
+        <Text style={styles.title} accessibilityRole="header">{t.blockedUsers.title}</Text>
         <View style={styles.navSpacer} />
       </View>
 
@@ -98,7 +98,7 @@ export default function BlockedUsersScreen() {
         ) : error ? (
           <ErrorMessage style={styles.error}>{error}</ErrorMessage>
         ) : isEmpty ? (
-          <Text style={styles.empty}>{fr.blockedUsers.empty}</Text>
+          <Text style={styles.empty}>{t.blockedUsers.empty}</Text>
         ) : (
           users?.map((user) => <BlockedUserRow key={user.id} user={user} onUnblocked={handleUnblocked} />)
         )}

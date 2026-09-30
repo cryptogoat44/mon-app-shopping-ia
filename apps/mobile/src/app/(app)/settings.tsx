@@ -3,12 +3,16 @@ import { Platform, Pressable, SafeAreaView, ScrollView, Switch, Text, View } fro
 import { useFocusEffect, useRouter } from "expo-router";
 import { LEGAL_DOCUMENT_VERSIONS, type ConsentStatus } from "@monapp/shared-types";
 import { color, font, serifFont, space } from "@/theme/tokens";
-import { fr } from "@/i18n/fr";
+import { getActiveLocale, t } from "@/i18n";
+import { SegmentedChoice } from "@/components/segmented-choice";
+import { usePreferences } from "@/lib/preferences-context";
+import { LOCALES, THEME_PREFERENCES } from "@/lib/preferences";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, deleteMyAccount, exportMyData, fetchConsentStatus, recordAnalyticsChoice } from "@/lib/api";
 import { hasAnalyticsConsent } from "@/lib/policy-notice";
 import { ErrorMessage } from "@/components/error-message";
-import { consentFor, formatLongDate, pendingConsents } from "@/lib/legal";
+import { consentFor, pendingConsents } from "@/lib/legal";
+import { formatLongDate } from "@/lib/format";
 import { themedStyles } from "@/theme/themed-styles";
 
 async function shareExportedData(data: unknown) {
@@ -31,6 +35,7 @@ async function shareExportedData(data: unknown) {
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { locale, themePreference, chooseLocale, chooseTheme } = usePreferences();
   const { signOut } = useAuth();
   const [consents, setConsents] = useState<ConsentStatus[] | null>(null);
   const [consentsFailed, setConsentsFailed] = useState(false);
@@ -71,7 +76,7 @@ export default function SettingsScreen() {
       const data = await exportMyData();
       await shareExportedData(data);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "L'export a échoué, réessayez.");
+      setError(e instanceof ApiError ? e.message : t.settings.exportError);
     } finally {
       setExporting(false);
     }
@@ -84,18 +89,18 @@ export default function SettingsScreen() {
       await deleteMyAccount();
       await signOut();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "La suppression a échoué.");
+      setError(e instanceof ApiError ? e.message : t.settings.deleteError);
       setDeleting(false);
     }
   }
 
   function consentLine(type: "terms" | "privacy_policy"): string {
-    if (consentsFailed) return fr.settings.consentFailed;
-    if (!consents) return fr.settings.consentLoading;
+    if (consentsFailed) return t.settings.consentFailed;
+    if (!consents) return t.settings.consentLoading;
     const consent = consentFor(consents, type);
-    if (pendingConsents(consents, type).length > 0 || !consent?.grantedAt) return fr.settings.notAccepted;
-    const date = formatLongDate(consent.grantedAt);
-    return consent.version === LEGAL_DOCUMENT_VERSIONS[type] ? fr.settings.acceptedOn(date) : fr.settings.acceptedEarlier(date);
+    if (pendingConsents(consents, type).length > 0 || !consent?.grantedAt) return t.settings.notAccepted;
+    const date = formatLongDate(consent.grantedAt, getActiveLocale());
+    return consent.version === LEGAL_DOCUMENT_VERSIONS[type] ? t.settings.acceptedOn(date) : t.settings.acceptedEarlier(date);
   }
 
   return (
@@ -105,44 +110,65 @@ export default function SettingsScreen() {
           onPress={() => (router.canGoBack() ? router.back() : router.replace("/profile"))}
           hitSlop={12}
           accessibilityRole="button"
-          accessibilityLabel="Retour"
+          accessibilityLabel={t.common.back}
         >
           <Text style={styles.back}>‹</Text>
         </Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title} accessibilityRole="header">{fr.settings.title}</Text>
+        <Text style={styles.title} accessibilityRole="header">{t.settings.title}</Text>
 
         {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>{fr.settings.account}</Text>
+          <Text style={styles.sectionLabel}>{t.settings.account}</Text>
           <Pressable accessibilityRole="button" onPress={() => router.push("/edit-profile")} hitSlop={12}>
-            <Text style={styles.link}>{fr.settings.editProfile}</Text>
+            <Text style={styles.link}>{t.settings.editProfile}</Text>
           </Pressable>
           <Pressable accessibilityRole="button" onPress={() => router.push("/blocked-users")} hitSlop={12} style={styles.secondLink}>
-            <Text style={styles.link}>{fr.blockedUsers.title}</Text>
+            <Text style={styles.link}>{t.blockedUsers.title}</Text>
           </Pressable>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>{fr.settings.documents}</Text>
+          <Text style={styles.sectionLabel}>{t.preferences.language}</Text>
+          <SegmentedChoice
+            label={t.preferences.language}
+            options={LOCALES.map((value) => ({ value, label: t.preferences.languageNames[value] }))}
+            value={locale}
+            onChange={(value) => chooseLocale(value, "settings")}
+          />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>{t.preferences.appearance}</Text>
+          <SegmentedChoice
+            label={t.preferences.appearance}
+            options={THEME_PREFERENCES.map((value) => ({ value, label: t.preferences.themeNames[value] }))}
+            value={themePreference}
+            onChange={chooseTheme}
+          />
+          <Text style={[styles.sectionBody, styles.hint]}>{t.preferences.appearanceHint}</Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>{t.settings.documents}</Text>
           <Pressable accessibilityRole="link" onPress={() => router.push("/conditions")} hitSlop={12}>
-            <Text style={styles.link}>{fr.settings.terms}</Text>
+            <Text style={styles.link}>{t.settings.terms}</Text>
           </Pressable>
           <Text style={styles.sectionBody}>{consentLine("terms")}</Text>
           <Pressable accessibilityRole="link" onPress={() => router.push("/confidentialite")} hitSlop={12}>
-            <Text style={styles.link}>{fr.settings.privacyPolicy}</Text>
+            <Text style={styles.link}>{t.settings.privacyPolicy}</Text>
           </Pressable>
           <Text style={styles.sectionBody}>{consentLine("privacy_policy")}</Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Vos données</Text>
+          <Text style={styles.sectionLabel}>{t.settings.dataSection}</Text>
           <View style={styles.analyticsRow}>
-            <Text style={styles.analyticsTitle}>{fr.settings.analyticsTitle}</Text>
+            <Text style={styles.analyticsTitle}>{t.settings.analyticsTitle}</Text>
             <Switch
-              accessibilityLabel={fr.settings.analyticsSwitchLabel}
+              accessibilityLabel={t.settings.analyticsSwitchLabel}
               value={consents ? hasAnalyticsConsent(consents) : false}
               disabled={!consents || analyticsSaving}
               onValueChange={toggleAnalytics}
@@ -151,38 +177,38 @@ export default function SettingsScreen() {
           </View>
           <Text style={styles.sectionBody}>
             {consentsFailed
-              ? fr.settings.consentFailed
+              ? t.settings.consentFailed
               : !consents
-                ? fr.settings.analyticsLoading
+                ? t.settings.analyticsLoading
                 : hasAnalyticsConsent(consents)
-                  ? fr.settings.analyticsOn
-                  : fr.settings.analyticsOff}
+                  ? t.settings.analyticsOn
+                  : t.settings.analyticsOff}
           </Text>
-          {analyticsError ? <ErrorMessage style={styles.sectionBody}>{fr.settings.analyticsFailed}</ErrorMessage> : null}
+          {analyticsError ? <ErrorMessage style={styles.sectionBody}>{t.settings.analyticsFailed}</ErrorMessage> : null}
           <Pressable accessibilityRole="button" onPress={handleExport} disabled={exporting} hitSlop={12}>
-            <Text style={styles.link}>{exporting ? "Préparation de l'export…" : fr.settings.exportData}</Text>
+            <Text style={styles.link}>{exporting ? t.settings.exporting : t.settings.exportData}</Text>
           </Pressable>
         </View>
 
         <Pressable accessibilityRole="button" onPress={signOut} hitSlop={12} style={styles.section}>
-          <Text style={styles.link}>{fr.settings.signOut}</Text>
+          <Text style={styles.link}>{t.settings.signOut}</Text>
         </Pressable>
 
         <View style={styles.dangerSection}>
-          <Text style={styles.sectionLabel}>Zone sensible</Text>
+          <Text style={styles.sectionLabel}>{t.settings.dangerZone}</Text>
           {!confirmingDelete ? (
             <Pressable accessibilityRole="button" onPress={() => setConfirmingDelete(true)} hitSlop={12}>
-              <Text style={styles.deleteLabel}>{fr.settings.deleteAccount}</Text>
+              <Text style={styles.deleteLabel}>{t.settings.deleteAccount}</Text>
             </Pressable>
           ) : (
             <View>
-              <Text style={styles.sectionBody}>{fr.settings.deleteConfirm}</Text>
+              <Text style={styles.sectionBody}>{t.settings.deleteConfirm}</Text>
               <View style={styles.confirmRow}>
                 <Pressable accessibilityRole="button" onPress={() => setConfirmingDelete(false)} disabled={deleting} hitSlop={12}>
-                  <Text style={styles.cancelLabel}>Annuler</Text>
+                  <Text style={styles.cancelLabel}>{t.common.cancel}</Text>
                 </Pressable>
                 <Pressable accessibilityRole="button" onPress={handleDelete} disabled={deleting} hitSlop={12}>
-                  <Text style={styles.deleteLabel}>{deleting ? "Suppression…" : "Confirmer la suppression"}</Text>
+                  <Text style={styles.deleteLabel}>{deleting ? t.settings.deleting : t.settings.confirmDelete}</Text>
                 </Pressable>
               </View>
             </View>
@@ -204,6 +230,7 @@ const styles = themedStyles(() => ({
   sectionLabel: { fontSize: font.caption, fontWeight: "600", color: color.acier, marginBottom: space.sm },
   analyticsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44 },
   analyticsTitle: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
+  hint: { marginTop: space.sm },
   sectionBody: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm, lineHeight: 19 },
   link: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   secondLink: { marginTop: space.sm },

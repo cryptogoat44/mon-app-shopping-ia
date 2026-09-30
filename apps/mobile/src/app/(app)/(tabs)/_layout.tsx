@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Platform, View } from "react-native";
 import { Tabs, usePathname, useRouter } from "expo-router";
 import { color, radius } from "@/theme/tokens";
-import { fr } from "@/i18n/fr";
+import { t } from "@/i18n";
 import { BellIcon, FeedIcon, PersonIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { fetchUnreadNotificationCount } from "@/lib/api";
 import { onUnreadChanged } from "@/lib/unread-notifications";
@@ -52,18 +52,18 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: fr.spotter.title, tabBarIcon: ({ color: tint }) => <SearchIcon tint={String(tint)} /> }}
+        options={{ title: t.spotter.title, tabBarIcon: ({ color: tint }) => <SearchIcon tint={String(tint)} /> }}
       />
       <Tabs.Screen
         name="feed"
-        options={{ title: "Fil", tabBarIcon: ({ color: tint }) => <FeedIcon tint={String(tint)} /> }}
+        options={{ title: t.tabs.feed, tabBarIcon: ({ color: tint }) => <FeedIcon tint={String(tint)} /> }}
       />
       <Tabs.Screen
         name="publish"
         options={{
-          title: fr.profile.publish,
+          title: t.profile.publish,
           tabBarLabel: () => null,
-          tabBarAccessibilityLabel: fr.profile.publish,
+          tabBarAccessibilityLabel: t.profile.publish,
           tabBarIcon: () => (
             <View
               style={{
@@ -90,16 +90,16 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="activite"
         options={{
-          title: fr.notifications.title,
+          title: t.notifications.title,
           tabBarIcon: ({ color: tint }) => <BellIcon tint={String(tint)} />,
           tabBarBadge: unread > 0 ? "" : undefined,
           tabBarBadgeStyle: { minWidth: 9, maxHeight: 9, borderRadius: 5, backgroundColor: color.vert, top: 2 },
-          tabBarAccessibilityLabel: unread > 0 ? `${fr.notifications.title}, ${unread} non lues` : fr.notifications.title,
+          tabBarAccessibilityLabel: unread > 0 ? t.tabs.unread(t.notifications.title, unread) : t.notifications.title,
         }}
       />
       <Tabs.Screen
         name="profile"
-        options={{ title: "Profil", tabBarIcon: ({ color: tint }) => <PersonIcon tint={String(tint)} /> }}
+        options={{ title: t.tabs.profile, tabBarIcon: ({ color: tint }) => <PersonIcon tint={String(tint)} /> }}
       />
     </Tabs>
   );

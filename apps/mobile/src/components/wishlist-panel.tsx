@@ -1,8 +1,9 @@
+import { formatPrice } from "@/lib/format";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { color, font, radius, space } from "@/theme/tokens";
-import { fr } from "@/i18n/fr";
+import { getActiveLocale, t } from "@/i18n";
 import { getWishlist } from "@/api/client";
 import type { Piece, WishlistItem } from "@/api/types";
 import { ApiError } from "@/lib/api";
@@ -13,10 +14,9 @@ import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { SpotImage } from "@/components/spot-image";
 import { themedStyles } from "@/theme/themed-styles";
 
-function formatPrice(item: Piece): string | null {
+function displayPrice(item: Piece): string | null {
   if (item.priceFrom === null) return null;
-  const currency = item.currency === "EUR" ? "€" : (item.currency ?? "");
-  return `${item.priceFrom.toLocaleString("fr-FR")} ${currency}`.trim();
+  return formatPrice(item.priceFrom, item.currency, getActiveLocale());
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -47,7 +47,7 @@ export function WishlistPanel() {
         .catch((e) => {
           setItems([]);
           setNextCursor(null);
-          setError(e instanceof ApiError ? e.message : fr.wishlist.loadError);
+          setError(e instanceof ApiError ? e.message : t.wishlist.loadError);
         }),
     []
   );
@@ -83,7 +83,7 @@ export function WishlistPanel() {
 
   return (
     <>
-      <Text style={styles.privateNote}>{fr.wishlist.privateNote}</Text>
+      <Text style={styles.privateNote}>{t.wishlist.privateNote}</Text>
       {loading ? (
         <View style={styles.grid}>
           {[0, 1, 2].map((i) => (
@@ -118,7 +118,7 @@ export function WishlistPanel() {
                     <Text style={styles.name} numberOfLines={1}>
                       {item.name}
                     </Text>
-                    {formatPrice(item) ? <Text style={styles.price}>{formatPrice(item)}</Text> : null}
+                    {displayPrice(item) ? <Text style={styles.price}>{displayPrice(item)}</Text> : null}
                   </Pressable>
                   {item.merchantUrl ? (
                     <MerchantLinkButton
@@ -138,9 +138,9 @@ export function WishlistPanel() {
           ListEmptyComponent={
             !error ? (
               <View style={styles.empty}>
-                <Text style={styles.emptyText}>{fr.wishlist.empty}</Text>
+                <Text style={styles.emptyText}>{t.wishlist.empty}</Text>
                 <Pressable accessibilityRole="button" onPress={() => router.push("/")}>
-                  <Text style={styles.emptyCta}>{fr.wishlist.emptyCta}</Text>
+                  <Text style={styles.emptyCta}>{t.wishlist.emptyCta}</Text>
                 </Pressable>
               </View>
             ) : null

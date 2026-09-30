@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { ApiError, acceptConsents, recordAnalyticsChoice, updateMyProfile } from "@/lib/api";
 import { forgetSignupConsents, hasSignupConsents, signupAnalyticsChoice } from "@/lib/signup-consents";
 import { setAnalyticsUser, track } from "@/lib/analytics";
-import { fr } from "@/i18n/fr";
+import { getActiveLocale, t } from "@/i18n";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
 import { CHECKBOX_SIZE, CheckboxRow } from "@/components/checkbox-row";
@@ -34,19 +34,19 @@ export default function CompleteProfileScreen() {
 
     const normalizedUsername = username.trim().toLowerCase();
     if (!USERNAME_REGEX.test(normalizedUsername)) {
-      setError("Le nom d'utilisateur doit faire 3 à 20 caractères : lettres minuscules, chiffres, underscore.");
+      setError(t.editProfile.usernameError);
       return;
     }
     if (!displayName.trim()) {
-      setError("Le nom affiché est obligatoire.");
+      setError(t.editProfile.displayNameError);
       return;
     }
     if (needsConsents && !ageChecked) {
-      setError(fr.auth.signUp.ageRequired);
+      setError(t.auth.signUp.ageRequired);
       return;
     }
     if (needsConsents && !documentsChecked) {
-      setError(fr.auth.signUp.consentRequired);
+      setError(t.auth.signUp.consentRequired);
       return;
     }
 
@@ -64,15 +64,15 @@ export default function CompleteProfileScreen() {
       await updateMyProfile({ username: normalizedUsername, displayName: displayName.trim() });
       if (session?.user.id) {
         setAnalyticsUser(session.user.id, analyticsChecked);
-        track("signup_completed", { locale: "fr" });
+        track("signup_completed", { locale: getActiveLocale() });
       }
       await refreshProfile();
       // Le layout racine redirige automatiquement vers (app) une fois le profil complet.
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
-        setError("Ce nom d'utilisateur est déjà pris.");
+        setError(t.editProfile.usernameTaken);
       } else {
-        setError("Une erreur est survenue, réessayez.");
+        setError(t.common.genericError);
       }
     } finally {
       setSubmitting(false);
@@ -83,13 +83,13 @@ export default function CompleteProfileScreen() {
     <SafeAreaView style={styles.screen}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Text style={styles.title} accessibilityRole="header">Dernière étape</Text>
-          <Text style={styles.subtitle}>Choisissez comment on vous reconnaît sur l'app.</Text>
+          <Text style={styles.title} accessibilityRole="header">{t.completeProfile.title}</Text>
+          <Text style={styles.subtitle}>{t.completeProfile.subtitle}</Text>
 
           {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
           <View style={styles.field}>
-            <Text style={styles.label}>Nom d'utilisateur</Text>
+            <Text style={styles.label}>{t.editProfile.username}</Text>
             <TextInput
               style={styles.input}
               autoCapitalize="none"
@@ -97,45 +97,45 @@ export default function CompleteProfileScreen() {
               value={username}
               onChangeText={setUsername}
               maxLength={20}
-              accessibilityLabel="Nom d'utilisateur"
+              accessibilityLabel={t.editProfile.username}
             />
           </View>
           <View style={styles.field}>
-            <Text style={styles.label}>Nom affiché</Text>
+            <Text style={styles.label}>{t.editProfile.displayName}</Text>
             <TextInput
               style={styles.input}
               autoCapitalize="words"
               value={displayName}
               onChangeText={setDisplayName}
               maxLength={60}
-              accessibilityLabel="Nom affiché"
+              accessibilityLabel={t.editProfile.displayName}
             />
           </View>
 
           {needsConsents ? (
             <View style={styles.consents}>
-              <CheckboxRow label={fr.auth.signUp.ageDeclaration} checked={ageChecked} onToggle={() => setAgeChecked((c) => !c)} />
+              <CheckboxRow label={t.auth.signUp.ageDeclaration} checked={ageChecked} onToggle={() => setAgeChecked((c) => !c)} />
               <CheckboxRow
                 style={styles.consentRow}
-                label={fr.auth.signUp.consent}
+                label={t.auth.signUp.consent}
                 checked={documentsChecked}
                 onToggle={() => setDocumentsChecked((c) => !c)}
               />
               <CheckboxRow
                 style={styles.consentRow}
-                label={fr.auth.signUp.analyticsConsent}
+                label={t.auth.signUp.analyticsConsent}
                 checked={analyticsChecked}
                 onToggle={() => setAnalyticsChecked((c) => !c)}
               />
               <View style={styles.legalLinks}>
                 <Link href="/conditions" asChild>
                   <Pressable accessibilityRole="link" hitSlop={12}>
-                    <Text style={styles.legalLink}>{fr.legal.readTerms}</Text>
+                    <Text style={styles.legalLink}>{t.legal.readTerms}</Text>
                   </Pressable>
                 </Link>
                 <Link href="/confidentialite" asChild>
                   <Pressable accessibilityRole="link" hitSlop={12}>
-                    <Text style={styles.legalLink}>{fr.legal.readPrivacy}</Text>
+                    <Text style={styles.legalLink}>{t.legal.readPrivacy}</Text>
                   </Pressable>
                 </Link>
               </View>
@@ -147,7 +147,7 @@ export default function CompleteProfileScreen() {
             onPress={handleSubmit}
             disabled={submitting || !username || !displayName || consentsMissing}
           >
-            <Text style={styles.ctaLabel}>{submitting ? "Enregistrement…" : "Continuer"}</Text>
+            <Text style={styles.ctaLabel}>{submitting ? t.editProfile.saving : t.completeProfile.continue}</Text>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
