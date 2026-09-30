@@ -1,13 +1,10 @@
 import { useEffect, useState } from "react";
-import { Platform } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { POLICY_UPDATE_NOTICE } from "@monapp/shared-types";
 import { fetchConsentStatus, recordAnalyticsChoice } from "@/lib/api";
-import { setAnalyticsPlatform, setAnalyticsUser } from "@/lib/analytics";
-import { setWebSentryUser } from "@/lib/sentry-web";
 import { useAuth } from "@/lib/auth-context";
-import { hasAnalyticsConsent, parseSeenNotices, seenNoticesKey, shouldAskAnalytics, shouldShowNotice } from "@/lib/policy-notice";
+import { parseSeenNotices, seenNoticesKey, shouldAskAnalytics, shouldShowNotice } from "@/lib/policy-notice";
 import { t } from "@/i18n";
 import { NoticeBanner } from "@/components/notice-banner";
 
@@ -16,9 +13,8 @@ import { NoticeBanner } from "@/components/notice-banner";
 //    acceptation (une fois par compte et par appareil) ;
 // 2. demande « statistiques d'usage » aux comptes qui n'ont jamais choisi
 //    (une seule fois : le choix, accord ou refus, est gardé sur le serveur).
-// Règle aussi la collecte de statistiques selon le consentement du compte
-// (rien avant d'avoir lu ce consentement ; coupée à la déconnexion).
-// Une lecture impossible (réseau) n'affiche rien et ne collecte rien.
+// Une lecture impossible (réseau) n'affiche rien. La collecte de statistiques
+// selon le consentement est réglée par AnalyticsSession (lot 3).
 
 type Notice = "policy" | "analytics";
 
@@ -31,9 +27,6 @@ export function AppNotices() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setAnalyticsPlatform(Platform.OS);
-    setAnalyticsUser(null, false);
-    setWebSentryUser(userId);
     setQueue([]);
     if (!userId) return;
     let cancelled = false;
@@ -41,21 +34,17 @@ export function AppNotices() {
       try {
         const statuses = await fetchConsentStatus();
         if (cancelled) return;
-        setAnalyticsUser(userId, hasAnalyticsConsent(statuses));
         const next: Notice[] = [];
         const seen = parseSeenNotices(await AsyncStorage.getItem(seenNoticesKey(userId)).catch(() => null));
         if (shouldShowNotice(statuses, seen, POLICY_UPDATE_NOTICE)) next.push("policy");
         if (shouldAskAnalytics(statuses)) next.push("analytics");
         if (!cancelled) setQueue(next);
       } catch {
-        // Voir plus haut : rien cette fois-ci, nouvel essai au prochain lancement.
+        // Lecture impossible (réseau) : rien cette fois-ci, nouvel essai au prochain lancement.
       }
     })();
     return () => {
       cancelled = true;
-      // Sortie de l'app connectée (déconnexion, compte supprimé) : collecte coupée.
-      setAnalyticsUser(null, false);
-      setWebSentryUser(null);
     };
   }, [userId]);
 

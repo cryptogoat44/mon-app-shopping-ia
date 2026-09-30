@@ -119,7 +119,7 @@ export default function NewPasswordScreen() {
                 disabled={submitting || !password || !confirmation}
                 accessibilityRole="button"
               >
-                <Text style={styles.ctaLabel}>{submitting ? t.auth.reset.ctaLoading : t.auth.reset.cta}</Text>
+                <Text style={[styles.ctaLabel, submitting || !password || !confirmation ? styles.ctaLabelDisabled : null]}>{submitting ? t.auth.reset.ctaLoading : t.auth.reset.cta}</Text>
               </Pressable>
             </>
           ) : (
@@ -151,6 +151,7 @@ const styles = themedStyles(() => ({
   label: { fontSize: font.caption, color: color.acier, marginBottom: space.xs },
   input: { borderBottomWidth: 1, borderBottomColor: color.filet, paddingVertical: 10, fontSize: font.body, color: color.encre },
   cta: { backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", marginTop: space.lg },
-  ctaDisabled: { opacity: 0.5 },
+  ctaDisabled: { backgroundColor: color.inactif, borderColor: color.inactif },
+  ctaLabelDisabled: { color: color.surInactif },
   ctaLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
 }));

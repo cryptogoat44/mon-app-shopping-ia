@@ -306,7 +306,7 @@ const styles = themedStyles(() => ({
   cancel: { fontSize: font.secondary, color: color.acier },
   navTitle: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   publishLabel: { fontSize: font.secondary, fontWeight: "600", color: color.vert },
-  publishLabelDisabled: { color: color.acier, opacity: 0.5 },
+  publishLabelDisabled: { color: color.acier },
   body: { paddingHorizontal: space.md, paddingTop: 18, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   error: { fontSize: font.caption, color: color.acier, marginBottom: space.md },
   modes: { flexDirection: "row", gap: 8, marginBottom: space.md },

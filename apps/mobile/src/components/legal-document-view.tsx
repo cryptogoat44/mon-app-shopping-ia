@@ -105,7 +105,7 @@ function Acceptance({ document }: { document: LegalDocument }) {
         onPress={() => accept(pending)}
         disabled={disabled}
       >
-        <Text style={styles.ctaLabel}>{saving ? t.legal.accepting : t.legal.accept}</Text>
+        <Text style={[styles.ctaLabel, disabled ? styles.ctaLabelDisabled : null]}>{saving ? t.legal.accepting : t.legal.accept}</Text>
       </Pressable>
     </View>
   );
@@ -195,6 +195,7 @@ const styles = themedStyles(() => ({
   ageRow: { marginBottom: space.md },
   link: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   cta: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 48, alignItems: "center", justifyContent: "center" },
-  ctaDisabled: { opacity: 0.5 },
+  ctaDisabled: { backgroundColor: color.inactif, borderColor: color.inactif },
+  ctaLabelDisabled: { color: color.surInactif },
   ctaLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
 }));

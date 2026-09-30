@@ -150,7 +150,7 @@ async function seed(p: Parcours, louise: TestAccount, camille: TestAccount): Pro
   // Un résultat du Spotter, écrit directement (aucun appel SerpApi).
   const { data: search, error } = await p.admin
     .from("product_searches")
-    .insert({ user_id: louise.id, source_platform: "photo", method: "manual_screenshot", status: "done" })
+    .insert({ user_id: louise.id, source_platform: "photo", method: "manual_screenshot", status: "completed" })
     .select("id")
     .single();
   if (error || !search) throw new Error(`Recherche de démonstration impossible : ${error?.message ?? "?"}`);
@@ -295,6 +295,7 @@ export async function run(p: Parcours): Promise<void> {
     await louise.signIn(phone);
     await phone.goto(`${p.siteUrl}/settings`);
     await phone.getByText("Statistiques d'usage").waitFor();
+    await phone.waitForLoadState("networkidle").catch(() => {}); // consentement lu
     await phone.getByRole("radio", { name: "Sombre" }).click();
     await phone.getByText("Statistiques d'usage").waitFor();
     check(new URL(phone.url()).pathname === "/settings", "on reste sur les Réglages après le changement d'apparence");
@@ -306,6 +307,7 @@ export async function run(p: Parcours): Promise<void> {
     await p.capture(phone, "reglages-02-anglais-sombre");
     await phone.reload();
     await phone.getByText("Usage statistics").waitFor();
+    await phone.waitForLoadState("networkidle").catch(() => {}); // consentement relu
     check((await phone.evaluate("getComputedStyle(document.body).backgroundColor")) === BACKGROUND.dark, "apparence mémorisée après rechargement");
     await phone.waitForTimeout(1500);
     const { data: profile } = await p.admin.from("profiles").select("locale").eq("id", louise.id).single();
@@ -321,7 +323,8 @@ export async function run(p: Parcours): Promise<void> {
 
     const languageEvents = sent.filter((s) => s.event === "language_changed");
     const themeEvents = sent.filter((s) => s.event === "theme_changed");
-    check(languageEvents.length === 2 && themeEvents.length === 2, `événements reçus (${sent.map((s) => s.event).join(", ")})`);
+    const summary = sent.map((s) => `${s.event} ${JSON.stringify(Object.fromEntries(Object.entries(s.properties).filter(([k]) => !k.startsWith("$"))))}`);
+    check(languageEvents.length === 2 && themeEvents.length === 2, `événements reçus (${summary.join(" ; ")})`);
     for (const event of [...languageEvents, ...themeEvents]) {
       const own = Object.keys(event.properties).filter((key) => !key.startsWith("$") && key !== "platform" && key !== "environment");
       const allowed = event.event === "language_changed" ? ["locale", "context"] : ["theme"];

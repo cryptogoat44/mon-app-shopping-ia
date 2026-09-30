@@ -28,6 +28,8 @@ export interface Palette {
   voileImage: string; // voile posé sur une photo (zone hors recadrage, badges)
   cadreImage: string; // trait du cadre de recadrage sur la photo
   grilleImage: string; // grille discrète du recadrage
+  inactif: string; // fond d'un bouton plein désactivé
+  surInactif: string; // texte d'un bouton désactivé (AA sur inactif)
 }
 
 export const lightPalette: Palette = {
@@ -53,6 +55,8 @@ export const lightPalette: Palette = {
   voileImage: "rgba(20,19,18,0.55)",
   cadreImage: "rgba(255,255,255,0.9)",
   grilleImage: "rgba(255,255,255,0.3)",
+  inactif: "#E4E4E0",
+  surInactif: "#57575C", // 5,5:1 sur inactif
 };
 
 export const darkPalette: Palette = {
@@ -78,6 +82,8 @@ export const darkPalette: Palette = {
   voileImage: "rgba(20,19,18,0.6)",
   cadreImage: "rgba(255,255,255,0.9)",
   grilleImage: "rgba(255,255,255,0.3)",
+  inactif: "#35322F",
+  surInactif: "#B3AFA8", // 5,9:1 sur inactif
 };
 
 export type ColorScheme = "light" | "dark";

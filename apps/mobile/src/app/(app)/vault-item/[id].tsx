@@ -235,7 +235,7 @@ export default function VaultItemDetailScreen() {
               onPress={handleShare}
               disabled={sharing}
             >
-              <Text style={styles.shareLabel}>{sharing ? t.vaultItem.sharing : t.vaultItem.share}</Text>
+              <Text style={[styles.shareLabel, sharing ? styles.shareLabelDisabled : null]}>{sharing ? t.vaultItem.sharing : t.vaultItem.share}</Text>
             </Pressable>
           </>
         )}
@@ -315,7 +315,8 @@ const styles = themedStyles(() => ({
     alignItems: "center",
     marginBottom: space.lg,
   },
-  shareButtonDisabled: { opacity: 0.6 },
+  shareButtonDisabled: { backgroundColor: color.inactif, borderColor: color.inactif },
+  shareLabelDisabled: { color: color.surInactif },
   shareLabel: { color: color.blanc, fontSize: font.secondary, fontWeight: "600" },
   removeRow: { alignItems: "center" },
   deleteLabel: { color: color.danger, fontSize: font.secondary, fontWeight: "600" },

@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { ToastProvider } from "@/lib/toast-context";
 import { PreferencesProvider } from "@/lib/preferences-context";
+import { AnalyticsSession } from "@/components/analytics-session";
 import { resolveRootRoute } from "@/lib/root-route";
 import { useAppFonts } from "@/theme/fonts";
 import { color, getActiveScheme } from "@/theme/tokens";
@@ -86,6 +87,7 @@ export default function RootLayout() {
       <Head>
         <title>{APP_NAME_DISPLAY}</title>
       </Head>
+      <AnalyticsSession />
       <PreferencesProvider>
         <ToastProvider>
           <RootNavigator />

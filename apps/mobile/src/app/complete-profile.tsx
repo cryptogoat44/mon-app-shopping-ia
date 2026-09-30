@@ -147,7 +147,7 @@ export default function CompleteProfileScreen() {
             onPress={handleSubmit}
             disabled={submitting || !username || !displayName || consentsMissing}
           >
-            <Text style={styles.ctaLabel}>{submitting ? t.editProfile.saving : t.completeProfile.continue}</Text>
+            <Text style={[styles.ctaLabel, (submitting || !username || !displayName || consentsMissing) ? styles.ctaLabelDisabled : null]}>{submitting ? t.editProfile.saving : t.completeProfile.continue}</Text>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -170,6 +170,7 @@ const styles = themedStyles(() => ({
   legalLink: { fontSize: font.caption, color: color.vert, fontWeight: "600", minHeight: 20 },
   input: { borderBottomWidth: 1, borderBottomColor: color.filet, paddingVertical: 10, fontSize: font.body, color: color.encre },
   cta: { backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", marginTop: space.lg },
-  ctaDisabled: { opacity: 0.5 },
+  ctaDisabled: { backgroundColor: color.inactif, borderColor: color.inactif },
+  ctaLabelDisabled: { color: color.surInactif },
   ctaLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
 }));

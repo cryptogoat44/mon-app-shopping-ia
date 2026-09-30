@@ -166,7 +166,7 @@ export default function SpotterScreen() {
             accessibilityRole="button"
           >
             {busy === "link" ? <ActivityIndicator color={color.blanc} /> : null}
-            <Text style={styles.primaryLabel}>{busy === "link" ? t.spotter.preparing : t.spotter.continue}</Text>
+            <Text style={[styles.primaryLabel, !canContinue ? styles.primaryLabelDisabled : null]}>{busy === "link" ? t.spotter.preparing : t.spotter.continue}</Text>
           </Pressable>
 
           <View style={styles.or}>
@@ -232,7 +232,8 @@ const styles = themedStyles(() => ({
   detectedLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   feedback: { fontSize: font.caption, marginTop: space.sm, lineHeight: 18 },
   primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, marginTop: space.lg },
-  primaryDisabled: { opacity: 0.45 },
+  primaryDisabled: { backgroundColor: color.inactif, borderColor: color.inactif },
+  primaryLabelDisabled: { color: color.surInactif },
   primaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
   or: { flexDirection: "row", alignItems: "center", gap: 14, marginVertical: space.lg },
   orLine: { flex: 1, height: 1, backgroundColor: color.filet },

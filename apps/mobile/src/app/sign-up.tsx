@@ -4,7 +4,7 @@ import { Link, useRouter } from "expo-router";
 import { translateAuthError } from "@/lib/auth-errors";
 import { forgetSignupConsents, rememberSignupConsents } from "@/lib/signup-consents";
 import { supabase } from "@/lib/supabase";
-import { t } from "@/i18n";
+import { getActiveLocale, t } from "@/i18n";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
 import { CHECKBOX_SIZE, CheckboxRow } from "@/components/checkbox-row";
@@ -47,7 +47,12 @@ export default function SignUpScreen() {
     // Mémorisé AVANT l'appel : la session peut s'ouvrir (et la « Dernière
     // étape » s'afficher) avant la fin de l'appel. Effacé en cas d'échec.
     rememberSignupConsents(email, analyticsChecked);
-    const { data, error: signUpError } = await supabase.auth.signUp({ email: email.trim(), password });
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      // Langue des e-mails d'authentification (modèles Supabase, lot 3).
+      options: { data: { locale: getActiveLocale() } },
+    });
     setSubmitting(false);
 
     if (signUpError) {
@@ -176,7 +181,7 @@ export default function SignUpScreen() {
             onPress={handleSignUp}
             disabled={submitting || !email || !password || !confirmPassword || !consentChecked || !ageChecked}
           >
-            <Text style={styles.ctaLabel}>{submitting ? t.auth.signUp.ctaLoading : t.auth.signUp.cta}</Text>
+            <Text style={[styles.ctaLabel, (submitting || !email || !password || !confirmPassword || !consentChecked || !ageChecked) ? styles.ctaLabelDisabled : null]}>{submitting ? t.auth.signUp.ctaLoading : t.auth.signUp.cta}</Text>
           </Pressable>
 
           <Link href="/sign-in" asChild>
@@ -206,7 +211,8 @@ const styles = themedStyles(() => ({
   legalLinks: { marginLeft: CHECKBOX_SIZE + space.sm, marginTop: space.xs, gap: space.sm },
   legalLink: { fontSize: font.caption, color: color.vert, fontWeight: "600", minHeight: 20 },
   cta: { backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", marginTop: space.lg },
-  ctaDisabled: { opacity: 0.5 },
+  ctaDisabled: { backgroundColor: color.inactif, borderColor: color.inactif },
+  ctaLabelDisabled: { color: color.surInactif },
   ctaLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
   link: { fontSize: font.secondary, color: color.acier, fontWeight: "600", textAlign: "center", marginTop: space.lg },
 }));

@@ -180,7 +180,7 @@ export function CommentsSection({
           style={[styles.send, sending || !draft.trim() ? styles.sendDisabled : null]}
           accessibilityRole="button"
         >
-          <Text style={styles.sendLabel}>{sending ? t.comments.sending : t.comments.send}</Text>
+          <Text style={[styles.sendLabel, sending || !draft.trim() ? styles.sendLabelDisabled : null]}>{sending ? t.comments.sending : t.comments.send}</Text>
         </Pressable>
       </View>
       {showCounter ? (
@@ -222,7 +222,8 @@ const styles = themedStyles(() => ({
   composer: { flexDirection: "row", alignItems: "flex-end", gap: space.sm, borderTopWidth: 1, borderTopColor: color.filet, marginTop: space.sm, paddingTop: space.sm },
   input: { flex: 1, minHeight: 40, maxHeight: 140, fontSize: font.secondary, color: color.encre, paddingVertical: 10 },
   send: { minHeight: 40, paddingHorizontal: space.md, borderRadius: radius.md, backgroundColor: color.vert, justifyContent: "center" },
-  sendDisabled: { opacity: 0.5 },
+  sendDisabled: { backgroundColor: color.inactif, borderColor: color.inactif },
+  sendLabelDisabled: { color: color.surInactif },
   sendLabel: { color: color.blanc, fontSize: font.secondary, fontWeight: "600" },
   counter: { fontSize: font.caption, color: color.acier, textAlign: "right", marginTop: 4 },
 }));

@@ -7,6 +7,7 @@ import { setActiveLocale, setDeviceRegion } from "@/i18n";
 import { color, setActiveScheme } from "@/theme/tokens";
 import { useAuth } from "@/lib/auth-context";
 import { updateMyLocale } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 import { track } from "@/lib/analytics";
 import {
   LOCALE_STORAGE_KEY,
@@ -76,6 +77,15 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       synced.current = null;
     });
   }, [locale, session, profile]);
+
+  // Même langue pour les e-mails envoyés par Supabase (confirmation, mot de
+  // passe oublié) : lue par leurs modèles dans les métadonnées du compte.
+  useEffect(() => {
+    if (!locale || !session || session.user.user_metadata?.locale === locale) return;
+    supabase.auth.updateUser({ data: { locale } }).catch(() => {
+      // Sans effet visible : nouvel essai au prochain lancement.
+    });
+  }, [locale, session]);
 
   useEffect(() => {
     if (Platform.OS !== "web" || typeof document === "undefined") return;

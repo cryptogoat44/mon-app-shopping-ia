@@ -120,7 +120,7 @@ export default function EditProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel={t.editProfile.save}
           >
-            <Text style={styles.ctaLabel}>{submitting ? t.editProfile.saving : t.editProfile.save}</Text>
+            <Text style={[styles.ctaLabel, submitting || !username || !displayName ? styles.ctaLabelDisabled : null]}>{submitting ? t.editProfile.saving : t.editProfile.save}</Text>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -141,6 +141,7 @@ const styles = themedStyles(() => ({
   input: { borderBottomWidth: 1, borderBottomColor: color.filet, paddingVertical: 10, fontSize: font.body, color: color.encre },
   bioInput: { minHeight: 70, textAlignVertical: "top" },
   cta: { backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", marginTop: space.lg },
-  ctaDisabled: { opacity: 0.5 },
+  ctaDisabled: { backgroundColor: color.inactif, borderColor: color.inactif },
+  ctaLabelDisabled: { color: color.surInactif },
   ctaLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
 }));
