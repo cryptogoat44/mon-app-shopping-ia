@@ -2,6 +2,7 @@ import { Platform } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import type { MerchantLinkContext } from "@monapp/shared-types";
 import { trackProductMatchClick } from "./api";
+import { track } from "./analytics";
 
 const DEBOUNCE_MS = 2000;
 
@@ -96,6 +97,7 @@ export async function openMerchantLink(options: OpenMerchantLinkOptions): Promis
   const debounceKey = options.matchId ?? options.url;
   if (isDebounced(debounceKey)) return NOT_BLOCKED;
   lastOpenedAt.set(debounceKey, Date.now());
+  track("merchant_link_opened", { context: options.context });
 
   if (Platform.OS === "web") return openMerchantLinkWeb(options);
 

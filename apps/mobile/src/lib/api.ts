@@ -35,7 +35,7 @@ import type {
 import { CONSENT_VERSIONS } from "@monapp/shared-types";
 import { Platform } from "react-native";
 import { supabase } from "./supabase";
-import { setAnalyticsConsent } from "./analytics";
+import { setAnalyticsConsent, track } from "./analytics";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -97,7 +97,9 @@ export async function uploadAvatar(imageUri: string): Promise<Profile> {
   await appendImageFile(formData, "file", imageUri);
 
   const response = await authorizedFetch("/api/me/avatar", { method: "POST", body: formData });
-  return response.json();
+  const profile: Profile = await response.json();
+  track("photo_changed", { target: "avatar" });
+  return profile;
 }
 
 /** Temps 1 du Spotter — gratuit : crée la recherche et renvoie l'image qui
@@ -107,7 +109,9 @@ export async function prepareSearch(payload: CreateSearchRequest): Promise<Produ
     method: "POST",
     body: JSON.stringify(payload),
   });
-  return response.json();
+  const search: ProductSearch & { previewIssue?: PreviewIssue | null } = await response.json();
+  track("spot_started", { source: payload.sourceUrl ? "link" : "photo", platform: search.sourcePlatform });
+  return search;
 }
 
 /** Temps 2 du Spotter — 1 crédit SerpApi : lance l'identification sur la
@@ -123,8 +127,15 @@ export async function runSearch(
   if (params.query.trim()) formData.append("query", params.query.trim());
   if (params.imageUri) await appendImageFile(formData, "file", params.imageUri);
 
+  // Ciblage et précision : seulement des oui / non, jamais le texte saisi.
+  track("spot_launched", { zone_adjusted: params.crop !== null, query_added: params.query.trim().length > 0, image_imported: params.imageUri !== null });
   const response = await authorizedFetch(`/api/searches/${searchId}/run`, { method: "POST", body: formData, signal });
-  return response.json();
+  const search: ProductSearch = await response.json();
+  track("spot_completed", {
+    outcome: search.status === "failed" ? "failed" : search.matches.length > 0 ? "results" : "none",
+    results_count: search.matches.length,
+  });
+  return search;
 }
 
 async function appendImageFile(formData: FormData, fieldName: string, imageUri: string): Promise<void> {
@@ -199,7 +210,9 @@ export async function addVaultItemFromMatch(params: {
   formData.append("productMatchId", params.productMatchId);
 
   const response = await authorizedFetch("/api/vault", { method: "POST", body: formData });
-  return response.json();
+  const item: VaultItem = await response.json();
+  track("vault_item_added", { source: "spotter", category: params.category });
+  return item;
 }
 
 export async function addVaultItemFromPhoto(params: {
@@ -213,7 +226,9 @@ export async function addVaultItemFromPhoto(params: {
   await appendImageFile(formData, "file", params.imageUri);
 
   const response = await authorizedFetch("/api/vault", { method: "POST", body: formData });
-  return response.json();
+  const item: VaultItem = await response.json();
+  track("vault_item_added", { source: "photo", category: params.category });
+  return item;
 }
 
 export async function updateVaultItem(id: string, payload: UpdateVaultItemRequest): Promise<VaultItem> {
@@ -229,7 +244,9 @@ export async function changeVaultItemPhoto(id: string, imageUri: string): Promis
   const formData = new FormData();
   await appendImageFile(formData, "file", imageUri);
   const response = await authorizedFetch(`/api/vault/${id}/photo`, { method: "POST", body: formData });
-  return response.json();
+  const item: VaultItem = await response.json();
+  track("photo_changed", { target: "vault" });
+  return item;
 }
 
 export async function deleteVaultItem(id: string): Promise<void> {
@@ -247,7 +264,9 @@ export async function addWishlistItem(payload: CreateWishlistItemRequest): Promi
     method: "POST",
     body: JSON.stringify(payload),
   });
-  return response.json();
+  const item: WishlistItem = await response.json();
+  track("wishlist_item_added", { context: "result" });
+  return item;
 }
 
 export async function searchUsers(query: string): Promise<PublicProfile[]> {
@@ -255,8 +274,9 @@ export async function searchUsers(query: string): Promise<PublicProfile[]> {
   return response.json();
 }
 
-export async function followUser(userId: string): Promise<void> {
+export async function followUser(userId: string, context: "search" | "profile"): Promise<void> {
   await authorizedFetch(`/api/follows/${userId}`, { method: "POST" });
+  track("follow_added", { context });
 }
 
 export async function unfollowUser(userId: string): Promise<void> {
@@ -281,7 +301,9 @@ export async function fetchPost(id: string): Promise<Post> {
 
 export async function updatePostPrivacy(id: string, privacy: PrivacyLevel): Promise<Post> {
   const response = await authorizedFetch(`/api/posts/${id}`, { method: "PATCH", body: JSON.stringify({ privacy }) });
-  return response.json();
+  const post: Post = await response.json();
+  track("post_visibility_changed", { visibility: post.privacy });
+  return post;
 }
 
 export async function deletePost(id: string): Promise<void> {
@@ -296,7 +318,9 @@ export async function fetchComments(postId: string, cursor?: string): Promise<Co
 
 export async function createComment(postId: string, body: string): Promise<PostComment> {
   const response = await authorizedFetch(`/api/posts/${postId}/comments`, { method: "POST", body: JSON.stringify({ body }) });
-  return response.json();
+  const comment: PostComment = await response.json();
+  track("comment_posted");
+  return comment;
 }
 
 export async function deleteComment(commentId: string): Promise<void> {
@@ -353,6 +377,7 @@ export async function fetchBlockedUsers(): Promise<BlockedUser[]> {
 
 export async function reportContent(payload: CreateReportRequest): Promise<void> {
   await authorizedFetch("/api/reports", { method: "POST", body: JSON.stringify(payload) });
+  track("report_submitted", { target_type: payload.targetType });
 }
 
 export async function createLifestylePost(params: {
@@ -371,7 +396,9 @@ export async function createLifestylePost(params: {
   await appendImageFile(formData, "file", params.imageUri);
 
   const response = await authorizedFetch("/api/posts", { method: "POST", body: formData });
-  return response.json();
+  const post: Post = await response.json();
+  track("post_published", { type: "lifestyle", visibility: post.privacy, tagged_count: params.taggedPieces?.length ?? 0 });
+  return post;
 }
 
 export async function sharePurchasePost(vaultItemId: string, privacy: PrivacyLevel, caption?: string): Promise<Post> {
@@ -382,12 +409,16 @@ export async function sharePurchasePost(vaultItemId: string, privacy: PrivacyLev
   if (caption) formData.append("caption", caption);
 
   const response = await authorizedFetch("/api/posts", { method: "POST", body: formData });
-  return response.json();
+  const post: Post = await response.json();
+  track("post_published", { type: "purchase", visibility: post.privacy, tagged_count: 0 });
+  return post;
 }
 
 export async function reactToPost(postId: string): Promise<ReactToPostResponse> {
   const response = await authorizedFetch(`/api/posts/${postId}/react`, { method: "POST" });
-  return response.json();
+  const result: ReactToPostResponse = await response.json();
+  if (result.viewerHasReacted) track("like_added");
+  return result;
 }
 
 export async function fetchConsentStatus(): Promise<ConsentStatus[]> {

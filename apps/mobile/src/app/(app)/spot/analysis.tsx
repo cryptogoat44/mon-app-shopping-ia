@@ -14,6 +14,7 @@ import { freshSearchId, markSearchUsed } from "@/lib/spot-flow";
 import { toSpotResult } from "@/lib/spot-result";
 import { setLastSpotResult } from "@/api/spotSession";
 import type { SpotFailReason } from "@/api/types";
+import { track } from "@/lib/analytics";
 
 const SLOW_AFTER_MS = 20_000;
 type Step = 0 | 1 | 2;
@@ -108,6 +109,7 @@ export default function AnalysisScreen() {
 
   function handleCancel() {
     controller.current?.abort();
+    track("spot_cancelled");
     router.back();
   }
 

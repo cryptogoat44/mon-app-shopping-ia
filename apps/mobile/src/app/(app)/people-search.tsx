@@ -33,7 +33,7 @@ function PersonRow({
       if (following) {
         await unfollowUser(person.id);
       } else {
-        await followUser(person.id);
+        await followUser(person.id, "search");
       }
       setFollowing((f) => !f);
       onToggle(person.id);

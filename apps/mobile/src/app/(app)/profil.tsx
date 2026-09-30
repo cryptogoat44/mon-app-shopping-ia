@@ -79,7 +79,7 @@ export default function UserProfileScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
       if (wasFollowing) await unfollowUser(profile.id);
-      else await followUser(profile.id);
+      else await followUser(profile.id, "profile");
       // Les publications « abonnés » apparaissent ou disparaissent : on relit.
       const [loadedProfile, page] = await Promise.all([fetchUserProfile(profile.id), fetchUserPosts(profile.id)]);
       setProfile(loadedProfile);

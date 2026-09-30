@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/skeleton";
 import { SpotImage } from "@/components/spot-image";
 import { ErrorMessage } from "@/components/error-message";
 import { CameraIcon } from "@/components/icons";
+import { track } from "@/lib/analytics";
 
 function formatPrice(piece: Piece): string {
   if (piece.priceFrom === null) return fr.result.priceOnSite;
@@ -354,7 +355,14 @@ export default function ResultScreen() {
               ))}
             </View>
             {hiddenCount > 0 ? (
-              <Pressable style={styles.secondary} onPress={() => setShowAllOthers(true)} accessibilityRole="button">
+              <Pressable
+                style={styles.secondary}
+                onPress={() => {
+                  setShowAllOthers(true);
+                  track("similar_results_opened");
+                }}
+                accessibilityRole="button"
+              >
                 <Text style={styles.secondaryLabel}>{fr.result.showMore(hiddenCount)}</Text>
               </Pressable>
             ) : null}

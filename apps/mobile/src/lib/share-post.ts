@@ -2,6 +2,7 @@ import { Platform, Share } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import type { Post } from "@monapp/shared-types";
 import { PUBLIC_WEB_URL } from "../constants/brand";
+import { track } from "./analytics";
 
 // Lien vers une publication (Lot F). La confidentialité est respectée à
 // l'ouverture : le serveur ne renvoie la publication qu'aux personnes qui
@@ -24,12 +25,15 @@ export async function sharePost(post: Pick<Post, "id" | "caption" | "author">): 
     if (Platform.OS === "web") {
       if (typeof navigator !== "undefined" && "share" in navigator) {
         await navigator.share({ text: message, url: postLink(post.id) });
+        track("post_shared", { method: "native" });
         return "shared";
       }
       await Clipboard.setStringAsync(postLink(post.id));
+      track("post_shared", { method: "copy" });
       return "copied";
     }
     await Share.share({ message });
+    track("post_shared", { method: "native" });
     return "shared";
   } catch {
     return "cancelled";
