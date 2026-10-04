@@ -1,0 +1,52 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      },
+      "environment": "development"
+    },
+    "preview": {
+      "distribution": "store",
+      "autoIncrement": true,
+      "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://spotto-api.onrender.com",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://qcwnlqkxnhqpyjpkooiw.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_c_rTYvGjDxlk7fFeQrsK4g_d9J8rPrJ",
+        "EXPO_PUBLIC_POSTHOG_KEY": "phc_moDi25bk7iMpzHCLhp4LZYWa5n4CgL9RUMeTjkUTg53c",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://c46ffc0abf2f3dc09449cf8764fde463@o4512173730299904.ingest.de.sentry.io/4512173801996368",
+        "EXPO_PUBLIC_WEB_URL": "https://mon-app-shopping-ia-web.onrender.com",
+        "EXPO_PUBLIC_ENVIRONMENT": "beta"
+      }
+    },
+    "production": {
+      "distribution": "store",
+      "autoIncrement": true,
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://spotto-api.onrender.com",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://qcwnlqkxnhqpyjpkooiw.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_c_rTYvGjDxlk7fFeQrsK4g_d9J8rPrJ",
+        "EXPO_PUBLIC_POSTHOG_KEY": "phc_moDi25bk7iMpzHCLhp4LZYWa5n4CgL9RUMeTjkUTg53c",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://c46ffc0abf2f3dc09449cf8764fde463@o4512173730299904.ingest.de.sentry.io/4512173801996368",
+        "EXPO_PUBLIC_WEB_URL": "https://mon-app-shopping-ia-web.onrender.com",
+        "EXPO_PUBLIC_ENVIRONMENT": "production"
+      }
+    }
+  },
+  "submit": {
+    "preview": {
+      "ios": {}
+    },
+    "production": {
+      "ios": {}
+    }
+  }
+}

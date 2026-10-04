@@ -1,0 +1,4 @@
+{
+  "CFBundleDisplayName": "Spotto",
+  "NSPhotoLibraryUsageDescription": "Spotto accède à vos photos uniquement pour importer l'image que vous choisissez : la capture d'une pièce à identifier, une photo à publier ou votre photo de profil."
+}
