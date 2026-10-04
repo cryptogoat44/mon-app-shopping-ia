@@ -1,6 +1,7 @@
 import { formatPrice } from "@/lib/format";
 import { useEffect, useRef, useState } from "react";
-import { Modal, Platform, Pressable, SafeAreaView, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
@@ -96,7 +97,6 @@ export default function ResultScreen() {
   async function handleImportCapture() {
     setActionError(null);
     const picked = await importPhotoForSpotter();
-    if (picked.kind === "denied") return setActionError(t.spotter.photoDenied);
     if (picked.kind !== "picked") return;
     const size = { width: picked.width, height: picked.height };
     try {

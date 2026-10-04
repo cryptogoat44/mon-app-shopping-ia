@@ -87,7 +87,6 @@ export const fr = {
     preparing: "Préparation…",
     or: "ou",
     importPhoto: "Importer une photo",
-    photoDenied: "Autorisez l'accès à vos photos pour importer une image.",
     recentlySpotted: "Récemment spottées",
     detected: {
       tiktok: "Vidéo TikTok reconnue",
@@ -368,7 +367,6 @@ export const fr = {
     vaultEmpty: "Votre Vault est vide. Ajoutez-y une pièce depuis un résultat du Spotter (« Je l'ai achetée »).",
     vaultLoadError: "Impossible de charger votre Vault.",
     choosePiece: "Choisissez une pièce de votre Vault.",
-    photoDenied: "Autorisez l'accès à vos photos pour publier.",
     photoRequired: "Ajoutez une photo.",
     error: "La publication a échoué, réessayez.",
     publishing: "Publication en cours",

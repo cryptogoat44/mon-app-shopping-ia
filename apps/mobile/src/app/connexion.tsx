@@ -1,4 +1,5 @@
-import { ActivityIndicator, Pressable, SafeAreaView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/lib/auth-context";
 import { t } from "@/i18n";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";

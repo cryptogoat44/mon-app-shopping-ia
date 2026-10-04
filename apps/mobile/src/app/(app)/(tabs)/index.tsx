@@ -1,16 +1,6 @@
 import { useCallback, useState } from "react";
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  RefreshControl,
-  SafeAreaView,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
@@ -103,10 +93,6 @@ export default function SpotterScreen() {
   async function handleImportPhoto() {
     setMessage(null);
     const picked = await importPhotoForSpotter();
-    if (picked.kind === "denied") {
-      setMessage(t.spotter.photoDenied);
-      return;
-    }
     if (picked.kind !== "picked") return;
     setBusy("photo");
     try {

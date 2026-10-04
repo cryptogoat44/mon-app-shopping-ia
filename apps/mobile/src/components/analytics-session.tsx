@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Platform } from "react-native";
 import { fetchConsentStatus } from "@/lib/api";
 import { setAnalyticsPlatform, setAnalyticsUser } from "@/lib/analytics";
-import { setWebSentryUser } from "@/lib/sentry-web";
+import { setErrorTrackingUser } from "@/lib/error-tracking";
 import { useAuth } from "@/lib/auth-context";
 import { hasAnalyticsConsent } from "@/lib/policy-notice";
 
@@ -18,7 +18,7 @@ export function AnalyticsSession() {
   useEffect(() => {
     setAnalyticsPlatform(Platform.OS);
     setAnalyticsUser(null, false);
-    setWebSentryUser(userId);
+    setErrorTrackingUser(userId);
     if (!userId) return;
     let cancelled = false;
     fetchConsentStatus()
@@ -31,7 +31,7 @@ export function AnalyticsSession() {
     return () => {
       cancelled = true;
       setAnalyticsUser(null, false);
-      setWebSentryUser(null);
+      setErrorTrackingUser(null);
     };
   }, [userId]);
 

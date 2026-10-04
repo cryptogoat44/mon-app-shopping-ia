@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { ErrorEvent } from "@sentry/react";
+import type { ErrorEvent as NativeErrorEvent } from "@sentry/react-native";
 import { SENTRY_EU_DSN_PATTERN } from "@monapp/shared-types";
-import { scrubWebBreadcrumb, scrubWebEvent } from "../src/lib/sentry-scrub";
+import { scrubBreadcrumb, scrubErrorEvent } from "../src/lib/sentry-scrub";
 
-describe("Sentry côté site : protection des données", () => {
+describe("Sentry (site et iPhone) : protection des données", () => {
   it("adresse de page sans paramètres, utilisateur réduit à son identifiant", () => {
-    const event = scrubWebEvent({
+    const event = scrubErrorEvent({
       type: undefined,
       request: { url: "https://mon-app-shopping-ia-web.onrender.com/profil?id=abc#x", headers: { "User-Agent": "x" } },
       user: { id: "u-1", email: "camille@example.com", ip_address: "{{auto}}" },
@@ -15,13 +16,28 @@ describe("Sentry côté site : protection des données", () => {
   });
 
   it("écarte la console et les clics, retire les paramètres des adresses", () => {
-    expect(scrubWebBreadcrumb({ category: "console", message: "commentaire de Camille" })).toBeNull();
-    expect(scrubWebBreadcrumb({ category: "ui.click", message: "button[aria-label=Camille]" })).toBeNull();
-    expect(scrubWebBreadcrumb({ category: "fetch", data: { url: "https://spotto-api.onrender.com/api/users/search?q=camille", method: "GET" } })!.data).toEqual({
+    expect(scrubBreadcrumb({ category: "console", message: "commentaire de Camille" })).toBeNull();
+    expect(scrubBreadcrumb({ category: "ui.click", message: "button[aria-label=Camille]" })).toBeNull();
+    expect(scrubBreadcrumb({ category: "fetch", data: { url: "https://spotto-api.onrender.com/api/users/search?q=camille", method: "GET" } })!.data).toEqual({
       url: "https://spotto-api.onrender.com/api/users/search",
       method: "GET",
     });
-    expect(scrubWebBreadcrumb({ category: "navigation", data: { from: "/a?x=1", to: "/profil?id=abc" } })!.data).toEqual({ from: "/a", to: "/profil" });
+    expect(scrubBreadcrumb({ category: "navigation", data: { from: "/a?x=1", to: "/profil?id=abc" } })!.data).toEqual({ from: "/a", to: "/profil" });
+  });
+
+  it("iPhone : mêmes règles — utilisateur réduit à son identifiant, touchers écartés (lot 3bis)", () => {
+    const event = scrubErrorEvent({
+      type: undefined,
+      user: { id: "u-2", username: "camille", email: "camille@example.com", ip_address: "{{auto}}" },
+      contexts: { device: { family: "iOS" } },
+    } as NativeErrorEvent);
+    expect(event.user).toEqual({ id: "u-2" });
+    expect(event.contexts).toEqual({ device: { family: "iOS" } });
+    expect(scrubBreadcrumb({ category: "touch", message: "Touched: Camille (test)" })).toBeNull();
+    expect(scrubBreadcrumb({ category: "xhr", data: { url: "https://spotto-api.onrender.com/api/posts?cursor=x", status_code: 200 } })!.data).toEqual({
+      url: "https://spotto-api.onrender.com/api/posts",
+      status_code: 200,
+    });
   });
 
   it("n'accepte qu'une adresse Sentry de la région UE", () => {

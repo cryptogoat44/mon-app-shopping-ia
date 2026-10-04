@@ -1,4 +1,5 @@
-import { Pressable, SafeAreaView, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { APP_NAME } from "@/constants/brand";
 import { t } from "@/i18n";

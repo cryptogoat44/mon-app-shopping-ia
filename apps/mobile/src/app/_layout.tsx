@@ -1,11 +1,11 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider, type Theme } from "expo-router";
-import Head from "expo-router/head";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { ToastProvider } from "@/lib/toast-context";
 import { PreferencesProvider } from "@/lib/preferences-context";
 import { AnalyticsSession } from "@/components/analytics-session";
+import { WebTitle } from "@/components/web-title";
 import { resolveRootRoute } from "@/lib/root-route";
 import { useAppFonts } from "@/theme/fonts";
 import { color, getActiveScheme } from "@/theme/tokens";
@@ -13,10 +13,10 @@ import { APP_NAME_DISPLAY } from "@/constants/brand";
 // Capture l'adresse d'arrivée (jetons du lien « mot de passe oublié ») avant
 // que la navigation ne la réécrive.
 import "@/lib/initial-url";
-import { initWebSentry } from "@/lib/sentry-web";
+import { initErrorTracking } from "@/lib/error-tracking";
 
-// Suivi des erreurs du site (lot 2) : actif seulement avec une adresse Sentry UE.
-initWebSentry();
+// Suivi des erreurs (site : lot 2 ; iPhone : lot 3bis) : actif seulement avec une adresse Sentry UE.
+initErrorTracking();
 
 SplashScreen.preventAutoHideAsync();
 
@@ -83,10 +83,7 @@ function RootNavigator() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      {/* Titre de l'onglet sur le web (sans effet sur iPhone). */}
-      <Head>
-        <title>{APP_NAME_DISPLAY}</title>
-      </Head>
+      <WebTitle title={APP_NAME_DISPLAY} />
       <AnalyticsSession />
       <PreferencesProvider>
         <ToastProvider>

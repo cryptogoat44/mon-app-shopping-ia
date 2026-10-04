@@ -32,7 +32,10 @@ export async function sharePost(post: Pick<Post, "id" | "caption" | "author">): 
       track("post_shared", { method: "copy" });
       return "copied";
     }
-    await Share.share({ message });
+    // iPhone : fermer la feuille de partage sans choisir d'app n'est pas un
+    // partage (lot 3bis) — rien n'est compté.
+    const { action } = await Share.share({ message });
+    if (action !== Share.sharedAction) return "cancelled";
     track("post_shared", { method: "native" });
     return "shared";
   } catch {

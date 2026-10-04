@@ -11,7 +11,7 @@
 // avant son chargement, n'est pas capturée.
 import { Platform } from "react-native";
 import { SENTRY_EU_DSN_PATTERN } from "@monapp/shared-types";
-import { scrubWebBreadcrumb, scrubWebEvent } from "./sentry-scrub";
+import { scrubBreadcrumb, scrubErrorEvent } from "./sentry-scrub";
 
 type SentryModule = typeof import("@sentry/react");
 
@@ -40,8 +40,8 @@ export function initWebSentry(): void {
         tracesSampleRate: 0,
         // Pas de suivi de « sessions » (il enverrait l'adresse IP de chaque visite).
         integrations: (defaults) => defaults.filter((integration) => integration.name !== "BrowserSession"),
-        beforeSend: (event) => scrubWebEvent(event),
-        beforeBreadcrumb: (crumb) => scrubWebBreadcrumb(crumb),
+        beforeSend: (event) => scrubErrorEvent(event),
+        beforeBreadcrumb: (crumb) => scrubBreadcrumb(crumb),
       });
       sentry = Sentry;
       if (pendingUser) Sentry.setUser({ id: pendingUser });

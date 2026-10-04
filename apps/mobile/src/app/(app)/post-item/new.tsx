@@ -54,11 +54,7 @@ export default function NewPostScreen() {
   }
 
   async function handlePickPhoto() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setError(t.publish.photoDenied);
-      return;
-    }
+    // Aucune autorisation demandée : le sélecteur ne remet que la photo choisie.
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
     if (result.canceled || !result.assets[0]) return;
     setImageUri(result.assets[0].uri);

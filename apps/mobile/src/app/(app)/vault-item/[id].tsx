@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
-import { Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import type { PrivacyLevel, VaultItemDetail } from "@monapp/shared-types";
@@ -37,10 +38,6 @@ export default function VaultItemDetailScreen() {
     if (!item) return;
     setError(null);
     const picked = await importPhotoForSpotter();
-    if (picked.kind === "denied") {
-      setError(t.spotter.photoDenied);
-      return;
-    }
     if (picked.kind !== "picked") return;
     setChangingPhoto(true);
     try {

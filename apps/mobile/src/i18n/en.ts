@@ -88,7 +88,6 @@ export const en: Catalog = {
     preparing: "Preparing…",
     or: "or",
     importPhoto: "Import a photo",
-    photoDenied: "Allow access to your photos to import an image.",
     recentlySpotted: "Recently spotted",
     detected: {
       tiktok: "TikTok video recognized",
@@ -368,7 +367,6 @@ export const en: Catalog = {
     vaultEmpty: "Your Vault is empty. Add a piece from a Spotter result (“I bought it”).",
     vaultLoadError: "Unable to load your Vault.",
     choosePiece: "Choose a piece from your Vault.",
-    photoDenied: "Allow access to your photos to post.",
     photoRequired: "Add a photo.",
     error: "Your post couldn't be published. Please try again.",
     publishing: "Posting",

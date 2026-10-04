@@ -5,17 +5,13 @@ import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 // ramène de toute façon l'image à 1 600 px).
 const MAX_EDGE = 1600;
 
-export type ImportResult =
-  | { kind: "picked"; uri: string; width: number; height: number }
-  | { kind: "cancelled" }
-  | { kind: "denied" };
+export type ImportResult = { kind: "picked"; uri: string; width: number; height: number } | { kind: "cancelled" };
 
 /** Ouvre la photothèque puis réduit la photo avant l'envoi (une photo
- * d'iPhone pèse souvent 3 à 5 Mo). Web et iPhone. */
+ * d'iPhone pèse souvent 3 à 5 Mo). Web et iPhone. Aucune autorisation
+ * n'est demandée (lot 3bis) : le sélecteur du système ne remet à l'app que
+ * la photo choisie, sans accès au reste de la photothèque. */
 export async function importPhotoForSpotter(): Promise<ImportResult> {
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) return { kind: "denied" };
-
   const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 1 });
   const asset = picked.canceled ? null : picked.assets[0];
   if (!asset) return { kind: "cancelled" };

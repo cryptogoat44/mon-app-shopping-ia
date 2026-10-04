@@ -41,3 +41,8 @@ example
 # generated native folders
 /ios
 /android
+
+# Dossiers natifs générés à chaque compilation (npx expo prebuild / EAS) :
+# la configuration fait foi dans app.json, jamais dans ces dossiers.
+/ios
+/android

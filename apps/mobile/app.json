@@ -11,7 +11,7 @@
       "bundleIdentifier": "com.spottoapp.ios",
       "buildNumber": "1",
       "supportsTablet": false,
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/marque/Spotto.icon",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleAllowMixedLocalizations": true
@@ -47,9 +47,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#004225",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
@@ -60,12 +59,17 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/demarrage-exact.js",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "backgroundColor": "#FBFBFA",
+          "image": "./assets/marque/demarrage/image@3x.png",
+          "imageWidth": 111,
+          "dark": {
+            "backgroundColor": "#141312",
+            "image": "./assets/marque/demarrage/dark_image@3x.png"
+          }
         }
       ],
       [

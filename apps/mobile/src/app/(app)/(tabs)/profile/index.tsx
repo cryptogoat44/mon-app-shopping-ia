@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, SafeAreaView, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { SpotImage } from "@/components/spot-image";
 import { WishlistPanel } from "@/components/wishlist-panel";
@@ -93,8 +94,7 @@ export default function ProfileScreen() {
 
   async function handlePickAvatar() {
     if (uploadingAvatar) return;
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) return;
+    // Aucune autorisation demandée : le sélecteur ne remet que la photo choisie.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       quality: 0.8,

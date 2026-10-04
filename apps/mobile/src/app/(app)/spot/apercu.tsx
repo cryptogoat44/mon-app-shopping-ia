@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
@@ -144,10 +145,6 @@ export default function PreviewScreen() {
   async function handleImportCapture() {
     setMessage(null);
     const picked = await importPhotoForSpotter();
-    if (picked.kind === "denied") {
-      setMessage(t.spotter.photoDenied);
-      return;
-    }
     if (picked.kind !== "picked") return;
     updateDraft({ localImageUri: picked.uri, imageSize: { width: picked.width, height: picked.height }, crop: null });
     router.push({ pathname: "/spot/ciblage", params: { searchId: searchId ?? "" } });

@@ -1,6 +1,7 @@
 import { formatPrice } from "@/lib/format";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { WishlistItem } from "@monapp/shared-types";
 import { ApiError, deleteWishlistItem, fetchWishlistItem } from "@/lib/api";

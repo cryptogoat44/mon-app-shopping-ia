@@ -1,7 +1,8 @@
+import { WebTitle } from "@/components/web-title";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, Text, View, type StyleProp, type TextStyle } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, View, type StyleProp, type TextStyle } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import Head from "expo-router/head";
 import { LEGAL_DOCUMENT_VERSIONS, isProfileComplete, type ConsentStatus, type VersionedConsentType } from "@monapp/shared-types";
 import { acceptConsents, fetchConsentStatus } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -123,9 +124,7 @@ export function LegalDocumentView({ document }: { document: LegalDocument }) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <Head>
-        <title>{`${document.title} — ${APP_NAME_DISPLAY}`}</title>
-      </Head>
+      <WebTitle title={`${document.title} — ${APP_NAME_DISPLAY}`} />
       <View style={styles.nav}>
         <Pressable
           onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
