@@ -79,6 +79,16 @@ export function CameraIcon({ size = 18, tint = color.encre, strokeWidth = 1.2 }:
   );
 }
 
+/** Lot 4 : « Importer une vidéo » (même cadre que l'appareil photo, avec le triangle de lecture). */
+export function VideoIcon({ size = 18, tint = color.encre, strokeWidth = 1.2 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
+      <Rect x={2.5} y={4} width={13} height={10.5} rx={1.5} stroke={tint} strokeWidth={strokeWidth} />
+      <Path d="M7.6 7.1v4.8l3.9-2.4z" stroke={tint} strokeWidth={strokeWidth * 0.9} strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 export function ClockIcon({ size = 24, tint = color.encre, strokeWidth = 1.1 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">

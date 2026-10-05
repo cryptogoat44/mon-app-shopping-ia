@@ -263,7 +263,7 @@ export async function lancerParcours(sortieNom: string, scenario: (o: Outils) =>
  * journaux restent dans un dossier temporaire, supprimé aussitôt. */
 export function maestro(udid: string, fichier: string, sortie: string, variables: Record<string, string> = {}): void {
   const travail = mkdtempSync(join(tmpdir(), "parcours-iphone-maestro-"));
-  const nom = variables.CAPTURE ?? basename(fichier, ".yaml");
+  const nom = variables.CAPTURE ?? (variables.PREFIXE ? `${variables.PREFIXE}-${basename(fichier, ".yaml")}` : basename(fichier, ".yaml"));
   try {
     const args = ["--device", udid, "test", fichier, "--test-output-dir", travail];
     for (const [cle, valeur] of Object.entries(variables)) args.push("-e", `${cle}=${valeur}`);

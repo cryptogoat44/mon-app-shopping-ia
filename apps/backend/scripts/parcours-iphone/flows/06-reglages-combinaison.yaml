@@ -1,0 +1,18 @@
+# Lot 4 : langue et thème de l'app pour une combinaison (les libellés de départ
+# sont ceux de la langue en cours, ceux d'arrivée ceux de la nouvelle langue).
+appId: com.spottoapp.ios
+---
+- tapOn: ${PROFIL}
+- tapOn: ${REGLAGES}
+- tapOn: ${LANGUE}
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn: ${THEME}
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn: ${RETOUR}
+- tapOn: "Spotter"
+- extendedWaitUntil:
+    visible: ${IMPORTER}
+    timeout: 15000
+- takeScreenshot: ${PREFIXE}-01-spotter

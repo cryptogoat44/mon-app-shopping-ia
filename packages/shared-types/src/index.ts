@@ -347,7 +347,10 @@ export const LEGAL_DOCUMENT_VERSIONS: Record<LegalDocumentType, string> = {
   // « projet-2026-10-05 » (lot 3bis) : identifiant d'installation pseudonyme
   // dans les rapports de plantage de l'app iPhone — simple information, sans
   // nouvelle acceptation ni message (décision du fondateur).
-  privacy_policy: "projet-2026-10-05",
+  // « projet-2026-10-05-b » (lot 4) : vidéo importée lue seulement sur
+  // l'appareil, jamais envoyée ni conservée — simple information, sans
+  // nouvelle acceptation ni message (décision du fondateur).
+  privacy_policy: "projet-2026-10-05-b",
 };
 
 /** Suivi des erreurs (lot 2) : seule adresse Sentry admise, région UE
@@ -378,7 +381,7 @@ export const CONSENT_VERSIONS: Record<VersionedConsentType, string> = {
  * quels changements relèvent de l'un ou de l'autre. */
 export const ACCEPTED_CONSENT_VERSIONS: Record<VersionedConsentType, readonly string[]> = {
   terms: ["projet-2026-09-25"],
-  privacy_policy: ["projet-2026-09-25", "projet-2026-09-29", "projet-2026-09-30", "projet-2026-09-30-b", "projet-2026-10-05"],
+  privacy_policy: ["projet-2026-09-25", "projet-2026-09-29", "projet-2026-09-30", "projet-2026-09-30-b", "projet-2026-10-05", "projet-2026-10-05-b"],
   age_declaration: [CONSENT_VERSIONS.age_declaration],
   analytics: [CONSENT_VERSIONS.analytics],
 };
@@ -393,7 +396,7 @@ export const POLICY_UPDATE_NOTICE = {
   document: "privacy_policy" as LegalDocumentType,
   /** Versions dont le texte contient déjà cette information : la
    * personne qui en a accepté une ne voit pas le message. */
-  alreadyCovered: ["projet-2026-09-30", "projet-2026-09-30-b", "projet-2026-10-05"] as readonly string[],
+  alreadyCovered: ["projet-2026-09-30", "projet-2026-09-30-b", "projet-2026-10-05", "projet-2026-10-05-b"] as readonly string[],
 } as const;
 
 export interface ConsentStatus {

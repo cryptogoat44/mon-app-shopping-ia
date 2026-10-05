@@ -1,0 +1,51 @@
+# Lot 4 : vidéo de 12 s (« Sac », « Veste », « Chaussures »), choix du moment
+# 6 s (« Veste ») au doigt vers la droite — le geste « retour » d'iOS coupait le
+# curseur, défaut corrigé —, réglage fin, image envoyée au ciblage.
+# Le sélecteur d'iOS suit la langue de l'iPhone (français) ; la plus récente
+# des deux vidéos de 12 s est la version H.264.
+appId: com.spottoapp.ios
+---
+- tapOn: ${IMPORTER}
+- extendedWaitUntil:
+    visible: "Collections"
+    timeout: 20000
+- tapOn:
+    text: "Vidéo, douze.*"
+    index: 1
+- extendedWaitUntil:
+    visible: "0:00 / 0:12"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 4000
+- takeScreenshot: ${PREFIXE}-02-choix-image
+- swipe:
+    start: "8%,71%"
+    end: "50%,71%"
+    duration: 1500
+- extendedWaitUntil:
+    visible: "0:06 / 0:12"
+    timeout: 10000
+- tapOn: ${AVANCER}
+- tapOn: ${AVANCER}
+- extendedWaitUntil:
+    visible: "0:07 / 0:12"
+    timeout: 10000
+- tapOn: ${RECULER}
+- tapOn: ${RECULER}
+- extendedWaitUntil:
+    visible: "0:06 / 0:12"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${PREFIXE}-03-moment-6s
+- tapOn: ${UTILISER}
+- extendedWaitUntil:
+    visible: ${CIBLAGE}
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${PREFIXE}-04-ciblage
+- tapOn: ${FERMER}
+- extendedWaitUntil:
+    visible: ${IMPORTER}
+    timeout: 15000

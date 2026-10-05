@@ -19,6 +19,7 @@ export const privacyPolicy: LegalDocument = {
           "Nous ne vendons pas vos données et n'affichons aucune publicité.",
           "Votre Vault et vos Envies ne sont visibles que par vous.",
           "L'image que vous faites analyser est supprimée de nos serveurs dès que le résultat est connu.",
+          "Si vous importez une vidéo, elle reste sur votre appareil : seule l'image que vous y choisissez est envoyée.",
           "Le partage de statistiques d'usage est facultatif, et se retire à tout moment.",
           "Vous pouvez à tout moment télécharger vos données ou supprimer votre compte, depuis les Réglages.",
         ],
@@ -36,7 +37,7 @@ export const privacyPolicy: LegalDocument = {
       blocks: [
         "Votre compte : votre adresse e-mail et votre mot de passe. Le mot de passe n'est jamais conservé en clair : nous ne le connaissons pas.",
         "Votre profil : nom d'utilisateur, nom affiché, bio, photo de profil, vos abonnés et vos abonnements.",
-        "Vos recherches (Spotter) : l'image ou le lien (TikTok, Instagram, Pinterest) que vous soumettez, la zone que vous sélectionnez, le texte que vous ajoutez éventuellement, puis les résultats proposés (nom de la pièce, image, prix, marchand, lien). L'historique de vos recherches vous est remontré (« Récemment spottées ») ; il est conservé 12 mois (voir « Combien de temps »).",
+        "Vos recherches (Spotter) : l'image ou le lien (TikTok, Instagram, Pinterest) que vous soumettez, la zone que vous sélectionnez, le texte que vous ajoutez éventuellement, puis les résultats proposés (nom de la pièce, image, prix, marchand, lien). L'historique de vos recherches vous est remontré (« Récemment spottées ») ; il est conservé 12 mois (voir « Combien de temps »). Si vous importez une vidéo (60 secondes et 100 Mo au plus), elle est lue uniquement sur votre appareil, le temps d'en choisir une image : la vidéo n'est jamais envoyée à nos serveurs ni conservée par Spotto ; seule l'image choisie est envoyée, comme une photo.",
         "Votre Vault et vos Envies : les pièces que vous y ajoutez (nom, catégorie, photo, lien vers la pièce d'origine).",
         "Vos publications et interactions : photos, légendes, visibilité choisie, commentaires, « j'aime », notifications, comptes bloqués et signalements que vous faites.",
         "Vos clics vers les marchands : la pièce concernée, l'endroit de l'app d'où vous avez cliqué, la date, et l'identification technique de votre navigateur ou de votre téléphone (« user agent »).",
@@ -119,7 +120,7 @@ export const privacyPolicy: LegalDocument = {
     {
       title: "Sur votre téléphone ou dans votre navigateur",
       blocks: [
-        "Spotto enregistre sur votre appareil votre session de connexion, pour que vous n'ayez pas à vous reconnecter, une copie des images déjà affichées, pour les montrer plus vite, le fait que vous avez déjà vu une information de mise à jour, pour ne pas vous la remontrer, ainsi que la langue et le thème (clair, sombre ou celui de l'appareil) que vous avez choisis. Ces éléments sont indispensables au fonctionnement de l'app.",
+        "Spotto enregistre sur votre appareil votre session de connexion, pour que vous n'ayez pas à vous reconnecter, une copie des images déjà affichées, pour les montrer plus vite, le fait que vous avez déjà vu une information de mise à jour, pour ne pas vous la remontrer, ainsi que la langue et le thème (clair, sombre ou celui de l'appareil) que vous avez choisis. Ces éléments sont indispensables au fonctionnement de l'app. Pendant que vous choisissez une image dans une vidéo, l'app iPhone garde une copie temporaire de la vidéo, effacée dès que vous quittez cet écran ; sur le site, la vidéo est lue par votre navigateur, sans être copiée.",
         "Spotto n'utilise aucun traceur publicitaire ni aucun cookie publicitaire. Les statistiques d'usage, si vous les acceptez, sont envoyées directement, sans cookie ni stockage sur votre appareil, et sans géolocalisation par votre adresse IP.",
       ],
     },

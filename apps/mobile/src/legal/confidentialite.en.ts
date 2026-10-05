@@ -18,6 +18,7 @@ export const privacyPolicyEn: LegalDocument = {
           "We do not sell your data and show no advertising.",
           "Your Vault and your Wishlist are visible to you alone.",
           "The image you submit for analysis is deleted from our servers as soon as the result is known.",
+          "If you import a video, it stays on your device: only the frame you choose from it is sent.",
           "Sharing usage statistics is optional, and can be withdrawn at any time.",
           "You can download your data or delete your account at any time, from Settings.",
         ],
@@ -35,7 +36,7 @@ export const privacyPolicyEn: LegalDocument = {
       blocks: [
         "Your account: your email address and your password. The password is never stored in plain text: we do not know it.",
         "Your profile: username, display name, bio, profile photo, your followers and the accounts you follow.",
-        "Your searches (Spotter): the image or link (TikTok, Instagram, Pinterest) you submit, the area you select, any text you add, then the suggested results (name of the piece, image, price, retailer, link). Your search history is shown back to you (“Recently spotted”); it is kept for 12 months (see “How long”).",
+        "Your searches (Spotter): the image or link (TikTok, Instagram, Pinterest) you submit, the area you select, any text you add, then the suggested results (name of the piece, image, price, retailer, link). Your search history is shown back to you (“Recently spotted”); it is kept for 12 months (see “How long”). If you import a video (60 seconds and 100 MB at most), it is read only on your device, while you choose a frame from it: the video is never sent to our servers nor kept by Spotto; only the chosen frame is sent, like a photo.",
         "Your Vault and your Wishlist: the pieces you add to them (name, category, photo, link to the original piece).",
         "Your posts and interactions: photos, captions, chosen visibility, comments, likes, notifications, blocked accounts and the reports you make.",
         "Your clicks to retailers: the piece concerned, the place in the app you clicked from, the date, and the technical identification of your browser or phone (“user agent”).",
@@ -118,7 +119,7 @@ export const privacyPolicyEn: LegalDocument = {
     {
       title: "On your phone or in your browser",
       blocks: [
-        "Spotto stores on your device your sign-in session, so that you do not have to sign in again, a copy of images already displayed, to show them faster, the fact that you have already seen an update notice, so as not to show it again, and the language and theme (light, dark or your device's) you have chosen. These items are essential for the app to work.",
+        "Spotto stores on your device your sign-in session, so that you do not have to sign in again, a copy of images already displayed, to show them faster, the fact that you have already seen an update notice, so as not to show it again, and the language and theme (light, dark or your device's) you have chosen. These items are essential for the app to work. While you choose a frame from a video, the iPhone app keeps a temporary copy of the video, deleted as soon as you leave that screen; on the website, the video is read by your browser without being copied.",
         "Spotto uses no advertising trackers and no advertising cookies. Usage statistics, if you accept them, are sent directly, without cookies or storage on your device, and without IP-based geolocation.",
       ],
     },

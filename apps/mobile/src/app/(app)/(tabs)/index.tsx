@@ -7,11 +7,12 @@ import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { getRecentSearches } from "@/api/client";
 import type { Piece } from "@/api/types";
-import { CameraIcon, ClipboardIcon, ClockIcon } from "@/components/icons";
+import { CameraIcon, ClipboardIcon, ClockIcon, VideoIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
 import { SpotImage } from "@/components/spot-image";
 import { detectLink, type LinkDetection } from "@/lib/link-detection";
-import { beginFromLink, beginFromPhoto, prepareFailureKind } from "@/lib/spot-flow";
+import { beginFromLink, beginFromPhoto, prepareErrorMessage } from "@/lib/spot-flow";
+import { importSpotVideo, videoImportMessage } from "@/lib/spot-video";
 import { importPhotoForSpotter } from "@/lib/image-import";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -32,17 +33,12 @@ function DetectionCard({ detection }: { detection: LinkDetection }) {
   return null;
 }
 
-function prepareErrorMessage(error: unknown): string {
-  const kind = prepareFailureKind(error);
-  return kind === "network" ? t.spotter.networkError : kind === "server" ? t.spotter.serverError : t.spotter.prepareError;
-}
-
 export default function SpotterScreen() {
   const router = useRouter();
   const [link, setLink] = useState("");
   const [recent, setRecent] = useState<{ searchId: string; piece: Piece }[]>([]);
   const [message, setMessage] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"link" | "photo" | null>(null);
+  const [busy, setBusy] = useState<"link" | "photo" | "video" | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const detection = detectLink(link);
@@ -100,6 +96,19 @@ export default function SpotterScreen() {
       router.push({ pathname: "/spot/ciblage", params: { searchId: draft.searchId ?? "" } });
     } catch (error) {
       setMessage(prepareErrorMessage(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  // Lot 4 : la vidéo reste sur l'appareil ; on y choisit une image, qui suit le chemin d'une photo.
+  async function handleImportVideo() {
+    setMessage(null);
+    setBusy("video");
+    try {
+      const result = await importSpotVideo();
+      if (result.kind === "ready") router.push("/spot/video");
+      else setMessage(videoImportMessage(result));
     } finally {
       setBusy(null);
     }
@@ -166,6 +175,10 @@ export default function SpotterScreen() {
             {busy === "photo" ? <ActivityIndicator color={color.encre} /> : <CameraIcon size={18} tint={color.encre} />}
             <Text style={styles.secondaryLabel}>{t.spotter.importPhoto}</Text>
           </Pressable>
+          <Pressable style={[styles.secondary, styles.secondaryNext]} onPress={handleImportVideo} disabled={busy !== null} accessibilityRole="button">
+            {busy === "video" ? <ActivityIndicator color={color.encre} /> : <VideoIcon size={18} tint={color.encre} />}
+            <Text style={styles.secondaryLabel}>{t.spotter.importVideo}</Text>
+          </Pressable>
 
           {recent.length > 0 ? (
             <View style={styles.recentSection}>
@@ -226,6 +239,7 @@ const styles = themedStyles(() => ({
   orLine: { flex: 1, height: 1, backgroundColor: color.filet },
   orLabel: { fontSize: font.caption, color: color.acier },
   secondary: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9 },
+  secondaryNext: { marginTop: space.sm },
   secondaryLabel: { color: color.encre, fontSize: font.body, fontWeight: "500" },
   recentSection: { marginTop: space.xxl - space.xs },
   recentTitle: { fontSize: font.body, fontWeight: "600", color: color.encre, marginBottom: space.md },

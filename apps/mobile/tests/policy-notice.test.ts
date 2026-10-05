@@ -43,12 +43,21 @@ describe("information de mise à jour (sans nouvelle acceptation)", () => {
   });
 
   it("lot 3bis (identifiant d'installation des rapports de plantage) : simple information, ni nouvelle acceptation ni message", () => {
-    expect(LEGAL_DOCUMENT_VERSIONS.privacy_policy).toBe("projet-2026-10-05");
+    expect(ACCEPTED_CONSENT_VERSIONS.privacy_policy).toContain("projet-2026-10-05");
     expect(JSON.stringify(privacyPolicy)).toContain("identifiant d'installation pseudonyme");
     expect(JSON.stringify(privacyPolicyEn)).toContain("pseudonymous installation identifier");
     // L'acceptation de la version précédente (lot 3) reste valable, sans message.
     expect(ACCEPTED_CONSENT_VERSIONS.privacy_policy).toContain("projet-2026-09-30-b");
     expect(shouldShowNotice(accepted("projet-2026-09-30-b"), [], POLICY_UPDATE_NOTICE)).toBe(false);
     expect(shouldShowNotice(accepted("projet-2026-10-05"), [], POLICY_UPDATE_NOTICE)).toBe(false);
+  });
+
+  it("lot 4 (vidéo lue seulement sur l'appareil) : simple information, ni nouvelle acceptation ni message", () => {
+    expect(LEGAL_DOCUMENT_VERSIONS.privacy_policy).toBe("projet-2026-10-05-b");
+    expect(JSON.stringify(privacyPolicy)).toContain("la vidéo n'est jamais envoyée à nos serveurs ni conservée");
+    expect(JSON.stringify(privacyPolicyEn)).toContain("the video is never sent to our servers nor kept");
+    expect(ACCEPTED_CONSENT_VERSIONS.privacy_policy).toContain("projet-2026-10-05");
+    expect(shouldShowNotice(accepted("projet-2026-10-05"), [], POLICY_UPDATE_NOTICE)).toBe(false);
+    expect(shouldShowNotice(accepted("projet-2026-10-05-b"), [], POLICY_UPDATE_NOTICE)).toBe(false);
   });
 });

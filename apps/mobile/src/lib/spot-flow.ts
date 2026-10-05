@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import { ApiError, prepareSearch } from "./api";
 import { getDraft, startDraft, updateDraft, type ImageSize, type SpotDraft } from "./spot-draft";
 import type { LinkPlatform } from "./link-detection";
@@ -52,4 +53,10 @@ export function prepareFailureKind(error: unknown): "network" | "server" | "othe
   if (error instanceof ApiError) return error.status >= 500 ? "server" : "other";
   // fetch échoue sans réponse (hors ligne, serveur injoignable).
   return error instanceof TypeError ? "network" : "other";
+}
+
+/** Message affiché quand « préparer » échoue (Spotter, choix d'une image dans une vidéo). */
+export function prepareErrorMessage(error: unknown): string {
+  const kind = prepareFailureKind(error);
+  return kind === "network" ? t.spotter.networkError : kind === "server" ? t.spotter.serverError : t.spotter.prepareError;
 }

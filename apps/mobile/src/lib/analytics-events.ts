@@ -12,6 +12,8 @@ const oneOf = (values: readonly string[]): Rule => ({ kind: "enum", values });
 const count: Rule = { kind: "count" };
 const bool: Rule = { kind: "bool" };
 const VISIBILITY = oneOf(["public", "followers", "private"]);
+// Lot 4 : vidéo importée dans le Spotter — photothèque (app iPhone) ou fichier (site).
+const VIDEO_SOURCE = oneOf(["library", "file"]);
 
 export const ANALYTICS_EVENTS = {
   signup_completed: { locale: oneOf(["fr", "en"]) },
@@ -35,6 +37,10 @@ export const ANALYTICS_EVENTS = {
   // Lot 3 : préférences d'affichage.
   language_changed: { locale: oneOf(["fr", "en"]), context: oneOf(["welcome", "settings"]) },
   theme_changed: { theme: oneOf(["system", "light", "dark"]) },
+  // Lot 4 : vidéo dans le Spotter — durée en secondes et source, jamais le contenu.
+  video_imported: { duration_s: count, source: VIDEO_SOURCE },
+  video_rejected: { reason: oneOf(["too_long", "too_large", "unreadable"]), duration_s: count, source: VIDEO_SOURCE },
+  video_frame_chosen: { duration_s: count, source: VIDEO_SOURCE },
 } as const satisfies Record<string, Record<string, Rule>>;
 
 export type AnalyticsEvent = keyof typeof ANALYTICS_EVENTS;

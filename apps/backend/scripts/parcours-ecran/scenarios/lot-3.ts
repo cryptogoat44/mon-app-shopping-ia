@@ -25,10 +25,11 @@ export const name = "Lot 3 — langues et mode sombre";
 export const outputDir = "lot-3-captures";
 export const buildEnv = { EXPO_PUBLIC_POSTHOG_KEY: "phc_parcoursEcranFausseCle000000000", EXPO_PUBLIC_ENVIRONMENT: "development" };
 
-type Locale = "fr" | "en";
+// Partagés avec le scénario lot-4 (mêmes combinaisons, mêmes contrôles de langue).
+export type Locale = "fr" | "en";
 type Words = Record<Locale, string>;
 
-interface Combo {
+export interface Combo {
   id: string;
   locale: Locale;
   browserLocale: string;
@@ -38,20 +39,20 @@ interface Combo {
   expected: "light" | "dark";
 }
 
-const COMBOS: Combo[] = [
+export const COMBOS: Combo[] = [
   { id: "fr-clair", locale: "fr", browserLocale: "fr-FR", deviceScheme: "light", expected: "light" },
   { id: "fr-sombre", locale: "fr", browserLocale: "fr-FR", deviceScheme: "dark", expected: "dark" },
   { id: "en-clair", locale: "en", browserLocale: "en-GB", deviceScheme: "dark", preference: "light", expected: "light" },
   { id: "en-sombre", locale: "en", browserLocale: "en-GB", deviceScheme: "light", preference: "dark", expected: "dark" },
 ];
 
-const BACKGROUND = { light: "rgb(251, 251, 250)", dark: "rgb(20, 19, 18)" };
+export const BACKGROUND = { light: "rgb(251, 251, 250)", dark: "rgb(20, 19, 18)" };
 
 // Mots qui trahissent l'autre langue (texte visible et libellés d'accessibilité).
-const FRENCH = /[àâçéèêëîïôûùœ«»]|\b(vous|votre|vos|le|la|les|des|une|du|et|pour|avec|sur|dans|Réglages|Retour|Fil|Profil|Envies|Publier|Suivre|Rechercher|Annuler|Fermer)\b/i;
-const ENGLISH = /\b(the|and|your|you|with|from|Settings|Back|Feed|Profile|Search|Sign in|Try again|Wishlist|Follow|Share|Cancel|Close|Post)\b/;
+export const FRENCH = /[àâçéèêëîïôûùœ«»]|\b(vous|votre|vos|le|la|les|des|une|du|et|pour|avec|sur|dans|Réglages|Retour|Fil|Profil|Envies|Publier|Suivre|Rechercher|Annuler|Fermer)\b/i;
+export const ENGLISH = /\b(the|and|your|you|with|from|Settings|Back|Feed|Profile|Search|Sign in|Try again|Wishlist|Follow|Share|Cancel|Close|Post)\b/;
 // Noms de langue du sélecteur : chacun est écrit dans sa propre langue.
-const LANGUAGE_NAMES = ["Français", "English"];
+export const LANGUAGE_NAMES = ["Français", "English"];
 
 function check(condition: boolean, message: string): void {
   if (!condition) throw new Error(`Vérification échouée : ${message}`);
@@ -64,7 +65,7 @@ function publisherValues(): string[] {
   return [...env.matchAll(/^EXPO_PUBLIC_PUBLISHER_\w+=(.+)$/gm)].map((m) => m[1]!.trim().replace(/^["']|["']$/g, "")).filter(Boolean);
 }
 
-async function screenText(page: Page): Promise<string> {
+export async function screenText(page: Page): Promise<string> {
   return (await page.evaluate(`(() => {
     const labels = [...document.querySelectorAll("[aria-label], [placeholder], [title]")]
       .flatMap((el) => [el.getAttribute("aria-label"), el.getAttribute("placeholder"), el.getAttribute("title")])

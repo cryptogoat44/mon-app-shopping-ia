@@ -56,6 +56,16 @@ describe("statistiques d'usage (PostHog UE)", () => {
     expect(sanitizeProps("spot_completed", { outcome: "results", results_count: 12.7 })).toEqual({ outcome: "results", results_count: 13 });
   });
 
+  it("vidéo du Spotter (lot 4) : durée en secondes, source et motif seulement, jamais le contenu", () => {
+    expect(sanitizeProps("video_imported", { duration_s: 12.6, source: "library", file_name: "IMG_0042.MOV", uri: "file:///x.mov" })).toEqual({
+      duration_s: 13,
+      source: "library",
+    });
+    expect(sanitizeProps("video_rejected", { reason: "too_long", duration_s: 72, source: "file" })).toEqual({ reason: "too_long", duration_s: 72, source: "file" });
+    expect(sanitizeProps("video_rejected", { reason: "camille@example.com", source: "tiktok" })).toEqual({});
+    expect(sanitizeProps("video_frame_chosen", { duration_s: 45, source: "file", time_s: 12 })).toEqual({ duration_s: 45, source: "file" });
+  });
+
   it("le catalogue n'admet aucun texte libre", () => {
     for (const rules of Object.values(ANALYTICS_EVENTS)) {
       for (const rule of Object.values(rules) as { kind: string }[]) expect(["enum", "count", "bool"]).toContain(rule.kind);
