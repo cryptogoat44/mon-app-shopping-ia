@@ -1,0 +1,16 @@
+# Après l'ouverture d'un lien par l'outil (Maestro ne voit jamais les jetons) :
+# confirmation d'iOS « Ouvrir dans Spotto ? », puis écran attendu.
+appId: com.spottoapp.ios
+---
+- extendedWaitUntil:
+    visible: "Ouvrir|${ATTENDRE}"
+    timeout: 90000
+- runFlow:
+    when:
+      visible: "Ouvrir"
+    commands:
+      - tapOn: "Ouvrir"
+- extendedWaitUntil:
+    visible: ${ATTENDRE}
+    timeout: 90000
+- takeScreenshot: ${CAPTURE}

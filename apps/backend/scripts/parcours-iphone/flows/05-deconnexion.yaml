@@ -1,0 +1,14 @@
+# Déconnexion, puis écran de connexion (rien n'y est saisi : la saisie réelle
+# de l'identifiant et du mot de passe se vérifie sur un vrai iPhone).
+appId: com.spottoapp.ios
+---
+- tapOn: "Se déconnecter"
+- extendedWaitUntil:
+    visible: "Commencer"
+    timeout: 15000
+- takeScreenshot: 18-deconnexion
+- tapOn: "Déjà un compte ? Se connecter"
+- extendedWaitUntil:
+    visible: "Mot de passe"
+    timeout: 10000
+- takeScreenshot: 19-ecran-de-connexion

@@ -56,3 +56,9 @@ export function setWebSentryUser(userId: string | null): void {
   pendingUser = userId;
   sentry?.setUser(userId ? { id: userId } : null);
 }
+
+/** Échec imprévu rattrapé par un écran (la personne voit déjà un message) :
+ * signalé quand même, avec le même nettoyage. `where` : le parcours concerné. */
+export function reportWebError(error: unknown, where: string): void {
+  sentry?.captureException(error, { tags: { where } });
+}

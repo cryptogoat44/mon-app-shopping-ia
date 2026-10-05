@@ -1,5 +1,6 @@
 import type { Profile } from "@monapp/shared-types";
 import { isProfileComplete } from "@monapp/shared-types";
+import { RECOVERY_PATH } from "./password-recovery";
 
 /** État du chargement du profil de la personne connectée.
  * - "idle" : pas de session, rien à charger ;
@@ -33,4 +34,16 @@ export function resolveRootRoute(input: {
   if (profileStatus === "retrying" || profileStatus === "failed" || profile === null) return "unavailable";
 
   return isProfileComplete(profile) ? "app" : "complete-profile";
+}
+
+/** Pendant l'écran de démarrage (« splash »), la navigation est retirée le
+ * temps de charger la police éditoriale, puis de connaître la session et le
+ * profil. Exception, une fois la police prête : l'écran du nouveau mot de
+ * passe, ouvert par le lien de l'e-mail. La session qu'il ouvre fait
+ * recharger le profil ; retirer la navigation à ce moment ramenait à
+ * l'accueil de l'app, sans le formulaire (constaté sur iPhone, lot 3bis).
+ * Cet écran est hors des groupes protégés : il reste affiché. */
+export function showsNavigator(route: RootRoute, pathname: string, fontsReady: boolean): boolean {
+  if (!fontsReady) return false;
+  return route !== "splash" || pathname === RECOVERY_PATH;
 }

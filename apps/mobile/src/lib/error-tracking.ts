@@ -13,11 +13,17 @@ import { scrubBreadcrumb, scrubErrorEvent } from "./sentry-scrub";
 
 let active = false;
 
+// Lus directement par la partie native (iOS) : sans eux, elle ajoute ses
+// propres traces d'écrans et d'appels réseau (adresses complètes), qui
+// échappent au nettoyage d'un plantage natif (constaté sur le simulateur).
+const NATIVE_ONLY_OPTIONS = { enableAutoBreadcrumbTracking: false, enableNetworkBreadcrumbs: false };
+
 export function initErrorTracking(): void {
   if (active) return;
   const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN?.trim();
   if (!dsn || !SENTRY_EU_DSN_PATTERN.test(dsn)) return;
   Sentry.init({
+    ...NATIVE_ONLY_OPTIONS,
     dsn,
     environment: process.env.EXPO_PUBLIC_ENVIRONMENT?.trim() || "development",
     sendDefaultPii: false,
@@ -38,4 +44,10 @@ export function initErrorTracking(): void {
 /** Compte connecté (identifiant interne seul), ou null à la déconnexion. */
 export function setErrorTrackingUser(userId: string | null): void {
   if (active) Sentry.setUser(userId ? { id: userId } : null);
+}
+
+/** Échec imprévu rattrapé par un écran (la personne voit déjà un message) :
+ * signalé quand même, avec le même nettoyage. `where` : le parcours concerné. */
+export function reportUnexpectedError(error: unknown, where: string): void {
+  if (active) Sentry.captureException(error, { tags: { where } });
 }

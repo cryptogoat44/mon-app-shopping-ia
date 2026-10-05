@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/lib/auth-context";
@@ -69,8 +69,8 @@ export default function EditProfileScreen() {
           <Text style={styles.back}>‹</Text>
         </Pressable>
       </View>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.content}>
+      <View style={styles.flex}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <Text style={styles.title} accessibilityRole="header">{t.editProfile.title}</Text>
 
           {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
@@ -124,7 +124,7 @@ export default function EditProfileScreen() {
             <Text style={[styles.ctaLabel, submitting || !username || !displayName ? styles.ctaLabelDisabled : null]}>{submitting ? t.editProfile.saving : t.editProfile.save}</Text>
           </Pressable>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }

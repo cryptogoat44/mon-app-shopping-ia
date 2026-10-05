@@ -16,6 +16,15 @@ export function scrubErrorEvent(event: WebErrorEvent | NativeErrorEvent): WebErr
   }
   const id = typeof event.user?.id === "string" ? event.user.id : undefined;
   event.user = id ? { id } : undefined;
+  // iPhone : les traces ajoutées par la partie native de Sentry (écrans,
+  // appels réseau) ne passent pas par beforeBreadcrumb — mêmes règles ici.
+  if (event.breadcrumbs) event.breadcrumbs = event.breadcrumbs.flatMap((crumb) => scrubBreadcrumb(crumb) ?? []);
+  // iPhone : code propre à l'appareil — seul l'identifiant interne doit partir.
+  if (event.contexts?.app && "device_app_hash" in event.contexts.app) {
+    const app = { ...event.contexts.app };
+    delete app.device_app_hash;
+    event.contexts = { ...event.contexts, app };
+  }
   return event;
 }
 

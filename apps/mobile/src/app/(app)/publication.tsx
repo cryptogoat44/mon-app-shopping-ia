@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { Post, PrivacyLevel } from "@monapp/shared-types";
@@ -110,8 +110,9 @@ export default function PostDetailScreen() {
           )}
         </View>
       ) : (
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <View style={styles.flex}>
+        {/* iPhone : le champ touché (ex. commentaire, en bas de page) remonte au-dessus du clavier — lot 3bis. */}
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <PostCard
             post={post}
             onOpenMenu={isMine ? undefined : () => setMenuOpen(true)}
@@ -169,7 +170,7 @@ export default function PostDetailScreen() {
             onOpenProfile={(userId) => router.push({ pathname: "/profil", params: { id: userId } })}
           />
         </ScrollView>
-        </KeyboardAvoidingView>
+        </View>
       )}
 
       {post && !isMine ? (

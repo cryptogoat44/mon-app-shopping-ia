@@ -143,7 +143,7 @@ export default function NewPostScreen() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.body}>
+      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
         <View style={styles.modes} accessibilityRole="radiogroup">

@@ -1,0 +1,25 @@
+# Lien « mot de passe oublié » ouvert par l'outil, app déconnectée (le cas
+# réel) : le formulaire doit s'afficher, puis RESTER affiché une fois la
+# session ouverte et le profil chargé (défaut corrigé au lot 3bis : l'app
+# partait sur l'accueil, sans formulaire).
+appId: com.spottoapp.ios
+---
+- extendedWaitUntil:
+    visible: "Ouvrir|Choisissez un mot de passe.*"
+    timeout: 90000
+- runFlow:
+    when:
+      visible: "Ouvrir"
+    commands:
+      - tapOn: "Ouvrir"
+- extendedWaitUntil:
+    visible: "Choisissez un mot de passe.*"
+    timeout: 90000
+# Attente (8 s au plus) d'une éventuelle disparition, qui serait le défaut.
+- extendedWaitUntil:
+    notVisible: "Choisissez un mot de passe.*"
+    timeout: 8000
+    optional: true
+- assertVisible: "Choisissez un mot de passe.*"
+- assertVisible: "Enregistrer"
+- takeScreenshot: 01-lien-mot-de-passe-oublie

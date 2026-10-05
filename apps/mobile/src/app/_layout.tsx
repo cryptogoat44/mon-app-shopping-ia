@@ -1,4 +1,4 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider, type Theme } from "expo-router";
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, usePathname, type Theme } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
@@ -6,7 +6,7 @@ import { ToastProvider } from "@/lib/toast-context";
 import { PreferencesProvider } from "@/lib/preferences-context";
 import { AnalyticsSession } from "@/components/analytics-session";
 import { WebTitle } from "@/components/web-title";
-import { resolveRootRoute } from "@/lib/root-route";
+import { resolveRootRoute, showsNavigator } from "@/lib/root-route";
 import { useAppFonts } from "@/theme/fonts";
 import { color, getActiveScheme } from "@/theme/tokens";
 import { APP_NAME_DISPLAY } from "@/constants/brand";
@@ -32,6 +32,7 @@ function navigationTheme(): Theme {
 
 function RootNavigator() {
   const { session, profile, profileStatus } = useAuth();
+  const pathname = usePathname();
   // La police éditoriale (Newsreader) n'était jamais chargée : tous les
   // titres tombaient dans une police par défaut (audit Lot Q, UX-01). On
   // garde l'écran de démarrage tant qu'elle n'est pas prête — sauf en cas
@@ -45,7 +46,7 @@ function RootNavigator() {
     if (route !== "splash") SplashScreen.hideAsync();
   }, [route]);
 
-  if (route === "splash") return null;
+  if (!showsNavigator(route, pathname, fontsReady)) return null;
 
   return (
     <ThemeProvider value={navigationTheme()}>

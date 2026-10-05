@@ -1,0 +1,39 @@
+# Choix d'une photo (photothèque, sans demande d'autorisation), recadrage
+# (coin, déplacement, réinitialisation), précision saisie, identification :
+# clé SerpApi invalide, donc échec technique attendu — jamais « pièce introuvable ».
+appId: com.spottoapp.ios
+---
+- tapOn: "Importer une photo"
+- extendedWaitUntil:
+    visible: "Collections"
+    timeout: 15000
+- takeScreenshot: 03-phototheque-sans-autorisation
+- tapOn:
+    point: "50%,25%"
+- extendedWaitUntil:
+    visible: "Entourez la pièce"
+    timeout: 30000
+- takeScreenshot: 04-recadrage
+- swipe:
+    start: "23%,30%"
+    end: "33%,38%"
+    duration: 1000
+- swipe:
+    start: "55%,52%"
+    end: "45%,58%"
+    duration: 1000
+- takeScreenshot: 05-recadrage-ajuste
+- tapOn: "Réinitialiser le cadre"
+- tapOn: "Que cherchez-vous ? (facultatif)"
+- inputText: "veste"
+- runFlow:
+    when:
+      visible: "Plus tard"
+    commands:
+      - tapOn: "Plus tard"
+- hideKeyboard
+- tapOn: "Lancer l'identification"
+- extendedWaitUntil:
+    visible: "La recherche n'a pas abouti"
+    timeout: 60000
+- takeScreenshot: 06-identification-echec-technique

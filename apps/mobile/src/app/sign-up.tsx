@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, useRouter } from "expo-router";
 import { translateAuthError } from "@/lib/auth-errors";
@@ -98,99 +98,105 @@ export default function SignUpScreen() {
         <Text style={styles.back}>‹</Text>
       </Pressable>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={styles.content}>
-          <Text style={styles.title} accessibilityRole="header">{t.auth.signUp.title}</Text>
-          <Text style={styles.subtitle}>{t.auth.signUp.subtitle}</Text>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.content}>
+            <Text style={styles.title} accessibilityRole="header">{t.auth.signUp.title}</Text>
+            <Text style={styles.subtitle}>{t.auth.signUp.subtitle}</Text>
 
-          {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
+            {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
-          <View style={styles.field}>
-            <Text style={styles.label}>{t.auth.email}</Text>
-            <TextInput
-              style={styles.input}
-              placeholderTextColor={color.acier}
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              autoCapitalize="none"
-              autoCorrect={false}
-              value={email}
-              onChangeText={setEmail}
-              accessibilityLabel={t.auth.email}
+            <View style={styles.field}>
+              <Text style={styles.label}>{t.auth.email}</Text>
+              <TextInput
+                style={styles.input}
+                placeholderTextColor={color.acier}
+                keyboardType="email-address"
+                textContentType="username"
+                autoComplete="email"
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={email}
+                onChangeText={setEmail}
+                accessibilityLabel={t.auth.email}
+              />
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>{t.auth.password}</Text>
+              <TextInput
+                style={styles.input}
+                placeholderTextColor={color.acier}
+                secureTextEntry
+                textContentType="newPassword"
+                autoComplete="new-password"
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={password}
+                onChangeText={setPassword}
+                accessibilityLabel={t.auth.password}
+              />
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>{t.auth.signUp.confirmPassword}</Text>
+              <TextInput
+                style={styles.input}
+                placeholderTextColor={color.acier}
+                secureTextEntry
+                textContentType="newPassword"
+                autoComplete="new-password"
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                accessibilityLabel={t.auth.signUp.confirmPassword}
+              />
+            </View>
+
+            <CheckboxRow
+              style={styles.consentRow}
+              label={t.auth.signUp.ageDeclaration}
+              checked={ageChecked}
+              onToggle={() => setAgeChecked((c) => !c)}
             />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>{t.auth.password}</Text>
-            <TextInput
-              style={styles.input}
-              placeholderTextColor={color.acier}
-              secureTextEntry
-              textContentType="newPassword"
-              autoCapitalize="none"
-              autoCorrect={false}
-              value={password}
-              onChangeText={setPassword}
-              accessibilityLabel={t.auth.password}
+            <CheckboxRow
+              style={styles.consentRow}
+              label={t.auth.signUp.consent}
+              checked={consentChecked}
+              onToggle={() => setConsentChecked((c) => !c)}
             />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>{t.auth.signUp.confirmPassword}</Text>
-            <TextInput
-              style={styles.input}
-              placeholderTextColor={color.acier}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              accessibilityLabel={t.auth.signUp.confirmPassword}
+            <CheckboxRow
+              style={styles.consentRow}
+              label={t.auth.signUp.analyticsConsent}
+              checked={analyticsChecked}
+              onToggle={() => setAnalyticsChecked((c) => !c)}
             />
-          </View>
+            <View style={styles.legalLinks}>
+              <Link href="/conditions" asChild>
+                <Pressable accessibilityRole="link" hitSlop={12}>
+                  <Text style={styles.legalLink}>{t.legal.readTerms}</Text>
+                </Pressable>
+              </Link>
+              <Link href="/confidentialite" asChild>
+                <Pressable accessibilityRole="link" hitSlop={12}>
+                  <Text style={styles.legalLink}>{t.legal.readPrivacy}</Text>
+                </Pressable>
+              </Link>
+            </View>
 
-          <CheckboxRow
-            style={styles.consentRow}
-            label={t.auth.signUp.ageDeclaration}
-            checked={ageChecked}
-            onToggle={() => setAgeChecked((c) => !c)}
-          />
-          <CheckboxRow
-            style={styles.consentRow}
-            label={t.auth.signUp.consent}
-            checked={consentChecked}
-            onToggle={() => setConsentChecked((c) => !c)}
-          />
-          <CheckboxRow
-            style={styles.consentRow}
-            label={t.auth.signUp.analyticsConsent}
-            checked={analyticsChecked}
-            onToggle={() => setAnalyticsChecked((c) => !c)}
-          />
-          <View style={styles.legalLinks}>
-            <Link href="/conditions" asChild>
-              <Pressable accessibilityRole="link" hitSlop={12}>
-                <Text style={styles.legalLink}>{t.legal.readTerms}</Text>
-              </Pressable>
-            </Link>
-            <Link href="/confidentialite" asChild>
-              <Pressable accessibilityRole="link" hitSlop={12}>
-                <Text style={styles.legalLink}>{t.legal.readPrivacy}</Text>
-              </Pressable>
-            </Link>
-          </View>
-
-          <Pressable accessibilityRole="button"
-            style={[styles.cta, (submitting || !email || !password || !confirmPassword || !consentChecked || !ageChecked) ? styles.ctaDisabled : null]}
-            onPress={handleSignUp}
-            disabled={submitting || !email || !password || !confirmPassword || !consentChecked || !ageChecked}
-          >
-            <Text style={[styles.ctaLabel, (submitting || !email || !password || !confirmPassword || !consentChecked || !ageChecked) ? styles.ctaLabelDisabled : null]}>{submitting ? t.auth.signUp.ctaLoading : t.auth.signUp.cta}</Text>
-          </Pressable>
-
-          <Link href="/sign-in" asChild>
-            <Pressable accessibilityRole="button" hitSlop={12}>
-              <Text style={styles.link}>{t.auth.signUp.hasAccount}</Text>
+            <Pressable accessibilityRole="button"
+              style={[styles.cta, (submitting || !email || !password || !confirmPassword || !consentChecked || !ageChecked) ? styles.ctaDisabled : null]}
+              onPress={handleSignUp}
+              disabled={submitting || !email || !password || !confirmPassword || !consentChecked || !ageChecked}
+            >
+              <Text style={[styles.ctaLabel, (submitting || !email || !password || !confirmPassword || !consentChecked || !ageChecked) ? styles.ctaLabelDisabled : null]}>{submitting ? t.auth.signUp.ctaLoading : t.auth.signUp.cta}</Text>
             </Pressable>
-          </Link>
-        </View>
+
+            <Link href="/sign-in" asChild>
+              <Pressable accessibilityRole="button" hitSlop={12}>
+                <Text style={styles.link}>{t.auth.signUp.hasAccount}</Text>
+              </Pressable>
+            </Link>
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -199,6 +205,7 @@ export default function SignUpScreen() {
 const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   flex: { flex: 1 },
+  scroll: { flexGrow: 1 },
   nav: { height: 47, justifyContent: "center", paddingHorizontal: 12 },
   back: { fontSize: 26, color: color.encre },
   content: { flex: 1, justifyContent: "center", paddingHorizontal: space.xl, maxWidth: 480, alignSelf: "center", width: "100%" },

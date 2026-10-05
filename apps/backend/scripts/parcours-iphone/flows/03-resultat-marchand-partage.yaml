@@ -1,0 +1,35 @@
+# Résultat d'une recherche (préparée sans SerpApi) : lien marchand dans le
+# navigateur intégré, puis feuille de partage d'iOS refermée sans partager.
+appId: com.spottoapp.ios
+---
+- tapOn: "Retour à Spotter"
+- extendedWaitUntil:
+    visible: "Récemment spottées"
+    timeout: 20000
+- tapOn: "Kelly 28"
+- extendedWaitUntil:
+    visible: "Meilleure proposition"
+    timeout: 20000
+- takeScreenshot: 07-resultat
+- tapOn: "Voir chez Example"
+- extendedWaitUntil:
+    visible: "OK"
+    timeout: 20000
+- takeScreenshot: 08-lien-marchand
+- tapOn: "OK"
+- extendedWaitUntil:
+    visible: "Partager"
+    timeout: 10000
+- tapOn: "Partager"
+- extendedWaitUntil:
+    visible: "Copier"
+    timeout: 15000
+- takeScreenshot: 09-partage-resultat
+# Feuille de partage refermée d'un glissement (un toucher pourrait tomber sur « Copier »).
+- swipe:
+    start: "50%,72%"
+    end: "50%,99%"
+    duration: 500
+- extendedWaitUntil:
+    visible: "Meilleure proposition"
+    timeout: 10000

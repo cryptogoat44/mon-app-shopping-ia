@@ -40,6 +40,25 @@ describe("Sentry (site et iPhone) : protection des données", () => {
     });
   });
 
+  it("iPhone : traces natives filtrées dans le rapport, code d'appareil retiré (lot 3bis)", () => {
+    // Constaté sur le simulateur : traces « ui.lifecycle » et appels réseau
+    // ajoutés par la partie native, sans passer par beforeBreadcrumb.
+    const event = scrubErrorEvent({
+      type: undefined,
+      breadcrumbs: [
+        { type: "navigation", category: "ui.lifecycle", data: { screen: "RNSScreen", title: "settings" } },
+        { type: "http", category: "http", data: { method: "GET", url: "http://localhost:3000/api/feed?cursor=abc", status_code: "200" } },
+        { category: "sentry.event", message: "Error: essai" },
+      ],
+      contexts: { app: { app_name: "Spotto", app_build: "1", device_app_hash: "9e4488b1" }, device: { family: "iOS" } },
+    } as NativeErrorEvent);
+    expect(event.breadcrumbs).toEqual([
+      { type: "http", category: "http", data: { method: "GET", url: "http://localhost:3000/api/feed", status_code: "200" } },
+      { category: "sentry.event", message: "Error: essai" },
+    ]);
+    expect(event.contexts).toEqual({ app: { app_name: "Spotto", app_build: "1" }, device: { family: "iOS" } });
+  });
+
   it("n'accepte qu'une adresse Sentry de la région UE", () => {
     expect(SENTRY_EU_DSN_PATTERN.test("https://0123abcd@o4500000000000000.ingest.de.sentry.io/4500000000000001")).toBe(true);
     expect(SENTRY_EU_DSN_PATTERN.test("https://0123abcd@o4500000000000000.ingest.us.sentry.io/4500000000000001")).toBe(false);

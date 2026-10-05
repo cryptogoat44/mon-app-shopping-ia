@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, useRouter } from "expo-router";
 import { translateAuthError } from "@/lib/auth-errors";
@@ -40,61 +40,65 @@ export default function SignInScreen() {
         <Text style={styles.back}>‹</Text>
       </Pressable>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={styles.content}>
-          <Text style={styles.title} accessibilityRole="header">{t.auth.signIn.title}</Text>
-          <Text style={styles.subtitle}>{t.auth.signIn.subtitle}</Text>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.content}>
+            <Text style={styles.title} accessibilityRole="header">{t.auth.signIn.title}</Text>
+            <Text style={styles.subtitle}>{t.auth.signIn.subtitle}</Text>
 
-          {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
+            {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
-          <View style={styles.field}>
-            <Text style={styles.label}>{t.auth.email}</Text>
-            <TextInput
-              style={styles.input}
-              placeholderTextColor={color.acier}
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              autoCapitalize="none"
-              autoCorrect={false}
-              value={email}
-              onChangeText={setEmail}
-              accessibilityLabel={t.auth.email}
-            />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>{t.auth.password}</Text>
-            <TextInput
-              style={styles.input}
-              placeholderTextColor={color.acier}
-              secureTextEntry
-              textContentType="password"
-              autoCapitalize="none"
-              autoCorrect={false}
-              value={password}
-              onChangeText={setPassword}
-              accessibilityLabel={t.auth.password}
-            />
-          </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>{t.auth.email}</Text>
+              <TextInput
+                style={styles.input}
+                placeholderTextColor={color.acier}
+                keyboardType="email-address"
+                textContentType="username"
+                autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={email}
+                onChangeText={setEmail}
+                accessibilityLabel={t.auth.email}
+              />
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>{t.auth.password}</Text>
+              <TextInput
+                style={styles.input}
+                placeholderTextColor={color.acier}
+                secureTextEntry
+                textContentType="password"
+                autoComplete="current-password"
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={password}
+                onChangeText={setPassword}
+                accessibilityLabel={t.auth.password}
+              />
+            </View>
 
-          <Link href="/mot-de-passe-oublie" asChild>
-            <Pressable accessibilityRole="button" hitSlop={8} style={styles.forgot}>
-              <Text style={styles.forgotLabel}>{t.auth.signIn.forgot}</Text>
+            <Link href="/mot-de-passe-oublie" asChild>
+              <Pressable accessibilityRole="button" hitSlop={8} style={styles.forgot}>
+                <Text style={styles.forgotLabel}>{t.auth.signIn.forgot}</Text>
+              </Pressable>
+            </Link>
+
+            <Pressable accessibilityRole="button"
+              style={[styles.cta, (submitting || !email || !password) ? styles.ctaDisabled : null]}
+              onPress={handleSignIn}
+              disabled={submitting || !email || !password}
+            >
+              <Text style={[styles.ctaLabel, (submitting || !email || !password) ? styles.ctaLabelDisabled : null]}>{submitting ? t.auth.signIn.ctaLoading : t.auth.signIn.cta}</Text>
             </Pressable>
-          </Link>
 
-          <Pressable accessibilityRole="button"
-            style={[styles.cta, (submitting || !email || !password) ? styles.ctaDisabled : null]}
-            onPress={handleSignIn}
-            disabled={submitting || !email || !password}
-          >
-            <Text style={[styles.ctaLabel, (submitting || !email || !password) ? styles.ctaLabelDisabled : null]}>{submitting ? t.auth.signIn.ctaLoading : t.auth.signIn.cta}</Text>
-          </Pressable>
-
-          <Link href="/sign-up" asChild>
-            <Pressable accessibilityRole="button" hitSlop={12}>
-              <Text style={styles.link}>{t.auth.signIn.noAccount}</Text>
-            </Pressable>
-          </Link>
-        </View>
+            <Link href="/sign-up" asChild>
+              <Pressable accessibilityRole="button" hitSlop={12}>
+                <Text style={styles.link}>{t.auth.signIn.noAccount}</Text>
+              </Pressable>
+            </Link>
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -103,6 +107,7 @@ export default function SignInScreen() {
 const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   flex: { flex: 1 },
+  scroll: { flexGrow: 1 },
   nav: { height: 47, justifyContent: "center", paddingHorizontal: 12 },
   back: { fontSize: 26, color: color.encre },
   content: { flex: 1, justifyContent: "center", paddingHorizontal: space.xl, maxWidth: 480, alignSelf: "center", width: "100%" },

@@ -14,7 +14,8 @@
       "icon": "./assets/marque/Spotto.icon",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "CFBundleAllowMixedLocalizations": true
+        "CFBundleAllowMixedLocalizations": true,
+        "CFBundleLocalizations": ["fr", "en"]
       },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [

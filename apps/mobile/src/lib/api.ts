@@ -35,10 +35,10 @@ import type {
   PostComment,
 } from "@monapp/shared-types";
 import { CONSENT_VERSIONS } from "@monapp/shared-types";
-import { Platform } from "react-native";
 import { supabase } from "./supabase";
 import { setAnalyticsConsent, track } from "./analytics";
 import { acceptLanguage, t } from "@/i18n";
+import { imageFileFromUri } from "./image-file";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -147,26 +147,12 @@ export async function runSearch(
   return search;
 }
 
+/** Joint une photo locale à un envoi (site et iPhone, voir image-file.ts).
+ * Sans extension reconnue, le nom suit le type réel du fichier. */
 async function appendImageFile(formData: FormData, fieldName: string, imageUri: string): Promise<void> {
-  const filename = imageUri.split("/").pop()?.split("?")[0] || "photo.jpg";
-  const extensionMatch = /\.(\w+)$/.exec(filename);
-  const extension = extensionMatch?.[1]?.toLowerCase() ?? "jpg";
-  const mimeType = extension === "png" ? "image/png" : "image/jpeg";
-
-  if (Platform.OS === "web") {
-    // Sur le web, le sélecteur de photos renvoie une adresse blob:/data: et
-    // le FormData du navigateur n'accepte qu'un vrai fichier : l'objet
-    // { uri, name, type } propre à React Native y devenait le texte
-    // « [object Object] », et aucune photo n'arrivait au serveur.
-    const blob = await (await fetch(imageUri)).blob();
-    formData.append(fieldName, blob, /\.\w+$/.test(filename) ? filename : `photo.${blob.type === "image/png" ? "png" : "jpg"}`);
-    return;
-  }
-
-  // Sur iPhone/Android, le fetch de React Native accepte cette forme
-  // { uri, name, type } : ce n'est pas un vrai Blob, mais son FormData sait
-  // lire le fichier depuis l'uri.
-  formData.append(fieldName, { uri: imageUri, name: filename, type: mimeType } as unknown as Blob);
+  const file = await imageFileFromUri(imageUri);
+  const filename = imageUri.split("/").pop()?.split("?")[0] ?? "";
+  formData.append(fieldName, file, /\.\w+$/.test(filename) ? filename : `photo.${file.type === "image/png" ? "png" : "jpg"}`);
 }
 
 export async function fetchSearch(searchId: string): Promise<ProductSearch> {

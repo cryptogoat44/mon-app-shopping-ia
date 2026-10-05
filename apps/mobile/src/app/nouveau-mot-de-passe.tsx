@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as Linking from "expo-linking";
@@ -15,13 +15,24 @@ import { themedStyles } from "@/theme/themed-styles";
 
 type Phase = "checking" | "ready" | "expired" | "invalid";
 
+/** Site : retire la partie « # » (jetons du lien) de l'adresse affichée. */
+function clearAddressHash(): void {
+  if (Platform.OS === "web" && typeof window !== "undefined" && window.location.hash) {
+    window.history.replaceState(null, "", window.location.pathname);
+  }
+}
+
 // Ouvert depuis le lien de l'e-mail « Mot de passe oublié ». Accessible
 // avec ou sans session (hors des groupes protégés du layout racine) : le
 // lien ouvre justement une session de réinitialisation.
 export default function NewPasswordScreen() {
   const router = useRouter();
   const { showToast } = useToast();
-  const nativeUrl = Linking.useURL();
+  // iPhone : dernier lien reçu par le système, même s'il est arrivé AVANT
+  // l'ouverture de cet écran (app déjà ouverte quand on touche le lien de
+  // l'e-mail : l'ancien Linking.useURL() le manquait, écran bloqué sur
+  // « Vérification du lien… » — constaté sur simulateur, lot 3bis).
+  const nativeUrl = Linking.useLinkingURL();
   const [phase, setPhase] = useState<Phase>("checking");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -32,13 +43,12 @@ export default function NewPasswordScreen() {
 
   useEffect(() => {
     if (phase !== "checking") return;
-    if (Platform.OS !== "web" && nativeUrl === null) return; // lien pas encore reçu
     const link = parseRecoveryUrl(url);
 
-    // Les jetons ne doivent pas rester dans l'adresse (historique, partage).
-    if (Platform.OS === "web" && typeof window !== "undefined" && window.location.hash) {
-      window.history.replaceState(null, "", window.location.pathname);
-    }
+    // Les jetons ne doivent pas rester dans l'adresse (historique, partage)
+    // ni dans la mémoire du système (iPhone).
+    clearAddressHash();
+    if (Platform.OS !== "web" && link.kind !== "none") Linking.clearInitialURL();
 
     if (link.kind === "error") {
       setPhase("expired");
@@ -53,6 +63,15 @@ export default function NewPasswordScreen() {
       .then(({ error: sessionError }) => setPhase(sessionError ? "expired" : "ready"))
       .catch(() => setPhase("expired"));
   }, [phase, url, nativeUrl]);
+
+  // Ni dans la navigation : Expo Router range la partie « # » de l'adresse
+  // dans les paramètres de l'écran et la réécrivait dans l'adresse à chaque
+  // mise à jour (constaté sur le site, lot 3bis). Vidée une fois le lien traité.
+  useEffect(() => {
+    if (phase === "checking") return;
+    router.setParams({ "#": "" });
+    clearAddressHash();
+  }, [phase, router]);
 
   async function handleSave() {
     const problem = newPasswordProblem(password, confirmation);
@@ -75,66 +94,68 @@ export default function NewPasswordScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={styles.content}>
-          {phase === "checking" ? (
-            <View style={styles.centered} accessibilityLabel={t.auth.reset.checking}>
-              <ActivityIndicator color={color.encre} />
-            </View>
-          ) : phase === "ready" ? (
-            <>
-              <Text style={styles.title} accessibilityRole="header">{t.auth.reset.title}</Text>
-              <Text style={styles.subtitle}>{t.auth.reset.subtitle}</Text>
-              {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
-              <View style={styles.field}>
-                <Text style={styles.label}>{t.auth.reset.password}</Text>
-                <TextInput
-                  style={styles.input}
-                  secureTextEntry
-                  textContentType="newPassword"
-                  autoComplete="new-password"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  value={password}
-                  onChangeText={setPassword}
-                  accessibilityLabel={t.auth.reset.password}
-                />
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.content}>
+            {phase === "checking" ? (
+              <View style={styles.centered} accessibilityLabel={t.auth.reset.checking}>
+                <ActivityIndicator color={color.encre} />
               </View>
-              <View style={styles.field}>
-                <Text style={styles.label}>{t.auth.reset.confirm}</Text>
-                <TextInput
-                  style={styles.input}
-                  secureTextEntry
-                  textContentType="newPassword"
-                  autoComplete="new-password"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  value={confirmation}
-                  onChangeText={setConfirmation}
-                  onSubmitEditing={handleSave}
-                  accessibilityLabel={t.auth.reset.confirm}
-                />
-              </View>
-              <Pressable
-                style={[styles.cta, submitting || !password || !confirmation ? styles.ctaDisabled : null]}
-                onPress={handleSave}
-                disabled={submitting || !password || !confirmation}
-                accessibilityRole="button"
-              >
-                <Text style={[styles.ctaLabel, submitting || !password || !confirmation ? styles.ctaLabelDisabled : null]}>{submitting ? t.auth.reset.ctaLoading : t.auth.reset.cta}</Text>
-              </Pressable>
-            </>
-          ) : (
-            <>
-              <Text style={styles.title} accessibilityRole="header">
-                {phase === "expired" ? t.auth.reset.expiredTitle : t.auth.reset.invalidTitle}
-              </Text>
-              <Text style={styles.subtitle}>{phase === "expired" ? t.auth.reset.expiredBody : t.auth.reset.invalidBody}</Text>
-              <Pressable style={styles.cta} onPress={() => router.replace("/mot-de-passe-oublie")} accessibilityRole="button">
-                <Text style={styles.ctaLabel}>{t.auth.reset.newLink}</Text>
-              </Pressable>
-            </>
-          )}
-        </View>
+            ) : phase === "ready" ? (
+              <>
+                <Text style={styles.title} accessibilityRole="header">{t.auth.reset.title}</Text>
+                <Text style={styles.subtitle}>{t.auth.reset.subtitle}</Text>
+                {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
+                <View style={styles.field}>
+                  <Text style={styles.label}>{t.auth.reset.password}</Text>
+                  <TextInput
+                    style={styles.input}
+                    secureTextEntry
+                    textContentType="newPassword"
+                    autoComplete="new-password"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    value={password}
+                    onChangeText={setPassword}
+                    accessibilityLabel={t.auth.reset.password}
+                  />
+                </View>
+                <View style={styles.field}>
+                  <Text style={styles.label}>{t.auth.reset.confirm}</Text>
+                  <TextInput
+                    style={styles.input}
+                    secureTextEntry
+                    textContentType="newPassword"
+                    autoComplete="new-password"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    value={confirmation}
+                    onChangeText={setConfirmation}
+                    onSubmitEditing={handleSave}
+                    accessibilityLabel={t.auth.reset.confirm}
+                  />
+                </View>
+                <Pressable
+                  style={[styles.cta, submitting || !password || !confirmation ? styles.ctaDisabled : null]}
+                  onPress={handleSave}
+                  disabled={submitting || !password || !confirmation}
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.ctaLabel, submitting || !password || !confirmation ? styles.ctaLabelDisabled : null]}>{submitting ? t.auth.reset.ctaLoading : t.auth.reset.cta}</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Text style={styles.title} accessibilityRole="header">
+                  {phase === "expired" ? t.auth.reset.expiredTitle : t.auth.reset.invalidTitle}
+                </Text>
+                <Text style={styles.subtitle}>{phase === "expired" ? t.auth.reset.expiredBody : t.auth.reset.invalidBody}</Text>
+                <Pressable style={styles.cta} onPress={() => router.replace("/mot-de-passe-oublie")} accessibilityRole="button">
+                  <Text style={styles.ctaLabel}>{t.auth.reset.newLink}</Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -143,6 +164,7 @@ export default function NewPasswordScreen() {
 const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   flex: { flex: 1 },
+  scroll: { flexGrow: 1 },
   content: { flex: 1, justifyContent: "center", paddingHorizontal: space.xl, maxWidth: 480, alignSelf: "center", width: "100%" },
   centered: { alignItems: "center" },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, color: color.encre },

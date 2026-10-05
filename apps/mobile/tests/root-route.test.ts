@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Profile } from "@monapp/shared-types";
-import { resolveRootRoute } from "../src/lib/root-route";
+import { resolveRootRoute, showsNavigator } from "../src/lib/root-route";
 import { RetryCancelledError, retryWithDelays } from "../src/lib/retry";
 
 function profile(username: string | null): Profile {
@@ -89,5 +89,23 @@ describe("retryWithDelays", () => {
       retryWithDelays(fn, { delaysMs: [1, 2, 3], sleep: noSleep, isCancelled: () => cancelled })
     ).rejects.toBeInstanceOf(RetryCancelledError);
     expect(fn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("navigation pendant l'écran de démarrage (lot 3bis)", () => {
+  it("retirée au démarrage et pendant le chargement du profil, affichée ensuite", () => {
+    expect(showsNavigator("splash", "/", true)).toBe(false);
+    expect(showsNavigator("splash", "/sign-in", true)).toBe(false);
+    expect(showsNavigator("app", "/", true)).toBe(true);
+  });
+
+  it("gardée sur le nouveau mot de passe : la session du lien de l'e-mail recharge le profil sans fermer le formulaire", () => {
+    // Constaté sur iPhone : lien ouvert app déconnectée → accueil de l'app, sans formulaire.
+    expect(showsNavigator("splash", "/nouveau-mot-de-passe", true)).toBe(true);
+  });
+
+  it("police éditoriale pas encore prête : rien n'est affiché, nouveau mot de passe compris", () => {
+    expect(showsNavigator("splash", "/nouveau-mot-de-passe", false)).toBe(false);
+    expect(showsNavigator("splash", "/", false)).toBe(false);
   });
 });

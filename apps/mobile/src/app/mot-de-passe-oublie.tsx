@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as Linking from "expo-linking";
@@ -53,46 +53,49 @@ export default function ForgotPasswordScreen() {
         <Text style={styles.back}>‹</Text>
       </Pressable>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={styles.content}>
-          {sentTo ? (
-            <>
-              <Text style={styles.title} accessibilityRole="header">{t.auth.forgot.sentTitle}</Text>
-              <Text style={styles.subtitle} accessibilityLiveRegion="polite">{t.auth.forgot.sentBody(sentTo)}</Text>
-              <Pressable style={styles.cta} onPress={() => router.replace("/sign-in")} accessibilityRole="button">
-                <Text style={styles.ctaLabel}>{t.auth.forgot.back}</Text>
-              </Pressable>
-            </>
-          ) : (
-            <>
-              <Text style={styles.title} accessibilityRole="header">{t.auth.forgot.title}</Text>
-              <Text style={styles.subtitle}>{t.auth.forgot.subtitle}</Text>
-              {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
-              <View style={styles.field}>
-                <Text style={styles.label}>{t.auth.email}</Text>
-                <TextInput
-                  style={styles.input}
-                  keyboardType="email-address"
-                  textContentType="emailAddress"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  value={email}
-                  onChangeText={setEmail}
-                  onSubmitEditing={handleSend}
-                  returnKeyType="send"
-                  accessibilityLabel={t.auth.email}
-                />
-              </View>
-              <Pressable
-                style={[styles.cta, submitting || !email.trim() ? styles.ctaDisabled : null]}
-                onPress={handleSend}
-                disabled={submitting || !email.trim()}
-                accessibilityRole="button"
-              >
-                <Text style={[styles.ctaLabel, submitting || !email.trim() ? styles.ctaLabelDisabled : null]}>{submitting ? t.auth.forgot.ctaLoading : t.auth.forgot.cta}</Text>
-              </Pressable>
-            </>
-          )}
-        </View>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.content}>
+            {sentTo ? (
+              <>
+                <Text style={styles.title} accessibilityRole="header">{t.auth.forgot.sentTitle}</Text>
+                <Text style={styles.subtitle} accessibilityLiveRegion="polite">{t.auth.forgot.sentBody(sentTo)}</Text>
+                <Pressable style={styles.cta} onPress={() => router.replace("/sign-in")} accessibilityRole="button">
+                  <Text style={styles.ctaLabel}>{t.auth.forgot.back}</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Text style={styles.title} accessibilityRole="header">{t.auth.forgot.title}</Text>
+                <Text style={styles.subtitle}>{t.auth.forgot.subtitle}</Text>
+                {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
+                <View style={styles.field}>
+                  <Text style={styles.label}>{t.auth.email}</Text>
+                  <TextInput
+                    style={styles.input}
+                    keyboardType="email-address"
+                    textContentType="emailAddress"
+                    autoComplete="email"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    value={email}
+                    onChangeText={setEmail}
+                    onSubmitEditing={handleSend}
+                    returnKeyType="send"
+                    accessibilityLabel={t.auth.email}
+                  />
+                </View>
+                <Pressable
+                  style={[styles.cta, submitting || !email.trim() ? styles.ctaDisabled : null]}
+                  onPress={handleSend}
+                  disabled={submitting || !email.trim()}
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.ctaLabel, submitting || !email.trim() ? styles.ctaLabelDisabled : null]}>{submitting ? t.auth.forgot.ctaLoading : t.auth.forgot.cta}</Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -101,6 +104,7 @@ export default function ForgotPasswordScreen() {
 const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   flex: { flex: 1 },
+  scroll: { flexGrow: 1 },
   nav: { height: 47, justifyContent: "center", paddingHorizontal: 12 },
   back: { fontSize: 26, color: color.encre },
   content: { flex: 1, justifyContent: "center", paddingHorizontal: space.xl, maxWidth: 480, alignSelf: "center", width: "100%" },

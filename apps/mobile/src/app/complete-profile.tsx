@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Link } from "expo-router";
 import { useAuth } from "@/lib/auth-context";
@@ -82,8 +82,8 @@ export default function CompleteProfileScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <View style={styles.flex}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <Text style={styles.title} accessibilityRole="header">{t.completeProfile.title}</Text>
           <Text style={styles.subtitle}>{t.completeProfile.subtitle}</Text>
 
@@ -151,7 +151,7 @@ export default function CompleteProfileScreen() {
             <Text style={[styles.ctaLabel, (submitting || !username || !displayName || consentsMissing) ? styles.ctaLabelDisabled : null]}>{submitting ? t.editProfile.saving : t.completeProfile.continue}</Text>
           </Pressable>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }

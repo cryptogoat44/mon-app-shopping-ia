@@ -35,6 +35,10 @@ export default function TabsLayout() {
   );
 
   return (
+    // Libellés d'accessibilité donnés à chaque onglet : sinon la barre d'onglets
+    // ajoute « tab, 1 of 5 » en anglais pour VoiceOver, même en français
+    // (constaté sur simulateur, lot 3bis) ; le rôle « onglet » est déjà
+    // annoncé par iOS dans la langue de l'appareil.
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -52,11 +56,11 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: t.spotter.title, tabBarIcon: ({ color: tint }) => <SearchIcon tint={String(tint)} /> }}
+        options={{ title: t.spotter.title, tabBarAccessibilityLabel: t.spotter.title, tabBarIcon: ({ color: tint }) => <SearchIcon tint={String(tint)} /> }}
       />
       <Tabs.Screen
         name="feed"
-        options={{ title: t.tabs.feed, tabBarIcon: ({ color: tint }) => <FeedIcon tint={String(tint)} /> }}
+        options={{ title: t.tabs.feed, tabBarAccessibilityLabel: t.tabs.feed, tabBarIcon: ({ color: tint }) => <FeedIcon tint={String(tint)} /> }}
       />
       <Tabs.Screen
         name="publish"
@@ -99,7 +103,7 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="profile"
-        options={{ title: t.tabs.profile, tabBarIcon: ({ color: tint }) => <PersonIcon tint={String(tint)} /> }}
+        options={{ title: t.tabs.profile, tabBarAccessibilityLabel: t.tabs.profile, tabBarIcon: ({ color: tint }) => <PersonIcon tint={String(tint)} /> }}
       />
     </Tabs>
   );

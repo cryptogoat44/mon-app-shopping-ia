@@ -16,6 +16,7 @@ import { toSpotResult } from "@/lib/spot-result";
 import { setLastSpotResult } from "@/api/spotSession";
 import type { SpotFailReason } from "@/api/types";
 import { track } from "@/lib/analytics";
+import { reportUnexpectedError } from "@/lib/error-tracking";
 import { themedStyles } from "@/theme/themed-styles";
 
 const SLOW_AFTER_MS = 20_000;
@@ -95,6 +96,9 @@ export default function AnalysisScreen() {
         if (abort.signal.aborted) return; // annulé par l'utilisateur : rien à afficher
         if (error instanceof ApiError && error.status === 429) return finish(null, "rate_limited");
         if (error instanceof ApiError && error.body.error === "preview_unavailable") return finish(null, "needs_photo");
+        // Erreur côté app (ex. photo refusée à l'envoi) : invisible du
+        // serveur, donc signalée à Sentry (lot 3bis).
+        if (!(error instanceof ApiError)) reportUnexpectedError(error, "spot_analysis");
         // Réseau coupé, serveur injoignable, panne : jamais présenté comme
         // « pièce introuvable » (audit Lot Q, ROB-02).
         finish(null, "technical");

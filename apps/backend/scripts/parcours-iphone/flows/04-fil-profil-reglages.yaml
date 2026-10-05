@@ -1,0 +1,132 @@
+# Fil (j'aime, commentaire saisi, partage refermé), profil (photo de profil
+# avec le recadrage d'iOS, photo d'une pièce du Vault,
+# lien marchand d'une Envie), réglages (anglais et sombre, puis retour),
+# export des données (feuille de partage d'iOS refermée).
+appId: com.spottoapp.ios
+---
+- tapOn: "Fermer"
+- extendedWaitUntil:
+    visible: "Récemment spottées"
+    timeout: 15000
+- tapOn: "Fil"
+- extendedWaitUntil:
+    visible: "Marais ✦"
+    timeout: 20000
+- tapOn:
+    text: "Aimer"
+    index: 0
+# « Commenter », ou « 1 commentaire » quand la publication en a déjà.
+- tapOn:
+    text: "Commenter|[0-9]+ commentaires?"
+    index: 0
+# Comme une personne : on fait défiler jusqu'au champ (sous le commentaire
+# existant), puis on écrit, clavier ouvert — le champ et « Publier » doivent
+# rester au-dessus du clavier (défaut corrigé au lot 3bis).
+- scrollUntilVisible:
+    element:
+      text: "Ajouter un commentaire.*"
+    direction: DOWN
+    centerElement: true
+- tapOn: "Ajouter un commentaire.*"
+- inputText: "Bel essai"
+- runFlow:
+    when:
+      visible: "Plus tard"
+    commands:
+      - tapOn: "Plus tard"
+- tapOn:
+    text: "Publier"
+    index: 0
+- extendedWaitUntil:
+    visible: "Louise \\(test\\) Bel essai"
+    timeout: 15000
+- takeScreenshot: 10-commentaire
+- tapOn: "Retour"
+- tapOn:
+    text: "Partager la publication"
+    index: 0
+- extendedWaitUntil:
+    visible: "Copier"
+    timeout: 15000
+- takeScreenshot: 11-partage-publication
+# Feuille de partage refermée d'un glissement (un toucher pourrait tomber sur « Copier »).
+- swipe:
+    start: "50%,72%"
+    end: "50%,99%"
+    duration: 500
+- tapOn: "Profil"
+- tapOn: "Changer la photo de profil"
+- extendedWaitUntil:
+    visible: "Collections"
+    timeout: 15000
+- tapOn:
+    point: "50%,25%"
+# Écran de recadrage d'iOS : « Choisir » sur un iPhone en français ; le
+# simulateur iOS 26.5 n'a pas la traduction française de ce module
+# (PhotoLibrary) et affiche « Choose ».
+- extendedWaitUntil:
+    visible: "Choisir|Choose"
+    timeout: 20000
+- takeScreenshot: 12-recadrage-photo-de-profil
+- tapOn: "Choisir|Choose"
+- extendedWaitUntil:
+    visible: "Photo de profil mise à jour"
+    timeout: 20000
+- tapOn: "Kelly 28, Kelly 28"
+- tapOn: "Changer la photo"
+- extendedWaitUntil:
+    visible: "Collections"
+    timeout: 15000
+- tapOn:
+    point: "50%,25%"
+- extendedWaitUntil:
+    visible: "Photo mise à jour"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 13-vault-nouvelle-photo
+- tapOn: "Retour au vault"
+- tapOn: "Envies"
+- tapOn:
+    text: "Kelly 28.*"
+    index: 0
+- tapOn: "Voir chez Example"
+- extendedWaitUntil:
+    visible: "OK"
+    timeout: 20000
+- takeScreenshot: 14-envie-lien-marchand
+- tapOn: "OK"
+- tapOn: "Retour aux Envies"
+- tapOn: "Réglages"
+- extendedWaitUntil:
+    visible: "Apparence"
+    timeout: 10000
+- tapOn: "English"
+- extendedWaitUntil:
+    visible: "Appearance"
+    timeout: 10000
+- tapOn: "Dark"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 15-reglages-anglais-sombre
+- tapOn: "Français"
+- extendedWaitUntil:
+    visible: "Apparence"
+    timeout: 10000
+- tapOn: "Système"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 16-reglages-francais
+- tapOn: "Exporter mes données"
+- extendedWaitUntil:
+    visible: "Copier"
+    timeout: 20000
+- takeScreenshot: 17-export-des-donnees
+# Feuille de partage refermée d'un glissement (un toucher pourrait tomber sur « Copier »).
+- swipe:
+    start: "50%,72%"
+    end: "50%,99%"
+    duration: 500
+- extendedWaitUntil:
+    visible: "Exporter mes données"
+    timeout: 10000
