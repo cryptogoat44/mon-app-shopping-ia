@@ -8,7 +8,8 @@
 // ouvert sur un téléphone déconnecté ; le formulaire doit s'afficher et RESTER
 // affiché une fois la session ouverte, la session n'être ouverte qu'une fois,
 // et les jetons doivent quitter l'adresse sans y revenir (Expo Router les y
-// réécrivait). Aucun mot de passe n'est saisi.
+// réécrivait). Aucun mot de passe n'est saisi. Puis la politique de
+// confidentialité (version du 5 octobre 2026), en français et en anglais.
 import { createClient } from "@supabase/supabase-js";
 import type { Parcours } from "../boite-a-outils.js";
 
@@ -57,5 +58,21 @@ export async function run(p: Parcours): Promise<void> {
     process.stdout.write(`  ouvertures de la session du lien : ${ouvertures}\n`);
     check(ouvertures === 1, `session ouverte une seule fois — l'écran n'a pas été démonté puis remonté (${ouvertures})`);
     await p.capture(phone, "01-nouveau-mot-de-passe");
+  });
+
+  await p.step("Politique de confidentialité : information du lot 3bis et nouvelle version datée (français, anglais)", async () => {
+    const versions = [
+      { locale: "fr-FR", date: "projet du 5 octobre 2026", phrase: "identifiant d'installation pseudonyme", capture: "02-confidentialite-fr" },
+      { locale: "en-GB", date: "draft of October 5, 2026", phrase: "pseudonymous installation identifier", capture: "03-confidentialite-en" },
+    ];
+    for (const { locale, date, phrase, capture } of versions) {
+      const lecteur = await p.newPhone({ locale });
+      await lecteur.goto(`${p.siteUrl}/confidentialite`);
+      await lecteur.getByText(date).waitFor({ timeout: 30_000 });
+      const information = lecteur.getByText(phrase);
+      await information.waitFor({ timeout: 10_000 });
+      await information.scrollIntoViewIfNeeded();
+      await p.capture(lecteur, capture);
+    }
   });
 }

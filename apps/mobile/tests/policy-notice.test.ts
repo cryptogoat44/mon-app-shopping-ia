@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ACCEPTED_CONSENT_VERSIONS, LEGAL_DOCUMENT_VERSIONS, POLICY_UPDATE_NOTICE } from "@monapp/shared-types";
 import { parseSeenNotices, seenNoticesKey, shouldShowNotice } from "../src/lib/policy-notice";
+import { privacyPolicy } from "../src/legal/confidentialite";
+import { privacyPolicyEn } from "../src/legal/confidentialite.en";
 
 const notice = { id: "info-test", document: "privacy_policy" as const, alreadyCovered: ["v2", "v3"] };
 const accepted = (version: string | null) => [{ type: "privacy_policy" as const, grantedAt: "2026-09-25T10:00:00Z", decidedAt: "2026-09-25T10:00:00Z", version, isCurrent: true }];
@@ -38,5 +40,15 @@ describe("information de mise à jour (sans nouvelle acceptation)", () => {
     // L'acceptation de la version précédente reste valable.
     expect(ACCEPTED_CONSENT_VERSIONS.privacy_policy).toContain("projet-2026-09-25");
     expect(ACCEPTED_CONSENT_VERSIONS.privacy_policy).toContain(LEGAL_DOCUMENT_VERSIONS.privacy_policy);
+  });
+
+  it("lot 3bis (identifiant d'installation des rapports de plantage) : simple information, ni nouvelle acceptation ni message", () => {
+    expect(LEGAL_DOCUMENT_VERSIONS.privacy_policy).toBe("projet-2026-10-05");
+    expect(JSON.stringify(privacyPolicy)).toContain("identifiant d'installation pseudonyme");
+    expect(JSON.stringify(privacyPolicyEn)).toContain("pseudonymous installation identifier");
+    // L'acceptation de la version précédente (lot 3) reste valable, sans message.
+    expect(ACCEPTED_CONSENT_VERSIONS.privacy_policy).toContain("projet-2026-09-30-b");
+    expect(shouldShowNotice(accepted("projet-2026-09-30-b"), [], POLICY_UPDATE_NOTICE)).toBe(false);
+    expect(shouldShowNotice(accepted("projet-2026-10-05"), [], POLICY_UPDATE_NOTICE)).toBe(false);
   });
 });
