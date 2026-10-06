@@ -113,6 +113,8 @@ const CONSENT = z.object({ granted_at: z.string().nullable(), revoked_at: z.stri
 interface Suivi {
   /** Envois d'images à l'analyse automatique, vus par le navigateur. */
   analyses: number;
+  /** Recherches lancées (préparation et identification) : les seules qui peuvent dépenser du SerpApi. */
+  recherches: number;
 }
 
 /** Compte neuf (premier usage), statistiques acceptées pour les intercepter. */
@@ -124,9 +126,11 @@ async function nouveauCompte(p: Parcours, combo: Combo): Promise<TestAccount> {
 }
 
 function suivreAnalyses(page: Page): Suivi {
-  const suivi: Suivi = { analyses: 0 };
+  const suivi: Suivi = { analyses: 0, recherches: 0 };
   page.on("request", (requete) => {
-    if (requete.method() === "POST" && requete.url().endsWith("/api/video-moments")) suivi.analyses += 1;
+    if (requete.method() !== "POST") return;
+    if (requete.url().endsWith("/api/video-moments")) suivi.analyses += 1;
+    if (requete.url().includes("/api/searches")) suivi.recherches += 1;
   });
   return suivi;
 }
@@ -247,11 +251,13 @@ async function retraitEtRefus(p: Parcours, page: Page, compte: TestAccount, vide
   check(suivi.analyses === 0, "refus : aucune image envoyée");
 }
 
-/** Replis : pièce non repérée, puis panne de l'IA (« Réessayer » proposé). */
+/** Replis : pièce non repérée (liste vide, puis moments sous le seuil de confiance) — message clair,
+ * curseur proposé, aucune recherche lancée donc aucun crédit SerpApi ; puis panne de l'IA (« Réessayer »). */
 async function replis(p: Parcours, page: Page, videoCourte: string, problemes: string[]): Promise<void> {
   const combo = COMBOS[0]!;
   const T = TEXTES.fr;
   await page.goto(`${p.siteUrl}/`);
+  const suivi = suivreAnalyses(page);
   await choisirVideo(page, combo, videoCourte);
   await page.getByText(T.titre).waitFor({ timeout: 30_000 });
   const champ = page.getByPlaceholder("ex. veste en daim marron");
@@ -261,7 +267,25 @@ async function replis(p: Parcours, page: Page, videoCourte: string, problemes: s
   await page.getByText(T.nonReperee).waitFor({ timeout: 60_000 });
   await p.capture(page, "fr-clair-08-non-reperee");
   await controlerAffichage(page, combo, "08-non-reperee", problemes);
+  // Moments proposés mais trop peu sûrs : le serveur les écarte, l'app dit « Pièce non repérée ».
+  const lignesAvant = p.simulation.length;
   await page.getByText(T.modifier, { exact: true }).click();
+  await champ.fill("veste incertaine");
+  await page.getByText(T.trouver, { exact: true }).click();
+  await page.getByText(T.nonReperee).waitFor({ timeout: 60_000 });
+  const ligne = p.simulation.slice(lignesAvant).at(-1) ?? "";
+  check(/3 moment\(s\).*confiance 0\.3/.test(ligne), `moments sous le seuil proposés par l'IA simulée (${ligne})`);
+  await p.capture(page, "fr-clair-08b-confiance-faible");
+  await controlerAffichage(page, combo, "08b-confiance-faible", problemes);
+  await page.getByRole("button", { name: T.moiMeme, exact: true }).click();
+  await page.getByRole("heading", { name: T.curseur, exact: true }).waitFor({ timeout: 30_000 });
+  await p.capture(page, "fr-clair-08c-curseur");
+  check(suivi.analyses === 2, `deux analyses envoyées (${suivi.analyses})`);
+  check(suivi.recherches === 0, `pièce non repérée : aucune recherche lancée, aucun crédit SerpApi (${suivi.recherches})`);
+
+  await page.goto(`${p.siteUrl}/`);
+  await choisirVideo(page, combo, videoCourte);
+  await page.getByText(T.titre).waitFor({ timeout: 30_000 });
   await champ.fill("panne simulée");
   await page.getByText(T.trouver, { exact: true }).click();
   await page.getByText(T.interrompue).waitFor({ timeout: 60_000 });
@@ -321,9 +345,26 @@ function controlerStatistiques(envois: Envoi[]): void {
   check(de("video_ai_consent", { decision: "declined", context: "first_use" }) === 1, "refus (curseur manuel)");
   check(de("video_ai_frames_sent", { frames_count: 3, duration_s: 12 }) >= COMBOS.length, "images envoyées : nombre et durée");
   check(de("video_ai_result", { outcome: "found", moments_count: 3 }) >= COMBOS.length, "moments trouvés");
-  check(de("video_ai_result", { outcome: "not_found" }) === 1, "pièce non repérée");
+  check(de("video_ai_result", { outcome: "not_found", moments_count: 0 }) === 2, "pièce non repérée (liste vide, puis moments sous le seuil)");
   check(de("video_ai_result", { outcome: "unavailable" }) === 1, "panne");
   check(de("video_ai_moment_tried", { rank: 1 }) >= COMBOS.length && de("video_ai_moment_tried", { rank: 2 }) >= COMBOS.length, "moments essayés (1er, 2e)");
+}
+
+/** Politique : nouvelle version datée et ce que fait Anthropic (entraînement, conservation, lieux), en français et en anglais. */
+async function politique(p: Parcours): Promise<void> {
+  const versions = [
+    { locale: "fr-FR", date: "projet du 6 octobre 2026", phrases: ["il ne peut pas entraîner ses modèles sur ces données", "jusqu'à 7 ans les scores"], capture: "11-politique-fr" },
+    { locale: "en-GB", date: "draft of October 6, 2026", phrases: ["it may not train its models on this data", "for up to 7 years"], capture: "12-politique-en" },
+  ];
+  for (const { locale, date, phrases, capture } of versions) {
+    const lecteur = await p.newPhone({ locale });
+    await lecteur.goto(`${p.siteUrl}/confidentialite`);
+    await lecteur.getByText(date).waitFor({ timeout: 30_000 });
+    for (const phrase of phrases) await lecteur.getByText(phrase).first().waitFor({ timeout: 10_000 });
+    await lecteur.getByText(phrases[0]!).first().scrollIntoViewIfNeeded();
+    await p.capture(lecteur, capture);
+    await lecteur.context().close();
+  }
 }
 
 export async function run(p: Parcours): Promise<void> {
@@ -357,6 +398,7 @@ export async function run(p: Parcours): Promise<void> {
       });
     }
     await p.step("Statistiques : événements de l'analyse automatique, liste fermée", async () => controlerStatistiques(envois));
+    await p.step("Politique de confidentialité : ce que fait Anthropic, version datée (français, anglais)", async () => politique(p));
     check(problemes.length === 0, `affichage :\n${problemes.join("\n")}`);
   } finally {
     rmSync(videos.dossier, { recursive: true, force: true });

@@ -62,7 +62,7 @@ describe("information de mise à jour (sans nouvelle acceptation)", () => {
   });
 
   it("lot 4, temps 1 bis (analyse automatique) : Anthropic nommé, consentement propre à la fonction ; la politique reste une simple information", () => {
-    expect(LEGAL_DOCUMENT_VERSIONS.privacy_policy).toBe("projet-2026-10-05-c");
+    expect(LEGAL_DOCUMENT_VERSIONS.privacy_policy).toBe("projet-2026-10-06");
     expect(JSON.stringify(privacyPolicy)).toContain("Anthropic (Anthropic, PBC, États-Unis)");
     expect(JSON.stringify(privacyPolicyEn)).toContain("Anthropic (Anthropic, PBC, United States)");
     expect(JSON.stringify(privacyPolicy)).toContain("Accepter ou retirer l'analyse automatique des vidéos");

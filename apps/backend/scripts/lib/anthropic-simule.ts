@@ -7,7 +7,8 @@
 // « L'IA » simulée reconnaît les plans de la vidéo d'essai à leur couleur
 // (scripts/lib/videos-essai.ts) : « veste » → plan Veste, « sac », « chaussures ».
 // Mots spéciaux dans la description, pour les replis : « panne » (529),
-// « limite » (400, limite de dépense atteinte), « rien » (pièce introuvable).
+// « limite » (400, limite de dépense atteinte), « rien » (pièce introuvable),
+// « incertain » (3 moments, mais confiance 0,3 : sous le seuil du serveur).
 import sharp from "sharp";
 import { z } from "zod";
 import { CLE_SIMULATION, MARQUE_SIMULATION } from "./simulation-anthropic.js";
@@ -61,6 +62,7 @@ async function repondre(init: RequestInit | undefined): Promise<Response> {
   }
   const mesures = await Promise.all(blocs.flatMap((bloc) => (bloc.type === "image" ? [mesurer(bloc.source.data)] : [])));
   const cible = mots.includes("rien") ? undefined : CIBLES.find((c) => c.mots.some((mot) => mots.includes(mot)));
+  const confidence = mots.includes("incertain") ? 0.3 : 0.9;
   const moments = cible
     ? mesures
         .map((mesure, index) => ({ index, mesure, ecart: distance(mesure.couleur, cible.couleur) }))
@@ -72,12 +74,15 @@ async function repondre(init: RequestInit | undefined): Promise<Response> {
           y1: Math.round(mesure.height * 0.3),
           x2: Math.round(mesure.width * 0.85),
           y2: Math.round(mesure.height * 0.7),
+          confidence,
         }))
     : [];
   // Coût simulé selon la règle officielle : ⌈largeur/28⌉ × ⌈hauteur/28⌉ jetons par image.
   const jetons = mesures.reduce((somme, m) => somme + Math.ceil(m.width / 28) * Math.ceil(m.height / 28), 0) + 300;
   const proche = cible ? mesures.some((m) => couleurProche(m.couleur.map(Math.round), cible.couleur, 25)) : false;
-  process.stdout.write(`[simulation Anthropic] ${mesures.length} image(s), ${moments.length} moment(s), plan reconnu : ${proche ? "oui" : "non"}\n`);
+  process.stdout.write(
+    `[simulation Anthropic] ${mesures.length} image(s), ${moments.length} moment(s), plan reconnu : ${proche ? "oui" : "non"}, confiance ${confidence}\n`
+  );
   return json(200, {
     id: "msg_simulation",
     type: "message",

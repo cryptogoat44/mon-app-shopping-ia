@@ -151,7 +151,7 @@ export const en: Catalog = {
     consentTitle: "Automatic video analysis",
     consentBody: [
       "To find the piece for you, Spotto sends a few reduced frames from this video (12 at most) and your description to an artificial intelligence provider, Anthropic, based in the United States.",
-      "They are used only to find the piece. Spotto does not keep them; Anthropic does not use them to train its models and deletes them automatically. The full video never leaves your device.",
+      "They are used only to find the piece. Spotto does not keep them; Anthropic may not use them to train its models and deletes them automatically, within 30 days at most (exceptions described in the privacy policy). The full video never leaves your device.",
       "You can withdraw your consent at any time in Settings.",
     ],
     consentPolicy: "Read the privacy policy",

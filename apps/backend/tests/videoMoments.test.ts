@@ -93,7 +93,7 @@ describe("analyse automatique d'une vidéo (POST /api/video-moments)", () => {
 
   beforeEach(() => {
     askMock.mockReset();
-    askMock.mockResolvedValue({ moments: MOMENTS, usage: { inputTokens: 900, outputTokens: 50 } });
+    askMock.mockResolvedValue({ moments: MOMENTS, candidates: MOMENTS.map((moment) => ({ ...moment, confidence: 0.9 })), usage: { inputTokens: 900, outputTokens: 50 } });
     env.ANTHROPIC_API_KEY = "cle-factice-des-tests";
   });
 
@@ -113,7 +113,7 @@ describe("analyse automatique d'une vidéo (POST /api/video-moments)", () => {
     expect(askMock).toHaveBeenCalledTimes(1);
     const [frames, query, options] = askMock.mock.calls[0]!;
     expect(query).toBe(QUERY);
-    expect(options).toEqual({ apiKey: "cle-factice-des-tests", model: "claude-haiku-4-5-20251001" });
+    expect(options).toEqual({ apiKey: "cle-factice-des-tests", model: "claude-sonnet-5-5", lowEffort: true });
     expect(frames.map((frame) => [frame.width, frame.height])).toEqual([
       [288, 512],
       [288, 512],
@@ -185,10 +185,21 @@ describe("analyse automatique d'une vidéo (POST /api/video-moments)", () => {
   });
 
   it("pièce introuvable : 200 et liste vide (un résultat, pas une panne)", async () => {
-    askMock.mockResolvedValueOnce({ moments: [], usage: { inputTokens: 900, outputTokens: 10 } });
+    askMock.mockResolvedValueOnce({ moments: [], candidates: [], usage: { inputTokens: 900, outputTokens: 10 } });
     const response = await send(consenting, { query: QUERY });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ moments: [] });
+  });
+
+  it("moments trop peu sûrs (écartés par le service) : « aucun moment » ; la confiance n'est jamais envoyée à l'app", async () => {
+    const unsure = MOMENTS.map((moment) => ({ ...moment, confidence: 0.3 }));
+    askMock.mockResolvedValueOnce({ moments: [], candidates: unsure, usage: { inputTokens: 900, outputTokens: 70 } });
+    const response = await send(consenting, { query: QUERY });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ moments: [] });
+    expect(response.body).not.toContain("confidence");
+    askMock.mockResolvedValueOnce({ moments: MOMENTS, candidates: MOMENTS.map((moment) => ({ ...moment, confidence: 0.95 })), usage: { inputTokens: 900, outputTokens: 70 } });
+    expect((await send(consenting, { query: QUERY })).body).not.toContain("confidence");
   });
 
   it("message en anglais si l'app le demande", async () => {
@@ -207,6 +218,7 @@ describe("analyse automatique d'une vidéo (POST /api/video-moments)", () => {
     await send(consenting, { query: QUERY });
     const text = logs.join("\n");
     expect(text).toContain('"frames":3');
+    expect(text).toContain('"candidates":2');
     expect(text).toContain('"inputTokens":900');
     expect(text).not.toContain("daim");
     expect(text).not.toContain(FRAME_FILES[0]!.data.toString("base64").slice(0, 40));

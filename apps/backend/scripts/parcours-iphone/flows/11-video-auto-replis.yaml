@@ -1,6 +1,9 @@
 # Lot 4, temps 1 bis : replis (français). Refus → curseur manuel, rien
-# n'est envoyé ; puis accord, « rien » → pièce non repérée ; « panne » →
-# analyse interrompue, « Réessayer » proposé. IA SIMULÉE (aucun appel réel).
+# n'est envoyé ; puis accord, « rien » → pièce non repérée ; « incertaine » →
+# moments sous le seuil de confiance, écartés par le serveur → pièce non
+# repérée, puis curseur proposé (aucune recherche, aucun crédit : vérifié par
+# l'outil) ; « panne » → analyse interrompue, « Réessayer » proposé.
+# IA SIMULÉE (aucun appel réel).
 appId: com.spottoapp.ios
 ---
 - tapOn: "Importer une vidéo"
@@ -46,6 +49,29 @@ appId: com.spottoapp.ios
 - waitForAnimationToEnd:
     timeout: 3000
 - takeScreenshot: 08-non-reperee
+- tapOn: "Modifier la description"
+- tapOn:
+    id: "video-auto-query"
+- eraseText: 20
+- inputText: "veste incertaine"
+- pressKey: Enter
+- extendedWaitUntil:
+    visible: "Pièce non repérée"
+    timeout: 120000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 08b-confiance-faible
+- tapOn: "Choisir l'image moi-même"
+- extendedWaitUntil:
+    visible: "Choisissez l'image"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 08c-curseur
+- tapOn: "Retour"
+- extendedWaitUntil:
+    visible: "Pièce non repérée"
+    timeout: 15000
 - tapOn: "Modifier la description"
 - tapOn:
     id: "video-auto-query"

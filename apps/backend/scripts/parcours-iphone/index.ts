@@ -235,7 +235,9 @@ async function verifierAuto(o: Outils, compte: Compte): Promise<void> {
   const recherches = z.array(z.object({ source_platform: z.string(), status: z.string(), query: z.string().nullable() })).parse(lues.data);
   const attendues = recherches.filter((r) => r.source_platform === "photo" && r.status === "failed" && (r.query === LIBELLES.fr.DESCRIPTION || r.query === LIBELLES.en.DESCRIPTION));
   if (attendues.length !== 2 * COMBINAISONS.length) throw new Error(`Identifications inattendues : ${attendues.length} sur ${2 * COMBINAISONS.length}`);
-  log(`  analyses simulées : ${reconnues} avec le bon plan ; consentements : ${accords} accords, ${retraits} retraits ; identifications : ${attendues.length} (comme une photo, aucun crédit)`);
+  // « Pièce non repérée » (liste vide ou moments sous le seuil) et panne : aucune recherche, donc aucun crédit SerpApi.
+  if (recherches.length !== attendues.length) throw new Error(`Recherches de trop : ${recherches.length - attendues.length} (replis)`);
+  log(`  analyses simulées : ${reconnues} avec le bon plan ; consentements : ${accords} accords, ${retraits} retraits ; identifications : ${attendues.length} (comme une photo, aucun crédit) ; replis : aucune recherche`);
 }
 
 /** Lot 4, temps 1 bis : analyse automatique (IA simulée), dans les 4 combinaisons. */

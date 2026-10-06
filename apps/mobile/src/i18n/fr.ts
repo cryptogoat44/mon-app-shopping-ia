@@ -151,7 +151,7 @@ export const fr = {
     consentTitle: "Analyse automatique de la vidéo",
     consentBody: [
       "Pour trouver la pièce à votre place, Spotto envoie quelques images réduites de cette vidéo (12 au plus) et votre description à un prestataire d'intelligence artificielle, Anthropic, situé aux États-Unis.",
-      "Elles servent uniquement à repérer la pièce. Spotto ne les conserve pas ; Anthropic ne s'en sert pas pour entraîner ses modèles et les supprime automatiquement. La vidéo entière ne quitte jamais votre appareil.",
+      "Elles servent uniquement à repérer la pièce. Spotto ne les conserve pas ; Anthropic ne peut pas s'en servir pour entraîner ses modèles et les supprime automatiquement, sous 30 jours au plus (exceptions décrites dans la politique de confidentialité). La vidéo entière ne quitte jamais votre appareil.",
       "Vous pouvez retirer votre accord à tout moment dans Réglages.",
     ],
     consentPolicy: "Lire la politique de confidentialité",

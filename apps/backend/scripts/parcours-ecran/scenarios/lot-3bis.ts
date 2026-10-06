@@ -62,8 +62,9 @@ export async function run(p: Parcours): Promise<void> {
 
   await p.step("Politique de confidentialité : information du lot 3bis et nouvelle version datée (français, anglais)", async () => {
     const versions = [
-      { locale: "fr-FR", date: "projet du 5 octobre 2026", phrase: "identifiant d'installation pseudonyme", capture: "02-confidentialite-fr" },
-      { locale: "en-GB", date: "draft of October 5, 2026", phrase: "pseudonymous installation identifier", capture: "03-confidentialite-en" },
+      // Version datée (quelle qu'elle soit : elle change à chaque mise à jour du texte).
+      { locale: "fr-FR", date: /projet du \d{1,2} \S+ 20\d\d/, phrase: "identifiant d'installation pseudonyme", capture: "02-confidentialite-fr" },
+      { locale: "en-GB", date: /draft of \S+ \d{1,2}, 20\d\d/, phrase: "pseudonymous installation identifier", capture: "03-confidentialite-en" },
     ];
     for (const { locale, date, phrase, capture } of versions) {
       const lecteur = await p.newPhone({ locale });

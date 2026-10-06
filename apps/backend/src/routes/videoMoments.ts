@@ -6,7 +6,7 @@ import { ConsentLookupError, hasCurrentConsent } from "../lib/consents.js";
 import { isFileTooLargeError, isTooManyPartsError } from "../lib/multipartErrors.js";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { optimizePhotoWithSize } from "../lib/photos.js";
-import { askVideoMoments, VIDEO_AI_MODEL, VideoAiError, type FrameForAi } from "../services/videoMoments.js";
+import { askVideoMoments, VIDEO_AI_SETTINGS, VideoAiError, type FrameForAi } from "../services/videoMoments.js";
 
 // Analyse automatique d'une vidéo (lot 4, temps 1 bis), étage 2. L'app envoie
 // au plus 12 images réduites (512 px), choisies sur l'appareil, et quelques
@@ -122,12 +122,16 @@ export default async function videoMomentsRoutes(fastify: FastifyInstance) {
 
         fastify.countRateLimitHit(request, "videoAiUser");
         fastify.countRateLimitHit(request, "videoAiGlobal");
-        const result = await askVideoMoments(frames, query.data, { apiKey, model: VIDEO_AI_MODEL });
+        const result = await askVideoMoments(frames, query.data, { apiKey, ...VIDEO_AI_SETTINGS });
         // Compteurs seulement : jamais le texte, les images ni la réponse du modèle.
-        request.log.info(
-          { frames: frames.length, moments: result.moments.length, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens },
-          "Analyse vidéo IA"
-        );
+        const counters = {
+          frames: frames.length,
+          candidates: result.candidates.length,
+          moments: result.moments.length,
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+        };
+        request.log.info(counters, "Analyse vidéo IA");
         const body: VideoMomentsResponse = { moments: result.moments };
         return reply.send(body);
       } catch (error) {

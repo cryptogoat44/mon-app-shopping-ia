@@ -418,12 +418,15 @@ export const LEGAL_DOCUMENT_VERSIONS: Record<LegalDocumentType, string> = {
   // « projet-2026-10-05-b » (lot 4) : vidéo importée lue seulement sur
   // l'appareil, jamais envoyée ni conservée — simple information, sans
   // nouvelle acceptation ni message (décision du fondateur).
-  // « projet-2026-10-05-c » (lot 4, temps 1 bis) : analyse automatique d'une
-  // vidéo par une IA (Anthropic, États-Unis), seulement avec le consentement
-  // « analyse_video_ia » — simple information, sans nouvelle acceptation
-  // (décision du fondateur, 2026-10-06 : le consentement propre à la fonction,
-  // demandé à son premier usage, fait foi ; à confirmer par le juriste).
-  privacy_policy: "projet-2026-10-05-c",
+  // « projet-2026-10-06 » (lot 4, temps 1 bis ; remplace le brouillon
+  // « -10-05-c », jamais publié) : analyse automatique d'une vidéo par une IA
+  // (Anthropic, États-Unis ; ce que prévoient ses conditions : pas
+  // d'entraînement, suppression sous 30 jours, exceptions, lieux), seulement
+  // avec le consentement « analyse_video_ia » — simple information, sans
+  // nouvelle acceptation (décision du fondateur, 2026-10-06 : le consentement
+  // propre à la fonction, demandé à son premier usage, fait foi ; à confirmer
+  // par le juriste).
+  privacy_policy: "projet-2026-10-06",
 };
 
 /** Suivi des erreurs (lot 2) : seule adresse Sentry admise, région UE
@@ -444,7 +447,9 @@ export const CONSENT_VERSIONS: Record<VersionedConsentType, string> = {
   // Texte de la case « statistiques d'usage » (lot 2).
   analytics: "statistiques-2026-09-30",
   // Texte de l'écran « Analyse automatique de la vidéo » (lot 4, temps 1 bis).
-  analyse_video_ia: "analyse-video-ia-2026-10-05",
+  // Texte complété le 2026-10-06 (durée de conservation chez Anthropic), avant
+  // toute mise en ligne : aucun accord n'avait été donné sur la version du 10-05.
+  analyse_video_ia: "analyse-video-ia-2026-10-06",
 };
 
 /** Versions dont l'acceptation reste valable. Une mise à jour qui demande
@@ -456,7 +461,7 @@ export const CONSENT_VERSIONS: Record<VersionedConsentType, string> = {
  * quels changements relèvent de l'un ou de l'autre. */
 export const ACCEPTED_CONSENT_VERSIONS: Record<VersionedConsentType, readonly string[]> = {
   terms: ["projet-2026-09-25"],
-  privacy_policy: ["projet-2026-09-25", "projet-2026-09-29", "projet-2026-09-30", "projet-2026-09-30-b", "projet-2026-10-05", "projet-2026-10-05-b", "projet-2026-10-05-c"],
+  privacy_policy: ["projet-2026-09-25", "projet-2026-09-29", "projet-2026-09-30", "projet-2026-09-30-b", "projet-2026-10-05", "projet-2026-10-05-b", "projet-2026-10-06"],
   age_declaration: [CONSENT_VERSIONS.age_declaration],
   analytics: [CONSENT_VERSIONS.analytics],
   analyse_video_ia: [CONSENT_VERSIONS.analyse_video_ia],
@@ -472,7 +477,7 @@ export const POLICY_UPDATE_NOTICE = {
   document: "privacy_policy" as LegalDocumentType,
   /** Versions dont le texte contient déjà cette information : la
    * personne qui en a accepté une ne voit pas le message. */
-  alreadyCovered: ["projet-2026-09-30", "projet-2026-09-30-b", "projet-2026-10-05", "projet-2026-10-05-b", "projet-2026-10-05-c"] as readonly string[],
+  alreadyCovered: ["projet-2026-09-30", "projet-2026-09-30-b", "projet-2026-10-05", "projet-2026-10-05-b", "projet-2026-10-06"] as readonly string[],
 } as const;
 
 export interface ConsentStatus {

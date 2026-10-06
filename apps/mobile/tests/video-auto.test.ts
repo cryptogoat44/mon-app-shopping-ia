@@ -84,11 +84,14 @@ describe("analyse automatique — étages 1 et 2", () => {
     expect(remainingMoments(video)).toEqual([0, 1]);
   });
 
-  it("pièce non repérée : un résultat, pas une panne ; rien n'est gardé", async () => {
+  it("pièce non repérée (« aucun moment ») : un résultat, pas une panne ; aucune recherche lancée, donc aucun crédit SerpApi ; rien n'est gardé", async () => {
     const video = fakeVideo();
     findVideoMoments.mockResolvedValue([]);
     expect(await analyzeVideo(video, "veste", onStep)).toEqual({ kind: "not_found" });
     expect(remainingMoments(video)).toEqual([]);
+    expect(lastTriedMoment(video)).toBeNull();
+    expect(beginFromPhoto).not.toHaveBeenCalled();
+    expect(track).toHaveBeenCalledWith("video_ai_result", { outcome: "not_found", moments_count: 0 });
     expect(discardLocalFile).toHaveBeenCalledTimes(3);
   });
 
