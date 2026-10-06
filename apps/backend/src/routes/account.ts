@@ -1,15 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { ACCEPTED_CONSENT_VERSIONS, CONSENT_VERSIONS, OPTIONAL_CONSENTS, type ConsentStatus, type ConsentType, type VersionedConsentType } from "@monapp/shared-types";
+import { ACCEPTED_CONSENT_VERSIONS, CONSENT_TYPES, CONSENT_VERSIONS, OPTIONAL_CONSENTS, type ConsentStatus, type ConsentType, type VersionedConsentType } from "@monapp/shared-types";
 import { deleteUserStorageFiles } from "../lib/storage.js";
-
-const CONSENT_TYPES: ConsentType[] = ["terms", "privacy_policy", "age_declaration", "analytics", "marketing_email"];
 
 const recordConsentsSchema = z.object({
   consents: z
     .array(
       z.object({
-        type: z.enum(CONSENT_TYPES as [ConsentType, ...ConsentType[]]),
+        type: z.enum(CONSENT_TYPES),
         version: z.string().trim().min(1).max(40).optional(),
         granted: z.boolean().optional(),
       })

@@ -80,9 +80,16 @@ export function authHeaders(token: string): { authorization: string } {
 // Construit un corps multipart/form-data à la main — aucune route testée
 // ici ne l'exige typiquement via une bibliothèque cliente, mais les routes
 // d'upload du backend (vault, posts, avatar...) n'acceptent que ce format.
+export interface MultipartFile {
+  fieldname: string;
+  filename: string;
+  contentType: string;
+  data: Buffer;
+}
+
 export function buildMultipart(
   fields: Record<string, string>,
-  file?: { fieldname: string; filename: string; contentType: string; data: Buffer }
+  file?: MultipartFile | MultipartFile[]
 ): { payload: Buffer; headers: { "content-type": string } } {
   const boundary = `testboundary${uniqueSuffix()}`;
   const parts: Buffer[] = [];
@@ -91,13 +98,13 @@ export function buildMultipart(
     parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`));
   }
 
-  if (file) {
+  for (const part of file === undefined ? [] : Array.isArray(file) ? file : [file]) {
     parts.push(
       Buffer.from(
-        `--${boundary}\r\nContent-Disposition: form-data; name="${file.fieldname}"; filename="${file.filename}"\r\nContent-Type: ${file.contentType}\r\n\r\n`
+        `--${boundary}\r\nContent-Disposition: form-data; name="${part.fieldname}"; filename="${part.filename}"\r\nContent-Type: ${part.contentType}\r\n\r\n`
       )
     );
-    parts.push(file.data);
+    parts.push(part.data);
     parts.push(Buffer.from("\r\n"));
   }
 

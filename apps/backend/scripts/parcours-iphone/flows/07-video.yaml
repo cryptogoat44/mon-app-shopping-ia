@@ -1,6 +1,8 @@
 # Lot 4 : vidéo de 12 s (« Sac », « Veste », « Chaussures »), choix du moment
 # 6 s (« Veste ») au doigt vers la droite — le geste « retour » d'iOS coupait le
-# curseur, défaut corrigé —, réglage fin, image envoyée au ciblage.
+# curseur, défaut corrigé —, réglage fin (pas de 0,1 s depuis le temps 1 bis :
+# dix appuis = une seconde ; horloge au dixième, « 0:06,2 » ou « 0:06.2 »),
+# image envoyée au ciblage.
 # Le sélecteur d'iOS suit la langue de l'iPhone (français) ; la plus récente
 # des deux vidéos de 12 s est la version H.264.
 appId: com.spottoapp.ios
@@ -13,7 +15,7 @@ appId: com.spottoapp.ios
     text: "Vidéo, douze.*"
     index: 1
 - extendedWaitUntil:
-    visible: "0:00 / 0:12"
+    visible: "0:00[,.]0 / 0:12"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 4000
@@ -22,18 +24,23 @@ appId: com.spottoapp.ios
     start: "8%,71%"
     end: "50%,71%"
     duration: 1500
+# Le doigt arrive vers 6 s (5,5 à 6,4 s selon le geste).
 - extendedWaitUntil:
-    visible: "0:06 / 0:12"
+    visible: "0:0(5[,.][5-9]|6[,.][0-4]) / 0:12"
     timeout: 10000
-- tapOn: ${AVANCER}
-- tapOn: ${AVANCER}
+- repeat:
+    times: 10
+    commands:
+      - tapOn: ${AVANCER}
 - extendedWaitUntil:
-    visible: "0:07 / 0:12"
+    visible: "0:0(6[,.][5-9]|7[,.][0-4]) / 0:12"
     timeout: 10000
-- tapOn: ${RECULER}
-- tapOn: ${RECULER}
+- repeat:
+    times: 10
+    commands:
+      - tapOn: ${RECULER}
 - extendedWaitUntil:
-    visible: "0:06 / 0:12"
+    visible: "0:0(5[,.][5-9]|6[,.][0-4]) / 0:12"
     timeout: 10000
 - waitForAnimationToEnd:
     timeout: 3000

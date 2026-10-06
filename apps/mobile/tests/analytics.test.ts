@@ -66,6 +66,14 @@ describe("statistiques d'usage (PostHog UE)", () => {
     expect(sanitizeProps("video_frame_chosen", { duration_s: 45, source: "file", time_s: 12 })).toEqual({ duration_s: 45, source: "file" });
   });
 
+  it("analyse automatique (lot 4, temps 1 bis) : nombres et choix seulement — jamais la description ni les images", () => {
+    expect(sanitizeProps("video_ai_consent", { decision: "granted", context: "first_use" })).toEqual({ decision: "granted", context: "first_use" });
+    expect(sanitizeProps("video_ai_consent", { decision: "veste en daim", context: "settings" })).toEqual({ context: "settings" });
+    expect(sanitizeProps("video_ai_frames_sent", { frames_count: 12, duration_s: 14.4, query: "veste en daim marron" })).toEqual({ frames_count: 12, duration_s: 14 });
+    expect(sanitizeProps("video_ai_result", { outcome: "found", moments_count: 3, frames: "data:image/jpeg;base64,AAAA" })).toEqual({ outcome: "found", moments_count: 3 });
+    expect(sanitizeProps("video_ai_moment_tried", { rank: 2, box: "0.1,0.2" })).toEqual({ rank: 2 });
+  });
+
   it("le catalogue n'admet aucun texte libre", () => {
     for (const rules of Object.values(ANALYTICS_EVENTS)) {
       for (const rule of Object.values(rules) as { kind: string }[]) expect(["enum", "count", "bool"]).toContain(rule.kind);

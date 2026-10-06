@@ -15,6 +15,8 @@ docs/
 
 # Clé d'API Render (script bridé render-bride) : secrète, locale uniquement
 .render-api-key
+# Clé d'ESSAI d'Anthropic (comparaison des modèles, lot 4 temps 1 bis) : saisie par le fondateur.
+.anthropic-essai-key
 
 # Protection contre les fuites accidentelles (décision du fondateur, 2026-09-29)
 # Documents bureautiques et fichiers temporaires de Word

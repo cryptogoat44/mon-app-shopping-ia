@@ -19,7 +19,7 @@ export const privacyPolicy: LegalDocument = {
           "Nous ne vendons pas vos données et n'affichons aucune publicité.",
           "Votre Vault et vos Envies ne sont visibles que par vous.",
           "L'image que vous faites analyser est supprimée de nos serveurs dès que le résultat est connu.",
-          "Si vous importez une vidéo, elle reste sur votre appareil : seule l'image que vous y choisissez est envoyée.",
+          "Si vous importez une vidéo, elle reste sur votre appareil : seule l'image que vous y choisissez est envoyée — ou, si vous acceptez l'analyse automatique, quelques images réduites de la vidéo, analysées par une IA et jamais conservées par Spotto.",
           "Le partage de statistiques d'usage est facultatif, et se retire à tout moment.",
           "Vous pouvez à tout moment télécharger vos données ou supprimer votre compte, depuis les Réglages.",
         ],
@@ -37,11 +37,11 @@ export const privacyPolicy: LegalDocument = {
       blocks: [
         "Votre compte : votre adresse e-mail et votre mot de passe. Le mot de passe n'est jamais conservé en clair : nous ne le connaissons pas.",
         "Votre profil : nom d'utilisateur, nom affiché, bio, photo de profil, vos abonnés et vos abonnements.",
-        "Vos recherches (Spotter) : l'image ou le lien (TikTok, Instagram, Pinterest) que vous soumettez, la zone que vous sélectionnez, le texte que vous ajoutez éventuellement, puis les résultats proposés (nom de la pièce, image, prix, marchand, lien). L'historique de vos recherches vous est remontré (« Récemment spottées ») ; il est conservé 12 mois (voir « Combien de temps »). Si vous importez une vidéo (60 secondes et 100 Mo au plus), elle est lue uniquement sur votre appareil, le temps d'en choisir une image : la vidéo n'est jamais envoyée à nos serveurs ni conservée par Spotto ; seule l'image choisie est envoyée, comme une photo.",
+        "Vos recherches (Spotter) : l'image ou le lien (TikTok, Instagram, Pinterest) que vous soumettez, la zone que vous sélectionnez, le texte que vous ajoutez éventuellement, puis les résultats proposés (nom de la pièce, image, prix, marchand, lien). L'historique de vos recherches vous est remontré (« Récemment spottées ») ; il est conservé 12 mois (voir « Combien de temps »). Si vous importez une vidéo (60 secondes et 100 Mo au plus), elle est lue uniquement sur votre appareil : la vidéo n'est jamais envoyée à nos serveurs ni conservée par Spotto ; seule l'image choisie est envoyée, comme une photo. Si vous acceptez l'analyse automatique, votre appareil choisit au plus 12 images nettes de la vidéo, réduites (512 pixels de côté), et les envoie avec votre description à notre serveur, qui les transmet à Anthropic pour repérer les meilleurs moments et la pièce (voir « Nos prestataires et les services tiers »). Ces images ne sont jamais enregistrées par Spotto : notre serveur les efface dès la réponse.",
         "Votre Vault et vos Envies : les pièces que vous y ajoutez (nom, catégorie, photo, lien vers la pièce d'origine).",
         "Vos publications et interactions : photos, légendes, visibilité choisie, commentaires, « j'aime », notifications, comptes bloqués et signalements que vous faites.",
         "Vos clics vers les marchands : la pièce concernée, l'endroit de l'app d'où vous avez cliqué, la date, et l'identification technique de votre navigateur ou de votre téléphone (« user agent »).",
-        "Vos consentements : la date et la version des documents que vous avez acceptés, et votre déclaration d'avoir au moins 15 ans.",
+        "Vos consentements : la date et la version des documents que vous avez acceptés, votre déclaration d'avoir au moins 15 ans, et vos choix (accord, refus ou retrait) pour les statistiques d'usage et l'analyse automatique des vidéos.",
         "Des données techniques : comme tout serveur web, le nôtre reçoit votre adresse IP et des informations techniques à chaque requête ; elles figurent dans ses journaux, utilisés pour la sécurité et la correction des erreurs.",
         "Des rapports d'erreur : quand une erreur survient dans l'app ou sur notre serveur, un rapport technique est créé (nature de l'erreur, écran ou fonction concernée, type de navigateur, ou modèle de téléphone et version du système), avec l'identifiant interne de votre compte — jamais votre nom, votre e-mail, vos contenus, ni les paramètres des adresses consultées. Si l'app iPhone se ferme brutalement (plantage), le rapport contient aussi un identifiant d'installation pseudonyme : un code propre à votre téléphone et à l'app, qui ne contient ni votre nom ni votre e-mail.",
         "Des statistiques d'usage, SEULEMENT si vous l'acceptez (case facultative, décochée par défaut) : les actions que vous faites dans l'app (par exemple lancer une recherche, ajouter une pièce, publier, commenter, suivre un compte), avec le seul identifiant interne de votre compte et quelques précisions choisies à l'avance (catégorie, visibilité choisie, nombre de résultats…). Jamais votre nom, votre e-mail, le texte de vos commentaires ou légendes, ni les adresses de vos images.",
@@ -58,6 +58,7 @@ export const privacyPolicy: LegalDocument = {
           "Conserver la preuve de votre acceptation des documents : notre obligation de pouvoir la démontrer.",
           "Détecter et corriger les erreurs (rapports d'erreur) : notre intérêt légitime à assurer le bon fonctionnement du service.",
           "Comprendre comment Spotto est utilisé pour l'améliorer (statistiques d'usage) : votre consentement, que vous pouvez retirer à tout moment (Réglages → Vos données) ; le retrait arrête la collecte immédiatement.",
+          "Analyser automatiquement une vidéo (quelques images réduites envoyées à Anthropic) : votre consentement, demandé à la première utilisation, que vous pouvez retirer à tout moment (Réglages → Vos données). Sans lui, aucune image ne part : vous choisissez l'image vous-même.",
         ],
         "[À vérifier : bases légales retenues, à faire valider par un professionnel — notamment l'intérêt légitime retenu pour les rapports d'erreur.]",
       ],
@@ -83,6 +84,7 @@ export const privacyPolicy: LegalDocument = {
           "SerpApi (SerpApi, LLC, États-Unis) : reçoit un lien temporaire (valable 5 minutes) vers l'image à analyser, et le texte éventuellement ajouté ; il les transmet à la recherche visuelle de Google (Google Lens, Google LLC, États-Unis), qui télécharge l'image pour trouver les pièces correspondantes. Aucune autre donnée vous concernant (nom, e-mail, identifiant) ne leur est transmise.",
           "Sentry (Functional Software, Inc., États-Unis) : rapports d'erreur de l'app et du serveur. Données hébergées dans l'Union européenne (Francfort, Allemagne).",
           "PostHog (PostHog Inc., États-Unis) : statistiques d'usage, uniquement avec votre accord. Données hébergées dans l'Union européenne (Francfort, Allemagne).",
+          "Anthropic (Anthropic, PBC, États-Unis), uniquement si vous acceptez l'analyse automatique des vidéos : reçoit de notre serveur au plus 12 images réduites de la vidéo et votre description, et indique les meilleurs moments et l'emplacement de la pièce. Aucune autre donnée vous concernant (nom, e-mail, identifiant) ne lui est transmise. Anthropic agit pour notre compte (sous-traitant) ; selon ses conditions, il n'utilise pas ces données pour entraîner ses modèles et les supprime automatiquement de ses systèmes sous 30 jours au plus, sauf contenu signalé par ses contrôles de sécurité (jusqu'à 2 ans) ou obligation légale.",
         ],
         "Quand vous collez un lien TikTok ou Instagram, notre serveur demande à TikTok ou à Meta l'aperçu public de la vidéo : seul le lien leur est transmis, jamais votre identité.",
         "Les images des pièces proposées sont affichées directement depuis les sites des marchands et de Google. Votre téléphone ou votre navigateur les télécharge chez eux : ils reçoivent donc votre adresse IP et les informations techniques habituelles d'une requête web. Quand vous ouvrez un lien vers un marchand, vous quittez Spotto : sa propre politique de confidentialité s'applique.",
@@ -95,12 +97,13 @@ export const privacyPolicy: LegalDocument = {
         "Certaines données quittent ou peuvent quitter l'Union européenne :",
         [
           "l'image que vous faites analyser et le texte éventuellement ajouté : envoyés à SerpApi puis à Google, aux États-Unis ;",
+          "si vous acceptez l'analyse automatique des vidéos : les images réduites et votre description, envoyées à Anthropic, aux États-Unis, et qui peuvent être traitées dans d'autres pays où Anthropic fait fonctionner ses modèles ;",
           "les données qui passent par notre serveur (chaque requête de l'app, avec votre adresse IP, et les données que vous consultez ou envoyez) : le serveur est situé dans l'Union européenne (Francfort), mais Render étant une société américaine, un accès depuis les États-Unis (maintenance, assistance) ne peut pas être exclu ; il en va de même pour les journaux techniques du serveur (adresse IP, informations de la requête), conservés chez Render (voir « Combien de temps ») ;",
           "les données hébergées chez Supabase : stockées en Irlande, mais Supabase étant une société établie à Singapour, un accès depuis l'extérieur de l'Union européenne (maintenance, assistance) ne peut pas être exclu ;",
           "votre adresse IP : reçue par les sites des marchands et par Google lorsque l'app affiche leurs images, où qu'ils soient établis ;",
           "les rapports d'erreur (Sentry) et, si vous les acceptez, les statistiques d'usage (PostHog) : stockés dans l'Union européenne (Francfort), mais ces sociétés étant américaines, un accès depuis les États-Unis (maintenance, assistance) ne peut pas être exclu. Sentry déclare participer au « Data Privacy Framework » UE–États-Unis.",
         ],
-        "[À vérifier : garanties encadrant chacun de ces transferts — certification « Data Privacy Framework » de la société, ou clauses contractuelles types de la Commission européenne signées avec elle — et situation de Google, qui reçoit l'image par l'intermédiaire de SerpApi sans contrat direct avec l'éditeur.]",
+        "[À vérifier : garanties encadrant chacun de ces transferts — certification « Data Privacy Framework » de la société, ou clauses contractuelles types de la Commission européenne signées avec elle — et situation de Google, qui reçoit l'image par l'intermédiaire de SerpApi sans contrat direct avec l'éditeur. Anthropic : clauses contractuelles types (modules 2 et 3) prévues par son accord de traitement des données ; certification « Data Privacy Framework » non mentionnée dans cet accord.]",
       ],
     },
     {
@@ -108,6 +111,7 @@ export const privacyPolicy: LegalDocument = {
       blocks: [
         [
           "L'image que vous faites analyser : supprimée de nos serveurs dès la réponse de la recherche, qu'elle ait réussi ou non (quelques secondes).",
+          "Les images réduites d'une vidéo envoyées pour l'analyse automatique : jamais enregistrées par Spotto ; notre serveur les garde en mémoire le temps de la réponse (quelques secondes), puis les efface. Chez Anthropic : voir « Nos prestataires et les services tiers ».",
           "L'historique de vos recherches (image analysée exceptée, voir ci-dessus) : 12 mois. Les recherches plus anciennes sont supprimées, avec leurs résultats et vos clics vers les marchands qui en dépendent, lors de votre recherche suivante. Exception : une recherche dont vous avez gardé une pièce (Vault, Envies, pièce montrée dans une publication) est conservée tant que cette pièce l'est.",
           "Votre compte et tout ce qui s'y rattache : tant que votre compte existe.",
           "Un compte sans aucune connexion pendant 3 ans est supprimé, avec toutes ses données. Un e-mail vous prévient avant la suppression.",
@@ -120,7 +124,7 @@ export const privacyPolicy: LegalDocument = {
     {
       title: "Sur votre téléphone ou dans votre navigateur",
       blocks: [
-        "Spotto enregistre sur votre appareil votre session de connexion, pour que vous n'ayez pas à vous reconnecter, une copie des images déjà affichées, pour les montrer plus vite, le fait que vous avez déjà vu une information de mise à jour, pour ne pas vous la remontrer, ainsi que la langue et le thème (clair, sombre ou celui de l'appareil) que vous avez choisis. Ces éléments sont indispensables au fonctionnement de l'app. Pendant que vous choisissez une image dans une vidéo, l'app iPhone garde une copie temporaire de la vidéo, effacée dès que vous quittez cet écran ; sur le site, la vidéo est lue par votre navigateur, sans être copiée.",
+        "Spotto enregistre sur votre appareil votre session de connexion, pour que vous n'ayez pas à vous reconnecter, une copie des images déjà affichées, pour les montrer plus vite, le fait que vous avez déjà vu une information de mise à jour, pour ne pas vous la remontrer, ainsi que la langue et le thème (clair, sombre ou celui de l'appareil) que vous avez choisis. Ces éléments sont indispensables au fonctionnement de l'app. Pendant que vous choisissez une image dans une vidéo, ou que l'analyse automatique s'en sert, l'app iPhone garde une copie temporaire de la vidéo, effacée dès que vous quittez la recherche ; les petites images préparées pour l'analyse automatique sont effacées dès leur envoi. Sur le site, la vidéo est lue par votre navigateur, sans être copiée.",
         "Spotto n'utilise aucun traceur publicitaire ni aucun cookie publicitaire. Les statistiques d'usage, si vous les acceptez, sont envoyées directement, sans cookie ni stockage sur votre appareil, et sans géolocalisation par votre adresse IP.",
       ],
     },
@@ -133,6 +137,7 @@ export const privacyPolicy: LegalDocument = {
           "Corriger votre profil : Réglages → Modifier le profil.",
           "Tout effacer : Réglages → Supprimer mon compte.",
           "Accepter ou retirer le partage des statistiques d'usage : Réglages → Vos données.",
+          "Accepter ou retirer l'analyse automatique des vidéos : Réglages → Vos données.",
           `Pour toute autre demande : ${PUBLISHER.email}.`,
         ],
         "Si vous estimez que vos droits ne sont pas respectés, vous pouvez adresser une réclamation à la CNIL (cnil.fr).",

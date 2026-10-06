@@ -12,7 +12,7 @@ import { ErrorMessage } from "@/components/error-message";
 import { SpotImage } from "@/components/spot-image";
 import { detectLink, type LinkDetection } from "@/lib/link-detection";
 import { beginFromLink, beginFromPhoto, prepareErrorMessage } from "@/lib/spot-flow";
-import { importSpotVideo, videoImportMessage } from "@/lib/spot-video";
+import { useVideoImport } from "@/lib/use-video-import";
 import { importPhotoForSpotter } from "@/lib/image-import";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -38,11 +38,14 @@ export default function SpotterScreen() {
   const [link, setLink] = useState("");
   const [recent, setRecent] = useState<{ searchId: string; piece: Piece }[]>([]);
   const [message, setMessage] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"link" | "photo" | "video" | null>(null);
+  const [busy, setBusy] = useState<"link" | "photo" | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // Lot 4 : la vidéo reste sur l'appareil. Analyse automatique si elle est
+  // active (temps 1 bis), sinon choix de l'image au curseur (temps 1).
+  const { importing, importVideo } = useVideoImport(setMessage);
 
   const detection = detectLink(link);
-  const canContinue = detection.kind === "supported" && busy === null;
+  const canContinue = detection.kind === "supported" && busy === null && !importing;
 
   const loadRecent = useCallback(() => getRecentSearches().then(setRecent).catch(() => {}), []);
   useFocusEffect(
@@ -96,19 +99,6 @@ export default function SpotterScreen() {
       router.push({ pathname: "/spot/ciblage", params: { searchId: draft.searchId ?? "" } });
     } catch (error) {
       setMessage(prepareErrorMessage(error));
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  // Lot 4 : la vidéo reste sur l'appareil ; on y choisit une image, qui suit le chemin d'une photo.
-  async function handleImportVideo() {
-    setMessage(null);
-    setBusy("video");
-    try {
-      const result = await importSpotVideo();
-      if (result.kind === "ready") router.push("/spot/video");
-      else setMessage(videoImportMessage(result));
     } finally {
       setBusy(null);
     }
@@ -171,12 +161,12 @@ export default function SpotterScreen() {
             <View style={styles.orLine} />
           </View>
 
-          <Pressable style={styles.secondary} onPress={handleImportPhoto} disabled={busy !== null} accessibilityRole="button">
+          <Pressable style={styles.secondary} onPress={handleImportPhoto} disabled={busy !== null || importing} accessibilityRole="button">
             {busy === "photo" ? <ActivityIndicator color={color.encre} /> : <CameraIcon size={18} tint={color.encre} />}
             <Text style={styles.secondaryLabel}>{t.spotter.importPhoto}</Text>
           </Pressable>
-          <Pressable style={[styles.secondary, styles.secondaryNext]} onPress={handleImportVideo} disabled={busy !== null} accessibilityRole="button">
-            {busy === "video" ? <ActivityIndicator color={color.encre} /> : <VideoIcon size={18} tint={color.encre} />}
+          <Pressable style={[styles.secondary, styles.secondaryNext]} onPress={() => void importVideo()} disabled={busy !== null || importing} accessibilityRole="button">
+            {importing ? <ActivityIndicator color={color.encre} /> : <VideoIcon size={18} tint={color.encre} />}
             <Text style={styles.secondaryLabel}>{t.spotter.importVideo}</Text>
           </Pressable>
 

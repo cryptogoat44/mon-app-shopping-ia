@@ -3,6 +3,7 @@
 // lecteur du navigateur). La vidéo ne quitte jamais l'appareil : seule
 // l'image choisie part, comme une photo. Logique pure, testée.
 import type { ImageProps } from "expo-image";
+import type { FrameSample } from "./frame-sample";
 
 export const VIDEO_MAX_SECONDS = 60;
 /** 100 Mo, au sens où l'iPhone affiche la taille des fichiers. */
@@ -32,6 +33,9 @@ export interface OpenedVideo {
   /** Grande image du moment en cours. */
   preview(timeMs: number, maxEdge: number): Promise<FramePreview>;
   frameFile(timeMs: number, maxEdge: number): Promise<FrameFile>;
+  /** Petite image en niveaux de gris, pour juger netteté et ressemblance
+   * (étage 1 de l'analyse automatique, sur l'appareil). */
+  sampleFrame(timeMs: number, maxEdge: number): Promise<FrameSample>;
   /** Libère le lecteur et efface la copie de la vidéo (iPhone) ou son adresse (site). */
   release(): void;
 }
@@ -71,6 +75,14 @@ export function filmstripTimes(durationMs: number, count: number): number[] {
 export function formatClock(ms: number): string {
   const total = Math.floor(Math.max(0, ms) / 1000);
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
+/** « 0:06,2 » (ou « 0:06.2 ») : moment au dixième de seconde, pour le
+ * curseur fin (pas de 0,1 s, lot 4 temps 1 bis). */
+export function formatClockTenths(ms: number, decimalSeparator: string): string {
+  const tenths = Math.floor(Math.max(0, ms) / 100);
+  const seconds = Math.floor(tenths / 10);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}${decimalSeparator}${tenths % 10}`;
 }
 
 /** Taille en mégaoctets entiers (« 142 »), pour les messages. */

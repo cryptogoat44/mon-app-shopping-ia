@@ -41,6 +41,12 @@ export const ANALYTICS_EVENTS = {
   video_imported: { duration_s: count, source: VIDEO_SOURCE },
   video_rejected: { reason: oneOf(["too_long", "too_large", "unreadable"]), duration_s: count, source: VIDEO_SOURCE },
   video_frame_chosen: { duration_s: count, source: VIDEO_SOURCE },
+  // Lot 4, temps 1 bis : analyse automatique — des nombres et des choix, jamais le contenu.
+  video_ai_consent: { decision: oneOf(["granted", "declined", "withdrawn"]), context: oneOf(["first_use", "settings"]) },
+  video_ai_frames_sent: { frames_count: count, duration_s: count },
+  video_ai_result: { outcome: oneOf(["found", "not_found", "unavailable", "limit"]), moments_count: count },
+  // Moment essayé parmi les 3 proposés (1 = le meilleur).
+  video_ai_moment_tried: { rank: count },
 } as const satisfies Record<string, Record<string, Rule>>;
 
 export type AnalyticsEvent = keyof typeof ANALYTICS_EVENTS;

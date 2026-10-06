@@ -4,7 +4,7 @@ import { Image } from "expo-image";
 import { t } from "@/i18n";
 import { color, radius } from "@/theme/tokens";
 import { themedStyles } from "@/theme/themed-styles";
-import { clampTime, formatClock, ratioOfTime, timeAtRatio, type FramePreview } from "@/lib/video-timeline";
+import { clampTime, formatClock, formatClockTenths, ratioOfTime, timeAtRatio, type FramePreview } from "@/lib/video-timeline";
 
 /** Hauteur de la frise : nettement au-dessus des 44 pt d'une zone tactile. */
 const STRIP_HEIGHT = 56;
@@ -88,7 +88,7 @@ export function VideoScrubber({
         accessible
         accessibilityRole="adjustable"
         accessibilityLabel={t.video.scrubber}
-        accessibilityValue={{ text: t.video.position(formatClock(timeMs), formatClock(durationMs)) }}
+        accessibilityValue={{ text: t.video.position(formatClockTenths(timeMs, t.video.decimalSeparator), formatClock(durationMs)) }}
         accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
         onAccessibilityAction={(event) => {
           const step = event.nativeEvent.actionName === "increment" ? ACCESSIBILITY_STEP_MS : -ACCESSIBILITY_STEP_MS;

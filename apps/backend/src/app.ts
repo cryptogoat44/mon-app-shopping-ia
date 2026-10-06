@@ -1,4 +1,4 @@
-import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
+import Fastify, { type FastifyError, type FastifyInstance, type FastifyServerOptions } from "fastify";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import supabasePlugin from "./plugins/supabase.js";
@@ -17,6 +17,7 @@ import accountRoutes from "./routes/account.js";
 import blocksRoutes from "./routes/blocks.js";
 import reportsRoutes from "./routes/reports.js";
 import commentsRoutes from "./routes/comments.js";
+import videoMomentsRoutes from "./routes/videoMoments.js";
 import { captureServerError, captureServerFailure } from "./lib/sentry.js";
 import { isErrorBody, localizeMessage } from "./lib/messages.js";
 import { requestLocale } from "./lib/locale.js";
@@ -25,8 +26,9 @@ import { requestLocale } from "./lib/locale.js";
 const reportedToSentry = new Set<string>();
 
 // Séparé de server.ts pour que les tests puissent construire l'app et
-// l'interroger via `.inject()` sans jamais ouvrir de vrai port réseau.
-export async function buildApp(options: { logger?: boolean } = {}): Promise<FastifyInstance> {
+// l'interroger via `.inject()` sans jamais ouvrir de vrai port réseau. Les
+// tests peuvent aussi lire les journaux (ex. : jamais de contenu journalisé).
+export async function buildApp(options: { logger?: FastifyServerOptions["logger"] } = {}): Promise<FastifyInstance> {
   const fastify = Fastify({ logger: options.logger ?? true });
 
   await fastify.register(cors, { origin: true });
@@ -90,6 +92,7 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
   await fastify.register(blocksRoutes);
   await fastify.register(reportsRoutes);
   await fastify.register(commentsRoutes);
+  await fastify.register(videoMomentsRoutes);
 
   // Exclue du filet anti-abus "default" : les sondes de disponibilité de
   // Render l'appellent très régulièrement, ça n'a rien à voir avec un abus.

@@ -10,7 +10,7 @@ import { track } from "./analytics";
 import { SPOTTER_IMAGE_MAX_EDGE } from "./image-import";
 import { beginFromPhoto } from "./spot-flow";
 import type { SpotDraft } from "./spot-draft";
-import { discardPickedVideo, openVideo } from "./video-frames";
+import { discardLocalFile, openVideo } from "./video-frames";
 import { durationSeconds, formatClock, megabytes, VIDEO_MAX_BYTES, videoRejection, type OpenedVideo, type VideoRejection } from "./video-timeline";
 
 /** Photothèque (app iPhone) ou fichier choisi dans le navigateur (site). */
@@ -26,6 +26,21 @@ export function getSpotVideo(): OpenedVideo | null {
 export function releaseSpotVideo(): void {
   current?.release();
   current = null;
+}
+
+// Écrans qui ont besoin de la vidéo (analyse automatique, choix de l'image) :
+// chacun la garde ouverte tant qu'il est affiché ou empilé ; le dernier à
+// partir la libère (copie effacée sur iPhone). Ainsi, après l'identification,
+// « Essayer un autre moment » et le curseur restent possibles.
+let holders = 0;
+
+export function holdSpotVideo(): void {
+  holders += 1;
+}
+
+export function letGoSpotVideo(): void {
+  holders = Math.max(0, holders - 1);
+  if (holders === 0) releaseSpotVideo();
 }
 
 export type VideoImport =
@@ -62,14 +77,14 @@ export async function importSpotVideo(): Promise<VideoImport> {
   if (!asset) return { kind: "cancelled" };
   const sizeBytes = asset.fileSize ?? null;
   if (sizeBytes !== null && sizeBytes > VIDEO_MAX_BYTES) {
-    discardPickedVideo(asset.uri);
+    discardLocalFile(asset.uri);
     return rejected("too_large", null, sizeBytes);
   }
   let video: OpenedVideo;
   try {
     video = await openVideo(asset.uri);
   } catch {
-    discardPickedVideo(asset.uri);
+    discardLocalFile(asset.uri);
     return rejected("unreadable", null, sizeBytes);
   }
   const rejection = videoRejection({ durationMs: video.durationMs, sizeBytes });

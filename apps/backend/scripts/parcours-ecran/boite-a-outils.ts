@@ -20,6 +20,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
 import { CONSENT_VERSIONS } from "@monapp/shared-types";
 import { assertDevSupabaseUrl } from "../lib/dev-database.js";
+import { CLE_SIMULATION, FICHIER_SIMULATION, MARQUE_SIMULATION } from "../lib/simulation-anthropic.js";
 
 const ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
 const BACKEND_DIR = join(ROOT, "apps/backend");
@@ -88,6 +89,38 @@ export interface Parcours {
   capture(page: Page, name: string): Promise<void>;
   api(account: TestAccount, method: string, path: string, body?: unknown): Promise<Response>;
   step<T>(title: string, fn: () => Promise<T>): Promise<T>;
+  /** Lignes écrites par la simulation d'Anthropic (scénarios à IA simulée). */
+  simulation: string[];
+}
+
+/** Serveur local : jamais de vraie clé d'Anthropic ; avec l'IA simulée, une
+ * clé factice et le module de simulation (aucun appel réel). */
+function startBackend(simulatedAi: boolean): ChildProcess {
+  const env: NodeJS.ProcessEnv = { ...process.env, PORT: String(API_PORT), SERPAPI_KEY: "cle-invalide-parcours-ecran" };
+  delete env.ANTHROPIC_API_KEY;
+  if (simulatedAi) env.ANTHROPIC_API_KEY = CLE_SIMULATION;
+  const args = simulatedAi ? ["tsx", "--import", FICHIER_SIMULATION, "src/server.ts"] : ["tsx", "src/server.ts"];
+  return spawn("npx", args, { cwd: BACKEND_DIR, env, stdio: ["ignore", simulatedAi ? "pipe" : "ignore", "ignore"] });
+}
+
+/** Attend l'annonce de la simulation ; sans elle, le parcours s'arrête (une
+ * clé factice partirait sinon chez Anthropic). Garde ensuite ses lignes. */
+function followSimulation(backend: ChildProcess, lines: string[], timeoutMs: number): Promise<void> {
+  return new Promise((resolvePromise, reject) => {
+    const timer = setTimeout(() => reject(new Error("La simulation d'Anthropic n'a pas démarré : parcours arrêté, aucun appel envoyé.")), timeoutMs);
+    let pending = "";
+    backend.stdout?.on("data", (chunk) => {
+      pending += String(chunk);
+      const parts = pending.split("\n");
+      pending = parts.pop() ?? "";
+      for (const line of parts) {
+        if (line === MARQUE_SIMULATION) {
+          clearTimeout(timer);
+          resolvePromise();
+        } else if (line.startsWith("[simulation Anthropic]")) lines.push(line);
+      }
+    });
+  });
 }
 
 function log(message: string): void {
@@ -169,7 +202,8 @@ export async function runParcours(
   outputDirName: string,
   scenario: (p: Parcours) => Promise<void>,
   extraArgs: string[] = [],
-  buildEnv: Record<string, string> = {}
+  buildEnv: Record<string, string> = {},
+  options: { simulatedAi?: boolean } = {}
 ): Promise<void> {
   // Variables de construction propres au scénario : liste fermée (jamais
   // l'adresse du serveur ni celle de Supabase, protégées plus bas).
@@ -198,6 +232,7 @@ export async function runParcours(
   let site: Server | null = null;
   let browser: Browser | null = null;
   const contexts: BrowserContext[] = [];
+  const simulation: string[] = [];
   const buildDir = mkdtempSync(join(tmpdir(), "parcours-ecran-"));
   const outputDir = resolve(ROOT, "docs", outputDirName);
   mkdirSync(outputDir, { recursive: true });
@@ -243,12 +278,9 @@ export async function runParcours(
     await run("npx", ["expo", "export", "--platform", "web", ...clear, "--output-dir", buildDir], MOBILE_DIR, { ...process.env, ...buildEnv });
     site = await serveStatic(buildDir, SITE_PORT);
 
-    log("Démarrage du serveur local…");
-    backend = spawn("npx", ["tsx", "src/server.ts"], {
-      cwd: BACKEND_DIR,
-      env: { ...process.env, PORT: String(API_PORT), SERPAPI_KEY: "cle-invalide-parcours-ecran" },
-      stdio: "ignore",
-    });
+    log(options.simulatedAi ? "Démarrage du serveur local (IA d'Anthropic simulée, aucun appel réel)…" : "Démarrage du serveur local…");
+    backend = startBackend(options.simulatedAi === true);
+    if (options.simulatedAi) await followSimulation(backend, simulation, 60_000);
     await waitForUrl(`${apiUrl}/health`, 60_000);
 
     browser = await chromium.launch({ executablePath: CHROME, headless: true });
@@ -259,6 +291,7 @@ export async function runParcours(
       outputDir,
       args: extraArgs,
       admin,
+      simulation,
       async createAccount(label, displayName, options) {
         const suffix = randomBytes(3).toString("hex");
         const email = `ecran-${label}-${suffix}@example.com`;

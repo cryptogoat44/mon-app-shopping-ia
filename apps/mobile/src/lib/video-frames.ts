@@ -6,13 +6,16 @@
 import { createVideoPlayer, type VideoPlayer } from "expo-video";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { File } from "expo-file-system";
+import { base64ToBytes, decodePngSample } from "./png-pixels";
+import type { FrameSample } from "./frame-sample";
 import type { FrameFile, FramePreview, OpenedVideo } from "./video-timeline";
 
 /** Au-delà, la vidéo est considérée comme illisible. */
 const OPEN_TIMEOUT_MS = 15_000;
 
-/** Efface la copie locale d'une vidéo choisie (silencieux si déjà effacée). */
-export function discardPickedVideo(uri: string): void {
+/** Efface un fichier local : copie d'une vidéo choisie, image temporaire
+ * (silencieux s'il est déjà effacé). */
+export function discardLocalFile(uri: string): void {
   try {
     const file = new File(uri);
     if (file.exists) file.delete();
@@ -68,9 +71,18 @@ export async function openVideo(uri: string): Promise<OpenedVideo> {
       const saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.85 });
       return { uri: saved.uri, width: saved.width, height: saved.height };
     },
+    async sampleFrame(timeMs, maxEdge): Promise<FrameSample> {
+      // Seul moyen simple de lire des pixels sur iPhone : une petite image PNG,
+      // décodée dans l'app (png-pixels.ts) ; son fichier est aussitôt effacé.
+      const rendered = await ImageManipulator.manipulate(await thumbnail(player, timeMs, maxEdge)).renderAsync();
+      const saved = await rendered.saveAsync({ format: SaveFormat.PNG, base64: true });
+      discardLocalFile(saved.uri);
+      if (!saved.base64) throw new Error("video_frame_missing");
+      return decodePngSample(base64ToBytes(saved.base64));
+    },
     release() {
       player.release();
-      discardPickedVideo(uri);
+      discardLocalFile(uri);
     },
   };
 }

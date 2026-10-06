@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { prepareErrorMessage } from "@/lib/spot-flow";
-import { getSpotVideo, importSpotVideo, releaseSpotVideo, startSearchFromFrame, videoImportMessage } from "@/lib/spot-video";
-import { clampTime, filmstripTimes, formatClock, type FramePreview, type OpenedVideo } from "@/lib/video-timeline";
+import { getSpotVideo, holdSpotVideo, importSpotVideo, letGoSpotVideo, startSearchFromFrame, videoImportMessage } from "@/lib/spot-video";
+import { clampTime, filmstripTimes, formatClock, formatClockTenths, type FramePreview, type OpenedVideo } from "@/lib/video-timeline";
 import { VideoScrubber } from "@/components/video-scrubber";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
@@ -16,8 +16,8 @@ import { themedStyles } from "@/theme/themed-styles";
 const STRIP_COUNT = 8;
 const THUMBNAIL_EDGE = 160;
 const PREVIEW_EDGE = 900;
-/** Pas des boutons « − 0,5 s » et « + 0,5 s ». */
-const FINE_STEP_MS = 500;
+/** Pas des boutons « − 0,1 s » et « + 0,1 s » (lot 4, temps 1 bis). */
+const FINE_STEP_MS = 100;
 
 /** Grande image du moment choisi : une seule extraction à la fois, la plus récente demandée. */
 function useFramePreview(video: OpenedVideo | null, onError: () => void) {
@@ -49,6 +49,9 @@ function useFramePreview(video: OpenedVideo | null, onError: () => void) {
 // envoie cette seule image, comme une photo importée — même coût.
 export default function VideoFrameScreen() {
   const router = useRouter();
+  // Ouvert depuis un résultat de l'analyse automatique : le curseur part du
+  // moment proposé par l'IA (lot 4, temps 1 bis), sinon du début.
+  const { start } = useLocalSearchParams<{ start?: string }>();
   const { height: windowHeight } = useWindowDimensions();
   const [video, setVideo] = useState<OpenedVideo | null>(() => getSpotVideo());
   const [thumbnails, setThumbnails] = useState<FramePreview[] | null>(null);
@@ -60,8 +63,12 @@ export default function VideoFrameScreen() {
   const [dragging, setDragging] = useState(false);
   const frame = useFramePreview(video, () => setMessage(t.video.frameError));
 
-  // En quittant cet écran, la vidéo est libérée (copie effacée sur iPhone).
-  useEffect(() => () => releaseSpotVideo(), []);
+  // La vidéo reste ouverte tant qu'un écran du parcours en a besoin (voir
+  // spot-video.ts) ; le dernier à partir la libère (copie effacée sur iPhone).
+  useEffect(() => {
+    holdSpotVideo();
+    return letGoSpotVideo;
+  }, []);
 
   // Frise et première image, à chaque nouvelle vidéo (ou nouvel essai).
   useEffect(() => {
@@ -75,8 +82,9 @@ export default function VideoFrameScreen() {
       .then((images) => {
         if (cancelled) return;
         setThumbnails(images);
-        setTimeMs(0);
-        frame.request(0);
+        const first = clampTime(Number(start) || 0, video.durationMs);
+        setTimeMs(first);
+        frame.request(first);
         setStatus("ready");
       })
       .catch(() => {
@@ -165,7 +173,7 @@ export default function VideoFrameScreen() {
             style={[styles.fill, shown ? null : styles.hidden]}
             contentFit="contain"
             accessible={shown}
-            accessibilityLabel={shown ? t.video.frameLabel(formatClock(timeMs)) : undefined}
+            accessibilityLabel={shown ? t.video.frameLabel(formatClockTenths(timeMs, t.video.decimalSeparator)) : undefined}
           />
           {!shown && status === "loading" ? (
             <View style={[styles.overlay, styles.centeredBox]} accessibilityLabel={t.video.preparing}>
@@ -185,7 +193,7 @@ export default function VideoFrameScreen() {
         ) : (
           <>
             <Text style={styles.clock}>
-              {formatClock(timeMs)} / {formatClock(video.durationMs)}
+              {formatClockTenths(timeMs, t.video.decimalSeparator)} / {formatClock(video.durationMs)}
             </Text>
             <VideoScrubber
               durationMs={video.durationMs}

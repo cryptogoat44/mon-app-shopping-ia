@@ -7,10 +7,17 @@ export interface RateLimitRule {
   max: number;
   /** Durée de la fenêtre glissante, en millisecondes. */
   windowMs: number;
+  /** "global" : un seul compteur pour tout le service (plafond commun) ;
+   * par défaut, un compteur par utilisateur (ou par adresse IP sans compte). */
+  scope?: "user" | "global";
+  /** Code et message propres à cette limite (sinon : « Trop de tentatives… »). */
+  error?: string;
+  message?: string;
 }
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
 
 export const RATE_LIMITS = {
   // ---- Limites strictes : actions coûteuses ou sensibles à l'abus ----
@@ -32,6 +39,26 @@ export const RATE_LIMITS = {
 
   // Commentaire sous une publication (POST /api/posts/:id/comments, Lot F).
   comment: { max: 30, windowMs: HOUR },
+
+  // Analyse automatique d'une vidéo par l'IA (lot 4, temps 1 bis) : chaque
+  // appel coûte (≈ un demi-centime avec Claude Haiku 4.5). Seuls les appels
+  // réellement envoyés comptent (`rateLimitCheck` / `countRateLimitHit`).
+  // Fenêtre de 24 h à partir du premier appel ; compteurs en mémoire, remis à
+  // zéro au redémarrage du serveur : le vrai plafond financier est la limite
+  // de dépense du compte Anthropic (voir docs/points-de-vigilance.md).
+  videoAiUser: {
+    max: 10,
+    windowMs: DAY,
+    error: "video_ai_user_limit",
+    message: "Vous avez atteint la limite quotidienne d'analyses automatiques. Choisissez l'image avec le curseur, ou réessayez demain.",
+  },
+  videoAiGlobal: {
+    max: 300,
+    windowMs: DAY,
+    scope: "global",
+    error: "video_ai_global_limit",
+    message: "L'analyse automatique est très demandée aujourd'hui et momentanément indisponible. Choisissez l'image avec le curseur.",
+  },
 
   // ---- Limite large, appliquée automatiquement à toutes les autres routes ----
   // Sert de simple filet anti-script — je préfère être trop permissif que

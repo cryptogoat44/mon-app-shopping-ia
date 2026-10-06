@@ -1,0 +1,22 @@
+# Lot 4, temps 1 bis : Réglages → Vos données → retrait de l'analyse
+# automatique (effet immédiat ; la question reviendra au prochain usage).
+appId: com.spottoapp.ios
+---
+- tapOn: ${PROFIL}
+- tapOn: ${REGLAGES}
+- scrollUntilVisible:
+    element: ${INTERRUPTEUR}
+    direction: DOWN
+    timeout: 15000
+- tapOn: ${INTERRUPTEUR}
+- extendedWaitUntil:
+    visible: ${RETIRE}
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${PREFIXE}-06-reglages-retrait
+- tapOn: ${RETOUR}
+- tapOn: "Spotter"
+- extendedWaitUntil:
+    visible: ${IMPORTER}
+    timeout: 15000

@@ -5,6 +5,7 @@ import {
   durationSeconds,
   filmstripTimes,
   formatClock,
+  formatClockTenths,
   megabytes,
   ratioOfTime,
   timeAtRatio,
@@ -55,5 +56,12 @@ describe("vidéo importée dans le Spotter (lot 4)", () => {
     expect(formatClock(72_900)).toBe("1:12");
     expect(megabytes(142_400_000)).toBe(142);
     expect(durationSeconds(12_600)).toBe(13);
+  });
+
+  it("curseur fin (pas de 0,1 s) : position au dixième, séparateur de la langue", () => {
+    expect(formatClockTenths(6_000, ",")).toBe("0:06,0");
+    expect(formatClockTenths(6_249, ",")).toBe("0:06,2");
+    expect(formatClockTenths(72_950, ".")).toBe("1:12.9");
+    expect(formatClockTenths(-5, ",")).toBe("0:00,0");
   });
 });

@@ -1,5 +1,5 @@
 import { formatPrice } from "@/lib/format";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -26,6 +26,7 @@ import { Skeleton } from "@/components/skeleton";
 import { SpotImage } from "@/components/spot-image";
 import { ErrorMessage } from "@/components/error-message";
 import { CameraIcon } from "@/components/icons";
+import { VideoAlternatives } from "@/components/video-alternatives";
 import { track } from "@/lib/analytics";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -253,6 +254,14 @@ export default function ResultScreen() {
           onRetry={handleRetry}
           onBack={() => closeSpotter(router)}
           error={actionError}
+          extra={
+            <VideoAlternatives
+              sourceUrl={result?.sourceUrl ?? draft?.sourceUrl ?? null}
+              query={result?.query ?? draft?.query ?? ""}
+              onMessage={setActionError}
+              afterFailure
+            />
+          }
         />
       </SafeAreaView>
     );
@@ -369,6 +378,7 @@ export default function ResultScreen() {
             ) : null}
           </>
         ) : null}
+        <VideoAlternatives sourceUrl={result.sourceUrl ?? null} query={result.query ?? ""} onMessage={setActionError} />
       </ScrollView>
 
       <Modal visible={categoryOpen} transparent animationType="slide" onRequestClose={() => setCategoryOpen(false)}>
@@ -397,6 +407,7 @@ function FailureView({
   onRetry,
   onBack,
   error,
+  extra,
 }: {
   reason: SpotFailReason;
   canReframe: boolean;
@@ -405,6 +416,8 @@ function FailureView({
   onRetry: () => void;
   onBack: () => void;
   error: string | null;
+  /** Vidéo : autre moment, choix au curseur, ou vidéo à ajouter (lot 4, temps 1 bis). */
+  extra?: ReactNode;
 }) {
   const copy = {
     no_match: [t.result.noMatchTitle, t.result.noMatchTip],
@@ -430,7 +443,7 @@ function FailureView({
   const [first, ...rest] = actions.filter((a): a is NonNullable<typeof a> => a !== null);
 
   return (
-    <View style={styles.failContent}>
+    <ScrollView contentContainerStyle={styles.failContent}>
       <Text style={styles.failTitle} accessibilityRole="header">
         {copy[0]}
       </Text>
@@ -448,10 +461,11 @@ function FailureView({
           <Text style={styles.secondaryLabel}>{action.label}</Text>
         </Pressable>
       ))}
+      {extra}
       <Pressable style={styles.textButton} onPress={onBack} accessibilityRole="button">
         <Text style={styles.textButtonLabel}>{t.result.backToSpotter}</Text>
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -490,7 +504,7 @@ const styles = themedStyles(() => ({
   cardImage: { width: "100%", aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.sm, overflow: "hidden" },
   cardName: { fontSize: font.caption, color: color.encre, marginTop: 8, lineHeight: 17 },
   cardMeta: { fontSize: 12, color: color.acier, marginTop: 2 },
-  failContent: { flex: 1, justifyContent: "center", paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
+  failContent: { flexGrow: 1, justifyContent: "center", paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   failTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 29 },
   failTip: { fontSize: font.secondary, color: color.acier, lineHeight: 21, marginTop: space.sm },
   backdrop: { flex: 1, backgroundColor: color.voile },

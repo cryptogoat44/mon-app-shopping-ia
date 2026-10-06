@@ -25,11 +25,14 @@ export const outputDir = "lot-4-captures";
 // Clé PostHog FACTICE : les envois sont interceptés, rien ne sort.
 export const buildEnv = { EXPO_PUBLIC_POSTHOG_KEY: "phc_parcoursEcranFausseCle000000000", EXPO_PUBLIC_ENVIRONMENT: "development" };
 
-const TEXTES: Record<Locale, Record<"importer" | "titre" | "curseur" | "utiliser" | "ciblage" | "lancer" | "echec" | "tropLongue" | "tropLourde" | "illisible", string>> = {
+type Cle = "importer" | "titre" | "curseur" | "avancer" | "reculer" | "utiliser" | "ciblage" | "lancer" | "echec" | "tropLongue" | "tropLourde" | "illisible";
+export const TEXTES: Record<Locale, Record<Cle, string>> = {
   fr: {
     importer: "Importer une vidéo",
     titre: "Choisissez l'image",
     curseur: "Moment de la vidéo",
+    avancer: "Avancer d'un dixième de seconde",
+    reculer: "Reculer d'un dixième de seconde",
     utiliser: "Utiliser cette image",
     ciblage: "Entourez la pièce",
     lancer: "Lancer l'identification",
@@ -42,6 +45,8 @@ const TEXTES: Record<Locale, Record<"importer" | "titre" | "curseur" | "utiliser
     importer: "Import a video",
     titre: "Choose the frame",
     curseur: "Moment in the video",
+    avancer: "Forward a tenth of a second",
+    reculer: "Back a tenth of a second",
     utiliser: "Use this frame",
     ciblage: "Frame the piece",
     lancer: "Identify the piece",
@@ -57,15 +62,15 @@ const ENVOI = z.object({ event: z.string().optional(), properties: z.record(z.un
 const COULEUR = z.array(z.number()).length(3).nullable();
 const RECHERCHE = z.object({ source_platform: z.string(), status: z.string() });
 
-type Envoi = { event: string; properties: Record<string, unknown> };
+export type Envoi = { event: string; properties: Record<string, unknown> };
 type Fichiers = { courte: string; longue: string; hevc: string; grande: string; abimee: string };
 
-function check(condition: boolean, message: string): asserts condition {
+export function check(condition: boolean, message: string): asserts condition {
   if (!condition) throw new Error(`Vérification échouée : ${message}`);
 }
 
 /** Téléphone connecté, sur le Spotter, statistiques interceptées. */
-async function ouvrirSpotter(p: Parcours, compte: TestAccount, combo: Combo, envois: Envoi[]): Promise<Page> {
+export async function ouvrirSpotter(p: Parcours, compte: TestAccount, combo: Combo, envois: Envoi[]): Promise<Page> {
   const page = await p.newPhone({ locale: combo.browserLocale, colorScheme: combo.deviceScheme });
   await page.route("https://eu.i.posthog.com/**", async (route) => {
     const body = ENVOI.parse(JSON.parse(route.request().postData() ?? "{}"));
@@ -80,12 +85,12 @@ async function ouvrirSpotter(p: Parcours, compte: TestAccount, combo: Combo, env
   return page;
 }
 
-async function choisirVideo(page: Page, combo: Combo, fichier: string): Promise<void> {
+export async function choisirVideo(page: Page, combo: Combo, fichier: string): Promise<void> {
   const [selecteur] = await Promise.all([page.waitForEvent("filechooser"), page.getByText(TEXTES[combo.locale].importer).click()]);
   await selecteur.setFiles(fichier);
 }
 
-async function attendreBoutonActif(page: Page, texte: string): Promise<void> {
+export async function attendreBoutonActif(page: Page, texte: string): Promise<void> {
   await page.waitForFunction(
     `[...document.querySelectorAll('[role="button"]')].some((el) => (el.textContent || "").includes(${JSON.stringify(texte)}) && el.getAttribute("aria-disabled") !== "true")`,
     undefined,
@@ -112,7 +117,7 @@ async function couleurImageChoisie(page: Page): Promise<number[] | null> {
 }
 
 /** Textes de la bonne langue, fond du bon thème, langue de la page (comme au lot 3). */
-async function controlerAffichage(page: Page, combo: Combo, ecran: string, problemes: string[]): Promise<void> {
+export async function controlerAffichage(page: Page, combo: Combo, ecran: string, problemes: string[]): Promise<void> {
   let texte = await screenText(page);
   for (const valeur of LANGUAGE_NAMES) texte = texte.split(valeur).join(" ");
   const fuite = (combo.locale === "en" ? FRENCH : ENGLISH).exec(texte);
@@ -120,6 +125,22 @@ async function controlerAffichage(page: Page, combo: Combo, ecran: string, probl
   const fond = z.string().parse(await page.evaluate("getComputedStyle(document.body).backgroundColor"));
   if (fond !== BACKGROUND[combo.expected]) problemes.push(`${combo.id}/${ecran} : fond ${fond}, attendu ${BACKGROUND[combo.expected]}`);
   if ((await page.evaluate("document.documentElement.lang")) !== combo.locale) problemes.push(`${combo.id}/${ecran} : langue de la page`);
+}
+
+/** Horloge du curseur en dixièmes : « 0:06,2 / 0:12 » (français), « 0:06.2 / 0:12 » (anglais). */
+function horloge(dixiemes: number, locale: Locale): string {
+  const secondes = Math.floor(dixiemes / 10);
+  return `0:${String(secondes).padStart(2, "0")}${locale === "fr" ? "," : "."}${dixiemes % 10} / 0:12`;
+}
+
+/** Moment affiché par le curseur, en dixièmes de seconde, une fois dans le
+ * plan « Veste » (4 à 8 s) — l'horloge affiche d'abord « 0:00,0 ». */
+async function lireHorloge(page: Page): Promise<number> {
+  await page.waitForFunction(`/0:0[4-7][,.]\\d \\/ 0:12/.test(document.body.innerText)`, undefined, { timeout: 10_000 });
+  const texte = z.string().parse(await page.evaluate("document.body.innerText"));
+  const trouve = /0:(\d\d)[,.](\d) \/ 0:12/.exec(texte);
+  check(trouve !== null, "horloge du curseur lisible");
+  return Number(trouve[1]) * 10 + Number(trouve[2]);
 }
 
 /** Vidéo de 12 s → moment 6 s (« Veste ») → image au ciblage. */
@@ -141,7 +162,13 @@ async function parcoursVideo(p: Parcours, page: Page, combo: Combo, fichiers: Fi
   await page.mouse.down();
   await page.mouse.move(zone.x + zone.width * 0.5 + 1, zone.y + zone.height / 2);
   await page.mouse.up();
-  await page.getByText("0:06 / 0:12").waitFor({ timeout: 10_000 });
+  // Moment au dixième (« 0:06,0 ») ; puis réglage fin, pas de 0,1 s (temps 1 bis).
+  const moment = await lireHorloge(page);
+  check(moment >= 40 && moment < 80, `moment dans le plan « Veste » (${moment / 10} s)`);
+  for (const [bouton, ecart] of [[T.avancer, 1], [T.avancer, 2], [T.reculer, 1], [T.reculer, 0]] as const) {
+    await page.getByLabel(bouton, { exact: true }).click();
+    await page.waitForFunction(`document.body.innerText.includes(${JSON.stringify(horloge(moment + ecart, combo.locale))})`, undefined, { timeout: 10_000 });
+  }
   await page.waitForTimeout(800); // grande image du nouveau moment
   await capture("03-moment-6s");
   await page.getByText(T.utiliser).click();

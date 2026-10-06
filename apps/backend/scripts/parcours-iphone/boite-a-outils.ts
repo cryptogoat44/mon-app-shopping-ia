@@ -12,7 +12,7 @@
 // - comptes toujours supprimés à la fin, même en cas d'échec ou d'arrêt.
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { copyFileSync, createWriteStream, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,6 +20,7 @@ import { config as loadEnv } from "dotenv";
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import { CONSENT_VERSIONS } from "@monapp/shared-types";
 import { assertDevSupabaseUrl } from "../lib/dev-database.js";
+import { CLE_SIMULATION, FICHIER_SIMULATION, MARQUE_SIMULATION } from "../lib/simulation-anthropic.js";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 export const ROOT = resolve(HERE, "../../../..");
@@ -70,6 +71,8 @@ export interface Outils {
   ouvrirLien(lien: string): void;
   /** Relance l'app sur le code servi par Metro, sans le menu de développement. */
   relancerApp(): void;
+  /** Lignes écrites par la simulation d'Anthropic (scénarios à IA simulée). */
+  simulation(): string[];
 }
 
 export function xcrun(args: string[]): string {
@@ -116,22 +119,27 @@ function verifierEnvironnement(): { mobileEnv: Record<string, string> } {
 
 /** Serveur local et Metro ; leurs journaux vont dans un dossier temporaire
  * (hors du dépôt), utile pour comprendre un échec. */
-function demarrerServeurs(): { serveur: ChildProcess; metro: ChildProcess; journaux: string } {
+function demarrerServeurs(iaSimulee: boolean): { serveur: ChildProcess; metro: ChildProcess; journaux: string } {
   const journaux = mkdtempSync(join(tmpdir(), "parcours-iphone-journaux-"));
-  const serveur = spawn("npx", ["tsx", "src/server.ts"], {
-    cwd: BACKEND_DIR,
-    env: { ...process.env, PORT: String(API_PORT), SERPAPI_KEY: "cle-invalide-parcours-iphone" },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  // Jamais de vraie clé d'Anthropic ; avec l'IA simulée, une clé factice et
+  // le module de simulation (aucun appel réel).
+  const env: NodeJS.ProcessEnv = { ...process.env, PORT: String(API_PORT), SERPAPI_KEY: "cle-invalide-parcours-iphone" };
+  delete env.ANTHROPIC_API_KEY;
+  if (iaSimulee) env.ANTHROPIC_API_KEY = CLE_SIMULATION;
+  const args = iaSimulee ? ["tsx", "--import", FICHIER_SIMULATION, "src/server.ts"] : ["tsx", "src/server.ts"];
+  // Chaque processus écrit DIRECTEMENT dans son journal : pendant un parcours
+  // Maestro (lancé en mode bloquant), l'outil ne lit plus rien ; un tuyau non
+  // vidé finirait par bloquer le serveur, et les dernières lignes manqueraient
+  // au contrôle final (constaté au lot 4, temps 1 bis).
+  const journalServeur = openSync(join(journaux, "serveur.log"), "a");
+  const serveur = spawn("npx", args, { cwd: BACKEND_DIR, env, stdio: ["ignore", journalServeur, journalServeur] });
+  closeSync(journalServeur);
   // Metro sans « CI » : sinon il ne recharge pas le code modifié.
   const sansCi: NodeJS.ProcessEnv = { ...OUTILS_ENV };
   delete sansCi.CI;
-  const metro = spawn("npx", ["expo", "start", "--dev-client", "--port", String(METRO_PORT)], { cwd: MOBILE_DIR, env: sansCi, stdio: ["ignore", "pipe", "pipe"] });
-  for (const [nom, processus] of [["serveur", serveur], ["metro", metro]] as const) {
-    const fichier = createWriteStream(join(journaux, `${nom}.log`));
-    processus.stdout?.pipe(fichier);
-    processus.stderr?.pipe(fichier);
-  }
+  const journalMetro = openSync(join(journaux, "metro.log"), "a");
+  const metro = spawn("npx", ["expo", "start", "--dev-client", "--port", String(METRO_PORT)], { cwd: MOBILE_DIR, env: sansCi, stdio: ["ignore", journalMetro, journalMetro] });
+  closeSync(journalMetro);
   return { serveur, metro, journaux };
 }
 
@@ -157,7 +165,25 @@ async function accepterDocuments(admin: SupabaseClient, id: string): Promise<voi
 }
 
 /** Lance un parcours sur le simulateur ; tout ce qui a été créé est nettoyé ensuite, quoi qu'il arrive. */
-export async function lancerParcours(sortieNom: string, scenario: (o: Outils) => Promise<void>): Promise<void> {
+/** Lignes de la simulation dans le journal du serveur local. */
+function lignesSimulation(journaux: string): string[] {
+  const fichier = join(journaux, "serveur.log");
+  if (!existsSync(fichier)) return [];
+  return readFileSync(fichier, "utf8").split("\n").filter((ligne) => ligne.startsWith("[simulation Anthropic]"));
+}
+
+/** Sans l'annonce de la simulation, le parcours s'arrête : une clé factice
+ * partirait sinon chez Anthropic. */
+async function attendreSimulation(journaux: string, delaiMs: number): Promise<void> {
+  const fin = Date.now() + delaiMs;
+  while (Date.now() < fin) {
+    if (lignesSimulation(journaux).includes(MARQUE_SIMULATION)) return;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error("La simulation d'Anthropic n'a pas démarré : parcours arrêté, aucun appel envoyé.");
+}
+
+export async function lancerParcours(sortieNom: string, scenario: (o: Outils) => Promise<void>, options: { iaSimulee?: boolean } = {}): Promise<void> {
   verifierEnvironnement();
   for (const port of [API_PORT, METRO_PORT]) {
     if (!(await portLibre(port))) throw new Error(`Le port ${port} est déjà utilisé : arrêtez ce qui tourne dessus, puis relancez.`);
@@ -169,7 +195,7 @@ export async function lancerParcours(sortieNom: string, scenario: (o: Outils) =>
   const sortie = join(ROOT, "docs", sortieNom);
   mkdirSync(sortie, { recursive: true });
   const comptes: Compte[] = [];
-  const { serveur, metro, journaux } = demarrerServeurs();
+  const { serveur, metro, journaux } = demarrerServeurs(options.iaSimulee === true);
   let nettoye = false;
 
   const nettoyer = async () => {
@@ -244,11 +270,16 @@ export async function lancerParcours(sortieNom: string, scenario: (o: Outils) =>
       }
       xcrun(["simctl", "openurl", udid, LIEN_DEV_CLIENT]);
     },
+    simulation: () => lignesSimulation(journaux).filter((ligne) => ligne !== MARQUE_SIMULATION),
   };
 
   try {
     log(`Parcours iPhone — simulateur ${udid}, spotto-dev uniquement, aucun crédit SerpApi.`);
     log(`  journaux du serveur local et de Metro : ${journaux}`);
+    if (options.iaSimulee) {
+      log("  IA d'Anthropic simulée dans le serveur local (aucun appel réel)");
+      await attendreSimulation(journaux, 60_000);
+    }
     await attendre(`${apiUrl}/health`, "ok", 60_000);
     await attendre(`http://localhost:${METRO_PORT}/status`, "packager-status:running", 90_000);
     await scenario(outils);

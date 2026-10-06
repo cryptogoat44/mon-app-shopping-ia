@@ -74,6 +74,20 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Zone de recadrage ou texte invalide.": "Invalid crop area or text.",
   "3 à 20 caractères : lettres minuscules, chiffres, underscore.": "3 to 20 characters: lowercase letters, numbers, underscore.",
   [RATE_LIMITED_MESSAGE]: "Too many attempts in a short time. Please try again in a moment.",
+  // Analyse automatique d'une vidéo (lot 4, temps 1 bis).
+  "Acceptez d'abord l'analyse automatique, ou choisissez l'image avec le curseur.":
+    "Please accept automatic analysis first, or choose the frame with the slider.",
+  "Décrivez la pièce en quelques mots.": "Describe the piece in a few words.",
+  "L'analyse automatique est très demandée aujourd'hui et momentanément indisponible. Choisissez l'image avec le curseur.":
+    "Automatic analysis is in high demand today and temporarily unavailable. Choose the frame with the slider.",
+  "L'analyse automatique n'a pas abouti. Choisissez l'image avec le curseur.":
+    "The automatic analysis didn't go through. Choose the frame with the slider.",
+  "L'analyse automatique n'est pas disponible. Choisissez l'image avec le curseur.":
+    "Automatic analysis isn't available. Choose the frame with the slider.",
+  "Les images de la vidéo sont invalides.": "The video frames are invalid.",
+  "Une image de la vidéo est trop lourde.": "One of the video frames is too large.",
+  "Vous avez atteint la limite quotidienne d'analyses automatiques. Choisissez l'image avec le curseur, ou réessayez demain.":
+    "You've reached the daily limit for automatic analyses. Choose the frame with the slider, or try again tomorrow.",
 };
 
 /** Message dans la langue voulue. Un message inconnu (par exemple un texte

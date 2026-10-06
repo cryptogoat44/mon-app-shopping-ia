@@ -1,0 +1,65 @@
+# Lot 4, temps 1 bis : replis (français). Refus → curseur manuel, rien
+# n'est envoyé ; puis accord, « rien » → pièce non repérée ; « panne » →
+# analyse interrompue, « Réessayer » proposé. IA SIMULÉE (aucun appel réel).
+appId: com.spottoapp.ios
+---
+- tapOn: "Importer une vidéo"
+- extendedWaitUntil:
+    visible: "Collections"
+    timeout: 20000
+- tapOn:
+    text: "Vidéo, douze.*"
+    index: 1
+- extendedWaitUntil:
+    visible: "Que cherchez-vous \\?"
+    timeout: 30000
+- tapOn:
+    id: "video-auto-query"
+- inputText: "veste"
+- pressKey: Enter
+- extendedWaitUntil:
+    visible: "Analyse automatique de la vidéo"
+    timeout: 15000
+- tapOn: "Plutôt le curseur manuel"
+- extendedWaitUntil:
+    visible: "Choisissez l'image"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 07-refus-curseur
+- tapOn: "Retour"
+- extendedWaitUntil:
+    visible: "Que cherchez-vous \\?"
+    timeout: 15000
+- tapOn:
+    id: "video-auto-query"
+- eraseText: 20
+- inputText: "rien du tout"
+- pressKey: Enter
+- extendedWaitUntil:
+    visible: "Analyse automatique de la vidéo"
+    timeout: 15000
+- tapOn: "Accepter"
+- extendedWaitUntil:
+    visible: "Pièce non repérée"
+    timeout: 120000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 08-non-reperee
+- tapOn: "Modifier la description"
+- tapOn:
+    id: "video-auto-query"
+- eraseText: 20
+- inputText: "panne totale"
+- pressKey: Enter
+- extendedWaitUntil:
+    visible: "Analyse automatique interrompue"
+    timeout: 120000
+- assertVisible: "Réessayer"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 09-panne
+- tapOn: "Fermer"
+- extendedWaitUntil:
+    visible: "Importer une vidéo"
+    timeout: 15000

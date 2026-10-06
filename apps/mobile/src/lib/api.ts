@@ -33,8 +33,9 @@ import type {
   UserProfile,
   CommentsPage,
   PostComment,
+  VideoMoment,
 } from "@monapp/shared-types";
-import { CONSENT_VERSIONS } from "@monapp/shared-types";
+import { CONSENT_VERSIONS, parseVideoMomentsResponse } from "@monapp/shared-types";
 import { supabase } from "./supabase";
 import { setAnalyticsConsent, track } from "./analytics";
 import { acceptLanguage, t } from "@/i18n";
@@ -435,6 +436,33 @@ export async function recordAnalyticsChoice(granted: boolean): Promise<void> {
   const body: RecordConsentsRequest = { consents: [{ type: "analytics", version: CONSENT_VERSIONS.analytics, granted }] };
   await authorizedFetch("/api/consents", { method: "POST", body: JSON.stringify(body) });
   setAnalyticsConsent(granted);
+}
+
+/** Consentement « analyse automatique de la vidéo » (lot 4, temps 1 bis) :
+ * accord (true) ou refus / retrait (false), événement daté et versionné. */
+export async function recordVideoAiChoice(granted: boolean): Promise<void> {
+  const body: RecordConsentsRequest = { consents: [{ type: "analyse_video_ia", version: CONSENT_VERSIONS.analyse_video_ia, granted }] };
+  await authorizedFetch("/api/consents", { method: "POST", body: JSON.stringify(body) });
+}
+
+/** L'analyse automatique est-elle active sur le serveur (clé d'API présente) ? */
+export async function fetchVideoAiEnabled(): Promise<boolean> {
+  const response = await authorizedFetch("/api/video-moments/status");
+  const body: unknown = await response.json();
+  return typeof body === "object" && body !== null && "enabled" in body && body.enabled === true;
+}
+
+/** Étage 2 : les images réduites (12 au plus) et quelques mots partent au
+ * serveur, qui interroge l'IA ; jusqu'à 3 moments reviennent, vérifiés ici
+ * aussi (jamais de confiance aveugle dans le réseau). */
+export async function findVideoMoments(frameUris: readonly string[], query: string, signal?: AbortSignal): Promise<VideoMoment[]> {
+  const formData = new FormData();
+  formData.append("query", query.trim());
+  for (const uri of frameUris) await appendImageFile(formData, "frame", uri);
+  const response = await authorizedFetch("/api/video-moments", { method: "POST", body: formData, signal });
+  const moments = parseVideoMomentsResponse(await response.json(), frameUris.length);
+  if (!moments) throw new ApiError(502, { error: "video_ai_unavailable", message: t.common.unknownServerError });
+  return moments;
 }
 
 export async function exportMyData(): Promise<unknown> {

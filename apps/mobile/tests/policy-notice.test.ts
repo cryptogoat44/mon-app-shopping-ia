@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ACCEPTED_CONSENT_VERSIONS, LEGAL_DOCUMENT_VERSIONS, POLICY_UPDATE_NOTICE } from "@monapp/shared-types";
+import { ACCEPTED_CONSENT_VERSIONS, CONSENT_VERSIONS, LEGAL_DOCUMENT_VERSIONS, POLICY_UPDATE_NOTICE } from "@monapp/shared-types";
 import { parseSeenNotices, seenNoticesKey, shouldShowNotice } from "../src/lib/policy-notice";
 import { privacyPolicy } from "../src/legal/confidentialite";
 import { privacyPolicyEn } from "../src/legal/confidentialite.en";
@@ -53,11 +53,21 @@ describe("information de mise à jour (sans nouvelle acceptation)", () => {
   });
 
   it("lot 4 (vidéo lue seulement sur l'appareil) : simple information, ni nouvelle acceptation ni message", () => {
-    expect(LEGAL_DOCUMENT_VERSIONS.privacy_policy).toBe("projet-2026-10-05-b");
+    expect(ACCEPTED_CONSENT_VERSIONS.privacy_policy).toContain("projet-2026-10-05-b");
     expect(JSON.stringify(privacyPolicy)).toContain("la vidéo n'est jamais envoyée à nos serveurs ni conservée");
     expect(JSON.stringify(privacyPolicyEn)).toContain("the video is never sent to our servers nor kept");
     expect(ACCEPTED_CONSENT_VERSIONS.privacy_policy).toContain("projet-2026-10-05");
     expect(shouldShowNotice(accepted("projet-2026-10-05"), [], POLICY_UPDATE_NOTICE)).toBe(false);
+    expect(shouldShowNotice(accepted("projet-2026-10-05-b"), [], POLICY_UPDATE_NOTICE)).toBe(false);
+  });
+
+  it("lot 4, temps 1 bis (analyse automatique) : Anthropic nommé, consentement propre à la fonction ; la politique reste une simple information", () => {
+    expect(LEGAL_DOCUMENT_VERSIONS.privacy_policy).toBe("projet-2026-10-05-c");
+    expect(JSON.stringify(privacyPolicy)).toContain("Anthropic (Anthropic, PBC, États-Unis)");
+    expect(JSON.stringify(privacyPolicyEn)).toContain("Anthropic (Anthropic, PBC, United States)");
+    expect(JSON.stringify(privacyPolicy)).toContain("Accepter ou retirer l'analyse automatique des vidéos");
+    expect(ACCEPTED_CONSENT_VERSIONS.privacy_policy).toContain("projet-2026-10-05-b");
+    expect(ACCEPTED_CONSENT_VERSIONS.analyse_video_ia).toEqual([CONSENT_VERSIONS.analyse_video_ia]);
     expect(shouldShowNotice(accepted("projet-2026-10-05-b"), [], POLICY_UPDATE_NOTICE)).toBe(false);
   });
 });

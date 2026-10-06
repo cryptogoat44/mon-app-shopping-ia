@@ -18,7 +18,7 @@ export const privacyPolicyEn: LegalDocument = {
           "We do not sell your data and show no advertising.",
           "Your Vault and your Wishlist are visible to you alone.",
           "The image you submit for analysis is deleted from our servers as soon as the result is known.",
-          "If you import a video, it stays on your device: only the frame you choose from it is sent.",
+          "If you import a video, it stays on your device: only the frame you choose from it is sent — or, if you accept automatic analysis, a few reduced frames from the video, analyzed by an AI and never kept by Spotto.",
           "Sharing usage statistics is optional, and can be withdrawn at any time.",
           "You can download your data or delete your account at any time, from Settings.",
         ],
@@ -36,11 +36,11 @@ export const privacyPolicyEn: LegalDocument = {
       blocks: [
         "Your account: your email address and your password. The password is never stored in plain text: we do not know it.",
         "Your profile: username, display name, bio, profile photo, your followers and the accounts you follow.",
-        "Your searches (Spotter): the image or link (TikTok, Instagram, Pinterest) you submit, the area you select, any text you add, then the suggested results (name of the piece, image, price, retailer, link). Your search history is shown back to you (“Recently spotted”); it is kept for 12 months (see “How long”). If you import a video (60 seconds and 100 MB at most), it is read only on your device, while you choose a frame from it: the video is never sent to our servers nor kept by Spotto; only the chosen frame is sent, like a photo.",
+        "Your searches (Spotter): the image or link (TikTok, Instagram, Pinterest) you submit, the area you select, any text you add, then the suggested results (name of the piece, image, price, retailer, link). Your search history is shown back to you (“Recently spotted”); it is kept for 12 months (see “How long”). If you import a video (60 seconds and 100 MB at most), it is read only on your device: the video is never sent to our servers nor kept by Spotto; only the chosen frame is sent, like a photo. If you accept automatic analysis, your device picks up to 12 sharp frames from the video, reduced (512 pixels on a side), and sends them with your description to our server, which passes them on to Anthropic to find the best moments and the piece (see “Our providers and third-party services”). These frames are never saved by Spotto: our server deletes them as soon as the answer arrives.",
         "Your Vault and your Wishlist: the pieces you add to them (name, category, photo, link to the original piece).",
         "Your posts and interactions: photos, captions, chosen visibility, comments, likes, notifications, blocked accounts and the reports you make.",
         "Your clicks to retailers: the piece concerned, the place in the app you clicked from, the date, and the technical identification of your browser or phone (“user agent”).",
-        "Your consents: the date and version of the documents you accepted, and your declaration that you are at least 15 years old.",
+        "Your consents: the date and version of the documents you accepted, your declaration that you are at least 15 years old, and your choices (consent, refusal or withdrawal) for usage statistics and automatic video analysis.",
         "Technical data: like any web server, ours receives your IP address and technical information with each request; they appear in its logs, used for security and to fix errors.",
         "Error reports: when an error occurs in the app or on our server, a technical report is created (type of error, screen or feature concerned, browser type, or phone model and system version) together with the internal identifier of your account — never your name, email address, content, or the parameters of the addresses you visited. If the iPhone app closes unexpectedly (crash), the report also contains a pseudonymous installation identifier: a code specific to your phone and the app, which contains neither your name nor your email address.",
         "Usage statistics, ONLY if you agree (optional box, unticked by default): the actions you take in the app (for example starting a search, adding a piece, publishing, commenting, following an account), with only the internal identifier of your account and a few predefined details (category, chosen visibility, number of results…). Never your name, email address, the text of your comments or captions, or the addresses of your images.",
@@ -57,6 +57,7 @@ export const privacyPolicyEn: LegalDocument = {
           "Keeping proof of your acceptance of the documents: our obligation to be able to demonstrate it.",
           "Detecting and fixing errors (error reports): our legitimate interest in keeping the service working properly.",
           "Understanding how Spotto is used in order to improve it (usage statistics): your consent, which you can withdraw at any time (Settings → Your data); withdrawal stops collection immediately.",
+          "Automatically analyzing a video (a few reduced frames sent to Anthropic): your consent, asked the first time you use it, which you can withdraw at any time (Settings → Your data). Without it, no frame is sent: you choose the frame yourself.",
         ],
         "[To be verified: legal bases retained, to be reviewed by a legal professional — in particular the legitimate interest relied on for error reports.]",
       ],
@@ -82,6 +83,7 @@ export const privacyPolicyEn: LegalDocument = {
           "SerpApi (SerpApi, LLC, United States): receives a temporary link (valid for 5 minutes) to the image to be analyzed, and any text you added; it passes them to Google's visual search (Google Lens, Google LLC, United States), which downloads the image to find matching pieces. No other data about you (name, email, identifier) is passed to them.",
           "Sentry (Functional Software, Inc., United States): error reports from the app and the server. Data hosted in the European Union (Frankfurt, Germany).",
           "PostHog (PostHog Inc., United States): usage statistics, only with your consent. Data hosted in the European Union (Frankfurt, Germany).",
+          "Anthropic (Anthropic, PBC, United States), only if you accept automatic video analysis: receives from our server up to 12 reduced frames from the video and your description, and indicates the best moments and where the piece is. No other data about you (name, email, identifier) is sent to it. Anthropic acts on our behalf (processor); under its terms, it does not use this data to train its models and automatically deletes it from its systems within 30 days at most, except for content flagged by its safety checks (up to 2 years) or legal obligations.",
         ],
         "When you paste a TikTok or Instagram link, our server asks TikTok or Meta for the public preview of the video: only the link is sent to them, never your identity.",
         "Images of suggested pieces are displayed directly from retailers' and Google's websites. Your phone or browser downloads them from those sites, which therefore receive your IP address and the usual technical information of a web request. When you open a link to a retailer, you leave Spotto: its own privacy policy applies.",
@@ -94,12 +96,13 @@ export const privacyPolicyEn: LegalDocument = {
         "Some data leaves, or may leave, the European Union:",
         [
           "the image you submit for analysis and any text you add: sent to SerpApi and then to Google, in the United States;",
+          "if you accept automatic video analysis: the reduced frames and your description, sent to Anthropic, in the United States, which may be processed in other countries where Anthropic runs its models;",
           "data passing through our server (each request from the app, with your IP address, and the data you view or send): the server is located in the European Union (Frankfurt), but as Render is a US company, access from the United States (maintenance, support) cannot be ruled out; the same applies to the server's technical logs (IP address, request information), kept by Render (see “How long”);",
           "data hosted by Supabase: stored in Ireland, but as Supabase is a company established in Singapore, access from outside the European Union (maintenance, support) cannot be ruled out;",
           "your IP address: received by retailers' websites and by Google when the app displays their images, wherever they are established;",
           "error reports (Sentry) and, if you accept them, usage statistics (PostHog): stored in the European Union (Frankfurt), but as these are US companies, access from the United States (maintenance, support) cannot be ruled out. Sentry states that it participates in the EU–US Data Privacy Framework.",
         ],
-        "[To be verified: safeguards covering each of these transfers — the company's Data Privacy Framework certification, or the European Commission's standard contractual clauses signed with it — and the position of Google, which receives the image through SerpApi without a direct contract with the publisher.]",
+        "[To be verified: safeguards covering each of these transfers — the company's Data Privacy Framework certification, or the European Commission's standard contractual clauses signed with it — and the position of Google, which receives the image through SerpApi without a direct contract with the publisher. Anthropic: standard contractual clauses (modules 2 and 3) provided for in its data processing addendum; Data Privacy Framework certification not mentioned in that addendum.]",
       ],
     },
     {
@@ -107,6 +110,7 @@ export const privacyPolicyEn: LegalDocument = {
       blocks: [
         [
           "The image you submit for analysis: deleted from our servers as soon as the search responds, whether it succeeded or not (a few seconds).",
+          "Reduced frames from a video sent for automatic analysis: never saved by Spotto; our server keeps them in memory while waiting for the answer (a few seconds), then deletes them. At Anthropic: see “Our providers and third-party services”.",
           "Your search history (except the analyzed image, see above): 12 months. Older searches are deleted, together with their results and the clicks to retailers that depend on them, at your next search. Exception: a search from which you kept a piece (Vault, Wishlist, piece shown in a post) is kept for as long as that piece is.",
           "Your account and everything attached to it: for as long as your account exists.",
           "An account with no sign-in for 3 years is deleted, with all its data. An email warns you before deletion.",
@@ -119,7 +123,7 @@ export const privacyPolicyEn: LegalDocument = {
     {
       title: "On your phone or in your browser",
       blocks: [
-        "Spotto stores on your device your sign-in session, so that you do not have to sign in again, a copy of images already displayed, to show them faster, the fact that you have already seen an update notice, so as not to show it again, and the language and theme (light, dark or your device's) you have chosen. These items are essential for the app to work. While you choose a frame from a video, the iPhone app keeps a temporary copy of the video, deleted as soon as you leave that screen; on the website, the video is read by your browser without being copied.",
+        "Spotto stores on your device your sign-in session, so that you do not have to sign in again, a copy of images already displayed, to show them faster, the fact that you have already seen an update notice, so as not to show it again, and the language and theme (light, dark or your device's) you have chosen. These items are essential for the app to work. While you choose a frame from a video, or while automatic analysis uses it, the iPhone app keeps a temporary copy of the video, deleted as soon as you leave the search; the small frames prepared for automatic analysis are deleted as soon as they are sent. On the website, the video is read by your browser without being copied.",
         "Spotto uses no advertising trackers and no advertising cookies. Usage statistics, if you accept them, are sent directly, without cookies or storage on your device, and without IP-based geolocation.",
       ],
     },
@@ -132,6 +136,7 @@ export const privacyPolicyEn: LegalDocument = {
           "Correct your profile: Settings → Edit profile.",
           "Erase everything: Settings → Delete my account.",
           "Accept or withdraw the sharing of usage statistics: Settings → Your data.",
+          "Accept or withdraw automatic video analysis: Settings → Your data.",
           `For any other request: ${PUBLISHER_EN.email}.`,
         ],
         "If you believe your rights are not being respected, you can lodge a complaint with the CNIL, the French data protection authority (cnil.fr).",

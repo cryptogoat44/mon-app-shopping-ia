@@ -96,6 +96,70 @@ export interface CropRect {
 /** Longueur maximale du texte « Que cherchez-vous ? ». */
 export const SEARCH_QUERY_MAX_LENGTH = 60;
 
+/** Lot 4, temps 1 bis : analyse automatique d'une vidéo. Étage 1 sur
+ * l'appareil (images nettes et différentes, réduites) ; étage 2 par une IA,
+ * seulement avec le consentement « analyse_video_ia ». La vidéo entière ne
+ * quitte jamais l'appareil. */
+export const VIDEO_AI = {
+  /** Images envoyées au plus (8 à 12 quand la vidéo en offre autant de différentes). */
+  maxFrames: 12,
+  /** Grand côté des images envoyées, en pixels. */
+  frameEdge: 512,
+  /** Moments proposés par l'IA. */
+  moments: 3,
+  /** Texte de l'utilisateur : quelques mots (la limite haute est SEARCH_QUERY_MAX_LENGTH). */
+  queryMinLength: 2,
+} as const;
+
+/** Un moment proposé : une des images envoyées, et le cadre de la pièce. */
+export interface VideoMoment {
+  /** Position de l'image dans l'envoi (0 = la première). */
+  frame: number;
+  /** Cadre de la pièce dans cette image, en proportions 0–1. */
+  box: CropRect;
+}
+
+export interface VideoMomentsResponse {
+  moments: VideoMoment[];
+}
+
+/** La fonction est-elle active sur le serveur (clé d'API présente) ? */
+export interface VideoAiStatus {
+  enabled: boolean;
+}
+
+export type VideoAiErrorCode =
+  | "video_ai_disabled"
+  | "video_ai_consent_required"
+  | "video_ai_user_limit"
+  | "video_ai_global_limit"
+  | "video_ai_unavailable"
+  | "invalid_frames";
+
+function isProportion(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
+/** Lit la réponse du serveur sans lui faire confiance : moments distincts,
+ * numéros d'images existants, cadres dans l'image. Null si la forme est
+ * mauvaise. */
+export function parseVideoMomentsResponse(value: unknown, frameCount: number): VideoMoment[] | null {
+  if (typeof value !== "object" || value === null || !("moments" in value) || !Array.isArray(value.moments)) return null;
+  const moments: VideoMoment[] = [];
+  for (const item of value.moments) {
+    if (typeof item !== "object" || item === null || !("frame" in item) || !("box" in item)) return null;
+    const { frame, box } = item;
+    if (typeof frame !== "number" || !Number.isInteger(frame) || frame < 0 || frame >= frameCount) return null;
+    if (typeof box !== "object" || box === null || !("x" in box) || !("y" in box) || !("width" in box) || !("height" in box)) return null;
+    const { x, y, width, height } = box;
+    if (!isProportion(x) || !isProportion(y) || !isProportion(width) || !isProportion(height)) return null;
+    if (width <= 0 || height <= 0 || x + width > 1.001 || y + height > 1.001) return null;
+    if (moments.some((moment) => moment.frame === frame)) return null;
+    moments.push({ frame, box: { x, y, width, height } });
+  }
+  return moments.length <= VIDEO_AI.moments ? moments : null;
+}
+
 /** Pourquoi l'image d'un lien n'a pas pu être récupérée à la préparation
  * (Spotter, Lot S2) — l'app affiche un message précis et la suite à donner.
  * - unavailable : la plateforme ne trouve pas le contenu (vidéo privée,
@@ -324,11 +388,15 @@ export interface FeedPage {
   nextCursor: string | null;
 }
 
-export type ConsentType = "terms" | "privacy_policy" | "age_declaration" | "analytics" | "marketing_email";
+/** Types de consentement enregistrés (une seule liste, serveur et app). */
+export const CONSENT_TYPES = ["terms", "privacy_policy", "age_declaration", "analytics", "marketing_email", "analyse_video_ia"] as const;
+export type ConsentType = (typeof CONSENT_TYPES)[number];
 
 /** Consentements facultatifs : ils peuvent être refusés ou retirés à tout
- * moment (chaque choix est un nouvel événement daté). */
-export const OPTIONAL_CONSENTS: readonly ConsentType[] = ["analytics"];
+ * moment (chaque choix est un nouvel événement daté). « analyse_video_ia »
+ * (lot 4, temps 1 bis) : quelques images réduites d'une vidéo envoyées à un
+ * prestataire d'IA pour y trouver la pièce. */
+export const OPTIONAL_CONSENTS: readonly ConsentType[] = ["analytics", "analyse_video_ia"];
 
 /** Documents juridiques dont l'acceptation est enregistrée avec sa version. */
 export type LegalDocumentType = "terms" | "privacy_policy";
@@ -350,7 +418,12 @@ export const LEGAL_DOCUMENT_VERSIONS: Record<LegalDocumentType, string> = {
   // « projet-2026-10-05-b » (lot 4) : vidéo importée lue seulement sur
   // l'appareil, jamais envoyée ni conservée — simple information, sans
   // nouvelle acceptation ni message (décision du fondateur).
-  privacy_policy: "projet-2026-10-05-b",
+  // « projet-2026-10-05-c » (lot 4, temps 1 bis) : analyse automatique d'une
+  // vidéo par une IA (Anthropic, États-Unis), seulement avec le consentement
+  // « analyse_video_ia ». Nouvelle acceptation de la politique ou simple
+  // information : décision du fondateur (proposé : simple information, le
+  // consentement propre à la fonction étant demandé à son premier usage).
+  privacy_policy: "projet-2026-10-05-c",
 };
 
 /** Suivi des erreurs (lot 2) : seule adresse Sentry admise, région UE
@@ -363,13 +436,15 @@ export const MINIMUM_AGE = 15;
 
 /** Consentements enregistrés avec la version du texte accepté : les deux
  * documents, et la déclaration d'âge (« Je certifie avoir au moins 15 ans »). */
-export type VersionedConsentType = LegalDocumentType | "age_declaration" | "analytics";
+export type VersionedConsentType = LegalDocumentType | "age_declaration" | "analytics" | "analyse_video_ia";
 
 export const CONSENT_VERSIONS: Record<VersionedConsentType, string> = {
   ...LEGAL_DOCUMENT_VERSIONS,
   age_declaration: `${MINIMUM_AGE}-ans-2026-09-25`,
   // Texte de la case « statistiques d'usage » (lot 2).
   analytics: "statistiques-2026-09-30",
+  // Texte de l'écran « Analyse automatique de la vidéo » (lot 4, temps 1 bis).
+  analyse_video_ia: "analyse-video-ia-2026-10-05",
 };
 
 /** Versions dont l'acceptation reste valable. Une mise à jour qui demande
@@ -381,9 +456,10 @@ export const CONSENT_VERSIONS: Record<VersionedConsentType, string> = {
  * quels changements relèvent de l'un ou de l'autre. */
 export const ACCEPTED_CONSENT_VERSIONS: Record<VersionedConsentType, readonly string[]> = {
   terms: ["projet-2026-09-25"],
-  privacy_policy: ["projet-2026-09-25", "projet-2026-09-29", "projet-2026-09-30", "projet-2026-09-30-b", "projet-2026-10-05", "projet-2026-10-05-b"],
+  privacy_policy: ["projet-2026-09-25", "projet-2026-09-29", "projet-2026-09-30", "projet-2026-09-30-b", "projet-2026-10-05", "projet-2026-10-05-b", "projet-2026-10-05-c"],
   age_declaration: [CONSENT_VERSIONS.age_declaration],
   analytics: [CONSENT_VERSIONS.analytics],
+  analyse_video_ia: [CONSENT_VERSIONS.analyse_video_ia],
 };
 
 /** Information à montrer une fois aux personnes connectées après une mise à
@@ -396,7 +472,7 @@ export const POLICY_UPDATE_NOTICE = {
   document: "privacy_policy" as LegalDocumentType,
   /** Versions dont le texte contient déjà cette information : la
    * personne qui en a accepté une ne voit pas le message. */
-  alreadyCovered: ["projet-2026-09-30", "projet-2026-09-30-b", "projet-2026-10-05", "projet-2026-10-05-b"] as readonly string[],
+  alreadyCovered: ["projet-2026-09-30", "projet-2026-09-30-b", "projet-2026-10-05", "projet-2026-10-05-b", "projet-2026-10-05-c"] as readonly string[],
 } as const;
 
 export interface ConsentStatus {

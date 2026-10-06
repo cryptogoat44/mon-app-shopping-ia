@@ -2,7 +2,7 @@
 // nouvelle acceptation (décision du fondateur, 2026-09-29 : le lieu
 // d'hébergement relève de l'information, pas du consentement).
 // Imports relatifs : ce fichier est testé par vitest.
-import type { ConsentStatus, LegalDocumentType } from "@monapp/shared-types";
+import type { ConsentStatus, ConsentType, LegalDocumentType } from "@monapp/shared-types";
 
 export interface PolicyNotice {
   id: string;
@@ -29,9 +29,14 @@ export function shouldAskAnalytics(statuses: readonly ConsentStatus[]): boolean 
   return !analytics?.decidedAt;
 }
 
+/** Consentement en vigueur : dernier choix = accord, sur le texte actuel. */
+export function hasCurrentConsent(statuses: readonly ConsentStatus[], type: ConsentType): boolean {
+  return statuses.find((status) => status.type === type)?.isCurrent === true;
+}
+
 /** Consentement « statistiques d'usage » en vigueur (accord, texte actuel). */
 export function hasAnalyticsConsent(statuses: readonly ConsentStatus[]): boolean {
-  return statuses.find((status) => status.type === "analytics")?.isCurrent === true;
+  return hasCurrentConsent(statuses, "analytics");
 }
 
 /** Clé de stockage propre à chaque compte (un appareil partagé). */

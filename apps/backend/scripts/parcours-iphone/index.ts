@@ -156,8 +156,8 @@ async function attendreExploration(o: Outils): Promise<void> {
 
 // Lot 4 : libellés de l'app dans chaque langue (le sélecteur d'iOS, lui, suit la langue de l'iPhone).
 const LIBELLES = {
-  fr: { PROFIL: "Profil", REGLAGES: "Réglages", RETOUR: "Retour", LANGUE: "Français", CLAIR: "Clair", SOMBRE: "Sombre", SYSTEME: "Système", IMPORTER: "Importer une vidéo", UTILISER: "Utiliser cette image", CIBLAGE: "Entourez la pièce", FERMER: "Fermer", AVANCER: "Avancer d'une demi-seconde", RECULER: "Reculer d'une demi-seconde" },
-  en: { PROFIL: "Profile", REGLAGES: "Settings", RETOUR: "Back", LANGUE: "English", CLAIR: "Light", SOMBRE: "Dark", SYSTEME: "System", IMPORTER: "Import a video", UTILISER: "Use this frame", CIBLAGE: "Frame the piece", FERMER: "Close", AVANCER: "Forward half a second", RECULER: "Back half a second" },
+  fr: { PROFIL: "Profil", REGLAGES: "Réglages", RETOUR: "Retour", LANGUE: "Français", CLAIR: "Clair", SOMBRE: "Sombre", SYSTEME: "Système", IMPORTER: "Importer une vidéo", UTILISER: "Utiliser cette image", CIBLAGE: "Entourez la pièce", FERMER: "Fermer", AVANCER: "Avancer d'un dixième de seconde", RECULER: "Reculer d'un dixième de seconde", TITRE: "Que cherchez-vous \\?", DESCRIPTION: "veste en daim marron", CONSENTEMENT: "Analyse automatique de la vidéo", ACCEPTER: "Accepter", ECHEC: "La recherche n'a pas abouti", ESSAYER2: "Essayer un autre moment \\(2 restants\\)", ESSAYER1: "Essayer un autre moment \\(1 restant\\)", MOI_MEME: "Choisir l'image moi-même", CURSEUR: "Choisissez l'image", INTERRUPTEUR: "Analyse automatique des vidéos par une IA", RETIRE: "Désactivée : aucune image.*" },
+  en: { PROFIL: "Profile", REGLAGES: "Settings", RETOUR: "Back", LANGUE: "English", CLAIR: "Light", SOMBRE: "Dark", SYSTEME: "System", IMPORTER: "Import a video", UTILISER: "Use this frame", CIBLAGE: "Frame the piece", FERMER: "Close", AVANCER: "Forward a tenth of a second", RECULER: "Back a tenth of a second", TITRE: "What are you looking for\\?", DESCRIPTION: "brown suede jacket", CONSENTEMENT: "Automatic video analysis", ACCEPTER: "Accept", ECHEC: "The search didn't go through", ESSAYER2: "Try another moment \\(2 left\\)", ESSAYER1: "Try another moment \\(1 left\\)", MOI_MEME: "Choose the frame myself", CURSEUR: "Choose the frame", INTERRUPTEUR: "Automatic video analysis by an AI", RETIRE: "Off: no frame.*" },
 } as const;
 const COMBINAISONS = [
   { id: "fr-clair", langue: "fr", theme: "CLAIR" },
@@ -218,10 +218,62 @@ async function video(o: Outils): Promise<void> {
   await verifierRecherche(o, louise);
 }
 
-const SCENARIOS: Record<string, { run: (o: Outils) => Promise<void>; sortie: string }> = {
+/** Lot 4, temps 1 bis : ce que l'IA simulée a vu, les consentements et les
+ * recherches enregistrés (spotto-dev) — jamais le contenu des images. */
+async function verifierAuto(o: Outils, compte: Compte): Promise<void> {
+  const reconnues = o.simulation().filter((ligne) => /3 image\(s\), 3 moment\(s\), plan reconnu : oui/.test(ligne)).length;
+  if (reconnues < COMBINAISONS.length) throw new Error(`Analyses simulées avec le plan « Veste » reconnu : ${reconnues} sur ${COMBINAISONS.length}`);
+  const choix = await o.admin.from("consents").select("granted_at, revoked_at").eq("user_id", compte.id).eq("type", "analyse_video_ia");
+  if (choix.error) throw new Error(`Consentements illisibles : ${choix.error.message}`);
+  const evenements = z.array(z.object({ granted_at: z.string().nullable(), revoked_at: z.string().nullable() })).parse(choix.data);
+  const accords = evenements.filter((e) => e.granted_at !== null).length;
+  const retraits = evenements.filter((e) => e.revoked_at !== null).length;
+  // 4 accords et 4 retraits (Réglages), puis un refus et un accord (replis).
+  if (accords !== 5 || retraits !== 5) throw new Error(`Consentements inattendus : ${accords} accords, ${retraits} retraits`);
+  const lues = await o.admin.from("product_searches").select("source_platform, status, query").eq("user_id", compte.id);
+  if (lues.error) throw new Error(`Recherches illisibles : ${lues.error.message}`);
+  const recherches = z.array(z.object({ source_platform: z.string(), status: z.string(), query: z.string().nullable() })).parse(lues.data);
+  const attendues = recherches.filter((r) => r.source_platform === "photo" && r.status === "failed" && (r.query === LIBELLES.fr.DESCRIPTION || r.query === LIBELLES.en.DESCRIPTION));
+  if (attendues.length !== 2 * COMBINAISONS.length) throw new Error(`Identifications inattendues : ${attendues.length} sur ${2 * COMBINAISONS.length}`);
+  log(`  analyses simulées : ${reconnues} avec le bon plan ; consentements : ${accords} accords, ${retraits} retraits ; identifications : ${attendues.length} (comme une photo, aucun crédit)`);
+}
+
+/** Lot 4, temps 1 bis : analyse automatique (IA simulée), dans les 4 combinaisons. */
+async function videoAuto(o: Outils): Promise<void> {
+  const louise = await o.creerCompte("a", "Louise (test)");
+  await videosSimulateur(o);
+  await connecter(o, louise, "Importer une vidéo");
+  let courante: "fr" | "en" = "fr";
+  for (const combo of COMBINAISONS) {
+    regler(o, courante, combo.langue, combo.theme, combo.id);
+    courante = combo.langue;
+    const l = LIBELLES[combo.langue];
+    etape(o, "09-video-auto", {
+      IMPORTER: l.IMPORTER,
+      TITRE: l.TITRE,
+      DESCRIPTION: l.DESCRIPTION,
+      CONSENTEMENT: l.CONSENTEMENT,
+      ACCEPTER: l.ACCEPTER,
+      ECHEC: l.ECHEC,
+      ESSAYER2: l.ESSAYER2,
+      ESSAYER1: l.ESSAYER1,
+      MOI_MEME: l.MOI_MEME,
+      CURSEUR: l.CURSEUR,
+      FERMER: l.FERMER,
+      PREFIXE: combo.id,
+    });
+    etape(o, "10-retrait-ia", { PROFIL: l.PROFIL, REGLAGES: l.REGLAGES, INTERRUPTEUR: l.INTERRUPTEUR, RETIRE: l.RETIRE, RETOUR: l.RETOUR, IMPORTER: l.IMPORTER, PREFIXE: combo.id });
+  }
+  regler(o, courante, "fr", "SYSTEME", "fr-systeme");
+  etape(o, "11-video-auto-replis");
+  await verifierAuto(o, louise);
+}
+
+const SCENARIOS: Record<string, { run: (o: Outils) => Promise<void>; sortie: string; iaSimulee?: boolean }> = {
   natif: { run: natif, sortie: "lot-3bis-captures" },
   preparer: { run: attendreExploration, sortie: "lot-3bis-captures" },
   video: { run: video, sortie: "lot-4-iphone-captures" },
+  "video-auto": { run: videoAuto, sortie: "lot-4-auto-iphone-captures", iaSimulee: true },
 };
 
 const nom = process.argv[2] ?? "";
@@ -230,7 +282,7 @@ if (!scenario) {
   console.error(`Indiquez un scénario : ${Object.keys(SCENARIOS).join(", ")}.`);
   process.exit(1);
 }
-lancerParcours(scenario.sortie, scenario.run).catch((error: unknown) => {
+lancerParcours(scenario.sortie, scenario.run, { iaSimulee: scenario.iaSimulee === true }).catch((error: unknown) => {
   console.error(`Erreur : ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
 });

@@ -12,14 +12,21 @@ import { ImageSourceError } from "./imageProcessing.js";
 // sharp retire aussi les métadonnées (dont la position GPS des photos).
 export const PHOTO_SIZES = { display: 1600, thumb: 480, avatar: 512 } as const;
 
-export async function optimizePhoto(input: Buffer, maxSide: number, quality = 82): Promise<Buffer> {
+/** Comme optimizePhoto, avec la taille finale (ex. images envoyées à l'IA,
+ * dont les coordonnées renvoyées dépendent de cette taille). */
+export async function optimizePhotoWithSize(input: Buffer, maxSide: number, quality = 82): Promise<{ data: Buffer; width: number; height: number }> {
   try {
-    return await sharp(input, { failOn: "error" })
+    const { data, info } = await sharp(input, { failOn: "error" })
       .rotate() // orientation EXIF appliquée avant de retirer les métadonnées
       .resize({ width: maxSide, height: maxSide, fit: "inside", withoutEnlargement: true })
       .jpeg({ quality, mozjpeg: true })
-      .toBuffer();
+      .toBuffer({ resolveWithObject: true });
+    return { data, width: info.width, height: info.height };
   } catch {
     throw new ImageSourceError("Image illisible");
   }
+}
+
+export async function optimizePhoto(input: Buffer, maxSide: number, quality = 82): Promise<Buffer> {
+  return (await optimizePhotoWithSize(input, maxSide, quality)).data;
 }

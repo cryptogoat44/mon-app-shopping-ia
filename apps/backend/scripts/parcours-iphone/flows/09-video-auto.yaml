@@ -1,0 +1,59 @@
+# Lot 4, temps 1 bis : analyse automatique, IA SIMULÉE dans le serveur local
+# (aucun appel réel). Vidéo de 12 s → description → consentement (premier
+# usage, ou après un retrait) → analyse → identification du meilleur moment
+# (clé SerpApi invalide : échec technique, aucun crédit) → autre moment →
+# curseur manuel. Textes : expressions régulières (« ? » et parenthèses échappés).
+appId: com.spottoapp.ios
+---
+- tapOn: ${IMPORTER}
+- extendedWaitUntil:
+    visible: "Collections"
+    timeout: 20000
+- tapOn:
+    text: "Vidéo, douze.*"
+    index: 1
+- extendedWaitUntil:
+    visible: ${TITRE}
+    timeout: 30000
+- tapOn:
+    id: "video-auto-query"
+- inputText: ${DESCRIPTION}
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${PREFIXE}-01-description
+# « Rechercher » du clavier : lance l'analyse (comme « Trouver la pièce »).
+- pressKey: Enter
+- extendedWaitUntil:
+    visible: ${CONSENTEMENT}
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${PREFIXE}-02-consentement
+- tapOn: ${ACCEPTER}
+- extendedWaitUntil:
+    visible: ${ECHEC}
+    timeout: 120000
+- extendedWaitUntil:
+    visible: ${ESSAYER2}
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${PREFIXE}-03-resultat
+- tapOn: ${ESSAYER2}
+- extendedWaitUntil:
+    visible: ${ESSAYER1}
+    timeout: 120000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${PREFIXE}-04-autre-moment
+- tapOn: ${MOI_MEME}
+- extendedWaitUntil:
+    visible: ${CURSEUR}
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${PREFIXE}-05-curseur
+- tapOn: ${FERMER}
+- extendedWaitUntil:
+    visible: ${IMPORTER}
+    timeout: 15000

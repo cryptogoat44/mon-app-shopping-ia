@@ -12,6 +12,8 @@ interface Scenario {
   run: (parcours: Parcours) => Promise<void>;
   /** Variables de construction du site propres au scénario (liste fermée). */
   buildEnv?: Record<string, string>;
+  /** IA d'Anthropic simulée dans le serveur local (aucun appel réel). */
+  simulatedAi?: boolean;
 }
 
 const SCENARIOS: Record<string, () => Promise<Scenario>> = {
@@ -24,6 +26,7 @@ const SCENARIOS: Record<string, () => Promise<Scenario>> = {
   "lot-3": () => import("./scenarios/lot-3.js"),
   "lot-3bis": () => import("./scenarios/lot-3bis.js"),
   "lot-4": () => import("./scenarios/lot-4.js"),
+  "lot-4-auto": () => import("./scenarios/lot-4-auto.js"),
 };
 
 async function main() {
@@ -33,7 +36,9 @@ async function main() {
     throw new Error(`Indiquez un scénario : ${Object.keys(SCENARIOS).join(", ")}.`);
   }
   const scenario = await load();
-  await runParcours(scenario.name, scenario.outputDir, scenario.run, process.argv.slice(3), scenario.buildEnv ?? {});
+  await runParcours(scenario.name, scenario.outputDir, scenario.run, process.argv.slice(3), scenario.buildEnv ?? {}, {
+    simulatedAi: scenario.simulatedAi ?? false,
+  });
 }
 
 main().catch((error: unknown) => {

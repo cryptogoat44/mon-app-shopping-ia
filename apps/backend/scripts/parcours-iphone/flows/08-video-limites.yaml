@@ -20,14 +20,14 @@ appId: com.spottoapp.ios
     text: "Vidéo, douze.*"
     index: 0
 - extendedWaitUntil:
-    visible: "0:00 / 0:12"
+    visible: "0:00[,.]0 / 0:12"
     timeout: 30000
 - swipe:
     start: "8%,71%"
     end: "50%,71%"
     duration: 1500
 - extendedWaitUntil:
-    visible: "0:06 / 0:12"
+    visible: "0:0(5[,.][5-9]|6[,.][0-4]) / 0:12"
     timeout: 10000
 - waitForAnimationToEnd:
     timeout: 3000

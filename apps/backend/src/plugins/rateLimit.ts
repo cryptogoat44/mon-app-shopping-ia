@@ -1,6 +1,6 @@
 import fp from "fastify-plugin";
 import type { FastifyInstance, FastifyReply, FastifyRequest, RouteOptions } from "fastify";
-import { RATE_LIMITS, type RateLimitName } from "../lib/rateLimits.js";
+import { RATE_LIMITS, type RateLimitName, type RateLimitRule } from "../lib/rateLimits.js";
 
 type PreHandler = (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
 
@@ -38,7 +38,13 @@ declare module "fastify" {
 // anti-abus, pas un dispositif de sécurité critique.
 const hits = new Map<string, { count: number; resetAt: number }>();
 
+function ruleFor(name: RateLimitName): RateLimitRule {
+  return RATE_LIMITS[name];
+}
+
+// Plafond commun (scope "global") : un seul compteur pour tout le service.
 function keyFor(request: FastifyRequest, name: RateLimitName): string {
+  if (ruleFor(name).scope === "global") return `${name}:global`;
   const identity = request.user?.id ?? request.ip;
   return `${name}:${identity}`;
 }
@@ -76,9 +82,9 @@ export function limitReached(
 
 export const RATE_LIMITED_MESSAGE = "Trop de tentatives en peu de temps. Réessayez dans quelques instants.";
 
-async function sendRateLimited(reply: FastifyReply, retryAfterMs: number): Promise<void> {
+async function sendRateLimited(reply: FastifyReply, retryAfterMs: number, rule: RateLimitRule): Promise<void> {
   reply.header("Retry-After", Math.ceil(retryAfterMs / 1000).toString());
-  await reply.code(429).send({ error: "rate_limited", message: RATE_LIMITED_MESSAGE });
+  await reply.code(429).send({ error: rule.error ?? "rate_limited", message: rule.message ?? RATE_LIMITED_MESSAGE });
 }
 
 // Vitest fixe NODE_ENV="test" automatiquement, sans configuration
@@ -92,24 +98,25 @@ function buildPreHandler(name: RateLimitName): PreHandler {
   return async function rateLimitPreHandler(request, reply) {
     if (isDisabled()) return;
 
-    const rule = RATE_LIMITS[name];
+    const rule = ruleFor(name);
     const { allowed, retryAfterMs } = registerHit(keyFor(request, name), rule);
 
-    if (!allowed) await sendRateLimited(reply, retryAfterMs);
+    if (!allowed) await sendRateLimited(reply, retryAfterMs, rule);
   };
 }
 
 function buildCheckPreHandler(name: RateLimitName): PreHandler {
   return async function rateLimitCheckPreHandler(request, reply) {
     if (isDisabled()) return;
-    const { reached, retryAfterMs } = limitReached(keyFor(request, name), RATE_LIMITS[name]);
-    if (reached) await sendRateLimited(reply, retryAfterMs);
+    const rule = ruleFor(name);
+    const { reached, retryAfterMs } = limitReached(keyFor(request, name), rule);
+    if (reached) await sendRateLimited(reply, retryAfterMs, rule);
   };
 }
 
 function countRateLimitHit(request: FastifyRequest, name: RateLimitName): void {
   if (isDisabled()) return;
-  registerHit(keyFor(request, name), RATE_LIMITS[name]);
+  registerHit(keyFor(request, name), ruleFor(name));
 }
 
 export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {

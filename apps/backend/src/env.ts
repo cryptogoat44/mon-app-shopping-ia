@@ -9,6 +9,10 @@ const envSchema = z.object({
   // Non requis pour que l'app démarre : sans jeton Meta, la reconnaissance
   // automatique Instagram est simplement sautée au profit du repli manuel.
   META_OEMBED_ACCESS_TOKEN: z.string().min(1).optional(),
+  // Analyse automatique des vidéos (lot 4, temps 1 bis) : clé secrète
+  // d'Anthropic, saisie par le fondateur dans Render. Absente : la fonction se
+  // désactive proprement et l'app propose le curseur manuel.
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
   // Non requis à l'exécution (jamais utilisée par le serveur lui-même) —
   // seulement par les tests, pour se connecter en tant qu'utilisateur de
   // test via mot de passe. Clé publique, sans risque à exiger.

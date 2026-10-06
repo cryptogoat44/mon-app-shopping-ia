@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { launchImageLibraryAsync, openVideo, discardPickedVideo, track } = vi.hoisted(() => ({
+const { launchImageLibraryAsync, openVideo, discardLocalFile, track } = vi.hoisted(() => ({
   launchImageLibraryAsync: vi.fn(),
   openVideo: vi.fn(),
-  discardPickedVideo: vi.fn(),
+  discardLocalFile: vi.fn(),
   track: vi.fn(),
 }));
 vi.mock("react-native", () => ({ Platform: { OS: "ios" } }));
@@ -12,7 +12,7 @@ vi.mock("expo-image-picker", () => ({
   UIImagePickerPreferredAssetRepresentationMode: { Current: "current" },
   VideoExportPreset: { Passthrough: 0 },
 }));
-vi.mock("../src/lib/video-frames", () => ({ openVideo, discardPickedVideo }));
+vi.mock("../src/lib/video-frames", () => ({ openVideo, discardLocalFile }));
 vi.mock("../src/lib/analytics", () => ({ track }));
 vi.mock("../src/lib/image-import", () => ({ SPOTTER_IMAGE_MAX_EDGE: 1600 }));
 vi.mock("../src/lib/spot-flow", () => ({ beginFromPhoto: vi.fn() }));
@@ -53,7 +53,7 @@ describe("vidéo importée dans le Spotter (lot 4)", () => {
     const result = await importSpotVideo();
     expect(result).toMatchObject({ kind: "rejected", reason: "too_large" });
     expect(openVideo).not.toHaveBeenCalled();
-    expect(discardPickedVideo).toHaveBeenCalledWith("file:///cache/video.mov");
+    expect(discardLocalFile).toHaveBeenCalledWith("file:///cache/video.mov");
     expect(videoImportMessage(result)).toContain("101 Mo");
     expect(track).toHaveBeenCalledWith("video_rejected", { reason: "too_large", source: "library", duration_s: undefined });
   });

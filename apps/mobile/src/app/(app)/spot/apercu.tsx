@@ -6,13 +6,14 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
-import { CameraIcon } from "@/components/icons";
+import { CameraIcon, VideoIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
 import { fetchSearch } from "@/lib/api";
 import { getDraft, startDraft, updateDraft, type SpotDraft } from "@/lib/spot-draft";
 import { detectLink } from "@/lib/link-detection";
 import { importPhotoForSpotter } from "@/lib/image-import";
 import { beginFromLink, prepareFailureKind } from "@/lib/spot-flow";
+import { useVideoImport } from "@/lib/use-video-import";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Le geste pour montrer le bon moment de la vidéo : pause, capture,
@@ -114,6 +115,9 @@ export default function PreviewScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [stepsOpen, setStepsOpen] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  // Lot 4, temps 1 bis : jamais de vidéo téléchargée depuis TikTok ou
+  // Instagram ; la personne peut ajouter la sienne (fichier de son appareil).
+  const { importing, importVideo } = useVideoImport(setMessage);
 
   // Page rechargée (web) : le brouillon a disparu, on le reconstruit depuis
   // la recherche préparée, quand elle vient d'un lien.
@@ -231,6 +235,10 @@ export default function PreviewScreen() {
                 >
                   <Text style={styles.noticeTitle}>{t.preview.notOnImageTitle}</Text>
                   <Text style={styles.noticeChevron}>{stepsOpen ? "–" : "+"}</Text>
+                </Pressable>
+                <Pressable onPress={() => void importVideo()} disabled={importing} style={styles.inlineAction} accessibilityRole="button">
+                  {importing ? <ActivityIndicator color={color.vert} /> : <VideoIcon size={17} tint={color.vert} />}
+                  <Text style={styles.inlineActionLabel}>{t.videoAuto.addVideo}</Text>
                 </Pressable>
                 {stepsOpen ? (
                   <>
