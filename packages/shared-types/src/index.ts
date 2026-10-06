@@ -420,9 +420,9 @@ export const LEGAL_DOCUMENT_VERSIONS: Record<LegalDocumentType, string> = {
   // nouvelle acceptation ni message (décision du fondateur).
   // « projet-2026-10-05-c » (lot 4, temps 1 bis) : analyse automatique d'une
   // vidéo par une IA (Anthropic, États-Unis), seulement avec le consentement
-  // « analyse_video_ia ». Nouvelle acceptation de la politique ou simple
-  // information : décision du fondateur (proposé : simple information, le
-  // consentement propre à la fonction étant demandé à son premier usage).
+  // « analyse_video_ia » — simple information, sans nouvelle acceptation
+  // (décision du fondateur, 2026-10-06 : le consentement propre à la fonction,
+  // demandé à son premier usage, fait foi ; à confirmer par le juriste).
   privacy_policy: "projet-2026-10-05-c",
 };
 
