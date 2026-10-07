@@ -12,6 +12,7 @@ import { useAuth } from "@/lib/auth-context";
 import { ApiError, deleteMyAccount, exportMyData, fetchConsentStatus, recordAnalyticsChoice } from "@/lib/api";
 import { hasAnalyticsConsent } from "@/lib/policy-notice";
 import { ErrorMessage } from "@/components/error-message";
+import { LatestVideoSetting } from "@/components/latest-video-setting";
 import { VideoAiSetting } from "@/components/video-ai-setting";
 import { consentFor, pendingConsents } from "@/lib/legal";
 import { formatLongDate } from "@/lib/format";
@@ -188,6 +189,7 @@ export default function SettingsScreen() {
           </Text>
           {analyticsError ? <ErrorMessage style={styles.sectionBody}>{t.settings.analyticsFailed}</ErrorMessage> : null}
           <VideoAiSetting consents={consents} failed={consentsFailed} onChange={setConsents} />
+          <LatestVideoSetting />
           <Pressable accessibilityRole="button" onPress={handleExport} disabled={exporting} hitSlop={12} style={styles.secondLink}>
             <Text style={styles.link}>{exporting ? t.settings.exporting : t.settings.exportData}</Text>
           </Pressable>

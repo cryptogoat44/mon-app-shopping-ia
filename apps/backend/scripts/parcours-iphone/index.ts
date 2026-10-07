@@ -7,6 +7,12 @@
 //                                                    lot 4 ter : dernière vidéo de la galerie, quelques
 //                                                    mots, « Lancer », dans les 4 combinaisons ; IA et
 //                                                    SerpApi simulées (docs/lot-4-ter-iphone-captures/)
+//   pnpm --filter backend parcours-iphone relance-session [n]
+//                                                    lot 4 ter : n relances (20 par défaut), session
+//                                                    contrôlée à chacune (docs/lot-4-ter-relances/)
+//   pnpm --filter backend parcours-iphone relance-session-panne [n]
+//                                                    idem, avec une coupure simulée de 1,5 s entre le
+//                                                    serveur local et Supabase Auth avant chaque relance
 //
 // Prérequis : Xcode, Maestro (brew), un simulateur iPhone démarré avec l'app
 // de développement installée (compilation : voir docs/journal-decisions.md,
@@ -16,7 +22,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
-import { BUNDLE_ID, lancerParcours, LIEN_DEV_CLIENT, log, maestro, type Compte, type Outils } from "./boite-a-outils.js";
+import { BUNDLE_ID, essaiMaestro, lancerParcours, LIEN_DEV_CLIENT, log, maestro, type Compte, type Outils } from "./boite-a-outils.js";
 import { z } from "zod";
 import { genererVideosEssai } from "../lib/videos-essai.js";
 import { verifierSentry } from "./sentry.js";
@@ -181,6 +187,16 @@ function regler(o: Outils, depuis: "fr" | "en", vers: "fr" | "en", theme: "CLAIR
   etape(o, "06-reglages-combinaison", { PROFIL: avant.PROFIL, REGLAGES: avant.REGLAGES, LANGUE: apres.LANGUE, THEME: apres[theme], RETOUR: apres.RETOUR, IMPORTER: apres.ACCUEIL, PREFIXE: prefixe });
 }
 
+/** En thème clair, l'heure en haut de l'écran doit être sombre (lisible). Défaut
+ * corrigé au lot 4 ter : après une recherche, elle restait blanche sur
+ * l'écran des résultats (barre de l'écran d'attente, sombre). Zone de l'heure
+ * d'une capture d'iPhone 17 Pro (1206 × 2622). */
+async function heureLisible(o: Outils, capture: string): Promise<void> {
+  const { data } = await sharp(join(o.sortie, capture)).extract({ left: 120, top: 50, width: 220, height: 90 }).greyscale().raw().toBuffer({ resolveWithObject: true });
+  const plusSombre = data.reduce((min, valeur) => Math.min(min, valeur), 255);
+  if (plusSombre > 110) throw new Error(`${capture} : heure illisible en haut de l'écran (pixel le plus sombre : ${plusSombre} sur 255)`);
+}
+
 /** Premier usage de l'analyse automatique (accord jamais donné) : l'accord du compte de test est effacé (spotto-dev). */
 async function oublierAccordIa(o: Outils, compte: Compte): Promise<void> {
   const { error } = await o.admin.from("consents").delete().eq("user_id", compte.id).eq("type", "analyse_video_ia");
@@ -214,19 +230,22 @@ async function verifierParcoursUnique(o: Outils, compte: Compte): Promise<void> 
 }
 
 /** Lot 4 ter : parcours unique sur l'app iPhone, dans les 4 combinaisons — la
- * dernière vidéo de la galerie proposée sur Spotter (accès demandé une fois),
- * quelques mots, « Lancer ». IA et SerpApi simulées : aucun appel réel. */
+ * dernière vidéo de la galerie proposée sur Spotter (option : question posée
+ * une fois, accès demandé par iOS seulement après « oui »), quelques mots,
+ * « Lancer ». Puis un autre compte répond « Non merci ». IA et SerpApi
+ * simulées : aucun appel réel. */
 async function parcoursUnique(o: Outils): Promise<void> {
   const louise = await o.creerCompte("u", "Louise (test)");
+  const camille = await o.creerCompte("n", "Camille (test)");
   await photosSimulateur(o);
   const videos = await genererVideosEssai();
   try {
     // D'abord, la plus récente est la vidéo de 65 s : refus annoncé sur la carte.
     ajouterVideos(o, [videos.hevc, videos.courte, videos.longue]);
-    await connecter(o, louise, LIBELLES.fr.ACCUEIL);
-    // Accès aux photos : remis à zéro pour photographier la demande d'iOS (une seule fois).
+    // Accès aux photos remis à zéro AVANT la première ouverture de Spotter :
+    // la question doit venir sans aucune demande d'iOS.
     o.xcrun(["simctl", "privacy", o.udid, "reset", "photos", BUNDLE_ID]);
-    o.relancerApp();
+    await connecter(o, louise, LIBELLES.fr.ACCUEIL);
     etape(o, "13-galerie-accord", { DERNIERE: LIBELLES.fr.DERNIERE });
     // Puis la vidéo de 12 s devient la plus récente (relue au retour sur Spotter).
     ajouterVideos(o, [videos.courte]);
@@ -240,6 +259,7 @@ async function parcoursUnique(o: Outils): Promise<void> {
     courante = combo.langue;
     const l = LIBELLES[combo.langue];
     etape(o, "14-derniere-video", { ...l, PREFIXE: combo.id });
+    if (combo.theme === "CLAIR") for (const capture of ["06-resultats", "08-relance-resultats"]) await heureLisible(o, `${combo.id}-${capture}.png`);
     const accords = await accordsIa(o, louise);
     if (!accords.some((a) => a.granted_at !== null)) throw new Error(`${combo.id} : accord non enregistré`);
   }
@@ -249,12 +269,70 @@ async function parcoursUnique(o: Outils): Promise<void> {
   await oublierAccordIa(o, louise);
   etape(o, "17-refus");
   await verifierParcoursUnique(o, louise);
+  // « Non merci » (autre compte) : refus sans conséquence, puis option réactivée dans Réglages.
+  await connecter(o, camille, LIBELLES.fr.ACCUEIL);
+  etape(o, "19-derniere-video-non");
 }
 
-const SCENARIOS: Record<string, { run: (o: Outils) => Promise<void>; sortie: string; iaSimulee?: boolean; serpapiSimule?: boolean }> = {
+/** Attentes avant une relance (secondes) : le serveur local reste inactif plus ou moins longtemps. */
+const ATTENTES = [0, 10, 25, 45] as const;
+
+/** Lot 4 ter, décision 5 : la session survit-elle aux relances ? `n` relances
+ * contrôlées (Spotter ou accueil), avec les réponses du serveur local (codes
+ * seulement) et la présence de la session rangée sur le simulateur. Toutes les
+ * 5 relances, connexion fraîche par le lien juste avant, comme lors de
+ * l'incident du 2026-10-07. Avec `panne` : coupure simulée de 1,5 s entre le
+ * serveur local et Supabase Auth juste avant chaque relance. */
+async function relancesSession(o: Outils, panne: boolean): Promise<void> {
+  const n = Math.max(1, Number(process.argv[3] ?? 20) || 20);
+  const compte = await o.creerCompte("r", "Relance (test)");
+  await connecter(o, compte, LIBELLES.fr.ACCUEIL);
+  const lignes: string[] = [];
+  let perdues = 0;
+  for (let i = 1; i <= n; i += 1) {
+    const frais = i % 5 === 0;
+    if (frais) {
+      o.ouvrirLien(await o.lienSession(compte));
+      etape(o, "01-nouveau-mot-de-passe");
+    }
+    const attente = frais ? 0 : ATTENTES[i % ATTENTES.length]!;
+    await new Promise((resolve) => setTimeout(resolve, attente * 1000));
+    const avant = o.reponsesServeur().length;
+    if (panne) o.declencherPanneAuth();
+    log(`→ relance ${i}/${n}${frais ? " (juste après une connexion par le lien)" : ` (après ${attente} s)`}`);
+    o.relancerApp();
+    const essai = essaiMaestro(o.udid, join(FLOWS, "18-relance-controle.yaml"), o.sortie, { ACCUEIL: LIBELLES.fr.ACCUEIL, CAPTURE: `relance-${String(i).padStart(2, "0")}` });
+    const reponses = o.reponsesServeur().slice(avant).filter((r) => r.chemin === "/api/me" || r.chemin === "/api/consents");
+    const stockee = o.sessionStockee();
+    const codes = reponses.map((r) => `${r.chemin} ${r.code} (${r.dureeMs} ms)`).join(" ; ") || "—";
+    lignes.push(`| ${i} | ${frais ? "lien, puis relance" : `${attente} s`} | ${essai.ok ? "Spotter" : "**accueil**"} | ${stockee ? "oui" : "**non**"} | ${codes} |`);
+    if (!essai.ok) {
+      perdues += 1;
+      log(`  ⚠ session perdue (session rangée sur le simulateur : ${stockee ? "oui" : "non"}) — reconnexion pour continuer`);
+      await connecter(o, compte, LIBELLES.fr.ACCUEIL);
+    }
+  }
+  const titre = panne ? "avec coupure simulée de 1,5 s vers Supabase Auth avant chaque relance" : "conditions réelles";
+  const rapport = [
+    `# Relances de l'app iPhone — ${titre}`,
+    "",
+    `${n} relances, ${perdues} session(s) perdue(s). Serveur local et spotto-dev ; captures relance-NN.png.`,
+    "",
+    "| Relance | Avant | Écran | Session rangée | Réponses du serveur (/api/me, /api/consents) |",
+    "|---|---|---|---|---|",
+    ...lignes,
+    "",
+  ].join("\n");
+  writeFileSync(join(o.sortie, "relances.md"), rapport);
+  log(`  ${perdues} session(s) perdue(s) sur ${n} relances — rapport : relances.md`);
+}
+
+const SCENARIOS: Record<string, { run: (o: Outils) => Promise<void>; sortie: string; iaSimulee?: boolean; serpapiSimule?: boolean; panneAuth?: boolean }> = {
   natif: { run: natif, sortie: "lot-3bis-captures" },
   preparer: { run: attendreExploration, sortie: "lot-3bis-captures" },
   "parcours-unique": { run: parcoursUnique, sortie: "lot-4-ter-iphone-captures", iaSimulee: true, serpapiSimule: true },
+  "relance-session": { run: (o) => relancesSession(o, false), sortie: "lot-4-ter-relances" },
+  "relance-session-panne": { run: (o) => relancesSession(o, true), sortie: "lot-4-ter-relances-panne", panneAuth: true },
 };
 
 const nom = process.argv[2] ?? "";
@@ -263,7 +341,7 @@ if (!scenario) {
   console.error(`Indiquez un scénario : ${Object.keys(SCENARIOS).join(", ")}.`);
   process.exit(1);
 }
-lancerParcours(scenario.sortie, scenario.run, { iaSimulee: scenario.iaSimulee === true, serpapiSimule: scenario.serpapiSimule === true }).catch((error: unknown) => {
+lancerParcours(scenario.sortie, scenario.run, { iaSimulee: scenario.iaSimulee === true, serpapiSimule: scenario.serpapiSimule === true, panneAuth: scenario.panneAuth === true }).catch((error: unknown) => {
   console.error(`Erreur : ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
 });

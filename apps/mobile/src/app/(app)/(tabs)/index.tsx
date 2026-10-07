@@ -10,29 +10,54 @@ import { ClockIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
 import { LinkEntry } from "@/components/link-entry";
 import { LinkNotice } from "@/components/link-notice";
-import { EntryTiles, LatestVideoCard } from "@/components/spot-entry";
+import { EntryTiles, LatestVideoCard, LatestVideoNote, LatestVideoQuestion } from "@/components/spot-entry";
 import { SpotImage } from "@/components/spot-image";
+import { useAuth } from "@/lib/auth-context";
 import { importPhotoForSpotter } from "@/lib/image-import";
-import { findLatestVideo, latestVideoAllowed, latestVideoUri, type LatestVideo } from "@/lib/latest-video";
+import { latestVideoUri, loadLatestVideo, saveLatestVideoChoice } from "@/lib/latest-video";
+import type { LatestVideo, LatestVideoChoice, LatestVideoState } from "@/lib/latest-video-state";
 import { beginFromPhoto } from "@/lib/spot-flow";
 import { LINK_COVER_ENABLED } from "@/lib/spot-flags";
 import { adoptSpotVideo, videoImportMessage } from "@/lib/spot-video";
 import { useVideoImport } from "@/lib/use-video-import";
 import { themedStyles } from "@/theme/themed-styles";
 
-/** Dernière vidéo de la galerie (app iPhone), relue à chaque retour sur
- * Spotter. L'accès aux photos n'est demandé qu'une fois, par le système. */
+/** Dernière vidéo de la galerie (app iPhone, en option), relue à chaque retour
+ * sur Spotter. L'accès aux photos n'est demandé à iOS qu'après un « oui ». */
 function useLatestVideo() {
-  const [latest, setLatest] = useState<LatestVideo | null>(null);
+  const { session } = useAuth();
+  const userId = session?.user.id ?? null;
+  const [state, setState] = useState<LatestVideoState>({ kind: "off" });
+  const [answer, setAnswer] = useState<"idle" | "saving" | "failed" | "answered">("idle");
   const load = useCallback(async () => {
     try {
-      setLatest((await latestVideoAllowed()) ? await findLatestVideo() : null);
+      setState(await loadLatestVideo(userId));
     } catch {
-      // Galerie illisible : les entrées habituelles restent proposées.
-      setLatest(null);
+      // Galerie ou réponse illisible : le sélecteur reste proposé.
+      setState({ kind: "off" });
     }
-  }, []);
-  return { latest, load };
+  }, [userId]);
+  // Retour sur Spotter : la note d'après la réponse a été lue.
+  const refresh = useCallback(() => {
+    setAnswer((current) => (current === "saving" ? current : "idle"));
+    return load();
+  }, [load]);
+
+  async function choose(choice: LatestVideoChoice) {
+    if (!userId) return;
+    setAnswer("saving");
+    try {
+      await saveLatestVideoChoice(userId, choice);
+    } catch {
+      return setAnswer("failed");
+    }
+    await load();
+    setAnswer("answered");
+  }
+
+  // Juste après un « oui » qui ne peut rien montrer : on dit pourquoi.
+  const note = answer !== "answered" ? null : state.kind === "no_access" ? t.spotter.latestVideoNoAccess : state.kind === "none" ? t.spotter.latestVideoEmpty : null;
+  return { state, refresh, choose: (choice: LatestVideoChoice) => void choose(choice), saving: answer === "saving", failed: answer === "failed", note };
 }
 
 function RecentRow({ recent }: { recent: { searchId: string; piece: Piece }[] }) {
@@ -130,26 +155,26 @@ function useSpotterEntries() {
 }
 
 // Spotter (lot 4 ter) : un seul point d'entrée, « Ajouter une vidéo », et la
-// photo à égalité ; sur l'app iPhone, la dernière vidéo de la galerie est
-// proposée d'emblée — il ne reste qu'à taper quelques mots et « Lancer ».
+// photo à égalité ; sur l'app iPhone, en option, la dernière vidéo de la
+// galerie — il ne reste qu'à taper quelques mots et « Lancer ».
 export default function SpotterScreen() {
   const [recent, setRecent] = useState<{ searchId: string; piece: Piece }[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const entries = useSpotterEntries();
   const latestVideo = useLatestVideo();
-  const { latest } = latestVideo;
+  const latest = latestVideo.state.kind === "ready" ? latestVideo.state.video : null;
 
   const loadRecent = useCallback(() => getRecentSearches().then(setRecent).catch(() => {}), []);
   useFocusEffect(
     useCallback(() => {
       loadRecent();
-      void latestVideo.load();
-    }, [loadRecent, latestVideo.load])
+      void latestVideo.refresh();
+    }, [loadRecent, latestVideo.refresh])
   );
 
   async function handleRefresh() {
     setRefreshing(true);
-    await Promise.all([loadRecent(), latestVideo.load()]);
+    await Promise.all([loadRecent(), latestVideo.refresh()]);
     setRefreshing(false);
   }
 
@@ -177,6 +202,8 @@ export default function SpotterScreen() {
         ) : null}
         {entries.message ? <ErrorMessage style={styles.feedback}>{entries.message}</ErrorMessage> : null}
         <EntryTiles videoLabel={latest ? t.spotter.otherVideo : t.spotter.addVideo} onVideo={entries.addVideo} onPhoto={entries.addPhoto} busy={entries.busy} />
+        {latestVideo.state.kind === "ask" ? <LatestVideoQuestion onAnswer={latestVideo.choose} saving={latestVideo.saving} failed={latestVideo.failed} /> : null}
+        {latestVideo.note ? <LatestVideoNote message={latestVideo.note} /> : null}
         <LinkHelp onAddVideo={entries.addVideo} importing={entries.importing} />
         <RecentRow recent={recent} />
       </ScrollView>

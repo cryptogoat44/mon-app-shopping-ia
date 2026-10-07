@@ -1,13 +1,20 @@
 // Site : un navigateur n'a pas accès à la galerie du téléphone — la vidéo se
-// choisit avec « Ajouter une vidéo ». Version app iPhone : latest-video.ts.
-import type { LatestVideo } from "./latest-video";
+// choisit avec « Ajouter une vidéo », et la question n'est jamais posée.
+// Version app iPhone : latest-video.ts.
+import type { GalleryAccess, LatestVideoChoice, LatestVideoState } from "./latest-video-state";
 
-export async function latestVideoAllowed(): Promise<boolean> {
-  return false;
+export type { LatestVideo } from "./latest-video-state";
+
+export async function latestVideoSettings(): Promise<{ choice: LatestVideoChoice | null; access: GalleryAccess }> {
+  return { choice: null, access: "denied" };
 }
 
-export async function findLatestVideo(): Promise<LatestVideo | null> {
-  return null;
+export async function loadLatestVideo(): Promise<LatestVideoState> {
+  return { kind: "off" };
+}
+
+export function saveLatestVideoChoice(): Promise<void> {
+  return Promise.reject(new Error("latest_video_unavailable"));
 }
 
 export function latestVideoUri(): Promise<string> {

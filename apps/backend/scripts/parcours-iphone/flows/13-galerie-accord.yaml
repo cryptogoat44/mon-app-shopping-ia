@@ -1,12 +1,21 @@
-# Lot 4 ter : accès aux photos demandé UNE fois, par iOS, à la première
-# ouverture de Spotter (texte de l'app : locales/*.json ; iOS propose aussi
-# « Limiter l'accès… »). L'outil a remis l'autorisation à zéro avant ce
-# parcours. Puis la dernière vidéo apparaît.
+# Lot 4 ter (décision du fondateur, 2026-10-07) : la dernière vidéo est une
+# OPTION. Première ouverture de Spotter : la question, et AUCUNE demande
+# d'accès d'iOS (l'outil a remis l'autorisation à zéro avant ce parcours).
+# « Oui, me la proposer » → demande d'iOS (texte : app.json et locales/*.json)
+# → accès complet → la dernière vidéo apparaît.
 appId: com.spottoapp.ios
 ---
 - extendedWaitUntil:
-    visible: "Autoriser l.accès complet"
+    visible: "Proposer automatiquement ma dernière vidéo \\?"
     timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertNotVisible: "Autoriser l.accès complet"
+- takeScreenshot: 00-question-derniere-video
+- tapOn: "Oui, me la proposer"
+- extendedWaitUntil:
+    visible: "Autoriser l.accès complet"
+    timeout: 30000
 - waitForAnimationToEnd:
     timeout: 3000
 - takeScreenshot: 00-accord-photos-ios
@@ -18,6 +27,7 @@ appId: com.spottoapp.ios
 - extendedWaitUntil:
     visible: "Cette vidéo dure 1:05.*"
     timeout: 10000
+- assertNotVisible: "Proposer automatiquement ma dernière vidéo \\?"
 - waitForAnimationToEnd:
     timeout: 3000
 - takeScreenshot: 00b-derniere-video-trop-longue

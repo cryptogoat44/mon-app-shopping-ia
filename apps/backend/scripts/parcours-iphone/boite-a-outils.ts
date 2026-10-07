@@ -11,8 +11,8 @@
 //   journaux, ne le voit jamais ;
 // - comptes toujours supprimés à la fin, même en cas d'échec ou d'arrêt.
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { randomBytes } from "node:crypto";
-import { closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,6 +22,9 @@ import { CONSENT_VERSIONS } from "@monapp/shared-types";
 import { assertDevSupabaseUrl } from "../lib/dev-database.js";
 import { CLE_SIMULATION, FICHIER_SIMULATION, MARQUE_SIMULATION } from "../lib/simulation-anthropic.js";
 import { FICHIER_SIMULATION_SERPAPI, MARQUE_SIMULATION_SERPAPI } from "../lib/simulation-serpapi.js";
+import { FICHIER_PANNE_AUTH, FICHIER_SIGNAL_PANNE, MARQUE_PANNE_AUTH } from "../lib/simulation-panne-auth.js";
+import { lireReponses, type ReponseServeur } from "../lib/journal-serveur.js";
+import { codeSansSentry } from "../parcours-ecran/garde-statistiques.js";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 export const ROOT = resolve(HERE, "../../../..");
@@ -74,6 +77,12 @@ export interface Outils {
   relancerApp(): void;
   /** Lignes écrites par la simulation d'Anthropic (scénarios à IA simulée). */
   simulation(): string[];
+  /** Réponses du serveur local depuis son démarrage (méthode, chemin, code ; jamais de jeton). */
+  reponsesServeur(): ReponseServeur[];
+  /** La session de l'app est-elle encore rangée sur le simulateur ? (présence seulement, jamais lue) */
+  sessionStockee(): boolean;
+  /** Coupure simulée vers Supabase Auth au prochain contrôle de session (scénario relance-session-panne). */
+  declencherPanneAuth(): void;
 }
 
 export function xcrun(args: string[]): string {
@@ -120,15 +129,22 @@ function verifierEnvironnement(): { mobileEnv: Record<string, string> } {
 
 /** Serveur local et Metro ; leurs journaux vont dans un dossier temporaire
  * (hors du dépôt), utile pour comprendre un échec. */
-function demarrerServeurs(iaSimulee: boolean, serpapiSimule: boolean): { serveur: ChildProcess; metro: ChildProcess; journaux: string } {
+function demarrerServeurs(iaSimulee: boolean, serpapiSimule: boolean, panneAuth: boolean): { serveur: ChildProcess; metro: ChildProcess; journaux: string } {
   const journaux = mkdtempSync(join(tmpdir(), "parcours-iphone-journaux-"));
   // Jamais de vraie clé d'Anthropic ; avec l'IA simulée, une clé factice et
   // le module de simulation (aucun appel réel).
   const env: NodeJS.ProcessEnv = { ...process.env, PORT: String(API_PORT), SERPAPI_KEY: "cle-invalide-parcours-iphone" };
+  // Jamais de Sentry : une erreur provoquée par un parcours ne part nulle part.
+  delete env.SENTRY_DSN;
   delete env.ANTHROPIC_API_KEY;
   if (iaSimulee) env.ANTHROPIC_API_KEY = CLE_SIMULATION;
   // SerpApi simulée (lot 4 ter) : propositions fabriquées sur le Mac, pour montrer l'écran des résultats.
-  const imports = [...(iaSimulee ? ["--import", FICHIER_SIMULATION] : []), ...(serpapiSimule ? ["--import", FICHIER_SIMULATION_SERPAPI] : [])];
+  // Coupure simulée vers Supabase Auth (lot 4 ter, relances) : seulement sur signal de l'outil.
+  const imports = [
+    ...(iaSimulee ? ["--import", FICHIER_SIMULATION] : []),
+    ...(serpapiSimule ? ["--import", FICHIER_SIMULATION_SERPAPI] : []),
+    ...(panneAuth ? ["--import", FICHIER_PANNE_AUTH] : []),
+  ];
   const args = ["tsx", ...imports, "src/server.ts"];
   // Chaque processus écrit DIRECTEMENT dans son journal : pendant un parcours
   // Maestro (lancé en mode bloquant), l'outil ne lit plus rien ; un tuyau non
@@ -137,11 +153,13 @@ function demarrerServeurs(iaSimulee: boolean, serpapiSimule: boolean): { serveur
   const journalServeur = openSync(join(journaux, "serveur.log"), "a");
   const serveur = spawn("npx", args, { cwd: BACKEND_DIR, env, stdio: ["ignore", journalServeur, journalServeur] });
   closeSync(journalServeur);
-  // Metro sans « CI » : sinon il ne recharge pas le code modifié.
-  const sansCi: NodeJS.ProcessEnv = { ...OUTILS_ENV };
+  // Metro sans « CI » : sinon il ne recharge pas le code modifié. App sans
+  // Sentry (une variable définie ici l'emporte sur apps/mobile/.env) ; cache
+  // vidé, sinon l'ancienne adresse pourrait rester dans le code servi.
+  const sansCi: NodeJS.ProcessEnv = { ...OUTILS_ENV, EXPO_PUBLIC_SENTRY_DSN: "" };
   delete sansCi.CI;
   const journalMetro = openSync(join(journaux, "metro.log"), "a");
-  const metro = spawn("npx", ["expo", "start", "--dev-client", "--port", String(METRO_PORT)], { cwd: MOBILE_DIR, env: sansCi, stdio: ["ignore", journalMetro, journalMetro] });
+  const metro = spawn("npx", ["expo", "start", "--dev-client", "--clear", "--port", String(METRO_PORT)], { cwd: MOBILE_DIR, env: sansCi, stdio: ["ignore", journalMetro, journalMetro] });
   closeSync(journalMetro);
   return { serveur, metro, journaux };
 }
@@ -190,24 +208,23 @@ async function attendreSimulation(journaux: string, marque: string, delaiMs: num
 export async function lancerParcours(
   sortieNom: string,
   scenario: (o: Outils) => Promise<void>,
-  options: { iaSimulee?: boolean; serpapiSimule?: boolean } = {}
+  options: { iaSimulee?: boolean; serpapiSimule?: boolean; panneAuth?: boolean } = {}
 ): Promise<void> {
   verifierEnvironnement();
   for (const port of [API_PORT, METRO_PORT]) {
     if (!(await portLibre(port))) throw new Error(`Le port ${port} est déjà utilisé : arrêtez ce qui tourne dessus, puis relancez.`);
   }
   const udid = simulateur();
-  // Lot 4 ter : Spotter demande l'accès aux photos à sa première ouverture ;
-  // accordé d'avance pour que la fenêtre d'iOS ne bloque aucun parcours (le
-  // parcours « parcours-unique » la remet à zéro pour la photographier).
-  spawnSync("xcrun", ["simctl", "privacy", udid, "grant", "photos", BUNDLE_ID], { env: OUTILS_ENV });
+  // Lot 4 ter : plus aucun accès aux photos accordé d'avance — l'app ne le
+  // demande qu'après « Oui, me la proposer » (parcours 13 et 19).
   const admin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
   const anon = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, { auth: { persistSession: false } });
   const apiUrl = `http://localhost:${API_PORT}`;
   const sortie = join(ROOT, "docs", sortieNom);
   mkdirSync(sortie, { recursive: true });
   const comptes: Compte[] = [];
-  const { serveur, metro, journaux } = demarrerServeurs(options.iaSimulee === true, options.serpapiSimule === true);
+  rmSync(FICHIER_SIGNAL_PANNE, { force: true });
+  const { serveur, metro, journaux } = demarrerServeurs(options.iaSimulee === true, options.serpapiSimule === true, options.panneAuth === true);
   let nettoye = false;
 
   const nettoyer = async () => {
@@ -283,6 +300,12 @@ export async function lancerParcours(
       xcrun(["simctl", "openurl", udid, LIEN_DEV_CLIENT]);
     },
     simulation: () => lignesSimulation(journaux).filter((ligne) => ligne !== MARQUE_SIMULATION),
+    reponsesServeur: () => lireReponses(existsSync(join(journaux, "serveur.log")) ? readFileSync(join(journaux, "serveur.log"), "utf8") : ""),
+    sessionStockee: () => sessionStockee(udid),
+    declencherPanneAuth() {
+      if (!options.panneAuth) throw new Error("Coupure simulée non chargée dans le serveur local.");
+      writeFileSync(FICHIER_SIGNAL_PANNE, "");
+    },
   };
 
   try {
@@ -296,19 +319,52 @@ export async function lancerParcours(
       log("  SerpApi simulée dans le serveur local (aucun appel réel, aucun crédit)");
       await attendreSimulation(journaux, MARQUE_SIMULATION_SERPAPI, 60_000);
     }
+    if (options.panneAuth) {
+      log("  coupures simulées vers Supabase Auth dans le serveur local (sur signal seulement)");
+      await attendreSimulation(journaux, MARQUE_PANNE_AUTH, 60_000);
+    }
     await attendre(`${apiUrl}/health`, "ok", 60_000);
     await attendre(`http://localhost:${METRO_PORT}/status`, "packager-status:running", 90_000);
+    await preparerCodeApp();
     await scenario(outils);
     log(`Parcours terminé. Captures : docs/${sortieNom}/`);
   } finally {
+    rmSync(FICHIER_SIGNAL_PANNE, { force: true });
     await nettoyer();
   }
 }
 
-/** Lance un fichier de parcours Maestro. Ses captures sont copiées dans
- * `sortie` (celle d'un échec : ECHEC-<capture ou parcours>.png) ; ses
- * journaux restent dans un dossier temporaire, supprimé aussitôt. */
-export function maestro(udid: string, fichier: string, sortie: string, variables: Record<string, string> = {}): void {
+/** Cache de Metro vidé (app servie sans Sentry) : le code de l'app est
+ * préparé une première fois avant toute ouverture, et contrôlé — aucune
+ * adresse Sentry ne doit s'y trouver. */
+async function preparerCodeApp(): Promise<void> {
+  log("  préparation du code de l'app par Metro (cache vidé, 1 à 2 min)…");
+  const reponse = await fetch(`http://localhost:${METRO_PORT}/.expo/.virtual-metro-entry.bundle?platform=ios&dev=true&minify=false`, { signal: AbortSignal.timeout(300_000) });
+  if (!reponse.ok) throw new Error(`Metro n'a pas pu préparer le code de l'app (${reponse.status}).`);
+  const dsn = loadEnv({ path: join(MOBILE_DIR, ".env"), processEnv: {} }).parsed?.EXPO_PUBLIC_SENTRY_DSN;
+  if (!codeSansSentry(await reponse.text(), dsn)) throw new Error("Le code servi à l'app contient encore l'adresse Sentry du projet : parcours arrêté, rien n'a été envoyé.");
+}
+
+/** Session Supabase rangée par l'app (AsyncStorage du simulateur) : la clé
+ * « sb-…-auth-token » et sa valeur (dans le manifeste, ou dans un fichier à
+ * part nommé d'après la clé). Seule la présence est regardée. */
+function sessionStockee(udid: string): boolean {
+  const conteneur = xcrun(["simctl", "get_app_container", udid, BUNDLE_ID, "data"]).trim();
+  const dossier = join(conteneur, "Library/Application Support", BUNDLE_ID, "RCTAsyncLocalStorage_V1");
+  const manifeste = join(dossier, "manifest.json");
+  if (!existsSync(manifeste)) return false;
+  const brut: unknown = JSON.parse(readFileSync(manifeste, "utf8"));
+  if (typeof brut !== "object" || brut === null) return false;
+  return Object.entries(brut).some(
+    ([cle, valeur]) => /^sb-[a-z0-9]+-auth-token$/.test(cle) && (valeur !== null || existsSync(join(dossier, createHash("md5").update(cle).digest("hex"))))
+  );
+}
+
+/** Lance un fichier de parcours Maestro et dit s'il a abouti, sans s'arrêter.
+ * Ses captures sont copiées dans `sortie` (celle d'un échec : ECHEC-<capture
+ * ou parcours>.png) ; ses journaux restent dans un dossier temporaire,
+ * supprimé aussitôt. */
+export function essaiMaestro(udid: string, fichier: string, sortie: string, variables: Record<string, string> = {}): { ok: boolean; nom: string; erreurs: string } {
   const travail = mkdtempSync(join(tmpdir(), "parcours-iphone-maestro-"));
   const nom = variables.CAPTURE ?? (variables.PREFIXE ? `${variables.PREFIXE}-${basename(fichier, ".yaml")}` : basename(fichier, ".yaml"));
   try {
@@ -324,8 +380,15 @@ export function maestro(udid: string, fichier: string, sortie: string, variables
     }
     const resume = (r.stdout ?? "").split("\n").filter((l) => /COMPLETED|FAILED|WARNED/.test(l)).map((l) => `    ${l.trim()}`);
     log(resume.join("\n"));
-    if (r.status !== 0) throw new Error(`Parcours Maestro « ${nom} » en échec :\n${(r.stdout ?? "").split("\n").filter((l) => /FAILED|Element not found|Assertion|Invalid|Error/.test(l)).slice(0, 5).join("\n")}`);
+    const erreurs = (r.stdout ?? "").split("\n").filter((l) => /FAILED|Element not found|Assertion|Invalid|Error/.test(l)).slice(0, 5).join("\n");
+    return { ok: r.status === 0, nom, erreurs };
   } finally {
     rmSync(travail, { recursive: true, force: true });
   }
+}
+
+/** Lance un fichier de parcours Maestro ; s'arrête s'il échoue. */
+export function maestro(udid: string, fichier: string, sortie: string, variables: Record<string, string> = {}): void {
+  const essai = essaiMaestro(udid, fichier, sortie, variables);
+  if (!essai.ok) throw new Error(`Parcours Maestro « ${essai.nom} » en échec :\n${essai.erreurs}`);
 }

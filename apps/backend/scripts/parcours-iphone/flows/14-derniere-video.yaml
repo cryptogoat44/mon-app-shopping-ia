@@ -39,13 +39,9 @@ appId: com.spottoapp.ios
 - waitForAnimationToEnd:
     timeout: 3000
 - takeScreenshot: ${PREFIXE}-06-resultats
-# Le lien discret suit les actions de la meilleure proposition : sur iPhone,
-# juste sous le bas de l'écran — on fait défiler.
-- scrollUntilVisible:
-    element:
-      text: ${PAS_LA_BONNE}
-    direction: DOWN
-    timeout: 10000
+# Le lien discret est juste sous la meilleure proposition : visible sans
+# défilement (décision du fondateur). Aucun défilement avant de le toucher.
+- assertVisible: ${PAS_LA_BONNE}
 - tapOn: ${PAS_LA_BONNE}
 - extendedWaitUntil:
     visible: ${ESSAYER2}

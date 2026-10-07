@@ -6,26 +6,26 @@ import { analyserZone, CREDITS_SERPAPI, ESSAIS, ZONE_APP } from "../scripts/lib/
 // Lot 4 ter, étape 2 : essais sur la photo du t-shirt — au plus 4 crédits
 // SerpApi (accord du fondateur), réglages réellement comparés.
 describe("plan des essais de la photo", () => {
-  it("4 crédits SerpApi au plus ; l'essai 0 (IA) n'en consomme aucun", () => {
+  it("4 crédits SerpApi au plus, un par essai ; aucun essai chez un autre prestataire", () => {
     expect(CREDITS_SERPAPI).toBeLessThanOrEqual(4);
-    expect(ESSAIS.map((e) => e.numero)).toEqual([0, 1, 2, 3, 4]);
+    expect(ESSAIS.map((e) => e.numero)).toEqual([1, 2, 3, 4]);
   });
 
   it("essai 1 : exactement l'app — zone centrale, sans texte, réglages actuels (products, fr/fr)", () => {
-    const essai = ESSAIS[1]!;
+    const essai = ESSAIS[0]!;
     expect(ZONE_APP).toEqual(DEFAULT_CROP);
     expect(essai).toMatchObject({ zone: "app", texte: null, reglages: { type: "products", locale: { country: "fr", hl: "fr" } } });
     expect(essai.reglages).toBe(CURRENT_LENS_SETTINGS);
   });
 
   it("essais 2 et 3 : zone du vêtement, sans puis avec « t-shirt Nike noir »", () => {
-    expect(ESSAIS[2]).toMatchObject({ zone: "vetement", texte: null });
-    expect(ESSAIS[3]).toMatchObject({ zone: "vetement", texte: "t-shirt Nike noir" });
+    expect(ESSAIS[1]).toMatchObject({ zone: "vetement", texte: null });
+    expect(ESSAIS[2]).toMatchObject({ zone: "vetement", texte: "t-shirt Nike noir" });
   });
 
   it("essai 4 : même image que l'essai 1, réglages d'avant le 22 septembre (type « all », sans localisation)", () => {
-    expect(ESSAIS[4]).toMatchObject({ zone: "app", texte: null });
-    expect(ESSAIS[4]!.reglages).toBe(PREVIOUS_LENS_SETTINGS);
+    expect(ESSAIS[3]).toMatchObject({ zone: "app", texte: null });
+    expect(ESSAIS[3]!.reglages).toBe(PREVIOUS_LENS_SETTINGS);
     expect(PREVIOUS_LENS_SETTINGS).toEqual({ type: "all", locale: null });
   });
 

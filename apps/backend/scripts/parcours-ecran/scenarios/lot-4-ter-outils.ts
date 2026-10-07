@@ -163,9 +163,15 @@ export async function simulerResultats(page: Page, query: string): Promise<void>
   });
 }
 
-/** Sous les résultats : aucune correction d'emblée, seulement le lien discret. */
+/** Sous les résultats : aucune correction d'emblée, seulement le lien discret,
+ * juste sous la meilleure proposition et visible sans défilement (décision du fondateur). */
 export async function controlerResultatsSobres(page: Page, T: Textes): Promise<void> {
-  await visible(page, T.pasLaBonne).waitFor({ timeout: 15_000 });
+  const lien = visible(page, T.pasLaBonne);
+  await lien.waitFor({ timeout: 15_000 });
+  const [boite, titre] = await Promise.all([lien.boundingBox(), visible(page, T.meilleure).boundingBox()]);
+  const hauteur = page.viewportSize()?.height ?? 0;
+  const bas = boite ? Math.round(boite.y + boite.height) : -1;
+  check(boite !== null && titre !== null && boite.y > titre.y && bas <= hauteur, `« ${T.pasLaBonne} » sous la proposition, visible sans défilement (bas du lien ${bas} px, écran ${hauteur} px)`);
   for (const correction of [T.recadrer, T.moiMeme, T.essayerDeux, T.essayerUn]) {
     check((await visible(page, correction).count()) === 0, `« ${correction} » n'est pas proposé d'emblée`);
   }

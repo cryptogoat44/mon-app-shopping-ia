@@ -1,38 +1,63 @@
-// Dernière vidéo de la galerie, proposée sur l'accueil du Spotter (lot 4 ter,
-// app iPhone). Tout se passe sur le téléphone : Spotto lit seulement son
-// aperçu et sa durée ; la vidéo n'est ouverte qu'au « Lancer », et la galerie
-// n'est jamais modifiée. L'accès aux photos est demandé une seule fois, par
-// la fenêtre du système (texte : app.json et locales/*.json) ; avec un accès
-// limité, Spotto ne voit que les éléments choisis par la personne.
+// Dernière vidéo de la galerie (app iPhone) — option décrite dans
+// latest-video-state.ts. Aucune demande d'accès aux photos tant que la
+// personne n'a pas répondu « oui » ; ensuite, la fenêtre d'iOS (texte :
+// app.json et locales/*.json) n'apparaît qu'une fois. Spotto lit l'aperçu et
+// la durée de la seule vidéo la plus récente ; elle n'est ouverte qu'au
+// « Lancer », et la galerie n'est jamais modifiée.
 // Version site : latest-video.web.ts (un navigateur n'a pas accès à la galerie).
 import { Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Asset, AssetField, MediaType, Query, getPermissionsAsync, requestPermissionsAsync } from "expo-media-library";
+import {
+  galleryAccessFrom,
+  latestVideoChoiceKey,
+  parseLatestVideoChoice,
+  type GalleryAccess,
+  type LatestVideo,
+  type LatestVideoChoice,
+  type LatestVideoState,
+} from "./latest-video-state";
 
-export interface LatestVideo {
-  /** Identifiant dans la photothèque (« ph://… ») ; il sert aussi d'aperçu (expo-image). */
-  id: string;
-  durationMs: number | null;
+export type { LatestVideo } from "./latest-video-state";
+
+/** Accès actuel, sans rien demander (vidéos seulement : la distinction ne compte que sur Android). */
+async function currentAccess(): Promise<GalleryAccess> {
+  return galleryAccessFrom(await getPermissionsAsync(false, ["video"]));
 }
 
-/** Accès accordé ? La première fois seulement, la fenêtre du système le
- * demande ; ensuite, la réponse donnée fait foi (modifiable dans Réglages). */
-export async function latestVideoAllowed(): Promise<boolean> {
-  if (Platform.OS !== "ios") return false;
-  // Lecture seule, vidéos seulement (la distinction ne compte que sur Android).
-  const current = await getPermissionsAsync(false, ["video"]);
-  if (current.granted) return true;
-  if (current.status !== "undetermined" || !current.canAskAgain) return false;
-  return (await requestPermissionsAsync(false, ["video"])).granted;
-}
-
-/** La vidéo la plus récente que Spotto peut voir, ou null. */
-export async function findLatestVideo(): Promise<LatestVideo | null> {
+/** La vidéo la plus récente de la galerie, ou null. */
+async function findLatestVideo(): Promise<LatestVideo | null> {
   const [latest] = await new Query()
     .eq(AssetField.MEDIA_TYPE, MediaType.VIDEO)
     .orderBy({ key: AssetField.CREATION_TIME, ascending: false })
     .limit(1)
     .exeForMetadata();
   return latest ? { id: latest.id, durationMs: latest.duration } : null;
+}
+
+/** Réglages : la réponse donnée et l'accès accordé par iOS, sans rien demander. */
+export async function latestVideoSettings(userId: string): Promise<{ choice: LatestVideoChoice | null; access: GalleryAccess }> {
+  const [stored, access] = await Promise.all([AsyncStorage.getItem(latestVideoChoiceKey(userId)), currentAccess()]);
+  return { choice: parseLatestVideoChoice(stored), access };
+}
+
+/** Ce que Spotter montre. L'accès n'est demandé à iOS qu'après un « oui ». */
+export async function loadLatestVideo(userId: string | null): Promise<LatestVideoState> {
+  if (Platform.OS !== "ios" || !userId) return { kind: "off" };
+  const choice = parseLatestVideoChoice(await AsyncStorage.getItem(latestVideoChoiceKey(userId)));
+  if (choice === null) return { kind: "ask" };
+  if (choice === "no") return { kind: "off" };
+  let access = await currentAccess();
+  if (access === "undetermined") access = galleryAccessFrom(await requestPermissionsAsync(false, ["video"]));
+  if (access !== "full") return { kind: "no_access", access: access === "limited" ? "limited" : "denied" };
+  const video = await findLatestVideo();
+  return video ? { kind: "ready", video } : { kind: "none" };
+}
+
+/** Enregistre la réponse (sur l'appareil, pour ce compte). Après un « oui »,
+ * le chargement suivant (loadLatestVideo) fait demander l'accès par iOS. */
+export async function saveLatestVideoChoice(userId: string, choice: LatestVideoChoice): Promise<void> {
+  await AsyncStorage.setItem(latestVideoChoiceKey(userId), choice);
 }
 
 /** Adresse du fichier, au « Lancer » (téléchargé depuis iCloud si besoin). */

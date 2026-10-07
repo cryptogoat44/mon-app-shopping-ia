@@ -1,0 +1,40 @@
+# Lot 4 ter : un autre compte répond « Non merci » — refus sans conséquence :
+# la question disparaît, aucune vidéo de la galerie n'est proposée (même si
+# iOS a déjà donné l'accès à l'app), « Ajouter une vidéo » reste là. Réglages :
+# option désactivée, accès restant signalé ; réactivée d'un geste, la
+# dernière vidéo revient sur Spotter.
+appId: com.spottoapp.ios
+---
+- extendedWaitUntil:
+    visible: "Proposer automatiquement ma dernière vidéo \\?"
+    timeout: 60000
+- tapOn: "Non merci"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertNotVisible: "Proposer automatiquement ma dernière vidéo \\?"
+- assertNotVisible: "Votre dernière vidéo"
+- assertVisible: "Ajouter une vidéo"
+- takeScreenshot: 19-non-merci
+- tapOn: "Profil"
+- tapOn: "Réglages"
+- scrollUntilVisible:
+    element:
+      text: "Ouvrir les Réglages de l.iPhone"
+    direction: DOWN
+    timeout: 10000
+- assertVisible: "Désactivé : vous choisissez la vidéo.*"
+- assertVisible: "Spotto a encore accès à vos photos.*"
+- takeScreenshot: 19b-reglages-desactive
+- tapOn: "Proposer automatiquement ma dernière vidéo dans Spotter"
+- extendedWaitUntil:
+    visible: "Activé : Spotter vous propose.*"
+    timeout: 15000
+- takeScreenshot: 19c-reglages-active
+- tapOn: "Retour"
+- tapOn: "Spotter"
+- extendedWaitUntil:
+    visible: "Votre dernière vidéo"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 19d-derniere-video-reactivee

@@ -1,4 +1,4 @@
 {
   "CFBundleDisplayName": "Spotto",
-  "NSPhotoLibraryUsageDescription": "Spotto suggests your latest video in Spotter, ready to analyze. It stays on your iPhone: only a few frames are sent when you tap “Search”."
+  "NSPhotoLibraryUsageDescription": "To suggest your latest video in Spotter, as you asked. Spotto only reads the most recent one and never changes your gallery; only a few frames leave your iPhone, when you tap “Search”."
 }

@@ -7,10 +7,13 @@
 // - démarre le serveur local (clé SerpApi volontairement invalide : aucun
 //   crédit ne peut être consommé) et le site local compilé ;
 // - pilote un Chrome invisible au format iPhone et enregistre les captures ;
+// - aucune statistique ni erreur ne part chez PostHog ou Sentry : site compilé
+//   et serveur local sans Sentry, et garde-fou dans le navigateur
+//   (garde-statistiques.ts) qui bloque et fait échouer le parcours ;
 // - supprime TOUJOURS les comptes à la fin, même en cas d'échec ou de Ctrl+C.
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { extname, join, resolve } from "node:path";
@@ -21,6 +24,7 @@ import { chromium, type Browser, type BrowserContext, type Page } from "playwrig
 import { CONSENT_VERSIONS } from "@monapp/shared-types";
 import { assertDevSupabaseUrl } from "../lib/dev-database.js";
 import { CLE_SIMULATION, FICHIER_SIMULATION, MARQUE_SIMULATION } from "../lib/simulation-anthropic.js";
+import { codeSansSentry, GardeStatistiques } from "./garde-statistiques.js";
 
 const ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
 const BACKEND_DIR = join(ROOT, "apps/backend");
@@ -94,9 +98,11 @@ export interface Parcours {
 }
 
 /** Serveur local : jamais de vraie clé d'Anthropic ; avec l'IA simulée, une
- * clé factice et le module de simulation (aucun appel réel). */
+ * clé factice et le module de simulation (aucun appel réel). Jamais de
+ * Sentry : une erreur provoquée par un parcours ne part nulle part. */
 function startBackend(simulatedAi: boolean): ChildProcess {
   const env: NodeJS.ProcessEnv = { ...process.env, PORT: String(API_PORT), SERPAPI_KEY: "cle-invalide-parcours-ecran" };
+  delete env.SENTRY_DSN;
   delete env.ANTHROPIC_API_KEY;
   if (simulatedAi) env.ANTHROPIC_API_KEY = CLE_SIMULATION;
   const args = simulatedAi ? ["tsx", "--import", FICHIER_SIMULATION, "src/server.ts"] : ["tsx", "src/server.ts"];
@@ -186,6 +192,15 @@ function serveStatic(dir: string, port: number): Promise<Server> {
   return new Promise((resolvePromise) => server.listen(port, "127.0.0.1", () => resolvePromise(server)));
 }
 
+/** Le site compilé pour les parcours ne contient pas l'adresse Sentry du projet. */
+function verifierSiteSansSentry(dir: string, dsn: string | undefined): void {
+  for (const fichier of readdirSync(dir, { recursive: true, encoding: "utf8" })) {
+    if (fichier.endsWith(".js") && !codeSansSentry(readFileSync(join(dir, fichier), "utf8"), dsn)) {
+      throw new Error(`Le site compilé contient encore une adresse Sentry (${fichier}) : parcours arrêté, rien n'a été envoyé.`);
+    }
+  }
+}
+
 function run(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv = process.env): Promise<void> {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(command, args, { cwd, env, stdio: ["ignore", "ignore", "pipe"] });
@@ -203,7 +218,7 @@ export async function runParcours(
   scenario: (p: Parcours) => Promise<void>,
   extraArgs: string[] = [],
   buildEnv: Record<string, string> = {},
-  options: { simulatedAi?: boolean } = {}
+  options: { simulatedAi?: boolean; statistiquesAutorisees?: readonly string[] } = {}
 ): Promise<void> {
   // Variables de construction propres au scénario : liste fermée (jamais
   // l'adresse du serveur ni celle de Supabase, protégées plus bas).
@@ -233,6 +248,8 @@ export async function runParcours(
   let browser: Browser | null = null;
   const contexts: BrowserContext[] = [];
   const simulation: string[] = [];
+  const garde = new GardeStatistiques(options.statistiquesAutorisees ?? []);
+  const avecSentry = (options.statistiquesAutorisees ?? []).some((domaine) => domaine.endsWith("sentry.io"));
   const buildDir = mkdtempSync(join(tmpdir(), "parcours-ecran-"));
   const outputDir = resolve(ROOT, "docs", outputDirName);
   mkdirSync(outputDir, { recursive: true });
@@ -270,12 +287,14 @@ export async function runParcours(
 
   try {
     log(`Parcours « ${name} » — spotto-dev uniquement, aucun crédit SerpApi.`);
-    log("Compilation du site local (≈ 1 min)…");
-    // Variables propres au scénario : construction SANS cache, sinon Expo peut
-    // réutiliser un fichier déjà construit avec d'anciennes valeurs (constaté
-    // au lot 2 : clé PostHog restée vide).
-    const clear = Object.keys(buildEnv).length > 0 ? ["--clear"] : [];
-    await run("npx", ["expo", "export", "--platform", "web", ...clear, "--output-dir", buildDir], MOBILE_DIR, { ...process.env, ...buildEnv });
+    log("Compilation du site local (≈ 2 min)…");
+    // Site SANS Sentry (sauf scénario qui l'envoie volontairement) : une
+    // variable définie ici l'emporte sur apps/mobile/.env. Construction
+    // toujours SANS cache, sinon Expo peut réutiliser un fichier construit avec
+    // d'anciennes valeurs (constaté au lot 2 : clé PostHog restée vide).
+    const siteEnv = { ...process.env, ...buildEnv, ...(avecSentry ? {} : { EXPO_PUBLIC_SENTRY_DSN: "" }) };
+    await run("npx", ["expo", "export", "--platform", "web", "--clear", "--output-dir", buildDir], MOBILE_DIR, siteEnv);
+    if (!avecSentry) verifierSiteSansSentry(buildDir, mobileEnv.EXPO_PUBLIC_SENTRY_DSN);
     site = await serveStatic(buildDir, SITE_PORT);
 
     log(options.simulatedAi ? "Démarrage du serveur local (IA d'Anthropic simulée, aucun appel réel)…" : "Démarrage du serveur local…");
@@ -348,6 +367,7 @@ export async function runParcours(
           ...(options?.locale ? { locale: options.locale } : {}),
           colorScheme: options?.colorScheme ?? "light",
         });
+        await garde.proteger(context);
         await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: siteUrl });
         contexts.push(context);
         return context.newPage();
@@ -438,14 +458,26 @@ export async function runParcours(
         });
       },
       async step(title, fn) {
+        garde.verifier();
         log(`→ ${title}`);
-        return fn();
+        const result = await fn();
+        garde.verifier();
+        return result;
       },
     };
 
     await scenario(toolkit);
+    garde.verifier();
     log(`Parcours terminé. Captures : docs/${outputDirName}/`);
   } catch (error) {
+    // Échec pour une autre raison : le garde-fou dit quand même ce qu'il a vu.
+    if (garde.fuites.length > 0 && !(error instanceof Error && error.message.startsWith("Garde-fou statistiques"))) {
+      try {
+        garde.verifier();
+      } catch (fuite) {
+        log(`  ⚠ ${fuite instanceof Error ? fuite.message : String(fuite)}`);
+      }
+    }
     // Capture de l'écran au moment de l'échec, pour comprendre.
     for (const [index, context] of contexts.entries()) {
       const page = context.pages()[0];

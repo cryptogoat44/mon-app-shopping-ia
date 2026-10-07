@@ -5,6 +5,7 @@ import { AppState } from "react-native";
 import { ApiError, fetchMyProfile } from "./api";
 import { PROFILE_RETRY_DELAYS_MS, RetryCancelledError, retryWithDelays } from "./retry";
 import type { ProfileStatus } from "./root-route";
+import { sessionRejectedBySupabase } from "./session-check";
 import { supabase } from "./supabase";
 
 interface AuthContextValue {
@@ -24,7 +25,8 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 // Une session refusée par le serveur (jeton expiré ou compte supprimé) ne
-// se réparera pas en réessayant : on déconnecte proprement.
+// se réparera pas en réessayant — mais on ne déconnecte que si Supabase le
+// confirme (lib/session-check.ts).
 function isAuthRejected(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401;
 }
@@ -83,7 +85,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       if (isStale() || error instanceof RetryCancelledError) return;
       if (isAuthRejected(error)) {
-        await supabase.auth.signOut();
+        // Déconnexion seulement si Supabase confirme le refus (session fermée,
+        // compte supprimé), et sur cet appareil seulement. Sinon (panne
+        // passagère), l'écran « momentanément injoignable » propose de
+        // réessayer : jamais de déconnexion au hasard (lot 4 ter, incident du
+        // 2026-10-07 : une coupure de 2 ms avait déconnecté l'app, partout).
+        const rejected = await sessionRejectedBySupabase();
+        if (isStale()) return;
+        if (rejected) await supabase.auth.signOut({ scope: "local" });
+        else setProfileStatus("failed");
         return;
       }
       console.error("Impossible de charger le profil", error);

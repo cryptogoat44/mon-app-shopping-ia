@@ -1,0 +1,14 @@
+# Lot 4 ter (décision 5, session perdue à la relance) : après une relance de
+# l'app, la session doit être conservée — Spotter, jamais l'accueil. Écran
+# « momentanément injoignable » : passager (l'app réessaie), on attend la suite.
+appId: com.spottoapp.ios
+---
+- extendedWaitUntil:
+    visible: "${ACCUEIL}|Commencer|Get started|Autoriser l.accès complet"
+    timeout: 90000
+- runFlow: accord-photos.yaml
+- extendedWaitUntil:
+    visible: "${ACCUEIL}|Commencer|Get started"
+    timeout: 90000
+- takeScreenshot: ${CAPTURE}
+- assertVisible: ${ACCUEIL}

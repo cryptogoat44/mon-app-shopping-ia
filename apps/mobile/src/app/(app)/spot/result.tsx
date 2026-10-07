@@ -239,6 +239,8 @@ export default function ResultScreen() {
         <Text style={styles.meta}>
           {[piece.merchantName, displayPrice(piece)].filter(Boolean).join(" · ")}
         </Text>
+        {/* Juste sous la proposition, visible sans défilement (décision du fondateur, lot 4 ter). */}
+        {successList.length > 0 ? <CorrectionsLink style={styles.notRight} onPress={() => setCorrectionsOpen(true)} /> : null}
 
         {piece.merchantUrl ? (
           <Pressable style={styles.primary} onPress={handleOpenMerchant} accessibilityRole="link">
@@ -286,7 +288,6 @@ export default function ResultScreen() {
           </Pressable>
         </View>
         {actionError ? <ErrorMessage style={styles.actionError}>{actionError}</ErrorMessage> : null}
-        {successList.length > 0 ? <CorrectionsLink onPress={() => setCorrectionsOpen(true)} /> : null}
 
         {others.length > 0 ? (
           <>
@@ -409,6 +410,7 @@ const styles = themedStyles(() => ({
   rankLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600", marginTop: space.md },
   name: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 28, marginTop: 4 },
   meta: { fontSize: font.secondary, color: color.acier, marginTop: 4 },
+  notRight: { alignItems: "flex-start", marginTop: 0 },
   primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: space.lg },
   primaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
   secondary: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: space.sm },

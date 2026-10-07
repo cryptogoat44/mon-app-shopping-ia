@@ -35,6 +35,7 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Impossible de se suivre soi-même.": "You can't follow yourself.",
   "Jeton d'authentification invalide ou expiré.": "Your session is invalid or has expired.",
   "Jeton d'authentification manquant.": "You are not signed in.",
+  "Spotto est momentanément injoignable. Réessayez dans un instant.": "Spotto is temporarily unreachable. Please try again in a moment.",
   "L'envoi de l'image a échoué, réessayez.": "The image couldn't be uploaded. Please try again.",
   "L'envoi de la photo a échoué.": "The photo couldn't be uploaded.",
   "L'export a échoué, réessayez.": "The export failed. Please try again.",

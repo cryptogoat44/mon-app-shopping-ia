@@ -14,6 +14,9 @@ interface Scenario {
   buildEnv?: Record<string, string>;
   /** IA d'Anthropic simulée dans le serveur local (aucun appel réel). */
   simulatedAi?: boolean;
+  /** Hôtes de statistiques envoyés VOLONTAIREMENT (sentry-site seulement) ;
+   * tout autre envoi vers PostHog ou Sentry fait échouer le parcours. */
+  statistiquesAutorisees?: readonly string[];
 }
 
 const SCENARIOS: Record<string, () => Promise<Scenario>> = {
@@ -37,6 +40,7 @@ async function main() {
   const scenario = await load();
   await runParcours(scenario.name, scenario.outputDir, scenario.run, process.argv.slice(3), scenario.buildEnv ?? {}, {
     simulatedAi: scenario.simulatedAi ?? false,
+    statistiquesAutorisees: scenario.statistiquesAutorisees ?? [],
   });
 }
 

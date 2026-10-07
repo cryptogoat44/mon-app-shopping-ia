@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Modal, Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
@@ -70,10 +70,10 @@ export function CorrectionButtons({ list, actions, onAddVideo, importing }: { li
   return <ActionButtons primary={first} secondary={rest} />;
 }
 
-/** Un seul lien discret sous les résultats ; il ouvre les corrections. */
-export function CorrectionsLink({ onPress }: { onPress: () => void }) {
+/** Un seul lien discret, sous la proposition affichée ; il ouvre les corrections. */
+export function CorrectionsLink({ onPress, style }: { onPress: () => void; style?: StyleProp<ViewStyle> }) {
   return (
-    <Pressable onPress={onPress} style={styles.link} accessibilityRole="button">
+    <Pressable onPress={onPress} style={[styles.link, style]} accessibilityRole="button" testID="corrections-link">
       <Text style={styles.linkLabel}>{t.result.notRight}</Text>
     </Pressable>
   );

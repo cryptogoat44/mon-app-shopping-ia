@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Pressable, Text, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { StatusBar } from "expo-status-bar";
+import { useFocusEffect } from "expo-router";
 import type { CropRect } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
@@ -17,6 +18,20 @@ export interface WaitingImage {
   source: FramePreview;
   size?: ImageSize | null;
   crop?: CropRect | null;
+}
+
+/** Barre du haut (heure, batterie) en clair sur le fond sombre — seulement
+ * tant que cet écran est affiché : il reste ouvert sous l'écran des résultats,
+ * où le blanc devenait illisible en thème clair (lot 4 ter). */
+function useFocused(): boolean {
+  const [focused, setFocused] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true);
+      return () => setFocused(false);
+    }, [])
+  );
+  return focused;
 }
 
 /** Une fine ligne de lumière parcourt l'image ; aucune animation si
@@ -72,10 +87,11 @@ export function SpotWaitingScreen({
   const view = image?.size && image.crop ? croppedView(image.size, image.crop, frameWidth, maxHeight) : null;
   const frameHeight = view ? view.frame.height : maxHeight;
   const translateY = useScanLine(frameHeight);
+  const focused = useFocused();
 
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar style="light" />
+      {focused ? <StatusBar style="light" /> : null}
       <View style={styles.nav}>
         <Pressable onPress={onClose} hitSlop={12} style={styles.navClose} accessibilityRole="button">
           <Text style={styles.close}>{t.spotter.close}</Text>

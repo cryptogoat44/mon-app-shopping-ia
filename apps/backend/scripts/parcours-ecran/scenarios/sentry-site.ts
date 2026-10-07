@@ -14,6 +14,9 @@ export const outputDir = "sentry-site-captures";
 // Fournir une variable force une construction SANS cache (sinon l'adresse
 // Sentry ajoutée au .env peut être ignorée — voir boite-a-outils.ts).
 export const buildEnv = { EXPO_PUBLIC_ENVIRONMENT: "development" };
+// Seul scénario autorisé à envoyer à Sentry, et seulement vers la région UE
+// (garde-statistiques.ts) ; le site est alors compilé AVEC l'adresse Sentry.
+export const statistiquesAutorisees = ["ingest.de.sentry.io"] as const;
 
 function check(condition: boolean, message: string): void {
   if (!condition) throw new Error(`Vérification échouée : ${message}`);

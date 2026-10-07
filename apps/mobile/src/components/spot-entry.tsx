@@ -1,19 +1,21 @@
-import type { ReactNode } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { useEffect, type ReactNode } from "react";
+import { AccessibilityInfo, ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { VIDEO_AI } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { CameraIcon, VideoIcon } from "@/components/icons";
+import { ErrorMessage } from "@/components/error-message";
 import { LinkNotice } from "@/components/link-notice";
 import { QueryInput } from "@/components/spot-launch-views";
 import { containsLink } from "@/lib/link-detection";
-import type { LatestVideo } from "@/lib/latest-video";
+import type { LatestVideo, LatestVideoChoice } from "@/lib/latest-video-state";
 import { formatClock, videoRejection } from "@/lib/video-timeline";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Entrées du Spotter (lot 4 ter) : une vidéo ou une photo, d'égale importance,
-// et sur l'app iPhone, la dernière vidéo de la galerie, prête à être analysée.
+// et sur l'app iPhone, en option, la dernière vidéo de la galerie, prête à
+// être analysée (lib/latest-video-state.ts).
 
 function Tile({ icon, label, onPress, busy, disabled }: { icon: ReactNode; label: string; onPress: () => void; busy: boolean; disabled: boolean }) {
   return (
@@ -104,6 +106,42 @@ export function LatestVideoCard({
   );
 }
 
+/** Question posée une fois (app iPhone). Deux réponses de même poids :
+ * « Non merci » ne change rien d'autre, le sélecteur reste le parcours par défaut. */
+export function LatestVideoQuestion({ onAnswer, saving, failed }: { onAnswer: (choice: LatestVideoChoice) => void; saving: boolean; failed: boolean }) {
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle} accessibilityRole="header">
+        {t.spotter.latestVideoAsk}
+      </Text>
+      <Text style={styles.askBody}>{t.spotter.latestVideoAskBody}</Text>
+      {failed ? <ErrorMessage style={styles.notice}>{t.spotter.latestVideoChoiceFailed}</ErrorMessage> : null}
+      <View style={styles.answers}>
+        <Pressable style={styles.answer} onPress={() => onAnswer("yes")} disabled={saving} accessibilityRole="button" accessibilityState={{ disabled: saving, busy: saving }}>
+          {saving ? <ActivityIndicator color={color.vert} /> : null}
+          <Text style={styles.answerLabel}>{t.spotter.latestVideoYes}</Text>
+        </Pressable>
+        <Pressable style={styles.answer} onPress={() => onAnswer("no")} disabled={saving} accessibilityRole="button" accessibilityState={{ disabled: saving }}>
+          <Text style={styles.answerLabel}>{t.spotter.latestVideoNo}</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.askNote}>{t.spotter.latestVideoAskNote}</Text>
+    </View>
+  );
+}
+
+/** Juste après un « oui » sans accès complet (ou sans vidéo) : on dit pourquoi rien n'apparaît. */
+export function LatestVideoNote({ message }: { message: string }) {
+  useEffect(() => {
+    if (Platform.OS === "ios") AccessibilityInfo.announceForAccessibility(message);
+  }, [message]);
+  return (
+    <Text style={styles.cardNote} accessibilityLiveRegion="polite">
+      {message}
+    </Text>
+  );
+}
+
 const styles = themedStyles(() => ({
   tiles: { flexDirection: "row", gap: space.sm, marginTop: space.lg },
   tile: {
@@ -132,4 +170,20 @@ const styles = themedStyles(() => ({
   primaryDisabled: { backgroundColor: color.inactif },
   primaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
   primaryLabelDisabled: { color: color.surInactif },
+  askBody: { fontSize: font.secondary, color: color.acier, marginTop: space.sm, lineHeight: 21 },
+  answers: { flexDirection: "row", gap: space.sm, marginTop: space.md },
+  answer: {
+    flex: 1,
+    minHeight: 48,
+    flexDirection: "row",
+    gap: space.xs,
+    borderWidth: 1,
+    borderColor: color.filet,
+    borderRadius: radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: space.sm,
+  },
+  answerLabel: { color: color.encre, fontSize: font.secondary, fontWeight: "600", textAlign: "center" },
+  askNote: { fontSize: font.caption, color: color.acier, marginTop: space.sm, lineHeight: 18 },
 }));
