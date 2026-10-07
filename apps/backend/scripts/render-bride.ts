@@ -7,6 +7,9 @@
 //   pnpm --filter backend render-bride suivre   <spotto-api|site> <dep-…>
 //   pnpm --filter backend render-bride api-url  https://spotto-api.onrender.com [--confirmer]
 //   pnpm --filter backend render-bride variable <spotto-api|site> <NOM> <valeur> [--confirmer]
+//   pnpm --filter backend render-bride compteurs-ia spotto-api --depuis <date ISO>
+//     (lecture SEULE des journaux : des compteurs, jamais de contenu — diagnostic
+//      du lot 4 ter, demandé par le fondateur le 2026-10-07)
 //
 // Règles (voir scripts/lib/render-guard.ts) :
 // - deux services seulement : spotto-api et le site ; l'ancien serveur
@@ -25,6 +28,8 @@
 // par un autre script, à saisie masquée : configurer-anthropic-prod.
 import { assertEditableVariable, FINAL_DEPLOY_STATUSES, RenderGuardError, assertDeployId, resolveService } from "./lib/render-guard.js";
 import { readRenderKey as readKey, renderRequest as render, RenderNotFound as NotFound } from "./lib/render-api.js";
+import { compterRequetes, decrireAnalyse, decrireCodes, extraireCompteursIA, lireJournaux, parametresJournaux, REQUETES_SUIVIES } from "./lib/render-logs.js";
+import { z } from "zod";
 
 const POLL_MS = 10_000;
 const POLL_LIMIT_MS = 15 * 60_000;
@@ -106,6 +111,28 @@ async function setVariable(args: string[], confirm: boolean): Promise<void> {
   console.log("Aucun déploiement lancé : la valeur sera prise au prochain déploiement.");
 }
 
+/** Lecture seule : compteurs du parcours vidéo dans les journaux de spotto-api (jamais de contenu). */
+async function counters(args: string[]): Promise<void> {
+  const service = resolveService(args[0]);
+  if (service.name !== "spotto-api") throw new RenderGuardError("Compteurs : seul « spotto-api » (le serveur) est concerné.");
+  const position = args.indexOf("--depuis");
+  const depuis = position >= 0 ? args[position + 1] : undefined;
+  if (!depuis || Number.isNaN(Date.parse(depuis))) throw new RenderGuardError("Indiquez --depuis <date ISO>, par exemple 2026-10-07T05:51:00Z.");
+  const jusque = new Date().toISOString();
+  const key = readKey();
+  const { ownerId } = z.object({ ownerId: z.string() }).parse(await render(key, "GET", `/services/${service.id}`));
+  console.log(`Compteurs de « spotto-api » du ${depuis} au ${jusque} — lecture seule, aucun contenu :`);
+  const lignes = await lireJournaux(key, parametresJournaux(ownerId, service.id, depuis, { type: "app" }, jusque));
+  const requetes = compterRequetes(lignes);
+  for (const requete of REQUETES_SUIVIES) console.log(`  ${requete.nom} — ${requete.sens} : ${decrireCodes(requetes.get(requete.nom) ?? {})}`);
+  const analyses = lignes.flatMap((entree) => {
+    const compteurs = extraireCompteursIA(entree.message);
+    return compteurs ? [compteurs] : [];
+  });
+  console.log(`  Analyses par l'IA (compteurs écrits par le serveur) : ${analyses.length}`);
+  for (const analyse of analyses) console.log(`    - ${decrireAnalyse(analyse)}`);
+}
+
 async function main(): Promise<void> {
   const [action, ...rest] = process.argv.slice(2);
   const confirm = rest.includes("--confirmer");
@@ -114,7 +141,8 @@ async function main(): Promise<void> {
   if (action === "suivre") return follow(args);
   if (action === "api-url") return setVariable(["site", "EXPO_PUBLIC_API_URL", args[0] ?? ""], confirm);
   if (action === "variable") return setVariable(args, confirm);
-  throw new RenderGuardError("Action refusée : seules « deployer », « suivre », « api-url » et « variable » existent.");
+  if (action === "compteurs-ia") return counters(args);
+  throw new RenderGuardError("Action refusée : seules « deployer », « suivre », « api-url », « variable » et « compteurs-ia » existent.");
 }
 
 main().catch((error: unknown) => {

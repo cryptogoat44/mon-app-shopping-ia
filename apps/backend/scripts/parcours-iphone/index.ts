@@ -271,11 +271,21 @@ async function videoAuto(o: Outils): Promise<void> {
   await verifierAuto(o, louise);
 }
 
+/** Lot 4 ter — étape 0 : parcours vidéo actuel au premier usage (fr, clair), une capture par écran. */
+async function diagnostic4ter(o: Outils): Promise<void> {
+  const compte = await o.creerCompte("d", "Louise (test)");
+  await videosSimulateur(o);
+  await connecter(o, compte, "Importer une vidéo");
+  regler(o, "fr", "fr", "CLAIR", "fr-clair");
+  etape(o, "12-diagnostic-4ter");
+}
+
 const SCENARIOS: Record<string, { run: (o: Outils) => Promise<void>; sortie: string; iaSimulee?: boolean }> = {
   natif: { run: natif, sortie: "lot-3bis-captures" },
   preparer: { run: attendreExploration, sortie: "lot-3bis-captures" },
   video: { run: video, sortie: "lot-4-iphone-captures" },
   "video-auto": { run: videoAuto, sortie: "lot-4-auto-iphone-captures", iaSimulee: true },
+  "diagnostic-4ter": { run: diagnostic4ter, sortie: "lot-4-ter-diagnostic-iphone", iaSimulee: true },
 };
 
 const nom = process.argv[2] ?? "";

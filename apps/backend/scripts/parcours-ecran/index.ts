@@ -27,6 +27,7 @@ const SCENARIOS: Record<string, () => Promise<Scenario>> = {
   "lot-3bis": () => import("./scenarios/lot-3bis.js"),
   "lot-4": () => import("./scenarios/lot-4.js"),
   "lot-4-auto": () => import("./scenarios/lot-4-auto.js"),
+  "diagnostic-4ter": () => import("./scenarios/diagnostic-4ter.js"),
 };
 
 async function main() {
