@@ -169,4 +169,20 @@ describe("searchProductsByImageUrl", () => {
       [2, "Autre"],
     ]);
   });
+
+  // Lot 4 ter : la réponse de SerpApi est lue avec zod, plus de conversion « de confiance » (charte, règle 19).
+  it("proposition mal formée écartée, sans faire échouer les autres", async () => {
+    safeFetchMock.mockResolvedValueOnce(
+      jsonResponse({ visual_matches: [{ ...PRODUCT_MATCH, title: 42 }, { ...PRODUCT_MATCH, position: 2, price: { extracted_value: "beaucoup" } }, { ...PRODUCT_MATCH, position: 3, link: "https://marchand.example/bon" }] })
+    );
+    const matches = await searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg");
+    expect(matches.map((m) => m.merchantUrl)).toEqual(["https://marchand.example/bon"]);
+  });
+
+  it("réponse illisible : panne technique, jamais « aucune pièce »", async () => {
+    safeFetchMock.mockResolvedValueOnce(new Response("<html>erreur</html>", { status: 200 }));
+    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toThrow("réponse inattendue");
+    safeFetchMock.mockResolvedValueOnce(jsonResponse({ visual_matches: "aucune" }));
+    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toThrow("réponse inattendue");
+  });
 });

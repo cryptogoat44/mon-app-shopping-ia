@@ -79,7 +79,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Spotto accède à vos photos uniquement pour importer l'image que vous choisissez : la capture d'une pièce à identifier, une photo à publier ou votre photo de profil.",
+          "photosPermission": "Spotto vous propose dans Spotter votre dernière vidéo, prête à être analysée. Elle reste sur votre iPhone : seules quelques images en partent quand vous appuyez sur « Lancer ».",
           "cameraPermission": false,
           "microphonePermission": false
         }
@@ -89,7 +89,17 @@
       "expo-web-browser",
       "expo-localization",
       "expo-image",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Spotto vous propose dans Spotter votre dernière vidéo, prête à être analysée. Elle reste sur votre iPhone : seules quelques images en partent quand vous appuyez sur « Lancer ».",
+          "savePhotosPermission": false,
+          "isAccessMediaLocationEnabled": false,
+          "preventAutomaticLimitedAccessAlert": true,
+          "granularPermissions": ["video"]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

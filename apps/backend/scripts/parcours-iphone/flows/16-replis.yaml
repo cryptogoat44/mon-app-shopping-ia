@@ -1,0 +1,41 @@
+# Lot 4 ter (français) : replis depuis la dernière vidéo. « Aucun moment »
+# (« rien… ») : message clair et « Choisir l'image moi-même » (curseur), sans
+# aucune recherche donc sans crédit. Panne de l'IA (« panne… ») : « Réessayer »
+# ou « Choisir l'image moi-même ».
+appId: com.spottoapp.ios
+---
+- tapOn:
+    id: "latest-query"
+- inputText: "rien de précis"
+- tapOn: "Lancer"
+- extendedWaitUntil:
+    visible: "Pièce non repérée"
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 13-non-reperee
+- tapOn: "Choisir l'image moi-même"
+- extendedWaitUntil:
+    visible: "Choisissez l'image"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 4000
+- takeScreenshot: 14-curseur-repli
+- tapOn: "Fermer"
+- extendedWaitUntil:
+    visible: "Ajouter une photo"
+    timeout: 20000
+- tapOn:
+    id: "latest-query"
+- inputText: "panne simulée"
+- tapOn: "Lancer"
+- extendedWaitUntil:
+    visible: "Analyse automatique interrompue"
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 15-panne
+- tapOn: "Fermer"
+- extendedWaitUntil:
+    visible: "Ajouter une photo"
+    timeout: 20000

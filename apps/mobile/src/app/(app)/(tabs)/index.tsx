@@ -1,236 +1,197 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
-import * as Clipboard from "expo-clipboard";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { getRecentSearches } from "@/api/client";
 import type { Piece } from "@/api/types";
-import { CameraIcon, ClipboardIcon, ClockIcon, VideoIcon } from "@/components/icons";
+import { ClockIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
+import { LinkEntry } from "@/components/link-entry";
+import { LinkNotice } from "@/components/link-notice";
+import { EntryTiles, LatestVideoCard } from "@/components/spot-entry";
 import { SpotImage } from "@/components/spot-image";
-import { detectLink, type LinkDetection } from "@/lib/link-detection";
-import { beginFromLink, beginFromPhoto, prepareErrorMessage } from "@/lib/spot-flow";
-import { useVideoImport } from "@/lib/use-video-import";
 import { importPhotoForSpotter } from "@/lib/image-import";
+import { findLatestVideo, latestVideoAllowed, latestVideoUri, type LatestVideo } from "@/lib/latest-video";
+import { beginFromPhoto } from "@/lib/spot-flow";
+import { LINK_COVER_ENABLED } from "@/lib/spot-flags";
+import { adoptSpotVideo, videoImportMessage } from "@/lib/spot-video";
+import { useVideoImport } from "@/lib/use-video-import";
 import { themedStyles } from "@/theme/themed-styles";
 
-function DetectionCard({ detection }: { detection: LinkDetection }) {
-  if (detection.kind === "supported") {
-    return (
-      <View style={styles.detected} accessibilityLiveRegion="polite">
-        <View style={styles.platformChip}>
-          <Text style={styles.platformChipLabel}>{t.spotter.platformName[detection.platform]}</Text>
-        </View>
-        <Text style={styles.detectedLabel}>{t.spotter.detected[detection.platform]}</Text>
-      </View>
-    );
-  }
-  if (detection.kind === "unsupported") return <ErrorMessage style={styles.feedback}>{t.spotter.unsupportedLink}</ErrorMessage>;
-  if (detection.kind === "not_a_link") return <ErrorMessage style={styles.feedback}>{t.spotter.notALink}</ErrorMessage>;
-  if (detection.kind === "not_a_video") return <ErrorMessage style={styles.feedback}>{t.spotter.notAVideo[detection.platform]}</ErrorMessage>;
-  return null;
+/** Dernière vidéo de la galerie (app iPhone), relue à chaque retour sur
+ * Spotter. L'accès aux photos n'est demandé qu'une fois, par le système. */
+function useLatestVideo() {
+  const [latest, setLatest] = useState<LatestVideo | null>(null);
+  const load = useCallback(async () => {
+    try {
+      setLatest((await latestVideoAllowed()) ? await findLatestVideo() : null);
+    } catch {
+      // Galerie illisible : les entrées habituelles restent proposées.
+      setLatest(null);
+    }
+  }, []);
+  return { latest, load };
 }
 
-export default function SpotterScreen() {
+function RecentRow({ recent }: { recent: { searchId: string; piece: Piece }[] }) {
   const router = useRouter();
-  const [link, setLink] = useState("");
-  const [recent, setRecent] = useState<{ searchId: string; piece: Piece }[]>([]);
+  if (recent.length === 0) return null;
+  return (
+    <View style={styles.recentSection}>
+      <Text style={styles.recentTitle} accessibilityRole="header">
+        {t.spotter.recentlySpotted}
+      </Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentRow}>
+        {recent.map(({ searchId, piece }) => (
+          <Pressable
+            key={searchId}
+            style={styles.recentItem}
+            onPress={() => router.push({ pathname: "/spot/result", params: { searchId } })}
+            accessibilityRole="button"
+            accessibilityLabel={piece.name}
+          >
+            <View style={styles.recentThumb}>
+              {piece.imageUrl ? <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} fit="cover" /> : <ClockIcon size={26} tint={color.acier} />}
+            </View>
+            <Text style={styles.recentName} numberOfLines={1}>
+              {piece.name}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+/** Lien collé ou partagé : aide discrète — comment ajouter la vidéo (enregistrement de l'écran). */
+function LinkHelp({ onAddVideo, importing }: { onAddVideo: () => void; importing: boolean }) {
+  const [open, setOpen] = useState(false);
+  if (LINK_COVER_ENABLED) return <LinkEntry />;
+  return (
+    <>
+      <Pressable onPress={() => setOpen((value) => !value)} style={styles.linkQuestion} accessibilityRole="button" accessibilityState={{ expanded: open }}>
+        <Text style={styles.linkQuestionLabel}>{t.spotter.linkQuestion}</Text>
+      </Pressable>
+      {open ? <LinkNotice onAddVideo={onAddVideo} busy={importing} /> : null}
+    </>
+  );
+}
+
+/** Entrées du Spotter : vidéo (sélecteur), photo, dernière vidéo de la galerie. */
+function useSpotterEntries() {
+  const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"link" | "photo" | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  // Lot 4 : la vidéo reste sur l'appareil. Analyse automatique si elle est
-  // active (temps 1 bis), sinon choix de l'image au curseur (temps 1).
+  const [busy, setBusy] = useState<"photo" | "latest" | null>(null);
+  const [query, setQuery] = useState("");
   const { importing, importVideo } = useVideoImport(setMessage);
 
-  const detection = detectLink(link);
-  const canContinue = detection.kind === "supported" && busy === null && !importing;
+  async function addPhoto() {
+    setMessage(null);
+    const picked = await importPhotoForSpotter();
+    if (picked.kind === "unavailable") return setMessage(t.common.photoUnavailable);
+    if (picked.kind !== "picked") return;
+    beginFromPhoto(picked.uri, { width: picked.width, height: picked.height });
+    router.push({ pathname: "/spot/lancer", params: { source: "photo" } });
+  }
+
+  /** « Lancer » sur la dernière vidéo : elle s'ouvre (téléchargée depuis
+   * iCloud si besoin), puis l'analyse démarre aussitôt. */
+  async function launchLatest(latest: LatestVideo) {
+    setMessage(null);
+    setBusy("latest");
+    try {
+      const result = await adoptSpotVideo(await latestVideoUri(latest.id), null, "latest");
+      if (result.kind !== "ready") return setMessage(videoImportMessage(result));
+      router.push({ pathname: "/spot/lancer", params: { source: "video", query: query.trim(), auto: "1" } });
+      // Recherche partie : au retour, le champ est prêt pour une autre vidéo.
+      setQuery("");
+    } catch {
+      setMessage(t.video.unavailable);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return {
+    message,
+    query,
+    onQuery: (value: string) => {
+      setQuery(value);
+      setMessage(null);
+    },
+    busy: importing ? ("video" as const) : busy,
+    importing,
+    addVideo: () => void importVideo(),
+    addPhoto: () => void addPhoto(),
+    launchLatest: (latest: LatestVideo) => void launchLatest(latest),
+  };
+}
+
+// Spotter (lot 4 ter) : un seul point d'entrée, « Ajouter une vidéo », et la
+// photo à égalité ; sur l'app iPhone, la dernière vidéo de la galerie est
+// proposée d'emblée — il ne reste qu'à taper quelques mots et « Lancer ».
+export default function SpotterScreen() {
+  const [recent, setRecent] = useState<{ searchId: string; piece: Piece }[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const entries = useSpotterEntries();
+  const latestVideo = useLatestVideo();
+  const { latest } = latestVideo;
 
   const loadRecent = useCallback(() => getRecentSearches().then(setRecent).catch(() => {}), []);
   useFocusEffect(
     useCallback(() => {
       loadRecent();
-    }, [loadRecent])
+      void latestVideo.load();
+    }, [loadRecent, latestVideo.load])
   );
 
   async function handleRefresh() {
     setRefreshing(true);
-    await loadRecent();
+    await Promise.all([loadRecent(), latestVideo.load()]);
     setRefreshing(false);
-  }
-
-  async function handlePaste() {
-    setMessage(null);
-    try {
-      const text = await Clipboard.getStringAsync();
-      if (!text || detectLink(text).kind === "not_a_link") {
-        setMessage(t.spotter.pasteEmpty);
-        return;
-      }
-      setLink(text.trim());
-    } catch {
-      // Web : le navigateur a refusé la lecture du presse-papiers.
-      setMessage(t.spotter.pasteDenied);
-    }
-  }
-
-  async function handleContinue() {
-    if (detection.kind !== "supported") return;
-    setMessage(null);
-    setBusy("link");
-    try {
-      const draft = await beginFromLink(detection.url, detection.platform);
-      router.push({ pathname: "/spot/apercu", params: { searchId: draft.searchId ?? "" } });
-    } catch (error) {
-      setMessage(prepareErrorMessage(error));
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function handleImportPhoto() {
-    setMessage(null);
-    const picked = await importPhotoForSpotter();
-    if (picked.kind !== "picked") return;
-    setBusy("photo");
-    try {
-      const draft = await beginFromPhoto(picked.uri, { width: picked.width, height: picked.height });
-      router.push({ pathname: "/spot/ciblage", params: { searchId: draft.searchId ?? "" } });
-    } catch (error) {
-      setMessage(prepareErrorMessage(error));
-    } finally {
-      setBusy(null);
-    }
   }
 
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={styles.flex}>
-        <ScrollView
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          automaticallyAdjustKeyboardInsets
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
-        >
-          <Text style={styles.title} accessibilityRole="header">
-            {t.spotter.title}
-          </Text>
-          <Text style={styles.lead}>{t.spotter.lead}</Text>
-
-          <Text style={styles.label}>{t.spotter.linkLabel}</Text>
-          <View style={styles.field}>
-            <TextInput
-              style={styles.input}
-              value={link}
-              onChangeText={(text) => {
-                setLink(text);
-                setMessage(null);
-              }}
-              placeholder={t.spotter.linkPlaceholder}
-              placeholderTextColor={color.acier}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              returnKeyType="go"
-              onSubmitEditing={handleContinue}
-              accessibilityLabel={t.spotter.linkLabel}
-            />
-            <Pressable onPress={handlePaste} hitSlop={10} style={styles.pasteButton} accessibilityRole="button">
-              <ClipboardIcon size={16} tint={color.vert} />
-              <Text style={styles.pasteLabel}>{t.spotter.paste}</Text>
-            </Pressable>
-          </View>
-
-          <DetectionCard detection={detection} />
-          {message ? <ErrorMessage style={styles.feedback}>{message}</ErrorMessage> : null}
-
-          <Pressable
-            style={[styles.primary, !canContinue ? styles.primaryDisabled : null]}
-            onPress={handleContinue}
-            disabled={!canContinue}
-            accessibilityRole="button"
-          >
-            {busy === "link" ? <ActivityIndicator color={color.blanc} /> : null}
-            <Text style={[styles.primaryLabel, !canContinue ? styles.primaryLabelDisabled : null]}>{busy === "link" ? t.spotter.preparing : t.spotter.continue}</Text>
-          </Pressable>
-
-          <View style={styles.or}>
-            <View style={styles.orLine} />
-            <Text style={styles.orLabel}>{t.spotter.or}</Text>
-            <View style={styles.orLine} />
-          </View>
-
-          <Pressable style={styles.secondary} onPress={handleImportPhoto} disabled={busy !== null || importing} accessibilityRole="button">
-            {busy === "photo" ? <ActivityIndicator color={color.encre} /> : <CameraIcon size={18} tint={color.encre} />}
-            <Text style={styles.secondaryLabel}>{t.spotter.importPhoto}</Text>
-          </Pressable>
-          <Pressable style={[styles.secondary, styles.secondaryNext]} onPress={() => void importVideo()} disabled={busy !== null || importing} accessibilityRole="button">
-            {importing ? <ActivityIndicator color={color.encre} /> : <VideoIcon size={18} tint={color.encre} />}
-            <Text style={styles.secondaryLabel}>{t.spotter.importVideo}</Text>
-          </Pressable>
-
-          {recent.length > 0 ? (
-            <View style={styles.recentSection}>
-              <Text style={styles.recentTitle} accessibilityRole="header">
-                {t.spotter.recentlySpotted}
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentRow}>
-                {recent.map(({ searchId, piece }) => (
-                  <Pressable
-                    key={searchId}
-                    style={styles.recentItem}
-                    onPress={() => router.push({ pathname: "/spot/result", params: { searchId } })}
-                    accessibilityRole="button"
-                    accessibilityLabel={piece.name}
-                  >
-                    <View style={styles.recentThumb}>
-                      {piece.imageUrl ? (
-                        <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} fit="cover" />
-                      ) : (
-                        <ClockIcon size={26} tint={color.acier} />
-                      )}
-                    </View>
-                    <Text style={styles.recentName} numberOfLines={1}>
-                      {piece.name}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-          ) : null}
-        </ScrollView>
-      </View>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
+      >
+        <Text style={styles.title} accessibilityRole="header">
+          {t.spotter.title}
+        </Text>
+        <Text style={styles.lead}>{t.spotter.lead}</Text>
+        {latest ? (
+          <LatestVideoCard
+            video={latest}
+            query={entries.query}
+            onQuery={entries.onQuery}
+            onLaunch={() => entries.launchLatest(latest)}
+            onAddVideo={entries.addVideo}
+            busy={entries.busy === "latest"}
+          />
+        ) : null}
+        {entries.message ? <ErrorMessage style={styles.feedback}>{entries.message}</ErrorMessage> : null}
+        <EntryTiles videoLabel={latest ? t.spotter.otherVideo : t.spotter.addVideo} onVideo={entries.addVideo} onPhoto={entries.addPhoto} busy={entries.busy} />
+        <LinkHelp onAddVideo={entries.addVideo} importing={entries.importing} />
+        <RecentRow recent={recent} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
-  flex: { flex: 1 },
   content: { paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, color: color.encre },
   lead: { fontSize: font.secondary, color: color.acier, marginTop: space.xs, lineHeight: 21 },
-  label: { fontSize: font.caption, color: color.acier, marginTop: space.xl },
-  field: { flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: color.filet, gap: space.sm },
-  input: { flex: 1, fontSize: font.body, color: color.encre, paddingVertical: 12 },
-  pasteButton: { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 44 },
-  pasteLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
-  detected: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.md },
-  platformChip: { backgroundColor: color.encre, borderRadius: radius.full, paddingHorizontal: 11, height: 26, justifyContent: "center" },
-  platformChipLabel: { color: color.blanc, fontSize: font.caption, fontWeight: "600" },
-  detectedLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   feedback: { fontSize: font.caption, marginTop: space.sm, lineHeight: 18 },
-  primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, marginTop: space.lg },
-  primaryDisabled: { backgroundColor: color.inactif, borderColor: color.inactif },
-  primaryLabelDisabled: { color: color.surInactif },
-  primaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
-  or: { flexDirection: "row", alignItems: "center", gap: 14, marginVertical: space.lg },
-  orLine: { flex: 1, height: 1, backgroundColor: color.filet },
-  orLabel: { fontSize: font.caption, color: color.acier },
-  secondary: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9 },
-  secondaryNext: { marginTop: space.sm },
-  secondaryLabel: { color: color.encre, fontSize: font.body, fontWeight: "500" },
+  linkQuestion: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: space.sm },
+  linkQuestionLabel: { fontSize: font.secondary, color: color.acier, textDecorationLine: "underline", textAlign: "center" },
   recentSection: { marginTop: space.xxl - space.xs },
   recentTitle: { fontSize: font.body, fontWeight: "600", color: color.encre, marginBottom: space.md },
   recentRow: { gap: space.md },

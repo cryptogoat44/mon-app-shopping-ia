@@ -21,46 +21,16 @@ vi.mock("../src/lib/image-import", () => ({ SPOTTER_IMAGE_MAX_EDGE: 1600 }));
 
 import { getDraft, startDraft } from "../src/lib/spot-draft";
 import { analyzeVideo, lastTriedMoment, prepareMoment, remainingMoments } from "../src/lib/video-auto";
-import type { FrameSample } from "../src/lib/frame-sample";
-import type { OpenedVideo } from "../src/lib/video-timeline";
-
-/** Trois plans nets et différents : rayures verticales, horizontales, damier,
- * chacun de sa couleur. */
-function sceneImage(scene: number): FrameSample {
-  const width = 54;
-  const height = 96;
-  const gray = new Uint8Array(width * height);
-  for (let y = 0; y < height; y += 1)
-    for (let x = 0; x < width; x += 1) {
-      const on = scene === 0 ? Math.floor(x / 6) % 2 : scene === 1 ? Math.floor(y / 8) % 2 : (Math.floor(x / 9) + Math.floor(y / 9)) % 2;
-      gray[y * width + x] = on ? 210 : 40;
-    }
-  const color = [[200, 60, 60], [60, 200, 60], [60, 60, 200]][scene] ?? [0, 0, 0];
-  return { gray, width, height, colors: Array.from({ length: 9 }, () => color).flat() };
-}
-
-function fakeVideo(): OpenedVideo & { frameFile: ReturnType<typeof vi.fn> } {
-  return {
-    durationMs: 12_000,
-    filmstrip: vi.fn(),
-    preview: vi.fn(),
-    sampleFrame: vi.fn(async (timeMs: number) => sceneImage(Math.floor(timeMs / 4000))),
-    frameFile: vi.fn(async (timeMs: number, maxEdge: number) => ({
-      uri: `file:///cache/image-${timeMs}-${maxEdge}.jpg`,
-      width: maxEdge === 512 ? 288 : 900,
-      height: maxEdge === 512 ? 512 : 1600,
-    })),
-    release: vi.fn(),
-  };
-}
+import { fakeVideo } from "./fake-video";
 
 const BOX = { x: 0.2, y: 0.3, width: 0.5, height: 0.4 };
 const onStep = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();
-  beginFromPhoto.mockImplementation(async (uri: string, size: { width: number; height: number }) =>
-    startDraft({ searchId: "recherche-1", sourceUrl: null, platform: "photo", previewUrl: null, localImageUri: uri, imageSize: size })
+  // Brouillon local, sans appel au serveur (lot 4 ter) : la recherche se prépare au lancement.
+  beginFromPhoto.mockImplementation((uri: string, size: { width: number; height: number }) =>
+    startDraft({ searchId: null, sourceUrl: null, platform: "photo", previewUrl: null, localImageUri: uri, imageSize: size })
   );
 });
 

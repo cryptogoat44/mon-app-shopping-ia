@@ -1,11 +1,13 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider, usePathname, type Theme } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
+import { StyleSheet, View } from "react-native";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { ToastProvider } from "@/lib/toast-context";
 import { PreferencesProvider } from "@/lib/preferences-context";
 import { AnalyticsSession } from "@/components/analytics-session";
 import { WebTitle } from "@/components/web-title";
+import { NewVersionBanner } from "@/components/new-version-banner";
 import { resolveRootRoute, showsNavigator } from "@/lib/root-route";
 import { useAppFonts } from "@/theme/fonts";
 import { color, getActiveScheme } from "@/theme/tokens";
@@ -50,33 +52,37 @@ function RootNavigator() {
 
   return (
     <ThemeProvider value={navigationTheme()}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Protected guard={route === "app"}>
-          <Stack.Screen name="(app)" />
-        </Stack.Protected>
+      {/* Site : « Nouvelle version disponible » en haut, sans rien masquer (lot 4 ter). */}
+      <View style={styles.fill}>
+        <NewVersionBanner />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Protected guard={route === "app"}>
+            <Stack.Screen name="(app)" />
+          </Stack.Protected>
 
-        <Stack.Protected guard={route === "complete-profile"}>
-          <Stack.Screen name="complete-profile" />
-        </Stack.Protected>
+          <Stack.Protected guard={route === "complete-profile"}>
+            <Stack.Screen name="complete-profile" />
+          </Stack.Protected>
 
-        <Stack.Protected guard={route === "unavailable"}>
-          <Stack.Screen name="connexion" />
-        </Stack.Protected>
+          <Stack.Protected guard={route === "unavailable"}>
+            <Stack.Screen name="connexion" />
+          </Stack.Protected>
 
-        <Stack.Protected guard={route === "welcome"}>
-          <Stack.Screen name="bienvenue" />
-          <Stack.Screen name="sign-in" />
-          <Stack.Screen name="sign-up" />
-          <Stack.Screen name="mot-de-passe-oublie" />
-        </Stack.Protected>
+          <Stack.Protected guard={route === "welcome"}>
+            <Stack.Screen name="bienvenue" />
+            <Stack.Screen name="sign-in" />
+            <Stack.Screen name="sign-up" />
+            <Stack.Screen name="mot-de-passe-oublie" />
+          </Stack.Protected>
 
-        {/* Ouvert depuis l'e-mail de réinitialisation, avec ou sans session. */}
-        <Stack.Screen name="nouveau-mot-de-passe" />
+          {/* Ouvert depuis l'e-mail de réinitialisation, avec ou sans session. */}
+          <Stack.Screen name="nouveau-mot-de-passe" />
 
-        {/* Documents juridiques : lisibles par tous, connecté ou non (bloc 5). */}
-        <Stack.Screen name="conditions" />
-        <Stack.Screen name="confidentialite" />
-      </Stack>
+          {/* Documents juridiques : lisibles par tous, connecté ou non (bloc 5). */}
+          <Stack.Screen name="conditions" />
+          <Stack.Screen name="confidentialite" />
+        </Stack>
+      </View>
     </ThemeProvider>
   );
 }
@@ -94,3 +100,5 @@ export default function RootLayout() {
     </AuthProvider>
   );
 }
+
+const styles = StyleSheet.create({ fill: { flex: 1 } });

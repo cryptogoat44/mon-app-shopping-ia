@@ -38,6 +38,7 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "L'envoi de l'image a échoué, réessayez.": "The image couldn't be uploaded. Please try again.",
   "L'envoi de la photo a échoué.": "The photo couldn't be uploaded.",
   "L'export a échoué, réessayez.": "The export failed. Please try again.",
+  "Le résultat n'a pas pu être enregistré, réessayez.": "The result couldn't be saved. Please try again.",
   "L'image de la vidéo n'est plus disponible. Importez une capture de la pièce.":
     "The video's image is no longer available. Please import a screenshot of the piece.",
   "La suppression a échoué.": "Deletion failed.",

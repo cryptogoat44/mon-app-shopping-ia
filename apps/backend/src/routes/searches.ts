@@ -117,12 +117,15 @@ async function discardAnalysisImage(fastify: FastifyInstance, storagePath: strin
   if (error) fastify.log.warn({ error, storagePath }, "Image analysée non supprimée après la recherche");
 }
 
+/** Enregistre les propositions et leurs liens. false : elles n'ont pas pu
+ * être enregistrées — la recherche est alors une panne, jamais « aucune
+ * pièce trouvée » (charte, règle 3 ; constaté au lot 4 ter). */
 async function saveMatches(
   fastify: FastifyInstance,
   searchId: string,
   matches: VisualMatch[]
-): Promise<void> {
-  if (matches.length === 0) return;
+): Promise<boolean> {
+  if (matches.length === 0) return true;
 
   const { error } = await fastify.supabaseAdmin.from("product_matches").insert(
     matches.map((m) => ({
@@ -141,7 +144,7 @@ async function saveMatches(
 
   if (error) {
     fastify.log.error({ error }, "Échec d'enregistrement des product_matches");
-    return;
+    return false;
   }
 
   // Un lien affilié par produit identifié. Pour l'instant "direct" (aucun
@@ -154,9 +157,10 @@ async function saveMatches(
     .select("id, merchant_url")
     .eq("search_id", searchId);
 
+  // Propositions enregistrées : sans lien affilié, l'app ouvre le lien du marchand.
   if (fetchError || !insertedMatches) {
     fastify.log.error({ fetchError }, "Impossible de relire les product_matches pour créer les liens affiliés");
-    return;
+    return true;
   }
 
   const { error: linksError } = await fastify.supabaseAdmin.from("affiliate_links").insert(
@@ -170,6 +174,7 @@ async function saveMatches(
   if (linksError) {
     fastify.log.error({ linksError }, "Échec d'enregistrement des affiliate_links");
   }
+  return true;
 }
 
 const RECENT_SEARCHES_DEFAULT_LIMIT = 6;
@@ -455,20 +460,27 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       }
 
       await discardAnalysisImage(fastify, storagePath);
-      await saveMatches(fastify, id, matches);
+      if (!(await saveMatches(fastify, id, matches))) {
+        finalStatus = "failed";
+        errorMessage = TECHNICAL_FAILURE_MESSAGE;
+      }
 
-      const { data: updated } = await fastify.supabaseAdmin
+      const { data: updated, error: updateError } = await fastify.supabaseAdmin
         .from("product_searches")
         .update({ screenshot_url: null, status: finalStatus, error_message: errorMessage })
         .eq("id", id)
         .select("*")
         .single();
-
-      const { data: matchRows } = await fastify.supabaseAdmin.from("product_matches").select("*").eq("search_id", id);
+      const { data: matchRows, error: matchesError } = await fastify.supabaseAdmin.from("product_matches").select("*").eq("search_id", id);
+      // Résultat illisible ou non enregistré : une panne annoncée comme telle, jamais « aucune pièce ».
+      if (updateError || !updated || matchesError) {
+        request.log.error({ updateError, matchesError }, "Échec d'enregistrement du résultat de la recherche");
+        return reply.code(500).send({ error: "search_save_failed", message: "Le résultat n'a pas pu être enregistré, réessayez." });
+      }
       const rowsForSearch = (matchRows as ProductMatchRow[]) ?? [];
       const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, rowsForSearch.map((m) => m.id));
 
-      return reply.send(toProductSearch((updated as ProductSearchRow) ?? row, rowsForSearch, affiliateUrlByMatchId));
+      return reply.send(toProductSearch(updated as ProductSearchRow, rowsForSearch, affiliateUrlByMatchId));
     }
   );
 

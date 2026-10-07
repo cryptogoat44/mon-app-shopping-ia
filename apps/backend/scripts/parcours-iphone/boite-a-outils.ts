@@ -21,6 +21,7 @@ import { createClient, type Session, type SupabaseClient } from "@supabase/supab
 import { CONSENT_VERSIONS } from "@monapp/shared-types";
 import { assertDevSupabaseUrl } from "../lib/dev-database.js";
 import { CLE_SIMULATION, FICHIER_SIMULATION, MARQUE_SIMULATION } from "../lib/simulation-anthropic.js";
+import { FICHIER_SIMULATION_SERPAPI, MARQUE_SIMULATION_SERPAPI } from "../lib/simulation-serpapi.js";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 export const ROOT = resolve(HERE, "../../../..");
@@ -119,14 +120,16 @@ function verifierEnvironnement(): { mobileEnv: Record<string, string> } {
 
 /** Serveur local et Metro ; leurs journaux vont dans un dossier temporaire
  * (hors du dépôt), utile pour comprendre un échec. */
-function demarrerServeurs(iaSimulee: boolean): { serveur: ChildProcess; metro: ChildProcess; journaux: string } {
+function demarrerServeurs(iaSimulee: boolean, serpapiSimule: boolean): { serveur: ChildProcess; metro: ChildProcess; journaux: string } {
   const journaux = mkdtempSync(join(tmpdir(), "parcours-iphone-journaux-"));
   // Jamais de vraie clé d'Anthropic ; avec l'IA simulée, une clé factice et
   // le module de simulation (aucun appel réel).
   const env: NodeJS.ProcessEnv = { ...process.env, PORT: String(API_PORT), SERPAPI_KEY: "cle-invalide-parcours-iphone" };
   delete env.ANTHROPIC_API_KEY;
   if (iaSimulee) env.ANTHROPIC_API_KEY = CLE_SIMULATION;
-  const args = iaSimulee ? ["tsx", "--import", FICHIER_SIMULATION, "src/server.ts"] : ["tsx", "src/server.ts"];
+  // SerpApi simulée (lot 4 ter) : propositions fabriquées sur le Mac, pour montrer l'écran des résultats.
+  const imports = [...(iaSimulee ? ["--import", FICHIER_SIMULATION] : []), ...(serpapiSimule ? ["--import", FICHIER_SIMULATION_SERPAPI] : [])];
+  const args = ["tsx", ...imports, "src/server.ts"];
   // Chaque processus écrit DIRECTEMENT dans son journal : pendant un parcours
   // Maestro (lancé en mode bloquant), l'outil ne lit plus rien ; un tuyau non
   // vidé finirait par bloquer le serveur, et les dernières lignes manqueraient
@@ -172,30 +175,39 @@ function lignesSimulation(journaux: string): string[] {
   return readFileSync(fichier, "utf8").split("\n").filter((ligne) => ligne.startsWith("[simulation Anthropic]"));
 }
 
-/** Sans l'annonce de la simulation, le parcours s'arrête : une clé factice
- * partirait sinon chez Anthropic. */
-async function attendreSimulation(journaux: string, delaiMs: number): Promise<void> {
+/** Sans l'annonce d'une simulation, le parcours s'arrête : une clé factice
+ * partirait sinon chez Anthropic (ou chez SerpApi). */
+async function attendreSimulation(journaux: string, marque: string, delaiMs: number): Promise<void> {
+  const fichier = join(journaux, "serveur.log");
   const fin = Date.now() + delaiMs;
   while (Date.now() < fin) {
-    if (lignesSimulation(journaux).includes(MARQUE_SIMULATION)) return;
+    if (existsSync(fichier) && readFileSync(fichier, "utf8").split("\n").includes(marque)) return;
     await new Promise((r) => setTimeout(r, 500));
   }
-  throw new Error("La simulation d'Anthropic n'a pas démarré : parcours arrêté, aucun appel envoyé.");
+  throw new Error(`Simulation absente (« ${marque} ») : parcours arrêté, aucun appel envoyé.`);
 }
 
-export async function lancerParcours(sortieNom: string, scenario: (o: Outils) => Promise<void>, options: { iaSimulee?: boolean } = {}): Promise<void> {
+export async function lancerParcours(
+  sortieNom: string,
+  scenario: (o: Outils) => Promise<void>,
+  options: { iaSimulee?: boolean; serpapiSimule?: boolean } = {}
+): Promise<void> {
   verifierEnvironnement();
   for (const port of [API_PORT, METRO_PORT]) {
     if (!(await portLibre(port))) throw new Error(`Le port ${port} est déjà utilisé : arrêtez ce qui tourne dessus, puis relancez.`);
   }
   const udid = simulateur();
+  // Lot 4 ter : Spotter demande l'accès aux photos à sa première ouverture ;
+  // accordé d'avance pour que la fenêtre d'iOS ne bloque aucun parcours (le
+  // parcours « parcours-unique » la remet à zéro pour la photographier).
+  spawnSync("xcrun", ["simctl", "privacy", udid, "grant", "photos", BUNDLE_ID], { env: OUTILS_ENV });
   const admin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
   const anon = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, { auth: { persistSession: false } });
   const apiUrl = `http://localhost:${API_PORT}`;
   const sortie = join(ROOT, "docs", sortieNom);
   mkdirSync(sortie, { recursive: true });
   const comptes: Compte[] = [];
-  const { serveur, metro, journaux } = demarrerServeurs(options.iaSimulee === true);
+  const { serveur, metro, journaux } = demarrerServeurs(options.iaSimulee === true, options.serpapiSimule === true);
   let nettoye = false;
 
   const nettoyer = async () => {
@@ -278,7 +290,11 @@ export async function lancerParcours(sortieNom: string, scenario: (o: Outils) =>
     log(`  journaux du serveur local et de Metro : ${journaux}`);
     if (options.iaSimulee) {
       log("  IA d'Anthropic simulée dans le serveur local (aucun appel réel)");
-      await attendreSimulation(journaux, 60_000);
+      await attendreSimulation(journaux, MARQUE_SIMULATION, 60_000);
+    }
+    if (options.serpapiSimule) {
+      log("  SerpApi simulée dans le serveur local (aucun appel réel, aucun crédit)");
+      await attendreSimulation(journaux, MARQUE_SIMULATION_SERPAPI, 60_000);
     }
     await attendre(`${apiUrl}/health`, "ok", 60_000);
     await attendre(`http://localhost:${METRO_PORT}/status`, "packager-status:running", 90_000);

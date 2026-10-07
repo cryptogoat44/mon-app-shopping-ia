@@ -7,6 +7,7 @@ import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { prepareErrorMessage } from "@/lib/spot-flow";
+import { updateDraft } from "@/lib/spot-draft";
 import { getSpotVideo, holdSpotVideo, importSpotVideo, letGoSpotVideo, startSearchFromFrame, videoImportMessage } from "@/lib/spot-video";
 import { clampTime, filmstripTimes, formatClock, formatClockTenths, type FramePreview, type OpenedVideo } from "@/lib/video-timeline";
 import { VideoScrubber } from "@/components/video-scrubber";
@@ -44,14 +45,16 @@ function useFramePreview(video: OpenedVideo | null, onError: () => void) {
   return { preview, request, reset: () => setPreview(null) };
 }
 
-// Étape 1 d'une vidéo importée (lot 4) : la personne choisit l'image où la
-// pièce est visible. Tout se passe sur l'appareil ; « Utiliser cette image »
-// envoie cette seule image, comme une photo importée — même coût.
+// Choix de l'image au curseur (lot 4) — au lot 4 ter, seulement en repli :
+// pièce non repérée par l'IA, panne, analyse automatique refusée, ou
+// correction d'un résultat. Tout se passe sur l'appareil ; « Utiliser cette
+// image » envoie cette seule image, comme une photo importée — même coût.
 export default function VideoFrameScreen() {
   const router = useRouter();
   // Ouvert depuis un résultat de l'analyse automatique : le curseur part du
-  // moment proposé par l'IA (lot 4, temps 1 bis), sinon du début.
-  const { start } = useLocalSearchParams<{ start?: string }>();
+  // moment proposé par l'IA (lot 4, temps 1 bis), sinon du début. Les mots
+  // déjà tapés suivent jusqu'au recadrage (lot 4 ter).
+  const { start, query } = useLocalSearchParams<{ start?: string; query?: string }>();
   const { height: windowHeight } = useWindowDimensions();
   const [video, setVideo] = useState<OpenedVideo | null>(() => getSpotVideo());
   const [thumbnails, setThumbnails] = useState<FramePreview[] | null>(null);
@@ -122,6 +125,7 @@ export default function VideoFrameScreen() {
     setMessage(null);
     try {
       const draft = await startSearchFromFrame(timeMs);
+      if (typeof query === "string" && query.trim()) updateDraft({ query: query.trim() });
       router.push({ pathname: "/spot/ciblage", params: { searchId: draft.searchId ?? "" } });
     } catch (error) {
       setMessage(error instanceof Error && error.message.startsWith("video_") ? t.video.frameError : prepareErrorMessage(error));
@@ -152,7 +156,6 @@ export default function VideoFrameScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.navSide} accessibilityRole="button" accessibilityLabel={t.common.back}>
           <Text style={styles.back}>‹</Text>
         </Pressable>
-        <Text style={styles.step}>{t.video.step}</Text>
         <Pressable onPress={() => closeSpotter(router)} hitSlop={12} style={[styles.navSide, styles.navRight]} accessibilityRole="button">
           <Text style={styles.close}>{t.spotter.close}</Text>
         </Pressable>
@@ -243,7 +246,6 @@ const styles = themedStyles(() => ({
   navRight: { alignItems: "flex-end" },
   close: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   back: { fontSize: 26, color: color.encre },
-  step: { fontSize: font.caption, color: color.acier },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 29 },
   caption: { fontSize: font.caption, color: color.acier, marginTop: 6, lineHeight: 18 },

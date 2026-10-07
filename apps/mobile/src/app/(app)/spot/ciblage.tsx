@@ -53,7 +53,6 @@ export default function TargetingScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.navSide} accessibilityRole="button" accessibilityLabel={t.common.back}>
           <Text style={styles.back}>‹</Text>
         </Pressable>
-        <Text style={styles.step}>{t.targeting.step}</Text>
         <Pressable onPress={() => closeSpotter(router)} hitSlop={12} style={[styles.navSide, styles.navRight]} accessibilityRole="button">
           <Text style={styles.close}>{t.spotter.close}</Text>
         </Pressable>
@@ -121,7 +120,6 @@ const styles = themedStyles(() => ({
   navRight: { alignItems: "flex-end" },
   close: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   back: { fontSize: 26, color: color.encre },
-  step: { fontSize: font.caption, color: color.acier },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 29 },
   caption: { fontSize: font.caption, color: color.acier, marginTop: 6, lineHeight: 18 },

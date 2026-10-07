@@ -1,16 +1,24 @@
 # Après l'ouverture d'un lien par l'outil (Maestro ne voit jamais les jetons) :
-# confirmation d'iOS « Ouvrir dans Spotto ? », puis écran attendu.
+# confirmation d'iOS « Ouvrir dans Spotto ? », puis écran attendu. Lot 4 ter :
+# la demande d'accès aux photos d'iOS, si elle s'affiche, est accordée.
 appId: com.spottoapp.ios
 ---
 - extendedWaitUntil:
-    visible: "Ouvrir|${ATTENDRE}"
+    visible: "Ouvrir|Autoriser l.accès complet|${ATTENDRE}"
     timeout: 90000
 - runFlow:
     when:
       visible: "Ouvrir"
     commands:
       - tapOn: "Ouvrir"
+- runFlow: accord-photos.yaml
 - extendedWaitUntil:
     visible: ${ATTENDRE}
     timeout: 90000
+# La demande peut arriver juste après l'écran (lecture de la galerie à l'ouverture de Spotter).
+- extendedWaitUntil:
+    visible: "Autoriser l.accès complet"
+    timeout: 4000
+    optional: true
+- runFlow: accord-photos.yaml
 - takeScreenshot: ${CAPTURE}

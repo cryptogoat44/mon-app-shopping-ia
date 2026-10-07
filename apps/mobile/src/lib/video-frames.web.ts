@@ -99,8 +99,9 @@ async function loadVideo(uri: string): Promise<HTMLVideoElement> {
   }
 }
 
-/** Ouvre la vidéo choisie ; rejette si elle ne peut pas être lue. */
-export async function openVideo(uri: string): Promise<OpenedVideo> {
+/** Ouvre la vidéo choisie ; rejette si elle ne peut pas être lue.
+ * `keepFile` : adresse qui n'appartient pas à Spotto — jamais oubliée ici. */
+export async function openVideo(uri: string, options: { keepFile?: boolean } = {}): Promise<OpenedVideo> {
   const video = await loadVideo(uri);
   const strip = new Set<string>();
   const previews: string[] = [];
@@ -147,7 +148,7 @@ export async function openVideo(uri: string): Promise<OpenedVideo> {
       previews.length = 0;
       video.removeAttribute("src");
       video.load();
-      discardLocalFile(uri);
+      if (!options.keepFile) discardLocalFile(uri);
     },
   };
 }

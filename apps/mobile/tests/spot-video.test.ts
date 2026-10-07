@@ -17,7 +17,7 @@ vi.mock("../src/lib/analytics", () => ({ track }));
 vi.mock("../src/lib/image-import", () => ({ SPOTTER_IMAGE_MAX_EDGE: 1600 }));
 vi.mock("../src/lib/spot-flow", () => ({ beginFromPhoto: vi.fn() }));
 
-import { importSpotVideo, releaseSpotVideo, videoImportMessage } from "../src/lib/spot-video";
+import { adoptSpotVideo, importSpotVideo, releaseSpotVideo, videoImportMessage } from "../src/lib/spot-video";
 
 function openedVideo(durationMs: number) {
   return { durationMs, filmstrip: vi.fn(), preview: vi.fn(), frameFile: vi.fn(), release: vi.fn() };
@@ -75,5 +75,37 @@ describe("vidéo importée dans le Spotter (lot 4)", () => {
     expect(result).toEqual({ kind: "ready" });
     expect(videoImportMessage(result)).toBeNull();
     expect(track).toHaveBeenCalledWith("video_imported", { duration_s: 12, source: "library" });
+  });
+});
+
+describe("dernière vidéo de la galerie (lot 4 ter, app iPhone)", () => {
+  const GALERIE = "file:///var/mobile/Media/DCIM/100APPLE/IMG_0001.MOV";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    releaseSpotVideo();
+  });
+
+  it("ouverte sans être copiée ni jamais effacée ; statistique « latest »", async () => {
+    openVideo.mockResolvedValue(openedVideo(12_000));
+    expect(await adoptSpotVideo(GALERIE, null, "latest")).toEqual({ kind: "ready" });
+    expect(openVideo).toHaveBeenCalledWith(GALERIE, { keepFile: true });
+    expect(track).toHaveBeenCalledWith("video_imported", { duration_s: 12, source: "latest" });
+    releaseSpotVideo();
+    expect(discardLocalFile).not.toHaveBeenCalled();
+  });
+
+  it("illisible ou trop lourde : refusée, mais le fichier de la galerie n'est pas touché", async () => {
+    openVideo.mockRejectedValue(new Error("video_unreadable"));
+    expect(await adoptSpotVideo(GALERIE, null, "latest")).toMatchObject({ kind: "rejected", reason: "unreadable" });
+    expect(await adoptSpotVideo(GALERIE, 150_000_000, "latest")).toMatchObject({ kind: "rejected", reason: "too_large" });
+    expect(discardLocalFile).not.toHaveBeenCalled();
+  });
+
+  it("copie faite par le sélecteur : effacée quand elle est refusée", async () => {
+    openVideo.mockRejectedValue(new Error("video_unreadable"));
+    await adoptSpotVideo("file:///cache/video.mov", null, "library");
+    expect(openVideo).toHaveBeenCalledWith("file:///cache/video.mov", { keepFile: false });
+    expect(discardLocalFile).toHaveBeenCalledWith("file:///cache/video.mov");
   });
 });

@@ -149,6 +149,7 @@ export default function PreviewScreen() {
   async function handleImportCapture() {
     setMessage(null);
     const picked = await importPhotoForSpotter();
+    if (picked.kind === "unavailable") return setMessage(t.common.photoUnavailable);
     if (picked.kind !== "picked") return;
     updateDraft({ localImageUri: picked.uri, imageSize: { width: picked.width, height: picked.height }, crop: null });
     router.push({ pathname: "/spot/ciblage", params: { searchId: searchId ?? "" } });
@@ -208,7 +209,6 @@ export default function PreviewScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.navSide} accessibilityRole="button" accessibilityLabel={t.common.back}>
           <Text style={styles.back}>‹</Text>
         </Pressable>
-        <Text style={styles.step}>{t.preview.step}</Text>
         <Pressable onPress={() => closeSpotter(router)} hitSlop={12} style={[styles.navSide, styles.navRight]} accessibilityRole="button">
           <Text style={styles.close}>{t.spotter.close}</Text>
         </Pressable>
@@ -238,7 +238,7 @@ export default function PreviewScreen() {
                 </Pressable>
                 <Pressable onPress={() => void importVideo()} disabled={importing} style={styles.inlineAction} accessibilityRole="button">
                   {importing ? <ActivityIndicator color={color.vert} /> : <VideoIcon size={17} tint={color.vert} />}
-                  <Text style={styles.inlineActionLabel}>{t.videoAuto.addVideo}</Text>
+                  <Text style={styles.inlineActionLabel}>{t.linkNotice.addVideo}</Text>
                 </Pressable>
                 {stepsOpen ? (
                   <>
@@ -283,7 +283,6 @@ const styles = themedStyles(() => ({
   navRight: { alignItems: "flex-end" },
   close: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   back: { fontSize: 26, color: color.encre },
-  step: { fontSize: font.caption, color: color.acier },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 29 },
   caption: { fontSize: font.caption, color: color.acier, marginTop: 6, lineHeight: 18 },

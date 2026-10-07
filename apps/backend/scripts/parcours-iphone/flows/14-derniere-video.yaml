@@ -1,0 +1,79 @@
+# Lot 4 ter : la dernière vidéo de la galerie est proposée sur Spotter ; il ne
+# reste qu'à taper quelques mots et « Lancer ». Premier usage : accord pour
+# l'analyse par IA (simulée), attente, résultats (SerpApi simulée : aucun
+# crédit), corrections derrière « Ce n'est pas la bonne pièce ? ». Puis une
+# relance, sans accord. Textes : expressions régulières (« ? » échappé).
+appId: com.spottoapp.ios
+---
+- extendedWaitUntil:
+    visible: ${DERNIERE}
+    timeout: 20000
+# La vidéo de 12 s, ajoutée en dernier.
+- extendedWaitUntil:
+    visible: "0:12"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${PREFIXE}-02-derniere-video
+- tapOn:
+    id: "latest-query"
+- inputText: ${DESCRIPTION}
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${PREFIXE}-03-mots
+- tapOn: ${LANCER}
+- extendedWaitUntil:
+    visible: ${CONSENTEMENT}
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${PREFIXE}-04-accord
+- tapOn: ${ACCEPTER}
+- extendedWaitUntil:
+    visible: ${ATTENTE}
+    timeout: 30000
+- takeScreenshot: ${PREFIXE}-05-attente
+- extendedWaitUntil:
+    visible: ${MEILLEURE}
+    timeout: 120000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${PREFIXE}-06-resultats
+# Le lien discret suit les actions de la meilleure proposition : sur iPhone,
+# juste sous le bas de l'écran — on fait défiler.
+- scrollUntilVisible:
+    element:
+      text: ${PAS_LA_BONNE}
+    direction: DOWN
+    timeout: 10000
+- tapOn: ${PAS_LA_BONNE}
+- extendedWaitUntil:
+    visible: ${ESSAYER2}
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${PREFIXE}-07-corrections
+# Feuille refermée en touchant le fond assombri, au-dessus d'elle.
+- tapOn:
+    point: "50%,12%"
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn: ${FERMER}
+- extendedWaitUntil:
+    visible: ${DERNIERE}
+    timeout: 20000
+# Ensuite : plus d'accord à donner — les mots, « Lancer ».
+- tapOn:
+    id: "latest-query"
+- inputText: ${DESCRIPTION}
+- tapOn: ${LANCER}
+- extendedWaitUntil:
+    visible: ${MEILLEURE}
+    timeout: 120000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${PREFIXE}-08-relance-resultats
+- tapOn: ${FERMER}
+- extendedWaitUntil:
+    visible: ${DERNIERE}
+    timeout: 20000

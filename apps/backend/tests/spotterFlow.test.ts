@@ -242,6 +242,28 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     expect(brokenBody.errorMessage).toBe("La recherche visuelle a échoué.");
   });
 
+  // Lot 4 ter (constaté sur le parcours iPhone : spotto-dev injoignable un instant) : propositions
+  // trouvées mais non enregistrées → l'app affichait « Aucune pièce trouvée ». C'est une panne.
+  it("propositions non enregistrées : une panne, jamais « aucune pièce trouvée »", async () => {
+    const search = await prepare("https://www.tiktok.com/@x/video/1");
+    const realFrom = app.supabaseAdmin.from.bind(app.supabaseAdmin);
+    const spy = vi.spyOn(app.supabaseAdmin, "from").mockImplementation((table: string) => {
+      const builder = realFrom(table);
+      if (table === "product_matches") {
+        builder.insert = (() => Promise.resolve({ data: null, error: { message: "panne simulée", details: "", hint: "", code: "08006" } })) as unknown as typeof builder.insert;
+      }
+      return builder;
+    });
+    try {
+      const body = (await run(search.id, {})).json();
+      expect(body.status).toBe("failed");
+      expect(body.errorMessage).toBe("La recherche visuelle a échoué.");
+      expect(body.matches).toEqual([]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("si la vignette n'est plus disponible, invite à importer une capture", async () => {
     const search = await prepare("https://www.tiktok.com/@x/video/1");
     downloadMock.mockRejectedValueOnce(new Error("403"));

@@ -1,0 +1,38 @@
+# Lot 4 ter (français) : accord refusé par le lien discret « Choisir l'image
+# moi-même » → curseur, sans IA ni envoi d'image ; ensuite, la question n'est
+# plus posée : « Lancer » ouvre directement le curseur. L'outil a effacé
+# l'accord avant ce parcours (premier usage).
+appId: com.spottoapp.ios
+---
+- tapOn:
+    id: "latest-query"
+- inputText: "veste en daim marron"
+- tapOn: "Lancer"
+- extendedWaitUntil:
+    visible: "Analyse automatique de la vidéo"
+    timeout: 30000
+- tapOn: "Choisir l'image moi-même"
+- extendedWaitUntil:
+    visible: "Choisissez l'image"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 4000
+- takeScreenshot: 16-refus-curseur
+- tapOn: "Fermer"
+- extendedWaitUntil:
+    visible: "Ajouter une photo"
+    timeout: 20000
+- tapOn:
+    id: "latest-query"
+- inputText: "veste en daim marron"
+- tapOn: "Lancer"
+- extendedWaitUntil:
+    visible: "Choisissez l'image"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 4000
+- takeScreenshot: 17-refus-ensuite-curseur
+- tapOn: "Fermer"
+- extendedWaitUntil:
+    visible: "Ajouter une photo"
+    timeout: 20000

@@ -1,4 +1,4 @@
 {
   "CFBundleDisplayName": "Spotto",
-  "NSPhotoLibraryUsageDescription": "Spotto accède à vos photos uniquement pour importer l'image que vous choisissez : la capture d'une pièce à identifier, une photo à publier ou votre photo de profil."
+  "NSPhotoLibraryUsageDescription": "Spotto vous propose dans Spotter votre dernière vidéo, prête à être analysée. Elle reste sur votre iPhone : seules quelques images en partent quand vous appuyez sur « Lancer »."
 }

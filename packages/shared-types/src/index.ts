@@ -93,6 +93,10 @@ export interface CropRect {
   height: number;
 }
 
+/** Zone analysée par défaut : centrée, 70 % de l'image (cadre proposé au
+ * recadrage ; photo lancée sans recadrage au lot 4 ter). */
+export const DEFAULT_CROP: CropRect = { x: 0.15, y: 0.15, width: 0.7, height: 0.7 };
+
 /** Longueur maximale du texte « Que cherchez-vous ? ». */
 export const SEARCH_QUERY_MAX_LENGTH = 60;
 

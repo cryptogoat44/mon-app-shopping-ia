@@ -1,0 +1,23 @@
+# Lot 4 ter : accès aux photos demandé UNE fois, par iOS, à la première
+# ouverture de Spotter (texte de l'app : locales/*.json ; iOS propose aussi
+# « Limiter l'accès… »). L'outil a remis l'autorisation à zéro avant ce
+# parcours. Puis la dernière vidéo apparaît.
+appId: com.spottoapp.ios
+---
+- extendedWaitUntil:
+    visible: "Autoriser l.accès complet"
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 00-accord-photos-ios
+- runFlow: accord-photos.yaml
+- extendedWaitUntil:
+    visible: ${DERNIERE}
+    timeout: 30000
+# La plus récente est ici la vidéo de 65 s : la carte le dit tout de suite, sans champ.
+- extendedWaitUntil:
+    visible: "Cette vidéo dure 1:05.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 00b-derniere-video-trop-longue

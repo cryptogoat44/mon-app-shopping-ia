@@ -13,10 +13,14 @@ import type { SpotDraft } from "./spot-draft";
 import { discardLocalFile, openVideo } from "./video-frames";
 import { durationSeconds, formatClock, megabytes, VIDEO_MAX_BYTES, videoRejection, type OpenedVideo, type VideoRejection } from "./video-timeline";
 
-/** Photothèque (app iPhone) ou fichier choisi dans le navigateur (site). */
-const SOURCE = Platform.OS === "web" ? "file" : "library";
+/** D'où vient la vidéo : sélecteur de la photothèque (app iPhone), fichier
+ * choisi dans le navigateur (site), ou dernière vidéo de la galerie proposée
+ * sur l'accueil (app iPhone, lot 4 ter). */
+export type VideoSource = "library" | "file" | "latest";
+const PICKER_SOURCE: VideoSource = Platform.OS === "web" ? "file" : "library";
 
 let current: OpenedVideo | null = null;
+let currentSource: VideoSource = PICKER_SOURCE;
 
 export function getSpotVideo(): OpenedVideo | null {
   return current;
@@ -61,12 +65,43 @@ async function pickVideo(): Promise<ImagePicker.ImagePickerAsset | null> {
   return picked.canceled ? null : (picked.assets[0] ?? null);
 }
 
-function rejected(reason: VideoRejection, durationMs: number | null, sizeBytes: number | null): VideoImport {
-  track("video_rejected", { reason, source: SOURCE, duration_s: durationMs === null ? undefined : durationSeconds(durationMs) });
+function rejected(reason: VideoRejection, durationMs: number | null, sizeBytes: number | null, source: VideoSource): VideoImport {
+  track("video_rejected", { reason, source, duration_s: durationMs === null ? undefined : durationSeconds(durationMs) });
   return { kind: "rejected", reason, durationMs, sizeBytes };
 }
 
-/** Choix d'une vidéo, contrôle des limites (60 s, 100 Mo), ouverture. */
+/** Contrôle des limites (60 s, 100 Mo) et ouverture de la vidéo, qui devient
+ * celle du Spotter. La copie faite par le sélecteur est effacée dès qu'elle
+ * ne sert plus ; la vidéo de la galerie, elle, n'est jamais touchée. */
+export async function adoptSpotVideo(uri: string, sizeBytes: number | null, source: VideoSource): Promise<VideoImport> {
+  const keepFile = source === "latest";
+  const discard = () => {
+    if (!keepFile) discardLocalFile(uri);
+  };
+  if (sizeBytes !== null && sizeBytes > VIDEO_MAX_BYTES) {
+    discard();
+    return rejected("too_large", null, sizeBytes, source);
+  }
+  let video: OpenedVideo;
+  try {
+    video = await openVideo(uri, { keepFile });
+  } catch {
+    discard();
+    return rejected("unreadable", null, sizeBytes, source);
+  }
+  const rejection = videoRejection({ durationMs: video.durationMs, sizeBytes });
+  if (rejection) {
+    video.release();
+    return rejected(rejection, video.durationMs, sizeBytes, source);
+  }
+  releaseSpotVideo();
+  current = video;
+  currentSource = source;
+  track("video_imported", { duration_s: durationSeconds(video.durationMs), source });
+  return { kind: "ready" };
+}
+
+/** Choix d'une vidéo dans le sélecteur du système, puis contrôle et ouverture. */
 export async function importSpotVideo(): Promise<VideoImport> {
   let asset: ImagePicker.ImagePickerAsset | null;
   try {
@@ -75,27 +110,7 @@ export async function importSpotVideo(): Promise<VideoImport> {
     return { kind: "unavailable" };
   }
   if (!asset) return { kind: "cancelled" };
-  const sizeBytes = asset.fileSize ?? null;
-  if (sizeBytes !== null && sizeBytes > VIDEO_MAX_BYTES) {
-    discardLocalFile(asset.uri);
-    return rejected("too_large", null, sizeBytes);
-  }
-  let video: OpenedVideo;
-  try {
-    video = await openVideo(asset.uri);
-  } catch {
-    discardLocalFile(asset.uri);
-    return rejected("unreadable", null, sizeBytes);
-  }
-  const rejection = videoRejection({ durationMs: video.durationMs, sizeBytes });
-  if (rejection) {
-    video.release();
-    return rejected(rejection, video.durationMs, sizeBytes);
-  }
-  releaseSpotVideo();
-  current = video;
-  track("video_imported", { duration_s: durationSeconds(video.durationMs), source: SOURCE });
-  return { kind: "ready" };
+  return adoptSpotVideo(asset.uri, asset.fileSize ?? null, PICKER_SOURCE);
 }
 
 /** Message clair quand la vidéo est refusée ou indisponible ; aucun si elle est prête ou si le choix est annulé. */
@@ -111,7 +126,7 @@ export function videoImportMessage(result: VideoImport): string | null {
 export async function startSearchFromFrame(timeMs: number): Promise<SpotDraft> {
   if (!current) throw new Error("video_missing");
   const frame = await current.frameFile(timeMs, SPOTTER_IMAGE_MAX_EDGE);
-  const draft = await beginFromPhoto(frame.uri, { width: frame.width, height: frame.height });
-  track("video_frame_chosen", { duration_s: durationSeconds(current.durationMs), source: SOURCE });
+  const draft = beginFromPhoto(frame.uri, { width: frame.width, height: frame.height });
+  track("video_frame_chosen", { duration_s: durationSeconds(current.durationMs), source: currentSource });
   return draft;
 }

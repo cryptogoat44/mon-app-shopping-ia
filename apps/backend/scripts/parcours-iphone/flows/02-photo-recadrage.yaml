@@ -1,9 +1,11 @@
-# Choix d'une photo (photothèque, sans demande d'autorisation), recadrage
-# (coin, déplacement, réinitialisation), précision saisie, identification :
-# clé SerpApi invalide, donc échec technique attendu — jamais « pièce introuvable ».
+# Photo choisie (photothèque, sans demande d'autorisation) → écran unique du
+# Spotter (lot 4 ter) : aperçu, « Que cherchez-vous ? » prêt à la saisie,
+# « Lancer » → identification : clé SerpApi invalide, donc échec technique
+# attendu — jamais « pièce introuvable ». Puis « Recadrer » : recadrage (coin,
+# déplacement, réinitialisation) et nouvelle identification.
 appId: com.spottoapp.ios
 ---
-- tapOn: "Importer une photo"
+- tapOn: "Ajouter une photo"
 - extendedWaitUntil:
     visible: "Collections"
     timeout: 15000
@@ -11,9 +13,27 @@ appId: com.spottoapp.ios
 - tapOn:
     point: "50%,25%"
 - extendedWaitUntil:
+    visible: "Que cherchez-vous \\?"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 04-photo-question
+- inputText: "veste"
+- runFlow:
+    when:
+      visible: "Plus tard"
+    commands:
+      - tapOn: "Plus tard"
+- tapOn: "Lancer"
+- extendedWaitUntil:
+    visible: "La recherche n'a pas abouti"
+    timeout: 60000
+- takeScreenshot: 05-identification-echec-technique
+- tapOn: "Recadrer"
+- extendedWaitUntil:
     visible: "Entourez la pièce"
     timeout: 30000
-- takeScreenshot: 04-recadrage
+- takeScreenshot: 05b-recadrage
 - swipe:
     start: "23%,30%"
     end: "33%,38%"
@@ -22,16 +42,8 @@ appId: com.spottoapp.ios
     start: "55%,52%"
     end: "45%,58%"
     duration: 1000
-- takeScreenshot: 05-recadrage-ajuste
+- takeScreenshot: 05c-recadrage-ajuste
 - tapOn: "Réinitialiser le cadre"
-- tapOn: "Que cherchez-vous ? (facultatif)"
-- inputText: "veste"
-- runFlow:
-    when:
-      visible: "Plus tard"
-    commands:
-      - tapOn: "Plus tard"
-- hideKeyboard
 - tapOn: "Lancer l'identification"
 - extendedWaitUntil:
     visible: "La recherche n'a pas abouti"

@@ -2,7 +2,7 @@
 // (écran d'attente). Logique pure, testée sans écran. Le cadre est manipulé
 // en proportions de l'IMAGE (0 à 1) : c'est ce que le serveur reçoit, et ça
 // ne dépend pas de la taille d'affichage.
-import type { CropRect } from "@monapp/shared-types";
+import { DEFAULT_CROP, type CropRect } from "@monapp/shared-types";
 
 export interface Size {
   width: number;
@@ -23,8 +23,9 @@ export type Corner = "topLeft" | "topRight" | "bottomLeft" | "bottomRight";
  * en dessous de 5 %). */
 export const MIN_CROP = 0.12;
 
-/** Cadre proposé par défaut : centré, 70 % de l'image. */
-export const DEFAULT_CROP: CropRect = { x: 0.15, y: 0.15, width: 0.7, height: 0.7 };
+/** Cadre proposé par défaut : centré, 70 % de l'image (défini une seule fois,
+ * dans les types partagés : l'outil d'essai du serveur l'utilise aussi). */
+export { DEFAULT_CROP };
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 

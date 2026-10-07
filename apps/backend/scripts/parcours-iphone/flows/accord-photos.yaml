@@ -1,0 +1,19 @@
+# Lot 4 ter : si iOS demande l'accès aux photos (Spotter le demande une seule
+# fois, pour proposer la dernière vidéo), l'accorder — sinon la fenêtre
+# masquerait l'écran suivant. iOS peut demander une confirmation.
+appId: com.spottoapp.ios
+---
+- runFlow:
+    when:
+      visible: "Autoriser l.accès complet"
+    commands:
+      - tapOn: "Autoriser l.accès complet"
+      - waitForAnimationToEnd:
+          timeout: 2000
+- runFlow:
+    when:
+      visible: "Autoriser l.accès complet"
+    commands:
+      - tapOn: "Autoriser l.accès complet"
+      - waitForAnimationToEnd:
+          timeout: 2000

@@ -5,7 +5,8 @@
 // sélecteur) est effacée dès qu'on n'en a plus besoin.
 import { createVideoPlayer, type VideoPlayer } from "expo-video";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
-import { File } from "expo-file-system";
+import { File, Paths } from "expo-file-system";
+import { isOwnCacheFile } from "./local-files";
 import { base64ToBytes, decodePngSample } from "./png-pixels";
 import type { FrameSample } from "./frame-sample";
 import type { FrameFile, FramePreview, OpenedVideo } from "./video-timeline";
@@ -14,8 +15,9 @@ import type { FrameFile, FramePreview, OpenedVideo } from "./video-timeline";
 const OPEN_TIMEOUT_MS = 15_000;
 
 /** Efface un fichier local : copie d'une vidéo choisie, image temporaire
- * (silencieux s'il est déjà effacé). */
+ * (silencieux s'il est déjà effacé). Jamais hors du cache de Spotto. */
 export function discardLocalFile(uri: string): void {
+  if (!isOwnCacheFile(uri, Paths.cache.uri)) return;
   try {
     const file = new File(uri);
     if (file.exists) file.delete();
@@ -47,8 +49,9 @@ async function thumbnail(player: VideoPlayer, timeMs: number, maxEdge: number) {
   return image;
 }
 
-/** Ouvre la vidéo choisie ; rejette si elle ne peut pas être lue. */
-export async function openVideo(uri: string): Promise<OpenedVideo> {
+/** Ouvre la vidéo choisie ; rejette si elle ne peut pas être lue.
+ * `keepFile` : vidéo de la photothèque (pas une copie) — jamais effacée. */
+export async function openVideo(uri: string, options: { keepFile?: boolean } = {}): Promise<OpenedVideo> {
   const player = createVideoPlayer({ uri });
   player.muted = true;
   try {
@@ -82,7 +85,7 @@ export async function openVideo(uri: string): Promise<OpenedVideo> {
     },
     release() {
       player.release();
-      discardLocalFile(uri);
+      if (!options.keepFile) discardLocalFile(uri);
     },
   };
 }

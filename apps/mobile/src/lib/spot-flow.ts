@@ -1,4 +1,4 @@
-import { t } from "@/i18n";
+import { t } from "../i18n";
 import { ApiError, prepareSearch } from "./api";
 import { getDraft, startDraft, updateDraft, type ImageSize, type SpotDraft } from "./spot-draft";
 import type { LinkPlatform } from "./link-detection";
@@ -18,10 +18,12 @@ export async function beginFromLink(url: string, platform: LinkPlatform): Promis
   });
 }
 
-export async function beginFromPhoto(uri: string, size: ImageSize): Promise<SpotDraft> {
-  const search = await prepareSearch({});
+/** Photo, ou image d'une vidéo : brouillon local. La recherche, gratuite,
+ * n'est préparée qu'au lancement (freshSearchId) : l'écran suivant s'ouvre
+ * sans attendre le serveur — même quand l'offre gratuite le réveille (lot 4 ter). */
+export function beginFromPhoto(uri: string, size: ImageSize): SpotDraft {
   return startDraft({
-    searchId: search.id,
+    searchId: null,
     sourceUrl: null,
     platform: "photo",
     previewUrl: null,

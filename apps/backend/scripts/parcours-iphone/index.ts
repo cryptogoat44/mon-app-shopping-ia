@@ -3,24 +3,27 @@
 //   pnpm --filter backend parcours-iphone natif      parcours complet (Maestro) + erreur de test Sentry
 //   pnpm --filter backend parcours-iphone preparer   données de test prêtes et session ouverte dans
 //                                                    l'app, puis attente (Ctrl+C : nettoyage)
-//   pnpm --filter backend parcours-iphone video      lot 4 : vidéo importée, dans les 4 combinaisons
-//                                                    (captures : docs/lot-4-iphone-captures/)
+//   pnpm --filter backend parcours-iphone parcours-unique
+//                                                    lot 4 ter : dernière vidéo de la galerie, quelques
+//                                                    mots, « Lancer », dans les 4 combinaisons ; IA et
+//                                                    SerpApi simulées (docs/lot-4-ter-iphone-captures/)
 //
 // Prérequis : Xcode, Maestro (brew), un simulateur iPhone démarré avec l'app
 // de développement installée (compilation : voir docs/journal-decisions.md,
 // lot 3bis). Captures : docs/lot-3bis-captures/.
+import { spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import sharp from "sharp";
-import { lancerParcours, LIEN_DEV_CLIENT, log, maestro, type Compte, type Outils } from "./boite-a-outils.js";
+import { BUNDLE_ID, lancerParcours, LIEN_DEV_CLIENT, log, maestro, type Compte, type Outils } from "./boite-a-outils.js";
 import { z } from "zod";
-import { couleurProche, genererVideosEssai, rgb, SEGMENTS } from "../lib/videos-essai.js";
+import { genererVideosEssai } from "../lib/videos-essai.js";
 import { verifierSentry } from "./sentry.js";
 
 const FLOWS = join(import.meta.dirname, "flows");
 // Écrans possibles au démarrage, selon l'état laissé par la fois précédente.
-const DEMARRAGE = "Commencer|Récemment spottées|Nouveau mot de passe|Connexion à Spotto.*|Spotto est momentanément injoignable.*";
+const DEMARRAGE = "Commencer|Récemment spottées|Ajouter une photo|Nouveau mot de passe|Connexion à Spotto.*|Spotto est momentanément injoignable.*";
 
 async function image(texte: string, fond: string, largeur = 900, hauteur = 1200): Promise<Buffer> {
   const svg = `<svg width="${largeur}" height="${hauteur}" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="${fond}"/>
@@ -99,16 +102,19 @@ async function photosSimulateur(o: Outils): Promise<void> {
   rmSync(dossier, { recursive: true, force: true });
 }
 
-/** Lot 4 : trois vidéos d'essai dans la photothèque du simulateur. Le
- * sélecteur range de la plus ancienne à la plus récente : la longue, puis
- * la HEVC, puis la courte (H.264). */
-async function videosSimulateur(o: Outils): Promise<void> {
-  const videos = await genererVideosEssai();
-  try {
-    for (const fichier of [videos.longue, videos.hevc, videos.courte]) o.xcrun(["simctl", "addmedia", o.udid, fichier]);
-  } finally {
-    rmSync(videos.dossier, { recursive: true, force: true });
-  }
+/** Vidéos d'essai ajoutées à la photothèque du simulateur. iOS les date
+ * d'après la date inscrite dans le fichier : chacune est copiée avec la date
+ * de l'instant (une seconde d'écart entre elles), si bien que la dernière de
+ * la liste devient la plus récente de la galerie (« Votre dernière vidéo »). */
+function ajouterVideos(o: Outils, fichiers: string[]): void {
+  const maintenant = Date.now();
+  fichiers.forEach((fichier, rang) => {
+    const copie = fichier.replace(/(\.\w+)$/, `-${maintenant}-${rang}$1`);
+    const date = new Date(maintenant + rang * 1000).toISOString();
+    const r = spawnSync("ffmpeg", ["-y", "-loglevel", "error", "-i", fichier, "-c", "copy", "-map_metadata", "-1", "-metadata", `creation_time=${date}`, copie], { encoding: "utf8" });
+    if (r.status !== 0) throw new Error(`Copie datée de la vidéo impossible : ${r.stderr.slice(-200)}`);
+    o.xcrun(["simctl", "addmedia", o.udid, copie]);
+  });
 }
 
 function etape(o: Outils, flow: string, variables: Record<string, string> = {}): void {
@@ -154,10 +160,12 @@ async function attendreExploration(o: Outils): Promise<void> {
   await new Promise(() => {});
 }
 
-// Lot 4 : libellés de l'app dans chaque langue (le sélecteur d'iOS, lui, suit la langue de l'iPhone).
+// Libellés de l'app dans chaque langue (le sélecteur d'iOS, lui, suit la langue
+// de l'iPhone). Expressions régulières : « ? » échappé. « Ajouter une photo » :
+// repère de Spotter, avec ou sans la dernière vidéo proposée.
 const LIBELLES = {
-  fr: { PROFIL: "Profil", REGLAGES: "Réglages", RETOUR: "Retour", LANGUE: "Français", CLAIR: "Clair", SOMBRE: "Sombre", SYSTEME: "Système", IMPORTER: "Importer une vidéo", UTILISER: "Utiliser cette image", CIBLAGE: "Entourez la pièce", FERMER: "Fermer", AVANCER: "Avancer d'un dixième de seconde", RECULER: "Reculer d'un dixième de seconde", TITRE: "Que cherchez-vous \\?", DESCRIPTION: "veste en daim marron", CONSENTEMENT: "Analyse automatique de la vidéo", ACCEPTER: "Accepter", ECHEC: "La recherche n'a pas abouti", ESSAYER2: "Essayer un autre moment \\(2 restants\\)", ESSAYER1: "Essayer un autre moment \\(1 restant\\)", MOI_MEME: "Choisir l'image moi-même", CURSEUR: "Choisissez l'image", INTERRUPTEUR: "Analyse automatique des vidéos par une IA", RETIRE: "Désactivée : aucune image.*" },
-  en: { PROFIL: "Profile", REGLAGES: "Settings", RETOUR: "Back", LANGUE: "English", CLAIR: "Light", SOMBRE: "Dark", SYSTEME: "System", IMPORTER: "Import a video", UTILISER: "Use this frame", CIBLAGE: "Frame the piece", FERMER: "Close", AVANCER: "Forward a tenth of a second", RECULER: "Back a tenth of a second", TITRE: "What are you looking for\\?", DESCRIPTION: "brown suede jacket", CONSENTEMENT: "Automatic video analysis", ACCEPTER: "Accept", ECHEC: "The search didn't go through", ESSAYER2: "Try another moment \\(2 left\\)", ESSAYER1: "Try another moment \\(1 left\\)", MOI_MEME: "Choose the frame myself", CURSEUR: "Choose the frame", INTERRUPTEUR: "Automatic video analysis by an AI", RETIRE: "Off: no frame.*" },
+  fr: { PROFIL: "Profil", REGLAGES: "Réglages", RETOUR: "Retour", LANGUE: "Français", CLAIR: "Clair", SOMBRE: "Sombre", SYSTEME: "Système", ACCUEIL: "Ajouter une photo", DERNIERE: "Votre dernière vidéo", DESCRIPTION: "veste en daim marron", LANCER: "Lancer", CONSENTEMENT: "Analyse automatique de la vidéo", ACCEPTER: "Accepter", ATTENTE: "Spotto parcourt les boutiques…", MEILLEURE: "Meilleure proposition", PAS_LA_BONNE: "Ce n'est pas la bonne pièce \\?", ESSAYER2: "Essayer un autre moment \\(2 restants\\)", FERMER: "Fermer" },
+  en: { PROFIL: "Profile", REGLAGES: "Settings", RETOUR: "Back", LANGUE: "English", CLAIR: "Light", SOMBRE: "Dark", SYSTEME: "System", ACCUEIL: "Add a photo", DERNIERE: "Your latest video", DESCRIPTION: "brown suede jacket", LANCER: "Search", CONSENTEMENT: "Automatic video analysis", ACCEPTER: "Accept", ATTENTE: "Spotto is browsing the boutiques…", MEILLEURE: "Best suggestion", PAS_LA_BONNE: "Not the right piece\\?", ESSAYER2: "Try another moment \\(2 left\\)", FERMER: "Close" },
 } as const;
 const COMBINAISONS = [
   { id: "fr-clair", langue: "fr", theme: "CLAIR" },
@@ -170,122 +178,83 @@ const COMBINAISONS = [
 function regler(o: Outils, depuis: "fr" | "en", vers: "fr" | "en", theme: "CLAIR" | "SOMBRE" | "SYSTEME", prefixe: string): void {
   const avant = LIBELLES[depuis];
   const apres = LIBELLES[vers];
-  etape(o, "06-reglages-combinaison", { PROFIL: avant.PROFIL, REGLAGES: avant.REGLAGES, LANGUE: apres.LANGUE, THEME: apres[theme], RETOUR: apres.RETOUR, IMPORTER: apres.IMPORTER, PREFIXE: prefixe });
+  etape(o, "06-reglages-combinaison", { PROFIL: avant.PROFIL, REGLAGES: avant.REGLAGES, LANGUE: apres.LANGUE, THEME: apres[theme], RETOUR: apres.RETOUR, IMPORTER: apres.ACCUEIL, PREFIXE: prefixe });
 }
 
-/** La recherche lancée avec l'image d'une vidéo est partie comme une photo (clé SerpApi invalide : échec). */
-async function verifierRecherche(o: Outils, compte: Compte): Promise<void> {
-  const { data, error } = await o.admin.from("product_searches").select("source_platform, status").eq("user_id", compte.id).order("created_at", { ascending: false }).limit(1).single();
-  if (error) throw new Error(`Recherche introuvable : ${error.message}`);
-  const recherche = z.object({ source_platform: z.string(), status: z.string() }).parse(data);
-  if (recherche.source_platform !== "photo" || recherche.status !== "failed") throw new Error(`Recherche inattendue : ${JSON.stringify(recherche)}`);
-  log("  recherche partie comme une photo (clé SerpApi invalide : échec technique, aucun crédit)");
+/** Premier usage de l'analyse automatique (accord jamais donné) : l'accord du compte de test est effacé (spotto-dev). */
+async function oublierAccordIa(o: Outils, compte: Compte): Promise<void> {
+  const { error } = await o.admin.from("consents").delete().eq("user_id", compte.id).eq("type", "analyse_video_ia");
+  if (error) throw new Error(`Accord de test impossible à effacer : ${error.message}`);
 }
 
-/** Première image (« Sac », vidéo en hauteur) montrée EN ENTIER : de part et
- * d'autre, le fond de la zone, pas l'image. Défaut corrigé au lot 4 : sur
- * iPhone, elle pouvait s'afficher agrandie et rognée. */
-async function verifierPremiereImage(capture: string): Promise<void> {
-  const { data, info } = await sharp(capture).removeAlpha().raw().toBuffer({ resolveWithObject: true });
-  const pixel = (fx: number, fy: number): number[] => {
-    const debut = (Math.round(fy * info.height) * info.width + Math.round(fx * info.width)) * 3;
-    return [...data.subarray(debut, debut + 3)];
-  };
-  const sac = rgb(SEGMENTS[0].fond);
-  // Hauteur 30 % : dans la zone de l'image, au-dessus du mot « Sac ».
-  if (!couleurProche(pixel(0.5, 0.3), sac, 25)) throw new Error(`${basename(capture)} : première image absente (${JSON.stringify(pixel(0.5, 0.3))})`);
-  if (couleurProche(pixel(0.12, 0.3), sac, 25) || couleurProche(pixel(0.88, 0.3), sac, 25)) {
-    throw new Error(`${basename(capture)} : première image agrandie et rognée, au lieu d'être montrée en entier`);
-  }
-  log("  première image montrée en entier");
+const ACCORD = z.array(z.object({ granted_at: z.string().nullable(), revoked_at: z.string().nullable() }));
+
+async function accordsIa(o: Outils, compte: Compte): Promise<z.infer<typeof ACCORD>> {
+  const lus = await o.admin.from("consents").select("granted_at, revoked_at").eq("user_id", compte.id).eq("type", "analyse_video_ia");
+  if (lus.error) throw new Error(`Accords illisibles : ${lus.error.message}`);
+  return ACCORD.parse(lus.data);
 }
 
-/** Lot 4 : vidéo importée, dans les 4 combinaisons de langue et de thème. */
-async function video(o: Outils): Promise<void> {
-  const louise = await o.creerCompte("l", "Louise (test)");
-  await videosSimulateur(o);
-  await connecter(o, louise, "Importer une vidéo");
-  let courante: "fr" | "en" = "fr";
-  for (const combo of COMBINAISONS) {
-    regler(o, courante, combo.langue, combo.theme, combo.id);
-    courante = combo.langue;
-    const l = LIBELLES[combo.langue];
-    etape(o, "07-video", { IMPORTER: l.IMPORTER, UTILISER: l.UTILISER, CIBLAGE: l.CIBLAGE, FERMER: l.FERMER, AVANCER: l.AVANCER, RECULER: l.RECULER, PREFIXE: combo.id });
-    await verifierPremiereImage(join(o.sortie, `${combo.id}-02-choix-image.png`));
-  }
-  regler(o, courante, "fr", "SYSTEME", "fr-systeme");
-  etape(o, "08-video-limites");
-  await verifierRecherche(o, louise);
-}
-
-/** Lot 4, temps 1 bis : ce que l'IA simulée a vu, les consentements et les
- * recherches enregistrés (spotto-dev) — jamais le contenu des images. */
-async function verifierAuto(o: Outils, compte: Compte): Promise<void> {
-  const reconnues = o.simulation().filter((ligne) => /3 image\(s\), 3 moment\(s\), plan reconnu : oui/.test(ligne)).length;
-  if (reconnues < COMBINAISONS.length) throw new Error(`Analyses simulées avec le plan « Veste » reconnu : ${reconnues} sur ${COMBINAISONS.length}`);
-  const choix = await o.admin.from("consents").select("granted_at, revoked_at").eq("user_id", compte.id).eq("type", "analyse_video_ia");
-  if (choix.error) throw new Error(`Consentements illisibles : ${choix.error.message}`);
-  const evenements = z.array(z.object({ granted_at: z.string().nullable(), revoked_at: z.string().nullable() })).parse(choix.data);
-  const accords = evenements.filter((e) => e.granted_at !== null).length;
-  const retraits = evenements.filter((e) => e.revoked_at !== null).length;
-  // 4 accords et 4 retraits (Réglages), puis un refus et un accord (replis).
-  if (accords !== 5 || retraits !== 5) throw new Error(`Consentements inattendus : ${accords} accords, ${retraits} retraits`);
-  const lues = await o.admin.from("product_searches").select("source_platform, status, query").eq("user_id", compte.id);
+/** Ce que les simulations ont vu et ce qui a été enregistré (spotto-dev) — jamais le contenu des images. */
+async function verifierParcoursUnique(o: Outils, compte: Compte): Promise<void> {
+  const analyses = o.simulation().filter((ligne) => /^\[simulation Anthropic\] 3 image\(s\), 3 moment\(s\), plan reconnu : oui/.test(ligne)).length;
+  // Par combinaison : premier usage et relance ; puis une autre vidéo.
+  if (analyses < 2 * COMBINAISONS.length + 1) throw new Error(`Analyses simulées avec le plan « Veste » reconnu : ${analyses}`);
+  const lues = await o.admin.from("product_searches").select("source_platform, status").eq("user_id", compte.id);
   if (lues.error) throw new Error(`Recherches illisibles : ${lues.error.message}`);
-  const recherches = z.array(z.object({ source_platform: z.string(), status: z.string(), query: z.string().nullable() })).parse(lues.data);
-  const attendues = recherches.filter((r) => r.source_platform === "photo" && r.status === "failed" && (r.query === LIBELLES.fr.DESCRIPTION || r.query === LIBELLES.en.DESCRIPTION));
-  if (attendues.length !== 2 * COMBINAISONS.length) throw new Error(`Identifications inattendues : ${attendues.length} sur ${2 * COMBINAISONS.length}`);
-  // « Pièce non repérée » (liste vide ou moments sous le seuil) et panne : aucune recherche, donc aucun crédit SerpApi.
-  if (recherches.length !== attendues.length) throw new Error(`Recherches de trop : ${recherches.length - attendues.length} (replis)`);
-  log(`  analyses simulées : ${reconnues} avec le bon plan ; consentements : ${accords} accords, ${retraits} retraits ; identifications : ${attendues.length} (comme une photo, aucun crédit) ; replis : aucune recherche`);
+  const recherches = z.array(z.object({ source_platform: z.string(), status: z.string() })).parse(lues.data);
+  const abouties = recherches.filter((r) => r.source_platform === "photo" && r.status === "completed").length;
+  // 2 par combinaison, une autre vidéo, une photo ; replis et refus : aucune recherche, donc aucun crédit.
+  if (abouties !== 2 * COMBINAISONS.length + 2 || recherches.length !== abouties) {
+    throw new Error(`Recherches inattendues : ${abouties} abouties sur ${recherches.length} (attendu : ${2 * COMBINAISONS.length + 2})`);
+  }
+  const refus = await accordsIa(o, compte);
+  if (refus.length !== 1 || refus[0]!.granted_at !== null) throw new Error(`Refus non enregistré : ${JSON.stringify(refus)}`);
+  log(`  analyses simulées : ${analyses} avec le bon plan ; identifications abouties (SerpApi simulée) : ${abouties} ; replis et refus : aucune recherche ; refus enregistré`);
 }
 
-/** Lot 4, temps 1 bis : analyse automatique (IA simulée), dans les 4 combinaisons. */
-async function videoAuto(o: Outils): Promise<void> {
-  const louise = await o.creerCompte("a", "Louise (test)");
-  await videosSimulateur(o);
-  await connecter(o, louise, "Importer une vidéo");
+/** Lot 4 ter : parcours unique sur l'app iPhone, dans les 4 combinaisons — la
+ * dernière vidéo de la galerie proposée sur Spotter (accès demandé une fois),
+ * quelques mots, « Lancer ». IA et SerpApi simulées : aucun appel réel. */
+async function parcoursUnique(o: Outils): Promise<void> {
+  const louise = await o.creerCompte("u", "Louise (test)");
+  await photosSimulateur(o);
+  const videos = await genererVideosEssai();
+  try {
+    // D'abord, la plus récente est la vidéo de 65 s : refus annoncé sur la carte.
+    ajouterVideos(o, [videos.hevc, videos.courte, videos.longue]);
+    await connecter(o, louise, LIBELLES.fr.ACCUEIL);
+    // Accès aux photos : remis à zéro pour photographier la demande d'iOS (une seule fois).
+    o.xcrun(["simctl", "privacy", o.udid, "reset", "photos", BUNDLE_ID]);
+    o.relancerApp();
+    etape(o, "13-galerie-accord", { DERNIERE: LIBELLES.fr.DERNIERE });
+    // Puis la vidéo de 12 s devient la plus récente (relue au retour sur Spotter).
+    ajouterVideos(o, [videos.courte]);
+  } finally {
+    rmSync(videos.dossier, { recursive: true, force: true });
+  }
   let courante: "fr" | "en" = "fr";
   for (const combo of COMBINAISONS) {
+    await oublierAccordIa(o, louise);
     regler(o, courante, combo.langue, combo.theme, combo.id);
     courante = combo.langue;
     const l = LIBELLES[combo.langue];
-    etape(o, "09-video-auto", {
-      IMPORTER: l.IMPORTER,
-      TITRE: l.TITRE,
-      DESCRIPTION: l.DESCRIPTION,
-      CONSENTEMENT: l.CONSENTEMENT,
-      ACCEPTER: l.ACCEPTER,
-      ECHEC: l.ECHEC,
-      ESSAYER2: l.ESSAYER2,
-      ESSAYER1: l.ESSAYER1,
-      MOI_MEME: l.MOI_MEME,
-      CURSEUR: l.CURSEUR,
-      FERMER: l.FERMER,
-      PREFIXE: combo.id,
-    });
-    etape(o, "10-retrait-ia", { PROFIL: l.PROFIL, REGLAGES: l.REGLAGES, INTERRUPTEUR: l.INTERRUPTEUR, RETIRE: l.RETIRE, RETOUR: l.RETOUR, IMPORTER: l.IMPORTER, PREFIXE: combo.id });
+    etape(o, "14-derniere-video", { ...l, PREFIXE: combo.id });
+    const accords = await accordsIa(o, louise);
+    if (!accords.some((a) => a.granted_at !== null)) throw new Error(`${combo.id} : accord non enregistré`);
   }
   regler(o, courante, "fr", "SYSTEME", "fr-systeme");
-  etape(o, "11-video-auto-replis");
-  await verifierAuto(o, louise);
+  etape(o, "15-autre-video-photo");
+  etape(o, "16-replis");
+  await oublierAccordIa(o, louise);
+  etape(o, "17-refus");
+  await verifierParcoursUnique(o, louise);
 }
 
-/** Lot 4 ter — étape 0 : parcours vidéo actuel au premier usage (fr, clair), une capture par écran. */
-async function diagnostic4ter(o: Outils): Promise<void> {
-  const compte = await o.creerCompte("d", "Louise (test)");
-  await videosSimulateur(o);
-  await connecter(o, compte, "Importer une vidéo");
-  regler(o, "fr", "fr", "CLAIR", "fr-clair");
-  etape(o, "12-diagnostic-4ter");
-}
-
-const SCENARIOS: Record<string, { run: (o: Outils) => Promise<void>; sortie: string; iaSimulee?: boolean }> = {
+const SCENARIOS: Record<string, { run: (o: Outils) => Promise<void>; sortie: string; iaSimulee?: boolean; serpapiSimule?: boolean }> = {
   natif: { run: natif, sortie: "lot-3bis-captures" },
   preparer: { run: attendreExploration, sortie: "lot-3bis-captures" },
-  video: { run: video, sortie: "lot-4-iphone-captures" },
-  "video-auto": { run: videoAuto, sortie: "lot-4-auto-iphone-captures", iaSimulee: true },
-  "diagnostic-4ter": { run: diagnostic4ter, sortie: "lot-4-ter-diagnostic-iphone", iaSimulee: true },
+  "parcours-unique": { run: parcoursUnique, sortie: "lot-4-ter-iphone-captures", iaSimulee: true, serpapiSimule: true },
 };
 
 const nom = process.argv[2] ?? "";
@@ -294,7 +263,7 @@ if (!scenario) {
   console.error(`Indiquez un scénario : ${Object.keys(SCENARIOS).join(", ")}.`);
   process.exit(1);
 }
-lancerParcours(scenario.sortie, scenario.run, { iaSimulee: scenario.iaSimulee === true }).catch((error: unknown) => {
+lancerParcours(scenario.sortie, scenario.run, { iaSimulee: scenario.iaSimulee === true, serpapiSimule: scenario.serpapiSimule === true }).catch((error: unknown) => {
   console.error(`Erreur : ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
 });

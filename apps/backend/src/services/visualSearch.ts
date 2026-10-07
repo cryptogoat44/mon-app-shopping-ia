@@ -1,6 +1,10 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { env } from "../env.js";
 import { safeFetch } from "../lib/safeFetch.js";
+import { CURRENT_LENS_SETTINGS, DEFAULT_LOCALE, type LensSettings, type SearchLocale } from "./lensSettings.js";
+
+export { CURRENT_LENS_SETTINGS, type LensSettings, type SearchLocale };
 
 export interface VisualMatch {
   rank: number;
@@ -15,26 +19,19 @@ export interface VisualMatch {
   currency: string | null;
 }
 
-interface SerpApiPrice {
-  value?: string;
-  extracted_value?: number;
-  currency?: string;
-}
-
-interface SerpApiVisualMatch {
-  position?: number;
-  title?: string;
-  link?: string;
-  source?: string;
-  thumbnail?: string;
-  image?: string;
-  price?: SerpApiPrice;
-}
-
-interface SerpApiLensResponse {
-  visual_matches?: SerpApiVisualMatch[];
-  error?: string;
-}
+// Réponse de SerpApi lue avec zod (charte, règle 19) : une proposition mal
+// formée est écartée, sans faire échouer les autres.
+const SERPAPI_VISUAL_MATCH = z.object({
+  position: z.number().optional(),
+  title: z.string().optional(),
+  link: z.string().optional(),
+  source: z.string().optional(),
+  thumbnail: z.string().optional(),
+  image: z.string().optional(),
+  price: z.object({ value: z.string().optional(), extracted_value: z.number().optional(), currency: z.string().optional() }).optional(),
+});
+export type SerpApiVisualMatch = z.infer<typeof SERPAPI_VISUAL_MATCH>;
+const SERPAPI_LENS_RESPONSE = z.object({ visual_matches: z.array(z.unknown()).optional(), error: z.string().optional() });
 
 const SERPAPI_ENDPOINT = "https://serpapi.com/search";
 // Nombre de propositions gardées (programme, étape 4.A, confirmé par le
@@ -51,30 +48,6 @@ function linkKey(link: string): string {
 // "processing" indéfiniment côté mobile.
 const SERPAPI_TIMEOUT_MS = 15_000;
 
-// --- Configuration de la recherche visuelle ---------------------------
-//
-// Comparée empiriquement à "type=all" (le comportement précédent) avant
-// d'être adoptée : sur un cas de test réel, "products" a fait passer la
-// part de résultats avec un vrai prix marchand de 16/60 à 20/60 et a
-// éliminé tous les résultats de réseaux sociaux (11/60 → 0/60), à
-// condition d'être combiné à la localisation ci-dessous — sans elle, le
-// premier résultat était une mauvaise marque. Voir docs/journal-decisions.md,
-// 2026-09-22.
-/** Restreint Google Lens aux résultats qu'il classe "produit" (prix, lien
- * marchand) plutôt qu'à toute image simplement ressemblante. */
-const SEARCH_TYPE = "products";
-
-export interface SearchLocale {
-  /** Code pays à deux lettres (ex. "fr", "us") — paramètre `country` de SerpApi. */
-  country: string;
-  /** Code langue (ex. "fr", "en") — paramètre `hl` de SerpApi. */
-  hl: string;
-}
-
-/** Localisation par défaut (français) ; la route de recherche transmet
- * celle de l'utilisateur — voir lib/locale.ts (lot 3). */
-const DEFAULT_LOCALE: SearchLocale = { country: "fr", hl: "fr" };
-
 // Un lien vers une simple publication n'est jamais un endroit où acheter
 // la pièce. "type=products" les élimine déjà la plupart du temps ; cette
 // liste s'applique en plus, après coup, pour ne pas en dépendre.
@@ -89,7 +62,7 @@ const EXCLUDED_MERCHANT_DOMAINS = [
   "x.com",
 ];
 
-function isExcludedMerchant(link: string): boolean {
+export function isExcludedMerchant(link: string): boolean {
   let host: string;
   try {
     host = new URL(link).hostname.toLowerCase();
@@ -103,15 +76,12 @@ function isExcludedMerchant(link: string): boolean {
  * transmis que s'il est rempli : sur une image recadrée il écarte les pièces
  * voisines, mais sur une image entière il avait dégradé le résultat (essais
  * du 2026-09-22 et du 2026-09-24, docs/lot-s-design/README.md). */
-async function callSerpApi(imageUrl: string, locale: SearchLocale, query: string | null): Promise<SerpApiLensResponse> {
-  const params = new URLSearchParams({
-    engine: "google_lens",
-    url: imageUrl,
-    country: locale.country,
-    hl: locale.hl,
-    type: SEARCH_TYPE,
-    api_key: env.SERPAPI_KEY,
-  });
+export async function callSerpApi(imageUrl: string, settings: LensSettings, query: string | null): Promise<SerpApiVisualMatch[]> {
+  const params = new URLSearchParams({ engine: "google_lens", url: imageUrl, type: settings.type, api_key: env.SERPAPI_KEY });
+  if (settings.locale) {
+    params.set("country", settings.locale.country);
+    params.set("hl", settings.locale.hl);
+  }
   if (query) params.set("q", query);
 
   const response = await safeFetch(`${SERPAPI_ENDPOINT}?${params.toString()}`, {
@@ -122,16 +92,20 @@ async function callSerpApi(imageUrl: string, locale: SearchLocale, query: string
     throw new Error(`SerpApi a répondu ${response.status}`);
   }
 
-  const data = (await response.json()) as SerpApiLensResponse;
+  const data = SERPAPI_LENS_RESPONSE.safeParse(await response.json().catch(() => null));
+  if (!data.success) throw new Error("SerpApi : réponse inattendue");
   // "Google Lens hasn't returned any results" arrive sous forme d'erreur
   // alors que c'est simplement une recherche vide : on la traite comme telle.
-  if (data.error && !/hasn't returned any results/i.test(data.error)) {
-    throw new Error(`SerpApi : ${data.error}`);
+  if (data.data.error && !/hasn't returned any results/i.test(data.data.error)) {
+    throw new Error(`SerpApi : ${data.data.error}`);
   }
-  return data;
+  return (data.data.visual_matches ?? []).flatMap((item) => {
+    const match = SERPAPI_VISUAL_MATCH.safeParse(item);
+    return match.success ? [match.data] : [];
+  });
 }
 
-function toVisualMatches(matches: SerpApiVisualMatch[]): VisualMatch[] {
+export function toVisualMatches(matches: SerpApiVisualMatch[]): VisualMatch[] {
   const seen = new Set<string>();
   return matches
     .filter(
@@ -178,10 +152,10 @@ export async function searchProductsByImageUrl(
   options: VisualSearchOptions = {}
 ): Promise<VisualMatch[]> {
   const query = options.query?.trim() || null;
-  const data = await callSerpApi(imageUrl, options.locale ?? DEFAULT_LOCALE, query);
-  const matches = toVisualMatches(data.visual_matches ?? []);
+  const settings: LensSettings = { ...CURRENT_LENS_SETTINGS, locale: options.locale ?? DEFAULT_LOCALE };
+  const matches = toVisualMatches(await callSerpApi(imageUrl, settings, query));
   if (matches.length === 0) {
-    fastify.log.info({ type: SEARCH_TYPE, withQuery: query !== null }, "Recherche visuelle sans résultat");
+    fastify.log.info({ type: settings.type, withQuery: query !== null }, "Recherche visuelle sans résultat");
   }
   return matches;
 }

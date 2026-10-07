@@ -1,5 +1,5 @@
 import { formatPrice } from "@/lib/format";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -16,17 +16,14 @@ import type { Piece, SpotFailReason } from "@/api/types";
 import { addVaultItemFromMatch } from "@/lib/api";
 import { openMerchantLink } from "@/lib/merchant-links";
 import { chooseInitialResult, type InitialResultState } from "@/lib/spot-result";
-import { getDraft, updateDraft } from "@/lib/spot-draft";
-import { beginFromLink, beginFromPhoto } from "@/lib/spot-flow";
-import { detectLink } from "@/lib/link-detection";
-import { importPhotoForSpotter } from "@/lib/image-import";
+import { failureCorrections, successCorrections, type Correction } from "@/lib/spot-corrections";
 import { VAULT_CATEGORIES } from "@/lib/vault-labels";
 import { useToast } from "@/lib/toast-context";
 import { Skeleton } from "@/components/skeleton";
 import { SpotImage } from "@/components/spot-image";
 import { ErrorMessage } from "@/components/error-message";
-import { CameraIcon } from "@/components/icons";
-import { VideoAlternatives } from "@/components/video-alternatives";
+import { CorrectionButtons, CorrectionsLink, CorrectionsSheet, useCorrections } from "@/components/spot-corrections";
+import { ActionButtons, type Action } from "@/components/spot-launch-views";
 import { track } from "@/lib/analytics";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -52,6 +49,7 @@ export default function ResultScreen() {
   const [blockedMerchantUrl, setBlockedMerchantUrl] = useState<string | null>(null);
   const [showAllOthers, setShowAllOthers] = useState(false);
   const [affiliateInfoOpen, setAffiliateInfoOpen] = useState(false);
+  const [correctionsOpen, setCorrectionsOpen] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   const result = state.kind === "ready" ? state.result : null;
@@ -75,53 +73,17 @@ export default function ResultScreen() {
     if (result?.status === "success") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   }, [result?.status]);
 
-  // ---- Reprendre le parcours (recadrer, importer une capture, réessayer) ----
+  // ---- Corrections (lot 4 ter) : recadrer, autres moments, choisir l'image soi-même ----
 
-  const draft = getDraft();
-  const canReframe = Boolean(draft) || Boolean(result?.sourceUrl);
-
-  async function handleReframe() {
-    if (draft) {
-      router.replace({ pathname: "/spot/ciblage", params: {} });
-      return;
-    }
-    const detection = result?.sourceUrl ? detectLink(result.sourceUrl) : null;
-    if (detection?.kind !== "supported") return;
-    try {
-      const next = await beginFromLink(detection.url, detection.platform);
-      router.replace({ pathname: "/spot/apercu", params: { searchId: next.searchId ?? "" } });
-    } catch {
-      setActionError(t.spotter.prepareError);
-    }
-  }
-
-  async function handleImportCapture() {
-    setActionError(null);
-    const picked = await importPhotoForSpotter();
-    if (picked.kind !== "picked") return;
-    const size = { width: picked.width, height: picked.height };
-    try {
-      if (draft) {
-        updateDraft({ localImageUri: picked.uri, imageSize: size, crop: null });
-      } else {
-        const detection = result?.sourceUrl ? detectLink(result.sourceUrl) : null;
-        if (detection?.kind === "supported") {
-          await beginFromLink(detection.url, detection.platform);
-          updateDraft({ localImageUri: picked.uri, imageSize: size });
-        } else {
-          await beginFromPhoto(picked.uri, size);
-        }
-      }
-      router.replace({ pathname: "/spot/ciblage", params: {} });
-    } catch {
-      setActionError(t.spotter.prepareError);
-    }
-  }
-
-  function handleRetry() {
-    if (draft) router.replace({ pathname: "/spot/analysis", params: {} });
-    else handleReframe();
-  }
+  const corrections = useCorrections(result, setActionError);
+  // La feuille se referme avant d'ouvrir l'écran suivant (sinon elle resterait par-dessus).
+  const fromSheet = (action: Action): Action => ({
+    ...action,
+    onPress: () => {
+      setCorrectionsOpen(false);
+      action.onPress();
+    },
+  });
 
   // ---- Actions sur une proposition ----
 
@@ -197,13 +159,7 @@ export default function ResultScreen() {
         <Text style={styles.close}>{t.spotter.close}</Text>
       </Pressable>
       <Text style={styles.navTitle}>{t.result.title}</Text>
-      {result?.status === "success" && canReframe ? (
-        <Pressable onPress={handleReframe} hitSlop={12} style={[styles.navSide, styles.navRight]} accessibilityRole="button">
-          <Text style={styles.navAction}>{t.result.reframe}</Text>
-        </Pressable>
-      ) : (
-        <View style={styles.navSide} />
-      )}
+      <View style={styles.navSide} />
     </View>
   );
 
@@ -248,25 +204,18 @@ export default function ResultScreen() {
         {nav}
         <FailureView
           reason={result?.failReason ?? "no_match"}
-          canReframe={canReframe}
-          onReframe={handleReframe}
-          onImportCapture={handleImportCapture}
-          onRetry={handleRetry}
+          corrections={failureCorrections(result?.failReason ?? "no_match", corrections.context)}
+          actions={corrections.actions}
+          onAddVideo={corrections.addVideo}
+          importing={corrections.importing}
           onBack={() => closeSpotter(router)}
           error={actionError}
-          extra={
-            <VideoAlternatives
-              sourceUrl={result?.sourceUrl ?? draft?.sourceUrl ?? null}
-              query={result?.query ?? draft?.query ?? ""}
-              onMessage={setActionError}
-              afterFailure
-            />
-          }
         />
       </SafeAreaView>
     );
   }
 
+  const successList = successCorrections(corrections.context);
   const others = result.pieces.map((p, index) => ({ p, index })).filter(({ index }) => index !== selectedIndex);
   // 11 autres propositions d'emblée (la meilleure + 11 = 12 images à
   // charger), le reste — jusqu'à 30 au total — sur demande.
@@ -337,6 +286,7 @@ export default function ResultScreen() {
           </Pressable>
         </View>
         {actionError ? <ErrorMessage style={styles.actionError}>{actionError}</ErrorMessage> : null}
+        {successList.length > 0 ? <CorrectionsLink onPress={() => setCorrectionsOpen(true)} /> : null}
 
         {others.length > 0 ? (
           <>
@@ -378,8 +328,15 @@ export default function ResultScreen() {
             ) : null}
           </>
         ) : null}
-        <VideoAlternatives sourceUrl={result.sourceUrl ?? null} query={result.query ?? ""} onMessage={setActionError} />
       </ScrollView>
+
+      <CorrectionsSheet visible={correctionsOpen} onClose={() => setCorrectionsOpen(false)}>
+        {successList.length === 1 && successList[0] === "add_video" ? (
+          <CorrectionButtons list={successList} actions={corrections.actions} onAddVideo={fromSheet(corrections.actions.add_video).onPress} importing={corrections.importing} />
+        ) : (
+          <ActionButtons secondary={successList.map((correction) => fromSheet(corrections.actions[correction]))} />
+        )}
+      </CorrectionsSheet>
 
       <Modal visible={categoryOpen} transparent animationType="slide" onRequestClose={() => setCategoryOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setCategoryOpen(false)} accessibilityRole="button" accessibilityLabel={t.common.close} />
@@ -401,23 +358,21 @@ export default function ResultScreen() {
 
 function FailureView({
   reason,
-  canReframe,
-  onReframe,
-  onImportCapture,
-  onRetry,
+  corrections,
+  actions,
+  onAddVideo,
+  importing,
   onBack,
   error,
-  extra,
 }: {
   reason: SpotFailReason;
-  canReframe: boolean;
-  onReframe: () => void;
-  onImportCapture: () => void;
-  onRetry: () => void;
+  /** Deux au plus, la plus utile d'abord (lib/spot-corrections.ts). */
+  corrections: Correction[];
+  actions: Record<Correction, Action>;
+  onAddVideo: () => void;
+  importing: boolean;
   onBack: () => void;
   error: string | null;
-  /** Vidéo : autre moment, choix au curseur, ou vidéo à ajouter (lot 4, temps 1 bis). */
-  extra?: ReactNode;
 }) {
   const copy = {
     no_match: [t.result.noMatchTitle, t.result.noMatchTip],
@@ -426,22 +381,6 @@ function FailureView({
     needs_photo: [t.result.previewUnavailableTitle, t.result.previewUnavailableTip],
   }[reason];
 
-  // Ordre des actions selon la cause : après « rien trouvé », recadrer
-  // d'abord (réessayer à l'identique redonnerait le même résultat) ; après
-  // une panne, réessayer d'abord.
-  const reframe = canReframe ? { label: t.result.reframe, onPress: onReframe } : null;
-  const capture = { label: t.result.importCapture, onPress: onImportCapture, icon: true };
-  const retry = { label: t.result.retry, onPress: onRetry };
-  const actions =
-    reason === "technical"
-      ? [retry, reframe]
-      : reason === "needs_photo"
-        ? [capture]
-        : reason === "rate_limited"
-          ? []
-          : [reframe, capture, retry];
-  const [first, ...rest] = actions.filter((a): a is NonNullable<typeof a> => a !== null);
-
   return (
     <ScrollView contentContainerStyle={styles.failContent}>
       <Text style={styles.failTitle} accessibilityRole="header">
@@ -449,19 +388,7 @@ function FailureView({
       </Text>
       <Text style={styles.failTip}>{copy[1]}</Text>
       {error ? <ErrorMessage style={styles.actionError}>{error}</ErrorMessage> : null}
-      {first ? (
-        <Pressable style={styles.primary} onPress={first.onPress} accessibilityRole="button">
-          {"icon" in first ? <CameraIcon size={18} tint={color.blanc} /> : null}
-          <Text style={styles.primaryLabel}>{first.label}</Text>
-        </Pressable>
-      ) : null}
-      {rest.map((action) => (
-        <Pressable key={action.label} style={styles.secondary} onPress={action.onPress} accessibilityRole="button">
-          {"icon" in action ? <CameraIcon size={18} tint={color.encre} /> : null}
-          <Text style={styles.secondaryLabel}>{action.label}</Text>
-        </Pressable>
-      ))}
-      {extra}
+      {corrections.length > 0 ? <CorrectionButtons list={corrections} actions={actions} onAddVideo={onAddVideo} importing={importing} /> : null}
       <Pressable style={styles.textButton} onPress={onBack} accessibilityRole="button">
         <Text style={styles.textButtonLabel}>{t.result.backToSpotter}</Text>
       </Pressable>
@@ -473,10 +400,8 @@ const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 },
   navSide: { minWidth: 44, height: 44, justifyContent: "center" },
-  navRight: { alignItems: "flex-end" },
   close: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   navTitle: { fontSize: font.caption, color: color.acier },
-  navAction: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   count: { fontSize: font.caption, color: color.acier, marginBottom: space.sm },
   hero: { width: "100%", aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.sm, overflow: "hidden" },

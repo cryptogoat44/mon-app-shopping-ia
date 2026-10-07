@@ -132,7 +132,7 @@ export async function prepareMoment(video: OpenedVideo, rank: number): Promise<S
   const moment = live?.moments[rank];
   if (!live || !moment) throw new Error("video_moment_missing");
   const frame = await video.frameFile(moment.timeMs, SPOTTER_IMAGE_MAX_EDGE);
-  const started = await beginFromPhoto(frame.uri, { width: frame.width, height: frame.height });
+  const started = beginFromPhoto(frame.uri, { width: frame.width, height: frame.height });
   const draft = updateDraft({ crop: moment.box, query: live.query }) ?? started;
   live.tried.push(rank);
   track("video_ai_moment_tried", { rank: rank + 1 });

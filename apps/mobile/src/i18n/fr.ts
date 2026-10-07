@@ -16,6 +16,7 @@ export const fr = {
     unknownServerError: "Erreur inconnue du serveur.",
     /** Texte cité (ex. ce que la personne cherche), avec les guillemets de la langue. */
     quoted: (text: string) => `« ${text} »`,
+    photoUnavailable: "Cette photo n'a pas pu être récupérée. Si elle est stockée sur iCloud, vérifiez votre connexion, puis réessayez.",
   },
   tabs: {
     feed: "Fil",
@@ -31,7 +32,7 @@ export const fr = {
   },
   welcome: {
     baseline: "L'identification discrète des pièces qui comptent.",
-    explain: "Collez un lien ou une photo. Spotto retrouve la pièce et vous dit où l'acheter.",
+    explain: "Ajoutez une vidéo ou une photo. Spotto retrouve la pièce et vous dit où l'acheter.",
     cta: "Commencer",
     login: "Déjà un compte ? Se connecter",
     terms: "Conditions d'utilisation",
@@ -87,9 +88,12 @@ export const fr = {
     pasteDenied: "Collez le lien directement dans le champ.",
     continue: "Continuer",
     preparing: "Préparation…",
-    or: "ou",
-    importPhoto: "Importer une photo",
-    importVideo: "Importer une vidéo",
+    addVideo: "Ajouter une vidéo",
+    addPhoto: "Ajouter une photo",
+    otherVideo: "Choisir une autre vidéo",
+    latestVideo: "Votre dernière vidéo",
+    latestVideoLabel: (duration: string) => `Aperçu de votre dernière vidéo, ${duration}`,
+    linkQuestion: "Vous avez un lien TikTok, Instagram ou Pinterest ?",
     recentlySpotted: "Récemment spottées",
     detected: {
       tiktok: "Vidéo TikTok reconnue",
@@ -111,7 +115,6 @@ export const fr = {
   },
   // Lot 4 : choix d'une image dans une vidéo importée (la vidéo reste sur l'appareil).
   video: {
-    step: "Étape 1 sur 3 · Image",
     title: "Choisissez l'image",
     caption: "Faites glisser le curseur jusqu'au moment où la pièce est bien visible.",
     privacy: "La vidéo reste sur votre appareil : seule l'image choisie est envoyée.",
@@ -131,22 +134,16 @@ export const fr = {
     frameError: "Cette image n'a pas pu être extraite. Réessayez, ou choisissez un autre moment.",
     loadError: "La vidéo n'a pas pu être préparée.",
     tooLong: (duration: string) => `Cette vidéo dure ${duration} : choisissez une vidéo de 60 secondes au plus, ou raccourcissez-la d'abord.`,
-    tooLarge: (megabytes: number) => `Cette vidéo pèse ${megabytes} Mo : 100 Mo au plus. Raccourcissez-la, ou importez une capture d'écran du bon moment.`,
-    unreadable: "Cette vidéo n'a pas pu être lue. Essayez une autre vidéo, ou importez une capture d'écran du bon moment.",
+    tooLarge: (megabytes: number) => `Cette vidéo pèse ${megabytes} Mo : 100 Mo au plus. Raccourcissez-la, ou ajoutez plutôt une capture d'écran du bon moment.`,
+    unreadable: "Cette vidéo n'a pas pu être lue. Essayez une autre vidéo, ou ajoutez plutôt une capture d'écran du bon moment.",
     unavailable: "Cette vidéo n'a pas pu être récupérée. Si elle est stockée sur iCloud, vérifiez votre connexion, puis réessayez.",
     unreadableWeb:
-      "Ce navigateur ne sait pas lire cette vidéo (les vidéos HEVC des iPhone, par exemple, ne s'ouvrent pas partout). Essayez avec Safari, ou importez une capture d'écran du bon moment.",
+      "Ce navigateur ne sait pas lire cette vidéo (les vidéos HEVC des iPhone, par exemple, ne s'ouvrent pas partout). Essayez avec Safari, ou ajoutez plutôt une capture d'écran du bon moment.",
   },
+  // Analyse automatique d'une vidéo (lot 4, temps 1 bis) : accord, replis.
   videoAuto: {
-    step: "Étape 1 sur 3 · Pièce",
-    title: "Que cherchez-vous ?",
-    caption: "Décrivez la pièce en quelques mots : Spotto repère les meilleurs moments de la vidéo, cadre la pièce et lance l'identification.",
-    queryLabel: "Description de la pièce",
-    placeholder: "ex. veste en daim marron",
-    find: "Trouver la pièce",
     chooseMyself: "Choisir l'image moi-même",
     privacyNote: "La vidéo reste sur votre appareil. Avec votre accord, quelques images réduites sont analysées par une IA, sans être conservées par Spotto.",
-    checking: "Préparation…",
     checkFailed: "L'analyse automatique n'a pas pu être préparée. Vérifiez votre connexion, puis réessayez.",
     consentTitle: "Analyse automatique de la vidéo",
     consentBody: [
@@ -156,13 +153,7 @@ export const fr = {
     ],
     consentPolicy: "Lire la politique de confidentialité",
     accept: "Accepter",
-    decline: "Plutôt le curseur manuel",
     consentFailed: "Votre accord n'a pas pu être enregistré. Vérifiez votre connexion, puis réessayez.",
-    workingTitle: "Recherche de la pièce…",
-    stepFrames: "Repérage des images nettes, sur votre appareil",
-    stepAi: "Recherche des meilleurs moments",
-    stepIdentify: "Identification de la pièce",
-    cancel: "Annuler",
     notFoundTitle: "Pièce non repérée",
     notFound: "La pièce n'a pas été repérée dans la vidéo. Précisez votre description, ou choisissez l'image vous-même.",
     editQuery: "Modifier la description",
@@ -175,16 +166,39 @@ export const fr = {
       network: "Connexion impossible. Vérifiez votre connexion, puis réessayez.",
       video: "Cette vidéo n'a pas pu être analysée sur votre appareil. Choisissez l'image vous-même.",
     },
-    retry: "Réessayer",
-    otherTitle: "Ce n'est pas la bonne pièce ?",
-    /** Même bloc sous une recherche sans résultat ou qui n'a pas abouti. */
-    otherMomentsTitle: "Autres moments de la vidéo",
     tryAnother: (remaining: number) => `Essayer un autre moment (${remaining} restant${remaining > 1 ? "s" : ""})`,
-    addVideoTitle: "La pièce n'est pas sur la couverture ?",
-    addVideo: "Ajoutez la vidéo",
+  },
+  // Parcours unique (lot 4 ter) : après le choix d'une vidéo ou d'une photo.
+  launch: {
+    title: "Que cherchez-vous ?",
+    placeholder: "ex. veste en daim marron, sac noir",
+    launch: "Lancer",
+    chooseImage: "Choisir l'image",
+    declinedNote: "Analyse automatique désactivée : vous choisirez l'image vous-même.",
+    enableAi: "Activer l'analyse automatique",
+    videoPreview: (duration: string) => `Aperçu de votre vidéo, ${duration}`,
+    photoPreview: "Votre photo",
+    waitingVideo: "Spotto repère la pièce…",
+    usualVideo: "Cela prend en général 15 à 30 secondes.",
+  },
+  // Site (lot 4 ter) : un onglet resté ouvert propose la version en ligne.
+  siteVersion: {
+    available: "Nouvelle version disponible.",
+    reload: "Recharger",
+  },
+  // Lien collé (lot 4 ter) : l'analyse de la couverture est désactivée.
+  linkNotice: {
+    title: "Une vidéo ne se lit pas depuis un lien",
+    body: (how: string) =>
+      `Spotto ne peut pas lire la vidéo à partir de son lien. Enregistrez votre écran pendant qu'elle passe (${how}), puis ajoutez cet enregistrement.`,
+    how: {
+      ios: "sur iPhone, depuis le Centre de contrôle",
+      android: "sur Android, depuis les Réglages rapides",
+      computer: "sur Mac : Cmd + Maj + 5 ; sur PC : Outil Capture d'écran",
+    },
+    addVideo: "Ajouter une vidéo",
   },
   preview: {
-    step: "Étape 1 sur 3 · Aperçu",
     title: "Voici l'image qui sera analysée",
     caption: (platform: string) => `Image de couverture de la ${platform === "TikTok" ? "vidéo" : "publication"} ${platform}.`,
     captureCaption: "Votre capture d'écran.",
@@ -237,7 +251,6 @@ export const fr = {
     back: "Retour à Spotter",
   },
   targeting: {
-    step: "Étape 2 sur 3 · Ciblage",
     title: "Entourez la pièce",
     caption: "Seule la zone choisie sera analysée. Faites glisser le cadre ou ses coins.",
     queryLabel: "Que cherchez-vous ?",
@@ -249,9 +262,6 @@ export const fr = {
   },
   analysis: {
     title: "Spotto parcourt les boutiques…",
-    stepZone: "Zone préparée",
-    stepSearch: "Recherche des pièces correspondantes",
-    stepSelect: "Sélection des propositions",
     usual: "Cela prend en général 10 à 20 secondes.",
     slow: "C'est plus long que d'habitude : le service redémarre peut-être. Merci de patienter.",
     cancel: "Annuler",
@@ -292,9 +302,10 @@ export const fr = {
     missingTip: "Relancez une identification depuis Spotter.",
     retry: "Réessayer",
     backToSpotter: "Retour à Spotter",
-    importCapture: "Importer une capture",
+    notRight: "Ce n'est pas la bonne pièce ?",
+    correctionsLead: "Montrez la pièce autrement à Spotto :",
     noMatchTitle: "Aucune pièce trouvée pour cette zone",
-    noMatchTip: "Resserrez le cadre sur la pièce, précisez ce que vous cherchez, ou importez une capture plus nette prise au bon moment de la vidéo.",
+    noMatchTip: "Recadrez la pièce de plus près ou précisez ce que vous cherchez ; dans une vidéo, un autre moment peut aussi mieux la montrer.",
     technicalTitle: "La recherche n'a pas abouti",
     technicalTip: "Le service de reconnaissance n'a pas répondu. Vérifiez votre connexion, puis réessayez.",
     rateLimitedTitle: "Trop de recherches d'un coup",

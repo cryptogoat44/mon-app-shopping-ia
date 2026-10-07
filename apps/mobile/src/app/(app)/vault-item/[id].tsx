@@ -38,6 +38,7 @@ export default function VaultItemDetailScreen() {
     if (!item) return;
     setError(null);
     const picked = await importPhotoForSpotter();
+    if (picked.kind === "unavailable") return setError(t.common.photoUnavailable);
     if (picked.kind !== "picked") return;
     setChangingPhoto(true);
     try {

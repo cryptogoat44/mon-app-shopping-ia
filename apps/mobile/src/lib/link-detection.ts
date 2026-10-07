@@ -76,3 +76,10 @@ export function detectLink(text: string): LinkDetection {
   }
   return { kind: "unsupported", url };
 }
+
+/** Le texte contient-il un lien (lot 4 ter) ? Une description de la pièce
+ * n'en contient jamais : un lien collé à la place appelle une explication. */
+export function containsLink(text: string): boolean {
+  const kind = detectLink(text).kind;
+  return kind !== "empty" && kind !== "not_a_link";
+}

@@ -12,8 +12,9 @@ const oneOf = (values: readonly string[]): Rule => ({ kind: "enum", values });
 const count: Rule = { kind: "count" };
 const bool: Rule = { kind: "bool" };
 const VISIBILITY = oneOf(["public", "followers", "private"]);
-// Lot 4 : vidéo importée dans le Spotter — photothèque (app iPhone) ou fichier (site).
-const VIDEO_SOURCE = oneOf(["library", "file"]);
+// Lot 4 : vidéo importée dans le Spotter — photothèque (app iPhone) ou fichier (site) ;
+// lot 4 ter : dernière vidéo de la galerie, proposée sur l'accueil (app iPhone).
+const VIDEO_SOURCE = oneOf(["library", "file", "latest"]);
 
 export const ANALYTICS_EVENTS = {
   signup_completed: { locale: oneOf(["fr", "en"]) },

@@ -1,0 +1,54 @@
+# Lot 4 ter (français) : une autre vidéo, choisie d'un geste dans le sélecteur
+# d'iOS (il suit la langue de l'iPhone) → écran unique, champ prêt à la saisie
+# → « Lancer » → résultats. Puis une photo : même parcours, sans IA.
+appId: com.spottoapp.ios
+---
+- tapOn: "Choisir une autre vidéo"
+- extendedWaitUntil:
+    visible: "Collections"
+    timeout: 20000
+- tapOn:
+    text: "Vidéo, douze.*"
+    index: 1
+- extendedWaitUntil:
+    visible: "Que cherchez-vous \\?"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 09-autre-video-question
+- inputText: "veste en daim marron"
+- tapOn: "Lancer"
+- extendedWaitUntil:
+    visible: "Meilleure proposition"
+    timeout: 120000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 10-autre-video-resultats
+- tapOn: "Fermer"
+- extendedWaitUntil:
+    visible: "Ajouter une photo"
+    timeout: 20000
+- tapOn: "Ajouter une photo"
+- extendedWaitUntil:
+    visible: "Collections"
+    timeout: 20000
+- tapOn:
+    point: "50%,25%"
+- extendedWaitUntil:
+    visible: "Que cherchez-vous \\?"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 11-photo-question
+- inputText: "veste"
+- tapOn: "Lancer"
+- extendedWaitUntil:
+    visible: "Meilleure proposition"
+    timeout: 120000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 12-photo-resultats
+- tapOn: "Fermer"
+- extendedWaitUntil:
+    visible: "Ajouter une photo"
+    timeout: 20000
