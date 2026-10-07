@@ -55,6 +55,30 @@ export function assertEditableVariable(service: AllowedServiceName, key: string 
   return { key, value, mustExist: rule.mustExist };
 }
 
+/** Seul SECRET que ces outils peuvent écrire (décision du fondateur,
+ * 2026-10-07) : la clé de production d'Anthropic, sur spotto-api, saisie
+ * masquée par configurer-anthropic-prod. Jamais en ligne de commande
+ * (render-bride la refuse : elle n'est pas dans EDITABLE_VARIABLES), jamais
+ * affichée, jamais écrite dans un fichier, jamais journalisée. */
+export const SECRET_VARIABLE = { service: "spotto-api", key: "ANTHROPIC_API_KEY" } as const;
+
+/** Variables indispensables au serveur (src/env.ts) et clé d'Anthropic : après
+ * l'envoi, on vérifie seulement qu'elles EXISTENT, sans jamais lire leur valeur. */
+export const REQUIRED_SERVER_VARIABLES = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SERPAPI_KEY", SECRET_VARIABLE.key] as const;
+
+export function assertSecretVariable(service: string | undefined, key: string | undefined): { serviceId: string; key: typeof SECRET_VARIABLE.key } {
+  const resolved = resolveService(service);
+  if (resolved.name !== SECRET_VARIABLE.service || key !== SECRET_VARIABLE.key) {
+    throw new RenderGuardError(`Secret refusé : seule ${SECRET_VARIABLE.key} sur « ${SECRET_VARIABLE.service} » peut être écrite (demandé : ${key ?? ""} sur « ${resolved.name} »).`);
+  }
+  return { serviceId: resolved.id, key: SECRET_VARIABLE.key };
+}
+
+/** Forme d'une clé d'API d'Anthropic (« sk-ant-… »), contrôlée avant tout envoi. */
+export function isAnthropicKeyShape(value: string): boolean {
+  return /^sk-ant-[A-Za-z0-9_-]{20,200}$/.test(value);
+}
+
 /** Adresse admise pour EXPO_PUBLIC_API_URL : un serveur Render, en https,
  * sans chemin, et jamais l'ancien serveur (Oregon). */
 export const ALLOWED_API_URLS = ["https://spotto-api.onrender.com"] as const;

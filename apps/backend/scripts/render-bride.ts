@@ -20,41 +20,14 @@
 // - chaque action qui change quelque chose est d'abord ANNONCÉE ; elle n'est
 //   lancée qu'avec --confirmer ;
 // - la clé est lue dans apps/backend/.render-api-key (ignoré par Git) et
-//   n'est jamais affichée.
-import { existsSync, readFileSync } from "node:fs";
-import {
-  RENDER_KEY_PATH as KEY_PATH,
-  assertEditableVariable,
-  FINAL_DEPLOY_STATUSES,
-  RenderGuardError,
-  assertDeployId,
-  resolveService,
-} from "./lib/render-guard.js";
+//   n'est jamais affichée (scripts/lib/render-api.ts).
+// La clé de production d'Anthropic (seul secret écrit par ces outils) passe
+// par un autre script, à saisie masquée : configurer-anthropic-prod.
+import { assertEditableVariable, FINAL_DEPLOY_STATUSES, RenderGuardError, assertDeployId, resolveService } from "./lib/render-guard.js";
+import { readRenderKey as readKey, renderRequest as render, RenderNotFound as NotFound } from "./lib/render-api.js";
 
-const API = "https://api.render.com/v1";
 const POLL_MS = 10_000;
 const POLL_LIMIT_MS = 15 * 60_000;
-
-function readKey(): string {
-  if (!existsSync(KEY_PATH)) throw new RenderGuardError("Clé absente : lancez d'abord « pnpm --filter backend configurer-render ».");
-  const key = readFileSync(KEY_PATH, "utf8").trim();
-  if (!key) throw new RenderGuardError("Fichier de clé vide.");
-  return key;
-}
-
-class NotFound extends Error {}
-
-async function render(key: string, method: "GET" | "POST" | "PUT", path: string, body?: unknown): Promise<unknown> {
-  const response = await fetch(`${API}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${key}`, Accept: "application/json", ...(body ? { "Content-Type": "application/json" } : {}) },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await response.text();
-  if (response.status === 404 && method === "GET") throw new NotFound();
-  if (!response.ok) throw new Error(`Render a répondu ${response.status}${text ? ` : ${text.slice(0, 200)}` : ""}`);
-  return text ? JSON.parse(text) : null;
-}
 
 interface Deploy {
   id: string;

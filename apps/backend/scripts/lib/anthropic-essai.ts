@@ -14,3 +14,10 @@ export function lireCleEssai(): string {
   if (!cle) throw new Error("Clé d'essai vide : relancez « pnpm --filter backend configurer-anthropic-essai ».");
   return cle;
 }
+
+/** Clé d'essai si elle a été enregistrée, sinon null (sert seulement à refuser
+ * qu'elle soit envoyée en production par erreur ; jamais affichée). */
+export function cleEssaiEventuelle(): string | null {
+  if (!existsSync(ANTHROPIC_ESSAI_KEY_PATH)) return null;
+  return readFileSync(ANTHROPIC_ESSAI_KEY_PATH, "utf8").trim() || null;
+}
