@@ -327,8 +327,9 @@ async function relancesSession(o: Outils, panne: boolean): Promise<void> {
   log(`  ${perdues} session(s) perdue(s) sur ${n} relances — rapport : relances.md`);
 }
 
-const SCENARIOS: Record<string, { run: (o: Outils) => Promise<void>; sortie: string; iaSimulee?: boolean; serpapiSimule?: boolean; panneAuth?: boolean }> = {
-  natif: { run: natif, sortie: "lot-3bis-captures" },
+const SCENARIOS: Record<string, { run: (o: Outils) => Promise<void>; sortie: string; iaSimulee?: boolean; serpapiSimule?: boolean; panneAuth?: boolean; sentry?: boolean }> = {
+  // « natif » envoie volontairement une erreur de test à Sentry (région UE) : seul scénario avec Sentry.
+  natif: { run: natif, sortie: "lot-3bis-captures", sentry: true },
   preparer: { run: attendreExploration, sortie: "lot-3bis-captures" },
   "parcours-unique": { run: parcoursUnique, sortie: "lot-4-ter-iphone-captures", iaSimulee: true, serpapiSimule: true },
   "relance-session": { run: (o) => relancesSession(o, false), sortie: "lot-4-ter-relances" },
@@ -341,7 +342,7 @@ if (!scenario) {
   console.error(`Indiquez un scénario : ${Object.keys(SCENARIOS).join(", ")}.`);
   process.exit(1);
 }
-lancerParcours(scenario.sortie, scenario.run, { iaSimulee: scenario.iaSimulee === true, serpapiSimule: scenario.serpapiSimule === true, panneAuth: scenario.panneAuth === true }).catch((error: unknown) => {
+lancerParcours(scenario.sortie, scenario.run, { iaSimulee: scenario.iaSimulee === true, serpapiSimule: scenario.serpapiSimule === true, panneAuth: scenario.panneAuth === true, sentry: scenario.sentry === true }).catch((error: unknown) => {
   console.error(`Erreur : ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
 });

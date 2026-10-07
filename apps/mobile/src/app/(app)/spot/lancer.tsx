@@ -1,17 +1,18 @@
-import { useCallback, useEffect, useState } from "react";
-import { Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Keyboard, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { VIDEO_AI } from "@monapp/shared-types";
+import { VIDEO_AI, type CropRect } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { containsLink } from "@/lib/link-detection";
 import { closeSpotter } from "@/lib/spot-navigation";
-import { getDraft, type SpotDraft } from "@/lib/spot-draft";
+import { DEFAULT_CROP } from "@/lib/crop-geometry";
+import { draftImageUri, getDraft, type SpotDraft } from "@/lib/spot-draft";
 import { getSpotVideo, holdSpotVideo, importSpotVideo, letGoSpotVideo, videoImportMessage } from "@/lib/spot-video";
 import { useSpotLaunch, type LaunchPhase } from "@/lib/use-spot-launch";
 import { clampTime, formatClock, type FramePreview, type OpenedVideo } from "@/lib/video-timeline";
-import { AskView, ConsentView, FallbackView, LaunchPreview, type Action, type AskProps } from "@/components/spot-launch-views";
+import { AskView, ConsentView, FallbackView, LaunchPreview, PhotoFrame, type Action, type AskProps } from "@/components/spot-launch-views";
 import { SpotWaitingScreen } from "@/components/spot-waiting";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -116,6 +117,7 @@ function useAsk(media: Media, setMedia: (media: Media) => void, query: string, s
   const linkInQuery = containsLink(query);
   const enoughWords = !isVideo || flow.declined || query.trim().length >= VIDEO_AI.queryMinLength;
   return {
+    autoFocus: isVideo,
     query,
     onQuery: (value) => {
       setQuery(value);
@@ -143,9 +145,20 @@ export default function LaunchScreen() {
   const { height: windowHeight } = useWindowDimensions();
   const [media, setMedia] = useState(() => initialMedia(params.source));
   const [query, setQuery] = useState(typeof params.query === "string" ? params.query : "");
+  // Photo : la zone entourée ; le défilement s'arrête pendant qu'on déplace le cadre.
+  const [crop, setCrop] = useState<CropRect>(() => media.draft?.crop ?? DEFAULT_CROP);
+  const [dragging, setDragging] = useState(false);
   const preview = useLaunchPreview(media);
-  const flow = useSpotLaunch({ ...media, preview: preview.source, query, auto: params.auto === "1" });
+  const flow = useSpotLaunch({ ...media, preview: preview.source, query, crop: media.source === "photo" ? crop : null, auto: params.auto === "1" });
   const ask = useAsk(media, setMedia, query, setQuery, flow);
+  // Photo : le cadre occupe le haut de l'écran ; quand le clavier s'ouvre, on
+  // descend jusqu'à « Lancer », sinon caché dessous (constaté sur iPhone).
+  const scrollRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    if (media.source !== "photo") return;
+    const subscription = Keyboard.addListener("keyboardDidShow", () => scrollRef.current?.scrollToEnd({ animated: true }));
+    return () => subscription.remove();
+  }, [media.source]);
 
   // La vidéo reste ouverte tant que cet écran est dans le parcours (résultats,
   // corrections) ; le dernier écran à partir la libère (copie effacée sur iPhone).
@@ -162,6 +175,7 @@ export default function LaunchScreen() {
   );
 
   if (!media.video && !media.draft) return <MissingView />;
+  const photoUri = media.source === "photo" && media.draft ? draftImageUri(media.draft) : null;
   if (flow.phase.kind === "working") {
     const isVideo = media.source === "video";
     const identifying = !isVideo || Boolean(flow.waitingImage?.crop);
@@ -188,8 +202,10 @@ export default function LaunchScreen() {
           <Text style={styles.close}>{t.spotter.close}</Text>
         </Pressable>
       </View>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
-        {flow.phase.kind === "ask" ? (
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content} scrollEnabled={!dragging} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+        {flow.phase.kind === "ask" && photoUri ? (
+          <PhotoFrame uri={photoUri} crop={crop} onChange={setCrop} onDragChange={setDragging} height={Math.min(Math.max(windowHeight * 0.42, 220), 400)} />
+        ) : flow.phase.kind === "ask" ? (
           <LaunchPreview
             source={preview.source}
             failed={preview.failed}

@@ -129,7 +129,7 @@ function verifierEnvironnement(): { mobileEnv: Record<string, string> } {
 
 /** Serveur local et Metro ; leurs journaux vont dans un dossier temporaire
  * (hors du dépôt), utile pour comprendre un échec. */
-function demarrerServeurs(iaSimulee: boolean, serpapiSimule: boolean, panneAuth: boolean): { serveur: ChildProcess; metro: ChildProcess; journaux: string } {
+function demarrerServeurs(iaSimulee: boolean, serpapiSimule: boolean, panneAuth: boolean, sentry: boolean): { serveur: ChildProcess; metro: ChildProcess; journaux: string } {
   const journaux = mkdtempSync(join(tmpdir(), "parcours-iphone-journaux-"));
   // Jamais de vraie clé d'Anthropic ; avec l'IA simulée, une clé factice et
   // le module de simulation (aucun appel réel).
@@ -154,9 +154,10 @@ function demarrerServeurs(iaSimulee: boolean, serpapiSimule: boolean, panneAuth:
   const serveur = spawn("npx", args, { cwd: BACKEND_DIR, env, stdio: ["ignore", journalServeur, journalServeur] });
   closeSync(journalServeur);
   // Metro sans « CI » : sinon il ne recharge pas le code modifié. App sans
-  // Sentry (une variable définie ici l'emporte sur apps/mobile/.env) ; cache
-  // vidé, sinon l'ancienne adresse pourrait rester dans le code servi.
-  const sansCi: NodeJS.ProcessEnv = { ...OUTILS_ENV, EXPO_PUBLIC_SENTRY_DSN: "" };
+  // Sentry (une variable définie ici l'emporte sur apps/mobile/.env), sauf le
+  // scénario « natif », qui lui envoie volontairement une erreur de test ;
+  // cache vidé, sinon l'ancienne adresse pourrait rester dans le code servi.
+  const sansCi: NodeJS.ProcessEnv = sentry ? { ...OUTILS_ENV } : { ...OUTILS_ENV, EXPO_PUBLIC_SENTRY_DSN: "" };
   delete sansCi.CI;
   const journalMetro = openSync(join(journaux, "metro.log"), "a");
   const metro = spawn("npx", ["expo", "start", "--dev-client", "--clear", "--port", String(METRO_PORT)], { cwd: MOBILE_DIR, env: sansCi, stdio: ["ignore", journalMetro, journalMetro] });
@@ -208,7 +209,7 @@ async function attendreSimulation(journaux: string, marque: string, delaiMs: num
 export async function lancerParcours(
   sortieNom: string,
   scenario: (o: Outils) => Promise<void>,
-  options: { iaSimulee?: boolean; serpapiSimule?: boolean; panneAuth?: boolean } = {}
+  options: { iaSimulee?: boolean; serpapiSimule?: boolean; panneAuth?: boolean; sentry?: boolean } = {}
 ): Promise<void> {
   verifierEnvironnement();
   for (const port of [API_PORT, METRO_PORT]) {
@@ -224,7 +225,7 @@ export async function lancerParcours(
   mkdirSync(sortie, { recursive: true });
   const comptes: Compte[] = [];
   rmSync(FICHIER_SIGNAL_PANNE, { force: true });
-  const { serveur, metro, journaux } = demarrerServeurs(options.iaSimulee === true, options.serpapiSimule === true, options.panneAuth === true);
+  const { serveur, metro, journaux } = demarrerServeurs(options.iaSimulee === true, options.serpapiSimule === true, options.panneAuth === true, options.sentry === true);
   let nettoye = false;
 
   const nettoyer = async () => {
@@ -325,7 +326,7 @@ export async function lancerParcours(
     }
     await attendre(`${apiUrl}/health`, "ok", 60_000);
     await attendre(`http://localhost:${METRO_PORT}/status`, "packager-status:running", 90_000);
-    await preparerCodeApp();
+    await preparerCodeApp(options.sentry === true);
     await scenario(outils);
     log(`Parcours terminé. Captures : docs/${sortieNom}/`);
   } finally {
@@ -335,14 +336,15 @@ export async function lancerParcours(
 }
 
 /** Cache de Metro vidé (app servie sans Sentry) : le code de l'app est
- * préparé une première fois avant toute ouverture, et contrôlé — aucune
- * adresse Sentry ne doit s'y trouver. */
-async function preparerCodeApp(): Promise<void> {
+ * préparé une première fois avant toute ouverture, et contrôlé — l'adresse
+ * Sentry du projet ne doit pas s'y trouver (sauf `sentry`, scénario « natif »). */
+async function preparerCodeApp(sentry: boolean): Promise<void> {
   log("  préparation du code de l'app par Metro (cache vidé, 1 à 2 min)…");
   const reponse = await fetch(`http://localhost:${METRO_PORT}/.expo/.virtual-metro-entry.bundle?platform=ios&dev=true&minify=false`, { signal: AbortSignal.timeout(300_000) });
   if (!reponse.ok) throw new Error(`Metro n'a pas pu préparer le code de l'app (${reponse.status}).`);
   const dsn = loadEnv({ path: join(MOBILE_DIR, ".env"), processEnv: {} }).parsed?.EXPO_PUBLIC_SENTRY_DSN;
-  if (!codeSansSentry(await reponse.text(), dsn)) throw new Error("Le code servi à l'app contient encore l'adresse Sentry du projet : parcours arrêté, rien n'a été envoyé.");
+  const code = await reponse.text();
+  if (!sentry && !codeSansSentry(code, dsn)) throw new Error("Le code servi à l'app contient encore l'adresse Sentry du projet : parcours arrêté, rien n'a été envoyé.");
 }
 
 /** Session Supabase rangée par l'app (AsyncStorage du simulateur) : la clé

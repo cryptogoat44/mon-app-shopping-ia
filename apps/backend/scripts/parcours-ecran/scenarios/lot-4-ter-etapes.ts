@@ -148,16 +148,52 @@ export async function liens(p: Parcours, page: Page, video: string, problemes: s
   await capture("19-lien-colle");
 }
 
-/** Photo : même parcours, sans IA ni accord ; zone centrale et mots envoyés à l'identification. */
+/** Cadre de la photo (option B) : sa place et sa taille à l'écran. */
+async function cadrePhoto(page: Page): Promise<{ x: number; y: number; width: number; height: number }> {
+  const cadre = page.getByRole("slider", { name: FR.zone, exact: true }).filter({ visible: true });
+  await cadre.waitFor({ timeout: 15_000 });
+  const boite = await cadre.boundingBox();
+  check(boite !== null, "cadre de la photo affiché");
+  return boite;
+}
+
+const memeCadre = (a: { x: number; width: number }, b: { x: number; width: number }) => Math.abs(a.x - b.x) < 2 && Math.abs(a.width - b.width) < 2;
+
+/** Zone envoyée à l'identification (corps de la requête « run »). */
+function zoneEnvoyee(lancement: string): { x: number; y: number; width: number; height: number } | null {
+  const trouve = /\{"x":([\d.]+),"y":([\d.]+),"width":([\d.]+),"height":([\d.]+)\}/.exec(lancement);
+  return trouve ? { x: Number(trouve[1]), y: Number(trouve[2]), width: Number(trouve[3]), height: Number(trouve[4]) } : null;
+}
+
+/** Photo (option B du fondateur) : le cadre « Entourez la pièce » d'emblée, sans
+ * IA ni accord ; coin tiré, réinitialisé, tiré à nouveau ; la zone entourée
+ * et les mots sont envoyés à l'identification. */
 export async function photo(p: Parcours, page: Page, fichier: string, problemes: string[]): Promise<void> {
   const capture = capteur(p, page, COMBO, problemes);
   await page.goto(`${p.siteUrl}/`);
   const suivi = suivreRequetes(page);
   await choisirFichier(page, FR.ajouterPhoto, fichier);
-  await page.getByRole("heading", { name: FR.question, exact: true }).filter({ visible: true }).waitFor({ timeout: 30_000 });
-  await champPret(page, FR);
+  await page.getByRole("heading", { name: FR.ciblage, exact: true }).filter({ visible: true }).waitFor({ timeout: 30_000 });
+  await page.getByRole("heading", { name: FR.question, exact: true }).filter({ visible: true }).waitFor();
+  const depart = await cadrePhoto(page);
   check(suivi.recherches === 0, "le choix d'une photo n'appelle pas le serveur");
-  await capture("20-photo-question");
+  check((await page.evaluate("document.activeElement?.getAttribute('placeholder') ?? ''")) !== FR.exemple, "photo : d'abord le cadre, le champ n'est pas activé d'emblée");
+  await capture("20-photo-cadre");
+  // Coin en haut à gauche tiré vers l'intérieur : le cadre rétrécit.
+  const tirer = async () => {
+    await page.mouse.move(depart.x + 2, depart.y + 2);
+    await page.mouse.down();
+    await page.mouse.move(depart.x + depart.width * 0.3, depart.y + depart.height * 0.25, { steps: 12 });
+    await page.mouse.up();
+  };
+  await tirer();
+  const tire = await cadrePhoto(page);
+  check(tire.x > depart.x + 10 && tire.width < depart.width - 20, `photo : le coin tiré change la zone (largeur ${Math.round(depart.width)} → ${Math.round(tire.width)} px)`);
+  await capture("20b-photo-cadre-ajuste");
+  await page.getByRole("button", { name: FR.reinitialiser, exact: true }).filter({ visible: true }).click();
+  check(memeCadre(await cadrePhoto(page), depart), "photo : « Réinitialiser le cadre » remet la zone centrale");
+  await tirer();
+  await page.getByPlaceholder(FR.exemple).filter({ visible: true }).click();
   await page.keyboard.type("t-shirt noir");
   await ralentir(page, "**/api/searches/*/run");
   await page.getByRole("button", { name: FR.lancer, exact: true }).filter({ visible: true }).click();
@@ -170,7 +206,8 @@ export async function photo(p: Parcours, page: Page, fichier: string, problemes:
   await page.unroute("**/api/searches/*/run");
   check(suivi.analyses === 0, "photo : aucune analyse par l'IA");
   const lancement = suivi.lancements.at(-1) ?? "";
-  check(lancement.includes('{"x":0.15,"y":0.15,"width":0.7,"height":0.7}') && lancement.includes("t-shirt noir"), "photo : zone centrale et mots envoyés");
+  const zone = zoneEnvoyee(lancement);
+  check(zone !== null && zone.x > 0.2 && zone.y > 0.2 && zone.width < 0.65 && lancement.includes("t-shirt noir"), `photo : zone entourée et mots envoyés (${JSON.stringify(zone)})`);
 }
 
 /** Site : un onglet resté ouvert apprend qu'une nouvelle version est en ligne (page en ligne simulée). */

@@ -1,8 +1,9 @@
 # Photo choisie (photothèque, sans demande d'autorisation) → écran unique du
-# Spotter (lot 4 ter) : aperçu, « Que cherchez-vous ? » prêt à la saisie,
-# « Lancer » → identification : clé SerpApi invalide, donc échec technique
-# attendu — jamais « pièce introuvable ». Puis « Recadrer » : recadrage (coin,
-# déplacement, réinitialisation) et nouvelle identification.
+# Spotter (lot 4 ter) : cadre « Entourez la pièce » d'emblée (option B),
+# « Que cherchez-vous ? », « Lancer » → identification : clé SerpApi invalide,
+# donc échec technique attendu — jamais « pièce introuvable ». Puis
+# « Recadrer » : recadrage (coin, déplacement, réinitialisation) et nouvelle
+# identification.
 appId: com.spottoapp.ios
 ---
 - tapOn: "Ajouter une photo"
@@ -13,11 +14,17 @@ appId: com.spottoapp.ios
 - tapOn:
     point: "50%,25%"
 - extendedWaitUntil:
-    visible: "Que cherchez-vous \\?"
+    visible: "Entourez la pièce"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 3000
-- takeScreenshot: 04-photo-question
+- takeScreenshot: 04-photo-cadre
+- swipe:
+    start: "26%,29%"
+    end: "36%,37%"
+    duration: 1000
+- tapOn:
+    id: "spot-query"
 - inputText: "veste"
 - runFlow:
     when:

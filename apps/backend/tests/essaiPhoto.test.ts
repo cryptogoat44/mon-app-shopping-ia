@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CROP } from "@monapp/shared-types";
 import { CURRENT_LENS_SETTINGS, PREVIOUS_LENS_SETTINGS } from "../src/services/lensSettings.js";
-import { analyserZone, CREDITS_SERPAPI, ESSAIS, ZONE_APP } from "../scripts/lib/essai-photo.js";
+import { analyserZone, CREDITS_MAX, ESSAIS, essaisTexte, planEssais, structureReponse, ZONE_APP } from "../scripts/lib/essai-photo.js";
 
 // Lot 4 ter, étape 2 : essais sur la photo du t-shirt — au plus 4 crédits
 // SerpApi (accord du fondateur), réglages réellement comparés.
 describe("plan des essais de la photo", () => {
   it("4 crédits SerpApi au plus, un par essai ; aucun essai chez un autre prestataire", () => {
-    expect(CREDITS_SERPAPI).toBeLessThanOrEqual(4);
+    expect(CREDITS_MAX).toBe(4);
+    expect(ESSAIS.length).toBeLessThanOrEqual(CREDITS_MAX);
     expect(ESSAIS.map((e) => e.numero)).toEqual([1, 2, 3, 4]);
+    expect(planEssais("nike", null)).toBe(ESSAIS);
   });
 
   it("essai 1 : exactement l'app — zone centrale, sans texte, réglages actuels (products, fr/fr)", () => {
@@ -27,6 +29,36 @@ describe("plan des essais de la photo", () => {
     expect(ESSAIS[3]).toMatchObject({ zone: "app", texte: null });
     expect(ESSAIS[3]!.reglages).toBe(PREVIOUS_LENS_SETTINGS);
     expect(PREVIOUS_LENS_SETTINGS).toEqual({ type: "all", locale: null });
+  });
+
+  it("plan « texte » : zone du vêtement sans texte, puis avec le texte deux fois ; 3 crédits ; texte obligatoire", () => {
+    const essais = essaisTexte("  veste en daim marron ");
+    expect(essais.length).toBeLessThanOrEqual(CREDITS_MAX);
+    expect(essais.map((e) => [e.zone, e.texte])).toEqual([
+      ["vetement", null],
+      ["vetement", "veste en daim marron"],
+      ["vetement", "veste en daim marron"],
+    ]);
+    expect(essais.every((e) => e.reglages === CURRENT_LENS_SETTINGS)).toBe(true);
+    expect(() => essaisTexte(" ")).toThrow("indiquez le texte");
+    expect(() => planEssais(null, "veste")).toThrow("Indiquez le plan");
+  });
+
+  it("structure d'une réponse : rubriques et tailles, jamais leur contenu", () => {
+    const structure = structureReponse({
+      search_metadata: { status: "Success", id: "x" },
+      visual_matches: [],
+      ai_overview: { text_blocks: [{ snippet: "contenu" }] },
+      related_content: [{ query: "a" }, { query: "b" }],
+      error: "Google Lens hasn't returned any results for this query.",
+    });
+    expect(structure).toEqual({
+      rubriques: { search_metadata: "objet", visual_matches: 0, ai_overview: "objet", related_content: 2, error: "texte" },
+      etat: "Success",
+      erreur: "Google Lens hasn't returned any results for this query.",
+    });
+    expect(JSON.stringify(structure)).not.toContain("contenu");
+    expect(structureReponse(null)).toEqual({ rubriques: {}, etat: null, erreur: "réponse illisible" });
   });
 
   it("zone donnée à la main : dans l'image et assez grande", () => {

@@ -9,6 +9,7 @@ import { track } from "./analytics";
 import { closeSpotter } from "./spot-navigation";
 import { draftImageUri, type SpotDraft } from "./spot-draft";
 import { checkVideoAi, identifyNextMoment, launchPhoto, launchVideo, photoCrop, type LaunchOutcome, type VideoAiChoice, type VideoAiReadiness } from "./spot-launch";
+import type { CropRect } from "@monapp/shared-types";
 import type { AutoFailure } from "./video-auto";
 import type { FramePreview, OpenedVideo } from "./video-timeline";
 import type { WaitingImage } from "../components/spot-waiting";
@@ -145,11 +146,13 @@ export interface LaunchInput {
   draft: SpotDraft | null;
   preview: FramePreview | null;
   query: string;
+  /** Photo : la zone entourée sur l'écran ; null pour une vidéo (cadre trouvé par l'IA). */
+  crop: CropRect | null;
   /** Lancer dès l'ouverture (dernière vidéo de la galerie, mots tapés sur l'accueil). */
   auto: boolean;
 }
 
-export function useSpotLaunch({ source, video, draft, preview, query, auto }: LaunchInput) {
+export function useSpotLaunch({ source, video, draft, preview, query, crop, auto }: LaunchInput) {
   const flow = useLaunchRun(auto);
   const { router, setPhase } = flow;
   const ai = useVideoAiReadiness(source === "video");
@@ -181,8 +184,9 @@ export function useSpotLaunch({ source, video, draft, preview, query, auto }: La
   }
   async function runPhoto() {
     if (!draft) return closeSpotter(router);
-    const { id, signal } = flow.begin(draftImage(draft, photoCrop(draft)));
-    flow.settle(id, await launchPhoto(draft, query, signal), consentRequired);
+    const zone = crop ?? photoCrop(draft);
+    const { id, signal } = flow.begin(draftImage(draft, zone));
+    flow.settle(id, await launchPhoto(draft, query, signal, zone), consentRequired);
   }
 
   /** Curseur manuel ; les mots tapés suivent jusqu'au recadrage. */

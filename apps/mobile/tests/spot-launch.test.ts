@@ -179,6 +179,13 @@ describe("photo : même parcours, sans attendre le serveur avant « Lancer »", 
     expect(runSearch).toHaveBeenCalledWith("recherche-1", { crop: DEFAULT_CROP, query: "t-shirt noir", imageUri: "file:///cache/photo.jpg" }, expect.anything());
   });
 
+  it("option B : la zone entourée sur l'écran (cadre « Entourez la pièce ») est celle envoyée", async () => {
+    const draft = beginFromPhoto("file:///cache/photo.jpg", { width: 1200, height: 1600 });
+    await launchPhoto(draft, "maillot", new AbortController().signal, BOX);
+    expect(runSearch.mock.calls[0]![1]).toMatchObject({ crop: BOX, query: "maillot" });
+    expect(getDraft()?.crop).toEqual(BOX);
+  });
+
   it("une zone déjà recadrée est gardée", async () => {
     beginFromPhoto("file:///cache/photo.jpg", { width: 1200, height: 1600 });
     const draft = updateDraft({ crop: BOX })!;

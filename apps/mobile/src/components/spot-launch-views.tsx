@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View, type StyleProp, type TextStyle } from "react-native";
 import { Image } from "expo-image";
-import { SEARCH_QUERY_MAX_LENGTH } from "@monapp/shared-types";
+import { SEARCH_QUERY_MAX_LENGTH, type CropRect } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
+import { CropSelector } from "@/components/crop-selector";
 import { ErrorMessage } from "@/components/error-message";
 import { VideoIcon } from "@/components/icons";
 import { LinkNotice } from "@/components/link-notice";
+import { DEFAULT_CROP } from "@/lib/crop-geometry";
 import type { FramePreview } from "@/lib/video-timeline";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -58,6 +60,39 @@ export function LaunchPreview({ source, failed, duration, height }: { source: Fr
   );
 }
 
+/** Photo (option B du fondateur, lot 4 ter) : le cadre « Entourez la pièce »
+ * d'emblée — seule la zone entourée part à l'analyse, sans IA et sans aucun
+ * autre envoi. Une capture entière (personne, décor, textes) égarait Google
+ * Lens : 0 proposition, contre 30 pour le vêtement seul (étape 2). */
+export function PhotoFrame({
+  uri,
+  crop,
+  onChange,
+  onDragChange,
+  height,
+}: {
+  uri: string;
+  crop: CropRect;
+  onChange: (crop: CropRect) => void;
+  onDragChange: (dragging: boolean) => void;
+  height: number;
+}) {
+  return (
+    <>
+      <Text style={styles.frameTitle} accessibilityRole="header">
+        {t.targeting.title}
+      </Text>
+      <Text style={styles.caption}>{t.targeting.caption}</Text>
+      <View style={styles.cropArea}>
+        <CropSelector uri={uri} crop={crop} onChange={onChange} onDragChange={onDragChange} height={height} />
+      </View>
+      <Pressable onPress={() => onChange(DEFAULT_CROP)} style={styles.reset} hitSlop={8} accessibilityRole="button">
+        <Text style={styles.resetLabel}>{t.targeting.reset}</Text>
+      </Pressable>
+    </>
+  );
+}
+
 /** Le champ « Que cherchez-vous ? » : exemples précis en gris. Au focus, un
  * soulignement vert remplace le cadre du navigateur : le repère reste visible
  * au clavier (contraste AA), sans encadrer le texte. */
@@ -97,6 +132,8 @@ export function QueryInput({
 }
 
 export interface AskProps {
+  /** Vidéo : champ prêt à la saisie dès l'ouverture ; photo : d'abord le cadre. */
+  autoFocus: boolean;
   query: string;
   onQuery: (value: string) => void;
   onLaunch: () => void;
@@ -120,7 +157,7 @@ export function AskView(p: AskProps) {
       <Text style={styles.title} accessibilityRole="header">
         {t.launch.title}
       </Text>
-      <QueryInput value={p.query} onChangeText={p.onQuery} onSubmit={() => p.canLaunch && p.onLaunch()} autoFocus testID="spot-query" />
+      <QueryInput value={p.query} onChangeText={p.onQuery} onSubmit={() => p.canLaunch && p.onLaunch()} autoFocus={p.autoFocus} testID="spot-query" />
       {p.linkInQuery ? <LinkNotice style={styles.notice} onAddVideo={p.onAddVideo} busy={p.addingVideo} /> : null}
       {p.message ? <ErrorMessage style={styles.message}>{p.message}</ErrorMessage> : null}
       <Pressable
@@ -217,6 +254,11 @@ const styles = themedStyles(() => ({
   },
   badgeLabel: { color: color.surImage, fontSize: font.caption, fontWeight: "600", fontVariant: ["tabular-nums"] },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 29, marginTop: space.lg },
+  frameTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 29 },
+  caption: { fontSize: font.caption, color: color.acier, marginTop: 6, lineHeight: 18 },
+  cropArea: { marginTop: space.md },
+  reset: { alignSelf: "flex-end", minHeight: 36, justifyContent: "center" },
+  resetLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600" },
   body: { fontSize: font.secondary, color: color.encre, marginTop: space.md, lineHeight: 21 },
   // Contour « plein » de largeur nulle : remplace le cadre du navigateur (« auto », qui ignore la largeur).
   input: { minHeight: 48, marginTop: space.xs, borderBottomWidth: 1, borderBottomColor: color.filet, fontSize: font.body, color: color.encre, outlineStyle: "solid", outlineWidth: 0 },

@@ -1,6 +1,8 @@
 # Lot 4 ter (français) : une autre vidéo, choisie d'un geste dans le sélecteur
 # d'iOS (il suit la langue de l'iPhone) → écran unique, champ prêt à la saisie
-# → « Lancer » → résultats. Puis une photo : même parcours, sans IA.
+# → « Lancer » → résultats. Puis une photo : même écran, sans IA, avec d'emblée
+# le cadre « Entourez la pièce » (option B du fondateur) : coin tiré, mots,
+# « Lancer ».
 appId: com.spottoapp.ios
 ---
 - tapOn: "Choisir une autre vidéo"
@@ -35,12 +37,28 @@ appId: com.spottoapp.ios
 - tapOn:
     point: "50%,25%"
 - extendedWaitUntil:
-    visible: "Que cherchez-vous \\?"
+    visible: "Entourez la pièce"
     timeout: 30000
+- assertVisible: "Que cherchez-vous \\?"
 - waitForAnimationToEnd:
     timeout: 3000
-- takeScreenshot: 11-photo-question
+- takeScreenshot: 11-photo-cadre
+# Coin en haut à gauche du cadre (zone centrale de la photo) tiré vers l'intérieur.
+- swipe:
+    start: "26%,29%"
+    end: "36%,37%"
+    duration: 1000
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: 11b-photo-cadre-ajuste
+- tapOn:
+    id: "spot-query"
 - inputText: "veste"
+# Clavier ouvert : « Lancer » reste visible au-dessus (défaut corrigé : il était caché dessous).
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: 11c-photo-mots-clavier
+- assertVisible: "Lancer"
 - tapOn: "Lancer"
 - extendedWaitUntil:
     visible: "Meilleure proposition"

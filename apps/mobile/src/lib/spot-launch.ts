@@ -85,8 +85,9 @@ export function photoCrop(draft: SpotDraft): CropRect {
   return draft.crop ?? DEFAULT_CROP;
 }
 
-/** Photo : la zone analysée et les mots tapés, puis l'identification. */
-export async function launchPhoto(draft: SpotDraft, query: string, signal: AbortSignal): Promise<LaunchOutcome> {
-  const ready = updateDraft({ crop: photoCrop(draft), query: query.trim() }) ?? draft;
+/** Photo : la zone entourée sur l'écran (cadre « Entourez la pièce », option B
+ * du fondateur) et les mots tapés, puis l'identification. */
+export async function launchPhoto(draft: SpotDraft, query: string, signal: AbortSignal, crop: CropRect = photoCrop(draft)): Promise<LaunchOutcome> {
+  const ready = updateDraft({ crop, query: query.trim() }) ?? draft;
   return identify(ready, signal);
 }
