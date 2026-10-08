@@ -6,6 +6,12 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   SERPAPI_KEY: z.string().min(1),
+  // Plafond GLOBAL des recherches SerpApi (lot 4 quater, lib/searchCapacity.ts) :
+  // par jour (heure de Paris) et sur 31 jours glissants. Quota réel en
+  // octobre 2026 : 250 par mois (offre gratuite) ; la marge de 25 couvre les
+  // outils d'essai du fondateur, qui puisent dans le même compte.
+  SERPAPI_DAILY_CAP: z.coerce.number().int().min(1).default(25),
+  SERPAPI_MONTHLY_CAP: z.coerce.number().int().min(1).default(225),
   // Non requis pour que l'app démarre : sans jeton Meta, la reconnaissance
   // automatique Instagram est simplement sautée au profit du repli manuel.
   META_OEMBED_ACCESS_TOKEN: z.string().min(1).optional(),

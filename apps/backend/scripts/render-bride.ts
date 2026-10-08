@@ -9,7 +9,8 @@
 //   pnpm --filter backend render-bride variable <spotto-api|site> <NOM> <valeur> [--confirmer]
 //   pnpm --filter backend render-bride compteurs-ia spotto-api --depuis <date ISO> [--chronologie]
 //     (lecture SEULE des journaux : des compteurs, jamais de contenu — diagnostic
-//      du lot 4 ter, demandé par le fondateur le 2026-10-07)
+//      du lot 4 ter, demandé par le fondateur le 2026-10-07 ; plafond global
+//      SerpApi depuis le lot 4 quater ; --chronologie : l'ordre des événements)
 //
 // Règles (voir scripts/lib/render-guard.ts) :
 // - deux services seulement : spotto-api et le site ; l'ancien serveur
@@ -28,7 +29,7 @@
 // par un autre script, à saisie masquée : configurer-anthropic-prod.
 import { assertEditableVariable, FINAL_DEPLOY_STATUSES, RenderGuardError, assertDeployId, resolveService } from "./lib/render-guard.js";
 import { readRenderKey as readKey, renderRequest as render, RenderNotFound as NotFound } from "./lib/render-api.js";
-import { chronologie, compterRequetes, decrireAnalyse, decrireCodes, extraireCompteursIA, lireJournaux, parametresJournaux, REQUETES_SUIVIES } from "./lib/render-logs.js";
+import { chronologie, compterRequetes, decrireAnalyse, decrireCodes, extraireCompteursIA, extrairePlafond, lireJournaux, parametresJournaux, REQUETES_SUIVIES, resumerPlafond } from "./lib/render-logs.js";
 import { z } from "zod";
 
 const POLL_MS = 10_000;
@@ -131,6 +132,11 @@ async function counters(args: string[]): Promise<void> {
   });
   console.log(`  Analyses par l'IA (compteurs écrits par le serveur) : ${analyses.length}`);
   for (const analyse of analyses) console.log(`    - ${decrireAnalyse(analyse)}`);
+  const plafonds = lignes.flatMap((entree) => {
+    const plafond = extrairePlafond(entree.message);
+    return plafond ? [plafond] : [];
+  });
+  console.log(`  Plafond global SerpApi (compteur de la base) : ${resumerPlafond(plafonds)}`);
   // --chronologie : l'ordre des événements, heure de Paris (jamais d'identifiant, d'adresse ni de contenu).
   if (!args.includes("--chronologie")) return;
   console.log("  Ordre des événements (heure de Paris) :");

@@ -1,3 +1,5 @@
+import type { SearchCapacityReached } from "@monapp/shared-types";
+
 export interface Piece {
   id: string;
   name: string;
@@ -26,8 +28,9 @@ export type SpotStatus = "success" | "failed";
 /** "no_match" : l'analyse a eu lieu mais n'a rien trouvé (proposer de
  * recadrer). "technical" : panne réseau ou du service (proposer de
  * réessayer). "needs_photo" : aucune image exploitable, il faut importer une
- * capture. "rate_limited" : trop d'identifications en peu de temps (429). */
-export type SpotFailReason = "no_match" | "technical" | "needs_photo" | "rate_limited";
+ * capture. "rate_limited" : trop d'identifications en peu de temps (429).
+ * "capacity" : plafond global des recherches atteint (429, lot 4 quater). */
+export type SpotFailReason = "no_match" | "technical" | "needs_photo" | "rate_limited" | "capacity";
 
 export interface SpotResult {
   /** Identifiant de la recherche côté serveur — null si elle n'a pas pu
@@ -44,6 +47,8 @@ export interface SpotResult {
   pieces: Piece[];
   similarPieces: Piece[];
   failReason?: SpotFailReason;
+  /** Plafond global atteint : jusqu'à demain, ou jusqu'à la date de reprise. */
+  capacity?: SearchCapacityReached;
 }
 
 export type VaultVerificationState = "pending" | "verified" | "refused";

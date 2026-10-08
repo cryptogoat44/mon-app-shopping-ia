@@ -138,6 +138,21 @@ describe("vidéo : « Lancer » enchaîne analyse, cadrage et identification", (
     expect(runSearch).not.toHaveBeenCalled();
   });
 
+  it("plafond global des recherches atteint avant l'analyse (lot 4 quater) : annoncé sur l'écran Résultat, rien n'est identifié", async () => {
+    const body = { error: "search_capacity_month", message: "…", retryAt: "2026-11-12T08:31:00.000Z" };
+    findVideoMoments.mockRejectedValue(new ApiError(429, body));
+    expect(await launchVideo(fakeVideo(), " veste ", new AbortController().signal)).toEqual({ kind: "result", searchId: null });
+    expect(prepareSearch).not.toHaveBeenCalled();
+    expect(runSearch).not.toHaveBeenCalled();
+    expect(getLastSpotResult()).toMatchObject({
+      searchId: null,
+      status: "failed",
+      failReason: "capacity",
+      capacity: { period: "month", retryAt: "2026-11-12T08:31:00.000Z" },
+      query: "veste",
+    });
+  });
+
   it("limite quotidienne : repli avec son motif", async () => {
     findVideoMoments.mockRejectedValue(new ApiError(429, { error: "video_ai_user_limit", message: "…" }));
     expect(await launchVideo(fakeVideo(), "veste", new AbortController().signal)).toEqual({ kind: "failed", reason: "user_limit" });
@@ -214,6 +229,14 @@ describe("identification : une panne n'est jamais présentée comme « pièce in
     expect(await identifyDraft(photoDraft(), new AbortController().signal)).toEqual({ kind: "done", searchId: null });
     expect(getLastSpotResult()).toMatchObject({ status: "failed", failReason });
     expect(reportUnexpectedError).toHaveBeenCalledTimes(reported ? 1 : 0);
+  });
+
+  it("plafond global des recherches atteint (lot 4 quater) : son motif et sa date, jamais « trop de recherches d'un coup »", async () => {
+    const body = { error: "search_capacity_day", message: "…", retryAt: "2026-10-09T22:00:00.000Z" };
+    runSearch.mockRejectedValue(new ApiError(429, body));
+    await identifyDraft(photoDraft(), new AbortController().signal);
+    expect(getLastSpotResult()).toMatchObject({ status: "failed", failReason: "capacity", capacity: { period: "day", retryAt: "2026-10-09T22:00:00.000Z" } });
+    expect(reportUnexpectedError).not.toHaveBeenCalled();
   });
 
   it("aucune correspondance : « aucune pièce trouvée », un vrai résultat", async () => {

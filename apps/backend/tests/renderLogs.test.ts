@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { RENDER_API, type FetchLike } from "../scripts/lib/render-api.js";
-import { chronologie, compterRequetes, decrireAnalyse, decrireCodes, extraireCompteursIA, lireJournaux, parametresJournaux } from "../scripts/lib/render-logs.js";
+import { chronologie, compterRequetes, decrireAnalyse, decrireCodes, extraireCompteursIA, extrairePlafond, lireJournaux, parametresJournaux, resumerPlafond } from "../scripts/lib/render-logs.js";
+import { CAPACITY_LOG_MESSAGE, capacityLogFields } from "../src/lib/searchCapacity.js";
 
 // Diagnostic du lot 4 ter (2026-10-07) : lecture SEULE des journaux de
 // spotto-api, des compteurs et jamais de contenu. Journaux SIMULÉS, qui
@@ -178,5 +179,49 @@ describe("ordre des événements (demande du fondateur, 2026-10-08)", () => {
 
   it("requête sans réponse : « ? »", () => {
     expect(chronologie([a("2026-10-08T20:16:01Z", requete("r9", "POST", "/api/searches/prepare"))])).toEqual([{ heure: "2026-10-08T20:16:01Z", nom: "POST /api/searches/prepare", issue: "?" }]);
+  });
+});
+
+describe("plafond global SerpApi (lot 4 quater)", () => {
+  // La ligne telle que le serveur l'écrit (mêmes champs que src/lib/searchCapacity.ts), plus ce que Fastify y ajoute.
+  const plafond = (outcome: "reserved" | "refused", period: "day" | "month" | null, day: number, window: number, step: "search" | "video_ai" = "search") =>
+    ligne({
+      reqId: "r7",
+      ...capacityLogFields(
+        step,
+        outcome === "reserved"
+          ? { allowed: true, cap_period: null, retry_at: null, day_count: day, window_count: window }
+          : { allowed: false, cap_period: period ?? "day", retry_at: null, day_count: day, window_count: window },
+        { daily: 25, monthly: 225 }
+      ),
+      msg: CAPACITY_LOG_MESSAGE,
+      compte: COMPTE,
+      adresse: IP,
+      texte: TEXTE,
+    });
+
+  it("lit la ligne écrite par le serveur : des nombres et des états, rien d'autre", () => {
+    const lue = extrairePlafond(plafond("refused", "month", 3, 225, "video_ai").message);
+    expect(lue).toEqual({ msg: "Plafond SerpApi", step: "video_ai", outcome: "refused", period: "month", day: 3, window: 225, dayCap: 25, monthCap: 225 });
+    expect(JSON.stringify(lue)).not.toContain(IP);
+    expect(extrairePlafond(ligne({ msg: "Analyse vidéo IA", frames: 3 }).message)).toBeNull();
+  });
+
+  it("bilan : réservations, refus par plafond, dernier état ; ordre des événements sans identifiant, adresse ni texte", () => {
+    const entrees = [plafond("reserved", null, 24, 120), plafond("reserved", null, 25, 121), plafond("refused", "day", 25, 121), plafond("refused", "month", 2, 225, "video_ai")].map(
+      (entree, index) => ({ ...entree, timestamp: `2026-10-09T08:0${index}:00Z` })
+    );
+    const lignes = entrees.flatMap((entree) => extrairePlafond(entree.message) ?? []);
+    expect(resumerPlafond(lignes)).toBe("2 recherche(s) réservée(s), 2 refus (jour 1, 31 jours 1) ; dernier état lu : aujourd'hui 2/25, 31 jours 225/225");
+    expect(resumerPlafond([])).toBe("aucune ligne dans la période");
+    const evenements = chronologie(entrees);
+    expect(evenements.map((e) => e.issue)).toEqual([
+      "recherche réservée — aujourd'hui 24/25, 31 jours 120/225",
+      "recherche réservée — aujourd'hui 25/25, 31 jours 121/225",
+      "refus (plafond du jour), au lancement d'une recherche — aujourd'hui 25/25, 31 jours 121/225",
+      "refus (plafond des 31 jours), avant l'analyse par l'IA — aujourd'hui 2/25, 31 jours 225/225",
+    ]);
+    const tout = JSON.stringify(evenements);
+    for (const interdit of [IP, COMPTE, TEXTE]) expect(tout).not.toContain(interdit);
   });
 });

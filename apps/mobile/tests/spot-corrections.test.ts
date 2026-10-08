@@ -53,6 +53,11 @@ describe("sans résultat : deux actions au plus, la plus utile d'abord", () => {
     expect(failureCorrections("rate_limited", video)).toEqual([]);
   });
 
+  it("plafond global des recherches atteint (lot 4 quater) : rien à tenter, un nouvel essai serait refusé", () => {
+    expect(failureCorrections("capacity", video)).toEqual([]);
+    expect(failureCorrections("capacity", { ...photo, hadQuery: true })).toEqual([]);
+  });
+
   it("image d'un lien indisponible, ou rien en mémoire", () => {
     expect(failureCorrections("needs_photo", oldLink)).toEqual(["add_video"]);
     expect(failureCorrections("technical", reopened)).toEqual([]);

@@ -25,6 +25,7 @@ import { CONSENT_VERSIONS } from "@monapp/shared-types";
 import { assertDevSupabaseUrl } from "../lib/dev-database.js";
 import { CLE_SIMULATION, FICHIER_SIMULATION, MARQUE_SIMULATION } from "../lib/simulation-anthropic.js";
 import { codeSansSentry, GardeStatistiques } from "./garde-statistiques.js";
+import { PLAFOND_SERPAPI_PARCOURS } from "../lib/plafond-parcours.js";
 
 const ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
 const BACKEND_DIR = join(ROOT, "apps/backend");
@@ -101,7 +102,7 @@ export interface Parcours {
  * clé factice et le module de simulation (aucun appel réel). Jamais de
  * Sentry : une erreur provoquée par un parcours ne part nulle part. */
 function startBackend(simulatedAi: boolean): ChildProcess {
-  const env: NodeJS.ProcessEnv = { ...process.env, PORT: String(API_PORT), SERPAPI_KEY: "cle-invalide-parcours-ecran" };
+  const env: NodeJS.ProcessEnv = { ...process.env, PORT: String(API_PORT), SERPAPI_KEY: "cle-invalide-parcours-ecran", ...PLAFOND_SERPAPI_PARCOURS };
   delete env.SENTRY_DSN;
   delete env.ANTHROPIC_API_KEY;
   if (simulatedAi) env.ANTHROPIC_API_KEY = CLE_SIMULATION;

@@ -140,6 +140,35 @@ export type VideoAiErrorCode =
   | "video_ai_unavailable"
   | "invalid_frames";
 
+/** Plafond GLOBAL des recherches atteint (lot 4 quater) : réponse 429 du
+ * lancement d'une recherche, et de l'analyse automatique avant tout envoi à
+ * l'IA. « day » : jusqu'à minuit, heure de Paris ; « month » : 31 jours
+ * glissants, `retryAt` = à partir de quand une recherche redevient possible. */
+export type SearchCapacityPeriod = "day" | "month";
+export const SEARCH_CAPACITY_ERRORS = {
+  day: "search_capacity_day",
+  month: "search_capacity_month",
+} as const satisfies Record<SearchCapacityPeriod, string>;
+
+export interface SearchCapacityReached {
+  period: SearchCapacityPeriod;
+  /** Date ISO ; null si inconnue. */
+  retryAt: string | null;
+}
+
+export interface SearchCapacityErrorBody extends ApiErrorBody {
+  retryAt: string | null;
+}
+
+/** Lit le corps d'une erreur sans lui faire confiance ; null si ce n'est pas un plafond atteint. */
+export function parseSearchCapacityError(body: unknown): SearchCapacityReached | null {
+  if (typeof body !== "object" || body === null || !("error" in body)) return null;
+  const period = (["day", "month"] as const).find((candidate) => SEARCH_CAPACITY_ERRORS[candidate] === body.error);
+  if (!period) return null;
+  const retryAt = "retryAt" in body && typeof body.retryAt === "string" && !Number.isNaN(Date.parse(body.retryAt)) ? body.retryAt : null;
+  return { period, retryAt };
+}
+
 function isProportion(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
 }

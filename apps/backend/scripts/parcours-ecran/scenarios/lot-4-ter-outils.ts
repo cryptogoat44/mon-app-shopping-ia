@@ -6,7 +6,7 @@ import { CONSENT_VERSIONS, SEARCH_FAILURE_MESSAGES } from "@monapp/shared-types"
 import type { Parcours, TestAccount } from "../boite-a-outils.js";
 import { rgb, SEGMENTS } from "../../lib/videos-essai.js";
 import type { Combo, Locale } from "./lot-3.js";
-import { check, controlerAffichage, visible } from "./spotter-outils.js";
+import { check, choisirFichier, controlerAffichage, visible } from "./spotter-outils.js";
 
 const FR = {
   ajouterVideo: "Ajouter une vidéo",
@@ -215,6 +215,18 @@ export async function fermerFeuille(page: Page, T: Textes): Promise<void> {
   const lien = visible(page, T.pasLaBonne);
   for (let essai = 0; essai < 50 && (await lien.count()) !== 1; essai += 1) await page.waitForTimeout(100);
   check((await lien.count()) === 1, "feuille des corrections refermée");
+}
+
+/** Depuis Spotter : photo choisie → (mots tapés) → « Lancer » (cadre « Entourez la pièce » laissé tel quel). */
+export async function lancerPhoto(p: Parcours, page: Page, T: Textes, fichier: string, mots: string | null): Promise<void> {
+  await page.goto(`${p.siteUrl}/`);
+  await choisirFichier(page, T.ajouterPhoto, fichier);
+  await page.getByRole("heading", { name: T.ciblage, exact: true }).filter({ visible: true }).waitFor({ timeout: 30_000 });
+  if (mots) {
+    await page.getByPlaceholder(T.exemple).filter({ visible: true }).click();
+    await page.keyboard.type(mots);
+  }
+  await page.getByRole("button", { name: T.lancer, exact: true }).filter({ visible: true }).click();
 }
 
 /** Vidéo choisie → mots tapés (le champ est déjà prêt) → « Lancer ». */

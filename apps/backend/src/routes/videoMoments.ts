@@ -6,14 +6,16 @@ import { ConsentLookupError, hasCurrentConsent } from "../lib/consents.js";
 import { isFileTooLargeError, isTooManyPartsError } from "../lib/multipartErrors.js";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { optimizePhotoWithSize } from "../lib/photos.js";
+import { searchCapacityForVideoAi, sendCapacityReached } from "../lib/searchCapacity.js";
 import { askVideoMoments, VIDEO_AI_SETTINGS, VideoAiError, type FrameForAi } from "../services/videoMoments.js";
 
 // Analyse automatique d'une vidéo (lot 4, temps 1 bis), étage 2. L'app envoie
 // au plus 12 images réduites (512 px), choisies sur l'appareil, et quelques
 // mots ; le serveur les vérifie, les transmet à l'IA d'Anthropic et renvoie
 // au plus 3 moments (numéro d'image et cadre de la pièce, en proportions).
-// Conditions : clé d'API présente, consentement « analyse_video_ia » en
-// vigueur, limites quotidiennes (lib/rateLimits.ts). Rien n'est conservé :
+// Conditions : clé d'API présente, plafond global des recherches non atteint
+// (lib/searchCapacity.ts), consentement « analyse_video_ia » en vigueur,
+// limites quotidiennes (lib/rateLimits.ts). Rien n'est conservé :
 // les images restent en mémoire le temps de la réponse, puis sont effacées ;
 // ni base, ni stockage, ni journal (compteurs seulement), ni Sentry.
 
@@ -101,6 +103,12 @@ export default async function videoMomentsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const apiKey = videoAiApiKey();
       if (!apiKey) return reply.code(503).send(DISABLED);
+      // Plafond global des recherches atteint (lot 4 quater) : aucune
+      // recherche ne pourrait suivre, donc aucune image ne part à l'IA, aucune
+      // dépense. Plafond illisible : pas d'analyse non plus.
+      const capacity = await searchCapacityForVideoAi(fastify, request.log).catch(() => null);
+      if (!capacity) return reply.code(503).send(UNAVAILABLE);
+      if (!capacity.allowed) return sendCapacityReached(reply, capacity);
       if (!request.isMultipart()) return reply.code(400).send(INVALID_FRAMES);
 
       const upload = await readUpload(request);

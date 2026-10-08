@@ -1,6 +1,7 @@
 import type { Locale } from "./locale.js";
 import { COMMENT_MAX_LENGTH } from "@monapp/shared-types";
 import { RATE_LIMITED_MESSAGE } from "../plugins/rateLimit.js";
+import { SEARCH_CAPACITY_MESSAGES } from "./searchCapacity.js";
 
 // Messages d'erreur renvoyés à l'app, dans la langue de l'utilisateur (lot 3).
 // Les routes écrivent leurs messages en français ; juste avant l'envoi, un
@@ -87,6 +88,9 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "L'analyse automatique n'est pas disponible. Choisissez l'image avec le curseur.":
     "Automatic analysis isn't available. Choose the frame with the slider.",
   "Les images de la vidéo sont invalides.": "The video frames are invalid.",
+  // Plafond global des recherches (lot 4 quater, lib/searchCapacity.ts).
+  [SEARCH_CAPACITY_MESSAGES.day]: "The search service is in very high demand today. Please try again tomorrow.",
+  [SEARCH_CAPACITY_MESSAGES.month]: "The search service has reached its monthly limit. Please try again later.",
   "Une image de la vidéo est trop lourde.": "One of the video frames is too large.",
   "Vous avez atteint la limite quotidienne d'analyses automatiques. Choisissez l'image avec le curseur, ou réessayez demain.":
     "You've reached the daily limit for automatic analyses. Choose the frame with the slider, or try again tomorrow.",

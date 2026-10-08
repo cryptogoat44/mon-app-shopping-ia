@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
   SEARCH_FAILURE_MESSAGES,
@@ -16,6 +16,7 @@ import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { searchLocaleFor } from "../lib/locale.js";
 import { INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
 import { ImageSourceError, downloadThumbnail, prepareImageForAnalysis } from "../lib/imageProcessing.js";
+import { reserveSearch, sendCapacityReached } from "../lib/searchCapacity.js";
 
 const createSearchSchema = z.object({
   sourceUrl: z.string().url().max(2048).optional(),
@@ -177,6 +178,154 @@ async function saveMatches(
   return true;
 }
 
+type RunInput = z.infer<typeof runSearchSchema>;
+interface RunForm {
+  input: RunInput;
+  /** Image importée (photo ou capture), sinon null : la vignette officielle servira. */
+  fileBuffer: Buffer | null;
+}
+
+/** Formulaire du lancement : image importée (champ « file »), zone choisie
+ * (« crop », JSON) et texte (« query »). null : l'erreur est déjà envoyée. */
+async function readRunForm(request: FastifyRequest, reply: FastifyReply): Promise<RunForm | null> {
+  const fields: Record<string, string> = {};
+  let fileBuffer: Buffer | null = null;
+  try {
+    for await (const part of request.parts()) {
+      if (part.type === "file") {
+        fileBuffer = await part.toBuffer();
+      } else {
+        fields[part.fieldname] = String(part.value);
+      }
+    }
+  } catch (error) {
+    if (isFileTooLargeError(error)) {
+      void reply.code(413).send({ error: "file_too_large", message: "Le fichier est trop volumineux (10 Mo maximum)." });
+      return null;
+    }
+    throw error;
+  }
+
+  let rawCrop: unknown = undefined;
+  if (fields.crop) {
+    try {
+      rawCrop = JSON.parse(fields.crop);
+    } catch {
+      void reply.code(400).send({ error: "invalid_body", message: "Zone de recadrage invalide." });
+      return null;
+    }
+  }
+  const input = parseInput(runSearchSchema, { crop: rawCrop, query: fields.query }, reply, {
+    error: "invalid_body",
+    message: "Zone de recadrage ou texte invalide.",
+  });
+  return input ? { input, fileBuffer } : null;
+}
+
+/** Image à analyser — celle importée en priorité, sinon la vignette
+ * officielle —, recadrée sur la zone choisie. null : l'erreur est déjà envoyée. */
+async function prepareRunImage(request: FastifyRequest, reply: FastifyReply, row: ProductSearchRow, form: RunForm): Promise<Buffer | null> {
+  let source: Buffer;
+  try {
+    if (form.fileBuffer) {
+      source = form.fileBuffer;
+    } else if (row.thumbnail_url) {
+      source = await downloadThumbnail(row.thumbnail_url);
+    } else {
+      void reply.code(400).send({ error: "image_required", message: "Importez une capture de la pièce." });
+      return null;
+    }
+  } catch (error) {
+    request.log.warn({ error }, "Vignette officielle indisponible au lancement");
+    void reply.code(422).send({
+      error: "preview_unavailable",
+      message: "L'image de la vidéo n'est plus disponible. Importez une capture de la pièce.",
+    });
+    return null;
+  }
+
+  try {
+    return await prepareImageForAnalysis(source, form.input.crop ?? null);
+  } catch (error) {
+    if (error instanceof ImageSourceError) {
+      void reply.code(400).send({ error: "invalid_image", message: "Cette image n'a pas pu être lue, ou la zone choisie est trop petite." });
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function markPending(fastify: FastifyInstance, id: string): Promise<void> {
+  const { error } = await fastify.supabaseAdmin.from("product_searches").update({ status: "pending" }).eq("id", id);
+  if (error) fastify.log.error({ error }, "Recherche non remise en attente après un lancement sans appel");
+}
+
+/** Aucun appel SerpApi finalement (annulation, plafond atteint, adresse
+ * signée manquante) : l'image est effacée et la recherche redevient lançable. */
+async function releaseSearch(fastify: FastifyInstance, id: string, storagePath: string): Promise<void> {
+  await discardAnalysisImage(fastify, storagePath);
+  await markPending(fastify, id);
+}
+
+/** Image déposée le temps que SerpApi la lise ; renvoie son adresse signée.
+ * null : échec, et la recherche redevient lançable. */
+async function uploadForAnalysis(fastify: FastifyInstance, request: FastifyRequest, id: string, storagePath: string, image: Buffer): Promise<string | null> {
+  const { error: uploadError } = await fastify.supabaseAdmin.storage
+    .from("screenshots")
+    .upload(storagePath, image, { contentType: "image/jpeg", upsert: true });
+  const signed = uploadError
+    ? null
+    : await fastify.supabaseAdmin.storage.from("screenshots").createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
+  if (!uploadError && signed?.data) return signed.data.signedUrl;
+
+  request.log.error({ uploadError }, "Échec d'envoi de l'image recadrée");
+  if (uploadError) await markPending(fastify, id);
+  else await releaseSearch(fastify, id, storagePath);
+  return null;
+}
+
+interface SearchOutcome {
+  matches: VisualMatch[];
+  status: SearchStatus;
+  errorMessage: string | null;
+}
+
+/** L'appel SerpApi (1 crédit) : des propositions, rien, ou une panne — chacun annoncé comme tel. */
+async function runVisualSearch(fastify: FastifyInstance, request: FastifyRequest, imageUrl: string, query: string | null): Promise<SearchOutcome> {
+  try {
+    const matches = await searchProductsByImageUrl(fastify, imageUrl, { query, locale: searchLocaleFor(request) });
+    if (matches.length === 0) return { matches, status: "failed", errorMessage: NO_MATCH_MESSAGE };
+    return { matches, status: "completed", errorMessage: null };
+  } catch (error) {
+    request.log.error({ error }, "Échec de l'appel à l'API de recherche visuelle (lancement)");
+    return { matches: [], status: "failed", errorMessage: TECHNICAL_FAILURE_MESSAGE };
+  }
+}
+
+/** Enregistre l'issue de l'appel et renvoie la recherche complète ; null :
+ * résultat illisible ou non enregistré. */
+async function saveOutcome(fastify: FastifyInstance, request: FastifyRequest, id: string, outcome: SearchOutcome): Promise<ProductSearch | null> {
+  const saved = await saveMatches(fastify, id, outcome.matches);
+  const { data: updated, error: updateError } = await fastify.supabaseAdmin
+    .from("product_searches")
+    .update({
+      screenshot_url: null,
+      status: saved ? outcome.status : "failed",
+      error_message: saved ? outcome.errorMessage : TECHNICAL_FAILURE_MESSAGE,
+    })
+    .eq("id", id)
+    .select("*")
+    .single();
+  const { data: matchRows, error: matchesError } = await fastify.supabaseAdmin.from("product_matches").select("*").eq("search_id", id);
+  if (updateError || !updated || matchesError) {
+    request.log.error({ updateError, matchesError }, "Échec d'enregistrement du résultat de la recherche");
+    return null;
+  }
+  const rowsForSearch = (matchRows as ProductMatchRow[]) ?? [];
+  const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, rowsForSearch.map((m) => m.id));
+  return toProductSearch(updated as ProductSearchRow, rowsForSearch, affiliateUrlByMatchId);
+}
+
 const RECENT_SEARCHES_DEFAULT_LIMIT = 6;
 const RECENT_SEARCHES_MAX_LIMIT = 20;
 
@@ -330,38 +479,9 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       if (!request.isMultipart()) {
         return reply.code(400).send({ error: "invalid_body", message: "Requête invalide." });
       }
-
-      const fields: Record<string, string> = {};
-      let fileBuffer: Buffer | null = null;
-      try {
-        for await (const part of request.parts()) {
-          if (part.type === "file") {
-            fileBuffer = await part.toBuffer();
-          } else {
-            fields[part.fieldname] = String(part.value);
-          }
-        }
-      } catch (error) {
-        if (isFileTooLargeError(error)) {
-          return reply.code(413).send({ error: "file_too_large", message: "Le fichier est trop volumineux (10 Mo maximum)." });
-        }
-        throw error;
-      }
-
-      let rawCrop: unknown = undefined;
-      if (fields.crop) {
-        try {
-          rawCrop = JSON.parse(fields.crop);
-        } catch {
-          return reply.code(400).send({ error: "invalid_body", message: "Zone de recadrage invalide." });
-        }
-      }
-      const input = parseInput(runSearchSchema, { crop: rawCrop, query: fields.query }, reply, {
-        error: "invalid_body",
-        message: "Zone de recadrage ou texte invalide.",
-      });
-      if (!input) return;
-      const query = input.query?.trim() || null;
+      const form = await readRunForm(request, reply);
+      if (!form) return;
+      const query = form.input.query?.trim() || null;
 
       const { data: search } = await fastify.supabaseAdmin
         .from("product_searches")
@@ -377,33 +497,8 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
         return reply.code(409).send({ error: "search_already_run", message: "Cette recherche a déjà été lancée." });
       }
 
-      // Image source : celle importée en priorité, sinon la vignette officielle.
-      let source: Buffer;
-      try {
-        if (fileBuffer) {
-          source = fileBuffer;
-        } else if (row.thumbnail_url) {
-          source = await downloadThumbnail(row.thumbnail_url);
-        } else {
-          return reply.code(400).send({ error: "image_required", message: "Importez une capture de la pièce." });
-        }
-      } catch (error) {
-        request.log.warn({ error }, "Vignette officielle indisponible au lancement");
-        return reply.code(422).send({
-          error: "preview_unavailable",
-          message: "L'image de la vidéo n'est plus disponible. Importez une capture de la pièce.",
-        });
-      }
-
-      let prepared: Buffer;
-      try {
-        prepared = await prepareImageForAnalysis(source, input.crop ?? null);
-      } catch (error) {
-        if (error instanceof ImageSourceError) {
-          return reply.code(400).send({ error: "invalid_image", message: "Cette image n'a pas pu être lue, ou la zone choisie est trop petite." });
-        }
-        throw error;
-      }
+      const prepared = await prepareRunImage(request, reply, row, form);
+      if (!prepared) return;
 
       // Verrou : passe de "pending" à "processing" en une seule instruction
       // conditionnelle. Deux lancements simultanés (double appui, réseau
@@ -420,16 +515,8 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       }
 
       const storagePath = `${userId}/${id}.jpg`;
-      const { error: uploadError } = await fastify.supabaseAdmin.storage
-        .from("screenshots")
-        .upload(storagePath, prepared, { contentType: "image/jpeg", upsert: true });
-      const signed = uploadError
-        ? null
-        : await fastify.supabaseAdmin.storage.from("screenshots").createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
-      if (uploadError || !signed?.data) {
-        request.log.error({ uploadError }, "Échec d'envoi de l'image recadrée");
-        if (!uploadError) await discardAnalysisImage(fastify, storagePath);
-        await fastify.supabaseAdmin.from("product_searches").update({ status: "pending" }).eq("id", id);
+      const imageUrl = await uploadForAnalysis(fastify, request, id, storagePath, prepared);
+      if (!imageUrl) {
         return reply.code(500).send({ error: "upload_failed", message: "L'envoi de l'image a échoué, réessayez." });
       }
 
@@ -438,49 +525,29 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       // recherche redevient lançable. Passé ce point, le crédit est engagé
       // — l'app ne promet jamais de le rembourser.
       if (request.raw.socket?.destroyed) {
-        await discardAnalysisImage(fastify, storagePath);
-        await fastify.supabaseAdmin.from("product_searches").update({ status: "pending" }).eq("id", id);
+        await releaseSearch(fastify, id, storagePath);
         return;
       }
 
-      let finalStatus: SearchStatus = "completed";
-      let errorMessage: string | null = null;
-      let matches: VisualMatch[] = [];
+      // Plafond global (lot 4 quater, lib/searchCapacity.ts) : un appel est
+      // réservé juste avant l'envoi. Atteint, ou illisible : aucun appel à
+      // SerpApi, aucun crédit, et la recherche redevient lançable.
+      const capacity = await reserveSearch(fastify, request.log).catch(() => null);
+      if (!capacity || !capacity.allowed) {
+        await releaseSearch(fastify, id, storagePath);
+        if (capacity) return sendCapacityReached(reply, capacity);
+        return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue, réessayez." });
+      }
+
       fastify.countRateLimitHit(request, "searchCreate");
-      try {
-        matches = await searchProductsByImageUrl(fastify, signed.data.signedUrl, { query, locale: searchLocaleFor(request) });
-        if (matches.length === 0) {
-          finalStatus = "failed";
-          errorMessage = NO_MATCH_MESSAGE;
-        }
-      } catch (error) {
-        request.log.error({ error }, "Échec de l'appel à l'API de recherche visuelle (lancement)");
-        finalStatus = "failed";
-        errorMessage = TECHNICAL_FAILURE_MESSAGE;
-      }
-
+      const outcome = await runVisualSearch(fastify, request, imageUrl, query);
       await discardAnalysisImage(fastify, storagePath);
-      if (!(await saveMatches(fastify, id, matches))) {
-        finalStatus = "failed";
-        errorMessage = TECHNICAL_FAILURE_MESSAGE;
-      }
-
-      const { data: updated, error: updateError } = await fastify.supabaseAdmin
-        .from("product_searches")
-        .update({ screenshot_url: null, status: finalStatus, error_message: errorMessage })
-        .eq("id", id)
-        .select("*")
-        .single();
-      const { data: matchRows, error: matchesError } = await fastify.supabaseAdmin.from("product_matches").select("*").eq("search_id", id);
+      const result = await saveOutcome(fastify, request, id, outcome);
       // Résultat illisible ou non enregistré : une panne annoncée comme telle, jamais « aucune pièce ».
-      if (updateError || !updated || matchesError) {
-        request.log.error({ updateError, matchesError }, "Échec d'enregistrement du résultat de la recherche");
+      if (!result) {
         return reply.code(500).send({ error: "search_save_failed", message: "Le résultat n'a pas pu être enregistré, réessayez." });
       }
-      const rowsForSearch = (matchRows as ProductMatchRow[]) ?? [];
-      const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, rowsForSearch.map((m) => m.id));
-
-      return reply.send(toProductSearch(updated as ProductSearchRow, rowsForSearch, affiliateUrlByMatchId));
+      return reply.send(result);
     }
   );
 

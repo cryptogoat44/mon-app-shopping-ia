@@ -5,6 +5,7 @@
 // directe, sur la zone centrale (comme au ciblage quand on ne touche pas au
 // cadre). Le curseur et le choix manuel ne servent qu'en repli.
 import type { ConsentStatus, CropRect } from "@monapp/shared-types";
+import { setLastSpotResult } from "../api/spotSession";
 import { fetchConsentStatus, fetchVideoAiEnabled } from "./api";
 import { DEFAULT_CROP } from "./crop-geometry";
 import { hasCurrentConsent } from "./policy-notice";
@@ -76,6 +77,12 @@ export async function identifyNextMoment(video: OpenedVideo, signal: AbortSignal
 export async function launchVideo(video: OpenedVideo, query: string, signal: AbortSignal, onDraft?: (draft: SpotDraft) => void): Promise<LaunchOutcome> {
   const analysis = await analyzeVideo(video, query, () => undefined, signal);
   if (analysis.kind === "cancelled" || analysis.kind === "not_found") return analysis;
+  // Plafond global des recherches atteint (lot 4 quater) : annoncé sur l'écran
+  // Résultat, comme pour une photo ; aucune identification n'est tentée.
+  if (analysis.kind === "capacity") {
+    setLastSpotResult({ searchId: null, status: "failed", pieces: [], similarPieces: [], failReason: "capacity", capacity: analysis.capacity, query: query.trim() || null });
+    return { kind: "result", searchId: null };
+  }
   if (analysis.kind === "failed") return analysis.reason === "consent" ? { kind: "consent_required" } : { kind: "failed", reason: analysis.reason };
   return identifyNextMoment(video, signal, onDraft);
 }

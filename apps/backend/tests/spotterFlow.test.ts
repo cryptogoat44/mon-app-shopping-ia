@@ -10,6 +10,12 @@ vi.mock("../src/services/oembed.js", () => ({
   detectPlatform: () => "tiktok",
   fetchOfficialPreview: vi.fn(async () => ({ ok: true, thumbnailUrl: "https://p16-common-sign.tiktokcdn-eu.com/vignette.jpeg" })),
 }));
+// Plafond global des recherches (lot 4 quater) : simulé ici ; la fonction
+// réelle de la base est testée dans searchCapacity.test.ts.
+vi.mock("../src/lib/searchCapacity.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/lib/searchCapacity.js")>();
+  return { ...original, reserveSearch: vi.fn() };
+});
 vi.mock("../src/lib/imageProcessing.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/lib/imageProcessing.js")>();
   return { ...original, downloadThumbnail: vi.fn() };
@@ -17,10 +23,12 @@ vi.mock("../src/lib/imageProcessing.js", async (importOriginal) => {
 
 import { searchProductsByImageUrl } from "../src/services/visualSearch.js";
 import { downloadThumbnail } from "../src/lib/imageProcessing.js";
+import { reserveSearch } from "../src/lib/searchCapacity.js";
 import { authHeaders, buildMultipart, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
 
 const searchMock = vi.mocked(searchProductsByImageUrl);
 const downloadMock = vi.mocked(downloadThumbnail);
+const reserveMock = vi.mocked(reserveSearch);
 
 // Image de test 400 × 600 (proportions d'une vignette verticale).
 const IMAGE = await sharp({ create: { width: 400, height: 600, channels: 3, background: "#6b4a3a" } }).jpeg().toBuffer();
@@ -61,6 +69,8 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     searchMock.mockResolvedValue([MATCH]);
     downloadMock.mockReset();
     downloadMock.mockResolvedValue(IMAGE);
+    reserveMock.mockReset();
+    reserveMock.mockResolvedValue({ allowed: true });
   });
 
   async function prepare(sourceUrl?: string) {
@@ -182,6 +192,91 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
       await deleteTestUser(app, counted.id);
     }
   }, 60_000);
+
+  describe("plafond global des recherches (lot 4 quater)", () => {
+    async function statusOf(searchId: string) {
+      const { data, error } = await app.supabaseAdmin.from("product_searches").select("status").eq("id", searchId).single();
+      expect(error).toBeNull();
+      return data?.status;
+    }
+    async function imageKept(searchId: string) {
+      const { data } = await app.supabaseAdmin.storage.from("screenshots").list(user.id);
+      return (data ?? []).some((file) => file.name === `${searchId}.jpg`);
+    }
+
+    it("plafond du jour atteint : aucun appel SerpApi, message honnête ; rien ne reste et la recherche se relance plus tard", async () => {
+      const search = await prepare("https://www.tiktok.com/@x/video/1");
+      reserveMock.mockResolvedValueOnce({ allowed: false, period: "day", retryAt: "2099-01-02T23:00:00.000Z" });
+      const refused = await run(search.id, { query: "veste" });
+      expect(refused.statusCode).toBe(429);
+      expect(refused.json()).toEqual({
+        error: "search_capacity_day",
+        message: "Le service de recherche est très sollicité aujourd'hui. Réessayez demain.",
+        retryAt: "2099-01-02T23:00:00.000Z",
+      });
+      expect(Number(refused.headers["retry-after"])).toBeGreaterThan(0);
+      expect(searchMock).not.toHaveBeenCalled();
+      expect(await imageKept(search.id)).toBe(false);
+      expect(await statusOf(search.id)).toBe("pending");
+
+      expect((await run(search.id, {})).statusCode).toBe(200);
+      expect(searchMock).toHaveBeenCalledOnce();
+      expect(reserveMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("plafond des 31 jours atteint : la date de reprise est transmise, message dans la langue de l'utilisateur", async () => {
+      const search = await prepare("https://www.tiktok.com/@x/video/1");
+      reserveMock.mockResolvedValueOnce({ allowed: false, period: "month", retryAt: "2099-11-12T08:31:00.000Z" });
+      const refused = await run(search.id, {}, undefined, user.token, "en-GB");
+      expect(refused.statusCode).toBe(429);
+      expect(refused.json()).toEqual({
+        error: "search_capacity_month",
+        message: "The search service has reached its monthly limit. Please try again later.",
+        retryAt: "2099-11-12T08:31:00.000Z",
+      });
+      expect(searchMock).not.toHaveBeenCalled();
+    });
+
+    it("plafond illisible (base injoignable) : aucun appel SerpApi, une panne annoncée comme telle", async () => {
+      const search = await prepare("https://www.tiktok.com/@x/video/1");
+      reserveMock.mockRejectedValueOnce(new Error("base injoignable"));
+      const res = await run(search.id, {});
+      expect(res.statusCode).toBe(500);
+      expect(res.json().error).toBe("internal_error");
+      expect(searchMock).not.toHaveBeenCalled();
+      expect(await statusOf(search.id)).toBe("pending");
+    });
+
+    it("consulté seulement au moment d'appeler SerpApi : un lancement refusé avant (zone invalide, recherche d'un autre) ne réserve rien", async () => {
+      const search = await prepare("https://www.tiktok.com/@x/video/1");
+      expect((await run(search.id, { crop: JSON.stringify({ x: 0.9, y: 0.9, width: 0.5, height: 0.5 }) })).statusCode).toBe(400);
+      expect((await run(search.id, {}, undefined, other.token)).statusCode).toBe(404);
+      expect(reserveMock).not.toHaveBeenCalled();
+    });
+
+    it("s'ajoute aux limites par personne : un lancement refusé par le plafond ne compte pas dans la limite horaire", async () => {
+      const counted = await createTestUser(app, "sfp");
+      const previousEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = "development"; // la limite par personne est coupée sous Vitest par défaut
+      try {
+        const prepared = await app.inject({
+          method: "POST",
+          url: "/api/searches/prepare",
+          headers: authHeaders(counted.token),
+          payload: { sourceUrl: "https://www.tiktok.com/@x/video/1" },
+        });
+        const searchId: string = prepared.json().id;
+        reserveMock.mockResolvedValue({ allowed: false, period: "day", retryAt: null });
+        for (let i = 0; i < 10; i++) expect((await run(searchId, {}, undefined, counted.token)).statusCode).toBe(429);
+        reserveMock.mockResolvedValue({ allowed: true });
+        expect((await run(searchId, {}, undefined, counted.token)).statusCode).toBe(200);
+        expect(searchMock).toHaveBeenCalledOnce();
+      } finally {
+        process.env.NODE_ENV = previousEnv;
+        await deleteTestUser(app, counted.id);
+      }
+    }, 60_000);
+  });
 
   it("un texte vide n'est jamais transmis", async () => {
     const search = await prepare("https://www.tiktok.com/@x/video/1");

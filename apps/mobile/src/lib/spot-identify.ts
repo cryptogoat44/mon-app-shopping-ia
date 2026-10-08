@@ -2,7 +2,8 @@
 // parcours unique (lot 4 ter) et aux corrections (recadrer, autre moment).
 // Le résultat — ou l'échec, jamais déguisé en « pièce introuvable » (audit
 // Lot Q, ROB-02) — est gardé en mémoire pour l'écran Résultat.
-import type { SpotFailReason } from "../api/types";
+import { parseSearchCapacityError } from "@monapp/shared-types";
+import type { SpotFailReason, SpotResult } from "../api/types";
 import { setLastSpotResult } from "../api/spotSession";
 import { ApiError, runSearch } from "./api";
 import { reportUnexpectedError } from "./error-tracking";
@@ -22,6 +23,13 @@ function failReasonOf(error: unknown): SpotFailReason {
   return "technical";
 }
 
+/** Plafond global des recherches atteint (lot 4 quater) : son motif et sa
+ * date de reprise, avant tout autre 429 (jamais « trop de recherches d'un coup »). */
+function failureOf(error: unknown): Pick<SpotResult, "failReason" | "capacity"> {
+  const capacity = error instanceof ApiError ? parseSearchCapacityError(error.body) : null;
+  return capacity ? { failReason: "capacity", capacity } : { failReason: failReasonOf(error) };
+}
+
 /** Lance l'identification du brouillon. « Annuler » (signal) abandonne
  * vraiment la requête ; il ne promet rien sur le crédit, qui peut déjà être
  * engagé côté serveur. */
@@ -35,7 +43,7 @@ export async function identifyDraft(draft: SpotDraft, signal: AbortSignal): Prom
     return { kind: "done", searchId: search.id };
   } catch (error) {
     if (signal.aborted) return { kind: "cancelled" };
-    setLastSpotResult({ searchId: null, status: "failed", pieces: [], similarPieces: [], failReason: failReasonOf(error), query: draft.query });
+    setLastSpotResult({ searchId: null, status: "failed", pieces: [], similarPieces: [], ...failureOf(error), query: draft.query });
     return { kind: "done", searchId: null };
   }
 }
