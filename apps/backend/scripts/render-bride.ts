@@ -7,7 +7,7 @@
 //   pnpm --filter backend render-bride suivre   <spotto-api|site> <dep-…>
 //   pnpm --filter backend render-bride api-url  https://spotto-api.onrender.com [--confirmer]
 //   pnpm --filter backend render-bride variable <spotto-api|site> <NOM> <valeur> [--confirmer]
-//   pnpm --filter backend render-bride compteurs-ia spotto-api --depuis <date ISO>
+//   pnpm --filter backend render-bride compteurs-ia spotto-api --depuis <date ISO> [--chronologie]
 //     (lecture SEULE des journaux : des compteurs, jamais de contenu — diagnostic
 //      du lot 4 ter, demandé par le fondateur le 2026-10-07)
 //
@@ -28,7 +28,7 @@
 // par un autre script, à saisie masquée : configurer-anthropic-prod.
 import { assertEditableVariable, FINAL_DEPLOY_STATUSES, RenderGuardError, assertDeployId, resolveService } from "./lib/render-guard.js";
 import { readRenderKey as readKey, renderRequest as render, RenderNotFound as NotFound } from "./lib/render-api.js";
-import { compterRequetes, decrireAnalyse, decrireCodes, extraireCompteursIA, lireJournaux, parametresJournaux, REQUETES_SUIVIES } from "./lib/render-logs.js";
+import { chronologie, compterRequetes, decrireAnalyse, decrireCodes, extraireCompteursIA, lireJournaux, parametresJournaux, REQUETES_SUIVIES } from "./lib/render-logs.js";
 import { z } from "zod";
 
 const POLL_MS = 10_000;
@@ -131,6 +131,13 @@ async function counters(args: string[]): Promise<void> {
   });
   console.log(`  Analyses par l'IA (compteurs écrits par le serveur) : ${analyses.length}`);
   for (const analyse of analyses) console.log(`    - ${decrireAnalyse(analyse)}`);
+  // --chronologie : l'ordre des événements, heure de Paris (jamais d'identifiant, d'adresse ni de contenu).
+  if (!args.includes("--chronologie")) return;
+  console.log("  Ordre des événements (heure de Paris) :");
+  for (const evenement of chronologie(lignes)) {
+    const heure = new Date(evenement.heure).toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris" });
+    console.log(`    ${heure} — ${evenement.nom} — ${evenement.issue}`);
+  }
 }
 
 async function main(): Promise<void> {

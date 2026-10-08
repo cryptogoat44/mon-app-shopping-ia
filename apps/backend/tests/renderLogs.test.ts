@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { RENDER_API, type FetchLike } from "../scripts/lib/render-api.js";
-import { compterRequetes, decrireAnalyse, decrireCodes, extraireCompteursIA, lireJournaux, parametresJournaux } from "../scripts/lib/render-logs.js";
+import { chronologie, compterRequetes, decrireAnalyse, decrireCodes, extraireCompteursIA, lireJournaux, parametresJournaux } from "../scripts/lib/render-logs.js";
 
 // Diagnostic du lot 4 ter (2026-10-07) : lecture SEULE des journaux de
 // spotto-api, des compteurs et jamais de contenu. Journaux SIMULÉS, qui
@@ -149,5 +149,34 @@ describe("lecture des journaux de spotto-api : des compteurs, jamais de contenu"
     expect(code.match(/fetchImpl\(/g)).toHaveLength(1);
     expect(code).toMatch(/fetchImpl\(`\$\{RENDER_API\}\/logs\?[^`]*`, \{\s*method: "GET"/);
     expect(code).not.toMatch(/\b(PUT|PATCH|DELETE)\b/);
+  });
+});
+
+describe("ordre des événements (demande du fondateur, 2026-10-08)", () => {
+  const a = (heure: string, contenu: ReturnType<typeof ligne>) => ({ ...contenu, timestamp: heure });
+  it("heure, chemin générique et code, dans l'ordre ; jamais d'identifiant, d'adresse IP ni de texte", () => {
+    const entrees = [
+      a("2026-10-08T20:16:05Z", requete("r3", "POST", `/api/searches/${COMPTE}/run?q=${encodeURIComponent(TEXTE)}`)),
+      a("2026-10-08T20:15:00Z", requete("r1", "POST", "/api/video-moments")),
+      a("2026-10-08T20:15:04Z", reponse("r1", 200)),
+      a("2026-10-08T20:15:04Z", ligne({ msg: "Analyse vidéo IA", frames: 12, candidates: 3, moments: 3, inputTokens: 3776, outputTokens: 153, texte: TEXTE })),
+      a("2026-10-08T20:16:01Z", requete("r2", "POST", "/api/searches/prepare")),
+      a("2026-10-08T20:16:02Z", reponse("r2", 200)),
+      a("2026-10-08T20:16:09Z", reponse("r3", 200)),
+      a("2026-10-08T20:17:00Z", requete("r4", "GET", "/api/me")),
+    ];
+    const evenements = chronologie(entrees);
+    expect(evenements.map((e) => `${e.heure} ${e.nom} ${e.issue}`)).toEqual([
+      "2026-10-08T20:15:00Z POST /api/video-moments 200",
+      "2026-10-08T20:15:04Z Analyse vidéo IA 12 image(s) envoyée(s), 3 moment(s) proposé(s), 3 retenu(s), jetons 3776 lus / 153 écrits",
+      "2026-10-08T20:16:01Z POST /api/searches/prepare 200",
+      "2026-10-08T20:16:05Z POST /api/searches/:id/run 200",
+    ]);
+    const tout = JSON.stringify(evenements);
+    for (const interdit of [IP, COMPTE, TEXTE, "veste"]) expect(tout).not.toContain(interdit);
+  });
+
+  it("requête sans réponse : « ? »", () => {
+    expect(chronologie([a("2026-10-08T20:16:01Z", requete("r9", "POST", "/api/searches/prepare"))])).toEqual([{ heure: "2026-10-08T20:16:01Z", nom: "POST /api/searches/prepare", issue: "?" }]);
   });
 });

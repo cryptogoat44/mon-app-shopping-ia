@@ -112,6 +112,46 @@ export function compterRequetes(entrees: readonly Entree[]): Map<string, Record<
   return codes;
 }
 
+export interface Evenement {
+  /** Heure de la ligne du journal (ISO, donnée par Render) : arrivée de la requête, ou ligne du serveur. */
+  heure: string;
+  nom: string;
+  /** Code de réponse (« ? » sans réponse) ; pour une analyse par l'IA, ses seuls compteurs. */
+  issue: string;
+}
+
+/** Ordre des événements (demande du fondateur, 2026-10-08) : requêtes suivies
+ * et analyses par l'IA, chacune avec son heure, son chemin générique et son
+ * code — jamais d'identifiant, d'adresse IP ni de contenu. */
+export function chronologie(entrees: readonly Entree[]): Evenement[] {
+  const enCours = new Map<string, Evenement>();
+  const evenements: Evenement[] = [];
+  for (const entree of entrees) {
+    const cle = (reqId: string) => `${entree.labels.find((label) => label.name === "instance")?.value ?? ""} ${reqId}`;
+    const brut = lireJson(entree.message);
+    const requete = REQUETE.safeParse(brut);
+    if (requete.success) {
+      const chemin = requete.data.req.url.split("?")[0] ?? "";
+      const suivie = REQUETES_SUIVIES.find((r) => r.method === requete.data.req.method && r.chemin.test(chemin));
+      if (!suivie) continue;
+      const evenement = { heure: entree.timestamp, nom: suivie.nom, issue: "?" };
+      enCours.set(cle(requete.data.reqId), evenement);
+      evenements.push(evenement);
+      continue;
+    }
+    const reponse = REPONSE.safeParse(brut);
+    if (reponse.success) {
+      const evenement = enCours.get(cle(reponse.data.reqId));
+      if (evenement) evenement.issue = String(reponse.data.res.statusCode);
+      enCours.delete(cle(reponse.data.reqId));
+      continue;
+    }
+    const compteurs = extraireCompteursIA(entree.message);
+    if (compteurs) evenements.push({ heure: entree.timestamp, nom: "Analyse vidéo IA", issue: decrireAnalyse(compteurs) });
+  }
+  return evenements.sort((a, b) => Date.parse(a.heure) - Date.parse(b.heure));
+}
+
 /** Ligne « Analyse vidéo IA » du serveur → ses seuls compteurs (null si ce n'en est pas une). */
 export function extraireCompteursIA(message: string): CompteursIA | null {
   const lu = COMPTEURS_IA.safeParse(lireJson(message));
