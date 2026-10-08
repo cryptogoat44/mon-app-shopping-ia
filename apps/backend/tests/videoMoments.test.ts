@@ -178,7 +178,7 @@ describe("analyse automatique d'une vidéo (POST /api/video-moments)", () => {
     expect(askMock).not.toHaveBeenCalled();
   });
 
-  it("plafond des recherches atteint (lot 4 quater : jour, 31 jours, part de la personne) : aucune image ne part à l'IA, message honnête", async () => {
+  it("plafond des recherches atteint (lot 4 quater : jour, mois, part de la personne) : aucune image ne part à l'IA, message honnête", async () => {
     capacityMock.mockResolvedValueOnce({ allowed: false, limit: "day" });
     const day = await send(consenting, { query: QUERY });
     expect(day.statusCode).toBe(429);

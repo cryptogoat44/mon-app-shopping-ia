@@ -7,11 +7,14 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   SERPAPI_KEY: z.string().min(1),
   // Plafond GLOBAL des recherches SerpApi (lot 4 quater, lib/searchCapacity.ts) :
-  // par jour (heure de Paris) et sur 31 jours glissants. Quota réel en
+  // par jour (heure de Paris) et par cycle mensuel de SerpApi, qui commence le
+  // jour de renouvellement de son quota (le 3 en octobre 2026). Quota réel en
   // octobre 2026 : 250 par mois (offre gratuite) ; la marge de 25 couvre les
-  // outils d'essai du fondateur, qui puisent dans le même compte.
+  // outils d'essai du fondateur, qui puisent dans le même compte. Changer
+  // d'offre ne demande que ces variables (docs/points-de-vigilance.md).
   SERPAPI_DAILY_CAP: z.coerce.number().int().min(1).default(25),
   SERPAPI_MONTHLY_CAP: z.coerce.number().int().min(1).default(225),
+  SERPAPI_RENEWAL_DAY: z.coerce.number().int().min(1).max(31).default(3),
   // Part de chaque personne, par jour : qu'une seule personne ne puisse pas
   // épuiser la journée des autres (8 sur 25 : un tiers au plus).
   SERPAPI_USER_DAILY_CAP: z.coerce.number().int().min(1).default(8),

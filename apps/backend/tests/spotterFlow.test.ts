@@ -225,7 +225,7 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
       expect(reserveMock).toHaveBeenCalledTimes(2);
     });
 
-    it("plafond des 31 jours atteint : message sans date (décision du fondateur), dans la langue de l'utilisateur", async () => {
+    it("plafond du mois atteint : message sans date (décision du fondateur), dans la langue de l'utilisateur", async () => {
       const search = await prepare("https://www.tiktok.com/@x/video/1");
       reserveMock.mockResolvedValueOnce({ allowed: false, limit: "month" });
       const french = await run(search.id, {});

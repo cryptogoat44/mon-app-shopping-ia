@@ -4,7 +4,7 @@ import { en } from "../src/i18n/en";
 import { fr } from "../src/i18n/fr";
 import { capacityFailReason } from "../src/lib/spot-capacity";
 
-// Lot 4 quater : plafond des recherches (jour et 31 jours pour tout le service,
+// Lot 4 quater : plafond des recherches (jour et mois pour tout le service,
 // part de la personne). Réponse du serveur lue sans lui faire confiance ;
 // textes du fondateur (2026-10-08), jamais de date.
 
@@ -27,7 +27,7 @@ describe("réponse « plafond atteint » du serveur", () => {
 });
 
 describe("textes de l'écran Résultat (décisions du fondateur, 2026-10-08)", () => {
-  it("français : jour, 31 jours sans date, part de la personne", () => {
+  it("français : jour, mois sans date, part de la personne", () => {
     const r = fr.result;
     expect([r.capacityDayTitle, r.capacityDayTip]).toEqual(["Le service de recherche est très sollicité aujourd'hui.", "Réessayez demain."]);
     expect([r.capacityMonthTitle, r.capacityMonthTip]).toEqual(["Le service de recherche a atteint sa limite mensuelle.", "Réessayez dans quelques jours."]);

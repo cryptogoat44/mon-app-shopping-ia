@@ -30,7 +30,7 @@ export type SpotStatus = "success" | "failed";
  * réessayer). "needs_photo" : aucune image exploitable, il faut importer une
  * capture. "rate_limited" : trop d'identifications en peu de temps (429).
  * "capacity_day", "capacity_month", "capacity_user" : plafond des recherches
- * atteint — du jour ou des 31 jours pour tout le service, ou part de la
+ * atteint — du jour ou du mois pour tout le service, ou part de la
  * personne pour la journée (429, lot 4 quater). */
 export type SpotFailReason = "no_match" | "technical" | "needs_photo" | "rate_limited" | CapacityFailReason;
 

@@ -322,7 +322,7 @@ export const fr = {
     rateLimitedTitle: "Trop de recherches d'un coup",
     rateLimitedTip: "Vous avez atteint la limite de 10 identifications par heure. Réessayez un peu plus tard.",
     // Plafond des recherches (lot 4 quater, textes du fondateur, 2026-10-08) :
-    // jour et 31 jours pour tout le service (jamais de date), part de la personne.
+    // jour et mois pour tout le service (jamais de date), part de la personne.
     capacityDayTitle: "Le service de recherche est très sollicité aujourd'hui.",
     capacityDayTip: "Réessayez demain.",
     capacityMonthTitle: "Le service de recherche a atteint sa limite mensuelle.",

@@ -3,8 +3,8 @@
 // requêtes par chemin et par code de réponse, et les compteurs que le serveur
 // écrit lui-même pour l'analyse automatique (images, moments, jetons, motif
 // d'échec) et pour le plafond des recherches SerpApi (lot 4 quater : réservé
-// ou refusé, compteurs du jour, des 31 jours et de la personne — un nombre,
-// jamais son identifiant). Render ne garde pas de journal des requêtes HTTP pour ce service :
+// ou refusé, compteurs du jour, du mois de SerpApi et de la personne — un
+// nombre, jamais son identifiant). Render ne garde pas de journal des requêtes HTTP pour ce service :
 // on lit les lignes du serveur (« incoming request » / « request completed »),
 // dont on n'extrait QUE la méthode, le chemin (comparé à une liste fixe) et le
 // code de réponse. Aucun message brut, adresse IP, identifiant de compte ni
@@ -172,11 +172,12 @@ const PLAFOND = z.object({
   outcome: z.enum(["reserved", "refused"]),
   limit: z.enum(["day", "month", "user"]).nullable(),
   day: z.number(),
-  window: z.number(),
+  month: z.number(),
   user: z.number(),
   dayCap: z.number(),
   monthCap: z.number(),
   userCap: z.number(),
+  renewalDay: z.number(),
 });
 export type LignePlafond = z.infer<typeof PLAFOND>;
 
@@ -184,15 +185,15 @@ export type LignePlafond = z.infer<typeof PLAFOND>;
 export function extrairePlafond(message: string): LignePlafond | null {
   const lu = PLAFOND.safeParse(lireJson(message));
   if (!lu.success) return null;
-  const { msg, step, outcome, limit, day, window, user, dayCap, monthCap, userCap } = lu.data;
-  return { msg, step, outcome, limit, day, window, user, dayCap, monthCap, userCap };
+  const { msg, step, outcome, limit, day, month, user, dayCap, monthCap, userCap, renewalDay } = lu.data;
+  return { msg, step, outcome, limit, day, month, user, dayCap, monthCap, userCap, renewalDay };
 }
 
 function etatPlafond(ligne: LignePlafond): string {
-  return `aujourd'hui ${ligne.day}/${ligne.dayCap}, 31 jours ${ligne.window}/${ligne.monthCap}, personne ${ligne.user}/${ligne.userCap}`;
+  return `aujourd'hui ${ligne.day}/${ligne.dayCap}, depuis le ${ligne.renewalDay} ${ligne.month}/${ligne.monthCap}, personne ${ligne.user}/${ligne.userCap}`;
 }
 
-const PLAFONDS = { day: "plafond du jour", month: "plafond des 31 jours", user: "part de la personne pour la journée" } as const;
+const PLAFONDS = { day: "plafond du jour", month: "plafond du mois", user: "part de la personne pour la journée" } as const;
 
 export function decrirePlafond(ligne: LignePlafond): string {
   if (ligne.outcome === "reserved" || !ligne.limit) return `recherche réservée — ${etatPlafond(ligne)}`;
@@ -207,7 +208,7 @@ export function resumerPlafond(lignes: readonly LignePlafond[]): string {
   const reservees = lignes.filter((ligne) => ligne.outcome === "reserved").length;
   const refus = (limit: LignePlafond["limit"]) => lignes.filter((ligne) => ligne.outcome === "refused" && ligne.limit === limit).length;
   const total = refus("day") + refus("month") + refus("user");
-  return `${reservees} recherche(s) réservée(s), ${total} refus (jour ${refus("day")}, 31 jours ${refus("month")}, part personnelle ${refus("user")}) ; dernier état lu : ${etatPlafond(derniere)}`;
+  return `${reservees} recherche(s) réservée(s), ${total} refus (jour ${refus("day")}, mois ${refus("month")}, part personnelle ${refus("user")}) ; dernier état lu : ${etatPlafond(derniere)}`;
 }
 
 export function decrireCodes(codes: Record<string, number>): string {

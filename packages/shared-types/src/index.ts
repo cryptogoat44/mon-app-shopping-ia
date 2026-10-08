@@ -143,7 +143,7 @@ export type VideoAiErrorCode =
 /** Plafond des recherches atteint (lot 4 quater) : réponse 429 du lancement
  * d'une recherche, et de l'analyse automatique avant tout envoi à l'IA.
  * « day » : tout le service, jusqu'à minuit (heure de Paris) ; « month » : tout
- * le service, 31 jours glissants ; « user » : la part de la personne pour la
+ * le service, cycle mensuel de SerpApi ; « user » : la part de la personne pour la
  * journée. Jamais de date de reprise (décision du fondateur, 2026-10-08). */
 export type SearchCapacityLimit = "day" | "month" | "user";
 export const SEARCH_CAPACITY_LIMITS = ["day", "month", "user"] as const satisfies readonly SearchCapacityLimit[];

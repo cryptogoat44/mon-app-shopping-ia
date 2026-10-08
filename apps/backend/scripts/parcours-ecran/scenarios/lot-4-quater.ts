@@ -1,5 +1,5 @@
 // Lot 4 quater — plafond des recherches SerpApi (site) : plafond global (jour,
-// 31 jours) et part de chaque personne pour la journée.
+// mois de SerpApi) et part de chaque personne pour la journée.
 //
 //   pnpm --filter backend parcours-ecran lot-4-quater
 //
@@ -7,7 +7,7 @@
 // que le serveur l'envoie (le serveur lui-même est vérifié par
 // tests/spotterFlow.test.ts, videoMoments.test.ts et searchCapacity.test.ts) :
 // aucune requête ne part vers SerpApi ni vers l'IA. Photo : plafond du jour,
-// des 31 jours (message sans date, décision du fondateur), part de la
+// du mois (message sans date, décision du fondateur), part de la
 // personne ; vidéo : plafond atteint avant l'analyse par l'IA. Français clair
 // et anglais sombre.
 import { rmSync, writeFileSync } from "node:fs";
@@ -104,11 +104,11 @@ export async function run(p: Parcours): Promise<void> {
   const problemes: string[] = [];
   try {
     for (const combo of [COMBOS[0]!, COMBOS[3]!]) {
-      await p.step(`${combo.id} : photo (plafond du jour, des 31 jours, part de la personne), vidéo (plafond atteint avant l'IA)`, async () => {
+      await p.step(`${combo.id} : photo (plafond du jour, du mois, part de la personne), vidéo (plafond atteint avant l'IA)`, async () => {
         const compte = await nouveauCompte(p, `q${combo.id.replace("-", "")}`);
         const page = await ouvrirSpotter(p, compte, combo, envois, TEXTES[combo.locale].ajouterVideo);
         await photoPlafond(p, page, combo, photoEssai, "day", "01-photo-plafond-jour", problemes);
-        await photoPlafond(p, page, combo, photoEssai, "month", "02-photo-plafond-31-jours", problemes);
+        await photoPlafond(p, page, combo, photoEssai, "month", "02-photo-plafond-mois", problemes);
         await photoPlafond(p, page, combo, photoEssai, "user", "03-photo-part-personnelle", problemes);
         await videoPlafond(p, page, combo, videos.courte, problemes);
         await page.context().close();

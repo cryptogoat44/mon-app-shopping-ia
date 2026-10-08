@@ -1,7 +1,8 @@
 // Plafond GLOBAL des recherches SerpApi et PART DE CHAQUE PERSONNE (lot 4
 // quater, décisions du fondateur, 2026-10-08) : par jour (heure de Paris) et
-// sur 31 jours glissants pour tout le service, par jour pour chaque personne,
-// EN PLUS des limites par personne existantes (lib/rateLimits.ts). Tout est
+// par cycle mensuel aligné sur le renouvellement du quota chez SerpApi (il se
+// libère quand ce quota revient) pour tout le service, par jour pour chaque
+// personne, EN PLUS des limites par personne existantes (lib/rateLimits.ts). Tout est
 // compté dans la base (fonction serpapi_quota, migration 0022) : en mémoire,
 // les compteurs repartiraient de zéro à chaque redémarrage du serveur (mise
 // en veille de l'offre gratuite de Render, déploiements).
@@ -19,7 +20,7 @@ export const SEARCH_CAPACITY_MESSAGES = {
 
 const COUNTS = {
   day_count: z.number().int().nonnegative(),
-  window_count: z.number().int().nonnegative(),
+  month_count: z.number().int().nonnegative(),
   user_day_count: z.number().int().nonnegative(),
 };
 /** Réponse de serpapi_quota, lue sans lui faire confiance (une seule ligne). */
@@ -40,12 +41,20 @@ export class SearchCapacityError extends Error {}
 
 export interface SearchCaps {
   daily: number;
+  /** Par cycle mensuel de SerpApi, depuis le dernier jour de renouvellement. */
   monthly: number;
   userDaily: number;
+  /** Jour du mois où SerpApi renouvelle le quota (le dernier jour du mois s'il est plus court). */
+  renewalDay: number;
 }
 
 export function searchCaps(): SearchCaps {
-  return { daily: env.SERPAPI_DAILY_CAP, monthly: env.SERPAPI_MONTHLY_CAP, userDaily: env.SERPAPI_USER_DAILY_CAP };
+  return {
+    daily: env.SERPAPI_DAILY_CAP,
+    monthly: env.SERPAPI_MONTHLY_CAP,
+    userDaily: env.SERPAPI_USER_DAILY_CAP,
+    renewalDay: env.SERPAPI_RENEWAL_DAY,
+  };
 }
 
 export const CAPACITY_LOG_MESSAGE = "Plafond SerpApi";
@@ -58,11 +67,12 @@ export function capacityLogFields(step: "search" | "video_ai", row: QuotaRow, ca
     outcome: row.allowed ? ("reserved" as const) : ("refused" as const),
     limit: row.refused_by,
     day: row.day_count,
-    window: row.window_count,
+    month: row.month_count,
     user: row.user_day_count,
     dayCap: caps.daily,
     monthCap: caps.monthly,
     userCap: caps.userDaily,
+    renewalDay: caps.renewalDay,
   };
 }
 
@@ -83,6 +93,7 @@ async function readQuota(fastify: FastifyInstance, log: FastifyBaseLogger, reque
     p_daily_cap: caps.daily,
     p_monthly_cap: caps.monthly,
     p_user_daily_cap: caps.userDaily,
+    p_renewal_day: caps.renewalDay,
     p_user_id: request.userId,
     p_reserve: reserve,
     p_exclude_search: request.searchId ?? null,
