@@ -75,6 +75,7 @@ async function repondre(init: RequestInit | undefined): Promise<Response> {
           x2: Math.round(mesure.width * 0.85),
           y2: Math.round(mesure.height * 0.7),
           confidence,
+          face_bottom: -1,
         }))
     : [];
   // Coût simulé selon la règle officielle : ⌈largeur/28⌉ × ⌈hauteur/28⌉ jetons par image.

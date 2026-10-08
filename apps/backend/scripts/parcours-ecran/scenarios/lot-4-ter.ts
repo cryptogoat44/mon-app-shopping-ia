@@ -18,7 +18,7 @@ import { genererVideosEssai } from "../../lib/videos-essai.js";
 import { COMBOS, type Combo } from "./lot-3.js";
 import { check, choisirFichier, ouvrirSpotter, suivreRequetes, visible, type Envoi } from "./spotter-outils.js";
 import { capteur, champPret, controlerResultatsSobres, fermerFeuille, nouveauCompte, ralentir, simulerResultats, TEXTES } from "./lot-4-ter-outils.js";
-import { corrections, identificationReelle, liens, limites, nouvelleVersion, photo, refusEtRetrait, replis } from "./lot-4-ter-etapes.js";
+import { corrections, identificationReelle, liens, limites, nouvelleVersion, photo, refusEtRetrait, replis, sansResultat } from "./lot-4-ter-etapes.js";
 
 export const name = "Lot 4 ter — parcours unique du Spotter (site)";
 export const outputDir = "lot-4-ter-captures";
@@ -153,6 +153,7 @@ export async function run(p: Parcours): Promise<void> {
           await replis(p, page, videos.courte, problemes);
           await liens(p, page, videos.courte, problemes);
           await photo(p, page, photoEssai, problemes);
+          await sansResultat(p, page, photoEssai, problemes);
           await nouvelleVersion(p, page, problemes);
           await refusEtRetrait(p, page, envois, videos.courte, problemes);
         }

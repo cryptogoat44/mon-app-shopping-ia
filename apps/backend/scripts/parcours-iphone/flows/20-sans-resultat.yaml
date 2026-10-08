@@ -1,0 +1,41 @@
+# Décision du fondateur (2026-10-08) : rien trouvé → « Google Lens n'a rien
+# trouvé pour le moment. » ; aucun réessai automatique ; des mots avaient été
+# tapés → « Réessayer sans le texte » (une recherche de plus, à l'initiative de
+# la personne). SerpApi simulée : le mot « introuvable » renvoie zéro
+# proposition ; sans lui, trois.
+appId: com.spottoapp.ios
+---
+- tapOn: "Ajouter une photo"
+- extendedWaitUntil:
+    visible: "Collections"
+    timeout: 20000
+- tapOn:
+    point: "50%,25%"
+- extendedWaitUntil:
+    visible: "Entourez la pièce"
+    timeout: 30000
+- tapOn:
+    id: "spot-query"
+- inputText: "veste introuvable"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "Lancer"
+- extendedWaitUntil:
+    visible: "Google Lens n.a rien trouvé pour le moment\\."
+    timeout: 60000
+- assertVisible: "Essayez avec un autre cadre ou réessayez dans quelques minutes\\."
+- assertVisible: "Réessayer sans le texte"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 20-rien-trouve
+- tapOn: "Réessayer sans le texte"
+- extendedWaitUntil:
+    visible: "Meilleure proposition"
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 20b-sans-le-texte-resultats
+- tapOn: "Fermer"
+- extendedWaitUntil:
+    visible: "Ajouter une photo"
+    timeout: 20000

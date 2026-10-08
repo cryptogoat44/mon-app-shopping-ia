@@ -3,11 +3,12 @@ import { failureCorrections, successCorrections, type CorrectionContext } from "
 
 // Lot 4 ter : les corrections ne s'affichent plus d'emblée. Avec des
 // résultats : un seul lien discret, « Ce n'est pas la bonne pièce ? ». Sans
-// résultat : deux actions au plus, la plus utile d'abord.
-const video: CorrectionContext = { hasDraft: true, hasVideo: true, remainingMoments: 2, fromLink: false };
+// résultat : deux actions au plus, la plus utile d'abord ; « Réessayer sans le
+// texte » en plus si des mots avaient été tapés (décision du fondateur, 2026-10-08).
+const video: CorrectionContext = { hasDraft: true, hasVideo: true, remainingMoments: 2, fromLink: false, hadQuery: false };
 const videoLastMoment: CorrectionContext = { ...video, remainingMoments: 0 };
-const photo: CorrectionContext = { hasDraft: true, hasVideo: false, remainingMoments: 0, fromLink: false };
-const reopened: CorrectionContext = { hasDraft: false, hasVideo: false, remainingMoments: 0, fromLink: false };
+const photo: CorrectionContext = { hasDraft: true, hasVideo: false, remainingMoments: 0, fromLink: false, hadQuery: false };
+const reopened: CorrectionContext = { hasDraft: false, hasVideo: false, remainingMoments: 0, fromLink: false, hadQuery: false };
 const oldLink: CorrectionContext = { ...reopened, fromLink: true };
 
 describe("sous des résultats : recadrer, autres moments, choisir l'image soi-même", () => {
@@ -41,6 +42,13 @@ describe("sans résultat : deux actions au plus, la plus utile d'abord", () => {
     expect(failureCorrections("no_match", photo)).toEqual(["reframe"]);
   });
 
+  it("rien trouvé alors que des mots avaient été tapés : « Réessayer sans le texte » en plus, jamais seul ni pour une panne", () => {
+    expect(failureCorrections("no_match", { ...photo, hadQuery: true })).toEqual(["reframe", "retry_without_text"]);
+    expect(failureCorrections("no_match", { ...video, hadQuery: true })).toEqual(["try_another", "retry_without_text", "choose_myself"]);
+    expect(failureCorrections("technical", { ...photo, hadQuery: true })).toEqual(["retry", "reframe"]);
+    expect(failureCorrections("no_match", { ...reopened, hadQuery: true })).toEqual([]);
+  });
+
   it("limite d'identifications atteinte : rien à tenter tout de suite", () => {
     expect(failureCorrections("rate_limited", video)).toEqual([]);
   });
@@ -50,8 +58,11 @@ describe("sans résultat : deux actions au plus, la plus utile d'abord", () => {
     expect(failureCorrections("technical", reopened)).toEqual([]);
   });
 
-  it("jamais plus de deux actions", () => {
+  it("jamais plus de deux actions, plus « Réessayer sans le texte » quand des mots avaient été tapés", () => {
     for (const reason of ["no_match", "technical", "rate_limited", "needs_photo"] as const)
-      for (const context of [video, videoLastMoment, photo, reopened, oldLink]) expect(failureCorrections(reason, context).length).toBeLessThanOrEqual(2);
+      for (const context of [video, videoLastMoment, photo, reopened, oldLink]) {
+        expect(failureCorrections(reason, context).length).toBeLessThanOrEqual(2);
+        expect(failureCorrections(reason, { ...context, hadQuery: true }).filter((c) => c !== "retry_without_text").length).toBeLessThanOrEqual(2);
+      }
   });
 });

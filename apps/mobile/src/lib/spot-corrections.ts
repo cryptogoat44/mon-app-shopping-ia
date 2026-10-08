@@ -1,9 +1,12 @@
 // Corrections proposées sur l'écran Résultat (lot 4 ter). Avec des résultats :
 // derrière un seul lien discret, « Ce n'est pas la bonne pièce ? ». Sans
-// résultat : deux actions au plus, la plus utile d'abord. Logique pure, testée.
+// résultat : deux actions au plus, la plus utile d'abord — et, si des mots
+// avaient été tapés, « Réessayer sans le texte » (décision du fondateur,
+// 2026-10-08 : jamais automatique, un crédit à l'initiative de la personne).
+// Logique pure, testée.
 import type { SpotFailReason } from "../api/types";
 
-export type Correction = "reframe" | "try_another" | "choose_myself" | "retry" | "add_video";
+export type Correction = "reframe" | "try_another" | "choose_myself" | "retry" | "retry_without_text" | "add_video";
 
 export interface CorrectionContext {
   /** Image de la recherche encore en mémoire : elle peut être recadrée. */
@@ -14,6 +17,8 @@ export interface CorrectionContext {
   remainingMoments: number;
   /** Ancienne recherche par lien (analyse de la couverture, désactivée). */
   fromLink: boolean;
+  /** Des mots avaient été tapés (« Que cherchez-vous ? ») pour cette recherche. */
+  hadQuery: boolean;
 }
 
 /** Sous des résultats ; liste vide : rien à proposer, aucun lien affiché
@@ -32,7 +37,9 @@ export function failureCorrections(reason: SpotFailReason, context: CorrectionCo
   if (reason === "needs_photo" || !context.hasDraft) return context.fromLink ? ["add_video"] : [];
   // Panne : réessayer d'abord ; l'image reste la bonne.
   if (reason === "technical") return ["retry", context.hasVideo ? "choose_myself" : "reframe"];
-  // Rien trouvé : une autre image vaut mieux qu'un nouvel essai à l'identique.
-  if (!context.hasVideo) return ["reframe"];
-  return [context.remainingMoments > 0 ? "try_another" : "reframe", "choose_myself"];
+  // Rien trouvé : une autre image vaut mieux qu'un nouvel essai à l'identique ;
+  // si des mots avaient été tapés, la même image sans eux.
+  const withoutText: Correction[] = context.hadQuery ? ["retry_without_text"] : [];
+  if (!context.hasVideo) return ["reframe", ...withoutText];
+  return [context.remainingMoments > 0 ? "try_another" : "reframe", ...withoutText, "choose_myself"];
 }

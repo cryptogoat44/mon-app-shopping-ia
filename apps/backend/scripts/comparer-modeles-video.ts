@@ -4,6 +4,9 @@
 //
 //   pnpm --filter backend comparer-modeles-video <dossier>               estimation seule (aucun appel)
 //   pnpm --filter backend comparer-modeles-video <dossier> --confirmer   appels réels (clé d'ESSAI)
+//   options : --modele sonnet (un seul modèle) ; --sortie <nom> (dossier de docs/,
+//   par défaut lot-4-auto-comparaison) — les cadres sont aussi écrits en chiffres
+//   dans resultats.json (aucune image, aucun texte du modèle).
 //
 // <dossier> : hors du dépôt, avec les vidéos et un fichier descriptions.json,
 // sous l'une de ces deux formes :
@@ -42,7 +45,7 @@ import {
 import { lireCleEssai } from "./lib/anthropic-essai.js";
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
-const SORTIE = join(ROOT, "docs", "lot-4-auto-comparaison");
+const SORTIE_PAR_DEFAUT = "lot-4-auto-comparaison";
 
 const MODELES = [
   { nom: "Claude Sonnet 5.5", ...VIDEO_AI_SETTINGS, prixEntree: 2, prixSortie: 10 },
@@ -191,7 +194,7 @@ async function interroger(modele: Modele, essai: Essai, apiKey: string): Promise
 
 /** Planche : les images proposées par un modèle, avec ses cadres (vert : retenu ; orange : écarté
  * par le seuil de confiance), dans l'ordre proposé. Renvoie le nom du fichier, ou null. */
-async function dessinerPlanche(resultat: Resultat, nom: string): Promise<string | null> {
+async function dessinerPlanche(resultat: Resultat, nom: string, sortie: string): Promise<string | null> {
   if ("erreur" in resultat.issue || resultat.issue.candidates.length === 0) return null;
   const retenus = new Set(resultat.issue.moments.map((moment) => moment.frame));
   const vignettes = await Promise.all(
@@ -210,7 +213,7 @@ async function dessinerPlanche(resultat: Resultat, nom: string): Promise<string 
     gauche += v.info.width + 8;
     return calque;
   });
-  await sharp({ create: { width: largeur, height: hauteur, channels: 3, background: "#888888" } }).composite(calques).png().toFile(join(SORTIE, nom));
+  await sharp({ create: { width: largeur, height: hauteur, channels: 3, background: "#888888" } }).composite(calques).png().toFile(join(sortie, nom));
   return nom;
 }
 
@@ -223,8 +226,8 @@ function ligne(resultat: Resultat): string {
   return `${debut} | ${momentsLisibles(essai, issue)} | ${retenusLisibles(issue)} | ${verdict(essai, issue)} | ${jetons} | ${prix.toFixed(4)} $ | ${secondes.toFixed(1)} s |`;
 }
 
-function synthese(resultats: readonly Resultat[]): string[] {
-  return MODELES.map((modele) => {
+function synthese(resultats: readonly Resultat[], modeles: readonly Modele[]): string[] {
+  return modeles.map((modele) => {
     const siens = resultats.filter((r) => r.modele === modele);
     const reussis = siens.flatMap((r) => ("erreur" in r.issue ? [] : [{ r, issue: r.issue }]));
     const justes = (liste: typeof reussis) => liste.filter(({ r, issue }) => verdict(r.essai, issue) === "oui").length;
@@ -262,18 +265,34 @@ function pageHtml(resultats: readonly Resultat[], syntheses: readonly string[]):
   const style = "body{font-family:-apple-system,sans-serif;max-width:1100px;margin:2rem auto;padding:0 1rem;color:#222}img{max-width:100%;border:1px solid #ccc}section{border-top:1px solid #ddd;margin-top:2rem}";
   const legende = `Seuil de confiance du serveur : ${VIDEO_AI_MIN_CONFIDENCE}. ✓ : moment dans la plage indiquée. Cadres verts : retenus (le premier est identifié aussitôt) ; orange : écartés par le seuil.`;
   const blocs = essais.map((essai) => blocHtml(essai, resultats.filter((r) => r.essai === essai))).join("");
-  return `<!doctype html><html lang="fr"><meta charset="utf-8"><title>Comparaison Sonnet 5.5 / Haiku 4.5</title><style>${style}</style><h1>Comparaison Sonnet 5.5 / Haiku 4.5</h1><p>${echapper(legende)}</p><ul>${resume}</ul>${blocs}</html>`;
+  const titre = `Comparaison ${[...new Set(resultats.map((r) => r.modele.nom))].join(" / ")}`;
+  return `<!doctype html><html lang="fr"><meta charset="utf-8"><title>${echapper(titre)}</title><style>${style}</style><h1>${echapper(titre)}</h1><p>${echapper(legende)}</p><ul>${resume}</ul>${blocs}</html>`;
 }
 
 /** Planches, rapport (docs/lot-4-auto-comparaison/rapport.md) et page locale index.html. */
-async function ecrireResultats(resultats: Resultat[]): Promise<void> {
-  mkdirSync(SORTIE, { recursive: true });
+/** Les cadres en chiffres (proportions de l'image), pour les contrôles : aucune image, aucun texte du modèle. */
+function donneesChiffrees(resultats: readonly Resultat[]): unknown[] {
+  return resultats.map(({ essai, modele, issue }) => {
+    const seconde = (frame: number) => Number(essai.temps[frame]!.toFixed(3));
+    const base = { fichier: essai.fichier, description: essai.description, attendu: essai.attendu, modele: modele.model };
+    if ("erreur" in issue) return { ...base, erreur: issue.erreur };
+    return {
+      ...base,
+      candidats: issue.candidates.map((c) => ({ image: c.frame, seconde: seconde(c.frame), cadre: c.box, confiance: c.confidence, menton: c.faceBottom ?? null })),
+      retenus: issue.moments.map((m) => ({ image: m.frame, seconde: seconde(m.frame), cadre: m.box })),
+      jetons: issue.usage,
+    };
+  });
+}
+
+async function ecrireResultats(resultats: Resultat[], modeles: readonly Modele[], sortie: string): Promise<void> {
+  mkdirSync(sortie, { recursive: true });
   for (const [index, resultat] of resultats.entries()) {
-    resultat.planche = await dessinerPlanche(resultat, `${index + 1}-${resultat.essai.fichier}-${resultat.modele.model}.png`);
+    resultat.planche = await dessinerPlanche(resultat, `${index + 1}-${resultat.essai.fichier}-${resultat.modele.model}.png`, sortie);
   }
-  const syntheses = synthese(resultats);
+  const syntheses = synthese(resultats, modeles);
   const rapport = [
-    "# Comparaison Sonnet 5.5 / Haiku 4.5 — analyse automatique (lot 4, temps 1 bis)",
+    `# Comparaison ${modeles.map((m) => m.nom).join(" / ")} — analyse automatique`,
     "",
     `Date : ${new Date().toISOString().slice(0, 10)}. Mêmes 12 images par vidéo, même requête et même seuil de confiance que le serveur (${VIDEO_AI_MIN_CONFIDENCE}). ✓ : moment dans la plage indiquée ; le premier moment retenu est celui identifié aussitôt.`,
     "",
@@ -284,10 +303,17 @@ async function ecrireResultats(resultats: Resultat[]): Promise<void> {
     ...syntheses,
     "",
   ].join("\n");
-  writeFileSync(join(SORTIE, "rapport.md"), rapport);
-  writeFileSync(join(SORTIE, "index.html"), pageHtml(resultats, syntheses));
+  writeFileSync(join(sortie, "rapport.md"), rapport);
+  writeFileSync(join(sortie, "index.html"), pageHtml(resultats, syntheses));
+  writeFileSync(join(sortie, "resultats.json"), JSON.stringify(donneesChiffrees(resultats), null, 1));
   console.log(rapport);
-  console.log("Planches, rapport et page à ouvrir sur le Mac : docs/lot-4-auto-comparaison/index.html");
+  console.log(`Planches, rapport, cadres chiffrés et page à ouvrir sur le Mac : ${sortie}`);
+}
+
+/** Valeur d'une option (« --modele sonnet »). */
+function option(nom: string): string | null {
+  const index = process.argv.indexOf(nom);
+  return index >= 0 ? (process.argv[index + 1] ?? null) : null;
 }
 
 async function main(): Promise<void> {
@@ -296,12 +322,18 @@ async function main(): Promise<void> {
   if (!process.argv[2] || !existsSync(join(dossier, "descriptions.json"))) throw new Error("Indiquez un dossier contenant les vidéos et descriptions.json.");
   if (dossier.startsWith(ROOT)) throw new Error("Le dossier des vidéos doit être hors du dépôt (aucune vidéo dans Git).");
   const cas = lireCas(dossier);
+  const filtre = option("--modele");
+  const modeles = filtre ? MODELES.filter((m) => m.model.includes(filtre)) : [...MODELES];
+  if (modeles.length === 0) throw new Error(`Aucun modèle ne correspond à « ${filtre} ».`);
+  const nomSortie = option("--sortie") ?? SORTIE_PAR_DEFAUT;
+  if (!/^[a-z0-9-]+$/.test(nomSortie)) throw new Error("--sortie : un nom de dossier simple (lettres, chiffres, tirets).");
+  const sortie = join(ROOT, "docs", nomSortie);
   const travail = mkdtempSync(join(tmpdir(), "comparaison-modeles-"));
   try {
     const essais = await preparerEssais(dossier, cas, travail);
     for (const essai of essais) {
       const jetons = jetonsImages(essai.images) + 700;
-      const estimations = MODELES.map((m) => `${m.nom} ≈ ${cout(m, jetons, 150).toFixed(4)} $`).join(" ; ");
+      const estimations = modeles.map((m) => `${m.nom} ≈ ${cout(m, jetons, 150).toFixed(4)} $`).join(" ; ");
       console.log(`${essai.fichier} — « ${essai.description} » : ${essai.images.length} images, ≈ ${jetons} jetons lus — ${estimations}`);
     }
     if (!confirmer) {
@@ -310,8 +342,8 @@ async function main(): Promise<void> {
     }
     const apiKey = lireCleEssai();
     const resultats: Resultat[] = [];
-    for (const essai of essais) for (const modele of MODELES) resultats.push(await interroger(modele, essai, apiKey));
-    await ecrireResultats(resultats);
+    for (const essai of essais) for (const modele of modeles) resultats.push(await interroger(modele, essai, apiKey));
+    await ecrireResultats(resultats, modeles, sortie);
   } finally {
     rmSync(travail, { recursive: true, force: true });
   }

@@ -3,6 +3,8 @@ import sharp from "sharp";
 import {
   askVideoMoments,
   buildMomentsRequest,
+  excludeFace,
+  FACE_GAP,
   parseMomentsResponse,
   sanitizeQuery,
   toRelativeBox,
@@ -220,5 +222,39 @@ describe("analyse automatique — appel HTTP (fetch simulé)", () => {
   it("corps illisible : réponse invalide", async () => {
     stubFetch(new Response("<html>", { status: 200 }));
     await expect(askVideoMoments(FRAMES, "veste", OPTIONS)).rejects.toMatchObject({ kind: "invalid_output" });
+  });
+});
+
+// Décision du fondateur (2026-10-08) : le cadre d'une pièce portée sous la tête
+// n'inclut pas le visage (sous le menton, marge de sécurité) — moins de données
+// personnelles envoyées à Google Lens.
+describe("cadre sans le visage", () => {
+  it("consigne : cadre limité à la pièce, sous le menton avec une marge ; bas du menton demandé (nombre)", () => {
+    const body = buildMomentsRequest(FRAMES, "pull blanc", VIDEO_AI_SETTINGS);
+    expect(body.system).toContain("must not include the person's face");
+    expect(body.system).toContain("below the chin, with a safety gap");
+    expect(body.output_config.format.schema.properties.moments.items.required).toContain("face_bottom");
+  });
+
+  it("cadre qui remonte sur le menton : son haut est abaissé sous le menton, marge comprise ; le bas ne bouge pas", () => {
+    const box = { x: 0, y: 0.3, width: 1, height: 0.6 };
+    const sansVisage = excludeFace(box, 0.4 * 512, 512);
+    expect(sansVisage.y).toBeCloseTo(0.4 + FACE_GAP, 4);
+    expect(sansVisage.y + sansVisage.height).toBeCloseTo(0.9, 4);
+  });
+
+  it("déjà sous le menton, aucun visage (-1), ou pièce portée sur la tête (place insuffisante) : cadre inchangé", () => {
+    const box = { x: 0.1, y: 0.5, width: 0.8, height: 0.4 };
+    expect(excludeFace(box, 0.4 * 512, 512)).toEqual(box);
+    expect(excludeFace(box, -1, 512)).toEqual(box);
+    const chapeau = { x: 0.2, y: 0.05, width: 0.6, height: 0.3 };
+    expect(excludeFace(chapeau, 0.3 * 512, 512)).toEqual(chapeau);
+  });
+
+  it("réponse de l'IA : le cadre agrandi par le serveur (8 %) ne remonte pas jusqu'au menton", () => {
+    // Pull de 200 à 460 px de haut, menton à 190 px : sans la règle, la marge de 8 % remonterait à ~179 px.
+    const sortie = JSON.stringify({ moments: [{ image: 1, x1: 20, y1: 200, x2: 268, y2: 460, confidence: SURE, face_bottom: 190 }] });
+    const [moment] = parseMomentsResponse(apiResponse(sortie), FRAMES).moments;
+    expect(moment!.box.y).toBeGreaterThanOrEqual(190 / 512 + FACE_GAP - 0.0001);
   });
 });

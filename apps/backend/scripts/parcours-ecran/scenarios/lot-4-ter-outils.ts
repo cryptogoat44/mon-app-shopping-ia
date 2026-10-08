@@ -2,7 +2,7 @@
 // lot-4-ter.ts et lot-4-ter-etapes.ts.
 import type { Page } from "playwright-core";
 import sharp from "sharp";
-import { CONSENT_VERSIONS } from "@monapp/shared-types";
+import { CONSENT_VERSIONS, SEARCH_FAILURE_MESSAGES } from "@monapp/shared-types";
 import type { Parcours, TestAccount } from "../boite-a-outils.js";
 import { rgb, SEGMENTS } from "../../lib/videos-essai.js";
 import type { Combo, Locale } from "./lot-3.js";
@@ -32,6 +32,9 @@ const FR = {
   ciblage: "Entourez la pièce",
   zone: "Zone analysée",
   reinitialiser: "Réinitialiser le cadre",
+  rienTrouve: "Google Lens n'a rien trouvé pour le moment.",
+  rienTrouveConseil: "Essayez avec un autre cadre ou réessayez dans quelques minutes.",
+  sansTexte: "Réessayer sans le texte",
   nonReperee: "Pièce non repérée",
   modifier: "Modifier la description",
   interrompue: "Analyse automatique interrompue",
@@ -79,6 +82,9 @@ export const TEXTES: Record<Locale, Textes> = {
     ciblage: "Frame the piece",
     zone: "Area to analyze",
     reinitialiser: "Reset the frame",
+    rienTrouve: "Google Lens didn't find anything for now.",
+    rienTrouveConseil: "Try another frame, or try again in a few minutes.",
+    sansTexte: "Try again without the text",
     nonReperee: "Piece not spotted",
     modifier: "Edit the description",
     interrompue: "Automatic analysis interrupted",
@@ -141,14 +147,19 @@ async function imagePiece(fond: string): Promise<string> {
   return `data:image/jpeg;base64,${jpeg.toString("base64")}`;
 }
 
-/** Identification réussie, fabriquée dans le navigateur : la requête ne part
- * jamais vers le serveur, donc aucun crédit SerpApi. */
-export async function simulerResultats(page: Page, query: string): Promise<void> {
+/** Identification fabriquée dans le navigateur : la requête ne part jamais
+ * vers le serveur, donc aucun crédit SerpApi. `videsAuDebut` : nombre de
+ * premières recherches « rien trouvé » (Google Lens sans proposition). */
+export async function simulerResultats(page: Page, query: string, options: { videsAuDebut?: number } = {}): Promise<void> {
   const images = await Promise.all(PIECES.map((piece) => imagePiece(piece.fond)));
+  let vides = options.videsAuDebut ?? 0;
   await page.route("**/api/searches/*/run", async (route) => {
     const id = /\/api\/searches\/([^/]+)\/run/.exec(route.request().url())?.[1] ?? "recherche";
     await new Promise((resolve) => setTimeout(resolve, 1500));
-    const matches = PIECES.map((piece, index) => ({
+    const motsEnvoyes = (route.request().postDataBuffer()?.toString("latin1") ?? "").includes(query) ? query : null;
+    const rien = vides > 0;
+    if (rien) vides -= 1;
+    const matches = rien ? [] : PIECES.map((piece, index) => ({
       id: `simulation-${index + 1}`,
       rank: index + 1,
       productName: piece.nom,
@@ -162,7 +173,18 @@ export async function simulerResultats(page: Page, query: string): Promise<void>
       merchantUrl: "https://example.com/piece",
       affiliateUrl: "https://example.com/piece",
     }));
-    const recherche = { id, sourceUrl: null, sourcePlatform: "photo", method: "manual_screenshot", thumbnailUrl: null, status: "completed", errorMessage: null, query, createdAt: new Date().toISOString(), matches };
+    const recherche = {
+      id,
+      sourceUrl: null,
+      sourcePlatform: "photo",
+      method: "manual_screenshot",
+      thumbnailUrl: null,
+      status: rien ? "failed" : "completed",
+      errorMessage: rien ? SEARCH_FAILURE_MESSAGES.noMatch : null,
+      query: motsEnvoyes,
+      createdAt: new Date().toISOString(),
+      matches,
+    };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(recherche) });
   });
 }

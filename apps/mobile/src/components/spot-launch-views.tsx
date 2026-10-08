@@ -62,8 +62,8 @@ export function LaunchPreview({ source, failed, duration, height }: { source: Fr
 
 /** Photo (option B du fondateur, lot 4 ter) : le cadre « Entourez la pièce »
  * d'emblée — seule la zone entourée part à l'analyse, sans IA et sans aucun
- * autre envoi. Une capture entière (personne, décor, textes) égarait Google
- * Lens : 0 proposition, contre 30 pour le vêtement seul (étape 2). */
+ * autre envoi. Étape 2 : 0 proposition sur une capture entière, 30 sur le
+ * vêtement seul — mesuré pendant une panne de SerpApi : plausible, non confirmé. */
 export function PhotoFrame({
   uri,
   crop,

@@ -229,6 +229,21 @@ async function verifierParcoursUnique(o: Outils, compte: Compte): Promise<void> 
   log(`  analyses simulées : ${analyses} avec le bon plan ; identifications abouties (SerpApi simulée) : ${abouties} ; replis et refus : aucune recherche ; refus enregistré`);
 }
 
+/** « Rien trouvé » (décision du fondateur, 2026-10-08) : exactement une recherche
+ * sans résultat, avec les mots, puis une seule autre, lancée par « Réessayer sans
+ * le texte » — sans les mots ; aucune relance automatique. Autre compte que
+ * Louise : la limite de 10 identifications par heure est atteinte par le reste du parcours. */
+async function verifierSansResultat(o: Outils, compte: Compte): Promise<void> {
+  const lues = await o.admin.from("product_searches").select("status, query, created_at").eq("user_id", compte.id).order("created_at", { ascending: true });
+  if (lues.error) throw new Error(`Recherches illisibles : ${lues.error.message}`);
+  const recherches = z.array(z.object({ status: z.string(), query: z.string().nullable() })).parse(lues.data);
+  const etats = recherches.map((r) => `${r.status}${r.query ? " (avec mots)" : " (sans mots)"}`).join(", ");
+  if (recherches.length !== 2 || recherches[0]!.status !== "failed" || !recherches[0]!.query || recherches[1]!.status !== "completed" || recherches[1]!.query) {
+    throw new Error(`« Rien trouvé » : recherches inattendues — ${etats}`);
+  }
+  log(`  rien trouvé : ${etats} — aucune relance automatique`);
+}
+
 /** Lot 4 ter : parcours unique sur l'app iPhone, dans les 4 combinaisons — la
  * dernière vidéo de la galerie proposée sur Spotter (option : question posée
  * une fois, accès demandé par iOS seulement après « oui »), quelques mots,
@@ -272,6 +287,9 @@ async function parcoursUnique(o: Outils): Promise<void> {
   // « Non merci » (autre compte) : refus sans conséquence, puis option réactivée dans Réglages.
   await connecter(o, camille, LIBELLES.fr.ACCUEIL);
   etape(o, "19-derniere-video-non");
+  // Rien trouvé, puis « Réessayer sans le texte » (même compte : il n'a fait aucune recherche).
+  etape(o, "20-sans-resultat");
+  await verifierSansResultat(o, camille);
 }
 
 /** Attentes avant une relance (secondes) : le serveur local reste inactif plus ou moins longtemps. */
