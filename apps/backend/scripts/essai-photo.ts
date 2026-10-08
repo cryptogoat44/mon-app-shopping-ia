@@ -18,69 +18,16 @@
 // relevée : elle dit si des propositions sont arrivées ailleurs que dans la
 // rubrique lue par l'app. La photo, les zones et les réponses restent dans un
 // dossier temporaire du Mac, jamais dans le dépôt.
-import { randomUUID } from "node:crypto";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import sharp from "sharp";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 import type { CropRect } from "@monapp/shared-types";
 import { env } from "../src/env.js";
 import { prepareImageForAnalysis } from "../src/lib/imageProcessing.js";
-import { callSerpApi, isExcludedMerchant, toVisualMatches } from "../src/services/visualSearch.js";
 import { assertDevSupabaseUrl } from "./lib/dev-database.js";
-import { analyserZone, CREDITS_MAX, planEssais, structureReponse, ZONE_APP, type Essai, type Resultat, type Structure } from "./lib/essai-photo.js";
-
-/** Import d'une photo dans l'app (lib/image-import.ts) : 1 600 px au plus, JPEG 0,85. */
-async function commeImportee(chemin: string): Promise<{ data: Buffer; width: number; height: number }> {
-  const { data, info } = await sharp(readFileSync(chemin))
-    .rotate()
-    .resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true })
-    .jpeg({ quality: 85 })
-    .toBuffer({ resolveWithObject: true });
-  return { data, width: info.width, height: info.height };
-}
-
-/** Structure de chaque réponse de SerpApi, relevée au passage (la réponse elle-même n'est pas modifiée). */
-function releverStructures(): () => Structure | null {
-  let derniere: Structure | null = null;
-  const fetchReel = globalThis.fetch;
-  globalThis.fetch = async (entree: Parameters<typeof fetch>[0], init?: RequestInit): Promise<Response> => {
-    const reponse = await fetchReel(entree, init);
-    const adresse = typeof entree === "string" ? entree : entree instanceof URL ? entree.href : entree.url;
-    if (adresse.startsWith("https://serpapi.com/")) derniere = structureReponse(await reponse.clone().json().catch(() => null));
-    return reponse;
-  };
-  return () => derniere;
-}
-
-/** Un appel SerpApi (1 crédit) sur la zone préparée comme par le serveur ; l'image est effacée ensuite. */
-async function essaiLens(admin: SupabaseClient, photo: Buffer, essai: Essai, zone: CropRect | null, dossier: string, structure: () => Structure | null): Promise<Resultat> {
-  const prepared = await prepareImageForAnalysis(photo, zone);
-  writeFileSync(join(dossier, `essai-${essai.numero}.jpg`), prepared);
-  const chemin = `essais-lot-4-ter/${randomUUID()}.jpg`;
-  const envoi = await admin.storage.from("screenshots").upload(chemin, prepared, { contentType: "image/jpeg" });
-  if (envoi.error) throw new Error(`Envoi de l'image impossible : ${envoi.error.message}`);
-  try {
-    const signee = await admin.storage.from("screenshots").createSignedUrl(chemin, 300);
-    if (signee.error || !signee.data) throw new Error(`Adresse signée impossible : ${signee.error?.message ?? "?"}`);
-    const brutes = await callSerpApi(signee.data.signedUrl, essai.reglages, essai.texte);
-    writeFileSync(join(dossier, `essai-${essai.numero}.json`), JSON.stringify(brutes, null, 2));
-    const gardees = toVisualMatches(brutes);
-    return {
-      essai,
-      brutes: brutes.length,
-      reseauxSociaux: brutes.filter((m) => m.link && isExcludedMerchant(m.link)).length,
-      gardees: gardees.length,
-      avecPrix: gardees.filter((m) => m.priceValue !== null).length,
-      premiers: gardees.slice(0, 3).map((m) => `${m.productName} — ${m.merchantName ?? "?"}${m.priceValue !== null ? ` (${m.priceValue} ${m.currency ?? ""})` : ""}`),
-      structure: structure(),
-    };
-  } finally {
-    const effacement = await admin.storage.from("screenshots").remove([chemin]);
-    if (effacement.error) console.error(`ATTENTION : image d'essai non effacée (${chemin}) : ${effacement.error.message}`);
-  }
-}
+import { afficher, commeImportee, essaiLens, releverReponses } from "./lib/essai-lens.js";
+import { analyserZone, CREDITS_MAX, planEssais, ZONE_APP, type Essai, type Resultat } from "./lib/essai-photo.js";
 
 /** Valeur d'une option de la ligne de commande (« --zone 0.2,… »). */
 function option(args: string[], nom: string): string | null {
@@ -105,23 +52,14 @@ function lireZone(args: string[]): CropRect | null {
   return analyserZone({ x, y, width, height });
 }
 
-function afficher(resultat: Resultat): void {
-  const { essai, structure } = resultat;
-  console.log(`  Essai ${essai.numero} — ${resultat.brutes} résultat(s) de Google Lens, dont ${resultat.reseauxSociaux} de réseaux sociaux ; ${resultat.gardees} gardé(s) par Spotto, ${resultat.avecPrix} avec un prix.`);
-  for (const titre of resultat.premiers) console.log(`    · ${titre}`);
-  if (!structure) return;
-  const rubriques = Object.entries(structure.rubriques).filter(([cle]) => !cle.startsWith("search_"));
-  console.log(`    réponse de SerpApi : ${rubriques.map(([cle, taille]) => `${cle} ${taille}`).join(", ") || "aucune rubrique"}${structure.erreur ? ` ; message : ${structure.erreur}` : ""}`);
-}
-
 /** Les appels réels, un par essai, dans l'ordre annoncé. */
 async function lancerEssais(essais: readonly Essai[], photo: Buffer, zoneVetement: CropRect, dossier: string): Promise<Resultat[]> {
   const admin = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
-  const structure = releverStructures();
+  const releve = releverReponses();
   const resultats: Resultat[] = [];
   for (const essai of essais) {
     console.log(`→ Essai ${essai.numero} — ${essai.titre}`);
-    resultats.push(await essaiLens(admin, photo, essai, essai.zone === "app" ? ZONE_APP : zoneVetement, dossier, structure));
+    resultats.push(await essaiLens(admin, photo, essai, essai.zone === "app" ? ZONE_APP : zoneVetement, dossier, releve));
     afficher(resultats.at(-1)!);
   }
   return resultats;

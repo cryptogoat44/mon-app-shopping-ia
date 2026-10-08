@@ -23,6 +23,7 @@
     "configurer-anthropic-prod": "tsx scripts/configurer-anthropic-prod.ts",
     "comparer-modeles-video": "tsx scripts/comparer-modeles-video.ts",
     "essai-photo": "tsx scripts/essai-photo.ts",
+    "mesure-texte": "tsx scripts/mesure-texte.ts",
     "parcours-ecran": "tsx scripts/parcours-ecran/index.ts",
     "images-marque": "tsx scripts/images-marque.ts",
     "parcours-iphone": "tsx scripts/parcours-iphone/index.ts"
