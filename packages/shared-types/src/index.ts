@@ -140,33 +140,23 @@ export type VideoAiErrorCode =
   | "video_ai_unavailable"
   | "invalid_frames";
 
-/** Plafond GLOBAL des recherches atteint (lot 4 quater) : réponse 429 du
- * lancement d'une recherche, et de l'analyse automatique avant tout envoi à
- * l'IA. « day » : jusqu'à minuit, heure de Paris ; « month » : 31 jours
- * glissants, `retryAt` = à partir de quand une recherche redevient possible. */
-export type SearchCapacityPeriod = "day" | "month";
+/** Plafond des recherches atteint (lot 4 quater) : réponse 429 du lancement
+ * d'une recherche, et de l'analyse automatique avant tout envoi à l'IA.
+ * « day » : tout le service, jusqu'à minuit (heure de Paris) ; « month » : tout
+ * le service, 31 jours glissants ; « user » : la part de la personne pour la
+ * journée. Jamais de date de reprise (décision du fondateur, 2026-10-08). */
+export type SearchCapacityLimit = "day" | "month" | "user";
+export const SEARCH_CAPACITY_LIMITS = ["day", "month", "user"] as const satisfies readonly SearchCapacityLimit[];
 export const SEARCH_CAPACITY_ERRORS = {
   day: "search_capacity_day",
   month: "search_capacity_month",
-} as const satisfies Record<SearchCapacityPeriod, string>;
-
-export interface SearchCapacityReached {
-  period: SearchCapacityPeriod;
-  /** Date ISO ; null si inconnue. */
-  retryAt: string | null;
-}
-
-export interface SearchCapacityErrorBody extends ApiErrorBody {
-  retryAt: string | null;
-}
+  user: "search_capacity_user",
+} as const satisfies Record<SearchCapacityLimit, string>;
 
 /** Lit le corps d'une erreur sans lui faire confiance ; null si ce n'est pas un plafond atteint. */
-export function parseSearchCapacityError(body: unknown): SearchCapacityReached | null {
+export function parseSearchCapacityError(body: unknown): SearchCapacityLimit | null {
   if (typeof body !== "object" || body === null || !("error" in body)) return null;
-  const period = (["day", "month"] as const).find((candidate) => SEARCH_CAPACITY_ERRORS[candidate] === body.error);
-  if (!period) return null;
-  const retryAt = "retryAt" in body && typeof body.retryAt === "string" && !Number.isNaN(Date.parse(body.retryAt)) ? body.retryAt : null;
-  return { period, retryAt };
+  return SEARCH_CAPACITY_LIMITS.find((limit) => SEARCH_CAPACITY_ERRORS[limit] === body.error) ?? null;
 }
 
 function isProportion(value: unknown): value is number {

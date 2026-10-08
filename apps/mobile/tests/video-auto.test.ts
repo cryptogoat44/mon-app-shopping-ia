@@ -78,10 +78,9 @@ describe("analyse automatique — étages 1 et 2", () => {
     expect(discardLocalFile).toHaveBeenCalledTimes(3);
   });
 
-  it("plafond global des recherches atteint (lot 4 quater) : ni moment ni repli, le plafond et sa date ; images tout de même effacées", async () => {
-    const body = { error: "search_capacity_day", message: "…", retryAt: null };
-    findVideoMoments.mockRejectedValue(new ApiError(429, body));
-    expect(await analyzeVideo(fakeVideo(), "veste", onStep)).toEqual({ kind: "capacity", capacity: { period: "day", retryAt: null } });
+  it("plafond des recherches atteint (lot 4 quater) : ni moment ni repli, le plafond en cause ; images tout de même effacées", async () => {
+    findVideoMoments.mockRejectedValue(new ApiError(429, { error: "search_capacity_user", message: "…" }));
+    expect(await analyzeVideo(fakeVideo(), "veste", onStep)).toEqual({ kind: "capacity", reason: "capacity_user" });
     expect(track).toHaveBeenCalledWith("video_ai_result", { outcome: "limit", moments_count: 0 });
     expect(discardLocalFile).toHaveBeenCalledTimes(3);
   });

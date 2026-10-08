@@ -90,7 +90,8 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Les images de la vidéo sont invalides.": "The video frames are invalid.",
   // Plafond global des recherches (lot 4 quater, lib/searchCapacity.ts).
   [SEARCH_CAPACITY_MESSAGES.day]: "The search service is in very high demand today. Please try again tomorrow.",
-  [SEARCH_CAPACITY_MESSAGES.month]: "The search service has reached its monthly limit. Please try again later.",
+  [SEARCH_CAPACITY_MESSAGES.month]: "The search service has reached its monthly limit. Please try again in a few days.",
+  [SEARCH_CAPACITY_MESSAGES.user]: "You've reached your search limit for today. Please try again tomorrow.",
   "Une image de la vidéo est trop lourde.": "One of the video frames is too large.",
   "Vous avez atteint la limite quotidienne d'analyses automatiques. Choisissez l'image avec le curseur, ou réessayez demain.":
     "You've reached the daily limit for automatic analyses. Choose the frame with the slider, or try again tomorrow.",

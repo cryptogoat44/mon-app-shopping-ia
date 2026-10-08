@@ -12,6 +12,9 @@ const envSchema = z.object({
   // outils d'essai du fondateur, qui puisent dans le même compte.
   SERPAPI_DAILY_CAP: z.coerce.number().int().min(1).default(25),
   SERPAPI_MONTHLY_CAP: z.coerce.number().int().min(1).default(225),
+  // Part de chaque personne, par jour : qu'une seule personne ne puisse pas
+  // épuiser la journée des autres (8 sur 25 : un tiers au plus).
+  SERPAPI_USER_DAILY_CAP: z.coerce.number().int().min(1).default(8),
   // Non requis pour que l'app démarre : sans jeton Meta, la reconnaissance
   // automatique Instagram est simplement sautée au profit du repli manuel.
   META_OEMBED_ACCESS_TOKEN: z.string().min(1).optional(),

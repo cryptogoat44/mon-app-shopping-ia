@@ -1,14 +1,13 @@
-// Plafond global des recherches atteint (lot 4 quater) : titre et conseil de
-// l'écran Résultat. Jamais de promesse fausse : « demain » seulement pour le
-// plafond du jour ; pour les 31 jours glissants, la date de reprise donnée par
-// le serveur. Imports relatifs : fichier testé par vitest.
-import type { SearchCapacityReached } from "@monapp/shared-types";
-import { getActiveLocale, t } from "../i18n";
-import { formatLongDate } from "./format";
+// Plafond des recherches atteint (lot 4 quater) : le motif d'échec affiché par
+// l'écran Résultat — plafond du jour ou des 31 jours (tout le service), ou part
+// de la personne pour la journée. Jamais de date (décision du fondateur,
+// 2026-10-08). Imports relatifs : fichier testé par vitest.
+import { parseSearchCapacityError, type SearchCapacityLimit } from "@monapp/shared-types";
 
-export function capacityCopy(capacity: SearchCapacityReached | undefined): [string, string] {
-  if (capacity?.period === "day") return [t.result.capacityDayTitle, t.result.capacityDayTip];
-  if (capacity?.retryAt) return [t.result.capacityMonthTitle, t.result.capacityMonthTip(formatLongDate(capacity.retryAt, getActiveLocale()))];
-  // Date inconnue : rien de plus précis que ce qui est sûr.
-  return [capacity ? t.result.capacityMonthTitle : t.result.capacityDayTitle, t.result.capacityLaterTip];
+export type CapacityFailReason = `capacity_${SearchCapacityLimit}`;
+
+/** Corps d'une erreur 429 du serveur → motif d'échec ; null si ce n'est pas un plafond atteint. */
+export function capacityFailReason(body: unknown): CapacityFailReason | null {
+  const limit = parseSearchCapacityError(body);
+  return limit ? `capacity_${limit}` : null;
 }

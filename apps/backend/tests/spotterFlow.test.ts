@@ -193,7 +193,7 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     }
   }, 60_000);
 
-  describe("plafond global des recherches (lot 4 quater)", () => {
+  describe("plafond global des recherches et part de la personne (lot 4 quater)", () => {
     async function statusOf(searchId: string) {
       const { data, error } = await app.supabaseAdmin.from("product_searches").select("status").eq("id", searchId).single();
       expect(error).toBeNull();
@@ -206,16 +206,17 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
 
     it("plafond du jour atteint : aucun appel SerpApi, message honnête ; rien ne reste et la recherche se relance plus tard", async () => {
       const search = await prepare("https://www.tiktok.com/@x/video/1");
-      reserveMock.mockResolvedValueOnce({ allowed: false, period: "day", retryAt: "2099-01-02T23:00:00.000Z" });
+      reserveMock.mockResolvedValueOnce({ allowed: false, limit: "day" });
       const refused = await run(search.id, { query: "veste" });
       expect(refused.statusCode).toBe(429);
       expect(refused.json()).toEqual({
         error: "search_capacity_day",
         message: "Le service de recherche est très sollicité aujourd'hui. Réessayez demain.",
-        retryAt: "2099-01-02T23:00:00.000Z",
       });
-      expect(Number(refused.headers["retry-after"])).toBeGreaterThan(0);
+      expect(refused.headers["retry-after"]).toBeUndefined();
       expect(searchMock).not.toHaveBeenCalled();
+      // La personne et la recherche en cours sont transmises au plafond (part de la personne).
+      expect(reserveMock.mock.calls[0]!.slice(2)).toEqual([user.id, search.id]);
       expect(await imageKept(search.id)).toBe(false);
       expect(await statusOf(search.id)).toBe("pending");
 
@@ -224,17 +225,32 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
       expect(reserveMock).toHaveBeenCalledTimes(2);
     });
 
-    it("plafond des 31 jours atteint : la date de reprise est transmise, message dans la langue de l'utilisateur", async () => {
+    it("plafond des 31 jours atteint : message sans date (décision du fondateur), dans la langue de l'utilisateur", async () => {
       const search = await prepare("https://www.tiktok.com/@x/video/1");
-      reserveMock.mockResolvedValueOnce({ allowed: false, period: "month", retryAt: "2099-11-12T08:31:00.000Z" });
-      const refused = await run(search.id, {}, undefined, user.token, "en-GB");
+      reserveMock.mockResolvedValueOnce({ allowed: false, limit: "month" });
+      const french = await run(search.id, {});
+      expect(french.json()).toEqual({
+        error: "search_capacity_month",
+        message: "Le service de recherche a atteint sa limite mensuelle. Réessayez dans quelques jours.",
+      });
+      reserveMock.mockResolvedValueOnce({ allowed: false, limit: "month" });
+      const english = await run(search.id, {}, undefined, user.token, "en-GB");
+      expect(english.statusCode).toBe(429);
+      expect(english.json().message).toBe("The search service has reached its monthly limit. Please try again in a few days.");
+      expect(searchMock).not.toHaveBeenCalled();
+    });
+
+    it("part de la personne atteinte : aucun appel SerpApi, son propre message ; la recherche reste lançable", async () => {
+      const search = await prepare("https://www.tiktok.com/@x/video/1");
+      reserveMock.mockResolvedValueOnce({ allowed: false, limit: "user" });
+      const refused = await run(search.id, {});
       expect(refused.statusCode).toBe(429);
       expect(refused.json()).toEqual({
-        error: "search_capacity_month",
-        message: "The search service has reached its monthly limit. Please try again later.",
-        retryAt: "2099-11-12T08:31:00.000Z",
+        error: "search_capacity_user",
+        message: "Vous avez atteint votre limite de recherches pour aujourd'hui. Réessayez demain.",
       });
       expect(searchMock).not.toHaveBeenCalled();
+      expect(await statusOf(search.id)).toBe("pending");
     });
 
     it("plafond illisible (base injoignable) : aucun appel SerpApi, une panne annoncée comme telle", async () => {
@@ -266,7 +282,7 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
           payload: { sourceUrl: "https://www.tiktok.com/@x/video/1" },
         });
         const searchId: string = prepared.json().id;
-        reserveMock.mockResolvedValue({ allowed: false, period: "day", retryAt: null });
+        reserveMock.mockResolvedValue({ allowed: false, limit: "day" });
         for (let i = 0; i < 10; i++) expect((await run(searchId, {}, undefined, counted.token)).statusCode).toBe(429);
         reserveMock.mockResolvedValue({ allowed: true });
         expect((await run(searchId, {}, undefined, counted.token)).statusCode).toBe(200);

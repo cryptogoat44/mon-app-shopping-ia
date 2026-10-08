@@ -6,7 +6,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
 import * as Haptics from "expo-haptics";
-import type { SearchCapacityReached, VaultCategory } from "@monapp/shared-types";
+import type { VaultCategory } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
@@ -17,7 +17,6 @@ import { addVaultItemFromMatch } from "@/lib/api";
 import { openMerchantLink } from "@/lib/merchant-links";
 import { chooseInitialResult, type InitialResultState } from "@/lib/spot-result";
 import { failureCorrections, successCorrections, type Correction } from "@/lib/spot-corrections";
-import { capacityCopy } from "@/lib/spot-capacity";
 import { VAULT_CATEGORIES } from "@/lib/vault-labels";
 import { useToast } from "@/lib/toast-context";
 import { Skeleton } from "@/components/skeleton";
@@ -205,7 +204,6 @@ export default function ResultScreen() {
         {nav}
         <FailureView
           reason={result?.failReason ?? "no_match"}
-          capacity={result?.capacity}
           corrections={failureCorrections(result?.failReason ?? "no_match", corrections.context)}
           actions={corrections.actions}
           onAddVideo={corrections.addVideo}
@@ -361,7 +359,6 @@ export default function ResultScreen() {
 
 function FailureView({
   reason,
-  capacity,
   corrections,
   actions,
   onAddVideo,
@@ -370,8 +367,6 @@ function FailureView({
   error,
 }: {
   reason: SpotFailReason;
-  /** Plafond global atteint (lot 4 quater) : jusqu'à quand. */
-  capacity?: SearchCapacityReached;
   /** Deux au plus, la plus utile d'abord (lib/spot-corrections.ts). */
   corrections: Correction[];
   actions: Record<Correction, Action>;
@@ -380,15 +375,16 @@ function FailureView({
   onBack: () => void;
   error: string | null;
 }) {
-  const copy =
-    reason === "capacity"
-      ? capacityCopy(capacity)
-      : {
-          no_match: [t.result.noMatchTitle, t.result.noMatchTip],
-          technical: [t.result.technicalTitle, t.result.technicalTip],
-          rate_limited: [t.result.rateLimitedTitle, t.result.rateLimitedTip],
-          needs_photo: [t.result.previewUnavailableTitle, t.result.previewUnavailableTip],
-        }[reason];
+  const copy = {
+    no_match: [t.result.noMatchTitle, t.result.noMatchTip],
+    technical: [t.result.technicalTitle, t.result.technicalTip],
+    rate_limited: [t.result.rateLimitedTitle, t.result.rateLimitedTip],
+    needs_photo: [t.result.previewUnavailableTitle, t.result.previewUnavailableTip],
+    // Plafond des recherches (lot 4 quater) : jamais de date.
+    capacity_day: [t.result.capacityDayTitle, t.result.capacityDayTip],
+    capacity_month: [t.result.capacityMonthTitle, t.result.capacityMonthTip],
+    capacity_user: [t.result.capacityUserTitle, t.result.capacityUserTip],
+  }[reason];
 
   return (
     <ScrollView contentContainerStyle={styles.failContent}>

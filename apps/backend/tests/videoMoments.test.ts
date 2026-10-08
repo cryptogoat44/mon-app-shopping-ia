@@ -178,20 +178,19 @@ describe("analyse automatique d'une vidéo (POST /api/video-moments)", () => {
     expect(askMock).not.toHaveBeenCalled();
   });
 
-  it("plafond global des recherches atteint (lot 4 quater) : aucune image ne part à l'IA, message honnête", async () => {
-    capacityMock.mockResolvedValueOnce({ allowed: false, period: "day", retryAt: "2099-01-02T23:00:00.000Z" });
+  it("plafond des recherches atteint (lot 4 quater : jour, 31 jours, part de la personne) : aucune image ne part à l'IA, message honnête", async () => {
+    capacityMock.mockResolvedValueOnce({ allowed: false, limit: "day" });
     const day = await send(consenting, { query: QUERY });
     expect(day.statusCode).toBe(429);
-    expect(day.json()).toEqual({
-      error: "search_capacity_day",
-      message: "Le service de recherche est très sollicité aujourd'hui. Réessayez demain.",
-      retryAt: "2099-01-02T23:00:00.000Z",
-    });
-    capacityMock.mockResolvedValueOnce({ allowed: false, period: "month", retryAt: null });
-    const month = await send(consenting, { query: QUERY });
-    expect(month.statusCode).toBe(429);
-    expect(month.json()).toMatchObject({ error: "search_capacity_month", retryAt: null });
-    expect(month.headers["retry-after"]).toBeUndefined();
+    expect(day.json()).toEqual({ error: "search_capacity_day", message: "Le service de recherche est très sollicité aujourd'hui. Réessayez demain." });
+    // La part de la personne se lit pour celle qui demande l'analyse.
+    expect(capacityMock.mock.calls[0]![2]).toBe(consenting.id);
+    capacityMock.mockResolvedValueOnce({ allowed: false, limit: "month" });
+    expect((await send(consenting, { query: QUERY })).json().error).toBe("search_capacity_month");
+    capacityMock.mockResolvedValueOnce({ allowed: false, limit: "user" });
+    const user = await send(consenting, { query: QUERY });
+    expect(user.statusCode).toBe(429);
+    expect(user.json()).toEqual({ error: "search_capacity_user", message: "Vous avez atteint votre limite de recherches pour aujourd'hui. Réessayez demain." });
     expect(askMock).not.toHaveBeenCalled();
   });
 

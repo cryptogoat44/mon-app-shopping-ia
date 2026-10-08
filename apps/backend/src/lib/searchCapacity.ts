@@ -1,92 +1,114 @@
-// Plafond GLOBAL des recherches SerpApi (lot 4 quater, décision du fondateur,
-// 2026-10-08) : par jour (heure de Paris) et sur 31 jours glissants, EN PLUS
-// des limites par personne (lib/rateLimits.ts). Le compteur est dans la base
-// (table serpapi_calls, fonction serpapi_quota, migration 0022) : en mémoire,
-// il repartirait de zéro à chaque redémarrage du serveur (mise en veille de
-// l'offre gratuite de Render, déploiements) et ne plafonnerait rien.
+// Plafond GLOBAL des recherches SerpApi et PART DE CHAQUE PERSONNE (lot 4
+// quater, décisions du fondateur, 2026-10-08) : par jour (heure de Paris) et
+// sur 31 jours glissants pour tout le service, par jour pour chaque personne,
+// EN PLUS des limites par personne existantes (lib/rateLimits.ts). Tout est
+// compté dans la base (fonction serpapi_quota, migration 0022) : en mémoire,
+// les compteurs repartiraient de zéro à chaque redémarrage du serveur (mise
+// en veille de l'offre gratuite de Render, déploiements).
 // Plafond atteint : aucun appel SerpApi, aucun crédit, un message honnête.
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
-import { SEARCH_CAPACITY_ERRORS, type SearchCapacityErrorBody, type SearchCapacityReached } from "@monapp/shared-types";
+import { SEARCH_CAPACITY_ERRORS, type ApiErrorBody, type SearchCapacityLimit } from "@monapp/shared-types";
 import { env } from "../env.js";
 
 export const SEARCH_CAPACITY_MESSAGES = {
   day: "Le service de recherche est très sollicité aujourd'hui. Réessayez demain.",
-  month: "Le service de recherche a atteint sa limite mensuelle. Réessayez plus tard.",
-} as const;
+  month: "Le service de recherche a atteint sa limite mensuelle. Réessayez dans quelques jours.",
+  user: "Vous avez atteint votre limite de recherches pour aujourd'hui. Réessayez demain.",
+} as const satisfies Record<SearchCapacityLimit, string>;
 
-const COUNTS = { day_count: z.number().int().nonnegative(), window_count: z.number().int().nonnegative() };
+const COUNTS = {
+  day_count: z.number().int().nonnegative(),
+  window_count: z.number().int().nonnegative(),
+  user_day_count: z.number().int().nonnegative(),
+};
 /** Réponse de serpapi_quota, lue sans lui faire confiance (une seule ligne). */
 export const QUOTA_ROWS = z
   .array(
     z.union([
-      z.object({ allowed: z.literal(true), cap_period: z.null(), retry_at: z.null(), ...COUNTS }),
-      z.object({ allowed: z.literal(false), cap_period: z.enum(["day", "month"]), retry_at: z.string().datetime({ offset: true }).nullable(), ...COUNTS }),
+      z.object({ allowed: z.literal(true), refused_by: z.null(), ...COUNTS }),
+      z.object({ allowed: z.literal(false), refused_by: z.enum(["day", "month", "user"]), ...COUNTS }),
     ])
   )
   .length(1);
+type QuotaRow = z.infer<typeof QUOTA_ROWS>[number];
 
-export type SearchCapacity = { allowed: true } | ({ allowed: false } & SearchCapacityReached);
+export type SearchCapacity = { allowed: true } | { allowed: false; limit: SearchCapacityLimit };
 
 /** Plafond illisible (base injoignable…) : la recherche échoue proprement, sans appel. */
 export class SearchCapacityError extends Error {}
 
-export function searchCaps(): { daily: number; monthly: number } {
-  return { daily: env.SERPAPI_DAILY_CAP, monthly: env.SERPAPI_MONTHLY_CAP };
+export interface SearchCaps {
+  daily: number;
+  monthly: number;
+  userDaily: number;
+}
+
+export function searchCaps(): SearchCaps {
+  return { daily: env.SERPAPI_DAILY_CAP, monthly: env.SERPAPI_MONTHLY_CAP, userDaily: env.SERPAPI_USER_DAILY_CAP };
 }
 
 export const CAPACITY_LOG_MESSAGE = "Plafond SerpApi";
-type QuotaRow = z.infer<typeof QUOTA_ROWS>[number];
 
 /** Champs de la ligne de journal « Plafond SerpApi », lue par compteurs-ia :
  * des nombres et des états, jamais de compte, d'adresse ni de contenu. */
-export function capacityLogFields(step: "search" | "video_ai", row: QuotaRow, caps: { daily: number; monthly: number }) {
+export function capacityLogFields(step: "search" | "video_ai", row: QuotaRow, caps: SearchCaps) {
   return {
     step,
     outcome: row.allowed ? ("reserved" as const) : ("refused" as const),
-    period: row.cap_period,
+    limit: row.refused_by,
     day: row.day_count,
     window: row.window_count,
+    user: row.user_day_count,
     dayCap: caps.daily,
     monthCap: caps.monthly,
+    userCap: caps.userDaily,
   };
 }
 
-/** « search » : réserve un appel, juste avant de l'envoyer. « video_ai » :
- * simple lecture, avant d'envoyer des images à l'IA — inutile (et payante)
- * si aucune recherche ne peut suivre. */
-async function readQuota(fastify: FastifyInstance, log: FastifyBaseLogger, step: "search" | "video_ai"): Promise<SearchCapacity> {
+interface QuotaRequest {
+  /** « search » : réserve un appel, juste avant de l'envoyer. « video_ai » :
+   * simple lecture, avant d'envoyer des images à l'IA — inutile (et payante)
+   * si aucune recherche ne peut suivre. */
+  step: "search" | "video_ai";
+  userId: string;
+  /** Recherche en cours de lancement (déjà « en cours ») : hors du compte de la personne. */
+  searchId?: string;
+}
+
+async function readQuota(fastify: FastifyInstance, log: FastifyBaseLogger, request: QuotaRequest): Promise<SearchCapacity> {
   const caps = searchCaps();
-  const reserve = step === "search";
-  const { data, error } = await fastify.supabaseAdmin.rpc("serpapi_quota", { p_daily_cap: caps.daily, p_monthly_cap: caps.monthly, p_reserve: reserve });
+  const reserve = request.step === "search";
+  const { data, error } = await fastify.supabaseAdmin.rpc("serpapi_quota", {
+    p_daily_cap: caps.daily,
+    p_monthly_cap: caps.monthly,
+    p_user_daily_cap: caps.userDaily,
+    p_user_id: request.userId,
+    p_reserve: reserve,
+    p_exclude_search: request.searchId ?? null,
+  });
   const rows = QUOTA_ROWS.safeParse(data);
   if (error || !rows.success) {
     log.error({ error }, "Plafond SerpApi illisible");
     throw new SearchCapacityError("Plafond SerpApi illisible");
   }
   const row = rows.data[0]!;
-  if (reserve || !row.allowed) log.info(capacityLogFields(step, row, caps), CAPACITY_LOG_MESSAGE);
-  if (row.allowed) return { allowed: true };
-  return { allowed: false, period: row.cap_period, retryAt: row.retry_at ? new Date(row.retry_at).toISOString() : null };
+  if (reserve || !row.allowed) log.info(capacityLogFields(request.step, row, caps), CAPACITY_LOG_MESSAGE);
+  return row.allowed ? { allowed: true } : { allowed: false, limit: row.refused_by };
 }
 
 /** Juste avant un appel SerpApi : un appel réservé, ou le refus (plafond atteint). */
-export function reserveSearch(fastify: FastifyInstance, log: FastifyBaseLogger): Promise<SearchCapacity> {
-  return readQuota(fastify, log, "search");
+export function reserveSearch(fastify: FastifyInstance, log: FastifyBaseLogger, userId: string, searchId: string): Promise<SearchCapacity> {
+  return readQuota(fastify, log, { step: "search", userId, searchId });
 }
 
 /** Avant l'analyse automatique d'une vidéo : lecture seule, rien n'est réservé. */
-export function searchCapacityForVideoAi(fastify: FastifyInstance, log: FastifyBaseLogger): Promise<SearchCapacity> {
-  return readQuota(fastify, log, "video_ai");
+export function searchCapacityForVideoAi(fastify: FastifyInstance, log: FastifyBaseLogger, userId: string): Promise<SearchCapacity> {
+  return readQuota(fastify, log, { step: "video_ai", userId });
 }
 
-/** Réponse 429 « plafond atteint » ; Retry-After en secondes quand la date est connue. */
-export function sendCapacityReached(reply: FastifyReply, capacity: SearchCapacityReached): FastifyReply {
-  const body: SearchCapacityErrorBody = {
-    error: SEARCH_CAPACITY_ERRORS[capacity.period],
-    message: SEARCH_CAPACITY_MESSAGES[capacity.period],
-    retryAt: capacity.retryAt,
-  };
-  if (capacity.retryAt) reply.header("Retry-After", String(Math.max(1, Math.ceil((Date.parse(capacity.retryAt) - Date.now()) / 1000))));
+/** Réponse 429 « plafond atteint » : le plafond en cause et son message, sans date. */
+export function sendCapacityReached(reply: FastifyReply, limit: SearchCapacityLimit): FastifyReply {
+  const body: ApiErrorBody = { error: SEARCH_CAPACITY_ERRORS[limit], message: SEARCH_CAPACITY_MESSAGES[limit] };
   return reply.code(429).send(body);
 }

@@ -529,13 +529,14 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
         return;
       }
 
-      // Plafond global (lot 4 quater, lib/searchCapacity.ts) : un appel est
-      // réservé juste avant l'envoi. Atteint, ou illisible : aucun appel à
-      // SerpApi, aucun crédit, et la recherche redevient lançable.
-      const capacity = await reserveSearch(fastify, request.log).catch(() => null);
+      // Plafond global et part de la personne (lot 4 quater,
+      // lib/searchCapacity.ts) : un appel est réservé juste avant l'envoi.
+      // Atteint, ou illisible : aucun appel à SerpApi, aucun crédit, et la
+      // recherche redevient lançable.
+      const capacity = await reserveSearch(fastify, request.log, userId, id).catch(() => null);
       if (!capacity || !capacity.allowed) {
         await releaseSearch(fastify, id, storagePath);
-        if (capacity) return sendCapacityReached(reply, capacity);
+        if (capacity) return sendCapacityReached(reply, capacity.limit);
         return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue, réessayez." });
       }
 

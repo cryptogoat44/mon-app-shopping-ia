@@ -184,15 +184,15 @@ describe("ordre des événements (demande du fondateur, 2026-10-08)", () => {
 
 describe("plafond global SerpApi (lot 4 quater)", () => {
   // La ligne telle que le serveur l'écrit (mêmes champs que src/lib/searchCapacity.ts), plus ce que Fastify y ajoute.
-  const plafond = (outcome: "reserved" | "refused", period: "day" | "month" | null, day: number, window: number, step: "search" | "video_ai" = "search") =>
+  const plafond = (outcome: "reserved" | "refused", limit: "day" | "month" | "user" | null, day: number, window: number, step: "search" | "video_ai" = "search") =>
     ligne({
       reqId: "r7",
       ...capacityLogFields(
         step,
         outcome === "reserved"
-          ? { allowed: true, cap_period: null, retry_at: null, day_count: day, window_count: window }
-          : { allowed: false, cap_period: period ?? "day", retry_at: null, day_count: day, window_count: window },
-        { daily: 25, monthly: 225 }
+          ? { allowed: true, refused_by: null, day_count: day, window_count: window, user_day_count: 3 }
+          : { allowed: false, refused_by: limit ?? "day", day_count: day, window_count: window, user_day_count: 3 },
+        { daily: 25, monthly: 225, userDaily: 8 }
       ),
       msg: CAPACITY_LOG_MESSAGE,
       compte: COMPTE,
@@ -202,24 +202,31 @@ describe("plafond global SerpApi (lot 4 quater)", () => {
 
   it("lit la ligne écrite par le serveur : des nombres et des états, rien d'autre", () => {
     const lue = extrairePlafond(plafond("refused", "month", 3, 225, "video_ai").message);
-    expect(lue).toEqual({ msg: "Plafond SerpApi", step: "video_ai", outcome: "refused", period: "month", day: 3, window: 225, dayCap: 25, monthCap: 225 });
+    expect(lue).toEqual({ msg: "Plafond SerpApi", step: "video_ai", outcome: "refused", limit: "month", day: 3, window: 225, user: 3, dayCap: 25, monthCap: 225, userCap: 8 });
     expect(JSON.stringify(lue)).not.toContain(IP);
     expect(extrairePlafond(ligne({ msg: "Analyse vidéo IA", frames: 3 }).message)).toBeNull();
   });
 
   it("bilan : réservations, refus par plafond, dernier état ; ordre des événements sans identifiant, adresse ni texte", () => {
-    const entrees = [plafond("reserved", null, 24, 120), plafond("reserved", null, 25, 121), plafond("refused", "day", 25, 121), plafond("refused", "month", 2, 225, "video_ai")].map(
-      (entree, index) => ({ ...entree, timestamp: `2026-10-09T08:0${index}:00Z` })
-    );
+    const entrees = [
+      plafond("reserved", null, 24, 120),
+      plafond("reserved", null, 25, 121),
+      plafond("refused", "day", 25, 121),
+      plafond("refused", "user", 25, 121),
+      plafond("refused", "month", 2, 225, "video_ai"),
+    ].map((entree, index) => ({ ...entree, timestamp: `2026-10-09T08:0${index}:00Z` }));
     const lignes = entrees.flatMap((entree) => extrairePlafond(entree.message) ?? []);
-    expect(resumerPlafond(lignes)).toBe("2 recherche(s) réservée(s), 2 refus (jour 1, 31 jours 1) ; dernier état lu : aujourd'hui 2/25, 31 jours 225/225");
+    expect(resumerPlafond(lignes)).toBe(
+      "2 recherche(s) réservée(s), 3 refus (jour 1, 31 jours 1, part personnelle 1) ; dernier état lu : aujourd'hui 2/25, 31 jours 225/225, personne 3/8"
+    );
     expect(resumerPlafond([])).toBe("aucune ligne dans la période");
     const evenements = chronologie(entrees);
     expect(evenements.map((e) => e.issue)).toEqual([
-      "recherche réservée — aujourd'hui 24/25, 31 jours 120/225",
-      "recherche réservée — aujourd'hui 25/25, 31 jours 121/225",
-      "refus (plafond du jour), au lancement d'une recherche — aujourd'hui 25/25, 31 jours 121/225",
-      "refus (plafond des 31 jours), avant l'analyse par l'IA — aujourd'hui 2/25, 31 jours 225/225",
+      "recherche réservée — aujourd'hui 24/25, 31 jours 120/225, personne 3/8",
+      "recherche réservée — aujourd'hui 25/25, 31 jours 121/225, personne 3/8",
+      "refus (plafond du jour), au lancement d'une recherche — aujourd'hui 25/25, 31 jours 121/225, personne 3/8",
+      "refus (part de la personne pour la journée), au lancement d'une recherche — aujourd'hui 25/25, 31 jours 121/225, personne 3/8",
+      "refus (plafond des 31 jours), avant l'analyse par l'IA — aujourd'hui 2/25, 31 jours 225/225, personne 3/8",
     ]);
     const tout = JSON.stringify(evenements);
     for (const interdit of [IP, COMPTE, TEXTE]) expect(tout).not.toContain(interdit);

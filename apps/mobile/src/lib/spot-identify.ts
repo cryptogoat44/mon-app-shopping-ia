@@ -2,11 +2,11 @@
 // parcours unique (lot 4 ter) et aux corrections (recadrer, autre moment).
 // Le résultat — ou l'échec, jamais déguisé en « pièce introuvable » (audit
 // Lot Q, ROB-02) — est gardé en mémoire pour l'écran Résultat.
-import { parseSearchCapacityError } from "@monapp/shared-types";
-import type { SpotFailReason, SpotResult } from "../api/types";
+import type { SpotFailReason } from "../api/types";
 import { setLastSpotResult } from "../api/spotSession";
 import { ApiError, runSearch } from "./api";
 import { reportUnexpectedError } from "./error-tracking";
+import { capacityFailReason } from "./spot-capacity";
 import { freshSearchId, markSearchUsed } from "./spot-flow";
 import { toSpotResult } from "./spot-result";
 import type { SpotDraft } from "./spot-draft";
@@ -15,19 +15,16 @@ import type { SpotDraft } from "./spot-draft";
 export type IdentifyOutcome = { kind: "done"; searchId: string | null } | { kind: "cancelled" };
 
 function failReasonOf(error: unknown): SpotFailReason {
+  // Plafond des recherches atteint (lot 4 quater), avant tout autre 429 :
+  // jamais « trop de recherches d'un coup ».
+  const capacity = error instanceof ApiError ? capacityFailReason(error.body) : null;
+  if (capacity) return capacity;
   if (error instanceof ApiError && error.status === 429) return "rate_limited";
   if (error instanceof ApiError && error.body.error === "preview_unavailable") return "needs_photo";
   // Erreur côté app (ex. image refusée à l'envoi) : invisible du serveur,
   // donc signalée à Sentry (lot 3bis).
   if (!(error instanceof ApiError)) reportUnexpectedError(error, "spot_analysis");
   return "technical";
-}
-
-/** Plafond global des recherches atteint (lot 4 quater) : son motif et sa
- * date de reprise, avant tout autre 429 (jamais « trop de recherches d'un coup »). */
-function failureOf(error: unknown): Pick<SpotResult, "failReason" | "capacity"> {
-  const capacity = error instanceof ApiError ? parseSearchCapacityError(error.body) : null;
-  return capacity ? { failReason: "capacity", capacity } : { failReason: failReasonOf(error) };
 }
 
 /** Lance l'identification du brouillon. « Annuler » (signal) abandonne
@@ -43,7 +40,7 @@ export async function identifyDraft(draft: SpotDraft, signal: AbortSignal): Prom
     return { kind: "done", searchId: search.id };
   } catch (error) {
     if (signal.aborted) return { kind: "cancelled" };
-    setLastSpotResult({ searchId: null, status: "failed", pieces: [], similarPieces: [], ...failureOf(error), query: draft.query });
+    setLastSpotResult({ searchId: null, status: "failed", pieces: [], similarPieces: [], failReason: failReasonOf(error), query: draft.query });
     return { kind: "done", searchId: null };
   }
 }

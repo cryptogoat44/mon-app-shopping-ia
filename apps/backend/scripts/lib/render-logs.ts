@@ -2,8 +2,9 @@
 // par le fondateur le 2026-10-07) : uniquement des COMPTEURS — le nombre de
 // requêtes par chemin et par code de réponse, et les compteurs que le serveur
 // écrit lui-même pour l'analyse automatique (images, moments, jetons, motif
-// d'échec) et pour le plafond global des recherches SerpApi (lot 4 quater :
-// réservé ou refusé, compteurs du jour et des 31 jours). Render ne garde pas de journal des requêtes HTTP pour ce service :
+// d'échec) et pour le plafond des recherches SerpApi (lot 4 quater : réservé
+// ou refusé, compteurs du jour, des 31 jours et de la personne — un nombre,
+// jamais son identifiant). Render ne garde pas de journal des requêtes HTTP pour ce service :
 // on lit les lignes du serveur (« incoming request » / « request completed »),
 // dont on n'extrait QUE la méthode, le chemin (comparé à une liste fixe) et le
 // code de réponse. Aucun message brut, adresse IP, identifiant de compte ni
@@ -169,11 +170,13 @@ const PLAFOND = z.object({
   msg: z.literal("Plafond SerpApi"),
   step: z.enum(["search", "video_ai"]),
   outcome: z.enum(["reserved", "refused"]),
-  period: z.enum(["day", "month"]).nullable(),
+  limit: z.enum(["day", "month", "user"]).nullable(),
   day: z.number(),
   window: z.number(),
+  user: z.number(),
   dayCap: z.number(),
   monthCap: z.number(),
+  userCap: z.number(),
 });
 export type LignePlafond = z.infer<typeof PLAFOND>;
 
@@ -181,19 +184,20 @@ export type LignePlafond = z.infer<typeof PLAFOND>;
 export function extrairePlafond(message: string): LignePlafond | null {
   const lu = PLAFOND.safeParse(lireJson(message));
   if (!lu.success) return null;
-  const { msg, step, outcome, period, day, window, dayCap, monthCap } = lu.data;
-  return { msg, step, outcome, period, day, window, dayCap, monthCap };
+  const { msg, step, outcome, limit, day, window, user, dayCap, monthCap, userCap } = lu.data;
+  return { msg, step, outcome, limit, day, window, user, dayCap, monthCap, userCap };
 }
 
 function etatPlafond(ligne: LignePlafond): string {
-  return `aujourd'hui ${ligne.day}/${ligne.dayCap}, 31 jours ${ligne.window}/${ligne.monthCap}`;
+  return `aujourd'hui ${ligne.day}/${ligne.dayCap}, 31 jours ${ligne.window}/${ligne.monthCap}, personne ${ligne.user}/${ligne.userCap}`;
 }
 
+const PLAFONDS = { day: "plafond du jour", month: "plafond des 31 jours", user: "part de la personne pour la journée" } as const;
+
 export function decrirePlafond(ligne: LignePlafond): string {
-  if (ligne.outcome === "reserved") return `recherche réservée — ${etatPlafond(ligne)}`;
-  const plafond = ligne.period === "month" ? "plafond des 31 jours" : "plafond du jour";
+  if (ligne.outcome === "reserved" || !ligne.limit) return `recherche réservée — ${etatPlafond(ligne)}`;
   const moment = ligne.step === "video_ai" ? "avant l'analyse par l'IA" : "au lancement d'une recherche";
-  return `refus (${plafond}), ${moment} — ${etatPlafond(ligne)}`;
+  return `refus (${PLAFONDS[ligne.limit]}), ${moment} — ${etatPlafond(ligne)}`;
 }
 
 /** Bilan de la période : réservations, refus, et le dernier état lu (lignes dans l'ordre). */
@@ -201,9 +205,9 @@ export function resumerPlafond(lignes: readonly LignePlafond[]): string {
   const derniere = lignes.at(-1);
   if (!derniere) return "aucune ligne dans la période";
   const reservees = lignes.filter((ligne) => ligne.outcome === "reserved").length;
-  const refus = lignes.filter((ligne) => ligne.outcome === "refused");
-  const parJour = refus.filter((ligne) => ligne.period === "day").length;
-  return `${reservees} recherche(s) réservée(s), ${refus.length} refus (jour ${parJour}, 31 jours ${refus.length - parJour}) ; dernier état lu : ${etatPlafond(derniere)}`;
+  const refus = (limit: LignePlafond["limit"]) => lignes.filter((ligne) => ligne.outcome === "refused" && ligne.limit === limit).length;
+  const total = refus("day") + refus("month") + refus("user");
+  return `${reservees} recherche(s) réservée(s), ${total} refus (jour ${refus("day")}, 31 jours ${refus("month")}, part personnelle ${refus("user")}) ; dernier état lu : ${etatPlafond(derniere)}`;
 }
 
 export function decrireCodes(codes: Record<string, number>): string {
