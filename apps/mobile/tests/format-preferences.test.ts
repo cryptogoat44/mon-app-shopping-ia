@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatLongDate, formatPrice, timeAgo } from "../src/lib/format";
+import { formatDayMonth, formatLongDate, formatPrice, timeAgo } from "../src/lib/format";
 import { detectLocale, parseLocale, parseThemePreference, resolveScheme } from "../src/lib/preferences";
 
 // Espaces insécables des formats français ramenés à des espaces simples.
@@ -9,6 +9,10 @@ describe("formats selon la langue (lot 3)", () => {
   it("écrit les dates longues dans la langue choisie", () => {
     expect(formatLongDate("2026-09-25", "fr")).toBe("25 septembre 2026");
     expect(formatLongDate("2026-09-25", "en")).toBe("September 25, 2026");
+    // Date proche, sans l'année (plafond du mois, lot 4 quater) ; « 1er » en français.
+    expect(formatDayMonth("2026-11-03", "fr")).toBe("3 novembre");
+    expect(formatDayMonth("2026-12-01", "fr")).toBe("1er décembre");
+    expect(formatDayMonth("2026-11-03", "en")).toBe("November 3");
   });
 
   it("formate un prix sans jamais convertir la devise", () => {

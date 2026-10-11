@@ -9,12 +9,14 @@
 // Plafond atteint : aucun appel SerpApi, aucun crédit, un message honnête.
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
-import { SEARCH_CAPACITY_ERRORS, type ApiErrorBody, type SearchCapacityLimit } from "@monapp/shared-types";
+import { SEARCH_CAPACITY_ERRORS, type SearchCapacityErrorBody, type SearchCapacityLimit, type SearchCapacityReached } from "@monapp/shared-types";
 import { env } from "../env.js";
 
 export const SEARCH_CAPACITY_MESSAGES = {
   day: "Le service de recherche est très sollicité aujourd'hui. Réessayez demain.",
-  month: "Le service de recherche a atteint sa limite mensuelle. Réessayez dans quelques jours.",
+  // La date (« Réessayez à partir du 3 novembre. ») est ajoutée par l'app, dans
+  // sa langue, à partir de resumesOn (décision du fondateur, 2026-10-11).
+  month: "Le service de recherche a atteint sa limite mensuelle.",
   user: "Vous avez atteint votre limite de recherches pour aujourd'hui. Réessayez demain.",
 } as const satisfies Record<SearchCapacityLimit, string>;
 
@@ -22,6 +24,7 @@ const COUNTS = {
   day_count: z.number().int().nonnegative(),
   month_count: z.number().int().nonnegative(),
   user_day_count: z.number().int().nonnegative(),
+  next_renewal: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 };
 /** Réponse de serpapi_quota, lue sans lui faire confiance (une seule ligne). */
 export const QUOTA_ROWS = z
@@ -34,7 +37,7 @@ export const QUOTA_ROWS = z
   .length(1);
 type QuotaRow = z.infer<typeof QUOTA_ROWS>[number];
 
-export type SearchCapacity = { allowed: true } | { allowed: false; limit: SearchCapacityLimit };
+export type SearchCapacity = { allowed: true } | ({ allowed: false } & SearchCapacityReached);
 
 /** Plafond illisible (base injoignable…) : la recherche échoue proprement, sans appel. */
 export class SearchCapacityError extends Error {}
@@ -105,7 +108,8 @@ async function readQuota(fastify: FastifyInstance, log: FastifyBaseLogger, reque
   }
   const row = rows.data[0]!;
   if (reserve || !row.allowed) log.info(capacityLogFields(request.step, row, caps), CAPACITY_LOG_MESSAGE);
-  return row.allowed ? { allowed: true } : { allowed: false, limit: row.refused_by };
+  if (row.allowed) return { allowed: true };
+  return { allowed: false, limit: row.refused_by, resumesOn: row.refused_by === "month" ? row.next_renewal : null };
 }
 
 /** Juste avant un appel SerpApi : un appel réservé, ou le refus (plafond atteint). */
@@ -118,8 +122,10 @@ export function searchCapacityForVideoAi(fastify: FastifyInstance, log: FastifyB
   return readQuota(fastify, log, { step: "video_ai", userId });
 }
 
-/** Réponse 429 « plafond atteint » : le plafond en cause et son message, sans date. */
-export function sendCapacityReached(reply: FastifyReply, limit: SearchCapacityLimit): FastifyReply {
-  const body: ApiErrorBody = { error: SEARCH_CAPACITY_ERRORS[limit], message: SEARCH_CAPACITY_MESSAGES[limit] };
+/** Réponse 429 « plafond atteint » : le plafond en cause, son message, et pour
+ * le mois le jour du prochain renouvellement (l'app en fait « Réessayez à partir du … »). */
+export function sendCapacityReached(reply: FastifyReply, capacity: SearchCapacityReached): FastifyReply {
+  const body: SearchCapacityErrorBody = { error: SEARCH_CAPACITY_ERRORS[capacity.limit], message: SEARCH_CAPACITY_MESSAGES[capacity.limit] };
+  if (capacity.resumesOn) body.resumesOn = capacity.resumesOn;
   return reply.code(429).send(body);
 }

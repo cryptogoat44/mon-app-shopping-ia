@@ -7,14 +7,14 @@
 // que le serveur l'envoie (le serveur lui-même est vérifié par
 // tests/spotterFlow.test.ts, videoMoments.test.ts et searchCapacity.test.ts) :
 // aucune requête ne part vers SerpApi ni vers l'IA. Photo : plafond du jour,
-// du mois (message sans date, décision du fondateur), part de la
-// personne ; vidéo : plafond atteint avant l'analyse par l'IA. Français clair
-// et anglais sombre.
+// du mois (avec la date du prochain renouvellement, décision du fondateur du
+// 2026-10-11), part de la personne ; vidéo : plafond atteint avant l'analyse
+// par l'IA. Français clair et anglais sombre.
 import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Page } from "playwright-core";
 import sharp from "sharp";
-import { SEARCH_CAPACITY_ERRORS, type ApiErrorBody, type SearchCapacityLimit } from "@monapp/shared-types";
+import { SEARCH_CAPACITY_ERRORS, type SearchCapacityErrorBody, type SearchCapacityLimit } from "@monapp/shared-types";
 import type { Parcours } from "../boite-a-outils.js";
 import { genererVideosEssai } from "../../lib/videos-essai.js";
 import { COMBOS, type Combo } from "./lot-3.js";
@@ -31,27 +31,30 @@ export const simulatedAi = true;
 const PLAFOND = {
   fr: {
     day: ["Le service de recherche est très sollicité aujourd'hui.", "Réessayez demain."],
-    month: ["Le service de recherche a atteint sa limite mensuelle.", "Réessayez dans quelques jours."],
+    month: ["Le service de recherche a atteint sa limite mensuelle.", "Réessayez à partir du 3 novembre."],
     user: ["Vous avez atteint votre limite de recherches pour aujourd'hui.", "Réessayez demain."],
     tropDeRecherches: "Trop de recherches d'un coup",
     retour: "Retour à Spotter",
   },
   en: {
     day: ["The search service is in very high demand today.", "Please try again tomorrow."],
-    month: ["The search service has reached its monthly limit.", "Please try again in a few days."],
+    month: ["The search service has reached its monthly limit.", "Please try again from November 3."],
     user: ["You've reached your search limit for today.", "Please try again tomorrow."],
     tropDeRecherches: "Too many searches at once",
     retour: "Back to Spotter",
   },
 } as const;
 
+/** Prochain renouvellement annoncé par le serveur pour le plafond du mois (date de Paris). */
+const REPRISE = "2026-11-03";
+
 /** Réponse 429 du serveur quand un plafond est atteint, fabriquée dans le navigateur. */
 async function plafondAtteint(page: Page, motif: string, limit: SearchCapacityLimit): Promise<void> {
-  const body: ApiErrorBody = { error: SEARCH_CAPACITY_ERRORS[limit], message: "…" };
+  const body: SearchCapacityErrorBody = { error: SEARCH_CAPACITY_ERRORS[limit], message: "…", ...(limit === "month" ? { resumesOn: REPRISE } : {}) };
   await page.route(motif, (route) => route.fulfill({ status: 429, contentType: "application/json", body: JSON.stringify(body) }));
 }
 
-/** Le message du plafond, seul : ni « trop de recherches d'un coup », ni date, ni correction à tenter, et le retour à Spotter. */
+/** Le message du plafond, seul : ni « trop de recherches d'un coup », ni année ou code technique, ni correction à tenter, et le retour à Spotter. */
 async function controlerMessage(page: Page, combo: Combo, limit: SearchCapacityLimit, ecran: string): Promise<void> {
   const T = TEXTES[combo.locale];
   const P = PLAFOND[combo.locale];
@@ -59,7 +62,7 @@ async function controlerMessage(page: Page, combo: Combo, limit: SearchCapacityL
   await page.getByRole("heading", { name: titre, exact: true }).filter({ visible: true }).waitFor({ timeout: 30_000 });
   check((await visible(page, conseil).count()) === 1, `${ecran} : conseil « ${conseil} »`);
   check((await visible(page, P.tropDeRecherches).count()) === 0, `${ecran} : jamais « ${P.tropDeRecherches} »`);
-  check((await page.getByText(/\d{4}/).filter({ visible: true }).count()) === 0, `${ecran} : aucune date affichée`);
+  check((await page.getByText(/\d{4}/).filter({ visible: true }).count()) === 0, `${ecran} : ni année ni code technique affichés`);
   for (const correction of [T.reessayer, T.recadrer, T.sansTexte, T.moiMeme]) {
     check((await visible(page, correction).count()) === 0, `${ecran} : « ${correction} » n'est pas proposé`);
   }

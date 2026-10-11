@@ -190,8 +190,8 @@ describe("plafond global SerpApi (lot 4 quater)", () => {
       ...capacityLogFields(
         step,
         outcome === "reserved"
-          ? { allowed: true, refused_by: null, day_count: day, month_count: month, user_day_count: 3 }
-          : { allowed: false, refused_by: limit ?? "day", day_count: day, month_count: month, user_day_count: 3 },
+          ? { allowed: true, refused_by: null, day_count: day, month_count: month, user_day_count: 3, next_renewal: "2026-11-03" }
+          : { allowed: false, refused_by: limit ?? "day", day_count: day, month_count: month, user_day_count: 3, next_renewal: "2026-11-03" },
         { daily: 25, monthly: 225, userDaily: 8, renewalDay: 3 }
       ),
       msg: CAPACITY_LOG_MESSAGE,

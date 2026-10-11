@@ -179,15 +179,15 @@ describe("analyse automatique d'une vidéo (POST /api/video-moments)", () => {
   });
 
   it("plafond des recherches atteint (lot 4 quater : jour, mois, part de la personne) : aucune image ne part à l'IA, message honnête", async () => {
-    capacityMock.mockResolvedValueOnce({ allowed: false, limit: "day" });
+    capacityMock.mockResolvedValueOnce({ allowed: false, limit: "day", resumesOn: null });
     const day = await send(consenting, { query: QUERY });
     expect(day.statusCode).toBe(429);
     expect(day.json()).toEqual({ error: "search_capacity_day", message: "Le service de recherche est très sollicité aujourd'hui. Réessayez demain." });
     // La part de la personne se lit pour celle qui demande l'analyse.
     expect(capacityMock.mock.calls[0]![2]).toBe(consenting.id);
-    capacityMock.mockResolvedValueOnce({ allowed: false, limit: "month" });
-    expect((await send(consenting, { query: QUERY })).json().error).toBe("search_capacity_month");
-    capacityMock.mockResolvedValueOnce({ allowed: false, limit: "user" });
+    capacityMock.mockResolvedValueOnce({ allowed: false, limit: "month", resumesOn: "2026-11-03" });
+    expect((await send(consenting, { query: QUERY })).json()).toMatchObject({ error: "search_capacity_month", resumesOn: "2026-11-03" });
+    capacityMock.mockResolvedValueOnce({ allowed: false, limit: "user", resumesOn: null });
     const user = await send(consenting, { query: QUERY });
     expect(user.statusCode).toBe(429);
     expect(user.json()).toEqual({ error: "search_capacity_user", message: "Vous avez atteint votre limite de recherches pour aujourd'hui. Réessayez demain." });

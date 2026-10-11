@@ -71,6 +71,12 @@ describe("plafond des recherches SerpApi (fonctions de la base, lot 4 quater)", 
     return parisTime(z.string().parse(data));
   }
 
+  async function nextRenewal(renewalDay: number, at: string): Promise<string> {
+    const { data, error } = await app.supabaseAdmin.rpc("serpapi_next_renewal", { p_renewal_day: renewalDay, p_at: at });
+    expect(error).toBeNull();
+    return z.string().parse(data);
+  }
+
   async function seed(renewalDay: number, count: number, at: Date): Promise<number> {
     const { data, error } = await app.supabaseAdmin.rpc("serpapi_seed_cycle", { p_renewal_day: renewalDay, p_count: count, p_at: at.toISOString() });
     expect(error).toBeNull();
@@ -143,6 +149,16 @@ describe("plafond des recherches SerpApi (fonctions de la base, lot 4 quater)", 
       expect(await cycleStart(1, "2026-09-30T23:30:00Z")).toBe("2026-10-01 00:00");
     });
 
+    it("prochain renouvellement (date de la reprise affichée) : le 3 suivant, l'année suivante en décembre, le dernier jour d'un mois plus court", async () => {
+      expect(await nextRenewal(3, "2026-10-02T21:59:00Z")).toBe("2026-10-03");
+      expect(await nextRenewal(3, "2026-10-02T22:01:00Z")).toBe("2026-11-03");
+      expect(await nextRenewal(3, "2026-12-20T12:00:00Z")).toBe("2027-01-03");
+      expect(await nextRenewal(31, "2015-01-31T12:00:00Z")).toBe("2015-02-28");
+      expect(await nextRenewal(31, "2016-01-31T12:00:00Z")).toBe("2016-02-29");
+      expect(await nextRenewal(31, "2015-02-28T12:00:00Z")).toBe("2015-03-31");
+      expect(await nextRenewal(31, "2026-04-30T12:00:00Z")).toBe("2026-05-31");
+    });
+
     it("jour de renouvellement invalide (0, 32) : refus net", async () => {
       for (const day of [0, 32]) {
         expect((await app.supabaseAdmin.rpc("serpapi_cycle_start", { p_renewal_day: day, p_at: "2026-10-08T12:00:00Z" })).error).not.toBeNull();
@@ -155,7 +171,8 @@ describe("plafond des recherches SerpApi (fonctions de la base, lot 4 quater)", 
     for (const [n, at] of [slotDate(1, 4, -1), slotDate(1, 20, -1), slotDate(1, 1)].entries()) {
       expect(await quota(at, caps)).toMatchObject({ allowed: true, month_count: n + 1 });
     }
-    expect(await quota(slotDate(1, 2), caps)).toMatchObject({ allowed: false, refused_by: "month", month_count: 3 });
+    // La reprise annoncée est ce même 3 (date de Paris).
+    expect(await quota(slotDate(1, 2), caps)).toMatchObject({ allowed: false, refused_by: "month", month_count: 3, next_renewal: slotDate(1, 3).toISOString().slice(0, 10) });
     const third = parisMidnight(1, 3);
     expect(await quota(after(third, -MINUTE), caps)).toMatchObject({ allowed: false, refused_by: "month" });
     expect(await quota(after(third, MINUTE), caps)).toMatchObject({ allowed: true, month_count: 1, day_count: 1 });
@@ -285,6 +302,8 @@ describe("plafond des recherches SerpApi (fonctions de la base, lot 4 quater)", 
       expect(call.error).not.toBeNull();
       expect((await client.rpc("serpapi_seed_cycle", { p_renewal_day: 3, p_count: 50, p_at: at })).error).not.toBeNull();
       expect((await client.rpc("serpapi_cycle_start", { p_renewal_day: 3, p_at: at })).error).not.toBeNull();
+      expect((await client.rpc("serpapi_next_renewal", { p_renewal_day: 3, p_at: at })).error).not.toBeNull();
+      expect((await client.rpc("serpapi_renewal_in_month", { p_renewal_day: 3, p_month: "2026-10-01" })).error).not.toBeNull();
       const read = await client.from("serpapi_calls").select("*").limit(1);
       expect(read.data ?? []).toEqual([]);
     }
@@ -306,7 +325,7 @@ describe("plafond des recherches SerpApi (fonctions de la base, lot 4 quater)", 
       const first = await searchAt(new Date(), "processing");
       expect(await reserveSearch(app, app.log, user.id, first)).toEqual({ allowed: true });
       const second = await searchAt(new Date(), "processing");
-      expect(await reserveSearch(app, app.log, user.id, second)).toEqual({ allowed: false, limit: "user" });
+      expect(await reserveSearch(app, app.log, user.id, second)).toEqual({ allowed: false, limit: "user", resumesOn: null });
       expect(await rowsBetween(start, new Date(Date.now() + MINUTE))).toHaveLength(1);
     } finally {
       Object.assign(env, { SERPAPI_DAILY_CAP: saved.daily, SERPAPI_MONTHLY_CAP: saved.monthly, SERPAPI_USER_DAILY_CAP: saved.user });
@@ -322,7 +341,7 @@ describe("plafond des recherches SerpApi (fonctions de la base, lot 4 quater)", 
 
     const fields = capacityLogFields(
       "search",
-      { allowed: false, refused_by: "user", day_count: 12, month_count: 40, user_day_count: 8 },
+      { allowed: false, refused_by: "user", day_count: 12, month_count: 40, user_day_count: 8, next_renewal: "2026-11-03" },
       { daily: 25, monthly: 225, userDaily: 8, renewalDay: 3 }
     );
     expect(fields).toEqual({ step: "search", outcome: "refused", limit: "user", day: 12, month: 40, user: 8, dayCap: 25, monthCap: 225, userCap: 8, renewalDay: 3 });

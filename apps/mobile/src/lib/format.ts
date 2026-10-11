@@ -11,6 +11,14 @@ export function formatLongDate(isoOrDay: string, locale: Locale): string {
   return date.toLocaleDateString(INTL[locale], { day: "numeric", month: "long", year: "numeric" });
 }
 
+/** Jour et mois, sans l'année, pour une date proche : « 3 novembre », « 1er décembre » ;
+ * « November 3 ». Lu à midi, comme formatLongDate, pour ne jamais changer de jour. */
+export function formatDayMonth(isoDay: string, locale: Locale): string {
+  const date = new Date(`${isoDay}T12:00:00`);
+  const text = date.toLocaleDateString(INTL[locale], { day: "numeric", month: "long" });
+  return locale === "fr" && date.getDate() === 1 ? text.replace(/^1 /, "1er ") : text;
+}
+
 /** Prix dans sa devise d'origine ; code devise inconnu : nombre suivi du code. */
 export function formatPrice(amount: number, currency: string | null, locale: Locale): string {
   const digits = { minimumFractionDigits: Number.isInteger(amount) ? 0 : 2, maximumFractionDigits: 2 };

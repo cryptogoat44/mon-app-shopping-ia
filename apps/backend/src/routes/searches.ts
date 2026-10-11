@@ -536,7 +536,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       const capacity = await reserveSearch(fastify, request.log, userId, id).catch(() => null);
       if (!capacity || !capacity.allowed) {
         await releaseSearch(fastify, id, storagePath);
-        if (capacity) return sendCapacityReached(reply, capacity.limit);
+        if (capacity) return sendCapacityReached(reply, capacity);
         return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue, réessayez." });
       }
 

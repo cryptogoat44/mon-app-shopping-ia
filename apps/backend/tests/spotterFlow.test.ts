@@ -206,7 +206,7 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
 
     it("plafond du jour atteint : aucun appel SerpApi, message honnête ; rien ne reste et la recherche se relance plus tard", async () => {
       const search = await prepare("https://www.tiktok.com/@x/video/1");
-      reserveMock.mockResolvedValueOnce({ allowed: false, limit: "day" });
+      reserveMock.mockResolvedValueOnce({ allowed: false, limit: "day", resumesOn: null });
       const refused = await run(search.id, { query: "veste" });
       expect(refused.statusCode).toBe(429);
       expect(refused.json()).toEqual({
@@ -225,24 +225,25 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
       expect(reserveMock).toHaveBeenCalledTimes(2);
     });
 
-    it("plafond du mois atteint : message sans date (décision du fondateur), dans la langue de l'utilisateur", async () => {
+    it("plafond du mois atteint : le jour du prochain renouvellement est transmis (l'app en fait « Réessayez à partir du … »), message dans la langue de l'utilisateur", async () => {
       const search = await prepare("https://www.tiktok.com/@x/video/1");
-      reserveMock.mockResolvedValueOnce({ allowed: false, limit: "month" });
+      reserveMock.mockResolvedValueOnce({ allowed: false, limit: "month", resumesOn: "2026-11-03" });
       const french = await run(search.id, {});
       expect(french.json()).toEqual({
         error: "search_capacity_month",
-        message: "Le service de recherche a atteint sa limite mensuelle. Réessayez dans quelques jours.",
+        message: "Le service de recherche a atteint sa limite mensuelle.",
+        resumesOn: "2026-11-03",
       });
-      reserveMock.mockResolvedValueOnce({ allowed: false, limit: "month" });
+      reserveMock.mockResolvedValueOnce({ allowed: false, limit: "month", resumesOn: "2026-11-03" });
       const english = await run(search.id, {}, undefined, user.token, "en-GB");
       expect(english.statusCode).toBe(429);
-      expect(english.json().message).toBe("The search service has reached its monthly limit. Please try again in a few days.");
+      expect(english.json()).toMatchObject({ message: "The search service has reached its monthly limit.", resumesOn: "2026-11-03" });
       expect(searchMock).not.toHaveBeenCalled();
     });
 
     it("part de la personne atteinte : aucun appel SerpApi, son propre message ; la recherche reste lançable", async () => {
       const search = await prepare("https://www.tiktok.com/@x/video/1");
-      reserveMock.mockResolvedValueOnce({ allowed: false, limit: "user" });
+      reserveMock.mockResolvedValueOnce({ allowed: false, limit: "user", resumesOn: null });
       const refused = await run(search.id, {});
       expect(refused.statusCode).toBe(429);
       expect(refused.json()).toEqual({
@@ -282,7 +283,7 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
           payload: { sourceUrl: "https://www.tiktok.com/@x/video/1" },
         });
         const searchId: string = prepared.json().id;
-        reserveMock.mockResolvedValue({ allowed: false, limit: "day" });
+        reserveMock.mockResolvedValue({ allowed: false, limit: "day", resumesOn: null });
         for (let i = 0; i < 10; i++) expect((await run(searchId, {}, undefined, counted.token)).statusCode).toBe(429);
         reserveMock.mockResolvedValue({ allowed: true });
         expect((await run(searchId, {}, undefined, counted.token)).statusCode).toBe(200);

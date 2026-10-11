@@ -108,7 +108,7 @@ export default async function videoMomentsRoutes(fastify: FastifyInstance) {
       // dépense. Plafond illisible : pas d'analyse non plus.
       const capacity = await searchCapacityForVideoAi(fastify, request.log, request.user!.id).catch(() => null);
       if (!capacity) return reply.code(503).send(UNAVAILABLE);
-      if (!capacity.allowed) return sendCapacityReached(reply, capacity.limit);
+      if (!capacity.allowed) return sendCapacityReached(reply, capacity);
       if (!request.isMultipart()) return reply.code(400).send(INVALID_FRAMES);
 
       const upload = await readUpload(request);

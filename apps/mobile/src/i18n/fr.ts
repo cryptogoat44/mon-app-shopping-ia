@@ -321,12 +321,14 @@ export const fr = {
     technicalTip: "Le service de reconnaissance n'a pas répondu. Vérifiez votre connexion, puis réessayez.",
     rateLimitedTitle: "Trop de recherches d'un coup",
     rateLimitedTip: "Vous avez atteint la limite de 10 identifications par heure. Réessayez un peu plus tard.",
-    // Plafond des recherches (lot 4 quater, textes du fondateur, 2026-10-08) :
-    // jour et mois pour tout le service (jamais de date), part de la personne.
+    // Plafond des recherches (lot 4 quater, textes du fondateur, 2026-10-08 et
+    // 2026-10-11) : jour et mois pour tout le service — pour le mois, la date
+    // du prochain renouvellement de SerpApi —, part de la personne.
     capacityDayTitle: "Le service de recherche est très sollicité aujourd'hui.",
     capacityDayTip: "Réessayez demain.",
     capacityMonthTitle: "Le service de recherche a atteint sa limite mensuelle.",
-    capacityMonthTip: "Réessayez dans quelques jours.",
+    capacityMonthTip: (date: string) => `Réessayez à partir du ${date}.`,
+    capacityMonthLater: "Réessayez dans quelques jours.",
     capacityUserTitle: "Vous avez atteint votre limite de recherches pour aujourd'hui.",
     capacityUserTip: "Réessayez demain.",
     previewUnavailableTitle: "L'image de la vidéo n'est plus disponible",

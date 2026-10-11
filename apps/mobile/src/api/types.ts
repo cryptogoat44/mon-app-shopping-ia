@@ -49,6 +49,8 @@ export interface SpotResult {
   pieces: Piece[];
   similarPieces: Piece[];
   failReason?: SpotFailReason;
+  /** Plafond du mois atteint : jour de la reprise (« AAAA-MM-JJ »). */
+  resumesOn?: string | null;
 }
 
 export type VaultVerificationState = "pending" | "verified" | "refused";

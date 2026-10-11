@@ -18,15 +18,33 @@ create table if not exists serpapi_calls (
 create index if not exists serpapi_calls_called_at_idx on serpapi_calls (called_at);
 alter table serpapi_calls enable row level security;
 
--- Écritures précédentes de la fonction (spotto-dev seulement, jamais en production).
+-- Écritures précédentes des fonctions (spotto-dev seulement, jamais en production).
 drop function if exists serpapi_quota(integer, integer, boolean, timestamptz);
 drop function if exists serpapi_quota(integer, integer, integer, uuid, boolean, uuid, timestamptz);
+drop function if exists serpapi_quota(integer, integer, integer, integer, uuid, boolean, uuid, timestamptz);
+
+-- Jour de renouvellement dans le mois de p_month : le jour p_renewal_day, ou
+-- le dernier jour d'un mois plus court (le 31 : le 30 avril, le 28 ou le 29
+-- février).
+create or replace function serpapi_renewal_in_month(p_renewal_day integer, p_month date)
+returns date
+language plpgsql
+stable
+set search_path = public
+as $$
+declare
+  v_first date := date_trunc('month', p_month)::date;
+begin
+  if p_renewal_day is null or p_renewal_day < 1 or p_renewal_day > 31 or p_month is null then
+    raise exception 'serpapi_renewal_in_month : paramètres invalides';
+  end if;
+  return v_first + (least(p_renewal_day, extract(day from (v_first + interval '1 month - 1 day'))::integer) - 1);
+end;
+$$;
 
 -- Début du cycle en cours : minuit (heure de Paris) du dernier jour de
--- renouvellement passé, ou d'aujourd'hui. Un mois plus court que ce jour
--- renouvelle à son dernier jour (le 31 : le 30 en avril, le 28 ou le 29 en
--- février). Le 2 janvier, avec un renouvellement le 3, le cycle a commencé le
--- 3 décembre de l'année précédente.
+-- renouvellement passé, ou d'aujourd'hui. Le 2 janvier, avec un renouvellement
+-- le 3, le cycle a commencé le 3 décembre de l'année précédente.
 create or replace function serpapi_cycle_start(p_renewal_day integer, p_at timestamptz)
 returns timestamptz
 language plpgsql
@@ -35,28 +53,41 @@ set search_path = public
 as $$
 declare
   v_today date;
-  v_month date;
   v_renewal date;
 begin
-  if p_renewal_day is null or p_renewal_day < 1 or p_renewal_day > 31 or p_at is null then
+  if p_at is null then
     raise exception 'serpapi_cycle_start : paramètres invalides';
   end if;
   v_today := (p_at at time zone 'Europe/Paris')::date;
-  v_month := date_trunc('month', v_today)::date;
-  v_renewal := v_month + (least(p_renewal_day, extract(day from (v_month + interval '1 month - 1 day'))::integer) - 1);
+  v_renewal := serpapi_renewal_in_month(p_renewal_day, v_today);
   if v_renewal > v_today then
-    v_month := (v_month - interval '1 month')::date;
-    v_renewal := v_month + (least(p_renewal_day, extract(day from (v_month + interval '1 month - 1 day'))::integer) - 1);
+    v_renewal := serpapi_renewal_in_month(p_renewal_day, (v_today - interval '1 month')::date);
   end if;
   return v_renewal::timestamp at time zone 'Europe/Paris';
+end;
+$$;
+
+-- Prochain renouvellement (date de Paris), quand le plafond du mois se libère :
+-- le jour de renouvellement du mois qui suit le début du cycle en cours.
+create or replace function serpapi_next_renewal(p_renewal_day integer, p_at timestamptz)
+returns date
+language plpgsql
+stable
+set search_path = public
+as $$
+begin
+  return serpapi_renewal_in_month(
+    p_renewal_day,
+    ((serpapi_cycle_start(p_renewal_day, p_at) at time zone 'Europe/Paris')::date + interval '1 month')::date
+  );
 end;
 $$;
 
 -- Réserve un appel (p_reserve = true), ou lit seulement l'état (false), pour
 -- la personne p_user_id. Trois plafonds, dans cet ordre : le mois (tout le
 -- service, depuis le début du cycle de SerpApi : il se libère quand le quota
--- de SerpApi revient), la part de la personne pour la journée, le jour (tout
--- le service) ; refused_by dit lequel est atteint.
+-- de SerpApi revient, le jour next_renewal), la part de la personne pour la
+-- journée, le jour (tout le service) ; refused_by dit lequel est atteint.
 -- La part de la personne compte ses recherches du jour qui ont atteint
 -- SerpApi (en cours, abouties ou non), lues dans product_searches — aucune
 -- donnée personnelle de plus ; p_exclude_search : la recherche en cours de
@@ -76,7 +107,7 @@ create or replace function serpapi_quota(
   p_exclude_search uuid default null,
   p_at timestamptz default null
 )
-returns table (allowed boolean, refused_by text, day_count integer, month_count integer, user_day_count integer)
+returns table (allowed boolean, refused_by text, day_count integer, month_count integer, user_day_count integer, next_renewal date)
 language plpgsql
 set search_path = public
 as $$
@@ -84,6 +115,7 @@ declare
   v_at timestamptz;
   v_day_start timestamptz;
   v_cycle_start timestamptz;
+  v_next date;
   v_day integer;
   v_month integer;
   v_user integer;
@@ -96,6 +128,7 @@ begin
   v_at := coalesce(p_at, clock_timestamp());
   v_day_start := date_trunc('day', v_at at time zone 'Europe/Paris') at time zone 'Europe/Paris';
   v_cycle_start := serpapi_cycle_start(p_renewal_day, v_at);
+  v_next := serpapi_next_renewal(p_renewal_day, v_at);
 
   -- Le jour commence toujours dans le cycle en cours (au plus tôt, avec lui).
   select count(*) filter (where c.called_at >= v_day_start), count(*)
@@ -112,15 +145,15 @@ begin
       and s.id is distinct from p_exclude_search;
 
   if v_month >= p_monthly_cap then
-    return query select false, 'month'::text, v_day, v_month, v_user;
+    return query select false, 'month'::text, v_day, v_month, v_user, v_next;
     return;
   end if;
   if v_user >= p_user_daily_cap then
-    return query select false, 'user'::text, v_day, v_month, v_user;
+    return query select false, 'user'::text, v_day, v_month, v_user, v_next;
     return;
   end if;
   if v_day >= p_daily_cap then
-    return query select false, 'day'::text, v_day, v_month, v_user;
+    return query select false, 'day'::text, v_day, v_month, v_user, v_next;
     return;
   end if;
 
@@ -130,15 +163,16 @@ begin
     v_month := v_month + 1;
     v_user := v_user + 1;
   end if;
-  return query select true, null::text, v_day, v_month, v_user;
+  return query select true, null::text, v_day, v_month, v_user, v_next;
 end;
 $$;
 
 -- Premier démarrage : le compteur part de zéro, alors que SerpApi a peut-être
 -- déjà compté des recherches dans le cycle en cours (avant le compteur, ou par
 -- les outils d'essai). À la mise en ligne, le fondateur reporte le nombre lu
--- chez SerpApi : autant d'appels, datés du début du cycle. Sans effet si le
--- cycle compte déjà des appels (jamais en double). Renvoie le total du cycle.
+-- chez SerpApi (fichier docs/0022-amorcage.sql, écrit à ce moment-là) : autant
+-- d'appels, datés du début du cycle. Sans effet si le cycle compte déjà des
+-- appels (jamais en double). Renvoie le total du cycle.
 create or replace function serpapi_seed_cycle(p_renewal_day integer, p_count integer, p_at timestamptz default null)
 returns integer
 language plpgsql
@@ -165,8 +199,12 @@ end;
 $$;
 
 -- Le serveur seul : ni les visiteurs, ni les comptes connectés.
+revoke all on function serpapi_renewal_in_month(integer, date) from public, anon, authenticated;
+grant execute on function serpapi_renewal_in_month(integer, date) to service_role;
 revoke all on function serpapi_cycle_start(integer, timestamptz) from public, anon, authenticated;
 grant execute on function serpapi_cycle_start(integer, timestamptz) to service_role;
+revoke all on function serpapi_next_renewal(integer, timestamptz) from public, anon, authenticated;
+grant execute on function serpapi_next_renewal(integer, timestamptz) to service_role;
 revoke all on function serpapi_quota(integer, integer, integer, integer, uuid, boolean, uuid, timestamptz) from public, anon, authenticated;
 grant execute on function serpapi_quota(integer, integer, integer, integer, uuid, boolean, uuid, timestamptz) to service_role;
 revoke all on function serpapi_seed_cycle(integer, integer, timestamptz) from public, anon, authenticated;

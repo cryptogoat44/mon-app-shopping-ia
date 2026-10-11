@@ -143,8 +143,9 @@ export type VideoAiErrorCode =
 /** Plafond des recherches atteint (lot 4 quater) : réponse 429 du lancement
  * d'une recherche, et de l'analyse automatique avant tout envoi à l'IA.
  * « day » : tout le service, jusqu'à minuit (heure de Paris) ; « month » : tout
- * le service, cycle mensuel de SerpApi ; « user » : la part de la personne pour la
- * journée. Jamais de date de reprise (décision du fondateur, 2026-10-08). */
+ * le service, cycle mensuel de SerpApi, de nouveau possible le jour
+ * `resumesOn` (son prochain renouvellement, date de Paris « AAAA-MM-JJ ») ;
+ * « user » : la part de la personne pour la journée. */
 export type SearchCapacityLimit = "day" | "month" | "user";
 export const SEARCH_CAPACITY_LIMITS = ["day", "month", "user"] as const satisfies readonly SearchCapacityLimit[];
 export const SEARCH_CAPACITY_ERRORS = {
@@ -153,10 +154,30 @@ export const SEARCH_CAPACITY_ERRORS = {
   user: "search_capacity_user",
 } as const satisfies Record<SearchCapacityLimit, string>;
 
+export interface SearchCapacityReached {
+  limit: SearchCapacityLimit;
+  /** Plafond du mois seulement : jour du prochain renouvellement (« AAAA-MM-JJ »), sinon null. */
+  resumesOn: string | null;
+}
+
+export interface SearchCapacityErrorBody extends ApiErrorBody {
+  resumesOn?: string;
+}
+
+/** Une vraie date du calendrier, au format « AAAA-MM-JJ ». */
+export function isCalendarDay(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
+}
+
 /** Lit le corps d'une erreur sans lui faire confiance ; null si ce n'est pas un plafond atteint. */
-export function parseSearchCapacityError(body: unknown): SearchCapacityLimit | null {
+export function parseSearchCapacityError(body: unknown): SearchCapacityReached | null {
   if (typeof body !== "object" || body === null || !("error" in body)) return null;
-  return SEARCH_CAPACITY_LIMITS.find((limit) => SEARCH_CAPACITY_ERRORS[limit] === body.error) ?? null;
+  const limit = SEARCH_CAPACITY_LIMITS.find((candidate) => SEARCH_CAPACITY_ERRORS[candidate] === body.error);
+  if (!limit) return null;
+  const resumesOn = limit === "month" && "resumesOn" in body && isCalendarDay(body.resumesOn) ? body.resumesOn : null;
+  return { limit, resumesOn };
 }
 
 function isProportion(value: unknown): value is number {

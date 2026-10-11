@@ -80,7 +80,7 @@ export async function launchVideo(video: OpenedVideo, query: string, signal: Abo
   // Plafond des recherches atteint (lot 4 quater) : annoncé sur l'écran
   // Résultat, comme pour une photo ; aucune identification n'est tentée.
   if (analysis.kind === "capacity") {
-    setLastSpotResult({ searchId: null, status: "failed", pieces: [], similarPieces: [], failReason: analysis.reason, query: query.trim() || null });
+    setLastSpotResult({ searchId: null, status: "failed", pieces: [], similarPieces: [], failReason: analysis.failure.reason, resumesOn: analysis.failure.resumesOn, query: query.trim() || null });
     return { kind: "result", searchId: null };
   }
   if (analysis.kind === "failed") return analysis.reason === "consent" ? { kind: "consent_required" } : { kind: "failed", reason: analysis.reason };
