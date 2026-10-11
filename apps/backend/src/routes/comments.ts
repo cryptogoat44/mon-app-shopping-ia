@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { COMMENT_MAX_LENGTH, type PostAuthor, type PostComment, type PrivacyLevel } from "@monapp/shared-types";
+import { COMMENT_MAX_LENGTH, type PostAuthor, type PostComment } from "@monapp/shared-types";
 import { fetchBlockedUserIds } from "../lib/blocks.js";
-import { canViewPost } from "../lib/visibility.js";
+import { findViewablePost } from "../lib/visibility.js";
 import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput } from "../lib/validation.js";
 
 // Commentaires (Lot F, section 5.A du programme) : à plat, ordre
@@ -30,19 +30,7 @@ interface CommentRow {
   created_at: string;
 }
 
-interface PostRef {
-  id: string;
-  user_id: string;
-  privacy: PrivacyLevel;
-}
-
 const POST_NOT_FOUND = { error: "post_not_found", message: "Publication introuvable." };
-
-async function loadVisiblePost(fastify: FastifyInstance, viewerId: string, postId: string): Promise<PostRef | null> {
-  const { data: post } = await fastify.supabaseAdmin.from("posts").select("id, user_id, privacy").eq("id", postId).maybeSingle();
-  if (!post || !(await canViewPost(fastify, viewerId, post as PostRef))) return null;
-  return post as PostRef;
-}
 
 async function toComments(fastify: FastifyInstance, rows: CommentRow[], viewerId: string, postAuthorId: string): Promise<PostComment[]> {
   if (rows.length === 0) return [];
@@ -80,7 +68,8 @@ export default async function commentsRoutes(fastify: FastifyInstance) {
     if (!pageQuery) return;
     const viewerId = request.user!.id;
 
-    const post = await loadVisiblePost(fastify, viewerId, params.id);
+    // Publication masquée par la modération : ses commentaires disparaissent avec elle.
+    const post = await findViewablePost(fastify, viewerId, params.id);
     if (!post) return reply.code(404).send(POST_NOT_FOUND);
 
     // Les commentaires des comptes en blocage avec le lecteur n'apparaissent pas.
@@ -111,7 +100,7 @@ export default async function commentsRoutes(fastify: FastifyInstance) {
 
   fastify.post(
     "/api/posts/:id/comments",
-    { preHandler: [fastify.requireAuth, fastify.rateLimit("comment")], config: { rateLimitName: "comment" } },
+    { preHandler: [fastify.requireAuth, fastify.requireActiveAccount, fastify.rateLimit("comment")], config: { rateLimitName: "comment" } },
     async (request, reply) => {
       const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
       if (!params) return;
@@ -122,7 +111,7 @@ export default async function commentsRoutes(fastify: FastifyInstance) {
         return reply.code(400).send({ error: "invalid_body", message: parsed.error.issues[0]?.message ?? "Commentaire invalide." });
       }
 
-      const post = await loadVisiblePost(fastify, viewerId, params.id);
+      const post = await findViewablePost(fastify, viewerId, params.id);
       if (!post) return reply.code(404).send(POST_NOT_FOUND);
 
       const { data: inserted, error } = await fastify.supabaseAdmin

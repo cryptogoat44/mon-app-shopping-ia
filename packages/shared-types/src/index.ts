@@ -1,4 +1,5 @@
 export type PrivacyLevel = "public" | "followers" | "private";
+export const PRIVACY_LEVELS = ["public", "followers", "private"] as const satisfies readonly PrivacyLevel[];
 
 export interface Profile {
   id: string;
@@ -15,6 +16,10 @@ export interface Profile {
   postsCount: number;
   createdAt: string;
   updatedAt: string;
+  /** Administrateur (lot 5, table « admins », attribuée par SQL) : seule
+   * condition d'affichage de l'entrée « Modération » des Réglages. Le serveur
+   * revérifie le rôle à chaque route d'administration. */
+  isAdmin: boolean;
 }
 
 /** True once the user has picked a username — the app shows the
@@ -350,6 +355,7 @@ export interface UserProfile {
 }
 
 export type PostType = "lifestyle" | "purchase";
+export const POST_TYPES = ["lifestyle", "purchase"] as const satisfies readonly PostType[];
 
 export interface PostAuthor {
   id: string;
@@ -549,20 +555,102 @@ export interface RecordConsentsRequest {
   consents: ConsentInput[];
 }
 
-export type NotificationType = "follow" | "like" | "comment";
+export type NotificationType = "follow" | "like" | "comment" | "moderation" | "report_handled";
+export const NOTIFICATION_TYPES = ["follow", "like", "comment", "moderation", "report_handled"] as const satisfies readonly NotificationType[];
 
 export interface AppNotification {
   id: string;
   type: NotificationType;
-  actor: PostAuthor;
+  /** Auteur de l'action ; null pour la modération (aucun administrateur n'est nommé). */
+  actor: PostAuthor | null;
   createdAt: string;
   read: boolean;
   /** Publication concernée (« j'aime », commentaire), sinon null. */
   postId: string | null;
+  /** « moderation » : la décision qui vous concerne et son motif ; sinon null. */
+  moderation: ModerationNotice | null;
 }
 
 export type ReportTargetType = "user" | "post" | "comment";
+export const REPORT_TARGET_TYPES = ["user", "post", "comment"] as const satisfies readonly ReportTargetType[];
 export type ReportReason = "spam" | "inappropriate" | "harassment" | "other";
+export const REPORT_REASONS = ["spam", "inappropriate", "harassment", "other"] as const satisfies readonly ReportReason[];
+
+// ---- Modération (lot 5, section 5.B) : visible des seuls administrateurs ----
+
+/** Décisions possibles : classer sans suite, masquer un contenu, suspendre un
+ * compte, et leurs annulations (rétablir, lever la suspension). */
+export type ModerationActionType = "dismiss" | "hide" | "suspend" | "restore" | "unsuspend";
+export const MODERATION_ACTION_TYPES = ["dismiss", "hide", "suspend", "restore", "unsuspend"] as const satisfies readonly ModerationActionType[];
+export const MODERATION_DECISIONS = ["dismiss", "hide", "suspend"] as const satisfies readonly ModerationActionType[];
+export type ModerationDecision = (typeof MODERATION_DECISIONS)[number];
+/** Longueur maximale de la note d'une décision (montrée à la personne concernée). */
+export const MODERATION_NOTE_MAX_LENGTH = 500;
+
+/** Ce que la personne concernée apprend d'une décision : jamais qui l'a prise. */
+export interface ModerationNotice {
+  action: ModerationActionType;
+  targetType: ReportTargetType;
+  reason: ReportReason | null;
+  note: string | null;
+}
+
+export type ModerationStatus = "open" | "handled";
+
+export interface ModerationAuthor extends PostAuthor {
+  suspended: boolean;
+}
+
+/** Aperçu du contenu signalé ; « missing » : supprimé depuis par son auteur. */
+export type ModerationPreview =
+  | { kind: "post"; author: ModerationAuthor; caption: string | null; imageUrl: string | null; privacy: PrivacyLevel; createdAt: string; hidden: boolean }
+  | { kind: "comment"; author: ModerationAuthor; body: string; postId: string; createdAt: string; hidden: boolean }
+  | { kind: "user"; author: ModerationAuthor; bio: string | null }
+  | { kind: "missing" };
+
+export interface ModerationLogEntry {
+  id: string;
+  action: ModerationActionType;
+  reason: ReportReason | null;
+  note: string | null;
+  createdAt: string;
+  /** Administrateur qui a pris la décision (visible des seuls administrateurs). */
+  adminUsername: string | null;
+}
+
+/** Les signalements d'un même contenu, regroupés. */
+export interface ModerationItem {
+  targetType: ReportTargetType;
+  targetId: string;
+  reportCount: number;
+  reasons: Partial<Record<ReportReason, number>>;
+  notes: string[];
+  firstReportedAt: string;
+  lastReportedAt: string;
+  preview: ModerationPreview;
+  /** Masquage en vigueur (à annuler pour rétablir), sinon null. */
+  activeHideActionId: string | null;
+  /** Suspension en vigueur du compte concerné (à lever), sinon null. */
+  activeSuspendActionId: string | null;
+  history: ModerationLogEntry[];
+}
+
+export interface ModerationPage {
+  items: ModerationItem[];
+  nextCursor: string | null;
+}
+
+export interface ModerationActionRequest {
+  targetType: ReportTargetType;
+  targetId: string;
+  action: ModerationDecision;
+  reason?: ReportReason;
+  note?: string;
+}
+
+export interface ModerationUndoRequest {
+  note?: string;
+}
 
 export interface CreateReportRequest {
   targetType: ReportTargetType;

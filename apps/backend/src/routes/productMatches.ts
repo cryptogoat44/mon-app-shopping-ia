@@ -1,8 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { MERCHANT_LINK_CONTEXTS, type PrivacyLevel } from "@monapp/shared-types";
+import { MERCHANT_LINK_CONTEXTS, PRIVACY_LEVELS } from "@monapp/shared-types";
 import { fetchBlockedUserIds } from "../lib/blocks.js";
-import { INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
+import { INVALID_ID, idParamsSchema, parseDbRows, parseInput } from "../lib/validation.js";
+import { shownPosts } from "../lib/visibility.js";
+
+const TAGGING_POST_ROWS = z.array(z.object({ user_id: z.string().uuid(), privacy: z.enum(PRIVACY_LEVELS) }));
 
 const clickBodySchema = z.object({ context: z.enum(MERCHANT_LINK_CONTEXTS).optional() }).optional();
 
@@ -28,11 +31,12 @@ async function isTaggedInVisiblePost(fastify: FastifyInstance, matchId: string, 
   const postIds = [...new Set((tags ?? []).map((t) => t.post_id as string))];
   if (postIds.length === 0) return false;
 
-  const { data: posts } = await fastify.supabaseAdmin
-    .from("posts")
-    .select("user_id, privacy")
-    .in("id", postIds);
-  const candidates = (posts ?? []) as { user_id: string; privacy: PrivacyLevel }[];
+  // Jamais une publication masquée par la modération (lib/visibility.ts).
+  const candidates = parseDbRows(
+    TAGGING_POST_ROWS,
+    await shownPosts(fastify, "user_id, privacy").in("id", postIds),
+    "Publications d'une pièce taguée"
+  );
   if (candidates.some((p) => p.user_id === viewerId)) return true;
 
   const blocked = await fetchBlockedUserIds(fastify, viewerId);

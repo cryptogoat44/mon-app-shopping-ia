@@ -1,17 +1,14 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import type { Post, PostTaggedPiece, PostType, PrivacyLevel, TaggedPieceInput } from "@monapp/shared-types";
+import { POST_TYPES, PRIVACY_LEVELS, type Post, type PostTaggedPiece, type PrivacyLevel, type TaggedPieceInput } from "@monapp/shared-types";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
-import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput } from "../lib/validation.js";
-import { canViewPost } from "../lib/visibility.js";
+import { DatabaseReadError, INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseDbRows, parseInput } from "../lib/validation.js";
+import { canViewPost, findViewablePost, shownPosts } from "../lib/visibility.js";
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
 import { PHOTO_SIZES, optimizePhoto } from "../lib/photos.js";
 import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.js";
-
-const POST_TYPES: PostType[] = ["lifestyle", "purchase"];
-const PRIVACY_LEVELS: PrivacyLevel[] = ["public", "followers", "private"];
 
 // Une publication ne peut pas devenir une liste sans fin de tags — reste
 // large pour un usage légitime (plusieurs pièces sur une même tenue) sans
@@ -24,26 +21,37 @@ const taggedPieceInputSchema = z.union([
 ]);
 const postOptionalFieldsSchema = z.object({
   vaultItemId: z.string().uuid().optional(),
-  privacy: z.enum(PRIVACY_LEVELS as [PrivacyLevel, ...PrivacyLevel[]]).optional(),
+  privacy: z.enum(PRIVACY_LEVELS).optional(),
 });
 
 const taggedPiecesInputSchema = z.array(taggedPieceInputSchema).max(MAX_TAGGED_PIECES);
 
 const updatePostSchema = z.object({
-  privacy: z.enum(PRIVACY_LEVELS as [PrivacyLevel, ...PrivacyLevel[]]),
+  privacy: z.enum(PRIVACY_LEVELS),
 });
 
-export interface PostRow {
-  id: string;
-  user_id: string;
-  type: PostType;
-  vault_item_id: string | null;
-  caption: string | null;
-  media_url: string | null;
-  media_thumb_url?: string | null;
-  privacy: PrivacyLevel;
-  created_at: string;
+// Ligne de la table `posts` lue avec select("*"), relue sans lui faire confiance.
+const postRowSchema = z.object({
+  id: z.string().uuid(),
+  user_id: z.string().uuid(),
+  type: z.enum(POST_TYPES),
+  vault_item_id: z.string().uuid().nullable(),
+  caption: z.string().nullable(),
+  media_url: z.string().nullable(),
+  media_thumb_url: z.string().nullable().optional(),
+  privacy: z.enum(PRIVACY_LEVELS),
+  created_at: z.string(),
+});
+export type PostRow = z.infer<typeof postRowSchema>;
+export const POST_ROWS = z.array(postRowSchema);
+
+function parsePostRow(data: unknown): PostRow {
+  const parsed = postRowSchema.safeParse(data);
+  if (!parsed.success) throw new DatabaseReadError("Publication illisible");
+  return parsed.data;
 }
+
+const ALREADY_SHARED_ROWS = z.array(z.object({ id: z.string().uuid(), hidden_at: z.string().nullable() }));
 
 interface ProfileRow {
   id: string;
@@ -317,9 +325,7 @@ export default async function postsRoutes(fastify: FastifyInstance) {
         ? `user_id.eq.${userId},and(user_id.in.(${followeeIds.join(",")}),privacy.in.(public,followers))`
         : `user_id.eq.${userId}`;
 
-    let query = fastify.supabaseAdmin
-      .from("posts")
-      .select("*")
+    let query = shownPosts(fastify, "*")
       .or(visibility)
       .order("created_at", { ascending: false })
       .limit(FEED_PAGE_SIZE + 1);
@@ -335,7 +341,7 @@ export default async function postsRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    const rows = (posts as PostRow[]) ?? [];
+    const rows = parseDbRows(POST_ROWS, { data: posts, error: null }, "Fil");
     const hasMore = rows.length > FEED_PAGE_SIZE;
     const pageRows = hasMore ? rows.slice(0, FEED_PAGE_SIZE) : rows;
     const nextCursor = hasMore ? (pageRows.at(-1)?.created_at ?? null) : null;
@@ -352,9 +358,7 @@ export default async function postsRoutes(fastify: FastifyInstance) {
   fastify.get("/api/posts/mine", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const userId = request.user!.id;
 
-    const { data: posts, error } = await fastify.supabaseAdmin
-      .from("posts")
-      .select("*")
+    const { data: posts, error } = await shownPosts(fastify, "*")
       .eq("user_id", userId)
       .eq("type", "lifestyle")
       .order("created_at", { ascending: false });
@@ -364,7 +368,7 @@ export default async function postsRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    const hydrated = await hydratePosts(fastify, (posts as PostRow[]) ?? [], userId);
+    const hydrated = await hydratePosts(fastify, parseDbRows(POST_ROWS, { data: posts, error: null }, "Publications lifestyle"), userId);
     return reply.send(hydrated);
   });
 
@@ -374,7 +378,7 @@ export default async function postsRoutes(fastify: FastifyInstance) {
   // taguées comme les autres actions sensibles à l'abus (voir rateLimits.ts).
   fastify.post(
     "/api/posts",
-    { preHandler: [fastify.requireAuth, fastify.rateLimit("pieceTag")], config: { rateLimitName: "pieceTag" } },
+    { preHandler: [fastify.requireAuth, fastify.requireActiveAccount, fastify.rateLimit("pieceTag")], config: { rateLimitName: "pieceTag" } },
     async (request, reply) => {
       const userId = request.user!.id;
 
@@ -398,10 +402,11 @@ export default async function postsRoutes(fastify: FastifyInstance) {
         throw error;
       }
 
-      const type = fields.type as PostType | undefined;
-      if (!type || !POST_TYPES.includes(type)) {
+      const parsedType = z.enum(POST_TYPES).safeParse(fields.type);
+      if (!parsedType.success) {
         return reply.code(400).send({ error: "invalid_body", message: "Type de publication invalide." });
       }
+      const type = parsedType.data;
 
       let mediaUrl: string;
       let mediaThumbUrl: string | null = null;
@@ -465,14 +470,26 @@ export default async function postsRoutes(fastify: FastifyInstance) {
         // Une pièce ne se partage qu'une fois à la fois (Lot F, décision
         // documentée dans docs/journal-decisions.md) : pour la montrer
         // autrement, on supprime d'abord sa publication.
-        const { data: alreadyShared } = await fastify.supabaseAdmin
-          .from("posts")
-          .select("id")
-          .eq("user_id", userId)
-          .eq("type", "purchase")
-          .eq("vault_item_id", vaultItemId)
-          .limit(1);
-        if (alreadyShared && alreadyShared.length > 0) {
+        // Une publication masquée par la modération compte aussi : la
+        // republier contournerait la décision (lot 5).
+        const alreadyShared = parseDbRows(
+          ALREADY_SHARED_ROWS,
+          await fastify.supabaseAdmin
+            .from("posts")
+            .select("id, hidden_at")
+            .eq("user_id", userId)
+            .eq("type", "purchase")
+            .eq("vault_item_id", vaultItemId)
+            .limit(1),
+          "Publication d'une pièce"
+        );
+        if (alreadyShared[0]?.hidden_at) {
+          return reply.code(409).send({
+            error: "already_shared_hidden",
+            message: "Cette pièce a déjà été partagée, et sa publication a été masquée par la modération.",
+          });
+        }
+        if (alreadyShared.length > 0) {
           return reply.code(409).send({
             error: "already_shared",
             message:
@@ -561,7 +578,7 @@ export default async function postsRoutes(fastify: FastifyInstance) {
         }
       }
 
-      const [hydrated] = await hydratePosts(fastify, [inserted as PostRow], userId);
+      const [hydrated] = await hydratePosts(fastify, [parsePostRow(inserted)], userId);
       return reply.send(hydrated);
     }
   );
@@ -574,11 +591,13 @@ export default async function postsRoutes(fastify: FastifyInstance) {
     if (!params) return;
     const userId = request.user!.id;
 
-    const { data: post } = await fastify.supabaseAdmin.from("posts").select("*").eq("id", params.id).maybeSingle();
-    if (!post || !(await canViewPost(fastify, userId, post as PostRow))) {
+    const { data, error } = await shownPosts(fastify, "*").eq("id", params.id).maybeSingle();
+    if (error) throw new DatabaseReadError("Lecture d'une publication impossible");
+    const post = data === null ? null : parsePostRow(data);
+    if (!post || !(await canViewPost(fastify, userId, post))) {
       return reply.code(404).send({ error: "post_not_found", message: "Publication introuvable." });
     }
-    const [hydrated] = await hydratePosts(fastify, [post as PostRow], userId);
+    const [hydrated] = await hydratePosts(fastify, [post], userId);
     return reply.send(hydrated);
   });
 
@@ -593,17 +612,19 @@ export default async function postsRoutes(fastify: FastifyInstance) {
     if (!body) return;
     const userId = request.user!.id;
 
+    // Une publication masquée par la modération est introuvable, même pour son auteur (lib/visibility.ts).
     const { data: updated } = await fastify.supabaseAdmin
       .from("posts")
       .update({ privacy: body.privacy })
       .eq("id", params.id)
       .eq("user_id", userId)
+      .is("hidden_at", null)
       .select("*")
       .maybeSingle();
     if (!updated) {
       return reply.code(404).send({ error: "post_not_found", message: "Publication introuvable." });
     }
-    const [hydrated] = await hydratePosts(fastify, [updated as PostRow], userId);
+    const [hydrated] = await hydratePosts(fastify, [parsePostRow(updated)], userId);
     return reply.send(hydrated);
   });
 
@@ -642,23 +663,15 @@ export default async function postsRoutes(fastify: FastifyInstance) {
     return reply.code(204).send();
   });
 
-  fastify.post("/api/posts/:id/react", { preHandler: fastify.requireAuth }, async (request, reply) => {
+  fastify.post("/api/posts/:id/react", { preHandler: [fastify.requireAuth, fastify.requireActiveAccount] }, async (request, reply) => {
     const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
     if (!params) return;
     const { id } = params;
     const userId = request.user!.id;
 
-    const { data: post } = await fastify.supabaseAdmin
-      .from("posts")
-      .select("id, user_id, privacy")
-      .eq("id", id)
-      .single();
-
+    // Masquée, bloquée ou hors de sa confidentialité : 404, sans dire pourquoi.
+    const post = await findViewablePost(fastify, userId, id);
     if (!post) {
-      return reply.code(404).send({ error: "post_not_found", message: "Publication introuvable." });
-    }
-
-    if (!(await canViewPost(fastify, userId, post as { user_id: string; privacy: PrivacyLevel }))) {
       return reply.code(404).send({ error: "post_not_found", message: "Publication introuvable." });
     }
 
