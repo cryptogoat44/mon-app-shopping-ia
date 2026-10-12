@@ -272,7 +272,8 @@ describe("partage d'une envie", () => {
       process.env.NODE_ENV = originalNodeEnv;
       await deleteTestUser(app, sender.id);
     }
-  });
+    // 21 envois réels vers spotto-dev : plus long que le délai par défaut de 20 s.
+  }, 90_000);
 
   it("export RGPD : pièces envoyées et reçues, réglage ; retirer l'envie supprime sa publication et sa copie", async () => {
     const exported = (await request(owner, "GET", "/api/me/export")).json();
