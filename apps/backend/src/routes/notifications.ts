@@ -63,17 +63,20 @@ async function fetchActors(fastify: FastifyInstance, rows: NotificationRow[]): P
   );
 }
 
-/** Décisions de la modération qui vous concernent : quoi et pourquoi, jamais qui. */
+/** Décisions de la modération citées par ces notifications (quoi et pourquoi, jamais qui). */
 async function fetchNotices(fastify: FastifyInstance, rows: NotificationRow[]): Promise<Map<string, ModerationNotice>> {
-  const ids = rows.filter((row) => row.type === "moderation").map((row) => row.moderation_action_id).filter((id): id is string => id !== null);
+  const ids = rows.map((row) => row.moderation_action_id).filter((id): id is string => id !== null);
   if (ids.length === 0) return new Map();
   const result = await fastify.supabaseAdmin.from("moderation_actions").select("id, action, target_type, reason, note").in("id", ids);
   const actions = parseDbRows(NOTICE_ROWS, result, "Décisions de modération");
   return new Map(actions.map((a) => [a.id, { action: a.action, targetType: a.target_type, reason: a.reason, note: a.note }]));
 }
 
+/** La personne concernée lit la décision et son motif ; l'auteur d'un
+ * signalement, seulement le type du contenu signalé (« traité »). */
 function toNotification(row: NotificationRow, actors: Map<string, PostAuthor>, notices: Map<string, ModerationNotice>): AppNotification {
   const actor = row.actor_id ? (actors.get(row.actor_id) ?? { id: row.actor_id, username: "", displayName: "", avatarUrl: null }) : null;
+  const notice = row.moderation_action_id ? (notices.get(row.moderation_action_id) ?? null) : null;
   return {
     id: row.id,
     type: row.type,
@@ -81,7 +84,8 @@ function toNotification(row: NotificationRow, actors: Map<string, PostAuthor>, n
     createdAt: row.created_at,
     read: row.read_at !== null,
     postId: row.post_id,
-    moderation: row.type === "moderation" && row.moderation_action_id ? (notices.get(row.moderation_action_id) ?? null) : null,
+    moderation: row.type === "moderation" ? notice : null,
+    reportedType: row.type === "report_handled" ? (notice?.targetType ?? null) : null,
   };
 }
 

@@ -11,6 +11,10 @@ import type {
   CropRect,
   FeedPage,
   MerchantLinkContext,
+  ModerationActionRequest,
+  ModerationActionType,
+  ModerationPage,
+  ModerationStatus,
   Post,
   PreviewIssue,
   PrivacyLevel,
@@ -40,6 +44,7 @@ import { supabase } from "./supabase";
 import { setAnalyticsConsent, track } from "./analytics";
 import { acceptLanguage, t } from "@/i18n";
 import { imageFileFromUri } from "./image-file";
+import { ApiError } from "./api-error";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -47,11 +52,7 @@ if (!apiUrl) {
   throw new Error("EXPO_PUBLIC_API_URL doit être définie (voir apps/mobile/.env.example).");
 }
 
-export class ApiError extends Error {
-  constructor(public status: number, public body: ApiErrorBody) {
-    super(body.message);
-  }
-}
+export { ApiError };
 
 async function authorizedFetch(path: string, init?: RequestInit): Promise<Response> {
   const { data } = await supabase.auth.getSession();
@@ -343,8 +344,12 @@ export async function deleteWishlistItem(id: string): Promise<void> {
   await authorizedFetch(`/api/wishlist/${id}`, { method: "DELETE" });
 }
 
-export async function fetchNotifications(): Promise<AppNotification[]> {
-  const response = await authorizedFetch("/api/notifications");
+/** Notifications, des plus récentes aux plus anciennes : 50 par page ;
+ * `cursor` = date de la dernière reçue, pour la page suivante. */
+export const NOTIFICATIONS_PAGE_SIZE = 50;
+
+export async function fetchNotifications(cursor?: string): Promise<AppNotification[]> {
+  const response = await authorizedFetch(`/api/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
   return response.json();
 }
 
@@ -369,6 +374,24 @@ export async function unblockUser(userId: string): Promise<void> {
 export async function fetchBlockedUsers(): Promise<BlockedUser[]> {
   const response = await authorizedFetch("/api/blocks");
   return response.json();
+}
+
+// Modération (lot 5) : réservée aux administrateurs, revérifiée par le serveur à chaque appel.
+export async function fetchModerationQueue(status: ModerationStatus, cursor?: string | null): Promise<ModerationPage> {
+  const query = `status=${encodeURIComponent(status)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`;
+  const response = await authorizedFetch(`/api/admin/moderation?${query}`);
+  return response.json();
+}
+
+export async function applyModerationDecision(payload: ModerationActionRequest): Promise<void> {
+  await authorizedFetch("/api/admin/moderation/actions", { method: "POST", body: JSON.stringify(payload) });
+  track("moderation_decision", { decision: payload.action, target_type: payload.targetType });
+}
+
+/** Annule un masquage (`hide`) ou une suspension (`suspend`) encore en vigueur. */
+export async function undoModerationDecision(actionId: string, undone: Extract<ModerationActionType, "hide" | "suspend">): Promise<void> {
+  await authorizedFetch(`/api/admin/moderation/actions/${encodeURIComponent(actionId)}/undo`, { method: "POST", body: JSON.stringify({}) });
+  track("moderation_undone", { decision: undone });
 }
 
 export async function reportContent(payload: CreateReportRequest): Promise<void> {

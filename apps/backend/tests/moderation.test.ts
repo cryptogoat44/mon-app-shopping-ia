@@ -137,7 +137,9 @@ describe("modération : file, décisions et annulations (administrateurs seuleme
     for (const user of [reporter, other]) {
       const handledNotices = (await notifications(user)).filter((n) => n.type === "report_handled");
       expect(handledNotices).toHaveLength(1);
-      expect(handledNotices[0]).toMatchObject({ actor: null, moderation: null, postId: null });
+      expect(handledNotices[0]).toMatchObject({ actor: null, moderation: null, postId: null, reportedType: "post" });
+      // L'auteur d'un signalement apprend qu'il est traité, jamais la décision ni sa précision.
+      expect(JSON.stringify(handledNotices)).not.toMatch(/hide|harassment|Propos insultants/);
     }
     const authorView = (await request(author, "GET", "/api/notifications")).body;
     for (const secret of [admin.id, admin.username]) expect(authorView).not.toContain(secret);

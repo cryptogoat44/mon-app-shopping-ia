@@ -1,21 +1,13 @@
 import { useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
-import type { ReportReason } from "@monapp/shared-types";
+import { REPORT_REASONS, type ReportReason } from "@monapp/shared-types";
 import { ApiError, blockUser, reportContent } from "@/lib/api";
 import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { useToast } from "@/lib/toast-context";
+import { reportReasonLabel } from "@/lib/moderation-labels";
 import { themedStyles } from "@/theme/themed-styles";
-
-const REASONS: ReportReason[] = ["spam", "inappropriate", "harassment", "other"];
-
-const REASON_LABELS: Record<ReportReason, string> = {
-  spam: t.moderation.reasonSpam,
-  inappropriate: t.moderation.reasonInappropriate,
-  harassment: t.moderation.reasonHarassment,
-  other: t.moderation.reasonOther,
-};
 
 type Step = "root" | "report" | "confirmBlock";
 
@@ -89,15 +81,17 @@ export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, o
             </Pressable>
           </>
         ) : step === "report" ? (
-          REASONS.map((reason, index) => (
+          // Libellés lus à l'affichage : avant, calculés au chargement du
+          // module, ils restaient en français après le passage à l'anglais.
+          REPORT_REASONS.map((reason, index) => (
             <Pressable
               key={reason}
-              style={[styles.item, index < REASONS.length - 1 ? styles.itemBorder : null]}
+              style={[styles.item, index < REPORT_REASONS.length - 1 ? styles.itemBorder : null]}
               onPress={() => handleReport(reason)}
               accessibilityRole="button"
-              accessibilityLabel={REASON_LABELS[reason]}
+              accessibilityLabel={reportReasonLabel(reason)}
             >
-              <Text style={styles.itemLabel}>{REASON_LABELS[reason]}</Text>
+              <Text style={styles.itemLabel}>{reportReasonLabel(reason)}</Text>
             </Pressable>
           ))
         ) : (

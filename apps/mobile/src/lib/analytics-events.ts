@@ -4,14 +4,14 @@
 // peut passer — donc jamais d'e-mail, de nom d'utilisateur, de commentaire,
 // de légende ni d'adresse d'image. Toute propriété absente du catalogue est
 // supprimée avant l'envoi. Imports relatifs : fichier testé par vitest.
-import { MERCHANT_LINK_CONTEXTS } from "@monapp/shared-types";
+import { MERCHANT_LINK_CONTEXTS, MODERATION_DECISIONS, PRIVACY_LEVELS, REPORT_TARGET_TYPES } from "@monapp/shared-types";
 
 type Rule = { kind: "enum"; values: readonly string[] } | { kind: "count" } | { kind: "bool" };
 
 const oneOf = (values: readonly string[]): Rule => ({ kind: "enum", values });
 const count: Rule = { kind: "count" };
 const bool: Rule = { kind: "bool" };
-const VISIBILITY = oneOf(["public", "followers", "private"]);
+const VISIBILITY = oneOf(PRIVACY_LEVELS);
 // Lot 4 : vidéo importée dans le Spotter — photothèque (app iPhone) ou fichier (site) ;
 // lot 4 ter : dernière vidéo de la galerie, proposée sur l'accueil (app iPhone).
 const VIDEO_SOURCE = oneOf(["library", "file", "latest"]);
@@ -33,7 +33,10 @@ export const ANALYTICS_EVENTS = {
   comment_posted: {},
   like_added: {},
   follow_added: { context: oneOf(["search", "profile"]) },
-  report_submitted: { target_type: oneOf(["user", "post", "comment"]) },
+  report_submitted: { target_type: oneOf(REPORT_TARGET_TYPES) },
+  // Lot 5 : décisions de la modération (administrateurs) — la décision et le type de contenu, jamais lequel.
+  moderation_decision: { decision: oneOf(MODERATION_DECISIONS), target_type: oneOf(REPORT_TARGET_TYPES) },
+  moderation_undone: { decision: oneOf(["hide", "suspend"]) },
   photo_changed: { target: oneOf(["vault", "avatar"]) },
   // Lot 3 : préférences d'affichage.
   language_changed: { locale: oneOf(["fr", "en"]), context: oneOf(["welcome", "settings"]) },

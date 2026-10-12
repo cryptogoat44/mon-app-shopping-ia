@@ -569,6 +569,9 @@ export interface AppNotification {
   postId: string | null;
   /** « moderation » : la décision qui vous concerne et son motif ; sinon null. */
   moderation: ModerationNotice | null;
+  /** « report_handled » : le type du contenu que vous aviez signalé (jamais la
+   * décision prise) ; sinon null. */
+  reportedType: ReportTargetType | null;
 }
 
 export type ReportTargetType = "user" | "post" | "comment";
