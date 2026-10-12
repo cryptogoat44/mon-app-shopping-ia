@@ -20,6 +20,17 @@ export interface Profile {
    * condition d'affichage de l'entrée « Modération » des Réglages. Le serveur
    * revérifie le rôle à chaque route d'administration. */
   isAdmin: boolean;
+  /** Qui peut vous envoyer des pièces (lot 5, section 5.C). */
+  pieceSendsFrom: PieceSendsFrom;
+}
+
+/** Réglage « Qui peut m'envoyer des pièces » : les comptes que je suis (par
+ * défaut), tout le monde, ou personne. */
+export type PieceSendsFrom = "following" | "everyone" | "nobody";
+export const PIECE_SENDS_FROM = ["following", "everyone", "nobody"] as const satisfies readonly PieceSendsFrom[];
+
+export interface UpdatePieceSendsFromRequest {
+  pieceSendsFrom: PieceSendsFrom;
 }
 
 /** True once the user has picked a username — the app shows the
@@ -241,7 +252,7 @@ export interface ProductMatchClickResponse {
  * hachée, retirée de `affiliate_clicks`). Source unique : le mobile et le
  * backend importent `MERCHANT_LINK_CONTEXTS` plutôt que de dupliquer la
  * liste, pour qu'une faute de frappe ou un contexte oublié soit impossible. */
-export const MERCHANT_LINK_CONTEXTS = ["result", "similar", "vault", "wishlist", "post", "price_alert"] as const;
+export const MERCHANT_LINK_CONTEXTS = ["result", "similar", "vault", "wishlist", "post", "price_alert", "received"] as const;
 export type MerchantLinkContext = (typeof MERCHANT_LINK_CONTEXTS)[number];
 
 export interface TrackProductMatchClickRequest {
@@ -329,6 +340,49 @@ export interface WishlistPage {
   nextCursor: string | null;
 }
 
+/** Détail d'une envie (GET /api/wishlist/:id) : ajoute sa publication
+ * « envie » si elle a été republiée (une seule à la fois, lot 5). */
+export interface WishlistItemDetail extends WishlistItem {
+  sharedPost: { id: string; privacy: PrivacyLevel; createdAt: string } | null;
+}
+
+// ---- Partage d'une envie (lot 5, section 5.C) ----
+// Toujours un geste volontaire : les envies restent privées par défaut.
+
+/** Republier une envie sur son profil (publication « envie »). */
+export interface RepublishWishRequest {
+  privacy: PrivacyLevel;
+}
+
+/** Envoyer une envie à une personne sur Spotto. */
+export interface SendPieceRequest {
+  recipientId: string;
+}
+
+/** Une pièce reçue (onglet « Reçues ») : un instantané de l'envie au moment
+ * de l'envoi, avec la copie de son image faite par notre serveur. */
+export interface ReceivedPiece {
+  id: string;
+  sender: PostAuthor;
+  title: string;
+  imageUrl: string;
+  imageThumbUrl: string;
+  merchantName: string | null;
+  /** Lien à ouvrir : affilié s'il existe, sinon le lien marchand ; null sans marchand. */
+  merchantUrl: string | null;
+  /** true quand `merchantUrl` est un lien affilié (mention obligatoire). */
+  isAffiliate: boolean;
+  productMatchId: string | null;
+  priceMin: number | null;
+  currency: string | null;
+  createdAt: string;
+}
+
+export interface ReceivedPiecesPage {
+  pieces: ReceivedPiece[];
+  nextCursor: string | null;
+}
+
 export interface PublicProfile {
   id: string;
   username: string;
@@ -354,8 +408,10 @@ export interface UserProfile {
   isMe: boolean;
 }
 
-export type PostType = "lifestyle" | "purchase";
-export const POST_TYPES = ["lifestyle", "purchase"] as const satisfies readonly PostType[];
+/** « wish » (lot 5) : une envie republiée sur son profil — jamais un achat,
+ * jamais de badge d'achat vérifié. */
+export type PostType = "lifestyle" | "purchase" | "wish";
+export const POST_TYPES = ["lifestyle", "purchase", "wish"] as const satisfies readonly PostType[];
 
 export interface PostAuthor {
   id: string;
@@ -368,6 +424,19 @@ export interface PostVaultItem {
   id: string;
   title: string;
   verified: boolean;
+}
+
+/** Publication « envie » : la pièce, son marchand et son prix. */
+export interface PostWish {
+  title: string;
+  merchantName: string | null;
+  /** Lien à ouvrir : affilié s'il existe, sinon le lien marchand ; null sans marchand. */
+  merchantUrl: string | null;
+  /** true quand `merchantUrl` est un lien affilié (mention obligatoire). */
+  isAffiliate: boolean;
+  productMatchId: string | null;
+  priceMin: number | null;
+  currency: string | null;
 }
 
 /** Une pièce taguée sur une publication (étape 1.E) — issue soit d'un objet
@@ -402,6 +471,8 @@ export interface Post {
   createdAt: string;
   author: PostAuthor;
   vaultItem: PostVaultItem | null;
+  /** Publication « envie » (lot 5) ; null pour les autres types. */
+  wish: PostWish | null;
   taggedPieces: PostTaggedPiece[];
   reactionCount: number;
   viewerHasReacted: boolean;
@@ -555,8 +626,9 @@ export interface RecordConsentsRequest {
   consents: ConsentInput[];
 }
 
-export type NotificationType = "follow" | "like" | "comment" | "moderation" | "report_handled";
-export const NOTIFICATION_TYPES = ["follow", "like", "comment", "moderation", "report_handled"] as const satisfies readonly NotificationType[];
+/** « piece_received » (lot 5) : une personne vous a envoyé une pièce (in-app, jamais push). */
+export type NotificationType = "follow" | "like" | "comment" | "moderation" | "report_handled" | "piece_received";
+export const NOTIFICATION_TYPES = ["follow", "like", "comment", "moderation", "report_handled", "piece_received"] as const satisfies readonly NotificationType[];
 
 export interface AppNotification {
   id: string;
@@ -574,8 +646,9 @@ export interface AppNotification {
   reportedType: ReportTargetType | null;
 }
 
-export type ReportTargetType = "user" | "post" | "comment";
-export const REPORT_TARGET_TYPES = ["user", "post", "comment"] as const satisfies readonly ReportTargetType[];
+/** « piece » (lot 5) : une pièce reçue d'une autre personne. */
+export type ReportTargetType = "user" | "post" | "comment" | "piece";
+export const REPORT_TARGET_TYPES = ["user", "post", "comment", "piece"] as const satisfies readonly ReportTargetType[];
 export type ReportReason = "spam" | "inappropriate" | "harassment" | "other";
 export const REPORT_REASONS = ["spam", "inappropriate", "harassment", "other"] as const satisfies readonly ReportReason[];
 
@@ -609,6 +682,7 @@ export type ModerationPreview =
   | { kind: "post"; author: ModerationAuthor; caption: string | null; imageUrl: string | null; privacy: PrivacyLevel; createdAt: string; hidden: boolean }
   | { kind: "comment"; author: ModerationAuthor; body: string; postId: string; createdAt: string; hidden: boolean }
   | { kind: "user"; author: ModerationAuthor; bio: string | null }
+  | { kind: "piece"; author: ModerationAuthor; title: string; imageUrl: string; createdAt: string; hidden: boolean }
   | { kind: "missing" };
 
 export interface ModerationLogEntry {

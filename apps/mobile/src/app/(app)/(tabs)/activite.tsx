@@ -20,6 +20,7 @@ import { themedStyles } from "@/theme/themed-styles";
 function actionText(notification: AppNotification): string {
   if (notification.type === "follow") return t.notifications.follow;
   if (notification.type === "comment") return t.notifications.comment;
+  if (notification.type === "piece_received") return t.notifications.pieceReceived;
   return t.notifications.like;
 }
 
@@ -150,10 +151,13 @@ export default function NotificationsScreen() {
     const actor = notification.actor;
     if (lines || !actor) return <SystemNotificationRow key={notification.id} notification={notification} lines={lines ?? [t.notifications.moderationOther]} />;
     // « J'aime » et commentaire : la publication ; abonnement : le profil.
+    // Pièce reçue (lot 5) : la liste des pièces reçues.
     const open = () =>
-      notification.postId
-        ? router.push({ pathname: "/publication", params: { id: notification.postId } })
-        : router.push({ pathname: "/profil", params: { id: actor.id } });
+      notification.type === "piece_received"
+        ? router.push("/pieces-recues")
+        : notification.postId
+          ? router.push({ pathname: "/publication", params: { id: notification.postId } })
+          : router.push({ pathname: "/profil", params: { id: actor.id } });
     return <NotificationRow key={notification.id} notification={notification} actor={actor} onPress={open} />;
   }
 

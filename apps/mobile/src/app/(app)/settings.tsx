@@ -14,6 +14,7 @@ import { hasAnalyticsConsent } from "@/lib/policy-notice";
 import { ErrorMessage } from "@/components/error-message";
 import { LatestVideoSetting } from "@/components/latest-video-setting";
 import { VideoAiSetting } from "@/components/video-ai-setting";
+import { PieceSendsSetting } from "@/components/piece-sends-setting";
 import { consentFor, pendingConsents } from "@/lib/legal";
 import { formatLongDate } from "@/lib/format";
 import { themedStyles } from "@/theme/themed-styles";
@@ -165,6 +166,8 @@ export default function SettingsScreen() {
           </Pressable>
           <Text style={styles.sectionBody}>{consentLine("privacy_policy")}</Text>
         </View>
+
+        <PieceSendsSetting />
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>{t.settings.dataSection}</Text>

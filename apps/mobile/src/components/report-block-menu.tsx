@@ -18,12 +18,15 @@ interface ReportBlockMenuProps {
   postId?: string;
   /** Signaler un commentaire précis (Lot F) plutôt que la publication. */
   commentId?: string;
+  /** Signaler une pièce reçue (lot 5) ; `userId` est alors la personne qui l'a envoyée. */
+  pieceId?: string;
   onBlocked?: (userId: string) => void;
 }
 
-export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, onBlocked }: ReportBlockMenuProps) {
+export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, pieceId, onBlocked }: ReportBlockMenuProps) {
   const [step, setStep] = useState<Step>("root");
   const { showToast } = useToast();
+  const reportLabel = pieceId ? t.received.report : postId ? t.moderation.reportPost : t.moderation.reportUser;
 
   function close() {
     onClose();
@@ -36,7 +39,9 @@ export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, o
       await reportContent(
         commentId
           ? { targetType: "comment", targetId: commentId, reason }
-          : { targetType: postId ? "post" : "user", targetId: postId ?? userId, reason }
+          : pieceId
+            ? { targetType: "piece", targetId: pieceId, reason }
+            : { targetType: postId ? "post" : "user", targetId: postId ?? userId, reason }
       );
       showToast(t.moderation.reportSuccess);
     } catch (e) {
@@ -67,9 +72,9 @@ export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, o
               style={[styles.item, styles.itemBorder]}
               onPress={() => setStep("report")}
               accessibilityRole="button"
-              accessibilityLabel={postId ? t.moderation.reportPost : t.moderation.reportUser}
+              accessibilityLabel={reportLabel}
             >
-              <Text style={styles.itemLabel}>{postId ? t.moderation.reportPost : t.moderation.reportUser}</Text>
+              <Text style={styles.itemLabel}>{reportLabel}</Text>
             </Pressable>
             <Pressable
               style={styles.item}

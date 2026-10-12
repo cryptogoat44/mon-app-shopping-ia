@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { PHOTO_SIZES, optimizePhoto } from "../lib/photos.js";
 import { z } from "zod";
-import { APP_LOCALES, PRIVACY_LEVELS, type Profile } from "@monapp/shared-types";
+import { APP_LOCALES, PIECE_SENDS_FROM, PRIVACY_LEVELS, type Profile } from "@monapp/shared-types";
 import { parseInput } from "../lib/validation.js";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
@@ -20,6 +20,7 @@ const updateMeSchema = z.object({
 });
 
 const updateLocaleSchema = z.object({ locale: z.enum(APP_LOCALES) });
+const updatePieceSendsFromSchema = z.object({ pieceSendsFrom: z.enum(PIECE_SENDS_FROM) });
 
 // Ligne brute de la table `profiles` (colonnes en snake_case, cf. schema.sql), relue sans lui faire confiance.
 const profileRowSchema = z.object({
@@ -30,6 +31,8 @@ const profileRowSchema = z.object({
   bio: z.string().nullable(),
   locale: z.string(),
   default_privacy: z.enum(PRIVACY_LEVELS),
+  // Lot 5 (migration 0024) ; valeur par défaut tant que la colonne n'existe pas.
+  piece_sends_from: z.enum(PIECE_SENDS_FROM).default("following"),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -57,6 +60,7 @@ function toProfile(row: unknown, counts: ProfileCounts, admin: boolean): Profile
     createdAt: profile.created_at,
     updatedAt: profile.updated_at,
     isAdmin: admin,
+    pieceSendsFrom: profile.piece_sends_from,
   };
 }
 
@@ -204,6 +208,23 @@ export default async function meRoutes(fastify: FastifyInstance) {
       return reply.code(500).send(PROFILE_UNREADABLE);
     }
     return reply.send(profile);
+  });
+
+  // « Qui peut m'envoyer des pièces » (lot 5, 5.C) : les comptes que je suis
+  // (par défaut), tout le monde, ou personne. Un réglage de confidentialité :
+  // modifiable même par un compte suspendu.
+  fastify.put("/api/me/piece-sends-from", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    const body = parseInput(updatePieceSendsFromSchema, request.body, reply, { error: "invalid_body", message: "Réglage invalide." });
+    if (!body) return;
+    const { error } = await fastify.supabaseAdmin
+      .from("profiles")
+      .update({ piece_sends_from: body.pieceSendsFrom, updated_at: new Date().toISOString() })
+      .eq("id", request.user!.id);
+    if (error) {
+      request.log.error({ error }, "Échec de mise à jour du réglage des pièces reçues");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+    return reply.code(204).send();
   });
 
   // Langue de l'interface (lot 3) : choisie sur l'écran Bienvenue ou dans les

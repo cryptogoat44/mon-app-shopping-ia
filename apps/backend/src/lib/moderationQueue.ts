@@ -56,6 +56,9 @@ const POST_ROWS = z.array(
 const COMMENT_ROWS = z.array(
   z.object({ id: ID, user_id: ID, post_id: ID, body: z.string(), created_at: TIMESTAMP, hidden_at: TIMESTAMP.nullable() })
 );
+const PIECE_ROWS = z.array(
+  z.object({ id: ID, sender_id: ID, title: z.string(), image_thumb_url: z.string(), created_at: TIMESTAMP, hidden_at: TIMESTAMP.nullable() })
+);
 const PROFILE_ROWS = z.array(
   z.object({ id: ID, username: z.string().nullable(), display_name: z.string(), avatar_url: z.string().nullable(), bio: z.string().nullable() })
 );
@@ -78,6 +81,8 @@ type ActionRow = z.infer<typeof ACTION_ROWS>[number];
 interface Loaded {
   posts: Map<string, z.infer<typeof POST_ROWS>[number]>;
   comments: Map<string, z.infer<typeof COMMENT_ROWS>[number]>;
+  /** Pièces envoyées signalées (lot 5, 5.C). */
+  pieces: Map<string, z.infer<typeof PIECE_ROWS>[number]>;
   profiles: Map<string, z.infer<typeof PROFILE_ROWS>[number]>;
   /** Compte suspendu → décision de suspension en vigueur. */
   suspensions: Map<string, string>;
@@ -92,16 +97,18 @@ function idsOf(rows: QueueRow[], type: QueueRow["target_type"]): string[] {
   return rows.filter((row) => row.target_type === type).map((row) => row.target_id);
 }
 
-/** Publications et commentaires signalés, et les décisions déjà prises sur ces contenus. */
+/** Publications, commentaires et pièces envoyées signalés, et les décisions déjà prises sur ces contenus. */
 async function loadTargets(fastify: FastifyInstance, rows: QueueRow[]) {
   const db = fastify.supabaseAdmin;
   const postIds = idsOf(rows, "post");
   const commentIds = idsOf(rows, "comment");
-  const [posts, comments, actions] = await Promise.all([
+  const pieceIds = idsOf(rows, "piece");
+  const [posts, comments, pieces, actions] = await Promise.all([
     postIds.length > 0
       ? db.from("posts").select("id, user_id, caption, media_url, media_thumb_url, privacy, created_at, hidden_at").in("id", postIds)
       : NO_ROWS,
     commentIds.length > 0 ? db.from("comments").select("id, user_id, post_id, body, created_at, hidden_at").in("id", commentIds) : NO_ROWS,
+    pieceIds.length > 0 ? db.from("piece_sends").select("id, sender_id, title, image_thumb_url, created_at, hidden_at").in("id", pieceIds) : NO_ROWS,
     db
       .from("moderation_actions")
       .select("id, admin_id, action, target_type, target_id, reason, note, undoes_action_id, created_at")
@@ -112,6 +119,7 @@ async function loadTargets(fastify: FastifyInstance, rows: QueueRow[]) {
   return {
     posts: parseDbRows(POST_ROWS, posts, "Publications signalées"),
     comments: parseDbRows(COMMENT_ROWS, comments, "Commentaires signalés"),
+    pieces: parseDbRows(PIECE_ROWS, pieces, "Pièces envoyées signalées"),
     actions: parseDbRows(ACTION_ROWS, actions, "Journal de modération"),
   };
 }
@@ -135,11 +143,13 @@ async function loadAll(fastify: FastifyInstance, rows: QueueRow[]): Promise<Load
   const userIds = new Set<string>(idsOf(rows, "user"));
   for (const post of targets.posts) userIds.add(post.user_id);
   for (const comment of targets.comments) userIds.add(comment.user_id);
+  for (const piece of targets.pieces) userIds.add(piece.sender_id);
   for (const action of targets.actions) if (action.admin_id) userIds.add(action.admin_id);
   const people = await loadPeople(fastify, [...userIds]);
   return {
     posts: new Map(targets.posts.map((post) => [post.id, post])),
     comments: new Map(targets.comments.map((comment) => [comment.id, comment])),
+    pieces: new Map(targets.pieces.map((piece) => [piece.id, piece])),
     profiles: new Map(people.profiles.map((profile) => [profile.id, profile])),
     suspensions: new Map(people.suspensions.map((s) => [s.user_id, s.moderation_action_id])),
     actions: targets.actions,
@@ -173,6 +183,12 @@ function previewOf(row: QueueRow, data: Loaded): ModerationPreview {
     if (!comment || !author) return MISSING;
     return { kind: "comment", author, body: comment.body, postId: comment.post_id, createdAt: comment.created_at, hidden: comment.hidden_at !== null };
   }
+  if (row.target_type === "piece") {
+    const piece = data.pieces.get(row.target_id);
+    const author = piece ? authorOf(piece.sender_id, data) : null;
+    if (!piece || !author) return MISSING;
+    return { kind: "piece", author, title: piece.title, imageUrl: piece.image_thumb_url, createdAt: piece.created_at, hidden: piece.hidden_at !== null };
+  }
   const author = authorOf(row.target_id, data);
   return author ? { kind: "user", author, bio: data.profiles.get(row.target_id)?.bio ?? null } : MISSING;
 }
@@ -197,7 +213,7 @@ function toLogEntry(action: ActionRow, data: Loaded): ModerationLogEntry {
 function toItem(row: QueueRow, data: Loaded): ModerationItem {
   const history = data.actions.filter((action) => action.target_type === row.target_type && action.target_id === row.target_id);
   const preview = previewOf(row, data);
-  const hidden = (preview.kind === "post" || preview.kind === "comment") && preview.hidden;
+  const hidden = (preview.kind === "post" || preview.kind === "comment" || preview.kind === "piece") && preview.hidden;
   return {
     targetType: row.target_type,
     targetId: row.target_id,

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { POST_TYPES, PRIVACY_LEVELS, type Post, type PostTaggedPiece, type PrivacyLevel, type TaggedPieceInput } from "@monapp/shared-types";
+import { POST_TYPES, PRIVACY_LEVELS, type Post, type PostTaggedPiece, type PostWish, type PrivacyLevel, type TaggedPieceInput } from "@monapp/shared-types";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { DatabaseReadError, INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseDbRows, parseInput } from "../lib/validation.js";
@@ -26,6 +26,10 @@ const postOptionalFieldsSchema = z.object({
 
 const taggedPiecesInputSchema = z.array(taggedPieceInputSchema).max(MAX_TAGGED_PIECES);
 
+// Types créés par POST /api/posts. Une publication « envie » (lot 5) ne se
+// crée qu'en republiant une envie (routes/pieces.ts), avec la copie de son image.
+const CREATABLE_POST_TYPES = ["lifestyle", "purchase"] as const;
+
 const updatePostSchema = z.object({
   privacy: z.enum(PRIVACY_LEVELS),
 });
@@ -36,6 +40,7 @@ const postRowSchema = z.object({
   user_id: z.string().uuid(),
   type: z.enum(POST_TYPES),
   vault_item_id: z.string().uuid().nullable(),
+  wishlist_item_id: z.string().uuid().nullable().optional(),
   caption: z.string().nullable(),
   media_url: z.string().nullable(),
   media_thumb_url: z.string().nullable().optional(),
@@ -66,6 +71,54 @@ interface VaultItemRow {
   verified: boolean;
   image_url: string;
   product_match_id: string | null;
+}
+
+const WISH_ROWS = z.array(
+  z.object({
+    id: z.string().uuid(),
+    title: z.string(),
+    merchant_name: z.string().nullable(),
+    merchant_url: z.string().nullable(),
+    product_match_id: z.string().uuid().nullable(),
+    price_min: z.union([z.string(), z.number()]).nullable(),
+    currency: z.string().nullable(),
+  })
+);
+
+/** Publications « envie » (lot 5) : la pièce, son marchand et son prix, lus
+ * sur l'envie d'origine (la publication est supprimée avec elle). */
+async function fetchPostWishes(fastify: FastifyInstance, rows: PostRow[]): Promise<Map<string, PostWish>> {
+  const wishIds = [...new Set(rows.map((row) => row.wishlist_item_id).filter((id): id is string => !!id))];
+  if (wishIds.length === 0) return new Map();
+  const wishes = parseDbRows(
+    WISH_ROWS,
+    await fastify.supabaseAdmin
+      .from("wishlist_items")
+      .select("id, title, merchant_name, merchant_url, product_match_id, price_min, currency")
+      .in("id", wishIds),
+    "Envies republiées"
+  );
+  const affiliateUrls = await fetchAffiliateUrls(
+    fastify,
+    wishes.map((wish) => wish.product_match_id).filter((id): id is string => id !== null)
+  );
+  return new Map(
+    wishes.map((wish) => {
+      const affiliateUrl = wish.product_match_id ? (affiliateUrls.get(wish.product_match_id) ?? null) : null;
+      return [
+        wish.id,
+        {
+          title: wish.title,
+          merchantName: wish.merchant_name,
+          merchantUrl: affiliateUrl ?? wish.merchant_url,
+          isAffiliate: affiliateUrl !== null && affiliateUrl !== wish.merchant_url,
+          productMatchId: wish.product_match_id,
+          priceMin: wish.price_min === null ? null : Number(wish.price_min),
+          currency: wish.currency,
+        },
+      ];
+    })
+  );
 }
 
 interface TaggedVaultItemRow {
@@ -261,7 +314,7 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
   // l'image du résultat d'origine. Avant : la miniature de Google, floue.
   const purchaseVaultItems = [...vaultItemById.values()];
   const hdByVaultItem = new Map<string, string | null>();
-  const hdUrls = await fetchHdImageUrls(fastify, purchaseVaultItems);
+  const [hdUrls, wishByItem] = await Promise.all([fetchHdImageUrls(fastify, purchaseVaultItems), fetchPostWishes(fastify, rows)]);
   purchaseVaultItems.forEach((item, index) => hdByVaultItem.set(item.id, hdUrls[index] ?? null));
 
   return rows.map((row) => {
@@ -285,6 +338,7 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
         avatarUrl: author?.avatar_url ?? null,
       },
       vaultItem: vaultItem ? { id: vaultItem.id, title: vaultItem.title, verified: vaultItem.verified } : null,
+      wish: row.type === "wish" && row.wishlist_item_id ? (wishByItem.get(row.wishlist_item_id) ?? null) : null,
       taggedPieces: taggedPiecesByPost.get(row.id) ?? [],
       reactionCount: reactionCountByPost.get(row.id) ?? 0,
       viewerHasReacted: viewerReactedPosts.has(row.id),
@@ -402,7 +456,7 @@ export default async function postsRoutes(fastify: FastifyInstance) {
         throw error;
       }
 
-      const parsedType = z.enum(POST_TYPES).safeParse(fields.type);
+      const parsedType = z.enum(CREATABLE_POST_TYPES).safeParse(fields.type);
       if (!parsedType.success) {
         return reply.code(400).send({ error: "invalid_body", message: "Type de publication invalide." });
       }

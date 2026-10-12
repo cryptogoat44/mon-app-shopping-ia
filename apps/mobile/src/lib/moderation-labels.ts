@@ -33,6 +33,10 @@ export function moderationActionLabel(action: ModerationActionType): string {
 
 function noticeSentence({ action, targetType }: ModerationNotice): string {
   const comment = targetType === "comment";
+  // Lot 5 : une pièce envoyée à une personne.
+  if (targetType === "piece" && (action === "hide" || action === "restore")) {
+    return action === "hide" ? t.notifications.moderationHiddenPiece : t.notifications.moderationRestoredPiece;
+  }
   switch (action) {
     case "hide":
       return comment ? t.notifications.moderationHiddenComment : t.notifications.moderationHiddenPost;

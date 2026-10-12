@@ -78,6 +78,20 @@ function ItemPreview({ preview }: { preview: ModerationPreview }) {
             <Text style={styles.meta}>{t.vaultLabels.privacy[preview.privacy]}</Text>
           </View>
         </View>
+      ) : preview.kind === "piece" ? (
+        <View style={styles.postRow}>
+          <Image
+            source={{ uri: preview.imageUrl }}
+            style={styles.postImage}
+            contentFit="cover"
+            accessible
+            accessibilityLabel={preview.title}
+          />
+          <View style={styles.postText}>
+            <Text style={styles.body}>{preview.title}</Text>
+            <Text style={styles.meta}>{t.moderationQueue.target.piece}</Text>
+          </View>
+        </View>
       ) : preview.kind === "comment" ? (
         <Text style={styles.body}>{t.common.quoted(preview.body)}</Text>
       ) : preview.bio ? (
@@ -166,7 +180,10 @@ function ItemDecisions({ item, status, onChanged }: { item: ModerationItem; stat
   const [panel, setPanel] = useState<DecisionKind | null>(null);
   const { busy, error, decide, undo } = useDecisions(item, onChanged);
   const { preview, activeHideActionId, activeSuspendActionId } = item;
-  const content = preview.kind === "post" || preview.kind === "comment" ? preview : null;
+  const content = preview.kind === "post" || preview.kind === "comment" || preview.kind === "piece" ? preview : null;
+  const hideLabel = content?.kind === "post" ? t.moderationQueue.hidePost : content?.kind === "piece" ? t.moderationQueue.hidePiece : t.moderationQueue.hideComment;
+  const restoreLabel =
+    content?.kind === "post" ? t.moderationQueue.restorePost : content?.kind === "piece" ? t.moderationQueue.restorePiece : t.moderationQueue.restoreComment;
   const errorView = error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null;
 
   if (panel) {
@@ -187,14 +204,14 @@ function ItemDecisions({ item, status, onChanged }: { item: ModerationItem; stat
     <View style={styles.actions}>
       {status === "open" ? <ActionButton label={t.moderationQueue.dismiss} onPress={() => void decide("dismiss")} disabled={busy} /> : null}
       {content && !content.hidden ? (
-        <ActionButton label={content.kind === "post" ? t.moderationQueue.hidePost : t.moderationQueue.hideComment} onPress={() => setPanel("hide")} disabled={busy} />
+        <ActionButton label={hideLabel} onPress={() => setPanel("hide")} disabled={busy} />
       ) : null}
       {preview.kind !== "missing" && !preview.author.suspended ? (
         <ActionButton label={t.moderationQueue.suspend} onPress={() => setPanel("suspend")} disabled={busy} danger />
       ) : null}
       {activeHideActionId && content ? (
         <ActionButton
-          label={content.kind === "post" ? t.moderationQueue.restorePost : t.moderationQueue.restoreComment}
+          label={restoreLabel}
           onPress={() => void undo(activeHideActionId, "hide")}
           disabled={busy}
         />

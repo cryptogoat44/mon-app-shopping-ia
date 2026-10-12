@@ -67,6 +67,31 @@ describe("messages de la modération", () => {
   });
 });
 
+describe("pièces envoyées (lot 5, 5.C)", () => {
+  it("l'expéditeur apprend le masquage et le rétablissement de SA pièce, avec le motif", () => {
+    expect(moderationNoticeLines({ action: "hide", targetType: "piece", reason: "inappropriate", note: null })).toEqual([
+      "Une pièce que vous avez envoyée a été masquée par la modération.",
+      "Motif : Contenu inapproprié",
+    ]);
+    expect(moderationNoticeLines({ action: "restore", targetType: "piece", reason: null, note: null })).toEqual([
+      "Une pièce que vous avez envoyée a été rétablie.",
+    ]);
+    setActiveLocale("en");
+    expect(moderationNoticeLines({ action: "hide", targetType: "piece", reason: null, note: null })[0]).toBe("A piece you sent was hidden by moderation.");
+  });
+
+  it("la personne qui a signalé une pièce apprend seulement qu'elle est traitée", () => {
+    expect(systemNotificationLines(notification({ type: "report_handled", reportedType: "piece" }))).toEqual([
+      "Votre signalement d'une pièce reçue a été traité. Merci.",
+    ]);
+  });
+
+  it("« vous a envoyé une pièce » a un auteur : ce n'est pas une notification système", () => {
+    const actor = { id: "u2", username: "louise", displayName: "Louise", avatarUrl: null };
+    expect(systemNotificationLines(notification({ type: "piece_received", actor }))).toBeNull();
+  });
+});
+
 describe("libellés de l'administrateur", () => {
   it("les motifs suivent la langue active (défaut du menu de signalement, resté en français)", () => {
     expect(reportReasonLabel("harassment")).toBe("Harcèlement");

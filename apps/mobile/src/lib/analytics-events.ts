@@ -4,7 +4,7 @@
 // peut passer — donc jamais d'e-mail, de nom d'utilisateur, de commentaire,
 // de légende ni d'adresse d'image. Toute propriété absente du catalogue est
 // supprimée avant l'envoi. Imports relatifs : fichier testé par vitest.
-import { MERCHANT_LINK_CONTEXTS, MODERATION_DECISIONS, PRIVACY_LEVELS, REPORT_TARGET_TYPES } from "@monapp/shared-types";
+import { MERCHANT_LINK_CONTEXTS, MODERATION_DECISIONS, PIECE_SENDS_FROM, PRIVACY_LEVELS, REPORT_TARGET_TYPES } from "@monapp/shared-types";
 
 type Rule = { kind: "enum"; values: readonly string[] } | { kind: "count" } | { kind: "bool" };
 
@@ -37,6 +37,12 @@ export const ANALYTICS_EVENTS = {
   // Lot 5 : décisions de la modération (administrateurs) — la décision et le type de contenu, jamais lequel.
   moderation_decision: { decision: oneOf(MODERATION_DECISIONS), target_type: oneOf(REPORT_TARGET_TYPES) },
   moderation_undone: { decision: oneOf(["hide", "suspend"]) },
+  // Lot 5 : partage d'une envie — le canal et des choix, jamais la pièce ni la personne.
+  wish_republished: { visibility: VISIBILITY },
+  piece_sent: {},
+  wish_shared_external: { method: oneOf(["native", "copy"]), affiliate: bool },
+  received_piece_removed: {},
+  piece_sends_setting_changed: { value: oneOf(PIECE_SENDS_FROM) },
   photo_changed: { target: oneOf(["vault", "avatar"]) },
   // Lot 3 : préférences d'affichage.
   language_changed: { locale: oneOf(["fr", "en"]), context: oneOf(["welcome", "settings"]) },

@@ -28,6 +28,9 @@ const NON_EMPTY_SECTIONS = [
   "affiliateClicks",
   "consents",
   "dataExportRequests",
+  // Lot 5 : pièces envoyées et reçues.
+  "piecesSent",
+  "piecesReceived",
 ] as const;
 
 // Audit Lot Q, SEC-01 : l'export oubliait Envies, blocages, signalements,
@@ -92,6 +95,14 @@ describe("export RGPD complet", () => {
     await app.inject({ method: "POST", url: "/api/reports", headers: authHeaders(user.token), payload: { targetType: "user", targetId: stranger.id, reason: "spam" } });
     await app.inject({ method: "POST", url: "/api/consents", headers: authHeaders(user.token), payload: { consents: [{ type: "terms", version: LEGAL_DOCUMENT_VERSIONS.terms }] } });
 
+    // Pièces envoyée et reçue (lot 5), insérées directement : aucune copie d'image ici.
+    const piece = { title: "Sac", image_url: "https://example.com/copie.jpg", image_thumb_url: "https://example.com/copie-mini.jpg" };
+    const { error: piecesError } = await app.supabaseAdmin.from("piece_sends").insert([
+      { ...piece, sender_id: user.id, recipient_id: friend.id },
+      { ...piece, sender_id: friend.id, recipient_id: user.id },
+    ]);
+    if (piecesError) throw piecesError;
+
     // Un premier export, pour que le second contienne cette demande.
     await app.inject({ method: "GET", url: "/api/me/export", headers: authHeaders(user.token) });
   });
@@ -133,5 +144,7 @@ describe("export RGPD complet", () => {
     for (const r of body.reportsSubmitted) expect(r.reporter_id).toBe(user.id);
     for (const w of body.wishlistItems) expect(w.user_id).toBe(user.id);
     for (const p of body.posts) expect(p.user_id).toBe(user.id);
+    for (const s of body.piecesSent) expect(s.sender_id).toBe(user.id);
+    for (const r of body.piecesReceived) expect(r.recipient_id).toBe(user.id);
   });
 });

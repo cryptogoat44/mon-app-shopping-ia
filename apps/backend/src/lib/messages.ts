@@ -26,6 +26,20 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Cette pièce est déjà partagée dans votre fil. Pour changer qui la voit, modifiez la visibilité de cette publication (depuis la publication).":
     "This piece is already shared in your feed. To change who can see it, edit that post's visibility (from the post itself).",
   "Cette recherche a déjà été lancée.": "This search has already been started.",
+  // Lot 5, partage d'une envie.
+  "Cette envie a déjà été republiée, et sa publication a été masquée par la modération.":
+    "This wish has already been reposted, and its post was hidden by moderation.",
+  "Cette envie est déjà sur votre profil. Pour changer qui la voit, modifiez la visibilité de cette publication (depuis la publication).":
+    "This wish is already on your profile. To change who can see it, edit that post's visibility (from the post itself).",
+  "Cette personne ne reçoit pas de pièces de votre part.": "This person doesn't accept pieces from you.",
+  "Destinataire invalide.": "Invalid recipient.",
+  "L'image de cette envie n'a pas pu être récupérée. Réessayez plus tard.": "This wish's image couldn't be retrieved. Please try again later.",
+  "Personne introuvable.": "Person not found.",
+  "Pièce introuvable.": "Piece not found.",
+  "Réglage invalide.": "Invalid setting.",
+  "Vous avez envoyé beaucoup de pièces en peu de temps. Réessayez dans une heure.":
+    "You've sent a lot of pieces in a short time. Please try again in an hour.",
+  "Vous ne pouvez pas vous envoyer une pièce.": "You can't send a piece to yourself.",
   "Ce compte est déjà suspendu.": "This account is already suspended.",
   "Ce contenu est déjà masqué.": "This content is already hidden.",
   "Ces signalements ont déjà été traités.": "These reports have already been handled.",

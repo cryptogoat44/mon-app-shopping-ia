@@ -1,15 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import type { ReportReason, ReportTargetType } from "@monapp/shared-types";
+import { REPORT_REASONS, REPORT_TARGET_TYPES } from "@monapp/shared-types";
 import { parseInput } from "../lib/validation.js";
 
-const TARGET_TYPES: [ReportTargetType, ...ReportTargetType[]] = ["user", "post", "comment"];
-const REASONS: [ReportReason, ...ReportReason[]] = ["spam", "inappropriate", "harassment", "other"];
-
+// Lot 5 : une pièce reçue (« piece ») se signale aussi.
 const createReportSchema = z.object({
-  targetType: z.enum(TARGET_TYPES),
+  targetType: z.enum(REPORT_TARGET_TYPES),
   targetId: z.string().uuid(),
-  reason: z.enum(REASONS),
+  reason: z.enum(REPORT_REASONS),
   note: z.string().max(2000).optional(),
 });
 

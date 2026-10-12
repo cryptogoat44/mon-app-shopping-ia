@@ -33,7 +33,10 @@ import type {
   VaultItemDetail,
   VaultPage,
   WishlistItem,
+  WishlistItemDetail,
   WishlistPage,
+  PieceSendsFrom,
+  ReceivedPiecesPage,
   UserProfile,
   CommentsPage,
   PostComment,
@@ -335,9 +338,42 @@ export async function fetchUserPosts(userId: string, cursor?: string): Promise<F
   return response.json();
 }
 
-export async function fetchWishlistItem(id: string): Promise<WishlistItem> {
+export async function fetchWishlistItem(id: string): Promise<WishlistItemDetail> {
   const response = await authorizedFetch(`/api/wishlist/${id}`);
   return response.json();
+}
+
+// ---- Partage d'une envie (lot 5, 5.C) : toujours un geste volontaire ----
+
+/** Republier une envie sur son profil (publication « envie »). */
+export async function republishWish(id: string, privacy: PrivacyLevel): Promise<Post> {
+  const response = await authorizedFetch(`/api/wishlist/${id}/republish`, { method: "POST", body: JSON.stringify({ privacy }) });
+  const post: Post = await response.json();
+  track("wish_republished", { visibility: post.privacy });
+  return post;
+}
+
+/** Envoyer une envie à une personne sur Spotto. */
+export async function sendPiece(wishId: string, recipientId: string): Promise<void> {
+  await authorizedFetch(`/api/wishlist/${wishId}/send`, { method: "POST", body: JSON.stringify({ recipientId }) });
+  track("piece_sent");
+}
+
+/** Pièces reçues, des plus récentes aux plus anciennes. */
+export async function fetchReceivedPieces(cursor?: string | null): Promise<ReceivedPiecesPage> {
+  const response = await authorizedFetch(`/api/pieces/received${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+  return response.json();
+}
+
+export async function removeReceivedPiece(id: string): Promise<void> {
+  await authorizedFetch(`/api/pieces/received/${id}`, { method: "DELETE" });
+  track("received_piece_removed");
+}
+
+/** Réglage « Qui peut m'envoyer des pièces ». */
+export async function updatePieceSendsFrom(pieceSendsFrom: PieceSendsFrom): Promise<void> {
+  await authorizedFetch("/api/me/piece-sends-from", { method: "PUT", body: JSON.stringify({ pieceSendsFrom }) });
+  track("piece_sends_setting_changed", { value: pieceSendsFrom });
 }
 
 export async function deleteWishlistItem(id: string): Promise<void> {
