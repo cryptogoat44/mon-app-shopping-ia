@@ -40,6 +40,15 @@ export const RATE_LIMITS = {
   // Commentaire sous une publication (POST /api/posts/:id/comments, Lot F).
   comment: { max: 30, windowMs: HOUR },
 
+  // Envoi d'une envie à une personne (lot 5, 5.C) : un geste entre deux
+  // personnes, jamais une diffusion de masse. Chaque envoi copie aussi une image.
+  pieceSend: {
+    max: 20,
+    windowMs: HOUR,
+    error: "piece_send_limit",
+    message: "Vous avez envoyé beaucoup de pièces en peu de temps. Réessayez dans une heure.",
+  },
+
   // Analyse automatique d'une vidéo par l'IA (lot 4, temps 1 bis) : chaque
   // appel coûte (≈ un demi-centime avec Claude Haiku 4.5). Seuls les appels
   // réellement envoyés comptent (`rateLimitCheck` / `countRateLimitHit`).

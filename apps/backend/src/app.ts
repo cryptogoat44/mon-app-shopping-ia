@@ -4,6 +4,7 @@ import multipart from "@fastify/multipart";
 import supabasePlugin from "./plugins/supabase.js";
 import authPlugin from "./plugins/auth.js";
 import rateLimitPlugin from "./plugins/rateLimit.js";
+import moderationPlugin from "./plugins/moderation.js";
 import meRoutes from "./routes/me.js";
 import searchesRoutes from "./routes/searches.js";
 import productMatchesRoutes from "./routes/productMatches.js";
@@ -18,6 +19,8 @@ import blocksRoutes from "./routes/blocks.js";
 import reportsRoutes from "./routes/reports.js";
 import commentsRoutes from "./routes/comments.js";
 import videoMomentsRoutes from "./routes/videoMoments.js";
+import moderationRoutes from "./routes/moderation.js";
+import piecesRoutes from "./routes/pieces.js";
 import { captureServerError, captureServerFailure } from "./lib/sentry.js";
 import { isErrorBody, localizeMessage } from "./lib/messages.js";
 import { requestLocale } from "./lib/locale.js";
@@ -79,6 +82,7 @@ export async function buildApp(options: { logger?: FastifyServerOptions["logger"
   await fastify.register(supabasePlugin);
   await fastify.register(authPlugin);
   await fastify.register(rateLimitPlugin);
+  await fastify.register(moderationPlugin);
   await fastify.register(meRoutes);
   await fastify.register(searchesRoutes);
   await fastify.register(productMatchesRoutes);
@@ -93,6 +97,8 @@ export async function buildApp(options: { logger?: FastifyServerOptions["logger"
   await fastify.register(reportsRoutes);
   await fastify.register(commentsRoutes);
   await fastify.register(videoMomentsRoutes);
+  await fastify.register(moderationRoutes);
+  await fastify.register(piecesRoutes);
 
   // Exclue du filet anti-abus "default" : les sondes de disponibilité de
   // Render l'appellent très régulièrement, ça n'a rien à voir avec un abus.

@@ -138,6 +138,15 @@ describe("vidéo : « Lancer » enchaîne analyse, cadrage et identification", (
     expect(runSearch).not.toHaveBeenCalled();
   });
 
+  it("plafond des recherches atteint avant l'analyse (lot 4 quater) : annoncé sur l'écran Résultat, rien n'est identifié", async () => {
+    const body = { error: "search_capacity_month", message: "…", resumesOn: "2026-11-03" };
+    findVideoMoments.mockRejectedValue(new ApiError(429, body));
+    expect(await launchVideo(fakeVideo(), " veste ", new AbortController().signal)).toEqual({ kind: "result", searchId: null });
+    expect(prepareSearch).not.toHaveBeenCalled();
+    expect(runSearch).not.toHaveBeenCalled();
+    expect(getLastSpotResult()).toMatchObject({ searchId: null, status: "failed", failReason: "capacity_month", resumesOn: "2026-11-03", query: "veste" });
+  });
+
   it("limite quotidienne : repli avec son motif", async () => {
     findVideoMoments.mockRejectedValue(new ApiError(429, { error: "video_ai_user_limit", message: "…" }));
     expect(await launchVideo(fakeVideo(), "veste", new AbortController().signal)).toEqual({ kind: "failed", reason: "user_limit" });
@@ -214,6 +223,18 @@ describe("identification : une panne n'est jamais présentée comme « pièce in
     expect(await identifyDraft(photoDraft(), new AbortController().signal)).toEqual({ kind: "done", searchId: null });
     expect(getLastSpotResult()).toMatchObject({ status: "failed", failReason });
     expect(reportUnexpectedError).toHaveBeenCalledTimes(reported ? 1 : 0);
+  });
+
+  it.each([
+    ["search_capacity_day", "capacity_day", null],
+    ["search_capacity_month", "capacity_month", "2026-11-03"],
+    ["search_capacity_user", "capacity_user", null],
+  ])("plafond des recherches atteint (lot 4 quater, %s) : son propre motif (et la date de reprise du mois), jamais « trop de recherches d'un coup »", async (error, failReason, resumesOn) => {
+    const body = { error, message: "…", resumesOn: "2026-11-03" };
+    runSearch.mockRejectedValue(new ApiError(429, body));
+    await identifyDraft(photoDraft(), new AbortController().signal);
+    expect(getLastSpotResult()).toMatchObject({ status: "failed", failReason, resumesOn });
+    expect(reportUnexpectedError).not.toHaveBeenCalled();
   });
 
   it("aucune correspondance : « aucune pièce trouvée », un vrai résultat", async () => {

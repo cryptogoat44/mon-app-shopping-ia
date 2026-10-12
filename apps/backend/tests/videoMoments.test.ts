@@ -8,6 +8,7 @@ import { env } from "../src/env.js";
 import { registerHit } from "../src/plugins/rateLimit.js";
 import { RATE_LIMITS } from "../src/lib/rateLimits.js";
 import { askVideoMoments, VideoAiError } from "../src/services/videoMoments.js";
+import { searchCapacityForVideoAi } from "../src/lib/searchCapacity.js";
 import { authHeaders, buildMultipart, createTestUser, deleteTestUser, type MultipartFile, type TestUser } from "./helpers.js";
 
 // Lot 4, temps 1 bis : point d'accès de l'analyse automatique. L'IA est
@@ -22,6 +23,13 @@ vi.mock("../src/services/videoMoments.js", async (importOriginal) => {
   return { ...original, askVideoMoments: vi.fn() };
 });
 const askMock = vi.mocked(askVideoMoments);
+// Plafond global des recherches (lot 4 quater) : simulé ici ; la fonction
+// réelle de la base est testée dans searchCapacity.test.ts.
+vi.mock("../src/lib/searchCapacity.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/lib/searchCapacity.js")>();
+  return { ...original, searchCapacityForVideoAi: vi.fn() };
+});
+const capacityMock = vi.mocked(searchCapacityForVideoAi);
 
 const QUERY = "veste en daim marron";
 const MOMENTS = [
@@ -95,6 +103,8 @@ describe("analyse automatique d'une vidéo (POST /api/video-moments)", () => {
     askMock.mockReset();
     askMock.mockResolvedValue({ moments: MOMENTS, candidates: MOMENTS.map((moment) => ({ ...moment, confidence: 0.9 })), usage: { inputTokens: 900, outputTokens: 50 } });
     env.ANTHROPIC_API_KEY = "cle-factice-des-tests";
+    capacityMock.mockReset();
+    capacityMock.mockResolvedValue({ allowed: true });
   });
 
   it("indique si la fonction est active (clé d'API présente), compte connecté seulement", async () => {
@@ -165,6 +175,30 @@ describe("analyse automatique d'une vidéo (POST /api/video-moments)", () => {
     }
     const json = await app.inject({ method: "POST", url: "/api/video-moments", headers: authHeaders(consenting.token), payload: { query: QUERY } });
     expect(json.statusCode).toBe(400);
+    expect(askMock).not.toHaveBeenCalled();
+  });
+
+  it("plafond des recherches atteint (lot 4 quater : jour, mois, part de la personne) : aucune image ne part à l'IA, message honnête", async () => {
+    capacityMock.mockResolvedValueOnce({ allowed: false, limit: "day", resumesOn: null });
+    const day = await send(consenting, { query: QUERY });
+    expect(day.statusCode).toBe(429);
+    expect(day.json()).toEqual({ error: "search_capacity_day", message: "Le service de recherche est très sollicité aujourd'hui. Réessayez demain." });
+    // La part de la personne se lit pour celle qui demande l'analyse.
+    expect(capacityMock.mock.calls[0]![2]).toBe(consenting.id);
+    capacityMock.mockResolvedValueOnce({ allowed: false, limit: "month", resumesOn: "2026-11-03" });
+    expect((await send(consenting, { query: QUERY })).json()).toMatchObject({ error: "search_capacity_month", resumesOn: "2026-11-03" });
+    capacityMock.mockResolvedValueOnce({ allowed: false, limit: "user", resumesOn: null });
+    const user = await send(consenting, { query: QUERY });
+    expect(user.statusCode).toBe(429);
+    expect(user.json()).toEqual({ error: "search_capacity_user", message: "Vous avez atteint votre limite de recherches pour aujourd'hui. Réessayez demain." });
+    expect(askMock).not.toHaveBeenCalled();
+  });
+
+  it("plafond illisible (base injoignable) : pas d'analyse, une panne annoncée comme telle (503)", async () => {
+    capacityMock.mockRejectedValueOnce(new Error("base injoignable"));
+    const response = await send(consenting, { query: QUERY });
+    expect(response.statusCode).toBe(503);
+    expect(response.json().error).toBe("video_ai_unavailable");
     expect(askMock).not.toHaveBeenCalled();
   });
 

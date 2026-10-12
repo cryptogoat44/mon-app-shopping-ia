@@ -1,8 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { MERCHANT_LINK_CONTEXTS, type PrivacyLevel } from "@monapp/shared-types";
+import { MERCHANT_LINK_CONTEXTS, PRIVACY_LEVELS } from "@monapp/shared-types";
 import { fetchBlockedUserIds } from "../lib/blocks.js";
-import { INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
+import { INVALID_ID, idParamsSchema, parseDbRows, parseInput } from "../lib/validation.js";
+import { shownPosts } from "../lib/visibility.js";
+
+const TAGGING_POST_ROWS = z.array(z.object({ user_id: z.string().uuid(), privacy: z.enum(PRIVACY_LEVELS) }));
 
 const clickBodySchema = z.object({ context: z.enum(MERCHANT_LINK_CONTEXTS).optional() }).optional();
 
@@ -16,23 +19,56 @@ async function isOwnSearchMatch(fastify: FastifyInstance, searchId: string, user
   return !!data;
 }
 
-/** Vrai si le produit est tagué dans au moins une publication visible par
+const ID_ROWS = z.array(z.object({ id: z.string().uuid() }));
+const SENDER_ROWS = z.array(z.object({ sender_id: z.string().uuid() }));
+
+/** Publications qui montrent ce produit : pièce taguée, ou publication
+ * « envie » (lot 5) dont l'envie vient de ce résultat. */
+async function postsShowingMatch(fastify: FastifyInstance, matchId: string): Promise<string[]> {
+  const [{ data: tags }, wishes] = await Promise.all([
+    fastify.supabaseAdmin.from("post_tagged_pieces").select("post_id").eq("product_match_id", matchId),
+    fastify.supabaseAdmin.from("wishlist_items").select("id").eq("product_match_id", matchId),
+  ]);
+  const wishIds = parseDbRows(ID_ROWS, wishes, "Envies d'un produit").map((w) => w.id);
+  const wishPosts =
+    wishIds.length > 0
+      ? parseDbRows(ID_ROWS, await fastify.supabaseAdmin.from("posts").select("id").in("wishlist_item_id", wishIds), "Publications « envie » d'un produit")
+      : [];
+  return [...new Set([...(tags ?? []).map((t) => t.post_id as string), ...wishPosts.map((p) => p.id)])];
+}
+
+/** Vrai si `viewerId` a reçu ce produit d'une autre personne (lot 5) : pièce
+ * non masquée, d'un compte qui n'est pas en blocage avec lui. */
+async function isInReceivedPiece(fastify: FastifyInstance, matchId: string, viewerId: string): Promise<boolean> {
+  const senders = parseDbRows(
+    SENDER_ROWS,
+    await fastify.supabaseAdmin
+      .from("piece_sends")
+      .select("sender_id")
+      .eq("product_match_id", matchId)
+      .eq("recipient_id", viewerId)
+      .is("hidden_at", null),
+    "Pièces reçues d'un produit"
+  );
+  if (senders.length === 0) return false;
+  const blocked = await fetchBlockedUserIds(fastify, viewerId);
+  return senders.some((s) => !blocked.has(s.sender_id));
+}
+
+/** Vrai si le produit est montré dans au moins une publication visible par
  * `viewerId`, selon les mêmes règles que le fil : la sienne, ou une
  * publication publique, ou "abonnés" d'un compte qu'il suit — jamais une
  * publication privée d'un autre, jamais en cas de blocage. */
 async function isTaggedInVisiblePost(fastify: FastifyInstance, matchId: string, viewerId: string): Promise<boolean> {
-  const { data: tags } = await fastify.supabaseAdmin
-    .from("post_tagged_pieces")
-    .select("post_id")
-    .eq("product_match_id", matchId);
-  const postIds = [...new Set((tags ?? []).map((t) => t.post_id as string))];
+  const postIds = await postsShowingMatch(fastify, matchId);
   if (postIds.length === 0) return false;
 
-  const { data: posts } = await fastify.supabaseAdmin
-    .from("posts")
-    .select("user_id, privacy")
-    .in("id", postIds);
-  const candidates = (posts ?? []) as { user_id: string; privacy: PrivacyLevel }[];
+  // Jamais une publication masquée par la modération (lib/visibility.ts).
+  const candidates = parseDbRows(
+    TAGGING_POST_ROWS,
+    await shownPosts(fastify, "user_id, privacy").in("id", postIds),
+    "Publications d'une pièce taguée"
+  );
   if (candidates.some((p) => p.user_id === viewerId)) return true;
 
   const blocked = await fetchBlockedUserIds(fastify, viewerId);
@@ -81,9 +117,11 @@ export default async function productMatchesRoutes(fastify: FastifyInstance) {
     // refusés et jamais enregistrés (audit Lot Q, DON-02). Dans tous les
     // autres cas, 404 : on ne laisse ni tracer un clic, ni découvrir un lien
     // sur une recherche ou une publication invisible.
+    // Lot 5 : aussi depuis une publication « envie » visible, ou une pièce reçue.
     const allowed =
       (await isOwnSearchMatch(fastify, match.search_id as string, userId)) ||
-      (await isTaggedInVisiblePost(fastify, id, userId));
+      (await isTaggedInVisiblePost(fastify, id, userId)) ||
+      (await isInReceivedPiece(fastify, id, userId));
 
     if (!allowed) {
       return reply.code(404).send({ error: "match_not_found", message: "Produit introuvable." });

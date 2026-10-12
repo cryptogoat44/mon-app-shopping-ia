@@ -25,13 +25,18 @@ import { CONSENT_VERSIONS } from "@monapp/shared-types";
 import { assertDevSupabaseUrl } from "../lib/dev-database.js";
 import { CLE_SIMULATION, FICHIER_SIMULATION, MARQUE_SIMULATION } from "../lib/simulation-anthropic.js";
 import { codeSansSentry, GardeStatistiques } from "./garde-statistiques.js";
+import { PLAFOND_SERPAPI_PARCOURS } from "../lib/plafond-parcours.js";
 
 const ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
 const BACKEND_DIR = join(ROOT, "apps/backend");
 const MOBILE_DIR = join(ROOT, "apps/mobile");
 const API_PORT = 3000;
 const SITE_PORT = 8090;
-const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+// Chrome du Mac du fondateur ; dans une session Claude Code « cloud », le
+// Chromium préinstallé (lot 5 : spotto-dev y devient joignable sur demande).
+const MAC_CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const CLOUD_CHROMIUM = "/opt/pw-browsers/chromium";
+const CHROME = existsSync(MAC_CHROME) ? MAC_CHROME : CLOUD_CHROMIUM;
 
 // Format iPhone (écran de 390 × 844 points, captures en 2×).
 const IPHONE = {
@@ -101,7 +106,7 @@ export interface Parcours {
  * clé factice et le module de simulation (aucun appel réel). Jamais de
  * Sentry : une erreur provoquée par un parcours ne part nulle part. */
 function startBackend(simulatedAi: boolean): ChildProcess {
-  const env: NodeJS.ProcessEnv = { ...process.env, PORT: String(API_PORT), SERPAPI_KEY: "cle-invalide-parcours-ecran" };
+  const env: NodeJS.ProcessEnv = { ...process.env, PORT: String(API_PORT), SERPAPI_KEY: "cle-invalide-parcours-ecran", ...PLAFOND_SERPAPI_PARCOURS };
   delete env.SENTRY_DSN;
   delete env.ANTHROPIC_API_KEY;
   if (simulatedAi) env.ANTHROPIC_API_KEY = CLE_SIMULATION;
@@ -234,7 +239,7 @@ export async function runParcours(
   if (mobileEnv.EXPO_PUBLIC_API_URL !== `http://localhost:${API_PORT}`) {
     throw new Error(`apps/mobile/.env doit viser le serveur local (http://localhost:${API_PORT}).`);
   }
-  if (!existsSync(CHROME)) throw new Error("Google Chrome est introuvable dans /Applications.");
+  if (!existsSync(CHROME)) throw new Error(`Navigateur introuvable (${MAC_CHROME} ou ${CLOUD_CHROMIUM}).`);
   for (const port of [API_PORT, SITE_PORT]) {
     if (!(await portFree(port))) throw new Error(`Le port ${port} est déjà utilisé : arrêtez ce qui tourne dessus, puis relancez.`);
   }

@@ -14,6 +14,7 @@ import { hasAnalyticsConsent } from "@/lib/policy-notice";
 import { ErrorMessage } from "@/components/error-message";
 import { LatestVideoSetting } from "@/components/latest-video-setting";
 import { VideoAiSetting } from "@/components/video-ai-setting";
+import { PieceSendsSetting } from "@/components/piece-sends-setting";
 import { consentFor, pendingConsents } from "@/lib/legal";
 import { formatLongDate } from "@/lib/format";
 import { themedStyles } from "@/theme/themed-styles";
@@ -39,7 +40,7 @@ async function shareExportedData(data: unknown) {
 export default function SettingsScreen() {
   const router = useRouter();
   const { locale, themePreference, chooseLocale, chooseTheme } = usePreferences();
-  const { signOut } = useAuth();
+  const { signOut, profile } = useAuth();
   const [consents, setConsents] = useState<ConsentStatus[] | null>(null);
   const [consentsFailed, setConsentsFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -166,6 +167,8 @@ export default function SettingsScreen() {
           <Text style={styles.sectionBody}>{consentLine("privacy_policy")}</Text>
         </View>
 
+        <PieceSendsSetting />
+
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>{t.settings.dataSection}</Text>
           <View style={styles.analyticsRow}>
@@ -219,6 +222,16 @@ export default function SettingsScreen() {
             </View>
           )}
         </View>
+
+        {/* Lot 5 : entrée discrète, visible des seuls administrateurs (le
+            serveur revérifie le rôle à chaque appel). */}
+        {profile?.isAdmin ? (
+          <View style={styles.adminSection}>
+            <Pressable accessibilityRole="link" onPress={() => router.push("/moderation")} style={styles.adminLink}>
+              <Text style={styles.adminLabel}>{t.moderationQueue.settingsEntry}</Text>
+            </Pressable>
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -243,4 +256,7 @@ const styles = themedStyles(() => ({
   deleteLabel: { color: color.danger, fontSize: font.secondary, fontWeight: "600" },
   confirmRow: { flexDirection: "row", gap: space.lg, marginTop: space.xs },
   cancelLabel: { color: color.acier, fontSize: font.secondary, fontWeight: "600" },
+  adminSection: { marginTop: space.xl, borderTopWidth: 1, borderTopColor: color.filet, paddingTop: space.sm },
+  adminLink: { minHeight: 44, minWidth: 44, justifyContent: "center", alignSelf: "flex-start" },
+  adminLabel: { fontSize: font.caption, fontWeight: "600", color: color.acier },
 }));

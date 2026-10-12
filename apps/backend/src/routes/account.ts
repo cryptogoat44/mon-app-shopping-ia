@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { ACCEPTED_CONSENT_VERSIONS, CONSENT_TYPES, CONSENT_VERSIONS, OPTIONAL_CONSENTS, type ConsentStatus, type ConsentType, type VersionedConsentType } from "@monapp/shared-types";
 import { deleteUserStorageFiles } from "../lib/storage.js";
+import { deleteWishCopy } from "../lib/wishShare.js";
 
 const recordConsentsSchema = z.object({
   consents: z
@@ -18,6 +19,31 @@ const recordConsentsSchema = z.object({
 
 function isVersioned(type: ConsentType): type is VersionedConsentType {
   return type in CONSENT_VERSIONS;
+}
+
+/** Export, partie modération (lot 5) : rôle d'administrateur, suspension en
+ * vigueur, décisions qui vous concernent (jamais le nom de l'administrateur)
+ * et, pour un administrateur, celles qu'il a prises. Une lecture en échec est
+ * ajoutée à `failures` : l'export entier échoue. */
+async function exportModeration(fastify: FastifyInstance, userId: string, failures: string[]) {
+  const db = fastify.supabaseAdmin;
+  const columns = "id, action, target_type, target_id, reason, note, undoes_action_id, created_at";
+  const [admin, suspension, aboutMe, taken] = await Promise.all([
+    db.from("admins").select("created_at").eq("user_id", userId).maybeSingle(),
+    db.from("suspensions").select("created_at, moderation_action_id").eq("user_id", userId).maybeSingle(),
+    db.from("moderation_actions").select(columns).eq("target_user_id", userId).order("created_at"),
+    db.from("moderation_actions").select(columns).eq("admin_id", userId).order("created_at"),
+  ]);
+  if (admin.error) failures.push("adminRole");
+  if (suspension.error) failures.push("suspension");
+  if (aboutMe.error) failures.push("moderationDecisionsAboutMe");
+  if (taken.error) failures.push("moderationDecisionsTaken");
+  return {
+    adminRole: admin.data ?? null,
+    suspension: suspension.data ?? null,
+    moderationDecisionsAboutMe: aboutMe.data ?? [],
+    moderationDecisionsTaken: taken.data ?? [],
+  };
 }
 
 export default async function accountRoutes(fastify: FastifyInstance) {
@@ -164,6 +190,9 @@ export default async function accountRoutes(fastify: FastifyInstance) {
       commentsRes,
       consentsRes,
       exportRequestsRes,
+      moderation,
+      piecesSentRes,
+      piecesReceivedRes,
     ] = await Promise.all([
       db.from("profiles").select("*").eq("id", userId).maybeSingle(),
       searchIds.length > 0 ? db.from("product_matches").select("*").in("search_id", searchIds) : empty,
@@ -180,6 +209,10 @@ export default async function accountRoutes(fastify: FastifyInstance) {
       db.from("comments").select("*").eq("user_id", userId),
       db.from("consents").select("*").eq("user_id", userId),
       db.from("data_export_requests").select("*").eq("user_id", userId),
+      exportModeration(fastify, userId, failures),
+      // Lot 5 : pièces envoyées et reçues (instantané de l'envie et adresse de la copie de son image).
+      db.from("piece_sends").select("*").eq("sender_id", userId),
+      db.from("piece_sends").select("*").eq("recipient_id", userId),
     ]);
 
     if (profileRes.error) failures.push("profile");
@@ -203,6 +236,9 @@ export default async function accountRoutes(fastify: FastifyInstance) {
       affiliateConversions: rows("affiliateConversions", conversionsRes),
       consents: rows("consents", consentsRes),
       dataExportRequests: rows("dataExportRequests", exportRequestsRes),
+      piecesSent: rows("piecesSent", piecesSentRes),
+      piecesReceived: rows("piecesReceived", piecesReceivedRes),
+      ...moderation,
     };
 
     if (failures.length > 0) {
@@ -228,6 +264,22 @@ export default async function accountRoutes(fastify: FastifyInstance) {
   // fichiers de stockage associés pour ne laisser aucune trace orpheline.
   fastify.delete("/api/me", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const userId = request.user!.id;
+
+    // Lot 5 : les pièces reçues disparaissent avec le compte (cascade en
+    // base) ; la copie de leur image est rangée chez la personne qui les a
+    // envoyées, on la supprime ici. Ses propres copies (pièces envoyées,
+    // publications « envie ») sont dans son dossier, vidé juste après.
+    const { data: received, error: receivedError } = await fastify.supabaseAdmin
+      .from("piece_sends")
+      .select("sender_id, image_url, image_thumb_url")
+      .eq("recipient_id", userId);
+    if (receivedError) {
+      request.log.error({ receivedError }, "Lecture des pièces reçues impossible avant suppression du compte");
+      return reply.code(500).send({ error: "internal_error", message: "La suppression a échoué." });
+    }
+    for (const piece of (received as { sender_id: string; image_url: string; image_thumb_url: string }[] | null) ?? []) {
+      await deleteWishCopy(fastify, piece.sender_id, [piece.image_url, piece.image_thumb_url]);
+    }
 
     await deleteUserStorageFiles(fastify, userId);
 

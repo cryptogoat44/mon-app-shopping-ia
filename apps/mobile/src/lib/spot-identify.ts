@@ -2,10 +2,11 @@
 // parcours unique (lot 4 ter) et aux corrections (recadrer, autre moment).
 // Le résultat — ou l'échec, jamais déguisé en « pièce introuvable » (audit
 // Lot Q, ROB-02) — est gardé en mémoire pour l'écran Résultat.
-import type { SpotFailReason } from "../api/types";
+import type { SpotFailReason, SpotResult } from "../api/types";
 import { setLastSpotResult } from "../api/spotSession";
 import { ApiError, runSearch } from "./api";
 import { reportUnexpectedError } from "./error-tracking";
+import { capacityFailure } from "./spot-capacity";
 import { freshSearchId, markSearchUsed } from "./spot-flow";
 import { toSpotResult } from "./spot-result";
 import type { SpotDraft } from "./spot-draft";
@@ -22,6 +23,14 @@ function failReasonOf(error: unknown): SpotFailReason {
   return "technical";
 }
 
+/** Motif d'échec, et pour le plafond du mois le jour de la reprise. Le
+ * plafond des recherches (lot 4 quater) passe avant tout autre 429 : jamais
+ * « trop de recherches d'un coup ». */
+function failureOf(error: unknown): Pick<SpotResult, "failReason" | "resumesOn"> {
+  const capacity = error instanceof ApiError ? capacityFailure(error.body) : null;
+  return capacity ? { failReason: capacity.reason, resumesOn: capacity.resumesOn } : { failReason: failReasonOf(error) };
+}
+
 /** Lance l'identification du brouillon. « Annuler » (signal) abandonne
  * vraiment la requête ; il ne promet rien sur le crédit, qui peut déjà être
  * engagé côté serveur. */
@@ -35,7 +44,7 @@ export async function identifyDraft(draft: SpotDraft, signal: AbortSignal): Prom
     return { kind: "done", searchId: search.id };
   } catch (error) {
     if (signal.aborted) return { kind: "cancelled" };
-    setLastSpotResult({ searchId: null, status: "failed", pieces: [], similarPieces: [], failReason: failReasonOf(error), query: draft.query });
+    setLastSpotResult({ searchId: null, status: "failed", pieces: [], similarPieces: [], ...failureOf(error), query: draft.query });
     return { kind: "done", searchId: null };
   }
 }

@@ -11,7 +11,8 @@ import { sharePost } from "@/lib/share-post";
 import { SpotImage } from "@/components/spot-image";
 import { useToast } from "@/lib/toast-context";
 import { getActiveLocale, t } from "@/i18n";
-import { timeAgo } from "@/lib/format";
+import { formatPrice, timeAgo } from "@/lib/format";
+import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { themedStyles } from "@/theme/themed-styles";
 
 const DOUBLE_TAP_DELAY_MS = 300;
@@ -104,7 +105,8 @@ export function PostCard({
           </View>
           <Text style={styles.authorName}>{post.author.displayName}</Text>
         </Pressable>
-        {post.vaultItem?.verified ? <VerifiedIcon size={13} /> : null}
+        {/* Badge « achat vérifié » : jamais sur une envie (lot 5). */}
+        {post.type !== "wish" && post.vaultItem?.verified ? <VerifiedIcon size={13} /> : null}
         <Text style={styles.timestamp}>{timeAgo(post.createdAt, getActiveLocale())}</Text>
         {onOpenMenu ? (
           <Pressable onPress={onOpenMenu} hitSlop={11} style={styles.moreButton} accessibilityRole="button" accessibilityLabel={t.common.moreOptions}>
@@ -116,7 +118,7 @@ export function PostCard({
       <Pressable
         onPress={handleMediaPress}
         accessibilityRole="image"
-        accessibilityLabel={t.post.photoBy(post.author.displayName)}
+        accessibilityLabel={post.type === "wish" ? t.post.wishBy(post.author.displayName) : t.post.photoBy(post.author.displayName)}
       >
         {/* « Achat » venu du Spotter : image HD du marchand, repli sur la
             miniature ; photo publiée : version d'affichage (1 600 px). */}
@@ -136,6 +138,35 @@ export function PostCard({
       </Pressable>
 
       {post.caption ? <Text style={styles.caption}>{post.caption}</Text> : null}
+
+      {/* Publication « envie » (lot 5) : une pièce qu'on aimerait avoir,
+          distincte d'un achat. Lien marchand avec la mention « lien affilié ». */}
+      {post.wish ? (
+        <View style={styles.wishBox} testID="publication-envie">
+          <Text style={styles.wishLabel}>{t.post.wishLabel}</Text>
+          <Text style={styles.wishTitle}>{post.wish.title}</Text>
+          {post.wish.merchantName || post.wish.priceMin !== null ? (
+            <Text style={styles.wishMeta}>
+              {[post.wish.merchantName, post.wish.priceMin !== null ? formatPrice(post.wish.priceMin, post.wish.currency, getActiveLocale()) : null]
+                .filter(Boolean)
+                .join(" · ")}
+            </Text>
+          ) : null}
+          {post.wish.merchantUrl ? (
+            <>
+              <MerchantLinkButton
+                url={post.wish.merchantUrl}
+                merchantName={post.wish.merchantName}
+                matchId={post.wish.productMatchId}
+                context="post"
+                isAffiliate={post.wish.isAffiliate}
+                compact
+              />
+              {post.wish.isAffiliate ? <Text style={styles.wishDisclosure}>{t.result.affiliateDisclosure}</Text> : null}
+            </>
+          ) : null}
+        </View>
+      ) : null}
 
       {post.taggedPieces.length > 0 ? (
         <View style={styles.tagRow}>
@@ -224,6 +255,11 @@ const styles = themedStyles(() => ({
   heartOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
   caption: { fontSize: 14.5, color: color.encre, marginTop: 12, lineHeight: 20 },
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+  wishBox: { marginTop: 12, gap: 2 },
+  wishLabel: { alignSelf: "flex-start", fontSize: 11.5, fontWeight: "600", color: color.acier, borderWidth: 1, borderColor: color.filet, borderRadius: radius.full, paddingHorizontal: 9, paddingVertical: 2, marginBottom: 4 },
+  wishTitle: { fontSize: 14.5, fontWeight: "600", color: color.encre },
+  wishMeta: { fontSize: font.caption, color: color.acier },
+  wishDisclosure: { fontSize: 11.5, color: color.acier },
   tagChip: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.full, paddingVertical: 5, paddingHorizontal: 11 },
   tagChipLabel: { fontSize: font.caption, color: color.encre },
   actions: { flexDirection: "row", alignItems: "center", gap: space.lg, marginTop: 12 },

@@ -2,9 +2,11 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { PHOTO_SIZES, optimizePhoto } from "../lib/photos.js";
 import { z } from "zod";
-import { APP_LOCALES, type Profile } from "@monapp/shared-types";
+import { APP_LOCALES, PIECE_SENDS_FROM, PRIVACY_LEVELS, type Profile } from "@monapp/shared-types";
 import { parseInput } from "../lib/validation.js";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
+import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
+import { isAdmin } from "../lib/moderation.js";
 
 const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
 
@@ -18,57 +20,72 @@ const updateMeSchema = z.object({
 });
 
 const updateLocaleSchema = z.object({ locale: z.enum(APP_LOCALES) });
+const updatePieceSendsFromSchema = z.object({ pieceSendsFrom: z.enum(PIECE_SENDS_FROM) });
 
-// Ligne brute de la table `profiles` (colonnes en snake_case, cf. schema.sql)
-interface ProfileRow {
-  id: string;
-  username: string | null;
-  display_name: string;
-  avatar_url: string | null;
-  bio: string | null;
-  locale: string;
-  default_privacy: "public" | "followers" | "private";
-  created_at: string;
-  updated_at: string;
+// Ligne brute de la table `profiles` (colonnes en snake_case, cf. schema.sql), relue sans lui faire confiance.
+const profileRowSchema = z.object({
+  id: z.string().uuid(),
+  username: z.string().nullable(),
+  display_name: z.string(),
+  avatar_url: z.string().nullable(),
+  bio: z.string().nullable(),
+  locale: z.string(),
+  default_privacy: z.enum(PRIVACY_LEVELS),
+  // Lot 5 (migration 0024) ; valeur par défaut tant que la colonne n'existe pas.
+  piece_sends_from: z.enum(PIECE_SENDS_FROM).default("following"),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+interface ProfileCounts {
+  followersCount: number;
+  followingCount: number;
+  postsCount: number;
 }
 
-function toProfile(row: ProfileRow, followersCount: number, followingCount: number, postsCount: number): Profile {
+/** Profil renvoyé à l'app ; null si la ligne lue n'a pas la forme attendue. */
+function toProfile(row: unknown, counts: ProfileCounts, admin: boolean): Profile | null {
+  const parsed = profileRowSchema.safeParse(row);
+  if (!parsed.success) return null;
+  const profile = parsed.data;
   return {
-    id: row.id,
-    username: row.username,
-    displayName: row.display_name,
-    avatarUrl: row.avatar_url,
-    bio: row.bio,
-    locale: row.locale,
-    defaultPrivacy: row.default_privacy,
-    followersCount,
-    followingCount,
-    postsCount,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    id: profile.id,
+    username: profile.username,
+    displayName: profile.display_name,
+    avatarUrl: profile.avatar_url,
+    bio: profile.bio,
+    locale: profile.locale,
+    defaultPrivacy: profile.default_privacy,
+    ...counts,
+    createdAt: profile.created_at,
+    updatedAt: profile.updated_at,
+    isAdmin: admin,
+    pieceSendsFrom: profile.piece_sends_from,
   };
 }
 
-async function fetchFollowCounts(
-  fastify: FastifyInstance,
-  userId: string
-): Promise<{ followersCount: number; followingCount: number; postsCount: number }> {
+async function fetchFollowCounts(fastify: FastifyInstance, userId: string): Promise<ProfileCounts> {
   const [followers, following, posts] = await Promise.all([
     fastify.supabaseAdmin.from("follows").select("*", { count: "exact", head: true }).eq("followee_id", userId),
     fastify.supabaseAdmin.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", userId),
-    // Son propre nombre de publications (toutes, y compris privées).
-    fastify.supabaseAdmin.from("posts").select("id", { count: "exact", head: true }).eq("user_id", userId),
+    // Son propre nombre de publications (toutes, y compris privées), hors
+    // publications masquées par la modération (lot 5).
+    fastify.supabaseAdmin.from("posts").select("id", { count: "exact", head: true }).eq("user_id", userId).is("hidden_at", null),
   ]);
   return { followersCount: followers.count ?? 0, followingCount: following.count ?? 0, postsCount: posts.count ?? 0 };
 }
+
+const PROFILE_UNREADABLE = { error: "internal_error", message: GENERIC_SERVER_ERROR } as const;
 
 export default async function meRoutes(fastify: FastifyInstance) {
   fastify.get("/api/me", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const userId = request.user!.id;
 
-    const [{ data, error }, counts] = await Promise.all([
+    // Rôle administrateur illisible : la requête échoue (500), jamais « non administrateur » par défaut.
+    const [{ data, error }, counts, admin] = await Promise.all([
       fastify.supabaseAdmin.from("profiles").select("*").eq("id", userId).single(),
       fetchFollowCounts(fastify, userId),
+      isAdmin(fastify, userId),
     ]);
 
     if (error || !data) {
@@ -76,10 +93,16 @@ export default async function meRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "profile_not_found", message: "Profil introuvable." });
     }
 
-    return reply.send(toProfile(data as ProfileRow, counts.followersCount, counts.followingCount, counts.postsCount));
+    const profile = toProfile(data, counts, admin);
+    if (!profile) {
+      request.log.error("Profil illisible");
+      return reply.code(500).send(PROFILE_UNREADABLE);
+    }
+    return reply.send(profile);
   });
 
-  fastify.post("/api/me/avatar", { preHandler: fastify.requireAuth }, async (request, reply) => {
+  // Profil public (photo, nom, bio) : non modifiable par un compte suspendu (lot 5).
+  fastify.post("/api/me/avatar", { preHandler: [fastify.requireAuth, fastify.requireActiveAccount] }, async (request, reply) => {
     const userId = request.user!.id;
 
     const file = await request.file();
@@ -104,6 +127,9 @@ export default async function meRoutes(fastify: FastifyInstance) {
     } catch {
       return reply.code(400).send({ error: "invalid_file", message: "Cette photo n'a pas pu être lue." });
     }
+    // Lu avant toute écriture : une lecture impossible n'enregistre rien.
+    const admin = await isAdmin(fastify, userId);
+
     // upsert avec un nom fixe par utilisateur : une photo de profil n'a
     // qu'une seule version à la fois, contrairement aux photos du vault.
     const path = `${userId}/avatar.jpg`;
@@ -134,11 +160,15 @@ export default async function meRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    const counts = await fetchFollowCounts(fastify, userId);
-    return reply.send(toProfile(updated as ProfileRow, counts.followersCount, counts.followingCount, counts.postsCount));
+    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin);
+    if (!profile) {
+      request.log.error("Profil illisible");
+      return reply.code(500).send(PROFILE_UNREADABLE);
+    }
+    return reply.send(profile);
   });
 
-  fastify.patch("/api/me", { preHandler: fastify.requireAuth }, async (request, reply) => {
+  fastify.patch("/api/me", { preHandler: [fastify.requireAuth, fastify.requireActiveAccount] }, async (request, reply) => {
     const parsed = updateMeSchema.safeParse(request.body);
 
     if (!parsed.success) {
@@ -150,6 +180,8 @@ export default async function meRoutes(fastify: FastifyInstance) {
 
     const userId = request.user!.id;
     const { username, displayName, bio } = parsed.data;
+    // Lu avant toute écriture : une lecture impossible n'enregistre rien.
+    const admin = await isAdmin(fastify, userId);
 
     const { data, error } = await fastify.supabaseAdmin
       .from("profiles")
@@ -170,7 +202,29 @@ export default async function meRoutes(fastify: FastifyInstance) {
     // Un profil qu'on vient de compléter n'a par construction encore
     // aucun abonné, abonnement ni publication — pas besoin de requêter les
     // compteurs ici.
-    return reply.send(toProfile(data as ProfileRow, 0, 0, 0));
+    const profile = toProfile(data, { followersCount: 0, followingCount: 0, postsCount: 0 }, admin);
+    if (!profile) {
+      request.log.error("Profil illisible");
+      return reply.code(500).send(PROFILE_UNREADABLE);
+    }
+    return reply.send(profile);
+  });
+
+  // « Qui peut m'envoyer des pièces » (lot 5, 5.C) : les comptes que je suis
+  // (par défaut), tout le monde, ou personne. Un réglage de confidentialité :
+  // modifiable même par un compte suspendu.
+  fastify.put("/api/me/piece-sends-from", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    const body = parseInput(updatePieceSendsFromSchema, request.body, reply, { error: "invalid_body", message: "Réglage invalide." });
+    if (!body) return;
+    const { error } = await fastify.supabaseAdmin
+      .from("profiles")
+      .update({ piece_sends_from: body.pieceSendsFrom, updated_at: new Date().toISOString() })
+      .eq("id", request.user!.id);
+    if (error) {
+      request.log.error({ error }, "Échec de mise à jour du réglage des pièces reçues");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+    return reply.code(204).send();
   });
 
   // Langue de l'interface (lot 3) : choisie sur l'écran Bienvenue ou dans les

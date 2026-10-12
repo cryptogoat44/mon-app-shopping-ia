@@ -97,3 +97,18 @@ describe("statistiques d'usage (PostHog UE)", () => {
     });
   });
 });
+
+describe("partage d'une envie (lot 5) : propriétés fermées", () => {
+  it("jamais le titre, la personne ni le lien ; seulement le canal et des choix", () => {
+    expect(sanitizeProps("wish_shared_external", { method: "native", affiliate: true, title: "Sac Kelly", url: "https://shop.test" })).toEqual({
+      method: "native",
+      affiliate: true,
+    });
+    expect(sanitizeProps("piece_sent", { recipientId: "u-2", title: "Sac" })).toEqual({});
+    expect(sanitizeProps("wish_republished", { visibility: "followers", wishId: "w-1" })).toEqual({ visibility: "followers" });
+    expect(sanitizeProps("piece_sends_setting_changed", { value: "everyone" })).toEqual({ value: "everyone" });
+    expect(sanitizeProps("piece_sends_setting_changed", { value: "amis" })).toEqual({});
+    expect(Object.keys(ANALYTICS_EVENTS)).toEqual(expect.arrayContaining(["wish_republished", "piece_sent", "wish_shared_external", "received_piece_removed"]));
+  });
+});
+

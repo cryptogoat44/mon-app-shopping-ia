@@ -10,6 +10,7 @@ import { VIDEO_AI, type CropRect } from "@monapp/shared-types";
 import { ApiError, findVideoMoments } from "./api";
 import { track } from "./analytics";
 import { SPOTTER_IMAGE_MAX_EDGE } from "./image-import";
+import { capacityFailure, type CapacityFailure } from "./spot-capacity";
 import { beginFromPhoto } from "./spot-flow";
 import { updateDraft, type SpotDraft } from "./spot-draft";
 import { discardLocalFile } from "./video-frames";
@@ -33,7 +34,13 @@ interface AutoSession {
 let session: AutoSession | null = null;
 
 export type AutoFailure = "consent" | "disabled" | "user_limit" | "global_limit" | "unavailable" | "network" | "video";
-export type AutoOutcome = { kind: "found" } | { kind: "not_found" } | { kind: "cancelled" } | { kind: "failed"; reason: AutoFailure };
+export type AutoOutcome =
+  | { kind: "found" }
+  | { kind: "not_found" }
+  | { kind: "cancelled" }
+  | { kind: "failed"; reason: AutoFailure }
+  /** Plafond des recherches atteint (lot 4 quater) : aucune image n'est partie à l'IA. */
+  | { kind: "capacity"; failure: CapacityFailure };
 export type AutoStep = "frames" | "ai";
 
 /** Session en cours, tant que sa vidéo est encore ouverte. */
@@ -102,6 +109,11 @@ export async function analyzeVideo(
   } catch (error) {
     // « Annuler » : la requête est abandonnée, rien à signaler.
     if (signal?.aborted) return { kind: "cancelled" };
+    const capacity = error instanceof ApiError ? capacityFailure(error.body) : null;
+    if (capacity) {
+      track("video_ai_result", { outcome: "limit", moments_count: 0 });
+      return { kind: "capacity", failure: capacity };
+    }
     const reason = failureOf(error);
     track("video_ai_result", { outcome: reason === "user_limit" || reason === "global_limit" ? "limit" : "unavailable", moments_count: 0 });
     return { kind: "failed", reason };

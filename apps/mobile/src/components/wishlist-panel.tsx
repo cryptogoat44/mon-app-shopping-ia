@@ -1,6 +1,6 @@
 import { formatPrice } from "@/lib/format";
 import { useCallback, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { color, font, radius, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
@@ -12,6 +12,8 @@ import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { SpotImage } from "@/components/spot-image";
+import { SegmentedChoice } from "@/components/segmented-choice";
+import { ReceivedPieces } from "@/components/received-pieces";
 import { themedStyles } from "@/theme/themed-styles";
 
 function displayPrice(item: Piece): string | null {
@@ -26,9 +28,37 @@ function chunk<T>(items: T[], size: number): T[][] {
 }
 
 // Envies (Lot F) : un onglet du Profil (Vault · Lifestyle · Envies), plus
-// dans la barre de navigation. Strictement privées : n'apparaissent que sur
-// son propre profil, jamais sur le profil vu par quelqu'un d'autre.
+// dans la barre de navigation. Privées : n'apparaissent que sur son propre
+// profil, jamais sur le profil vu par quelqu'un d'autre. Lot 5 : « Mes
+// envies » ou « Reçues » (les pièces envoyées par d'autres personnes) ; une
+// envie ne se partage que par un geste volontaire, depuis son détail.
 export function WishlistPanel() {
+  const [view, setView] = useState<"mine" | "received">("mine");
+  return (
+    <>
+      <View style={styles.switcher}>
+        <SegmentedChoice
+          label={t.wishlist.tabsLabel}
+          options={[
+            { value: "mine", label: t.wishlist.mine },
+            { value: "received", label: t.wishlist.received },
+          ]}
+          value={view}
+          onChange={setView}
+        />
+      </View>
+      {view === "mine" ? (
+        <MyWishlist />
+      ) : (
+        <ScrollView>
+          <ReceivedPieces />
+        </ScrollView>
+      )}
+    </>
+  );
+}
+
+function MyWishlist() {
   const router = useRouter();
   const [items, setItems] = useState<WishlistItem[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -155,6 +185,7 @@ export function WishlistPanel() {
 }
 
 const styles = themedStyles(() => ({
+  switcher: { paddingHorizontal: space.lg, paddingTop: space.sm, maxWidth: 640, alignSelf: "center", width: "100%" },
   privateNote: { fontSize: font.caption, color: color.acier, paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.xs, maxWidth: 640, alignSelf: "center", width: "100%" },
   emptyContent: { flexGrow: 1 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl, marginTop: -60 },

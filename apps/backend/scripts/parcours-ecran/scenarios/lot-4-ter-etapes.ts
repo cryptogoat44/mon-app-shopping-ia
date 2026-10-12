@@ -12,7 +12,7 @@ import type { Parcours, TestAccount } from "../boite-a-outils.js";
 import { couleurProche } from "../../lib/videos-essai.js";
 import { COMBOS, type Combo } from "./lot-3.js";
 import { attendreBoutonActif, attendreEnvoi, champContient, check, choisirFichier, couleurImageLocale, ouvrirSpotter, suivreRequetes, visible, type Envoi } from "./spotter-outils.js";
-import { CHAUSSURES, capteur, champPret, lancerVideo, nouveauCompte, ralentir, simulerResultats, TEXTES, VESTE } from "./lot-4-ter-outils.js";
+import { CHAUSSURES, capteur, champPret, lancerPhoto, lancerVideo, nouveauCompte, ralentir, simulerResultats, TEXTES, VESTE } from "./lot-4-ter-outils.js";
 
 const FR = TEXTES.fr;
 const COMBO = COMBOS[0]!;
@@ -211,17 +211,6 @@ export async function photo(p: Parcours, page: Page, fichier: string, problemes:
 }
 
 /** Photo choisie, cadre par défaut, mots facultatifs, « Lancer ». */
-async function lancerPhoto(p: Parcours, page: Page, fichier: string, mots: string | null): Promise<void> {
-  await page.goto(`${p.siteUrl}/`);
-  await choisirFichier(page, FR.ajouterPhoto, fichier);
-  await page.getByRole("heading", { name: FR.ciblage, exact: true }).filter({ visible: true }).waitFor({ timeout: 30_000 });
-  if (mots) {
-    await page.getByPlaceholder(FR.exemple).filter({ visible: true }).click();
-    await page.keyboard.type(mots);
-  }
-  await page.getByRole("button", { name: FR.lancer, exact: true }).filter({ visible: true }).click();
-}
-
 /** Rien trouvé (décision du fondateur, 2026-10-08) : nouveau message, aucun
  * réessai automatique ; avec des mots, « Réessayer sans le texte » relance la
  * même image sans eux (une recherche de plus, à l'initiative de la personne) ;
@@ -232,7 +221,7 @@ export async function sansResultat(p: Parcours, page: Page, fichier: string, pro
   const bouton = () => page.getByRole("button", { name: FR.sansTexte, exact: true }).filter({ visible: true });
   const lancements = () => suivi.lancements.length;
   await simulerResultats(page, "pull blanc", { videsAuDebut: 1 });
-  await lancerPhoto(p, page, fichier, "pull blanc");
+  await lancerPhoto(p, page, FR, fichier, "pull blanc");
   await visible(page, FR.rienTrouve).waitFor({ timeout: 30_000 });
   check((await visible(page, FR.rienTrouveConseil).count()) === 1, "rien trouvé : conseil affiché");
   check((await bouton().count()) === 1, "« Réessayer sans le texte » proposé (des mots avaient été tapés)");
@@ -245,7 +234,7 @@ export async function sansResultat(p: Parcours, page: Page, fichier: string, pro
   await capture("24-sans-le-texte-resultats");
   await page.unroute("**/api/searches/*/run");
   await simulerResultats(page, "pull blanc", { videsAuDebut: 1 });
-  await lancerPhoto(p, page, fichier, null);
+  await lancerPhoto(p, page, FR, fichier, null);
   await visible(page, FR.rienTrouve).waitFor({ timeout: 30_000 });
   check((await bouton().count()) === 0, "sans mots tapés : pas de « Réessayer sans le texte »");
   await capture("25-rien-trouve-sans-mots");

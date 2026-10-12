@@ -38,5 +38,17 @@ export function parseInput<S extends z.ZodTypeAny>(
   return parsed.data;
 }
 
+/** Lecture de la base impossible, ou réponse d'une forme inattendue. */
+export class DatabaseReadError extends Error {}
+
+/** Relit une LISTE lue dans la base avec `schema`. Une erreur ou une forme
+ * inattendue relève DatabaseReadError : jamais une liste vide par défaut. */
+export function parseDbRows<S extends z.ZodTypeAny>(schema: S, result: { data: unknown; error: unknown }, what: string): z.infer<S> {
+  if (result.error) throw new DatabaseReadError(`${what} : lecture impossible`);
+  const parsed = schema.safeParse(result.data ?? []);
+  if (!parsed.success) throw new DatabaseReadError(`${what} : réponse illisible`);
+  return parsed.data;
+}
+
 export const INVALID_ID = { error: "invalid_params", message: "Identifiant invalide." } as const;
 export const INVALID_CURSOR = { error: "invalid_query", message: "Curseur de pagination invalide." } as const;

@@ -1,9 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Post, PublicProfile, UserProfile } from "@monapp/shared-types";
-import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, parseInput, userIdParamsSchema } from "../lib/validation.js";
-import { isBlockedEitherWay, isFollowing, visiblePrivacies } from "../lib/visibility.js";
-import { hydratePosts, type PostRow } from "./posts.js";
+import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, parseDbRows, parseInput, userIdParamsSchema } from "../lib/validation.js";
+import { isBlockedEitherWay, isFollowing, shownPosts, visiblePrivacies } from "../lib/visibility.js";
+import { suspendedAmong } from "../lib/moderation.js";
+import { POST_ROWS, hydratePosts } from "./posts.js";
 
 const USER_POSTS_PAGE_SIZE = 18;
 
@@ -81,7 +82,9 @@ export default async function usersRoutes(fastify: FastifyInstance) {
       ]);
     }
 
-    const rows = candidateRows.filter((row) => !blockedIds.has(row.id));
+    // Un compte suspendu par la modération n'apparaît plus en recherche (lot 5).
+    const suspendedIds = await suspendedAmong(fastify, candidateIds);
+    const rows = candidateRows.filter((row) => !blockedIds.has(row.id) && !suspendedIds.has(row.id));
     const profileIds = rows.map((p) => p.id);
 
     let followingIds = new Set<string>();
@@ -131,10 +134,8 @@ export default async function usersRoutes(fastify: FastifyInstance) {
       fastify.supabaseAdmin.from("follows").select("*", { count: "exact", head: true }).eq("followee_id", targetId),
       fastify.supabaseAdmin.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", targetId),
       // Nombre de publications que CE visiteur peut voir (le même que la
-      // grille) : ne révèle jamais l'existence de publications privées.
-      fastify.supabaseAdmin
-        .from("posts")
-        .select("id", { count: "exact", head: true })
+      // grille) : ne révèle jamais l'existence de publications privées ni masquées.
+      shownPosts(fastify, "id", { count: "exact", head: true })
         .eq("user_id", targetId)
         .in("privacy", visiblePrivacies(isMe, viewerFollows)),
     ]);
@@ -170,9 +171,7 @@ export default async function usersRoutes(fastify: FastifyInstance) {
     }
     const follows = isMe ? false : await isFollowing(fastify, viewerId, targetId);
 
-    let query = fastify.supabaseAdmin
-      .from("posts")
-      .select("*")
+    let query = shownPosts(fastify, "*")
       .eq("user_id", targetId)
       .in("privacy", visiblePrivacies(isMe, follows))
       .order("created_at", { ascending: false })
@@ -184,7 +183,7 @@ export default async function usersRoutes(fastify: FastifyInstance) {
       request.log.error({ error }, "Échec de lecture des publications d'un profil");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
-    const rows = (data as PostRow[]) ?? [];
+    const rows = parseDbRows(POST_ROWS, { data, error: null }, "Publications d'un profil");
     const hasMore = rows.length > USER_POSTS_PAGE_SIZE;
     const pageRows = hasMore ? rows.slice(0, USER_POSTS_PAGE_SIZE) : rows;
     const posts: Post[] = await hydratePosts(fastify, pageRows, viewerId);

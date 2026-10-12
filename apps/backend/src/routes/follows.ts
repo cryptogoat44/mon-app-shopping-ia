@@ -5,7 +5,7 @@ export default async function followsRoutes(fastify: FastifyInstance) {
   fastify.post(
     "/api/follows/:userId",
     {
-      preHandler: [fastify.requireAuth, fastify.rateLimit("follow")],
+      preHandler: [fastify.requireAuth, fastify.requireActiveAccount, fastify.rateLimit("follow")],
       config: { rateLimitName: "follow" },
     },
     async (request, reply) => {

@@ -1,6 +1,7 @@
 import type { Locale } from "./locale.js";
 import { COMMENT_MAX_LENGTH } from "@monapp/shared-types";
 import { RATE_LIMITED_MESSAGE } from "../plugins/rateLimit.js";
+import { SEARCH_CAPACITY_MESSAGES } from "./searchCapacity.js";
 
 // Messages d'erreur renvoyés à l'app, dans la langue de l'utilisateur (lot 3).
 // Les routes écrivent leurs messages en français ; juste avant l'envoi, un
@@ -20,10 +21,32 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
     "This image couldn't be read, or the selected area is too small.",
   "Cette image n'est pas autorisée.": "This image isn't allowed.",
   "Cette photo n'a pas pu être lue.": "This photo couldn't be read.",
+  "Cette pièce a déjà été partagée, et sa publication a été masquée par la modération.":
+    "This piece has already been shared, and its post was hidden by moderation.",
   "Cette pièce est déjà partagée dans votre fil. Pour changer qui la voit, modifiez la visibilité de cette publication (depuis la publication).":
     "This piece is already shared in your feed. To change who can see it, edit that post's visibility (from the post itself).",
   "Cette recherche a déjà été lancée.": "This search has already been started.",
+  // Lot 5, partage d'une envie.
+  "Cette envie a déjà été republiée, et sa publication a été masquée par la modération.":
+    "This wish has already been reposted, and its post was hidden by moderation.",
+  "Cette envie est déjà sur votre profil. Pour changer qui la voit, modifiez la visibilité de cette publication (depuis la publication).":
+    "This wish is already on your profile. To change who can see it, edit that post's visibility (from the post itself).",
+  "Cette personne ne reçoit pas de pièces de votre part.": "This person doesn't accept pieces from you.",
+  "Destinataire invalide.": "Invalid recipient.",
+  "L'image de cette envie n'a pas pu être récupérée. Réessayez plus tard.": "This wish's image couldn't be retrieved. Please try again later.",
+  "Personne introuvable.": "Person not found.",
+  "Pièce introuvable.": "Piece not found.",
+  "Réglage invalide.": "Invalid setting.",
+  "Vous avez envoyé beaucoup de pièces en peu de temps. Réessayez dans une heure.":
+    "You've sent a lot of pieces in a short time. Please try again in an hour.",
+  "Vous ne pouvez pas vous envoyer une pièce.": "You can't send a piece to yourself.",
+  "Ce compte est déjà suspendu.": "This account is already suspended.",
+  "Ce contenu est déjà masqué.": "This content is already hidden.",
+  "Ces signalements ont déjà été traités.": "These reports have already been handled.",
+  "Cette décision a déjà été annulée.": "This decision has already been reversed.",
   "Commentaire introuvable.": "Comment not found.",
+  "Contenu introuvable.": "Content not found.",
+  "Décision invalide.": "Invalid decision.",
   "Commentaire invalide.": "Invalid comment.",
   "Contexte de clic invalide.": "Invalid link context.",
   "Curseur de pagination invalide.": "Invalid pagination cursor.",
@@ -55,6 +78,7 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Objet du vault introuvable.": "Vault item not found.",
   "Objet du vault manquant.": "Vault item missing.",
   "Objet introuvable.": "Item not found.",
+  "Page introuvable.": "Page not found.",
   "Paramètre de liste invalide.": "Invalid list parameter.",
   "Pièces taguées invalides.": "Invalid tagged pieces.",
   "Produit introuvable.": "Product not found.",
@@ -72,6 +96,7 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Une photo est obligatoire.": "A photo is required.",
   "Une pièce taguée est introuvable.": "A tagged piece could not be found.",
   "Visibilité invalide.": "Invalid visibility.",
+  "Votre compte est suspendu : cette action n'est plus possible.": "Your account is suspended: this action is no longer available.",
   "Zone de recadrage invalide.": "Invalid crop area.",
   "Zone de recadrage ou texte invalide.": "Invalid crop area or text.",
   "3 à 20 caractères : lettres minuscules, chiffres, underscore.": "3 to 20 characters: lowercase letters, numbers, underscore.",
@@ -87,6 +112,10 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "L'analyse automatique n'est pas disponible. Choisissez l'image avec le curseur.":
     "Automatic analysis isn't available. Choose the frame with the slider.",
   "Les images de la vidéo sont invalides.": "The video frames are invalid.",
+  // Plafond global des recherches (lot 4 quater, lib/searchCapacity.ts).
+  [SEARCH_CAPACITY_MESSAGES.day]: "The search service is in very high demand today. Please try again tomorrow.",
+  [SEARCH_CAPACITY_MESSAGES.month]: "The search service has reached its monthly limit.",
+  [SEARCH_CAPACITY_MESSAGES.user]: "You've reached your search limit for today. Please try again tomorrow.",
   "Une image de la vidéo est trop lourde.": "One of the video frames is too large.",
   "Vous avez atteint la limite quotidienne d'analyses automatiques. Choisissez l'image avec le curseur, ou réessayez demain.":
     "You've reached the daily limit for automatic analyses. Choose the frame with the slider, or try again tomorrow.",

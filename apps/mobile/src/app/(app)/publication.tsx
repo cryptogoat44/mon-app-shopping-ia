@@ -148,7 +148,11 @@ export default function PostDetailScreen() {
               ) : (
                 <View style={styles.confirm}>
                   <Text style={styles.confirmText} accessibilityRole="alert">
-                    {post.type === "purchase" ? t.postDetail.deleteConfirmPurchase : t.postDetail.deleteConfirm}
+                    {post.type === "purchase"
+                      ? t.postDetail.deleteConfirmPurchase
+                      : post.type === "wish"
+                        ? t.postDetail.deleteConfirmWish
+                        : t.postDetail.deleteConfirm}
                   </Text>
                   <View style={styles.confirmButtons}>
                     <Pressable onPress={() => setConfirming(false)} disabled={deleting} hitSlop={12} accessibilityRole="button">

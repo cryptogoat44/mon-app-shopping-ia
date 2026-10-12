@@ -1,4 +1,5 @@
 export type PrivacyLevel = "public" | "followers" | "private";
+export const PRIVACY_LEVELS = ["public", "followers", "private"] as const satisfies readonly PrivacyLevel[];
 
 export interface Profile {
   id: string;
@@ -15,6 +16,21 @@ export interface Profile {
   postsCount: number;
   createdAt: string;
   updatedAt: string;
+  /** Administrateur (lot 5, table « admins », attribuée par SQL) : seule
+   * condition d'affichage de l'entrée « Modération » des Réglages. Le serveur
+   * revérifie le rôle à chaque route d'administration. */
+  isAdmin: boolean;
+  /** Qui peut vous envoyer des pièces (lot 5, section 5.C). */
+  pieceSendsFrom: PieceSendsFrom;
+}
+
+/** Réglage « Qui peut m'envoyer des pièces » : les comptes que je suis (par
+ * défaut), tout le monde, ou personne. */
+export type PieceSendsFrom = "following" | "everyone" | "nobody";
+export const PIECE_SENDS_FROM = ["following", "everyone", "nobody"] as const satisfies readonly PieceSendsFrom[];
+
+export interface UpdatePieceSendsFromRequest {
+  pieceSendsFrom: PieceSendsFrom;
 }
 
 /** True once the user has picked a username — the app shows the
@@ -140,6 +156,46 @@ export type VideoAiErrorCode =
   | "video_ai_unavailable"
   | "invalid_frames";
 
+/** Plafond des recherches atteint (lot 4 quater) : réponse 429 du lancement
+ * d'une recherche, et de l'analyse automatique avant tout envoi à l'IA.
+ * « day » : tout le service, jusqu'à minuit (heure de Paris) ; « month » : tout
+ * le service, cycle mensuel de SerpApi, de nouveau possible le jour
+ * `resumesOn` (son prochain renouvellement, date de Paris « AAAA-MM-JJ ») ;
+ * « user » : la part de la personne pour la journée. */
+export type SearchCapacityLimit = "day" | "month" | "user";
+export const SEARCH_CAPACITY_LIMITS = ["day", "month", "user"] as const satisfies readonly SearchCapacityLimit[];
+export const SEARCH_CAPACITY_ERRORS = {
+  day: "search_capacity_day",
+  month: "search_capacity_month",
+  user: "search_capacity_user",
+} as const satisfies Record<SearchCapacityLimit, string>;
+
+export interface SearchCapacityReached {
+  limit: SearchCapacityLimit;
+  /** Plafond du mois seulement : jour du prochain renouvellement (« AAAA-MM-JJ »), sinon null. */
+  resumesOn: string | null;
+}
+
+export interface SearchCapacityErrorBody extends ApiErrorBody {
+  resumesOn?: string;
+}
+
+/** Une vraie date du calendrier, au format « AAAA-MM-JJ ». */
+export function isCalendarDay(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
+}
+
+/** Lit le corps d'une erreur sans lui faire confiance ; null si ce n'est pas un plafond atteint. */
+export function parseSearchCapacityError(body: unknown): SearchCapacityReached | null {
+  if (typeof body !== "object" || body === null || !("error" in body)) return null;
+  const limit = SEARCH_CAPACITY_LIMITS.find((candidate) => SEARCH_CAPACITY_ERRORS[candidate] === body.error);
+  if (!limit) return null;
+  const resumesOn = limit === "month" && "resumesOn" in body && isCalendarDay(body.resumesOn) ? body.resumesOn : null;
+  return { limit, resumesOn };
+}
+
 function isProportion(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
 }
@@ -196,7 +252,7 @@ export interface ProductMatchClickResponse {
  * hachée, retirée de `affiliate_clicks`). Source unique : le mobile et le
  * backend importent `MERCHANT_LINK_CONTEXTS` plutôt que de dupliquer la
  * liste, pour qu'une faute de frappe ou un contexte oublié soit impossible. */
-export const MERCHANT_LINK_CONTEXTS = ["result", "similar", "vault", "wishlist", "post", "price_alert"] as const;
+export const MERCHANT_LINK_CONTEXTS = ["result", "similar", "vault", "wishlist", "post", "price_alert", "received"] as const;
 export type MerchantLinkContext = (typeof MERCHANT_LINK_CONTEXTS)[number];
 
 export interface TrackProductMatchClickRequest {
@@ -284,6 +340,49 @@ export interface WishlistPage {
   nextCursor: string | null;
 }
 
+/** Détail d'une envie (GET /api/wishlist/:id) : ajoute sa publication
+ * « envie » si elle a été republiée (une seule à la fois, lot 5). */
+export interface WishlistItemDetail extends WishlistItem {
+  sharedPost: { id: string; privacy: PrivacyLevel; createdAt: string } | null;
+}
+
+// ---- Partage d'une envie (lot 5, section 5.C) ----
+// Toujours un geste volontaire : les envies restent privées par défaut.
+
+/** Republier une envie sur son profil (publication « envie »). */
+export interface RepublishWishRequest {
+  privacy: PrivacyLevel;
+}
+
+/** Envoyer une envie à une personne sur Spotto. */
+export interface SendPieceRequest {
+  recipientId: string;
+}
+
+/** Une pièce reçue (onglet « Reçues ») : un instantané de l'envie au moment
+ * de l'envoi, avec la copie de son image faite par notre serveur. */
+export interface ReceivedPiece {
+  id: string;
+  sender: PostAuthor;
+  title: string;
+  imageUrl: string;
+  imageThumbUrl: string;
+  merchantName: string | null;
+  /** Lien à ouvrir : affilié s'il existe, sinon le lien marchand ; null sans marchand. */
+  merchantUrl: string | null;
+  /** true quand `merchantUrl` est un lien affilié (mention obligatoire). */
+  isAffiliate: boolean;
+  productMatchId: string | null;
+  priceMin: number | null;
+  currency: string | null;
+  createdAt: string;
+}
+
+export interface ReceivedPiecesPage {
+  pieces: ReceivedPiece[];
+  nextCursor: string | null;
+}
+
 export interface PublicProfile {
   id: string;
   username: string;
@@ -309,7 +408,10 @@ export interface UserProfile {
   isMe: boolean;
 }
 
-export type PostType = "lifestyle" | "purchase";
+/** « wish » (lot 5) : une envie republiée sur son profil — jamais un achat,
+ * jamais de badge d'achat vérifié. */
+export type PostType = "lifestyle" | "purchase" | "wish";
+export const POST_TYPES = ["lifestyle", "purchase", "wish"] as const satisfies readonly PostType[];
 
 export interface PostAuthor {
   id: string;
@@ -322,6 +424,19 @@ export interface PostVaultItem {
   id: string;
   title: string;
   verified: boolean;
+}
+
+/** Publication « envie » : la pièce, son marchand et son prix. */
+export interface PostWish {
+  title: string;
+  merchantName: string | null;
+  /** Lien à ouvrir : affilié s'il existe, sinon le lien marchand ; null sans marchand. */
+  merchantUrl: string | null;
+  /** true quand `merchantUrl` est un lien affilié (mention obligatoire). */
+  isAffiliate: boolean;
+  productMatchId: string | null;
+  priceMin: number | null;
+  currency: string | null;
 }
 
 /** Une pièce taguée sur une publication (étape 1.E) — issue soit d'un objet
@@ -356,6 +471,8 @@ export interface Post {
   createdAt: string;
   author: PostAuthor;
   vaultItem: PostVaultItem | null;
+  /** Publication « envie » (lot 5) ; null pour les autres types. */
+  wish: PostWish | null;
   taggedPieces: PostTaggedPiece[];
   reactionCount: number;
   viewerHasReacted: boolean;
@@ -509,20 +626,108 @@ export interface RecordConsentsRequest {
   consents: ConsentInput[];
 }
 
-export type NotificationType = "follow" | "like" | "comment";
+/** « piece_received » (lot 5) : une personne vous a envoyé une pièce (in-app, jamais push). */
+export type NotificationType = "follow" | "like" | "comment" | "moderation" | "report_handled" | "piece_received";
+export const NOTIFICATION_TYPES = ["follow", "like", "comment", "moderation", "report_handled", "piece_received"] as const satisfies readonly NotificationType[];
 
 export interface AppNotification {
   id: string;
   type: NotificationType;
-  actor: PostAuthor;
+  /** Auteur de l'action ; null pour la modération (aucun administrateur n'est nommé). */
+  actor: PostAuthor | null;
   createdAt: string;
   read: boolean;
   /** Publication concernée (« j'aime », commentaire), sinon null. */
   postId: string | null;
+  /** « moderation » : la décision qui vous concerne et son motif ; sinon null. */
+  moderation: ModerationNotice | null;
+  /** « report_handled » : le type du contenu que vous aviez signalé (jamais la
+   * décision prise) ; sinon null. */
+  reportedType: ReportTargetType | null;
 }
 
-export type ReportTargetType = "user" | "post" | "comment";
+/** « piece » (lot 5) : une pièce reçue d'une autre personne. */
+export type ReportTargetType = "user" | "post" | "comment" | "piece";
+export const REPORT_TARGET_TYPES = ["user", "post", "comment", "piece"] as const satisfies readonly ReportTargetType[];
 export type ReportReason = "spam" | "inappropriate" | "harassment" | "other";
+export const REPORT_REASONS = ["spam", "inappropriate", "harassment", "other"] as const satisfies readonly ReportReason[];
+
+// ---- Modération (lot 5, section 5.B) : visible des seuls administrateurs ----
+
+/** Décisions possibles : classer sans suite, masquer un contenu, suspendre un
+ * compte, et leurs annulations (rétablir, lever la suspension). */
+export type ModerationActionType = "dismiss" | "hide" | "suspend" | "restore" | "unsuspend";
+export const MODERATION_ACTION_TYPES = ["dismiss", "hide", "suspend", "restore", "unsuspend"] as const satisfies readonly ModerationActionType[];
+export const MODERATION_DECISIONS = ["dismiss", "hide", "suspend"] as const satisfies readonly ModerationActionType[];
+export type ModerationDecision = (typeof MODERATION_DECISIONS)[number];
+/** Longueur maximale de la note d'une décision (montrée à la personne concernée). */
+export const MODERATION_NOTE_MAX_LENGTH = 500;
+
+/** Ce que la personne concernée apprend d'une décision : jamais qui l'a prise. */
+export interface ModerationNotice {
+  action: ModerationActionType;
+  targetType: ReportTargetType;
+  reason: ReportReason | null;
+  note: string | null;
+}
+
+export type ModerationStatus = "open" | "handled";
+
+export interface ModerationAuthor extends PostAuthor {
+  suspended: boolean;
+}
+
+/** Aperçu du contenu signalé ; « missing » : supprimé depuis par son auteur. */
+export type ModerationPreview =
+  | { kind: "post"; author: ModerationAuthor; caption: string | null; imageUrl: string | null; privacy: PrivacyLevel; createdAt: string; hidden: boolean }
+  | { kind: "comment"; author: ModerationAuthor; body: string; postId: string; createdAt: string; hidden: boolean }
+  | { kind: "user"; author: ModerationAuthor; bio: string | null }
+  | { kind: "piece"; author: ModerationAuthor; title: string; imageUrl: string; createdAt: string; hidden: boolean }
+  | { kind: "missing" };
+
+export interface ModerationLogEntry {
+  id: string;
+  action: ModerationActionType;
+  reason: ReportReason | null;
+  note: string | null;
+  createdAt: string;
+  /** Administrateur qui a pris la décision (visible des seuls administrateurs). */
+  adminUsername: string | null;
+}
+
+/** Les signalements d'un même contenu, regroupés. */
+export interface ModerationItem {
+  targetType: ReportTargetType;
+  targetId: string;
+  reportCount: number;
+  reasons: Partial<Record<ReportReason, number>>;
+  notes: string[];
+  firstReportedAt: string;
+  lastReportedAt: string;
+  preview: ModerationPreview;
+  /** Masquage en vigueur (à annuler pour rétablir), sinon null. */
+  activeHideActionId: string | null;
+  /** Suspension en vigueur du compte concerné (à lever), sinon null. */
+  activeSuspendActionId: string | null;
+  history: ModerationLogEntry[];
+}
+
+export interface ModerationPage {
+  items: ModerationItem[];
+  nextCursor: string | null;
+}
+
+export interface ModerationActionRequest {
+  targetType: ReportTargetType;
+  targetId: string;
+  action: ModerationDecision;
+  reason?: ReportReason;
+  note?: string;
+}
+
+export interface ModerationUndoRequest {
+  note?: string;
+}
 
 export interface CreateReportRequest {
   targetType: ReportTargetType;

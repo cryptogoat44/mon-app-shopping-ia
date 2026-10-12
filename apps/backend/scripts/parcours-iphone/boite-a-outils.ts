@@ -25,6 +25,7 @@ import { FICHIER_SIMULATION_SERPAPI, MARQUE_SIMULATION_SERPAPI } from "../lib/si
 import { FICHIER_PANNE_AUTH, FICHIER_SIGNAL_PANNE, MARQUE_PANNE_AUTH } from "../lib/simulation-panne-auth.js";
 import { lireReponses, type ReponseServeur } from "../lib/journal-serveur.js";
 import { codeSansSentry } from "../parcours-ecran/garde-statistiques.js";
+import { PLAFOND_SERPAPI_PARCOURS } from "../lib/plafond-parcours.js";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 export const ROOT = resolve(HERE, "../../../..");
@@ -133,7 +134,7 @@ function demarrerServeurs(iaSimulee: boolean, serpapiSimule: boolean, panneAuth:
   const journaux = mkdtempSync(join(tmpdir(), "parcours-iphone-journaux-"));
   // Jamais de vraie clé d'Anthropic ; avec l'IA simulée, une clé factice et
   // le module de simulation (aucun appel réel).
-  const env: NodeJS.ProcessEnv = { ...process.env, PORT: String(API_PORT), SERPAPI_KEY: "cle-invalide-parcours-iphone" };
+  const env: NodeJS.ProcessEnv = { ...process.env, PORT: String(API_PORT), SERPAPI_KEY: "cle-invalide-parcours-iphone", ...PLAFOND_SERPAPI_PARCOURS };
   // Jamais de Sentry : une erreur provoquée par un parcours ne part nulle part.
   delete env.SENTRY_DSN;
   delete env.ANTHROPIC_API_KEY;

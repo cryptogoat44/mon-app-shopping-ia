@@ -31,9 +31,12 @@ export function successCorrections(context: CorrectionContext): Correction[] {
   return list.length === 0 && context.fromLink ? ["add_video"] : list;
 }
 
+const LIMIT_REASONS: readonly SpotFailReason[] = ["rate_limited", "capacity_day", "capacity_month", "capacity_user"];
+
 /** Après une recherche sans résultat ou qui n'a pas abouti. */
 export function failureCorrections(reason: SpotFailReason, context: CorrectionContext): Correction[] {
-  if (reason === "rate_limited") return [];
+  // Limite atteinte (personne ou service entier) : rien à proposer, un nouvel essai serait refusé.
+  if (LIMIT_REASONS.includes(reason)) return [];
   if (reason === "needs_photo" || !context.hasDraft) return context.fromLink ? ["add_video"] : [];
   // Panne : réessayer d'abord ; l'image reste la bonne.
   if (reason === "technical") return ["retry", context.hasVideo ? "choose_myself" : "reframe"];

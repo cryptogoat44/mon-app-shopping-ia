@@ -17,6 +17,8 @@ function profile(username: string | null): Profile {
     postsCount: 0,
     createdAt: "2026-09-01T00:00:00.000Z",
     updatedAt: "2026-09-01T00:00:00.000Z",
+    isAdmin: false,
+    pieceSendsFrom: "following",
   };
 }
 

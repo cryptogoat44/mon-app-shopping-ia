@@ -78,6 +78,13 @@ describe("analyse automatique — étages 1 et 2", () => {
     expect(discardLocalFile).toHaveBeenCalledTimes(3);
   });
 
+  it("plafond des recherches atteint (lot 4 quater) : ni moment ni repli, le plafond en cause ; images tout de même effacées", async () => {
+    findVideoMoments.mockRejectedValue(new ApiError(429, { error: "search_capacity_user", message: "…" }));
+    expect(await analyzeVideo(fakeVideo(), "veste", onStep)).toEqual({ kind: "capacity", failure: { reason: "capacity_user", resumesOn: null } });
+    expect(track).toHaveBeenCalledWith("video_ai_result", { outcome: "limit", moments_count: 0 });
+    expect(discardLocalFile).toHaveBeenCalledTimes(3);
+  });
+
   it("vidéo illisible sur l'appareil : rien n'est envoyé", async () => {
     const video = fakeVideo();
     video.sampleFrame = vi.fn(async () => {

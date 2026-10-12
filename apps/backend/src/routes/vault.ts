@@ -2,12 +2,15 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { z } from "zod";
-import type { PrivacyLevel, VaultCategory, VaultItem, VaultItemDetail } from "@monapp/shared-types";
+import { PRIVACY_LEVELS, type VaultCategory, type VaultItem, type VaultItemDetail } from "@monapp/shared-types";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.js";
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
 import { PHOTO_SIZES, optimizePhoto } from "../lib/photos.js";
-import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput } from "../lib/validation.js";
+import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseDbRows, parseInput } from "../lib/validation.js";
+import { shownPosts } from "../lib/visibility.js";
+
+const SHARED_POST_ROWS = z.array(z.object({ id: z.string().uuid(), privacy: z.enum(PRIVACY_LEVELS), created_at: z.string() }));
 
 const VAULT_CATEGORIES: VaultCategory[] = [
   "clothing",
@@ -119,9 +122,8 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
     // Publications "achat" qui montrent cet objet : le retirer les
     // supprimerait aussi (cascade, migration 0014) — le mobile s'en sert
     // pour avertir avant confirmation.
-    const { count, error: countError } = await fastify.supabaseAdmin
-      .from("posts")
-      .select("id", { count: "exact", head: true })
+    // Hors publications masquées par la modération, invisibles pour l'auteur aussi (lib/visibility.ts).
+    const { count, error: countError } = await shownPosts(fastify, "id", { count: "exact", head: true })
       .eq("vault_item_id", id)
       .eq("user_id", userId);
 
@@ -157,15 +159,13 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
 
     // État du partage (Lot F) : la publication « achat » la plus récente qui
     // montre cette pièce, pour afficher « Partagée dans votre fil · … ».
-    const { data: sharedRows } = await fastify.supabaseAdmin
-      .from("posts")
-      .select("id, privacy, created_at")
+    const sharedRows = await shownPosts(fastify, "id, privacy, created_at")
       .eq("user_id", userId)
       .eq("type", "purchase")
       .eq("vault_item_id", id)
       .order("created_at", { ascending: false })
       .limit(1);
-    const shared = (sharedRows as { id: string; privacy: PrivacyLevel; created_at: string }[] | null)?.[0];
+    const shared = parseDbRows(SHARED_POST_ROWS, sharedRows, "Partage d'une pièce")[0];
 
     const detail: VaultItemDetail = {
       ...item,

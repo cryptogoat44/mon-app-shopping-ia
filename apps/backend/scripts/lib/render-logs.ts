@@ -2,7 +2,9 @@
 // par le fondateur le 2026-10-07) : uniquement des COMPTEURS — le nombre de
 // requêtes par chemin et par code de réponse, et les compteurs que le serveur
 // écrit lui-même pour l'analyse automatique (images, moments, jetons, motif
-// d'échec). Render ne garde pas de journal des requêtes HTTP pour ce service :
+// d'échec) et pour le plafond des recherches SerpApi (lot 4 quater : réservé
+// ou refusé, compteurs du jour, du mois de SerpApi et de la personne — un
+// nombre, jamais son identifiant). Render ne garde pas de journal des requêtes HTTP pour ce service :
 // on lit les lignes du serveur (« incoming request » / « request completed »),
 // dont on n'extrait QUE la méthode, le chemin (comparé à une liste fixe) et le
 // code de réponse. Aucun message brut, adresse IP, identifiant de compte ni
@@ -112,12 +114,101 @@ export function compterRequetes(entrees: readonly Entree[]): Map<string, Record<
   return codes;
 }
 
+export interface Evenement {
+  /** Heure de la ligne du journal (ISO, donnée par Render) : arrivée de la requête, ou ligne du serveur. */
+  heure: string;
+  nom: string;
+  /** Code de réponse (« ? » sans réponse) ; pour une analyse par l'IA, ses seuls compteurs. */
+  issue: string;
+}
+
+/** Ordre des événements (demande du fondateur, 2026-10-08) : requêtes suivies,
+ * analyses par l'IA et plafond SerpApi, chacun avec son heure, son chemin
+ * générique et son code ou ses compteurs — jamais d'identifiant, d'adresse IP
+ * ni de contenu. */
+export function chronologie(entrees: readonly Entree[]): Evenement[] {
+  const enCours = new Map<string, Evenement>();
+  const evenements: Evenement[] = [];
+  for (const entree of entrees) {
+    const cle = (reqId: string) => `${entree.labels.find((label) => label.name === "instance")?.value ?? ""} ${reqId}`;
+    const brut = lireJson(entree.message);
+    const requete = REQUETE.safeParse(brut);
+    if (requete.success) {
+      const chemin = requete.data.req.url.split("?")[0] ?? "";
+      const suivie = REQUETES_SUIVIES.find((r) => r.method === requete.data.req.method && r.chemin.test(chemin));
+      if (!suivie) continue;
+      const evenement = { heure: entree.timestamp, nom: suivie.nom, issue: "?" };
+      enCours.set(cle(requete.data.reqId), evenement);
+      evenements.push(evenement);
+      continue;
+    }
+    const reponse = REPONSE.safeParse(brut);
+    if (reponse.success) {
+      const evenement = enCours.get(cle(reponse.data.reqId));
+      if (evenement) evenement.issue = String(reponse.data.res.statusCode);
+      enCours.delete(cle(reponse.data.reqId));
+      continue;
+    }
+    const compteurs = extraireCompteursIA(entree.message);
+    if (compteurs) evenements.push({ heure: entree.timestamp, nom: "Analyse vidéo IA", issue: decrireAnalyse(compteurs) });
+    const plafond = extrairePlafond(entree.message);
+    if (plafond) evenements.push({ heure: entree.timestamp, nom: "Plafond SerpApi", issue: decrirePlafond(plafond) });
+  }
+  return evenements.sort((a, b) => Date.parse(a.heure) - Date.parse(b.heure));
+}
+
 /** Ligne « Analyse vidéo IA » du serveur → ses seuls compteurs (null si ce n'en est pas une). */
 export function extraireCompteursIA(message: string): CompteursIA | null {
   const lu = COMPTEURS_IA.safeParse(lireJson(message));
   if (!lu.success || !lu.data.msg.startsWith("Analyse vidéo IA")) return null;
   const { msg, frames, candidates, moments, inputTokens, outputTokens, kind, status } = lu.data;
   return { msg, frames, candidates, moments, inputTokens, outputTokens, kind, status };
+}
+
+/** Seuls champs lus dans les lignes « Plafond SerpApi » du serveur (src/lib/searchCapacity.ts) : des nombres et des états. */
+const PLAFOND = z.object({
+  msg: z.literal("Plafond SerpApi"),
+  step: z.enum(["search", "video_ai"]),
+  outcome: z.enum(["reserved", "refused"]),
+  limit: z.enum(["day", "month", "user"]).nullable(),
+  day: z.number(),
+  month: z.number(),
+  user: z.number(),
+  dayCap: z.number(),
+  monthCap: z.number(),
+  userCap: z.number(),
+  renewalDay: z.number(),
+});
+export type LignePlafond = z.infer<typeof PLAFOND>;
+
+/** Ligne « Plafond SerpApi » du serveur → ses seuls compteurs (null si ce n'en est pas une). */
+export function extrairePlafond(message: string): LignePlafond | null {
+  const lu = PLAFOND.safeParse(lireJson(message));
+  if (!lu.success) return null;
+  const { msg, step, outcome, limit, day, month, user, dayCap, monthCap, userCap, renewalDay } = lu.data;
+  return { msg, step, outcome, limit, day, month, user, dayCap, monthCap, userCap, renewalDay };
+}
+
+function etatPlafond(ligne: LignePlafond): string {
+  return `aujourd'hui ${ligne.day}/${ligne.dayCap}, depuis le ${ligne.renewalDay} ${ligne.month}/${ligne.monthCap}, personne ${ligne.user}/${ligne.userCap}`;
+}
+
+const PLAFONDS = { day: "plafond du jour", month: "plafond du mois", user: "part de la personne pour la journée" } as const;
+
+export function decrirePlafond(ligne: LignePlafond): string {
+  if (ligne.outcome === "reserved" || !ligne.limit) return `recherche réservée — ${etatPlafond(ligne)}`;
+  const moment = ligne.step === "video_ai" ? "avant l'analyse par l'IA" : "au lancement d'une recherche";
+  return `refus (${PLAFONDS[ligne.limit]}), ${moment} — ${etatPlafond(ligne)}`;
+}
+
+/** Bilan de la période : réservations, refus, et le dernier état lu (lignes dans l'ordre). */
+export function resumerPlafond(lignes: readonly LignePlafond[]): string {
+  const derniere = lignes.at(-1);
+  if (!derniere) return "aucune ligne dans la période";
+  const reservees = lignes.filter((ligne) => ligne.outcome === "reserved").length;
+  const refus = (limit: LignePlafond["limit"]) => lignes.filter((ligne) => ligne.outcome === "refused" && ligne.limit === limit).length;
+  const total = refus("day") + refus("month") + refus("user");
+  return `${reservees} recherche(s) réservée(s), ${total} refus (jour ${refus("day")}, mois ${refus("month")}, part personnelle ${refus("user")}) ; dernier état lu : ${etatPlafond(derniere)}`;
 }
 
 export function decrireCodes(codes: Record<string, number>): string {

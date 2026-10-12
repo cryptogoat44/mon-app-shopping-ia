@@ -2,8 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
 import { z } from "zod";
-import type { WishlistItem } from "@monapp/shared-types";
+import type { WishlistItem, WishlistItemDetail } from "@monapp/shared-types";
 import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput } from "../lib/validation.js";
+import { deleteWishCopy, findWishPost } from "../lib/wishShare.js";
 
 const createWishlistItemSchema = z.object({
   title: z.string().trim().min(1).max(120),
@@ -126,7 +127,9 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
     return reply.send(toWishlistItem(inserted as WishlistItemRow));
   });
 
-  // Détail d'une Envie (Lot Q, bloc 3, UX-04) — seulement la sienne.
+  // Détail d'une Envie (Lot Q, bloc 3, UX-04) — seulement la sienne. Lot 5 :
+  // avec sa publication « envie » si elle a été republiée (jamais une
+  // publication masquée par la modération, invisible pour son auteur aussi).
   fastify.get("/api/wishlist/:id", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
     if (!params) return;
@@ -142,11 +145,17 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "wishlist_item_not_found", message: "Envie introuvable." });
     }
     const row = data as WishlistItemRow;
-    const [affiliateUrls, hdUrls] = await Promise.all([
+    const [affiliateUrls, hdUrls, wishPost] = await Promise.all([
       fetchAffiliateUrls(fastify, row.product_match_id ? [row.product_match_id] : []),
       fetchHdImageUrls(fastify, [row]),
+      findWishPost(fastify, row.id),
     ]);
-    return reply.send(toWishlistItem(row, affiliateUrls, hdUrls[0] ?? null));
+    const detail: WishlistItemDetail = {
+      ...toWishlistItem(row, affiliateUrls, hdUrls[0] ?? null),
+      sharedPost:
+        wishPost && !wishPost.hidden_at ? { id: wishPost.id, privacy: wishPost.privacy, createdAt: wishPost.created_at } : null,
+    };
+    return reply.send(detail);
   });
 
   fastify.delete("/api/wishlist/:id", { preHandler: fastify.requireAuth }, async (request, reply) => {
@@ -155,7 +164,22 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
     const { id } = params;
     const userId = request.user!.id;
 
-    await fastify.supabaseAdmin.from("wishlist_items").delete().eq("id", id).eq("user_id", userId);
+    // Lot 5 : sa publication « envie » est supprimée avec elle (cascade en
+    // base) ; la copie de son image, rangée dans le dossier de l'auteur, aussi.
+    const { data: wishPosts } = await fastify.supabaseAdmin
+      .from("posts")
+      .select("media_url, media_thumb_url")
+      .eq("wishlist_item_id", id)
+      .eq("user_id", userId);
+
+    const { error } = await fastify.supabaseAdmin.from("wishlist_items").delete().eq("id", id).eq("user_id", userId);
+    if (error) {
+      request.log.error({ error }, "Échec du retrait d'une envie");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+    for (const post of (wishPosts as { media_url: string | null; media_thumb_url: string | null }[] | null) ?? []) {
+      await deleteWishCopy(fastify, userId, [post.media_url, post.media_thumb_url]);
+    }
 
     return reply.code(204).send();
   });
