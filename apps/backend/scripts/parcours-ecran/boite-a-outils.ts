@@ -32,7 +32,11 @@ const BACKEND_DIR = join(ROOT, "apps/backend");
 const MOBILE_DIR = join(ROOT, "apps/mobile");
 const API_PORT = 3000;
 const SITE_PORT = 8090;
-const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+// Chrome du Mac du fondateur ; dans une session Claude Code « cloud », le
+// Chromium préinstallé (lot 5 : spotto-dev y devient joignable sur demande).
+const MAC_CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const CLOUD_CHROMIUM = "/opt/pw-browsers/chromium";
+const CHROME = existsSync(MAC_CHROME) ? MAC_CHROME : CLOUD_CHROMIUM;
 
 // Format iPhone (écran de 390 × 844 points, captures en 2×).
 const IPHONE = {
@@ -235,7 +239,7 @@ export async function runParcours(
   if (mobileEnv.EXPO_PUBLIC_API_URL !== `http://localhost:${API_PORT}`) {
     throw new Error(`apps/mobile/.env doit viser le serveur local (http://localhost:${API_PORT}).`);
   }
-  if (!existsSync(CHROME)) throw new Error("Google Chrome est introuvable dans /Applications.");
+  if (!existsSync(CHROME)) throw new Error(`Navigateur introuvable (${MAC_CHROME} ou ${CLOUD_CHROMIUM}).`);
   for (const port of [API_PORT, SITE_PORT]) {
     if (!(await portFree(port))) throw new Error(`Le port ${port} est déjà utilisé : arrêtez ce qui tourne dessus, puis relancez.`);
   }

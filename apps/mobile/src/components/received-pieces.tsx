@@ -21,6 +21,7 @@ import { themedStyles } from "@/theme/themed-styles";
 function PieceRow({ piece, onOpenMenu, onRemoved }: { piece: ReceivedPiece; onOpenMenu: () => void; onRemoved: (id: string) => void }) {
   const router = useRouter();
   const { showToast } = useToast();
+  const [confirming, setConfirming] = useState(false);
   const [removing, setRemoving] = useState(false);
   const price = piece.priceMin === null ? null : formatPrice(piece.priceMin, piece.currency, getActiveLocale());
 
@@ -69,9 +70,26 @@ function PieceRow({ piece, onOpenMenu, onRemoved }: { piece: ReceivedPiece; onOp
             {piece.isAffiliate ? <Text style={styles.disclosure}>{t.result.affiliateDisclosure}</Text> : null}
           </>
         ) : null}
-        <Pressable onPress={handleRemove} disabled={removing} hitSlop={8} style={styles.remove} accessibilityRole="button" accessibilityState={{ busy: removing }}>
-          <Text style={styles.removeLabel}>{t.received.remove}</Text>
-        </Pressable>
+        {/* Retrait définitif (la copie de l'image est effacée) : toujours confirmé. */}
+        {!confirming ? (
+          <Pressable onPress={() => setConfirming(true)} hitSlop={8} style={styles.remove} accessibilityRole="button">
+            <Text style={styles.removeLabel}>{t.received.remove}</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.confirm}>
+            <Text style={styles.confirmText} accessibilityRole="alert">
+              {t.received.removeConfirm}
+            </Text>
+            <View style={styles.confirmButtons}>
+              <Pressable onPress={() => setConfirming(false)} disabled={removing} hitSlop={8} style={styles.remove} accessibilityRole="button">
+                <Text style={styles.cancelLabel}>{t.received.removeCancel}</Text>
+              </Pressable>
+              <Pressable onPress={handleRemove} disabled={removing} hitSlop={8} style={styles.remove} accessibilityRole="button" accessibilityState={{ busy: removing }}>
+                <Text style={styles.removeLabel}>{t.received.removeConfirmCta}</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
       </View>
       <Pressable onPress={onOpenMenu} hitSlop={11} style={styles.more} accessibilityRole="button" accessibilityLabel={t.received.options(piece.title)}>
         <MoreIcon size={18} tint={color.acier} />
@@ -183,6 +201,10 @@ const styles = themedStyles(() => ({
   disclosure: { fontSize: 11.5, color: color.acier },
   remove: { alignSelf: "flex-start", minHeight: 32, justifyContent: "center" },
   removeLabel: { fontSize: font.caption, color: color.danger, fontWeight: "600" },
+  confirm: { backgroundColor: color.plinthe, borderRadius: radius.md, padding: space.sm, marginTop: space.xs },
+  confirmText: { fontSize: font.caption, color: color.encre, lineHeight: 18 },
+  confirmButtons: { flexDirection: "row", gap: space.lg },
+  cancelLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600" },
   more: { paddingTop: 2, minWidth: 32, alignItems: "flex-end" },
   moreError: { fontSize: font.secondary, marginTop: space.md },
   loadMore: { alignSelf: "center", marginTop: space.md, minHeight: 44, minWidth: 44, paddingHorizontal: space.lg, borderRadius: radius.md, borderWidth: 1, borderColor: color.filet, justifyContent: "center" },
