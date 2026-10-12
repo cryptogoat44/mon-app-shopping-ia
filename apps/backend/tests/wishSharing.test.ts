@@ -4,6 +4,7 @@ import sharp from "sharp";
 import type { AppNotification, Post, ReceivedPiece, WishlistItemDetail } from "@monapp/shared-types";
 import { env } from "../src/env.js";
 import { downloadPublicImage, PublicImageError } from "../src/lib/publicImage.js";
+import { RATE_LIMITS } from "../src/lib/rateLimits.js";
 import { authHeaders, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
 
 // Lot 5, section 5.C : partage d'une envie. Les envies restent privées ; le
@@ -250,15 +251,25 @@ describe("partage d'une envie", () => {
 
   it("limite de débit : 20 envois par heure au plus", async () => {
     // Un compte neuf (compteur à zéro) ; `stranger` refuse tout : aucune copie d'image, mais chaque envoi compte.
+    // Les limites sont désactivées sous Vitest (NODE_ENV=test) : réactivées le temps de ce test, comme dans rateLimit.test.ts.
     const sender = await createTestUser(app, "wsl");
+    const originalNodeEnv = process.env.NODE_ENV;
     try {
       await setPieceSendsFrom(stranger, "nobody");
       const wish = await createWish(sender, "Lunettes");
+      process.env.NODE_ENV = "development";
       const statuses: number[] = [];
-      for (let i = 0; i < 21; i++) statuses.push((await send(sender, stranger, wish)).statusCode);
+      let last: Awaited<ReturnType<typeof send>> | null = null;
+      for (let i = 0; i <= RATE_LIMITS.pieceSend.max; i++) {
+        last = await send(sender, stranger, wish);
+        statuses.push(last.statusCode);
+      }
+      expect(RATE_LIMITS.pieceSend.max).toBe(20);
       expect(statuses.slice(0, 20)).toEqual(Array(20).fill(403));
       expect(statuses[20]).toBe(429);
+      expect(last!.json()).toEqual({ error: "piece_send_limit", message: RATE_LIMITS.pieceSend.message });
     } finally {
+      process.env.NODE_ENV = originalNodeEnv;
       await deleteTestUser(app, sender.id);
     }
   });
