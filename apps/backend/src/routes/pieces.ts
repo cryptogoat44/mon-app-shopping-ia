@@ -7,7 +7,7 @@
 //   avec une limite de débit ; elle peut signaler la pièce reçue.
 // Dans les deux cas, l'image montrée est une copie faite par notre serveur
 // (lib/wishShare.ts), jamais l'adresse d'origine.
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { PIECE_SENDS_FROM, PRIVACY_LEVELS, type ReceivedPiece } from "@monapp/shared-types";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
@@ -110,10 +110,12 @@ async function checkRecipient(fastify: FastifyInstance, reply: FastifyReply, sen
   return true;
 }
 
-/** Copie l'image de l'envie ; null (réponse déjà envoyée) si impossible. */
-async function copyOrReply(fastify: FastifyInstance, reply: FastifyReply, userId: string, wish: WishRow) {
+/** Copie l'image de l'envie ; null (réponse déjà envoyée) si impossible.
+ * Le journal de la requête relie ses lignes (source retenue ou écartée) à
+ * cette requête. */
+async function copyOrReply(fastify: FastifyInstance, request: FastifyRequest, reply: FastifyReply, userId: string, wish: WishRow) {
   try {
-    return await copyWishImage(fastify, userId, wish);
+    return await copyWishImage(fastify, request.log, userId, wish);
   } catch (error) {
     if (error instanceof WishImageError) {
       void reply.code(422).send(IMAGE_UNAVAILABLE);
@@ -153,7 +155,7 @@ export default async function piecesRoutes(fastify: FastifyInstance) {
       };
       if (existing) return reply.code(409).send(alreadyShared);
 
-      const copy = await copyOrReply(fastify, reply, userId, wish);
+      const copy = await copyOrReply(fastify, request, reply, userId, wish);
       if (!copy) return;
 
       const { data: inserted, error } = await fastify.supabaseAdmin
@@ -200,7 +202,7 @@ export default async function piecesRoutes(fastify: FastifyInstance) {
       if (!wish) return reply.code(404).send(WISH_NOT_FOUND);
       if (!(await checkRecipient(fastify, reply, userId, body.recipientId))) return;
 
-      const copy = await copyOrReply(fastify, reply, userId, wish);
+      const copy = await copyOrReply(fastify, request, reply, userId, wish);
       if (!copy) return;
 
       const { data: sent, error } = await fastify.supabaseAdmin

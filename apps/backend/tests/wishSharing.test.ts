@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import type { FastifyInstance, InjectOptions } from "fastify";
 import sharp from "sharp";
 import type { AppNotification, Post, ReceivedPiece, WishlistItemDetail } from "@monapp/shared-types";
+import { buildApp } from "../src/app.js";
 import { env } from "../src/env.js";
 import { downloadPublicImage, PublicImageError } from "../src/lib/publicImage.js";
 import { RATE_LIMITS } from "../src/lib/rateLimits.js";
@@ -21,6 +22,8 @@ vi.mock("../src/lib/publicImage.js", async (importOriginal) => {
 const downloadMock = vi.mocked(downloadPublicImage);
 
 const ORIGINAL_IMAGE = "https://images.example-shop.test/sac-kelly.jpg";
+// Image « haute définition » du marchand, enregistrée avec le résultat du Spotter.
+const HD_IMAGE = "https://cdn.marchand.test/produits/sac-kelly-hd.jpg";
 const OUR_STORAGE = `${env.SUPABASE_URL}/storage/v1/object/public/post-media/`;
 
 describe("partage d'une envie", () => {
@@ -79,7 +82,7 @@ describe("partage d'une envie", () => {
       .single();
     const { data: match } = await app.supabaseAdmin
       .from("product_matches")
-      .insert({ search_id: search!.id, rank: 1, product_name: "Sac Kelly", image_url: ORIGINAL_IMAGE, merchant_url: "https://example-shop.test/sac" })
+      .insert({ search_id: search!.id, rank: 1, product_name: "Sac Kelly", image_url: ORIGINAL_IMAGE, image_hd_url: HD_IMAGE, merchant_url: "https://example-shop.test/sac" })
       .select("id")
       .single();
     matchId = match!.id;
@@ -116,7 +119,11 @@ describe("partage d'une envie", () => {
     expect(post.mediaUrl.startsWith(`${OUR_STORAGE}${owner.id}/`)).toBe(true);
     expect(post.mediaThumbUrl!.startsWith(`${OUR_STORAGE}${owner.id}/`)).toBe(true);
     expect(JSON.stringify(post)).not.toContain(ORIGINAL_IMAGE);
+    expect(JSON.stringify(post)).not.toContain(HD_IMAGE);
+    expect(post.mediaHdUrl).toBeNull();
+    // Les deux sources sont téléchargées (la plus grande l'emporte : voir plus bas).
     expect(downloadMock).toHaveBeenCalledWith(ORIGINAL_IMAGE);
+    expect(downloadMock).toHaveBeenCalledWith(HD_IMAGE);
     expect(await storageFiles(owner.id)).toEqual(expect.arrayContaining([fileName(post.mediaUrl), fileName(post.mediaThumbUrl!)]));
 
     // Visible des abonnés (fil, profil, détail), jamais des autres.
@@ -293,5 +300,194 @@ describe("partage d'une envie", () => {
     expect(await storageFiles(owner.id)).toContain(fileName(piece.imageUrl));
     expect((await request(stranger, "DELETE", "/api/me")).statusCode).toBe(204);
     expect(await storageFiles(owner.id)).not.toContain(fileName(piece.imageUrl));
+  });
+});
+
+// Choix de la source de la copie : l'image « haute définition » du marchand
+// n'en est pas toujours une (petites versions), et le marchand peut refuser
+// notre serveur. La plus grande image réellement reçue l'emporte ; le journal
+// de la requête dit pourquoi, sans jamais l'adresse complète, la personne,
+// l'envie ni son titre.
+describe("copie de l'image d'une envie : la plus grande source réellement reçue", () => {
+  const logs: string[] = [];
+  let app: FastifyInstance;
+  let sharer: TestUser;
+  let recipient: TestUser; // suit `sharer` : accepte ses pièces
+  let searchId = "";
+  let rank = 0;
+  const wishIds: string[] = [];
+  const titles: string[] = [];
+
+  const request = (user: TestUser, method: InjectOptions["method"], url: string, payload?: object) =>
+    app.inject({ method, url, headers: authHeaders(user.token), payload });
+  const republish = (id: string) => request(sharer, "POST", `/api/wishlist/${id}/republish`, { privacy: "private" });
+  const jpeg = (width: number, height: number) => sharp({ create: { width, height, channels: 3, background: "#876" } }).jpeg().toBuffer();
+
+  /** Téléchargement simulé, adresse par adresse. */
+  function answers(byUrl: Record<string, Buffer | Error>) {
+    downloadMock.mockImplementation(async (url: string) => {
+      const answer = byUrl[url];
+      if (answer === undefined) throw new PublicImageError("Image injoignable");
+      if (answer instanceof Error) throw answer;
+      return answer;
+    });
+  }
+
+  /** Dimensions d'une copie, relue dans notre stockage. */
+  async function storedSize(url: string): Promise<[number | undefined, number | undefined]> {
+    expect(url.startsWith(OUR_STORAGE)).toBe(true);
+    const { data, error } = await app.supabaseAdmin.storage.from("post-media").download(url.slice(OUR_STORAGE.length));
+    if (error || !data) throw error ?? new Error("Copie introuvable");
+    const meta = await sharp(Buffer.from(await data.arrayBuffer())).metadata();
+    return [meta.width, meta.height];
+  }
+
+  /** Lignes du journal sur la copie, depuis le début du test. */
+  function copyLines(): Record<string, unknown>[] {
+    const lines = logs.flatMap((line) => {
+      try {
+        return [JSON.parse(line) as Record<string, unknown>];
+      } catch {
+        return [];
+      }
+    });
+    const copy = lines.filter((line) => typeof line.msg === "string" && line.msg.startsWith("Copie de l'image d'une envie"));
+    // Jamais l'adresse complète, la personne, l'envie ni son titre ; toujours reliées à la requête.
+    const text = JSON.stringify(copy);
+    for (const secret of [HD_IMAGE, ORIGINAL_IMAGE, "sac-kelly", sharer.id, recipient.id, ...wishIds, ...titles]) {
+      expect(text).not.toContain(secret);
+    }
+    for (const line of copy) expect(typeof line.reqId).toBe("string");
+    return copy;
+  }
+
+  /** Une envie venue du Spotter, avec l'image « haute définition » du marchand. */
+  async function wishWithHd(title: string): Promise<string> {
+    rank += 1;
+    const { data: match, error } = await app.supabaseAdmin
+      .from("product_matches")
+      .insert({ search_id: searchId, rank, product_name: title, image_url: ORIGINAL_IMAGE, image_hd_url: HD_IMAGE, merchant_url: "https://example-shop.test/sac" })
+      .select("id")
+      .single();
+    if (error || !match) throw error ?? new Error("Résultat non créé");
+    const res = await request(sharer, "POST", "/api/wishlist", {
+      title,
+      imageUrl: ORIGINAL_IMAGE,
+      merchantName: "Boutique test",
+      merchantUrl: "https://example-shop.test/sac",
+      productMatchId: match.id,
+    });
+    expect(res.statusCode).toBe(200);
+    wishIds.push(res.json().id);
+    titles.push(title);
+    return res.json().id;
+  }
+
+  beforeAll(async () => {
+    app = await buildApp({ logger: { level: "info", stream: { write: (line: string) => logs.push(line) } } });
+    await app.ready();
+    [sharer, recipient] = await Promise.all([createTestUser(app, "wcs"), createTestUser(app, "wcr")]);
+    expect((await request(recipient, "POST", `/api/follows/${sharer.id}`)).statusCode).toBe(204);
+    const { data: search, error } = await app.supabaseAdmin
+      .from("product_searches")
+      .insert({ user_id: sharer.id, source_url: "https://www.tiktok.com/@x/video/3", source_platform: "tiktok", method: "oembed", status: "completed" })
+      .select("id")
+      .single();
+    if (error || !search) throw error ?? new Error("Recherche non créée");
+    searchId = search.id;
+  });
+
+  beforeEach(() => {
+    downloadMock.mockReset();
+    logs.length = 0;
+  });
+
+  afterAll(async () => {
+    // Copies rangées dans le dossier de `sharer` : effacées avec le compte de test.
+    const files = ((await app.supabaseAdmin.storage.from("post-media").list(sharer.id, { limit: 1000 })).data ?? []).map((f) => `${sharer.id}/${f.name}`);
+    if (files.length > 0) await app.supabaseAdmin.storage.from("post-media").remove(files);
+    for (const user of [sharer, recipient]) await deleteTestUser(app, user.id);
+    await app.close();
+  });
+
+  it("la haute définition, plus grande, l'emporte : la copie a sa taille (1 200 × 1 500), la miniature 480 px", async () => {
+    answers({ [HD_IMAGE]: await jpeg(1200, 1500), [ORIGINAL_IMAGE]: await jpeg(180, 280) });
+    const res = await republish(await wishWithHd("Bottes cuir"));
+    expect(res.statusCode).toBe(200);
+    const post: Post = res.json();
+    expect(await storedSize(post.mediaUrl)).toEqual([1200, 1500]);
+    expect(await storedSize(post.mediaThumbUrl!)).toEqual([384, 480]);
+    expect(post.mediaHdUrl).toBeNull();
+    expect(JSON.stringify(post)).not.toContain(HD_IMAGE);
+
+    expect(copyLines()).toEqual([
+      expect.objectContaining({ level: 30, msg: "Copie de l'image d'une envie : source retenue", source: "hd", host: "cdn.marchand.test", width: 1200, height: 1500, bytes: expect.any(Number) }),
+      expect.objectContaining({ level: 30, msg: "Copie de l'image d'une envie : autre source, non retenue", source: "thumbnail", host: "images.example-shop.test", width: 180, height: 280 }),
+    ]);
+  });
+
+  it("le marchand refuse notre serveur (403) : republier et envoyer réussissent avec la vignette ; le refus est journalisé", async () => {
+    answers({ [HD_IMAGE]: new PublicImageError("Image indisponible (403)", 403), [ORIGINAL_IMAGE]: await jpeg(180, 280) });
+    const id = await wishWithHd("Veste en jean");
+    const res = await republish(id);
+    expect(res.statusCode).toBe(200);
+    const post: Post = res.json();
+    expect(await storedSize(post.mediaUrl)).toEqual([180, 280]);
+    expect(copyLines()).toEqual([
+      expect.objectContaining({ level: 40, msg: "Copie de l'image d'une envie : source écartée", source: "hd", host: "cdn.marchand.test", status: 403, reason: "Image indisponible (403)" }),
+      expect.objectContaining({ level: 30, msg: "Copie de l'image d'une envie : source retenue", source: "thumbnail", host: "images.example-shop.test", width: 180, height: 280 }),
+    ]);
+
+    const sent = await request(sharer, "POST", `/api/wishlist/${id}/send`, { recipientId: recipient.id });
+    expect(sent.statusCode).toBe(201);
+    const pieces: ReceivedPiece[] = (await request(recipient, "GET", "/api/pieces/received")).json().pieces;
+    const piece = pieces.find((p) => p.id === sent.json().id)!;
+    expect(await storedSize(piece.imageUrl)).toEqual([180, 280]);
+    expect(await storedSize(piece.imageThumbUrl)).toEqual([180, 280]);
+  });
+
+  it("une petite version « HD » du marchand (120 × 150) perd face à une vignette plus grande", async () => {
+    answers({ [HD_IMAGE]: await jpeg(120, 150), [ORIGINAL_IMAGE]: await jpeg(180, 280) });
+    const res = await republish(await wishWithHd("Mocassins"));
+    expect(res.statusCode).toBe(200);
+    expect(await storedSize((res.json() as Post).mediaUrl)).toEqual([180, 280]);
+    expect(copyLines()).toEqual([
+      expect.objectContaining({ msg: "Copie de l'image d'une envie : source retenue", source: "thumbnail", width: 180, height: 280 }),
+      expect.objectContaining({ msg: "Copie de l'image d'une envie : autre source, non retenue", source: "hd", width: 120, height: 150 }),
+    ]);
+  });
+
+  it("la plus grande se lit (en-tête) mais ne se décode pas (fichier tronqué) : la suivante est copiée", async () => {
+    const full = await sharp({ create: { width: 1200, height: 1500, channels: 3, background: "#000", noise: { type: "gaussian", mean: 128, sigma: 40 } } }).jpeg().toBuffer();
+    answers({ [HD_IMAGE]: full.subarray(0, Math.floor(full.length / 2)), [ORIGINAL_IMAGE]: await jpeg(180, 280) });
+    const res = await republish(await wishWithHd("Ceinture tressée"));
+    expect(res.statusCode).toBe(200);
+    expect(await storedSize((res.json() as Post).mediaUrl)).toEqual([180, 280]);
+    expect(copyLines()).toEqual([
+      expect.objectContaining({ level: 40, msg: "Copie de l'image d'une envie : source écartée", source: "hd", host: "cdn.marchand.test", reason: "Image illisible" }),
+      expect.objectContaining({ msg: "Copie de l'image d'une envie : source retenue", source: "thumbnail", width: 180, height: 280 }),
+    ]);
+  });
+
+  it("aucune source utilisable (refus, puis un SVG) : 422, rien n'est publié ni envoyé", async () => {
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="4000" height="5000"><rect width="4000" height="5000" fill="#876"/></svg>');
+    answers({ [HD_IMAGE]: new PublicImageError("Image indisponible (403)", 403), [ORIGINAL_IMAGE]: svg });
+    const id = await wishWithHd("Lunettes");
+    const filesBefore = ((await app.supabaseAdmin.storage.from("post-media").list(sharer.id, { limit: 1000 })).data ?? []).length;
+    const res = await republish(id);
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error).toBe("wish_image_unavailable");
+    const sent = await request(sharer, "POST", `/api/wishlist/${id}/send`, { recipientId: recipient.id });
+    expect(sent.statusCode).toBe(422);
+    expect((await request(sharer, "GET", `/api/wishlist/${id}`)).json().sharedPost).toBeNull();
+    expect(((await app.supabaseAdmin.storage.from("post-media").list(sharer.id, { limit: 1000 })).data ?? []).length).toBe(filesBefore);
+    const lines = copyLines();
+    expect(lines.some((line) => line.msg === "Copie de l'image d'une envie : source retenue")).toBe(false);
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ level: 40, source: "hd", status: 403, reason: "Image indisponible (403)" }),
+        expect.objectContaining({ level: 40, source: "thumbnail", reason: "Image illisible" }),
+      ])
+    );
   });
 });

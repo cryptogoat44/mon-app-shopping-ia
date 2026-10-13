@@ -60,7 +60,7 @@ const T = {
   en: {
     partager: "Share this wish",
     abonnes: "Followers",
-    republier: "Repost on my profile",
+    republier: "Post to my profile",
     republiee: "On your profile · Followers",
     envoyerA: "Send to someone on Spotto",
     hors: "Share outside Spotto",

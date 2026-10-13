@@ -14,6 +14,7 @@
 // - la connexion se fait sur l'adresse vérifiée, jamais sur une nouvelle
 //   résolution (parade au « DNS rebinding ») ;
 // - 3 redirections au plus, 10 s au total, 8 Mo au plus, type image/*.
+// Si la connexion à une adresse échoue, la suivante (déjà vérifiée) est essayée.
 import { lookup as dnsLookup } from "node:dns/promises";
 import https from "node:https";
 import net from "node:net";
@@ -23,7 +24,28 @@ export const MAX_PUBLIC_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_REDIRECTS = 3;
 const TIMEOUT_MS = 10_000;
 
-export class PublicImageError extends Error {}
+// Identité annoncée aux sites qui servent l'image : celle, honnête, d'un
+// robot, au format standard des robots (« compatible; Nom/version; +site »),
+// jamais celle d'un vrai navigateur. Un simple « Spotto/1.0 » est plus
+// souvent refusé par les serveurs d'images des marchands. Aucune variable du
+// serveur ne porte l'adresse du site public : c'est celle de la version web
+// (même valeur que PUBLIC_WEB_URL dans l'app, apps/mobile/src/constants/brand.ts).
+const SPOTTO_SITE_URL = "https://mon-app-shopping-ia-web.onrender.com";
+export const IMAGE_REQUEST_HEADERS = {
+  accept: "image/avif,image/webp,image/jpeg,image/png,image/*;q=0.8",
+  "user-agent": `Mozilla/5.0 (compatible; Spotto/1.0; +${SPOTTO_SITE_URL})`,
+} as const;
+
+export class PublicImageError extends Error {
+  /** Code de la réponse quand le site a répondu autre chose que 200 (ex.
+   * 403 : il refuse notre serveur) — pour le journal. */
+  readonly status?: number;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.status = status;
+  }
+}
 
 export interface ResolvedAddress {
   address: string;
@@ -118,14 +140,14 @@ export function checkImageUrl(raw: string): URL {
   return url;
 }
 
-/** L'adresse publique sur laquelle se connecter, ou une erreur si le nom
- * désigne (même en partie) une adresse interne. */
-export async function resolvePublicHost(hostname: string, resolver: Resolver = defaultResolver): Promise<ResolvedAddress> {
+/** Toutes les adresses publiques du nom, dans l'ordre de la résolution, ou
+ * une erreur si le nom désigne (même en partie) une adresse interne. */
+export async function resolvePublicAddresses(hostname: string, resolver: Resolver = defaultResolver): Promise<ResolvedAddress[]> {
   const bare = hostname.replace(/^\[|\]$/g, "");
   const literal = net.isIP(bare);
   if (literal) {
     if (!isPublicAddress(bare)) throw new PublicImageError("Adresse interne refusée");
-    return { address: bare, family: literal === 6 ? 6 : 4 };
+    return [{ address: bare, family: literal === 6 ? 6 : 4 }];
   }
   let addresses: ResolvedAddress[];
   try {
@@ -136,7 +158,12 @@ export async function resolvePublicHost(hostname: string, resolver: Resolver = d
   if (addresses.length === 0) throw new PublicImageError("Nom d'hôte introuvable");
   // Une seule adresse interne suffit à tout refuser : on ne choisit pas « la bonne ».
   if (addresses.some((a) => !isPublicAddress(a.address))) throw new PublicImageError("Adresse interne refusée");
-  return addresses[0]!;
+  return addresses;
+}
+
+/** L'adresse publique sur laquelle se connecter en premier (mêmes refus). */
+export async function resolvePublicHost(hostname: string, resolver: Resolver = defaultResolver): Promise<ResolvedAddress> {
+  return (await resolvePublicAddresses(hostname, resolver))[0]!;
 }
 
 function request(url: URL, target: ResolvedAddress, signal: AbortSignal): Promise<IncomingMessage> {
@@ -146,7 +173,7 @@ function request(url: URL, target: ResolvedAddress, signal: AbortSignal): Promis
       {
         method: "GET",
         signal,
-        headers: { accept: "image/*", "user-agent": "Spotto/1.0 (image copy)" },
+        headers: IMAGE_REQUEST_HEADERS,
         // Connexion sur l'adresse déjà vérifiée : aucune nouvelle résolution.
         lookup: (_hostname, options, callback) => {
           if (options.all) callback(null, [{ address: target.address, family: target.family }]);
@@ -158,6 +185,21 @@ function request(url: URL, target: ResolvedAddress, signal: AbortSignal): Promis
     req.on("error", reject);
     req.end();
   });
+}
+
+/** Se connecte à la première adresse qui répond, parmi celles déjà
+ * vérifiées (un serveur injoignable parmi plusieurs ne fait plus échouer la
+ * copie) ; jamais au-delà du délai total. */
+async function connect(url: URL, targets: ResolvedAddress[], signal: AbortSignal): Promise<IncomingMessage> {
+  for (const target of targets) {
+    if (signal.aborted) break;
+    try {
+      return await request(url, target, signal);
+    } catch {
+      // Adresse suivante.
+    }
+  }
+  throw new PublicImageError("Image injoignable");
 }
 
 async function readBody(response: IncomingMessage): Promise<Buffer> {
@@ -186,13 +228,7 @@ export async function downloadPublicImage(rawUrl: string, resolver: Resolver = d
   const signal = AbortSignal.timeout(TIMEOUT_MS);
   let url = checkImageUrl(rawUrl);
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    const target = await resolvePublicHost(url.hostname, resolver);
-    let response: IncomingMessage;
-    try {
-      response = await request(url, target, signal);
-    } catch {
-      throw new PublicImageError("Image injoignable");
-    }
+    const response = await connect(url, await resolvePublicAddresses(url.hostname, resolver), signal);
     const status = response.statusCode ?? 0;
     if (status >= 300 && status < 400) {
       const location = response.headers.location;
@@ -203,7 +239,7 @@ export async function downloadPublicImage(rawUrl: string, resolver: Resolver = d
     }
     if (status !== 200) {
       response.resume();
-      throw new PublicImageError(`Image indisponible (${status})`);
+      throw new PublicImageError(`Image indisponible (${status})`, status);
     }
     if (!String(response.headers["content-type"] ?? "").toLowerCase().startsWith("image/")) {
       response.resume();

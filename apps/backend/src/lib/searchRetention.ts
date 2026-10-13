@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { chunks } from "./pagedReads.js";
 
 // Conservation de l'historique des recherches (décision du fondateur,
 // 2026-09-25) : 12 mois, puis suppression. Pas de tâche programmée : à
@@ -13,18 +14,11 @@ import type { FastifyInstance } from "fastify";
 // lien vers la pièce d'origine.
 
 export const SEARCH_RETENTION_MONTHS = 12;
-const CHUNK = 100; // taille des listes d'identifiants envoyées à la base
 
 export function retentionCutoff(now: Date): Date {
   const cutoff = new Date(now);
   cutoff.setMonth(cutoff.getMonth() - SEARCH_RETENTION_MONTHS);
   return cutoff;
-}
-
-function chunks<T>(items: T[]): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += CHUNK) out.push(items.slice(i, i + CHUNK));
-  return out;
 }
 
 async function idsWhere(

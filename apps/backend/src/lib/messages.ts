@@ -6,7 +6,8 @@ import { SEARCH_CAPACITY_MESSAGES } from "./searchCapacity.js";
 // Messages d'erreur renvoyés à l'app, dans la langue de l'utilisateur (lot 3).
 // Les routes écrivent leurs messages en français ; juste avant l'envoi, un
 // crochet (app.ts) les remplace par leur version anglaise si l'app a demandé
-// l'anglais. L'app envoie la langue du profil dans l'en-tête Accept-Language.
+// l'anglais. L'app envoie, dans l'en-tête Accept-Language, la langue choisie
+// dans l'app sur cet appareil (pas la langue enregistrée dans le profil).
 // Un test vérifie que chaque message français du serveur a sa traduction.
 
 export const GENERIC_CLIENT_ERROR = "Requête invalide.";
@@ -28,7 +29,7 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Cette recherche a déjà été lancée.": "This search has already been started.",
   // Lot 5, partage d'une envie.
   "Cette envie a déjà été republiée, et sa publication a été masquée par la modération.":
-    "This wish has already been reposted, and its post was hidden by moderation.",
+    "This wish has already been posted to your profile, and that post was hidden by moderation.",
   "Cette envie est déjà sur votre profil. Pour changer qui la voit, modifiez la visibilité de cette publication (depuis la publication).":
     "This wish is already on your profile. To change who can see it, edit that post's visibility (from the post itself).",
   "Cette personne ne reçoit pas de pièces de votre part.": "This person doesn't accept pieces from you.",
@@ -62,6 +63,9 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "L'envoi de l'image a échoué, réessayez.": "The image couldn't be uploaded. Please try again.",
   "L'envoi de la photo a échoué.": "The photo couldn't be uploaded.",
   "L'export a échoué, réessayez.": "The export failed. Please try again.",
+  // Limite des exports de données (lib/rateLimits.ts).
+  "Vous avez demandé plusieurs exports en peu de temps. Réessayez dans une heure.":
+    "You've requested several exports in a short time. Please try again in an hour.",
   "Le résultat n'a pas pu être enregistré, réessayez.": "The result couldn't be saved. Please try again.",
   "L'image de la vidéo n'est plus disponible. Importez une capture de la pièce.":
     "The video's image is no longer available. Please import a screenshot of the piece.",

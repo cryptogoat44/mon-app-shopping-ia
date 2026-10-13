@@ -22,12 +22,20 @@ export function wishShareIsAffiliate(item: ShareableWish): boolean {
   return item.affiliateUrl !== null && item.affiliateUrl !== item.merchantUrl;
 }
 
+/** Le marchand à citer, sauf s'il figure déjà dans le titre : « Sac | ASOS »
+ * ne devient pas « Sac | ASOS chez ASOS » (comparaison sans les majuscules). */
+function merchantToMention(item: ShareableWish): string | null {
+  const merchant = item.merchantName?.trim();
+  if (!merchant) return null;
+  return item.title.toLowerCase().includes(merchant.toLowerCase()) ? null : item.merchantName;
+}
+
 /** Le texte partagé : la pièce, le marchand, le lien et, s'il y a lieu, la mention. */
 export function wishShareMessage(item: ShareableWish): string | null {
   const link = wishShareLink(item);
   if (!link) return null;
   const mention = wishShareIsAffiliate(item) ? ` ${t.wishlistItem.affiliateMention}` : "";
-  return `${t.wishlistItem.shareMessage(item.title, item.merchantName)}\n${link}${mention}`;
+  return `${t.wishlistItem.shareMessage(item.title, merchantToMention(item))}\n${link}${mention}`;
 }
 
 /** Feuille de partage du système ; sur un navigateur sans partage, copie le
