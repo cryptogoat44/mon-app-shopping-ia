@@ -1,5 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { EventEmitter } from "node:events";
+import { Readable } from "node:stream";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  IMAGE_REQUEST_HEADERS,
   PublicImageError,
   checkImageUrl,
   downloadPublicImage,
@@ -11,8 +14,14 @@ import {
 // Lot 5, 5.C : copie de l'image d'une envie partagée « comme Instagram ».
 // L'adresse vient de l'app : le serveur ne doit jamais se laisser envoyer
 // vers une adresse interne (attaque SSRF). Aucun appel réseau ici : les
-// résolutions de noms sont simulées, et chaque refus a lieu avant toute
-// connexion.
+// résolutions de noms sont simulées, chaque refus a lieu avant toute
+// connexion, et les réponses des serveurs sont simulées elles aussi.
+const { httpsRequest } = vi.hoisted(() => ({ httpsRequest: vi.fn() }));
+vi.mock("node:https", () => ({ default: { request: httpsRequest } }));
+
+beforeEach(() => {
+  httpsRequest.mockReset();
+});
 
 const resolverTo = (...addresses: string[]): Resolver =>
   vi.fn(async () => addresses.map((address) => ({ address, family: address.includes(":") ? (6 as const) : (4 as const) })));
@@ -97,11 +106,77 @@ describe("résolution du nom", () => {
   });
 });
 
+type Answer = { status: number; headers?: Record<string, string>; body?: Buffer } | Error;
+
+/** Prochaine connexion simulée : la réponse du serveur, ou l'échec de la
+ * connexion. Note l'adresse sur laquelle elle a lieu (celle déjà vérifiée). */
+function answerNext(answer: Answer, connectedTo: string[] = []) {
+  httpsRequest.mockImplementationOnce(
+    (_url: URL, options: { lookup: (host: string, opts: object, done: (error: Error | null, address: string) => void) => void }, callback: (response: Readable) => void) => {
+      const req = Object.assign(new EventEmitter(), {
+        end: () => {
+          options.lookup("ignoré", {}, (_error, address) => connectedTo.push(address));
+          setImmediate(() => {
+            if (answer instanceof Error) req.emit("error", answer);
+            else callback(Object.assign(Readable.from(answer.body ? [answer.body] : []), { statusCode: answer.status, headers: answer.headers ?? {} }));
+          });
+        },
+      });
+      return req;
+    }
+  );
+  return connectedTo;
+}
+
+const JPEG = { "content-type": "image/jpeg" };
+
 describe("téléchargement", () => {
   it("refuse avant toute connexion une adresse http, interne ou mal formée", async () => {
     const resolver = resolverTo("127.0.0.1");
     await expect(downloadPublicImage("http://cdn.example.com/a.jpg", resolver)).rejects.toThrow(PublicImageError);
     await expect(downloadPublicImage("https://127.0.0.1/a.jpg", resolver)).rejects.toThrow("Adresse interne refusée");
     await expect(downloadPublicImage("https://cdn.example.com/a.jpg", resolver)).rejects.toThrow("Adresse interne refusée");
+    expect(httpsRequest).not.toHaveBeenCalled();
+  });
+
+  it("s'annonce honnêtement comme un robot (format standard), jamais comme un vrai navigateur", async () => {
+    answerNext({ status: 200, headers: JPEG, body: Buffer.from("octets") });
+    await expect(downloadPublicImage("https://cdn.example.com/a.jpg", resolverTo("93.184.215.14"))).resolves.toEqual(Buffer.from("octets"));
+    const headers = httpsRequest.mock.calls[0]![1].headers as Record<string, string>;
+    expect(headers).toEqual(IMAGE_REQUEST_HEADERS);
+    expect(headers["user-agent"]).toMatch(/^Mozilla\/5\.0 \(compatible; Spotto\/1\.0; \+https:\/\/[^ )]+\)$/);
+    expect(headers["user-agent"]).not.toMatch(/Chrome|Safari|Firefox|Gecko|AppleWebKit|Edg/);
+    expect(headers.accept).toBe("image/avif,image/webp,image/jpeg,image/png,image/*;q=0.8");
+  });
+
+  it("réponse autre que 200 : son code est gardé (status), pour le journal", async () => {
+    answerNext({ status: 403 });
+    const refused = await downloadPublicImage("https://cdn.example.com/a.jpg", resolverTo("93.184.215.14")).catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(PublicImageError);
+    expect(refused).toMatchObject({ message: "Image indisponible (403)", status: 403 });
+
+    // Les autres refus n'ont pas de code.
+    answerNext({ status: 200, headers: { "content-type": "text/html" } });
+    const notImage = await downloadPublicImage("https://cdn.example.com/a.jpg", resolverTo("93.184.215.14")).catch((error: unknown) => error);
+    expect(notImage).toMatchObject({ message: "Ce n'est pas une image", status: undefined });
+  });
+
+  it("redirection vers une adresse interne : refusée, sans seconde connexion", async () => {
+    answerNext({ status: 302, headers: { location: "https://10.0.0.5/a.jpg" } });
+    await expect(downloadPublicImage("https://cdn.example.com/a.jpg", resolverTo("93.184.215.14"))).rejects.toThrow("Adresse interne refusée");
+    expect(httpsRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("une adresse injoignable : la suivante, déjà vérifiée, est essayée ; toutes injoignables : refus", async () => {
+    const resolver = resolverTo("93.184.215.14", "151.101.1.140");
+    const connectedTo = answerNext(new Error("ECONNREFUSED"));
+    answerNext({ status: 200, headers: JPEG, body: Buffer.from("octets") }, connectedTo);
+    await expect(downloadPublicImage("https://cdn.example.com/a.jpg", resolver)).resolves.toEqual(Buffer.from("octets"));
+    expect(connectedTo).toEqual(["93.184.215.14", "151.101.1.140"]);
+
+    answerNext(new Error("ECONNREFUSED"));
+    answerNext(new Error("ETIMEDOUT"));
+    await expect(downloadPublicImage("https://cdn.example.com/a.jpg", resolver)).rejects.toThrow("Image injoignable");
+    expect(httpsRequest).toHaveBeenCalledTimes(4);
   });
 });

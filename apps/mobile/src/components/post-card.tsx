@@ -9,6 +9,8 @@ import { color, font, radius, space } from "@/theme/tokens";
 import { CommentIcon, HeartIcon, MoreIcon, PersonIcon, ShareIcon, VerifiedIcon } from "@/components/icons";
 import { sharePost } from "@/lib/share-post";
 import { SpotImage } from "@/components/spot-image";
+import { ProductFrame } from "@/components/product-frame";
+import { showsProductPicture } from "@/lib/post-media";
 import { useToast } from "@/lib/toast-context";
 import { getActiveLocale, t } from "@/i18n";
 import { formatPrice, timeAgo } from "@/lib/format";
@@ -120,9 +122,15 @@ export function PostCard({
         accessibilityRole="image"
         accessibilityLabel={post.type === "wish" ? t.post.wishBy(post.author.displayName) : t.post.photoBy(post.author.displayName)}
       >
-        {/* « Achat » venu du Spotter : image HD du marchand, repli sur la
-            miniature ; photo publiée : version d'affichage (1 600 px). */}
-        <SpotImage hdUri={post.mediaHdUrl} fallbackUri={post.mediaUrl} style={styles.media} fit="cover" recyclingKey={post.id} />
+        {/* Image d'une pièce (envie republiée : notre copie ; « achat » venu du
+            Spotter : image HD du marchand, repli sur la miniature) : entière,
+            dans le cadre 4:5 de l'écran d'une envie. Photo de la personne :
+            version d'affichage (1 600 px), carré pleine largeur. */}
+        {showsProductPicture(post) ? (
+          <ProductFrame hdUri={post.mediaHdUrl} fallbackUri={post.mediaUrl} recyclingKey={post.id} />
+        ) : (
+          <SpotImage hdUri={post.mediaHdUrl} fallbackUri={post.mediaUrl} style={styles.media} fit="cover" recyclingKey={post.id} />
+        )}
         <Animated.View
           pointerEvents="none"
           style={[

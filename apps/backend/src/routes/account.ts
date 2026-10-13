@@ -1,7 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { ACCEPTED_CONSENT_VERSIONS, CONSENT_TYPES, CONSENT_VERSIONS, OPTIONAL_CONSENTS, type ConsentStatus, type ConsentType, type VersionedConsentType } from "@monapp/shared-types";
+import { env } from "../env.js";
+import { collectExport } from "../lib/exportData.js";
+import { localDay, resolveTimeZone } from "../lib/exportFormat.js";
+import { exportContentSecurityPolicy, renderExportHtml } from "../lib/exportHtml.js";
+import { collectLookups } from "../lib/exportLookups.js";
+import { requestLocale } from "../lib/locale.js";
 import { deleteUserStorageFiles } from "../lib/storage.js";
+import { parseInput } from "../lib/validation.js";
 import { deleteWishCopy } from "../lib/wishShare.js";
 
 const recordConsentsSchema = z.object({
@@ -21,29 +28,20 @@ function isVersioned(type: ConsentType): type is VersionedConsentType {
   return type in CONSENT_VERSIONS;
 }
 
-/** Export, partie modération (lot 5) : rôle d'administrateur, suspension en
- * vigueur, décisions qui vous concernent (jamais le nom de l'administrateur)
- * et, pour un administrateur, celles qu'il a prises. Une lecture en échec est
- * ajoutée à `failures` : l'export entier échoue. */
-async function exportModeration(fastify: FastifyInstance, userId: string, failures: string[]) {
-  const db = fastify.supabaseAdmin;
-  const columns = "id, action, target_type, target_id, reason, note, undoes_action_id, created_at";
-  const [admin, suspension, aboutMe, taken] = await Promise.all([
-    db.from("admins").select("created_at").eq("user_id", userId).maybeSingle(),
-    db.from("suspensions").select("created_at, moderation_action_id").eq("user_id", userId).maybeSingle(),
-    db.from("moderation_actions").select(columns).eq("target_user_id", userId).order("created_at"),
-    db.from("moderation_actions").select(columns).eq("admin_id", userId).order("created_at"),
-  ]);
-  if (admin.error) failures.push("adminRole");
-  if (suspension.error) failures.push("suspension");
-  if (aboutMe.error) failures.push("moderationDecisionsAboutMe");
-  if (taken.error) failures.push("moderationDecisionsTaken");
-  return {
-    adminRole: admin.data ?? null,
-    suspension: suspension.data ?? null,
-    moderationDecisionsAboutMe: aboutMe.data ?? [],
-    moderationDecisionsTaken: taken.data ?? [],
-  };
+// Export : format choisi par la personne à chaque export. « json » (par
+// défaut, comme les anciennes versions de l'app) : les lignes brutes ;
+// « html » : le fichier lisible, qui contient aussi le JSON complet.
+const exportQuerySchema = z.object({ format: z.enum(["json", "html"]).default("json") });
+
+const EXPORT_FILE_BASE = { fr: "spotto-mes-donnees", en: "spotto-my-data" } as const;
+
+/** Origine de notre stockage (seules images affichées dans le fichier). */
+function storageOrigin(): string | null {
+  try {
+    return new URL(env.SUPABASE_URL).origin;
+  } catch {
+    return null;
+  }
 }
 
 export default async function accountRoutes(fastify: FastifyInstance) {
@@ -139,124 +137,74 @@ export default async function accountRoutes(fastify: FastifyInstance) {
     return reply.code(204).send();
   });
 
-  // Export RGPD (droit d'accès et de portabilité) : un instantané JSON de
-  // TOUTES les données personnelles de l'utilisateur. Toute nouvelle table
-  // contenant des données personnelles doit être ajoutée ici (règle 10 du
-  // programme) — le test tests/exportCompleteness.test.ts vérifie chaque
-  // section. Si une seule lecture échoue, l'export entier échoue : un export
+  // Export RGPD (droit d'accès et de portabilité) : TOUTES les données
+  // personnelles de l'utilisateur (lecture : lib/exportData.ts, règle 10 du
+  // programme ; le test tests/exportCompleteness.test.ts vérifie chaque
+  // section). Si une seule lecture échoue, l'export entier échoue : un export
   // partiel présenté comme complet serait pire qu'une erreur (audit Lot Q,
-  // SEC-01).
-  fastify.get("/api/me/export", { preHandler: fastify.requireAuth }, async (request, reply) => {
-    const userId = request.user!.id;
-    const db = fastify.supabaseAdmin;
+  // SEC-01). Jamais requireActiveAccount : un compte suspendu peut toujours
+  // exporter ses données.
+  fastify.get(
+    "/api/me/export",
+    { preHandler: [fastify.requireAuth, fastify.rateLimit("dataExport")], config: { rateLimitName: "dataExport" } },
+    async (request, reply) => {
+      const query = parseInput(exportQuerySchema, request.query, reply);
+      if (!query) return;
+      const userId = request.user!.id;
 
-    const failures: string[] = [];
-    function rows<T>(section: string, result: { data: T[] | null; error: unknown }): T[] {
-      if (result.error) failures.push(section);
-      return result.data ?? [];
+      const { data, failures } = await collectExport(fastify, userId, request.user!.email);
+      if (failures.length > 0) {
+        request.log.error({ failures }, "Export RGPD incomplet — échec de lecture");
+        return reply.code(500).send({ error: "export_failed", message: "L'export a échoué, réessayez." });
+      }
+
+      // Fichier lisible : dans la langue de l'app (Accept-Language), dates dans
+      // le fuseau de l'appareil (en-tête X-Time-Zone, jamais dans l'adresse :
+      // elle finirait dans les journaux de Render).
+      let page: string | null = null;
+      const locale = requestLocale(request);
+      const timeZone = resolveTimeZone(request.headers["x-time-zone"], locale);
+      if (query.format === "html") {
+        try {
+          const lookups = await collectLookups(fastify, userId, data);
+          page = renderExportHtml(data, lookups, {
+            locale,
+            timeZone,
+            storageOrigin: storageOrigin(),
+            // Nom de la section et de la colonne seulement, jamais sa valeur.
+            onUnknownColumn: (section, column) => request.log.warn({ section, column }, "Export lisible : colonne inconnue, affichée sous son nom brut"),
+          });
+        } catch (error) {
+          request.log.error({ errorName: error instanceof Error ? error.name : "inconnue" }, "Export RGPD lisible impossible");
+          return reply.code(500).send({ error: "export_failed", message: "L'export a échoué, réessayez." });
+        }
+      }
+
+      const { error: requestLogError } = await fastify.supabaseAdmin.from("data_export_requests").insert({
+        user_id: userId,
+        status: "ready",
+        completed_at: new Date().toISOString(),
+      });
+      if (requestLogError) {
+        request.log.error({ requestLogError }, "Échec d'enregistrement de la demande d'export");
+      }
+      // Le format va seulement dans le journal (aucune colonne pour lui en base).
+      request.log.info({ format: query.format }, "Export RGPD envoyé");
+
+      reply.header("Cache-Control", "no-store");
+      if (page === null) return reply.send(data);
+
+      // Téléchargé, jamais affiché sur l'adresse de l'API : pièce jointe,
+      // type imposé, et une politique de sécurité « sandbox » au cas où.
+      const fileName = `${EXPORT_FILE_BASE[locale]}-${localDay(new Date(), timeZone)}.html`;
+      return reply
+        .header("Content-Type", "text/html; charset=utf-8")
+        .header("Content-Disposition", `attachment; filename="${fileName}"`)
+        .header("X-Content-Type-Options", "nosniff")
+        .header("Content-Security-Policy", `sandbox; ${exportContentSecurityPolicy(storageOrigin())}`)
+        .send(page);
     }
-
-    // Tables sans user_id direct (product_matches, post_tagged_pieces,
-    // affiliate_conversions) : on récupère d'abord les lignes parentes de
-    // l'utilisateur, puis leurs enfants par identifiant — plus simple et
-    // plus sûr qu'un filtre sur une ressource jointe.
-    const [searchesRes, postsRes, clicksRes] = await Promise.all([
-      db.from("product_searches").select("*").eq("user_id", userId),
-      db.from("posts").select("*").eq("user_id", userId),
-      db.from("affiliate_clicks").select("*").eq("user_id", userId),
-    ]);
-    const productSearches = rows("productSearches", searchesRes);
-    const posts = rows("posts", postsRes);
-    const affiliateClicks = rows("affiliateClicks", clicksRes);
-
-    const searchIds = productSearches.map((s) => s.id as string);
-    const postIds = posts.map((p) => p.id as string);
-    const clickIds = affiliateClicks.map((c) => c.id as string);
-    const empty = Promise.resolve({ data: [] as Record<string, unknown>[], error: null });
-
-    const [
-      profileRes,
-      matchesRes,
-      taggedRes,
-      conversionsRes,
-      vaultRes,
-      wishlistRes,
-      followersRes,
-      followingRes,
-      reactionsRes,
-      notificationsRes,
-      blocksRes,
-      reportsRes,
-      commentsRes,
-      consentsRes,
-      exportRequestsRes,
-      moderation,
-      piecesSentRes,
-      piecesReceivedRes,
-    ] = await Promise.all([
-      db.from("profiles").select("*").eq("id", userId).maybeSingle(),
-      searchIds.length > 0 ? db.from("product_matches").select("*").in("search_id", searchIds) : empty,
-      postIds.length > 0 ? db.from("post_tagged_pieces").select("*").in("post_id", postIds) : empty,
-      clickIds.length > 0 ? db.from("affiliate_conversions").select("*").in("affiliate_click_id", clickIds) : empty,
-      db.from("vault_items").select("*").eq("user_id", userId),
-      db.from("wishlist_items").select("*").eq("user_id", userId),
-      db.from("follows").select("follower_id, created_at").eq("followee_id", userId),
-      db.from("follows").select("followee_id, created_at").eq("follower_id", userId),
-      db.from("post_reactions").select("post_id, created_at").eq("user_id", userId),
-      db.from("notifications").select("*").eq("user_id", userId),
-      db.from("blocks").select("blocked_id, created_at").eq("blocker_id", userId),
-      db.from("reports").select("*").eq("reporter_id", userId),
-      db.from("comments").select("*").eq("user_id", userId),
-      db.from("consents").select("*").eq("user_id", userId),
-      db.from("data_export_requests").select("*").eq("user_id", userId),
-      exportModeration(fastify, userId, failures),
-      // Lot 5 : pièces envoyées et reçues (instantané de l'envie et adresse de la copie de son image).
-      db.from("piece_sends").select("*").eq("sender_id", userId),
-      db.from("piece_sends").select("*").eq("recipient_id", userId),
-    ]);
-
-    if (profileRes.error) failures.push("profile");
-    const exported = {
-      exportedAt: new Date().toISOString(),
-      profile: profileRes.data ?? null,
-      productSearches,
-      productMatches: rows("productMatches", matchesRes),
-      vaultItems: rows("vaultItems", vaultRes),
-      wishlistItems: rows("wishlistItems", wishlistRes),
-      posts,
-      postTaggedPieces: rows("postTaggedPieces", taggedRes),
-      reactionsGiven: rows("reactionsGiven", reactionsRes),
-      followers: rows("followers", followersRes),
-      following: rows("following", followingRes),
-      blockedAccounts: rows("blockedAccounts", blocksRes),
-      reportsSubmitted: rows("reportsSubmitted", reportsRes),
-      comments: rows("comments", commentsRes),
-      notifications: rows("notifications", notificationsRes),
-      affiliateClicks,
-      affiliateConversions: rows("affiliateConversions", conversionsRes),
-      consents: rows("consents", consentsRes),
-      dataExportRequests: rows("dataExportRequests", exportRequestsRes),
-      piecesSent: rows("piecesSent", piecesSentRes),
-      piecesReceived: rows("piecesReceived", piecesReceivedRes),
-      ...moderation,
-    };
-
-    if (failures.length > 0) {
-      request.log.error({ failures }, "Export RGPD incomplet — échec de lecture");
-      return reply.code(500).send({ error: "export_failed", message: "L'export a échoué, réessayez." });
-    }
-
-    const { error: requestLogError } = await db.from("data_export_requests").insert({
-      user_id: userId,
-      status: "ready",
-      completed_at: new Date().toISOString(),
-    });
-    if (requestLogError) {
-      request.log.error({ requestLogError }, "Échec d'enregistrement de la demande d'export");
-    }
-
-    return reply.send(exported);
-  });
+  );
 
   // Suppression réelle de compte : supprime l'utilisateur Supabase Auth (les
   // clés étrangères "on delete cascade" du schéma nettoient déjà profils,

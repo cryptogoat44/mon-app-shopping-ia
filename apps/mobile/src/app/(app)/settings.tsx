@@ -10,6 +10,8 @@ import { usePreferences } from "@/lib/preferences-context";
 import { LOCALES, THEME_PREFERENCES } from "@/lib/preferences";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, deleteMyAccount, exportMyData, fetchConsentStatus, recordAnalyticsChoice } from "@/lib/api";
+import { exportFile, type ExportFile, type ExportFormat } from "@/lib/export-file";
+import { useToast } from "@/lib/toast-context";
 import { hasAnalyticsConsent } from "@/lib/policy-notice";
 import { ErrorMessage } from "@/components/error-message";
 import { LatestVideoSetting } from "@/components/latest-video-setting";
@@ -19,32 +21,53 @@ import { consentFor, pendingConsents } from "@/lib/legal";
 import { formatLongDate } from "@/lib/format";
 import { themedStyles } from "@/theme/themed-styles";
 
-async function shareExportedData(data: unknown) {
-  const json = JSON.stringify(data, null, 2);
+// Le site ne garde le lien du fichier que le temps que le navigateur lance le
+// téléchargement.
+const REVOKE_DELAY_MS = 30_000;
+
+/** Site : téléchargement direct. Le fichier n'est jamais ouvert dans un
+ * onglet ni un cadre de l'app : on l'ouvre depuis ses téléchargements.
+ * iPhone : écrit dans le cache, proposé par la feuille de partage, puis effacé. */
+async function saveExportFile(file: ExportFile) {
   if (Platform.OS === "web") {
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(new Blob([file.content], { type: file.mimeType }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = `mes-donnees-${Date.now()}.json`;
+    link.download = file.name;
     link.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
     return;
   }
   const [{ File, Paths }, Sharing] = await Promise.all([import("expo-file-system"), import("expo-sharing")]);
-  const file = new File(Paths.cache, `mes-donnees-${Date.now()}.json`);
-  file.write(json);
-  await Sharing.shareAsync(file.uri);
+  const cached = new File(Paths.cache, file.name);
+  try {
+    // Un fichier du même nom, resté d'un export interrompu, est remplacé.
+    if (cached.exists) cached.delete();
+    cached.write(file.content);
+    await Sharing.shareAsync(cached.uri, { mimeType: file.mimeType, UTI: file.uti, dialogTitle: t.settings.exportData });
+  } finally {
+    // Le fichier contient toutes les données du compte : il ne reste pas dans le cache.
+    try {
+      if (cached.exists) cached.delete();
+    } catch {
+      // Déjà effacé par le système (dossier de cache) : rien à faire.
+    }
+  }
 }
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { locale, themePreference, chooseLocale, chooseTheme } = usePreferences();
   const { signOut, profile } = useAuth();
+  const { showToast } = useToast();
   const [consents, setConsents] = useState<ConsentStatus[] | null>(null);
   const [consentsFailed, setConsentsFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
+  // Export : le format se choisit à chaque fois ; seul le choix touché
+  // affiche « Préparation de l'export… ».
+  const [choosingExport, setChoosingExport] = useState(false);
+  const [exporting, setExporting] = useState<ExportFormat | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [analyticsSaving, setAnalyticsSaving] = useState(false);
@@ -73,17 +96,25 @@ export default function SettingsScreen() {
     }, [])
   );
 
-  async function handleExport() {
-    setError(null);
-    setExporting(true);
+  async function handleExport(format: ExportFormat) {
+    setExportError(null);
+    setExporting(format);
     try {
-      const data = await exportMyData();
-      await shareExportedData(data);
+      // Nom du fichier daté au moment de l'export, dans la langue de l'app.
+      const file = exportFile(format, await exportMyData(format));
+      await saveExportFile(file);
+      setChoosingExport(false);
+      if (Platform.OS === "web") showToast(t.settings.exportDone);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : t.settings.exportError);
+      setExportError(e instanceof ApiError ? e.message : t.settings.exportError);
     } finally {
-      setExporting(false);
+      setExporting(null);
     }
+  }
+
+  function cancelExport() {
+    setChoosingExport(false);
+    setExportError(null);
   }
 
   async function handleDelete() {
@@ -193,9 +224,27 @@ export default function SettingsScreen() {
           {analyticsError ? <ErrorMessage style={styles.sectionBody}>{t.settings.analyticsFailed}</ErrorMessage> : null}
           <VideoAiSetting consents={consents} failed={consentsFailed} onChange={setConsents} />
           <LatestVideoSetting />
-          <Pressable accessibilityRole="button" onPress={handleExport} disabled={exporting} hitSlop={12} style={styles.secondLink}>
-            <Text style={styles.link}>{exporting ? t.settings.exporting : t.settings.exportData}</Text>
-          </Pressable>
+          {!choosingExport ? (
+            <Pressable accessibilityRole="button" onPress={() => setChoosingExport(true)} hitSlop={12} style={styles.secondLink}>
+              <Text style={styles.link}>{t.settings.exportData}</Text>
+            </Pressable>
+          ) : (
+            <View style={styles.secondLink}>
+              <Text style={styles.sectionBody}>{t.settings.exportChoiceIntro}</Text>
+              <Pressable accessibilityRole="button" onPress={() => handleExport("html")} disabled={exporting !== null} hitSlop={12}>
+                <Text style={styles.link}>{exporting === "html" ? t.settings.exporting : t.settings.exportReadable}</Text>
+              </Pressable>
+              <Text style={[styles.sectionBody, styles.choiceHint]}>{t.settings.exportReadableHint}</Text>
+              <Pressable accessibilityRole="button" onPress={() => handleExport("json")} disabled={exporting !== null} hitSlop={12}>
+                <Text style={styles.link}>{exporting === "json" ? t.settings.exporting : t.settings.exportJson}</Text>
+              </Pressable>
+              <Text style={[styles.sectionBody, styles.choiceHint]}>{t.settings.exportJsonHint}</Text>
+              {exportError ? <ErrorMessage style={styles.sectionBody}>{exportError}</ErrorMessage> : null}
+              <Pressable accessibilityRole="button" onPress={cancelExport} disabled={exporting !== null} hitSlop={12}>
+                <Text style={styles.cancelLabel}>{t.common.cancel}</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
 
         <Pressable accessibilityRole="button" onPress={signOut} hitSlop={12} style={styles.section}>
@@ -249,6 +298,7 @@ const styles = themedStyles(() => ({
   analyticsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44 },
   analyticsTitle: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   hint: { marginTop: space.sm },
+  choiceHint: { marginTop: space.xs },
   sectionBody: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm, lineHeight: 19 },
   link: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   secondLink: { marginTop: space.sm },

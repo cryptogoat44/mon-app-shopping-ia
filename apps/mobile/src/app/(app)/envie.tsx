@@ -11,7 +11,7 @@ import { useAuth } from "@/lib/auth-context";
 import { shareWishOutside } from "@/lib/share-wish";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
-import { SpotImage } from "@/components/spot-image";
+import { ProductFrame } from "@/components/product-frame";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
@@ -123,9 +123,7 @@ export default function WishlistItemScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
-          <View style={styles.image}>
-            <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.fill} accessibilityLabel={item.title} />
-          </View>
+          <ProductFrame hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} accessibilityLabel={item.title} />
           <Text style={styles.title} accessibilityRole="header">{item.title}</Text>
           <Text style={styles.meta}>{[item.merchantName, displayPrice(item)].filter(Boolean).join(" · ")}</Text>
 
@@ -240,8 +238,6 @@ const styles = themedStyles(() => ({
   retry: { marginTop: space.md, minHeight: 44, justifyContent: "center" },
   retryLabel: { fontSize: font.body, color: color.vert, fontWeight: "600" },
   content: { padding: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
-  image: { width: "100%", maxWidth: 360, aspectRatio: 4 / 5, alignSelf: "center", borderRadius: radius.sm, backgroundColor: color.plinthe, overflow: "hidden" },
-  fill: { width: "100%", height: "100%" },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, marginTop: space.md },
   meta: { fontSize: font.secondary, color: color.acier, marginTop: 4, marginBottom: space.lg },
   merchant: { marginBottom: space.lg },

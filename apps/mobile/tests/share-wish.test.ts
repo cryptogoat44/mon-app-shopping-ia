@@ -23,19 +23,28 @@ describe("partage d'une envie hors de Spotto", () => {
   it("lien affilié : le lien affilié et sa mention", () => {
     expect(wishShareLink(affiliate)).toBe("https://shop.test/sac?aff=spotto");
     expect(wishShareIsAffiliate(affiliate)).toBe(true);
-    expect(wishShareMessage(affiliate)).toBe("Sac Kelly chez Boutique, repérée sur Spotto\nhttps://shop.test/sac?aff=spotto (lien affilié)");
+    expect(wishShareMessage(affiliate)).toBe("Une pièce repérée sur Spotto : Sac Kelly chez Boutique\nhttps://shop.test/sac?aff=spotto (lien affilié)");
   });
 
   it("lien direct : aucune mention", () => {
     expect(wishShareIsAffiliate(direct)).toBe(false);
-    expect(wishShareMessage(direct)).toBe("Sac Kelly chez Boutique, repérée sur Spotto\nhttps://shop.test/sac");
+    expect(wishShareMessage(direct)).toBe("Une pièce repérée sur Spotto : Sac Kelly chez Boutique\nhttps://shop.test/sac");
     // Un « lien affilié » identique au lien du marchand n'en est pas un.
     expect(wishShareIsAffiliate({ ...direct, affiliateUrl: direct.merchantUrl })).toBe(false);
   });
 
   it("en anglais", () => {
     setActiveLocale("en");
-    expect(wishShareMessage(affiliate)).toBe("Sac Kelly at Boutique, spotted on Spotto\nhttps://shop.test/sac?aff=spotto (affiliate link)");
+    expect(wishShareMessage(affiliate)).toBe("Spotted on Spotto: Sac Kelly at Boutique\nhttps://shop.test/sac?aff=spotto (affiliate link)");
+  });
+
+  it("marchand déjà dans le titre : il n'est pas répété ; la mention et le lien ne changent pas", () => {
+    const titled = { ...affiliate, title: "Sac Kelly | Boutique" };
+    expect(wishShareMessage(titled)).toBe("Une pièce repérée sur Spotto : Sac Kelly | Boutique\nhttps://shop.test/sac?aff=spotto (lien affilié)");
+    // Sans tenir compte des majuscules.
+    expect(wishShareMessage({ ...direct, title: "Sac Kelly | BOUTIQUE" })).toBe("Une pièce repérée sur Spotto : Sac Kelly | BOUTIQUE\nhttps://shop.test/sac");
+    setActiveLocale("en");
+    expect(wishShareMessage(titled)).toBe("Spotted on Spotto: Sac Kelly | Boutique\nhttps://shop.test/sac?aff=spotto (affiliate link)");
   });
 
   it("sans marchand : rien à partager", async () => {

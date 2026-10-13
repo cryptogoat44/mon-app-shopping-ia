@@ -49,6 +49,16 @@ export const RATE_LIMITS = {
     message: "Vous avez envoyé beaucoup de pièces en peu de temps. Réessayez dans une heure.",
   },
 
+  // Export des données (RGPD) : chaque export relit toutes les tables du
+  // compte. Large pour une personne, mais protège la base d'un script. Le
+  // fichier lisible et le format technique comptent ensemble.
+  dataExport: {
+    max: 10,
+    windowMs: HOUR,
+    error: "export_limit",
+    message: "Vous avez demandé plusieurs exports en peu de temps. Réessayez dans une heure.",
+  },
+
   // Analyse automatique d'une vidéo par l'IA (lot 4, temps 1 bis) : chaque
   // appel coûte (≈ un demi-centime avec Claude Haiku 4.5). Seuls les appels
   // réellement envoyés comptent (`rateLimitCheck` / `countRateLimitHit`).

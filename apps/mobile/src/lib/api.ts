@@ -48,6 +48,7 @@ import { setAnalyticsConsent, track } from "./analytics";
 import { acceptLanguage, t } from "@/i18n";
 import { imageFileFromUri } from "./image-file";
 import { ApiError } from "./api-error";
+import { deviceTimeZone, type ExportFormat, type ExportResponse } from "./export-file";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -524,9 +525,16 @@ export async function findVideoMoments(frameUris: readonly string[], query: stri
   return moments;
 }
 
-export async function exportMyData(): Promise<unknown> {
-  const response = await authorizedFetch("/api/me/export");
-  return response.json();
+/** Export des données (lot 5) : « html », le fichier lisible rendu par le
+ * serveur dans la langue de l'app et daté dans le fuseau de l'appareil ;
+ * « json », le format technique. Le texte est rendu brut, avec son type :
+ * un serveur plus ancien renvoie encore le JSON (voir export-file.ts). */
+export async function exportMyData(format: ExportFormat): Promise<ExportResponse> {
+  const timeZone = deviceTimeZone();
+  const response = await authorizedFetch(`/api/me/export?format=${format}`, {
+    headers: timeZone ? { "X-Time-Zone": timeZone } : {},
+  });
+  return { text: await response.text(), contentType: response.headers.get("Content-Type") };
 }
 
 export async function deleteMyAccount(): Promise<void> {
