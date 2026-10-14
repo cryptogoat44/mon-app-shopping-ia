@@ -26,6 +26,7 @@ import { FICHIER_PANNE_AUTH, FICHIER_SIGNAL_PANNE, MARQUE_PANNE_AUTH } from "../
 import { lireReponses, type ReponseServeur } from "../lib/journal-serveur.js";
 import { codeSansSentry } from "../parcours-ecran/garde-statistiques.js";
 import { PLAFOND_SERPAPI_PARCOURS } from "../lib/plafond-parcours.js";
+import { supprimerCompteParLApp } from "../lib/suppression-compte-test.js";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 export const ROOT = resolve(HERE, "../../../..");
@@ -234,8 +235,7 @@ export async function lancerParcours(
     nettoye = true;
     log("Nettoyage…");
     for (const compte of comptes) {
-      const res = await fetch(`${apiUrl}/api/me`, { method: "DELETE", headers: { authorization: `Bearer ${compte.jeton}` } }).catch(() => null);
-      if (!res || !(res.ok || res.status === 204)) await admin.auth.admin.deleteUser(compte.id).catch(() => {});
+      if (!(await supprimerCompteParLApp(apiUrl, admin, compte))) await admin.auth.admin.deleteUser(compte.id).catch(() => {});
       const { data } = await admin.auth.admin.getUserById(compte.id);
       log(data?.user ? `  ⚠ compte ${compte.username} NON supprimé — à supprimer à la main` : `  compte ${compte.username} supprimé`);
     }

@@ -26,6 +26,7 @@ import { assertDevSupabaseUrl } from "../lib/dev-database.js";
 import { CLE_SIMULATION, FICHIER_SIMULATION, MARQUE_SIMULATION } from "../lib/simulation-anthropic.js";
 import { codeSansSentry, GardeStatistiques } from "./garde-statistiques.js";
 import { PLAFOND_SERPAPI_PARCOURS } from "../lib/plafond-parcours.js";
+import { supprimerCompteParLApp } from "../lib/suppression-compte-test.js";
 
 const ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
 const BACKEND_DIR = join(ROOT, "apps/backend");
@@ -271,11 +272,7 @@ export async function runParcours(
     // Suppression des comptes par l'app elle-même (« Supprimer mon compte ») :
     // fichiers, publications, commentaires… ; à défaut, par l'administration.
     for (const account of accounts) {
-      let deleted = false;
-      if (backend) {
-        const res = await fetch(`${apiUrl}/api/me`, { method: "DELETE", headers: { authorization: `Bearer ${account.token}` } }).catch(() => null);
-        deleted = Boolean(res && (res.ok || res.status === 204));
-      }
+      const deleted = backend ? await supprimerCompteParLApp(apiUrl, admin, { id: account.id, jeton: account.token }) : false;
       if (!deleted) await admin.auth.admin.deleteUser(account.id).catch(() => {});
       const { data } = await admin.auth.admin.getUserById(account.id);
       log(data?.user ? `  ⚠ compte ${account.username} NON supprimé — à supprimer à la main` : `  compte ${account.username} supprimé`);

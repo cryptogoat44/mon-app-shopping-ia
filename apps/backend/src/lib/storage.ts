@@ -8,32 +8,115 @@ import { env } from "../env.js";
 export const USER_STORAGE_BUCKETS = ["screenshots", "vault-media", "post-media", "avatars"] as const;
 
 const LIST_PAGE_SIZE = 100;
+/** Essais par appel au stockage (lecture d'une page, effacement d'un lot). */
+export const STORAGE_ATTEMPTS = 3;
+/** Garde-fou : au plus 1 000 pages (100 000 fichiers) par dossier. */
+const MAX_PAGES = 1000;
 
-async function deleteAllUserFilesInBucket(fastify: FastifyInstance, bucket: string, userId: string): Promise<void> {
-  // On relit toujours depuis le début (pas d'offset) : chaque page est
-  // supprimée avant de relire, donc la page suivante commence là où la
-  // précédente s'arrêtait — avancer un offset ferait sauter des fichiers
-  // au fur et à mesure qu'on les supprime.
-  while (true) {
-    const { data: files, error } = await fastify.supabaseAdmin.storage.from(bucket).list(userId, {
-      limit: LIST_PAGE_SIZE,
-    });
-    if (error || !files || files.length === 0) return;
+/** Ce dont l'effacement a besoin dans un bucket : le client Supabase, ou un
+ * faux client dans les tests. */
+export interface BucketFiles {
+  list(
+    path: string,
+    options: { limit: number; offset: number; sortBy: { column: "name"; order: "asc" } }
+  ): Promise<{ data: { name: string; id: string | null }[] | null; error: unknown }>;
+  remove(paths: string[]): Promise<{ error: unknown }>;
+}
 
-    const paths = files.map((f) => `${userId}/${f.name}`);
-    await fastify.supabaseAdmin.storage.from(bucket).remove(paths);
+/** Bilan d'un effacement : des nombres, jamais un chemin ni un identifiant. */
+export interface StorageCleanup {
+  bucket: string;
+  removed: number;
+  /** Fichiers restés : effacement refusé après STORAGE_ATTEMPTS essais. */
+  failed: number;
+  /** Dossier illisible : le nombre de fichiers restés est inconnu. */
+  unreadable: boolean;
+}
 
-    if (files.length < LIST_PAGE_SIZE) return;
+/** `call` jusqu'à ce que `succeeded` (au plus STORAGE_ATTEMPTS fois), sinon null. */
+async function withAttempts<T>(call: () => Promise<T>, succeeded: (result: T) => boolean): Promise<T | null> {
+  for (let attempt = 0; attempt < STORAGE_ATTEMPTS; attempt += 1) {
+    try {
+      const result = await call();
+      if (succeeded(result)) return result;
+    } catch {
+      // Panne passagère du réseau : essai suivant.
+    }
   }
+  return null;
+}
+
+/** Efface `paths` d'un coup ; vrai si le stockage l'a accepté (STORAGE_ATTEMPTS essais au plus). */
+async function removeWithAttempts(files: BucketFiles, paths: string[]): Promise<boolean> {
+  if (paths.length === 0) return true;
+  return (await withAttempts(() => files.remove(paths), (result) => !result.error)) !== null;
+}
+
+/** Vide le dossier `userId` d'un bucket. Ne s'arrête jamais sur un fichier
+ * qui refuse de s'effacer, et ne boucle jamais : un lot refusé est compté
+ * comme resté, puis sauté (il précède les suivants dans l'ordre des noms). */
+export async function emptyUserFolder(files: BucketFiles, bucket: string, userId: string): Promise<StorageCleanup> {
+  const report: StorageCleanup = { bucket, removed: 0, failed: 0, unreadable: false };
+  let previousFirst: string | null = null;
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const listing = await withAttempts(
+      () => files.list(userId, { limit: LIST_PAGE_SIZE, offset: report.failed, sortBy: { column: "name", order: "asc" } }),
+      (result) => !result.error && result.data !== null
+    );
+    if (!listing?.data) return { ...report, unreadable: true };
+    const entries = listing.data;
+    if (entries.length === 0) return report;
+    // Page relue à l'identique (le stockage a dit « effacé » sans effacer) :
+    // comptée comme restée, pour avancer quand même.
+    const again = entries[0]!.name === previousFirst;
+    previousFirst = entries[0]!.name;
+    // Un sous-dossier (aucun aujourd'hui) n'est pas un fichier : il reste.
+    const paths = entries.filter((entry) => entry.id !== null).map((entry) => `${userId}/${entry.name}`);
+    if (!again && (await removeWithAttempts(files, paths))) {
+      report.removed += paths.length;
+      report.failed += entries.length - paths.length;
+    } else {
+      report.failed += entries.length;
+    }
+    if (entries.length < LIST_PAGE_SIZE) return report;
+  }
+  return { ...report, unreadable: true };
 }
 
 // Vide, dans chaque bucket de USER_STORAGE_BUCKETS, tous les fichiers d'un
 // utilisateur — appelé à la suppression de compte pour ne laisser aucune
-// trace orpheline sur le stockage malgré la suppression en base.
-export async function deleteUserStorageFiles(fastify: FastifyInstance, userId: string): Promise<void> {
+// trace orpheline sur le stockage malgré la suppression en base. Ne lève
+// jamais d'erreur de stockage : le bilan dit ce qui est resté.
+export async function deleteUserStorageFiles(fastify: FastifyInstance, userId: string): Promise<StorageCleanup[]> {
+  const reports: StorageCleanup[] = [];
   for (const bucket of USER_STORAGE_BUCKETS) {
-    await deleteAllUserFilesInBucket(fastify, bucket, userId);
+    reports.push(await emptyUserFolder(fastify.supabaseAdmin.storage.from(bucket), bucket, userId));
   }
+  return reports;
+}
+
+/** Efface des fichiers précis (adresses publiques), chacun seulement s'il est
+ * bien dans le dossier de son propriétaire, par lots et avec
+ * STORAGE_ATTEMPTS essais. Une adresse étrangère à notre stockage est ignorée. */
+export async function removeOwnedFiles(
+  fastify: FastifyInstance,
+  bucket: string,
+  files: { ownerId: string; url: string }[]
+): Promise<StorageCleanup> {
+  const paths = files.map((file) => extractOwnedStoragePath(file.url, bucket, file.ownerId)).filter((path): path is string => path !== null);
+  const report: StorageCleanup = { bucket, removed: 0, failed: 0, unreadable: false };
+  for (let start = 0; start < paths.length; start += LIST_PAGE_SIZE) {
+    const batch = paths.slice(start, start + LIST_PAGE_SIZE);
+    if (await removeWithAttempts(fastify.supabaseAdmin.storage.from(bucket), batch)) report.removed += batch.length;
+    else report.failed += batch.length;
+  }
+  return report;
+}
+
+/** Ce qui reste à nettoyer après des effacements, pour le journal du serveur :
+ * des nombres par bucket, jamais un chemin ni un identifiant. */
+export function storageLeftovers(reports: StorageCleanup[]): Omit<StorageCleanup, "removed">[] {
+  return reports.filter((report) => report.failed > 0 || report.unreadable).map(({ bucket, failed, unreadable }) => ({ bucket, failed, unreadable }));
 }
 
 // Vérifie qu'une URL publique de stockage pointe bien vers NOTRE projet

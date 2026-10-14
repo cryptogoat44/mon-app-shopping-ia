@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance, InjectOptions } from "fastify";
 import sharp from "sharp";
-import type { AppNotification, Post, ReceivedPiece, WishlistItemDetail } from "@monapp/shared-types";
+import { ACCOUNT_DELETION_WORDS, type AppNotification, type Post, type ReceivedPiece, type WishlistItemDetail } from "@monapp/shared-types";
 import { buildApp } from "../src/app.js";
 import { env } from "../src/env.js";
 import { downloadPublicImage, PublicImageError } from "../src/lib/publicImage.js";
@@ -298,7 +298,7 @@ describe("partage d'une envie", () => {
   it("suppression du compte qui a reçu une pièce : la copie de son image est supprimée aussi", async () => {
     const piece = (await received(stranger))[0]!;
     expect(await storageFiles(owner.id)).toContain(fileName(piece.imageUrl));
-    expect((await request(stranger, "DELETE", "/api/me")).statusCode).toBe(204);
+    expect((await request(stranger, "DELETE", "/api/me", { confirmation: ACCOUNT_DELETION_WORDS.fr })).statusCode).toBe(204);
     expect(await storageFiles(owner.id)).not.toContain(fileName(piece.imageUrl));
   });
 });

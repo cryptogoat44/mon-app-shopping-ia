@@ -588,7 +588,9 @@ export const en: Catalog = {
     dangerZone: "Danger zone",
     deleting: "Deleting…",
     confirmDelete: "Confirm deletion",
-    deleteError: "The account couldn't be deleted.",
+    deleteError: "The account couldn't be deleted. Check your connection, then try again.",
+    deleteTypeWord: (word: string) => `To confirm, type ${word} below.`,
+    deleteWordLabel: (word: string) => `Confirmation word: ${word}`,
   },
   legal: {
     draftBanner: "Draft — to be reviewed by a legal professional.",

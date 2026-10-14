@@ -70,6 +70,10 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "L'image de la vidéo n'est plus disponible. Importez une capture de la pièce.":
     "The video's image is no longer available. Please import a screenshot of the piece.",
   "La suppression a échoué.": "Deletion failed.",
+  // Suppression de son compte (lot 5) : mot de confirmation, compte administrateur.
+  "Pour confirmer la suppression, tapez le mot demandé.": "To confirm the deletion, type the requested word.",
+  "Ce compte est administrateur et ne peut pas être supprimé tant qu'il a ce rôle. Retirez d'abord le rôle d'administrateur, puis recommencez.":
+    "This account is an administrator and can't be deleted while it has this role. Remove the administrator role first, then try again.",
   "Le commentaire est vide.": "The comment is empty.",
   [`Le commentaire est trop long (${COMMENT_MAX_LENGTH} caractères maximum).`]: `The comment is too long (${COMMENT_MAX_LENGTH} characters maximum).`,
   "Le fichier doit être une image.": "The file must be an image.",
