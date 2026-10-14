@@ -9,7 +9,7 @@ import { SegmentedChoice } from "@/components/segmented-choice";
 import { usePreferences } from "@/lib/preferences-context";
 import { LOCALES, THEME_PREFERENCES } from "@/lib/preferences";
 import { useAuth } from "@/lib/auth-context";
-import { ApiError, deleteMyAccount, exportMyData, fetchConsentStatus, recordAnalyticsChoice } from "@/lib/api";
+import { ApiError, exportMyData, fetchConsentStatus, recordAnalyticsChoice } from "@/lib/api";
 import { exportFile, type ExportFile, type ExportFormat } from "@/lib/export-file";
 import { useToast } from "@/lib/toast-context";
 import { hasAnalyticsConsent } from "@/lib/policy-notice";
@@ -17,6 +17,7 @@ import { ErrorMessage } from "@/components/error-message";
 import { LatestVideoSetting } from "@/components/latest-video-setting";
 import { VideoAiSetting } from "@/components/video-ai-setting";
 import { PieceSendsSetting } from "@/components/piece-sends-setting";
+import { DeleteAccountSection } from "@/components/delete-account-section";
 import { consentFor, pendingConsents } from "@/lib/legal";
 import { formatLongDate } from "@/lib/format";
 import { themedStyles } from "@/theme/themed-styles";
@@ -62,14 +63,11 @@ export default function SettingsScreen() {
   const { showToast } = useToast();
   const [consents, setConsents] = useState<ConsentStatus[] | null>(null);
   const [consentsFailed, setConsentsFailed] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   // Export : le format se choisit à chaque fois ; seul le choix touché
   // affiche « Préparation de l'export… ».
   const [choosingExport, setChoosingExport] = useState(false);
   const [exporting, setExporting] = useState<ExportFormat | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [analyticsSaving, setAnalyticsSaving] = useState(false);
   const [analyticsError, setAnalyticsError] = useState(false);
 
@@ -117,18 +115,6 @@ export default function SettingsScreen() {
     setExportError(null);
   }
 
-  async function handleDelete() {
-    setError(null);
-    setDeleting(true);
-    try {
-      await deleteMyAccount();
-      await signOut();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : t.settings.deleteError);
-      setDeleting(false);
-    }
-  }
-
   function consentLine(type: "terms" | "privacy_policy"): string {
     if (consentsFailed) return t.settings.consentFailed;
     if (!consents) return t.settings.consentLoading;
@@ -152,8 +138,6 @@ export default function SettingsScreen() {
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title} accessibilityRole="header">{t.settings.title}</Text>
-
-        {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>{t.settings.account}</Text>
@@ -251,26 +235,7 @@ export default function SettingsScreen() {
           <Text style={styles.link}>{t.settings.signOut}</Text>
         </Pressable>
 
-        <View style={styles.dangerSection}>
-          <Text style={styles.sectionLabel}>{t.settings.dangerZone}</Text>
-          {!confirmingDelete ? (
-            <Pressable accessibilityRole="button" onPress={() => setConfirmingDelete(true)} hitSlop={12}>
-              <Text style={styles.deleteLabel}>{t.settings.deleteAccount}</Text>
-            </Pressable>
-          ) : (
-            <View>
-              <Text style={styles.sectionBody}>{t.settings.deleteConfirm}</Text>
-              <View style={styles.confirmRow}>
-                <Pressable accessibilityRole="button" onPress={() => setConfirmingDelete(false)} disabled={deleting} hitSlop={12}>
-                  <Text style={styles.cancelLabel}>{t.common.cancel}</Text>
-                </Pressable>
-                <Pressable accessibilityRole="button" onPress={handleDelete} disabled={deleting} hitSlop={12}>
-                  <Text style={styles.deleteLabel}>{deleting ? t.settings.deleting : t.settings.confirmDelete}</Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
-        </View>
+        <DeleteAccountSection onDeleted={signOut} />
 
         {/* Lot 5 : entrée discrète, visible des seuls administrateurs (le
             serveur revérifie le rôle à chaque appel). */}
@@ -292,7 +257,6 @@ const styles = themedStyles(() => ({
   back: { fontSize: 26, color: color.encre },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, marginBottom: space.lg },
-  error: { fontSize: font.secondary, color: color.acier, marginBottom: space.md },
   section: { marginBottom: space.lg },
   sectionLabel: { fontSize: font.caption, fontWeight: "600", color: color.acier, marginBottom: space.sm },
   analyticsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44 },
@@ -302,9 +266,6 @@ const styles = themedStyles(() => ({
   sectionBody: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm, lineHeight: 19 },
   link: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   secondLink: { marginTop: space.sm },
-  dangerSection: { borderTopWidth: 1, borderTopColor: color.filet, paddingTop: space.lg },
-  deleteLabel: { color: color.danger, fontSize: font.secondary, fontWeight: "600" },
-  confirmRow: { flexDirection: "row", gap: space.lg, marginTop: space.xs },
   cancelLabel: { color: color.acier, fontSize: font.secondary, fontWeight: "600" },
   adminSection: { marginTop: space.xl, borderTopWidth: 1, borderTopColor: color.filet, paddingTop: space.sm },
   adminLink: { minHeight: 44, minWidth: 44, justifyContent: "center", alignSelf: "flex-start" },

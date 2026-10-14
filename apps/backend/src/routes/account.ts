@@ -1,15 +1,38 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { ACCEPTED_CONSENT_VERSIONS, CONSENT_TYPES, CONSENT_VERSIONS, OPTIONAL_CONSENTS, type ConsentStatus, type ConsentType, type VersionedConsentType } from "@monapp/shared-types";
+import {
+  ACCEPTED_CONSENT_VERSIONS,
+  CONSENT_TYPES,
+  CONSENT_VERSIONS,
+  OPTIONAL_CONSENTS,
+  isAccountDeletionWord,
+  type ConsentStatus,
+  type ConsentType,
+  type VersionedConsentType,
+} from "@monapp/shared-types";
 import { env } from "../env.js";
 import { collectExport } from "../lib/exportData.js";
 import { localDay, resolveTimeZone } from "../lib/exportFormat.js";
 import { exportContentSecurityPolicy, renderExportHtml } from "../lib/exportHtml.js";
 import { collectLookups } from "../lib/exportLookups.js";
 import { requestLocale } from "../lib/locale.js";
-import { deleteUserStorageFiles } from "../lib/storage.js";
-import { parseInput } from "../lib/validation.js";
-import { deleteWishCopy } from "../lib/wishShare.js";
+import { isAdmin } from "../lib/moderation.js";
+import { deleteUserStorageFiles, removeOwnedFiles, storageLeftovers } from "../lib/storage.js";
+import { parseDbRows, parseInput } from "../lib/validation.js";
+import { WISH_COPY_BUCKET } from "../lib/wishShare.js";
+
+/** Corps de DELETE /api/me : le mot tapé par la personne (revérifié ici). */
+const deleteAccountSchema = z.object({ confirmation: z.string().max(40).refine((value) => isAccountDeletionWord(value)) });
+const DELETION_NOT_CONFIRMED = { error: "deletion_not_confirmed", message: "Pour confirmer la suppression, tapez le mot demandé." } as const;
+/** Un administrateur retire d'abord son rôle (dans la base) : sans lui, plus
+ * personne ne traiterait les signalements. */
+const ADMIN_ACCOUNT_DELETION = {
+  error: "admin_account",
+  message: "Ce compte est administrateur et ne peut pas être supprimé tant qu'il a ce rôle. Retirez d'abord le rôle d'administrateur, puis recommencez.",
+} as const;
+const RECEIVED_PIECE_ROWS = z.array(
+  z.object({ sender_id: z.string().uuid(), image_url: z.string().nullable(), image_thumb_url: z.string().nullable() })
+);
 
 const recordConsentsSchema = z.object({
   consents: z
@@ -210,26 +233,40 @@ export default async function accountRoutes(fastify: FastifyInstance) {
   // clés étrangères "on delete cascade" du schéma nettoient déjà profils,
   // vault, posts, recherches, abonnements, consentements...), puis vide les
   // fichiers de stockage associés pour ne laisser aucune trace orpheline.
+  // Garde-fous (lot 5, décisions du fondateur du 2026-10-15) : le mot de
+  // confirmation tapé, revérifié ici, et jamais un compte administrateur.
   fastify.delete("/api/me", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const userId = request.user!.id;
+    if (!parseInput(deleteAccountSchema, request.body, reply, DELETION_NOT_CONFIRMED)) return reply;
+    if (await isAdmin(fastify, userId)) return reply.code(409).send(ADMIN_ACCOUNT_DELETION);
 
     // Lot 5 : les pièces reçues disparaissent avec le compte (cascade en
     // base) ; la copie de leur image est rangée chez la personne qui les a
     // envoyées, on la supprime ici. Ses propres copies (pièces envoyées,
     // publications « envie ») sont dans son dossier, vidé juste après.
-    const { data: received, error: receivedError } = await fastify.supabaseAdmin
-      .from("piece_sends")
-      .select("sender_id, image_url, image_thumb_url")
-      .eq("recipient_id", userId);
-    if (receivedError) {
-      request.log.error({ receivedError }, "Lecture des pièces reçues impossible avant suppression du compte");
+    let received: z.infer<typeof RECEIVED_PIECE_ROWS>;
+    try {
+      received = parseDbRows(
+        RECEIVED_PIECE_ROWS,
+        await fastify.supabaseAdmin.from("piece_sends").select("sender_id, image_url, image_thumb_url").eq("recipient_id", userId),
+        "Pièces reçues avant la suppression du compte"
+      );
+    } catch {
+      request.log.error("Lecture des pièces reçues impossible avant suppression du compte");
       return reply.code(500).send({ error: "internal_error", message: "La suppression a échoué." });
     }
-    for (const piece of (received as { sender_id: string; image_url: string; image_thumb_url: string }[] | null) ?? []) {
-      await deleteWishCopy(fastify, piece.sender_id, [piece.image_url, piece.image_thumb_url]);
-    }
+    const receivedCopies = await removeOwnedFiles(
+      fastify,
+      WISH_COPY_BUCKET,
+      received.flatMap((piece) => [piece.image_url, piece.image_thumb_url].flatMap((url) => (url ? [{ ownerId: piece.sender_id, url }] : [])))
+    );
 
-    await deleteUserStorageFiles(fastify, userId);
+    // Le droit à l'effacement ne dépend pas d'un incident de stockage
+    // (décision du fondateur, 2026-10-15) : un fichier qui refuse de
+    // s'effacer est compté et signalé au journal — des nombres, jamais un
+    // identifiant —, puis le compte est supprimé quand même.
+    const leftovers = storageLeftovers([receivedCopies, ...(await deleteUserStorageFiles(fastify, userId))]);
+    if (leftovers.length > 0) request.log.warn({ leftovers }, "Suppression de compte : fichiers restés dans le stockage, à nettoyer");
 
     const { error } = await fastify.supabaseAdmin.auth.admin.deleteUser(userId);
     if (error) {

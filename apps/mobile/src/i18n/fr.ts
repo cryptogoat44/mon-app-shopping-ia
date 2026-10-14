@@ -604,7 +604,9 @@ export const fr = {
     dangerZone: "Zone sensible",
     deleting: "Suppression…",
     confirmDelete: "Confirmer la suppression",
-    deleteError: "La suppression a échoué.",
+    deleteError: "La suppression a échoué. Vérifiez votre connexion, puis réessayez.",
+    deleteTypeWord: (word: string) => `Pour confirmer, tapez ${word} ci-dessous.`,
+    deleteWordLabel: (word: string) => `Mot de confirmation : ${word}`,
   },
   legal: {
     draftBanner: "Projet — à faire valider par un professionnel.",

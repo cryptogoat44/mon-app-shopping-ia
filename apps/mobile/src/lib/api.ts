@@ -9,6 +9,7 @@ import type {
   CreateSearchRequest,
   CreateWishlistItemRequest,
   CropRect,
+  DeleteAccountRequest,
   FeedPage,
   MerchantLinkContext,
   ModerationActionRequest,
@@ -537,6 +538,9 @@ export async function exportMyData(format: ExportFormat): Promise<ExportResponse
   return { text: await response.text(), contentType: response.headers.get("Content-Type") };
 }
 
-export async function deleteMyAccount(): Promise<void> {
-  await authorizedFetch("/api/me", { method: "DELETE" });
+/** Supprime son compte : `confirmation` est le mot tapé par la personne,
+ * revérifié par le serveur (lot 5). */
+export async function deleteMyAccount(confirmation: string): Promise<void> {
+  const body: DeleteAccountRequest = { confirmation };
+  await authorizedFetch("/api/me", { method: "DELETE", body: JSON.stringify(body) });
 }

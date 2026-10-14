@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance, InjectOptions } from "fastify";
 import sharp from "sharp";
-import type { AppNotification } from "@monapp/shared-types";
+import { ACCOUNT_DELETION_WORDS, type AppNotification } from "@monapp/shared-types";
 import { authHeaders, buildMultipart, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
 
 // Lot 5, section 5.B : effets d'une décision. Un contenu masqué disparaît
@@ -215,7 +215,7 @@ describe("modération : suppression de compte", () => {
     const suspended = await request(admin, "POST", "/api/admin/moderation/actions", { targetType: "user", targetId: target.id, action: "suspend", reason: "spam" });
     expect(suspended.statusCode).toBe(200);
 
-    expect((await request(target, "DELETE", "/api/me")).statusCode).toBe(204);
+    expect((await request(target, "DELETE", "/api/me", { confirmation: ACCOUNT_DELETION_WORDS.fr })).statusCode).toBe(204);
     const db = app.supabaseAdmin;
     expect((await db.from("suspensions").select("user_id").eq("user_id", target.id)).data).toEqual([]);
     expect((await db.from("moderation_actions").select("id").eq("target_user_id", target.id)).data).toEqual([]);
@@ -225,13 +225,17 @@ describe("modération : suppression de compte", () => {
     expect(reports.data).toEqual([{ handled_at: expect.any(String), moderation_action_id: null }]);
   });
 
-  it("efface le rôle d'un administrateur ; ses décisions restent au journal, sans son nom", async () => {
+  it("un administrateur retire d'abord son rôle pour supprimer son compte ; ses décisions restent au journal, sans son nom", async () => {
     expect((await request(reporter, "POST", "/api/reports", { targetType: "user", targetId: admin.id, reason: "other" })).statusCode).toBe(204);
     const dismissed = await request(secondAdmin, "POST", "/api/admin/moderation/actions", { targetType: "user", targetId: admin.id, action: "dismiss" });
     expect(dismissed.statusCode).toBe(200);
 
-    expect((await request(secondAdmin, "DELETE", "/api/me")).statusCode).toBe(204);
+    // Lot 5, décision du fondateur du 2026-10-15 : refus tant que le rôle est là.
+    const confirmed = { confirmation: ACCOUNT_DELETION_WORDS.fr };
+    expect((await request(secondAdmin, "DELETE", "/api/me", confirmed)).statusCode).toBe(409);
     const db = app.supabaseAdmin;
+    expect((await db.from("admins").delete().eq("user_id", secondAdmin.id)).error).toBeNull();
+    expect((await request(secondAdmin, "DELETE", "/api/me", confirmed)).statusCode).toBe(204);
     expect((await db.from("admins").select("user_id").eq("user_id", secondAdmin.id)).data).toEqual([]);
     const kept = await db.from("moderation_actions").select("admin_id, action").eq("id", dismissed.json().actionId);
     expect(kept.data).toEqual([{ admin_id: null, action: "dismiss" }]);

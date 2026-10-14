@@ -1,7 +1,8 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import sharp from "sharp";
 import type { FastifyInstance } from "fastify";
 import { authHeaders, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
-import { CONSENT_VERSIONS, LEGAL_DOCUMENT_VERSIONS } from "@monapp/shared-types";
+import { ACCOUNT_DELETION_WORDS, CONSENT_VERSIONS, LEGAL_DOCUMENT_VERSIONS } from "@monapp/shared-types";
 import { USER_STORAGE_BUCKETS } from "../src/lib/storage.js";
 
 describe("account consents and export", () => {
@@ -219,45 +220,137 @@ describe("account consents and export", () => {
 
 describe("account deletion", () => {
   let app: FastifyInstance;
-  let user: TestUser;
+  // Mot tapé dans l'app (lot 5), revérifié par le serveur.
+  const CONFIRMED = { confirmation: ACCOUNT_DELETION_WORDS.fr };
 
   beforeAll(async () => {
     app = await buildTestApp();
-    user = await createTestUser(app, "accd");
   });
 
   afterAll(async () => {
     await app.close();
   });
 
+  const deleteAccount = (user: TestUser, payload?: object, language?: string) =>
+    app.inject({
+      method: "DELETE",
+      url: "/api/me",
+      headers: { ...authHeaders(user.token), ...(language ? { "accept-language": language } : {}) },
+      ...(payload === undefined ? {} : { payload }),
+    });
+
+  async function profileExists(id: string): Promise<boolean> {
+    const { data, error } = await app.supabaseAdmin.from("profiles").select("id").eq("id", id).maybeSingle();
+    expect(error).toBeNull();
+    return data !== null;
+  }
+
   it("deletes the account and invalidates its token", async () => {
-    const del = await app.inject({ method: "DELETE", url: "/api/me", headers: authHeaders(user.token) });
+    const user = await createTestUser(app, "accd");
+    const del = await deleteAccount(user, CONFIRMED);
     expect(del.statusCode).toBe(204);
 
     const me = await app.inject({ method: "GET", url: "/api/me", headers: authHeaders(user.token) });
     expect(me.statusCode).toBe(401);
+    expect(await profileExists(user.id)).toBe(false);
+  });
 
-    const { data } = await app.supabaseAdmin.from("profiles").select("id").eq("id", user.id).maybeSingle();
-    expect(data).toBeNull();
+  it("refuses without the typed word, or with a wrong one, and keeps the account", async () => {
+    const user = await createTestUser(app, "accw");
+    try {
+      for (const payload of [undefined, {}, { confirmation: "" }, { confirmation: "SUPPRIME" }, { confirmation: "oui" }, { confirmation: 42 }]) {
+        const res = await deleteAccount(user, payload);
+        expect(res.statusCode).toBe(400);
+        expect(res.json()).toEqual({ error: "deletion_not_confirmed", message: "Pour confirmer la suppression, tapez le mot demandé." });
+      }
+      const english = await deleteAccount(user, { confirmation: "nope" }, "en-GB");
+      expect(english.json().message).toBe("To confirm the deletion, type the requested word.");
+      expect(await profileExists(user.id)).toBe(true);
+    } finally {
+      await deleteTestUser(app, user.id);
+    }
+  });
+
+  it("accepts the word of either language, whatever the case and the spaces around it", async () => {
+    const user = await createTestUser(app, "acce");
+    const del = await deleteAccount(user, { confirmation: "  delete " });
+    expect(del.statusCode).toBe(204);
+    expect(await profileExists(user.id)).toBe(false);
+  });
+
+  it("refuses to delete an administrator until the role is removed, with a clear message", async () => {
+    const admin = await createTestUser(app, "accadm");
+    expect((await app.supabaseAdmin.from("admins").insert({ user_id: admin.id })).error).toBeNull();
+    try {
+      const refused = await deleteAccount(admin, CONFIRMED);
+      expect(refused.statusCode).toBe(409);
+      expect(refused.json()).toEqual({
+        error: "admin_account",
+        message: "Ce compte est administrateur et ne peut pas être supprimé tant qu'il a ce rôle. Retirez d'abord le rôle d'administrateur, puis recommencez.",
+      });
+      const english = await deleteAccount(admin, CONFIRMED, "en");
+      expect(english.json().message).toBe(
+        "This account is an administrator and can't be deleted while it has this role. Remove the administrator role first, then try again."
+      );
+      expect(await profileExists(admin.id)).toBe(true);
+
+      expect((await app.supabaseAdmin.from("admins").delete().eq("user_id", admin.id)).error).toBeNull();
+      const deleted = await deleteAccount(admin, CONFIRMED);
+      expect(deleted.statusCode).toBe(204);
+      expect(await profileExists(admin.id)).toBe(false);
+    } finally {
+      await app.supabaseAdmin.from("admins").delete().eq("user_id", admin.id);
+      await deleteTestUser(app, admin.id);
+    }
   });
 
   it("removes files from every storage bucket, including avatars", async () => {
     const storageUser = await createTestUser(app, "accs");
-    const content = Buffer.from("fichier de test");
+    const photo = await sharp({ create: { width: 64, height: 64, channels: 3, background: "#6B4A3A" } }).jpeg().toBuffer();
 
     for (const bucket of USER_STORAGE_BUCKETS) {
       const { error } = await app.supabaseAdmin.storage
         .from(bucket)
-        .upload(`${storageUser.id}/test.txt`, content, { contentType: "text/plain", upsert: true });
+        .upload(`${storageUser.id}/test.jpg`, photo, { contentType: "image/jpeg", upsert: true });
       expect(error).toBeNull();
     }
 
-    const del = await app.inject({ method: "DELETE", url: "/api/me", headers: authHeaders(storageUser.token) });
+    const del = await deleteAccount(storageUser, CONFIRMED);
     expect(del.statusCode).toBe(204);
 
     for (const bucket of USER_STORAGE_BUCKETS) {
       const { data: remaining } = await app.supabaseAdmin.storage.from(bucket).list(storageUser.id);
       expect(remaining ?? []).toHaveLength(0);
     }
+  });
+
+  // Cas du fichier orphelin de post-media (constat du 2026-10-14) : un fichier
+  // qui refuse de s'effacer. Le compte est supprimé quand même (décision du
+  // fondateur du 2026-10-15) ; le fichier reste, compté au journal du
+  // serveur, pour un nettoyage ultérieur.
+  it("deletes the account even when a file refuses to be erased", async () => {
+    const user = await createTestUser(app, "accf");
+    const photo = await sharp({ create: { width: 64, height: 64, channels: 3, background: "#1E3D32" } }).jpeg().toBuffer();
+    const path = `${user.id}/incident.jpg`;
+    expect((await app.supabaseAdmin.storage.from("post-media").upload(path, photo, { contentType: "image/jpeg" })).error).toBeNull();
+
+    const storage = app.supabaseAdmin.storage;
+    const realFrom = storage.from.bind(storage);
+    const spy = vi.spyOn(storage, "from").mockImplementation((bucket: string) => {
+      const files = realFrom(bucket);
+      if (bucket === "post-media") files.remove = async () => Promise.reject(new Error("panne simulée du stockage"));
+      return files;
+    });
+    try {
+      const del = await deleteAccount(user, CONFIRMED);
+      expect(del.statusCode).toBe(204);
+      expect(await profileExists(user.id)).toBe(false);
+    } finally {
+      spy.mockRestore();
+    }
+
+    const { data } = await app.supabaseAdmin.storage.from("post-media").list(user.id);
+    expect((data ?? []).map((file) => file.name)).toEqual(["incident.jpg"]);
+    expect((await app.supabaseAdmin.storage.from("post-media").remove([path])).error).toBeNull();
   });
 });

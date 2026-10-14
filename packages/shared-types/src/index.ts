@@ -47,6 +47,23 @@ export interface UpdateLocaleRequest {
   locale: AppLocale;
 }
 
+/** Mot à taper pour confirmer la suppression de son compte (lot 5), dans la
+ * langue de l'app. */
+export const ACCOUNT_DELETION_WORDS = { fr: "SUPPRIMER", en: "DELETE" } as const satisfies Record<AppLocale, string>;
+
+/** Vrai si `typed` est le mot de confirmation de `locale` — ou, sans langue
+ * (le serveur, qui vérifie l'intention), de l'une des langues —, sans tenir
+ * compte de la casse ni des espaces autour. */
+export function isAccountDeletionWord(typed: string, locale?: AppLocale): boolean {
+  const word = typed.trim().toUpperCase();
+  return (locale ? [locale] : APP_LOCALES).some((l) => word === ACCOUNT_DELETION_WORDS[l]);
+}
+
+/** Corps de DELETE /api/me. */
+export interface DeleteAccountRequest {
+  confirmation: string;
+}
+
 export interface UpdateMeRequest {
   username: string;
   displayName: string;
