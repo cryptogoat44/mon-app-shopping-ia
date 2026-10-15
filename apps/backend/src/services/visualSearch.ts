@@ -84,10 +84,36 @@ function isUsable(match: SerpApiVisualMatch): match is UsableMatch {
   return Boolean(match.title && (match.thumbnail || match.image)) && Boolean(match.link) && !isExcludedMerchant(match.link ?? "");
 }
 
+// Ce que la base sait ranger (product_matches) : aucun caractère nul, une
+// devise de 3 caractères au plus (char(3)), un prix de moins de 100 millions
+// (numeric(10,2)). Une valeur étrange n'annule jamais la proposition, ni les
+// autres : le texte est nettoyé, le prix retiré (2026-10-15).
+const MAX_CURRENCY_CHARACTERS = 3;
+const MAX_PRICE = 99_999_999.99;
+
+function withoutNul(text: string | undefined): string | undefined {
+  return text?.replace(/\u0000/g, "");
+}
+
+function withCleanTexts(match: SerpApiVisualMatch): SerpApiVisualMatch {
+  return { ...match, title: withoutNul(match.title), link: withoutNul(match.link), source: withoutNul(match.source), thumbnail: withoutNul(match.thumbnail), image: withoutNul(match.image) };
+}
+
+/** Prix et devise rangeables tels quels, sinon aucun prix. */
+function storablePrice(price: SerpApiVisualMatch["price"]): Pick<VisualMatch, "priceValue" | "currency"> {
+  const value = price?.extracted_value;
+  const currency = withoutNul(price?.currency)?.trim() || null;
+  const currencyFits = currency === null || [...currency].length <= MAX_CURRENCY_CHARACTERS;
+  if (value === undefined || !Number.isFinite(value) || value < 0 || value > MAX_PRICE || !currencyFits) {
+    return { priceValue: null, currency: null };
+  }
+  return { priceValue: value, currency };
+}
+
 /** `country` : pays de la recherche, dont le site passe devant quand un
  * marchand propose le même article sur plusieurs sites de pays. */
 export function toVisualMatches(matches: SerpApiVisualMatch[], country: string): VisualMatch[] {
-  return withoutDuplicates(matches.filter(isUsable), country)
+  return withoutDuplicates(matches.map(withCleanTexts).filter(isUsable), country)
     .slice(0, MAX_MATCHES)
     // Rang renuméroté APRÈS filtrage : le rang de Google compte aussi les
     // réseaux sociaux écartés, et une liste qui commençait au rang 2 posait
@@ -99,8 +125,7 @@ export function toVisualMatches(matches: SerpApiVisualMatch[], country: string):
       imageHdUrl: match.image ?? null,
       merchantName: match.source ?? null,
       merchantUrl: match.link,
-      priceValue: match.price?.extracted_value ?? null,
-      currency: match.price?.currency ?? null,
+      ...storablePrice(match.price),
     }));
 }
 

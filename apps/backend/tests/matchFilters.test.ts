@@ -122,6 +122,25 @@ describe("réponses enregistrées de Google Lens : filtres sans risque pour un r
     expect(results.map((r) => r.merchantUrl)).toEqual([original.link, otherColour.link]);
   });
 
+  it("réponse complétée de valeurs étranges : chaque proposition reste, sans prix si besoin, et les autres ne bougent pas", async () => {
+    const [a, b, c, d] = [at(ZONE, 4), at(ZONE, 5), at(ZONE, 6), at(ZONE, 10)];
+    const odd = [
+      { ...a, price: { value: "1 990 руб.", extracted_value: 1990, currency: "руб." } },
+      { ...b, price: { value: "39 €", extracted_value: 39, currency: " € " } },
+      { ...c, price: { value: "1 000 000 000 000 €", extracted_value: 1e12, currency: "€" } },
+      { ...d, title: `${d.title}\u0000` },
+    ];
+
+    const results = await replay({ visual_matches: odd });
+    expect(results.map((r) => [r.rank, r.merchantUrl, r.priceValue, r.currency])).toEqual([
+      [1, a.link, null, null],
+      [2, b.link, 39, "€"],
+      [3, c.link, null, null],
+      [4, d.link, 70, "€"],
+    ]);
+    expect(results[3]!.productName).toBe(d.title);
+  });
+
   it("réponse enregistrée vide (« Fully empty ») : recherche vide, jamais une panne", async () => {
     await expect(replay(fixture("lens-vignette-entiere-vide.json"))).resolves.toEqual([]);
   });

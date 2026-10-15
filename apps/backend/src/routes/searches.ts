@@ -118,54 +118,72 @@ async function discardAnalysisImage(fastify: FastifyInstance, storagePath: strin
   if (error) fastify.log.warn({ error, storagePath }, "Image analysée non supprimée après la recherche");
 }
 
-/** Enregistre les propositions et leurs liens. false : elles n'ont pas pu
- * être enregistrées — la recherche est alors une panne, jamais « aucune
- * pièce trouvée » (charte, règle 3 ; constaté au lot 4 ter). */
+const INSERTED_MATCH_ROWS = z.array(z.object({ id: z.string(), merchant_url: z.string() }));
+
+function toMatchRow(searchId: string, m: VisualMatch, rank: number) {
+  return {
+    search_id: searchId,
+    rank,
+    product_name: m.productName,
+    image_url: m.imageUrl,
+    image_hd_url: m.imageHdUrl,
+    price_min: m.priceValue,
+    price_max: m.priceValue,
+    currency: m.currency ?? "EUR",
+    merchant_name: m.merchantName,
+    merchant_url: m.merchantUrl,
+  };
+}
+
+/** Range les propositions et renvoie leur nombre. Une proposition que la
+ * base refuse (valeur inattendue) est écartée seule, jamais les autres : on
+ * reprend alors une par une, rangs renumérotés sans trou (fiabilité des
+ * résultats, 2026-10-15). 0 : rien n'a pu être rangé. */
+async function insertMatches(fastify: FastifyInstance, searchId: string, matches: VisualMatch[]): Promise<number> {
+  const table = () => fastify.supabaseAdmin.from("product_matches");
+  const { error } = await table().insert(matches.map((m, index) => toMatchRow(searchId, m, index + 1)));
+  if (!error) return matches.length;
+
+  let saved = 0;
+  for (const match of matches) {
+    const { error: rowError } = await table().insert(toMatchRow(searchId, match, saved + 1));
+    if (!rowError) saved += 1;
+  }
+  if (saved === 0) fastify.log.error({ error }, "Échec d'enregistrement des product_matches");
+  else fastify.log.warn({ refused: matches.length - saved, total: matches.length }, "Propositions refusées par la base : écartées, les autres gardées");
+  return saved;
+}
+
+/** Enregistre les propositions et leurs liens. false : aucune n'a pu être
+ * enregistrée — la recherche est alors une panne, jamais « aucune pièce
+ * trouvée » (charte, règle 3 ; constaté au lot 4 ter). */
 async function saveMatches(
   fastify: FastifyInstance,
   searchId: string,
   matches: VisualMatch[]
 ): Promise<boolean> {
   if (matches.length === 0) return true;
-
-  const { error } = await fastify.supabaseAdmin.from("product_matches").insert(
-    matches.map((m) => ({
-      search_id: searchId,
-      rank: m.rank,
-      product_name: m.productName,
-      image_url: m.imageUrl,
-      image_hd_url: m.imageHdUrl,
-      price_min: m.priceValue,
-      price_max: m.priceValue,
-      currency: m.currency ?? "EUR",
-      merchant_name: m.merchantName,
-      merchant_url: m.merchantUrl,
-    }))
-  );
-
-  if (error) {
-    fastify.log.error({ error }, "Échec d'enregistrement des product_matches");
-    return false;
-  }
+  if ((await insertMatches(fastify, searchId, matches)) === 0) return false;
 
   // Un lien affilié par produit identifié. Pour l'instant "direct" (aucun
   // réseau d'affiliation rejoint) : le lien pointe tel quel vers le
   // marchand, sans commission. Le tracking de clic est déjà en place pour
   // qu'il suffise de changer affiliate_url le jour où un programme
   // d'affiliation (Awin, Rakuten, CJ...) est rejoint pour ce marchand.
-  const { data: insertedMatches, error: fetchError } = await fastify.supabaseAdmin
+  const { data: insertedRows, error: fetchError } = await fastify.supabaseAdmin
     .from("product_matches")
     .select("id, merchant_url")
     .eq("search_id", searchId);
+  const insertedMatches = INSERTED_MATCH_ROWS.safeParse(insertedRows);
 
   // Propositions enregistrées : sans lien affilié, l'app ouvre le lien du marchand.
-  if (fetchError || !insertedMatches) {
+  if (fetchError || !insertedMatches.success) {
     fastify.log.error({ fetchError }, "Impossible de relire les product_matches pour créer les liens affiliés");
     return true;
   }
 
   const { error: linksError } = await fastify.supabaseAdmin.from("affiliate_links").insert(
-    (insertedMatches as { id: string; merchant_url: string }[]).map((m) => ({
+    insertedMatches.data.map((m) => ({
       product_match_id: m.id,
       network: "direct",
       affiliate_url: m.merchant_url,

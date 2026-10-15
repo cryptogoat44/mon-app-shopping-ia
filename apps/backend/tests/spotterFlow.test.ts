@@ -376,6 +376,24 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     }
   });
 
+  // 2026-10-15 : une devise de plus de 3 caractères faisait refuser tout l'enregistrement
+  // (colonne char(3)) : la recherche entière tombait en panne. Refus réel de la base ici.
+  it("une proposition que la base refuse est écartée seule : les autres sont gardées, rangs sans trou", async () => {
+    const search = await prepare("https://www.tiktok.com/@x/video/1");
+    searchMock.mockResolvedValueOnce([
+      MATCH,
+      { ...MATCH, rank: 2, productName: "Devise inattendue", merchantUrl: "https://marchand.example/rouble", currency: "руб." },
+      { ...MATCH, rank: 3, productName: "Troisième", merchantUrl: "https://marchand.example/troisieme" },
+    ]);
+
+    const body = (await run(search.id, {})).json();
+    expect(body.status).toBe("completed");
+    expect(body.matches.map((m: { rank: number; productName: string }) => [m.rank, m.productName])).toEqual([
+      [1, MATCH.productName],
+      [2, "Troisième"],
+    ]);
+  });
+
   it("si la vignette n'est plus disponible, invite à importer une capture", async () => {
     const search = await prepare("https://www.tiktok.com/@x/video/1");
     downloadMock.mockRejectedValueOnce(new Error("403"));
