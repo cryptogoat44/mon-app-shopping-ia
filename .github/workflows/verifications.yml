@@ -106,6 +106,13 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    # Une seule série de tests à la fois sur spotto-dev, toutes branches
+    # confondues (décision du fondateur, 2026-10-15) : les suivantes attendent
+    # leur tour, aucune n'est annulée (« queue: max », jusqu'à 100 en attente).
+    concurrency:
+      group: tests-spotto-dev
+      cancel-in-progress: false
+      queue: max
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -124,6 +131,8 @@ jobs:
       # Diagnostic des lenteurs de spotto-dev (2026-10-15) : des durées
       # seulement, avant et après les tests, sans effet sur le résultat.
       # Même protection que les tests : refus de toute autre adresse.
+      # Gardé deux semaines (décision du fondateur) : à retirer, avec l'étape
+      # « après les tests », à partir du 2026-10-29.
       - name: Délai de réponse de spotto-dev, avant les tests (diagnostic)
         working-directory: apps/backend
         continue-on-error: true
