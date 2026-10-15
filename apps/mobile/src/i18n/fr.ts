@@ -337,6 +337,28 @@ export const fr = {
     capacityUserTip: "Réessayez demain.",
     previewUnavailableTitle: "L'image de la vidéo n'est plus disponible",
     previewUnavailableTip: "Importez une capture d'écran de la pièce pour continuer.",
+    // Bouton « Résultat incohérent » (fiabilité des résultats, motifs validés
+    // par le fondateur le 2026-10-15).
+    reportMenuLabel: "Signaler un résultat incohérent",
+    reportTitle: "Résultat incohérent",
+    reportQuestion: "Qu'est-ce qui ne va pas ?",
+    feedbackReasons: {
+      image_title_mismatch: "L'image et le titre ne correspondent pas",
+      wrong_item: "Ce n'est pas la pièce cherchée (autre type, autre couleur, autre modèle)",
+      not_for_sale: "Impossible à acheter (la page ne vend rien)",
+      wrong_price: "Prix faux ou absent",
+      duplicate: "Doublon d'une autre proposition",
+    },
+    reportSend: "Envoyer",
+    reportSending: "Envoi…",
+    reportCancel: "Annuler",
+    reportWithdraw: "Retirer mon signalement",
+    reportThanks: "Merci, c'est noté.",
+    reportWithdrawn: "Signalement retiré.",
+    reportedLine: (reason: string) => `Signalé : ${reason}`,
+    reportedHint: "Modifier ou retirer votre signalement",
+    reportError: "Le signalement n'a pas pu être envoyé. Vérifiez votre connexion, puis réessayez.",
+    reportWithdrawError: "Le signalement n'a pas pu être retiré. Vérifiez votre connexion, puis réessayez.",
   },
   wishlistItem: {
     back: "Envies",

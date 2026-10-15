@@ -59,7 +59,7 @@ export async function essaiLens(admin: SupabaseClient, photo: Buffer, essai: Ess
   try {
     const signee = await admin.storage.from("screenshots").createSignedUrl(chemin, 300);
     if (signee.error || !signee.data) throw new Error(`Adresse signée impossible : ${signee.error?.message ?? "?"}`);
-    const brutes = await callSerpApi(signee.data.signedUrl, essai.reglages, essai.texte);
+    const { matches: brutes } = await callSerpApi(signee.data.signedUrl, essai.reglages, essai.texte);
     const { structure, brut } = releve();
     writeFileSync(join(dossier, `essai-${essai.numero}.json`), JSON.stringify(brutes, null, 2));
     writeFileSync(join(dossier, `reponse-${essai.numero}.json`), JSON.stringify(brut, null, 2));

@@ -38,6 +38,8 @@ const NON_EMPTY_SECTIONS = [
   "piecesReceived",
   "moderationDecisionsAboutMe",
   "moderationDecisionsTaken",
+  // Fiabilité des résultats : bouton « Résultat incohérent » (migration 0025).
+  "resultFeedback",
 ] as const;
 
 // Sections qui sont un objet (ou null), pas une liste.
@@ -72,6 +74,7 @@ const JSON_KEYS = [
   "suspension",
   "moderationDecisionsAboutMe",
   "moderationDecisionsTaken",
+  "resultFeedback",
 ];
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
@@ -119,6 +122,9 @@ describe("export RGPD complet", () => {
       .select("id")
       .single();
     await app.supabaseAdmin.from("affiliate_links").insert({ product_match_id: match!.id, network: "direct", affiliate_url: "https://example.com/p" });
+    // Bouton « Résultat incohérent » : la proposition signalée.
+    const { error: feedbackError } = await app.supabaseAdmin.from("match_feedback").insert({ user_id: user.id, match_id: match!.id, reason: "wrong_item" });
+    if (feedbackError) throw feedbackError;
 
     // Clic marchand avec contexte, puis un achat suivi rattaché à ce clic.
     await app.inject({

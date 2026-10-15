@@ -5,11 +5,13 @@ import {
   SEARCH_QUERY_MAX_LENGTH,
   type PlatformSource,
   type ProductSearch,
-  type RecognitionMethod,
   type SearchStatus,
 } from "@monapp/shared-types";
 import { detectPlatform, fetchOfficialPreview } from "../services/oembed.js";
-import { searchProductsByImageUrl, type VisualMatch } from "../services/visualSearch.js";
+import { LensCallError, searchProductsByImageUrl, type VisualMatch } from "../services/visualSearch.js";
+import { parseMatchRows, parseSearchRow, parseSearchRows, toProductSearch, type MatchRow, type SearchRow } from "../lib/searchRows.js";
+import { cropAreaPct, failedColumns, measuredColumns, secondsSince, type MeasureColumns } from "../lib/searchMeasure.js";
+import { fetchFeedbackReasons } from "../lib/matchFeedback.js";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { purgeExpiredSearches } from "../lib/searchRetention.js";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
@@ -41,71 +43,6 @@ const runSearchSchema = z.object({
   crop: cropSchema.optional(),
   query: z.string().max(SEARCH_QUERY_MAX_LENGTH).optional(),
 });
-
-interface ProductSearchRow {
-  id: string;
-  user_id: string;
-  source_url: string | null;
-  source_platform: PlatformSource;
-  method: RecognitionMethod;
-  thumbnail_url: string | null;
-  screenshot_url: string | null;
-  status: SearchStatus;
-  error_message: string | null;
-  query: string | null;
-  created_at: string;
-}
-
-interface ProductMatchRow {
-  id: string;
-  search_id?: string;
-  rank: number;
-  product_name: string;
-  brand: string | null;
-  image_url: string;
-  image_hd_url: string | null;
-  price_min: string | null;
-  price_max: string | null;
-  currency: string | null;
-  merchant_name: string | null;
-  merchant_url: string;
-}
-
-function toProductSearch(
-  row: ProductSearchRow,
-  matches: ProductMatchRow[],
-  affiliateUrlByMatchId: Map<string, string>
-): ProductSearch {
-  return {
-    id: row.id,
-    sourceUrl: row.source_url,
-    sourcePlatform: row.source_platform,
-    method: row.method,
-    thumbnailUrl: row.thumbnail_url,
-    status: row.status,
-    errorMessage: row.error_message,
-    query: row.query ?? null,
-    createdAt: row.created_at,
-    matches: matches
-      .sort((a, b) => a.rank - b.rank)
-      .map((m) => ({
-        id: m.id,
-        rank: m.rank,
-        productName: m.product_name,
-        brand: m.brand,
-        imageUrl: m.image_url,
-        imageHdUrl: m.image_hd_url ?? null,
-        priceMin: m.price_min !== null ? Number(m.price_min) : null,
-        priceMax: m.price_max !== null ? Number(m.price_max) : null,
-        currency: m.currency,
-        merchantName: m.merchant_name,
-        merchantUrl: m.merchant_url,
-        // Repli sur merchant_url si le lien affilié manque (échec d'écriture
-        // ponctuel dans saveMatches) — toujours une URL valide à ouvrir.
-        affiliateUrl: affiliateUrlByMatchId.get(m.id) ?? m.merchant_url,
-      })),
-  };
-}
 
 // RGPD : l'image analysée (capture importée ou zone recadrée) n'est
 // stockée que le temps que SerpApi la lise, via une adresse temporaire
@@ -240,37 +177,47 @@ async function readRunForm(request: FastifyRequest, reply: FastifyReply): Promis
   return input ? { input, fileBuffer } : null;
 }
 
+// Lancements refusés avant l'appel à SerpApi (aucun crédit). Les deux
+// derniers sont comptés dans la mesure : un cadre inutilisable repéré par nous.
+const RUN_REFUSALS = {
+  image_required: { status: 400, body: { error: "image_required", message: "Importez une capture de la pièce." } },
+  preview_unavailable: {
+    status: 422,
+    body: { error: "preview_unavailable", message: "L'image de la vidéo n'est plus disponible. Importez une capture de la pièce." },
+  },
+  invalid_image: { status: 400, body: { error: "invalid_image", message: "Cette image n'a pas pu être lue, ou la zone choisie est trop petite." } },
+} as const;
+type RunRefusal = keyof typeof RUN_REFUSALS;
+
 /** Image à analyser — celle importée en priorité, sinon la vignette
- * officielle —, recadrée sur la zone choisie. null : l'erreur est déjà envoyée. */
-async function prepareRunImage(request: FastifyRequest, reply: FastifyReply, row: ProductSearchRow, form: RunForm): Promise<Buffer | null> {
+ * officielle —, recadrée sur la zone choisie ; sinon la raison du refus. */
+async function prepareRunImage(request: FastifyRequest, row: SearchRow, form: RunForm): Promise<{ image: Buffer } | { refusal: RunRefusal }> {
   let source: Buffer;
   try {
-    if (form.fileBuffer) {
-      source = form.fileBuffer;
-    } else if (row.thumbnail_url) {
-      source = await downloadThumbnail(row.thumbnail_url);
-    } else {
-      void reply.code(400).send({ error: "image_required", message: "Importez une capture de la pièce." });
-      return null;
-    }
+    if (form.fileBuffer) source = form.fileBuffer;
+    else if (row.thumbnail_url) source = await downloadThumbnail(row.thumbnail_url);
+    else return { refusal: "image_required" };
   } catch (error) {
     request.log.warn({ error }, "Vignette officielle indisponible au lancement");
-    void reply.code(422).send({
-      error: "preview_unavailable",
-      message: "L'image de la vidéo n'est plus disponible. Importez une capture de la pièce.",
-    });
-    return null;
+    return { refusal: "preview_unavailable" };
   }
 
   try {
-    return await prepareImageForAnalysis(source, form.input.crop ?? null);
+    return { image: await prepareImageForAnalysis(source, form.input.crop ?? null) };
   } catch (error) {
-    if (error instanceof ImageSourceError) {
-      void reply.code(400).send({ error: "invalid_image", message: "Cette image n'a pas pu être lue, ou la zone choisie est trop petite." });
-      return null;
-    }
+    if (error instanceof ImageSourceError) return { refusal: "invalid_image" };
     throw error;
   }
+}
+
+/** Mesure : un lancement refusé avant l'appel (cadre inutilisable repéré par
+ * nous). Un échec d'écriture est journalisé, sans bloquer la réponse. */
+async function countRefusalBeforeCall(fastify: FastifyInstance, row: SearchRow): Promise<void> {
+  const { error } = await fastify.supabaseAdmin
+    .from("product_searches")
+    .update({ refused_before_call: row.refused_before_call + 1 })
+    .eq("id", row.id);
+  if (error) fastify.log.error({ error }, "Lancement refusé non compté dans la mesure");
 }
 
 async function markPending(fastify: FastifyInstance, id: string): Promise<void> {
@@ -306,42 +253,52 @@ interface SearchOutcome {
   matches: VisualMatch[];
   status: SearchStatus;
   errorMessage: string | null;
+  /** Mesure de la recherche (migration 0025) : des nombres, jamais de contenu. */
+  measure: MeasureColumns;
 }
 
-/** L'appel SerpApi (1 crédit) : des propositions, rien, ou une panne — chacun annoncé comme tel. */
+/** L'appel SerpApi (1 crédit) : des propositions, rien, ou une panne — chacun annoncé comme tel, et mesuré. */
 async function runVisualSearch(fastify: FastifyInstance, request: FastifyRequest, imageUrl: string, query: string | null): Promise<SearchOutcome> {
+  const start = Date.now();
   try {
-    const matches = await searchProductsByImageUrl(fastify, imageUrl, { query, locale: searchLocaleFor(request) });
-    if (matches.length === 0) return { matches, status: "failed", errorMessage: NO_MATCH_MESSAGE };
-    return { matches, status: "completed", errorMessage: null };
+    const { matches, measure } = await searchProductsByImageUrl(fastify, imageUrl, { query, locale: searchLocaleFor(request) });
+    const columns = measuredColumns(measure, secondsSince(start));
+    if (matches.length === 0) return { matches, status: "failed", errorMessage: NO_MATCH_MESSAGE, measure: columns };
+    return { matches, status: "completed", errorMessage: null, measure: columns };
   } catch (error) {
     request.log.error({ error }, "Échec de l'appel à l'API de recherche visuelle (lancement)");
-    return { matches: [], status: "failed", errorMessage: TECHNICAL_FAILURE_MESSAGE };
+    const kind = error instanceof LensCallError ? error.kind : "serpapi_error";
+    return { matches: [], status: "failed", errorMessage: TECHNICAL_FAILURE_MESSAGE, measure: failedColumns(kind, secondsSince(start)) };
   }
 }
 
-/** Enregistre l'issue de l'appel et renvoie la recherche complète ; null :
- * résultat illisible ou non enregistré. */
-async function saveOutcome(fastify: FastifyInstance, request: FastifyRequest, id: string, outcome: SearchOutcome): Promise<ProductSearch | null> {
+/** Enregistre l'issue de l'appel et sa mesure, et renvoie la recherche
+ * complète ; null : résultat illisible ou non enregistré. */
+async function saveOutcome(fastify: FastifyInstance, request: FastifyRequest, id: string, outcome: SearchOutcome, cropPct: number): Promise<ProductSearch | null> {
   const saved = await saveMatches(fastify, id, outcome.matches);
+  const measure = saved ? outcome.measure : failedColumns("save_failed", outcome.measure.call_seconds);
   const { data: updated, error: updateError } = await fastify.supabaseAdmin
     .from("product_searches")
     .update({
       screenshot_url: null,
       status: saved ? outcome.status : "failed",
       error_message: saved ? outcome.errorMessage : TECHNICAL_FAILURE_MESSAGE,
+      ...measure,
+      crop_area_pct: cropPct,
     })
     .eq("id", id)
     .select("*")
     .single();
   const { data: matchRows, error: matchesError } = await fastify.supabaseAdmin.from("product_matches").select("*").eq("search_id", id);
-  if (updateError || !updated || matchesError) {
+  const search = parseSearchRow(updated);
+  const matches = parseMatchRows(matchRows);
+  if (updateError || matchesError || !search || !matches) {
     request.log.error({ updateError, matchesError }, "Échec d'enregistrement du résultat de la recherche");
     return null;
   }
-  const rowsForSearch = (matchRows as ProductMatchRow[]) ?? [];
-  const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, rowsForSearch.map((m) => m.id));
-  return toProductSearch(updated as ProductSearchRow, rowsForSearch, affiliateUrlByMatchId);
+  const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, matches.map((m) => m.id));
+  // Recherche toute neuve : aucune proposition n'a encore pu être signalée.
+  return toProductSearch(search, matches, affiliateUrlByMatchId, new Map());
 }
 
 const RECENT_SEARCHES_DEFAULT_LIMIT = 6;
@@ -378,7 +335,11 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    const rows = (searches as ProductSearchRow[]) ?? [];
+    const rows = parseSearchRows(searches);
+    if (!rows) {
+      request.log.error("Historique des recherches illisible");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
     if (rows.length === 0) {
       return reply.send([]);
     }
@@ -399,21 +360,25 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     // filtrage des réseaux sociaux, et une recherche dont le 1ᵉʳ résultat
     // était un TikTok disparaissait de « Récemment spottées » et du
     // sélecteur de pièces de Publier (audit Lot Q, ROB-04).
-    const topMatchBySearch = new Map<string, ProductMatchRow>();
-    for (const match of (matchRows as ProductMatchRow[]) ?? []) {
-      if (match.search_id && !topMatchBySearch.has(match.search_id)) topMatchBySearch.set(match.search_id, match);
+    const matches = parseMatchRows(matchRows);
+    if (!matches) {
+      request.log.error("Meilleurs résultats de l'historique illisibles");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+    const topMatchBySearch = new Map<string, MatchRow>();
+    for (const match of matches) {
+      if (!topMatchBySearch.has(match.search_id)) topMatchBySearch.set(match.search_id, match);
     }
 
-    const affiliateUrlByMatchId = await fetchAffiliateUrls(
-      fastify,
-      Array.from(topMatchBySearch.values()).map((m) => m.id)
-    );
+    const topMatchIds = Array.from(topMatchBySearch.values()).map((m) => m.id);
+    const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, topMatchIds);
+    const feedbackByMatchId = await fetchFeedbackReasons(fastify, userId, topMatchIds);
 
     return reply.send(
       rows
         .map((row) => {
           const topMatch = topMatchBySearch.get(row.id);
-          return topMatch ? toProductSearch(row, [topMatch], affiliateUrlByMatchId) : null;
+          return topMatch ? toProductSearch(row, [topMatch], affiliateUrlByMatchId, feedbackByMatchId) : null;
         })
         .filter((search): search is ProductSearch => search !== null)
     );
@@ -472,7 +437,12 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
 
     // Sans image : la raison précise, pour que l'app dise quoi faire.
     const previewIssue = preview && !preview.ok ? preview.issue : null;
-    return reply.send({ ...toProductSearch(inserted as ProductSearchRow, [], new Map()), previewIssue });
+    const row = parseSearchRow(inserted);
+    if (!row) {
+      request.log.error("Recherche préparée illisible");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+    return reply.send({ ...toProductSearch(row, [], new Map(), new Map()), previewIssue });
   });
 
   // Temps 2 — LANCER (1 crédit SerpApi, une seule fois par recherche) :
@@ -510,13 +480,21 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       if (!search) {
         return reply.code(404).send({ error: "search_not_found", message: "Recherche introuvable." });
       }
-      const row = search as ProductSearchRow;
+      const row = parseSearchRow(search);
+      if (!row) {
+        request.log.error("Recherche illisible au lancement");
+        return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue, réessayez." });
+      }
       if (row.status !== "pending") {
         return reply.code(409).send({ error: "search_already_run", message: "Cette recherche a déjà été lancée." });
       }
 
-      const prepared = await prepareRunImage(request, reply, row, form);
-      if (!prepared) return;
+      const prepared = await prepareRunImage(request, row, form);
+      if ("refusal" in prepared) {
+        if (prepared.refusal !== "image_required") await countRefusalBeforeCall(fastify, row);
+        const refusal = RUN_REFUSALS[prepared.refusal];
+        return reply.code(refusal.status).send(refusal.body);
+      }
 
       // Verrou : passe de "pending" à "processing" en une seule instruction
       // conditionnelle. Deux lancements simultanés (double appui, réseau
@@ -533,7 +511,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       }
 
       const storagePath = `${userId}/${id}.jpg`;
-      const imageUrl = await uploadForAnalysis(fastify, request, id, storagePath, prepared);
+      const imageUrl = await uploadForAnalysis(fastify, request, id, storagePath, prepared.image);
       if (!imageUrl) {
         return reply.code(500).send({ error: "upload_failed", message: "L'envoi de l'image a échoué, réessayez." });
       }
@@ -561,7 +539,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       fastify.countRateLimitHit(request, "searchCreate");
       const outcome = await runVisualSearch(fastify, request, imageUrl, query);
       await discardAnalysisImage(fastify, storagePath);
-      const result = await saveOutcome(fastify, request, id, outcome);
+      const result = await saveOutcome(fastify, request, id, outcome, cropAreaPct(form.input.crop));
       // Résultat illisible ou non enregistré : une panne annoncée comme telle, jamais « aucune pièce ».
       if (!result) {
         return reply.code(500).send({ error: "search_save_failed", message: "Le résultat n'a pas pu être enregistré, réessayez." });
@@ -587,10 +565,17 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "search_not_found", message: "Recherche introuvable." });
     }
 
-    const { data: matchRows } = await fastify.supabaseAdmin.from("product_matches").select("*").eq("search_id", id);
-    const rowsForSearch = (matchRows as ProductMatchRow[]) ?? [];
-    const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, rowsForSearch.map((m) => m.id));
+    const { data: matchRows, error: matchesError } = await fastify.supabaseAdmin.from("product_matches").select("*").eq("search_id", id);
+    const row = parseSearchRow(search);
+    const matches = parseMatchRows(matchRows);
+    if (matchesError || !row || !matches) {
+      request.log.error({ matchesError }, "Recherche ou propositions illisibles");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+    const matchIds = matches.map((m) => m.id);
+    const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, matchIds);
+    const feedbackByMatchId = await fetchFeedbackReasons(fastify, userId, matchIds);
 
-    return reply.send(toProductSearch(search as ProductSearchRow, rowsForSearch, affiliateUrlByMatchId));
+    return reply.send(toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId));
   });
 }

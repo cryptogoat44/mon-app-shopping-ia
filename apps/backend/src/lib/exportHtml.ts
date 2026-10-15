@@ -32,6 +32,7 @@ import {
   RECOGNITION_METHOD_LABELS,
   REPORT_HANDLED_LABELS,
   REPORT_REASON_LABELS,
+  FEEDBACK_REASON_LABELS,
   REPORT_TARGET_LABELS,
   SEARCH_FAILURE_LABELS,
   SEARCH_STATUS_LABELS,
@@ -374,8 +375,12 @@ function failureReason(ctx: Ctx, value: unknown): string | null {
   return key ? tr(ctx, SEARCH_FAILURE_LABELS[key]) : text;
 }
 
-function matchCard(ctx: Ctx, row: ExportRow): Html {
+/** `feedback` : le signalement « Résultat incohérent » de cette pièce, s'il y en a un. */
+function matchCard(ctx: Ctx, row: ExportRow, feedback?: ExportRow): Html {
   const merchant = str(row.merchant_name);
+  const reported = feedback
+    ? tr(ctx, EXPORT_TEXT.reportedInconsistentValue, { reason: enumLabel(ctx, FEEDBACK_REASON_LABELS, feedback.reason) ?? "", date: plainDate(ctx, feedback.created_at) })
+    : null;
   return new Card(ctx, "productMatches", row)
     .use("product_name")
     .field("rank")
@@ -390,17 +395,19 @@ function matchCard(ctx: Ctx, row: ExportRow): Html {
     .field("image_hd_url", link(ctx, row.image_hd_url, (site) => tr(ctx, EXPORT_TEXT.viewLargeImage, { site })))
     // Indice absent (cas courant) : rien plutôt qu'un pourcentage vide.
     .field("confidence_score", formatPercent(row.confidence_score, ctx.locale))
+    .line(tr(ctx, EXPORT_TEXT.reportedInconsistent), reported)
     .render(str(row.product_name));
 }
 
-function matchesBlock(ctx: Ctx, matches: readonly ExportRow[]): Part {
+function matchesBlock(ctx: Ctx, matches: readonly ExportRow[], feedbackByMatch: ReadonlyMap<string, ExportRow>): Part {
   if (matches.length === 0) return null;
   const sorted = [...matches].sort((a, b) => (toAmount(a.rank) ?? 0) - (toAmount(b.rank) ?? 0));
-  return html`<h4>${tr(ctx, EXPORT_TEXT.matchesTitle, { count: String(matches.length) })}</h4>${sorted.map((row) => matchCard(ctx, row))}`;
+  return html`<h4>${tr(ctx, EXPORT_TEXT.matchesTitle, { count: String(matches.length) })}</h4>${sorted.map((row) => matchCard(ctx, row, feedbackByMatch.get(String(row.id))))}`;
 }
 
 function searchesSection(ctx: Ctx): Html {
   const matchesBySearch = groupBy(ctx.data.productMatches, "search_id");
+  const feedbackByMatch = new Map(ctx.data.resultFeedback.map((row) => [String(row.match_id), row]));
   const searchIds = new Set(ctx.data.productSearches.map((row) => String(row.id)));
   const cards = newestFirst(ctx.data.productSearches, "created_at").map((row) => {
     const platform = row.source_platform;
@@ -425,13 +432,13 @@ function searchesSection(ctx: Ctx): Html {
       .field("error_message", failureReason(ctx, row.error_message));
     if (row.status === "pending") card.note(tr(ctx, EXPORT_TEXT.pendingExplained));
     else if (platform === "photo" || row.method === "manual_screenshot") card.note(tr(ctx, EXPORT_TEXT.analysedImageDeleted));
-    return card.render(tr(ctx, EXPORT_TEXT.searchTitle, { date: plainDate(ctx, row.created_at) }), matchesBlock(ctx, matchesBySearch.get(String(row.id)) ?? []));
+    return card.render(tr(ctx, EXPORT_TEXT.searchTitle, { date: plainDate(ctx, row.created_at) }), matchesBlock(ctx, matchesBySearch.get(String(row.id)) ?? [], feedbackByMatch));
   });
   // Propositions sans recherche retrouvée : jamais perdues.
   const orphans = ctx.data.productMatches.filter((row) => !searchIds.has(String(row.search_id)));
   return section(ctx, "searches", [
     cards,
-    orphans.length > 0 ? html`<h3 class="sub">${tr(ctx, EXPORT_TEXT.orphanMatches)}</h3>${orphans.map((row) => matchCard(ctx, row))}` : null,
+    orphans.length > 0 ? html`<h3 class="sub">${tr(ctx, EXPORT_TEXT.orphanMatches)}</h3>${orphans.map((row) => matchCard(ctx, row, feedbackByMatch.get(String(row.id))))}` : null,
   ]);
 }
 

@@ -41,9 +41,13 @@ function fakeFastify(): FastifyInstance {
   return { log: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } } as unknown as FastifyInstance;
 }
 
-async function replay(body: unknown, locale?: SearchLocale) {
+async function replayWithMeasure(body: unknown, locale?: SearchLocale) {
   safeFetchMock.mockResolvedValueOnce(new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } }));
   return searchProductsByImageUrl(fakeFastify(), "https://example.com/zone.jpg", locale ? { locale } : {});
+}
+
+async function replay(body: unknown, locale?: SearchLocale) {
+  return (await replayWithMeasure(body, locale)).matches;
 }
 
 beforeEach(() => {
@@ -139,6 +143,31 @@ describe("réponses enregistrées de Google Lens : filtres sans risque pour un r
       [4, d.link, 70, "€"],
     ]);
     expect(results[3]!.productName).toBe(d.title);
+  });
+
+  it("mesure d'un extrait de réponse enregistrée : reçues, écartées par motif, gardées, prix, autre devise, sites, rubriques", async () => {
+    const extract = [...ZONE.filter((m) => new URL(m.link).hostname.includes("zalando")), at(ZONE, 21), at(ZONE, 54), at(ZONE_TEXTE, 17)];
+    const { matches, measure } = await replayWithMeasure({ visual_matches: extract });
+
+    expect(matches).toHaveLength(8);
+    expect(measure).toEqual({
+      received: 11,
+      removedIncomplete: 0,
+      removedSocial: 1,
+      removedProfessional: 1,
+      removedDuplicates: 1,
+      kept: 8,
+      keptWithPrice: 2,
+      keptOtherCurrency: 1,
+      distinctSites: 4,
+      sections: ["visual_matches"],
+      googleState: null,
+    });
+  });
+
+  it("mesure de la réponse vide enregistrée : rien reçu, aucune rubrique, Google la dit « vide »", async () => {
+    const { measure } = await replayWithMeasure(fixture("lens-vignette-entiere-vide.json"));
+    expect(measure).toMatchObject({ received: 0, kept: 0, sections: [], googleState: "empty" });
   });
 
   it("réponse enregistrée vide (« Fully empty ») : recherche vide, jamais une panne", async () => {

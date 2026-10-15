@@ -75,9 +75,14 @@ export interface ApiErrorBody {
   message: string;
 }
 
-export type PlatformSource = "tiktok" | "instagram" | "other" | "photo";
-export type RecognitionMethod = "oembed" | "manual_screenshot";
-export type SearchStatus = "pending" | "processing" | "completed" | "failed";
+// Listes de valeurs : servent aussi au serveur pour valider les lignes lues
+// dans la base (charte, règle 19).
+export const PLATFORM_SOURCES = ["tiktok", "instagram", "other", "photo"] as const;
+export type PlatformSource = (typeof PLATFORM_SOURCES)[number];
+export const RECOGNITION_METHODS = ["oembed", "manual_screenshot"] as const;
+export type RecognitionMethod = (typeof RECOGNITION_METHODS)[number];
+export const SEARCH_STATUSES = ["pending", "processing", "completed", "failed"] as const;
+export type SearchStatus = (typeof SEARCH_STATUSES)[number];
 
 export interface ProductMatch {
   id: string;
@@ -100,6 +105,25 @@ export interface ProductMatch {
    * les résultats de recherche pour que l'app puisse l'ouvrir immédiatement,
    * sans attendre un aller-retour serveur au moment du clic. */
   affiliateUrl: string;
+  /** Motif choisi si la personne a signalé cette proposition comme
+   * incohérente (bouton « Résultat incohérent »), sinon null. */
+  feedbackReason: MatchFeedbackReason | null;
+}
+
+// ---- Bouton « Résultat incohérent » (fiabilité des résultats, 2026-10-15) ----
+
+/** Les cinq motifs, validés par le fondateur le 2026-10-15, dans l'ordre de
+ * l'écran. Seuls l'identifiant de la proposition et le motif partent : ni
+ * texte libre, ni image. */
+export const MATCH_FEEDBACK_REASONS = ["image_title_mismatch", "wrong_item", "not_for_sale", "wrong_price", "duplicate"] as const;
+export type MatchFeedbackReason = (typeof MATCH_FEEDBACK_REASONS)[number];
+
+/** Signalements au plus par personne et par jour (jour de Paris), comptés
+ * par le serveur dans la base. Changer de motif ou retirer ne compte pas. */
+export const MATCH_FEEDBACK_DAILY_LIMIT = 30;
+
+export interface MatchFeedbackRequest {
+  reason: MatchFeedbackReason;
 }
 
 export interface ProductSearch {

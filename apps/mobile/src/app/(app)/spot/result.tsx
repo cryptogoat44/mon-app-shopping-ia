@@ -6,7 +6,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
 import * as Haptics from "expo-haptics";
-import type { VaultCategory } from "@monapp/shared-types";
+import type { MatchFeedbackReason, VaultCategory } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
@@ -25,6 +25,7 @@ import { SpotImage } from "@/components/spot-image";
 import { ErrorMessage } from "@/components/error-message";
 import { CorrectionButtons, CorrectionsLink, CorrectionsSheet, useCorrections } from "@/components/spot-corrections";
 import { ActionButtons, type Action } from "@/components/spot-launch-views";
+import { ReportedLine, ResultFeedbackButton, ResultFeedbackSheet } from "@/components/result-feedback-sheet";
 import { track } from "@/lib/analytics";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -51,6 +52,9 @@ export default function ResultScreen() {
   const [showAllOthers, setShowAllOthers] = useState(false);
   const [affiliateInfoOpen, setAffiliateInfoOpen] = useState(false);
   const [correctionsOpen, setCorrectionsOpen] = useState(false);
+  // « Résultat incohérent » : motif changé ou retiré dans cet écran (null : retiré).
+  const [reportOpen, setReportOpen] = useState(false);
+  const [feedbackOverrides, setFeedbackOverrides] = useState<ReadonlyMap<string, MatchFeedbackReason | null>>(new Map());
   const scrollRef = useRef<ScrollView>(null);
 
   const result = state.kind === "ready" ? state.result : null;
@@ -218,6 +222,7 @@ export default function ResultScreen() {
   }
 
   const successList = successCorrections(corrections.context);
+  const reported = feedbackOverrides.has(piece.id) ? (feedbackOverrides.get(piece.id) ?? null) : (piece.feedbackReason ?? null);
   const others = result.pieces.map((p, index) => ({ p, index })).filter(({ index }) => index !== selectedIndex);
   // 11 autres propositions d'emblée (la meilleure + 11 = 12 images à
   // charger), le reste — jusqu'à 30 au total — sur demande.
@@ -288,7 +293,9 @@ export default function ResultScreen() {
           <Pressable style={styles.action} onPress={handleShare} accessibilityRole="button">
             <Text style={styles.actionLabel}>{t.result.share}</Text>
           </Pressable>
+          {piece.real ? <ResultFeedbackButton onPress={() => setReportOpen(true)} /> : null}
         </View>
+        {piece.real && reported ? <ReportedLine reason={reported} onPress={() => setReportOpen(true)} /> : null}
         {actionError ? <ErrorMessage style={styles.actionError}>{actionError}</ErrorMessage> : null}
 
         {others.length > 0 ? (
@@ -332,6 +339,16 @@ export default function ResultScreen() {
           </>
         ) : null}
       </ScrollView>
+
+      {piece.real ? (
+        <ResultFeedbackSheet
+          visible={reportOpen}
+          matchId={piece.id}
+          current={reported}
+          onClose={() => setReportOpen(false)}
+          onChanged={(reason) => setFeedbackOverrides((previous) => new Map(previous).set(piece.id, reason))}
+        />
+      ) : null}
 
       <CorrectionsSheet visible={correctionsOpen} onClose={() => setCorrectionsOpen(false)}>
         {successList.length === 1 && successList[0] === "add_video" ? (

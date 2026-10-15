@@ -15,6 +15,7 @@ export function matchToPiece(match: ProductMatch): Piece {
     merchantUrl: match.merchantUrl,
     affiliateUrl: match.affiliateUrl,
     real: true,
+    feedbackReason: match.feedbackReason ?? null,
   };
 }
 

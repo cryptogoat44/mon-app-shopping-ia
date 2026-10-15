@@ -2,6 +2,7 @@ import {
   MINIMUM_AGE,
   type AppLocale,
   type ConsentType,
+  type MatchFeedbackReason,
   type MerchantLinkContext,
   type ModerationActionType,
   type NotificationType,
@@ -107,6 +108,24 @@ export const EXPORT_COLUMNS = {
     error_message: shown("Raison de l'échec", "Reason for the failure"),
     created_at: shown("Date", "Date"),
     query: shown("Texte ajouté", "Text you added"),
+    // Mesure de la qualité des résultats (migration 0025) : des nombres et
+    // des valeurs d'une liste fermée, dans la version JSON seulement.
+    outcome: technical("Issue de la recherche (mesure de qualité)", "Search outcome (quality measure)"),
+    failure_kind: technical("Type de panne (mesure de qualité)", "Kind of failure (quality measure)"),
+    received_count: technical("Propositions reçues de la recherche visuelle", "Results received from the visual search"),
+    removed_incomplete: technical("Propositions écartées : sans titre, lien ou image, ou illisibles", "Results set aside: no title, link or image, or unreadable"),
+    removed_social: technical("Propositions écartées : réseaux sociaux", "Results set aside: social networks"),
+    removed_professional: technical("Propositions écartées : vente aux professionnels", "Results set aside: trade-only sellers"),
+    removed_duplicates: technical("Propositions écartées : doublons", "Results set aside: duplicates"),
+    kept_count: technical("Propositions gardées", "Results kept"),
+    kept_with_price: technical("Propositions gardées avec un prix", "Results kept with a price"),
+    kept_other_currency: technical("Propositions gardées dans une autre devise", "Results kept in another currency"),
+    distinct_sites: technical("Sites différents parmi les propositions", "Different sites among the results"),
+    lens_sections: technical("Rubriques de la réponse de la recherche visuelle", "Sections of the visual search answer"),
+    google_state: technical("État signalé par la recherche visuelle", "State reported by the visual search"),
+    crop_area_pct: technical("Part de l'image analysée (pour cent)", "Share of the image analysed (percent)"),
+    call_seconds: technical("Durée de la recherche (secondes)", "Search duration (seconds)"),
+    refused_before_call: technical("Lancements refusés avant la recherche", "Launches refused before the search"),
   },
   productMatches: {
     id: ID,
@@ -124,6 +143,14 @@ export const EXPORT_COLUMNS = {
     merchant_url: shown("Lien vers la pièce", "Link to the piece"),
     // Même date que la recherche : seulement dans la version JSON.
     created_at: technical("Proposée le", "Suggested on"),
+  },
+  resultFeedback: {
+    id: ID,
+    user_id: USER_ID,
+    match_id: technical("Pièce proposée signalée", "Reported suggested piece"),
+    reason: shown("Motif", "Reason"),
+    created_at: shown("Signalée le", "Reported on"),
+    updated_at: technical("Motif modifié le", "Reason changed on"),
   },
   vaultItems: {
     id: ID,
@@ -302,7 +329,7 @@ export const EXPORT_SECTIONS = {
       fr: "Chaque recherche faite à partir d'une vidéo, d'un lien ou d'une photo, avec les pièces que Spotto vous a proposées.",
       en: "Every search made from a video, a link or a photo, with the pieces Spotto suggested to you.",
     },
-    keys: ["productSearches", "productMatches"],
+    keys: ["productSearches", "productMatches", "resultFeedback"],
   },
   wishlist: {
     title: { fr: "Vos Envies", en: "Your Wishlist" },
@@ -534,6 +561,18 @@ export const REPORT_REASON_LABELS: Record<ReportReason, Bilingual> = {
   other: { fr: "Autre", en: "Other" },
 };
 
+/** Motifs du bouton « Résultat incohérent » (validés par le fondateur, 2026-10-15). */
+export const FEEDBACK_REASON_LABELS: Record<MatchFeedbackReason, Bilingual> = {
+  image_title_mismatch: { fr: "L'image et le titre ne correspondent pas", en: "The image and the title don't match" },
+  wrong_item: {
+    fr: "Ce n'est pas la pièce cherchée (autre type, autre couleur, autre modèle)",
+    en: "Not the item I was looking for (different type, color or model)",
+  },
+  not_for_sale: { fr: "Impossible à acheter (la page ne vend rien)", en: "Can't be bought (the page doesn't sell anything)" },
+  wrong_price: { fr: "Prix faux ou absent", en: "Wrong or missing price" },
+  duplicate: { fr: "Doublon d'une autre proposition", en: "Duplicate of another result" },
+};
+
 export const MODERATION_ACTION_LABELS: Record<ModerationActionType, Bilingual> = {
   dismiss: { fr: "Classé sans suite", en: "Dismissed" },
   hide: { fr: "Contenu masqué", en: "Content hidden" },
@@ -622,6 +661,8 @@ export const EXPORT_TEXT = {
     en: "The analysed image is not kept: it is deleted right after the search.",
   },
   matchesTitle: { fr: "Pièces proposées ({count})", en: "Suggested pieces ({count})" },
+  reportedInconsistent: { fr: "Signalée comme incohérente", en: "Reported as inconsistent" },
+  reportedInconsistentValue: { fr: "{reason}, le {date}", en: "{reason}, on {date}" },
   orphanMatches: { fr: "Pièces proposées pour une recherche introuvable", en: "Suggested pieces for a search that could not be found" },
   // Publications.
   postTitle: { fr: "{type} publiée le {date}", en: "{type} posted on {date}" },

@@ -2,7 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { env } from "../env.js";
 import { safeFetch } from "../lib/safeFetch.js";
-import { isExcludedMerchant, withoutDuplicates } from "./matchFilters.js";
+import { exclusionReason, withoutDuplicates } from "./matchFilters.js";
+import { googleStateOf, measureLens, sectionsOf, type FilterCounts, type LensMeasure, type LensSection } from "./lensMeasure.js";
 import { CURRENT_LENS_SETTINGS, DEFAULT_LOCALE, type LensSettings, type SearchLocale } from "./lensSettings.js";
 
 export { CURRENT_LENS_SETTINGS, type LensSettings, type SearchLocale };
@@ -32,7 +33,15 @@ const SERPAPI_VISUAL_MATCH = z.object({
   price: z.object({ value: z.string().optional(), extracted_value: z.number().optional(), currency: z.string().optional() }).optional(),
 });
 export type SerpApiVisualMatch = z.infer<typeof SERPAPI_VISUAL_MATCH>;
-const SERPAPI_LENS_RESPONSE = z.object({ visual_matches: z.array(z.unknown()).optional(), error: z.string().optional() });
+// Les autres rubriques sont gardées (passthrough) pour être comptées par la
+// mesure, jamais lues.
+const SERPAPI_LENS_RESPONSE = z
+  .object({
+    visual_matches: z.array(z.unknown()).optional(),
+    error: z.string().optional(),
+    search_information: z.object({ images_results_state: z.string().optional() }).passthrough().optional(),
+  })
+  .passthrough();
 
 const SERPAPI_ENDPOINT = "https://serpapi.com/search";
 // Nombre de propositions gardées (programme, étape 4.A, confirmé par le
@@ -44,11 +53,37 @@ export const MAX_MATCHES = 30;
 // "processing" indéfiniment côté mobile.
 const SERPAPI_TIMEOUT_MS = 15_000;
 
+/** Type de panne d'un appel à SerpApi, rangé avec la recherche (mesure). */
+export type LensFailureKind = "timeout" | "serpapi_error" | "unreadable_response";
+
+export class LensCallError extends Error {
+  constructor(
+    readonly kind: LensFailureKind,
+    message: string
+  ) {
+    super(message);
+    this.name = "LensCallError";
+  }
+}
+
+/** Ce que l'on garde d'une réponse de Google Lens. */
+export interface LensResponse {
+  matches: SerpApiVisualMatch[];
+  /** Propositions renvoyées, lisibles ou non. */
+  received: number;
+  sections: LensSection[];
+  googleState: "empty" | "other" | null;
+}
+
+function isTimeout(error: unknown): boolean {
+  return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+}
+
 /** Un seul appel SerpApi. `query` (texte « Que cherchez-vous ? ») n'est
  * transmis que s'il est rempli : sur une image recadrée il écarte les pièces
  * voisines, mais sur une image entière il avait dégradé le résultat (essais
  * du 2026-09-22 et du 2026-09-24, docs/lot-s-design/README.md). */
-export async function callSerpApi(imageUrl: string, settings: LensSettings, query: string | null): Promise<SerpApiVisualMatch[]> {
+export async function callSerpApi(imageUrl: string, settings: LensSettings, query: string | null): Promise<LensResponse> {
   const params = new URLSearchParams({ engine: "google_lens", url: imageUrl, type: settings.type, api_key: env.SERPAPI_KEY });
   if (settings.locale) {
     params.set("country", settings.locale.country);
@@ -56,32 +91,41 @@ export async function callSerpApi(imageUrl: string, settings: LensSettings, quer
   }
   if (query) params.set("q", query);
 
-  const response = await safeFetch(`${SERPAPI_ENDPOINT}?${params.toString()}`, {
-    allowedHosts: ["serpapi.com"],
-    signal: AbortSignal.timeout(SERPAPI_TIMEOUT_MS),
-  });
-  if (!response.ok) {
-    throw new Error(`SerpApi a répondu ${response.status}`);
+  let response: Response;
+  try {
+    response = await safeFetch(`${SERPAPI_ENDPOINT}?${params.toString()}`, {
+      allowedHosts: ["serpapi.com"],
+      signal: AbortSignal.timeout(SERPAPI_TIMEOUT_MS),
+    });
+  } catch (error) {
+    throw new LensCallError(isTimeout(error) ? "timeout" : "serpapi_error", `SerpApi injoignable : ${error instanceof Error ? error.message : String(error)}`);
   }
+  if (!response.ok) throw new LensCallError("serpapi_error", `SerpApi a répondu ${response.status}`);
 
   const data = SERPAPI_LENS_RESPONSE.safeParse(await response.json().catch(() => null));
-  if (!data.success) throw new Error("SerpApi : réponse inattendue");
+  if (!data.success) throw new LensCallError("unreadable_response", "SerpApi : réponse inattendue");
   // "Google Lens hasn't returned any results" arrive sous forme d'erreur
   // alors que c'est simplement une recherche vide : on la traite comme telle.
   if (data.data.error && !/hasn't returned any results/i.test(data.data.error)) {
-    throw new Error(`SerpApi : ${data.data.error}`);
+    throw new LensCallError("serpapi_error", `SerpApi : ${data.data.error}`);
   }
-  return (data.data.visual_matches ?? []).flatMap((item) => {
-    const match = SERPAPI_VISUAL_MATCH.safeParse(item);
-    return match.success ? [match.data] : [];
-  });
+  const items = data.data.visual_matches ?? [];
+  return {
+    matches: items.flatMap((item) => {
+      const match = SERPAPI_VISUAL_MATCH.safeParse(item);
+      return match.success ? [match.data] : [];
+    }),
+    received: items.length,
+    sections: sectionsOf(data.data),
+    googleState: googleStateOf(data.data.search_information?.images_results_state),
+  };
 }
 
 type UsableMatch = SerpApiVisualMatch & { title: string; link: string };
 
-/** Titre, lien et image présents, et un endroit où un particulier peut acheter. */
-function isUsable(match: SerpApiVisualMatch): match is UsableMatch {
-  return Boolean(match.title && (match.thumbnail || match.image)) && Boolean(match.link) && !isExcludedMerchant(match.link ?? "");
+/** Titre, lien et image présents. */
+function isComplete(match: SerpApiVisualMatch): match is UsableMatch {
+  return Boolean(match.title && (match.thumbnail || match.image) && match.link);
 }
 
 // Ce que la base sait ranger (product_matches) : aucun caractère nul, une
@@ -110,23 +154,42 @@ function storablePrice(price: SerpApiVisualMatch["price"]): Pick<VisualMatch, "p
   return { priceValue: value, currency };
 }
 
-/** `country` : pays de la recherche, dont le site passe devant quand un
- * marchand propose le même article sur plusieurs sites de pays. */
+// Rang renuméroté APRÈS filtrage : le rang de Google compte aussi les
+// réseaux sociaux écartés, et une liste qui commençait au rang 2 posait
+// problème ailleurs (audit Lot Q, ROB-04).
+function toVisualMatch(match: UsableMatch, index: number): VisualMatch {
+  return {
+    rank: index + 1,
+    productName: match.title,
+    imageUrl: (match.thumbnail ?? match.image)!,
+    imageHdUrl: match.image ?? null,
+    merchantName: match.source ?? null,
+    merchantUrl: match.link,
+    ...storablePrice(match.price),
+  };
+}
+
+/** Propositions gardées, et ce que chaque filtre a écarté. `country` : pays
+ * de la recherche, dont le site passe devant quand un marchand propose le
+ * même article sur plusieurs sites de pays. */
+export function filterVisualMatches(response: Pick<LensResponse, "matches" | "received">, country: string): { matches: VisualMatch[]; counts: FilterCounts } {
+  const complete = response.matches.map(withCleanTexts).filter(isComplete);
+  const reasons = complete.map((match) => exclusionReason(match.link));
+  const buyable = complete.filter((_, index) => reasons[index] === null);
+  const unique = withoutDuplicates(buyable, country);
+  return {
+    matches: unique.slice(0, MAX_MATCHES).map(toVisualMatch),
+    counts: {
+      removedIncomplete: response.received - complete.length,
+      removedSocial: reasons.filter((reason) => reason === "social").length,
+      removedProfessional: reasons.filter((reason) => reason === "professional").length,
+      removedDuplicates: buyable.length - unique.length,
+    },
+  };
+}
+
 export function toVisualMatches(matches: SerpApiVisualMatch[], country: string): VisualMatch[] {
-  return withoutDuplicates(matches.map(withCleanTexts).filter(isUsable), country)
-    .slice(0, MAX_MATCHES)
-    // Rang renuméroté APRÈS filtrage : le rang de Google compte aussi les
-    // réseaux sociaux écartés, et une liste qui commençait au rang 2 posait
-    // problème ailleurs (audit Lot Q, ROB-04).
-    .map((match, index) => ({
-      rank: index + 1,
-      productName: match.title,
-      imageUrl: (match.thumbnail ?? match.image)!,
-      imageHdUrl: match.image ?? null,
-      merchantName: match.source ?? null,
-      merchantUrl: match.link,
-      ...storablePrice(match.price),
-    }));
+  return filterVisualMatches({ matches, received: matches.length }, country).matches;
 }
 
 export interface VisualSearchOptions {
@@ -135,8 +198,14 @@ export interface VisualSearchOptions {
   locale?: SearchLocale;
 }
 
+export interface VisualSearchResult {
+  matches: VisualMatch[];
+  measure: LensMeasure;
+}
+
 /** Interroge Google Lens (via SerpApi) à partir d'une image publiquement
- * accessible et renvoie une liste normalisée de produits candidats.
+ * accessible et renvoie une liste normalisée de produits candidats, avec la
+ * mesure de la recherche. Une panne lève une `LensCallError` typée.
  *
  * Exactement UN appel SerpApi (1 crédit), jamais de repli : l'ancien repli
  * en type=all doublait le coût de chaque échec pour un résultat
@@ -146,13 +215,14 @@ export async function searchProductsByImageUrl(
   fastify: FastifyInstance,
   imageUrl: string,
   options: VisualSearchOptions = {}
-): Promise<VisualMatch[]> {
+): Promise<VisualSearchResult> {
   const query = options.query?.trim() || null;
   const locale = options.locale ?? DEFAULT_LOCALE;
   const settings: LensSettings = { ...CURRENT_LENS_SETTINGS, locale };
-  const matches = toVisualMatches(await callSerpApi(imageUrl, settings, query), locale.country);
+  const response = await callSerpApi(imageUrl, settings, query);
+  const { matches, counts } = filterVisualMatches(response, locale.country);
   if (matches.length === 0) {
     fastify.log.info({ type: settings.type, withQuery: query !== null }, "Recherche visuelle sans résultat");
   }
-  return matches;
+  return { matches, measure: measureLens(response, counts, matches, locale.country) };
 }

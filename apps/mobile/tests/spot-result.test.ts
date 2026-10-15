@@ -28,6 +28,7 @@ function search(overrides: Partial<ProductSearch> = {}): ProductSearch {
         merchantUrl: "https://example.com/p",
         affiliateUrl: "https://example.com/p?aff",
         imageHdUrl: "https://example.com/hd.jpg",
+        feedbackReason: "wrong_price",
       },
     ],
     ...overrides,

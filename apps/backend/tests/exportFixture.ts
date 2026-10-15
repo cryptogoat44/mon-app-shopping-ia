@@ -248,6 +248,17 @@ export function fixture(): ExportData {
     suspension: null,
     moderationDecisionsAboutMe: [],
     moderationDecisionsTaken: [],
+    // Bouton « Résultat incohérent » : la pièce m2 signalée (prix faux).
+    resultFeedback: [
+      {
+        id: "rf000000-0000-4000-8000-000000000001",
+        user_id: SELF,
+        match_id: "m2000000-0000-4000-8000-000000000001",
+        reason: "wrong_price",
+        created_at: "2026-10-15T20:00:00+00:00",
+        updated_at: "2026-10-15T20:00:00+00:00",
+      },
+    ],
   };
 }
 

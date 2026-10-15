@@ -11,6 +11,8 @@ import type {
   CropRect,
   DeleteAccountRequest,
   FeedPage,
+  MatchFeedbackReason,
+  MatchFeedbackRequest,
   MerchantLinkContext,
   ModerationActionRequest,
   ModerationActionType,
@@ -430,6 +432,17 @@ export async function applyModerationDecision(payload: ModerationActionRequest):
 export async function undoModerationDecision(actionId: string, undone: Extract<ModerationActionType, "hide" | "suspend">): Promise<void> {
   await authorizedFetch(`/api/admin/moderation/actions/${encodeURIComponent(actionId)}/undo`, { method: "POST", body: JSON.stringify({}) });
   track("moderation_undone", { decision: undone });
+}
+
+/** Bouton « Résultat incohérent » : seuls l'identifiant de la proposition et
+ * le motif partent (ni texte libre, ni image). */
+export async function reportInconsistentResult(matchId: string, reason: MatchFeedbackReason): Promise<void> {
+  const body: MatchFeedbackRequest = { reason };
+  await authorizedFetch(`/api/product-matches/${encodeURIComponent(matchId)}/feedback`, { method: "POST", body: JSON.stringify(body) });
+}
+
+export async function withdrawInconsistentReport(matchId: string): Promise<void> {
+  await authorizedFetch(`/api/product-matches/${encodeURIComponent(matchId)}/feedback`, { method: "DELETE" });
 }
 
 export async function reportContent(payload: CreateReportRequest): Promise<void> {

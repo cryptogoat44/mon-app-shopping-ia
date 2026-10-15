@@ -78,6 +78,18 @@ describe("export lisible : prix et indice de confiance", () => {
 });
 
 describe("export lisible : recherches", () => {
+  it("une pièce signalée « Résultat incohérent » porte la mention, le motif et la date ; la mesure reste dans le JSON", () => {
+    const fr = spaces(visibleText(render()));
+    expect(fr).toContain("Signalée comme incohérente");
+    expect(fr).toMatch(/Prix faux ou absent, le 15 octobre 2026/);
+    expect(fr.match(/Signalée comme incohérente/g)).toHaveLength(1);
+    const en = spaces(visibleText(render({ locale: "en" })));
+    expect(en).toContain("Reported as inconsistent");
+    expect(en).toMatch(/Wrong or missing price, on October 15, 2026/);
+    // Les nombres de la mesure ne sont jamais dans le texte lisible.
+    expect(fr).not.toContain("mesure de qualité");
+  });
+
   it("explique une recherche jamais lancée et la suppression de l'image analysée", () => {
     const fr = visibleText(render());
     expect(fr).toContain(EXPORT_TEXT.pendingExplained.fr);
