@@ -24,6 +24,7 @@ import {
   MEDIA_KIND_LABELS,
   MERCHANT_LINK_CONTEXT_LABELS,
   MODERATION_ACTION_LABELS,
+  MODERATION_REASON_LABELS,
   NOTIFICATION_LABELS,
   PIECE_SENDS_FROM_LABELS,
   PLATFORM_LABELS,
@@ -487,6 +488,7 @@ function taggedCard(ctx: Ctx, row: ExportRow): Html {
 }
 
 function postMedia(ctx: Ctx, row: ExportRow): Part {
+  if (str(row.media_removed_at)) return tr(ctx, EXPORT_TEXT.imageRemovedOn, { date: plainDate(ctx, row.media_removed_at) });
   const openMedia = (site: string) => tr(ctx, EXPORT_TEXT.openMedia, { site });
   const thumb = safeHref(row.media_thumb_url);
   const full = safeHref(row.media_url);
@@ -509,7 +511,7 @@ function postsSection(ctx: Ctx): Html {
     const tagged = [...(taggedByPost.get(String(row.id)) ?? [])].sort((a, b) => (toAmount(a.position) ?? 0) - (toAmount(b.position) ?? 0));
     return new Card(ctx, "posts", row)
       .use("type", "created_at")
-      .line(tr(ctx, EXPORT_COLUMNS.posts.media_url.label), postMedia(ctx, row), ["media_url", "media_thumb_url"])
+      .line(tr(ctx, EXPORT_COLUMNS.posts.media_url.label), postMedia(ctx, row), ["media_url", "media_thumb_url", "media_removed_at"])
       .field("caption", multiline(row.caption))
       .field("privacy", enumLabel(ctx, PRIVACY_LABELS, row.privacy))
       .field("media_kind", enumLabel(ctx, MEDIA_KIND_LABELS, row.media_kind))
@@ -583,18 +585,24 @@ function blockedSection(ctx: Ctx): Html {
  * simple lien pour TOUTES les pièces reçues : une image affichée pour les
  * unes et pas pour les autres trahirait la décision, et un contenu masqué par
  * la modération ne se réaffiche pas de lui-même. */
+/** L'image d'une pièce : la copie, ou son retrait par la modération (lot 5,
+ * partie B) — daté pour l'expéditeur, « indisponible » pour qui l'a reçue. */
+function pieceImage(ctx: Ctx, row: ExportRow, sent: boolean): Part {
+  if (str(row.image_removed_at)) {
+    return sent ? tr(ctx, EXPORT_TEXT.imageRemovedOn, { date: plainDate(ctx, row.image_removed_at) }) : tr(ctx, EXPORT_TEXT.imageUnavailable);
+  }
+  const viewImage = (site: string) => tr(ctx, EXPORT_TEXT.viewImage, { site });
+  const image = row.image_thumb_url ?? row.image_url;
+  return sent ? imageOrLink(ctx, image, viewImage) : link(ctx, image, viewImage);
+}
+
 function pieceSendCard(ctx: Ctx, key: "piecesSent" | "piecesReceived", row: ExportRow, other: "recipient_id" | "sender_id"): Html {
   const merchant = str(row.merchant_name);
   const sent = key === "piecesSent";
-  const viewImage = (site: string) => tr(ctx, EXPORT_TEXT.viewImage, { site });
-  const image = row.image_thumb_url ?? row.image_url;
   const card = new Card(ctx, key, row)
     .use("title")
     .field(other, person(ctx, row[other]))
-    .line(tr(ctx, EXPORT_COLUMNS.piecesSent.image_url.label), sent ? imageOrLink(ctx, image, viewImage) : link(ctx, image, viewImage), [
-      "image_url",
-      "image_thumb_url",
-    ])
+    .line(tr(ctx, EXPORT_COLUMNS.piecesSent.image_url.label), pieceImage(ctx, row, sent), ["image_url", "image_thumb_url", "image_removed_at"])
     .line(tr(ctx, EXPORT_COLUMNS.piecesSent.price_min.label), price(ctx, row.price_min, null, row.currency), ["price_min", "currency"])
     .field("merchant_name")
     .field(
@@ -629,7 +637,7 @@ function decisionLines(ctx: Ctx, decision: ExportRow): string[] {
   const lines = [tr(ctx, EXPORT_TEXT.decision, { action: enumLabel(ctx, MODERATION_ACTION_LABELS, decision.action) ?? "" })];
   const target = enumLabel(ctx, REPORT_TARGET_LABELS, decision.target_type);
   if (target) lines.push(tr(ctx, EXPORT_TEXT.decisionAbout, { target }));
-  const reason = enumLabel(ctx, REPORT_REASON_LABELS, decision.reason);
+  const reason = enumLabel(ctx, MODERATION_REASON_LABELS, decision.reason);
   if (reason) lines.push(tr(ctx, EXPORT_TEXT.decisionReason, { reason }));
   const note = str(decision.note);
   if (note) lines.push(tr(ctx, EXPORT_TEXT.decisionNote, { note }));
@@ -754,7 +762,7 @@ function decisionCard(ctx: Ctx, key: "moderationDecisionsAboutMe" | "moderationD
   return new Card(ctx, key, row)
     .use("action")
     .field("target_type", enumLabel(ctx, REPORT_TARGET_LABELS, row.target_type))
-    .field("reason", enumLabel(ctx, REPORT_REASON_LABELS, row.reason))
+    .field("reason", enumLabel(ctx, MODERATION_REASON_LABELS, row.reason))
     .field("note", multiline(row.note))
     .field("created_at")
     .render(enumLabel(ctx, MODERATION_ACTION_LABELS, row.action));

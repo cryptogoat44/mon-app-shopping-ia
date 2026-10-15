@@ -2,8 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   MODERATION_ACTION_TYPES,
+  MODERATION_REASONS,
   NOTIFICATION_TYPES,
-  REPORT_REASONS,
   REPORT_TARGET_TYPES,
   type AppNotification,
   type ModerationNotice,
@@ -40,7 +40,7 @@ const NOTICE_ROWS = z.array(
     id: ID,
     action: z.enum(MODERATION_ACTION_TYPES),
     target_type: z.enum(REPORT_TARGET_TYPES),
-    reason: z.enum(REPORT_REASONS).nullable(),
+    reason: z.enum(MODERATION_REASONS).nullable(),
     note: z.string().nullable(),
   })
 );

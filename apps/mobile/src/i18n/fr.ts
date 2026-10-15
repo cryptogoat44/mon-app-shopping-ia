@@ -18,6 +18,8 @@ export const fr = {
     quoted: (text: string) => `« ${text} »`,
     photoUnavailable: "Cette photo n'a pas pu être récupérée. Si elle est stockée sur iCloud, vérifiez votre connexion, puis réessayez.",
     offline: "Vous semblez hors ligne. Vérifiez votre connexion internet, puis réessayez.",
+    /** Lot 5, partie B : image copiée retirée par la modération. */
+    imageUnavailable: "Image indisponible",
   },
   tabs: {
     feed: "Fil",
@@ -691,6 +693,8 @@ export const fr = {
     moderationRestoredComment: "Votre commentaire a été rétabli.",
     moderationRestoredPiece: "Une pièce que vous avez envoyée a été rétablie.",
     moderationUnsuspended: "La suspension de votre compte a été levée.",
+    moderationImageRemovedPost: "L'image de votre publication « envie » a été retirée par la modération. La publication reste visible, sans son image.",
+    moderationImageRemovedPiece: "L'image d'une pièce que vous avez envoyée a été retirée par la modération. La pièce reste visible, sans son image.",
     moderationOther: "Une décision de la modération vous concerne.",
     moderationReason: (reason: string) => `Motif : ${reason}`,
     moderationNote: (note: string) => `Précision : ${note}`,
@@ -710,6 +714,8 @@ export const fr = {
     reasonInappropriate: "Contenu inapproprié",
     reasonHarassment: "Harcèlement",
     reasonOther: "Autre",
+    /** Motif neutre du retrait d'une image copiée (lot 5, partie B) : jamais proposé dans « Signaler ». */
+    reasonImageRights: "Droits sur l'image",
   },
   // Lot 5 : écran réservé aux administrateurs (entrée discrète des Réglages).
   moderationQueue: {
@@ -750,8 +756,22 @@ export const fr = {
     saved: "Décision enregistrée.",
     undone: "Décision annulée.",
     saveError: "La décision n'a pas pu être enregistrée.",
+    // Retirer l'image copiée d'une envie partagée (lot 5, partie B).
+    removeImage: "Retirer l'image",
+    removeImageWarning:
+      "Retirer l'image ? Son fichier sera effacé définitivement : cette décision ne s'annule pas. Le contenu restera visible avec « Image indisponible », son titre et le lien du marchand. La personne sera prévenue, avec le motif « droits sur l'image ».",
+    confirmRemoveImage: "Confirmer le retrait",
+    imageRemoved: "Image retirée",
+    imageRemovedSaved: "Image retirée : son fichier est effacé.",
     history: "Décisions",
-    actions: { dismiss: "Classé sans suite", hide: "Masqué", suspend: "Compte suspendu", restore: "Rétabli", unsuspend: "Suspension levée" },
+    actions: {
+      dismiss: "Classé sans suite",
+      hide: "Masqué",
+      suspend: "Compte suspendu",
+      restore: "Rétabli",
+      unsuspend: "Suspension levée",
+      remove_image: "Image retirée",
+    },
     by: (username: string) => `par @${username}`,
   },
   blockedUsers: {

@@ -2,10 +2,12 @@
 // regroupés par contenu, décisions (classer sans suite, masquer, suspendre) et
 // leur annulation. Réservé aux administrateurs (`requireAdmin`, revérifié par
 // les fonctions de la base) ; chaque décision est journalisée et appliquée en
-// une seule transaction (migration 0023).
+// une seule transaction (migration 0023). Lot 5, partie B : retirer l'image
+// copiée d'une envie partagée (lib/imageRemoval.ts, migration 0026).
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import {
+  IMAGE_REMOVAL_TARGET_TYPES,
   MODERATION_DECISIONS,
   MODERATION_NOTE_MAX_LENGTH,
   REPORT_REASONS,
@@ -13,9 +15,10 @@ import {
   type ModerationItem,
   type ModerationPage,
 } from "@monapp/shared-types";
-import { INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
+import { DatabaseReadError, INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { buildModerationItems, QUEUE_ROWS } from "../lib/moderationQueue.js";
+import { eraseCopiedImage } from "../lib/imageRemoval.js";
 
 const PAGE_SIZE = 20;
 
@@ -39,6 +42,8 @@ const decisionSchema = z
 
 const undoSchema = z.object({ note: noteSchema });
 
+const removeImageSchema = z.object({ targetType: z.enum(IMAGE_REMOVAL_TARGET_TYPES), targetId: z.string().uuid(), note: noteSchema });
+
 const OUTCOME = z.array(z.object({ outcome: z.string(), action_id: z.string().uuid().nullable() })).length(1);
 
 const INVALID_DECISION = { error: "invalid_body", message: "Décision invalide." };
@@ -50,6 +55,20 @@ const REFUSALS: Record<string, { status: number; error: string; message: string 
   already_suspended: { status: 409, error: "already_suspended", message: "Ce compte est déjà suspendu." },
   already_undone: { status: 409, error: "already_undone", message: "Cette décision a déjà été annulée." },
   already_handled: { status: 409, error: "already_handled", message: "Ces signalements ont déjà été traités." },
+  // Retrait d'une image copiée (lot 5, partie B).
+  not_a_copy: { status: 409, error: "not_a_copy", message: "Cette image a été publiée par la personne elle-même : utilisez « Masquer »." },
+  already_removed: { status: 409, error: "already_removed", message: "L'image a déjà été retirée." },
+  shared_copy: {
+    status: 409,
+    error: "shared_copy",
+    message: "Cette image sert aussi à un autre contenu : rien n'a été effacé ni changé. Signalez ce cas à l'équipe technique.",
+  },
+  storage_failed: {
+    status: 503,
+    error: "storage_failed",
+    message: "L'image n'a pas pu être effacée du stockage : rien n'a été changé. Réessayez dans un instant.",
+  },
+  not_undoable: { status: 409, error: "not_undoable", message: "Le retrait d'une image ne s'annule pas : le fichier a été effacé." },
 };
 
 export default async function moderationRoutes(fastify: FastifyInstance) {
@@ -107,6 +126,35 @@ export default async function moderationRoutes(fastify: FastifyInstance) {
     });
     return sendOutcome(request.log, reply, data, error, "Annulation d'une décision de modération");
   });
+
+  // Fichiers effacés D'ABORD (3 essais) ; la décision n'est enregistrée
+  // qu'ensuite : un échec du stockage ne laisse jamais une image « retirée »
+  // encore en ligne.
+  fastify.post("/api/admin/moderation/remove-image", adminOnly, async (request, reply) => {
+    const body = parseInput(removeImageSchema, request.body, reply, INVALID_DECISION);
+    if (!body) return;
+    let refusal: string | null;
+    try {
+      refusal = await eraseCopiedImage(fastify, request.log, body.targetType, body.targetId);
+    } catch (readError) {
+      if (!(readError instanceof DatabaseReadError)) throw readError;
+      request.log.error({ readError }, "Retrait d'image : lecture impossible");
+      return reply.code(500).send({ error: "internal_error", message: GENERIC_SERVER_ERROR });
+    }
+    if (refusal) return sendRefusal(reply, refusal);
+    const { data, error } = await fastify.supabaseAdmin.rpc("moderation_remove_image", {
+      p_admin_id: request.user!.id,
+      p_target_type: body.targetType,
+      p_target_id: body.targetId,
+      p_note: body.note || null,
+    });
+    return sendOutcome(request.log, reply, data, error, "Retrait d'une image copiée");
+  });
+}
+
+function sendRefusal(reply: FastifyReply, outcome: string) {
+  const refusal = REFUSALS[outcome] ?? { status: 500, error: "internal_error", message: GENERIC_SERVER_ERROR };
+  return reply.code(refusal.status).send({ error: refusal.error, message: refusal.message });
 }
 
 /** Résultat d'une fonction de la base : 200 avec l'identifiant de la décision, ou le refus expliqué. */
@@ -121,6 +169,5 @@ function sendOutcome(log: FastifyInstance["log"], reply: FastifyReply, data: unk
     log.info({ outcome }, what);
     return reply.send({ actionId });
   }
-  const refusal = REFUSALS[outcome] ?? { status: 500, error: "internal_error", message: GENERIC_SERVER_ERROR };
-  return reply.code(refusal.status).send({ error: refusal.error, message: refusal.message });
+  return sendRefusal(reply, outcome);
 }

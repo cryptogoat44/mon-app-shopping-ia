@@ -45,6 +45,14 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Ce contenu est déjà masqué.": "This content is already hidden.",
   "Ces signalements ont déjà été traités.": "These reports have already been handled.",
   "Cette décision a déjà été annulée.": "This decision has already been reversed.",
+  // Retrait d'une image copiée (lot 5, partie B).
+  "Cette image a été publiée par la personne elle-même : utilisez « Masquer ».": "This image was posted by the person themselves: use “Hide” instead.",
+  "L'image a déjà été retirée.": "The image has already been removed.",
+  "Cette image sert aussi à un autre contenu : rien n'a été effacé ni changé. Signalez ce cas à l'équipe technique.":
+    "This image is also used by other content: nothing was deleted or changed. Please report this case to the technical team.",
+  "L'image n'a pas pu être effacée du stockage : rien n'a été changé. Réessayez dans un instant.":
+    "The image couldn't be deleted from storage: nothing was changed. Please try again in a moment.",
+  "Le retrait d'une image ne s'annule pas : le fichier a été effacé.": "Removing an image can't be undone: the file has been deleted.",
   "Commentaire introuvable.": "Comment not found.",
   "Contenu introuvable.": "Content not found.",
   "Décision invalide.": "Invalid decision.",

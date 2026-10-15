@@ -9,7 +9,7 @@ const STORAGE = "https://spotto-dev.supabase.co/storage/v1/object/public";
 const GOOGLE = "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcR";
 const MERCHANT_HD = "https://images.asos-media.com/products/bottes/204489237-4";
 
-const post = (type: Post["type"], mediaUrl: string, mediaHdUrl: string | null = null) => ({ type, mediaUrl, mediaHdUrl });
+const post = (type: Post["type"], mediaUrl: string | null, mediaHdUrl: string | null = null) => ({ type, mediaUrl, mediaHdUrl });
 
 describe("image d'une publication : pièce ou photo de la personne", () => {
   it("envie republiée : toujours l'image d'une pièce (notre copie, dans notre stockage)", () => {
@@ -31,6 +31,12 @@ describe("image d'une publication : pièce ou photo de la personne", () => {
   it("publication photo : toujours la photo de la personne, en carré", () => {
     expect(showsProductPicture(post("lifestyle", `${STORAGE}/post-media/u1/photo.jpg`))).toBe(false);
     expect(showsProductPicture(post("lifestyle", GOOGLE))).toBe(false);
+  });
+
+  it("image retirée par la modération (lot 5, partie B) : une envie garde le cadre d'une pièce, sans planter", () => {
+    expect(showsProductPicture(post("wish", null))).toBe(true);
+    expect(showsProductPicture(post("purchase", null))).toBe(false);
+    expect(showsProductPicture(post("lifestyle", null))).toBe(false);
   });
 
   it("notre stockage se reconnaît au chemin qui suit le nom d'hôte, jamais à une mention dans les paramètres", () => {

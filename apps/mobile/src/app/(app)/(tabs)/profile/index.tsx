@@ -3,6 +3,7 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Tex
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { SpotImage } from "@/components/spot-image";
+import { ImageUnavailable } from "@/components/image-unavailable";
 import { WishlistPanel } from "@/components/wishlist-panel";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
@@ -283,14 +284,18 @@ export default function ProfileScreen() {
                 accessibilityLabel={post.caption ?? t.profile.lifestylePhoto}
               >
                 <View style={styles.thumb}>
-                  <SpotImage
-                    hdUri={post.mediaThumbUrl}
-                    fallbackUri={post.mediaUrl}
-                    style={styles.thumbImage}
-                    fit="cover"
-                    recyclingKey={post.id}
-                    accessibilityLabel={post.caption ?? t.profile.lifestylePhoto}
-                  />
+                  {post.mediaUrl === null ? (
+                    <ImageUnavailable variant="tile" />
+                  ) : (
+                    <SpotImage
+                      hdUri={post.mediaThumbUrl}
+                      fallbackUri={post.mediaUrl}
+                      style={styles.thumbImage}
+                      fit="cover"
+                      recyclingKey={post.id}
+                      accessibilityLabel={post.caption ?? t.profile.lifestylePhoto}
+                    />
+                  )}
                 </View>
                 {post.taggedPieces.length > 0 ? (
                   <View style={styles.tagBadge}>

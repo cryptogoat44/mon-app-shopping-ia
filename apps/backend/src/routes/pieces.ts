@@ -41,8 +41,10 @@ const PIECE_ROWS = z.array(
     id: ID,
     sender_id: ID,
     title: z.string(),
-    image_url: z.string(),
-    image_thumb_url: z.string(),
+    // Lot 5, partie B : sans image quand la modération l'a retirée.
+    image_url: z.string().nullable(),
+    image_thumb_url: z.string().nullable(),
+    image_removed_at: z.string().nullable(),
     merchant_name: z.string().nullable(),
     merchant_url: z.string().nullable(),
     product_match_id: ID.nullable(),
@@ -77,6 +79,7 @@ async function toReceivedPieces(fastify: FastifyInstance, rows: PieceRow[]): Pro
       title: row.title,
       imageUrl: row.image_url,
       imageThumbUrl: row.image_thumb_url,
+      imageRemoved: row.image_removed_at !== null,
       merchantName: row.merchant_name,
       merchantUrl,
       isAffiliate: affiliateUrl !== null && affiliateUrl !== row.merchant_url,
@@ -248,7 +251,7 @@ export default async function piecesRoutes(fastify: FastifyInstance) {
 
     let query = fastify.supabaseAdmin
       .from("piece_sends")
-      .select("id, sender_id, title, image_url, image_thumb_url, merchant_name, merchant_url, product_match_id, price_min, currency, created_at")
+      .select("id, sender_id, title, image_url, image_thumb_url, image_removed_at, merchant_name, merchant_url, product_match_id, price_min, currency, created_at")
       .eq("recipient_id", userId)
       .is("hidden_at", null)
       .order("created_at", { ascending: false })
@@ -282,7 +285,11 @@ export default async function piecesRoutes(fastify: FastifyInstance) {
       request.log.error({ error }, "Échec du retrait d'une pièce reçue");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
-    const [removed] = parseDbRows(z.array(z.object({ sender_id: ID, image_url: z.string(), image_thumb_url: z.string() })), { data, error: null }, "Pièce retirée");
+    const [removed] = parseDbRows(
+      z.array(z.object({ sender_id: ID, image_url: z.string().nullable(), image_thumb_url: z.string().nullable() })),
+      { data, error: null },
+      "Pièce retirée"
+    );
     if (!removed) return reply.code(404).send({ error: "piece_not_found", message: "Pièce introuvable." });
     await deleteWishCopy(fastify, removed.sender_id, [removed.image_url, removed.image_thumb_url]);
     return reply.code(204).send();

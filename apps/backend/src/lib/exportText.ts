@@ -5,6 +5,7 @@ import {
   type MatchFeedbackReason,
   type MerchantLinkContext,
   type ModerationActionType,
+  type ModerationReason,
   type NotificationType,
   type PieceSendsFrom,
   type PlatformSource,
@@ -66,6 +67,7 @@ const PIECE_SEND_COLUMNS = {
   price_min: shown("Prix", "Price"),
   currency: shown("Devise", "Currency"),
   hidden_at: shown("Masquée par la modération le", "Hidden by moderation on"),
+  image_removed_at: shown("Image retirée par la modération le", "Image removed by moderation on"),
 } as const;
 
 const MODERATION_DECISION_COLUMNS = {
@@ -186,6 +188,7 @@ export const EXPORT_COLUMNS = {
     media_kind: shown("Format", "Format"),
     media_url: shown("Photo ou vidéo", "Photo or video"),
     media_thumb_url: shown("Miniature", "Thumbnail"),
+    media_removed_at: shown("Image retirée par la modération le", "Image removed by moderation on"),
     mux_playback_id: technical("Identifiant de lecture vidéo", "Video playback identifier"),
     privacy: shown("Visible par", "Visible to"),
     hidden_at: shown("Masquée par la modération le", "Hidden by moderation on"),
@@ -297,6 +300,9 @@ export const EXPORT_COLUMNS = {
     // est la seule à pouvoir la signaler, elle apprendrait la décision prise
     // (version JSON seulement).
     hidden_at: technical("Masquée par la modération le", "Hidden by moderation on"),
+    // Même raison : le fichier lisible dit seulement « Image indisponible »,
+    // comme l'app (lot 5, partie B).
+    image_removed_at: technical("Image retirée par la modération le", "Image removed by moderation on"),
     created_at: shown("Reçue le", "Received on"),
   },
   adminRole: {
@@ -573,12 +579,20 @@ export const FEEDBACK_REASON_LABELS: Record<MatchFeedbackReason, Bilingual> = {
   duplicate: { fr: "Doublon d'une autre proposition", en: "Duplicate of another result" },
 };
 
+/** Motifs d'une décision : ceux des signalements, plus le motif neutre du
+ * retrait d'une image copiée (lot 5, partie B). */
+export const MODERATION_REASON_LABELS: Record<ModerationReason, Bilingual> = {
+  ...REPORT_REASON_LABELS,
+  image_rights: { fr: "Droits sur l'image", en: "Image rights" },
+};
+
 export const MODERATION_ACTION_LABELS: Record<ModerationActionType, Bilingual> = {
   dismiss: { fr: "Classé sans suite", en: "Dismissed" },
   hide: { fr: "Contenu masqué", en: "Content hidden" },
   suspend: { fr: "Compte suspendu", en: "Account suspended" },
   restore: { fr: "Contenu rétabli", en: "Content restored" },
   unsuspend: { fr: "Suspension levée", en: "Suspension lifted" },
+  remove_image: { fr: "Image retirée", en: "Image removed" },
 };
 
 /** Liste locale (aucune constante partagée) : type conversion_status de la base. */
@@ -670,6 +684,14 @@ export const EXPORT_TEXT = {
   taggedTitle: { fr: "Pièces taguées ({count})", en: "Tagged pieces ({count})" },
   orphanTagged: { fr: "Pièces taguées d'une publication introuvable", en: "Tagged pieces from a post that could not be found" },
   pieceGone: { fr: "Pièce qui n'existe plus", en: "A piece that no longer exists" },
+  // Image copiée retirée par la modération (lot 5, partie B) : la date et le
+  // motif pour la personne qui l'avait partagée ; « indisponible » seulement
+  // pour celle qui a reçu la pièce, comme dans l'app.
+  imageRemovedOn: {
+    fr: "Retirée par la modération le {date} (droits sur l'image) : le fichier a été effacé",
+    en: "Removed by moderation on {date} (image rights): the file has been deleted",
+  },
+  imageUnavailable: { fr: "Image indisponible", en: "Image unavailable" },
   // Notifications.
   unread: { fr: "Non lue", en: "Unread" },
   // Seulement pour une notification liée à une publication masquée de la

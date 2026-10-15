@@ -26,6 +26,7 @@ import type {
   ProductSearch,
   PublicProfile,
   ReactToPostResponse,
+  RemoveImageRequest,
   TaggedPieceInput,
   UpdateMeRequest,
   UpdateLocaleRequest,
@@ -426,6 +427,14 @@ export async function fetchModerationQueue(status: ModerationStatus, cursor?: st
 export async function applyModerationDecision(payload: ModerationActionRequest): Promise<void> {
   await authorizedFetch("/api/admin/moderation/actions", { method: "POST", body: JSON.stringify(payload) });
   track("moderation_decision", { decision: payload.action, target_type: payload.targetType });
+}
+
+/** Retire l'image copiée d'une publication « envie » ou d'une pièce envoyée
+ * (lot 5, partie B) : le serveur efface d'abord le fichier, puis enregistre
+ * la décision ; définitif. */
+export async function removeCopiedImage(payload: RemoveImageRequest): Promise<void> {
+  await authorizedFetch("/api/admin/moderation/remove-image", { method: "POST", body: JSON.stringify(payload) });
+  track("moderation_decision", { decision: "remove_image", target_type: payload.targetType });
 }
 
 /** Annule un masquage (`hide`) ou une suspension (`suspend`) encore en vigueur. */

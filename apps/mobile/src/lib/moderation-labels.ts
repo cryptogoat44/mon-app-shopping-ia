@@ -2,7 +2,15 @@
 // L'APPEL. Un tableau calculé au chargement d'un module reste dans la langue
 // de démarrage : c'était le cas des motifs du menu de signalement, restés en
 // français après le passage à l'anglais (corrigé, voir tests).
-import { REPORT_REASONS, type AppNotification, type ModerationActionType, type ModerationItem, type ModerationNotice, type ReportReason } from "@monapp/shared-types";
+import {
+  REPORT_REASONS,
+  type AppNotification,
+  type ModerationActionType,
+  type ModerationItem,
+  type ModerationNotice,
+  type ModerationReason,
+  type ReportReason,
+} from "@monapp/shared-types";
 import { t } from "../i18n";
 
 /** Le motif le plus signalé d'un contenu (le premier de la liste en cas d'égalité) : choix proposé par défaut. */
@@ -27,12 +35,22 @@ export function reportReasonLabel(reason: ReportReason): string {
   return labels[reason];
 }
 
+/** Motif d'une décision : celui d'un signalement, ou le motif neutre du
+ * retrait d'une image copiée (lot 5, partie B). */
+export function moderationReasonLabel(reason: ModerationReason): string {
+  return reason === "image_rights" ? t.moderation.reasonImageRights : reportReasonLabel(reason);
+}
+
 export function moderationActionLabel(action: ModerationActionType): string {
   return t.moderationQueue.actions[action];
 }
 
 function noticeSentence({ action, targetType }: ModerationNotice): string {
   const comment = targetType === "comment";
+  // Lot 5, partie B : l'image copiée d'une envie partagée.
+  if (action === "remove_image") {
+    return targetType === "piece" ? t.notifications.moderationImageRemovedPiece : t.notifications.moderationImageRemovedPost;
+  }
   // Lot 5 : une pièce envoyée à une personne.
   if (targetType === "piece" && (action === "hide" || action === "restore")) {
     return action === "hide" ? t.notifications.moderationHiddenPiece : t.notifications.moderationRestoredPiece;
@@ -56,7 +74,7 @@ function noticeSentence({ action, targetType }: ModerationNotice): string {
 export function moderationNoticeLines(notice: ModerationNotice | null): string[] {
   if (!notice) return [t.notifications.moderationOther];
   const lines = [noticeSentence(notice)];
-  if (notice.reason) lines.push(t.notifications.moderationReason(reportReasonLabel(notice.reason)));
+  if (notice.reason) lines.push(t.notifications.moderationReason(moderationReasonLabel(notice.reason)));
   if (notice.note) lines.push(t.notifications.moderationNote(t.common.quoted(notice.note)));
   return lines;
 }

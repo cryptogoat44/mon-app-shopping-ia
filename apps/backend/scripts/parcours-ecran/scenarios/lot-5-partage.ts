@@ -16,7 +16,7 @@
 import type { Page } from "playwright-core";
 import sharp from "sharp";
 import { z } from "zod";
-import type { Parcours, TestAccount } from "../boite-a-outils.js";
+import { attendreAvecReleve, type Parcours, type TestAccount } from "../boite-a-outils.js";
 import { COMBOS, type Combo, type Locale } from "./lot-3.js";
 import { attendreEnvoi, check, ouvrirSpotter, visible, type Envoi } from "./spotter-outils.js";
 import { capteur, nouveauCompte, TEXTES } from "./lot-4-ter-outils.js";
@@ -25,7 +25,7 @@ export const name = "Lot 5 — partage d'une envie (site)";
 export const outputDir = "lot-5-partage-captures";
 export const buildEnv = { EXPO_PUBLIC_POSTHOG_KEY: "phc_parcoursEcranFausseCle000000000", EXPO_PUBLIC_ENVIRONMENT: "development" };
 
-const TITRE = "Kelly 28 (test)";
+export const TITRE = "Kelly 28 (test)";
 
 const T = {
   fr: {
@@ -88,7 +88,7 @@ const T = {
   },
 } as const satisfies Record<Locale, Record<string, unknown>>;
 
-interface Comptes {
+export interface Comptes {
   alix: TestAccount;
   louise: TestAccount;
   camille: TestAccount;
@@ -97,13 +97,13 @@ interface Comptes {
   source: string;
 }
 
-async function ok(response: Response, what: string): Promise<Response> {
+export async function ok(response: Response, what: string): Promise<Response> {
   check(response.ok, `${what} (${response.status})`);
   return response;
 }
 
 /** Trois comptes neufs ; Camille suit Louise ; Louise a une envie venue d'un résultat avec lien affilié. */
-async function preparer(p: Parcours, combo: Combo): Promise<Comptes> {
+export async function preparer(p: Parcours, combo: Combo): Promise<Comptes> {
   const id = combo.id.replace("-", "").slice(0, 4);
   const [alix, louise, camille] = [await nouveauCompte(p, `pa${id}`), await nouveauCompte(p, `pl${id}`), await nouveauCompte(p, `pc${id}`)];
   await p.admin.from("profiles").update({ display_name: "Alix (test)" }).eq("id", alix.id);
@@ -136,11 +136,16 @@ async function preparer(p: Parcours, combo: Combo): Promise<Comptes> {
   return { alix, louise, camille, wishId: wish.id, source };
 }
 
-async function ouvrir(p: Parcours, compte: TestAccount, combo: Combo, envois: Envoi[], chemin: string, attendu: string | RegExp): Promise<Page> {
+export async function ouvrir(p: Parcours, compte: TestAccount, combo: Combo, envois: Envoi[], chemin: string, attendu: string | RegExp): Promise<Page> {
   const page = await ouvrirSpotter(p, compte, combo, envois, TEXTES[combo.locale].ajouterVideo);
-  await page.goto(`${p.siteUrl}${chemin}`);
-  await page.getByText(attendu).filter({ visible: true }).first().waitFor({ timeout: 30_000 });
+  await allerA(p, page, chemin, () => page.getByText(attendu).filter({ visible: true }).first().waitFor({ timeout: 30_000 }));
   return page;
+}
+
+/** Ouvre `chemin` (le site redémarre) puis attend `attente`, avec le relevé de ce qui reste en attente en cas d'échec. */
+export async function allerA(p: Parcours, page: Page, chemin: string, attente: () => Promise<unknown>): Promise<void> {
+  await page.goto(`${p.siteUrl}${chemin}`);
+  await attendreAvecReleve(page, `${chemin} non affiché`, attente);
 }
 
 /** Adresses des images affichées : jamais l'adresse d'origine, toujours une copie dans le dossier de Louise. */

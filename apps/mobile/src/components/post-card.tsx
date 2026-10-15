@@ -10,6 +10,7 @@ import { CommentIcon, HeartIcon, MoreIcon, PersonIcon, ShareIcon, VerifiedIcon }
 import { sharePost } from "@/lib/share-post";
 import { SpotImage } from "@/components/spot-image";
 import { ProductFrame } from "@/components/product-frame";
+import { ImageUnavailable } from "@/components/image-unavailable";
 import { showsProductPicture } from "@/lib/post-media";
 import { useToast } from "@/lib/toast-context";
 import { getActiveLocale, t } from "@/i18n";
@@ -18,6 +19,22 @@ import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { themedStyles } from "@/theme/themed-styles";
 
 const DOUBLE_TAP_DELAY_MS = 300;
+
+function mediaLabel(post: Post): string {
+  const label = post.type === "wish" ? t.post.wishBy(post.author.displayName) : t.post.photoBy(post.author.displayName);
+  return post.mediaUrl === null ? `${label}. ${t.common.imageUnavailable}` : label;
+}
+
+/** Image d'une pièce (envie republiée : notre copie ; « achat » venu du
+ * Spotter : image HD du marchand, repli sur la miniature) : entière, dans le
+ * cadre 4:5 de l'écran d'une envie. Photo de la personne : version
+ * d'affichage (1 600 px), carré pleine largeur. Image retirée par la
+ * modération (lot 5, partie B) : « Image indisponible », même cadre. */
+function PostMedia({ post }: { post: Post }) {
+  if (post.mediaUrl === null) return <ImageUnavailable variant="frame" accessible={false} />;
+  if (showsProductPicture(post)) return <ProductFrame hdUri={post.mediaHdUrl} fallbackUri={post.mediaUrl} recyclingKey={post.id} />;
+  return <SpotImage hdUri={post.mediaHdUrl} fallbackUri={post.mediaUrl} style={styles.media} fit="cover" recyclingKey={post.id} />;
+}
 
 // Une publication (fil, détail, profil d'un utilisateur). Le nom et la
 // photo de l'auteur ouvrent son profil quand `onPressAuthor` est fourni.
@@ -120,17 +137,9 @@ export function PostCard({
       <Pressable
         onPress={handleMediaPress}
         accessibilityRole="image"
-        accessibilityLabel={post.type === "wish" ? t.post.wishBy(post.author.displayName) : t.post.photoBy(post.author.displayName)}
+        accessibilityLabel={mediaLabel(post)}
       >
-        {/* Image d'une pièce (envie republiée : notre copie ; « achat » venu du
-            Spotter : image HD du marchand, repli sur la miniature) : entière,
-            dans le cadre 4:5 de l'écran d'une envie. Photo de la personne :
-            version d'affichage (1 600 px), carré pleine largeur. */}
-        {showsProductPicture(post) ? (
-          <ProductFrame hdUri={post.mediaHdUrl} fallbackUri={post.mediaUrl} recyclingKey={post.id} />
-        ) : (
-          <SpotImage hdUri={post.mediaHdUrl} fallbackUri={post.mediaUrl} style={styles.media} fit="cover" recyclingKey={post.id} />
-        )}
+        <PostMedia post={post} />
         <Animated.View
           pointerEvents="none"
           style={[

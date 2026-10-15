@@ -26,6 +26,12 @@ const ORIGINAL_IMAGE = "https://images.example-shop.test/sac-kelly.jpg";
 const HD_IMAGE = "https://cdn.marchand.test/produits/sac-kelly-hd.jpg";
 const OUR_STORAGE = `${env.SUPABASE_URL}/storage/v1/object/public/post-media/`;
 
+// Une image peut manquer depuis le lot 5, partie B (retirée par la modération).
+function present(url: string | null): string {
+  if (url === null) throw new Error("Image absente");
+  return url;
+}
+
 describe("partage d'une envie", () => {
   let app: FastifyInstance;
   let owner: TestUser; // a l'envie et la partage
@@ -45,7 +51,7 @@ describe("partage d'une envie", () => {
     expect((await request(user, "PUT", "/api/me/piece-sends-from", { pieceSendsFrom: value })).statusCode).toBe(204);
   const storageFiles = async (userId: string): Promise<string[]> =>
     ((await app.supabaseAdmin.storage.from("post-media").list(userId, { limit: 1000 })).data ?? []).map((f) => f.name);
-  const fileName = (url: string) => url.split("/").pop()!;
+  const fileName = (url: string | null) => present(url).split("/").pop()!;
 
   async function createWish(user: TestUser, title: string, productMatchId: string | null = null): Promise<string> {
     const res = await request(user, "POST", "/api/wishlist", {
@@ -116,7 +122,7 @@ describe("partage d'une envie", () => {
     expect(post.wish).toMatchObject({ title: "Sac Kelly", merchantName: "Boutique test", priceMin: 120, isAffiliate: true });
     expect(post.wish!.merchantUrl).toBe("https://example-shop.test/sac?aff=spotto");
     // Jamais l'adresse d'origine : une copie dans notre stockage, dans le dossier de l'auteur.
-    expect(post.mediaUrl.startsWith(`${OUR_STORAGE}${owner.id}/`)).toBe(true);
+    expect(post.mediaUrl?.startsWith(`${OUR_STORAGE}${owner.id}/`)).toBe(true);
     expect(post.mediaThumbUrl!.startsWith(`${OUR_STORAGE}${owner.id}/`)).toBe(true);
     expect(JSON.stringify(post)).not.toContain(ORIGINAL_IMAGE);
     expect(JSON.stringify(post)).not.toContain(HD_IMAGE);
@@ -184,7 +190,7 @@ describe("partage d'une envie", () => {
       isAffiliate: true,
       priceMin: 120,
     });
-    expect(pieces[0]!.imageUrl.startsWith(`${OUR_STORAGE}${owner.id}/`)).toBe(true);
+    expect(pieces[0]!.imageUrl?.startsWith(`${OUR_STORAGE}${owner.id}/`)).toBe(true);
     expect(JSON.stringify(pieces)).not.toContain(ORIGINAL_IMAGE);
     expect((await notifications(friend)).find((n) => n.type === "piece_received")).toMatchObject({ actor: { id: owner.id } });
 
@@ -334,9 +340,10 @@ describe("copie de l'image d'une envie : la plus grande source réellement reçu
   }
 
   /** Dimensions d'une copie, relue dans notre stockage. */
-  async function storedSize(url: string): Promise<[number | undefined, number | undefined]> {
-    expect(url.startsWith(OUR_STORAGE)).toBe(true);
-    const { data, error } = await app.supabaseAdmin.storage.from("post-media").download(url.slice(OUR_STORAGE.length));
+  async function storedSize(url: string | null): Promise<[number | undefined, number | undefined]> {
+    const address = present(url);
+    expect(address.startsWith(OUR_STORAGE)).toBe(true);
+    const { data, error } = await app.supabaseAdmin.storage.from("post-media").download(address.slice(OUR_STORAGE.length));
     if (error || !data) throw error ?? new Error("Copie introuvable");
     const meta = await sharp(Buffer.from(await data.arrayBuffer())).metadata();
     return [meta.width, meta.height];

@@ -18,6 +18,7 @@ export const en: Catalog = {
     quoted: (text: string) => `“${text}”`,
     photoUnavailable: "This photo couldn't be retrieved. If it's stored in iCloud, check your connection, then try again.",
     offline: "You seem to be offline. Check your internet connection, then try again.",
+    imageUnavailable: "Image unavailable",
   },
   tabs: {
     feed: "Feed",
@@ -672,6 +673,8 @@ export const en: Catalog = {
     moderationRestoredComment: "Your comment was restored.",
     moderationRestoredPiece: "A piece you sent was restored.",
     moderationUnsuspended: "Your account suspension was lifted.",
+    moderationImageRemovedPost: "The image of your wish post was removed by moderation. The post stays visible, without its image.",
+    moderationImageRemovedPiece: "The image of a piece you sent was removed by moderation. The piece stays visible, without its image.",
     moderationOther: "A moderation decision concerns you.",
     moderationReason: (reason: string) => `Reason: ${reason}`,
     moderationNote: (note: string) => `Details: ${note}`,
@@ -691,6 +694,7 @@ export const en: Catalog = {
     reasonInappropriate: "Inappropriate content",
     reasonHarassment: "Harassment",
     reasonOther: "Other",
+    reasonImageRights: "Image rights",
   },
   moderationQueue: {
     settingsEntry: "Moderation",
@@ -730,8 +734,21 @@ export const en: Catalog = {
     saved: "Decision saved.",
     undone: "Decision reversed.",
     saveError: "The decision couldn't be saved.",
+    removeImage: "Remove the image",
+    removeImageWarning:
+      "Remove the image? Its file will be permanently deleted: this decision can't be undone. The content will stay visible with “Image unavailable”, its title and the retailer link. The person will be notified, with the reason “image rights”.",
+    confirmRemoveImage: "Confirm removal",
+    imageRemoved: "Image removed",
+    imageRemovedSaved: "Image removed: its file has been deleted.",
     history: "Decisions",
-    actions: { dismiss: "Dismissed", hide: "Hidden", suspend: "Account suspended", restore: "Restored", unsuspend: "Suspension lifted" },
+    actions: {
+      dismiss: "Dismissed",
+      hide: "Hidden",
+      suspend: "Account suspended",
+      restore: "Restored",
+      unsuspend: "Suspension lifted",
+      remove_image: "Image removed",
+    },
     by: (username: string) => `by @${username}`,
   },
   blockedUsers: {

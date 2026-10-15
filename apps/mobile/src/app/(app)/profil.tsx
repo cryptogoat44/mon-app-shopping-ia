@@ -11,6 +11,7 @@ import { t } from "@/i18n";
 import { MoreIcon, PersonIcon } from "@/components/icons";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { SpotImage } from "@/components/spot-image";
+import { ImageUnavailable } from "@/components/image-unavailable";
 import { ErrorMessage } from "@/components/error-message";
 import { useToast } from "@/lib/toast-context";
 import { themedStyles } from "@/theme/themed-styles";
@@ -182,14 +183,19 @@ export default function UserProfileScreen() {
                 accessibilityLabel={post.caption ?? t.postDetail.title}
               >
                 {/* Grille : miniature (480 px) d'une photo publiée ; image HD du
-                    marchand pour un « achat » ; repli sur l'image d'origine. */}
-                <SpotImage
-                  hdUri={post.mediaThumbUrl ?? post.mediaHdUrl}
-                  fallbackUri={post.mediaUrl}
-                  style={styles.fill}
-                  fit="cover"
-                  recyclingKey={post.id}
-                />
+                    marchand pour un « achat » ; repli sur l'image d'origine.
+                    Image retirée par la modération : « Image indisponible ». */}
+                {post.mediaUrl === null ? (
+                  <ImageUnavailable variant="tile" />
+                ) : (
+                  <SpotImage
+                    hdUri={post.mediaThumbUrl ?? post.mediaHdUrl}
+                    fallbackUri={post.mediaUrl}
+                    style={styles.fill}
+                    fit="cover"
+                    recyclingKey={post.id}
+                  />
+                )}
               </Pressable>
             ))}
           </View>
