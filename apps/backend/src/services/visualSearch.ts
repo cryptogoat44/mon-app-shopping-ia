@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { env } from "../env.js";
 import { safeFetch } from "../lib/safeFetch.js";
+import { isExcludedMerchant, withoutDuplicates } from "./matchFilters.js";
 import { CURRENT_LENS_SETTINGS, DEFAULT_LOCALE, type LensSettings, type SearchLocale } from "./lensSettings.js";
 
 export { CURRENT_LENS_SETTINGS, type LensSettings, type SearchLocale };
@@ -39,38 +40,9 @@ const SERPAPI_ENDPOINT = "https://serpapi.com/search";
 // SerpApi en renvoie ~60, dont beaucoup sans prix.
 export const MAX_MATCHES = 30;
 
-// Même page produit = même proposition, même si Google la renvoie deux fois
-// (seul le fragment « # » diffère parfois).
-function linkKey(link: string): string {
-  return link.split("#")[0]!.replace(/\/$/, "");
-}
 // SerpApi lente ou muette ne doit jamais laisser une recherche bloquée en
 // "processing" indéfiniment côté mobile.
 const SERPAPI_TIMEOUT_MS = 15_000;
-
-// Un lien vers une simple publication n'est jamais un endroit où acheter
-// la pièce. "type=products" les élimine déjà la plupart du temps ; cette
-// liste s'applique en plus, après coup, pour ne pas en dépendre.
-const EXCLUDED_MERCHANT_DOMAINS = [
-  "tiktok.com",
-  "instagram.com",
-  "pinterest.",
-  "youtube.com",
-  "youtu.be",
-  "facebook.com",
-  "twitter.com",
-  "x.com",
-];
-
-export function isExcludedMerchant(link: string): boolean {
-  let host: string;
-  try {
-    host = new URL(link).hostname.toLowerCase();
-  } catch {
-    return false;
-  }
-  return EXCLUDED_MERCHANT_DOMAINS.some((domain) => host === domain || host.endsWith(`.${domain}`));
-}
 
 /** Un seul appel SerpApi. `query` (texte « Que cherchez-vous ? ») n'est
  * transmis que s'il est rempli : sur une image recadrée il écarte les pièces
@@ -105,29 +77,28 @@ export async function callSerpApi(imageUrl: string, settings: LensSettings, quer
   });
 }
 
-export function toVisualMatches(matches: SerpApiVisualMatch[]): VisualMatch[] {
-  const seen = new Set<string>();
-  return matches
-    .filter(
-      (match) => match.title && match.link && (match.thumbnail || match.image) && !isExcludedMerchant(match.link)
-    )
-    .filter((match) => {
-      const key = linkKey(match.link!);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
+type UsableMatch = SerpApiVisualMatch & { title: string; link: string };
+
+/** Titre, lien et image présents, et un endroit où un particulier peut acheter. */
+function isUsable(match: SerpApiVisualMatch): match is UsableMatch {
+  return Boolean(match.title && (match.thumbnail || match.image)) && Boolean(match.link) && !isExcludedMerchant(match.link ?? "");
+}
+
+/** `country` : pays de la recherche, dont le site passe devant quand un
+ * marchand propose le même article sur plusieurs sites de pays. */
+export function toVisualMatches(matches: SerpApiVisualMatch[], country: string): VisualMatch[] {
+  return withoutDuplicates(matches.filter(isUsable), country)
     .slice(0, MAX_MATCHES)
     // Rang renuméroté APRÈS filtrage : le rang de Google compte aussi les
     // réseaux sociaux écartés, et une liste qui commençait au rang 2 posait
     // problème ailleurs (audit Lot Q, ROB-04).
     .map((match, index) => ({
       rank: index + 1,
-      productName: match.title!,
+      productName: match.title,
       imageUrl: (match.thumbnail ?? match.image)!,
       imageHdUrl: match.image ?? null,
       merchantName: match.source ?? null,
-      merchantUrl: match.link!,
+      merchantUrl: match.link,
       priceValue: match.price?.extracted_value ?? null,
       currency: match.price?.currency ?? null,
     }));
@@ -152,8 +123,9 @@ export async function searchProductsByImageUrl(
   options: VisualSearchOptions = {}
 ): Promise<VisualMatch[]> {
   const query = options.query?.trim() || null;
-  const settings: LensSettings = { ...CURRENT_LENS_SETTINGS, locale: options.locale ?? DEFAULT_LOCALE };
-  const matches = toVisualMatches(await callSerpApi(imageUrl, settings, query));
+  const locale = options.locale ?? DEFAULT_LOCALE;
+  const settings: LensSettings = { ...CURRENT_LENS_SETTINGS, locale };
+  const matches = toVisualMatches(await callSerpApi(imageUrl, settings, query), locale.country);
   if (matches.length === 0) {
     fastify.log.info({ type: settings.type, withQuery: query !== null }, "Recherche visuelle sans résultat");
   }
