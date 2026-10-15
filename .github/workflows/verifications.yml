@@ -121,6 +121,19 @@ jobs:
       - name: Installation (versions figées)
         run: pnpm install --frozen-lockfile --filter backend...
 
+      # Diagnostic des lenteurs de spotto-dev (2026-10-15) : des durées
+      # seulement, avant et après les tests, sans effet sur le résultat.
+      # Même protection que les tests : refus de toute autre adresse.
+      - name: Délai de réponse de spotto-dev, avant les tests (diagnostic)
+        working-directory: apps/backend
+        continue-on-error: true
+        timeout-minutes: 3
+        env:
+          SUPABASE_URL: https://sbtwsmxfdfxzgcohbznd.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SPOTTO_DEV_SERVICE_ROLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.SPOTTO_DEV_PUBLISHABLE_KEY }}
+        run: pnpm run mesure-latence-dev
+
       # Le script refuse de démarrer si l'adresse n'est pas celle de
       # spotto-dev, et relance une seule fois un fichier en échec réseau.
       - name: Tests serveur (relance unique d'un échec réseau)
@@ -136,3 +149,14 @@ jobs:
             exit 1
           fi
           pnpm run test:ci
+
+      - name: Délai de réponse de spotto-dev, après les tests (diagnostic)
+        if: always()
+        working-directory: apps/backend
+        continue-on-error: true
+        timeout-minutes: 3
+        env:
+          SUPABASE_URL: https://sbtwsmxfdfxzgcohbznd.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SPOTTO_DEV_SERVICE_ROLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.SPOTTO_DEV_PUBLISHABLE_KEY }}
+        run: pnpm run mesure-latence-dev
