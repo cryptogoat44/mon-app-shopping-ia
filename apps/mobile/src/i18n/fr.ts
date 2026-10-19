@@ -783,7 +783,10 @@ export const fr = {
   },
   connection: {
     connectingTitle: "Connexion à Spotto…",
-    connectingBody: "Le service démarre, cela peut prendre jusqu'à une minute.",
+    // Après quelques secondes d'attente (demande du fondateur, 2026-10-16) :
+    // le serveur gratuit se met en veille ; réveils mesurés de 37 à 60 s.
+    wakingTitle: "Spotto se réveille…",
+    wakingBody: "Après un moment sans visite, le serveur se met en veille. Il lui faut jusqu'à une minute pour redémarrer.",
     failedTitle: "Spotto est momentanément injoignable.",
     failedBody: "Vérifiez votre connexion internet, puis réessayez. Vos données sont intactes.",
     retry: "Réessayer",

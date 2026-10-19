@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Profile } from "@monapp/shared-types";
-import { resolveRootRoute, showsNavigator } from "../src/lib/root-route";
-import { RetryCancelledError, retryWithDelays } from "../src/lib/retry";
+import { resolveRootRoute, rootContent, showsNavigator } from "../src/lib/root-route";
+import { AttemptTimeoutError, RetryCancelledError, retryWithDelays, withTimeout } from "../src/lib/retry";
 
 function profile(username: string | null): Profile {
   return {
@@ -109,5 +109,57 @@ describe("navigation pendant l'écran de démarrage (lot 3bis)", () => {
   it("police éditoriale pas encore prête : rien n'est affiché, nouveau mot de passe compris", () => {
     expect(showsNavigator("splash", "/nouveau-mot-de-passe", false)).toBe(false);
     expect(showsNavigator("splash", "/", false)).toBe(false);
+  });
+});
+
+describe("démarrage du site : jamais une page vide (défaut repéré le 2026-10-16)", () => {
+  it("site : l'écran d'attente pendant le démarrage, police prête ou non", () => {
+    expect(rootContent("splash", "/", true, "web")).toBe("waiting");
+    expect(rootContent("splash", "/", false, "web")).toBe("waiting");
+    expect(rootContent("app", "/", false, "web")).toBe("waiting");
+  });
+
+  it("iPhone : l'écran de démarrage du système reste affiché", () => {
+    expect(rootContent("splash", "/", true, "ios")).toBe("native-splash");
+  });
+
+  it("navigation affichée dès que la route est connue, sur le site comme sur iPhone", () => {
+    expect(rootContent("app", "/", true, "web")).toBe("navigator");
+    expect(rootContent("unavailable", "/", true, "ios")).toBe("navigator");
+    expect(rootContent("splash", "/nouveau-mot-de-passe", true, "web")).toBe("navigator");
+  });
+});
+
+describe("essai de chargement du profil limité dans le temps", () => {
+  it("un appel qui répond à temps passe tel quel", async () => {
+    await expect(withTimeout(1_000, async () => "profil")).resolves.toBe("profil");
+  });
+
+  it("un appel sans réponse est abandonné : signal déclenché, AttemptTimeoutError", async () => {
+    let received: AbortSignal | null = null;
+    const neverAnswers = (signal: AbortSignal) => {
+      received = signal;
+      return new Promise<string>(() => {});
+    };
+    await expect(withTimeout(20, neverAnswers)).rejects.toBeInstanceOf(AttemptTimeoutError);
+    expect(received!.aborted).toBe(true);
+  });
+
+  it("une autre erreur remonte telle quelle", async () => {
+    await expect(withTimeout(1_000, async () => Promise.reject(new Error("401")))).rejects.toThrow("401");
+  });
+
+  it("avec les relances : le premier essai reste sans réponse, le second réussit", async () => {
+    let calls = 0;
+    const task = (signal: AbortSignal) => {
+      calls += 1;
+      if (calls === 1) return new Promise<string>((_, reject) => signal.addEventListener("abort", () => reject(new Error("abandonné"))));
+      return Promise.resolve("profil");
+    };
+    const onRetry = vi.fn();
+    const result = retryWithDelays(() => withTimeout(20, task), { delaysMs: [1], sleep: async () => {}, onRetry });
+    await expect(result).resolves.toBe("profil");
+    expect(calls).toBe(2);
+    expect(onRetry.mock.calls[0]![1]).toBeInstanceOf(AttemptTimeoutError);
   });
 });

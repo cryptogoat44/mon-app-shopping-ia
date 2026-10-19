@@ -760,7 +760,8 @@ export const en: Catalog = {
   },
   connection: {
     connectingTitle: "Connecting to Spotto…",
-    connectingBody: "The service is starting up; this can take up to a minute.",
+    wakingTitle: "Spotto is waking up…",
+    wakingBody: "After a while without visitors, the server goes to sleep. It can take up to a minute to start again.",
     failedTitle: "Spotto is temporarily unreachable.",
     failedBody: "Check your internet connection, then try again. Your data is safe.",
     retry: "Try again",

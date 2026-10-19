@@ -93,8 +93,9 @@ async function authorizedFetch(path: string, init?: RequestInit): Promise<Respon
   return response;
 }
 
-export async function fetchMyProfile(): Promise<Profile> {
-  const response = await authorizedFetch("/api/me");
+/** `signal` : pour abandonner un essai resté sans réponse (lib/retry.ts). */
+export async function fetchMyProfile(signal?: AbortSignal): Promise<Profile> {
+  const response = await authorizedFetch("/api/me", signal ? { signal } : undefined);
   return response.json();
 }
 

@@ -3,7 +3,7 @@ import type { Profile } from "@monapp/shared-types";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { AppState } from "react-native";
 import { ApiError, fetchMyProfile } from "./api";
-import { PROFILE_RETRY_DELAYS_MS, RetryCancelledError, retryWithDelays } from "./retry";
+import { PROFILE_ATTEMPT_TIMEOUT_MS, PROFILE_RETRY_DELAYS_MS, RetryCancelledError, retryWithDelays, withTimeout } from "./retry";
 import type { ProfileStatus } from "./root-route";
 import { sessionRejectedBySupabase } from "./session-check";
 import { supabase } from "./supabase";
@@ -71,7 +71,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setProfileStatus(initialStatus);
     try {
-      const nextProfile = await retryWithDelays(fetchMyProfile, {
+      // Chaque essai a une durée maximale : un appel sans réponse est relancé, l'écran n'est jamais figé.
+      const nextProfile = await retryWithDelays(() => withTimeout(PROFILE_ATTEMPT_TIMEOUT_MS, (signal) => fetchMyProfile(signal)), {
         delaysMs: PROFILE_RETRY_DELAYS_MS,
         shouldRetry: (error) => !isAuthRejected(error),
         onRetry: () => {

@@ -47,3 +47,16 @@ export function showsNavigator(route: RootRoute, pathname: string, fontsReady: b
   if (!fontsReady) return false;
   return route !== "splash" || pathname === RECOVERY_PATH;
 }
+
+/** Après ce délai d'attente au démarrage, l'écran dit honnêtement que le
+ * serveur se réveille (demande du fondateur, 2026-10-16). */
+export const WAKING_NOTICE_AFTER_MS = 3_000;
+
+/** Ce que montre la racine : la navigation ; sinon, pendant le démarrage,
+ * un écran d'attente sur le site — jamais une page vide (charte, règle 1 ;
+ * défaut repéré le 2026-10-16) — et rien sur iPhone, où l'écran de démarrage
+ * du système reste affiché. */
+export function rootContent(route: RootRoute, pathname: string, fontsReady: boolean, platform: string): "navigator" | "waiting" | "native-splash" {
+  if (showsNavigator(route, pathname, fontsReady)) return "navigator";
+  return platform === "web" ? "waiting" : "native-splash";
+}
