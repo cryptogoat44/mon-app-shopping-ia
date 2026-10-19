@@ -18,6 +18,7 @@
     "migrer-dev": "tsx scripts/migrer-dev.ts",
     "essai-retours-dev": "tsx scripts/essai-retours-dev.ts",
     "mesure-cache-image-dev": "tsx scripts/mesure-cache-image-dev.ts",
+    "mesure-connexion-prod": "tsx scripts/mesure-connexion-prod.ts",
     "mesure-latence-dev": "tsx scripts/mesure-latence-dev.ts",
     "nettoyer-comptes-test-dev": "tsx scripts/nettoyer-comptes-test-dev.ts",
     "render-bride": "tsx scripts/render-bride.ts",

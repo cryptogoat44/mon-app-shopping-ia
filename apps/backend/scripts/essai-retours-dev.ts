@@ -12,6 +12,7 @@ import "dotenv/config";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import pg from "pg";
+import { z } from "zod";
 import { DEV_DATABASE_ENV, assertDevDatabaseUrl, describeDevDatabase } from "./lib/dev-database.js";
 
 const DOCS = resolve(import.meta.dirname, "../../../docs");
@@ -21,6 +22,11 @@ const APRES_0025 = ["16", "1", "0", "2", "true"];
 const APRES_0026 = ["2", "true", "true", "true", "true"];
 const AVANT_0026 = ["0", "true", "true", "true", "true", "true"];
 const AVANT_0025 = ["0", "false"];
+/** Listes du journal avant 0026, telles que la base les décrit. */
+const LISTE_DECISIONS = "CHECK ((action = ANY (ARRAY['dismiss'::text, 'hide'::text, 'suspend'::text, 'restore'::text, 'unsuspend'::text])))";
+const LISTE_MOTIFS = "CHECK (((reason IS NULL) OR (reason = ANY (ARRAY['spam'::text, 'inappropriate'::text, 'harassment'::text, 'other'::text]))))";
+const LIGNES = z.array(z.record(z.unknown()));
+const CONTROLE = z.object({ pret_pour_les_migrations: z.boolean(), liste_decisions_actuelle: z.string().nullable(), liste_motifs_actuelle: z.string().nullable() });
 
 const lire = (nom: string) => readFileSync(resolve(DOCS, nom), "utf8");
 
@@ -47,10 +53,19 @@ function noter(ok: boolean, quoi: string, detail = ""): void {
 }
 
 async function verifier(client: pg.Client, nom: string, attendu: string[], quoi: string): Promise<void> {
-  const { rows } = await client.query(lire(nom));
-  const obtenu = rows.length === 1 ? Object.values(rows[0] as Record<string, unknown>).map(String) : [`${rows.length} lignes`];
+  const lignes = LIGNES.parse((await client.query(lire(nom))).rows);
+  const obtenu = lignes.length === 1 ? Object.values(lignes[0]!).map(String) : [`${lignes.length} lignes`];
   const ok = obtenu.join(" | ") === attendu.join(" | ");
   noter(ok, quoi, `${nom} : ${obtenu.join(" | ")}${ok ? "" : ` (attendu ${attendu.join(" | ")})`}`);
+}
+
+/** Contrôle préalable (docs/avant-0025-0026-controle.sql) : « prêt » attendu, et, avant 0025, les listes d'origine. */
+async function controle(client: pg.Client, pretAttendu: boolean, listes: boolean, quoi: string): Promise<void> {
+  const lignes = LIGNES.parse((await client.query(lire("avant-0025-0026-controle.sql"))).rows);
+  const ligne = lignes.length === 1 ? CONTROLE.parse(lignes[0]) : null;
+  const listesOk = !listes || (ligne?.liste_decisions_actuelle === LISTE_DECISIONS && ligne.liste_motifs_actuelle === LISTE_MOTIFS);
+  const ok = ligne !== null && ligne.pret_pour_les_migrations === pretAttendu && listesOk;
+  noter(ok, quoi, `pret_pour_les_migrations : ${String(ligne?.pret_pour_les_migrations)}${listes ? `, listes d'origine : ${listesOk ? "oui" : "NON"}` : ""}`);
 }
 
 /** Exécute `sql` dans un point de sauvegarde annulé ; vrai s'il échoue avec `motif`. */
@@ -75,6 +90,7 @@ async function essais(client: pg.Client): Promise<void> {
 
   await verifier(client, "0025-verification.sql", APRES_0025, "état de départ : 0025 appliquée");
   await verifier(client, "0026-verification.sql", APRES_0026, "état de départ : 0026 appliquée");
+  await controle(client, false, false, "contrôle préalable : voit que les migrations sont déjà là");
 
   for (let fois = 1; fois <= 2; fois += 1) {
     await client.query(m25);
@@ -111,6 +127,7 @@ async function essais(client: pg.Client): Promise<void> {
   await client.query(r26);
   await client.query(r25);
   await verifier(client, "0025-retour-verification.sql", AVANT_0025, "retour de 0025 : l'état d'avant 0025");
+  await controle(client, true, true, "contrôle préalable avant 0025 : prêt, listes d'origine");
   await client.query(r25);
   await verifier(client, "0025-retour-verification.sql", AVANT_0025, "retour de 0025 rejoué sans erreur");
   await client.query(m25);
