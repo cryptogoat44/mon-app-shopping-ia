@@ -1,594 +1,594 @@
 {
- "visual_matches": [
-  {
-   "position": 1,
-   "title": "Veste bomber verte pour femmes, veste ample , saison hivernale/de transition printemps | Mode en ligne | SHEIN FRANCE",
-   "link": "https://fr.shein.com/Women-s-Green-Bomber-Jacket-Faux-Suede-Loose-Fit-Jacket-Winter-Transitional-Season-Spring-p-170742271.html",
-   "source": "Shein",
-   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcSHBviyngIJ9F9l1cFVHlBEE5hAW-B4ZETHV53TK8i_g8_rdXQx",
-   "image": "https://img.ltwebstatic.com/v4/j/spmp/2026/07/30/fd/1785399924f46ad7d6d0b71c2b7c69fda46593fd11_thumbnail_750x999.jpg"
-  },
-  {
-   "position": 2,
-   "title": "Topshop - Bomber en imitation daim - Marron | ASOS",
-   "link": "https://www.asos.com/fr/topshop/topshop-bomber-en-imitation-daim-marron/prd/207787406",
-   "source": "ASOS",
-   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR2O6Iwfei7NAKjpk4MzDF2zCDW7awRc5DW-GApDmX_oZJRiyVu",
-   "image": "https://images.asos-media.com/products/topshop-bomber-en-imitation-daim-marron/207787406-3?$n_640w$&wid=513&fit=constrain"
-  },
-  {
-   "position": 3,
-   "title": "JDY JDYAMONIA V NECK TOP - Blouse - catawba grape/sandshell/rouge clair - ZALANDO.FR",
-   "link": "https://www.zalando.fr/jdy-jdyamonia-v-neck-top-blouse-catawba-grapesandshell-jy121e1b8-g11.html",
-   "source": "Zalando",
-   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcQ-eKxK27AGhfEGmuSYAXCq26hFXlSvuwVG7HSELwK7Yb_epTtj",
-   "image": "https://img01.ztat.net/article/spp-media-p1/3b6ea0098af94b43842db1cf4676cf99/326eca0350814659bfa8be1ab7995066.jpg?imwidth=500"
-  },
-  {
-   "position": 4,
-   "title": "Veste en suédine unie - Marron - Femme - 10.50€ - Kiabi",
-   "link": "https://www.kiabi.com/veste-en-suedine-unie-marron_P2694227C2693599",
-   "source": "Kiabi",
-   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcRXtLZ8a0qNjMEgs7HElheXQ7uIqcbSFlHst32ICiJ1wPkaOb0m",
-   "image": "https://static.kiabi.com/images/veste-en-suedine-unie-marron-etz01_4_hd1.jpg?width=800",
-   "price": {
-    "value": "11 €*",
-    "extracted_value": 11,
-    "currency": "€"
-   }
-  },
-  {
-   "position": 5,
-   "title": "Sac marron aspect daim | Loavies",
-   "link": "https://www.loavies.com/fr/27621010900-sacs-bandouliere-brun-solide/",
-   "source": "LOAVIES",
-   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcR5_xq8VOnukrt52Vem8YC3ya2N5KgXTB6RPkkd9FFvovJKByC1",
-   "image": "https://loavies-assets.com/media/catalog/product/cache/2c5e7419d2e0cf0ac001711d785fedb3/2/7/27676010900-1_1763463749_1.jpg",
-   "price": {
-    "value": "39 €*",
-    "extracted_value": 39,
-    "currency": "€"
-   }
-  },
-  {
-   "position": 6,
-   "title": "Veste oversize Maya Choco – Bulle d'harmonie",
-   "link": "https://www.bulle-harmonie.fr/boutique/vetements-mode-femme/nouveautes-mode-femme/veste-oversize-maya-choco/",
-   "source": "Bulle d'harmonie",
-   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcSJVq5tccukuTDdO2UUkW2xrV1-WVcbKVFXl9fuBDDc2aq46puW",
-   "image": "https://www.bulle-harmonie.fr/wp-content/uploads/2025/10/mayacho5.jpg",
-   "price": {
-    "value": "38 €*",
-    "extracted_value": 38,
-    "currency": "€"
-   }
-  },
-  {
-   "position": 7,
-   "title": "Veste Lilo Chocolat",
-   "link": "https://www.juste-elles.com/fr/80007-veste-lilo-chocolat.html",
-   "source": "Juste Elles",
-   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcRp8qisSJ5AkdXMj90bCjEUi-2q6DAZiWLCzj3zcmNkwORUWR4M",
-   "image": "https://www.juste-elles.com/47155-product_main/veste-lilo-chocolat.jpg"
-  },
-  {
-   "position": 8,
-   "title": "Veste Sierra Chocolat – Intemporel Shop",
-   "link": "https://www.intemporel.shop/products/veste-sierra-en-suedine",
-   "source": "Intemporel Shop",
-   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRXPfSwffYJ69baJeW0CFaYQpkpZW8Oauhbc4c5JDW-ya7rFnA2",
-   "image": "http://www.intemporel.shop/cdn/shop/files/VesteSierra7092031.jpg?v=1757170730"
-  },
-  {
-   "position": 9,
-   "title": "MARLOW Chocolat - Veste Suédine femme",
-   "link": "https://prettywire.fr/-vestes-manteaux/3016741-marlow-chocolat-veste-suedine.html",
-   "source": "Pretty Wire",
-   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTetTwP07oPWIOM2hL5EM5kR1x4aI6n-ZkTy_ofA6G8oEIOBcO0",
-   "image": "https://prettywire.fr/116006-product_cover/marlow-chocolat-veste-suedine.jpg"
-  },
-  {
-   "position": 10,
-   "title": "Veste Céline, à manches longues en suédine – Mademoiselle Marcelle",
-   "link": "https://mademoisellemarcelle.com/products/veste-celine",
-   "source": "Mademoiselle Marcelle",
-   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcQnmyFyIjdzAlqpVr_Oor4Fscz1ot8wZN5aQU-SWpHi21cZ6Lic",
-   "image": "https://mademoisellemarcelle.com/cdn/shop/files/IMG_6949_32dea0a3-a224-4adf-a0be-bcce3618dc95_grande.jpg?v=1762349917",
-   "price": {
-    "value": "70 €*",
-    "extracted_value": 70,
-    "currency": "€"
-   }
-  },
-  {
-   "position": 11,
-   "title": "OH APRIL Veste en similicuir - truffle/marron - ZALANDO.CH",
-   "link": "https://fr.zalando.ch/oh-april-veste-en-similicuir-truffle-oh921u00g-o11.html",
-   "source": "Zalando",
-   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcRRkm8ux00_Q1ycTGYRtaClbaRUYHi0ScaLjku4SjDZm8247ME9",
-   "image": "https://img01.ztat.net/article/spp-media-p1/ae555c73f88f4c9c84d0137e54b3b535/7044cdf34a8641be9d59923a5146511c.jpg?imwidth=200"
-  },
-  {
-   "position": 12,
-   "title": "Chocolate Chocolat Veste Zippée À Col En Synthétiquecuir | PrettyLittleThing FR",
-   "link": "https://www.prettylittlething.fr/product/chocoalate-pu-collar-zip-up-jacket_plt00616?colour=chocolate",
-   "source": "PrettyLittleThing FR",
-   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcQcJsTwDPtgHdPeXqSzA1XQEPw_oCewPKsHvCTEV-5buJLji3uR",
-   "image": "https://mediahub.prettylittlething.com/cnn8520_chocolate_xl_3?qlt=70&w=100&ssz=true&dpr=1",
-   "price": {
-    "value": "46 €*",
-    "extracted_value": 46,
-    "currency": "€"
-   }
-  },
-  {
-   "position": 13,
-   "title": "Veste Chloé Chocolat | Lutèce",
-   "link": "https://lutece-shop.fr/produit/veste-chloe-chocolat/",
-   "source": "lutece-shop.fr",
-   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcSMesnqjkANMwmbPpoIQ681ai7WWIlCF2XBokKeapRRJqZi7wFH",
-   "image": "https://lutece-shop.fr/wp-content/uploads/2026/02/IMG_0499-scaled.jpeg"
-  },
-  {
-   "position": 14,
-   "title": "Women's Suede Bomber Jacket, 2025 Casual Lapel Pilot Cropped Coat Long Sleeves Trendy Streetwear Outerwear (Beige,S) : Amazon.fr: Mode",
-   "link": "https://www.amazon.fr/Womens-Cropped-Sleeves-Streetwear-Outerwear/dp/B0FQVB4DKN",
-   "source": "Amazon",
-   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcSzpDE0CoyQ1nZJVLAuYjPBcoG2V3Zcp8dwlxNKHPnhqu53ZjFh",
-   "image": "https://m.media-amazon.com/images/I/51SDFFf0YeL._AC_SX522_.jpg"
-  },
-  {
-   "position": 15,
-   "title": "veste en suédine belle taille – Mode et Glamour",
-   "link": "https://modeetglamour.com/products/veste-en-suedine-belle-taille",
-   "source": "Mode et Glamour",
-   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQmSbrl8_Dd07mmQzzvye0auF0fCt2Qr8wAUCvskb5rT0gdtesp",
-   "image": "https://modeetglamour.com/cdn/shop/files/MS_1787915976721.jpg?v=1787916030&width=1445"
-  },
-  {
-   "position": 16,
-   "title": "Vente Privée Pretty Wire - Veste Suédine Yuna Chocolat – The Bradery",
-   "link": "https://thebradery.com/collections/pretty-wire/products/yuna-chocolat-veste-suedine",
-   "source": "The Bradery",
-   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTahaFjdapV1W2YPpT2Xtzbyq90luKIuWXHiyW4F09DlVDQoyDr",
-   "image": "https://thebradery.com/cdn/shop/files/yuna-chocolat-veste-suedine_5cd9499c-0298-446f-8d7b-048120478370.jpg?v=1789552181&width=1062"
-  },
-  {
-   "position": 17,
-   "title": "Vest bomber effet daim, L - Vêtements",
-   "link": "https://www.leboncoin.fr/ad/vetements/0000000001",
-   "source": "Leboncoin",
-   "thumbnail": "https://example.invalid/image-anonymisee.jpg",
-   "image": "https://example.invalid/image-anonymisee.jpg"
-  },
-  {
-   "position": 18,
-   "title": "Veste suédine bomber – Charme & Élégance",
-   "link": "https://charmeetelegance.com/products/veste-suedine-bomber",
-   "source": "charmeetelegance.com",
-   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcTZ1fGGjEN3ujPJN5wu6pkOuCsvDObRCwtWjBoDpirOx00aXC8_",
-   "image": "https://charmeetelegance.com/cdn/shop/files/350F3F24-61BB-4C15-8062-DAF84E93E899.jpg?v=1759774876&width=1946",
-   "price": {
-    "value": "40 €*",
-    "extracted_value": 40,
-    "currency": "€"
-   }
-  },
-  {
-   "position": 19,
-   "title": "Veste bomber Constance en suédine – SOERA",
-   "link": "https://fr.soera-store.com/products/constance-faux-suede-bomber-jacket",
-   "source": "SOERA",
-   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcQI1l3Jv0XFVY84Ri-OvriCQjfosnWnlpeZkaSadksN28kHydzk",
-   "image": "https://fr.soera-store.com/cdn/shop/files/soera-jacket-constance-faux-suede-bomber-jacket-soera-680707-s-taupeb-50723-coffee-s-2572536.jpg?v=1787001254"
-  },
-  {
-   "position": 20,
-   "title": "Manteau marron carafe Kaffe | La Redoute",
-   "link": "https://www.laredoute.fr/ppdp/prod-602656167.aspx",
-   "source": "La Redoute",
-   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcT33wmmlaLTdhZdUelvwGsGY4QaFOukFom840XPWhUIl9bd6foa",
-   "image": "https://cdn.laredoute.com/products/a/1/2/a127e103b53df63db832b37d2c05a37a.jpg"
-  },
-  {
-   "position": 21,
-   "title": "Veste zippée effet daim Mojave à acheter en B2B pour votre magasin – Faire",
-   "link": "https://www.faire.com/fr-ca/product/p_yugugt5va9",
-   "source": "Faire",
-   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcRpf859Ooqkja25JaHKTbwYuPFbxariC1Vx9Ore2104eLyEI_to",
-   "image": "https://cdn.faire.com/fastly/e67b5e8456bcf93c2ce12b14dac8d59913ccfe550ff64d729fc35362dd824691.jpeg?bg-color=FFFFFF&dpr=1&fit=crop&format=jpg&height=960&width=720"
-  },
-  {
-   "position": 22,
-   "title": "ONLMOON-STINA Veste bomber | Marron foncé | ONLY®",
-   "link": "https://www.only.com/fr-fr/product/15381024_13063/bombers-anti-froid-col-italien-epaules-tombantes",
-   "source": "only.com",
-   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcSyWvVzBH12i64bjaluHKCw2q4YRmIQz1nw9DrQUpSj-OEWp2Gk",
-   "image": "https://images.only.com/15381024/5101718/003/only-onlmoon-stinafauxsuedebomberpntnoos-marron.jpg?v=fc231d0c52ce6e71b81238f6d2450e06"
-  },
-  {
-   "position": 23,
-   "title": "Body Iris – Marron côtelé – Mëya Dressing",
-   "link": "https://meya-dressing.fr/products/body-iris-marron-cotele",
-   "source": "Mëya Dressing",
-   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQCuXf1_pg89Dd9dWnD8JkM2DBpG_LobyWpHnOf599t3VEJtKPO",
-   "image": "https://meya-dressing.fr/cdn/shop/files/body_cotele_marron_iris_0839_jpg.jpg?v=1758452833&width=1024",
-   "price": {
-    "value": "5 €*",
-    "extracted_value": 5,
-    "currency": "€"
-   }
-  },
-  {
-   "position": 24,
-   "title": "Veste bomber oversize en daim pour femme avec fermeture éclair – Klara Mody",
-   "link": "https://klaramody.com/fr-fr/collections/f-w/products/zamszowa-kurtka-bomberka-damska-oversize-na-zamek",
-   "source": "Klara Mody",
-   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSow8_1rEGNBypyJ-LFnywee1sAq3gaaEe9wIPwoV2SOcKwVUJF",
-   "image": "https://klaramody.com/cdn/shop/files/Zamszowakurtkabomberkadamskaoversizenazamek_1.png?v=1764857742&width=720"
-  },
-  {
-   "position": 25,
-   "title": "Veste oversize en suédine camel",
-   "link": "https://www.jeans-industry.fr/fr/bombers/74067-veste-oversize-en-suedine-camel.html",
-   "source": "Jeans Industry",
-   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTH3SFNY9veQgz4IDygEgkcsijoG0gG8fjLPI7RPrwYiPMHEr8U",
-   "image": "https://www.jeans-industry.fr/504427-thickbox/veste-oversize-en-suedine-camel.jpg",
-   "price": {
-    "value": "60 €*",
-    "extracted_value": 60,
-    "currency": "€"
-   }
-  },
-  {
-   "position": 26,
-   "title": "Veste - brun - ONLY® - ZEB",
-   "link": "https://www.zeb.fr/products/only-doudounes-brun-15295422-otter-weathered-fr",
-   "source": "zeb.fr",
-   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcR8hFKVf3Q4HFBDimOR-hk5h5VPwQglZSfOO8iU8ilvXCn0lQIu",
-   "image": "https://cdn.shopify.com/s/files/1/0862/1332/9239/files/15371828_CHOCOLATE_20TORTE_ed085e79-a258-433c-8ef3-42cac9159c46_480x.jpg?v=1769589457"
-  },
-  {
-   "position": 27,
-   "title": "Veste Sienna suédine Chocolat – Nana Stylée",
-   "link": "https://nanastylee.com/products/veste-sienna-suedine-chocolat",
-   "source": "nanastylee.com",
-   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcTbB0JUj70V3Ipoe1_FeQTyGezQNgANEweDI2m2dTMBeUptYJiN",
-   "image": "https://nanastylee.com/cdn/shop/files/4C755902-D008-44CE-B89C-689CD9E65F06.jpg?v=1760644661&width=1920",
-   "price": {
-    "value": "49 €*",
-    "extracted_value": 49,
-    "currency": "€"
-   },
-   "in_stock": true
-  },
-  {
-   "position": 28,
-   "title": "SUEDE BOMBER JACKET - SALSA JEANS",
-   "link": "https://www.salsajeans.com/fr/femme/blazer-et-veste/bomber-effet-suede_p103132.html",
-   "source": "Salsa Jeans",
-   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcTjFA7EIOA4BoXNvWhLIYis0nMV6-QxWsnaGtQjf1w9GEumH17-",
-   "image": "https://1891874916.rsc.cdn77.org/temp/1786108988_db42377954c2245916f597aa270d7178.jpg",
-   "price": {
-    "value": "120 €*",
-    "extracted_value": 120,
-    "currency": "€"
-   },
-   "in_stock": true
-  },
-  {
-   "position": 29,
-   "title": "Veste Delma chocolat – Madame Le Shop",
-   "link": "https://www.madameleshop.com/products/veste-delma-chocolat",
-   "source": "Madame Le Shop",
-   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcQN6XyXQd-TOApmXYXuz8Q2qdnOaQi9bv1PJ8_Gk85nPI7jXyjr",
-   "image": "https://www.madameleshop.com/cdn/shop/files/AC9C8DA6-6C1D-4D12-9E13-7C489C0D7718.jpg?v=1774469752&width=1080",
-   "price": {
-    "value": "40 €*",
-    "extracted_value": 40,
-    "currency": "€"
-   },
-   "in_stock": true
-  },
-  {
-   "position": 30,
-   "title": "VMHAZEL Veste aviateur Col italien | Dark Brown | Vero Moda®",
-   "link": "https://www.veromoda.ca/fr-ca/product/10353230_2051/bombers-anti-froid-col-italien",
-   "source": "veromoda.ca",
-   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTDfri9qwrd1rbmdOsoPUE19tohFyVmpvK8dn-gmLV-_gC1j7wh",
-   "image": "https://images.veromoda.com/10353230/5115423/006/veromoda-vmhazellsfauxsuedebomberjacketnoos-brown.jpg?v=904697f4d47e5f6e2d629559e8c63c1c"
-  },
-  {
-   "position": 31,
-   "title": "Veste Bomber – Thalina – Louise Perrin",
-   "link": "https://louiseperrin.com/products/veste-bomber-thalina",
-   "source": "Louise Perrin",
-   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcRfqSLmnu_FkWKi0BOjheEAhVAJEZKfkmcSE3BGGIaGRsEnDnZO",
-   "image": "https://louiseperrin.com/cdn/shop/files/9eb9d70f-b752-450e-b5ba-0a54363e31f4.jpg?v=1761868252",
-   "price": {
-    "value": "50 €*",
-    "extracted_value": 50,
-    "currency": "€"
-   },
-   "in_stock": true
-  },
-  {
-   "position": 32,
-   "title": "Veste en suédine avec strass",
-   "link": "https://www.pimkie.fr/products/veste-en-suedine-avec-strass-280601e25f0g",
-   "source": "Pimkie",
-   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcTwiDgFmyxMOZxHoJQBKE8pDSFSS4gp4jhxWOK2NZzRc1OWNx-P",
-   "image": "https://www.pimkie.fr/cdn/shop/files/323986_D68A07_portrait_HD_1.jpg?v=1790051546&width=500"
-  },
-  {
-   "position": 33,
-   "title": "manteau veste décontracté femme fermeture éclair - Temu Luxembourg",
-   "link": "https://www.temu.com/lu-fr/manteau-veste-décontracté-pour-femme-avec--fermeture-éclair-g-601104897064831.html",
-   "source": "Temu",
-   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcStVFemMFf1puYHw7ZDKj8s5MSO4H2P9IQEaWEuQBnhi6whJI5I",
-   "image": "https://img.kwcdn.com/product/fancy/5c700a1d-ff9b-4e46-928b-b40380ecdd2f.jpg?imageMogr2/auto-orient|imageView2/2/w/800/q/70/format/webp"
-  },
-  {
-   "position": 34,
-   "title": "Veste oversize en suédine marron – Inayt collection",
-   "link": "https://inaytcollection.com/products/veste-oversize-en-suedine-marron",
-   "source": "Inayt collection",
-   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTTEoMlKiQHKpeezTdYPPaQ8M_S3EQGN7N0PydDceWwFSvMhWi1",
-   "image": "https://inaytcollection.com/cdn/shop/files/DFAD9596-0569-4A50-ADEF-94DD0E4B2429.jpg?v=1761785183&width=1946",
-   "price": {
-    "value": "50 €*",
-    "extracted_value": 50,
-    "currency": "€"
-   }
-  },
-  {
-   "position": 35,
-   "title": "LCW Vision Pardessus Cachet Surdimensionné Femme À Col De Chemise - W6AL31Z8-CT9 | LC Waikiki",
-   "link": "https://www.lcwaikiki.fr/pardessus-cachet-surdimensionne-femme-a-col-de-chemise-brun-o-5287652",
-   "source": "lcwaikiki.fr",
-   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcRL65xZpqT-1SmlBz8dTu3HcbZLSBneNWptuyc4rS_g20uaIvyZ",
-   "image": "https://img-lcwaikiki.mncdn.com/mnpadding/1020/1360/ffffff/pim/productimages/20262/9086182/v2/l_20262-w6al31z8-ct9-80-62-91-176_a1.jpg",
-   "price": {
-    "value": "35 €*",
-    "extracted_value": 35,
-    "currency": "€"
-   },
-   "in_stock": true
-  },
-  {
-   "position": 36,
-   "title": "Veste de loisirs à la mode pour femmes. Couleur unie, col cranté, manches longues, fermeture éclair. Manteau élégant pour le printemps et l'automne, idéal pour les vacances. | Mode en ligne |",
-   "link": "https://fr.shein.com/Women-s-High-Street-Casual-Suede-Jacket-Fashion-Solid-Color-Lapel-Long-Sleeve-Zipper-Coat-Spring-Autumn-Vacation-New-Elegant-Outerwear-p-477005438.html",
-   "source": "shein.com",
-   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQgjmfcGqPVywhGM1oc7kgB8SQGP65upaY0-bYrryG5lNFHUhLp",
-   "image": "https://img.ltwebstatic.com/v4/j/spmp/2026/05/09/5c/1778316820d0237f4fa6b0a10b3d74794386d7bfca_thumbnail_750x999.webp"
-  },
-  {
-   "position": 37,
-   "title": "New Look BUBBLE HEM - Veste en similicuir - dark brown/marron foncé - ZALANDO.FR",
-   "link": "https://www.zalando.fr/new-look-veste-en-similicuir-dark-brown-nl021u0kr-o11.html",
-   "source": "Zalando",
-   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcQCJ-5aS7YFavlm3ZrPAmOJte7PHFCMXVDdn3lBGWP3k-NSY0io",
-   "image": "https://img01.ztat.net/article/spp-media-p1/5e48aaad6eff41148620fd0ed017c4bb/94c9449e5d4f4dc28cec1b0121364208.jpg?imwidth=762"
-  },
-  {
-   "position": 38,
-   "title": "Abercrombie & Fitch CLEAN ZIP - Veste en similicuir - brown/marron - ZALANDO.FR",
-   "link": "https://www.zalando.fr/abercrombie-and-fitch-clean-zip-veste-en-similicuir-brown-a0f21u04c-o11.html",
-   "source": "Zalando",
-   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcRjNWVUbPmhF06kThRKC7VCyA-7gdGgIirerSUdl1p5zxDS0yJB",
-   "image": "https://img01.ztat.net/article/spp-media-p1/9e33dafdc474465ca296220adbad1b98/66c37c7cc8214c66bffc33973b706f5f.jpg?imwidth=762",
-   "price": {
-    "value": "98 €*",
-    "extracted_value": 98,
-    "currency": "€"
-   }
-  },
-  {
-   "position": 39,
-   "title": "Gina Tricot HIGH NECK JACKET - Faux leather jacket - dark brown/dark brown - Zalando.co.uk",
-   "link": "https://www.zalando.co.uk/gina-tricot-high-neck-jacket-faux-leather-jacket-dark-brown-gid21u056-o11.html",
-   "source": "Zalando UK",
-   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcRP0NKLSXnhTUW9u57WYX0iM2dioj5QCBqv20us9k9DqzRVUJym",
-   "image": "https://img01.ztat.net/article/spp-media-p1/f61f1251f25b4d8c8489c203a6935065/fb7cfa485ff94d5e9973045091d8df22.jpg?imwidth=762"
-  },
-  {
-   "position": 40,
-   "title": "Camellia Printemps/Automne Nouvelle Veste de Vol Décontractée Polyvalente pour Femmes à Effet de Texture en Daim | Mode en ligne | SHEIN FRANCE",
-   "link": "https://fr.shein.com/Camellia-Spring-Autumn-New-Women-s-Casual-Versatile-Suede-Texture-Effect-Flight-Jacket-Coat-p-106791687.html",
-   "source": "Shein",
-   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcSJaEPAHRvmQebKE1SI40bnldNAN80S9kx3bwOKNS25l5SfAvV3",
-   "image": "https://img.ltwebstatic.com/v4/j/spmp/2025/09/15/d3/1757915977b01e0a305535d9bfb9ec2befaaf8c33c_thumbnail_750x999.webp"
-  },
-  {
-   "position": 41,
-   "title": "Veste fourrure | Tysha",
-   "link": "https://www.tysha.fr/page-d-article/veste-fourrure",
-   "source": "tysha.fr",
-   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcTTtH9MAnUOKN5I09vxlbswMh34D6MBTBzIWga6jfoKOLUqh4ne",
-   "image": "https://static.wixstatic.com/media/1f2b6d_eeabb8135239410bbbd2e8cfe6e1b786~mv2.jpg/v1/fill/w_980,h_1307,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/1f2b6d_eeabb8135239410bbbd2e8cfe6e1b786~mv2.jpg"
-  },
-  {
-   "position": 42,
-   "title": "OH APRIL Veste en similicuir - truffle/marron - ZALANDO.FR",
-   "link": "https://www.zalando.fr/oh-april-veste-en-similicuir-truffle-oh921u00g-o11.html",
-   "source": "Zalando",
-   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcT2fcMocPGEe7cOa9Tyu6U1ctGheITRjpC-hCABlmEyMt8yUy_T",
-   "image": "https://img01.ztat.net/article/spp-media-p1/457e1cd0d7094cea811a34ee5ccd8082/017ae1c17c184e01bc732abb1c21eaf9.jpg?imwidth=762&filter=packshot"
-  },
-  {
-   "position": 43,
-   "title": "Blouson Femme Effet Suédine | Coupe Décontractée, Cuir Vegan | Claire Mode",
-   "link": "https://clairemode.com/en/products/blouson-femme-effet-suedine-coupe-decontractee-moderne",
-   "source": "Claire Mode",
-   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcSpdZDfSm6Ercv6DEpGy1aAQcalOfpI_3WI0W4OsJR7Z0Q0Yc1T",
-   "image": "https://clairemode.com/cdn/shop/files/imageye___-_imgi_9_83bc0224-6135-4216-aba9-94a8d68a13d7.jpg?v=1786119929&width=1080",
-   "price": {
-    "value": "70 €*",
-    "extracted_value": 70,
-    "currency": "€"
-   },
-   "in_stock": true
-  },
-  {
-   "position": 44,
-   "title": "VESTE BOMBER OVERSIZE EFFET DAIM - K-ZELL PARIS - Veste femme",
-   "link": "https://kzellparis.com/de/products/blouson-effet-daim?variant=56686813479244&country=CH&currency=CHF",
-   "source": "k-zell paris",
-   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcQ3EzZ4gM-vpmr3wMqMlEujmoMizpTrQE32-WV-0c7DPOfQikJJ",
-   "image": "https://kzellparis.com/cdn/shop/files/8788_5_95d43e71-6e87-4a2c-9cff-413f95b762c1.png?v=1773243486&width=1445",
-   "price": {
-    "value": "50 €*",
-    "extracted_value": 50,
-    "currency": "€"
-   },
-   "in_stock": true
-  },
-  {
-   "position": 45,
-   "title": "Veste mi-saison ' Naeko ' trueprodigy en Marron | ABOUT YOU",
-   "link": "https://www.aboutyou.fr/p/trueprodigy/veste-mi-saison-naeko-31815531",
-   "source": "about you fr",
-   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcRvPBYKCR_rGjIVuLqa_5EvWMQM9aGoBdDzSs-mRdI_RUndZ3Wi",
-   "image": "https://cdn.aboutstatic.com/file/images/478a34e80cd15cab02cc0d4888684466.jpg?brightness=0.96&quality=75&trim=1&height=480&width=360"
-  },
-  {
-   "position": 46,
-   "title": "Veste en daim synthétique Y2K pour femme avec fermeture éclair intégrale et manches chauve-souris - Vêtement d'extérieur court tendance et décontracté, Beige-2., S : Amazon.com.be: Mode",
-   "link": "https://www.amazon.com.be/synthétique-fermeture-intégrale-manches-chauve-souris/dp/B0FPD7435N",
-   "source": "Amazon.com.be",
-   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcSvxeWx7NXpzT4l4sMg43pMablNN9qWleVXfPKBEUcW4aofH1LN",
-   "image": "https://m.media-amazon.com/images/I/61Rl8AsngzL._AC_SL1500_.jpg"
-  },
-  {
-   "position": 47,
-   "title": "Veste oversize suédine taupe femme",
-   "link": "https://prettywire.fr/-vestes-manteaux/3020073-mina-taupe-veste-suedine-.html",
-   "source": "Pretty Wire",
-   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcQKze-5IPBXqLo_4Fhfge12ZEz_javElJuUHScGO-KYZQe-FROG",
-   "image": "https://prettywire.fr/140162-miniatures/yuna-chocolat-veste-suedine.jpg",
-   "price": {
-    "value": "69 €*",
-    "extracted_value": 69,
-    "currency": "€"
-   },
-   "in_stock": true
-  },
-  {
-   "position": 48,
-   "title": "Veste décontractée de mode de rue pour femmes MUMRAP, veste ample à manches longues et zip vintage | Mode en ligne | SHEIN FRANCE",
-   "link": "https://fr.shein.com/Veste-décontractée-de-mode-de-rue-pour-femmes,-col-rabattu,-manches-longues,-fermeture-éclair,-coupe-ample,-style-vintage-p-69449478.html",
-   "source": "shein.com",
-   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQknKhr68Yx-4oR9IbvEcUTkUocCDn2U9m-_EyBwZxi3aqxhkAP",
-   "image": "https://img.ltwebstatic.com/v4/j/spmp/2026/08/05/9c/1785893272af7fb0986f8ebf164920fd922b1f01da_thumbnail_750x999.jpg"
-  },
-  {
-   "position": 49,
-   "title": "Perfecto à imprimé treillis - jaune | Stand-Prive",
-   "link": "https://www.stand-prive.com/products/perfecto-a-imprime-treillis-gem-423_jaune",
-   "source": "Stand-Privé",
-   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTIMVridqnawpS2GSUO2S3MKFsBnB_XK6HwAcQavMi4Za9qWWfh",
-   "image": "https://www.stand-prive.com/cdn/shop/files/GAO-5411-1.jpg?v=1788510108&width=1100",
-   "price": {
-    "value": "23 €*",
-    "extracted_value": 23,
-    "currency": "€"
-   },
-   "in_stock": true
-  },
-  {
-   "position": 50,
-   "title": "Veste bomber pour femmes, manteau de printemps, veste ample à manches longues avec fermeture éclair de style rétro, nouvelle veste de style, vêtement extérieur vert | Mode en ligne | SHEIN FRANCE",
-   "link": "https://fr.shein.com/Women-s-Bomber-Jacket-Spring-Coat-Loose-Long-Sleeve-Zipper-Retro-Jacket-New-Style-Jacket-Green-Outerwear-p-76707333.html",
-   "source": "Shein",
-   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcQR3ISinD_vja2I2nfboT6WF0tQKmhNZwQtPyGf31F-_HHAVyKQ",
-   "image": "https://img.ltwebstatic.com/v4/j/spmp/2026/08/11/c2/1786435865c471e947d84d5829b03069da11f0ea78_thumbnail_405x552_thumbnail_720x.jpg"
-  },
-  {
-   "position": 51,
-   "title": "Vero Moda JACKET VMJOSEMAJA JACKET - Veste légère - coffee bean/marron foncé - ZALANDO.FR",
-   "link": "https://www.zalando.fr/vero-moda-jacket-vmjosemaja-jacket-veste-mi-saison-coffee-bean-ve121u1g7-o12.html",
-   "source": "Zalando",
-   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcSp-hJJX8BcbzUZuq8-yu-McpeT1RgHJf7iF1UoAahwx0LL_nPi",
-   "image": "https://img01.ztat.net/article/spp-media-p1/5a8b6512b0e54a799171c236a8fda14e/8004f39f358c40f29a1091a72fd3e403.jpg?imwidth=200"
-  },
-  {
-   "position": 52,
-   "title": "Liorin Automne/Hiver Nouveau Style Old Money Veste décontracté Polyvalente Texture Daim Vert pour Femmes | Mode en ligne | SHEIN FRANCE",
-   "link": "https://fr.shein.com/Seelio-Autumn-Winter-New-Old-Money-Style-Women-s-Casual-Versatile-Suede-Texture-Effect-Green-Jacket-p-98561963.html",
-   "source": "shein.com",
-   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcTkOzksfI91aHP80X3vQJ7JAMoZY7Njm7pV_C4B6SyD7UdeaaZr",
-   "image": "https://img.ltwebstatic.com/v4/j/spmp/2025/09/05/02/175703950993c9eb7c5af1de6ac9dd8bc3c6ee1133_thumbnail_750x999.jpg"
-  },
-  {
-   "position": 53,
-   "title": "Veste femme style streetwear à fermeture éclair, col à revers, tissu en suédine unie, coupe élégante - Nihaojewelry France",
-   "link": "https://fr.nihaojewelry.com/women-s-street-style-zipper-collar-suede-jacket-retro-windbreaker-long-sleeve-loose-fit-pure-color-nh11480211.html",
-   "source": "NihaoJewelry",
-   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcTKYMI1DEYzWPb5Qn1_4yNHRwGHn3RtqDvTmr1yz8xS9IJ4VTiE",
-   "image": "https://img.nihaojewelry.com/fit-in/0x0/product/2025/10/7/1975452426177744896/Veste-femme-style-streetwear-fermeture-clair-col-revers-tissu-en-su-dine-unie-coupe-l-gante-Nihaojewelry-France.jpg"
-  },
-  {
-   "position": 54,
-   "title": "Blouson bomber effet daim",
-   "link": "https://www.alcott.eu/fr_MA/blouson-bomber-effet-daim/05145002.html",
-   "source": "Alcott",
-   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcTG1DEx55AtALo_g4Sy73iZHMUCF31xPYuPNuL1I34vhVpdwUZv",
-   "image": "https://www.alcott.eu/on/demandware.static/-/Sites-catalog-alcott-master/default/dw43067234/hi-res/GB0460DOAX15_BR2_002.jpg",
-   "price": {
-    "value": "730 MAD*",
-    "extracted_value": 730,
-    "currency": "MAD"
-   },
-   "in_stock": true
-  },
-  {
-   "position": 55,
-   "title": "Camellia Printemps/Automne Nouvelle Veste de Vol Décontractée Polyvalente pour Femmes à Effet de Texture en Daim | Mode en ligne | SHEIN FRANCE",
-   "link": "https://fr.shein.com/DEEKA-Spring-Autumn-New-Casual-Versatile-Suede-Like-Bomber-Jacket-For-Women-p-411485480.html",
-   "source": "Shein",
-   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcSGD_1Hjj16BO1sONxniNGR4AwAAfBQ5ftBo-hE-t-D0Herxh5z",
-   "image": "https://img.ltwebstatic.com/v4/j/spmp/2026/02/28/43/1772260892e1beeb7f3c168ac6d092c578715d593a_thumbnail_750x999.webp"
-  },
-  {
-   "position": 56,
-   "title": "Aveloria GENKIRA Jaqueta Bomber Versátil Cáqui Com Mangas Morcego, Lapela Plissada E Textura Macia, Com Design Moderno E Elegante. Combine Com Saia Evasê Ou Shorts. Conjunto Feminino. | SHEIN PT",
-   "link": "https://pt.shein.com/Aveloria-GENKIRA-Women-s-Shades-Of-Brown-Suede-Bomber-Jacket-Set-Autumn-Street-Style-Everyday-Khaki-Batwing-Sleeve-Lapel-Fuzzy-Texture-Coat-With-A-Line-Shorts-Suit-p-239875355.html",
-   "source": "Shein",
-   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSEPDxbKxmj2jgExESbEPyqGvhgXsVALmI6d13niL6MLx76C0QO",
-   "image": "https://img.ltwebstatic.com/v4/j/pi/2025/10/27/13/1761569387e4a5d9f52d0f21648948244012ce8e12_thumbnail_750x999.webp"
-  },
-  {
-   "position": 57,
-   "title": "HZXVIC Veste en suède et polaire confortable et décontractée pour femmes, nouvelle collection automne | Mode en ligne | SHEIN FRANCE",
-   "link": "https://fr.shein.com/Women-s-Casual-Comfortable-Suede-Fleece-Jacket-New-Autumn-Collection-p-76094118.html",
-   "source": "Shein",
-   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcShjfglbnTUossa3UP86yCG6uBjhmqWh1NGCH8qDzeTXu8Jb4bH",
-   "image": "https://img.ltwebstatic.com/v4/p/spmp/2026/03/06/b6/1772768706bc7be9d285eb90619513bd058a5f1c8d_thumbnail_220x293.png"
-  },
-  {
-   "position": 58,
-   "title": "Veste bomber élégante unie pour femme, légère, basique et décontractée, marron, pour l'automne, la rentrée scolaire et le bureau | Mode en ligne | SHEIN FRANCE",
-   "link": "https://fr.shein.com/Elegant-Solid-Faux-Suede-Bomber-Jacket-Women's-Fall-Lightweight-Basic-Casual-Back-To-School-Office-Brown-p-76091810.html",
-   "source": "Shein",
-   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcT-hD5AcwmUBxxW2ycd8sOlUN2_lHAdJ7OmpsqbmH5KnP758zYC",
-   "image": "https://img.ltwebstatic.com/v4/p/spmp/2026/07/31/cc/1785480428ddfbdc279a0095760e99446fbb99a0f5_thumbnail_750x999.webp"
-  },
-  {
-   "position": 59,
-   "title": "SHEIN BAE Shorts minimalistes décontractés polyvalents de couleur unie | Mode en ligne | SHEIN FRANCE",
-   "link": "https://fr.shein.com/SHEIN-BAE-Minimalist-Casual-Versatile-Solid-Color-Shorts-p-488484513.html",
-   "source": "shein.com",
-   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcQOq4SZFQASD_roJPKQPJ3Y3Ku5B9Jbnafh5UzLUqmE6JjQQPCF",
-   "image": "https://img.ltwebstatic.com/v4/j/pi/2026/06/01/b0/1780283604930f30cdd5f97e5d169fbabc85ec82f9_thumbnail_750x999.webp"
-  },
-  {
-   "position": 60,
-   "title": "Rich & Royal Abrigo corto - cinnamon/marrón claro - Zalando.es",
-   "link": "https://www.zalando.es/rich-and-royal-abrigo-corto-cinnamon-ri521u04s-o11.html",
-   "source": "Zalando",
-   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcQP5Jx3DFDbirt0zvgpkbAT8SSZjF0Ka13dUC3IwT-LUnd8i8pN",
-   "image": "https://img01.ztat.net/article/spp-media-p1/80b6e633386a4dae9179588cbde3774b/bc7124d2b8414fc880f4b9982c98033a.jpg?imwidth=500"
-  }
- ]
+  "visual_matches": [
+    {
+      "position": 1,
+      "title": "Produit 1",
+      "link": "https://fr.shein.com/produit-1",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-1.jpg",
+      "image": "https://example.invalid/image-1.jpg"
+    },
+    {
+      "position": 2,
+      "title": "Produit 2",
+      "link": "https://www.asos.com/produit-2",
+      "source": "Marchand 2",
+      "thumbnail": "https://example.invalid/vignette-2.jpg",
+      "image": "https://example.invalid/image-2.jpg"
+    },
+    {
+      "position": 3,
+      "title": "Produit 3 - ZALANDO.FR",
+      "link": "https://www.zalando.fr/produit-3",
+      "source": "Marchand 3",
+      "thumbnail": "https://example.invalid/vignette-3.jpg",
+      "image": "https://example.invalid/image-3.jpg"
+    },
+    {
+      "position": 4,
+      "title": "Produit 4",
+      "link": "https://www.kiabi.com/produit-4",
+      "source": "Marchand 4",
+      "thumbnail": "https://example.invalid/vignette-4.jpg",
+      "image": "https://example.invalid/image-4.jpg",
+      "price": {
+        "value": "11 €*",
+        "extracted_value": 11,
+        "currency": "€"
+      }
+    },
+    {
+      "position": 5,
+      "title": "Produit 5",
+      "link": "https://www.loavies.com/produit-5",
+      "source": "Marchand 5",
+      "thumbnail": "https://example.invalid/vignette-5.jpg",
+      "image": "https://example.invalid/image-5.jpg",
+      "price": {
+        "value": "39 €*",
+        "extracted_value": 39,
+        "currency": "€"
+      }
+    },
+    {
+      "position": 6,
+      "title": "Produit 6",
+      "link": "https://www.bulle-harmonie.fr/produit-6",
+      "source": "Marchand 6",
+      "thumbnail": "https://example.invalid/vignette-6.jpg",
+      "image": "https://example.invalid/image-6.jpg",
+      "price": {
+        "value": "38 €*",
+        "extracted_value": 38,
+        "currency": "€"
+      }
+    },
+    {
+      "position": 7,
+      "title": "Produit 7",
+      "link": "https://www.juste-elles.com/produit-7",
+      "source": "Marchand 7",
+      "thumbnail": "https://example.invalid/vignette-7.jpg",
+      "image": "https://example.invalid/image-7.jpg"
+    },
+    {
+      "position": 8,
+      "title": "Produit 8",
+      "link": "https://www.intemporel.shop/produit-8",
+      "source": "Marchand 8",
+      "thumbnail": "https://example.invalid/vignette-8.jpg",
+      "image": "https://example.invalid/image-8.jpg"
+    },
+    {
+      "position": 9,
+      "title": "Produit 9",
+      "link": "https://prettywire.fr/produit-9",
+      "source": "Marchand 9",
+      "thumbnail": "https://example.invalid/vignette-9.jpg",
+      "image": "https://example.invalid/image-9.jpg"
+    },
+    {
+      "position": 10,
+      "title": "Produit 10",
+      "link": "https://mademoisellemarcelle.com/produit-10",
+      "source": "Marchand 10",
+      "thumbnail": "https://example.invalid/vignette-10.jpg",
+      "image": "https://example.invalid/image-10.jpg",
+      "price": {
+        "value": "70 €*",
+        "extracted_value": 70,
+        "currency": "€"
+      }
+    },
+    {
+      "position": 11,
+      "title": "Produit 11 - ZALANDO.CH",
+      "link": "https://fr.zalando.ch/produit-11",
+      "source": "Marchand 3",
+      "thumbnail": "https://example.invalid/vignette-11.jpg",
+      "image": "https://example.invalid/image-11.jpg"
+    },
+    {
+      "position": 12,
+      "title": "Produit 12",
+      "link": "https://www.prettylittlething.fr/produit-12?colour=chocolate",
+      "source": "Marchand 11",
+      "thumbnail": "https://example.invalid/vignette-12.jpg",
+      "image": "https://example.invalid/image-12.jpg",
+      "price": {
+        "value": "46 €*",
+        "extracted_value": 46,
+        "currency": "€"
+      }
+    },
+    {
+      "position": 13,
+      "title": "Produit 13",
+      "link": "https://lutece-shop.fr/produit-13",
+      "source": "Marchand 12",
+      "thumbnail": "https://example.invalid/vignette-13.jpg",
+      "image": "https://example.invalid/image-13.jpg"
+    },
+    {
+      "position": 14,
+      "title": "Produit 14 - AMAZON.FR",
+      "link": "https://www.amazon.fr/produit-14",
+      "source": "Marchand 13",
+      "thumbnail": "https://example.invalid/vignette-14.jpg",
+      "image": "https://example.invalid/image-14.jpg"
+    },
+    {
+      "position": 15,
+      "title": "Produit 15",
+      "link": "https://modeetglamour.com/produit-15",
+      "source": "Marchand 14",
+      "thumbnail": "https://example.invalid/vignette-15.jpg",
+      "image": "https://example.invalid/image-15.jpg"
+    },
+    {
+      "position": 16,
+      "title": "Produit 16",
+      "link": "https://thebradery.com/produit-16",
+      "source": "Marchand 15",
+      "thumbnail": "https://example.invalid/vignette-16.jpg",
+      "image": "https://example.invalid/image-16.jpg"
+    },
+    {
+      "position": 17,
+      "title": "Produit 17",
+      "link": "https://www.leboncoin.fr/annonce/0000000017",
+      "source": "Marchand 16",
+      "thumbnail": "https://example.invalid/vignette-17.jpg",
+      "image": "https://example.invalid/image-17.jpg"
+    },
+    {
+      "position": 18,
+      "title": "Produit 18",
+      "link": "https://charmeetelegance.com/produit-17",
+      "source": "Marchand 17",
+      "thumbnail": "https://example.invalid/vignette-18.jpg",
+      "image": "https://example.invalid/image-18.jpg",
+      "price": {
+        "value": "40 €*",
+        "extracted_value": 40,
+        "currency": "€"
+      }
+    },
+    {
+      "position": 19,
+      "title": "Produit 19",
+      "link": "https://fr.soera-store.com/produit-18",
+      "source": "Marchand 18",
+      "thumbnail": "https://example.invalid/vignette-19.jpg",
+      "image": "https://example.invalid/image-19.jpg"
+    },
+    {
+      "position": 20,
+      "title": "Produit 20",
+      "link": "https://www.laredoute.fr/produit-19",
+      "source": "Marchand 19",
+      "thumbnail": "https://example.invalid/vignette-20.jpg",
+      "image": "https://example.invalid/image-20.jpg"
+    },
+    {
+      "position": 21,
+      "title": "Produit 21",
+      "link": "https://www.faire.com/produit-20",
+      "source": "Marchand 20",
+      "thumbnail": "https://example.invalid/vignette-21.jpg",
+      "image": "https://example.invalid/image-21.jpg"
+    },
+    {
+      "position": 22,
+      "title": "Produit 22",
+      "link": "https://www.only.com/produit-21",
+      "source": "Marchand 21",
+      "thumbnail": "https://example.invalid/vignette-22.jpg",
+      "image": "https://example.invalid/image-22.jpg"
+    },
+    {
+      "position": 23,
+      "title": "Produit 23",
+      "link": "https://meya-dressing.fr/produit-22",
+      "source": "Marchand 22",
+      "thumbnail": "https://example.invalid/vignette-23.jpg",
+      "image": "https://example.invalid/image-23.jpg",
+      "price": {
+        "value": "5 €*",
+        "extracted_value": 5,
+        "currency": "€"
+      }
+    },
+    {
+      "position": 24,
+      "title": "Produit 24",
+      "link": "https://klaramody.com/produit-23",
+      "source": "Marchand 23",
+      "thumbnail": "https://example.invalid/vignette-24.jpg",
+      "image": "https://example.invalid/image-24.jpg"
+    },
+    {
+      "position": 25,
+      "title": "Produit 25",
+      "link": "https://www.jeans-industry.fr/produit-24",
+      "source": "Marchand 24",
+      "thumbnail": "https://example.invalid/vignette-25.jpg",
+      "image": "https://example.invalid/image-25.jpg",
+      "price": {
+        "value": "60 €*",
+        "extracted_value": 60,
+        "currency": "€"
+      }
+    },
+    {
+      "position": 26,
+      "title": "Produit 26",
+      "link": "https://www.zeb.fr/produit-25",
+      "source": "Marchand 25",
+      "thumbnail": "https://example.invalid/vignette-26.jpg",
+      "image": "https://example.invalid/image-26.jpg"
+    },
+    {
+      "position": 27,
+      "title": "Produit 27",
+      "link": "https://nanastylee.com/produit-26",
+      "source": "Marchand 26",
+      "thumbnail": "https://example.invalid/vignette-27.jpg",
+      "image": "https://example.invalid/image-27.jpg",
+      "price": {
+        "value": "49 €*",
+        "extracted_value": 49,
+        "currency": "€"
+      },
+      "in_stock": true
+    },
+    {
+      "position": 28,
+      "title": "Produit 28",
+      "link": "https://www.salsajeans.com/produit-27",
+      "source": "Marchand 27",
+      "thumbnail": "https://example.invalid/vignette-28.jpg",
+      "image": "https://example.invalid/image-28.jpg",
+      "price": {
+        "value": "120 €*",
+        "extracted_value": 120,
+        "currency": "€"
+      },
+      "in_stock": true
+    },
+    {
+      "position": 29,
+      "title": "Produit 29",
+      "link": "https://www.madameleshop.com/produit-28",
+      "source": "Marchand 28",
+      "thumbnail": "https://example.invalid/vignette-29.jpg",
+      "image": "https://example.invalid/image-29.jpg",
+      "price": {
+        "value": "40 €*",
+        "extracted_value": 40,
+        "currency": "€"
+      },
+      "in_stock": true
+    },
+    {
+      "position": 30,
+      "title": "Produit 30",
+      "link": "https://www.veromoda.ca/produit-29",
+      "source": "Marchand 29",
+      "thumbnail": "https://example.invalid/vignette-30.jpg",
+      "image": "https://example.invalid/image-30.jpg"
+    },
+    {
+      "position": 31,
+      "title": "Produit 31",
+      "link": "https://louiseperrin.com/produit-30",
+      "source": "Marchand 30",
+      "thumbnail": "https://example.invalid/vignette-31.jpg",
+      "image": "https://example.invalid/image-31.jpg",
+      "price": {
+        "value": "50 €*",
+        "extracted_value": 50,
+        "currency": "€"
+      },
+      "in_stock": true
+    },
+    {
+      "position": 32,
+      "title": "Produit 32",
+      "link": "https://www.pimkie.fr/produit-31",
+      "source": "Marchand 31",
+      "thumbnail": "https://example.invalid/vignette-32.jpg",
+      "image": "https://example.invalid/image-32.jpg"
+    },
+    {
+      "position": 33,
+      "title": "Produit 33",
+      "link": "https://www.temu.com/produit-32",
+      "source": "Marchand 32",
+      "thumbnail": "https://example.invalid/vignette-33.jpg",
+      "image": "https://example.invalid/image-33.jpg"
+    },
+    {
+      "position": 34,
+      "title": "Produit 34",
+      "link": "https://inaytcollection.com/produit-33",
+      "source": "Marchand 33",
+      "thumbnail": "https://example.invalid/vignette-34.jpg",
+      "image": "https://example.invalid/image-34.jpg",
+      "price": {
+        "value": "50 €*",
+        "extracted_value": 50,
+        "currency": "€"
+      }
+    },
+    {
+      "position": 35,
+      "title": "Produit 35",
+      "link": "https://www.lcwaikiki.fr/produit-34",
+      "source": "Marchand 34",
+      "thumbnail": "https://example.invalid/vignette-35.jpg",
+      "image": "https://example.invalid/image-35.jpg",
+      "price": {
+        "value": "35 €*",
+        "extracted_value": 35,
+        "currency": "€"
+      },
+      "in_stock": true
+    },
+    {
+      "position": 36,
+      "title": "Produit 36",
+      "link": "https://fr.shein.com/produit-35",
+      "source": "Marchand 35",
+      "thumbnail": "https://example.invalid/vignette-36.jpg",
+      "image": "https://example.invalid/image-36.jpg"
+    },
+    {
+      "position": 37,
+      "title": "Produit 37 - ZALANDO.FR",
+      "link": "https://www.zalando.fr/produit-36",
+      "source": "Marchand 3",
+      "thumbnail": "https://example.invalid/vignette-37.jpg",
+      "image": "https://example.invalid/image-37.jpg"
+    },
+    {
+      "position": 38,
+      "title": "Produit 38 - ZALANDO.FR",
+      "link": "https://www.zalando.fr/produit-37",
+      "source": "Marchand 3",
+      "thumbnail": "https://example.invalid/vignette-38.jpg",
+      "image": "https://example.invalid/image-38.jpg",
+      "price": {
+        "value": "98 €*",
+        "extracted_value": 98,
+        "currency": "€"
+      }
+    },
+    {
+      "position": 39,
+      "title": "Produit 39 - ZALANDO.CO.UK",
+      "link": "https://www.zalando.co.uk/produit-38",
+      "source": "Marchand 36",
+      "thumbnail": "https://example.invalid/vignette-39.jpg",
+      "image": "https://example.invalid/image-39.jpg"
+    },
+    {
+      "position": 40,
+      "title": "Produit 40",
+      "link": "https://fr.shein.com/produit-39",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-40.jpg",
+      "image": "https://example.invalid/image-40.jpg"
+    },
+    {
+      "position": 41,
+      "title": "Produit 41",
+      "link": "https://www.tysha.fr/produit-40",
+      "source": "Marchand 37",
+      "thumbnail": "https://example.invalid/vignette-41.jpg",
+      "image": "https://example.invalid/image-41.jpg"
+    },
+    {
+      "position": 42,
+      "title": "Produit 11 - ZALANDO.FR",
+      "link": "https://www.zalando.fr/produit-11",
+      "source": "Marchand 3",
+      "thumbnail": "https://example.invalid/vignette-42.jpg",
+      "image": "https://example.invalid/image-42.jpg"
+    },
+    {
+      "position": 43,
+      "title": "Produit 42",
+      "link": "https://clairemode.com/produit-41",
+      "source": "Marchand 38",
+      "thumbnail": "https://example.invalid/vignette-43.jpg",
+      "image": "https://example.invalid/image-43.jpg",
+      "price": {
+        "value": "70 €*",
+        "extracted_value": 70,
+        "currency": "€"
+      },
+      "in_stock": true
+    },
+    {
+      "position": 44,
+      "title": "Produit 43",
+      "link": "https://kzellparis.com/produit-42?variant=56686813479244&country=CH&currency=CHF",
+      "source": "Marchand 39",
+      "thumbnail": "https://example.invalid/vignette-44.jpg",
+      "image": "https://example.invalid/image-44.jpg",
+      "price": {
+        "value": "50 €*",
+        "extracted_value": 50,
+        "currency": "€"
+      },
+      "in_stock": true
+    },
+    {
+      "position": 45,
+      "title": "Produit 44",
+      "link": "https://www.aboutyou.fr/produit-43",
+      "source": "Marchand 40",
+      "thumbnail": "https://example.invalid/vignette-45.jpg",
+      "image": "https://example.invalid/image-45.jpg"
+    },
+    {
+      "position": 46,
+      "title": "Produit 45 - AMAZON.COM.BE",
+      "link": "https://www.amazon.com.be/produit-44",
+      "source": "Marchand 41",
+      "thumbnail": "https://example.invalid/vignette-46.jpg",
+      "image": "https://example.invalid/image-46.jpg"
+    },
+    {
+      "position": 47,
+      "title": "Produit 46",
+      "link": "https://prettywire.fr/produit-45",
+      "source": "Marchand 9",
+      "thumbnail": "https://example.invalid/vignette-47.jpg",
+      "image": "https://example.invalid/image-47.jpg",
+      "price": {
+        "value": "69 €*",
+        "extracted_value": 69,
+        "currency": "€"
+      },
+      "in_stock": true
+    },
+    {
+      "position": 48,
+      "title": "Produit 47",
+      "link": "https://fr.shein.com/produit-46",
+      "source": "Marchand 35",
+      "thumbnail": "https://example.invalid/vignette-48.jpg",
+      "image": "https://example.invalid/image-48.jpg"
+    },
+    {
+      "position": 49,
+      "title": "Produit 48",
+      "link": "https://www.stand-prive.com/produit-47",
+      "source": "Marchand 42",
+      "thumbnail": "https://example.invalid/vignette-49.jpg",
+      "image": "https://example.invalid/image-49.jpg",
+      "price": {
+        "value": "23 €*",
+        "extracted_value": 23,
+        "currency": "€"
+      },
+      "in_stock": true
+    },
+    {
+      "position": 50,
+      "title": "Produit 49",
+      "link": "https://fr.shein.com/produit-48",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-50.jpg",
+      "image": "https://example.invalid/image-50.jpg"
+    },
+    {
+      "position": 51,
+      "title": "Produit 50 - ZALANDO.FR",
+      "link": "https://www.zalando.fr/produit-49",
+      "source": "Marchand 3",
+      "thumbnail": "https://example.invalid/vignette-51.jpg",
+      "image": "https://example.invalid/image-51.jpg"
+    },
+    {
+      "position": 52,
+      "title": "Produit 51",
+      "link": "https://fr.shein.com/produit-50",
+      "source": "Marchand 35",
+      "thumbnail": "https://example.invalid/vignette-52.jpg",
+      "image": "https://example.invalid/image-52.jpg"
+    },
+    {
+      "position": 53,
+      "title": "Produit 52",
+      "link": "https://fr.nihaojewelry.com/produit-51",
+      "source": "Marchand 43",
+      "thumbnail": "https://example.invalid/vignette-53.jpg",
+      "image": "https://example.invalid/image-53.jpg"
+    },
+    {
+      "position": 54,
+      "title": "Produit 53",
+      "link": "https://www.alcott.eu/produit-52",
+      "source": "Marchand 44",
+      "thumbnail": "https://example.invalid/vignette-54.jpg",
+      "image": "https://example.invalid/image-54.jpg",
+      "price": {
+        "value": "730 MAD*",
+        "extracted_value": 730,
+        "currency": "MAD"
+      },
+      "in_stock": true
+    },
+    {
+      "position": 55,
+      "title": "Produit 40",
+      "link": "https://fr.shein.com/produit-53",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-55.jpg",
+      "image": "https://example.invalid/image-55.jpg"
+    },
+    {
+      "position": 56,
+      "title": "Produit 54",
+      "link": "https://pt.shein.com/produit-54",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-56.jpg",
+      "image": "https://example.invalid/image-56.jpg"
+    },
+    {
+      "position": 57,
+      "title": "Produit 55",
+      "link": "https://fr.shein.com/produit-55",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-57.jpg",
+      "image": "https://example.invalid/image-57.jpg"
+    },
+    {
+      "position": 58,
+      "title": "Produit 56",
+      "link": "https://fr.shein.com/produit-56",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-58.jpg",
+      "image": "https://example.invalid/image-58.jpg"
+    },
+    {
+      "position": 59,
+      "title": "Produit 57",
+      "link": "https://fr.shein.com/produit-57",
+      "source": "Marchand 35",
+      "thumbnail": "https://example.invalid/vignette-59.jpg",
+      "image": "https://example.invalid/image-59.jpg"
+    },
+    {
+      "position": 60,
+      "title": "Produit 58 - ZALANDO.ES",
+      "link": "https://www.zalando.es/produit-58",
+      "source": "Marchand 3",
+      "thumbnail": "https://example.invalid/vignette-60.jpg",
+      "image": "https://example.invalid/image-60.jpg"
+    }
+  ]
 }

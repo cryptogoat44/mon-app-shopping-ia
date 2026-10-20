@@ -10,19 +10,24 @@
 //     « visual_matches » sur 4 pièces, puis « products » (erreur attendue) ; 5 crédits au plus
 //   pnpm --filter backend essai-type-recherche <pieces.json> --sonde [--malgre-page-etat] --confirmer
 //     sonde unique : 1 recherche « visual_matches », 1 crédit au plus
+//   pnpm --filter backend essai-type-recherche <pieces.json> --malgre-page-etat-apres-sonde --confirmer
+//     essai complet malgré la page d'état, seulement après une sonde réussie
 //
 // Garde-fous :
 // - aucun appel sans --confirmer ;
 // - aucun appel si la page d'état de SerpApi n'annonce pas Google Lens
-//   opérationnel, SAUF la sonde unique avec --malgre-page-etat, lancée
-//   seulement après la phrase tapée par le fondateur ; jamais l'essai complet ;
+//   opérationnel, sauf deux dérogations, chacune lancée seulement après la
+//   phrase tapée par le fondateur : la sonde unique (--malgre-page-etat), et
+//   l'essai complet (--malgre-page-etat-apres-sonde) si la DERNIÈRE sonde a
+//   réussi (au moins une proposition gardée, moins de 24 heures) ;
 // - relevé de chaque recherche (sans contenu personnel) écrit AVANT l'appel,
 //   complété après, dans docs/ (hors de Git) ;
-// - essai complet seulement : réponses de test réduites, anonymisées et
+// - essai complet seulement : réponses de test réduites, neutralisées
+//   (titres, marchands, chemins), anonymisées (images, comptes, annonces) et
 //   vérifiées (ni clé, ni adresse e-mail, ni adresse d'image temporaire, ni
 //   lien de SerpApi) avant d'être écrites dans tests/fixtures/serpapi ;
 // - arrêt net à la première panne inattendue ; images effacées du stockage et du Mac.
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,7 +37,7 @@ import { assertDevSupabaseUrl } from "./lib/dev-database.js";
 import { afficher, commeImportee, essaiLens, releverReponses, type Releve } from "./lib/essai-lens.js";
 import { imageDe, lireEtatLens, lirePiecesDe } from "./lib/essai-pieces.js";
 import type { Resultat } from "./lib/essai-photo.js";
-import { bilanFacturation, contenusInterdits, CREDITS_MAX, depensePermise, ligneLancee, ligneTerminee, planEssaiType, reponseDeTest, type EssaiType, type LigneReleve, type PlanType } from "./lib/essai-type.js";
+import { bilanFacturation, contenusInterdits, CREDITS_MAX, depensePermise, ligneLancee, ligneTerminee, planEssaiType, reponseDeTest, verdictSonde, type Derogation, type EssaiType, type LigneReleve, type PlanType, type VerdictSonde } from "./lib/essai-type.js";
 import type { Piece } from "./lib/mesure-texte.js";
 
 /** Relevés (sans contenu personnel) : dans docs/, hors de Git. */
@@ -116,12 +121,36 @@ function afficherBilan(contexte: Contexte): void {
   console.log(`Relevé, sans contenu personnel : ${contexte.fichierReleve}`);
 }
 
+/** Verdict sur la DERNIÈRE sonde (relevés « releve-sonde-… », rangés par date dans leur nom). */
+function verdictDerniereSonde(): VerdictSonde {
+  const sondes = existsSync(DOSSIER_RELEVES) ? readdirSync(DOSSIER_RELEVES).filter((nom) => /^releve-sonde-.+\.json$/.test(nom)).sort() : [];
+  const derniere = sondes.at(-1);
+  if (!derniere) return { reussie: false, raison: "aucune sonde n'a été faite" };
+  let releve: unknown = null;
+  try {
+    releve = JSON.parse(readFileSync(join(DOSSIER_RELEVES, derniere), "utf8"));
+  } catch {
+    return { reussie: false, raison: `relevé de la dernière sonde illisible (${derniere})` };
+  }
+  return verdictSonde(releve, new Date());
+}
+
+/** La dérogation demandée : une seule à la fois. */
+function derogationDemandee(): Derogation {
+  const sonde = process.argv.includes("--malgre-page-etat");
+  const apresSonde = process.argv.includes("--malgre-page-etat-apres-sonde");
+  if (sonde && apresSonde) throw new Error("Une seule dérogation à la fois. Aucun appel lancé.");
+  if (apresSonde) return { type: "apres-sonde", verdict: verdictDerniereSonde() };
+  return sonde ? { type: "sonde" } : { type: "aucune" };
+}
+
 /** Le plan annoncé ; les appels seulement avec --confirmer, et si la dépense est permise. */
-async function lancerEssai(plan: PlanType, pieces: Piece[], etat: string, malgrePageEtat: boolean): Promise<void> {
+async function lancerEssai(plan: PlanType, pieces: Piece[], etat: string, derogation: Derogation): Promise<void> {
   const etapes = planEssaiType(plan, pieces);
   console.log(plan === "sonde" ? `Sonde unique : 1 recherche « visual_matches », ${CREDITS_MAX.sonde} crédit au plus ; aucune réponse de test gardée.` : `Essai complet : ${etapes.length} appels, ${CREDITS_MAX.type} crédits SerpApi au plus (l'erreur de « products » ne devrait pas être facturée).`);
   for (const { essai } of etapes) console.log(`  ${essai.titre}`);
-  const autorisation = depensePermise(plan, etat, malgrePageEtat);
+  if (derogation.type === "apres-sonde") console.log(`Dernière sonde : ${derogation.verdict.reussie ? "réussie" : `non retenue — ${derogation.verdict.raison}`}.`);
+  const autorisation = depensePermise(plan, etat, derogation);
   if (!process.argv.includes("--confirmer")) {
     console.log(`Aucun appel lancé (ajoutez --confirmer).${autorisation.permis ? "" : ` Avec --confirmer : refusé — ${autorisation.raison}`}`);
     return;
@@ -149,19 +178,19 @@ async function lancerEssai(plan: PlanType, pieces: Piece[], etat: string, malgre
 }
 
 /** Options permises : une option mal tapée ne doit jamais retomber sur l'essai complet. */
-const OPTIONS = new Set(["--confirmer", "--sonde", "--malgre-page-etat"]);
+const OPTIONS = new Set(["--confirmer", "--sonde", "--malgre-page-etat", "--malgre-page-etat-apres-sonde"]);
 
 async function main(): Promise<void> {
   const [manifeste, ...options] = process.argv.slice(2);
   if (!manifeste || manifeste.startsWith("--")) throw new Error("Indiquez le fichier des pièces (pieces.json, hors de Git).");
   const inconnues = options.filter((option) => !OPTIONS.has(option));
-  if (inconnues.length > 0) throw new Error(`Option inconnue (${inconnues.map((o) => `« ${o} »`).join(", ")}) : seules --confirmer, --sonde et --malgre-page-etat existent. Aucun appel lancé.`);
+  if (inconnues.length > 0) throw new Error(`Option inconnue (${inconnues.map((o) => `« ${o} »`).join(", ")}) : seules ${[...OPTIONS].join(", ")} existent. Aucun appel lancé.`);
   assertDevSupabaseUrl(env.SUPABASE_URL, "apps/backend/.env (SUPABASE_URL)");
   const plan: PlanType = process.argv.includes("--sonde") ? "sonde" : "type";
   const pieces = lirePiecesDe(manifeste);
   const etat = await lireEtatLens();
   console.log(`Google Lens chez SerpApi (page d'état) : ${etat}.`);
-  await lancerEssai(plan, pieces, etat, process.argv.includes("--malgre-page-etat"));
+  await lancerEssai(plan, pieces, etat, derogationDemandee());
 }
 
 main().catch((error: unknown) => {

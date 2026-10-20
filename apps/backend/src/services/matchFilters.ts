@@ -6,8 +6,9 @@
 // tests/fixtures/serpapi).
 
 // Simples publications de réseaux sociaux : jamais un endroit où acheter la
-// pièce. "type=products" les élimine déjà la plupart du temps ; cette liste
-// s'applique en plus, après coup, pour ne pas en dépendre.
+// pièce. Depuis « visual_matches » (2026-10-21 ; l'ancien "type=products" les
+// éliminait lui-même), Google Lens en renvoie davantage : cette liste les écarte
+// après coup.
 const SOCIAL_NETWORK_DOMAINS = ["tiktok.com", "instagram.com", "youtube.com", "youtu.be", "facebook.com", "twitter.com", "x.com"];
 // Réseaux sociaux présents sous plusieurs extensions (pinterest.fr,
 // pinterest.com, pinterest.co.uk…) : reconnus par leur nom de site.
@@ -86,6 +87,17 @@ function pageKey(link: string): string {
 /** Titre sans le nom du site : « … - ZALANDO.CH » et « … - ZALANDO.FR » se valent. */
 function titleWithoutSite(title: string, domain: string): string {
   return title.toLowerCase().split(domain).join(" ").replace(/\s+/g, " ").replace(/[\s\-–—|·:]+$/u, "").trim();
+}
+
+/** Ce qui identifie le titre d'un article (titre sans le nom du site), et ce
+ * nom de site s'il figurait dans le titre. Sert à l'outil qui neutralise les
+ * réponses de test (scripts/lib/essai-type.ts) : deux titres « identiques au
+ * nom du site près » y restent identiques. */
+export function articleTitleParts(link: string, title: string): { key: string; siteInTitle: string | null } {
+  const url = parseLink(link);
+  if (!url) return { key: title.toLowerCase().replace(/\s+/g, " ").trim(), siteInTitle: null };
+  const { domain } = siteOf(url.hostname);
+  return { key: titleWithoutSite(title, domain), siteInTitle: title.toLowerCase().includes(domain) ? domain : null };
 }
 
 /** Même article chez le même marchand, sur le site d'un autre pays : même

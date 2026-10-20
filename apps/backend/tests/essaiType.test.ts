@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { withoutDuplicates } from "../src/services/matchFilters.js";
 import { PIECE } from "../scripts/lib/mesure-texte.js";
 import {
   bilanFacturation,
@@ -12,12 +13,14 @@ import {
   PIECES_ESSAI_TYPE,
   planEssaiType,
   reponseDeTest,
+  verdictSonde,
+  type VerdictSonde,
 } from "../scripts/lib/essai-type.js";
 
 // Essai du type de recherche de Google Lens (décisions du fondateur,
-// 2026-10-20) : « visual_matches » sur les 4 pièces choisies, puis « products »
-// (erreur attendue) ; sonde unique ; relevé sans contenu personnel ; réponses de
-// test anonymisées et vérifiées. Aucun appel dans ces tests.
+// 2026-10-20 et 2026-10-21) : plans, dérogations, relevé sans contenu
+// personnel, réponses de test neutralisées, anonymisées et vérifiées (dépôt
+// public). Aucun appel dans ces tests.
 const piece = (nom: string) => PIECE.parse({ nom, texte: "pièce d'essai", image: `/tmp/${nom}.jpg`, zone: { x: 0, y: 0.5, width: 1, height: 0.4 } });
 const TOUTES = ["maillot-nike", "veste-bleu-marine", "tshirt-blanc", "pull-blanc", "pull-noir"].map(piece);
 
@@ -47,19 +50,52 @@ describe("plans de l'essai du type de recherche", () => {
   });
 });
 
-describe("dépense permise", () => {
-  it("par défaut, seulement si Google Lens est annoncé opérationnel", () => {
-    expect(depensePermise("type", "operational", false)).toEqual({ permis: true });
-    expect(depensePermise("type", "degraded_performance", false).permis).toBe(false);
-    expect(depensePermise("type", "illisible", false).permis).toBe(false);
-    expect(depensePermise("sonde", "degraded_performance", false).permis).toBe(false);
+describe("dépense permise : la règle et ses deux dérogations", () => {
+  const REUSSIE: VerdictSonde = { reussie: true };
+  const RATEE: VerdictSonde = { reussie: false, raison: "la dernière sonde n'a donné aucune proposition gardée par Spotto" };
+
+  it("la règle : seulement si Google Lens est annoncé opérationnel", () => {
+    expect(depensePermise("type", "operational", { type: "aucune" })).toEqual({ permis: true });
+    expect(depensePermise("type", "degraded_performance", { type: "aucune" }).permis).toBe(false);
+    expect(depensePermise("type", "illisible", { type: "aucune" }).permis).toBe(false);
+    expect(depensePermise("sonde", "degraded_performance", { type: "aucune" }).permis).toBe(false);
   });
 
-  it("malgré la page d'état : la sonde unique seulement, jamais l'essai complet (même opérationnel)", () => {
-    expect(depensePermise("sonde", "degraded_performance", true)).toEqual({ permis: true });
-    expect(depensePermise("sonde", "illisible", true)).toEqual({ permis: true });
-    expect(depensePermise("type", "degraded_performance", true)).toMatchObject({ permis: false, raison: expect.stringMatching(/sonde unique/) });
-    expect(depensePermise("type", "operational", true).permis).toBe(false);
+  it("première dérogation : la sonde unique seulement, jamais l'essai complet (même opérationnel)", () => {
+    expect(depensePermise("sonde", "degraded_performance", { type: "sonde" })).toEqual({ permis: true });
+    expect(depensePermise("sonde", "illisible", { type: "sonde" })).toEqual({ permis: true });
+    expect(depensePermise("type", "degraded_performance", { type: "sonde" })).toMatchObject({ permis: false, raison: expect.stringMatching(/sonde unique/) });
+    expect(depensePermise("type", "operational", { type: "sonde" }).permis).toBe(false);
+  });
+
+  it("seconde dérogation : l'essai complet seulement, et seulement après une sonde réussie", () => {
+    expect(depensePermise("type", "degraded_performance", { type: "apres-sonde", verdict: REUSSIE })).toEqual({ permis: true });
+    expect(depensePermise("type", "degraded_performance", { type: "apres-sonde", verdict: RATEE })).toMatchObject({ permis: false, raison: expect.stringMatching(/aucune proposition gardée/) });
+    expect(depensePermise("sonde", "degraded_performance", { type: "apres-sonde", verdict: REUSSIE })).toMatchObject({ permis: false, raison: expect.stringMatching(/essai complet/) });
+  });
+});
+
+describe("verdict sur la dernière sonde", () => {
+  const maintenant = new Date("2026-10-21T12:00:00Z");
+  const ligne = { type: "visual_matches", lanceeLe: "2026-10-21T08:30:05.000Z", issue: "reussie", code: 200, statutSerpApi: "Success", gardees: 12, recues: 60 };
+
+  it("réussie : une recherche visual_matches, code 200, « Success », au moins une proposition gardée, moins de 24 heures", () => {
+    expect(verdictSonde([ligne], maintenant)).toEqual({ reussie: true });
+  });
+
+  it("non réussie : vide, erreur, panne, ou aucune proposition gardée (que des réseaux sociaux, par exemple)", () => {
+    expect(verdictSonde([{ ...ligne, issue: "vide", gardees: 0, recues: 0 }], maintenant).reussie).toBe(false);
+    expect(verdictSonde([{ ...ligne, issue: "erreur", code: 400, statutSerpApi: null, gardees: null }], maintenant).reussie).toBe(false);
+    expect(verdictSonde([{ ...ligne, issue: "panne", code: null, statutSerpApi: null, gardees: null }], maintenant).reussie).toBe(false);
+    expect(verdictSonde([{ ...ligne, gardees: 0 }], maintenant)).toMatchObject({ reussie: false, raison: expect.stringMatching(/aucune proposition gardée/) });
+  });
+
+  it("non retenue : plus de 24 heures, plus d'une recherche, autre type, relevé illisible", () => {
+    expect(verdictSonde([{ ...ligne, lanceeLe: "2026-10-20T11:00:00.000Z" }], maintenant)).toMatchObject({ reussie: false, raison: expect.stringMatching(/24 heures/) });
+    expect(verdictSonde([ligne, ligne], maintenant).reussie).toBe(false);
+    expect(verdictSonde([{ ...ligne, type: "products" }], maintenant).reussie).toBe(false);
+    expect(verdictSonde({ pas: "une liste" }, maintenant).reussie).toBe(false);
+    expect(verdictSonde([{ ...ligne, lanceeLe: "hier" }], maintenant).reussie).toBe(false);
   });
 });
 
@@ -67,8 +103,8 @@ describe("relevé de chaque recherche", () => {
   const [veste, , , , products] = essaisType(TOUTES);
   const lancee = ligneLancee(veste!, new Date("2026-10-21T08:30:05Z"));
 
-  it("écrit avant l'appel : en cours, heure de Paris, rien d'autre", () => {
-    expect(lancee).toMatchObject({ numero: 1, piece: "veste-bleu-marine", type: "visual_matches", lancee: "10:30:05", issue: "en_cours", code: null, factureeSelonSerpApi: "inconnu", recues: null });
+  it("écrit avant l'appel : en cours, heure de Paris et instant exact, rien d'autre", () => {
+    expect(lancee).toMatchObject({ numero: 1, piece: "veste-bleu-marine", type: "visual_matches", lancee: "10:30:05", lanceeLe: "2026-10-21T08:30:05.000Z", issue: "en_cours", code: null, factureeSelonSerpApi: "inconnu", recues: null });
   });
 
   it("facturée d'après SerpApi : « Success » oui ; code d'erreur ou « Error » non ; sans réponse, inconnu", () => {
@@ -111,14 +147,14 @@ describe("relevé de chaque recherche", () => {
   });
 });
 
-describe("réponses de test : réduites, anonymisées, vérifiées", () => {
+describe("réponses de test : réduites, neutralisées, anonymisées, vérifiées", () => {
   const BRUT = {
     search_metadata: { id: "6a1b2c", status: "Success", json_endpoint: "https://serpapi.com/searches/6a1b2c/x.json" },
     search_parameters: { engine: "google_lens", type: "visual_matches", url: "https://projet.supabase.co/storage/v1/object/sign/screenshots/essai.jpg?token=jeton-secret", api_key: "cle-secrete" },
     search_information: { images_results_state: "Results for exact image", autre: "?" },
     visual_matches: [
-      { position: 1, title: "Veste bleu marine", link: "https://www.boutique.fr/veste", source: "Boutique", source_icon: "https://icone", thumbnail: "https://encrypted-tbn0.gstatic.com/images?q=1", image: "https://www.boutique.fr/veste.jpg", price: { value: "49 €", extracted_value: 49, currency: "EUR" }, in_stock: true, rating: 4.5, exact_matches: true, serpapi_exact_matches_link: "https://serpapi.com/search.json?engine=google_lens&url=https%3A%2F%2Fprojet.supabase.co%2Fstorage" },
-      { position: 2, title: "@marie.dupont porte sa veste", link: "https://www.tiktok.com/@marie.dupont/video/123", source: "TikTok", thumbnail: "https://p16.tiktokcdn.com/x.jpg" },
+      { position: 1, title: "Veste bleu marine", link: "https://www.boutique.fr/vestes/veste-bleu-marine?couleur=bleu#avis", source: "Boutique", source_icon: "https://icone", thumbnail: "https://encrypted-tbn0.gstatic.com/images?q=1", image: "https://www.boutique.fr/veste.jpg", price: { value: "49 €", extracted_value: 49, currency: "EUR" }, in_stock: true, rating: 4.5, exact_matches: true, serpapi_exact_matches_link: "https://serpapi.com/search.json?engine=google_lens&url=https%3A%2F%2Fprojet.supabase.co%2Fstorage" },
+      { position: 2, title: "@prenom.nom porte sa veste", link: "https://www.tiktok.com/@prenom.nom/video/123", source: "TikTok", thumbnail: "https://p16.tiktokcdn.com/x.jpg" },
       { position: 3, title: "Veste bleue taille M", link: "https://www.leboncoin.fr/ad/vetements/2876543210", source: "Leboncoin", thumbnail: "https://img.leboncoin.fr/x.jpg", image: "https://img.leboncoin.fr/y.jpg" },
       { position: 4, title: "Veste", link: "https://www.vinted.fr/items/123456-veste", source: "Vinted" },
     ],
@@ -126,7 +162,7 @@ describe("réponses de test : réduites, anonymisées, vérifiées", () => {
     ai_overview: { page_token: "jeton" },
   };
 
-  it("forme d'une réponse de SerpApi : statut, état de Google, propositions réduites aux champs lus, autres rubriques vides à leur taille", () => {
+  it("forme d'une réponse de SerpApi ; titres, marchands et chemins neutres ; prix, domaine et paramètres gardés", () => {
     const test = reponseDeTest(BRUT)!;
     expect(test.search_metadata).toEqual({ status: "Success" });
     expect(test.search_information).toEqual({ images_results_state: "Results for exact image" });
@@ -134,11 +170,31 @@ describe("réponses de test : réduites, anonymisées, vérifiées", () => {
     expect(test.ai_overview).toEqual({});
     expect(test).not.toHaveProperty("search_parameters");
     expect(test.visual_matches).toEqual([
-      { position: 1, title: "Veste bleu marine", link: "https://www.boutique.fr/veste", source: "Boutique", thumbnail: "https://example.invalid/vignette-1.jpg", image: "https://example.invalid/image-1.jpg", price: { value: "49 €", extracted_value: 49, currency: "EUR" }, in_stock: true },
-      { position: 2, title: "Publication anonymisée", link: "https://www.tiktok.com/compte-anonyme/0000000002", source: "TikTok", thumbnail: "https://example.invalid/vignette-2.jpg" },
-      { position: 3, title: "Veste bleue taille M", link: "https://www.leboncoin.fr/annonce/0000000003", source: "Leboncoin", thumbnail: "https://example.invalid/vignette-3.jpg", image: "https://example.invalid/image-3.jpg" },
-      { position: 4, title: "Veste", link: "https://www.vinted.fr/annonce/0000000004", source: "Vinted" },
+      { position: 1, title: "Produit 1", link: "https://www.boutique.fr/produit-1?couleur=bleu", source: "Marchand 1", thumbnail: "https://example.invalid/vignette-1.jpg", image: "https://example.invalid/image-1.jpg", price: { value: "49 €", extracted_value: 49, currency: "EUR" }, in_stock: true },
+      { position: 2, title: "Publication anonymisée", link: "https://www.tiktok.com/compte-anonyme/0000000002", source: "Marchand 2", thumbnail: "https://example.invalid/vignette-2.jpg" },
+      { position: 3, title: "Produit 3", link: "https://www.leboncoin.fr/annonce/0000000003", source: "Marchand 3", thumbnail: "https://example.invalid/vignette-3.jpg", image: "https://example.invalid/image-3.jpg" },
+      { position: 4, title: "Produit 4", link: "https://www.vinted.fr/annonce/0000000004", source: "Marchand 4" },
     ]);
+  });
+
+  it("les relations dont dépendent les filtres restent vraies : titres égaux (au nom du site près), chemins égaux, doublons", () => {
+    const brut = {
+      visual_matches: [
+        { position: 1, title: "Veste daim - ZALANDO.CH", link: "https://www.zalando.ch/veste-daim.html", source: "Zalando" },
+        { position: 2, title: "Camellia veste", link: "https://fr.shein.com/camellia-p-1.html", source: "Shein" },
+        { position: 3, title: "Camellia veste", link: "https://www.na-kd.com/fr/camellia", source: "NA-KD" },
+        { position: 4, title: "Veste daim - ZALANDO.FR", link: "https://www.zalando.fr/veste-daim.html", source: "Zalando" },
+        { position: 5, title: "Autre veste", link: "https://www.zalando.fr/Veste-Daim.html", source: "Zalando" },
+      ],
+    };
+    const test = reponseDeTest(brut)!.visual_matches as { title: string; link: string; source: string }[];
+    expect(test.map((m) => m.title)).toEqual(["Produit 1 - ZALANDO.CH", "Produit 2", "Produit 2", "Produit 1 - ZALANDO.FR", "Produit 3"]);
+    expect(test.map((m) => m.source)).toEqual(["Marchand 1", "Marchand 2", "Marchand 3", "Marchand 1", "Marchand 1"]);
+    expect(test[0]!.link.replace("zalando.ch", "zalando.fr")).toBe(test[3]!.link);
+    expect(test[4]!.link).not.toBe(test[3]!.link);
+    // Le filtre des doublons garde la même décision avant et après neutralisation.
+    const garder = (liste: { title: string; link: string }[]) => withoutDuplicates(liste, "fr").map((m) => liste.indexOf(m));
+    expect(garder(test)).toEqual(garder(brut.visual_matches));
   });
 
   it("le résultat ne contient plus rien à protéger, alors que la réponse brute en contenait", () => {

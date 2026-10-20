@@ -1,12 +1,13 @@
-// Essai du type de recherche de Google Lens (décisions du fondateur, 2026-10-20).
-// SerpApi a abandonné « products » le 2026-10-09 ; « visual_matches » renvoie
-// les mêmes champs (documentation de SerpApi, lue le 2026-10-20). Logique pure,
-// testée (tests/essaiType.test.ts) : plans, autorisation de dépenser, relevé de
-// chaque recherche (sans contenu personnel), réponses de test réduites,
-// anonymisées et vérifiées.
+// Essai du type de recherche de Google Lens (décisions du fondateur, 2026-10-20
+// et 2026-10-21). SerpApi a abandonné « products » le 2026-10-09 ;
+// « visual_matches » renvoie les mêmes champs (documentation de SerpApi, lue le
+// 2026-10-20). Logique pure, testée (tests/essaiType.test.ts) : plans,
+// autorisation de dépenser (et ses deux dérogations), relevé de chaque
+// recherche (sans contenu personnel), réponses de test réduites, neutralisées,
+// anonymisées et vérifiées (dépôt public).
 import { z } from "zod";
 import { DEFAULT_LOCALE, type LensSettings } from "../../src/services/lensSettings.js";
-import { exclusionReason } from "../../src/services/matchFilters.js";
+import { articleTitleParts, exclusionReason } from "../../src/services/matchFilters.js";
 import { structureReponse, type Essai, type Structure } from "./essai-photo.js";
 import type { Piece } from "./mesure-texte.js";
 
@@ -54,14 +55,54 @@ export function planEssaiType(plan: PlanType, pieces: readonly Piece[]): EssaiTy
   return plan === "sonde" ? [rechercheVisuelle(pieceNommee(pieces, PIECES_ESSAI_TYPE[0]), 1)] : essaisType(pieces);
 }
 
-/** Dépense permise ? Par défaut, seulement si la page d'état de SerpApi annonce
- * Google Lens opérationnel. Seule exception : la sonde unique, avec
- * « --malgre-page-etat », lancée après la phrase tapée par le fondateur — jamais
- * l'essai complet. */
-export function depensePermise(plan: PlanType, etat: string, malgrePageEtat: boolean): { permis: true } | { permis: false; raison: string } {
-  if (malgrePageEtat && plan !== "sonde") return { permis: false, raison: "« --malgre-page-etat » ne vaut que pour la sonde unique, jamais pour l'essai complet." };
-  if (etat === "operational" || malgrePageEtat) return { permis: true };
-  return { permis: false, raison: `SerpApi n'annonce pas Google Lens opérationnel (« ${etat} ») : aucun crédit dépensé.` };
+// ---- Autorisation de dépenser ----
+
+/** Une sonde « réussie » ne vaut que 24 heures : l'état de Google Lens change. */
+export const VALIDITE_SONDE_MS = 24 * 60 * 60 * 1000;
+export type VerdictSonde = { reussie: true } | { reussie: false; raison: string };
+
+const LIGNE_DE_SONDE = z.object({
+  type: z.string(),
+  lanceeLe: z.string().datetime(),
+  issue: z.string(),
+  code: z.number().nullable(),
+  statutSerpApi: z.string().nullable(),
+  gardees: z.number().nullable(),
+});
+
+/** Sonde réussie : son relevé a une seule recherche « visual_matches », réussie
+ * (code 200, statut « Success »), avec au moins UNE proposition gardée par
+ * Spotto (donc qu'une personne verrait), lancée il y a moins de 24 heures. */
+export function verdictSonde(releve: unknown, maintenant: Date): VerdictSonde {
+  const lignes = z.array(LIGNE_DE_SONDE).safeParse(releve);
+  if (!lignes.success || lignes.data.length !== 1) return { reussie: false, raison: "relevé de sonde illisible, ou avec plus d'une recherche" };
+  const ligne = lignes.data[0]!;
+  if (ligne.type !== "visual_matches" || ligne.issue !== "reussie" || ligne.code !== 200 || ligne.statutSerpApi !== "Success") {
+    return { reussie: false, raison: `la dernière sonde n'a pas réussi (issue « ${ligne.issue} », code ${ligne.code ?? "—"})` };
+  }
+  if ((ligne.gardees ?? 0) < 1) return { reussie: false, raison: "la dernière sonde n'a donné aucune proposition gardée par Spotto" };
+  const age = maintenant.getTime() - Date.parse(ligne.lanceeLe);
+  if (!(age >= 0 && age <= VALIDITE_SONDE_MS)) return { reussie: false, raison: "la dernière sonde date de plus de 24 heures : refaites une sonde" };
+  return { reussie: true };
+}
+
+/** « aucune » : la règle ; « sonde » : la sonde unique malgré la page d'état ;
+ * « apres-sonde » : l'essai complet malgré la page d'état, après une sonde réussie. */
+export type Derogation = { type: "aucune" } | { type: "sonde" } | { type: "apres-sonde"; verdict: VerdictSonde };
+type Autorisation = { permis: true } | { permis: false; raison: string };
+
+const refus = (raison: string): Autorisation => ({ permis: false, raison });
+
+/** Dépense permise ? La règle : seulement si la page d'état de SerpApi annonce
+ * Google Lens opérationnel. Chaque dérogation, lancée seulement après la phrase
+ * tapée par le fondateur, ne vaut que pour son plan ; celle de l'essai complet
+ * exige en plus une sonde réussie. */
+export function depensePermise(plan: PlanType, etat: string, derogation: Derogation): Autorisation {
+  if (derogation.type === "sonde" && plan !== "sonde") return refus("« --malgre-page-etat » ne vaut que pour la sonde unique, jamais pour l'essai complet.");
+  if (derogation.type === "apres-sonde" && plan !== "type") return refus("« --malgre-page-etat-apres-sonde » ne vaut que pour l'essai complet.");
+  if (etat === "operational" || derogation.type === "sonde") return { permis: true };
+  if (derogation.type === "apres-sonde") return derogation.verdict.reussie ? { permis: true } : refus(`essai complet refusé : ${derogation.verdict.raison}.`);
+  return refus(`SerpApi n'annonce pas Google Lens opérationnel (« ${etat} ») : aucun crédit dépensé.`);
 }
 
 // ---- Relevé de chaque recherche (sans contenu personnel) ----
@@ -76,8 +117,9 @@ export interface LigneReleve {
   numero: number;
   piece: string;
   type: LensSettings["type"];
-  /** Heure de Paris du lancement. */
+  /** Heure de Paris du lancement, et l'instant exact (pour la validité d'une sonde). */
   lancee: string;
+  lanceeLe: string;
   issue: Issue;
   /** Code de réponse de SerpApi (200, 400…). */
   code: number | null;
@@ -97,7 +139,10 @@ export interface LigneReleve {
 const HEURE_DE_PARIS = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
 export function ligneLancee({ piece, essai }: EssaiType, lancee: Date): LigneReleve {
-  return { numero: essai.numero, piece: piece.nom, type: essai.reglages.type, lancee: HEURE_DE_PARIS.format(lancee), issue: "en_cours", code: null, statutSerpApi: null, factureeSelonSerpApi: "inconnu", recues: null, gardees: null, avecPrix: null, rubriques: [], secondes: null, message: null };
+  return {
+    numero: essai.numero, piece: piece.nom, type: essai.reglages.type, lancee: HEURE_DE_PARIS.format(lancee), lanceeLe: lancee.toISOString(),
+    issue: "en_cours", code: null, statutSerpApi: null, factureeSelonSerpApi: "inconnu", recues: null, gardees: null, avecPrix: null, rubriques: [], secondes: null, message: null,
+  };
 }
 
 export function factureeSelonSerpApi(code: number | null, statut: string | null): Facturee {
@@ -136,7 +181,14 @@ export function bilanFacturation(lignes: readonly LigneReleve[]): Record<Facture
   return bilan;
 }
 
-// ---- Réponses de test : réduites, anonymisées, vérifiées ----
+// ---- Réponses de test : réduites, neutralisées, anonymisées, vérifiées ----
+// Le dépôt est public (décision du fondateur, 2026-10-21) : titres, noms de
+// marchands, chemins des liens et images sont remplacés par des valeurs
+// neutres ou fictives. Restent tels quels les éléments dont dépendent les tests
+// et la mesure : positions, prix et devises, domaines et paramètres des liens,
+// rubriques, statut, état de Google et message d'erreur de SerpApi. Les
+// relations sont gardées : deux titres identiques (au nom du site près) ou deux
+// chemins identiques reçoivent la même valeur neutre.
 
 const OBJET = z.record(z.string(), z.unknown());
 /** Champs d'une proposition lus par le serveur, comme dans les réponses enregistrées du 24 septembre. */
@@ -144,31 +196,61 @@ const CHAMPS_LUS = ["position", "title", "link", "source", "thumbnail", "image",
 /** Sites d'annonces de particuliers : le lien de l'annonce est anonymisé (comme Leboncoin en septembre). */
 const ANNONCES_DE_PARTICULIERS = ["leboncoin", "vinted", "depop", "vestiairecollective"];
 
-function hoteDe(lien: string): string | null {
-  try {
-    return new URL(lien).hostname.toLowerCase();
-  } catch {
-    return null;
-  }
-}
-
 function numeroFictif(n: number): string {
   return String(n).padStart(10, "0");
 }
 
-/** Une proposition réduite aux champs lus ; images fictives ; comptes de réseaux
- * sociaux (lien et titre) et annonces de particuliers (lien) anonymisés. */
-function propositionDeTest(proposition: Record<string, unknown>, index: number): Record<string, unknown> {
+/** Valeurs neutres d'UNE réponse : une même valeur d'origine reçoit toujours la même valeur neutre. */
+function neutraliseur() {
+  const numeros = { titres: new Map<string, number>(), marchands: new Map<string, number>(), chemins: new Map<string, number>() };
+  const numero = (carte: Map<string, number>, cle: string): number => {
+    if (!carte.has(cle)) carte.set(cle, carte.size + 1);
+    return carte.get(cle)!;
+  };
+  return {
+    titre(lien: string, titre: string): string {
+      const { key, siteInTitle } = articleTitleParts(lien, titre);
+      const neutre = `Produit ${numero(numeros.titres, key)}`;
+      return siteInTitle ? `${neutre} - ${siteInTitle.toUpperCase()}` : neutre;
+    },
+    marchand: (nom: string): string => `Marchand ${numero(numeros.marchands, nom.trim().toLowerCase())}`,
+    /** Domaine et paramètres gardés ; chemin neutre ; fragment « # » retiré. Deux
+     * chemins sont « les mêmes » exactement comme pour le filtre des doublons
+     * (barre finale près, majuscules comprises). */
+    lien(lien: string): string {
+      try {
+        const url = new URL(lien);
+        const chemin = url.pathname.length > 1 ? url.pathname.replace(/\/$/, "") : url.pathname;
+        return `${url.protocol}//${url.host}/produit-${numero(numeros.chemins, chemin)}${url.search}`;
+      } catch {
+        return "https://example.invalid/lien-illisible";
+      }
+    },
+  };
+}
+
+type Neutraliseur = ReturnType<typeof neutraliseur>;
+
+/** Une proposition réduite aux champs lus ; titre, marchand et chemin neutres ;
+ * images fictives ; comptes de réseaux sociaux et annonces de particuliers anonymisés. */
+function propositionDeTest(proposition: Record<string, unknown>, index: number, neutre: Neutraliseur): Record<string, unknown> {
   const n = index + 1;
   const reduite: Record<string, unknown> = Object.fromEntries(CHAMPS_LUS.filter((champ) => champ in proposition).map((champ) => [champ, proposition[champ]]));
+  const lien = typeof reduite.link === "string" ? reduite.link : null;
+  if (typeof reduite.title === "string") reduite.title = neutre.titre(lien ?? "", reduite.title);
+  if (typeof reduite.source === "string") reduite.source = neutre.marchand(reduite.source);
   if ("thumbnail" in reduite) reduite.thumbnail = `https://example.invalid/vignette-${n}.jpg`;
   if ("image" in reduite) reduite.image = `https://example.invalid/image-${n}.jpg`;
-  const lien = typeof reduite.link === "string" ? reduite.link : null;
-  const hote = lien ? hoteDe(lien) : null;
-  if (!lien || !hote) return reduite;
+  if (!lien) return reduite;
+  let hote: string;
+  try {
+    hote = new URL(lien).host.toLowerCase();
+  } catch {
+    return { ...reduite, link: neutre.lien(lien) };
+  }
   if (exclusionReason(lien) === "social") return { ...reduite, link: `https://${hote}/compte-anonyme/${numeroFictif(n)}`, title: "Publication anonymisée" };
   if (ANNONCES_DE_PARTICULIERS.some((nom) => hote.split(".").includes(nom))) return { ...reduite, link: `https://${hote}/annonce/${numeroFictif(n)}` };
-  return reduite;
+  return { ...reduite, link: neutre.lien(lien) };
 }
 
 /** Réponse de test, de la forme d'une réponse de SerpApi : le statut de la
@@ -188,7 +270,8 @@ export function reponseDeTest(brut: unknown): Record<string, unknown> | null {
     sortie[cle] = Array.isArray(valeur) ? valeur.map(() => ({})) : {};
   }
   const propositions = z.array(OBJET).safeParse(lu.data.visual_matches);
-  if (propositions.success) sortie.visual_matches = propositions.data.map(propositionDeTest);
+  const neutre = neutraliseur();
+  if (propositions.success) sortie.visual_matches = propositions.data.map((proposition, index) => propositionDeTest(proposition, index, neutre));
   if (typeof lu.data.error === "string") sortie.error = lu.data.error;
   return sortie;
 }
