@@ -51,7 +51,7 @@ describe("searchProductsByImageUrl", () => {
     safeFetchMock.mockResolvedValueOnce(jsonResponse({ visual_matches: [PRODUCT_MATCH] }));
 
     const fastify = fakeFastify();
-    const matches = await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg");
+    const { matches } = await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg");
 
     expect(safeFetchMock).toHaveBeenCalledOnce();
     const calledUrl = new URL(safeFetchMock.mock.calls[0]![0] as string);
@@ -91,7 +91,7 @@ describe("searchProductsByImageUrl", () => {
     safeFetchMock.mockResolvedValueOnce(jsonResponse({ visual_matches: [] }));
 
     const fastify = fakeFastify();
-    const matches = await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg");
+    const { matches } = await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg");
 
     expect(safeFetchMock).toHaveBeenCalledOnce();
     expect(matches).toEqual([]);
@@ -101,7 +101,7 @@ describe("searchProductsByImageUrl", () => {
     safeFetchMock.mockResolvedValueOnce(jsonResponse({ error: "Google Lens hasn't returned any results for this query." }));
 
     const fastify = fakeFastify();
-    await expect(searchProductsByImageUrl(fastify, "https://example.com/photo.jpg")).resolves.toEqual([]);
+    expect((await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg")).matches).toEqual([]);
   });
 
   it("relève une vraie erreur de SerpApi", async () => {
@@ -117,7 +117,7 @@ describe("searchProductsByImageUrl", () => {
     );
 
     const fastify = fakeFastify();
-    const matches = await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg");
+    const { matches } = await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg");
 
     expect(matches[0]!.imageHdUrl).toBe("https://marchand.example/hd.jpg");
     expect(matches[0]!.imageUrl).toBe(PRODUCT_MATCH.thumbnail);
@@ -128,7 +128,7 @@ describe("searchProductsByImageUrl", () => {
     safeFetchMock.mockResolvedValueOnce(jsonResponse({ visual_matches: [SOCIAL_MATCH, PRODUCT_MATCH] }));
 
     const fastify = fakeFastify();
-    const matches = await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg");
+    const { matches } = await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg");
 
     expect(matches).toHaveLength(1);
     expect(matches[0]!.merchantUrl).toBe(PRODUCT_MATCH.link);
@@ -138,7 +138,7 @@ describe("searchProductsByImageUrl", () => {
     safeFetchMock.mockResolvedValueOnce(jsonResponse({ visual_matches: [SOCIAL_MATCH, { ...PRODUCT_MATCH, position: 5 }] }));
 
     const fastify = fakeFastify();
-    const matches = await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg");
+    const { matches } = await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg");
 
     expect(matches.map((m) => m.rank)).toEqual([1]);
   });
@@ -148,7 +148,7 @@ describe("searchProductsByImageUrl", () => {
     safeFetchMock.mockResolvedValueOnce(jsonResponse({ visual_matches: many }));
 
     const fastify = fakeFastify();
-    expect(await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg")).toHaveLength(30);
+    expect((await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg")).matches).toHaveLength(30);
   });
 
   it("retire les doublons (même page produit), en gardant la première", async () => {
@@ -163,7 +163,7 @@ describe("searchProductsByImageUrl", () => {
       })
     );
 
-    const matches = await searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg");
+    const { matches } = await searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg");
     expect(matches.map((m) => [m.rank, m.productName])).toEqual([
       [1, "Première"],
       [2, "Autre"],
@@ -175,8 +175,20 @@ describe("searchProductsByImageUrl", () => {
     safeFetchMock.mockResolvedValueOnce(
       jsonResponse({ visual_matches: [{ ...PRODUCT_MATCH, title: 42 }, { ...PRODUCT_MATCH, position: 2, price: { extracted_value: "beaucoup" } }, { ...PRODUCT_MATCH, position: 3, link: "https://marchand.example/bon" }] })
     );
-    const matches = await searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg");
+    const { matches } = await searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg");
     expect(matches.map((m) => m.merchantUrl)).toEqual(["https://marchand.example/bon"]);
+  });
+
+  // Mesure (fiabilité des résultats) : chaque panne est rangée avec son type.
+  it("panne typée : délai dépassé, SerpApi en erreur ou injoignable, réponse illisible", async () => {
+    safeFetchMock.mockRejectedValueOnce(Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" }));
+    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toMatchObject({ kind: "timeout" });
+    safeFetchMock.mockRejectedValueOnce(new TypeError("fetch failed"));
+    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toMatchObject({ kind: "serpapi_error" });
+    safeFetchMock.mockResolvedValueOnce(new Response("{}", { status: 503 }));
+    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toMatchObject({ kind: "serpapi_error" });
+    safeFetchMock.mockResolvedValueOnce(new Response("<html>erreur</html>", { status: 200 }));
+    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toMatchObject({ kind: "unreadable_response" });
   });
 
   it("réponse illisible : panne technique, jamais « aucune pièce »", async () => {

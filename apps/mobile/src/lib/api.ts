@@ -11,6 +11,8 @@ import type {
   CropRect,
   DeleteAccountRequest,
   FeedPage,
+  MatchFeedbackReason,
+  MatchFeedbackRequest,
   MerchantLinkContext,
   ModerationActionRequest,
   ModerationActionType,
@@ -24,6 +26,7 @@ import type {
   ProductSearch,
   PublicProfile,
   ReactToPostResponse,
+  RemoveImageRequest,
   TaggedPieceInput,
   UpdateMeRequest,
   UpdateLocaleRequest,
@@ -90,8 +93,9 @@ async function authorizedFetch(path: string, init?: RequestInit): Promise<Respon
   return response;
 }
 
-export async function fetchMyProfile(): Promise<Profile> {
-  const response = await authorizedFetch("/api/me");
+/** `signal` : pour abandonner un essai resté sans réponse (lib/retry.ts). */
+export async function fetchMyProfile(signal?: AbortSignal): Promise<Profile> {
+  const response = await authorizedFetch("/api/me", signal ? { signal } : undefined);
   return response.json();
 }
 
@@ -426,10 +430,29 @@ export async function applyModerationDecision(payload: ModerationActionRequest):
   track("moderation_decision", { decision: payload.action, target_type: payload.targetType });
 }
 
+/** Retire l'image copiée d'une publication « envie » ou d'une pièce envoyée
+ * (lot 5, partie B) : le serveur efface d'abord le fichier, puis enregistre
+ * la décision ; définitif. */
+export async function removeCopiedImage(payload: RemoveImageRequest): Promise<void> {
+  await authorizedFetch("/api/admin/moderation/remove-image", { method: "POST", body: JSON.stringify(payload) });
+  track("moderation_decision", { decision: "remove_image", target_type: payload.targetType });
+}
+
 /** Annule un masquage (`hide`) ou une suspension (`suspend`) encore en vigueur. */
 export async function undoModerationDecision(actionId: string, undone: Extract<ModerationActionType, "hide" | "suspend">): Promise<void> {
   await authorizedFetch(`/api/admin/moderation/actions/${encodeURIComponent(actionId)}/undo`, { method: "POST", body: JSON.stringify({}) });
   track("moderation_undone", { decision: undone });
+}
+
+/** Bouton « Résultat incohérent » : seuls l'identifiant de la proposition et
+ * le motif partent (ni texte libre, ni image). */
+export async function reportInconsistentResult(matchId: string, reason: MatchFeedbackReason): Promise<void> {
+  const body: MatchFeedbackRequest = { reason };
+  await authorizedFetch(`/api/product-matches/${encodeURIComponent(matchId)}/feedback`, { method: "POST", body: JSON.stringify(body) });
+}
+
+export async function withdrawInconsistentReport(matchId: string): Promise<void> {
+  await authorizedFetch(`/api/product-matches/${encodeURIComponent(matchId)}/feedback`, { method: "DELETE" });
 }
 
 export async function reportContent(payload: CreateReportRequest): Promise<void> {

@@ -58,6 +58,7 @@ function search(id: string, matches: number): ProductSearch {
     merchantUrl: "https://example.com/v",
     imageHdUrl: null,
     affiliateUrl: "https://example.com/v",
+    feedbackReason: null,
   };
   return {
     id,

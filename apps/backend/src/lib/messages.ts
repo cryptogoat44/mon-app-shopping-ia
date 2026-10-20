@@ -45,6 +45,14 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Ce contenu est déjà masqué.": "This content is already hidden.",
   "Ces signalements ont déjà été traités.": "These reports have already been handled.",
   "Cette décision a déjà été annulée.": "This decision has already been reversed.",
+  // Retrait d'une image copiée (lot 5, partie B).
+  "Cette image a été publiée par la personne elle-même : utilisez « Masquer ».": "This image was posted by the person themselves: use “Hide” instead.",
+  "L'image a déjà été retirée.": "The image has already been removed.",
+  "Cette image sert aussi à un autre contenu : rien n'a été effacé ni changé. Signalez ce cas à l'équipe technique.":
+    "This image is also used by other content: nothing was deleted or changed. Please report this case to the technical team.",
+  "L'image n'a pas pu être effacée du stockage : rien n'a été changé. Réessayez dans un instant.":
+    "The image couldn't be deleted from storage: nothing was changed. Please try again in a moment.",
+  "Le retrait d'une image ne s'annule pas : le fichier a été effacé.": "Removing an image can't be undone: the file has been deleted.",
   "Commentaire introuvable.": "Comment not found.",
   "Contenu introuvable.": "Content not found.",
   "Décision invalide.": "Invalid decision.",
@@ -72,6 +80,13 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "La suppression a échoué.": "Deletion failed.",
   // Suppression de son compte (lot 5) : mot de confirmation, compte administrateur.
   "Pour confirmer la suppression, tapez le mot demandé.": "To confirm the deletion, type the requested word.",
+  // Bouton « Résultat incohérent » (fiabilité des résultats, 2026-10-15).
+  "Proposition introuvable.": "Result not found.",
+  "Motif de signalement invalide.": "Invalid report reason.",
+  "Vous avez atteint la limite de signalements pour aujourd'hui. Merci de votre aide : vous pourrez en envoyer d'autres demain.":
+    "You've reached today's limit of reports. Thank you for your help: you can send more tomorrow.",
+  "Le signalement n'a pas pu être enregistré. Réessayez.": "The report couldn't be saved. Please try again.",
+  "Le signalement n'a pas pu être retiré. Réessayez.": "The report couldn't be withdrawn. Please try again.",
   "Ce compte est administrateur et ne peut pas être supprimé tant qu'il a ce rôle. Retirez d'abord le rôle d'administrateur, puis recommencez.":
     "This account is an administrator and can't be deleted while it has this role. Remove the administrator role first, then try again.",
   "Le commentaire est vide.": "The comment is empty.",

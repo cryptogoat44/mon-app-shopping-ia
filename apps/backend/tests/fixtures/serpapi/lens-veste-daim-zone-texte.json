@@ -1,0 +1,603 @@
+{
+ "visual_matches": [
+  {
+   "position": 1,
+   "title": "Veste Effet Daim Marron Taupe Mado - Sozély",
+   "link": "https://sozely.fr/produit/veste-effet-daim-marron-taupe-mado/",
+   "source": "Sozély",
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQBcuLoeZd6FMYfmVrJRVQBy_sfYagmplK4daRzrYbQDgyCRaE8",
+   "image": "https://sozely.fr/wp-content/uploads/2025/10/sozely-vetement-femme-veste-effet-daim-marron-taupe-mado6-scaled.jpeg"
+  },
+  {
+   "position": 2,
+   "title": "Veste courte texture daim marron",
+   "link": "https://www.brentinyparis.com/fr/tendance-mode-femme-brentiny-paris/54780-veste-courte-texture-daim-marron.html",
+   "source": "Brentiny Paris",
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcRwCMhAfNflrt3j8BJwrzUDmVB0qorPpReo0cMGP-vilA9vGoZe",
+   "image": "https://www.brentinyparis.com/241695-large_default/veste-courte-texture-daim-marron.jpg",
+   "price": {
+    "value": "20 €*",
+    "extracted_value": 20,
+    "currency": "€"
+   },
+   "in_stock": true
+  },
+  {
+   "position": 3,
+   "title": "Veste courte zippée en daim Viral Marron Vila - Femme | Place des Tendances",
+   "link": "https://www.placedestendances.com/fr/fr/vila-veste-courte-zippee-en-daim-marron-femme-11116001",
+   "source": "Place des Tendances",
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcR7v9pfx7APk0VSgIf9fKbWA-qR225ohMlKf_OqvrUUHOlrI3qq",
+   "image": "https://media-cdn.placedestendances.com/image/47/1/9481471.jpg?fit=bounds&bg-color=F7F7F7&width=571&height=782&canvas=571-782",
+   "price": {
+    "value": "70 €*",
+    "extracted_value": 70,
+    "currency": "€"
+   },
+   "in_stock": true
+  },
+  {
+   "position": 4,
+   "title": "Reiss Veste bomber petite taille à col cheminée en daim marron chocolat | REISS",
+   "link": "https://www.reiss.com/fr/fr/style/sv049313/v62854",
+   "source": "Reiss",
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR2nJeqcGKv3-Kx8iUWgsKOEWTITXIpW3lgsZsPtVDIeDM-4f4X",
+   "image": "https://cdn.platform.next/common/items/default/default/itemimages/3_4Ratio/product/lge/V62854s5.jpg",
+   "price": {
+    "value": "555 €*",
+    "extracted_value": 555,
+    "currency": "€"
+   },
+   "in_stock": true
+  },
+  {
+   "position": 5,
+   "title": "Veste courte zippée en daim marron avec poches pour femme (2026) - Milanoo.com",
+   "link": "https://www.milanoo.com/fr/produit/veste-courte-zippee-en-daim-marron-avec-poches-pour-femme-2025-p1076938.html",
+   "source": "Milanoo.com",
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcQRJHKKgddhjUkXpAEMpiKb611xjHA-7VQJvEp33hc2mcy0foJQ",
+   "image": "https://www-s.mlo.me/upen/v/202509/20250917/9c355b04cf3f419d9e81f70e6dff7625.jpg",
+   "price": {
+    "value": "34 €*",
+    "extracted_value": 34,
+    "currency": "€"
+   },
+   "in_stock": true
+  },
+  {
+   "position": 6,
+   "title": "Vila bomber en daim synthétique marron | ASOS",
+   "link": "https://www.asos.com/fr/vila/vila-bomber-en-daim-synthetique-marron/prd/211006665",
+   "source": "ASOS",
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcSbTa0dZjXzT2-q_FiETGXYect_WtvF2fTHCiguOvnYsiUJpDNH",
+   "image": "https://images.asos-media.com/products/vila-bomber-en-daim-synthetique-marron/211006665-1-raindrum?$n_640w$&wid=513&fit=constrain"
+  },
+  {
+   "position": 7,
+   "title": "blouson aviateur en daim marron foncé",
+   "link": "https://edyisa.com/fr-fr/products/dark-brown-suede-wide-bomber-jacket",
+   "source": "Edyisa",
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcSIH-ZoLHQ7JKSj2kxP5HSPeZEncWJheAsmLUdmLV62hnokqGAt",
+   "image": "https://edyisa.com/cdn/shop/files/image_2025-09-21_133457338.png?v=1758458132&width=1152"
+  },
+  {
+   "position": 8,
+   "title": "Veste Aviateur Daim Marron Femme | Cuir Aviateur",
+   "link": "https://cuir-aviateur.com/products/veste-aviateur-daim-marron-femme",
+   "source": "Cuir Aviateur",
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ78ydFCLjNKn7xxbTzolZqxs1v3JdLHmUPcrrX1azXaIteRFtd",
+   "image": "https://cuir-aviateur.com/cdn/shop/files/veste-aviateur-daim-marron-femme.png?v=1759915819&width=1946"
+  },
+  {
+   "position": 9,
+   "title": "Veste femme en suédine marron chocolat style bombers fermeture zip du 36 au 50",
+   "link": "https://www.primtex.fr/vestes-bombers-et-blazers/6705-veste-femme-en-suedine-marron-chocolat-style-bombers-fermeture-zip-du-36-au-50-.html",
+   "source": "PRIMTEX Femme",
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcRCmTZyypiaDllIqHP3YTGGAxqt3noMW5zdbHigfyuk7JPEr8yJ",
+   "image": "https://www.primtex.fr/18852-thickbox_default/veste-femme-en-suedine-marron-chocolat-style-bombers-fermeture-zip-du-36-au-50-.jpg",
+   "price": {
+    "value": "60 €*",
+    "extracted_value": 60,
+    "currency": "€"
+   },
+   "in_stock": true
+  },
+  {
+   "position": 10,
+   "title": "Reiss Petite veste décontractée en daim marron | REISS",
+   "link": "https://www.reiss.com/fr/fr/style/sv178078/628659",
+   "source": "Reiss",
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcS9DW6BfK_8oauVGtXDAOttznDB7gOTbnp97Ohl9OA0uXE0lpax",
+   "image": "https://cdn.platform.next/common/items/default/default/itemimages/3_4Ratio/product/lge/628659s3.jpg",
+   "price": {
+    "value": "645 €*",
+    "extracted_value": 645,
+    "currency": "€"
+   },
+   "in_stock": true
+  },
+  {
+   "position": 11,
+   "title": "Veste marron effet suédine | Loavies",
+   "link": "https://www.loavies.com/fr/27676010903-bombers-brun-solide/",
+   "source": "LOAVIES",
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcQrjGJNADNTPgztocqC12evOSxnKYwNOKZH_XufQwzeJl_N8Pl3",
+   "image": "https://loavies-assets.com/cdn-cgi/image/format=webp,sharpen=0.3,width=1000,dpr=1,quality=75/media/catalog/product/2/7/27676010900-1_1763463749_1.jpg"
+  },
+  {
+   "position": 12,
+   "title": "veste en daim synthétique marron foncé | ASOS",
+   "link": "https://www.asos.com/fr/only/veste-en-daim-synthetique-marron-fonce/prd/211404541",
+   "source": "ASOS",
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcQhRp0a51YBmrPyCmcr1DNN0xxC38_oXPNaq3HS96gpcplyP9mD",
+   "image": "https://images.asos-media.com/products/veste-en-daim-synthetique-marron-fonce/211404541-3?$n_640w$&wid=513&fit=constrain"
+  },
+  {
+   "position": 13,
+   "title": "Veste en daim en marron – Magda Butrym | Mytheresa",
+   "link": "https://www.mytheresa.com/fr/fr/femme/magda-butrym-veste-en-daim-marron-p01190580",
+   "source": "Mytheresa",
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcQ4HLReQkJ1JF7_iFQ78FJ9Yal9O5CKqZyqtYYB-O5rYwzRe9Yx",
+   "image": "https://www.mytheresa.com/image/1094/1238/100/d4/P01190580.jpg"
+  },
+  {
+   "position": 14,
+   "title": "Vintage Marron Daim Veste Courte Femmes Élégant... Du 27,02 € | DHgate",
+   "link": "https://fr.dhgate.com/product/vintage-brown-suede-short-jacket-women-elegant/1080048190.html",
+   "source": "DHgate",
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRDxusywuSe0J0kMQLrEAAr71RqvdA13q0evoobpsLcBeQ4yFux",
+   "image": "https://img4.dhresource.com/webp/m/0x0/f3/albu/ys/z/16/deeb4fd4-cea3-4006-81d1-db384ffa519e.jpg"
+  },
+  {
+   "position": 15,
+   "title": "Veste Bombers effet daim couleur marron chocolat over size Neuf - Vêtements",
+   "link": "https://www.leboncoin.fr/ad/vetements/0000000002",
+   "source": "Leboncoin",
+   "thumbnail": "https://example.invalid/image-anonymisee.jpg",
+   "image": "https://example.invalid/image-anonymisee.jpg"
+  },
+  {
+   "position": 16,
+   "title": "Object veste courte aspect daim marron carafe | ASOS",
+   "link": "https://www.asos.com/fr/object/object-veste-courte-aspect-daim-marron-carafe/prd/211357016",
+   "source": "ASOS",
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcTuD9CYI_ffdZE4klCpDhMInx2taLOPLMDYonydgrfQHiREX_7O",
+   "image": "https://images.asos-media.com/products/object-veste-courte-aspect-daim-marron-carafe/211357016-1-carafe?$n_640w$&wid=513&fit=constrain"
+  },
+  {
+   "position": 17,
+   "title": "Veste en Daim Marron d'Hannah dans Off Campus et 1 Dupe Abordable | TikTok",
+   "link": "https://www.tiktok.com/@compte-anonymise/photo/1",
+   "source": "TikTok",
+   "thumbnail": "https://example.invalid/image-anonymisee.jpg",
+   "image": "https://example.invalid/image-anonymisee.jpg"
+  },
+  {
+   "position": 18,
+   "title": "Veste THÉA En daim, chocolat | Hello Moon",
+   "link": "https://hellomoon-shop.com/products/veste-thea-marron",
+   "source": "Hello Moon",
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcQ9O778JJ4EI-aZPkHTwWiWI23OAJ1Sj5ySTtPX6_PhUMs3BI39",
+   "image": "https://hellomoon-shop.com/cdn/shop/files/117963.jpg?v=1784017759&width=1500"
+  },
+  {
+   "position": 19,
+   "title": "Yaphleet Femmes Élégant Daim Marron Bomber Vestes... Du 30,03 € | DHgate",
+   "link": "https://fr.dhgate.com/product/yaphleet-women-elegant-suede-brown-bomber/1091987293.html",
+   "source": "DHgate",
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcRhX3y2goJq5BUp37u4tYwbCrJsZjxaLFtsn7CXIsbEQLVHItXh",
+   "image": "https://img4.dhresource.com/webp/m/0x0/f3/albu/bw/h/15/913766b0-6d87-43f4-9084-4db22ab574a0.jpg"
+  },
+  {
+   "position": 20,
+   "title": "Veste en daim en marron – Saint Laurent | Mytheresa",
+   "link": "https://www.mytheresa.com/fr/fr/femme/saint-laurent-veste-en-daim-marron-p01207035",
+   "source": "Mytheresa",
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS3-cYFqQ4CiLSdEK3bgxPhZxn-yTHeQNGUEXoAanFDJEFHfJuS",
+   "image": "https://www.mytheresa.com/image/1094/1238/100/d8/P01207035.jpg"
+  },
+  {
+   "position": 21,
+   "title": "Veste oversize en suédine camel",
+   "link": "https://www.jeans-industry.fr/fr/bombers/74067-veste-oversize-en-suedine-camel.html",
+   "source": "Jeans Industry",
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTH3SFNY9veQgz4IDygEgkcsijoG0gG8fjLPI7RPrwYiPMHEr8U",
+   "image": "https://www.jeans-industry.fr/504427-thickbox/veste-oversize-en-suedine-camel.jpg",
+   "price": {
+    "value": "60 €*",
+    "extracted_value": 60,
+    "currency": "€"
+   },
+   "in_stock": true
+  },
+  {
+   "position": 22,
+   "title": "2025 Veste en Daim Femme Legere Veste en Cuir Femme Grande Taille Mi Saison Blouson Aviateur Oversize Fourrure Manteau Court Bomber Chic Et Elegant Jacket(Café,S) : Amazon.fr: Mode",
+   "link": "https://www.amazon.fr/uxxnjfg-Elegant-Manteau-Fourrure-Aviateur/dp/B0FR53F5JX",
+   "source": "Amazon",
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcQVmaZM_e6OrjUwTO-f5xg1NCeClqUSsCCuVQ6cjGVhH1v3csTG",
+   "image": "https://m.media-amazon.com/images/I/71bYktrMPzL._AC_UY1000_.jpg"
+  },
+  {
+   "position": 23,
+   "title": "Veste zippée en imitation daim Marron | NA-KD",
+   "link": "https://www.na-kd.com/fr/tous-nos-produits/veste-zippee-en-imitation-daim-dark-brown-1100-009862-0765",
+   "source": "NA-KD",
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcTOtXMbuYm5EfBr7AyA568nHwU3yKlZcKKaPT1Cpf8YTXRyT3Xz",
+   "image": "https://www.na-kd.com/globalassets/faux_suede_zip_jacket_1100-009862-0765_2_curated.jpg?ref=F7F38DBF3A",
+   "price": {
+    "value": "67 €*",
+    "extracted_value": 67,
+    "currency": "€"
+   },
+   "in_stock": true
+  },
+  {
+   "position": 24,
+   "title": "Veste bomber oversize en daim pour femme avec fermeture éclair – Klara Mody",
+   "link": "https://klaramody.com/fr-fr/collections/f-w/products/zamszowa-kurtka-bomberka-damska-oversize-na-zamek",
+   "source": "Klara Mody",
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSow8_1rEGNBypyJ-LFnywee1sAq3gaaEe9wIPwoV2SOcKwVUJF",
+   "image": "https://klaramody.com/cdn/shop/files/Zamszowakurtkabomberkadamskaoversizenazamek_1.png?v=1764857742&width=720"
+  },
+  {
+   "position": 25,
+   "title": "Veste cintrée en imitation daim marron chocolat Next | La Redoute",
+   "link": "https://www.laredoute.fr/ppdp/prod-602688856.aspx",
+   "source": "La Redoute",
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcRVmpApVZqx78Tj0Im3NW_xcySAiaprrfcViMJu0s2SWZQbmrU2",
+   "image": "https://cdn.laredoute.com/products/f/5/7/f570979560124e3415328855d4653500.jpg",
+   "price": {
+    "value": "91 €*",
+    "extracted_value": 91,
+    "currency": "€"
+   },
+   "in_stock": true
+  },
+  {
+   "position": 26,
+   "title": "Veste en daim | Veste suédine | PLT FR",
+   "link": "https://www.prettylittlething.fr/categories/femmes-manteaux-vestes-suede-synthetique",
+   "source": "Pretty Little Thing",
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQR5EUx5s9Q-MNIT54HQxln2DrQsc50QrvYfSMMYk-AzSbZo5Hg",
+   "image": "https://mediahub.prettylittlething.com/cnn8701_brown_xl?qlt=70&w=480&h=720&dpr=1&fit=cvr"
+  },
+  {
+   "position": 27,
+   "title": "Veste en daim Keïna - Marron",
+   "link": "https://hangar86.com/fr/vestesblazers/105905-veste-en-daim-keina-marron.html",
+   "source": "HANGAR 86",
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcSROFJ-G-pWeckreb47w9-74ywL11n-Qs8fpQg6toZbVBdkIjeJ",
+   "image": "https://hangar86.com/477167-large_default/veste-en-daim-keina-marron.jpg"
+  },
+  {
+   "position": 28,
+   "title": "LOEWE Veste Bomber En Daim | Marron | FARFETCH FR",
+   "link": "https://www.farfetch.com/fr/shopping/women/loewe-veste-bomber-en-daim-item-36113681.aspx",
+   "source": "Farfetch",
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcRQcikO5Hj00swn18qkhDqOFx9_5tX3Srtfw11zDtQPw6iEOzWB",
+   "image": "https://cdn-images.farfetch-contents.com/36/11/36/81/36113681_67725723_600.jpg"
+  },
+  {
+   "position": 29,
+   "title": "Acheter Veste Marron Coupe-vent et Chaude en Daim à Col Montant Fermeture Éclair Manches Longues Veste pour Femme Streetwear Rétro Automne et Hiver | Joom",
+   "link": "https://www.joom.com/fr/products/68c91c1a8322550165b7a6bb",
+   "source": "Joom",
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcQtGjExg31OZEDYnYT4sWpDagbripTHm36Qao0oyCJp09mFeOyk",
+   "image": "https://img.joomcdn.net/416178bec24f75fa854a98604c465e5cbb640a50_original.jpeg"
+  },
+  {
+   "position": 30,
+   "title": "Veste en daim Naeko pour femme | Marron – TRUEPRODIGY",
+   "link": "https://www.trueprodigy.de/fr/products/feminine-lederjacke-mit-hemdkragen-und-raffung-am-saum-1",
+   "source": "trueprodigy",
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcRTKgX73Szeld77YTLlGAeW0fx2GzqUrVHnk2PqAL4dahws11zz",
+   "image": "https://www.trueprodigy.de/cdn/shop/files/3792529-1027-Naeko-Model-Front-Nah-3_grande.jpg?v=1777368384"
+  },
+  {
+   "position": 31,
+   "title": "VESTE STYLE DAIM MARRON SK32045",
+   "link": "https://www.chummy-boutique.com/veste-style-daim-marron-sk32045--prod-fr-5213.html",
+   "source": "Chummy Boutique",
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcSzsG0COXtIguoDeA0LgWSoqn8tOklCV3cZSWv4xAEZN1VimAoD",
+   "image": "https://www.chummy-boutique.com/catalog/5213_1l.jpg?0",
+   "price": {
+    "value": "30 €*",
+    "extracted_value": 30,
+    "currency": "€"
+   }
+  },
+  {
+   "position": 32,
+   "title": "Dark Brown Foncé Veste Courte Plissée En Daim Avec Fermeture Éclair | PrettyLittleThing FR",
+   "link": "https://www.prettylittlething.fr/product/suede-zip-up-pleated-cropped-jacket-co-ord_plt05813?colour=dark+brown",
+   "source": "Pretty Little Thing",
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcSelTKi6UXfelum93O_pGrnBEB3ACH-PRWLOfeo7OVq6YWmSJAD",
+   "image": "https://mediahub.prettylittlething.com/cno2234_dark brown_xl_3?qlt=70&w=549&ssz=true&dpr=1",
+   "price": {
+    "value": "41 €*",
+    "extracted_value": 41,
+    "currency": "€"
+   },
+   "in_stock": true
+  },
+  {
+   "position": 33,
+   "title": "Veste en tissu gratté - Marron foncé - FEMME | H&M FR",
+   "link": "https://www2.hm.com/fr_fr/productpage.1328843003.html",
+   "source": "H&M",
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcRMfhA5ekA0Mq0UWZQMesrBFGt4jHHNjYKVnbNYQtHNZCeOVgOE",
+   "image": "https://image.hm.com/assets/hm/07/34/07344d46d9c6ac741243fe1e6848bbe60ec10807.jpg?imwidth=1260",
+   "price": {
+    "value": "45 €*",
+    "extracted_value": 45,
+    "currency": "€"
+   },
+   "in_stock": true
+  },
+  {
+   "position": 34,
+   "title": "Veste Suédine Oversize Femme- Veste Chic Tendance Effet Daim Mi-Saison – MYRAÏDA",
+   "link": "https://myraida.com/products/veste-suedine-oversize-femme-effet-daim",
+   "source": "Myraïda",
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcQfGAwnO9QbLn0o0m7lC0t1-HGVUwLpMs3E49fxOhHwjHLM51PC",
+   "image": "https://myraida.com/cdn/shop/files/B9371221-E8A9-4909-82F1-6E2021B0F480.jpg?v=1775640201&width=3840",
+   "price": {
+    "value": "37 €*",
+    "extracted_value": 37,
+    "currency": "€"
+   },
+   "in_stock": true
+  },
+  {
+   "position": 35,
+   "title": "Camellia Printemps/Automne Nouvelle Veste de Vol Décontractée Polyvalente pour Femmes à Effet de Texture en Daim | Mode en ligne | SHEIN FRANCE",
+   "link": "https://fr.shein.com/DEEKA-Spring-Autumn-New-Casual-Versatile-Suede-Like-Bomber-Jacket-For-Women-p-411485480.html",
+   "source": "SHEIN FRANCE",
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcRvWgC1Yh2P4sXk7_A8_I4HZt9uErMdmu_GXHMpsy-tJAi_kLuy",
+   "image": "https://img.ltwebstatic.com/v4/j/spmp/2026/04/20/75/1776678664192a2f07e89db808af6c5c71168e84d9_thumbnail_750x999.jpg"
+  },
+  {
+   "position": 36,
+   "title": "Veste en daim femme | Des vestes en daim courtes et longues",
+   "link": "https://www.veromoda.com/fr-be/vetements/vestes/vestes-en-suede",
+   "source": "Vero Moda",
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcTFjz0dEnYWNQ4cXipuhvqcxA_KDfN5GHd2lqk18V1UVLD4rhhB",
+   "image": "https://images.veromoda.com/10335868/4961185/003/veromoda-vmroycestineshortsuedejacket-brown.jpg?v=e21291e0ca925afe547f99fe1071af07"
+  },
+  {
+   "position": 37,
+   "title": "Manteau BO en daim - Marron – Stockholm Style",
+   "link": "https://stockholm-style.fr/products/manteau-bo-en-daim-marron",
+   "source": "Stockholm Style",
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcTg_95DukXy75WWaNKUeyRQYCNNHcXvoTjHdkFGw4RtBbAMuvaa",
+   "image": "https://stockholm-style.fr/cdn/shop/files/img-4375-large.webp?v=1771067906&width=1024",
+   "price": {
+    "value": "119 €*",
+    "extracted_value": 119,
+    "currency": "€"
+   },
+   "in_stock": true
+  },
+  {
+   "position": 38,
+   "title": "Mode Marron Daim Femmes Vestes Col Rabattu Fermeture... Du 35,25 € | DHgate",
+   "link": "https://fr.dhgate.com/product/fashion-brown-suede-womens-jackets-turn-down/1092188278.html",
+   "source": "DHgate",
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcSrp0kGwSo5zb_9gL_ZL3FyjKIsk5ft0_PEsfluFjL-HrQ14A6g",
+   "image": "https://img4.dhresource.com/webp/m/0x0/f3/albu/bw/h/16/7274de80-7d3c-4370-a553-401950239e5a.jpg"
+  },
+  {
+   "position": 39,
+   "title": "Babe Pay Pls - Veste en daim marron 2602SUEDE acheter en ligne chez Symbol",
+   "link": "https://symbol.fashion/fr/store/brown-suede-jacket-baby-pay-please-2602suede-brown",
+   "source": "Symbol Fashion",
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcTtcdFn4Q7Aw-t1FokoeuJKF4Y8P35xjy9HAEDnyPzYHweGDhrr",
+   "image": "https://media4.symbol.fashion/aio-images/15/6f/156f44ed0bb18be0879cac0492b26d61/df678252-4e00-4207-b474-350ee45b65ed.jpg"
+  },
+  {
+   "position": 40,
+   "title": "Acheter Marron chocolat - Veste bomber à col cheminée en daim Reiss Cara from Next France",
+   "link": "https://www.nextdirect.com/fr/fr/style/sv049313/h05582",
+   "source": "Next Direct",
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQIsxjhh1-_h_YDdedY3_ZBBChlr-bmGr_uUwV1L4D7iQMNuh3B",
+   "image": "https://xcdn.next.co.uk/common/items/default/default/itemimages/3_4Ratio/product/lge/H05582s3.jpg?im=Resize,width=750"
+  },
+  {
+   "position": 41,
+   "title": "Veste boutonnée daim marron foncé, Serge Pariente - ROMA marron foncé | Cesare Nori",
+   "link": "https://www.cesarenori.fr/31022-roma-dark-brown.html",
+   "source": "Cesare Nori",
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcQ8b34iE4Zb0LQjQmlsgTjXsB3eFrIcTv1B7H-THMDzaEK-2_Rn",
+   "image": "https://www.cesarenori.fr/83576-large_default/roma-dark-brown.jpg",
+   "price": {
+    "value": "369 €*",
+    "extracted_value": 369,
+    "currency": "€"
+   },
+   "in_stock": true
+  },
+  {
+   "position": 42,
+   "title": "Veste bomber Roana en daim en marron – The Row | Mytheresa",
+   "link": "https://www.mytheresa.com/fr/fr/femme/the-row-veste-bomber-roana-en-daim-marron-p01031628",
+   "source": "Mytheresa",
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcQ2tmSKhNcU-EHii0ROTgnF-19gNypqtKtwFtaILs5A0DK1q_Kb",
+   "image": "https://www.mytheresa.com/image/1094/1238/100/5a/P01031628_d4.jpg"
+  },
+  {
+   "position": 43,
+   "title": "Veste bomber en daim pour femme, courte de transition, en cuir à revers avec poche zippée, manches longues décontractées, grande taille Y2k, tendance hiver automne : Amazon.com.be: Mode",
+   "link": "https://www.amazon.com.be/transition-manches-longues-décontractées-tendance/dp/B0FNN1V492",
+   "source": "Amazon.com.be",
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcTuZrtwOhg1DLFfJH7ZURsKVJU9RMqN2TKUQfkdJFyCw3a0sxX6",
+   "image": "https://m.media-amazon.com/images/I/41KQOguy38L._AC_SY1000_.jpg"
+  },
+  {
+   "position": 44,
+   "title": "Veste en daim vintage pour femme | Veste en cuir marron des années 70 | Veste western style bohème | Veste femme faite main | Cadeau pour elle - Etsy France",
+   "link": "https://www.etsy.com/fr/listing/4426881870/veste-en-daim-vintage-pour-femme-o-veste",
+   "source": "Etsy",
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcTy5WWCvkQNTX-wtesyP_qCHOTZHKYtxc1K0Jdlr75-4tdoUnpq",
+   "image": "https://i.etsystatic.com/60796762/r/il/b59571/7521359940/il_570xN.7521359940_883e.jpg"
+  },
+  {
+   "position": 45,
+   "title": "Vero Moda Veste en similicuir - dachshund/marron foncé - ZALANDO.FR",
+   "link": "https://www.zalando.fr/vero-moda-veste-en-similicuir-dachshund-ve121u1bh-o13.html",
+   "source": "Zalando",
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcSNaEFmShHCzO2eoZVQz6OsZyaNmAPKW1zqRFLpkvHV40cQ_Tjq",
+   "image": "https://img01.ztat.net/article/spp-media-p1/f9459b20a6294206adf8a0c120b6d3d4/35be5dddd4904603bd646ac2584198b9.jpg?imwidth=762&filter=packshot"
+  },
+  {
+   "position": 46,
+   "title": "Veste suédine marron femme chic avec détails dorés",
+   "link": "https://www.dreambyc.com/produit/veste-suedine-marron-femme/",
+   "source": "DreamByC",
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcTQ2udJLDAZxDZJ55T6x-f7d6PXOdZpy9JsyK0Zia4r-RljG8eu",
+   "image": "https://www.dreambyc.com/wp-content/uploads/2025/10/veste-suedine-marron-femme--scaled.webp"
+  },
+  {
+   "position": 47,
+   "title": "Veste oversize de style motard - Marron foncé - FEMME | H&M FR",
+   "link": "https://www2.hm.com/fr_fr/productpage.1298601003.html",
+   "source": "H&M",
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcQBBkURRQzW91JPuZ5uKVO_WX_Mdsu1BEAQ78xvXkVRBpsu8w_R",
+   "image": "https://image.hm.com/assets/hm/2f/ca/2fcae5f9bd28ed5aaea25a0de235d8bfbdf5deac.jpg?imwidth=2160",
+   "price": {
+    "value": "60 €*",
+    "extracted_value": 60,
+    "currency": "€"
+   },
+   "in_stock": true
+  },
+  {
+   "position": 48,
+   "title": "Alexander McQueen Veste En Daim à Fermeture Zippée | Marron | FARFETCH DZ",
+   "link": "https://www.farfetch.com/dz/shopping/men/alexander-mcqueen-veste-en-daim-a-fermeture-zippee-item-33165103.aspx",
+   "source": "Farfetch",
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcTNbZexxU0LWdLyN9Gi5xvLXEo6VImN7Gvojc5V_MdaTWmVYZ8a",
+   "image": "https://cdn-images.farfetch-contents.com/33/16/51/03/33165103_63775071_600.jpg"
+  },
+  {
+   "position": 49,
+   "title": "Camellia Printemps/Automne Nouvelle Veste de Vol Décontractée Polyvalente pour Femmes à Effet de Texture en Daim | Mode en ligne | SHEIN FRANCE",
+   "link": "https://fr.shein.com/DEEKA-Casual-Suede-Like-Bomber-Jacket-Brown-Color-Versatile-For-Spring-Autumn-p-106791687.html",
+   "source": "SHEIN FRANCE",
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcTVhKneKgd32fg4XdjvhOm9CBcotFhNsTdvfj-Q7DfAJ0r60tYN",
+   "image": "https://img.ltwebstatic.com/v4/j/spmp/2025/09/15/3b/175791583354766d597ffbc24b59abfe7f02bd6bc4_thumbnail_405x552_thumbnail_720x.jpg"
+  },
+  {
+   "position": 50,
+   "title": "Veste zippée en imitation daim Marron | NA-KD",
+   "link": "https://www.na-kd.com/fr/tous-nos-produits/faux-suede-zip-jacket-brown-1100-009862-0017",
+   "source": "NA-KD",
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcQF6lhZJVZXSfKRwXbh2YcDtc2-T3oY88o0kqRJWR2sLXbnOXLK",
+   "image": "https://www.na-kd.com/cdn-cgi/image/width=300,quality=80,sharpen=0.3/globalassets/faux_suede_zip_jacket_1100-009862-00175387.jpg?ref=3B6B6D3A22"
+  },
+  {
+   "position": 51,
+   "title": "Blouson aviateur en imitation daim Femme | Pilote oversize streetwear | Veste à épaules tombantes et col cranté à revers | Cadeau pour elle - Etsy France",
+   "link": "https://www.etsy.com/fr/listing/4384237583/blouson-aviateur-en-imitation-daim-femme",
+   "source": "Etsy",
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcRsAvdi80hzSl8_7Rus5IiO_NsYw0uP0Fz6CfljmMTWAGtyQOMs",
+   "image": "https://i.etsystatic.com/58410108/r/il/cd6fdf/7271576922/il_570xN.7271576922_nvt9.jpg"
+  },
+  {
+   "position": 52,
+   "title": "Vestes Courtes en Suède : SOLDE Vestes Courtes pour 2024 | Stylight",
+   "link": "https://www.stylight.fr/Vestes-Courtes/Suede/",
+   "source": "Stylight",
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRMhGrffR2v3PT5Z1vRnfWMj2hunim-xLyJjVf5zDmwzQ1UE708",
+   "image": "https://images.cdn.inspogroup.net/mOVIF6Sihi1rUx9rUQQj1GXzkye4ebryPiSD9aPoQQE/g:ce/trim:10/h:440/w:330/czM6L/y9zdH/lsaWdodC1pbWctcHJvY2Vzc2luZy9waG90b2JveC9kMDlkZTY1MzZhMDQ4MzFjYjAyMmI2NTVjZTljOGU4ZC5qcGc"
+  },
+  {
+   "position": 53,
+   "title": "Veste effet daim MOLLY MARRON - ETAM",
+   "link": "https://www.etam.com/p/veste-effet-daim-655900285.html",
+   "source": "Etam",
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTQldtsIpBPjwFWfOECuKhIb9jQaibZyRidd_cnzZwqcRpBAW09",
+   "image": "https://images.etam.com/on/demandware.static/-/Sites-ELIN-master/default/dwb58a30d2/655900285_a.jpg?sw=1000&sh=1510",
+   "price": {
+    "value": "40 €*",
+    "extracted_value": 40,
+    "currency": "€"
+   },
+   "in_stock": true
+  },
+  {
+   "position": 54,
+   "title": "BLOUSON EFFET DAIM - Marron | ZARA France",
+   "link": "https://www.zara.com/fr/fr/blouson-effet-daim-p04344651.html",
+   "source": "Zara",
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcTGxdaFXEcjdcHAI5PUFttEqNjLDjkL1zd7RPKd7cNIOENhNhE7",
+   "image": "https://static.zara.net/assets/public/f7f4/2a95/cc5f41b18bea/4903b2b17246/04344651700-a1/04344651700-a1.jpg?ts=1788511994385&w=1120&f=auto"
+  },
+  {
+   "position": 55,
+   "title": "Veste blouson en daim en marron – Loewe | Mytheresa",
+   "link": "https://www.mytheresa.com/fr/fr/femme/loewe-veste-bomber-en-daim-marron-p01166373",
+   "source": "Mytheresa",
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcRRT2jORHbAkHv23Xv4W7nBSeeVfJ8cRDQ-WYlzdVv-9ro_QUZN",
+   "image": "https://www.mytheresa.com/image/1094/1238/100/24/P01166373.jpg",
+   "price": {
+    "value": "4 900 €*",
+    "extracted_value": 4900,
+    "currency": "€"
+   },
+   "in_stock": true
+  },
+  {
+   "position": 56,
+   "title": "Veste en Daim à Surpiqûres Contrastées | Tressé",
+   "link": "https://tresse-paris.com/products/veste-en-daim-a-surpiqures",
+   "source": "Tressé Paris",
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTUO_prUZB_UyIInk4CLYyyovlxjxTz04bqpzyDBn-Sw6pB7aBs",
+   "image": "https://tresse-paris.com/cdn/shop/files/E26_DAHIA_MARRON_0139.jpg?v=1766743162&width=1200",
+   "price": {
+    "value": "995 €*",
+    "extracted_value": 995,
+    "currency": "€"
+   },
+   "in_stock": true
+  },
+  {
+   "position": 57,
+   "title": "Veste daim style Zara 65dt🤎🎀",
+   "link": "https://www.instagram.com/p/publication-anonymisee/",
+   "source": "Instagram",
+   "thumbnail": "https://example.invalid/image-anonymisee.jpg",
+   "image": "https://example.invalid/image-anonymisee.jpg"
+  },
+  {
+   "position": 58,
+   "title": "Veste Hester effet daim - Marron – The Frankie Shop Europe",
+   "link": "https://eu.thefrankieshop.com/fr-fr/products/hester-faux-suede-jacket-brown",
+   "source": "The Frankie Shop",
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcSAk8OvY9RQdpjOaLGJCuAmnPKDSl6fQTGrlk9GmPe-zPVXyyO7",
+   "image": "https://eu.thefrankieshop.com/cdn/shop/files/HESTER-FAUX-SUEDE-JACKET-BROWN-OTW-2295-017-V1-RT-PACKSHOT.jpg?v=1753958687&width=1200"
+  },
+  {
+   "position": 59,
+   "title": "South Beach COLLARED - Veste en similicuir - tan/havane - ZALANDO.FR",
+   "link": "https://www.zalando.fr/south-beach-veste-en-similicuir-tan-soh21u015-b11.html",
+   "source": "Zalando",
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcRBKqpXf4AUenIqJU2kfbPRrgO0e-LKqm2TpJ6tPquQzXYrMP_p",
+   "image": "https://img01.ztat.net/article/spp-media-p1/b5924014c1564b72bfb058e870c4ddc5/40fe893eda944e9f944c1ba4fdf51c2f.jpg?imwidth=762",
+   "price": {
+    "value": "57 €*",
+    "extracted_value": 57,
+    "currency": "€"
+   },
+   "in_stock": true
+  },
+  {
+   "position": 60,
+   "title": "Veste courte en daim ceinturée marron",
+   "link": "https://www.brentinyparis.com/en/coats-jackets/57535-veste-courte-en-daim-ceinturee-marron.html",
+   "source": "Brentiny Paris",
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcRknfo3RMw6o20xaMq-jeFTvJzX9sdbFu7MpiXSeWjYogxQ7x6z",
+   "image": "https://www.brentinyparis.com/img/p/2/5/4/3/9/8/254398.jpg"
+  }
+ ]
+}

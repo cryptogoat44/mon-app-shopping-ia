@@ -6,6 +6,7 @@ import { loadErrorMessage } from "../src/lib/load-error";
 import {
   moderationActionLabel,
   moderationNoticeLines,
+  moderationReasonLabel,
   mostReportedReason,
   reasonsSummary,
   reportReasonLabel,
@@ -89,6 +90,35 @@ describe("pièces envoyées (lot 5, 5.C)", () => {
   it("« vous a envoyé une pièce » a un auteur : ce n'est pas une notification système", () => {
     const actor = { id: "u2", username: "louise", displayName: "Louise", avatarUrl: null };
     expect(systemNotificationLines(notification({ type: "piece_received", actor }))).toBeNull();
+  });
+});
+
+describe("image copiée retirée (lot 5, partie B)", () => {
+  it("la personne qui avait partagé l'envie apprend le retrait, avec le motif neutre, sans savoir qui l'a décidé", () => {
+    expect(moderationNoticeLines({ action: "remove_image", targetType: "post", reason: "image_rights", note: "Demande du titulaire." })).toEqual([
+      "L'image de votre publication « envie » a été retirée par la modération. La publication reste visible, sans son image.",
+      "Motif : Droits sur l'image",
+      "Précision : « Demande du titulaire. »",
+    ]);
+    expect(moderationNoticeLines({ action: "remove_image", targetType: "piece", reason: "image_rights", note: null })).toEqual([
+      "L'image d'une pièce que vous avez envoyée a été retirée par la modération. La pièce reste visible, sans son image.",
+      "Motif : Droits sur l'image",
+    ]);
+  });
+
+  it("en anglais ; et dans l'historique de l'administrateur", () => {
+    expect(moderationActionLabel("remove_image")).toBe("Image retirée");
+    setActiveLocale("en");
+    expect(moderationNoticeLines({ action: "remove_image", targetType: "post", reason: "image_rights", note: null })).toEqual([
+      "The image of your wish post was removed by moderation. The post stays visible, without its image.",
+      "Reason: Image rights",
+    ]);
+    expect(moderationNoticeLines({ action: "remove_image", targetType: "piece", reason: "image_rights", note: null })[0]).toBe(
+      "The image of a piece you sent was removed by moderation. The piece stays visible, without its image."
+    );
+    expect(moderationActionLabel("remove_image")).toBe("Image removed");
+    expect(moderationReasonLabel("image_rights")).toBe("Image rights");
+    expect(moderationReasonLabel("spam")).toBe("Spam");
   });
 });
 

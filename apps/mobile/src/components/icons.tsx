@@ -181,6 +181,17 @@ export function NotFoundIcon({ size = 44, tint = color.acier, strokeWidth = 1.3 
   );
 }
 
+/** Image retirée (lot 5, partie B) : un cadre d'image barré. */
+export function ImageOffIcon({ size = 24, tint = color.acier, strokeWidth = 1.4 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x={3.5} y={5} width={17} height={14} rx={2} stroke={tint} strokeWidth={strokeWidth} />
+      <Path d="M3.5 16l4.5-4.5 3.5 3.5 2.5-2.5 6.5 6.5" stroke={tint} strokeWidth={strokeWidth} strokeLinejoin="round" />
+      <Path d="M4 3.5l16 17" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 export function ClipboardIcon({ size = 16, tint = color.encre, strokeWidth = 1.6 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">

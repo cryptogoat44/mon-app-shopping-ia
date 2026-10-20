@@ -8,6 +8,7 @@ import moderationPlugin from "./plugins/moderation.js";
 import meRoutes from "./routes/me.js";
 import searchesRoutes from "./routes/searches.js";
 import productMatchesRoutes from "./routes/productMatches.js";
+import matchFeedbackRoutes from "./routes/matchFeedback.js";
 import vaultRoutes from "./routes/vault.js";
 import wishlistRoutes from "./routes/wishlist.js";
 import usersRoutes from "./routes/users.js";
@@ -86,6 +87,7 @@ export async function buildApp(options: { logger?: FastifyServerOptions["logger"
   await fastify.register(meRoutes);
   await fastify.register(searchesRoutes);
   await fastify.register(productMatchesRoutes);
+  await fastify.register(matchFeedbackRoutes);
   await fastify.register(vaultRoutes);
   await fastify.register(wishlistRoutes);
   await fastify.register(usersRoutes);

@@ -18,6 +18,8 @@ export const fr = {
     quoted: (text: string) => `« ${text} »`,
     photoUnavailable: "Cette photo n'a pas pu être récupérée. Si elle est stockée sur iCloud, vérifiez votre connexion, puis réessayez.",
     offline: "Vous semblez hors ligne. Vérifiez votre connexion internet, puis réessayez.",
+    /** Lot 5, partie B : image copiée retirée par la modération. */
+    imageUnavailable: "Image indisponible",
   },
   tabs: {
     feed: "Fil",
@@ -337,6 +339,28 @@ export const fr = {
     capacityUserTip: "Réessayez demain.",
     previewUnavailableTitle: "L'image de la vidéo n'est plus disponible",
     previewUnavailableTip: "Importez une capture d'écran de la pièce pour continuer.",
+    // Bouton « Résultat incohérent » (fiabilité des résultats, motifs validés
+    // par le fondateur le 2026-10-15).
+    reportMenuLabel: "Signaler un résultat incohérent",
+    reportTitle: "Résultat incohérent",
+    reportQuestion: "Qu'est-ce qui ne va pas ?",
+    feedbackReasons: {
+      image_title_mismatch: "L'image et le titre ne correspondent pas",
+      wrong_item: "Ce n'est pas la pièce cherchée (autre type, autre couleur, autre modèle)",
+      not_for_sale: "Impossible à acheter (la page ne vend rien)",
+      wrong_price: "Prix faux ou absent",
+      duplicate: "Doublon d'une autre proposition",
+    },
+    reportSend: "Envoyer",
+    reportSending: "Envoi…",
+    reportCancel: "Annuler",
+    reportWithdraw: "Retirer mon signalement",
+    reportThanks: "Merci, c'est noté.",
+    reportWithdrawn: "Signalement retiré.",
+    reportedLine: (reason: string) => `Signalé : ${reason}`,
+    reportedHint: "Modifier ou retirer votre signalement",
+    reportError: "Le signalement n'a pas pu être envoyé. Vérifiez votre connexion, puis réessayez.",
+    reportWithdrawError: "Le signalement n'a pas pu être retiré. Vérifiez votre connexion, puis réessayez.",
   },
   wishlistItem: {
     back: "Envies",
@@ -669,6 +693,8 @@ export const fr = {
     moderationRestoredComment: "Votre commentaire a été rétabli.",
     moderationRestoredPiece: "Une pièce que vous avez envoyée a été rétablie.",
     moderationUnsuspended: "La suspension de votre compte a été levée.",
+    moderationImageRemovedPost: "L'image de votre publication « envie » a été retirée par la modération. La publication reste visible, sans son image.",
+    moderationImageRemovedPiece: "L'image d'une pièce que vous avez envoyée a été retirée par la modération. La pièce reste visible, sans son image.",
     moderationOther: "Une décision de la modération vous concerne.",
     moderationReason: (reason: string) => `Motif : ${reason}`,
     moderationNote: (note: string) => `Précision : ${note}`,
@@ -688,6 +714,8 @@ export const fr = {
     reasonInappropriate: "Contenu inapproprié",
     reasonHarassment: "Harcèlement",
     reasonOther: "Autre",
+    /** Motif neutre du retrait d'une image copiée (lot 5, partie B) : jamais proposé dans « Signaler ». */
+    reasonImageRights: "Droits sur l'image",
   },
   // Lot 5 : écran réservé aux administrateurs (entrée discrète des Réglages).
   moderationQueue: {
@@ -728,8 +756,22 @@ export const fr = {
     saved: "Décision enregistrée.",
     undone: "Décision annulée.",
     saveError: "La décision n'a pas pu être enregistrée.",
+    // Retirer l'image copiée d'une envie partagée (lot 5, partie B).
+    removeImage: "Retirer l'image",
+    removeImageWarning:
+      "Retirer l'image ? Son fichier sera effacé définitivement : cette décision ne s'annule pas. Le contenu restera visible avec « Image indisponible », son titre et le lien du marchand. La personne sera prévenue, avec le motif « droits sur l'image ».",
+    confirmRemoveImage: "Confirmer le retrait",
+    imageRemoved: "Image retirée",
+    imageRemovedSaved: "Image retirée : son fichier est effacé.",
     history: "Décisions",
-    actions: { dismiss: "Classé sans suite", hide: "Masqué", suspend: "Compte suspendu", restore: "Rétabli", unsuspend: "Suspension levée" },
+    actions: {
+      dismiss: "Classé sans suite",
+      hide: "Masqué",
+      suspend: "Compte suspendu",
+      restore: "Rétabli",
+      unsuspend: "Suspension levée",
+      remove_image: "Image retirée",
+    },
     by: (username: string) => `par @${username}`,
   },
   blockedUsers: {
@@ -741,7 +783,10 @@ export const fr = {
   },
   connection: {
     connectingTitle: "Connexion à Spotto…",
-    connectingBody: "Le service démarre, cela peut prendre jusqu'à une minute.",
+    // Après quelques secondes d'attente (demande du fondateur, 2026-10-16) :
+    // le serveur gratuit se met en veille ; réveils mesurés de 37 à 60 s.
+    wakingTitle: "Spotto se réveille…",
+    wakingBody: "Après un moment sans visite, le serveur se met en veille. Il lui faut jusqu'à une minute pour redémarrer.",
     failedTitle: "Spotto est momentanément injoignable.",
     failedBody: "Vérifiez votre connexion internet, puis réessayez. Vos données sont intactes.",
     retry: "Réessayer",

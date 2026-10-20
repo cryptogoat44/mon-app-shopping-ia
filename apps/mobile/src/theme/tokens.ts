@@ -132,6 +132,16 @@ export const radius = {
   full: 999, // pastilles, avatar
 } as const;
 
+// Dimensions communes des contrôles (2026-10-15) : zone tactile minimale
+// (charte, règle 7), poignée des feuilles, boutons radio, largeur maximale du
+// contenu sur grand écran.
+export const size = {
+  touchTarget: 44,
+  sheetHandle: { width: 36, height: 5 },
+  radio: { diameter: 22, border: 2 },
+  contentMaxWidth: 480,
+} as const;
+
 // Police éditoriale serif (logotype, titres, noms de pièces). Chargée via
 // expo-font — voir src/theme/fonts.ts. SIL Open Font License.
 export const serifFont = "Newsreader_500Medium";

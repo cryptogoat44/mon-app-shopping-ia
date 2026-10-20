@@ -44,6 +44,8 @@ const postRowSchema = z.object({
   caption: z.string().nullable(),
   media_url: z.string().nullable(),
   media_thumb_url: z.string().nullable().optional(),
+  /** Lot 5, partie B : image copiée retirée par la modération (migration 0026). */
+  media_removed_at: z.string().nullable(),
   privacy: z.enum(PRIVACY_LEVELS),
   created_at: z.string(),
 });
@@ -326,7 +328,8 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
       id: row.id,
       type: row.type,
       caption: row.caption,
-      mediaUrl: row.media_url!,
+      mediaUrl: row.media_url,
+      mediaRemoved: row.media_removed_at !== null,
       mediaHdUrl,
       mediaThumbUrl: row.media_thumb_url ?? null,
       privacy: row.privacy,

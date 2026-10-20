@@ -20,7 +20,7 @@ import { extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
+import { chromium, type Browser, type BrowserContext, type Page, type Request } from "playwright-core";
 import { CONSENT_VERSIONS } from "@monapp/shared-types";
 import { assertDevSupabaseUrl } from "../lib/dev-database.js";
 import { CLE_SIMULATION, FICHIER_SIMULATION, MARQUE_SIMULATION } from "../lib/simulation-anthropic.js";
@@ -133,6 +133,37 @@ function followSimulation(backend: ChildProcess, lines: string[], timeoutMs: num
       }
     });
   });
+}
+
+/** Attend `attente`. Sinon (écran resté vide, vu trois fois les 15 et 16
+ * octobre 2026), l'erreur dit ce qui restait en attente : requêtes (méthode,
+ * hôte, chemin, durée — jamais les paramètres) et erreurs de la page. */
+export async function attendreAvecReleve(page: Page, quoi: string, attente: () => Promise<unknown>): Promise<void> {
+  const enCours = new Map<Request, number>();
+  const erreurs: string[] = [];
+  const debut = (requete: Request) => enCours.set(requete, Date.now());
+  const fin = (requete: Request) => enCours.delete(requete);
+  const erreur = (e: Error) => erreurs.push(e.message);
+  page.on("request", debut);
+  page.on("requestfinished", fin);
+  page.on("requestfailed", fin);
+  page.on("pageerror", erreur);
+  try {
+    await attente();
+  } catch (cause) {
+    const enAttente = [...enCours].map(([requete, depuis]) => {
+      const adresse = new URL(requete.url());
+      return `${requete.method()} ${adresse.host}${adresse.pathname} depuis ${Math.round((Date.now() - depuis) / 1000)} s`;
+    });
+    throw new Error(
+      `${quoi} — requêtes en attente : ${enAttente.join(" ; ") || "aucune"} — erreurs de la page : ${erreurs.join(" | ") || "aucune"} (${String(cause)})`
+    );
+  } finally {
+    page.off("request", debut);
+    page.off("requestfinished", fin);
+    page.off("requestfailed", fin);
+    page.off("pageerror", erreur);
+  }
 }
 
 function log(message: string): void {
@@ -355,7 +386,7 @@ export async function runParcours(
             const landing = options?.incompleteProfile
               ? english ? "One last step" : "Dernière étape"
               : english ? "Find a piece you saw in a video or a photo." : "Retrouvez une pièce vue dans une vidéo ou sur une photo.";
-            await page.getByText(landing).waitFor({ timeout: 30_000 });
+            await attendreAvecReleve(page, "accueil non affiché après la connexion", () => page.getByText(landing).waitFor({ timeout: 30_000 }));
           },
         };
         accounts.push(account);

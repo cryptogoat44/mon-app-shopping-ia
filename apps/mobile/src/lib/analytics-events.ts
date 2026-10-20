@@ -35,7 +35,8 @@ export const ANALYTICS_EVENTS = {
   follow_added: { context: oneOf(["search", "profile"]) },
   report_submitted: { target_type: oneOf(REPORT_TARGET_TYPES) },
   // Lot 5 : décisions de la modération (administrateurs) — la décision et le type de contenu, jamais lequel.
-  moderation_decision: { decision: oneOf(MODERATION_DECISIONS), target_type: oneOf(REPORT_TARGET_TYPES) },
+  // Partie B : « remove_image », retrait d'une image copiée.
+  moderation_decision: { decision: oneOf([...MODERATION_DECISIONS, "remove_image"]), target_type: oneOf(REPORT_TARGET_TYPES) },
   moderation_undone: { decision: oneOf(["hide", "suspend"]) },
   // Lot 5 : partage d'une envie — le canal et des choix, jamais la pièce ni la personne.
   wish_republished: { visibility: VISIBILITY },

@@ -75,9 +75,14 @@ export interface ApiErrorBody {
   message: string;
 }
 
-export type PlatformSource = "tiktok" | "instagram" | "other" | "photo";
-export type RecognitionMethod = "oembed" | "manual_screenshot";
-export type SearchStatus = "pending" | "processing" | "completed" | "failed";
+// Listes de valeurs : servent aussi au serveur pour valider les lignes lues
+// dans la base (charte, règle 19).
+export const PLATFORM_SOURCES = ["tiktok", "instagram", "other", "photo"] as const;
+export type PlatformSource = (typeof PLATFORM_SOURCES)[number];
+export const RECOGNITION_METHODS = ["oembed", "manual_screenshot"] as const;
+export type RecognitionMethod = (typeof RECOGNITION_METHODS)[number];
+export const SEARCH_STATUSES = ["pending", "processing", "completed", "failed"] as const;
+export type SearchStatus = (typeof SEARCH_STATUSES)[number];
 
 export interface ProductMatch {
   id: string;
@@ -100,6 +105,25 @@ export interface ProductMatch {
    * les résultats de recherche pour que l'app puisse l'ouvrir immédiatement,
    * sans attendre un aller-retour serveur au moment du clic. */
   affiliateUrl: string;
+  /** Motif choisi si la personne a signalé cette proposition comme
+   * incohérente (bouton « Résultat incohérent »), sinon null. */
+  feedbackReason: MatchFeedbackReason | null;
+}
+
+// ---- Bouton « Résultat incohérent » (fiabilité des résultats, 2026-10-15) ----
+
+/** Les cinq motifs, validés par le fondateur le 2026-10-15, dans l'ordre de
+ * l'écran. Seuls l'identifiant de la proposition et le motif partent : ni
+ * texte libre, ni image. */
+export const MATCH_FEEDBACK_REASONS = ["image_title_mismatch", "wrong_item", "not_for_sale", "wrong_price", "duplicate"] as const;
+export type MatchFeedbackReason = (typeof MATCH_FEEDBACK_REASONS)[number];
+
+/** Signalements au plus par personne et par jour (jour de Paris), comptés
+ * par le serveur dans la base. Changer de motif ou retirer ne compte pas. */
+export const MATCH_FEEDBACK_DAILY_LIMIT = 30;
+
+export interface MatchFeedbackRequest {
+  reason: MatchFeedbackReason;
 }
 
 export interface ProductSearch {
@@ -382,8 +406,12 @@ export interface ReceivedPiece {
   id: string;
   sender: PostAuthor;
   title: string;
-  imageUrl: string;
-  imageThumbUrl: string;
+  /** Null quand l'image a été retirée par la modération (`imageRemoved`). */
+  imageUrl: string | null;
+  imageThumbUrl: string | null;
+  /** Lot 5 : image retirée par la modération (droits sur l'image) — afficher
+   * « Image indisponible », le titre et le lien du marchand. */
+  imageRemoved: boolean;
   merchantName: string | null;
   /** Lien à ouvrir : affilié s'il existe, sinon le lien marchand ; null sans marchand. */
   merchantUrl: string | null;
@@ -477,7 +505,12 @@ export interface Post {
   id: string;
   type: PostType;
   caption: string | null;
-  mediaUrl: string;
+  /** Null quand l'image copiée d'une envie a été retirée par la modération
+   * (`mediaRemoved`). */
+  mediaUrl: string | null;
+  /** Lot 5 : image copiée retirée par la modération (droits sur l'image) —
+   * la publication reste, avec « Image indisponible ». */
+  mediaRemoved: boolean;
   /** « Achat » venu du Spotter : image haute définition du marchand, avec
    * repli sur `mediaUrl`. Null sinon. */
   mediaHdUrl: string | null;
@@ -668,13 +701,19 @@ export type ReportTargetType = "user" | "post" | "comment" | "piece";
 export const REPORT_TARGET_TYPES = ["user", "post", "comment", "piece"] as const satisfies readonly ReportTargetType[];
 export type ReportReason = "spam" | "inappropriate" | "harassment" | "other";
 export const REPORT_REASONS = ["spam", "inappropriate", "harassment", "other"] as const satisfies readonly ReportReason[];
+/** Motif d'une décision de la modération : ceux des signalements, plus le
+ * motif neutre du retrait d'une image copiée (lot 5), jamais proposé dans
+ * « Signaler ». */
+export type ModerationReason = ReportReason | "image_rights";
+export const MODERATION_REASONS = [...REPORT_REASONS, "image_rights"] as const satisfies readonly ModerationReason[];
 
 // ---- Modération (lot 5, section 5.B) : visible des seuls administrateurs ----
 
 /** Décisions possibles : classer sans suite, masquer un contenu, suspendre un
- * compte, et leurs annulations (rétablir, lever la suspension). */
-export type ModerationActionType = "dismiss" | "hide" | "suspend" | "restore" | "unsuspend";
-export const MODERATION_ACTION_TYPES = ["dismiss", "hide", "suspend", "restore", "unsuspend"] as const satisfies readonly ModerationActionType[];
+ * compte, et leurs annulations (rétablir, lever la suspension) ; retirer une
+ * image copiée par Spotto (lot 5 : définitif, le fichier est effacé). */
+export type ModerationActionType = "dismiss" | "hide" | "suspend" | "restore" | "unsuspend" | "remove_image";
+export const MODERATION_ACTION_TYPES = ["dismiss", "hide", "suspend", "restore", "unsuspend", "remove_image"] as const satisfies readonly ModerationActionType[];
 export const MODERATION_DECISIONS = ["dismiss", "hide", "suspend"] as const satisfies readonly ModerationActionType[];
 export type ModerationDecision = (typeof MODERATION_DECISIONS)[number];
 /** Longueur maximale de la note d'une décision (montrée à la personne concernée). */
@@ -684,7 +723,7 @@ export const MODERATION_NOTE_MAX_LENGTH = 500;
 export interface ModerationNotice {
   action: ModerationActionType;
   targetType: ReportTargetType;
-  reason: ReportReason | null;
+  reason: ModerationReason | null;
   note: string | null;
 }
 
@@ -694,18 +733,28 @@ export interface ModerationAuthor extends PostAuthor {
   suspended: boolean;
 }
 
-/** Aperçu du contenu signalé ; « missing » : supprimé depuis par son auteur. */
+/** Aperçu du contenu signalé ; « missing » : supprimé depuis par son auteur.
+ * `imageRemoved` (lot 5) : image copiée retirée par la modération. */
 export type ModerationPreview =
-  | { kind: "post"; author: ModerationAuthor; caption: string | null; imageUrl: string | null; privacy: PrivacyLevel; createdAt: string; hidden: boolean }
+  | {
+      kind: "post";
+      author: ModerationAuthor;
+      caption: string | null;
+      imageUrl: string | null;
+      imageRemoved: boolean;
+      privacy: PrivacyLevel;
+      createdAt: string;
+      hidden: boolean;
+    }
   | { kind: "comment"; author: ModerationAuthor; body: string; postId: string; createdAt: string; hidden: boolean }
   | { kind: "user"; author: ModerationAuthor; bio: string | null }
-  | { kind: "piece"; author: ModerationAuthor; title: string; imageUrl: string; createdAt: string; hidden: boolean }
+  | { kind: "piece"; author: ModerationAuthor; title: string; imageUrl: string | null; imageRemoved: boolean; createdAt: string; hidden: boolean }
   | { kind: "missing" };
 
 export interface ModerationLogEntry {
   id: string;
   action: ModerationActionType;
-  reason: ReportReason | null;
+  reason: ModerationReason | null;
   note: string | null;
   createdAt: string;
   /** Administrateur qui a pris la décision (visible des seuls administrateurs). */
@@ -726,6 +775,9 @@ export interface ModerationItem {
   activeHideActionId: string | null;
   /** Suspension en vigueur du compte concerné (à lever), sinon null. */
   activeSuspendActionId: string | null;
+  /** Lot 5 : l'image est une copie faite par Spotto (publication « envie »,
+   * pièce envoyée), encore en place — elle peut être retirée. */
+  canRemoveImage: boolean;
   history: ModerationLogEntry[];
 }
 
@@ -743,6 +795,18 @@ export interface ModerationActionRequest {
 }
 
 export interface ModerationUndoRequest {
+  note?: string;
+}
+
+/** Contenus dont l'image peut être une copie faite par Spotto (lot 5). */
+export const IMAGE_REMOVAL_TARGET_TYPES = ["post", "piece"] as const satisfies readonly ReportTargetType[];
+
+/** Retirer l'image copiée d'une publication « envie » ou d'une pièce envoyée
+ * (lot 5) : motif neutre fixé par le serveur, note facultative. Le serveur
+ * efface d'abord le fichier ; s'il n'y parvient pas, rien n'est changé. */
+export interface RemoveImageRequest {
+  targetType: (typeof IMAGE_REMOVAL_TARGET_TYPES)[number];
+  targetId: string;
   note?: string;
 }
 

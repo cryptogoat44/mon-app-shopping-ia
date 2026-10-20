@@ -43,6 +43,8 @@ export interface ExportData {
   suspension: ExportRow | null;
   moderationDecisionsAboutMe: ExportRow[];
   moderationDecisionsTaken: ExportRow[];
+  /** Bouton « Résultat incohérent » (migration 0025) : propositions signalées et motif. */
+  resultFeedback: ExportRow[];
 }
 
 /** Sections de l'export (toutes les clés sauf la date de l'export). */
@@ -140,6 +142,7 @@ export async function collectExport(
     suspension,
     moderationDecisionsAboutMe,
     moderationDecisionsTaken,
+    resultFeedback,
   ] = await Promise.all([
     section(
       "profile",
@@ -191,6 +194,7 @@ export async function collectExport(
     ),
     section("moderationDecisionsAboutMe", () => listWhere(db, "moderation_actions", MODERATION_EXPORT_COLUMNS, "target_user_id", userId, BY_DATE), none),
     section("moderationDecisionsTaken", () => listWhere(db, "moderation_actions", MODERATION_EXPORT_COLUMNS, "admin_id", userId, BY_DATE), none),
+    section("resultFeedback", () => listWhere(db, "match_feedback", "*", "user_id", userId, BY_DATE), none),
   ]);
 
   const data: ExportData = {
@@ -220,6 +224,7 @@ export async function collectExport(
     suspension,
     moderationDecisionsAboutMe,
     moderationDecisionsTaken,
+    resultFeedback,
   };
   return { data, failures };
 }

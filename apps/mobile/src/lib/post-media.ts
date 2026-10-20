@@ -13,6 +13,8 @@ import type { Post } from "@monapp/shared-types";
 //   ou Google) ne l'est jamais. Une image HD fournie (mediaHdUrl) vient
 //   toujours du Spotter.
 // - Publication photo : toujours une photo de la personne.
+// - Image retirée par la modération (lot 5, partie B ; mediaUrl null) :
+//   « Image indisponible » (components/image-unavailable.tsx).
 
 // Fichier public de notre stockage (Supabase Storage), dans un dossier de
 // photos envoyées : le chemin suit immédiatement le nom d'hôte (jamais une
@@ -29,5 +31,5 @@ export function isOwnStoredPhoto(url: string): boolean {
 export function showsProductPicture(post: Pick<Post, "type" | "mediaUrl" | "mediaHdUrl">): boolean {
   if (post.type === "wish") return true;
   if (post.type !== "purchase") return false;
-  return post.mediaHdUrl !== null || !isOwnStoredPhoto(post.mediaUrl);
+  return post.mediaHdUrl !== null || (post.mediaUrl !== null && !isOwnStoredPhoto(post.mediaUrl));
 }

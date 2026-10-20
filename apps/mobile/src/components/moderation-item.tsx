@@ -5,13 +5,14 @@ import type { ModerationAuthor, ModerationItem, ModerationLogEntry, ModerationPr
 import { color, font, radius, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { timeAgo } from "@/lib/format";
-import { applyModerationDecision, undoModerationDecision } from "@/lib/api";
+import { applyModerationDecision, removeCopiedImage, undoModerationDecision } from "@/lib/api";
 import { loadErrorMessage } from "@/lib/load-error";
-import { moderationActionLabel, mostReportedReason, reasonsSummary, reportReasonLabel } from "@/lib/moderation-labels";
+import { moderationActionLabel, moderationReasonLabel, mostReportedReason, reasonsSummary } from "@/lib/moderation-labels";
 import { useToast } from "@/lib/toast-context";
 import { ErrorMessage } from "@/components/error-message";
 import { PersonIcon } from "@/components/icons";
-import { DecisionPanel, type DecisionKind } from "@/components/moderation-decision";
+import { ImageUnavailable } from "@/components/image-unavailable";
+import { DecisionPanel, RemoveImagePanel, type DecisionKind } from "@/components/moderation-decision";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Un contenu signalé, vu par un administrateur (lot 5) : les signalements
@@ -51,10 +52,24 @@ function AuthorLine({ author }: { author: ModerationAuthor }) {
   );
 }
 
-function Badges({ hidden, suspended }: { hidden: boolean; suspended: boolean }) {
-  if (!hidden && !suspended) return null;
-  const labels = [hidden ? t.moderationQueue.hidden : null, suspended ? t.moderationQueue.suspended : null].filter((label): label is string => label !== null);
-  return <Text style={styles.badge}>{labels.join(" · ")}</Text>;
+function Badges({ hidden, suspended, imageRemoved }: { hidden: boolean; suspended: boolean; imageRemoved: boolean }) {
+  const labels = [
+    hidden ? t.moderationQueue.hidden : null,
+    imageRemoved ? t.moderationQueue.imageRemoved : null,
+    suspended ? t.moderationQueue.suspended : null,
+  ].filter((label): label is string => label !== null);
+  return labels.length > 0 ? <Text style={styles.badge}>{labels.join(" · ")}</Text> : null;
+}
+
+/** Vignette du contenu ; « Image indisponible » si la modération l'a retirée (lot 5, partie B). */
+function PreviewImage({ uri, removed, label }: { uri: string | null; removed: boolean; label: string }) {
+  if (uri) return <Image source={{ uri }} style={styles.postImage} contentFit="cover" accessible accessibilityLabel={label} />;
+  if (!removed) return null;
+  return (
+    <View style={styles.postImage}>
+      <ImageUnavailable variant="thumb" />
+    </View>
+  );
 }
 
 function ItemPreview({ preview }: { preview: ModerationPreview }) {
@@ -64,15 +79,7 @@ function ItemPreview({ preview }: { preview: ModerationPreview }) {
       <AuthorLine author={preview.author} />
       {preview.kind === "post" ? (
         <View style={styles.postRow}>
-          {preview.imageUrl ? (
-            <Image
-              source={{ uri: preview.imageUrl }}
-              style={styles.postImage}
-              contentFit="cover"
-              accessible
-              accessibilityLabel={t.post.photoBy(preview.author.displayName)}
-            />
-          ) : null}
+          <PreviewImage uri={preview.imageUrl} removed={preview.imageRemoved} label={t.post.photoBy(preview.author.displayName)} />
           <View style={styles.postText}>
             {preview.caption ? <Text style={styles.body}>{preview.caption}</Text> : null}
             <Text style={styles.meta}>{t.vaultLabels.privacy[preview.privacy]}</Text>
@@ -80,13 +87,7 @@ function ItemPreview({ preview }: { preview: ModerationPreview }) {
         </View>
       ) : preview.kind === "piece" ? (
         <View style={styles.postRow}>
-          <Image
-            source={{ uri: preview.imageUrl }}
-            style={styles.postImage}
-            contentFit="cover"
-            accessible
-            accessibilityLabel={preview.title}
-          />
+          <PreviewImage uri={preview.imageUrl} removed={preview.imageRemoved} label={preview.title} />
           <View style={styles.postText}>
             <Text style={styles.body}>{preview.title}</Text>
             <Text style={styles.meta}>{t.moderationQueue.target.piece}</Text>
@@ -97,7 +98,11 @@ function ItemPreview({ preview }: { preview: ModerationPreview }) {
       ) : preview.bio ? (
         <Text style={styles.body}>{preview.bio}</Text>
       ) : null}
-      <Badges hidden={preview.kind !== "user" && preview.hidden} suspended={preview.author.suspended} />
+      <Badges
+        hidden={preview.kind !== "user" && preview.hidden}
+        suspended={preview.author.suspended}
+        imageRemoved={(preview.kind === "post" || preview.kind === "piece") && preview.imageRemoved}
+      />
     </View>
   );
 }
@@ -124,7 +129,7 @@ function ReportDetails({ item }: { item: ModerationItem }) {
 function historyLine(entry: ModerationLogEntry): string {
   return [
     moderationActionLabel(entry.action),
-    entry.reason ? reportReasonLabel(entry.reason) : null,
+    entry.reason ? moderationReasonLabel(entry.reason) : null,
     entry.adminUsername ? t.moderationQueue.by(entry.adminUsername) : null,
     ago(entry.createdAt),
   ]
@@ -173,12 +178,18 @@ function useDecisions(item: ModerationItem, onChanged: () => void) {
       t.moderationQueue.saved
     );
   const undo = (actionId: string, kind: DecisionKind) => run(() => undoModerationDecision(actionId, kind), t.moderationQueue.undone);
-  return { busy, error, decide, undo };
+  // Lot 5, partie B : seulement pour une copie faite par Spotto (item.canRemoveImage).
+  const removeImage = async (note: string) => {
+    const targetType = item.targetType;
+    if (targetType !== "post" && targetType !== "piece") return false;
+    return run(() => removeCopiedImage({ targetType, targetId: item.targetId, ...(note ? { note } : {}) }), t.moderationQueue.imageRemovedSaved);
+  };
+  return { busy, error, decide, undo, removeImage };
 }
 
 function ItemDecisions({ item, status, onChanged }: { item: ModerationItem; status: ModerationStatus; onChanged: () => void }) {
-  const [panel, setPanel] = useState<DecisionKind | null>(null);
-  const { busy, error, decide, undo } = useDecisions(item, onChanged);
+  const [panel, setPanel] = useState<DecisionKind | "remove_image" | null>(null);
+  const { busy, error, decide, undo, removeImage } = useDecisions(item, onChanged);
   const { preview, activeHideActionId, activeSuspendActionId } = item;
   const content = preview.kind === "post" || preview.kind === "comment" || preview.kind === "piece" ? preview : null;
   const hideLabel = content?.kind === "post" ? t.moderationQueue.hidePost : content?.kind === "piece" ? t.moderationQueue.hidePiece : t.moderationQueue.hideComment;
@@ -186,6 +197,14 @@ function ItemDecisions({ item, status, onChanged }: { item: ModerationItem; stat
     content?.kind === "post" ? t.moderationQueue.restorePost : content?.kind === "piece" ? t.moderationQueue.restorePiece : t.moderationQueue.restoreComment;
   const errorView = error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null;
 
+  if (panel === "remove_image") {
+    return (
+      <>
+        <RemoveImagePanel busy={busy} onCancel={() => setPanel(null)} onConfirm={(note) => void removeImage(note).then((done) => done && setPanel(null))} />
+        {errorView}
+      </>
+    );
+  }
   if (panel) {
     return (
       <>
@@ -206,6 +225,7 @@ function ItemDecisions({ item, status, onChanged }: { item: ModerationItem; stat
       {content && !content.hidden ? (
         <ActionButton label={hideLabel} onPress={() => setPanel("hide")} disabled={busy} />
       ) : null}
+      {item.canRemoveImage ? <ActionButton label={t.moderationQueue.removeImage} onPress={() => setPanel("remove_image")} disabled={busy} danger /> : null}
       {preview.kind !== "missing" && !preview.author.suspended ? (
         <ActionButton label={t.moderationQueue.suspend} onPress={() => setPanel("suspend")} disabled={busy} danger />
       ) : null}

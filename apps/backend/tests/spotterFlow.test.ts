@@ -5,7 +5,11 @@ import sharp from "sharp";
 // Aucun appel réel : ni SerpApi (crédits), ni TikTok. La recherche visuelle
 // et la voie officielle sont simulées ; le recadrage (sharp) et le stockage
 // (spotto-dev) sont réels.
-vi.mock("../src/services/visualSearch.js", () => ({ searchProductsByImageUrl: vi.fn() }));
+// Le reste du module (dont l'erreur typée LensCallError) reste le vrai.
+vi.mock("../src/services/visualSearch.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/services/visualSearch.js")>();
+  return { ...original, searchProductsByImageUrl: vi.fn() };
+});
 vi.mock("../src/services/oembed.js", () => ({
   detectPlatform: () => "tiktok",
   fetchOfficialPreview: vi.fn(async () => ({ ok: true, thumbnailUrl: "https://p16-common-sign.tiktokcdn-eu.com/vignette.jpeg" })),
@@ -21,7 +25,7 @@ vi.mock("../src/lib/imageProcessing.js", async (importOriginal) => {
   return { ...original, downloadThumbnail: vi.fn() };
 });
 
-import { searchProductsByImageUrl } from "../src/services/visualSearch.js";
+import { LensCallError, searchProductsByImageUrl, type VisualMatch, type VisualSearchResult } from "../src/services/visualSearch.js";
 import { downloadThumbnail } from "../src/lib/imageProcessing.js";
 import { reserveSearch } from "../src/lib/searchCapacity.js";
 import { authHeaders, buildMultipart, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
@@ -32,6 +36,37 @@ const reserveMock = vi.mocked(reserveSearch);
 
 // Image de test 400 × 600 (proportions d'une vignette verticale).
 const IMAGE = await sharp({ create: { width: 400, height: 600, channels: 3, background: "#6b4a3a" } }).jpeg().toBuffer();
+
+/** Ce que rend la recherche visuelle simulée : les propositions, et une
+ * mesure plausible (`received` : propositions renvoyées par Google). */
+function found(matches: VisualMatch[], received = matches.length): VisualSearchResult {
+  return {
+    matches,
+    measure: {
+      received,
+      removedIncomplete: 0,
+      removedSocial: received - matches.length,
+      removedProfessional: 0,
+      removedDuplicates: 0,
+      kept: matches.length,
+      keptWithPrice: matches.filter((m) => m.priceValue !== null).length,
+      keptOtherCurrency: 0,
+      distinctSites: matches.length,
+      sections: received > 0 ? ["visual_matches"] : [],
+      googleState: received > 0 ? null : "empty",
+    },
+  };
+}
+
+/** Colonnes de la mesure rangées avec une recherche (migration 0025). */
+async function measureOf(app: FastifyInstance, searchId: string) {
+  const { data } = await app.supabaseAdmin
+    .from("product_searches")
+    .select("outcome, failure_kind, received_count, removed_social, kept_count, kept_with_price, lens_sections, google_state, crop_area_pct, call_seconds, refused_before_call")
+    .eq("id", searchId)
+    .single();
+  return data;
+}
 
 const MATCH = {
   rank: 1,
@@ -66,7 +101,7 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
 
   beforeEach(() => {
     searchMock.mockReset();
-    searchMock.mockResolvedValue([MATCH]);
+    searchMock.mockResolvedValue(found([MATCH]));
     downloadMock.mockReset();
     downloadMock.mockResolvedValue(IMAGE);
     reserveMock.mockReset();
@@ -124,7 +159,7 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     searchMock.mockImplementationOnce(async () => {
       const { data } = await app.supabaseAdmin.storage.from("screenshots").download(`${user.id}/${search.id}.jpg`);
       analysed = Buffer.from(await data!.arrayBuffer());
-      return [MATCH];
+      return found([MATCH]);
     });
     const res = await run(search.id, {
       crop: JSON.stringify({ x: 0.25, y: 0.5, width: 0.5, height: 0.25 }),
@@ -342,7 +377,7 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
 
   it("distingue « rien trouvé » d'une panne", async () => {
     const empty = await prepare("https://www.tiktok.com/@x/video/1");
-    searchMock.mockResolvedValueOnce([]);
+    searchMock.mockResolvedValueOnce(found([]));
     const emptyBody = (await run(empty.id, {})).json();
     expect(emptyBody.status).toBe("failed");
     expect(emptyBody.errorMessage).toBe("Aucun produit identifié sur cette image.");
@@ -352,6 +387,53 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     const brokenBody = (await run(broken.id, {})).json();
     expect(brokenBody.status).toBe("failed");
     expect(brokenBody.errorMessage).toBe("La recherche visuelle a échoué.");
+  });
+
+  describe("mesure de chaque recherche (fiabilité des résultats, migration 0025)", () => {
+    it("une recherche aboutie range ses nombres, son issue et la part de l'image, sans aucun contenu", async () => {
+      const search = await prepare("https://www.tiktok.com/@x/video/1");
+      searchMock.mockResolvedValueOnce(found([MATCH], 3));
+      await run(search.id, { crop: JSON.stringify({ x: 0.25, y: 0.5, width: 0.5, height: 0.25 }), query: "veste" });
+
+      expect(await measureOf(app, search.id)).toMatchObject({
+        outcome: "found",
+        failure_kind: null,
+        received_count: 3,
+        removed_social: 2,
+        kept_count: 1,
+        kept_with_price: 1,
+        lens_sections: ["visual_matches"],
+        google_state: null,
+        crop_area_pct: 10,
+        refused_before_call: 0,
+      });
+    });
+
+    it("distingue Google vide (cadre inutilisable), rien d'achetable et une panne typée", async () => {
+      const empty = await prepare("https://www.tiktok.com/@x/video/1");
+      searchMock.mockResolvedValueOnce(found([], 0));
+      await run(empty.id, {});
+      expect(await measureOf(app, empty.id)).toMatchObject({ outcome: "empty_lens", google_state: "empty", crop_area_pct: 100 });
+
+      const unbuyable = await prepare("https://www.tiktok.com/@x/video/1");
+      searchMock.mockResolvedValueOnce(found([], 4));
+      await run(unbuyable.id, {});
+      expect(await measureOf(app, unbuyable.id)).toMatchObject({ outcome: "nothing_buyable", received_count: 4, kept_count: 0 });
+
+      const slow = await prepare("https://www.tiktok.com/@x/video/1");
+      searchMock.mockRejectedValueOnce(new LensCallError("timeout", "SerpApi injoignable : délai dépassé"));
+      await run(slow.id, {});
+      expect(await measureOf(app, slow.id)).toMatchObject({ outcome: "failure", failure_kind: "timeout", received_count: null, kept_count: null });
+    });
+
+    it("un lancement refusé avant l'appel (image illisible) est compté, sans aucun appel à SerpApi", async () => {
+      const search = await prepare();
+      const res = await run(search.id, {}, Buffer.from("pas une image"));
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toBe("invalid_image");
+      expect(searchMock).not.toHaveBeenCalled();
+      expect(await measureOf(app, search.id)).toMatchObject({ outcome: null, refused_before_call: 1 });
+    });
   });
 
   // Lot 4 ter (constaté sur le parcours iPhone : spotto-dev injoignable un instant) : propositions
@@ -374,6 +456,27 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     } finally {
       spy.mockRestore();
     }
+    expect(await measureOf(app, search.id)).toMatchObject({ outcome: "failure", failure_kind: "save_failed" });
+  });
+
+  // 2026-10-15 : une devise de plus de 3 caractères faisait refuser tout l'enregistrement
+  // (colonne char(3)) : la recherche entière tombait en panne. Refus réel de la base ici.
+  it("une proposition que la base refuse est écartée seule : les autres sont gardées, rangs sans trou", async () => {
+    const search = await prepare("https://www.tiktok.com/@x/video/1");
+    searchMock.mockResolvedValueOnce(
+      found([
+        MATCH,
+        { ...MATCH, rank: 2, productName: "Devise inattendue", merchantUrl: "https://marchand.example/rouble", currency: "руб." },
+        { ...MATCH, rank: 3, productName: "Troisième", merchantUrl: "https://marchand.example/troisieme" },
+      ])
+    );
+
+    const body = (await run(search.id, {})).json();
+    expect(body.status).toBe("completed");
+    expect(body.matches.map((m: { rank: number; productName: string }) => [m.rank, m.productName])).toEqual([
+      [1, MATCH.productName],
+      [2, "Troisième"],
+    ]);
   });
 
   it("si la vignette n'est plus disponible, invite à importer une capture", async () => {

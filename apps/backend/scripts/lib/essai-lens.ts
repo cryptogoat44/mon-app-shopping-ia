@@ -12,7 +12,9 @@ import sharp from "sharp";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CropRect } from "@monapp/shared-types";
 import { prepareImageForAnalysis } from "../../src/lib/imageProcessing.js";
-import { callSerpApi, isExcludedMerchant, toVisualMatches } from "../../src/services/visualSearch.js";
+import { callSerpApi, toVisualMatches } from "../../src/services/visualSearch.js";
+import { DEFAULT_LOCALE } from "../../src/services/lensSettings.js";
+import { exclusionReason } from "../../src/services/matchFilters.js";
 import { structureReponse, type Essai, type Resultat, type Structure } from "./essai-photo.js";
 
 /** Import d'une photo dans l'app (lib/image-import.ts) : 1 600 px au plus, JPEG 0,85. */
@@ -57,15 +59,15 @@ export async function essaiLens(admin: SupabaseClient, photo: Buffer, essai: Ess
   try {
     const signee = await admin.storage.from("screenshots").createSignedUrl(chemin, 300);
     if (signee.error || !signee.data) throw new Error(`Adresse signée impossible : ${signee.error?.message ?? "?"}`);
-    const brutes = await callSerpApi(signee.data.signedUrl, essai.reglages, essai.texte);
+    const { matches: brutes } = await callSerpApi(signee.data.signedUrl, essai.reglages, essai.texte);
     const { structure, brut } = releve();
     writeFileSync(join(dossier, `essai-${essai.numero}.json`), JSON.stringify(brutes, null, 2));
     writeFileSync(join(dossier, `reponse-${essai.numero}.json`), JSON.stringify(brut, null, 2));
-    const gardees = toVisualMatches(brutes);
+    const gardees = toVisualMatches(brutes, essai.reglages.locale?.country ?? DEFAULT_LOCALE.country);
     return {
       essai,
       brutes: brutes.length,
-      reseauxSociaux: brutes.filter((m) => m.link && isExcludedMerchant(m.link)).length,
+      reseauxSociaux: brutes.filter((m) => m.link && exclusionReason(m.link) === "social").length,
       gardees: gardees.length,
       avecPrix: gardees.filter((m) => m.priceValue !== null).length,
       premiers: gardees.slice(0, 3).map((m) => `${m.productName} — ${m.merchantName ?? "?"}${m.priceValue !== null ? ` (${m.priceValue} ${m.currency ?? ""})` : ""}`),

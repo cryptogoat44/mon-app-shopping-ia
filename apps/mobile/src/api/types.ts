@@ -1,3 +1,4 @@
+import type { MatchFeedbackReason } from "@monapp/shared-types";
 import type { CapacityFailReason } from "../lib/spot-capacity";
 
 export interface Piece {
@@ -21,6 +22,9 @@ export interface Piece {
    * l'id réel d'un product_match côté serveur) — permet de distinguer
    * une pièce réelle d'une pièce de démonstration (catalogue mock). */
   real?: boolean;
+  /** Motif choisi si la personne a signalé cette proposition comme
+   * incohérente (résultats d'une recherche seulement), sinon null. */
+  feedbackReason?: MatchFeedbackReason | null;
 }
 
 export type SpotStatus = "success" | "failed";

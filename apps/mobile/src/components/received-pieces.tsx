@@ -16,6 +16,7 @@ import { LoadFailure } from "@/components/load-failure";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { SpotImage } from "@/components/spot-image";
+import { ImageUnavailable } from "@/components/image-unavailable";
 import { themedStyles } from "@/theme/themed-styles";
 
 function PieceRow({ piece, onOpenMenu, onRemoved }: { piece: ReceivedPiece; onOpenMenu: () => void; onRemoved: (id: string) => void }) {
@@ -41,7 +42,12 @@ function PieceRow({ piece, onOpenMenu, onRemoved }: { piece: ReceivedPiece; onOp
   return (
     <View style={styles.row} testID={`piece-recue-${piece.id}`}>
       <View style={styles.thumb}>
-        <SpotImage hdUri={null} fallbackUri={piece.imageThumbUrl} style={styles.fill} fit="cover" accessibilityLabel={piece.title} />
+        {/* Image retirée par la modération (lot 5, partie B) : « Image indisponible ». */}
+        {piece.imageThumbUrl === null ? (
+          <ImageUnavailable variant="thumb" />
+        ) : (
+          <SpotImage hdUri={null} fallbackUri={piece.imageThumbUrl} style={styles.fill} fit="cover" accessibilityLabel={piece.title} />
+        )}
       </View>
       <View style={styles.rowText}>
         <Text style={styles.title} numberOfLines={2}>

@@ -3,6 +3,36 @@
  * Render, qui peut prendre jusqu'à une minute. */
 export const PROFILE_RETRY_DELAYS_MS = [2_000, 4_000, 8_000, 15_000, 30_000] as const;
 
+/** Durée maximale d'UN essai de chargement du profil (2026-10-16) : un appel
+ * resté sans réponse est abandonné puis relancé, au lieu de laisser l'écran
+ * figé (vu deux fois dans les vérifications à l'écran : plus de 30 s). */
+export const PROFILE_ATTEMPT_TIMEOUT_MS = 15_000;
+
+export class AttemptTimeoutError extends Error {
+  constructor(ms: number) {
+    super(`Aucune réponse après ${ms} ms.`);
+  }
+}
+
+/** Lance `task` avec un signal d'abandon, et relève AttemptTimeoutError au
+ * bout de `ms`, même si `task` ignore le signal. */
+export async function withTimeout<T>(ms: number, task: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      // Le délai l'emporte d'abord : l'abandon qui suit ne change plus l'erreur.
+      reject(new AttemptTimeoutError(ms));
+      controller.abort();
+    }, ms);
+  });
+  try {
+    return await Promise.race([task(controller.signal), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export interface RetryOptions {
   /** Délai avant chaque nouvel essai ; leur nombre fixe le nombre de
    * relances (essais au total = délais + 1). */

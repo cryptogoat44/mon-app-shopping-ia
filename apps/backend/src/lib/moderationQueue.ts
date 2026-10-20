@@ -3,10 +3,13 @@
 // de chaque contenu, la décision en vigueur (à annuler) et l'historique des
 // décisions. Visible des seuls administrateurs ; l'auteur d'un signalement
 // n'y figure jamais. Tout ce qui vient de la base est relu avec zod.
+// Lot 5, partie B : une image copiée peut avoir été retirée (« Image
+// indisponible ») ; « Retirer l'image » n'est proposé que pour une copie.
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   MODERATION_ACTION_TYPES,
+  MODERATION_REASONS,
   PRIVACY_LEVELS,
   REPORT_REASONS,
   REPORT_TARGET_TYPES,
@@ -45,9 +48,11 @@ const POST_ROWS = z.array(
   z.object({
     id: ID,
     user_id: ID,
+    type: z.string(),
     caption: z.string().nullable(),
     media_url: z.string().nullable(),
     media_thumb_url: z.string().nullable(),
+    media_removed_at: TIMESTAMP.nullable(),
     privacy: z.enum(PRIVACY_LEVELS),
     created_at: TIMESTAMP,
     hidden_at: TIMESTAMP.nullable(),
@@ -57,7 +62,16 @@ const COMMENT_ROWS = z.array(
   z.object({ id: ID, user_id: ID, post_id: ID, body: z.string(), created_at: TIMESTAMP, hidden_at: TIMESTAMP.nullable() })
 );
 const PIECE_ROWS = z.array(
-  z.object({ id: ID, sender_id: ID, title: z.string(), image_thumb_url: z.string(), created_at: TIMESTAMP, hidden_at: TIMESTAMP.nullable() })
+  z.object({
+    id: ID,
+    sender_id: ID,
+    title: z.string(),
+    image_url: z.string().nullable(),
+    image_thumb_url: z.string().nullable(),
+    image_removed_at: TIMESTAMP.nullable(),
+    created_at: TIMESTAMP,
+    hidden_at: TIMESTAMP.nullable(),
+  })
 );
 const PROFILE_ROWS = z.array(
   z.object({ id: ID, username: z.string().nullable(), display_name: z.string(), avatar_url: z.string().nullable(), bio: z.string().nullable() })
@@ -70,7 +84,7 @@ const ACTION_ROWS = z.array(
     action: z.enum(MODERATION_ACTION_TYPES),
     target_type: TARGET_TYPE,
     target_id: ID,
-    reason: REASON.nullable(),
+    reason: z.enum(MODERATION_REASONS).nullable(),
     note: z.string().nullable(),
     undoes_action_id: ID.nullable(),
     created_at: TIMESTAMP,
@@ -105,10 +119,15 @@ async function loadTargets(fastify: FastifyInstance, rows: QueueRow[]) {
   const pieceIds = idsOf(rows, "piece");
   const [posts, comments, pieces, actions] = await Promise.all([
     postIds.length > 0
-      ? db.from("posts").select("id, user_id, caption, media_url, media_thumb_url, privacy, created_at, hidden_at").in("id", postIds)
+      ? db
+          .from("posts")
+          .select("id, user_id, type, caption, media_url, media_thumb_url, media_removed_at, privacy, created_at, hidden_at")
+          .in("id", postIds)
       : NO_ROWS,
     commentIds.length > 0 ? db.from("comments").select("id, user_id, post_id, body, created_at, hidden_at").in("id", commentIds) : NO_ROWS,
-    pieceIds.length > 0 ? db.from("piece_sends").select("id, sender_id, title, image_thumb_url, created_at, hidden_at").in("id", pieceIds) : NO_ROWS,
+    pieceIds.length > 0
+      ? db.from("piece_sends").select("id, sender_id, title, image_url, image_thumb_url, image_removed_at, created_at, hidden_at").in("id", pieceIds)
+      : NO_ROWS,
     db
       .from("moderation_actions")
       .select("id, admin_id, action, target_type, target_id, reason, note, undoes_action_id, created_at")
@@ -174,8 +193,16 @@ function previewOf(row: QueueRow, data: Loaded): ModerationPreview {
     const post = data.posts.get(row.target_id);
     const author = post ? authorOf(post.user_id, data) : null;
     if (!post || !author) return MISSING;
-    const imageUrl = post.media_thumb_url ?? post.media_url;
-    return { kind: "post", author, caption: post.caption, imageUrl, privacy: post.privacy, createdAt: post.created_at, hidden: post.hidden_at !== null };
+    return {
+      kind: "post",
+      author,
+      caption: post.caption,
+      imageUrl: post.media_thumb_url ?? post.media_url,
+      imageRemoved: post.media_removed_at !== null,
+      privacy: post.privacy,
+      createdAt: post.created_at,
+      hidden: post.hidden_at !== null,
+    };
   }
   if (row.target_type === "comment") {
     const comment = data.comments.get(row.target_id);
@@ -187,10 +214,26 @@ function previewOf(row: QueueRow, data: Loaded): ModerationPreview {
     const piece = data.pieces.get(row.target_id);
     const author = piece ? authorOf(piece.sender_id, data) : null;
     if (!piece || !author) return MISSING;
-    return { kind: "piece", author, title: piece.title, imageUrl: piece.image_thumb_url, createdAt: piece.created_at, hidden: piece.hidden_at !== null };
+    return {
+      kind: "piece",
+      author,
+      title: piece.title,
+      imageUrl: piece.image_thumb_url ?? piece.image_url,
+      imageRemoved: piece.image_removed_at !== null,
+      createdAt: piece.created_at,
+      hidden: piece.hidden_at !== null,
+    };
   }
   const author = authorOf(row.target_id, data);
   return author ? { kind: "user", author, bio: data.profiles.get(row.target_id)?.bio ?? null } : MISSING;
+}
+
+/** L'image est une copie faite par Spotto (publication « envie », pièce
+ * envoyée), encore en place : « Retirer l'image » est proposé. */
+function canRemoveImage(row: QueueRow, preview: ModerationPreview, data: Loaded): boolean {
+  if (preview.kind === "piece") return !preview.imageRemoved;
+  if (preview.kind !== "post") return false;
+  return data.posts.get(row.target_id)?.type === "wish" && !preview.imageRemoved;
 }
 
 /** Masquage en vigueur : le plus récent qui n'a pas été annulé (un seul possible à la fois). */
@@ -225,6 +268,7 @@ function toItem(row: QueueRow, data: Loaded): ModerationItem {
     preview,
     activeHideActionId: hidden ? activeHideActionId(history) : null,
     activeSuspendActionId: preview.kind === "missing" ? null : (data.suspensions.get(preview.author.id) ?? null),
+    canRemoveImage: canRemoveImage(row, preview, data),
     history: history.slice(0, HISTORY_LIMIT).map((action) => toLogEntry(action, data)),
   };
 }

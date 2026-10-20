@@ -1,14 +1,15 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider, usePathname, type Theme } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import { StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { ToastProvider } from "@/lib/toast-context";
 import { PreferencesProvider } from "@/lib/preferences-context";
 import { AnalyticsSession } from "@/components/analytics-session";
 import { WebTitle } from "@/components/web-title";
 import { NewVersionBanner } from "@/components/new-version-banner";
-import { resolveRootRoute, showsNavigator } from "@/lib/root-route";
+import { resolveRootRoute, rootContent } from "@/lib/root-route";
+import { StartupWaiting } from "@/components/connecting";
 import { useAppFonts } from "@/theme/fonts";
 import { color, getActiveScheme } from "@/theme/tokens";
 import { APP_NAME_DISPLAY } from "@/constants/brand";
@@ -48,7 +49,11 @@ function RootNavigator() {
     if (route !== "splash") SplashScreen.hideAsync();
   }, [route]);
 
-  if (!showsNavigator(route, pathname, fontsReady)) return null;
+  // Site : un écran d'attente pendant le démarrage, jamais une page vide ;
+  // iPhone : l'écran de démarrage du système reste affiché.
+  const content = rootContent(route, pathname, fontsReady, Platform.OS);
+  if (content === "native-splash") return null;
+  if (content === "waiting") return <StartupWaiting />;
 
   return (
     <ThemeProvider value={navigationTheme()}>
