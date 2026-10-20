@@ -200,9 +200,16 @@ function numeroFictif(n: number): string {
   return String(n).padStart(10, "0");
 }
 
+/** Paramètres de liens qui peuvent porter un identifiant de session, de compte,
+ * de clic ou de partenaire (demande du fondateur, 2026-10-21) : leur valeur est
+ * remplacée par « id-N ». Une même valeur reçoit le même « id-N », pour garder
+ * les égalités dont dépend le filtre des doublons. Les autres paramètres
+ * (couleur, taille, variante, pays, devise) restent tels quels. */
+const PARAMETRE_IDENTIFIANT = /^(?:.*session.*|sid|ssid|.*token.*|auth.*|.*user.*|uid|.*account.*|acct|.*customer.*|member.*|login|.*e-?mail.*|gclid|gbraid|wbraid|dclid|fbclid|msclkid|ttclid|twclid|igshid|yclid|srsltid|mc_cid|mc_eid|_ga|_gl|.*click_?id.*|ref|referr?er|aff.*|partner.*|utm_.*)$/i;
+
 /** Valeurs neutres d'UNE réponse : une même valeur d'origine reçoit toujours la même valeur neutre. */
 function neutraliseur() {
-  const numeros = { titres: new Map<string, number>(), marchands: new Map<string, number>(), chemins: new Map<string, number>() };
+  const numeros = { titres: new Map<string, number>(), marchands: new Map<string, number>(), chemins: new Map<string, number>(), identifiants: new Map<string, number>() };
   const numero = (carte: Map<string, number>, cle: string): number => {
     if (!carte.has(cle)) carte.set(cle, carte.size + 1);
     return carte.get(cle)!;
@@ -214,14 +221,17 @@ function neutraliseur() {
       return siteInTitle ? `${neutre} - ${siteInTitle.toUpperCase()}` : neutre;
     },
     marchand: (nom: string): string => `Marchand ${numero(numeros.marchands, nom.trim().toLowerCase())}`,
-    /** Domaine et paramètres gardés ; chemin neutre ; fragment « # » retiré. Deux
-     * chemins sont « les mêmes » exactement comme pour le filtre des doublons
-     * (barre finale près, majuscules comprises). */
+    /** Domaine gardé ; chemin neutre ; paramètres gardés, sauf la valeur des
+     * identifiants ; fragment « # » retiré. Deux chemins sont « les mêmes »
+     * exactement comme pour le filtre des doublons (barre finale près,
+     * majuscules comprises). */
     lien(lien: string): string {
       try {
         const url = new URL(lien);
         const chemin = url.pathname.length > 1 ? url.pathname.replace(/\/$/, "") : url.pathname;
-        return `${url.protocol}//${url.host}/produit-${numero(numeros.chemins, chemin)}${url.search}`;
+        const parametres = new URLSearchParams([...url.searchParams].map(([nom, valeur]) => [nom, PARAMETRE_IDENTIFIANT.test(nom) ? `id-${numero(numeros.identifiants, valeur)}` : valeur]));
+        const requete = parametres.toString();
+        return `${url.protocol}//${url.host}/produit-${numero(numeros.chemins, chemin)}${requete ? `?${requete}` : ""}`;
       } catch {
         return "https://example.invalid/lien-illisible";
       }
@@ -280,7 +290,8 @@ export function reponseDeTest(brut: unknown): Record<string, unknown> | null {
 const INTERDITS: readonly { nom: string; motif: RegExp }[] = [
   { nom: "clé d'API", motif: /api[_-]?key/i },
   { nom: "adresse e-mail", motif: /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i },
-  { nom: "adresse d'image temporaire de notre serveur", motif: /supabase\.(?:co|in)|\/storage\/v1\/|[?&]token=|sbtwsmxfdfxzgcohbznd|qcwnlqkxnhqpyjpkooiw/i },
+  { nom: "adresse d'image temporaire de notre serveur", motif: /supabase\.(?:co|in)|\/storage\/v1\/|[?&]token=(?!id-\d)|sbtwsmxfdfxzgcohbznd|qcwnlqkxnhqpyjpkooiw/i },
+  { nom: "identifiant de session, de compte ou de clic dans un lien", motif: /[?&](?:[a-z_]*session[a-z_]*|sid|uid|[a-z_]*user[a-z_]*|[a-z_]*account[a-z_]*|[a-z_]*customer[a-z_]*|gclid|fbclid|msclkid|srsltid)=(?!id-\d)/i },
   { nom: "lien de recherche de SerpApi (il contient l'adresse de l'image)", motif: /serpapi\.com\/search/i },
 ];
 

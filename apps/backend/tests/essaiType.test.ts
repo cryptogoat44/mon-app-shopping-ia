@@ -197,6 +197,25 @@ describe("réponses de test : réduites, neutralisées, anonymisées, vérifiée
     expect(garder(test)).toEqual(garder(brut.visual_matches));
   });
 
+  it("paramètres de liens : identifiants de session, de compte ou de clic remplacés (même valeur, même remplaçant) ; couleur, variante, pays et devise gardés", () => {
+    const brut = {
+      visual_matches: [
+        { position: 1, title: "Veste", link: "https://www.boutique.fr/veste?colour=chocolate&sessionid=abc123&gclid=XYZ&variant=42&country=CH&currency=CHF", source: "Boutique" },
+        { position: 2, title: "Veste", link: "https://www.boutique.fr/veste?colour=chocolate&sessionid=abc123&gclid=AUTRE", source: "Boutique" },
+        { position: 3, title: "Pull", link: "https://www.boutique.fr/pull?user_id=987&ref=partenaire&srsltid=AfmBOo", source: "Boutique" },
+      ],
+    };
+    const liens = (reponseDeTest(brut)!.visual_matches as { link: string }[]).map((m) => m.link);
+    expect(liens).toEqual([
+      "https://www.boutique.fr/produit-1?colour=chocolate&sessionid=id-1&gclid=id-2&variant=42&country=CH&currency=CHF",
+      "https://www.boutique.fr/produit-1?colour=chocolate&sessionid=id-1&gclid=id-3",
+      "https://www.boutique.fr/produit-2?user_id=id-4&ref=id-5&srsltid=id-6",
+    ]);
+    expect(contenusInterdits(JSON.stringify(liens))).toEqual([]);
+    expect(contenusInterdits("https://x.fr/a?sessionid=abc123")).toEqual(["identifiant de session, de compte ou de clic dans un lien"]);
+    expect(contenusInterdits("https://x.fr/a?colour=chocolate&variant=42&country=CH&currency=CHF")).toEqual([]);
+  });
+
   it("le résultat ne contient plus rien à protéger, alors que la réponse brute en contenait", () => {
     expect(contenusInterdits(JSON.stringify(BRUT))).toEqual(["clé d'API", "adresse d'image temporaire de notre serveur", "lien de recherche de SerpApi (il contient l'adresse de l'image)"]);
     expect(contenusInterdits(JSON.stringify(reponseDeTest(BRUT)))).toEqual([]);
