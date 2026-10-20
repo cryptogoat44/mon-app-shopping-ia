@@ -16,7 +16,7 @@ describe("plan des essais de la photo", () => {
   it("essai 1 : exactement l'app — zone centrale, sans texte, réglages actuels (products, fr/fr)", () => {
     const essai = ESSAIS[0]!;
     expect(ZONE_APP).toEqual(DEFAULT_CROP);
-    expect(essai).toMatchObject({ zone: "app", texte: null, reglages: { type: "products", locale: { country: "fr", hl: "fr" } } });
+    expect(essai).toMatchObject({ zone: "app", texte: null, reglages: { type: "visual_matches", locale: { country: "fr", hl: "fr" } } });
     expect(essai.reglages).toBe(CURRENT_LENS_SETTINGS);
   });
 

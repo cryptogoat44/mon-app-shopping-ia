@@ -47,7 +47,7 @@ afterEach(() => {
 });
 
 describe("searchProductsByImageUrl", () => {
-  it("appelle SerpApi avec type=products et la localisation par défaut (fr/fr)", async () => {
+  it("appelle SerpApi avec type=visual_matches (« products » abandonné par SerpApi le 2026-10-09) et la localisation par défaut (fr/fr)", async () => {
     safeFetchMock.mockResolvedValueOnce(jsonResponse({ visual_matches: [PRODUCT_MATCH] }));
 
     const fastify = fakeFastify();
@@ -55,11 +55,57 @@ describe("searchProductsByImageUrl", () => {
 
     expect(safeFetchMock).toHaveBeenCalledOnce();
     const calledUrl = new URL(safeFetchMock.mock.calls[0]![0] as string);
-    expect(calledUrl.searchParams.get("type")).toBe("products");
+    expect(calledUrl.searchParams.get("type")).toBe("visual_matches");
     expect(calledUrl.searchParams.get("country")).toBe("fr");
     expect(calledUrl.searchParams.get("hl")).toBe("fr");
     expect(matches).toHaveLength(1);
     expect(matches[0]!.productName).toBe("Sac Polène");
+  });
+
+  // Réponses fabriquées sur le modèle documenté de « visual_matches »
+  // (serpapi.com/google-lens-visual-matches-api, lu le 2026-10-20) : mêmes
+  // champs que « products », plus quelques-uns que le serveur ignore.
+  it("visual_matches : propositions lues comme avant ; les champs en plus sont ignorés ; les réseaux sociaux restent écartés", async () => {
+    const visuelle = {
+      ...PRODUCT_MATCH,
+      image: "https://www.polene-paris.com/sac-grand.jpg",
+      source_icon: "https://example.com/icone.png",
+      rating: 4.8,
+      reviews: 120,
+      in_stock: true,
+      condition: "Neuf",
+      exact_matches: true,
+      serpapi_exact_matches_link: "https://serpapi.com/search.json?engine=google_lens&type=exact_matches",
+    };
+    safeFetchMock.mockResolvedValueOnce(jsonResponse({ search_metadata: { status: "Success" }, visual_matches: [visuelle, SOCIAL_MATCH] }));
+
+    const { matches, measure } = await searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg");
+
+    expect(matches).toEqual([
+      { rank: 1, productName: "Sac Polène", imageUrl: "https://example.com/thumb.jpg", imageHdUrl: "https://www.polene-paris.com/sac-grand.jpg", merchantName: "Polène", merchantUrl: "https://www.polene-paris.com/sac", priceValue: 640, currency: "€" },
+    ]);
+    expect(measure).toMatchObject({ received: 2, removedSocial: 1, kept: 1, keptWithPrice: 1, sections: ["visual_matches"] });
+  });
+
+  it("une réponse avec d'autres rubriques (correspondances exactes, contenus liés) : seules les correspondances visuelles sont lues, les autres sont comptées par la mesure", async () => {
+    safeFetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        visual_matches: [PRODUCT_MATCH],
+        exact_matches: [{ position: 1, title: "Sac Polène", link: "https://www.polene-paris.com/sac", price: "640 €", extracted_price: 640 }],
+        related_content: [{ query: "sac polène" }],
+      })
+    );
+
+    const { matches, measure } = await searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg");
+
+    expect(matches.map((m) => m.productName)).toEqual(["Sac Polène"]);
+    expect(measure.sections).toEqual(["visual_matches", "related_content", "other"]);
+  });
+
+  it("un type refusé par SerpApi (code 400, comme « products » depuis son abandon) est une panne annoncée, jamais une recherche vide", async () => {
+    safeFetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ error: "Unsupported `products` type." }), { status: 400, headers: { "content-type": "application/json" } }));
+
+    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toMatchObject({ kind: "serpapi_error" });
   });
 
   it("accepte une locale explicite, en prévision du branchement sur la langue de l'utilisateur (Lot 3)", async () => {
