@@ -229,7 +229,7 @@ function neutraliseur() {
       try {
         const url = new URL(lien);
         const chemin = url.pathname.length > 1 ? url.pathname.replace(/\/$/, "") : url.pathname;
-        const parametres = new URLSearchParams([...url.searchParams].map(([nom, valeur]) => [nom, PARAMETRE_IDENTIFIANT.test(nom) ? `id-${numero(numeros.identifiants, valeur)}` : valeur]));
+        const parametres = new URLSearchParams([...url.searchParams].map(([nom, valeur]): [string, string] => [nom, PARAMETRE_IDENTIFIANT.test(nom) ? `id-${numero(numeros.identifiants, valeur)}` : valeur]));
         const requete = parametres.toString();
         return `${url.protocol}//${url.host}/produit-${numero(numeros.chemins, chemin)}${requete ? `?${requete}` : ""}`;
       } catch {
