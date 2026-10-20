@@ -19,8 +19,11 @@ export interface SearchLocale {
 
 /** Réglages d'un appel à Google Lens. */
 export interface LensSettings {
-  /** "products" : seulement les résultats que Google classe « produit » (prix, lien marchand). */
-  type: "products" | "all";
+  /** "products" : seulement les résultats que Google classe « produit » (prix, lien
+   * marchand) — ABANDONNÉ par SerpApi le 2026-10-09 (« Requests using it now return
+   * an error ») ; "visual_matches" : la rubrique des correspondances visuelles, mêmes
+   * champs ; "all" : toutes les rubriques. */
+  type: "products" | "visual_matches" | "all";
   /** null : sans localisation (comme avant le 2026-09-22). */
   locale: SearchLocale | null;
 }

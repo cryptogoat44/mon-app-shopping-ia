@@ -15,17 +15,16 @@
 // Garde-fous : aucun appel si la page d'état de SerpApi ne dit pas « Lens API »
 // opérationnelle (ou ne répond pas) ; à la première panne d'un essai (délai
 // dépassé…), arrêt net.
-import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { z } from "zod";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { env } from "../src/env.js";
 import { assertDevSupabaseUrl } from "./lib/dev-database.js";
 import { afficher, commeImportee, essaiLens, releverReponses, type Releve } from "./lib/essai-lens.js";
-import { analyserZone, type Essai, type Resultat } from "./lib/essai-photo.js";
-import { CREDITS_MESURE_MAX, decision, divergenceForte, essaisDeBase, ETAT_ILLISIBLE, ETAT_SERPAPI, etatLens, moyenne, PIECE, texteNuisible, troisiemeEssai, type Piece } from "./lib/mesure-texte.js";
+import { imageDe, lireEtatLens, lirePiecesDe } from "./lib/essai-pieces.js";
+import type { Essai, Resultat } from "./lib/essai-photo.js";
+import { CREDITS_MESURE_MAX, decision, divergenceForte, essaisDeBase, moyenne, texteNuisible, troisiemeEssai, type Piece } from "./lib/mesure-texte.js";
 
 interface Bilan {
   piece: Piece;
@@ -35,25 +34,9 @@ interface Bilan {
 }
 
 function lirePieces(manifeste: string): Piece[] {
-  const pieces = z.array(PIECE).min(1).parse(JSON.parse(readFileSync(manifeste, "utf8")));
-  for (const piece of pieces) analyserZone(piece.zone);
+  const pieces = lirePiecesDe(manifeste);
   if (pieces.length * 2 > CREDITS_MESURE_MAX) throw new Error(`${pieces.length} pièces : plus de ${CREDITS_MESURE_MAX} crédits.`);
   return pieces;
-}
-
-/** État de Google Lens chez SerpApi (page d'état publique), ou « illisible ». */
-async function lireEtatLens(): Promise<string> {
-  const reponse = await fetch(ETAT_SERPAPI, { headers: { accept: "application/json", "user-agent": "Mozilla/5.0 (Spotto, outil de mesure)" }, signal: AbortSignal.timeout(15_000) }).catch(() => null);
-  return (reponse?.ok ? etatLens(await reponse.json().catch(() => null)) : null) ?? ETAT_ILLISIBLE;
-}
-
-/** Image de la pièce : la photo telle quelle, ou l'image de la vidéo à l'instant choisi (ffmpeg, sur le Mac). */
-function imageDe(piece: Piece, travail: string): string {
-  if (piece.image) return piece.image;
-  if (!piece.video || piece.seconde === undefined) throw new Error(`${piece.nom} : ni image, ni vidéo et instant.`);
-  const sortie = join(travail, `${piece.nom}.jpg`);
-  execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-ss", piece.seconde.toFixed(3), "-i", piece.video, "-frames:v", "1", "-q:v", "2", sortie]);
-  return sortie;
 }
 
 /** Les recherches d'une pièce ; `tiers` : troisièmes recherches encore permises par le plafond ;
