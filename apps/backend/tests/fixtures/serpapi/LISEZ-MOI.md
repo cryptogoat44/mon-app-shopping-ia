@@ -18,7 +18,7 @@ Trois recherches réelles faites le 24 septembre 2026 sur spotto-dev, pendant le
 - **Rubriques absentes** : à l'époque, seule la liste des propositions avait été gardée pour les deux recherches abouties. Pour la recherche vide, l'adresse de l'image et les identifiants de recherche ont été retirés.
 - **Anonymisé** : les liens vers des comptes de réseaux sociaux (TikTok, Instagram) et vers des annonces de particuliers (Leboncoin), avec leurs images. Tout le reste est tel que SerpApi l'a renvoyé.
 
-## Neutralisées le 21 octobre 2026 (dépôt public, décision du fondateur)
+## Neutralisées le 20 octobre 2026 (dépôt public, décision du fondateur)
 
 Les trois réponses ont été repassées dans `reponseDeTest` (`scripts/lib/essai-type.ts`, testée dans `tests/essaiType.test.ts`), comme le seront les réponses des prochains essais.
 

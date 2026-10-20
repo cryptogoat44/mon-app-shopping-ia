@@ -18,7 +18,7 @@ import {
 } from "../scripts/lib/essai-type.js";
 
 // Essai du type de recherche de Google Lens (décisions du fondateur,
-// 2026-10-20 et 2026-10-21) : plans, dérogations, relevé sans contenu
+// 2026-10-20) : plans, dérogations, relevé sans contenu
 // personnel, réponses de test neutralisées, anonymisées et vérifiées (dépôt
 // public). Aucun appel dans ces tests.
 const piece = (nom: string) => PIECE.parse({ nom, texte: "pièce d'essai", image: `/tmp/${nom}.jpg`, zone: { x: 0, y: 0.5, width: 1, height: 0.4 } });

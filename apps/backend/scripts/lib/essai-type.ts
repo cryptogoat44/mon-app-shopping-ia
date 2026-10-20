@@ -1,5 +1,5 @@
-// Essai du type de recherche de Google Lens (décisions du fondateur, 2026-10-20
-// et 2026-10-21). SerpApi a abandonné « products » le 2026-10-09 ;
+// Essai du type de recherche de Google Lens (décisions du fondateur du
+// 2026-10-20). SerpApi a abandonné « products » le 2026-10-09 ;
 // « visual_matches » renvoie les mêmes champs (documentation de SerpApi, lue le
 // 2026-10-20). Logique pure, testée (tests/essaiType.test.ts) : plans,
 // autorisation de dépenser (et ses deux dérogations), relevé de chaque
@@ -182,7 +182,7 @@ export function bilanFacturation(lignes: readonly LigneReleve[]): Record<Facture
 }
 
 // ---- Réponses de test : réduites, neutralisées, anonymisées, vérifiées ----
-// Le dépôt est public (décision du fondateur, 2026-10-21) : titres, noms de
+// Le dépôt est public (décision du fondateur, 2026-10-20) : titres, noms de
 // marchands, chemins des liens et images sont remplacés par des valeurs
 // neutres ou fictives. Restent tels quels les éléments dont dépendent les tests
 // et la mesure : positions, prix et devises, domaines et paramètres des liens,
@@ -201,7 +201,7 @@ function numeroFictif(n: number): string {
 }
 
 /** Paramètres de liens qui peuvent porter un identifiant de session, de compte,
- * de clic ou de partenaire (demande du fondateur, 2026-10-21) : leur valeur est
+ * de clic ou de partenaire (demande du fondateur, 2026-10-20) : leur valeur est
  * remplacée par « id-N ». Une même valeur reçoit le même « id-N », pour garder
  * les égalités dont dépend le filtre des doublons. Les autres paramètres
  * (couleur, taille, variante, pays, devise) restent tels quels. */

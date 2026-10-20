@@ -9,7 +9,7 @@
 //   résultat était une mauvaise marque (docs/journal-decisions.md) ;
 // - 2026-10-09 : SerpApi abandonne "products", Google ayant retiré cet onglet
 //   de Google Lens : « Requests using it now return an error » ;
-// - 2026-10-21 : "visual_matches" retenu par le fondateur. D'après la
+// - 2026-10-20 : "visual_matches" retenu par le fondateur. D'après la
 //   documentation de SerpApi, il renvoie les mêmes champs (titre, lien,
 //   marchand, prix, image) et accepte le texte ; il n'écarte plus lui-même les
 //   réseaux sociaux : les filtres du serveur le font (services/matchFilters.ts).

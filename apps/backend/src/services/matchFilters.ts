@@ -6,7 +6,7 @@
 // tests/fixtures/serpapi).
 
 // Simples publications de réseaux sociaux : jamais un endroit où acheter la
-// pièce. Depuis « visual_matches » (2026-10-21 ; l'ancien "type=products" les
+// pièce. Depuis « visual_matches » (2026-10-20 ; l'ancien "type=products" les
 // éliminait lui-même), Google Lens en renvoie davantage : cette liste les écarte
 // après coup.
 const SOCIAL_NETWORK_DOMAINS = ["tiktok.com", "instagram.com", "youtube.com", "youtu.be", "facebook.com", "twitter.com", "x.com"];
