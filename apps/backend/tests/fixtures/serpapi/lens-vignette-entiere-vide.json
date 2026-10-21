@@ -1,6 +1,6 @@
 {
- "search_information": {
-  "images_results_state": "Fully empty"
- },
- "error": "Google Lens hasn't returned any results for this query."
+  "search_information": {
+    "images_results_state": "Fully empty"
+  },
+  "error": "Google Lens hasn't returned any results for this query."
 }

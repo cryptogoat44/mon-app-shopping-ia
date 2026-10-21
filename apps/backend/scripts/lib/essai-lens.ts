@@ -31,18 +31,23 @@ export interface Releve {
   structure: Structure | null;
   /** Réponse brute de SerpApi (gardée dans le dossier temporaire seulement). */
   brut: unknown;
+  /** Code de réponse de SerpApi (200, 400…), null avant toute réponse. */
+  statut: number | null;
+  /** Durée de l'appel à SerpApi, en secondes (à la seconde près). */
+  secondes: number | null;
 }
 
 /** Chaque réponse de SerpApi, relevée au passage (la réponse elle-même n'est pas modifiée). */
 export function releverReponses(): () => Releve {
-  let derniere: Releve = { structure: null, brut: null };
+  let derniere: Releve = { structure: null, brut: null, statut: null, secondes: null };
   const fetchReel = globalThis.fetch;
   globalThis.fetch = async (entree: Parameters<typeof fetch>[0], init?: RequestInit): Promise<Response> => {
+    const debut = Date.now();
     const reponse = await fetchReel(entree, init);
     const adresse = typeof entree === "string" ? entree : entree instanceof URL ? entree.href : entree.url;
     if (adresse.startsWith("https://serpapi.com/")) {
       const brut: unknown = await reponse.clone().json().catch(() => null);
-      derniere = { structure: structureReponse(brut), brut };
+      derniere = { structure: structureReponse(brut), brut, statut: reponse.status, secondes: Math.round((Date.now() - debut) / 1000) };
     }
     return reponse;
   };
