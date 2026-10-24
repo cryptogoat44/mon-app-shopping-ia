@@ -29,6 +29,7 @@
     "essai-photo": "tsx scripts/essai-photo.ts",
     "mesure-texte": "tsx scripts/mesure-texte.ts",
     "essai-type-recherche": "tsx scripts/essai-type-recherche.ts",
+    "serie-mesure": "tsx scripts/serie-mesure.ts",
     "parcours-ecran": "tsx scripts/parcours-ecran/index.ts",
     "images-marque": "tsx scripts/images-marque.ts",
     "parcours-iphone": "tsx scripts/parcours-iphone/index.ts"
