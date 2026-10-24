@@ -85,8 +85,12 @@ export interface ProduitChoisi {
 }
 
 export interface MesureShopping {
+  /** Nombres seulement : c'est ce qui est relevé. */
   mesures: Record<string, number>;
   produit: ProduitChoisi | null;
+  /** Noms des vendeurs, en mémoire seulement (répétabilité), jamais relevés :
+   * le relevé ne garde que des nombres, des rangs, des devises et des domaines. */
+  vendeurs: string[];
 }
 
 const enEuros = (prix: string | undefined): boolean => Boolean(prix && /€|EUR/.test(prix));
@@ -113,12 +117,38 @@ export function mesurerShopping(json: unknown, texte: string): MesureShopping | 
       pertinents,
     },
     produit: premier ? { productId: premier.product_id ?? null, pageToken: premier.immersive_product_page_token ?? null } : null,
+    vendeurs: [...new Set(resultats.map((r) => r.source?.trim()).filter((s): s is string => Boolean(s)))],
   };
 }
 
+/** Répétabilité de la recherche par texte : vendeurs communs avec la recherche
+ * précédente (même pièce, mêmes mots), en nombres seulement. */
+export function vendeursCommuns(precedents: readonly string[], actuels: readonly string[]): { vendeursCommuns: number; partVendeursCommuns: number } {
+  const communs = new Set(actuels.filter((v) => precedents.includes(v))).size;
+  return { vendeursCommuns: communs, partVendeursCommuns: Math.round(partCommune(precedents, actuels) * 100) / 100 };
+}
+
 /** Pertinence douteuse : une minorité de résultats contient un mot de la recherche. */
-export function pertinenceDouteuse(mesures: Record<string, number>): boolean {
-  return (mesures.resultats ?? 0) > 0 && (mesures.pertinents ?? 0) * 2 < (mesures.resultats ?? 0);
+export function pertinenceDouteuse(mesures: Record<string, unknown>): boolean {
+  const nombre = (cle: string): number => {
+    const valeur = mesures[cle];
+    return typeof valeur === "number" ? valeur : 0;
+  };
+  return nombre("resultats") > 0 && nombre("pertinents") * 2 < nombre("resultats");
+}
+
+/** Mots qui décrivent une personne : une description de l'IA qui en contient n'est jamais envoyée à Google. */
+const MOTS_PERSONNE = ["visage", "cheveux", "barbe", "moustache", "peau", "tatouage", "yeux", "sourire", "homme", "femme", "garcon", "fille", "enfant", "personne", "bras", "main", "cou", "lunettes"];
+
+/** Description de l'IA acceptable : 3 à 80 caractères, ni adresse ni e-mail,
+ * aucun mot qui décrit une personne. */
+export function descriptionAcceptable(description: string): { ok: boolean; raison: string | null } {
+  const texte = description.trim();
+  if (texte.length < 3 || texte.length > 80) return { ok: false, raison: "longueur" };
+  if (/https?:|www\.|@/i.test(texte)) return { ok: false, raison: "format" };
+  const mots = sansAccent(texte).split(/[^a-z0-9]+/);
+  const personne = MOTS_PERSONNE.find((mot) => mots.includes(mot));
+  return personne ? { ok: false, raison: "personne décrite" } : { ok: true, raison: null };
 }
 
 const BOUTIQUE = z.object({ link: z.string().optional(), price: z.string().optional(), extracted_price: z.number().optional() });

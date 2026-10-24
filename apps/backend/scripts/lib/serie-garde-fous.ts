@@ -7,6 +7,13 @@
 import { z } from "zod";
 import { AUTORISATION_SERIE, PIECES_SERIE, type EtapeSerie } from "./serie-plan.js";
 
+/** Une autorisation tapée par le fondateur : un nombre de recherches, pour certains lots (tous si `lots` est null). */
+export interface Autorisation {
+  recherches: number;
+  lots: readonly number[] | null;
+}
+export const AUTORISATION_SERIE_1: Autorisation = { recherches: AUTORISATION_SERIE, lots: null };
+
 /** Réserve gardée jusqu'au 2 novembre (décision du fondateur). */
 export const RESERVE = 30;
 /** Plafond de la série par jour de Paris (proposé le 24 octobre, accepté avec le plan). */
@@ -27,7 +34,7 @@ export const LIGNE_SERIE = z.object({
   numero: z.number().int().positive(),
   lot: z.number().int(),
   piece: z.enum(PIECES_SERIE),
-  service: z.enum(["lens", "shopping", "immersive", "product"]),
+  service: z.enum(["lens", "shopping", "immersive", "product", "description"]),
   lanceeLe: z.string(),
   issue: z.enum(ISSUES),
   code: z.number().int().nullable(),
@@ -80,24 +87,32 @@ export function attenteHoraireMinutes(lignes: readonly LigneSerie[], maintenant:
   return Math.max(1, Math.ceil((libere + HEURE_MS - maintenant.getTime()) / 60_000));
 }
 
-export type OptionsSerie = { mode: "etat" } | { mode: "reference" } | { mode: "lancer"; plafondJourLeve: boolean };
+export type OptionsSerie =
+  | { serie: 1 | 2; mode: "etat" }
+  | { serie: 1 | 2; mode: "reference" }
+  | { serie: 1 | 2; mode: "lancer"; plafondJourLeve: boolean; lot12: boolean };
 
 /** Options permises ; une option inconnue ou mal combinée ne lance jamais rien.
- * `--plafond-jour-leve` : seulement avec `--confirmer`, après la phrase tapée
- * par le fondateur ; ne change ni le total de 46 ni les autres garde-fous. */
+ * `--serie-2` : la série 2 (son plan, son relevé). `--plafond-jour-leve` :
+ * seulement avec `--confirmer`, après la phrase tapée par le fondateur.
+ * `--lot-12-ia` : seulement avec `--serie-2 --confirmer`, après la phrase du lot 12. */
 export function lireOptions(options: readonly string[]): OptionsSerie {
-  const connues = new Set(["--confirmer", "--nouvelle-reference", "--plafond-jour-leve"]);
-  const inconnues = options.filter((o) => !connues.has(o));
-  if (inconnues.length > 0 || new Set(options).size !== options.length) throw new Error(`Options refusées (${options.join(" ")}). Aucun appel lancé.`);
-  if (options.length === 0) return { mode: "etat" };
-  if (options.length === 1 && options[0] === "--nouvelle-reference") return { mode: "reference" };
-  if (options.includes("--confirmer") && !options.includes("--nouvelle-reference")) return { mode: "lancer", plafondJourLeve: options.includes("--plafond-jour-leve") };
-  throw new Error(`Options refusées (${options.join(" ")}) : --plafond-jour-leve ne va qu'avec --confirmer. Aucun appel lancé.`);
+  const connues = new Set(["--confirmer", "--nouvelle-reference", "--plafond-jour-leve", "--serie-2", "--lot-12-ia"]);
+  const refus = (raison = "") => new Error(`Options refusées (${options.join(" ")})${raison}. Aucun appel lancé.`);
+  if (options.some((o) => !connues.has(o)) || new Set(options).size !== options.length) throw refus();
+  const serie = options.includes("--serie-2") ? 2 : 1;
+  const reste = options.filter((o) => o !== "--serie-2");
+  if (reste.length === 0) return { serie, mode: "etat" };
+  if (reste.length === 1 && reste[0] === "--nouvelle-reference") return { serie, mode: "reference" };
+  if (!reste.includes("--confirmer") || reste.includes("--nouvelle-reference")) throw refus(" : --plafond-jour-leve et --lot-12-ia ne vont qu'avec --confirmer");
+  const lot12 = reste.includes("--lot-12-ia");
+  if (lot12 && serie !== 2) throw refus(" : --lot-12-ia ne vaut que pour la série 2");
+  return { serie, mode: "lancer", plafondJourLeve: reste.includes("--plafond-jour-leve"), lot12 };
 }
 
 /** Recherches comptées contre l'autorisation : parties, sauf celles que SerpApi dit non facturées. */
-export function rechercheesAutorisees(lignes: readonly LigneSerie[]): number {
-  return lignes.filter((l) => appelParti(l) && l.facturee !== "non").length;
+export function rechercheesAutorisees(lignes: readonly LigneSerie[], lots: readonly number[] | null = null): number {
+  return lignes.filter((l) => appelParti(l) && l.facturee !== "non" && (lots === null || lots.includes(l.lot))).length;
 }
 
 /** Recherches facturées d'après le relevé (réponse de SerpApi, ou compteur lors d'une reprise). */
@@ -116,14 +131,14 @@ export function etapeSuivante(plan: readonly EtapeSerie[], lignes: readonly Lign
 export type Arret = { raison: "panne" | "vides" | "en_cours" | "autorisation"; message: string };
 
 /** Faut-il s'arrêter avant le prochain appel ? */
-export function arretDemande(lignes: readonly LigneSerie[]): Arret | null {
+export function arretDemande(lignes: readonly LigneSerie[], autorisation: Autorisation = AUTORISATION_SERIE_1): Arret | null {
   if (lignes.some((l) => l.issue === "en_cours")) return { raison: "en_cours", message: "Un appel est resté « en cours » : la reprise doit d'abord être tranchée avec le compteur." };
   const derniere = lignes.at(-1);
   if (derniere && (derniere.issue === "panne" || derniere.issue === "erreur")) return { raison: "panne", message: `Panne à l'étape ${derniere.numero} : série arrêtée (première panne).` };
   const appels = lignes.filter(appelParti);
   const dernieres = appels.slice(-VIDES_DE_SUITE_MAX);
   if (dernieres.length === VIDES_DE_SUITE_MAX && dernieres.every((l) => l.issue === "vide")) return { raison: "vides", message: `${VIDES_DE_SUITE_MAX} réponses vides de suite : série arrêtée (signe d'un incident).` };
-  if (rechercheesAutorisees(lignes) >= AUTORISATION_SERIE) return { raison: "autorisation", message: `Autorisation épuisée : ${AUTORISATION_SERIE} recherches.` };
+  if (rechercheesAutorisees(lignes, autorisation.lots) >= autorisation.recherches) return { raison: "autorisation", message: `Autorisation épuisée : ${autorisation.recherches} recherches.` };
   return null;
 }
 
@@ -133,9 +148,9 @@ export const FIN_SERIE = "Série terminée.";
  * continuer. La fin passe avant « autorisation épuisée » : quand les 46 étapes
  * sont faites, la série est terminée (constaté le 24 octobre : le dernier
  * passage affichait « autorisation épuisée »). */
-export function finOuArret(plan: readonly EtapeSerie[], lignes: readonly LigneSerie[]): string | null {
+export function finOuArret(plan: readonly EtapeSerie[], lignes: readonly LigneSerie[], autorisation: Autorisation = AUTORISATION_SERIE_1): string | null {
   if (!lignes.some((l) => l.issue === "en_cours") && !etapeSuivante(plan, lignes)) return FIN_SERIE;
-  return arretDemande(lignes)?.message ?? null;
+  return arretDemande(lignes, autorisation)?.message ?? null;
 }
 
 /** Reprise d'un appel resté « en cours » (session interrompue) : le compteur
@@ -197,7 +212,8 @@ export function reserveSuffisante(actuel: Compteur, etapesRestantes: number): bo
 
 /** Services de la page d'état dont dépend un lot (Google Product API n'y a pas de ligne). */
 export function servicesDuLot(lot: number): string[] {
-  return lot === 10 ? ["Shopping Light API", "Immersive Product API"] : ["Lens API"];
+  if (lot === 12) return ["Shopping Light API"];
+  return [10, 13, 14, 15].includes(lot) ? ["Shopping Light API", "Immersive Product API"] : ["Lens API"];
 }
 
 /** Tous les services du lot sont-ils annoncés « operational » ? */

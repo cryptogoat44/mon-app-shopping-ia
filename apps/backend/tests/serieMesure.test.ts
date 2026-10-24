@@ -8,9 +8,10 @@ import {
   type Compteur, type LigneSerie,
 } from "../scripts/lib/serie-garde-fous.js";
 import { lireDetections } from "../scripts/lib/serie-images.js";
-import { ajoutsRegleDesPrix, mesurerBoutiques, mesurerLens, mesurerShopping, motsSignificatifs, partCommune, pertinenceDouteuse } from "../scripts/lib/serie-mesures.js";
+import { ajoutsRegleDesPrix, descriptionAcceptable, mesurerBoutiques, mesurerLens, mesurerShopping, motsSignificatifs, partCommune, pertinenceDouteuse, vendeursCommuns } from "../scripts/lib/serie-mesures.js";
+import { demandeDescription, IMAGES_MAX, instantsRepartis, lireDescription } from "../scripts/lib/serie-ia.js";
 import { etiquette } from "../scripts/lib/serie-planche.js";
-import { AUTORISATION_SERIE, PHRASE_SERIE, piecesDeSerie, planSerie, titreEtape, type EtapeSerie } from "../scripts/lib/serie-plan.js";
+import { AUTORISATION_LOT_12, AUTORISATION_SERIE, AUTORISATION_SERIE_2, MOTS_VAGUES, PHRASE_LOT_12, PHRASE_SERIE, PHRASE_SERIE_2, piecesDeSerie, planSerie, planSerie2, titreEtape, type EtapeSerie } from "../scripts/lib/serie-plan.js";
 import type { SerpApiVisualMatch } from "../src/services/visualSearch.js";
 
 const PLAN = planSerie();
@@ -91,10 +92,15 @@ describe("garde-fous", () => {
   });
 
   it("options : le plafond du jour ne se lève qu'avec --confirmer, et rien d'inconnu", () => {
-    expect(lireOptions([])).toEqual({ mode: "etat" });
-    expect(lireOptions(["--nouvelle-reference"])).toEqual({ mode: "reference" });
-    expect(lireOptions(["--confirmer"])).toEqual({ mode: "lancer", plafondJourLeve: false });
-    expect(lireOptions(["--confirmer", "--plafond-jour-leve"])).toEqual({ mode: "lancer", plafondJourLeve: true });
+    expect(lireOptions([])).toEqual({ serie: 1, mode: "etat" });
+    expect(lireOptions(["--nouvelle-reference"])).toEqual({ serie: 1, mode: "reference" });
+    expect(lireOptions(["--confirmer"])).toEqual({ serie: 1, mode: "lancer", plafondJourLeve: false, lot12: false });
+    expect(lireOptions(["--confirmer", "--plafond-jour-leve"])).toEqual({ serie: 1, mode: "lancer", plafondJourLeve: true, lot12: false });
+    expect(lireOptions(["--serie-2", "--nouvelle-reference"])).toEqual({ serie: 2, mode: "reference" });
+    expect(lireOptions(["--serie-2", "--confirmer"])).toEqual({ serie: 2, mode: "lancer", plafondJourLeve: false, lot12: false });
+    expect(lireOptions(["--serie-2", "--confirmer", "--lot-12-ia"])).toEqual({ serie: 2, mode: "lancer", plafondJourLeve: false, lot12: true });
+    expect(() => lireOptions(["--confirmer", "--lot-12-ia"])).toThrow(/série 2/);
+    expect(() => lireOptions(["--serie-2", "--lot-12-ia"])).toThrow();
     expect(() => lireOptions(["--plafond-jour-leve"])).toThrow();
     expect(() => lireOptions(["--confirmer", "--nouvelle-reference"])).toThrow();
     expect(() => lireOptions(["--confirmer", "--confirmer"])).toThrow();
@@ -320,5 +326,69 @@ describe("appels, images et planches (simulés)", () => {
     const texte = JSON.stringify({ phrase: PHRASE_SERIE, lignes: [ligne(1, "reussie", { mesures: { recues: 60, domainesGardes: ["asos.com", "zalando.fr"], ajouts: [{ rang: 42, domaine: "asos.com", devise: "€" }] } })] });
     expect(contenusInterdits(texte)).toEqual([]);
     expect(/https?:\/\//.test(texte)).toBe(false);
+  });
+});
+
+describe("série 2 (lots 13, 14, 15, puis 12)", () => {
+  const PLAN2 = planSerie2();
+
+  it("15 étapes : lots 13 à 15 (11 recherches), puis le lot 12 (4) ; phrases exactes", () => {
+    expect(PLAN2).toHaveLength(15);
+    expect(PLAN2.filter((e) => e.lot !== 12)).toHaveLength(AUTORISATION_SERIE_2);
+    expect(PLAN2.filter((e) => e.lot === 12)).toHaveLength(AUTORISATION_LOT_12);
+    expect(PLAN2.slice(-4).every((e) => e.service === "description")).toBe(true);
+    expect(PHRASE_SERIE_2).toBe("OK série 2 : lots 13, 14 et 15, 11 recherches au plus");
+    expect(PHRASE_LOT_12).toBe("OK lot 12 de la série 2, IA comprise, 4 recherches au plus");
+  });
+
+  it("chaque lien marchand suit aussitôt la recherche par texte de sa pièce ; mots vagues au lot 14", () => {
+    PLAN2.forEach((etape, i) => {
+      if (etape.service === "immersive") expect(PLAN2[i - 1]).toMatchObject({ service: "shopping", piece: etape.piece });
+    });
+    expect(PLAN2.filter((e) => e.service === "immersive").map((e) => e.piece)).toEqual(["maillot-nike", "pull-noir", "veste-bleu-marine", "tshirt-blanc"]);
+    const vagues = PLAN2.filter((e): e is Extract<EtapeSerie, { service: "shopping" }> => e.service === "shopping" && e.lot === 14);
+    expect(vagues.map((e) => e.mots)).toEqual(["veste bleue", "maillot noir"]);
+    expect(MOTS_VAGUES).toEqual({ "veste-bleu-marine": "veste bleue", "maillot-nike": "maillot noir" });
+    // Le lot 12 ne porte que sur les vidéos (le maillot est une photo).
+    expect(PLAN2.filter((e) => e.lot === 12).map((e) => e.piece)).toEqual(["veste-bleu-marine", "tshirt-blanc", "pull-blanc", "pull-noir"]);
+  });
+
+  it("deux autorisations distinctes : 11 pour les lots 13 à 15, 4 pour le lot 12", () => {
+    const ligne2 = (numero: number, lot: number, options: Partial<LigneSerie> = {}): LigneSerie => ({ numero, lot, piece: "maillot-nike", service: "shopping", lanceeLe: "2026-10-25T10:00:00.000Z", issue: "reussie", code: 200, statutSerpApi: "Success", facturee: "oui", secondes: 2, mesures: null, message: null, ...options });
+    const onze = Array.from({ length: 11 }, (_, i) => ligne2(i + 1, 13 + (i % 3)));
+    expect(rechercheesAutorisees(onze, [13, 14, 15])).toBe(11);
+    expect(rechercheesAutorisees(onze, [12])).toBe(0);
+    expect(arretDemande(onze, { recherches: 11, lots: [13, 14, 15] })?.raison).toBe("autorisation");
+    expect(arretDemande(onze, { recherches: 4, lots: [12] })).toBeNull();
+    expect(servicesDuLot(12)).toEqual(["Shopping Light API"]);
+    expect(servicesDuLot(13)).toEqual(["Shopping Light API", "Immersive Product API"]);
+  });
+
+  it("description de l'IA : longueur, et jamais une personne décrite", () => {
+    expect(descriptionAcceptable("Veste en jean bleu, col montant, boutons dorés")).toEqual({ ok: true, raison: null });
+    expect(descriptionAcceptable("Pull noir porté par un homme aux cheveux courts").ok).toBe(false);
+    expect(descriptionAcceptable("Veste bleue, voir www.exemple.fr").raison).toBe("format");
+    expect(descriptionAcceptable("x".repeat(81)).raison).toBe("longueur");
+    expect(descriptionAcceptable("  ").raison).toBe("longueur");
+  });
+
+  it("répétabilité : les vendeurs restent en mémoire, seuls des nombres sont relevés", () => {
+    const mesure = mesurerShopping({ shopping_results: [{ title: "Maillot noir", source: "Vendeur A", extracted_price: 30, price: "30 €" }, { title: "Maillot noir col V", source: "Vendeur A" }, { title: "Maillot", source: "Vendeur B" }] }, "maillot noir");
+    expect(mesure?.vendeurs).toEqual(["Vendeur A", "Vendeur B"]);
+    expect(JSON.stringify(mesure?.mesures)).not.toMatch(/Vendeur|col V/);
+    expect(vendeursCommuns(["Vendeur A", "Vendeur C"], ["Vendeur A", "Vendeur B", "Vendeur A"])).toEqual({ vendeursCommuns: 1, partVendeursCommuns: 0.33 });
+    expect(vendeursCommuns([], [])).toEqual({ vendeursCommuns: 0, partVendeursCommuns: 1 });
+  });
+
+  it("IA : 12 images réparties, demande à sortie imposée, lecture de la réponse et du coût", () => {
+    expect(instantsRepartis(12)).toEqual([0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5, 11.5]);
+    expect(IMAGES_MAX).toBe(12);
+    const demande = demandeDescription([{ data: "AAA", largeur: 512, hauteur: 288 }], "veste <b>bleue</b>");
+    expect(demande).toMatchObject({ model: "claude-sonnet-5-5", tool_choice: { type: "tool", name: "decrire_piece" } });
+    expect(JSON.stringify(demande)).toContain("Image 1 (512×288 px)");
+    expect(JSON.stringify(demande)).not.toContain("<b>");
+    const reponse = { content: [{ type: "tool_use", name: "decrire_piece", input: { description: " Veste bleu marine à capuche " } }], usage: { input_tokens: 3776, output_tokens: 40 } };
+    expect(lireDescription(reponse)).toEqual({ description: "Veste bleu marine à capuche", jetonsLus: 3776, jetonsEcrits: 40, cout: 0.0080 });
+    expect(lireDescription({ content: [{ type: "text" }], usage: { input_tokens: 1, output_tokens: 1 } })).toBeNull();
   });
 });

@@ -1,10 +1,12 @@
-// Série de mesure sans nouvelles photos (décisions du fondateur, 2026-10-24) :
-// lots 10 (en premier), 2, 3, 9, 11 et 7, 46 recherches au plus, enchaînés
-// sous UNE phrase tapée par le fondateur (PHRASE_SERIE). Le lot 12 n'en fait pas partie.
+// Séries de mesure (décisions du fondateur, 2026-10-24) :
+// - série 1 : lots 10, 2, 3, 9, 11 et 7, 46 recherches au plus, sous UNE phrase (PHRASE_SERIE) ;
+// - série 2 (`--serie-2`) : lots 13, 14 et 15, 11 recherches au plus (PHRASE_SERIE_2), puis
+//   le lot 12 à part (`--lot-12-ia`, PHRASE_LOT_12), qui envoie des images réduites à Anthropic.
 //
 //   pnpm --filter backend serie-mesure <pieces.json>                       état et plan (aucun appel)
 //   pnpm --filter backend serie-mesure <pieces.json> --nouvelle-reference  relit le compteur et le prend pour référence
 //   pnpm --filter backend serie-mesure <pieces.json> --confirmer           lance ou reprend la série
+//   … --serie-2 [--nouvelle-reference | --confirmer [--lot-12-ia]]         la série 2 (relevé à part)
 //
 // Garde-fous (serie-garde-fous.ts) : spotto-dev seulement ; relevé écrit
 // avant et après chaque appel (docs/, hors de Git) ; arrêt à la première
@@ -22,15 +24,35 @@ import { assertDevSupabaseUrl } from "./lib/dev-database.js";
 import { contenusInterdits, factureeSelonSerpApi } from "./lib/essai-type.js";
 import type { Piece } from "./lib/mesure-texte.js";
 import { appelBoutiques, appelLens, appelShopping, brancherSerpApi, lireCompteur, lirePageEtat, verifierLien, viderStockage, type Branchement, type ReponseSerpApi } from "./lib/serie-appels.js";
-import { appelsDuJour, attenteHoraireMinutes, controlerCompteur, decisionReprise, etapeSuivante, factureesSelonReleve, FIN_SERIE, finOuArret, jourParis, LIMITE_HEURE, lireOptions, PLAFOND_JOUR, RELEVE_SERIE, reserveSuffisante, servicesDuLot, servicesOperationnels, type Compteur, type LigneSerie, type ReleveSerie } from "./lib/serie-garde-fous.js";
+import { appelsDuJour, attenteHoraireMinutes, AUTORISATION_SERIE_1, controlerCompteur, decisionReprise, etapeSuivante, factureesSelonReleve, FIN_SERIE, finOuArret, jourParis, LIMITE_HEURE, lireOptions, PLAFOND_JOUR, RELEVE_SERIE, reserveSuffisante, servicesDuLot, servicesOperationnels, type Autorisation, type Compteur, type LigneSerie, type ReleveSerie } from "./lib/serie-garde-fous.js";
 import { compilerDetection, imageDeLEtape, sansVisage } from "./lib/serie-images.js";
-import { mesurerBoutiques, mesurerLens, mesurerShopping, pertinenceDouteuse, type ProduitChoisi } from "./lib/serie-mesures.js";
+import { descriptionAcceptable, mesurerBoutiques, mesurerLens, mesurerShopping, pertinenceDouteuse, vendeursCommuns, type ProduitChoisi } from "./lib/serie-mesures.js";
 import { ecrirePlanche } from "./lib/serie-planche.js";
-import { AUTORISATION_SERIE, PHRASE_SERIE, piecesDeSerie, planSerie, titreEtape, type EtapeSerie, type NomPiece } from "./lib/serie-plan.js";
+import { AUTORISATION_LOT_12, AUTORISATION_SERIE_2, PHRASE_LOT_12, PHRASE_SERIE, PHRASE_SERIE_2, piecesDeSerie, planSerie, planSerie2, titreEtape, type EtapeSerie, type NomPiece } from "./lib/serie-plan.js";
+import { lireCleEssai } from "./lib/anthropic-essai.js";
+import { cleEssaiValable, decrirePiece, etatClaudeApi, imagesDeLaVideo } from "./lib/serie-ia.js";
 
 const DOSSIER = fileURLToPath(new URL("../../../docs/serie-mesure/", import.meta.url));
-const FICHIER = join(DOSSIER, "releve-serie.json");
-const PLAN = planSerie();
+/** Ce qui change d'une série (ou d'une phase) à l'autre : plan, autorisation, phrase, relevé. */
+interface ConfigSerie {
+  serie: 1 | 2;
+  plan: EtapeSerie[];
+  autorisation: Autorisation;
+  phrase: string;
+  fichier: string;
+  lot12: boolean;
+}
+
+function configDe(serie: 1 | 2, lot12: boolean): ConfigSerie {
+  if (serie === 1) return { serie, plan: planSerie(), autorisation: AUTORISATION_SERIE_1, phrase: PHRASE_SERIE, fichier: join(DOSSIER, "releve-serie.json"), lot12: false };
+  const plan = planSerie2().filter((e) => (lot12 ? e.lot === 12 : e.lot !== 12));
+  const autorisation: Autorisation = lot12 ? { recherches: AUTORISATION_LOT_12, lots: [12] } : { recherches: AUTORISATION_SERIE_2, lots: [13, 14, 15] };
+  return { serie, plan, autorisation, phrase: lot12 ? PHRASE_LOT_12 : PHRASE_SERIE_2, fichier: join(DOSSIER, "releve-serie-2.json"), lot12 };
+}
+
+/** Fixée une fois, au démarrage (main). */
+let CONFIG: ConfigSerie = configDe(1, false);
+const planComplet = (): EtapeSerie[] => (CONFIG.serie === 1 ? planSerie() : planSerie2());
 
 /** Arrêt voulu (garde-fou) : le message est pour le fondateur, sans contenu. */
 class ArretSerie extends Error {}
@@ -44,11 +66,15 @@ interface Contexte {
   releve: ReleveSerie;
   /** Produit de Google Shopping Light par pièce : en mémoire seulement. */
   produits: Map<NomPiece, ProduitChoisi>;
+  /** Vendeurs de la dernière recherche par texte, par pièce et mots : en mémoire seulement (répétabilité). */
+  vendeurs: Map<string, string[]>;
+  /** Clé d'essai d'Anthropic (lot 12 seulement), jamais affichée. */
+  cleIA: string | null;
 }
 
 function lireReleve(): ReleveSerie {
-  if (!existsSync(FICHIER)) return { phrase: PHRASE_SERIE, reference: null, lignes: [], lots: [] };
-  return RELEVE_SERIE.parse(JSON.parse(readFileSync(FICHIER, "utf8")));
+  if (!existsSync(CONFIG.fichier)) return { phrase: CONFIG.serie === 1 ? PHRASE_SERIE : PHRASE_SERIE_2, reference: null, lignes: [], lots: [] };
+  return RELEVE_SERIE.parse(JSON.parse(readFileSync(CONFIG.fichier, "utf8")));
 }
 
 /** Écrit le relevé, après avoir vérifié qu'il ne contient ni adresse, ni clé, ni e-mail. */
@@ -57,7 +83,7 @@ function ecrireReleve(releve: ReleveSerie): void {
   const problemes = [...contenusInterdits(texte), ...(/https?:\/\//i.test(texte) ? ["adresse"] : [])];
   if (problemes.length > 0) throw new ArretSerie(`Relevé NON écrit : ${problemes.join(", ")}. Série arrêtée.`);
   mkdirSync(DOSSIER, { recursive: true });
-  writeFileSync(FICHIER, texte);
+  writeFileSync(CONFIG.fichier, texte);
 }
 
 const piece = (contexte: Contexte, nom: NomPiece): Piece => {
@@ -108,13 +134,48 @@ async function etapeLens(contexte: Contexte, etape: Extract<EtapeSerie, { servic
 }
 
 /** Une étape Google Shopping Light : texte seul (les mots du 8 octobre). */
-async function etapeShopping(contexte: Contexte, etape: EtapeSerie, ligne: LigneSerie): Promise<void> {
-  const texte = piece(contexte, etape.piece).texte;
+async function etapeShopping(contexte: Contexte, etape: Extract<EtapeSerie, { service: "shopping" }>, ligne: LigneSerie): Promise<void> {
+  await rechercheParTexte(contexte, etape.piece, etape.mots ?? piece(contexte, etape.piece).texte, ligne, {});
+}
+
+/** Google Shopping Light avec des mots (les vôtres, des mots vagues, ou la description de l'IA). */
+async function rechercheParTexte(contexte: Contexte, nom: NomPiece, texte: string, ligne: LigneSerie, autres: NonNullable<LigneSerie["mesures"]>): Promise<void> {
   const reponse = await appelShopping(texte);
   const mesure = reponse.code !== null && reponse.code < 400 ? mesurerShopping(reponse.json, texte) : null;
   if (!mesure && (reponse.code === null || reponse.code < 400)) throw new Error("Google Shopping Light : réponse illisible");
-  if (mesure?.produit) contexte.produits.set(etape.piece, mesure.produit);
-  terminer(ligne, reponse, (mesure?.mesures.resultats ?? 0) === 0, mesure?.mesures ?? null, mesure && pertinenceDouteuse(mesure.mesures) ? "pertinence douteuse" : null);
+  if (mesure?.produit) contexte.produits.set(nom, mesure.produit);
+  // Même pièce, mêmes mots : seule la part de vendeurs communs (un nombre) est relevée.
+  const cle = `${nom}|${texte}`;
+  const precedents = contexte.vendeurs.get(cle);
+  const repetabilite = mesure && precedents ? vendeursCommuns(precedents, mesure.vendeurs) : {};
+  if (mesure) contexte.vendeurs.set(cle, mesure.vendeurs);
+  terminer(ligne, reponse, (mesure?.mesures.resultats ?? 0) === 0, mesure ? { ...mesure.mesures, ...repetabilite, ...autres } : null, mesure && pertinenceDouteuse(mesure.mesures) ? "pertinence douteuse" : null);
+}
+
+/** Panne avant tout appel à Google (vidéo, Anthropic) : non facturée par SerpApi ; la série s'arrête (première panne). */
+function panneAvantGoogle(ligne: LigneSerie, cause: string): void {
+  Object.assign(ligne, { issue: "panne", facturee: "non", message: `${cause} Aucune recherche envoyée.`.slice(0, 160) });
+}
+
+/** Lot 12 : la description de la pièce par l'IA (vidéo), puis une recherche par texte avec elle.
+ * Une description qui décrit une personne n'est jamais envoyée à Google. */
+async function etapeDescription(contexte: Contexte, etape: Extract<EtapeSerie, { service: "description" }>, ligne: LigneSerie): Promise<void> {
+  const p = piece(contexte, etape.piece);
+  if (!p.video || !contexte.cleIA) throw new ArretSerie(`${etape.piece} : lot 12 impossible (vidéo ou clé d'essai absente).`);
+  const images = await imagesDeLaVideo(p.video, contexte.travail).catch(() => null);
+  if (!images) return panneAvantGoogle(ligne, "Images de la vidéo illisibles.");
+  const ia = await decrirePiece(contexte.cleIA, images, p.texte).catch((error: unknown) => {
+    panneAvantGoogle(ligne, error instanceof Error ? error.message : "Anthropic : panne.");
+    return null;
+  });
+  if (!ia) return;
+  const verdict = descriptionAcceptable(ia.description);
+  const usage = { imagesEnvoyees: images.length, jetonsLus: ia.jetonsLus, jetonsEcrits: ia.jetonsEcrits, coutIA: ia.cout };
+  if (!verdict.ok) {
+    Object.assign(ligne, { issue: "non_lancee", facturee: "non", mesures: usage, message: `description refusée (${verdict.raison ?? "?"}) : aucune recherche envoyée` });
+    return;
+  }
+  await rechercheParTexte(contexte, etape.piece, ia.description, ligne, { ...usage, description: ia.description });
 }
 
 /** Domaines gardés par Google Lens pour la pièce (lot 2, dernière mesure) ;
@@ -150,6 +211,7 @@ async function faireEtape(contexte: Contexte, etape: EtapeSerie): Promise<LigneS
   try {
     if (etape.service === "lens") await etapeLens(contexte, etape, ligne);
     else if (etape.service === "shopping") await etapeShopping(contexte, etape, ligne);
+    else if (etape.service === "description") await etapeDescription(contexte, etape, ligne);
     else await etapeBoutiques(contexte, etape, ligne);
   } catch (error) {
     if (error instanceof ArretSerie) throw error;
@@ -180,10 +242,14 @@ async function controlerAvant(contexte: Contexte, etape: EtapeSerie): Promise<vo
   const services = servicesDuLot(etape.lot);
   const { etats, incidents } = await lirePageEtat(services);
   if (!servicesOperationnels(etats, services)) throw new ArretSerie(`Page d'état : ${services.map((s) => `${s} « ${etats[s] ?? "illisible"} »`).join(", ")}. Aucun appel lancé.`);
+  if (etape.service === "description") {
+    const etat = await etatClaudeApi();
+    if (etat !== "operational") throw new ArretSerie(`Page d'état d'Anthropic : Claude API « ${etat ?? "illisible"} ». Aucun appel lancé.`);
+  }
   const { releve } = contexte;
   if (releve.lots.some((l) => l.lot === etape.lot)) return;
   const compteur = await compteurControle(releve, `avant le lot ${etape.lot}`);
-  const restantes = PLAN.filter((e) => e.lot === etape.lot && e.numero >= etape.numero).length;
+  const restantes = CONFIG.plan.filter((e) => e.lot === etape.lot && e.numero >= etape.numero).length;
   if (!reserveSuffisante(compteur, restantes)) throw new ArretSerie(`Réserve : il resterait moins de 30 recherches après le lot ${etape.lot}. Aucun appel lancé.`);
   releve.lots.push({ lot: etape.lot, avant: compteur, apres: null, services: etats, incidents });
   ecrireReleve(releve);
@@ -215,7 +281,7 @@ async function compteurControle(releve: ReleveSerie, moment: string): Promise<Co
 function afficherLigne(ligne: LigneSerie): void {
   const m = ligne.mesures ?? {};
   const nombres = Object.entries(m).filter(([, v]) => typeof v === "number").map(([k, v]) => `${k} ${v}`).join(", ");
-  const etape = PLAN.find((e) => e.numero === ligne.numero);
+  const etape = planComplet().find((e) => e.numero === ligne.numero);
   console.log(`  ${ligne.numero}. ${etape ? titreEtape(etape) : ""} → ${ligne.issue}${ligne.message ? ` (${ligne.message})` : ""}${nombres ? ` · ${nombres}` : ""}`);
 }
 
@@ -223,9 +289,9 @@ function afficherLigne(ligne: LigneSerie): void {
 async function derouler(contexte: Contexte, plafondJourLeve: boolean): Promise<string> {
   for (;;) {
     await trancherEnCours(contexte.releve);
-    const fin = finOuArret(PLAN, contexte.releve.lignes);
+    const fin = finOuArret(CONFIG.plan, contexte.releve.lignes, CONFIG.autorisation);
     if (fin) return fin;
-    const etape = etapeSuivante(PLAN, contexte.releve.lignes);
+    const etape = etapeSuivante(CONFIG.plan, contexte.releve.lignes);
     if (!etape) return FIN_SERIE;
     // Plafond du jour levé seulement pour ce passage, sur la phrase du fondateur ; le total de 46 et les autres garde-fous restent.
     if (!plafondJourLeve && appelsDuJour(contexte.releve.lignes, jourParis(new Date())) >= PLAFOND_JOUR) return `Plafond du jour atteint (${PLAFOND_JOUR} recherches) : reprise demain.`;
@@ -233,22 +299,24 @@ async function derouler(contexte: Contexte, plafondJourLeve: boolean): Promise<s
     if (attente > 0) return `Limite horaire de SerpApi (${LIMITE_HEURE} par heure) : attendre ${attente} minutes.`;
     await controlerAvant(contexte, etape);
     afficherLigne(await faireEtape(contexte, etape));
-    const suivante = etapeSuivante(PLAN, contexte.releve.lignes);
+    const suivante = etapeSuivante(CONFIG.plan, contexte.releve.lignes);
     if (!suivante || suivante.lot !== etape.lot) await controlerApres(contexte, etape.lot);
   }
 }
 
 function afficherEtat(releve: ReleveSerie, compteur: Compteur): void {
-  const faites = PLAN.filter((e) => !etapeSuivante([e], releve.lignes)).length;
-  console.log(`Phrase : « ${PHRASE_SERIE} » (${AUTORISATION_SERIE} recherches au plus).`);
+  const plan = planComplet();
+  const faites = plan.filter((e) => !etapeSuivante([e], releve.lignes)).length;
+  console.log(`Série ${CONFIG.serie}${CONFIG.lot12 ? ", lot 12" : ""} — phrase : « ${CONFIG.phrase} » (${CONFIG.autorisation.recherches} recherches au plus).`);
   console.log(`Compteur de SerpApi : ${compteur.utilisees} utilisées, ${compteur.restantes} restantes. Référence : ${releve.reference ? `${releve.reference.utilisees} utilisées (${releve.reference.lueLe})` : "aucune"}.`);
-  console.log(`Étapes faites : ${faites} sur ${PLAN.length} ; appels aujourd'hui : ${appelsDuJour(releve.lignes, jourParis(new Date()))} sur ${PLAFOND_JOUR}.`);
+  console.log(`Étapes faites : ${faites} sur ${plan.length} ; appels aujourd'hui : ${appelsDuJour(releve.lignes, jourParis(new Date()))} sur ${PLAFOND_JOUR}.`);
 }
 
 async function main(): Promise<void> {
   const [manifeste, ...brutes] = process.argv.slice(2);
   if (!manifeste || manifeste.startsWith("--")) throw new Error("Indiquez le fichier des pièces (pieces.json, hors de Git).");
   const options = lireOptions(brutes);
+  CONFIG = configDe(options.serie, options.mode === "lancer" && options.lot12);
   assertDevSupabaseUrl(env.SUPABASE_URL, "apps/backend/.env (SUPABASE_URL)");
   const pieces = piecesDeSerie(JSON.parse(readFileSync(manifeste, "utf8")));
   const releve = lireReleve();
@@ -263,7 +331,7 @@ async function main(): Promise<void> {
   }
   if (options.mode === "etat") return void console.log("Aucun appel lancé (ajoutez --confirmer).");
   if (!releve.reference) throw new Error("Aucune référence de compteur : lancez d'abord --nouvelle-reference. Aucun appel lancé.");
-  if (options.plafondJourLeve) console.log(`Plafond du jour levé pour ce passage (phrase du fondateur) ; total de ${AUTORISATION_SERIE} et autres garde-fous inchangés.`);
+  if (options.plafondJourLeve) console.log(`Plafond du jour levé pour ce passage (phrase du fondateur) ; total de ${CONFIG.autorisation.recherches} et autres garde-fous inchangés.`);
   await lancer(pieces, releve, options.plafondJourLeve);
 }
 
@@ -305,16 +373,28 @@ function codeDeSortie(fin: string): number {
   return fin.startsWith("Limite horaire") ? 5 : 3;
 }
 
+/** Lot 12 : la clé d'essai doit être valable (vérifié gratuitement) et l'API d'Anthropic annoncée en service. */
+async function cleDuLot12(): Promise<string | null> {
+  if (!CONFIG.lot12) return null;
+  const cle = lireCleEssai();
+  if (!(await cleEssaiValable(cle))) throw new ArretSerie("Clé d'essai d'Anthropic refusée (expirée ou désactivée) : créez-en une et lancez configurer-anthropic-essai. Aucun appel lancé.");
+  const etat = await etatClaudeApi();
+  if (etat !== "operational") throw new ArretSerie(`Page d'état d'Anthropic : Claude API « ${etat ?? "illisible"} ». Aucun appel lancé.`);
+  return cle;
+}
+
 async function lancer(pieces: Map<NomPiece, Piece>, releve: ReleveSerie, plafondJourLeve: boolean): Promise<void> {
+  const cleIA = await cleDuLot12();
   prendreVerrou();
   const travail = mkdtempSync(join(tmpdir(), "spotto-serie-"));
   const admin = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
-  const contexte: Contexte = { admin, branchement: brancherSerpApi(), travail, binaireVisages: compilerDetection(travail), pieces, releve, produits: new Map() };
+  const contexte: Contexte = { admin, branchement: brancherSerpApi(), travail, binaireVisages: compilerDetection(travail), pieces, releve, produits: new Map(), vendeurs: new Map(), cleIA };
   try {
     const restees = await viderStockage(admin);
     if (restees > 0) console.log(`Images d'essai restées dans le stockage (interruption) : ${restees}, effacées.`);
     const fin = await derouler(contexte, plafondJourLeve);
     console.log(fin);
+    if (fin === FIN_SERIE && CONFIG.serie === 2 && !CONFIG.lot12) console.log(`Lots 13, 14 et 15 terminés ; le lot 12 attend sa propre phrase (« ${PHRASE_LOT_12} »).`);
     process.exitCode = codeDeSortie(fin);
   } catch (error) {
     console.log(error instanceof Error ? error.message : String(error));

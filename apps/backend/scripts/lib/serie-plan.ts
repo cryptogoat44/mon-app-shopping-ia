@@ -25,8 +25,11 @@ export type SourceImage = "moment" | "plus-nette" | "pleine-definition";
 
 export type EtapeSerie =
   | { numero: number; lot: number; service: "lens"; piece: NomPiece; image: SourceImage; texte: boolean; locale: SearchLocale; sansCache: boolean; planche: boolean }
-  | { numero: number; lot: 10; service: "shopping"; piece: NomPiece }
-  | { numero: number; lot: 10; service: "immersive" | "product"; piece: NomPiece };
+  /** `mots` : d'autres mots que ceux du 8 octobre (série 2, lot 14 : mots vagues). */
+  | { numero: number; lot: number; service: "shopping"; piece: NomPiece; mots?: string }
+  | { numero: number; lot: number; service: "immersive" | "product"; piece: NomPiece }
+  /** Série 2, lot 12 : description de la pièce par l'IA (vidéo), puis Google Shopping Light avec elle. */
+  | { numero: number; lot: 12; service: "description"; piece: NomPiece };
 
 type SansNumero<T> = T extends unknown ? Omit<T, "numero"> : never;
 type Brouillon = SansNumero<EtapeSerie>;
@@ -80,6 +83,35 @@ export function planSerie(): EtapeSerie[] {
   return brouillons.map((etape, index): EtapeSerie => ({ ...etape, numero: index + 1 }));
 }
 
+// ---- Série 2 (décisions du fondateur, 2026-10-24) : 15 recherches au plus,
+// sous deux phrases distinctes ; le lot 12 envoie des images à Anthropic.
+
+/** Phrase des lots 13, 14 et 15 (recherche par texte, mots vagues, liens marchands). */
+export const PHRASE_SERIE_2 = "OK série 2 : lots 13, 14 et 15, 11 recherches au plus";
+export const AUTORISATION_SERIE_2 = 11;
+/** Phrase du lot 12, à part : il envoie des images réduites des vidéos à Anthropic. */
+export const PHRASE_LOT_12 = "OK lot 12 de la série 2, IA comprise, 4 recherches au plus";
+export const AUTORISATION_LOT_12 = 4;
+
+/** Mots vagues du lot 14 (décision du fondateur). */
+export const MOTS_VAGUES: Readonly<Partial<Record<NomPiece, string>>> = { "veste-bleu-marine": "veste bleue", "maillot-nike": "maillot noir" };
+
+/** Les 15 étapes de la série 2. Chaque lien marchand (lot 15) suit aussitôt la
+ * recherche par texte de sa pièce : le produit ne passe qu'en mémoire. */
+export function planSerie2(): EtapeSerie[] {
+  const shopping = (lot: number, piece: NomPiece, mots?: string): Brouillon => (mots ? { lot, service: "shopping", piece, mots } : { lot, service: "shopping", piece });
+  const immersive = (piece: NomPiece): Brouillon => ({ lot: 15, service: "immersive", piece });
+  const brouillons: Brouillon[] = [
+    shopping(13, "maillot-nike"), immersive("maillot-nike"), shopping(13, "maillot-nike"),
+    shopping(13, "pull-noir"), immersive("pull-noir"), shopping(13, "pull-noir"),
+    shopping(14, "veste-bleu-marine", MOTS_VAGUES["veste-bleu-marine"]), immersive("veste-bleu-marine"),
+    shopping(14, "maillot-nike", MOTS_VAGUES["maillot-nike"]),
+    shopping(15, "tshirt-blanc"), immersive("tshirt-blanc"),
+    ...(["veste-bleu-marine", "tshirt-blanc", "pull-blanc", "pull-noir"] as const).map((piece): Brouillon => ({ lot: 12, service: "description", piece })),
+  ];
+  return brouillons.map((etape, index): EtapeSerie => ({ ...etape, numero: index + 1 }));
+}
+
 /** Les pièces du fichier du 8 octobre, réduites aux 5 de la série. */
 export function piecesDeSerie(json: unknown): Map<NomPiece, Piece> {
   const pieces = z.array(PIECE).parse(json);
@@ -94,8 +126,9 @@ export function piecesDeSerie(json: unknown): Map<NomPiece, Piece> {
 
 /** Titre court d'une étape, pour l'écran et le relevé (jamais de contenu). */
 export function titreEtape(etape: EtapeSerie): string {
-  if (etape.service === "shopping") return `lot 10 · ${etape.piece} · Google Shopping Light, texte seul`;
-  if (etape.service !== "lens") return `lot 10 · ${etape.piece} · lien marchand (${etape.service === "immersive" ? "Immersive Product" : "Google Product"})`;
+  if (etape.service === "shopping") return `lot ${etape.lot} · ${etape.piece} · Google Shopping Light, texte seul${etape.mots ? " (mots vagues)" : ""}`;
+  if (etape.service === "description") return `lot 12 · ${etape.piece} · description par l'IA, puis Google Shopping Light`;
+  if (etape.service !== "lens") return `lot ${etape.lot} · ${etape.piece} · lien marchand (${etape.service === "immersive" ? "Immersive Product" : "Google Product"})`;
   const details = [etape.texte ? "image et mots" : "image seule", etape.image !== "moment" ? etape.image : null, etape.locale.country !== "fr" ? `${etape.locale.country}/${etape.locale.hl}` : null, etape.sansCache ? "sans cache" : null];
   return `lot ${etape.lot} · ${etape.piece} · ${details.filter(Boolean).join(", ")}`;
 }
