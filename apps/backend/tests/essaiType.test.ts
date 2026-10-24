@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { withoutDuplicates } from "../src/services/matchFilters.js";
+import { exclusionReason, withoutDuplicates } from "../src/services/matchFilters.js";
+import { apercu } from "../scripts/lib/essai-lens.js";
 import { PIECE } from "../scripts/lib/mesure-texte.js";
 import {
   bilanFacturation,
@@ -162,7 +163,7 @@ describe("réponses de test : réduites, neutralisées, anonymisées, vérifiée
     ai_overview: { page_token: "jeton" },
   };
 
-  it("forme d'une réponse de SerpApi ; titres, marchands et chemins neutres ; prix, domaine et paramètres gardés", () => {
+  it("forme d'une réponse de SerpApi ; titres, marchands, chemins et site peu connu neutres ; prix, extension et paramètres gardés", () => {
     const test = reponseDeTest(BRUT)!;
     expect(test.search_metadata).toEqual({ status: "Success" });
     expect(test.search_information).toEqual({ images_results_state: "Results for exact image" });
@@ -170,7 +171,7 @@ describe("réponses de test : réduites, neutralisées, anonymisées, vérifiée
     expect(test.ai_overview).toEqual({});
     expect(test).not.toHaveProperty("search_parameters");
     expect(test.visual_matches).toEqual([
-      { position: 1, title: "Produit 1", link: "https://www.boutique.fr/produit-1?couleur=bleu", source: "Marchand 1", thumbnail: "https://example.invalid/vignette-1.jpg", image: "https://example.invalid/image-1.jpg", price: { value: "49 €", extracted_value: 49, currency: "EUR" }, in_stock: true },
+      { position: 1, title: "Produit 1", link: "https://www.site-1.fr/produit-1?couleur=bleu", source: "Marchand 1", thumbnail: "https://example.invalid/vignette-1.jpg", image: "https://example.invalid/image-1.jpg", price: { value: "49 €", extracted_value: 49, currency: "EUR" }, in_stock: true },
       { position: 2, title: "Publication anonymisée", link: "https://www.tiktok.com/compte-anonyme/0000000002", source: "Marchand 2", thumbnail: "https://example.invalid/vignette-2.jpg" },
       { position: 3, title: "Produit 3", link: "https://www.leboncoin.fr/annonce/0000000003", source: "Marchand 3", thumbnail: "https://example.invalid/vignette-3.jpg", image: "https://example.invalid/image-3.jpg" },
       { position: 4, title: "Produit 4", link: "https://www.vinted.fr/annonce/0000000004", source: "Marchand 4" },
@@ -197,7 +198,7 @@ describe("réponses de test : réduites, neutralisées, anonymisées, vérifiée
     expect(garder(test)).toEqual(garder(brut.visual_matches));
   });
 
-  it("paramètres de liens : identifiants de session, de compte ou de clic remplacés (même valeur, même remplaçant) ; couleur, variante, pays et devise gardés", () => {
+  it("paramètres de liens : identifiants de session, de compte ou de clic (jetons de clic compris) remplacés (même valeur, même remplaçant) ; couleur, variante, pays et devise gardés", () => {
     const brut = {
       visual_matches: [
         { position: 1, title: "Veste", link: "https://www.boutique.fr/veste?colour=chocolate&sessionid=abc123&gclid=XYZ&variant=42&country=CH&currency=CHF", source: "Boutique" },
@@ -207,17 +208,57 @@ describe("réponses de test : réduites, neutralisées, anonymisées, vérifiée
     };
     const liens = (reponseDeTest(brut)!.visual_matches as { link: string }[]).map((m) => m.link);
     expect(liens).toEqual([
-      "https://www.boutique.fr/produit-1?colour=chocolate&sessionid=id-1&gclid=id-2&variant=42&country=CH&currency=CHF",
-      "https://www.boutique.fr/produit-1?colour=chocolate&sessionid=id-1&gclid=id-3",
-      "https://www.boutique.fr/produit-2?user_id=id-4&ref=id-5&srsltid=id-6",
+      "https://www.site-1.fr/produit-1?colour=chocolate&sessionid=id-1&gclid=id-2&variant=42&country=CH&currency=CHF",
+      "https://www.site-1.fr/produit-1?colour=chocolate&sessionid=id-1&gclid=id-3",
+      "https://www.site-1.fr/produit-2?user_id=id-4&ref=id-5&srsltid=id-6",
     ]);
     expect(contenusInterdits(JSON.stringify(liens))).toEqual([]);
     expect(contenusInterdits("https://x.fr/a?sessionid=abc123")).toEqual(["identifiant de session, de compte ou de clic dans un lien"]);
+    // Jetons de clic d'une place de marché (constaté dans une réponse réelle du 21 octobre).
+    const clic = reponseDeTest({ visual_matches: [{ position: 1, title: "T-shirt", link: "https://www.etsy.com/listing/1/t-shirt?click_key=605da0%3ALT8d&click_sum=ed4a2c55&ls=r", source: "Etsy" }] })!;
+    expect((clic.visual_matches as { link: string }[])[0]!.link).toBe("https://www.etsy.com/produit-1?click_key=id-1&click_sum=id-2&ls=r");
+    expect(contenusInterdits("https://www.etsy.com/l?click_key=605da0")).toEqual(["identifiant de session, de compte ou de clic dans un lien"]);
+    // Jeton opaque sous un autre nom de paramètre (constaté le 2026-10-25) ; un numéro de variante reste.
+    const opaque = reponseDeTest({ visual_matches: [{ position: 1, title: "T-shirt", link: "https://www.etsy.com/listing/1/t-shirt?content_source=0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d%3AAB12&variant=43643024900184", source: "Etsy" }] })!;
+    expect((opaque.visual_matches as { link: string }[])[0]!.link).toBe("https://www.etsy.com/produit-1?content_source=id-1&variant=43643024900184");
+    expect(contenusInterdits("https://x.fr/a?content_source=0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d")).toEqual(["jeton opaque dans un lien"]);
+    expect(contenusInterdits("https://x.fr/a?variant=43643024900184&size=XXL")).toEqual([]);
     expect(contenusInterdits("https://x.fr/a?colour=chocolate&variant=42&country=CH&currency=CHF")).toEqual([]);
   });
 
+  it("domaines : sites connus et réseaux sociaux gardés ; sites peu connus fictifs, sous-domaine et extension gardés ; même site sur deux extensions, même nom ; le site d'un titre suit", () => {
+    const brut = {
+      visual_matches: [
+        { position: 1, title: "Maillot - PETITEBOUTIQUE-EXEMPLE.BE", link: "https://www.petiteboutique-exemple.be/maillot", source: "A" },
+        { position: 2, title: "Maillot", link: "https://maillots-exemple.com/maillot", source: "B" },
+        { position: 3, title: "Maillot", link: "https://maillots-exemple.fr/maillot", source: "B" },
+        { position: 4, title: "Veste", link: "https://fr.friperie-exemple.co.uk/veste", source: "C" },
+        { position: 5, title: "Veste - ZALANDO.FR", link: "https://www.zalando.fr/veste", source: "Zalando" },
+        { position: 6, title: "Veste", link: "https://www2.hm.com/fr_fr/veste", source: "H&M" },
+        { position: 7, title: "Vente en gros", link: "https://www.faire.com/veste", source: "Faire" },
+        { position: 8, title: "Mon blog", link: "https://monblog.example-perso.net/article", source: "Blog" },
+      ],
+    };
+    const test = reponseDeTest(brut)!.visual_matches as { title: string; link: string }[];
+    expect(test.map((m) => new URL(m.link).host)).toEqual(["www.site-1.be", "site-2.com", "site-2.fr", "fr.site-3.co.uk", "www.zalando.fr", "www2.hm.com", "www.faire.com", "monblog.site-4.net"]);
+    expect(test[0]!.title).toBe("Produit 1 - SITE-1.BE");
+    expect(test[4]!.title).toBe("Produit 2 - ZALANDO.FR");
+    expect(JSON.stringify(test)).not.toMatch(/petiteboutique|maillots-exemple|friperie|example-perso/i);
+    // Le filtre des doublons et l'exclusion de la vente aux professionnels gardent la même décision.
+    const garder = (liste: { title: string; link: string }[]) => withoutDuplicates(liste, "fr").map((m) => liste.indexOf(m));
+    expect(garder(test)).toEqual(garder(brut.visual_matches));
+    expect(test.map((m) => exclusionReason(m.link))).toEqual(brut.visual_matches.map((m) => exclusionReason(m.link)));
+  });
+
+  it("aperçu dans le Terminal : le site et le prix, jamais le titre ni le marchand", () => {
+    expect(apercu({ merchantUrl: "https://www.zalando.fr/produit-1", priceValue: 39.99, currency: "EUR" })).toBe("zalando.fr (39.99 EUR)");
+    expect(apercu({ merchantUrl: "https://shop.site-6.fr/produit-2", priceValue: 25, currency: null })).toBe("shop.site-6.fr (25)");
+    expect(apercu({ merchantUrl: "https://www.instagram.com/compte-anonyme/1", priceValue: null, currency: null })).toBe("instagram.com");
+    expect(apercu({ merchantUrl: "pas une adresse", priceValue: null, currency: null })).toBe("site illisible");
+  });
+
   it("le résultat ne contient plus rien à protéger, alors que la réponse brute en contenait", () => {
-    expect(contenusInterdits(JSON.stringify(BRUT))).toEqual(["clé d'API", "adresse d'image temporaire de notre serveur", "lien de recherche de SerpApi (il contient l'adresse de l'image)"]);
+    expect(contenusInterdits(JSON.stringify(BRUT))).toEqual(["clé d'API", "adresse d'image temporaire de notre serveur", "lien de recherche de SerpApi (il contient l'adresse de l'image)", "jeton opaque dans un lien"]);
     expect(contenusInterdits(JSON.stringify(reponseDeTest(BRUT)))).toEqual([]);
   });
 

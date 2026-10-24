@@ -45,6 +45,26 @@ Seule différence voulue : les deux publications de réseaux sociaux de la répo
 - les cas d'incohérence ci-dessous se lisaient dans les titres d'origine ; ils restent décrits ici, mais ne se voient plus dans les fichiers. Aucun test n'en dépend ;
 - les versions d'avant restent dans l'historique de Git (dépôt public).
 
+## Réponses du 21 octobre 2026 (type « visual_matches »)
+
+Essai du type de recherche (`scripts/essai-type-recherche.ts`), sur spotto-dev, avec les photos et vidéos du fondateur : 5 appels, 4 crédits (le refus de « products » n'a pas été facturé, vérifié sur le compteur) :
+
+| Fichier | Image envoyée | Réponse |
+|---|---|---|
+| `lens-visual-veste-bleu-marine.json` | cadre sur la veste (vidéo) | 60 propositions ; 30 gardées, dont 12 avec un prix |
+| `lens-visual-tshirt-blanc.json` | cadre sur le t-shirt (vidéo) | 60 ; 30 gardées, dont 5 avec un prix (surtout des sites mexicains) |
+| `lens-visual-maillot-nike.json` | cadre sur le maillot (photo) | 60 ; 4 réseaux sociaux écartés ; 30 gardées, dont 7 avec un prix |
+| `lens-visual-pull-noir.json` | cadre sur le pull noir porté (vidéo) | 60 ; 52 réseaux sociaux écartés ; 8 gardées, aucune avec un prix |
+| `lens-products-abandonne-400.json` | — (ancien type « products ») | erreur 400 : « The `products` search type has been discontinued. » |
+
+- **Neutralisées à l'enregistrement** par `reponseDeTest`, comme les trois réponses ci-dessus : titres, marchands, chemins, images, comptes et annonces.
+- **Le 25 octobre 2026, avant leur versement au dépôt** (décision du fondateur du 22 octobre), repassées dans `reponseDeTest` complétée :
+  - **domaines des sites peu connus** (blogs, forums, sites personnels, petites boutiques) → `site-N`, en gardant le sous-domaine (`www.`, `fr.`, `shop.`) et l'extension (`.fr`, `.co.uk`, `.com.mx`). Un même site sur deux extensions reçoit le même N, et un titre qui nommait son site suit (« Produit 1 - SITE-1.BE ») ;
+  - **gardés** : les sites très connus (grands marchands, places de marché, sites d'annonces, grandes marques), les réseaux sociaux et la vente aux professionnels (les filtres en dépendent) ; liste dans `scripts/lib/essai-type.ts` ;
+  - **jetons de clic et jetons opaques** dans les liens (ex. `click_key`, `content_source` : longues suites de lettres et de chiffres, quel que soit le nom du paramètre) → `id-N` ; un numéro de variante, fait de chiffres seuls, reste.
+- **Contrôlé** : les filtres prennent exactement les mêmes décisions avant et après (mêmes propositions gardées, mêmes comptes, mêmes devises, mêmes extensions de pays), et aucun contenu interdit (`contenusInterdits`) ne reste.
+- **Rejouées** dans `tests/matchFilters.test.ts`.
+
 ## Cas d'incohérence présents
 
 1. **Titre qui nomme une autre pièce que l'image** : un chemisier, un sac, un body, un short, pour une veste.

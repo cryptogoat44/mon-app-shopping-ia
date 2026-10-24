@@ -32,8 +32,9 @@ function parseLink(link: string): URL | null {
 }
 
 /** Nom du site sans son pays : « zalando » (et « zalando.ch ») pour
- * fr.zalando.ch ; « zalando » (et « zalando.co.uk ») pour www.zalando.co.uk. */
-function siteOf(host: string): { name: string; domain: string } {
+ * fr.zalando.ch ; « zalando » (et « zalando.co.uk ») pour www.zalando.co.uk.
+ * Exporté aussi pour l'outil qui neutralise les réponses de test. */
+export function siteOf(host: string): { name: string; domain: string } {
   const labels = host.toLowerCase().split(".");
   const last = labels.at(-1) ?? "";
   const beforeLast = labels.at(-2) ?? "";

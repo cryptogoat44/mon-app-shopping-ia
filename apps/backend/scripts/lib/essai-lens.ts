@@ -12,7 +12,7 @@ import sharp from "sharp";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CropRect } from "@monapp/shared-types";
 import { prepareImageForAnalysis } from "../../src/lib/imageProcessing.js";
-import { callSerpApi, toVisualMatches } from "../../src/services/visualSearch.js";
+import { callSerpApi, toVisualMatches, type VisualMatch } from "../../src/services/visualSearch.js";
 import { DEFAULT_LOCALE } from "../../src/services/lensSettings.js";
 import { exclusionReason } from "../../src/services/matchFilters.js";
 import { structureReponse, type Essai, type Resultat, type Structure } from "./essai-photo.js";
@@ -75,7 +75,7 @@ export async function essaiLens(admin: SupabaseClient, photo: Buffer, essai: Ess
       reseauxSociaux: brutes.filter((m) => m.link && exclusionReason(m.link) === "social").length,
       gardees: gardees.length,
       avecPrix: gardees.filter((m) => m.priceValue !== null).length,
-      premiers: gardees.slice(0, 3).map((m) => `${m.productName} — ${m.merchantName ?? "?"}${m.priceValue !== null ? ` (${m.priceValue} ${m.currency ?? ""})` : ""}`),
+      premiers: gardees.slice(0, 3).map(apercu),
       structure,
     };
   } finally {
@@ -84,10 +84,24 @@ export async function essaiLens(admin: SupabaseClient, photo: Buffer, essai: Ess
   }
 }
 
+/** Une proposition dans le Terminal : son site et son prix, jamais son titre
+ * ni son marchand, qui peuvent être des noms de comptes de particuliers
+ * (décision du fondateur, 2026-10-22). */
+export function apercu(match: Pick<VisualMatch, "merchantUrl" | "priceValue" | "currency">): string {
+  let site: string;
+  try {
+    site = new URL(match.merchantUrl).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    site = "site illisible";
+  }
+  if (match.priceValue === null) return site;
+  return `${site} (${match.currency ? `${match.priceValue} ${match.currency}` : match.priceValue})`;
+}
+
 export function afficher(resultat: Resultat): void {
   const { essai, structure } = resultat;
   console.log(`  Essai ${essai.numero} — ${resultat.brutes} résultat(s) de Google Lens, dont ${resultat.reseauxSociaux} de réseaux sociaux ; ${resultat.gardees} gardé(s) par Spotto, ${resultat.avecPrix} avec un prix.`);
-  for (const titre of resultat.premiers) console.log(`    · ${titre}`);
+  for (const ligne of resultat.premiers) console.log(`    · ${ligne}`);
   if (!structure) return;
   const rubriques = Object.entries(structure.rubriques).filter(([cle]) => !cle.startsWith("search_"));
   console.log(`    réponse de SerpApi : ${rubriques.map(([cle, taille]) => `${cle} ${taille}`).join(", ") || "aucune rubrique"}${structure.erreur ? ` ; message : ${structure.erreur}` : ""}`);

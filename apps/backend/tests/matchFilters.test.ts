@@ -1,7 +1,7 @@
 // Fiabilité des résultats, phase 1 : les filtres rejoués sur de VRAIES
-// réponses de Google Lens, enregistrées le 2026-09-24 sur spotto-dev
-// (tests/fixtures/serpapi, voir LISEZ-MOI.md). Aucun appel réel à SerpApi :
-// safeFetch est remplacé et renvoie la réponse enregistrée.
+// réponses de Google Lens, enregistrées le 2026-09-24 et le 2026-10-21 sur
+// spotto-dev (tests/fixtures/serpapi, voir LISEZ-MOI.md). Aucun appel réel à
+// SerpApi : safeFetch est remplacé et renvoie la réponse enregistrée.
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
@@ -172,6 +172,26 @@ describe("réponses enregistrées de Google Lens : filtres sans risque pour un r
 
   it("réponse enregistrée vide (« Fully empty ») : recherche vide, jamais une panne", async () => {
     await expect(replay(fixture("lens-vignette-entiere-vide.json"))).resolves.toEqual([]);
+  });
+});
+
+describe("réponses réelles du 21 octobre (« visual_matches », 4 pièces du fondateur) : rejouées", () => {
+  // Nombres relevés lors de l'essai, retrouvés à l'identique après la
+  // neutralisation des domaines peu connus (LISEZ-MOI.md).
+  it.each([
+    ["lens-visual-veste-bleu-marine.json", { received: 60, removedSocial: 0, kept: 30, keptWithPrice: 12 }],
+    ["lens-visual-tshirt-blanc.json", { received: 60, removedSocial: 0, kept: 30, keptWithPrice: 5 }],
+    ["lens-visual-maillot-nike.json", { received: 60, removedSocial: 4, kept: 30, keptWithPrice: 7 }],
+    ["lens-visual-pull-noir.json", { received: 60, removedSocial: 52, kept: 8, keptWithPrice: 0 }],
+  ])("%s : reçues, réseaux sociaux écartés, gardées, avec un prix", async (file, attendu) => {
+    const { matches, measure } = await replayWithMeasure(fixture(file), { country: "fr", hl: "fr" });
+    expect(measure).toMatchObject(attendu);
+    expect(matches.map((m) => m.rank)).toEqual(matches.map((_, i) => i + 1));
+  });
+
+  it("le type « products », abandonné le 9 octobre : erreur de SerpApi (400), une panne, jamais « rien trouvé »", async () => {
+    safeFetchMock.mockResolvedValueOnce(new Response(JSON.stringify(fixture("lens-products-abandonne-400.json")), { status: 400, headers: { "content-type": "application/json" } }));
+    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/zone.jpg")).rejects.toMatchObject({ name: "LensCallError", kind: "serpapi_error" });
   });
 });
 
