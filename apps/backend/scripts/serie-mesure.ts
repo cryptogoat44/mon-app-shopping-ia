@@ -1,6 +1,6 @@
 // Série de mesure sans nouvelles photos (décisions du fondateur, 2026-10-24) :
-// lots 2, 3, 9, 11, 7 et 10, 46 recherches au plus, enchaînés sous UNE
-// phrase tapée par le fondateur (PHRASE_SERIE). Le lot 12 n'en fait pas partie.
+// lots 10 (en premier), 2, 3, 9, 11 et 7, 46 recherches au plus, enchaînés
+// sous UNE phrase tapée par le fondateur (PHRASE_SERIE). Le lot 12 n'en fait pas partie.
 //
 //   pnpm --filter backend serie-mesure <pieces.json>                       état et plan (aucun appel)
 //   pnpm --filter backend serie-mesure <pieces.json> --nouvelle-reference  relit le compteur et le prend pour référence
@@ -117,11 +117,12 @@ async function etapeShopping(contexte: Contexte, etape: EtapeSerie, ligne: Ligne
   terminer(ligne, reponse, (mesure?.mesures.resultats ?? 0) === 0, mesure?.mesures ?? null, mesure && pertinenceDouteuse(mesure.mesures) ? "pertinence douteuse" : null);
 }
 
-/** Domaines gardés par Google Lens pour la pièce (lot 2, dernière mesure) : comparaison avec les boutiques. */
-function domainesLensDe(releve: ReleveSerie, nom: NomPiece): string[] {
-  const ligne = releve.lignes.filter((l) => l.lot === 2 && l.piece === nom && l.service === "lens").at(-1);
+/** Domaines gardés par Google Lens pour la pièce (lot 2, dernière mesure) ;
+ * null si Lens n'a pas encore tourné (lot 10 en premier) : la comparaison se fait dans le rapport. */
+function domainesLensDe(releve: ReleveSerie, nom: NomPiece): string[] | null {
+  const ligne = releve.lignes.filter((l) => l.lot === 2 && l.piece === nom && l.service === "lens" && l.issue === "reussie").at(-1);
   const domaines = ligne?.mesures?.domainesGardes;
-  return Array.isArray(domaines) ? domaines.filter((d): d is string => typeof d === "string") : [];
+  return Array.isArray(domaines) ? domaines.filter((d): d is string => typeof d === "string") : null;
 }
 
 /** Une étape « lien marchand » : les boutiques du produit choisi, puis la vérification du premier lien. */

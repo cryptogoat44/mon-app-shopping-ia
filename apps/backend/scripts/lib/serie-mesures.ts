@@ -125,13 +125,15 @@ const BOUTIQUE = z.object({ link: z.string().optional(), price: z.string().optio
 const REPONSE_BOUTIQUES = z.object({ product_results: z.object({ stores: z.array(z.unknown()).optional() }).passthrough().optional(), stores: z.array(z.unknown()).optional() }).passthrough();
 
 export interface MesureMarchand {
-  mesures: Record<string, number | string[]>;
+  mesures: Record<string, number | string[] | null>;
   /** Liens des boutiques, en mémoire seulement (vérification du lien), jamais relevés. */
   liens: string[];
 }
 
-/** Mesure des boutiques d'un produit (Immersive Product ou Google Product). */
-export function mesurerBoutiques(json: unknown, domainesLens: readonly string[]): MesureMarchand | null {
+/** Mesure des boutiques d'un produit (Immersive Product ou Google Product).
+ * `domainesLens` : null si Google Lens n'a pas encore été mesuré pour la
+ * pièce (lot 10 en premier) ; la comparaison se fait alors dans le rapport. */
+export function mesurerBoutiques(json: unknown, domainesLens: readonly string[] | null): MesureMarchand | null {
   const lu = REPONSE_BOUTIQUES.safeParse(json);
   if (!lu.success) return null;
   const brutes = lu.data.stores ?? lu.data.product_results?.stores ?? [];
@@ -147,7 +149,7 @@ export function mesurerBoutiques(json: unknown, domainesLens: readonly string[])
       liensDirects: directs.length,
       domainesFrEu: directs.filter((d) => /\.(fr|eu)$/.test(d)).length,
       prixEnEuros: boutiques.filter((b) => enEuros(b.price)).length,
-      communsAvecLens: new Set(directs.filter((d) => domainesLens.includes(d))).size,
+      communsAvecLens: domainesLens ? new Set(directs.filter((d) => domainesLens.includes(d))).size : null,
       domaines: [...new Set(directs)].slice(0, 30),
     },
     liens: boutiques.map((b) => b.link).filter((l): l is string => Boolean(l)),

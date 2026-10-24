@@ -1,5 +1,5 @@
 // Plan de la série de mesure sans nouvelles photos (décisions du fondateur,
-// 2026-10-24) : lots 2, 3, 9, 11, 7 et 10, 46 recherches au plus, sous une
+// 2026-10-24) : lots 10, 2, 3, 9, 11 et 7, 46 recherches au plus, sous une
 // seule autorisation tapée. Le lot 12 (description par l'IA) n'en fait pas
 // partie. Logique pure, testée (tests/serieMesure.test.ts).
 import { z } from "zod";
@@ -58,9 +58,12 @@ function lot10(): Brouillon[] {
   return etapes;
 }
 
-/** Les 46 étapes, dans l'ordre : lots 2, 3, 9, 11, 7 (Google Lens), puis 10. */
+/** Les 46 étapes, dans l'ordre : le lot 10 d'abord (recherche par texte et
+ * liens marchands, qui répond au problème des prix — décision du fondateur,
+ * 2026-10-24), puis les lots Google Lens 2, 3, 9, 11 et 7. */
 export function planSerie(): EtapeSerie[] {
   const brouillons: Brouillon[] = [
+    ...lot10(),
     // Lot 2 : image seule ; le pull blanc, puis une seconde mesure des 5 pièces.
     lens(2, "pull-blanc"),
     ...PIECES_SERIE.map((p) => lens(2, p)),
@@ -73,7 +76,6 @@ export function planSerie(): EtapeSerie[] {
     ...(["pull-blanc", "pull-noir"] as const).map((p) => lens(11, p, { image: "pleine-definition" })),
     // Lot 7 : pays et devise.
     ...(["veste-bleu-marine", "tshirt-blanc", "maillot-nike", "pull-noir"] as const).flatMap((p) => [lens(7, p, { locale: SUISSE }), lens(7, p, { locale: ROYAUME_UNI })]),
-    ...lot10(),
   ];
   return brouillons.map((etape, index): EtapeSerie => ({ ...etape, numero: index + 1 }));
 }

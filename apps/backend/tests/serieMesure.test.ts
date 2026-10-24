@@ -23,14 +23,14 @@ function ligne(numero: number, issue: LigneSerie["issue"], options: Partial<Lign
 const compteur = (utilisees: number, restantes = 250 - utilisees): Compteur => ({ utilisees, restantes, lueLe: "2026-10-25T09:00:00.000Z" });
 
 describe("plan de la série", () => {
-  it("46 recherches, dans l'ordre des lots 2, 3, 9, 11, 7 puis 10", () => {
+  it("46 recherches : le lot 10 en premier, puis les lots 2, 3, 9, 11 et 7", () => {
     expect(PLAN).toHaveLength(46);
     expect(AUTORISATION_SERIE).toBe(46);
     expect(PLAN.map((e) => e.numero)).toEqual(Array.from({ length: 46 }, (_, i) => i + 1));
-    const tailles = [2, 3, 9, 11, 7, 10].map((lot) => PLAN.filter((e) => e.lot === lot).length);
-    expect(tailles).toEqual([6, 10, 8, 5, 8, 9]);
+    const tailles = [10, 2, 3, 9, 11, 7].map((lot) => PLAN.filter((e) => e.lot === lot).length);
+    expect(tailles).toEqual([9, 6, 10, 8, 5, 8]);
     const ordre = PLAN.map((e) => e.lot).filter((lot, i, tous) => tous.indexOf(lot) === i);
-    expect(ordre).toEqual([2, 3, 9, 11, 7, 10]);
+    expect(ordre).toEqual([10, 2, 3, 9, 11, 7]);
   });
 
   it("planches aux lots 2 et 3 seulement ; lot 9 sans cache ; lot 7 en Suisse et au Royaume-Uni", () => {
@@ -190,6 +190,8 @@ describe("mesures", () => {
     expect(mesure?.mesures).toMatchObject({ boutiques: 3, liensDirects: 2, domainesFrEu: 2, prixEnEuros: 2, communsAvecLens: 1, domaines: ["zalando.fr", "shop.example.eu"] });
     expect(mesure?.liens).toHaveLength(3);
     expect(mesurerBoutiques({ stores: [] }, [])?.mesures.boutiques).toBe(0);
+    // Lot 10 en premier : Google Lens pas encore mesuré, la comparaison attend le rapport.
+    expect(mesurerBoutiques(json, null)?.mesures.communsAvecLens).toBeNull();
   });
 
   it("répétabilité : part de domaines communs", () => {
