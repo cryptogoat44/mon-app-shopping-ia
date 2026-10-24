@@ -22,7 +22,7 @@ import { assertDevSupabaseUrl } from "./lib/dev-database.js";
 import { contenusInterdits, factureeSelonSerpApi } from "./lib/essai-type.js";
 import type { Piece } from "./lib/mesure-texte.js";
 import { appelBoutiques, appelLens, appelShopping, brancherSerpApi, lireCompteur, lirePageEtat, verifierLien, viderStockage, type Branchement, type ReponseSerpApi } from "./lib/serie-appels.js";
-import { appelsDuJour, arretDemande, attenteHoraireMinutes, compteurConcorde, decisionReprise, etapeSuivante, jourParis, LIMITE_HEURE, lireOptions, PLAFOND_JOUR, RELEVE_SERIE, reserveSuffisante, servicesDuLot, servicesOperationnels, type Compteur, type LigneSerie, type ReleveSerie } from "./lib/serie-garde-fous.js";
+import { appelsDuJour, arretDemande, attenteHoraireMinutes, controlerCompteur, decisionReprise, etapeSuivante, factureesSelonReleve, jourParis, LIMITE_HEURE, lireOptions, PLAFOND_JOUR, RELEVE_SERIE, reserveSuffisante, servicesDuLot, servicesOperationnels, type Compteur, type LigneSerie, type ReleveSerie } from "./lib/serie-garde-fous.js";
 import { compilerDetection, imageDeLEtape, sansVisage } from "./lib/serie-images.js";
 import { mesurerBoutiques, mesurerLens, mesurerShopping, pertinenceDouteuse, type ProduitChoisi } from "./lib/serie-mesures.js";
 import { ecrirePlanche } from "./lib/serie-planche.js";
@@ -182,8 +182,7 @@ async function controlerAvant(contexte: Contexte, etape: EtapeSerie): Promise<vo
   if (!servicesOperationnels(etats, services)) throw new ArretSerie(`Page d'état : ${services.map((s) => `${s} « ${etats[s] ?? "illisible"} »`).join(", ")}. Aucun appel lancé.`);
   const { releve } = contexte;
   if (releve.lots.some((l) => l.lot === etape.lot)) return;
-  const compteur = await lireCompteur();
-  if (!releve.reference || !compteurConcorde(releve.reference, compteur, releve.lignes)) throw new ArretSerie("Compteur de SerpApi différent du relevé avant le lot : une recherche hors série ? Aucun appel lancé.");
+  const compteur = await compteurControle(releve, `avant le lot ${etape.lot}`);
   const restantes = PLAN.filter((e) => e.lot === etape.lot && e.numero >= etape.numero).length;
   if (!reserveSuffisante(compteur, restantes)) throw new ArretSerie(`Réserve : il resterait moins de 30 recherches après le lot ${etape.lot}. Aucun appel lancé.`);
   releve.lots.push({ lot: etape.lot, avant: compteur, apres: null, services: etats, incidents });
@@ -194,10 +193,23 @@ async function controlerAvant(contexte: Contexte, etape: EtapeSerie): Promise<vo
 async function controlerApres(contexte: Contexte, lot: number): Promise<void> {
   const entree = contexte.releve.lots.find((l) => l.lot === lot);
   if (!entree || !contexte.releve.reference) return;
-  const compteur: Compteur = await lireCompteur();
-  entree.apres = compteur;
+  entree.apres = await compteurControle(contexte.releve, `après le lot ${lot}`);
   ecrireReleve(contexte.releve);
-  if (!compteurConcorde(contexte.releve.reference, compteur, contexte.releve.lignes)) throw new ArretSerie(`Compteur de SerpApi différent du relevé après le lot ${lot}. Série arrêtée.`);
+}
+
+const attendre = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Compteur relu et comparé au relevé : relecture (3 fois, 20 s) seulement s'il
+ * est en retard de 1 ; plus haut, ou plus de 1 d'écart : arrêt immédiat. */
+async function compteurControle(releve: ReleveSerie, moment: string): Promise<Compteur> {
+  if (!releve.reference) throw new ArretSerie("Aucune référence de compteur. Aucun appel lancé.");
+  const { ok, compteur, relectures } = await controlerCompteur(releve.reference, releve.lignes, () => lireCompteur(), attendre);
+  if (relectures > 0) console.log(`  Compteur relu ${relectures} fois ${moment} (retard de SerpApi) : ${ok ? "concordant" : "toujours différent"}.`);
+  if (!ok) {
+    const depuis = compteur.utilisees - releve.reference.utilisees;
+    throw new ArretSerie(`Compteur de SerpApi différent du relevé ${moment} : ${depuis} recherches depuis la référence, ${factureesSelonReleve(releve.lignes)} facturées d'après le relevé. Série arrêtée.`);
+  }
+  return compteur;
 }
 
 function afficherLigne(ligne: LigneSerie): void {

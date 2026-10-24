@@ -144,6 +144,41 @@ export function compteurConcorde(reference: Compteur, actuel: Compteur, lignes: 
   return actuel.utilisees - reference.utilisees === factureesSelonReleve(lignes);
 }
 
+/** Verdict du compteur face au relevé (décision du fondateur, 2026-10-24) :
+ * « retard » seulement s'il est INFÉRIEUR au relevé de 1 exactement (SerpApi
+ * n'a pas encore compté la dernière recherche) ; plus haut, ou plus de 1
+ * d'écart : « ecart », arrêt immédiat. */
+export function verdictCompteur(reference: Compteur, actuel: Compteur, lignes: readonly LigneSerie[]): "concorde" | "retard" | "ecart" {
+  const ecart = actuel.utilisees - reference.utilisees - factureesSelonReleve(lignes);
+  if (ecart === 0) return "concorde";
+  return ecart === -1 ? "retard" : "ecart";
+}
+
+/** Relectures permises en cas de retard de 1, et leur intervalle. */
+export const RELECTURES_MAX = 3;
+export const RELECTURE_MS = 20_000;
+
+/** Contrôle du compteur, avec relecture seulement en cas de retard de 1 :
+ * jusqu'à 3 fois, à 20 secondes d'intervalle. Un compteur plus haut que le
+ * relevé, ou un écart de plus de 1, arrête tout de suite, sans relecture. */
+export async function controlerCompteur(
+  reference: Compteur,
+  lignes: readonly LigneSerie[],
+  lire: () => Promise<Compteur>,
+  attendre: (ms: number) => Promise<void>
+): Promise<{ ok: boolean; compteur: Compteur; relectures: number }> {
+  let compteur = await lire();
+  let relectures = 0;
+  let verdict = verdictCompteur(reference, compteur, lignes);
+  while (verdict === "retard" && relectures < RELECTURES_MAX) {
+    await attendre(RELECTURE_MS);
+    compteur = await lire();
+    relectures += 1;
+    verdict = verdictCompteur(reference, compteur, lignes);
+  }
+  return { ok: verdict === "concorde", compteur, relectures };
+}
+
 /** La réserve tient-elle si les étapes restantes du lot partent ? */
 export function reserveSuffisante(actuel: Compteur, etapesRestantes: number): boolean {
   return actuel.restantes - etapesRestantes >= RESERVE;

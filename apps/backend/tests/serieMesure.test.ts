@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { contenusInterdits } from "../scripts/lib/essai-type.js";
 import { brancherSerpApi, sansCache, statutDe } from "../scripts/lib/serie-appels.js";
 import {
-  appelsDuJour, arretDemande, attenteHoraireMinutes, compteurConcorde, decisionReprise, etapeSuivante, jourParis, lireOptions, RELEVE_SERIE, rechercheesAutorisees, reserveSuffisante, servicesDuLot, servicesOperationnels,
+  appelsDuJour, arretDemande, attenteHoraireMinutes, compteurConcorde, controlerCompteur, decisionReprise, etapeSuivante, jourParis, lireOptions, RELEVE_SERIE, rechercheesAutorisees, reserveSuffisante, servicesDuLot, servicesOperationnels, verdictCompteur,
   type Compteur, type LigneSerie,
 } from "../scripts/lib/serie-garde-fous.js";
 import { lireDetections } from "../scripts/lib/serie-images.js";
@@ -127,6 +127,55 @@ describe("garde-fous", () => {
     expect(decisionReprise(compteur(21), compteur(23), lignes)).toBe("non_facturee");
     expect(decisionReprise(compteur(21), compteur(24), lignes)).toBe("facturee");
     expect(decisionReprise(compteur(21), compteur(26), lignes)).toBe("ecart");
+  });
+
+  describe("compteur : relecture seulement en cas de retard de 1 (décision du fondateur)", () => {
+    const deux = [ligne(1, "reussie"), ligne(2, "reussie")];
+    function lecteur(valeurs: number[]) {
+      let i = 0;
+      return { lire: async () => compteur(valeurs[Math.min(i++, valeurs.length - 1)] ?? 0), lues: () => i };
+    }
+    const attentes: number[] = [];
+    const attendre = async (ms: number) => {
+      attentes.push(ms);
+    };
+
+    it("inférieur de 1 (retard de SerpApi) : relu jusqu'à concorder, 20 s d'intervalle", async () => {
+      attentes.length = 0;
+      const l = lecteur([22, 22, 23]);
+      expect(verdictCompteur(compteur(21), compteur(22), deux)).toBe("retard");
+      await expect(controlerCompteur(compteur(21), deux, l.lire, attendre)).resolves.toMatchObject({ ok: true, relectures: 2 });
+      expect(attentes).toEqual([20_000, 20_000]);
+    });
+
+    it("inférieur de 1 qui persiste : 3 relectures, puis arrêt", async () => {
+      attentes.length = 0;
+      const l = lecteur([22]);
+      await expect(controlerCompteur(compteur(21), deux, l.lire, attendre)).resolves.toMatchObject({ ok: false, relectures: 3 });
+      expect(l.lues()).toBe(4);
+    });
+
+    it("supérieur au relevé : arrêt immédiat, sans relecture", async () => {
+      attentes.length = 0;
+      const l = lecteur([24, 23]);
+      expect(verdictCompteur(compteur(21), compteur(24), deux)).toBe("ecart");
+      await expect(controlerCompteur(compteur(21), deux, l.lire, attendre)).resolves.toMatchObject({ ok: false, relectures: 0 });
+      expect(attentes).toEqual([]);
+      expect(l.lues()).toBe(1);
+    });
+
+    it("écart de plus de 1 (inférieur de 2) : arrêt immédiat, sans relecture", async () => {
+      attentes.length = 0;
+      const l = lecteur([21, 23]);
+      expect(verdictCompteur(compteur(21), compteur(21), deux)).toBe("ecart");
+      await expect(controlerCompteur(compteur(21), deux, l.lire, attendre)).resolves.toMatchObject({ ok: false, relectures: 0 });
+      expect(attentes).toEqual([]);
+    });
+
+    it("concordant d'emblée : aucune relecture", async () => {
+      const l = lecteur([23]);
+      await expect(controlerCompteur(compteur(21), deux, l.lire, attendre)).resolves.toMatchObject({ ok: true, relectures: 0 });
+    });
   });
 
   it("compteur, réserve et page d'état", () => {
