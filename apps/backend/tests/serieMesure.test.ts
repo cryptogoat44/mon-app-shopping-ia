@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { contenusInterdits } from "../scripts/lib/essai-type.js";
 import { brancherSerpApi, sansCache, statutDe } from "../scripts/lib/serie-appels.js";
 import {
-  appelsDuJour, arretDemande, compteurConcorde, decisionReprise, etapeSuivante, jourParis, RELEVE_SERIE, rechercheesAutorisees, reserveSuffisante, servicesDuLot, servicesOperationnels,
+  appelsDuJour, arretDemande, attenteHoraireMinutes, compteurConcorde, decisionReprise, etapeSuivante, jourParis, lireOptions, RELEVE_SERIE, rechercheesAutorisees, reserveSuffisante, servicesDuLot, servicesOperationnels,
   type Compteur, type LigneSerie,
 } from "../scripts/lib/serie-garde-fous.js";
 import { lireDetections } from "../scripts/lib/serie-images.js";
@@ -78,6 +78,27 @@ describe("garde-fous", () => {
     const lignes = [ligne(1, "reussie"), ligne(2, "interrompue_non_facturee"), ligne(3, "reussie", { lanceeLe: "2026-10-26T10:00:00.000Z" }), ligne(40, "non_lancee")];
     expect(appelsDuJour(lignes, "2026-10-25")).toBe(1);
     expect(appelsDuJour(lignes, "2026-10-26")).toBe(1);
+  });
+
+  it("limite horaire de SerpApi (50 par heure glissante) : attente en minutes", () => {
+    const debut = new Date("2026-10-24T17:56:00.000Z").getTime();
+    const trente = Array.from({ length: 30 }, (_, i) => ligne(i + 1, "reussie", { lanceeLe: new Date(debut + i * 5000).toISOString() }));
+    expect(attenteHoraireMinutes(trente, new Date("2026-10-24T18:43:00.000Z"))).toBe(0);
+    const cinquante = Array.from({ length: 50 }, (_, i) => ligne((i % 46) + 1, "reussie", { lanceeLe: new Date(debut + i * 60_000).toISOString() }));
+    // La plus ancienne (17:56) sort de l'heure à 18:56 : à 18:50, il faut attendre 6 minutes.
+    expect(attenteHoraireMinutes(cinquante, new Date("2026-10-24T18:50:00.000Z"))).toBe(6);
+    expect(attenteHoraireMinutes(cinquante, new Date("2026-10-24T18:57:00.000Z"))).toBe(0);
+  });
+
+  it("options : le plafond du jour ne se lève qu'avec --confirmer, et rien d'inconnu", () => {
+    expect(lireOptions([])).toEqual({ mode: "etat" });
+    expect(lireOptions(["--nouvelle-reference"])).toEqual({ mode: "reference" });
+    expect(lireOptions(["--confirmer"])).toEqual({ mode: "lancer", plafondJourLeve: false });
+    expect(lireOptions(["--confirmer", "--plafond-jour-leve"])).toEqual({ mode: "lancer", plafondJourLeve: true });
+    expect(() => lireOptions(["--plafond-jour-leve"])).toThrow();
+    expect(() => lireOptions(["--confirmer", "--nouvelle-reference"])).toThrow();
+    expect(() => lireOptions(["--confirmer", "--confirmer"])).toThrow();
+    expect(() => lireOptions(["--confirme"])).toThrow();
   });
 
   it("autorisation : les recherches non facturées ne comptent pas", () => {

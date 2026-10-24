@@ -22,7 +22,7 @@ import { assertDevSupabaseUrl } from "./lib/dev-database.js";
 import { contenusInterdits, factureeSelonSerpApi } from "./lib/essai-type.js";
 import type { Piece } from "./lib/mesure-texte.js";
 import { appelBoutiques, appelLens, appelShopping, brancherSerpApi, lireCompteur, lirePageEtat, verifierLien, viderStockage, type Branchement, type ReponseSerpApi } from "./lib/serie-appels.js";
-import { appelsDuJour, arretDemande, compteurConcorde, decisionReprise, etapeSuivante, jourParis, PLAFOND_JOUR, RELEVE_SERIE, reserveSuffisante, servicesDuLot, servicesOperationnels, type Compteur, type LigneSerie, type ReleveSerie } from "./lib/serie-garde-fous.js";
+import { appelsDuJour, arretDemande, attenteHoraireMinutes, compteurConcorde, decisionReprise, etapeSuivante, jourParis, LIMITE_HEURE, lireOptions, PLAFOND_JOUR, RELEVE_SERIE, reserveSuffisante, servicesDuLot, servicesOperationnels, type Compteur, type LigneSerie, type ReleveSerie } from "./lib/serie-garde-fous.js";
 import { compilerDetection, imageDeLEtape, sansVisage } from "./lib/serie-images.js";
 import { mesurerBoutiques, mesurerLens, mesurerShopping, pertinenceDouteuse, type ProduitChoisi } from "./lib/serie-mesures.js";
 import { ecrirePlanche } from "./lib/serie-planche.js";
@@ -208,14 +208,17 @@ function afficherLigne(ligne: LigneSerie): void {
 }
 
 /** Enchaîne les étapes jusqu'à la fin, un garde-fou, ou le plafond du jour. */
-async function derouler(contexte: Contexte): Promise<string> {
+async function derouler(contexte: Contexte, plafondJourLeve: boolean): Promise<string> {
   for (;;) {
     await trancherEnCours(contexte.releve);
     const arret = arretDemande(contexte.releve.lignes);
     if (arret) return arret.message;
     const etape = etapeSuivante(PLAN, contexte.releve.lignes);
     if (!etape) return "Série terminée.";
-    if (appelsDuJour(contexte.releve.lignes, jourParis(new Date())) >= PLAFOND_JOUR) return `Plafond du jour atteint (${PLAFOND_JOUR} recherches) : reprise demain.`;
+    // Plafond du jour levé seulement pour ce passage, sur la phrase du fondateur ; le total de 46 et les autres garde-fous restent.
+    if (!plafondJourLeve && appelsDuJour(contexte.releve.lignes, jourParis(new Date())) >= PLAFOND_JOUR) return `Plafond du jour atteint (${PLAFOND_JOUR} recherches) : reprise demain.`;
+    const attente = attenteHoraireMinutes(contexte.releve.lignes, new Date());
+    if (attente > 0) return `Limite horaire de SerpApi (${LIMITE_HEURE} par heure) : attendre ${attente} minutes.`;
     await controlerAvant(contexte, etape);
     afficherLigne(await faireEtape(contexte, etape));
     const suivante = etapeSuivante(PLAN, contexte.releve.lignes);
@@ -230,28 +233,45 @@ function afficherEtat(releve: ReleveSerie, compteur: Compteur): void {
   console.log(`Étapes faites : ${faites} sur ${PLAN.length} ; appels aujourd'hui : ${appelsDuJour(releve.lignes, jourParis(new Date()))} sur ${PLAFOND_JOUR}.`);
 }
 
-const OPTIONS = new Set(["--confirmer", "--nouvelle-reference"]);
-
 async function main(): Promise<void> {
-  const [manifeste, ...options] = process.argv.slice(2);
+  const [manifeste, ...brutes] = process.argv.slice(2);
   if (!manifeste || manifeste.startsWith("--")) throw new Error("Indiquez le fichier des pièces (pieces.json, hors de Git).");
-  const inconnues = options.filter((o) => !OPTIONS.has(o));
-  if (inconnues.length > 0 || options.length > 1) throw new Error(`Une seule option, parmi ${[...OPTIONS].join(", ")}. Aucun appel lancé.`);
+  const options = lireOptions(brutes);
   assertDevSupabaseUrl(env.SUPABASE_URL, "apps/backend/.env (SUPABASE_URL)");
   const pieces = piecesDeSerie(JSON.parse(readFileSync(manifeste, "utf8")));
   const releve = lireReleve();
   const compteur = await lireCompteur();
   afficherEtat(releve, compteur);
-  if (options[0] === "--nouvelle-reference") {
+  if (options.mode === "reference") {
     if (releve.lignes.some((l) => l.issue === "en_cours")) throw new Error("Un appel est resté « en cours » : reprenez d'abord la série. Référence inchangée.");
     releve.reference = compteur;
     ecrireReleve(releve);
     console.log(`Nouvelle référence : ${compteur.utilisees} utilisées, ${compteur.restantes} restantes.`);
     return;
   }
-  if (options[0] !== "--confirmer") return void console.log("Aucun appel lancé (ajoutez --confirmer).");
+  if (options.mode === "etat") return void console.log("Aucun appel lancé (ajoutez --confirmer).");
   if (!releve.reference) throw new Error("Aucune référence de compteur : lancez d'abord --nouvelle-reference. Aucun appel lancé.");
-  await lancer(pieces, releve);
+  if (options.plafondJourLeve) console.log(`Plafond du jour levé pour ce passage (phrase du fondateur) ; total de ${AUTORISATION_SERIE} et autres garde-fous inchangés.`);
+  await lancer(pieces, releve, options.plafondJourLeve);
+}
+
+const VERROU = join(DOSSIER, "passage-en-cours.verrou");
+
+/** Un seul passage à la fois : un second refuse de démarrer tant que le premier tourne. */
+function prendreVerrou(): void {
+  mkdirSync(DOSSIER, { recursive: true });
+  if (existsSync(VERROU)) {
+    const pid = Number(readFileSync(VERROU, "utf8"));
+    const vivant = (() => {
+      try {
+        return Number.isInteger(pid) && pid > 0 && process.kill(pid, 0);
+      } catch {
+        return false;
+      }
+    })();
+    if (vivant) throw new ArretSerie("Un autre passage de la série tourne déjà : aucun appel lancé.");
+  }
+  writeFileSync(VERROU, String(process.pid));
 }
 
 /** En fin de passage (fin, arrêt ou panne) : compteur relu et comparé au relevé, en nombres. */
@@ -267,16 +287,23 @@ async function afficherConcordance(releve: ReleveSerie): Promise<void> {
   }
 }
 
-async function lancer(pieces: Map<NomPiece, Piece>, releve: ReleveSerie): Promise<void> {
+function codeDeSortie(fin: string): number {
+  if (fin === "Série terminée.") return 0;
+  if (fin.startsWith("Plafond du jour")) return 4;
+  return fin.startsWith("Limite horaire") ? 5 : 3;
+}
+
+async function lancer(pieces: Map<NomPiece, Piece>, releve: ReleveSerie, plafondJourLeve: boolean): Promise<void> {
+  prendreVerrou();
   const travail = mkdtempSync(join(tmpdir(), "spotto-serie-"));
   const admin = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   const contexte: Contexte = { admin, branchement: brancherSerpApi(), travail, binaireVisages: compilerDetection(travail), pieces, releve, produits: new Map() };
   try {
     const restees = await viderStockage(admin);
     if (restees > 0) console.log(`Images d'essai restées dans le stockage (interruption) : ${restees}, effacées.`);
-    const fin = await derouler(contexte);
+    const fin = await derouler(contexte, plafondJourLeve);
     console.log(fin);
-    process.exitCode = fin === "Série terminée." ? 0 : fin.startsWith("Plafond du jour") ? 4 : 3;
+    process.exitCode = codeDeSortie(fin);
   } catch (error) {
     console.log(error instanceof Error ? error.message : String(error));
     process.exitCode = error instanceof ArretSerie ? 3 : 1;
@@ -284,6 +311,7 @@ async function lancer(pieces: Map<NomPiece, Piece>, releve: ReleveSerie): Promis
     await afficherConcordance(releve);
     await viderStockage(admin).catch(() => 0);
     rmSync(travail, { recursive: true, force: true });
+    rmSync(VERROU, { force: true });
     console.log("Images de travail effacées du Mac et du stockage.");
   }
 }

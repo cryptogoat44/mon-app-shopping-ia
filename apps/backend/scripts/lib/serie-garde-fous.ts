@@ -13,6 +13,9 @@ export const RESERVE = 30;
 export const PLAFOND_JOUR = 30;
 /** Arrêt après autant de réponses vides de suite (signe d'un incident). */
 export const VIDES_DE_SUITE_MAX = 3;
+/** Débit de l'offre gratuite de SerpApi : « 50 » recherches par heure (page des
+ * tarifs, lue le 2026-10-24). Compté sur l'heure glissante, par prudence. */
+export const LIMITE_HEURE = 50;
 
 const ISSUES = ["en_cours", "reussie", "vide", "erreur", "panne", "interrompue_facturee", "interrompue_non_facturee", "non_lancee"] as const;
 export type IssueSerie = (typeof ISSUES)[number];
@@ -63,6 +66,33 @@ function appelParti(ligne: LigneSerie): boolean {
 /** Appels partis pendant le jour de Paris donné (plafond par jour). */
 export function appelsDuJour(lignes: readonly LigneSerie[], jour: string): number {
   return lignes.filter((l) => appelParti(l) && jourParis(new Date(l.lanceeLe)) === jour).length;
+}
+
+const HEURE_MS = 60 * 60 * 1000;
+
+/** Minutes à attendre avant le prochain appel pour rester sous la limite
+ * horaire de SerpApi (heure glissante) ; 0 si l'appel peut partir. */
+export function attenteHoraireMinutes(lignes: readonly LigneSerie[], maintenant: Date): number {
+  const debut = maintenant.getTime() - HEURE_MS;
+  const instants = lignes.filter(appelParti).map((l) => new Date(l.lanceeLe).getTime()).filter((t) => t > debut).sort((a, b) => a - b);
+  if (instants.length < LIMITE_HEURE) return 0;
+  const libere = instants[instants.length - LIMITE_HEURE] ?? debut;
+  return Math.max(1, Math.ceil((libere + HEURE_MS - maintenant.getTime()) / 60_000));
+}
+
+export type OptionsSerie = { mode: "etat" } | { mode: "reference" } | { mode: "lancer"; plafondJourLeve: boolean };
+
+/** Options permises ; une option inconnue ou mal combinée ne lance jamais rien.
+ * `--plafond-jour-leve` : seulement avec `--confirmer`, après la phrase tapée
+ * par le fondateur ; ne change ni le total de 46 ni les autres garde-fous. */
+export function lireOptions(options: readonly string[]): OptionsSerie {
+  const connues = new Set(["--confirmer", "--nouvelle-reference", "--plafond-jour-leve"]);
+  const inconnues = options.filter((o) => !connues.has(o));
+  if (inconnues.length > 0 || new Set(options).size !== options.length) throw new Error(`Options refusées (${options.join(" ")}). Aucun appel lancé.`);
+  if (options.length === 0) return { mode: "etat" };
+  if (options.length === 1 && options[0] === "--nouvelle-reference") return { mode: "reference" };
+  if (options.includes("--confirmer") && !options.includes("--nouvelle-reference")) return { mode: "lancer", plafondJourLeve: options.includes("--plafond-jour-leve") };
+  throw new Error(`Options refusées (${options.join(" ")}) : --plafond-jour-leve ne va qu'avec --confirmer. Aucun appel lancé.`);
 }
 
 /** Recherches comptées contre l'autorisation : parties, sauf celles que SerpApi dit non facturées. */
