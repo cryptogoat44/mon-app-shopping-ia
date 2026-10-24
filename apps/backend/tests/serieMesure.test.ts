@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { contenusInterdits } from "../scripts/lib/essai-type.js";
 import { brancherSerpApi, sansCache, statutDe } from "../scripts/lib/serie-appels.js";
 import {
-  appelsDuJour, arretDemande, attenteHoraireMinutes, compteurConcorde, controlerCompteur, decisionReprise, etapeSuivante, jourParis, lireOptions, RELEVE_SERIE, rechercheesAutorisees, reserveSuffisante, servicesDuLot, servicesOperationnels, verdictCompteur,
+  appelsDuJour, arretDemande, attenteHoraireMinutes, compteurConcorde, controlerCompteur, decisionReprise, etapeSuivante, FIN_SERIE, finOuArret, jourParis, lireOptions, RELEVE_SERIE, rechercheesAutorisees, reserveSuffisante, servicesDuLot, servicesOperationnels, verdictCompteur,
   type Compteur, type LigneSerie,
 } from "../scripts/lib/serie-garde-fous.js";
 import { lireDetections } from "../scripts/lib/serie-images.js";
@@ -120,6 +120,14 @@ describe("garde-fous", () => {
     expect(arretDemande([ligne(1, "vide"), ligne(2, "vide"), ligne(3, "vide")])?.raison).toBe("vides");
     expect(arretDemande([ligne(1, "vide"), ligne(2, "reussie"), ligne(3, "vide"), ligne(4, "vide")])).toBeNull();
     expect(arretDemande(PLAN.map((e) => ligne(e.numero, "reussie")))?.raison).toBe("autorisation");
+  });
+
+  it("fin de série : « Série terminée. » quand les 46 étapes sont faites, et non « autorisation épuisée »", () => {
+    const toutes = PLAN.map((e) => ligne(e.numero, "reussie"));
+    expect(finOuArret(PLAN, toutes)).toBe(FIN_SERIE);
+    expect(finOuArret(PLAN, [ligne(1, "reussie")])).toBeNull();
+    expect(finOuArret(PLAN, [ligne(1, "panne")])).toMatch(/Panne/);
+    expect(finOuArret(PLAN, [...toutes.slice(0, 45), ligne(46, "en_cours")])).toMatch(/en cours/);
   });
 
   it("reprise : le compteur dit si l'appel interrompu a été facturé", () => {

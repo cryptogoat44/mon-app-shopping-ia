@@ -22,7 +22,7 @@ import { assertDevSupabaseUrl } from "./lib/dev-database.js";
 import { contenusInterdits, factureeSelonSerpApi } from "./lib/essai-type.js";
 import type { Piece } from "./lib/mesure-texte.js";
 import { appelBoutiques, appelLens, appelShopping, brancherSerpApi, lireCompteur, lirePageEtat, verifierLien, viderStockage, type Branchement, type ReponseSerpApi } from "./lib/serie-appels.js";
-import { appelsDuJour, arretDemande, attenteHoraireMinutes, controlerCompteur, decisionReprise, etapeSuivante, factureesSelonReleve, jourParis, LIMITE_HEURE, lireOptions, PLAFOND_JOUR, RELEVE_SERIE, reserveSuffisante, servicesDuLot, servicesOperationnels, type Compteur, type LigneSerie, type ReleveSerie } from "./lib/serie-garde-fous.js";
+import { appelsDuJour, attenteHoraireMinutes, controlerCompteur, decisionReprise, etapeSuivante, factureesSelonReleve, FIN_SERIE, finOuArret, jourParis, LIMITE_HEURE, lireOptions, PLAFOND_JOUR, RELEVE_SERIE, reserveSuffisante, servicesDuLot, servicesOperationnels, type Compteur, type LigneSerie, type ReleveSerie } from "./lib/serie-garde-fous.js";
 import { compilerDetection, imageDeLEtape, sansVisage } from "./lib/serie-images.js";
 import { mesurerBoutiques, mesurerLens, mesurerShopping, pertinenceDouteuse, type ProduitChoisi } from "./lib/serie-mesures.js";
 import { ecrirePlanche } from "./lib/serie-planche.js";
@@ -223,10 +223,10 @@ function afficherLigne(ligne: LigneSerie): void {
 async function derouler(contexte: Contexte, plafondJourLeve: boolean): Promise<string> {
   for (;;) {
     await trancherEnCours(contexte.releve);
-    const arret = arretDemande(contexte.releve.lignes);
-    if (arret) return arret.message;
+    const fin = finOuArret(PLAN, contexte.releve.lignes);
+    if (fin) return fin;
     const etape = etapeSuivante(PLAN, contexte.releve.lignes);
-    if (!etape) return "Série terminée.";
+    if (!etape) return FIN_SERIE;
     // Plafond du jour levé seulement pour ce passage, sur la phrase du fondateur ; le total de 46 et les autres garde-fous restent.
     if (!plafondJourLeve && appelsDuJour(contexte.releve.lignes, jourParis(new Date())) >= PLAFOND_JOUR) return `Plafond du jour atteint (${PLAFOND_JOUR} recherches) : reprise demain.`;
     const attente = attenteHoraireMinutes(contexte.releve.lignes, new Date());
@@ -300,7 +300,7 @@ async function afficherConcordance(releve: ReleveSerie): Promise<void> {
 }
 
 function codeDeSortie(fin: string): number {
-  if (fin === "Série terminée.") return 0;
+  if (fin === FIN_SERIE) return 0;
   if (fin.startsWith("Plafond du jour")) return 4;
   return fin.startsWith("Limite horaire") ? 5 : 3;
 }

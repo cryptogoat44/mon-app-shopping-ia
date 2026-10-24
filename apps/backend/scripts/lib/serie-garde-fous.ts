@@ -127,6 +127,17 @@ export function arretDemande(lignes: readonly LigneSerie[]): Arret | null {
   return null;
 }
 
+export const FIN_SERIE = "Série terminée.";
+
+/** Avant le prochain appel : fin de la série, ou arrêt (garde-fou), ou null pour
+ * continuer. La fin passe avant « autorisation épuisée » : quand les 46 étapes
+ * sont faites, la série est terminée (constaté le 24 octobre : le dernier
+ * passage affichait « autorisation épuisée »). */
+export function finOuArret(plan: readonly EtapeSerie[], lignes: readonly LigneSerie[]): string | null {
+  if (!lignes.some((l) => l.issue === "en_cours") && !etapeSuivante(plan, lignes)) return FIN_SERIE;
+  return arretDemande(lignes)?.message ?? null;
+}
+
 /** Reprise d'un appel resté « en cours » (session interrompue) : le compteur
  * de SerpApi dit s'il a été facturé. Facturé : on ne le refait pas (sa
  * réponse est perdue). Non facturé : on peut le refaire. Autre écart : on
