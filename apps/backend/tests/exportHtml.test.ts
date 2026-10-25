@@ -442,3 +442,24 @@ describe("lectures complètes (pagination)", () => {
     expect(chunks([])).toEqual([]);
   });
 });
+
+describe("colonnes de la migration 0027, décrites d'avance", () => {
+  // La base migrée renvoie ces colonnes même au serveur d'avant (mise en ligne) :
+  // chacune doit déjà avoir son libellé, sinon l'export ne serait plus complet.
+  it("recherches et propositions : chaque nouvelle colonne a son libellé en français et en anglais", () => {
+    const attendues: [keyof typeof EXPORT_COLUMNS, string][] = [
+      ["productSearches", "provider"],
+      ["productSearches", "provider_status_code"],
+      ["productSearches", "run_started_at"],
+      ["productMatches", "provider_page_token"],
+      ["productMatches", "provider_product_id"],
+      ["productMatches", "stores"],
+      ["productMatches", "stores_requested_at"],
+    ];
+    for (const [section, colonne] of attendues) {
+      const libelle = (EXPORT_COLUMNS[section] as Record<string, { label: Bilingual }>)[colonne]?.label;
+      expect(libelle?.fr.trim(), `${section}.${colonne}`).toBeTruthy();
+      expect(libelle?.en.trim(), `${section}.${colonne}`).toBeTruthy();
+    }
+  });
+});
