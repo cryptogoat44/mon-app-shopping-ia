@@ -2,6 +2,7 @@
 // aucune conversion « de confiance »), puis mises en forme pour l'app.
 import { z } from "zod";
 import { PLATFORM_SOURCES, RECOGNITION_METHODS, SEARCH_STATUSES, type MatchFeedbackReason, type ProductSearch } from "@monapp/shared-types";
+import { FAILURE_KINDS } from "./searchMeasure.js";
 
 export const SEARCH_ROW = z.object({
   id: z.string(),
@@ -16,6 +17,10 @@ export const SEARCH_ROW = z.object({
   query: z.string().nullable(),
   created_at: z.string(),
   refused_before_call: z.number().int().nonnegative(),
+  failure_kind: z.enum(FAILURE_KINDS).nullable(),
+  provider: z.string().nullable(),
+  // Heure du lancement (0027) : vide tant que la recherche n'est pas partie.
+  run_started_at: z.string().nullable(),
 });
 export type SearchRow = z.infer<typeof SEARCH_ROW>;
 
@@ -38,6 +43,18 @@ export type MatchRow = z.infer<typeof MATCH_ROW>;
 
 const MATCH_ROWS = z.array(MATCH_ROW);
 const SEARCH_ROWS = z.array(SEARCH_ROW);
+
+/** Au-delà, une recherche encore « en cours » est interrompue (conception du
+ * 21 octobre) : la recherche elle-même dure 15 secondes au plus. */
+export const INTERRUPTED_AFTER_MS = 2 * 60_000;
+
+/** Restée « en cours » plus de 2 minutes depuis son lancement (ou, pour une
+ * recherche d'avant 0027, depuis sa création). */
+export function isInterrupted(row: Pick<SearchRow, "status" | "run_started_at" | "created_at">, now: number): boolean {
+  if (row.status !== "processing") return false;
+  const startedAt = Date.parse(row.run_started_at ?? row.created_at);
+  return Number.isFinite(startedAt) && now - startedAt > INTERRUPTED_AFTER_MS;
+}
 
 /** null : ligne absente ou illisible. */
 export function parseSearchRow(data: unknown): SearchRow | null {
@@ -75,6 +92,8 @@ export function toProductSearch(
     errorMessage: row.error_message,
     query: row.query,
     createdAt: row.created_at,
+    // Refus du fournisseur dont la place a été rendue dans les trois plafonds.
+    notCounted: row.failure_kind === "provider_refused",
     matches: [...matches]
       .sort((a, b) => a.rank - b.rank)
       .map((m) => ({

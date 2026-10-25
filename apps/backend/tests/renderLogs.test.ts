@@ -2,19 +2,52 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { RENDER_API, type FetchLike } from "../scripts/lib/render-api.js";
-import { chronologie, compterRequetes, decrireAnalyse, decrireCodes, decrireMesure, extraireCompteursIA, extraireMesure, extrairePlafond, lireJournaux, parametresJournaux, resumerMesures, resumerPlafond } from "../scripts/lib/render-logs.js";
-import { CAPACITY_LOG_MESSAGE, capacityLogFields } from "../src/lib/searchCapacity.js";
-import { failedColumns, MEASURE_LOG_MESSAGE, measuredColumns, measureLogLine, type MeasureColumns } from "../src/lib/searchMeasure.js";
+import {
+  chronologie,
+  compterRequetes,
+  decrireAnalyse,
+  decrireCodes,
+  decrireMesure,
+  extraireCompteursIA,
+  extraireDisjoncteur,
+  extraireMesure,
+  extrairePlaceRendue,
+  extrairePlafond,
+  lireJournaux,
+  parametresJournaux,
+  resumerDisjoncteurs,
+  resumerMesures,
+  resumerPlacesRendues,
+  resumerPlafond,
+} from "../scripts/lib/render-logs.js";
+import { CAPACITY_LOG_MESSAGE, capacityLogFields, RELEASE_LOG_MESSAGE } from "../src/lib/searchCapacity.js";
+import { failedColumns, MEASURE_LOG_MESSAGE, measuredColumns, measureLogLine, type MeasureColumns, type ProviderReply } from "../src/lib/searchMeasure.js";
+import { BREAKER_LOG_MESSAGE, breakerLogFields, type BreakerEvent } from "../src/lib/searchBreaker.js";
 
 describe("mesure de chaque recherche (petit lot)", () => {
   // La ligne telle que le serveur l'écrit (src/lib/searchMeasure.ts), plus ce que Fastify y ajoute.
-  const mesure = (colonnes: MeasureColumns, ajouts: number[]) => ligne({ ...measureLogLine(colonnes, ajouts), msg: MEASURE_LOG_MESSAGE, compte: COMPTE, adresse: IP, texte: TEXTE });
+  const SERPAPI_200: ProviderReply = { provider: "serpapi", statusCode: 200 };
+  const mesure = (colonnes: MeasureColumns, ajouts: number[], reponse: ProviderReply = SERPAPI_200) =>
+    ligne({ ...measureLogLine(colonnes, ajouts, reponse), msg: MEASURE_LOG_MESSAGE, compte: COMPTE, adresse: IP, texte: TEXTE });
   const lens = (received: number, kept: number, keptWithPrice: number) => ({ received, removedIncomplete: 0, removedSocial: 0, removedProfessional: 0, removedDuplicates: 0, kept, keptWithPrice, keptOtherCurrency: 0, distinctSites: kept, sections: [], googleState: null });
   const AJOUTS = [32, 36, 37, 38, 46, 47, 51, 52, 53, 55];
 
   it("lit la ligne écrite par le serveur : l'issue et des nombres, rien d'autre", () => {
     const lue = extraireMesure(mesure(measuredColumns(lens(60, 40, 22), 4), AJOUTS).message);
-    expect(lue).toEqual({ msg: "Mesure recherche", outcome: "found", failureKind: null, received: 60, kept: 40, keptWithPrice: 22, keptOtherCurrency: 0, added: 10, addedRanks: AJOUTS, callSeconds: 4 });
+    expect(lue).toEqual({
+      msg: "Mesure recherche",
+      provider: "serpapi",
+      statusCode: 200,
+      outcome: "found",
+      failureKind: null,
+      received: 60,
+      kept: 40,
+      keptWithPrice: 22,
+      keptOtherCurrency: 0,
+      added: 10,
+      addedRanks: AJOUTS,
+      callSeconds: 4,
+    });
     for (const interdit of [IP, COMPTE, TEXTE]) expect(JSON.stringify(lue)).not.toContain(interdit);
     expect(decrireMesure(lue!)).toBe("trouvée — 60 reçue(s), 40 gardée(s) dont 22 avec un prix (0 dans une autre devise) ; 10 ajoutée(s) par la règle des prix (rangs 32, 36, 37, 38, 46, 47, 51, 52, 53, 55), 4 s");
     // Une panne n'a jamais d'ajouts, même si on lui en passe.
@@ -22,12 +55,31 @@ describe("mesure de chaque recherche (petit lot)", () => {
     expect(extraireMesure(ligne({ msg: "Plafond SerpApi" }).message)).toBeNull();
   });
 
+  it("0027 : nouvelles causes de panne, code de réponse du fournisseur ; les lignes d'avant 0027 restent lues", () => {
+    const refus = extraireMesure(mesure(failedColumns("provider_refused", 1), [], { provider: "serpapi", statusCode: 429 }).message);
+    expect(decrireMesure(refus!)).toBe("panne (refus du fournisseur, place rendue, code 429), 1 s");
+    const coupee = extraireMesure(mesure(failedColumns("interrupted", null), [], { provider: null, statusCode: null }).message);
+    expect(decrireMesure(coupee!)).toBe("panne (interrompue), durée inconnue");
+    const erreur = extraireMesure(mesure(failedColumns("provider_error", 15), [], { provider: "serpapi", statusCode: null }).message);
+    expect(decrireMesure(erreur!)).toBe("panne (erreur du fournisseur), 15 s");
+    const erreurCode = extraireMesure(mesure(failedColumns("provider_error", 1), [], { provider: "serpapi", statusCode: 502 }).message);
+    expect(decrireMesure(erreurCode!)).toBe("panne (erreur du fournisseur, code 502), 1 s");
+    // Ligne écrite par le serveur d'avant 0027 : ni fournisseur ni code.
+    const ancienne = ligne({ msg: "Mesure recherche", outcome: "failure", failureKind: "serpapi_error", received: null, kept: null, keptWithPrice: null, keptOtherCurrency: null, added: 0, addedRanks: [], callSeconds: 2 });
+    const lueAncienne = extraireMesure(ancienne.message);
+    expect(lueAncienne).toMatchObject({ provider: null, statusCode: null, failureKind: "serpapi_error" });
+    expect(decrireMesure(lueAncienne!)).toBe("panne (erreur du fournisseur, ancien serveur), 2 s");
+    expect(resumerMesures([refus!, coupee!, erreur!, lueAncienne!])).toBe(
+      "4 recherche(s) : trouvées 0, rien d'achetable 0, vides 0, pannes 4 (erreur du fournisseur 1, refus du fournisseur, place rendue 1, interrompue 1, erreur du fournisseur, ancien serveur 1) ; 0 propositions gardées, dont 0 avec un prix et 0 ajoutées par la règle des prix"
+    );
+  });
+
   it("bilan de la période et ordre des événements, sans identifiant, adresse ni texte", () => {
     const entrees = [
       mesure(measuredColumns(lens(60, 40, 22), 4), AJOUTS),
       mesure(measuredColumns(lens(3, 0, 0), 2), []),
       mesure(measuredColumns(lens(0, 0, 0), 2), []),
-      mesure(failedColumns("timeout", 15), []),
+      mesure(failedColumns("timeout", 15), [], { provider: "serpapi", statusCode: null }),
       mesure(failedColumns("save_failed", 3), []),
     ].map((entree, index) => ({ ...entree, timestamp: `2026-10-25T08:0${index}:00Z` }));
     const lignes = entrees.flatMap((entree) => extraireMesure(entree.message) ?? []);
@@ -233,8 +285,8 @@ describe("plafond global SerpApi (lot 4 quater)", () => {
       ...capacityLogFields(
         step,
         outcome === "reserved"
-          ? { allowed: true, refused_by: null, day_count: day, month_count: month, user_day_count: 3, next_renewal: "2026-11-03" }
-          : { allowed: false, refused_by: limit ?? "day", day_count: day, month_count: month, user_day_count: 3, next_renewal: "2026-11-03" },
+          ? { allowed: true, refused_by: null, reservation_id: 77, day_count: day, month_count: month, user_day_count: 3, next_renewal: "2026-11-03" }
+          : { allowed: false, refused_by: limit ?? "day", reservation_id: null, day_count: day, month_count: month, user_day_count: 3, next_renewal: "2026-11-03" },
         { daily: 25, monthly: 225, userDaily: 8, renewalDay: 3 }
       ),
       msg: CAPACITY_LOG_MESSAGE,
@@ -245,9 +297,14 @@ describe("plafond global SerpApi (lot 4 quater)", () => {
 
   it("lit la ligne écrite par le serveur : des nombres et des états, rien d'autre", () => {
     const lue = extrairePlafond(plafond("refused", "month", 3, 225, "video_ai").message);
-    expect(lue).toEqual({ msg: "Plafond SerpApi", step: "video_ai", outcome: "refused", limit: "month", day: 3, month: 225, user: 3, dayCap: 25, monthCap: 225, userCap: 8, renewalDay: 3 });
+    expect(lue).toEqual({ msg: "Plafond recherches", step: "video_ai", outcome: "refused", limit: "month", day: 3, month: 225, user: 3, dayCap: 25, monthCap: 225, userCap: 8, renewalDay: 3 });
     expect(JSON.stringify(lue)).not.toContain(IP);
+    // Le numéro de place n'est jamais écrit dans le journal.
+    expect(plafond("reserved", null, 1, 1).message).not.toContain("reservation");
     expect(extrairePlafond(ligne({ msg: "Analyse vidéo IA", frames: 3 }).message)).toBeNull();
+    // Lignes d'avant 0027 (« Plafond SerpApi », sans fournisseur) : toujours lues.
+    const ancienne = { step: "search", outcome: "reserved", limit: null, day: 4, month: 70, user: 1, dayCap: 25, monthCap: 225, userCap: 8, renewalDay: 3 };
+    expect(extrairePlafond(ligne({ ...ancienne, msg: "Plafond SerpApi" }).message)).toEqual({ ...ancienne, msg: "Plafond SerpApi" });
   });
 
   it("bilan : réservations, refus par plafond, dernier état ; ordre des événements sans identifiant, adresse ni texte", () => {
@@ -273,5 +330,50 @@ describe("plafond global SerpApi (lot 4 quater)", () => {
     ]);
     const tout = JSON.stringify(evenements);
     for (const interdit of [IP, COMPTE, TEXTE]) expect(tout).not.toContain(interdit);
+  });
+});
+
+describe("places rendues et disjoncteur (0027)", () => {
+  it("place rendue : l'issue du retour seulement, jamais de compte ni de numéro de place", () => {
+    const rendue = ligne({ provider: "serpapi", step: "search", released: true, msg: RELEASE_LOG_MESSAGE, compte: COMPTE, adresse: IP });
+    const ratee = ligne({ provider: "serpapi", step: "search", released: false, msg: RELEASE_LOG_MESSAGE });
+    const lues = [rendue, ratee].flatMap((entree) => extrairePlaceRendue(entree.message) ?? []);
+    expect(lues).toEqual([
+      { msg: "Place rendue", provider: "serpapi", step: "search", released: true },
+      { msg: "Place rendue", provider: "serpapi", step: "search", released: false },
+    ]);
+    expect(resumerPlacesRendues(lues)).toBe("1 place(s) rendue(s), 1 retour(s) en échec (places restées comptées)");
+    expect(resumerPlacesRendues([])).toBe("aucune ligne dans la période");
+    expect(chronologie([rendue, ratee]).map((e) => `${e.nom} — ${e.issue}`)).toEqual([
+      "Place rendue — refus du fournisseur : place rendue (jour et mois)",
+      "Place rendue — refus du fournisseur : place NON rendue (retour en échec, elle reste comptée)",
+    ]);
+    for (const interdit of [IP, COMPTE]) expect(JSON.stringify(lues)).not.toContain(interdit);
+  });
+
+  it("disjoncteur en observation : événements et nombres seulement", () => {
+    // La ligne telle que le serveur l'écrit (src/lib/searchBreaker.ts), plus ce que Fastify y ajoute.
+    const disjoncteur = (event: BreakerEvent | "would_block", bad: number, minutesLeft: number | null, timestamp: string) => ({
+      ...ligne({ ...breakerLogFields("image", "serpapi", event, { open: minutesLeft !== null, tripped: true, judged: 10, bad, minutesLeft }), msg: BREAKER_LOG_MESSAGE, compte: COMPTE }),
+      timestamp,
+    });
+    const entrees = [
+      disjoncteur("opened", 6, 15, "2026-10-26T08:00:00Z"),
+      disjoncteur("would_block", 6, 12, "2026-10-26T08:03:00Z"),
+      disjoncteur("reopened", 7, 15, "2026-10-26T08:16:00Z"),
+      disjoncteur("closed", 6, null, "2026-10-26T08:32:00Z"),
+    ];
+    const champs = { provider: "serpapi", searchType: "image", mode: "observation", msg: BREAKER_LOG_MESSAGE };
+    const lues = entrees.flatMap((entree) => extraireDisjoncteur(entree.message) ?? []);
+    expect(lues).toHaveLength(4);
+    expect(JSON.stringify(lues)).not.toContain(COMPTE);
+    expect(resumerDisjoncteurs(lues)).toBe("en observation : ouvertures 1, réouvertures 1, fermetures 1, recherches qui auraient été bloquées 1");
+    expect(chronologie(entrees).map((e) => e.issue)).toEqual([
+      "image (observation) : se serait ouvert — 6 mauvaise(s) sur 10, encore 15 min",
+      "image (observation) : aurait bloqué une recherche — 6 mauvaise(s) sur 10, encore 12 min",
+      "image (observation) : se serait rouvert (recherche de test mauvaise) — 7 mauvaise(s) sur 10, encore 15 min",
+      "image (observation) : se serait refermé — 6 mauvaise(s) sur 10",
+    ]);
+    expect(extraireDisjoncteur(ligne({ ...champs, event: "inconnu", judged: 1, bad: 1, minutesLeft: null }).message)).toBeNull();
   });
 });

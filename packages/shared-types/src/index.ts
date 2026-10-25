@@ -137,6 +137,10 @@ export interface ProductSearch {
   /** Texte « Que cherchez-vous ? » saisi au lancement, s'il y en a un. */
   query: string | null;
   createdAt: string;
+  /** true : la recherche a échoué chez le fournisseur, qui l'a refusée, et
+   * n'a été comptée dans aucune limite (place rendue, 0027). Affiché par l'app
+   * à partir de la mise en ligne 2 (« Cette tentative n'a pas été comptée. »). */
+  notCounted?: boolean;
   matches: ProductMatch[];
 }
 

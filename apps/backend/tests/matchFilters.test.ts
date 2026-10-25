@@ -13,7 +13,8 @@ vi.mock("../src/lib/safeFetch.js", () => ({
 
 import { safeFetch } from "../src/lib/safeFetch.js";
 import { exclusionReason } from "../src/services/matchFilters.js";
-import { searchProductsByImageUrl, type SearchLocale } from "../src/services/visualSearch.js";
+import { searchProductsByImageUrl } from "../src/services/visualSearch.js";
+import type { SearchLocale } from "../src/services/lensSettings.js";
 
 const safeFetchMock = vi.mocked(safeFetch);
 
@@ -201,9 +202,21 @@ describe("réponses réelles du 21 octobre (« visual_matches », 4 pièces du f
     expect(matches.slice(0, 6).map((m) => m.merchantUrl)).toEqual(reponse.slice(0, 6).map((m) => m.link));
   });
 
-  it("le type « products », abandonné le 9 octobre : erreur de SerpApi (400), une panne, jamais « rien trouvé »", async () => {
+  it("le type « products », abandonné le 9 octobre : refus de SerpApi (400, non facturé), une panne dont la place est rendue, jamais « rien trouvé »", async () => {
     safeFetchMock.mockResolvedValueOnce(new Response(JSON.stringify(fixture("lens-products-abandonne-400.json")), { status: 400, headers: { "content-type": "application/json" } }));
-    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/zone.jpg")).rejects.toMatchObject({ name: "LensCallError", kind: "serpapi_error" });
+    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/zone.jpg")).rejects.toMatchObject({ name: "ProviderFailure", kind: "refused", statusCode: 400 });
+  });
+
+  it("interface du fournisseur (0027) : les 5 réponses réelles passent par l'adaptateur SerpApi, propositions lues et code de réponse 200", async () => {
+    const fichiers = ["lens-visual-maillot-nike.json", "lens-visual-pull-noir.json", "lens-visual-tshirt-blanc.json", "lens-visual-veste-bleu-marine.json", "lens-veste-daim-zone.json"];
+    for (const fichier of fichiers) {
+      const reponse = RECORDED.parse(fixture(fichier)).visual_matches;
+      const { matches, statusCode } = await replayWithMeasure(fixture(fichier), { country: "fr", hl: "fr" });
+      expect(statusCode).toBe(200);
+      expect(matches.length).toBeGreaterThan(0);
+      // Chaque proposition vient de la réponse, sans rien inventer.
+      for (const match of matches) expect(reponse.map((m) => m.link)).toContain(match.merchantUrl);
+    }
   });
 });
 

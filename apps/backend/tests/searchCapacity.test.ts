@@ -7,8 +7,8 @@ import { capacityLogFields, QUOTA_ROWS, reserveSearch, searchCapacityForVideoAi 
 import { buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
 
 // Lot 4 quater : les fonctions serpapi_cycle_start, serpapi_quota et
-// serpapi_seed_cycle de spotto-dev (migration 0022), sans aucun appel à
-// SerpApi. Chaque cas qui inscrit des appels a son propre trimestre fictif,
+// serpapi_seed_cycle de spotto-dev (migration 0022 ; numéro de place et
+// serpapi_release depuis 0027), sans aucun appel à SerpApi. Chaque cas qui inscrit des appels a son propre trimestre fictif,
 // à partir d'une année tirée au hasard entre 1980 et 2005 : jamais mêlé aux
 // vrais appels (2026), ni aux autres cas (3 mois d'écart). Les lignes créées
 // sont effacées à la fin (les recherches de test avec leurs comptes).
@@ -81,6 +81,13 @@ describe("plafond des recherches SerpApi (fonctions de la base, lot 4 quater)", 
     const { data, error } = await app.supabaseAdmin.rpc("serpapi_seed_cycle", { p_renewal_day: renewalDay, p_count: count, p_at: at.toISOString() });
     expect(error).toBeNull();
     return z.number().int().parse(data);
+  }
+
+  /** Rend une place (0027), à un instant fixé. */
+  async function release(id: number, at: Date): Promise<boolean> {
+    const { data, error } = await app.supabaseAdmin.rpc("serpapi_release", { p_id: id, p_at: at.toISOString() });
+    expect(error).toBeNull();
+    return z.boolean().parse(data);
   }
 
   async function rowsBetween(from: Date, to: Date) {
@@ -304,19 +311,18 @@ describe("plafond des recherches SerpApi (fonctions de la base, lot 4 quater)", 
       expect((await client.rpc("serpapi_cycle_start", { p_renewal_day: 3, p_at: at })).error).not.toBeNull();
       expect((await client.rpc("serpapi_next_renewal", { p_renewal_day: 3, p_at: at })).error).not.toBeNull();
       expect((await client.rpc("serpapi_renewal_in_month", { p_renewal_day: 3, p_month: "2026-10-01" })).error).not.toBeNull();
+      expect((await client.rpc("serpapi_release", { p_id: 1, p_at: at })).error).not.toBeNull();
       const read = await client.from("serpapi_calls").select("*").limit(1);
       expect(read.data ?? []).toEqual([]);
     }
     expect(await rowsBetween(slotDate(9, 1, -1), slotDate(9, 1, 2))).toHaveLength(0);
   });
 
-  it("aucune donnée personnelle dans les appels : une ligne ne garde que son numéro et ses dates (rien à exporter ni à effacer avec un compte)", async () => {
+  it("aucune donnée personnelle dans les appels : une ligne ne garde que son numéro et ses dates, réservée et rendue (rien à exporter ni à effacer avec un compte)", async () => {
     const at = slotDate(10, 10);
     await quota(at, { daily: 5, monthly: 5 });
     const [row] = await rowsBetween(after(at, -MINUTE), after(at, MINUTE));
-    // La migration 0027 (spotto-dev depuis le 25 octobre, puis la production)
-    // ajoute la date « rendue le » : une date de plus, rien d'autre.
-    expect([["called_at", "id"], ["called_at", "id", "released_at"]]).toContainEqual(Object.keys(row ?? {}).sort());
+    expect(Object.keys(row ?? {}).sort()).toEqual(["called_at", "id", "released_at"]);
   });
 
   it("le serveur réserve pour de vrai (maintenant) : la recherche en cours ne se compte pas, la suivante bute sur la part de la personne", async () => {
@@ -325,7 +331,7 @@ describe("plafond des recherches SerpApi (fonctions de la base, lot 4 quater)", 
     const start = new Date(Date.now() - MINUTE);
     try {
       const first = await searchAt(new Date(), "processing");
-      expect(await reserveSearch(app, app.log, user.id, first)).toEqual({ allowed: true });
+      expect(await reserveSearch(app, app.log, user.id, first)).toEqual({ allowed: true, reservationId: expect.any(Number) });
       const second = await searchAt(new Date(), "processing");
       expect(await reserveSearch(app, app.log, user.id, second)).toEqual({ allowed: false, limit: "user", resumesOn: null });
       expect(await rowsBetween(start, new Date(Date.now() + MINUTE))).toHaveLength(1);
@@ -343,9 +349,78 @@ describe("plafond des recherches SerpApi (fonctions de la base, lot 4 quater)", 
 
     const fields = capacityLogFields(
       "search",
-      { allowed: false, refused_by: "user", day_count: 12, month_count: 40, user_day_count: 8, next_renewal: "2026-11-03" },
+      { allowed: false, refused_by: "user", reservation_id: null, day_count: 12, month_count: 40, user_day_count: 8, next_renewal: "2026-11-03" },
       { daily: 25, monthly: 225, userDaily: 8, renewalDay: 3 }
     );
-    expect(fields).toEqual({ step: "search", outcome: "refused", limit: "user", day: 12, month: 40, user: 8, dayCap: 25, monthCap: 225, userCap: 8, renewalDay: 3 });
+    expect(fields).toEqual({ provider: "serpapi", step: "search", outcome: "refused", limit: "user", day: 12, month: 40, user: 8, dayCap: 25, monthCap: 225, userCap: 8, renewalDay: 3 });
+  });
+
+  describe("place rendue quand le fournisseur refuse (0027)", () => {
+    it("une réservation renvoie le numéro de sa place ; une lecture ou un refus n'en renvoie aucun", async () => {
+      const at = slotDate(12, 10);
+      const reserved = await quota(at, { daily: 1, monthly: 5 });
+      expect(reserved.reservation_id).toEqual(expect.any(Number));
+      const [row] = await rowsBetween(after(at, -MINUTE), after(at, MINUTE));
+      expect(row?.id).toBe(reserved.reservation_id);
+      expect((await quota(at, { daily: 5, monthly: 5 }, { reserve: false })).reservation_id).toBeNull();
+      expect(await quota(after(at, MINUTE), { daily: 1, monthly: 5 })).toMatchObject({ allowed: false, refused_by: "day", reservation_id: null });
+    });
+
+    it("une place rendue ne compte plus, ni dans le jour ni dans le mois ; rendue une seule fois", async () => {
+      const at = slotDate(13, 10);
+      const first = await quota(at, { daily: 2, monthly: 10 });
+      await quota(after(at, MINUTE), { daily: 2, monthly: 10 });
+      expect(await quota(after(at, 2 * MINUTE), { daily: 2, monthly: 10 }, { reserve: false })).toMatchObject({ allowed: false, refused_by: "day", day_count: 2, month_count: 2 });
+
+      expect(await release(first.reservation_id!, after(at, 3 * MINUTE))).toBe(true);
+      expect(await quota(after(at, 4 * MINUTE), { daily: 2, monthly: 10 }, { reserve: false })).toMatchObject({ allowed: true, day_count: 1, month_count: 1 });
+      expect(await release(first.reservation_id!, after(at, 5 * MINUTE))).toBe(false);
+      expect(await quota(after(at, 6 * MINUTE), { daily: 2, monthly: 10 }, { reserve: false })).toMatchObject({ day_count: 1, month_count: 1 });
+      // La table ne garde que des dates : « rendue le » s'ajoute à la ligne, rien d'autre.
+      const rows = await rowsBetween(after(at, -MINUTE), after(at, 2 * MINUTE));
+      expect(rows.filter((row) => row.released_at !== null)).toHaveLength(1);
+    });
+
+    it("jamais une place inconnue, trop ancienne (plus d'une heure), future, ni une place amorcée en début de cycle", async () => {
+      const at = slotDate(14, 10);
+      const reserved = await quota(at, { daily: 5, monthly: 50 });
+      expect(await release(9_000_000_000_000, at)).toBe(false);
+      expect(await release(reserved.reservation_id!, after(at, 2 * HOUR))).toBe(false);
+      expect(await release(reserved.reservation_id!, after(at, -MINUTE))).toBe(false);
+
+      const seedAt = slotDate(15, 10);
+      expect(await seed(3, 2, seedAt)).toBe(2);
+      const seeded = await rowsBetween(parisMidnight(15, 3), after(parisMidnight(15, 3), MINUTE));
+      expect(seeded).toHaveLength(2);
+      for (const row of seeded) expect(await release(z.number().parse(row.id), seedAt)).toBe(false);
+      expect(await quota(seedAt, { daily: 5, monthly: 50 }, { reserve: false })).toMatchObject({ month_count: 2 });
+    });
+
+    it("part de la personne : ses recherches refusées par le fournisseur (place rendue) ne comptent pas ; ses « Voir les boutiques » du jour comptent", async () => {
+      const at = slotDate(16, 10);
+      const refused = await searchAt(after(at, -HOUR), "failed");
+      const failed = await searchAt(after(at, -HOUR), "failed");
+      for (const [id, kind] of [[refused, "provider_refused"], [failed, "provider_error"]] as const) {
+        const { error } = await app.supabaseAdmin.from("product_searches").update({ outcome: "failure", failure_kind: kind }).eq("id", id);
+        expect(error).toBeNull();
+      }
+      expect(await quota(at, { daily: 100, monthly: 100, user: 5 }, { reserve: false })).toMatchObject({ user_day_count: 1 });
+
+      // Une pièce d'une recherche de la veille : ses boutiques demandées aujourd'hui comptent, celles d'hier non.
+      const yesterday = await searchAt(after(at, -DAY), "completed");
+      const piece = (rank: number, storesAt: Date) => ({
+        search_id: yesterday,
+        rank,
+        product_name: "Pièce de test",
+        image_url: "https://example.invalid/piece.jpg",
+        merchant_url: "https://example.invalid/piece",
+        stores_requested_at: storesAt.toISOString(),
+      });
+      const { error } = await app.supabaseAdmin.from("product_matches").insert([piece(1, after(at, -HOUR)), piece(2, after(at, -DAY))]);
+      expect(error).toBeNull();
+      expect(await quota(at, { daily: 100, monthly: 100, user: 5 }, { reserve: false })).toMatchObject({ user_day_count: 2 });
+      // Ni pour une autre personne.
+      expect(await quota(at, { daily: 100, monthly: 100, user: 5 }, { reserve: false, userId: other.id })).toMatchObject({ user_day_count: 0 });
+    });
   });
 });

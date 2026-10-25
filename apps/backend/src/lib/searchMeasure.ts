@@ -1,19 +1,44 @@
 // Colonnes de la mesure d'une recherche dans product_searches (migration
-// 0025, fiabilité des résultats) : des nombres et des valeurs d'une liste
-// fermée, jamais de contenu.
+// 0025, fiabilité des résultats ; causes d'échec complétées par 0027) : des
+// nombres et des valeurs d'une liste fermée, jamais de contenu.
 import type { CropRect } from "@monapp/shared-types";
 import type { LensMeasure, LensSection } from "../services/lensMeasure.js";
-import type { LensFailureKind } from "../services/visualSearch.js";
+import type { ProviderFailureKind } from "../services/searchProvider.js";
 
 /** found : au moins une proposition gardée ; nothing_buyable : Google a
  * répondu, tout a été écarté ; empty_lens : Google n'a rien renvoyé (cadre
  * inutilisable, ou incident chez Google) ; failure : panne. */
 export type SearchOutcomeCode = "found" | "nothing_buyable" | "empty_lens" | "failure";
-export type FailureKind = LensFailureKind | "save_failed";
+
+/** Causes d'échec acceptées par la base (colonne failure_kind, migrations 0025
+ * et 0027). provider_refused : refus du fournisseur dont la place a été rendue
+ * dans les trois plafonds ; interrupted : restée « en cours » plus de 2 minutes ;
+ * serpapi_error : écrite seulement par le serveur d'avant 0027 (encore acceptée
+ * pour un retour en arrière), jamais par celui-ci. */
+export const FAILURE_KINDS = ["timeout", "provider_error", "provider_refused", "unreadable_response", "save_failed", "interrupted", "serpapi_error"] as const;
+export type FailureKind = (typeof FAILURE_KINDS)[number];
+/** Causes que ce serveur écrit. */
+export type WrittenFailureKind = Exclude<FailureKind, "serpapi_error">;
+
+/** Cause rangée pour une panne du fournisseur. Un refus n'est noté
+ * provider_refused que si sa place a bien été rendue ; sinon provider_error :
+ * il reste compté partout, par prudence (conception du 20 octobre). */
+export function providerFailureKind(kind: ProviderFailureKind, placeReleased: boolean): WrittenFailureKind {
+  switch (kind) {
+    case "refused":
+      return placeReleased ? "provider_refused" : "provider_error";
+    case "timeout":
+      return "timeout";
+    case "error":
+      return "provider_error";
+    case "unreadable":
+      return "unreadable_response";
+  }
+}
 
 export interface MeasureColumns {
   outcome: SearchOutcomeCode;
-  failure_kind: FailureKind | null;
+  failure_kind: WrittenFailureKind | null;
   received_count: number | null;
   removed_incomplete: number | null;
   removed_social: number | null;
@@ -25,7 +50,8 @@ export interface MeasureColumns {
   distinct_sites: number | null;
   lens_sections: LensSection[] | null;
   google_state: "empty" | "other" | null;
-  call_seconds: number;
+  /** Durée de l'appel ; inconnue (null) pour une recherche interrompue. */
+  call_seconds: number | null;
 }
 
 export function secondsSince(startMs: number): number {
@@ -52,7 +78,7 @@ export function measuredColumns(measure: LensMeasure, callSeconds: number): Meas
 }
 
 /** Panne : seuls son type et la durée de l'appel sont connus. */
-export function failedColumns(kind: FailureKind, callSeconds: number): MeasureColumns {
+export function failedColumns(kind: WrittenFailureKind, callSeconds: number | null): MeasureColumns {
   return {
     outcome: "failure",
     failure_kind: kind,
@@ -77,23 +103,36 @@ export const MEASURE_LOG_MESSAGE = "Mesure recherche";
 
 /** Ligne « Mesure recherche » (petit lot, décision du fondateur du 2026-10-24) :
  * l'issue et des nombres, dont le rang d'origine chez Google des propositions
- * ajoutées par la règle des prix. Jamais de titre, d'adresse ni d'identifiant
- * (ni de la recherche, ni du compte). */
+ * ajoutées par la règle des prix ; depuis 0027, le fournisseur et son code de
+ * réponse. Jamais de titre, d'adresse ni d'identifiant (ni de la recherche, ni
+ * du compte). */
 export interface MeasureLogLine {
+  /** Fournisseur ; null pour une recherche d'avant 0027 marquée interrompue. */
+  provider: string | null;
+  /** Code de réponse du fournisseur ; null sans réponse. */
+  statusCode: number | null;
   outcome: SearchOutcomeCode;
-  failureKind: FailureKind | null;
+  failureKind: WrittenFailureKind | null;
   received: number | null;
   kept: number | null;
   keptWithPrice: number | null;
   keptOtherCurrency: number | null;
   added: number;
   addedRanks: number[];
-  callSeconds: number;
+  callSeconds: number | null;
 }
 
-export function measureLogLine(columns: MeasureColumns, addedRanks: readonly number[]): MeasureLogLine {
+/** Fournisseur d'une recherche et son code de réponse (null sans réponse). */
+export interface ProviderReply {
+  provider: string | null;
+  statusCode: number | null;
+}
+
+export function measureLogLine(columns: MeasureColumns, addedRanks: readonly number[], reply: ProviderReply): MeasureLogLine {
   const ranks = columns.outcome === "failure" ? [] : [...addedRanks];
   return {
+    provider: reply.provider,
+    statusCode: reply.statusCode,
     outcome: columns.outcome,
     failureKind: columns.failure_kind,
     received: columns.received_count,

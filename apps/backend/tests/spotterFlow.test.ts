@@ -5,7 +5,7 @@ import sharp from "sharp";
 // Aucun appel réel : ni SerpApi (crédits), ni TikTok. La recherche visuelle
 // et la voie officielle sont simulées ; le recadrage (sharp) et le stockage
 // (spotto-dev) sont réels.
-// Le reste du module (dont l'erreur typée LensCallError) reste le vrai.
+// Le reste du module reste le vrai.
 vi.mock("../src/services/visualSearch.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/services/visualSearch.js")>();
   return { ...original, searchProductsByImageUrl: vi.fn() };
@@ -14,25 +14,30 @@ vi.mock("../src/services/oembed.js", () => ({
   detectPlatform: () => "tiktok",
   fetchOfficialPreview: vi.fn(async () => ({ ok: true, thumbnailUrl: "https://p16-common-sign.tiktokcdn-eu.com/vignette.jpeg" })),
 }));
-// Plafond global des recherches (lot 4 quater) : simulé ici ; la fonction
-// réelle de la base est testée dans searchCapacity.test.ts.
+// Plafond global des recherches (lot 4 quater) et place rendue (0027) :
+// simulés ici ; les fonctions réelles de la base sont testées dans
+// searchCapacity.test.ts et placeRendue.test.ts.
 vi.mock("../src/lib/searchCapacity.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/lib/searchCapacity.js")>();
-  return { ...original, reserveSearch: vi.fn() };
+  return { ...original, reserveSearch: vi.fn(), releaseReservation: vi.fn() };
 });
 vi.mock("../src/lib/imageProcessing.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/lib/imageProcessing.js")>();
   return { ...original, downloadThumbnail: vi.fn() };
 });
 
-import { LensCallError, searchProductsByImageUrl, type VisualMatch, type VisualSearchResult } from "../src/services/visualSearch.js";
+import { searchProductsByImageUrl, type VisualMatch, type VisualSearchResult } from "../src/services/visualSearch.js";
+import { ProviderFailure } from "../src/services/searchProvider.js";
 import { downloadThumbnail } from "../src/lib/imageProcessing.js";
-import { reserveSearch } from "../src/lib/searchCapacity.js";
+import { releaseReservation, reserveSearch } from "../src/lib/searchCapacity.js";
 import { authHeaders, buildMultipart, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
 
 const searchMock = vi.mocked(searchProductsByImageUrl);
 const downloadMock = vi.mocked(downloadThumbnail);
 const reserveMock = vi.mocked(reserveSearch);
+const releaseMock = vi.mocked(releaseReservation);
+/** Numéro de place simulé (0027). */
+const RESERVATION = 4242;
 
 // Image de test 400 × 600 (proportions d'une vignette verticale).
 const IMAGE = await sharp({ create: { width: 400, height: 600, channels: 3, background: "#6b4a3a" } }).jpeg().toBuffer();
@@ -56,6 +61,7 @@ function found(matches: VisualMatch[], received = matches.length): VisualSearchR
       googleState: received > 0 ? null : "empty",
     },
     addedRanks: [],
+    statusCode: 200,
   };
 }
 
@@ -106,7 +112,9 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     downloadMock.mockReset();
     downloadMock.mockResolvedValue(IMAGE);
     reserveMock.mockReset();
-    reserveMock.mockResolvedValue({ allowed: true });
+    reserveMock.mockResolvedValue({ allowed: true, reservationId: RESERVATION });
+    releaseMock.mockReset();
+    releaseMock.mockResolvedValue(true);
   });
 
   async function prepare(sourceUrl?: string) {
@@ -322,7 +330,7 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
         const searchId: string = prepared.json().id;
         reserveMock.mockResolvedValue({ allowed: false, limit: "day", resumesOn: null });
         for (let i = 0; i < 10; i++) expect((await run(searchId, {}, undefined, counted.token)).statusCode).toBe(429);
-        reserveMock.mockResolvedValue({ allowed: true });
+        reserveMock.mockResolvedValue({ allowed: true, reservationId: RESERVATION });
         expect((await run(searchId, {}, undefined, counted.token)).statusCode).toBe(200);
         expect(searchMock).toHaveBeenCalledOnce();
       } finally {
@@ -348,7 +356,19 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
       expect((await run(search.id, {})).statusCode).toBe(200);
       const lignes = journal.mock.calls.filter((call) => call[1] === "Mesure recherche");
       expect(lignes).toHaveLength(1);
-      expect(lignes[0]![0]).toEqual({ outcome: "found", failureKind: null, received: 60, kept: 1, keptWithPrice: 1, keptOtherCurrency: 0, added: 2, addedRanks: [34, 41], callSeconds: expect.any(Number) });
+      expect(lignes[0]![0]).toEqual({
+        provider: "serpapi",
+        statusCode: 200,
+        outcome: "found",
+        failureKind: null,
+        received: 60,
+        kept: 1,
+        keptWithPrice: 1,
+        keptOtherCurrency: 0,
+        added: 2,
+        addedRanks: [34, 41],
+        callSeconds: expect.any(Number),
+      });
       const texte = JSON.stringify(lignes[0]);
       for (const interdit of [search.id, user.id, MATCH.productName, MATCH.merchantUrl, "http"]) expect(texte).not.toContain(interdit);
     } finally {
@@ -441,9 +461,51 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
       expect(await measureOf(app, unbuyable.id)).toMatchObject({ outcome: "nothing_buyable", received_count: 4, kept_count: 0 });
 
       const slow = await prepare("https://www.tiktok.com/@x/video/1");
-      searchMock.mockRejectedValueOnce(new LensCallError("timeout", "SerpApi injoignable : délai dépassé"));
+      searchMock.mockRejectedValueOnce(new ProviderFailure("timeout", null, "SerpApi injoignable : délai dépassé"));
       await run(slow.id, {});
       expect(await measureOf(app, slow.id)).toMatchObject({ outcome: "failure", failure_kind: "timeout", received_count: null, kept_count: null });
+    });
+
+    // 0027 : fournisseur, code de réponse et heure du lancement rangés avec chaque recherche.
+    it("range le fournisseur, son code de réponse et l'heure du lancement ; rien de tout cela pour une recherche jamais partie", async () => {
+      const search = await prepare("https://www.tiktok.com/@x/video/1");
+      const before = Date.now();
+      await run(search.id, {});
+      const { data } = await app.supabaseAdmin.from("product_searches").select("provider, provider_status_code, run_started_at").eq("id", search.id).single();
+      expect(data).toMatchObject({ provider: "serpapi", provider_status_code: 200 });
+      expect(Date.parse(String(data?.run_started_at))).toBeGreaterThanOrEqual(before - 5_000);
+
+      const capped = await prepare("https://www.tiktok.com/@x/video/1");
+      reserveMock.mockResolvedValueOnce({ allowed: false, limit: "day", resumesOn: null });
+      expect((await run(capped.id, {})).statusCode).toBe(429);
+      const { data: never } = await app.supabaseAdmin.from("product_searches").select("status, provider, provider_status_code, run_started_at").eq("id", capped.id).single();
+      expect(never).toEqual({ status: "pending", provider: null, provider_status_code: null, run_started_at: null });
+    });
+
+    it("refus du fournisseur : la place est rendue ; la recherche est notée « refus » et « non comptée » seulement si le retour a réussi", async () => {
+      const refused = await prepare("https://www.tiktok.com/@x/video/1");
+      searchMock.mockRejectedValueOnce(new ProviderFailure("refused", 429, "SerpApi a répondu 429"));
+      const body = (await run(refused.id, {})).json();
+      expect(releaseMock).toHaveBeenCalledOnce();
+      expect(releaseMock.mock.calls[0]![2]).toBe(RESERVATION);
+      expect(body).toMatchObject({ status: "failed", errorMessage: "La recherche visuelle a échoué.", notCounted: true });
+      expect(await measureOf(app, refused.id)).toMatchObject({ outcome: "failure", failure_kind: "provider_refused" });
+
+      // Retour en échec : la place reste comptée, la recherche aussi (prudence).
+      const kept = await prepare("https://www.tiktok.com/@x/video/1");
+      releaseMock.mockResolvedValueOnce(false);
+      searchMock.mockRejectedValueOnce(new ProviderFailure("refused", 503, "SerpApi a répondu 503"));
+      expect((await run(kept.id, {})).json()).toMatchObject({ status: "failed", notCounted: false });
+      expect(await measureOf(app, kept.id)).toMatchObject({ outcome: "failure", failure_kind: "provider_error" });
+
+      // Panne incertaine (délai dépassé, réseau, réponse illisible) : aucune place rendue.
+      releaseMock.mockClear();
+      for (const kind of ["timeout", "error", "unreadable"] as const) {
+        const uncertain = await prepare("https://www.tiktok.com/@x/video/1");
+        searchMock.mockRejectedValueOnce(new ProviderFailure(kind, null, "panne simulée"));
+        expect((await run(uncertain.id, {})).json()).toMatchObject({ status: "failed", notCounted: false });
+      }
+      expect(releaseMock).not.toHaveBeenCalled();
     });
 
     it("un lancement refusé avant l'appel (image illisible) est compté, sans aucun appel à SerpApi", async () => {
@@ -453,6 +515,71 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
       expect(res.json().error).toBe("invalid_image");
       expect(searchMock).not.toHaveBeenCalled();
       expect(await measureOf(app, search.id)).toMatchObject({ outcome: null, refused_before_call: 1 });
+    });
+  });
+
+  // 0027 (coupure, conception acceptée le 21 octobre) : une recherche restée
+  // « en cours » plus de 2 minutes est marquée interrompue quand on la relit.
+  describe("recherche interrompue, marquée à la relecture", () => {
+    /** Une recherche « en cours » lancée (ou créée, avant 0027) `minutes` minutes plus tôt. */
+    async function stuck(minutes: number, options: { launched: boolean } = { launched: true }): Promise<string> {
+      const at = new Date(Date.now() - minutes * 60_000).toISOString();
+      const { data, error } = await app.supabaseAdmin
+        .from("product_searches")
+        .insert({
+          user_id: user.id,
+          source_platform: "photo",
+          method: "manual_screenshot",
+          status: "processing",
+          created_at: at,
+          run_started_at: options.launched ? at : null,
+          provider: options.launched ? "serpapi" : null,
+        })
+        .select("id")
+        .single();
+      expect(error).toBeNull();
+      return String(data?.id);
+    }
+
+    function read(searchId: string) {
+      return app.inject({ method: "GET", url: `/api/searches/${searchId}`, headers: authHeaders(user.token) });
+    }
+
+    it("plus de 2 minutes : interrompue (une panne, place gardée), avec sa ligne « Mesure recherche » ; moins : toujours en cours", async () => {
+      const old = await stuck(3);
+      const journal = vi.spyOn(app.log, "info");
+      try {
+        const body = (await read(old)).json();
+        expect(body).toMatchObject({ status: "failed", errorMessage: "La recherche visuelle a échoué.", notCounted: false });
+        const lignes = journal.mock.calls.filter((call) => call[1] === "Mesure recherche");
+        expect(lignes.map((call) => call[0])).toEqual([expect.objectContaining({ provider: "serpapi", statusCode: null, outcome: "failure", failureKind: "interrupted", callSeconds: null })]);
+      } finally {
+        journal.mockRestore();
+      }
+      expect(await measureOf(app, old)).toMatchObject({ outcome: "failure", failure_kind: "interrupted", call_seconds: null });
+
+      const recent = await stuck(1);
+      expect((await read(recent)).json().status).toBe("processing");
+      expect(await measureOf(app, recent)).toMatchObject({ outcome: null, failure_kind: null });
+    });
+
+    it("recherche d'avant 0027 (sans heure de lancement) : jugée sur sa date de création ; relue deux fois, marquée une seule fois", async () => {
+      const old = await stuck(5, { launched: false });
+      expect((await read(old)).json().status).toBe("failed");
+      expect((await read(old)).json().status).toBe("failed");
+      expect(await measureOf(app, old)).toMatchObject({ failure_kind: "interrupted" });
+    });
+
+    it("une recherche terminée n'est jamais marquée, même ancienne ; celle d'un autre reste introuvable", async () => {
+      const done = await stuck(10);
+      await app.supabaseAdmin.from("product_searches").update({ status: "completed", outcome: "found" }).eq("id", done);
+      expect((await read(done)).json().status).toBe("completed");
+      expect(await measureOf(app, done)).toMatchObject({ outcome: "found", failure_kind: null });
+
+      const theirs = await stuck(10);
+      const res = await app.inject({ method: "GET", url: `/api/searches/${theirs}`, headers: authHeaders(other.token) });
+      expect(res.statusCode).toBe(404);
+      expect(await measureOf(app, theirs)).toMatchObject({ outcome: null });
     });
   });
 
