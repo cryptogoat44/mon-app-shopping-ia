@@ -1,9 +1,10 @@
 // Filtres appliqués aux propositions de Google Lens, sans aucun appel :
 // propositions où l'on ne peut pas acheter, et doublons. Chacun ne retire
 // qu'une proposition qui ne peut pas être la bonne pour un particulier, ou
-// qui existe déjà dans la liste : l'ordre de Google n'est jamais modifié
+// qui existe déjà dans la liste : l'ordre de Google n'est jamais modifié ici
 // (fiabilité des résultats, phase 1 — réponses enregistrées dans
-// tests/fixtures/serpapi).
+// tests/fixtures/serpapi). Le classement de la règle des prix vient ensuite
+// (services/visualSearch.ts).
 
 // Simples publications de réseaux sociaux : jamais un endroit où acheter la
 // pièce. Depuis « visual_matches » (2026-10-20 ; l'ancien "type=products" les
@@ -112,11 +113,22 @@ function articleKey(link: string, title: string): string {
   return `${site.name}${pageOf(url)}|${titleWithoutSite(title, site.domain)}`;
 }
 
+/** Extension des sites du pays de la recherche (« uk » pour le Royaume-Uni). */
+function countryTld(country: string): string {
+  return country === "gb" ? "uk" : country;
+}
+
 /** Site du pays de la recherche : extension du pays (.fr) d'abord, puis sous-domaine (fr.). */
 function countryScore(link: string, country: string): number {
   const labels = parseLink(link)?.hostname.toLowerCase().split(".") ?? [];
-  if (labels.at(-1) === (country === "gb" ? "uk" : country)) return 2;
+  if (labels.at(-1) === countryTld(country)) return 2;
   return labels[0] === country ? 1 : 0;
+}
+
+/** Site du pays de la recherche (.fr) ou européen (.eu) : classement de la règle des prix. */
+export function isCountryOrEuSite(link: string, country: string): boolean {
+  const tld = parseLink(link)?.hostname.toLowerCase().split(".").at(-1);
+  return tld === countryTld(country) || tld === "eu";
 }
 
 export interface LinkedMatch {

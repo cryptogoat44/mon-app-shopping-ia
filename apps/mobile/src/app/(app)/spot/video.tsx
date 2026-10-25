@@ -7,7 +7,6 @@ import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { prepareErrorMessage } from "@/lib/spot-flow";
-import { updateDraft } from "@/lib/spot-draft";
 import { getSpotVideo, holdSpotVideo, importSpotVideo, letGoSpotVideo, startSearchFromFrame, videoImportMessage } from "@/lib/spot-video";
 import { clampTime, filmstripTimes, formatClock, formatClockTenths, type FramePreview, type OpenedVideo } from "@/lib/video-timeline";
 import { VideoScrubber } from "@/components/video-scrubber";
@@ -52,9 +51,9 @@ function useFramePreview(video: OpenedVideo | null, onError: () => void) {
 export default function VideoFrameScreen() {
   const router = useRouter();
   // Ouvert depuis un résultat de l'analyse automatique : le curseur part du
-  // moment proposé par l'IA (lot 4, temps 1 bis), sinon du début. Les mots
-  // déjà tapés suivent jusqu'au recadrage (lot 4 ter).
-  const { start, query } = useLocalSearchParams<{ start?: string; query?: string }>();
+  // moment proposé par l'IA (lot 4, temps 1 bis), sinon du début. L'image
+  // choisie part seule, sans mots (petit lot, 2026-10-25).
+  const { start } = useLocalSearchParams<{ start?: string }>();
   const { height: windowHeight } = useWindowDimensions();
   const [video, setVideo] = useState<OpenedVideo | null>(() => getSpotVideo());
   const [thumbnails, setThumbnails] = useState<FramePreview[] | null>(null);
@@ -125,7 +124,6 @@ export default function VideoFrameScreen() {
     setMessage(null);
     try {
       const draft = await startSearchFromFrame(timeMs);
-      if (typeof query === "string" && query.trim()) updateDraft({ query: query.trim() });
       router.push({ pathname: "/spot/ciblage", params: { searchId: draft.searchId ?? "" } });
     } catch (error) {
       setMessage(error instanceof Error && error.message.startsWith("video_") ? t.video.frameError : prepareErrorMessage(error));

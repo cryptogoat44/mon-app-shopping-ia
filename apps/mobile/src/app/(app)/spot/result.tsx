@@ -15,7 +15,7 @@ import { getLastSpotResult } from "@/api/spotSession";
 import type { Piece, SpotFailReason } from "@/api/types";
 import { addVaultItemFromMatch } from "@/lib/api";
 import { openMerchantLink } from "@/lib/merchant-links";
-import { chooseInitialResult, type InitialResultState } from "@/lib/spot-result";
+import { chooseInitialResult, noPriceShown, type InitialResultState } from "@/lib/spot-result";
 import { failureCorrections, successCorrections, type Correction } from "@/lib/spot-corrections";
 import { capacityMonthTip } from "@/lib/spot-capacity";
 import { VAULT_CATEGORIES } from "@/lib/vault-labels";
@@ -23,6 +23,7 @@ import { useToast } from "@/lib/toast-context";
 import { Skeleton } from "@/components/skeleton";
 import { SpotImage } from "@/components/spot-image";
 import { ErrorMessage } from "@/components/error-message";
+import { NoPriceNotice } from "@/components/no-price-notice";
 import { CorrectionButtons, CorrectionsLink, CorrectionsSheet, useCorrections } from "@/components/spot-corrections";
 import { ActionButtons, type Action } from "@/components/spot-launch-views";
 import { ReportedLine, ResultFeedbackButton, ResultFeedbackSheet } from "@/components/result-feedback-sheet";
@@ -225,7 +226,7 @@ export default function ResultScreen() {
   const reported = feedbackOverrides.has(piece.id) ? (feedbackOverrides.get(piece.id) ?? null) : (piece.feedbackReason ?? null);
   const others = result.pieces.map((p, index) => ({ p, index })).filter(({ index }) => index !== selectedIndex);
   // 11 autres propositions d'emblée (la meilleure + 11 = 12 images à
-  // charger), le reste — jusqu'à 30 au total — sur demande.
+  // charger), le reste — jusqu'à 40 au total avec la règle des prix — sur demande.
   const visibleOthers = showAllOthers ? others : others.slice(0, OTHERS_SHOWN_FIRST);
   const hiddenCount = others.length - visibleOthers.length;
 
@@ -234,6 +235,7 @@ export default function ResultScreen() {
       {nav}
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
         <Text style={styles.count}>{t.result.count(result.pieces.length, result.query)}</Text>
+        {noPriceShown(result.pieces) ? <NoPriceNotice /> : null}
 
         <View style={styles.hero}>
           <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} accessibilityLabel={piece.name} />

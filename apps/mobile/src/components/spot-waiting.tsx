@@ -61,11 +61,13 @@ function useSlow(afterMs: number): boolean {
 }
 
 /** Écran d'attente unique du Spotter (lot 4 ter) : sombre et sobre, sans
- * étapes affichées — l'image analysée, ce que l'on cherche, « Annuler ». */
+ * étapes affichées — l'image analysée, ce que l'on cherche, « Annuler ».
+ * `query` : seulement pendant l'analyse d'une vidéo par l'IA, qui s'en sert ;
+ * jamais pendant l'identification, où les mots ne partent plus (petit lot). */
 export function SpotWaitingScreen({
   image,
   title,
-  query,
+  query = "",
   usual,
   slowAfterMs,
   onCancel,
@@ -73,7 +75,7 @@ export function SpotWaitingScreen({
 }: {
   image: WaitingImage | null;
   title: string;
-  query: string;
+  query?: string;
   /** Durée habituelle, dite à la personne. */
   usual: string;
   slowAfterMs: number;

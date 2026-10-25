@@ -71,6 +71,41 @@ export function failedColumns(kind: FailureKind, callSeconds: number): MeasureCo
   };
 }
 
+/** Message de la ligne de journal de chaque recherche, lue par
+ * `render-bride compteurs-ia` (scripts/lib/render-logs.ts). */
+export const MEASURE_LOG_MESSAGE = "Mesure recherche";
+
+/** Ligne « Mesure recherche » (petit lot, décision du fondateur du 2026-10-24) :
+ * l'issue et des nombres, dont le rang d'origine chez Google des propositions
+ * ajoutées par la règle des prix. Jamais de titre, d'adresse ni d'identifiant
+ * (ni de la recherche, ni du compte). */
+export interface MeasureLogLine {
+  outcome: SearchOutcomeCode;
+  failureKind: FailureKind | null;
+  received: number | null;
+  kept: number | null;
+  keptWithPrice: number | null;
+  keptOtherCurrency: number | null;
+  added: number;
+  addedRanks: number[];
+  callSeconds: number;
+}
+
+export function measureLogLine(columns: MeasureColumns, addedRanks: readonly number[]): MeasureLogLine {
+  const ranks = columns.outcome === "failure" ? [] : [...addedRanks];
+  return {
+    outcome: columns.outcome,
+    failureKind: columns.failure_kind,
+    received: columns.received_count,
+    kept: columns.kept_count,
+    keptWithPrice: columns.kept_with_price,
+    keptOtherCurrency: columns.kept_other_currency,
+    added: ranks.length,
+    addedRanks: ranks,
+    callSeconds: columns.call_seconds,
+  };
+}
+
 /** Part de l'image retenue par le cadrage, arrondie à 10 % ; image entière : 100. */
 export function cropAreaPct(crop: CropRect | undefined): number {
   if (!crop) return 100;

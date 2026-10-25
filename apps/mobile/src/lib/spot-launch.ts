@@ -1,9 +1,10 @@
-// Parcours unique du Spotter (lot 4 ter) : une vidéo ou une photo, quelques
-// mots, « Lancer » — puis tout s'enchaîne sans autre geste. Vidéo : images
-// extraites sur l'appareil, meilleur moment et cadre de la pièce par l'IA
-// (avec l'accord « analyse_video_ia »), identification. Photo : identification
-// directe, sur la zone centrale (comme au ciblage quand on ne touche pas au
-// cadre). Le curseur et le choix manuel ne servent qu'en repli.
+// Parcours unique du Spotter (lot 4 ter) : une vidéo (avec quelques mots pour
+// l'IA) ou une photo, « Lancer » — puis tout s'enchaîne sans autre geste.
+// Vidéo : images extraites sur l'appareil, meilleur moment et cadre de la pièce
+// par l'IA (avec l'accord « analyse_video_ia »), identification. Photo :
+// identification directe, sur la zone centrale (comme au ciblage quand on ne
+// touche pas au cadre). Les mots ne partent jamais avec l'image (petit lot,
+// 2026-10-25). Le curseur et le choix manuel ne servent qu'en repli.
 import type { ConsentStatus, CropRect } from "@monapp/shared-types";
 import { setLastSpotResult } from "../api/spotSession";
 import { fetchConsentStatus, fetchVideoAiEnabled } from "./api";
@@ -80,7 +81,7 @@ export async function launchVideo(video: OpenedVideo, query: string, signal: Abo
   // Plafond des recherches atteint (lot 4 quater) : annoncé sur l'écran
   // Résultat, comme pour une photo ; aucune identification n'est tentée.
   if (analysis.kind === "capacity") {
-    setLastSpotResult({ searchId: null, status: "failed", pieces: [], similarPieces: [], failReason: analysis.failure.reason, resumesOn: analysis.failure.resumesOn, query: query.trim() || null });
+    setLastSpotResult({ searchId: null, status: "failed", pieces: [], similarPieces: [], failReason: analysis.failure.reason, resumesOn: analysis.failure.resumesOn });
     return { kind: "result", searchId: null };
   }
   if (analysis.kind === "failed") return analysis.reason === "consent" ? { kind: "consent_required" } : { kind: "failed", reason: analysis.reason };
@@ -93,8 +94,8 @@ export function photoCrop(draft: SpotDraft): CropRect {
 }
 
 /** Photo : la zone entourée sur l'écran (cadre « Entourez la pièce », option B
- * du fondateur) et les mots tapés, puis l'identification. */
-export async function launchPhoto(draft: SpotDraft, query: string, signal: AbortSignal, crop: CropRect = photoCrop(draft)): Promise<LaunchOutcome> {
-  const ready = updateDraft({ crop, query: query.trim() }) ?? draft;
+ * du fondateur), puis l'identification, sans mots (petit lot, 2026-10-25). */
+export async function launchPhoto(draft: SpotDraft, signal: AbortSignal, crop: CropRect = photoCrop(draft)): Promise<LaunchOutcome> {
+  const ready = updateDraft({ crop }) ?? draft;
   return identify(ready, signal);
 }

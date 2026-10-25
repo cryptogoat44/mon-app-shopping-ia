@@ -54,7 +54,6 @@ export default function AnalysisScreen() {
     <SpotWaitingScreen
       image={{ source: { uri: imageUri }, size: draft.imageSize, crop: draft.crop }}
       title={t.analysis.title}
-      query={draft.query}
       usual={t.analysis.usual}
       slowAfterMs={SLOW_AFTER_MS}
       onCancel={handleCancel}

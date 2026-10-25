@@ -139,16 +139,15 @@ export async function prepareSearch(payload: CreateSearchRequest): Promise<Produ
  * préparée. `signal` permet d'abandonner la requête (bouton « Annuler »). */
 export async function runSearch(
   searchId: string,
-  params: { crop: CropRect | null; query: string; imageUri: string | null },
+  params: { crop: CropRect | null; imageUri: string | null },
   signal?: AbortSignal
 ): Promise<ProductSearch> {
   const formData = new FormData();
   if (params.crop) formData.append("crop", JSON.stringify(params.crop));
-  if (params.query.trim()) formData.append("query", params.query.trim());
   if (params.imageUri) await appendImageFile(formData, "file", params.imageUri);
 
-  // Ciblage et précision : seulement des oui / non, jamais le texte saisi.
-  track("spot_launched", { zone_adjusted: params.crop !== null, query_added: params.query.trim().length > 0, image_imported: params.imageUri !== null });
+  // Ciblage : seulement des oui / non. Aucun mot n'accompagne l'image (petit lot, 2026-10-25).
+  track("spot_launched", { zone_adjusted: params.crop !== null, image_imported: params.imageUri !== null });
   const response = await authorizedFetch(`/api/searches/${searchId}/run`, { method: "POST", body: formData, signal });
   const search: ProductSearch = await response.json();
   track("spot_completed", {

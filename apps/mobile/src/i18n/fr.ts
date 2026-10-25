@@ -192,6 +192,8 @@ export const fr = {
     chooseImage: "Choisir l'image",
     declinedNote: "Analyse automatique désactivée : vous choisirez l'image vous-même.",
     enableAi: "Activer l'analyse automatique",
+    // Texte du fondateur (2026-10-25) : les mots ne servent qu'à l'IA.
+    wordsHelpAi: "Ces mots aident l'IA à retrouver la pièce dans la vidéo.",
     videoPreview: (duration: string) => `Aperçu de votre vidéo, ${duration}`,
     photoPreview: "Votre photo",
     waitingVideo: "Spotto repère la pièce…",
@@ -269,10 +271,6 @@ export const fr = {
   targeting: {
     title: "Entourez la pièce",
     caption: "Seule la zone choisie sera analysée. Faites glisser le cadre ou ses coins.",
-    queryLabel: "Que cherchez-vous ?",
-    queryOptional: "(facultatif)",
-    queryPlaceholder: "ex. veste en daim marron",
-    queryHint: "Quelques mots précis aident à écarter les pièces voisines.",
     reset: "Réinitialiser le cadre",
     launch: "Lancer l'identification",
   },
@@ -320,9 +318,13 @@ export const fr = {
     backToSpotter: "Retour à Spotter",
     notRight: "Ce n'est pas la bonne pièce ?",
     correctionsLead: "Montrez la pièce autrement à Spotto :",
-    noMatchTitle: "Google Lens n'a rien trouvé pour le moment.",
+    // Sans nom de fournisseur (décision du fondateur, 2026-10-21).
+    noMatchTitle: "Notre recherche visuelle n'a rien trouvé pour le moment.",
     noMatchTip: "Essayez avec un autre cadre ou réessayez dans quelques minutes.",
-    retryWithoutText: "Réessayer sans le texte",
+    // Aucune proposition gardée n'a de prix (textes validés le 2026-10-21).
+    noPriceTitle: "Aucune de ces propositions n'affiche de prix.",
+    noPriceText:
+      "Ce sont des pièces qui ressemblent à la vôtre, trouvées par notre recherche visuelle. Elles ne sont pas forcément en vente : ouvrez-les pour vérifier, ou essayez un autre cadre.",
     technicalTitle: "La recherche n'a pas abouti",
     technicalTip: "Le service de reconnaissance n'a pas répondu. Vérifiez votre connexion, puis réessayez.",
     rateLimitedTitle: "Trop de recherches d'un coup",

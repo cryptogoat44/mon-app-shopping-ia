@@ -118,7 +118,9 @@ describe("vidéo : « Lancer » enchaîne analyse, cadrage et identification", (
     expect(prepareSearch).toHaveBeenCalledTimes(1);
     expect(runSearch).toHaveBeenCalledTimes(1);
     const [, params] = runSearch.mock.calls[0]!;
-    expect(params).toMatchObject({ crop: BOX, query: "veste en daim" });
+    // Les mots ont servi à l'IA seulement : ils ne partent pas avec l'image (petit lot, 2026-10-25).
+    expect(params).toMatchObject({ crop: BOX });
+    expect(params).not.toHaveProperty("query");
     expect(params.imageUri).toMatch(/-1600\.jpg$/);
     expect(shown).toHaveBeenCalledWith(expect.objectContaining({ crop: BOX }));
     expect(getLastSpotResult()).toMatchObject({ searchId: "recherche-1", status: "success" });
@@ -145,7 +147,8 @@ describe("vidéo : « Lancer » enchaîne analyse, cadrage et identification", (
     expect(await launchVideo(fakeVideo(), " veste ", new AbortController().signal)).toEqual({ kind: "result", searchId: null });
     expect(prepareSearch).not.toHaveBeenCalled();
     expect(runSearch).not.toHaveBeenCalled();
-    expect(getLastSpotResult()).toMatchObject({ searchId: null, status: "failed", failReason: "capacity_month", resumesOn: "2026-11-03", query: "veste" });
+    expect(getLastSpotResult()).toMatchObject({ searchId: null, status: "failed", failReason: "capacity_month", resumesOn: "2026-11-03" });
+    expect(getLastSpotResult()?.query ?? null).toBeNull();
   });
 
   it("limite quotidienne : repli avec son motif", async () => {
@@ -180,27 +183,27 @@ describe("vidéo : « Lancer » enchaîne analyse, cadrage et identification", (
 });
 
 describe("photo : même parcours, sans attendre le serveur avant « Lancer »", () => {
-  it("le choix d'une photo ne prépare rien sur le serveur ; « Lancer » analyse la zone centrale avec les mots tapés", async () => {
+  it("le choix d'une photo ne prépare rien sur le serveur ; « Lancer » analyse la zone centrale, sans mots", async () => {
     const draft = beginFromPhoto("file:///cache/photo.jpg", { width: 1200, height: 1600 });
     expect(prepareSearch).not.toHaveBeenCalled();
     expect(draft.searchId).toBeNull();
-    expect(await launchPhoto(draft, "  t-shirt noir ", new AbortController().signal)).toEqual({ kind: "result", searchId: "recherche-1" });
+    expect(await launchPhoto(draft, new AbortController().signal)).toEqual({ kind: "result", searchId: "recherche-1" });
     expect(prepareSearch).toHaveBeenCalledTimes(1);
-    expect(runSearch).toHaveBeenCalledWith("recherche-1", { crop: DEFAULT_CROP, query: "t-shirt noir", imageUri: "file:///cache/photo.jpg" }, expect.anything());
+    expect(runSearch).toHaveBeenCalledWith("recherche-1", { crop: DEFAULT_CROP, imageUri: "file:///cache/photo.jpg" }, expect.anything());
   });
 
   it("option B : la zone entourée sur l'écran (cadre « Entourez la pièce ») est celle envoyée", async () => {
     const draft = beginFromPhoto("file:///cache/photo.jpg", { width: 1200, height: 1600 });
-    await launchPhoto(draft, "maillot", new AbortController().signal, BOX);
-    expect(runSearch.mock.calls[0]![1]).toMatchObject({ crop: BOX, query: "maillot" });
+    await launchPhoto(draft, new AbortController().signal, BOX);
+    expect(runSearch.mock.calls[0]![1]).toEqual({ crop: BOX, imageUri: "file:///cache/photo.jpg" });
     expect(getDraft()?.crop).toEqual(BOX);
   });
 
   it("une zone déjà recadrée est gardée", async () => {
     beginFromPhoto("file:///cache/photo.jpg", { width: 1200, height: 1600 });
     const draft = updateDraft({ crop: BOX })!;
-    await launchPhoto(draft, "", new AbortController().signal);
-    expect(runSearch.mock.calls[0]![1]).toMatchObject({ crop: BOX, query: "" });
+    await launchPhoto(draft, new AbortController().signal);
+    expect(runSearch.mock.calls[0]![1]).toMatchObject({ crop: BOX });
   });
 });
 

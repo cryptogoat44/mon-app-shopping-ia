@@ -106,7 +106,7 @@ describe("analyse automatique — étages 1 et 2", () => {
 });
 
 describe("analyse automatique — identification d'un moment", () => {
-  it("image en pleine taille, cadre de l'IA et description : même chemin qu'une photo ; chaque essai est compté", async () => {
+  it("image en pleine taille et cadre de l'IA : même chemin qu'une photo, sans les mots (petit lot) ; chaque essai est compté", async () => {
     const video = fakeVideo();
     findVideoMoments.mockResolvedValue([
       { frame: 1, box: BOX },
@@ -116,7 +116,8 @@ describe("analyse automatique — identification d'un moment", () => {
     await prepareMoment(video, 0);
     expect(video.frameFile).toHaveBeenLastCalledWith(expect.any(Number), 1600);
     expect(beginFromPhoto).toHaveBeenCalledTimes(1);
-    expect(getDraft()).toMatchObject({ crop: BOX, query: "veste en daim", imageSize: { width: 900, height: 1600 } });
+    expect(getDraft()).toMatchObject({ crop: BOX, imageSize: { width: 900, height: 1600 } });
+    expect(getDraft()).not.toHaveProperty("query");
     expect(track).toHaveBeenCalledWith("video_ai_moment_tried", { rank: 1 });
     expect(remainingMoments(video)).toEqual([1]);
     // Image n° 2 de l'envoi = deuxième plan (« Veste ») : le curseur y repartira.

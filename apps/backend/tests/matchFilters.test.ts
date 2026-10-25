@@ -55,29 +55,29 @@ beforeEach(() => {
 });
 
 describe("réponses enregistrées de Google Lens : filtres sans risque pour un résultat valide", () => {
-  it("vente aux professionnels (Faire) écartée ; l'ordre de Google est conservé, les rangs se suivent", async () => {
+  it("vente aux professionnels (Faire) écartée ; les 6 premières restent à leur place ; les rangs se suivent", async () => {
     expect(ZONE.filter((m) => exclusionReason(m.link) === "professional").map((m) => m.position)).toEqual([21]);
-    const results = await replay({ visual_matches: ZONE });
+    const { matches: results, addedRanks } = await replayWithMeasure({ visual_matches: ZONE });
 
     expect(results.some((r) => exclusionReason(r.merchantUrl) !== null)).toBe(false);
-    expect(results.slice(0, 10).map((r) => r.merchantUrl)).toEqual(ZONE.slice(0, 10).map((m) => m.link));
+    // Au-delà des 6 premières, la règle des prix classe par proximité (devise, pays) : l'ordre de Google n'y est plus gardé.
+    expect(results.slice(0, 6).map((r) => r.merchantUrl)).toEqual(ZONE.slice(0, 6).map((m) => m.link));
     expect(results.map((r) => r.rank)).toEqual(results.map((_, index) => index + 1));
-    expect(results).toHaveLength(30);
+    expect(results).toHaveLength(30 + addedRanks.length);
   });
 
-  it("même article sur zalando.ch et zalando.fr : une seule proposition, le site français, à la place de la première apparition", async () => {
+  it("même article sur zalando.ch et zalando.fr : une seule proposition, le site français", async () => {
     const swiss = at(ZONE, 11);
     const french = at(ZONE, 42);
     const results = await replay({ visual_matches: ZONE });
 
-    expect(results[10]).toMatchObject({ rank: 11, merchantUrl: french.link, productName: french.title });
-    expect(results.filter((r) => r.merchantUrl === swiss.link || r.merchantUrl === french.link)).toHaveLength(1);
+    expect(results.filter((r) => r.merchantUrl === swiss.link || r.merchantUrl === french.link).map((r) => r.productName)).toEqual([french.title]);
   });
 
   it("même article, sans site du pays de la recherche (anglais, États-Unis) : la première apparition reste", async () => {
     const results = await replay({ visual_matches: ZONE }, { hl: "en", country: "us" });
 
-    expect(results[10]!.merchantUrl).toBe(at(ZONE, 11).link);
+    expect(results.some((r) => r.merchantUrl === at(ZONE, 11).link)).toBe(true);
     expect(results.some((r) => r.merchantUrl === at(ZONE, 42).link)).toBe(false);
   });
 
@@ -176,17 +176,29 @@ describe("réponses enregistrées de Google Lens : filtres sans risque pour un r
 });
 
 describe("réponses réelles du 21 octobre (« visual_matches », 4 pièces du fondateur) : rejouées", () => {
-  // Nombres relevés lors de l'essai, retrouvés à l'identique après la
-  // neutralisation des domaines peu connus (LISEZ-MOI.md).
+  // Avant la règle des prix, l'essai avait gardé 30, 30, 30 et 8 propositions,
+  // dont 12, 5, 7 et 0 avec un prix. Avec la règle (petit lot), on retrouve
+  // exactement les chiffres de la conception du 21 octobre
+  // (docs/conception-apres-correction-2026-10-21.md, section 2).
+  const euros = (currency: string | null) => currency === "€" || currency === "EUR";
   it.each([
-    ["lens-visual-veste-bleu-marine.json", { received: 60, removedSocial: 0, kept: 30, keptWithPrice: 12 }],
-    ["lens-visual-tshirt-blanc.json", { received: 60, removedSocial: 0, kept: 30, keptWithPrice: 5 }],
-    ["lens-visual-maillot-nike.json", { received: 60, removedSocial: 4, kept: 30, keptWithPrice: 7 }],
-    ["lens-visual-pull-noir.json", { received: 60, removedSocial: 52, kept: 8, keptWithPrice: 0 }],
-  ])("%s : reçues, réseaux sociaux écartés, gardées, avec un prix", async (file, attendu) => {
-    const { matches, measure } = await replayWithMeasure(fixture(file), { country: "fr", hl: "fr" });
+    ["lens-visual-veste-bleu-marine.json", { received: 60, removedSocial: 0, kept: 40, keptWithPrice: 22 }, { ecranPrix: 9, ecranEuros: 9 }, [32, 36, 37, 38, 46, 47, 51, 52, 53, 55]],
+    ["lens-visual-tshirt-blanc.json", { received: 60, removedSocial: 0, kept: 33, keptWithPrice: 8 }, { ecranPrix: 5, ecranEuros: 1 }, [43, 48, 57]],
+    ["lens-visual-maillot-nike.json", { received: 60, removedSocial: 4, kept: 38, keptWithPrice: 15 }, { ecranPrix: 7, ecranEuros: 6 }, [42, 43, 44, 45, 54, 55, 59, 60]],
+    ["lens-visual-pull-noir.json", { received: 60, removedSocial: 52, kept: 8, keptWithPrice: 0 }, { ecranPrix: 0, ecranEuros: 0 }, []],
+  ])("%s : gardées et prix avec la règle des prix ; premier écran (12) ; rangs d'origine des ajouts", async (file, attendu, ecran, ajouts) => {
+    const { matches, measure, addedRanks } = await replayWithMeasure(fixture(file), { country: "fr", hl: "fr" });
     expect(measure).toMatchObject(attendu);
+    const premierEcran = matches.slice(0, 12).filter((m) => m.priceValue !== null);
+    expect({ ecranPrix: premierEcran.length, ecranEuros: premierEcran.filter((m) => euros(m.currency)).length }).toEqual(ecran);
+    expect(addedRanks).toEqual(ajouts);
     expect(matches.map((m) => m.rank)).toEqual(matches.map((_, i) => i + 1));
+  });
+
+  it("les 6 premières de Google restent à leur place", async () => {
+    const reponse = RECORDED.parse(fixture("lens-visual-veste-bleu-marine.json")).visual_matches;
+    const matches = await replay({ visual_matches: reponse }, { country: "fr", hl: "fr" });
+    expect(matches.slice(0, 6).map((m) => m.merchantUrl)).toEqual(reponse.slice(0, 6).map((m) => m.link));
   });
 
   it("le type « products », abandonné le 9 octobre : erreur de SerpApi (400), une panne, jamais « rien trouvé »", async () => {

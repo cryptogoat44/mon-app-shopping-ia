@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProductSearch } from "@monapp/shared-types";
 import type { SpotResult } from "../src/api/types";
-import { chooseInitialResult, toSpotResult } from "../src/lib/spot-result";
+import { chooseInitialResult, noPriceShown, toSpotResult } from "../src/lib/spot-result";
 
 function search(overrides: Partial<ProductSearch> = {}): ProductSearch {
   return {
@@ -85,5 +85,15 @@ describe("toSpotResult", () => {
 
   it("garde l'image haute définition des propositions", () => {
     expect(toSpotResult(search()).pieces[0]?.imageHdUrl).toBe("https://example.com/hd.jpg");
+  });
+});
+
+describe("message « Aucune de ces propositions n'affiche de prix » (petit lot)", () => {
+  it("seulement quand il y a des propositions et qu'aucune n'a de prix", () => {
+    expect(noPriceShown([{ priceFrom: null }, { priceFrom: null }])).toBe(true);
+    expect(noPriceShown([{ priceFrom: null }, { priceFrom: 39 }])).toBe(false);
+    expect(noPriceShown([{ priceFrom: 0 }])).toBe(false);
+    // Aucune proposition : c'est le message « rien trouvé », pas celui-ci.
+    expect(noPriceShown([])).toBe(false);
   });
 });

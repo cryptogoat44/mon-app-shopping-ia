@@ -55,6 +55,7 @@ function found(matches: VisualMatch[], received = matches.length): VisualSearchR
       sections: received > 0 ? ["visual_matches"] : [],
       googleState: received > 0 ? null : "empty",
     },
+    addedRanks: [],
   };
 }
 
@@ -152,7 +153,7 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     expect(search.status).toBe("pending");
   });
 
-  it("lancer recadre la vignette, transmet le texte, enregistre l'image HD — un seul appel SerpApi", async () => {
+  it("lancer recadre la vignette, enregistre l'image HD — un seul appel SerpApi ; le texte d'une ancienne app n'est ni transmis ni enregistré", async () => {
     const search = await prepare("https://www.tiktok.com/@x/video/1");
     // L'image n'existe que pendant l'appel SerpApi : on la lit à ce moment-là.
     let analysed: Buffer | null = null;
@@ -169,12 +170,13 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.status).toBe("completed");
-    expect(body.query).toBe("veste en daim marron");
+    // Petit lot (décision du fondateur du 2026-10-25) : les mots ne partent plus avec l'image.
+    expect(body.query).toBeNull();
     expect(body.matches[0].imageHdUrl).toBe(MATCH.imageHdUrl);
     expect(body.matches[0].imageUrl).toBe(MATCH.imageUrl);
 
     expect(searchMock).toHaveBeenCalledOnce();
-    expect(searchMock.mock.calls[0]![2]).toEqual({ query: "veste en daim marron", locale: { hl: "fr", country: "fr" } });
+    expect(searchMock.mock.calls[0]![2]).toEqual({ locale: { hl: "fr", country: "fr" } });
 
     // L'image réellement envoyée à l'analyse est bien la zone choisie :
     // 50 % × 25 % d'une image 400 × 600 = 200 × 150.
@@ -330,10 +332,28 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     }, 60_000);
   });
 
-  it("un texte vide n'est jamais transmis", async () => {
+  it("un texte, vide ou rempli, n'est jamais transmis à la recherche visuelle", async () => {
+    const vide = await prepare("https://www.tiktok.com/@x/video/1");
+    await run(vide.id, { query: "   " });
+    const rempli = await prepare("https://www.tiktok.com/@x/video/2");
+    await run(rempli.id, { query: "veste" });
+    expect(searchMock.mock.calls.map((call) => call[2])).toEqual([{ locale: { hl: "fr", country: "fr" } }, { locale: { hl: "fr", country: "fr" } }]);
+  });
+
+  it("chaque recherche écrit sa ligne « Mesure recherche » : l'issue et des nombres, jamais d'identifiant, de titre ni d'adresse", async () => {
     const search = await prepare("https://www.tiktok.com/@x/video/1");
-    await run(search.id, { query: "   " });
-    expect(searchMock.mock.calls[0]![2]).toEqual({ query: null, locale: { hl: "fr", country: "fr" } });
+    const journal = vi.spyOn(app.log, "info");
+    searchMock.mockResolvedValueOnce({ ...found([MATCH], 60), addedRanks: [34, 41] });
+    try {
+      expect((await run(search.id, {})).statusCode).toBe(200);
+      const lignes = journal.mock.calls.filter((call) => call[1] === "Mesure recherche");
+      expect(lignes).toHaveLength(1);
+      expect(lignes[0]![0]).toEqual({ outcome: "found", failureKind: null, received: 60, kept: 1, keptWithPrice: 1, keptOtherCurrency: 0, added: 2, addedRanks: [34, 41], callSeconds: expect.any(Number) });
+      const texte = JSON.stringify(lignes[0]);
+      for (const interdit of [search.id, user.id, MATCH.productName, MATCH.merchantUrl, "http"]) expect(texte).not.toContain(interdit);
+    } finally {
+      journal.mockRestore();
+    }
   });
 
   it("une recherche ne peut être lancée qu'une fois : pas de second crédit", async () => {

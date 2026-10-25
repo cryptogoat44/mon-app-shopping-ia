@@ -19,6 +19,12 @@ export function matchToPiece(match: ProductMatch): Piece {
   };
 }
 
+/** Des propositions, mais aucune avec un prix : le message honnête s'affiche
+ * au-dessus d'elles (petit lot ; décision du fondateur du 2026-10-21). */
+export function noPriceShown(pieces: readonly Pick<Piece, "priceFrom">[]): boolean {
+  return pieces.length > 0 && pieces.every((piece) => piece.priceFrom === null);
+}
+
 /** Traduit une recherche renvoyée par le serveur en résultat affichable. */
 export function toSpotResult(search: ProductSearch): SpotResult {
   if (search.matches.length === 0) {

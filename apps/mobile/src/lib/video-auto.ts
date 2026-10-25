@@ -25,7 +25,6 @@ export interface AutoMoment {
 
 interface AutoSession {
   video: OpenedVideo;
-  query: string;
   moments: AutoMoment[];
   /** Rangs déjà essayés (0 = le meilleur). */
   tried: number[];
@@ -104,7 +103,7 @@ export async function analyzeVideo(
     );
     track("video_ai_result", { outcome: moments.length > 0 ? "found" : "not_found", moments_count: moments.length });
     if (moments.length === 0) return { kind: "not_found" };
-    session = { video, query: query.trim(), moments: moments.map((moment) => ({ timeMs: times[moment.frame]!, box: moment.box })), tried: [] };
+    session = { video, moments: moments.map((moment) => ({ timeMs: times[moment.frame]!, box: moment.box })), tried: [] };
     return { kind: "found" };
   } catch (error) {
     // « Annuler » : la requête est abandonnée, rien à signaler.
@@ -137,15 +136,16 @@ export function remainingMoments(video: OpenedVideo | null): number[] {
 }
 
 /** Prépare l'identification d'un moment : image en pleine taille extraite sur
- * l'appareil, cadre de l'IA, mots de l'utilisateur — puis même chemin qu'une
- * photo (1 crédit au lancement). */
+ * l'appareil, cadre de l'IA — puis même chemin qu'une photo (1 crédit au
+ * lancement). Les mots de la personne ont servi à l'IA seulement : ils ne
+ * partent plus avec l'image (petit lot, 2026-10-25). */
 export async function prepareMoment(video: OpenedVideo, rank: number): Promise<SpotDraft> {
   const live = liveSession(video);
   const moment = live?.moments[rank];
   if (!live || !moment) throw new Error("video_moment_missing");
   const frame = await video.frameFile(moment.timeMs, SPOTTER_IMAGE_MAX_EDGE);
   const started = beginFromPhoto(frame.uri, { width: frame.width, height: frame.height });
-  const draft = updateDraft({ crop: moment.box, query: live.query }) ?? started;
+  const draft = updateDraft({ crop: moment.box }) ?? started;
   live.tried.push(rank);
   track("video_ai_moment_tried", { rank: rank + 1 });
   return draft;

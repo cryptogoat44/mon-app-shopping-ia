@@ -114,9 +114,12 @@ function useAsk(media: Media, setMedia: (media: Media) => void, query: string, s
   }
 
   const isVideo = media.source === "video";
-  const linkInQuery = containsLink(query);
-  const enoughWords = !isVideo || flow.declined || query.trim().length >= VIDEO_AI.queryMinLength;
+  // Les mots ne servent qu'à l'IA, pour trouver la pièce dans la vidéo (petit lot, 2026-10-25).
+  const withQuery = isVideo && !flow.declined;
+  const linkInQuery = withQuery && containsLink(query);
+  const enoughWords = !withQuery || query.trim().length >= VIDEO_AI.queryMinLength;
   return {
+    withQuery,
     autoFocus: isVideo,
     query,
     onQuery: (value) => {
@@ -183,7 +186,7 @@ export default function LaunchScreen() {
       <SpotWaitingScreen
         image={flow.waitingImage}
         title={identifying ? t.analysis.title : t.launch.waitingVideo}
-        query={query}
+        query={identifying ? "" : query}
         usual={isVideo ? t.launch.usualVideo : t.analysis.usual}
         slowAfterMs={isVideo ? SLOW_VIDEO_MS : SLOW_PHOTO_MS}
         onCancel={flow.cancel}
