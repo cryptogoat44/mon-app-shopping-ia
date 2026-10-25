@@ -582,11 +582,11 @@ export const FEEDBACK_REASON_LABELS: Record<MatchFeedbackReason, Bilingual> = {
   image_title_mismatch: { fr: "L'image et le titre ne correspondent pas", en: "The image and the title don't match" },
   wrong_item: {
     fr: "Ce n'est pas la pièce cherchée (autre type, autre couleur, autre modèle)",
-    en: "Not the item I was looking for (different type, color or model)",
+    en: "Not the piece I was looking for (different type, color or model)",
   },
   not_for_sale: { fr: "Impossible à acheter (la page ne vend rien)", en: "Can't be bought (the page doesn't sell anything)" },
   wrong_price: { fr: "Prix faux ou absent", en: "Wrong or missing price" },
-  duplicate: { fr: "Doublon d'une autre proposition", en: "Duplicate of another result" },
+  duplicate: { fr: "Doublon d'une autre proposition", en: "Duplicate of another suggestion" },
 };
 
 /** Motifs d'une décision : ceux des signalements, plus le motif neutre du

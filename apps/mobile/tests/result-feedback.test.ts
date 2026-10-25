@@ -25,10 +25,10 @@ describe("motifs du bouton « Résultat incohérent »", () => {
     setActiveLocale("en");
     expect(feedbackReasonChoices().map((choice) => choice.label)).toEqual([
       "The image and the title don't match",
-      "Not the item I was looking for (different type, color or model)",
+      "Not the piece I was looking for (different type, color or model)",
       "Can't be bought (the page doesn't sell anything)",
       "Wrong or missing price",
-      "Duplicate of another result",
+      "Duplicate of another suggestion",
     ]);
     expect(t.result.reportedLine(feedbackReasonLabel("wrong_price"))).toBe("Reported: Wrong or missing price");
   });

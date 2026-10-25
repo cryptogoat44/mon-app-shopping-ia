@@ -4,7 +4,8 @@
 // - vidéo avec l'IA : le champ reste, expliqué (« Ces mots aident l'IA… ») ;
 //   les mots servent à l'IA, mais ne partent jamais avec l'image ;
 // - propositions sans aucun prix : le message honnête, au-dessus d'elles ;
-// - rien trouvé : le texte sans nom de fournisseur, plus de « Réessayer sans le texte ».
+// - rien trouvé : le texte sans nom de fournisseur, plus de « Réessayer sans le texte » ;
+// - Vault : la confirmation du retrait d'une pièce (en anglais, « piece », plus « item »).
 //
 //   pnpm --filter backend parcours-ecran petit-lot
 //
@@ -16,7 +17,8 @@ import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Page } from "playwright-core";
 import sharp from "sharp";
-import type { Parcours } from "../boite-a-outils.js";
+import { z } from "zod";
+import type { Parcours, TestAccount } from "../boite-a-outils.js";
 import { genererVideosEssai } from "../../lib/videos-essai.js";
 import { COMBOS, type Combo } from "./lot-3.js";
 import { attendreEnvoi, check, choisirFichier, ouvrirSpotter, suivreRequetes, visible, type Envoi } from "./spotter-outils.js";
@@ -130,20 +132,47 @@ async function videoSansIa(p: Parcours, page: Page, combo: Combo, video: string,
   await capteur(p, page, combo, problemes)("08-video-sans-ia");
 }
 
+const VAULT = {
+  fr: { titre: "Veste en daim", retirer: "Retirer du vault", confirmation: "Retirer définitivement cet objet ?", annuler: "Annuler" },
+  en: { titre: "Suede jacket", retirer: "Remove from the Vault", confirmation: "Remove this piece permanently?", annuler: "Cancel" },
+} as const;
+
+/** Vault : la confirmation du retrait d'une pièce, affichée sans rien retirer. */
+async function vaultRetrait(p: Parcours, page: Page, combo: Combo, compte: TestAccount, image: Buffer, problemes: string[]): Promise<void> {
+  const V = VAULT[combo.locale];
+  const form = new FormData();
+  form.append("title", V.titre);
+  form.append("category", "clothing");
+  form.append("file", new Blob([image], { type: "image/jpeg" }), "veste.jpg");
+  const ajout = await p.api(compte, "POST", "/api/vault", form);
+  check(ajout.ok, `pièce ajoutée au Vault (${ajout.status})`);
+  const { id } = z.object({ id: z.string() }).parse(await ajout.json());
+  await page.goto(`${p.siteUrl}/vault-item/${id}`);
+  await page.getByRole("button", { name: V.retirer, exact: true }).filter({ visible: true }).click();
+  await visible(page, V.confirmation).waitFor({ timeout: 15_000 });
+  check((await page.getByText("item", { exact: false }).filter({ visible: true }).count()) === 0, "Vault : plus aucun « item » à l'écran");
+  // La confirmation est en bas de la page : on y descend pour la photographier.
+  await page.getByRole("button", { name: V.annuler, exact: true }).filter({ visible: true }).scrollIntoViewIfNeeded();
+  await page.waitForTimeout(400);
+  await capteur(p, page, combo, problemes)("09-vault-retrait");
+}
+
 export async function run(p: Parcours): Promise<void> {
   const videos = await genererVideosEssai();
   const photoEssai = join(videos.dossier, "photo.jpg");
   writeFileSync(photoEssai, await sharp({ create: { width: 900, height: 1200, channels: 3, background: "#26262A" } }).jpeg().toBuffer());
+  const imageVault = await sharp({ create: { width: 800, height: 1000, channels: 3, background: "#8A5A3C" } }).jpeg().toBuffer();
   const envois: Envoi[] = [];
   const problemes: string[] = [];
   try {
     for (const combo of COMBOS) {
-      await p.step(`${combo.id} : photo sans champ, aucun prix, « Recadrer », rien trouvé ; vidéo avec l'IA ; vidéo sans l'IA`, async () => {
+      await p.step(`${combo.id} : photo sans champ, aucun prix, « Recadrer », rien trouvé ; vidéo avec l'IA ; vidéo sans l'IA ; retrait du Vault`, async () => {
         const compte = await nouveauCompte(p, `pl${combo.id.replace("-", "")}`);
         const page = await ouvrirSpotter(p, compte, combo, envois, TEXTES[combo.locale].ajouterVideo);
         await photo(p, page, combo, photoEssai, problemes);
         await videoAvecIa(p, page, combo, videos.courte, problemes);
         await videoSansIa(p, page, combo, videos.courte, envois, problemes);
+        await vaultRetrait(p, page, combo, compte, imageVault, problemes);
         await page.context().close();
       });
     }
