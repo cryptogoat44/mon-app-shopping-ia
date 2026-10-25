@@ -512,7 +512,7 @@ export default async function postsRoutes(fastify: FastifyInstance) {
       if (type === "purchase") {
         vaultItemId = optionalFields.vaultItemId ?? null;
         if (!vaultItemId) {
-          return reply.code(400).send({ error: "invalid_body", message: "Objet du vault manquant." });
+          return reply.code(400).send({ error: "invalid_body", message: "Pièce du vault manquante." });
         }
         const { data: vaultItem } = await fastify.supabaseAdmin
           .from("vault_items")
@@ -522,7 +522,7 @@ export default async function postsRoutes(fastify: FastifyInstance) {
           .single();
 
         if (!vaultItem) {
-          return reply.code(404).send({ error: "vault_item_not_found", message: "Objet du vault introuvable." });
+          return reply.code(404).send({ error: "vault_item_not_found", message: "Pièce du vault introuvable." });
         }
         // Une pièce ne se partage qu'une fois à la fois (Lot F, décision
         // documentée dans docs/journal-decisions.md) : pour la montrer

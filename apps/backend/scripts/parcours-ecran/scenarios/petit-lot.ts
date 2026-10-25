@@ -133,7 +133,7 @@ async function videoSansIa(p: Parcours, page: Page, combo: Combo, video: string,
 }
 
 const VAULT = {
-  fr: { titre: "Veste en daim", retirer: "Retirer du vault", confirmation: "Retirer définitivement cet objet ?", annuler: "Annuler" },
+  fr: { titre: "Veste en daim", retirer: "Retirer du vault", confirmation: "Retirer définitivement cette pièce ?", annuler: "Annuler" },
   en: { titre: "Suede jacket", retirer: "Remove from the Vault", confirmation: "Remove this piece permanently?", annuler: "Cancel" },
 } as const;
 

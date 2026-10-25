@@ -116,7 +116,7 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       .single();
 
     if (error || !data) {
-      return reply.code(404).send({ error: "vault_item_not_found", message: "Objet introuvable." });
+      return reply.code(404).send({ error: "vault_item_not_found", message: "Pièce introuvable." });
     }
 
     // Publications "achat" qui montrent cet objet : le retirer les
@@ -344,7 +344,7 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       .single();
 
     if (error || !updated) {
-      return reply.code(404).send({ error: "vault_item_not_found", message: "Objet introuvable." });
+      return reply.code(404).send({ error: "vault_item_not_found", message: "Pièce introuvable." });
     }
 
     const [imageHdUrl] = await fetchHdImageUrls(fastify, [updated as VaultItemRow]);
@@ -370,7 +370,7 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       .eq("user_id", userId)
       .maybeSingle();
     if (!existing) {
-      return reply.code(404).send({ error: "vault_item_not_found", message: "Objet introuvable." });
+      return reply.code(404).send({ error: "vault_item_not_found", message: "Pièce introuvable." });
     }
 
     let fileBuffer: Buffer;
@@ -449,7 +449,7 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       .single();
 
     if (!existing) {
-      return reply.code(404).send({ error: "vault_item_not_found", message: "Objet introuvable." });
+      return reply.code(404).send({ error: "vault_item_not_found", message: "Pièce introuvable." });
     }
 
     // Publications "achat" qui montrent cet objet : supprimées avec lui par

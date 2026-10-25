@@ -9,7 +9,9 @@
 // affiché une fois la session ouverte, la session n'être ouverte qu'une fois,
 // et les jetons doivent quitter l'adresse sans y revenir (Expo Router les y
 // réécrivait). Aucun mot de passe n'est saisi. Puis la politique de
-// confidentialité (version du 5 octobre 2026), en français et en anglais.
+// confidentialité (version en vigueur, datée), en français et en anglais :
+// depuis le 25 octobre 2026 (petit lot), le passage sur les mots tapés, qui ne
+// partent plus avec l'image.
 import { createClient } from "@supabase/supabase-js";
 import type { Parcours } from "../boite-a-outils.js";
 
@@ -60,11 +62,11 @@ export async function run(p: Parcours): Promise<void> {
     await p.capture(phone, "01-nouveau-mot-de-passe");
   });
 
-  await p.step("Politique de confidentialité : information du lot 3bis et nouvelle version datée (français, anglais)", async () => {
+  await p.step("Politique de confidentialité : version datée en vigueur et passage sur les mots tapés (français, anglais)", async () => {
     const versions = [
       // Version datée (quelle qu'elle soit : elle change à chaque mise à jour du texte).
-      { locale: "fr-FR", date: /projet du \d{1,2} \S+ 20\d\d/, phrase: "identifiant d'installation pseudonyme", capture: "02-confidentialite-fr" },
-      { locale: "en-GB", date: /draft of \S+ \d{1,2}, 20\d\d/, phrase: "pseudonymous installation identifier", capture: "03-confidentialite-en" },
+      { locale: "fr-FR", date: /projet du \d{1,2} \S+ 20\d\d/, phrase: "Les mots que vous tapez ne partent plus avec l'image", capture: "02-confidentialite-fr" },
+      { locale: "en-GB", date: /draft of \S+ \d{1,2}, 20\d\d/, phrase: "The words you type are no longer sent with the image", capture: "03-confidentialite-en" },
     ];
     for (const { locale, date, phrase, capture } of versions) {
       const lecteur = await p.newPhone({ locale });

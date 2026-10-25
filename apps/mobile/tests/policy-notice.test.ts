@@ -62,12 +62,28 @@ describe("information de mise à jour (sans nouvelle acceptation)", () => {
   });
 
   it("lot 4, temps 1 bis (analyse automatique) : Anthropic nommé, consentement propre à la fonction ; la politique reste une simple information", () => {
-    expect(LEGAL_DOCUMENT_VERSIONS.privacy_policy).toBe("projet-2026-10-06");
+    expect(ACCEPTED_CONSENT_VERSIONS.privacy_policy).toContain("projet-2026-10-06");
     expect(JSON.stringify(privacyPolicy)).toContain("Anthropic (Anthropic, PBC, États-Unis)");
     expect(JSON.stringify(privacyPolicyEn)).toContain("Anthropic (Anthropic, PBC, United States)");
     expect(JSON.stringify(privacyPolicy)).toContain("Accepter ou retirer l'analyse automatique des vidéos");
     expect(ACCEPTED_CONSENT_VERSIONS.privacy_policy).toContain("projet-2026-10-05-b");
     expect(ACCEPTED_CONSENT_VERSIONS.analyse_video_ia).toEqual([CONSENT_VERSIONS.analyse_video_ia]);
     expect(shouldShowNotice(accepted("projet-2026-10-05-b"), [], POLICY_UPDATE_NOTICE)).toBe(false);
+  });
+
+  it("petit lot (mots retirés de la recherche par image) : simple information, ni nouvelle acceptation ni message", () => {
+    expect(LEGAL_DOCUMENT_VERSIONS.privacy_policy).toBe("projet-2026-10-25");
+    const fr = JSON.stringify(privacyPolicy);
+    const en = JSON.stringify(privacyPolicyEn);
+    expect(fr).toContain("Les mots que vous tapez ne partent plus avec l'image et ne sont plus enregistrés avec la recherche");
+    expect(en).toContain("The words you type are no longer sent with the image, nor saved with the search");
+    expect(fr).toContain("Ces images et votre description ne sont jamais enregistrées par Spotto");
+    expect(en).toContain("These frames and your description are never saved by Spotto");
+    // Plus aucun texte envoyé à SerpApi ni à Google avec l'image.
+    expect(fr).not.toContain("le texte éventuellement ajouté");
+    expect(en).not.toContain("any text you added");
+    expect(ACCEPTED_CONSENT_VERSIONS.privacy_policy).toContain("projet-2026-10-06");
+    expect(shouldShowNotice(accepted("projet-2026-10-06"), [], POLICY_UPDATE_NOTICE)).toBe(false);
+    expect(shouldShowNotice(accepted("projet-2026-10-25"), [], POLICY_UPDATE_NOTICE)).toBe(false);
   });
 });
