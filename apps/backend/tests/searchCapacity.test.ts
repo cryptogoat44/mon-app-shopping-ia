@@ -310,11 +310,13 @@ describe("plafond des recherches SerpApi (fonctions de la base, lot 4 quater)", 
     expect(await rowsBetween(slotDate(9, 1, -1), slotDate(9, 1, 2))).toHaveLength(0);
   });
 
-  it("aucune donnée personnelle dans les appels : une ligne ne garde que son numéro et sa date (rien à exporter ni à effacer avec un compte)", async () => {
+  it("aucune donnée personnelle dans les appels : une ligne ne garde que son numéro et ses dates (rien à exporter ni à effacer avec un compte)", async () => {
     const at = slotDate(10, 10);
     await quota(at, { daily: 5, monthly: 5 });
     const [row] = await rowsBetween(after(at, -MINUTE), after(at, MINUTE));
-    expect(Object.keys(row ?? {}).sort()).toEqual(["called_at", "id"]);
+    // La migration 0027 (spotto-dev depuis le 25 octobre, puis la production)
+    // ajoute la date « rendue le » : une date de plus, rien d'autre.
+    expect([["called_at", "id"], ["called_at", "id", "released_at"]]).toContainEqual(Object.keys(row ?? {}).sort());
   });
 
   it("le serveur réserve pour de vrai (maintenant) : la recherche en cours ne se compte pas, la suivante bute sur la part de la personne", async () => {
