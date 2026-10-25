@@ -25,8 +25,9 @@ export type SourceImage = "moment" | "plus-nette" | "pleine-definition";
 
 export type EtapeSerie =
   | { numero: number; lot: number; service: "lens"; piece: NomPiece; image: SourceImage; texte: boolean; locale: SearchLocale; sansCache: boolean; planche: boolean }
-  /** `mots` : d'autres mots que ceux du 8 octobre (série 2, lot 14 : mots vagues). */
-  | { numero: number; lot: number; service: "shopping"; piece: NomPiece; mots?: string }
+  /** `mots` : d'autres mots que ceux du 8 octobre (série 2, lot 14 : mots vagues) ;
+   * `sansCache` : une répétition (série 2, lot 13) demande une réponse fraîche. */
+  | { numero: number; lot: number; service: "shopping"; piece: NomPiece; mots?: string; sansCache?: boolean }
   | { numero: number; lot: number; service: "immersive" | "product"; piece: NomPiece }
   /** Série 2, lot 12 : description de la pièce par l'IA (vidéo), puis Google Shopping Light avec elle. */
   | { numero: number; lot: 12; service: "description"; piece: NomPiece };
@@ -97,13 +98,16 @@ export const AUTORISATION_LOT_12 = 4;
 export const MOTS_VAGUES: Readonly<Partial<Record<NomPiece, string>>> = { "veste-bleu-marine": "veste bleue", "maillot-nike": "maillot noir" };
 
 /** Les 15 étapes de la série 2. Chaque lien marchand (lot 15) suit aussitôt la
- * recherche par texte de sa pièce : le produit ne passe qu'en mémoire. */
+ * recherche par texte de sa pièce : le produit ne passe qu'en mémoire. La
+ * répétition du lot 13 part sans le cache : sinon SerpApi rejoue la première
+ * réponse, gratuitement, et la mesure ne vaut rien (constaté le 2026-10-25). */
 export function planSerie2(): EtapeSerie[] {
   const shopping = (lot: number, piece: NomPiece, mots?: string): Brouillon => (mots ? { lot, service: "shopping", piece, mots } : { lot, service: "shopping", piece });
+  const repetition = (piece: NomPiece): Brouillon => ({ lot: 13, service: "shopping", piece, sansCache: true });
   const immersive = (piece: NomPiece): Brouillon => ({ lot: 15, service: "immersive", piece });
   const brouillons: Brouillon[] = [
-    shopping(13, "maillot-nike"), immersive("maillot-nike"), shopping(13, "maillot-nike"),
-    shopping(13, "pull-noir"), immersive("pull-noir"), shopping(13, "pull-noir"),
+    shopping(13, "maillot-nike"), immersive("maillot-nike"), repetition("maillot-nike"),
+    shopping(13, "pull-noir"), immersive("pull-noir"), repetition("pull-noir"),
     shopping(14, "veste-bleu-marine", MOTS_VAGUES["veste-bleu-marine"]), immersive("veste-bleu-marine"),
     shopping(14, "maillot-nike", MOTS_VAGUES["maillot-nike"]),
     shopping(15, "tshirt-blanc"), immersive("tshirt-blanc"),
@@ -126,7 +130,7 @@ export function piecesDeSerie(json: unknown): Map<NomPiece, Piece> {
 
 /** Titre court d'une étape, pour l'écran et le relevé (jamais de contenu). */
 export function titreEtape(etape: EtapeSerie): string {
-  if (etape.service === "shopping") return `lot ${etape.lot} · ${etape.piece} · Google Shopping Light, texte seul${etape.mots ? " (mots vagues)" : ""}`;
+  if (etape.service === "shopping") return `lot ${etape.lot} · ${etape.piece} · Google Shopping Light, texte seul${etape.mots ? " (mots vagues)" : ""}${etape.sansCache ? ", sans cache" : ""}`;
   if (etape.service === "description") return `lot 12 · ${etape.piece} · description par l'IA, puis Google Shopping Light`;
   if (etape.service !== "lens") return `lot ${etape.lot} · ${etape.piece} · lien marchand (${etape.service === "immersive" ? "Immersive Product" : "Google Product"})`;
   const details = [etape.texte ? "image et mots" : "image seule", etape.image !== "moment" ? etape.image : null, etape.locale.country !== "fr" ? `${etape.locale.country}/${etape.locale.hl}` : null, etape.sansCache ? "sans cache" : null];

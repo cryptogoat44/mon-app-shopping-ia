@@ -24,7 +24,10 @@ export const VIDES_DE_SUITE_MAX = 3;
  * tarifs, lue le 2026-10-24). Compté sur l'heure glissante, par prudence. */
 export const LIMITE_HEURE = 50;
 
-const ISSUES = ["en_cours", "reussie", "vide", "erreur", "panne", "interrompue_facturee", "interrompue_non_facturee", "non_lancee"] as const;
+/** « cache » : SerpApi a rejoué une réponse de son cache (recherche identique
+ * de moins d'une heure) — gratuite, et sans valeur de mesure ; l'étape est
+ * refaite sans le cache (constaté le 2026-10-25, série 2, étape 3). */
+const ISSUES = ["en_cours", "reussie", "vide", "erreur", "panne", "interrompue_facturee", "interrompue_non_facturee", "non_lancee", "cache"] as const;
 export type IssueSerie = (typeof ISSUES)[number];
 
 /** Une valeur relevée : des nombres, des domaines, des devises — jamais un titre ni une adresse. */
@@ -120,12 +123,35 @@ export function factureesSelonReleve(lignes: readonly LigneSerie[]): number {
   return lignes.filter((l) => l.facturee === "oui").length;
 }
 
+// « cache » n'y est pas : l'étape est refaite, sans le cache.
 const TERMINEES: ReadonlySet<IssueSerie> = new Set(["reussie", "vide", "erreur", "panne", "interrompue_facturee", "non_lancee"]);
 
 /** Prochaine étape à faire : la première du plan sans ligne terminée. Une
  * étape interrompue SANS facturation (prouvé par le compteur) est refaite. */
 export function etapeSuivante(plan: readonly EtapeSerie[], lignes: readonly LigneSerie[]): EtapeSerie | null {
   return plan.find((etape) => !lignes.some((l) => l.numero === etape.numero && TERMINEES.has(l.issue))) ?? null;
+}
+
+/** Durée du cache de SerpApi : « Cache expires after 1h » ; « Cached searches
+ * are free » (documentation de SerpApi, lue le 2026-10-25). */
+export const CACHE_SERPAPI_MS = 60 * 60 * 1000;
+
+/** Ce qui rend deux étapes identiques pour SerpApi (mêmes paramètres) ; null
+ * pour une description par l'IA (son texte n'est connu qu'au moment de l'appel). */
+function cleRecherche(etape: EtapeSerie): string | null {
+  if (etape.service === "description") return null;
+  if (etape.service === "lens") return JSON.stringify(["lens", etape.piece, etape.image, etape.texte, etape.locale.country, etape.locale.hl]);
+  if (etape.service === "shopping") return JSON.stringify(["shopping", etape.piece, etape.mots ?? null]);
+  return JSON.stringify([etape.service, etape.piece]);
+}
+
+/** Garde-fou du cache : une étape identique à une autre partie il y a moins
+ * d'une heure part sans le cache (sinon SerpApi rejoue la même réponse). */
+export function exigeSansCache(plan: readonly EtapeSerie[], lignes: readonly LigneSerie[], etape: EtapeSerie, maintenant: Date): boolean {
+  const cle = cleRecherche(etape);
+  if (cle === null) return false;
+  const identiques = new Set(plan.filter((autre) => autre.numero !== etape.numero && cleRecherche(autre) === cle).map((autre) => autre.numero));
+  return lignes.some((l) => identiques.has(l.numero) && appelParti(l) && maintenant.getTime() - Date.parse(l.lanceeLe) < CACHE_SERPAPI_MS);
 }
 
 export type Arret = { raison: "panne" | "vides" | "en_cours" | "autorisation"; message: string };

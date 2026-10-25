@@ -24,7 +24,7 @@ import { assertDevSupabaseUrl } from "./lib/dev-database.js";
 import { contenusInterdits, factureeSelonSerpApi } from "./lib/essai-type.js";
 import type { Piece } from "./lib/mesure-texte.js";
 import { appelBoutiques, appelLens, appelShopping, brancherSerpApi, lireCompteur, lirePageEtat, verifierLien, viderStockage, type Branchement, type ReponseSerpApi } from "./lib/serie-appels.js";
-import { appelsDuJour, attenteHoraireMinutes, AUTORISATION_SERIE_1, controlerCompteur, decisionReprise, etapeSuivante, factureesSelonReleve, FIN_SERIE, finOuArret, jourParis, LIMITE_HEURE, lireOptions, PLAFOND_JOUR, RELEVE_SERIE, reserveSuffisante, servicesDuLot, servicesOperationnels, type Autorisation, type Compteur, type LigneSerie, type ReleveSerie } from "./lib/serie-garde-fous.js";
+import { appelsDuJour, attenteHoraireMinutes, AUTORISATION_SERIE_1, controlerCompteur, decisionReprise, etapeSuivante, exigeSansCache, factureesSelonReleve, FIN_SERIE, finOuArret, jourParis, LIMITE_HEURE, lireOptions, PLAFOND_JOUR, RELEVE_SERIE, reserveSuffisante, servicesDuLot, servicesOperationnels, type Autorisation, type Compteur, type LigneSerie, type ReleveSerie } from "./lib/serie-garde-fous.js";
 import { compilerDetection, imageDeLEtape, sansVisage } from "./lib/serie-images.js";
 import { descriptionAcceptable, mesurerBoutiques, mesurerLens, mesurerShopping, pertinenceDouteuse, vendeursCommuns, type ProduitChoisi } from "./lib/serie-mesures.js";
 import { ecrirePlanche } from "./lib/serie-planche.js";
@@ -135,6 +135,7 @@ async function etapeLens(contexte: Contexte, etape: Extract<EtapeSerie, { servic
 
 /** Une étape Google Shopping Light : texte seul (les mots du 8 octobre). */
 async function etapeShopping(contexte: Contexte, etape: Extract<EtapeSerie, { service: "shopping" }>, ligne: LigneSerie): Promise<void> {
+  if (etape.sansCache) contexte.branchement.sansCacheAuProchain();
   await rechercheParTexte(contexte, etape.piece, etape.mots ?? piece(contexte, etape.piece).texte, ligne, {});
 }
 
@@ -206,6 +207,8 @@ async function etapeBoutiques(contexte: Contexte, etape: Extract<EtapeSerie, { s
 async function faireEtape(contexte: Contexte, etape: EtapeSerie): Promise<LigneSerie> {
   const ligne = nouvelleLigne(etape);
   contexte.branchement.reinitialiser();
+  // Garde-fou du cache : jamais deux fois la même recherche en moins d'une heure avec le cache.
+  if (exigeSansCache(planComplet(), contexte.releve.lignes, etape, new Date())) contexte.branchement.sansCacheAuProchain();
   contexte.releve.lignes.push(ligne);
   ecrireReleve(contexte.releve);
   try {

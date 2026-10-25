@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { contenusInterdits } from "../scripts/lib/essai-type.js";
 import { brancherSerpApi, sansCache, statutDe } from "../scripts/lib/serie-appels.js";
 import {
-  appelsDuJour, arretDemande, attenteHoraireMinutes, compteurConcorde, controlerCompteur, decisionReprise, etapeSuivante, FIN_SERIE, finOuArret, jourParis, lireOptions, RELEVE_SERIE, rechercheesAutorisees, reserveSuffisante, servicesDuLot, servicesOperationnels, verdictCompteur,
+  appelsDuJour, arretDemande, attenteHoraireMinutes, compteurConcorde, controlerCompteur, decisionReprise, etapeSuivante, exigeSansCache, factureesSelonReleve, FIN_SERIE, finOuArret, jourParis, lireOptions, RELEVE_SERIE, rechercheesAutorisees, reserveSuffisante, servicesDuLot, servicesOperationnels, verdictCompteur,
   type Compteur, type LigneSerie,
 } from "../scripts/lib/serie-garde-fous.js";
 import { lireDetections } from "../scripts/lib/serie-images.js";
@@ -390,5 +390,48 @@ describe("série 2 (lots 13, 14, 15, puis 12)", () => {
     const reponse = { content: [{ type: "tool_use", name: "decrire_piece", input: { description: " Veste bleu marine à capuche " } }], usage: { input_tokens: 3776, output_tokens: 40 } };
     expect(lireDescription(reponse)).toEqual({ description: "Veste bleu marine à capuche", jetonsLus: 3776, jetonsEcrits: 40, cout: 0.0080 });
     expect(lireDescription({ content: [{ type: "text" }], usage: { input_tokens: 1, output_tokens: 1 } })).toBeNull();
+  });
+});
+
+describe("cache de SerpApi (constaté le 2026-10-25, série 2, étape 3)", () => {
+  const PLAN2 = planSerie2();
+  const ligneCache = (numero: number, issue: LigneSerie["issue"], lanceeLe: string, facturee: LigneSerie["facturee"] = "oui"): LigneSerie => {
+    const etape = PLAN2.find((e) => e.numero === numero)!;
+    return { numero, lot: etape.lot, piece: etape.piece, service: etape.service, lanceeLe, issue, code: 200, statutSerpApi: "Success", facturee, secondes: 1, mesures: null, message: null };
+  };
+
+  it("la répétition du lot 13 part sans le cache ; la première recherche, avec", () => {
+    const shopping = PLAN2.filter((e): e is Extract<EtapeSerie, { service: "shopping" }> => e.service === "shopping" && e.lot === 13);
+    expect(shopping.map((e) => [e.numero, e.piece, e.sansCache ?? false])).toEqual([
+      [1, "maillot-nike", false],
+      [3, "maillot-nike", true],
+      [4, "pull-noir", false],
+      [6, "pull-noir", true],
+    ]);
+    expect(titreEtape(shopping[1]!)).toContain("sans cache");
+  });
+
+  it("garde-fou : une recherche identique de moins d'une heure part sans le cache ; pas au-delà, ni pour d'autres mots", () => {
+    const etape9 = PLAN2.find((e) => e.numero === 9)!; // « maillot noir » : d'autres mots que l'étape 1
+    const etape3 = PLAN2.find((e) => e.numero === 3)!;
+    const lignes = [ligneCache(1, "reussie", "2026-10-25T09:21:37.000Z")];
+    expect(exigeSansCache(PLAN2, lignes, etape3, new Date("2026-10-25T09:22:22.000Z"))).toBe(true);
+    expect(exigeSansCache(PLAN2, lignes, etape3, new Date("2026-10-25T10:22:00.000Z"))).toBe(false);
+    expect(exigeSansCache(PLAN2, lignes, etape9, new Date("2026-10-25T09:22:22.000Z"))).toBe(false);
+    const description = PLAN2.find((e) => e.service === "description")!;
+    expect(exigeSansCache(PLAN2, lignes, description, new Date("2026-10-25T09:22:22.000Z"))).toBe(false);
+  });
+
+  it("réponse du cache : non facturée, hors autorisation et hors compteur ; l'étape est refaite", () => {
+    const lignes = [
+      ligneCache(1, "reussie", "2026-10-25T09:21:37.000Z"),
+      ligneCache(2, "reussie", "2026-10-25T09:21:59.000Z"),
+      ligneCache(3, "cache", "2026-10-25T09:22:22.000Z", "non"),
+      ligneCache(4, "reussie", "2026-10-25T09:22:22.000Z"),
+    ];
+    const lots13a15 = PLAN2.filter((e) => e.lot !== 12);
+    expect(etapeSuivante(lots13a15, lignes)?.numero).toBe(3);
+    expect(rechercheesAutorisees(lignes, [13, 14, 15])).toBe(3);
+    expect(factureesSelonReleve(lignes)).toBe(3);
   });
 });
