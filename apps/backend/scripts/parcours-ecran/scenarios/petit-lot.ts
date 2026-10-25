@@ -49,6 +49,8 @@ async function photo(p: Parcours, page: Page, combo: Combo, fichier: string, pro
   await page.getByRole("button", { name: T.lancer, exact: true }).filter({ visible: true }).click();
   await visible(page, T.aucunPrix).waitFor({ timeout: 30_000 });
   check((await visible(page, T.aucunPrixTexte).count()) === 1, "aucun prix : l'explication est affichée");
+  check((await page.getByText(T.prixAVerifier, { exact: false }).filter({ visible: true }).count()) >= 1, `sous la proposition : « ${T.prixAVerifier} »`);
+  check((await page.getByText(T.ancienPrixSurSite, { exact: false }).count()) === 0, `plus de « ${T.ancienPrixSurSite} »`);
   const [boite, meilleure] = await Promise.all([visible(page, T.aucunPrix).boundingBox(), visible(page, T.meilleure).boundingBox()]);
   const hauteur = page.viewportSize()?.height ?? 0;
   check(boite !== null && meilleure !== null && boite.y < meilleure.y && boite.y + boite.height <= hauteur, "aucun prix : au-dessus des propositions, visible sans défilement");
@@ -106,7 +108,7 @@ async function videoAvecIa(p: Parcours, page: Page, combo: Combo, video: string,
   await page.unroute("**/api/video-moments");
 }
 
-/** Vidéo sans l'IA (accord retiré dans Réglages) : le titre de l'étape suivante, aucun champ. */
+/** Vidéo sans l'IA (accord retiré dans Réglages) : titre « Votre vidéo », aucun champ. */
 async function videoSansIa(p: Parcours, page: Page, combo: Combo, video: string, envois: Envoi[], problemes: string[]): Promise<void> {
   const T = TEXTES[combo.locale];
   await page.goto(`${p.siteUrl}/settings`);
@@ -119,7 +121,7 @@ async function videoSansIa(p: Parcours, page: Page, combo: Combo, video: string,
   await attendreEnvoi(page, envois, "video_ai_consent", { decision: "withdrawn", context: "settings" });
   await page.goto(`${p.siteUrl}/`);
   await choisirFichier(page, T.ajouterVideo, video);
-  await page.getByRole("heading", { name: T.curseur, exact: true }).filter({ visible: true }).waitFor({ timeout: 30_000 });
+  await page.getByRole("heading", { name: T.votreVideo, exact: true }).filter({ visible: true }).waitFor({ timeout: 30_000 });
   await visible(page, T.desactivee).waitFor({ timeout: 15_000 });
   await page.getByRole("button", { name: T.choisirImage, exact: true }).filter({ visible: true }).waitFor();
   check(await aucunChamp(page), "vidéo sans l'IA : aucun champ de mots");

@@ -257,8 +257,8 @@ export async function refusEtRetrait(p: Parcours, page: Page, envois: Envoi[], v
   await capture("24-reglages-retrait");
   await page.goto(`${p.siteUrl}/`);
   await choisirFichier(page, FR.ajouterVideo, video);
-  // Vidéo sans l'IA : plus de question ni de champ (petit lot) ; le titre annonce l'étape suivante.
-  await page.getByRole("heading", { name: FR.curseur, exact: true }).filter({ visible: true }).waitFor({ timeout: 30_000 });
+  // Vidéo sans l'IA : plus de question ni de champ (petit lot) ; titre « Votre vidéo ».
+  await page.getByRole("heading", { name: FR.votreVideo, exact: true }).filter({ visible: true }).waitFor({ timeout: 30_000 });
   await visible(page, FR.desactivee).waitFor({ timeout: 15_000 });
   await page.getByRole("button", { name: FR.choisirImage, exact: true }).filter({ visible: true }).waitFor();
   check(await aucunChamp(page), "vidéo sans l'IA : aucun champ de mots (petit lot)");

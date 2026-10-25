@@ -196,6 +196,8 @@ export const fr = {
     wordsHelpAi: "Ces mots aident l'IA à retrouver la pièce dans la vidéo.",
     videoPreview: (duration: string) => `Aperçu de votre vidéo, ${duration}`,
     photoPreview: "Votre photo",
+    // Titre de la vidéo sans l'analyse automatique (texte du fondateur, 2026-10-25).
+    yourVideo: "Votre vidéo",
     waitingVideo: "Spotto repère la pièce…",
     usualVideo: "Cela prend en général 15 à 30 secondes.",
   },
@@ -289,7 +291,8 @@ export const fr = {
     otherProposal: "Autre proposition",
     otherProposals: "Autres propositions",
     showMore: (n: number) => `Voir plus (${n})`,
-    priceOnSite: "prix affiché sur le site",
+    // Texte du fondateur (2026-10-25) : ne promet pas un prix que le site n'affiche peut-être pas.
+    priceOnSite: "Prix à vérifier chez le marchand",
     viewAt: (merchant: string) => (merchant ? `Voir chez ${merchant}` : "Voir la pièce"),
     affiliateDisclosure: "Lien affilié",
     // Aligné sur les conditions d'utilisation (projet, bloc 5 du Lot Q) —

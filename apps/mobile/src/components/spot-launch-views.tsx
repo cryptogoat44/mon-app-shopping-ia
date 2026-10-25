@@ -168,9 +168,9 @@ export function AskView(p: AskProps) {
           {p.linkInQuery ? <LinkNotice style={styles.notice} onAddVideo={p.onAddVideo} busy={p.addingVideo} /> : null}
         </>
       ) : p.declined ? (
-        // Vidéo sans l'IA : l'étape suivante est le choix de l'image (le cadre de la photo a son propre titre).
+        // Vidéo sans l'IA (le cadre de la photo a son propre titre).
         <Text style={styles.title} accessibilityRole="header">
-          {t.video.title}
+          {t.launch.yourVideo}
         </Text>
       ) : null}
       {p.message ? <ErrorMessage style={styles.message}>{p.message}</ErrorMessage> : null}
