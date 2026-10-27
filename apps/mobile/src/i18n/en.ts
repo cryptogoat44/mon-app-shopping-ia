@@ -194,7 +194,7 @@ export const en: Catalog = {
     // Photo (small lot 2, founder's decision of 2026-10-27).
     photoLabel: "Which piece? (optional)",
     photoPlaceholder: "e.g. the black leather jacket",
-    photoWordsNote: "Your words are used to sort the suggestions. They are not sent with the image.",
+    photoWordsNote: "Your words are used to sort the suggestions. Only the image goes to the search.",
     frameHint: "Several pieces in the photo? Circle the one you're looking for.",
     videoPreview: (duration: string) => `Preview of your video, ${duration}`,
     photoPreview: "Your photo",

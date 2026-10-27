@@ -197,7 +197,7 @@ export const fr = {
     // Photo (petit lot 2, décision du fondateur du 2026-10-27).
     photoLabel: "Quelle pièce ? (facultatif)",
     photoPlaceholder: "ex. la veste en cuir noir",
-    photoWordsNote: "Vos mots servent à trier les propositions. Ils ne partent pas avec l'image.",
+    photoWordsNote: "Vos mots servent à trier les propositions. Seule l'image part vers la recherche.",
     frameHint: "Plusieurs pièces sur la photo ? Entourez celle que vous cherchez.",
     videoPreview: (duration: string) => `Aperçu de votre vidéo, ${duration}`,
     photoPreview: "Votre photo",

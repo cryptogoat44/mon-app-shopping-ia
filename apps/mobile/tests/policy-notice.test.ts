@@ -72,11 +72,9 @@ describe("information de mise à jour (sans nouvelle acceptation)", () => {
   });
 
   it("petit lot (mots retirés de la recherche par image) : simple information, ni nouvelle acceptation ni message", () => {
-    expect(LEGAL_DOCUMENT_VERSIONS.privacy_policy).toBe("projet-2026-10-25");
+    expect(ACCEPTED_CONSENT_VERSIONS.privacy_policy).toContain("projet-2026-10-25");
     const fr = JSON.stringify(privacyPolicy);
     const en = JSON.stringify(privacyPolicyEn);
-    expect(fr).toContain("Les mots que vous tapez ne partent plus avec l'image et ne sont plus enregistrés avec la recherche");
-    expect(en).toContain("The words you type are no longer sent with the image, nor saved with the search");
     expect(fr).toContain("Ces images et votre description ne sont jamais enregistrées par Spotto");
     expect(en).toContain("These frames and your description are never saved by Spotto");
     // Plus aucun texte envoyé à SerpApi ni à Google avec l'image.
@@ -85,5 +83,29 @@ describe("information de mise à jour (sans nouvelle acceptation)", () => {
     expect(ACCEPTED_CONSENT_VERSIONS.privacy_policy).toContain("projet-2026-10-06");
     expect(shouldShowNotice(accepted("projet-2026-10-06"), [], POLICY_UPDATE_NOTICE)).toBe(false);
     expect(shouldShowNotice(accepted("projet-2026-10-25"), [], POLICY_UPDATE_NOTICE)).toBe(false);
+  });
+
+  // Petit lot 2 (décision du fondateur du 2026-10-27) : les mots d'une photo trient les propositions.
+  it("petit lot 2 (mots qui trient) : simple information, ni nouvelle acceptation ni message", () => {
+    expect(LEGAL_DOCUMENT_VERSIONS.privacy_policy).toBe("projet-2026-10-27");
+    const fr = JSON.stringify(privacyPolicy);
+    const en = JSON.stringify(privacyPolicyEn);
+    expect(fr).toContain(
+      "Les mots que vous tapez ne sont envoyés ni à SerpApi ni à Google, et ne sont pas enregistrés avec la recherche : sous une photo, notre serveur s'en sert seulement pour trier les propositions."
+    );
+    expect(en).toContain(
+      "The words you type are sent neither to SerpApi nor to Google, and are not saved with the search: under a photo, our server only uses them to sort the suggestions."
+    );
+    // Les anciennes recherches et leur texte : la durée renvoie à « Combien de temps ».
+    expect(fr).toContain("Les recherches faites jusqu'au 27 octobre 2026 gardent le texte que vous aviez éventuellement ajouté, jusqu'à leur suppression (voir « Combien de temps »).");
+    expect(en).toContain("Searches made up to 27 October 2026 keep any text you had added, until they are deleted (see “How long”).");
+    expect(fr).not.toContain("ne partent plus avec l'image");
+    expect(en).not.toContain("no longer sent with the image");
+    // La vidéo avec l'IA : la description part vers Anthropic, jamais enregistrée (inchangé).
+    expect(fr).toContain("les envoie avec votre description à notre serveur, qui les transmet à Anthropic");
+    expect(en).toContain("These frames and your description are never saved by Spotto");
+    expect(ACCEPTED_CONSENT_VERSIONS.privacy_policy).toContain("projet-2026-10-27");
+    expect(shouldShowNotice(accepted("projet-2026-10-25"), [], POLICY_UPDATE_NOTICE)).toBe(false);
+    expect(shouldShowNotice(accepted("projet-2026-10-27"), [], POLICY_UPDATE_NOTICE)).toBe(false);
   });
 });

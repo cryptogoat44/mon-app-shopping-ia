@@ -64,7 +64,7 @@ const FR = {
   // Petit lot 2 (2026-10-27) : les mots facultatifs d'une photo trient les propositions.
   champPhoto: "Quelle pièce ? (facultatif)",
   exemplePhoto: "ex. la veste en cuir noir",
-  motsTri: "Vos mots servent à trier les propositions. Ils ne partent pas avec l'image.",
+  motsTri: "Vos mots servent à trier les propositions. Seule l'image part vers la recherche.",
   conseilCadre: "Plusieurs pièces sur la photo ? Entourez celle que vous cherchez.",
   triees: "Triées selon vos mots",
   motsPhoto: "veste en cuir noir",
@@ -127,7 +127,7 @@ export const TEXTES: Record<Locale, Textes> = {
     fermer: "Close",
     champPhoto: "Which piece? (optional)",
     exemplePhoto: "e.g. the black leather jacket",
-    motsTri: "Your words are used to sort the suggestions. They are not sent with the image.",
+    motsTri: "Your words are used to sort the suggestions. Only the image goes to the search.",
     conseilCadre: "Several pieces in the photo? Circle the one you're looking for.",
     triees: "Sorted by your words",
     motsPhoto: "black leather jacket",
