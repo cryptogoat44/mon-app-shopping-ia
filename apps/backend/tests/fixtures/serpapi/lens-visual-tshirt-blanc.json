@@ -1,0 +1,534 @@
+{
+  "search_metadata": {
+    "status": "Success"
+  },
+  "visual_matches": [
+    {
+      "position": 1,
+      "title": "Produit 1",
+      "link": "https://www.farfetch.com/produit-1",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-1.jpg",
+      "image": "https://example.invalid/image-1.jpg"
+    },
+    {
+      "position": 2,
+      "title": "Produit 2",
+      "link": "https://www.zara.com/produit-2",
+      "source": "Marchand 2",
+      "thumbnail": "https://example.invalid/vignette-2.jpg",
+      "image": "https://example.invalid/image-2.jpg",
+      "price": {
+        "value": "269 $MX*",
+        "extracted_value": 269,
+        "currency": "$MX"
+      },
+      "in_stock": true
+    },
+    {
+      "position": 3,
+      "title": "Produit 3",
+      "link": "https://www2.hm.com/produit-3",
+      "source": "Marchand 3",
+      "thumbnail": "https://example.invalid/vignette-3.jpg",
+      "image": "https://example.invalid/image-3.jpg",
+      "price": {
+        "value": "349 $MX*",
+        "extracted_value": 349,
+        "currency": "$MX"
+      },
+      "in_stock": true
+    },
+    {
+      "position": 4,
+      "title": "Produit 4",
+      "link": "https://www.thenorthface.com/produit-4",
+      "source": "Marchand 4",
+      "thumbnail": "https://example.invalid/vignette-4.jpg",
+      "image": "https://example.invalid/image-4.jpg"
+    },
+    {
+      "position": 5,
+      "title": "Produit 5",
+      "link": "https://www.shein.com.mx/produit-5",
+      "source": "Marchand 5",
+      "thumbnail": "https://example.invalid/vignette-5.jpg",
+      "image": "https://example.invalid/image-5.jpg"
+    },
+    {
+      "position": 6,
+      "title": "Produit 6",
+      "link": "https://www.ssense.com/produit-6",
+      "source": "Marchand 6",
+      "thumbnail": "https://example.invalid/vignette-6.jpg",
+      "image": "https://example.invalid/image-6.jpg"
+    },
+    {
+      "position": 7,
+      "title": "Produit 7",
+      "link": "https://pe.shein.com/produit-7",
+      "source": "Marchand 7",
+      "thumbnail": "https://example.invalid/vignette-7.jpg",
+      "image": "https://example.invalid/image-7.jpg"
+    },
+    {
+      "position": 8,
+      "title": "Produit 8",
+      "link": "https://es.site-1.com/produit-8",
+      "source": "Marchand 8",
+      "thumbnail": "https://example.invalid/vignette-8.jpg",
+      "image": "https://example.invalid/image-8.jpg"
+    },
+    {
+      "position": 9,
+      "title": "Produit 9",
+      "link": "https://www.site-2.eu/produit-9",
+      "source": "Marchand 9",
+      "thumbnail": "https://example.invalid/vignette-9.jpg",
+      "image": "https://example.invalid/image-9.jpg",
+      "price": {
+        "value": "20 $US*",
+        "extracted_value": 20,
+        "currency": "$US"
+      },
+      "in_stock": true
+    },
+    {
+      "position": 10,
+      "title": "Produit 10",
+      "link": "https://www.versace.com/produit-10",
+      "source": "Marchand 10",
+      "thumbnail": "https://example.invalid/vignette-10.jpg",
+      "image": "https://example.invalid/image-10.jpg"
+    },
+    {
+      "position": 11,
+      "title": "Produit 11 - AMAZON.COM.MX",
+      "link": "https://www.amazon.com.mx/produit-11",
+      "source": "Marchand 11",
+      "thumbnail": "https://example.invalid/vignette-11.jpg",
+      "image": "https://example.invalid/image-11.jpg",
+      "price": {
+        "value": "646 $MX*",
+        "extracted_value": 646,
+        "currency": "$MX"
+      },
+      "in_stock": true
+    },
+    {
+      "position": 12,
+      "title": "Produit 12",
+      "link": "https://www.site-3.com/produit-12",
+      "source": "Marchand 12",
+      "thumbnail": "https://example.invalid/vignette-12.jpg",
+      "image": "https://example.invalid/image-12.jpg",
+      "price": {
+        "value": "120 €*",
+        "extracted_value": 120,
+        "currency": "€"
+      }
+    },
+    {
+      "position": 13,
+      "title": "Produit 13",
+      "link": "https://stockx.com/produit-13",
+      "source": "Marchand 13",
+      "thumbnail": "https://example.invalid/vignette-13.jpg",
+      "image": "https://example.invalid/image-13.jpg"
+    },
+    {
+      "position": 14,
+      "title": "Produit 14",
+      "link": "https://site-4.com/produit-14",
+      "source": "Marchand 14",
+      "thumbnail": "https://example.invalid/vignette-14.jpg",
+      "image": "https://example.invalid/image-14.jpg"
+    },
+    {
+      "position": 15,
+      "title": "Produit 15",
+      "link": "https://latam.site-5.com/produit-15",
+      "source": "Marchand 15",
+      "thumbnail": "https://example.invalid/vignette-15.jpg",
+      "image": "https://example.invalid/image-15.jpg"
+    },
+    {
+      "position": 16,
+      "title": "Produit 16",
+      "link": "https://www.site-6.es/produit-16",
+      "source": "Marchand 16",
+      "thumbnail": "https://example.invalid/vignette-16.jpg",
+      "image": "https://example.invalid/image-16.jpg"
+    },
+    {
+      "position": 17,
+      "title": "Produit 17",
+      "link": "https://www.celio.com/produit-17",
+      "source": "Marchand 17",
+      "thumbnail": "https://example.invalid/vignette-17.jpg",
+      "image": "https://example.invalid/image-17.jpg"
+    },
+    {
+      "position": 18,
+      "title": "Produit 18",
+      "link": "https://www.farfetch.com/produit-18",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-18.jpg",
+      "image": "https://example.invalid/image-18.jpg"
+    },
+    {
+      "position": 19,
+      "title": "Produit 19",
+      "link": "https://www.etsy.com/produit-19",
+      "source": "Marchand 18",
+      "thumbnail": "https://example.invalid/vignette-19.jpg",
+      "image": "https://example.invalid/image-19.jpg"
+    },
+    {
+      "position": 20,
+      "title": "Produit 20 - SITE-7.ES",
+      "link": "https://site-7.es/produit-20",
+      "source": "Marchand 19",
+      "thumbnail": "https://example.invalid/vignette-20.jpg",
+      "image": "https://example.invalid/image-20.jpg"
+    },
+    {
+      "position": 21,
+      "title": "Produit 21",
+      "link": "https://www.farfetch.com/produit-21",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-21.jpg",
+      "image": "https://example.invalid/image-21.jpg"
+    },
+    {
+      "position": 22,
+      "title": "Produit 22",
+      "link": "https://www.temu.com/produit-22",
+      "source": "Marchand 20",
+      "thumbnail": "https://example.invalid/vignette-22.jpg",
+      "image": "https://example.invalid/image-22.jpg"
+    },
+    {
+      "position": 23,
+      "title": "Produit 23",
+      "link": "https://www.etsy.com/produit-23",
+      "source": "Marchand 18",
+      "thumbnail": "https://example.invalid/vignette-23.jpg",
+      "image": "https://example.invalid/image-23.jpg"
+    },
+    {
+      "position": 24,
+      "title": "Produit 24 - AMAZON.COM.MX",
+      "link": "https://www.amazon.com.mx/produit-24",
+      "source": "Marchand 11",
+      "thumbnail": "https://example.invalid/vignette-24.jpg",
+      "image": "https://example.invalid/image-24.jpg"
+    },
+    {
+      "position": 25,
+      "title": "Produit 25",
+      "link": "https://www.etsy.com/produit-25",
+      "source": "Marchand 18",
+      "thumbnail": "https://example.invalid/vignette-25.jpg",
+      "image": "https://example.invalid/image-25.jpg"
+    },
+    {
+      "position": 26,
+      "title": "Produit 26",
+      "link": "https://es.aliexpress.com/produit-26",
+      "source": "Marchand 21",
+      "thumbnail": "https://example.invalid/vignette-26.jpg",
+      "image": "https://example.invalid/image-26.jpg"
+    },
+    {
+      "position": 27,
+      "title": "Produit 27",
+      "link": "https://www.etsy.com/produit-27?click_key=id-1&click_sum=id-2&ls=r&ref=id-3&external=1&content_source=id-4",
+      "source": "Marchand 18",
+      "thumbnail": "https://example.invalid/vignette-27.jpg",
+      "image": "https://example.invalid/image-27.jpg"
+    },
+    {
+      "position": 28,
+      "title": "Produit 28",
+      "link": "https://www.etsy.com/produit-28",
+      "source": "Marchand 18",
+      "thumbnail": "https://example.invalid/vignette-28.jpg",
+      "image": "https://example.invalid/image-28.jpg"
+    },
+    {
+      "position": 29,
+      "title": "Produit 29",
+      "link": "https://www.etsy.com/produit-29",
+      "source": "Marchand 18",
+      "thumbnail": "https://example.invalid/vignette-29.jpg",
+      "image": "https://example.invalid/image-29.jpg"
+    },
+    {
+      "position": 30,
+      "title": "Produit 30",
+      "link": "https://www.napapijri.com/produit-30",
+      "source": "Marchand 22",
+      "thumbnail": "https://example.invalid/vignette-30.jpg",
+      "image": "https://example.invalid/image-30.jpg"
+    },
+    {
+      "position": 31,
+      "title": "Produit 31",
+      "link": "https://site-8.shop/produit-31",
+      "source": "Marchand 23",
+      "thumbnail": "https://example.invalid/vignette-31.jpg",
+      "image": "https://example.invalid/image-31.jpg"
+    },
+    {
+      "position": 32,
+      "title": "Produit 32",
+      "link": "https://site-9.com/produit-32?page=81",
+      "source": "Marchand 24",
+      "thumbnail": "https://example.invalid/vignette-32.jpg",
+      "image": "https://example.invalid/image-32.jpg"
+    },
+    {
+      "position": 33,
+      "title": "Produit 33",
+      "link": "https://www.etsy.com/produit-33",
+      "source": "Marchand 18",
+      "thumbnail": "https://example.invalid/vignette-33.jpg",
+      "image": "https://example.invalid/image-33.jpg"
+    },
+    {
+      "position": 34,
+      "title": "Produit 34",
+      "link": "https://www.site-10.com/produit-34?variant=43643024900184",
+      "source": "Marchand 25",
+      "thumbnail": "https://example.invalid/vignette-34.jpg",
+      "image": "https://example.invalid/image-34.jpg"
+    },
+    {
+      "position": 35,
+      "title": "Produit 35",
+      "link": "https://www.zalando.lu/produit-35?size=S",
+      "source": "Marchand 26",
+      "thumbnail": "https://example.invalid/vignette-35.jpg",
+      "image": "https://example.invalid/image-35.jpg"
+    },
+    {
+      "position": 36,
+      "title": "Produit 36",
+      "link": "https://www.newbalance.com/produit-36",
+      "source": "Marchand 27",
+      "thumbnail": "https://example.invalid/vignette-36.jpg",
+      "image": "https://example.invalid/image-36.jpg"
+    },
+    {
+      "position": 37,
+      "title": "Produit 37",
+      "link": "https://www.uniqlo.com/produit-37",
+      "source": "Marchand 28",
+      "thumbnail": "https://example.invalid/vignette-37.jpg",
+      "image": "https://example.invalid/image-37.jpg"
+    },
+    {
+      "position": 38,
+      "title": "Produit 38",
+      "link": "https://www.site-11.com/produit-38",
+      "source": "Marchand 29",
+      "thumbnail": "https://example.invalid/vignette-38.jpg",
+      "image": "https://example.invalid/image-38.jpg"
+    },
+    {
+      "position": 39,
+      "title": "Produit 39",
+      "link": "https://www.lcwaikiki.it/produit-39",
+      "source": "Marchand 30",
+      "thumbnail": "https://example.invalid/vignette-39.jpg",
+      "image": "https://example.invalid/image-39.jpg"
+    },
+    {
+      "position": 40,
+      "title": "Produit 40",
+      "link": "https://www.farfetch.com/produit-40",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-40.jpg",
+      "image": "https://example.invalid/image-40.jpg"
+    },
+    {
+      "position": 41,
+      "title": "Produit 41",
+      "link": "https://www.ferragamo.com/produit-41",
+      "source": "Marchand 31",
+      "thumbnail": "https://example.invalid/vignette-41.jpg",
+      "image": "https://example.invalid/image-41.jpg"
+    },
+    {
+      "position": 42,
+      "title": "Produit 42",
+      "link": "https://www.levi.com/produit-42",
+      "source": "Marchand 32",
+      "thumbnail": "https://example.invalid/vignette-42.jpg",
+      "image": "https://example.invalid/image-42.jpg"
+    },
+    {
+      "position": 43,
+      "title": "Produit 43",
+      "link": "https://www.farfetch.com/produit-43",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-43.jpg",
+      "image": "https://example.invalid/image-43.jpg",
+      "price": {
+        "value": "2 957 $MX*",
+        "extracted_value": 2957,
+        "currency": "$MX"
+      },
+      "in_stock": true
+    },
+    {
+      "position": 44,
+      "title": "Produit 44",
+      "link": "https://www.mammut.com/produit-44",
+      "source": "Marchand 33",
+      "thumbnail": "https://example.invalid/vignette-44.jpg",
+      "image": "https://example.invalid/image-44.jpg"
+    },
+    {
+      "position": 45,
+      "title": "Produit 45",
+      "link": "https://es.vestiairecollective.com/annonce/0000000045",
+      "source": "Marchand 34",
+      "thumbnail": "https://example.invalid/vignette-45.jpg",
+      "image": "https://example.invalid/image-45.jpg"
+    },
+    {
+      "position": 46,
+      "title": "Produit 46",
+      "link": "https://www.farfetch.com/produit-45",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-46.jpg",
+      "image": "https://example.invalid/image-46.jpg"
+    },
+    {
+      "position": 47,
+      "title": "Produit 47",
+      "link": "https://www.farfetch.com/produit-46",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-47.jpg",
+      "image": "https://example.invalid/image-47.jpg"
+    },
+    {
+      "position": 48,
+      "title": "Produit 48",
+      "link": "https://www.farfetch.com/produit-47",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-48.jpg",
+      "image": "https://example.invalid/image-48.jpg",
+      "price": {
+        "value": "2 911 $MX*",
+        "extracted_value": 2911,
+        "currency": "$MX"
+      },
+      "in_stock": true
+    },
+    {
+      "position": 49,
+      "title": "Produit 49",
+      "link": "https://www.farfetch.com/produit-48",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-49.jpg",
+      "image": "https://example.invalid/image-49.jpg"
+    },
+    {
+      "position": 50,
+      "title": "Produit 50",
+      "link": "https://www.farfetch.com/produit-49",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-50.jpg",
+      "image": "https://example.invalid/image-50.jpg"
+    },
+    {
+      "position": 51,
+      "title": "Produit 51",
+      "link": "https://www.farfetch.com/produit-50",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-51.jpg",
+      "image": "https://example.invalid/image-51.jpg"
+    },
+    {
+      "position": 52,
+      "title": "Produit 52",
+      "link": "https://www.farfetch.com/produit-51",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-52.jpg",
+      "image": "https://example.invalid/image-52.jpg"
+    },
+    {
+      "position": 53,
+      "title": "Produit 53",
+      "link": "https://www.farfetch.com/produit-52",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-53.jpg",
+      "image": "https://example.invalid/image-53.jpg"
+    },
+    {
+      "position": 54,
+      "title": "Produit 54",
+      "link": "https://www.farfetch.com/produit-53",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-54.jpg",
+      "image": "https://example.invalid/image-54.jpg"
+    },
+    {
+      "position": 55,
+      "title": "Produit 55",
+      "link": "https://www.farfetch.com/produit-54",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-55.jpg",
+      "image": "https://example.invalid/image-55.jpg"
+    },
+    {
+      "position": 56,
+      "title": "Produit 56",
+      "link": "https://www.farfetch.com/produit-55",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-56.jpg",
+      "image": "https://example.invalid/image-56.jpg"
+    },
+    {
+      "position": 57,
+      "title": "Produit 57",
+      "link": "https://www.farfetch.com/produit-56",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-57.jpg",
+      "image": "https://example.invalid/image-57.jpg",
+      "price": {
+        "value": "5 016 $MX*",
+        "extracted_value": 5016,
+        "currency": "$MX"
+      },
+      "in_stock": true
+    },
+    {
+      "position": 58,
+      "title": "Produit 58",
+      "link": "https://www.farfetch.com/produit-57",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-58.jpg",
+      "image": "https://example.invalid/image-58.jpg"
+    },
+    {
+      "position": 59,
+      "title": "Produit 59",
+      "link": "https://www.farfetch.com/produit-58",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-59.jpg",
+      "image": "https://example.invalid/image-59.jpg"
+    },
+    {
+      "position": 60,
+      "title": "Produit 60",
+      "link": "https://www.farfetch.com/produit-59",
+      "source": "Marchand 1",
+      "thumbnail": "https://example.invalid/vignette-60.jpg",
+      "image": "https://example.invalid/image-60.jpg"
+    }
+  ]
+}

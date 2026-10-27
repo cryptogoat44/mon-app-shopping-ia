@@ -32,9 +32,17 @@ const FR = {
   ciblage: "Entourez la pièce",
   zone: "Zone analysée",
   reinitialiser: "Réinitialiser le cadre",
-  rienTrouve: "Google Lens n'a rien trouvé pour le moment.",
+  rienTrouve: "Notre recherche visuelle n'a rien trouvé pour le moment.",
   rienTrouveConseil: "Essayez avec un autre cadre ou réessayez dans quelques minutes.",
+  // Retiré au petit lot (2026-10-25) : les scénarios vérifient qu'il n'apparaît plus.
   sansTexte: "Réessayer sans le texte",
+  motsIA: "Ces mots aident l'IA à retrouver la pièce dans la vidéo.",
+  votreVideo: "Votre vidéo",
+  prixAVerifier: "Prix à vérifier chez le marchand",
+  // Ancien libellé, remplacé le 2026-10-25 : les scénarios vérifient qu'il n'apparaît plus.
+  ancienPrixSurSite: "prix affiché sur le site",
+  aucunPrix: "Aucune de ces propositions n'affiche de prix.",
+  aucunPrixTexte: "Ce sont des pièces qui ressemblent à la vôtre, trouvées par notre recherche visuelle. Elles ne sont pas forcément en vente : ouvrez-les pour vérifier, ou essayez un autre cadre.",
   nonReperee: "Pièce non repérée",
   modifier: "Modifier la description",
   interrompue: "Analyse automatique interrompue",
@@ -82,9 +90,15 @@ export const TEXTES: Record<Locale, Textes> = {
     ciblage: "Frame the piece",
     zone: "Area to analyze",
     reinitialiser: "Reset the frame",
-    rienTrouve: "Google Lens didn't find anything for now.",
+    rienTrouve: "Our visual search didn't find anything for now.",
     rienTrouveConseil: "Try another frame, or try again in a few minutes.",
     sansTexte: "Try again without the text",
+    motsIA: "These words help the AI find the piece in the video.",
+    votreVideo: "Your video",
+    prixAVerifier: "Check the price with the retailer",
+    ancienPrixSurSite: "price shown on the site",
+    aucunPrix: "None of these suggestions show a price.",
+    aucunPrixTexte: "These are pieces that look like yours, found by our visual search. They are not necessarily for sale: open them to check, or try another frame.",
     nonReperee: "Piece not spotted",
     modifier: "Edit the description",
     interrompue: "Automatic analysis interrupted",
@@ -149,8 +163,10 @@ async function imagePiece(fond: string): Promise<string> {
 
 /** Identification fabriquée dans le navigateur : la requête ne part jamais
  * vers le serveur, donc aucun crédit SerpApi. `videsAuDebut` : nombre de
- * premières recherches « rien trouvé » (Google Lens sans proposition). */
-export async function simulerResultats(page: Page, query: string, options: { videsAuDebut?: number } = {}): Promise<void> {
+ * premières recherches « rien trouvé » (Google Lens sans proposition) ;
+ * `sansPrix` : propositions sans aucun prix (petit lot). `query` : mots dont on
+ * vérifie qu'ils ne partent PAS avec l'image (petit lot, 2026-10-25). */
+export async function simulerResultats(page: Page, query: string, options: { videsAuDebut?: number; sansPrix?: boolean } = {}): Promise<void> {
   const images = await Promise.all(PIECES.map((piece) => imagePiece(piece.fond)));
   let vides = options.videsAuDebut ?? 0;
   await page.route("**/api/searches/*/run", async (route) => {
@@ -166,9 +182,9 @@ export async function simulerResultats(page: Page, query: string, options: { vid
       brand: null,
       imageUrl: images[index],
       imageHdUrl: null,
-      priceMin: piece.prix,
-      priceMax: piece.prix,
-      currency: "EUR",
+      priceMin: options.sansPrix ? null : piece.prix,
+      priceMax: options.sansPrix ? null : piece.prix,
+      currency: options.sansPrix ? null : "EUR",
       merchantName: piece.marchand,
       merchantUrl: "https://example.com/piece",
       affiliateUrl: "https://example.com/piece",
@@ -217,16 +233,17 @@ export async function fermerFeuille(page: Page, T: Textes): Promise<void> {
   check((await lien.count()) === 1, "feuille des corrections refermée");
 }
 
-/** Depuis Spotter : photo choisie → (mots tapés) → « Lancer » (cadre « Entourez la pièce » laissé tel quel). */
-export async function lancerPhoto(p: Parcours, page: Page, T: Textes, fichier: string, mots: string | null): Promise<void> {
+/** Depuis Spotter : photo choisie → « Lancer » (cadre « Entourez la pièce » laissé tel quel ; aucun champ de mots depuis le petit lot). */
+export async function lancerPhoto(p: Parcours, page: Page, T: Textes, fichier: string): Promise<void> {
   await page.goto(`${p.siteUrl}/`);
   await choisirFichier(page, T.ajouterPhoto, fichier);
   await page.getByRole("heading", { name: T.ciblage, exact: true }).filter({ visible: true }).waitFor({ timeout: 30_000 });
-  if (mots) {
-    await page.getByPlaceholder(T.exemple).filter({ visible: true }).click();
-    await page.keyboard.type(mots);
-  }
   await page.getByRole("button", { name: T.lancer, exact: true }).filter({ visible: true }).click();
+}
+
+/** Aucun champ de saisie visible (petit lot : photo, « Recadrer », vidéo sans l'IA). */
+export async function aucunChamp(page: Page): Promise<boolean> {
+  return (await page.getByRole("textbox").filter({ visible: true }).count()) === 0;
 }
 
 /** Vidéo choisie → mots tapés (le champ est déjà prêt) → « Lancer ». */

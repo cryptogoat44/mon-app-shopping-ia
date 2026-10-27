@@ -10,7 +10,7 @@ import {
 import { detectPlatform, fetchOfficialPreview } from "../services/oembed.js";
 import { LensCallError, searchProductsByImageUrl, type VisualMatch } from "../services/visualSearch.js";
 import { parseMatchRows, parseSearchRow, parseSearchRows, toProductSearch, type MatchRow, type SearchRow } from "../lib/searchRows.js";
-import { cropAreaPct, failedColumns, measuredColumns, secondsSince, type MeasureColumns } from "../lib/searchMeasure.js";
+import { cropAreaPct, failedColumns, MEASURE_LOG_MESSAGE, measuredColumns, measureLogLine, secondsSince, type MeasureColumns } from "../lib/searchMeasure.js";
 import { fetchFeedbackReasons } from "../lib/matchFeedback.js";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { purgeExpiredSearches } from "../lib/searchRetention.js";
@@ -41,6 +41,9 @@ const cropSchema = z
 
 const runSearchSchema = z.object({
   crop: cropSchema.optional(),
+  // Encore accepté et validé pour les anciennes versions de l'app, mais jamais
+  // envoyé à Google Lens ni enregistré (petit lot, décision du fondateur du
+  // 2026-10-25 : les mots avec l'image faisaient baisser les résultats).
   query: z.string().max(SEARCH_QUERY_MAX_LENGTH).optional(),
 });
 
@@ -255,28 +258,33 @@ interface SearchOutcome {
   errorMessage: string | null;
   /** Mesure de la recherche (migration 0025) : des nombres, jamais de contenu. */
   measure: MeasureColumns;
+  /** Rang d'origine chez Google des propositions ajoutées par la règle des prix (journal de mesure). */
+  addedRanks: number[];
 }
 
 /** L'appel SerpApi (1 crédit) : des propositions, rien, ou une panne — chacun annoncé comme tel, et mesuré. */
-async function runVisualSearch(fastify: FastifyInstance, request: FastifyRequest, imageUrl: string, query: string | null): Promise<SearchOutcome> {
+async function runVisualSearch(fastify: FastifyInstance, request: FastifyRequest, imageUrl: string): Promise<SearchOutcome> {
   const start = Date.now();
   try {
-    const { matches, measure } = await searchProductsByImageUrl(fastify, imageUrl, { query, locale: searchLocaleFor(request) });
+    const { matches, measure, addedRanks } = await searchProductsByImageUrl(fastify, imageUrl, { locale: searchLocaleFor(request) });
     const columns = measuredColumns(measure, secondsSince(start));
-    if (matches.length === 0) return { matches, status: "failed", errorMessage: NO_MATCH_MESSAGE, measure: columns };
-    return { matches, status: "completed", errorMessage: null, measure: columns };
+    if (matches.length === 0) return { matches, status: "failed", errorMessage: NO_MATCH_MESSAGE, measure: columns, addedRanks };
+    return { matches, status: "completed", errorMessage: null, measure: columns, addedRanks };
   } catch (error) {
     request.log.error({ error }, "Échec de l'appel à l'API de recherche visuelle (lancement)");
     const kind = error instanceof LensCallError ? error.kind : "serpapi_error";
-    return { matches: [], status: "failed", errorMessage: TECHNICAL_FAILURE_MESSAGE, measure: failedColumns(kind, secondsSince(start)) };
+    return { matches: [], status: "failed", errorMessage: TECHNICAL_FAILURE_MESSAGE, measure: failedColumns(kind, secondsSince(start)), addedRanks: [] };
   }
 }
 
 /** Enregistre l'issue de l'appel et sa mesure, et renvoie la recherche
- * complète ; null : résultat illisible ou non enregistré. */
+ * complète ; null : résultat illisible ou non enregistré. La ligne « Mesure
+ * recherche » est écrite d'abord : elle reste, même si l'enregistrement échoue. */
 async function saveOutcome(fastify: FastifyInstance, request: FastifyRequest, id: string, outcome: SearchOutcome, cropPct: number): Promise<ProductSearch | null> {
   const saved = await saveMatches(fastify, id, outcome.matches);
   const measure = saved ? outcome.measure : failedColumns("save_failed", outcome.measure.call_seconds);
+  // Journal racine (sans le contexte de la requête) : ni identifiant de requête, ni chemin, ni compte.
+  fastify.log.info(measureLogLine(measure, outcome.addedRanks), MEASURE_LOG_MESSAGE);
   const { data: updated, error: updateError } = await fastify.supabaseAdmin
     .from("product_searches")
     .update({
@@ -449,9 +457,10 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
   // formulaire multipart avec, au choix, une image importée (champ
   // "file" — photo ou capture au bon moment de la vidéo) ou, à défaut, la
   // vignette officielle préparée au temps 1 ; plus la zone choisie ("crop",
-  // JSON en proportions 0–1) et le texte facultatif ("query"). Le serveur
-  // recadre lui-même : identique sur le web et sur iPhone, et sans les
-  // restrictions du navigateur sur les images d'un autre site.
+  // JSON en proportions 0–1). Un texte ("query") envoyé par une ancienne
+  // version de l'app est ignoré. Le serveur recadre lui-même : identique sur
+  // le web et sur iPhone, et sans les restrictions du navigateur sur les
+  // images d'un autre site.
   fastify.post(
     "/api/searches/:id/run",
     {
@@ -469,7 +478,6 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       }
       const form = await readRunForm(request, reply);
       if (!form) return;
-      const query = form.input.query?.trim() || null;
 
       const { data: search } = await fastify.supabaseAdmin
         .from("product_searches")
@@ -502,7 +510,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       // plus de ligne "pending" et reçoit 409 (audit Lot Q, ROB-03).
       const { data: locked } = await fastify.supabaseAdmin
         .from("product_searches")
-        .update({ status: "processing", query })
+        .update({ status: "processing" })
         .eq("id", id)
         .eq("status", "pending")
         .select("id");
@@ -537,7 +545,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       }
 
       fastify.countRateLimitHit(request, "searchCreate");
-      const outcome = await runVisualSearch(fastify, request, imageUrl, query);
+      const outcome = await runVisualSearch(fastify, request, imageUrl);
       await discardAnalysisImage(fastify, storagePath);
       const result = await saveOutcome(fastify, request, id, outcome, cropAreaPct(form.input.crop));
       // Résultat illisible ou non enregistré : une panne annoncée comme telle, jamais « aucune pièce ».

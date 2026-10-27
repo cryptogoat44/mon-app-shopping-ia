@@ -38,13 +38,13 @@ export async function identifyDraft(draft: SpotDraft, signal: AbortSignal): Prom
   try {
     const searchId = await freshSearchId(draft);
     markSearchUsed();
-    const search = await runSearch(searchId, { crop: draft.crop, query: draft.query, imageUri: draft.localImageUri }, signal);
+    const search = await runSearch(searchId, { crop: draft.crop, imageUri: draft.localImageUri }, signal);
     if (signal.aborted) return { kind: "cancelled" };
     setLastSpotResult(toSpotResult(search));
     return { kind: "done", searchId: search.id };
   } catch (error) {
     if (signal.aborted) return { kind: "cancelled" };
-    setLastSpotResult({ searchId: null, status: "failed", pieces: [], similarPieces: [], ...failureOf(error), query: draft.query });
+    setLastSpotResult({ searchId: null, status: "failed", pieces: [], similarPieces: [], ...failureOf(error), query: null });
     return { kind: "done", searchId: null };
   }
 }

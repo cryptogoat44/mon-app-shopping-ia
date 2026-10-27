@@ -8,7 +8,7 @@ import type { SpotResult } from "@/api/types";
 import { ActionButtons, type Action } from "@/components/spot-launch-views";
 import { LinkNotice } from "@/components/link-notice";
 import type { Correction, CorrectionContext } from "@/lib/spot-corrections";
-import { getDraft, updateDraft } from "@/lib/spot-draft";
+import { getDraft } from "@/lib/spot-draft";
 import { getSpotVideo } from "@/lib/spot-video";
 import { useVideoImport } from "@/lib/use-video-import";
 import { lastTriedMoment, prepareMoment, remainingMoments } from "@/lib/video-auto";
@@ -27,7 +27,6 @@ export function useCorrections(result: SpotResult | null, onMessage: (message: s
     hasVideo: Boolean(video),
     remainingMoments: remaining.length,
     fromLink: Boolean(result?.sourceUrl ?? draft?.sourceUrl),
-    hadQuery: Boolean((result?.query ?? draft?.query ?? "").trim()),
   };
 
   // Chaque autre moment est un geste de la personne : une identification consentie.
@@ -46,11 +45,10 @@ export function useCorrections(result: SpotResult | null, onMessage: (message: s
     }
   }
 
-  /** Le curseur part du dernier moment essayé ; les mots suivent jusqu'au recadrage. */
+  /** Le curseur part du dernier moment essayé ; l'image choisie part seule, sans mots (petit lot). */
   function chooseMyself() {
     const start = lastTriedMoment(video);
-    const query = (draft?.query ?? result?.query ?? "").trim();
-    router.push({ pathname: "/spot/video", params: { ...(start === null ? {} : { start: String(start) }), ...(query ? { query } : {}) } });
+    router.push({ pathname: "/spot/video", params: start === null ? {} : { start: String(start) } });
   }
 
   const actions: Record<Correction, Action> = {
@@ -58,14 +56,6 @@ export function useCorrections(result: SpotResult | null, onMessage: (message: s
     try_another: { label: t.videoAuto.tryAnother(remaining.length), onPress: () => void tryAnother(), busy: preparing },
     choose_myself: { label: t.videoAuto.chooseMyself, onPress: chooseMyself },
     retry: { label: t.result.retry, onPress: () => router.replace({ pathname: "/spot/analysis", params: {} }) },
-    // Même image, même cadre, sans les mots : une nouvelle recherche (1 crédit), jamais lancée seule.
-    retry_without_text: {
-      label: t.result.retryWithoutText,
-      onPress: () => {
-        updateDraft({ query: "" });
-        router.replace({ pathname: "/spot/analysis", params: {} });
-      },
-    },
     add_video: { label: t.linkNotice.addVideo, onPress: () => void importVideo(), busy: importing },
   };
   return { context, actions, addVideo: () => void importVideo(), importing };

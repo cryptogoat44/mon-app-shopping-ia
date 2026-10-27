@@ -38,7 +38,7 @@ export interface FilterCounts {
 export interface LensMeasure extends FilterCounts {
   /** Propositions renvoyées par Google Lens, lisibles ou non. */
   received: number;
-  /** Gardées (30 au plus). */
+  /** Gardées (40 au plus : les 30 premières, plus au plus 10 avec un prix trouvées plus loin). */
   kept: number;
   keptWithPrice: number;
   /** Gardées avec un prix dans une autre devise que celle du pays ; null si
@@ -57,6 +57,14 @@ const LOCAL_CURRENCIES: Record<string, readonly string[]> = {
   ch: ["CHF"],
 };
 
+/** La devise est-elle celle du pays de la recherche ? null si la devise du pays
+ * n'est pas connue ici. Sert à la mesure et au classement (règle des prix). */
+export function isLocalCurrency(currency: string | null, country: string): boolean | null {
+  const local = LOCAL_CURRENCIES[country];
+  if (!local) return null;
+  return currency !== null && local.includes(currency);
+}
+
 function siteOf(link: string): string | null {
   try {
     return new URL(link).hostname.toLowerCase().replace(/^www\./, "");
@@ -71,14 +79,13 @@ export function measureLens(
   kept: VisualMatch[],
   country: string
 ): LensMeasure {
-  const local = LOCAL_CURRENCIES[country];
   const priced = kept.filter((match) => match.priceValue !== null);
   return {
     ...counts,
     received: response.received,
     kept: kept.length,
     keptWithPrice: priced.length,
-    keptOtherCurrency: local ? priced.filter((match) => match.currency !== null && !local.includes(match.currency)).length : null,
+    keptOtherCurrency: LOCAL_CURRENCIES[country] ? priced.filter((match) => match.currency !== null && isLocalCurrency(match.currency, country) === false).length : null,
     distinctSites: new Set(kept.map((match) => siteOf(match.merchantUrl)).filter((site) => site !== null)).size,
     sections: response.sections,
     googleState: response.googleState,

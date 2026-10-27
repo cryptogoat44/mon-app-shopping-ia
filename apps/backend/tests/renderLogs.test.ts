@@ -2,8 +2,51 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { RENDER_API, type FetchLike } from "../scripts/lib/render-api.js";
-import { chronologie, compterRequetes, decrireAnalyse, decrireCodes, extraireCompteursIA, extrairePlafond, lireJournaux, parametresJournaux, resumerPlafond } from "../scripts/lib/render-logs.js";
+import { chronologie, compterRequetes, decrireAnalyse, decrireCodes, decrireMesure, extraireCompteursIA, extraireMesure, extrairePlafond, lireJournaux, parametresJournaux, resumerMesures, resumerPlafond } from "../scripts/lib/render-logs.js";
 import { CAPACITY_LOG_MESSAGE, capacityLogFields } from "../src/lib/searchCapacity.js";
+import { failedColumns, MEASURE_LOG_MESSAGE, measuredColumns, measureLogLine, type MeasureColumns } from "../src/lib/searchMeasure.js";
+
+describe("mesure de chaque recherche (petit lot)", () => {
+  // La ligne telle que le serveur l'écrit (src/lib/searchMeasure.ts), plus ce que Fastify y ajoute.
+  const mesure = (colonnes: MeasureColumns, ajouts: number[]) => ligne({ ...measureLogLine(colonnes, ajouts), msg: MEASURE_LOG_MESSAGE, compte: COMPTE, adresse: IP, texte: TEXTE });
+  const lens = (received: number, kept: number, keptWithPrice: number) => ({ received, removedIncomplete: 0, removedSocial: 0, removedProfessional: 0, removedDuplicates: 0, kept, keptWithPrice, keptOtherCurrency: 0, distinctSites: kept, sections: [], googleState: null });
+  const AJOUTS = [32, 36, 37, 38, 46, 47, 51, 52, 53, 55];
+
+  it("lit la ligne écrite par le serveur : l'issue et des nombres, rien d'autre", () => {
+    const lue = extraireMesure(mesure(measuredColumns(lens(60, 40, 22), 4), AJOUTS).message);
+    expect(lue).toEqual({ msg: "Mesure recherche", outcome: "found", failureKind: null, received: 60, kept: 40, keptWithPrice: 22, keptOtherCurrency: 0, added: 10, addedRanks: AJOUTS, callSeconds: 4 });
+    for (const interdit of [IP, COMPTE, TEXTE]) expect(JSON.stringify(lue)).not.toContain(interdit);
+    expect(decrireMesure(lue!)).toBe("trouvée — 60 reçue(s), 40 gardée(s) dont 22 avec un prix (0 dans une autre devise) ; 10 ajoutée(s) par la règle des prix (rangs 32, 36, 37, 38, 46, 47, 51, 52, 53, 55), 4 s");
+    // Une panne n'a jamais d'ajouts, même si on lui en passe.
+    expect(extraireMesure(mesure(failedColumns("timeout", 15), AJOUTS).message)).toMatchObject({ outcome: "failure", failureKind: "timeout", added: 0, addedRanks: [] });
+    expect(extraireMesure(ligne({ msg: "Plafond SerpApi" }).message)).toBeNull();
+  });
+
+  it("bilan de la période et ordre des événements, sans identifiant, adresse ni texte", () => {
+    const entrees = [
+      mesure(measuredColumns(lens(60, 40, 22), 4), AJOUTS),
+      mesure(measuredColumns(lens(3, 0, 0), 2), []),
+      mesure(measuredColumns(lens(0, 0, 0), 2), []),
+      mesure(failedColumns("timeout", 15), []),
+      mesure(failedColumns("save_failed", 3), []),
+    ].map((entree, index) => ({ ...entree, timestamp: `2026-10-25T08:0${index}:00Z` }));
+    const lignes = entrees.flatMap((entree) => extraireMesure(entree.message) ?? []);
+    expect(resumerMesures(lignes)).toBe(
+      "5 recherche(s) : trouvées 1, rien d'achetable 1, vides 1, pannes 2 (délai dépassé 1, enregistrement 1) ; 40 propositions gardées, dont 22 avec un prix et 10 ajoutées par la règle des prix"
+    );
+    expect(resumerMesures([])).toBe("aucune ligne dans la période");
+    const evenements = chronologie(entrees);
+    expect(evenements.map((e) => e.issue)).toEqual([
+      "trouvée — 60 reçue(s), 40 gardée(s) dont 22 avec un prix (0 dans une autre devise) ; 10 ajoutée(s) par la règle des prix (rangs 32, 36, 37, 38, 46, 47, 51, 52, 53, 55), 4 s",
+      "rien d'achetable — 3 reçue(s), 0 gardée(s) dont 0 avec un prix (0 dans une autre devise), 2 s",
+      "vide — 0 reçue(s), 0 gardée(s) dont 0 avec un prix (0 dans une autre devise), 2 s",
+      "panne (délai dépassé), 15 s",
+      "panne (enregistrement), 3 s",
+    ]);
+    const tout = JSON.stringify(evenements);
+    for (const interdit of [IP, COMPTE, TEXTE]) expect(tout).not.toContain(interdit);
+  });
+});
 
 // Diagnostic du lot 4 ter (2026-10-07) : lecture SEULE des journaux de
 // spotto-api, des compteurs et jamais de contenu. Journaux SIMULÉS, qui

@@ -2,9 +2,11 @@
 // par le fondateur le 2026-10-07) : uniquement des COMPTEURS — le nombre de
 // requêtes par chemin et par code de réponse, et les compteurs que le serveur
 // écrit lui-même pour l'analyse automatique (images, moments, jetons, motif
-// d'échec) et pour le plafond des recherches SerpApi (lot 4 quater : réservé
+// d'échec), pour le plafond des recherches SerpApi (lot 4 quater : réservé
 // ou refusé, compteurs du jour, du mois de SerpApi et de la personne — un
-// nombre, jamais son identifiant). Render ne garde pas de journal des requêtes HTTP pour ce service :
+// nombre, jamais son identifiant) et pour la mesure de chaque recherche (petit
+// lot : issue, propositions, prix, rangs des ajouts de la règle des prix).
+// Render ne garde pas de journal des requêtes HTTP pour ce service :
 // on lit les lignes du serveur (« incoming request » / « request completed »),
 // dont on n'extrait QUE la méthode, le chemin (comparé à une liste fixe) et le
 // code de réponse. Aucun message brut, adresse IP, identifiant de compte ni
@@ -153,6 +155,8 @@ export function chronologie(entrees: readonly Entree[]): Evenement[] {
     if (compteurs) evenements.push({ heure: entree.timestamp, nom: "Analyse vidéo IA", issue: decrireAnalyse(compteurs) });
     const plafond = extrairePlafond(entree.message);
     if (plafond) evenements.push({ heure: entree.timestamp, nom: "Plafond SerpApi", issue: decrirePlafond(plafond) });
+    const mesure = extraireMesure(entree.message);
+    if (mesure) evenements.push({ heure: entree.timestamp, nom: "Mesure recherche", issue: decrireMesure(mesure) });
   }
   return evenements.sort((a, b) => Date.parse(a.heure) - Date.parse(b.heure));
 }
@@ -209,6 +213,52 @@ export function resumerPlafond(lignes: readonly LignePlafond[]): string {
   const refus = (limit: LignePlafond["limit"]) => lignes.filter((ligne) => ligne.outcome === "refused" && ligne.limit === limit).length;
   const total = refus("day") + refus("month") + refus("user");
   return `${reservees} recherche(s) réservée(s), ${total} refus (jour ${refus("day")}, mois ${refus("month")}, part personnelle ${refus("user")}) ; dernier état lu : ${etatPlafond(derniere)}`;
+}
+
+/** Seuls champs lus dans les lignes « Mesure recherche » du serveur
+ * (src/lib/searchMeasure.ts, petit lot) : l'issue et des nombres. */
+const MESURE = z.object({
+  msg: z.literal("Mesure recherche"),
+  outcome: z.enum(["found", "nothing_buyable", "empty_lens", "failure"]),
+  failureKind: z.enum(["timeout", "serpapi_error", "unreadable_response", "save_failed"]).nullable(),
+  received: z.number().nullable(),
+  kept: z.number().nullable(),
+  keptWithPrice: z.number().nullable(),
+  keptOtherCurrency: z.number().nullable(),
+  added: z.number(),
+  addedRanks: z.array(z.number()),
+  callSeconds: z.number(),
+});
+export type LigneMesure = z.infer<typeof MESURE>;
+
+/** Ligne « Mesure recherche » du serveur → ses seuls nombres (null si ce n'en est pas une). */
+export function extraireMesure(message: string): LigneMesure | null {
+  const lu = MESURE.safeParse(lireJson(message));
+  if (!lu.success) return null;
+  const { msg, outcome, failureKind, received, kept, keptWithPrice, keptOtherCurrency, added, addedRanks, callSeconds } = lu.data;
+  return { msg, outcome, failureKind, received, kept, keptWithPrice, keptOtherCurrency, added, addedRanks, callSeconds };
+}
+
+const ISSUES = { found: "trouvée", nothing_buyable: "rien d'achetable", empty_lens: "vide", failure: "panne" } as const;
+const PANNES = { timeout: "délai dépassé", serpapi_error: "erreur du fournisseur", unreadable_response: "réponse illisible", save_failed: "enregistrement" } as const;
+
+export function decrireMesure(ligne: LigneMesure): string {
+  if (ligne.outcome === "failure") return `panne (${ligne.failureKind ? PANNES[ligne.failureKind] : "?"}), ${ligne.callSeconds} s`;
+  const ajoutees = ligne.added > 0 ? ` ; ${ligne.added} ajoutée(s) par la règle des prix (rangs ${ligne.addedRanks.join(", ")})` : "";
+  return `${ISSUES[ligne.outcome]} — ${ligne.received ?? "?"} reçue(s), ${ligne.kept ?? "?"} gardée(s) dont ${ligne.keptWithPrice ?? "?"} avec un prix (${ligne.keptOtherCurrency ?? "?"} dans une autre devise)${ajoutees}, ${ligne.callSeconds} s`;
+}
+
+/** Bilan de la période : issues, pannes par type, prix, ajouts de la règle des prix. */
+export function resumerMesures(lignes: readonly LigneMesure[]): string {
+  if (lignes.length === 0) return "aucune ligne dans la période";
+  const issue = (code: LigneMesure["outcome"]) => lignes.filter((ligne) => ligne.outcome === code).length;
+  const pannes = Object.entries(PANNES)
+    .map(([code, nom]) => [nom, lignes.filter((ligne) => ligne.failureKind === code).length] as const)
+    .filter(([, nombre]) => nombre > 0)
+    .map(([nom, nombre]) => `${nom} ${nombre}`);
+  const abouties = lignes.filter((ligne) => ligne.outcome !== "failure");
+  const somme = (champ: "kept" | "keptWithPrice" | "added") => abouties.reduce((total, ligne) => total + (ligne[champ] ?? 0), 0);
+  return `${lignes.length} recherche(s) : trouvées ${issue("found")}, rien d'achetable ${issue("nothing_buyable")}, vides ${issue("empty_lens")}, pannes ${issue("failure")}${pannes.length > 0 ? ` (${pannes.join(", ")})` : ""} ; ${somme("kept")} propositions gardées, dont ${somme("keptWithPrice")} avec un prix et ${somme("added")} ajoutées par la règle des prix`;
 }
 
 export function decrireCodes(codes: Record<string, number>): string {

@@ -27,13 +27,12 @@ export interface SpotDraft {
   /** Taille de l'image affichée, connue une fois chargée. */
   imageSize: ImageSize | null;
   crop: CropRect | null;
-  query: string;
 }
 
 let current: SpotDraft | null = null;
 
-export function startDraft(draft: Omit<SpotDraft, "crop" | "query" | "imageSize"> & Partial<SpotDraft>): SpotDraft {
-  current = { crop: null, query: "", imageSize: null, ...draft };
+export function startDraft(draft: Omit<SpotDraft, "crop" | "imageSize"> & Partial<SpotDraft>): SpotDraft {
+  current = { crop: null, imageSize: null, ...draft };
   return current;
 }
 

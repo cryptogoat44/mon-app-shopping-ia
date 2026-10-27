@@ -192,8 +192,12 @@ export const fr = {
     chooseImage: "Choisir l'image",
     declinedNote: "Analyse automatique désactivée : vous choisirez l'image vous-même.",
     enableAi: "Activer l'analyse automatique",
+    // Texte du fondateur (2026-10-25) : les mots ne servent qu'à l'IA.
+    wordsHelpAi: "Ces mots aident l'IA à retrouver la pièce dans la vidéo.",
     videoPreview: (duration: string) => `Aperçu de votre vidéo, ${duration}`,
     photoPreview: "Votre photo",
+    // Titre de la vidéo sans l'analyse automatique (texte du fondateur, 2026-10-25).
+    yourVideo: "Votre vidéo",
     waitingVideo: "Spotto repère la pièce…",
     usualVideo: "Cela prend en général 15 à 30 secondes.",
   },
@@ -269,10 +273,6 @@ export const fr = {
   targeting: {
     title: "Entourez la pièce",
     caption: "Seule la zone choisie sera analysée. Faites glisser le cadre ou ses coins.",
-    queryLabel: "Que cherchez-vous ?",
-    queryOptional: "(facultatif)",
-    queryPlaceholder: "ex. veste en daim marron",
-    queryHint: "Quelques mots précis aident à écarter les pièces voisines.",
     reset: "Réinitialiser le cadre",
     launch: "Lancer l'identification",
   },
@@ -291,7 +291,8 @@ export const fr = {
     otherProposal: "Autre proposition",
     otherProposals: "Autres propositions",
     showMore: (n: number) => `Voir plus (${n})`,
-    priceOnSite: "prix affiché sur le site",
+    // Texte du fondateur (2026-10-25) : ne promet pas un prix que le site n'affiche peut-être pas.
+    priceOnSite: "Prix à vérifier chez le marchand",
     viewAt: (merchant: string) => (merchant ? `Voir chez ${merchant}` : "Voir la pièce"),
     affiliateDisclosure: "Lien affilié",
     // Aligné sur les conditions d'utilisation (projet, bloc 5 du Lot Q) —
@@ -320,9 +321,13 @@ export const fr = {
     backToSpotter: "Retour à Spotter",
     notRight: "Ce n'est pas la bonne pièce ?",
     correctionsLead: "Montrez la pièce autrement à Spotto :",
-    noMatchTitle: "Google Lens n'a rien trouvé pour le moment.",
+    // Sans nom de fournisseur (décision du fondateur, 2026-10-21).
+    noMatchTitle: "Notre recherche visuelle n'a rien trouvé pour le moment.",
     noMatchTip: "Essayez avec un autre cadre ou réessayez dans quelques minutes.",
-    retryWithoutText: "Réessayer sans le texte",
+    // Aucune proposition gardée n'a de prix (textes validés le 2026-10-21).
+    noPriceTitle: "Aucune de ces propositions n'affiche de prix.",
+    noPriceText:
+      "Ce sont des pièces qui ressemblent à la vôtre, trouvées par notre recherche visuelle. Elles ne sont pas forcément en vente : ouvrez-les pour vérifier, ou essayez un autre cadre.",
     technicalTitle: "La recherche n'a pas abouti",
     technicalTip: "Le service de reconnaissance n'a pas répondu. Vérifiez votre connexion, puis réessayez.",
     rateLimitedTitle: "Trop de recherches d'un coup",
@@ -527,15 +532,15 @@ export const fr = {
     viewPost: "Voir la publication",
     shareAgainHint: "Pour changer qui la voit, modifiez la visibilité depuis la publication.",
     remove: "Retirer du vault",
-    removeConfirm: "Retirer définitivement cet objet ?",
-    removeConfirmWithPost: "Cet objet apparaît dans une publication. Le retirer supprimera aussi cette publication.",
+    removeConfirm: "Retirer définitivement cette pièce ?",
+    removeConfirmWithPost: "Cette pièce apparaît dans une publication. La retirer supprimera aussi cette publication.",
     removeConfirmWithPosts: (count: number) =>
-      `Cet objet apparaît dans ${count} publications. Le retirer supprimera aussi ces publications.`,
+      `Cette pièce apparaît dans ${count} publications. La retirer supprimera aussi ces publications.`,
     removedToast: "Retiré du vault",
     removing: "Suppression…",
     confirm: "Confirmer",
     cancel: "Annuler",
-    loadError: "Impossible de charger cet objet.",
+    loadError: "Impossible de charger cette pièce.",
     updateError: "La mise à jour a échoué.",
     shareError: "Le partage a échoué.",
     removeError: "La suppression a échoué.",

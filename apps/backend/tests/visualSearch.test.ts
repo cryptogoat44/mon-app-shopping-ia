@@ -9,7 +9,7 @@ vi.mock("../src/lib/safeFetch.js", () => ({
 }));
 
 import { safeFetch } from "../src/lib/safeFetch.js";
-import { searchProductsByImageUrl } from "../src/services/visualSearch.js";
+import { callSerpApi, CURRENT_LENS_SETTINGS, searchProductsByImageUrl } from "../src/services/visualSearch.js";
 
 const safeFetchMock = vi.mocked(safeFetch);
 
@@ -119,18 +119,14 @@ describe("searchProductsByImageUrl", () => {
     expect(calledUrl.searchParams.get("hl")).toBe("en");
   });
 
-  it("transmet le texte « Que cherchez-vous ? » (q) seulement quand il est rempli", async () => {
+  it("n'envoie jamais de mots avec l'image (petit lot) ; seuls les outils de mesure le peuvent, par callSerpApi", async () => {
     safeFetchMock.mockImplementation(async () => jsonResponse({ visual_matches: [PRODUCT_MATCH] }));
-    const fastify = fakeFastify();
-
-    await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg", { query: "veste en daim marron" });
-    await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg", { query: "   " });
-    await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg");
+    await searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg");
+    await callSerpApi("https://example.com/photo.jpg", CURRENT_LENS_SETTINGS, "veste en daim marron");
 
     const urls = safeFetchMock.mock.calls.map((c) => new URL(c[0] as string));
-    expect(urls[0]!.searchParams.get("q")).toBe("veste en daim marron");
-    expect(urls[1]!.searchParams.has("q")).toBe(false);
-    expect(urls[2]!.searchParams.has("q")).toBe(false);
+    expect(urls[0]!.searchParams.has("q")).toBe(false);
+    expect(urls[1]!.searchParams.get("q")).toBe("veste en daim marron");
   });
 
   it("ne fait JAMAIS de second appel quand rien n'est trouvé (1 crédit par recherche)", async () => {
@@ -189,12 +185,43 @@ describe("searchProductsByImageUrl", () => {
     expect(matches.map((m) => m.rank)).toEqual([1]);
   });
 
-  it("garde jusqu'à 30 propositions", async () => {
-    const many = Array.from({ length: 60 }, (_, i) => ({ ...PRODUCT_MATCH, position: i + 1, link: `https://marchand.example/${i}` }));
-    safeFetchMock.mockResolvedValueOnce(jsonResponse({ visual_matches: many }));
+  it("garde les 30 premières, plus au plus 10 avec un prix venues de plus loin (40 au plus)", async () => {
+    const avecPrix = Array.from({ length: 60 }, (_, i) => ({ ...PRODUCT_MATCH, position: i + 1, link: `https://marchand.example/${i}` }));
+    const sansPrix = avecPrix.map(({ price: _, ...sans }) => sans);
+    safeFetchMock.mockResolvedValueOnce(jsonResponse({ visual_matches: avecPrix })).mockResolvedValueOnce(jsonResponse({ visual_matches: sansPrix }));
 
     const fastify = fakeFastify();
+    expect((await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg")).matches).toHaveLength(40);
     expect((await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg")).matches).toHaveLength(30);
+  });
+
+  it("règle des prix et classement : 6 premières à leur place, puis prix en euros, sites .fr/.eu, le reste ; ajouts dans l'ordre de Google, 10 au plus", async () => {
+    const piece = (position: number, site: string, prix?: [number, string]) => ({
+      position,
+      title: `Pièce ${position}`,
+      link: `https://${site}/p${position}`,
+      source: "Marchand",
+      thumbnail: "https://example.com/t.jpg",
+      ...(prix ? { price: { value: `${prix[0]} ${prix[1]}`, extracted_value: prix[0], currency: prix[1] } } : {}),
+    });
+    const reponse = [
+      piece(1, "a.com"), piece(2, "b.com", [10, "$"]), piece(3, "c.fr"), piece(4, "d.com", [20, "€"]), piece(5, "e.mx", [300, "MXN"]), piece(6, "f.com"),
+      piece(7, "g.com"), piece(8, "h.fr"), piece(9, "i.com", [30, "€"]), piece(10, "j.eu"), piece(11, "k.com", [40, "$"]), piece(12, "l.fr", [50, "$"]),
+      ...Array.from({ length: 18 }, (_, i) => piece(13 + i, `m${13 + i}.com`)),
+      piece(31, "n.com", [60, "€"]), piece(32, "o.com"), piece(33, "p.mx", [700, "MXN"]), piece(34, "q.fr", [80, "€"]),
+      // Prix illisible (devise de plus de 3 caractères) : ne compte pas comme un prix.
+      piece(35, "r.com", [90, "EUROS"]),
+      ...Array.from({ length: 10 }, (_, i) => piece(36 + i, `s${36 + i}.com`, [100 + i, "$"])),
+    ];
+    safeFetchMock.mockResolvedValueOnce(jsonResponse({ visual_matches: reponse }));
+
+    const { matches, measure, addedRanks } = await searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg");
+    const position = (lien: string) => Number(new URL(lien).pathname.slice(2));
+    const groupe2 = [7, 11, ...Array.from({ length: 18 }, (_, i) => 13 + i), 33, 36, 37, 38, 39, 40, 41, 42];
+    expect(matches.map((m) => position(m.merchantUrl))).toEqual([1, 2, 3, 4, 5, 6, 9, 31, 34, 8, 10, 12, ...groupe2]);
+    expect(matches.map((m) => m.rank)).toEqual(Array.from({ length: 40 }, (_, i) => i + 1));
+    expect(addedRanks).toEqual([31, 33, 34, 36, 37, 38, 39, 40, 41, 42]);
+    expect(measure.kept).toBe(40);
   });
 
   it("retire les doublons (même page produit), en gardant la première", async () => {

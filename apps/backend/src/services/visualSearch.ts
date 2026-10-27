@@ -2,8 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { env } from "../env.js";
 import { safeFetch } from "../lib/safeFetch.js";
-import { exclusionReason, withoutDuplicates } from "./matchFilters.js";
-import { googleStateOf, measureLens, sectionsOf, type FilterCounts, type LensMeasure, type LensSection } from "./lensMeasure.js";
+import { exclusionReason, isCountryOrEuSite, withoutDuplicates } from "./matchFilters.js";
+import { googleStateOf, isLocalCurrency, measureLens, sectionsOf, type FilterCounts, type LensMeasure, type LensSection } from "./lensMeasure.js";
 import { CURRENT_LENS_SETTINGS, DEFAULT_LOCALE, type LensSettings, type SearchLocale } from "./lensSettings.js";
 
 export { CURRENT_LENS_SETTINGS, type LensSettings, type SearchLocale };
@@ -48,6 +48,13 @@ const SERPAPI_ENDPOINT = "https://serpapi.com/search";
 // fondateur au Lot S : jusqu'à 30, l'app en montre 12 puis « Voir plus »).
 // SerpApi en renvoie ~60, dont beaucoup sans prix.
 export const MAX_MATCHES = 30;
+// Règle des prix (décision du fondateur du 2026-10-21, petit lot) : aux 30
+// premières s'ajoutent au plus 10 propositions avec un prix trouvées plus loin,
+// dans l'ordre de Google. Rien n'est retiré : la liste passe à 40 au plus.
+export const MAX_PRICED_ADDITIONS = 10;
+// Les 6 premières de Google restent à leur place, la moitié du premier écran :
+// la pièce exacte s'y trouve le plus souvent (supposé ; réglage à revoir avec la mesure).
+export const FIXED_TOP = 6;
 
 // SerpApi lente ou muette ne doit jamais laisser une recherche bloquée en
 // "processing" indéfiniment côté mobile.
@@ -79,11 +86,11 @@ function isTimeout(error: unknown): boolean {
   return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
 }
 
-/** Un seul appel SerpApi. `query` (texte « Que cherchez-vous ? ») n'est
- * transmis que s'il est rempli : sur une image recadrée il écarte les pièces
- * voisines, mais sur une image entière il avait dégradé le résultat (essais
- * du 2026-09-22 et du 2026-09-24, docs/lot-s-design/README.md). */
-export async function callSerpApi(imageUrl: string, settings: LensSettings, query: string | null): Promise<LensResponse> {
+/** Un seul appel SerpApi. `query` : réservé aux outils de mesure (scripts/).
+ * Le serveur n'envoie plus jamais de mots avec l'image (petit lot, décision du
+ * fondateur du 2026-10-25) : dans la série de mesure du 24 octobre, ils ont
+ * fait baisser les résultats (maillot, pull blanc) ou les ont vidés (pull noir). */
+export async function callSerpApi(imageUrl: string, settings: LensSettings, query: string | null = null): Promise<LensResponse> {
   const params = new URLSearchParams({ engine: "google_lens", url: imageUrl, type: settings.type, api_key: env.SERPAPI_KEY });
   if (settings.locale) {
     params.set("country", settings.locale.country);
@@ -169,22 +176,45 @@ function toVisualMatch(match: UsableMatch, index: number): VisualMatch {
   };
 }
 
-/** Propositions gardées, et ce que chaque filtre a écarté. `country` : pays
- * de la recherche, dont le site passe devant quand un marchand propose le
- * même article sur plusieurs sites de pays. */
-export function filterVisualMatches(response: Pick<LensResponse, "matches" | "received">, country: string): { matches: VisualMatch[]; counts: FilterCounts } {
+/** Groupe de proximité, pour le classement : 0 prix dans la devise du pays ;
+ * 1 site du pays (.fr) ou .eu ; 2 le reste. */
+function proximityGroup(match: UsableMatch, country: string): number {
+  const { priceValue, currency } = storablePrice(match.price);
+  if (priceValue !== null && isLocalCurrency(currency, country)) return 0;
+  return isCountryOrEuSite(match.link, country) ? 1 : 2;
+}
+
+/** Les 6 premières de Google à leur place ; ensuite les prix dans la devise du
+ * pays, puis les sites du pays ou .eu, puis le reste, dans l'ordre de Google à
+ * l'intérieur de chaque groupe. Rien n'est retiré. */
+function byProximity(matches: UsableMatch[], country: string): UsableMatch[] {
+  const rest = matches.slice(FIXED_TOP).map((match, index) => ({ match, index, group: proximityGroup(match, country) }));
+  rest.sort((a, b) => a.group - b.group || a.index - b.index);
+  return [...matches.slice(0, FIXED_TOP), ...rest.map(({ match }) => match)];
+}
+
+/** Propositions gardées et classées, ce que chaque filtre a écarté, et le rang
+ * d'origine chez Google des propositions ajoutées par la règle des prix (pour la
+ * mesure). `country` : pays de la recherche, dont le site passe devant quand un
+ * marchand propose le même article sur plusieurs sites de pays. */
+export function filterVisualMatches(
+  response: Pick<LensResponse, "matches" | "received">,
+  country: string
+): { matches: VisualMatch[]; counts: FilterCounts; addedRanks: number[] } {
   const complete = response.matches.map(withCleanTexts).filter(isComplete);
   const reasons = complete.map((match) => exclusionReason(match.link));
   const buyable = complete.filter((_, index) => reasons[index] === null);
   const unique = withoutDuplicates(buyable, country);
+  const added = unique.slice(MAX_MATCHES).filter((match) => storablePrice(match.price).priceValue !== null).slice(0, MAX_PRICED_ADDITIONS);
   return {
-    matches: unique.slice(0, MAX_MATCHES).map(toVisualMatch),
+    matches: byProximity([...unique.slice(0, MAX_MATCHES), ...added], country).map(toVisualMatch),
     counts: {
       removedIncomplete: response.received - complete.length,
       removedSocial: reasons.filter((reason) => reason === "social").length,
       removedProfessional: reasons.filter((reason) => reason === "professional").length,
       removedDuplicates: buyable.length - unique.length,
     },
+    addedRanks: added.flatMap((match) => (match.position === undefined ? [] : [match.position])),
   };
 }
 
@@ -193,14 +223,14 @@ export function toVisualMatches(matches: SerpApiVisualMatch[], country: string):
 }
 
 export interface VisualSearchOptions {
-  /** Texte « Que cherchez-vous ? » — ignoré s'il est vide. */
-  query?: string | null;
   locale?: SearchLocale;
 }
 
 export interface VisualSearchResult {
   matches: VisualMatch[];
   measure: LensMeasure;
+  /** Rang d'origine chez Google des propositions ajoutées par la règle des prix. */
+  addedRanks: number[];
 }
 
 /** Interroge Google Lens (via SerpApi) à partir d'une image publiquement
@@ -216,13 +246,12 @@ export async function searchProductsByImageUrl(
   imageUrl: string,
   options: VisualSearchOptions = {}
 ): Promise<VisualSearchResult> {
-  const query = options.query?.trim() || null;
   const locale = options.locale ?? DEFAULT_LOCALE;
   const settings: LensSettings = { ...CURRENT_LENS_SETTINGS, locale };
-  const response = await callSerpApi(imageUrl, settings, query);
-  const { matches, counts } = filterVisualMatches(response, locale.country);
+  const response = await callSerpApi(imageUrl, settings);
+  const { matches, counts, addedRanks } = filterVisualMatches(response, locale.country);
   if (matches.length === 0) {
-    fastify.log.info({ type: settings.type, withQuery: query !== null }, "Recherche visuelle sans résultat");
+    fastify.log.info({ type: settings.type }, "Recherche visuelle sans résultat");
   }
-  return { matches, measure: measureLens(response, counts, matches, locale.country) };
+  return { matches, measure: measureLens(response, counts, matches, locale.country), addedRanks };
 }

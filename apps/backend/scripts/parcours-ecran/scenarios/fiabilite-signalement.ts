@@ -44,7 +44,7 @@ const TEXTES_SIGNALEMENT = {
     menu: "Report an inconsistent result",
     titre: "Inconsistent result",
     question: "What's wrong?",
-    pieceCherchee: "Not the item I was looking for (different type, color or model)",
+    pieceCherchee: "Not the piece I was looking for (different type, color or model)",
     prix: "Wrong or missing price",
     envoyer: "Send",
     retirer: "Withdraw my report",

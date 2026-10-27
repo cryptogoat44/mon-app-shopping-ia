@@ -19,8 +19,8 @@ const VIDEO_SOURCE = oneOf(["library", "file", "latest"]);
 export const ANALYTICS_EVENTS = {
   signup_completed: { locale: oneOf(["fr", "en"]) },
   spot_started: { source: oneOf(["link", "photo"]), platform: oneOf(["tiktok", "instagram", "pinterest", "photo", "other"]) },
-  // Ciblage et précision : zone recadrée, texte ajouté, capture importée (jamais le texte lui-même).
-  spot_launched: { zone_adjusted: bool, query_added: bool, image_imported: bool },
+  // Ciblage : zone recadrée, capture importée. Plus de texte depuis le petit lot (2026-10-25) : les mots ne partent plus avec l'image.
+  spot_launched: { zone_adjusted: bool, image_imported: bool },
   spot_cancelled: {},
   spot_completed: { outcome: oneOf(["results", "none", "failed"]), results_count: count },
   similar_results_opened: {},

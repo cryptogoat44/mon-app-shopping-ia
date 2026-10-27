@@ -7,7 +7,7 @@
 // anonymisées et vérifiées (dépôt public).
 import { z } from "zod";
 import { DEFAULT_LOCALE, type LensSettings } from "../../src/services/lensSettings.js";
-import { articleTitleParts, exclusionReason } from "../../src/services/matchFilters.js";
+import { articleTitleParts, exclusionReason, siteOf } from "../../src/services/matchFilters.js";
 import { structureReponse, type Essai, type Structure } from "./essai-photo.js";
 import type { Piece } from "./mesure-texte.js";
 
@@ -184,11 +184,13 @@ export function bilanFacturation(lignes: readonly LigneReleve[]): Record<Facture
 // ---- Réponses de test : réduites, neutralisées, anonymisées, vérifiées ----
 // Le dépôt est public (décision du fondateur, 2026-10-20) : titres, noms de
 // marchands, chemins des liens et images sont remplacés par des valeurs
-// neutres ou fictives. Restent tels quels les éléments dont dépendent les tests
-// et la mesure : positions, prix et devises, domaines et paramètres des liens,
-// rubriques, statut, état de Google et message d'erreur de SerpApi. Les
-// relations sont gardées : deux titres identiques (au nom du site près) ou deux
-// chemins identiques reçoivent la même valeur neutre.
+// neutres ou fictives ; depuis le 2026-10-22, les domaines des sites peu connus
+// aussi (« site-N », extension gardée). Restent tels quels les éléments dont
+// dépendent les tests et la mesure : positions, prix et devises, domaines des
+// sites connus, extensions, paramètres des liens (sauf identifiants), rubriques,
+// statut, état de Google et message d'erreur de SerpApi. Les relations sont
+// gardées : deux titres identiques (au nom du site près), deux chemins
+// identiques ou deux extensions d'un même site reçoivent la même valeur neutre.
 
 const OBJET = z.record(z.string(), z.unknown());
 /** Champs d'une proposition lus par le serveur, comme dans les réponses enregistrées du 24 septembre. */
@@ -205,33 +207,62 @@ function numeroFictif(n: number): string {
  * remplacée par « id-N ». Une même valeur reçoit le même « id-N », pour garder
  * les égalités dont dépend le filtre des doublons. Les autres paramètres
  * (couleur, taille, variante, pays, devise) restent tels quels. */
-const PARAMETRE_IDENTIFIANT = /^(?:.*session.*|sid|ssid|.*token.*|auth.*|.*user.*|uid|.*account.*|acct|.*customer.*|member.*|login|.*e-?mail.*|gclid|gbraid|wbraid|dclid|fbclid|msclkid|ttclid|twclid|igshid|yclid|srsltid|mc_cid|mc_eid|_ga|_gl|.*click_?id.*|ref|referr?er|aff.*|partner.*|utm_.*)$/i;
+const PARAMETRE_IDENTIFIANT = /^(?:.*session.*|sid|ssid|.*token.*|auth.*|.*user.*|uid|.*account.*|acct|.*customer.*|member.*|login|.*e-?mail.*|gclid|gbraid|wbraid|dclid|fbclid|msclkid|ttclid|twclid|igshid|yclid|srsltid|mc_cid|mc_eid|_ga|_gl|.*click.*|ref|referr?er|aff.*|partner.*|utm_.*)$/i;
+
+/** Valeur de paramètre qui ressemble à un jeton opaque (24 caractères ou plus,
+ * lettres et chiffres mêlés), quel que soit le nom du paramètre : remplacée par
+ * « id-N » (constaté le 2026-10-25 : jeton de clic d'une place de marché dans
+ * « content_source »). Un numéro de variante, fait de chiffres seuls, reste. */
+const JETON_OPAQUE = /^(?=[^?#]*[a-z])(?=[^?#]*\d)[A-Za-z0-9%:._~-]{24,}$/i;
+
+/** Sites très connus, gardés tels quels (décision du fondateur, 2026-10-22) :
+ * grands marchands et places de marché, sites d'annonces, grandes marques et
+ * enseignes. Les réseaux sociaux et la vente aux professionnels le sont aussi
+ * (les filtres en dépendent). Tout autre site (blog, forum, site personnel,
+ * petite boutique) devient « site-N », sous-domaine (« www. », « fr. ») et
+ * extension (« .fr », « .co.uk ») gardés : le classement par pays en dépend. */
+const SITES_CONNUS = new Set([
+  "aliexpress", "alibaba", "amazon", "asos", "ebay", "etsy", "farfetch", "zalando", "shein", "temu", "stockx", "goat", "ssense",
+  "leboncoin", "vinted", "depop", "vestiairecollective", "ricardo",
+  "zara", "hm", "uniqlo", "mango", "nike", "adidas", "newbalance", "levi", "thenorthface", "versace", "ferragamo", "napapijri", "mammut", "quiksilver", "celio", "reserved", "defacto", "lcwaikiki", "decathlon",
+  "nba", "blizzard", "tripadvisor", "reddit", "threads", "google", "helloasso",
+]);
 
 /** Valeurs neutres d'UNE réponse : une même valeur d'origine reçoit toujours la même valeur neutre. */
 function neutraliseur() {
-  const numeros = { titres: new Map<string, number>(), marchands: new Map<string, number>(), chemins: new Map<string, number>(), identifiants: new Map<string, number>() };
+  const numeros = { titres: new Map<string, number>(), marchands: new Map<string, number>(), chemins: new Map<string, number>(), identifiants: new Map<string, number>(), sites: new Map<string, number>() };
   const numero = (carte: Map<string, number>, cle: string): number => {
     if (!carte.has(cle)) carte.set(cle, carte.size + 1);
     return carte.get(cle)!;
   };
+  /** Hôte gardé pour un site connu ; sinon « site-N ». Un même site sur
+   * plusieurs extensions (.com et .fr) reçoit le même N : le filtre des
+   * doublons entre sites de pays en dépend. */
+  const hote = (brut: string): string => {
+    const minuscules = brut.toLowerCase();
+    const { name, domain } = siteOf(minuscules);
+    if (SITES_CONNUS.has(name) || exclusionReason(`https://${minuscules}/`) !== null || !minuscules.endsWith(domain)) return minuscules;
+    return `${minuscules.slice(0, minuscules.length - domain.length)}site-${numero(numeros.sites, name)}${domain.slice(name.length)}`;
+  };
   return {
+    hote,
     titre(lien: string, titre: string): string {
       const { key, siteInTitle } = articleTitleParts(lien, titre);
       const neutre = `Produit ${numero(numeros.titres, key)}`;
-      return siteInTitle ? `${neutre} - ${siteInTitle.toUpperCase()}` : neutre;
+      return siteInTitle ? `${neutre} - ${hote(siteInTitle).toUpperCase()}` : neutre;
     },
     marchand: (nom: string): string => `Marchand ${numero(numeros.marchands, nom.trim().toLowerCase())}`,
-    /** Domaine gardé ; chemin neutre ; paramètres gardés, sauf la valeur des
-     * identifiants ; fragment « # » retiré. Deux chemins sont « les mêmes »
-     * exactement comme pour le filtre des doublons (barre finale près,
-     * majuscules comprises). */
+    /** Domaine gardé pour un site connu, fictif sinon ; chemin neutre ;
+     * paramètres gardés, sauf la valeur des identifiants ; fragment « # »
+     * retiré. Deux chemins sont « les mêmes » exactement comme pour le filtre
+     * des doublons (barre finale près, majuscules comprises). */
     lien(lien: string): string {
       try {
         const url = new URL(lien);
         const chemin = url.pathname.length > 1 ? url.pathname.replace(/\/$/, "") : url.pathname;
-        const parametres = new URLSearchParams([...url.searchParams].map(([nom, valeur]): [string, string] => [nom, PARAMETRE_IDENTIFIANT.test(nom) ? `id-${numero(numeros.identifiants, valeur)}` : valeur]));
+        const parametres = new URLSearchParams([...url.searchParams].map(([nom, valeur]): [string, string] => [nom, PARAMETRE_IDENTIFIANT.test(nom) || JETON_OPAQUE.test(valeur) ? `id-${numero(numeros.identifiants, valeur)}` : valeur]));
         const requete = parametres.toString();
-        return `${url.protocol}//${url.host}/produit-${numero(numeros.chemins, chemin)}${requete ? `?${requete}` : ""}`;
+        return `${url.protocol}//${hote(url.host)}/produit-${numero(numeros.chemins, chemin)}${requete ? `?${requete}` : ""}`;
       } catch {
         return "https://example.invalid/lien-illisible";
       }
@@ -291,8 +322,9 @@ const INTERDITS: readonly { nom: string; motif: RegExp }[] = [
   { nom: "clé d'API", motif: /api[_-]?key/i },
   { nom: "adresse e-mail", motif: /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i },
   { nom: "adresse d'image temporaire de notre serveur", motif: /supabase\.(?:co|in)|\/storage\/v1\/|[?&]token=(?!id-\d)|sbtwsmxfdfxzgcohbznd|qcwnlqkxnhqpyjpkooiw/i },
-  { nom: "identifiant de session, de compte ou de clic dans un lien", motif: /[?&](?:[a-z_]*session[a-z_]*|sid|uid|[a-z_]*user[a-z_]*|[a-z_]*account[a-z_]*|[a-z_]*customer[a-z_]*|gclid|fbclid|msclkid|srsltid)=(?!id-\d)/i },
+  { nom: "identifiant de session, de compte ou de clic dans un lien", motif: /[?&](?:[a-z_]*session[a-z_]*|sid|uid|[a-z_]*user[a-z_]*|[a-z_]*account[a-z_]*|[a-z_]*customer[a-z_]*|[a-z_]*click[a-z_]*|gclid|fbclid|msclkid|srsltid)=(?!id-\d)/i },
   { nom: "lien de recherche de SerpApi (il contient l'adresse de l'image)", motif: /serpapi\.com\/search/i },
+  { nom: "jeton opaque dans un lien", motif: /[?&][a-z0-9_]+=(?=[a-z0-9%:._~-]*[a-z])(?=[a-z0-9%:._~-]*\d)[a-z0-9%:._~-]{24,}/i },
 ];
 
 /** Les contenus interdits trouvés dans un texte (leur nature, jamais leur valeur). */

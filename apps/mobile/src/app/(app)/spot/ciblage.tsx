@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { SEARCH_QUERY_MAX_LENGTH, type CropRect } from "@monapp/shared-types";
+import type { CropRect } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
@@ -12,8 +12,8 @@ import { draftImageUri, getDraft, updateDraft } from "@/lib/spot-draft";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Étape 2 : l'utilisateur entoure la pièce (seule cette zone part à
-// l'analyse) et peut préciser ce qu'il cherche. Toujours aucun crédit
-// consommé : c'est « Lancer l'identification » qui engage la recherche.
+// l'analyse, sans mots depuis le petit lot, 2026-10-25). Toujours aucun
+// crédit consommé : c'est « Lancer l'identification » qui engage la recherche.
 export default function TargetingScreen() {
   const router = useRouter();
   const { searchId } = useLocalSearchParams<{ searchId?: string }>();
@@ -22,7 +22,6 @@ export default function TargetingScreen() {
   const imageUri = draft ? draftImageUri(draft) : null;
 
   const [crop, setCrop] = useState<CropRect>(draft?.crop ?? DEFAULT_CROP);
-  const [query, setQuery] = useState(draft?.query ?? "");
   const [dragging, setDragging] = useState(false);
 
   // Brouillon perdu (page rechargée sur le web avec une photo importée,
@@ -41,7 +40,7 @@ export default function TargetingScreen() {
   }
 
   function handleLaunch() {
-    updateDraft({ crop, query: query.trim() });
+    updateDraft({ crop });
     router.push({ pathname: "/spot/analysis", params: { searchId: searchId ?? "" } });
   }
 
@@ -79,29 +78,6 @@ export default function TargetingScreen() {
             <Text style={styles.resetLabel}>{t.targeting.reset}</Text>
           </Pressable>
 
-          <Text style={styles.label}>
-            {t.targeting.queryLabel} <Text style={styles.optional}>{t.targeting.queryOptional}</Text>
-          </Text>
-          <View style={styles.field}>
-            <TextInput
-              style={styles.input}
-              value={query}
-              onChangeText={setQuery}
-              placeholder={t.targeting.queryPlaceholder}
-              placeholderTextColor={color.acier}
-              maxLength={SEARCH_QUERY_MAX_LENGTH}
-              returnKeyType="search"
-              onSubmitEditing={handleLaunch}
-              accessibilityLabel={`${t.targeting.queryLabel} ${t.targeting.queryOptional}`}
-            />
-            {query.length > 0 ? (
-              <Text style={styles.counter}>
-                {query.length}/{SEARCH_QUERY_MAX_LENGTH}
-              </Text>
-            ) : null}
-          </View>
-          <Text style={styles.caption}>{t.targeting.queryHint}</Text>
-
           <Pressable style={styles.primary} onPress={handleLaunch} accessibilityRole="button">
             <Text style={styles.primaryLabel}>{t.targeting.launch}</Text>
           </Pressable>
@@ -127,11 +103,6 @@ const styles = themedStyles(() => ({
   cropArea: { marginTop: space.md },
   reset: { alignSelf: "flex-end", minHeight: 36, justifyContent: "center" },
   resetLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600" },
-  label: { fontSize: font.caption, color: color.acier, marginTop: space.md },
-  optional: { color: color.acier, opacity: 0.8 },
-  field: { flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: color.filet },
-  input: { flex: 1, fontSize: font.body, color: color.encre, paddingVertical: 12 },
-  counter: { fontSize: font.caption, color: color.acier },
   primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, alignItems: "center", justifyContent: "center", marginTop: space.lg },
   primaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
 }));

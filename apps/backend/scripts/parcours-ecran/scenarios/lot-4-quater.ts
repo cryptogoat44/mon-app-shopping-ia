@@ -69,11 +69,11 @@ async function controlerMessage(page: Page, combo: Combo, limit: SearchCapacityL
   check((await page.getByRole("button", { name: P.retour, exact: true }).filter({ visible: true }).count()) === 1, `${ecran} : « ${P.retour} »`);
 }
 
-/** Photo, mots tapés, « Lancer » : le lancement reçoit « plafond atteint » ; aucun réessai automatique. */
+/** Photo, « Lancer » : le lancement reçoit « plafond atteint » ; aucun réessai automatique. */
 async function photoPlafond(p: Parcours, page: Page, combo: Combo, fichier: string, limit: SearchCapacityLimit, ecran: string, problemes: string[]): Promise<void> {
   const suivi = suivreRequetes(page);
   await plafondAtteint(page, "**/api/searches/*/run", limit);
-  await lancerPhoto(p, page, TEXTES[combo.locale], fichier, TEXTES[combo.locale].description);
+  await lancerPhoto(p, page, TEXTES[combo.locale], fichier);
   await controlerMessage(page, combo, limit, ecran);
   await page.waitForTimeout(2000);
   check(suivi.lancements.length === 1, `${ecran} : un seul lancement, aucun réessai automatique (${suivi.lancements.length})`);

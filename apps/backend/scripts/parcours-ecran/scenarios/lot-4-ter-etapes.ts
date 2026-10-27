@@ -12,7 +12,7 @@ import type { Parcours, TestAccount } from "../boite-a-outils.js";
 import { couleurProche } from "../../lib/videos-essai.js";
 import { COMBOS, type Combo } from "./lot-3.js";
 import { attendreBoutonActif, attendreEnvoi, champContient, check, choisirFichier, couleurImageLocale, ouvrirSpotter, suivreRequetes, visible, type Envoi } from "./spotter-outils.js";
-import { CHAUSSURES, capteur, champPret, lancerPhoto, lancerVideo, nouveauCompte, ralentir, simulerResultats, TEXTES, VESTE } from "./lot-4-ter-outils.js";
+import { aucunChamp, CHAUSSURES, capteur, champPret, lancerPhoto, lancerVideo, nouveauCompte, ralentir, simulerResultats, TEXTES, VESTE } from "./lot-4-ter-outils.js";
 
 const FR = TEXTES.fr;
 const COMBO = COMBOS[0]!;
@@ -47,7 +47,7 @@ async function horloge(page: Page, motif: string): Promise<number> {
   return Number(trouve[1]) * 10 + Number(trouve[2]);
 }
 
-/** Sous les résultats : autre moment, curseur (parti du moment essayé), recadrage (image et mots). */
+/** Sous les résultats : autre moment, curseur (parti du moment essayé), recadrage (image seule depuis le petit lot). */
 export async function corrections(p: Parcours, page: Page, combo: Combo, problemes: string[]): Promise<void> {
   const T = TEXTES[combo.locale];
   const capture = capteur(p, page, combo, problemes);
@@ -72,7 +72,7 @@ export async function corrections(p: Parcours, page: Page, combo: Combo, problem
   await page.waitForTimeout(800);
   const couleur = await couleurImageLocale(page);
   check(couleur !== null && couleurProche(couleur, CHAUSSURES, 25), `image recadrée = moment essayé, « Chaussures » (couleur ${JSON.stringify(couleur)})`);
-  check(await champContient(page, T.description), "les mots tapés suivent jusqu'au recadrage");
+  check(await aucunChamp(page), "« Recadrer » : aucun champ de mots (petit lot)");
   await capture("12-recadrer");
 }
 
@@ -120,8 +120,8 @@ export async function replis(p: Parcours, page: Page, video: string, problemes: 
   await page.waitForTimeout(800);
   const couleur = await couleurImageLocale(page);
   check(couleur !== null && couleurProche(couleur, VESTE, 20), `image choisie = « Veste » (couleur ${JSON.stringify(couleur)})`);
-  check(await champContient(page, "veste incertaine"), "les mots suivent jusqu'au recadrage");
-  await capture("16-ciblage-mots");
+  check(await aucunChamp(page), "choix manuel puis « Recadrer » : aucun champ de mots (petit lot)");
+  await capture("16-ciblage");
   check(suivi.analyses === 2, `deux analyses envoyées (${suivi.analyses})`);
   check(suivi.recherches === 0, `pièce non repérée : aucune recherche lancée, aucun crédit (${suivi.recherches})`);
   await depuisSpotter(p, page, "panne simulée", video);
@@ -167,17 +167,17 @@ function zoneEnvoyee(lancement: string): { x: number; y: number; width: number; 
 
 /** Photo (option B du fondateur) : le cadre « Entourez la pièce » d'emblée, sans
  * IA ni accord ; coin tiré, réinitialisé, tiré à nouveau ; la zone entourée
- * et les mots sont envoyés à l'identification. */
+ * est envoyée à l'identification, sans aucun champ de mots (petit lot). */
 export async function photo(p: Parcours, page: Page, fichier: string, problemes: string[]): Promise<void> {
   const capture = capteur(p, page, COMBO, problemes);
   await page.goto(`${p.siteUrl}/`);
   const suivi = suivreRequetes(page);
   await choisirFichier(page, FR.ajouterPhoto, fichier);
   await page.getByRole("heading", { name: FR.ciblage, exact: true }).filter({ visible: true }).waitFor({ timeout: 30_000 });
-  await page.getByRole("heading", { name: FR.question, exact: true }).filter({ visible: true }).waitFor();
   const depart = await cadrePhoto(page);
   check(suivi.recherches === 0, "le choix d'une photo n'appelle pas le serveur");
-  check((await page.evaluate("document.activeElement?.getAttribute('placeholder') ?? ''")) !== FR.exemple, "photo : d'abord le cadre, le champ n'est pas activé d'emblée");
+  check((await page.getByRole("heading", { name: FR.question, exact: true }).filter({ visible: true }).count()) === 0, "photo : plus de question « Que cherchez-vous ? » (petit lot)");
+  check(await aucunChamp(page), "photo : aucun champ de mots (petit lot)");
   await capture("20-photo-cadre");
   // Coin en haut à gauche tiré vers l'intérieur : le cadre rétrécit.
   const tirer = async () => {
@@ -193,8 +193,6 @@ export async function photo(p: Parcours, page: Page, fichier: string, problemes:
   await page.getByRole("button", { name: FR.reinitialiser, exact: true }).filter({ visible: true }).click();
   check(memeCadre(await cadrePhoto(page), depart), "photo : « Réinitialiser le cadre » remet la zone centrale");
   await tirer();
-  await page.getByPlaceholder(FR.exemple).filter({ visible: true }).click();
-  await page.keyboard.type("t-shirt noir");
   await ralentir(page, "**/api/searches/*/run");
   await page.getByRole("button", { name: FR.lancer, exact: true }).filter({ visible: true }).click();
   await visible(page, FR.attenteBoutiques).waitFor({ timeout: 15_000 });
@@ -207,37 +205,26 @@ export async function photo(p: Parcours, page: Page, fichier: string, problemes:
   check(suivi.analyses === 0, "photo : aucune analyse par l'IA");
   const lancement = suivi.lancements.at(-1) ?? "";
   const zone = zoneEnvoyee(lancement);
-  check(zone !== null && zone.x > 0.2 && zone.y > 0.2 && zone.width < 0.65 && lancement.includes("t-shirt noir"), `photo : zone entourée et mots envoyés (${JSON.stringify(zone)})`);
+  check(zone !== null && zone.x > 0.2 && zone.y > 0.2 && zone.width < 0.65, `photo : zone entourée envoyée (${JSON.stringify(zone)})`);
+  check(!/name="query"/.test(lancement), "photo : aucun mot envoyé avec l'image (petit lot)");
 }
 
-/** Photo choisie, cadre par défaut, mots facultatifs, « Lancer ». */
-/** Rien trouvé (décision du fondateur, 2026-10-08) : nouveau message, aucun
- * réessai automatique ; avec des mots, « Réessayer sans le texte » relance la
- * même image sans eux (une recherche de plus, à l'initiative de la personne) ;
- * sans mots, pas de bouton. Réponses fabriquées dans le navigateur : aucun crédit. */
+/** Rien trouvé (décisions du fondateur, 2026-10-08 et 2026-10-21) : le message
+ * sans nom de fournisseur, aucun réessai automatique ; « Réessayer sans le
+ * texte » n'existe plus (petit lot, 2026-10-25). Réponses fabriquées dans le
+ * navigateur : aucun crédit. */
 export async function sansResultat(p: Parcours, page: Page, fichier: string, problemes: string[]): Promise<void> {
   const capture = capteur(p, page, COMBO, problemes);
   const suivi = suivreRequetes(page);
-  const bouton = () => page.getByRole("button", { name: FR.sansTexte, exact: true }).filter({ visible: true });
   const lancements = () => suivi.lancements.length;
   await simulerResultats(page, "pull blanc", { videsAuDebut: 1 });
-  await lancerPhoto(p, page, FR, fichier, "pull blanc");
+  await lancerPhoto(p, page, FR, fichier);
   await visible(page, FR.rienTrouve).waitFor({ timeout: 30_000 });
   check((await visible(page, FR.rienTrouveConseil).count()) === 1, "rien trouvé : conseil affiché");
-  check((await bouton().count()) === 1, "« Réessayer sans le texte » proposé (des mots avaient été tapés)");
+  check((await page.getByText(FR.sansTexte, { exact: true }).count()) === 0, "« Réessayer sans le texte » n'apparaît plus (petit lot)");
   await page.waitForTimeout(2500);
   check(lancements() === 1, `aucun réessai automatique (${lancements()} lancement(s))`);
   await capture("23-rien-trouve");
-  await bouton().click();
-  await visible(page, FR.meilleure).waitFor({ timeout: 30_000 });
-  check(lancements() === 2 && !(suivi.lancements[1] ?? "pull blanc").includes("pull blanc"), "relancée une fois, à la demande, sans le texte");
-  await capture("24-sans-le-texte-resultats");
-  await page.unroute("**/api/searches/*/run");
-  await simulerResultats(page, "pull blanc", { videsAuDebut: 1 });
-  await lancerPhoto(p, page, FR, fichier, null);
-  await visible(page, FR.rienTrouve).waitFor({ timeout: 30_000 });
-  check((await bouton().count()) === 0, "sans mots tapés : pas de « Réessayer sans le texte »");
-  await capture("25-rien-trouve-sans-mots");
   await page.unroute("**/api/searches/*/run");
 }
 
@@ -270,9 +257,11 @@ export async function refusEtRetrait(p: Parcours, page: Page, envois: Envoi[], v
   await capture("24-reglages-retrait");
   await page.goto(`${p.siteUrl}/`);
   await choisirFichier(page, FR.ajouterVideo, video);
-  await page.getByRole("heading", { name: FR.question, exact: true }).filter({ visible: true }).waitFor({ timeout: 30_000 });
+  // Vidéo sans l'IA : plus de question ni de champ (petit lot) ; titre « Votre vidéo ».
+  await page.getByRole("heading", { name: FR.votreVideo, exact: true }).filter({ visible: true }).waitFor({ timeout: 30_000 });
   await visible(page, FR.desactivee).waitFor({ timeout: 15_000 });
   await page.getByRole("button", { name: FR.choisirImage, exact: true }).filter({ visible: true }).waitFor();
+  check(await aucunChamp(page), "vidéo sans l'IA : aucun champ de mots (petit lot)");
   await capture("25-retrait-question");
 
   const refus = await nouveauCompte(p, "trefus");

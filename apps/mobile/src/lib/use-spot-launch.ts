@@ -186,13 +186,12 @@ export function useSpotLaunch({ source, video, draft, preview, query, crop, auto
     if (!draft) return closeSpotter(router);
     const zone = crop ?? photoCrop(draft);
     const { id, signal } = flow.begin(draftImage(draft, zone));
-    flow.settle(id, await launchPhoto(draft, query, signal, zone), consentRequired);
+    flow.settle(id, await launchPhoto(draft, signal, zone), consentRequired);
   }
 
-  /** Curseur manuel ; les mots tapés suivent jusqu'au recadrage. */
+  /** Curseur manuel : l'image choisie part seule, sans les mots (petit lot, 2026-10-25). */
   function chooseMyself() {
-    const words = query.trim();
-    router.push({ pathname: "/spot/video", params: words ? { query: words } : {} });
+    router.push({ pathname: "/spot/video" });
   }
   function proceed(ready: VideoAiReadiness) {
     if (!ready.enabled) return setPhase({ kind: "failed", reason: "disabled" });

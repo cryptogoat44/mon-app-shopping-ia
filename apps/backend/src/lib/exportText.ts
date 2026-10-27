@@ -128,6 +128,11 @@ export const EXPORT_COLUMNS = {
     crop_area_pct: technical("Part de l'image analysée (pour cent)", "Share of the image analysed (percent)"),
     call_seconds: technical("Durée de la recherche (secondes)", "Search duration (seconds)"),
     refused_before_call: technical("Lancements refusés avant la recherche", "Launches refused before the search"),
+    // Colonnes de la migration 0027, décrites d'avance : l'export reste complet
+    // dès que la base est migrée, même avec le serveur d'avant (mise en ligne).
+    provider: technical("Fournisseur de la recherche", "Search provider"),
+    provider_status_code: technical("Code de réponse du fournisseur (mesure)", "Provider response code (measure)"),
+    run_started_at: technical("Heure du lancement de la recherche", "Search start time"),
   },
   productMatches: {
     id: ID,
@@ -145,6 +150,11 @@ export const EXPORT_COLUMNS = {
     merchant_url: shown("Lien vers la pièce", "Link to the piece"),
     // Même date que la recherche : seulement dans la version JSON.
     created_at: technical("Proposée le", "Suggested on"),
+    // Colonnes de la migration 0027 (« Voir les boutiques »), décrites d'avance.
+    provider_page_token: technical("Référence de la pièce chez le fournisseur", "Piece reference at the provider"),
+    provider_product_id: technical("Identifiant de la pièce chez le fournisseur", "Piece ID at the provider"),
+    stores: technical("Boutiques consultées (« Voir les boutiques »)", "Retailers viewed (“View retailers”)"),
+    stores_requested_at: technical("Heure de « Voir les boutiques »", "Time of “View retailers”"),
   },
   resultFeedback: {
     id: ID,
@@ -572,11 +582,11 @@ export const FEEDBACK_REASON_LABELS: Record<MatchFeedbackReason, Bilingual> = {
   image_title_mismatch: { fr: "L'image et le titre ne correspondent pas", en: "The image and the title don't match" },
   wrong_item: {
     fr: "Ce n'est pas la pièce cherchée (autre type, autre couleur, autre modèle)",
-    en: "Not the item I was looking for (different type, color or model)",
+    en: "Not the piece I was looking for (different type, color or model)",
   },
   not_for_sale: { fr: "Impossible à acheter (la page ne vend rien)", en: "Can't be bought (the page doesn't sell anything)" },
   wrong_price: { fr: "Prix faux ou absent", en: "Wrong or missing price" },
-  duplicate: { fr: "Doublon d'une autre proposition", en: "Duplicate of another result" },
+  duplicate: { fr: "Doublon d'une autre proposition", en: "Duplicate of another suggestion" },
 };
 
 /** Motifs d'une décision : ceux des signalements, plus le motif neutre du

@@ -132,7 +132,11 @@ export function QueryInput({
 }
 
 export interface AskProps {
-  /** Vidéo : champ prêt à la saisie dès l'ouverture ; photo : d'abord le cadre. */
+  /** Le champ « Que cherchez-vous ? » : seulement pour une vidéo analysée par
+   * l'IA, qui se sert des mots pour trouver la pièce. Photo, ou vidéo sans
+   * l'IA : aucun champ, les mots ne partent plus avec l'image (petit lot). */
+  withQuery: boolean;
+  /** Vidéo : champ prêt à la saisie dès l'ouverture. */
   autoFocus: boolean;
   query: string;
   onQuery: (value: string) => void;
@@ -150,15 +154,25 @@ export interface AskProps {
   privacy: string | null;
 }
 
-/** La question, prête à la saisie dès l'ouverture, et « Lancer ». */
+/** La question (vidéo analysée par l'IA), prête à la saisie dès l'ouverture, et « Lancer ». */
 export function AskView(p: AskProps) {
   return (
     <>
-      <Text style={styles.title} accessibilityRole="header">
-        {t.launch.title}
-      </Text>
-      <QueryInput value={p.query} onChangeText={p.onQuery} onSubmit={() => p.canLaunch && p.onLaunch()} autoFocus={p.autoFocus} testID="spot-query" />
-      {p.linkInQuery ? <LinkNotice style={styles.notice} onAddVideo={p.onAddVideo} busy={p.addingVideo} /> : null}
+      {p.withQuery ? (
+        <>
+          <Text style={styles.title} accessibilityRole="header">
+            {t.launch.title}
+          </Text>
+          <QueryInput value={p.query} onChangeText={p.onQuery} onSubmit={() => p.canLaunch && p.onLaunch()} autoFocus={p.autoFocus} testID="spot-query" />
+          <Text style={styles.note}>{t.launch.wordsHelpAi}</Text>
+          {p.linkInQuery ? <LinkNotice style={styles.notice} onAddVideo={p.onAddVideo} busy={p.addingVideo} /> : null}
+        </>
+      ) : p.declined ? (
+        // Vidéo sans l'IA (le cadre de la photo a son propre titre).
+        <Text style={styles.title} accessibilityRole="header">
+          {t.launch.yourVideo}
+        </Text>
+      ) : null}
       {p.message ? <ErrorMessage style={styles.message}>{p.message}</ErrorMessage> : null}
       <Pressable
         style={[styles.primary, p.canLaunch ? null : styles.primaryDisabled]}
