@@ -7,6 +7,11 @@
 // - Rien n'est retiré, caché ni marqué : les autres propositions gardent leur
 //   ordre, juste après. Si aucune ne correspond, l'ordre ne change pas.
 // - Les petits mots courants (« la », « en », « the »…) ne comptent pas.
+// - Un mot compte aussi pour ses traductions courantes (lib/fashionWords.ts :
+//   « veste en cuir noir » trouve « Black leather jacket ») ; les marques
+//   passent telles quelles.
+
+import { isTranslationForm, translationsOf } from "./fashionWords.js";
 
 /** Petits mots qui ne désignent pas une pièce (français et anglais). */
 const SMALL_WORDS = new Set([
@@ -29,10 +34,13 @@ export function significantWords(text: string): string[] {
   return [...new Set(wordsOf(text).filter((word) => word.length >= 2 && !SMALL_WORDS.has(word)))];
 }
 
-/** Le nom contient-il un des mots (au début d'un de ses mots) ? */
+/** Le nom contient-il un des mots (au début d'un de ses mots), ou une de ses traductions ? */
 export function nameMatches(name: string, words: readonly string[]): boolean {
   const nameWords = wordsOf(name);
-  return words.some((word) => nameWords.some((nameWord) => nameWord.startsWith(word)));
+  return words.some((word) => {
+    const translations = [...translationsOf(word)];
+    return nameWords.some((nameWord) => nameWord.startsWith(word) || translations.some((translation) => isTranslationForm(nameWord, translation)));
+  });
 }
 
 /** Remonte en tête, dans leur ordre, les propositions dont le nom contient un
