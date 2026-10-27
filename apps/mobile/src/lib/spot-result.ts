@@ -43,6 +43,7 @@ export function toSpotResult(search: ProductSearch): SpotResult {
     status: "success",
     pieces: search.matches.map(matchToPiece),
     similarPieces: [],
+    sortedByWords: search.sortedByWords === true,
   };
 }
 

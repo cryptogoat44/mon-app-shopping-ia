@@ -27,12 +27,15 @@ export interface SpotDraft {
   /** Taille de l'image affichée, connue une fois chargée. */
   imageSize: ImageSize | null;
   crop: CropRect | null;
+  /** Mots tapés sous une photo : ils trient les propositions, sans partir avec
+   * l'image ; repris par « Recadrer » (petit lot 2). Jamais enregistrés. */
+  words: string | null;
 }
 
 let current: SpotDraft | null = null;
 
-export function startDraft(draft: Omit<SpotDraft, "crop" | "imageSize"> & Partial<SpotDraft>): SpotDraft {
-  current = { crop: null, imageSize: null, ...draft };
+export function startDraft(draft: Omit<SpotDraft, "crop" | "imageSize" | "words"> & Partial<SpotDraft>): SpotDraft {
+  current = { crop: null, imageSize: null, words: null, ...draft };
   return current;
 }
 

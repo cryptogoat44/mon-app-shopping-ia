@@ -3,8 +3,10 @@
 // Vidéo : images extraites sur l'appareil, meilleur moment et cadre de la pièce
 // par l'IA (avec l'accord « analyse_video_ia »), identification. Photo :
 // identification directe, sur la zone centrale (comme au ciblage quand on ne
-// touche pas au cadre). Les mots ne partent jamais avec l'image (petit lot,
-// 2026-10-25). Le curseur et le choix manuel ne servent qu'en repli.
+// touche pas au cadre). Les mots ne partent jamais avec l'image vers Google
+// Lens (petit lot, 2026-10-25) ; ceux d'une photo trient seulement les
+// propositions (petit lot 2, 2026-10-27). Le curseur et le choix manuel ne
+// servent qu'en repli.
 import type { ConsentStatus, CropRect } from "@monapp/shared-types";
 import { setLastSpotResult } from "../api/spotSession";
 import { fetchConsentStatus, fetchVideoAiEnabled } from "./api";
@@ -94,8 +96,9 @@ export function photoCrop(draft: SpotDraft): CropRect {
 }
 
 /** Photo : la zone entourée sur l'écran (cadre « Entourez la pièce », option B
- * du fondateur), puis l'identification, sans mots (petit lot, 2026-10-25). */
-export async function launchPhoto(draft: SpotDraft, signal: AbortSignal, crop: CropRect = photoCrop(draft)): Promise<LaunchOutcome> {
-  const ready = updateDraft({ crop }) ?? draft;
+ * du fondateur), puis l'identification. Les mots facultatifs partent à part,
+ * pour trier les propositions ; gardés pour « Recadrer » (petit lot 2). */
+export async function launchPhoto(draft: SpotDraft, signal: AbortSignal, crop: CropRect = photoCrop(draft), words = ""): Promise<LaunchOutcome> {
+  const ready = updateDraft({ crop, words: words.trim() || null }) ?? draft;
   return identify(ready, signal);
 }

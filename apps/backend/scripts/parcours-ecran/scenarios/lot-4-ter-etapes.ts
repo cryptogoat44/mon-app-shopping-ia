@@ -12,7 +12,7 @@ import type { Parcours, TestAccount } from "../boite-a-outils.js";
 import { couleurProche } from "../../lib/videos-essai.js";
 import { COMBOS, type Combo } from "./lot-3.js";
 import { attendreBoutonActif, attendreEnvoi, champContient, check, choisirFichier, couleurImageLocale, ouvrirSpotter, suivreRequetes, visible, type Envoi } from "./spotter-outils.js";
-import { aucunChamp, CHAUSSURES, capteur, champPret, lancerPhoto, lancerVideo, nouveauCompte, ralentir, simulerResultats, TEXTES, VESTE } from "./lot-4-ter-outils.js";
+import { aucunChamp, cadrePhoto, CHAUSSURES, capteur, champPhotoVide, champPret, lancerPhoto, lancerVideo, nouveauCompte, ralentir, simulerResultats, TEXTES, VESTE, zoneEnvoyee } from "./lot-4-ter-outils.js";
 
 const FR = TEXTES.fr;
 const COMBO = COMBOS[0]!;
@@ -148,36 +148,22 @@ export async function liens(p: Parcours, page: Page, video: string, problemes: s
   await capture("19-lien-colle");
 }
 
-/** Cadre de la photo (option B) : sa place et sa taille à l'écran. */
-async function cadrePhoto(page: Page): Promise<{ x: number; y: number; width: number; height: number }> {
-  const cadre = page.getByRole("slider", { name: FR.zone, exact: true }).filter({ visible: true });
-  await cadre.waitFor({ timeout: 15_000 });
-  const boite = await cadre.boundingBox();
-  check(boite !== null, "cadre de la photo affiché");
-  return boite;
-}
-
 const memeCadre = (a: { x: number; width: number }, b: { x: number; width: number }) => Math.abs(a.x - b.x) < 2 && Math.abs(a.width - b.width) < 2;
-
-/** Zone envoyée à l'identification (corps de la requête « run »). */
-function zoneEnvoyee(lancement: string): { x: number; y: number; width: number; height: number } | null {
-  const trouve = /\{"x":([\d.]+),"y":([\d.]+),"width":([\d.]+),"height":([\d.]+)\}/.exec(lancement);
-  return trouve ? { x: Number(trouve[1]), y: Number(trouve[2]), width: Number(trouve[3]), height: Number(trouve[4]) } : null;
-}
 
 /** Photo (option B du fondateur) : le cadre « Entourez la pièce » d'emblée, sans
  * IA ni accord ; coin tiré, réinitialisé, tiré à nouveau ; la zone entourée
- * est envoyée à l'identification, sans aucun champ de mots (petit lot). */
+ * est envoyée à l'identification. Le champ de mots facultatif (petit lot 2)
+ * reste vide ici : rien d'autre que l'image et sa zone n'est envoyé. */
 export async function photo(p: Parcours, page: Page, fichier: string, problemes: string[]): Promise<void> {
   const capture = capteur(p, page, COMBO, problemes);
   await page.goto(`${p.siteUrl}/`);
   const suivi = suivreRequetes(page);
   await choisirFichier(page, FR.ajouterPhoto, fichier);
   await page.getByRole("heading", { name: FR.ciblage, exact: true }).filter({ visible: true }).waitFor({ timeout: 30_000 });
-  const depart = await cadrePhoto(page);
+  const depart = await cadrePhoto(page, FR);
   check(suivi.recherches === 0, "le choix d'une photo n'appelle pas le serveur");
   check((await page.getByRole("heading", { name: FR.question, exact: true }).filter({ visible: true }).count()) === 0, "photo : plus de question « Que cherchez-vous ? » (petit lot)");
-  check(await aucunChamp(page), "photo : aucun champ de mots (petit lot)");
+  check(await champPhotoVide(page, FR), "photo : le seul champ est « Quelle pièce ? (facultatif) », vide (petit lot 2)");
   await capture("20-photo-cadre");
   // Coin en haut à gauche tiré vers l'intérieur : le cadre rétrécit.
   const tirer = async () => {
@@ -187,11 +173,11 @@ export async function photo(p: Parcours, page: Page, fichier: string, problemes:
     await page.mouse.up();
   };
   await tirer();
-  const tire = await cadrePhoto(page);
+  const tire = await cadrePhoto(page, FR);
   check(tire.x > depart.x + 10 && tire.width < depart.width - 20, `photo : le coin tiré change la zone (largeur ${Math.round(depart.width)} → ${Math.round(tire.width)} px)`);
   await capture("20b-photo-cadre-ajuste");
   await page.getByRole("button", { name: FR.reinitialiser, exact: true }).filter({ visible: true }).click();
-  check(memeCadre(await cadrePhoto(page), depart), "photo : « Réinitialiser le cadre » remet la zone centrale");
+  check(memeCadre(await cadrePhoto(page, FR), depart), "photo : « Réinitialiser le cadre » remet la zone centrale");
   await tirer();
   await ralentir(page, "**/api/searches/*/run");
   await page.getByRole("button", { name: FR.lancer, exact: true }).filter({ visible: true }).click();
@@ -206,7 +192,7 @@ export async function photo(p: Parcours, page: Page, fichier: string, problemes:
   const lancement = suivi.lancements.at(-1) ?? "";
   const zone = zoneEnvoyee(lancement);
   check(zone !== null && zone.x > 0.2 && zone.y > 0.2 && zone.width < 0.65, `photo : zone entourée envoyée (${JSON.stringify(zone)})`);
-  check(!/name="query"/.test(lancement), "photo : aucun mot envoyé avec l'image (petit lot)");
+  check(!/name="query"/.test(lancement), "photo sans mots : aucun champ « query » envoyé");
 }
 
 /** Rien trouvé (décisions du fondateur, 2026-10-08 et 2026-10-21) : le message

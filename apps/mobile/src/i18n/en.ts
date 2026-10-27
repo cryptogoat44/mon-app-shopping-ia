@@ -191,6 +191,11 @@ export const en: Catalog = {
     declinedNote: "Automatic analysis is off: you'll choose the frame yourself.",
     enableAi: "Turn on automatic analysis",
     wordsHelpAi: "These words help the AI find the piece in the video.",
+    // Photo (small lot 2, founder's decision of 2026-10-27).
+    photoLabel: "Which piece? (optional)",
+    photoPlaceholder: "e.g. the black leather jacket",
+    photoWordsNote: "Your words are used to sort the suggestions. They are not sent with the image.",
+    frameHint: "Several pieces in the photo? Circle the one you're looking for.",
     videoPreview: (duration: string) => `Preview of your video, ${duration}`,
     photoPreview: "Your photo",
     yourVideo: "Your video",
@@ -280,6 +285,7 @@ export const en: Catalog = {
     reframe: "Reframe",
     count: (n: number, query: string | null | undefined) =>
       `${n} suggestion${n === 1 ? "" : "s"}${query ? ` for “${query}”` : ""}`,
+    sortedByWords: "Sorted by your words",
     bestProposal: "Best suggestion",
     otherProposal: "Other suggestion",
     otherProposals: "Other suggestions",

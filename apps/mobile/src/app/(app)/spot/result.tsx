@@ -235,6 +235,7 @@ export default function ResultScreen() {
       {nav}
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
         <Text style={styles.count}>{t.result.count(result.pieces.length, result.query)}</Text>
+        {result.sortedByWords ? <Text style={styles.count}>{t.result.sortedByWords}</Text> : null}
         {noPriceShown(result.pieces) ? <NoPriceNotice /> : null}
 
         <View style={styles.hero}>

@@ -68,6 +68,13 @@ describe("toSpotResult", () => {
     expect(result.pieces[0]?.affiliateUrl).toBe("https://example.com/p?aff");
   });
 
+  // Petit lot 2 : « Triées selon vos mots » seulement si le serveur a remonté des propositions.
+  it("indique le tri par les mots seulement quand le serveur l'a fait ; une recherche relue n'en dit rien", () => {
+    expect(toSpotResult(search({ sortedByWords: true })).sortedByWords).toBe(true);
+    expect(toSpotResult(search({ sortedByWords: false })).sortedByWords).toBe(false);
+    expect(toSpotResult(search()).sortedByWords).toBe(false);
+  });
+
   it("signale une capture nécessaire pour un lien sans miniature exploitable", () => {
     const result = toSpotResult(search({ matches: [], method: "manual_screenshot", status: "pending" }));
     expect(result).toMatchObject({ status: "failed", failReason: "needs_photo" });

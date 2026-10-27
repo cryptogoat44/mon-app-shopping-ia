@@ -142,6 +142,10 @@ export interface ProductSearch {
    * à partir de la mise en ligne 2 (« Cette tentative n'a pas été comptée. »). */
   notCounted?: boolean;
   matches: ProductMatch[];
+  /** Réponse du lancement seulement (petit lot 2) : les propositions dont le
+   * nom contient un des mots tapés sous la photo ont été remontées en tête.
+   * Les mots ne sont pas enregistrés : une recherche relue n'en dit rien. */
+  sortedByWords?: boolean;
 }
 
 /** Zone choisie par l'utilisateur sur l'image, en proportions (0 à 1) de

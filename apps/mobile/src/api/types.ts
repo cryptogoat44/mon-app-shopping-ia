@@ -55,6 +55,8 @@ export interface SpotResult {
   failReason?: SpotFailReason;
   /** Plafond du mois atteint : jour de la reprise (« AAAA-MM-JJ »). */
   resumesOn?: string | null;
+  /** Propositions remontées selon les mots tapés sous la photo (petit lot 2). */
+  sortedByWords?: boolean;
 }
 
 export type VaultVerificationState = "pending" | "verified" | "refused";

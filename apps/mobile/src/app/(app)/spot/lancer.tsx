@@ -94,7 +94,14 @@ function MissingView() {
 }
 
 /** La question : mots, lien collé (une autre vidéo s'ajoute ici même), libellé de « Lancer ». */
-function useAsk(media: Media, setMedia: (media: Media) => void, query: string, setQuery: (value: string) => void, flow: ReturnType<typeof useSpotLaunch>): AskProps {
+function useAsk(
+  media: Media,
+  setMedia: (media: Media) => void,
+  query: string,
+  setQuery: (value: string) => void,
+  flow: ReturnType<typeof useSpotLaunch>,
+  frameAdjusted: boolean
+): AskProps {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [addingVideo, setAddingVideo] = useState(false);
@@ -118,8 +125,12 @@ function useAsk(media: Media, setMedia: (media: Media) => void, query: string, s
   const withQuery = isVideo && !flow.declined;
   const linkInQuery = withQuery && containsLink(query);
   const enoughWords = !withQuery || query.trim().length >= VIDEO_AI.queryMinLength;
+  // Photo : des mots facultatifs, qui trient les propositions (petit lot 2, 2026-10-27).
+  const photoWords = media.source === "photo";
   return {
     withQuery,
+    photoWords,
+    frameHint: photoWords && query.trim().length > 0 && !frameAdjusted,
     autoFocus: isVideo,
     query,
     onQuery: (value) => {
@@ -153,7 +164,8 @@ export default function LaunchScreen() {
   const [dragging, setDragging] = useState(false);
   const preview = useLaunchPreview(media);
   const flow = useSpotLaunch({ ...media, preview: preview.source, query, crop: media.source === "photo" ? crop : null, auto: params.auto === "1" });
-  const ask = useAsk(media, setMedia, query, setQuery, flow);
+  const frameAdjusted = (["x", "y", "width", "height"] as const).some((side) => crop[side] !== DEFAULT_CROP[side]);
+  const ask = useAsk(media, setMedia, query, setQuery, flow, frameAdjusted);
   // Photo : le cadre occupe le haut de l'écran ; quand le clavier s'ouvre, on
   // descend jusqu'à « Lancer », sinon caché dessous (constaté sur iPhone).
   const scrollRef = useRef<ScrollView>(null);
