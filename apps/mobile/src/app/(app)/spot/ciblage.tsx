@@ -12,7 +12,8 @@ import { draftImageUri, getDraft, updateDraft } from "@/lib/spot-draft";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Étape 2 : l'utilisateur entoure la pièce (seule cette zone part à
-// l'analyse, sans mots depuis le petit lot, 2026-10-25). Toujours aucun
+// l'analyse, sans mots depuis le petit lot, 2026-10-25 ; les mots tapés sous
+// la photo, s'il y en a, trient encore les propositions : petit lot 2). Aucun
 // crédit consommé : c'est « Lancer l'identification » qui engage la recherche.
 export default function TargetingScreen() {
   const router = useRouter();

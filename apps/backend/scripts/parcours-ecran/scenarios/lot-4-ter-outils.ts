@@ -61,6 +61,14 @@ const FR = {
   etape: /Étape \d sur \d/,
   lienAncien: "Collez ou tapez un lien",
   fermer: "Fermer",
+  // Petit lot 2 (2026-10-27) : les mots facultatifs d'une photo trient les propositions.
+  champPhoto: "Quelle pièce ? (facultatif)",
+  exemplePhoto: "ex. la veste en cuir noir",
+  motsTri: "Vos mots servent à trier les propositions. Seule l'image part vers la recherche.",
+  conseilCadre: "Plusieurs pièces sur la photo ? Entourez celle que vous cherchez.",
+  triees: "Triées selon vos mots",
+  motsPhoto: "veste en cuir noir",
+  identifier: "Lancer l'identification",
 };
 export type Textes = typeof FR;
 
@@ -117,6 +125,13 @@ export const TEXTES: Record<Locale, Textes> = {
     etape: /Step \d of \d/,
     lienAncien: "Paste or type a link",
     fermer: "Close",
+    champPhoto: "Which piece? (optional)",
+    exemplePhoto: "e.g. the black leather jacket",
+    motsTri: "Your words are used to sort the suggestions. Only the image goes to the search.",
+    conseilCadre: "Several pieces in the photo? Circle the one you're looking for.",
+    triees: "Sorted by your words",
+    motsPhoto: "black leather jacket",
+    identifier: "Identify the piece",
   },
 };
 
@@ -164,15 +179,15 @@ async function imagePiece(fond: string): Promise<string> {
 /** Identification fabriquée dans le navigateur : la requête ne part jamais
  * vers le serveur, donc aucun crédit SerpApi. `videsAuDebut` : nombre de
  * premières recherches « rien trouvé » (Google Lens sans proposition) ;
- * `sansPrix` : propositions sans aucun prix (petit lot). `query` : mots dont on
- * vérifie qu'ils ne partent PAS avec l'image (petit lot, 2026-10-25). */
-export async function simulerResultats(page: Page, query: string, options: { videsAuDebut?: number; sansPrix?: boolean } = {}): Promise<void> {
+ * `sansPrix` : propositions sans aucun prix (petit lot) ; `triees` : propositions
+ * remontées par les mots d'une photo (petit lot 2). Comme le serveur, la réponse
+ * ne renvoie jamais les mots (`_description` : ceux de l'essai). */
+export async function simulerResultats(page: Page, _description: string, options: { videsAuDebut?: number; sansPrix?: boolean; triees?: boolean } = {}): Promise<void> {
   const images = await Promise.all(PIECES.map((piece) => imagePiece(piece.fond)));
   let vides = options.videsAuDebut ?? 0;
   await page.route("**/api/searches/*/run", async (route) => {
     const id = /\/api\/searches\/([^/]+)\/run/.exec(route.request().url())?.[1] ?? "recherche";
     await new Promise((resolve) => setTimeout(resolve, 1500));
-    const motsEnvoyes = (route.request().postDataBuffer()?.toString("latin1") ?? "").includes(query) ? query : null;
     const rien = vides > 0;
     if (rien) vides -= 1;
     const matches = rien ? [] : PIECES.map((piece, index) => ({
@@ -197,9 +212,10 @@ export async function simulerResultats(page: Page, query: string, options: { vid
       thumbnailUrl: null,
       status: rien ? "failed" : "completed",
       errorMessage: rien ? SEARCH_FAILURE_MESSAGES.noMatch : null,
-      query: motsEnvoyes,
+      query: null,
       createdAt: new Date().toISOString(),
       matches,
+      ...(options.triees && !rien ? { sortedByWords: true } : {}),
     };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(recherche) });
   });
@@ -233,7 +249,7 @@ export async function fermerFeuille(page: Page, T: Textes): Promise<void> {
   check((await lien.count()) === 1, "feuille des corrections refermée");
 }
 
-/** Depuis Spotter : photo choisie → « Lancer » (cadre « Entourez la pièce » laissé tel quel ; aucun champ de mots depuis le petit lot). */
+/** Depuis Spotter : photo choisie → « Lancer » (cadre « Entourez la pièce » laissé tel quel, champ de mots facultatif laissé vide). */
 export async function lancerPhoto(p: Parcours, page: Page, T: Textes, fichier: string): Promise<void> {
   await page.goto(`${p.siteUrl}/`);
   await choisirFichier(page, T.ajouterPhoto, fichier);
@@ -241,9 +257,31 @@ export async function lancerPhoto(p: Parcours, page: Page, T: Textes, fichier: s
   await page.getByRole("button", { name: T.lancer, exact: true }).filter({ visible: true }).click();
 }
 
-/** Aucun champ de saisie visible (petit lot : photo, « Recadrer », vidéo sans l'IA). */
+/** Aucun champ de saisie visible (petit lot : « Recadrer », vidéo sans l'IA). */
 export async function aucunChamp(page: Page): Promise<boolean> {
   return (await page.getByRole("textbox").filter({ visible: true }).count()) === 0;
+}
+
+/** Photo (petit lot 2) : un seul champ, « Quelle pièce ? (facultatif) », vide, avec son exemple. */
+export async function champPhotoVide(page: Page, T: Textes): Promise<boolean> {
+  if ((await page.getByRole("textbox").filter({ visible: true }).count()) !== 1) return false;
+  const champ = page.getByRole("textbox", { name: T.champPhoto, exact: true }).filter({ visible: true });
+  return (await champ.count()) === 1 && (await champ.inputValue()) === "" && (await champ.getAttribute("placeholder")) === T.exemplePhoto;
+}
+
+/** Cadre de la photo (option B) : sa place et sa taille à l'écran. */
+export async function cadrePhoto(page: Page, T: Textes): Promise<{ x: number; y: number; width: number; height: number }> {
+  const cadre = page.getByRole("slider", { name: T.zone, exact: true }).filter({ visible: true });
+  await cadre.waitFor({ timeout: 15_000 });
+  const boite = await cadre.boundingBox();
+  check(boite !== null, "cadre de la photo affiché");
+  return boite;
+}
+
+/** Zone envoyée à l'identification (corps de la requête « run »). */
+export function zoneEnvoyee(lancement: string): { x: number; y: number; width: number; height: number } | null {
+  const trouve = /\{"x":([\d.]+),"y":([\d.]+),"width":([\d.]+),"height":([\d.]+)\}/.exec(lancement);
+  return trouve ? { x: Number(trouve[1]), y: Number(trouve[2]), width: Number(trouve[3]), height: Number(trouve[4]) } : null;
 }
 
 /** Vidéo choisie → mots tapés (le champ est déjà prêt) → « Lancer ». */

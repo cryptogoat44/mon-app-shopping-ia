@@ -194,6 +194,11 @@ export const fr = {
     enableAi: "Activer l'analyse automatique",
     // Texte du fondateur (2026-10-25) : les mots ne servent qu'à l'IA.
     wordsHelpAi: "Ces mots aident l'IA à retrouver la pièce dans la vidéo.",
+    // Photo (petit lot 2, décision du fondateur du 2026-10-27).
+    photoLabel: "Quelle pièce ? (facultatif)",
+    photoPlaceholder: "ex. la veste en cuir noir",
+    photoWordsNote: "Vos mots servent à trier les propositions. Seule l'image part vers la recherche.",
+    frameHint: "Plusieurs pièces sur la photo ? Entourez celle que vous cherchez.",
     videoPreview: (duration: string) => `Aperçu de votre vidéo, ${duration}`,
     photoPreview: "Votre photo",
     // Titre de la vidéo sans l'analyse automatique (texte du fondateur, 2026-10-25).
@@ -287,6 +292,7 @@ export const fr = {
     reframe: "Recadrer",
     count: (n: number, query: string | null | undefined) =>
       `${n} proposition${n > 1 ? "s" : ""}${query ? ` pour « ${query} »` : ""}`,
+    sortedByWords: "Triées selon vos mots",
     bestProposal: "Meilleure proposition",
     otherProposal: "Autre proposition",
     otherProposals: "Autres propositions",

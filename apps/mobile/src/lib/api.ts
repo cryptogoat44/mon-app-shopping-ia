@@ -139,14 +139,17 @@ export async function prepareSearch(payload: CreateSearchRequest): Promise<Produ
  * préparée. `signal` permet d'abandonner la requête (bouton « Annuler »). */
 export async function runSearch(
   searchId: string,
-  params: { crop: CropRect | null; imageUri: string | null },
+  params: { crop: CropRect | null; imageUri: string | null; words?: string | null },
   signal?: AbortSignal
 ): Promise<ProductSearch> {
   const formData = new FormData();
   if (params.crop) formData.append("crop", JSON.stringify(params.crop));
   if (params.imageUri) await appendImageFile(formData, "file", params.imageUri);
+  // Mots d'une photo : le serveur s'en sert seulement pour trier les
+  // propositions ; jamais envoyés à Google Lens, jamais enregistrés (petit lot 2).
+  if (params.words) formData.append("query", params.words);
 
-  // Ciblage : seulement des oui / non. Aucun mot n'accompagne l'image (petit lot, 2026-10-25).
+  // Ciblage : seulement des oui / non (statistiques : ni les mots, ni leur présence).
   track("spot_launched", { zone_adjusted: params.crop !== null, image_imported: params.imageUri !== null });
   const response = await authorizedFetch(`/api/searches/${searchId}/run`, { method: "POST", body: formData, signal });
   const search: ProductSearch = await response.json();

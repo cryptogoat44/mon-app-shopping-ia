@@ -38,7 +38,7 @@ export async function identifyDraft(draft: SpotDraft, signal: AbortSignal): Prom
   try {
     const searchId = await freshSearchId(draft);
     markSearchUsed();
-    const search = await runSearch(searchId, { crop: draft.crop, imageUri: draft.localImageUri }, signal);
+    const search = await runSearch(searchId, { crop: draft.crop, imageUri: draft.localImageUri, words: draft.words }, signal);
     if (signal.aborted) return { kind: "cancelled" };
     setLastSpotResult(toSpotResult(search));
     return { kind: "done", searchId: search.id };

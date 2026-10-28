@@ -348,6 +348,50 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     expect(searchMock.mock.calls.map((call) => call[2])).toEqual([{ locale: { hl: "fr", country: "fr" } }, { locale: { hl: "fr", country: "fr" } }]);
   });
 
+  // Petit lot 2 (décision du fondateur du 2026-10-27) : les mots tapés sous la photo trient les propositions.
+  it("les mots remontent en tête les propositions dont le nom les contient ; ni transmis à la recherche visuelle, ni enregistrés", async () => {
+    const search = await prepare();
+    searchMock.mockResolvedValueOnce(
+      found([
+        { ...MATCH, rank: 1, productName: "Chelsea boots", merchantUrl: "https://marchand.example/a" },
+        { ...MATCH, rank: 2, productName: "Sac en cuir noir", merchantUrl: "https://marchand.example/b" },
+        { ...MATCH, rank: 3, productName: "Veste en cuir noire", merchantUrl: "https://marchand.example/c" },
+      ])
+    );
+    const res = await run(search.id, { query: "la veste en cuir noir" }, IMAGE);
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.sortedByWords).toBe(true);
+    expect(body.matches.map((m: { rank: number; productName: string }) => [m.rank, m.productName])).toEqual([
+      [1, "Sac en cuir noir"],
+      [2, "Veste en cuir noire"],
+      [3, "Chelsea boots"],
+    ]);
+    expect(searchMock.mock.calls[0]![2]).toEqual({ locale: { hl: "fr", country: "fr" } });
+    const { data } = await app.supabaseAdmin.from("product_searches").select("query").eq("id", search.id).single();
+    expect(data).toEqual({ query: null });
+    // Relue plus tard : même ordre, mais rien ne dit plus le tri (les mots ne sont pas gardés).
+    const relue = (await app.inject({ method: "GET", url: `/api/searches/${search.id}`, headers: authHeaders(user.token) })).json();
+    expect(relue.matches.map((m: { productName: string }) => m.productName)).toEqual(["Sac en cuir noir", "Veste en cuir noire", "Chelsea boots"]);
+    expect(relue.sortedByWords).toBeUndefined();
+  });
+
+  it("aucun nom ne contient les mots ni leurs traductions, ou aucun mot : l'ordre de la recherche visuelle ne change pas, et rien ne l'indique", async () => {
+    const sansMots: Record<string, string> = {};
+    for (const fields of [{ query: "veste en cuir noir" }, sansMots]) {
+      const search = await prepare();
+      searchMock.mockResolvedValueOnce(
+        found([
+          { ...MATCH, rank: 1, productName: "Chelsea boots", merchantUrl: "https://marchand.example/a" },
+          { ...MATCH, rank: 2, productName: "Silk scarf", merchantUrl: "https://marchand.example/b" },
+        ])
+      );
+      const body = (await run(search.id, fields, IMAGE)).json();
+      expect(body.sortedByWords).toBe(false);
+      expect(body.matches.map((m: { productName: string }) => m.productName)).toEqual(["Chelsea boots", "Silk scarf"]);
+    }
+  });
+
   it("chaque recherche écrit sa ligne « Mesure recherche » : l'issue et des nombres, jamais d'identifiant, de titre ni d'adresse", async () => {
     const search = await prepare("https://www.tiktok.com/@x/video/1");
     const journal = vi.spyOn(app.log, "info");

@@ -1,6 +1,7 @@
 // Petit lot (décisions du fondateur, 2026-10-21 et 2026-10-25), sur le site,
 // dans les 4 combinaisons (français/anglais, clair/sombre) :
-// - photo, « Recadrer », vidéo sans l'IA : aucun champ de mots ;
+// - « Recadrer », vidéo sans l'IA : aucun champ de mots ; photo : le champ
+//   facultatif du petit lot 2 (2026-10-27), laissé vide ici (scénario petit-lot-2) ;
 // - vidéo avec l'IA : le champ reste, expliqué (« Ces mots aident l'IA… ») ;
 //   les mots servent à l'IA, mais ne partent jamais avec l'image ;
 // - propositions sans aucun prix : le message honnête, au-dessus d'elles ;
@@ -22,7 +23,7 @@ import type { Parcours, TestAccount } from "../boite-a-outils.js";
 import { genererVideosEssai } from "../../lib/videos-essai.js";
 import { COMBOS, type Combo } from "./lot-3.js";
 import { attendreEnvoi, check, choisirFichier, ouvrirSpotter, suivreRequetes, visible, type Envoi } from "./spotter-outils.js";
-import { aucunChamp, capteur, champPret, lancerPhoto, nouveauCompte, ralentir, simulerResultats, TEXTES } from "./lot-4-ter-outils.js";
+import { aucunChamp, capteur, champPhotoVide, champPret, lancerPhoto, nouveauCompte, ralentir, simulerResultats, TEXTES } from "./lot-4-ter-outils.js";
 
 export const name = "Petit lot — les mots ne partent plus avec l'image ; message « aucun prix » (site)";
 export const outputDir = "petit-lot-captures";
@@ -34,7 +35,7 @@ const RUN = "**/api/searches/*/run";
 /** Le corps du lancement (multipart) ne contient aucun champ « query ». */
 const sansMots = (lancement: string): boolean => lancement.length > 0 && !/name="query"/.test(lancement);
 
-/** Photo : le cadre sans champ ; propositions sans prix ; « Recadrer » ; rien trouvé. */
+/** Photo : le cadre et son champ facultatif, vide ; propositions sans prix ; « Recadrer » ; rien trouvé. */
 async function photo(p: Parcours, page: Page, combo: Combo, fichier: string, problemes: string[]): Promise<void> {
   const T = TEXTES[combo.locale];
   const capture = capteur(p, page, combo, problemes);
@@ -42,9 +43,10 @@ async function photo(p: Parcours, page: Page, combo: Combo, fichier: string, pro
   await page.goto(`${p.siteUrl}/`);
   await choisirFichier(page, T.ajouterPhoto, fichier);
   await page.getByRole("heading", { name: T.ciblage, exact: true }).filter({ visible: true }).waitFor({ timeout: 30_000 });
-  check(await aucunChamp(page), "photo : aucun champ de mots");
+  // Petit lot 2 : le champ facultatif revient (mots qui trient, jamais envoyés à Google Lens).
+  check(await champPhotoVide(page, T), "photo : le seul champ est « Quelle pièce ? (facultatif) », vide");
   check((await page.getByRole("heading", { name: T.question, exact: true }).filter({ visible: true }).count()) === 0, "photo : plus de question « Que cherchez-vous ? »");
-  await capture("01-photo-sans-champ");
+  await capture("01-photo");
 
   // Propositions sans aucun prix : le message, au-dessus d'elles, visible sans défilement.
   await simulerResultats(page, T.description, { sansPrix: true });
@@ -56,7 +58,7 @@ async function photo(p: Parcours, page: Page, combo: Combo, fichier: string, pro
   const [boite, meilleure] = await Promise.all([visible(page, T.aucunPrix).boundingBox(), visible(page, T.meilleure).boundingBox()]);
   const hauteur = page.viewportSize()?.height ?? 0;
   check(boite !== null && meilleure !== null && boite.y < meilleure.y && boite.y + boite.height <= hauteur, "aucun prix : au-dessus des propositions, visible sans défilement");
-  check(sansMots(suivi.lancements.at(-1) ?? ""), "photo : aucun mot envoyé avec l'image");
+  check(sansMots(suivi.lancements.at(-1) ?? ""), "photo sans mots : aucun champ « query » envoyé");
   await capture("02-aucun-prix");
 
   // « Recadrer » : l'image seule.
@@ -166,7 +168,7 @@ export async function run(p: Parcours): Promise<void> {
   const problemes: string[] = [];
   try {
     for (const combo of COMBOS) {
-      await p.step(`${combo.id} : photo sans champ, aucun prix, « Recadrer », rien trouvé ; vidéo avec l'IA ; vidéo sans l'IA ; retrait du Vault`, async () => {
+      await p.step(`${combo.id} : photo (champ vide), aucun prix, « Recadrer », rien trouvé ; vidéo avec l'IA ; vidéo sans l'IA ; retrait du Vault`, async () => {
         const compte = await nouveauCompte(p, `pl${combo.id.replace("-", "")}`);
         const page = await ouvrirSpotter(p, compte, combo, envois, TEXTES[combo.locale].ajouterVideo);
         await photo(p, page, combo, photoEssai, problemes);

@@ -103,6 +103,8 @@ export function QueryInput({
   autoFocus = false,
   testID,
   style,
+  placeholder = t.launch.placeholder,
+  label = t.launch.title,
 }: {
   value: string;
   onChangeText: (value: string) => void;
@@ -110,6 +112,8 @@ export function QueryInput({
   autoFocus?: boolean;
   testID: string;
   style?: StyleProp<TextStyle>;
+  placeholder?: string;
+  label?: string;
 }) {
   const [focused, setFocused] = useState(false);
   return (
@@ -117,7 +121,7 @@ export function QueryInput({
       style={[styles.input, focused ? styles.inputFocused : null, style]}
       value={value}
       onChangeText={onChangeText}
-      placeholder={t.launch.placeholder}
+      placeholder={placeholder}
       placeholderTextColor={color.acier}
       maxLength={SEARCH_QUERY_MAX_LENGTH}
       autoFocus={autoFocus}
@@ -125,7 +129,7 @@ export function QueryInput({
       onSubmitEditing={onSubmit}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
-      accessibilityLabel={t.launch.title}
+      accessibilityLabel={label}
       testID={testID}
     />
   );
@@ -133,9 +137,14 @@ export function QueryInput({
 
 export interface AskProps {
   /** Le champ « Que cherchez-vous ? » : seulement pour une vidéo analysée par
-   * l'IA, qui se sert des mots pour trouver la pièce. Photo, ou vidéo sans
-   * l'IA : aucun champ, les mots ne partent plus avec l'image (petit lot). */
+   * l'IA, qui se sert des mots pour trouver la pièce. Vidéo sans l'IA : aucun
+   * champ. Les mots ne partent jamais avec l'image vers Google Lens (petit lot). */
   withQuery: boolean;
+  /** Photo : le champ « Quelle pièce ? (facultatif) », dont les mots trient
+   * les propositions (petit lot 2, décision du fondateur du 2026-10-27). */
+  photoWords: boolean;
+  /** Photo : des mots tapés et le cadre pas encore ajusté : conseil d'entourer la pièce. */
+  frameHint: boolean;
   /** Vidéo : champ prêt à la saisie dès l'ouverture. */
   autoFocus: boolean;
   query: string;
@@ -154,11 +163,30 @@ export interface AskProps {
   privacy: string | null;
 }
 
-/** La question (vidéo analysée par l'IA), prête à la saisie dès l'ouverture, et « Lancer ». */
+/** La question (vidéo analysée par l'IA, prête à la saisie dès l'ouverture),
+ * ou les mots facultatifs d'une photo, puis « Lancer ». */
 export function AskView(p: AskProps) {
   return (
     <>
-      {p.withQuery ? (
+      {p.photoWords ? (
+        <>
+          <Text style={styles.fieldLabel}>{t.launch.photoLabel}</Text>
+          <QueryInput
+            value={p.query}
+            onChangeText={p.onQuery}
+            onSubmit={() => p.canLaunch && p.onLaunch()}
+            testID="spot-photo-words"
+            placeholder={t.launch.photoPlaceholder}
+            label={t.launch.photoLabel}
+          />
+          <Text style={styles.note}>{t.launch.photoWordsNote}</Text>
+          {p.frameHint ? (
+            <Text style={styles.body} accessibilityLiveRegion="polite">
+              {t.launch.frameHint}
+            </Text>
+          ) : null}
+        </>
+      ) : p.withQuery ? (
         <>
           <Text style={styles.title} accessibilityRole="header">
             {t.launch.title}
@@ -268,6 +296,7 @@ const styles = themedStyles(() => ({
   },
   badgeLabel: { color: color.surImage, fontSize: font.caption, fontWeight: "600", fontVariant: ["tabular-nums"] },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 29, marginTop: space.lg },
+  fieldLabel: { fontSize: font.secondary, color: color.encre, fontWeight: "600", marginTop: space.lg },
   frameTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 29 },
   caption: { fontSize: font.caption, color: color.acier, marginTop: 6, lineHeight: 18 },
   cropArea: { marginTop: space.md },

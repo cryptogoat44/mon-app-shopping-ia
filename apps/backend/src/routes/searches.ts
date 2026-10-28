@@ -30,6 +30,7 @@ import { INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
 import { ImageSourceError, downloadThumbnail, prepareImageForAnalysis } from "../lib/imageProcessing.js";
 import { releaseReservation, reserveSearch, sendCapacityReached } from "../lib/searchCapacity.js";
 import { observeBreakerAfter, observeBreakerAtLaunch } from "../lib/searchBreaker.js";
+import { sortByWords } from "../lib/wordSort.js";
 
 const createSearchSchema = z.object({
   sourceUrl: z.string().url().max(2048).optional(),
@@ -52,9 +53,10 @@ const cropSchema = z
 
 const runSearchSchema = z.object({
   crop: cropSchema.optional(),
-  // Encore accepté et validé pour les anciennes versions de l'app, mais jamais
-  // envoyé à Google Lens ni enregistré (petit lot, décision du fondateur du
-  // 2026-10-25 : les mots avec l'image faisaient baisser les résultats).
+  // Les mots tapés sous la photo : jamais envoyés à Google Lens (petit lot,
+  // 2026-10-25 : avec l'image, ils faisaient baisser les résultats), jamais
+  // enregistrés ; ils servent seulement à trier les propositions (petit lot 2,
+  // décision du fondateur du 2026-10-27, lib/wordSort.ts).
   query: z.string().max(SEARCH_QUERY_MAX_LENGTH).optional(),
 });
 
@@ -610,7 +612,10 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       }
 
       fastify.countRateLimitHit(request, "searchCreate");
-      const outcome = await runVisualSearch(fastify, request, imageUrl, reservation.reservationId);
+      // Les mots remontent en tête les propositions dont le nom les contient ; rien n'est retiré.
+      const searched = await runVisualSearch(fastify, request, imageUrl, reservation.reservationId);
+      const byWords = sortByWords(searched.matches, form.input.query);
+      const outcome = { ...searched, matches: byWords.matches };
       await discardAnalysisImage(fastify, storagePath);
       const result = await saveOutcome(fastify, request, id, outcome, cropAreaPct(form.input.crop));
       await observeBreakerAfter(fastify, "image", IMAGE_SEARCH_PROVIDER.name, id);
@@ -618,7 +623,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       if (!result) {
         return reply.code(500).send({ error: "search_save_failed", message: "Le résultat n'a pas pu être enregistré, réessayez." });
       }
-      return reply.send(result);
+      return reply.send({ ...result, sortedByWords: byWords.sorted });
     }
   );
 

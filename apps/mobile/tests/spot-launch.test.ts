@@ -189,13 +189,13 @@ describe("photo : même parcours, sans attendre le serveur avant « Lancer »", 
     expect(draft.searchId).toBeNull();
     expect(await launchPhoto(draft, new AbortController().signal)).toEqual({ kind: "result", searchId: "recherche-1" });
     expect(prepareSearch).toHaveBeenCalledTimes(1);
-    expect(runSearch).toHaveBeenCalledWith("recherche-1", { crop: DEFAULT_CROP, imageUri: "file:///cache/photo.jpg" }, expect.anything());
+    expect(runSearch).toHaveBeenCalledWith("recherche-1", { crop: DEFAULT_CROP, imageUri: "file:///cache/photo.jpg", words: null }, expect.anything());
   });
 
   it("option B : la zone entourée sur l'écran (cadre « Entourez la pièce ») est celle envoyée", async () => {
     const draft = beginFromPhoto("file:///cache/photo.jpg", { width: 1200, height: 1600 });
     await launchPhoto(draft, new AbortController().signal, BOX);
-    expect(runSearch.mock.calls[0]![1]).toEqual({ crop: BOX, imageUri: "file:///cache/photo.jpg" });
+    expect(runSearch.mock.calls[0]![1]).toEqual({ crop: BOX, imageUri: "file:///cache/photo.jpg", words: null });
     expect(getDraft()?.crop).toEqual(BOX);
   });
 
@@ -204,6 +204,25 @@ describe("photo : même parcours, sans attendre le serveur avant « Lancer »", 
     const draft = updateDraft({ crop: BOX })!;
     await launchPhoto(draft, new AbortController().signal);
     expect(runSearch.mock.calls[0]![1]).toMatchObject({ crop: BOX });
+  });
+
+  // Petit lot 2 (décision du fondateur du 2026-10-27) : les mots facultatifs d'une photo trient les propositions.
+  it("les mots tapés sous la photo partent avec la demande, pour trier ; des espaces seuls : aucun mot", async () => {
+    const draft = beginFromPhoto("file:///cache/photo.jpg", { width: 1200, height: 1600 });
+    await launchPhoto(draft, new AbortController().signal, BOX, "  la veste en cuir noir ");
+    expect(runSearch.mock.calls[0]![1]).toEqual({ crop: BOX, imageUri: "file:///cache/photo.jpg", words: "la veste en cuir noir" });
+
+    const autre = beginFromPhoto("file:///cache/photo.jpg", { width: 1200, height: 1600 });
+    await launchPhoto(autre, new AbortController().signal, BOX, "   ");
+    expect(runSearch.mock.calls[1]![1]).toMatchObject({ words: null });
+  });
+
+  it("« Recadrer » reprend les mots de la photo", async () => {
+    const draft = beginFromPhoto("file:///cache/photo.jpg", { width: 1200, height: 1600 });
+    await launchPhoto(draft, new AbortController().signal, BOX, "sac noir");
+    const recadre = updateDraft({ crop: DEFAULT_CROP, searchId: null })!;
+    await identifyDraft(recadre, new AbortController().signal);
+    expect(runSearch.mock.calls[1]![1]).toEqual({ crop: DEFAULT_CROP, imageUri: "file:///cache/photo.jpg", words: "sac noir" });
   });
 });
 

@@ -142,6 +142,10 @@ export interface ProductSearch {
    * à partir de la mise en ligne 2 (« Cette tentative n'a pas été comptée. »). */
   notCounted?: boolean;
   matches: ProductMatch[];
+  /** Réponse du lancement seulement (petit lot 2) : les propositions dont le
+   * nom contient un des mots tapés sous la photo ont été remontées en tête.
+   * Les mots ne sont pas enregistrés : une recherche relue n'en dit rien. */
+  sortedByWords?: boolean;
 }
 
 /** Zone choisie par l'utilisateur sur l'image, en proportions (0 à 1) de
@@ -605,7 +609,11 @@ export const LEGAL_DOCUMENT_VERSIONS: Record<LegalDocumentType, string> = {
   // l'image vers SerpApi et Google, et ne sont plus enregistrés avec la
   // recherche ; la description d'une vidéo n'est pas enregistrée — simple
   // information, sans nouvelle acceptation ni message (décision du fondateur).
-  privacy_policy: "projet-2026-10-25",
+  // « projet-2026-10-27 » (petit lot 2) : les mots tapés ne sont envoyés ni à
+  // SerpApi ni à Google, ni enregistrés ; sous une photo, notre serveur s'en
+  // sert seulement pour trier les propositions — simple information, sans
+  // nouvelle acceptation ni message (décision du fondateur du 2026-10-27).
+  privacy_policy: "projet-2026-10-27",
 };
 
 /** Suivi des erreurs (lot 2) : seule adresse Sentry admise, région UE
@@ -640,7 +648,7 @@ export const CONSENT_VERSIONS: Record<VersionedConsentType, string> = {
  * quels changements relèvent de l'un ou de l'autre. */
 export const ACCEPTED_CONSENT_VERSIONS: Record<VersionedConsentType, readonly string[]> = {
   terms: ["projet-2026-09-25"],
-  privacy_policy: ["projet-2026-09-25", "projet-2026-09-29", "projet-2026-09-30", "projet-2026-09-30-b", "projet-2026-10-05", "projet-2026-10-05-b", "projet-2026-10-06", "projet-2026-10-25"],
+  privacy_policy: ["projet-2026-09-25", "projet-2026-09-29", "projet-2026-09-30", "projet-2026-09-30-b", "projet-2026-10-05", "projet-2026-10-05-b", "projet-2026-10-06", "projet-2026-10-25", "projet-2026-10-27"],
   age_declaration: [CONSENT_VERSIONS.age_declaration],
   analytics: [CONSENT_VERSIONS.analytics],
   analyse_video_ia: [CONSENT_VERSIONS.analyse_video_ia],
@@ -656,7 +664,7 @@ export const POLICY_UPDATE_NOTICE = {
   document: "privacy_policy" as LegalDocumentType,
   /** Versions dont le texte contient déjà cette information : la
    * personne qui en a accepté une ne voit pas le message. */
-  alreadyCovered: ["projet-2026-09-30", "projet-2026-09-30-b", "projet-2026-10-05", "projet-2026-10-05-b", "projet-2026-10-06", "projet-2026-10-25"] as readonly string[],
+  alreadyCovered: ["projet-2026-09-30", "projet-2026-09-30-b", "projet-2026-10-05", "projet-2026-10-05-b", "projet-2026-10-06", "projet-2026-10-25", "projet-2026-10-27"] as readonly string[],
 } as const;
 
 export interface ConsentStatus {
