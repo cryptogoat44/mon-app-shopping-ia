@@ -8,9 +8,19 @@ import {
   type SearchStatus,
 } from "@monapp/shared-types";
 import { detectPlatform, fetchOfficialPreview } from "../services/oembed.js";
-import { LensCallError, searchProductsByImageUrl, type VisualMatch } from "../services/visualSearch.js";
-import { parseMatchRows, parseSearchRow, parseSearchRows, toProductSearch, type MatchRow, type SearchRow } from "../lib/searchRows.js";
-import { cropAreaPct, failedColumns, MEASURE_LOG_MESSAGE, measuredColumns, measureLogLine, secondsSince, type MeasureColumns } from "../lib/searchMeasure.js";
+import { IMAGE_SEARCH_PROVIDER, searchProductsByImageUrl, type VisualMatch } from "../services/visualSearch.js";
+import { ProviderFailure } from "../services/searchProvider.js";
+import { isInterrupted, parseMatchRows, parseSearchRow, parseSearchRows, toProductSearch, type MatchRow, type SearchRow } from "../lib/searchRows.js";
+import {
+  cropAreaPct,
+  failedColumns,
+  MEASURE_LOG_MESSAGE,
+  measuredColumns,
+  measureLogLine,
+  providerFailureKind,
+  secondsSince,
+  type MeasureColumns,
+} from "../lib/searchMeasure.js";
 import { fetchFeedbackReasons } from "../lib/matchFeedback.js";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { purgeExpiredSearches } from "../lib/searchRetention.js";
@@ -18,7 +28,8 @@ import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { searchLocaleFor } from "../lib/locale.js";
 import { INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
 import { ImageSourceError, downloadThumbnail, prepareImageForAnalysis } from "../lib/imageProcessing.js";
-import { reserveSearch, sendCapacityReached } from "../lib/searchCapacity.js";
+import { releaseReservation, reserveSearch, sendCapacityReached } from "../lib/searchCapacity.js";
+import { observeBreakerAfter, observeBreakerAtLaunch } from "../lib/searchBreaker.js";
 
 const createSearchSchema = z.object({
   sourceUrl: z.string().url().max(2048).optional(),
@@ -224,7 +235,7 @@ async function countRefusalBeforeCall(fastify: FastifyInstance, row: SearchRow):
 }
 
 async function markPending(fastify: FastifyInstance, id: string): Promise<void> {
-  const { error } = await fastify.supabaseAdmin.from("product_searches").update({ status: "pending" }).eq("id", id);
+  const { error } = await fastify.supabaseAdmin.from("product_searches").update({ status: "pending", run_started_at: null }).eq("id", id);
   if (error) fastify.log.error({ error }, "Recherche non remise en attente après un lancement sans appel");
 }
 
@@ -260,20 +271,33 @@ interface SearchOutcome {
   measure: MeasureColumns;
   /** Rang d'origine chez Google des propositions ajoutées par la règle des prix (journal de mesure). */
   addedRanks: number[];
+  /** Code de réponse du fournisseur ; null sans réponse (délai dépassé, réseau coupé). */
+  providerStatusCode: number | null;
 }
 
-/** L'appel SerpApi (1 crédit) : des propositions, rien, ou une panne — chacun annoncé comme tel, et mesuré. */
-async function runVisualSearch(fastify: FastifyInstance, request: FastifyRequest, imageUrl: string): Promise<SearchOutcome> {
+/** L'appel au fournisseur (1 crédit) : des propositions, rien, ou une panne —
+ * chacun annoncé comme tel, et mesuré. Un refus annoncé par le fournisseur
+ * n'est pas facturé : sa place est rendue (`reservationId`, 0027). */
+async function runVisualSearch(fastify: FastifyInstance, request: FastifyRequest, imageUrl: string, reservationId: number): Promise<SearchOutcome> {
   const start = Date.now();
   try {
-    const { matches, measure, addedRanks } = await searchProductsByImageUrl(fastify, imageUrl, { locale: searchLocaleFor(request) });
-    const columns = measuredColumns(measure, secondsSince(start));
-    if (matches.length === 0) return { matches, status: "failed", errorMessage: NO_MATCH_MESSAGE, measure: columns, addedRanks };
-    return { matches, status: "completed", errorMessage: null, measure: columns, addedRanks };
+    const { matches, measure, addedRanks, statusCode } = await searchProductsByImageUrl(fastify, imageUrl, { locale: searchLocaleFor(request) });
+    const found = { matches, measure: measuredColumns(measure, secondsSince(start)), addedRanks, providerStatusCode: statusCode };
+    if (matches.length === 0) return { ...found, status: "failed", errorMessage: NO_MATCH_MESSAGE };
+    return { ...found, status: "completed", errorMessage: null };
   } catch (error) {
     request.log.error({ error }, "Échec de l'appel à l'API de recherche visuelle (lancement)");
-    const kind = error instanceof LensCallError ? error.kind : "serpapi_error";
-    return { matches: [], status: "failed", errorMessage: TECHNICAL_FAILURE_MESSAGE, measure: failedColumns(kind, secondsSince(start)), addedRanks: [] };
+    const failure = error instanceof ProviderFailure ? error : null;
+    const released = failure?.kind === "refused" ? await releaseReservation(fastify, request.log, reservationId) : false;
+    const kind = failure ? providerFailureKind(failure.kind, released) : "provider_error";
+    return {
+      matches: [],
+      status: "failed",
+      errorMessage: TECHNICAL_FAILURE_MESSAGE,
+      measure: failedColumns(kind, secondsSince(start)),
+      addedRanks: [],
+      providerStatusCode: failure?.statusCode ?? null,
+    };
   }
 }
 
@@ -283,8 +307,9 @@ async function runVisualSearch(fastify: FastifyInstance, request: FastifyRequest
 async function saveOutcome(fastify: FastifyInstance, request: FastifyRequest, id: string, outcome: SearchOutcome, cropPct: number): Promise<ProductSearch | null> {
   const saved = await saveMatches(fastify, id, outcome.matches);
   const measure = saved ? outcome.measure : failedColumns("save_failed", outcome.measure.call_seconds);
+  const reply = { provider: IMAGE_SEARCH_PROVIDER.name, statusCode: outcome.providerStatusCode };
   // Journal racine (sans le contexte de la requête) : ni identifiant de requête, ni chemin, ni compte.
-  fastify.log.info(measureLogLine(measure, outcome.addedRanks), MEASURE_LOG_MESSAGE);
+  fastify.log.info(measureLogLine(measure, outcome.addedRanks, reply), MEASURE_LOG_MESSAGE);
   const { data: updated, error: updateError } = await fastify.supabaseAdmin
     .from("product_searches")
     .update({
@@ -293,6 +318,8 @@ async function saveOutcome(fastify: FastifyInstance, request: FastifyRequest, id
       error_message: saved ? outcome.errorMessage : TECHNICAL_FAILURE_MESSAGE,
       ...measure,
       crop_area_pct: cropPct,
+      provider: reply.provider,
+      provider_status_code: reply.statusCode,
     })
     .eq("id", id)
     .select("*")
@@ -307,6 +334,68 @@ async function saveOutcome(fastify: FastifyInstance, request: FastifyRequest, id
   const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, matches.map((m) => m.id));
   // Recherche toute neuve : aucune proposition n'a encore pu être signalée.
   return toProductSearch(search, matches, affiliateUrlByMatchId, new Map());
+}
+
+/** La recherche à lancer : celle de la personne, encore en attente. null :
+ * l'erreur est déjà envoyée (introuvable, illisible ou déjà lancée). */
+async function readPendingSearch(fastify: FastifyInstance, request: FastifyRequest, reply: FastifyReply, id: string, userId: string): Promise<SearchRow | null> {
+  const { data: search } = await fastify.supabaseAdmin.from("product_searches").select("*").eq("id", id).eq("user_id", userId).maybeSingle();
+  if (!search) {
+    void reply.code(404).send({ error: "search_not_found", message: "Recherche introuvable." });
+    return null;
+  }
+  const row = parseSearchRow(search);
+  if (!row) {
+    request.log.error("Recherche illisible au lancement");
+    void reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue, réessayez." });
+    return null;
+  }
+  if (row.status !== "pending") {
+    void reply.code(409).send({ error: "search_already_run", message: "Cette recherche a déjà été lancée." });
+    return null;
+  }
+  return row;
+}
+
+/** Verrou : passe de "pending" à "processing" en une seule instruction
+ * conditionnelle, et note l'heure du lancement (0027 : recherche interrompue,
+ * disjoncteurs). Deux lancements simultanés (double appui, réseau lent) ne
+ * peuvent pas consommer deux crédits : le second ne trouve plus de ligne
+ * "pending" (audit Lot Q, ROB-03). false : déjà lancée. */
+async function lockForRun(fastify: FastifyInstance, id: string): Promise<boolean> {
+  const { data: locked } = await fastify.supabaseAdmin
+    .from("product_searches")
+    .update({ status: "processing", run_started_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("status", "pending")
+    .select("id");
+  return Boolean(locked && locked.length > 0);
+}
+
+/** Recherche restée « en cours » plus de 2 minutes (coupure, serveur
+ * redémarré) : marquée interrompue au moment où on la relit, sans tâche
+ * périodique (conception acceptée le 21 octobre). Sa place reste comptée.
+ * L'image analysée, si elle était restée, est effacée (RGPD). Terminée
+ * entre-temps : relue telle quelle. null : illisible. */
+async function markInterrupted(fastify: FastifyInstance, row: SearchRow): Promise<SearchRow | null> {
+  const measure = failedColumns("interrupted", null);
+  const { data, error } = await fastify.supabaseAdmin
+    .from("product_searches")
+    .update({ screenshot_url: null, status: "failed", error_message: TECHNICAL_FAILURE_MESSAGE, ...measure })
+    .eq("id", row.id)
+    .eq("status", "processing")
+    .select("*");
+  if (error) {
+    fastify.log.error({ error }, "Recherche interrompue non marquée");
+    return row;
+  }
+  if (data && data.length > 0) {
+    await discardAnalysisImage(fastify, `${row.user_id}/${row.id}.jpg`);
+    fastify.log.info(measureLogLine(measure, [], { provider: row.provider, statusCode: null }), MEASURE_LOG_MESSAGE);
+    return parseSearchRow(data[0]);
+  }
+  const { data: current } = await fastify.supabaseAdmin.from("product_searches").select("*").eq("id", row.id).maybeSingle();
+  return parseSearchRow(current);
 }
 
 const RECENT_SEARCHES_DEFAULT_LIMIT = 6;
@@ -478,25 +567,11 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       }
       const form = await readRunForm(request, reply);
       if (!form) return;
+      const row = await readPendingSearch(fastify, request, reply, id, userId);
+      if (!row) return;
 
-      const { data: search } = await fastify.supabaseAdmin
-        .from("product_searches")
-        .select("*")
-        .eq("id", id)
-        .eq("user_id", userId)
-        .maybeSingle();
-      if (!search) {
-        return reply.code(404).send({ error: "search_not_found", message: "Recherche introuvable." });
-      }
-      const row = parseSearchRow(search);
-      if (!row) {
-        request.log.error("Recherche illisible au lancement");
-        return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue, réessayez." });
-      }
-      if (row.status !== "pending") {
-        return reply.code(409).send({ error: "search_already_run", message: "Cette recherche a déjà été lancée." });
-      }
-
+      // Disjoncteur de la recherche par image, en observation (mise en ligne 1) : il ne bloque rien.
+      await observeBreakerAtLaunch(fastify, "image", IMAGE_SEARCH_PROVIDER.name);
       const prepared = await prepareRunImage(request, row, form);
       if ("refusal" in prepared) {
         if (prepared.refusal !== "image_required") await countRefusalBeforeCall(fastify, row);
@@ -504,17 +579,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
         return reply.code(refusal.status).send(refusal.body);
       }
 
-      // Verrou : passe de "pending" à "processing" en une seule instruction
-      // conditionnelle. Deux lancements simultanés (double appui, réseau
-      // lent) ne peuvent pas consommer deux crédits : le second ne trouve
-      // plus de ligne "pending" et reçoit 409 (audit Lot Q, ROB-03).
-      const { data: locked } = await fastify.supabaseAdmin
-        .from("product_searches")
-        .update({ status: "processing" })
-        .eq("id", id)
-        .eq("status", "pending")
-        .select("id");
-      if (!locked || locked.length === 0) {
+      if (!(await lockForRun(fastify, id))) {
         return reply.code(409).send({ error: "search_already_run", message: "Cette recherche a déjà été lancée." });
       }
 
@@ -525,7 +590,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       }
 
       // « Annuler » dans l'app coupe la connexion : si c'est déjà fait à ce
-      // stade, on n'appelle pas SerpApi (aucun crédit consommé) et la
+      // stade, on n'appelle pas le fournisseur (aucun crédit consommé) et la
       // recherche redevient lançable. Passé ce point, le crédit est engagé
       // — l'app ne promet jamais de le rembourser.
       if (request.raw.socket?.destroyed) {
@@ -534,20 +599,21 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       }
 
       // Plafond global et part de la personne (lot 4 quater,
-      // lib/searchCapacity.ts) : un appel est réservé juste avant l'envoi.
-      // Atteint, ou illisible : aucun appel à SerpApi, aucun crédit, et la
+      // lib/searchCapacity.ts) : une place est réservée juste avant l'envoi.
+      // Atteint, ou illisible : aucun appel au fournisseur, aucun crédit, et la
       // recherche redevient lançable.
-      const capacity = await reserveSearch(fastify, request.log, userId, id).catch(() => null);
-      if (!capacity || !capacity.allowed) {
+      const reservation = await reserveSearch(fastify, request.log, userId, id).catch(() => null);
+      if (!reservation || !reservation.allowed) {
         await releaseSearch(fastify, id, storagePath);
-        if (capacity) return sendCapacityReached(reply, capacity);
+        if (reservation) return sendCapacityReached(reply, reservation);
         return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue, réessayez." });
       }
 
       fastify.countRateLimitHit(request, "searchCreate");
-      const outcome = await runVisualSearch(fastify, request, imageUrl);
+      const outcome = await runVisualSearch(fastify, request, imageUrl, reservation.reservationId);
       await discardAnalysisImage(fastify, storagePath);
       const result = await saveOutcome(fastify, request, id, outcome, cropAreaPct(form.input.crop));
+      await observeBreakerAfter(fastify, "image", IMAGE_SEARCH_PROVIDER.name, id);
       // Résultat illisible ou non enregistré : une panne annoncée comme telle, jamais « aucune pièce ».
       if (!result) {
         return reply.code(500).send({ error: "search_save_failed", message: "Le résultat n'a pas pu être enregistré, réessayez." });
@@ -573,8 +639,9 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "search_not_found", message: "Recherche introuvable." });
     }
 
+    const read = parseSearchRow(search);
+    const row = read && isInterrupted(read, Date.now()) ? await markInterrupted(fastify, read) : read;
     const { data: matchRows, error: matchesError } = await fastify.supabaseAdmin.from("product_matches").select("*").eq("search_id", id);
-    const row = parseSearchRow(search);
     const matches = parseMatchRows(matchRows);
     if (matchesError || !row || !matches) {
       request.log.error({ matchesError }, "Recherche ou propositions illisibles");

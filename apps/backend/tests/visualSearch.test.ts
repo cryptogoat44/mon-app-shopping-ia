@@ -9,7 +9,9 @@ vi.mock("../src/lib/safeFetch.js", () => ({
 }));
 
 import { safeFetch } from "../src/lib/safeFetch.js";
-import { callSerpApi, CURRENT_LENS_SETTINGS, searchProductsByImageUrl } from "../src/services/visualSearch.js";
+import { searchProductsByImageUrl } from "../src/services/visualSearch.js";
+import { callSerpApi, isRefusalStatus } from "../src/services/serpapi.js";
+import { CURRENT_LENS_SETTINGS } from "../src/services/lensSettings.js";
 
 const safeFetchMock = vi.mocked(safeFetch);
 
@@ -102,10 +104,10 @@ describe("searchProductsByImageUrl", () => {
     expect(measure.sections).toEqual(["visual_matches", "related_content", "other"]);
   });
 
-  it("un type refusé par SerpApi (code 400, comme « products » depuis son abandon) est une panne annoncée, jamais une recherche vide", async () => {
+  it("un type refusé par SerpApi (code 400, comme « products » depuis son abandon) est une panne annoncée, jamais une recherche vide ; refus non facturé", async () => {
     safeFetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ error: "Unsupported `products` type." }), { status: 400, headers: { "content-type": "application/json" } }));
 
-    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toMatchObject({ kind: "serpapi_error" });
+    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toMatchObject({ kind: "refused", statusCode: 400 });
   });
 
   it("accepte une locale explicite, en prévision du branchement sur la langue de l'utilisateur (Lot 3)", async () => {
@@ -146,11 +148,28 @@ describe("searchProductsByImageUrl", () => {
     expect((await searchProductsByImageUrl(fastify, "https://example.com/photo.jpg")).matches).toEqual([]);
   });
 
-  it("relève une vraie erreur de SerpApi", async () => {
+  it("relève une vraie erreur de SerpApi ; sans statut, elle reste incertaine (comptée)", async () => {
     safeFetchMock.mockResolvedValueOnce(jsonResponse({ error: "Invalid API key." }));
 
     const fastify = fakeFastify();
     await expect(searchProductsByImageUrl(fastify, "https://example.com/photo.jpg")).rejects.toThrow("Invalid API key");
+    safeFetchMock.mockResolvedValueOnce(jsonResponse({ error: "Invalid API key." }));
+    await expect(searchProductsByImageUrl(fastify, "https://example.com/photo.jpg")).rejects.toMatchObject({ name: "ProviderFailure", kind: "error", statusCode: 200 });
+  });
+
+  // Conception du 20 octobre (acceptée) : ne compter que ce que SerpApi facture, et, dans le doute, compter.
+  it("statut « Error » de SerpApi : refus non facturé, même avec le code 200 ; statut « Success » sans résultat : une recherche vide (facturée)", async () => {
+    safeFetchMock.mockResolvedValueOnce(jsonResponse({ search_metadata: { status: "Error" }, error: "Proxy timeout" }));
+    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toMatchObject({ kind: "refused", statusCode: 200 });
+    safeFetchMock.mockResolvedValueOnce(jsonResponse({ search_metadata: { status: "Success" }, error: "Google Lens hasn't returned any results for this query." }));
+    const vide = await searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg");
+    expect(vide.matches).toEqual([]);
+    expect(vide.statusCode).toBe(200);
+  });
+
+  it("codes de refus documentés par SerpApi (non facturés) : 400 à 499, 500 et 503 ; les autres codes d'erreur restent incertains", () => {
+    for (const code of [400, 401, 403, 404, 410, 429, 499, 500, 503]) expect(isRefusalStatus(code), String(code)).toBe(true);
+    for (const code of [200, 301, 399, 501, 502, 504, 520]) expect(isRefusalStatus(code), String(code)).toBe(false);
   });
 
   it("garde l'image haute définition quand elle existe, la vignette sinon", async () => {
@@ -253,15 +272,17 @@ describe("searchProductsByImageUrl", () => {
   });
 
   // Mesure (fiabilité des résultats) : chaque panne est rangée avec son type.
-  it("panne typée : délai dépassé, SerpApi en erreur ou injoignable, réponse illisible", async () => {
+  it("panne classée : délai dépassé, réseau coupé, refus de SerpApi (503), autre erreur (502), réponse illisible ; code de réponse gardé quand il existe", async () => {
     safeFetchMock.mockRejectedValueOnce(Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" }));
-    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toMatchObject({ kind: "timeout" });
+    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toMatchObject({ kind: "timeout", statusCode: null });
     safeFetchMock.mockRejectedValueOnce(new TypeError("fetch failed"));
-    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toMatchObject({ kind: "serpapi_error" });
+    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toMatchObject({ kind: "error", statusCode: null });
     safeFetchMock.mockResolvedValueOnce(new Response("{}", { status: 503 }));
-    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toMatchObject({ kind: "serpapi_error" });
+    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toMatchObject({ kind: "refused", statusCode: 503 });
+    safeFetchMock.mockResolvedValueOnce(new Response("{}", { status: 502 }));
+    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toMatchObject({ kind: "error", statusCode: 502 });
     safeFetchMock.mockResolvedValueOnce(new Response("<html>erreur</html>", { status: 200 }));
-    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toMatchObject({ kind: "unreadable_response" });
+    await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toMatchObject({ kind: "unreadable", statusCode: 200 });
   });
 
   it("réponse illisible : panne technique, jamais « aucune pièce »", async () => {

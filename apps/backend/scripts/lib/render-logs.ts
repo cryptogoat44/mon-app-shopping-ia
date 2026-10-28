@@ -4,8 +4,9 @@
 // écrit lui-même pour l'analyse automatique (images, moments, jetons, motif
 // d'échec), pour le plafond des recherches SerpApi (lot 4 quater : réservé
 // ou refusé, compteurs du jour, du mois de SerpApi et de la personne — un
-// nombre, jamais son identifiant) et pour la mesure de chaque recherche (petit
-// lot : issue, propositions, prix, rangs des ajouts de la règle des prix).
+// nombre, jamais son identifiant), pour la mesure de chaque recherche (petit
+// lot : issue, propositions, prix, rangs des ajouts de la règle des prix) et,
+// depuis 0027, pour les places rendues et les disjoncteurs.
 // Render ne garde pas de journal des requêtes HTTP pour ce service :
 // on lit les lignes du serveur (« incoming request » / « request completed »),
 // dont on n'extrait QUE la méthode, le chemin (comparé à une liste fixe) et le
@@ -154,9 +155,13 @@ export function chronologie(entrees: readonly Entree[]): Evenement[] {
     const compteurs = extraireCompteursIA(entree.message);
     if (compteurs) evenements.push({ heure: entree.timestamp, nom: "Analyse vidéo IA", issue: decrireAnalyse(compteurs) });
     const plafond = extrairePlafond(entree.message);
-    if (plafond) evenements.push({ heure: entree.timestamp, nom: "Plafond SerpApi", issue: decrirePlafond(plafond) });
+    if (plafond) evenements.push({ heure: entree.timestamp, nom: "Plafond recherches", issue: decrirePlafond(plafond) });
     const mesure = extraireMesure(entree.message);
     if (mesure) evenements.push({ heure: entree.timestamp, nom: "Mesure recherche", issue: decrireMesure(mesure) });
+    const place = extrairePlaceRendue(entree.message);
+    if (place) evenements.push({ heure: entree.timestamp, nom: "Place rendue", issue: decrirePlaceRendue(place) });
+    const disjoncteur = extraireDisjoncteur(entree.message);
+    if (disjoncteur) evenements.push({ heure: entree.timestamp, nom: "Disjoncteur", issue: decrireDisjoncteur(disjoncteur) });
   }
   return evenements.sort((a, b) => Date.parse(a.heure) - Date.parse(b.heure));
 }
@@ -169,9 +174,10 @@ export function extraireCompteursIA(message: string): CompteursIA | null {
   return { msg, frames, candidates, moments, inputTokens, outputTokens, kind, status };
 }
 
-/** Seuls champs lus dans les lignes « Plafond SerpApi » du serveur (src/lib/searchCapacity.ts) : des nombres et des états. */
+/** Seuls champs lus dans les lignes « Plafond recherches » du serveur
+ * (src/lib/searchCapacity.ts ; « Plafond SerpApi » avant 0027) : des nombres et des états. */
 const PLAFOND = z.object({
-  msg: z.literal("Plafond SerpApi"),
+  msg: z.enum(["Plafond SerpApi", "Plafond recherches"]),
   step: z.enum(["search", "video_ai"]),
   outcome: z.enum(["reserved", "refused"]),
   limit: z.enum(["day", "month", "user"]).nullable(),
@@ -185,7 +191,7 @@ const PLAFOND = z.object({
 });
 export type LignePlafond = z.infer<typeof PLAFOND>;
 
-/** Ligne « Plafond SerpApi » du serveur → ses seuls compteurs (null si ce n'en est pas une). */
+/** Ligne « Plafond recherches » (ou « Plafond SerpApi ») du serveur → ses seuls compteurs (null si ce n'en est pas une). */
 export function extrairePlafond(message: string): LignePlafond | null {
   const lu = PLAFOND.safeParse(lireJson(message));
   if (!lu.success) return null;
@@ -216,18 +222,21 @@ export function resumerPlafond(lignes: readonly LignePlafond[]): string {
 }
 
 /** Seuls champs lus dans les lignes « Mesure recherche » du serveur
- * (src/lib/searchMeasure.ts, petit lot) : l'issue et des nombres. */
+ * (src/lib/searchMeasure.ts, petit lot ; fournisseur et code de réponse
+ * depuis 0027) : l'issue et des nombres. */
 const MESURE = z.object({
   msg: z.literal("Mesure recherche"),
+  provider: z.string().regex(/^[a-z][a-z0-9_]{0,31}$/).nullable().default(null),
+  statusCode: z.number().nullable().default(null),
   outcome: z.enum(["found", "nothing_buyable", "empty_lens", "failure"]),
-  failureKind: z.enum(["timeout", "serpapi_error", "unreadable_response", "save_failed"]).nullable(),
+  failureKind: z.enum(["timeout", "provider_error", "provider_refused", "unreadable_response", "save_failed", "interrupted", "serpapi_error"]).nullable(),
   received: z.number().nullable(),
   kept: z.number().nullable(),
   keptWithPrice: z.number().nullable(),
   keptOtherCurrency: z.number().nullable(),
   added: z.number(),
   addedRanks: z.array(z.number()),
-  callSeconds: z.number(),
+  callSeconds: z.number().nullable(),
 });
 export type LigneMesure = z.infer<typeof MESURE>;
 
@@ -235,17 +244,34 @@ export type LigneMesure = z.infer<typeof MESURE>;
 export function extraireMesure(message: string): LigneMesure | null {
   const lu = MESURE.safeParse(lireJson(message));
   if (!lu.success) return null;
-  const { msg, outcome, failureKind, received, kept, keptWithPrice, keptOtherCurrency, added, addedRanks, callSeconds } = lu.data;
-  return { msg, outcome, failureKind, received, kept, keptWithPrice, keptOtherCurrency, added, addedRanks, callSeconds };
+  const { msg, provider, statusCode, outcome, failureKind, received, kept, keptWithPrice, keptOtherCurrency, added, addedRanks, callSeconds } = lu.data;
+  return { msg, provider, statusCode, outcome, failureKind, received, kept, keptWithPrice, keptOtherCurrency, added, addedRanks, callSeconds };
 }
 
 const ISSUES = { found: "trouvée", nothing_buyable: "rien d'achetable", empty_lens: "vide", failure: "panne" } as const;
-const PANNES = { timeout: "délai dépassé", serpapi_error: "erreur du fournisseur", unreadable_response: "réponse illisible", save_failed: "enregistrement" } as const;
+const PANNES = {
+  timeout: "délai dépassé",
+  provider_error: "erreur du fournisseur",
+  provider_refused: "refus du fournisseur, place rendue",
+  unreadable_response: "réponse illisible",
+  save_failed: "enregistrement",
+  interrupted: "interrompue",
+  serpapi_error: "erreur du fournisseur, ancien serveur",
+} as const;
+
+function duree(secondes: number | null): string {
+  return secondes === null ? "durée inconnue" : `${secondes} s`;
+}
 
 export function decrireMesure(ligne: LigneMesure): string {
-  if (ligne.outcome === "failure") return `panne (${ligne.failureKind ? PANNES[ligne.failureKind] : "?"}), ${ligne.callSeconds} s`;
+  if (ligne.outcome === "failure") {
+    // Le code de réponse ne dit quelque chose que pour un refus ou une erreur du fournisseur.
+    const parlant = ligne.failureKind === "provider_refused" || ligne.failureKind === "provider_error";
+    const code = parlant && ligne.statusCode !== null ? `, code ${ligne.statusCode}` : "";
+    return `panne (${ligne.failureKind ? PANNES[ligne.failureKind] : "?"}${code}), ${duree(ligne.callSeconds)}`;
+  }
   const ajoutees = ligne.added > 0 ? ` ; ${ligne.added} ajoutée(s) par la règle des prix (rangs ${ligne.addedRanks.join(", ")})` : "";
-  return `${ISSUES[ligne.outcome]} — ${ligne.received ?? "?"} reçue(s), ${ligne.kept ?? "?"} gardée(s) dont ${ligne.keptWithPrice ?? "?"} avec un prix (${ligne.keptOtherCurrency ?? "?"} dans une autre devise)${ajoutees}, ${ligne.callSeconds} s`;
+  return `${ISSUES[ligne.outcome]} — ${ligne.received ?? "?"} reçue(s), ${ligne.kept ?? "?"} gardée(s) dont ${ligne.keptWithPrice ?? "?"} avec un prix (${ligne.keptOtherCurrency ?? "?"} dans une autre devise)${ajoutees}, ${duree(ligne.callSeconds)}`;
 }
 
 /** Bilan de la période : issues, pannes par type, prix, ajouts de la règle des prix. */
@@ -259,6 +285,75 @@ export function resumerMesures(lignes: readonly LigneMesure[]): string {
   const abouties = lignes.filter((ligne) => ligne.outcome !== "failure");
   const somme = (champ: "kept" | "keptWithPrice" | "added") => abouties.reduce((total, ligne) => total + (ligne[champ] ?? 0), 0);
   return `${lignes.length} recherche(s) : trouvées ${issue("found")}, rien d'achetable ${issue("nothing_buyable")}, vides ${issue("empty_lens")}, pannes ${issue("failure")}${pannes.length > 0 ? ` (${pannes.join(", ")})` : ""} ; ${somme("kept")} propositions gardées, dont ${somme("keptWithPrice")} avec un prix et ${somme("added")} ajoutées par la règle des prix`;
+}
+
+/** Seuls champs lus dans les lignes « Place rendue » du serveur (0027,
+ * src/lib/searchCapacity.ts) : le fournisseur et l'issue du retour. */
+const PLACE_RENDUE = z.object({
+  msg: z.literal("Place rendue"),
+  provider: z.string().regex(/^[a-z][a-z0-9_]{0,31}$/),
+  step: z.enum(["search"]),
+  released: z.boolean(),
+});
+export type LignePlaceRendue = z.infer<typeof PLACE_RENDUE>;
+
+/** Ligne « Place rendue » du serveur → l'issue du retour (null si ce n'en est pas une). */
+export function extrairePlaceRendue(message: string): LignePlaceRendue | null {
+  const lu = PLACE_RENDUE.safeParse(lireJson(message));
+  if (!lu.success) return null;
+  const { msg, provider, step, released } = lu.data;
+  return { msg, provider, step, released };
+}
+
+export function decrirePlaceRendue(ligne: LignePlaceRendue): string {
+  return ligne.released ? "refus du fournisseur : place rendue (jour et mois)" : "refus du fournisseur : place NON rendue (retour en échec, elle reste comptée)";
+}
+
+export function resumerPlacesRendues(lignes: readonly LignePlaceRendue[]): string {
+  if (lignes.length === 0) return "aucune ligne dans la période";
+  const rendues = lignes.filter((ligne) => ligne.released).length;
+  return `${rendues} place(s) rendue(s), ${lignes.length - rendues} retour(s) en échec (places restées comptées)`;
+}
+
+/** Seuls champs lus dans les lignes « Disjoncteur » du serveur (0027,
+ * src/lib/searchBreaker.ts) : l'événement et des nombres. */
+const DISJONCTEUR = z.object({
+  msg: z.literal("Disjoncteur"),
+  provider: z.string().regex(/^[a-z][a-z0-9_]{0,31}$/),
+  searchType: z.enum(["image"]),
+  mode: z.enum(["observation"]),
+  event: z.enum(["opened", "reopened", "closed", "would_block"]),
+  judged: z.number(),
+  bad: z.number(),
+  minutesLeft: z.number().nullable(),
+});
+export type LigneDisjoncteur = z.infer<typeof DISJONCTEUR>;
+
+/** Ligne « Disjoncteur » du serveur → l'événement et ses nombres (null si ce n'en est pas une). */
+export function extraireDisjoncteur(message: string): LigneDisjoncteur | null {
+  const lu = DISJONCTEUR.safeParse(lireJson(message));
+  if (!lu.success) return null;
+  const { msg, provider, searchType, mode, event, judged, bad, minutesLeft } = lu.data;
+  return { msg, provider, searchType, mode, event, judged, bad, minutesLeft };
+}
+
+// Mise en ligne 1 : le disjoncteur de l'image, en observation (il ne bloque rien).
+const EVENEMENTS_DISJONCTEUR = {
+  opened: "se serait ouvert",
+  reopened: "se serait rouvert (recherche de test mauvaise)",
+  closed: "se serait refermé",
+  would_block: "aurait bloqué une recherche",
+} as const;
+
+export function decrireDisjoncteur(ligne: LigneDisjoncteur): string {
+  const reste = ligne.minutesLeft === null ? "" : `, encore ${ligne.minutesLeft} min`;
+  return `image (observation) : ${EVENEMENTS_DISJONCTEUR[ligne.event]} — ${ligne.bad} mauvaise(s) sur ${ligne.judged}${reste}`;
+}
+
+export function resumerDisjoncteurs(lignes: readonly LigneDisjoncteur[]): string {
+  if (lignes.length === 0) return "aucune ligne dans la période";
+  const nombre = (event: LigneDisjoncteur["event"]) => lignes.filter((ligne) => ligne.event === event).length;
+  return `en observation : ouvertures ${nombre("opened")}, réouvertures ${nombre("reopened")}, fermetures ${nombre("closed")}, recherches qui auraient été bloquées ${nombre("would_block")}`;
 }
 
 export function decrireCodes(codes: Record<string, number>): string {

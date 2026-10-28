@@ -1,5 +1,5 @@
 import type { FastifyRequest } from "fastify";
-import type { SearchLocale } from "../services/visualSearch.js";
+import type { SearchLocale } from "../services/lensSettings.js";
 
 // Langue de l'utilisateur, transmise par l'app dans l'en-tête Accept-Language
 // (lot 3) : « fr », « en » ou « en-GB » (langue choisie dans l'app sur cet

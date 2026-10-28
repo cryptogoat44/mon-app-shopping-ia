@@ -11,7 +11,8 @@
 //     (lecture SEULE des journaux : des compteurs, jamais de contenu — diagnostic
 //      du lot 4 ter, demandé par le fondateur le 2026-10-07 ; plafond global
 //      SerpApi depuis le lot 4 quater ; mesure de chaque recherche depuis le
-//      petit lot ; --chronologie : l'ordre des événements)
+//      petit lot ; places rendues et disjoncteur depuis 0027 ; --chronologie :
+//      l'ordre des événements)
 //
 // Règles (voir scripts/lib/render-guard.ts) :
 // - deux services seulement : spotto-api et le site ; l'ancien serveur
@@ -30,7 +31,24 @@
 // par un autre script, à saisie masquée : configurer-anthropic-prod.
 import { assertEditableVariable, FINAL_DEPLOY_STATUSES, RenderGuardError, assertDeployId, resolveService } from "./lib/render-guard.js";
 import { readRenderKey as readKey, renderRequest as render, RenderNotFound as NotFound } from "./lib/render-api.js";
-import { chronologie, compterRequetes, decrireAnalyse, decrireCodes, extraireCompteursIA, extraireMesure, extrairePlafond, lireJournaux, parametresJournaux, REQUETES_SUIVIES, resumerMesures, resumerPlafond } from "./lib/render-logs.js";
+import {
+  chronologie,
+  compterRequetes,
+  decrireAnalyse,
+  decrireCodes,
+  extraireCompteursIA,
+  extraireDisjoncteur,
+  extraireMesure,
+  extrairePlaceRendue,
+  extrairePlafond,
+  lireJournaux,
+  parametresJournaux,
+  REQUETES_SUIVIES,
+  resumerDisjoncteurs,
+  resumerMesures,
+  resumerPlacesRendues,
+  resumerPlafond,
+} from "./lib/render-logs.js";
 import { z } from "zod";
 
 const POLL_MS = 10_000;
@@ -137,12 +155,22 @@ async function counters(args: string[]): Promise<void> {
     const plafond = extrairePlafond(entree.message);
     return plafond ? [plafond] : [];
   });
-  console.log(`  Plafond global SerpApi (compteur de la base) : ${resumerPlafond(plafonds)}`);
+  console.log(`  Plafond global des recherches (compteur de la base) : ${resumerPlafond(plafonds)}`);
   const mesures = lignes.flatMap((entree) => {
     const mesure = extraireMesure(entree.message);
     return mesure ? [mesure] : [];
   });
   console.log(`  Mesure des recherches (écrite par le serveur) : ${resumerMesures(mesures)}`);
+  const places = lignes.flatMap((entree) => {
+    const place = extrairePlaceRendue(entree.message);
+    return place ? [place] : [];
+  });
+  console.log(`  Places rendues (refus du fournisseur) : ${resumerPlacesRendues(places)}`);
+  const disjoncteurs = lignes.flatMap((entree) => {
+    const disjoncteur = extraireDisjoncteur(entree.message);
+    return disjoncteur ? [disjoncteur] : [];
+  });
+  console.log(`  Disjoncteur de la recherche par image : ${resumerDisjoncteurs(disjoncteurs)}`);
   // --chronologie : l'ordre des événements, heure de Paris (jamais d'identifiant, d'adresse ni de contenu).
   if (!args.includes("--chronologie")) return;
   console.log("  Ordre des événements (heure de Paris) :");
