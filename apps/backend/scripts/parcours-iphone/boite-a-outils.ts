@@ -311,7 +311,7 @@ export async function lancerParcours(
   };
 
   try {
-    log(`Parcours iPhone — simulateur ${udid}, spotto-dev uniquement, aucun crédit SerpApi.`);
+    log(`Parcours iPhone — simulateur ${udid}, spotto-dev-2 uniquement, aucun crédit SerpApi.`);
     log(`  journaux du serveur local et de Metro : ${journaux}`);
     if (options.iaSimulee) {
       log("  IA d'Anthropic simulée dans le serveur local (aucun appel réel)");

@@ -76,7 +76,7 @@ describe("hôtes surveillés", () => {
     for (const adresse of ["https://eu.i.posthog.com/i/v0/e/", "https://us.i.posthog.com/batch", "https://app.posthog.com/", "https://o450.ingest.de.sentry.io/api/1/envelope/", "https://sentry.io/"]) {
       expect(versStatistiques(adresse), adresse).toBe(true);
     }
-    for (const adresse of ["http://localhost:3000/api/searches", "https://sbtwsmxfdfxzgcohbznd.supabase.co/rest/v1/", "https://posthog.com.example.org/", "https://notsentry.io/", "data:,x"]) {
+    for (const adresse of ["http://localhost:3000/api/searches", "https://sedfepcpmhilaxbrgdif.supabase.co/rest/v1/", "https://posthog.com.example.org/", "https://notsentry.io/", "data:,x"]) {
       expect(versStatistiques(adresse), adresse).toBe(false);
     }
   });

@@ -57,8 +57,8 @@ async function production(): Promise<Projet> {
 function spottoDev(): Projet {
   const url = assertDevSupabaseUrl(process.env.SUPABASE_URL, "SUPABASE_URL").origin;
   const cle = process.env.SUPABASE_ANON_KEY ?? "";
-  if (!CLE_PUBLIQUE.test(cle)) throw new Error("Clé publique de spotto-dev absente ou non publique : refusée.");
-  return { nom: "spotto-dev", sante: `${url}/auth/v1/health`, cle, durees: [], erreurs: 0, erreursDeSuite: 0, lents: [] };
+  if (!CLE_PUBLIQUE.test(cle)) throw new Error("Clé publique de spotto-dev-2 absente ou non publique : refusée.");
+  return { nom: "spotto-dev-2", sante: `${url}/auth/v1/health`, cle, durees: [], erreurs: 0, erreursDeSuite: 0, lents: [] };
 }
 
 async function interroger(projet: Projet): Promise<void> {
