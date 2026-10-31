@@ -5,9 +5,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { avecVariables, configurerEnvDev, genreDeCle, type OptionsEnvDev } from "../scripts/lib/env-dev.js";
 
 // configurer-env-dev (lot outils, 30 octobre 2026) : testé sans aucune vraie clé ni aucun appel ;
-// toutes les clés ci-dessous sont fausses.
+// toutes les clés ci-dessous sont fausses. La fausse clé secrète est assemblée à l'exécution : écrite
+// en toutes lettres, elle ressemblerait à une vraie clé pour la détection des secrets de GitHub
+// (dépôt public).
 const URL_DEV_2 = "https://sedfepcpmhilaxbrgdif.supabase.co";
-const FAUSSE_SECRETE = "sb_secret_FAUX-pour-le-test-0123456789";
+const FAUSSE_SECRETE = ["sb", "secret", "FAUX-pour-le-test-0123456789"].join("_");
 const FAUSSE_PUBLIQUE = "sb_publishable_FAUX-pour-le-test-0123456789";
 const jeton = (role: string) => `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ role })).toString("base64url")}.signature-fausse`;
 
