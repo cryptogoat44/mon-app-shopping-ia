@@ -321,7 +321,7 @@ export function reponseDeTest(brut: unknown): Record<string, unknown> | null {
 const INTERDITS: readonly { nom: string; motif: RegExp }[] = [
   { nom: "clé d'API", motif: /api[_-]?key/i },
   { nom: "adresse e-mail", motif: /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i },
-  { nom: "adresse d'image temporaire de notre serveur", motif: /supabase\.(?:co|in)|\/storage\/v1\/|[?&]token=(?!id-\d)|sbtwsmxfdfxzgcohbznd|qcwnlqkxnhqpyjpkooiw/i },
+  { nom: "adresse d'image temporaire de notre serveur", motif: /supabase\.(?:co|in)|\/storage\/v1\/|[?&]token=(?!id-\d)|sedfepcpmhilaxbrgdif|selhqdqfrflsqivgxypf|sbtwsmxfdfxzgcohbznd|qcwnlqkxnhqpyjpkooiw/i },
   { nom: "identifiant de session, de compte ou de clic dans un lien", motif: /[?&](?:[a-z_]*session[a-z_]*|sid|uid|[a-z_]*user[a-z_]*|[a-z_]*account[a-z_]*|[a-z_]*customer[a-z_]*|[a-z_]*click[a-z_]*|gclid|fbclid|msclkid|srsltid)=(?!id-\d)/i },
   { nom: "lien de recherche de SerpApi (il contient l'adresse de l'image)", motif: /serpapi\.com\/search/i },
   { nom: "jeton opaque dans un lien", motif: /[?&][a-z0-9_]+=(?=[a-z0-9%:._~-]*[a-z])(?=[a-z0-9%:._~-]*\d)[a-z0-9%:._~-]{24,}/i },

@@ -150,7 +150,7 @@ async function main() {
     await client.end();
   }
   console.log(resultats.join("\n"));
-  console.log(echecs === 0 ? "Tous les essais sont conformes. spotto-dev n'a pas été modifié (transaction annulée)." : `${echecs} essai(s) non conforme(s).`);
+  console.log(echecs === 0 ? "Tous les essais sont conformes. spotto-dev-2 n'a pas été modifié (transaction annulée)." : `${echecs} essai(s) non conforme(s).`);
   if (echecs > 0) process.exit(1);
 }
 

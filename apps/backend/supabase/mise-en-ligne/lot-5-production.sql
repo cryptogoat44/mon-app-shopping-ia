@@ -2,7 +2,8 @@
 -- MISE EN LIGNE DU LOT 5 (et du lot 4 quater) — PRODUCTION
 -- ============================================================================
 -- À coller dans l'éditeur SQL du projet de PRODUCTION : l'adresse de la page
--- doit contenir qcwnlqkxnhqpyjpkooiw (jamais sbtwsmxfdfxzgcohbznd = spotto-dev).
+-- doit contenir selhqdqfrflsqivgxypf (spotto-prod, production depuis le 28 octobre 2026 ;
+-- jamais sedfepcpmhilaxbrgdif = spotto-dev-2, ni les anciens projets qcwnlqkxnhqpyjpkooiw et sbtwsmxfdfxzgcohbznd).
 --
 -- Ce fichier enchaîne, dans l'ordre, les trois migrations déjà appliquées et
 -- vérifiées sur spotto-dev (texte identique à supabase/migrations/) :

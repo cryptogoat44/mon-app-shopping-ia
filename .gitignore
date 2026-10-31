@@ -4,6 +4,8 @@ build/
 .expo/
 .env
 .env.local
+# Copies des anciens .env gardées par configurer-env-dev (contiennent des secrets)
+.env.sauvegarde-*
 *.log
 .DS_Store
 .turbo/

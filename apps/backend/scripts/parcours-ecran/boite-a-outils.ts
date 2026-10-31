@@ -319,7 +319,7 @@ export async function runParcours(
   process.once("SIGTERM", onSignal);
 
   try {
-    log(`Parcours « ${name} » — spotto-dev uniquement, aucun crédit SerpApi.`);
+    log(`Parcours « ${name} » — spotto-dev-2 uniquement, aucun crédit SerpApi.`);
     log("Compilation du site local (≈ 2 min)…");
     // Site SANS Sentry (sauf scénario qui l'envoie volontairement) : une
     // variable définie ici l'emporte sur apps/mobile/.env. Construction

@@ -119,7 +119,7 @@ async function surveiller(minutes: number, url: string, admin: SupabaseClient, a
     ];
     const lents: string[] = [];
     const fin = Date.now() + minutes * 60_000;
-    console.log(`Surveillance de spotto-dev pendant ${minutes} min, depuis ${heureDeParis()} (heure de Paris)…`);
+    console.log(`Surveillance de spotto-dev-2 pendant ${minutes} min, depuis ${heureDeParis()} (heure de Paris)…`);
     while (Date.now() < fin) {
       const tour = Date.now();
       await Promise.all(
@@ -148,7 +148,7 @@ async function main() {
   const url = assertDevSupabaseUrl(process.env.SUPABASE_URL, "SUPABASE_URL").origin;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const anonKey = process.env.SUPABASE_ANON_KEY;
-  if (!serviceKey || !anonKey) throw new Error("Clés de spotto-dev absentes.");
+  if (!serviceKey || !anonKey) throw new Error("Clés de spotto-dev-2 absentes.");
   const options = { auth: { persistSession: false, autoRefreshToken: false } };
   const admin = createClient(url, serviceKey, options);
   const anon = createClient(url, anonKey, options);
@@ -186,7 +186,7 @@ async function main() {
   }
 
   const depuis = process.env.GITHUB_ACTIONS === "true" ? "GitHub (machine de GitHub Actions)" : "ce Mac";
-  console.log(`Délai de réponse de spotto-dev — depuis ${depuis} — ${new Date().toISOString().slice(0, 16)} UTC`);
+  console.log(`Délai de réponse de spotto-dev-2 — depuis ${depuis} — ${new Date().toISOString().slice(0, 16)} UTC`);
   for (const mesure of Object.values(mesures)) console.log(ligne(mesure));
   console.log(`Durée totale de la mesure : ${(Math.round(performance.now() - debut) / 1000).toFixed(1)} s`);
 }

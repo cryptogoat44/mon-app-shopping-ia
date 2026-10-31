@@ -38,7 +38,7 @@ function failedFiles(jsonPath: string): string[] | null {
 
 function main(): number {
   const url = assertDevSupabaseUrl(process.env.SUPABASE_URL, "SUPABASE_URL");
-  console.log(`Tests serveur contre spotto-dev (${url.hostname}).`);
+  console.log(`Tests serveur contre spotto-dev-2 (${url.hostname}).`);
 
   const dir = mkdtempSync(join(tmpdir(), "spotto-tests-"));
   const first = runVitest([], join(dir, "premier.json"));

@@ -19,7 +19,7 @@ const RECENT_MS = 15 * 60 * 1000;
 async function main(): Promise<void> {
   const url = assertDevSupabaseUrl(process.env.SUPABASE_URL, "SUPABASE_URL (apps/backend/.env)");
   const remove = process.argv.includes("--supprimer");
-  console.log(`Projet : spotto-dev (${url.hostname}) — ${remove ? "SUPPRESSION" : "liste seulement, rien n'est supprimé"}.`);
+  console.log(`Projet : spotto-dev-2 (${url.hostname}) — ${remove ? "SUPPRESSION" : "liste seulement, rien n'est supprimé"}.`);
 
   const app = await buildApp({ logger: false });
   try {

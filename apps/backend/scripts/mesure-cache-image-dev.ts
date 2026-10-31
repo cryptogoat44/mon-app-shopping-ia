@@ -41,7 +41,7 @@ async function lire(adresse: string): Promise<Omit<Lecture, "quand" | "image">> 
 async function main() {
   const url = assertDevSupabaseUrl(process.env.SUPABASE_URL, "SUPABASE_URL").origin;
   const cle = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!cle) throw new Error("Clé de spotto-dev absente.");
+  if (!cle) throw new Error("Clé de spotto-dev-2 absente.");
   const admin = createClient(url, cle, { auth: { persistSession: false, autoRefreshToken: false } });
   const bucket = admin.storage.from("post-media");
   const image = await sharp({ create: { width: 640, height: 800, channels: 3, background: "#8a5a3c" } }).jpeg({ quality: 80 }).toBuffer();

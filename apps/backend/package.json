@@ -15,6 +15,7 @@
     "test:ci": "tsx scripts/tests-ci.ts",
     "nettoyer-captures": "tsx scripts/nettoyer-captures.ts",
     "configurer-base-dev": "tsx scripts/configurer-base-dev.ts",
+    "configurer-env-dev": "tsx scripts/configurer-env-dev.ts",
     "migrer-dev": "tsx scripts/migrer-dev.ts",
     "essai-retours-dev": "tsx scripts/essai-retours-dev.ts",
     "mesure-cache-image-dev": "tsx scripts/mesure-cache-image-dev.ts",

@@ -3,7 +3,7 @@
 # interne au dépôt, et à la demande (onglet Actions → « Run workflow »).
 #
 # Règles (décision du fondateur, à ne jamais assouplir) :
-# - clés de spotto-dev UNIQUEMENT : jamais de clé de production, jamais de
+# - clés de spotto-dev-2 UNIQUEMENT : jamais de clé de production, jamais de
 #   clé SerpApi (une valeur factice suffit, les tests simulent SerpApi) ;
 # - jamais `pull_request_target` : une pull request venue d'un autre dépôt
 #   ne reçoit aucune clé et ne lance pas les tests serveur ;
@@ -94,23 +94,23 @@ jobs:
         working-directory: apps/mobile
         env:
           EXPO_PUBLIC_API_URL: http://localhost:3000
-          EXPO_PUBLIC_SUPABASE_URL: https://sbtwsmxfdfxzgcohbznd.supabase.co
+          EXPO_PUBLIC_SUPABASE_URL: https://sedfepcpmhilaxbrgdif.supabase.co
           EXPO_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_factice-ci
         run: pnpm run build:web
 
-  # Tests serveur contre spotto-dev : seul job qui reçoit une clé.
+  # Tests serveur contre spotto-dev-2 : seul job qui reçoit une clé.
   tests-serveur:
-    name: Tests serveur (spotto-dev)
+    name: Tests serveur (spotto-dev-2)
     # Jamais pour une pull request venue d'un autre dépôt (elle n'aurait pas
     # la clé de toute façon) : le job est sauté, pas en échec.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 25
-    # Une seule série de tests à la fois sur spotto-dev, toutes branches
+    # Une seule série de tests à la fois sur spotto-dev-2, toutes branches
     # confondues (décision du fondateur, 2026-10-15) : les suivantes attendent
     # leur tour, aucune n'est annulée (« queue: max », jusqu'à 100 en attente).
     concurrency:
-      group: tests-spotto-dev
+      group: tests-spotto-dev-2
       cancel-in-progress: false
       queue: max
     steps:
@@ -128,27 +128,27 @@ jobs:
       - name: Installation (versions figées)
         run: pnpm install --frozen-lockfile --filter backend...
 
-      # Diagnostic des lenteurs de spotto-dev (2026-10-15) : des durées
+      # Diagnostic des lenteurs de l'ancien spotto-dev (2026-10-15) : des durées
       # seulement, avant et après les tests, sans effet sur le résultat.
       # Même protection que les tests : refus de toute autre adresse.
       # Gardé deux semaines (décision du fondateur) : à retirer, avec l'étape
       # « après les tests », à partir du 2026-10-29.
-      - name: Délai de réponse de spotto-dev, avant les tests (diagnostic)
+      - name: Délai de réponse de spotto-dev-2, avant les tests (diagnostic)
         working-directory: apps/backend
         continue-on-error: true
         timeout-minutes: 3
         env:
-          SUPABASE_URL: https://sbtwsmxfdfxzgcohbznd.supabase.co
+          SUPABASE_URL: https://sedfepcpmhilaxbrgdif.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SPOTTO_DEV_SERVICE_ROLE_KEY }}
           SUPABASE_ANON_KEY: ${{ secrets.SPOTTO_DEV_PUBLISHABLE_KEY }}
         run: pnpm run mesure-latence-dev
 
       # Le script refuse de démarrer si l'adresse n'est pas celle de
-      # spotto-dev, et relance une seule fois un fichier en échec réseau.
+      # spotto-dev-2, et relance une seule fois un fichier en échec réseau.
       - name: Tests serveur (relance unique d'un échec réseau)
         working-directory: apps/backend
         env:
-          SUPABASE_URL: https://sbtwsmxfdfxzgcohbznd.supabase.co
+          SUPABASE_URL: https://sedfepcpmhilaxbrgdif.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SPOTTO_DEV_SERVICE_ROLE_KEY }}
           SUPABASE_ANON_KEY: ${{ secrets.SPOTTO_DEV_PUBLISHABLE_KEY }}
           SERPAPI_KEY: cle-factice-ci-jamais-valide
@@ -159,13 +159,13 @@ jobs:
           fi
           pnpm run test:ci
 
-      - name: Délai de réponse de spotto-dev, après les tests (diagnostic)
+      - name: Délai de réponse de spotto-dev-2, après les tests (diagnostic)
         if: always()
         working-directory: apps/backend
         continue-on-error: true
         timeout-minutes: 3
         env:
-          SUPABASE_URL: https://sbtwsmxfdfxzgcohbznd.supabase.co
+          SUPABASE_URL: https://sedfepcpmhilaxbrgdif.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SPOTTO_DEV_SERVICE_ROLE_KEY }}
           SUPABASE_ANON_KEY: ${{ secrets.SPOTTO_DEV_PUBLISHABLE_KEY }}
         run: pnpm run mesure-latence-dev
