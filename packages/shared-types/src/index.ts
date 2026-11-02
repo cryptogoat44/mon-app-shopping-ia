@@ -84,6 +84,40 @@ export type RecognitionMethod = (typeof RECOGNITION_METHODS)[number];
 export const SEARCH_STATUSES = ["pending", "processing", "completed", "failed"] as const;
 export type SearchStatus = (typeof SEARCH_STATUSES)[number];
 
+// ---- Voie C (lot c, 2026-11-02) : complément des résultats Lens ----
+// Les résultats Lens sont toujours gardés, montrés en premier et jamais
+// remplacés ; toute panne du complément laisse les résultats Lens seuls.
+
+/** Origine d'une proposition (product_matches.origin, 0028, « lens » par
+ * défaut) : « lens », la recherche visuelle ; « shopping », la même pièce dans
+ * d'autres boutiques (Google Shopping, requête tirée des titres Lens) ;
+ * « words », la recherche lancée avec les mots de la personne (voie B). */
+export const MATCH_ORIGINS = ["lens", "shopping", "words"] as const;
+export type MatchOrigin = (typeof MATCH_ORIGINS)[number];
+
+/** Issue du complément (product_searches.complement_status, 0028 ; null quand
+ * la voie C n'a pas tourné). Toute issue autre que « shown » = Lens seul.
+ * - shown : des propositions du complément sont montrées ;
+ * - empty : requête valable, mais rien de gardé après les filtres ;
+ * - no_query : pas de requête sûre (Lens n'a rien gardé, ou la requête
+ *   proposée est vide, invente des mots ou contient des opérateurs) ;
+ * - ai_failed : l'IA a échoué, refusé, dépassé son temps ou mal répondu ;
+ * - shopping_failed : la recherche Shopping a échoué, ou ses lignes n'ont
+ *   pas pu être enregistrées ;
+ * - no_time : plus assez de temps dans le budget de la recherche ;
+ * - no_capacity : plafond des recherches ou limite de l'IA atteints (jamais
+ *   de 429 pour le complément) ;
+ * - skipped : étape IA coupée (interrupteur) ;
+ * - error : exception inattendue — distincte de « skipped », pour que la
+ *   mesure révèle les anomalies. */
+export const COMPLEMENT_STATUSES = ["shown", "empty", "no_query", "ai_failed", "shopping_failed", "no_time", "no_capacity", "skipped", "error"] as const;
+export type ComplementStatus = (typeof COMPLEMENT_STATUSES)[number];
+
+/** Issue de la recherche par mots (voie B ; product_searches.text_status,
+ * 0028 ; null tant qu'elle n'a pas été lancée). */
+export const TEXT_SEARCH_STATUSES = ["shown", "empty", "shopping_failed"] as const;
+export type TextSearchStatus = (typeof TEXT_SEARCH_STATUSES)[number];
+
 export interface ProductMatch {
   id: string;
   rank: number;
@@ -108,6 +142,10 @@ export interface ProductMatch {
   /** Motif choisi si la personne a signalé cette proposition comme
    * incohérente (bouton « Résultat incohérent »), sinon null. */
   feedbackReason: MatchFeedbackReason | null;
+  /** Voie C (lot c) : d'où vient la proposition. Absente = « lens » — le
+   * serveur ne l'envoie que pour « shopping » et « words », et un ancien
+   * serveur ne l'envoie jamais. */
+  origin?: MatchOrigin;
 }
 
 // ---- Bouton « Résultat incohérent » (fiabilité des résultats, 2026-10-15) ----
@@ -146,6 +184,25 @@ export interface ProductSearch {
    * nom contient un des mots tapés sous la photo ont été remontées en tête.
    * Les mots ne sont pas enregistrés : une recherche relue n'en dit rien. */
   sortedByWords?: boolean;
+  /** Voie C (lot c) : absent quand elle n'a pas tourné sur cette recherche
+   * (interrupteur coupé, recherche plus ancienne, ancien serveur). Les
+   * propositions du complément sont dans `matches`, avec leur `origin`. */
+  complement?: SearchComplement;
+}
+
+/** Complément d'une recherche (voie C, lot c). */
+export interface SearchComplement {
+  /** Issue du complément ; null quand il n'a pas tourné sur cette recherche. */
+  status: ComplementStatus | null;
+  /** Requête envoyée à la recherche Shopping : réponse du lancement
+   * seulement, jamais enregistrée — une recherche relue n'en dit rien. */
+  query?: string;
+  /** Proposer « Que cherchez-vous ? » (voie B) : enregistré par le serveur
+   * (text_suggested), et faux dès que la recherche par mots a été lancée.
+   * L'invitation survit donc à un rechargement et à l'historique. */
+  suggestText: boolean;
+  /** Issue de la recherche par mots ; null tant qu'elle n'a pas été lancée. */
+  textStatus: TextSearchStatus | null;
 }
 
 /** Zone choisie par l'utilisateur sur l'image, en proportions (0 à 1) de
@@ -291,6 +348,26 @@ export const SEARCH_FAILURE_MESSAGES = {
 export interface CreateSearchRequest {
   sourceUrl?: string;
 }
+
+/** Corps de POST /api/searches/:id/text (voie B, lot c) : une recherche
+ * Google Shopping avec les mots de la personne, ajoutée à la MÊME recherche,
+ * une seule fois. `words` : SEARCH_QUERY_MAX_LENGTH caractères au plus. Les
+ * mots ne sont ni enregistrés, ni journalisés, ni mis en cache. */
+export interface RunTextSearchRequest {
+  words: string;
+}
+
+/** Refus propres à la recherche par mots (le plafond des recherches garde
+ * ses codes, SEARCH_CAPACITY_ERRORS) :
+ * - alreadyUsed : déjà lancée pour cette recherche (409) — l'app retire
+ *   l'invitation ;
+ * - unavailable : fonction coupée sur le serveur (404) ;
+ * - notAllowed : recherche non admissible, ou budget de la photo épuisé (409). */
+export const TEXT_SEARCH_ERRORS = {
+  alreadyUsed: "text_search_already_used",
+  unavailable: "text_search_unavailable",
+  notAllowed: "text_search_not_allowed",
+} as const;
 
 export interface ProductMatchClickResponse {
   url: string;
