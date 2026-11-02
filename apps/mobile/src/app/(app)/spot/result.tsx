@@ -11,7 +11,7 @@ import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { addToWishlist, loadSpotResult } from "@/api/client";
-import { clearLastSpotResult, getLastSpotResult, setLastSpotResult } from "@/api/spotSession";
+import { clearLastSpotResult, getLastSpotResult, rememberLaunchExtras, withLaunchExtras } from "@/api/spotSession";
 import type { Piece, SpotFailReason, SpotResult } from "@/api/types";
 import { addVaultItemFromMatch } from "@/lib/api";
 import { openMerchantLink } from "@/lib/merchant-links";
@@ -48,6 +48,10 @@ export default function ResultScreen() {
   const { showToast } = useToast();
   const { searchId } = useLocalSearchParams<{ searchId?: string }>();
   const [state, setState] = useState<ScreenState>(() => chooseInitialResult(getLastSpotResult(), searchId));
+  // La copie en mémoire ne sert qu'au passage depuis l'écran Analyse : lue une
+  // fois, elle est oubliée (ses mentions propres au lancement sont gardées à
+  // part). Tout retour sur cet écran relit donc la recherche sur le serveur.
+  const fromLaunch = useRef(state.kind === "ready");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [kept, setKept] = useState<Set<string>>(new Set());
   const [bought, setBought] = useState<Set<string>>(new Set());
@@ -76,7 +80,7 @@ export default function ResultScreen() {
     if (!pendingSearchId) return;
     let cancelled = false;
     loadSpotResult(pendingSearchId)
-      .then((loaded) => !cancelled && setState({ kind: "ready", result: loaded }))
+      .then((loaded) => !cancelled && setState({ kind: "ready", result: withLaunchExtras(loaded) }))
       .catch(() => !cancelled && setState({ kind: "error", searchId: pendingSearchId }));
     return () => {
       cancelled = true;
@@ -86,6 +90,13 @@ export default function ResultScreen() {
   useEffect(() => {
     if (result?.status === "success") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   }, [result?.status]);
+
+  // Une fois, au premier affichage : la copie du lancement est oubliée.
+  useEffect(() => {
+    if (!fromLaunch.current || state.kind !== "ready") return;
+    rememberLaunchExtras(state.result);
+    clearLastSpotResult();
+  }, []);
 
   useScrollToEndOnKeyboard(scrollRef, result?.complement?.suggestText === true);
 
@@ -160,13 +171,10 @@ export default function ResultScreen() {
     }
   }
 
-  /** Voie B (lot c) : le résultat est remplacé sur place, et en mémoire pour
-   * un retour sur cet écran. Dès que la recherche par les mots part, la copie
-   * en mémoire est oubliée (onStarted) : un écran quitté pendant la
-   * recherche, puis rouvert depuis « Récemment spottées », relit la
-   * recherche sur le serveur au lieu de reproposer « Que cherchez-vous ? ». */
+  /** Voie B (lot c) : le résultat est remplacé sur place, dans cet écran
+   * seulement. Un retour sur l'écran relit la recherche sur le serveur, qui a
+   * l'issue de la recherche par les mots (voir fromLaunch). */
   function replaceResult(next: SpotResult) {
-    setLastSpotResult(next);
     setState({ kind: "ready", result: next });
   }
 
@@ -180,13 +188,7 @@ export default function ResultScreen() {
    * l'invitation disparaît, ici comme au retour sur cet écran. */
   function handleTextSearchClosed(alreadyUsed: boolean) {
     if (!result) return;
-    const next = withoutTextPrompt(result);
-    // « Déjà lancée » : les propositions des mots peuvent encore arriver ; pas de
-    // copie en mémoire, l'écran rouvert (« Récemment spottées ») relira la recherche.
-    if (alreadyUsed) {
-      clearLastSpotResult();
-      setState({ kind: "ready", result: next });
-    } else replaceResult(next);
+    replaceResult(withoutTextPrompt(result));
     setTextSearchUsed(alreadyUsed);
   }
 
@@ -252,8 +254,7 @@ export default function ResultScreen() {
     result?.searchId && result.complement?.suggestText ? (
       <TextSearchPrompt
         searchId={result.searchId}
-        initialWords={getLastSpotResult()?.searchId === result.searchId ? getDraft()?.words : null}
-        onStarted={clearLastSpotResult}
+        initialWords={fromLaunch.current ? getDraft()?.words : null}
         onDone={handleTextSearchDone}
         onClosed={handleTextSearchClosed}
         withIntro={withIntro}

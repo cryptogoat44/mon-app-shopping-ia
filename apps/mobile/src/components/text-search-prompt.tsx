@@ -54,7 +54,6 @@ function announce(message: string | null, platforms: "ios" | "native") {
 export function TextSearchPrompt({
   searchId,
   initialWords,
-  onStarted,
   onDone,
   onClosed,
   withIntro = true,
@@ -62,9 +61,6 @@ export function TextSearchPrompt({
   searchId: string;
   /** Mots tapés sous la photo au lancement, quand le brouillon est encore en mémoire. */
   initialWords?: string | null;
-  /** La recherche par les mots part : l'invitation que porte la copie en
-   * mémoire de l'écran peut ne plus être valable (l'écran l'oublie). */
-  onStarted?: () => void;
   /** Recherche renvoyée (ou relue) par le serveur avec l'issue des mots :
    * l'écran remplace son résultat sur place. */
   onDone: (search: ProductSearch) => void;
@@ -105,7 +101,6 @@ export function TextSearchPrompt({
     const current = new AbortController();
     controller.current = current;
     setState({ kind: "running" });
-    onStarted?.();
     announce(t.result.textSearchRunning, "ios");
     try {
       const found = await runTextSearch(searchId, words.trim(), current.signal);

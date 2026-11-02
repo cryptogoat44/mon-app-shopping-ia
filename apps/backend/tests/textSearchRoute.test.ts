@@ -287,11 +287,12 @@ describe("« Que cherchez-vous ? » : une recherche avec vos mots, sur la même 
   it("servie par le cache, minuit (heure de Paris) passé pendant la réservation : la place est rendue, le verrou remis, 409, aucun appel", async () => {
     const id = await searchRow({ status: "completed", outcome: "found", lens_from_cache: true, served_from_cache: true, complement_status: "empty", text_suggested: true });
     await lensRow(id, 1);
-    // L'horloge du serveur avance d'un jour pendant la réservation (le contrôle d'avant l'a vue la veille).
+    // L'horloge du serveur avance de deux jours pendant la réservation (le contrôle d'avant l'a vue
+    // au moins un jour plus tôt, même le jour de 25 h du passage à l'heure d'hiver).
     vi.useFakeTimers({ toFake: ["Date"], shouldAdvanceTime: true });
     try {
       reserveMock.mockImplementationOnce(async () => {
-        vi.setSystemTime(Date.now() + 86_400_000);
+        vi.setSystemTime(Date.now() + 2 * 86_400_000);
         return { allowed: true, reservationId: RESERVATION };
       });
       const res = await text(id);

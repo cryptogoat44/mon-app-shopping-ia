@@ -328,6 +328,14 @@ describe("requête Shopping — contrôles du serveur (sans IA)", () => {
         ["grandmagasin.fr", "boutique-a.fr", "boutique-b.fr"]
       )
     ).toBe("query");
+    // Un seul mot commun avec la marque (« le ») n'excuse pas le nom de boutique collé (lebonmagasin.fr).
+    expect(
+      reason(
+        { query: "Le Slip Exemple marinière Le Bon Magasin", brand: "Le Slip Exemple", model: "" },
+        ["Marinière Le Slip Exemple Gaston | Le Bon Magasin", "Le Slip Exemple marinière rayée", "Marinière Le Slip Exemple - Le Bon Magasin"],
+        ["lebonmagasin.fr", "boutique-a.fr", "lebonmagasin.fr"]
+      )
+    ).toBe("invented");
     // Formes que Google ramène aux lettres ordinaires (NFKC), recopiées d'un titre.
     const sites = ["boutique-a.fr", "boutique-b.fr", "boutique-c.fr", "boutiquezed.fr"];
     for (const trap of ["ｐｒｏｍｏ", "offerts", "réductions", "promoshopx.ⅽom", "Ｂｏｕｔｉｑｕｅｚｅｄ"]) {

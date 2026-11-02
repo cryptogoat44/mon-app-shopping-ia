@@ -515,6 +515,9 @@ async function queryStep(ports: ComplementPorts, input: ComplementInput, state: 
     ports,
     key,
     async () => {
+      // Revérifié ici : après l'attente d'un autre lancement sans réponse
+      // partageable, la reprise ne lit le cache que s'il en reste le temps.
+      if (!canReadCache(input.deadline)) return stop("no_time");
       const cached = await readCacheSafely(ports, key, QUERY_CACHE_PAYLOAD);
       if (cached) return { shared: cached, own: { kind: "answer", answer: cached, fromCache: true } };
       if (input.deadline.remainingMs() < AI_GATE_MS) return stop("no_time");
@@ -551,7 +554,9 @@ async function queryStep(ports: ComplementPorts, input: ComplementInput, state: 
       const written = writeCacheSafely(ports, key, "query", answer);
       return { shared: answer, own: { kind: "answer", answer, fromCache: false }, written };
     },
-    () => input.deadline.remainingMs() - VOIE_C_BUDGET.saveReserveMs
+    // Attente bornée : jamais pour une réponse que ce lancement ne pourrait plus
+    // utiliser (il lui faut encore de quoi lire le cache et enregistrer).
+    () => input.deadline.remainingMs() - (VOIE_C_BUDGET.saveReserveMs + VOIE_C_BUDGET.cacheReadMs)
   );
 
   let answer: QueryCachePayload;

@@ -352,8 +352,11 @@ export function checkShoppingQuery(
   //   boutique-running.fr), pas un nom de boutique.
   // Un seul titre, qui pourrait être piégé, n'excuse jamais un mot. Un nom de
   // boutique en deux ou trois mots, collés dans le domaine (« Foot Locker »
-  // pour footlocker.fr), est refusé de même. Un mot de promotion n'est excusé
-  // que par la marque.
+  // pour footlocker.fr), est refusé de même, sauf si tous ses mots sont
+  // excusés (une marque collée dans son propre domaine : « The North Face »
+  // pour thenorthface.fr) ; un seul mot commun ne suffit pas (« Le Bon
+  // Marché » face à la marque « Le Slip Français »). Un mot de promotion
+  // n'est excusé que par la marque.
   const modelShared = titlesWithModel >= MIN_TITLES_WITH_BRAND;
   const brandWords = wordsOf(brand.normalize("NFKC"));
   const modelWords = modelShared ? wordsOf(model.normalize("NFKC")) : [];
@@ -375,7 +378,7 @@ export function checkShoppingQuery(
     for (let size = 2; size <= 3 && start + size <= foldedTokens.length; size += 1) {
       const part = foldedTokens.slice(start, start + size);
       const glued = part.join("");
-      if (!part.some(excused) && shopWords.includes(glued) && titlesElsewhere(part, glued) < MIN_TITLES_WITH_BRAND) return reject("invented");
+      if (!part.every(excused) && shopWords.includes(glued) && titlesElsewhere(part, glued) < MIN_TITLES_WITH_BRAND) return reject("invented");
     }
   }
   if (folded.split(" ").some((word) => WEB_ADDRESS.test(word) && !wordsOf(word).every(excused))) return reject("invented");
