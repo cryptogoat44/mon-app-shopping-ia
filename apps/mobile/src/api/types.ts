@@ -1,4 +1,4 @@
-import type { MatchFeedbackReason } from "@monapp/shared-types";
+import type { ComplementStatus, MatchFeedbackReason, MatchOrigin, TextSearchStatus } from "@monapp/shared-types";
 import type { CapacityFailReason } from "../lib/spot-capacity";
 
 export interface Piece {
@@ -25,6 +25,9 @@ export interface Piece {
   /** Motif choisi si la personne a signalé cette proposition comme
    * incohérente (résultats d'une recherche seulement), sinon null. */
   feedbackReason?: MatchFeedbackReason | null;
+  /** Voie C (lot c) : d'où vient la proposition (résultats d'une recherche
+   * seulement). Absente = « lens », la recherche visuelle. */
+  origin?: MatchOrigin;
 }
 
 export type SpotStatus = "success" | "failed";
@@ -57,6 +60,27 @@ export interface SpotResult {
   resumesOn?: string | null;
   /** Propositions remontées selon les mots tapés sous la photo (petit lot 2). */
   sortedByWords?: boolean;
+  /** Voie C (lot c) : absent quand elle n'a pas tourné sur cette recherche.
+   * `pieces` ne garde alors que les propositions de la recherche visuelle. */
+  complement?: SpotComplement;
+}
+
+/** Complément des propositions de la recherche visuelle (voie C, lot c) :
+ * deux sections sous elles, jamais à leur place. */
+export interface SpotComplement {
+  /** La même pièce dans d'autres boutiques (requête tirée des titres). */
+  shopping: Piece[];
+  /** Recherche lancée avec les mots de la personne (« Que cherchez-vous ? »). */
+  words: Piece[];
+  status: ComplementStatus | null;
+  /** Requête de la section « shopping » : réponse du lancement seulement,
+   * jamais enregistrée — null pour une recherche relue. */
+  query: string | null;
+  /** Proposer « Que cherchez-vous ? » sous les résultats (ou après « rien
+   * trouvé ») : décidé et gardé par le serveur, donc aussi après un rechargement. */
+  suggestText: boolean;
+  /** Issue de la recherche par les mots ; null tant qu'elle n'a pas été lancée. */
+  textStatus: TextSearchStatus | null;
 }
 
 export type VaultVerificationState = "pending" | "verified" | "refused";

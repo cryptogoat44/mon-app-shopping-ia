@@ -1,21 +1,23 @@
 import { formatPrice } from "@/lib/format";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
 import * as Haptics from "expo-haptics";
-import type { MatchFeedbackReason, VaultCategory } from "@monapp/shared-types";
+import type { MatchFeedbackReason, ProductSearch, VaultCategory } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { addToWishlist, loadSpotResult } from "@/api/client";
-import { getLastSpotResult } from "@/api/spotSession";
+import { getLastSpotResult, setLastSpotResult } from "@/api/spotSession";
 import type { Piece, SpotFailReason } from "@/api/types";
 import { addVaultItemFromMatch } from "@/lib/api";
 import { openMerchantLink } from "@/lib/merchant-links";
-import { chooseInitialResult, noPriceShown, type InitialResultState } from "@/lib/spot-result";
+import { chooseInitialResult, noPriceShown, withTextSearch, type InitialResultState } from "@/lib/spot-result";
+import { allPieces, merchantContextFor, opensOfferPage, otherPiecesBySection } from "@/lib/result-sections";
+import { getDraft } from "@/lib/spot-draft";
 import { failureCorrections, successCorrections, type Correction } from "@/lib/spot-corrections";
 import { capacityMonthTip } from "@/lib/spot-capacity";
 import { VAULT_CATEGORIES } from "@/lib/vault-labels";
@@ -27,6 +29,8 @@ import { NoPriceNotice } from "@/components/no-price-notice";
 import { CorrectionButtons, CorrectionsLink, CorrectionsSheet, useCorrections } from "@/components/spot-corrections";
 import { ActionButtons, type Action } from "@/components/spot-launch-views";
 import { ReportedLine, ResultFeedbackButton, ResultFeedbackSheet } from "@/components/result-feedback-sheet";
+import { ResultComplement, textSearchStatusNote } from "@/components/result-complement";
+import { TextSearchPrompt } from "@/components/text-search-prompt";
 import { track } from "@/lib/analytics";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -59,7 +63,9 @@ export default function ResultScreen() {
   const scrollRef = useRef<ScrollView>(null);
 
   const result = state.kind === "ready" ? state.result : null;
-  const piece = result?.pieces[selectedIndex] ?? null;
+  // Voie C (lot c) : l'indice désigne toutes les propositions de l'écran —
+  // recherche visuelle d'abord, puis les sections du complément.
+  const piece = result ? (allPieces(result)[selectedIndex] ?? null) : null;
 
   // Résultat absent de la mémoire (rouvert depuis « Récemment spottées »,
   // page rechargée) : relu sur le serveur, sans relancer d'identification.
@@ -97,7 +103,7 @@ export default function ResultScreen() {
     const url = piece?.affiliateUrl ?? piece?.merchantUrl;
     if (!piece || !url) return;
     setBlockedMerchantUrl(null);
-    const outcome = await openMerchantLink({ matchId: piece.real ? piece.id : null, url, context: "result" });
+    const outcome = await openMerchantLink({ matchId: piece.real ? piece.id : null, url, context: merchantContextFor(piece) });
     if (outcome.blocked) setBlockedMerchantUrl(outcome.url ?? url);
   }
 
@@ -148,6 +154,15 @@ export default function ResultScreen() {
     } catch {
       // Partage annulé par l'utilisateur : rien à signaler.
     }
+  }
+
+  /** Voie B (lot c) : la recherche par les mots a répondu — le résultat est
+   * remplacé sur place, et en mémoire pour un retour sur cet écran. */
+  function handleTextSearchDone(search: ProductSearch) {
+    if (!result) return;
+    const next = withTextSearch(result, search);
+    setLastSpotResult(next);
+    setState({ kind: "ready", result: next });
   }
 
   function selectPiece(index: number) {
@@ -204,14 +219,30 @@ export default function ResultScreen() {
     );
   }
 
+  // Voie B (lot c) : « Que cherchez-vous ? » quand le serveur le propose —
+  // pré-rempli avec les mots tapés sous la photo, si ce résultat vient d'être
+  // calculé (le brouillon en mémoire est alors le sien).
+  const textSearch = (withIntro: boolean) =>
+    result?.searchId && result.complement?.suggestText ? (
+      <TextSearchPrompt
+        searchId={result.searchId}
+        initialWords={getLastSpotResult()?.searchId === result.searchId ? getDraft()?.words : null}
+        onDone={handleTextSearchDone}
+        withIntro={withIntro}
+      />
+    ) : null;
+
   if (!result || result.status === "failed" || !piece) {
+    const reason = result?.failReason ?? "no_match";
     return (
       <SafeAreaView style={styles.screen}>
         {nav}
         <FailureView
-          reason={result?.failReason ?? "no_match"}
+          reason={reason}
+          textSearch={reason === "no_match" ? textSearch(false) : null}
+          textNote={reason === "no_match" ? textSearchStatusNote(result?.complement?.textStatus) : null}
           resumesOn={result?.resumesOn}
-          corrections={failureCorrections(result?.failReason ?? "no_match", corrections.context)}
+          corrections={failureCorrections(reason, corrections.context)}
           actions={corrections.actions}
           onAddVideo={corrections.addVideo}
           importing={corrections.importing}
@@ -224,7 +255,8 @@ export default function ResultScreen() {
 
   const successList = successCorrections(corrections.context);
   const reported = feedbackOverrides.has(piece.id) ? (feedbackOverrides.get(piece.id) ?? null) : (piece.feedbackReason ?? null);
-  const others = result.pieces.map((p, index) => ({ p, index })).filter(({ index }) => index !== selectedIndex);
+  const sections = otherPiecesBySection(result, selectedIndex);
+  const others = sections.lens;
   // 11 autres propositions d'emblée (la meilleure + 11 = 12 images à
   // charger), le reste — jusqu'à 40 au total avec la règle des prix — sur demande.
   const visibleOthers = showAllOthers ? others : others.slice(0, OTHERS_SHOWN_FIRST);
@@ -234,7 +266,8 @@ export default function ResultScreen() {
     <SafeAreaView style={styles.screen}>
       {nav}
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
-        <Text style={styles.count}>{t.result.count(result.pieces.length, result.query)}</Text>
+        {/* Voie C : le décompte, le tri et l'absence de prix parlent de la recherche visuelle seule. */}
+        {result.pieces.length > 0 ? <Text style={styles.count}>{t.result.count(result.pieces.length, result.query)}</Text> : null}
         {result.sortedByWords ? <Text style={styles.count}>{t.result.sortedByWords}</Text> : null}
         {noPriceShown(result.pieces) ? <NoPriceNotice /> : null}
 
@@ -254,7 +287,7 @@ export default function ResultScreen() {
 
         {piece.merchantUrl ? (
           <Pressable style={styles.primary} onPress={handleOpenMerchant} accessibilityRole="link">
-            <Text style={styles.primaryLabel}>{t.result.viewAt(piece.merchantName ?? "")}</Text>
+            <Text style={styles.primaryLabel}>{opensOfferPage(piece) ? t.result.viewOffer : t.result.viewAt(piece.merchantName ?? "")}</Text>
           </Pressable>
         ) : null}
         {blockedMerchantUrl ? (
@@ -307,7 +340,7 @@ export default function ResultScreen() {
               {t.result.otherProposals}
             </Text>
             <View style={styles.grid}>
-              {visibleOthers.map(({ p, index }) => (
+              {visibleOthers.map(({ piece: p, index }) => (
                 <Pressable
                   key={p.id}
                   style={styles.card}
@@ -341,6 +374,11 @@ export default function ResultScreen() {
             ) : null}
           </>
         ) : null}
+
+        {/* Voie C (lot c) : le complément, sous la recherche visuelle — jamais à sa place. */}
+        <ResultComplement source="ai" others={sections.shopping} query={result.complement?.query} onSelect={selectPiece} />
+        <ResultComplement source="words" others={sections.words} textStatus={result.complement?.textStatus} onSelect={selectPiece} />
+        {textSearch(true)}
       </ScrollView>
 
       {piece.real ? (
@@ -381,6 +419,8 @@ export default function ResultScreen() {
 
 function FailureView({
   reason,
+  textSearch,
+  textNote,
   resumesOn,
   corrections,
   actions,
@@ -390,6 +430,11 @@ function FailureView({
   error,
 }: {
   reason: SpotFailReason;
+  /** Voie B (lot c), « rien trouvé » seulement : « Que cherchez-vous ? »,
+   * quand le serveur le propose. */
+  textSearch: ReactNode;
+  /** Voie B : la recherche par les mots n'a rien donné, ou n'a pas abouti. */
+  textNote: string | null;
   /** Plafond du mois atteint (lot 4 quater) : jour de la reprise. */
   resumesOn?: string | null;
   /** Deux au plus, la plus utile d'abord (lib/spot-corrections.ts). */
@@ -417,8 +462,10 @@ function FailureView({
         {copy[0]}
       </Text>
       <Text style={styles.failTip}>{copy[1]}</Text>
+      {textNote ? <Text style={styles.failTip}>{textNote}</Text> : null}
       {error ? <ErrorMessage style={styles.actionError}>{error}</ErrorMessage> : null}
       {corrections.length > 0 ? <CorrectionButtons list={corrections} actions={actions} onAddVideo={onAddVideo} importing={importing} /> : null}
+      {textSearch}
       <Pressable style={styles.textButton} onPress={onBack} accessibilityRole="button">
         <Text style={styles.textButtonLabel}>{t.result.backToSpotter}</Text>
       </Pressable>

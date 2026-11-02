@@ -4,7 +4,15 @@
 // peut passer — donc jamais d'e-mail, de nom d'utilisateur, de commentaire,
 // de légende ni d'adresse d'image. Toute propriété absente du catalogue est
 // supprimée avant l'envoi. Imports relatifs : fichier testé par vitest.
-import { MERCHANT_LINK_CONTEXTS, MODERATION_DECISIONS, PIECE_SENDS_FROM, PRIVACY_LEVELS, REPORT_TARGET_TYPES } from "@monapp/shared-types";
+import {
+  COMPLEMENT_STATUSES,
+  MERCHANT_LINK_CONTEXTS,
+  MODERATION_DECISIONS,
+  PIECE_SENDS_FROM,
+  PRIVACY_LEVELS,
+  REPORT_TARGET_TYPES,
+  TEXT_SEARCH_STATUSES,
+} from "@monapp/shared-types";
 
 type Rule = { kind: "enum"; values: readonly string[] } | { kind: "count" } | { kind: "bool" };
 
@@ -22,7 +30,12 @@ export const ANALYTICS_EVENTS = {
   // Ciblage : zone recadrée, capture importée. Plus de texte depuis le petit lot (2026-10-25) : les mots ne partent plus avec l'image.
   spot_launched: { zone_adjusted: bool, image_imported: bool },
   spot_cancelled: {},
-  spot_completed: { outcome: oneOf(["results", "none", "failed"]), results_count: count },
+  // Voie C (lot c) : results_count compte la recherche visuelle seule ; le
+  // complément a son issue (« none » quand il n'a pas tourné) et son nombre.
+  spot_completed: { outcome: oneOf(["results", "none", "failed"]), results_count: count, complement: oneOf([...COMPLEMENT_STATUSES, "none"]), complement_count: count },
+  // Voie C (lot c) : recherche par les mots — l'issue et un nombre, jamais les mots ni la requête.
+  text_search_launched: {},
+  text_search_completed: { outcome: oneOf([...TEXT_SEARCH_STATUSES, "failed"]), results_count: count },
   similar_results_opened: {},
   wishlist_item_added: { context: oneOf(["result"]) },
   vault_item_added: { source: oneOf(["spotter", "photo"]), category: oneOf(["clothing", "watches", "accessories", "shoes", "bags", "home", "other"]) },
