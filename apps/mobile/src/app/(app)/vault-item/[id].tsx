@@ -1,12 +1,12 @@
-import { useCallback, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import type { PrivacyLevel, VaultItemDetail } from "@monapp/shared-types";
+import type { PrivacyLevel, VaultCategory, VaultItemDetail } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
-import { ApiError, changeVaultItemPhoto, deleteVaultItem, fetchVaultItem, sharePurchasePost } from "@/lib/api";
+import { ApiError, changeVaultItemPhoto, deleteVaultItem, fetchVaultItem, sharePurchasePost, updateVaultItem } from "@/lib/api";
 import { importPhotoForSpotter } from "@/lib/image-import";
 import { SpotImage } from "@/components/spot-image";
 import { PRIVACY_LEVELS } from "@/lib/vault-labels";
@@ -16,6 +16,9 @@ import { useAuth } from "@/lib/auth-context";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
+import { SegmentedChoice } from "@/components/segmented-choice";
+import { VAULT_TITLE_MAX_LENGTH, checkVaultEdit, vaultCategoryChoices, vaultFormIssueMessage, vaultSaveErrorMessage } from "@/lib/vault-form";
+import { vaultChanged } from "@/lib/vault-changes";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Décision du fondateur (journal, 2026-09-23, décision 1) : retirer un
@@ -65,6 +68,24 @@ export default function VaultItemDetailScreen() {
   const { profile } = useAuth();
   const [sharePrivacy, setSharePrivacy] = useState<PrivacyLevel>(profile?.defaultPrivacy ?? "followers");
   const [sharing, setSharing] = useState(false);
+  // Lot 2 (Vault) : « Modifier » le titre et la catégorie, dans un formulaire
+  // qui remplace le titre le temps de la modification.
+  const [editing, setEditing] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftCategory, setDraftCategory] = useState<VaultCategory | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  // Garde immédiate contre un double appui sur « Enregistrer ».
+  const savingRef = useRef(false);
+  // Écran quitté pendant l'enregistrement (« ‹ Vault ») : l'échec se dit
+  // quand même, par un message flottant.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Relu à chaque retour sur l'écran : une publication supprimée depuis son
   // détail rend la pièce de nouveau partageable (Lot F).
@@ -75,6 +96,63 @@ export default function VaultItemDetailScreen() {
         .catch((e) => setError(e instanceof ApiError ? e.message : t.vaultItem.loadError));
     }, [id])
   );
+
+  function startEdit() {
+    if (!item) return;
+    setDraftTitle(item.title);
+    setDraftCategory(item.category);
+    setEditError(null);
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    setEditError(null);
+  }
+
+  // Le message d'erreur disparaît dès que la personne corrige le formulaire.
+  function changeDraftTitle(value: string) {
+    setDraftTitle(value);
+    setEditError(null);
+  }
+
+  function chooseDraftCategory(value: VaultCategory) {
+    setDraftCategory(value);
+    setEditError(null);
+  }
+
+  // Seulement ce qui change (PATCH) ; la photo, le partage et le retrait
+  // restent à part. Rien de changé : on referme sans appeler le serveur.
+  async function handleSave() {
+    if (!item || savingRef.current) return;
+    setEditError(null);
+    const checked = checkVaultEdit(item, { title: draftTitle, category: draftCategory });
+    if (!checked.ok) {
+      setEditError(vaultFormIssueMessage(checked.issue));
+      return;
+    }
+    if (!checked.value) {
+      setEditing(false);
+      return;
+    }
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      const updated = await updateVaultItem(item.id, checked.value);
+      setItem((current) => (current ? { ...current, ...updated } : current));
+      setEditing(false);
+      // Profil déjà revenu au premier plan : il se relit (nouveau titre).
+      vaultChanged();
+      showToast(t.vaultItem.saved);
+    } catch (e) {
+      const message = vaultSaveErrorMessage(e, t.vaultItem.updateError);
+      if (mountedRef.current) setEditError(message);
+      else showToast(message);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }
 
   async function handleShare() {
     if (!item) return;
@@ -137,7 +215,7 @@ export default function VaultItemDetailScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         <Pressable
           onPress={safeBack}
           hitSlop={12}
@@ -164,16 +242,73 @@ export default function VaultItemDetailScreen() {
           <Text style={styles.changePhotoLabel}>{changingPhoto ? t.vaultItem.changingPhoto : t.vaultItem.changePhoto}</Text>
         </Pressable>
 
-        <View style={styles.titleRow}>
-          <Text style={styles.title} accessibilityRole="header">{item.title}</Text>
-          {item.verified ? (
-            <View style={styles.verifiedBadge}>
-              <VerifiedIcon size={13} tint={color.vert} />
-              <Text style={styles.verifiedBadgeText}>{t.profile.verified}</Text>
+        {editing ? (
+          <View style={styles.editBox}>
+            <Text style={styles.label}>{t.vaultForm.titleLabel}</Text>
+            {/* « Modifier » disparaît à l'ouverture : le titre prend le
+                focus (clavier et lecteur d'écran), sinon il retombait en
+                haut de la page sur le site et n'importe où avec VoiceOver. */}
+            <TextInput
+              autoFocus
+              style={styles.input}
+              value={draftTitle}
+              onChangeText={changeDraftTitle}
+              placeholder={t.vaultForm.titlePlaceholder}
+              placeholderTextColor={color.acier}
+              maxLength={VAULT_TITLE_MAX_LENGTH}
+              returnKeyType="done"
+              editable={!saving}
+              accessibilityLabel={t.vaultForm.titleLabel}
+            />
+            <Text style={styles.label}>{t.vaultForm.categoryLabel}</Text>
+            <SegmentedChoice
+              label={t.vaultForm.categoryLabel}
+              options={vaultCategoryChoices()}
+              value={draftCategory}
+              onChange={chooseDraftCategory}
+              disabled={saving}
+            />
+            {editError ? <ErrorMessage style={styles.editError}>{editError}</ErrorMessage> : null}
+            <View style={styles.editButtons}>
+              <Pressable accessibilityRole="button" onPress={cancelEdit} disabled={saving} hitSlop={12}>
+                <Text style={styles.cancelLabel}>{t.vaultItem.cancel}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                aria-busy={saving}
+                onPress={handleSave}
+                disabled={saving}
+                style={[styles.saveButton, saving ? styles.saveButtonDisabled : null]}
+              >
+                <Text style={[styles.saveLabel, saving ? styles.saveLabelDisabled : null]}>{saving ? t.vaultItem.saving : t.vaultItem.save}</Text>
+              </Pressable>
             </View>
-          ) : null}
-        </View>
-        <Text style={styles.subtitle}>{t.vaultLabels.categories[item.category]}</Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.titleRow}>
+              <Text style={styles.title} accessibilityRole="header">{item.title}</Text>
+              {item.verified ? (
+                <View style={styles.verifiedBadge}>
+                  <VerifiedIcon size={13} tint={color.vert} />
+                  <Text style={styles.verifiedBadgeText}>{t.profile.verified}</Text>
+                </View>
+              ) : null}
+            </View>
+            <View style={styles.metaRow}>
+              <Text style={styles.subtitle}>{t.vaultLabels.categories[item.category]}</Text>
+              <Pressable
+                onPress={startEdit}
+                disabled={busy}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel={t.vaultItem.editLabel}
+              >
+                <Text style={styles.editLinkLabel}>{t.vaultItem.edit}</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
 
         {item.merchantUrl ? (
           <View style={styles.merchant}>
@@ -283,7 +418,17 @@ const styles = themedStyles(() => ({
   changePhotoLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600" },
   titleRow: { flexDirection: "row", alignItems: "center", gap: space.sm, marginBottom: space.xs },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, flexShrink: 1 },
-  subtitle: { fontSize: font.secondary, color: color.acier, marginBottom: space.lg },
+  metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, marginBottom: space.lg },
+  subtitle: { fontSize: font.secondary, color: color.acier, flexShrink: 1 },
+  editLinkLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
+  editBox: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, marginBottom: space.lg },
+  input: { borderBottomWidth: 1, borderBottomColor: color.filet, paddingVertical: 10, fontSize: font.body, color: color.encre, marginBottom: space.md },
+  editError: { fontSize: font.secondary, marginTop: space.md },
+  editButtons: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: space.lg, marginTop: space.md },
+  saveButton: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 44, paddingHorizontal: space.lg, justifyContent: "center" },
+  saveButtonDisabled: { backgroundColor: color.inactif },
+  saveLabel: { color: color.blanc, fontSize: font.secondary, fontWeight: "600" },
+  saveLabelDisabled: { color: color.surInactif },
   merchant: { marginBottom: space.lg },
   verifiedBadge: {
     flexDirection: "row",
