@@ -643,6 +643,15 @@ export const fr = {
     deleteTypeWord: (word: string) => `Pour confirmer, tapez ${word} ci-dessous.`,
     deleteWordLabel: (word: string) => `Mot de confirmation : ${word}`,
   },
+  // « Nous contacter » (Réglages, écran d'accueil) : adresse de l'éditeur,
+  // lue à la construction (lib/contact.ts). Sans adresse réelle, rien ne
+  // s'affiche.
+  contact: {
+    settingsSection: "Aide",
+    link: "Nous contacter",
+    linkHint: "Ouvre votre messagerie pour nous écrire.",
+    openFailed: "Votre messagerie n'a pas pu s'ouvrir : copiez l'adresse ci-dessus pour nous écrire.",
+  },
   legal: {
     draftBanner: "Projet — à faire valider par un professionnel.",
     version: (label: string) => `Version : ${label}`,

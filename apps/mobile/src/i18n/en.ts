@@ -619,6 +619,12 @@ export const en: Catalog = {
     deleteTypeWord: (word: string) => `To confirm, type ${word} below.`,
     deleteWordLabel: (word: string) => `Confirmation word: ${word}`,
   },
+  contact: {
+    settingsSection: "Help",
+    link: "Contact us",
+    linkHint: "Opens your email app to write to us.",
+    openFailed: "Your email app couldn't be opened: copy the address above to write to us.",
+  },
   legal: {
     draftBanner: "Draft — to be reviewed by a legal professional.",
     version: (label: string) => `Version: ${label}`,
