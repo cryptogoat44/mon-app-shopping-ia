@@ -1,6 +1,6 @@
 import { formatPrice } from "@/lib/format";
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { Keyboard, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
@@ -86,6 +86,8 @@ export default function ResultScreen() {
   useEffect(() => {
     if (result?.status === "success") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   }, [result?.status]);
+
+  useScrollToEndOnKeyboard(scrollRef, result?.complement?.suggestText === true);
 
   // ---- Corrections (lot 4 ter) : recadrer, autres moments, choisir l'image soi-même ----
 
@@ -283,7 +285,7 @@ export default function ResultScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       {nav}
-      {/* Voie B : le champ « Que cherchez-vous ? » peut se trouver en bas de la liste. */}
+      {/* Voie B : le champ « Que cherchez-vous ? » est en bas de la liste. */}
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         {/* Voie C : le décompte, le tri et l'absence de prix parlent de la recherche visuelle seule. */}
         {result.pieces.length > 0 ? <Text style={styles.count}>{t.result.count(result.pieces.length, result.query)}</Text> : null}
@@ -436,6 +438,18 @@ export default function ResultScreen() {
   );
 }
 
+/** Voie B (lot c) : « Que cherchez-vous ? » est en bas de la liste ; au
+ * clavier, l'écran y descend, sinon « Chercher » reste caché dessous sur
+ * iPhone (même défaut que « Lancer », lancer.tsx). Seul champ de l'écran :
+ * rien tant que l'invitation n'est pas affichée. */
+function useScrollToEndOnKeyboard(scrollRef: RefObject<ScrollView | null>, active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    const subscription = Keyboard.addListener("keyboardDidShow", () => scrollRef.current?.scrollToEnd({ animated: true }));
+    return () => subscription.remove();
+  }, [scrollRef, active]);
+}
+
 function FailureView({
   reason,
   textSearch,
@@ -464,6 +478,8 @@ function FailureView({
   onBack: () => void;
   error: string | null;
 }) {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToEndOnKeyboard(scrollRef, Boolean(textSearch));
   const copy = {
     no_match: [t.result.noMatchTitle, t.result.noMatchTip],
     technical: [t.result.technicalTitle, t.result.technicalTip],
@@ -476,7 +492,7 @@ function FailureView({
   }[reason];
 
   return (
-    <ScrollView contentContainerStyle={styles.failContent} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+    <ScrollView ref={scrollRef} contentContainerStyle={styles.failContent} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
       <Text style={styles.failTitle} accessibilityRole="header">
         {copy[0]}
       </Text>

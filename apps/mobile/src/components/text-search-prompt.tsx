@@ -72,6 +72,11 @@ export function TextSearchPrompt({
     onDone(search);
   }
 
+  function close(alreadyUsed: boolean) {
+    setState({ kind: "closed" });
+    onClosed(alreadyUsed);
+  }
+
   async function search() {
     if (!canSearch) return;
     // Une relecture après « Annuler » s'efface devant le nouvel essai, qui relira au besoin.
@@ -91,10 +96,8 @@ export function TextSearchPrompt({
       const next = await recoverTextSearch(textSearchFailure(error), () => fetchSearch(searchId, current.signal));
       if (current.signal.aborted) return;
       if (next.kind === "done") finish(next.search);
-      else if (next.kind === "closed") {
-        setState({ kind: "closed" });
-        onClosed(next.alreadyUsed);
-      } else setState({ kind: "idle", failure: next.failure });
+      else if (next.kind === "closed") close(next.alreadyUsed);
+      else setState({ kind: "idle", failure: next.failure });
     } finally {
       if (controller.current === current) controller.current = null;
     }

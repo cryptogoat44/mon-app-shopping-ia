@@ -120,10 +120,17 @@ describe("« Que cherchez-vous ? » : une recherche avec vos mots, sur la même 
   async function columnsOf(searchId: string) {
     const { data } = await app.supabaseAdmin
       .from("product_searches")
-      .select("status, error_message, text_requested_at, text_status, text_suggested, shopping_calls, query")
+      .select("status, error_message, text_requested_at, text_status, text_suggested, shopping_calls, served_from_cache, query")
       .eq("id", searchId)
       .single();
     return data;
+  }
+
+  /** Lignes écrites par le serveur lui-même : sans « incoming request » ni
+   * « request completed » de Fastify (avec logger: false, request.log est
+   * app.log, et ces deux lignes portent la requête entière, corps compris). */
+  function appLines(journal: { mock: { calls: unknown[][] } }): unknown[][] {
+    return journal.mock.calls.filter((call) => call[1] !== "incoming request" && call[1] !== "request completed");
   }
 
   it("voie C coupée : 404 text_search_unavailable, sans réservation ni appel", async () => {
@@ -166,7 +173,7 @@ describe("« Que cherchez-vous ? » : une recherche avec vos mots, sur la même 
       // Journal : la ligne « Mesure complément » (vos mots), jamais vos mots ni une adresse.
       const lignes = journal.mock.calls.filter((call) => call[1] === "Mesure complément");
       expect(lignes.map((call) => call[0])).toEqual([expect.objectContaining({ source: "words", status: "shown", calls: 1, kept: 2 })]);
-      const texte = JSON.stringify(journal.mock.calls);
+      const texte = JSON.stringify(appLines(journal));
       for (const interdit of ["daim", "Exemplor", "http", id, user.id]) expect(texte).not.toContain(interdit);
     } finally {
       journal.mockRestore();
@@ -212,7 +219,7 @@ describe("« Que cherchez-vous ? » : une recherche avec vos mots, sur la même 
   });
 
   it("budget de la photo épuisé (Lens + 2 recherches dans les boutiques) : 409 text_search_not_allowed, sans réservation ni appel", async () => {
-    const id = await searchRow({ status: "completed", outcome: "found", shopping_calls: 2 });
+    const id = await searchRow({ status: "completed", outcome: "found", complement_status: "empty", text_suggested: true, shopping_calls: 2 });
     await lensRow(id, 1);
     const res = await text(id);
     expect(res.statusCode).toBe(409);
@@ -222,9 +229,38 @@ describe("« Que cherchez-vous ? » : une recherche avec vos mots, sur la même 
     expect(await columnsOf(id)).toMatchObject({ text_requested_at: null });
 
     // Lens venu du cache (aucun appel) + 1 recherche dans les boutiques : encore permise (0 + 1 + 1 ≤ 3).
-    const cached = await searchRow({ status: "completed", outcome: "found", lens_from_cache: true, shopping_calls: 1 });
+    const cached = await searchRow({ status: "completed", outcome: "found", lens_from_cache: true, complement_status: "empty", text_suggested: true, shopping_calls: 1 });
     await lensRow(cached, 1);
     expect((await text(cached)).statusCode).toBe(200);
+  });
+
+  it("invitation jamais proposée (résultat fiable, ancienne recherche de l'historique) : 409 text_search_not_allowed, rien n'est verrouillé ni réservé", async () => {
+    const reliable = await searchRow({ status: "completed", outcome: "found", complement_status: "shown", text_suggested: false, shopping_calls: 1 });
+    await lensRow(reliable, 1);
+    const old = await searchRow({ status: "completed", outcome: "found" });
+    await lensRow(old, 1);
+    for (const id of [reliable, old]) {
+      const res = await text(id);
+      expect(res.statusCode).toBe(409);
+      expect(res.json().error).toBe("text_search_not_allowed");
+      expect(await columnsOf(id)).toMatchObject({ text_requested_at: null });
+    }
+    expect(reserveMock).not.toHaveBeenCalled();
+    expect(textMock).not.toHaveBeenCalled();
+  });
+
+  it("recherche servie entièrement par le cache : après vos mots (un appel réel), elle compte dans la part de 8 par personne ; refusée par le plafond, elle reste hors de la part", async () => {
+    const id = await searchRow({ status: "completed", outcome: "found", lens_from_cache: true, served_from_cache: true, complement_status: "empty", text_suggested: true });
+    await lensRow(id, 1);
+    reserveMock.mockResolvedValueOnce({ allowed: false, limit: "user", resumesOn: null });
+    const refused = await text(id);
+    expect(refused.statusCode).toBe(429);
+    expect(refused.json().error).toBe("search_capacity_user");
+    expect(await columnsOf(id)).toMatchObject({ text_requested_at: null, served_from_cache: true, shopping_calls: 0 });
+
+    expect((await text(id)).statusCode).toBe(200);
+    expect(textMock).toHaveBeenCalledOnce();
+    expect(await columnsOf(id)).toMatchObject({ served_from_cache: false, shopping_calls: 1, text_status: "shown" });
   });
 
   it("recherche non admissible (pas encore lancée, en panne technique) : 409 ; celle d'un autre : 404 ; rien n'est verrouillé", async () => {
@@ -244,17 +280,23 @@ describe("« Que cherchez-vous ? » : une recherche avec vos mots, sur la même 
 
   it("mots vides une fois les opérateurs retirés, trop longs ou absents : 400, rien n'est verrouillé ni appelé", async () => {
     const id = await completedWithLens();
-    for (const words of ["site:exemple.fr -cuir OR", "x".repeat(61), "   ", undefined]) {
+    for (const words of ["site:exemple.fr -cuir OR '-daim", "x".repeat(61), "   "]) {
       const res = await text(id, words);
       expect(res.statusCode).toBe(400);
       expect(res.json().error).toBe("invalid_body");
     }
+    // Mots absents : un corps sans « words », envoyé sans l'outil text() (sa
+    // valeur par défaut remplacerait un « undefined » par de vrais mots).
+    const absent = await app.inject({ method: "POST", url: `/api/searches/${id}/text`, headers: authHeaders(user.token), payload: {} });
+    expect(absent.statusCode).toBe(400);
+    expect(absent.json().error).toBe("invalid_body");
     expect(await columnsOf(id)).toMatchObject({ text_requested_at: null });
     expect(reserveMock).not.toHaveBeenCalled();
+    expect(textMock).not.toHaveBeenCalled();
   });
 
   it("Google Shopping en panne : « shopping_failed », la recherche reste telle quelle, la demande est consommée ; un refus non facturé rend sa place", async () => {
-    const id = await searchRow({ status: "failed", error_message: NO_MATCH, outcome: "nothing_buyable" });
+    const id = await searchRow({ status: "failed", error_message: NO_MATCH, outcome: "nothing_buyable", complement_status: "no_query", text_suggested: true });
     textMock.mockRejectedValueOnce(new ProviderFailure("timeout", null, "délai dépassé"));
     const res = await text(id);
     expect(res.statusCode).toBe(200);

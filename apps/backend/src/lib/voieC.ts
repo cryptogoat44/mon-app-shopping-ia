@@ -214,25 +214,65 @@ function errorName(error: unknown): string {
 
 type Leg<T, R> = { shared: T | null; own: R };
 
-/** Un seul appel à la fois pour une même clé. Celui qui lance l'étape garde
- * son propre résultat ; ceux qui arrivent pendant l'appel reçoivent sa part
- * partageable (une réponse facturée), ou, sans elle (panne, refus, arrêt avant
- * l'appel), font leur propre appel. */
-async function sharedStep<T, R>(key: string, run: () => Promise<Leg<T, R>>): Promise<{ own: R } | { shared: T }> {
-  let ran = false;
-  let leg: Leg<T, R>;
-  try {
-    leg = await singleFlight(key, () => {
+const LATE = Symbol("late");
+
+/** Résout LATE dès que le signal est déclenché (jamais s'il ne l'est pas). */
+function lateAfter(signal: AbortSignal): Promise<typeof LATE> {
+  return new Promise((resolve) => {
+    if (signal.aborted) resolve(LATE);
+    else signal.addEventListener("abort", () => resolve(LATE), { once: true });
+  });
+}
+
+/** Un seul appel à la fois pour une même clé, reprises comprises.
+ * - Celui qui lance l'étape garde son propre résultat.
+ * - Ceux qui arrivent pendant l'appel reçoivent sa part partageable (une
+ *   réponse facturée). Sans elle (panne, refus, arrêt avant l'appel), ils ne
+ *   font pas chacun leur appel : ils repassent par singleFlight, où l'un
+ *   d'eux relance l'étape et où les autres, comme tout lancement arrivé
+ *   entre-temps, l'attendent. Jamais deux appels identiques en même temps
+ *   dans ce processus.
+ * - `maxWaitMs` (complément seulement) : l'attente de l'appel d'un AUTRE
+ *   lancement ne dépasse jamais le budget de celui-ci ; au-delà, « late »
+ *   (l'appel attendu, lui, continue). Jamais pour Lens : son appel a déjà son
+ *   propre plafond fixe de 12 s. */
+function sharedStep<T, R>(ports: Pick<CachePorts, "timeoutSignal">, key: string, run: () => Promise<Leg<T, R>>): Promise<{ own: R } | { shared: T }>;
+function sharedStep<T, R>(
+  ports: Pick<CachePorts, "timeoutSignal">,
+  key: string,
+  run: () => Promise<Leg<T, R>>,
+  maxWaitMs: () => number
+): Promise<{ own: R } | { shared: T } | { late: true }>;
+async function sharedStep<T, R>(
+  ports: Pick<CachePorts, "timeoutSignal">,
+  key: string,
+  run: () => Promise<Leg<T, R>>,
+  maxWaitMs?: () => number
+): Promise<{ own: R } | { shared: T } | { late: true }> {
+  for (;;) {
+    let ran = false;
+    // Sans appel en cours, singleFlight lance `run` tout de suite : `ran` est connu dès le retour.
+    const flight = singleFlight(key, () => {
       ran = true;
       return run();
     });
-  } catch (error) {
-    if (ran) throw error;
-    return { own: (await run()).own };
+    let leg: Leg<T, R> | typeof LATE;
+    try {
+      if (ran || maxWaitMs === undefined) {
+        leg = await flight;
+      } else {
+        const waitMs = Math.floor(maxWaitMs());
+        if (waitMs < 1) return { late: true };
+        leg = await Promise.race([flight, lateAfter(signalAfter(ports, waitMs))]);
+      }
+    } catch (error) {
+      if (ran) throw error;
+      continue;
+    }
+    if (leg === LATE) return { late: true };
+    if (ran) return { own: leg.own };
+    if (leg.shared !== null) return { shared: leg.shared };
   }
-  if (ran) return { own: leg.own };
-  if (leg.shared !== null) return { shared: leg.shared };
-  return { own: (await run()).own };
 }
 
 // ---- Étape Lens ----
@@ -261,7 +301,7 @@ export type LensStepResult<R> = { lensFromCache: true; answer: LensAnswer } | { 
  * écrite dans le cache (sans l'attendre). */
 export async function lensStep<R>(ports: LensStepPorts, input: LensStepInput<R>): Promise<LensStepResult<R>> {
   const key = ports.cacheKey("lens", lensCacheParts(input.locale, input.imageHash));
-  const step = await sharedStep(key, async (): Promise<Leg<LensAnswer, LensStepResult<R>>> => {
+  const step = await sharedStep(ports, key, async (): Promise<Leg<LensAnswer, LensStepResult<R>>> => {
     const cached = await readCacheSafely(ports, key, LENS_CACHE_PAYLOAD);
     if (cached) return { shared: cached, own: { lensFromCache: true, answer: cached } };
     const result = await input.call();
@@ -275,18 +315,23 @@ export async function lensStep<R>(ports: LensStepPorts, input: LensStepInput<R>)
 // ---- Requête des boutiques ----
 
 const GOOGLE_OPERATORS = new Set(["OR", "AND"]);
+/** Tiret ailleurs qu'entre deux lettres ou chiffres (« t-shirt », « X-200 »
+ * gardés) : l'exclusion de Google (« -mot »), même cachée derrière ' . & +
+ * (« '-mot », « +-mot »). Même règle dans services/shoppingQueryAi.ts. */
+const LOOSE_HYPHEN = /(?:^|[^\p{L}\p{M}\p{N}])-|-(?:$|[^\p{L}\p{M}\p{N}])/u;
 
 /** Requête sûre pour Google Shopping : sanitizeQuery (caractères de contrôle
  * et chevrons retirés, 60 caractères au plus), puis les opérateurs de Google
- * retirés (« site:… » et tout mot avec deux-points, « -mot », OR, AND,
- * guillemets) et toute ponctuation hors lettres, chiffres, espaces et ' - . & +.
- * Vide : aucune requête. */
+ * retirés (« site:… » et tout mot avec deux-points, tout mot avec un tiret
+ * hors d'un mot composé, « 10..20 », OR, AND, guillemets) et toute
+ * ponctuation hors lettres, chiffres, espaces et ' - . & +. Vide : aucune
+ * requête. */
 export function sanitizeShoppingQuery(text: string): string {
   const kept: string[] = [];
   for (const raw of sanitizeQuery(text).replace(/’/g, "'").split(" ")) {
     if (raw.includes(":")) continue;
     const token = raw.replace(/[^\p{L}\p{M}\p{N}'\-.&+]/gu, "");
-    if (token === "" || token.startsWith("-") || GOOGLE_OPERATORS.has(token) || !/[\p{L}\p{N}]/u.test(token)) continue;
+    if (token === "" || LOOSE_HYPHEN.test(token) || token.includes("..") || GOOGLE_OPERATORS.has(token) || !/[\p{L}\p{N}]/u.test(token)) continue;
     kept.push(token);
   }
   return kept.join(" ").slice(0, SEARCH_QUERY_MAX_LENGTH);
@@ -464,19 +509,29 @@ async function queryStep(ports: ComplementPorts, input: ComplementInput, state: 
 type ShoppingCall = { kind: "answered"; filtered: ShoppingFiltered } | { kind: "cached"; filtered: ShoppingFiltered } | { kind: "stop"; status: ComplementStatus | null };
 
 /** Étape d : le cache d'abord, sinon le temps, le budget de la photo, la
- * réservation, puis UN appel à Google Shopping. */
+ * réservation, puis UN appel à Google Shopping. L'appel identique d'un autre
+ * lancement, s'il est en cours, est attendu (jamais au-delà de T0 + 14 s −
+ * 1,5 s : sinon « no_time », sans appel). */
 async function shoppingStep(ports: ComplementPorts, input: ComplementInput, state: RunState, query: string): Promise<ShoppingCall> {
   if (!canReadCache(input.deadline)) return { kind: "stop", status: "no_time" };
   const key = ports.cacheKey("shopping", shoppingCacheParts(query, input.locale));
-  const step = await sharedStep(key, async (): Promise<Leg<ShoppingFiltered, ShoppingCall>> => {
-    const cached = await readCacheSafely(ports, key, SHOPPING_CACHE_PAYLOAD);
-    if (cached) return { shared: cached, own: { kind: "cached", filtered: cached } };
-    const own = await callShoppingOnce(ports, input, state, query);
-    if (own.kind !== "answered") return { shared: null, own };
-    // Réponse facturée (vide comprise) : gardée 24 h.
-    writeCacheSafely(ports, key, "shopping", own.filtered);
-    return { shared: own.filtered, own };
-  });
+  const step = await sharedStep(
+    ports,
+    key,
+    async (): Promise<Leg<ShoppingFiltered, ShoppingCall>> => {
+      // Reprise après l'appel d'un autre lancement (sans réponse partageable) : le temps est revu.
+      if (!canReadCache(input.deadline)) return { shared: null, own: { kind: "stop", status: "no_time" } };
+      const cached = await readCacheSafely(ports, key, SHOPPING_CACHE_PAYLOAD);
+      if (cached) return { shared: cached, own: { kind: "cached", filtered: cached } };
+      const own = await callShoppingOnce(ports, input, state, query);
+      if (own.kind !== "answered") return { shared: null, own };
+      // Réponse facturée (vide comprise) : gardée 24 h.
+      writeCacheSafely(ports, key, "shopping", own.filtered);
+      return { shared: own.filtered, own };
+    },
+    () => input.deadline.remainingMs() - VOIE_C_BUDGET.saveReserveMs
+  );
+  if ("late" in step) return { kind: "stop", status: "no_time" };
   return "own" in step ? step.own : { kind: "cached", filtered: step.shared };
 }
 

@@ -707,20 +707,26 @@ function sendTextRefusal(reply: FastifyReply, refusal: keyof typeof TEXT_SEARCH_
 }
 
 /** Admissible : terminée, ou « rien trouvé » (jamais une panne, ni une
- * recherche pas encore lancée), et le budget de la photo permet encore une
- * recherche réelle (3 au plus : Lens s'il a été appelé, plus les recherches
- * Google Shopping déjà envoyées). Garanti par la ligne, jamais par le cache. */
+ * recherche pas encore lancée), l'invitation « Que cherchez-vous ? » a été
+ * proposée (text_suggested : seul cas où l'app l'offre ; jamais sur une
+ * ancienne recherche de l'historique), et le budget de la photo permet encore
+ * une recherche réelle (3 au plus : Lens s'il a été appelé, plus les
+ * recherches Google Shopping déjà envoyées). Garanti par la ligne, jamais
+ * par le cache. */
 function textSearchAllowed(row: SearchRow): boolean {
   const finished = row.status === "completed" || (row.status === "failed" && row.error_message === NO_MATCH_MESSAGE);
-  return finished && photoCallsLeft(row.lens_from_cache !== true, row.shopping_calls ?? 0) >= 1;
+  return finished && row.text_suggested === true && photoCallsLeft(row.lens_from_cache !== true, row.shopping_calls ?? 0) >= 1;
 }
 
 /** Verrou de la voie B : une seule recherche avec vos mots par recherche
- * (text_requested_at, en une instruction conditionnelle). false : déjà demandée. */
+ * (text_requested_at, en une instruction conditionnelle). false : déjà demandée.
+ * Dans la même instruction, la recherche cesse d'être « servie par le cache » :
+ * elle va faire un appel réel, et compte dès maintenant dans la part de 8 par
+ * personne (serpapi_quota), y compris pour un autre lancement simultané. */
 async function lockTextSearch(fastify: FastifyInstance, id: string): Promise<boolean> {
   const { data } = await fastify.supabaseAdmin
     .from("product_searches")
-    .update({ text_requested_at: new Date().toISOString() })
+    .update({ text_requested_at: new Date().toISOString(), served_from_cache: false })
     .eq("id", id)
     .is("text_requested_at", null)
     .select("id");
@@ -728,9 +734,13 @@ async function lockTextSearch(fastify: FastifyInstance, id: string): Promise<boo
 }
 
 /** Aucun appel finalement (annulation, plafond atteint ou illisible) : la
- * recherche avec vos mots redevient possible. */
-async function unlockTextSearch(fastify: FastifyInstance, id: string): Promise<void> {
-  const { error } = await fastify.supabaseAdmin.from("product_searches").update({ text_requested_at: null }).eq("id", id);
+ * recherche avec vos mots redevient possible, et « servie par le cache »
+ * reprend sa valeur d'avant le verrou. */
+async function unlockTextSearch(fastify: FastifyInstance, row: SearchRow): Promise<void> {
+  const { error } = await fastify.supabaseAdmin
+    .from("product_searches")
+    .update({ text_requested_at: null, served_from_cache: row.served_from_cache === true })
+    .eq("id", row.id);
   if (error) fastify.log.error({ code: error.code ?? null }, "Verrou de la recherche avec vos mots non remis");
 }
 
@@ -748,7 +758,8 @@ async function readSearchForReply(fastify: FastifyInstance, request: FastifyRequ
   const matchIds = matches.map((m) => m.id);
   const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, matchIds);
   const feedbackByMatchId = await fetchFeedbackReasons(fastify, userId, matchIds);
-  return toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId);
+  // Appelée seulement par la route « Que cherchez-vous ? », voie C en service.
+  return toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, true);
 }
 
 /** La recherche à lancer : celle de la personne, encore en attente. null :
@@ -885,12 +896,14 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     const topMatchIds = Array.from(topMatchBySearch.values()).map((m) => m.id);
     const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, topMatchIds);
     const feedbackByMatchId = await fetchFeedbackReasons(fastify, userId, topMatchIds);
+    // « Que cherchez-vous ? » annoncé seulement si la voie C est en service (coupée : jamais sondée).
+    const textSearchOn = await voieCActive(fastify);
 
     return reply.send(
       rows
         .map((row) => {
           const topMatch = topMatchBySearch.get(row.id);
-          return topMatch ? toProductSearch(row, [topMatch], affiliateUrlByMatchId, feedbackByMatchId) : null;
+          return topMatch ? toProductSearch(row, [topMatch], affiliateUrlByMatchId, feedbackByMatchId, textSearchOn) : null;
         })
         .filter((search): search is ProductSearch => search !== null)
     );
@@ -1067,7 +1080,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
 
       // « Annuler » avant l'appel : rien n'est consommé, le verrou est remis.
       if (request.raw.socket?.destroyed) {
-        await unlockTextSearch(fastify, id);
+        await unlockTextSearch(fastify, row);
         return;
       }
       // Une place réservée juste avant l'envoi (étape « shopping ») ; la
@@ -1076,7 +1089,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       // annoncé (une action explicite de la personne).
       const reservation = await reserveSearch(fastify, request.log, userId, id, "shopping").catch(() => null);
       if (!reservation || !reservation.allowed) {
-        await unlockTextSearch(fastify, id);
+        await unlockTextSearch(fastify, row);
         if (reservation) return sendCapacityReached(reply, reservation);
         return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue, réessayez." });
       }
@@ -1093,7 +1106,9 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       const saved = await saveComplementRows(fastify, id, text.matches, "words", lastRank);
       const textStatus = saved === null ? "shopping_failed" : text.textStatus;
       // « Rien trouvé » complété par vos mots : terminée. Les colonnes de la
-      // mesure de Lens restent celles du lancement.
+      // mesure de Lens restent celles du lancement. Un appel réel envoyé : la
+      // recherche n'est plus « servie par le cache » (sinon, valeur d'avant le
+      // verrou) ; elle compte dans la part de 8 par personne.
       const completes = row.status === "failed" && (saved ?? 0) > 0;
       const { error: updateError } = await fastify.supabaseAdmin
         .from("product_searches")
@@ -1101,6 +1116,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
           text_status: textStatus,
           shopping_calls: (row.shopping_calls ?? 0) + text.calls,
           text_suggested: false,
+          served_from_cache: text.calls === 0 && row.served_from_cache === true,
           ...(completes ? { status: "completed", error_message: null } : {}),
         })
         .eq("id", id);
@@ -1144,7 +1160,10 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     const matchIds = matches.map((m) => m.id);
     const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, matchIds);
     const feedbackByMatchId = await fetchFeedbackReasons(fastify, userId, matchIds);
+    // Voie C coupée depuis l'enregistrement : l'issue et les sections restent,
+    // l'invitation « Que cherchez-vous ? » n'est plus annoncée (la route répondrait 404).
+    const textSearchOn = await voieCActive(fastify);
 
-    return reply.send(toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId));
+    return reply.send(toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, textSearchOn));
   });
 }

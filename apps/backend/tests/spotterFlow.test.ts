@@ -59,6 +59,7 @@ import { serpApiTextProvider } from "../src/services/serpapi.js";
 import { askShoppingQuery, type ShoppingQueryResult } from "../src/services/shoppingQueryAi.js";
 import { writeCache } from "../src/lib/searchCache.js";
 import { assertNoUserImage } from "../src/lib/aiSwitches.js";
+import { VOIE_C_BUDGET } from "../src/lib/deadline.js";
 import { authHeaders, buildMultipart, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
 
 const searchMock = vi.mocked(searchProductsByImageUrl);
@@ -953,18 +954,32 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
       expect(firstBody.complement.status).toBe("shown");
       await settleCacheWrites();
 
-      const again = await prepare();
-      const res = await run(again.id, CROP, image);
+      // Chaque lecture du cache est bornée à 800 ms (VOIE_C_BUDGET.cacheReadMs),
+      // et une lecture isolée de spotto-dev-2 peut prendre plusieurs secondes
+      // (vitest.config.ts) : elle vaudrait « absent », et ce cas échouerait au
+      // hasard. Pour ce second lancement seulement, les trois lectures attendent
+      // la base ; tous les autres délais restent les vrais.
+      const timeoutOf = AbortSignal.timeout.bind(AbortSignal);
+      const readCap = vi.spyOn(AbortSignal, "timeout").mockImplementation((ms: number) => (ms === VOIE_C_BUDGET.cacheReadMs ? new AbortController().signal : timeoutOf(ms)));
+      let res: Awaited<ReturnType<typeof run>>;
+      let again: { id: string };
+      try {
+        again = await prepare();
+        res = await run(again.id, CROP, image);
+      } finally {
+        readCap.mockRestore();
+      }
       expect(res.statusCode).toBe(200);
+      // D'abord les appels : un appel de plus ici, c'est le cache manqué.
+      expect(searchMock).toHaveBeenCalledOnce();
+      expect(askMock).toHaveBeenCalledOnce();
+      expect(textMock).toHaveBeenCalledOnce();
+      expect(reserveMock).toHaveBeenCalledTimes(2);
       const body = res.json();
       expect(body.matches.map((m: { productName: string; origin?: string }) => [m.productName, m.origin ?? "lens"])).toEqual(
         firstBody.matches.map((m: { productName: string; origin?: string }) => [m.productName, m.origin ?? "lens"])
       );
       expect(body.complement).toMatchObject({ status: "shown", suggestText: false });
-      expect(searchMock).toHaveBeenCalledOnce();
-      expect(askMock).toHaveBeenCalledOnce();
-      expect(textMock).toHaveBeenCalledOnce();
-      expect(reserveMock).toHaveBeenCalledTimes(2);
       expect(await columnsOf(again.id)).toMatchObject({
         status: "completed",
         complement_status: "shown",
@@ -989,6 +1004,16 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
       const relue = (await app.inject({ method: "GET", url: `/api/searches/${search.id}`, headers: authHeaders(user.token) })).json();
       expect(relue.complement).toEqual({ status: "no_query", suggestText: true, textStatus: null });
       expect(await columnsOf(search.id)).toMatchObject({ complement_status: "no_query", text_suggested: true, shopping_calls: 0 });
+
+      // Voie C coupée depuis : l'issue reste, l'invitation n'est plus annoncée
+      // (la route « Que cherchez-vous ? » répondrait 404).
+      env.VOIE_C_ENABLED = false;
+      try {
+        const coupee = (await app.inject({ method: "GET", url: `/api/searches/${search.id}`, headers: authHeaders(user.token) })).json();
+        expect(coupee.complement).toEqual({ status: "no_query", suggestText: false, textStatus: null });
+      } finally {
+        env.VOIE_C_ENABLED = true;
+      }
     });
 
     it("étape IA coupée (VOIE_C_AI_ENABLED) : Lens seul, issue « skipped », aucune invitation, aucune recherche dans les boutiques", async () => {

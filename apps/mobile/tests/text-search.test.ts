@@ -12,9 +12,17 @@ vi.mock("../src/lib/supabase", () => ({ supabase: { auth: { getSession: async ()
 vi.mock("../src/lib/analytics", () => ({ track, setAnalyticsConsent: vi.fn() }));
 vi.mock("../src/lib/image-file", () => ({ imageFileFromUri: vi.fn() }));
 
-import { ApiError, runTextSearch } from "../src/lib/api";
+import { ApiError, fetchSearch, runTextSearch } from "../src/lib/api";
 import type { SpotResult } from "../src/api/types";
-import { textSearchFailure, toSpotResult, withTextSearch } from "../src/lib/spot-result";
+import {
+  recoverTextSearch,
+  settledTextSearch,
+  textSearchFailure,
+  textSearchSettled,
+  toSpotResult,
+  withoutTextPrompt,
+  withTextSearch,
+} from "../src/lib/spot-result";
 
 const WORDS = "veste en daim marron";
 
@@ -119,6 +127,53 @@ describe("runTextSearch (voie B)", () => {
     expect(error).toMatchObject({ status: 409 });
     expect(track).toHaveBeenLastCalledWith("text_search_completed", { outcome: "failed", results_count: 0 });
   });
+
+  it("mots refusés avant toute recherche (400) : une ApiError, sans issue « failed » comptée", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(400, { error: "invalid_body", message: "Décrivez la pièce en quelques mots." }));
+    const error = await runTextSearch("s1", "site:zalando.fr").catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ status: 400 });
+    expect(track.mock.calls).toEqual([["text_search_launched"]]);
+  });
+});
+
+describe("relecture de la recherche (voie B)", () => {
+  it("fetchSearch relit la recherche sans corps, et peut être abandonnée", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, search()));
+    const controller = new AbortController();
+    await fetchSearch("s1", controller.signal);
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("https://api.exemple.test/api/searches/s1");
+    expect(init?.method).toBeUndefined();
+    expect(init?.body).toBeUndefined();
+    expect(init?.signal).toBe(controller.signal);
+    expect(init?.headers).not.toHaveProperty("Content-Type");
+    // Sans signal : l'appel d'avant, inchangé (Aperçu, écran rouvert).
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, search()));
+    await fetchSearch("s1");
+    expect(fetchMock.mock.calls[1]![1]?.signal).toBeUndefined();
+  });
+
+  it("« Annuler » trop tard puis nouvel essai : 409, la recherche relue montre les propositions des mots, remplacées sur place", async () => {
+    const launched = toSpotResult(search({ complement: { status: "shown", query: "veste daim", suggestText: true, textStatus: null } }));
+    // Le premier essai, abandonné, est allé au bout côté serveur : le verrou est pris, les propositions enregistrées.
+    fetchMock.mockResolvedValueOnce(jsonResponse(409, { error: "text_search_already_used", message: "Déjà lancée." }));
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, search({ matches: [match("l1"), match("l2"), match("s1", "shopping"), match("w1", "words")], complement: { status: "shown", suggestText: false, textStatus: "shown" } }))
+    );
+    const controller = new AbortController();
+    const error = await runTextSearch("s1", WORDS, controller.signal).catch((caught: unknown) => caught);
+
+    const next = await recoverTextSearch(textSearchFailure(error), () => fetchSearch("s1", controller.signal));
+
+    expect(next.kind).toBe("done");
+    if (next.kind !== "done") return;
+    const replaced = withTextSearch(launched, next.search);
+    expect(replaced.complement?.words.map((piece) => piece.id)).toEqual(["w1"]);
+    expect(replaced.complement).toMatchObject({ query: "veste daim", suggestText: false, textStatus: "shown" });
+    expect(fetchMock.mock.calls[1]![0]).toBe("https://api.exemple.test/api/searches/s1");
+    expect(JSON.stringify(fetchMock.mock.calls[1])).not.toContain("daim");
+  });
 });
 
 describe("échecs de la recherche par les mots, tels que l'invitation les montre", () => {
@@ -144,6 +199,63 @@ describe("échecs de la recherche par les mots, tels que l'invitation les montre
   it("réseau ou serveur : l'invitation reste, pour réessayer", () => {
     expect(textSearchFailure(new TypeError("Network request failed"))).toEqual({ kind: "technical" });
     expect(textSearchFailure(new ApiError(500, { error: "unknown", message: "" }))).toEqual({ kind: "technical" });
+  });
+
+  it("mots refusés (400 « invalid_body », rien ne reste une fois les opérateurs retirés) : un texte à part, l'invitation reste", () => {
+    expect(textSearchFailure(new ApiError(400, { error: "invalid_body", message: "Décrivez la pièce en quelques mots." }))).toEqual({ kind: "invalid_words" });
+    // Un autre refus 400 n'accuse pas les mots.
+    expect(textSearchFailure(new ApiError(400, { error: "invalid_params", message: "" }))).toEqual({ kind: "technical" });
+  });
+});
+
+describe("après un échec, la recherche relue dit ce que le serveur a fait des mots", () => {
+  const inProgress = search({ complement: { status: "shown", suggestText: false, textStatus: null } });
+  const withWords = search({ matches: [match("l1"), match("w1", "words")], complement: { status: "shown", suggestText: false, textStatus: "shown" } });
+  const nothingForWords = search({ complement: { status: "shown", suggestText: false, textStatus: "empty" } });
+  // Propositions enregistrées, issue non écrite (500 « search_save_failed » après l'enregistrement).
+  const rowsOnly = search({ matches: [match("l1"), match("w1", "words")], complement: { status: "shown", suggestText: false, textStatus: null } });
+  const unreadable = () => Promise.reject(new TypeError("Network request failed"));
+
+  it("issue des mots : des propositions « words », ou une issue enregistrée", () => {
+    expect(textSearchSettled(withWords)).toBe(true);
+    expect(textSearchSettled(nothingForWords)).toBe(true);
+    expect(textSearchSettled(rowsOnly)).toBe(true);
+    expect(textSearchSettled(inProgress)).toBe(false);
+    expect(textSearchSettled(search({ complement: undefined }))).toBe(false);
+  });
+
+  it("409 déjà lancée : l'issue relue remplace le résultat ; sinon « déjà lancée », l'invitation disparaît", async () => {
+    const used = textSearchFailure(new ApiError(409, { error: "text_search_already_used", message: "" }));
+    expect(await recoverTextSearch(used, async () => withWords)).toEqual({ kind: "done", search: withWords });
+    expect(await recoverTextSearch(used, async () => nothingForWords)).toEqual({ kind: "done", search: nothingForWords });
+    expect(await recoverTextSearch(used, async () => rowsOnly)).toEqual({ kind: "done", search: rowsOnly });
+    // Recherche encore en cours côté serveur, ou relecture impossible : la phrase.
+    expect(await recoverTextSearch(used, async () => inProgress)).toEqual({ kind: "closed", alreadyUsed: true });
+    expect(await recoverTextSearch(used, unreadable)).toEqual({ kind: "closed", alreadyUsed: true });
+  });
+
+  it("réseau ou serveur : l'issue relue remplace le résultat ; sinon un nouvel essai est proposé", async () => {
+    const technical = textSearchFailure(new ApiError(500, { error: "search_save_failed", message: "" }));
+    expect(await recoverTextSearch(technical, async () => rowsOnly)).toEqual({ kind: "done", search: rowsOnly });
+    expect(await recoverTextSearch(technical, async () => inProgress)).toEqual({ kind: "idle", failure: { kind: "technical" } });
+    expect(await recoverTextSearch(technical, unreadable)).toEqual({ kind: "idle", failure: { kind: "technical" } });
+  });
+
+  it("refus sans recherche engagée : aucune relecture", async () => {
+    const read = vi.fn(async () => withWords);
+    const hidden = textSearchFailure(new ApiError(404, { error: "text_search_unavailable", message: "" }));
+    expect(await recoverTextSearch(hidden, read)).toEqual({ kind: "closed", alreadyUsed: false });
+    const limit = textSearchFailure(new ApiError(429, { error: "rate_limited", message: "" }));
+    expect(await recoverTextSearch(limit, read)).toEqual({ kind: "idle", failure: limit });
+    const refused = textSearchFailure(new ApiError(400, { error: "invalid_body", message: "" }));
+    expect(await recoverTextSearch(refused, read)).toEqual({ kind: "idle", failure: { kind: "invalid_words" } });
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it("après « Annuler » : la recherche relue seulement si l'issue des mots y est, jamais une erreur", async () => {
+    expect(await settledTextSearch(async () => withWords)).toBe(withWords);
+    expect(await settledTextSearch(async () => inProgress)).toBeNull();
+    expect(await settledTextSearch(unreadable)).toBeNull();
   });
 });
 
@@ -176,6 +288,17 @@ describe("le résultat est remplacé sur place", () => {
     expect(next.pieces).toEqual([]);
     expect(next.complement?.words.map((piece) => piece.id)).toEqual(["w1"]);
     expect(next.sortedByWords).toBe(false);
+  });
+
+  it("plus proposée par le serveur : l'invitation disparaît, ici comme au retour sur l'écran", () => {
+    const next = withoutTextPrompt(launched);
+    expect(next.complement).toMatchObject({ suggestText: false, query: "veste daim", textStatus: null });
+    expect(next.pieces).toEqual(launched.pieces);
+    expect(next.sortedByWords).toBe(true);
+    // Le résultat d'avant n'est pas modifié ; sans complément, rien à retirer.
+    expect(launched.complement?.suggestText).toBe(true);
+    const plain = toSpotResult(search({ complement: undefined, matches: [match("l1")] }));
+    expect(withoutTextPrompt(plain)).toBe(plain);
   });
 
   it("rien pour les mots : toujours « rien trouvé », l'issue est gardée, l'invitation disparaît", () => {

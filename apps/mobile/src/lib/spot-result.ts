@@ -97,15 +97,17 @@ export function withoutTextPrompt(result: SpotResult): SpotResult {
 }
 
 /** Échec de la recherche par les mots, tel que l'invitation le montre :
- * - already_used : déjà lancée pour cette recherche (409) — l'invitation
- *   laisse place à une phrase ;
+ * - already_used : déjà lancée pour cette recherche (409) — relue d'abord
+ *   (recoverTextSearch) ; sans l'issue des mots, l'invitation laisse place à
+ *   une phrase ;
  * - hidden : fonction coupée ou recherche introuvable (404), recherche non
  *   admissible ou budget de la photo épuisé (409) — l'invitation disparaît ;
  * - limit : plafond des recherches ou trop de recherches d'un coup (429),
  *   avec les textes de l'écran Résultat — l'invitation reste ;
  * - invalid_words : rien ne reste des mots une fois retirés les opérateurs
  *   et la ponctuation (400, avant toute recherche) — l'invitation reste ;
- * - technical : réseau ou serveur — l'invitation reste, pour réessayer. */
+ * - technical : réseau ou serveur — relue d'abord, puis l'invitation reste,
+ *   pour réessayer. */
 export type TextSearchFailure =
   | { kind: "already_used" }
   | { kind: "hidden" }

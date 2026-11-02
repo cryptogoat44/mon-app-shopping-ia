@@ -463,3 +463,33 @@ describe("colonnes de la migration 0027, décrites d'avance", () => {
     }
   });
 });
+
+describe("colonne de la migration 0028 (voie C) : origine des pièces proposées", () => {
+  /** Le jeu de données, avec une origine par pièce (dans l'ordre des rangs). */
+  const withOrigins = (origins: readonly string[]) => {
+    const data = fixture();
+    data.productMatches.forEach((row, index) => (row.origin = origins[index]));
+    return data;
+  };
+
+  it("recherche visuelle (valeur par défaut de toute pièce une fois 0028 appliquée) : rien n'est ajouté, la page lisible reste celle d'avant", () => {
+    for (const locale of ["fr", "en"] as const) {
+      const before = render({ locale });
+      const after = render({ locale }, withOrigins(["lens", "lens", "lens", "lens", "lens"]));
+      expect(sectionHtml(after, "searches")).toBe(sectionHtml(before, "searches"));
+      expect(visibleText(after)).toBe(visibleText(before));
+    }
+  });
+
+  it("boutiques et vos mots : l'origine en clair, en français et en anglais ; jamais la valeur brute", () => {
+    const data = withOrigins(["lens", "shopping", "words", "shopping", "lens"]);
+    const fr = visibleText(render({}, data));
+    expect(fr.match(/Origine Boutiques/g)).toHaveLength(2);
+    expect(fr.match(/Origine Vos mots/g)).toHaveLength(1);
+    expect(fr).not.toMatch(/Origine (Recherche visuelle|lens|shopping|words)/);
+    const en = visibleText(render({ locale: "en" }, data));
+    expect(en.match(/Origin Retailers/g)).toHaveLength(2);
+    expect(en.match(/Origin Your words/g)).toHaveLength(1);
+    expect(en).not.toMatch(/Origin (Visual search|lens|shopping|words)/);
+  });
+});

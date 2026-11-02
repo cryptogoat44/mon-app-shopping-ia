@@ -101,24 +101,29 @@ function priceOf(value: number | string | null): number | null {
 /** Complément de la voie C, lu dans la ligne : absent quand aucune de ses
  * colonnes n'est remplie (voie C coupée, recherche plus ancienne, base sans
  * 0028). L'invitation « Que cherchez-vous ? » n'est plus proposée une fois la
- * recherche par vos mots lancée. La requête de l'IA n'est jamais enregistrée :
- * une recherche relue n'en dit rien. */
-export function complementOf(row: SearchRow): SearchComplement | undefined {
+ * recherche par vos mots lancée, ni quand elle ne peut pas l'être
+ * (`textSearchOn` faux : voie C coupée depuis, la route répondrait 404) ;
+ * l'issue et les sections, elles, restent. La requête de l'IA n'est jamais
+ * enregistrée : une recherche relue n'en dit rien. */
+export function complementOf(row: SearchRow, textSearchOn: boolean): SearchComplement | undefined {
   const status = row.complement_status ?? null;
   const textStatus = row.text_status ?? null;
   const textRequested = row.text_requested_at != null;
   const ran = status !== null || textStatus !== null || textRequested || row.text_suggested === true || (row.shopping_calls ?? 0) > 0 || row.lens_from_cache === true;
   if (!ran) return undefined;
-  return { status, suggestText: row.text_suggested === true && !textRequested, textStatus };
+  return { status, suggestText: textSearchOn && row.text_suggested === true && !textRequested, textStatus };
 }
 
+/** `textSearchOn` : « Que cherchez-vous ? » peut être lancé maintenant (voie
+ * C en service) ; faux par défaut, l'invitation n'est alors jamais annoncée. */
 export function toProductSearch(
   row: SearchRow,
   matches: MatchRow[],
   affiliateUrlByMatchId: Map<string, string>,
-  feedbackByMatchId: Map<string, MatchFeedbackReason>
+  feedbackByMatchId: Map<string, MatchFeedbackReason>,
+  textSearchOn = false
 ): ProductSearch {
-  const complement = complementOf(row);
+  const complement = complementOf(row, textSearchOn);
   return {
     id: row.id,
     sourceUrl: row.source_url,

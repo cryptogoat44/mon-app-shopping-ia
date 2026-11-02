@@ -1,21 +1,21 @@
-// PROJET — À RELIRE PAR LE FONDATEUR ; non utilisé tant que
-// VOIE_C_AI_ENABLED n'est pas "true".
+// APPROUVÉES PAR LE FONDATEUR LE 2 NOVEMBRE 2026, règle 12 dans sa version
+// stricte. Utilisées seulement quand VOIE_C_AI_ENABLED vaut exactement
+// "true" (coupé par défaut).
 //
 // Consignes de l'IA qui écrit la requête Google Shopping de la voie C (lot c,
-// 2026-11-02). VERSION consignes-requete-shopping-2026-11-02-projet-2 : PAS
-// ENCORE APPROUVÉE. Ce fichier est LE texte à relire ; le reste du code ne
-// fait que l'envoyer (services/shoppingQueryAi.ts).
-// - Toute modification du texte change la version, donc la clé du cache des
-//   requêtes (aiInputKey) : une ancienne réponse n'est jamais resservie pour
-//   de nouvelles consignes.
-// - Règle 12 STRICTE (recommandée), retenue ici. Variante permissive, au
-//   choix du fondateur, NON utilisée : « … Si les résultats s'accordent sur
-//   une pièce sans marque, écris le nom de la pièce tel qu'il figure dans les
-//   titres et laisse brand vide. » Si elle est retenue, le contrôle du
-//   serveur « brand présente dans au moins deux titres » devient « brand vide
-//   OU présente dans au moins deux titres » (shoppingQueryAi.ts), et le tri
-//   léger se fait alors sans marque (lib/lightSort.ts) : les deux changent
-//   ensemble.
+// 2026-11-02). VERSION consignes-requete-shopping-2026-11-02 : approuvée.
+// Ce fichier est LE texte de référence ; le reste du code ne fait que
+// l'envoyer (services/shoppingQueryAi.ts).
+// - Toute modification du texte doit changer la version, donc la clé du
+//   cache des requêtes (aiInputKey) : une ancienne réponse n'est jamais
+//   resservie pour de nouvelles consignes. Toute modification repasse aussi
+//   par la relecture du fondateur.
+// - Règle 12 STRICTE, choisie par le fondateur : pas de requête quand aucune
+//   marque n'apparaît dans au moins deux titres. La variante permissive
+//   (pièce sans marque, brand vide) a été écartée. Si elle revenait un jour,
+//   le contrôle du serveur « brand présente dans au moins deux titres »
+//   (shoppingQueryAi.ts) et le tri léger (lib/lightSort.ts) devraient
+//   changer avec elle.
 //
 // Ce qui entre dans le message (rôle « user ») :
 // - les 15 premiers résultats Lens gardés après les filtres, dans l'ordre de
@@ -39,7 +39,7 @@
 // voir services/shoppingQueryAi.ts.
 
 export const SHOPPING_QUERY_INSTRUCTIONS = {
-  version: "consignes-requete-shopping-2026-11-02-projet-2",
+  version: "consignes-requete-shopping-2026-11-02",
   /** Consignes (champ « system »), les 13 règles du projet, mot pour mot. */
   system: [
     "1. Tu aides une application de mode à retrouver en boutique la pièce (vêtement, chaussures ou accessoire) qu'un utilisateur a photographiée.",

@@ -89,8 +89,12 @@ grant select, insert, update, delete on table search_cache to service_role;
 -- même type renvoyé (d'où « create or replace », sans suppression). Une seule
 -- condition ajoutée, dans le compte de la part de la personne :
 -- « and not s.served_from_cache ». La voie B n'est pas une nouvelle photo
--- (décision du fondateur) : elle ne compte pas dans la part de 8, mais chaque
+-- (décision du fondateur) : elle n'ajoute rien à la part de 8, mais chaque
 -- appel réel compte dans les plafonds du jour et du mois (serpapi_calls).
+-- Une recherche servie par le cache qui lance la voie B fait un appel réel :
+-- le serveur la retire alors des recherches « servies par le cache », et elle
+-- compte comme une photo (sinon, une boucle relance + vos mots ne serait
+-- jamais comptée).
 create or replace function serpapi_quota(
   p_daily_cap integer,
   p_monthly_cap integer,

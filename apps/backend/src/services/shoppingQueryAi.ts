@@ -246,6 +246,10 @@ const APOSTROPHES = /[‘’ʼ]/g;
 const COLONS = /[:：﹕]/;
 /** Ce qui reste d'une requête : lettres, chiffres, espaces et ' - . & + */
 const NOT_ALLOWED = /[^\p{L}\p{N}\s'\-.&+]/gu;
+/** Tiret ailleurs qu'entre deux lettres ou chiffres (« t-shirt », « X-200 »
+ * gardés) : l'exclusion de Google (« -mot »), même cachée derrière ' . & +
+ * (« '-mot », « +-mot »). Même règle dans lib/voieC.ts (sanitizeShoppingQuery). */
+const LOOSE_HYPHEN = /(?:^|[^\p{L}\p{M}\p{N}])-|-(?:$|[^\p{L}\p{M}\p{N}])/u;
 
 /** Marque ou modèle : même nettoyage que les titres. */
 function tidy(text: string): string {
@@ -267,7 +271,7 @@ export function checkShoppingQuery(
     .replace(NOT_ALLOWED, " ")
     .split(/\s+/)
     .filter((word) => word !== "" && !/^-+$/.test(word));
-  if (words.some((word) => word.startsWith("-") || word === "OR" || word === "AND" || word.includes(".."))) return reject("operators");
+  if (words.some((word) => LOOSE_HYPHEN.test(word) || word === "OR" || word === "AND" || word.includes(".."))) return reject("operators");
   if (words.length === 0) return reject("empty");
   const query = words.join(" ");
   if (words.length < SHOPPING_QUERY_MIN_WORDS || words.length > SHOPPING_QUERY_MAX_WORDS || Array.from(query).length > SHOPPING_QUERY_MAX_CHARS) {

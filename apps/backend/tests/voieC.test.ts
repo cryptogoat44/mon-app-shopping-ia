@@ -300,6 +300,72 @@ describe("runComplement — le chemin normal", () => {
     expect([a.columns.shopping_calls + b.columns.shopping_calls]).toEqual([1]);
     expect(vi.mocked(second.ports.reserve).mock.calls.length + vi.mocked(first.ports.reserve).mock.calls.length).toBe(1);
   });
+
+  it("panne des boutiques chez celui qui appelait, deux lancements en attente : UN seul nouvel appel (l'un relance, l'autre l'attend)", async () => {
+    const cache = fakeCache();
+    let fail!: (error: unknown) => void;
+    let answer!: (response: TextSearchResponse) => void;
+    const searchText = vi
+      .fn<ComplementPorts["searchText"]>()
+      .mockImplementationOnce(() => new Promise((_, reject) => (fail = reject)))
+      .mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+    const launches = [setup({ cache, ports: { searchText } }), setup({ cache, ports: { searchText } }), setup({ cache, ports: { searchText } })];
+    const all = Promise.all(launches.map((launch) => runComplement(launch.ports, launch.input())));
+    try {
+      await vi.waitFor(() => expect(searchText).toHaveBeenCalledOnce());
+      fail(new ProviderFailure("timeout", null, "SerpApi injoignable (timeout)"));
+      await vi.waitFor(() => expect(searchText).toHaveBeenCalledTimes(2));
+    } finally {
+      // Toujours réglés : un appel resté en cours bloquerait les cas suivants (même requête).
+      fail?.(new ProviderFailure("timeout", null, "SerpApi injoignable (timeout)"));
+      answer?.(SHOPPING);
+    }
+    const results = await all;
+    expect(searchText).toHaveBeenCalledTimes(2);
+    expect(results.map((result) => result.columns.complement_status)).toEqual(["shopping_failed", "shown", "shown"]);
+    expect(results.map((result) => result.columns.shopping_calls)).toEqual([1, 1, 0]);
+    expect(results[2]!.measure).toMatchObject({ shoppingFromCache: true, calls: 0 });
+    expect(launches.reduce((sum, launch) => sum + vi.mocked(launch.ports.reserve).mock.calls.length, 0)).toBe(2);
+  });
+
+  it("attente de l'appel d'un autre lancement bornée par son propre budget (T0 + 14 s − 1,5 s) : au-delà, « no_time », sans réservation ni appel", async () => {
+    const cache = fakeCache();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const searchText = vi.fn(async (): Promise<TextSearchResponse> => {
+      await gate;
+      return SHOPPING;
+    });
+    const leader = setup({ cache, ports: { searchText } });
+    const leading = runComplement(leader.ports, leader.input());
+    await vi.waitFor(() => expect(searchText).toHaveBeenCalledOnce());
+
+    // Lens lent pour ce lancement : il ne reste que 4 s (requête lue dans le cache, écrite par le premier).
+    const waits: number[] = [];
+    const waiter = setup({
+      cache,
+      clock: fakeClock(10_000),
+      ports: {
+        timeoutSignal: (ms: number) => {
+          waits.push(ms);
+          return ms === 2_500 ? AbortSignal.abort() : new AbortController().signal;
+        },
+      },
+    });
+    try {
+      const late = await runComplement(waiter.ports, waiter.input());
+      expect(waits).toEqual([800, 2_500]);
+      expect(late.columns).toEqual({ complement_status: "no_time", shopping_calls: 0, text_suggested: false });
+      expect(late.measure).toMatchObject({ queryFromCache: true, calls: 0 });
+      expect(waiter.ports.reserve).not.toHaveBeenCalled();
+      expect(waiter.ports.searchText).not.toHaveBeenCalled();
+    } finally {
+      // L'appel attendu, lui, continue (et finit toujours : il bloquerait les cas suivants).
+      release();
+    }
+    expect((await leading).columns).toEqual({ complement_status: "shown", shopping_calls: 1, text_suggested: false });
+    expect(searchText).toHaveBeenCalledOnce();
+  });
 });
 
 describe("runComplement — sorties sans complément (résultats Lens seuls)", () => {
@@ -564,6 +630,53 @@ describe("lensStep — un seul appel pour la même image", () => {
     expect(b).toEqual({ lensFromCache: false, result: { kind: "answered", answer: ANSWER }, answer: ANSWER });
   });
 
+  type Called = { kind: "failed" } | { kind: "answered"; answer: LensAnswer };
+  const answerOfCall = (result: Called) => (result.kind === "answered" ? result.answer : null);
+
+  /** Premier appel en panne, second en attente de `answer` : chacun réglé par le test. */
+  function failThenAnswer() {
+    let fail!: (value: Called) => void;
+    let answer!: (value: Called) => void;
+    const call = vi
+      .fn<() => Promise<Called>>()
+      .mockImplementationOnce(() => new Promise((resolve) => (fail = resolve)))
+      .mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+    return { call, fail: () => fail({ kind: "failed" }), answer: () => answer({ kind: "answered", answer: ANSWER }) };
+  }
+
+  it("panne de celui qui appelait, deux lancements en attente : UN seul nouvel appel (l'un relance, l'autre l'attend), pas un chacun", async () => {
+    const cache = fakeCache();
+    const { call, fail, answer } = failThenAnswer();
+    const step = () => lensStep(lensPorts(cache), { imageHash: "e".repeat(64), locale: FR, call, answerOf: answerOfCall });
+    const all = Promise.all([step(), step(), step()]);
+    await vi.waitFor(() => expect(call).toHaveBeenCalledOnce());
+    fail();
+    await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2));
+    answer();
+    const [a, b, c] = await all;
+    expect(call).toHaveBeenCalledTimes(2);
+    expect(a).toEqual({ lensFromCache: false, result: { kind: "failed" }, answer: null });
+    expect(b).toEqual({ lensFromCache: false, result: { kind: "answered", answer: ANSWER }, answer: ANSWER });
+    expect(c).toEqual({ lensFromCache: true, answer: ANSWER });
+  });
+
+  it("un lancement arrivé pendant cette reprise l'attend aussi : 2 appels en tout, jamais 3", async () => {
+    const cache = fakeCache();
+    const { call, fail, answer } = failThenAnswer();
+    const step = () => lensStep(lensPorts(cache), { imageHash: "f".repeat(64), locale: FR, call, answerOf: answerOfCall });
+    const first = step();
+    const second = step();
+    await vi.waitFor(() => expect(call).toHaveBeenCalledOnce());
+    fail();
+    await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2));
+    const third = step();
+    answer();
+    const [, b, c] = await Promise.all([first, second, third]);
+    expect(call).toHaveBeenCalledTimes(2);
+    expect(b.lensFromCache).toBe(false);
+    expect(c).toEqual({ lensFromCache: true, answer: ANSWER });
+  });
+
   it("clé : même image et même pays ; une autre image ou un autre pays ne ressert rien", async () => {
     const cache = fakeCache();
     const call = vi.fn(async () => ({ kind: "answered" as const, answer: ANSWER }));
@@ -657,6 +770,13 @@ describe("sanitizeShoppingQuery", () => {
     expect(sanitizeShoppingQuery("<script>veste</script>\u0000 -- ' ")).toBe("script veste script");
     expect(sanitizeShoppingQuery("site:exemple.fr -x")).toBe("");
     expect(sanitizeShoppingQuery("é".repeat(80)).length).toBeLessThanOrEqual(60);
+  });
+
+  it("retire aussi « -mot » caché derrière ' . & + (« '-cuir »…), tout tiret hors d'un mot composé, et « 10..20 »", () => {
+    expect(sanitizeShoppingQuery("veste '-cuir .-cuir &-cuir +-cuir ''-cuir")).toBe("veste");
+    expect(sanitizeShoppingQuery("veste cuir'-daim cuir- 10..20 ..")).toBe("veste");
+    // Les mots composés restent : le tiret y est entre deux lettres ou chiffres.
+    expect(sanitizeShoppingQuery("t-shirt Exemplor X-200 é-è")).toBe("t-shirt Exemplor X-200 é-è");
   });
 });
 
@@ -759,12 +879,22 @@ describe("recherches relues : origine et complément (lib/searchRows.ts)", () =>
       { ...MATCH, id: "00000000-0000-4000-8000-000000000004", rank: 2, origin: "shopping" },
       { ...MATCH, id: "00000000-0000-4000-8000-000000000005", rank: 3, origin: "words" },
     ])!;
-    const search = toProductSearch(parseSearchRow(row)!, matches, new Map(), new Map());
+    const search = toProductSearch(parseSearchRow(row)!, matches, new Map(), new Map(), true);
     expect(search.complement).toEqual({ status: "empty", suggestText: true, textStatus: null });
     expect(search.matches.map((match) => match.origin)).toEqual([undefined, "shopping", "words"]);
-    const used = toProductSearch(parseSearchRow({ ...row, text_requested_at: "2026-11-02T10:01:00Z", text_status: "shown", shopping_calls: 2 })!, matches, new Map(), new Map());
+    const used = toProductSearch(parseSearchRow({ ...row, text_requested_at: "2026-11-02T10:01:00Z", text_status: "shown", shopping_calls: 2 })!, matches, new Map(), new Map(), true);
     expect(used.complement).toEqual({ status: "empty", suggestText: false, textStatus: "shown" });
     expect(JSON.stringify(used)).not.toContain("query\":\"");
+  });
+
+  it("voie C coupée depuis l'enregistrement : l'invitation n'est plus annoncée (la route répondrait 404) ; l'issue et les origines restent", async () => {
+    const { parseMatchRows, parseSearchRow, toProductSearch } = await import("../src/lib/searchRows.js");
+    const row = parseSearchRow({ ...BASE_ROW, complement_status: "no_query", shopping_calls: 0, lens_from_cache: false, served_from_cache: false, text_suggested: true, text_requested_at: null, text_status: null, total_seconds: 4 })!;
+    const matches = parseMatchRows([{ ...MATCH, origin: "shopping" }])!;
+    for (const off of [toProductSearch(row, matches, new Map(), new Map(), false), toProductSearch(row, matches, new Map(), new Map())]) {
+      expect(off.complement).toEqual({ status: "no_query", suggestText: false, textStatus: null });
+      expect(off.matches[0]!.origin).toBe("shopping");
+    }
   });
 
   it("valeur inconnue (origine, issue) : ligne illisible, comme toute valeur hors liste", async () => {
