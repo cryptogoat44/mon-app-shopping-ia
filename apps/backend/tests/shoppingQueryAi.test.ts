@@ -297,6 +297,44 @@ describe("requête Shopping — contrôles du serveur (sans IA)", () => {
       "invented"
     );
   });
+
+  it("règle 9, sans faux refus : petits mots de la marque, et mot de site présent dans deux titres d'autres sites", () => {
+    // « des » est un mot du site de la marque, et un petit mot : excusé comme tout mot de la marque.
+    expect(
+      reason(
+        { query: "Maison des Exemples veste Nuage", brand: "Maison des Exemples", model: "Nuage" },
+        ["Maison des Exemples veste Nuage bleue", "Veste Nuage Maison des Exemples", "Veste bleue femme"],
+        ["maison-des-exemples.fr", "boutique-a.fr", "boutique-b.fr"]
+      )
+    ).toBe("query");
+    // « running » : mot du site boutique-running.fr, mais aussi de deux titres d'autres sites.
+    const running = ["Exemplor Course 9 running homme", "Chaussures running Exemplor Course 9", "Exemplor Course 9 running femme"];
+    const runningSites = ["boutique-running.fr", "boutique-a.fr", "boutique-b.fr"];
+    expect(reason({ query: "Exemplor Course 9 running", brand: "Exemplor", model: "Course 9" }, running, runningSites)).toBe("query");
+    // Un seul titre d'un autre site : pas assez, le mot reste celui d'une boutique.
+    const once = ["Exemplor Course 9 running homme", "Chaussures running Exemplor Course 9", "Exemplor Course 9 femme"];
+    expect(reason({ query: "Exemplor Course 9 running", brand: "Exemplor", model: "Course 9" }, once, runningSites)).toBe("invented");
+  });
+
+  it("règle 9 : nom de boutique en deux mots collés dans le domaine, lettres pleine chasse, chiffres romains et pluriels de promotion → refusé", () => {
+    // « Grand Magasin » s'écrit grandmagasin.fr : refusé, sauf quand c'est la marque.
+    const shop = ["Exemplor veste Nuage 07 | Grand Magasin", "Veste Exemplor Nuage 07 bleue", "Exemplor Nuage 07 veste - Grand Magasin"];
+    const shopSites = ["grandmagasin.fr", "boutique-a.fr", "grandmagasin.fr"];
+    expect(reason({ query: "Exemplor Nuage 07 Grand Magasin", brand: "Exemplor", model: "Nuage 07" }, shop, shopSites)).toBe("invented");
+    expect(
+      reason(
+        { query: "Grand Magasin veste Nuage", brand: "Grand Magasin", model: "Nuage" },
+        ["Grand Magasin veste Nuage bleue", "Veste Nuage Grand Magasin", "Veste bleue"],
+        ["grandmagasin.fr", "boutique-a.fr", "boutique-b.fr"]
+      )
+    ).toBe("query");
+    // Formes que Google ramène aux lettres ordinaires (NFKC), recopiées d'un titre.
+    const sites = ["boutique-a.fr", "boutique-b.fr", "boutique-c.fr", "boutiquezed.fr"];
+    for (const trap of ["ｐｒｏｍｏ", "offerts", "réductions", "promoshopx.ⅽom", "Ｂｏｕｔｉｑｕｅｚｅｄ"]) {
+      const titles = [...TITLES, `Marque Exemple X-200 ${trap}`];
+      expect(reason({ query: `Marque Exemple X-200 ${trap}`, brand: "Marque Exemple", model: "X-200" }, titles, sites), trap).toBe("invented");
+    }
+  });
 });
 
 describe("requête Shopping — lecture de la réponse", () => {

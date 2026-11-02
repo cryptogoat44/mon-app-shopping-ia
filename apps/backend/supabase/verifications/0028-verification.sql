@@ -4,7 +4,7 @@
 --
 -- Résultat attendu : une seule ligne,
 --   true | key text NO, step text NO, payload jsonb NO, created_at timestamp with time zone NO, expires_at timestamp with time zone NO
---   | true | true | 0 | 0 | true | 8 | true | true | true | true
+--   | true | true | 0 | 0 | true | true | 8 | true | true | true | true
 -- soit :
 --   cache_forme_exacte = true : search_cache a EXACTEMENT les colonnes de 0028,
 --     dans cet ordre, avec ces types (une autre forme, laissée par exemple par
@@ -18,6 +18,11 @@
 --   droits_publics_cache = 0 : aucun droit pour anon, authenticated ni public
 --     (seul le serveur, avec sa clé secrète, la lit et l'écrit) ;
 --   index_expiration = true : l'index qui sert à supprimer les lignes expirées ;
+--   cache_regles_exactes = true : les règles de search_cache sont EXACTEMENT
+--     celles de 0028 (clé de 64 caractères hexadécimaux, étapes lens / query /
+--     shopping, 256 Ko au plus, expiration après la création), avec created_at
+--     à now() par défaut et l'index sur expires_at (une table de même forme
+--     laissée par un brouillon, avec d'autres règles, donne false) ;
 --   colonnes_recherche = 8 : les 8 nouvelles colonnes de product_searches, avec
 --     leur type ;
 --   colonne_origine = true : product_matches.origin, obligatoire, 'lens' par défaut ;
@@ -32,10 +37,11 @@
 --     étroite, laissée par un brouillon, donne false ;
 --   quota_sans_cache = true : serpapi_quota ignore les recherches servies par
 --     le cache dans la part de la personne.
--- Un false sur colonnes_voie_c_exactes ou contraintes_voie_c_exactes : ne pas
--- mettre VOIE_C_ENABLED à "true" avant d'avoir compris d'où vient l'écart (les
--- colonnes et les règles de product_searches et product_matches, comparées à
--- celles de 0028). Tri « collate "C" » : le même ordre quelle que soit la
+-- Un false sur cache_regles_exactes, colonnes_voie_c_exactes ou
+-- contraintes_voie_c_exactes : ne pas mettre VOIE_C_ENABLED à "true" avant
+-- d'avoir compris d'où vient l'écart (les colonnes et les règles de
+-- search_cache, product_searches et product_matches, comparées à celles de
+-- 0028). Tri « collate "C" » : le même ordre quelle que soit la
 -- langue de la base.
 select
   (
@@ -63,6 +69,16 @@ select
       and grantee in ('anon', 'authenticated', 'PUBLIC')
   ) as droits_publics_cache,
   exists (select 1 from pg_indexes where schemaname = 'public' and tablename = 'search_cache' and indexname = 'search_cache_expires_at_idx') as index_expiration,
+  (
+    select string_agg(pg_get_constraintdef(c.oid), ', ' order by pg_get_constraintdef(c.oid) collate "C")
+    from pg_constraint c
+    where c.conrelid = to_regclass('public.search_cache') and c.contype = 'c'
+  ) || ' | ' || coalesce((
+    select column_default from information_schema.columns
+    where table_schema = 'public' and table_name = 'search_cache' and column_name = 'created_at'
+  ), '-') || ' | ' || coalesce(pg_get_indexdef(to_regclass('public.search_cache_expires_at_idx')), '-')
+  is not distinct from 'CHECK ((expires_at > created_at)), CHECK ((key ~ ''^[0-9a-f]{64}$''::text)), CHECK ((octet_length((payload)::text) <= 262144)), CHECK ((step = ANY (ARRAY[''lens''::text, ''query''::text, ''shopping''::text]))) | now() | CREATE INDEX search_cache_expires_at_idx ON public.search_cache USING btree (expires_at)'
+    as cache_regles_exactes,
   (
     select count(*)::int from information_schema.columns
     where table_schema = 'public' and table_name = 'product_searches'

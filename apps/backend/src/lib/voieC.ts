@@ -494,46 +494,76 @@ const SHOPPING_GATE_MS = VOIE_C_BUDGET.saveReserveMs + VOIE_C_BUDGET.shoppingMin
 
 type QueryOutcome = { kind: "query"; query: string; brand: string; model: string } | { kind: "stop"; status: ComplementStatus | null; suggestText: boolean };
 
+/** Résultat propre au lancement qui a fait l'étape b-c : la réponse (lue dans
+ * le cache, ou écrite par l'IA), ou l'arrêt et pourquoi. */
+type QueryOwn = { kind: "answer"; answer: QueryCachePayload; fromCache: boolean } | { kind: "stop"; outcome: QueryOutcome };
+
 /** Étapes b et c : le cache de la requête d'abord (sans IA ni garde de
- * dépense), sinon le temps, les gardes de dépense, puis l'IA. */
+ * dépense), sinon le temps, les gardes de dépense, puis l'IA. Un seul appel
+ * à la fois pour les mêmes titres (sharedStep, comme Lens et les boutiques) :
+ * un lancement arrivé pendant l'appel de l'IA, ou avant l'écriture de sa
+ * réponse dans le cache, reçoit la même réponse, donc la même requête et la
+ * même recherche dans les boutiques, au lieu d'une seconde réponse peut-être
+ * formulée autrement (une seconde recherche payée). Son attente ne dépasse
+ * jamais son propre budget (« late » : no_time). */
 async function queryStep(ports: ComplementPorts, input: ComplementInput, state: RunState): Promise<QueryOutcome> {
   if (!canReadCache(input.deadline)) return { kind: "stop", status: "no_time", suggestText: false };
   const items = aiItems(input.lens);
   const key = ports.aiInputKey(items, input.locale);
-  let answer: QueryCachePayload | null = await readCacheSafely(ports, key, QUERY_CACHE_PAYLOAD);
-  if (answer) {
-    state.measure.queryFromCache = true;
-  } else {
-    if (input.deadline.remainingMs() < AI_GATE_MS) return { kind: "stop", status: "no_time", suggestText: false };
-    // Gardes de dépense : lecture seule du plafond, puis limite commune de
-    // l'IA. Atteints : l'IA est sautée, jamais de 429.
-    const capacity = await ports.capacityLeft().catch(() => false);
-    if (!capacity) return { kind: "stop", status: "no_capacity", suggestText: false };
-    const timeout = input.deadline.stepTimeoutMs(VOIE_C_BUDGET.aiMaxMs, VOIE_C_BUDGET.saveReserveMs + VOIE_C_BUDGET.shoppingMinMs);
-    if (timeout === null || timeout < VOIE_C_BUDGET.aiMinMs) return { kind: "stop", status: "no_time", suggestText: false };
-    if (ports.socketDestroyed()) return { kind: "stop", status: null, suggestText: false };
-    if (!ports.consumeAiLimit()) return { kind: "stop", status: "no_capacity", suggestText: false };
+  const stop = (status: ComplementStatus | null): Leg<QueryCachePayload, QueryOwn> => ({ shared: null, own: { kind: "stop", outcome: { kind: "stop", status, suggestText: false } } });
+  const step = await sharedStep<QueryCachePayload, QueryOwn>(
+    ports,
+    key,
+    async () => {
+      const cached = await readCacheSafely(ports, key, QUERY_CACHE_PAYLOAD);
+      if (cached) return { shared: cached, own: { kind: "answer", answer: cached, fromCache: true } };
+      if (input.deadline.remainingMs() < AI_GATE_MS) return stop("no_time");
+      // Gardes de dépense : lecture seule du plafond, puis limite commune de
+      // l'IA. Atteints : l'IA est sautée, jamais de 429.
+      const capacity = await ports.capacityLeft().catch(() => false);
+      if (!capacity) return stop("no_capacity");
+      const timeout = input.deadline.stepTimeoutMs(VOIE_C_BUDGET.aiMaxMs, VOIE_C_BUDGET.saveReserveMs + VOIE_C_BUDGET.shoppingMinMs);
+      if (timeout === null || timeout < VOIE_C_BUDGET.aiMinMs) return stop("no_time");
+      if (ports.socketDestroyed()) return stop(null);
+      if (!ports.consumeAiLimit()) return stop("no_capacity");
 
-    const started = ports.now();
-    let result: ShoppingQueryAnswer;
-    try {
-      result = await ports.askQuery(items, input.locale, signalAfter(ports, timeout));
-    } catch (error) {
+      const started = ports.now();
+      let result: ShoppingQueryAnswer;
+      try {
+        result = await ports.askQuery(items, input.locale, signalAfter(ports, timeout));
+      } catch (error) {
+        state.measure.aiMs = ports.now() - started;
+        const kind = aiErrorKindOf(error);
+        if (kind === null) throw error;
+        state.measure.aiErrorKind = kind;
+        return stop("ai_failed");
+      }
       state.measure.aiMs = ports.now() - started;
-      const kind = aiErrorKindOf(error);
-      if (kind === null) throw error;
-      state.measure.aiErrorKind = kind;
-      return { kind: "stop", status: "ai_failed", suggestText: false };
-    }
-    state.measure.aiMs = ports.now() - started;
-    state.measure.inputTokens = result.usage.inputTokens;
-    state.measure.outputTokens = result.usage.outputTokens;
-    answer =
-      result.kind === "query"
-        ? { query: result.value.query, brand: result.value.brand, model: result.value.model }
-        : { no_query: true, reason: result.reason };
-    // Requêtes vérifiées ET absences de requête sont gardées (24 h).
-    if (QUERY_CACHE_PAYLOAD.safeParse(answer).success) void writeCacheSafely(ports, key, "query", answer);
+      state.measure.inputTokens = result.usage.inputTokens;
+      state.measure.outputTokens = result.usage.outputTokens;
+      const answer: QueryCachePayload =
+        result.kind === "query"
+          ? { query: result.value.query, brand: result.value.brand, model: result.value.model }
+          : { no_query: true, reason: result.reason };
+      // Requêtes vérifiées ET absences de requête sont gardées (24 h), et
+      // partagées ; une réponse que le cache refuserait ne l'est pas.
+      if (!QUERY_CACHE_PAYLOAD.safeParse(answer).success) return { shared: null, own: { kind: "answer", answer, fromCache: false } };
+      const written = writeCacheSafely(ports, key, "query", answer);
+      return { shared: answer, own: { kind: "answer", answer, fromCache: false }, written };
+    },
+    () => input.deadline.remainingMs() - VOIE_C_BUDGET.saveReserveMs
+  );
+
+  let answer: QueryCachePayload;
+  if ("late" in step) return { kind: "stop", status: "no_time", suggestText: false };
+  if ("shared" in step) {
+    state.measure.queryFromCache = true;
+    answer = step.shared;
+  } else if (step.own.kind === "stop") {
+    return step.own.outcome;
+  } else {
+    if (step.own.fromCache) state.measure.queryFromCache = true;
+    answer = step.own.answer;
   }
 
   if ("no_query" in answer) {

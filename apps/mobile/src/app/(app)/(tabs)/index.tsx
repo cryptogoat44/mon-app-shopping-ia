@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { getRecentSearches } from "@/api/client";
+import { clearLastSpotResult } from "@/api/spotSession";
 import type { Piece } from "@/api/types";
 import { ClockIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
@@ -73,7 +74,13 @@ function RecentRow({ recent }: { recent: { searchId: string; piece: Piece }[] })
           <Pressable
             key={searchId}
             style={styles.recentItem}
-            onPress={() => router.push({ pathname: "/spot/result", params: { searchId } })}
+            onPress={() => {
+              // Rouverte depuis l'historique : toujours relue sur le serveur (gratuit), jamais
+              // la copie en mémoire du dernier lancement, qui peut être périmée (voie B lancée
+              // ou plus admissible, propositions de vos mots arrivées depuis).
+              clearLastSpotResult();
+              router.push({ pathname: "/spot/result", params: { searchId } });
+            }}
             accessibilityRole="button"
             accessibilityLabel={piece.name}
           >

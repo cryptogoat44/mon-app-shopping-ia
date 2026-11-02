@@ -398,6 +398,73 @@ describe("runComplement — le chemin normal", () => {
     await vi.waitFor(() => expect(singleFlightPending()).toBe(0));
     expect([...cache.entries.values()].some((entry) => entry.step === "shopping")).toBe(true);
   });
+
+  /** L'IA formulerait autrement à un second appel : une autre requête, donc une seconde recherche payée. */
+  const REWORDED: ShoppingQueryAnswer = { ...QUERY_ANSWER, value: { ...(QUERY_ANSWER.kind === "query" ? QUERY_ANSWER.value : { query: "", brand: "", model: "" }), query: "veste Exemplor Nuage 07 bleue" } };
+
+  it("deux lancements des mêmes titres pendant l'appel de l'IA : UNE réponse partagée, donc une seule recherche dans les boutiques", async () => {
+    const cache = fakeCache();
+    let answer!: () => void;
+    const gate = new Promise<void>((resolve) => (answer = resolve));
+    const askQuery = vi
+      .fn<ComplementPorts["askQuery"]>()
+      .mockImplementationOnce(async () => {
+        await gate;
+        return QUERY_ANSWER;
+      })
+      .mockResolvedValue(REWORDED);
+    const searchText = vi.fn(async (): Promise<TextSearchResponse> => SHOPPING);
+    const reserve = vi.fn(async () => ({ allowed: true as const, reservationId: 42 }));
+    const first = setup({ cache, ports: { askQuery, searchText, reserve } });
+    const second = setup({ cache, ports: { askQuery, searchText, reserve } });
+    let results: Awaited<ReturnType<typeof runComplement>>[];
+    try {
+      const running = runComplement(first.ports, first.input());
+      await vi.waitFor(() => expect(askQuery).toHaveBeenCalledOnce());
+      const joining = runComplement(second.ports, second.input());
+      answer();
+      results = await Promise.all([running, joining]);
+    } finally {
+      // Toujours réglé : un appel resté en cours bloquerait les cas suivants (mêmes titres).
+      answer();
+    }
+    expect(askQuery).toHaveBeenCalledOnce();
+    expect(second.ports.consumeAiLimit).not.toHaveBeenCalled();
+    expect(searchText).toHaveBeenCalledOnce();
+    expect(reserve).toHaveBeenCalledOnce();
+    expect(results.map((result) => result.reply.query)).toEqual([QUERY, QUERY]);
+    expect(results[1]!.measure).toMatchObject({ queryFromCache: true, calls: 0 });
+    await vi.waitFor(() => expect(singleFlightPending()).toBe(0));
+  });
+
+  it("relance entre la réponse de l'IA et l'écriture du cache (base lente) : la même requête, sans second appel à l'IA ni seconde recherche", async () => {
+    const cache = fakeCache();
+    let commit!: () => void;
+    const committed = new Promise<void>((resolve) => (commit = resolve));
+    const slowWrite = async (key: string, step: CacheStep, payload: unknown) => {
+      if (step === "query") await committed;
+      cache.writeCache(key, step, payload);
+    };
+    const askQuery = vi.fn<ComplementPorts["askQuery"]>().mockResolvedValueOnce(QUERY_ANSWER).mockResolvedValue(REWORDED);
+    const searchText = vi.fn(async (): Promise<TextSearchResponse> => SHOPPING);
+    const reserve = vi.fn(async () => ({ allowed: true as const, reservationId: 42 }));
+    const first = setup({ cache, ports: { writeCache: slowWrite, askQuery, searchText, reserve } });
+    const second = setup({ cache, ports: { writeCache: slowWrite, askQuery, searchText, reserve } });
+    try {
+      const a = await runComplement(first.ports, first.input());
+      expect([...cache.entries.values()].some((entry) => entry.step === "query")).toBe(false);
+      const b = await runComplement(second.ports, second.input());
+      expect(askQuery).toHaveBeenCalledOnce();
+      expect(b.measure).toMatchObject({ queryFromCache: true, calls: 0 });
+      expect(b.reply.query).toBe(a.reply.query);
+      expect(searchText).toHaveBeenCalledOnce();
+      expect(reserve).toHaveBeenCalledOnce();
+    } finally {
+      commit();
+    }
+    await vi.waitFor(() => expect(singleFlightPending()).toBe(0));
+    expect([...cache.entries.values()].some((entry) => entry.step === "query")).toBe(true);
+  });
 });
 
 describe("runComplement — sorties sans complément (résultats Lens seuls)", () => {

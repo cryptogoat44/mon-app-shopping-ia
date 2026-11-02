@@ -517,6 +517,9 @@ interface VoieCLaunch {
   /** Image préparée (recadrée, réduite) : son empreinte est la clé du cache. */
   image: Buffer;
   input: RunInput;
+  /** Création de la recherche (au « préparer ») : décide si « Que
+   * cherchez-vous ? » pourra être compté (textSearchCountable). */
+  createdAt: string;
 }
 
 /** Ports du cache (lib/searchCache.ts), base et journal de la requête liés. */
@@ -676,7 +679,13 @@ async function launchWithVoieC(fastify: FastifyInstance, request: FastifyRequest
   // Limite horaire : comptée une fois par lancement avec au moins un appel
   // réel. Lens venu du cache mais Google Shopping appelé : c'est ici.
   if (lens.lensFromCache && complement.measure.calls > 0) fastify.countRateLimitHit(request, "searchCreate");
-  const saved = await saveVoieCOutcome(fastify, request, launch, { ...searched, matches: byWords.matches }, { lensFromCache: lens.lensFromCache, complement });
+  // « Que cherchez-vous ? » n'est proposé que s'il pourra être compté : une
+  // recherche servie entièrement par le cache, préparée avant minuit (heure
+  // de Paris) et lancée après, ne compte dans aucune part de 8 ; la route le
+  // refuserait (409), et l'invitation disparaîtrait sans un mot.
+  const servedFromCache = lens.lensFromCache && complement.columns.shopping_calls === 0;
+  const offered = textSearchCountable({ served_from_cache: servedFromCache, created_at: launch.createdAt }) ? complement : withoutSuggestion(complement);
+  const saved = await saveVoieCOutcome(fastify, request, launch, { ...searched, matches: byWords.matches }, { lensFromCache: lens.lensFromCache, complement: offered });
   // Le disjoncteur ne juge que les vrais appels à Lens.
   if (!lens.lensFromCache) await observeBreakerAfter(fastify, "image", IMAGE_SEARCH_PROVIDER.name, launch.id);
   // Résultat illisible ou non enregistré : une panne annoncée comme telle, jamais « aucune pièce ».
@@ -1024,7 +1033,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       // Voie C (lot c) : interrupteur allumé ET migration 0028 vue. Sinon,
       // exactement le chemin d'avant : Lens seul, 15 s, aucune colonne nouvelle.
       if (await voieCActive(fastify)) {
-        return launchWithVoieC(fastify, request, reply, { id, userId, t0, image: prepared.image, input: form.input });
+        return launchWithVoieC(fastify, request, reply, { id, userId, t0, image: prepared.image, input: form.input, createdAt: row.created_at });
       }
 
       const call = await callLens(fastify, request, { id, userId, image: prepared.image });
@@ -1096,6 +1105,15 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
         await unlockTextSearch(fastify, row);
         if (reservation) return sendCapacityReached(reply, reservation);
         return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue, réessayez." });
+      }
+      // Minuit (heure de Paris) passé entre le contrôle et la réservation : la
+      // part de 8 se décide à la réservation, au jour nouveau, qui ne compte
+      // pas cette recherche servie par le cache. Rien n'est envoyé, la place
+      // est rendue et le verrou remis.
+      if (!textSearchCountable(row)) {
+        await releaseReservation(fastify, request.log, reservation.reservationId, "shopping");
+        await unlockTextSearch(fastify, row);
+        return sendTextRefusal(reply, "notAllowed");
       }
       fastify.countRateLimitHit(request, "searchCreate");
 

@@ -105,9 +105,13 @@ function priceOf(value: number | string | null): number | null {
  * serpapi_quota ne compte une recherche que le jour (de Paris) de sa
  * création. Servie par le cache un jour précédent : jamais comptée dans une
  * part de 8 (celle de son jour est close) ; la voie B n'y est plus possible.
- * Les autres recherches ont compté le jour de leur lancement : toujours
- * possible. Un message envoyé juste après minuit reçoit donc un refus
- * (l'invitation disparaît ; la photo peut être relancée). */
+ * Les autres recherches : toujours possible (leur part s'est décidée à leur
+ * lancement, d'après leur jour de création ; limite connue, antérieure à la
+ * voie C : préparée avant minuit et lancée après, une recherche ne compte
+ * dans aucune part). Un message envoyé juste après minuit reçoit donc un
+ * refus (l'invitation disparaît ; la photo peut être relancée) ; l'invitation
+ * n'est pas proposée au lancement quand elle serait refusée, et la route
+ * revérifie l'heure après la réservation. */
 export function textSearchCountable(row: Pick<SearchRow, "served_from_cache" | "created_at">, now: Date = new Date()): boolean {
   if (row.served_from_cache !== true) return true;
   const createdAt = Date.parse(row.created_at);

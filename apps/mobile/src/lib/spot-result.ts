@@ -192,7 +192,8 @@ export type InitialResultState =
  * - en mémoire, s'il vient juste d'être calculé par l'écran Analyse et
  *   correspond bien à la recherche demandée ;
  * - sinon, relu sur le serveur à partir de l'identifiant de la recherche
- *   (page rechargée sur le web, lien rouvert...) ;
+ *   (page rechargée sur le web, lien rouvert, recherche rouverte depuis
+ *   « Récemment spottées », qui oublie d'abord la copie en mémoire...) ;
  * - sans identifiant ni mémoire, le résultat n'existe plus : on le dit
  *   plutôt que d'afficher un faux « pièce non identifiée ». */
 export function chooseInitialResult(memory: SpotResult | null, searchId: string | undefined): InitialResultState {

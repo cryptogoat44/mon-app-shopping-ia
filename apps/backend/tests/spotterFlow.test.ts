@@ -60,6 +60,7 @@ import { askShoppingQuery, type ShoppingQueryResult } from "../src/services/shop
 import { writeCache } from "../src/lib/searchCache.js";
 import { assertNoUserImage } from "../src/lib/aiSwitches.js";
 import { VOIE_C_BUDGET } from "../src/lib/deadline.js";
+import { parisDayStart } from "../src/lib/matchFeedback.js";
 import { authHeaders, buildMultipart, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
 
 const searchMock = vi.mocked(searchProductsByImageUrl);
@@ -1014,6 +1015,31 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
       } finally {
         env.VOIE_C_ENABLED = true;
       }
+    });
+
+    it("servie entièrement par le cache, préparée avant minuit (heure de Paris) et lancée après : « Que cherchez-vous ? » n'est pas proposé (la route le refuserait)", async () => {
+      const image = await uniqueImage();
+      searchMock.mockResolvedValueOnce(found([], 0));
+      const first = await prepare();
+      expect((await run(first.id, CROP, image)).json().complement).toMatchObject({ status: "no_query", suggestText: true });
+      await settleCacheWrites();
+
+      const again = await prepare();
+      const yesterday = new Date(parisDayStart().getTime() - 3_600_000).toISOString();
+      const { error } = await app.supabaseAdmin.from("product_searches").update({ created_at: yesterday }).eq("id", again.id);
+      expect(error).toBeNull();
+      // Même précaution que pour la relance servie par le cache : la lecture attend la base.
+      const timeoutOf = AbortSignal.timeout.bind(AbortSignal);
+      const readCap = vi.spyOn(AbortSignal, "timeout").mockImplementation((ms: number) => (ms === VOIE_C_BUDGET.cacheReadMs ? new AbortController().signal : timeoutOf(ms)));
+      let res: Awaited<ReturnType<typeof run>>;
+      try {
+        res = await run(again.id, CROP, image);
+      } finally {
+        readCap.mockRestore();
+      }
+      expect(searchMock).toHaveBeenCalledOnce();
+      expect(res.json().complement).toMatchObject({ status: "no_query", suggestText: false });
+      expect(await columnsOf(again.id)).toMatchObject({ lens_from_cache: true, served_from_cache: true, text_suggested: false });
     });
 
     it("étape IA coupée (VOIE_C_AI_ENABLED) : Lens seul, issue « skipped », aucune invitation, aucune recherche dans les boutiques", async () => {

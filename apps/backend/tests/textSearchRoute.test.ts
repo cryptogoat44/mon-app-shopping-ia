@@ -284,6 +284,28 @@ describe("« Que cherchez-vous ? » : une recherche avec vos mots, sur la même 
     expect(textMock).toHaveBeenCalledOnce();
   });
 
+  it("servie par le cache, minuit (heure de Paris) passé pendant la réservation : la place est rendue, le verrou remis, 409, aucun appel", async () => {
+    const id = await searchRow({ status: "completed", outcome: "found", lens_from_cache: true, served_from_cache: true, complement_status: "empty", text_suggested: true });
+    await lensRow(id, 1);
+    // L'horloge du serveur avance d'un jour pendant la réservation (le contrôle d'avant l'a vue la veille).
+    vi.useFakeTimers({ toFake: ["Date"], shouldAdvanceTime: true });
+    try {
+      reserveMock.mockImplementationOnce(async () => {
+        vi.setSystemTime(Date.now() + 86_400_000);
+        return { allowed: true, reservationId: RESERVATION };
+      });
+      const res = await text(id);
+      expect(res.statusCode).toBe(409);
+      expect(res.json().error).toBe("text_search_not_allowed");
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(releaseMock).toHaveBeenCalledOnce();
+    expect(releaseMock.mock.calls[0]!.slice(2)).toEqual([RESERVATION, "shopping"]);
+    expect(textMock).not.toHaveBeenCalled();
+    expect(await columnsOf(id)).toMatchObject({ text_requested_at: null, served_from_cache: true, text_suggested: true, shopping_calls: 0 });
+  });
+
   it("recherche non admissible (pas encore lancée, en panne technique) : 409 ; celle d'un autre : 404 ; rien n'est verrouillé", async () => {
     const pending = await searchRow({ status: "pending" });
     const broken = await searchRow({ status: "failed", error_message: TECHNICAL, outcome: "failure", failure_kind: "timeout" });

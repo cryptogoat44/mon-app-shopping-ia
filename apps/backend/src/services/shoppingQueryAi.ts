@@ -29,8 +29,9 @@
 // l'effort « high » ou moins, sans autre champ) ; ni température ni
 // `tool_choice` forcé (400 sur ce modèle).
 // Pas de modèle de repli en cas de refus (`fallbacks`) : un refus donne les
-// résultats Lens seuls, dans un budget de 3 s. Écart volontaire à la
-// recommandation d'Anthropic, décision du fondateur.
+// résultats Lens seuls, dans un budget de 3 s (un repli n'y tiendrait pas).
+// Écart volontaire à la recommandation d'Anthropic : proposition, à
+// confirmer par le fondateur.
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { SEARCH_QUERY_MAX_LENGTH } from "@monapp/shared-types";
@@ -101,9 +102,11 @@ export interface ShoppingQueryUsage {
  *   60 caractères au plus) ;
  * - invented : un mot de la requête, ou le modèle, absent des titres ; ou le
  *   modèle absent de la requête ; ou la règle 9 non tenue : nom d'un site des
- *   résultats Lens, adresse web ou mot de promotion (« promo », « livraison »,
- *   « soldes »…), hors des mots de la marque (et de ceux du modèle quand il
- *   figure dans au moins deux titres) ;
+ *   résultats Lens (en un mot, ou en deux ou trois mots collés dans le
+ *   domaine), adresse web ou mot de promotion (« promo », « livraison »,
+ *   « soldes »…), hors des mots de la marque, de ceux du modèle quand il
+ *   figure dans au moins deux titres, et des mots de site présents dans au
+ *   moins deux titres d'autres sites ;
  * - brand_not_shared : marque vide (ou faite seulement de petits mots, sans
  *   modèle), présente dans moins de deux titres, ou absente de la requête. */
 export type ShoppingQueryRejection = "empty" | "invented" | "brand_not_shared" | "too_long" | "operators";
@@ -261,11 +264,12 @@ const LOOSE_HYPHEN = /(?:^|[^\p{L}\p{M}\p{N}])-|-(?:$|[^\p{L}\p{M}\p{N}])/u;
 /** Adresse web : un point suivi d'une lettre (« boutique.com », « www.x »),
  * ou un mot qui commence par « www ». « L.12.12 » reste un modèle. */
 const WEB_ADDRESS = /\.\p{L}|^www/iu;
-/** Mots de la règle 9 (prix, promotions, livraison), tels que wordsOf les rend. */
-const PROMO_WORDS: ReadonlySet<string> = new Set([
+/** Mots de la règle 9 (prix, promotions, livraison), tels que wordsOf les rend ;
+ * comparés avec sameToken, pluriel compris (« offerts », « réductions »). */
+const PROMO_WORDS: readonly string[] = [
   "promo", "promos", "promotion", "promotions", "solde", "soldes", "livraison", "gratuit", "gratuite", "offert", "offerte", "cher", "prix", "reduction",
-  "discount", "sale", "cheap",
-]);
+  "discount", "sale", "cheap", "outlet", "destockage", "liquidation", "remise", "deal",
+];
 /** Mots d'un nom de site plus courts : jamais comparés (« fr », « m », « co »). */
 const SITE_WORD_MIN_LENGTH = 3;
 
@@ -336,16 +340,45 @@ export function checkShoppingQuery(
   }
 
   // Règle 9 : ni nom d'un site des résultats Lens, ni adresse web, ni mot de
-  // promotion. Seuls en sont excusés les mots de la marque (« Nike » sur
-  // nike.com), et ceux du modèle quand il figure dans au moins deux titres
-  // (« Air Max » sur un site nike-air-max.fr) : un seul titre, qui pourrait
-  // être piégé, ne suffit jamais à excuser un mot.
+  // promotion. Contrôlée sur la forme NFKC de la requête : lettres pleine
+  // chasse ou « mathématiques », ligatures et chiffres romains y redeviennent
+  // des lettres ordinaires, comme Google les lit. Excusés :
+  // - tous les mots de la marque, petits mots compris (« Nike » sur nike.com,
+  //   « des » de « Comme des Garçons » sur comme-des-garcons.com) ;
+  // - ceux du modèle quand il figure dans au moins deux titres (« Air Max »
+  //   sur un site nike-air-max.fr) ;
+  // - un mot d'un nom de site présent aussi dans au moins deux titres
+  //   d'AUTRES sites : un mot de la pièce (« running » d'un site
+  //   boutique-running.fr), pas un nom de boutique.
+  // Un seul titre, qui pourrait être piégé, n'excuse jamais un mot. Un nom de
+  // boutique en deux ou trois mots, collés dans le domaine (« Foot Locker »
+  // pour footlocker.fr), est refusé de même. Un mot de promotion n'est excusé
+  // que par la marque.
   const modelShared = titlesWithModel >= MIN_TITLES_WITH_BRAND;
-  const excused = (token: string) => brandTokens.some((word) => sameToken(token, word)) || (modelShared && modelTokens.some((word) => sameToken(token, word)));
-  const shopWords = siteWords(sites);
-  const shopWord = (token: string) => !excused(token) && (PROMO_WORDS.has(token) || shopWords.some((word) => sameToken(token, word)));
-  if (queryTokens.some(shopWord)) return reject("invented");
-  if (words.some((word) => WEB_ADDRESS.test(word) && !wordsOf(word).every(excused))) return reject("invented");
+  const brandWords = wordsOf(brand.normalize("NFKC"));
+  const modelWords = modelShared ? wordsOf(model.normalize("NFKC")) : [];
+  const excused = (token: string) => brandWords.some((word) => sameToken(token, word)) || modelWords.some((word) => sameToken(token, word));
+  const folded = query.normalize("NFKC");
+  const foldedTokens = wordsOf(folded);
+  const siteLists = sites.map((site) => siteWords([site]));
+  const shopWords = siteLists.flat();
+  /** Titres d'autres sites que ceux dont le nom contient `glued`, où figurent tous les mots de `part`. */
+  const titlesElsewhere = (part: readonly string[], glued: string) =>
+    titleTokenLists.filter(
+      (tokens, index) => part.every((word) => tokens.some((token) => sameToken(word, token))) && !(siteLists[index] ?? []).some((word) => sameToken(glued, word))
+    ).length;
+  const promoWord = (token: string) => PROMO_WORDS.some((word) => sameToken(token, word));
+  const shopWord = (token: string) =>
+    !excused(token) && (promoWord(token) || (shopWords.some((word) => sameToken(token, word)) && titlesElsewhere([token], token) < MIN_TITLES_WITH_BRAND));
+  if (foldedTokens.some(shopWord)) return reject("invented");
+  for (let start = 0; start < foldedTokens.length; start += 1) {
+    for (let size = 2; size <= 3 && start + size <= foldedTokens.length; size += 1) {
+      const part = foldedTokens.slice(start, start + size);
+      const glued = part.join("");
+      if (!part.some(excused) && shopWords.includes(glued) && titlesElsewhere(part, glued) < MIN_TITLES_WITH_BRAND) return reject("invented");
+    }
+  }
+  if (folded.split(" ").some((word) => WEB_ADDRESS.test(word) && !wordsOf(word).every(excused))) return reject("invented");
   return { kind: "query", value: { query, brand, model } };
 }
 
