@@ -84,6 +84,40 @@ export type RecognitionMethod = (typeof RECOGNITION_METHODS)[number];
 export const SEARCH_STATUSES = ["pending", "processing", "completed", "failed"] as const;
 export type SearchStatus = (typeof SEARCH_STATUSES)[number];
 
+// ---- Voie C (lot c, 2026-11-02) : complément des résultats Lens ----
+// Les résultats Lens sont toujours gardés, montrés en premier et jamais
+// remplacés ; toute panne du complément laisse les résultats Lens seuls.
+
+/** Origine d'une proposition (product_matches.origin, 0028, « lens » par
+ * défaut) : « lens », la recherche visuelle ; « shopping », la même pièce dans
+ * d'autres boutiques (Google Shopping, requête tirée des titres Lens) ;
+ * « words », la recherche lancée avec les mots de la personne (voie B). */
+export const MATCH_ORIGINS = ["lens", "shopping", "words"] as const;
+export type MatchOrigin = (typeof MATCH_ORIGINS)[number];
+
+/** Issue du complément (product_searches.complement_status, 0028 ; null quand
+ * la voie C n'a pas tourné). Toute issue autre que « shown » = Lens seul.
+ * - shown : des propositions du complément sont montrées ;
+ * - empty : requête valable, mais rien de gardé après les filtres ;
+ * - no_query : pas de requête sûre (Lens n'a rien gardé, ou la requête
+ *   proposée est vide, invente des mots ou contient des opérateurs) ;
+ * - ai_failed : l'IA a échoué, refusé, dépassé son temps ou mal répondu ;
+ * - shopping_failed : la recherche Shopping a échoué, ou ses lignes n'ont
+ *   pas pu être enregistrées ;
+ * - no_time : plus assez de temps dans le budget de la recherche ;
+ * - no_capacity : plafond des recherches ou limite de l'IA atteints (jamais
+ *   de 429 pour le complément) ;
+ * - skipped : étape IA coupée (interrupteur) ;
+ * - error : exception inattendue — distincte de « skipped », pour que la
+ *   mesure révèle les anomalies. */
+export const COMPLEMENT_STATUSES = ["shown", "empty", "no_query", "ai_failed", "shopping_failed", "no_time", "no_capacity", "skipped", "error"] as const;
+export type ComplementStatus = (typeof COMPLEMENT_STATUSES)[number];
+
+/** Issue de la recherche par mots (voie B ; product_searches.text_status,
+ * 0028 ; null tant qu'elle n'a pas été lancée). */
+export const TEXT_SEARCH_STATUSES = ["shown", "empty", "shopping_failed"] as const;
+export type TextSearchStatus = (typeof TEXT_SEARCH_STATUSES)[number];
+
 export interface ProductMatch {
   id: string;
   rank: number;
