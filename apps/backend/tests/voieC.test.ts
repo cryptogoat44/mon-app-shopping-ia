@@ -3,10 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 import { startDeadline, VOIE_C_BUDGET } from "../src/lib/deadline.js";
 import { complementLogLine } from "../src/lib/searchMeasure.js";
+import { singleFlightPending } from "../src/lib/singleFlight.js";
 import {
   complementAfterSaveFailure,
   launchColumns,
   lensStep,
+  QUERY_CACHE_PAYLOAD,
   runComplement,
   runTextComplement,
   sanitizeShoppingQuery,
@@ -366,6 +368,36 @@ describe("runComplement — le chemin normal", () => {
     expect((await leading).columns).toEqual({ complement_status: "shown", shopping_calls: 1, text_suggested: false });
     expect(searchText).toHaveBeenCalledOnce();
   });
+
+  it("relance entre la fin de l'appel aux boutiques et l'écriture du cache (base lente) : ni réservation ni appel de plus", async () => {
+    const cache = fakeCache();
+    let commit!: () => void;
+    const committed = new Promise<void>((resolve) => (commit = resolve));
+    const slowWrite = async (key: string, step: CacheStep, payload: unknown) => {
+      if (step === "shopping") await committed;
+      cache.writeCache(key, step, payload);
+    };
+    const searchText = vi.fn(async (): Promise<TextSearchResponse> => SHOPPING);
+    const reserve = vi.fn(async () => ({ allowed: true as const, reservationId: 42 }));
+    const first = setup({ cache, ports: { writeCache: slowWrite, searchText, reserve } });
+    const second = setup({ cache, ports: { writeCache: slowWrite, searchText, reserve } });
+    try {
+      const a = await runComplement(first.ports, first.input());
+      expect([...cache.entries.values()].some((entry) => entry.step === "shopping")).toBe(false);
+      const b = await runComplement(second.ports, second.input());
+      expect(a.measure).toMatchObject({ calls: 1, shoppingFromCache: false });
+      expect(b.measure).toMatchObject({ calls: 0, shoppingFromCache: true, queryFromCache: true });
+      expect(b.columns).toEqual({ complement_status: "shown", shopping_calls: 0, text_suggested: false });
+      expect(b.matches).toEqual(a.matches);
+      expect(searchText).toHaveBeenCalledOnce();
+      expect(reserve).toHaveBeenCalledOnce();
+    } finally {
+      commit();
+    }
+    // Écriture faite : l'entrée est retirée, la réponse est dans le cache.
+    await vi.waitFor(() => expect(singleFlightPending()).toBe(0));
+    expect([...cache.entries.values()].some((entry) => entry.step === "shopping")).toBe(true);
+  });
 });
 
 describe("runComplement — sorties sans complément (résultats Lens seuls)", () => {
@@ -500,13 +532,27 @@ describe("runComplement — sorties sans complément (résultats Lens seuls)", (
     expect(ports.searchText).not.toHaveBeenCalled();
   });
 
-  it("refus des boutiques (non facturé) : place rendue une fois ; délai dépassé : « shopping_failed », place gardée", async () => {
+  it("refus des boutiques (non facturé) : place rendue une fois, appel non compté dans le budget de la photo ; délai dépassé : « shopping_failed », place gardée", async () => {
     const refused = setup({ ports: { searchText: vi.fn(async (): Promise<TextSearchResponse> => Promise.reject(new ProviderFailure("refused", 429, "SerpApi a répondu 429"))) } });
     const a = await runComplement(refused.ports, refused.input());
-    expect(a.columns).toEqual({ complement_status: "shopping_failed", shopping_calls: 1, text_suggested: false });
+    expect(a.columns).toEqual({ complement_status: "shopping_failed", shopping_calls: 0, text_suggested: false });
     expect(refused.ports.release).toHaveBeenCalledOnce();
     expect(refused.ports.release).toHaveBeenCalledWith(42);
-    expect(a.measure.shoppingFailureKind).toBe("refused");
+    // La mesure garde l'appel envoyé ; Lens venu du cache : aucune recherche comptée, servie par le cache.
+    expect(a.measure).toMatchObject({ shoppingFailureKind: "refused", calls: 1 });
+    expect(launchColumns(true, a, 0)).toMatchObject({ shopping_calls: 0, lens_from_cache: true, served_from_cache: true });
+    expect(launchColumns(false, a, 0).served_from_cache).toBe(false);
+
+    // Place non rendue (base injoignable) : l'appel reste compté, comme 0027 le demande.
+    const notReleased = setup({
+      ports: {
+        searchText: vi.fn(async (): Promise<TextSearchResponse> => Promise.reject(new ProviderFailure("refused", 503, "SerpApi a répondu 503"))),
+        release: vi.fn(async () => false),
+      },
+    });
+    const kept = await runComplement(notReleased.ports, notReleased.input());
+    expect(kept.columns.shopping_calls).toBe(1);
+    expect(launchColumns(true, kept, 0).served_from_cache).toBe(false);
 
     const slow = setup({ ports: { searchText: vi.fn(async (): Promise<TextSearchResponse> => Promise.reject(new ProviderFailure("timeout", null, "SerpApi injoignable (timeout)"))) } });
     const b = await runComplement(slow.ports, slow.input());
@@ -677,6 +723,69 @@ describe("lensStep — un seul appel pour la même image", () => {
     expect(c).toEqual({ lensFromCache: true, answer: ANSWER });
   });
 
+  it("relance entre la fin de l'appel et l'écriture du cache (base lente) : la réponse de l'appel, sans second appel", async () => {
+    const cache = fakeCache();
+    let commit!: () => void;
+    const committed = new Promise<void>((resolve) => (commit = resolve));
+    const ports = {
+      ...lensPorts(cache),
+      writeCache: async (key: string, step: CacheStep, payload: unknown) => {
+        await committed;
+        cache.writeCache(key, step, payload);
+      },
+    };
+    const call = vi.fn(async () => ({ kind: "answered" as const, answer: ANSWER }));
+    const step = () => lensStep(ports, { imageHash: "9".repeat(64), locale: FR, call, answerOf: (result) => result.answer });
+    try {
+      expect((await step()).lensFromCache).toBe(false);
+      expect(cache.entries.size).toBe(0);
+      expect(await step()).toEqual({ lensFromCache: true, answer: ANSWER });
+      expect(call).toHaveBeenCalledOnce();
+    } finally {
+      commit();
+    }
+    await vi.waitFor(() => expect(singleFlightPending()).toBe(0));
+    expect(cache.entries.size).toBe(1);
+    expect((await step()).lensFromCache).toBe(true);
+    expect(call).toHaveBeenCalledOnce();
+  });
+
+  it("écriture du cache qui ne finit pas : l'entrée n'est gardée que 10 s, jamais une panne", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const cache = fakeCache();
+      let writes = 0;
+      const ports = {
+        ...lensPorts(cache),
+        // La première écriture ne finit jamais (base bloquée) ; les suivantes, tout de suite.
+        writeCache: (key: string, step: CacheStep, payload: unknown) => (++writes === 1 ? new Promise<void>(() => undefined) : cache.writeCache(key, step, payload)),
+      };
+      let fails = false;
+      const call = vi.fn(async () => (fails ? { kind: "failed" as const } : { kind: "answered" as const, answer: ANSWER }));
+      const answerOf = (result: { kind: "failed" } | { kind: "answered"; answer: LensAnswer }) => (result.kind === "answered" ? result.answer : null);
+      const step = () => lensStep(ports, { imageHash: "8".repeat(64), locale: FR, call, answerOf });
+      await step();
+      expect(singleFlightPending()).toBe(1);
+      expect((await step()).lensFromCache).toBe(true);
+      await vi.advanceTimersByTimeAsync(9_999);
+      expect(singleFlightPending()).toBe(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(singleFlightPending()).toBe(0);
+      // Rien n'a été écrit : la relance suivante appelle Lens.
+      expect(cache.entries.size).toBe(0);
+      expect((await step()).lensFromCache).toBe(false);
+      expect(call).toHaveBeenCalledTimes(2);
+      await vi.waitFor(() => expect(singleFlightPending()).toBe(0));
+      // Une panne n'est jamais gardée.
+      fails = true;
+      cache.entries.clear();
+      await step();
+      expect(singleFlightPending()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("clé : même image et même pays ; une autre image ou un autre pays ne ressert rien", async () => {
     const cache = fakeCache();
     const call = vi.fn(async () => ({ kind: "answered" as const, answer: ANSWER }));
@@ -723,9 +832,21 @@ describe("runTextComplement — « Que cherchez-vous ? »", () => {
 
     const refused = textSetup({ searchText: vi.fn(async (): Promise<TextSearchResponse> => Promise.reject(new ProviderFailure("refused", 503, "SerpApi a répondu 503"))) });
     const a = await runTextComplement(refused.ports, { words: "veste", existing: [], locale: FR, deadline: refused.deadline, reservationId: 7 });
-    expect(a).toMatchObject({ textStatus: "shopping_failed", calls: 1, matches: [] });
+    // Place rendue : rien à ajouter à shopping_calls ; la mesure garde l'appel envoyé.
+    expect(a).toMatchObject({ textStatus: "shopping_failed", calls: 0, matches: [] });
+    expect(a.measure.calls).toBe(1);
     expect(refused.ports.release).toHaveBeenCalledOnce();
     expect(refused.ports.release).toHaveBeenCalledWith(7);
+
+    // Place non rendue : l'appel reste compté.
+    const notReleased = textSetup({
+      searchText: vi.fn(async (): Promise<TextSearchResponse> => Promise.reject(new ProviderFailure("refused", 429, "SerpApi a répondu 429"))),
+      release: vi.fn(async () => false),
+    });
+    expect(await runTextComplement(notReleased.ports, { words: "veste", existing: [], locale: FR, deadline: notReleased.deadline, reservationId: 7 })).toMatchObject({
+      textStatus: "shopping_failed",
+      calls: 1,
+    });
 
     const slow = textSetup({ searchText: vi.fn(async (): Promise<TextSearchResponse> => Promise.reject(new ProviderFailure("timeout", null, "SerpApi injoignable (timeout)"))) });
     expect((await runTextComplement(slow.ports, { words: "veste", existing: [], locale: FR, deadline: slow.deadline, reservationId: 7 })).textStatus).toBe("shopping_failed");
@@ -777,6 +898,26 @@ describe("sanitizeShoppingQuery", () => {
     expect(sanitizeShoppingQuery("veste cuir'-daim cuir- 10..20 ..")).toBe("veste");
     // Les mots composés restent : le tiret y est entre deux lettres ou chiffres.
     expect(sanitizeShoppingQuery("t-shirt Exemplor X-200 é-è")).toBe("t-shirt Exemplor X-200 é-è");
+  });
+});
+
+describe("requête de l'IA : mêmes bornes que le cache et sanitizeShoppingQuery", () => {
+  it("une requête acceptée par les contrôles tient toujours dans le cache des requêtes et n'est jamais coupée ; 62 unités (lettres « mathématiques ») : refusée", async () => {
+    const { checkShoppingQuery } = await import("../src/services/shoppingQueryAi.js");
+    const bold = (text: string) =>
+      Array.from(text, (char) => (/[a-z]/.test(char) ? String.fromCodePoint(0x1d41a + char.charCodeAt(0) - 97) : /[A-Z]/.test(char) ? String.fromCodePoint(0x1d400 + char.charCodeAt(0) - 65) : char)).join("");
+    const boldTitles = [bold("Marque Exemple basket blanc cuir"), bold("Basket Marque Exemple cuir blanc")];
+    const accepted = [
+      checkShoppingQuery({ query: QUERY, brand: BRAND, model: MODEL }, LENS.map((match) => match.productName)),
+      checkShoppingQuery({ query: bold("Marque Exemple basket blanc cuir"), brand: bold("Marque Exemple"), model: "" }, boldTitles),
+    ];
+    for (const checked of accepted) {
+      expect(checked.kind).toBe("query");
+      if (checked.kind !== "query") continue;
+      expect(QUERY_CACHE_PAYLOAD.safeParse(checked.value).success).toBe(true);
+      expect(sanitizeShoppingQuery(checked.value.query)).toBe(checked.value.query);
+    }
+    expect(checkShoppingQuery({ query: bold("Marque Exemple baskets blanc cuir"), brand: bold("Marque Exemple"), model: "" }, boldTitles)).toEqual({ kind: "no_query", reason: "too_long" });
   });
 });
 
@@ -895,6 +1036,23 @@ describe("recherches relues : origine et complément (lib/searchRows.ts)", () =>
       expect(off.complement).toEqual({ status: "no_query", suggestText: false, textStatus: null });
       expect(off.matches[0]!.origin).toBe("shopping");
     }
+  });
+
+  it("servie entièrement par le cache : « Que cherchez-vous ? » annoncé le jour (de Paris) de sa création seulement ; une recherche ordinaire, toujours", async () => {
+    const { complementOf, parseSearchRow, textSearchCountable } = await import("../src/lib/searchRows.js");
+    const columns = { complement_status: "no_query", shopping_calls: 0, lens_from_cache: true, served_from_cache: true, text_suggested: true, text_requested_at: null, text_status: null, total_seconds: 1 };
+    const served = parseSearchRow({ ...BASE_ROW, ...columns })!;
+    // Créée le 2 novembre à 11 h (Paris) : annoncée le jour même, plus le lendemain.
+    expect(complementOf(served, true, new Date("2026-11-02T22:59:00Z"))).toEqual({ status: "no_query", suggestText: true, textStatus: null });
+    expect(complementOf(served, true, new Date("2026-11-02T23:00:00Z"))).toEqual({ status: "no_query", suggestText: false, textStatus: null });
+    expect(textSearchCountable(served, new Date("2026-11-03T08:00:00Z"))).toBe(false);
+    // Jour de Paris, pas jour UTC : créée le 3 novembre à 0 h 30 (Paris), soit le 2 à 23 h 30 UTC.
+    const lateNight = parseSearchRow({ ...BASE_ROW, ...columns, created_at: "2026-11-02T23:30:00Z" })!;
+    expect(textSearchCountable(lateNight, new Date("2026-11-03T20:00:00Z"))).toBe(true);
+    // Une recherche ordinaire (comptée le jour de son lancement), Lens venu du cache ou non : toujours annoncée.
+    const ordinary = parseSearchRow({ ...BASE_ROW, ...columns, served_from_cache: false })!;
+    expect(complementOf(ordinary, true, new Date("2026-11-20T10:00:00Z"))?.suggestText).toBe(true);
+    expect(textSearchCountable(parseSearchRow(BASE_ROW)!, new Date("2027-01-01T10:00:00Z"))).toBe(true);
   });
 
   it("valeur inconnue (origine, issue) : ligne illisible, comme toute valeur hors liste", async () => {

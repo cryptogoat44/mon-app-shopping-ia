@@ -11,11 +11,11 @@ import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { addToWishlist, loadSpotResult } from "@/api/client";
-import { getLastSpotResult, setLastSpotResult } from "@/api/spotSession";
+import { clearLastSpotResult, getLastSpotResult, setLastSpotResult } from "@/api/spotSession";
 import type { Piece, SpotFailReason, SpotResult } from "@/api/types";
 import { addVaultItemFromMatch } from "@/lib/api";
 import { openMerchantLink } from "@/lib/merchant-links";
-import { chooseInitialResult, noPriceShown, withoutTextPrompt, withTextSearch, type InitialResultState } from "@/lib/spot-result";
+import { chooseInitialResult, noPriceShown, pieceTitle, withoutTextPrompt, withTextSearch, type InitialResultState } from "@/lib/spot-result";
 import { allPieces, merchantContextFor, opensOfferPage, otherPiecesBySection } from "@/lib/result-sections";
 import { getDraft } from "@/lib/spot-draft";
 import { failureCorrections, successCorrections, type Correction } from "@/lib/spot-corrections";
@@ -133,7 +133,7 @@ export default function ResultScreen() {
     if (!piece || bought.has(piece.id)) return;
     setActionError(null);
     try {
-      await addVaultItemFromMatch({ title: piece.name.slice(0, 120), imageUrl: piece.imageUrl, category, productMatchId: piece.id });
+      await addVaultItemFromMatch({ title: pieceTitle(piece.name), imageUrl: piece.imageUrl, category, productMatchId: piece.id });
       setBought((prev) => new Set(prev).add(piece.id));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       showToast(t.result.boughtToast);
@@ -161,7 +161,10 @@ export default function ResultScreen() {
   }
 
   /** Voie B (lot c) : le résultat est remplacé sur place, et en mémoire pour
-   * un retour sur cet écran. */
+   * un retour sur cet écran. Dès que la recherche par les mots part, la copie
+   * en mémoire est oubliée (onStarted) : un écran quitté pendant la
+   * recherche, puis rouvert depuis « Récemment spottées », relit la
+   * recherche sur le serveur au lieu de reproposer « Que cherchez-vous ? ». */
   function replaceResult(next: SpotResult) {
     setLastSpotResult(next);
     setState({ kind: "ready", result: next });
@@ -177,7 +180,13 @@ export default function ResultScreen() {
    * l'invitation disparaît, ici comme au retour sur cet écran. */
   function handleTextSearchClosed(alreadyUsed: boolean) {
     if (!result) return;
-    replaceResult(withoutTextPrompt(result));
+    const next = withoutTextPrompt(result);
+    // « Déjà lancée » : les propositions des mots peuvent encore arriver ; pas de
+    // copie en mémoire, l'écran rouvert (« Récemment spottées ») relira la recherche.
+    if (alreadyUsed) {
+      clearLastSpotResult();
+      setState({ kind: "ready", result: next });
+    } else replaceResult(next);
     setTextSearchUsed(alreadyUsed);
   }
 
@@ -244,6 +253,7 @@ export default function ResultScreen() {
       <TextSearchPrompt
         searchId={result.searchId}
         initialWords={getLastSpotResult()?.searchId === result.searchId ? getDraft()?.words : null}
+        onStarted={clearLastSpotResult}
         onDone={handleTextSearchDone}
         onClosed={handleTextSearchClosed}
         withIntro={withIntro}

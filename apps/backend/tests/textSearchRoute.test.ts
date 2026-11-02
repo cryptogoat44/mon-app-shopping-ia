@@ -27,6 +27,7 @@ import { env } from "../src/env.js";
 import { serpApiTextProvider } from "../src/services/serpapi.js";
 import { ProviderFailure, type TextSearchResponse } from "../src/services/searchProvider.js";
 import { releaseReservation, reserveSearch } from "../src/lib/searchCapacity.js";
+import { parisDayStart } from "../src/lib/matchFeedback.js";
 import { authHeaders, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
 
 const textMock = vi.mocked(serpApiTextProvider.searchByText);
@@ -263,6 +264,26 @@ describe("« Que cherchez-vous ? » : une recherche avec vos mots, sur la même 
     expect(await columnsOf(id)).toMatchObject({ served_from_cache: false, shopping_calls: 1, text_status: "shown" });
   });
 
+  it("servie par le cache un jour précédent (jamais comptée dans une part de 8) : 409 text_search_not_allowed, rien n'est verrouillé ni réservé, l'invitation n'est plus annoncée ; une recherche ordinaire d'hier reste permise", async () => {
+    const yesterday = new Date(parisDayStart().getTime() - 3_600_000).toISOString();
+    const id = await searchRow({ status: "completed", outcome: "found", lens_from_cache: true, served_from_cache: true, complement_status: "empty", text_suggested: true, created_at: yesterday });
+    await lensRow(id, 1);
+    const res = await text(id);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe("text_search_not_allowed");
+    expect(reserveMock).not.toHaveBeenCalled();
+    expect(textMock).not.toHaveBeenCalled();
+    expect(await columnsOf(id)).toMatchObject({ text_requested_at: null, served_from_cache: true, text_suggested: true, shopping_calls: 0 });
+    const read = await app.inject({ method: "GET", url: `/api/searches/${id}`, headers: authHeaders(user.token) });
+    expect(read.json().complement).toMatchObject({ status: "empty", suggestText: false });
+
+    // Lancée hier avec un vrai appel à Lens : elle a compté hier, la voie B reste possible.
+    const ordinary = await searchRow({ status: "completed", outcome: "found", complement_status: "empty", text_suggested: true, shopping_calls: 1, created_at: yesterday });
+    await lensRow(ordinary, 1);
+    expect((await text(ordinary)).statusCode).toBe(200);
+    expect(textMock).toHaveBeenCalledOnce();
+  });
+
   it("recherche non admissible (pas encore lancée, en panne technique) : 409 ; celle d'un autre : 404 ; rien n'est verrouillé", async () => {
     const pending = await searchRow({ status: "pending" });
     const broken = await searchRow({ status: "failed", error_message: TECHNICAL, outcome: "failure", failure_kind: "timeout" });
@@ -310,6 +331,30 @@ describe("« Que cherchez-vous ? » : une recherche avec vos mots, sur la même 
     expect((await text(refused)).json().complement.textStatus).toBe("shopping_failed");
     expect(releaseMock).toHaveBeenCalledOnce();
     expect(releaseMock.mock.calls[0]!.slice(2)).toEqual([RESERVATION, "shopping"]);
+    // Place rendue : l'appel ne compte pas dans le budget de la photo (1 avant, 1 après).
+    expect(await columnsOf(refused)).toMatchObject({ text_status: "shopping_failed", text_suggested: false, shopping_calls: 1 });
+  });
+
+  it("refus non facturé dont la place est rendue, sur une recherche servie par le cache : la demande est consommée, mais elle reste hors de la part de 8 ; place non rendue : l'appel compte", async () => {
+    const cached = await searchRow({ status: "completed", outcome: "found", lens_from_cache: true, served_from_cache: true, complement_status: "empty", text_suggested: true });
+    await lensRow(cached, 1);
+    textMock.mockRejectedValueOnce(new ProviderFailure("refused", 503, "refus"));
+    const res = await text(cached);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().complement).toMatchObject({ textStatus: "shopping_failed", suggestText: false });
+    expect(releaseMock).toHaveBeenCalledOnce();
+    const columns = await columnsOf(cached);
+    expect(columns).toMatchObject({ text_status: "shopping_failed", text_suggested: false, served_from_cache: true, shopping_calls: 0 });
+    expect(columns?.text_requested_at).not.toBeNull();
+    expect((await text(cached)).json().error).toBe("text_search_already_used");
+
+    // Place non rendue (base injoignable) : l'appel reste compté, la recherche compte comme une photo.
+    const kept = await searchRow({ status: "completed", outcome: "found", lens_from_cache: true, served_from_cache: true, complement_status: "empty", text_suggested: true });
+    await lensRow(kept, 1);
+    textMock.mockRejectedValueOnce(new ProviderFailure("refused", 429, "refus"));
+    releaseMock.mockResolvedValueOnce(false);
+    expect((await text(kept)).statusCode).toBe(200);
+    expect(await columnsOf(kept)).toMatchObject({ text_status: "shopping_failed", served_from_cache: false, shopping_calls: 1 });
   });
 
   it("Google Shopping ne garde rien : « empty », aucune ligne ajoutée", async () => {

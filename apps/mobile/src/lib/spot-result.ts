@@ -23,6 +23,17 @@ export function matchToPiece(match: ProductMatch): Piece {
   };
 }
 
+const PIECE_TITLE_MAX = 120;
+
+/** Titre envoyé au serveur pour « Garder » (Envies) et « Je l'ai achetée »
+ * (Vault) : 120 caractères au plus, sa limite (une envie envoyée garde ce
+ * titre) ; ceux de Google Shopping vont jusqu'à 150. Jamais coupé au milieu
+ * d'un emoji (une moitié seule n'est pas un texte valide). */
+export function pieceTitle(name: string): string {
+  const cut = name.slice(0, PIECE_TITLE_MAX);
+  return /[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut;
+}
+
 /** Des propositions, mais aucune avec un prix : le message honnête s'affiche
  * au-dessus d'elles (petit lot ; décision du fondateur du 2026-10-21). */
 export function noPriceShown(pieces: readonly Pick<Piece, "priceFrom">[]): boolean {

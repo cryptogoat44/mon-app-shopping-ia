@@ -14,19 +14,52 @@
 -- - un cache de 24 h qui survit aux redémarrages de Render ;
 -- - les recherches servies par le cache, hors de la part de 8 par personne.
 --
--- Rejouable sans effet (if not exists). Le fondateur l'applique sur
--- spotto-dev-2 avec migrer-dev AVANT de mettre VOIE_C_ENABLED à "true".
--- L'ancien serveur fonctionne avec la base migrée : les nouvelles colonnes ont
--- des valeurs par défaut (origine 'lens', booléens faux, 0 appel), zod ignore
--- les colonnes qu'il ne connaît pas, et serpapi_quota garde ses paramètres et
--- ce qu'elle renvoie. Le nouveau serveur sur une base sans 0028 : la voie C
--- reste coupée (interrupteur coupé par défaut, et sonde du schéma).
+-- Rejouable sans effet (if not exists ; une colonne ou une table déjà là,
+-- laissée par un brouillon, est gardée telle quelle : la vérification
+-- supabase/verifications/0028-verification.sql le montre). Le fondateur
+-- l'applique sur spotto-dev-2 avec migrer-dev AVANT de mettre
+-- VOIE_C_ENABLED à "true".
+--
+-- Serveur et base migrée : seul un serveur qui a déjà les libellés d'export
+-- de 0028 (un petit commit sur main, sans interrupteur ni changement de
+-- comportement, comme pour 0027) fonctionne sans écart avec la base migrée.
+-- Un serveur plus ancien — la production tourne aujourd'hui sur f0ec229, qui
+-- ne les a pas — garde ses recherches et son quota (valeurs par défaut :
+-- origine 'lens', booléens faux, 0 appel ; zod ignore les colonnes qu'il ne
+-- connaît pas ; serpapi_quota garde ses paramètres et ce qu'elle renvoie),
+-- mais son export RGPD lisible montre les 9 nouvelles colonnes sous leur nom
+-- brut (« Autres informations »), les journalise à chaque export, et son test
+-- exportCompleteness échoue (« colonne sans libellé »). Ordre à tenir :
+-- 1. les libellés d'export de 0028 sur main, puis dans les lots en cours ;
+-- 2. 0028 sur spotto-dev-2, puis les tests de base de données sur le Mac ;
+-- 3. fusion de la voie C dans main ;
+-- 4. en production : mettre en ligne le serveur et le site de la voie C
+--    depuis le même commit (le site d'abord ou en même temps), interrupteurs
+--    coupés ; PUIS appliquer 0028 sur spotto-prod ; PUIS seulement, le
+--    nouveau site en ligne et les onglets ouverts rechargés, VOIE_C_ENABLED
+--    puis VOIE_C_AI_ENABLED à "true" (l'ancien site mêlerait les pièces des
+--    boutiques aux résultats Lens) ;
+-- 5. tant que 0028 est appliquée, ne jamais revenir sur Render à un serveur
+--    antérieur au commit des libellés.
+-- Le nouveau serveur sur une base sans 0028 : la voie C reste coupée
+-- (interrupteur coupé par défaut, et sonde du schéma). La sonde ne protège
+-- qu'un serveur qui n'a pas encore vu 0028 : une fois vue, elle est
+-- mémorisée jusqu'au redémarrage du serveur (d'où l'étape 0 ci-dessous).
 --
 -- Retour en arrière (docs/0028-retour.sql, sur le Mac), dans cet ordre :
+-- 0. couper la voie C : VOIE_C_ENABLED à toute autre valeur que "true" (ou
+--    retirée) dans Render, puis déployer et attendre que le nouveau
+--    déploiement soit en service (l'interrupteur n'est lu qu'au démarrage, et
+--    la sonde du schéma est mémorisée tant que le serveur tourne) ;
 -- 1. recréer serpapi_quota avec le corps exact de 0027, EN PREMIER ;
 -- 2. drop table if exists search_cache ;
 -- 3. retirer les nouvelles colonnes de product_searches et la contrainte ;
 -- 4. retirer product_matches.origin.
+-- Retour du code seul sur Render (base gardée migrée ; vers un serveur qui a
+-- les libellés, voir le point 5) : l'ancien serveur ne touche jamais à
+-- search_cache, donc ne la purge pas ; vider la table aussitôt :
+-- delete from search_cache; (la voie C, si elle revient, repart d'un cache
+-- vide). De même sur spotto-dev-2 en revenant à main.
 
 -- ---- Origine de chaque proposition ----
 -- 'lens' : la recherche visuelle ; 'shopping' : la même pièce dans d'autres
@@ -38,12 +71,13 @@ alter table product_matches
 -- complement_status : issue du complément, vide quand la voie C n'a pas tourné
 --   (shown, empty, no_query, ai_failed, shopping_failed, no_time, no_capacity,
 --   skipped : étape IA coupée, error : exception inattendue) ;
--- shopping_calls : recherches Google Shopping réellement envoyées pour cette
---   photo (boutiques au plus 1, vos mots au plus 1) ; avec Lens (0 s'il vient
---   du cache, sinon 1), jamais plus de 3 recherches par photo ;
+-- shopping_calls : recherches Google Shopping comptées pour cette photo
+--   (boutiques au plus 1, vos mots au plus 1 ; un refus non facturé dont la
+--   place a été rendue n'y compte pas) ; avec Lens (0 s'il vient du cache,
+--   sinon 1), jamais plus de 3 recherches par photo ;
 -- lens_from_cache : la réponse de Lens vient du cache (aucun appel Lens) ;
--- served_from_cache : aucune recherche réelle dans ce lancement (tout vient du
---   cache) : hors de la part de 8 par personne ;
+-- served_from_cache : aucune recherche réelle comptée dans ce lancement (tout
+--   vient du cache) : hors de la part de 8 par personne ;
 -- text_suggested : proposer « Que cherchez-vous ? » (résultat peu fiable) ;
 -- text_requested_at : heure de la recherche avec vos mots, une seule fois par
 --   recherche (verrou) ; vos mots, eux, ne sont jamais enregistrés ;
@@ -70,8 +104,9 @@ alter table product_searches add constraint product_searches_served_from_cache_c
 --   son absence), shopping (réponse filtrée de Google Shopping, requêtes de
 --   l'IA seulement : vos mots ne sont jamais mis en cache) ;
 -- payload : 256 Ko au plus ; expires_at : 24 h après l'écriture.
--- Le serveur supprime les lignes expirées à chaque préparation de recherche,
--- même voie C coupée : la durée de 24 h borne la conservation.
+-- Le serveur de la voie C (lui seul) supprime les lignes expirées à la
+-- première préparation de recherche qui suit leurs 24 h, même voie C coupée ;
+-- après un retour du code seul, vider la table (voir l'en-tête).
 create table if not exists search_cache (
   key text primary key check (key ~ '^[0-9a-f]{64}$'),
   step text not null check (step in ('lens','query','shopping')),
@@ -91,10 +126,13 @@ grant select, insert, update, delete on table search_cache to service_role;
 -- « and not s.served_from_cache ». La voie B n'est pas une nouvelle photo
 -- (décision du fondateur) : elle n'ajoute rien à la part de 8, mais chaque
 -- appel réel compte dans les plafonds du jour et du mois (serpapi_calls).
--- Une recherche servie par le cache qui lance la voie B fait un appel réel :
--- le serveur la retire alors des recherches « servies par le cache », et elle
--- compte comme une photo (sinon, une boucle relance + vos mots ne serait
--- jamais comptée).
+-- Une recherche servie par le cache ne peut lancer la voie B que le jour (de
+-- Paris) de sa création : cet appel réel la retire alors des recherches
+-- « servies par le cache », et elle compte comme une photo ce jour-là (sinon,
+-- une boucle relance + vos mots ne serait jamais comptée). Plus tard, elle ne
+-- compterait dans aucune part de 8 (seules y comptent les recherches créées
+-- le jour même) : le serveur refuse alors la voie B. Un refus non facturé
+-- dont la place est rendue ne compte pas : elle reste « servie par le cache ».
 create or replace function serpapi_quota(
   p_daily_cap integer,
   p_monthly_cap integer,

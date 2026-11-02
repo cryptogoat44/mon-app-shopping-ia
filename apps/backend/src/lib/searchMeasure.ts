@@ -183,7 +183,9 @@ export interface ComplementMeasure {
   status: ComplementStatus | TextSearchStatus | null;
   queryFromCache: boolean;
   shoppingFromCache: boolean;
-  /** Recherches Google Shopping réellement envoyées (0 ou 1). */
+  /** Recherches Google Shopping envoyées (0 ou 1), un refus non facturé
+   * compris : ce qui compte dans shopping_calls se lit dans les colonnes
+   * (un refus dont la place a été rendue n'y compte pas). */
   calls: number;
   aiMs: number | null;
   shoppingMs: number | null;

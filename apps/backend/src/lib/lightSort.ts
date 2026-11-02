@@ -66,7 +66,9 @@ export function allTokensPresent(reference: readonly string[], tokens: readonly 
 
 /** Palier d'un titre pour la marque et le modèle donnés. Modèle vide : palier
  * 0 si la marque est complète, sinon 2 ; marque vide (variante permissive
- * de la règle 12 seulement) : de même avec le modèle ; les deux vides : 2. */
+ * de la règle 12) ou faite seulement de petits mots (« On », acceptée avec un
+ * modèle par services/shoppingQueryAi.ts) : de même avec le modèle ; les deux
+ * vides : 2. */
 export function titleTier(title: string, reference: LightSortReference): TitleTier {
   const tokens = titleTokens(title);
   const brand = referenceTokens(reference.brand);

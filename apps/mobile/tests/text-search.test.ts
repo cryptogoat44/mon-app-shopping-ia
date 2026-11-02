@@ -13,8 +13,10 @@ vi.mock("../src/lib/analytics", () => ({ track, setAnalyticsConsent: vi.fn() }))
 vi.mock("../src/lib/image-file", () => ({ imageFileFromUri: vi.fn() }));
 
 import { ApiError, fetchSearch, runTextSearch } from "../src/lib/api";
+import { clearLastSpotResult, getLastSpotResult, setLastSpotResult } from "../src/api/spotSession";
 import type { SpotResult } from "../src/api/types";
 import {
+  chooseInitialResult,
   recoverTextSearch,
   settledTextSearch,
   textSearchFailure,
@@ -120,12 +122,32 @@ describe("runTextSearch (voie B)", () => {
     expect(track.mock.calls).toEqual([["text_search_launched"]]);
   });
 
-  it("refus du serveur : une ApiError, et l'issue « failed »", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse(409, { error: "text_search_already_used", message: "Déjà lancée." }));
-    const error = await runTextSearch("s1", WORDS).catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(ApiError);
-    expect(error).toMatchObject({ status: 409 });
-    expect(track).toHaveBeenLastCalledWith("text_search_completed", { outcome: "failed", results_count: 0 });
+  it("refus du serveur avant toute recherche (409, 404, 429) : une ApiError, sans issue « failed » comptée", async () => {
+    const refusals = [
+      [409, { error: "text_search_already_used", message: "Déjà lancée." }],
+      [409, { error: "text_search_not_allowed", message: "" }],
+      [404, { error: "text_search_unavailable", message: "" }],
+      [429, { error: "search_capacity_day", message: "" }],
+      [429, { error: "rate_limited", message: "" }],
+    ] as const;
+    for (const [status, body] of refusals) {
+      track.mockReset();
+      fetchMock.mockResolvedValueOnce(jsonResponse(status, body));
+      const error = await runTextSearch("s1", WORDS).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(ApiError);
+      expect(error).toMatchObject({ status });
+      expect(track.mock.calls).toEqual([["text_search_launched"]]);
+    }
+  });
+
+  it("panne du réseau ou du serveur : l'issue « failed »", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(500, { error: "internal_error", message: "" }));
+    await expect(runTextSearch("s1", WORDS)).rejects.toBeInstanceOf(ApiError);
+    expect(track.mock.calls).toEqual([["text_search_launched"], ["text_search_completed", { outcome: "failed", results_count: 0 }]]);
+    track.mockReset();
+    fetchMock.mockRejectedValueOnce(new TypeError("Network request failed"));
+    await expect(runTextSearch("s1", WORDS)).rejects.toBeInstanceOf(TypeError);
+    expect(track.mock.calls).toEqual([["text_search_launched"], ["text_search_completed", { outcome: "failed", results_count: 0 }]]);
   });
 
   it("mots refusés avant toute recherche (400) : une ApiError, sans issue « failed » comptée", async () => {
@@ -299,6 +321,15 @@ describe("le résultat est remplacé sur place", () => {
     expect(launched.complement?.suggestText).toBe(true);
     const plain = toSpotResult(search({ complement: undefined, matches: [match("l1")] }));
     expect(withoutTextPrompt(plain)).toBe(plain);
+  });
+
+  it("« déjà lancée » : plus de copie en mémoire, l'écran rouvert depuis « Récemment spottées » relit la recherche", () => {
+    // handleTextSearchClosed(true), result.tsx : les propositions des mots peuvent encore arriver.
+    setLastSpotResult(launched);
+    expect(chooseInitialResult(getLastSpotResult(), "s1")).toEqual({ kind: "ready", result: launched });
+    clearLastSpotResult();
+    expect(getLastSpotResult()).toBeNull();
+    expect(chooseInitialResult(getLastSpotResult(), "s1")).toEqual({ kind: "loading", searchId: "s1" });
   });
 
   it("rien pour les mots : toujours « rien trouvé », l'issue est gardée, l'invitation disparaît", () => {

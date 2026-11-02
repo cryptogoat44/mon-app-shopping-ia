@@ -187,10 +187,11 @@ export async function runTextSearch(searchId: string, words: string, signal?: Ab
     });
     return search;
   } catch (error) {
-    // Abandon (« Annuler »), ou mots refusés avant toute recherche (400 : rien
-    // ne reste une fois retirés les opérateurs et la ponctuation) : pas
-    // d'issue à compter, comme au lancement.
-    if (!signal?.aborted && textSearchFailure(error).kind !== "invalid_words") track("text_search_completed", { outcome: "failed", results_count: 0 });
+    // Seule une panne (réseau ou serveur) est comptée « failed ». « Annuler »,
+    // ou un refus avant toute recherche (mots refusés, plafond ou trop de
+    // recherches d'un coup, fonction coupée, recherche non admissible ou déjà
+    // lancée) : pas d'issue à compter, comme au lancement.
+    if (!signal?.aborted && textSearchFailure(error).kind === "technical") track("text_search_completed", { outcome: "failed", results_count: 0 });
     throw error;
   }
 }

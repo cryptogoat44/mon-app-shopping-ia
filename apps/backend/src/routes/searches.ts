@@ -16,7 +16,7 @@ import { ProviderFailure, type TextSearchProvider } from "../services/searchProv
 import { serpApiTextProvider } from "../services/serpapi.js";
 import { aiInputKey, askShoppingQuery } from "../services/shoppingQueryAi.js";
 import type { ShoppingMatch } from "../services/textSearch.js";
-import { isInterrupted, parseMatchRows, parseSearchRow, parseSearchRows, toProductSearch, type MatchRow, type SearchRow } from "../lib/searchRows.js";
+import { isInterrupted, parseMatchRows, parseSearchRow, parseSearchRows, textSearchCountable, toProductSearch, type MatchRow, type SearchRow } from "../lib/searchRows.js";
 import {
   COMPLEMENT_LOG_MESSAGE,
   complementLogLine,
@@ -709,13 +709,16 @@ function sendTextRefusal(reply: FastifyReply, refusal: keyof typeof TEXT_SEARCH_
 /** Admissible : terminée, ou « rien trouvé » (jamais une panne, ni une
  * recherche pas encore lancée), l'invitation « Que cherchez-vous ? » a été
  * proposée (text_suggested : seul cas où l'app l'offre ; jamais sur une
- * ancienne recherche de l'historique), et le budget de la photo permet encore
+ * ancienne recherche de l'historique), la recherche peut encore être comptée
+ * dans une part de 8 (servie par le cache un jour précédent : jamais comptée
+ * dans une part de 8, celle de son jour est close ; la voie B n'y est plus
+ * possible, voir textSearchCountable), et le budget de la photo permet encore
  * une recherche réelle (3 au plus : Lens s'il a été appelé, plus les
- * recherches Google Shopping déjà envoyées). Garanti par la ligne, jamais
+ * recherches Google Shopping déjà comptées). Garanti par la ligne, jamais
  * par le cache. */
-function textSearchAllowed(row: SearchRow): boolean {
+function textSearchAllowed(row: SearchRow, now: Date = new Date()): boolean {
   const finished = row.status === "completed" || (row.status === "failed" && row.error_message === NO_MATCH_MESSAGE);
-  return finished && row.text_suggested === true && photoCallsLeft(row.lens_from_cache !== true, row.shopping_calls ?? 0) >= 1;
+  return finished && textSearchCountable(row, now) && row.text_suggested === true && photoCallsLeft(row.lens_from_cache !== true, row.shopping_calls ?? 0) >= 1;
 }
 
 /** Verrou de la voie B : une seule recherche avec vos mots par recherche
@@ -956,10 +959,11 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     // sera refait à la recherche suivante. Cache de la voie C : ses entrées
     // expirées (24 h) sont supprimées ici aussi, QUEL QUE SOIT l'interrupteur,
     // pour que la durée tienne même quand plus rien n'y écrit (table absente
-    // avant 0028 : ignoré sans bruit ; purgeExpiredCache ne lève jamais d'erreur).
+    // avant 0028 : ignoré sans bruit). D'abord, et hors du try : il ne lève
+    // jamais d'erreur, et un échec de l'historique ne le saute donc jamais.
+    await purgeExpiredCache(fastify.supabaseAdmin, request.log);
     try {
       await purgeExpiredSearches(fastify, userId);
-      await purgeExpiredCache(fastify.supabaseAdmin, request.log);
     } catch (purgeError) {
       request.log.error({ purgeError }, "Échec de la suppression des recherches de plus de 12 mois");
     }
@@ -1106,9 +1110,12 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       const saved = await saveComplementRows(fastify, id, text.matches, "words", lastRank);
       const textStatus = saved === null ? "shopping_failed" : text.textStatus;
       // « Rien trouvé » complété par vos mots : terminée. Les colonnes de la
-      // mesure de Lens restent celles du lancement. Un appel réel envoyé : la
-      // recherche n'est plus « servie par le cache » (sinon, valeur d'avant le
-      // verrou) ; elle compte dans la part de 8 par personne.
+      // mesure de Lens restent celles du lancement. Un appel réel compté : la
+      // recherche n'est plus « servie par le cache » et compte dans la part de
+      // 8 par personne. Sinon (aucun appel, ou refus non facturé dont la place
+      // a été rendue : text.calls = 0), shopping_calls et « servie par le
+      // cache » reprennent leur valeur d'avant le verrou ; la voie B, elle,
+      // reste utilisée (une seule tentative).
       const completes = row.status === "failed" && (saved ?? 0) > 0;
       const { error: updateError } = await fastify.supabaseAdmin
         .from("product_searches")

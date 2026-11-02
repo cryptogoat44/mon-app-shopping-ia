@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { singleFlight, singleFlightPending } from "../src/lib/singleFlight.js";
 
 // Lot c, voie C : un seul appel à la fois pour une même clé.
@@ -60,5 +60,48 @@ describe("singleFlight", () => {
       })
     ).rejects.toThrow("immédiate");
     expect(singleFlightPending()).toBe(0);
+  });
+
+  it("réussite gardée par holdUntil : un appel arrivé avant la fin du maintien reçoit le même résultat sans relancer fn ; retirée ensuite", async () => {
+    const hold = deferred<void>();
+    let runs = 0;
+    const fn = async () => ++runs;
+    expect(await singleFlight("cle-f", fn, () => hold.promise)).toBe(1);
+    expect(singleFlightPending()).toBe(1);
+    expect(await singleFlight("cle-f", fn)).toBe(1);
+    expect(runs).toBe(1);
+    hold.resolve();
+    await vi.waitFor(() => expect(singleFlightPending()).toBe(0));
+    expect(await singleFlight("cle-f", fn)).toBe(2);
+  });
+
+  it("maintien en échec, holdUntil qui lève une erreur ou rend null : l'entrée est retirée quand même", async () => {
+    const failingHold = deferred<void>();
+    await singleFlight("cle-g", async () => "a", () => failingHold.promise);
+    expect(singleFlightPending()).toBe(1);
+    failingHold.reject(new Error("écriture en panne"));
+    await vi.waitFor(() => expect(singleFlightPending()).toBe(0));
+    await singleFlight("cle-h", async () => "b", () => {
+      throw new Error("bogue");
+    });
+    expect(singleFlightPending()).toBe(0);
+    await singleFlight("cle-i", async () => "c", () => null);
+    expect(singleFlightPending()).toBe(0);
+  });
+
+  it("un échec n'est jamais gardé, même avec holdUntil : l'appel suivant relance fn", async () => {
+    const holdUntil = vi.fn(() => new Promise<void>(() => undefined));
+    await expect(
+      singleFlight(
+        "cle-j",
+        async () => {
+          throw new Error("panne");
+        },
+        holdUntil
+      )
+    ).rejects.toThrow("panne");
+    expect(holdUntil).not.toHaveBeenCalled();
+    expect(singleFlightPending()).toBe(0);
+    expect(await singleFlight("cle-j", async () => "neuf")).toBe("neuf");
   });
 });

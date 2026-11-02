@@ -12,3 +12,10 @@ export function setLastSpotResult(result: SpotResult): void {
 export function getLastSpotResult(): SpotResult | null {
   return lastResult;
 }
+
+/** Voie B (lot c) : copie en mémoire périmée (« déjà lancée », propositions
+ * des mots peut-être encore en route) — l'écran rouvert relira la recherche
+ * sur le serveur. */
+export function clearLastSpotResult(): void {
+  lastResult = null;
+}

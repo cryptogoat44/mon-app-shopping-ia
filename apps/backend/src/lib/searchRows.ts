@@ -12,6 +12,7 @@ import {
   type ProductSearch,
   type SearchComplement,
 } from "@monapp/shared-types";
+import { parisDayStart } from "./matchFeedback.js";
 import { FAILURE_KINDS } from "./searchMeasure.js";
 
 export const SEARCH_ROW = z.object({
@@ -98,20 +99,37 @@ function priceOf(value: number | string | null): number | null {
   return value === null ? null : Number(value);
 }
 
+/** « Que cherchez-vous ? » peut-il encore être compté ? Une recherche servie
+ * entièrement par le cache (served_from_cache) n'a compté dans aucune part de
+ * 8 ; la voie B, un appel réel, la fait compter comme une photo… mais
+ * serpapi_quota ne compte une recherche que le jour (de Paris) de sa
+ * création. Servie par le cache un jour précédent : jamais comptée dans une
+ * part de 8 (celle de son jour est close) ; la voie B n'y est plus possible.
+ * Les autres recherches ont compté le jour de leur lancement : toujours
+ * possible. Un message envoyé juste après minuit reçoit donc un refus
+ * (l'invitation disparaît ; la photo peut être relancée). */
+export function textSearchCountable(row: Pick<SearchRow, "served_from_cache" | "created_at">, now: Date = new Date()): boolean {
+  if (row.served_from_cache !== true) return true;
+  const createdAt = Date.parse(row.created_at);
+  return Number.isFinite(createdAt) && createdAt >= parisDayStart(now).getTime();
+}
+
 /** Complément de la voie C, lu dans la ligne : absent quand aucune de ses
  * colonnes n'est remplie (voie C coupée, recherche plus ancienne, base sans
  * 0028). L'invitation « Que cherchez-vous ? » n'est plus proposée une fois la
  * recherche par vos mots lancée, ni quand elle ne peut pas l'être
- * (`textSearchOn` faux : voie C coupée depuis, la route répondrait 404) ;
- * l'issue et les sections, elles, restent. La requête de l'IA n'est jamais
- * enregistrée : une recherche relue n'en dit rien. */
-export function complementOf(row: SearchRow, textSearchOn: boolean): SearchComplement | undefined {
+ * (`textSearchOn` faux : voie C coupée depuis, la route répondrait 404 ;
+ * recherche servie par le cache un jour précédent, voir textSearchCountable,
+ * la route répondrait 409) ; l'issue et les sections, elles, restent. La
+ * requête de l'IA n'est jamais enregistrée : une recherche relue n'en dit
+ * rien. */
+export function complementOf(row: SearchRow, textSearchOn: boolean, now: Date = new Date()): SearchComplement | undefined {
   const status = row.complement_status ?? null;
   const textStatus = row.text_status ?? null;
   const textRequested = row.text_requested_at != null;
   const ran = status !== null || textStatus !== null || textRequested || row.text_suggested === true || (row.shopping_calls ?? 0) > 0 || row.lens_from_cache === true;
   if (!ran) return undefined;
-  return { status, suggestText: textSearchOn && row.text_suggested === true && !textRequested, textStatus };
+  return { status, suggestText: textSearchOn && row.text_suggested === true && !textRequested && textSearchCountable(row, now), textStatus };
 }
 
 /** `textSearchOn` : « Que cherchez-vous ? » peut être lancé maintenant (voie

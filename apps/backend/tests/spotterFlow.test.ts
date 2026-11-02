@@ -1065,6 +1065,8 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
       expect((await run(refused.id, {}, await uniqueImage())).json().complement.status).toBe("shopping_failed");
       expect(releaseMock).toHaveBeenCalledOnce();
       expect(releaseMock.mock.calls[0]!.slice(2)).toEqual([RESERVATION, "shopping"]);
+      // Place rendue : l'appel refusé ne compte pas dans le budget de la photo.
+      expect(await columnsOf(refused.id)).toMatchObject({ complement_status: "shopping_failed", shopping_calls: 0, served_from_cache: false });
     });
 
     it("panne de Lens : aucun complément, rien n'est mis en cache", async () => {

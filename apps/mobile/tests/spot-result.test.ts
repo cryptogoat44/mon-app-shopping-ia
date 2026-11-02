@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MatchOrigin, ProductMatch, ProductSearch } from "@monapp/shared-types";
 import type { SpotResult } from "../src/api/types";
-import { chooseInitialResult, noPriceShown, toSpotResult } from "../src/lib/spot-result";
+import { chooseInitialResult, noPriceShown, pieceTitle, toSpotResult } from "../src/lib/spot-result";
 
 function search(overrides: Partial<ProductSearch> = {}): ProductSearch {
   return {
@@ -102,6 +102,21 @@ describe("message « Aucune de ces propositions n'affiche de prix » (petit lot)
     expect(noPriceShown([{ priceFrom: 0 }])).toBe(false);
     // Aucune proposition : c'est le message « rien trouvé », pas celui-ci.
     expect(noPriceShown([])).toBe(false);
+  });
+});
+
+describe("titre envoyé pour « Garder » et « Je l'ai achetée » : 120 caractères au plus", () => {
+  it("coupe les titres plus longs (Google Shopping va jusqu'à 150), laisse les autres tels quels", () => {
+    const shopTitle = "Veste en cuir femme automne hiver courte cintrée style motard, simili cuir PU, fermeture éclair, poches zippées, noir, taille M";
+    expect(shopTitle.length).toBeGreaterThan(120);
+    expect(pieceTitle(shopTitle)).toBe(shopTitle.slice(0, 120));
+    expect(pieceTitle("x".repeat(120))).toBe("x".repeat(120));
+    expect(pieceTitle("Sac Boutique")).toBe("Sac Boutique");
+  });
+
+  it("ne coupe jamais un emoji en deux", () => {
+    expect(pieceTitle(`${"x".repeat(119)}👜 cuir noir`)).toBe("x".repeat(119));
+    expect(pieceTitle(`${"x".repeat(118)}👜 cuir noir`)).toBe(`${"x".repeat(118)}👜`);
   });
 });
 

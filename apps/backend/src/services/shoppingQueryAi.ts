@@ -11,20 +11,23 @@
 //
 // Sécurité : les titres viennent de pages web quelconques et peuvent contenir
 // des instructions piégées. Ils sont déclarés comme des données dans les
-// consignes, placés entre balises (chevrons retirés : impossible d'en
-// sortir), et la réponse n'est jamais suivie : elle est contrôlée ici, sans
-// IA (opérateurs de recherche, 2 à 8 mots, chaque mot présent dans un titre,
-// marque commune à au moins deux titres…). Au moindre écart : pas de
-// recherche Shopping, résultats Lens seuls.
+// consignes, placés entre balises (chevrons et leurs sosies retirés : bien
+// plus difficile d'en sortir, sans garantie absolue), et la réponse n'est
+// jamais suivie : elle est contrôlée ici, sans IA (opérateurs de recherche, 2
+// à 8 mots, chaque mot présent dans un titre, marque commune à au moins deux
+// titres, ni nom d'un site des résultats, ni adresse web, ni mot de promotion
+// — règle 9…). Au moindre écart : pas de recherche Shopping, résultats Lens
+// seuls.
 // Rien n'est journalisé ici ; l'appelant ne journalise que des nombres et des
 // types d'erreur, jamais la requête, la marque, le modèle ni les titres.
 //
 // Même façon de faire que services/videoMoments.ts : appel HTTP direct par
 // safeFetch (liste blanche d'hôtes), sortie JSON imposée, erreurs typées
 // sans contenu. Documentation vérifiée le 2026-11-02 (référence claude-api du
-// 2026-10-06) : sur Claude Sonnet 5.5, `thinking: {type: "between_tools"}`
-// coupe la réflexion préalable (accepté à l'effort « high » ou moins, sans
-// autre champ) ; ni température ni `tool_choice` forcé (400 sur ce modèle).
+// 2026-10-06) : avec le modèle de SHOPPING_QUERY_AI_SETTINGS,
+// `thinking: {type: "between_tools"}` coupe la réflexion préalable (accepté à
+// l'effort « high » ou moins, sans autre champ) ; ni température ni
+// `tool_choice` forcé (400 sur ce modèle).
 // Pas de modèle de repli en cas de refus (`fallbacks`) : un refus donne les
 // résultats Lens seuls, dans un budget de 3 s. Écart volontaire à la
 // recommandation d'Anthropic, décision du fondateur.
@@ -38,12 +41,12 @@ import { wordsOf } from "../lib/wordSort.js";
 import type { SearchLocale } from "./lensSettings.js";
 import { SHOPPING_QUERY_INSTRUCTIONS } from "./shoppingQueryInstructions.js";
 
-/** Modèle proposé (à confirmer par le fondateur) : Claude Sonnet 5.5, déjà
- * utilisé pour l'analyse des vidéos, 2 $ / 10 $ le million de jetons lus /
- * écrits (≈ 0,25 centime par photo, à vérifier sur la facture). Effort bas,
- * pas de réflexion préalable. Avec claude-haiku-5-5, la réflexion se coupe
- * par `thinking: {type: "disabled"}` (between_tools y est refusé) : la
- * requête construite ici devrait changer. */
+/** Modèle proposé (à confirmer par le fondateur) : celui déjà utilisé pour
+ * l'analyse des vidéos (VIDEO_AI_SETTINGS), 2 $ / 10 $ le million de jetons
+ * lus / écrits (≈ 0,25 centime par photo, à vérifier sur la facture). Effort
+ * bas, pas de réflexion préalable. Tous les modèles n'acceptent pas
+ * `between_tools` : certains demandent `thinking: {type: "disabled"}`.
+ * Changer de modèle impose donc de revoir la requête construite ici. */
 export const SHOPPING_QUERY_AI_SETTINGS = { model: "claude-sonnet-5-5", effort: "low", thinking: "between_tools" } as const;
 
 const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
@@ -56,7 +59,8 @@ const MAX_OUTPUT_TOKENS = 256;
 export const SHOPPING_QUERY_MIN_WORDS = 2;
 export const SHOPPING_QUERY_MAX_WORDS = 8;
 export const SHOPPING_QUERY_MAX_CHARS = SEARCH_QUERY_MAX_LENGTH;
-/** La marque doit figurer dans au moins deux titres (règle 12 stricte). */
+/** La marque doit figurer dans au moins deux titres (règle 12 stricte). Même
+ * seuil pour qu'un modèle excuse ses mots au contrôle de la règle 9. */
 const MIN_TITLES_WITH_BRAND = 2;
 
 const OUTPUT_SCHEMA = {
@@ -96,9 +100,12 @@ export interface ShoppingQueryUsage {
  * - too_long : hors des bornes, trop courte comme trop longue (2 à 8 mots,
  *   60 caractères au plus) ;
  * - invented : un mot de la requête, ou le modèle, absent des titres ; ou le
- *   modèle absent de la requête ;
- * - brand_not_shared : marque vide, présente dans moins de deux titres, ou
- *   absente de la requête. */
+ *   modèle absent de la requête ; ou la règle 9 non tenue : nom d'un site des
+ *   résultats Lens, adresse web ou mot de promotion (« promo », « livraison »,
+ *   « soldes »…), hors des mots de la marque (et de ceux du modèle quand il
+ *   figure dans au moins deux titres) ;
+ * - brand_not_shared : marque vide (ou faite seulement de petits mots, sans
+ *   modèle), présente dans moins de deux titres, ou absente de la requête. */
 export type ShoppingQueryRejection = "empty" | "invented" | "brand_not_shared" | "too_long" | "operators";
 
 export type ShoppingQueryResult =
@@ -139,12 +146,12 @@ export interface AskShoppingQueryOptions {
 }
 
 /** Caractères de contrôle (y compris les caractères invisibles de mise en
- * forme) et chevrons retirés — ils ne pourraient servir qu'à sortir de la
- * balise <resultats_lens> ou à cacher du texte —, espaces resserrés, coupé à
- * `maxChars` caractères. */
+ * forme), chevrons et leurs sosies (‹ › ⟨ ⟩ 《 》 ＜ ＞…) retirés — ils ne
+ * pourraient servir qu'à imiter la balise <resultats_lens> ou à cacher du
+ * texte —, espaces resserrés, coupé à `maxChars` caractères. */
 function cleanText(text: string, maxChars: number): string {
   const flat = text
-    .replace(/[\p{Cc}\p{Cf}<>]/gu, " ")
+    .replace(/[\p{Cc}\p{Cf}<>‹›〈〉⟨⟩〈〉《》﹤﹥＜＞˂˃❮❯]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
   return Array.from(flat).slice(0, maxChars).join("").trim();
@@ -251,16 +258,36 @@ const NOT_ALLOWED = /[^\p{L}\p{N}\s'\-.&+]/gu;
  * (« '-mot », « +-mot »). Même règle dans lib/voieC.ts (sanitizeShoppingQuery). */
 const LOOSE_HYPHEN = /(?:^|[^\p{L}\p{M}\p{N}])-|-(?:$|[^\p{L}\p{M}\p{N}])/u;
 
+/** Adresse web : un point suivi d'une lettre (« boutique.com », « www.x »),
+ * ou un mot qui commence par « www ». « L.12.12 » reste un modèle. */
+const WEB_ADDRESS = /\.\p{L}|^www/iu;
+/** Mots de la règle 9 (prix, promotions, livraison), tels que wordsOf les rend. */
+const PROMO_WORDS: ReadonlySet<string> = new Set([
+  "promo", "promos", "promotion", "promotions", "solde", "soldes", "livraison", "gratuit", "gratuite", "offert", "offerte", "cher", "prix", "reduction",
+  "discount", "sale", "cheap",
+]);
+/** Mots d'un nom de site plus courts : jamais comparés (« fr », « m », « co »). */
+const SITE_WORD_MIN_LENGTH = 3;
+
+/** Mots des noms de sites (domaine sans son extension finale : « veja-store »
+ * pour veja-store.com, « asos » pour fr.asos.com). */
+function siteWords(sites: readonly (string | null)[]): string[] {
+  return sites
+    .flatMap((site) => (site === null ? [] : site.split(".").slice(0, -1).flatMap((label) => wordsOf(label))))
+    .filter((word) => word.length >= SITE_WORD_MIN_LENGTH && word !== "www");
+}
+
 /** Marque ou modèle : même nettoyage que les titres. */
 function tidy(text: string): string {
   return cleanText(text.normalize("NFC").replace(APOSTROPHES, "'"), Number.MAX_SAFE_INTEGER);
 }
 
-/** Contrôles du serveur, sans IA (fonction pure, testée). `titles` : les
- * titres tels qu'envoyés. */
+/** Contrôles du serveur, sans IA (fonction pure, testée). `titles` et
+ * `sites` : les titres et les sites tels qu'envoyés, dans le même ordre. */
 export function checkShoppingQuery(
   output: ShoppingQueryValue,
-  titles: readonly string[]
+  titles: readonly string[],
+  sites: readonly (string | null)[] = []
 ): { kind: "query"; value: ShoppingQueryValue } | { kind: "no_query"; reason: ShoppingQueryRejection } {
   const reject = (reason: ShoppingQueryRejection) => ({ kind: "no_query" as const, reason });
   const visible = tidy(output.query);
@@ -274,7 +301,10 @@ export function checkShoppingQuery(
   if (words.some((word) => LOOSE_HYPHEN.test(word) || word === "OR" || word === "AND" || word.includes(".."))) return reject("operators");
   if (words.length === 0) return reject("empty");
   const query = words.join(" ");
-  if (words.length < SHOPPING_QUERY_MIN_WORDS || words.length > SHOPPING_QUERY_MAX_WORDS || Array.from(query).length > SHOPPING_QUERY_MAX_CHARS) {
+  // 60 unités de texte (.length), comme le cache des requêtes et
+  // sanitizeShoppingQuery : une requête acceptée n'est jamais coupée ni
+  // refusée par le cache (une lettre « mathématique » en compte deux).
+  if (words.length < SHOPPING_QUERY_MIN_WORDS || words.length > SHOPPING_QUERY_MAX_WORDS || query.length > SHOPPING_QUERY_MAX_CHARS) {
     return reject("too_long");
   }
 
@@ -284,22 +314,38 @@ export function checkShoppingQuery(
   const inSomeTitle = (token: string) => titleTokenLists.some((tokens) => tokens.some((word) => sameToken(token, word)));
   if (queryTokens.length === 0 || !queryTokens.every(inSomeTitle)) return reject("invented");
 
-  // Marque : non vide, dans au moins deux titres ET dans la requête.
+  // Marque : non vide, dans au moins deux titres ET dans la requête. Faite
+  // seulement de petits mots (« On ») : ses mots sont exigés tels quels, et
+  // seulement avec un modèle (un petit mot seul n'est jamais une marque).
   const brand = tidy(output.brand);
-  const brandTokens = referenceTokens(brand);
+  const modelTokens = referenceTokens(tidy(output.model));
+  const keptBrandTokens = referenceTokens(brand);
+  const brandTokens = keptBrandTokens.length > 0 ? keptBrandTokens : modelTokens.length > 0 ? [...new Set(wordsOf(brand))] : [];
   if (brand.length > SHOPPING_QUERY_MAX_CHARS || brandTokens.length === 0) return reject("brand_not_shared");
   if (titleTokenLists.filter((tokens) => allTokensPresent(brandTokens, tokens)).length < MIN_TITLES_WITH_BRAND) return reject("brand_not_shared");
   if (!allTokensPresent(brandTokens, queryTokens)) return reject("brand_not_shared");
 
   // Modèle, s'il est donné : dans au moins un titre ET dans la requête. Fait
   // seulement de signes ou de petits mots : considéré comme non donné.
-  const modelTokens = referenceTokens(tidy(output.model));
   const model = modelTokens.length === 0 ? "" : tidy(output.model);
+  const titlesWithModel = titleTokenLists.filter((tokens) => allTokensPresent(modelTokens, tokens)).length;
   if (model !== "") {
     if (model.length > SHOPPING_QUERY_MAX_CHARS) return reject("invented");
-    if (!titleTokenLists.some((tokens) => allTokensPresent(modelTokens, tokens))) return reject("invented");
+    if (titlesWithModel === 0) return reject("invented");
     if (!allTokensPresent(modelTokens, queryTokens)) return reject("invented");
   }
+
+  // Règle 9 : ni nom d'un site des résultats Lens, ni adresse web, ni mot de
+  // promotion. Seuls en sont excusés les mots de la marque (« Nike » sur
+  // nike.com), et ceux du modèle quand il figure dans au moins deux titres
+  // (« Air Max » sur un site nike-air-max.fr) : un seul titre, qui pourrait
+  // être piégé, ne suffit jamais à excuser un mot.
+  const modelShared = titlesWithModel >= MIN_TITLES_WITH_BRAND;
+  const excused = (token: string) => brandTokens.some((word) => sameToken(token, word)) || (modelShared && modelTokens.some((word) => sameToken(token, word)));
+  const shopWords = siteWords(sites);
+  const shopWord = (token: string) => !excused(token) && (PROMO_WORDS.has(token) || shopWords.some((word) => sameToken(token, word)));
+  if (queryTokens.some(shopWord)) return reject("invented");
+  if (words.some((word) => WEB_ADDRESS.test(word) && !wordsOf(word).every(excused))) return reject("invented");
   return { kind: "query", value: { query, brand, model } };
 }
 
@@ -323,8 +369,8 @@ export function parseShoppingQueryResponse(json: unknown, items: readonly Shoppi
   const checked = modelOutputSchema.safeParse(output);
   if (!checked.success) throw new ShoppingQueryError("invalid_output");
   const usage = { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens };
-  const titles = preparedItems(items).map((item) => item.title);
-  return { ...checkShoppingQuery(checked.data, titles), usage };
+  const prepared = preparedItems(items);
+  return { ...checkShoppingQuery(checked.data, prepared.map((item) => item.title), prepared.map((item) => item.site)), usage };
 }
 
 /** Interroge l'API d'Anthropic (liste blanche d'hôtes, délai fixé par

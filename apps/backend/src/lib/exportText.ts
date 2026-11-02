@@ -138,7 +138,7 @@ export const EXPORT_COLUMNS = {
     // et des valeurs d'une liste fermée, dans la version JSON seulement. La
     // requête des boutiques et vos mots ne sont jamais enregistrés.
     complement_status: technical("Issue du complément « autres boutiques » (mesure)", "Outcome of the “other retailers” complement (measure)"),
-    shopping_calls: technical("Recherches en boutiques envoyées pour cette photo", "Retailer searches sent for this photo"),
+    shopping_calls: technical("Recherches en boutiques comptées pour cette photo", "Retailer searches counted for this photo"),
     lens_from_cache: technical("Recherche visuelle reprise du cache (24 h)", "Visual search taken from the cache (24 h)"),
     served_from_cache: technical("Recherche servie entièrement par le cache (24 h)", "Search served entirely from the cache (24 h)"),
     text_suggested: technical("« Que cherchez-vous ? » proposé", "“What are you looking for?” suggested"),

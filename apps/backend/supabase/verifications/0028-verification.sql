@@ -4,7 +4,7 @@
 --
 -- Résultat attendu : une seule ligne,
 --   true | key text NO, step text NO, payload jsonb NO, created_at timestamp with time zone NO, expires_at timestamp with time zone NO
---   | true | true | 0 | 0 | true | 8 | true | true | true | true | true | true
+--   | true | true | 0 | 0 | true | 8 | true | true | true | true
 -- soit :
 --   cache_forme_exacte = true : search_cache a EXACTEMENT les colonnes de 0028,
 --     dans cet ordre, avec ces types (une autre forme, laissée par exemple par
@@ -21,13 +21,22 @@
 --   colonnes_recherche = 8 : les 8 nouvelles colonnes de product_searches, avec
 --     leur type ;
 --   colonne_origine = true : product_matches.origin, obligatoire, 'lens' par défaut ;
---   contrainte_origine = true : origin n'accepte que lens, shopping et words ;
---   contrainte_complement = true : complement_status accepte les 9 issues,
---     « error » comprise ;
---   contrainte_cache_servi = true : servie par le cache ⇒ Lens venu du cache ;
---   contrainte_appels = true : shopping_calls entre 0 et 2 ;
+--   colonnes_voie_c_exactes = true : les 9 colonnes de la voie C ont
+--     exactement ce type, ce caractère obligatoire et cette valeur par défaut
+--     (une colonne laissée par un brouillon, que « add column if not exists »
+--     garde telle quelle, donne false) ;
+--   contraintes_voie_c_exactes = true : les règles de ces colonnes sont
+--     exactement celles de 0028 (origin lens/shopping/words, les 9 issues, les
+--     3 issues de vos mots, shopping_calls 0 à 2, total_seconds 0 à 600,
+--     servie par le cache ⇒ Lens venu du cache) ; une règle en plus ou plus
+--     étroite, laissée par un brouillon, donne false ;
 --   quota_sans_cache = true : serpapi_quota ignore les recherches servies par
 --     le cache dans la part de la personne.
+-- Un false sur colonnes_voie_c_exactes ou contraintes_voie_c_exactes : ne pas
+-- mettre VOIE_C_ENABLED à "true" avant d'avoir compris d'où vient l'écart (les
+-- colonnes et les règles de product_searches et product_matches, comparées à
+-- celles de 0028). Tri « collate "C" » : le même ordre quelle que soit la
+-- langue de la base.
 select
   (
     select string_agg(column_name || ' ' || data_type || ' ' || is_nullable, ', ' order by ordinal_position)
@@ -71,28 +80,25 @@ select
     where table_schema = 'public' and table_name = 'product_matches' and column_name = 'origin'
       and data_type = 'text' and is_nullable = 'NO' and column_default like '''lens''%'
   ) as colonne_origine,
-  exists (
-    select 1 from pg_constraint
-    where conrelid = 'public.product_matches'::regclass and contype = 'c'
-      and pg_get_constraintdef(oid) like '%origin%' and pg_get_constraintdef(oid) like '%words%'
-  ) as contrainte_origine,
-  exists (
-    select 1 from pg_constraint
-    where conrelid = 'public.product_searches'::regclass and contype = 'c'
-      and pg_get_constraintdef(oid) like '%complement_status%' and pg_get_constraintdef(oid) like '%no_capacity%'
-      and pg_get_constraintdef(oid) like '%''error''%'
-  ) as contrainte_complement,
-  exists (
-    select 1 from pg_constraint
-    where conrelid = 'public.product_searches'::regclass and conname = 'product_searches_served_from_cache_check'
-      and pg_get_constraintdef(oid) like '%served_from_cache%' and pg_get_constraintdef(oid) like '%lens_from_cache%'
-  ) as contrainte_cache_servi,
-  exists (
-    select 1 from pg_constraint
-    where conrelid = 'public.product_searches'::regclass and contype = 'c'
-      and pg_get_constraintdef(oid) like '%shopping_calls%'
-  ) as contrainte_appels,
+  (
+    select string_agg(table_name || '.' || column_name || ' ' || data_type || ' ' || is_nullable || ' ' || coalesce(column_default, '-'), ', ' order by table_name collate "C", column_name collate "C")
+    from information_schema.columns
+    where table_schema = 'public'
+      and ((table_name = 'product_matches' and column_name = 'origin')
+        or (table_name = 'product_searches' and column_name in ('complement_status', 'shopping_calls', 'lens_from_cache', 'served_from_cache', 'text_suggested', 'text_requested_at', 'text_status', 'total_seconds')))
+  ) is not distinct from 'product_matches.origin text NO ''lens''::text, product_searches.complement_status text YES -, product_searches.lens_from_cache boolean NO false, product_searches.served_from_cache boolean NO false, product_searches.shopping_calls smallint NO 0, product_searches.text_requested_at timestamp with time zone YES -, product_searches.text_status text YES -, product_searches.text_suggested boolean NO false, product_searches.total_seconds smallint YES -'
+    as colonnes_voie_c_exactes,
+  (
+    select string_agg(t.relname || ' ' || pg_get_constraintdef(c.oid), ', ' order by t.relname collate "C", pg_get_constraintdef(c.oid) collate "C")
+    from pg_constraint c join pg_class t on t.oid = c.conrelid
+    where c.contype = 'c' and t.relnamespace = 'public'::regnamespace
+      and exists (select 1 from pg_attribute a where a.attrelid = c.conrelid and a.attnum = any(c.conkey)
+        and ((t.relname = 'product_matches' and a.attname = 'origin')
+          or (t.relname = 'product_searches' and a.attname in ('complement_status', 'shopping_calls', 'lens_from_cache', 'served_from_cache', 'text_suggested', 'text_requested_at', 'text_status', 'total_seconds'))))
+  ) is not distinct from 'product_matches CHECK ((origin = ANY (ARRAY[''lens''::text, ''shopping''::text, ''words''::text]))), product_searches CHECK (((NOT served_from_cache) OR lens_from_cache)), product_searches CHECK (((shopping_calls >= 0) AND (shopping_calls <= 2))), product_searches CHECK (((total_seconds >= 0) AND (total_seconds <= 600))), product_searches CHECK ((complement_status = ANY (ARRAY[''shown''::text, ''empty''::text, ''no_query''::text, ''ai_failed''::text, ''shopping_failed''::text, ''no_time''::text, ''no_capacity''::text, ''skipped''::text, ''error''::text]))), product_searches CHECK ((text_status = ANY (ARRAY[''shown''::text, ''empty''::text, ''shopping_failed''::text])))'
+    as contraintes_voie_c_exactes,
   coalesce((
     select bool_and(pg_get_functiondef(p.oid) like '%served_from_cache%') from pg_proc p
     where p.proname = 'serpapi_quota' and p.pronamespace = 'public'::regnamespace
   ), false) as quota_sans_cache;
+

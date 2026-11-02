@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { AccessibilityInfo, ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
 import type { ProductSearch } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
@@ -7,6 +7,7 @@ import { fetchSearch, runTextSearch } from "@/lib/api";
 import { capacityMonthTip } from "@/lib/spot-capacity";
 import { recoverTextSearch, settledTextSearch, textSearchFailure, type TextSearchFailure } from "@/lib/spot-result";
 import { ErrorMessage } from "@/components/error-message";
+import { textSearchStatusNote } from "@/components/result-complement";
 import { QueryInput } from "@/components/spot-launch-views";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -37,9 +38,23 @@ function limitCopy(failure: Extract<TextSearchFailure, { kind: "limit" }>): [str
   }
 }
 
+/** VoiceOver ignore les zones annoncées (accessibilityLiveRegion : Android
+ * seulement) : l'attente et l'issue de la recherche par les mots sont dites
+ * explicitement (audit Lot Q, A11Y-03). L'attente, sur iPhone seulement
+ * (Android lit sa zone annoncée) ; l'issue, sans zone annoncée, sur les deux,
+ * comme les confirmations (lib/toast-context.tsx). En file d'attente sur
+ * iPhone : dite après ce que VoiceOver est en train de lire (l'élément où il
+ * se pose quand la case disparaît), sans le couper. Les échecs affichés par
+ * ErrorMessage s'annoncent déjà. */
+function announce(message: string | null, platforms: "ios" | "native") {
+  if (!message || Platform.OS === "web" || (platforms === "ios" && Platform.OS !== "ios")) return;
+  AccessibilityInfo.announceForAccessibilityWithOptions(message, { queue: true });
+}
+
 export function TextSearchPrompt({
   searchId,
   initialWords,
+  onStarted,
   onDone,
   onClosed,
   withIntro = true,
@@ -47,6 +62,9 @@ export function TextSearchPrompt({
   searchId: string;
   /** Mots tapés sous la photo au lancement, quand le brouillon est encore en mémoire. */
   initialWords?: string | null;
+  /** La recherche par les mots part : l'invitation que porte la copie en
+   * mémoire de l'écran peut ne plus être valable (l'écran l'oublie). */
+  onStarted?: () => void;
   /** Recherche renvoyée (ou relue) par le serveur avec l'issue des mots :
    * l'écran remplace son résultat sur place. */
   onDone: (search: ProductSearch) => void;
@@ -70,11 +88,14 @@ export function TextSearchPrompt({
   function finish(search: ProductSearch) {
     setState({ kind: "closed" });
     onDone(search);
+    // L'issue, y compris relue après « Annuler » : la section des mots, sinon la phrase de l'écran.
+    announce(search.matches.some((match) => match.origin === "words") ? t.result.complementTitleWords : textSearchStatusNote(search.complement?.textStatus), "native");
   }
 
   function close(alreadyUsed: boolean) {
     setState({ kind: "closed" });
     onClosed(alreadyUsed);
+    if (alreadyUsed) announce(t.result.textSearchAlreadyUsed, "native");
   }
 
   async function search() {
@@ -84,6 +105,8 @@ export function TextSearchPrompt({
     const current = new AbortController();
     controller.current = current;
     setState({ kind: "running" });
+    onStarted?.();
+    announce(t.result.textSearchRunning, "ios");
     try {
       const found = await runTextSearch(searchId, words.trim(), current.signal);
       if (current.signal.aborted) return;

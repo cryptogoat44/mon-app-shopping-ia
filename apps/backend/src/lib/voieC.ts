@@ -101,7 +101,8 @@ export type CacheStep = "lens" | "query" | "shopping";
 /** Lecture du cache (lib/searchCache.ts, readCache, base et journal liés) :
  * null = absent ; ne lève jamais d'erreur. */
 export type CacheReader = <T>(key: string, schema: z.ZodType<T, z.ZodTypeDef, unknown>, signal: AbortSignal) => Promise<T | null>;
-/** Écriture du cache (writeCache, base et journal liés), jamais attendue. */
+/** Écriture du cache (writeCache, base et journal liés), jamais attendue par
+ * le lancement. */
 export type CacheWriter = (key: string, step: CacheStep, payload: unknown) => unknown;
 /** Clé d'une entrée (cacheKey) : SHA-256 de l'étape et des parties. */
 export type CacheKeyMaker = (step: CacheStep, parts: string[]) => string;
@@ -200,11 +201,40 @@ async function readCacheSafely<T>(ports: CachePorts, key: string, schema: z.ZodT
   }
 }
 
-/** Écriture jamais attendue, jamais bloquante. */
-function writeCacheSafely(ports: CachePorts, key: string, step: CacheStep, payload: unknown): void {
-  void Promise.resolve()
+/** Écriture jamais attendue par le lancement, jamais bloquante ; ne lève
+ * jamais d'erreur. La promesse rendue (réglée une fois l'écriture finie, ou
+ * échouée) ne sert qu'à garder l'entrée de singleFlight jusque-là. */
+function writeCacheSafely(ports: CachePorts, key: string, step: CacheStep, payload: unknown): Promise<void> {
+  return Promise.resolve()
     .then(() => ports.writeCache(key, step, payload))
-    .catch(() => undefined);
+    .then(
+      () => undefined,
+      () => undefined
+    );
+}
+
+/** Au plus ce temps après l'appel, l'entrée de singleFlight attend l'écriture
+ * du cache (la base a des pointes mesurées de 0,5 à 4,8 s). */
+const CACHE_WRITE_HOLD_MS = 10_000;
+
+/** Entre la fin de l'appel et l'écriture du cache, l'image n'est ni en cours,
+ * ni lisible dans le cache : l'entrée de singleFlight, déjà réglée, reste donc
+ * jusqu'à l'écriture (10 s au plus), et une relance arrivée entre-temps reçoit
+ * la même réponse au lieu de payer à nouveau la même recherche. Jamais pour
+ * une part vide (panne, refus) : elle n'est pas partagée. */
+function heldUntilWritten(leg: { shared: unknown; written?: Promise<void> }): Promise<void> | null {
+  const written = leg.written;
+  if (!written || leg.shared === null) return null;
+  return new Promise<void>((resolve) => {
+    // Minuterie ordinaire (jamais ports.timeoutSignal) : elle ne retient pas
+    // le processus et ne compte pas parmi les délais des étapes.
+    const timer = setTimeout(resolve, CACHE_WRITE_HOLD_MS);
+    timer.unref();
+    void written.then(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
 }
 
 /** Nom de l'erreur (« TypeError »…), jamais son message. */
@@ -212,7 +242,10 @@ function errorName(error: unknown): string {
   return error instanceof Error ? error.name : typeof error;
 }
 
-type Leg<T, R> = { shared: T | null; own: R };
+/** Résultat d'une étape partagée : la part partageable (null : rien à
+ * partager), le résultat propre au lancement qui a appelé, et l'écriture du
+ * cache en cours, s'il y en a une. */
+type Leg<T, R> = { shared: T | null; own: R; written?: Promise<void> };
 
 const LATE = Symbol("late");
 
@@ -226,12 +259,13 @@ function lateAfter(signal: AbortSignal): Promise<typeof LATE> {
 
 /** Un seul appel à la fois pour une même clé, reprises comprises.
  * - Celui qui lance l'étape garde son propre résultat.
- * - Ceux qui arrivent pendant l'appel reçoivent sa part partageable (une
- *   réponse facturée). Sans elle (panne, refus, arrêt avant l'appel), ils ne
- *   font pas chacun leur appel : ils repassent par singleFlight, où l'un
- *   d'eux relance l'étape et où les autres, comme tout lancement arrivé
- *   entre-temps, l'attendent. Jamais deux appels identiques en même temps
- *   dans ce processus.
+ * - Ceux qui arrivent pendant l'appel, ou après lui mais avant l'écriture de
+ *   sa réponse dans le cache (heldUntilWritten), reçoivent sa part
+ *   partageable (une réponse facturée). Sans elle (panne, refus, arrêt avant
+ *   l'appel), ils ne font pas chacun leur appel : ils repassent par
+ *   singleFlight, où l'un d'eux relance l'étape et où les autres, comme tout
+ *   lancement arrivé entre-temps, l'attendent. Jamais deux appels identiques
+ *   en même temps dans ce processus.
  * - `maxWaitMs` (complément seulement) : l'attente de l'appel d'un AUTRE
  *   lancement ne dépasse jamais le budget de celui-ci ; au-delà, « late »
  *   (l'appel attendu, lui, continue). Jamais pour Lens : son appel a déjà son
@@ -252,10 +286,14 @@ async function sharedStep<T, R>(
   for (;;) {
     let ran = false;
     // Sans appel en cours, singleFlight lance `run` tout de suite : `ran` est connu dès le retour.
-    const flight = singleFlight(key, () => {
-      ran = true;
-      return run();
-    });
+    const flight = singleFlight(
+      key,
+      () => {
+        ran = true;
+        return run();
+      },
+      heldUntilWritten
+    );
     let leg: Leg<T, R> | typeof LATE;
     try {
       if (ran || maxWaitMs === undefined) {
@@ -306,8 +344,8 @@ export async function lensStep<R>(ports: LensStepPorts, input: LensStepInput<R>)
     if (cached) return { shared: cached, own: { lensFromCache: true, answer: cached } };
     const result = await input.call();
     const answer = input.answerOf(result);
-    if (answer) writeCacheSafely(ports, key, "lens", answer);
-    return { shared: answer, own: { lensFromCache: false, result, answer } };
+    const written = answer ? writeCacheSafely(ports, key, "lens", answer) : undefined;
+    return { shared: answer, own: { lensFromCache: false, result, answer }, written };
   });
   return "own" in step ? step.own : { lensFromCache: true, answer: step.shared };
 }
@@ -382,7 +420,8 @@ export interface ComplementInput {
 
 /** Colonnes de product_searches que le complément connaît (la route y ajoute
  * lens_from_cache, served_from_cache et total_seconds). `shopping_calls` :
- * le nouveau total pour cette photo. */
+ * le nouveau total pour cette photo (un refus non facturé dont la place a
+ * été rendue n'y compte pas). */
 export interface ComplementColumns {
   complement_status: ComplementStatus | null;
   shopping_calls: number;
@@ -427,13 +466,16 @@ interface RunState {
   measure: ComplementMeasure;
   /** Requête envoyée (ou lue dans le cache) : seulement pour la réponse. */
   query: string | null;
+  /** L'appel aux boutiques a été refusé sans être facturé, et sa place
+   * rendue : envoyé (measure.calls), mais jamais compté dans shopping_calls. */
+  refusalReleased: boolean;
 }
 
 function finish(state: RunState, input: ComplementInput, status: ComplementStatus | null, matches: ShoppingMatch[], suggestText: boolean): ComplementResult {
   const showsQuery = state.query !== null && (status === "shown" || status === "empty");
   return {
     matches,
-    columns: { complement_status: status, shopping_calls: input.shoppingCalls + state.measure.calls, text_suggested: suggestText },
+    columns: { complement_status: status, shopping_calls: input.shoppingCalls + state.measure.calls - (state.refusalReleased ? 1 : 0), text_suggested: suggestText },
     reply: { status, ...(showsQuery ? { query: state.query! } : {}), suggestText, textStatus: null },
     measure: { ...state.measure, status },
   };
@@ -491,7 +533,7 @@ async function queryStep(ports: ComplementPorts, input: ComplementInput, state: 
         ? { query: result.value.query, brand: result.value.brand, model: result.value.model }
         : { no_query: true, reason: result.reason };
     // Requêtes vérifiées ET absences de requête sont gardées (24 h).
-    if (QUERY_CACHE_PAYLOAD.safeParse(answer).success) writeCacheSafely(ports, key, "query", answer);
+    if (QUERY_CACHE_PAYLOAD.safeParse(answer).success) void writeCacheSafely(ports, key, "query", answer);
   }
 
   if ("no_query" in answer) {
@@ -526,8 +568,8 @@ async function shoppingStep(ports: ComplementPorts, input: ComplementInput, stat
       const own = await callShoppingOnce(ports, input, state, query);
       if (own.kind !== "answered") return { shared: null, own };
       // Réponse facturée (vide comprise) : gardée 24 h.
-      writeCacheSafely(ports, key, "shopping", own.filtered);
-      return { shared: own.filtered, own };
+      const written = writeCacheSafely(ports, key, "shopping", own.filtered);
+      return { shared: own.filtered, own, written };
     },
     () => input.deadline.remainingMs() - VOIE_C_BUDGET.saveReserveMs
   );
@@ -559,9 +601,10 @@ async function callShoppingOnce(ports: ComplementPorts, input: ComplementInput, 
     state.measure.shoppingMs = ports.now() - started;
     if (!(error instanceof ProviderFailure)) throw error;
     state.measure.shoppingFailureKind = error.kind;
-    // Refus non facturé : la place est rendue, une fois. Délai dépassé ou
-    // erreur incertaine : l'appel reste compté.
-    if (error.kind === "refused") await ports.release(reservation.reservationId).catch(() => false);
+    // Refus non facturé : la place est rendue, une fois, et l'appel ne compte
+    // pas dans le budget de la photo (sauf si la place n'a pas pu être rendue).
+    // Délai dépassé ou erreur incertaine : l'appel reste compté.
+    if (error.kind === "refused") state.refusalReleased = await ports.release(reservation.reservationId).catch(() => false);
     return { kind: "stop", status: "shopping_failed" };
   }
 }
@@ -571,7 +614,7 @@ async function callShoppingOnce(ports: ComplementPorts, input: ComplementInput, 
  * plus. Ne lève jamais d'erreur ; toute issue autre que « shown » laisse les
  * résultats Lens seuls. */
 export async function runComplement(ports: ComplementPorts, input: ComplementInput): Promise<ComplementResult> {
-  const state: RunState = { measure: emptyComplementMeasure("ai"), query: null };
+  const state: RunState = { measure: emptyComplementMeasure("ai"), query: null, refusalReleased: false };
   try {
     // a. Sorties sans IA. Lens sans résultat : « Que cherchez-vous ? » est
     // proposé, même IA coupée (la voie B n'a pas besoin de l'IA).
@@ -628,14 +671,15 @@ export function complementAfterSaveFailure(result: ComplementResult): Complement
 }
 
 /** Colonnes de la voie C à l'enregistrement du lancement (écrites seulement
- * quand elle a tourné). served_from_cache : aucune recherche réelle dans ce
- * lancement (Lens venu du cache, et aucun appel aux boutiques) : hors de la
+ * quand elle a tourné). served_from_cache : aucune recherche réelle comptée
+ * dans ce lancement (Lens venu du cache, et aucun appel aux boutiques compté :
+ * un refus non facturé dont la place a été rendue ne compte pas) : hors de la
  * part de 8 par personne. `totalMs` : depuis T0, enregistrement compris. */
 export function launchColumns(lensFromCache: boolean, complement: ComplementResult, totalMs: number) {
   return {
     ...complement.columns,
     lens_from_cache: lensFromCache,
-    served_from_cache: lensFromCache && complement.measure.calls === 0,
+    served_from_cache: lensFromCache && complement.columns.shopping_calls === 0,
     total_seconds: totalSeconds(totalMs),
   };
 }
@@ -666,7 +710,8 @@ export interface TextComplementResult {
   /** Propositions « Résultats pour vos mots » (origine « words »), 20 au plus, rangs 1..n. */
   matches: ShoppingMatch[];
   textStatus: TextSearchStatus;
-  /** Recherches réellement envoyées (0 ou 1) : à ajouter à shopping_calls. */
+  /** Recherches à ajouter à shopping_calls (0 ou 1) : celle envoyée, sauf un
+   * refus non facturé dont la place a été rendue (la mesure, elle, la garde). */
   calls: number;
   measure: ComplementMeasure;
 }
@@ -676,10 +721,12 @@ export interface TextComplementResult {
  * Pas de règle « Lens vide », pas d'IA, pas de cache. Ne lève jamais d'erreur. */
 export async function runTextComplement(ports: TextComplementPorts, input: TextComplementInput): Promise<TextComplementResult> {
   const measure = emptyComplementMeasure("words");
+  // Faux seulement pour un refus non facturé dont la place a été rendue.
+  let counted = true;
   const done = (textStatus: TextSearchStatus, matches: ShoppingMatch[]): TextComplementResult => ({
     matches,
     textStatus,
-    calls: measure.calls,
+    calls: counted ? measure.calls : 0,
     measure: { ...measure, status: textStatus },
   });
   try {
@@ -697,7 +744,9 @@ export async function runTextComplement(ports: TextComplementPorts, input: TextC
       measure.shoppingMs = ports.now() - started;
       if (!(error instanceof ProviderFailure)) throw error;
       measure.shoppingFailureKind = error.kind;
-      if (error.kind === "refused") await ports.release(input.reservationId).catch(() => false);
+      // Refus non facturé : la place est rendue, et l'appel ne compte pas
+      // dans le budget de la photo (sauf si la place n'a pas pu être rendue).
+      if (error.kind === "refused") counted = !(await ports.release(input.reservationId).catch(() => false));
       return done("shopping_failed", []);
     }
     measure.shoppingMs = ports.now() - started;
