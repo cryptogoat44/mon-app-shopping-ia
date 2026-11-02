@@ -12,7 +12,7 @@ import { z } from "zod";
 import { PIECE_SENDS_FROM, PRIVACY_LEVELS, type ReceivedPiece } from "@monapp/shared-types";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { fetchBlockedUserIds } from "../lib/blocks.js";
-import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseDbRows, parseInput } from "../lib/validation.js";
+import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseDbRows, parseInput, webUrlOrNull } from "../lib/validation.js";
 import { isBlockedEitherWay, isFollowing } from "../lib/visibility.js";
 import { WishImageError, copyWishImage, deleteWishCopy, findOwnWish, findWishPost, type WishRow } from "../lib/wishShare.js";
 import { POST_ROWS, hydratePosts } from "./posts.js";
@@ -72,7 +72,8 @@ async function toReceivedPieces(fastify: FastifyInstance, rows: PieceRow[]): Pro
   return rows.map((row) => {
     const sender = senderById.get(row.sender_id);
     const affiliateUrl = row.product_match_id ? (affiliateUrls.get(row.product_match_id) ?? null) : null;
-    const merchantUrl = affiliateUrl ?? row.merchant_url;
+    // Seulement un lien web ordinaire (lib/validation.ts), même pour une pièce envoyée plus tôt.
+    const merchantUrl = webUrlOrNull(affiliateUrl ?? row.merchant_url);
     return {
       id: row.id,
       sender: { id: row.sender_id, username: sender?.username ?? "", displayName: sender?.display_name ?? "", avatarUrl: sender?.avatar_url ?? null },
@@ -217,7 +218,8 @@ export default async function piecesRoutes(fastify: FastifyInstance) {
           image_url: copy.url,
           image_thumb_url: copy.thumbUrl,
           merchant_name: wish.merchant_name,
-          merchant_url: wish.merchant_url,
+          // Recopié seulement si c'est un lien web ordinaire (envie rangée plus tôt).
+          merchant_url: webUrlOrNull(wish.merchant_url),
           product_match_id: wish.product_match_id,
           price_min: wish.price_min,
           currency: wish.currency,

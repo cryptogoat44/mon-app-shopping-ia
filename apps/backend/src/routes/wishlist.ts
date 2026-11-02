@@ -3,19 +3,32 @@ import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
 import { z } from "zod";
 import type { WishlistItem, WishlistItemDetail } from "@monapp/shared-types";
-import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput } from "../lib/validation.js";
+import { findOwnMatch } from "../lib/ownMatches.js";
+import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput, webUrlOrNull, webUrlSchema } from "../lib/validation.js";
 import { deleteWishCopy, findWishPost } from "../lib/wishShare.js";
 
-const createWishlistItemSchema = z.object({
-  title: z.string().trim().min(1).max(120),
-  imageUrl: z.string().url(),
-  reference: z.string().trim().max(120).nullish(),
-  priceMin: z.number().nonnegative().nullish(),
-  currency: z.string().trim().max(3).nullish(),
-  merchantName: z.string().trim().max(120).nullish(),
-  merchantUrl: z.string().url().nullish(),
-  productMatchId: z.string().uuid().nullish(),
-});
+// Liens d'une envie rangés tels que l'app les envoie : http ou https
+// seulement, 2 048 caractères au plus (lib/validation.ts, webUrlSchema).
+const typedLinksSchema = z.object({ imageUrl: webUrlSchema, merchantUrl: webUrlSchema.nullish() });
+
+const createWishlistItemSchema = z
+  .object({
+    title: z.string().trim().min(1).max(120),
+    imageUrl: z.string(),
+    reference: z.string().trim().max(120).nullish(),
+    priceMin: z.number().nonnegative().nullish(),
+    currency: z.string().trim().max(3).nullish(),
+    merchantName: z.string().trim().max(120).nullish(),
+    merchantUrl: z.string().nullish(),
+    productMatchId: z.string().uuid().nullish(),
+  })
+  // Liens vérifiés quand ce sont eux qui sont rangés : envie sans résultat du
+  // Spotter. Avec un résultat, ceux de la base les remplacent (plus bas) et la
+  // copie que l'app envoie encore n'est pas lue, comme pour POST /api/vault :
+  // la refuser ferait échouer « Garder » pour un lien que personne ne range.
+  .refine((body) => Boolean(body.productMatchId) || typedLinksSchema.safeParse(body).success);
+
+const PRODUCT_MATCH_NOT_FOUND = { error: "product_match_not_found", message: "Produit introuvable." } as const;
 
 interface WishlistItemRow {
   id: string;
@@ -44,7 +57,8 @@ function toWishlistItem(
     priceMin: row.price_min !== null ? Number(row.price_min) : null,
     currency: row.currency,
     merchantName: row.merchant_name,
-    merchantUrl: row.merchant_url,
+    // Seulement un lien web ordinaire, même pour une envie rangée plus tôt.
+    merchantUrl: webUrlOrNull(row.merchant_url),
     affiliateUrl: row.product_match_id ? (affiliateUrls.get(row.product_match_id) ?? null) : null,
     productMatchId: row.product_match_id,
     createdAt: row.created_at,
@@ -100,18 +114,32 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: "invalid_body", message: "Données invalides." });
     }
 
+    // Envie venue d'un résultat du Spotter : ce résultat doit venir d'une
+    // recherche de cette personne (même règle que POST /api/vault), et ses
+    // liens (image, marchand) sont repris de la base, jamais de la requête.
+    // L'app envoie exactement ceux du résultat : rien ne change pour elle.
+    // Sans résultat : les liens envoyés, vérifiés par typedLinksSchema.
+    let imageUrl = parsed.data.imageUrl;
+    let merchantUrl = parsed.data.merchantUrl ?? null;
+    if (parsed.data.productMatchId) {
+      const match = await findOwnMatch(fastify, userId, parsed.data.productMatchId);
+      if (!match) return reply.code(404).send(PRODUCT_MATCH_NOT_FOUND);
+      imageUrl = match.imageUrl;
+      merchantUrl = webUrlOrNull(match.merchantUrl);
+    }
+
     const { data: inserted, error: insertError } = await fastify.supabaseAdmin
       .from("wishlist_items")
       .upsert(
         {
           user_id: userId,
           title: parsed.data.title,
-          image_url: parsed.data.imageUrl,
+          image_url: imageUrl,
           reference: parsed.data.reference ?? null,
           price_min: parsed.data.priceMin ?? null,
           currency: parsed.data.currency ?? "EUR",
           merchant_name: parsed.data.merchantName ?? null,
-          merchant_url: parsed.data.merchantUrl ?? null,
+          merchant_url: merchantUrl,
           product_match_id: parsed.data.productMatchId ?? null,
         },
         { onConflict: "user_id,product_match_id" }

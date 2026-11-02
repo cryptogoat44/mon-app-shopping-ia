@@ -87,3 +87,101 @@ describe("lien marchand d'une pièce du Vault et d'une Envie", () => {
     await deleteTestUser(app, stranger.id);
   });
 });
+
+// Une pièce du Vault ne se lie qu'à un résultat d'une de SES recherches, avec
+// ou sans photo envoyée : sinon 404, vérifié avant tout envoi de photo, et rien
+// n'est rangé (le détail de la pièce donnerait le lien marchand et le lien
+// affilié de ce résultat).
+describe("pièce du Vault liée à un résultat : seulement d'une de ses propres recherches, même avec une photo", () => {
+  let app: FastifyInstance;
+  let searcher: TestUser; // autrice de la recherche
+  let intruder: TestUser;
+  let photo: Buffer;
+  let matchId = "";
+
+  const addToVault = (user: TestUser, fields: Record<string, string>, withPhoto: boolean) => {
+    const mp = buildMultipart(fields, withPhoto ? { fieldname: "file", filename: "veste.jpg", contentType: "image/jpeg", data: photo } : undefined);
+    return app.inject({ method: "POST", url: "/api/vault", headers: { ...authHeaders(user.token), ...mp.headers }, payload: mp.payload });
+  };
+
+  /** Les pièces du Vault de `user` portant ce titre, lues directement en base. */
+  async function storedItems(user: TestUser, title: string) {
+    const { data, error } = await app.supabaseAdmin.from("vault_items").select("id, image_url, product_match_id").eq("user_id", user.id).eq("title", title);
+    expect(error).toBeNull();
+    return data ?? [];
+  }
+
+  /** Les photos rangées dans le dossier de `user` (vault-media/<id>/…). */
+  async function storedPhotos(user: TestUser): Promise<string[]> {
+    const { data, error } = await app.supabaseAdmin.storage.from("vault-media").list(user.id, { limit: 1000 });
+    expect(error).toBeNull();
+    return (data ?? []).map((file) => file.name);
+  }
+
+  beforeAll(async () => {
+    app = await buildTestApp();
+    [searcher, intruder] = await Promise.all([createTestUser(app, "mvs"), createTestUser(app, "mvi")]);
+    photo = await sharp({ create: { width: 20, height: 20, channels: 3, background: "#654" } }).jpeg().toBuffer();
+    const { data: search, error: searchError } = await app.supabaseAdmin
+      .from("product_searches")
+      .insert({ user_id: searcher.id, source_url: null, source_platform: "photo", method: "manual_screenshot", status: "completed" })
+      .select("id")
+      .single();
+    if (searchError || !search) throw searchError ?? new Error("Recherche non créée");
+    const { data: match, error } = await app.supabaseAdmin
+      .from("product_matches")
+      .insert({
+        search_id: search.id,
+        rank: 1,
+        product_name: "Veste en daim",
+        image_url: "https://encrypted-tbn.example/vignette.jpg",
+        merchant_url: "https://marchand.example/veste",
+        merchant_name: "Marchand",
+      })
+      .select("id")
+      .single();
+    if (error || !match) throw error ?? new Error("Résultat non créé");
+    matchId = match.id as string;
+  });
+
+  afterAll(async () => {
+    // Photos rangées dans le dossier de chaque compte : effacées ici, puis les comptes (pièces, recherche, résultat : cascade).
+    for (const user of [searcher, intruder].filter(Boolean)) {
+      const files = ((await app.supabaseAdmin.storage.from("vault-media").list(user.id, { limit: 1000 })).data ?? []).map((f) => `${user.id}/${f.name}`);
+      if (files.length > 0) await app.supabaseAdmin.storage.from("vault-media").remove(files);
+      await deleteTestUser(app, user.id);
+    }
+    await app.close();
+  });
+
+  it("avec une photo : le résultat de la recherche d'une autre personne est refusé (404) avant tout envoi, rien n'est rangé", async () => {
+    const fields = { title: "Veste d'une autre recherche", category: "clothing", productMatchId: matchId };
+    const refused = await addToVault(intruder, fields, true);
+    expect(refused.statusCode).toBe(404);
+    expect(refused.json()).toMatchObject({ error: "product_match_not_found" });
+    expect(await storedItems(intruder, fields.title)).toEqual([]);
+    expect(await storedPhotos(intruder)).toEqual([]);
+
+    // La même demande par l'autrice de la recherche : acceptée, avec sa photo (le refus venait bien de la propriété).
+    const accepted = await addToVault(searcher, fields, true);
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json()).toMatchObject({ productMatchId: matchId });
+    expect(accepted.json().imageUrl).toContain(`/vault-media/${searcher.id}/`);
+    expect(await storedItems(searcher, fields.title)).toEqual([
+      { id: accepted.json().id, image_url: accepted.json().imageUrl, product_match_id: matchId },
+    ]);
+  });
+
+  it("sans photo : refusé de la même façon (404), rien n'est rangé", async () => {
+    const fields = {
+      title: "Veste d'une autre recherche, sans photo",
+      category: "clothing",
+      productMatchId: matchId,
+      imageUrl: "https://encrypted-tbn.example/vignette.jpg",
+    };
+    const refused = await addToVault(intruder, fields, false);
+    expect(refused.statusCode).toBe(404);
+    expect(refused.json()).toMatchObject({ error: "product_match_not_found" });
+    expect(await storedItems(intruder, fields.title)).toEqual([]);
+  });
+});

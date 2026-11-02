@@ -8,6 +8,7 @@ import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
 import { PHOTO_SIZES, optimizePhoto } from "../lib/photos.js";
 import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseDbRows, parseInput } from "../lib/validation.js";
+import { findOwnMatch } from "../lib/ownMatches.js";
 import { shownPosts } from "../lib/visibility.js";
 
 const SHARED_POST_ROWS = z.array(z.object({ id: z.string().uuid(), privacy: z.enum(PRIVACY_LEVELS), created_at: z.string() }));
@@ -223,6 +224,15 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
     );
     if (!optionalFields) return;
 
+    // Pièce venue d'un résultat du Spotter, avec ou sans photo envoyée : ce
+    // résultat doit venir d'une recherche de cet utilisateur (lib/ownMatches.ts,
+    // même contrôle que POST /api/wishlist). Vérifié avant tout envoi de
+    // photo ; sinon 404 et rien n'est rangé.
+    const match = optionalFields.productMatchId ? await findOwnMatch(fastify, userId, optionalFields.productMatchId) : null;
+    if (optionalFields.productMatchId && !match) {
+      return reply.code(404).send({ error: "product_match_not_found", message: "Produit introuvable." });
+    }
+
     let imageUrl: string;
 
     if (fileBuffer) {
@@ -247,36 +257,13 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       }
 
       imageUrl = fastify.supabaseAdmin.storage.from("vault-media").getPublicUrl(path).data.publicUrl;
-    } else if (optionalFields.productMatchId) {
+    } else if (match) {
       // Ajout depuis un produit identifié : l'image vient de la recherche
       // visuelle, potentiellement hébergée par le marchand (donc jamais
       // dans notre propre bucket) — impossible de la limiter au préfixe de
-      // l'utilisateur. On va donc la chercher nous-mêmes en base plutôt que
-      // de faire confiance à l'URL envoyée par le client, et on vérifie au
-      // passage que ce produit appartient bien à une recherche de cet
-      // utilisateur (même contrôle que POST /api/product-matches/:id/click).
-      const { data: match } = await fastify.supabaseAdmin
-        .from("product_matches")
-        .select("id, search_id, image_url")
-        .eq("id", optionalFields.productMatchId)
-        .maybeSingle();
-
-      if (!match) {
-        return reply.code(404).send({ error: "product_match_not_found", message: "Produit introuvable." });
-      }
-
-      const { data: search } = await fastify.supabaseAdmin
-        .from("product_searches")
-        .select("id")
-        .eq("id", match.search_id)
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      if (!search) {
-        return reply.code(404).send({ error: "product_match_not_found", message: "Produit introuvable." });
-      }
-
-      imageUrl = match.image_url as string;
+      // l'utilisateur. On la prend donc en base (résultat vérifié ci-dessus)
+      // plutôt que de faire confiance à l'URL envoyée par le client.
+      imageUrl = match.imageUrl;
     } else if (fields.imageUrl) {
       // `imageUrl` n'est lue (et donc vérifiée) QUE dans ce cas : lors d'un
       // ajout depuis un produit identifié, l'app l'envoie encore mais le
@@ -302,7 +289,8 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
         title,
         image_url: imageUrl,
         category,
-        product_match_id: optionalFields.productMatchId ?? null,
+        // Seulement un résultat vérifié ci-dessus.
+        product_match_id: match?.id ?? null,
         // Aucune vérification automatique pour l'instant : ça nécessite un
         // webhook de conversion d'un vrai programme d'affiliation, pas
         // encore rejoint. Voir la note du bloc 3.
