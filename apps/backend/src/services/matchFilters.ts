@@ -79,8 +79,10 @@ function pageOf(url: URL): string {
 }
 
 /** Même page produit, même si Google la renvoie deux fois sous des écritures
- * différentes (fragment, barre finale, casse du site, paramètres de suivi). */
-function pageKey(link: string): string {
+ * différentes (fragment, barre finale, casse du site, paramètres de suivi).
+ * Exportée pour la voie C : une proposition de Google Shopping qui reprend la
+ * page d'un résultat Lens est un doublon (services/textSearch.ts). */
+export function pageKey(link: string): string {
   const url = parseLink(link);
   if (!url) return link.split("#")[0]!.replace(/\/$/, "");
   return `${url.hostname.toLowerCase()}${pageOf(url)}`;
