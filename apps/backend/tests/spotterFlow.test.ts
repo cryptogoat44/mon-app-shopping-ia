@@ -1,5 +1,6 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
+import { randomBytes } from "node:crypto";
 import sharp from "sharp";
 
 // Aucun appel réel : ni SerpApi (crédits), ni TikTok. La recherche visuelle
@@ -19,17 +20,45 @@ vi.mock("../src/services/oembed.js", () => ({
 // searchCapacity.test.ts et placeRendue.test.ts.
 vi.mock("../src/lib/searchCapacity.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/lib/searchCapacity.js")>();
-  return { ...original, reserveSearch: vi.fn(), releaseReservation: vi.fn() };
+  return { ...original, reserveSearch: vi.fn(), releaseReservation: vi.fn(), searchCapacityBeforeComplementAi: vi.fn() };
 });
 vi.mock("../src/lib/imageProcessing.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/lib/imageProcessing.js")>();
   return { ...original, downloadThumbnail: vi.fn() };
 });
+// Voie C (lot c) : interrupteurs forcés à « coupé » pour tout le fichier (un
+// .env du Mac qui les allumerait ne change rien aux cas d'avant) ; le bloc
+// « voie C allumée » les allume lui-même, puis les recoupe. Google Shopping et
+// l'IA sont simulés (jamais un appel payant ; la garde des tests refuse de
+// toute façon serpapi.com et anthropic.com). Le cache est le vrai (table
+// search_cache de spotto-dev-2, après 0028) : ses écritures sont suivies pour
+// être effacées après chaque cas.
+vi.mock("../src/env.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/env.js")>();
+  return { env: { ...original.env, VOIE_C_ENABLED: false, VOIE_C_AI_ENABLED: false, ANTHROPIC_PHOTO_ENABLED: false } };
+});
+vi.mock("../src/services/serpapi.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/services/serpapi.js")>();
+  return { ...original, callShopping: vi.fn(), serpApiTextProvider: { name: "serpapi", searchByText: vi.fn() } };
+});
+vi.mock("../src/services/shoppingQueryAi.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/services/shoppingQueryAi.js")>();
+  return { ...original, askShoppingQuery: vi.fn() };
+});
+vi.mock("../src/lib/searchCache.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/lib/searchCache.js")>();
+  return { ...original, writeCache: vi.fn(original.writeCache) };
+});
 
 import { searchProductsByImageUrl, type VisualMatch, type VisualSearchResult } from "../src/services/visualSearch.js";
-import { ProviderFailure } from "../src/services/searchProvider.js";
+import { ProviderFailure, type TextSearchResponse } from "../src/services/searchProvider.js";
 import { downloadThumbnail } from "../src/lib/imageProcessing.js";
-import { releaseReservation, reserveSearch } from "../src/lib/searchCapacity.js";
+import { releaseReservation, reserveSearch, searchCapacityBeforeComplementAi } from "../src/lib/searchCapacity.js";
+import { env } from "../src/env.js";
+import { serpApiTextProvider } from "../src/services/serpapi.js";
+import { askShoppingQuery, type ShoppingQueryResult } from "../src/services/shoppingQueryAi.js";
+import { writeCache } from "../src/lib/searchCache.js";
+import { assertNoUserImage } from "../src/lib/aiSwitches.js";
 import { authHeaders, buildMultipart, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
 
 const searchMock = vi.mocked(searchProductsByImageUrl);
@@ -709,5 +738,317 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     const screenshot = await app.inject({ method: "POST", url: "/api/searches/00000000-0000-0000-0000-000000000000/screenshot", headers: authHeaders(user.token) });
     expect(screenshot.statusCode).toBe(404);
     expect(searchMock).not.toHaveBeenCalled();
+  });
+
+  // ---------------------------------------------------------------------
+  // Voie C (lot c, 2026-11-02). À lancer sur le Mac, contre spotto-dev-2,
+  // APRÈS la migration 0028 : sans elle, la voie C reste coupée et ces cas
+  // échouent (c'est voulu).
+  // ---------------------------------------------------------------------
+
+  it("voie C coupée : ni complément dans la réponse, ni colonne de la voie C écrite, ni cache écrit", async () => {
+    const writeMock = vi.mocked(writeCache);
+    writeMock.mockClear();
+    const search = await prepare("https://www.tiktok.com/@x/video/1");
+    const body = (await run(search.id, {})).json();
+    expect(body.status).toBe("completed");
+    expect(body.complement).toBeUndefined();
+    expect(body.matches[0].origin).toBeUndefined();
+    expect(searchMock.mock.calls[0]![2]).toEqual({ locale: { hl: "fr", country: "fr" } });
+    expect(writeMock).not.toHaveBeenCalled();
+    const { data } = await app.supabaseAdmin
+      .from("product_searches")
+      .select("complement_status, shopping_calls, lens_from_cache, served_from_cache, text_suggested, text_requested_at, text_status, total_seconds")
+      .eq("id", search.id)
+      .single();
+    expect(data).toEqual({
+      complement_status: null,
+      shopping_calls: 0,
+      lens_from_cache: false,
+      served_from_cache: false,
+      text_suggested: false,
+      text_requested_at: null,
+      text_status: null,
+      total_seconds: null,
+    });
+  });
+
+  it("chaque préparation supprime les entrées expirées du cache, même voie C coupée (la durée de 24 h tient)", async () => {
+    const key = randomBytes(32).toString("hex");
+    const day = 24 * 60 * 60 * 1000;
+    const { error } = await app.supabaseAdmin.from("search_cache").insert({
+      key,
+      step: "lens",
+      payload: { essai: true },
+      created_at: new Date(Date.now() - 2 * day).toISOString(),
+      expires_at: new Date(Date.now() - day).toISOString(),
+    });
+    expect(error).toBeNull();
+    await prepare();
+    const { data } = await app.supabaseAdmin.from("search_cache").select("key").eq("key", key);
+    expect(data).toEqual([]);
+  });
+
+  describe("voie C allumée : Lens d'abord, puis le complément", () => {
+    const textMock = vi.mocked(serpApiTextProvider.searchByText);
+    const askMock = vi.mocked(askShoppingQuery);
+    const capacityMock = vi.mocked(searchCapacityBeforeComplementAi);
+    const writeMock = vi.mocked(writeCache);
+    const switches = { VOIE_C_ENABLED: env.VOIE_C_ENABLED, VOIE_C_AI_ENABLED: env.VOIE_C_AI_ENABLED, ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY };
+    const CROP = { crop: JSON.stringify({ x: 0.1, y: 0.1, width: 0.8, height: 0.8 }) };
+
+    beforeAll(() => {
+      // Clé factice : l'IA est simulée, et la garde des tests refuse anthropic.com.
+      Object.assign(env, { VOIE_C_ENABLED: true, VOIE_C_AI_ENABLED: true, ANTHROPIC_API_KEY: "cle-factice-des-tests" });
+    });
+    afterAll(() => {
+      Object.assign(env, switches);
+    });
+    beforeEach(() => {
+      textMock.mockReset();
+      askMock.mockReset();
+      capacityMock.mockReset();
+      capacityMock.mockResolvedValue({ allowed: true });
+      writeMock.mockClear();
+    });
+    // Le cache est commun à tout le service : ce que chaque cas y écrit est
+    // effacé (écritures jamais attendues par la route : attendues ici).
+    afterEach(async () => {
+      await settleCacheWrites();
+      const keys = writeMock.mock.calls.map((call) => call[1]);
+      if (keys.length > 0) await app.supabaseAdmin.from("search_cache").delete().in("key", keys);
+    });
+
+    async function settleCacheWrites(): Promise<void> {
+      await Promise.allSettled(writeMock.mock.results.map((result) => result.value));
+    }
+
+    /** Image propre à chaque cas (octets tirés au hasard) : le cache ne sert
+     * jamais la réponse d'un autre cas, ni d'un passage précédent. */
+    function uniqueImage(): Promise<Buffer> {
+      return sharp(randomBytes(400 * 600 * 3), { raw: { width: 400, height: 600, channels: 3 } }).jpeg().toBuffer();
+    }
+
+    /** Mot propre à chaque cas (modèle fictif) : la requête et ses clés de cache aussi. */
+    function token(): string {
+      return `n${randomBytes(4).toString("hex")}`;
+    }
+
+    /** Résultats Lens fictifs, marque « Exemplor » et modèle `model` dans les titres. */
+    function lensMatches(model: string): VisualMatch[] {
+      return [
+        { ...MATCH, rank: 1, productName: `Veste Exemplor ${model} marron`, merchantUrl: "https://marchand.example/a" },
+        { ...MATCH, rank: 2, productName: `Exemplor ${model} veste en daim`, merchantUrl: "https://autre-marchand.example/b" },
+      ];
+    }
+
+    function aiQuery(model: string): ShoppingQueryResult {
+      return { kind: "query", value: { query: `Exemplor veste ${model}`, brand: "Exemplor", model }, usage: { inputTokens: 900, outputTokens: 24 } };
+    }
+
+    /** Réponse de Google Shopping fictive : deux boutiques, dont une page déjà proposée par Lens (retirée). */
+    function shopping(model: string): TextSearchResponse {
+      const item = (position: number, title: string, link: string) => ({
+        position,
+        title,
+        link,
+        product_link: `https://www.google.fr/shopping/product/${position}`,
+        source: "Boutique Exemple",
+        price: "149,00 €",
+        extracted_price: 149,
+        thumbnail: `https://images.boutique.example/${position}.jpg`,
+      });
+      return {
+        items: [
+          item(1, `Exemplor veste ${model} camel`, "https://boutique.example/veste-1"),
+          item(2, "Veste en daim", "https://marchand.example/a"),
+          item(3, `Veste ${model} Exemplor marron`, "https://boutique.example/veste-3"),
+        ],
+        received: 3,
+        statusCode: 200,
+      };
+    }
+
+    async function columnsOf(searchId: string) {
+      const { data } = await app.supabaseAdmin
+        .from("product_searches")
+        .select("status, complement_status, shopping_calls, lens_from_cache, served_from_cache, text_suggested, total_seconds, run_started_at, call_seconds, provider_status_code, query")
+        .eq("id", searchId)
+        .single();
+      return data;
+    }
+
+    it("Lens, puis la requête de l'IA et Google Shopping : Lens d'abord et inchangé ; les boutiques après, origine « shopping », avec leurs liens ; la requête dans la réponse seulement", async () => {
+      const model = token();
+      const lens = lensMatches(model);
+      searchMock.mockResolvedValueOnce(found(lens));
+      askMock.mockResolvedValueOnce(aiQuery(model));
+      textMock.mockResolvedValueOnce(shopping(model));
+      const journal = vi.spyOn(app.log, "info");
+      const search = await prepare();
+      try {
+        const res = await run(search.id, {}, await uniqueImage());
+        expect(res.statusCode).toBe(200);
+        const body = res.json();
+        expect(body.status).toBe("completed");
+        expect(body.complement).toEqual({ status: "shown", query: `Exemplor veste ${model}`, suggestText: false, textStatus: null });
+        // Lens en tête, dans son ordre, sans origine ; puis les boutiques (la page déjà proposée par Lens est retirée).
+        expect(body.matches.map((m: { rank: number; productName: string; origin?: string }) => [m.rank, m.productName, m.origin ?? "lens"])).toEqual([
+          [1, lens[0]!.productName, "lens"],
+          [2, lens[1]!.productName, "lens"],
+          [3, `Exemplor veste ${model} camel`, "shopping"],
+          [4, `Veste ${model} Exemplor marron`, "shopping"],
+        ]);
+        const boutique = body.matches[2];
+        expect(boutique).toMatchObject({ merchantUrl: "https://boutique.example/veste-1", affiliateUrl: "https://boutique.example/veste-1", priceMin: 149, currency: "EUR" });
+
+        // Lens avec son plafond fixe (un signal de délai), jamais l'« Annuler » de la personne.
+        expect(searchMock).toHaveBeenCalledOnce();
+        expect(searchMock.mock.calls[0]![2]).toEqual({ locale: { hl: "fr", country: "fr" }, signal: expect.any(AbortSignal) });
+        // Deux places : Lens (étape par défaut), puis Google Shopping (étape « shopping »).
+        expect(reserveMock.mock.calls.map((call) => call.slice(2))).toEqual([
+          [user.id, search.id],
+          [user.id, search.id, "shopping"],
+        ]);
+        // L'IA : seulement les titres et les sites Lens, avec la garde « aucune image ».
+        expect(askMock).toHaveBeenCalledOnce();
+        expect(askMock.mock.calls[0]![0]).toEqual([
+          { title: lens[0]!.productName, site: "marchand.example" },
+          { title: lens[1]!.productName, site: "autre-marchand.example" },
+        ]);
+        expect(askMock.mock.calls[0]![2]).toMatchObject({ apiKey: "cle-factice-des-tests", assertNoImage: assertNoUserImage });
+        expect(textMock).toHaveBeenCalledOnce();
+        expect(textMock.mock.calls[0]!.slice(0, 2)).toEqual([`Exemplor veste ${model}`, { hl: "fr", country: "fr" }]);
+
+        const columns = await columnsOf(search.id);
+        expect(columns).toMatchObject({ status: "completed", complement_status: "shown", shopping_calls: 1, lens_from_cache: false, served_from_cache: false, text_suggested: false, query: null });
+        expect(columns?.total_seconds).toEqual(expect.any(Number));
+        expect(columns?.run_started_at).not.toBeNull();
+
+        // Journal : « Mesure recherche » (fromCache) puis « Mesure complément », des nombres et des listes fermées seulement.
+        expect(journal.mock.calls.filter((call) => call[1] === "Mesure recherche").map((call) => call[0])).toEqual([expect.objectContaining({ outcome: "found", fromCache: false })]);
+        const lignes = journal.mock.calls.filter((call) => call[1] === "Mesure complément");
+        expect(lignes).toHaveLength(1);
+        expect(lignes[0]![0]).toMatchObject({ source: "ai", status: "shown", lensFromCache: false, queryFromCache: false, shoppingFromCache: false, calls: 1, kept: 2, tier0: 2, inputTokens: 900, outputTokens: 24 });
+        const texte = JSON.stringify(lignes[0]);
+        for (const interdit of [model, "Exemplor", search.id, user.id, "http", "boutique.example"]) expect(texte).not.toContain(interdit);
+      } finally {
+        journal.mockRestore();
+      }
+
+      // Relue : l'origine de chaque proposition et le complément, sans la requête.
+      const relue = (await app.inject({ method: "GET", url: `/api/searches/${search.id}`, headers: authHeaders(user.token) })).json();
+      expect(relue.complement).toEqual({ status: "shown", suggestText: false, textStatus: null });
+      expect(relue.matches.map((m: { origin?: string }) => m.origin ?? "lens")).toEqual(["lens", "lens", "shopping", "shopping"]);
+    });
+
+    it("la même image relancée (mêmes octets, même cadre) : tout vient du cache — aucun appel, aucune place, hors de la part de 8 ; heure de lancement vidée", async () => {
+      const model = token();
+      const image = await uniqueImage();
+      searchMock.mockResolvedValueOnce(found(lensMatches(model)));
+      askMock.mockResolvedValueOnce(aiQuery(model));
+      textMock.mockResolvedValueOnce(shopping(model));
+      const first = await prepare();
+      const firstBody = (await run(first.id, CROP, image)).json();
+      expect(firstBody.complement.status).toBe("shown");
+      await settleCacheWrites();
+
+      const again = await prepare();
+      const res = await run(again.id, CROP, image);
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.matches.map((m: { productName: string; origin?: string }) => [m.productName, m.origin ?? "lens"])).toEqual(
+        firstBody.matches.map((m: { productName: string; origin?: string }) => [m.productName, m.origin ?? "lens"])
+      );
+      expect(body.complement).toMatchObject({ status: "shown", suggestText: false });
+      expect(searchMock).toHaveBeenCalledOnce();
+      expect(askMock).toHaveBeenCalledOnce();
+      expect(textMock).toHaveBeenCalledOnce();
+      expect(reserveMock).toHaveBeenCalledTimes(2);
+      expect(await columnsOf(again.id)).toMatchObject({
+        status: "completed",
+        complement_status: "shown",
+        shopping_calls: 0,
+        lens_from_cache: true,
+        served_from_cache: true,
+        run_started_at: null,
+        call_seconds: 0,
+        provider_status_code: null,
+      });
+    });
+
+    it("Lens sans résultat : ni IA ni boutiques ; « Que cherchez-vous ? » est proposé, et l'invitation survit à la relecture", async () => {
+      searchMock.mockResolvedValueOnce(found([], 0));
+      const search = await prepare();
+      const body = (await run(search.id, {}, await uniqueImage())).json();
+      expect(body).toMatchObject({ status: "failed", errorMessage: "Aucun produit identifié sur cette image.", complement: { status: "no_query", suggestText: true, textStatus: null } });
+      expect(body.complement.query).toBeUndefined();
+      expect(askMock).not.toHaveBeenCalled();
+      expect(textMock).not.toHaveBeenCalled();
+      expect(reserveMock).toHaveBeenCalledOnce();
+      const relue = (await app.inject({ method: "GET", url: `/api/searches/${search.id}`, headers: authHeaders(user.token) })).json();
+      expect(relue.complement).toEqual({ status: "no_query", suggestText: true, textStatus: null });
+      expect(await columnsOf(search.id)).toMatchObject({ complement_status: "no_query", text_suggested: true, shopping_calls: 0 });
+    });
+
+    it("étape IA coupée (VOIE_C_AI_ENABLED) : Lens seul, issue « skipped », aucune invitation, aucune recherche dans les boutiques", async () => {
+      env.VOIE_C_AI_ENABLED = false;
+      try {
+        searchMock.mockResolvedValueOnce(found(lensMatches(token())));
+        const search = await prepare();
+        const body = (await run(search.id, {}, await uniqueImage())).json();
+        expect(body.complement).toEqual({ status: "skipped", suggestText: false, textStatus: null });
+        expect(body.matches.every((m: { origin?: string }) => m.origin === undefined)).toBe(true);
+        expect(askMock).not.toHaveBeenCalled();
+        expect(textMock).not.toHaveBeenCalled();
+        expect(capacityMock).not.toHaveBeenCalled();
+        expect(await columnsOf(search.id)).toMatchObject({ complement_status: "skipped", shopping_calls: 0 });
+      } finally {
+        env.VOIE_C_AI_ENABLED = true;
+      }
+    });
+
+    it("plafond atteint avant l'IA : l'IA est sautée, Lens montré seul, jamais de 429", async () => {
+      capacityMock.mockResolvedValueOnce({ allowed: false, limit: "day", resumesOn: null });
+      searchMock.mockResolvedValueOnce(found(lensMatches(token())));
+      const search = await prepare();
+      const res = await run(search.id, {}, await uniqueImage());
+      expect(res.statusCode).toBe(200);
+      expect(res.json().complement.status).toBe("no_capacity");
+      expect(askMock).not.toHaveBeenCalled();
+      expect(reserveMock).toHaveBeenCalledOnce();
+    });
+
+    it("Google Shopping en panne : les résultats Lens seuls (« shopping_failed ») ; un délai dépassé reste compté, un refus non facturé rend sa place, une fois", async () => {
+      const slowModel = token();
+      searchMock.mockResolvedValueOnce(found(lensMatches(slowModel)));
+      askMock.mockResolvedValueOnce(aiQuery(slowModel));
+      textMock.mockRejectedValueOnce(new ProviderFailure("timeout", null, "délai dépassé"));
+      const slow = await prepare();
+      const slowBody = (await run(slow.id, {}, await uniqueImage())).json();
+      expect(slowBody.status).toBe("completed");
+      expect(slowBody.complement).toEqual({ status: "shopping_failed", suggestText: false, textStatus: null });
+      expect(slowBody.matches.every((m: { origin?: string }) => m.origin === undefined)).toBe(true);
+      expect(releaseMock).not.toHaveBeenCalled();
+      expect(await columnsOf(slow.id)).toMatchObject({ complement_status: "shopping_failed", shopping_calls: 1 });
+
+      const refusedModel = token();
+      searchMock.mockResolvedValueOnce(found(lensMatches(refusedModel)));
+      askMock.mockResolvedValueOnce(aiQuery(refusedModel));
+      textMock.mockRejectedValueOnce(new ProviderFailure("refused", 429, "refus"));
+      const refused = await prepare();
+      expect((await run(refused.id, {}, await uniqueImage())).json().complement.status).toBe("shopping_failed");
+      expect(releaseMock).toHaveBeenCalledOnce();
+      expect(releaseMock.mock.calls[0]!.slice(2)).toEqual([RESERVATION, "shopping"]);
+    });
+
+    it("panne de Lens : aucun complément, rien n'est mis en cache", async () => {
+      searchMock.mockRejectedValueOnce(new ProviderFailure("timeout", null, "délai dépassé"));
+      const search = await prepare();
+      const body = (await run(search.id, {}, await uniqueImage())).json();
+      expect(body).toMatchObject({ status: "failed", errorMessage: "La recherche visuelle a échoué.", complement: { status: null, suggestText: false } });
+      expect(askMock).not.toHaveBeenCalled();
+      expect(writeMock).not.toHaveBeenCalled();
+    });
   });
 });

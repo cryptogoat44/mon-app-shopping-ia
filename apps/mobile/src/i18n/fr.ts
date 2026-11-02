@@ -389,6 +389,8 @@ export const fr = {
     textSearchEmpty: "Aucune proposition pour vos mots.",
     textSearchFailed: "La recherche avec vos mots n'a pas abouti.",
     textSearchError: "La recherche n'a pas abouti. Vérifiez votre connexion, puis réessayez.",
+    // Mots refusés par le serveur : rien ne reste une fois retirés les opérateurs et la ponctuation.
+    textSearchInvalidWords: "Décrivez la pièce en quelques mots.",
   },
   wishlistItem: {
     back: "Envies",

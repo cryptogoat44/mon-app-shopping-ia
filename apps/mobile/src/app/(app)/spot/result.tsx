@@ -12,10 +12,10 @@ import { getActiveLocale, t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { addToWishlist, loadSpotResult } from "@/api/client";
 import { getLastSpotResult, setLastSpotResult } from "@/api/spotSession";
-import type { Piece, SpotFailReason } from "@/api/types";
+import type { Piece, SpotFailReason, SpotResult } from "@/api/types";
 import { addVaultItemFromMatch } from "@/lib/api";
 import { openMerchantLink } from "@/lib/merchant-links";
-import { chooseInitialResult, noPriceShown, withTextSearch, type InitialResultState } from "@/lib/spot-result";
+import { chooseInitialResult, noPriceShown, withoutTextPrompt, withTextSearch, type InitialResultState } from "@/lib/spot-result";
 import { allPieces, merchantContextFor, opensOfferPage, otherPiecesBySection } from "@/lib/result-sections";
 import { getDraft } from "@/lib/spot-draft";
 import { failureCorrections, successCorrections, type Correction } from "@/lib/spot-corrections";
@@ -30,7 +30,7 @@ import { CorrectionButtons, CorrectionsLink, CorrectionsSheet, useCorrections } 
 import { ActionButtons, type Action } from "@/components/spot-launch-views";
 import { ReportedLine, ResultFeedbackButton, ResultFeedbackSheet } from "@/components/result-feedback-sheet";
 import { ResultComplement, textSearchStatusNote } from "@/components/result-complement";
-import { TextSearchPrompt } from "@/components/text-search-prompt";
+import { TextSearchAlreadyUsed, TextSearchPrompt } from "@/components/text-search-prompt";
 import { track } from "@/lib/analytics";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -60,6 +60,8 @@ export default function ResultScreen() {
   // « Résultat incohérent » : motif changé ou retiré dans cet écran (null : retiré).
   const [reportOpen, setReportOpen] = useState(false);
   const [feedbackOverrides, setFeedbackOverrides] = useState<ReadonlyMap<string, MatchFeedbackReason | null>>(new Map());
+  // Voie B (lot c) : seconde recherche avec les mots refusée, sans leurs propositions pour l'instant.
+  const [textSearchUsed, setTextSearchUsed] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   const result = state.kind === "ready" ? state.result : null;
@@ -156,13 +158,25 @@ export default function ResultScreen() {
     }
   }
 
-  /** Voie B (lot c) : la recherche par les mots a répondu — le résultat est
-   * remplacé sur place, et en mémoire pour un retour sur cet écran. */
-  function handleTextSearchDone(search: ProductSearch) {
-    if (!result) return;
-    const next = withTextSearch(result, search);
+  /** Voie B (lot c) : le résultat est remplacé sur place, et en mémoire pour
+   * un retour sur cet écran. */
+  function replaceResult(next: SpotResult) {
     setLastSpotResult(next);
     setState({ kind: "ready", result: next });
+  }
+
+  /** La recherche par les mots a répondu, ou elle est relue avec son issue. */
+  function handleTextSearchDone(search: ProductSearch) {
+    if (!result) return;
+    replaceResult(withTextSearch(result, search));
+  }
+
+  /** Le serveur ne la propose plus (déjà lancée, coupée, non admissible) :
+   * l'invitation disparaît, ici comme au retour sur cet écran. */
+  function handleTextSearchClosed(alreadyUsed: boolean) {
+    if (!result) return;
+    replaceResult(withoutTextPrompt(result));
+    setTextSearchUsed(alreadyUsed);
   }
 
   function selectPiece(index: number) {
@@ -221,15 +235,19 @@ export default function ResultScreen() {
 
   // Voie B (lot c) : « Que cherchez-vous ? » quand le serveur le propose —
   // pré-rempli avec les mots tapés sous la photo, si ce résultat vient d'être
-  // calculé (le brouillon en mémoire est alors le sien).
+  // calculé (le brouillon en mémoire est alors le sien) ; « déjà lancée » à
+  // sa place après un refus du serveur.
   const textSearch = (withIntro: boolean) =>
     result?.searchId && result.complement?.suggestText ? (
       <TextSearchPrompt
         searchId={result.searchId}
         initialWords={getLastSpotResult()?.searchId === result.searchId ? getDraft()?.words : null}
         onDone={handleTextSearchDone}
+        onClosed={handleTextSearchClosed}
         withIntro={withIntro}
       />
+    ) : textSearchUsed ? (
+      <TextSearchAlreadyUsed />
     ) : null;
 
   if (!result || result.status === "failed" || !piece) {
@@ -265,7 +283,8 @@ export default function ResultScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       {nav}
-      <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
+      {/* Voie B : le champ « Que cherchez-vous ? » peut se trouver en bas de la liste. */}
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         {/* Voie C : le décompte, le tri et l'absence de prix parlent de la recherche visuelle seule. */}
         {result.pieces.length > 0 ? <Text style={styles.count}>{t.result.count(result.pieces.length, result.query)}</Text> : null}
         {result.sortedByWords ? <Text style={styles.count}>{t.result.sortedByWords}</Text> : null}
@@ -457,7 +476,7 @@ function FailureView({
   }[reason];
 
   return (
-    <ScrollView contentContainerStyle={styles.failContent}>
+    <ScrollView contentContainerStyle={styles.failContent} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
       <Text style={styles.failTitle} accessibilityRole="header">
         {copy[0]}
       </Text>

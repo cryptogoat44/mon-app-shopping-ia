@@ -53,6 +53,7 @@ import { setAnalyticsConsent, track } from "./analytics";
 import { acceptLanguage, t } from "../i18n";
 import { imageFileFromUri } from "./image-file";
 import { ApiError } from "./api-error";
+import { textSearchFailure } from "./spot-result";
 import { deviceTimeZone, type ExportFormat, type ExportResponse } from "./export-file";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -186,8 +187,10 @@ export async function runTextSearch(searchId: string, words: string, signal?: Ab
     });
     return search;
   } catch (error) {
-    // Abandon (« Annuler ») : pas d'issue à compter, comme au lancement.
-    if (!signal?.aborted) track("text_search_completed", { outcome: "failed", results_count: 0 });
+    // Abandon (« Annuler »), ou mots refusés avant toute recherche (400 : rien
+    // ne reste une fois retirés les opérateurs et la ponctuation) : pas
+    // d'issue à compter, comme au lancement.
+    if (!signal?.aborted && textSearchFailure(error).kind !== "invalid_words") track("text_search_completed", { outcome: "failed", results_count: 0 });
     throw error;
   }
 }
@@ -200,8 +203,9 @@ async function appendImageFile(formData: FormData, fieldName: string, imageUri: 
   formData.append(fieldName, file, /\.\w+$/.test(filename) ? filename : `photo.${file.type === "image/png" ? "png" : "jpg"}`);
 }
 
-export async function fetchSearch(searchId: string): Promise<ProductSearch> {
-  const response = await authorizedFetch(`/api/searches/${searchId}`);
+/** `signal` : relecture abandonnée avec la recherche par les mots (voie B). */
+export async function fetchSearch(searchId: string, signal?: AbortSignal): Promise<ProductSearch> {
+  const response = await authorizedFetch(`/api/searches/${searchId}`, signal ? { signal } : undefined);
   return response.json();
 }
 

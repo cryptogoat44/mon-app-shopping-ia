@@ -3,9 +3,9 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import type { ProductSearch } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
-import { runTextSearch } from "@/lib/api";
+import { fetchSearch, runTextSearch } from "@/lib/api";
 import { capacityMonthTip } from "@/lib/spot-capacity";
-import { textSearchFailure, type TextSearchFailure } from "@/lib/spot-result";
+import { recoverTextSearch, settledTextSearch, textSearchFailure, type TextSearchFailure } from "@/lib/spot-result";
 import { ErrorMessage } from "@/components/error-message";
 import { QueryInput } from "@/components/spot-launch-views";
 import { themedStyles } from "@/theme/themed-styles";
@@ -19,8 +19,8 @@ import { themedStyles } from "@/theme/themed-styles";
 type PromptState =
   | { kind: "idle"; failure: TextSearchFailure | null }
   | { kind: "running" }
-  /** Déjà lancée (une phrase le dit), recherche non admissible, ou terminée. */
-  | { kind: "closed"; alreadyUsed: boolean };
+  /** Terminée, déjà lancée ou plus proposée : l'écran a pris la suite. */
+  | { kind: "closed" };
 
 /** Plafond des recherches ou trop de recherches d'un coup : les textes de
  * l'écran Résultat (lot 4 quater), lus à l'affichage. */
@@ -41,19 +41,25 @@ export function TextSearchPrompt({
   searchId,
   initialWords,
   onDone,
+  onClosed,
   withIntro = true,
 }: {
   searchId: string;
   /** Mots tapés sous la photo au lancement, quand le brouillon est encore en mémoire. */
   initialWords?: string | null;
-  /** Recherche renvoyée par le serveur : l'écran remplace son résultat sur place. */
+  /** Recherche renvoyée (ou relue) par le serveur avec l'issue des mots :
+   * l'écran remplace son résultat sur place. */
   onDone: (search: ProductSearch) => void;
+  /** Plus proposée par le serveur : l'écran retire l'invitation, et dit
+   * « déjà lancée » quand `alreadyUsed` (TextSearchAlreadyUsed). */
+  onClosed: (alreadyUsed: boolean) => void;
   /** « Pas tout à fait ça ? » sous des propositions ; après « rien trouvé »,
    * la question « Que cherchez-vous ? » sert seule de titre. */
   withIntro?: boolean;
 }) {
   const [words, setWords] = useState(initialWords ?? "");
   const [state, setState] = useState<PromptState>({ kind: "idle", failure: null });
+  // La requête en cours : la recherche, sa relecture, ou la relecture qui suit « Annuler ».
   const controller = useRef<AbortController | null>(null);
 
   // Écran quitté pendant la recherche : la requête est abandonnée.
@@ -61,38 +67,54 @@ export function TextSearchPrompt({
 
   const canSearch = words.trim().length > 0 && state.kind === "idle";
 
+  function finish(search: ProductSearch) {
+    setState({ kind: "closed" });
+    onDone(search);
+  }
+
   async function search() {
     if (!canSearch) return;
+    // Une relecture après « Annuler » s'efface devant le nouvel essai, qui relira au besoin.
+    controller.current?.abort();
     const current = new AbortController();
     controller.current = current;
     setState({ kind: "running" });
     try {
       const found = await runTextSearch(searchId, words.trim(), current.signal);
       if (current.signal.aborted) return;
-      setState({ kind: "closed", alreadyUsed: false });
-      onDone(found);
+      finish(found);
     } catch (error) {
       // « Annuler » : l'invitation est déjà revenue à son état de départ.
       if (current.signal.aborted) return;
-      const failure = textSearchFailure(error);
-      if (failure.kind === "already_used" || failure.kind === "hidden") setState({ kind: "closed", alreadyUsed: failure.kind === "already_used" });
-      else setState({ kind: "idle", failure });
+      // 409 « déjà lancée », réponse perdue ou panne : la recherche est relue
+      // avant de dire « déjà lancée » ou de proposer un nouvel essai.
+      const next = await recoverTextSearch(textSearchFailure(error), () => fetchSearch(searchId, current.signal));
+      if (current.signal.aborted) return;
+      if (next.kind === "done") finish(next.search);
+      else if (next.kind === "closed") {
+        setState({ kind: "closed" });
+        onClosed(next.alreadyUsed);
+      } else setState({ kind: "idle", failure: next.failure });
     } finally {
       if (controller.current === current) controller.current = null;
     }
   }
 
   /** « Annuler » abandonne vraiment la requête ; il ne promet rien sur la
-   * recherche, qui peut déjà être engagée côté serveur. */
+   * recherche, que le serveur a pu engager et mener au bout : elle est
+   * relue, et ses propositions remplacent le résultat si elles sont là. */
   function cancel() {
     controller.current?.abort();
-    controller.current = null;
+    const check = new AbortController();
+    controller.current = check;
     setState({ kind: "idle", failure: null });
+    void settledTextSearch(() => fetchSearch(searchId, check.signal)).then((settled) => {
+      if (controller.current === check) controller.current = null;
+      if (settled && !check.signal.aborted) finish(settled);
+    });
   }
 
-  if (state.kind === "closed") {
-    return state.alreadyUsed ? <Text style={styles.closed}>{t.result.textSearchAlreadyUsed}</Text> : null;
-  }
+  if (state.kind === "closed") return null;
 
   const failure = state.kind === "idle" ? state.failure : null;
   const limit = failure?.kind === "limit" ? limitCopy(failure) : null;
@@ -118,6 +140,8 @@ export function TextSearchPrompt({
           <ErrorMessage style={styles.message}>{limit[0]}</ErrorMessage>
           <Text style={styles.tip}>{limit[1]}</Text>
         </>
+      ) : failure?.kind === "invalid_words" ? (
+        <ErrorMessage style={styles.message}>{t.result.textSearchInvalidWords}</ErrorMessage>
       ) : failure?.kind === "technical" ? (
         <ErrorMessage style={styles.message}>{t.result.textSearchError}</ErrorMessage>
       ) : null}
@@ -136,6 +160,13 @@ export function TextSearchPrompt({
       )}
     </View>
   );
+}
+
+/** « Déjà lancée » : à la place de l'invitation, quand le serveur a refusé
+ * une seconde recherche avec les mots et que leurs propositions ne sont pas
+ * encore là (elles le seront au rechargement, et dans l'historique). */
+export function TextSearchAlreadyUsed() {
+  return <Text style={styles.closed}>{t.result.textSearchAlreadyUsed}</Text>;
 }
 
 const styles = themedStyles(() => ({

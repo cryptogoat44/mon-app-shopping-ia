@@ -358,8 +358,8 @@ export const en: Catalog = {
     complementTitleAi: "This piece at other shops",
     complementTitleWords: "Results for your words",
     complementQuery: (query: string) => `Search: “${query}”`,
-    viewOffer: "View the offer",
-    textSearchIntro: "Not quite it?",
+    viewOffer: "View offer",
+    textSearchIntro: "Not quite right?",
     textSearchButton: "Search",
     textSearchNote: "Your words are sent to the online search.",
     textSearchRunning: "Searching…",
@@ -367,6 +367,7 @@ export const en: Catalog = {
     textSearchEmpty: "No suggestions for your words.",
     textSearchFailed: "The search with your words didn't go through.",
     textSearchError: "The search didn't go through. Check your connection, then try again.",
+    textSearchInvalidWords: "Describe the piece in a few words.",
   },
   wishlistItem: {
     back: "Wishlist",

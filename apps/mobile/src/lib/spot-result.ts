@@ -90,6 +90,12 @@ export function withTextSearch(previous: SpotResult, search: ProductSearch): Spo
   return next;
 }
 
+/** L'invitation n'est plus proposée (refus du serveur) : même résultat, sans
+ * « Que cherchez-vous ? » — à l'écran comme au retour sur l'écran. */
+export function withoutTextPrompt(result: SpotResult): SpotResult {
+  return result.complement ? { ...result, complement: { ...result.complement, suggestText: false } } : result;
+}
+
 /** Échec de la recherche par les mots, tel que l'invitation le montre :
  * - already_used : déjà lancée pour cette recherche (409) — l'invitation
  *   laisse place à une phrase ;
@@ -97,11 +103,14 @@ export function withTextSearch(previous: SpotResult, search: ProductSearch): Spo
  *   admissible ou budget de la photo épuisé (409) — l'invitation disparaît ;
  * - limit : plafond des recherches ou trop de recherches d'un coup (429),
  *   avec les textes de l'écran Résultat — l'invitation reste ;
+ * - invalid_words : rien ne reste des mots une fois retirés les opérateurs
+ *   et la ponctuation (400, avant toute recherche) — l'invitation reste ;
  * - technical : réseau ou serveur — l'invitation reste, pour réessayer. */
 export type TextSearchFailure =
   | { kind: "already_used" }
   | { kind: "hidden" }
   | { kind: "limit"; reason: CapacityFailReason | "rate_limited"; resumesOn: string | null }
+  | { kind: "invalid_words" }
   | { kind: "technical" };
 
 export function textSearchFailure(error: unknown): TextSearchFailure {
@@ -113,7 +122,52 @@ export function textSearchFailure(error: unknown): TextSearchFailure {
     const capacity = capacityFailure(error.body);
     return capacity ? { kind: "limit", reason: capacity.reason, resumesOn: capacity.resumesOn } : { kind: "limit", reason: "rate_limited", resumesOn: null };
   }
+  // Seul refus des mots eux-mêmes sur cette route (un identifiant invalide dit « invalid_params »).
+  if (error.status === 400 && error.body.error === "invalid_body") return { kind: "invalid_words" };
   return { kind: "technical" };
+}
+
+/** La recherche relue porte-t-elle déjà l'issue de la recherche par les mots
+ * (propositions « words », ou issue enregistrée) ? */
+export function textSearchSettled(search: ProductSearch): boolean {
+  return search.complement?.textStatus != null || search.matches.some((match) => match.origin === "words");
+}
+
+/** Ce que l'invitation fait d'un échec de la recherche par les mots :
+ * - done : le serveur l'avait faite quand même — la recherche relue remplace
+ *   le résultat sur place ;
+ * - closed : l'invitation n'est plus proposée (« déjà lancée » quand
+ *   `alreadyUsed`) ;
+ * - idle : l'invitation reste, avec l'échec à montrer. */
+export type TextSearchRecovery =
+  | { kind: "done"; search: ProductSearch }
+  | { kind: "closed"; alreadyUsed: boolean }
+  | { kind: "idle"; failure: TextSearchFailure };
+
+/** Le serveur pose le verrou « une seule fois » avant d'appeler Google
+ * Shopping et va au bout même si l'app n'attend plus : après un 409 « déjà
+ * lancée », une réponse perdue, une panne du serveur ou « Annuler », les
+ * propositions des mots peuvent être déjà enregistrées. La recherche est
+ * relue (`read`, aucun appel payant) avant de dire « déjà lancée » ou de
+ * proposer un nouvel essai ; relecture impossible : rien de plus n'est dit. */
+export async function recoverTextSearch(failure: TextSearchFailure, read: () => Promise<ProductSearch>): Promise<TextSearchRecovery> {
+  if (failure.kind === "hidden") return { kind: "closed", alreadyUsed: false };
+  if (failure.kind === "already_used" || failure.kind === "technical") {
+    const search = await settledTextSearch(read);
+    if (search) return { kind: "done", search };
+    if (failure.kind === "already_used") return { kind: "closed", alreadyUsed: true };
+  }
+  return { kind: "idle", failure };
+}
+
+/** La recherche relue, si l'issue des mots y est déjà ; null sinon, ou si la relecture échoue. */
+export async function settledTextSearch(read: () => Promise<ProductSearch>): Promise<ProductSearch | null> {
+  try {
+    const search = await read();
+    return textSearchSettled(search) ? search : null;
+  } catch {
+    return null;
+  }
 }
 
 export type InitialResultState =
