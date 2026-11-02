@@ -3,6 +3,7 @@ import {
   type AppLocale,
   type ConsentType,
   type MatchFeedbackReason,
+  type MatchOrigin,
   type MerchantLinkContext,
   type ModerationActionType,
   type ModerationReason,
@@ -133,6 +134,17 @@ export const EXPORT_COLUMNS = {
     provider: technical("Fournisseur de la recherche", "Search provider"),
     provider_status_code: technical("Code de réponse du fournisseur (mesure)", "Provider response code (measure)"),
     run_started_at: technical("Heure du lancement de la recherche", "Search start time"),
+    // Colonnes de la migration 0028 (voie C), décrites d'avance : des nombres
+    // et des valeurs d'une liste fermée, dans la version JSON seulement. La
+    // requête des boutiques et vos mots ne sont jamais enregistrés.
+    complement_status: technical("Issue du complément « autres boutiques » (mesure)", "Outcome of the “other retailers” complement (measure)"),
+    shopping_calls: technical("Recherches en boutiques envoyées pour cette photo", "Retailer searches sent for this photo"),
+    lens_from_cache: technical("Recherche visuelle reprise du cache (24 h)", "Visual search taken from the cache (24 h)"),
+    served_from_cache: technical("Recherche servie entièrement par le cache (24 h)", "Search served entirely from the cache (24 h)"),
+    text_suggested: technical("« Que cherchez-vous ? » proposé", "“What are you looking for?” suggested"),
+    text_requested_at: technical("Heure de la recherche avec vos mots", "Time of the search with your words"),
+    text_status: technical("Issue de la recherche avec vos mots (mesure)", "Outcome of the search with your words (measure)"),
+    total_seconds: technical("Durée du lancement (secondes)", "Launch duration (seconds)"),
   },
   productMatches: {
     id: ID,
@@ -155,6 +167,9 @@ export const EXPORT_COLUMNS = {
     provider_product_id: technical("Identifiant de la pièce chez le fournisseur", "Piece ID at the provider"),
     stores: technical("Boutiques consultées (« Voir les boutiques »)", "Retailers viewed (“View retailers”)"),
     stores_requested_at: technical("Heure de « Voir les boutiques »", "Time of “View retailers”"),
+    // Colonne de la migration 0028 (voie C), décrite d'avance : recherche
+    // visuelle, boutiques ou vos mots (libellés : MATCH_ORIGIN_LABELS).
+    origin: shown("Origine", "Origin"),
   },
   resultFeedback: {
     id: ID,
@@ -523,6 +538,13 @@ export const POST_TYPE_LABELS: Record<PostType, Bilingual> = {
 export const MEDIA_KIND_LABELS: Record<"photo" | "video", Bilingual> = {
   photo: { fr: "Photo", en: "Photo" },
   video: { fr: "Vidéo", en: "Video" },
+};
+
+/** Origine d'une proposition (voie C, migration 0028). */
+export const MATCH_ORIGIN_LABELS: Record<MatchOrigin, Bilingual> = {
+  lens: { fr: "Recherche visuelle", en: "Visual search" },
+  shopping: { fr: "Boutiques", en: "Retailers" },
+  words: { fr: "Vos mots", en: "Your words" },
 };
 
 export const MERCHANT_LINK_CONTEXT_LABELS: Record<MerchantLinkContext, Bilingual> = {

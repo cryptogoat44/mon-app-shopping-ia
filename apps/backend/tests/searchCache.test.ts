@@ -241,7 +241,8 @@ describe("cache — écriture", () => {
     expect(payloadBytes({ a: 1, b: [1, 2] })).toBe(Buffer.byteLength('{"a": 1, "b": [1, 2]}'));
     expect(payloadBytes({ nom: "é" })).toBe(Buffer.byteLength('{"nom": "é"}'));
     expect(payloadBytes(undefined)).toBeNull();
-    const many = Array.from({ length: 70_000 }, () => 1);
+    // 100 000 fois « 1 » : ≈ 200 Ko en JSON compact, ≈ 300 Ko comme la base le compte.
+    const many = Array.from({ length: 100_000 }, () => 1);
     expect(Buffer.byteLength(JSON.stringify(many))).toBeLessThan(CACHE_PAYLOAD_MAX_BYTES);
     const { db, calls } = fakeDb();
     await writeCache(db, KEY, "lens", many, fakeLog().log);

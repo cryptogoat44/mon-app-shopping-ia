@@ -1,7 +1,7 @@
 // Colonnes de la mesure d'une recherche dans product_searches (migration
 // 0025, fiabilité des résultats ; causes d'échec complétées par 0027) : des
 // nombres et des valeurs d'une liste fermée, jamais de contenu.
-import type { CropRect } from "@monapp/shared-types";
+import type { ComplementStatus, CropRect, TextSearchStatus } from "@monapp/shared-types";
 import type { LensMeasure, LensSection } from "../services/lensMeasure.js";
 import type { ProviderFailureKind } from "../services/searchProvider.js";
 
@@ -120,6 +120,9 @@ export interface MeasureLogLine {
   added: number;
   addedRanks: number[];
   callSeconds: number | null;
+  /** Voie C (lot c) : la réponse de Lens vient du cache (aucun appel).
+   * Absent quand la voie C est coupée : la ligne reste celle d'avant. */
+  fromCache?: boolean;
 }
 
 /** Fournisseur d'une recherche et son code de réponse (null sans réponse). */
@@ -128,7 +131,8 @@ export interface ProviderReply {
   statusCode: number | null;
 }
 
-export function measureLogLine(columns: MeasureColumns, addedRanks: readonly number[], reply: ProviderReply): MeasureLogLine {
+/** `fromCache` : donné seulement quand la voie C a tourné (lot c). */
+export function measureLogLine(columns: MeasureColumns, addedRanks: readonly number[], reply: ProviderReply, fromCache?: boolean): MeasureLogLine {
   const ranks = columns.outcome === "failure" ? [] : [...addedRanks];
   return {
     provider: reply.provider,
@@ -142,7 +146,118 @@ export function measureLogLine(columns: MeasureColumns, addedRanks: readonly num
     added: ranks.length,
     addedRanks: ranks,
     callSeconds: columns.call_seconds,
+    ...(fromCache === undefined ? {} : { fromCache }),
   };
+}
+
+// ---- Voie C (lot c, 2026-11-02) : « Mesure complément » ----
+
+/** Message de la ligne de journal de chaque complément (voie C), lue par
+ * `render-bride compteurs-ia` (scripts/lib/render-logs.ts). */
+export const COMPLEMENT_LOG_MESSAGE = "Mesure complément";
+
+/** La promesse au fondateur : un lancement en moins de 15 secondes, mesurées
+ * depuis T0 (formulaire lu) jusqu'à la fin de l'enregistrement. */
+export const COMPLEMENT_PROMISE_MS = 15_000;
+
+/** ai : « Cette pièce dans d'autres boutiques » (requête de l'IA, au
+ * lancement) ; words : « Que cherchez-vous ? » (vos mots, voie B). */
+export type ComplementSource = "ai" | "words";
+
+/** Pourquoi l'IA n'a pas donné de requête sûre (liste fermée, la même que
+ * services/shoppingQueryAi.ts). */
+export const NO_QUERY_REASONS = ["empty", "invented", "brand_not_shared", "too_long", "operators"] as const;
+export type NoQueryReason = (typeof NO_QUERY_REASONS)[number];
+
+/** Échec de l'IA (liste fermée, la même que services/shoppingQueryAi.ts). */
+export const AI_ERROR_KINDS = ["unavailable", "refused", "invalid_output"] as const;
+export type AiErrorKind = (typeof AI_ERROR_KINDS)[number];
+
+/** Ce que le complément sait de lui-même (lib/voieC.ts) ; la route y ajoute
+ * la durée totale, connue après l'enregistrement. Des nombres et des valeurs
+ * de listes fermées seulement : jamais la requête, un titre, une marque, un
+ * modèle, vos mots, une adresse ni un identifiant. */
+export interface ComplementMeasure {
+  source: ComplementSource;
+  /** Issue ; null : le complément n'a pas tourné (panne de Lens, « Annuler »). */
+  status: ComplementStatus | TextSearchStatus | null;
+  queryFromCache: boolean;
+  shoppingFromCache: boolean;
+  /** Recherches Google Shopping réellement envoyées (0 ou 1). */
+  calls: number;
+  aiMs: number | null;
+  shoppingMs: number | null;
+  received: number | null;
+  kept: number | null;
+  keptWithPrice: number | null;
+  /** Propositions de Google Shopping aux paliers 0 et 1 du tri léger. */
+  tier0: number | null;
+  tier1: number | null;
+  googleLinks: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  aiErrorKind: AiErrorKind | null;
+  noQueryReason: NoQueryReason | null;
+  shoppingFailureKind: ProviderFailureKind | null;
+}
+
+/** Ligne « Mesure complément ». */
+export interface ComplementLogLine {
+  source: ComplementSource;
+  status: ComplementStatus | TextSearchStatus | null;
+  lensFromCache: boolean;
+  queryFromCache: boolean;
+  shoppingFromCache: boolean;
+  calls: number;
+  aiMs: number | null;
+  shoppingMs: number | null;
+  totalMs: number;
+  /** Lancement de 15 secondes ou plus (enregistrement compris). */
+  overBudget: boolean;
+  received: number | null;
+  kept: number | null;
+  keptWithPrice: number | null;
+  tier0: number | null;
+  tier1: number | null;
+  googleLinks: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  aiErrorKind: AiErrorKind | null;
+  noQueryReason: NoQueryReason | null;
+  shoppingFailureKind: ProviderFailureKind | null;
+}
+
+/** `totalMs` : depuis T0 jusqu'à la fin de l'enregistrement. */
+export function complementLogLine(measure: ComplementMeasure, run: { lensFromCache: boolean; totalMs: number }): ComplementLogLine {
+  const totalMs = Math.max(0, Math.round(run.totalMs));
+  return {
+    source: measure.source,
+    status: measure.status,
+    lensFromCache: run.lensFromCache,
+    queryFromCache: measure.queryFromCache,
+    shoppingFromCache: measure.shoppingFromCache,
+    calls: measure.calls,
+    aiMs: measure.aiMs,
+    shoppingMs: measure.shoppingMs,
+    totalMs,
+    overBudget: totalMs >= COMPLEMENT_PROMISE_MS,
+    received: measure.received,
+    kept: measure.kept,
+    keptWithPrice: measure.keptWithPrice,
+    tier0: measure.tier0,
+    tier1: measure.tier1,
+    googleLinks: measure.googleLinks,
+    inputTokens: measure.inputTokens,
+    outputTokens: measure.outputTokens,
+    aiErrorKind: measure.aiErrorKind,
+    noQueryReason: measure.noQueryReason,
+    shoppingFailureKind: measure.shoppingFailureKind,
+  };
+}
+
+/** Durée en secondes pour total_seconds (0 à 600, contrainte de 0028). */
+export function totalSeconds(totalMs: number): number {
+  return Math.min(600, Math.max(0, Math.round(totalMs / 1000)));
 }
 
 /** Part de l'image retenue par le cadrage, arrondie à 10 % ; image entière : 100. */

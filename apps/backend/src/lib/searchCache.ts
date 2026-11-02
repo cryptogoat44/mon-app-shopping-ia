@@ -19,7 +19,7 @@
 
 import { createHash } from "node:crypto";
 import type { FastifyBaseLogger } from "fastify";
-import type { ZodType } from "zod";
+import type { ZodType, ZodTypeDef } from "zod";
 
 /** Étapes mises en cache (contrainte search_cache.step, 0028). */
 export type CacheStep = "lens" | "query" | "shopping";
@@ -119,11 +119,18 @@ function whenAborted(signal: AbortSignal): Promise<null> {
 const ROW_SHAPE = (row: unknown): row is { payload: unknown; expires_at: string } =>
   typeof row === "object" && row !== null && "payload" in row && typeof (row as { expires_at?: unknown }).expires_at === "string";
 
-/** Lit une entrée encore valable et la valide avec `schema`. Absente,
+/** Lit une entrée encore valable et la valide avec `schema` (sa sortie est
+ * renvoyée : valeurs par défaut et transformations comprises). Absente,
  * expirée, illisible, invalide, table absente ou lecture plus lente que le
  * signal (800 ms, VOIE_C_BUDGET.cacheReadMs) : null, et un avertissement
  * sans la clé. Ne lève jamais d'erreur. */
-export async function readCache<T>(db: CacheDb, key: string, schema: ZodType<T>, log: CacheLog, signal: AbortSignal): Promise<T | null> {
+export async function readCache<T>(
+  db: CacheDb,
+  key: string,
+  schema: ZodType<T, ZodTypeDef, unknown>,
+  log: CacheLog,
+  signal: AbortSignal
+): Promise<T | null> {
   const miss = (reason: "timeout" | "missing_table" | "error" | "invalid_payload", code?: string): null => {
     log.warn({ reason, code: code ?? null }, "Cache recherche : lecture ignorée");
     return null;
