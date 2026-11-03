@@ -34,6 +34,7 @@ import {
   REPORT_HANDLED_LABELS,
   REPORT_REASON_LABELS,
   FEEDBACK_REASON_LABELS,
+  MATCH_ORIGIN_LABELS,
   REPORT_TARGET_LABELS,
   SEARCH_FAILURE_LABELS,
   SEARCH_STATUS_LABELS,
@@ -382,9 +383,14 @@ function matchCard(ctx: Ctx, row: ExportRow, feedback?: ExportRow): Html {
   const reported = feedback
     ? tr(ctx, EXPORT_TEXT.reportedInconsistentValue, { reason: enumLabel(ctx, FEEDBACK_REASON_LABELS, feedback.reason) ?? "", date: plainDate(ctx, feedback.created_at) })
     : null;
+  // Origine (0028, voie C) : écrite pour les pièces des boutiques et de vos
+  // mots ; la recherche visuelle (valeur par défaut de toute pièce) n'ajoute
+  // rien, pour que la page reste celle d'avant quand la voie C n'a pas tourné.
+  const fromVisualSearch = row.origin === undefined || row.origin === null || row.origin === "lens";
   return new Card(ctx, "productMatches", row)
     .use("product_name")
     .field("rank")
+    .field("origin", fromVisualSearch ? null : enumLabel(ctx, MATCH_ORIGIN_LABELS, row.origin))
     .field("brand")
     .line(tr(ctx, EXPORT_COLUMNS.productMatches.price_min.label), price(ctx, row.price_min, row.price_max, row.currency), ["price_min", "price_max", "currency"])
     .field("merchant_name")
