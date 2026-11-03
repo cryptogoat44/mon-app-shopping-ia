@@ -1,11 +1,11 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { SpotImage } from "@/components/spot-image";
 import { ImageUnavailable } from "@/components/image-unavailable";
 import { WishlistPanel } from "@/components/wishlist-panel";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useNavigation, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
@@ -13,8 +13,9 @@ import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, fetchMyLifestylePosts, fetchVault, uploadAvatar } from "@/lib/api";
 import type { Post, VaultItem } from "@monapp/shared-types";
-import { CameraIcon, ClockIcon, GearIcon, PersonIcon, TagIcon, VerifiedIcon } from "@/components/icons";
+import { CameraIcon, ClockIcon, GearIcon, PersonIcon, PlusIcon, TagIcon, VerifiedIcon } from "@/components/icons";
 import { useToast } from "@/lib/toast-context";
+import { onVaultChanged } from "@/lib/vault-changes";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
@@ -27,6 +28,7 @@ function chunk<T>(items: T[], size: number): T[][] {
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { profile, refreshProfile } = useAuth();
   const { showToast } = useToast();
   const [items, setItems] = useState<VaultItem[]>([]);
@@ -70,6 +72,17 @@ export default function ProfileScreen() {
     }, [load, refreshProfile])
   );
 
+  // Lot 2 (Vault) : une pièce ajoutée ou modifiée après le retour sur le
+  // profil (feuille quittée pendant l'envoi) : le Vault se relit. Profil
+  // caché, rien : il se relira en reprenant la main (ci-dessus).
+  useEffect(
+    () =>
+      onVaultChanged(() => {
+        if (navigation.isFocused()) load();
+      }),
+    [load, navigation]
+  );
+
   async function handleRefresh() {
     setRefreshing(true);
     await Promise.all([load(), refreshProfile()]);
@@ -92,6 +105,12 @@ export default function ProfileScreen() {
 
   const isEmptyVault = segment === "vault" && !vaultError && items.length === 0;
   const isEmptyLifestyle = segment === "lifestyle" && !lifestyleError && lifestylePosts.length === 0;
+
+  // Lot 2 (Vault) : ajout d'une pièce à la main. Au retour, le Vault se relit
+  // (useFocusEffect ci-dessus) : la nouvelle pièce apparaît en tête.
+  function openAddPiece() {
+    router.push("/vault-item/new");
+  }
 
   async function handlePickAvatar() {
     if (uploadingAvatar) return;
@@ -243,11 +262,30 @@ export default function ProfileScreen() {
               ))}
             </View>
           )}
-          ListHeaderComponent={vaultError ? <ErrorMessage style={styles.emptyText}>{vaultError}</ErrorMessage> : null}
+          ListHeaderComponent={
+            <>
+              {vaultError ? <ErrorMessage style={styles.emptyText}>{vaultError}</ErrorMessage> : null}
+              {items.length > 0 ? (
+                <Pressable
+                  onPress={openAddPiece}
+                  hitSlop={8}
+                  style={styles.addPiece}
+                  accessibilityRole="button"
+                  accessibilityLabel={t.profile.addPiece}
+                >
+                  <PlusIcon size={16} tint={color.vert} strokeWidth={1.8} />
+                  <Text style={styles.addPieceLabel}>{t.profile.addPiece}</Text>
+                </Pressable>
+              ) : null}
+            </>
+          }
           ListEmptyComponent={
             !vaultError ? (
               <View style={styles.empty}>
                 <Text style={styles.emptyText}>{t.profile.emptyVault}</Text>
+                <Pressable accessibilityRole="button" onPress={openAddPiece} style={styles.emptyButton}>
+                  <Text style={styles.emptyButtonLabel}>{t.profile.addPiece}</Text>
+                </Pressable>
                 <Pressable accessibilityRole="button" onPress={() => router.push("/(app)/(tabs)")}>
                   <Text style={styles.emptyCta}>{t.profile.emptyVaultCta}</Text>
                 </Pressable>
@@ -389,6 +427,18 @@ const styles = themedStyles(() => ({
   empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl, marginTop: -60 },
   emptyText: { fontSize: font.secondary, color: color.acier, textAlign: "center", lineHeight: 20, marginBottom: space.md },
   emptyCta: { fontSize: font.body, color: color.vert, fontWeight: "600" },
+  // Vault vide : l'ajout à la main en bouton plein, Spotter en lien dessous.
+  emptyButton: {
+    backgroundColor: color.vert,
+    borderRadius: radius.md,
+    minHeight: 44,
+    paddingHorizontal: space.lg,
+    justifyContent: "center",
+    marginBottom: space.md,
+  },
+  emptyButtonLabel: { color: color.blanc, fontSize: font.secondary, fontWeight: "600" },
+  addPiece: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 6, minHeight: 44, marginBottom: space.xs },
+  addPieceLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   piece: { width: "31%" },
   thumb: {
     backgroundColor: color.plinthe,
