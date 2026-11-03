@@ -187,19 +187,31 @@ export function canLeaveForSharedItem(root: NavigationStateLike | null | undefin
 
 /** Partage arrivé, personne connectée, un autre écran affiché (appelé une fois
  * par arrivée). Rien à perdre : retour au Spotter, qui l'ouvre. Sinon on reste
- * sur l'écran : un refus est dit tout de suite (il ne s'ouvrira jamais) ; le
- * reste attend le Spotter, qui l'ouvrira quand on y reviendra (« Fermer »,
- * onglet). Rien n'est relancé ensuite : un résultat qui vient de s'ouvrir ne
- * se referme jamais tout seul. */
+ * sur l'écran et l'élément attend le Spotter, qui l'ouvrira à la prochaine
+ * visite (« Fermer », onglet marqué d'une pastille en attendant). Un refus
+ * attend aussi : le Spotter l'affiche en message fixe, qui reste, alors qu'un
+ * message flottant passerait trop vite pour l'expliquer. On dit seulement
+ * qu'il attend. Rien n'est relancé ensuite : un écran dont on se sert ne se
+ * ferme jamais tout seul. */
 export function onSharedItemArrival(navigation: NavigationStateLike | null | undefined, actions: { backToSpotter: () => void; say: (message: string) => void }): void {
-  const item = peekSharedItem();
-  if (!item) return;
+  if (!peekSharedItem()) return;
   if (canLeaveForSharedItem(navigation)) return actions.backToSpotter();
-  if (item.kind === "refused") {
-    takeSharedItem();
-    return actions.say(sharedRefusalMessage(item.reason));
-  }
   actions.say(t.share.waiting);
+}
+
+/** Onglet Spotter : une pastille tant qu'un partage l'attend (comme celle
+ * d'Activité), dite aussi par VoiceOver. */
+export function spotterTab(pending: SharedItem | null): { badge: string | undefined; accessibilityLabel: string } {
+  if (!pending) return { badge: undefined, accessibilityLabel: t.spotter.title };
+  return { badge: "", accessibilityLabel: t.share.tabWaiting(t.spotter.title) };
+}
+
+/** Durée d'affichage d'un message du partage : il arrive au retour d'une autre
+ * app, sans qu'on l'attende. Le temps de le remarquer, puis de le lire
+ * posément (moins de 3 mots par seconde) ; jamais moins de 4 s. */
+export function sharedMessageDurationMs(message: string): number {
+  const words = message.split(/\s+/).filter(Boolean).length;
+  return Math.max(4000, 1500 + words * 350);
 }
 
 /** Pas connecté (accueil) : un refus est pris et dit tout de suite, plutôt

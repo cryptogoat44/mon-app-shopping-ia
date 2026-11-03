@@ -3,10 +3,10 @@
 // de l'app ramène le Spotter au premier plan quand rien ne se perd, et le
 // Spotter, affiché et libre, le prend pour l'ouvrir. Les décisions (logique
 // pure, testée) et la mise en attente : shared-item.ts.
-import { useEffect, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { useIsFocused, useNavigationContainerRef, useRouter } from "expo-router";
 import { useToast } from "./toast-context";
-import { onSharedItemArrival, onSharedItemSignedOut, peekSharedItem, subscribeSharedItem, takeSharedItem, type SharedItem } from "./shared-item";
+import { onSharedItemArrival, onSharedItemSignedOut, peekSharedItem, sharedMessageDurationMs, subscribeSharedItem, takeSharedItem, type SharedItem } from "./shared-item";
 
 const nothingOnServer = () => null;
 
@@ -14,26 +14,34 @@ export function usePendingSharedItem(): SharedItem | null {
   return useSyncExternalStore(subscribeSharedItem, peekSharedItem, nothingOnServer);
 }
 
+/** Message du partage : il arrive au retour d'une autre app, on le laisse
+ * affiché le temps de le lire (2,2 s pour une confirmation ordinaire). */
+function useSharedMessage(): (message: string) => void {
+  const { showToast } = useToast();
+  return useCallback((message: string) => showToast(message, { durationMs: sharedMessageDurationMs(message) }), [showToast]);
+}
+
 /** Pas connecté : on dit une fois que l'élément s'ouvrira après la connexion ;
  * un élément refusé, lui, est dit tout de suite. */
 export function useSharedItemWaitingNotice(waiting: boolean): void {
   const pending = usePendingSharedItem();
-  const { showToast } = useToast();
+  const say = useSharedMessage();
   useEffect(() => {
-    if (waiting && pending) onSharedItemSignedOut(showToast);
-  }, [waiting, pending, showToast]);
+    if (waiting && pending) onSharedItemSignedOut(say);
+  }, [waiting, pending, say]);
 }
 
 /** Zone connectée : un partage arrive pendant qu'un autre écran est affiché.
  * Rien à perdre (onglets, pages de simple lecture) : retour au Spotter, qui
  * l'ouvrira — comme « Fermer » quand des écrans sont empilés, sinon simple
  * changement d'onglet. Recherche en cours, saisie, écran hors de la zone : on
- * reste, et l'élément attend le Spotter (shared-item.ts, onSharedItemArrival).
+ * reste, on dit que l'élément (même refusé) attend le Spotter, qui l'ouvrira à
+ * la prochaine visite (shared-item.ts, onSharedItemArrival).
  * Les écrans ouverts sont lus au moment de l'arrivée (état de navigation). */
 export function useSharedItemArrival(): void {
   const router = useRouter();
   const navigation = useNavigationContainerRef();
-  const { showToast } = useToast();
+  const say = useSharedMessage();
   useEffect(
     () =>
       subscribeSharedItem(() =>
@@ -42,10 +50,10 @@ export function useSharedItemArrival(): void {
             if (router.canDismiss()) router.dismissTo("/");
             else router.navigate("/");
           },
-          say: showToast,
+          say,
         })
       ),
-    [router, navigation, showToast]
+    [router, navigation, say]
   );
 }
 

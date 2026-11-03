@@ -11,7 +11,9 @@ import {
   onSharedItemSignedOut,
   peekSharedItem,
   receiveSharedItem,
+  sharedMessageDurationMs,
   sharedRefusalMessage,
+  spotterTab,
   subscribeSharedItem,
   takeSharedItem,
   type NavigationStateLike,
@@ -292,13 +294,17 @@ describe("partage reçu pendant qu'un autre écran est affiché (personne connec
     expect(peekSharedItem()).toEqual(item);
   });
 
-  it("partage refusé pendant une recherche : pris et dit tout de suite, il ne s'ouvrira jamais", () => {
-    receiveSharedItem({ kind: "refused", reason: "several" });
-    const actions = { backToSpotter: vi.fn(), say: vi.fn() };
-    onSharedItemArrival(navigation(["spot/lancer"]), actions);
-    expect(actions.backToSpotter).not.toHaveBeenCalled();
-    expect(actions.say).toHaveBeenCalledWith(sharedRefusalMessage("several"));
-    expect(peekSharedItem()).toBeNull();
+  it("partage refusé pendant une recherche ou une saisie : il attend le Spotter, qui l'affiche en message fixe ; seule l'attente est dite", () => {
+    for (const screen of ["spot/lancer", "post-item/new", "settings"]) {
+      const refused: SharedItem = { kind: "refused", reason: "several" };
+      receiveSharedItem(refused);
+      const actions = { backToSpotter: vi.fn(), say: vi.fn() };
+      onSharedItemArrival(navigation([screen]), actions);
+      expect(actions.backToSpotter, screen).not.toHaveBeenCalled();
+      // Le refus ne passe plus en message flottant (2,2 s, sous une feuille ou le clavier) : il n'est pas pris.
+      expect(actions.say.mock.calls, screen).toEqual([[t.share.waiting]]);
+      expect(peekSharedItem(), screen).toEqual(refused);
+    }
   });
 
   it("un message par arrivée, jamais en boucle ; rien n'est relancé quand le Spotter prend l'élément", () => {
@@ -307,7 +313,7 @@ describe("partage reçu pendant qu'un autre écran est affiché (personne connec
     const stop = subscribeSharedItem(() => onSharedItemArrival(shown, actions));
     receiveSharedItem({ kind: "video", uri: "file:///cache/partages/B.MOV", sizeBytes: 1_000 });
     receiveSharedItem({ kind: "refused", reason: "unsupported" });
-    expect(actions.say.mock.calls).toEqual([[t.share.waiting], [sharedRefusalMessage("unsupported")]]);
+    expect(actions.say.mock.calls).toEqual([[t.share.waiting], [t.share.waiting]]);
     receiveSharedItem({ kind: "link", text: "https://pin.it/1" });
     // « Fermer » : retour au Spotter, qui prend l'élément ; aucun nouveau message, aucun retour forcé.
     shown = navigation([]);
@@ -317,13 +323,66 @@ describe("partage reçu pendant qu'un autre écran est affiché (personne connec
     stop();
   });
 
-  it("textes en français et en anglais", () => {
+  it("nouvelle publication ouverte depuis le Fil : rien ne s'ouvre seul après « Publier » ; l'élément attend le Spotter, marqué d'une pastille", () => {
+    const actions = { backToSpotter: vi.fn(), say: vi.fn() };
+    let shown = navigation(["post-item/new"], { tab: "feed/index" });
+    const stop = subscribeSharedItem(() => onSharedItemArrival(shown, actions));
+    const video: SharedItem = { kind: "video", uri: "file:///cache/partages/A.MOV", sizeBytes: 9_000_000 };
+    receiveSharedItem(video);
+    expect(actions.say.mock.calls).toEqual([[t.share.waiting]]);
+    // « Publier » ramène au Fil : aucun écran ne se ferme seul, aucun nouveau message.
+    shown = navigation([], { tab: "feed/index" });
+    expect(actions.backToSpotter).not.toHaveBeenCalled();
+    expect(actions.say).toHaveBeenCalledTimes(1);
+    expect(peekSharedItem()).toEqual(video);
+    expect(spotterTab(peekSharedItem()).badge).toBe("");
+    stop();
+  });
+
+  it("onglet Spotter : une pastille tant qu'un partage attend (même refusé), dite par VoiceOver ; rien sinon", () => {
+    for (const locale of ["fr", "en"] as const) {
+      setActiveLocale(locale);
+      expect(spotterTab(null)).toEqual({ badge: undefined, accessibilityLabel: t.spotter.title });
+      for (const item of [{ kind: "link", text: "https://pin.it/1" }, { kind: "refused", reason: "unsupported" }] as SharedItem[]) {
+        const tab = spotterTab(item);
+        expect(tab.badge).toBe("");
+        expect(tab.accessibilityLabel.startsWith(`${t.spotter.title}, `)).toBe(true);
+        expect(tab.accessibilityLabel.length).toBeGreaterThan(t.spotter.title.length + 10);
+      }
+    }
+    setActiveLocale("fr");
+    expect(spotterTab({ kind: "link", text: "https://pin.it/1" }).accessibilityLabel).toBe("Spotter, un partage vous attend");
+  });
+
+  it("textes en français et en anglais : l'attente est dite sans rien promettre d'autre", () => {
     for (const locale of ["fr", "en"] as const) {
       setActiveLocale(locale);
       expect(t.share.waiting.length).toBeGreaterThan(20);
+      // « dès que vous aurez fini ici » était faux : rien ne s'ouvre quand on a fini.
+      expect(t.share.waiting).not.toMatch(/fini|done|dès que|once/i);
+      // « dans Spotter », sans article, comme les autres textes.
+      expect(t.share.waiting).not.toMatch(/le Spotter|the Spotter/);
     }
     setActiveLocale("fr");
-    expect(t.share.waiting).toBe("Votre partage s'ouvrira dans le Spotter dès que vous aurez fini ici.");
+    expect(t.share.waiting).toBe("Votre partage vous attend dans Spotter.");
+    setActiveLocale("en");
+    expect(t.share.waiting).toBe("What you shared is waiting for you in Spotter.");
+    setActiveLocale("fr");
+  });
+
+  it("messages du partage affichés le temps de les lire : au moins 4 s, moins de 3 mots par seconde", () => {
+    for (const locale of ["fr", "en"] as const) {
+      setActiveLocale(locale);
+      for (const message of [t.share.waiting, t.share.signInFirst, ...(["several", "unsupported", "unreadable"] as const).map(sharedRefusalMessage)]) {
+        const words = message.split(/\s+/).filter(Boolean).length;
+        const duration = sharedMessageDurationMs(message);
+        expect(duration, message).toBeGreaterThanOrEqual(4000);
+        expect(words / (duration / 1000), message).toBeLessThan(3);
+      }
+    }
+    setActiveLocale("fr");
+    // Le plus long (22 mots) : plus de 9 s, contre 2,2 s pour une confirmation ordinaire.
+    expect(sharedMessageDurationMs(sharedRefusalMessage("unsupported"))).toBeGreaterThan(9000);
   });
 });
 

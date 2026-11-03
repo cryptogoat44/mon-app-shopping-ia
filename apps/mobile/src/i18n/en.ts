@@ -222,8 +222,11 @@ export const en: Catalog = {
   // "Share to Spotto" lot: what the iOS share sheet hands over to Spotto.
   share: {
     signInFirst: "Sign in: what you shared will then open in Spotter.",
-    // Shared during a search, while typing or on a separate page: the screen stays (to be approved).
-    waiting: "What you shared will open in Spotter once you're done here.",
+    // Shared during a search, while typing or on a separate page: the screen stays and nothing
+    // opens by itself later; the Spotter tab shows a dot meanwhile (to be approved).
+    waiting: "What you shared is waiting for you in Spotter.",
+    // VoiceOver: Spotter tab marked with that dot (to be approved).
+    tabWaiting: (label: string) => `${label}, something you shared is waiting`,
     several: "Spotto opens one item at a time: share a single photo or a single video.",
     unsupported: "Spotto can't open this content. Share a TikTok, Instagram or Pinterest link, a screenshot, a photo or a video.",
     unreadable: "What you shared couldn't be opened. Try again, or add the photo or video below.",
