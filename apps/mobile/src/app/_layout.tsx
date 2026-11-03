@@ -10,6 +10,8 @@ import { WebTitle } from "@/components/web-title";
 import { NewVersionBanner } from "@/components/new-version-banner";
 import { resolveRootRoute, rootContent } from "@/lib/root-route";
 import { StartupWaiting } from "@/components/connecting";
+import { useShareIntake } from "@/lib/share-intake";
+import { useSharedItemWaitingNotice } from "@/lib/use-shared-item";
 import { useAppFonts } from "@/theme/fonts";
 import { color, getActiveScheme } from "@/theme/tokens";
 import { APP_NAME_DISPLAY } from "@/constants/brand";
@@ -44,6 +46,8 @@ function RootNavigator() {
   const [fontsLoaded, fontError] = useAppFonts();
   const fontsReady = fontsLoaded || fontError !== null;
   const route = fontsReady ? resolveRootRoute({ session, profileStatus, profile }) : "splash";
+  // Partage reçu sans être connecté : il s'ouvrira après la connexion, on le dit.
+  useSharedItemWaitingNotice(route === "welcome");
 
   useEffect(() => {
     if (route !== "splash") SplashScreen.hideAsync();
@@ -92,9 +96,17 @@ function RootNavigator() {
   );
 }
 
+/** Feuille de partage d'iOS (lot « partager vers Spotto ») : reçue ici, connecté
+ * ou non. Composant à part : ses changements ne redessinent pas toute l'app. */
+function ShareIntake() {
+  useShareIntake();
+  return null;
+}
+
 export default function RootLayout() {
   return (
     <AuthProvider>
+      <ShareIntake />
       <WebTitle title={APP_NAME_DISPLAY} />
       <AnalyticsSession />
       <PreferencesProvider>

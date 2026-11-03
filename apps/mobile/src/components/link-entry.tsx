@@ -1,17 +1,18 @@
 import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
-import { useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { ClipboardIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
 import { detectLink, type LinkDetection } from "@/lib/link-detection";
-import { beginFromLink, prepareErrorMessage } from "@/lib/spot-flow";
+import { linkRefusal } from "@/lib/link-step";
+import { useLinkEntry } from "@/lib/use-link-entry";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Champ de lien du Spotter (Lot S) : analyse de l'image de couverture.
 // DÉSACTIVÉ au lot 4 ter (voir lib/spot-flags.ts) ; gardé pour pouvoir le rétablir.
+// « Continuer » passe par la même fonction qu'un lien partagé (lib/use-link-entry.ts).
 
 function DetectionCard({ detection }: { detection: LinkDetection }) {
   if (detection.kind === "supported") {
@@ -24,14 +25,13 @@ function DetectionCard({ detection }: { detection: LinkDetection }) {
       </View>
     );
   }
-  if (detection.kind === "unsupported") return <ErrorMessage style={styles.feedback}>{t.spotter.unsupportedLink}</ErrorMessage>;
-  if (detection.kind === "not_a_link") return <ErrorMessage style={styles.feedback}>{t.spotter.notALink}</ErrorMessage>;
-  if (detection.kind === "not_a_video") return <ErrorMessage style={styles.feedback}>{t.spotter.notAVideo[detection.platform]}</ErrorMessage>;
-  return null;
+  const refusal = linkRefusal(detection);
+  return refusal ? <ErrorMessage style={styles.feedback}>{refusal}</ErrorMessage> : null;
 }
 
-export function LinkEntry() {
-  const router = useRouter();
+/** `onHelp` : le lien ne peut pas être lu — le Spotter montre l'aide « capture d'écran d'abord ». */
+export function LinkEntry({ onHelp }: { onHelp: () => void }) {
+  const openLink = useLinkEntry();
   const [link, setLink] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -58,10 +58,9 @@ export function LinkEntry() {
     setMessage(null);
     setBusy(true);
     try {
-      const draft = await beginFromLink(detection.url, detection.platform);
-      router.push({ pathname: "/spot/apercu", params: { searchId: draft.searchId ?? "" } });
-    } catch (error) {
-      setMessage(prepareErrorMessage(error));
+      const outcome = await openLink(link);
+      if (outcome.kind === "refused") setMessage(outcome.message);
+      if (outcome.kind === "help") onHelp();
     } finally {
       setBusy(false);
     }
