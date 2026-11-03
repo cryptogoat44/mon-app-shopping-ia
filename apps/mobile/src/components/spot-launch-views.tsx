@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View, type StyleProp, type TextStyle } from "react-native";
 import { Image } from "expo-image";
-import { SEARCH_QUERY_MAX_LENGTH, type CropRect } from "@monapp/shared-types";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { SEARCH_QUERY_MAX_LENGTH } from "@monapp/shared-types";
+import { color, font, radius, serifFont, size, space } from "@/theme/tokens";
 import { t } from "@/i18n";
-import { CropSelector } from "@/components/crop-selector";
 import { ErrorMessage } from "@/components/error-message";
 import { VideoIcon } from "@/components/icons";
 import { LinkNotice } from "@/components/link-notice";
-import { DEFAULT_CROP } from "@/lib/crop-geometry";
+import { PieceTracer } from "@/components/piece-tracer";
+import type { Size } from "@/lib/crop-geometry";
+import { WHOLE_IMAGE_ZONE, type PieceZone } from "@/lib/piece-trace";
 import type { FramePreview } from "@/lib/video-timeline";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -60,21 +61,26 @@ export function LaunchPreview({ source, failed, duration, height }: { source: Fr
   );
 }
 
-/** Photo (option B du fondateur, lot 4 ter) : le cadre « Entourez la pièce »
- * d'emblée — seule la zone entourée part à l'analyse, sans IA et sans aucun
- * autre envoi. Étape 2 : 0 proposition sur une capture entière, 30 sur le
- * vêtement seul — mesuré pendant une panne de SerpApi : plausible, non confirmé. */
+/** Photo (option B du fondateur, lot 4 ter), ou image d'une vidéo (Ciblage) :
+ * « Entourez la pièce » d'emblée — seule la zone entourée part à l'analyse,
+ * sans IA et sans aucun autre envoi. Étape 2 : 0 proposition sur une capture
+ * entière, 30 sur le vêtement seul — mesuré pendant une panne de SerpApi :
+ * plausible, non confirmé. La pièce s'entoure au doigt (lot entourer la
+ * pièce) ; « Utiliser toute l'image » sert à qui ne peut pas tracer
+ * (VoiceOver, motricité) ou le préfère. */
 export function PhotoFrame({
   uri,
-  crop,
+  zone,
   onChange,
   onDragChange,
+  onImageSize,
   height,
 }: {
   uri: string;
-  crop: CropRect;
-  onChange: (crop: CropRect) => void;
+  zone: PieceZone | null;
+  onChange: (zone: PieceZone) => void;
   onDragChange: (dragging: boolean) => void;
+  onImageSize?: (size: Size) => void;
   height: number;
 }) {
   return (
@@ -84,10 +90,10 @@ export function PhotoFrame({
       </Text>
       <Text style={styles.caption}>{t.targeting.caption}</Text>
       <View style={styles.cropArea}>
-        <CropSelector uri={uri} crop={crop} onChange={onChange} onDragChange={onDragChange} height={height} />
+        <PieceTracer uri={uri} zone={zone} onChange={onChange} onDragChange={onDragChange} onImageSize={onImageSize} height={height} />
       </View>
-      <Pressable onPress={() => onChange(DEFAULT_CROP)} style={styles.reset} hitSlop={8} accessibilityRole="button">
-        <Text style={styles.resetLabel}>{t.targeting.reset}</Text>
+      <Pressable onPress={() => onChange(WHOLE_IMAGE_ZONE)} style={styles.wholeImage} accessibilityRole="button">
+        <Text style={styles.wholeImageLabel}>{t.targeting.wholeImage}</Text>
       </Pressable>
     </>
   );
@@ -143,7 +149,7 @@ export interface AskProps {
   /** Photo : le champ « Quelle pièce ? (facultatif) », dont les mots trient
    * les propositions (petit lot 2, décision du fondateur du 2026-10-27). */
   photoWords: boolean;
-  /** Photo : le cadre pas encore ajusté, avec ou sans mots : conseil de le resserrer sur la pièce. */
+  /** Photo : la pièce pas encore entourée (rien de tracé, ou toute l'image), avec ou sans mots : conseil de l'entourer seule. */
   frameHint: boolean;
   /** Vidéo : champ prêt à la saisie dès l'ouverture. */
   autoFocus: boolean;
@@ -300,8 +306,8 @@ const styles = themedStyles(() => ({
   frameTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 29 },
   caption: { fontSize: font.caption, color: color.acier, marginTop: 6, lineHeight: 18 },
   cropArea: { marginTop: space.md },
-  reset: { alignSelf: "flex-end", minHeight: 36, justifyContent: "center" },
-  resetLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600" },
+  wholeImage: { alignSelf: "flex-end", minHeight: size.touchTarget, justifyContent: "center" },
+  wholeImageLabel: { fontSize: font.secondary, color: color.acier, textDecorationLine: "underline" },
   body: { fontSize: font.secondary, color: color.encre, marginTop: space.md, lineHeight: 21 },
   // Contour « plein » de largeur nulle : remplace le cadre du navigateur (« auto », qui ignore la largeur).
   input: { minHeight: 48, marginTop: space.xs, borderBottomWidth: 1, borderBottomColor: color.filet, fontSize: font.body, color: color.encre, outlineStyle: "solid", outlineWidth: 0 },

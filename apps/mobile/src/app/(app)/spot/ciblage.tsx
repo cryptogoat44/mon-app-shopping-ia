@@ -2,12 +2,11 @@ import { useState } from "react";
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import type { CropRect } from "@monapp/shared-types";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
-import { CropSelector } from "@/components/crop-selector";
-import { DEFAULT_CROP } from "@/lib/crop-geometry";
+import { PhotoFrame } from "@/components/spot-launch-views";
+import { zoneReady, type PieceZone } from "@/lib/piece-trace";
 import { draftImageUri, getDraft, updateDraft } from "@/lib/spot-draft";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -15,6 +14,8 @@ import { themedStyles } from "@/theme/themed-styles";
 // l'analyse, sans mots depuis le petit lot, 2026-10-25 ; les mots tapés sous
 // la photo, s'il y en a, trient encore les propositions : petit lot 2). Aucun
 // crédit consommé : c'est « Lancer l'identification » qui engage la recherche.
+// Comme pour une photo (lot entourer la pièce), il attend la zone : entourée
+// au doigt, ou l'image entière. « Recadrer » repart d'une image sans tracé.
 export default function TargetingScreen() {
   const router = useRouter();
   const { searchId } = useLocalSearchParams<{ searchId?: string }>();
@@ -22,7 +23,7 @@ export default function TargetingScreen() {
   const draft = getDraft();
   const imageUri = draft ? draftImageUri(draft) : null;
 
-  const [crop, setCrop] = useState<CropRect>(draft?.crop ?? DEFAULT_CROP);
+  const [zone, setZone] = useState<PieceZone | null>(null);
   const [dragging, setDragging] = useState(false);
 
   // Brouillon perdu (page rechargée sur le web avec une photo importée,
@@ -40,8 +41,10 @@ export default function TargetingScreen() {
     );
   }
 
+  const ready = zoneReady(zone);
   function handleLaunch() {
-    updateDraft({ crop });
+    if (!zoneReady(zone)) return;
+    updateDraft({ crop: zone.crop });
     router.push({ pathname: "/spot/analysis", params: { searchId: searchId ?? "" } });
   }
 
@@ -60,27 +63,23 @@ export default function TargetingScreen() {
 
       <View style={styles.flex}>
         <ScrollView contentContainerStyle={styles.content} scrollEnabled={!dragging} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
-          <Text style={styles.title} accessibilityRole="header">
-            {t.targeting.title}
-          </Text>
-          <Text style={styles.caption}>{t.targeting.caption}</Text>
+          <PhotoFrame
+            uri={imageUri}
+            zone={zone}
+            onChange={setZone}
+            onDragChange={setDragging}
+            onImageSize={(size) => updateDraft({ imageSize: size })}
+            height={cropHeight}
+          />
 
-          <View style={styles.cropArea}>
-            <CropSelector
-              uri={imageUri}
-              crop={crop}
-              onChange={setCrop}
-              onDragChange={setDragging}
-              onImageSize={(size) => updateDraft({ imageSize: size })}
-              height={cropHeight}
-            />
-          </View>
-          <Pressable onPress={() => setCrop(DEFAULT_CROP)} style={styles.reset} hitSlop={8} accessibilityRole="button">
-            <Text style={styles.resetLabel}>{t.targeting.reset}</Text>
-          </Pressable>
-
-          <Pressable style={styles.primary} onPress={handleLaunch} accessibilityRole="button">
-            <Text style={styles.primaryLabel}>{t.targeting.launch}</Text>
+          <Pressable
+            style={[styles.primary, ready ? null : styles.primaryDisabled]}
+            onPress={handleLaunch}
+            disabled={!ready}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !ready }}
+          >
+            <Text style={[styles.primaryLabel, ready ? null : styles.primaryLabelDisabled]}>{t.targeting.launch}</Text>
           </Pressable>
         </ScrollView>
       </View>
@@ -98,12 +97,9 @@ const styles = themedStyles(() => ({
   close: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   back: { fontSize: 26, color: color.encre },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 29 },
-  caption: { fontSize: font.caption, color: color.acier, marginTop: 6, lineHeight: 18 },
   lead: { fontSize: font.secondary, color: color.acier, lineHeight: 21 },
-  cropArea: { marginTop: space.md },
-  reset: { alignSelf: "flex-end", minHeight: 36, justifyContent: "center" },
-  resetLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600" },
   primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, alignItems: "center", justifyContent: "center", marginTop: space.lg },
+  primaryDisabled: { backgroundColor: color.inactif },
   primaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
+  primaryLabelDisabled: { color: color.surInactif },
 }));

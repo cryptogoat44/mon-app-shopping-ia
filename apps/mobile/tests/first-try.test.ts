@@ -14,7 +14,7 @@ vi.mock("../src/lib/analytics", () => ({ track, setAnalyticsConsent: vi.fn() }))
 vi.mock("../src/lib/image-file", () => ({ imageFileFromUri: vi.fn() }));
 
 import { runSearch } from "../src/lib/api";
-import { DEFAULT_CROP, isDefaultCrop } from "../src/lib/crop-geometry";
+import { DEFAULT_CROP, WHOLE_IMAGE, isDefaultCrop } from "../src/lib/crop-geometry";
 import { isForeignPrice, searchCountryFrom } from "../src/lib/foreign-shop";
 import { getDraft, startDraft } from "../src/lib/spot-draft";
 import { openWishlistFromSpotter, requestedProfileSegment } from "../src/lib/wishlist-link";
@@ -23,12 +23,15 @@ import { en } from "../src/i18n/en";
 
 const moved: CropRect = { x: 0.3, y: 0.2, width: 0.4, height: 0.5 };
 
-describe("cadre « Entourez la pièce » : resté par défaut ou ajusté", () => {
-  it("le cadre par défaut, ou une copie (réinitialisé) : par défaut ; déplacé ou absent : non", () => {
+describe("« Entourez la pièce » : zone par défaut ou ajustée", () => {
+  it("l'ancienne zone par défaut ou l'image entière (« Utiliser toute l'image ») : par défaut ; zone entourée ou absente : non", () => {
     expect(isDefaultCrop(DEFAULT_CROP)).toBe(true);
     expect(isDefaultCrop({ ...DEFAULT_CROP })).toBe(true);
+    expect(isDefaultCrop(WHOLE_IMAGE)).toBe(true);
+    expect(isDefaultCrop({ x: 0, y: 0, width: 1, height: 1 })).toBe(true);
     expect(isDefaultCrop(moved)).toBe(false);
     expect(isDefaultCrop({ ...DEFAULT_CROP, width: 0.69 })).toBe(false);
+    expect(isDefaultCrop({ ...WHOLE_IMAGE, height: 0.98 })).toBe(false);
     expect(isDefaultCrop(null)).toBe(false);
   });
 });
@@ -68,9 +71,15 @@ describe("statistique « cadre ajusté » : n'est plus toujours vraie", () => {
     expect(await launchedWith(DEFAULT_CROP)).toEqual({ zone_adjusted: false, image_imported: false });
   });
 
-  it("cadre déplacé : ajusté ; sans cadre : non", async () => {
+  it("pièce entourée : ajusté ; sans zone : non", async () => {
     expect(await launchedWith(moved)).toEqual({ zone_adjusted: true, image_imported: false });
     expect(await launchedWith(null)).toEqual({ zone_adjusted: false, image_imported: false });
+  });
+
+  it("« Utiliser toute l'image » : non ajusté, et l'image entière part au serveur", async () => {
+    expect(await launchedWith(WHOLE_IMAGE)).toEqual({ zone_adjusted: false, image_imported: false });
+    const body = fetchMock.mock.calls[0]![1]?.body as FormData;
+    expect(JSON.parse(String(body.get("crop")))).toEqual({ x: 0, y: 0, width: 1, height: 1 });
   });
 
   it("le cadre part toujours tel quel au serveur", async () => {
@@ -81,14 +90,14 @@ describe("statistique « cadre ajusté » : n'est plus toujours vraie", () => {
 });
 
 describe("conseil de cadrage et « rien trouvé » : ne poussent plus à relancer la même image", () => {
-  it("le conseil parle de resserrer le cadre, en français et en anglais", () => {
-    expect(fr.launch.frameHint).toMatch(/^Resserrez le cadre sur la pièce seule/);
-    expect(en.launch.frameHint).toMatch(/^Tighten the frame around the piece alone/);
+  it("le conseil dit d'entourer la pièce seule (lot entourer la pièce), en français et en anglais", () => {
+    expect(fr.launch.frameHint).toMatch(/^Entourez la pièce seule, sans visage ni texte autour/);
+    expect(en.launch.frameHint).toMatch(/^Circle the piece alone, with no faces or text around it/);
   });
 
-  it("« rien trouvé » : plus de « réessayez dans quelques minutes » ; cadre, autre moment, mots", () => {
+  it("« rien trouvé » : plus de « réessayez dans quelques minutes » ; zone, autre moment, mots", () => {
     for (const text of [fr.result.noMatchTitle, fr.result.noMatchTip]) expect(text).not.toMatch(/pour le moment|quelques minutes/);
-    expect(fr.result.noMatchTip).toMatch(/resserrer le cadre/);
+    expect(fr.result.noMatchTip).toMatch(/entourer la pièce seule/);
     expect(fr.result.noMatchTip).toMatch(/autre moment de la vidéo/);
     expect(fr.result.noMatchTip).toMatch(/préciser vos mots/);
     expect(en.result.noMatchTip).not.toMatch(/few minutes/);

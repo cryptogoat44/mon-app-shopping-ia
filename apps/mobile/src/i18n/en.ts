@@ -63,8 +63,10 @@ export const en: Catalog = {
   },
   crop: {
     label: "Area to analyze",
-    hint: "Drag the frame or its corners. Swipe up or down to enlarge or reduce it.",
+    hint: (instruction: string, button: string) => `${instruction}, or tap “${button}”.`,
     value: (width: number, height: number) => `${width}% of the width, ${height}% of the height`,
+    none: "Piece not circled yet",
+    whole: "The whole image",
   },
   peopleSearch: {
     placeholder: "Search",
@@ -195,8 +197,8 @@ export const en: Catalog = {
     photoLabel: "Which piece? (optional)",
     photoPlaceholder: "e.g. the black leather jacket",
     photoWordsNote: "Your words are used to sort the suggestions. Only the image goes to the search.",
-    // Shown while the frame hasn't moved, with or without words ("first try" lot).
-    frameHint: "Tighten the frame around the piece alone, with no faces or text around it: Spotto will find it more easily.",
+    // Shown until the piece is circled (nothing drawn, or the whole image), with or without words.
+    frameHint: "Circle the piece alone, with no faces or text around it: Spotto will find it more easily.",
     videoPreview: (duration: string) => `Preview of your video, ${duration}`,
     photoPreview: "Your photo",
     yourVideo: "Your video",
@@ -233,7 +235,7 @@ export const en: Catalog = {
       title: "How it works",
       steps: (addPhoto: string) => [
         "Pause the video when the piece is clearly visible, and take a screenshot.",
-        `Add it with “${addPhoto}”, then frame the piece.`,
+        `Add it with “${addPhoto}”, then circle the piece.`,
         "Spotto shows you where to buy it, in 10 to 20 seconds.",
       ],
     },
@@ -309,9 +311,14 @@ export const en: Catalog = {
     back: "Back to Spotter",
   },
   targeting: {
-    title: "Frame the piece",
-    caption: "Only the selected area will be analyzed. Drag the frame or its corners.",
-    reset: "Reset the frame",
+    title: "Circle the piece",
+    caption: "Only the circled area will be analyzed. To correct it, circle the piece again.",
+    instruction: {
+      finger: "Circle the piece with your finger",
+      mouse: "Circle the piece with your mouse or finger",
+    },
+    tooSmall: "Circle the whole piece in a single stroke.",
+    wholeImage: "Use the whole image",
     launch: "Identify the piece",
   },
   analysis: {
@@ -332,7 +339,7 @@ export const en: Catalog = {
     relaunch: "Launch again",
     checkAgain: "Check again",
     cancelled:
-      "Search cancelled. It may have carried on on our side: launch it again without changing the frame or the words, and its result will appear if it's already there.",
+      "Search cancelled. It may have carried on on our side: launch it again without changing the area or the words, and its result will appear if it's already there.",
   },
   result: {
     title: "Results",
@@ -376,7 +383,7 @@ export const en: Catalog = {
     correctionsLead: "Show Spotto the piece another way:",
     noMatchTitle: "Our visual search didn't find anything in this image.",
     noMatchTip:
-      "Searching the same image again would give the same result. Instead, try tightening the frame around the piece alone, picking another moment in the video where it's clearly visible or, for a video, describing it more precisely.",
+      "Searching the same image again would give the same result. Instead, try circling the piece alone, picking another moment in the video where it's clearly visible or, for a video, describing it more precisely.",
     noPriceTitle: "None of these suggestions show a price.",
     noPriceText:
       "These are pieces that look like yours, found by our visual search. They are not necessarily for sale: open them to check, or try another frame.",

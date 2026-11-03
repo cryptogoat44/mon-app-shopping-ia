@@ -2,12 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Keyboard, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { VIDEO_AI, type CropRect } from "@monapp/shared-types";
+import { VIDEO_AI } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { containsLink } from "@/lib/link-detection";
 import { closeSpotter } from "@/lib/spot-navigation";
-import { DEFAULT_CROP, isDefaultCrop } from "@/lib/crop-geometry";
+import { isAdjustedCrop } from "@/lib/crop-geometry";
+import { zoneReady, type PieceZone } from "@/lib/piece-trace";
 import { draftImageUri, getDraft, type SpotDraft } from "@/lib/spot-draft";
 import { getSpotVideo, holdSpotVideo, importSpotVideo, letGoSpotVideo, videoImportMessage } from "@/lib/spot-video";
 import { blocksLaunch } from "@/lib/search-limits";
@@ -111,7 +112,7 @@ function useAsk(
   query: string,
   setQuery: (value: string) => void,
   flow: ReturnType<typeof useSpotLaunch>,
-  frameAdjusted: boolean
+  zone: PieceZone | null
 ): AskProps {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
@@ -141,8 +142,8 @@ function useAsk(
   return {
     withQuery,
     photoWords,
-    // Dès que le cadre n'a pas bougé, avec ou sans mots (lot « premier essai »).
-    frameHint: photoWords && !frameAdjusted,
+    // Tant que la pièce n'est pas entourée, avec ou sans mots (lots « premier essai » et « entourer la pièce »).
+    frameHint: photoWords && !isAdjustedCrop(zone?.crop ?? null),
     autoFocus: isVideo,
     query,
     onQuery: (value) => {
@@ -151,7 +152,8 @@ function useAsk(
     },
     onLaunch: flow.launch,
     launchLabel: isVideo && flow.declined ? t.launch.chooseImage : t.launch.launch,
-    canLaunch: enoughWords && !linkInQuery,
+    // Photo : « Lancer » attend la zone, dont le résultat dépend (lot entourer la pièce).
+    canLaunch: enoughWords && !linkInQuery && (!photoWords || zoneReady(zone)),
     declined: isVideo && flow.declined,
     onEnableAi: flow.enableAi,
     linkInQuery,
@@ -171,8 +173,9 @@ export default function LaunchScreen() {
   const { height: windowHeight } = useWindowDimensions();
   const [media, setMedia] = useState(() => initialMedia(params.source));
   const [query, setQuery] = useState(typeof params.query === "string" ? params.query : "");
-  // Photo : la zone entourée ; le défilement s'arrête pendant qu'on déplace le cadre.
-  const [crop, setCrop] = useState<CropRect>(() => media.draft?.crop ?? DEFAULT_CROP);
+  // Photo : la zone entourée (rien tant que la pièce n'est pas entourée) ; le
+  // défilement s'arrête pendant le tracé.
+  const [zone, setZone] = useState<PieceZone | null>(null);
   const [dragging, setDragging] = useState(false);
   const preview = useLaunchPreview(media);
   // Lot limites annoncées : Spotter en pause ou part du jour épuisée — le
@@ -180,10 +183,9 @@ export default function LaunchScreen() {
   // (jamais de lancement automatique non plus). Compteur inconnu : rien ne change.
   const limits = useSearchLimits();
   const blocked = blocksLaunch(limits.notice);
-  const flow = useSpotLaunch({ ...media, preview: preview.source, query, crop: media.source === "photo" ? crop : null, auto: params.auto === "1" && !blocked });
-  const frameAdjusted = !isDefaultCrop(crop);
-  const ask = useAsk(media, setMedia, query, setQuery, flow, frameAdjusted);
-  // Photo : le cadre occupe le haut de l'écran ; quand le clavier s'ouvre, on
+  const flow = useSpotLaunch({ ...media, preview: preview.source, query, crop: media.source === "photo" ? (zone?.crop ?? null) : null, auto: params.auto === "1" && !blocked });
+  const ask = useAsk(media, setMedia, query, setQuery, flow, zone);
+  // Photo : l'image occupe le haut de l'écran ; quand le clavier s'ouvre, on
   // descend jusqu'à « Lancer », sinon caché dessous (constaté sur iPhone).
   const scrollRef = useRef<ScrollView>(null);
   useEffect(() => {
@@ -237,7 +239,7 @@ export default function LaunchScreen() {
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content} scrollEnabled={!dragging} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         {flow.phase.kind === "ask" && blocked ? <SearchLimitsNotice notice={limits.notice} style={styles.limits} /> : null}
         {flow.phase.kind === "ask" && photoUri ? (
-          <PhotoFrame uri={photoUri} crop={crop} onChange={setCrop} onDragChange={setDragging} height={Math.min(Math.max(windowHeight * 0.42, 220), 400)} />
+          <PhotoFrame uri={photoUri} zone={zone} onChange={setZone} onDragChange={setDragging} height={Math.min(Math.max(windowHeight * 0.42, 220), 400)} />
         ) : flow.phase.kind === "ask" ? (
           <LaunchPreview
             source={preview.source}
