@@ -1,11 +1,12 @@
-import { t } from "@/i18n";
+import { t } from "../i18n";
 
 // Supabase (GoTrue) renvoie ses messages d'erreur en anglais, quel que soit
 // le projet — il n'y a pas d'option de localisation côté service. On mappe
 // ici les cas les plus courants vers un message dans la langue de l'app ;
 // tout le reste tombe sur un message générique plutôt que d'afficher du
-// texte technique brut à un utilisateur non-technique.
-type AuthErrorKey = keyof typeof t.auth.errors;
+// texte technique brut à un utilisateur non-technique. Imports relatifs :
+// fichier testé par vitest.
+export type AuthErrorKey = keyof typeof t.auth.errors;
 
 const KNOWN_PATTERNS: Array<{ match: RegExp; key: AuthErrorKey }> = [
   { match: /invalid login credentials/i, key: "invalidCredentials" },
@@ -20,7 +21,13 @@ const KNOWN_PATTERNS: Array<{ match: RegExp; key: AuthErrorKey }> = [
   { match: /signups? not allowed/i, key: "signupsClosed" },
 ];
 
+/** Cas reconnu (ex. « e-mail non confirmé » : l'écran propose alors de
+ * renvoyer l'e-mail), ou null. */
+export function authErrorKey(message: string): AuthErrorKey | null {
+  return KNOWN_PATTERNS.find((p) => p.match.test(message))?.key ?? null;
+}
+
 export function translateAuthError(message: string): string {
-  const found = KNOWN_PATTERNS.find((p) => p.match.test(message));
-  return found ? t.auth.errors[found.key] : t.common.genericError;
+  const key = authErrorKey(message);
+  return key ? t.auth.errors[key] : t.common.genericError;
 }

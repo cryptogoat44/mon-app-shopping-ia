@@ -195,7 +195,8 @@ export const en: Catalog = {
     photoLabel: "Which piece? (optional)",
     photoPlaceholder: "e.g. the black leather jacket",
     photoWordsNote: "Your words are used to sort the suggestions. Only the image goes to the search.",
-    frameHint: "Several pieces in the photo? Circle the one you're looking for.",
+    // Shown while the frame hasn't moved, with or without words ("first try" lot).
+    frameHint: "Tighten the frame around the piece alone, with no faces or text around it: Spotto will find it more easily.",
     videoPreview: (duration: string) => `Preview of your video, ${duration}`,
     photoPreview: "Your photo",
     yourVideo: "Your video",
@@ -217,6 +218,45 @@ export const en: Catalog = {
       computer: "on Mac: Cmd + Shift + 5; on PC: Snipping Tool",
     },
     addVideo: "Add a video",
+  },
+  // "First try" lot: the right gesture (a screenshot first), "How it works",
+  // the Wishlist after "Save", retailers abroad and sign-up.
+  firstTry: {
+    linkHelp: {
+      title: "The easiest way: a screenshot",
+      lead: "Spotto can't read a video from its link. Show it the piece instead:",
+      lastStep: (button: string) => `Come back here and tap “${button}”.`,
+      addScreenshot: "Add a screenshot",
+      recording: (how: string) => `Prefer the video? Record your screen while it plays (${how}), then add the recording.`,
+    },
+    howItWorks: {
+      title: "How it works",
+      steps: (addPhoto: string) => [
+        "Pause the video when the piece is clearly visible, and take a screenshot.",
+        `Add it with “${addPhoto}”, then frame the piece.`,
+        "Spotto shows you where to buy it, in 10 to 20 seconds.",
+      ],
+    },
+    kept: "Added to your Wishlist",
+    viewWishlist: "View my Wishlist",
+    foreignShop: "Retailer abroad",
+    signUp: {
+      passwordHint: "At least 8 characters",
+      missing: (items: string) => `To continue, please ${items}.`,
+      missingItem: {
+        email: "enter your email",
+        password: "choose a password",
+        confirmPassword: "re-enter your password",
+        age: "confirm your age",
+        consent: "accept the terms",
+      },
+      lastItem: (items: string, last: string) => `${items} and ${last}`,
+      notReceived: "Nothing after a few minutes? Check your spam folder, then resend the email.",
+      resend: "Resend the email",
+      resending: "Sending…",
+      resendIn: (seconds: number) => `Resend the email in ${seconds} s`,
+      resent: "Email sent again. Remember to check your spam folder too.",
+    },
   },
   preview: {
     title: "This is the image that will be analyzed",
@@ -317,8 +357,9 @@ export const en: Catalog = {
     backToSpotter: "Back to Spotter",
     notRight: "Not the right piece?",
     correctionsLead: "Show Spotto the piece another way:",
-    noMatchTitle: "Our visual search didn't find anything for now.",
-    noMatchTip: "Try another frame, or try again in a few minutes.",
+    noMatchTitle: "Our visual search didn't find anything in this image.",
+    noMatchTip:
+      "Searching the same image again would give the same result. Instead, try tightening the frame around the piece alone, picking another moment in the video where it's clearly visible or, for a video, describing it more precisely.",
     noPriceTitle: "None of these suggestions show a price.",
     noPriceText:
       "These are pieces that look like yours, found by our visual search. They are not necessarily for sale: open them to check, or try another frame.",
@@ -872,7 +913,7 @@ export const en: Catalog = {
     },
     signUp: {
       title: "Create an account",
-      subtitle: "Your personal Vault awaits.",
+      subtitle: "Find where to buy the pieces you spot.",
       confirmPassword: "Confirm the password",
       consent: "I accept the terms of use and the privacy policy.",
       ageDeclaration: `I confirm that I am at least ${MINIMUM_AGE} years old.`,

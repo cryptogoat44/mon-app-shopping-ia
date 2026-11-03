@@ -116,7 +116,8 @@ function toMatchRow(searchId: string, m: VisualMatch, rank: number) {
     image_hd_url: m.imageHdUrl,
     price_min: m.priceValue,
     price_max: m.priceValue,
-    currency: m.currency ?? "EUR",
+    // Jamais « EUR » par défaut : sans devise, il n'y a pas de prix (storablePrice).
+    currency: m.currency,
     merchant_name: m.merchantName,
     merchant_url: m.merchantUrl,
   };

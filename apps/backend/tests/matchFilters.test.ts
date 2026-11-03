@@ -186,7 +186,8 @@ describe("réponses réelles du 21 octobre (« visual_matches », 4 pièces du f
     ["lens-visual-veste-bleu-marine.json", { received: 60, removedSocial: 0, kept: 40, keptWithPrice: 22 }, { ecranPrix: 9, ecranEuros: 9 }, [32, 36, 37, 38, 46, 47, 51, 52, 53, 55]],
     ["lens-visual-tshirt-blanc.json", { received: 60, removedSocial: 0, kept: 33, keptWithPrice: 8 }, { ecranPrix: 5, ecranEuros: 1 }, [43, 48, 57]],
     ["lens-visual-maillot-nike.json", { received: 60, removedSocial: 4, kept: 38, keptWithPrice: 15 }, { ecranPrix: 7, ecranEuros: 6 }, [42, 43, 44, 45, 54, 55, 59, 60]],
-    ["lens-visual-pull-noir.json", { received: 60, removedSocial: 52, kept: 8, keptWithPrice: 0 }, { ecranPrix: 0, ecranEuros: 0 }, []],
+    // Lot « premier essai » : Threads (réseau social), Reddit et Tripadvisor (pages sans vente) écartés : 52 + 5, 3 gardées au lieu de 8.
+    ["lens-visual-pull-noir.json", { received: 60, removedSocial: 57, kept: 3, keptWithPrice: 0 }, { ecranPrix: 0, ecranEuros: 0 }, []],
   ])("%s : gardées et prix avec la règle des prix ; premier écran (12) ; rangs d'origine des ajouts", async (file, attendu, ecran, ajouts) => {
     const { matches, measure, addedRanks } = await replayWithMeasure(fixture(file), { country: "fr", hl: "fr" });
     expect(measure).toMatchObject(attendu);
@@ -205,6 +206,23 @@ describe("réponses réelles du 21 octobre (« visual_matches », 4 pièces du f
   it("le type « products », abandonné le 9 octobre : refus de SerpApi (400, non facturé), une panne dont la place est rendue, jamais « rien trouvé »", async () => {
     safeFetchMock.mockResolvedValueOnce(new Response(JSON.stringify(fixture("lens-products-abandonne-400.json")), { status: 400, headers: { "content-type": "application/json" } }));
     await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/zone.jpg")).rejects.toMatchObject({ name: "ProviderFailure", kind: "refused", statusCode: 400 });
+  });
+
+  it("« pull noir » : Reddit n'est plus la « Meilleure proposition » ; Threads et les 3 pages Tripadvisor sont écartés aussi", async () => {
+    const reponse = RECORDED.parse(fixture("lens-visual-pull-noir.json")).visual_matches;
+    const host = (link: string) => new URL(link).hostname;
+    // Avant le lot : ces 5 propositions restaient, Reddit en tête.
+    expect(reponse.filter((m) => /reddit|threads|tripadvisor/.test(host(m.link))).map((m) => [m.position, exclusionReason(m.link)])).toEqual([
+      [17, "no_sale"],
+      [23, "social"],
+      [46, "no_sale"],
+      [49, "no_sale"],
+      [52, "no_sale"],
+    ]);
+    const matches = await replay({ visual_matches: reponse }, { country: "fr", hl: "fr" });
+    // Seules restent les 3 autres pages, dans l'ordre de Google.
+    expect(matches.map((m) => host(m.merchantUrl))).toEqual(["site-1.com", "site-2.com", "www.site-3.net"]);
+    expect(matches[0]!.merchantUrl).toBe(at(reponse, 26).link);
   });
 
   it("interface du fournisseur (0027) : les 5 réponses réelles passent par l'adaptateur SerpApi, propositions lues et code de réponse 200", async () => {
@@ -228,5 +246,54 @@ describe("exclusionReason", () => {
     expect(exclusionReason("https://fr.pinterest.com/pin/1/")).toBe("social");
     expect(exclusionReason("https://pinterest.example.com/veste")).toBeNull();
     expect(exclusionReason("pas une adresse")).toBeNull();
+  });
+
+  it("Threads est un réseau social, quelle que soit son adresse", () => {
+    expect(exclusionReason("https://www.threads.com/@compte/post/1")).toBe("social");
+    expect(exclusionReason("https://www.threads.net/@compte/post/1")).toBe("social");
+    expect(exclusionReason("https://threads.example.com/veste")).toBeNull();
+  });
+
+  it("pages où rien ne s'achète : forums, questions-réponses, avis, encyclopédie (toutes extensions pour Tripadvisor)", () => {
+    for (const link of [
+      "https://www.reddit.com/r/mode/comments/1",
+      "https://old.reddit.com/r/mode/comments/1",
+      "https://fr.quora.com/question",
+      "https://fr.wikipedia.org/wiki/Pull",
+      "https://www.tripadvisor.fr/Restaurant-1",
+      "https://www.tripadvisor.com/Hotel-1",
+      "https://www.tripadvisor.co.uk/Attraction-1",
+    ]) {
+      expect(exclusionReason(link), link).toBe("no_sale");
+    }
+  });
+
+  it("pages sans vente : les noms qui leur ressemblent restent des boutiques", () => {
+    expect(exclusionReason("https://notreddit.com/pull")).toBeNull();
+    expect(exclusionReason("https://reddit.example.com/pull")).toBeNull();
+    expect(exclusionReason("https://tripadvisor-boutique.fr/pull")).toBeNull();
+    expect(exclusionReason("https://wikipedia.example.org/pull")).toBeNull();
+  });
+});
+
+describe("prix sans devise (lot « premier essai »)", () => {
+  it("jamais enregistré en euros : la proposition reste, sans prix ; un prix avec devise ne change pas", async () => {
+    const [a, b] = [at(ZONE, 4), at(ZONE, 5)];
+    const results = await replay({
+      visual_matches: [
+        { ...a, price: { value: "45", extracted_value: 45 } },
+        { ...b, price: { value: "39 €", extracted_value: 39, currency: "€" } },
+      ],
+    });
+    expect(results.map((r) => [r.merchantUrl, r.priceValue, r.currency])).toEqual([
+      [a.link, null, null],
+      [b.link, 39, "€"],
+    ]);
+  });
+
+  it("devise vide : pareil, aucun prix", async () => {
+    const a = at(ZONE, 4);
+    const [result] = await replay({ visual_matches: [{ ...a, price: { value: "45", extracted_value: 45, currency: "  " } }] });
+    expect(result).toMatchObject({ priceValue: null, currency: null });
   });
 });

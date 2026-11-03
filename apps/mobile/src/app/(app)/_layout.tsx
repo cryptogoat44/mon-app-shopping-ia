@@ -14,6 +14,11 @@ export default function AppLayout() {
             recadrage dès qu'on allait vers la droite (lot 4). Retour par « ‹ ». */}
         <Stack.Screen name="spot/video" options={{ gestureEnabled: false }} />
         <Stack.Screen name="spot/ciblage" options={{ gestureEnabled: false }} />
+        {/* Le cadre « Entourez la pièce » vit aussi ici depuis le lot 4 ter : tirer
+            le cadre vers la droite risquait de ramener à Spotter, cadre et mots
+            perdus (lot « premier essai », à confirmer sur iPhone). Retour par « ‹ »
+            ou « Fermer ». */}
+        <Stack.Screen name="spot/lancer" options={{ gestureEnabled: false }} />
       </Stack>
       {/* Messages discrets (information de mise à jour, demande « statistiques ») et réglage de la collecte. */}
       <AppNotices />
