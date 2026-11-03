@@ -34,6 +34,7 @@ import { TextSearchAlreadyUsed, TextSearchPrompt } from "@/components/text-searc
 import { ProposalCard } from "@/components/proposal-card";
 import { YourPiece } from "@/components/your-piece";
 import { yourPieceImage } from "@/lib/your-piece";
+import { useHeroReveal } from "@/lib/use-hero-reveal";
 import { track } from "@/lib/analytics";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -70,6 +71,7 @@ export default function ResultScreen() {
   // Voie B (lot c) : seconde recherche avec les mots refusée, sans leurs propositions pour l'instant.
   const [textSearchUsed, setTextSearchUsed] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  const heroReveal = useHeroReveal(scrollRef);
   // « Votre pièce » : l'image du lancement, encore sur l'appareil ; lue une
   // fois (un autre essai préparé ensuite depuis cet écran ne la change pas).
   // Rien pour un résultat rouvert : son image n'est gardée nulle part.
@@ -203,7 +205,9 @@ export default function ResultScreen() {
     setSelectedIndex(index);
     setBlockedMerchantUrl(null);
     setActionError(null);
-    scrollRef.current?.scrollTo({ y: 0, animated: true });
+    // Comparer sans remonter : la page reste où elle est, sauf si la grande
+    // image n'est plus assez visible pour voir le changement.
+    heroReveal.revealHero(result ? (allPieces(result)[index]?.name ?? null) : null);
   }
 
   // ---- Rendus ----
@@ -304,14 +308,22 @@ export default function ResultScreen() {
     <SafeAreaView style={styles.screen}>
       {nav}
       {/* Voie B : le champ « Que cherchez-vous ? » est en bas de la liste. */}
-      <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        onScroll={heroReveal.onScroll}
+        scrollEventThrottle={32}
+        onLayout={heroReveal.onViewportLayout}
+      >
         {/* Voie C : le décompte, le tri et l'absence de prix parlent de la recherche visuelle seule. */}
         {result.pieces.length > 0 ? <Text style={styles.count}>{t.result.count(result.pieces.length, result.query)}</Text> : null}
         {result.sortedByWords ? <Text style={styles.count}>{t.result.sortedByWords}</Text> : null}
         {noPriceShown(result.pieces) ? <NoPriceNotice /> : null}
 
         {yourPiece ? <YourPiece image={yourPiece} /> : null}
-        <View style={styles.hero}>
+        <View style={styles.hero} onLayout={heroReveal.onHeroLayout}>
           <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} accessibilityLabel={piece.name} />
         </View>
 

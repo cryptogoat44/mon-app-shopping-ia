@@ -300,6 +300,7 @@ export const fr = {
     // Lot résultats lisibles : textes à valider par le fondateur.
     yourPiece: "Votre pièce",
     showLargeHint: "Affiche cette proposition en grand, en haut de l'écran.",
+    shownAbove: (name: string) => `Proposition affichée en grand en haut de l'écran : ${name}`,
     // Texte du fondateur (2026-10-25) : ne promet pas un prix que le site n'affiche peut-être pas.
     priceOnSite: "Prix à vérifier chez le marchand",
     viewAt: (merchant: string) => (merchant ? `Voir chez ${merchant}` : "Voir la pièce"),

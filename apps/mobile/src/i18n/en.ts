@@ -292,6 +292,7 @@ export const en: Catalog = {
     showMore: (n: number) => `Show more (${n})`,
     yourPiece: "Your piece",
     showLargeHint: "Shows this suggestion full size at the top of the screen.",
+    shownAbove: (name: string) => `Suggestion shown full size at the top of the screen: ${name}`,
     priceOnSite: "Check the price with the retailer",
     viewAt: (merchant: string) => (merchant ? `View at ${merchant}` : "View the piece"),
     affiliateDisclosure: "Affiliate link",
