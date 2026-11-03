@@ -369,6 +369,26 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
         await deleteTestUser(app, counted.id);
       }
     }, 60_000);
+
+    // Lot quota (2026-11-02) : préparée avant minuit (heure de Paris) et lancée
+    // après, une recherche ne comptait dans aucune part (lib/launchDating.ts).
+    it("préparée la veille et lancée aujourd'hui : datée de son lancement, pour compter dans la part du jour ; préparée aujourd'hui : sa date ne change pas", async () => {
+      const { parisDayStart } = await import("../src/lib/matchFeedback.js");
+      const dayStart = parisDayStart();
+      const fromYesterday = await prepare("https://www.tiktok.com/@x/video/1");
+      const yesterday = new Date(dayStart.getTime() - 3_600_000).toISOString();
+      const { error } = await app.supabaseAdmin.from("product_searches").update({ created_at: yesterday }).eq("id", fromYesterday.id);
+      expect(error).toBeNull();
+      expect((await run(fromYesterday.id, {})).statusCode).toBe(200);
+      const { data: launched } = await app.supabaseAdmin.from("product_searches").select("created_at, run_started_at").eq("id", fromYesterday.id).single();
+      expect(Date.parse(String(launched?.created_at))).toBeGreaterThanOrEqual(dayStart.getTime());
+      expect(launched?.created_at).toBe(launched?.run_started_at);
+
+      const fromToday = await prepare("https://www.tiktok.com/@x/video/1");
+      expect((await run(fromToday.id, {})).statusCode).toBe(200);
+      const { data: kept } = await app.supabaseAdmin.from("product_searches").select("created_at").eq("id", fromToday.id).single();
+      expect(kept?.created_at).toBe(fromToday.createdAt);
+    });
   });
 
   it("un texte, vide ou rempli, n'est jamais transmis à la recherche visuelle", async () => {

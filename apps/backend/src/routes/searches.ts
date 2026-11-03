@@ -32,6 +32,7 @@ import {
 import { fetchFeedbackReasons } from "../lib/matchFeedback.js";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { purgeExpiredSearches } from "../lib/searchRetention.js";
+import { launchDating } from "../lib/launchDating.js";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { searchLocaleFor } from "../lib/locale.js";
 import { INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
@@ -799,15 +800,20 @@ async function readPendingSearch(fastify: FastifyInstance, request: FastifyReque
  * conditionnelle, et note l'heure du lancement (0027 : recherche interrompue,
  * disjoncteurs). Deux lancements simultanés (double appui, réseau lent) ne
  * peuvent pas consommer deux crédits : le second ne trouve plus de ligne
- * "pending" (audit Lot Q, ROB-03). false : déjà lancée. */
-async function lockForRun(fastify: FastifyInstance, id: string): Promise<boolean> {
+ * "pending" (audit Lot Q, ROB-03). Créée un jour précédent (heure de Paris),
+ * la recherche prend aussi l'heure du lancement comme date de création, dans
+ * la même instruction, pour compter dans la part du jour où elle part
+ * (lib/launchDating.ts). Renvoie sa date de création après le verrou ; null :
+ * déjà lancée. */
+async function lockForRun(fastify: FastifyInstance, row: Pick<SearchRow, "id" | "created_at">): Promise<string | null> {
+  const dating = launchDating(row.created_at, new Date());
   const { data: locked } = await fastify.supabaseAdmin
     .from("product_searches")
-    .update({ status: "processing", run_started_at: new Date().toISOString() })
-    .eq("id", id)
+    .update({ status: "processing", ...dating })
+    .eq("id", row.id)
     .eq("status", "pending")
     .select("id");
-  return Boolean(locked && locked.length > 0);
+  return locked && locked.length > 0 ? (dating.created_at ?? row.created_at) : null;
 }
 
 /** Recherche restée « en cours » plus de 2 minutes (coupure, serveur
@@ -1026,7 +1032,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
         return reply.code(refusal.status).send(refusal.body);
       }
 
-      if (!(await lockForRun(fastify, id))) {
+      if (!(await lockForRun(fastify, row))) {
         return reply.code(409).send({ error: "search_already_run", message: "Cette recherche a déjà été lancée." });
       }
 
