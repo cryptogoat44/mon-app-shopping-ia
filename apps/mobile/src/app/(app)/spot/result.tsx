@@ -31,6 +31,10 @@ import { ActionButtons, type Action } from "@/components/spot-launch-views";
 import { ReportedLine, ResultFeedbackButton, ResultFeedbackSheet } from "@/components/result-feedback-sheet";
 import { ResultComplement, textSearchStatusNote } from "@/components/result-complement";
 import { TextSearchAlreadyUsed, TextSearchPrompt } from "@/components/text-search-prompt";
+import { ProposalCard } from "@/components/proposal-card";
+import { YourPiece } from "@/components/your-piece";
+import { yourPieceImage } from "@/lib/your-piece";
+import { useHeroReveal } from "@/lib/use-hero-reveal";
 import { track } from "@/lib/analytics";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -67,6 +71,11 @@ export default function ResultScreen() {
   // Voie B (lot c) : seconde recherche avec les mots refusée, sans leurs propositions pour l'instant.
   const [textSearchUsed, setTextSearchUsed] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  const heroReveal = useHeroReveal(scrollRef);
+  // « Votre pièce » : l'image du lancement, encore sur l'appareil ; lue une
+  // fois (un autre essai préparé ensuite depuis cet écran ne la change pas).
+  // Rien pour un résultat rouvert : son image n'est gardée nulle part.
+  const [yourPiece] = useState(() => yourPieceImage(fromLaunch.current, getDraft()));
 
   const result = state.kind === "ready" ? state.result : null;
   // Voie C (lot c) : l'indice désigne toutes les propositions de l'écran —
@@ -196,7 +205,9 @@ export default function ResultScreen() {
     setSelectedIndex(index);
     setBlockedMerchantUrl(null);
     setActionError(null);
-    scrollRef.current?.scrollTo({ y: 0, animated: true });
+    // Comparer sans remonter : la page reste où elle est, sauf si la grande
+    // image n'est plus assez visible pour voir le changement.
+    heroReveal.revealHero(result ? (allPieces(result)[index]?.name ?? null) : null);
   }
 
   // ---- Rendus ----
@@ -297,13 +308,22 @@ export default function ResultScreen() {
     <SafeAreaView style={styles.screen}>
       {nav}
       {/* Voie B : le champ « Que cherchez-vous ? » est en bas de la liste. */}
-      <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        onScroll={heroReveal.onScroll}
+        scrollEventThrottle={32}
+        onLayout={heroReveal.onViewportLayout}
+      >
         {/* Voie C : le décompte, le tri et l'absence de prix parlent de la recherche visuelle seule. */}
         {result.pieces.length > 0 ? <Text style={styles.count}>{t.result.count(result.pieces.length, result.query)}</Text> : null}
         {result.sortedByWords ? <Text style={styles.count}>{t.result.sortedByWords}</Text> : null}
         {noPriceShown(result.pieces) ? <NoPriceNotice /> : null}
 
-        <View style={styles.hero}>
+        {yourPiece ? <YourPiece image={yourPiece} /> : null}
+        <View style={styles.hero} onLayout={heroReveal.onHeroLayout}>
           <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} accessibilityLabel={piece.name} />
         </View>
 
@@ -372,24 +392,9 @@ export default function ResultScreen() {
               {t.result.otherProposals}
             </Text>
             <View style={styles.grid}>
+              {/* Cartes (image, nom, boutique, prix, « Voir chez … ») : components/proposal-card.tsx. */}
               {visibleOthers.map(({ piece: p, index }) => (
-                <Pressable
-                  key={p.id}
-                  style={styles.card}
-                  onPress={() => selectPiece(index)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${p.name}${p.merchantName ? `, ${p.merchantName}` : ""}`}
-                >
-                  <View style={styles.cardImage}>
-                    <SpotImage hdUri={p.imageHdUrl} fallbackUri={p.imageUrl} style={styles.fill} />
-                  </View>
-                  <Text style={styles.cardName} numberOfLines={2}>
-                    {p.name}
-                  </Text>
-                  <Text style={styles.cardMeta} numberOfLines={1}>
-                    {[p.merchantName, p.priceFrom !== null ? displayPrice(p) : null].filter(Boolean).join(" · ")}
-                  </Text>
-                </Pressable>
+                <ProposalCard key={p.id} piece={p} onSelect={() => selectPiece(index)} />
               ))}
             </View>
             {hiddenCount > 0 ? (
@@ -549,10 +554,6 @@ const styles = themedStyles(() => ({
   actionError: { fontSize: font.caption, marginTop: space.sm },
   sectionTitle: { fontSize: font.body, fontWeight: "600", color: color.encre, marginTop: space.xl, marginBottom: space.md },
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.lg },
-  card: { width: "48%" },
-  cardImage: { width: "100%", aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.sm, overflow: "hidden" },
-  cardName: { fontSize: font.caption, color: color.encre, marginTop: 8, lineHeight: 17 },
-  cardMeta: { fontSize: 12, color: color.acier, marginTop: 2 },
   failContent: { flexGrow: 1, justifyContent: "center", paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   failTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 29 },
   failTip: { fontSize: font.secondary, color: color.acier, lineHeight: 21, marginTop: space.sm },
