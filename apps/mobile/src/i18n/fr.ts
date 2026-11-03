@@ -297,6 +297,8 @@ export const fr = {
     otherProposal: "Autre proposition",
     otherProposals: "Autres propositions",
     showMore: (n: number) => `Voir plus (${n})`,
+    // Lot résultats lisibles : textes à valider par le fondateur.
+    showLargeHint: "Affiche cette proposition en grand, en haut de l'écran.",
     // Texte du fondateur (2026-10-25) : ne promet pas un prix que le site n'affiche peut-être pas.
     priceOnSite: "Prix à vérifier chez le marchand",
     viewAt: (merchant: string) => (merchant ? `Voir chez ${merchant}` : "Voir la pièce"),

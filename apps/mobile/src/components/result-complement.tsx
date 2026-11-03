@@ -1,20 +1,19 @@
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { TextSearchStatus } from "@monapp/shared-types";
-import type { Piece } from "@/api/types";
 import { color, font, radius, space } from "@/theme/tokens";
-import { getActiveLocale, t } from "@/i18n";
-import { formatPrice } from "@/lib/format";
+import { t } from "@/i18n";
 import { COMPLEMENT_SHOWN_FIRST, firstShown, type IndexedPiece } from "@/lib/result-sections";
-import { SpotImage } from "@/components/spot-image";
+import { ProposalCard } from "@/components/proposal-card";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Voie C (lot c) : une section du complément, sous les propositions de la
 // recherche visuelle — jamais à leur place. « ai » : la même pièce dans
 // d'autres boutiques (requête tirée des titres des propositions) ; « words » :
-// la recherche lancée avec les mots de la personne. Même grille que « Autres
-// propositions », 6 d'emblée puis son propre « Voir plus ». Ni nom de
-// fournisseur, ni « IA » (décision du fondateur du 2026-10-21).
+// la recherche lancée avec les mots de la personne. Même grille et mêmes
+// cartes que « Autres propositions » (components/proposal-card.tsx), 6
+// d'emblée puis son propre « Voir plus ». Ni nom de fournisseur, ni « IA »
+// (décision du fondateur du 2026-10-21).
 
 /** Issue de la recherche par les mots quand elle n'a rien montré : une phrase,
  * sous les résultats ou après « rien trouvé » ; null sinon. */
@@ -55,7 +54,7 @@ export function ResultComplement({
       {visible.length > 0 ? (
         <View style={styles.grid}>
           {visible.map(({ piece, index }) => (
-            <PieceCard key={piece.id} piece={piece} onPress={() => onSelect(index)} />
+            <ProposalCard key={piece.id} piece={piece} onSelect={() => onSelect(index)} />
           ))}
         </View>
       ) : null}
@@ -68,40 +67,11 @@ export function ResultComplement({
   );
 }
 
-/** Une proposition de la grille : image, nom, marchand et prix s'il est connu.
- * Toucher la carte la montre en grand, en haut de l'écran. */
-function PieceCard({ piece, onPress }: { piece: Piece; onPress: () => void }) {
-  const price = piece.priceFrom !== null ? formatPrice(piece.priceFrom, piece.currency, getActiveLocale()) : null;
-  return (
-    <Pressable
-      style={styles.card}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${piece.name}${piece.merchantName ? `, ${piece.merchantName}` : ""}`}
-    >
-      <View style={styles.cardImage}>
-        <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} />
-      </View>
-      <Text style={styles.cardName} numberOfLines={2}>
-        {piece.name}
-      </Text>
-      <Text style={styles.cardMeta} numberOfLines={1}>
-        {[piece.merchantName, price].filter(Boolean).join(" · ")}
-      </Text>
-    </Pressable>
-  );
-}
-
 // Mêmes mesures que la grille « Autres propositions » de l'écran Résultat.
 const styles = themedStyles(() => ({
   sectionTitle: { fontSize: font.body, fontWeight: "600", color: color.encre, marginTop: space.xl, marginBottom: space.md },
   caption: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: -space.sm, marginBottom: space.md },
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.lg },
-  card: { width: "48%" },
-  cardImage: { width: "100%", aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.sm, overflow: "hidden" },
-  fill: { width: "100%", height: "100%" },
-  cardName: { fontSize: font.caption, color: color.encre, marginTop: 8, lineHeight: 17 },
-  cardMeta: { fontSize: 12, color: color.acier, marginTop: 2 },
   secondary: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: space.sm },
   secondaryLabel: { color: color.encre, fontSize: font.body, fontWeight: "500" },
 }));

@@ -31,6 +31,7 @@ import { ActionButtons, type Action } from "@/components/spot-launch-views";
 import { ReportedLine, ResultFeedbackButton, ResultFeedbackSheet } from "@/components/result-feedback-sheet";
 import { ResultComplement, textSearchStatusNote } from "@/components/result-complement";
 import { TextSearchAlreadyUsed, TextSearchPrompt } from "@/components/text-search-prompt";
+import { ProposalCard } from "@/components/proposal-card";
 import { track } from "@/lib/analytics";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -372,24 +373,9 @@ export default function ResultScreen() {
               {t.result.otherProposals}
             </Text>
             <View style={styles.grid}>
+              {/* Cartes (image, nom, boutique, prix, « Voir chez … ») : components/proposal-card.tsx. */}
               {visibleOthers.map(({ piece: p, index }) => (
-                <Pressable
-                  key={p.id}
-                  style={styles.card}
-                  onPress={() => selectPiece(index)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${p.name}${p.merchantName ? `, ${p.merchantName}` : ""}`}
-                >
-                  <View style={styles.cardImage}>
-                    <SpotImage hdUri={p.imageHdUrl} fallbackUri={p.imageUrl} style={styles.fill} />
-                  </View>
-                  <Text style={styles.cardName} numberOfLines={2}>
-                    {p.name}
-                  </Text>
-                  <Text style={styles.cardMeta} numberOfLines={1}>
-                    {[p.merchantName, p.priceFrom !== null ? displayPrice(p) : null].filter(Boolean).join(" · ")}
-                  </Text>
-                </Pressable>
+                <ProposalCard key={p.id} piece={p} onSelect={() => selectPiece(index)} />
               ))}
             </View>
             {hiddenCount > 0 ? (
@@ -549,10 +535,6 @@ const styles = themedStyles(() => ({
   actionError: { fontSize: font.caption, marginTop: space.sm },
   sectionTitle: { fontSize: font.body, fontWeight: "600", color: color.encre, marginTop: space.xl, marginBottom: space.md },
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.lg },
-  card: { width: "48%" },
-  cardImage: { width: "100%", aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.sm, overflow: "hidden" },
-  cardName: { fontSize: font.caption, color: color.encre, marginTop: 8, lineHeight: 17 },
-  cardMeta: { fontSize: 12, color: color.acier, marginTop: 2 },
   failContent: { flexGrow: 1, justifyContent: "center", paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   failTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 29 },
   failTip: { fontSize: font.secondary, color: color.acier, lineHeight: 21, marginTop: space.sm },
