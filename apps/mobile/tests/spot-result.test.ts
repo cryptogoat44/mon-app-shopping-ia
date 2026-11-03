@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { ProductSearch } from "@monapp/shared-types";
+import type { MatchOrigin, ProductMatch, ProductSearch } from "@monapp/shared-types";
 import type { SpotResult } from "../src/api/types";
-import { chooseInitialResult, noPriceShown, toSpotResult } from "../src/lib/spot-result";
+import { chooseInitialResult, noPriceShown, pieceTitle, toSpotResult } from "../src/lib/spot-result";
 
 function search(overrides: Partial<ProductSearch> = {}): ProductSearch {
   return {
@@ -102,5 +102,98 @@ describe("message « Aucune de ces propositions n'affiche de prix » (petit lot)
     expect(noPriceShown([{ priceFrom: 0 }])).toBe(false);
     // Aucune proposition : c'est le message « rien trouvé », pas celui-ci.
     expect(noPriceShown([])).toBe(false);
+  });
+});
+
+describe("titre envoyé pour « Garder » et « Je l'ai achetée » : 120 caractères au plus", () => {
+  it("coupe les titres plus longs (Google Shopping va jusqu'à 150), laisse les autres tels quels", () => {
+    const shopTitle = "Veste en cuir femme automne hiver courte cintrée style motard, simili cuir PU, fermeture éclair, poches zippées, noir, taille M";
+    expect(shopTitle.length).toBeGreaterThan(120);
+    expect(pieceTitle(shopTitle)).toBe(shopTitle.slice(0, 120));
+    expect(pieceTitle("x".repeat(120))).toBe("x".repeat(120));
+    expect(pieceTitle("Sac Boutique")).toBe("Sac Boutique");
+  });
+
+  it("ne coupe jamais un emoji en deux", () => {
+    expect(pieceTitle(`${"x".repeat(119)}👜 cuir noir`)).toBe("x".repeat(119));
+    expect(pieceTitle(`${"x".repeat(118)}👜 cuir noir`)).toBe(`${"x".repeat(118)}👜`);
+  });
+});
+
+// Voie C (lot c) : les propositions du complément arrivent dans `matches`,
+// avec leur origine ; la recherche visuelle reste seule dans `pieces`.
+function match(id: string, origin?: MatchOrigin): ProductMatch {
+  return {
+    id,
+    rank: 1,
+    productName: `Pièce ${id}`,
+    brand: null,
+    imageUrl: `https://example.com/${id}.jpg`,
+    priceMin: null,
+    priceMax: null,
+    currency: "EUR",
+    merchantName: "Boutique",
+    merchantUrl: `https://example.com/${id}`,
+    affiliateUrl: `https://example.com/${id}`,
+    imageHdUrl: null,
+    feedbackReason: null,
+    ...(origin ? { origin } : {}),
+  };
+}
+
+describe("toSpotResult, voie C (lot c)", () => {
+  it("origine absente = recherche visuelle : sans complément, le résultat ne change pas", () => {
+    const result = toSpotResult(search({ matches: [match("a"), match("b")] }));
+    expect(result.pieces.map((piece) => piece.id)).toEqual(["a", "b"]);
+    expect(result.pieces[0]?.origin).toBeUndefined();
+    expect("complement" in result).toBe(false);
+  });
+
+  it("partage les propositions en trois, chacune dans son ordre", () => {
+    const result = toSpotResult(
+      search({
+        matches: [match("l1"), match("l2", "lens"), match("s1", "shopping"), match("s2", "shopping"), match("w1", "words")],
+        complement: { status: "shown", query: "veste daim marron", suggestText: false, textStatus: "shown" },
+      })
+    );
+    expect(result.pieces.map((piece) => piece.id)).toEqual(["l1", "l2"]);
+    expect(result.complement?.shopping.map((piece) => piece.id)).toEqual(["s1", "s2"]);
+    expect(result.complement?.words.map((piece) => piece.id)).toEqual(["w1"]);
+    expect(result.complement?.shopping[0]).toMatchObject({ origin: "shopping", real: true });
+    expect(result.complement).toMatchObject({ status: "shown", query: "veste daim marron", suggestText: false, textStatus: "shown" });
+  });
+
+  it("un succès dès qu'une proposition existe, même sans la recherche visuelle (0 + mots)", () => {
+    const result = toSpotResult(
+      search({ matches: [match("w1", "words"), match("w2", "words")], complement: { status: "no_query", suggestText: false, textStatus: "shown" } })
+    );
+    expect(result.status).toBe("success");
+    expect(result.pieces).toEqual([]);
+    expect(result.complement?.words).toHaveLength(2);
+  });
+
+  it("l'invitation et l'issue de la recherche par les mots survivent à une relecture", () => {
+    // Recherche relue (GET) : pas de requête, mais suggestText et textStatus enregistrés.
+    const reread = toSpotResult(search({ matches: [match("l1")], complement: { status: "empty", suggestText: true, textStatus: null } }));
+    expect(reread.complement).toMatchObject({ suggestText: true, textStatus: null, query: null, status: "empty" });
+    const afterWords = toSpotResult(search({ matches: [match("l1")], complement: { status: "empty", suggestText: false, textStatus: "empty" } }));
+    expect(afterWords.complement).toMatchObject({ suggestText: false, textStatus: "empty" });
+  });
+
+  it("la requête ne vient que de la réponse du lancement", () => {
+    const launched = toSpotResult(search({ matches: [match("l1"), match("s1", "shopping")], complement: { status: "shown", query: "sac cuir noir", suggestText: false, textStatus: null } }));
+    expect(launched.complement?.query).toBe("sac cuir noir");
+    const reread = toSpotResult(search({ matches: [match("l1"), match("s1", "shopping")], complement: { status: "shown", suggestText: false, textStatus: null } }));
+    expect(reread.complement?.query).toBeNull();
+    // Jamais confondue avec le texte « Que cherchez-vous ? » d'un lancement (search.query).
+    expect(reread.query).toBeNull();
+  });
+
+  it("« rien trouvé » garde l'invitation « Que cherchez-vous ? »", () => {
+    const result = toSpotResult(
+      search({ matches: [], status: "failed", errorMessage: "Aucun produit identifié sur cette image.", complement: { status: "no_query", suggestText: true, textStatus: null } })
+    );
+    expect(result).toMatchObject({ status: "failed", failReason: "no_match" });
+    expect(result.complement).toMatchObject({ suggestText: true, shopping: [], words: [] });
   });
 });

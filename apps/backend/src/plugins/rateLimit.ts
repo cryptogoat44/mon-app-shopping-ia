@@ -119,6 +119,15 @@ function countRateLimitHit(request: FastifyRequest, name: RateLimitName): void {
   registerHit(keyFor(request, name), ruleFor(name));
 }
 
+/** Compte une action pour la limite `name` et dit si elle était permise, sans
+ * rien répondre : la route décide (voie C : sauter l'IA, ou refuser un
+ * lancement servi par le cache). Toujours permise quand les limites sont
+ * coupées (tests). */
+export function consumeRateLimit(request: FastifyRequest, name: RateLimitName): boolean {
+  if (isDisabled()) return true;
+  return registerHit(keyFor(request, name), ruleFor(name)).allowed;
+}
+
 export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
   fastify.decorate("rateLimit", buildPreHandler);
   fastify.decorate("rateLimitCheck", buildCheckPreHandler);

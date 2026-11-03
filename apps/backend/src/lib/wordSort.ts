@@ -13,14 +13,16 @@
 
 import { isTranslationForm, translationsOf } from "./fashionWords.js";
 
-/** Petits mots qui ne désignent pas une pièce (français et anglais). */
-const SMALL_WORDS = new Set([
+/** Petits mots qui ne désignent pas une pièce (français et anglais). Exportés
+ * pour le tri léger de la voie C (lib/lightSort.ts). */
+export const SMALL_WORDS: ReadonlySet<string> = new Set([
   "le", "la", "les", "un", "une", "des", "de", "du", "en", "et", "au", "aux", "avec", "pour", "sur", "dans", "par", "ma", "mon", "mes", "ce", "cette", "ces", "qui", "que",
   "the", "an", "of", "with", "and", "for", "in", "on", "my", "this", "that",
 ]);
 
-/** Minuscules, sans accents, découpé en mots (lettres et chiffres). */
-function wordsOf(text: string): string[] {
+/** Minuscules, sans accents, découpé en mots (lettres et chiffres). Même
+ * découpage pour le tri léger et les contrôles de la requête de la voie C. */
+export function wordsOf(text: string): string[] {
   return text
     .normalize("NFD")
     .replace(/\p{M}/gu, "")

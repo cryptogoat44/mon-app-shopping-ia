@@ -1,21 +1,23 @@
 import { formatPrice } from "@/lib/format";
-import { useEffect, useRef, useState } from "react";
-import { Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { Keyboard, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
 import * as Haptics from "expo-haptics";
-import type { MatchFeedbackReason, VaultCategory } from "@monapp/shared-types";
+import type { MatchFeedbackReason, ProductSearch, VaultCategory } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { addToWishlist, loadSpotResult } from "@/api/client";
-import { getLastSpotResult } from "@/api/spotSession";
-import type { Piece, SpotFailReason } from "@/api/types";
+import { clearLastSpotResult, getLastSpotResult, rememberLaunchExtras, withLaunchExtras } from "@/api/spotSession";
+import type { Piece, SpotFailReason, SpotResult } from "@/api/types";
 import { addVaultItemFromMatch } from "@/lib/api";
 import { openMerchantLink } from "@/lib/merchant-links";
-import { chooseInitialResult, noPriceShown, type InitialResultState } from "@/lib/spot-result";
+import { chooseInitialResult, noPriceShown, pieceTitle, withoutTextPrompt, withTextSearch, type InitialResultState } from "@/lib/spot-result";
+import { allPieces, merchantContextFor, opensOfferPage, otherPiecesBySection } from "@/lib/result-sections";
+import { getDraft } from "@/lib/spot-draft";
 import { failureCorrections, successCorrections, type Correction } from "@/lib/spot-corrections";
 import { capacityMonthTip } from "@/lib/spot-capacity";
 import { VAULT_CATEGORIES } from "@/lib/vault-labels";
@@ -27,6 +29,8 @@ import { NoPriceNotice } from "@/components/no-price-notice";
 import { CorrectionButtons, CorrectionsLink, CorrectionsSheet, useCorrections } from "@/components/spot-corrections";
 import { ActionButtons, type Action } from "@/components/spot-launch-views";
 import { ReportedLine, ResultFeedbackButton, ResultFeedbackSheet } from "@/components/result-feedback-sheet";
+import { ResultComplement, textSearchStatusNote } from "@/components/result-complement";
+import { TextSearchAlreadyUsed, TextSearchPrompt } from "@/components/text-search-prompt";
 import { track } from "@/lib/analytics";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -44,6 +48,10 @@ export default function ResultScreen() {
   const { showToast } = useToast();
   const { searchId } = useLocalSearchParams<{ searchId?: string }>();
   const [state, setState] = useState<ScreenState>(() => chooseInitialResult(getLastSpotResult(), searchId));
+  // La copie en mémoire ne sert qu'au passage depuis l'écran Analyse : lue une
+  // fois, elle est oubliée (ses mentions propres au lancement sont gardées à
+  // part). Tout retour sur cet écran relit donc la recherche sur le serveur.
+  const fromLaunch = useRef(state.kind === "ready");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [kept, setKept] = useState<Set<string>>(new Set());
   const [bought, setBought] = useState<Set<string>>(new Set());
@@ -56,10 +64,14 @@ export default function ResultScreen() {
   // « Résultat incohérent » : motif changé ou retiré dans cet écran (null : retiré).
   const [reportOpen, setReportOpen] = useState(false);
   const [feedbackOverrides, setFeedbackOverrides] = useState<ReadonlyMap<string, MatchFeedbackReason | null>>(new Map());
+  // Voie B (lot c) : seconde recherche avec les mots refusée, sans leurs propositions pour l'instant.
+  const [textSearchUsed, setTextSearchUsed] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   const result = state.kind === "ready" ? state.result : null;
-  const piece = result?.pieces[selectedIndex] ?? null;
+  // Voie C (lot c) : l'indice désigne toutes les propositions de l'écran —
+  // recherche visuelle d'abord, puis les sections du complément.
+  const piece = result ? (allPieces(result)[selectedIndex] ?? null) : null;
 
   // Résultat absent de la mémoire (rouvert depuis « Récemment spottées »,
   // page rechargée) : relu sur le serveur, sans relancer d'identification.
@@ -68,7 +80,7 @@ export default function ResultScreen() {
     if (!pendingSearchId) return;
     let cancelled = false;
     loadSpotResult(pendingSearchId)
-      .then((loaded) => !cancelled && setState({ kind: "ready", result: loaded }))
+      .then((loaded) => !cancelled && setState({ kind: "ready", result: withLaunchExtras(loaded) }))
       .catch(() => !cancelled && setState({ kind: "error", searchId: pendingSearchId }));
     return () => {
       cancelled = true;
@@ -78,6 +90,15 @@ export default function ResultScreen() {
   useEffect(() => {
     if (result?.status === "success") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   }, [result?.status]);
+
+  // Une fois, au premier affichage : la copie du lancement est oubliée.
+  useEffect(() => {
+    if (!fromLaunch.current || state.kind !== "ready") return;
+    rememberLaunchExtras(state.result);
+    clearLastSpotResult();
+  }, []);
+
+  useScrollToEndOnKeyboard(scrollRef, result?.complement?.suggestText === true);
 
   // ---- Corrections (lot 4 ter) : recadrer, autres moments, choisir l'image soi-même ----
 
@@ -97,7 +118,7 @@ export default function ResultScreen() {
     const url = piece?.affiliateUrl ?? piece?.merchantUrl;
     if (!piece || !url) return;
     setBlockedMerchantUrl(null);
-    const outcome = await openMerchantLink({ matchId: piece.real ? piece.id : null, url, context: "result" });
+    const outcome = await openMerchantLink({ matchId: piece.real ? piece.id : null, url, context: merchantContextFor(piece) });
     if (outcome.blocked) setBlockedMerchantUrl(outcome.url ?? url);
   }
 
@@ -123,7 +144,7 @@ export default function ResultScreen() {
     if (!piece || bought.has(piece.id)) return;
     setActionError(null);
     try {
-      await addVaultItemFromMatch({ title: piece.name.slice(0, 120), imageUrl: piece.imageUrl, category, productMatchId: piece.id });
+      await addVaultItemFromMatch({ title: pieceTitle(piece.name), imageUrl: piece.imageUrl, category, productMatchId: piece.id });
       setBought((prev) => new Set(prev).add(piece.id));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       showToast(t.result.boughtToast);
@@ -148,6 +169,27 @@ export default function ResultScreen() {
     } catch {
       // Partage annulé par l'utilisateur : rien à signaler.
     }
+  }
+
+  /** Voie B (lot c) : le résultat est remplacé sur place, dans cet écran
+   * seulement. Un retour sur l'écran relit la recherche sur le serveur, qui a
+   * l'issue de la recherche par les mots (voir fromLaunch). */
+  function replaceResult(next: SpotResult) {
+    setState({ kind: "ready", result: next });
+  }
+
+  /** La recherche par les mots a répondu, ou elle est relue avec son issue. */
+  function handleTextSearchDone(search: ProductSearch) {
+    if (!result) return;
+    replaceResult(withTextSearch(result, search));
+  }
+
+  /** Le serveur ne la propose plus (déjà lancée, coupée, non admissible) :
+   * l'invitation disparaît, ici comme au retour sur cet écran. */
+  function handleTextSearchClosed(alreadyUsed: boolean) {
+    if (!result) return;
+    replaceResult(withoutTextPrompt(result));
+    setTextSearchUsed(alreadyUsed);
   }
 
   function selectPiece(index: number) {
@@ -204,14 +246,34 @@ export default function ResultScreen() {
     );
   }
 
+  // Voie B (lot c) : « Que cherchez-vous ? » quand le serveur le propose —
+  // pré-rempli avec les mots tapés sous la photo, si ce résultat vient d'être
+  // calculé (le brouillon en mémoire est alors le sien) ; « déjà lancée » à
+  // sa place après un refus du serveur.
+  const textSearch = (withIntro: boolean) =>
+    result?.searchId && result.complement?.suggestText ? (
+      <TextSearchPrompt
+        searchId={result.searchId}
+        initialWords={fromLaunch.current ? getDraft()?.words : null}
+        onDone={handleTextSearchDone}
+        onClosed={handleTextSearchClosed}
+        withIntro={withIntro}
+      />
+    ) : textSearchUsed ? (
+      <TextSearchAlreadyUsed />
+    ) : null;
+
   if (!result || result.status === "failed" || !piece) {
+    const reason = result?.failReason ?? "no_match";
     return (
       <SafeAreaView style={styles.screen}>
         {nav}
         <FailureView
-          reason={result?.failReason ?? "no_match"}
+          reason={reason}
+          textSearch={reason === "no_match" ? textSearch(false) : null}
+          textNote={reason === "no_match" ? textSearchStatusNote(result?.complement?.textStatus) : null}
           resumesOn={result?.resumesOn}
-          corrections={failureCorrections(result?.failReason ?? "no_match", corrections.context)}
+          corrections={failureCorrections(reason, corrections.context)}
           actions={corrections.actions}
           onAddVideo={corrections.addVideo}
           importing={corrections.importing}
@@ -224,7 +286,8 @@ export default function ResultScreen() {
 
   const successList = successCorrections(corrections.context);
   const reported = feedbackOverrides.has(piece.id) ? (feedbackOverrides.get(piece.id) ?? null) : (piece.feedbackReason ?? null);
-  const others = result.pieces.map((p, index) => ({ p, index })).filter(({ index }) => index !== selectedIndex);
+  const sections = otherPiecesBySection(result, selectedIndex);
+  const others = sections.lens;
   // 11 autres propositions d'emblée (la meilleure + 11 = 12 images à
   // charger), le reste — jusqu'à 40 au total avec la règle des prix — sur demande.
   const visibleOthers = showAllOthers ? others : others.slice(0, OTHERS_SHOWN_FIRST);
@@ -233,8 +296,10 @@ export default function ResultScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       {nav}
-      <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
-        <Text style={styles.count}>{t.result.count(result.pieces.length, result.query)}</Text>
+      {/* Voie B : le champ « Que cherchez-vous ? » est en bas de la liste. */}
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+        {/* Voie C : le décompte, le tri et l'absence de prix parlent de la recherche visuelle seule. */}
+        {result.pieces.length > 0 ? <Text style={styles.count}>{t.result.count(result.pieces.length, result.query)}</Text> : null}
         {result.sortedByWords ? <Text style={styles.count}>{t.result.sortedByWords}</Text> : null}
         {noPriceShown(result.pieces) ? <NoPriceNotice /> : null}
 
@@ -254,7 +319,7 @@ export default function ResultScreen() {
 
         {piece.merchantUrl ? (
           <Pressable style={styles.primary} onPress={handleOpenMerchant} accessibilityRole="link">
-            <Text style={styles.primaryLabel}>{t.result.viewAt(piece.merchantName ?? "")}</Text>
+            <Text style={styles.primaryLabel}>{opensOfferPage(piece) ? t.result.viewOffer : t.result.viewAt(piece.merchantName ?? "")}</Text>
           </Pressable>
         ) : null}
         {blockedMerchantUrl ? (
@@ -307,7 +372,7 @@ export default function ResultScreen() {
               {t.result.otherProposals}
             </Text>
             <View style={styles.grid}>
-              {visibleOthers.map(({ p, index }) => (
+              {visibleOthers.map(({ piece: p, index }) => (
                 <Pressable
                   key={p.id}
                   style={styles.card}
@@ -341,6 +406,11 @@ export default function ResultScreen() {
             ) : null}
           </>
         ) : null}
+
+        {/* Voie C (lot c) : le complément, sous la recherche visuelle — jamais à sa place. */}
+        <ResultComplement source="ai" others={sections.shopping} query={result.complement?.query} onSelect={selectPiece} />
+        <ResultComplement source="words" others={sections.words} textStatus={result.complement?.textStatus} onSelect={selectPiece} />
+        {textSearch(true)}
       </ScrollView>
 
       {piece.real ? (
@@ -379,8 +449,22 @@ export default function ResultScreen() {
   );
 }
 
+/** Voie B (lot c) : « Que cherchez-vous ? » est en bas de la liste ; au
+ * clavier, l'écran y descend, sinon « Chercher » reste caché dessous sur
+ * iPhone (même défaut que « Lancer », lancer.tsx). Seul champ de l'écran :
+ * rien tant que l'invitation n'est pas affichée. */
+function useScrollToEndOnKeyboard(scrollRef: RefObject<ScrollView | null>, active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    const subscription = Keyboard.addListener("keyboardDidShow", () => scrollRef.current?.scrollToEnd({ animated: true }));
+    return () => subscription.remove();
+  }, [scrollRef, active]);
+}
+
 function FailureView({
   reason,
+  textSearch,
+  textNote,
   resumesOn,
   corrections,
   actions,
@@ -390,6 +474,11 @@ function FailureView({
   error,
 }: {
   reason: SpotFailReason;
+  /** Voie B (lot c), « rien trouvé » seulement : « Que cherchez-vous ? »,
+   * quand le serveur le propose. */
+  textSearch: ReactNode;
+  /** Voie B : la recherche par les mots n'a rien donné, ou n'a pas abouti. */
+  textNote: string | null;
   /** Plafond du mois atteint (lot 4 quater) : jour de la reprise. */
   resumesOn?: string | null;
   /** Deux au plus, la plus utile d'abord (lib/spot-corrections.ts). */
@@ -400,6 +489,8 @@ function FailureView({
   onBack: () => void;
   error: string | null;
 }) {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToEndOnKeyboard(scrollRef, Boolean(textSearch));
   const copy = {
     no_match: [t.result.noMatchTitle, t.result.noMatchTip],
     technical: [t.result.technicalTitle, t.result.technicalTip],
@@ -412,13 +503,15 @@ function FailureView({
   }[reason];
 
   return (
-    <ScrollView contentContainerStyle={styles.failContent}>
+    <ScrollView ref={scrollRef} contentContainerStyle={styles.failContent} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
       <Text style={styles.failTitle} accessibilityRole="header">
         {copy[0]}
       </Text>
       <Text style={styles.failTip}>{copy[1]}</Text>
+      {textNote ? <Text style={styles.failTip}>{textNote}</Text> : null}
       {error ? <ErrorMessage style={styles.actionError}>{error}</ErrorMessage> : null}
       {corrections.length > 0 ? <CorrectionButtons list={corrections} actions={actions} onAddVideo={onAddVideo} importing={importing} /> : null}
+      {textSearch}
       <Pressable style={styles.textButton} onPress={onBack} accessibilityRole="button">
         <Text style={styles.textButtonLabel}>{t.result.backToSpotter}</Text>
       </Pressable>

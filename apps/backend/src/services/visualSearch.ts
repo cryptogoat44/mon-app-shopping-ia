@@ -44,20 +44,21 @@ function isComplete(match: ProviderVisualMatch): match is UsableMatch {
 // Ce que la base sait ranger (product_matches) : aucun caractère nul, une
 // devise de 3 caractères au plus (char(3)), un prix de moins de 100 millions
 // (numeric(10,2)). Une valeur étrange n'annule jamais la proposition, ni les
-// autres : le texte est nettoyé, le prix retiré (2026-10-15).
+// autres : le texte est nettoyé, le prix retiré (2026-10-15). Mêmes limites
+// pour les propositions de Google Shopping (voie C, services/textSearch.ts).
 const MAX_CURRENCY_CHARACTERS = 3;
-const MAX_PRICE = 99_999_999.99;
+export const MAX_PRICE = 99_999_999.99;
 
 function withoutNul(text: string | undefined): string | undefined {
   return text?.replace(/\u0000/g, "");
 }
 
-function withCleanTexts(match: ProviderVisualMatch): ProviderVisualMatch {
+export function withCleanTexts(match: ProviderVisualMatch): ProviderVisualMatch {
   return { ...match, title: withoutNul(match.title), link: withoutNul(match.link), source: withoutNul(match.source), thumbnail: withoutNul(match.thumbnail), image: withoutNul(match.image) };
 }
 
 /** Prix et devise rangeables tels quels, sinon aucun prix. */
-function storablePrice(price: ProviderVisualMatch["price"]): Pick<VisualMatch, "priceValue" | "currency"> {
+export function storablePrice(price: ProviderVisualMatch["price"]): Pick<VisualMatch, "priceValue" | "currency"> {
   const value = price?.extracted_value;
   const currency = withoutNul(price?.currency)?.trim() || null;
   const currencyFits = currency === null || [...currency].length <= MAX_CURRENCY_CHARACTERS;
@@ -130,6 +131,9 @@ export function toVisualMatches(matches: ProviderVisualMatch[], country: string)
 
 export interface VisualSearchOptions {
   locale?: SearchLocale;
+  /** Arrêt de l'appel (voie C : plafond fixe de 12 s) ; sans lui, le délai
+   * d'avant (15 s). Jamais l'« Annuler » de la personne. */
+  signal?: AbortSignal;
 }
 
 export interface VisualSearchResult {
@@ -156,7 +160,11 @@ export async function searchProductsByImageUrl(
   options: VisualSearchOptions = {}
 ): Promise<VisualSearchResult> {
   const locale = options.locale ?? DEFAULT_LOCALE;
-  const response = await IMAGE_SEARCH_PROVIDER.searchByImage(imageUrl, locale);
+  // Le signal n'est transmis que s'il est donné : sans lui, l'appel reste
+  // exactement celui d'avant la voie C.
+  const response = options.signal
+    ? await IMAGE_SEARCH_PROVIDER.searchByImage(imageUrl, locale, options.signal)
+    : await IMAGE_SEARCH_PROVIDER.searchByImage(imageUrl, locale);
   const { matches, counts, addedRanks } = filterVisualMatches(response, locale.country);
   if (matches.length === 0) {
     fastify.log.info({ provider: IMAGE_SEARCH_PROVIDER.name }, "Recherche visuelle sans résultat");

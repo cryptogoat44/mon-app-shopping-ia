@@ -5,8 +5,9 @@
 // d'échec), pour le plafond des recherches SerpApi (lot 4 quater : réservé
 // ou refusé, compteurs du jour, du mois de SerpApi et de la personne — un
 // nombre, jamais son identifiant), pour la mesure de chaque recherche (petit
-// lot : issue, propositions, prix, rangs des ajouts de la règle des prix) et,
-// depuis 0027, pour les places rendues et les disjoncteurs.
+// lot : issue, propositions, prix, rangs des ajouts de la règle des prix),
+// depuis 0027, pour les places rendues et les disjoncteurs et, depuis la voie C
+// (lot c), pour le complément de chaque recherche (« Mesure complément »).
 // Render ne garde pas de journal des requêtes HTTP pour ce service :
 // on lit les lignes du serveur (« incoming request » / « request completed »),
 // dont on n'extrait QUE la méthode, le chemin (comparé à une liste fixe) et le
@@ -162,6 +163,8 @@ export function chronologie(entrees: readonly Entree[]): Evenement[] {
     if (place) evenements.push({ heure: entree.timestamp, nom: "Place rendue", issue: decrirePlaceRendue(place) });
     const disjoncteur = extraireDisjoncteur(entree.message);
     if (disjoncteur) evenements.push({ heure: entree.timestamp, nom: "Disjoncteur", issue: decrireDisjoncteur(disjoncteur) });
+    const complement = extraireComplement(entree.message);
+    if (complement) evenements.push({ heure: entree.timestamp, nom: "Mesure complément", issue: decrireComplement(complement) });
   }
   return evenements.sort((a, b) => Date.parse(a.heure) - Date.parse(b.heure));
 }
@@ -175,10 +178,13 @@ export function extraireCompteursIA(message: string): CompteursIA | null {
 }
 
 /** Seuls champs lus dans les lignes « Plafond recherches » du serveur
- * (src/lib/searchCapacity.ts ; « Plafond SerpApi » avant 0027) : des nombres et des états. */
+ * (src/lib/searchCapacity.ts ; « Plafond SerpApi » avant 0027) : des nombres et des états.
+ * Étapes : search (Lens), video_ai (avant l'analyse d'une vidéo) et, depuis la
+ * voie C, complement_ai (lecture avant l'IA des boutiques) et shopping
+ * (Google Shopping : la requête de l'IA, ou vos mots). */
 const PLAFOND = z.object({
   msg: z.enum(["Plafond SerpApi", "Plafond recherches"]),
-  step: z.enum(["search", "video_ai"]),
+  step: z.enum(["search", "video_ai", "complement_ai", "shopping"]),
   outcome: z.enum(["reserved", "refused"]),
   limit: z.enum(["day", "month", "user"]).nullable(),
   day: z.number(),
@@ -204,26 +210,37 @@ function etatPlafond(ligne: LignePlafond): string {
 }
 
 const PLAFONDS = { day: "plafond du jour", month: "plafond du mois", user: "part de la personne pour la journée" } as const;
+const MOMENTS = {
+  search: "au lancement d'une recherche",
+  video_ai: "avant l'analyse par l'IA",
+  complement_ai: "avant la requête des boutiques par l'IA",
+  shopping: "avant une recherche dans les boutiques",
+} as const;
 
 export function decrirePlafond(ligne: LignePlafond): string {
-  if (ligne.outcome === "reserved" || !ligne.limit) return `recherche réservée — ${etatPlafond(ligne)}`;
-  const moment = ligne.step === "video_ai" ? "avant l'analyse par l'IA" : "au lancement d'une recherche";
-  return `refus (${PLAFONDS[ligne.limit]}), ${moment} — ${etatPlafond(ligne)}`;
+  if (ligne.outcome === "reserved" || !ligne.limit) {
+    return `recherche réservée${ligne.step === "shopping" ? " (boutiques)" : ""} — ${etatPlafond(ligne)}`;
+  }
+  return `refus (${PLAFONDS[ligne.limit]}), ${MOMENTS[ligne.step]} — ${etatPlafond(ligne)}`;
 }
 
-/** Bilan de la période : réservations, refus, et le dernier état lu (lignes dans l'ordre). */
+/** Bilan de la période : réservations (dont celles de Google Shopping), refus,
+ * et le dernier état lu (lignes dans l'ordre). */
 export function resumerPlafond(lignes: readonly LignePlafond[]): string {
   const derniere = lignes.at(-1);
   if (!derniere) return "aucune ligne dans la période";
   const reservees = lignes.filter((ligne) => ligne.outcome === "reserved").length;
+  const boutiques = lignes.filter((ligne) => ligne.outcome === "reserved" && ligne.step === "shopping").length;
   const refus = (limit: LignePlafond["limit"]) => lignes.filter((ligne) => ligne.outcome === "refused" && ligne.limit === limit).length;
   const total = refus("day") + refus("month") + refus("user");
-  return `${reservees} recherche(s) réservée(s), ${total} refus (jour ${refus("day")}, mois ${refus("month")}, part personnelle ${refus("user")}) ; dernier état lu : ${etatPlafond(derniere)}`;
+  const dont = boutiques > 0 ? ` (dont ${boutiques} dans les boutiques)` : "";
+  return `${reservees} recherche(s) réservée(s)${dont}, ${total} refus (jour ${refus("day")}, mois ${refus("month")}, part personnelle ${refus("user")}) ; dernier état lu : ${etatPlafond(derniere)}`;
 }
 
 /** Seuls champs lus dans les lignes « Mesure recherche » du serveur
  * (src/lib/searchMeasure.ts, petit lot ; fournisseur et code de réponse
- * depuis 0027) : l'issue et des nombres. */
+ * depuis 0027 ; fromCache depuis la voie C, absent quand elle est coupée) :
+ * l'issue et des nombres. */
 const MESURE = z.object({
   msg: z.literal("Mesure recherche"),
   provider: z.string().regex(/^[a-z][a-z0-9_]{0,31}$/).nullable().default(null),
@@ -237,6 +254,8 @@ const MESURE = z.object({
   added: z.number(),
   addedRanks: z.array(z.number()),
   callSeconds: z.number().nullable(),
+  // Voie C : la réponse de Lens vient du cache (aucun appel).
+  fromCache: z.boolean().optional(),
 });
 export type LigneMesure = z.infer<typeof MESURE>;
 
@@ -244,8 +263,22 @@ export type LigneMesure = z.infer<typeof MESURE>;
 export function extraireMesure(message: string): LigneMesure | null {
   const lu = MESURE.safeParse(lireJson(message));
   if (!lu.success) return null;
-  const { msg, provider, statusCode, outcome, failureKind, received, kept, keptWithPrice, keptOtherCurrency, added, addedRanks, callSeconds } = lu.data;
-  return { msg, provider, statusCode, outcome, failureKind, received, kept, keptWithPrice, keptOtherCurrency, added, addedRanks, callSeconds };
+  const { msg, provider, statusCode, outcome, failureKind, received, kept, keptWithPrice, keptOtherCurrency, added, addedRanks, callSeconds, fromCache } = lu.data;
+  return {
+    msg,
+    provider,
+    statusCode,
+    outcome,
+    failureKind,
+    received,
+    kept,
+    keptWithPrice,
+    keptOtherCurrency,
+    added,
+    addedRanks,
+    callSeconds,
+    ...(fromCache === undefined ? {} : { fromCache }),
+  };
 }
 
 const ISSUES = { found: "trouvée", nothing_buyable: "rien d'achetable", empty_lens: "vide", failure: "panne" } as const;
@@ -271,12 +304,24 @@ export function decrireMesure(ligne: LigneMesure): string {
     return `panne (${ligne.failureKind ? PANNES[ligne.failureKind] : "?"}${code}), ${duree(ligne.callSeconds)}`;
   }
   const ajoutees = ligne.added > 0 ? ` ; ${ligne.added} ajoutée(s) par la règle des prix (rangs ${ligne.addedRanks.join(", ")})` : "";
-  return `${ISSUES[ligne.outcome]} — ${ligne.received ?? "?"} reçue(s), ${ligne.kept ?? "?"} gardée(s) dont ${ligne.keptWithPrice ?? "?"} avec un prix (${ligne.keptOtherCurrency ?? "?"} dans une autre devise)${ajoutees}, ${duree(ligne.callSeconds)}`;
+  const cache = ligne.fromCache === true ? " — réponse du cache, sans appel" : "";
+  return `${ISSUES[ligne.outcome]} — ${ligne.received ?? "?"} reçue(s), ${ligne.kept ?? "?"} gardée(s) dont ${ligne.keptWithPrice ?? "?"} avec un prix (${ligne.keptOtherCurrency ?? "?"} dans une autre devise)${ajoutees}, ${duree(ligne.callSeconds)}${cache}`;
 }
 
-/** Bilan de la période : issues, pannes par type, prix, ajouts de la règle des prix. */
+/** Bilan de la période : issues, pannes par type, prix, ajouts de la règle des
+ * prix. Les recherches servies par le cache (voie C, aucun appel) sont
+ * comptées à part : elles ne disent rien de Google Lens ce jour-là. */
 export function resumerMesures(lignes: readonly LigneMesure[]): string {
   if (lignes.length === 0) return "aucune ligne dans la période";
+  const servies = lignes.filter((ligne) => ligne.fromCache === true);
+  const appels = lignes.filter((ligne) => ligne.fromCache !== true);
+  const bilan = resumerAppels(appels);
+  if (servies.length === 0) return bilan;
+  const issue = (code: LigneMesure["outcome"]) => servies.filter((ligne) => ligne.outcome === code).length;
+  return `${bilan} ; servies par le cache, sans appel : ${servies.length} (trouvées ${issue("found")}, rien d'achetable ${issue("nothing_buyable")}, vides ${issue("empty_lens")})`;
+}
+
+function resumerAppels(lignes: readonly LigneMesure[]): string {
   const issue = (code: LigneMesure["outcome"]) => lignes.filter((ligne) => ligne.outcome === code).length;
   const pannes = Object.entries(PANNES)
     .map(([code, nom]) => [nom, lignes.filter((ligne) => ligne.failureKind === code).length] as const)
@@ -292,7 +337,8 @@ export function resumerMesures(lignes: readonly LigneMesure[]): string {
 const PLACE_RENDUE = z.object({
   msg: z.literal("Place rendue"),
   provider: z.string().regex(/^[a-z][a-z0-9_]{0,31}$/),
-  step: z.enum(["search"]),
+  // search : Lens ; shopping : Google Shopping (voie C).
+  step: z.enum(["search", "shopping"]),
   released: z.boolean(),
 });
 export type LignePlaceRendue = z.infer<typeof PLACE_RENDUE>;
@@ -306,7 +352,8 @@ export function extrairePlaceRendue(message: string): LignePlaceRendue | null {
 }
 
 export function decrirePlaceRendue(ligne: LignePlaceRendue): string {
-  return ligne.released ? "refus du fournisseur : place rendue (jour et mois)" : "refus du fournisseur : place NON rendue (retour en échec, elle reste comptée)";
+  const qui = ligne.step === "shopping" ? "refus du fournisseur (boutiques)" : "refus du fournisseur";
+  return ligne.released ? `${qui} : place rendue (jour et mois)` : `${qui} : place NON rendue (retour en échec, elle reste comptée)`;
 }
 
 export function resumerPlacesRendues(lignes: readonly LignePlaceRendue[]): string {
@@ -354,6 +401,126 @@ export function resumerDisjoncteurs(lignes: readonly LigneDisjoncteur[]): string
   if (lignes.length === 0) return "aucune ligne dans la période";
   const nombre = (event: LigneDisjoncteur["event"]) => lignes.filter((ligne) => ligne.event === event).length;
   return `en observation : ouvertures ${nombre("opened")}, réouvertures ${nombre("reopened")}, fermetures ${nombre("closed")}, recherches qui auraient été bloquées ${nombre("would_block")}`;
+}
+
+/** Seuls champs lus dans les lignes « Mesure complément » du serveur (voie C,
+ * src/lib/searchMeasure.ts, complementLogLine) : l'issue, des durées, des
+ * nombres et des valeurs de listes fermées. Jamais la requête, un titre, une
+ * marque, un modèle, vos mots ni une adresse : le serveur ne les écrit pas, et
+ * rien d'autre n'est lu ici. */
+const COMPLEMENT = z.object({
+  msg: z.literal("Mesure complément"),
+  // ai : « Cette pièce dans d'autres boutiques » (au lancement) ; words : « Que cherchez-vous ? ».
+  source: z.enum(["ai", "words"]),
+  // null : le complément n'a pas tourné (panne de Lens, « Annuler »).
+  status: z.enum(["shown", "empty", "no_query", "ai_failed", "shopping_failed", "no_time", "no_capacity", "skipped", "error"]).nullable(),
+  lensFromCache: z.boolean(),
+  queryFromCache: z.boolean(),
+  shoppingFromCache: z.boolean(),
+  calls: z.number(),
+  aiMs: z.number().nullable(),
+  shoppingMs: z.number().nullable(),
+  totalMs: z.number(),
+  overBudget: z.boolean(),
+  received: z.number().nullable(),
+  kept: z.number().nullable(),
+  keptWithPrice: z.number().nullable(),
+  tier0: z.number().nullable(),
+  tier1: z.number().nullable(),
+  googleLinks: z.number().nullable(),
+  inputTokens: z.number().nullable(),
+  outputTokens: z.number().nullable(),
+  aiErrorKind: z.enum(["unavailable", "refused", "invalid_output"]).nullable(),
+  noQueryReason: z.enum(["empty", "invented", "brand_not_shared", "too_long", "operators"]).nullable(),
+  shoppingFailureKind: z.enum(["refused", "timeout", "error", "unreadable"]).nullable(),
+});
+export type LigneComplement = z.infer<typeof COMPLEMENT>;
+
+/** Ligne « Mesure complément » du serveur → ses seuls champs (null si ce n'en est pas une). */
+export function extraireComplement(message: string): LigneComplement | null {
+  const lu = COMPLEMENT.safeParse(lireJson(message));
+  if (!lu.success) return null;
+  const d = lu.data;
+  return {
+    msg: d.msg,
+    source: d.source,
+    status: d.status,
+    lensFromCache: d.lensFromCache,
+    queryFromCache: d.queryFromCache,
+    shoppingFromCache: d.shoppingFromCache,
+    calls: d.calls,
+    aiMs: d.aiMs,
+    shoppingMs: d.shoppingMs,
+    totalMs: d.totalMs,
+    overBudget: d.overBudget,
+    received: d.received,
+    kept: d.kept,
+    keptWithPrice: d.keptWithPrice,
+    tier0: d.tier0,
+    tier1: d.tier1,
+    googleLinks: d.googleLinks,
+    inputTokens: d.inputTokens,
+    outputTokens: d.outputTokens,
+    aiErrorKind: d.aiErrorKind,
+    noQueryReason: d.noQueryReason,
+    shoppingFailureKind: d.shoppingFailureKind,
+  };
+}
+
+const ISSUES_COMPLEMENT = {
+  shown: "montré",
+  empty: "rien gardé",
+  no_query: "aucune requête sûre",
+  ai_failed: "échec de l'IA",
+  shopping_failed: "échec de la recherche",
+  no_time: "plus le temps",
+  no_capacity: "plafond atteint",
+  skipped: "IA coupée",
+  error: "exception inattendue",
+} as const;
+
+const SOURCES_COMPLEMENT = { ai: "boutiques", words: "vos mots" } as const;
+
+function secondes(ms: number): string {
+  return `${(ms / 1000).toFixed(1).replace(".", ",")} s`;
+}
+
+/** Une ligne lisible : issue et sa raison, propositions, origine des réponses (cache), durées, jetons. */
+export function decrireComplement(ligne: LigneComplement): string {
+  const source = SOURCES_COMPLEMENT[ligne.source];
+  if (ligne.status === null) return `${source} : non lancé (panne de Lens ou « Annuler »), total ${secondes(ligne.totalMs)}`;
+  const raison =
+    ligne.status === "no_query" ? ligne.noQueryReason : ligne.status === "ai_failed" ? ligne.aiErrorKind : ligne.status === "shopping_failed" ? ligne.shoppingFailureKind : null;
+  const parties = [`${source} : ${ISSUES_COMPLEMENT[ligne.status]}${raison ? ` (${raison})` : ""}`];
+  if (ligne.kept !== null) {
+    const paliers = ligne.tier0 !== null ? `, paliers 0 / 1 : ${ligne.tier0} / ${ligne.tier1 ?? "?"}` : "";
+    const google = ligne.googleLinks ? `, ${ligne.googleLinks} lien(s) vers Google` : "";
+    parties.push(`${ligne.received ?? "?"} reçue(s), ${ligne.kept} gardée(s) dont ${ligne.keptWithPrice ?? "?"} avec un prix${paliers}${google}`);
+  }
+  const caches = [ligne.lensFromCache ? "Lens" : null, ligne.queryFromCache ? "requête" : null, ligne.shoppingFromCache ? "boutiques" : null].filter((nom) => nom !== null);
+  if (caches.length > 0) parties.push(`du cache : ${caches.join(", ")}`);
+  const durees = [ligne.aiMs !== null ? `IA ${ligne.aiMs} ms` : null, ligne.shoppingMs !== null ? `recherche ${ligne.shoppingMs} ms` : null].filter((duree) => duree !== null);
+  if (ligne.inputTokens !== null) durees.push(`jetons ${ligne.inputTokens} lus / ${ligne.outputTokens ?? "?"} écrits`);
+  parties.push(`${ligne.calls} appel(s)${durees.length > 0 ? `, ${durees.join(", ")}` : ""}`);
+  parties.push(`total ${secondes(ligne.totalMs)}${ligne.overBudget ? " (15 s ou plus)" : ""}`);
+  return parties.join(" ; ");
+}
+
+/** Bilan de la période, par source : issues, appels aux boutiques, lancements de 15 s ou plus. */
+export function resumerComplements(lignes: readonly LigneComplement[]): string {
+  if (lignes.length === 0) return "aucune ligne dans la période";
+  const bilan = (source: LigneComplement["source"], nom: string) => {
+    const lues = lignes.filter((ligne) => ligne.source === source);
+    const comptes: [string, number][] = Object.entries(ISSUES_COMPLEMENT).map(([code, libelle]) => [libelle, lues.filter((ligne) => ligne.status === code).length]);
+    comptes.push(["non lancé", lues.filter((ligne) => ligne.status === null).length]);
+    const issues = comptes
+      .filter(([, nombre]) => nombre > 0)
+      .map(([libelle, nombre]) => `${libelle} ${nombre}`);
+    return `${nom} ${lues.length}${issues.length > 0 ? ` (${issues.join(", ")})` : ""}`;
+  };
+  const appels = lignes.reduce((total, ligne) => total + ligne.calls, 0);
+  const longs = lignes.filter((ligne) => ligne.overBudget).length;
+  return `${bilan("ai", "boutiques")} ; ${bilan("words", "vos mots")} ; ${appels} recherche(s) dans les boutiques ; ${longs} de 15 s ou plus`;
 }
 
 export function decrireCodes(codes: Record<string, number>): string {

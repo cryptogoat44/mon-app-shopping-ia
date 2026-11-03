@@ -14,6 +14,9 @@ export default defineConfig({
     // réels par leur email ; les lancer en parallèle n'apporterait rien ici
     // et compliquerait le nettoyage.
     fileParallelism: false,
+    // Aucun appel payant possible (lot c, voie C) : fetch refuse serpapi.com
+    // et anthropic.com dans tous les tests, même si un faux est oublié.
+    setupFiles: ["./tests/setup/noPaidCalls.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],

@@ -372,6 +372,25 @@ export const fr = {
     reportedHint: "Modifier ou retirer votre signalement",
     reportError: "Le signalement n'a pas pu être envoyé. Vérifiez votre connexion, puis réessayez.",
     reportWithdrawError: "Le signalement n'a pas pu être retiré. Vérifiez votre connexion, puis réessayez.",
+    // Voie C (lot c) : sections sous les propositions de la recherche
+    // visuelle, puis la recherche par les mots (« Que cherchez-vous ? »).
+    // Textes à valider par le fondateur ; sans nom de fournisseur, sans « IA ».
+    complementTitleAi: "Cette pièce dans d'autres boutiques",
+    complementTitleWords: "Résultats pour vos mots",
+    complementQuery: (query: string) => `Recherche : “${query}”`,
+    // Proposition sans lien direct vers le marchand : le lien ouvre la page produit de Google.
+    viewOffer: "Voir l'offre",
+    textSearchIntro: "Pas tout à fait ça ?",
+    textSearchButton: "Chercher",
+    // Mention provisoire : la politique de confidentialité change avant la mise en ligne, après l'avocat.
+    textSearchNote: "Vos mots partent vers la recherche en ligne.",
+    textSearchRunning: "Recherche en cours…",
+    textSearchAlreadyUsed: "La recherche avec vos mots a déjà été lancée pour cette photo.",
+    textSearchEmpty: "Aucune proposition pour vos mots.",
+    textSearchFailed: "La recherche avec vos mots n'a pas abouti.",
+    textSearchError: "La recherche n'a pas abouti. Vérifiez votre connexion, puis réessayez.",
+    // Mots refusés par le serveur : rien ne reste une fois retirés les opérateurs et la ponctuation.
+    textSearchInvalidWords: "Décrivez la pièce en quelques mots.",
   },
   wishlistItem: {
     back: "Envies",

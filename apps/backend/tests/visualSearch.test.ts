@@ -10,7 +10,7 @@ vi.mock("../src/lib/safeFetch.js", () => ({
 
 import { safeFetch } from "../src/lib/safeFetch.js";
 import { searchProductsByImageUrl } from "../src/services/visualSearch.js";
-import { callSerpApi, isRefusalStatus } from "../src/services/serpapi.js";
+import { callSerpApi, isRefusalStatus, serpApiProvider } from "../src/services/serpapi.js";
 import { CURRENT_LENS_SETTINGS } from "../src/services/lensSettings.js";
 
 const safeFetchMock = vi.mocked(safeFetch);
@@ -283,6 +283,36 @@ describe("searchProductsByImageUrl", () => {
     await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toMatchObject({ kind: "error", statusCode: 502 });
     safeFetchMock.mockResolvedValueOnce(new Response("<html>erreur</html>", { status: 200 }));
     await expect(searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg")).rejects.toMatchObject({ kind: "unreadable", statusCode: 200 });
+  });
+
+  // Voie C (lot c) : Lens avec son plafond fixe de 12 s, par un signal. Sans
+  // signal, l'appel reste exactement celui d'avant.
+  it("signal donné : transmis tel quel jusqu'à l'appel, toujours un seul appel", async () => {
+    const providerSpy = vi.spyOn(serpApiProvider, "searchByImage");
+    safeFetchMock.mockResolvedValueOnce(jsonResponse({ visual_matches: [PRODUCT_MATCH] }));
+    const stop = new AbortController().signal;
+
+    await searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg", { signal: stop });
+
+    expect(safeFetchMock).toHaveBeenCalledOnce();
+    expect(safeFetchMock.mock.calls[0]![1]).toMatchObject({ signal: stop });
+    expect(providerSpy.mock.calls[0]).toHaveLength(3);
+    providerSpy.mockRestore();
+  });
+
+  it("sans signal : le délai d'avant (15 s), un seul appel, et le fournisseur appelé sans signal", async () => {
+    const providerSpy = vi.spyOn(serpApiProvider, "searchByImage");
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+    safeFetchMock.mockResolvedValueOnce(jsonResponse({ visual_matches: [] }));
+
+    await searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg");
+
+    expect(safeFetchMock).toHaveBeenCalledOnce();
+    expect(timeoutSpy).toHaveBeenCalledWith(15_000);
+    expect(safeFetchMock.mock.calls[0]![1]!.signal).toBe(timeoutSpy.mock.results[0]!.value);
+    expect(providerSpy.mock.calls[0]).toHaveLength(2);
+    timeoutSpy.mockRestore();
+    providerSpy.mockRestore();
   });
 
   it("réponse illisible : panne technique, jamais « aucune pièce »", async () => {

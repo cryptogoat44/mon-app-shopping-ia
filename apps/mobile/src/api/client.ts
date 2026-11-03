@@ -1,6 +1,6 @@
 import type { WishlistItem as RemoteWishlistItem } from "@monapp/shared-types";
 import { addWishlistItem, fetchSearch, fetchWishlist, listRecentSearches } from "@/lib/api";
-import { matchToPiece, toSpotResult } from "@/lib/spot-result";
+import { matchToPiece, pieceTitle, toSpotResult } from "@/lib/spot-result";
 import * as mock from "./mock";
 import type { Piece, Profile, SpotResult, VaultItem, WishlistItem } from "./types";
 
@@ -83,7 +83,7 @@ export async function addToWishlist(piece: Piece): Promise<void> {
     return mock.addToWishlist(piece);
   }
   await addWishlistItem({
-    title: piece.name,
+    title: pieceTitle(piece.name),
     imageUrl: piece.imageUrl,
     reference: piece.reference,
     priceMin: piece.priceFrom,

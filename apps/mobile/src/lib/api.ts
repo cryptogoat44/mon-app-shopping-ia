@@ -27,6 +27,7 @@ import type {
   PublicProfile,
   ReactToPostResponse,
   RemoveImageRequest,
+  RunTextSearchRequest,
   TaggedPieceInput,
   UpdateMeRequest,
   UpdateLocaleRequest,
@@ -49,9 +50,10 @@ import type {
 import { CONSENT_VERSIONS, parseVideoMomentsResponse } from "@monapp/shared-types";
 import { supabase } from "./supabase";
 import { setAnalyticsConsent, track } from "./analytics";
-import { acceptLanguage, t } from "@/i18n";
+import { acceptLanguage, t } from "../i18n";
 import { imageFileFromUri } from "./image-file";
 import { ApiError } from "./api-error";
+import { textSearchFailure } from "./spot-result";
 import { deviceTimeZone, type ExportFormat, type ExportResponse } from "./export-file";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -134,9 +136,11 @@ export async function prepareSearch(payload: CreateSearchRequest): Promise<Produ
   return search;
 }
 
-/** Temps 2 du Spotter — 1 crédit SerpApi : lance l'identification sur la
- * zone choisie. `imageUri` (capture ou photo importée) remplace l'image
- * préparée. `signal` permet d'abandonner la requête (bouton « Annuler »). */
+/** Temps 2 du Spotter — 1 à 3 recherches par photo (la recherche visuelle,
+ * puis, voie C, le complément ; la recherche par les mots compte dans les
+ * mêmes 3) : lance l'identification sur la zone choisie. `imageUri` (capture
+ * ou photo importée) remplace l'image préparée. `signal` permet d'abandonner
+ * la requête (bouton « Annuler »). */
 export async function runSearch(
   searchId: string,
   params: { crop: CropRect | null; imageUri: string | null; words?: string | null },
@@ -153,11 +157,43 @@ export async function runSearch(
   track("spot_launched", { zone_adjusted: params.crop !== null, image_imported: params.imageUri !== null });
   const response = await authorizedFetch(`/api/searches/${searchId}/run`, { method: "POST", body: formData, signal });
   const search: ProductSearch = await response.json();
+  // Voie C (lot c) : results_count reste celui de la recherche visuelle ; le
+  // complément a son issue et son nombre (jamais la requête).
+  const lensCount = search.matches.filter((match) => match.origin === undefined || match.origin === "lens").length;
   track("spot_completed", {
     outcome: search.status === "failed" ? "failed" : search.matches.length > 0 ? "results" : "none",
-    results_count: search.matches.length,
+    results_count: lensCount,
+    complement: search.complement?.status ?? "none",
+    complement_count: search.matches.length - lensCount,
   });
   return search;
+}
+
+/** Voie B (lot c) — « Que cherchez-vous ? » sous un résultat : 1 recherche
+ * avec les mots de la personne, une seule fois par recherche et dans les 3
+ * de la photo. Les mots partent vers la recherche en ligne ; le serveur ne
+ * les enregistre pas, les statistiques n'en disent rien. Renvoie la recherche
+ * entière, avec les propositions ajoutées (origine « words »). `signal` :
+ * bouton « Annuler ». */
+export async function runTextSearch(searchId: string, words: string, signal?: AbortSignal): Promise<ProductSearch> {
+  const payload: RunTextSearchRequest = { words };
+  track("text_search_launched");
+  try {
+    const response = await authorizedFetch(`/api/searches/${searchId}/text`, { method: "POST", body: JSON.stringify(payload), signal });
+    const search: ProductSearch = await response.json();
+    track("text_search_completed", {
+      outcome: search.complement?.textStatus ?? "failed",
+      results_count: search.matches.filter((match) => match.origin === "words").length,
+    });
+    return search;
+  } catch (error) {
+    // Seule une panne (réseau ou serveur) est comptée « failed ». « Annuler »,
+    // ou un refus avant toute recherche (mots refusés, plafond ou trop de
+    // recherches d'un coup, fonction coupée, recherche non admissible ou déjà
+    // lancée) : pas d'issue à compter, comme au lancement.
+    if (!signal?.aborted && textSearchFailure(error).kind === "technical") track("text_search_completed", { outcome: "failed", results_count: 0 });
+    throw error;
+  }
 }
 
 /** Joint une photo locale à un envoi (site et iPhone, voir image-file.ts).
@@ -168,8 +204,9 @@ async function appendImageFile(formData: FormData, fieldName: string, imageUri: 
   formData.append(fieldName, file, /\.\w+$/.test(filename) ? filename : `photo.${file.type === "image/png" ? "png" : "jpg"}`);
 }
 
-export async function fetchSearch(searchId: string): Promise<ProductSearch> {
-  const response = await authorizedFetch(`/api/searches/${searchId}`);
+/** `signal` : relecture abandonnée avec la recherche par les mots (voie B). */
+export async function fetchSearch(searchId: string, signal?: AbortSignal): Promise<ProductSearch> {
+  const response = await authorizedFetch(`/api/searches/${searchId}`, signal ? { signal } : undefined);
   return response.json();
 }
 

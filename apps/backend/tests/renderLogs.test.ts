@@ -7,7 +7,10 @@ import {
   compterRequetes,
   decrireAnalyse,
   decrireCodes,
+  decrireComplement,
   decrireMesure,
+  decrirePlafond,
+  extraireComplement,
   extraireCompteursIA,
   extraireDisjoncteur,
   extraireMesure,
@@ -15,13 +18,24 @@ import {
   extrairePlafond,
   lireJournaux,
   parametresJournaux,
+  resumerComplements,
   resumerDisjoncteurs,
   resumerMesures,
   resumerPlacesRendues,
   resumerPlafond,
 } from "../scripts/lib/render-logs.js";
-import { CAPACITY_LOG_MESSAGE, capacityLogFields, RELEASE_LOG_MESSAGE } from "../src/lib/searchCapacity.js";
-import { failedColumns, MEASURE_LOG_MESSAGE, measuredColumns, measureLogLine, type MeasureColumns, type ProviderReply } from "../src/lib/searchMeasure.js";
+import { CAPACITY_LOG_MESSAGE, capacityLogFields, RELEASE_LOG_MESSAGE, type CapacityStep } from "../src/lib/searchCapacity.js";
+import {
+  COMPLEMENT_LOG_MESSAGE,
+  complementLogLine,
+  failedColumns,
+  MEASURE_LOG_MESSAGE,
+  measuredColumns,
+  measureLogLine,
+  type ComplementMeasure,
+  type MeasureColumns,
+  type ProviderReply,
+} from "../src/lib/searchMeasure.js";
 import { BREAKER_LOG_MESSAGE, breakerLogFields, type BreakerEvent } from "../src/lib/searchBreaker.js";
 
 describe("mesure de chaque recherche (petit lot)", () => {
@@ -375,5 +389,175 @@ describe("places rendues et disjoncteur (0027)", () => {
       "image (observation) : se serait refermé — 6 mauvaise(s) sur 10",
     ]);
     expect(extraireDisjoncteur(ligne({ ...champs, event: "inconnu", judged: 1, bad: 1, minutesLeft: null }).message)).toBeNull();
+  });
+});
+
+// Voie C (lot c, 2026-11-02) : les lignes que le serveur écrit pour le
+// complément, telles que src/lib/searchMeasure.ts et searchCapacity.ts les
+// fabriquent. Journaux SIMULÉS : la requête, la marque et vos mots y sont
+// glissés exprès (fictifs) ; rien de tout cela ne doit ressortir.
+describe("voie C : « Mesure complément », étapes des boutiques, réponses du cache", () => {
+  const REQUETE = "Exemplor veste Nuage 07";
+  const MARQUE = "Exemplor";
+  const mesureVide = (source: ComplementMeasure["source"]): ComplementMeasure => ({
+    source,
+    status: null,
+    queryFromCache: false,
+    shoppingFromCache: false,
+    calls: 0,
+    aiMs: null,
+    shoppingMs: null,
+    received: null,
+    kept: null,
+    keptWithPrice: null,
+    tier0: null,
+    tier1: null,
+    googleLinks: null,
+    inputTokens: null,
+    outputTokens: null,
+    aiErrorKind: null,
+    noQueryReason: null,
+    shoppingFailureKind: null,
+  });
+  const complement = (mesure: ComplementMeasure, run: { lensFromCache: boolean; totalMs: number }, heure = "2026-11-02T08:00:00Z") => ({
+    ...ligne({ ...complementLogLine(mesure, run), msg: COMPLEMENT_LOG_MESSAGE, compte: COMPTE, adresse: IP, texte: TEXTE, query: REQUETE, brand: MARQUE }),
+    timestamp: heure,
+  });
+  const MONTRE: ComplementMeasure = {
+    ...mesureVide("ai"),
+    status: "shown",
+    calls: 1,
+    aiMs: 1240,
+    shoppingMs: 2100,
+    received: 40,
+    kept: 18,
+    keptWithPrice: 15,
+    tier0: 3,
+    tier1: 6,
+    googleLinks: 2,
+    inputTokens: 910,
+    outputTokens: 28,
+  };
+
+  it("lit la ligne écrite par le serveur : issue, durées et nombres, jamais la requête, la marque ni vos mots", () => {
+    const lue = extraireComplement(complement(MONTRE, { lensFromCache: false, totalMs: 9_430 }).message);
+    expect(lue).toEqual({
+      msg: "Mesure complément",
+      source: "ai",
+      status: "shown",
+      lensFromCache: false,
+      queryFromCache: false,
+      shoppingFromCache: false,
+      calls: 1,
+      aiMs: 1240,
+      shoppingMs: 2100,
+      totalMs: 9_430,
+      overBudget: false,
+      received: 40,
+      kept: 18,
+      keptWithPrice: 15,
+      tier0: 3,
+      tier1: 6,
+      googleLinks: 2,
+      inputTokens: 910,
+      outputTokens: 28,
+      aiErrorKind: null,
+      noQueryReason: null,
+      shoppingFailureKind: null,
+    });
+    const texte = decrireComplement(lue!);
+    expect(texte).toBe(
+      "boutiques : montré ; 40 reçue(s), 18 gardée(s) dont 15 avec un prix, paliers 0 / 1 : 3 / 6, 2 lien(s) vers Google ; 1 appel(s), IA 1240 ms, recherche 2100 ms, jetons 910 lus / 28 écrits ; total 9,4 s"
+    );
+    for (const interdit of [IP, COMPTE, TEXTE, REQUETE, MARQUE]) expect(JSON.stringify(lue) + texte).not.toContain(interdit);
+    // Une autre ligne, ou une issue inconnue : ignorée.
+    expect(extraireComplement(ligne({ msg: "Mesure recherche" }).message)).toBeNull();
+    expect(extraireComplement(ligne({ ...complementLogLine(MONTRE, { lensFromCache: false, totalMs: 1 }), status: "inconnue", msg: COMPLEMENT_LOG_MESSAGE }).message)).toBeNull();
+  });
+
+  it("issue absente (Lens en panne, « Annuler »), raisons en listes fermées, réponses du cache, 15 s ou plus", () => {
+    const nonLance = extraireComplement(complement(mesureVide("ai"), { lensFromCache: false, totalMs: 15_200 }).message)!;
+    expect(nonLance).toMatchObject({ status: null, overBudget: true });
+    expect(decrireComplement(nonLance)).toBe("boutiques : non lancé (panne de Lens ou « Annuler »), total 15,2 s");
+
+    const sansRequete = extraireComplement(complement({ ...mesureVide("ai"), status: "no_query", noQueryReason: "brand_not_shared", aiMs: 900, inputTokens: 700, outputTokens: 12 }, { lensFromCache: true, totalMs: 3_000 }).message)!;
+    expect(decrireComplement(sansRequete)).toBe("boutiques : aucune requête sûre (brand_not_shared) ; du cache : Lens ; 0 appel(s), IA 900 ms, jetons 700 lus / 12 écrits ; total 3,0 s");
+
+    const toutDuCache = extraireComplement(complement({ ...MONTRE, calls: 0, aiMs: null, shoppingMs: null, inputTokens: null, outputTokens: null, queryFromCache: true, shoppingFromCache: true }, { lensFromCache: true, totalMs: 1_100 }).message)!;
+    expect(decrireComplement(toutDuCache)).toContain("du cache : Lens, requête, boutiques ; 0 appel(s) ; total 1,1 s");
+
+    const vosMots = extraireComplement(complement({ ...mesureVide("words"), status: "shopping_failed", calls: 1, shoppingMs: 10_000, shoppingFailureKind: "timeout" }, { lensFromCache: false, totalMs: 11_800 }).message)!;
+    expect(decrireComplement(vosMots)).toBe("vos mots : échec de la recherche (timeout) ; 1 appel(s), recherche 10000 ms ; total 11,8 s");
+
+    const echecIA = extraireComplement(complement({ ...mesureVide("ai"), status: "ai_failed", aiErrorKind: "refused", aiMs: 2_000 }, { lensFromCache: false, totalMs: 8_000 }).message)!;
+    expect(decrireComplement(echecIA)).toBe("boutiques : échec de l'IA (refused) ; 0 appel(s), IA 2000 ms ; total 8,0 s");
+  });
+
+  it("bilan de la période par source, et ordre des événements, sans identifiant, adresse ni texte", () => {
+    const entrees = [
+      complement(MONTRE, { lensFromCache: false, totalMs: 9_430 }, "2026-11-02T08:00:00Z"),
+      complement({ ...mesureVide("ai"), status: "skipped" }, { lensFromCache: false, totalMs: 6_000 }, "2026-11-02T08:01:00Z"),
+      complement({ ...mesureVide("ai"), status: "no_time" }, { lensFromCache: false, totalMs: 15_400 }, "2026-11-02T08:02:00Z"),
+      complement(mesureVide("ai"), { lensFromCache: false, totalMs: 12_000 }, "2026-11-02T08:03:00Z"),
+      complement({ ...mesureVide("words"), status: "shown", calls: 1, shoppingMs: 1_800, received: 20, kept: 12, keptWithPrice: 12 }, { lensFromCache: false, totalMs: 2_500 }, "2026-11-02T08:04:00Z"),
+    ];
+    const lignes = entrees.flatMap((entree) => extraireComplement(entree.message) ?? []);
+    expect(resumerComplements(lignes)).toBe("boutiques 4 (montré 1, plus le temps 1, IA coupée 1, non lancé 1) ; vos mots 1 (montré 1) ; 2 recherche(s) dans les boutiques ; 1 de 15 s ou plus");
+    expect(resumerComplements([])).toBe("aucune ligne dans la période");
+    const evenements = chronologie(entrees);
+    expect(evenements.map((e) => e.nom)).toEqual(Array.from({ length: 5 }, () => "Mesure complément"));
+    expect(evenements[4]!.issue).toBe("vos mots : montré ; 20 reçue(s), 12 gardée(s) dont 12 avec un prix ; 1 appel(s), recherche 1800 ms ; total 2,5 s");
+    const tout = JSON.stringify(evenements);
+    for (const interdit of [IP, COMPTE, TEXTE, REQUETE, MARQUE]) expect(tout).not.toContain(interdit);
+  });
+
+  it("« Plafond recherches » : les étapes complement_ai et shopping sont lues ; « Place rendue » : l'étape shopping aussi", () => {
+    const plafond = (step: CapacityStep, allowed: boolean) =>
+      ligne({
+        ...capacityLogFields(
+          step,
+          allowed
+            ? { allowed: true, refused_by: null, reservation_id: 9, day_count: 5, month_count: 40, user_day_count: 2, next_renewal: "2026-11-03" }
+            : { allowed: false, refused_by: "day", reservation_id: null, day_count: 25, month_count: 40, user_day_count: 2, next_renewal: "2026-11-03" },
+          { daily: 25, monthly: 225, userDaily: 8, renewalDay: 3 }
+        ),
+        msg: CAPACITY_LOG_MESSAGE,
+        compte: COMPTE,
+      });
+    const boutiques = extrairePlafond(plafond("shopping", true).message)!;
+    expect(boutiques).toMatchObject({ step: "shopping", outcome: "reserved" });
+    expect(decrirePlafond(boutiques)).toBe("recherche réservée (boutiques) — aujourd'hui 5/25, depuis le 3 40/225, personne 2/8");
+    const avantIA = extrairePlafond(plafond("complement_ai", false).message)!;
+    expect(decrirePlafond(avantIA)).toBe("refus (plafond du jour), avant la requête des boutiques par l'IA — aujourd'hui 25/25, depuis le 3 40/225, personne 2/8");
+    expect(decrirePlafond(extrairePlafond(plafond("shopping", false).message)!)).toBe("refus (plafond du jour), avant une recherche dans les boutiques — aujourd'hui 25/25, depuis le 3 40/225, personne 2/8");
+    const lens = extrairePlafond(plafond("search", true).message)!;
+    expect(resumerPlafond([lens, boutiques, avantIA])).toBe(
+      "2 recherche(s) réservée(s) (dont 1 dans les boutiques), 1 refus (jour 1, mois 0, part personnelle 0) ; dernier état lu : aujourd'hui 25/25, depuis le 3 40/225, personne 2/8"
+    );
+    expect(JSON.stringify([boutiques, avantIA])).not.toContain(COMPTE);
+
+    const rendue = extrairePlaceRendue(ligne({ provider: "serpapi", step: "shopping", released: true, msg: RELEASE_LOG_MESSAGE, compte: COMPTE }).message);
+    expect(rendue).toEqual({ msg: "Place rendue", provider: "serpapi", step: "shopping", released: true });
+    expect(chronologie([ligne({ provider: "serpapi", step: "shopping", released: false, msg: RELEASE_LOG_MESSAGE })]).map((e) => e.issue)).toEqual([
+      "refus du fournisseur (boutiques) : place NON rendue (retour en échec, elle reste comptée)",
+    ]);
+  });
+
+  it("« Mesure recherche » : fromCache lu quand il est écrit ; les recherches servies par le cache sont comptées à part", () => {
+    const lens = { received: 60, removedIncomplete: 0, removedSocial: 0, removedProfessional: 0, removedDuplicates: 0, kept: 40, keptWithPrice: 22, keptOtherCurrency: 0, distinctSites: 40, sections: [], googleState: null };
+    const mesure = (fromCache: boolean | undefined, callSeconds: number) =>
+      ligne({ ...measureLogLine(measuredColumns(lens, callSeconds), [], { provider: "serpapi", statusCode: fromCache ? null : 200 }, fromCache), msg: MEASURE_LOG_MESSAGE, compte: COMPTE });
+    const avant = extraireMesure(mesure(undefined, 4).message)!;
+    expect("fromCache" in avant).toBe(false);
+    const appel = extraireMesure(mesure(false, 4).message)!;
+    const cache = extraireMesure(mesure(true, 0).message)!;
+    expect(appel.fromCache).toBe(false);
+    expect(cache.fromCache).toBe(true);
+    expect(decrireMesure(appel)).toBe(decrireMesure(avant));
+    expect(decrireMesure(cache)).toBe("trouvée — 60 reçue(s), 40 gardée(s) dont 22 avec un prix (0 dans une autre devise), 0 s — réponse du cache, sans appel");
+    expect(resumerMesures([avant, appel, cache])).toBe(
+      "2 recherche(s) : trouvées 2, rien d'achetable 0, vides 0, pannes 0 ; 80 propositions gardées, dont 44 avec un prix et 0 ajoutées par la règle des prix ; servies par le cache, sans appel : 1 (trouvées 1, rien d'achetable 0, vides 0)"
+    );
+    expect(chronologie([mesure(true, 0)]).map((e) => e.issue)).toEqual(["trouvée — 60 reçue(s), 40 gardée(s) dont 22 avec un prix (0 dans une autre devise), 0 s — réponse du cache, sans appel"]);
   });
 });
