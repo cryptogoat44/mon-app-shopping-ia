@@ -10,7 +10,8 @@ import { themedStyles } from "@/theme/themed-styles";
 // « Voir chez le marchand » pour une pièce déjà gardée (Vault, Envies).
 // Toujours via openMerchantLink (point de passage unique, contexte suivi).
 // L'appelant n'affiche rien quand la pièce n'a pas de lien marchand (pièce
-// ajoutée à la main).
+// ajoutée à la main). Le lien de secours (ouverture bloquée par le
+// navigateur) est celui qu'openMerchantLink renvoie, donc déjà vérifié.
 export function MerchantLinkButton({
   url,
   merchantName,
@@ -32,7 +33,7 @@ export function MerchantLinkButton({
   async function handlePress() {
     setBlockedUrl(null);
     const outcome = await openMerchantLink({ matchId, url, context });
-    if (outcome.blocked) setBlockedUrl(outcome.url ?? url);
+    if (outcome.blocked) setBlockedUrl(outcome.url);
   }
 
   return (

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance, InjectOptions } from "fastify";
 import sharp from "sharp";
-import { ACCOUNT_DELETION_WORDS, type AppNotification, type Post, type ReceivedPiece, type WishlistItemDetail } from "@monapp/shared-types";
+import { ACCOUNT_DELETION_WORDS, type AppNotification, type Post, type ReceivedPiece, type WishlistItem, type WishlistItemDetail } from "@monapp/shared-types";
 import { buildApp } from "../src/app.js";
 import { env } from "../src/env.js";
 import { downloadPublicImage, PublicImageError } from "../src/lib/publicImage.js";
@@ -494,6 +494,105 @@ describe("copie de l'image d'une envie : la plus grande source réellement reçu
       expect.arrayContaining([
         expect.objectContaining({ level: 40, source: "hd", status: 403, reason: "Image indisponible (403)" }),
         expect.objectContaining({ level: 40, source: "thumbnail", reason: "Image illisible" }),
+      ])
+    );
+  });
+});
+
+// Lien marchand d'une envie rangée avant que POST /api/wishlist n'accepte que
+// les liens http et https (insérée directement en base : la route refuserait
+// ce lien) : jamais renvoyé, ni à son autrice, ni dans une publication
+// « envie », ni dans une pièce reçue, et jamais recopié dans une pièce envoyée.
+// Une envie au lien ordinaire, partagée de la même façon, garde le sien.
+describe("lien marchand d'une envie plus ancienne qui n'est pas un lien web : jamais servi ni recopié", () => {
+  let app: FastifyInstance;
+  let sharer: TestUser;
+  let follower: TestUser; // suit `sharer` : voit ses publications « abonnés » et accepte ses pièces
+  let photo: Buffer;
+  let webWishId = "";
+  let scriptWishId = "";
+  const WEB_LINK = "https://example-shop.test/foulard";
+  const SCRIPT_LINK = "javascript:alert(document.domain)";
+
+  const request = (user: TestUser, method: InjectOptions["method"], url: string, payload?: object) =>
+    app.inject({ method, url, headers: authHeaders(user.token), payload });
+
+  async function insertOldWish(title: string, merchantUrl: string): Promise<string> {
+    const { data, error } = await app.supabaseAdmin
+      .from("wishlist_items")
+      .insert({ user_id: sharer.id, title, image_url: ORIGINAL_IMAGE, merchant_name: "Boutique test", merchant_url: merchantUrl, currency: "EUR" })
+      .select("id")
+      .single();
+    if (error || !data) throw error ?? new Error("Envie non créée");
+    return data.id as string;
+  }
+
+  beforeAll(async () => {
+    app = await buildTestApp();
+    [sharer, follower] = await Promise.all([createTestUser(app, "wls"), createTestUser(app, "wlf")]);
+    photo = await sharp({ create: { width: 40, height: 50, channels: 3, background: "#876" } }).jpeg().toBuffer();
+    expect((await request(follower, "POST", `/api/follows/${sharer.id}`)).statusCode).toBe(204);
+    webWishId = await insertOldWish("Foulard", WEB_LINK);
+    scriptWishId = await insertOldWish("Foulard piégé", SCRIPT_LINK);
+  });
+
+  beforeEach(() => {
+    downloadMock.mockReset();
+    downloadMock.mockResolvedValue(photo);
+  });
+
+  afterAll(async () => {
+    // Copies rangées dans le dossier de `sharer` : effacées ici, puis les comptes (envies, publications, pièces : cascade).
+    if (sharer) {
+      const files = ((await app.supabaseAdmin.storage.from("post-media").list(sharer.id, { limit: 1000 })).data ?? []).map((f) => `${sharer.id}/${f.name}`);
+      if (files.length > 0) await app.supabaseAdmin.storage.from("post-media").remove(files);
+    }
+    for (const user of [sharer, follower].filter(Boolean)) await deleteTestUser(app, user.id);
+    await app.close();
+  });
+
+  it("ses Envies (liste et détail) : le lien web est renvoyé, l'autre jamais", async () => {
+    const items: WishlistItem[] = (await request(sharer, "GET", "/api/wishlist")).json().items;
+    const byId = new Map(items.map((item) => [item.id, item]));
+    expect(byId.get(webWishId)).toMatchObject({ title: "Foulard", merchantUrl: WEB_LINK });
+    expect(byId.get(scriptWishId)).toMatchObject({ title: "Foulard piégé", merchantUrl: null, affiliateUrl: null });
+    const detail = await request(sharer, "GET", `/api/wishlist/${scriptWishId}`);
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json()).toMatchObject({ id: scriptWishId, merchantUrl: null });
+    expect(JSON.stringify([items, detail.json()])).not.toContain("javascript:");
+  });
+
+  it("republiée : la publication « envie » ne montre que le lien web, chez l'autrice comme dans le fil d'un abonné", async () => {
+    const web = await request(sharer, "POST", `/api/wishlist/${webWishId}/republish`, { privacy: "followers" });
+    const script = await request(sharer, "POST", `/api/wishlist/${scriptWishId}/republish`, { privacy: "followers" });
+    expect([web.statusCode, script.statusCode]).toEqual([200, 200]);
+    expect((web.json() as Post).wish).toMatchObject({ title: "Foulard", merchantUrl: WEB_LINK, isAffiliate: false });
+    expect((script.json() as Post).wish).toMatchObject({ title: "Foulard piégé", merchantUrl: null, isAffiliate: false });
+
+    const feed: Post[] = (await request(follower, "GET", "/api/feed")).json().posts;
+    const byId = new Map(feed.map((post) => [post.id, post]));
+    expect(byId.get(web.json().id)?.wish?.merchantUrl).toBe(WEB_LINK);
+    expect(byId.get(script.json().id)?.wish).toMatchObject({ title: "Foulard piégé", merchantUrl: null });
+    expect(JSON.stringify(feed)).not.toContain("javascript:");
+  });
+
+  it("envoyée : la pièce reçue n'a que le lien web, et l'autre n'est pas recopié dans la pièce envoyée", async () => {
+    const web = await request(sharer, "POST", `/api/wishlist/${webWishId}/send`, { recipientId: follower.id });
+    const script = await request(sharer, "POST", `/api/wishlist/${scriptWishId}/send`, { recipientId: follower.id });
+    expect([web.statusCode, script.statusCode]).toEqual([201, 201]);
+
+    const pieces: ReceivedPiece[] = (await request(follower, "GET", "/api/pieces/received")).json().pieces;
+    const byId = new Map(pieces.map((piece) => [piece.id, piece]));
+    expect(byId.get(web.json().id)).toMatchObject({ title: "Foulard", merchantUrl: WEB_LINK });
+    expect(byId.get(script.json().id)).toMatchObject({ title: "Foulard piégé", merchantUrl: null });
+    expect(JSON.stringify(pieces)).not.toContain("javascript:");
+
+    const { data, error } = await app.supabaseAdmin.from("piece_sends").select("id, merchant_url").in("id", [web.json().id, script.json().id]);
+    expect(error).toBeNull();
+    expect(new Map((data ?? []).map((row) => [row.id, row.merchant_url]))).toEqual(
+      new Map([
+        [web.json().id, WEB_LINK],
+        [script.json().id, null],
       ])
     );
   });
