@@ -14,6 +14,7 @@ import { getActiveLocale, t } from "@/i18n";
 import { ProductFrame } from "@/components/product-frame";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { ErrorMessage } from "@/components/error-message";
+import { WishBoughtButton } from "@/components/wish-bought-button";
 import { themedStyles } from "@/theme/themed-styles";
 
 function displayPrice(item: WishlistItemDetail): string | null {
@@ -26,6 +27,9 @@ function displayPrice(item: WishlistItemDetail): string | null {
 // partager l'envie, toujours par un geste volontaire — la republier sur son
 // profil (confidentialité au choix), l'envoyer à une personne sur Spotto, ou
 // la partager hors de l'app (mention « lien affilié » quand c'est le cas).
+// Lot « Retrouver ses pièces » : « Voir chez … » devient le bouton principal
+// et « Je l'ai achetée » le suit — garder puis acheter quelques jours plus
+// tard ; republier passe en bouton secondaire.
 export default function WishlistItemScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -127,17 +131,19 @@ export default function WishlistItemScreen() {
           <Text style={styles.title} accessibilityRole="header">{item.title}</Text>
           <Text style={styles.meta}>{[item.merchantName, displayPrice(item)].filter(Boolean).join(" · ")}</Text>
 
-          {item.merchantUrl ? (
-            <View style={styles.merchant}>
+          <View style={styles.merchant}>
+            {item.merchantUrl ? (
               <MerchantLinkButton
                 url={item.affiliateUrl ?? item.merchantUrl}
                 merchantName={item.merchantName}
                 matchId={item.productMatchId}
                 context="wishlist"
                 isAffiliate={item.affiliateUrl !== null && item.affiliateUrl !== item.merchantUrl}
+                primary
               />
-            </View>
-          ) : null}
+            ) : null}
+            <WishBoughtButton item={item} onAdded={() => setItem((current) => (current ? { ...current, inVault: true } : current))} />
+          </View>
 
           <View style={styles.shareSection}>
             <Text style={styles.sectionTitle} accessibilityRole="header">{t.wishlistItem.shareTitle}</Text>
@@ -176,12 +182,12 @@ export default function WishlistItemScreen() {
                 </View>
                 <Pressable
                   accessibilityRole="button"
-                  style={[styles.primaryButton, republishing ? styles.primaryButtonDisabled : null]}
+                  style={[styles.secondaryButton, styles.republishButton]}
                   onPress={handleRepublish}
                   disabled={republishing}
                   accessibilityState={{ disabled: republishing, busy: republishing }}
                 >
-                  <Text style={[styles.primaryLabel, republishing ? styles.primaryLabelDisabled : null]}>
+                  <Text style={[styles.secondaryLabel, republishing ? styles.labelBusy : null]}>
                     {republishing ? t.wishlistItem.republishing : t.wishlistItem.republish}
                   </Text>
                 </Pressable>
@@ -250,10 +256,8 @@ const styles = themedStyles(() => ({
   privacyPillActive: { backgroundColor: color.vert, borderColor: color.vert },
   privacyLabel: { fontSize: font.caption, color: color.acier },
   privacyLabelActive: { color: color.blanc, fontWeight: "600" },
-  primaryButton: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 48, alignItems: "center", justifyContent: "center", marginTop: space.xs },
-  primaryButtonDisabled: { backgroundColor: color.inactif },
-  primaryLabel: { color: color.blanc, fontSize: font.secondary, fontWeight: "600" },
-  primaryLabelDisabled: { color: color.surInactif },
+  republishButton: { marginTop: space.xs },
+  labelBusy: { color: color.acier },
   secondaryButton: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, minHeight: 48, alignItems: "center", justifyContent: "center" },
   secondaryLabel: { color: color.vert, fontSize: font.secondary, fontWeight: "600" },
   sharedBox: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, gap: 6 },

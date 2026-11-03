@@ -313,6 +313,10 @@ export const fr = {
     otherProposal: "Autre proposition",
     otherProposals: "Autres propositions",
     showMore: (n: number) => `Voir plus (${n})`,
+    // Lot résultats lisibles : textes à valider par le fondateur.
+    yourPiece: "Votre pièce",
+    showLargeHint: "Affiche cette proposition en grand, en haut de l'écran.",
+    shownAbove: (name: string) => `Proposition affichée en grand en haut de l'écran : ${name}`,
     // Texte du fondateur (2026-10-25) : ne promet pas un prix que le site n'affiche peut-être pas.
     priceOnSite: "Prix à vérifier chez le marchand",
     viewAt: (merchant: string) => (merchant ? `Voir chez ${merchant}` : "Voir la pièce"),
@@ -438,6 +442,19 @@ export const fr = {
     linkCopied: "Lien copié",
     shareMessage: (title: string, merchant: string | null) => `Une pièce repérée sur Spotto : ${title}${merchant ? ` chez ${merchant}` : ""}`,
     affiliateMention: "(lien affilié)",
+  },
+  // Lot « Retrouver ses pièces » : toutes les recherches récentes (« Tout
+  // voir ») et « Je l'ai achetée » depuis la fiche d'une envie.
+  retrouverPieces: {
+    seeAll: "Tout voir",
+    seeAllLabel: "Voir toutes vos pièces récemment spottées",
+    recentLead: "Rouvrir un résultat ne compte pas dans vos recherches du jour.",
+    recentEmpty: "Aucune recherche réussie pour l'instant. Les pièces que vous retrouvez avec Spotter s'afficheront ici.",
+    recentLoadError: "Impossible d'afficher vos recherches récentes. Vérifiez votre connexion, puis réessayez.",
+    recentLimitNote: (n: number) => `Seules vos ${n} dernières recherches réussies s'affichent ici. Pour retrouver une pièce plus tard, gardez-la dans vos Envies.`,
+    today: "Aujourd'hui",
+    yesterday: "Hier",
+    alreadyInVault: "Déjà dans votre Vault",
   },
   // Lot 5 : envoyer une envie à une personne sur Spotto.
   sendPiece: {

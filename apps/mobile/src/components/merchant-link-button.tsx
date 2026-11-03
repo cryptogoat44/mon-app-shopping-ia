@@ -19,6 +19,7 @@ export function MerchantLinkButton({
   context,
   isAffiliate,
   compact = false,
+  primary = false,
 }: {
   url: string;
   merchantName: string | null;
@@ -26,6 +27,9 @@ export function MerchantLinkButton({
   context: MerchantLinkContext;
   isAffiliate: boolean;
   compact?: boolean;
+  /** Bouton principal de l'écran (plein, vert) : la fiche d'une envie, où
+   * acheter est le geste attendu (lot « Retrouver ses pièces »). */
+  primary?: boolean;
 }) {
   const [blockedUrl, setBlockedUrl] = useState<string | null>(null);
   const label = t.merchant.viewAt(merchantName);
@@ -41,11 +45,11 @@ export function MerchantLinkButton({
       <Pressable
         onPress={handlePress}
         hitSlop={compact ? 10 : 0}
-        style={compact ? styles.compact : styles.button}
+        style={compact ? styles.compact : primary ? [styles.button, styles.primary] : styles.button}
         accessibilityRole="link"
         accessibilityLabel={isAffiliate ? `${label}, ${t.result.affiliateDisclosure}` : label}
       >
-        <Text style={compact ? styles.compactLabel : styles.buttonLabel} numberOfLines={compact ? 2 : 1}>
+        <Text style={compact ? styles.compactLabel : primary ? [styles.buttonLabel, styles.primaryLabel] : styles.buttonLabel} numberOfLines={compact ? 2 : 1}>
           {label}
           {compact ? " ›" : ""}
         </Text>
@@ -77,6 +81,8 @@ const styles = themedStyles(() => ({
     paddingHorizontal: space.md,
   },
   buttonLabel: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
+  primary: { backgroundColor: color.vert, borderColor: color.vert },
+  primaryLabel: { color: color.blanc },
   compact: { minHeight: 32, justifyContent: "center" },
   compactLabel: { fontSize: 11.5, color: color.vert, fontWeight: "600" },
   disclosure: { textAlign: "center", fontSize: 11.5, color: color.acier, marginTop: 6 },

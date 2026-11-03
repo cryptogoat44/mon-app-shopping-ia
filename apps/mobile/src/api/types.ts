@@ -64,6 +64,9 @@ export interface SpotResult {
   /** Voie C (lot c) : absent quand elle n'a pas tourné sur cette recherche.
    * `pieces` ne garde alors que les propositions de la recherche visuelle. */
   complement?: SpotComplement;
+  /** Résultat relu sur le serveur seulement : propositions déjà gardées
+   * (Envies) ou achetées (Vault) par la personne (lib/owned-marks.ts). */
+  owned?: { kept: string[]; bought: string[] };
 }
 
 /** Complément des propositions de la recherche visuelle (voie C, lot c) :
