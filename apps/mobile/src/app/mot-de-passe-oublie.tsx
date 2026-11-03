@@ -6,6 +6,7 @@ import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
 import { translateAuthError } from "@/lib/auth-errors";
 import { RECOVERY_PATH } from "@/lib/password-recovery";
+import { rememberedEmail } from "@/lib/remembered-email";
 import { t } from "@/i18n";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
@@ -23,7 +24,8 @@ function recoveryRedirectUrl(): string {
 // qui est inscrit.
 export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  // E-mail déjà tapé à la connexion ou à l'inscription (lot « premier essai »).
+  const [email, setEmail] = useState(rememberedEmail);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);

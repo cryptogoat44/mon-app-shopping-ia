@@ -54,6 +54,7 @@ import { setAnalyticsConsent, track } from "./analytics";
 import { acceptLanguage, t } from "../i18n";
 import { imageFileFromUri } from "./image-file";
 import { ApiError } from "./api-error";
+import { isDefaultCrop } from "./crop-geometry";
 import { textSearchFailure } from "./spot-result";
 import { deviceTimeZone, type ExportFormat, type ExportResponse } from "./export-file";
 import { searchLaunched } from "./search-limits";
@@ -157,7 +158,9 @@ export async function runSearch(
   if (params.words) formData.append("query", params.words);
 
   // Ciblage : seulement des oui / non (statistiques : ni les mots, ni leur présence).
-  track("spot_launched", { zone_adjusted: params.crop !== null, image_imported: params.imageUri !== null });
+  // « Cadre ajusté » : différent du cadre par défaut — une photo en a toujours
+  // un, la statistique était donc toujours vraie (lot « premier essai »).
+  track("spot_launched", { zone_adjusted: params.crop !== null && !isDefaultCrop(params.crop), image_imported: params.imageUri !== null });
   const response = await authorizedFetch(`/api/searches/${searchId}/run`, { method: "POST", body: formData, signal });
   const search: ProductSearch = await response.json();
   // Voie C (lot c) : results_count reste celui de la recherche visuelle ; le

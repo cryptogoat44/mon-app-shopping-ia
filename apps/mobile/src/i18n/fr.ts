@@ -198,7 +198,8 @@ export const fr = {
     photoLabel: "Quelle pièce ? (facultatif)",
     photoPlaceholder: "ex. la veste en cuir noir",
     photoWordsNote: "Vos mots servent à trier les propositions. Seule l'image part vers la recherche.",
-    frameHint: "Plusieurs pièces sur la photo ? Entourez celle que vous cherchez.",
+    // Montré tant que le cadre n'a pas bougé, avec ou sans mots (lot « premier essai »).
+    frameHint: "Resserrez le cadre sur la pièce seule, sans visage ni texte autour : Spotto la retrouvera plus facilement.",
     videoPreview: (duration: string) => `Aperçu de votre vidéo, ${duration}`,
     photoPreview: "Votre photo",
     // Titre de la vidéo sans l'analyse automatique (texte du fondateur, 2026-10-25).
@@ -222,6 +223,50 @@ export const fr = {
       computer: "sur Mac : Cmd + Maj + 5 ; sur PC : Outil Capture d'écran",
     },
     addVideo: "Ajouter une vidéo",
+  },
+  // Lot « premier essai » : le bon geste (la capture d'écran d'abord),
+  // « Comment ça marche », les Envies après « Garder », la boutique à
+  // l'étranger et l'inscription. Textes à valider par le fondateur. Espaces
+  // insécables avant « : » et « ? », dans « … » et avant « s » : jamais de
+  // ponctuation seule en début de ligne.
+  firstTry: {
+    linkHelp: {
+      title: "Le plus simple : une capture d'écran",
+      lead: "Spotto ne peut pas lire une vidéo à partir de son lien. Montrez-lui plutôt la pièce :",
+      // Dernière étape, après les trois premières de preview.captureSteps.
+      lastStep: (button: string) => `Revenez ici et touchez « ${button} ».`,
+      addScreenshot: "Ajouter une capture d'écran",
+      recording: (how: string) => `Vous préférez la vidéo ? Enregistrez votre écran pendant qu'elle passe (${how}), puis ajoutez l'enregistrement.`,
+    },
+    howItWorks: {
+      title: "Comment ça marche",
+      steps: (addPhoto: string) => [
+        "Mettez la vidéo en pause quand la pièce est bien visible, et faites une capture d'écran.",
+        `Ajoutez-la avec « ${addPhoto} », puis entourez la pièce.`,
+        "Spotto vous montre où l'acheter, en 10 à 20 secondes.",
+      ],
+    },
+    kept: "Ajoutée à vos Envies",
+    viewWishlist: "Voir mes Envies",
+    foreignShop: "Boutique à l'étranger",
+    signUp: {
+      passwordHint: "Au moins 8 caractères",
+      missing: (items: string) => `Pour continuer, il reste à ${items}.`,
+      missingItem: {
+        email: "indiquer votre e-mail",
+        password: "choisir un mot de passe",
+        confirmPassword: "confirmer le mot de passe",
+        age: "certifier votre âge",
+        consent: "accepter les conditions",
+      },
+      // Fin d'une liste : « a, b et c ».
+      lastItem: (items: string, last: string) => `${items} et ${last}`,
+      notReceived: "Rien reçu après quelques minutes ? Vérifiez les courriers indésirables, puis renvoyez l'e-mail.",
+      resend: "Renvoyer l'e-mail",
+      resending: "Envoi…",
+      resendIn: (seconds: number) => `Renvoyer l'e-mail dans ${seconds} s`,
+      resent: "E-mail renvoyé. Pensez à regarder aussi dans les courriers indésirables.",
+    },
   },
   preview: {
     title: "Voici l'image qui sera analysée",
@@ -347,9 +392,12 @@ export const fr = {
     backToSpotter: "Retour à Spotter",
     notRight: "Ce n'est pas la bonne pièce ?",
     correctionsLead: "Montrez la pièce autrement à Spotto :",
-    // Sans nom de fournisseur (décision du fondateur, 2026-10-21).
-    noMatchTitle: "Notre recherche visuelle n'a rien trouvé pour le moment.",
-    noMatchTip: "Essayez avec un autre cadre ou réessayez dans quelques minutes.",
+    // Sans nom de fournisseur (décision du fondateur, 2026-10-21). Lot « premier
+    // essai » : ne pousse plus à relancer la même image (même résultat, une
+    // recherche de plus).
+    noMatchTitle: "Notre recherche visuelle n'a rien trouvé sur cette image.",
+    noMatchTip:
+      "Relancer la même image donnerait le même résultat. Essayez plutôt de resserrer le cadre sur la pièce seule, de choisir un autre moment de la vidéo où elle se voit bien ou, pour une vidéo, de préciser vos mots.",
     // Aucune proposition gardée n'a de prix (textes validés le 2026-10-21).
     noPriceTitle: "Aucune de ces propositions n'affiche de prix.",
     noPriceText:
@@ -972,7 +1020,8 @@ export const fr = {
     },
     signUp: {
       title: "Créer un compte",
-      subtitle: "Votre vault personnel vous attend.",
+      // La promesse plutôt qu'un « vault » encore inconnu (lot « premier essai »).
+      subtitle: "Retrouvez où acheter les pièces que vous repérez.",
       confirmPassword: "Confirmez le mot de passe",
       consent: "J'accepte les conditions d'utilisation et la politique de confidentialité.",
       ageDeclaration: `Je certifie avoir au moins ${MINIMUM_AGE} ans.`,

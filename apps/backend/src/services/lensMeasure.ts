@@ -29,6 +29,7 @@ export function googleStateOf(state: string | undefined): "empty" | "other" | nu
 export interface FilterCounts {
   /** Sans titre, lien ou image, ou illisibles. */
   removedIncomplete: number;
+  /** Réseaux sociaux, et pages où rien ne s'achète (forums, avis). */
   removedSocial: number;
   removedProfessional: number;
   /** Même page, ou même article sur le site d'un autre pays. */

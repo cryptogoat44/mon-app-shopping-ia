@@ -117,7 +117,7 @@ export const EXPORT_COLUMNS = {
     failure_kind: technical("Type de panne (mesure de qualité)", "Kind of failure (quality measure)"),
     received_count: technical("Propositions reçues de la recherche visuelle", "Results received from the visual search"),
     removed_incomplete: technical("Propositions écartées : sans titre, lien ou image, ou illisibles", "Results set aside: no title, link or image, or unreadable"),
-    removed_social: technical("Propositions écartées : réseaux sociaux", "Results set aside: social networks"),
+    removed_social: technical("Propositions écartées : réseaux sociaux et pages où rien ne s'achète", "Results set aside: social networks and pages with nothing for sale"),
     removed_professional: technical("Propositions écartées : vente aux professionnels", "Results set aside: trade-only sellers"),
     removed_duplicates: technical("Propositions écartées : doublons", "Results set aside: duplicates"),
     kept_count: technical("Propositions gardées", "Results kept"),

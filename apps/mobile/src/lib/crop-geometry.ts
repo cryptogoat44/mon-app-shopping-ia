@@ -27,6 +27,12 @@ export const MIN_CROP = 0.12;
  * dans les types partagés : l'outil d'essai du serveur l'utilise aussi). */
 export { DEFAULT_CROP };
 
+/** Cadre resté à sa place par défaut (jamais déplacé, ou réinitialisé) :
+ * conseil de le resserrer, et statistique « cadre ajusté » (lot « premier essai »). */
+export function isDefaultCrop(crop: CropRect | null): boolean {
+  return crop !== null && (["x", "y", "width", "height"] as const).every((side) => crop[side] === DEFAULT_CROP[side]);
+}
+
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
 /** Où l'image s'affiche dans son conteneur quand elle est « contenue »

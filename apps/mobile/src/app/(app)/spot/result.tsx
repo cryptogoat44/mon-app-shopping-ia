@@ -36,7 +36,10 @@ import { ProposalCard } from "@/components/proposal-card";
 import { YourPiece } from "@/components/your-piece";
 import { yourPieceImage } from "@/lib/your-piece";
 import { useHeroReveal } from "@/lib/use-hero-reveal";
+import { ForeignShopNote } from "@/components/foreign-shop-note";
+import { KeptNotice } from "@/components/kept-notice";
 import { track } from "@/lib/analytics";
+import { openWishlistFromSpotter } from "@/lib/wishlist-link";
 import { themedStyles } from "@/theme/themed-styles";
 
 function displayPrice(piece: Piece): string {
@@ -59,6 +62,8 @@ export default function ResultScreen() {
   const fromLaunch = useRef(state.kind === "ready");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [kept, setKept] = useState<Set<string>>(new Set());
+  // Ajout aux Envies confirmé par le serveur : « Ajoutée à vos Envies · Voir mes Envies » (lot « premier essai »).
+  const [keptSaved, setKeptSaved] = useState<Set<string>>(new Set());
   const [bought, setBought] = useState<Set<string>>(new Set());
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -148,6 +153,7 @@ export default function ResultScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
       await addToWishlist(piece);
+      setKeptSaved((prev) => new Set(prev).add(piece.id));
     } catch {
       setKept((prev) => {
         const next = new Set(prev);
@@ -344,6 +350,7 @@ export default function ResultScreen() {
         <Text style={styles.meta}>
           {[piece.merchantName, displayPrice(piece)].filter(Boolean).join(" · ")}
         </Text>
+        <ForeignShopNote piece={piece} />
         {/* Juste sous la proposition, visible sans défilement (décision du fondateur, lot 4 ter). */}
         {successList.length > 0 ? <CorrectionsLink style={styles.notRight} onPress={() => setCorrectionsOpen(true)} /> : null}
 
@@ -393,6 +400,7 @@ export default function ResultScreen() {
           </Pressable>
           {piece.real ? <ResultFeedbackButton onPress={() => setReportOpen(true)} /> : null}
         </View>
+        {keptSaved.has(piece.id) ? <KeptNotice onOpen={() => openWishlistFromSpotter(router)} /> : null}
         {piece.real && reported ? <ReportedLine reason={reported} onPress={() => setReportOpen(true)} /> : null}
         {actionError ? <ErrorMessage style={styles.actionError}>{actionError}</ErrorMessage> : null}
 

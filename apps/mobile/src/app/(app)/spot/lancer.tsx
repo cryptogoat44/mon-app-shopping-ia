@@ -7,7 +7,7 @@ import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { containsLink } from "@/lib/link-detection";
 import { closeSpotter } from "@/lib/spot-navigation";
-import { DEFAULT_CROP } from "@/lib/crop-geometry";
+import { DEFAULT_CROP, isDefaultCrop } from "@/lib/crop-geometry";
 import { draftImageUri, getDraft, type SpotDraft } from "@/lib/spot-draft";
 import { getSpotVideo, holdSpotVideo, importSpotVideo, letGoSpotVideo, videoImportMessage } from "@/lib/spot-video";
 import { blocksLaunch } from "@/lib/search-limits";
@@ -141,7 +141,8 @@ function useAsk(
   return {
     withQuery,
     photoWords,
-    frameHint: photoWords && query.trim().length > 0 && !frameAdjusted,
+    // Dès que le cadre n'a pas bougé, avec ou sans mots (lot « premier essai »).
+    frameHint: photoWords && !frameAdjusted,
     autoFocus: isVideo,
     query,
     onQuery: (value) => {
@@ -180,7 +181,7 @@ export default function LaunchScreen() {
   const limits = useSearchLimits();
   const blocked = blocksLaunch(limits.notice);
   const flow = useSpotLaunch({ ...media, preview: preview.source, query, crop: media.source === "photo" ? crop : null, auto: params.auto === "1" && !blocked });
-  const frameAdjusted = (["x", "y", "width", "height"] as const).some((side) => crop[side] !== DEFAULT_CROP[side]);
+  const frameAdjusted = !isDefaultCrop(crop);
   const ask = useAsk(media, setMedia, query, setQuery, flow, frameAdjusted);
   // Photo : le cadre occupe le haut de l'écran ; quand le clavier s'ouvre, on
   // descend jusqu'à « Lancer », sinon caché dessous (constaté sur iPhone).

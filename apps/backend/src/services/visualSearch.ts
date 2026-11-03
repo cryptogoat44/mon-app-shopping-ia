@@ -57,11 +57,13 @@ export function withCleanTexts(match: ProviderVisualMatch): ProviderVisualMatch 
   return { ...match, title: withoutNul(match.title), link: withoutNul(match.link), source: withoutNul(match.source), thumbnail: withoutNul(match.thumbnail), image: withoutNul(match.image) };
 }
 
-/** Prix et devise rangeables tels quels, sinon aucun prix. */
+/** Prix et devise rangeables tels quels, sinon aucun prix. Un prix sans devise
+ * n'est pas gardé : sa devise n'est jamais devinée (avant le lot « premier
+ * essai », il était enregistré en euros et affiché comme tel). */
 export function storablePrice(price: ProviderVisualMatch["price"]): Pick<VisualMatch, "priceValue" | "currency"> {
   const value = price?.extracted_value;
   const currency = withoutNul(price?.currency)?.trim() || null;
-  const currencyFits = currency === null || [...currency].length <= MAX_CURRENCY_CHARACTERS;
+  const currencyFits = currency !== null && [...currency].length <= MAX_CURRENCY_CHARACTERS;
   if (value === undefined || !Number.isFinite(value) || value < 0 || value > MAX_PRICE || !currencyFits) {
     return { priceValue: null, currency: null };
   }
@@ -117,7 +119,9 @@ export function filterVisualMatches(
     matches: byProximity([...unique.slice(0, MAX_MATCHES), ...added], country).map(toVisualMatch),
     counts: {
       removedIncomplete: response.received - complete.length,
-      removedSocial: reasons.filter((reason) => reason === "social").length,
+      // Pages sans vente : écartées comme les réseaux sociaux et comptées avec
+      // eux (removed_social) — un compteur à part demanderait une migration.
+      removedSocial: reasons.filter((reason) => reason === "social" || reason === "no_sale").length,
       removedProfessional: reasons.filter((reason) => reason === "professional").length,
       removedDuplicates: buyable.length - unique.length,
     },

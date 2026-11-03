@@ -5,7 +5,7 @@ import { Image } from "expo-image";
 import { SpotImage } from "@/components/spot-image";
 import { ImageUnavailable } from "@/components/image-unavailable";
 import { WishlistPanel } from "@/components/wishlist-panel";
-import { useFocusEffect, useNavigation, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
@@ -16,6 +16,7 @@ import type { Post, VaultItem } from "@monapp/shared-types";
 import { CameraIcon, ClockIcon, GearIcon, PersonIcon, PlusIcon, TagIcon, VerifiedIcon } from "@/components/icons";
 import { useToast } from "@/lib/toast-context";
 import { onVaultChanged } from "@/lib/vault-changes";
+import { requestedProfileSegment, type ProfileSegment } from "@/lib/wishlist-link";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
@@ -38,7 +39,9 @@ export default function ProfileScreen() {
   const [lifestylePosts, setLifestylePosts] = useState<Post[]>([]);
   const [vaultError, setVaultError] = useState<string | null>(null);
   const [lifestyleError, setLifestyleError] = useState<string | null>(null);
-  const [segment, setSegment] = useState<"vault" | "lifestyle" | "wishlist">("vault");
+  // « Voir mes Envies » (Spotter) ouvre l'onglet Envies ; sinon le Vault, comme toujours.
+  const { segment: segmentParam } = useLocalSearchParams<{ segment?: string }>();
+  const [segment, setSegment] = useState<ProfileSegment>(() => requestedProfileSegment(segmentParam) ?? "vault");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -62,6 +65,19 @@ export default function ProfileScreen() {
           .catch((e) => setLifestyleError(e instanceof ApiError ? e.message : t.profile.loadError)),
       ]).finally(() => setLoading(false)),
     []
+  );
+
+  // Profil déjà ouvert : l'onglet demandé s'affiche aussi. Le paramètre est
+  // ensuite retiré, pour qu'un prochain « Voir mes Envies » rouvre l'onglet
+  // même après un passage au Vault — une fois l'écran au premier plan :
+  // setParams vise l'écran affiché.
+  useFocusEffect(
+    useCallback(() => {
+      const requested = requestedProfileSegment(segmentParam);
+      if (!requested) return;
+      setSegment(requested);
+      router.setParams({ segment: undefined });
+    }, [segmentParam, router])
   );
 
   useFocusEffect(

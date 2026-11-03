@@ -167,8 +167,9 @@ export interface ComplementPorts extends CachePorts {
 
 // ---- Clés du cache ----
 
-/** Version des clés : à changer dès que les filtres de Lens ou de Google Shopping changent. */
-const CACHE_KEY_VERSION = "v1";
+/** Version des clés : à changer dès que les filtres de Lens ou de Google Shopping changent.
+ * v2 (lot « premier essai ») : Threads et pages sans vente écartés, prix sans devise retirés. */
+const CACHE_KEY_VERSION = "v2";
 
 /** Parties de la clé Lens : moteur, type, pays, langue et empreinte de l'image préparée. */
 export function lensCacheParts(locale: SearchLocale, imageHash: string): string[] {
