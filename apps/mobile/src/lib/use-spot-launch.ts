@@ -7,21 +7,26 @@ import { t } from "../i18n";
 import { recordVideoAiChoice } from "./api";
 import { track } from "./analytics";
 import { closeSpotter } from "./spot-navigation";
-import { draftImageUri, type SpotDraft } from "./spot-draft";
-import { checkVideoAi, identifyNextMoment, launchPhoto, launchVideo, photoCrop, type LaunchOutcome, type VideoAiChoice, type VideoAiReadiness } from "./spot-launch";
+import { draftImageUri, getDraft, type SpotDraft } from "./spot-draft";
+import { checkVideoAi, identifyNextMoment, launchPhoto, launchVideo, photoCrop, recheckSearch, relaunchDraft, type LaunchOutcome, type VideoAiChoice, type VideoAiReadiness } from "./spot-launch";
+import { notifyAppForeground, recheckOnReturn, type UnsettledState } from "./spot-recovery";
+import { useForegroundReturn } from "./use-foreground-return";
 import type { CropRect } from "@monapp/shared-types";
 import type { AutoFailure } from "./video-auto";
 import type { FramePreview, OpenedVideo } from "./video-timeline";
 import type { WaitingImage } from "../components/spot-waiting";
 
-/** États de l'écran unique ; pendant « working », l'attente occupe tout l'écran. */
+/** États de l'écran unique ; pendant « working », l'attente occupe tout
+ * l'écran. `cancelled` : retour après « Annuler » d'une photo (la recherche a
+ * pu continuer). `unsettled` : recherche coupée dont l'issue reste inconnue. */
 export type LaunchPhase =
-  | { kind: "ask" }
+  | { kind: "ask"; cancelled?: boolean }
   | { kind: "consent" }
   | { kind: "working" }
   | { kind: "not_found" }
   | { kind: "failed"; reason: Exclude<AutoFailure, "consent"> | "check" }
-  | { kind: "prepare_failed" };
+  | { kind: "prepare_failed" }
+  | { kind: "unsettled"; searchId: string; state: UnsettledState };
 
 /** Disponibilité de l'IA et accord de la personne : demandés en arrière-plan
  * dès l'ouverture (vidéo seulement), redemandés au lancement en cas d'échec. */
@@ -73,7 +78,8 @@ function useLaunchRun(auto: boolean) {
       setPhase({ kind: "ask" });
     }, [])
   );
-  // Quitter l'écran abandonne la requête en cours.
+  // Quitter l'écran abandonne la requête en cours ; son numéro reste dans le
+  // brouillon : relancée à l'identique, elle est relue, pas repayée.
   useEffect(() => () => run.current.controller?.abort(), []);
 
   function begin(image: WaitingImage | null) {
@@ -188,6 +194,26 @@ export function useSpotLaunch({ source, video, draft, preview, query, crop, auto
     const { id, signal } = flow.begin(draftImage(draft, zone));
     flow.settle(id, await launchPhoto(draft, signal, zone, query), consentRequired);
   }
+  // Recherche coupée (lib/spot-recovery.ts) : « Relancer » reprend le même
+  // brouillon (photo, ou image du moment de la vidéo), sans refaire l'analyse ;
+  // « Vérifier à nouveau » ne fait que relire.
+  async function relaunch() {
+    const current = getDraft();
+    if (!current) return closeSpotter(router);
+    const { id, signal } = flow.begin(draftImage(current));
+    flow.settle(id, await relaunchDraft(current, signal), consentRequired);
+  }
+  async function recheck(searchId: string) {
+    const current = getDraft();
+    const { id, signal } = flow.begin(current ? draftImage(current) : flow.waitingImage);
+    flow.settle(id, await recheckSearch(searchId, signal), consentRequired);
+  }
+  // Retour dans l'app : le lancement en cours relit sa recherche ; une
+  // recherche restée sans issue est relue (gratuit), jamais relancée seule.
+  useForegroundReturn(() => {
+    notifyAppForeground();
+    if (flow.phase.kind === "unsettled" && recheckOnReturn(flow.phase.state)) void recheck(flow.phase.searchId);
+  });
 
   /** Curseur manuel : l'image choisie part seule, sans les mots (petit lot, 2026-10-25). */
   function chooseMyself() {
@@ -231,7 +257,8 @@ export function useSpotLaunch({ source, video, draft, preview, query, crop, auto
     cancel: () => {
       flow.stop();
       track("spot_cancelled");
-      setPhase({ kind: "ask" });
+      // Photo : relancée sans rien changer, la recherche annulée est relue (vidéo : l'analyse serait refaite).
+      setPhase({ kind: "ask", cancelled: source === "photo" });
     },
     close: () => {
       flow.stop();
@@ -242,6 +269,8 @@ export function useSpotLaunch({ source, video, draft, preview, query, crop, auto
     chooseMyself,
     retry: () => void (flow.phase.kind === "failed" && flow.phase.reason === "check" ? launch() : runVideo()),
     retryPrepare: () => void retryPrepare(),
+    relaunch: () => void relaunch(),
+    recheck: () => void (flow.phase.kind === "unsettled" && recheck(flow.phase.searchId)),
     ask: () => setPhase({ kind: "ask" }),
     enableAi: () => setPhase({ kind: "consent" }),
   };

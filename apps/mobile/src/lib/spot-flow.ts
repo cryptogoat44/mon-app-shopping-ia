@@ -2,6 +2,7 @@ import { t } from "../i18n";
 import { ApiError, prepareSearch } from "./api";
 import { getDraft, startDraft, updateDraft, type ImageSize, type SpotDraft } from "./spot-draft";
 import type { LinkPlatform } from "./link-detection";
+import type { UnsettledLaunch } from "./spot-recovery";
 
 // Enchaînement du parcours Spotter. « Préparer » est gratuit (aucun appel
 // SerpApi) : on peut le refaire sans scrupule pour chaque nouveau lancement.
@@ -42,9 +43,16 @@ export async function freshSearchId(draft: SpotDraft): Promise<string> {
   return search.id;
 }
 
-/** À appeler dès qu'une recherche a été envoyée (même annulée ensuite). */
-export function markSearchUsed(): void {
-  updateDraft({ searchId: null });
+/** À appeler dès qu'une recherche part (même annulée ensuite) : elle ne se
+ * relance plus comme neuve, mais son numéro est gardé avec ce qui part tant
+ * que son issue n'est pas montrée (lib/spot-recovery.ts). */
+export function markSearchUsed(launch: UnsettledLaunch): void {
+  updateDraft({ searchId: null, unsettled: launch });
+}
+
+/** Issue montrée (résultat ou échec) : plus rien à retrouver pour ce lancement. */
+export function settleLaunch(searchId: string): void {
+  if (getDraft()?.unsettled?.searchId === searchId) updateDraft({ unsettled: null });
 }
 
 export { getDraft };

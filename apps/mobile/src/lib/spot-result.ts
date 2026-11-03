@@ -70,12 +70,15 @@ export function toSpotResult(search: ProductSearch): SpotResult {
   const complement = complementOf(search, all);
   const withComplement = complement ? { complement } : {};
   if (all.length === 0) {
+    // Encore en cours : jamais « rien trouvé », son résultat arrive (lot recherche coupée).
     const failReason =
       search.status === "pending"
         ? "needs_photo"
-        : search.errorMessage === SEARCH_FAILURE_MESSAGES.technical
-          ? "technical"
-          : "no_match";
+        : search.status === "processing"
+          ? "running"
+          : search.errorMessage === SEARCH_FAILURE_MESSAGES.technical
+            ? "technical"
+            : "no_match";
     return { searchId: search.id, query: search.query, sourceUrl: search.sourceUrl, status: "failed", pieces: [], similarPieces: [], failReason, ...withComplement };
   }
   return {

@@ -6,6 +6,11 @@ export default function AppLayout() {
     <>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
+        {/* iPhone : glisser vers la droite (n'importe où sous iOS 26) fait revenir en
+            arrière. Pendant l'attente de l'identification, ce geste quittait l'écran et
+            abandonnait la requête : une recherche peut-être payée, sans son résultat
+            (lot recherche coupée). Retour par « Annuler » ou « Fermer ». */}
+        <Stack.Screen name="spot/analysis" options={{ gestureEnabled: false }} />
         <Stack.Screen name="post-item/new" options={{ presentation: "modal" }} />
         {/* Lot 2 (Vault) : ajout d'une pièce à la main, présenté comme « Nouvelle publication ». */}
         <Stack.Screen name="vault-item/new" options={{ presentation: "modal" }} />

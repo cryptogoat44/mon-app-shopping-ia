@@ -45,7 +45,7 @@ export const QUOTA_ROWS = z
     ])
   )
   .length(1);
-type QuotaRow = z.infer<typeof QUOTA_ROWS>[number];
+export type QuotaRow = z.infer<typeof QUOTA_ROWS>[number];
 
 type CapacityReached = { allowed: false } & SearchCapacityReached;
 export type SearchCapacity = { allowed: true } | CapacityReached;
@@ -116,26 +116,39 @@ interface QuotaRequest {
   searchId?: string;
 }
 
-async function readQuota(fastify: FastifyInstance, log: FastifyBaseLogger, request: QuotaRequest): Promise<QuotaRow> {
-  const caps = searchCaps();
-  const reserve = request.step === "search" || request.step === "shopping";
+/** Un appel à serpapi_quota, sa réponse lue sans lui faire confiance. */
+async function callQuota(fastify: FastifyInstance, log: FastifyBaseLogger, caps: SearchCaps, userId: string, reserve: boolean, searchId?: string): Promise<QuotaRow> {
   const { data, error } = await fastify.supabaseAdmin.rpc("serpapi_quota", {
     p_daily_cap: caps.daily,
     p_monthly_cap: caps.monthly,
     p_user_daily_cap: caps.userDaily,
     p_renewal_day: caps.renewalDay,
-    p_user_id: request.userId,
+    p_user_id: userId,
     p_reserve: reserve,
-    p_exclude_search: request.searchId ?? null,
+    p_exclude_search: searchId ?? null,
   });
   const rows = QUOTA_ROWS.safeParse(data);
   if (error || !rows.success) {
     log.error({ error }, "Plafond des recherches illisible");
     throw new SearchCapacityError("Plafond des recherches illisible");
   }
-  const row = rows.data[0]!;
+  return rows.data[0]!;
+}
+
+async function readQuota(fastify: FastifyInstance, log: FastifyBaseLogger, request: QuotaRequest): Promise<QuotaRow> {
+  const caps = searchCaps();
+  const reserve = request.step === "search" || request.step === "shopping";
+  const row = await callQuota(fastify, log, caps, request.userId, reserve, request.searchId);
   if (reserve || !row.allowed) log.info(capacityLogFields(request.step, row, caps), CAPACITY_LOG_MESSAGE);
   return row;
+}
+
+/** Compteur lu pour l'app (lot limites annoncées, GET /api/searches/capacity) :
+ * rien n'est réservé, et aucune ligne « Plafond recherches » n'est écrite —
+ * une visite de l'accueil n'est pas un refus : compteurs-ia ne doit pas la compter. */
+export async function readSearchCounts(fastify: FastifyInstance, log: FastifyBaseLogger, userId: string): Promise<{ row: QuotaRow; caps: SearchCaps }> {
+  const caps = searchCaps();
+  return { row: await callQuota(fastify, log, caps, userId, false), caps };
 }
 
 function reachedBy(row: QuotaRow & { allowed: false }): CapacityReached {

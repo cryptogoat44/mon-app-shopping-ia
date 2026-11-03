@@ -7,6 +7,7 @@ import type {
   RecordConsentsRequest,
   CreateReportRequest,
   CreateSearchRequest,
+  CreateVaultItemResponse,
   CreateWishlistItemRequest,
   CropRect,
   DeleteAccountRequest,
@@ -47,7 +48,7 @@ import type {
   PostComment,
   VideoMoment,
 } from "@monapp/shared-types";
-import { CONSENT_VERSIONS, parseVideoMomentsResponse } from "@monapp/shared-types";
+import { CONSENT_VERSIONS, parseSearchCapacityStatus, parseVideoMomentsResponse, type SearchCapacityStatus } from "@monapp/shared-types";
 import { supabase } from "./supabase";
 import { setAnalyticsConsent, track } from "./analytics";
 import { acceptLanguage, t } from "../i18n";
@@ -56,6 +57,7 @@ import { ApiError } from "./api-error";
 import { isDefaultCrop } from "./crop-geometry";
 import { textSearchFailure } from "./spot-result";
 import { deviceTimeZone, type ExportFormat, type ExportResponse } from "./export-file";
+import { searchLaunched } from "./search-limits";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -147,6 +149,7 @@ export async function runSearch(
   params: { crop: CropRect | null; imageUri: string | null; words?: string | null },
   signal?: AbortSignal
 ): Promise<ProductSearch> {
+  searchLaunched();
   const formData = new FormData();
   if (params.crop) formData.append("crop", JSON.stringify(params.crop));
   if (params.imageUri) await appendImageFile(formData, "file", params.imageUri);
@@ -179,6 +182,7 @@ export async function runSearch(
  * entière, avec les propositions ajoutées (origine « words »). `signal` :
  * bouton « Annuler ». */
 export async function runTextSearch(searchId: string, words: string, signal?: AbortSignal): Promise<ProductSearch> {
+  searchLaunched();
   const payload: RunTextSearchRequest = { words };
   track("text_search_launched");
   try {
@@ -234,6 +238,13 @@ export async function trackProductMatchClick(
   return response.json();
 }
 
+/** Lot limites annoncées : le compteur des recherches, lu sans rien réserver
+ * (gratuit, aucune recherche lancée) ; null si la réponse est illisible. */
+export async function fetchSearchCapacity(): Promise<SearchCapacityStatus | null> {
+  const response = await authorizedFetch("/api/searches/capacity");
+  return parseSearchCapacityStatus(await response.json());
+}
+
 export async function fetchVault(cursor?: string): Promise<VaultPage> {
   const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
   const response = await authorizedFetch(`/api/vault${query}`);
@@ -245,12 +256,14 @@ export async function fetchVaultItem(id: string): Promise<VaultItemDetail> {
   return response.json();
 }
 
+/** « Je l'ai achetée » (résultat ou envie). Proposition déjà dans le Vault :
+ * le serveur renvoie la pièce déjà là (`alreadyInVault`), rien n'est créé. */
 export async function addVaultItemFromMatch(params: {
   title: string;
   imageUrl: string;
   category: VaultCategory;
   productMatchId: string;
-}): Promise<VaultItem> {
+}): Promise<CreateVaultItemResponse> {
   const formData = new FormData();
   formData.append("title", params.title);
   formData.append("category", params.category);
@@ -258,8 +271,8 @@ export async function addVaultItemFromMatch(params: {
   formData.append("productMatchId", params.productMatchId);
 
   const response = await authorizedFetch("/api/vault", { method: "POST", body: formData });
-  const item: VaultItem = await response.json();
-  track("vault_item_added", { source: "spotter", category: params.category });
+  const item: CreateVaultItemResponse = await response.json();
+  if (item.alreadyInVault !== true) track("vault_item_added", { source: "spotter", category: params.category });
   return item;
 }
 
@@ -582,6 +595,7 @@ export async function fetchVideoAiEnabled(): Promise<boolean> {
  * serveur, qui interroge l'IA ; jusqu'à 3 moments reviennent, vérifiés ici
  * aussi (jamais de confiance aveugle dans le réseau). */
 export async function findVideoMoments(frameUris: readonly string[], query: string, signal?: AbortSignal): Promise<VideoMoment[]> {
+  searchLaunched();
   const formData = new FormData();
   formData.append("query", query.trim());
   for (const uri of frameUris) await appendImageFile(formData, "frame", uri);

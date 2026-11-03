@@ -22,6 +22,7 @@ import commentsRoutes from "./routes/comments.js";
 import videoMomentsRoutes from "./routes/videoMoments.js";
 import moderationRoutes from "./routes/moderation.js";
 import piecesRoutes from "./routes/pieces.js";
+import searchCapacityRoutes from "./routes/searchCapacity.js";
 import { captureServerError, captureServerFailure } from "./lib/sentry.js";
 import { isErrorBody, localizeMessage } from "./lib/messages.js";
 import { requestLocale } from "./lib/locale.js";
@@ -101,6 +102,7 @@ export async function buildApp(options: { logger?: FastifyServerOptions["logger"
   await fastify.register(videoMomentsRoutes);
   await fastify.register(moderationRoutes);
   await fastify.register(piecesRoutes);
+  await fastify.register(searchCapacityRoutes);
 
   // Exclue du filet anti-abus "default" : les sondes de disponibilité de
   // Render l'appellent très régulièrement, ça n'a rien à voir avec un abus.

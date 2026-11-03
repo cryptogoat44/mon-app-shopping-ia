@@ -30,6 +30,7 @@ import {
   type MeasureColumns,
 } from "../lib/searchMeasure.js";
 import { fetchFeedbackReasons } from "../lib/matchFeedback.js";
+import { keptMatchIds } from "../lib/keptPieces.js";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { purgeExpiredSearches } from "../lib/searchRetention.js";
 import { launchDating } from "../lib/launchDating.js";
@@ -1200,7 +1201,14 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     // Voie C coupée depuis l'enregistrement : l'issue et les sections restent,
     // l'invitation « Que cherchez-vous ? » n'est plus annoncée (la route répondrait 404).
     const textSearchOn = await voieCActive(fastify);
+    // Résultat rouvert (historique, rechargement) : « Gardée » et « Ajoutée
+    // au Vault » sur les propositions que la personne a déjà rangées.
+    const [wishlistMatchIds, vaultMatchIds] = await Promise.all([
+      keptMatchIds(fastify, "wishlist_items", userId, matchIds),
+      keptMatchIds(fastify, "vault_items", userId, matchIds),
+    ]);
+    const reread: ProductSearch = { ...toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, textSearchOn), wishlistMatchIds, vaultMatchIds };
 
-    return reply.send(toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, textSearchOn));
+    return reply.send(reread);
   });
 }
