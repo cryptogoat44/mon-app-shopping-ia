@@ -236,11 +236,12 @@ describe("identification : une panne n'est jamais présentée comme « pièce in
     expect(getDraft()?.searchId).toBeNull();
   });
 
+  // Réponse perdue (réseau, délai dépassé, serveur en panne) : la recherche
+  // est relue au lieu d'être montrée en échec (tests/search-recovery.test.ts).
   it.each([
     [new ApiError(429, { error: "rate_limited", message: "…" }), "rate_limited", false],
     [new ApiError(422, { error: "preview_unavailable", message: "…" }), "needs_photo", false],
-    [new ApiError(500, { error: "internal", message: "…" }), "technical", false],
-    [new TypeError("Network request failed"), "technical", true],
+    [new Error("image illisible"), "technical", true],
   ])("échec %#: « %s », signalé à Sentry seulement s'il vient de l'app", async (error, failReason, reported) => {
     runSearch.mockRejectedValue(error);
     expect(await identifyDraft(photoDraft(), new AbortController().signal)).toEqual({ kind: "done", searchId: null });

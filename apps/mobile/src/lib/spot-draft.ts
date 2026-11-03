@@ -5,6 +5,7 @@
 // quand c'est possible, ou renvoie proprement vers Spotter.
 import type { CropRect, PreviewIssue } from "@monapp/shared-types";
 import type { LinkPlatform } from "./link-detection";
+import type { UnsettledLaunch } from "./spot-recovery";
 
 export interface ImageSize {
   width: number;
@@ -13,7 +14,8 @@ export interface ImageSize {
 
 export interface SpotDraft {
   /** Recherche préparée, encore jamais lancée. Null une fois lancée (même
-   * annulée) : un nouveau lancement prépare une nouvelle recherche, gratuite. */
+   * annulée) : un nouveau lancement prépare une nouvelle recherche, gratuite —
+   * sauf relance à l'identique d'un lancement resté sans issue (`unsettled`). */
   searchId: string | null;
   /** Lien d'origine (null pour une photo importée). */
   sourceUrl: string | null;
@@ -30,6 +32,10 @@ export interface SpotDraft {
   /** Mots tapés sous une photo : ils trient les propositions, sans partir avec
    * l'image ; repris par « Recadrer » (petit lot 2). Jamais enregistrés. */
   words: string | null;
+  /** Dernier lancement dont l'issue n'a pas encore été montrée (annulé,
+   * écran quitté, réponse perdue) : relancé à l'identique, il est relu au
+   * lieu d'être repayé (lib/spot-recovery.ts). */
+  unsettled?: UnsettledLaunch | null;
 }
 
 let current: SpotDraft | null = null;
