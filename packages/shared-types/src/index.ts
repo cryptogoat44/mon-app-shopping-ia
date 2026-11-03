@@ -308,6 +308,52 @@ export function parseSearchCapacityError(body: unknown): SearchCapacityReached |
   return { limit, resumesOn };
 }
 
+/** Compteur des recherches, lu sans rien réserver (lot limites annoncées,
+ * GET /api/searches/capacity) : l'app annonce une pause du service, ou les
+ * dernières recherches du jour, AVANT qu'on prépare une photo. Instants en
+ * ISO 8601 (UTC) ; l'app les affiche à l'heure de l'appareil.
+ * - user : la part de la personne pour la journée (heure de Paris), en
+ *   photos ; remaining = limit − used, jamais négatif ; resetsAt : le minuit
+ *   (heure de Paris) qui vient ;
+ * - service : ouvert, ou en pause jusqu'à `reopensAt` (plafond du jour :
+ *   minuit, heure de Paris ; du mois : minuit du jour du renouvellement) ;
+ * - remainingToday : ce que la personne peut encore lancer aujourd'hui, le
+ *   plus petit de sa part et de ce que le service peut encore servir
+ *   (converti prudemment en photos par le serveur). */
+export interface SearchCapacityStatus {
+  user: { used: number; limit: number; remaining: number; resetsAt: string };
+  service: { status: "open" } | { status: "paused"; reason: Exclude<SearchCapacityLimit, "user">; reopensAt: string };
+  remainingToday: number;
+}
+
+function fieldOf(value: unknown, key: string): unknown {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>)[key] : undefined;
+}
+
+function isCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
+function isInstant(value: unknown): value is string {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value) && !Number.isNaN(Date.parse(value));
+}
+
+/** Lit le compteur sans lui faire confiance ; null si la forme est mauvaise (l'app n'affiche alors rien). */
+export function parseSearchCapacityStatus(value: unknown): SearchCapacityStatus | null {
+  const user = fieldOf(value, "user");
+  const [used, limit, remaining, resetsAt] = ["used", "limit", "remaining", "resetsAt"].map((key) => fieldOf(user, key));
+  const remainingToday = fieldOf(value, "remainingToday");
+  if (!isCount(used) || !isCount(limit) || !isCount(remaining) || !isInstant(resetsAt) || !isCount(remainingToday)) return null;
+  const parsedUser = { used, limit, remaining, resetsAt };
+  const service = fieldOf(value, "service");
+  const status = fieldOf(service, "status");
+  if (status === "open") return { user: parsedUser, service: { status }, remainingToday };
+  const reason = fieldOf(service, "reason");
+  const reopensAt = fieldOf(service, "reopensAt");
+  if (status !== "paused" || (reason !== "day" && reason !== "month") || !isInstant(reopensAt)) return null;
+  return { user: parsedUser, service: { status, reason, reopensAt }, remainingToday };
+}
+
 function isProportion(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
 }

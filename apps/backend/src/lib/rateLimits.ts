@@ -33,6 +33,10 @@ export const RATE_LIMITS = {
   // (aucun appel, donc hors des plafonds) : chacun écrit encore une recherche
   // et ses propositions. Au-delà : 429, comme toute limite.
   searchCacheServed: { max: 30, windowMs: HOUR },
+  // Lecture du compteur des recherches (lot limites annoncées) : gratuite,
+  // mais chaque lecture interroge la base. L'app relit au plus toutes les
+  // 20 s en usage normal ; au-delà, l'app n'affiche simplement rien.
+  searchCapacityRead: { max: 30, windowMs: 10 * MINUTE },
   // Signalement d'un utilisateur ou d'une publication.
   report: { max: 20, windowMs: HOUR },
   // Abonnement à un autre utilisateur — limite un usage abusif type bot de

@@ -138,6 +138,8 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   [SEARCH_CAPACITY_MESSAGES.day]: "The search service is in very high demand today. Please try again tomorrow.",
   [SEARCH_CAPACITY_MESSAGES.month]: "The search service has reached its monthly limit.",
   [SEARCH_CAPACITY_MESSAGES.user]: "You've reached your search limit for today. Please try again tomorrow.",
+  // Lecture du compteur (lot limites annoncées, routes/searchCapacity.ts).
+  "Le compteur de recherches est momentanément illisible.": "The search counter can't be read right now.",
   "Une image de la vidéo est trop lourde.": "One of the video frames is too large.",
   "Vous avez atteint la limite quotidienne d'analyses automatiques. Choisissez l'image avec le curseur, ou réessayez demain.":
     "You've reached the daily limit for automatic analyses. Choose the frame with the slider, or try again tomorrow.",

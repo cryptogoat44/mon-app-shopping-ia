@@ -758,6 +758,26 @@ export const en: Catalog = {
     moderationReason: (reason: string) => `Reason: ${reason}`,
     moderationNote: (note: string) => `Details: ${note}`,
   },
+  searchLimits: {
+    pausedTitle: (until: string) => `Spotter is taking a break ${until}.`,
+    usedUpTitle: (limit: number) => (limit === 1 ? "You've used your search for today." : `You've used your ${limit} searches for today.`),
+    retryFrom: (from: string) => `Please try again ${from}.`,
+    remaining: (n: number) => (n === 1 ? "You have 1 search left today." : `You have ${n} searches left today.`),
+    until: {
+      midnight: "until midnight",
+      time: (time: string) => `until ${time}`,
+      tomorrow: (time: string) => `until tomorrow, ${time}`,
+      date: (date: string) => `until ${date}`,
+      dateTime: (date: string, time: string) => `until ${date}, ${time}`,
+    },
+    from: {
+      midnight: "after midnight",
+      time: (time: string) => `from ${time}`,
+      tomorrow: (time: string) => `tomorrow from ${time}`,
+      date: (date: string) => `from ${date}`,
+      dateTime: (date: string, time: string) => `from ${date}, ${time}`,
+    },
+  },
   moderation: {
     reportUser: "Report this profile",
     reportPost: "Report this post",
