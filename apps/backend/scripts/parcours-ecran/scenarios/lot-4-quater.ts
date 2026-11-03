@@ -10,11 +10,14 @@
 // du mois (avec la date du prochain renouvellement, décision du fondateur du
 // 2026-10-11), part de la personne ; vidéo : plafond atteint avant l'analyse
 // par l'IA. Français clair et anglais sombre.
+// Lot limites annoncées : le compteur lu à l'accueil est fabriqué lui aussi
+// (part de 8, remise à zéro au minuit de cette machine) ; les messages disent
+// le chiffre de la part et « à partir de minuit ».
 import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Page } from "playwright-core";
 import sharp from "sharp";
-import { SEARCH_CAPACITY_ERRORS, type SearchCapacityErrorBody, type SearchCapacityLimit } from "@monapp/shared-types";
+import { SEARCH_CAPACITY_ERRORS, type SearchCapacityErrorBody, type SearchCapacityLimit, type SearchCapacityStatus } from "@monapp/shared-types";
 import type { Parcours } from "../boite-a-outils.js";
 import { genererVideosEssai } from "../../lib/videos-essai.js";
 import { COMBOS, type Combo } from "./lot-3.js";
@@ -30,16 +33,16 @@ export const simulatedAi = true;
 
 const PLAFOND = {
   fr: {
-    day: ["Le service de recherche est très sollicité aujourd'hui.", "Réessayez demain."],
+    day: ["Le service de recherche est très sollicité aujourd'hui.", "Réessayez à partir de minuit."],
     month: ["Le service de recherche a atteint sa limite mensuelle.", "Réessayez à partir du 3 novembre."],
-    user: ["Vous avez atteint votre limite de recherches pour aujourd'hui.", "Réessayez demain."],
+    user: ["Vous avez utilisé vos 8 recherches du jour.", "Réessayez à partir de minuit."],
     tropDeRecherches: "Trop de recherches d'un coup",
     retour: "Retour à Spotter",
   },
   en: {
-    day: ["The search service is in very high demand today.", "Please try again tomorrow."],
+    day: ["The search service is in very high demand today.", "Please try again after midnight."],
     month: ["The search service has reached its monthly limit.", "Please try again from November 3."],
-    user: ["You've reached your search limit for today.", "Please try again tomorrow."],
+    user: ["You've used your 8 searches for today.", "Please try again after midnight."],
     tropDeRecherches: "Too many searches at once",
     retour: "Back to Spotter",
   },
@@ -52,6 +55,17 @@ const REPRISE = "2026-11-03";
 async function plafondAtteint(page: Page, motif: string, limit: SearchCapacityLimit): Promise<void> {
   const body: SearchCapacityErrorBody = { error: SEARCH_CAPACITY_ERRORS[limit], message: "…", ...(limit === "month" ? { resumesOn: REPRISE } : {}) };
   await page.route(motif, (route) => route.fulfill({ status: 429, contentType: "application/json", body: JSON.stringify(body) }));
+}
+
+/** Compteur lu à l'accueil (lot limites annoncées), fabriqué : service ouvert,
+ * 6 recherches sur 8 (rien n'est annoncé, « Lancer » reste actif), remise à
+ * zéro au minuit de cette machine — « à partir de minuit » quel que soit son
+ * fuseau. Le serveur local, aux plafonds relevés, dirait « vos 1000000 recherches ». */
+async function compteurOuvert(page: Page): Promise<void> {
+  const minuit = new Date();
+  minuit.setHours(24, 0, 0, 0);
+  const body: SearchCapacityStatus = { user: { used: 2, limit: 8, remaining: 6, resetsAt: minuit.toISOString() }, service: { status: "open" }, remainingToday: 6 };
+  await page.route("**/api/searches/capacity", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) }));
 }
 
 /** Le message du plafond, seul : ni « trop de recherches d'un coup », ni année ou code technique, ni correction à tenter, et le retour à Spotter. */
@@ -110,6 +124,10 @@ export async function run(p: Parcours): Promise<void> {
       await p.step(`${combo.id} : photo (plafond du jour, du mois, part de la personne), vidéo (plafond atteint avant l'IA)`, async () => {
         const compte = await nouveauCompte(p, `q${combo.id.replace("-", "")}`);
         const page = await ouvrirSpotter(p, compte, combo, envois, TEXTES[combo.locale].ajouterVideo);
+        // Le compteur déjà lu venait du serveur local : la page rechargée lit le compteur fabriqué.
+        await compteurOuvert(page);
+        await page.goto(`${p.siteUrl}/`);
+        await visible(page, TEXTES[combo.locale].ajouterVideo).waitFor({ timeout: 30_000 });
         await photoPlafond(p, page, combo, photoEssai, "day", "01-photo-plafond-jour", problemes);
         await photoPlafond(p, page, combo, photoEssai, "month", "02-photo-plafond-mois", problemes);
         await photoPlafond(p, page, combo, photoEssai, "user", "03-photo-part-personnelle", problemes);

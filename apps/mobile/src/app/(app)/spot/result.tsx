@@ -19,7 +19,7 @@ import { chooseInitialResult, noPriceShown, pieceTitle, withoutTextPrompt, withT
 import { allPieces, merchantContextFor, opensOfferPage, otherPiecesBySection } from "@/lib/result-sections";
 import { getDraft } from "@/lib/spot-draft";
 import { failureCorrections, successCorrections, type Correction } from "@/lib/spot-corrections";
-import { capacityMonthTip } from "@/lib/spot-capacity";
+import { capacityMessages } from "@/lib/use-search-limits";
 import { VAULT_CATEGORIES } from "@/lib/vault-labels";
 import { useToast } from "@/lib/toast-context";
 import { Skeleton } from "@/components/skeleton";
@@ -496,10 +496,11 @@ function FailureView({
     technical: [t.result.technicalTitle, t.result.technicalTip],
     rate_limited: [t.result.rateLimitedTitle, t.result.rateLimitedTip],
     needs_photo: [t.result.previewUnavailableTitle, t.result.previewUnavailableTip],
-    // Plafond des recherches (lot 4 quater) : pour le mois, la date de la reprise.
-    capacity_day: [t.result.capacityDayTitle, t.result.capacityDayTip],
-    capacity_month: [t.result.capacityMonthTitle, capacityMonthTip(resumesOn, getActiveLocale())],
-    capacity_user: [t.result.capacityUserTitle, t.result.capacityUserTip],
+    // Plafond des recherches (lot 4 quater) : pour le mois, la date de la reprise ;
+    // le chiffre de la part et l'heure de reprise quand on les connaît (lot limites annoncées).
+    capacity_day: capacityMessages("capacity_day", resumesOn),
+    capacity_month: capacityMessages("capacity_month", resumesOn),
+    capacity_user: capacityMessages("capacity_user", resumesOn),
   }[reason];
 
   return (

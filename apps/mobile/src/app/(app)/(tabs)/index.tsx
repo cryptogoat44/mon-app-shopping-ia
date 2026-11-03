@@ -13,6 +13,7 @@ import { LinkEntry } from "@/components/link-entry";
 import { LinkNotice } from "@/components/link-notice";
 import { EntryTiles, LatestVideoCard, LatestVideoNote, LatestVideoQuestion } from "@/components/spot-entry";
 import { SpotImage } from "@/components/spot-image";
+import { SearchLimitsNotice } from "@/components/search-limits-notice";
 import { useAuth } from "@/lib/auth-context";
 import { importPhotoForSpotter } from "@/lib/image-import";
 import { latestVideoUri, loadLatestVideo, saveLatestVideoChoice } from "@/lib/latest-video";
@@ -21,6 +22,7 @@ import { beginFromPhoto } from "@/lib/spot-flow";
 import { LINK_COVER_ENABLED } from "@/lib/spot-flags";
 import { adoptSpotVideo, videoImportMessage } from "@/lib/spot-video";
 import { useVideoImport } from "@/lib/use-video-import";
+import { useSearchLimits } from "@/lib/use-search-limits";
 import { themedStyles } from "@/theme/themed-styles";
 
 /** Dernière vidéo de la galerie (app iPhone, en option), relue à chaque retour
@@ -170,6 +172,8 @@ export default function SpotterScreen() {
   const entries = useSpotterEntries();
   const latestVideo = useLatestVideo();
   const latest = latestVideo.state.kind === "ready" ? latestVideo.state.video : null;
+  // Lot limites annoncées : pause du service ou dernières recherches, dites avant de choisir une photo.
+  const limits = useSearchLimits();
 
   const loadRecent = useCallback(() => getRecentSearches().then(setRecent).catch(() => {}), []);
   useFocusEffect(
@@ -181,7 +185,7 @@ export default function SpotterScreen() {
 
   async function handleRefresh() {
     setRefreshing(true);
-    await Promise.all([loadRecent(), latestVideo.refresh()]);
+    await Promise.all([loadRecent(), latestVideo.refresh(), limits.refresh()]);
     setRefreshing(false);
   }
 
@@ -197,6 +201,7 @@ export default function SpotterScreen() {
           {t.spotter.title}
         </Text>
         <Text style={styles.lead}>{t.spotter.lead}</Text>
+        <SearchLimitsNotice notice={limits.notice} />
         {latest ? (
           <LatestVideoCard
             video={latest}

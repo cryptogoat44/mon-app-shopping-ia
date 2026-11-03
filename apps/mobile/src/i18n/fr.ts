@@ -767,6 +767,30 @@ export const fr = {
     moderationReason: (reason: string) => `Motif : ${reason}`,
     moderationNote: (note: string) => `Précision : ${note}`,
   },
+  // Lot limites annoncées (2026-11-03) : les limites dites AVANT l'effort
+  // (accueil du Spotter, écran de cadrage), et le chiffre et l'heure de
+  // reprise dans les messages de limite. Heures et dates à l'heure de
+  // l'appareil (la reprise est à minuit, heure de Paris).
+  searchLimits: {
+    pausedTitle: (until: string) => `Spotter fait une pause ${until}.`,
+    usedUpTitle: (limit: number) => (limit === 1 ? "Vous avez utilisé votre recherche du jour." : `Vous avez utilisé vos ${limit} recherches du jour.`),
+    retryFrom: (from: string) => `Réessayez ${from}.`,
+    remaining: (n: number) => (n === 1 ? "Il vous reste 1 recherche aujourd'hui." : `Il vous reste ${n} recherches aujourd'hui.`),
+    until: {
+      midnight: "jusqu'à minuit",
+      time: (time: string) => `jusqu'à ${time}`,
+      tomorrow: (time: string) => `jusqu'à demain, ${time}`,
+      date: (date: string) => `jusqu'au ${date}`,
+      dateTime: (date: string, time: string) => `jusqu'au ${date}, ${time}`,
+    },
+    from: {
+      midnight: "à partir de minuit",
+      time: (time: string) => `à partir de ${time}`,
+      tomorrow: (time: string) => `demain à partir de ${time}`,
+      date: (date: string) => `à partir du ${date}`,
+      dateTime: (date: string, time: string) => `à partir du ${date}, ${time}`,
+    },
+  },
   moderation: {
     reportUser: "Signaler ce profil",
     reportPost: "Signaler cette publication",
