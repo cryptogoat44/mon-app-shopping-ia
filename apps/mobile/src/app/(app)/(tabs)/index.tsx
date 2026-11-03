@@ -90,7 +90,7 @@ function RecentRow({ recent }: { recent: { searchId: string; piece: Piece }[] })
             accessibilityLabel={piece.name}
           >
             <View style={styles.recentThumb}>
-              {piece.imageUrl ? <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} fit="cover" /> : <ClockIcon size={26} tint={color.acier} />}
+              {piece.imageUrl ? <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} fit="cover" size="small" /> : <ClockIcon size={26} tint={color.acier} />}
             </View>
             <Text style={styles.recentName} numberOfLines={1}>
               {piece.name}
