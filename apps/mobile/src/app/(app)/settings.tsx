@@ -18,6 +18,8 @@ import { LatestVideoSetting } from "@/components/latest-video-setting";
 import { VideoAiSetting } from "@/components/video-ai-setting";
 import { PieceSendsSetting } from "@/components/piece-sends-setting";
 import { DeleteAccountSection } from "@/components/delete-account-section";
+import { ContactEntry } from "@/components/contact-entry";
+import { CONTACT_EMAIL } from "@/lib/contact";
 import { consentFor, pendingConsents } from "@/lib/legal";
 import { formatLongDate } from "@/lib/format";
 import { themedStyles } from "@/theme/themed-styles";
@@ -181,6 +183,14 @@ export default function SettingsScreen() {
           </Pressable>
           <Text style={styles.sectionBody}>{consentLine("privacy_policy")}</Text>
         </View>
+
+        {/* « Nous contacter » : section entière masquée sans adresse réelle. */}
+        {CONTACT_EMAIL ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>{t.contact.settingsSection}</Text>
+            <ContactEntry email={CONTACT_EMAIL} linkStyle={styles.link} textStyle={styles.sectionBody} />
+          </View>
+        ) : null}
 
         <PieceSendsSetting />
 
