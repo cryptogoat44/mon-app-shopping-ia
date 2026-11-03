@@ -2,8 +2,8 @@
 // combinaisons (français/anglais, clair/sombre) :
 // - photo : le champ facultatif « Quelle pièce ? (facultatif) », vide, son
 //   exemple et la ligne qui dit à quoi servent les mots ; le conseil
-//   « Plusieurs pièces… » dès que des mots sont tapés, tant que le cadre n'a
-//   pas bougé ;
+//   « Entourez la pièce seule… », avec ou sans mots, tant que la pièce n'est
+//   pas entourée (lots « premier essai » et « entourer la pièce ») ;
 // - les mots partent vers le serveur de Spotto avec le lancement (champ
 //   « query »), qui s'en sert pour trier ; « Triées selon vos mots » au-dessus
 //   des résultats quand le serveur l'indique, rien sinon ;
@@ -24,8 +24,8 @@ import sharp from "sharp";
 import type { Parcours } from "../boite-a-outils.js";
 import { genererVideosEssai } from "../../lib/videos-essai.js";
 import { COMBOS, type Combo } from "./lot-3.js";
-import { check, choisirFichier, ouvrirSpotter, suivreRequetes, visible, type Envoi, type Suivi } from "./spotter-outils.js";
-import { aucunChamp, cadrePhoto, capteur, champPhotoVide, champPret, nouveauCompte, simulerResultats, TEXTES, zoneEnvoyee, type Textes } from "./lot-4-ter-outils.js";
+import { attendreBoutonActif, check, choisirFichier, ouvrirSpotter, suivreRequetes, visible, type Envoi, type Suivi } from "./spotter-outils.js";
+import { aucunChamp, capteur, champPhotoVide, champPret, entourerPiece, nouveauCompte, simulerResultats, TEXTES, zoneEnvoyee, type Textes } from "./lot-4-ter-outils.js";
 
 export const name = "Petit lot 2 — les mots d'une photo trient les propositions (site)";
 export const outputDir = "petit-lot-2-captures";
@@ -51,19 +51,14 @@ async function taperMots(page: Page, T: Textes): Promise<void> {
   await page.keyboard.type(T.motsPhoto);
 }
 
-/** Coin en haut à gauche du cadre tiré vers l'intérieur (cadre remonté en haut de l'écran d'abord). */
-async function ajusterCadre(page: Page, T: Textes): Promise<void> {
-  await page.evaluate(`document.querySelector('[role="slider"][aria-label=${JSON.stringify(T.zone)}]')?.scrollIntoView({ block: "start" })`);
-  const depart = await cadrePhoto(page, T);
-  await page.mouse.move(depart.x + 2, depart.y + 2);
-  await page.mouse.down();
-  await page.mouse.move(depart.x + depart.width * 0.3, depart.y + depart.height * 0.25, { steps: 12 });
-  await page.mouse.up();
-  const tire = await cadrePhoto(page, T);
-  check(tire.width < depart.width - 20, `photo : le coin tiré change la zone (largeur ${Math.round(depart.width)} → ${Math.round(tire.width)} px)`);
+/** « Utiliser toute l'image », quand la zone importe peu (« Lancer » attend une zone). */
+async function touteImage(page: Page, T: Textes, bouton: string): Promise<void> {
+  await page.getByRole("button", { name: T.touteImage, exact: true }).filter({ visible: true }).click();
+  await attendreBoutonActif(page, bouton);
 }
 
-/** Photo choisie : le champ vide et sa ligne ; mots tapés : le conseil, jusqu'à ce que le cadre bouge. */
+/** Photo choisie : le champ vide et sa ligne, et le conseil d'entourer la pièce seule ; il
+ * reste quand des mots sont tapés, et disparaît quand la pièce est entourée. */
 async function champEtConseil(p: Parcours, page: Page, combo: Combo, fichier: string, problemes: string[]): Promise<void> {
   const T = TEXTES[combo.locale];
   const capture = capteur(p, page, combo, problemes);
@@ -71,7 +66,7 @@ async function champEtConseil(p: Parcours, page: Page, combo: Combo, fichier: st
   check(await champPhotoVide(page, T), "photo : le seul champ est « Quelle pièce ? (facultatif) », vide, avec son exemple");
   check((await nbVisibles(page, T.champPhoto)) === 1, "photo : le titre du champ est affiché");
   check((await nbVisibles(page, T.motsTri)) === 1, "photo : la ligne qui dit à quoi servent les mots");
-  check((await nbVisibles(page, T.conseilCadre)) === 0, "photo sans mots : pas de conseil");
+  check((await nbVisibles(page, T.conseilCadre)) === 1, "photo, pièce pas encore entourée : le conseil d'entourer la pièce seule");
   check((await nbVisibles(page, T.motsIA)) === 0, "photo : pas de ligne sur l'IA");
   check((await page.getByRole("heading", { name: T.question, exact: true }).filter({ visible: true }).count()) === 0, "photo : pas de question « Que cherchez-vous ? »");
   await capture("01-photo-champ");
@@ -80,9 +75,9 @@ async function champEtConseil(p: Parcours, page: Page, combo: Combo, fichier: st
   await visible(page, T.conseilCadre).waitFor({ timeout: 10_000 });
   await capture("02-mots-conseil");
 
-  await ajusterCadre(page, T);
+  await entourerPiece(page, T);
   for (let essai = 0; essai < 30 && (await nbVisibles(page, T.conseilCadre)) > 0; essai += 1) await page.waitForTimeout(100);
-  check((await nbVisibles(page, T.conseilCadre)) === 0, "cadre ajusté : le conseil disparaît");
+  check((await nbVisibles(page, T.conseilCadre)) === 0, "pièce entourée : le conseil disparaît");
   await capture("03-mots-cadre-ajuste");
 }
 
@@ -113,6 +108,8 @@ async function recadrerMemesMots(p: Parcours, page: Page, combo: Combo, suivi: S
   await page.waitForTimeout(800);
   check(await aucunChamp(page), "« Recadrer » : aucun champ de mots");
   const avant = suivi.lancements.length;
+  // « Recadrer » repart sans tracé : l'image entière, la zone importe peu ici.
+  await touteImage(page, T, T.identifier);
   await page.getByRole("button", { name: T.identifier, exact: true }).filter({ visible: true }).click();
   for (let essai = 0; essai < 100 && suivi.lancements.length === avant; essai += 1) await page.waitForTimeout(100);
   await visible(page, T.meilleure).waitFor({ timeout: 30_000 });
@@ -130,6 +127,7 @@ async function motsSansCorrespondance(p: Parcours, page: Page, combo: Combo, fic
   await choisirPhoto(p, page, T, fichier);
   check(await champPhotoVide(page, T), "nouvelle photo : le champ repart vide");
   await taperMots(page, T);
+  await touteImage(page, T, T.lancer);
   await page.getByRole("button", { name: T.lancer, exact: true }).filter({ visible: true }).click();
   await visible(page, T.meilleure).waitFor({ timeout: 30_000 });
   check(avecMots(suivi.lancements.at(-1) ?? "", T.motsPhoto), "les mots partent avec le lancement");

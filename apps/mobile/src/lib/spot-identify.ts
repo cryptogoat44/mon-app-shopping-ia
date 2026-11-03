@@ -119,7 +119,10 @@ async function runWatched(searchId: string, draft: SpotDraft, signal: AbortSigna
     });
   });
   try {
-    return await Promise.race([runSearch(searchId, { crop: draft.crop, imageUri: draft.localImageUri, words: draft.words }, request.signal), recovered]);
+    return await Promise.race([
+      runSearch(searchId, { crop: draft.crop, imageUri: draft.localImageUri, words: draft.words, zoneByAi: draft.zoneByAi }, request.signal),
+      recovered,
+    ]);
   } finally {
     unsubscribe();
     signal.removeEventListener("abort", stop);

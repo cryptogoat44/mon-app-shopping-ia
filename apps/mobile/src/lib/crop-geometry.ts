@@ -1,7 +1,7 @@
-// Géométrie du recadrage (écran Ciblage) et de l'aperçu de la zone choisie
-// (écran d'attente). Logique pure, testée sans écran. Le cadre est manipulé
-// en proportions de l'IMAGE (0 à 1) : c'est ce que le serveur reçoit, et ça
-// ne dépend pas de la taille d'affichage.
+// Géométrie de la zone à chercher (tracé « Entourez la pièce ») et de son
+// aperçu (écran d'attente). Logique pure, testée sans écran. La zone est
+// exprimée en proportions de l'IMAGE (0 à 1) : c'est ce que le serveur
+// reçoit, et ça ne dépend pas de la taille d'affichage.
 import { DEFAULT_CROP, type CropRect } from "@monapp/shared-types";
 
 export interface Size {
@@ -17,23 +17,30 @@ export interface Box {
   height: number;
 }
 
-export type Corner = "topLeft" | "topRight" | "bottomLeft" | "bottomRight";
-
-/** Taille minimale du cadre, en proportion de l'image (le serveur refuse
+/** Taille minimale de la zone, en proportion de l'image (le serveur refuse
  * en dessous de 5 %). */
 export const MIN_CROP = 0.12;
 
-/** Cadre proposé par défaut : centré, 70 % de l'image (défini une seule fois,
- * dans les types partagés : l'outil d'essai du serveur l'utilise aussi). */
+/** Ancienne zone par défaut : centrée, 70 % de l'image (définie une seule
+ * fois, dans les types partagés : l'outil d'essai du serveur l'utilise aussi). */
 export { DEFAULT_CROP };
 
-/** Cadre resté à sa place par défaut (jamais déplacé, ou réinitialisé) :
- * conseil de le resserrer, et statistique « cadre ajusté » (lot « premier essai »). */
+/** L'image entière : « Utiliser toute l'image ». */
+export const WHOLE_IMAGE: CropRect = { x: 0, y: 0, width: 1, height: 1 };
+
+const SIDES = ["x", "y", "width", "height"] as const;
+
+/** Zone obtenue sans entourer la pièce : l'image entière, ou l'ancienne zone
+ * centrale par défaut. Conseil d'entourer la pièce seule, et statistique
+ * « zone ajustée » (lots « premier essai » et « entourer la pièce »). */
 export function isDefaultCrop(crop: CropRect | null): boolean {
-  return crop !== null && (["x", "y", "width", "height"] as const).every((side) => crop[side] === DEFAULT_CROP[side]);
+  return crop !== null && [DEFAULT_CROP, WHOLE_IMAGE].some((reference) => SIDES.every((side) => crop[side] === reference[side]));
 }
 
-const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+/** « Zone ajustée » : la personne a entouré la pièce. */
+export function isAdjustedCrop(crop: CropRect | null): boolean {
+  return crop !== null && !isDefaultCrop(crop);
+}
 
 /** Où l'image s'affiche dans son conteneur quand elle est « contenue »
  * (entière, sans déformation, centrée). */
@@ -47,32 +54,7 @@ export function containBox(container: Size, image: Size): Box {
   return { left: (container.width - width) / 2, top: (container.height - height) / 2, width, height };
 }
 
-/** Déplace le cadre entier (dx, dy en proportions), sans jamais sortir de l'image. */
-export function moveCrop(crop: CropRect, dx: number, dy: number): CropRect {
-  return {
-    ...crop,
-    x: clamp(crop.x + dx, 0, 1 - crop.width),
-    y: clamp(crop.y + dy, 0, 1 - crop.height),
-  };
-}
-
-/** Tire un coin du cadre ; le coin opposé reste fixe. Taille minimale et
- * bords de l'image toujours respectés. */
-export function resizeCrop(crop: CropRect, corner: Corner, dx: number, dy: number): CropRect {
-  let left = crop.x;
-  let top = crop.y;
-  let right = crop.x + crop.width;
-  let bottom = crop.y + crop.height;
-
-  if (corner === "topLeft" || corner === "bottomLeft") left = clamp(left + dx, 0, right - MIN_CROP);
-  else right = clamp(right + dx, left + MIN_CROP, 1);
-  if (corner === "topLeft" || corner === "topRight") top = clamp(top + dy, 0, bottom - MIN_CROP);
-  else bottom = clamp(bottom + dy, top + MIN_CROP, 1);
-
-  return { x: left, y: top, width: right - left, height: bottom - top };
-}
-
-/** Le cadre (proportions de l'image) converti en points écran. */
+/** La zone (proportions de l'image) convertie en points écran. */
 export function cropToBox(crop: CropRect, imageBox: Box): Box {
   return {
     left: imageBox.left + crop.x * imageBox.width,
@@ -102,20 +84,5 @@ export function croppedView(image: Size, crop: CropRect, frameWidth: number, max
       left: -crop.x * image.width * scale,
       top: -crop.y * image.height * scale,
     },
-  };
-}
-
-/** Agrandit (facteur > 1) ou réduit le cadre autour de son centre — pour
- * VoiceOver, qui ne peut pas faire glisser les coins. */
-export function scaleCrop(crop: CropRect, factor: number): CropRect {
-  const width = clamp(crop.width * factor, MIN_CROP, 1);
-  const height = clamp(crop.height * factor, MIN_CROP, 1);
-  const centerX = crop.x + crop.width / 2;
-  const centerY = crop.y + crop.height / 2;
-  return {
-    x: clamp(centerX - width / 2, 0, 1 - width),
-    y: clamp(centerY - height / 2, 0, 1 - height),
-    width,
-    height,
   };
 }
