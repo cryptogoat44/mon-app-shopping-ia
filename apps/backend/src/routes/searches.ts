@@ -518,8 +518,9 @@ interface VoieCLaunch {
   /** Image préparée (recadrée, réduite) : son empreinte est la clé du cache. */
   image: Buffer;
   input: RunInput;
-  /** Création de la recherche (au « préparer ») : décide si « Que
-   * cherchez-vous ? » pourra être compté (textSearchCountable). */
+  /** Création de la recherche, relue après le verrou du lancement (celle du
+   * lancement si elle a été préparée un jour précédent, lib/launchDating.ts) :
+   * décide si « Que cherchez-vous ? » pourra être compté (textSearchCountable). */
   createdAt: string;
 }
 
@@ -680,10 +681,11 @@ async function launchWithVoieC(fastify: FastifyInstance, request: FastifyRequest
   // Limite horaire : comptée une fois par lancement avec au moins un appel
   // réel. Lens venu du cache mais Google Shopping appelé : c'est ici.
   if (lens.lensFromCache && complement.measure.calls > 0) fastify.countRateLimitHit(request, "searchCreate");
-  // « Que cherchez-vous ? » n'est proposé que s'il pourra être compté : une
-  // recherche servie entièrement par le cache, préparée avant minuit (heure
-  // de Paris) et lancée après, ne compte dans aucune part de 8 ; la route le
-  // refuserait (409), et l'invitation disparaîtrait sans un mot.
+  // « Que cherchez-vous ? » n'est proposé que s'il pourra être compté, dans la
+  // part du jour de création de la recherche. Préparée un jour précédent, elle
+  // a pris au verrou la date du lancement (lib/launchDating.ts) : l'invitation
+  // est proposée. Le jour change entre le lancement et l'envoi des mots : la
+  // route le refuse (409), et l'invitation disparaît.
   const servedFromCache = lens.lensFromCache && complement.columns.shopping_calls === 0;
   const offered = textSearchCountable({ served_from_cache: servedFromCache, created_at: launch.createdAt }) ? complement : withoutSuggestion(complement);
   const saved = await saveVoieCOutcome(fastify, request, launch, { ...searched, matches: byWords.matches }, { lensFromCache: lens.lensFromCache, complement: offered });
@@ -1032,14 +1034,17 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
         return reply.code(refusal.status).send(refusal.body);
       }
 
-      if (!(await lockForRun(fastify, row))) {
+      // Date de création après le verrou : celle du lancement si la recherche
+      // a été préparée un jour (de Paris) précédent (lib/launchDating.ts).
+      const createdAt = await lockForRun(fastify, row);
+      if (!createdAt) {
         return reply.code(409).send({ error: "search_already_run", message: "Cette recherche a déjà été lancée." });
       }
 
       // Voie C (lot c) : interrupteur allumé ET migration 0028 vue. Sinon,
       // exactement le chemin d'avant : Lens seul, 15 s, aucune colonne nouvelle.
       if (await voieCActive(fastify)) {
-        return launchWithVoieC(fastify, request, reply, { id, userId, t0, image: prepared.image, input: form.input, createdAt: row.created_at });
+        return launchWithVoieC(fastify, request, reply, { id, userId, t0, image: prepared.image, input: form.input, createdAt });
       }
 
       const call = await callLens(fastify, request, { id, userId, image: prepared.image });
