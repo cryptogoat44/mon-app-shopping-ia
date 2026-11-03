@@ -77,6 +77,28 @@ function thumbSwipe(start: Finger, chord: number, radius: number, angleDeg: numb
   });
 }
 
+/** Aller de 150 points vers le haut, puis retour sans lever le doigt, décalé
+ * de `gap` points au plus (au milieu du trajet). */
+function goAndBack(gap: number): Finger[] {
+  const go = Array.from({ length: 31 }, (_, index) => ({ x: 80, y: 250 - index * 5 }));
+  const back = go.map((finger, index) => ({ x: finger.x + gap * Math.sin((index / 30) * Math.PI), y: finger.y })).reverse();
+  return [...go, ...back];
+}
+
+/** Le pouce pousse la page en arc (comme thumbSwipe), puis revient sans se
+ * lever sur `share` du trajet, à `gap` points au plus de son aller. */
+function pushAndBack(start: Finger, chord: number, radius: number, angleDeg: number, side: 1 | -1, share: number, gap: number): Finger[] {
+  const go = thumbSwipe(start, chord, radius, angleDeg, side);
+  const steps = Math.max(1, Math.round((go.length - 1) * share));
+  const angle = (angleDeg * Math.PI) / 180;
+  const back = Array.from({ length: steps }, (_, index) => {
+    const finger = go[go.length - 2 - index];
+    const shift = gap * Math.sin((Math.PI * (index + 1)) / steps);
+    return { x: finger.x - Math.sin(angle) * shift, y: finger.y + Math.cos(angle) * shift };
+  });
+  return [...go, ...back];
+}
+
 const kept = (fingers: readonly Finger[], image: Size) => zoneFromTrace(replay(fingers, image), image);
 
 describe("du doigt à l'image", () => {
@@ -151,16 +173,16 @@ describe("zone envoyée : le rectangle qui englobe le tracé", () => {
     expect(zone.y + zone.height).toBe(1);
   });
 
-  it("jamais plus petite que MIN_CROP : une boucle très plate est élargie autour de son milieu", () => {
+  it("jamais plus petite que MIN_CROP : une boucle plate (240 × 20 points, une ceinture) est élargie autour de son milieu", () => {
     const square: Size = { width: 400, height: 400 };
-    const zone = zoneFromTrace(loop(0.5, 0.5, 0.3, 0.005), square)!;
+    const zone = zoneFromTrace(loop(0.5, 0.5, 0.3, 0.025), square)!;
     expect(zone.height).toBeCloseTo(MIN_CROP);
     expect(zone.y + zone.height / 2).toBeCloseTo(0.5);
     expect(zone.width).toBeCloseTo(0.63);
   });
 
   it("élargie sans sortir de l'image, contre un bord", () => {
-    const zone = zoneFromTrace(loop(0.5, 0.99, 0.3, 0.005), { width: 400, height: 400 })!;
+    const zone = zoneFromTrace(loop(0.5, 0.97, 0.3, 0.025), { width: 400, height: 400 })!;
     expect(zone.height).toBeCloseTo(MIN_CROP);
     expect(zone.y + zone.height).toBeCloseTo(1);
   });
@@ -243,9 +265,7 @@ describe("tracé non retenu : il n'entoure rien", () => {
     expect(zoneFromTrace(line, display)).toBeNull();
     expect(zoneFromTrace([...line, ...[...line].reverse()], display)).toBeNull();
     // Aller de 150 points vers le haut, retour décalé de 2 points au plus.
-    const go = Array.from({ length: 31 }, (_, index) => ({ x: 80, y: 250 - index * 5 }));
-    const back = go.map((finger, index) => ({ x: finger.x + 2 * Math.sin((index / 30) * Math.PI), y: finger.y })).reverse();
-    expect(kept([...go, ...back], CAPTURE)).toBeNull();
+    expect(kept(goAndBack(2), CAPTURE)).toBeNull();
   });
 
   it("un demi-tour « ( » : la personne doit refaire un tour complet (avant : la moitié de la pièce)", () => {
@@ -278,6 +298,35 @@ describe("un balayage pour faire défiler la page n'entoure rien", () => {
       for (let draw = 0; draw < 2000; draw += 1) {
         const start = { x: random() * image.width, y: random() * image.height };
         if (kept(thumbSwipe(start, 100 + random() * 160, 200 + random() * 450, random() * 360, random() < 0.5 ? 1 : -1), image)) retained += 1;
+      }
+      expect(retained / 2000).toBeLessThan(0.01);
+    }
+  });
+});
+
+describe("un aller-retour du pouce (pousser la page puis revenir sans lever le doigt) n'entoure rien", () => {
+  it("retour à 2, 3,5 ou 5 points de l'aller (avant : une bande de 12 % × 45 % remplaçait la pièce entourée)", () => {
+    for (const image of IMAGES) for (const gap of [2, 3.5, 5]) expect(kept(goAndBack(gap), image)).toBeNull();
+  });
+
+  it("le cas relevé : poussée en arc de 150 points (rayon 350), retour de 135 points à 4 points de l'aller (avant : 12 % × 45 %, 13 % × 58 % sur iPhone SE)", () => {
+    for (const image of [CAPTURE, CAPTURE_SE]) expect(kept(pushAndBack({ x: image.width / 2, y: image.height * 0.8 }, 150, 350, -90, 1, 0.9, 4), image)).toBeNull();
+  });
+
+  it("une boucle de 240 × 4 points (la forme d'un aller-retour décalé de 4 points) : trop fine, même assez grande", () => {
+    expect(zoneFromTrace(loop(0.5, 0.5, 0.3, 0.005), { width: 400, height: 400 })).toBeNull();
+  });
+
+  it("tirés au hasard (poussée de 100 à 220 points en arc, retour sur 30 à 100 % du trajet, à 2 à 6 points de l'aller) : moins de 1 % retenus", () => {
+    let seed = 11;
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (const image of IMAGES) {
+      let retained = 0;
+      for (let draw = 0; draw < 2000; draw += 1) {
+        const start = { x: random() * image.width, y: random() * image.height };
+        const angle = (random() < 0.5 ? -90 : 90) + (random() - 0.5) * 30;
+        const gap = (2 + 4 * random()) * (random() < 0.5 ? 1 : -1);
+        if (kept(pushAndBack(start, 100 + random() * 120, 250 + random() * 400, angle, random() < 0.5 ? 1 : -1, 0.3 + 0.7 * random(), gap), image)) retained += 1;
       }
       expect(retained / 2000).toBeLessThan(0.01);
     }

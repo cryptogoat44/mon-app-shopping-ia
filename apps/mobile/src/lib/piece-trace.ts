@@ -32,9 +32,17 @@ export const MAX_TRACE_POINTS = 300;
  * boucle fine autour d'une petite pièce (lunettes, ceinture) reste retenue. */
 export const MIN_TRACE_SIDE = 24;
 /** Surface entourée minimale, en points² : écarte un trait ou un aller-retour
- * (surface presque nulle), pas une petite pièce (un rond de 24 points en fait
- * environ 450). */
+ * serré (surface presque nulle), pas une petite pièce (un rond de 24 points en
+ * fait environ 450). */
 export const MIN_TRACE_AREA = 300;
+/** Épaisseur minimale d'un tour, en points écran : 2 × surface ÷ longueur du
+ * tour (le rayon d'un rond, la largeur moyenne d'une boucle allongée). Le
+ * pouce qui pousse la page puis revient sans se lever, à quelques points de
+ * son aller, dessine une boucle très fine (moins de 5 pour 5 points
+ * d'écart) : elle n'est pas retenue. Une petite pièce entourée reste
+ * au-dessus : environ 12 pour un rond de 24 points, 10 pour des lunettes
+ * (40 × 14), 15 pour une ceinture (160 × 20). */
+export const MIN_TRACE_THICKNESS = 6;
 /** Tour fermé : après s'être éloigné de son départ, le tracé y revient, à
  * moins de cette part de sa plus grande distance au départ. Un « C » de 300°
  * passe ; un balayage pour faire défiler la page, même courbe, s'éloigne sans
@@ -100,6 +108,16 @@ function signedArea(points: readonly Point[]): number {
   return twice / 2;
 }
 
+/** Épaisseur du polygone refermé, en points : 2 × surface ÷ périmètre. */
+function thickness(points: readonly Point[], area: number): number {
+  let perimeter = 0;
+  points.forEach((point, index) => {
+    const next = points[(index + 1) % points.length];
+    perimeter += Math.hypot(next.x - point.x, next.y - point.y);
+  });
+  return (2 * area) / perimeter;
+}
+
 /** Le retour vers le départ : le point le plus proche du départ après le
  * premier point « loin » (90 % de la plus grande distance au départ, pour
  * qu'un tour qui dépasse son départ, jusqu'à un tour et demi, compte aussi).
@@ -155,10 +173,10 @@ function side(start: number, end: number): [number, number] {
 
 /** La zone à chercher d'après le tracé : le rectangle qui l'englobe, avec la
  * marge, borné à l'image, à la taille minimale. Retenu : un tour (le tracé
- * revient vers son départ), ou une pièce coupée par le bord (le bord referme
- * le tour), assez grand. Null si le tracé n'entoure rien (toucher, trait,
- * balayage pour faire défiler la page, aller-retour, boucle trop petite) :
- * il n'est pas retenu. */
+ * revient vers son départ) assez grand et assez épais, ou une pièce coupée
+ * par le bord (le bord referme le tour) assez grande. Null si le tracé
+ * n'entoure rien (toucher, trait, balayage pour faire défiler la page,
+ * aller-retour, boucle trop petite ou trop fine) : il n'est pas retenu. */
 export function zoneFromTrace(trace: readonly TracePoint[], display: Size): CropRect | null {
   if (trace.length < 3 || !display.width || !display.height) return null;
   const points = trace.map((point) => ({ x: point.x * display.width, y: point.y * display.height }));
@@ -170,8 +188,12 @@ export function zoneFromTrace(trace: readonly TracePoint[], display: Size): Crop
   const width = (Math.max(...xs) - Math.min(...xs)) * display.width + slack;
   const height = (Math.max(...ys) - Math.min(...ys)) * display.height + slack;
   if (width < MIN_TRACE_SIDE && height < MIN_TRACE_SIDE) return null;
-  const area = returnIndex(points) >= 0 ? Math.abs(signedArea(points)) : edgeClosedArea(points, display);
+  const closed = returnIndex(points) >= 0;
+  const area = closed ? Math.abs(signedArea(points)) : edgeClosedArea(points, display);
   if (area === null || area < MIN_TRACE_AREA) return null;
+  // Un aller-retour du pouce revient lui aussi vers son départ : seul un tour
+  // assez épais est retenu.
+  if (closed && thickness(points, area) < MIN_TRACE_THICKNESS) return null;
   const marginX = TRACE_MARGIN / display.width;
   const marginY = TRACE_MARGIN / display.height;
   const [x, cropWidth] = side(Math.min(...xs) - marginX, Math.max(...xs) + marginX);
