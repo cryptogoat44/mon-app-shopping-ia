@@ -2,8 +2,8 @@
 // l'IA) ou une photo, « Lancer » — puis tout s'enchaîne sans autre geste.
 // Vidéo : images extraites sur l'appareil, meilleur moment et cadre de la pièce
 // par l'IA (avec l'accord « analyse_video_ia »), identification. Photo :
-// identification directe, sur la zone centrale (comme au ciblage quand on ne
-// touche pas au cadre). Les mots ne partent jamais avec l'image vers Google
+// identification directe, sur la zone entourée au doigt (ou l'image entière,
+// lot entourer la pièce). Les mots ne partent jamais avec l'image vers Google
 // Lens (petit lot, 2026-10-25) ; ceux d'une photo trient seulement les
 // propositions (petit lot 2, 2026-10-27). Le curseur et le choix manuel ne
 // servent qu'en repli.
@@ -109,13 +109,16 @@ export async function launchVideo(video: OpenedVideo, query: string, signal: Abo
   return identifyNextMoment(video, signal, onDraft);
 }
 
-/** Zone analysée d'une photo : celle déjà choisie (recadrage), sinon la zone centrale. */
+/** Zone d'une photo lancée sans zone : celle du brouillon, sinon l'ancienne
+ * zone centrale. Aucun écran ne le fait plus (« Lancer » attend la zone
+ * entourée), mais un lien spotto://spot/lancer?source=photo&auto=1 lancerait
+ * encore la photo du brouillon sans passer par le tracé. */
 export function photoCrop(draft: SpotDraft): CropRect {
   return draft.crop ?? DEFAULT_CROP;
 }
 
-/** Photo : la zone entourée sur l'écran (cadre « Entourez la pièce », option B
- * du fondateur), puis l'identification. Les mots facultatifs partent à part,
+/** Photo : la zone entourée sur l'écran (« Entourez la pièce », option B du
+ * fondateur), puis l'identification. Les mots facultatifs partent à part,
  * pour trier les propositions ; gardés pour « Recadrer » (petit lot 2). */
 export async function launchPhoto(draft: SpotDraft, signal: AbortSignal, crop: CropRect = photoCrop(draft), words = ""): Promise<LaunchOutcome> {
   const ready = updateDraft({ crop, words: words.trim() || null }) ?? draft;

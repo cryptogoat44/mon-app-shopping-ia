@@ -7,7 +7,7 @@
 // et rien de nouveau n'est gardé pour cela. Logique pure, testée.
 // Imports relatifs : fichier testé par vitest.
 import type { CropRect } from "@monapp/shared-types";
-import { croppedView, type Box, type Size } from "./crop-geometry";
+import { WHOLE_IMAGE, croppedView, type Box, type Size } from "./crop-geometry";
 import { draftImageUri, type ImageSize, type SpotDraft } from "./spot-draft";
 
 export interface YourPieceImage {
@@ -17,8 +17,6 @@ export interface YourPieceImage {
   /** Zone analysée ; null : l'image entière est partie. */
   crop: CropRect | null;
 }
-
-const WHOLE_IMAGE: CropRect = { x: 0, y: 0, width: 1, height: 1 };
 
 function knownSize(size: ImageSize | null): size is ImageSize {
   return size !== null && size.width > 0 && size.height > 0;

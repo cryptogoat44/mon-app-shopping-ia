@@ -145,7 +145,7 @@ export async function prepareMoment(video: OpenedVideo, rank: number): Promise<S
   if (!live || !moment) throw new Error("video_moment_missing");
   const frame = await video.frameFile(moment.timeMs, SPOTTER_IMAGE_MAX_EDGE);
   const started = beginFromPhoto(frame.uri, { width: frame.width, height: frame.height });
-  const draft = updateDraft({ crop: moment.box }) ?? started;
+  const draft = updateDraft({ crop: moment.box, zoneByAi: true }) ?? started;
   live.tried.push(rank);
   track("video_ai_moment_tried", { rank: rank + 1 });
   return draft;

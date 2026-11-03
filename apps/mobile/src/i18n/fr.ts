@@ -65,8 +65,11 @@ export const fr = {
   },
   crop: {
     label: "Zone analysée",
-    hint: "Faites glisser le cadre ou ses coins. Balayez vers le haut ou le bas pour l'agrandir ou le réduire.",
+    // Lot entourer la pièce : sans tracer (VoiceOver, motricité), le bouton choisit l'image entière.
+    hint: (instruction: string, button: string) => `${instruction}, ou touchez « ${button} ».`,
     value: (width: number, height: number) => `${width} % de la largeur, ${height} % de la hauteur`,
+    none: "Pièce pas encore entourée",
+    whole: "Toute l'image",
   },
   peopleSearch: {
     placeholder: "Rechercher",
@@ -198,8 +201,9 @@ export const fr = {
     photoLabel: "Quelle pièce ? (facultatif)",
     photoPlaceholder: "ex. la veste en cuir noir",
     photoWordsNote: "Vos mots servent à trier les propositions. Seule l'image part vers la recherche.",
-    // Montré tant que le cadre n'a pas bougé, avec ou sans mots (lot « premier essai »).
-    frameHint: "Resserrez le cadre sur la pièce seule, sans visage ni texte autour : Spotto la retrouvera plus facilement.",
+    // Montré tant que la pièce n'est pas entourée (rien de tracé, ou toute
+    // l'image), avec ou sans mots (lots « premier essai » et « entourer la pièce »).
+    frameHint: "Entourez la pièce seule, sans visage ni texte autour : Spotto la retrouvera plus facilement.",
     videoPreview: (duration: string) => `Aperçu de votre vidéo, ${duration}`,
     photoPreview: "Votre photo",
     // Titre de la vidéo sans l'analyse automatique (texte du fondateur, 2026-10-25).
@@ -320,10 +324,20 @@ export const fr = {
     missing: "Ce parcours n'est plus disponible. Recommencez depuis Spotter.",
     back: "Retour à Spotter",
   },
+  // Lot entourer la pièce (décision du fondateur : entourer seulement) : la
+  // pièce s'entoure au doigt, ou à la souris sur un ordinateur. Textes à valider.
   targeting: {
     title: "Entourez la pièce",
-    caption: "Seule la zone choisie sera analysée. Faites glisser le cadre ou ses coins.",
-    reset: "Réinitialiser le cadre",
+    caption: "Seule la zone entourée sera analysée. Pour corriger, entourez à nouveau la pièce.",
+    // Consigne avant le premier tracé.
+    instruction: {
+      finger: "Entourez la pièce avec votre doigt",
+      mouse: "Entourez la pièce avec la souris ou le doigt",
+    },
+    // Le tracé n'est pas retenu : un toucher, un trait, un balayage, ou une
+    // boucle trop petite ou pas refermée. À valider.
+    tooSmall: "Faites un tour complet, un peu plus large que la pièce.",
+    wholeImage: "Utiliser toute l'image",
     launch: "Lancer l'identification",
   },
   analysis: {
@@ -346,7 +360,7 @@ export const fr = {
     relaunch: "Relancer",
     checkAgain: "Vérifier à nouveau",
     cancelled:
-      "Recherche annulée. Elle a pu continuer de notre côté : relancez-la sans changer le cadre ni les mots, et son résultat s'affichera s'il existe déjà.",
+      "Recherche annulée. Elle a pu continuer de notre côté : relancez-la sans changer la zone ni les mots, et son résultat s'affichera s'il existe déjà.",
   },
   result: {
     title: "Résultats",
@@ -397,11 +411,12 @@ export const fr = {
     // recherche de plus).
     noMatchTitle: "Notre recherche visuelle n'a rien trouvé sur cette image.",
     noMatchTip:
-      "Relancer la même image donnerait le même résultat. Essayez plutôt de resserrer le cadre sur la pièce seule, de choisir un autre moment de la vidéo où elle se voit bien ou, pour une vidéo, de préciser vos mots.",
-    // Aucune proposition gardée n'a de prix (textes validés le 2026-10-21).
+      "Relancer la même image donnerait le même résultat. Essayez plutôt d'entourer la pièce seule, de choisir un autre moment de la vidéo où elle se voit bien ou, pour une vidéo, de préciser vos mots.",
+    // Aucune proposition gardée n'a de prix (textes validés le 2026-10-21 ; la
+    // fin de noPriceText parle d'entourer, plus de cadre : à valider).
     noPriceTitle: "Aucune de ces propositions n'affiche de prix.",
     noPriceText:
-      "Ce sont des pièces qui ressemblent à la vôtre, trouvées par notre recherche visuelle. Elles ne sont pas forcément en vente : ouvrez-les pour vérifier, ou essayez un autre cadre.",
+      "Ce sont des pièces qui ressemblent à la vôtre, trouvées par notre recherche visuelle. Elles ne sont pas forcément en vente : ouvrez-les pour vérifier, ou entourez la pièce autrement.",
     technicalTitle: "La recherche n'a pas abouti",
     // Panne du service, pas de la connexion de la personne (lot recherche coupée).
     technicalTip: "Le service de recherche n'a pas répondu. Réessayez dans un instant.",

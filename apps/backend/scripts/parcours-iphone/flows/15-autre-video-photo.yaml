@@ -1,7 +1,8 @@
 # Lot 4 ter (français) : une autre vidéo, choisie d'un geste dans le sélecteur
 # d'iOS (il suit la langue de l'iPhone) → écran unique, champ prêt à la saisie
 # → « Lancer » → résultats. Puis une photo : même écran, sans IA, avec d'emblée
-# le cadre « Entourez la pièce » (option B du fondateur) : coin tiré, mots,
+# « Entourez la pièce » (option B du fondateur) : « Utiliser toute l'image »
+# (Maestro ne trace que des lignes droites, lot entourer la pièce), mots,
 # « Lancer ».
 appId: com.spottoapp.ios
 ---
@@ -43,11 +44,7 @@ appId: com.spottoapp.ios
 - waitForAnimationToEnd:
     timeout: 3000
 - takeScreenshot: 11-photo-cadre
-# Coin en haut à gauche du cadre (zone centrale de la photo) tiré vers l'intérieur.
-- swipe:
-    start: "26%,29%"
-    end: "36%,37%"
-    duration: 1000
+- tapOn: "Utiliser toute l'image"
 - waitForAnimationToEnd:
     timeout: 2000
 - takeScreenshot: 11b-photo-cadre-ajuste

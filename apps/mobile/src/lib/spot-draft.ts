@@ -29,6 +29,10 @@ export interface SpotDraft {
   /** Taille de l'image affichée, connue une fois chargée. */
   imageSize: ImageSize | null;
   crop: CropRect | null;
+  /** Zone trouvée par l'IA (moment d'une vidéo) : comptée « ajustée » dans la
+   * statistique, même quand elle couvre toute l'image. Retombe à faux quand
+   * la personne entoure la pièce elle-même (« Recadrer »). */
+  zoneByAi?: boolean;
   /** Mots tapés sous une photo : ils trient les propositions, sans partir avec
    * l'image ; repris par « Recadrer » (petit lot 2). Jamais enregistrés. */
   words: string | null;

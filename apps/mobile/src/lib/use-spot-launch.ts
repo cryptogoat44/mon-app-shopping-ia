@@ -152,7 +152,7 @@ export interface LaunchInput {
   draft: SpotDraft | null;
   preview: FramePreview | null;
   query: string;
-  /** Photo : la zone entourée sur l'écran ; null pour une vidéo (cadre trouvé par l'IA). */
+  /** Photo : la zone entourée sur l'écran (« Lancer » l'attend) ; null pour une vidéo (cadre trouvé par l'IA). */
   crop: CropRect | null;
   /** Lancer dès l'ouverture (dernière vidéo de la galerie, mots tapés sur l'accueil). */
   auto: boolean;

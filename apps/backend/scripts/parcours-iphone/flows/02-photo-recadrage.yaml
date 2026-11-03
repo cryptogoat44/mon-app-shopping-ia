@@ -1,9 +1,10 @@
 # Photo choisie (photothèque, sans demande d'autorisation) → écran unique du
-# Spotter (lot 4 ter) : cadre « Entourez la pièce » d'emblée (option B),
+# Spotter (lot 4 ter) : « Entourez la pièce » d'emblée (option B),
 # « Que cherchez-vous ? », « Lancer » → identification : clé SerpApi invalide,
 # donc échec technique attendu — jamais « pièce introuvable ». Puis
-# « Recadrer » : recadrage (coin, déplacement, réinitialisation) et nouvelle
-# identification.
+# « Recadrer » et nouvelle identification. Lot entourer la pièce : plus de
+# cadre à poignées ; Maestro ne trace que des lignes droites (un trait n'est
+# pas retenu), donc « Utiliser toute l'image » avant de lancer.
 appId: com.spottoapp.ios
 ---
 - tapOn: "Ajouter une photo"
@@ -19,10 +20,7 @@ appId: com.spottoapp.ios
 - waitForAnimationToEnd:
     timeout: 3000
 - takeScreenshot: 04-photo-cadre
-- swipe:
-    start: "26%,29%"
-    end: "36%,37%"
-    duration: 1000
+- tapOn: "Utiliser toute l'image"
 - tapOn:
     id: "spot-query"
 - inputText: "veste"
@@ -41,16 +39,8 @@ appId: com.spottoapp.ios
     visible: "Entourez la pièce"
     timeout: 30000
 - takeScreenshot: 05b-recadrage
-- swipe:
-    start: "23%,30%"
-    end: "33%,38%"
-    duration: 1000
-- swipe:
-    start: "55%,52%"
-    end: "45%,58%"
-    duration: 1000
+- tapOn: "Utiliser toute l'image"
 - takeScreenshot: 05c-recadrage-ajuste
-- tapOn: "Réinitialiser le cadre"
 - tapOn: "Lancer l'identification"
 - extendedWaitUntil:
     visible: "La recherche n'a pas abouti"

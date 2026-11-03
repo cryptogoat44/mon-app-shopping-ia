@@ -6,17 +6,17 @@ import { t } from "@/i18n";
 import { TagIcon, VideoIcon } from "@/components/icons";
 import { themedStyles } from "@/theme/themed-styles";
 
-/** Les quatre coins du cadre « Entourez la pièce ». */
-function FrameIcon({ size = 18, tint }: { size?: number; tint: string }) {
+/** Un rond tracé à main levée, qui se chevauche : « entourez la pièce » (lot entourer la pièce). */
+function LoopIcon({ size = 18, tint }: { size?: number; tint: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
-      <Path d="M3 6.5V3h3.5M11.5 3H15v3.5M15 11.5V15h-3.5M6.5 15H3v-3.5" stroke={tint} strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M6.6 4.2A6.5 5 0 1 1 3.6 6.5C4.6 4 7.8 2.4 11.8 2.9" stroke={tint} strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
 }
 
-// Pause et capture, cadre, boutique : une icône par étape.
-const STEP_ICONS: ComponentType<{ size?: number; tint: string }>[] = [VideoIcon, FrameIcon, TagIcon];
+// Pause et capture, tracé autour de la pièce, boutique : une icône par étape.
+const STEP_ICONS: ComponentType<{ size?: number; tint: string }>[] = [VideoIcon, LoopIcon, TagIcon];
 
 /** Tant qu'aucune pièce n'a été spottée (lot « premier essai ») : le geste en
  * trois étapes, avec des icônes et du texte seulement — jamais d'image
