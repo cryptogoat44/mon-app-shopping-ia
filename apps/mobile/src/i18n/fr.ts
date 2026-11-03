@@ -334,8 +334,9 @@ export const fr = {
       finger: "Entourez la pièce avec votre doigt",
       mouse: "Entourez la pièce avec la souris ou le doigt",
     },
-    // Un toucher, un trait ou un griffonnage : le tracé n'est pas retenu.
-    tooSmall: "Entourez toute la pièce d'un seul trait.",
+    // Le tracé n'est pas retenu : un toucher, un trait, un balayage, ou une
+    // boucle trop petite ou pas refermée. À valider.
+    tooSmall: "Faites un tour complet, un peu plus large que la pièce.",
     wholeImage: "Utiliser toute l'image",
     launch: "Lancer l'identification",
   },
@@ -411,10 +412,11 @@ export const fr = {
     noMatchTitle: "Notre recherche visuelle n'a rien trouvé sur cette image.",
     noMatchTip:
       "Relancer la même image donnerait le même résultat. Essayez plutôt d'entourer la pièce seule, de choisir un autre moment de la vidéo où elle se voit bien ou, pour une vidéo, de préciser vos mots.",
-    // Aucune proposition gardée n'a de prix (textes validés le 2026-10-21).
+    // Aucune proposition gardée n'a de prix (textes validés le 2026-10-21 ; la
+    // fin de noPriceText parle d'entourer, plus de cadre : à valider).
     noPriceTitle: "Aucune de ces propositions n'affiche de prix.",
     noPriceText:
-      "Ce sont des pièces qui ressemblent à la vôtre, trouvées par notre recherche visuelle. Elles ne sont pas forcément en vente : ouvrez-les pour vérifier, ou essayez un autre cadre.",
+      "Ce sont des pièces qui ressemblent à la vôtre, trouvées par notre recherche visuelle. Elles ne sont pas forcément en vente : ouvrez-les pour vérifier, ou entourez la pièce autrement.",
     technicalTitle: "La recherche n'a pas abouti",
     // Panne du service, pas de la connexion de la personne (lot recherche coupée).
     technicalTip: "Le service de recherche n'a pas répondu. Réessayez dans un instant.",

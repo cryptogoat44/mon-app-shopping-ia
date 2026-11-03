@@ -280,7 +280,8 @@ export const en: Catalog = {
     },
     theApp: "the app",
     importCapture: "Import a screenshot",
-    target: "Frame the piece",
+    // Opens "Circle the piece" (circle-the-piece lot). To be validated (à valider).
+    target: "Circle the piece",
     noPreviewTitle: "Import a screenshot of the piece",
     noPreviewBody: (platform: string) =>
       `Spotto can't retrieve the image from this ${platform} link. Take a screenshot when the piece is clearly visible, then import it.`,
@@ -317,7 +318,8 @@ export const en: Catalog = {
       finger: "Circle the piece with your finger",
       mouse: "Circle the piece with your mouse or finger",
     },
-    tooSmall: "Circle the whole piece in a single stroke.",
+    // Trace not kept: a tap, a line, a swipe, or a loop too small or left open. To be validated (à valider).
+    tooSmall: "Draw a full loop, a little wider than the piece.",
     wholeImage: "Use the whole image",
     launch: "Identify the piece",
   },
@@ -385,8 +387,9 @@ export const en: Catalog = {
     noMatchTip:
       "Searching the same image again would give the same result. Instead, try circling the piece alone, picking another moment in the video where it's clearly visible or, for a video, describing it more precisely.",
     noPriceTitle: "None of these suggestions show a price.",
+    // Ends on circling, no longer on a frame. To be validated (à valider).
     noPriceText:
-      "These are pieces that look like yours, found by our visual search. They are not necessarily for sale: open them to check, or try another frame.",
+      "These are pieces that look like yours, found by our visual search. They are not necessarily for sale: open them to check, or circle the piece differently.",
     technicalTitle: "The search didn't go through",
     technicalTip: "The search service didn't respond. Try again in a moment.",
     rateLimitedTitle: "Too many searches at once",

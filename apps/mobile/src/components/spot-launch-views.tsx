@@ -92,7 +92,8 @@ export function PhotoFrame({
       <View style={styles.cropArea}>
         <PieceTracer uri={uri} zone={zone} onChange={onChange} onDragChange={onDragChange} onImageSize={onImageSize} height={height} />
       </View>
-      <Pressable onPress={() => onChange(WHOLE_IMAGE_ZONE)} style={styles.wholeImage} accessibilityRole="button">
+      {/* Un nouvel objet à chaque toucher : retoucher le bouton efface aussi le message d'un tracé refusé. */}
+      <Pressable onPress={() => onChange({ ...WHOLE_IMAGE_ZONE })} style={styles.wholeImage} accessibilityRole="button">
         <Text style={styles.wholeImageLabel}>{t.targeting.wholeImage}</Text>
       </Pressable>
     </>

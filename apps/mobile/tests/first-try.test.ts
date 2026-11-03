@@ -61,9 +61,9 @@ describe("statistique « cadre ajusté » : n'est plus toujours vraie", () => {
     vi.unstubAllGlobals();
   });
 
-  async function launchedWith(crop: CropRect | null) {
+  async function launchedWith(crop: CropRect | null, zoneByAi?: boolean) {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(completed), { status: 200, headers: { "Content-Type": "application/json" } }));
-    await runSearch("s1", { crop, imageUri: null });
+    await runSearch("s1", { crop, imageUri: null, zoneByAi });
     return track.mock.calls.filter(([name]) => name === "spot_launched").at(-1)?.[1];
   }
 
@@ -74,6 +74,13 @@ describe("statistique « cadre ajusté » : n'est plus toujours vraie", () => {
   it("pièce entourée : ajusté ; sans zone : non", async () => {
     expect(await launchedWith(moved)).toEqual({ zone_adjusted: true, image_imported: false });
     expect(await launchedWith(null)).toEqual({ zone_adjusted: false, image_imported: false });
+  });
+
+  it("zone trouvée par l'IA (vidéo) : toujours ajustée, même quand elle couvre toute l'image", async () => {
+    expect(await launchedWith(WHOLE_IMAGE, true)).toEqual({ zone_adjusted: true, image_imported: false });
+    expect(await launchedWith(moved, true)).toEqual({ zone_adjusted: true, image_imported: false });
+    // La personne a repris la main (« Recadrer », toute l'image) : plus la zone de l'IA.
+    expect(await launchedWith(WHOLE_IMAGE, false)).toEqual({ zone_adjusted: false, image_imported: false });
   });
 
   it("« Utiliser toute l'image » : non ajusté, et l'image entière part au serveur", async () => {

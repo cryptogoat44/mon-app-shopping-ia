@@ -44,7 +44,8 @@ export default function TargetingScreen() {
   const ready = zoneReady(zone);
   function handleLaunch() {
     if (!zoneReady(zone)) return;
-    updateDraft({ crop: zone.crop });
+    // La zone entourée ici est celle de la personne, plus celle de l'IA.
+    updateDraft({ crop: zone.crop, zoneByAi: false });
     router.push({ pathname: "/spot/analysis", params: { searchId: searchId ?? "" } });
   }
 

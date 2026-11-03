@@ -12,7 +12,24 @@ import type { Parcours, TestAccount } from "../boite-a-outils.js";
 import { couleurProche } from "../../lib/videos-essai.js";
 import { COMBOS, type Combo } from "./lot-3.js";
 import { attendreBoutonActif, attendreEnvoi, champContient, check, choisirFichier, couleurImageLocale, ouvrirSpotter, suivreRequetes, visible, type Envoi } from "./spotter-outils.js";
-import { aucunChamp, cadrePhoto, CHAUSSURES, capteur, champPhotoVide, champPret, lancerPhoto, lancerVideo, nouveauCompte, ralentir, simulerResultats, TEXTES, VESTE, zoneEnvoyee } from "./lot-4-ter-outils.js";
+import {
+  aucunChamp,
+  CHAUSSURES,
+  capteur,
+  champPhotoVide,
+  champPret,
+  entourerPiece,
+  lancerPhoto,
+  lancerVideo,
+  nouveauCompte,
+  ralentir,
+  simulerResultats,
+  surfaceTrace,
+  TEXTES,
+  tracerTrait,
+  VESTE,
+  zoneEnvoyee,
+} from "./lot-4-ter-outils.js";
 
 const FR = TEXTES.fr;
 const COMBO = COMBOS[0]!;
@@ -148,39 +165,35 @@ export async function liens(p: Parcours, page: Page, video: string, problemes: s
   await capture("19-lien-colle");
 }
 
-const memeCadre = (a: { x: number; width: number }, b: { x: number; width: number }) => Math.abs(a.x - b.x) < 2 && Math.abs(a.width - b.width) < 2;
-
-/** Photo (option B du fondateur) : le cadre « Entourez la pièce » d'emblée, sans
- * IA ni accord ; coin tiré, réinitialisé, tiré à nouveau ; la zone entourée
- * est envoyée à l'identification. Le champ de mots facultatif (petit lot 2)
- * reste vide ici : rien d'autre que l'image et sa zone n'est envoyé. */
+/** Photo (option B du fondateur) : « Entourez la pièce » d'emblée, sans IA ni
+ * accord ; « Lancer » attend la zone ; un trait n'est pas retenu, un tour à la
+ * souris l'est (lot entourer la pièce) ; la zone entourée est envoyée à
+ * l'identification. Le champ de mots facultatif (petit lot 2) reste vide ici :
+ * rien d'autre que l'image et sa zone n'est envoyé. */
 export async function photo(p: Parcours, page: Page, fichier: string, problemes: string[]): Promise<void> {
   const capture = capteur(p, page, COMBO, problemes);
   await page.goto(`${p.siteUrl}/`);
   const suivi = suivreRequetes(page);
   await choisirFichier(page, FR.ajouterPhoto, fichier);
   await page.getByRole("heading", { name: FR.ciblage, exact: true }).filter({ visible: true }).waitFor({ timeout: 30_000 });
-  const depart = await cadrePhoto(page, FR);
+  await surfaceTrace(page, FR);
   check(suivi.recherches === 0, "le choix d'une photo n'appelle pas le serveur");
   check((await page.getByRole("heading", { name: FR.question, exact: true }).filter({ visible: true }).count()) === 0, "photo : plus de question « Que cherchez-vous ? » (petit lot)");
   check(await champPhotoVide(page, FR), "photo : le seul champ est « Quelle pièce ? (facultatif) », vide (petit lot 2)");
+  const lancer = page.getByRole("button", { name: FR.lancer, exact: true }).filter({ visible: true });
+  check((await lancer.getAttribute("aria-disabled")) === "true", "photo : « Lancer » attend la pièce entourée");
   await capture("20-photo-cadre");
-  // Coin en haut à gauche tiré vers l'intérieur : le cadre rétrécit.
-  const tirer = async () => {
-    await page.mouse.move(depart.x + 2, depart.y + 2);
-    await page.mouse.down();
-    await page.mouse.move(depart.x + depart.width * 0.3, depart.y + depart.height * 0.25, { steps: 12 });
-    await page.mouse.up();
-  };
-  await tirer();
-  const tire = await cadrePhoto(page, FR);
-  check(tire.x > depart.x + 10 && tire.width < depart.width - 20, `photo : le coin tiré change la zone (largeur ${Math.round(depart.width)} → ${Math.round(tire.width)} px)`);
+  // Un trait n'entoure rien : refusé, avec le message ; « Lancer » reste inactif.
+  await tracerTrait(page, FR);
+  await visible(page, FR.traceRefuse).waitFor({ timeout: 5_000 });
+  check((await lancer.getAttribute("aria-disabled")) === "true", "photo : un trait n'est pas retenu, « Lancer » reste inactif");
+  // Un tour à la souris autour du milieu de la photo : retenu.
+  await entourerPiece(page, FR);
+  await page.waitForFunction(`document.querySelector('[role="img"][aria-label^=${JSON.stringify(FR.zone)}]')?.getAttribute("aria-label")?.includes("%")`, undefined, { timeout: 5_000 });
+  check((await visible(page, FR.traceRefuse).count()) === 0, "photo : le tour est retenu, le message disparaît");
   await capture("20b-photo-cadre-ajuste");
-  await page.getByRole("button", { name: FR.reinitialiser, exact: true }).filter({ visible: true }).click();
-  check(memeCadre(await cadrePhoto(page, FR), depart), "photo : « Réinitialiser le cadre » remet la zone centrale");
-  await tirer();
   await ralentir(page, "**/api/searches/*/run");
-  await page.getByRole("button", { name: FR.lancer, exact: true }).filter({ visible: true }).click();
+  await lancer.click();
   await visible(page, FR.attenteBoutiques).waitFor({ timeout: 15_000 });
   await capture("21-photo-attente", "nuit");
   await visible(page, FR.echec).waitFor({ timeout: 90_000 });

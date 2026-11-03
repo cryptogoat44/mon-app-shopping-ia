@@ -25,9 +25,7 @@ export interface Palette {
   nuitFilet: string; // bordures et étapes à venir sur nuit
   lueur: string; // ligne de balayage de l'analyse (sur nuit)
   voile: string; // fond assombri derrière une feuille ou un menu
-  voileImage: string; // voile posé sur une photo (zone hors recadrage, badges)
-  cadreImage: string; // trait du cadre de recadrage sur la photo
-  grilleImage: string; // grille discrète du recadrage
+  voileImage: string; // voile posé sur une photo (hors de la zone entourée, badges)
   inactif: string; // fond d'un bouton plein désactivé
   surInactif: string; // texte d'un bouton désactivé (AA sur inactif)
 }
@@ -53,8 +51,6 @@ export const lightPalette: Palette = {
   lueur: "rgba(255,255,255,0.85)",
   voile: "rgba(20,19,18,0.35)",
   voileImage: "rgba(20,19,18,0.55)",
-  cadreImage: "rgba(255,255,255,0.9)",
-  grilleImage: "rgba(255,255,255,0.3)",
   inactif: "#E4E4E0",
   surInactif: "#57575C", // 5,5:1 sur inactif
 };
@@ -80,8 +76,6 @@ export const darkPalette: Palette = {
   lueur: "rgba(255,255,255,0.85)",
   voile: "rgba(0,0,0,0.6)",
   voileImage: "rgba(20,19,18,0.6)",
-  cadreImage: "rgba(255,255,255,0.9)",
-  grilleImage: "rgba(255,255,255,0.3)",
   inactif: "#35322F",
   surInactif: "#B3AFA8", // 5,9:1 sur inactif
 };

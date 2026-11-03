@@ -146,7 +146,7 @@ export async function prepareSearch(payload: CreateSearchRequest): Promise<Produ
  * la requête (bouton « Annuler »). */
 export async function runSearch(
   searchId: string,
-  params: { crop: CropRect | null; imageUri: string | null; words?: string | null },
+  params: { crop: CropRect | null; imageUri: string | null; words?: string | null; zoneByAi?: boolean },
   signal?: AbortSignal
 ): Promise<ProductSearch> {
   searchLaunched();
@@ -159,8 +159,9 @@ export async function runSearch(
 
   // Ciblage : seulement des oui / non (statistiques : ni les mots, ni leur présence).
   // « Zone ajustée » : la personne a entouré la pièce — ni l'image entière, ni
-  // l'ancienne zone par défaut (lots « premier essai » et « entourer la pièce »).
-  track("spot_launched", { zone_adjusted: isAdjustedCrop(params.crop), image_imported: params.imageUri !== null });
+  // l'ancienne zone par défaut (lots « premier essai » et « entourer la pièce ») ;
+  // la zone trouvée par l'IA compte toujours, même si c'est l'image entière.
+  track("spot_launched", { zone_adjusted: params.zoneByAi === true || isAdjustedCrop(params.crop), image_imported: params.imageUri !== null });
   const response = await authorizedFetch(`/api/searches/${searchId}/run`, { method: "POST", body: formData, signal });
   const search: ProductSearch = await response.json();
   // Voie C (lot c) : results_count reste celui de la recherche visuelle ; le

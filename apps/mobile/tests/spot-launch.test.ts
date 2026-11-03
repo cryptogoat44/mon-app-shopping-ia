@@ -119,7 +119,8 @@ describe("vidéo : « Lancer » enchaîne analyse, cadrage et identification", (
     expect(runSearch).toHaveBeenCalledTimes(1);
     const [, params] = runSearch.mock.calls[0]!;
     // Les mots ont servi à l'IA seulement : ils ne partent pas avec l'image (petit lot, 2026-10-25).
-    expect(params).toMatchObject({ crop: BOX });
+    // La zone de l'IA compte « ajustée » dans la statistique, même si c'est l'image entière.
+    expect(params).toMatchObject({ crop: BOX, zoneByAi: true });
     expect(params).not.toHaveProperty("query");
     expect(params.imageUri).toMatch(/-1600\.jpg$/);
     expect(shown).toHaveBeenCalledWith(expect.objectContaining({ crop: BOX }));
@@ -183,7 +184,7 @@ describe("vidéo : « Lancer » enchaîne analyse, cadrage et identification", (
 });
 
 describe("photo : même parcours, sans attendre le serveur avant « Lancer »", () => {
-  it("le choix d'une photo ne prépare rien sur le serveur ; « Lancer » analyse la zone centrale, sans mots", async () => {
+  it("le choix d'une photo ne prépare rien sur le serveur ; lancée sans zone (aucun écran ne le fait plus) : l'ancienne zone centrale, sans mots", async () => {
     const draft = beginFromPhoto("file:///cache/photo.jpg", { width: 1200, height: 1600 });
     expect(prepareSearch).not.toHaveBeenCalled();
     expect(draft.searchId).toBeNull();

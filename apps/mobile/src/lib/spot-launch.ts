@@ -109,7 +109,10 @@ export async function launchVideo(video: OpenedVideo, query: string, signal: Abo
   return identifyNextMoment(video, signal, onDraft);
 }
 
-/** Zone analysée d'une photo : celle déjà choisie (recadrage), sinon la zone centrale. */
+/** Zone d'une photo lancée sans zone : celle du brouillon, sinon l'ancienne
+ * zone centrale. Aucun écran ne le fait plus (« Lancer » attend la zone
+ * entourée), mais un lien spotto://spot/lancer?source=photo&auto=1 lancerait
+ * encore la photo du brouillon sans passer par le tracé. */
 export function photoCrop(draft: SpotDraft): CropRect {
   return draft.crop ?? DEFAULT_CROP;
 }
