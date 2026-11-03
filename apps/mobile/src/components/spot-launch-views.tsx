@@ -143,7 +143,7 @@ export interface AskProps {
   /** Photo : le champ « Quelle pièce ? (facultatif) », dont les mots trient
    * les propositions (petit lot 2, décision du fondateur du 2026-10-27). */
   photoWords: boolean;
-  /** Photo : des mots tapés et le cadre pas encore ajusté : conseil d'entourer la pièce. */
+  /** Photo : le cadre pas encore ajusté, avec ou sans mots : conseil de le resserrer sur la pièce. */
   frameHint: boolean;
   /** Vidéo : champ prêt à la saisie dès l'ouverture. */
   autoFocus: boolean;

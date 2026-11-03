@@ -9,16 +9,24 @@
 // Simples publications de réseaux sociaux : jamais un endroit où acheter la
 // pièce. Depuis « visual_matches » (2026-10-20 ; l'ancien "type=products" les
 // éliminait lui-même), Google Lens en renvoie davantage : cette liste les écarte
-// après coup.
-const SOCIAL_NETWORK_DOMAINS = ["tiktok.com", "instagram.com", "youtube.com", "youtu.be", "facebook.com", "twitter.com", "x.com"];
+// après coup. Threads (threads.net, devenu threads.com) : vu dans la réponse
+// enregistrée « pull noir » du 21 octobre.
+const SOCIAL_NETWORK_DOMAINS = ["tiktok.com", "instagram.com", "youtube.com", "youtu.be", "facebook.com", "twitter.com", "x.com", "threads.com", "threads.net"];
 // Réseaux sociaux présents sous plusieurs extensions (pinterest.fr,
 // pinterest.com, pinterest.co.uk…) : reconnus par leur nom de site.
 const SOCIAL_NETWORK_NAMES = ["pinterest"];
+// Pages où rien ne s'achète (forum, questions-réponses, avis, encyclopédie) :
+// dans la réponse « pull noir », Reddit devenait la « Meilleure proposition »,
+// suivi de trois pages Tripadvisor. Liste courte et fermée : chaque ajout est
+// validé par le fondateur.
+const NO_SALE_DOMAINS = ["reddit.com", "quora.com", "wikipedia.org"];
+// Présentes sous plusieurs extensions (tripadvisor.fr, tripadvisor.co.uk…).
+const NO_SALE_NAMES = ["tripadvisor"];
 // Vente en gros réservée aux boutiques : jamais achetable par un particulier
 // (« à acheter en B2B pour votre magasin », réponse enregistrée du 2026-09-24).
 const PROFESSIONAL_ONLY_DOMAINS = ["faire.com"];
 
-export type ExclusionReason = "social" | "professional";
+export type ExclusionReason = "social" | "no_sale" | "professional";
 
 // Extensions à deux niveaux (« co.uk », « com.be ») : le nom du site est le
 // libellé qui les précède.
@@ -51,7 +59,9 @@ function isOnDomain(host: string, domains: readonly string[]): boolean {
 export function exclusionReason(link: string): ExclusionReason | null {
   const host = parseLink(link)?.hostname.toLowerCase();
   if (!host) return null;
-  if (isOnDomain(host, SOCIAL_NETWORK_DOMAINS) || SOCIAL_NETWORK_NAMES.includes(siteOf(host).name)) return "social";
+  const { name } = siteOf(host);
+  if (isOnDomain(host, SOCIAL_NETWORK_DOMAINS) || SOCIAL_NETWORK_NAMES.includes(name)) return "social";
+  if (isOnDomain(host, NO_SALE_DOMAINS) || NO_SALE_NAMES.includes(name)) return "no_sale";
   if (isOnDomain(host, PROFESSIONAL_ONLY_DOMAINS)) return "professional";
   return null;
 }

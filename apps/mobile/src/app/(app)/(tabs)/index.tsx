@@ -9,9 +9,10 @@ import { clearLastSpotResult } from "@/api/spotSession";
 import type { Piece } from "@/api/types";
 import { ClockIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
+import { HowItWorksCard } from "@/components/how-it-works";
 import { LinkEntry } from "@/components/link-entry";
-import { LinkNotice } from "@/components/link-notice";
 import { SeeAllRecentLink } from "@/components/recent-searches";
+import { ScreenshotHelp } from "@/components/screenshot-help";
 import { EntryTiles, LatestVideoCard, LatestVideoNote, LatestVideoQuestion } from "@/components/spot-entry";
 import { SpotImage } from "@/components/spot-image";
 import { SearchLimitsNotice } from "@/components/search-limits-notice";
@@ -104,8 +105,8 @@ function RecentRow({ recent }: { recent: { searchId: string; piece: Piece }[] })
   );
 }
 
-/** Lien collé ou partagé : aide discrète — comment ajouter la vidéo (enregistrement de l'écran). */
-function LinkHelp({ onAddVideo, importing }: { onAddVideo: () => void; importing: boolean }) {
+/** Lien collé ou partagé : aide discrète — la capture d'écran d'abord, puis l'enregistrement de l'écran (lot « premier essai »). */
+function LinkHelp({ onAddPhoto, onAddVideo, importing }: { onAddPhoto: () => void; onAddVideo: () => void; importing: boolean }) {
   const [open, setOpen] = useState(false);
   if (LINK_COVER_ENABLED) return <LinkEntry />;
   return (
@@ -113,7 +114,7 @@ function LinkHelp({ onAddVideo, importing }: { onAddVideo: () => void; importing
       <Pressable onPress={() => setOpen((value) => !value)} style={styles.linkQuestion} accessibilityRole="button" accessibilityState={{ expanded: open }}>
         <Text style={styles.linkQuestionLabel}>{t.spotter.linkQuestion}</Text>
       </Pressable>
-      {open ? <LinkNotice onAddVideo={onAddVideo} busy={importing} /> : null}
+      {open ? <ScreenshotHelp onAddScreenshot={onAddPhoto} onAddVideo={onAddVideo} busy={importing} /> : null}
     </>
   );
 }
@@ -173,6 +174,8 @@ function useSpotterEntries() {
 // galerie — il ne reste qu'à taper quelques mots et « Lancer ».
 export default function SpotterScreen() {
   const [recent, setRecent] = useState<{ searchId: string; piece: Piece }[]>([]);
+  // Historique relu au moins une fois : « Comment ça marche » ne s'affiche pas avant.
+  const [recentLoaded, setRecentLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const entries = useSpotterEntries();
   const latestVideo = useLatestVideo();
@@ -180,7 +183,7 @@ export default function SpotterScreen() {
   // Lot limites annoncées : pause du service ou dernières recherches, dites avant de choisir une photo.
   const limits = useSearchLimits();
 
-  const loadRecent = useCallback(() => getRecentSearches(RECENT_SEARCHES_LIMIT).then(setRecent).catch(() => {}), []);
+  const loadRecent = useCallback(() => getRecentSearches(RECENT_SEARCHES_LIMIT).then(setRecent).then(() => setRecentLoaded(true)).catch(() => {}), []);
   useFocusEffect(
     useCallback(() => {
       loadRecent();
@@ -221,8 +224,9 @@ export default function SpotterScreen() {
         <EntryTiles videoLabel={latest ? t.spotter.otherVideo : t.spotter.addVideo} onVideo={entries.addVideo} onPhoto={entries.addPhoto} busy={entries.busy} />
         {latestVideo.state.kind === "ask" ? <LatestVideoQuestion onAnswer={latestVideo.choose} saving={latestVideo.saving} failed={latestVideo.failed} /> : null}
         {latestVideo.note ? <LatestVideoNote message={latestVideo.note} /> : null}
-        <LinkHelp onAddVideo={entries.addVideo} importing={entries.importing} />
+        <LinkHelp onAddPhoto={entries.addPhoto} onAddVideo={entries.addVideo} importing={entries.importing} />
         <RecentRow recent={recent} />
+        {recentLoaded && recent.length === 0 ? <HowItWorksCard /> : null}
       </ScrollView>
     </SafeAreaView>
   );

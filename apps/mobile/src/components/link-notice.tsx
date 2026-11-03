@@ -5,7 +5,7 @@ import { VideoIcon } from "@/components/icons";
 import { recordingDevice } from "@/lib/screen-recording";
 import { themedStyles } from "@/theme/themed-styles";
 
-function currentDevice() {
+export function currentDevice() {
   const browser = Platform.OS === "web" && typeof navigator !== "undefined" ? navigator : null;
   return recordingDevice(Platform.OS, browser?.userAgent ?? null, browser?.maxTouchPoints ?? 0);
 }

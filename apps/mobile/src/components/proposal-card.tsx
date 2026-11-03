@@ -8,6 +8,7 @@ import { formatPrice } from "@/lib/format";
 import { openMerchantLink } from "@/lib/merchant-links";
 import { merchantContextFor, opensOfferPage } from "@/lib/result-sections";
 import { SpotImage } from "@/components/spot-image";
+import { ForeignShopNote } from "@/components/foreign-shop-note";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Carte d'une proposition dans les grilles de l'écran Résultat (« Autres
@@ -38,6 +39,8 @@ export function ProposalCard({ piece, onSelect }: { piece: Piece; onSelect: () =
         <Text style={styles.cardMeta} numberOfLines={1}>
           {[piece.merchantName, price].filter(Boolean).join(" · ")}
         </Text>
+        {/* Lot premier essai : prix dans la devise d'un autre pays que celui de la recherche. */}
+        <ForeignShopNote piece={piece} compact />
       </Pressable>
       {piece.merchantUrl ? <ShopLink piece={piece} /> : null}
     </View>

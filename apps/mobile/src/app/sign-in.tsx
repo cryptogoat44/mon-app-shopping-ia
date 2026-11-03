@@ -2,19 +2,30 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, useRouter } from "expo-router";
-import { translateAuthError } from "@/lib/auth-errors";
+import { authErrorKey, translateAuthError } from "@/lib/auth-errors";
+import { forgetEmail, rememberEmail, rememberedEmail } from "@/lib/remembered-email";
 import { supabase } from "@/lib/supabase";
 import { t } from "@/i18n";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
+import { ResendEmailButton } from "@/components/signup-help";
 import { themedStyles } from "@/theme/themed-styles";
 
 export default function SignInScreen() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  // E-mail tapé à l'inscription, repris ici (lot « premier essai »).
+  const [email, setEmail] = useState(rememberedEmail);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Adresse pas encore confirmée : on propose de renvoyer l'e-mail.
+  const [unconfirmed, setUnconfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  function handleEmail(value: string) {
+    setEmail(value);
+    // Repris par « Mot de passe oublié ».
+    rememberEmail(value);
+  }
 
   async function handleSignIn() {
     setError(null);
@@ -24,8 +35,11 @@ export default function SignInScreen() {
 
     if (signInError) {
       setError(translateAuthError(signInError.message));
+      setUnconfirmed(authErrorKey(signInError.message) === "emailNotConfirmed");
+      return;
     }
     // Si succès : onAuthStateChange met à jour la session, le layout racine redirige automatiquement.
+    forgetEmail();
   }
 
   return (
@@ -46,6 +60,7 @@ export default function SignInScreen() {
             <Text style={styles.subtitle}>{t.auth.signIn.subtitle}</Text>
 
             {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
+            {unconfirmed ? <ResendEmailButton email={email} style={styles.resend} /> : null}
 
             <View style={styles.field}>
               <Text style={styles.label}>{t.auth.email}</Text>
@@ -58,7 +73,7 @@ export default function SignInScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={handleEmail}
                 accessibilityLabel={t.auth.email}
               />
             </View>
@@ -114,6 +129,7 @@ const styles = themedStyles(() => ({
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, color: color.encre },
   subtitle: { fontSize: font.secondary, color: color.acier, marginTop: space.xs, marginBottom: space.xl, lineHeight: 20 },
   error: { fontSize: font.caption, color: color.acier, marginBottom: space.md },
+  resend: { marginBottom: space.lg },
   field: { marginBottom: space.md },
   label: { fontSize: font.caption, color: color.acier, marginBottom: space.xs },
   input: { borderBottomWidth: 1, borderBottomColor: color.filet, paddingVertical: 10, fontSize: font.body, color: color.encre },
