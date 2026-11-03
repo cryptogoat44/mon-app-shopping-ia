@@ -19,7 +19,14 @@ export function SearchLimitsNotice({ notice, style }: { notice: LimitsNotice | n
   }, [spoken]);
 
   if (!notice || !text) return null;
-  if (notice.kind === "low") return <Text style={[styles.low, style]}>{text.title}</Text>;
+  // Le style reçu (marges, place dans l'écran) est un style de bloc : il va sur
+  // un conteneur, jamais sur le texte (la CI, avec les types de routes Expo, le refuse).
+  if (notice.kind === "low")
+    return (
+      <View style={style}>
+        <Text style={styles.low}>{text.title}</Text>
+      </View>
+    );
   return (
     <View style={[styles.box, style]} accessibilityLiveRegion="polite" testID="search-limits-notice">
       <Text style={styles.title} accessibilityRole="header">
