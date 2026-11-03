@@ -400,6 +400,17 @@ export const en: Catalog = {
     shareMessage: (title: string, merchant: string | null) => `Spotted on Spotto: ${title}${merchant ? ` at ${merchant}` : ""}`,
     affiliateMention: "(affiliate link)",
   },
+  retrouverPieces: {
+    seeAll: "See all",
+    seeAllLabel: "See all your recently spotted pieces",
+    recentLead: "Reopening a result doesn't count toward your daily searches.",
+    recentEmpty: "No successful searches yet. The pieces you find with Spotter will appear here.",
+    recentLoadError: "Unable to show your recent searches. Check your connection, then try again.",
+    recentLimitNote: (n: number) => `Only your last ${n} successful searches appear here. To find a piece again later, keep it in your Wishlist.`,
+    today: "Today",
+    yesterday: "Yesterday",
+    alreadyInVault: "Already in your Vault",
+  },
   sendPiece: {
     title: "Send to…",
     back: "Back",

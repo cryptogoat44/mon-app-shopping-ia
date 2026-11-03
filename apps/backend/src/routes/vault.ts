@@ -2,12 +2,12 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { z } from "zod";
-import { PRIVACY_LEVELS, type VaultCategory, type VaultItem, type VaultItemDetail } from "@monapp/shared-types";
+import { PRIVACY_LEVELS, type CreateVaultItemResponse, type VaultCategory, type VaultItem, type VaultItemDetail } from "@monapp/shared-types";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.js";
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
 import { PHOTO_SIZES, optimizePhoto } from "../lib/photos.js";
-import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseDbRows, parseInput } from "../lib/validation.js";
+import { DatabaseReadError, INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseDbRows, parseInput } from "../lib/validation.js";
 import { findOwnMatch } from "../lib/ownMatches.js";
 import { shownPosts } from "../lib/visibility.js";
 
@@ -58,6 +58,21 @@ function toVaultItem(row: VaultItemRow, imageHdUrl: string | null = null): Vault
     productMatchId: row.product_match_id,
     createdAt: row.created_at,
   };
+}
+
+/** La pièce du Vault de `userId` déjà liée au résultat `matchId`, ou null ;
+ * s'il y en a plusieurs (rangées avant cette vérification), la plus ancienne. */
+async function findVaultItemForMatch(fastify: FastifyInstance, userId: string, matchId: string): Promise<VaultItemRow | null> {
+  const { data, error } = await fastify.supabaseAdmin
+    .from("vault_items")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("product_match_id", matchId)
+    .order("created_at", { ascending: true })
+    .limit(1);
+  // Lecture impossible : l'ajout s'arrête (500) plutôt que de risquer un doublon.
+  if (error) throw new DatabaseReadError("Lecture du Vault impossible");
+  return ((data as VaultItemRow[] | null) ?? [])[0] ?? null;
 }
 
 const VAULT_PAGE_SIZE = 24;
@@ -233,6 +248,22 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "product_match_not_found", message: "Produit introuvable." });
     }
 
+    // Une même proposition ne se range qu'une fois par personne : un second
+    // « Je l'ai achetée » (résultat rouvert, envie) renvoie la pièce déjà là,
+    // avec alreadyInVault, sans rien créer ni envoyer de photo. Course connue,
+    // faute d'index unique en base (ce serait une migration) : deux demandes
+    // simultanées (double toucher, deux appareils) peuvent passer toutes les
+    // deux cette vérification avant l'insertion de l'autre ; le doublon,
+    // rare, se retire alors du Vault comme n'importe quelle pièce.
+    if (match) {
+      const existing = await findVaultItemForMatch(fastify, userId, match.id);
+      if (existing) {
+        const [existingHdUrl] = await fetchHdImageUrls(fastify, [existing]);
+        const already: CreateVaultItemResponse = { ...toVaultItem(existing, existingHdUrl ?? null), alreadyInVault: true };
+        return reply.send(already);
+      }
+    }
+
     let imageUrl: string;
 
     if (fileBuffer) {
@@ -305,7 +336,8 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
     }
 
     const [imageHdUrl] = await fetchHdImageUrls(fastify, [inserted as VaultItemRow]);
-    return reply.send(toVaultItem(inserted as VaultItemRow, imageHdUrl ?? null));
+    const created: CreateVaultItemResponse = { ...toVaultItem(inserted as VaultItemRow, imageHdUrl ?? null), alreadyInVault: false };
+    return reply.send(created);
   });
 
   fastify.patch("/api/vault/:id", { preHandler: fastify.requireAuth }, async (request, reply) => {
