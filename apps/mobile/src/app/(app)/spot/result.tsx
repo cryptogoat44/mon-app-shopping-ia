@@ -32,6 +32,8 @@ import { ReportedLine, ResultFeedbackButton, ResultFeedbackSheet } from "@/compo
 import { ResultComplement, textSearchStatusNote } from "@/components/result-complement";
 import { TextSearchAlreadyUsed, TextSearchPrompt } from "@/components/text-search-prompt";
 import { ProposalCard } from "@/components/proposal-card";
+import { YourPiece } from "@/components/your-piece";
+import { yourPieceImage } from "@/lib/your-piece";
 import { track } from "@/lib/analytics";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -68,6 +70,10 @@ export default function ResultScreen() {
   // Voie B (lot c) : seconde recherche avec les mots refusée, sans leurs propositions pour l'instant.
   const [textSearchUsed, setTextSearchUsed] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  // « Votre pièce » : l'image du lancement, encore sur l'appareil ; lue une
+  // fois (un autre essai préparé ensuite depuis cet écran ne la change pas).
+  // Rien pour un résultat rouvert : son image n'est gardée nulle part.
+  const [yourPiece] = useState(() => yourPieceImage(fromLaunch.current, getDraft()));
 
   const result = state.kind === "ready" ? state.result : null;
   // Voie C (lot c) : l'indice désigne toutes les propositions de l'écran —
@@ -304,6 +310,7 @@ export default function ResultScreen() {
         {result.sortedByWords ? <Text style={styles.count}>{t.result.sortedByWords}</Text> : null}
         {noPriceShown(result.pieces) ? <NoPriceNotice /> : null}
 
+        {yourPiece ? <YourPiece image={yourPiece} /> : null}
         <View style={styles.hero}>
           <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} accessibilityLabel={piece.name} />
         </View>

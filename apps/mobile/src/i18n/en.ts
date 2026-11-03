@@ -290,6 +290,7 @@ export const en: Catalog = {
     otherProposal: "Other suggestion",
     otherProposals: "Other suggestions",
     showMore: (n: number) => `Show more (${n})`,
+    yourPiece: "Your piece",
     showLargeHint: "Shows this suggestion full size at the top of the screen.",
     priceOnSite: "Check the price with the retailer",
     viewAt: (merchant: string) => (merchant ? `View at ${merchant}` : "View the piece"),
