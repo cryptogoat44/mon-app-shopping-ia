@@ -3,7 +3,9 @@ import { AppNotices } from "@/components/app-notices";
 import { useSharedItemArrival } from "@/lib/use-shared-item";
 
 export default function AppLayout() {
-  // Partage reçu pendant qu'un autre écran est affiché : retour au Spotter, qui l'ouvre.
+  // Partage reçu pendant qu'un autre écran est affiché : retour au Spotter, qui
+  // l'ouvre, seulement si rien ne se perd ; pendant une recherche ou une saisie,
+  // il attend le retour au Spotter.
   useSharedItemArrival();
   return (
     <>

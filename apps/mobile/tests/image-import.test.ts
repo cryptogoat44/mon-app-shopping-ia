@@ -51,13 +51,31 @@ describe("image partagée depuis une autre app (lot « partager vers Spotto »)"
     expect(ctx.resize).toHaveBeenCalledWith({ height: 1600 });
   });
 
-  it("taille inconnue : lue sur l'image avant la réduction", async () => {
-    const image = { width: 4032, height: 3024 };
+  it("taille inconnue : lue sur l'image avant la réduction, puis cette première image est libérée", async () => {
+    const image = { width: 4032, height: 3024, saveAsync: vi.fn(), release: vi.fn() };
     const ctx = context({ uri: "file:///cache/d.jpg", width: 1600, height: 1200 });
     manipulate.mockReturnValueOnce({ renderAsync: vi.fn(async () => image) }).mockReturnValueOnce(ctx);
     expect(await prepareSharedPhoto(COPIE, null, null)).toEqual({ kind: "picked", uri: "file:///cache/d.jpg", width: 1600, height: 1200 });
     expect(manipulate).toHaveBeenLastCalledWith(image);
     expect(ctx.resize).toHaveBeenCalledWith({ width: 1600 });
+    expect(image.saveAsync).not.toHaveBeenCalled();
+    expect(image.release).toHaveBeenCalledTimes(1);
+  });
+
+  it("taille inconnue, image déjà assez petite : enregistrée telle quelle, en une seule passe", async () => {
+    const image = { width: 750, height: 1334, saveAsync: vi.fn(async () => ({ uri: "file:///cache/e.jpg", width: 750, height: 1334 })), release: vi.fn() };
+    manipulate.mockReturnValueOnce({ renderAsync: vi.fn(async () => image) });
+    expect(await prepareSharedPhoto(COPIE, null, null)).toEqual({ kind: "picked", uri: "file:///cache/e.jpg", width: 750, height: 1334 });
+    expect(manipulate).toHaveBeenCalledTimes(1);
+    expect(image.saveAsync).toHaveBeenCalledWith({ format: "jpeg", compress: 0.85 });
+    expect(image.release).toHaveBeenCalledTimes(1);
+  });
+
+  it("taille inconnue, enregistrement impossible : on le dit, et l'image est quand même libérée", async () => {
+    const image = { width: 750, height: 1334, saveAsync: vi.fn(async () => Promise.reject(new Error("disk full"))), release: vi.fn() };
+    manipulate.mockReturnValueOnce({ renderAsync: vi.fn(async () => image) });
+    expect(await prepareSharedPhoto(COPIE, null, null)).toEqual({ kind: "unavailable" });
+    expect(image.release).toHaveBeenCalledTimes(1);
   });
 
   it("illisible : on le dit (« unavailable »)", async () => {

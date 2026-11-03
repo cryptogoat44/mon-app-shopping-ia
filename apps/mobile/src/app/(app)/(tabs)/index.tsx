@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { useCallback, useRef, useState } from "react";
+import { AccessibilityInfo, Platform, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
@@ -124,8 +124,9 @@ function LinkHelp({ onAddPhoto, onAddVideo, onHelp, importing }: { onAddPhoto: (
 }
 
 /** Entrées du Spotter : vidéo (sélecteur), photo, dernière vidéo de la galerie,
- * et ce qui arrive par la feuille de partage d'iOS (lot « partager vers Spotto »). */
-function useSpotterEntries() {
+ * et ce qui arrive par la feuille de partage d'iOS (lot « partager vers Spotto »).
+ * `reveal` remonte en haut de l'écran, où s'affichent l'aide et les messages. */
+function useSpotterEntries(reveal: () => void) {
   const router = useRouter();
   const openLink = useLinkEntry();
   const [message, setMessage] = useState<string | null>(null);
@@ -154,12 +155,18 @@ function useSpotterEntries() {
   async function openShared(item: SharedItem) {
     setMessage(null);
     setLinkHelp(false);
+    // Spotter déjà défilé vers le bas : l'aide ou le message serait hors de vue.
+    reveal();
     if (item.kind === "refused") return setMessage(sharedRefusalMessage(item.reason));
     if (item.kind === "video") return importSharedVideo(item.uri, item.sizeBytes);
     if (item.kind === "link") {
       const outcome = await openLink(item.text);
       if (outcome.kind === "refused") setMessage(outcome.message);
-      if (outcome.kind === "help") setLinkHelp(true);
+      if (outcome.kind === "help") {
+        setLinkHelp(true);
+        // VoiceOver : l'aide apparaît sans rien dire (un message d'erreur, lui, s'annonce).
+        if (Platform.OS === "ios") AccessibilityInfo.announceForAccessibility(t.firstTry.linkHelp.title);
+      }
       return;
     }
     setBusy("photo");
@@ -217,7 +224,8 @@ export default function SpotterScreen() {
   // Historique relu au moins une fois : « Comment ça marche » ne s'affiche pas avant.
   const [recentLoaded, setRecentLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const entries = useSpotterEntries();
+  const scroll = useRef<ScrollView>(null);
+  const entries = useSpotterEntries(() => scroll.current?.scrollTo({ y: 0, animated: true }));
   const latestVideo = useLatestVideo();
   const latest = latestVideo.state.kind === "ready" ? latestVideo.state.video : null;
   // Lot limites annoncées : pause du service ou dernières recherches, dites avant de choisir une photo.
@@ -242,6 +250,7 @@ export default function SpotterScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView
+        ref={scroll}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets

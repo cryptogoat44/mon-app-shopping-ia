@@ -228,6 +228,9 @@ export const fr = {
   // Spotto. Textes à valider par le fondateur.
   share: {
     signInFirst: "Connectez-vous : ce que vous avez partagé s'ouvrira ensuite dans Spotter.",
+    // Partage reçu pendant une recherche, une saisie ou une page à part : on
+    // ne quitte pas l'écran (à valider).
+    waiting: "Votre partage s'ouvrira dans le Spotter dès que vous aurez fini ici.",
     several: "Spotto ouvre un seul élément à la fois : partagez une seule photo ou une seule vidéo.",
     unsupported: "Spotto ne peut pas ouvrir ce contenu. Partagez un lien TikTok, Instagram ou Pinterest, une capture d'écran, une photo ou une vidéo.",
     unreadable: "Ce que vous avez partagé n'a pas pu être ouvert. Réessayez, ou ajoutez la photo ou la vidéo ci-dessous.",

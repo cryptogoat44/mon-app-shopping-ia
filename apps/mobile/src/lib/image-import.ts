@@ -1,5 +1,5 @@
 import * as ImagePicker from "expo-image-picker";
-import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
+import { ImageManipulator, SaveFormat, type ImageRef } from "expo-image-manipulator";
 
 // Au-delà, l'analyse n'y gagne rien et l'envoi est plus lent (le serveur
 // ramène de toute façon l'image à 1 600 px).
@@ -48,13 +48,21 @@ export async function importPhotoForSpotter(): Promise<ImportResult> {
 }
 
 /** Image reçue par la feuille de partage d'iOS (lot « partager vers Spotto ») :
- * la même préparation qu'une photo choisie. Taille inconnue : lue sur l'image. */
+ * la même préparation qu'une photo choisie. Taille inconnue : lue sur l'image
+ * ouverte une première fois ; déjà assez petite, elle est enregistrée telle
+ * quelle (une seule passe). Cette première image est libérée tout de suite
+ * après, sans attendre le ramasse-miettes (elle pèse lourd en mémoire). */
 export async function prepareSharedPhoto(uri: string, width: number | null, height: number | null): Promise<ImportResult> {
   if (width && height) return shrinkForSpotter(uri, width, height);
+  let image: ImageRef | null = null;
   try {
-    const image = await ImageManipulator.manipulate(uri).renderAsync();
-    return await shrinkForSpotter(image, image.width, image.height);
+    image = await ImageManipulator.manipulate(uri).renderAsync();
+    if (image.width > SPOTTER_IMAGE_MAX_EDGE || image.height > SPOTTER_IMAGE_MAX_EDGE) return await shrinkForSpotter(image, image.width, image.height);
+    const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress: 0.85 });
+    return { kind: "picked", uri: saved.uri, width: saved.width, height: saved.height };
   } catch {
     return { kind: "unavailable" };
+  } finally {
+    image?.release();
   }
 }

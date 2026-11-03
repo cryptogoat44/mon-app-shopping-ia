@@ -16,11 +16,14 @@ const entree = expo.plugins.find((plugin: unknown) => Array.isArray(plugin) && p
 const options = entree?.[1];
 
 describe("extension de partage (app.json)", () => {
-  it("activée pour 1 lien web, 1 image, 1 vidéo ; ni texte libre, ni fichier quelconque, ni page web", () => {
+  it("activée pour 1 lien web, 1 image, 1 vidéo et le texte (le lien en est tiré) ; ni fichier quelconque, ni page web", () => {
+    // Texte : un message WhatsApp ou une app qui partage « Regarde… https://… » ;
+    // un texte sans lien reçoit le message « contenu non pris en charge ».
     expect(options.iosActivationRules).toEqual({
       NSExtensionActivationSupportsWebURLWithMaxCount: 1,
       NSExtensionActivationSupportsImageWithMaxCount: 1,
       NSExtensionActivationSupportsMovieWithMaxCount: 1,
+      NSExtensionActivationSupportsText: true,
     });
   });
 
@@ -49,7 +52,7 @@ describe("fichiers de l'extension, tels que le module les écrit puis retouchés
     const infoPlist = nommer(brut, expo.name);
     expect(infoPlist).toMatch(/<key>CFBundleDisplayName<\/key>\s*<string>Spotto<\/string>/);
     expect(infoPlist).toContain("<key>NSExtensionActivationSupportsMovieWithMaxCount</key>");
-    expect(infoPlist).not.toContain("NSExtensionActivationSupportsText");
+    expect(infoPlist).toMatch(/<key>NSExtensionActivationSupportsText<\/key>\s*<true\/>/);
     expect(infoPlist).toContain(`<string>${APP_GROUP}</string>`);
     expect(nommer(infoPlist, "A & <B>")).toContain("<string>A &amp; &lt;B&gt;</string>");
   });

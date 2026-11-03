@@ -1,15 +1,20 @@
+import { existsSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { setActiveLocale } from "../src/i18n";
+import { setActiveLocale, t } from "../src/i18n";
 import { detectLink } from "../src/lib/link-detection";
 import {
+  canLeaveForSharedItem,
   classifySharedItem,
   isShareOpeningUrl,
   normalizeSharedLink,
+  onSharedItemArrival,
+  onSharedItemSignedOut,
   peekSharedItem,
   receiveSharedItem,
   sharedRefusalMessage,
   subscribeSharedItem,
   takeSharedItem,
+  type NavigationStateLike,
   type SharedItem,
 } from "../src/lib/shared-item";
 import { redirectSystemPath } from "../src/app/+native-intent";
@@ -99,8 +104,17 @@ describe("normalisation du lien partagé", () => {
     expect(normalizeSharedLink(text)).toBeNull();
   });
 
-  it("le lien transmis à part passe avant celui du texte", () => {
-    expect(classifySharedItem({ webUrl: "https://pin.it/1", text: "Vu sur https://exemple.fr" })).toEqual({ kind: "link", text: "https://pin.it/1" });
+  it("texte partagé : son lien lu comme dans le champ, pas celui que le module en tire (coupé à une virgule ou un accent)", () => {
+    // Forme rendue par le module pour un texte : webUrl tiré du texte par sa propre lecture.
+    expect(
+      classifySharedItem({ webUrl: "https://www.zara.com/fr/fr/veste-p01234567.html?v1=123", text: "Regarde https://www.zara.com/fr/fr/veste-p01234567.html?v1=123,456" })
+    ).toEqual({ kind: "link", text: "https://www.zara.com/fr/fr/veste-p01234567.html?v1=123,456" });
+    expect(classifySharedItem({ webUrl: "https://boutique.fr/produits/robe-", text: "https://boutique.fr/produits/robe-été-123" })).toEqual({
+      kind: "link",
+      text: "https://boutique.fr/produits/robe-été-123",
+    });
+    // Texte sans lien lisible : le lien transmis à part sert de repli.
+    expect(classifySharedItem({ webUrl: "https://pin.it/1", text: "épingle" })).toEqual({ kind: "link", text: "https://pin.it/1" });
   });
 
   it("même lecture que le champ de lien : même lien, même plateforme", () => {
@@ -171,5 +185,172 @@ describe("ouverture de l'app par l'extension de partage", () => {
       expect(isShareOpeningUrl(path)).toBe(false);
       expect(redirectSystemPath({ path, initial: true })).toBe(path);
     }
+  });
+
+  it("adresse fabriquée à la main (sans type reconnu) : jamais lue comme un partage, le module natif planterait", () => {
+    for (const path of [
+      "spotto://dataUrl=spottoShareKey",
+      "spotto://dataUrl=spottoShareKey?nonce=1",
+      "spotto://dataUrl=spottoShareKey#",
+      "spotto://dataUrl=spottoShareKey#https://exemple.fr",
+      "spotto://dataUrl=spottoShareKeyX#weburl",
+      "spotto://dataUrl=spottoShareKey?nonce=1#media#weburl",
+    ]) {
+      expect(isShareOpeningUrl(path)).toBe(false);
+      // Elle suit le chemin de toute adresse : au pire, « page introuvable ».
+      expect(redirectSystemPath({ path, initial: false })).toBe(path);
+    }
+    expect(isShareOpeningUrl("spotto://dataUrl=spottoShareKey#text")).toBe(true);
+  });
+});
+
+// État de navigation tel qu'expo-router le tient : « __root », pile racine
+// (zone connectée « (app) » et pages hors zone), pile de la zone (onglets,
+// puis les écrans empilés), onglet affiché.
+function navigation(stacked: string[], { tab = "index", above }: { tab?: string; above?: string } = {}): NavigationStateLike {
+  const app = { name: "(app)", state: { index: stacked.length, routes: [{ name: "(tabs)", state: { index: 0, routes: [{ name: tab }] } }, ...stacked.map((name) => ({ name }))] } };
+  const root = { index: above ? 1 : 0, routes: above ? [app, { name: above }] : [app] };
+  return { index: 0, routes: [{ name: "__root", state: root }] };
+}
+
+describe("partage reçu pendant qu'un autre écran est affiché (personne connectée)", () => {
+  // Écrans de la zone connectée, d'après les fichiers de src/app/(app).
+  const APP_DIR = new URL("../src/app/(app)/", import.meta.url);
+  const SPOT_SCREENS = ["spot/lancer", "spot/analysis", "spot/result", "spot/ciblage", "spot/apercu", "spot/video"];
+
+  beforeEach(() => {
+    takeSharedItem();
+  });
+
+  it("onglets et pages de simple lecture : on peut revenir au Spotter", () => {
+    for (const tab of ["index", "feed/index", "activite", "profile/index"]) expect(canLeaveForSharedItem(navigation([], { tab }))).toBe(true);
+    for (const page of ["recentes", "pieces-recues", "profil", "envie", "blocked-users"]) expect(canLeaveForSharedItem(navigation([page]))).toBe(true);
+    expect(canLeaveForSharedItem(navigation(["envie", "profil"]))).toBe(true);
+  });
+
+  it("tout le parcours du Spotter retient le partage : une recherche peut-être payée ne se coupe jamais", () => {
+    for (const screen of SPOT_SCREENS) {
+      expect(existsSync(new URL(`${screen}.tsx`, APP_DIR)), screen).toBe(true);
+      expect(canLeaveForSharedItem(navigation([screen])), screen).toBe(false);
+      // Ouvert depuis « Tout voir » : même chose.
+      expect(canLeaveForSharedItem(navigation(["recentes", screen])), screen).toBe(false);
+    }
+  });
+
+  it("formulaires et écrans où l'on écrit ou agit : le partage attend", () => {
+    for (const screen of ["post-item/new", "vault-item/new", "edit-profile", "envoyer-envie", "people-search", "publication", "vault-item/[id]", "settings", "moderation"]) {
+      expect(existsSync(new URL(`${screen}.tsx`, APP_DIR)), screen).toBe(true);
+      expect(canLeaveForSharedItem(navigation([screen])), screen).toBe(false);
+    }
+  });
+
+  it("le retour au Spotter refermerait aussi les écrans d'en dessous : chacun doit pouvoir partir", () => {
+    // Profil d'une personne ouvert depuis une publication (commentaire en cours) ou depuis la recherche de personnes.
+    expect(canLeaveForSharedItem(navigation(["publication", "profil"]))).toBe(false);
+    expect(canLeaveForSharedItem(navigation(["people-search", "profil"]))).toBe(false);
+    expect(canLeaveForSharedItem(navigation(["settings", "blocked-users"]))).toBe(false);
+  });
+
+  it("page hors de la zone connectée (Conditions, Confidentialité, nouveau mot de passe) : le partage attend, sans second Spotter", () => {
+    for (const above of ["conditions", "confidentialite", "nouveau-mot-de-passe"]) {
+      expect(canLeaveForSharedItem(navigation([], { above })), above).toBe(false);
+      expect(canLeaveForSharedItem(navigation(["spot/lancer"], { above })), above).toBe(false);
+    }
+  });
+
+  it("écran inconnu (ajouté plus tard) ou état illisible : le partage attend", () => {
+    expect(canLeaveForSharedItem(navigation(["nouvel-ecran"]))).toBe(false);
+    expect(canLeaveForSharedItem(null)).toBe(false);
+    expect(canLeaveForSharedItem(undefined)).toBe(false);
+    expect(canLeaveForSharedItem({ routes: [] })).toBe(false);
+    expect(canLeaveForSharedItem({ index: 0, routes: [{ name: "__root" }] })).toBe(false);
+    expect(canLeaveForSharedItem({ index: 0, routes: [{ name: "__root", state: { routes: [{ name: "(app)" }] } }] })).toBe(false);
+  });
+
+  it("la liste blanche ne nomme que des écrans qui existent", () => {
+    expect(existsSync(new URL("(tabs)/_layout.tsx", APP_DIR))).toBe(true);
+    for (const page of ["recentes", "pieces-recues", "profil", "envie", "blocked-users"]) expect(existsSync(new URL(`${page}.tsx`, APP_DIR)), page).toBe(true);
+  });
+
+  it("rien à perdre : retour au Spotter, qui ouvrira l'élément ; aucun message", () => {
+    const item: SharedItem = { kind: "link", text: "https://vm.tiktok.com/ZMabc123/" };
+    receiveSharedItem(item);
+    const actions = { backToSpotter: vi.fn(), say: vi.fn() };
+    onSharedItemArrival(navigation(["recentes"]), actions);
+    expect(actions.backToSpotter).toHaveBeenCalledTimes(1);
+    expect(actions.say).not.toHaveBeenCalled();
+    expect(peekSharedItem()).toEqual(item);
+  });
+
+  it("recherche en cours : on reste, l'élément attend le Spotter, on le dit", () => {
+    const item: SharedItem = { kind: "image", uri: "file:///cache/partages/A.PNG", width: 10, height: 20 };
+    receiveSharedItem(item);
+    const actions = { backToSpotter: vi.fn(), say: vi.fn() };
+    onSharedItemArrival(navigation(["spot/analysis"]), actions);
+    expect(actions.backToSpotter).not.toHaveBeenCalled();
+    expect(actions.say).toHaveBeenCalledWith(t.share.waiting);
+    expect(peekSharedItem()).toEqual(item);
+  });
+
+  it("partage refusé pendant une recherche : pris et dit tout de suite, il ne s'ouvrira jamais", () => {
+    receiveSharedItem({ kind: "refused", reason: "several" });
+    const actions = { backToSpotter: vi.fn(), say: vi.fn() };
+    onSharedItemArrival(navigation(["spot/lancer"]), actions);
+    expect(actions.backToSpotter).not.toHaveBeenCalled();
+    expect(actions.say).toHaveBeenCalledWith(sharedRefusalMessage("several"));
+    expect(peekSharedItem()).toBeNull();
+  });
+
+  it("un message par arrivée, jamais en boucle ; rien n'est relancé quand le Spotter prend l'élément", () => {
+    const actions = { backToSpotter: vi.fn(), say: vi.fn() };
+    let shown = navigation(["spot/result"]);
+    const stop = subscribeSharedItem(() => onSharedItemArrival(shown, actions));
+    receiveSharedItem({ kind: "video", uri: "file:///cache/partages/B.MOV", sizeBytes: 1_000 });
+    receiveSharedItem({ kind: "refused", reason: "unsupported" });
+    expect(actions.say.mock.calls).toEqual([[t.share.waiting], [sharedRefusalMessage("unsupported")]]);
+    receiveSharedItem({ kind: "link", text: "https://pin.it/1" });
+    // « Fermer » : retour au Spotter, qui prend l'élément ; aucun nouveau message, aucun retour forcé.
+    shown = navigation([]);
+    takeSharedItem();
+    expect(actions.say).toHaveBeenCalledTimes(3);
+    expect(actions.backToSpotter).not.toHaveBeenCalled();
+    stop();
+  });
+
+  it("textes en français et en anglais", () => {
+    for (const locale of ["fr", "en"] as const) {
+      setActiveLocale(locale);
+      expect(t.share.waiting.length).toBeGreaterThan(20);
+    }
+    setActiveLocale("fr");
+    expect(t.share.waiting).toBe("Votre partage s'ouvrira dans le Spotter dès que vous aurez fini ici.");
+  });
+});
+
+describe("partage reçu sans être connecté (accueil)", () => {
+  beforeEach(() => {
+    takeSharedItem();
+  });
+
+  it("élément ouvrable : il s'ouvrira après la connexion, on le dit ; il reste en attente", () => {
+    const say = vi.fn();
+    receiveSharedItem({ kind: "link", text: "https://vm.tiktok.com/ZMabc123/" });
+    onSharedItemSignedOut(say);
+    expect(say).toHaveBeenCalledWith(t.share.signInFirst);
+    expect(peekSharedItem()).not.toBeNull();
+  });
+
+  it("élément refusé : son message tout de suite, plutôt qu'après la connexion", () => {
+    const say = vi.fn();
+    receiveSharedItem({ kind: "refused", reason: "several" });
+    onSharedItemSignedOut(say);
+    expect(say).toHaveBeenCalledWith(sharedRefusalMessage("several"));
+    expect(peekSharedItem()).toBeNull();
+  });
+
+  it("rien en attente : rien à dire", () => {
+    const say = vi.fn();
+    onSharedItemSignedOut(say);
+    expect(say).not.toHaveBeenCalled();
   });
 });

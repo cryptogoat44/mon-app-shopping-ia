@@ -107,7 +107,8 @@
           "iosActivationRules": {
             "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
             "NSExtensionActivationSupportsImageWithMaxCount": 1,
-            "NSExtensionActivationSupportsMovieWithMaxCount": 1
+            "NSExtensionActivationSupportsMovieWithMaxCount": 1,
+            "NSExtensionActivationSupportsText": true
           },
           "iosAppGroupIdentifier": "group.com.spottoapp.ios",
           "iosShareExtensionBundleIdentifier": "com.spottoapp.ios.share-extension",
