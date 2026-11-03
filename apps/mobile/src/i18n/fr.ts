@@ -224,6 +224,15 @@ export const fr = {
     },
     addVideo: "Ajouter une vidéo",
   },
+  // Lot « partager vers Spotto » : ce que la feuille de partage d'iOS remet à
+  // Spotto. Textes à valider par le fondateur.
+  share: {
+    signInFirst: "Connectez-vous : ce que vous avez partagé s'ouvrira ensuite dans Spotter.",
+    several: "Spotto ouvre un seul élément à la fois : partagez une seule photo ou une seule vidéo.",
+    unsupported: "Spotto ne peut pas ouvrir ce contenu. Partagez un lien TikTok, Instagram ou Pinterest, une capture d'écran, une photo ou une vidéo.",
+    unreadable: "Ce que vous avez partagé n'a pas pu être ouvert. Réessayez, ou ajoutez la photo ou la vidéo ci-dessous.",
+    imageUnreadable: (button: string) => `Cette image n'a pas pu être ouverte. Réessayez, ou ajoutez-la avec « ${button} ».`,
+  },
   // Lot « premier essai » : le bon geste (la capture d'écran d'abord),
   // « Comment ça marche », les Envies après « Garder », la boutique à
   // l'étranger et l'inscription. Textes à valider par le fondateur. Espaces

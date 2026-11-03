@@ -109,3 +109,38 @@ describe("dernière vidéo de la galerie (lot 4 ter, app iPhone)", () => {
     expect(discardLocalFile).toHaveBeenCalledWith("file:///cache/video.mov");
   });
 });
+
+describe("vidéo partagée depuis une autre app (lot « partager vers Spotto »)", () => {
+  // Copie reçue par la feuille de partage d'iOS, déjà rangée dans le cache de Spotto.
+  const COPIE = "file:///var/mobile/Containers/Data/Application/ABC/Library/Caches/4F1C.MOV";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    releaseSpotVideo();
+  });
+
+  it("mêmes limites que l'import : trop lourde, trop longue ou illisible, refusée avec le même message, copie effacée", async () => {
+    const tooLarge = await adoptSpotVideo(COPIE, 101_000_000, "share");
+    expect(tooLarge).toMatchObject({ kind: "rejected", reason: "too_large" });
+    expect(videoImportMessage(tooLarge)).toContain("101 Mo");
+    expect(openVideo).not.toHaveBeenCalled();
+
+    const video = openedVideo(65_000);
+    openVideo.mockResolvedValueOnce(video);
+    const tooLong = await adoptSpotVideo(COPIE, 20_000_000, "share");
+    expect(videoImportMessage(tooLong)).toContain("1:05");
+    expect(video.release).toHaveBeenCalled();
+
+    openVideo.mockRejectedValueOnce(new Error("video_unreadable"));
+    expect(await adoptSpotVideo(COPIE, 20_000_000, "share")).toMatchObject({ kind: "rejected", reason: "unreadable" });
+    expect(discardLocalFile).toHaveBeenCalledWith(COPIE);
+    expect(track).toHaveBeenCalledWith("video_rejected", { reason: "too_large", source: "share", duration_s: undefined });
+  });
+
+  it("valable : prête pour la frise, copie gardée le temps du choix puis effacée", async () => {
+    openVideo.mockResolvedValue(openedVideo(12_000));
+    expect(await adoptSpotVideo(COPIE, 20_000_000, "share")).toEqual({ kind: "ready" });
+    expect(openVideo).toHaveBeenCalledWith(COPIE, { keepFile: false });
+    expect(track).toHaveBeenCalledWith("video_imported", { duration_s: 12, source: "share" });
+  });
+});

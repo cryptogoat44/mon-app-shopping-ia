@@ -17,10 +17,25 @@ async function pickPhoto(): Promise<ImagePicker.ImagePickerAsset | null> {
   return picked.canceled ? null : (picked.assets[0] ?? null);
 }
 
-/** Ouvre la photothèque puis réduit la photo avant l'envoi (une photo
- * d'iPhone pèse souvent 3 à 5 Mo). Web et iPhone. Aucune autorisation
- * n'est demandée (lot 3bis) : le sélecteur du système ne remet à l'app que
- * la photo choisie, sans accès au reste de la photothèque. */
+/** Réduit l'image avant l'envoi (une photo d'iPhone pèse souvent 3 à 5 Mo)
+ * et l'enregistre en JPEG : un nouveau fichier, dans le cache. */
+async function shrinkForSpotter(source: Parameters<typeof ImageManipulator.manipulate>[0], width: number, height: number): Promise<ImportResult> {
+  try {
+    const context = ImageManipulator.manipulate(source);
+    if (width > SPOTTER_IMAGE_MAX_EDGE || height > SPOTTER_IMAGE_MAX_EDGE) {
+      context.resize(width >= height ? { width: SPOTTER_IMAGE_MAX_EDGE } : { height: SPOTTER_IMAGE_MAX_EDGE });
+    }
+    const rendered = await context.renderAsync();
+    const saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.85 });
+    return { kind: "picked", uri: saved.uri, width: saved.width, height: saved.height };
+  } catch {
+    return { kind: "unavailable" };
+  }
+}
+
+/** Ouvre la photothèque puis réduit la photo avant l'envoi. Web et iPhone.
+ * Aucune autorisation n'est demandée (lot 3bis) : le sélecteur du système ne
+ * remet à l'app que la photo choisie, sans accès au reste de la photothèque. */
 export async function importPhotoForSpotter(): Promise<ImportResult> {
   let asset: ImagePicker.ImagePickerAsset | null;
   try {
@@ -29,15 +44,16 @@ export async function importPhotoForSpotter(): Promise<ImportResult> {
     return { kind: "unavailable" };
   }
   if (!asset) return { kind: "cancelled" };
+  return shrinkForSpotter(asset.uri, asset.width, asset.height);
+}
+
+/** Image reçue par la feuille de partage d'iOS (lot « partager vers Spotto ») :
+ * la même préparation qu'une photo choisie. Taille inconnue : lue sur l'image. */
+export async function prepareSharedPhoto(uri: string, width: number | null, height: number | null): Promise<ImportResult> {
+  if (width && height) return shrinkForSpotter(uri, width, height);
   try {
-    const { width, height } = asset;
-    const context = ImageManipulator.manipulate(asset.uri);
-    if (width > SPOTTER_IMAGE_MAX_EDGE || height > SPOTTER_IMAGE_MAX_EDGE) {
-      context.resize(width >= height ? { width: SPOTTER_IMAGE_MAX_EDGE } : { height: SPOTTER_IMAGE_MAX_EDGE });
-    }
-    const rendered = await context.renderAsync();
-    const saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.85 });
-    return { kind: "picked", uri: saved.uri, width: saved.width, height: saved.height };
+    const image = await ImageManipulator.manipulate(uri).renderAsync();
+    return await shrinkForSpotter(image, image.width, image.height);
   } catch {
     return { kind: "unavailable" };
   }

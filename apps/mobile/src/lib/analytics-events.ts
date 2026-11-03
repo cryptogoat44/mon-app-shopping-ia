@@ -21,8 +21,9 @@ const count: Rule = { kind: "count" };
 const bool: Rule = { kind: "bool" };
 const VISIBILITY = oneOf(PRIVACY_LEVELS);
 // Lot 4 : vidéo importée dans le Spotter — photothèque (app iPhone) ou fichier (site) ;
-// lot 4 ter : dernière vidéo de la galerie, proposée sur l'accueil (app iPhone).
-const VIDEO_SOURCE = oneOf(["library", "file", "latest"]);
+// lot 4 ter : dernière vidéo de la galerie, proposée sur l'accueil (app iPhone) ;
+// lot « partager vers Spotto » : vidéo reçue par la feuille de partage d'iOS.
+const VIDEO_SOURCE = oneOf(["library", "file", "latest", "share"]);
 
 export const ANALYTICS_EVENTS = {
   signup_completed: { locale: oneOf(["fr", "en"]) },

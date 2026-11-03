@@ -219,6 +219,14 @@ export const en: Catalog = {
     },
     addVideo: "Add a video",
   },
+  // "Share to Spotto" lot: what the iOS share sheet hands over to Spotto.
+  share: {
+    signInFirst: "Sign in: what you shared will then open in Spotter.",
+    several: "Spotto opens one item at a time: share a single photo or a single video.",
+    unsupported: "Spotto can't open this content. Share a TikTok, Instagram or Pinterest link, a screenshot, a photo or a video.",
+    unreadable: "What you shared couldn't be opened. Try again, or add the photo or video below.",
+    imageUnreadable: (button: string) => `This image couldn't be opened. Try again, or add it with “${button}”.`,
+  },
   // "First try" lot: the right gesture (a screenshot first), "How it works",
   // the Wishlist after "Save", retailers abroad and sign-up.
   firstTry: {
