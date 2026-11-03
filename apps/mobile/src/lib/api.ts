@@ -48,7 +48,7 @@ import type {
   PostComment,
   VideoMoment,
 } from "@monapp/shared-types";
-import { CONSENT_VERSIONS, parseVideoMomentsResponse } from "@monapp/shared-types";
+import { CONSENT_VERSIONS, parseSearchCapacityStatus, parseVideoMomentsResponse, type SearchCapacityStatus } from "@monapp/shared-types";
 import { supabase } from "./supabase";
 import { setAnalyticsConsent, track } from "./analytics";
 import { acceptLanguage, t } from "../i18n";
@@ -56,6 +56,7 @@ import { imageFileFromUri } from "./image-file";
 import { ApiError } from "./api-error";
 import { textSearchFailure } from "./spot-result";
 import { deviceTimeZone, type ExportFormat, type ExportResponse } from "./export-file";
+import { searchLaunched } from "./search-limits";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -147,6 +148,7 @@ export async function runSearch(
   params: { crop: CropRect | null; imageUri: string | null; words?: string | null },
   signal?: AbortSignal
 ): Promise<ProductSearch> {
+  searchLaunched();
   const formData = new FormData();
   if (params.crop) formData.append("crop", JSON.stringify(params.crop));
   if (params.imageUri) await appendImageFile(formData, "file", params.imageUri);
@@ -177,6 +179,7 @@ export async function runSearch(
  * entière, avec les propositions ajoutées (origine « words »). `signal` :
  * bouton « Annuler ». */
 export async function runTextSearch(searchId: string, words: string, signal?: AbortSignal): Promise<ProductSearch> {
+  searchLaunched();
   const payload: RunTextSearchRequest = { words };
   track("text_search_launched");
   try {
@@ -230,6 +233,13 @@ export async function trackProductMatchClick(
     keepalive: true,
   });
   return response.json();
+}
+
+/** Lot limites annoncées : le compteur des recherches, lu sans rien réserver
+ * (gratuit, aucune recherche lancée) ; null si la réponse est illisible. */
+export async function fetchSearchCapacity(): Promise<SearchCapacityStatus | null> {
+  const response = await authorizedFetch("/api/searches/capacity");
+  return parseSearchCapacityStatus(await response.json());
 }
 
 export async function fetchVault(cursor?: string): Promise<VaultPage> {
@@ -582,6 +592,7 @@ export async function fetchVideoAiEnabled(): Promise<boolean> {
  * serveur, qui interroge l'IA ; jusqu'à 3 moments reviennent, vérifiés ici
  * aussi (jamais de confiance aveugle dans le réseau). */
 export async function findVideoMoments(frameUris: readonly string[], query: string, signal?: AbortSignal): Promise<VideoMoment[]> {
+  searchLaunched();
   const formData = new FormData();
   formData.append("query", query.trim());
   for (const uri of frameUris) await appendImageFile(formData, "frame", uri);

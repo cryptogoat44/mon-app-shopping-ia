@@ -10,11 +10,14 @@ import { closeSpotter } from "@/lib/spot-navigation";
 import { DEFAULT_CROP } from "@/lib/crop-geometry";
 import { draftImageUri, getDraft, type SpotDraft } from "@/lib/spot-draft";
 import { getSpotVideo, holdSpotVideo, importSpotVideo, letGoSpotVideo, videoImportMessage } from "@/lib/spot-video";
+import { blocksLaunch } from "@/lib/search-limits";
+import { useSearchLimits } from "@/lib/use-search-limits";
 import { useSpotLaunch, type LaunchPhase } from "@/lib/use-spot-launch";
 import { clampTime, formatClock, type FramePreview, type OpenedVideo } from "@/lib/video-timeline";
 import { AskView, ConsentView, FallbackView, LaunchPreview, PhotoFrame, type Action, type AskProps } from "@/components/spot-launch-views";
 import { SpotWaitingScreen } from "@/components/spot-waiting";
 import { CancelledNote, SearchRecoveryView } from "@/components/search-recovery";
+import { SearchLimitsNotice } from "@/components/search-limits-notice";
 import { themedStyles } from "@/theme/themed-styles";
 
 const PREVIEW_EDGE = 900;
@@ -171,7 +174,12 @@ export default function LaunchScreen() {
   const [crop, setCrop] = useState<CropRect>(() => media.draft?.crop ?? DEFAULT_CROP);
   const [dragging, setDragging] = useState(false);
   const preview = useLaunchPreview(media);
-  const flow = useSpotLaunch({ ...media, preview: preview.source, query, crop: media.source === "photo" ? crop : null, auto: params.auto === "1" });
+  // Lot limites annoncées : Spotter en pause ou part du jour épuisée — le
+  // serveur refuserait : « Lancer » est désactivé et l'écran dit pourquoi
+  // (jamais de lancement automatique non plus). Compteur inconnu : rien ne change.
+  const limits = useSearchLimits();
+  const blocked = blocksLaunch(limits.notice);
+  const flow = useSpotLaunch({ ...media, preview: preview.source, query, crop: media.source === "photo" ? crop : null, auto: params.auto === "1" && !blocked });
   const frameAdjusted = (["x", "y", "width", "height"] as const).some((side) => crop[side] !== DEFAULT_CROP[side]);
   const ask = useAsk(media, setMedia, query, setQuery, flow, frameAdjusted);
   // Photo : le cadre occupe le haut de l'écran ; quand le clavier s'ouvre, on
@@ -226,6 +234,7 @@ export default function LaunchScreen() {
         </Pressable>
       </View>
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content} scrollEnabled={!dragging} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+        {flow.phase.kind === "ask" && blocked ? <SearchLimitsNotice notice={limits.notice} style={styles.limits} /> : null}
         {flow.phase.kind === "ask" && photoUri ? (
           <PhotoFrame uri={photoUri} crop={crop} onChange={setCrop} onDragChange={setDragging} height={Math.min(Math.max(windowHeight * 0.42, 220), 400)} />
         ) : flow.phase.kind === "ask" ? (
@@ -236,7 +245,7 @@ export default function LaunchScreen() {
             height={Math.min(Math.max(windowHeight - 640, 110), 300)}
           />
         ) : null}
-        <PhaseContent phase={flow.phase} flow={flow} ask={ask} />
+        <PhaseContent phase={flow.phase} flow={flow} ask={blocked ? { ...ask, canLaunch: false } : ask} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -251,6 +260,7 @@ const styles = themedStyles(() => ({
   close: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   back: { fontSize: 26, color: color.encre },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
+  limits: { marginTop: 0, marginBottom: space.md },
   lead: { fontSize: font.secondary, color: color.acier, lineHeight: 21 },
   primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 52, alignItems: "center", justifyContent: "center" },
   primaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },

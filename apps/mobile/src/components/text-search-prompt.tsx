@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
 import type { ProductSearch } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
-import { getActiveLocale, t } from "@/i18n";
+import { t } from "@/i18n";
 import { fetchSearch, runTextSearch } from "@/lib/api";
-import { capacityMonthTip } from "@/lib/spot-capacity";
+import { capacityMessages } from "@/lib/use-search-limits";
 import { recoverTextSearch, settledTextSearch, textSearchFailure, type TextSearchFailure } from "@/lib/spot-result";
 import { ErrorMessage } from "@/components/error-message";
 import { textSearchStatusNote } from "@/components/result-complement";
@@ -24,15 +24,13 @@ type PromptState =
   | { kind: "closed" };
 
 /** Plafond des recherches ou trop de recherches d'un coup : les textes de
- * l'écran Résultat (lot 4 quater), lus à l'affichage. */
+ * l'écran Résultat (lot 4 quater, précisés au lot limites annoncées), lus à l'affichage. */
 function limitCopy(failure: Extract<TextSearchFailure, { kind: "limit" }>): [string, string] {
   switch (failure.reason) {
     case "capacity_day":
-      return [t.result.capacityDayTitle, t.result.capacityDayTip];
     case "capacity_month":
-      return [t.result.capacityMonthTitle, capacityMonthTip(failure.resumesOn, getActiveLocale())];
     case "capacity_user":
-      return [t.result.capacityUserTitle, t.result.capacityUserTip];
+      return capacityMessages(failure.reason, failure.resumesOn);
     case "rate_limited":
       return [t.result.rateLimitedTitle, t.result.rateLimitedTip];
   }
