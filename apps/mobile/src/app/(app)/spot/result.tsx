@@ -20,6 +20,7 @@ import { allPieces, merchantContextFor, opensOfferPage, otherPiecesBySection } f
 import { getDraft } from "@/lib/spot-draft";
 import { failureCorrections, successCorrections, type Correction } from "@/lib/spot-corrections";
 import { capacityMonthTip } from "@/lib/spot-capacity";
+import { withIds } from "@/lib/owned-marks";
 import { VAULT_CATEGORIES } from "@/lib/vault-labels";
 import { useToast } from "@/lib/toast-context";
 import { Skeleton } from "@/components/skeleton";
@@ -86,6 +87,15 @@ export default function ResultScreen() {
       cancelled = true;
     };
   }, [pendingSearchId]);
+
+  // Relu sur le serveur : « Gardée » et « Ajoutée au Vault » sur ce que la
+  // personne a déjà rangé (lot « Retrouver ses pièces », lib/owned-marks.ts).
+  const owned = result?.owned;
+  useEffect(() => {
+    if (!owned) return;
+    setKept((previous) => withIds(previous, owned.kept));
+    setBought((previous) => withIds(previous, owned.bought));
+  }, [owned]);
 
   useEffect(() => {
     if (result?.status === "success") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});

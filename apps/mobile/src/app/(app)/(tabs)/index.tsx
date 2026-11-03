@@ -11,12 +11,14 @@ import { ClockIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
 import { LinkEntry } from "@/components/link-entry";
 import { LinkNotice } from "@/components/link-notice";
+import { SeeAllRecentLink } from "@/components/recent-searches";
 import { EntryTiles, LatestVideoCard, LatestVideoNote, LatestVideoQuestion } from "@/components/spot-entry";
 import { SpotImage } from "@/components/spot-image";
 import { useAuth } from "@/lib/auth-context";
 import { importPhotoForSpotter } from "@/lib/image-import";
 import { latestVideoUri, loadLatestVideo, saveLatestVideoChoice } from "@/lib/latest-video";
 import type { LatestVideo, LatestVideoChoice, LatestVideoState } from "@/lib/latest-video-state";
+import { RECENT_SEARCHES_LIMIT } from "@/lib/recent-searches";
 import { beginFromPhoto } from "@/lib/spot-flow";
 import { LINK_COVER_ENABLED } from "@/lib/spot-flags";
 import { adoptSpotVideo, videoImportMessage } from "@/lib/spot-video";
@@ -66,9 +68,12 @@ function RecentRow({ recent }: { recent: { searchId: string; piece: Piece }[] })
   if (recent.length === 0) return null;
   return (
     <View style={styles.recentSection}>
-      <Text style={styles.recentTitle} accessibilityRole="header">
-        {t.spotter.recentlySpotted}
-      </Text>
+      <View style={styles.recentHeader}>
+        <Text style={styles.recentTitle} accessibilityRole="header">
+          {t.spotter.recentlySpotted}
+        </Text>
+        <SeeAllRecentLink />
+      </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentRow}>
         {recent.map(({ searchId, piece }) => (
           <Pressable
@@ -171,7 +176,7 @@ export default function SpotterScreen() {
   const latestVideo = useLatestVideo();
   const latest = latestVideo.state.kind === "ready" ? latestVideo.state.video : null;
 
-  const loadRecent = useCallback(() => getRecentSearches().then(setRecent).catch(() => {}), []);
+  const loadRecent = useCallback(() => getRecentSearches(RECENT_SEARCHES_LIMIT).then(setRecent).catch(() => {}), []);
   useFocusEffect(
     useCallback(() => {
       loadRecent();
@@ -227,7 +232,8 @@ const styles = themedStyles(() => ({
   linkQuestion: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: space.sm },
   linkQuestionLabel: { fontSize: font.secondary, color: color.acier, textDecorationLine: "underline", textAlign: "center" },
   recentSection: { marginTop: space.xxl - space.xs },
-  recentTitle: { fontSize: font.body, fontWeight: "600", color: color.encre, marginBottom: space.md },
+  recentHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, marginBottom: space.md },
+  recentTitle: { fontSize: font.body, fontWeight: "600", color: color.encre },
   recentRow: { gap: space.md },
   recentItem: { width: 104 },
   recentThumb: { width: 104, height: 104, backgroundColor: color.plinthe, borderRadius: radius.sm, alignItems: "center", justifyContent: "center", overflow: "hidden" },

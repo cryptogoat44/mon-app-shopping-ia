@@ -422,6 +422,19 @@ export const fr = {
     shareMessage: (title: string, merchant: string | null) => `Une pièce repérée sur Spotto : ${title}${merchant ? ` chez ${merchant}` : ""}`,
     affiliateMention: "(lien affilié)",
   },
+  // Lot « Retrouver ses pièces » : toutes les recherches récentes (« Tout
+  // voir ») et « Je l'ai achetée » depuis la fiche d'une envie.
+  retrouverPieces: {
+    seeAll: "Tout voir",
+    seeAllLabel: "Voir toutes vos pièces récemment spottées",
+    recentLead: "Rouvrir un résultat ne compte pas dans vos recherches du jour.",
+    recentEmpty: "Aucune recherche réussie pour l'instant. Les pièces que vous retrouvez avec Spotter s'afficheront ici.",
+    recentLoadError: "Impossible d'afficher vos recherches récentes. Vérifiez votre connexion, puis réessayez.",
+    recentLimitNote: (n: number) => `Seules vos ${n} dernières recherches réussies s'affichent ici. Pour retrouver une pièce plus tard, gardez-la dans vos Envies.`,
+    today: "Aujourd'hui",
+    yesterday: "Hier",
+    alreadyInVault: "Déjà dans votre Vault",
+  },
   // Lot 5 : envoyer une envie à une personne sur Spotto.
   sendPiece: {
     title: "Envoyer à…",
