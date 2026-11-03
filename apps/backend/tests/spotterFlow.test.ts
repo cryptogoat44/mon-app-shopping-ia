@@ -1037,7 +1037,10 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
       }
     });
 
-    it("servie entièrement par le cache, préparée avant minuit (heure de Paris) et lancée après : « Que cherchez-vous ? » n'est pas proposé (la route le refuserait)", async () => {
+    // Lot quota : préparée avant minuit (heure de Paris) et lancée après, la
+    // recherche prend au verrou la date du lancement ; elle compte dans la
+    // part du jour, et « Que cherchez-vous ? » peut l'être aussi.
+    it("servie entièrement par le cache, préparée avant minuit (heure de Paris) et lancée après : datée de son lancement, « Que cherchez-vous ? » est proposé", async () => {
       const image = await uniqueImage();
       searchMock.mockResolvedValueOnce(found([], 0));
       const first = await prepare();
@@ -1058,8 +1061,10 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
         readCap.mockRestore();
       }
       expect(searchMock).toHaveBeenCalledOnce();
-      expect(res.json().complement).toMatchObject({ status: "no_query", suggestText: false });
-      expect(await columnsOf(again.id)).toMatchObject({ lens_from_cache: true, served_from_cache: true, text_suggested: false });
+      expect(res.json().complement).toMatchObject({ status: "no_query", suggestText: true });
+      expect(await columnsOf(again.id)).toMatchObject({ lens_from_cache: true, served_from_cache: true, text_suggested: true });
+      const { data: relaunched } = await app.supabaseAdmin.from("product_searches").select("created_at").eq("id", again.id).single();
+      expect(Date.parse(String(relaunched?.created_at))).toBeGreaterThanOrEqual(parisDayStart().getTime());
     });
 
     it("étape IA coupée (VOIE_C_AI_ENABLED) : Lens seul, issue « skipped », aucune invitation, aucune recherche dans les boutiques", async () => {
