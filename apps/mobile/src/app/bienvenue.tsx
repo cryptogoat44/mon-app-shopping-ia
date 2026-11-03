@@ -4,6 +4,8 @@ import { useRouter } from "expo-router";
 import { APP_NAME } from "@/constants/brand";
 import { t } from "@/i18n";
 import { SegmentedChoice } from "@/components/segmented-choice";
+import { ContactEntry } from "@/components/contact-entry";
+import { CONTACT_EMAIL } from "@/lib/contact";
 import { usePreferences } from "@/lib/preferences-context";
 import { LOCALES } from "@/lib/preferences";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
@@ -46,6 +48,10 @@ export default function BienvenueScreen() {
             <Text style={styles.legal}>{t.welcome.privacy}</Text>
           </Pressable>
         </View>
+        {/* « Nous contacter », sans compte (site et iPhone) : masqué sans adresse réelle. */}
+        {CONTACT_EMAIL ? (
+          <ContactEntry email={CONTACT_EMAIL} style={styles.contact} linkStyle={styles.legal} textStyle={styles.contactText} />
+        ) : null}
       </View>
     </SafeAreaView>
   );
@@ -74,4 +80,6 @@ const styles = themedStyles(() => ({
   loginLink: { fontSize: font.secondary, color: color.acier, fontWeight: "600", marginTop: space.lg },
   legalRow: { flexDirection: "row", gap: space.sm, marginTop: space.xl },
   legal: { fontSize: font.caption, color: color.acier, textDecorationLine: "underline", paddingVertical: space.xs },
+  contact: { alignItems: "center", marginTop: space.xs },
+  contactText: { fontSize: font.caption, color: color.acier, textAlign: "center", lineHeight: 19 },
 }));

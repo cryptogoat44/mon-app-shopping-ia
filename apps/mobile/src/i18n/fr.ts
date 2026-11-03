@@ -531,8 +531,9 @@ export const fr = {
     following: "Abonné",
     followers: "Abonnés",
     followingCount: "Abonnements",
-    emptyVault: "Aucune pièce dans votre vault. Confirmez un achat depuis Spotter pour l'ajouter ici.",
+    emptyVault: "Aucune pièce dans votre Vault. Ajoutez-en une avec sa photo, ou confirmez un achat depuis Spotter.",
     emptyVaultCta: "Spotter une pièce",
+    addPiece: "Ajouter une pièce",
     avatarUpdated: "Photo de profil mise à jour",
     avatarError: "L'envoi de la photo a échoué.",
     emptyLifestyle: "Aucune publication lifestyle pour l'instant.",
@@ -569,6 +570,34 @@ export const fr = {
     updateError: "La mise à jour a échoué.",
     shareError: "Le partage a échoué.",
     removeError: "La suppression a échoué.",
+    // Lot 2 (Vault) : « Modifier » le titre et la catégorie.
+    edit: "Modifier",
+    editLabel: "Modifier le titre et la catégorie",
+    save: "Enregistrer",
+    saving: "Enregistrement…",
+    saved: "Modifications enregistrées",
+  },
+  // Lot 2 (Vault) : ajout d'une pièce à la main (photo, titre, catégorie).
+  // Libellés et messages repris par « Modifier », sur l'écran de la pièce.
+  vaultForm: {
+    title: "Ajouter une pièce",
+    cancel: "Annuler",
+    privateNote: "Votre Vault est privé : personne d'autre que vous ne verra cette pièce.",
+    addPhoto: "Ajouter une photo",
+    changePhoto: "Changer la photo",
+    photoLabel: "Photo de la pièce",
+    titleLabel: "Titre",
+    titlePlaceholder: "Ex. : veste en daim camel",
+    categoryLabel: "Catégorie",
+    submit: "Ajouter",
+    submitting: "Ajout en cours…",
+    added: "Pièce ajoutée à votre Vault",
+    addError: "L'ajout a échoué. Réessayez.",
+    photoRequired: "Ajoutez une photo de la pièce.",
+    titleRequired: "Indiquez un titre.",
+    titleTooLong: (max: number) => `Le titre est trop long (${max} caractères maximum).`,
+    categoryRequired: "Choisissez une catégorie.",
+    photoTooLarge: "Cette photo est trop lourde (10 Mo maximum). Choisissez-en une autre.",
   },
   publish: {
     title: "Nouvelle publication",
@@ -661,6 +690,15 @@ export const fr = {
     deleteError: "La suppression a échoué. Vérifiez votre connexion, puis réessayez.",
     deleteTypeWord: (word: string) => `Pour confirmer, tapez ${word} ci-dessous.`,
     deleteWordLabel: (word: string) => `Mot de confirmation : ${word}`,
+  },
+  // « Nous contacter » (Réglages, écran d'accueil) : adresse de l'éditeur,
+  // lue à la construction (lib/contact.ts). Sans adresse réelle, rien ne
+  // s'affiche.
+  contact: {
+    settingsSection: "Aide",
+    link: "Nous contacter",
+    linkHint: "Ouvre votre messagerie pour nous écrire.",
+    openFailed: "Votre messagerie n'a pas pu s'ouvrir : copiez l'adresse ci-dessus pour nous écrire.",
   },
   legal: {
     draftBanner: "Projet — à faire valider par un professionnel.",

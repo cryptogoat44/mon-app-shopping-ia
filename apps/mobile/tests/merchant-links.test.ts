@@ -17,13 +17,18 @@ vi.mock("expo-web-browser", () => ({
   openBrowserAsync: vi.fn(async () => ({ type: "opened" })),
 }));
 
+// Statistiques d'usage : seul l'appel (« lien marchand ouvert ») est observé.
+vi.mock("../src/lib/analytics", () => ({ track: vi.fn() }));
+
 import { Platform } from "react-native";
 import * as WebBrowser from "expo-web-browser";
+import { track } from "../src/lib/analytics";
 import { trackProductMatchClick } from "../src/lib/api";
 import { openMerchantLink, openMerchantLinkWeb } from "../src/lib/merchant-links";
 
 const trackMock = vi.mocked(trackProductMatchClick);
 const openBrowserMock = vi.mocked(WebBrowser.openBrowserAsync);
+const analyticsMock = vi.mocked(track);
 
 interface FakeWindow {
   open: ReturnType<typeof vi.fn>;
@@ -38,6 +43,7 @@ beforeEach(() => {
   trackMock.mockReset();
   trackMock.mockResolvedValue({ url: "https://marchand.example/affilie" });
   openBrowserMock.mockClear();
+  analyticsMock.mockClear();
 });
 
 afterEach(() => {
@@ -143,5 +149,80 @@ describe("openMerchantLink (dispatch + anti-double-clic)", () => {
     expect(openBrowserMock).toHaveBeenCalledWith("https://marchand.example/affilie");
     expect(trackMock).toHaveBeenCalledWith("match-native", "result");
     expect(result).toEqual({ blocked: false });
+  });
+});
+
+// Un lien qui n'est pas une adresse web ordinaire (javascript:, data:…), par
+// exemple venu de l'envie d'une autre personne : refusé avant tout le reste,
+// sur le site comme sur iPhone. Aucun message : le bouton ne fait rien.
+describe("lien qui n'est pas une adresse web : rien ne s'ouvre, rien n'est compté", () => {
+  const SCRIPT_LINK = "javascript:alert(document.cookie)";
+
+  it("openMerchantLinkWeb : ni window.open, ni suivi, ni lien de secours (même si le navigateur bloquerait)", () => {
+    const openFn = vi.fn(() => null);
+    vi.stubGlobal("window", { open: openFn } satisfies FakeWindow);
+
+    const result = openMerchantLinkWeb({ matchId: "match-web-refused", url: SCRIPT_LINK, context: "wishlist" });
+
+    expect(openFn).not.toHaveBeenCalled();
+    expect(trackMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ blocked: false });
+  });
+
+  it.each([
+    "javascript:alert(1)",
+    "JAVASCRIPT:alert(1)",
+    " javascript:alert(1)",
+    "java\tscript:alert(1)",
+    "data:text/html,<script>alert(1)</script>",
+    "vbscript:msgbox(1)",
+    "//evil.example/x",
+  ])("openMerchantLink sur le site : %j n'ouvre rien et ne compte rien", async (link) => {
+    const openFn = vi.fn(() => createFakeTab());
+    vi.stubGlobal("window", { open: openFn } satisfies FakeWindow);
+
+    const result = await openMerchantLink({ matchId: `match-refused-${link}`, url: link, context: "post" });
+
+    expect(openFn).not.toHaveBeenCalled();
+    expect(trackMock).not.toHaveBeenCalled();
+    expect(analyticsMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ blocked: false });
+  });
+
+  it("openMerchantLink sur iPhone : jamais le navigateur intégré, aucun suivi", async () => {
+    Platform.OS = "ios";
+
+    const result = await openMerchantLink({ matchId: "match-native-refused", url: SCRIPT_LINK, context: "received" });
+
+    expect(openBrowserMock).not.toHaveBeenCalled();
+    expect(trackMock).not.toHaveBeenCalled();
+    expect(analyticsMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ blocked: false });
+  });
+
+  it("le lien https de la même pièce, juste après un lien refusé, s'ouvre comme avant (aucun anti-double-clic consommé)", async () => {
+    const tab = createFakeTab();
+    const openFn = vi.fn(() => tab);
+    vi.stubGlobal("window", { open: openFn } satisfies FakeWindow);
+
+    await openMerchantLink({ matchId: "match-after-refused", url: SCRIPT_LINK, context: "post" });
+    const result = await openMerchantLink({ matchId: "match-after-refused", url: "https://marchand.example/affilie", context: "post" });
+
+    expect(openFn).toHaveBeenCalledOnce();
+    expect(openFn).toHaveBeenCalledWith("https://marchand.example/affilie", "_blank");
+    expect(tab.opener).toBeNull();
+    expect(trackMock).toHaveBeenCalledOnce();
+    expect(trackMock).toHaveBeenCalledWith("match-after-refused", "post");
+    expect(analyticsMock).toHaveBeenCalledOnce();
+    expect(analyticsMock).toHaveBeenCalledWith("merchant_link_opened", { context: "post" });
+    expect(result).toEqual({ blocked: false });
+  });
+
+  it("une ouverture https bloquée par le navigateur rend toujours le lien de secours vérifié", async () => {
+    vi.stubGlobal("window", { open: vi.fn(() => null) } satisfies FakeWindow);
+
+    const result = await openMerchantLink({ matchId: "match-blocked-https", url: "https://marchand.example/affilie", context: "wishlist" });
+
+    expect(result).toEqual({ blocked: true, url: "https://marchand.example/affilie" });
   });
 });

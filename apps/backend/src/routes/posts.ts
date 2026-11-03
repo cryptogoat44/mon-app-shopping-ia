@@ -4,7 +4,7 @@ import { z } from "zod";
 import { POST_TYPES, PRIVACY_LEVELS, type Post, type PostTaggedPiece, type PostWish, type PrivacyLevel, type TaggedPieceInput } from "@monapp/shared-types";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
-import { DatabaseReadError, INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseDbRows, parseInput } from "../lib/validation.js";
+import { DatabaseReadError, INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseDbRows, parseInput, webUrlOrNull } from "../lib/validation.js";
 import { canViewPost, findViewablePost, shownPosts } from "../lib/visibility.js";
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
 import { PHOTO_SIZES, optimizePhoto } from "../lib/photos.js";
@@ -112,7 +112,8 @@ async function fetchPostWishes(fastify: FastifyInstance, rows: PostRow[]): Promi
         {
           title: wish.title,
           merchantName: wish.merchant_name,
-          merchantUrl: affiliateUrl ?? wish.merchant_url,
+          // Seulement un lien web ordinaire (lib/validation.ts), même pour une envie rangée plus tôt.
+          merchantUrl: webUrlOrNull(affiliateUrl ?? wish.merchant_url),
           isAffiliate: affiliateUrl !== null && affiliateUrl !== wish.merchant_url,
           productMatchId: wish.product_match_id,
           priceMin: wish.price_min === null ? null : Number(wish.price_min),

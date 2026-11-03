@@ -3,6 +3,7 @@ import * as WebBrowser from "expo-web-browser";
 import type { MerchantLinkContext } from "@monapp/shared-types";
 import { trackProductMatchClick } from "./api";
 import { track } from "./analytics";
+import { isWebUrl } from "./web-url";
 
 const DEBOUNCE_MS = 2000;
 
@@ -34,14 +35,11 @@ export interface OpenMerchantLinkOptions {
   context: MerchantLinkContext;
 }
 
-export interface OpenMerchantLinkResult {
-  /** true si le navigateur a malgré tout bloqué l'ouverture (web
-   * uniquement — ne peut jamais arriver sur mobile natif). L'appelant doit
-   * alors proposer un lien cliquable de secours vers `url`. */
-  blocked: boolean;
-  /** Présent seulement quand `blocked` est vrai. */
-  url?: string;
-}
+/** `blocked` est vrai si le navigateur a malgré tout bloqué l'ouverture (web
+ * uniquement — ne peut jamais arriver sur mobile natif). L'appelant doit alors
+ * proposer un lien cliquable de secours vers `url` : toujours un lien déjà
+ * vérifié ici (isWebUrl), jamais un autre. */
+export type OpenMerchantLinkResult = { blocked: false } | { blocked: true; url: string };
 
 const NOT_BLOCKED: OpenMerchantLinkResult = { blocked: false };
 
@@ -62,10 +60,11 @@ const NOT_BLOCKED: OpenMerchantLinkResult = { blocked: false };
  * pratique standard bien antérieure à ce mot-clé) — la valeur de retour
  * redevient alors un signal fiable de blocage.
  * Exportée séparément (plutôt que de lire `Platform.OS` ici) pour pouvoir
- * être testée sans dépendre de `react-native`.
+ * être testée sans dépendre de `react-native` — d'où la même vérification
+ * du lien qu'à l'entrée d'openMerchantLink.
  */
 export function openMerchantLinkWeb({ matchId, url, context }: OpenMerchantLinkOptions): OpenMerchantLinkResult {
-  if (typeof window === "undefined") return NOT_BLOCKED;
+  if (typeof window === "undefined" || !isWebUrl(url)) return NOT_BLOCKED;
 
   const win = window.open(url, "_blank");
   if (matchId) trackClickInBackground(matchId, context);
@@ -92,8 +91,14 @@ async function openMerchantLinkNative({ matchId, url, context }: OpenMerchantLin
  * affiché dans l'app (résultat de recherche, pièces similaires, Vault,
  * Envies, publication, alerte de prix...) — aucune ouverture de lien
  * marchand ne doit contourner cette fonction.
+ *
+ * Avant tout le reste, sur le web comme sur iPhone : un lien qui n'est pas
+ * une adresse web ordinaire (isWebUrl : javascript:, data:…) n'ouvre rien,
+ * n'enregistre aucun clic, ne compte dans aucune statistique et ne donne
+ * aucun lien de secours. Aucun message : le bouton ne fait simplement rien.
  */
 export async function openMerchantLink(options: OpenMerchantLinkOptions): Promise<OpenMerchantLinkResult> {
+  if (!isWebUrl(options.url)) return NOT_BLOCKED;
   const debounceKey = options.matchId ?? options.url;
   if (isDebounced(debounceKey)) return NOT_BLOCKED;
   lastOpenedAt.set(debounceKey, Date.now());
