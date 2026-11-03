@@ -287,6 +287,22 @@ export const fr = {
     slow: "C'est plus long que d'habitude : le service redémarre peut-être. Merci de patienter.",
     cancel: "Annuler",
   },
+  // Recherche coupée (réseau perdu, retour sur une autre app, « Annuler ») :
+  // le serveur va au bout, l'app relit la recherche au lieu de la repayer.
+  searchRecovery: {
+    notStartedTitle: "Votre recherche n'est pas partie",
+    notStartedText: "Elle a été interrompue avant l'analyse de l'image et n'a pas été comptée. Relancez-la quand vous voulez.",
+    unreachableTitle: "Votre recherche continue peut-être",
+    unreachableText:
+      "Spotto ne répond pas pour l'instant. Si votre recherche est partie, elle continue de notre côté : vérifiez à nouveau dans un instant pour voir son résultat, sans rien relancer.",
+    runningTitle: "Votre recherche continue…",
+    stillRunningText: "Elle prend plus de temps que d'habitude. Vérifiez à nouveau dans un instant pour voir son résultat, sans rien relancer.",
+    runningTip: "Si elle aboutit, son résultat apparaîtra dans « Récemment spottées », sur l'accueil de Spotter.",
+    relaunch: "Relancer",
+    checkAgain: "Vérifier à nouveau",
+    cancelled:
+      "Recherche annulée. Elle a pu continuer de notre côté : relancez-la sans changer le cadre ni les mots, et son résultat s'affichera s'il existe déjà.",
+  },
   result: {
     title: "Résultats",
     reframe: "Recadrer",
@@ -297,6 +313,10 @@ export const fr = {
     otherProposal: "Autre proposition",
     otherProposals: "Autres propositions",
     showMore: (n: number) => `Voir plus (${n})`,
+    // Lot résultats lisibles : textes à valider par le fondateur.
+    yourPiece: "Votre pièce",
+    showLargeHint: "Affiche cette proposition en grand, en haut de l'écran.",
+    shownAbove: (name: string) => `Proposition affichée en grand en haut de l'écran : ${name}`,
     // Texte du fondateur (2026-10-25) : ne promet pas un prix que le site n'affiche peut-être pas.
     priceOnSite: "Prix à vérifier chez le marchand",
     viewAt: (merchant: string) => (merchant ? `Voir chez ${merchant}` : "Voir la pièce"),
@@ -335,7 +355,8 @@ export const fr = {
     noPriceText:
       "Ce sont des pièces qui ressemblent à la vôtre, trouvées par notre recherche visuelle. Elles ne sont pas forcément en vente : ouvrez-les pour vérifier, ou essayez un autre cadre.",
     technicalTitle: "La recherche n'a pas abouti",
-    technicalTip: "Le service de reconnaissance n'a pas répondu. Vérifiez votre connexion, puis réessayez.",
+    // Panne du service, pas de la connexion de la personne (lot recherche coupée).
+    technicalTip: "Le service de recherche n'a pas répondu. Réessayez dans un instant.",
     rateLimitedTitle: "Trop de recherches d'un coup",
     rateLimitedTip: "Vous avez atteint la limite de 10 identifications par heure. Réessayez un peu plus tard.",
     // Plafond des recherches (lot 4 quater, textes du fondateur, 2026-10-08 et
@@ -421,6 +442,19 @@ export const fr = {
     linkCopied: "Lien copié",
     shareMessage: (title: string, merchant: string | null) => `Une pièce repérée sur Spotto : ${title}${merchant ? ` chez ${merchant}` : ""}`,
     affiliateMention: "(lien affilié)",
+  },
+  // Lot « Retrouver ses pièces » : toutes les recherches récentes (« Tout
+  // voir ») et « Je l'ai achetée » depuis la fiche d'une envie.
+  retrouverPieces: {
+    seeAll: "Tout voir",
+    seeAllLabel: "Voir toutes vos pièces récemment spottées",
+    recentLead: "Rouvrir un résultat ne compte pas dans vos recherches du jour.",
+    recentEmpty: "Aucune recherche réussie pour l'instant. Les pièces que vous retrouvez avec Spotter s'afficheront ici.",
+    recentLoadError: "Impossible d'afficher vos recherches récentes. Vérifiez votre connexion, puis réessayez.",
+    recentLimitNote: (n: number) => `Seules vos ${n} dernières recherches réussies s'affichent ici. Pour retrouver une pièce plus tard, gardez-la dans vos Envies.`,
+    today: "Aujourd'hui",
+    yesterday: "Hier",
+    alreadyInVault: "Déjà dans votre Vault",
   },
   // Lot 5 : envoyer une envie à une personne sur Spotto.
   sendPiece: {

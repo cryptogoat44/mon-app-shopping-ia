@@ -181,7 +181,7 @@ export default function NewPostScreen() {
                     accessibilityLabel={item.title}
                   >
                     <View style={styles.vaultThumb}>
-                      <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.photoPreview} fit="cover" />
+                      <SpotImage hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} style={styles.photoPreview} fit="cover" size="small" />
                     </View>
                     <Text style={styles.vaultTitle} numberOfLines={1}>{item.title}</Text>
                   </Pressable>

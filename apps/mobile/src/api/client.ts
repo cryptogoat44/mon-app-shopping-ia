@@ -1,6 +1,7 @@
 import type { WishlistItem as RemoteWishlistItem } from "@monapp/shared-types";
 import { addWishlistItem, fetchSearch, fetchWishlist, listRecentSearches } from "@/lib/api";
 import { matchToPiece, pieceTitle, toSpotResult } from "@/lib/spot-result";
+import { ownedMarks } from "@/lib/owned-marks";
 import * as mock from "./mock";
 import type { Piece, Profile, SpotResult, VaultItem, WishlistItem } from "./types";
 
@@ -39,8 +40,10 @@ function wishlistRowToItem(row: RemoteWishlistItem): WishlistItem {
 
 // Relit une recherche déjà faite (écran Résultat rouvert ou rechargé) —
 // aucun nouvel appel SerpApi, seulement la lecture de ce qui est en base.
+// Avec ce que la personne en a déjà gardé ou acheté.
 export async function loadSpotResult(searchId: string): Promise<SpotResult> {
-  return toSpotResult(await fetchSearch(searchId));
+  const search = await fetchSearch(searchId);
+  return { ...toSpotResult(search), owned: ownedMarks(search) };
 }
 
 // Branché sur le vrai historique de recherches (table product_searches) —
@@ -49,13 +52,14 @@ export async function getRecentlySpotted(): Promise<Piece[]> {
   return (await getRecentSearches()).map((entry) => entry.piece);
 }
 
-/** Recherches récentes avec leur meilleure proposition — pour rouvrir un
- * résultat depuis « Récemment spottées ». */
-export async function getRecentSearches(): Promise<{ searchId: string; piece: Piece }[]> {
-  const searches = await listRecentSearches();
+/** Recherches récentes avec leur meilleure proposition et leur date — pour
+ * rouvrir un résultat depuis « Récemment spottées ». `limit` : 6 par défaut
+ * côté serveur, 20 au plus (lib/recent-searches.ts). */
+export async function getRecentSearches(limit?: number): Promise<{ searchId: string; createdAt: string; piece: Piece }[]> {
+  const searches = await listRecentSearches(limit);
   return searches.flatMap((search) => {
     const best = search.matches[0];
-    return best ? [{ searchId: search.id, piece: matchToPiece(best) }] : [];
+    return best ? [{ searchId: search.id, createdAt: search.createdAt, piece: matchToPiece(best) }] : [];
   });
 }
 

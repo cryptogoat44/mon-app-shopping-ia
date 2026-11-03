@@ -16,6 +16,7 @@ import { useSpotLaunch, type LaunchPhase } from "@/lib/use-spot-launch";
 import { clampTime, formatClock, type FramePreview, type OpenedVideo } from "@/lib/video-timeline";
 import { AskView, ConsentView, FallbackView, LaunchPreview, PhotoFrame, type Action, type AskProps } from "@/components/spot-launch-views";
 import { SpotWaitingScreen } from "@/components/spot-waiting";
+import { CancelledNote, SearchRecoveryView } from "@/components/search-recovery";
 import { SearchLimitsNotice } from "@/components/search-limits-notice";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -64,7 +65,12 @@ function PhaseContent({ phase, flow, ask }: { phase: LaunchPhase; flow: ReturnTy
   switch (phase.kind) {
     case "ask":
     case "working":
-      return <AskView {...ask} />;
+      return (
+        <>
+          {phase.kind === "ask" && phase.cancelled ? <CancelledNote /> : null}
+          <AskView {...ask} />
+        </>
+      );
     case "consent":
       return (
         <ConsentView saving={flow.saving} error={flow.consentError} onAccept={flow.accept} onChooseMyself={flow.decline} onPolicy={() => router.push("/confidentialite")} />
@@ -78,6 +84,8 @@ function PhaseContent({ phase, flow, ask }: { phase: LaunchPhase; flow: ReturnTy
     }
     case "prepare_failed":
       return <FallbackView failure title={t.videoAuto.failedTitle} text={t.video.frameError} actions={[{ label: t.common.retry, onPress: flow.retryPrepare }, manual]} />;
+    case "unsettled":
+      return <SearchRecoveryView state={phase.state} onRelaunch={flow.relaunch} onCheck={flow.recheck} back={{ label: t.common.back, onPress: flow.ask }} />;
   }
 }
 

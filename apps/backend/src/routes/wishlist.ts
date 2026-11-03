@@ -4,6 +4,7 @@ import { fetchHdImageUrls } from "../lib/pieceImages.js";
 import { z } from "zod";
 import type { WishlistItem, WishlistItemDetail } from "@monapp/shared-types";
 import { findOwnMatch } from "../lib/ownMatches.js";
+import { keptMatchIds } from "../lib/keptPieces.js";
 import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput, webUrlOrNull, webUrlSchema } from "../lib/validation.js";
 import { deleteWishCopy, findWishPost } from "../lib/wishShare.js";
 
@@ -173,15 +174,19 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "wishlist_item_not_found", message: "Envie introuvable." });
     }
     const row = data as WishlistItemRow;
-    const [affiliateUrls, hdUrls, wishPost] = await Promise.all([
-      fetchAffiliateUrls(fastify, row.product_match_id ? [row.product_match_id] : []),
+    const matchIds = row.product_match_id ? [row.product_match_id] : [];
+    const [affiliateUrls, hdUrls, wishPost, inVault] = await Promise.all([
+      fetchAffiliateUrls(fastify, matchIds),
       fetchHdImageUrls(fastify, [row]),
       findWishPost(fastify, row.id),
+      // « Je l'ai achetée » déjà fait (depuis le résultat ou cette fiche) : « Ajoutée au Vault ».
+      keptMatchIds(fastify, "vault_items", userId, matchIds),
     ]);
     const detail: WishlistItemDetail = {
       ...toWishlistItem(row, affiliateUrls, hdUrls[0] ?? null),
       sharedPost:
         wishPost && !wishPost.hidden_at ? { id: wishPost.id, privacy: wishPost.privacy, createdAt: wishPost.created_at } : null,
+      inVault: inVault.length > 0,
     };
     return reply.send(detail);
   });

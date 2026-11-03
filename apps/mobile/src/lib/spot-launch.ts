@@ -13,7 +13,8 @@ import { fetchConsentStatus, fetchVideoAiEnabled } from "./api";
 import { DEFAULT_CROP } from "./crop-geometry";
 import { hasCurrentConsent } from "./policy-notice";
 import { updateDraft, type SpotDraft } from "./spot-draft";
-import { identifyDraft } from "./spot-identify";
+import { checkSearch, identifyDraft, type IdentifyOutcome } from "./spot-identify";
+import type { UnsettledState } from "./spot-recovery";
 import { analyzeVideo, prepareMoment, remainingMoments, type AutoFailure } from "./video-auto";
 import type { OpenedVideo } from "./video-timeline";
 
@@ -52,11 +53,29 @@ export type LaunchOutcome =
   /** Moments trouvés, mais l'image n'a pas pu être extraite de la vidéo :
    * réessayer ne rappelle pas l'IA. */
   | { kind: "prepare_failed" }
+  /** Recherche coupée dont l'issue reste inconnue (lib/spot-recovery.ts) :
+   * jamais partie (« Relancer »), Spotto injoignable ou toujours en cours
+   * (« Vérifier à nouveau »). */
+  | { kind: "unsettled"; searchId: string; state: UnsettledState }
   | { kind: "cancelled" };
 
+function launchOutcomeOf(outcome: IdentifyOutcome): LaunchOutcome {
+  return outcome.kind === "done" ? { kind: "result", searchId: outcome.searchId } : outcome;
+}
+
 async function identify(draft: SpotDraft, signal: AbortSignal): Promise<LaunchOutcome> {
-  const outcome = await identifyDraft(draft, signal);
-  return outcome.kind === "cancelled" ? outcome : { kind: "result", searchId: outcome.searchId };
+  return launchOutcomeOf(await identifyDraft(draft, signal));
+}
+
+/** « Relancer » une recherche coupée : le même brouillon — sous le même
+ * numéro si elle n'est jamais partie, relue d'abord dans tous les cas. */
+export function relaunchDraft(draft: SpotDraft, signal: AbortSignal): Promise<LaunchOutcome> {
+  return identify(draft, signal);
+}
+
+/** « Vérifier à nouveau », ou retour dans l'app : relecture seule, rien n'est relancé. */
+export async function recheckSearch(searchId: string, signal: AbortSignal): Promise<LaunchOutcome> {
+  return launchOutcomeOf(await checkSearch(searchId, signal));
 }
 
 /** Meilleur moment pas encore essayé : image en pleine taille, cadre de

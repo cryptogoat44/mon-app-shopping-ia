@@ -7,6 +7,7 @@ import type {
   RecordConsentsRequest,
   CreateReportRequest,
   CreateSearchRequest,
+  CreateVaultItemResponse,
   CreateWishlistItemRequest,
   CropRect,
   DeleteAccountRequest,
@@ -252,12 +253,14 @@ export async function fetchVaultItem(id: string): Promise<VaultItemDetail> {
   return response.json();
 }
 
+/** « Je l'ai achetée » (résultat ou envie). Proposition déjà dans le Vault :
+ * le serveur renvoie la pièce déjà là (`alreadyInVault`), rien n'est créé. */
 export async function addVaultItemFromMatch(params: {
   title: string;
   imageUrl: string;
   category: VaultCategory;
   productMatchId: string;
-}): Promise<VaultItem> {
+}): Promise<CreateVaultItemResponse> {
   const formData = new FormData();
   formData.append("title", params.title);
   formData.append("category", params.category);
@@ -265,8 +268,8 @@ export async function addVaultItemFromMatch(params: {
   formData.append("productMatchId", params.productMatchId);
 
   const response = await authorizedFetch("/api/vault", { method: "POST", body: formData });
-  const item: VaultItem = await response.json();
-  track("vault_item_added", { source: "spotter", category: params.category });
+  const item: CreateVaultItemResponse = await response.json();
+  if (item.alreadyInVault !== true) track("vault_item_added", { source: "spotter", category: params.category });
   return item;
 }
 

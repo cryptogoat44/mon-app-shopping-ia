@@ -38,8 +38,9 @@ export type SpotStatus = "success" | "failed";
  * capture. "rate_limited" : trop d'identifications en peu de temps (429).
  * "capacity_day", "capacity_month", "capacity_user" : plafond des recherches
  * atteint — du jour ou du mois pour tout le service, ou part de la
- * personne pour la journée (429, lot 4 quater). */
-export type SpotFailReason = "no_match" | "technical" | "needs_photo" | "rate_limited" | CapacityFailReason;
+ * personne pour la journée (429, lot 4 quater). "running" : recherche relue
+ * encore en cours côté serveur, jamais « rien trouvé » (lot recherche coupée). */
+export type SpotFailReason = "no_match" | "technical" | "needs_photo" | "rate_limited" | "running" | CapacityFailReason;
 
 export interface SpotResult {
   /** Identifiant de la recherche côté serveur — null si elle n'a pas pu
@@ -63,6 +64,9 @@ export interface SpotResult {
   /** Voie C (lot c) : absent quand elle n'a pas tourné sur cette recherche.
    * `pieces` ne garde alors que les propositions de la recherche visuelle. */
   complement?: SpotComplement;
+  /** Résultat relu sur le serveur seulement : propositions déjà gardées
+   * (Envies) ou achetées (Vault) par la personne (lib/owned-marks.ts). */
+  owned?: { kept: string[]; bought: string[] };
 }
 
 /** Complément des propositions de la recherche visuelle (voie C, lot c) :

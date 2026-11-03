@@ -188,6 +188,12 @@ export interface ProductSearch {
    * (interrupteur coupé, recherche plus ancienne, ancien serveur). Les
    * propositions du complément sont dans `matches`, avec leur `origin`. */
   complement?: SearchComplement;
+  /** Relecture d'une recherche (GET /api/searches/:id) seulement : ses
+   * propositions déjà gardées dans les Envies de la personne, ou rangées dans
+   * son Vault — le résultat rouvert affiche « Gardée » et « Ajoutée au Vault ».
+   * Absents ailleurs, et d'un ancien serveur. */
+  wishlistMatchIds?: string[];
+  vaultMatchIds?: string[];
 }
 
 /** Complément d'une recherche (voie C, lot c). */
@@ -470,6 +476,14 @@ export interface UpdateVaultItemRequest {
   category?: VaultCategory;
 }
 
+/** Réponse de POST /api/vault. `alreadyInVault` : la même proposition du
+ * Spotter était déjà dans le Vault de la personne — c'est cette pièce qui
+ * est renvoyée et rien n'est créé (un second « Je l'ai achetée » ne fait
+ * plus de doublon). Absent d'un ancien serveur. */
+export interface CreateVaultItemResponse extends VaultItem {
+  alreadyInVault?: boolean;
+}
+
 export interface VaultPage {
   items: VaultItem[];
   nextCursor: string | null;
@@ -516,6 +530,10 @@ export interface WishlistPage {
  * « envie » si elle a été republiée (une seule à la fois, lot 5). */
 export interface WishlistItemDetail extends WishlistItem {
   sharedPost: { id: string; privacy: PrivacyLevel; createdAt: string } | null;
+  /** Sa proposition d'origine est déjà dans le Vault de la personne : la
+   * fiche affiche « Ajoutée au Vault » au lieu de « Je l'ai achetée ».
+   * Absent d'un ancien serveur. */
+  inVault?: boolean;
 }
 
 // ---- Partage d'une envie (lot 5, section 5.C) ----
