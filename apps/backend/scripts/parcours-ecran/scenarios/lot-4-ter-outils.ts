@@ -2,7 +2,7 @@
 // lot-4-ter.ts et lot-4-ter-etapes.ts.
 import type { Page } from "playwright-core";
 import sharp from "sharp";
-import { CONSENT_VERSIONS, SEARCH_FAILURE_MESSAGES } from "@monapp/shared-types";
+import { CONSENT_VERSIONS, SEARCH_FAILURE_MESSAGES, type MatchOrigin, type SearchComplement } from "@monapp/shared-types";
 import type { Parcours, TestAccount } from "../boite-a-outils.js";
 import { rgb, SEGMENTS } from "../../lib/videos-essai.js";
 import type { Combo, Locale } from "./lot-3.js";
@@ -176,13 +176,27 @@ async function imagePiece(fond: string): Promise<string> {
   return `data:image/jpeg;base64,${jpeg.toString("base64")}`;
 }
 
+/** Options de l'identification fabriquée. Voie C (lot c) : `origines` donne
+ * l'origine de chaque proposition, dans l'ordre (« lens » par défaut, jamais
+ * écrite, comme le serveur ; « shopping » : « Cette pièce dans d'autres
+ * boutiques » ; « words » : « Résultats pour vos mots ») ; `complement` : le
+ * complément renvoyé avec la recherche (issue, requête, invitation « Que
+ * cherchez-vous ? »), pour que l'écran montre ses sections. */
+export interface OptionsSimulation {
+  videsAuDebut?: number;
+  sansPrix?: boolean;
+  triees?: boolean;
+  origines?: readonly MatchOrigin[];
+  complement?: SearchComplement;
+}
+
 /** Identification fabriquée dans le navigateur : la requête ne part jamais
  * vers le serveur, donc aucun crédit SerpApi. `videsAuDebut` : nombre de
  * premières recherches « rien trouvé » (Google Lens sans proposition) ;
  * `sansPrix` : propositions sans aucun prix (petit lot) ; `triees` : propositions
  * remontées par les mots d'une photo (petit lot 2). Comme le serveur, la réponse
  * ne renvoie jamais les mots (`_description` : ceux de l'essai). */
-export async function simulerResultats(page: Page, _description: string, options: { videsAuDebut?: number; sansPrix?: boolean; triees?: boolean } = {}): Promise<void> {
+export async function simulerResultats(page: Page, _description: string, options: OptionsSimulation = {}): Promise<void> {
   const images = await Promise.all(PIECES.map((piece) => imagePiece(piece.fond)));
   let vides = options.videsAuDebut ?? 0;
   await page.route("**/api/searches/*/run", async (route) => {
@@ -203,6 +217,7 @@ export async function simulerResultats(page: Page, _description: string, options
       merchantName: piece.marchand,
       merchantUrl: "https://example.com/piece",
       affiliateUrl: "https://example.com/piece",
+      ...(options.origines?.[index] && options.origines[index] !== "lens" ? { origin: options.origines[index] } : {}),
     }));
     const recherche = {
       id,
@@ -216,6 +231,7 @@ export async function simulerResultats(page: Page, _description: string, options
       createdAt: new Date().toISOString(),
       matches,
       ...(options.triees && !rien ? { sortedByWords: true } : {}),
+      ...(options.complement ? { complement: options.complement } : {}),
     };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(recherche) });
   });

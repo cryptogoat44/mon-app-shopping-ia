@@ -11,8 +11,8 @@
 //     (lecture SEULE des journaux : des compteurs, jamais de contenu — diagnostic
 //      du lot 4 ter, demandé par le fondateur le 2026-10-07 ; plafond global
 //      SerpApi depuis le lot 4 quater ; mesure de chaque recherche depuis le
-//      petit lot ; places rendues et disjoncteur depuis 0027 ; --chronologie :
-//      l'ordre des événements)
+//      petit lot ; places rendues et disjoncteur depuis 0027 ; compléments de
+//      la voie C depuis le lot c ; --chronologie : l'ordre des événements)
 //
 // Règles (voir scripts/lib/render-guard.ts) :
 // - deux services seulement : spotto-api et le site ; l'ancien serveur
@@ -36,6 +36,7 @@ import {
   compterRequetes,
   decrireAnalyse,
   decrireCodes,
+  extraireComplement,
   extraireCompteursIA,
   extraireDisjoncteur,
   extraireMesure,
@@ -44,6 +45,7 @@ import {
   lireJournaux,
   parametresJournaux,
   REQUETES_SUIVIES,
+  resumerComplements,
   resumerDisjoncteurs,
   resumerMesures,
   resumerPlacesRendues,
@@ -171,6 +173,11 @@ async function counters(args: string[]): Promise<void> {
     return disjoncteur ? [disjoncteur] : [];
   });
   console.log(`  Disjoncteur de la recherche par image : ${resumerDisjoncteurs(disjoncteurs)}`);
+  const complements = lignes.flatMap((entree) => {
+    const complement = extraireComplement(entree.message);
+    return complement ? [complement] : [];
+  });
+  console.log(`  Compléments de la voie C (écrits par le serveur) : ${resumerComplements(complements)}`);
   // --chronologie : l'ordre des événements, heure de Paris (jamais d'identifiant, d'adresse ni de contenu).
   if (!args.includes("--chronologie")) return;
   console.log("  Ordre des événements (heure de Paris) :");

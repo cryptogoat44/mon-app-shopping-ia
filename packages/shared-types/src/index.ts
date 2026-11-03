@@ -142,6 +142,10 @@ export interface ProductMatch {
   /** Motif choisi si la personne a signalé cette proposition comme
    * incohérente (bouton « Résultat incohérent »), sinon null. */
   feedbackReason: MatchFeedbackReason | null;
+  /** Voie C (lot c) : d'où vient la proposition. Absente = « lens » — le
+   * serveur ne l'envoie que pour « shopping » et « words », et un ancien
+   * serveur ne l'envoie jamais. */
+  origin?: MatchOrigin;
 }
 
 // ---- Bouton « Résultat incohérent » (fiabilité des résultats, 2026-10-15) ----
@@ -180,6 +184,25 @@ export interface ProductSearch {
    * nom contient un des mots tapés sous la photo ont été remontées en tête.
    * Les mots ne sont pas enregistrés : une recherche relue n'en dit rien. */
   sortedByWords?: boolean;
+  /** Voie C (lot c) : absent quand elle n'a pas tourné sur cette recherche
+   * (interrupteur coupé, recherche plus ancienne, ancien serveur). Les
+   * propositions du complément sont dans `matches`, avec leur `origin`. */
+  complement?: SearchComplement;
+}
+
+/** Complément d'une recherche (voie C, lot c). */
+export interface SearchComplement {
+  /** Issue du complément ; null quand il n'a pas tourné sur cette recherche. */
+  status: ComplementStatus | null;
+  /** Requête envoyée à la recherche Shopping : réponse du lancement
+   * seulement, jamais enregistrée — une recherche relue n'en dit rien. */
+  query?: string;
+  /** Proposer « Que cherchez-vous ? » (voie B) : enregistré par le serveur
+   * (text_suggested), et faux dès que la recherche par mots a été lancée.
+   * L'invitation survit donc à un rechargement et à l'historique. */
+  suggestText: boolean;
+  /** Issue de la recherche par mots ; null tant qu'elle n'a pas été lancée. */
+  textStatus: TextSearchStatus | null;
 }
 
 /** Zone choisie par l'utilisateur sur l'image, en proportions (0 à 1) de
@@ -325,6 +348,26 @@ export const SEARCH_FAILURE_MESSAGES = {
 export interface CreateSearchRequest {
   sourceUrl?: string;
 }
+
+/** Corps de POST /api/searches/:id/text (voie B, lot c) : une recherche
+ * Google Shopping avec les mots de la personne, ajoutée à la MÊME recherche,
+ * une seule fois. `words` : SEARCH_QUERY_MAX_LENGTH caractères au plus. Les
+ * mots ne sont ni enregistrés, ni journalisés, ni mis en cache. */
+export interface RunTextSearchRequest {
+  words: string;
+}
+
+/** Refus propres à la recherche par mots (le plafond des recherches garde
+ * ses codes, SEARCH_CAPACITY_ERRORS) :
+ * - alreadyUsed : déjà lancée pour cette recherche (409) — l'app retire
+ *   l'invitation ;
+ * - unavailable : fonction coupée sur le serveur (404) ;
+ * - notAllowed : recherche non admissible, ou budget de la photo épuisé (409). */
+export const TEXT_SEARCH_ERRORS = {
+  alreadyUsed: "text_search_already_used",
+  unavailable: "text_search_unavailable",
+  notAllowed: "text_search_not_allowed",
+} as const;
 
 export interface ProductMatchClickResponse {
   url: string;

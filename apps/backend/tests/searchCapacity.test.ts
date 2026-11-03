@@ -1,9 +1,9 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { env } from "../src/env.js";
-import { capacityLogFields, QUOTA_ROWS, reserveSearch, searchCapacityForVideoAi } from "../src/lib/searchCapacity.js";
+import { capacityLogFields, QUOTA_ROWS, reserveSearch, searchCapacityBeforeComplementAi, searchCapacityForVideoAi } from "../src/lib/searchCapacity.js";
 import { buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
 
 // Lot 4 quater : les fonctions serpapi_cycle_start, serpapi_quota et
@@ -421,6 +421,59 @@ describe("plafond des recherches SerpApi (fonctions de la base, lot 4 quater)", 
       expect(await quota(at, { daily: 100, monthly: 100, user: 5 }, { reserve: false })).toMatchObject({ user_day_count: 2 });
       // Ni pour une autre personne.
       expect(await quota(at, { daily: 100, monthly: 100, user: 5 }, { reserve: false, userId: other.id })).toMatchObject({ user_day_count: 0 });
+    });
+  });
+
+  // Voie C (lot c, migration 0028) : les plafonds du jour et du mois comptent
+  // des APPELS, la part de la personne compte des PHOTOS (lignes de
+  // recherche), hors recherches servies par le cache. À lancer sur le Mac,
+  // contre spotto-dev-2, après 0028.
+  describe("voie C : appels et photos (0028)", () => {
+    it("une recherche servie par le cache (aucun appel réel) ne compte pas dans la part de la personne", async () => {
+      const at = slotDate(17, 10);
+      for (const status of ["completed", "completed"] as const) await searchAt(after(at, -HOUR), status);
+      const served = await searchAt(after(at, -HOUR), "completed");
+      const { error } = await app.supabaseAdmin.from("product_searches").update({ lens_from_cache: true, served_from_cache: true }).eq("id", served);
+      expect(error).toBeNull();
+      // Lens venu du cache mais Google Shopping appelé : une vraie recherche, comptée.
+      const partly = await searchAt(after(at, -HOUR), "completed");
+      expect((await app.supabaseAdmin.from("product_searches").update({ lens_from_cache: true, shopping_calls: 1 }).eq("id", partly)).error).toBeNull();
+      expect(await quota(at, { daily: 100, monthly: 100, user: 5 }, { reserve: false })).toMatchObject({ user_day_count: 3 });
+      // Servie par le cache sans Lens venu du cache : refusé par la base.
+      const { error: refused } = await app.supabaseAdmin.from("product_searches").update({ lens_from_cache: false, served_from_cache: true }).eq("id", served);
+      expect(refused).not.toBeNull();
+    });
+
+    it("deux réservations pour la même recherche (Lens, puis Google Shopping) : 2 appels dans le jour et le mois, 1 photo dans la part", async () => {
+      const at = slotDate(18, 10);
+      const current = await searchAt(after(at, -MINUTE), "processing");
+      expect(await quota(at, { daily: 100, monthly: 100, user: 5 }, { exclude: current })).toMatchObject({ allowed: true, day_count: 1, month_count: 1, user_day_count: 1 });
+      expect(await quota(after(at, MINUTE), { daily: 100, monthly: 100, user: 5 }, { exclude: current })).toMatchObject({ allowed: true, day_count: 2, month_count: 2, user_day_count: 1 });
+      expect(await rowsBetween(after(at, -MINUTE), after(at, 2 * MINUTE))).toHaveLength(2);
+      // Lue ensuite par une autre recherche de la personne : 2 appels, 1 photo.
+      expect(await quota(after(at, 2 * MINUTE), { daily: 100, monthly: 100, user: 5 }, { reserve: false })).toMatchObject({ day_count: 2, month_count: 2, user_day_count: 1 });
+    });
+
+    it("le serveur (maintenant) : place réservée pour Lens puis pour Google Shopping (étape « shopping »), simple lecture avant l'IA ; la recherche en cours reste hors de la part ; journal : l'étape et des nombres", async () => {
+      const saved = { daily: env.SERPAPI_DAILY_CAP, monthly: env.SERPAPI_MONTHLY_CAP, user: env.SERPAPI_USER_DAILY_CAP };
+      Object.assign(env, { SERPAPI_DAILY_CAP: 1_000_000, SERPAPI_MONTHLY_CAP: 1_000_000, SERPAPI_USER_DAILY_CAP: 1 });
+      const start = new Date(Date.now() - MINUTE);
+      const journal = vi.spyOn(app.log, "info");
+      try {
+        const current = await searchAt(new Date(), "processing", other);
+        expect(await reserveSearch(app, app.log, other.id, current)).toEqual({ allowed: true, reservationId: expect.any(Number) });
+        expect(await searchCapacityBeforeComplementAi(app, app.log, other.id, current)).toEqual({ allowed: true });
+        expect(await reserveSearch(app, app.log, other.id, current, "shopping")).toEqual({ allowed: true, reservationId: expect.any(Number) });
+        expect(await rowsBetween(start, new Date(Date.now() + MINUTE))).toHaveLength(2);
+        const steps = journal.mock.calls.filter((call) => call[1] === "Plafond recherches").map((call) => (call[0] as { step: string }).step);
+        expect(steps).toEqual(["search", "shopping"]);
+        const texte = JSON.stringify(journal.mock.calls);
+        for (const interdit of [other.id, current]) expect(texte).not.toContain(interdit);
+      } finally {
+        journal.mockRestore();
+        Object.assign(env, { SERPAPI_DAILY_CAP: saved.daily, SERPAPI_MONTHLY_CAP: saved.monthly, SERPAPI_USER_DAILY_CAP: saved.user });
+        await app.supabaseAdmin.from("serpapi_calls").delete().gte("called_at", start.toISOString());
+      }
     });
   });
 });

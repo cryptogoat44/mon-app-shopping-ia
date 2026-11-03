@@ -10,6 +10,12 @@
 // Depuis 0027 : la place d'un refus annoncé par le fournisseur (non facturé)
 // est rendue (serpapi_release). La table, les fonctions et les variables
 // gardent le nom de SerpApi : leurs valeurs ne valent que pour son offre.
+// Voie C (lot c, 2026-11-02) : chaque appel réel réserve sa place, Lens
+// (étape « search ») comme Google Shopping (étape « shopping ») ; les
+// plafonds du jour et du mois comptent des APPELS, la part de chaque personne
+// compte des PHOTOS (lignes de recherche, hors recherches servies par le
+// cache, migration 0028). Avant l'IA de la voie C, une simple lecture
+// (étape « complement_ai »), jamais un 429.
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import { SEARCH_CAPACITY_ERRORS, type SearchCapacityErrorBody, type SearchCapacityLimit, type SearchCapacityReached } from "@monapp/shared-types";
@@ -73,9 +79,17 @@ const CAPS_PROVIDER = "serpapi";
 /** « Plafond recherches » depuis 0027 (« Plafond SerpApi » avant) : compteurs-ia lit les deux. */
 export const CAPACITY_LOG_MESSAGE = "Plafond recherches";
 
+/** Étape qui consulte le plafond. « search » (Lens) et « shopping » (Google
+ * Shopping, voie C) réservent une place juste avant l'appel ; « video_ai » et
+ * « complement_ai » lisent seulement, avant une dépense d'IA inutile si
+ * aucune recherche ne peut suivre. */
+export type CapacityStep = "search" | "video_ai" | "complement_ai" | "shopping";
+/** Étapes qui réservent une place (un appel réel au fournisseur). */
+export type ReservingStep = Extract<CapacityStep, "search" | "shopping">;
+
 /** Champs de la ligne de journal « Plafond recherches », lue par compteurs-ia :
  * des nombres et des états, jamais de compte, d'adresse ni de contenu. */
-export function capacityLogFields(step: "search" | "video_ai", row: QuotaRow, caps: SearchCaps) {
+export function capacityLogFields(step: CapacityStep, row: QuotaRow, caps: SearchCaps) {
   return {
     provider: CAPS_PROVIDER,
     step,
@@ -92,10 +106,11 @@ export function capacityLogFields(step: "search" | "video_ai", row: QuotaRow, ca
 }
 
 interface QuotaRequest {
-  /** « search » : réserve un appel, juste avant de l'envoyer. « video_ai » :
-   * simple lecture, avant d'envoyer des images à l'IA — inutile (et payante)
-   * si aucune recherche ne peut suivre. */
-  step: "search" | "video_ai";
+  /** « search » et « shopping » : réserve un appel, juste avant de l'envoyer.
+   * « video_ai » et « complement_ai » : simple lecture, avant d'envoyer des
+   * images ou des titres à l'IA — inutile (et payante) si aucune recherche ne
+   * peut suivre. */
+  step: CapacityStep;
   userId: string;
   /** Recherche en cours de lancement (déjà « en cours ») : hors du compte de la personne. */
   searchId?: string;
@@ -103,7 +118,7 @@ interface QuotaRequest {
 
 async function readQuota(fastify: FastifyInstance, log: FastifyBaseLogger, request: QuotaRequest): Promise<QuotaRow> {
   const caps = searchCaps();
-  const reserve = request.step === "search";
+  const reserve = request.step === "search" || request.step === "shopping";
   const { data, error } = await fastify.supabaseAdmin.rpc("serpapi_quota", {
     p_daily_cap: caps.daily,
     p_monthly_cap: caps.monthly,
@@ -127,9 +142,18 @@ function reachedBy(row: QuotaRow & { allowed: false }): CapacityReached {
   return { allowed: false, limit: row.refused_by, resumesOn: row.refused_by === "month" ? row.next_renewal : null };
 }
 
-/** Juste avant un appel au fournisseur : une place réservée (avec son numéro), ou le refus (plafond atteint). */
-export async function reserveSearch(fastify: FastifyInstance, log: FastifyBaseLogger, userId: string, searchId: string): Promise<SearchReservation> {
-  const row = await readQuota(fastify, log, { step: "search", userId, searchId });
+/** Juste avant un appel au fournisseur : une place réservée (avec son numéro), ou le refus (plafond atteint).
+ * `step` : « search » pour Lens (par défaut), « shopping » pour Google Shopping
+ * (voie C) — la recherche en cours reste hors de la part de la personne : la
+ * voie B n'est pas une nouvelle photo. */
+export async function reserveSearch(
+  fastify: FastifyInstance,
+  log: FastifyBaseLogger,
+  userId: string,
+  searchId: string,
+  step: ReservingStep = "search"
+): Promise<SearchReservation> {
+  const row = await readQuota(fastify, log, { step, userId, searchId });
   if (!row.allowed) return reachedBy(row);
   if (row.reservation_id === null) {
     log.error("Place réservée sans numéro");
@@ -144,6 +168,14 @@ export async function searchCapacityForVideoAi(fastify: FastifyInstance, log: Fa
   return row.allowed ? { allowed: true } : reachedBy(row);
 }
 
+/** Avant l'IA de la voie C : lecture seule, rien n'est réservé ; la recherche
+ * en cours est hors de la part de la personne. Refusé : l'IA est sautée
+ * (issue no_capacity), jamais de 429 : les résultats Lens sont montrés seuls. */
+export async function searchCapacityBeforeComplementAi(fastify: FastifyInstance, log: FastifyBaseLogger, userId: string, searchId: string): Promise<SearchCapacity> {
+  const row = await readQuota(fastify, log, { step: "complement_ai", userId, searchId });
+  return row.allowed ? { allowed: true } : reachedBy(row);
+}
+
 /** Ligne « Place rendue » (0027), lue par compteurs-ia : le fournisseur et
  * l'issue du retour, jamais de compte ni de numéro de place. */
 export const RELEASE_LOG_MESSAGE = "Place rendue";
@@ -151,13 +183,19 @@ export const RELEASE_LOG_MESSAGE = "Place rendue";
 /** Refus annoncé par le fournisseur (non facturé) : rend la place réservée
  * pour cette recherche, dans le plafond du jour et dans celui du mois. false :
  * non rendue (base injoignable, place inconnue ou déjà rendue) ; elle reste
- * alors comptée, par prudence. */
-export async function releaseReservation(fastify: FastifyInstance, log: FastifyBaseLogger, reservationId: number): Promise<boolean> {
+ * alors comptée, par prudence. `step` : l'étape qui avait réservé (« search »
+ * pour Lens, par défaut ; « shopping » pour Google Shopping). */
+export async function releaseReservation(
+  fastify: FastifyInstance,
+  log: FastifyBaseLogger,
+  reservationId: number,
+  step: ReservingStep = "search"
+): Promise<boolean> {
   const { data, error } = await fastify.supabaseAdmin.rpc("serpapi_release", { p_id: reservationId });
   const released = z.boolean().safeParse(data);
   const ok = !error && released.success && released.data;
   if (error || !released.success) log.error({ error }, "Place non rendue : retour illisible");
-  fastify.log.info({ provider: CAPS_PROVIDER, step: "search", released: ok }, RELEASE_LOG_MESSAGE);
+  fastify.log.info({ provider: CAPS_PROVIDER, step, released: ok }, RELEASE_LOG_MESSAGE);
   return ok;
 }
 

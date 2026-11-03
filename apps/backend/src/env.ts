@@ -25,6 +25,36 @@ const envSchema = z.object({
   // d'Anthropic, saisie par le fondateur dans Render. Absente : la fonction se
   // désactive proprement et l'app propose le curseur manuel.
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  // Interrupteurs de la voie C (lot c, 2026-11-02), COUPÉS par défaut. Seule
+  // la valeur exacte "true" en allume un ; toute autre valeur (absente,
+  // « TRUE », « 1 », « true » suivi d'une espace…) le laisse coupé, sans
+  // jamais arrêter le serveur : une faute de frappe dans Render ne doit pas
+  // couper toute l'API. Jamais z.coerce.boolean (il lit "false" comme vrai),
+  // jamais une liste stricte (elle ferait échouer le démarrage).
+  // Lus seulement par lib/aiSwitches.ts. Hors de la liste des variables
+  // modifiables par les outils (render-guard) : le fondateur seul les change,
+  // à la main, dans le tableau de bord de Render.
+  // - VOIE_C_ENABLED : toute la voie C (complément « boutiques » et « Que
+  //   cherchez-vous ? »).
+  VOIE_C_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "true"),
+  // - VOIE_C_AI_ENABLED : l'étape IA (requête écrite à partir des titres
+  //   Lens, texte seulement), tant que ses consignes ne sont pas validées ;
+  //   demande aussi ANTHROPIC_API_KEY.
+  VOIE_C_AI_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "true"),
+  // - ANTHROPIC_PHOTO_ENABLED : envoi d'une photo d'un utilisateur à
+  //   Anthropic. Coupé : tout bloc image est refusé avant l'appel de la voie C
+  //   (lib/aiSwitches.ts, assertNoUserImage). Ne couvre PAS l'analyse des
+  //   vidéos existante (consentement analyse_video_ia).
+  ANTHROPIC_PHOTO_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "true"),
   // Non requis à l'exécution (jamais utilisée par le serveur lui-même) —
   // seulement par les tests, pour se connecter en tant qu'utilisateur de
   // test via mot de passe. Clé publique, sans risque à exiger.

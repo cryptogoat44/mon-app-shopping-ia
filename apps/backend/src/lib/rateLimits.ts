@@ -22,11 +22,17 @@ const DAY = 24 * HOUR;
 export const RATE_LIMITS = {
   // ---- Limites strictes : actions coûteuses ou sensibles à l'abus ----
 
-  // Identification visuelle : seuls les appels SerpApi réellement envoyés
-  // (1 crédit chacun) comptent. Une préparation, un lancement refusé (image
-  // illisible, recherche déjà lancée…) ou annulé avant l'appel ne comptent
-  // pas (voir `rateLimitCheck` / `countRateLimitHit`).
+  // Identification visuelle : seuls les lancements avec au moins un appel
+  // réel (Lens, boutiques ou vos mots) comptent, une fois par lancement, et
+  // une fois par recherche avec vos mots (voie C). Une préparation, un
+  // lancement refusé (image illisible, recherche déjà lancée…), annulé avant
+  // l'appel ou servi entièrement par le cache ne comptent pas (voir
+  // `rateLimitCheck` / `countRateLimitHit`).
   searchCreate: { max: 10, windowMs: HOUR },
+  // Voie C (lot c, 2026-11-02) : lancements servis entièrement par le cache
+  // (aucun appel, donc hors des plafonds) : chacun écrit encore une recherche
+  // et ses propositions. Au-delà : 429, comme toute limite.
+  searchCacheServed: { max: 30, windowMs: HOUR },
   // Signalement d'un utilisateur ou d'une publication.
   report: { max: 20, windowMs: HOUR },
   // Abonnement à un autre utilisateur — limite un usage abusif type bot de
@@ -78,6 +84,12 @@ export const RATE_LIMITS = {
     error: "video_ai_global_limit",
     message: "L'analyse automatique est très demandée aujourd'hui et momentanément indisponible. Choisissez l'image avec le curseur.",
   },
+  // Requête des boutiques écrite par l'IA (voie C, titres Lens seulement,
+  // ≈ 0,25 centime l'appel) : plafond commun à tout le service, compté juste
+  // avant l'appel (`consumeRateLimit`). Atteint : l'IA est sautée, les
+  // résultats Lens sont montrés seuls — jamais de 429. Compteur en mémoire :
+  // le vrai plafond financier reste la limite de dépense du compte Anthropic.
+  shoppingQueryAiGlobal: { max: 300, windowMs: DAY, scope: "global" },
 
   // ---- Limite large, appliquée automatiquement à toutes les autres routes ----
   // Sert de simple filet anti-script — je préfère être trop permissif que

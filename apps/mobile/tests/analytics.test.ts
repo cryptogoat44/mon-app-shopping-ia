@@ -112,3 +112,38 @@ describe("partage d'une envie (lot 5) : propriétés fermées", () => {
   });
 });
 
+
+describe("voie C (lot c) : complément et recherche par les mots, propriétés fermées", () => {
+  it("spot_completed : l'issue du complément et son nombre, jamais la requête", () => {
+    expect(
+      sanitizeProps("spot_completed", { outcome: "results", results_count: 12, complement: "shown", complement_count: 8, query: "veste daim marron" })
+    ).toEqual({ outcome: "results", results_count: 12, complement: "shown", complement_count: 8 });
+    // Complément qui n'a pas tourné : « none ».
+    expect(sanitizeProps("spot_completed", { outcome: "results", results_count: 3, complement: "none", complement_count: 0 })).toEqual({
+      outcome: "results",
+      results_count: 3,
+      complement: "none",
+      complement_count: 0,
+    });
+    // Une valeur hors liste est retirée : jamais un texte à la place de l'issue.
+    expect(sanitizeProps("spot_completed", { outcome: "results", results_count: 3, complement: "veste daim marron" })).toEqual({ outcome: "results", results_count: 3 });
+  });
+
+  it("recherche par les mots : le lancement sans rien, puis l'issue et un nombre — jamais les mots", () => {
+    expect(sanitizeProps("text_search_launched", { words: "veste daim marron", searchId: "s-1" })).toEqual({});
+    expect(sanitizeProps("text_search_completed", { outcome: "shown", results_count: 4.2, words: "veste daim marron", query: "veste daim" })).toEqual({
+      outcome: "shown",
+      results_count: 4,
+    });
+    expect(sanitizeProps("text_search_completed", { outcome: "failed", results_count: 0 })).toEqual({ outcome: "failed", results_count: 0 });
+    expect(sanitizeProps("text_search_completed", { outcome: "veste daim marron" })).toEqual({});
+  });
+
+  it("les nouvelles propriétés sont des listes de valeurs ou des nombres", () => {
+    expect(ANALYTICS_EVENTS.spot_completed.complement.kind).toBe("enum");
+    expect(ANALYTICS_EVENTS.spot_completed.complement_count.kind).toBe("count");
+    expect(ANALYTICS_EVENTS.text_search_completed.outcome.kind).toBe("enum");
+    expect(ANALYTICS_EVENTS.text_search_completed.results_count.kind).toBe("count");
+    expect(Object.keys(ANALYTICS_EVENTS.text_search_launched)).toEqual([]);
+  });
+});
