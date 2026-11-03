@@ -500,6 +500,8 @@ function FailureView({
     capacity_day: [t.result.capacityDayTitle, t.result.capacityDayTip],
     capacity_month: [t.result.capacityMonthTitle, capacityMonthTip(resumesOn, getActiveLocale())],
     capacity_user: [t.result.capacityUserTitle, t.result.capacityUserTip],
+    // Recherche relue encore en cours (lot recherche coupée) : jamais « rien trouvé ».
+    running: [t.searchRecovery.runningTitle, t.searchRecovery.runningTip],
   }[reason];
 
   return (

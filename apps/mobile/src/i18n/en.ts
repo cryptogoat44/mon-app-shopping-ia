@@ -280,6 +280,20 @@ export const en: Catalog = {
     slow: "This is taking longer than usual: the service may be restarting. Thank you for your patience.",
     cancel: "Cancel",
   },
+  searchRecovery: {
+    notStartedTitle: "Your search didn't go out",
+    notStartedText: "It was interrupted before the image was analyzed and hasn't been counted. Launch it again whenever you like.",
+    unreachableTitle: "Your search may still be running",
+    unreachableText:
+      "Spotto isn't responding right now. If your search went out, it carries on on our side: check again in a moment to see its result, without launching anything again.",
+    runningTitle: "Your search is still running…",
+    stillRunningText: "It's taking longer than usual. Check again in a moment to see its result, without launching anything again.",
+    runningTip: "If it goes through, its result will appear in “Recently spotted”, on the Spotter home screen.",
+    relaunch: "Launch again",
+    checkAgain: "Check again",
+    cancelled:
+      "Search cancelled. It may have carried on on our side: launch it again without changing the frame or the words, and its result will appear if it's already there.",
+  },
   result: {
     title: "Results",
     reframe: "Reframe",
@@ -323,7 +337,7 @@ export const en: Catalog = {
     noPriceText:
       "These are pieces that look like yours, found by our visual search. They are not necessarily for sale: open them to check, or try another frame.",
     technicalTitle: "The search didn't go through",
-    technicalTip: "The recognition service didn't respond. Check your connection, then try again.",
+    technicalTip: "The search service didn't respond. Try again in a moment.",
     rateLimitedTitle: "Too many searches at once",
     rateLimitedTip: "You've reached the limit of 10 identifications per hour. Please try again a little later.",
     capacityDayTitle: "The search service is in very high demand today.",
