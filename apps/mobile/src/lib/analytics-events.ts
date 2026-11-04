@@ -38,9 +38,15 @@ export const ANALYTICS_EVENTS = {
   text_search_launched: {},
   text_search_completed: { outcome: oneOf([...TEXT_SEARCH_STATUSES, "failed"]), results_count: count },
   similar_results_opened: {},
+  // Prix d'abord (2026-11-03) : section repliée « Sans prix » ouverte, avec son nombre de propositions.
+  no_price_results_opened: { results_count: count },
   wishlist_item_added: { context: oneOf(["result"]) },
   vault_item_added: { source: oneOf(["spotter", "photo"]), category: oneOf(["clothing", "watches", "accessories", "shoes", "bags", "home", "other"]) },
-  merchant_link_opened: { context: oneOf(MERCHANT_LINK_CONTEXTS) },
+  // Prix d'abord (2026-11-03), écran Résultat seulement (lib/price-first.ts) :
+  // rang d'origine (ordre du serveur, inchangé), place affichée (ordre « prix
+  // d'abord », 1 = la grande carte proposée d'office) et section repliée
+  // « Sans prix ». Ailleurs (Envies, Vault, publication…) : le contexte seul.
+  merchant_link_opened: { context: oneOf(MERCHANT_LINK_CONTEXTS), rank: count, displayed_position: count, in_no_price_section: bool },
   post_published: { type: oneOf(["lifestyle", "purchase"]), visibility: VISIBILITY, tagged_count: count },
   post_visibility_changed: { visibility: VISIBILITY },
   post_shared: { method: oneOf(["native", "copy"]) },

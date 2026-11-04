@@ -16,7 +16,8 @@ import type { Piece, SpotFailReason, SpotResult } from "@/api/types";
 import { addVaultItemFromMatch } from "@/lib/api";
 import { openMerchantLink } from "@/lib/merchant-links";
 import { chooseInitialResult, noPriceShown, pieceTitle, withoutTextPrompt, withTextSearch, type InitialResultState } from "@/lib/spot-result";
-import { allPieces, merchantContextFor, opensOfferPage, otherPiecesBySection } from "@/lib/result-sections";
+import { allPieces, merchantContextFor, opensOfferPage } from "@/lib/result-sections";
+import { bestProposalIndex, clickPlacements, noPriceAnywhere, priceFirstSections } from "@/lib/price-first";
 import { getDraft } from "@/lib/spot-draft";
 import { failureCorrections, successCorrections, type Correction } from "@/lib/spot-corrections";
 import { withIds } from "@/lib/owned-marks";
@@ -33,6 +34,7 @@ import { ReportedLine, ResultFeedbackButton, ResultFeedbackSheet } from "@/compo
 import { ResultComplement, textSearchStatusNote } from "@/components/result-complement";
 import { TextSearchAlreadyUsed, TextSearchPrompt } from "@/components/text-search-prompt";
 import { ProposalCard } from "@/components/proposal-card";
+import { NoPriceSection } from "@/components/no-price-section";
 import { YourPiece } from "@/components/your-piece";
 import { yourPieceImage } from "@/lib/your-piece";
 import { useHeroReveal } from "@/lib/use-hero-reveal";
@@ -60,7 +62,9 @@ export default function ResultScreen() {
   // fois, elle est oubliée (ses mentions propres au lancement sont gardées à
   // part). Tout retour sur cet écran relit donc la recherche sur le serveur.
   const fromLaunch = useRef(state.kind === "ready");
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  // Proposition mise en grand par la personne ; null tant qu'elle n'en a
+  // choisi aucune : la grande carte suit alors l'ordre « prix d'abord ».
+  const [chosenIndex, setChosenIndex] = useState<number | null>(null);
   const [kept, setKept] = useState<Set<string>>(new Set());
   // Ajout aux Envies confirmé par le serveur : « Ajoutée à vos Envies · Voir mes Envies » (lot « premier essai »).
   const [keptSaved, setKeptSaved] = useState<Set<string>>(new Set());
@@ -85,7 +89,11 @@ export default function ResultScreen() {
 
   const result = state.kind === "ready" ? state.result : null;
   // Voie C (lot c) : l'indice désigne toutes les propositions de l'écran —
-  // recherche visuelle d'abord, puis les sections du complément.
+  // recherche visuelle d'abord, puis les sections du complément. Prix
+  // d'abord : sans choix de la personne, la grande carte est la mieux classée
+  // avec un prix (lib/price-first.ts).
+  const bestIndex = result ? bestProposalIndex(result) : 0;
+  const selectedIndex = chosenIndex ?? bestIndex;
   const piece = result ? (allPieces(result)[selectedIndex] ?? null) : null;
 
   // Résultat absent de la mémoire (rouvert depuis « Récemment spottées »,
@@ -142,7 +150,8 @@ export default function ResultScreen() {
     const url = piece?.affiliateUrl ?? piece?.merchantUrl;
     if (!piece || !url) return;
     setBlockedMerchantUrl(null);
-    const outcome = await openMerchantLink({ matchId: piece.real ? piece.id : null, url, context: merchantContextFor(piece) });
+    const placement = result ? clickPlacements(result).get(selectedIndex) : undefined;
+    const outcome = await openMerchantLink({ matchId: piece.real ? piece.id : null, url, context: merchantContextFor(piece), placement });
     if (outcome.blocked) setBlockedMerchantUrl(outcome.url ?? url);
   }
 
@@ -218,7 +227,7 @@ export default function ResultScreen() {
   }
 
   function selectPiece(index: number) {
-    setSelectedIndex(index);
+    setChosenIndex(index);
     setBlockedMerchantUrl(null);
     setActionError(null);
     // Comparer sans remonter : la page reste où elle est, sauf si la grande
@@ -313,8 +322,12 @@ export default function ResultScreen() {
 
   const successList = successCorrections(corrections.context);
   const reported = feedbackOverrides.has(piece.id) ? (feedbackOverrides.get(piece.id) ?? null) : (piece.feedbackReason ?? null);
-  const sections = otherPiecesBySection(result, selectedIndex);
-  const others = sections.lens;
+  // Prix d'abord (lib/price-first.ts) : « Autres propositions » avec un prix,
+  // le complément, puis la section repliée « Sans prix » ; tout comme avant
+  // quand rien n'a de prix. Chaque clic garde son rang d'origine.
+  const sections = priceFirstSections(result, selectedIndex);
+  const placements = clickPlacements(result);
+  const others = sections.others;
   // 11 autres propositions d'emblée (la meilleure + 11 = 12 images à
   // charger), le reste — jusqu'à 40 au total avec la règle des prix — sur demande.
   const visibleOthers = showAllOthers ? others : others.slice(0, OTHERS_SHOWN_FIRST);
@@ -333,17 +346,18 @@ export default function ResultScreen() {
         scrollEventThrottle={32}
         onLayout={heroReveal.onViewportLayout}
       >
-        {/* Voie C : le décompte, le tri et l'absence de prix parlent de la recherche visuelle seule. */}
+        {/* Voie C : le décompte, le tri et l'absence de prix parlent de la recherche visuelle seule.
+            Prix d'abord : « aucun prix » seulement quand rien n'a de prix, nulle part (sinon elles sont repliées en bas). */}
         {result.pieces.length > 0 ? <Text style={styles.count}>{t.result.count(result.pieces.length, result.query)}</Text> : null}
         {result.sortedByWords ? <Text style={styles.count}>{t.result.sortedByWords}</Text> : null}
-        {noPriceShown(result.pieces) ? <NoPriceNotice /> : null}
+        {noPriceShown(result.pieces) && noPriceAnywhere(result) ? <NoPriceNotice /> : null}
 
         {yourPiece ? <YourPiece image={yourPiece} /> : null}
         <View style={styles.hero} onLayout={heroReveal.onHeroLayout}>
           <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} accessibilityLabel={piece.name} />
         </View>
 
-        <Text style={styles.rankLabel}>{selectedIndex === 0 ? t.result.bestProposal : t.result.otherProposal}</Text>
+        <Text style={styles.rankLabel}>{selectedIndex === bestIndex ? t.result.bestProposal : t.result.otherProposal}</Text>
         <Text style={styles.name} accessibilityRole="header">
           {piece.name}
         </Text>
@@ -412,7 +426,7 @@ export default function ResultScreen() {
             <View style={styles.grid}>
               {/* Cartes (image, nom, boutique, prix, « Voir chez … ») : components/proposal-card.tsx. */}
               {visibleOthers.map(({ piece: p, index }) => (
-                <ProposalCard key={p.id} piece={p} onSelect={() => selectPiece(index)} />
+                <ProposalCard key={p.id} piece={p} onSelect={() => selectPiece(index)} placement={placements.get(index)} />
               ))}
             </View>
             {hiddenCount > 0 ? (
@@ -430,9 +444,12 @@ export default function ResultScreen() {
           </>
         ) : null}
 
-        {/* Voie C (lot c) : le complément, sous la recherche visuelle — jamais à sa place. */}
-        <ResultComplement source="ai" others={sections.shopping} query={result.complement?.query} onSelect={selectPiece} />
-        <ResultComplement source="words" others={sections.words} textStatus={result.complement?.textStatus} onSelect={selectPiece} />
+        {/* Voie C (lot c) : le complément, sous « Autres propositions » — jamais à leur place. Prix d'abord : la
+            grande carte n'en vient que si aucune proposition de la recherche visuelle n'a de prix. */}
+        <ResultComplement source="ai" others={sections.shopping} query={result.complement?.query} onSelect={selectPiece} placements={placements} />
+        <ResultComplement source="words" others={sections.words} textStatus={result.complement?.textStatus} onSelect={selectPiece} placements={placements} />
+        {/* Prix d'abord : les propositions sans prix en dernier, repliées ; « Que cherchez-vous ? » reste tout en bas (clavier). */}
+        <NoPriceSection pieces={sections.withoutPrice} onSelect={selectPiece} placements={placements} />
         {textSearch(true)}
       </ScrollView>
 

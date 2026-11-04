@@ -403,6 +403,13 @@ export const en: Catalog = {
     // Ends on circling, no longer on a frame. To be validated (à valider).
     noPriceText:
       "These are pieces that look like yours, found by our visual search. They are not necessarily for sale: open them to check, or circle the piece differently.",
+    // "Price first" (founder's decision of 2026-11-03): suggestions without a price
+    // are tucked away last, behind a button. To be validated (à valider).
+    showWithoutPrice: (n: number) => (n > 1 ? `Show ${n} suggestions without a price` : "Show the suggestion without a price"),
+    hideWithoutPrice: (n: number) => (n > 1 ? "Hide suggestions without a price" : "Hide the suggestion without a price"),
+    // VoiceOver, after the button: the list appears or disappears below it (to be validated).
+    withoutPriceShown: (n: number) => (n > 1 ? `${n} suggestions without a price, shown below.` : "The suggestion without a price is shown below."),
+    withoutPriceHidden: (n: number) => (n > 1 ? "Suggestions without a price hidden." : "Suggestion without a price hidden."),
     technicalTitle: "The search didn't go through",
     technicalTip: "The search service didn't respond. Try again in a moment.",
     rateLimitedTitle: "Too many searches at once",

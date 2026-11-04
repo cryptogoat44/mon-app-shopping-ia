@@ -7,6 +7,7 @@ import { getActiveLocale, t } from "@/i18n";
 import { formatPrice } from "@/lib/format";
 import { openMerchantLink } from "@/lib/merchant-links";
 import { merchantContextFor, opensOfferPage } from "@/lib/result-sections";
+import type { ClickPlacement } from "@/lib/price-first";
 import { SpotImage } from "@/components/spot-image";
 import { ForeignShopNote } from "@/components/foreign-shop-note";
 import { themedStyles } from "@/theme/themed-styles";
@@ -19,8 +20,9 @@ import { themedStyles } from "@/theme/themed-styles";
 // l'autre, et le site garde des éléments cliquables valides.
 
 /** Toucher l'image ou le nom montre la proposition en grand ; le lien, juste
- * dessous, ouvre la boutique. */
-export function ProposalCard({ piece, onSelect }: { piece: Piece; onSelect: () => void }) {
+ * dessous, ouvre la boutique. `placement` : sa place à l'écran, pour les
+ * statistiques du clic (prix d'abord, lib/price-first.ts). */
+export function ProposalCard({ piece, onSelect, placement }: { piece: Piece; onSelect: () => void; placement?: ClickPlacement }) {
   const price = piece.priceFrom !== null ? formatPrice(piece.priceFrom, piece.currency, getActiveLocale()) : null;
   return (
     <View style={styles.card}>
@@ -42,7 +44,7 @@ export function ProposalCard({ piece, onSelect }: { piece: Piece; onSelect: () =
         {/* Lot premier essai : prix dans la devise d'un autre pays que celui de la recherche. */}
         <ForeignShopNote piece={piece} compact />
       </Pressable>
-      {piece.merchantUrl ? <ShopLink piece={piece} /> : null}
+      {piece.merchantUrl ? <ShopLink piece={piece} placement={placement} /> : null}
     </View>
   );
 }
@@ -51,7 +53,7 @@ export function ProposalCard({ piece, onSelect }: { piece: Piece; onSelect: () =
  * de passage unique (openMerchantLink : adresses web seulement, clic suivi).
  * Le lien de secours, si le navigateur bloque l'ouverture, est celui
  * qu'openMerchantLink renvoie, donc déjà vérifié. */
-function ShopLink({ piece }: { piece: Piece }) {
+function ShopLink({ piece, placement }: { piece: Piece; placement?: ClickPlacement }) {
   const [blockedUrl, setBlockedUrl] = useState<string | null>(null);
   const label = opensOfferPage(piece) ? t.result.viewOffer : t.result.viewAt(piece.merchantName ?? "");
   const isAffiliate = piece.affiliateUrl !== null && piece.affiliateUrl !== piece.merchantUrl;
@@ -60,7 +62,7 @@ function ShopLink({ piece }: { piece: Piece }) {
     const url = piece.affiliateUrl ?? piece.merchantUrl;
     if (!url) return;
     setBlockedUrl(null);
-    const outcome = await openMerchantLink({ matchId: piece.real ? piece.id : null, url, context: merchantContextFor(piece) });
+    const outcome = await openMerchantLink({ matchId: piece.real ? piece.id : null, url, context: merchantContextFor(piece), placement });
     if (outcome.blocked) setBlockedUrl(outcome.url);
   }
 
