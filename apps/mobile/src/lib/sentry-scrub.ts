@@ -7,6 +7,23 @@ import type { Breadcrumb as NativeBreadcrumb, ErrorEvent as NativeErrorEvent } f
 
 const withoutQuery = (url: string) => url.split("?")[0]!.split("#")[0]!;
 
+// Lot « lecteur intégré » : le lien d'une vidéo (lien court TikTok, lien de
+// partage Instagram) suivi par l'app ne doit pas partir dans une trace réseau :
+// seule l'origine de ces sites est gardée (contre-expertise n° 11).
+const VIDEO_SITES = ["tiktok.com", "instagram.com", "instagr.am", "facebook.com"];
+
+function scrubUrl(url: string): string {
+  const bare = withoutQuery(url);
+  try {
+    const parsed = new URL(bare);
+    const host = parsed.hostname.toLowerCase();
+    if (VIDEO_SITES.some((site) => host === site || host.endsWith(`.${site}`))) return parsed.origin;
+  } catch {
+    // Pas une adresse complète (chemin d'écran) : gardée sans paramètres.
+  }
+  return bare;
+}
+
 /** Ne garde de la page que son adresse sans paramètres, de l'utilisateur que son identifiant. */
 export function scrubErrorEvent(event: WebErrorEvent): WebErrorEvent;
 export function scrubErrorEvent(event: NativeErrorEvent): NativeErrorEvent;
@@ -39,7 +56,7 @@ export function scrubBreadcrumb(crumb: WebBreadcrumb | NativeBreadcrumb): WebBre
   if (data) {
     for (const key of ["url", "from", "to"]) {
       const value = data[key];
-      if (typeof value === "string") data[key] = withoutQuery(value);
+      if (typeof value === "string") data[key] = scrubUrl(value);
     }
   }
   return { ...crumb, data, message: crumb.message && crumb.category === "navigation" ? withoutQuery(crumb.message) : crumb.message };

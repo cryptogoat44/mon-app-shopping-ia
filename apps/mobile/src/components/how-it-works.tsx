@@ -4,6 +4,7 @@ import Svg, { Path } from "react-native-svg";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { TagIcon, VideoIcon } from "@/components/icons";
+import { isPlayerAvailable } from "@/lib/player-capture";
 import { themedStyles } from "@/theme/themed-styles";
 
 /** Un rond tracé à main levée, qui se chevauche : « entourez la pièce » (lot entourer la pièce). */
@@ -27,7 +28,7 @@ export function HowItWorksCard() {
       <Text style={styles.title} accessibilityRole="header">
         {t.firstTry.howItWorks.title}
       </Text>
-      {t.firstTry.howItWorks.steps(t.spotter.addPhoto).map((text, index) => {
+      {(isPlayerAvailable() ? t.player.howItWorksSteps(t.player.spot) : t.firstTry.howItWorks.steps(t.spotter.addPhoto)).map((text, index) => {
         const Icon = STEP_ICONS[index] ?? TagIcon;
         return (
           <View key={index} style={styles.step} accessible accessibilityLabel={`${index + 1}. ${text}`}>

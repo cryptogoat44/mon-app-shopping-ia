@@ -273,6 +273,67 @@ export const en: Catalog = {
       resent: "Email sent again. Remember to check your spam folder too.",
     },
   },
+  // "Built-in player" lot (iPhone app): the TikTok or Instagram video opens in
+  // Spotto, in the official player; "Spot this moment" takes the frame shown.
+  // Texts to be approved by the founder.
+  player: {
+    linkQuestion: "Have a TikTok or Instagram link?",
+    linkLabel: "TikTok or Instagram link",
+    linkHint: "The video opens here, in Spotto: you'll pause it on the piece.",
+    open: "Open the video",
+    opening: "Opening the video…",
+    instruction: "Pause the video when the piece is clearly visible.",
+    frameTitle: (platform: string) => `${platform} video`,
+    spot: "Spot this moment",
+    taking: "Taking the frame…",
+    recording: "Recording the screen…",
+    privacy: (platform: string) => `Played by ${platform}, nothing is downloaded. Only the frame of this moment is sent.`,
+    tapToPlay: "Tap the video to play it.",
+    leaveLink: (platform: string) => `This link opens in ${platform}.`,
+    openIn: (platform: string) => `Open in ${platform}`,
+    reloaded: "The player restarted: find the right moment again.",
+    gate: {
+      body: (platform: string) => `This video is played by ${platform}, which may use its own trackers.`,
+      play: "Play the video here",
+    },
+    unavailableTitle: "This video won't open in Spotto",
+    unavailable: {
+      notPublic: "It may be private or deleted, or its creator doesn't allow it to be shown elsewhere.",
+      notAVideo: (platform: string) => `This ${platform} link doesn't lead to a video.`,
+      shortLink: (platform: string) => `This link won't open here right now. Open the video in ${platform}, or add a screenshot.`,
+      noAnswer: (platform: string) => `${platform} isn't responding right now. Try again in a moment.`,
+      playerError: (platform: string) => `The ${platform} player couldn't play this video.`,
+      crashed: "The player stopped.",
+    },
+    screenConsent: {
+      title: "One more step",
+      body: "Your iPhone will ask you to allow screen recording. Spotto keeps only one frame, the one of this moment: nothing else is recorded or sent.",
+      continue: "Continue",
+      myself: "Take a screenshot myself",
+    },
+    captureFailed: {
+      title: "Spotto couldn't take the frame",
+      body: (shortcut: string) => `Take a screenshot now (${shortcut}): the video stays paused here. Then add it.`,
+      declined: (shortcut: string) => `Without your permission, Spotto can't take the frame. Take a screenshot now (${shortcut}), then add it.`,
+      phoneCall: (shortcut: string) => `Not possible during a call. Take a screenshot (${shortcut}), then add it.`,
+    },
+    blackImage: "Was the frame black or empty? Try another way",
+    howItWorksSteps: (spot: string) => [
+      "Share the TikTok or Instagram video to Spotto, or paste its link.",
+      `Pause it on the piece, tap “${spot}”, then circle the piece.`,
+      "Spotto shows you where to buy it, in 10 to 20 seconds.",
+    ],
+    linkNotice: {
+      title: "This video can open in Spotto",
+      body: "Open it right here: you'll pause it on the piece.",
+    },
+    settings: {
+      title: "Videos played in Spotto",
+      on: "You agreed to TikTok or Instagram videos being played here, in their official player.",
+      withdraw: "Withdraw my consent",
+      withdrawn: "Consent withdrawn: you'll be asked again with the next video.",
+    },
+  },
   preview: {
     title: "This is the image that will be analyzed",
     caption: (platform: string) => `Cover image of the ${platform} ${platform === "TikTok" ? "video" : "post"}.`,

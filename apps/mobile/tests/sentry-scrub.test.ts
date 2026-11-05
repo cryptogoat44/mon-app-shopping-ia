@@ -25,6 +25,14 @@ describe("Sentry (site et iPhone) : protection des données", () => {
     expect(scrubBreadcrumb({ category: "navigation", data: { from: "/a?x=1", to: "/profil?id=abc" } })!.data).toEqual({ from: "/a", to: "/profil" });
   });
 
+  it("lien de vidéo suivi par le lecteur intégré : seule l'origine du site reste (contre-expertise n° 11)", () => {
+    expect(scrubBreadcrumb({ category: "xhr", data: { url: "https://vm.tiktok.com/ZMabc123/", method: "GET" } })!.data).toEqual({ url: "https://vm.tiktok.com", method: "GET" });
+    expect(scrubBreadcrumb({ category: "fetch", data: { url: "https://www.instagram.com/share/reel/BAGxyz/?igsh=x" } })!.data).toEqual({ url: "https://www.instagram.com" });
+    expect(scrubBreadcrumb({ category: "fetch", data: { url: "https://graph.facebook.com/v26.0/instagram_oembed?url=x" } })!.data).toEqual({ url: "https://graph.facebook.com" });
+    expect(scrubBreadcrumb({ category: "fetch", data: { url: "https://instagr.am/p/abc/" } })!.data).toEqual({ url: "https://instagr.am" });
+    expect(scrubBreadcrumb({ category: "fetch", data: { url: "https://nottiktok.com/a/b" } })!.data).toEqual({ url: "https://nottiktok.com/a/b" });
+  });
+
   it("iPhone : mêmes règles — utilisateur réduit à son identifiant, touchers écartés (lot 3bis)", () => {
     const event = scrubErrorEvent({
       type: undefined,

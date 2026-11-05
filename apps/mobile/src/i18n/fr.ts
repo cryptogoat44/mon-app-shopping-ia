@@ -287,6 +287,69 @@ export const fr = {
       resent: "E-mail renvoyé. Pensez à regarder aussi dans les courriers indésirables.",
     },
   },
+  // Lot « lecteur intégré » (app iPhone) : la vidéo TikTok ou Instagram
+  // s'ouvre dans Spotto, dans le lecteur officiel ; « Spotter ce moment »
+  // prend l'image affichée. TEXTES À VALIDER PAR LE FONDATEUR (§1.7 de la
+  // conception, corrigé par la contre-expertise : lien court n° 4a, accord
+  // préalable n° 5). Espaces insécables avant « : » et « ? », et dans « … ».
+  player: {
+    linkQuestion: "Vous avez un lien TikTok ou Instagram ?",
+    linkLabel: "Lien TikTok ou Instagram",
+    linkHint: "La vidéo s'ouvre ici, dans Spotto : vous la mettrez en pause sur la pièce.",
+    open: "Ouvrir la vidéo",
+    opening: "Ouverture de la vidéo…",
+    instruction: "Mettez la vidéo en pause quand la pièce est bien visible.",
+    frameTitle: (platform: string) => `Vidéo ${platform}`,
+    spot: "Spotter ce moment",
+    taking: "Spotto prend l'image…",
+    recording: "Enregistrement de l'écran…",
+    privacy: (platform: string) => `Vidéo lue par ${platform}, sans téléchargement. Seule l'image de ce moment est envoyée.`,
+    tapToPlay: "Touchez la vidéo pour la lancer.",
+    leaveLink: (platform: string) => `Ce lien s'ouvre dans ${platform}.`,
+    openIn: (platform: string) => `Ouvrir dans ${platform}`,
+    reloaded: "Le lecteur a redémarré : retrouvez le bon moment.",
+    gate: {
+      body: (platform: string) => `Cette vidéo est lue par ${platform}, qui peut utiliser ses propres traceurs.`,
+      play: "Lire la vidéo ici",
+    },
+    unavailableTitle: "Cette vidéo ne s'ouvre pas dans Spotto",
+    unavailable: {
+      notPublic: "Elle est peut-être privée ou supprimée, ou son auteur ne permet pas de l'afficher ailleurs.",
+      notAVideo: (platform: string) => `Ce lien ${platform} ne mène pas à une vidéo.`,
+      shortLink: (platform: string) => `Ce lien ne s'ouvre pas ici pour le moment. Ouvrez la vidéo dans ${platform}, ou ajoutez une capture d'écran.`,
+      noAnswer: (platform: string) => `${platform} ne répond pas pour le moment. Réessayez dans un instant.`,
+      playerError: (platform: string) => `Le lecteur ${platform} n'a pas pu lire cette vidéo.`,
+      crashed: "Le lecteur s'est arrêté.",
+    },
+    screenConsent: {
+      title: "Encore une étape",
+      body: "Votre iPhone va vous demander d'autoriser l'enregistrement de l'écran. Spotto n'en garde qu'une image, celle de ce moment : rien d'autre n'est enregistré ni envoyé.",
+      continue: "Continuer",
+      myself: "Faire une capture moi-même",
+    },
+    captureFailed: {
+      title: "Spotto n'a pas pu prendre l'image",
+      body: (shortcut: string) => `Faites une capture d'écran maintenant (${shortcut}) : la vidéo reste en pause ici. Puis ajoutez-la.`,
+      declined: (shortcut: string) => `Sans votre accord, Spotto ne peut pas prendre l'image. Faites une capture d'écran maintenant (${shortcut}), puis ajoutez-la.`,
+      phoneCall: (shortcut: string) => `Impossible pendant un appel. Faites une capture d'écran (${shortcut}), puis ajoutez-la.`,
+    },
+    blackImage: "L'image prise était noire ou vide ? Réessayer autrement",
+    howItWorksSteps: (spot: string) => [
+      "Partagez la vidéo TikTok ou Instagram vers Spotto, ou collez son lien.",
+      `Mettez-la en pause sur la pièce, touchez « ${spot} », puis entourez la pièce.`,
+      "Spotto vous montre où l'acheter, en 10 à 20 secondes.",
+    ],
+    linkNotice: {
+      title: "Cette vidéo peut s'ouvrir dans Spotto",
+      body: "Ouvrez-la ici même : vous la mettrez en pause sur la pièce.",
+    },
+    settings: {
+      title: "Vidéos lues dans Spotto",
+      on: "Vous avez accepté que les vidéos TikTok ou Instagram soient lues ici, dans leur lecteur officiel.",
+      withdraw: "Retirer mon accord",
+      withdrawn: "Accord retiré : la question vous sera reposée à la prochaine vidéo.",
+    },
+  },
   preview: {
     title: "Voici l'image qui sera analysée",
     caption: (platform: string) => `Image de couverture de la ${platform === "TikTok" ? "vidéo" : "publication"} ${platform}.`,

@@ -24,6 +24,8 @@ const VISIBILITY = oneOf(PRIVACY_LEVELS);
 // lot 4 ter : dernière vidéo de la galerie, proposée sur l'accueil (app iPhone) ;
 // lot « partager vers Spotto » : vidéo reçue par la feuille de partage d'iOS.
 const VIDEO_SOURCE = oneOf(["library", "file", "latest", "share"]);
+// Lot « lecteur intégré » (app iPhone) : la plateforme du lecteur officiel.
+const PLAYER_PLATFORM = oneOf(["tiktok", "instagram"]);
 
 export const ANALYTICS_EVENTS = {
   signup_completed: { locale: oneOf(["fr", "en"]) },
@@ -93,6 +95,20 @@ export const ANALYTICS_EVENTS = {
   video_ai_result: { outcome: oneOf(["found", "not_found", "unavailable", "limit"]), moments_count: count },
   // Moment essayé parmi les 3 proposés (1 = le meilleur).
   video_ai_moment_tried: { rank: count },
+  // Lot « lecteur intégré » (app iPhone) : la plateforme, l'origine du lien
+  // (collé ou partagé), la méthode de capture et son issue — jamais le lien,
+  // la vidéo ni l'image.
+  player_opened: { platform: PLAYER_PLATFORM, source: oneOf(["paste", "share"]) },
+  player_unavailable: { platform: PLAYER_PLATFORM, reason: oneOf(["not_public", "not_a_video", "no_answer", "short_link", "network", "player_error", "crashed"]) },
+  player_capture: {
+    platform: PLAYER_PLATFORM,
+    method: oneOf(["pdf", "snapshot", "screen", "none"]),
+    outcome: oneOf(["ok", "blank", "declined", "failed"]),
+    remembered: bool,
+    attempts: count,
+  },
+  player_fallback: { platform: PLAYER_PLATFORM, choice: oneOf(["screenshot", "open_app", "black_reported", "embed"]) },
+  player_consent: { platform: PLAYER_PLATFORM, choice: oneOf(["play", "screenshot"]) },
 } as const satisfies Record<string, Record<string, Rule>>;
 
 export type AnalyticsEvent = keyof typeof ANALYTICS_EVENTS;

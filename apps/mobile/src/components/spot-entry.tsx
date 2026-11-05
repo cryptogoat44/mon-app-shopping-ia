@@ -89,7 +89,7 @@ export function LatestVideoCard({
       ) : (
         <>
           <QueryInput value={query} onChangeText={onQuery} onSubmit={() => valid && !busy && onLaunch()} testID="latest-query" style={styles.input} />
-          {linkInQuery ? <LinkNotice style={styles.notice} onAddVideo={onAddVideo} /> : null}
+          {linkInQuery ? <LinkNotice style={styles.notice} onAddVideo={onAddVideo} link={query} /> : null}
           <Pressable
             style={[styles.primary, valid ? null : styles.primaryDisabled]}
             onPress={onLaunch}
