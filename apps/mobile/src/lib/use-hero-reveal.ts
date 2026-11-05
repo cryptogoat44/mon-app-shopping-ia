@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { AccessibilityInfo, Platform, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollView } from "react-native";
 import { t } from "../i18n";
-import { shouldRevealHero, type Area, type Viewport } from "./result-scroll";
+import { sectionArrivedAbove, shouldRevealHero, type Area, type Viewport } from "./result-scroll";
 
 /** « Réduire les animations » (iPhone, ou réglage du navigateur) : la page
  * saute d'un coup au lieu de défiler. Lu une fois, comme l'écran d'attente. */
@@ -40,10 +40,18 @@ export function useHeroReveal(scrollRef: RefObject<ScrollView | null>) {
       if (shouldRevealHero(viewport.current, hero.current)) scrollRef.current?.scrollTo({ y: 0, animated: !reduceMotion });
       if (name && Platform.OS === "ios") AccessibilityInfo.announceForAccessibilityWithOptions(t.result.shownAbove(name), { queue: true });
     },
-    /** Amener une section en haut de l'écran (prix d'abord : « Résultats pour
-     * vos mots », section « Sans prix »), d'un coup avec « Réduire les animations ». */
+    /** Amener une section en haut de l'écran à la demande de la personne (prix
+     * d'abord : section « Sans prix » depuis « Ce n'est pas la bonne pièce ? »),
+     * d'un coup avec « Réduire les animations ». */
     scrollToSection: (y: number) => {
       scrollRef.current?.scrollTo({ y: Math.max(0, y), animated: !reduceMotion });
+    },
+    /** Section apparue d'elle-même (« Résultats pour vos mots ») : amenée en
+     * haut de l'écran seulement si elle est arrivée au-dessus de la partie
+     * visible (lib/result-scroll.ts, sectionArrivedAbove) ; sinon la page
+     * reste où elle est. */
+    revealArrivedSection: (y: number) => {
+      if (sectionArrivedAbove(viewport.current, y)) scrollRef.current?.scrollTo({ y: Math.max(0, y), animated: !reduceMotion });
     },
   };
 }

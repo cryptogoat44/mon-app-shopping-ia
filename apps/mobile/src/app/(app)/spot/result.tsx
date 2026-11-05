@@ -308,9 +308,9 @@ export default function ResultScreen() {
    * (après « Annuler », un 409 ou une panne). Appelée depuis le rendu où
    * « Chercher » a été touché : le geste de la personne est lu dans la ref.
    * Sans geste, la grande carte peut changer (règle annoncée) : l'écran
-   * remonte la montrer et VoiceOver le dit (relecture E3) ; sinon, il
-   * descend sur « Résultats pour vos mots », une fois la section placée
-   * (relecture E2, onWordsLayout). */
+   * remonte la montrer et VoiceOver le dit (relecture E3) ; sinon, il amène
+   * « Résultats pour vos mots » en haut s'ils sont arrivés au-dessus de la
+   * partie visible, une fois la section placée (relecture E2, onWordsLayout). */
   function handleTextSearchDone(search: ProductSearch) {
     if (!result) return;
     const next = withTextSearch(result, search);
@@ -338,12 +338,15 @@ export default function ResultScreen() {
     heroReveal.revealHero(result ? (allPieces(result)[index]?.name ?? null) : null);
   }
 
-  /** « Résultats pour vos mots » vient d'arriver et de prendre sa place : l'écran y descend une fois. */
+  /** « Résultats pour vos mots » vient d'arriver et de prendre sa place : une
+   * fois, l'écran l'amène en haut s'il est arrivé au-dessus de la partie
+   * visible (section « Sans prix » dépliée) ; sinon il ne bouge pas — la
+   * personne a pu toucher une carte pendant l'attente, passée en grand en haut. */
   function onWordsLayout(event: LayoutChangeEvent) {
     const { y, height } = event.nativeEvent.layout;
     if (!revealWords.current || height === 0) return;
     revealWords.current = false;
-    heroReveal.scrollToSection(y);
+    heroReveal.revealArrivedSection(y);
   }
 
   /** La section « Sans prix » en haut de l'écran. Sa place est mesurée au

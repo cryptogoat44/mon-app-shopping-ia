@@ -216,9 +216,11 @@ export function startIndexOf(choice: BigCardChoice, result: ResultLists & Pick<S
  * - « hero » : la grande carte change d'elle-même (aucun geste, la règle
  *   l'annonce) — l'écran remonte la montrer et VoiceOver le dit, au lieu
  *   d'un changement hors de l'écran (relecture, E3) ;
- * - « words » : sinon, l'écran descend sur « Résultats pour vos mots », qui
- *   arrivent au-dessus de la section « Sans prix », parfois dépliée et
- *   longue (relecture, E2) ;
+ * - « words » : sinon, l'écran amène « Résultats pour vos mots » en haut
+ *   s'ils sont arrivés au-dessus de la partie visible — au-dessus de la
+ *   section « Sans prix », parfois dépliée et longue (relecture, E2) ; plus
+ *   bas, il ne bouge pas : la personne a pu toucher une carte pendant
+ *   l'attente (lib/result-scroll.ts, sectionArrivedAbove) ;
  * - null : après « rien trouvé », l'écran s'ouvre déjà en haut, sur la
  *   grande carte. */
 export function wordsArrivalReveal(previous: SpotResult, next: SpotResult, choice: BigCardChoice, options: StartOptions): "hero" | "words" | null {
