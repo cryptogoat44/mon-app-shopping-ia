@@ -7,6 +7,7 @@ import { parseInput } from "../lib/validation.js";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { isAdmin } from "../lib/moderation.js";
+import { CONTENT_NOT_ALLOWED, firstBannedText } from "../lib/contentFilter.js";
 
 const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
 
@@ -180,6 +181,8 @@ export default async function meRoutes(fastify: FastifyInstance) {
 
     const userId = request.user!.id;
     const { username, displayName, bio } = parsed.data;
+    // Filtre des mots interdits (chantier 3, règle 1.2 d'Apple) : noms et bio sont vus des autres.
+    if (firstBannedText(username, displayName, bio) !== null) return reply.code(400).send(CONTENT_NOT_ALLOWED);
     // Lu avant toute écriture : une lecture impossible n'enregistre rien.
     const admin = await isAdmin(fastify, userId);
 

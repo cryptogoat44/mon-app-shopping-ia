@@ -75,3 +75,35 @@ export function captureServerError(error: unknown, userId: string | undefined): 
     Sentry.captureException(error);
   });
 }
+
+/** Événement de modération (chantier 3, point 6) : un signalement arrive, ou
+ * un contenu vient d'être masqué automatiquement (lib/autoHide.ts). Envoyé
+ * comme simple avertissement, sans aucune donnée sur la personne qui
+ * signale ; une règle d'alerte de Sentry (« nouveau problème », étiquette
+ * moderation) prévient le fondateur sur son téléphone ou par e-mail. Un
+ * contenu = un problème Sentry : plusieurs signalements du même contenu se
+ * regroupent, un nouveau contenu signalé déclenche une nouvelle alerte. */
+export interface ModerationEvent {
+  kind: "report" | "auto_hide";
+  targetType: string;
+  targetId: string;
+  reason?: string;
+}
+
+/** Texte de l'événement (fonction pure, testée). */
+export function moderationEventMessage(event: ModerationEvent): string {
+  return event.kind === "report"
+    ? `Nouveau signalement à traiter : ${event.targetType}${event.reason ? ` (${event.reason})` : ""}`
+    : `Contenu masqué automatiquement (plusieurs signalements) : ${event.targetType}`;
+}
+
+export function captureModerationEvent(event: ModerationEvent): void {
+  if (!enabled) return;
+  Sentry.withScope((scope) => {
+    scope.setTag("moderation", event.kind);
+    scope.setTag("target_type", event.targetType);
+    if (event.reason) scope.setTag("reason", event.reason);
+    scope.setFingerprint(["moderation", event.kind, event.targetType, event.targetId]);
+    Sentry.captureMessage(moderationEventMessage(event), "warning");
+  });
+}

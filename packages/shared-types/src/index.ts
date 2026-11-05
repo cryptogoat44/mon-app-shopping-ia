@@ -916,6 +916,9 @@ export interface ModerationLogEntry {
   createdAt: string;
   /** Administrateur qui a pris la décision (visible des seuls administrateurs). */
   adminUsername: string | null;
+  /** Chantier 3 : décision prise automatiquement (masquage après plusieurs
+   * signalements de personnes différentes), sans administrateur. */
+  automatic: boolean;
 }
 
 /** Les signalements d'un même contenu, regroupés. */
@@ -930,6 +933,10 @@ export interface ModerationItem {
   preview: ModerationPreview;
   /** Masquage en vigueur (à annuler pour rétablir), sinon null. */
   activeHideActionId: string | null;
+  /** Chantier 3 : ce masquage est automatique (plusieurs signalements), en
+   * attente de décision. « Masquer » le confirme ; « Classer sans suite » le
+   * lève et rétablit le contenu. */
+  activeHideAutomatic: boolean;
   /** Suspension en vigueur du compte concerné (à lever), sinon null. */
   activeSuspendActionId: string | null;
   /** Lot 5 : l'image est une copie faite par Spotto (publication « envie »,

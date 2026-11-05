@@ -4,6 +4,7 @@ import type { Post, PublicProfile, UserProfile } from "@monapp/shared-types";
 import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, parseDbRows, parseInput, userIdParamsSchema } from "../lib/validation.js";
 import { isBlockedEitherWay, isFollowing, shownPosts, visiblePrivacies } from "../lib/visibility.js";
 import { suspendedAmong } from "../lib/moderation.js";
+import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
 import { POST_ROWS, hydratePosts } from "./posts.js";
 
 const USER_POSTS_PAGE_SIZE = 18;
@@ -177,6 +178,9 @@ export default async function usersRoutes(fastify: FastifyInstance) {
       .order("created_at", { ascending: false })
       .limit(USER_POSTS_PAGE_SIZE + 1);
     if (pageQuery.cursor) query = query.lt("created_at", pageQuery.cursor);
+    // Chantier 3 : les publications que le visiteur a signalées ne lui sont plus montrées.
+    const reported = isMe ? null : notInFilter(await reportedIdsFor(fastify, request.log, viewerId, "post"));
+    if (reported) query = query.not("id", "in", reported);
 
     const { data, error } = await query;
     if (error) {
