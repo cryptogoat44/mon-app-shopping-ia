@@ -147,3 +147,59 @@ describe("voie C (lot c) : complément et recherche par les mots, propriétés f
     expect(Object.keys(ANALYTICS_EVENTS.text_search_launched)).toEqual([]);
   });
 });
+
+describe("prix d'abord (2026-11-03) : place de la proposition cliquée, propriétés fermées", () => {
+  it("merchant_link_opened : rang d'origine, place affichée et section « Sans prix », jamais la pièce ni le lien", () => {
+    expect(
+      sanitizeProps("merchant_link_opened", {
+        context: "result",
+        rank: 7,
+        displayed_position: 2,
+        in_no_price_section: false,
+        url: "https://boutique.test/veste",
+        name: "Veste en daim",
+        matchId: "m-1",
+      })
+    ).toEqual({ context: "result", rank: 7, displayed_position: 2, in_no_price_section: false });
+    expect(sanitizeProps("merchant_link_opened", { context: "result", rank: 31, displayed_position: 40, in_no_price_section: true })).toEqual({
+      context: "result",
+      rank: 31,
+      displayed_position: 40,
+      in_no_price_section: true,
+    });
+    // Un oui/non écrit en texte, ou une place en texte, est retiré.
+    expect(sanitizeProps("merchant_link_opened", { context: "result", rank: "7", in_no_price_section: "oui" })).toEqual({ context: "result" });
+  });
+
+  it("ailleurs (Envies, Vault, publication…) : l'événement reste le même, le contexte seul", () => {
+    expect(sanitizeProps("merchant_link_opened", { context: "wishlist" })).toEqual({ context: "wishlist" });
+    expect(sanitizeProps("merchant_link_opened", { context: "post" })).toEqual({ context: "post" });
+  });
+
+  it("section « Sans prix » ouverte : son nombre de propositions seulement", () => {
+    expect(sanitizeProps("no_price_results_opened", { results_count: 24, names: "Veste, Sac" })).toEqual({ results_count: 24 });
+    expect(ANALYTICS_EVENTS.no_price_results_opened.results_count.kind).toBe("count");
+    expect(ANALYTICS_EVENTS.merchant_link_opened.rank.kind).toBe("count");
+    expect(ANALYTICS_EVENTS.merchant_link_opened.displayed_position.kind).toBe("count");
+    expect(ANALYTICS_EVENTS.merchant_link_opened.in_no_price_section.kind).toBe("bool");
+    // Les événements d'avant restent dans le catalogue.
+    expect(Object.keys(ANALYTICS_EVENTS)).toEqual(expect.arrayContaining(["similar_results_opened", "merchant_link_opened", "spot_completed"]));
+  });
+});
+
+describe("prix d'abord, relecture : séries comparables et origine de l'ouverture « Sans prix »", () => {
+  it("F5 : « Voir plus » sous « Autres propositions » dit si la section ne compte que des propositions avec prix", () => {
+    expect(sanitizeProps("similar_results_opened", { price_first: true })).toEqual({ price_first: true });
+    expect(sanitizeProps("similar_results_opened", { price_first: false })).toEqual({ price_first: false });
+    // Versions d'avant : rien, comme avant ; un texte est retiré.
+    expect(sanitizeProps("similar_results_opened", {})).toEqual({});
+    expect(sanitizeProps("similar_results_opened", { price_first: "oui" })).toEqual({});
+    expect(ANALYTICS_EVENTS.similar_results_opened.price_first.kind).toBe("bool");
+  });
+
+  it("ORD-5 : section « Sans prix » ouverte depuis son bouton ou depuis « Ce n'est pas la bonne pièce ? »", () => {
+    expect(sanitizeProps("no_price_results_opened", { results_count: 23, context: "not_right" })).toEqual({ results_count: 23, context: "not_right" });
+    expect(sanitizeProps("no_price_results_opened", { results_count: 7, context: "section" })).toEqual({ results_count: 7, context: "section" });
+    expect(sanitizeProps("no_price_results_opened", { results_count: 7, context: "ailleurs" })).toEqual({ results_count: 7 });
+  });
+});

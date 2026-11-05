@@ -3,6 +3,7 @@ import * as WebBrowser from "expo-web-browser";
 import type { MerchantLinkContext } from "@monapp/shared-types";
 import { trackProductMatchClick } from "./api";
 import { track } from "./analytics";
+import type { ClickPlacement } from "./price-first";
 import { isWebUrl } from "./web-url";
 
 const DEBOUNCE_MS = 2000;
@@ -33,6 +34,11 @@ export interface OpenMerchantLinkOptions {
   url: string;
   /** Depuis quel écran le lien est ouvert. */
   context: MerchantLinkContext;
+  /** Écran Résultat seulement (prix d'abord) : rang d'origine et place
+   * affichée de la proposition, ajoutés aux statistiques d'usage du clic. Le
+   * clic enregistré par le serveur, lui, reste celui de la proposition
+   * (matchId), donc de son rang d'origine. */
+  placement?: ClickPlacement;
 }
 
 /** `blocked` est vrai si le navigateur a malgré tout bloqué l'ouverture (web
@@ -102,7 +108,7 @@ export async function openMerchantLink(options: OpenMerchantLinkOptions): Promis
   const debounceKey = options.matchId ?? options.url;
   if (isDebounced(debounceKey)) return NOT_BLOCKED;
   lastOpenedAt.set(debounceKey, Date.now());
-  track("merchant_link_opened", { context: options.context });
+  track("merchant_link_opened", { context: options.context, ...options.placement });
 
   if (Platform.OS === "web") return openMerchantLinkWeb(options);
 

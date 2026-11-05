@@ -37,10 +37,31 @@ export const ANALYTICS_EVENTS = {
   // Voie C (lot c) : recherche par les mots — l'issue et un nombre, jamais les mots ni la requête.
   text_search_launched: {},
   text_search_completed: { outcome: oneOf([...TEXT_SEARCH_STATUSES, "failed"]), results_count: count },
-  similar_results_opened: {},
+  // « Voir plus » sous « Autres propositions ». ATTENTION, changement de sens
+  // avec le lot « prix d'abord » (2026-11-03) : quand une proposition a un
+  // prix, cette section ne montre plus que celles avec prix (les autres sont
+  // repliées sous « Sans prix »). price_first dit lequel : vrai, la section ne
+  // compte que des propositions avec prix ; faux ou absent (versions
+  // d'avant), toute la recherche visuelle, comme avant — séries comparables
+  // en filtrant sur price_first différent de vrai (relecture, F5).
+  similar_results_opened: { price_first: bool },
+  // Prix d'abord (2026-11-03) : section repliée « Sans prix » ouverte, avec son
+  // nombre de propositions, et d'où : son bouton (« section ») ou « Ce n'est
+  // pas la bonne pièce ? » (« not_right », avant toute nouvelle recherche).
+  no_price_results_opened: { results_count: count, context: oneOf(["section", "not_right"]) },
   wishlist_item_added: { context: oneOf(["result"]) },
   vault_item_added: { source: oneOf(["spotter", "photo"]), category: oneOf(["clothing", "watches", "accessories", "shoes", "bags", "home", "other"]) },
-  merchant_link_opened: { context: oneOf(MERCHANT_LINK_CONTEXTS) },
+  // Prix d'abord (2026-11-03), écran Résultat seulement (lib/price-first.ts) :
+  // rang d'origine (ordre du serveur, inchangé), place affichée et section
+  // repliée « Sans prix ». La place est celle de la disposition proposée
+  // d'office (1 = la grande carte d'office). Sans geste de la personne, c'est
+  // celle de l'écran au moment du clic : elle change quand « vos mots »
+  // répondent, comme l'écran. Dès qu'elle touche une carte ou agit sur la
+  // grande carte, la disposition reste celle qu'elle avait sous les yeux (les
+  // propositions de vos mots y prennent leur place), et la carte mise en grand
+  // garde la place où elle l'a trouvée (relecture, ORD-6, F6). Ailleurs
+  // (Envies, Vault, publication…) : le contexte seul.
+  merchant_link_opened: { context: oneOf(MERCHANT_LINK_CONTEXTS), rank: count, displayed_position: count, in_no_price_section: bool },
   post_published: { type: oneOf(["lifestyle", "purchase"]), visibility: VISIBILITY, tagged_count: count },
   post_visibility_changed: { visibility: VISIBILITY },
   post_shared: { method: oneOf(["native", "copy"]) },

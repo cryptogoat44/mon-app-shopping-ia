@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { failureCorrections, successCorrections, type CorrectionContext } from "../src/lib/spot-corrections";
+import { failureCorrections, successCorrections, successSheetActions, type CorrectionContext } from "../src/lib/spot-corrections";
 
 // Lot 4 ter : les corrections ne s'affichent plus d'emblée. Avec des
 // résultats : un seul lien discret, « Ce n'est pas la bonne pièce ? ». Sans
@@ -70,5 +70,25 @@ describe("sans résultat : deux actions au plus, la plus utile d'abord", () => {
       for (const context of [video, videoLastMoment, photo, reopened, oldLink]) {
         expect(failureCorrections(reason, context).length).toBeLessThanOrEqual(2);
       }
+  });
+});
+
+// Prix d'abord, relecture ORD-5 : la pièce cherchée peut être repliée tout en
+// bas, sans prix (le rang 1 de Google parfois). « Ce n'est pas la bonne
+// pièce ? » propose d'abord de la voir, gratuitement ; chaque correction lance
+// une nouvelle recherche, comptée.
+describe("« Ce n'est pas la bonne pièce ? » avec des propositions repliées sans prix", () => {
+  it("section « Sans prix » non vide : la voir vient en premier, les corrections ensuite, inchangées", () => {
+    expect(successSheetActions(successCorrections(video), 23)).toEqual(["show_without_price", "reframe", "try_another", "choose_myself"]);
+    expect(successSheetActions(successCorrections(photo), 1)).toEqual(["show_without_price", "reframe"]);
+    expect(successSheetActions(successCorrections(oldLink), 4)).toEqual(["show_without_price", "add_video"]);
+  });
+
+  it("section « Sans prix » vide : la liste ne change pas", () => {
+    expect(successSheetActions(successCorrections(video), 0)).toEqual(["reframe", "try_another", "choose_myself"]);
+  });
+
+  it("résultat rouvert (aucune correction) : la liste reste vide, le lien reste absent comme avant", () => {
+    expect(successSheetActions(successCorrections(reopened), 23)).toEqual([]);
   });
 });

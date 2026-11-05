@@ -78,17 +78,40 @@ export function CorrectionsLink({ onPress, style }: { onPress: () => void; style
   );
 }
 
-export function CorrectionsSheet({ visible, onClose, children }: { visible: boolean; onClose: () => void; children: ReactNode }) {
+/** `withoutPrice` (prix d'abord, lib/spot-corrections.ts successSheetActions) :
+ * voir d'abord, gratuitement, les propositions repliées sans prix ; les
+ * corrections, qui relancent une recherche, viennent ensuite. `onDismiss` :
+ * la feuille a fini de se fermer (sur le site, le lien qui l'a ouverte vient
+ * de reprendre le focus, ce qui fait remonter la page jusqu'à lui). */
+export function CorrectionsSheet({
+  visible,
+  onClose,
+  onDismiss,
+  withoutPrice,
+  children,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onDismiss?: () => void;
+  withoutPrice?: Action | null;
+  children: ReactNode;
+}) {
   const insets = useSafeAreaInsets();
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} onDismiss={onDismiss}>
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel={t.common.close} />
       <View style={[styles.sheet, { paddingBottom: space.xl + insets.bottom }]}>
         <View style={styles.grab} />
         <Text style={styles.sheetTitle} accessibilityRole="header">
           {t.result.notRight}
         </Text>
-        <Text style={styles.sheetLead}>{t.result.correctionsLead}</Text>
+        {withoutPrice ? (
+          <>
+            <Text style={styles.sheetLead}>{t.result.notRightWithoutPriceLead}</Text>
+            <ActionButtons secondary={[withoutPrice]} />
+          </>
+        ) : null}
+        <Text style={[styles.sheetLead, withoutPrice ? styles.leadAfter : null]}>{t.result.correctionsLead}</Text>
         {children}
       </View>
     </Modal>
@@ -104,4 +127,5 @@ const styles = themedStyles(() => ({
   grab: { width: 36, height: 5, borderRadius: 3, backgroundColor: color.filet, alignSelf: "center", marginBottom: space.md },
   sheetTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre },
   sheetLead: { fontSize: font.secondary, color: color.acier, marginTop: space.xs, lineHeight: 21 },
+  leadAfter: { marginTop: space.lg },
 }));

@@ -4,6 +4,7 @@ import type { TextSearchStatus } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { COMPLEMENT_SHOWN_FIRST, firstShown, type IndexedPiece } from "@/lib/result-sections";
+import type { ClickPlacement } from "@/lib/price-first";
 import { ProposalCard } from "@/components/proposal-card";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -29,6 +30,7 @@ export function ResultComplement({
   query,
   textStatus,
   onSelect,
+  placements,
 }: {
   source: "ai" | "words";
   /** Propositions de la section, sans celle montrée en grand ; `index` désigne la liste complète de l'écran. */
@@ -38,6 +40,8 @@ export function ResultComplement({
   /** Section « words » : issue de la recherche par les mots, pour dire qu'elle n'a rien donné. */
   textStatus?: TextSearchStatus | null;
   onSelect: (index: number) => void;
+  /** Place de chaque proposition à l'écran, pour les statistiques du clic (lib/price-first.ts). */
+  placements?: ReadonlyMap<number, ClickPlacement>;
 }) {
   const [showAll, setShowAll] = useState(false);
   const note = source === "words" && others.length === 0 ? textSearchStatusNote(textStatus) : null;
@@ -54,7 +58,7 @@ export function ResultComplement({
       {visible.length > 0 ? (
         <View style={styles.grid}>
           {visible.map(({ piece, index }) => (
-            <ProposalCard key={piece.id} piece={piece} onSelect={() => onSelect(index)} />
+            <ProposalCard key={piece.id} piece={piece} onSelect={() => onSelect(index)} placement={placements?.get(index)} />
           ))}
         </View>
       ) : null}

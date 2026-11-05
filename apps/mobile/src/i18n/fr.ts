@@ -383,7 +383,13 @@ export const fr = {
     count: (n: number, query: string | null | undefined) =>
       `${n} proposition${n > 1 ? "s" : ""}${query ? ` pour « ${query} »` : ""}`,
     sortedByWords: "Triées selon vos mots",
+    // Prix d'abord : la première proposition remontée par vos mots n'a pas de
+    // prix, elle est repliée plus bas (relecture F4, à valider).
+    sortedByWordsPriceFirst: "Avec prix d'abord, puis selon vos mots",
     bestProposal: "Meilleure proposition",
+    // Prix d'abord : la grande carte proposée d'office quand ce n'est pas la
+    // première de la recherche (relecture E4, à valider).
+    bestWithPrice: "Meilleure proposition avec prix",
     otherProposal: "Autre proposition",
     otherProposals: "Autres propositions",
     showMore: (n: number) => `Voir plus (${n})`,
@@ -421,6 +427,9 @@ export const fr = {
     backToSpotter: "Retour à Spotter",
     notRight: "Ce n'est pas la bonne pièce ?",
     correctionsLead: "Montrez la pièce autrement à Spotto :",
+    // Prix d'abord : avant les corrections, qui relancent une recherche, voir
+    // gratuitement les propositions repliées sans prix (relecture ORD-5, à valider).
+    notRightWithoutPriceLead: "Elle est peut-être parmi les propositions sans prix :",
     // Sans nom de fournisseur (décision du fondateur, 2026-10-21). Lot « premier
     // essai » : ne pousse plus à relancer la même image (même résultat, une
     // recherche de plus).
@@ -432,6 +441,15 @@ export const fr = {
     noPriceTitle: "Aucune de ces propositions n'affiche de prix.",
     noPriceText:
       "Ce sont des pièces qui ressemblent à la vôtre, trouvées par notre recherche visuelle. Elles ne sont pas forcément en vente : ouvrez-les pour vérifier, ou entourez la pièce autrement.",
+    // Prix d'abord (décision du fondateur du 2026-11-03) : les propositions
+    // sans prix rangées en dernier, derrière un bouton. Textes à valider.
+    // Titre de la section, au-dessus du bouton (relecture E5, à valider).
+    withoutPriceTitle: "Sans prix affiché",
+    showWithoutPrice: (n: number) => (n > 1 ? `Voir les ${n} propositions sans prix` : "Voir la proposition sans prix"),
+    hideWithoutPrice: (n: number) => (n > 1 ? "Masquer les propositions sans prix" : "Masquer la proposition sans prix"),
+    // VoiceOver, après le bouton : la liste apparaît ou disparaît dessous (à valider).
+    withoutPriceShown: (n: number) => (n > 1 ? `${n} propositions sans prix, affichées ci-dessous.` : "La proposition sans prix est affichée ci-dessous."),
+    withoutPriceHidden: (n: number) => (n > 1 ? "Propositions sans prix masquées." : "Proposition sans prix masquée."),
     technicalTitle: "La recherche n'a pas abouti",
     // Panne du service, pas de la connexion de la personne (lot recherche coupée).
     technicalTip: "Le service de recherche n'a pas répondu. Réessayez dans un instant.",

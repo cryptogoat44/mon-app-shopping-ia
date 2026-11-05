@@ -1,9 +1,10 @@
 // Sections de l'écran Résultat (voie C, lot c). Les propositions de la
-// recherche visuelle restent en premier, telles qu'aujourd'hui ; le
-// complément vient dessous, en deux sections à part : « Cette pièce dans
-// d'autres boutiques » (origine « shopping »), puis « Résultats pour vos
-// mots » (origine « words »). Une seule liste d'indices pour toutes : la
-// proposition montrée en grand et ses actions ne changent pas.
+// recherche visuelle en premier ; le complément vient dessous, en deux
+// sections à part : « Cette pièce dans d'autres boutiques » (origine
+// « shopping »), puis « Résultats pour vos mots » (origine « words »). Une
+// seule liste d'indices pour toutes : la proposition montrée en grand et ses
+// actions ne changent pas. Prix d'abord (2026-11-03) : l'ordre affiché, avec
+// la section repliée « Sans prix », est décidé dans lib/price-first.ts.
 // Logique pure, testée. Imports relatifs : fichier testé par vitest.
 import type { MerchantLinkContext } from "@monapp/shared-types";
 import type { Piece, SpotResult } from "../api/types";

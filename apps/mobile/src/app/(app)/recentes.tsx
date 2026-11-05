@@ -8,7 +8,7 @@ import { getRecentSearches } from "@/api/client";
 import { clearLastSpotResult } from "@/api/spotSession";
 import { ErrorMessage } from "@/components/error-message";
 import { RecentSearchRow, type RecentSearch } from "@/components/recent-searches";
-import { RECENT_SEARCHES_LIMIT } from "@/lib/recent-searches";
+import { RECENT_SEARCHES_LIMIT, reopenParams } from "@/lib/recent-searches";
 import { themedStyles } from "@/theme/themed-styles";
 
 // « Tout voir » (lot « Retrouver ses pièces ») : les 20 dernières recherches
@@ -40,11 +40,11 @@ export default function RecentSearchesScreen() {
     else router.replace("/");
   }
 
-  function open(searchId: string) {
+  function open(entry: RecentSearch) {
     // Comme depuis l'accueil : toujours relue sur le serveur (gratuit), jamais
-    // la copie en mémoire du dernier lancement.
+    // la copie en mémoire du dernier lancement ; la proposition de la ligne en grand.
     clearLastSpotResult();
-    router.push({ pathname: "/spot/result", params: { searchId } });
+    router.push({ pathname: "/spot/result", params: reopenParams(entry) });
   }
 
   return (
@@ -77,7 +77,7 @@ export default function RecentSearchesScreen() {
           <>
             <View style={styles.list}>
               {entries.map((entry) => (
-                <RecentSearchRow key={entry.searchId} entry={entry} onOpen={() => open(entry.searchId)} />
+                <RecentSearchRow key={entry.searchId} entry={entry} onOpen={() => open(entry)} />
               ))}
             </View>
             {entries.length >= RECENT_SEARCHES_LIMIT ? <Text style={styles.note}>{t.retrouverPieces.recentLimitNote(RECENT_SEARCHES_LIMIT)}</Text> : null}
