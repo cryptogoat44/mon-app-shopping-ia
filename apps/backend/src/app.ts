@@ -1,3 +1,6 @@
+// Sécurité des images, avant tout le reste : sharp ne lit plus que les
+// formats JPEG, PNG, WebP, GIF et HEIF/AVIF (lib/imageSafety.ts).
+import "./lib/imageSafety.js";
 import Fastify, { type FastifyError, type FastifyInstance, type FastifyServerOptions } from "fastify";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
