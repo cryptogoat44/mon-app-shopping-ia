@@ -11,8 +11,12 @@ export class ErreurMesure extends Error {}
 /** Les réponses du fondateur, dans le dossier du jeu de vérité. */
 export const FICHIER_REPONSES = "reponses.txt";
 const NB_CHAMPS = 11;
-/** Le serveur refuse un cadre plus petit (routes/searches.ts, cropSchema). */
-const COTE_MIN = 0.05;
+/** Côté minimal d'un cadre envoyé par l'app de main, en proportion de
+ * l'image (apps/mobile/src/lib/crop-geometry.ts, MIN_CROP) : le cadre à
+ * poignées ne descend jamais en dessous, et la zone d'une pièce entourée au
+ * doigt y est élargie autour de son milieu (piece-trace.ts, side). Le serveur,
+ * lui, refuserait sous 5 % (routes/searches.ts, cropSchema). */
+export const COTE_MIN_APP = 0.12;
 
 /** Une ligne de reponses.txt. Le numéro du cas est le rang de la ligne. */
 export interface CasVerite {
@@ -118,16 +122,38 @@ export function lireCadres(texte: string, origine: string): Map<number, CadreTra
  * toute la photo, c'est celui-ci (le serveur analyse alors l'image entière). */
 export const IMAGE_ENTIERE: CropRect = { x: 0, y: 0, width: 1, height: 1 };
 
+/** Un côté du cadre, comme side() de l'app (piece-trace.ts) : borné à
+ * l'image, puis élargi autour de son milieu jusqu'à 12 % s'il est plus petit.
+ * null : rien de ce côté dans l'image. */
+function coteDeLApp(debut: number, fin: number): { depart: number; longueur: number; elargi: boolean } | null {
+  const de = Math.max(debut, 0);
+  const a = Math.min(fin, 1);
+  if (a - de <= 0) return null;
+  if (a - de >= COTE_MIN_APP) return { depart: de, longueur: a - de, elargi: false };
+  return { depart: Math.min(Math.max((de + a) / 2 - COTE_MIN_APP / 2, 0), 1 - COTE_MIN_APP), longueur: COTE_MIN_APP, elargi: true };
+}
+
+function cotesDeLApp(cadre: CadreTrace) {
+  const largeur = coteDeLApp(cadre.gauche / 100, (cadre.gauche + cadre.largeur) / 100);
+  const hauteur = coteDeLApp(cadre.haut / 100, (cadre.haut + cadre.hauteur) / 100);
+  if (!largeur || !hauteur) throw new ErreurMesure(`Cadre du cas ${cadre.numero} : en dehors de l'image.`);
+  return { largeur, hauteur };
+}
+
 /** Cadre envoyé par l'app : des proportions de l'image (0 à 1), bornées à
- * l'image. Trop petit pour le serveur (moins de 5 %) : refusé ici, avant tout envoi. */
+ * l'image, chaque côté porté à 12 % au moins autour de son milieu, comme
+ * l'app de main (elle ne peut jamais envoyer moins). La marge de 6 points de
+ * la pièce entourée au doigt n'est pas ajoutée : elle dépend de la taille
+ * d'affichage. */
 export function cadreEnProportions(cadre: CadreTrace): CropRect {
-  const x = Math.min(cadre.gauche / 100, 1);
-  const y = Math.min(cadre.haut / 100, 1);
-  const zone = { x, y, width: Math.min(cadre.largeur / 100, 1 - x), height: Math.min(cadre.hauteur / 100, 1 - y) };
-  if (zone.width < COTE_MIN || zone.height < COTE_MIN) {
-    throw new ErreurMesure(`Cadre du cas ${cadre.numero} : moins de 5 % de l'image une fois borné à l'image ; le serveur le refuserait.`);
-  }
-  return zone;
+  const { largeur, hauteur } = cotesDeLApp(cadre);
+  return { x: largeur.depart, y: hauteur.depart, width: largeur.longueur, height: hauteur.longueur };
+}
+
+/** Le cadre tracé a-t-il un côté sous 12 % une fois borné à l'image (donc élargi, comme l'app) ? */
+export function cadreElargi(cadre: CadreTrace): boolean {
+  const { largeur, hauteur } = cotesDeLApp(cadre);
+  return largeur.elargi || hauteur.elargi;
 }
 
 /** Les mots que l'app enverrait : sans espaces autour, rien s'ils sont vides,
@@ -147,8 +173,9 @@ export interface JeuCharge {
   avertissements: string[];
 }
 
-/** Écarts entre la colonne « cadre » du jeu et le fichier des cadres. Les cas
- * sans cadre partent en image entière ; un cadre présent est toujours utilisé. */
+/** Écarts entre la colonne « cadre » du jeu et le fichier des cadres, et
+ * cadres élargis à 12 % comme l'app. Les cas sans cadre partent en image
+ * entière ; un cadre présent est toujours utilisé. */
 export function ecartsCadres(cas: readonly CasVerite[], cadres: ReadonlyMap<number, CadreTrace>): string[] {
   const ecarts: string[] = [];
   for (const numero of cadres.keys()) {
@@ -157,6 +184,10 @@ export function ecartsCadres(cas: readonly CasVerite[], cadres: ReadonlyMap<numb
   for (const c of cas) {
     if (c.cadre && !cadres.has(c.numero)) ecarts.push(`cas ${c.numero} : le jeu dit « cadre : oui », mais aucun cadre n'est tracé : image entière.`);
     if (!c.cadre && cadres.has(c.numero)) ecarts.push(`cas ${c.numero} : cadre tracé alors que le jeu dit « cadre : non » : le cadre est utilisé.`);
+    const trace = cadres.get(c.numero);
+    if (trace && cadreElargi(trace)) {
+      ecarts.push(`cas ${c.numero} : cadre de moins de 12 % de côté (${trace.largeur} × ${trace.hauteur} %), élargi à 12 % autour de son milieu comme l'app (qui ne peut pas envoyer moins) : c'est cette zone qui est envoyée (zones/).`);
+    }
   }
   return ecarts;
 }

@@ -236,11 +236,45 @@ export interface ResultatCas {
   horodatage: string;
 }
 
+/** Lens venu du cache de 24 h du serveur : d'après la ligne relue, à défaut le journal. */
+export function lensDuCache(r: Pick<ResultatCas, "ligne" | "journal">): boolean {
+  if (r.ligne) return r.ligne.lens_from_cache;
+  return r.journal?.complement?.lensFromCache === true;
+}
+
+/** Ce qui vient du cache du serveur pour ce cas : Lens, la requête de l'IA, les boutiques. */
+export function partsDuCache(r: Pick<ResultatCas, "ligne" | "journal">): { lens: boolean; requete: boolean; boutiques: boolean } {
+  const complement = r.journal?.complement ?? null;
+  return { lens: lensDuCache(r), requete: complement?.queryFromCache === true, boutiques: complement?.shoppingFromCache === true };
+}
+
+/** Lens a répondu (lancement mesuré, sans panne de Lens) : sa réponse est dans le cache de 24 h. */
+export function lensARepondu(r: Pick<ResultatCas, "issue" | "ligne">): boolean {
+  return r.issue === "mesure" && r.ligne?.outcome !== "failure";
+}
+
+/** Réponses de Lens gardées par le cache (seulement celles qui ont été facturées). */
+const ISSUES_LENS_EN_CACHE = new Set(["found", "nothing_buyable", "empty_lens"]);
+
+/** Entrées que ce lancement a sans doute écrites dans le cache du serveur
+ * (table search_cache de spotto-dev-2, sans compte ni recherche, 24 h) :
+ * Lens, la requête de l'IA (ou son absence), Google Shopping. Estimation. */
+export function entreesDeCache(r: Pick<ResultatCas, "ligne" | "journal">): number {
+  const complement = r.journal?.complement ?? null;
+  const lens = r.ligne !== null && !r.ligne.lens_from_cache && ISSUES_LENS_EN_CACHE.has(r.ligne.outcome ?? "") ? 1 : 0;
+  const requete = complement && typeof complement.aiMs === "number" && typeof complement.inputTokens === "number" && complement.queryFromCache !== true ? 1 : 0;
+  const boutiques =
+    complement && typeof complement.calls === "number" && complement.calls > 0 && typeof complement.shoppingMs === "number" && complement.shoppingFailureKind == null && complement.shoppingFromCache !== true ? 1 : 0;
+  return lens + requete + boutiques;
+}
+
 /** Ce que dit la mesure entière (mesure.json), à côté des cas. */
 export interface MetaMesure {
   version: 1;
   debut: string;
   fin: string | null;
+  /** Marqueur des comptes d'essai de cette exécution (mesure-voie-c-<exécution>-…@example.com). */
+  execution?: string;
   serveur: { commit: string | null; identiqueAMain: boolean | null; commitMain: string };
   jeu: string;
   cadres: { chemin: string; nombre: number; tracesParClaude: boolean };
@@ -253,4 +287,13 @@ export interface MetaMesure {
   arret: string | null;
   nettoyage: { comptes: number; supprimes: number; restes: string[] };
   avertissements: string[];
+  /** Mesure reprise (--reprendre) : cas gardés de la mesure d'origine, et cas refaits. */
+  reprise?: { debutPrecedent: string; casGardes: number; casRefaits: string[] } | null;
+  /** Exécutions précédentes de cette mesure, avant une reprise (la plus récente d'abord). */
+  precedentes?: MetaMesure[];
 }
+
+/** Nom du JSON d'un cas dans le dossier de la mesure. */
+export const FICHIER_CAS = /^cas-\d+(-avec-mots|-sans-mots)?\.json$/;
+/** Lancement refait par une reprise : l'ancien JSON est gardé sous ce nom (ses crédits ont été dépensés). */
+export const FICHIER_CAS_REMPLACE = /^cas-\d+(-avec-mots|-sans-mots)?\.remplace-[0-9a-z]+\.json$/;

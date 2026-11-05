@@ -2,7 +2,7 @@
 // seulement », environnement du serveur local, et masquage des secrets dans
 // tout ce que l'outil affiche ou écrit. Logique pure, testée
 // (tests/mesureVoieC.test.ts).
-import { join, relative, resolve, isAbsolute } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { parse } from "dotenv";
 import { assertDevDatabaseUrl, assertDevSupabaseUrl, DEV_PROJECT_NAME, DEV_PROJECT_REF, DevDatabaseGuardError } from "../dev-database.js";
 import { lirePlafond, PLAFOND_PAR_DEFAUT } from "./budget.js";
@@ -23,18 +23,27 @@ export interface OptionsMesure {
   mots: ModeMots;
   /** Refaire le rapport d'une mesure déjà faite, sans rien lancer. */
   refaireRapport: string | null;
+  /** Finir une mesure arrêtée : seuls ses cas absents ou en panne sont relancés, dans son dossier. */
+  reprendre: string | null;
+  /** Supprimer, par l'administration, les comptes d'essai listés dans comptes.json de ce dossier. */
+  nettoyer: string | null;
+}
+
+/** Dossier habituel du fondateur (travail non commité) : l'outil n'y écrit jamais. */
+export function depotHabituel(maison: string): string {
+  return join(maison, "Desktop", "Spotto", "mon-app-shopping-ia");
 }
 
 /** Emplacements par défaut, sur le Mac du fondateur (à partir de son dossier personnel). */
 export function emplacementsParDefaut(maison: string): Pick<OptionsMesure, "jeu" | "cadres" | "sortie"> {
   return {
     jeu: join(maison, "Downloads", "spotto-jeu-de-verite"),
-    cadres: join(maison, "Desktop", "Spotto", "mon-app-shopping-ia", "docs", "banc-jeu-de-verite", "cadres-traces.txt"),
+    cadres: join(depotHabituel(maison), "docs", "banc-jeu-de-verite", "cadres-traces.txt"),
     sortie: join(maison, "Downloads", "spotto-mesure-voie-c"),
   };
 }
 
-const AVEC_VALEUR = ["--jeu", "--cadres", "--sortie", "--plafond-credits", "--refaire-rapport"];
+const AVEC_VALEUR = ["--jeu", "--cadres", "--sortie", "--plafond-credits", "--refaire-rapport", "--reprendre", "--nettoyer"];
 const SEULES = ["--confirmer", "--sans-mots", "--les-deux"];
 
 /** Lit la ligne de commande. Une option inconnue est refusée (une faute de
@@ -53,12 +62,22 @@ export function lireOptions(argv: readonly string[], maison: string, dossierCour
     } else throw new ErreurMesure(`Option inconnue : ${option}. Options : ${[...SEULES, ...AVEC_VALEUR].join(", ")}.`);
   }
   if (drapeaux.has("--sans-mots") && drapeaux.has("--les-deux")) throw new ErreurMesure("--sans-mots et --les-deux s'excluent.");
+  if (valeurs.has("--reprendre") && (drapeaux.has("--sans-mots") || drapeaux.has("--les-deux"))) {
+    throw new ErreurMesure("--reprendre garde le mode de la mesure reprise (avec vos mots, sans, ou les deux) : ne pas ajouter --sans-mots ni --les-deux.");
+  }
+  if (valeurs.has("--reprendre") && valeurs.has("--refaire-rapport")) throw new ErreurMesure("--reprendre et --refaire-rapport s'excluent.");
+  if (valeurs.has("--nettoyer") && (drapeaux.has("--confirmer") || valeurs.has("--reprendre") || valeurs.has("--refaire-rapport"))) {
+    throw new ErreurMesure("--nettoyer s'emploie seul : pnpm --filter backend mesure-voie-c --nettoyer <dossier d'une mesure>.");
+  }
   const chemin = (option: string, parDefaut: string) => {
     const valeur = valeurs.get(option);
     return valeur === undefined ? parDefaut : resolve(dossierCourant, valeur);
   };
+  const facultatif = (option: string) => {
+    const valeur = valeurs.get(option);
+    return valeur === undefined ? null : resolve(dossierCourant, valeur);
+  };
   const defauts = emplacementsParDefaut(maison);
-  const refaire = valeurs.get("--refaire-rapport");
   return {
     confirmer: drapeaux.has("--confirmer"),
     jeu: chemin("--jeu", defauts.jeu),
@@ -66,16 +85,61 @@ export function lireOptions(argv: readonly string[], maison: string, dossierCour
     sortie: chemin("--sortie", defauts.sortie),
     plafond: valeurs.has("--plafond-credits") ? lirePlafond(valeurs.get("--plafond-credits")) : PLAFOND_PAR_DEFAUT,
     mots: drapeaux.has("--les-deux") ? "les-deux" : drapeaux.has("--sans-mots") ? "sans" : "avec",
-    refaireRapport: refaire === undefined ? null : resolve(dossierCourant, refaire),
+    refaireRapport: facultatif("--refaire-rapport"),
+    reprendre: facultatif("--reprendre"),
+    nettoyer: facultatif("--nettoyer"),
   };
 }
 
-/** Les sorties restent hors du dépôt Git : jamais une réponse ni une image dans le code. */
-export function verifierHorsDuDepot(dossier: string, racineDepot: string): void {
-  const chemin = relative(resolve(racineDepot), resolve(dossier));
-  if (chemin === "" || (!chemin.startsWith("..") && !isAbsolute(chemin))) {
-    throw new ErreurMesure(`Le dossier des sorties (${dossier}) est dans le dépôt Git : choisissez-en un autre (--sortie).`);
+/** Ce que la garde des dossiers sait du disque (faux dans les tests). */
+export interface GardesDossier {
+  /** Chemin réel (liens symboliques résolus) d'un chemin EXISTANT ; lève une erreur sinon. */
+  realpath(chemin: string): string;
+  /** Dossiers interdits en plus du dépôt de l'outil : le dossier habituel du fondateur. */
+  interdits: readonly string[];
+  /** Racine du dépôt Git qui contient ce dossier existant (git rev-parse --show-toplevel), ou null. */
+  depotGit(dossierExistant: string): string | null;
+}
+
+/** Sans disque : chemins pris tels quels, aucun dépôt Git détecté. */
+const GARDES_SANS_DISQUE: GardesDossier = { realpath: (chemin) => chemin, interdits: [], depotGit: () => null };
+
+/** Chemin réel d'un dossier qui n'existe peut-être pas encore : celui de son
+ * plus proche parent existant (liens résolus), suivi du reste. */
+export function cheminReel(chemin: string, realpath: GardesDossier["realpath"]): { reel: string; existant: string } {
+  let courant = resolve(chemin);
+  const suite: string[] = [];
+  for (;;) {
+    try {
+      const reel = realpath(courant);
+      return { reel: join(reel, ...suite), existant: reel };
+    } catch {
+      const parent = dirname(courant);
+      if (parent === courant) return { reel: resolve(chemin), existant: courant };
+      suite.unshift(basename(courant));
+      courant = parent;
+    }
   }
+}
+
+function dedans(chemin: string, zone: string): boolean {
+  const ecart = relative(zone, chemin);
+  return ecart === "" || (!ecart.startsWith("..") && !isAbsolute(ecart));
+}
+
+/** Les sorties restent hors de tout dépôt Git — celui de l'outil, le dossier
+ * habituel du fondateur, et tout autre dépôt —, liens symboliques résolus :
+ * jamais une réponse ni une image dans du code. */
+export function verifierHorsDuDepot(dossier: string, racineDepot: string, gardes: GardesDossier = GARDES_SANS_DISQUE): void {
+  const cible = cheminReel(dossier, gardes.realpath);
+  const zones = [{ zone: racineDepot, nom: "le dépôt Git de l'outil" }, ...gardes.interdits.map((zone) => ({ zone, nom: "le dossier habituel du fondateur" }))];
+  for (const { zone, nom } of zones) {
+    if (dedans(resolve(dossier), resolve(zone)) || dedans(cible.reel, cheminReel(zone, gardes.realpath).reel)) {
+      throw new ErreurMesure(`Le dossier ${dossier} est dans ${nom} (${zone}) : choisissez-en un autre, hors de tout dépôt Git (--sortie).`);
+    }
+  }
+  const depot = gardes.depotGit(cible.existant);
+  if (depot !== null) throw new ErreurMesure(`Le dossier ${dossier} est dans un dépôt Git (${depot}) : choisissez-en un autre, hors de tout dépôt Git (--sortie).`);
 }
 
 /** L'environnement que verrait le serveur lancé dans apps/backend : le
@@ -106,7 +170,8 @@ export const CLE_SERPAPI_A_BLANC = "cle-invalide-essai-a-blanc";
 
 export interface SurchargesServeur {
   port: number;
-  /** Clé d'essai d'Anthropic ; null : aucune (essai à blanc). */
+  /** Clé d'essai d'Anthropic ; null : aucune, et l'IA de la voie C coupée
+   * (essai à blanc, seconde passe de --les-deux). */
   cleAnthropic: string | null;
   /** Remplace la clé SerpApi (essai à blanc) ; null : celle du .env. */
   cleSerpApi: string | null;
@@ -121,15 +186,18 @@ export interface SurchargesServeur {
  * NODE_ENV (« test » couperait les limites du serveur). */
 const RETIREES = ["SENTRY_DSN", "ANTHROPIC_PHOTO_ENABLED", "ANTHROPIC_API_KEY", "NODE_ENV"];
 
-/** Environnement du serveur local : celui de apps/backend/.env, voie C et son
- * IA allumées, plafonds relevés juste assez, pour CE processus seulement. */
+/** Environnement du serveur local : celui de apps/backend/.env, voie C
+ * allumée, son IA allumée seulement avec une clé d'essai, plafonds relevés
+ * juste assez, pour CE processus seulement. Sans clé, l'IA est coupée deux
+ * fois (VOIE_C_AI_ENABLED et clé absente) : le complément finit en
+ * « skipped », sans IA ni Google Shopping. */
 export function environnementServeur(base: Readonly<Record<string, string>>, surcharges: SurchargesServeur): Record<string, string> {
   const env: Record<string, string> = { ...base };
   for (const cle of RETIREES) delete env[cle];
   Object.assign(env, surcharges.plafonds, {
     PORT: String(surcharges.port),
     VOIE_C_ENABLED: "true",
-    VOIE_C_AI_ENABLED: "true",
+    VOIE_C_AI_ENABLED: surcharges.cleAnthropic ? "true" : "false",
     DOTENV_CONFIG_PATH: surcharges.envAbsent,
   });
   if (surcharges.cleAnthropic) env.ANTHROPIC_API_KEY = surcharges.cleAnthropic;

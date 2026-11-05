@@ -100,19 +100,44 @@ export function motPresent(mot: string, motsTitre: readonly string[]): boolean {
   return motsTitre.some((motTitre) => [...formes].some((forme) => isTranslationForm(motTitre, forme)));
 }
 
-/** Règle du banc : au moins la moitié des mots de la MARQUE dans le titre (sans
- * marque : au moins 2 mots du modèle), ET au moins la moitié des mots
- * importants du MODÈLE. Un modèle vide n'est jamais une bonne pièce. */
+/** Petits mots d'une marque qui ne la désignent pas (« The Kooples », « De
+ * Fursac », « Le Slip Français ») : ignorés pour la juger. */
+export const ARTICLES_MARQUE: ReadonlySet<string> = new Set(["le", "la", "les", "de", "des", "du", "the", "a"]);
+
+/** Mots de la marque, sans les articles (une marque faite seulement d'articles les garde). */
+export function motsDeMarque(marque: string): string[] {
+  const mots = motsDe(marque);
+  const utiles = mots.filter((mot) => !ARTICLES_MARQUE.has(mot));
+  return utiles.length > 0 ? utiles : mots;
+}
+
+/** Un mot de la marque est dans le titre tel quel, ou au pluriel : jamais un
+ * début de mot (« Maje » n'est pas « Majestic »), jamais une traduction. */
+export function motDeMarquePresent(mot: string, motsTitre: readonly string[]): boolean {
+  return motsTitre.some((motTitre) => motTitre === mot || motTitre === `${mot}s` || motTitre === `${mot}x`);
+}
+
+/** Règle du banc, telle que décrite : au moins la moitié des mots de la
+ * MARQUE dans le titre (articles ignorés, mot exact ou son pluriel), ET au
+ * moins la moitié des mots importants du MODÈLE (3 lettres ou plus,
+ * traductions FR/EN comprises). Sans marque : au moins 2 mots importants du
+ * modèle — un modèle d'un seul mot important n'est donc jamais une bonne
+ * pièce sans marque (version stricte, gardée et écrite dans le rapport). Un
+ * modèle vide n'est jamais une bonne pièce. */
 export function semblePiece(titre: string, attendu: Attendu): boolean {
   const modele = motsImportants(attendu.modele);
   if (modele.length === 0) return false;
   const motsTitre = motsDe(titre);
   const trouvesModele = modele.filter((mot) => motPresent(mot, motsTitre)).length;
   if (trouvesModele * 2 < modele.length) return false;
-  const marque = motsDe(attendu.marque);
+  const marque = motsDeMarque(attendu.marque);
   if (marque.length === 0) return trouvesModele >= 2;
-  return marque.filter((mot) => motPresent(mot, motsTitre)).length * 2 >= marque.length;
+  return marque.filter((mot) => motDeMarquePresent(mot, motsTitre)).length * 2 >= marque.length;
 }
+
+/** La règle, en une phrase, pour le rapport et le mode d'emploi. */
+export const REGLE_BONNE_PIECE =
+  "au moins la moitié des mots de la marque (articles ignorés, mot exact ou son pluriel) et au moins la moitié des mots importants du modèle (3 lettres ou plus, traductions FR/EN comprises) ; sans marque, au moins 2 mots importants du modèle (un modèle d'un seul mot important n'est donc jamais une bonne pièce sans marque)";
 
 /** Un juge : vrai si la proposition est la bonne pièce. */
 export type Juge = (proposition: PropositionJugee) => boolean;

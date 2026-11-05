@@ -3,9 +3,9 @@
 // requêtes HTTP de l'app, les images, les fichiers de sortie. Le déroulé
 // (mesure.ts) est testé avec des faux ; ici, seulement le branchement.
 // Rien de secret n'est affiché ni écrit : tout texte passe par masquerSecrets.
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
@@ -18,9 +18,10 @@ import { imageHash } from "../../../src/lib/searchCache.js";
 import { SHOPPING_QUERY_AI_SETTINGS } from "../../../src/services/shoppingQueryAi.js";
 import { lireEtatLens } from "../essai-pieces.js";
 import { supprimerCompteParLApp } from "../suppression-compte-test.js";
-import { masquerSecrets } from "./environnement.js";
+import { depotHabituel, masquerSecrets, type GardesDossier } from "./environnement.js";
+import { afficherSansRisque, surInterruption } from "./interruption.js";
 import { ErreurMesure } from "./jeu-de-verite.js";
-import type { CompteEssai, PortsMesure, ServeurLocal } from "./mesure.js";
+import { PREFIXE_COMPTE, type CompteCree, type CompteEssai, type PortsMesure, type ServeurLocal } from "./mesure.js";
 import { codeErreur, COLONNES_LIGNE, LIGNE_RECHERCHE, lireLigneJournal, type LigneJournal } from "./resultats.js";
 
 export const DOSSIER_BACKEND = fileURLToPath(new URL("../../../", import.meta.url));
@@ -44,9 +45,28 @@ export interface ConfigReelle {
   environnement: Record<string, string>;
   /** Secrets à masquer ; l'outil y ajoute les jetons et mots de passe des comptes d'essai. */
   secrets: string[];
+  /** Marqueur de cette exécution, dans l'adresse des comptes d'essai. */
+  execution: string;
 }
 
-export function portsReels({ environnement, secrets }: ConfigReelle): PortsMesure {
+/** Pages de 200 comptes lues au plus par le balayage (spotto-dev-2 en a bien moins). */
+const PAGES_DE_COMPTES_MAX = 50;
+
+/** Garde des dossiers d'écriture sur ce Mac : liens symboliques résolus, le
+ * dossier habituel du fondateur interdit, et tout dossier dans un dépôt Git
+ * (git rev-parse --show-toplevel réussit). */
+export function gardesDuMac(maison: string): GardesDossier {
+  return {
+    realpath: (chemin) => realpathSync(chemin),
+    interdits: [depotHabituel(maison)],
+    depotGit: (dossier) => {
+      const reponse = spawnSync("git", ["-C", dossier, "rev-parse", "--show-toplevel"], { encoding: "utf8" });
+      return reponse.status === 0 ? reponse.stdout.trim() || dossier : null;
+    },
+  };
+}
+
+export function portsReels({ environnement, secrets, execution }: ConfigReelle): PortsMesure {
   // Clients créés au premier usage : la garde « spotto-dev-2 seulement » (mesure.ts) passe toujours avant.
   const options = { auth: { persistSession: false, autoRefreshToken: false } };
   let clients: { admin: SupabaseClient; anonyme: SupabaseClient } | null = null;
@@ -66,9 +86,24 @@ export function portsReels({ environnement, secrets }: ConfigReelle): PortsMesur
 
   return {
     maintenant: () => Date.now(),
-    afficher: (texte) => console.log(masquer(texte)),
+    // Jamais d'erreur à l'affichage : Terminal fermé (SIGHUP), le nettoyage continue.
+    afficher: (texte) => afficherSansRisque(masquer(texte)),
     ecrire: (chemin, contenu) => writeFileSync(chemin, typeof contenu === "string" ? masquer(contenu) : contenu),
     creerDossier: (chemin) => mkdirSync(chemin, { recursive: true }),
+    lire: (chemin) => {
+      try {
+        return readFileSync(chemin, "utf8");
+      } catch {
+        return null;
+      }
+    },
+    lister: (dossier) => {
+      try {
+        return readdirSync(dossier);
+      } catch {
+        return [];
+      }
+    },
     etatLens: () => lireEtatLens(),
     attendre,
 
@@ -112,9 +147,11 @@ export function portsReels({ environnement, secrets }: ConfigReelle): PortsMesur
       }),
 
     async demarrerServeur(env) {
-      // Processus à part (detached) : Ctrl-C n'atteint que l'outil, qui supprime
-      // d'abord les comptes par l'app, puis arrête le serveur. Si l'outil
-      // disparaît, l'entrée standard du serveur se ferme et il s'arrête seul.
+      // Processus à part (detached : sa propre session) : Ctrl-C et la
+      // fermeture du Terminal n'atteignent que l'outil, qui arrête d'abord ce
+      // serveur (lui seul appelle SerpApi et Anthropic), puis supprime les
+      // comptes par l'administration. Si l'outil disparaît, l'entrée standard
+      // du serveur se ferme et il s'arrête seul.
       const enfant = spawn(process.execPath, ["--import", "tsx", LANCEUR], { cwd: DOSSIER_BACKEND, env, stdio: ["pipe", "pipe", "pipe"], detached: true });
       const tuer = () => {
         if (enfant.exitCode === null && enfant.signalCode === null) enfant.kill("SIGKILL");
@@ -159,15 +196,18 @@ export function portsReels({ environnement, secrets }: ConfigReelle): PortsMesur
       return serveur;
     },
 
-    async creerCompte(numero) {
+    async creerCompte(numero, surCree) {
       const suffixe = randomBytes(4).toString("hex");
-      // @example.com : un compte oublié est retrouvé par nettoyer-comptes-test-dev.
-      const email = `mesure-voie-c-${suffixe}@example.com`;
+      // Le marqueur de l'exécution permet un dernier balayage (comptesDeLExecution) ;
+      // @example.com : un compte oublié est aussi retrouvé par nettoyer-comptes-test-dev.
+      const email = `${PREFIXE_COMPTE}${execution}-${suffixe}@example.com`;
       const motDePasse = `${randomBytes(18).toString("base64url")}A1!`;
       secrets.push(motDePasse);
       const cree = await supabase().admin.auth.admin.createUser({ email, password: motDePasse, email_confirm: true });
       if (cree.error || !cree.data.user) throw new ErreurMesure(`Création du compte d'essai impossible (${cree.error?.code ?? cree.error?.status ?? "raison inconnue"}).`);
       const id = cree.data.user.id;
+      // Dès qu'il existe, avant le profil, les accords et la connexion : il ne peut plus échapper au nettoyage.
+      surCree({ numero, id, email });
       try {
         const profil = await supabase().admin.from("profiles").update({ username: `mvc_${suffixe}`, display_name: `Mesure voie C ${numero}` }).eq("id", id);
         if (profil.error) throw new ErreurMesure("Profil du compte d'essai impossible.");
@@ -184,7 +224,7 @@ export function portsReels({ environnement, secrets }: ConfigReelle): PortsMesur
         const session = await supabase().anonyme.auth.signInWithPassword({ email, password: motDePasse });
         if (session.error || !session.data.session) throw new ErreurMesure("Connexion du compte d'essai impossible.");
         secrets.push(session.data.session.access_token);
-        return { numero, id, jeton: session.data.session.access_token };
+        return { numero, id, email, jeton: session.data.session.access_token };
       } catch (erreur) {
         await supabase().admin.auth.admin.deleteUser(id).catch(() => undefined);
         throw erreur;
@@ -192,8 +232,9 @@ export function portsReels({ environnement, secrets }: ConfigReelle): PortsMesur
     },
 
     async supprimerCompte(compte, serveur) {
-      // Par l'app d'abord (« Supprimer mon compte » : fichiers compris) ; sinon par l'administration.
-      const parLApp = serveur ? await supprimerCompteParLApp(serveur.url, supabase().admin, { id: compte.id, jeton: compte.jeton }) : false;
+      // Par l'app d'abord (« Supprimer mon compte » : fichiers compris) ; sinon
+      // (serveur arrêté, compte pas encore connecté) par l'administration.
+      const parLApp = serveur && compte.jeton ? await supprimerCompteParLApp(serveur.url, supabase().admin, { id: compte.id, jeton: compte.jeton }) : false;
       if (!parLApp) {
         const fichiers = await supabase().admin.storage.from("screenshots").list(compte.id);
         if (fichiers.data && fichiers.data.length > 0) await supabase().admin.storage.from("screenshots").remove(fichiers.data.map((f) => `${compte.id}/${f.name}`));
@@ -202,6 +243,21 @@ export function portsReels({ environnement, secrets }: ConfigReelle): PortsMesur
       const reste = await supabase().admin.auth.admin.getUserById(compte.id);
       const recherches = await supabase().admin.from("product_searches").select("id", { count: "exact", head: true }).eq("user_id", compte.id);
       return !reste.data?.user && !recherches.error && (recherches.count ?? 0) === 0;
+    },
+
+    async comptesDeLExecution(marqueur) {
+      const prefixe = `${PREFIXE_COMPTE}${marqueur}-`;
+      const trouves: CompteCree[] = [];
+      for (let page = 1; page <= PAGES_DE_COMPTES_MAX; page += 1) {
+        const { data, error } = await supabase().admin.auth.admin.listUsers({ page, perPage: 200 });
+        if (error) throw new ErreurMesure("Lecture des comptes de spotto-dev-2 impossible (balayage).");
+        for (const utilisateur of data.users) {
+          const email = utilisateur.email?.toLowerCase() ?? "";
+          if (email.startsWith(prefixe) && email.endsWith("@example.com")) trouves.push({ numero: 0, id: utilisateur.id, email });
+        }
+        if (data.users.length < 200) break;
+      }
+      return trouves;
     },
 
     async preparer(serveur, compte) {
@@ -250,17 +306,8 @@ export function portsReels({ environnement, secrets }: ConfigReelle): PortsMesur
       return { zone, empreinte: imageHash(zone) };
     },
 
-    surInterruption(action) {
-      const gestion = () => {
-        console.log("\nInterruption : suppression des comptes d'essai et arrêt du serveur local…");
-        void action().finally(() => process.exit(130));
-      };
-      process.once("SIGINT", gestion);
-      process.once("SIGTERM", gestion);
-      return () => {
-        process.off("SIGINT", gestion);
-        process.off("SIGTERM", gestion);
-      };
-    },
+    // Permanent jusqu'à la fin : premier signal → nettoyage ; les suivants
+    // (second Ctrl-C, celui que tsx relaie, SIGHUP, SIGTERM) sont ignorés.
+    surInterruption: (action, attendreLe) => surInterruption(action, attendreLe),
   };
 }
