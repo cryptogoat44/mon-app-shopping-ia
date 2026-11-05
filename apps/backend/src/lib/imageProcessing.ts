@@ -1,6 +1,7 @@
 import sharp, { type Sharp } from "sharp";
 import type { CropRect } from "@monapp/shared-types";
 import { safeFetch } from "./safeFetch.js";
+import { MAX_INPUT_PIXELS, imageFormatOf } from "./imageSafety.js";
 
 // Hébergeurs des vignettes renvoyées par les voies officielles (oEmbed) :
 // seules adresses que le serveur accepte de télécharger pour les recadrer
@@ -47,8 +48,12 @@ export async function downloadThumbnail(url: string): Promise<Buffer> {
  * son orientation EXIF (photos d'iPhone), la limite à 1 600 px et la
  * convertit en JPEG. Sans zone, l'image entière est seulement normalisée.
  * Relève ImageSourceError si le fichier n'est pas une image lisible (le type
- * déclaré par l'app n'est jamais cru sur parole : c'est sharp qui décode). */
+ * déclaré par l'app n'est jamais cru sur parole : c'est sharp qui décode),
+ * pas d'un format permis ou trop grande (lib/imageSafety.ts). */
 export async function prepareImageForAnalysis(input: Buffer, crop: CropRect | null): Promise<Buffer> {
+  // Format vérifié sur les premiers octets, AVANT sharp : un SVG n'est
+  // jamais lu, même annoncé comme une photo.
+  if (!imageFormatOf(input)) throw new ImageSourceError("Image illisible");
   let image: Sharp;
   let width: number;
   let height: number;
@@ -56,8 +61,10 @@ export async function prepareImageForAnalysis(input: Buffer, crop: CropRect | nu
     // rotate() sans argument applique l'orientation EXIF avant tout calcul
     // de dimensions — sinon une photo verticale d'iPhone serait recadrée
     // sur une zone tournée de 90°.
-    const oriented = await sharp(input, { failOn: "error" }).rotate().toBuffer({ resolveWithObject: true });
-    image = sharp(oriented.data);
+    const oriented = await sharp(input, { failOn: "error", limitInputPixels: MAX_INPUT_PIXELS })
+      .rotate()
+      .toBuffer({ resolveWithObject: true });
+    image = sharp(oriented.data, { limitInputPixels: MAX_INPUT_PIXELS });
     width = oriented.info.width;
     height = oriented.info.height;
   } catch {
