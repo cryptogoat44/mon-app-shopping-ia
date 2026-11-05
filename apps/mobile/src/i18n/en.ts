@@ -196,7 +196,8 @@ export const en: Catalog = {
     // Photo (small lot 2, founder's decision of 2026-10-27).
     photoLabel: "Which piece? (optional)",
     photoPlaceholder: "e.g. the black leather jacket",
-    photoWordsNote: "Your words are used to sort the suggestions. Only the image goes to the search.",
+    photoWordsNote:
+      "Your words are only used to sort the suggestions: they aren't sent with the image to the search. They only go to a search engine if you start a search with your words yourself.",
     // Shown until the piece is circled (nothing drawn, or the whole image), with or without words.
     frameHint: "Circle the piece alone, with no faces or text around it: Spotto will find it more easily.",
     videoPreview: (duration: string) => `Preview of your video, ${duration}`,
@@ -456,11 +457,12 @@ export const en: Catalog = {
     reportWithdrawError: "The report couldn't be withdrawn. Check your connection, then try again.",
     complementTitleAi: "This piece at other shops",
     complementTitleWords: "Results for your words",
-    complementQuery: (query: string) => `Search: “${query}”`,
+    complementQuery: (query: string) => `Search written by an AI: “${query}”`,
     viewOffer: "View offer",
     textSearchIntro: "Not quite right?",
     textSearchButton: "Search",
-    textSearchNote: "Your words are sent to the online search.",
+    textSearchNote:
+      "Your words will be sent to Google Shopping through our provider SerpApi, without your name or email address. Spotto doesn't keep them; it keeps the pieces found with your search.",
     textSearchRunning: "Searching…",
     textSearchAlreadyUsed: "A search with your words has already been run for this photo.",
     textSearchEmpty: "No suggestions for your words.",
@@ -793,7 +795,7 @@ export const en: Catalog = {
     analyticsPromptYes: "Yes, gladly",
     analyticsPromptNo: "No, thank you",
     updateNotice:
-      "Our privacy policy has been updated: your server is now in Europe, and the policy describes error tracking and (optional) usage statistics.",
+      "Our privacy policy has been updated: it describes the new searches at other shops and with your words. An AI reads the titles of the results, never your photo.",
     updateNoticeRead: "Read the policy",
     updateNoticeDismiss: "OK",
     updateNoticeDismissLabel: "Dismiss this notice",

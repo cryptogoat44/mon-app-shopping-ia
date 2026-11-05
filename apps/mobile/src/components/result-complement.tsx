@@ -13,8 +13,9 @@ import { themedStyles } from "@/theme/themed-styles";
 // d'autres boutiques (requête tirée des titres des propositions) ; « words » :
 // la recherche lancée avec les mots de la personne. Même grille et mêmes
 // cartes que « Autres propositions » (components/proposal-card.tsx), 6
-// d'emblée puis son propre « Voir plus ». Ni nom de fournisseur, ni « IA »
-// (décision du fondateur du 2026-10-21).
+// d'emblée puis son propre « Voir plus ». Pas de nom de fournisseur (décision
+// du fondateur du 2026-10-21) ; la requête de la section « ai » dit qu'elle est
+// écrite par une IA (point 4.3 du document pour l'avocat, 2026-11-05).
 
 /** Issue de la recherche par les mots quand elle n'a rien montré : une phrase,
  * sous les résultats ou après « rien trouvé » ; null sinon. */

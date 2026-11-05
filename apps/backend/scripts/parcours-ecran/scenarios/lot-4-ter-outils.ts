@@ -69,7 +69,9 @@ const FR = {
   // Petit lot 2 (2026-10-27) : les mots facultatifs d'une photo trient les propositions.
   champPhoto: "Quelle pièce ? (facultatif)",
   exemplePhoto: "ex. la veste en cuir noir",
-  motsTri: "Vos mots servent à trier les propositions. Seule l'image part vers la recherche.",
+  // Texte du 2026-11-05 (lot politique exacte, point 4.1 du document pour l'avocat).
+  motsTri:
+    "Vos mots servent seulement à trier les propositions : ils ne partent pas avec l'image vers la recherche. Ils ne sont envoyés à un moteur de recherche que si vous lancez vous-même une recherche avec vos mots.",
   // Lots « premier essai » et « entourer la pièce » : montré tant que la pièce n'est pas entourée, avec ou sans mots.
   conseilCadre: "Entourez la pièce seule, sans visage ni texte autour : Spotto la retrouvera plus facilement.",
   triees: "Triées selon vos mots",
@@ -135,7 +137,8 @@ export const TEXTES: Record<Locale, Textes> = {
     fermer: "Close",
     champPhoto: "Which piece? (optional)",
     exemplePhoto: "e.g. the black leather jacket",
-    motsTri: "Your words are used to sort the suggestions. Only the image goes to the search.",
+    motsTri:
+      "Your words are only used to sort the suggestions: they aren't sent with the image to the search. They only go to a search engine if you start a search with your words yourself.",
     conseilCadre: "Circle the piece alone, with no faces or text around it: Spotto will find it more easily.",
     triees: "Sorted by your words",
     motsPhoto: "black leather jacket",
