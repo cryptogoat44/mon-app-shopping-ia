@@ -362,7 +362,13 @@ export const en: Catalog = {
     count: (n: number, query: string | null | undefined) =>
       `${n} suggestion${n === 1 ? "" : "s"}${query ? ` for “${query}”` : ""}`,
     sortedByWords: "Sorted by your words",
+    // Price first: the first suggestion matching the words has no price, it is
+    // tucked away further down (review F4, to be validated).
+    sortedByWordsPriceFirst: "Priced first, then by your words",
     bestProposal: "Best suggestion",
+    // Price first: the big card chosen by default when it isn't the first
+    // suggestion of the search (review E4, to be validated).
+    bestWithPrice: "Best suggestion with a price",
     otherProposal: "Other suggestion",
     otherProposals: "Other suggestions",
     showMore: (n: number) => `Show more (${n})`,
@@ -396,6 +402,9 @@ export const en: Catalog = {
     backToSpotter: "Back to Spotter",
     notRight: "Not the right piece?",
     correctionsLead: "Show Spotto the piece another way:",
+    // Price first: before the corrections, which start a new search, see the
+    // suggestions without a price for free (review ORD-5, to be validated).
+    notRightWithoutPriceLead: "It may be among the suggestions without a price:",
     noMatchTitle: "Our visual search didn't find anything in this image.",
     noMatchTip:
       "Searching the same image again would give the same result. Instead, try circling the piece alone, picking another moment in the video where it's clearly visible or, for a video, describing it more precisely.",
@@ -405,6 +414,8 @@ export const en: Catalog = {
       "These are pieces that look like yours, found by our visual search. They are not necessarily for sale: open them to check, or circle the piece differently.",
     // "Price first" (founder's decision of 2026-11-03): suggestions without a price
     // are tucked away last, behind a button. To be validated (à valider).
+    // Section title, above the button (review E5, to be validated).
+    withoutPriceTitle: "No price shown",
     showWithoutPrice: (n: number) => (n > 1 ? `Show ${n} suggestions without a price` : "Show the suggestion without a price"),
     hideWithoutPrice: (n: number) => (n > 1 ? "Hide suggestions without a price" : "Hide the suggestion without a price"),
     // VoiceOver, after the button: the list appears or disappears below it (to be validated).

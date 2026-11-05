@@ -186,3 +186,20 @@ describe("prix d'abord (2026-11-03) : place de la proposition cliquée, proprié
     expect(Object.keys(ANALYTICS_EVENTS)).toEqual(expect.arrayContaining(["similar_results_opened", "merchant_link_opened", "spot_completed"]));
   });
 });
+
+describe("prix d'abord, relecture : séries comparables et origine de l'ouverture « Sans prix »", () => {
+  it("F5 : « Voir plus » sous « Autres propositions » dit si la section ne compte que des propositions avec prix", () => {
+    expect(sanitizeProps("similar_results_opened", { price_first: true })).toEqual({ price_first: true });
+    expect(sanitizeProps("similar_results_opened", { price_first: false })).toEqual({ price_first: false });
+    // Versions d'avant : rien, comme avant ; un texte est retiré.
+    expect(sanitizeProps("similar_results_opened", {})).toEqual({});
+    expect(sanitizeProps("similar_results_opened", { price_first: "oui" })).toEqual({});
+    expect(ANALYTICS_EVENTS.similar_results_opened.price_first.kind).toBe("bool");
+  });
+
+  it("ORD-5 : section « Sans prix » ouverte depuis son bouton ou depuis « Ce n'est pas la bonne pièce ? »", () => {
+    expect(sanitizeProps("no_price_results_opened", { results_count: 23, context: "not_right" })).toEqual({ results_count: 23, context: "not_right" });
+    expect(sanitizeProps("no_price_results_opened", { results_count: 7, context: "section" })).toEqual({ results_count: 7, context: "section" });
+    expect(sanitizeProps("no_price_results_opened", { results_count: 7, context: "ailleurs" })).toEqual({ results_count: 7 });
+  });
+});

@@ -20,7 +20,7 @@ import { useAuth } from "@/lib/auth-context";
 import { importPhotoForSpotter, prepareSharedPhoto, type ImportResult } from "@/lib/image-import";
 import { latestVideoUri, loadLatestVideo, saveLatestVideoChoice } from "@/lib/latest-video";
 import type { LatestVideo, LatestVideoChoice, LatestVideoState } from "@/lib/latest-video-state";
-import { RECENT_SEARCHES_LIMIT } from "@/lib/recent-searches";
+import { RECENT_SEARCHES_LIMIT, reopenParams } from "@/lib/recent-searches";
 import { sharedRefusalMessage, type SharedItem } from "@/lib/shared-item";
 import { beginFromPhoto } from "@/lib/spot-flow";
 import { LINK_COVER_ENABLED } from "@/lib/spot-flags";
@@ -89,9 +89,10 @@ function RecentRow({ recent }: { recent: { searchId: string; piece: Piece }[] })
             onPress={() => {
               // Rouverte depuis l'historique : toujours relue sur le serveur (gratuit), jamais
               // la copie en mémoire du dernier lancement, qui peut être périmée (voie B lancée
-              // ou plus admissible, propositions de vos mots arrivées depuis).
+              // ou plus admissible, propositions de vos mots arrivées depuis). La proposition
+              // de la vignette s'y affiche en grand (lib/recent-searches.ts).
               clearLastSpotResult();
-              router.push({ pathname: "/spot/result", params: { searchId } });
+              router.push({ pathname: "/spot/result", params: reopenParams({ searchId, piece }) });
             }}
             accessibilityRole="button"
             accessibilityLabel={piece.name}

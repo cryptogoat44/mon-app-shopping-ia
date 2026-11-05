@@ -29,6 +29,18 @@ export function successCorrections(context: CorrectionContext): Correction[] {
   return list.length === 0 && context.fromLink ? ["add_video"] : list;
 }
 
+/** Ce que propose « Ce n'est pas la bonne pièce ? » sous des résultats. Prix
+ * d'abord : la pièce cherchée peut être repliée tout en bas, sans prix (le
+ * rang 1 de Google parfois) ; la voir est gratuit, alors que chaque
+ * correction lance une nouvelle recherche, comptée. Ces propositions passent
+ * donc en premier, dès que la section « Sans prix » n'est pas vide (relecture,
+ * ORD-5). Sans correction possible (résultat rouvert), rien ne change : pas
+ * de lien. */
+export function successSheetActions(corrections: Correction[], withoutPriceCount: number): ("show_without_price" | Correction)[] {
+  if (corrections.length === 0 || withoutPriceCount === 0) return corrections;
+  return ["show_without_price", ...corrections];
+}
+
 const LIMIT_REASONS: readonly SpotFailReason[] = ["rate_limited", "capacity_day", "capacity_month", "capacity_user"];
 
 /** Après une recherche sans résultat ou qui n'a pas abouti. */

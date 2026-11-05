@@ -40,5 +40,10 @@ export function useHeroReveal(scrollRef: RefObject<ScrollView | null>) {
       if (shouldRevealHero(viewport.current, hero.current)) scrollRef.current?.scrollTo({ y: 0, animated: !reduceMotion });
       if (name && Platform.OS === "ios") AccessibilityInfo.announceForAccessibilityWithOptions(t.result.shownAbove(name), { queue: true });
     },
+    /** Amener une section en haut de l'écran (prix d'abord : « Résultats pour
+     * vos mots », section « Sans prix »), d'un coup avec « Réduire les animations ». */
+    scrollToSection: (y: number) => {
+      scrollRef.current?.scrollTo({ y: Math.max(0, y), animated: !reduceMotion });
+    },
   };
 }
