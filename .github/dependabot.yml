@@ -1,0 +1,19 @@
+# Alertes de GitHub sur les failles des dépendances (lot garde-fous, point 19
+# de la feuille de route V1). Mises à jour de SÉCURITÉ seulement : quand une
+# faille connue touche une dépendance, Dependabot propose une demande de
+# fusion qui la corrige. Les mises à jour de routine sont coupées
+# (open-pull-requests-limit: 0), pour ne pas recevoir une demande par semaine.
+# À activer aussi dans GitHub : Settings → Code security → « Dependabot
+# alerts » et « Dependabot security updates » (une action du fondateur).
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 0

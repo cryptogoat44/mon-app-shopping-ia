@@ -34,6 +34,7 @@ import { keptMatchIds } from "../lib/keptPieces.js";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { purgeExpiredSearches } from "../lib/searchRetention.js";
 import { launchDating } from "../lib/launchDating.js";
+import { ANALYSIS_BUCKET, analysisImagePath, legacyAnalysisImagePath, purgeStaleAnalysisImages } from "../lib/storage.js";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { searchLocaleFor } from "../lib/locale.js";
 import { INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
@@ -45,7 +46,7 @@ import {
   sendCapacityReached,
   type SearchReservation,
 } from "../lib/searchCapacity.js";
-import { observeBreakerAfter, observeBreakerAtLaunch } from "../lib/searchBreaker.js";
+import { breakerPause, observeBreakerAfter, SEARCH_PAUSED } from "../lib/searchBreaker.js";
 import { sortByWords } from "../lib/wordSort.js";
 import { assertNoUserImage, voieCAiEnabled } from "../lib/aiSwitches.js";
 import { photoCallsLeft, startDeadline, VOIE_C_BUDGET } from "../lib/deadline.js";
@@ -66,6 +67,8 @@ import {
   type TextComplementPorts,
 } from "../lib/voieC.js";
 import { consumeRateLimit, RATE_LIMITED_MESSAGE } from "../plugins/rateLimit.js";
+import { aiQuotaFor } from "../lib/aiQuota.js";
+import { noteFailure } from "../lib/alerts.js";
 
 const createSearchSchema = z.object({
   sourceUrl: z.string().url().max(2048).optional(),
@@ -101,9 +104,14 @@ const runSearchSchema = z.object({
 // échoue : rien ne la réutilise ensuite (l'app garde sa propre copie pour
 // « Recadrer », l'historique affiche les images des produits). Un échec de
 // suppression est journalisé sans bloquer l'utilisateur.
-async function discardAnalysisImage(fastify: FastifyInstance, storagePath: string): Promise<void> {
-  const { error } = await fastify.supabaseAdmin.storage.from("screenshots").remove([storagePath]);
-  if (error) fastify.log.warn({ error, storagePath }, "Image analysée non supprimée après la recherche");
+// Nom du fichier : « analyses/<recherche>.jpg », sans le compte (lib/storage.ts) :
+// le lien signé part chez le fournisseur, puis chez Google. Une image restée
+// (échec ici, panne au mauvais moment) est effacée par la purge des images de
+// plus d'une heure, à la préparation suivante, quel que soit le compte.
+async function discardAnalysisImage(fastify: FastifyInstance, storagePaths: string[]): Promise<void> {
+  const { error } = await fastify.supabaseAdmin.storage.from(ANALYSIS_BUCKET).remove(storagePaths);
+  // Ni le chemin, ni l'erreur entière (elle pourrait le reprendre) : son nom seulement.
+  if (error) fastify.log.warn({ errorName: error.name }, "Image analysée non supprimée après la recherche");
 }
 
 const INSERTED_MATCH_ROWS = z.array(z.object({ id: z.string(), merchant_url: z.string() }));
@@ -316,7 +324,7 @@ async function markPending(fastify: FastifyInstance, id: string): Promise<void> 
 /** Aucun appel SerpApi finalement (annulation, plafond atteint, adresse
  * signée manquante) : l'image est effacée et la recherche redevient lançable. */
 async function releaseSearch(fastify: FastifyInstance, id: string, storagePath: string): Promise<void> {
-  await discardAnalysisImage(fastify, storagePath);
+  await discardAnalysisImage(fastify, [storagePath]);
   await markPending(fastify, id);
 }
 
@@ -324,11 +332,11 @@ async function releaseSearch(fastify: FastifyInstance, id: string, storagePath: 
  * null : échec, et la recherche redevient lançable. */
 async function uploadForAnalysis(fastify: FastifyInstance, request: FastifyRequest, id: string, storagePath: string, image: Buffer): Promise<string | null> {
   const { error: uploadError } = await fastify.supabaseAdmin.storage
-    .from("screenshots")
+    .from(ANALYSIS_BUCKET)
     .upload(storagePath, image, { contentType: "image/jpeg", upsert: true });
   const signed = uploadError
     ? null
-    : await fastify.supabaseAdmin.storage.from("screenshots").createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
+    : await fastify.supabaseAdmin.storage.from(ANALYSIS_BUCKET).createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
   if (!uploadError && signed?.data) return signed.data.signedUrl;
 
   request.log.error({ uploadError }, "Échec d'envoi de l'image recadrée");
@@ -418,7 +426,8 @@ async function callLens(
   timeoutMs?: number
 ): Promise<LensCall> {
   const { id, userId } = launch;
-  const storagePath = `${userId}/${id}.jpg`;
+  // Sans le compte dans le nom : ce chemin figure dans le lien signé envoyé au fournisseur.
+  const storagePath = analysisImagePath(id);
   const imageUrl = await uploadForAnalysis(fastify, request, id, storagePath, launch.image);
   if (!imageUrl) return { kind: "upload_failed" };
 
@@ -443,7 +452,7 @@ async function callLens(
 
   fastify.countRateLimitHit(request, "searchCreate");
   const outcome = await runVisualSearch(fastify, request, imageUrl, reservation.reservationId, timeoutMs);
-  await discardAnalysisImage(fastify, storagePath);
+  await discardAnalysisImage(fastify, [storagePath]);
   return { kind: "searched", outcome };
 }
 
@@ -549,7 +558,8 @@ function complementPorts(fastify: FastifyInstance, request: FastifyRequest, laun
     reserve: () => reserveSearch(fastify, request.log, launch.userId, launch.id, "shopping"),
     release: (reservationId) => releaseReservation(fastify, request.log, reservationId, "shopping"),
     capacityLeft: async () => (await searchCapacityBeforeComplementAi(fastify, request.log, launch.userId, launch.id)).allowed,
-    consumeAiLimit: () => consumeRateLimit(request, "shoppingQueryAiGlobal"),
+    // Compté dans la base (lib/aiQuota.ts, 0029) ; illisible : l'IA est sautée.
+    consumeAiLimit: async () => (await aiQuotaFor(fastify, request.log, { kind: "shopping_query", userId: null, reserve: true }).catch(() => null))?.allowed === true,
     socketDestroyed: () => Boolean(request.raw.socket?.destroyed),
     now: () => Date.now(),
     log: request.log,
@@ -680,6 +690,9 @@ async function launchWithVoieC(fastify: FastifyInstance, request: FastifyRequest
     deadline: startDeadline(launch.t0, VOIE_C_BUDGET.totalMs),
     aiEnabled: voieCAiEnabled(),
   });
+  // Échecs répétés de l'IA ou de Google Shopping : une alerte (lib/alerts.ts).
+  if (complement.columns.complement_status === "ai_failed") noteFailure(request.log, "ia_voie_c");
+  if (complement.columns.complement_status === "shopping_failed") noteFailure(request.log, "google_shopping");
   // Limite horaire : comptée une fois par lancement avec au moins un appel
   // réel. Lens venu du cache mais Google Shopping appelé : c'est ici.
   if (lens.lensFromCache && complement.measure.calls > 0) fastify.countRateLimitHit(request, "searchCreate");
@@ -838,7 +851,8 @@ async function markInterrupted(fastify: FastifyInstance, row: SearchRow): Promis
     return row;
   }
   if (data && data.length > 0) {
-    await discardAnalysisImage(fastify, `${row.user_id}/${row.id}.jpg`);
+    // Nouveau nom, et l'ancien (image d'une recherche lancée avant le lot garde-fous).
+    await discardAnalysisImage(fastify, [analysisImagePath(row.id), legacyAnalysisImagePath(row.user_id, row.id)]);
     fastify.log.info(measureLogLine(measure, [], { provider: row.provider, statusCode: null }), MEASURE_LOG_MESSAGE);
     return parseSearchRow(data[0]);
   }
@@ -980,7 +994,12 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     // pour que la durée tienne même quand plus rien n'y écrit (table absente
     // avant 0028 : ignoré sans bruit). D'abord, et hors du try : il ne lève
     // jamais d'erreur, et un échec de l'historique ne le saute donc jamais.
-    await purgeExpiredCache(fastify.supabaseAdmin, request.log);
+    // Images analysées restées plus d'une heure (lot garde-fous) : même
+    // principe, en même temps que le cache ; ne lève jamais d'erreur non plus.
+    await Promise.all([
+      purgeExpiredCache(fastify.supabaseAdmin, request.log),
+      purgeStaleAnalysisImages(fastify.supabaseAdmin.storage.from(ANALYSIS_BUCKET), request.log),
+    ]);
     try {
       await purgeExpiredSearches(fastify, userId);
     } catch (purgeError) {
@@ -1027,8 +1046,10 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       const row = await readPendingSearch(fastify, request, reply, id, userId);
       if (!row) return;
 
-      // Disjoncteur de la recherche par image, en observation (mise en ligne 1) : il ne bloque rien.
-      await observeBreakerAtLaunch(fastify, "image", IMAGE_SEARCH_PROVIDER.name);
+      // Disjoncteur de la recherche par image (lot garde-fous : il bloque).
+      // En pause : refusé AVANT tout appel ; la recherche reste en attente,
+      // rien n'est réservé ni compté dans la part de la personne.
+      if (await breakerPause(fastify, "image", IMAGE_SEARCH_PROVIDER.name)) return reply.code(503).send(SEARCH_PAUSED);
       const prepared = await prepareRunImage(request, row, form);
       if ("refusal" in prepared) {
         if (prepared.refusal !== "image_required") await countRefusalBeforeCall(fastify, row);
@@ -1140,6 +1161,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       const lastRank = existing.reduce((max, m) => Math.max(max, m.rank), 0);
       const saved = await saveComplementRows(fastify, id, text.matches, "words", lastRank);
       const textStatus = saved === null ? "shopping_failed" : text.textStatus;
+      if (text.textStatus === "shopping_failed") noteFailure(request.log, "google_shopping");
       // « Rien trouvé » complété par vos mots : terminée. Les colonnes de la
       // mesure de Lens restent celles du lancement. Un appel réel compté : la
       // recherche n'est plus « servie par le cache » et compte dans la part de

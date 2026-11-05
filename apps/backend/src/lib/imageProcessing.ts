@@ -49,28 +49,34 @@ export async function downloadThumbnail(url: string): Promise<Buffer> {
  * convertit en JPEG. Sans zone, l'image entière est seulement normalisée.
  * Relève ImageSourceError si le fichier n'est pas une image lisible (le type
  * déclaré par l'app n'est jamais cru sur parole : c'est sharp qui décode),
- * pas d'un format permis ou trop grande (lib/imageSafety.ts). */
+ * pas d'un format permis ou trop grande (lib/imageSafety.ts).
+ * Mémoire (lot garde-fous, 2026-11-05) : une seule chaîne sharp, qui redresse,
+ * recadre et réduit en un passage. Avant, l'image entière était redressée et
+ * réencodée, puis décodée une seconde fois : ≈ 509 Mo au pic pour une photo de
+ * 48 Mpx, sur un serveur de 512 Mo. Les dimensions redressées sont lues dans
+ * l'en-tête seul (metadata), sans décoder l'image. */
 export async function prepareImageForAnalysis(input: Buffer, crop: CropRect | null): Promise<Buffer> {
   // Format vérifié sur les premiers octets, AVANT sharp : un SVG n'est
   // jamais lu, même annoncé comme une photo.
   if (!imageFormatOf(input)) throw new ImageSourceError("Image illisible");
-  let image: Sharp;
+  const options = { failOn: "error", limitInputPixels: MAX_INPUT_PIXELS, autoOrient: true } as const;
   let width: number;
   let height: number;
   try {
-    // rotate() sans argument applique l'orientation EXIF avant tout calcul
-    // de dimensions — sinon une photo verticale d'iPhone serait recadrée
-    // sur une zone tournée de 90°.
-    const oriented = await sharp(input, { failOn: "error", limitInputPixels: MAX_INPUT_PIXELS })
-      .rotate()
-      .toBuffer({ resolveWithObject: true });
-    image = sharp(oriented.data, { limitInputPixels: MAX_INPUT_PIXELS });
-    width = oriented.info.width;
-    height = oriented.info.height;
+    // autoOrient : largeur et hauteur telles qu'affichées, orientation EXIF
+    // appliquée — sinon une photo verticale d'iPhone serait recadrée sur une
+    // zone tournée de 90°. L'en-tête seul : la limite de pixels s'applique déjà.
+    const meta = await sharp(input, options).metadata();
+    width = meta.autoOrient.width;
+    height = meta.autoOrient.height;
   } catch {
     throw new ImageSourceError("Image illisible");
   }
+  if (!width || !height) throw new ImageSourceError("Image illisible");
 
+  // autoOrient (option d'entrée) : sharp redresse l'image AVANT le recadrage
+  // (extract avant resize : coordonnées de l'image redressée).
+  let image: Sharp = sharp(input, options);
   if (crop) {
     const left = Math.round(crop.x * width);
     const top = Math.round(crop.y * height);
@@ -82,8 +88,14 @@ export async function prepareImageForAnalysis(input: Buffer, crop: CropRect | nu
     image = image.extract({ left, top, width: cropWidth, height: cropHeight });
   }
 
-  return image
-    .resize({ width: MAX_ANALYSIS_EDGE, height: MAX_ANALYSIS_EDGE, fit: "inside", withoutEnlargement: true })
-    .jpeg({ quality: 88 })
-    .toBuffer();
+  try {
+    return await image
+      .resize({ width: MAX_ANALYSIS_EDGE, height: MAX_ANALYSIS_EDGE, fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 88 })
+      .toBuffer();
+  } catch {
+    // Le décodage se fait ici désormais : un fichier tronqué ou corrompu est
+    // une image illisible (400), comme avant, jamais une erreur du serveur.
+    throw new ImageSourceError("Image illisible");
+  }
 }

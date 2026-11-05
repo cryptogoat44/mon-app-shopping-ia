@@ -415,7 +415,8 @@ export const fr = {
     boughtError: "L'ajout au Vault a échoué.",
     categoryTitle: "Dans quelle catégorie ?",
     share: "Partager",
-    shareMessage: (name: string, url: string) => `${name}\n${url} (lien affilié)\n\nRepérée avec Spotto.`,
+    // La mention seulement pour un vrai lien affilié (lot garde-fous, lib/affiliate-link.ts).
+    shareMessage: (name: string, url: string, affiliate: boolean) => `${name}\n${url}${affiliate ? " (lien affilié)" : ""}\n\nRepérée avec Spotto.`,
     linkCopied: "Message copié, avec le lien",
     merchantLinkBlocked: "Votre navigateur a bloqué l'ouverture. Touchez ici pour continuer vers le marchand.",
     loading: "Chargement du résultat",
@@ -467,6 +468,9 @@ export const fr = {
     capacityUserTip: "Réessayez demain.",
     previewUnavailableTitle: "L'image de la vidéo n'est plus disponible",
     previewUnavailableTip: "Importez une capture d'écran de la pièce pour continuer.",
+    // Lot garde-fous : recherche en pause, notre fournisseur est en panne (disjoncteur). À relire.
+    pausedTitle: "La recherche est momentanément en pause",
+    pausedTip: "Notre fournisseur de recherche rencontre une panne et nous sommes prévenus. Cette tentative n'a pas été comptée. Réessayez dans quelques minutes.",
     // Bouton « Résultat incohérent » (fiabilité des résultats, motifs validés
     // par le fondateur le 2026-10-15).
     reportMenuLabel: "Signaler un résultat incohérent",

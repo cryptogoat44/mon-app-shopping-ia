@@ -86,9 +86,17 @@ describe("géométrie de la zone", () => {
 });
 
 describe("partage d'une proposition", () => {
-  it("le lien partagé est toujours accompagné de la mention « lien affilié »", async () => {
+  // Lot garde-fous (point 20) : la mention seulement pour un vrai lien affilié.
+  it("un lien affilié partagé est accompagné de la mention « lien affilié »", async () => {
     const { fr } = await import("../src/i18n/fr");
-    const message = fr.result.shareMessage("Veste en daim", "https://marchand.example/veste");
+    const message = fr.result.shareMessage("Veste en daim", "https://marchand.example/veste", true);
     expect(message).toContain("https://marchand.example/veste (lien affilié)");
+  });
+
+  it("le lien du marchand, tel quel, est partagé sans la mention", async () => {
+    const { fr } = await import("../src/i18n/fr");
+    const { en } = await import("../src/i18n/en");
+    expect(fr.result.shareMessage("Veste en daim", "https://marchand.example/veste", false)).toBe("Veste en daim\nhttps://marchand.example/veste\n\nRepérée avec Spotto.");
+    expect(en.result.shareMessage("Suede jacket", "https://shop.example/jacket", false)).not.toContain("affiliate");
   });
 });

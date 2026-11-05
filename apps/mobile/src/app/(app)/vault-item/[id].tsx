@@ -19,6 +19,7 @@ import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { SegmentedChoice } from "@/components/segmented-choice";
 import { VAULT_TITLE_MAX_LENGTH, checkVaultEdit, vaultCategoryChoices, vaultFormIssueMessage, vaultSaveErrorMessage } from "@/lib/vault-form";
 import { vaultChanged } from "@/lib/vault-changes";
+import { isAffiliateLink } from "@/lib/affiliate-link";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Décision du fondateur (journal, 2026-09-23, décision 1) : retirer un
@@ -317,7 +318,7 @@ export default function VaultItemDetailScreen() {
               merchantName={item.merchantName}
               matchId={item.productMatchId}
               context="vault"
-              isAffiliate={item.affiliateUrl !== null}
+              isAffiliate={isAffiliateLink(item)}
             />
           </View>
         ) : null}

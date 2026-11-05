@@ -315,6 +315,16 @@ describe("account deletion", () => {
       expect(error).toBeNull();
     }
 
+    // Lot garde-fous : une image analysée restée, rangée sans le compte dans son nom.
+    const { data: search, error: searchError } = await app.supabaseAdmin
+      .from("product_searches")
+      .insert({ user_id: storageUser.id, source_platform: "photo", method: "manual_screenshot", status: "processing" })
+      .select("id")
+      .single();
+    expect(searchError).toBeNull();
+    const analysed = `analyses/${search!.id}.jpg`;
+    expect((await app.supabaseAdmin.storage.from("screenshots").upload(analysed, photo, { contentType: "image/jpeg" })).error).toBeNull();
+
     const del = await deleteAccount(storageUser, CONFIRMED);
     expect(del.statusCode).toBe(204);
 
@@ -322,6 +332,8 @@ describe("account deletion", () => {
       const { data: remaining } = await app.supabaseAdmin.storage.from(bucket).list(storageUser.id);
       expect(remaining ?? []).toHaveLength(0);
     }
+    const { data: analyses } = await app.supabaseAdmin.storage.from("screenshots").list("analyses", { search: search!.id });
+    expect(analyses ?? []).toHaveLength(0);
   });
 
   // Cas du fichier orphelin de post-media (constat du 2026-10-14) : un fichier

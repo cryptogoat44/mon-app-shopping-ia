@@ -30,6 +30,16 @@ import { captureServerError, captureServerFailure } from "./lib/sentry.js";
 import { isErrorBody, localizeMessage } from "./lib/messages.js";
 import { requestLocale } from "./lib/locale.js";
 
+/** La base répond-elle en 3 secondes ? Une lecture sans ligne (limit 0). */
+async function databaseResponds(fastify: FastifyInstance): Promise<boolean> {
+  try {
+    const { error } = await fastify.supabaseAdmin.from("serpapi_calls").select("id").limit(0).abortSignal(AbortSignal.timeout(3_000));
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 // Requêtes dont l'erreur a déjà été transmise à Sentry (évite un doublon).
 const reportedToSentry = new Set<string>();
 
@@ -109,7 +119,22 @@ export async function buildApp(options: { logger?: FastifyServerOptions["logger"
 
   // Exclue du filet anti-abus "default" : les sondes de disponibilité de
   // Render l'appellent très régulièrement, ça n'a rien à voir avec un abus.
+  // Elle ne dit que « le serveur répond » : Render s'en sert pour savoir si
+  // une mise en ligne a démarré ; une panne de la base ne doit pas la faire échouer.
   fastify.get("/health", { config: { skipDefaultRateLimit: true } }, async () => ({ status: "ok" }));
+
+  // Sonde complète (lot garde-fous), pour une surveillance extérieure toutes
+  // les 5 minutes : le serveur répond ET la base aussi. 503 si la base ne
+  // répond pas en 3 secondes. Rien de personnel : une lecture vide d'une
+  // table sans données personnelles. Garde le filet anti-abus par défaut.
+  fastify.get("/health/deep", async (request, reply) => {
+    const database = await databaseResponds(fastify);
+    if (!database) request.log.error("Sonde complète : la base ne répond pas");
+    return reply
+      .code(database ? 200 : 503)
+      .header("Cache-Control", "no-store")
+      .send({ status: database ? "ok" : "degraded", database: database ? "ok" : "unreachable" });
+  });
 
   return fastify;
 }

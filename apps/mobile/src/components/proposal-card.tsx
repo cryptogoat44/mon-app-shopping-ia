@@ -10,6 +10,7 @@ import { merchantContextFor, opensOfferPage } from "@/lib/result-sections";
 import type { ClickPlacement } from "@/lib/price-first";
 import { SpotImage } from "@/components/spot-image";
 import { ForeignShopNote } from "@/components/foreign-shop-note";
+import { isAffiliateLink } from "@/lib/affiliate-link";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Carte d'une proposition dans les grilles de l'écran Résultat (« Autres
@@ -56,7 +57,7 @@ export function ProposalCard({ piece, onSelect, placement }: { piece: Piece; onS
 function ShopLink({ piece, placement }: { piece: Piece; placement?: ClickPlacement }) {
   const [blockedUrl, setBlockedUrl] = useState<string | null>(null);
   const label = opensOfferPage(piece) ? t.result.viewOffer : t.result.viewAt(piece.merchantName ?? "");
-  const isAffiliate = piece.affiliateUrl !== null && piece.affiliateUrl !== piece.merchantUrl;
+  const isAffiliate = isAffiliateLink(piece);
 
   async function handlePress() {
     const url = piece.affiliateUrl ?? piece.merchantUrl;

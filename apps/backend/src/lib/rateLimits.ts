@@ -70,11 +70,13 @@ export const RATE_LIMITS = {
   },
 
   // Analyse automatique d'une vidéo par l'IA (lot 4, temps 1 bis) : chaque
-  // appel coûte (≈ un demi-centime avec Claude Haiku 4.5). Seuls les appels
-  // réellement envoyés comptent (`rateLimitCheck` / `countRateLimitHit`).
-  // Fenêtre de 24 h à partir du premier appel ; compteurs en mémoire, remis à
-  // zéro au redémarrage du serveur : le vrai plafond financier est la limite
-  // de dépense du compte Anthropic (voir docs/points-de-vigilance.md).
+  // appel coûte (jusqu'à 12 images envoyées à Claude Sonnet, de l'ordre de 1 à
+  // 3 centimes, services/videoMoments.ts). Seuls les appels réellement
+  // envoyés comptent. Depuis le lot garde-fous, comptés dans la base par jour
+  // (heure de Paris), lib/aiQuota.ts et migration 0029 : un redémarrage ne
+  // remet plus rien à zéro. Sans 0029 : compteurs en mémoire, fenêtre de 24 h
+  // à partir du premier appel, comme avant. La limite de dépense du compte
+  // Anthropic reste le dernier filet (voir docs/points-de-vigilance.md).
   videoAiUser: {
     max: 10,
     windowMs: DAY,
@@ -90,9 +92,9 @@ export const RATE_LIMITS = {
   },
   // Requête des boutiques écrite par l'IA (voie C, titres Lens seulement,
   // ≈ 0,25 centime l'appel) : plafond commun à tout le service, compté juste
-  // avant l'appel (`consumeRateLimit`). Atteint : l'IA est sautée, les
-  // résultats Lens sont montrés seuls — jamais de 429. Compteur en mémoire :
-  // le vrai plafond financier reste la limite de dépense du compte Anthropic.
+  // avant l'appel (lib/aiQuota.ts, dans la base depuis le lot garde-fous ;
+  // en mémoire sans la migration 0029). Atteint : l'IA est sautée, les
+  // résultats Lens sont montrés seuls — jamais de 429.
   shoppingQueryAiGlobal: { max: 300, windowMs: DAY, scope: "global" },
 
   // ---- Limite large, appliquée automatiquement à toutes les autres routes ----

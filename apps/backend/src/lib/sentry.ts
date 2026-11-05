@@ -75,3 +75,17 @@ export function captureServerError(error: unknown, userId: string | undefined): 
     Sentry.captureException(error);
   });
 }
+
+/** Alerte du serveur (lot garde-fous) : un avertissement, sans aucune donnée
+ * personnelle (ni compte, ni contenu : des étiquettes de listes fermées). Le
+ * tag « alerte » porte son type : une seule règle Sentry (« nouveau problème
+ * avec le tag alerte ») prévient le fondateur. `fingerprint` : une alerte
+ * nouvelle = un nouveau problème dans Sentry, donc une notification. */
+export function captureAlert(message: string, tags: Record<string, string>, fingerprint: string[]): void {
+  if (!enabled) return;
+  Sentry.withScope((scope) => {
+    scope.setTags(tags);
+    scope.setFingerprint(fingerprint);
+    Sentry.captureMessage(message, "warning");
+  });
+}
