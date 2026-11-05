@@ -47,6 +47,11 @@ export default function BienvenueScreen() {
           <Pressable accessibilityRole="link" onPress={() => router.push("/confidentialite")} hitSlop={12}>
             <Text style={styles.legal}>{t.welcome.privacy}</Text>
           </Pressable>
+          <Text style={styles.legal} importantForAccessibility="no">·</Text>
+          {/* Chantier 3 : aide et contact, sans compte. */}
+          <Pressable accessibilityRole="link" onPress={() => router.push("/aide")} hitSlop={12}>
+            <Text style={styles.legal}>{t.help.entry}</Text>
+          </Pressable>
         </View>
         {/* « Nous contacter », sans compte (site et iPhone) : masqué sans adresse réelle. */}
         {CONTACT_EMAIL ? (
@@ -78,7 +83,7 @@ const styles = themedStyles(() => ({
   cta: { alignSelf: "stretch", backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center" },
   ctaLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },
   loginLink: { fontSize: font.secondary, color: color.acier, fontWeight: "600", marginTop: space.lg },
-  legalRow: { flexDirection: "row", gap: space.sm, marginTop: space.xl },
+  legalRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: space.sm, marginTop: space.xl },
   legal: { fontSize: font.caption, color: color.acier, textDecorationLine: "underline", paddingVertical: space.xs },
   contact: { alignItems: "center", marginTop: space.xs },
   contactText: { fontSize: font.caption, color: color.acier, textAlign: "center", lineHeight: 19 },

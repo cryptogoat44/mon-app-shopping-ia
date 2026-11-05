@@ -196,6 +196,10 @@ export function CommentsSection({
         userId={menuFor?.author.id ?? ""}
         commentId={menuFor?.id}
         onBlocked={(blockedId) => setComments((prev) => (prev ?? []).filter((c) => c.author.id !== blockedId))}
+        onReported={() => {
+          const reportedId = menuFor?.id;
+          if (reportedId) setComments((prev) => (prev ?? []).filter((c) => c.id !== reportedId));
+        }}
       />
     </View>
   );

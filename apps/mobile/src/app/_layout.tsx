@@ -19,6 +19,7 @@ import { APP_NAME_DISPLAY } from "@/constants/brand";
 // que la navigation ne la réécrive.
 import "@/lib/initial-url";
 import { initErrorTracking } from "@/lib/error-tracking";
+import { EmailConfirmationLanding } from "@/components/email-confirmation-landing";
 
 // Suivi des erreurs (site : lot 2 ; iPhone : lot 3bis) : actif seulement avec une adresse Sentry UE.
 initErrorTracking();
@@ -90,6 +91,8 @@ function RootNavigator() {
           {/* Documents juridiques : lisibles par tous, connecté ou non (bloc 5). */}
           <Stack.Screen name="conditions" />
           <Stack.Screen name="confidentialite" />
+          {/* Aide et contact (chantier 3) : lisible par tous, adresse d'assistance de l'App Store. */}
+          <Stack.Screen name="aide" />
         </Stack>
       </View>
     </ThemeProvider>
@@ -111,6 +114,8 @@ export default function RootLayout() {
       <AnalyticsSession />
       <PreferencesProvider>
         <ToastProvider>
+          {/* Chantier 3 : lien de confirmation d'un e-mail ouvert sur le site (flux PKCE). */}
+          <EmailConfirmationLanding />
           <RootNavigator />
         </ToastProvider>
       </PreferencesProvider>

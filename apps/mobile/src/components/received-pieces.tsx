@@ -190,6 +190,10 @@ export function ReceivedPieces() {
         userId={menuPiece?.sender.id ?? ""}
         pieceId={menuPiece?.id}
         onBlocked={(blockedId) => setPieces((current) => (current ?? []).filter((p) => p.sender.id !== blockedId))}
+        onReported={() => {
+          const reportedId = menuPiece?.id;
+          if (reportedId) setPieces((current) => (current ?? []).filter((p) => p.id !== reportedId));
+        }}
       />
     </View>
   );
