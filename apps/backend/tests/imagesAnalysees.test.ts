@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
+import type { FastifyInstance } from "fastify";
 import {
   ANALYSIS_FOLDER,
   ANALYSIS_IMAGE_MAX_AGE_MS,
   analysisImagePath,
+  deleteUserStorageFiles,
   legacyAnalysisImagePath,
   purgeStaleAnalysisImages,
   type AnalysisFiles,
@@ -89,5 +91,72 @@ describe("purge des images analysées restées plus d'une heure", () => {
     expect(await purgeStaleAnalysisImages(refused.files, fakeLog(), NOW)).toBe(0);
     const throwing: AnalysisFiles = { list: () => Promise.reject(new Error("réseau")), remove: () => Promise.reject(new Error("réseau")) };
     expect(await purgeStaleAnalysisImages(throwing, fakeLog(), NOW)).toBe(0);
+  });
+});
+
+/** Fausse base et faux stockage pour la suppression d'un compte : `searchIds`
+ * sont ses recherches ; `stored` les fichiers de chaque bucket. */
+function fakeAccountApp(searchIds: string[], stored: Record<string, string[]>, options: { readFails?: boolean; removeFails?: boolean } = {}) {
+  const removed: { bucket: string; paths: string[] }[] = [];
+  const query = {
+    order: () => query,
+    range: async (from: number, to: number) =>
+      options.readFails
+        ? { data: null, error: new Error("base injoignable"), count: null }
+        : { data: searchIds.slice(from, to + 1).map((id) => ({ id })), error: null, count: searchIds.length },
+  };
+  const app = {
+    supabaseAdmin: {
+      from: (table: string) => {
+        expect(table).toBe("product_searches");
+        return { select: () => ({ eq: (column: string, value: string) => (expect([column, value]).toEqual(["user_id", USER]), query) }) };
+      },
+      storage: {
+        from: (bucket: string) => ({
+          list: async (path: string, { limit, offset }: { limit: number; offset: number }) => ({
+            data: (stored[bucket] ?? [])
+              .filter((name) => name.startsWith(`${path}/`))
+              .slice(offset, offset + limit)
+              .map((name) => ({ name: name.slice(path.length + 1), id: `id-${name}` })),
+            error: null,
+          }),
+          remove: async (paths: string[]) => {
+            removed.push({ bucket, paths });
+            if (options.removeFails) return { error: new Error("effacement refusé") };
+            stored[bucket] = (stored[bucket] ?? []).filter((name) => !paths.includes(name));
+            return { error: null };
+          },
+        }),
+      },
+    },
+  } as unknown as FastifyInstance;
+  return { app, removed, stored };
+}
+
+describe("suppression d'un compte : ses images analysées, anciennes et nouvelles", () => {
+  it("le dossier du compte (ancien nom) est vidé, et chaque recherche du compte efface son image « analyses/… »", async () => {
+    const other = "ffffffff-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+    const { app, stored } = fakeAccountApp([SEARCH], {
+      screenshots: [legacyAnalysisImagePath(USER, "ancienne"), analysisImagePath(SEARCH), analysisImagePath(other)],
+    });
+    const reports = await deleteUserStorageFiles(app, USER);
+    // Il ne reste que l'image d'une recherche d'un autre compte.
+    expect(stored.screenshots).toEqual([analysisImagePath(other)]);
+    expect(reports.at(-1)).toEqual({ bucket: "screenshots", removed: 1, failed: 0, unreadable: false });
+  });
+
+  it("par lots de 100 chemins ; un lot refusé est compté comme resté ; recherches illisibles : signalé, sans erreur", async () => {
+    const ids = Array.from({ length: 150 }, (_, index) => `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`);
+    const many = fakeAccountApp(ids, {});
+    expect((await deleteUserStorageFiles(many.app, USER)).at(-1)).toEqual({ bucket: "screenshots", removed: 150, failed: 0, unreadable: false });
+    const analysisBatches = many.removed.filter((call) => call.paths.every((path) => path.startsWith(`${ANALYSIS_FOLDER}/`)));
+    expect(analysisBatches.map((call) => call.paths.length)).toEqual([100, 50]);
+    expect(analysisBatches.flatMap((call) => call.paths).some((path) => path.includes(USER))).toBe(false);
+
+    const refused = fakeAccountApp(ids.slice(0, 3), {}, { removeFails: true });
+    expect((await deleteUserStorageFiles(refused.app, USER)).at(-1)).toEqual({ bucket: "screenshots", removed: 0, failed: 3, unreadable: false });
+
+    const unreadable = fakeAccountApp(ids, {}, { readFails: true });
+    expect((await deleteUserStorageFiles(unreadable.app, USER)).at(-1)).toEqual({ bucket: "screenshots", removed: 0, failed: 0, unreadable: true });
   });
 });

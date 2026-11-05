@@ -339,7 +339,8 @@ async function uploadForAnalysis(fastify: FastifyInstance, request: FastifyReque
     : await fastify.supabaseAdmin.storage.from(ANALYSIS_BUCKET).createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
   if (!uploadError && signed?.data) return signed.data.signedUrl;
 
-  request.log.error({ uploadError }, "Échec d'envoi de l'image recadrée");
+  // Le nom de l'erreur seulement : son message peut reprendre le chemin du fichier (lot garde-fous).
+  request.log.error({ uploadError: uploadError?.name ?? null, signedUrlError: signed?.error?.name ?? null }, "Échec d'envoi de l'image recadrée");
   if (uploadError) await markPending(fastify, id);
   else await releaseSearch(fastify, id, storagePath);
   return null;

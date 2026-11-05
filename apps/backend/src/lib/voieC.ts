@@ -530,8 +530,11 @@ async function queryStep(ports: ComplementPorts, input: ComplementInput, state: 
       if (timeout === null || timeout < VOIE_C_BUDGET.aiMinMs) return stop("no_time");
       if (ports.socketDestroyed()) return stop(null);
       if (!(await ports.consumeAiLimit())) return stop("no_capacity");
-      // Le compteur est lu dans la base : le délai de l'IA est recalculé après lui.
-      const aiTimeout = Math.min(timeout, input.deadline.stepTimeoutMs(VOIE_C_BUDGET.aiMaxMs, VOIE_C_BUDGET.saveReserveMs + VOIE_C_BUDGET.shoppingMinMs) ?? 0);
+      // Le compteur est lu dans la base (lot garde-fous) : le délai de l'IA
+      // est recalculé après lui. Plus assez de temps : aucun appel (jamais un
+      // appel coupé d'avance, qui serait compté comme un échec de l'IA).
+      const aiTimeout = input.deadline.stepTimeoutMs(VOIE_C_BUDGET.aiMaxMs, VOIE_C_BUDGET.saveReserveMs + VOIE_C_BUDGET.shoppingMinMs);
+      if (aiTimeout === null || aiTimeout < VOIE_C_BUDGET.aiMinMs) return stop("no_time");
 
       const started = ports.now();
       let result: ShoppingQueryAnswer;

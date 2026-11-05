@@ -43,6 +43,7 @@ create index if not exists affiliate_links_product_match_id_idx on affiliate_lin
 create index if not exists affiliate_clicks_affiliate_link_id_idx on affiliate_clicks (affiliate_link_id);
 create index if not exists affiliate_conversions_affiliate_click_id_idx on affiliate_conversions (affiliate_click_id);
 create index if not exists vault_items_product_match_id_idx on vault_items (product_match_id);
+create index if not exists vault_items_affiliate_conversion_id_idx on vault_items (affiliate_conversion_id);
 create index if not exists wishlist_items_product_match_id_idx on wishlist_items (product_match_id);
 create index if not exists post_tagged_pieces_product_match_id_idx on post_tagged_pieces (product_match_id);
 create index if not exists post_tagged_pieces_vault_item_id_idx on post_tagged_pieces (vault_item_id);
