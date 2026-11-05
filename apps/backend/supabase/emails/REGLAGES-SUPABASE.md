@@ -42,7 +42,7 @@ Supabase → projet **spotto-prod** → **Authentication** → **Emails** → on
 
 ## 4. Ce qui a changé dans l'app (rien à régler de plus)
 
-- **Flux PKCE** (point 13) : le lien des e-mails ne contient plus la session de la personne, seulement un code à usage unique, que seul l'appareil qui a fait la demande peut échanger. Sur iPhone, une autre app qui intercepterait le lien `spotto://` n'en ferait rien. Conséquence à connaître : le lien « mot de passe oublié » doit être ouvert **sur l'appareil où la demande a été faite** (même téléphone, ou même navigateur) ; ailleurs, l'app l'explique et propose de refaire la demande.
+- **Flux PKCE** (point 13) : le lien des e-mails ne contient plus la session de la personne, seulement un code à usage unique, que seul l'appareil qui a fait la demande peut échanger. Sur iPhone, une autre app qui intercepterait le lien `spotto://` d'une demande faite dans Spotto n'en ferait rien. Limite : quelqu'un peut encore lancer lui-même une réinitialisation sans ce code vers `spotto://` (Supabase ne peut pas l'interdire) ; la fermer tout à fait demandera des liens universels https pour l'iPhone (point 27 de la feuille de route). Conséquence à connaître : le lien « mot de passe oublié » doit être ouvert **sur l'appareil où la demande a été faite** (même téléphone, ou même navigateur) ; ailleurs, l'app l'explique et propose de refaire la demande.
 - Les liens déjà envoyés avant la mise en ligne restent lus (ancien format).
 - Confirmation d'inscription ouverte sur le site, dans le navigateur de l'inscription : la session s'ouvre directement. Ailleurs (inscription faite sur l'iPhone, par exemple) : l'adresse est confirmée, le site invite à se connecter.
 
