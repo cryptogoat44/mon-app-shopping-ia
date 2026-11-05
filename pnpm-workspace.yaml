@@ -20,3 +20,6 @@ minimumReleaseAgeExclude:
 # Requis pour Expo/React Native : certains modules natifs ne résolvent pas
 # correctement avec le mode d'isolation strict par défaut de pnpm.
 nodeLinker: hoisted
+
+patchedDependencies:
+  react-native-webview@13.16.1: patches/react-native-webview@13.16.1.patch
