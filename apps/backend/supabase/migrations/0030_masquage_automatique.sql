@@ -15,8 +15,13 @@
 -- 2. moderation_auto_hide : masque un contenu (publication, commentaire,
 --    pièce envoyée) dès que N personnes différentes l'ont signalé (N fixé
 --    par le serveur : 3), sans compter l'auteur ni les signalements déjà
---    traités ou antérieurs à un rétablissement. La personne concernée est
---    prévenue ; les signalements restent « à traiter ».
+--    traités ou antérieurs à un rétablissement. Ne comptent pas non plus :
+--    un compte créé depuis moins d'un jour, un compte suspendu, une
+--    personne dont un administrateur a déjà jugé un signalement de ce
+--    contenu (voir la fonction). La personne concernée est prévenue ; les
+--    signalements restent « à traiter ».
+--    Pour essayer à la main : les comptes qui signalent doivent exister
+--    depuis plus d'un jour.
 -- 3. moderation_apply (reprise de la version de 0024) : sur un contenu
 --    masqué automatiquement, « Masquer » CONFIRME le masquage (au lieu de
 --    répondre « déjà masqué »), et « Classer sans suite » le RÉTABLIT
@@ -72,27 +77,43 @@ begin
     from moderation_actions m
     where m.target_type = p_target_type and m.target_id = p_target_id and m.action = 'restore';
 
-  select count(distinct r.reporter_id)::integer into v_reporters
-    from reports r
-    where r.target_type = p_target_type and r.target_id = p_target_id
-      and r.handled_at is null
-      and r.reporter_id <> v_user
-      and (v_since is null or r.created_at > v_since);
+  -- Signalements qui comptent, contre les masquages abusifs (relecture
+  -- sécurité du chantier 3) :
+  -- - pas ceux d'un compte créé depuis moins d'un jour au moment du
+  --   signalement : trois comptes jetables, créés à la minute, ne font plus
+  --   disparaître le contenu de quelqu'un ;
+  -- - pas ceux d'un compte suspendu (il peut encore signaler, mais ne masque
+  --   plus rien) ;
+  -- - pas ceux d'une personne dont un administrateur a déjà traité un
+  --   signalement de ce contenu, ou qui l'avait signalé avant son
+  --   rétablissement : un contenu rétabli ou « classé sans suite » ne peut
+  --   pas être remasqué aussitôt par les mêmes personnes (rien n'empêche de
+  --   signaler deux fois). Il faut trois personnes nouvelles.
+  with eligible as (
+    select r.reporter_id, r.reason
+      from reports r
+      join profiles p on p.id = r.reporter_id
+      where r.target_type = p_target_type and r.target_id = p_target_id
+        and r.handled_at is null
+        and r.reporter_id <> v_user
+        and (v_since is null or r.created_at > v_since)
+        and r.created_at >= p.created_at + interval '1 day'
+        and not exists (select 1 from suspensions s where s.user_id = r.reporter_id)
+        and not exists (
+          select 1 from reports o
+          where o.target_type = p_target_type and o.target_id = p_target_id and o.reporter_id = r.reporter_id
+            and (o.handled_at is not null or (v_since is not null and o.created_at <= v_since))
+        )
+  )
+  select
+    (select count(distinct e.reporter_id)::integer from eligible e),
+    -- Motif : le plus fréquent parmi ces signalements.
+    (select e.reason from eligible e group by e.reason order by count(*) desc, e.reason limit 1)
+    into v_reporters, v_reason;
   if v_reporters < p_threshold then
     return query select 'below_threshold'::text, null::uuid;
     return;
   end if;
-
-  -- Motif : le plus fréquent parmi ces signalements.
-  select r.reason into v_reason
-    from reports r
-    where r.target_type = p_target_type and r.target_id = p_target_id
-      and r.handled_at is null
-      and r.reporter_id <> v_user
-      and (v_since is null or r.created_at > v_since)
-    group by r.reason
-    order by count(*) desc, r.reason
-    limit 1;
 
   insert into moderation_actions (admin_id, action, target_type, target_id, target_user_id, reason, note, automatic)
     values (null, 'hide', p_target_type, p_target_id, v_user, v_reason, null, true)

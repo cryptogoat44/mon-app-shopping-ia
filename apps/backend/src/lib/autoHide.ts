@@ -7,6 +7,9 @@
 // personne concernée prévenue. Les signalements restent « à traiter » :
 // l'administrateur confirme le masquage ou classe sans suite, ce qui rétablit
 // le contenu (migration 0030, moderation_apply).
+// Contre les masquages abusifs, ne comptent pas : un compte créé depuis
+// moins d'un jour, un compte suspendu, une personne dont un administrateur a
+// déjà jugé un signalement du même contenu (relecture sécurité).
 //
 // Sans la migration 0030 (production avant que le fondateur l'applique), la
 // fonction n'existe pas : le signalement est enregistré comme avant, rien

@@ -16,6 +16,8 @@ describe("chantier 3 : masquage automatique, contenu signalé, mots interdits", 
   let admin: TestUser;
   let author: TestUser;
   let reporters: TestUser[] = [];
+  // Compte créé à l'instant : ses signalements ne masquent rien (comptes jetables).
+  let fresh: TestUser;
   let photo: Buffer;
   let has0030 = false;
 
@@ -44,9 +46,17 @@ describe("chantier 3 : masquage automatique, contenu signalé, mots interdits", 
 
   beforeAll(async () => {
     app = await buildTestApp();
-    const users = await Promise.all(["mxa", "mxu", "mx1", "mx2", "mx3", "mx4"].map((label) => createTestUser(app, label)));
+    const users = await Promise.all(["mxa", "mxu", "mx1", "mx2", "mx3", "mx4", "mxf"].map((label) => createTestUser(app, label)));
     [admin, author] = users as [TestUser, TestUser];
-    reporters = users.slice(2);
+    reporters = users.slice(2, 6);
+    fresh = users[6]!;
+    // Seuls comptent les signalements de comptes d'au moins un jour (migration
+    // 0030) : les comptes de test qui signalent sont « vieillis » de deux jours.
+    const aged = await app.supabaseAdmin
+      .from("profiles")
+      .update({ created_at: new Date(Date.now() - 2 * 86_400_000).toISOString() })
+      .in("id", reporters.map((reporter) => reporter.id));
+    if (aged.error) throw aged.error;
     photo = await sharp({ create: { width: 12, height: 12, channels: 3, background: "#753" } }).jpeg().toBuffer();
     const { error } = await app.supabaseAdmin.from("admins").insert({ user_id: admin.id });
     if (error) throw error;
@@ -55,7 +65,7 @@ describe("chantier 3 : masquage automatique, contenu signalé, mots interdits", 
   });
 
   afterAll(async () => {
-    for (const user of [admin, author, ...reporters]) await deleteTestUser(app, user.id);
+    for (const user of [admin, author, ...reporters, fresh]) await deleteTestUser(app, user.id);
     await app.close();
   });
 
@@ -83,6 +93,27 @@ describe("chantier 3 : masquage automatique, contenu signalé, mots interdits", 
     expect(handled).toMatchObject({ activeHideActionId: null, activeHideAutomatic: false, preview: { hidden: false } });
     expect(handled?.history.map((entry) => entry.action)).toEqual(expect.arrayContaining(["dismiss", "restore", "hide"]));
     expect((await notifications(author)).some((n) => n.type === "moderation" && n.moderation?.action === "restore")).toBe(true);
+
+    // Les MÊMES personnes signalent à nouveau : la décision de l'administrateur tient.
+    for (const reporter of [r1, r2, r3]) await report(reporter, "post", postId);
+    expect(await visibleToAuthor(postId)).toBe(true);
+  });
+
+  it("comptes jetables et comptes suspendus ne comptent pas", async (context) => {
+    if (!has0030) context.skip();
+    const [r1, r2, r3] = reporters as [TestUser, TestUser, TestUser];
+    const postId = await publish("Visée par des comptes jetables");
+    await report(r1, "post", postId);
+    await report(r2, "post", postId);
+    await report(fresh, "post", postId); // compte créé il y a moins d'un jour
+    expect(await visibleToAuthor(postId)).toBe(true);
+
+    const suspended = await decide({ targetType: "user", targetId: r3.id, action: "suspend", reason: "spam" });
+    expect(suspended.statusCode).toBe(200);
+    await report(r3, "post", postId); // un compte suspendu peut signaler, sans rien masquer
+    expect(await visibleToAuthor(postId)).toBe(true);
+    const lifted = await request(admin, "POST", `/api/admin/moderation/actions/${suspended.json().actionId}/undo`, {});
+    expect(lifted.statusCode).toBe(200);
   });
 
   it("« Masquer » confirme le masquage automatique (pas de « déjà masqué »), sans prévenir l'auteur une 2e fois", async (context) => {

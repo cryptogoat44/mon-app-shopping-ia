@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AUTO_HIDE_DISTINCT_REPORTERS, autoHideIfReported, isAutoHideTarget, resetAutoHideProbe, type AutoHideRpc } from "../src/lib/autoHide.js";
 import { REPORTED_IDS_LIMIT, notInFilter, reportedIdsFor } from "../src/lib/reportedByViewer.js";
@@ -120,5 +122,34 @@ describe("alerte de l'administrateur (Sentry)", () => {
 
   it("sans Sentry configuré (tests, développement) : rien n'est envoyé, rien ne plante", () => {
     expect(() => captureModerationEvent({ kind: "report", targetType: "post", targetId: ID })).not.toThrow();
+  });
+});
+
+// Relecture sécurité du chantier 3 : masquages abusifs. Le décompte se fait
+// dans la base (migration 0030) ; scénarios rejoués sur un Postgres 16 lors de
+// la relecture, et dans tests/moderationAutomatique.test.ts (avec base, Mac).
+// Ici, hors base : les garde-fous sont toujours dans la fonction.
+describe("migration 0030 : garde-fous contre les masquages abusifs", () => {
+  const sql = readFileSync(fileURLToPath(new URL("../supabase/migrations/0030_masquage_automatique.sql", import.meta.url)), "utf8");
+  const start = sql.indexOf("create or replace function moderation_auto_hide");
+  const autoHide = sql.slice(start, sql.indexOf("create or replace function moderation_apply", start));
+
+  it("comptes jetables : un signalement fait par un compte de moins d'un jour ne compte pas", () => {
+    expect(autoHide).toContain("join profiles p on p.id = r.reporter_id");
+    expect(autoHide).toContain("r.created_at >= p.created_at + interval '1 day'");
+  });
+
+  it("compte suspendu : ses signalements ne masquent rien", () => {
+    expect(autoHide).toContain("not exists (select 1 from suspensions s where s.user_id = r.reporter_id)");
+  });
+
+  it("contenu rétabli ou classé sans suite : les mêmes personnes ne le remasquent pas", () => {
+    expect(autoHide).toContain("o.reporter_id = r.reporter_id");
+    expect(autoHide).toContain("o.handled_at is not null or (v_since is not null and o.created_at <= v_since)");
+  });
+
+  it("le motif est pris parmi les seuls signalements qui comptent", () => {
+    expect(autoHide).toMatch(/select e\.reason from eligible e group by e\.reason/);
+    expect(autoHide.match(/from reports r\b/g)).toHaveLength(1);
   });
 });
