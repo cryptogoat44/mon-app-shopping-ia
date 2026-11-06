@@ -830,6 +830,49 @@ export const fr = {
     linkHint: "Ouvre votre messagerie pour nous écrire.",
     openFailed: "Votre messagerie n'a pas pu s'ouvrir : copiez l'adresse ci-dessus pour nous écrire.",
   },
+  // Chantier 3 (comptes et modération) : page « Aide et contact » (/aide),
+  // publique, connecté ou non. Elle sert aussi d'adresse d'assistance
+  // (« Support URL ») de la fiche App Store.
+  help: {
+    title: "Aide et contact",
+    entry: "Aide et contact",
+    intro: "Les réponses aux questions les plus fréquentes, et le moyen de nous écrire.",
+    faqTitle: "Questions fréquentes",
+    faq: [
+      {
+        q: "Comment retrouver une pièce ?",
+        a: "Dans le Spotter, importez une photo, une capture d'écran ou une vidéo, puis entourez la pièce si besoin. Spotto cherche la même pièce, ou les plus proches, et vous indique où l'acheter quand il trouve une boutique et un prix.",
+      },
+      {
+        q: "Combien de recherches puis-je lancer ?",
+        a: "Le nombre de recherches est limité chaque jour, pour chaque personne et pour l'ensemble du service. Le compteur repart chaque jour.",
+      },
+      {
+        q: "J'ai oublié mon mot de passe",
+        a: "Sur l'écran de connexion, touchez « Mot de passe oublié ? » et indiquez votre adresse e-mail. Vous recevrez un lien valable une heure : ouvrez-le sur l'appareil où vous avez fait la demande (le même téléphone, ou le même navigateur).",
+      },
+      {
+        q: "Je n'ai pas reçu l'e-mail de confirmation",
+        a: "Regardez dans vos courriers indésirables. Sur l'écran d'inscription, vous pouvez renvoyer l'e-mail au bout d'une minute.",
+      },
+      {
+        q: "Signaler un contenu, bloquer un compte",
+        a: "Ouvrez le menu d'une publication, d'un commentaire, d'un profil ou d'une pièce reçue, puis choisissez « Signaler » ou « Bloquer ce compte ». Ce que vous signalez disparaît aussitôt de votre fil. Chaque signalement est examiné par l'équipe de Spotto ; un contenu signalé par plusieurs personnes est masqué en attendant cet examen. Vos comptes bloqués se gèrent dans les Réglages.",
+      },
+      {
+        q: "Quels contenus sont interdits ?",
+        a: "Les insultes, les propos haineux, le harcèlement et les contenus sexuels ou violents, comme le détaillent les conditions d'utilisation. Un texte qui contient un mot interdit ne peut pas être publié.",
+      },
+      {
+        q: "Mes données et mon compte",
+        a: "Dans les Réglages, vous pouvez télécharger toutes vos données et supprimer votre compte. La suppression est définitive.",
+      },
+    ],
+    contactTitle: "Nous écrire",
+    contactBody: "Une question, un problème, un contenu à nous signaler : écrivez-nous à cette adresse.",
+    write: "Écrire un e-mail",
+    documentsTitle: "Documents",
+  },
   legal: {
     draftBanner: "Projet — à faire valider par un professionnel.",
     version: (label: string) => `Version : ${label}`,
@@ -1002,6 +1045,22 @@ export const fr = {
     unblock: "Débloquer",
     unblockError: "Le déblocage a échoué.",
     loadError: "Impossible de charger les comptes bloqués.",
+  },
+  // Chantier 3 (comptes et modération) : lien « mot de passe oublié » ouvert
+  // sur un autre appareil (échange PKCE), contenu signalé retiré du fil,
+  // masquage automatique vu par un administrateur.
+  accountSafety: {
+    resetOtherDeviceTitle: "Ouvrez ce lien sur le bon appareil",
+    resetOtherDeviceBody:
+      "Pour votre sécurité, ce lien ne fonctionne que sur l'appareil où vous avez demandé un nouveau mot de passe (le même téléphone, ou le même navigateur). Ouvrez-le là-bas, ou refaites la demande ici.",
+    emailConfirmed: "Votre adresse e-mail est confirmée. Connectez-vous pour continuer.",
+    reportedHidden: "Signalement envoyé. Ce contenu ne vous sera plus montré.",
+    autoHidden: "Masqué automatiquement",
+    autoHiddenHint:
+      "Masqué après les signalements de plusieurs personnes, en attente de votre décision : confirmez le masquage, ou classez sans suite pour le rétablir.",
+    automatic: "automatique (plusieurs signalements)",
+    confirmAutoHide: "Confirmer le masquage",
+    dismissAndRestore: "Classer sans suite et rétablir",
   },
   connection: {
     connectingTitle: "Connexion à Spotto…",

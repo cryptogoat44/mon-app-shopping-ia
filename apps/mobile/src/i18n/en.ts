@@ -774,6 +774,47 @@ export const en: Catalog = {
     linkHint: "Opens your email app to write to us.",
     openFailed: "Your email app couldn't be opened: copy the address above to write to us.",
   },
+  // Chantier 3 (accounts and moderation): "Help and contact" page (/aide).
+  help: {
+    title: "Help and contact",
+    entry: "Help and contact",
+    intro: "Answers to the most common questions, and how to write to us.",
+    faqTitle: "Frequently asked questions",
+    faq: [
+      {
+        q: "How do I find a piece?",
+        a: "In the Spotter, import a photo, a screenshot or a video, then circle the piece if needed. Spotto looks for the same piece, or the closest ones, and tells you where to buy it when it finds a shop and a price.",
+      },
+      {
+        q: "How many searches can I run?",
+        a: "The number of searches is limited each day, for each person and for the whole service. The counter starts again every day.",
+      },
+      {
+        q: "I forgot my password",
+        a: "On the sign-in screen, tap \"Forgot your password?\" and enter your email address. You'll receive a link valid for one hour: open it on the device where you made the request (the same phone, or the same browser).",
+      },
+      {
+        q: "I didn't receive the confirmation email",
+        a: "Check your spam folder. On the sign-up screen, you can send the email again after one minute.",
+      },
+      {
+        q: "Reporting content, blocking an account",
+        a: "Open the menu of a post, a comment, a profile or a piece you received, then choose \"Report\" or \"Block this account\". What you report disappears from your feed right away. Every report is reviewed by the Spotto team; content reported by several people is hidden until that review. You can manage blocked accounts in Settings.",
+      },
+      {
+        q: "What content is not allowed?",
+        a: "Insults, hateful speech, harassment and sexual or violent content, as detailed in the terms of use. A text containing a banned word can't be posted.",
+      },
+      {
+        q: "My data and my account",
+        a: "In Settings, you can download all your data and delete your account. Deletion is permanent.",
+      },
+    ],
+    contactTitle: "Write to us",
+    contactBody: "A question, a problem, content to report to us: write to us at this address.",
+    write: "Send an email",
+    documentsTitle: "Documents",
+  },
   legal: {
     draftBanner: "Draft — to be reviewed by a legal professional.",
     version: (label: string) => `Version: ${label}`,
@@ -938,6 +979,20 @@ export const en: Catalog = {
     unblock: "Unblock",
     unblockError: "The account couldn't be unblocked.",
     loadError: "Unable to load blocked accounts.",
+  },
+  // Chantier 3 (accounts and moderation).
+  accountSafety: {
+    resetOtherDeviceTitle: "Open this link on the right device",
+    resetOtherDeviceBody:
+      "For your security, this link only works on the device where you requested a new password (the same phone, or the same browser). Open it there, or make a new request here.",
+    emailConfirmed: "Your email address is confirmed. Sign in to continue.",
+    reportedHidden: "Report sent. You won't see this content again.",
+    autoHidden: "Hidden automatically",
+    autoHiddenHint:
+      "Hidden after reports from several people, awaiting your decision: confirm the hiding, or dismiss to restore it.",
+    automatic: "automatic (several reports)",
+    confirmAutoHide: "Confirm hiding",
+    dismissAndRestore: "Dismiss and restore",
   },
   connection: {
     connectingTitle: "Connecting to Spotto…",

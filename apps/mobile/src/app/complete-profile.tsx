@@ -72,6 +72,9 @@ export default function CompleteProfileScreen() {
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         setError(t.editProfile.usernameTaken);
+      } else if (e instanceof ApiError && e.body.error === "content_not_allowed") {
+        // Chantier 3 : nom refusé par le filtre des mots interdits (message du serveur, dans la langue de l'app).
+        setError(e.message);
       } else {
         setError(t.common.genericError);
       }

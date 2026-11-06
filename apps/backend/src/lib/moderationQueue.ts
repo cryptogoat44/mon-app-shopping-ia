@@ -88,6 +88,9 @@ const ACTION_ROWS = z.array(
     note: z.string().nullable(),
     undoes_action_id: ID.nullable(),
     created_at: TIMESTAMP,
+    // Chantier 3 (migration 0030) : décision prise automatiquement, après
+    // plusieurs signalements. Absente avant 0030 : jamais automatique.
+    automatic: z.boolean().default(false),
   })
 );
 type ActionRow = z.infer<typeof ACTION_ROWS>[number];
@@ -130,7 +133,9 @@ async function loadTargets(fastify: FastifyInstance, rows: QueueRow[]) {
       : NO_ROWS,
     db
       .from("moderation_actions")
-      .select("id, admin_id, action, target_type, target_id, reason, note, undoes_action_id, created_at")
+      // Toutes les colonnes : `automatic` n'existe qu'après la migration 0030,
+      // et la file doit se lire avec ou sans elle.
+      .select("*")
       .in("target_id", [...new Set(rows.map((row) => row.target_id))])
       .order("created_at", { ascending: false })
       .limit(ACTIONS_READ_LIMIT),
@@ -237,9 +242,9 @@ function canRemoveImage(row: QueueRow, preview: ModerationPreview, data: Loaded)
 }
 
 /** Masquage en vigueur : le plus récent qui n'a pas été annulé (un seul possible à la fois). */
-function activeHideActionId(history: ActionRow[]): string | null {
+function activeHide(history: ActionRow[]): ActionRow | null {
   const undone = new Set(history.map((action) => action.undoes_action_id).filter((id): id is string => id !== null));
-  return history.find((action) => action.action === "hide" && !undone.has(action.id))?.id ?? null;
+  return history.find((action) => action.action === "hide" && !undone.has(action.id)) ?? null;
 }
 
 function toLogEntry(action: ActionRow, data: Loaded): ModerationLogEntry {
@@ -250,6 +255,7 @@ function toLogEntry(action: ActionRow, data: Loaded): ModerationLogEntry {
     note: action.note,
     createdAt: action.created_at,
     adminUsername: action.admin_id ? (data.profiles.get(action.admin_id)?.username ?? null) : null,
+    automatic: action.automatic,
   };
 }
 
@@ -257,6 +263,7 @@ function toItem(row: QueueRow, data: Loaded): ModerationItem {
   const history = data.actions.filter((action) => action.target_type === row.target_type && action.target_id === row.target_id);
   const preview = previewOf(row, data);
   const hidden = (preview.kind === "post" || preview.kind === "comment" || preview.kind === "piece") && preview.hidden;
+  const hide = hidden ? activeHide(history) : null;
   return {
     targetType: row.target_type,
     targetId: row.target_id,
@@ -266,7 +273,8 @@ function toItem(row: QueueRow, data: Loaded): ModerationItem {
     firstReportedAt: row.first_at,
     lastReportedAt: row.last_at,
     preview,
-    activeHideActionId: hidden ? activeHideActionId(history) : null,
+    activeHideActionId: hide?.id ?? null,
+    activeHideAutomatic: hide?.automatic ?? false,
     activeSuspendActionId: preview.kind === "missing" ? null : (data.suspensions.get(preview.author.id) ?? null),
     canRemoveImage: canRemoveImage(row, preview, data),
     history: history.slice(0, HISTORY_LIMIT).map((action) => toLogEntry(action, data)),
