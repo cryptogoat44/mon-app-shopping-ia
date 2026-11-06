@@ -24,6 +24,7 @@
     "mesure-latence-dev": "tsx scripts/mesure-latence-dev.ts",
     "nettoyer-comptes-test-dev": "tsx scripts/nettoyer-comptes-test-dev.ts",
     "render-bride": "tsx scripts/render-bride.ts",
+    "etiqueter-version": "tsx scripts/etiqueter-version.ts",
     "configurer-render": "tsx scripts/configurer-render.ts",
     "configurer-anthropic-essai": "tsx scripts/configurer-anthropic-essai.ts",
     "configurer-anthropic-prod": "tsx scripts/configurer-anthropic-prod.ts",
