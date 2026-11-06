@@ -79,6 +79,10 @@ Simulateur du Mac : `eas build --profile development-simulator --platform ios`.
 
 Le numéro de build augmente tout seul à chaque build (réglé chez EAS).
 
+Avant chaque envoi à Apple : la liste de contrôle, la fiche, les notes de
+validation et les réponses « App Privacy » sont dans
+[app-store/](app-store/README.md).
+
 ## 6. Corriger l'app après sa sortie
 
 - **Correction du code de l'app** (textes, écrans, logique) sans repasser par
