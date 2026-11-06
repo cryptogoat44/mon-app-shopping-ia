@@ -18,6 +18,9 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Ce document a été mis à jour. Relisez-le, puis acceptez-le à nouveau.":
     "This document has been updated. Please read it again, then accept it.",
   "Ce nom d'utilisateur est déjà pris.": "This username is already taken.",
+  // Chantier 3 (comptes et modération) : filtre des mots interdits.
+  "Ce texte contient un mot interdit sur Spotto (insulte, propos haineux ou contenu sexuel). Modifiez-le pour continuer.":
+    "This text contains a word that isn't allowed on Spotto (insult, hateful or sexual content). Please change it to continue.",
   "Cette image n'a pas pu être lue, ou la zone choisie est trop petite.":
     "This image couldn't be read, or the selected area is too small.",
   "Cette image n'est pas autorisée.": "This image isn't allowed.",

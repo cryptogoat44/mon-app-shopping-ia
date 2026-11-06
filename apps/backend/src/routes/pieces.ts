@@ -16,6 +16,7 @@ import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseDbR
 import { isBlockedEitherWay, isFollowing } from "../lib/visibility.js";
 import { WishImageError, copyWishImage, deleteWishCopy, findOwnWish, findWishPost, type WishRow } from "../lib/wishShare.js";
 import { POST_ROWS, hydratePosts } from "./posts.js";
+import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
 
 const RECEIVED_PAGE_SIZE = 24;
 
@@ -261,6 +262,9 @@ export default async function piecesRoutes(fastify: FastifyInstance) {
     // Identifiants venus de notre base, jamais du client.
     if (blocked.size > 0) query = query.not("sender_id", "in", `(${[...blocked].join(",")})`);
     if (pageQuery.cursor) query = query.lt("created_at", pageQuery.cursor);
+    // Chantier 3 : une pièce reçue que vous avez signalée ne vous est plus montrée.
+    const reported = notInFilter(await reportedIdsFor(fastify, request.log, userId, "piece"));
+    if (reported) query = query.not("id", "in", reported);
 
     const rows = parseDbRows(PIECE_ROWS, await query, "Pièces reçues");
     const hasMore = rows.length > RECEIVED_PAGE_SIZE;
