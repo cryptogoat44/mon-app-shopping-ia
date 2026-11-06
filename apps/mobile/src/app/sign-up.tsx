@@ -12,6 +12,8 @@ import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
 import { CHECKBOX_SIZE, CheckboxRow } from "@/components/checkbox-row";
 import { ExistingAccountNotice, ResendEmailButton } from "@/components/signup-help";
+import { useRobotCheck } from "@/components/robot-check";
+import { withCaptchaOption } from "@/lib/robot-check";
 import { themedStyles } from "@/theme/themed-styles";
 
 export default function SignUpScreen() {
@@ -29,10 +31,12 @@ export default function SignUpScreen() {
   const [confirmationSentAt, setConfirmationSentAt] = useState<number | null>(null);
   // L'adresse a déjà un compte (lot « premier essai ») : se connecter plutôt qu'attendre un e-mail.
   const [existingAccount, setExistingAccount] = useState(false);
+  // Anti-robots (point 17) : l'inscription, puis « Renvoyer l'e-mail ».
+  const robot = useRobotCheck();
 
   // Ce qui manque encore, dit sous le bouton tant qu'il est grisé (lot « premier essai »).
   const missingText = missingFieldsText(missingSignUpFields({ email, password, confirmPassword, ageChecked, consentChecked }));
-  const ctaDisabled = submitting || missingText !== null;
+  const ctaDisabled = submitting || missingText !== null || !robot.ready;
 
   function handleEmail(value: string) {
     setEmail(value);
@@ -62,16 +66,24 @@ export default function SignUpScreen() {
       return;
     }
 
+    // Jeton anti-robots pris juste avant l'appel (après les contrôles ci-dessus).
+    const check = robot.take();
+    if (!check) return;
     setSubmitting(true);
     // Mémorisé AVANT l'appel : la session peut s'ouvrir (et la « Dernière
     // étape » s'afficher) avant la fin de l'appel. Effacé en cas d'échec.
     rememberSignupConsents(email, analyticsChecked);
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      // Langue des e-mails d'authentification (modèles Supabase, lot 3).
-      options: { data: { locale: getActiveLocale() } },
-    });
+    const { data, error: signUpError } = await supabase.auth.signUp(
+      withCaptchaOption(
+        {
+          email: email.trim(),
+          password,
+          // Langue des e-mails d'authentification (modèles Supabase, lot 3).
+          options: { data: { locale: getActiveLocale() } },
+        },
+        check.token
+      )
+    );
     setSubmitting(false);
 
     if (signUpError) {
@@ -108,7 +120,8 @@ export default function SignUpScreen() {
           <Text style={styles.title} accessibilityRole="header">{t.auth.signUp.confirmTitle}</Text>
           <Text style={styles.subtitle}>{t.auth.signUp.confirmBody(email.trim())}</Text>
           <Text style={styles.hint}>{t.firstTry.signUp.notReceived}</Text>
-          <ResendEmailButton email={email} sentAt={confirmationSentAt} style={styles.resend} />
+          {robot.widget}
+          <ResendEmailButton email={email} sentAt={confirmationSentAt} robot={robot} style={styles.resend} />
           <Link href="/sign-in" asChild>
             <Pressable accessibilityRole="button" hitSlop={12}>
               <Text style={styles.link}>{t.auth.signUp.backToSignIn}</Text>
@@ -217,6 +230,8 @@ export default function SignUpScreen() {
                 </Pressable>
               </Link>
             </View>
+
+            {robot.widget}
 
             <Pressable
               accessibilityRole="button"

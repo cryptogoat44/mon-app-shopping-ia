@@ -1092,4 +1092,13 @@ export const en: Catalog = {
     denied: "Spotto doesn't have access to the camera. To take a photo, allow it in your iPhone's Settings, under Spotto.",
     unavailable: (addPhoto: string) => `The camera couldn't open. Try again, or choose a photo with “${addPhoto}”.`,
   },
+  // “Anti-robots” batch (point 17): Cloudflare Turnstile check before sign-in,
+  // sign-up, “forgot password” and resending the confirmation email.
+  robotCheck: {
+    checking: "Checking you're not a robot…",
+    failed: "Verification failed: please try again.",
+    retry: "Try again",
+    rejected: "The anti-robot check failed: please try again.",
+    frameTitle: "Anti-robot check",
+  },
 };

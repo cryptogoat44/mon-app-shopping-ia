@@ -30,6 +30,7 @@ Pour chacune : le nom, la valeur, la visibilité, et les environnements cochés.
 | `EXPO_PUBLIC_WEB_URL` | `https://mon-app-shopping-ia-web.onrender.com` (ou le futur nom de domaine) | Plain text | preview, production |
 | `EXPO_PUBLIC_SENTRY_DSN` | `https://c46ffc0abf2f3dc09449cf8764fde463@o4512173730299904.ingest.de.sentry.io/4512173801996368` | Plain text | preview, production |
 | `EXPO_PUBLIC_POSTHOG_KEY` | `phc_moDi25bk7iMpzHCLhp4LZYWa5n4CgL9RUMeTjkUTg53c` | Plain text | preview, production |
+| `EXPO_PUBLIC_TURNSTILE_SITE_KEY` | clé **publique** (« Site Key ») du widget anti-robots Cloudflare Turnstile, la même que sur Render pour le site (`ANTI-ROBOTS.md`). **Jamais** la « Secret Key ». | Plain text | preview, production |
 | `EXPO_PUBLIC_ENVIRONMENT` | `beta` | Plain text | preview seulement |
 | `EXPO_PUBLIC_ENVIRONMENT` | `production` | Plain text | production seulement |
 | `EXPO_PUBLIC_PUBLISHER_NAME`, `_STATUS`, `_ADDRESS`, `_EMAIL`, `_PHONE` | l'identité de l'éditeur, comme sur Render (pages légales et « Nous contacter ») | Plain text | preview, production |
@@ -45,7 +46,9 @@ En ligne de commande, la même chose, par exemple :
 contrôle (`scripts/verifier-build.js`) arrête le build en une minute, avec un
 message en français, si une adresse ou la clé publique manque, si l'adresse
 vise encore l'ancien projet Supabase, si une clé **secrète** a été collée à la
-place de la clé publique, ou si le jeton Sentry manque.
+place de la clé publique (Supabase ou widget anti-robots), ou si le jeton
+Sentry manque. Sans `EXPO_PUBLIC_TURNSTILE_SITE_KEY`, il prévient seulement :
+ce build n'aurait pas la protection anti-robots (`ANTI-ROBOTS.md`).
 
 ## 3. Le jeton Sentry (plantages lisibles)
 

@@ -62,7 +62,7 @@ Pour les outils du Mac seulement : `DEV_DATABASE_URL` (migrations sur spotto-dev
 `cp apps/mobile/.env.example apps/mobile/.env`, puis remplissez :
 - `EXPO_PUBLIC_SUPABASE_URL` et `EXPO_PUBLIC_SUPABASE_ANON_KEY` : l'adresse et la clé **publique** (« publishable ») du même projet Supabase que le serveur ;
 - `EXPO_PUBLIC_API_URL` : `http://localhost:3000`. Sur un téléphone, mettez l'adresse IP locale du Mac à la place de `localhost` ;
-- facultatives : `EXPO_PUBLIC_WEB_URL`, `EXPO_PUBLIC_SENTRY_DSN`, `EXPO_PUBLIC_POSTHOG_KEY`, `EXPO_PUBLIC_ENVIRONMENT`, et l'identité de l'éditeur `EXPO_PUBLIC_PUBLISHER_NAME`, `_STATUS`, `_ADDRESS`, `_EMAIL`, `_PHONE` (jamais dans le dépôt).
+- facultatives : `EXPO_PUBLIC_WEB_URL`, `EXPO_PUBLIC_SENTRY_DSN`, `EXPO_PUBLIC_POSTHOG_KEY`, `EXPO_PUBLIC_ENVIRONMENT`, `EXPO_PUBLIC_TURNSTILE_SITE_KEY` (protection anti-robots, voir apps/mobile/ANTI-ROBOTS.md), et l'identité de l'éditeur `EXPO_PUBLIC_PUBLISHER_NAME`, `_STATUS`, `_ADDRESS`, `_EMAIL`, `_PHONE` (jamais dans le dépôt).
 
 ### Les valeurs de production
 

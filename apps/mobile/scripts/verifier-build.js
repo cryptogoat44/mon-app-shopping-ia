@@ -8,7 +8,8 @@
 // - avec une clé SECRÈTE de Supabase à la place de la clé publique (elle
 //   serait lisible par tous dans l'app) ;
 // - sans le jeton Sentry qui rend les plantages lisibles (sauf si
-//   SENTRY_DISABLE_AUTO_UPLOAD vaut « true », choix assumé d'un build d'essai).
+//   SENTRY_DISABLE_AUTO_UPLOAD vaut « true », choix assumé d'un build d'essai) ;
+// - avec la clé SECRÈTE du widget anti-robots à la place de sa clé publique.
 // Profils « development » : rien à vérifier (le code vient du Mac).
 // Aucune valeur n'est jamais affichée : seulement les noms des réglages.
 // Sans dépendance (il tourne avant l'installation) ; testé par vitest.
@@ -79,6 +80,22 @@ function problemesBuild(env) {
 
   for (const nom of ["EXPO_PUBLIC_SENTRY_DSN", "EXPO_PUBLIC_POSTHOG_KEY", "EXPO_PUBLIC_WEB_URL", "EXPO_PUBLIC_ENVIRONMENT"]) {
     if (vide(env[nom])) avertissements.push(`${nom} absente ${chezExpo} : la fonction correspondante sera coupée dans ce build.`);
+  }
+
+  // Protection anti-robots (point 17, ANTI-ROBOTS.md) : la clé PUBLIQUE du
+  // widget Cloudflare Turnstile. Une clé publique fait 24 caractères, la clé
+  // secrète bien plus : celle-ci ne va que dans Supabase, jamais dans l'app.
+  const turnstile = (env.EXPO_PUBLIC_TURNSTILE_SITE_KEY || "").trim();
+  if (!turnstile) {
+    avertissements.push(
+      `EXPO_PUBLIC_TURNSTILE_SITE_KEY absente ${chezExpo} : ce build n'aura pas la protection anti-robots, et ne pourra plus ni se connecter ni créer de compte le jour où elle sera activée dans Supabase (apps/mobile/ANTI-ROBOTS.md).`
+    );
+  } else if (turnstile.length > 30) {
+    erreurs.push(
+      "EXPO_PUBLIC_TURNSTILE_SITE_KEY est plus longue qu'une clé publique Turnstile (24 caractères) : c'est sans doute la clé SECRÈTE. Mettez la « Site Key » ; la « Secret Key » ne va que dans Supabase (si elle a été publiée, changez-la dans Cloudflare)."
+    );
+  } else if (!/^[0-9A-Za-z_-]+$/.test(turnstile)) {
+    erreurs.push("EXPO_PUBLIC_TURNSTILE_SITE_KEY n'a pas la forme d'une clé Turnstile (lettres, chiffres, « - » et « _ » seulement).");
   }
   return { erreurs, avertissements };
 }

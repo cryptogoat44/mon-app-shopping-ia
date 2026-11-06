@@ -1167,4 +1167,13 @@ export const fr = {
     denied: "Spotto n'a pas accès à l'appareil photo. Pour prendre une photo, autorisez-le dans les Réglages de l'iPhone, puis Spotto.",
     unavailable: (addPhoto: string) => `L'appareil photo n'a pas pu s'ouvrir. Réessayez, ou choisissez une photo avec « ${addPhoto} ».`,
   },
+  // Lot « anti-robots » (point 17) : vérification Cloudflare Turnstile avant
+  // connexion, inscription, « mot de passe oublié » et renvoi de l'e-mail.
+  robotCheck: {
+    checking: "Vérification anti-robots en cours…",
+    failed: "Vérification impossible : réessayez.",
+    retry: "Réessayer",
+    rejected: "La vérification anti-robots a échoué : réessayez.",
+    frameTitle: "Vérification anti-robots",
+  },
 } as const;
