@@ -65,6 +65,8 @@ Voir [apps/mobile/BUILD-IPHONE.md](apps/mobile/BUILD-IPHONE.md), sections 5 et 6
 - correction du code de l'app seulement : une mise à jour à distance (`eas update`), **après** le serveur et le site ;
 - changement natif (nouveau module, nouvelle autorisation) : un nouveau build, puis la validation d'Apple.
 
+Pour un build envoyé à la validation d'Apple : la liste de contrôle, la fiche, les notes de validation et les réponses « App Privacy » sont dans [apps/mobile/app-store/](apps/mobile/app-store/README.md).
+
 Les iPhone déjà installés gardent leur version jusqu'à la mise à jour. N'obligez une mise à jour (`APP_MIN_IOS_BUILD`) qu'une fois le nouveau build disponible sur l'App Store.
 
 ## 5. Vérifier la version servie
