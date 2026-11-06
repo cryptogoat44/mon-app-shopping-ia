@@ -16,14 +16,17 @@
 import { z } from "zod";
 import { RENDER_API, type FetchLike } from "./render-api.js";
 
-/** Requêtes suivies, dans l'ordre du parcours « vidéo + quelques mots ». */
+/** Requêtes suivies, dans l'ordre du parcours « vidéo + quelques mots ».
+ * Depuis le lot « filets de sécurité », le serveur note la route déclarée
+ * (« /api/searches/:id ») au lieu de l'adresse réelle : les deux formes sont
+ * lues, pour les journaux d'avant et d'après. */
 export const REQUETES_SUIVIES = [
   { method: "GET", chemin: /^\/api\/video-moments\/status$/, nom: "GET /api/video-moments/status", sens: "fonction d'analyse active ? (après le choix d'une vidéo)" },
   { method: "POST", chemin: /^\/api\/consents$/, nom: "POST /api/consents", sens: "accord enregistré (tous types d'accord)" },
   { method: "POST", chemin: /^\/api\/video-moments$/, nom: "POST /api/video-moments", sens: "analyse par l'IA" },
   { method: "POST", chemin: /^\/api\/searches\/prepare$/, nom: "POST /api/searches/prepare", sens: "image préparée pour l'identification" },
   { method: "POST", chemin: /^\/api\/searches\/[^/]+\/run$/, nom: "POST /api/searches/:id/run", sens: "identification (SerpApi)" },
-  { method: "GET", chemin: /^\/api\/searches\/[0-9a-f-]{36}$/, nom: "GET /api/searches/:id", sens: "résultats consultés" },
+  { method: "GET", chemin: /^\/api\/searches\/(?:[0-9a-f-]{36}|:id)$/, nom: "GET /api/searches/:id", sens: "résultats consultés" },
 ] as const;
 
 const REQUETE = z.object({ reqId: z.string(), msg: z.literal("incoming request"), req: z.object({ method: z.string(), url: z.string() }) });
