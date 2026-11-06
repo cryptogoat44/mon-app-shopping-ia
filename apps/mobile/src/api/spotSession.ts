@@ -22,7 +22,7 @@ export function clearLastSpotResult(): void {
 
 // Ce que seule la réponse du lancement contient, et que le serveur
 // n'enregistre pas : « Triées selon vos mots » et la requête des boutiques
-// (« Recherche : “…” »). Gardés le temps de la session, pour qu'une
+// (« Recherche écrite par une IA : “…” »). Gardés le temps de la session, pour qu'une
 // recherche rouverte les affiche encore ; jamais écrits sur l'appareil.
 type LaunchExtras = { sortedByWords: boolean; query: string | null };
 const launchExtras = new Map<string, LaunchExtras>();

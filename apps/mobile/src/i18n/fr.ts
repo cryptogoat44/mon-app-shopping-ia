@@ -200,7 +200,9 @@ export const fr = {
     // Photo (petit lot 2, décision du fondateur du 2026-10-27).
     photoLabel: "Quelle pièce ? (facultatif)",
     photoPlaceholder: "ex. la veste en cuir noir",
-    photoWordsNote: "Vos mots servent à trier les propositions. Seule l'image part vers la recherche.",
+    // Texte du document pour l'avocat (2026-11-05, point 4.1), vrai interrupteurs coupés comme allumés.
+    photoWordsNote:
+      "Vos mots servent seulement à trier les propositions : ils ne partent pas avec l'image vers la recherche. Ils ne sont envoyés à un moteur de recherche que si vous lancez vous-même une recherche avec vos mots.",
     // Montré tant que la pièce n'est pas entourée (rien de tracé, ou toute
     // l'image), avec ou sans mots (lots « premier essai » et « entourer la pièce »).
     frameHint: "Entourez la pièce seule, sans visage ni texte autour : Spotto la retrouvera plus facilement.",
@@ -495,16 +497,19 @@ export const fr = {
     reportWithdrawError: "Le signalement n'a pas pu être retiré. Vérifiez votre connexion, puis réessayez.",
     // Voie C (lot c) : sections sous les propositions de la recherche
     // visuelle, puis la recherche par les mots (« Que cherchez-vous ? »).
-    // Textes à valider par le fondateur ; sans nom de fournisseur, sans « IA ».
+    // Textes à valider par le fondateur ; sans nom de fournisseur. La requête
+    // des boutiques dit qu'elle est écrite par une IA (document pour l'avocat
+    // du 2026-11-05, point 4.3).
     complementTitleAi: "Cette pièce dans d'autres boutiques",
     complementTitleWords: "Résultats pour vos mots",
-    complementQuery: (query: string) => `Recherche : “${query}”`,
+    complementQuery: (query: string) => `Recherche écrite par une IA : “${query}”`,
     // Proposition sans lien direct vers le marchand : le lien ouvre la page produit de Google.
     viewOffer: "Voir l'offre",
     textSearchIntro: "Pas tout à fait ça ?",
     textSearchButton: "Chercher",
-    // Mention provisoire : la politique de confidentialité change avant la mise en ligne, après l'avocat.
-    textSearchNote: "Vos mots partent vers la recherche en ligne.",
+    // Option A du document pour l'avocat (2026-11-05, point 4.2), comme la politique « projet-2026-11-05 ».
+    textSearchNote:
+      "Vos mots seront envoyés à Google Shopping par notre prestataire SerpApi, sans votre nom ni votre e-mail. Spotto ne les garde pas ; il garde les pièces trouvées avec votre recherche.",
     textSearchRunning: "Recherche en cours…",
     textSearchAlreadyUsed: "La recherche avec vos mots a déjà été lancée pour cette photo.",
     textSearchEmpty: "Aucune proposition pour vos mots.",
@@ -895,8 +900,9 @@ export const fr = {
       "Aidez-nous à améliorer Spotto : acceptez-vous de partager des statistiques d'usage ? Jamais vos contenus, votre nom ni votre e-mail. Modifiable à tout moment dans les Réglages.",
     analyticsPromptYes: "Oui, volontiers",
     analyticsPromptNo: "Non merci",
+    // Information de la version « projet-2026-11-05 » (POLICY_UPDATE_NOTICE, shared-types).
     updateNotice:
-      "Notre politique de confidentialité a été mise à jour : votre serveur est désormais en Europe, et elle décrit le suivi des erreurs et les statistiques d'usage (facultatives).",
+      "Notre politique de confidentialité a été mise à jour : elle décrit les nouvelles recherches dans d'autres boutiques et avec vos mots. Une IA lit les titres des résultats, jamais votre photo.",
     updateNoticeRead: "Lire la politique",
     updateNoticeDismiss: "OK",
     updateNoticeDismissLabel: "Fermer cette information",

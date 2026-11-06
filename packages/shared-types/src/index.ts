@@ -754,7 +754,16 @@ export const LEGAL_DOCUMENT_VERSIONS: Record<LegalDocumentType, string> = {
   // SerpApi ni à Google, ni enregistrés ; sous une photo, notre serveur s'en
   // sert seulement pour trier les propositions — simple information, sans
   // nouvelle acceptation ni message (décision du fondateur du 2026-10-27).
-  privacy_policy: "projet-2026-10-27",
+  // « projet-2026-11-05 » (lot politique exacte) : la voie C décrite
+  // interrupteurs allumés — recherche de la même pièce dans d'autres boutiques
+  // (une IA d'Anthropic lit les titres et les sites des premiers résultats,
+  // jamais l'image ni les mots, sans consentement), « Que cherchez-vous ? »
+  // (les mots partent vers SerpApi puis Google Shopping), cache commun de 24 h,
+  // aucun identifiant du compte transmis à SerpApi ni à Google — simple
+  // information, sans nouvelle acceptation, AVEC le court message promis par
+  // la section « Modifications » (POLICY_UPDATE_NOTICE ci-dessous). Textes du
+  // document pour l'avocat du 2026-11-05 ; à valider par le fondateur.
+  privacy_policy: "projet-2026-11-05",
 };
 
 /** Suivi des erreurs (lot 2) : seule adresse Sentry admise, région UE
@@ -789,7 +798,7 @@ export const CONSENT_VERSIONS: Record<VersionedConsentType, string> = {
  * quels changements relèvent de l'un ou de l'autre. */
 export const ACCEPTED_CONSENT_VERSIONS: Record<VersionedConsentType, readonly string[]> = {
   terms: ["projet-2026-09-25"],
-  privacy_policy: ["projet-2026-09-25", "projet-2026-09-29", "projet-2026-09-30", "projet-2026-09-30-b", "projet-2026-10-05", "projet-2026-10-05-b", "projet-2026-10-06", "projet-2026-10-25", "projet-2026-10-27"],
+  privacy_policy: ["projet-2026-09-25", "projet-2026-09-29", "projet-2026-09-30", "projet-2026-09-30-b", "projet-2026-10-05", "projet-2026-10-05-b", "projet-2026-10-06", "projet-2026-10-25", "projet-2026-10-27", "projet-2026-11-05"],
   age_declaration: [CONSENT_VERSIONS.age_declaration],
   analytics: [CONSENT_VERSIONS.analytics],
   analyse_video_ia: [CONSENT_VERSIONS.analyse_video_ia],
@@ -799,13 +808,17 @@ export const ACCEPTED_CONSENT_VERSIONS: Record<VersionedConsentType, readonly st
  * jour qui ne demande pas de nouvelle acceptation (un identifiant par
  * information, pour ne la montrer qu'une fois). */
 export const POLICY_UPDATE_NOTICE = {
-  // Remplace l'information du 2026-09-29 (serveur en Europe) : le message
-  // couvre les deux mises à jour, une seule fois.
-  id: "politique-2026-09-30-erreurs-statistiques",
+  // Version « projet-2026-11-05 » (voie C) : nouvel identifiant, donc montré
+  // une fois à toute personne qui a accepté une version antérieure, même si
+  // elle avait déjà vu l'information précédente. Remplace l'information du
+  // 2026-09-30 (serveur en Europe, erreurs, statistiques), elle-même venue
+  // après celle du 2026-09-29 : un seul message à la fois, le plus récent ; le
+  // lien mène à la politique entière, qui contient les deux.
+  id: "politique-2026-11-05-boutiques-et-mots",
   document: "privacy_policy" as LegalDocumentType,
   /** Versions dont le texte contient déjà cette information : la
    * personne qui en a accepté une ne voit pas le message. */
-  alreadyCovered: ["projet-2026-09-30", "projet-2026-09-30-b", "projet-2026-10-05", "projet-2026-10-05-b", "projet-2026-10-06", "projet-2026-10-25", "projet-2026-10-27"] as readonly string[],
+  alreadyCovered: ["projet-2026-11-05"] as readonly string[],
 } as const;
 
 export interface ConsentStatus {
