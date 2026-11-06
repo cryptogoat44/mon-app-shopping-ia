@@ -110,7 +110,7 @@ Ne défaites jamais une migration à la main. Le plus souvent, revenir en arriè
 
 ### Tout restaurer
 
-En dernier recours (données abîmées), avec l'offre Supabase Pro : Supabase → spotto-prod → **Database** → **Backups** → **Restore**, sur la sauvegarde de la nuit (à vérifier). Tout ce qui a été fait depuis cette sauvegarde est perdu : comptes créés, recherches, publications. La procédure complète est dans [apps/backend/supabase/RESTAURATION.md](apps/backend/supabase/RESTAURATION.md) : quand restaurer, comment, et ce qu'il faut rejouer ensuite.
+En dernier recours (données abîmées), avec l'offre Supabase Pro : Supabase → spotto-prod → **Database** → **Backups** → **Restore**, sur la sauvegarde de la nuit (à vérifier). Tout ce qui a été fait depuis cette sauvegarde est perdu : comptes créés, recherches, publications. La procédure complète est dans [apps/backend/supabase/RESTAURATION.md](apps/backend/supabase/RESTAURATION.md) : quand restaurer, comment, et ce qu'il faut rejouer ensuite. Les photos se restaurent à part : [apps/backend/supabase/SAUVEGARDE-PHOTOS.md](apps/backend/supabase/SAUVEGARDE-PHOTOS.md).
 
 ## 8. Si une migration échoue
 
