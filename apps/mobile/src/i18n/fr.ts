@@ -1148,4 +1148,17 @@ export const fr = {
       backToSignIn: "Retour à la connexion",
     },
   },
+  // Lot « app iPhone prête » (chantier 4) : mise à jour obligatoire (point 11)
+  // et bouton appareil photo du Spotter (point 14).
+  appUpdate: {
+    title: "Mettez à jour Spotto",
+    body: "Cette version de Spotto n'est plus prise en charge. Installez la dernière version depuis l'App Store pour continuer.",
+    openStore: "Ouvrir l'App Store",
+    searchStore: "Ouvrez l'App Store, cherchez « Spotto », puis touchez « Mettre à jour ».",
+  },
+  cameraCapture: {
+    takePhoto: "Prendre une photo",
+    denied: "Spotto n'a pas accès à l'appareil photo. Pour prendre une photo, autorisez-le dans les Réglages de l'iPhone, puis Spotto.",
+    unavailable: (addPhoto: string) => `L'appareil photo n'a pas pu s'ouvrir. Réessayez, ou choisissez une photo avec « ${addPhoto} ».`,
+  },
 } as const;

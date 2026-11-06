@@ -26,9 +26,13 @@ import videoMomentsRoutes from "./routes/videoMoments.js";
 import moderationRoutes from "./routes/moderation.js";
 import piecesRoutes from "./routes/pieces.js";
 import searchCapacityRoutes from "./routes/searchCapacity.js";
+import appVersionRoutes from "./routes/appVersion.js";
 import { captureServerError, captureServerFailure } from "./lib/sentry.js";
 import { isErrorBody, localizeMessage } from "./lib/messages.js";
 import { requestLocale } from "./lib/locale.js";
+import { APP_BUILD_HEADER } from "@monapp/shared-types";
+import { env } from "./env.js";
+import { buildFromHeader, isBelowMinimum, isVersionGuardExempt, updateRequiredBody } from "./lib/appVersion.js";
 
 /** La base répond-elle en 3 secondes ? Une lecture sans ligne (limit 0). */
 async function databaseResponds(fastify: FastifyInstance): Promise<boolean> {
@@ -94,6 +98,16 @@ export async function buildApp(options: { logger?: FastifyServerOptions["logger"
     return { ...payload, message: localizeMessage(payload.message, reply.statusCode, requestLocale(request)) };
   });
 
+  // Mise à jour obligatoire de l'app iPhone (lot « app iPhone prête »,
+  // lib/appVersion.ts) : un build sous le minimum réglé chez Render reçoit
+  // 426 sur tout appel, avant toute vérification de compte. Sans minimum
+  // (par défaut), ou sans numéro de build (le site), rien ne change.
+  fastify.addHook("onRequest", async (request, reply) => {
+    if (isVersionGuardExempt(request.url)) return;
+    if (!isBelowMinimum(buildFromHeader(request.headers[APP_BUILD_HEADER]), env.APP_MIN_IOS_BUILD)) return;
+    return reply.code(426).send(updateRequiredBody(env.APP_STORE_URL));
+  });
+
   await fastify.register(supabasePlugin);
   await fastify.register(authPlugin);
   await fastify.register(rateLimitPlugin);
@@ -116,6 +130,7 @@ export async function buildApp(options: { logger?: FastifyServerOptions["logger"
   await fastify.register(moderationRoutes);
   await fastify.register(piecesRoutes);
   await fastify.register(searchCapacityRoutes);
+  await fastify.register(appVersionRoutes);
 
   // Exclue du filet anti-abus "default" : les sondes de disponibilité de
   // Render l'appellent très régulièrement, ça n'a rien à voir avec un abus.

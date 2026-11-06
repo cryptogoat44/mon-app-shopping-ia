@@ -13,6 +13,8 @@ import { StartupWaiting } from "@/components/connecting";
 import { useShareIntake } from "@/lib/share-intake";
 import { useSharedItemWaitingNotice } from "@/lib/use-shared-item";
 import { useAppFonts } from "@/theme/fonts";
+import { useMinimumVersionCheck, useUpdateRequired } from "@/lib/use-app-update";
+import { UpdateRequiredScreen } from "@/components/update-required";
 import { color, getActiveScheme } from "@/theme/tokens";
 import { APP_NAME_DISPLAY } from "@/constants/brand";
 // Capture l'adresse d'arrivée (jetons du lien « mot de passe oublié ») avant
@@ -49,10 +51,17 @@ function RootNavigator() {
   const route = fontsReady ? resolveRootRoute({ session, profileStatus, profile }) : "splash";
   // Partage reçu sans être connecté : il s'ouvrira après la connexion, on le dit.
   useSharedItemWaitingNotice(route === "welcome");
+  // App iPhone sous le build minimal réglé sur le serveur (lot « app iPhone
+  // prête ») : « Mettez à jour Spotto » remplace toute l'app, connecté ou non.
+  useMinimumVersionCheck();
+  const updateRequired = useUpdateRequired();
+  const showUpdate = updateRequired !== null && fontsReady;
 
   useEffect(() => {
-    if (route !== "splash") SplashScreen.hideAsync();
-  }, [route]);
+    if (route !== "splash" || showUpdate) SplashScreen.hideAsync();
+  }, [route, showUpdate]);
+
+  if (showUpdate) return <UpdateRequiredScreen storeUrl={updateRequired.storeUrl} />;
 
   // Site : un écran d'attente pendant le démarrage, jamais une page vide ;
   // iPhone : l'écran de démarrage du système reste affiché.

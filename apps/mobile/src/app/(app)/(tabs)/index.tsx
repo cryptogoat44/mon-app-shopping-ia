@@ -17,7 +17,7 @@ import { EntryTiles, LatestVideoCard, LatestVideoNote, LatestVideoQuestion } fro
 import { SpotImage } from "@/components/spot-image";
 import { SearchLimitsNotice } from "@/components/search-limits-notice";
 import { useAuth } from "@/lib/auth-context";
-import { importPhotoForSpotter, prepareSharedPhoto, type ImportResult } from "@/lib/image-import";
+import { importPhotoForSpotter, prepareSharedPhoto, takePhotoForSpotter, type ImportResult } from "@/lib/image-import";
 import { latestVideoUri, loadLatestVideo, saveLatestVideoChoice } from "@/lib/latest-video";
 import type { LatestVideo, LatestVideoChoice, LatestVideoState } from "@/lib/latest-video-state";
 import { RECENT_SEARCHES_LIMIT, reopenParams } from "@/lib/recent-searches";
@@ -131,7 +131,7 @@ function useSpotterEntries(reveal: () => void) {
   const router = useRouter();
   const openLink = useLinkEntry();
   const [message, setMessage] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"photo" | "latest" | null>(null);
+  const [busy, setBusy] = useState<"photo" | "camera" | "latest" | null>(null);
   // Lien partagé qui ne se lit pas : l'aide « capture d'écran d'abord », en haut de l'écran.
   const [linkHelp, setLinkHelp] = useState(false);
   const [query, setQuery] = useState("");
@@ -150,6 +150,20 @@ function useSpotterEntries(reveal: () => void) {
   async function addPhoto() {
     setMessage(null);
     openPhoto(await importPhotoForSpotter(), t.common.photoUnavailable);
+  }
+
+  /** « Prendre une photo » (app iPhone, lot « app iPhone prête ») : la même
+   * suite qu'une photo choisie ; autorisation refusée : on dit où la donner. */
+  async function takePhoto() {
+    setMessage(null);
+    setBusy("camera");
+    try {
+      const taken = await takePhotoForSpotter();
+      if (taken.kind === "denied") return setMessage(t.cameraCapture.denied);
+      openPhoto(taken, t.cameraCapture.unavailable(t.spotter.addPhoto));
+    } finally {
+      setBusy(null);
+    }
   }
 
   /** Élément partagé : les mêmes chemins que les boutons de l'écran. */
@@ -213,6 +227,8 @@ function useSpotterEntries(reveal: () => void) {
     importing,
     addVideo: () => void importVideo(),
     addPhoto: () => void addPhoto(),
+    // L'appareil photo : sur l'app iPhone seulement (le site garde l'import).
+    takePhoto: Platform.OS === "ios" ? () => void takePhoto() : undefined,
     launchLatest: (latest: LatestVideo) => void launchLatest(latest),
   };
 }
@@ -278,7 +294,13 @@ export default function SpotterScreen() {
           />
         ) : null}
         {entries.message ? <ErrorMessage style={styles.feedback}>{entries.message}</ErrorMessage> : null}
-        <EntryTiles videoLabel={latest ? t.spotter.otherVideo : t.spotter.addVideo} onVideo={entries.addVideo} onPhoto={entries.addPhoto} busy={entries.busy} />
+        <EntryTiles
+          videoLabel={latest ? t.spotter.otherVideo : t.spotter.addVideo}
+          onVideo={entries.addVideo}
+          onPhoto={entries.addPhoto}
+          onCamera={entries.takePhoto}
+          busy={entries.busy}
+        />
         {latestVideo.state.kind === "ask" ? <LatestVideoQuestion onAnswer={latestVideo.choose} saving={latestVideo.saving} failed={latestVideo.failed} /> : null}
         {latestVideo.note ? <LatestVideoNote message={latestVideo.note} /> : null}
         <LinkHelp onAddPhoto={entries.addPhoto} onAddVideo={entries.addVideo} onHelp={entries.showLinkHelp} importing={entries.importing} />

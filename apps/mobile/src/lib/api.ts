@@ -58,6 +58,7 @@ import { isAdjustedCrop } from "./crop-geometry";
 import { textSearchFailure } from "./spot-result";
 import { deviceTimeZone, type ExportFormat, type ExportResponse } from "./export-file";
 import { searchLaunched } from "./search-limits";
+import { appBuildHeaders, isUpdateRequiredResponse, markUpdateRequired, parseStoreUrl, readAppVersionInfo } from "./app-update";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -85,6 +86,8 @@ async function authorizedFetch(path: string, init?: RequestInit): Promise<Respon
     headers: {
       ...(hasJsonBody ? { "Content-Type": "application/json" } : {}),
       ...init?.headers,
+      // App iPhone : son numéro de build (mise à jour obligatoire, app-update.ts).
+      ...appBuildHeaders(),
       "Accept-Language": acceptLanguage(),
       Authorization: `Bearer ${token}`,
     },
@@ -92,10 +95,21 @@ async function authorizedFetch(path: string, init?: RequestInit): Promise<Respon
 
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as ApiErrorBody | null;
+    // Build sous le minimum réglé sur le serveur : l'écran « Mettez à jour Spotto » prend la place de l'app.
+    if (isUpdateRequiredResponse(response.status, body)) markUpdateRequired(parseStoreUrl((body as { storeUrl?: unknown }).storeUrl));
     throw new ApiError(response.status, body ?? { error: "unknown", message: t.common.unknownServerError });
   }
 
   return response;
+}
+
+/** Lot « app iPhone prête » : build minimal exigé de l'app iPhone, lu sans
+ * compte (l'accueil aussi doit pouvoir dire « Mettez à jour Spotto »). null :
+ * réponse illisible ou en erreur (rien n'est alors bloqué). */
+export async function fetchAppVersionInfo(): Promise<{ minimumBuild: number | null; storeUrl: string | null } | null> {
+  const response = await fetch(`${apiUrl}/api/app/version`, { headers: { ...appBuildHeaders(), "Accept-Language": acceptLanguage() } });
+  if (!response.ok) return null;
+  return readAppVersionInfo(await response.json().catch(() => null));
 }
 
 /** `signal` : pour abandonner un essai resté sans réponse (lib/retry.ts). */

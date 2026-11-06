@@ -1077,4 +1077,17 @@ export const en: Catalog = {
       backToSignIn: "Back to sign in",
     },
   },
+  // “iPhone app ready” batch (chantier 4): required update (point 11) and the
+  // Spotter's camera button (point 14).
+  appUpdate: {
+    title: "Update Spotto",
+    body: "This version of Spotto is no longer supported. Install the latest version from the App Store to continue.",
+    openStore: "Open the App Store",
+    searchStore: "Open the App Store, search for “Spotto”, then tap “Update”.",
+  },
+  cameraCapture: {
+    takePhoto: "Take a photo",
+    denied: "Spotto doesn't have access to the camera. To take a photo, allow it in your iPhone's Settings, under Spotto.",
+    unavailable: (addPhoto: string) => `The camera couldn't open. Try again, or choose a photo with “${addPhoto}”.`,
+  },
 };
