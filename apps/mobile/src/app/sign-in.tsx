@@ -9,6 +9,8 @@ import { t } from "@/i18n";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
 import { ResendEmailButton } from "@/components/signup-help";
+import { useRobotCheck } from "@/components/robot-check";
+import { withCaptchaOption } from "@/lib/robot-check";
 import { themedStyles } from "@/theme/themed-styles";
 
 export default function SignInScreen() {
@@ -20,6 +22,9 @@ export default function SignInScreen() {
   // Adresse pas encore confirmée : on propose de renvoyer l'e-mail.
   const [unconfirmed, setUnconfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Anti-robots (point 17) : aussi pour « Renvoyer l'e-mail » ci-dessous.
+  const robot = useRobotCheck();
+  const ctaDisabled = submitting || !email || !password || !robot.ready;
 
   function handleEmail(value: string) {
     setEmail(value);
@@ -28,9 +33,10 @@ export default function SignInScreen() {
   }
 
   async function handleSignIn() {
+    if (!robot.ready) return;
     setError(null);
     setSubmitting(true);
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const { error: signInError } = await supabase.auth.signInWithPassword(withCaptchaOption({ email: email.trim(), password }, robot.take()));
     setSubmitting(false);
 
     if (signInError) {
@@ -60,7 +66,7 @@ export default function SignInScreen() {
             <Text style={styles.subtitle}>{t.auth.signIn.subtitle}</Text>
 
             {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
-            {unconfirmed ? <ResendEmailButton email={email} style={styles.resend} /> : null}
+            {unconfirmed ? <ResendEmailButton email={email} robot={robot} style={styles.resend} /> : null}
 
             <View style={styles.field}>
               <Text style={styles.label}>{t.auth.email}</Text>
@@ -99,12 +105,14 @@ export default function SignInScreen() {
               </Pressable>
             </Link>
 
+            {robot.widget}
+
             <Pressable accessibilityRole="button"
-              style={[styles.cta, (submitting || !email || !password) ? styles.ctaDisabled : null]}
+              style={[styles.cta, ctaDisabled ? styles.ctaDisabled : null]}
               onPress={handleSignIn}
-              disabled={submitting || !email || !password}
+              disabled={ctaDisabled}
             >
-              <Text style={[styles.ctaLabel, (submitting || !email || !password) ? styles.ctaLabelDisabled : null]}>{submitting ? t.auth.signIn.ctaLoading : t.auth.signIn.cta}</Text>
+              <Text style={[styles.ctaLabel, ctaDisabled ? styles.ctaLabelDisabled : null]}>{submitting ? t.auth.signIn.ctaLoading : t.auth.signIn.cta}</Text>
             </Pressable>
 
             <Link href="/sign-up" asChild>

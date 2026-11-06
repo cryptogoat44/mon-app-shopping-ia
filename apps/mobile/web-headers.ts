@@ -32,6 +32,8 @@ export const PRODUCTION_SERVICES: SiteServices = {
 /** Sentry (région UE) et PostHog (UE), fixes dans le code de l'app. */
 const SENTRY_EU = "https://*.ingest.de.sentry.io";
 const POSTHOG_EU = "https://eu.i.posthog.com";
+/** Widget anti-robots Cloudflare Turnstile (point 17, ANTI-ROBOTS.md) : son script et son cadre. */
+export const TURNSTILE = "https://challenges.cloudflare.com";
 
 function origin(url: string): string {
   return new URL(url).origin;
@@ -42,8 +44,9 @@ export function contentSecurityPolicy(services: SiteServices): string {
   const supabase = origin(services.supabaseUrl);
   const directives: [string, string[]][] = [
     ["default-src", ["'self'"]],
-    // Le code du site seulement, et le petit script d'Expo par son empreinte.
-    ["script-src", ["'self'", `'sha256-${EXPO_INLINE_SCRIPT_SHA256}'`]],
+    // Le code du site seulement, le petit script d'Expo par son empreinte, et
+    // le script du widget anti-robots (page /verification-robot.html).
+    ["script-src", ["'self'", `'sha256-${EXPO_INLINE_SCRIPT_SHA256}'`, TURNSTILE]],
     // Les styles écrits dans la page par React Native Web.
     ["style-src", ["'self'", "'unsafe-inline'"]],
     // Images des boutiques (n'importe quel site, en https), photos choisies sur l'appareil.
@@ -54,11 +57,14 @@ export function contentSecurityPolicy(services: SiteServices): string {
     // Le serveur, la base (et son temps réel), Sentry, PostHog ; photos de l'appareil lues avant l'envoi.
     ["connect-src", ["'self'", origin(services.apiUrl), supabase, supabase.replace(/^https:/, "wss:"), SENTRY_EU, POSTHOG_EU, "blob:", "data:"]],
     ["worker-src", ["'self'", "blob:"]],
+    // Cadres : la page du widget anti-robots (même origine) et le widget de Cloudflare.
+    ["frame-src", ["'self'", TURNSTILE]],
     ["object-src", ["'none'"]],
     ["base-uri", ["'self'"]],
     ["form-action", ["'self'"]],
-    // Jamais affiché dans le cadre d'un autre site.
-    ["frame-ancestors", ["'none'"]],
+    // Jamais affiché dans le cadre d'un autre site ; seulement dans le sien
+    // (la page du widget anti-robots, affichée dans une iframe du site).
+    ["frame-ancestors", ["'self'"]],
     ["upgrade-insecure-requests", []],
   ];
   return directives.map(([name, values]) => [name, ...values].join(" ")).join("; ");
@@ -71,7 +77,7 @@ export function webSecurityHeaders(services: SiteServices): { name: string; valu
     // HTTPS obligatoire pendant un an (sans les sous-domaines : le nom de domaine n'est pas encore choisi).
     { name: "Strict-Transport-Security", value: "max-age=31536000" },
     { name: "X-Content-Type-Options", value: "nosniff" },
-    { name: "X-Frame-Options", value: "DENY" },
+    { name: "X-Frame-Options", value: "SAMEORIGIN" },
     // Les boutiques ne voient que « vient de Spotto », jamais la page exacte.
     { name: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
     { name: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=(), usb=()" },

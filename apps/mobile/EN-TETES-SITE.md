@@ -24,10 +24,10 @@ de passe oublié), et un script injecté dans la page est bien refusé.
 
 | Name | Value |
 | --- | --- |
-| `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'sha256-67fhrP0+BkBqmgGGXTtgiVO/9EQs3QruYNU/7fnRkI8='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: data:; font-src 'self' data:; connect-src 'self' https://spotto-api.onrender.com https://selhqdqfrflsqivgxypf.supabase.co wss://selhqdqfrflsqivgxypf.supabase.co https://*.ingest.de.sentry.io https://eu.i.posthog.com blob: data:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests` |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'sha256-67fhrP0+BkBqmgGGXTtgiVO/9EQs3QruYNU/7fnRkI8=' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: data:; font-src 'self' data:; connect-src 'self' https://spotto-api.onrender.com https://selhqdqfrflsqivgxypf.supabase.co wss://selhqdqfrflsqivgxypf.supabase.co https://*.ingest.de.sentry.io https://eu.i.posthog.com blob: data:; worker-src 'self' blob:; frame-src 'self' https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests` |
 | `Strict-Transport-Security` | `max-age=31536000` |
 | `X-Content-Type-Options` | `nosniff` |
-| `X-Frame-Options` | `DENY` |
+| `X-Frame-Options` | `SAMEORIGIN` |
 | `Referrer-Policy` | `strict-origin-when-cross-origin` |
 | `Permissions-Policy` | `camera=(self), microphone=(), geolocation=(), payment=(), usb=()` |
 
@@ -37,7 +37,14 @@ de passe oublié), et un script injecté dans la page est bien refusé.
   projet Supabase) : la ligne `connect-src` doit suivre. Demandez à Claude de
   régénérer ce tableau.
 - Le lecteur intégré TikTok et Instagram est allumé : il faudra ajouter
-  `frame-src https://www.tiktok.com https://www.instagram.com` (Claude le fera
-  avec ce lot).
+  `https://www.tiktok.com https://www.instagram.com` à la ligne `frame-src`
+  (Claude le fera avec ce lot).
+- Protection anti-robots (point 17, `ANTI-ROBOTS.md`) : `https://challenges.cloudflare.com`
+  figure dans `script-src` et `frame-src` (le widget de Cloudflare), et le site
+  peut s'afficher dans son propre cadre (`frame-ancestors 'self'`,
+  `X-Frame-Options: SAMEORIGIN`) pour la page `/verification-robot.html`.
+  Jamais dans celui d'un autre site. Ces lignes doivent être en place dans
+  Render AVANT d'y mettre la clé du widget, sinon la vérification ne
+  s'affiche pas sur le site.
 - Une mise à jour d'Expo change le petit script écrit dans chaque page : le
   test le repère (empreinte `sha256-…`), Claude met la valeur à jour.

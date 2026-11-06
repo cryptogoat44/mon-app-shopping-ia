@@ -90,6 +90,8 @@ describe("contrôle au début d'un build EAS (scripts/verifier-build.js)", () =>
     EXPO_PUBLIC_POSTHOG_KEY: "phc_factice",
     EXPO_PUBLIC_WEB_URL: "https://exemple.test",
     EXPO_PUBLIC_ENVIRONMENT: "production",
+    // Clé publique de test documentée par Cloudflare (24 caractères).
+    EXPO_PUBLIC_TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
     SENTRY_AUTH_TOKEN: "sntrys_factice",
   };
 
@@ -128,6 +130,19 @@ describe("contrôle au début d'un build EAS (scripts/verifier-build.js)", () =>
     const essai = problemesBuild({ ...BON, EAS_BUILD_PROFILE: "preview", SENTRY_AUTH_TOKEN: "", SENTRY_DISABLE_AUTO_UPLOAD: "true" });
     expect(essai).toEqual({ erreurs: [], avertissements: [] });
     expect(problemesBuild({ ...BON, SENTRY_AUTH_TOKEN: "", SENTRY_DISABLE_AUTO_UPLOAD: "true" }).avertissements[0]).toContain("illisibles");
+  });
+
+  it("anti-robots (point 17) : clé absente, simple avertissement ; clé secrète à la place de la clé publique, build arrêté sans l'afficher", () => {
+    const sans = problemesBuild({ ...BON, EXPO_PUBLIC_TURNSTILE_SITE_KEY: "" });
+    expect(sans.erreurs).toEqual([]);
+    expect(sans.avertissements).toHaveLength(1);
+    expect(sans.avertissements[0]).toContain("anti-robots");
+    const secrete = "1x0000000000000000000000000000000AA";
+    const { erreurs } = problemesBuild({ ...BON, EXPO_PUBLIC_TURNSTILE_SITE_KEY: secrete });
+    expect(erreurs).toHaveLength(1);
+    expect(erreurs[0]).toContain("SECRÈTE");
+    expect(erreurs[0]).not.toContain(secrete);
+    expect(problemesBuild({ ...BON, EXPO_PUBLIC_TURNSTILE_SITE_KEY: "<cle>" }).erreurs[0]).toContain("forme");
   });
 
   it("réglages facultatifs absents : simple avertissement", () => {
