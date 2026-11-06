@@ -20,15 +20,15 @@ describe("alertes", () => {
   it("une alerte : la ligne « Alerte » et l'envoi à Sentry, avec le tag « alerte »", () => {
     const log = fakeLog();
     const send = vi.fn();
-    expect(raiseAlert(log, { kind: "signalement", message: "Nouveau signalement à traiter", tags: { cible: "post", motif: "spam" } }, NOW, send)).toBe(true);
-    expect(log.lines).toEqual([{ fields: { alerte: "signalement", cible: "post", motif: "spam" }, message: ALERT_LOG_MESSAGE }]);
+    expect(raiseAlert(log, { kind: "disjoncteur", message: "Recherche en pause", tags: { motif: "pannes" } }, NOW, send)).toBe(true);
+    expect(log.lines).toEqual([{ fields: { alerte: "disjoncteur", motif: "pannes" }, message: ALERT_LOG_MESSAGE }]);
     expect(send).toHaveBeenCalledOnce();
     const [message, tags, fingerprint] = send.mock.calls[0]!;
-    expect(message).toBe("Nouveau signalement à traiter");
-    expect(tags).toEqual({ alerte: "signalement", cible: "post", motif: "spam" });
-    // Sans clé : chaque signalement est un nouveau problème dans Sentry, donc une notification.
-    expect(fingerprint[0]).toBe("signalement");
-    raiseAlert(log, { kind: "signalement", message: "Nouveau signalement à traiter" }, NOW, send);
+    expect(message).toBe("Recherche en pause");
+    expect(tags).toEqual({ alerte: "disjoncteur", motif: "pannes" });
+    // Sans clé : chaque appel est un nouveau problème dans Sentry, donc une notification.
+    expect(fingerprint[0]).toBe("disjoncteur");
+    raiseAlert(log, { kind: "disjoncteur", message: "Recherche en pause" }, NOW, send);
     expect(send.mock.calls[1]![2][1]).not.toBe(fingerprint[1]);
   });
 

@@ -9,6 +9,8 @@ import { canViewPost, findViewablePost, shownPosts } from "../lib/visibility.js"
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
 import { PHOTO_SIZES, optimizePhoto } from "../lib/photos.js";
 import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.js";
+import { CONTENT_NOT_ALLOWED, containsBannedWords } from "../lib/contentFilter.js";
+import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
 
 // Une publication ne peut pas devenir une liste sans fin de tags — reste
 // large pour un usage légitime (plusieurs pièces sur une même tenue) sans
@@ -387,6 +389,9 @@ export default async function postsRoutes(fastify: FastifyInstance) {
       .or(visibility)
       .order("created_at", { ascending: false })
       .limit(FEED_PAGE_SIZE + 1);
+    // Chantier 3 : une publication signalée sort aussitôt du fil de la personne qui l'a signalée.
+    const reported = notInFilter(await reportedIdsFor(fastify, request.log, userId, "post"));
+    if (reported) query = query.not("id", "in", reported);
 
     if (cursorDate) {
       query = query.lt("created_at", cursorDate);
@@ -474,6 +479,8 @@ export default async function postsRoutes(fastify: FastifyInstance) {
       if (caption && caption.length > 280) {
         return reply.code(400).send({ error: "invalid_body", message: "Le texte est trop long (280 caractères maximum)." });
       }
+      // Filtre des mots interdits (chantier 3, règle 1.2 d'Apple), avant tout envoi de photo.
+      if (containsBannedWords(caption)) return reply.code(400).send(CONTENT_NOT_ALLOWED);
 
       // Pièces taguées (étape 1.E) : origine Vault ou recherche récente,
       // validée côté serveur ci-dessous — jamais de confiance dans

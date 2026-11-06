@@ -10,14 +10,16 @@
 // - plafond_recherches : plafond du jour ou du mois atteint, Spotter fermé à tous ;
 // - plafond_ia : plafond du jour de l'IA d'Anthropic atteint ;
 // - echecs_repetes : 5 échecs ou plus en 15 minutes chez un fournisseur
-//   (IA de l'analyse vidéo, IA de la voie C, Google Shopping) ;
-// - signalement : un nouveau signalement attend la modération.
+//   (IA de l'analyse vidéo, IA de la voie C, Google Shopping).
+// Les signalements (« signalement », « masquage_auto ») portent le même tag
+// mais partent de captureModerationEvent (lib/sentry.ts, chantier 3) : une
+// seule alerte par signalement.
 // Mémoire : la répétition d'une même alerte est évitée en mémoire ; après un
 // redémarrage, une alerte peut être envoyée une seconde fois (sans risque).
 import { randomUUID } from "node:crypto";
 import { captureAlert } from "./sentry.js";
 
-export type AlertKind = "disjoncteur" | "plafond_recherches" | "plafond_ia" | "echecs_repetes" | "signalement";
+export type AlertKind = "disjoncteur" | "plafond_recherches" | "plafond_ia" | "echecs_repetes";
 
 export const ALERT_LOG_MESSAGE = "Alerte";
 

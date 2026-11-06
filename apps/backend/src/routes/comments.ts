@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { COMMENT_MAX_LENGTH, type PostAuthor, type PostComment } from "@monapp/shared-types";
 import { fetchBlockedUserIds } from "../lib/blocks.js";
+import { CONTENT_NOT_ALLOWED, containsBannedWords } from "../lib/contentFilter.js";
+import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
 import { findViewablePost } from "../lib/visibility.js";
 import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput } from "../lib/validation.js";
 
@@ -82,6 +84,9 @@ export default async function commentsRoutes(fastify: FastifyInstance) {
       .order("created_at", { ascending: true })
       .limit(COMMENTS_PAGE_SIZE + 1);
     if (blocked.size > 0) query = query.not("user_id", "in", `(${[...blocked].join(",")})`);
+    // Chantier 3 : un commentaire signalé disparaît aussitôt pour la personne qui l'a signalé.
+    const reported = notInFilter(await reportedIdsFor(fastify, request.log, viewerId, "comment"));
+    if (reported) query = query.not("id", "in", reported);
     if (pageQuery.cursor) query = query.gt("created_at", pageQuery.cursor);
 
     const { data, error } = await query;
@@ -110,6 +115,9 @@ export default async function commentsRoutes(fastify: FastifyInstance) {
       if (!parsed.success) {
         return reply.code(400).send({ error: "invalid_body", message: parsed.error.issues[0]?.message ?? "Commentaire invalide." });
       }
+
+      // Filtre des mots interdits (chantier 3, règle 1.2 d'Apple).
+      if (containsBannedWords(parsed.data.body)) return reply.code(400).send(CONTENT_NOT_ALLOWED);
 
       const post = await findViewablePost(fastify, viewerId, params.id);
       if (!post) return reply.code(404).send(POST_NOT_FOUND);

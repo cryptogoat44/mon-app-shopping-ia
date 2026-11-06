@@ -15,10 +15,13 @@ Chaque alerte écrit une ligne `Alerte` dans le journal de Render et, si
 | `plafond_recherches` | plafond du jour ou du mois atteint : Spotter fermé à tous | une par jour (le jour), une par cycle (le mois) |
 | `plafond_ia` | 300 analyses de l'IA dans la journée | une par jour |
 | `echecs_repetes` | 5 échecs en 15 minutes de l'IA (vidéo, voie C) ou de Google Shopping | une par heure au plus |
-| `signalement` | un nouveau signalement attend la modération | à chaque signalement |
+| `signalement` | un nouveau signalement attend la modération | une par contenu signalé (les signalements suivants du même contenu se regroupent) |
+| `masquage_auto` | un contenu signalé par 3 personnes différentes vient d'être masqué | une par contenu |
 
 Jamais de compte, d'adresse ni de contenu : le type, et des valeurs comme
-« publication » ou « spam ».
+« post » ou « spam ». Rien sur la personne qui signale. Les deux dernières
+lignes portent aussi le tag `moderation` (chantier 3) : une règle déjà créée
+sur ce tag continue de marcher.
 
 ## À régler dans Sentry (une fois)
 

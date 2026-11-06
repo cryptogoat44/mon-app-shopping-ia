@@ -89,3 +89,46 @@ export function captureAlert(message: string, tags: Record<string, string>, fing
     Sentry.captureMessage(message, "warning");
   });
 }
+
+/** Événement de modération (chantier 3, point 6) : un signalement arrive, ou
+ * un contenu vient d'être masqué automatiquement (lib/autoHide.ts). Envoyé
+ * comme simple avertissement, sans aucune donnée sur la personne qui
+ * signale ; une règle d'alerte de Sentry (« nouveau problème », tag
+ * « alerte », voir ALERTES.md) prévient le fondateur sur son téléphone ou par
+ * e-mail. Un contenu = un problème Sentry : plusieurs signalements du même
+ * contenu se regroupent, un nouveau contenu signalé déclenche une nouvelle
+ * alerte. C'est la SEULE alerte envoyée pour un signalement. */
+export interface ModerationEvent {
+  kind: "report" | "auto_hide";
+  targetType: string;
+  targetId: string;
+  reason?: string;
+}
+
+/** Texte de l'événement (fonction pure, testée). */
+export function moderationEventMessage(event: ModerationEvent): string {
+  return event.kind === "report"
+    ? `Nouveau signalement à traiter : ${event.targetType}${event.reason ? ` (${event.reason})` : ""}`
+    : `Contenu masqué automatiquement (plusieurs signalements) : ${event.targetType}`;
+}
+
+/** Tags de l'événement (fonction pure, testée) : le tag « alerte » (règle
+ * unique du lot garde-fous) et le tag « moderation » (chantier 3). Des
+ * valeurs de listes fermées seulement : rien sur la personne qui signale. */
+export function moderationEventTags(event: ModerationEvent): Record<string, string> {
+  return {
+    alerte: event.kind === "report" ? "signalement" : "masquage_auto",
+    moderation: event.kind,
+    target_type: event.targetType,
+    ...(event.reason ? { reason: event.reason } : {}),
+  };
+}
+
+export function captureModerationEvent(event: ModerationEvent): void {
+  if (!enabled) return;
+  Sentry.withScope((scope) => {
+    scope.setTags(moderationEventTags(event));
+    scope.setFingerprint(["moderation", event.kind, event.targetType, event.targetId]);
+    Sentry.captureMessage(moderationEventMessage(event), "warning");
+  });
+}

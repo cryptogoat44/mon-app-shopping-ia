@@ -52,9 +52,9 @@ function AuthorLine({ author }: { author: ModerationAuthor }) {
   );
 }
 
-function Badges({ hidden, suspended, imageRemoved }: { hidden: boolean; suspended: boolean; imageRemoved: boolean }) {
+function Badges({ hidden, autoHidden, suspended, imageRemoved }: { hidden: boolean; autoHidden: boolean; suspended: boolean; imageRemoved: boolean }) {
   const labels = [
-    hidden ? t.moderationQueue.hidden : null,
+    hidden ? (autoHidden ? t.accountSafety.autoHidden : t.moderationQueue.hidden) : null,
     imageRemoved ? t.moderationQueue.imageRemoved : null,
     suspended ? t.moderationQueue.suspended : null,
   ].filter((label): label is string => label !== null);
@@ -72,7 +72,7 @@ function PreviewImage({ uri, removed, label }: { uri: string | null; removed: bo
   );
 }
 
-function ItemPreview({ preview }: { preview: ModerationPreview }) {
+function ItemPreview({ preview, autoHidden }: { preview: ModerationPreview; autoHidden: boolean }) {
   if (preview.kind === "missing") return <Text style={styles.missing}>{t.moderationQueue.missing}</Text>;
   return (
     <View style={styles.preview}>
@@ -100,6 +100,7 @@ function ItemPreview({ preview }: { preview: ModerationPreview }) {
       ) : null}
       <Badges
         hidden={preview.kind !== "user" && preview.hidden}
+        autoHidden={autoHidden}
         suspended={preview.author.suspended}
         imageRemoved={(preview.kind === "post" || preview.kind === "piece") && preview.imageRemoved}
       />
@@ -129,6 +130,8 @@ function ReportDetails({ item }: { item: ModerationItem }) {
 function historyLine(entry: ModerationLogEntry): string {
   return [
     moderationActionLabel(entry.action),
+    // Chantier 3 : masquage automatique, après plusieurs signalements.
+    entry.automatic ? t.accountSafety.automatic : null,
     entry.reason ? moderationReasonLabel(entry.reason) : null,
     entry.adminUsername ? t.moderationQueue.by(entry.adminUsername) : null,
     ago(entry.createdAt),
@@ -191,6 +194,10 @@ function ItemDecisions({ item, status, onChanged }: { item: ModerationItem; stat
   const [panel, setPanel] = useState<DecisionKind | "remove_image" | null>(null);
   const { busy, error, decide, undo, removeImage } = useDecisions(item, onChanged);
   const { preview, activeHideActionId, activeSuspendActionId } = item;
+  // Chantier 3 : masqué automatiquement, signalements encore à traiter.
+  // « Masquer » confirme le masquage, « Classer sans suite » le lève (le
+  // serveur rétablit le contenu) : « Rétablir » ferait doublon.
+  const pendingAutoHide = status === "open" && item.activeHideAutomatic && activeHideActionId !== null;
   const content = preview.kind === "post" || preview.kind === "comment" || preview.kind === "piece" ? preview : null;
   const hideLabel = content?.kind === "post" ? t.moderationQueue.hidePost : content?.kind === "piece" ? t.moderationQueue.hidePiece : t.moderationQueue.hideComment;
   const restoreLabel =
@@ -221,15 +228,19 @@ function ItemDecisions({ item, status, onChanged }: { item: ModerationItem; stat
   }
   return (
     <View style={styles.actions}>
-      {status === "open" ? <ActionButton label={t.moderationQueue.dismiss} onPress={() => void decide("dismiss")} disabled={busy} /> : null}
+      {pendingAutoHide ? <Text style={[styles.meta, styles.fullWidth]}>{t.accountSafety.autoHiddenHint}</Text> : null}
+      {status === "open" ? (
+        <ActionButton label={pendingAutoHide ? t.accountSafety.dismissAndRestore : t.moderationQueue.dismiss} onPress={() => void decide("dismiss")} disabled={busy} />
+      ) : null}
       {content && !content.hidden ? (
         <ActionButton label={hideLabel} onPress={() => setPanel("hide")} disabled={busy} />
       ) : null}
+      {pendingAutoHide ? <ActionButton label={t.accountSafety.confirmAutoHide} onPress={() => setPanel("hide")} disabled={busy} /> : null}
       {item.canRemoveImage ? <ActionButton label={t.moderationQueue.removeImage} onPress={() => setPanel("remove_image")} disabled={busy} danger /> : null}
       {preview.kind !== "missing" && !preview.author.suspended ? (
         <ActionButton label={t.moderationQueue.suspend} onPress={() => setPanel("suspend")} disabled={busy} danger />
       ) : null}
-      {activeHideActionId && content ? (
+      {activeHideActionId && content && !pendingAutoHide ? (
         <ActionButton
           label={restoreLabel}
           onPress={() => void undo(activeHideActionId, "hide")}
@@ -247,7 +258,7 @@ export function ModerationItemCard({ item, status, onChanged }: { item: Moderati
     <View style={styles.card} testID={`moderation-${item.targetType}-${item.targetId}`}>
       <Text style={styles.title}>{[t.moderationQueue.target[item.targetType], t.moderationQueue.reportCount(item.reportCount)].join(" · ")}</Text>
       <Text style={styles.meta}>{t.moderationQueue.lastReport(ago(item.lastReportedAt))}</Text>
-      <ItemPreview preview={item.preview} />
+      <ItemPreview preview={item.preview} autoHidden={item.activeHideAutomatic} />
       <ReportDetails item={item} />
       <ItemDecisions item={item} status={status} onChanged={onChanged} />
       <ItemHistory history={item.history} />
@@ -291,6 +302,7 @@ const styles = themedStyles(() => ({
   note: { fontSize: font.secondary, color: color.encre, lineHeight: 20, marginTop: space.xs },
   historyEntry: { marginTop: space.xs },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.md },
+  fullWidth: { width: "100%" },
   action: {
     minHeight: 44,
     minWidth: 44,

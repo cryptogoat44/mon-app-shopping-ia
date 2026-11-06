@@ -21,9 +21,13 @@ interface ReportBlockMenuProps {
   /** Signaler une pièce reçue (lot 5) ; `userId` est alors la personne qui l'a envoyée. */
   pieceId?: string;
   onBlocked?: (userId: string) => void;
+  /** Chantier 3 (règle 1.2 d'Apple) : le contenu signalé (publication,
+   * commentaire, pièce reçue) disparaît aussitôt de ce que voit la personne
+   * qui l'a signalé ; le serveur ne le lui renvoie plus. */
+  onReported?: () => void;
 }
 
-export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, pieceId, onBlocked }: ReportBlockMenuProps) {
+export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, pieceId, onBlocked, onReported }: ReportBlockMenuProps) {
   const [step, setStep] = useState<Step>("root");
   const { showToast } = useToast();
   const reportLabel = pieceId ? t.received.report : postId ? t.moderation.reportPost : t.moderation.reportUser;
@@ -43,7 +47,10 @@ export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, p
             ? { targetType: "piece", targetId: pieceId, reason }
             : { targetType: postId ? "post" : "user", targetId: postId ?? userId, reason }
       );
-      showToast(t.moderation.reportSuccess);
+      // Un contenu (pas un profil) signalé ne vous est plus montré.
+      const content = Boolean(commentId || pieceId || postId);
+      showToast(content && onReported ? t.accountSafety.reportedHidden : t.moderation.reportSuccess);
+      if (content) onReported?.();
     } catch (e) {
       showToast(e instanceof ApiError ? e.message : t.moderation.reportError);
     }

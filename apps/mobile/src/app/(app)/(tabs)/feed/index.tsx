@@ -41,6 +41,11 @@ export default function FeedScreen() {
     setPosts((prev) => (prev ? prev.filter((p) => p.author.id !== userId) : prev));
   }
 
+  // Chantier 3 : une publication signalée quitte aussitôt le fil.
+  function handleReported(postId: string) {
+    setPosts((prev) => (prev ? prev.filter((p) => p.id !== postId) : prev));
+  }
+
   const load = useCallback(async () => {
     try {
       const page = await fetchFeed();
@@ -166,6 +171,9 @@ export default function FeedScreen() {
         userId={menuTarget?.userId ?? ""}
         postId={menuTarget?.postId}
         onBlocked={handleBlocked}
+        onReported={() => {
+          if (menuTarget) handleReported(menuTarget.postId);
+        }}
       />
     </SafeAreaView>
   );
