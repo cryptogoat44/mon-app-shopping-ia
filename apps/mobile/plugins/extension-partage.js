@@ -9,7 +9,13 @@
 // - le manifeste de confidentialité : l'extension écrit dans les réglages
 //   partagés du groupe d'apps, motif « 1C8F.1 » chez Apple (le module ne
 //   déclare que « CA92.1 », réglages propres à l'app).
-// Les deux retouches sont testées sur les fichiers que produit le module
+// - le contrôleur de l'extension (lot « app iPhone prête », point 12, repli
+//   du partage) : l'adresse d'ouverture est aussi déposée dans le fichier
+//   « partage-en-attente.txt » du groupe d'apps, que l'app relit quand on
+//   l'ouvre à la main si iOS ne l'a pas rouverte (src/lib/share-intake.ts) ;
+//   et le message d'échec, en anglais technique seulement, devient une phrase
+//   claire en français ou en anglais (langue de l'iPhone).
+// Les retouches sont testées sur les fichiers que produit le module
 // (tests/share-config.test.ts).
 const fs = require("node:fs");
 const path = require("node:path");
@@ -35,6 +41,33 @@ function declarerGroupe(manifeste) {
   return manifeste.replace(MOTIF_APP, (ligne, retrait) => `${ligne}\n${retrait}<string>${MOTIF_GROUPE}</string>`);
 }
 
+/** Fichier du groupe d'apps lu par l'app (src/lib/shared-item.ts, PENDING_SHARE_FILE). */
+const FICHIER_EN_ATTENTE = "partage-en-attente.txt";
+const LIGNE_ADRESSE = 'let url = URL(string: "\\(shareProtocol)://dataUrl=\\(sharedKey)?nonce=\\(nonce)#\\(type)")!';
+const ALERTE_ANGLAISE = 'title: "Error", message: "Error loading application: \\(message!)", preferredStyle: .alert)';
+const MESSAGE_FR = "Spotto n’a pas pu s’ouvrir. Ouvrez Spotto : si votre partage n’y est pas, partagez-le à nouveau.";
+const MESSAGE_EN = "Spotto couldn’t open. Open Spotto: if your share isn’t there, share it again.";
+
+/** Contrôleur de l'extension avec le repli et le message traduit ; null si son format a changé. */
+function retoucherControleur(swift) {
+  if (swift.includes(FICHIER_EN_ATTENTE)) return swift;
+  const debut = swift.indexOf(LIGNE_ADRESSE);
+  if (debut === -1 || swift.indexOf(LIGNE_ADRESSE, debut + 1) !== -1 || !swift.includes(ALERTE_ANGLAISE)) return null;
+  const finLigne = debut + LIGNE_ADRESSE.length;
+  const retrait = swift.slice(swift.lastIndexOf("\n", debut) + 1, debut);
+  const depot = [
+    "",
+    "// Spotto (repli du partage) : l'adresse est aussi déposée dans le groupe d'apps ;",
+    "// si iOS ne rouvre pas Spotto, l'app la relit quand on l'ouvre à la main.",
+    "if let dossier = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: hostAppGroupIdentifier) {",
+    `  _ = try? url.absoluteString.write(to: dossier.appendingPathComponent("${FICHIER_EN_ATTENTE}"), atomically: true, encoding: .utf8)`,
+    "}",
+  ].join(`\n${retrait}`);
+  const avecDepot = swift.slice(0, finLigne) + depot + swift.slice(finLigne);
+  const alerte = `title: "Spotto", message: Locale.preferredLanguages.first?.hasPrefix("fr") == true ? "${MESSAGE_FR}" : "${MESSAGE_EN}", preferredStyle: .alert)`;
+  return avecDepot.replace(ALERTE_ANGLAISE, alerte);
+}
+
 /** Réécrit un fichier de l'extension ; s'arrête si le module a changé de format, plutôt que livrer une extension fausse. */
 function retoucher(racine, fichier, modifier) {
   const chemin = path.join(racine, DOSSIER, fichier);
@@ -50,6 +83,7 @@ function withExtensionPartage(config) {
       const racine = config.modRequest.platformProjectRoot;
       retoucher(racine, "ShareExtension-Info.plist", (contenu) => nommer(contenu, config.name));
       retoucher(racine, "PrivacyInfo.xcprivacy", declarerGroupe);
+      retoucher(racine, "ShareViewController.swift", retoucherControleur);
       return config;
     },
   ]);
@@ -58,3 +92,5 @@ function withExtensionPartage(config) {
 module.exports = withExtensionPartage;
 module.exports.nommer = nommer;
 module.exports.declarerGroupe = declarerGroupe;
+module.exports.retoucherControleur = retoucherControleur;
+module.exports.FICHIER_EN_ATTENTE = FICHIER_EN_ATTENTE;
