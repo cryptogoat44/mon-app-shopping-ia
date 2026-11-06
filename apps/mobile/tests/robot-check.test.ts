@@ -62,12 +62,13 @@ describe("les appels : sans jeton exactement comme avant, avec jeton captchaToke
     expect(withCaptcha({ redirectTo: "https://site/x" }, "jeton-4")).toEqual({ redirectTo: "https://site/x", captchaToken: "jeton-4" });
   });
 
-  it("les quatre écrans passent par ces fonctions, avec le jeton pris au moment de l'appel", () => {
+  it("les quatre écrans passent par ces fonctions, avec le jeton pris juste avant l'appel (rien n'est envoyé sans)", () => {
     const source = (file: string) => readFileSync(join(__dirname, "../src", file), "utf8");
-    expect(source("app/sign-in.tsx")).toMatch(/signInWithPassword\(withCaptchaOption\(\{ email: email\.trim\(\), password \}, robot\.take\(\)\)\)/);
-    expect(source("app/sign-up.tsx")).toMatch(/signUp\(\s*withCaptchaOption\([\s\S]*?options: \{ data: \{ locale: getActiveLocale\(\) \} \},[\s\S]*?robot\.take\(\)\s*\)\s*\)/);
-    expect(source("app/mot-de-passe-oublie.tsx")).toMatch(/resetPasswordForEmail\(address, withCaptcha\(\{ redirectTo: recoveryRedirectUrl\(\) \}, robot\.take\(\)\)\)/);
-    expect(source("lib/use-resend-confirmation.ts")).toMatch(/resend\(withCaptchaOption\(\{ type: "signup" as const, email: address \}, robot\.take\(\)\)\)/);
+    const take = /const check = robot\.take\(\);\n\s*if \(!check\) return;\n/.source;
+    expect(source("app/sign-in.tsx")).toMatch(new RegExp(`${take}[\\s\\S]{0,120}signInWithPassword\\(withCaptchaOption\\(\\{ email: email\\.trim\\(\\), password \\}, check\\.token\\)\\)`));
+    expect(source("app/sign-up.tsx")).toMatch(new RegExp(`${take}[\\s\\S]{0,400}signUp\\(\\s*withCaptchaOption\\([\\s\\S]*?options: \\{ data: \\{ locale: getActiveLocale\\(\\) \\} \\},[\\s\\S]*?check\\.token\\s*\\)\\s*\\)`));
+    expect(source("app/mot-de-passe-oublie.tsx")).toMatch(new RegExp(`${take}[\\s\\S]{0,120}resetPasswordForEmail\\(address, withCaptcha\\(\\{ redirectTo: recoveryRedirectUrl\\(\\) \\}, check\\.token\\)\\)`));
+    expect(source("lib/use-resend-confirmation.ts")).toMatch(new RegExp(`${take}[\\s\\S]{0,400}resend\\(withCaptchaOption\\(\\{ type: "signup" as const, email: address \\}, check\\.token\\)\\)`));
     // Le bouton d'envoi attend le jeton.
     for (const file of ["app/sign-in.tsx", "app/sign-up.tsx", "app/mot-de-passe-oublie.tsx", "components/signup-help.tsx"]) {
       expect(source(file), file).toMatch(/!robot(\.r|R)eady/);

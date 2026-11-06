@@ -33,10 +33,11 @@ export default function SignInScreen() {
   }
 
   async function handleSignIn() {
-    if (!robot.ready) return;
+    const check = robot.take();
+    if (!check) return;
     setError(null);
     setSubmitting(true);
-    const { error: signInError } = await supabase.auth.signInWithPassword(withCaptchaOption({ email: email.trim(), password }, robot.take()));
+    const { error: signInError } = await supabase.auth.signInWithPassword(withCaptchaOption({ email: email.trim(), password }, check.token));
     setSubmitting(false);
 
     if (signInError) {

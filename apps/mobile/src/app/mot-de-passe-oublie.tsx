@@ -37,10 +37,12 @@ export default function ForgotPasswordScreen() {
 
   async function handleSend() {
     const address = email.trim();
-    if (!address || !robot.ready) return;
+    if (!address) return;
+    const check = robot.take();
+    if (!check) return;
     setError(null);
     setSubmitting(true);
-    const { error: sendError } = await supabase.auth.resetPasswordForEmail(address, withCaptcha({ redirectTo: recoveryRedirectUrl() }, robot.take()));
+    const { error: sendError } = await supabase.auth.resetPasswordForEmail(address, withCaptcha({ redirectTo: recoveryRedirectUrl() }, check.token));
     setSubmitting(false);
     if (sendError) {
       setError(translateAuthError(sendError.message));

@@ -46,7 +46,6 @@ export default function SignUpScreen() {
   }
 
   async function handleSignUp() {
-    if (!robot.ready) return;
     setError(null);
     setExistingAccount(false);
 
@@ -67,6 +66,9 @@ export default function SignUpScreen() {
       return;
     }
 
+    // Jeton anti-robots pris juste avant l'appel (après les contrôles ci-dessus).
+    const check = robot.take();
+    if (!check) return;
     setSubmitting(true);
     // Mémorisé AVANT l'appel : la session peut s'ouvrir (et la « Dernière
     // étape » s'afficher) avant la fin de l'appel. Effacé en cas d'échec.
@@ -79,7 +81,7 @@ export default function SignUpScreen() {
           // Langue des e-mails d'authentification (modèles Supabase, lot 3).
           options: { data: { locale: getActiveLocale() } },
         },
-        robot.take()
+        check.token
       )
     );
     setSubmitting(false);

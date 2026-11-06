@@ -13,8 +13,9 @@ const SITE_KEY = turnstileSiteKey(process.env.EXPO_PUBLIC_TURNSTILE_SITE_KEY);
 export interface RobotCheck {
   /** Vrai sans protection (clé absente), ou quand un jeton attend. */
   ready: boolean;
-  /** Prend le jeton pour UN appel (null sans protection) et redemande aussitôt un nouveau jeton. */
-  take: () => string | null;
+  /** Pour UN appel : { token } (token null sans protection), puis un nouveau
+   * jeton est aussitôt redemandé ; null si aucun jeton n'attend (ne rien envoyer). */
+  take: () => { token: string | null } | null;
   /** Le widget à afficher au-dessus du bouton d'envoi ; null sans protection. */
   widget: ReactElement | null;
 }
@@ -29,11 +30,13 @@ export function useRobotCheck(): RobotCheck {
 
   const onMessage = useCallback((message: RobotMessage) => dispatch({ ...message, generation }), [generation]);
   const take = useCallback(() => {
-    if (SITE_KEY === null) return null;
+    if (SITE_KEY === null) return { token: null };
     const token = tokenRef.current;
+    // Deux appuis rapprochés : le second ne trouve plus de jeton et n'envoie rien.
+    if (token === null) return null;
     tokenRef.current = null;
     dispatch({ type: "used" });
-    return token;
+    return { token };
   }, []);
 
   if (SITE_KEY === null) return { ready: true, take, widget: null };

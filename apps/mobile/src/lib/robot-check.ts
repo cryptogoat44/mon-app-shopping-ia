@@ -123,6 +123,8 @@ export function withCaptcha<O extends object>(options: O, token: string | null):
 }
 
 /** Les paramètres d'un appel, avec `options.captchaToken` s'il y a un jeton ; sans jeton, l'objet tel quel. */
-export function withCaptchaOption<P extends { options?: object }>(params: P, token: string | null): P & { options?: { captchaToken?: string } } {
-  return token === null ? params : { ...params, options: { ...params.options, captchaToken: token } };
+export function withCaptchaOption<P extends object>(params: P, token: string | null): P & { options?: { captchaToken?: string } } {
+  if (token === null) return params;
+  const options = (params as { options?: object }).options;
+  return { ...params, options: { ...options, captchaToken: token } };
 }

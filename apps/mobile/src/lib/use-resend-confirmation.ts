@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { withCaptchaOption } from "@/lib/robot-check";
 
 /** La vérification anti-robots de l'écran (point 17, components/robot-check.tsx). */
-type RobotToken = { ready: boolean; take: () => string | null };
+type RobotToken = { ready: boolean; take: () => { token: string | null } | null };
 
 type ResendState = { kind: "idle" } | { kind: "sending" } | { kind: "sent" } | { kind: "failed"; message: string };
 
@@ -30,12 +30,14 @@ export function useResendConfirmation(email: string, sentAt: number | null, robo
 
   async function resend() {
     const address = email.trim();
-    if (!address || waiting || state.kind === "sending" || !robot.ready) return;
+    if (!address || waiting || state.kind === "sending") return;
+    const check = robot.take();
+    if (!check) return;
     setState({ kind: "sending" });
     try {
       // Type « signup » : renvoie le lien de confirmation de l'inscription
       // (signature de @supabase/auth-js 2.114 : { type, email, options? }).
-      const { error } = await supabase.auth.resend(withCaptchaOption({ type: "signup" as const, email: address }, robot.take()));
+      const { error } = await supabase.auth.resend(withCaptchaOption({ type: "signup" as const, email: address }, check.token));
       const answeredAt = Date.now();
       setNow(answeredAt);
       if (!error) {
