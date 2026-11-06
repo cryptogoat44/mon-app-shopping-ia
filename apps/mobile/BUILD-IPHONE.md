@@ -53,7 +53,8 @@ Sentry → Settings → Developer Settings → **Organization Tokens** → Creat
 Token (nom : « EAS Spotto »). Le jeton commence par `sntrys_`. Le saisir chez
 Expo sous `SENTRY_AUTH_TOKEN`, visibilité **Secret**, environnements preview et
 production. Chaque build envoie alors à Sentry les fichiers qui rendent les
-plantages lisibles (sourcemaps et dSYM).
+plantages lisibles (sourcemaps et dSYM). L'organisation Sentry vient de ce
+jeton : le message « Missing config for organization » d'Expo est normal.
 
 Pour un tout premier build d'essai sans ce jeton : créer plutôt
 `SENTRY_DISABLE_AUTO_UPLOAD` = `true` dans l'environnement **preview** (et le
