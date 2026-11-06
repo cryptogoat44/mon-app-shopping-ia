@@ -215,6 +215,19 @@ describe("lecture des journaux de spotto-api : des compteurs, jamais de contenu"
     for (const interdit of [IP, recherche, "cursor", "51515"]) expect(texte + JSON.stringify(Object.fromEntries(codes))).not.toContain(interdit);
   });
 
+  it("journaux d'après le lot « filets de sécurité » : la route déclarée (« :id ») est comptée comme l'adresse réelle", () => {
+    const codes = compterRequetes([
+      requete("req-1", "POST", "/api/searches/:id/run"),
+      reponse("req-1", 200),
+      requete("req-2", "GET", "/api/searches/:id"),
+      reponse("req-2", 200),
+      requete("req-3", "GET", "(route inconnue)"),
+      reponse("req-3", 404),
+    ]);
+    expect(codes.get("POST /api/searches/:id/run")).toEqual({ "200": 1 });
+    expect(codes.get("GET /api/searches/:id")).toEqual({ "200": 1 });
+  });
+
   it("codes inconnus affichés en dernier", () => {
     expect(decrireCodes({ "?": 1, "403": 1, "200": 2 })).toBe("200 × 2, 403 × 1, ? × 1");
     expect(entree("200").labels.map((label) => label.name)).not.toContain("clientIP");

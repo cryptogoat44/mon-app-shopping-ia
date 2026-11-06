@@ -9,7 +9,10 @@ import { codeSansSentry, GardeStatistiques, versStatistiques } from "../scripts/
 // PostHog ou Sentry que le scénario n'a pas interceptée. Preuve dans un VRAI
 // Chrome. Sécurité du test lui-même : Chrome résout PostHog et Sentry vers un
 // faux serveur local (--host-resolver-rules) — rien ne peut partir sur Internet,
-// même si le garde-fou faisait défaut.
+// même si le garde-fou faisait défaut. Et Chrome ne passe jamais par un
+// serveur mandataire (--no-proxy-server, lot « filets de sécurité ») : un
+// mandataire imposé par la machine (conteneur, réseau d'entreprise) recevrait
+// sinon la requête vers Sentry et chercherait lui-même son adresse.
 const CHROME = [
   process.env.CHROME_PATH,
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", // Mac
@@ -37,7 +40,7 @@ beforeAll(async () => {
   browser = await chromium.launch({
     executablePath: CHROME,
     headless: true,
-    args: ["--host-resolver-rules=MAP *.posthog.com 127.0.0.1, MAP posthog.com 127.0.0.1, MAP *.sentry.io 127.0.0.1, MAP sentry.io 127.0.0.1"],
+    args: ["--host-resolver-rules=MAP *.posthog.com 127.0.0.1, MAP posthog.com 127.0.0.1, MAP *.sentry.io 127.0.0.1, MAP sentry.io 127.0.0.1", "--no-proxy-server"],
   });
 });
 
@@ -66,6 +69,11 @@ function envoyer(page: Page, adresse: string): Promise<string> {
     `fetch(${JSON.stringify(adresse)}, { method: "POST", body: "{}" }).then(() => "ok", () => "bloqué")`
   ) as Promise<string>;
 }
+
+/** Erreurs de Chrome qui disent que la connexion directe vers la machine
+ * elle-même n'a pas pu être tentée (mandataire imposé, réseau fermé) : le
+ * scénario sentry-site, qui en a besoin, est alors sauté (voir plus bas). */
+const RESEAU_INDISPONIBLE = ["ERR_TUNNEL_CONNECTION_FAILED", "ERR_PROXY_CONNECTION_FAILED", "ERR_NETWORK_ACCESS_DENIED", "ERR_INTERNET_DISCONNECTED"];
 
 async function attendre(condition: () => boolean): Promise<void> {
   for (let essai = 0; essai < 50 && !condition(); essai += 1) await new Promise((resolve) => setTimeout(resolve, 100));
@@ -130,12 +138,23 @@ describe("garde-fou dans un vrai Chrome", () => {
     await contexte.close();
   });
 
-  it("scénario sentry-site : seul l'hôte UE de Sentry passe le garde-fou ; PostHog reste bloqué", async () => {
+  it("scénario sentry-site : seul l'hôte UE de Sentry passe le garde-fou ; PostHog reste bloqué", async (ctx) => {
     const garde = new GardeStatistiques(["ingest.de.sentry.io"]);
     const { contexte, page, echecs } = await ouvrir(garde);
     // Sentry passe le garde-fou, puis ne trouve aucun serveur (résolu vers le Mac) : rien ne sort.
     expect(await envoyer(page, "https://o450.ingest.de.sentry.io/api/1/envelope/")).toBe("bloqué");
     expect(await envoyer(page, "https://eu.i.posthog.com/i/v0/e/")).toBe("bloqué");
+    // Sans connexion directe possible vers la machine elle-même, la preuve
+    // « refusée par la machine, pas par le garde-fou » est impossible : le
+    // scénario est sauté proprement (et le dit), au lieu d'échouer. Partout
+    // ailleurs (Mac, machines de GitHub), il tourne en entier.
+    const sentry = echecs.find((echec) => echec.startsWith("o450.ingest.de.sentry.io "));
+    const indisponible = RESEAU_INDISPONIBLE.find((code) => sentry?.endsWith(`net::${code}`));
+    if (indisponible) {
+      await contexte.close();
+      console.warn(`Scénario sentry-site sauté : connexion directe impossible sur cette machine (${indisponible}).`);
+      ctx.skip();
+    }
     expect(echecs).toEqual(["o450.ingest.de.sentry.io net::ERR_CONNECTION_REFUSED", "eu.i.posthog.com net::ERR_BLOCKED_BY_CLIENT"]);
     expect(garde.fuites.map((f) => `${f.issue} ${f.hote}`)).toEqual(["bloquee eu.i.posthog.com"]);
     await contexte.close();

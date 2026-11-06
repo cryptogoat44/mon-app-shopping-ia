@@ -28,11 +28,12 @@ import piecesRoutes from "./routes/pieces.js";
 import searchCapacityRoutes from "./routes/searchCapacity.js";
 import appVersionRoutes from "./routes/appVersion.js";
 import { captureServerError, captureServerFailure } from "./lib/sentry.js";
-import { isErrorBody, localizeMessage } from "./lib/messages.js";
+import { GENERIC_CLIENT_ERROR, isErrorBody, localizeMessage } from "./lib/messages.js";
 import { requestLocale } from "./lib/locale.js";
 import { APP_BUILD_HEADER } from "@monapp/shared-types";
 import { env } from "./env.js";
 import { buildFromHeader, isBelowMinimum, isVersionGuardExempt, updateRequiredBody } from "./lib/appVersion.js";
+import { requestLogFields, scrubLogLine, withoutErrorDetails } from "./lib/logPrivacy.js";
 
 /** La base répond-elle en 3 secondes ? Une lecture sans ligne (limit 0). */
 async function databaseResponds(fastify: FastifyInstance): Promise<boolean> {
@@ -44,14 +45,30 @@ async function databaseResponds(fastify: FastifyInstance): Promise<boolean> {
   }
 }
 
+type LoggerOption = FastifyServerOptions["logger"];
+
+/** Journal de Fastify, sans donnée personnelle (lib/logPrivacy.ts) : route
+ * déclarée au lieu de l'adresse, erreurs réduites à leur nom et leur code.
+ * Les options d'un test (niveau, flux) s'y ajoutent ; « false » le coupe. */
+function loggerOptions(logger: LoggerOption): LoggerOption {
+  if (logger === false) return false;
+  const custom = typeof logger === "object" && logger !== null ? logger : {};
+  return {
+    ...custom,
+    serializers: { req: requestLogFields, ...custom.serializers },
+    formatters: { log: withoutErrorDetails, ...custom.formatters },
+    hooks: { streamWrite: scrubLogLine, ...custom.hooks },
+  };
+}
+
 // Requêtes dont l'erreur a déjà été transmise à Sentry (évite un doublon).
 const reportedToSentry = new Set<string>();
 
 // Séparé de server.ts pour que les tests puissent construire l'app et
 // l'interroger via `.inject()` sans jamais ouvrir de vrai port réseau. Les
 // tests peuvent aussi lire les journaux (ex. : jamais de contenu journalisé).
-export async function buildApp(options: { logger?: FastifyServerOptions["logger"] } = {}): Promise<FastifyInstance> {
-  const fastify = Fastify({ logger: options.logger ?? true });
+export async function buildApp(options: { logger?: LoggerOption } = {}): Promise<FastifyInstance> {
+  const fastify = Fastify({ logger: loggerOptions(options.logger ?? true) });
 
   await fastify.register(cors, { origin: true });
   await fastify.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
@@ -136,7 +153,19 @@ export async function buildApp(options: { logger?: FastifyServerOptions["logger"
   // Render l'appellent très régulièrement, ça n'a rien à voir avec un abus.
   // Elle ne dit que « le serveur répond » : Render s'en sert pour savoir si
   // une mise en ligne a démarré ; une panne de la base ne doit pas la faire échouer.
-  fastify.get("/health", { config: { skipDefaultRateLimit: true } }, async () => ({ status: "ok" }));
+  // « version » (lot « filets de sécurité ») : les 7 premiers caractères du
+  // commit en service, ou null hors de Render (lib/serverVersion.ts). Rien
+  // d'autre : ni réglage, ni adresse, ni nom de service.
+  fastify.get("/health", { config: { skipDefaultRateLimit: true } }, async (_request, reply) => {
+    reply.header("Cache-Control", "no-store");
+    return { status: "ok", version: env.RENDER_GIT_COMMIT };
+  });
+
+  // Adresse inconnue : même réponse qu'avec Fastify (404, message général,
+  // traduit par preSerialization), mais sans sa ligne « Route GET:/… not
+  // found », qui recopiait l'adresse entière dans le journal (lot « filets
+  // de sécurité », lib/logPrivacy.ts).
+  fastify.setNotFoundHandler(async (_request, reply) => reply.code(404).send({ error: "Not Found", message: GENERIC_CLIENT_ERROR, statusCode: 404 }));
 
   // Sonde complète (lot garde-fous), pour une surveillance extérieure toutes
   // les 5 minutes : le serveur répond ET la base aussi. 503 si la base ne

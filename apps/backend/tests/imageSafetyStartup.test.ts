@@ -22,7 +22,7 @@ describe("démarrage du serveur : liste blanche des lecteurs d'images", () => {
       expect((await sharp(jpeg).metadata()).format).toBe("jpeg");
       const health = await app.inject({ method: "GET", url: "/health" });
       expect(health.statusCode).toBe(200);
-      expect(health.json()).toEqual({ status: "ok" });
+      expect(health.json()).toMatchObject({ status: "ok" });
     } finally {
       await app.close();
     }

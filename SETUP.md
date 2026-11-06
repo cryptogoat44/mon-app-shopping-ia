@@ -1,133 +1,107 @@
-# Mise en route
+# Installer et lancer Spotto
 
-Ce document explique comment faire tourner le projet en local. Vous n'aurez
-à refaire ces étapes qu'une fois (sauf la section "à chaque nouveau bloc" qui
-reviendra de temps en temps).
+*Réécrit au lot « filets de sécurité » (point 24 de la feuille de route V1). L'ancienne version décrivait l'ancien projet. Surtout, elle affirmait que Render republie tout seul à chaque envoi sur `main`. **C'est faux** : rien ne part en ligne sans un clic. Pour mettre en ligne, voir [MISE-EN-LIGNE.md](MISE-EN-LIGNE.md).*
 
-> **Déjà fait pour vous** (session du 2026-09-03) : le projet Supabase
-> `mon-app-shopping-ia` est créé (compte `aifans1.0@outlook.fr`, région
-> `eu-west-1`), les migrations `0001` à `0006` sont exécutées, un compte
-> SerpApi est créé (même compte `aifans1.0@outlook.fr`), et les fichiers
-> `.env` sont remplis (Supabase + SerpApi). Les étapes 1 à 3 ci-dessous ne
-> sont donc à relire que si vous changez de machine ou perdez ces fichiers.
+## Le projet
 
-## 0. Outils déjà installés sur cette machine
+| Dossier | Ce que c'est |
+|---|---|
+| `apps/backend` | Le serveur (Fastify). Lui seul parle à Supabase, SerpApi et Anthropic. |
+| `apps/mobile` | L'app (Expo) : elle sert à la fois l'iPhone et le site web. |
+| `packages/shared-types` | Ce que le serveur et l'app partagent. |
 
-Node.js et pnpm ont été installés via Homebrew pendant la session de mise en
-place. Pour vérifier qu'ils sont bien disponibles :
+Deux bases Supabase :
+- **spotto-prod** (`selhqdqfrflsqivgxypf`) : la production, les vrais utilisateurs. Jamais pour développer ni pour les tests.
+- **spotto-dev-2** (`sedfepcpmhilaxbrgdif`) : le développement et les tests.
 
-```bash
-node -v   # doit afficher une version 20+
-pnpm -v
-```
+## 1. Les outils (une fois)
 
-## 1. Créer le projet Supabase (une seule fois)
+- **Node.js 26** : la version exacte est dans `.node-version` (26.8.2). https://nodejs.org
+- **pnpm 11.25.0** : `npm install -g pnpm@11.25.0`
+- **Git**.
+- **Google Chrome** : un test du serveur et les parcours à l'écran l'utilisent.
+- Pour l'iPhone : Xcode et l'outil `eas`, voir [apps/mobile/BUILD-IPHONE.md](apps/mobile/BUILD-IPHONE.md).
 
-1. Allez sur [supabase.com](https://supabase.com) et créez un compte (gratuit pour démarrer).
-2. Cliquez sur **New project**. Choisissez un nom (ex. `mon-app-shopping-ia`), une région proche de vos futurs utilisateurs (Europe), et un mot de passe de base de données que vous conservez précieusement (un gestionnaire de mots de passe, pas un fichier texte).
-3. Une fois le projet créé (1-2 minutes), allez dans **Project Settings > API Keys**. Notez trois valeurs, vous en aurez besoin juste après :
-   - **Project URL** (Project Settings > General > Project ID, sous la forme `https://<project-id>.supabase.co`)
-   - **Publishable key**
-   - **Secret key** (⚠️ à garder strictement secrète — jamais dans l'app mobile)
-
-## 2. Exécuter le schéma de base de données
-
-1. Dans Supabase, ouvrez **SQL Editor**.
-2. Copiez-collez le contenu de `apps/backend/supabase/migrations/0001_init_schema.sql`, exécutez.
-3. Copiez-collez ensuite `apps/backend/supabase/migrations/0002_handle_new_user.sql`, exécutez.
-4. Vérifiez dans **Table Editor** que les tables (`profiles`, `follows`, `product_searches`, ...) sont bien créées.
-
-Les prochains blocs ajouteront de nouveaux fichiers `000X_....sql` dans ce
-même dossier : à chaque fois, même procédure (copier-coller dans SQL Editor,
-exécuter, dans l'ordre des numéros).
-
-## 3. Configurer les variables d'environnement
-
-**Backend** — créez `apps/backend/.env` à partir de `apps/backend/.env.example` :
+## 2. Installer
 
 ```bash
-cp apps/backend/.env.example apps/backend/.env
+git clone https://github.com/cryptogoat44/mon-app-shopping-ia.git
+cd mon-app-shopping-ia
+pnpm install --frozen-lockfile
 ```
 
-Puis ouvrez `apps/backend/.env` et collez votre `Project URL` et votre
-`Secret key` récupérés à l'étape 1.
+## 3. Les réglages (variables d'environnement)
 
-**Mobile** — créez `apps/mobile/.env` à partir de `apps/mobile/.env.example` :
+Les fichiers `.env` restent sur votre ordinateur : Git ne les envoie jamais. **Le dépôt est public** : n'y écrivez jamais une vraie clé, ni une adresse e-mail ou postale personnelle.
 
-```bash
-cp apps/mobile/.env.example apps/mobile/.env
-```
+Le plus simple, pour travailler sur spotto-dev-2 : `pnpm --filter backend configurer-env-dev`. Cette commande remplit les deux fichiers `.env` ci-dessous. Elle demande la clé publique, en saisie masquée.
 
-Collez votre `Project URL` et votre `Publishable key`. Pour `EXPO_PUBLIC_API_URL`,
-gardez `http://localhost:3000` si vous testez dans le simulateur ou sur le web ;
-si vous testez sur un téléphone physique via l'app Expo Go, remplacez
-`localhost` par l'adresse IP locale de votre ordinateur (visible dans
-Réglages système > Réseau), par exemple `http://192.168.1.24:3000`.
+### Le serveur : `apps/backend/.env`
 
-## 4. Lancer le projet
+`cp apps/backend/.env.example apps/backend/.env`, puis remplissez. **Chaque variable est expliquée dans [apps/backend/.env.example](apps/backend/.env.example)**. Au démarrage, le serveur vérifie les obligatoires et s'arrête avec un message clair s'il en manque une.
+
+| Variable | Obligatoire | Rôle |
+|---|---|---|
+| `SUPABASE_URL` | oui | Adresse du projet Supabase |
+| `SUPABASE_SERVICE_ROLE_KEY` | oui | Clé **secrète** de Supabase (serveur seulement, jamais dans l'app) |
+| `SERPAPI_KEY` | oui | Clé SerpApi (recherche par image). Chaque vraie recherche coûte un crédit. |
+| `SUPABASE_ANON_KEY` | pour les tests | Clé publique, utilisée par les tests seulement |
+| `PORT` | non (3000) | Port local du serveur |
+| `SERPAPI_DAILY_CAP`, `SERPAPI_MONTHLY_CAP`, `SERPAPI_RENEWAL_DAY`, `SERPAPI_USER_DAILY_CAP` | non | Plafonds des recherches (25 par jour, 225 par cycle, renouvellement le 3, 8 par personne et par jour) |
+| `ANTHROPIC_API_KEY` | non | IA (analyse des vidéos, voie C) ; absente, ces fonctions se coupent |
+| `VOIE_C_ENABLED`, `VOIE_C_AI_ENABLED`, `ANTHROPIC_PHOTO_ENABLED` | non | Interrupteurs de la voie C, coupés sauf valeur exacte `true` |
+| `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | non | Suivi des erreurs et alertes (`production` sur Render) |
+| `APP_MIN_IOS_BUILD`, `APP_STORE_URL` | non | Mise à jour obligatoire de l'app iPhone |
+| `META_OEMBED_ACCESS_TOKEN` | non | Reconnaissance des liens Instagram |
+| `RENDER_GIT_COMMIT` | jamais à la main | Remplie par Render : la version donnée par /health |
+
+Pour les outils du Mac seulement : `DEV_DATABASE_URL` (migrations sur spotto-dev-2, enregistrée par `pnpm --filter backend configurer-base-dev`) et le fichier `apps/backend/.render-api-key` (commande `render-bride`).
+
+### L'app et le site : `apps/mobile/.env`
+
+`cp apps/mobile/.env.example apps/mobile/.env`, puis remplissez :
+- `EXPO_PUBLIC_SUPABASE_URL` et `EXPO_PUBLIC_SUPABASE_ANON_KEY` : l'adresse et la clé **publique** (« publishable ») du même projet Supabase que le serveur ;
+- `EXPO_PUBLIC_API_URL` : `http://localhost:3000`. Sur un téléphone, mettez l'adresse IP locale du Mac à la place de `localhost` ;
+- facultatives : `EXPO_PUBLIC_WEB_URL`, `EXPO_PUBLIC_SENTRY_DSN`, `EXPO_PUBLIC_POSTHOG_KEY`, `EXPO_PUBLIC_ENVIRONMENT`, et l'identité de l'éditeur `EXPO_PUBLIC_PUBLISHER_NAME`, `_STATUS`, `_ADDRESS`, `_EMAIL`, `_PHONE` (jamais dans le dépôt).
+
+### Les valeurs de production
+
+Elles ne sont que chez les services : chez Render pour le serveur et le site (service → **Environment**), chez Expo pour les builds iPhone (voir BUILD-IPHONE.md, section 2).
+
+## 4. Lancer
 
 Deux terminaux, à la racine du projet :
 
 ```bash
-# Terminal 1 — backend
-pnpm backend:dev
-
-# Terminal 2 — mobile
-pnpm mobile:start
+pnpm backend:dev     # le serveur, sur http://localhost:3000
+pnpm mobile:start    # l'app : touche « w » pour le site dans le navigateur
 ```
 
-Le mobile démarre l'interface Expo : appuyez sur `w` pour ouvrir dans le
-navigateur (le plus rapide pour un premier essai), ou scannez le QR code
-avec l'app **Expo Go** sur votre téléphone (iOS/Android).
+Pour l'app sur votre iPhone, il faut un build de développement : voir BUILD-IPHONE.md, section 4.
 
-## À chaque nouveau bloc de fonctionnalités
+## 5. Les tests
 
-1. `git pull` si vous travaillez sur plusieurs machines (à activer une fois qu'on aura un dépôt distant).
-2. `pnpm install` si de nouvelles dépendances ont été ajoutées.
-3. Exécuter les nouvelles migrations SQL listées dans `apps/backend/supabase/migrations/` (celles que vous n'avez pas encore passées).
-4. Relancer `pnpm backend:dev` et `pnpm mobile:start`.
+| Commande | Ce qu'elle vérifie |
+|---|---|
+| `pnpm --filter backend test:hors-base` | Les tests du serveur qui n'ont besoin ni de la base ni d'une clé (comme sur GitHub) |
+| `pnpm --filter backend test:ci` | Tous les tests du serveur, sur spotto-dev-2 (Mac seulement : ils créent et effacent des comptes de test) |
+| `pnpm --filter backend typecheck` | Les types du serveur |
+| `pnpm --filter mobile test` | Les tests de l'app |
+| `pnpm --filter backend migrer-dev supabase/migrations/00XX_….sql` | Applique une migration sur spotto-dev-2, jamais ailleurs |
 
-## Version en ligne (déployée sur Render, session du 2026-09-09)
+À chaque envoi sur GitHub, trois vérifications tournent (onglet **Actions**) : « Types, tests de l'app, compilation », « Tests serveur hors base », et « Tests serveur (spotto-dev-2) ». Cette dernière reste rouge tant que ses deux secrets manquent. Juste avant le lancement : GitHub → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**, pour `SPOTTO_DEV_SERVICE_ROLE_KEY` et `SPOTTO_DEV_PUBLISHABLE_KEY` (les clés de spotto-dev-2, jamais celles de la production).
 
-L'app tourne aussi en ligne, accessible depuis n'importe quel ordinateur ou
-téléphone, sans rien installer :
+## 6. Où trouver chaque mode d'emploi
 
-- **App (version web)** : https://mon-app-shopping-ia-web.onrender.com
-- **Backend** : https://mon-app-shopping-ia.onrender.com (pas besoin d'y aller directement, c'est l'app qui l'appelle)
-- **Code source** : https://github.com/cryptogoat44/mon-app-shopping-ia (dépôt public)
-- **Tableau de bord Render** : https://dashboard.render.com (compte créé avec votre GitHub)
-
-Ces deux services sont sur le plan gratuit de Render : le backend
-"s'endort" après un moment sans trafic, donc la première requête après une
-pause peut prendre jusqu'à 50 secondes avant de répondre — c'est normal, pas
-un bug. Suffisant pour tester, pas pour de vrais utilisateurs (à revoir le
-jour où on passe en production).
-
-**Pour republier une mise à jour** : chaque fois que du code est poussé sur
-la branche `main` du dépôt GitHub, Render reconstruit et republie
-automatiquement les deux services — rien à faire manuellement. Si vous
-changez une valeur secrète (clé Supabase, clé SerpApi), il faut la mettre à
-jour à la main dans Render : ouvrez le service concerné > **Environment**.
-
-## Envoi d'emails (SMTP, session du 2026-09-09)
-
-Par défaut, Supabase n'autorise qu'un tout petit nombre d'emails de
-confirmation par heure — suffisant pour un usage ponctuel, pas pour des
-tests répétés ni pour de vrais utilisateurs. Un vrai fournisseur d'envoi
-d'emails a donc été branché :
-
-- **Compte Gmail dédié à l'app** : `monappshoppingia@gmail.com` (mot de
-  passe créé par vous, à noter dans votre gestionnaire de mots de passe si
-  pas déjà fait). C'est l'adresse "expéditeur" que verront vos utilisateurs.
-- **Compte SendGrid** (fournisseur d'envoi, via Twilio) : même adresse
-  `monappshoppingia@gmail.com`, essai gratuit jusqu'au 8 novembre 2026.
-  Tableau de bord : https://app.sendgrid.com
-- Configuré dans Supabase (**Authentication > Emails > SMTP Settings**) :
-  activé, ce qui fait passer la limite de Supabase de quelques emails/heure
-  à 30/heure.
-
-**Avant la fin de l'essai gratuit SendGrid (8 novembre 2026)**, il faudra
-soit passer sur un plan payant SendGrid (quelques dollars/mois selon le
-volume), soit changer de fournisseur — sans quoi les emails de confirmation
-s'arrêteront à nouveau. Je peux m'en occuper si vous me le rappelez avant
-cette date.
+| Fichier | Pour quoi |
+|---|---|
+| [MISE-EN-LIGNE.md](MISE-EN-LIGNE.md) | Mettre en ligne, vérifier la version, revenir en arrière, carnet d'incidents |
+| [apps/backend/supabase/REGISTRE-MIGRATIONS.md](apps/backend/supabase/REGISTRE-MIGRATIONS.md) | Chaque migration et son état en production |
+| [apps/backend/.env.example](apps/backend/.env.example) | Chaque réglage du serveur, expliqué |
+| [apps/backend/ALERTES.md](apps/backend/ALERTES.md) | Les alertes envoyées à Sentry, où les recevoir, la sonde extérieure |
+| [apps/mobile/BUILD-IPHONE.md](apps/mobile/BUILD-IPHONE.md) | Builds iPhone, réglages chez Expo, TestFlight, corrections après la sortie |
+| [apps/backend/supabase/emails/REGLAGES-SUPABASE.md](apps/backend/supabase/emails/REGLAGES-SUPABASE.md) | E-mails de connexion et réglages de Supabase |
+| [apps/mobile/EN-TETES-SITE.md](apps/mobile/EN-TETES-SITE.md) | En-têtes de sécurité du site, à coller dans Render |
+| `apps/backend/supabase/mise-en-ligne/` | Les fichiers SQL de mise en production déjà utilisés (lot 5, voie C) |
+| [apps/backend/tests/fixtures/serpapi/LISEZ-MOI.md](apps/backend/tests/fixtures/serpapi/LISEZ-MOI.md) | Les réponses SerpApi enregistrées, rejouées par les tests |
+| `docs/` (sur votre Mac seulement) | Scripts de retour en arrière, nommer un administrateur, notes. Jamais envoyé sur GitHub : à sauvegarder en privé. |
