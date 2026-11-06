@@ -2,11 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Lot 4 ter : la photo est une entrée à part entière du Spotter. Un échec du
 // sélecteur (photo restée sur iCloud, sans connexion) n'est plus muet.
-const { launchImageLibraryAsync, manipulate } = vi.hoisted(() => ({ launchImageLibraryAsync: vi.fn(), manipulate: vi.fn() }));
-vi.mock("expo-image-picker", () => ({ launchImageLibraryAsync }));
+const { launchImageLibraryAsync, launchCameraAsync, requestCameraPermissionsAsync, manipulate } = vi.hoisted(() => ({
+  launchImageLibraryAsync: vi.fn(),
+  launchCameraAsync: vi.fn(),
+  requestCameraPermissionsAsync: vi.fn(),
+  manipulate: vi.fn(),
+}));
+vi.mock("expo-image-picker", () => ({ launchImageLibraryAsync, launchCameraAsync, requestCameraPermissionsAsync }));
 vi.mock("expo-image-manipulator", () => ({ ImageManipulator: { manipulate }, SaveFormat: { JPEG: "jpeg" } }));
 
-import { importPhotoForSpotter, prepareSharedPhoto } from "../src/lib/image-import";
+import { importPhotoForSpotter, prepareSharedPhoto, takePhotoForSpotter } from "../src/lib/image-import";
 
 function context(saved: { uri: string; width: number; height: number }) {
   return { resize: vi.fn(), renderAsync: vi.fn(async () => ({ saveAsync: vi.fn(async () => saved) })) };
@@ -82,5 +87,31 @@ describe("image partagée depuis une autre app (lot « partager vers Spotto »)"
     manipulate.mockReturnValue({ resize: vi.fn(), renderAsync: vi.fn(async () => Promise.reject(new Error("decode"))) });
     expect(await prepareSharedPhoto(COPIE, null, null)).toEqual({ kind: "unavailable" });
     expect(await prepareSharedPhoto(COPIE, 100, 100)).toEqual({ kind: "unavailable" });
+  });
+});
+
+describe("« Prendre une photo » (lot « app iPhone prête », point 14)", () => {
+  it("autorisation refusée : on le dit (« denied »), sans ouvrir l'appareil photo", async () => {
+    requestCameraPermissionsAsync.mockResolvedValue({ granted: false });
+    expect(await takePhotoForSpotter()).toEqual({ kind: "denied" });
+    expect(launchCameraAsync).not.toHaveBeenCalled();
+  });
+
+  it("photo prise : même préparation qu'une photo choisie (1 600 px, JPEG)", async () => {
+    requestCameraPermissionsAsync.mockResolvedValue({ granted: true });
+    launchCameraAsync.mockResolvedValue({ canceled: false, assets: [{ uri: "file:///cache/camera.jpg", width: 3024, height: 4032 }] });
+    const ctx = context({ uri: "file:///cache/e.jpg", width: 1200, height: 1600 });
+    manipulate.mockReturnValue(ctx);
+    expect(await takePhotoForSpotter()).toEqual({ kind: "picked", uri: "file:///cache/e.jpg", width: 1200, height: 1600 });
+    expect(launchCameraAsync).toHaveBeenCalledWith({ mediaTypes: ["images"], quality: 1 });
+    expect(ctx.resize).toHaveBeenCalledWith({ height: 1600 });
+  });
+
+  it("annulé : rien à dire ; appareil photo indisponible (simulateur) : « unavailable »", async () => {
+    requestCameraPermissionsAsync.mockResolvedValue({ granted: true });
+    launchCameraAsync.mockResolvedValue({ canceled: true, assets: null });
+    expect(await takePhotoForSpotter()).toEqual({ kind: "cancelled" });
+    launchCameraAsync.mockRejectedValue(new Error("Camera not available on simulator"));
+    expect(await takePhotoForSpotter()).toEqual({ kind: "unavailable" });
   });
 });

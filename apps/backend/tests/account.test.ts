@@ -150,6 +150,29 @@ describe("account consents and export", () => {
     }
   });
 
+  // Lot politique exacte : la version « projet-2026-11-05 » (voie C) est une
+  // simple information. La version précédente reste acceptée ; une nouvelle
+  // acceptation ne se fait que dans la version en vigueur.
+  it("politique « projet-2026-11-05 » : l'acceptation du 2026-10-27 reste valable, sans nouvelle acceptation", async () => {
+    const other = await createTestUser(app, "acvc");
+    try {
+      expect(LEGAL_DOCUMENT_VERSIONS.privacy_policy).toBe("projet-2026-11-05");
+      await app.supabaseAdmin
+        .from("consents")
+        .insert({ user_id: other.id, type: "privacy_policy", granted_at: new Date().toISOString(), document_version: "projet-2026-10-27" });
+      const status = (await app.inject({ method: "GET", url: "/api/consents", headers: authHeaders(other.token) })).json();
+      const privacy = status.find((c: { type: string }) => c.type === "privacy_policy");
+      expect(privacy.version).toBe("projet-2026-10-27");
+      expect(privacy.isCurrent).toBe(true);
+      const post = (version: string) =>
+        app.inject({ method: "POST", url: "/api/consents", headers: authHeaders(other.token), payload: { consents: [{ type: "privacy_policy", version }] } });
+      expect((await post("projet-2026-10-27")).statusCode).toBe(409);
+      expect((await post("projet-2026-11-05")).statusCode).toBe(204);
+    } finally {
+      await deleteTestUser(app, other.id);
+    }
+  });
+
   it("statistiques d'usage : accord, retrait et refus sont des événements datés, versionnés", async () => {
     const other = await createTestUser(app, "acan");
     try {
@@ -315,6 +338,16 @@ describe("account deletion", () => {
       expect(error).toBeNull();
     }
 
+    // Lot garde-fous : une image analysée restée, rangée sans le compte dans son nom.
+    const { data: search, error: searchError } = await app.supabaseAdmin
+      .from("product_searches")
+      .insert({ user_id: storageUser.id, source_platform: "photo", method: "manual_screenshot", status: "processing" })
+      .select("id")
+      .single();
+    expect(searchError).toBeNull();
+    const analysed = `analyses/${search!.id}.jpg`;
+    expect((await app.supabaseAdmin.storage.from("screenshots").upload(analysed, photo, { contentType: "image/jpeg" })).error).toBeNull();
+
     const del = await deleteAccount(storageUser, CONFIRMED);
     expect(del.statusCode).toBe(204);
 
@@ -322,6 +355,8 @@ describe("account deletion", () => {
       const { data: remaining } = await app.supabaseAdmin.storage.from(bucket).list(storageUser.id);
       expect(remaining ?? []).toHaveLength(0);
     }
+    const { data: analyses } = await app.supabaseAdmin.storage.from("screenshots").list("analyses", { search: search!.id });
+    expect(analyses ?? []).toHaveLength(0);
   });
 
   // Cas du fichier orphelin de post-media (constat du 2026-10-14) : un fichier

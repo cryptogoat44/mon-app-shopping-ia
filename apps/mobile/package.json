@@ -32,6 +32,7 @@
     "expo-status-bar": "~57.0.1",
     "expo-symbols": "~57.0.3",
     "expo-system-ui": "~57.0.4",
+    "expo-updates": "57.0.24",
     "expo-video": "~57.0.5",
     "expo-web-browser": "~57.0.3",
     "fflate": "0.8.3",
@@ -60,7 +61,8 @@
     "web": "expo start --web",
     "build:web": "expo export --platform web",
     "lint": "expo lint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "eas-build-pre-install": "node scripts/verifier-build.js"
   },
   "private": true
 }

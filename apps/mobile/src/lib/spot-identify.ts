@@ -64,6 +64,8 @@ const ports: RecoveryPorts = {
 function failReasonOf(error: unknown): SpotFailReason {
   if (error instanceof ApiError && error.status === 429) return "rate_limited";
   if (error instanceof ApiError && error.body.error === "preview_unavailable") return "needs_photo";
+  // Disjoncteur ouvert (lot garde-fous) : panne du fournisseur, rien n'a été compté.
+  if (error instanceof ApiError && error.body.error === "search_paused") return "paused";
   // Erreur côté app (ex. image refusée à l'envoi) : invisible du serveur,
   // donc signalée à Sentry (lot 3bis).
   if (!(error instanceof ApiError)) reportUnexpectedError(error, "spot_analysis");

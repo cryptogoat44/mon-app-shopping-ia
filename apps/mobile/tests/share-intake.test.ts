@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // du module de partage, des liens d'ouverture et des fichiers. Chaque partage
 // est lu une fois, avec l'adresse qui vient d'ouvrir l'app (jamais une
 // ancienne : le module natif s'arrête net si le type ne correspond pas).
-const { linking, share, disk, discardLocalFile } = vi.hoisted(() => {
+const { linking, share, disk, discardLocalFile, appState } = vi.hoisted(() => {
   const handlers = new Map<string, (payload: { value: string }) => void>();
   const share = {
     getShareIntent: vi.fn(),
@@ -30,11 +30,32 @@ const { linking, share, disk, discardLocalFile } = vi.hoisted(() => {
   const GROUP = "file:///private/var/mobile/Containers/Shared/AppGroup/0D1E2F/";
   const CACHE = "file:///var/mobile/Containers/Data/Application/ABC/Library/Caches/";
   const META = `${GROUP}.com.apple.mobile_container_manager.metadata.plist`;
-  const disk = { GROUP, CACHE, META, files: new Map<string, number>(), deleted: [] as string[], stuck: new Set<string>(), folders: new Set<string>() };
+  // `texts` : contenu et date des fichiers texte (repli du partage, lot « app iPhone prête »).
+  const disk = {
+    GROUP,
+    CACHE,
+    META,
+    files: new Map<string, number>(),
+    texts: new Map<string, { content: string; at: number | null }>(),
+    deleted: [] as string[],
+    stuck: new Set<string>(),
+    folders: new Set<string>(),
+  };
   class File {
     uri: string;
-    constructor(uri: string) {
-      this.uri = uri;
+    constructor(...parts: (string | { uri: string })[]) {
+      this.uri = parts.map((part) => (typeof part === "string" ? part : part.uri)).reduce((base, part) => `${base.replace(/\/?$/, "/")}${part}`);
+    }
+    get exists() {
+      return disk.files.has(this.uri);
+    }
+    get lastModified() {
+      return disk.texts.get(this.uri)?.at ?? null;
+    }
+    textSync() {
+      const text = disk.texts.get(this.uri);
+      if (!text) throw new Error("introuvable");
+      return text.content;
     }
     get name() {
       return this.uri.split("/").pop() ?? "";
@@ -52,6 +73,7 @@ const { linking, share, disk, discardLocalFile } = vi.hoisted(() => {
     delete() {
       if (this.uri === META || disk.stuck.has(this.uri)) throw new Error("couldn’t be removed because you don’t have permission to access it");
       disk.files.delete(this.uri);
+      disk.texts.delete(this.uri);
       disk.deleted.push(this.uri);
     }
   }
@@ -72,10 +94,19 @@ const { linking, share, disk, discardLocalFile } = vi.hoisted(() => {
       return this.uri === GROUP ? [new File(META), ...entries, new Directory(`${this.uri}Library/`)] : entries;
     }
   }
-  return { linking, share, disk: { ...disk, File, Directory }, discardLocalFile: vi.fn() };
+  // Retour au premier plan (AppState de React Native).
+  let onState: ((state: string) => void) | null = null;
+  const appState = {
+    addEventListener: vi.fn((_type: string, handler: (state: string) => void) => {
+      onState = handler;
+      return { remove: () => (onState = null) };
+    }),
+    change: (state: string) => onState?.(state),
+  };
+  return { linking, share, disk: { ...disk, File, Directory }, discardLocalFile: vi.fn(), appState };
 });
 
-vi.mock("react-native", () => ({ Platform: { OS: "ios" } }));
+vi.mock("react-native", () => ({ Platform: { OS: "ios" }, AppState: appState }));
 vi.mock("expo-linking", () => ({ getLinkingURL: linking.getLinkingURL, addEventListener: linking.addEventListener }));
 // Le module rend une chaîne JSON ; sa mise en forme (parseShareIntent) est simulée.
 vi.mock("expo-share-intent", () => ({ ShareIntentModule: share, parseShareIntent: (value: string) => JSON.parse(value) }));
@@ -97,6 +128,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   takeSharedItem();
   disk.files.clear();
+  disk.texts.clear();
   disk.deleted.length = 0;
   disk.stuck.clear();
   disk.folders.clear();
@@ -224,5 +256,60 @@ describe("copies de partages jamais ouverts (app fermée par iOS avant la connex
     expect(disk.deleted).toEqual([]);
     stop();
     shared.takeSharedItem();
+  });
+});
+
+describe("repli : la réouverture par l'extension a échoué (lot « app iPhone prête »)", () => {
+  const PENDING = `${disk.GROUP}partage-en-attente.txt`;
+  function pending(content: string, at: number | null = Date.now()) {
+    disk.files.set(PENDING, content.length);
+    disk.texts.set(PENDING, { content, at });
+  }
+
+  it("Spotto ouvert à la main : le partage resté en attente est lu, une fois, et le fichier effacé", () => {
+    pending(`${opening(10, "media")}\n`);
+    const stop = startShareIntake();
+    expect(share.getShareIntent).toHaveBeenCalledTimes(1);
+    expect(share.getShareIntent).toHaveBeenCalledWith(opening(10, "media"));
+    expect(disk.deleted).toContain(PENDING);
+    appState.change("active");
+    expect(share.getShareIntent).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it("retour dans Spotto déjà ouvert : lu au passage au premier plan", () => {
+    const stop = startShareIntake();
+    expect(share.getShareIntent).not.toHaveBeenCalled();
+    pending(opening(11, "weburl"));
+    appState.change("background");
+    expect(share.getShareIntent).not.toHaveBeenCalled();
+    appState.change("active");
+    expect(share.getShareIntent).toHaveBeenCalledWith(opening(11, "weburl"));
+    stop();
+  });
+
+  it("ouverture réussie par l'extension : la même adresse n'est jamais lue deux fois, quel que soit l'ordre", () => {
+    const stop = startShareIntake();
+    pending(opening(12, "media"));
+    appState.change("active");
+    linking.open(opening(12, "media"));
+    expect(share.getShareIntent).toHaveBeenCalledTimes(1);
+    linking.getLinkingURL.mockReturnValue(opening(13, "text"));
+    stop();
+    pending(opening(13, "text"));
+    const again = startShareIntake();
+    expect(share.getShareIntent).toHaveBeenCalledTimes(2);
+    expect(share.getShareIntent).toHaveBeenLastCalledWith(opening(13, "text"));
+    again();
+  });
+
+  it("contenu inattendu ou partage de plus de 24 heures : jamais lu, fichier effacé quand même", () => {
+    pending("spotto://dataUrl=spottoShareKey#inconnu");
+    const stop = startShareIntake();
+    pending(opening(14, "media"), Date.now() - 25 * 60 * 60_000);
+    appState.change("active");
+    expect(share.getShareIntent).not.toHaveBeenCalled();
+    expect(disk.files.has(PENDING)).toBe(false);
+    stop();
   });
 });

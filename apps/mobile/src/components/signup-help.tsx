@@ -4,6 +4,7 @@ import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { ErrorMessage } from "@/components/error-message";
 import { useResendConfirmation } from "@/lib/use-resend-confirmation";
+import type { RobotCheck } from "@/components/robot-check";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Inscription et connexion (lot « premier essai ») : renvoyer l'e-mail de
@@ -24,9 +25,10 @@ function StatusLine({ message }: { message: string }) {
 /** « Renvoyer l'e-mail », avec une minute d'attente entre deux envois. Le
  * décompte reste visuel : le libellé lu par VoiceOver ne change pas chaque
  * seconde, l'attente est dite dans l'indication. */
-export function ResendEmailButton({ email, sentAt = null, style }: { email: string; sentAt?: number | null; style?: StyleProp<ViewStyle> }) {
-  const { wait, sending, sent, error, resend } = useResendConfirmation(email, sentAt);
-  const disabled = sending || wait > 0 || !email.trim();
+export function ResendEmailButton({ email, sentAt = null, robot, style }: { email: string; sentAt?: number | null; robot: RobotCheck; style?: StyleProp<ViewStyle> }) {
+  const { wait, robotReady, sending, sent, error, resend } = useResendConfirmation(email, sentAt, robot);
+  // Anti-robots (point 17) : attend le jeton du widget affiché par l'écran.
+  const disabled = sending || wait > 0 || !email.trim() || !robotReady;
   const label = sending ? t.firstTry.signUp.resending : wait > 0 ? t.firstTry.signUp.resendIn(wait) : t.firstTry.signUp.resend;
   return (
     <View style={style}>

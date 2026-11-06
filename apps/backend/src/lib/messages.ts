@@ -2,6 +2,7 @@ import type { Locale } from "./locale.js";
 import { COMMENT_MAX_LENGTH } from "@monapp/shared-types";
 import { RATE_LIMITED_MESSAGE } from "../plugins/rateLimit.js";
 import { SEARCH_CAPACITY_MESSAGES } from "./searchCapacity.js";
+import { UPDATE_REQUIRED_MESSAGE } from "./appVersion.js";
 
 // Messages d'erreur renvoyés à l'app, dans la langue de l'utilisateur (lot 3).
 // Les routes écrivent leurs messages en français ; juste avant l'envoi, un
@@ -18,6 +19,9 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Ce document a été mis à jour. Relisez-le, puis acceptez-le à nouveau.":
     "This document has been updated. Please read it again, then accept it.",
   "Ce nom d'utilisateur est déjà pris.": "This username is already taken.",
+  // Chantier 3 (comptes et modération) : filtre des mots interdits.
+  "Ce texte contient un mot interdit sur Spotto (insulte, propos haineux ou contenu sexuel). Modifiez-le pour continuer.":
+    "This text contains a word that isn't allowed on Spotto (insult, hateful or sexual content). Please change it to continue.",
   "Cette image n'a pas pu être lue, ou la zone choisie est trop petite.":
     "This image couldn't be read, or the selected area is too small.",
   "Cette image n'est pas autorisée.": "This image isn't allowed.",
@@ -143,6 +147,11 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Une image de la vidéo est trop lourde.": "One of the video frames is too large.",
   "Vous avez atteint la limite quotidienne d'analyses automatiques. Choisissez l'image avec le curseur, ou réessayez demain.":
     "You've reached the daily limit for automatic analyses. Choose the frame with the slider, or try again tomorrow.",
+  // Lot garde-fous : disjoncteur de la recherche par image (lib/searchBreaker.ts).
+  "La recherche est en pause : notre fournisseur de recherche rencontre une panne. Nous sommes prévenus. Réessayez dans quelques minutes.":
+    "Search is paused: our search provider is having an outage. We've been notified. Please try again in a few minutes.",
+  // Mise à jour obligatoire de l'app iPhone (lot « app iPhone prête », lib/appVersion.ts).
+  [UPDATE_REQUIRED_MESSAGE]: "This version of Spotto is no longer supported. Please update the app from the App Store.",
 };
 
 /** Message dans la langue voulue. Un message inconnu (par exemple un texte

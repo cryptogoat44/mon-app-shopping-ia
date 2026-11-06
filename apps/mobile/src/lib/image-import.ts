@@ -47,6 +47,25 @@ export async function importPhotoForSpotter(): Promise<ImportResult> {
   return shrinkForSpotter(asset.uri, asset.width, asset.height);
 }
 
+/** « Prendre une photo » (app iPhone, lot « app iPhone prête », point 14) :
+ * l'autorisation d'iOS est demandée au premier appui ; refusée, on dit où la
+ * donner (« denied »). La photo prise reste dans le cache de Spotto (jamais
+ * dans la galerie) et suit la même préparation qu'une photo choisie. */
+export async function takePhotoForSpotter(): Promise<ImportResult | { kind: "denied" }> {
+  let asset: ImagePicker.ImagePickerAsset | null;
+  try {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) return { kind: "denied" };
+    const taken = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 1 });
+    asset = taken.canceled ? null : (taken.assets[0] ?? null);
+  } catch {
+    // Appareil photo absent (simulateur) ou indisponible.
+    return { kind: "unavailable" };
+  }
+  if (!asset) return { kind: "cancelled" };
+  return shrinkForSpotter(asset.uri, asset.width, asset.height);
+}
+
 /** Image reçue par la feuille de partage d'iOS (lot « partager vers Spotto ») :
  * la même préparation qu'une photo choisie. Taille inconnue : lue sur l'image
  * ouverte une première fois ; déjà assez petite, elle est enregistrée telle

@@ -6,6 +6,13 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "spotto",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.spottoapp.ios",
@@ -81,7 +88,7 @@
         "expo-image-picker",
         {
           "photosPermission": "Pour vous proposer dans Spotter votre dernière vidéo, comme vous l'avez demandé. Spotto ne lit que la plus récente et ne modifie jamais votre galerie ; seules quelques images en partent, quand vous appuyez sur « Lancer ».",
-          "cameraPermission": false,
+          "cameraPermission": "Pour prendre en photo, depuis Spotter, une pièce que vous voulez retrouver. La photo n'est pas enregistrée dans votre galerie ; elle ne part qu'au moment où vous appuyez sur « Lancer ».",
           "microphonePermission": false
         }
       ],
@@ -115,7 +122,14 @@
           "disableAndroid": true
         }
       ],
-      "./plugins/extension-partage.js"
+      "./plugins/extension-partage.js",
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://de.sentry.io/",
+          "project": "4512173801996368"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

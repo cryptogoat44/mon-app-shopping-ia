@@ -18,6 +18,7 @@ import { safeFetch } from "../src/lib/safeFetch.js";
 import { env } from "../src/env.js";
 import { QUOTA_ROWS } from "../src/lib/searchCapacity.js";
 import { authHeaders, buildMultipart, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
+import { migration0029Applied } from "./migration0029.js";
 
 const safeFetchMock = vi.mocked(safeFetch);
 
@@ -90,7 +91,9 @@ describe("place rendue dans les trois plafonds quand le fournisseur refuse (0027
     expect(await counters()).toEqual(before);
   });
 
-  it("délai dépassé (facturation incertaine) : les trois compteurs augmentent de 1, et la réponse ne dit pas « non comptée »", async () => {
+  it("délai dépassé (facturation incertaine) : les plafonds du jour et du mois augmentent de 1 (la part de la personne aussi, sans 0029), et la réponse ne dit pas « non comptée »", async () => {
+    // 0029 (lot garde-fous) : une recherche en panne ne compte plus dans la part de la personne.
+    const userIncrease = (await migration0029Applied(app)) ? 0 : 1;
     const before = await counters();
     const { body, row } = await launch(async () => {
       throw Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" });
@@ -98,10 +101,11 @@ describe("place rendue dans les trois plafonds quand le fournisseur refuse (0027
 
     expect(body).toMatchObject({ status: "failed", notCounted: false });
     expect(row).toMatchObject({ failure_kind: "timeout", provider: "serpapi", provider_status_code: null });
-    expect(await counters()).toEqual({ day: before.day + 1, month: before.month + 1, user: before.user + 1 });
+    expect(await counters()).toEqual({ day: before.day + 1, month: before.month + 1, user: before.user + userIncrease });
   });
 
-  it("retour de place en panne (simulée) : la place reste comptée partout, et la réponse ne dit pas « non comptée »", async () => {
+  it("retour de place en panne (simulée) : la place reste comptée dans les plafonds, et la réponse ne dit pas « non comptée »", async () => {
+    const userIncrease = (await migration0029Applied(app)) ? 0 : 1;
     const realRpc = app.supabaseAdmin.rpc.bind(app.supabaseAdmin);
     const spy = vi.spyOn(app.supabaseAdmin, "rpc").mockImplementation(((fn: string, args?: Record<string, unknown>) =>
       fn === "serpapi_release"
@@ -114,7 +118,7 @@ describe("place rendue dans les trois plafonds quand le fournisseur refuse (0027
       expect(spy.mock.calls.some(([fn]) => fn === "serpapi_release")).toBe(true);
       expect(body).toMatchObject({ status: "failed", notCounted: false });
       expect(row).toMatchObject({ failure_kind: "provider_error", provider_status_code: 429 });
-      expect(await counters()).toEqual({ day: before.day + 1, month: before.month + 1, user: before.user + 1 });
+      expect(await counters()).toEqual({ day: before.day + 1, month: before.month + 1, user: before.user + userIncrease });
     } finally {
       spy.mockRestore();
     }

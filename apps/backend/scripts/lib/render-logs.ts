@@ -16,14 +16,17 @@
 import { z } from "zod";
 import { RENDER_API, type FetchLike } from "./render-api.js";
 
-/** Requêtes suivies, dans l'ordre du parcours « vidéo + quelques mots ». */
+/** Requêtes suivies, dans l'ordre du parcours « vidéo + quelques mots ».
+ * Depuis le lot « filets de sécurité », le serveur note la route déclarée
+ * (« /api/searches/:id ») au lieu de l'adresse réelle : les deux formes sont
+ * lues, pour les journaux d'avant et d'après. */
 export const REQUETES_SUIVIES = [
   { method: "GET", chemin: /^\/api\/video-moments\/status$/, nom: "GET /api/video-moments/status", sens: "fonction d'analyse active ? (après le choix d'une vidéo)" },
   { method: "POST", chemin: /^\/api\/consents$/, nom: "POST /api/consents", sens: "accord enregistré (tous types d'accord)" },
   { method: "POST", chemin: /^\/api\/video-moments$/, nom: "POST /api/video-moments", sens: "analyse par l'IA" },
   { method: "POST", chemin: /^\/api\/searches\/prepare$/, nom: "POST /api/searches/prepare", sens: "image préparée pour l'identification" },
   { method: "POST", chemin: /^\/api\/searches\/[^/]+\/run$/, nom: "POST /api/searches/:id/run", sens: "identification (SerpApi)" },
-  { method: "GET", chemin: /^\/api\/searches\/[0-9a-f-]{36}$/, nom: "GET /api/searches/:id", sens: "résultats consultés" },
+  { method: "GET", chemin: /^\/api\/searches\/(?:[0-9a-f-]{36}|:id)$/, nom: "GET /api/searches/:id", sens: "résultats consultés" },
 ] as const;
 
 const REQUETE = z.object({ reqId: z.string(), msg: z.literal("incoming request"), req: z.object({ method: z.string(), url: z.string() }) });
@@ -368,8 +371,9 @@ const DISJONCTEUR = z.object({
   msg: z.literal("Disjoncteur"),
   provider: z.string().regex(/^[a-z][a-z0-9_]{0,31}$/),
   searchType: z.enum(["image"]),
-  mode: z.enum(["observation"]),
-  event: z.enum(["opened", "reopened", "closed", "would_block"]),
+  // « observation » : serveur d'avant le lot garde-fous ; « block » : depuis.
+  mode: z.enum(["observation", "block"]),
+  event: z.enum(["opened", "reopened", "closed", "would_block", "blocked"]),
   judged: z.number(),
   bad: z.number(),
   minutesLeft: z.number().nullable(),
@@ -384,23 +388,44 @@ export function extraireDisjoncteur(message: string): LigneDisjoncteur | null {
   return { msg, provider, searchType, mode, event, judged, bad, minutesLeft };
 }
 
-// Mise en ligne 1 : le disjoncteur de l'image, en observation (il ne bloque rien).
-const EVENEMENTS_DISJONCTEUR = {
+// Mise en ligne 1 : le disjoncteur de l'image, en observation (il ne bloquait
+// rien). Depuis le lot garde-fous, il bloque (mode « block »).
+const EVENEMENTS_OBSERVATION = {
   opened: "se serait ouvert",
   reopened: "se serait rouvert (recherche de test mauvaise)",
   closed: "se serait refermé",
   would_block: "aurait bloqué une recherche",
+  blocked: "a bloqué une recherche",
+} as const;
+const EVENEMENTS_BLOCAGE = {
+  opened: "ouvert (recherche en pause)",
+  reopened: "rouvert (recherche de test mauvaise)",
+  closed: "refermé",
+  would_block: "aurait bloqué une recherche",
+  blocked: "a bloqué une recherche",
 } as const;
 
 export function decrireDisjoncteur(ligne: LigneDisjoncteur): string {
   const reste = ligne.minutesLeft === null ? "" : `, encore ${ligne.minutesLeft} min`;
-  return `image (observation) : ${EVENEMENTS_DISJONCTEUR[ligne.event]} — ${ligne.bad} mauvaise(s) sur ${ligne.judged}${reste}`;
+  const evenements = ligne.mode === "block" ? EVENEMENTS_BLOCAGE : EVENEMENTS_OBSERVATION;
+  return `image (${ligne.mode === "block" ? "blocage" : "observation"}) : ${evenements[ligne.event]} — ${ligne.bad} mauvaise(s) sur ${ligne.judged}${reste}`;
 }
 
 export function resumerDisjoncteurs(lignes: readonly LigneDisjoncteur[]): string {
   if (lignes.length === 0) return "aucune ligne dans la période";
-  const nombre = (event: LigneDisjoncteur["event"]) => lignes.filter((ligne) => ligne.event === event).length;
-  return `en observation : ouvertures ${nombre("opened")}, réouvertures ${nombre("reopened")}, fermetures ${nombre("closed")}, recherches qui auraient été bloquées ${nombre("would_block")}`;
+  const nombre = (mode: LigneDisjoncteur["mode"], event: LigneDisjoncteur["event"]) => lignes.filter((ligne) => ligne.mode === mode && ligne.event === event).length;
+  const parties: string[] = [];
+  if (lignes.some((ligne) => ligne.mode === "observation")) {
+    parties.push(
+      `en observation : ouvertures ${nombre("observation", "opened")}, réouvertures ${nombre("observation", "reopened")}, fermetures ${nombre("observation", "closed")}, recherches qui auraient été bloquées ${nombre("observation", "would_block")}`
+    );
+  }
+  if (lignes.some((ligne) => ligne.mode === "block")) {
+    parties.push(
+      `en blocage : ouvertures ${nombre("block", "opened")}, réouvertures ${nombre("block", "reopened")}, fermetures ${nombre("block", "closed")}, recherches bloquées ${nombre("block", "blocked")}`
+    );
+  }
+  return parties.join(" ; ");
 }
 
 /** Seuls champs lus dans les lignes « Mesure complément » du serveur (voie C,

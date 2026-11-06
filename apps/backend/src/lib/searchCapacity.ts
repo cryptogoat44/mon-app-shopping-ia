@@ -20,6 +20,8 @@ import type { FastifyBaseLogger, FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import { SEARCH_CAPACITY_ERRORS, type SearchCapacityErrorBody, type SearchCapacityLimit, type SearchCapacityReached } from "@monapp/shared-types";
 import { env } from "../env.js";
+import { raiseAlert } from "./alerts.js";
+import { parisDayStart } from "./matchFeedback.js";
 
 export const SEARCH_CAPACITY_MESSAGES = {
   day: "Le service de recherche est très sollicité aujourd'hui. Réessayez demain.",
@@ -140,7 +142,26 @@ async function readQuota(fastify: FastifyInstance, log: FastifyBaseLogger, reque
   const reserve = request.step === "search" || request.step === "shopping";
   const row = await callQuota(fastify, log, caps, request.userId, reserve, request.searchId);
   if (reserve || !row.allowed) log.info(capacityLogFields(request.step, row, caps), CAPACITY_LOG_MESSAGE);
+  alertIfServiceClosed(log, row, caps);
   return row;
+}
+
+/** Plafond du jour ou du mois atteint : Spotter est fermé à tout le monde.
+ * Une alerte (lib/alerts.ts) par jour, ou par cycle mensuel. La part d'une
+ * personne n'en est pas une : c'est le fonctionnement normal. */
+export function alertIfServiceClosed(log: Pick<FastifyBaseLogger, "warn">, row: QuotaRow, caps: SearchCaps, now = new Date()): void {
+  if (row.allowed || row.refused_by === "user") return;
+  const day = row.refused_by === "day";
+  raiseAlert(log, {
+    kind: "plafond_recherches",
+    message: day
+      ? `Plafond du jour des recherches atteint (${caps.daily}) : Spotter est fermé à tous jusqu'à minuit`
+      : `Plafond du mois des recherches atteint (${caps.monthly}) : Spotter est fermé à tous jusqu'au ${row.next_renewal}`,
+    tags: { plafond: row.refused_by },
+    // Une alerte par jour de Paris pour le plafond du jour ; une par cycle pour le mois.
+    onceKey: day ? `plafond_recherches:day:${parisDayStart(now).toISOString()}` : `plafond_recherches:month:${row.next_renewal}`,
+    onceMs: day ? 24 * 60 * 60 * 1000 : 32 * 24 * 60 * 60 * 1000,
+  });
 }
 
 /** Compteur lu pour l'app (lot limites annoncées, GET /api/searches/capacity) :

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { env } from "../src/env.js";
 import { capacityLogFields, QUOTA_ROWS, reserveSearch, searchCapacityBeforeComplementAi, searchCapacityForVideoAi } from "../src/lib/searchCapacity.js";
 import { buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
+import { migration0029Applied } from "./migration0029.js";
 
 // Lot 4 quater : les fonctions serpapi_cycle_start, serpapi_quota et
 // serpapi_seed_cycle de spotto-dev (migration 0022 ; numéro de place et
@@ -397,6 +398,8 @@ describe("plafond des recherches SerpApi (fonctions de la base, lot 4 quater)", 
     });
 
     it("part de la personne : ses recherches refusées par le fournisseur (place rendue) ne comptent pas ; ses « Voir les boutiques » du jour comptent", async () => {
+      // 0029 (lot garde-fous) : aucune recherche en panne ne compte plus (ici, celle en « provider_error »).
+      const failedCounts = (await migration0029Applied(app)) ? 0 : 1;
       const at = slotDate(16, 10);
       const refused = await searchAt(after(at, -HOUR), "failed");
       const failed = await searchAt(after(at, -HOUR), "failed");
@@ -404,7 +407,7 @@ describe("plafond des recherches SerpApi (fonctions de la base, lot 4 quater)", 
         const { error } = await app.supabaseAdmin.from("product_searches").update({ outcome: "failure", failure_kind: kind }).eq("id", id);
         expect(error).toBeNull();
       }
-      expect(await quota(at, { daily: 100, monthly: 100, user: 5 }, { reserve: false })).toMatchObject({ user_day_count: 1 });
+      expect(await quota(at, { daily: 100, monthly: 100, user: 5 }, { reserve: false })).toMatchObject({ user_day_count: failedCounts });
 
       // Une pièce d'une recherche de la veille : ses boutiques demandées aujourd'hui comptent, celles d'hier non.
       const yesterday = await searchAt(after(at, -DAY), "completed");
@@ -418,7 +421,7 @@ describe("plafond des recherches SerpApi (fonctions de la base, lot 4 quater)", 
       });
       const { error } = await app.supabaseAdmin.from("product_matches").insert([piece(1, after(at, -HOUR)), piece(2, after(at, -DAY))]);
       expect(error).toBeNull();
-      expect(await quota(at, { daily: 100, monthly: 100, user: 5 }, { reserve: false })).toMatchObject({ user_day_count: 2 });
+      expect(await quota(at, { daily: 100, monthly: 100, user: 5 }, { reserve: false })).toMatchObject({ user_day_count: failedCounts + 1 });
       // Ni pour une autre personne.
       expect(await quota(at, { daily: 100, monthly: 100, user: 5 }, { reserve: false, userId: other.id })).toMatchObject({ user_day_count: 0 });
     });

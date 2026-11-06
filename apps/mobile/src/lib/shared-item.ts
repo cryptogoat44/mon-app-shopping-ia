@@ -114,6 +114,27 @@ export function isShareOpeningUrl(url: string): boolean {
   return SHARE_OPENING.test(url);
 }
 
+// Repli du partage (lot « app iPhone prête », point 12). Pour rouvrir Spotto,
+// l'extension passe par un chemin qu'Apple ne prévoit pas : s'il échoue, rien
+// ne s'ouvre et le partage était perdu. L'extension dépose donc aussi son
+// adresse d'ouverture dans ce fichier du groupe d'apps
+// (plugins/extension-partage.js) ; l'app le relit quand on l'ouvre à la main,
+// au lancement ou au retour au premier plan (share-intake.ts).
+/** Fichier du groupe d'apps : l'adresse d'ouverture du dernier partage. */
+export const PENDING_SHARE_FILE = "partage-en-attente.txt";
+/** Au-delà, un partage resté en attente n'est plus ouvert : il est oublié. */
+export const PENDING_SHARE_MAX_AGE_MS = 24 * 60 * 60_000;
+
+/** Adresse à relire depuis le fichier de repli, ou null : contenu qui n'est
+ * pas une adresse d'ouverture exacte (le module natif s'arrêterait net sur un
+ * type inconnu), ou partage trop ancien. Date du fichier inconnue : relu. */
+export function pendingShareOpening(content: string, modifiedAt: number | null, now: number): string | null {
+  const url = content.trim();
+  if (!isShareOpeningUrl(url)) return null;
+  if (modifiedAt !== null && now - modifiedAt > PENDING_SHARE_MAX_AGE_MS) return null;
+  return url;
+}
+
 // Élément en attente : un seul, le plus récent ; gardé en mémoire tant que
 // l'app reste ouverte (même en arrière-plan), jamais enregistré.
 let waiting: SharedItem | null = null;
