@@ -48,7 +48,8 @@ export function failureCorrections(reason: SpotFailReason, context: CorrectionCo
   // Limite atteinte (personne ou service entier) : rien à proposer, un nouvel essai serait refusé.
   if (LIMIT_REASONS.includes(reason)) return [];
   // Encore en cours : rien à corriger, une autre recherche serait payée pour rien (lot recherche coupée).
-  if (reason === "running") return [];
+  // En pause (fournisseur en panne, lot garde-fous) : un nouvel essai serait refusé jusqu'à la fin de la pause.
+  if (reason === "running" || reason === "paused") return [];
   if (reason === "needs_photo" || !context.hasDraft) return context.fromLink ? ["add_video"] : [];
   // Panne : réessayer d'abord ; l'image reste la bonne.
   if (reason === "technical") return ["retry", context.hasVideo ? "choose_myself" : "reframe"];

@@ -147,6 +147,9 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Une image de la vidéo est trop lourde.": "One of the video frames is too large.",
   "Vous avez atteint la limite quotidienne d'analyses automatiques. Choisissez l'image avec le curseur, ou réessayez demain.":
     "You've reached the daily limit for automatic analyses. Choose the frame with the slider, or try again tomorrow.",
+  // Lot garde-fous : disjoncteur de la recherche par image (lib/searchBreaker.ts).
+  "La recherche est en pause : notre fournisseur de recherche rencontre une panne. Nous sommes prévenus. Réessayez dans quelques minutes.":
+    "Search is paused: our search provider is having an outage. We've been notified. Please try again in a few minutes.",
   // Mise à jour obligatoire de l'app iPhone (lot « app iPhone prête », lib/appVersion.ts).
   [UPDATE_REQUIRED_MESSAGE]: "This version of Spotto is no longer supported. Please update the app from the App Store.",
 };

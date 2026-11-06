@@ -1,9 +1,15 @@
-// Nettoyage unique des anciennes images analysées (Lot S, RGPD).
+// Nettoyage à la main des images analysées restées (Lot S, RGPD).
 //
 // Depuis le Lot S, l'image envoyée à la recherche visuelle est supprimée dès
-// la réponse de SerpApi. Ce script efface celles stockées AVANT ce
-// changement. Il ne touche qu'au bucket « screenshots », jamais aux autres
-// (Vault, publications, avatars), ni à la base de données.
+// la réponse de SerpApi. Ce script efface celles restées malgré tout : celles
+// d'avant ce changement, et celles d'une panne au mauvais moment. Depuis le
+// lot garde-fous (2026-11-05), une image analysée est rangée sans le compte
+// dans son nom (dossier « analyses/ ») et le serveur efface lui-même, à chaque
+// préparation de recherche, celles restées plus d'une heure : ce script sert
+// surtout, une fois, aux anciennes, rangées dans le dossier de chaque compte.
+// Il parcourt tous les dossiers du bucket, « analyses/ » compris. Il ne
+// touche qu'au bucket « screenshots », jamais aux autres (Vault,
+// publications, avatars), ni à la base de données.
 //
 // Deux temps :
 //   pnpm --filter backend nettoyer-captures              → SIMULATION : compte seulement

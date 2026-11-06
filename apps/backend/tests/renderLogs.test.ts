@@ -36,7 +36,7 @@ import {
   type MeasureColumns,
   type ProviderReply,
 } from "../src/lib/searchMeasure.js";
-import { BREAKER_LOG_MESSAGE, breakerLogFields, type BreakerEvent } from "../src/lib/searchBreaker.js";
+import { BREAKER_LOG_MESSAGE, breakerLogFields, type BreakerLogEvent } from "../src/lib/searchBreaker.js";
 
 describe("mesure de chaque recherche (petit lot)", () => {
   // La ligne telle que le serveur l'écrit (src/lib/searchMeasure.ts), plus ce que Fastify y ajoute.
@@ -365,10 +365,10 @@ describe("places rendues et disjoncteur (0027)", () => {
     for (const interdit of [IP, COMPTE]) expect(JSON.stringify(lues)).not.toContain(interdit);
   });
 
-  it("disjoncteur en observation : événements et nombres seulement", () => {
-    // La ligne telle que le serveur l'écrit (src/lib/searchBreaker.ts), plus ce que Fastify y ajoute.
-    const disjoncteur = (event: BreakerEvent | "would_block", bad: number, minutesLeft: number | null, timestamp: string) => ({
-      ...ligne({ ...breakerLogFields("image", "serpapi", event, { open: minutesLeft !== null, tripped: true, judged: 10, bad, minutesLeft }), msg: BREAKER_LOG_MESSAGE, compte: COMPTE }),
+  it("disjoncteur en observation (serveur d'avant le lot garde-fous) : événements et nombres seulement", () => {
+    // Les lignes telles que l'ancien serveur les écrivait, plus ce que Fastify y ajoute.
+    const disjoncteur = (event: "opened" | "reopened" | "closed" | "would_block", bad: number, minutesLeft: number | null, timestamp: string) => ({
+      ...ligne({ provider: "serpapi", searchType: "image", mode: "observation", event, judged: 10, bad, minutesLeft, msg: BREAKER_LOG_MESSAGE, compte: COMPTE }),
       timestamp,
     });
     const entrees = [
@@ -389,6 +389,30 @@ describe("places rendues et disjoncteur (0027)", () => {
       "image (observation) : se serait refermé — 6 mauvaise(s) sur 10",
     ]);
     expect(extraireDisjoncteur(ligne({ ...champs, event: "inconnu", judged: 1, bad: 1, minutesLeft: null }).message)).toBeNull();
+  });
+
+  it("disjoncteur qui bloque (lot garde-fous) : la ligne du serveur, lue telle quelle", () => {
+    // La ligne telle que le serveur l'écrit (src/lib/searchBreaker.ts), plus ce que Fastify y ajoute.
+    const disjoncteur = (event: BreakerLogEvent, bad: number, minutesLeft: number | null, timestamp: string) => ({
+      ...ligne({ ...breakerLogFields("image", "serpapi", event, { open: minutesLeft !== null, tripped: true, judged: 10, bad, minutesLeft }), msg: BREAKER_LOG_MESSAGE, compte: COMPTE }),
+      timestamp,
+    });
+    const entrees = [
+      disjoncteur("opened", 6, 15, "2026-11-06T08:00:00Z"),
+      disjoncteur("blocked", 6, 12, "2026-11-06T08:03:00Z"),
+      disjoncteur("blocked", 6, 11, "2026-11-06T08:04:00Z"),
+      disjoncteur("closed", 5, null, "2026-11-06T08:32:00Z"),
+    ];
+    const lues = entrees.flatMap((entree) => extraireDisjoncteur(entree.message) ?? []);
+    expect(lues).toHaveLength(4);
+    expect(JSON.stringify(lues)).not.toContain(COMPTE);
+    expect(resumerDisjoncteurs(lues)).toBe("en blocage : ouvertures 1, réouvertures 0, fermetures 1, recherches bloquées 2");
+    expect(chronologie(entrees).map((e) => e.issue)).toEqual([
+      "image (blocage) : ouvert (recherche en pause) — 6 mauvaise(s) sur 10, encore 15 min",
+      "image (blocage) : a bloqué une recherche — 6 mauvaise(s) sur 10, encore 12 min",
+      "image (blocage) : a bloqué une recherche — 6 mauvaise(s) sur 10, encore 11 min",
+      "image (blocage) : refermé — 5 mauvaise(s) sur 10",
+    ]);
   });
 });
 

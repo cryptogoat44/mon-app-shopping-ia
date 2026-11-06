@@ -390,7 +390,7 @@ export const en: Catalog = {
     boughtError: "The piece couldn't be added to the Vault.",
     categoryTitle: "Which category?",
     share: "Share",
-    shareMessage: (name: string, url: string) => `${name}\n${url} (affiliate link)\n\nSpotted with Spotto.`,
+    shareMessage: (name: string, url: string, affiliate: boolean) => `${name}\n${url}${affiliate ? " (affiliate link)" : ""}\n\nSpotted with Spotto.`,
     linkCopied: "Message copied, with the link",
     merchantLinkBlocked: "Your browser blocked the page from opening. Tap here to continue to the retailer.",
     loading: "Loading the result",
@@ -434,6 +434,9 @@ export const en: Catalog = {
     capacityUserTip: "Please try again tomorrow.",
     previewUnavailableTitle: "The video's image is no longer available",
     previewUnavailableTip: "Import a screenshot of the piece to continue.",
+    // Garde-fous batch: search paused, our provider is down (circuit breaker).
+    pausedTitle: "Search is temporarily paused",
+    pausedTip: "Our search provider is having an outage and we've been notified. This attempt wasn't counted. Please try again in a few minutes.",
     reportMenuLabel: "Report an inconsistent result",
     reportTitle: "Inconsistent result",
     reportQuestion: "What's wrong?",

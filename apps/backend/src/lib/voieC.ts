@@ -156,8 +156,8 @@ export interface ComplementPorts extends CachePorts {
   release(reservationId: number): Promise<boolean>;
   /** Lecture seule du plafond avant l'IA (searchCapacityBeforeComplementAi) : true s'il reste de la place. */
   capacityLeft(): Promise<boolean>;
-  /** Compte un appel dans la limite commune de l'IA (consumeRateLimit, shoppingQueryAiGlobal) : false si atteinte. */
-  consumeAiLimit(): boolean;
+  /** Compte un appel dans la limite commune de l'IA (lib/aiQuota.ts, shoppingQueryAiGlobal, dans la base) : false si atteinte ou illisible. */
+  consumeAiLimit(): boolean | Promise<boolean>;
   /** La personne a coupé la connexion (« Annuler ») : plus d'IA ni de Google Shopping. */
   socketDestroyed(): boolean;
   /** Horloge des durées mesurées. */
@@ -529,12 +529,17 @@ async function queryStep(ports: ComplementPorts, input: ComplementInput, state: 
       const timeout = input.deadline.stepTimeoutMs(VOIE_C_BUDGET.aiMaxMs, VOIE_C_BUDGET.saveReserveMs + VOIE_C_BUDGET.shoppingMinMs);
       if (timeout === null || timeout < VOIE_C_BUDGET.aiMinMs) return stop("no_time");
       if (ports.socketDestroyed()) return stop(null);
-      if (!ports.consumeAiLimit()) return stop("no_capacity");
+      if (!(await ports.consumeAiLimit())) return stop("no_capacity");
+      // Le compteur est lu dans la base (lot garde-fous) : le délai de l'IA
+      // est recalculé après lui. Plus assez de temps : aucun appel (jamais un
+      // appel coupé d'avance, qui serait compté comme un échec de l'IA).
+      const aiTimeout = input.deadline.stepTimeoutMs(VOIE_C_BUDGET.aiMaxMs, VOIE_C_BUDGET.saveReserveMs + VOIE_C_BUDGET.shoppingMinMs);
+      if (aiTimeout === null || aiTimeout < VOIE_C_BUDGET.aiMinMs) return stop("no_time");
 
       const started = ports.now();
       let result: ShoppingQueryAnswer;
       try {
-        result = await ports.askQuery(items, input.locale, signalAfter(ports, timeout));
+        result = await ports.askQuery(items, input.locale, signalAfter(ports, aiTimeout));
       } catch (error) {
         state.measure.aiMs = ports.now() - started;
         const kind = aiErrorKindOf(error);

@@ -60,6 +60,7 @@ import { ForeignShopNote } from "@/components/foreign-shop-note";
 import { KeptNotice } from "@/components/kept-notice";
 import { track } from "@/lib/analytics";
 import { openWishlistFromSpotter } from "@/lib/wishlist-link";
+import { isAffiliateLink } from "@/lib/affiliate-link";
 import { themedStyles } from "@/theme/themed-styles";
 
 function displayPrice(piece: Piece): string {
@@ -282,7 +283,7 @@ export default function ResultScreen() {
     if (!piece) return;
     holdPiece();
     const url = piece.affiliateUrl ?? piece.merchantUrl ?? "";
-    const message = t.result.shareMessage(piece.name, url);
+    const message = t.result.shareMessage(piece.name, url, isAffiliateLink(piece));
     try {
       if (Platform.OS === "web" && !(typeof navigator !== "undefined" && "share" in navigator)) {
         // Le message entier, pas le lien seul : la mention « lien affilié »
@@ -555,18 +556,21 @@ export default function ResultScreen() {
             <Text style={styles.blockedLink}>{t.result.merchantLinkBlocked}</Text>
           </Pressable>
         ) : null}
-        <Pressable
-          onPress={() => setAffiliateInfoOpen((open) => !open)}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityState={{ expanded: affiliateInfoOpen }}
-          accessibilityHint={t.result.affiliateHint}
-        >
-          <Text style={styles.disclosure}>
-            {t.result.affiliateDisclosure} <Text style={styles.disclosureMore}>{affiliateInfoOpen ? "–" : "ⓘ"}</Text>
-          </Text>
-        </Pressable>
-        {affiliateInfoOpen ? <Text style={styles.disclosureText}>{t.result.affiliateExplanation}</Text> : null}
+        {/* « Lien affilié » seulement pour un vrai lien affilié (lot garde-fous, lib/affiliate-link.ts). */}
+        {isAffiliateLink(piece) ? (
+          <Pressable
+            onPress={() => setAffiliateInfoOpen((open) => !open)}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: affiliateInfoOpen }}
+            accessibilityHint={t.result.affiliateHint}
+          >
+            <Text style={styles.disclosure}>
+              {t.result.affiliateDisclosure} <Text style={styles.disclosureMore}>{affiliateInfoOpen ? "–" : "ⓘ"}</Text>
+            </Text>
+          </Pressable>
+        ) : null}
+        {isAffiliateLink(piece) && affiliateInfoOpen ? <Text style={styles.disclosureText}>{t.result.affiliateExplanation}</Text> : null}
 
         <View style={styles.actions}>
           <Pressable style={styles.action} onPress={handleKeep} disabled={kept.has(piece.id)} accessibilityRole="button">
@@ -731,6 +735,8 @@ function FailureView({
     capacity_user: capacityMessages("capacity_user", resumesOn),
     // Recherche relue encore en cours (lot recherche coupée) : jamais « rien trouvé ».
     running: [t.searchRecovery.runningTitle, t.searchRecovery.runningTip],
+    // Fournisseur en panne (disjoncteur, lot garde-fous) : rien n'a été compté.
+    paused: [t.result.pausedTitle, t.result.pausedTip],
   }[reason];
 
   return (

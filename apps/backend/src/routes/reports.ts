@@ -15,10 +15,12 @@ const createReportSchema = z.object({
 
 // Signalements : enregistrés pour la file de modération (lot 5). Chantier 3
 // (point 6 de la feuille de route V1, règle 1.2 d'Apple) : chaque
-// signalement prévient le fondateur (avertissement Sentry), et un contenu
-// signalé par plusieurs personnes différentes est masqué aussitôt, en
-// attendant la décision d'un administrateur (lib/autoHide.ts, migration
-// 0030). La personne qui signale ne voit plus ce contenu (lib/reportedByViewer.ts).
+// signalement prévient le fondateur (UNE alerte Sentry, tag « alerte » :
+// le type de contenu et le motif, jamais la personne qui signale ni sa
+// note), et un contenu signalé par plusieurs personnes différentes est
+// masqué aussitôt, en attendant la décision d'un administrateur
+// (lib/autoHide.ts, migration 0030). La personne qui signale ne voit plus
+// ce contenu (lib/reportedByViewer.ts).
 export default async function reportsRoutes(fastify: FastifyInstance) {
   fastify.post(
     "/api/reports",
