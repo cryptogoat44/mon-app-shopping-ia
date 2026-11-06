@@ -1,14 +1,14 @@
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { describe, expect, it, vi } from "vitest";
-import { APP_GROUP, APP_SCHEME, SHARE_KEY, isShareOpeningUrl } from "../src/lib/shared-item";
+import { APP_GROUP, APP_SCHEME, PENDING_SHARE_FILE, SHARE_KEY, isShareOpeningUrl } from "../src/lib/shared-item";
 import { sanitizeProps } from "../src/lib/analytics-events";
 
 // Lot « partager vers Spotto » : réglages de l'extension de partage d'iOS
 // (app.json) et retouches de plugins/extension-partage.js, appliquées aux
 // fichiers que produit réellement expo-share-intent.
 const require = createRequire(import.meta.url);
-const { nommer, declarerGroupe } = require("../plugins/extension-partage.js");
+const { nommer, declarerGroupe, retoucherControleur, FICHIER_EN_ATTENTE } = require("../plugins/extension-partage.js");
 const fichiersExtension = require("expo-share-intent/plugin/build/ios/writeIosShareExtensionFiles");
 
 const expo = JSON.parse(readFileSync(new URL("../app.json", import.meta.url), "utf8")).expo;
@@ -75,9 +75,29 @@ describe("fichiers de l'extension, tels que le module les écrit puis retouchés
     vi.restoreAllMocks();
   });
 
+  it("repli (lot « app iPhone prête ») : l'adresse d'ouverture est déposée, avant d'essayer d'ouvrir l'app, dans le fichier que l'app relit", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const brut: string = fichiersExtension.getShareExtensionViewControllerContent(expo.scheme, APP_GROUP, true);
+    const swift: string = retoucherControleur(brut);
+    expect(FICHIER_EN_ATTENTE).toBe(PENDING_SHARE_FILE);
+    expect(swift).toContain(`dossier.appendingPathComponent("${PENDING_SHARE_FILE}")`);
+    expect(swift).toContain("containerURL(forSecurityApplicationGroupIdentifier: hostAppGroupIdentifier)");
+    const depot = swift.indexOf(PENDING_SHARE_FILE);
+    expect(depot).toBeGreaterThan(swift.indexOf("let url = URL(string:"));
+    expect(depot).toBeLessThan(swift.indexOf("application.open(url)"));
+    // Message d'échec : une phrase claire, en français ou en anglais selon l'iPhone.
+    expect(swift).not.toContain('"Error loading application: ');
+    expect(swift).toContain('Locale.preferredLanguages.first?.hasPrefix("fr") == true ? "Spotto n’a pas pu s’ouvrir.');
+    expect(swift).toContain('"Spotto couldn’t open.');
+    // La retouche ne s'applique qu'une fois.
+    expect(retoucherControleur(swift)).toBe(swift);
+    vi.restoreAllMocks();
+  });
+
   it("format du module changé : retouche refusée (le prebuild s'arrête)", () => {
     expect(nommer("<plist><dict/></plist>", "Spotto")).toBeNull();
     expect(declarerGroupe("<plist><dict/></plist>")).toBeNull();
+    expect(retoucherControleur("class ShareViewController {}")).toBeNull();
   });
 });
 

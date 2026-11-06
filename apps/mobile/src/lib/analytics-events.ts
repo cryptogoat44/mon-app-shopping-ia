@@ -26,6 +26,10 @@ const VISIBILITY = oneOf(PRIVACY_LEVELS);
 const VIDEO_SOURCE = oneOf(["library", "file", "latest", "share"]);
 
 export const ANALYTICS_EVENTS = {
+  // Lot « app iPhone prête » (point 21) : ouverture de l'app, pour savoir si
+  // les gens reviennent (rétention J1, J7). « launch » : au lancement, une
+  // fois ; « resume » : retour dans l'app après 30 minutes au moins (app-opening.ts).
+  app_opened: { context: oneOf(["launch", "resume"]) },
   signup_completed: { locale: oneOf(["fr", "en"]) },
   spot_started: { source: oneOf(["link", "photo"]), platform: oneOf(["tiktok", "instagram", "pinterest", "photo", "other"]) },
   // Ciblage : zone recadrée, capture importée. Plus de texte depuis le petit lot (2026-10-25) : les mots ne partent plus avec l'image.

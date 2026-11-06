@@ -9,7 +9,9 @@ import {
   normalizeSharedLink,
   onSharedItemArrival,
   onSharedItemSignedOut,
+  PENDING_SHARE_MAX_AGE_MS,
   peekSharedItem,
+  pendingShareOpening,
   receiveSharedItem,
   sharedMessageDurationMs,
   sharedRefusalMessage,
@@ -411,5 +413,19 @@ describe("partage reçu sans être connecté (accueil)", () => {
     const say = vi.fn();
     onSharedItemSignedOut(say);
     expect(say).not.toHaveBeenCalled();
+  });
+});
+
+describe("repli : partage resté en attente (lot « app iPhone prête »)", () => {
+  const NOW = Date.UTC(2026, 10, 6, 12);
+  const url = "spotto://dataUrl=spottoShareKey?nonce=A1#media";
+
+  it("seule une adresse d'ouverture exacte, de moins de 24 heures, est relue", () => {
+    expect(pendingShareOpening(`${url}\n`, NOW - 60_000, NOW)).toBe(url);
+    expect(pendingShareOpening(url, null, NOW)).toBe(url);
+    expect(pendingShareOpening(url, NOW - PENDING_SHARE_MAX_AGE_MS - 1, NOW)).toBeNull();
+    expect(pendingShareOpening("spotto://dataUrl=spottoShareKey?nonce=A1#inconnu", NOW, NOW)).toBeNull();
+    expect(pendingShareOpening("spotto://nouveau-mot-de-passe", NOW, NOW)).toBeNull();
+    expect(pendingShareOpening("", NOW, NOW)).toBeNull();
   });
 });

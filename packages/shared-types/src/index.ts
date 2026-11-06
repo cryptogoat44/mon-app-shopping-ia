@@ -988,3 +988,26 @@ export interface BlockedUser {
   avatarUrl: string | null;
   blockedAt: string;
 }
+
+// --- Lot « app iPhone prête » (chantier 4, point 11) : mise à jour obligatoire ---
+
+/** En-tête par lequel l'app iPhone donne son numéro de build (CFBundleVersion)
+ * à chaque appel du serveur. Le site ne l'envoie jamais. */
+export const APP_BUILD_HEADER = "x-spotto-build";
+
+/** Code d'erreur (réponse 426) : ce build est sous le minimum réglé sur le serveur. */
+export const UPDATE_REQUIRED_ERROR = "update_required";
+
+/** Réponse 426 : l'adresse de Spotto sur l'App Store, quand elle est réglée. */
+export interface UpdateRequiredErrorBody extends ApiErrorBody {
+  storeUrl?: string | null;
+}
+
+/** GET /api/app/version (sans compte) : build minimal exigé de l'app iPhone
+ * (null : aucun minimum, réglage par défaut) et adresse de la fiche App Store. */
+export interface AppVersionInfo {
+  ios: {
+    minimumBuild: number | null;
+    storeUrl: string | null;
+  };
+}
