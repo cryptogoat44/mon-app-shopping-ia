@@ -2,6 +2,7 @@ import type { Locale } from "./locale.js";
 import { COMMENT_MAX_LENGTH } from "@monapp/shared-types";
 import { RATE_LIMITED_MESSAGE } from "../plugins/rateLimit.js";
 import { SEARCH_CAPACITY_MESSAGES } from "./searchCapacity.js";
+import { UPDATE_REQUIRED_MESSAGE } from "./appVersion.js";
 
 // Messages d'erreur renvoyés à l'app, dans la langue de l'utilisateur (lot 3).
 // Les routes écrivent leurs messages en français ; juste avant l'envoi, un
@@ -143,6 +144,8 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Une image de la vidéo est trop lourde.": "One of the video frames is too large.",
   "Vous avez atteint la limite quotidienne d'analyses automatiques. Choisissez l'image avec le curseur, ou réessayez demain.":
     "You've reached the daily limit for automatic analyses. Choose the frame with the slider, or try again tomorrow.",
+  // Mise à jour obligatoire de l'app iPhone (lot « app iPhone prête », lib/appVersion.ts).
+  [UPDATE_REQUIRED_MESSAGE]: "This version of Spotto is no longer supported. Please update the app from the App Store.",
 };
 
 /** Message dans la langue voulue. Un message inconnu (par exemple un texte
