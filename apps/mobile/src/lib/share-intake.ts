@@ -11,12 +11,22 @@
 // (plantage de l'app). Ici, chaque partage est lu une fois, avec l'adresse qui
 // vient de l'ouvrir. Version site : share-intake.web.ts (rien à recevoir).
 import { useEffect } from "react";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import * as Linking from "expo-linking";
 import { Directory, File, Paths } from "expo-file-system";
 import { ShareIntentModule, parseShareIntent } from "expo-share-intent";
 import { discardLocalFile } from "./video-frames";
-import { APP_GROUP, SHARE_KEY, classifySharedItem, isShareOpeningUrl, peekSharedItem, receiveSharedItem, type SharedItem } from "./shared-item";
+import {
+  APP_GROUP,
+  PENDING_SHARE_FILE,
+  SHARE_KEY,
+  classifySharedItem,
+  isShareOpeningUrl,
+  peekSharedItem,
+  pendingShareOpening,
+  receiveSharedItem,
+  type SharedItem,
+} from "./shared-item";
 
 // Un partage après l'autre : le nettoyage du groupe d'apps ne croise jamais un déplacement en cours.
 let queue: Promise<void> = Promise.resolve();
@@ -104,6 +114,25 @@ async function keep(item: SharedItem): Promise<void> {
   if (replaced && (replaced.kind === "image" || replaced.kind === "video")) discardLocalFile(replaced.uri);
 }
 
+/** Repli (lot « app iPhone prête ») : l'adresse d'un partage que l'extension
+ * n'a pas pu ouvrir, lue une seule fois (le fichier est effacé aussitôt). Rien,
+ * ou un contenu inattendu : null. Un partage reçu normalement efface aussi ce
+ * fichier, avec le reste du groupe d'apps (clearSharedContainer). */
+function takePendingShareUrl(): string | null {
+  try {
+    const container = Paths.appleSharedContainers[APP_GROUP];
+    if (!container) return null;
+    const file = new File(container, PENDING_SHARE_FILE);
+    if (!file.exists) return null;
+    const content = file.textSync();
+    const modifiedAt = file.lastModified;
+    file.delete();
+    return pendingShareOpening(content, modifiedAt, Date.now());
+  } catch {
+    return null;
+  }
+}
+
 function accept(item: SharedItem): void {
   // Un échec imprévu n'arrête pas les partages suivants.
   queue = queue.then(() => keep(item)).catch(() => undefined);
@@ -141,11 +170,19 @@ export function startShareIntake(): () => void {
     accept({ kind: "refused", reason: "unreadable" });
   });
   read(Linking.getLinkingURL());
+  // Repli : Spotto ouvert à la main alors qu'un partage attend (la réouverture
+  // par l'extension a échoué). La même adresse qu'une ouverture par
+  // l'extension : elle n'est lue qu'une fois (lastUrl), quel que soit l'ordre.
+  read(takePendingShareUrl());
   const links = Linking.addEventListener("url", ({ url }) => read(url));
+  const returns = AppState.addEventListener("change", (state) => {
+    if (state === "active") read(takePendingShareUrl());
+  });
   return () => {
     changes.remove();
     errors.remove();
     links.remove();
+    returns.remove();
   };
 }
 

@@ -44,34 +44,81 @@ export async function downloadThumbnail(url: string): Promise<Buffer> {
   return buffer;
 }
 
+/** Zone en pixels (gauche, haut, largeur, hauteur). */
+interface PixelRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/** La zone vue à l'écran (image redressée) retrouvée dans l'image telle
+ * qu'elle est stockée, pour chacune des 8 orientations EXIF (largeur et
+ * hauteur stockées : `storedWidth`, `storedHeight`). Exporté pour les tests. */
+export function storedRect(orientation: number, storedWidth: number, storedHeight: number, shown: PixelRect): PixelRect {
+  const { left, top, width, height } = shown;
+  switch (orientation) {
+    case 2: // miroir horizontal
+      return { left: storedWidth - left - width, top, width, height };
+    case 3: // demi-tour
+      return { left: storedWidth - left - width, top: storedHeight - top - height, width, height };
+    case 4: // miroir vertical
+      return { left, top: storedHeight - top - height, width, height };
+    case 5: // transposée
+      return { left: top, top: left, width: height, height: width };
+    case 6: // quart de tour (photo verticale d'iPhone)
+      return { left: top, top: storedHeight - left - width, width: height, height: width };
+    case 7: // transposée inverse
+      return { left: storedWidth - top - height, top: storedHeight - left - width, width: height, height: width };
+    case 8: // quart de tour dans l'autre sens
+      return { left: storedWidth - top - height, top: left, width: height, height: width };
+    default:
+      return shown;
+  }
+}
+
 /** Recadre l'image sur la zone choisie (proportions 0–1), la redresse selon
  * son orientation EXIF (photos d'iPhone), la limite à 1 600 px et la
  * convertit en JPEG. Sans zone, l'image entière est seulement normalisée.
  * Relève ImageSourceError si le fichier n'est pas une image lisible (le type
  * déclaré par l'app n'est jamais cru sur parole : c'est sharp qui décode),
- * pas d'un format permis ou trop grande (lib/imageSafety.ts). */
+ * pas d'un format permis ou trop grande (lib/imageSafety.ts).
+ * Mémoire (lot garde-fous, 2026-11-05) : avant, l'image entière était
+ * redressée et réencodée, puis décodée une seconde fois : ≈ 545 Mo au pic pour
+ * une photo de 48 Mpx, sur un serveur de 512 Mo. Désormais, une seule chaîne
+ * sharp, et rien n'est jamais tourné en entier : la zone est découpée dans
+ * l'image telle qu'elle est stockée (storedRect), puis redressée et réduite ;
+ * sans zone, sharp décode l'image déjà réduite. Mesuré sur 48 Mpx : 125 à
+ * 160 Mo au pic selon la zone (dont ≈ 85 Mo pour Node et sharp chargés), et
+ * exactement les mêmes pixels qu'en redressant d'abord (même zone, même
+ * sens, mêmes dimensions). Dimensions et orientation lues dans l'en-tête
+ * seul (metadata), sans décoder l'image. */
 export async function prepareImageForAnalysis(input: Buffer, crop: CropRect | null): Promise<Buffer> {
   // Format vérifié sur les premiers octets, AVANT sharp : un SVG n'est
   // jamais lu, même annoncé comme une photo.
   if (!imageFormatOf(input)) throw new ImageSourceError("Image illisible");
-  let image: Sharp;
-  let width: number;
-  let height: number;
+  const options = { failOn: "error", limitInputPixels: MAX_INPUT_PIXELS } as const;
+  let storedWidth: number | undefined;
+  let storedHeight: number | undefined;
+  let orientation: number;
   try {
-    // rotate() sans argument applique l'orientation EXIF avant tout calcul
-    // de dimensions — sinon une photo verticale d'iPhone serait recadrée
-    // sur une zone tournée de 90°.
-    const oriented = await sharp(input, { failOn: "error", limitInputPixels: MAX_INPUT_PIXELS })
-      .rotate()
-      .toBuffer({ resolveWithObject: true });
-    image = sharp(oriented.data, { limitInputPixels: MAX_INPUT_PIXELS });
-    width = oriented.info.width;
-    height = oriented.info.height;
+    const meta = await sharp(input, options).metadata();
+    storedWidth = meta.width;
+    storedHeight = meta.height;
+    orientation = meta.orientation ?? 1;
   } catch {
     throw new ImageSourceError("Image illisible");
   }
+  if (!storedWidth || !storedHeight) throw new ImageSourceError("Image illisible");
 
+  let image: Sharp;
   if (crop) {
+    // La zone est donnée sur l'image telle qu'affichée, orientation EXIF
+    // appliquée (5 à 8 : largeur et hauteur échangées) — sinon une photo
+    // verticale d'iPhone serait recadrée sur une zone tournée de 90°.
+    const swapped = orientation >= 5 && orientation <= 8;
+    const width = swapped ? storedHeight : storedWidth;
+    const height = swapped ? storedWidth : storedHeight;
     const left = Math.round(crop.x * width);
     const top = Math.round(crop.y * height);
     const cropWidth = Math.min(Math.round(crop.width * width), width - left);
@@ -79,11 +126,22 @@ export async function prepareImageForAnalysis(input: Buffer, crop: CropRect | nu
     if (cropWidth < MIN_CROP_PIXELS || cropHeight < MIN_CROP_PIXELS) {
       throw new ImageSourceError("Zone trop petite");
     }
-    image = image.extract({ left, top, width: cropWidth, height: cropHeight });
+    // Découpée dans l'image stockée, puis redressée (autoOrient après extract).
+    image = sharp(input, options)
+      .extract(storedRect(orientation, storedWidth, storedHeight, { left, top, width: cropWidth, height: cropHeight }))
+      .autoOrient();
+  } else {
+    image = sharp(input, { ...options, autoOrient: true });
   }
 
-  return image
-    .resize({ width: MAX_ANALYSIS_EDGE, height: MAX_ANALYSIS_EDGE, fit: "inside", withoutEnlargement: true })
-    .jpeg({ quality: 88 })
-    .toBuffer();
+  try {
+    return await image
+      .resize({ width: MAX_ANALYSIS_EDGE, height: MAX_ANALYSIS_EDGE, fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 88 })
+      .toBuffer();
+  } catch {
+    // Le décodage se fait ici : un fichier tronqué ou corrompu est une image
+    // illisible (400), comme avant, jamais une erreur du serveur.
+    throw new ImageSourceError("Image illisible");
+  }
 }

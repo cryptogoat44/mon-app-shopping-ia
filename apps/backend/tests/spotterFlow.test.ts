@@ -197,7 +197,8 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     // L'image n'existe que pendant l'appel SerpApi : on la lit à ce moment-là.
     let analysed: Buffer | null = null;
     searchMock.mockImplementationOnce(async () => {
-      const { data } = await app.supabaseAdmin.storage.from("screenshots").download(`${user.id}/${search.id}.jpg`);
+      // Lot garde-fous : rangée sans le compte dans son nom (le lien part chez SerpApi).
+      const { data } = await app.supabaseAdmin.storage.from("screenshots").download(`analyses/${search.id}.jpg`);
       analysed = Buffer.from(await data!.arrayBuffer());
       return found([MATCH]);
     });
@@ -230,10 +231,13 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     const ko = await prepare("https://www.tiktok.com/@x/video/1");
     expect((await run(ko.id, {})).json().status).toBe("failed");
 
-    const { data } = await app.supabaseAdmin.storage.from("screenshots").list(user.id);
+    const { data } = await app.supabaseAdmin.storage.from("screenshots").list("analyses", { limit: 1000 });
     const names = (data ?? []).map((f) => f.name);
     expect(names).not.toContain(`${ok.id}.jpg`);
     expect(names).not.toContain(`${ko.id}.jpg`);
+    // Rien non plus sous l'ancien nom, dans le dossier du compte.
+    const { data: legacy } = await app.supabaseAdmin.storage.from("screenshots").list(user.id);
+    expect(legacy ?? []).toHaveLength(0);
     const { data: row } = await app.supabaseAdmin.from("product_searches").select("screenshot_url").eq("id", ok.id).single();
     expect(row!.screenshot_url).toBeNull();
   });

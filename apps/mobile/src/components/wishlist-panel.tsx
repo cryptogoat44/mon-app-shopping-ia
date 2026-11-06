@@ -14,6 +14,7 @@ import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { SpotImage } from "@/components/spot-image";
 import { SegmentedChoice } from "@/components/segmented-choice";
 import { ReceivedPieces } from "@/components/received-pieces";
+import { isAffiliateLink } from "@/lib/affiliate-link";
 import { themedStyles } from "@/theme/themed-styles";
 
 function displayPrice(item: Piece): string | null {
@@ -156,7 +157,7 @@ function MyWishlist() {
                       merchantName={item.merchantName}
                       matchId={item.productMatchId}
                       context="wishlist"
-                      isAffiliate={item.affiliateUrl !== null && item.affiliateUrl !== item.merchantUrl}
+                      isAffiliate={isAffiliateLink(item)}
                       compact
                     />
                   ) : null}

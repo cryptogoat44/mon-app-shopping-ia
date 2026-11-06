@@ -13,12 +13,15 @@ import { StartupWaiting } from "@/components/connecting";
 import { useShareIntake } from "@/lib/share-intake";
 import { useSharedItemWaitingNotice } from "@/lib/use-shared-item";
 import { useAppFonts } from "@/theme/fonts";
+import { useMinimumVersionCheck, useUpdateRequired } from "@/lib/use-app-update";
+import { UpdateRequiredScreen } from "@/components/update-required";
 import { color, getActiveScheme } from "@/theme/tokens";
 import { APP_NAME_DISPLAY } from "@/constants/brand";
 // Capture l'adresse d'arrivée (jetons du lien « mot de passe oublié ») avant
 // que la navigation ne la réécrive.
 import "@/lib/initial-url";
 import { initErrorTracking } from "@/lib/error-tracking";
+import { EmailConfirmationLanding } from "@/components/email-confirmation-landing";
 
 // Suivi des erreurs (site : lot 2 ; iPhone : lot 3bis) : actif seulement avec une adresse Sentry UE.
 initErrorTracking();
@@ -48,10 +51,17 @@ function RootNavigator() {
   const route = fontsReady ? resolveRootRoute({ session, profileStatus, profile }) : "splash";
   // Partage reçu sans être connecté : il s'ouvrira après la connexion, on le dit.
   useSharedItemWaitingNotice(route === "welcome");
+  // App iPhone sous le build minimal réglé sur le serveur (lot « app iPhone
+  // prête ») : « Mettez à jour Spotto » remplace toute l'app, connecté ou non.
+  useMinimumVersionCheck();
+  const updateRequired = useUpdateRequired();
+  const showUpdate = updateRequired !== null && fontsReady;
 
   useEffect(() => {
-    if (route !== "splash") SplashScreen.hideAsync();
-  }, [route]);
+    if (route !== "splash" || showUpdate) SplashScreen.hideAsync();
+  }, [route, showUpdate]);
+
+  if (showUpdate) return <UpdateRequiredScreen storeUrl={updateRequired.storeUrl} />;
 
   // Site : un écran d'attente pendant le démarrage, jamais une page vide ;
   // iPhone : l'écran de démarrage du système reste affiché.
@@ -90,6 +100,8 @@ function RootNavigator() {
           {/* Documents juridiques : lisibles par tous, connecté ou non (bloc 5). */}
           <Stack.Screen name="conditions" />
           <Stack.Screen name="confidentialite" />
+          {/* Aide et contact (chantier 3) : lisible par tous, adresse d'assistance de l'App Store. */}
+          <Stack.Screen name="aide" />
         </Stack>
       </View>
     </ThemeProvider>
@@ -111,6 +123,8 @@ export default function RootLayout() {
       <AnalyticsSession />
       <PreferencesProvider>
         <ToastProvider>
+          {/* Chantier 3 : lien de confirmation d'un e-mail ouvert sur le site (flux PKCE). */}
+          <EmailConfirmationLanding />
           <RootNavigator />
         </ToastProvider>
       </PreferencesProvider>

@@ -6,12 +6,18 @@
 // Calculé à chaque lancement à partir de la table des recherches : aucun état
 // en mémoire (le serveur gratuit redémarre souvent), aucune tâche périodique,
 // aucune nouvelle table.
-// Mise en ligne 1 : en OBSERVATION seulement. Une ligne « Disjoncteur » (des
-// nombres) quand il se serait ouvert, rouvert ou fermé, et à chaque lancement
-// qu'il aurait bloqué ; rien n'est bloqué. Il bloquera à la mise en ligne 2.
+// Mise en ligne 1 : en observation seulement. Depuis le lot garde-fous
+// (2026-11-05, point 15 de la feuille de route V1), il BLOQUE : pendant la
+// pause, un lancement est refusé AVANT tout appel (503, « search_paused ») —
+// la recherche reste en attente, rien n'est réservé ni compté dans la part
+// de la personne — et chaque ouverture envoie une alerte (lib/alerts.ts).
+// Une ligne « Disjoncteur » (des nombres) quand il s'ouvre, se rouvre ou se
+// ferme, et à chaque lancement bloqué. Disjoncteur illisible : rien n'est
+// bloqué (le plafond des recherches protège toujours la dépense).
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { RecognitionMethod } from "@monapp/shared-types";
+import { raiseAlert } from "./alerts.js";
 
 export const BREAKER_RULES = {
   /** Les recherches des 30 dernières minutes… */
@@ -132,35 +138,69 @@ export async function readJudgedSearches(fastify: FastifyInstance, kind: Breaker
 /** Message de la ligne de journal du disjoncteur, lue par compteurs-ia. */
 export const BREAKER_LOG_MESSAGE = "Disjoncteur";
 
+const HOUR_MS = 60 * 60_000;
+
+/** Lancement refusé pendant la pause (« blocked ») ; « would_block » : écrit par le serveur d'avant, en observation. */
+export type BreakerLogEvent = BreakerEvent | "blocked";
+
 /** Champs de la ligne « Disjoncteur » : l'événement et des nombres, jamais de compte ni d'identifiant. */
-export function breakerLogFields(kind: BreakerKind, provider: string, event: BreakerEvent | "would_block", state: BreakerState) {
-  return { provider, searchType: kind, mode: "observation" as const, event, judged: state.judged, bad: state.bad, minutesLeft: state.minutesLeft };
+export function breakerLogFields(kind: BreakerKind, provider: string, event: BreakerLogEvent, state: BreakerState) {
+  return { provider, searchType: kind, mode: "block" as const, event, judged: state.judged, bad: state.bad, minutesLeft: state.minutesLeft };
 }
 
-function logBreaker(fastify: FastifyInstance, kind: BreakerKind, provider: string, event: BreakerEvent | "would_block", state: BreakerState): void {
+function logBreaker(fastify: FastifyInstance, kind: BreakerKind, provider: string, event: BreakerLogEvent, state: BreakerState): void {
   fastify.log.info(breakerLogFields(kind, provider, event, state), BREAKER_LOG_MESSAGE);
 }
 
-/** Au lancement : note la recherche que le disjoncteur aurait bloquée. Ne
- * bloque jamais (observation) ; une lecture impossible est seulement notée. */
-export async function observeBreakerAtLaunch(fastify: FastifyInstance, kind: BreakerKind, provider: string): Promise<void> {
+/** Réponse d'un lancement bloqué : la recherche reste en attente, rien n'est
+ * compté ; l'app affiche son propre texte (code « search_paused »). */
+export const SEARCH_PAUSED = {
+  error: "search_paused",
+  message: "La recherche est en pause : notre fournisseur de recherche rencontre une panne. Nous sommes prévenus. Réessayez dans quelques minutes.",
+} as const;
+
+/** Au lancement : la pause en cours (minutes restantes), ou null si la
+ * recherche peut partir. Chaque lancement bloqué est noté. Disjoncteur
+ * illisible : null (rien n'est bloqué), et une ligne d'avertissement.
+ * Sous Vitest (NODE_ENV « test »), il ne bloque pas, comme les limites
+ * (plugins/rateLimit.ts) : les tests simulent beaucoup de pannes du
+ * fournisseur, dans la même base, et se bloqueraient les uns les autres. */
+export async function breakerPause(fastify: FastifyInstance, kind: BreakerKind, provider: string): Promise<{ minutesLeft: number } | null> {
+  if (process.env.NODE_ENV === "test") return null;
   const now = Date.now();
   try {
     const state = breakerState(await readJudgedSearches(fastify, kind, now), now);
-    if (state.open) logBreaker(fastify, kind, provider, "would_block", state);
+    if (!state.open) return null;
+    logBreaker(fastify, kind, provider, "blocked", state);
+    return { minutesLeft: state.minutesLeft ?? 1 };
   } catch (error) {
-    fastify.log.warn({ error }, "Disjoncteur illisible (observation, au lancement)");
+    fastify.log.warn({ error }, "Disjoncteur illisible au lancement : rien n'est bloqué");
+    return null;
   }
 }
 
-/** Après l'issue d'une recherche : note l'ouverture, la réouverture ou la fermeture qu'elle a causée. */
+/** Après l'issue d'une recherche : note l'ouverture, la réouverture ou la
+ * fermeture qu'elle a causée ; une ouverture ou une réouverture envoie une alerte. */
 export async function observeBreakerAfter(fastify: FastifyInstance, kind: BreakerKind, provider: string, searchId: string): Promise<void> {
   const now = Date.now();
   try {
     const searches = await readJudgedSearches(fastify, kind, now);
     const event = breakerEvent(searches, searchId, now);
-    if (event) logBreaker(fastify, kind, provider, event, breakerState(searches, now));
+    if (!event) return;
+    const state = breakerState(searches, now);
+    logBreaker(fastify, kind, provider, event, state);
+    if (event !== "closed") {
+      raiseAlert(fastify.log, {
+        kind: "disjoncteur",
+        message: `Disjoncteur ${event === "opened" ? "ouvert" : "rouvert"} : recherche par image en pause 15 minutes (${state.bad} mauvaises sur les ${state.judged} dernières)`,
+        tags: { fournisseur: provider, evenement: event },
+        // Une alerte par heure au plus : une panne longue rouvre la pause toutes
+        // les 15 minutes (recherche de test mauvaise), sans alerter à chaque fois.
+        onceKey: `disjoncteur:${kind}:${Math.floor(now / HOUR_MS)}`,
+        onceMs: HOUR_MS,
+      });
+    }
   } catch (error) {
-    fastify.log.warn({ error }, "Disjoncteur illisible (observation, après la recherche)");
+    fastify.log.warn({ error }, "Disjoncteur illisible après la recherche");
   }
 }

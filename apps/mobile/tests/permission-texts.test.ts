@@ -20,13 +20,13 @@ function texte(objet: unknown, cle: string): string {
   return valeur;
 }
 
-/** Texte « photosPermission » d'un module dans app.json. */
-function textePlugin(nom: string): string {
+/** Texte « photosPermission » (ou une autre clé) d'un module dans app.json. */
+function textePlugin(nom: string, cle = "photosPermission"): string {
   const plugins = champ(champ(lire("../app.json"), "expo"), "plugins");
   if (!Array.isArray(plugins)) throw new Error("plugins absents");
   const entree: unknown = plugins.find((p: unknown) => Array.isArray(p) && p[0] === nom);
   if (!Array.isArray(entree)) throw new Error(`${nom} absent`);
-  return texte(entree[1], "photosPermission");
+  return texte(entree[1], cle);
 }
 
 describe("texte de l'autorisation d'accès aux photos (iOS)", () => {
@@ -39,5 +39,21 @@ describe("texte de l'autorisation d'accès aux photos (iOS)", () => {
   it("présent en anglais, et traduit", () => {
     const en = texte(lire("../locales/en.json"), "NSPhotoLibraryUsageDescription");
     expect(en).not.toBe(texte(lire("../locales/fr.json"), "NSPhotoLibraryUsageDescription"));
+  });
+});
+
+// Lot « app iPhone prête » (point 14) : bouton « Prendre une photo » du Spotter.
+describe("texte de l'autorisation d'accès à l'appareil photo (iOS)", () => {
+  it("le même en français dans app.json et locales/fr.json ; présent et traduit en anglais", () => {
+    const fr = texte(lire("../locales/fr.json"), "NSCameraUsageDescription");
+    expect(textePlugin("expo-image-picker", "cameraPermission")).toBe(fr);
+    const en = texte(lire("../locales/en.json"), "NSCameraUsageDescription");
+    expect(en).not.toBe(fr);
+  });
+
+  it("le micro n'est jamais demandé", () => {
+    const plugins = champ(champ(lire("../app.json"), "expo"), "plugins");
+    const entree = (plugins as unknown[]).find((p: unknown) => Array.isArray(p) && p[0] === "expo-image-picker") as [string, Record<string, unknown>];
+    expect(entree[1].microphonePermission).toBe(false);
   });
 });

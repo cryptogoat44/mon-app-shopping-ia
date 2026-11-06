@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { env } from "../env.js";
+import { chunks, readAll } from "./pagedReads.js";
 
 // Liste centrale unique des buckets de stockage contenant des fichiers
 // rangés sous `${userId}/...` — tout bucket manquant ici serait oublié
@@ -86,13 +87,117 @@ export async function emptyUserFolder(files: BucketFiles, bucket: string, userId
 // Vide, dans chaque bucket de USER_STORAGE_BUCKETS, tous les fichiers d'un
 // utilisateur — appelé à la suppression de compte pour ne laisser aucune
 // trace orpheline sur le stockage malgré la suppression en base. Ne lève
-// jamais d'erreur de stockage : le bilan dit ce qui est resté.
+// jamais d'erreur de stockage : le bilan dit ce qui est resté. Les images
+// analysées rangées sans le compte dans leur nom (dossier « analyses »,
+// depuis le lot garde-fous) sont effacées aussi, recherche par recherche.
 export async function deleteUserStorageFiles(fastify: FastifyInstance, userId: string): Promise<StorageCleanup[]> {
   const reports: StorageCleanup[] = [];
   for (const bucket of USER_STORAGE_BUCKETS) {
     reports.push(await emptyUserFolder(fastify.supabaseAdmin.storage.from(bucket), bucket, userId));
   }
+  reports.push(await deleteUserAnalysisImages(fastify, userId));
   return reports;
+}
+
+// ---------------------------------------------------------------------
+// Images analysées (Spotter) : l'image recadrée est déposée le temps que le
+// fournisseur de recherche la lise, par un lien signé de 5 minutes, puis
+// effacée. Depuis le lot garde-fous (2026-11-05), son nom ne contient plus
+// l'identifiant du compte (ce lien part chez SerpApi, puis chez Google) :
+// « analyses/<recherche>.jpg ». Avant : « <compte>/<recherche>.jpg », encore
+// effacé par le balayage du dossier du compte (emptyUserFolder) et par
+// markInterrupted.
+// ---------------------------------------------------------------------
+
+/** Bucket privé des images analysées. */
+export const ANALYSIS_BUCKET = "screenshots";
+/** Dossier fixe des images analysées : aucun identifiant de compte dans le chemin. */
+export const ANALYSIS_FOLDER = "analyses";
+/** Au-delà d'une heure, une image analysée n'est plus lue par personne (lien
+ * de 5 minutes, recherche de 15 s au plus) : elle est restée par accident
+ * (panne au mauvais moment, mise en ligne pendant une recherche). */
+export const ANALYSIS_IMAGE_MAX_AGE_MS = 60 * 60 * 1000;
+/** Fichiers examinés à chaque purge (les plus anciens d'abord). */
+const ANALYSIS_PURGE_PAGE = 100;
+
+export function analysisImagePath(searchId: string): string {
+  return `${ANALYSIS_FOLDER}/${searchId}.jpg`;
+}
+
+/** Ancien nom, dans le dossier du compte : seulement pour effacer une image restée d'avant le lot garde-fous. */
+export function legacyAnalysisImagePath(userId: string, searchId: string): string {
+  return `${userId}/${searchId}.jpg`;
+}
+
+/** Ce dont la purge a besoin du bucket : le client Supabase, ou un faux dans les tests. */
+export interface AnalysisFiles {
+  list(
+    path: string,
+    options: { limit: number; offset: number; sortBy: { column: "created_at"; order: "asc" } }
+  ): Promise<{ data: { name: string; id: string | null; created_at?: string | null }[] | null; error: unknown }>;
+  remove(paths: string[]): Promise<{ error: unknown }>;
+}
+
+/** Journal de la purge : des nombres seulement. */
+export interface PurgeLog {
+  info(fields: Record<string, unknown>, message: string): void;
+  warn(fields: Record<string, unknown>, message: string): void;
+}
+
+/** Efface les images analysées restées plus d'une heure (au plus 100 par
+ * appel, les plus anciennes d'abord), à chaque préparation de recherche,
+ * comme la purge du cache. Ne lève jamais d'erreur : un échec est seulement
+ * journalisé (des nombres, jamais un chemin), la purge suivante reprendra.
+ * Renvoie le nombre d'images effacées. */
+export async function purgeStaleAnalysisImages(files: AnalysisFiles, log: PurgeLog, now = Date.now()): Promise<number> {
+  try {
+    const { data, error } = await files.list(ANALYSIS_FOLDER, { limit: ANALYSIS_PURGE_PAGE, offset: 0, sortBy: { column: "created_at", order: "asc" } });
+    if (error || !data) {
+      log.warn({ code: null }, "Images analysées restées : dossier illisible, purge remise à plus tard");
+      return 0;
+    }
+    const cutoff = now - ANALYSIS_IMAGE_MAX_AGE_MS;
+    const stale = data
+      .filter((entry) => entry.id !== null && typeof entry.created_at === "string" && Date.parse(entry.created_at) < cutoff)
+      .map((entry) => `${ANALYSIS_FOLDER}/${entry.name}`);
+    if (stale.length === 0) return 0;
+    const removed = await files.remove(stale);
+    if (removed.error) {
+      log.warn({ count: stale.length }, "Images analysées restées : effacement refusé, purge remise à plus tard");
+      return 0;
+    }
+    log.info({ removed: stale.length }, "Images analysées restées plus d'une heure : effacées");
+    return stale.length;
+  } catch {
+    log.warn({ code: null }, "Images analysées restées : purge impossible");
+    return 0;
+  }
+}
+
+/** Efface les images analysées des recherches d'un compte (nouveau nom, sans
+ * le compte dedans), avant la suppression du compte : la base dit encore
+ * quelles recherches sont les siennes. Par lots de 100, avec STORAGE_ATTEMPTS
+ * essais ; une image absente n'est pas une erreur. `removed` compte les
+ * chemins demandés (la plupart des images sont déjà effacées). */
+export async function deleteUserAnalysisImages(fastify: FastifyInstance, userId: string): Promise<StorageCleanup> {
+  const report: StorageCleanup = { bucket: ANALYSIS_BUCKET, removed: 0, failed: 0, unreadable: false };
+  let searchIds: string[];
+  try {
+    const rows = await readAll<{ id: string }>(
+      "Recherches du compte (images analysées)",
+      () => fastify.supabaseAdmin.from("product_searches").select("id", { count: "exact" }).eq("user_id", userId),
+      ["id"]
+    );
+    searchIds = rows.map((row) => row.id);
+  } catch {
+    return { ...report, unreadable: true };
+  }
+  const files = fastify.supabaseAdmin.storage.from(ANALYSIS_BUCKET);
+  for (const part of chunks(searchIds)) {
+    if (await removeWithAttempts(files, part.map(analysisImagePath))) report.removed += part.length;
+    else report.failed += part.length;
+  }
+  return report;
 }
 
 /** Efface des fichiers précis (adresses publiques), chacun seulement s'il est
@@ -163,15 +268,13 @@ export async function deleteOwnedStorageFile(
 ): Promise<void> {
   const path = extractOwnedStoragePath(imageUrl, bucket, userId);
   if (!path) {
-    fastify.log.warn(
-      { bucket, userId },
-      "Suppression de fichier ignorée : l'URL enregistrée ne correspond pas à ce bucket/utilisateur"
-    );
+    // Le bucket seul : jamais l'identifiant du compte ni l'adresse.
+    fastify.log.warn({ bucket }, "Suppression de fichier ignorée : l'URL enregistrée ne correspond pas à ce bucket/utilisateur");
     return;
   }
 
   const { error } = await fastify.supabaseAdmin.storage.from(bucket).remove([path]);
   if (error) {
-    fastify.log.error({ error, bucket, userId }, "Échec de la suppression du fichier de stockage");
+    fastify.log.error({ error, bucket }, "Échec de la suppression du fichier de stockage");
   }
 }

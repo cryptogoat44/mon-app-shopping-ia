@@ -3,6 +3,7 @@ import * as Clipboard from "expo-clipboard";
 import type { WishlistItem } from "@monapp/shared-types";
 import { track } from "./analytics";
 import { t } from "../i18n";
+import { isAffiliateLink } from "./affiliate-link";
 
 // Partager une envie hors de Spotto (lot 5, 5.C) : un geste volontaire, par
 // la feuille de partage du téléphone. Les envies sont privées : aucune page
@@ -19,7 +20,7 @@ export function wishShareLink(item: ShareableWish): string | null {
 
 /** true quand le lien partagé est un lien affilié (mention obligatoire). */
 export function wishShareIsAffiliate(item: ShareableWish): boolean {
-  return item.affiliateUrl !== null && item.affiliateUrl !== item.merchantUrl;
+  return isAffiliateLink(item);
 }
 
 /** Le marchand à citer, sauf s'il figure déjà dans le titre : « Sac | ASOS »

@@ -391,7 +391,7 @@ export const en: Catalog = {
     boughtError: "The piece couldn't be added to the Vault.",
     categoryTitle: "Which category?",
     share: "Share",
-    shareMessage: (name: string, url: string) => `${name}\n${url} (affiliate link)\n\nSpotted with Spotto.`,
+    shareMessage: (name: string, url: string, affiliate: boolean) => `${name}\n${url}${affiliate ? " (affiliate link)" : ""}\n\nSpotted with Spotto.`,
     linkCopied: "Message copied, with the link",
     merchantLinkBlocked: "Your browser blocked the page from opening. Tap here to continue to the retailer.",
     loading: "Loading the result",
@@ -435,6 +435,9 @@ export const en: Catalog = {
     capacityUserTip: "Please try again tomorrow.",
     previewUnavailableTitle: "The video's image is no longer available",
     previewUnavailableTip: "Import a screenshot of the piece to continue.",
+    // Garde-fous batch: search paused, our provider is down (circuit breaker).
+    pausedTitle: "Search is temporarily paused",
+    pausedTip: "Our search provider is having an outage and we've been notified. This attempt wasn't counted. Please try again in a few minutes.",
     reportMenuLabel: "Report an inconsistent result",
     reportTitle: "Inconsistent result",
     reportQuestion: "What's wrong?",
@@ -776,6 +779,47 @@ export const en: Catalog = {
     linkHint: "Opens your email app to write to us.",
     openFailed: "Your email app couldn't be opened: copy the address above to write to us.",
   },
+  // Chantier 3 (accounts and moderation): "Help and contact" page (/aide).
+  help: {
+    title: "Help and contact",
+    entry: "Help and contact",
+    intro: "Answers to the most common questions, and how to write to us.",
+    faqTitle: "Frequently asked questions",
+    faq: [
+      {
+        q: "How do I find a piece?",
+        a: "In the Spotter, import a photo, a screenshot or a video, then circle the piece if needed. Spotto looks for the same piece, or the closest ones, and tells you where to buy it when it finds a shop and a price.",
+      },
+      {
+        q: "How many searches can I run?",
+        a: "The number of searches is limited each day, for each person and for the whole service. The counter starts again every day.",
+      },
+      {
+        q: "I forgot my password",
+        a: "On the sign-in screen, tap \"Forgot your password?\" and enter your email address. You'll receive a link valid for one hour: open it on the device where you made the request (the same phone, or the same browser).",
+      },
+      {
+        q: "I didn't receive the confirmation email",
+        a: "Check your spam folder. On the sign-up screen, you can send the email again after one minute.",
+      },
+      {
+        q: "Reporting content, blocking an account",
+        a: "Open the menu of a post, a comment, a profile or a piece you received, then choose \"Report\" or \"Block this account\". What you report disappears from your feed right away. Every report is reviewed by the Spotto team; content reported by several people is hidden until that review. You can manage blocked accounts in Settings.",
+      },
+      {
+        q: "What content is not allowed?",
+        a: "Insults, hateful speech, harassment and sexual or violent content, as detailed in the terms of use. A text containing a banned word can't be posted.",
+      },
+      {
+        q: "My data and my account",
+        a: "In Settings, you can download all your data and delete your account. Deletion is permanent.",
+      },
+    ],
+    contactTitle: "Write to us",
+    contactBody: "A question, a problem, content to report to us: write to us at this address.",
+    write: "Send an email",
+    documentsTitle: "Documents",
+  },
   legal: {
     draftBanner: "Draft — to be reviewed by a legal professional.",
     version: (label: string) => `Version: ${label}`,
@@ -941,6 +985,20 @@ export const en: Catalog = {
     unblockError: "The account couldn't be unblocked.",
     loadError: "Unable to load blocked accounts.",
   },
+  // Chantier 3 (accounts and moderation).
+  accountSafety: {
+    resetOtherDeviceTitle: "Open this link on the right device",
+    resetOtherDeviceBody:
+      "For your security, this link only works on the device where you requested a new password (the same phone, or the same browser). Open it there, or make a new request here.",
+    emailConfirmed: "Your email address is confirmed. Sign in to continue.",
+    reportedHidden: "Report sent. You won't see this content again.",
+    autoHidden: "Hidden automatically",
+    autoHiddenHint:
+      "Hidden after reports from several people, awaiting your decision: confirm the hiding, or dismiss to restore it.",
+    automatic: "automatic (several reports)",
+    confirmAutoHide: "Confirm hiding",
+    dismissAndRestore: "Dismiss and restore",
+  },
   connection: {
     connectingTitle: "Connecting to Spotto…",
     wakingTitle: "Spotto is waking up…",
@@ -1020,5 +1078,18 @@ export const en: Catalog = {
         `We've sent a confirmation link to ${email}. Click it to activate your account, then come back to sign in.`,
       backToSignIn: "Back to sign in",
     },
+  },
+  // “iPhone app ready” batch (chantier 4): required update (point 11) and the
+  // Spotter's camera button (point 14).
+  appUpdate: {
+    title: "Update Spotto",
+    body: "This version of Spotto is no longer supported. Install the latest version from the App Store to continue.",
+    openStore: "Open the App Store",
+    searchStore: "Open the App Store, search for “Spotto”, then tap “Update”.",
+  },
+  cameraCapture: {
+    takePhoto: "Take a photo",
+    denied: "Spotto doesn't have access to the camera. To take a photo, allow it in your iPhone's Settings, under Spotto.",
+    unavailable: (addPhoto: string) => `The camera couldn't open. Try again, or choose a photo with “${addPhoto}”.`,
   },
 };

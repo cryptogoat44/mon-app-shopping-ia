@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { z } from "zod";
 import { SENTRY_EU_DSN_PATTERN } from "./lib/sentry.js";
+import { parseMinimumBuild, parseStoreUrl } from "./lib/appVersion.js";
 
 const envSchema = z.object({
   SUPABASE_URL: z.string().url(),
@@ -67,6 +68,14 @@ const envSchema = z.object({
     .regex(SENTRY_EU_DSN_PATTERN, "SENTRY_DSN doit être une adresse Sentry de la région UE (ingest.de.sentry.io).")
     .optional(),
   SENTRY_ENVIRONMENT: z.enum(["development", "production"]).default("development"),
+  // Mise à jour obligatoire de l'app iPhone (lot « app iPhone prête »,
+  // lib/appVersion.ts), COUPÉE par défaut. APP_MIN_IOS_BUILD : numéro de build
+  // minimal (celui d'EAS et d'App Store Connect, par exemple 12) ; un build
+  // plus ancien affiche « Mettez à jour Spotto ». APP_STORE_URL : la fiche de
+  // Spotto (https://apps.apple.com/…), pour le bouton de cet écran. Valeur
+  // absente ou illisible : aucun minimum, aucun bouton — jamais un arrêt du serveur.
+  APP_MIN_IOS_BUILD: z.string().optional().transform(parseMinimumBuild),
+  APP_STORE_URL: z.string().optional().transform(parseStoreUrl),
 });
 
 const parsed = envSchema.safeParse(process.env);

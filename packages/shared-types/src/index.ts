@@ -929,6 +929,9 @@ export interface ModerationLogEntry {
   createdAt: string;
   /** Administrateur qui a pris la décision (visible des seuls administrateurs). */
   adminUsername: string | null;
+  /** Chantier 3 : décision prise automatiquement (masquage après plusieurs
+   * signalements de personnes différentes), sans administrateur. */
+  automatic: boolean;
 }
 
 /** Les signalements d'un même contenu, regroupés. */
@@ -943,6 +946,10 @@ export interface ModerationItem {
   preview: ModerationPreview;
   /** Masquage en vigueur (à annuler pour rétablir), sinon null. */
   activeHideActionId: string | null;
+  /** Chantier 3 : ce masquage est automatique (plusieurs signalements), en
+   * attente de décision. « Masquer » le confirme ; « Classer sans suite » le
+   * lève et rétablit le contenu. */
+  activeHideAutomatic: boolean;
   /** Suspension en vigueur du compte concerné (à lever), sinon null. */
   activeSuspendActionId: string | null;
   /** Lot 5 : l'image est une copie faite par Spotto (publication « envie »,
@@ -993,4 +1000,27 @@ export interface BlockedUser {
   displayName: string;
   avatarUrl: string | null;
   blockedAt: string;
+}
+
+// --- Lot « app iPhone prête » (chantier 4, point 11) : mise à jour obligatoire ---
+
+/** En-tête par lequel l'app iPhone donne son numéro de build (CFBundleVersion)
+ * à chaque appel du serveur. Le site ne l'envoie jamais. */
+export const APP_BUILD_HEADER = "x-spotto-build";
+
+/** Code d'erreur (réponse 426) : ce build est sous le minimum réglé sur le serveur. */
+export const UPDATE_REQUIRED_ERROR = "update_required";
+
+/** Réponse 426 : l'adresse de Spotto sur l'App Store, quand elle est réglée. */
+export interface UpdateRequiredErrorBody extends ApiErrorBody {
+  storeUrl?: string | null;
+}
+
+/** GET /api/app/version (sans compte) : build minimal exigé de l'app iPhone
+ * (null : aucun minimum, réglage par défaut) et adresse de la fiche App Store. */
+export interface AppVersionInfo {
+  ios: {
+    minimumBuild: number | null;
+    storeUrl: string | null;
+  };
 }

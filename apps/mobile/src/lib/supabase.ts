@@ -28,5 +28,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    // Chantier 3 (point 13) : flux PKCE. Les liens des e-mails (mot de passe
+    // oublié, confirmation) ne portent plus la session elle-même, mais un
+    // code que seul l'appareil qui a fait la demande peut échanger (il garde
+    // la clé de l'échange dans son stockage). Une autre app de l'iPhone qui
+    // déclarerait aussi « spotto:// » ne pourrait rien en faire.
+    flowType: "pkce",
   },
 });

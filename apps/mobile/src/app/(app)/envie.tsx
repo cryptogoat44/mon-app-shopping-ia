@@ -15,6 +15,7 @@ import { ProductFrame } from "@/components/product-frame";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { ErrorMessage } from "@/components/error-message";
 import { WishBoughtButton } from "@/components/wish-bought-button";
+import { isAffiliateLink } from "@/lib/affiliate-link";
 import { themedStyles } from "@/theme/themed-styles";
 
 function displayPrice(item: WishlistItemDetail): string | null {
@@ -138,7 +139,7 @@ export default function WishlistItemScreen() {
                 merchantName={item.merchantName}
                 matchId={item.productMatchId}
                 context="wishlist"
-                isAffiliate={item.affiliateUrl !== null && item.affiliateUrl !== item.merchantUrl}
+                isAffiliate={isAffiliateLink(item)}
                 primary
               />
             ) : null}
