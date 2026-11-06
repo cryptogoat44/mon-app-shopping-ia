@@ -55,6 +55,8 @@ Le plus simple, pour travailler sur spotto-dev-2 : `pnpm --filter backend config
 | `META_OEMBED_ACCESS_TOKEN` | non | Reconnaissance des liens Instagram |
 | `RENDER_GIT_COMMIT` | jamais à la main | Remplie par Render : la version donnée par /health |
 
+Pour la copie hebdomadaire des photos seulement (tâche planifiée de Render) : `PHOTO_BACKUP_S3_ENDPOINT`, `PHOTO_BACKUP_S3_REGION`, `PHOTO_BACKUP_S3_BUCKET`, `PHOTO_BACKUP_S3_ACCESS_KEY_ID`, `PHOTO_BACKUP_S3_SECRET_ACCESS_KEY` (voir [apps/backend/supabase/SAUVEGARDE-PHOTOS.md](apps/backend/supabase/SAUVEGARDE-PHOTOS.md)).
+
 Pour les outils du Mac seulement : `DEV_DATABASE_URL` (migrations sur spotto-dev-2, enregistrée par `pnpm --filter backend configurer-base-dev`) et le fichier `apps/backend/.render-api-key` (commande `render-bride`).
 
 ### L'app et le site : `apps/mobile/.env`
@@ -102,6 +104,7 @@ Pour l'app sur votre iPhone, il faut un build de développement : voir BUILD-IPH
 | [apps/mobile/BUILD-IPHONE.md](apps/mobile/BUILD-IPHONE.md) | Builds iPhone, réglages chez Expo, TestFlight, corrections après la sortie |
 | [apps/backend/supabase/emails/REGLAGES-SUPABASE.md](apps/backend/supabase/emails/REGLAGES-SUPABASE.md) | E-mails de connexion et réglages de Supabase |
 | [apps/mobile/EN-TETES-SITE.md](apps/mobile/EN-TETES-SITE.md) | En-têtes de sécurité du site, à coller dans Render |
+| [apps/backend/supabase/SAUVEGARDE-PHOTOS.md](apps/backend/supabase/SAUVEGARDE-PHOTOS.md) | La copie hebdomadaire des photos, et leur restauration |
 | `apps/backend/supabase/mise-en-ligne/` | Les fichiers SQL de mise en production déjà utilisés (lot 5, voie C) |
 | [apps/backend/tests/fixtures/serpapi/LISEZ-MOI.md](apps/backend/tests/fixtures/serpapi/LISEZ-MOI.md) | Les réponses SerpApi enregistrées, rejouées par les tests |
 | `docs/` (sur votre Mac seulement) | Scripts de retour en arrière, nommer un administrateur, notes. Jamais envoyé sur GitHub : à sauvegarder en privé. |

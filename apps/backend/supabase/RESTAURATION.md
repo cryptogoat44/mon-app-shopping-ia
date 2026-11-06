@@ -59,4 +59,4 @@ spotto-dev-2 est en offre gratuite : on ne peut pas y faire cet essai.
 
 ## 5. Les photos
 
-Les sauvegardes de la base ne contiennent aucune photo. Le point 10 de la feuille de route prévoit une copie hebdomadaire des photos vers un stockage privé, qui effacerait aussi de cette copie les photos des comptes supprimés. Elle attend le choix de ce stockage. D'ici là, une photo supprimée par erreur ne peut pas être récupérée.
+Les sauvegardes de la base ne contiennent aucune photo. Les photos ont leur propre copie, hebdomadaire, dans un stockage privé : voir [SAUVEGARDE-PHOTOS.md](SAUVEGARDE-PHOTOS.md). Après une restauration de la base, restaurez aussi les photos (sa section 5). Tant que cette copie n'est pas mise en place, une photo supprimée par erreur ne peut pas être récupérée.

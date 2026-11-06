@@ -34,7 +34,8 @@
     "essai-type-recherche": "tsx scripts/essai-type-recherche.ts",
     "parcours-ecran": "tsx scripts/parcours-ecran/index.ts",
     "images-marque": "tsx scripts/images-marque.ts",
-    "parcours-iphone": "tsx scripts/parcours-iphone/index.ts"
+    "parcours-iphone": "tsx scripts/parcours-iphone/index.ts",
+    "sauvegarder-photos": "tsx scripts/sauvegarder-photos.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
@@ -49,6 +50,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "3.1153.0",
     "@types/node": "^22.7.4",
     "@types/pg": "^8.23.1",
     "@vitest/coverage-v8": "^2.1.4",
