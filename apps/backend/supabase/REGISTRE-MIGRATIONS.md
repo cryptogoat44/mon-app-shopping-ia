@@ -55,7 +55,7 @@ Les dates de 0001 à 0028 ne sont pas notées dans le dépôt : celles du tablea
 
 ## Avant d'appliquer 0029 et 0030
 
-1. **L'offre Supabase Pro sur spotto-prod** (sauvegardes quotidiennes), comme décidé dans la feuille de route : aucun nouveau SQL en production avant.
+1. **L'offre Supabase Pro sur spotto-prod** (sauvegardes quotidiennes), comme décidé dans la feuille de route : aucun nouveau SQL en production avant. Que faire si ça tourne mal : [RESTAURATION.md](RESTAURATION.md).
 2. Chacune a d'abord été appliquée sur **spotto-dev-2** (`pnpm --filter backend migrer-dev …`, sur votre Mac), puis vérifiée.
 3. Le serveur fonctionne avec ou sans elles : sans 0029, il garde ses compteurs de l'IA en mémoire ; sans 0030, il ne masque rien automatiquement. Un serveur plus ancien fonctionne aussi sur une base qui les a.
 4. Toutes deux sont rejouables : relancer le fichier une seconde fois ne change rien.
