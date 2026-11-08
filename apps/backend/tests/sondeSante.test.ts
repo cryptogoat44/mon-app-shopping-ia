@@ -1,11 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
+import { env } from "../src/env.js";
 import { parseServedCommit } from "../src/lib/serverVersion.js";
 
-// Sondes de santé (lot garde-fous, point 15). Hors base : l'adresse de la
-// base est factice (SUPABASE_URL, voir la vérification du lot), donc la base
-// « ne répond pas ».
+// Sondes de santé (lot garde-fous, point 15). Hors base (test:hors-base),
+// l'adresse de la base est factice (http://127.0.0.1:9), donc la base « ne
+// répond pas ». Avec la base (test:ci, spotto-dev-2), elle répond.
+const offlineDatabase = new URL(env.SUPABASE_URL).hostname === "127.0.0.1";
+
 describe("sondes de santé", () => {
   let app: FastifyInstance;
   beforeAll(async () => {
@@ -24,10 +27,17 @@ describe("sondes de santé", () => {
     expect(response.headers["cache-control"]).toBe("no-store");
   });
 
-  it("/health/deep vérifie aussi la base : injoignable, 503 et « degraded », sans détail", async () => {
+  it.runIf(offlineDatabase)("/health/deep vérifie aussi la base : injoignable, 503 et « degraded », sans détail", async () => {
     const response = await app.inject({ method: "GET", url: "/health/deep" });
     expect(response.statusCode).toBe(503);
     expect(response.json()).toEqual({ status: "degraded", database: "unreachable" });
+    expect(response.headers["cache-control"]).toBe("no-store");
+  });
+
+  it.skipIf(offlineDatabase)("/health/deep vérifie aussi la base : joignable, 200 et « ok », sans détail", async () => {
+    const response = await app.inject({ method: "GET", url: "/health/deep" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ status: "ok", database: "ok" });
     expect(response.headers["cache-control"]).toBe("no-store");
   });
 });
