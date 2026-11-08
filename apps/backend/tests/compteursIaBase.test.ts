@@ -67,10 +67,11 @@ describe.skipIf(!migrated)("compteurs de l'IA (fonction ai_quota de la base, 002
 
   it("le jour est celui de Paris : à minuit, tout repart de zéro", async () => {
     const caps = { user: 1, daily: 100 };
-    // 23 h 30 à Paris (hiver : 22 h 30 UTC), puis 0 h 30 le lendemain.
+    // 23 h 30 à Paris (hiver : 22 h 30 UTC), 23 h 45 le même jour, puis 0 h 30
+    // le lendemain. (23 h 30 + 30 min tombe pile à minuit : déjà le lendemain.)
     const evening = new Date(Date.UTC(BASE_YEAR, 1, 20, 22, 30));
     expect(await quota("video", alice.id, caps, true, evening)).toMatchObject({ allowed: true });
-    expect(await quota("video", alice.id, caps, true, new Date(evening.getTime() + 30 * 60_000))).toMatchObject({ allowed: false, refused_by: "user" });
+    expect(await quota("video", alice.id, caps, true, new Date(evening.getTime() + 15 * 60_000))).toMatchObject({ allowed: false, refused_by: "user" });
     expect(await quota("video", alice.id, caps, true, new Date(evening.getTime() + 2 * HOUR))).toMatchObject({ allowed: true, user_day_count: 1 });
   });
 
