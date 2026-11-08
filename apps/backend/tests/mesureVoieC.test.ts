@@ -111,6 +111,12 @@ describe("jeu de vérité et cadres", () => {
     expect(lireCadres("2 ; 10,5 20 30 40 ; virgule acceptée", "c").get(2)!.gauche).toBe(10.5);
   });
 
+  it("cadres : les lignes de commentaire « # » sont ignorées (en-tête du fichier du banc), les numéros de ligne restent justes", () => {
+    const texte = "# Cadres tracés par Claude le 30 octobre\n  # deuxième ligne de commentaire ; avec ; des ; points-virgules\n1 ; 27 28 73 53 ; la veste\n";
+    expect([...lireCadres(texte, "cadres-traces.txt").keys()]).toEqual([1]);
+    expect(() => lireCadres("# en-tête\n1 ; 27 28 73 ; la veste", "cadres-traces.txt")).toThrow(/cadres-traces\.txt, ligne 2 : il faut quatre nombres/);
+  });
+
   it("cadres : une ligne mal formée est refusée avec un message clair", () => {
     expect(() => lireCadres("1 ; 27 28 73 ; la veste", "cadres-traces.txt")).toThrow(/cadres-traces\.txt, ligne 1 : il faut quatre nombres/);
     expect(() => lireCadres("1 ; 27 28 73 53", "c")).toThrow(/trois champs/);

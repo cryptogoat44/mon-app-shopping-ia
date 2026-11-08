@@ -93,15 +93,16 @@ function nombre(texte: string): number {
 }
 
 /** Lit cadres-traces.txt : une ligne « cas ; gauche haut largeur hauteur ;
- * rappel », en POURCENTAGES de l'image. Lignes vides ignorées ; toute ligne
- * mal formée est refusée, avec son numéro. */
+ * rappel », en POURCENTAGES de l'image. Lignes vides et lignes de
+ * commentaire (commençant par « # ») ignorées ; toute autre ligne mal formée
+ * est refusée, avec son numéro. */
 export function lireCadres(texte: string, origine: string): Map<number, CadreTrace> {
   const cadres = new Map<number, CadreTrace>();
   texte
     .replace(/^﻿/, "")
     .split(/\r?\n/)
     .forEach((ligne, index) => {
-      if (ligne.trim() === "") return;
+      if (ligne.trim() === "" || ligne.trimStart().startsWith("#")) return;
       const refus = (raison: string) => new ErreurMesure(`${origine}, ligne ${index + 1} : ${raison} (attendu : « cas ; gauche haut largeur hauteur ; rappel », en pourcentages).`);
       const [cas, valeurs, ...rappel] = ligne.split(";").map((champ) => champ.trim());
       if (cas === undefined || valeurs === undefined || rappel.length === 0) throw refus("il faut trois champs séparés par « ; »");
