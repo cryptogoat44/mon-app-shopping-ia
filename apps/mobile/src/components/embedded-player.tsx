@@ -8,7 +8,7 @@ import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import type { ShouldStartLoadRequest } from "react-native-webview/lib/WebViewTypes";
 import { color } from "@/theme/tokens";
 import { instagramHostPage, tiktokEmbedHostPage, tiktokHostPage } from "@/lib/player-host-page";
-import { PLAYER_NETWORK, isAllowedNavigation, sameDocument, shortLinkHop, type PlayerEmbed } from "@/lib/player-link";
+import { PLAYER_NETWORK, isAllowedNavigation, sameDocument, shortLinkHop, type PlayerEmbed, type PlayerPlatform } from "@/lib/player-link";
 import { parseHostMessage, type HostMessage } from "@/lib/player-state";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -35,9 +35,10 @@ export interface EmbeddedPlayerProps {
   children?: ReactNode;
 }
 
+/** Page hôte écrite par l'app seule, depuis l'identifiant ou l'adresse vérifiés (jamais le html d'un oEmbed). */
 function hostPage(embed: PlayerEmbed, title: string): string {
-  if (embed.platform === "instagram") return instagramHostPage(embed.html, title);
-  return embed.variant === "player" ? tiktokHostPage(embed.playerUrl, title) : tiktokEmbedHostPage(embed.html, title);
+  if (embed.platform === "instagram") return instagramHostPage(embed.canonical, title);
+  return embed.variant === "player" ? tiktokHostPage(embed.playerUrl, title) : tiktokEmbedHostPage(embed.id, title);
 }
 
 export function EmbeddedPlayer(p: EmbeddedPlayerProps) {
@@ -103,9 +104,20 @@ export function EmbeddedPlayer(p: EmbeddedPlayerProps) {
 }
 
 /** Second suivi d'un lien court (contre-expertise n° 4b) : vue web cachée,
- * sans cookie gardé ; la première navigation principale vers une vidéo est
- * lue puis arrêtée. Rien ne s'affiche ; 6 s au plus. */
-export function ShortLinkResolver({ url, onResolved, onFailed }: { url: string; onResolved: (url: string) => void; onFailed: () => void }) {
+ * sans cookie gardé ; la première navigation principale vers une vidéo de la
+ * plateforme attendue est lue puis arrêtée (l'autre plateforme est refusée).
+ * Rien ne s'affiche ; 6 s au plus. */
+export function ShortLinkResolver({
+  url,
+  platform,
+  onResolved,
+  onFailed,
+}: {
+  url: string;
+  platform: PlayerPlatform;
+  onResolved: (url: string) => void;
+  onFailed: () => void;
+}) {
   const done = useRef(false);
   const finish = useRef({ onResolved, onFailed });
   finish.current = { onResolved, onFailed };
@@ -121,7 +133,7 @@ export function ShortLinkResolver({ url, onResolved, onFailed }: { url: string; 
 
   function handleRequest(request: ShouldStartLoadRequest): boolean {
     if (!request.isTopFrame) return false;
-    const hop = shortLinkHop(request.url);
+    const hop = shortLinkHop(request.url, platform);
     if (hop === "resolved" && !done.current) {
       done.current = true;
       finish.current.onResolved(request.url);

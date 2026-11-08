@@ -21,7 +21,8 @@ export function isPlayerPlatform(value: string): value is PlayerPlatform {
 export const PLAYER_NETWORK = { resolveTimeoutMs: 6_000, oembedTimeoutMs: 6_000 } as const;
 
 export type PlayerLink =
-  | { kind: "tiktok"; id: string; media: "video" | "photo"; oembedUrl: string | null }
+  /** `page` : page publique de la vidéo, reconstruite (jamais le texte collé). */
+  | { kind: "tiktok"; id: string; media: "video" | "photo"; page: string; oembedUrl: string | null }
   | { kind: "instagram"; code: string; media: "p" | "reel"; canonical: string }
   /** Lien court ou de partage, sans identifiant : à suivre jusqu'à l'adresse finale. */
   | { kind: "short"; platform: PlayerPlatform; url: string }
@@ -29,19 +30,24 @@ export type PlayerLink =
 
 export type UnavailableReason = "not_public" | "not_a_video" | "no_answer" | "short_link" | "network" | "player_error" | "crashed";
 export type TikTokCheckStatus = "ok" | "not_public" | "not_a_video" | "no_answer" | "network" | "skipped";
-/** Vérification TikTok (oEmbed) : verdict, et code d'intégration officiel (repli, contre-expertise n° 9). */
+/** Vérification TikTok (oEmbed) : verdict, et repli possible ou non (contre-expertise n° 9).
+ * Le html renvoyé par TikTok n'est jamais gardé : il contient la légende et
+ * le nom de l'auteur, que n'importe qui peut écrire. */
 export interface TikTokCheck {
   status: TikTokCheckStatus;
-  html: string | null;
+  embeddable: boolean;
 }
 
+// Codes d'intégration : l'app écrit elle-même le blockquote à partir de
+// l'identifiant ou de l'adresse qu'elle a vérifiés (lib/player-host-page.ts) ;
+// le html des oEmbed ne sert qu'à savoir que la vidéo est intégrable.
 export type PlayerEmbed =
   /** Lecteur officiel piloté (https://www.tiktok.com/player/v1/{id}). */
   | { platform: "tiktok"; variant: "player"; id: string; media: "video" | "photo"; playerUrl: string; oembedUrl: string | null }
-  /** Repli documenté : code d'intégration renvoyé par l'oEmbed TikTok (blockquote + embed.js), sans commande. */
-  | { platform: "tiktok"; variant: "oembed"; id: string; html: string }
+  /** Repli documenté : code d'intégration TikTok (blockquote + embed.js), sans commande. */
+  | { platform: "tiktok"; variant: "oembed"; id: string }
   /** Code d'intégration officiel d'Instagram (blockquote + embed.js), sans commande. */
-  | { platform: "instagram"; variant: "oembed"; code: string; media: "p" | "reel"; canonical: string; html: string };
+  | { platform: "instagram"; variant: "oembed"; code: string; media: "p" | "reel"; canonical: string };
 
 export type EmbedOpening = { kind: "embed"; embed: PlayerEmbed } | { kind: "unavailable"; reason: UnavailableReason };
 
@@ -55,19 +61,40 @@ const TIKTOK_OTHER_PATHS = [
 ];
 const INSTAGRAM_MEDIA = /^\/(?:(?!share\/|stories\/|explore\/|accounts\/)[A-Za-z0-9._]{1,30}\/)?(p|tv|reels?)(?!\/audio\/)\/([A-Za-z0-9_-]+)(?:\/|$)/;
 
+/** Origine du lecteur officiel TikTok : seule source admise de ses messages (lib/player-host-page.ts). */
+export const TIKTOK_ORIGIN = "https://www.tiktok.com";
+
+/** Même site, ou un de ses sous-domaines : comparaison exacte sur le nom d'hôte lu par URL, jamais « contient ». */
 const isHost = (host: string, domain: string) => host === domain || host.endsWith(`.${domain}`);
+
+/** Plateforme d'un nom d'hôte (tiktok.com, instagram.com, instagr.am et leurs sous-domaines). */
+function platformOfHost(host: string): PlayerPlatform | null {
+  if (isHost(host, "tiktok.com")) return "tiktok";
+  if (isHost(host, "instagram.com") || isHost(host, "instagr.am")) return "instagram";
+  return null;
+}
+
+// Nom de compte TikTok (lettres, chiffres, point, tiret bas) ; sinon « _ » à
+// sa place : TikTok retrouve la vidéo par son identifiant (À VÉRIFIER sur
+// iPhone, essai T4).
+const TIKTOK_ACCOUNT = /^[A-Za-z0-9._]{1,30}$/;
+
+function tiktokPage(id: string, media: "video" | "photo", account: string | null): string {
+  return `${TIKTOK_ORIGIN}/@${account !== null && TIKTOK_ACCOUNT.test(account) ? account : "_"}/${media}/${id}`;
+}
 
 function readTikTok(host: string, path: string): PlayerLink {
   const account = path.match(TIKTOK_ACCOUNT_PATH);
   if (account) {
     const id = account[3]!;
+    const media = account[2] === "photo" ? "photo" : "video";
     // L'oEmbed attend la forme « vidéo » ; une publication photo y est réécrite (iframely, « TikTok photomode »).
-    const page = `https://www.tiktok.com/@${account[1]!}/video/${id}`;
-    return { kind: "tiktok", id, media: account[2] === "photo" ? "photo" : "video", oembedUrl: `https://www.tiktok.com/oembed?url=${encodeURIComponent(page)}` };
+    const oembedPage = `https://www.tiktok.com/@${account[1]!}/video/${id}`;
+    return { kind: "tiktok", id, media, page: tiktokPage(id, media, account[1]!), oembedUrl: `https://www.tiktok.com/oembed?url=${encodeURIComponent(oembedPage)}` };
   }
   for (const pattern of TIKTOK_OTHER_PATHS) {
     const match = path.match(pattern);
-    if (match) return { kind: "tiktok", id: match[1]!, media: "video", oembedUrl: null };
+    if (match) return { kind: "tiktok", id: match[1]!, media: "video", page: tiktokPage(match[1]!, "video", null), oembedUrl: null };
   }
   const segments = path.split("/").filter(Boolean);
   const shortHost = host === "vm.tiktok.com" || host === "vt.tiktok.com";
@@ -96,9 +123,37 @@ export function readPlayerLink(raw: string): PlayerLink {
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") return { kind: "none" };
   const host = url.hostname.toLowerCase();
-  if (isHost(host, "tiktok.com")) return readTikTok(host, url.pathname);
-  if (isHost(host, "instagram.com") || isHost(host, "instagr.am")) return readInstagram(host, url.pathname);
+  const platform = platformOfHost(host);
+  if (platform === "tiktok") return readTikTok(host, url.pathname);
+  if (platform === "instagram") return readInstagram(host, url.pathname);
   return { kind: "none" };
+}
+
+/** Plateforme d'un lien lu (null : pas un lien TikTok ni Instagram). */
+function platformOfLink(link: PlayerLink): PlayerPlatform | null {
+  if (link.kind === "tiktok" || link.kind === "instagram") return link.kind;
+  return link.kind === "short" ? link.platform : null;
+}
+
+/** « Ouvrir dans TikTok / Instagram » : adresse donnée à iOS. Jamais le texte
+ * collé tel quel : une barre oblique inversée ou un « @ » peuvent faire lire à
+ * iOS un autre site que celui vérifié ici (https://vm.tiktok.com\@autre.site/).
+ * On rouvre une adresse reconstruite (page TikTok d'après l'identifiant,
+ * adresse canonique Instagram, ou lien court réécrit), puis on revérifie son
+ * site. null : rien à ouvrir. */
+export function playerAppUrl(raw: string, platform: PlayerPlatform): string | null {
+  const link = readPlayerLink(raw);
+  if (platformOfLink(link) !== platform) return null;
+  const rebuilt = link.kind === "tiktok" ? link.page : link.kind === "instagram" ? link.canonical : link.kind === "short" ? link.url : null;
+  if (rebuilt === null) return null;
+  let url: URL;
+  try {
+    url = new URL(rebuilt);
+  } catch {
+    return null;
+  }
+  const clean = url.protocol === "https:" && !url.username && !url.password && !url.port;
+  return clean && platformOfHost(url.hostname.toLowerCase()) === platform ? url.href : null;
 }
 
 /** Paramètres du lecteur officiel (note R1 §1, valeurs 0 ou 1) : lecture
@@ -109,7 +164,7 @@ export function readPlayerLink(raw: string): PlayerLink {
 const TIKTOK_PLAYER_PARAMS = "autoplay=1&loop=1&rel=0&fullscreen_button=0&native_context_menu=0&description=0&music_info=0";
 
 export function tiktokPlayerUrl(id: string): string {
-  return `https://www.tiktok.com/player/v1/${id}?${TIKTOK_PLAYER_PARAMS}`;
+  return `${TIKTOK_ORIGIN}/player/v1/${id}?${TIKTOK_PLAYER_PARAMS}`;
 }
 
 /** oEmbed Instagram, sans jeton depuis le 15/06/2026 (note R2 §1) : légende masquée, script chargé par la page hôte. */
@@ -153,6 +208,12 @@ export function enabledPlayerPlatforms(allowed: boolean, perPlatform: Record<Pla
   return allowed ? PLAYER_PLATFORM_LIST.filter((platform) => perPlatform[platform]) : [];
 }
 
+/** Lecteur prêt à charger : la vidéo trouvée est bien de la plateforme du lien
+ * collé (celle de l'accord donné) et cette plateforme est toujours ouverte. */
+export function embedAllowed(embed: PlayerEmbed, heldPlatform: PlayerPlatform, platforms: readonly PlayerPlatform[]): boolean {
+  return embed.platform === heldPlatform && platforms.includes(embed.platform);
+}
+
 /** Origine de la page hôte : le site de Spotto (jamais tiktok.com ni instagram.com, note R2 §3.2). */
 export function playerBaseUrl(webUrl: string): string {
   try {
@@ -175,34 +236,56 @@ export function sameDocument(a: string, b: string): boolean {
   return normalize(a) === normalize(b);
 }
 
+// Sites qu'un cadre intégré peut charger : le lecteur et les codes
+// d'intégration (tiktok.com, instagram.com), leurs fichiers (tiktokcdn…,
+// cdninstagram.com, fbcdn.net) et Meta (facebook.com), avec leurs
+// sous-domaines. Tout autre site est refusé : un cadre piégé ne peut pas
+// afficher une fausse page d'un autre site dans le lecteur.
+const FRAME_DOMAINS = ["tiktok.com", "tiktokcdn.com", "tiktokcdn-us.com", "tiktokcdn-eu.com", "instagram.com", "cdninstagram.com", "facebook.com", "fbcdn.net"] as const;
+
+function isEmbedFrameUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:" || url.username || url.password || url.port) return false;
+  const host = url.hostname.toLowerCase();
+  return FRAME_DOMAINS.some((domain) => isHost(host, domain));
+}
+
 /** Navigation admise dans la vue web du lecteur. Le document principal ne
  * quitte jamais la page hôte ; un cadre intégré (le lecteur, ses sous-cadres)
- * peut charger toute adresse https. Tout le reste (autre page, schéma d'app
- * comme instagram://) est refusé : rien ne s'ouvre hors de Spotto sans un
- * geste explicite (note R1 §5, note R4 §1.2). */
+ * ne charge que les sites ci-dessus, en https. Tout le reste (autre site,
+ * schéma d'app comme instagram://, about:srcdoc) est refusé : rien ne s'ouvre
+ * hors de Spotto sans un geste explicite (note R1 §5, note R4 §1.2).
+ * about:srcdoc est refusé car un tel cadre prend l'origine de la page qui le
+ * crée : dans la page hôte, il aurait accès au pont vers l'app ; aucun code
+ * de Spotto n'en crée. */
 export function isAllowedNavigation(request: { url: string; isTopFrame: boolean }, topUrls: readonly string[]): boolean {
-  if (request.url === "about:blank" || request.url === "about:srcdoc") return true;
+  if (request.url === "about:blank") return true;
   if (request.isTopFrame) return topUrls.some((allowed) => sameDocument(request.url, allowed));
-  return request.url.startsWith("https://");
+  return isEmbedFrameUrl(request.url);
 }
 
 /** Second suivi d'un lien court, dans une vue web cachée (contre-expertise
  * n° 4b) : chaque navigation principale est lue ici. « resolved » : adresse
- * d'une vidéo, la navigation est arrêtée et l'adresse gardée ; « follow » :
- * redirection https chez TikTok ou Instagram, on la laisse faire ; « stop » :
- * tout le reste (schéma d'app, autre site), refusé. */
-export function shortLinkHop(url: string): "resolved" | "follow" | "stop" {
+ * d'une vidéo de la plateforme attendue, la navigation est arrêtée et
+ * l'adresse gardée ; « follow » : redirection https chez cette même
+ * plateforme, on la laisse faire ; « stop » : tout le reste (schéma d'app,
+ * autre site, ou l'autre plateforme : un lien TikTok qui mène à Instagram ne
+ * doit pas charger Instagram avec l'accord donné pour TikTok). */
+export function shortLinkHop(url: string, platform: PlayerPlatform): "resolved" | "follow" | "stop" {
   const link = readPlayerLink(url);
-  if (link.kind === "tiktok" || link.kind === "instagram") return "resolved";
+  if (link.kind === "tiktok" || link.kind === "instagram") return link.kind === platform ? "resolved" : "stop";
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
     return "stop";
   }
-  const host = parsed.hostname.toLowerCase();
-  const known = isHost(host, "tiktok.com") || isHost(host, "instagram.com") || isHost(host, "instagr.am");
-  return parsed.protocol === "https:" && known ? "follow" : "stop";
+  return parsed.protocol === "https:" && platformOfHost(parsed.hostname.toLowerCase()) === platform ? "follow" : "stop";
 }
 
 export interface FetchResponseLike {
@@ -238,32 +321,33 @@ const htmlField = (body: unknown): string | null => {
   return typeof html === "string" ? html : null;
 };
 
-/** html d'oEmbed Instagram : seulement le code officiel attendu (blockquote « instagram-media », sans script). */
-export function embedHtmlOf(body: unknown): string | null {
+// html des oEmbed : lu seulement pour savoir si la plateforme propose son
+// code d'intégration (la vidéo est publique et intégrable). Il n'est jamais
+// inséré dans la page : la légende, le nom de l'auteur et les mots-clés qu'il
+// contient sont écrits par n'importe qui et pourraient cacher du code.
+
+/** oEmbed Instagram : le code officiel attendu (blockquote « instagram-media ») est proposé. */
+export function offersInstagramEmbed(body: unknown): boolean {
   const html = htmlField(body);
-  if (html === null) return null;
-  return html.trimStart().startsWith("<blockquote") && html.includes("instagram-media") && !/<script/i.test(html) ? html : null;
+  return html !== null && html.trimStart().startsWith("<blockquote") && html.includes("instagram-media");
 }
 
-const TIKTOK_EMBED_SCRIPT = /<script\b[^>]*\bsrc="https:\/\/www\.tiktok\.com\/embed\.js"[^>]*>\s*<\/script>/gi;
-
-/** html d'oEmbed TikTok : le blockquote « tiktok-embed » ; le script embed.js
- * officiel est retiré (la page hôte le charge elle-même), tout autre script
- * fait refuser le code. Forme exacte À VÉRIFIER (essai T4). */
-export function tiktokEmbedHtmlOf(body: unknown): string | null {
+/** oEmbed TikTok : le code officiel attendu (blockquote « tiktok-embed ») est proposé. */
+export function offersTikTokEmbed(body: unknown): boolean {
   const html = htmlField(body);
-  if (html === null) return null;
-  const blockquote = html.replace(TIKTOK_EMBED_SCRIPT, "").trim();
-  return blockquote.startsWith("<blockquote") && blockquote.includes("tiktok-embed") && !/<script/i.test(blockquote) ? blockquote : null;
+  return html !== null && html.trimStart().startsWith("<blockquote") && html.includes("tiktok-embed");
 }
 
 /** Ouvre le lien tenu : lien court suivi (depuis le téléphone : adresse IP de
  * la personne, aucune charge serveur, note R1 §3), puis, pour Instagram,
- * vérification et code officiel. */
-export async function openPlayerLink(rawUrl: string, options: { width: number; fetchImpl?: FetchLike }): Promise<EmbedOpening> {
+ * vérification. `platform` : plateforme du lien collé, celle de l'accord et
+ * de l'interrupteur vérifiés par l'écran ; un lien court qui mène à l'autre
+ * plateforme est refusé avant tout appel oEmbed et tout chargement. */
+export async function openPlayerLink(rawUrl: string, options: { platform: PlayerPlatform; width: number; fetchImpl?: FetchLike }): Promise<EmbedOpening> {
   const fetchImpl = options.fetchImpl ?? fetch;
   let link = readPlayerLink(rawUrl);
   if (link.kind === "short") {
+    if (link.platform !== options.platform) return { kind: "unavailable", reason: "short_link" };
     try {
       const response = await get(fetchImpl, link.url, PLAYER_NETWORK.resolveTimeoutMs);
       link = readPlayerLink(response.url);
@@ -273,6 +357,8 @@ export async function openPlayerLink(rawUrl: string, options: { width: number; f
     if (link.kind === "short" || link.kind === "none") return { kind: "unavailable", reason: "short_link" };
   }
   if (link.kind === "none") return { kind: "unavailable", reason: "not_a_video" };
+  // Vidéo de l'autre plateforme (lien court qui y mène) : rien n'est chargé.
+  if (link.kind !== options.platform) return { kind: "unavailable", reason: "short_link" };
   if (link.kind === "tiktok") {
     return { kind: "embed", embed: { platform: "tiktok", variant: "player", id: link.id, media: link.media, playerUrl: tiktokPlayerUrl(link.id), oembedUrl: link.oembedUrl } };
   }
@@ -280,9 +366,8 @@ export async function openPlayerLink(rawUrl: string, options: { width: number; f
     const response = await get(fetchImpl, instagramOEmbedUrl(link.canonical, options.width), PLAYER_NETWORK.oembedTimeoutMs);
     const verdict = oembedVerdict(response.status);
     if (verdict !== "ok") return { kind: "unavailable", reason: verdict };
-    const html = embedHtmlOf(await response.json());
-    return html
-      ? { kind: "embed", embed: { platform: "instagram", variant: "oembed", code: link.code, media: link.media, canonical: link.canonical, html } }
+    return offersInstagramEmbed(await response.json())
+      ? { kind: "embed", embed: { platform: "instagram", variant: "oembed", code: link.code, media: link.media, canonical: link.canonical } }
       : { kind: "unavailable", reason: "not_public" };
   } catch (error) {
     return { kind: "unavailable", reason: isOffline(error) ? "network" : "no_answer" };
@@ -291,20 +376,20 @@ export async function openPlayerLink(rawUrl: string, options: { width: number; f
 
 /** Vérification TikTok (oEmbed), faite pendant que le lecteur charge : elle
  * explique un lecteur muet (vidéo privée, supprimée…), fait passer en
- * « indisponible » une vidéo qu'elle refuse (contre-expertise n° 14) et
- * fournit le code d'intégration du repli (n° 9). */
+ * « indisponible » une vidéo qu'elle refuse (contre-expertise n° 14) et dit
+ * si le repli par code d'intégration est possible (n° 9). */
 export async function checkTikTok(oembedUrl: string | null, fetchImpl: FetchLike = fetch): Promise<TikTokCheck> {
-  if (!oembedUrl) return { status: "skipped", html: null };
+  if (!oembedUrl) return { status: "skipped", embeddable: false };
   try {
     const response = await get(fetchImpl, oembedUrl, PLAYER_NETWORK.oembedTimeoutMs);
     const verdict = oembedVerdict(response.status);
-    if (verdict !== "ok") return { status: verdict, html: null };
+    if (verdict !== "ok") return { status: verdict, embeddable: false };
     const body = await response.json();
     const type = typeof body === "object" && body !== null && "type" in body ? (body as { type: unknown }).type : undefined;
     // Comme le serveur (oembed.ts l.40) : un profil répond « rich ».
-    if (typeof type === "string" && type !== "video" && type !== "photo") return { status: "not_a_video", html: null };
-    return { status: "ok", html: tiktokEmbedHtmlOf(body) };
+    if (typeof type === "string" && type !== "video" && type !== "photo") return { status: "not_a_video", embeddable: false };
+    return { status: "ok", embeddable: offersTikTokEmbed(body) };
   } catch (error) {
-    return { status: isOffline(error) ? "network" : "no_answer", html: null };
+    return { status: isOffline(error) ? "network" : "no_answer", embeddable: false };
   }
 }

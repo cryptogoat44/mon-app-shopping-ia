@@ -24,6 +24,7 @@ import {
   markScreenConsentShown,
   mediaState,
   pauseMedia,
+  playerPlatforms,
   readPlayerConsent,
   reportBlackImage,
   screenConsentNeeded,
@@ -31,8 +32,10 @@ import {
 import {
   checkTikTok,
   clearPlayerLink,
+  embedAllowed,
   getHeldPlayerLink,
   openPlayerLink,
+  playerAppUrl,
   playerBaseUrl,
   readPlayerLink,
   type HeldPlayerLink,
@@ -82,7 +85,7 @@ type Capture =
 type Notice = "tap_to_play" | "leave" | "reloaded";
 
 const BASE_URL = playerBaseUrl(PUBLIC_WEB_URL);
-const NO_CHECK: Promise<TikTokCheck> = Promise.resolve({ status: "skipped", html: null });
+const NO_CHECK: Promise<TikTokCheck> = Promise.resolve({ status: "skipped", embeddable: false });
 
 export default function PlayerScreen() {
   // Lu une fois : le lien reste en mémoire jusqu'à « Fermer » ou au départ de l'écran.
@@ -178,6 +181,8 @@ function Player({ held }: { held: HeldPlayerLink }) {
   const layout = playerLayout(screen.width, screen.height - insets.top - insets.bottom);
   const embedWidth = Math.floor(Math.min(screen.width - 2 * space.md, 400));
   const name = t.spotter.platformName[held.platform];
+  // « Ouvrir dans TikTok / Instagram » : adresse reconstruite depuis le lien lu, jamais le texte collé (null : bouton masqué).
+  const appUrl = playerAppUrl(held.url, held.platform);
   const webRef = useRef<WebView>(null);
   const frameRef = useRef<View>(null);
   const [generation, setGeneration] = useState(0);
@@ -264,9 +269,15 @@ function Player({ held }: { held: HeldPlayerLink }) {
     reloaded.current = false;
     fallbackTried.current = false;
     setStage({ kind: "opening" });
-    const result = await openPlayerLink(url, { width: embedWidth });
+    const result = await openPlayerLink(url, { platform: held.platform, width: embedWidth });
     if (!alive.current || token.current !== mine) return;
-    if (result.kind === "embed") return start(result.embed);
+    if (result.kind === "embed") {
+      // L'accord et l'interrupteur ont été vérifiés pour la plateforme du lien
+      // collé : une vidéo d'une autre plateforme (lien court qui y mène) n'est
+      // jamais chargée.
+      if (embedAllowed(result.embed, held.platform, playerPlatforms())) return start(result.embed);
+      return unavailable("short_link");
+    }
     const link = readPlayerLink(url);
     if (result.reason === "short_link" && webResolve && link.kind === "short") return setStage({ kind: "resolving", url: link.url });
     unavailable(result.reason);
@@ -291,9 +302,9 @@ function Player({ held }: { held: HeldPlayerLink }) {
     fallbackTried.current = true;
     const mine = token.current;
     const result = await check.current;
-    if (!alive.current || token.current !== mine || result.status !== "ok" || !result.html) return false;
+    if (!alive.current || token.current !== mine || result.status !== "ok" || !result.embeddable) return false;
     track("player_fallback", { platform: "tiktok", choice: "embed" });
-    start({ platform: "tiktok", variant: "oembed", id: embed.id, html: result.html });
+    start({ platform: "tiktok", variant: "oembed", id: embed.id });
     return true;
   }
 
@@ -493,8 +504,9 @@ function Player({ held }: { held: HeldPlayerLink }) {
   }
 
   function openInApp() {
+    if (!appUrl) return;
     track("player_fallback", { platform: held.platform, choice: "open_app" });
-    void Linking.openURL(held.url).catch(() => {});
+    void Linking.openURL(appUrl).catch(() => {});
   }
 
   async function acceptGate() {
@@ -517,6 +529,7 @@ function Player({ held }: { held: HeldPlayerLink }) {
         {stage.kind === "resolving" ? (
           <ShortLinkResolver
             url={stage.url}
+            platform={held.platform}
             onResolved={(url) => void open(url, false)}
             onFailed={() => {
               if (alive.current) unavailable("short_link");
@@ -570,9 +583,11 @@ function Player({ held }: { held: HeldPlayerLink }) {
           <View style={styles.box}>
             <ScreenshotFallback title={null} text={t.player.captureFailed.body(t.preview.screenshotShortcut.ios)} onAdd={() => void addScreenshot()} />
           </View>
-          <Pressable style={styles.secondary} onPress={openInApp} accessibilityRole="button">
-            <Text style={styles.secondaryLabel}>{t.player.openIn(name)}</Text>
-          </Pressable>
+          {appUrl ? (
+            <Pressable style={styles.secondary} onPress={openInApp} accessibilityRole="button">
+              <Text style={styles.secondaryLabel}>{t.player.openIn(name)}</Text>
+            </Pressable>
+          ) : null}
           {message ? <ErrorMessage style={styles.message}>{message}</ErrorMessage> : null}
         </ScrollView>
       </SafeAreaView>
@@ -625,7 +640,7 @@ function Player({ held }: { held: HeldPlayerLink }) {
           {notice ? (
             <OverlayBox>
               <Text style={styles.body}>{noticeText(notice, name)}</Text>
-              {notice === "leave" ? (
+              {notice === "leave" && appUrl ? (
                 <Pressable onPress={openInApp} style={styles.link} accessibilityRole="button">
                   <Text style={styles.linkLabel}>{t.player.openIn(name)}</Text>
                 </Pressable>
