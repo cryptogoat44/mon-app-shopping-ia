@@ -34,6 +34,9 @@ describe("retirer l'image copiée (administrateurs seulement)", () => {
   let admin: TestUser;
   let owner: TestUser; // partage son envie : publication « envie » et pièces envoyées
   let recipient: TestUser; // suit `owner`, reçoit les pièces et signale
+  // Suit `owner` et ne signale rien : ce que `recipient` signale disparaît de
+  // SON fil et des profils qu'IL consulte (lib/reportedByViewer.ts, chantier 3).
+  let viewer: TestUser;
   let photo: Buffer;
   let wishId = "";
   let wishPost: Post;
@@ -60,11 +63,17 @@ describe("retirer l'image copiée (administrateurs seulement)", () => {
 
   beforeAll(async () => {
     app = await buildTestApp();
-    [admin, owner, recipient] = await Promise.all([createTestUser(app, "ria"), createTestUser(app, "rio"), createTestUser(app, "rir")]);
+    [admin, owner, recipient, viewer] = await Promise.all([
+      createTestUser(app, "ria"),
+      createTestUser(app, "rio"),
+      createTestUser(app, "rir"),
+      createTestUser(app, "riv"),
+    ]);
     photo = await sharp({ create: { width: 40, height: 50, channels: 3, background: "#7a5" } }).jpeg().toBuffer();
     const { error } = await app.supabaseAdmin.from("admins").insert({ user_id: admin.id });
     if (error) throw error;
     expect((await request(recipient, "POST", `/api/follows/${owner.id}`)).statusCode).toBe(204);
+    expect((await request(viewer, "POST", `/api/follows/${owner.id}`)).statusCode).toBe(204);
 
     downloadMock.mockResolvedValue(photo);
     const wish = await request(owner, "POST", "/api/wishlist", {
@@ -94,7 +103,7 @@ describe("retirer l'image copiée (administrateurs seulement)", () => {
   });
 
   afterAll(async () => {
-    for (const user of [admin, owner, recipient]) {
+    for (const user of [admin, owner, recipient, viewer]) {
       await deleteUserStorageFiles(app, user.id);
       await deleteTestUser(app, user.id);
     }
@@ -170,16 +179,20 @@ describe("retirer l'image copiée (administrateurs seulement)", () => {
     expect(files).toEqual(expect.arrayContaining([...kept, ...lookFiles]));
 
     // Partout où la publication apparaît : sans image, avec son titre et son lien.
+    // Le fil et le profil sont vus par `viewer` : `recipient` a signalé la
+    // publication, elle n'y est donc plus pour lui (vérifié juste après).
     const views: Post[] = [
       (await request(owner, "GET", `/api/posts/${wishPost.id}`)).json(),
       (await request(recipient, "GET", `/api/posts/${wishPost.id}`)).json(),
-      (await request(recipient, "GET", "/api/feed")).json().posts.find((p: Post) => p.id === wishPost.id),
-      (await request(recipient, "GET", `/api/users/${owner.id}/posts`)).json().posts.find((p: Post) => p.id === wishPost.id),
+      (await request(viewer, "GET", "/api/feed")).json().posts.find((p: Post) => p.id === wishPost.id),
+      (await request(viewer, "GET", `/api/users/${owner.id}/posts`)).json().posts.find((p: Post) => p.id === wishPost.id),
     ];
     for (const view of views) {
       expect(view).toMatchObject({ mediaUrl: null, mediaThumbUrl: null, mediaHdUrl: null, mediaRemoved: true });
       expect(view.wish).toMatchObject({ title: "Foulard en soie", merchantUrl: "https://example-shop.test/foulard" });
     }
+    expect((await request(recipient, "GET", "/api/feed")).json().posts.some((p: Post) => p.id === wishPost.id)).toBe(false);
+    expect((await request(recipient, "GET", `/api/users/${owner.id}/posts`)).json().posts.some((p: Post) => p.id === wishPost.id)).toBe(false);
     // L'envie elle-même garde l'image d'origine du marchand (décision du fondateur).
     expect((await request(owner, "GET", `/api/wishlist/${wishId}`)).json().imageUrl).toBe(ORIGINAL_IMAGE);
     // La pièce envoyée avec une autre copie garde son image.
@@ -218,12 +231,21 @@ describe("retirer l'image copiée (administrateurs seulement)", () => {
 
     const res = await removeImage({ targetType: "piece", targetId: piece.id });
     expect(res.statusCode).toBe(200);
-    expect((await received()).find((p) => p.id === piece.id)).toMatchObject({
-      imageUrl: null,
-      imageThumbUrl: null,
-      imageRemoved: true,
+    // `recipient` a signalé la pièce : elle n'est plus dans SES pièces reçues
+    // (lib/reportedByViewer.ts). La pièce elle-même reste, sans image.
+    expect((await received()).some((p) => p.id === piece.id)).toBe(false);
+    const { data: kept } = await app.supabaseAdmin
+      .from("piece_sends")
+      .select("image_url, image_thumb_url, image_removed_at, title, merchant_url, hidden_at")
+      .eq("id", piece.id)
+      .single();
+    expect(kept).toMatchObject({
+      image_url: null,
+      image_thumb_url: null,
+      image_removed_at: expect.any(String),
       title: "Foulard en soie",
-      merchantUrl: "https://example-shop.test/foulard",
+      merchant_url: "https://example-shop.test/foulard",
+      hidden_at: null,
     });
     expect(await journal(piece.id)).toEqual([{ action: "remove_image", reason: "image_rights", note: null, target_type: "piece" }]);
     const notices = (await notifications(owner)).filter((n) => n.type === "moderation").map((n) => n.moderation);
@@ -280,8 +302,10 @@ describe("retirer l'image copiée (administrateurs seulement)", () => {
   }, 60_000);
 
   it("sans image, la pièce se retire encore, et la publication « envie » se supprime encore", async () => {
+    expect(removedPieceId).not.toBe("");
     expect((await request(recipient, "DELETE", `/api/pieces/received/${removedPieceId}`)).statusCode).toBe(204);
-    expect((await received()).some((p) => p.id === removedPieceId)).toBe(false);
+    const { data: left } = await app.supabaseAdmin.from("piece_sends").select("id").eq("id", removedPieceId);
+    expect(left).toEqual([]);
     expect((await request(owner, "DELETE", `/api/posts/${wishPost.id}`)).statusCode).toBe(204);
     expect((await request(owner, "GET", `/api/posts/${wishPost.id}`)).statusCode).toBe(404);
   });
