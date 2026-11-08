@@ -1,17 +1,20 @@
 import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
-import { useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { ClipboardIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
 import { detectLink, type LinkDetection } from "@/lib/link-detection";
-import { beginFromLink, prepareErrorMessage } from "@/lib/spot-flow";
+import { linkRefusal } from "@/lib/link-step";
+import { useLinkEntry } from "@/lib/use-link-entry";
 import { themedStyles } from "@/theme/themed-styles";
 
-// Champ de lien du Spotter (Lot S) : analyse de l'image de couverture.
-// DÉSACTIVÉ au lot 4 ter (voir lib/spot-flags.ts) ; gardé pour pouvoir le rétablir.
+// Champ de lien du Spotter. Mode « player » : le lecteur intégré (app iPhone,
+// lot « lecteur intégré », coupé tant que LINK_PLAYER_ENABLED vaut false).
+// Mode « cover » : l'analyse de l'image de couverture (Lot S), DÉSACTIVÉE au
+// lot 4 ter (voir lib/spot-flags.ts) ; gardée pour pouvoir la rétablir. Le
+// bouton passe par la même fonction qu'un lien partagé (lib/use-link-entry.ts).
 
 function DetectionCard({ detection }: { detection: LinkDetection }) {
   if (detection.kind === "supported") {
@@ -24,14 +27,14 @@ function DetectionCard({ detection }: { detection: LinkDetection }) {
       </View>
     );
   }
-  if (detection.kind === "unsupported") return <ErrorMessage style={styles.feedback}>{t.spotter.unsupportedLink}</ErrorMessage>;
-  if (detection.kind === "not_a_link") return <ErrorMessage style={styles.feedback}>{t.spotter.notALink}</ErrorMessage>;
-  if (detection.kind === "not_a_video") return <ErrorMessage style={styles.feedback}>{t.spotter.notAVideo[detection.platform]}</ErrorMessage>;
-  return null;
+  const refusal = linkRefusal(detection);
+  return refusal ? <ErrorMessage style={styles.feedback}>{refusal}</ErrorMessage> : null;
 }
 
-export function LinkEntry() {
-  const router = useRouter();
+/** `onHelp` : le lien ne peut pas être lu — le Spotter montre l'aide « capture d'écran d'abord ». */
+export function LinkEntry({ onHelp, mode = "cover" }: { onHelp: () => void; mode?: "cover" | "player" }) {
+  const label = mode === "player" ? t.player.linkLabel : t.spotter.linkLabel;
+  const openLink = useLinkEntry();
   const [link, setLink] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -58,10 +61,9 @@ export function LinkEntry() {
     setMessage(null);
     setBusy(true);
     try {
-      const draft = await beginFromLink(detection.url, detection.platform);
-      router.push({ pathname: "/spot/apercu", params: { searchId: draft.searchId ?? "" } });
-    } catch (error) {
-      setMessage(prepareErrorMessage(error));
+      const outcome = await openLink(link, "paste");
+      if (outcome.kind === "refused") setMessage(outcome.message);
+      if (outcome.kind === "help") onHelp();
     } finally {
       setBusy(false);
     }
@@ -69,7 +71,8 @@ export function LinkEntry() {
 
   return (
     <>
-      <Text style={styles.label}>{t.spotter.linkLabel}</Text>
+      <Text style={styles.label}>{label}</Text>
+      {mode === "player" ? <Text style={styles.hint}>{t.player.linkHint}</Text> : null}
       <View style={styles.field}>
         <TextInput
           style={styles.input}
@@ -85,7 +88,7 @@ export function LinkEntry() {
           keyboardType="url"
           returnKeyType="go"
           onSubmitEditing={handleContinue}
-          accessibilityLabel={t.spotter.linkLabel}
+          accessibilityLabel={label}
         />
         <Pressable onPress={handlePaste} hitSlop={10} style={styles.pasteButton} accessibilityRole="button">
           <ClipboardIcon size={16} tint={color.vert} />
@@ -96,7 +99,9 @@ export function LinkEntry() {
       {message ? <ErrorMessage style={styles.feedback}>{message}</ErrorMessage> : null}
       <Pressable style={[styles.primary, !canContinue ? styles.primaryDisabled : null]} onPress={handleContinue} disabled={!canContinue} accessibilityRole="button">
         {busy ? <ActivityIndicator color={color.blanc} /> : null}
-        <Text style={[styles.primaryLabel, !canContinue ? styles.primaryLabelDisabled : null]}>{busy ? t.spotter.preparing : t.spotter.continue}</Text>
+        <Text style={[styles.primaryLabel, !canContinue ? styles.primaryLabelDisabled : null]}>
+          {busy ? t.spotter.preparing : mode === "player" ? t.player.open : t.spotter.continue}
+        </Text>
       </Pressable>
     </>
   );
@@ -104,6 +109,7 @@ export function LinkEntry() {
 
 const styles = themedStyles(() => ({
   label: { fontSize: font.caption, color: color.acier, marginTop: space.xl },
+  hint: { fontSize: font.caption, color: color.acier, marginTop: space.xs, lineHeight: 18 },
   field: { flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: color.filet, gap: space.sm },
   input: { flex: 1, fontSize: font.body, color: color.encre, paddingVertical: 12 },
   pasteButton: { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 44 },

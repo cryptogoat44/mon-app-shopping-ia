@@ -48,7 +48,13 @@ function pointsToContent(platform: LinkPlatform, host: string, path: string): bo
   }
   if (platform === "instagram") {
     if (host === "instagr.am") return segments.length > 0;
-    return ["p", "reel", "reels", "tv"].includes(segments[0] ?? "") && segments.length >= 2;
+    // Lot « lecteur intégré » : aussi /{compte}/reel/{code}/ et les liens de
+    // partage /share/… (formes relevées par yt-dlp, note R2 §2). Sans le
+    // lecteur, ces liens donnent toujours l'aide, comme avant (link-step.ts).
+    if (segments[0] === "share") return segments.length >= 2;
+    const media = ["p", "reel", "reels", "tv"];
+    if (media.includes(segments[0] ?? "")) return segments.length >= 2;
+    return media.includes(segments[1] ?? "") && segments.length >= 3;
   }
   if (host === "pin.it") return segments.length > 0;
   return segments[0] === "pin" && segments.length >= 2;

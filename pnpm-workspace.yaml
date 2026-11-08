@@ -5,8 +5,10 @@ packages:
 allowBuilds:
   # esbuild télécharge son binaire natif via un script d'installation officiel — nécessaire, sans danger.
   esbuild: true
-  # Outil d'envoi des fichiers de débogage à Sentry : non utilisé (envoi des
-  # sourcemaps non retenu), son script d'installation n'est donc pas lancé.
+  # Outil d'envoi des fichiers de débogage à Sentry (sourcemaps et dSYM, envoyés
+  # pendant les builds iPhone depuis le lot « app iPhone prête ») : son binaire
+  # vient des paquets par plateforme (@sentry/cli-darwin sur les machines
+  # d'EAS) ; son script d'installation, qui le retéléchargerait, reste inutile.
   '@sentry/cli': false
 
 minimumReleaseAgeExclude:
@@ -20,3 +22,6 @@ minimumReleaseAgeExclude:
 # Requis pour Expo/React Native : certains modules natifs ne résolvent pas
 # correctement avec le mode d'isolation strict par défaut de pnpm.
 nodeLinker: hoisted
+
+patchedDependencies:
+  react-native-webview@13.16.1: patches/react-native-webview@13.16.1.patch

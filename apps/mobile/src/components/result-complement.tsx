@@ -4,6 +4,7 @@ import type { TextSearchStatus } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { COMPLEMENT_SHOWN_FIRST, firstShown, type IndexedPiece } from "@/lib/result-sections";
+import type { ClickPlacement } from "@/lib/price-first";
 import { ProposalCard } from "@/components/proposal-card";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -12,8 +13,9 @@ import { themedStyles } from "@/theme/themed-styles";
 // d'autres boutiques (requête tirée des titres des propositions) ; « words » :
 // la recherche lancée avec les mots de la personne. Même grille et mêmes
 // cartes que « Autres propositions » (components/proposal-card.tsx), 6
-// d'emblée puis son propre « Voir plus ». Ni nom de fournisseur, ni « IA »
-// (décision du fondateur du 2026-10-21).
+// d'emblée puis son propre « Voir plus ». Pas de nom de fournisseur (décision
+// du fondateur du 2026-10-21) ; la requête de la section « ai » dit qu'elle est
+// écrite par une IA (point 4.3 du document pour l'avocat, 2026-11-05).
 
 /** Issue de la recherche par les mots quand elle n'a rien montré : une phrase,
  * sous les résultats ou après « rien trouvé » ; null sinon. */
@@ -29,6 +31,7 @@ export function ResultComplement({
   query,
   textStatus,
   onSelect,
+  placements,
 }: {
   source: "ai" | "words";
   /** Propositions de la section, sans celle montrée en grand ; `index` désigne la liste complète de l'écran. */
@@ -38,6 +41,8 @@ export function ResultComplement({
   /** Section « words » : issue de la recherche par les mots, pour dire qu'elle n'a rien donné. */
   textStatus?: TextSearchStatus | null;
   onSelect: (index: number) => void;
+  /** Place de chaque proposition à l'écran, pour les statistiques du clic (lib/price-first.ts). */
+  placements?: ReadonlyMap<number, ClickPlacement>;
 }) {
   const [showAll, setShowAll] = useState(false);
   const note = source === "words" && others.length === 0 ? textSearchStatusNote(textStatus) : null;
@@ -54,7 +59,7 @@ export function ResultComplement({
       {visible.length > 0 ? (
         <View style={styles.grid}>
           {visible.map(({ piece, index }) => (
-            <ProposalCard key={piece.id} piece={piece} onSelect={() => onSelect(index)} />
+            <ProposalCard key={piece.id} piece={piece} onSelect={() => onSelect(index)} placement={placements?.get(index)} />
           ))}
         </View>
       ) : null}

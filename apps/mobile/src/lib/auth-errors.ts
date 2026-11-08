@@ -27,7 +27,13 @@ export function authErrorKey(message: string): AuthErrorKey | null {
   return KNOWN_PATTERNS.find((p) => p.match.test(message))?.key ?? null;
 }
 
+/** Jeton anti-robots refusé par Supabase (« captcha protection: … »), point 17. */
+export function isCaptchaError(message: string): boolean {
+  return /captcha/i.test(message);
+}
+
 export function translateAuthError(message: string): string {
+  if (isCaptchaError(message)) return t.robotCheck.rejected;
   const key = authErrorKey(message);
   return key ? t.auth.errors[key] : t.common.genericError;
 }

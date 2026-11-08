@@ -10,6 +10,8 @@ import { rememberedEmail } from "@/lib/remembered-email";
 import { t } from "@/i18n";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
+import { useRobotCheck } from "@/components/robot-check";
+import { withCaptcha } from "@/lib/robot-check";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Adresse où ramène le lien de l'e-mail : le site (web) ou l'app (iPhone).
@@ -29,13 +31,18 @@ export default function ForgotPasswordScreen() {
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Anti-robots (point 17).
+  const robot = useRobotCheck();
+  const ctaDisabled = submitting || !email.trim() || !robot.ready;
 
   async function handleSend() {
     const address = email.trim();
     if (!address) return;
+    const check = robot.take();
+    if (!check) return;
     setError(null);
     setSubmitting(true);
-    const { error: sendError } = await supabase.auth.resetPasswordForEmail(address, { redirectTo: recoveryRedirectUrl() });
+    const { error: sendError } = await supabase.auth.resetPasswordForEmail(address, withCaptcha({ redirectTo: recoveryRedirectUrl() }, check.token));
     setSubmitting(false);
     if (sendError) {
       setError(translateAuthError(sendError.message));
@@ -86,13 +93,14 @@ export default function ForgotPasswordScreen() {
                     accessibilityLabel={t.auth.email}
                   />
                 </View>
+                {robot.widget}
                 <Pressable
-                  style={[styles.cta, submitting || !email.trim() ? styles.ctaDisabled : null]}
+                  style={[styles.cta, ctaDisabled ? styles.ctaDisabled : null]}
                   onPress={handleSend}
-                  disabled={submitting || !email.trim()}
+                  disabled={ctaDisabled}
                   accessibilityRole="button"
                 >
-                  <Text style={[styles.ctaLabel, submitting || !email.trim() ? styles.ctaLabelDisabled : null]}>{submitting ? t.auth.forgot.ctaLoading : t.auth.forgot.cta}</Text>
+                  <Text style={[styles.ctaLabel, ctaDisabled ? styles.ctaLabelDisabled : null]}>{submitting ? t.auth.forgot.ctaLoading : t.auth.forgot.cta}</Text>
                 </Pressable>
               </>
             )}

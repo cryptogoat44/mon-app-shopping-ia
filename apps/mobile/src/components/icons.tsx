@@ -89,6 +89,21 @@ export function VideoIcon({ size = 18, tint = color.encre, strokeWidth = 1.2 }: 
   );
 }
 
+/** Lot « app iPhone prête » : « Prendre une photo » (un boîtier d'appareil et son objectif). */
+export function TakePhotoIcon({ size = 18, tint = color.encre, strokeWidth = 1.2 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
+      <Path
+        d="M2.5 6.5A1.5 1.5 0 014 5h2l1.2-1.8h3.6L12 5h2a1.5 1.5 0 011.5 1.5V13a1.5 1.5 0 01-1.5 1.5H4A1.5 1.5 0 012.5 13z"
+        stroke={tint}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+      <Circle cx={9} cy={9.6} r={2.6} stroke={tint} strokeWidth={strokeWidth * 0.9} />
+    </Svg>
+  );
+}
+
 export function ClockIcon({ size = 24, tint = color.encre, strokeWidth = 1.1 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">

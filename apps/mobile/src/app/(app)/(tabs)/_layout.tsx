@@ -5,7 +5,13 @@ import { color, radius } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { BellIcon, FeedIcon, PersonIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { fetchUnreadNotificationCount } from "@/lib/api";
+import { spotterTab } from "@/lib/shared-item";
 import { onUnreadChanged } from "@/lib/unread-notifications";
+import { usePendingSharedItem } from "@/lib/use-shared-item";
+
+// Pastille ronde, sans chiffre (Activité, partage qui attend le Spotter) ;
+// couleur lue à l'affichage, selon le thème en cours.
+const dot = () => ({ minWidth: 9, maxHeight: 9, borderRadius: 5, backgroundColor: color.vert, top: 2 });
 
 // Barre de navigation (Lot F, proposition A validée par le fondateur) :
 // Spotter · Fil · + · Activité · Profil. Les Envies sont devenues un onglet
@@ -15,6 +21,9 @@ export default function TabsLayout() {
   const router = useRouter();
   const pathname = usePathname();
   const [unread, setUnread] = useState(0);
+  // Lot « partager vers Spotto » : un partage reçu pendant une recherche ou une
+  // saisie attend le Spotter ; une pastille le rappelle jusqu'à son ouverture.
+  const spotter = spotterTab(usePendingSharedItem());
 
   // Relu à chaque changement d'écran : l'écran Activité marque tout comme
   // lu, la pastille disparaît au changement suivant.
@@ -56,7 +65,13 @@ export default function TabsLayout() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: t.spotter.title, tabBarAccessibilityLabel: t.spotter.title, tabBarIcon: ({ color: tint }) => <SearchIcon tint={String(tint)} /> }}
+        options={{
+          title: t.spotter.title,
+          tabBarIcon: ({ color: tint }) => <SearchIcon tint={String(tint)} />,
+          tabBarBadge: spotter.badge,
+          tabBarBadgeStyle: dot(),
+          tabBarAccessibilityLabel: spotter.accessibilityLabel,
+        }}
       />
       <Tabs.Screen
         name="feed"
@@ -97,7 +112,7 @@ export default function TabsLayout() {
           title: t.notifications.title,
           tabBarIcon: ({ color: tint }) => <BellIcon tint={String(tint)} />,
           tabBarBadge: unread > 0 ? "" : undefined,
-          tabBarBadgeStyle: { minWidth: 9, maxHeight: 9, borderRadius: 5, backgroundColor: color.vert, top: 2 },
+          tabBarBadgeStyle: dot(),
           tabBarAccessibilityLabel: unread > 0 ? t.tabs.unread(t.notifications.title, unread) : t.notifications.title,
         }}
       />

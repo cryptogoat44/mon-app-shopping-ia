@@ -5,10 +5,10 @@ import { randomBytes } from "node:crypto";
 import { CONSENT_VERSIONS } from "@monapp/shared-types";
 import { buildApp } from "../src/app.js";
 import { env } from "../src/env.js";
-import { registerHit } from "../src/plugins/rateLimit.js";
 import { RATE_LIMITS } from "../src/lib/rateLimits.js";
 import { askVideoMoments, VideoAiError } from "../src/services/videoMoments.js";
 import { searchCapacityForVideoAi } from "../src/lib/searchCapacity.js";
+import { aiQuotaFor } from "../src/lib/aiQuota.js";
 import { authHeaders, buildMultipart, createTestUser, deleteTestUser, type MultipartFile, type TestUser } from "./helpers.js";
 
 // Lot 4, temps 1 bis : point d'accès de l'analyse automatique. L'IA est
@@ -30,6 +30,13 @@ vi.mock("../src/lib/searchCapacity.js", async (importOriginal) => {
   return { ...original, searchCapacityForVideoAi: vi.fn() };
 });
 const capacityMock = vi.mocked(searchCapacityForVideoAi);
+// Compteurs de l'IA (lot garde-fous, lib/aiQuota.ts) : les vrais par défaut
+// (dans la base avec 0029, en mémoire sans elle) ; simulés pour le plafond commun.
+vi.mock("../src/lib/aiQuota.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/lib/aiQuota.js")>();
+  return { ...original, aiQuotaFor: vi.fn(original.aiQuotaFor) };
+});
+const aiQuotaMock = vi.mocked(aiQuotaFor);
 
 const QUERY = "veste en daim marron";
 const MOMENTS = [
@@ -278,11 +285,12 @@ describe("analyse automatique d'une vidéo (POST /api/video-moments)", () => {
     });
 
     it("plafond commun à tout le service : atteint, plus personne n'envoie d'images", async () => {
-      for (let hit = 0; hit < RATE_LIMITS.videoAiGlobal.max; hit += 1) registerHit("videoAiGlobal:global", RATE_LIMITS.videoAiGlobal);
+      // Plafond commun atteint (simulé : dans la base, il vaudrait pour toute la journée de spotto-dev-2).
+      aiQuotaMock.mockResolvedValueOnce({ allowed: false, refusedBy: "global" });
       await recordChoice(withoutConsent, true);
       const blocked = await send(withoutConsent, { query: QUERY });
       expect(blocked.statusCode).toBe(429);
-      expect(blocked.json().error).toBe("video_ai_global_limit");
+      expect(blocked.json()).toEqual({ error: "video_ai_global_limit", message: RATE_LIMITS.videoAiGlobal.message });
       expect(askMock).not.toHaveBeenCalled();
     });
   });

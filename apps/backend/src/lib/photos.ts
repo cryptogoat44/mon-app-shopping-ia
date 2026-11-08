@@ -1,5 +1,6 @@
 import sharp, { type Sharp } from "sharp";
 import { ImageSourceError } from "./imageProcessing.js";
+import { MAX_INPUT_PIXELS, imageFormatOf } from "./imageSafety.js";
 
 // Photos envoyées par les utilisateurs (publications, Vault, avatar) —
 // lot « images et fluidité ». Une photo d'iPhone pèse 3 à 4 Mo (3024 × 4032) :
@@ -10,13 +11,17 @@ import { ImageSourceError } from "./imageProcessing.js";
 // - « miniature » : 480 px, pour les grilles (≈ 320 px nécessaires) ;
 // - avatar : 512 px.
 // sharp retire aussi les métadonnées (dont la position GPS des photos).
+// Format et taille sont vérifiés avant tout décodage (lib/imageSafety.ts).
 export const PHOTO_SIZES = { display: 1600, thumb: 480, avatar: 512 } as const;
 
 /** Comme optimizePhoto, avec la taille finale (ex. images envoyées à l'IA,
  * dont les coordonnées renvoyées dépendent de cette taille). */
 export async function optimizePhotoWithSize(input: Buffer, maxSide: number, quality = 82): Promise<{ data: Buffer; width: number; height: number }> {
+  // Premiers octets vérifiés AVANT sharp : un SVG n'est jamais lu, même
+  // annoncé comme une photo.
+  if (!imageFormatOf(input)) throw new ImageSourceError("Image illisible");
   try {
-    const { data, info } = await sharp(input, { failOn: "error" })
+    const { data, info } = await sharp(input, { failOn: "error", limitInputPixels: MAX_INPUT_PIXELS })
       .rotate() // orientation EXIF appliquée avant de retirer les métadonnées
       .resize({ width: maxSide, height: maxSide, fit: "inside", withoutEnlargement: true })
       .jpeg({ quality, mozjpeg: true })
@@ -38,7 +43,8 @@ export async function optimizePhoto(input: Buffer, maxSide: number, quality = 82
 // sous-échantillonnées en 4:2:0) ajoutait une deuxième perte visible, et sa
 // miniature, à la même taille en qualité 78, était pire encore. D'où :
 // - formats d'image classiques seulement (jamais de SVG, que sharp devrait
-//   dessiner lui-même à partir d'un fichier venu d'ailleurs), 40 mégapixels
+//   dessiner lui-même à partir d'un fichier venu d'ailleurs), vérifiés sur
+//   les premiers octets AVANT sharp (lib/imageSafety.ts), 40 mégapixels
 //   au plus ;
 // - orientation EXIF appliquée, fond blanc sous la transparence (un PNG de
 //   produit détouré ressortait sur fond NOIR : le JPEG n'a pas de
@@ -65,6 +71,9 @@ export interface SharedCopy {
 /** Ouvre une image à copier : format accepté et taille plafonnée, sinon
  * ImageSourceError. Seul l'en-tête est lu à ce stade. */
 async function openSharedSource(input: Buffer): Promise<{ image: Sharp; width: number; height: number }> {
+  // metadata() fait déjà lire le fichier par sharp : le format se vérifie
+  // donc avant, sur les premiers octets.
+  if (!imageFormatOf(input)) throw new ImageSourceError("Image illisible");
   try {
     const image = sharp(input, { failOn: "error", limitInputPixels: SHARED_COPY_MAX_PIXELS });
     const { format, width, height } = await image.metadata();

@@ -178,7 +178,7 @@ export default function PostDetailScreen() {
       )}
 
       {post && !isMine ? (
-        <ReportBlockMenu visible={menuOpen} onClose={() => setMenuOpen(false)} userId={post.author.id} postId={post.id} onBlocked={goBack} />
+        <ReportBlockMenu visible={menuOpen} onClose={() => setMenuOpen(false)} userId={post.author.id} postId={post.id} onBlocked={goBack} onReported={goBack} />
       ) : null}
     </SafeAreaView>
   );

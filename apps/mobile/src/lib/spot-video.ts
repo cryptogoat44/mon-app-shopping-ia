@@ -14,9 +14,10 @@ import { discardLocalFile, openVideo } from "./video-frames";
 import { durationSeconds, formatClock, megabytes, VIDEO_MAX_BYTES, videoRejection, type OpenedVideo, type VideoRejection } from "./video-timeline";
 
 /** D'où vient la vidéo : sélecteur de la photothèque (app iPhone), fichier
- * choisi dans le navigateur (site), ou dernière vidéo de la galerie proposée
- * sur l'accueil (app iPhone, lot 4 ter). */
-export type VideoSource = "library" | "file" | "latest";
+ * choisi dans le navigateur (site), dernière vidéo de la galerie proposée
+ * sur l'accueil (app iPhone, lot 4 ter), ou feuille de partage d'iOS (copie
+ * rangée dans le cache de Spotto, lot « partager vers Spotto »). */
+export type VideoSource = "library" | "file" | "latest" | "share";
 const PICKER_SOURCE: VideoSource = Platform.OS === "web" ? "file" : "library";
 
 let current: OpenedVideo | null = null;

@@ -4,7 +4,7 @@ import { Image } from "expo-image";
 import { VIDEO_AI } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
-import { CameraIcon, VideoIcon } from "@/components/icons";
+import { CameraIcon, TakePhotoIcon, VideoIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
 import { LinkNotice } from "@/components/link-notice";
 import { QueryInput } from "@/components/spot-launch-views";
@@ -26,22 +26,29 @@ function Tile({ icon, label, onPress, busy, disabled }: { icon: ReactNode; label
   );
 }
 
-/** Deux entrées égales, côte à côte : vidéo et photo. */
+/** Entrées égales, côte à côte : vidéo et photo ; sur l'app iPhone, aussi
+ * « Prendre une photo », à côté de l'import (lot « app iPhone prête »). */
 export function EntryTiles({
   videoLabel,
   onVideo,
   onPhoto,
+  onCamera,
   busy,
 }: {
   videoLabel: string;
   onVideo: () => void;
   onPhoto: () => void;
-  busy: "video" | "photo" | "latest" | null;
+  /** Absent : pas d'appareil photo proposé (site). */
+  onCamera?: () => void;
+  busy: "video" | "photo" | "camera" | "latest" | null;
 }) {
   return (
     <View style={styles.tiles}>
       <Tile icon={<VideoIcon size={24} tint={color.vert} />} label={videoLabel} onPress={onVideo} busy={busy === "video"} disabled={busy !== null} />
       <Tile icon={<CameraIcon size={24} tint={color.vert} />} label={t.spotter.addPhoto} onPress={onPhoto} busy={busy === "photo"} disabled={busy !== null} />
+      {onCamera ? (
+        <Tile icon={<TakePhotoIcon size={24} tint={color.vert} />} label={t.cameraCapture.takePhoto} onPress={onCamera} busy={busy === "camera"} disabled={busy !== null} />
+      ) : null}
     </View>
   );
 }
@@ -89,7 +96,7 @@ export function LatestVideoCard({
       ) : (
         <>
           <QueryInput value={query} onChangeText={onQuery} onSubmit={() => valid && !busy && onLaunch()} testID="latest-query" style={styles.input} />
-          {linkInQuery ? <LinkNotice style={styles.notice} onAddVideo={onAddVideo} /> : null}
+          {linkInQuery ? <LinkNotice style={styles.notice} onAddVideo={onAddVideo} link={query} /> : null}
           <Pressable
             style={[styles.primary, valid ? null : styles.primaryDisabled]}
             onPress={onLaunch}

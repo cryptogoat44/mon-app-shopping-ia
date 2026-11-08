@@ -65,8 +65,11 @@ export const fr = {
   },
   crop: {
     label: "Zone analysée",
-    hint: "Faites glisser le cadre ou ses coins. Balayez vers le haut ou le bas pour l'agrandir ou le réduire.",
+    // Lot entourer la pièce : sans tracer (VoiceOver, motricité), le bouton choisit l'image entière.
+    hint: (instruction: string, button: string) => `${instruction}, ou touchez « ${button} ».`,
     value: (width: number, height: number) => `${width} % de la largeur, ${height} % de la hauteur`,
+    none: "Pièce pas encore entourée",
+    whole: "Toute l'image",
   },
   peopleSearch: {
     placeholder: "Rechercher",
@@ -197,9 +200,12 @@ export const fr = {
     // Photo (petit lot 2, décision du fondateur du 2026-10-27).
     photoLabel: "Quelle pièce ? (facultatif)",
     photoPlaceholder: "ex. la veste en cuir noir",
-    photoWordsNote: "Vos mots servent à trier les propositions. Seule l'image part vers la recherche.",
-    // Montré tant que le cadre n'a pas bougé, avec ou sans mots (lot « premier essai »).
-    frameHint: "Resserrez le cadre sur la pièce seule, sans visage ni texte autour : Spotto la retrouvera plus facilement.",
+    // Texte du document pour l'avocat (2026-11-05, point 4.1), vrai interrupteurs coupés comme allumés.
+    photoWordsNote:
+      "Vos mots servent seulement à trier les propositions : ils ne partent pas avec l'image vers la recherche. Ils ne sont envoyés à un moteur de recherche que si vous lancez vous-même une recherche avec vos mots.",
+    // Montré tant que la pièce n'est pas entourée (rien de tracé, ou toute
+    // l'image), avec ou sans mots (lots « premier essai » et « entourer la pièce »).
+    frameHint: "Entourez la pièce seule, sans visage ni texte autour : Spotto la retrouvera plus facilement.",
     videoPreview: (duration: string) => `Aperçu de votre vidéo, ${duration}`,
     photoPreview: "Votre photo",
     // Titre de la vidéo sans l'analyse automatique (texte du fondateur, 2026-10-25).
@@ -223,6 +229,21 @@ export const fr = {
       computer: "sur Mac : Cmd + Maj + 5 ; sur PC : Outil Capture d'écran",
     },
     addVideo: "Ajouter une vidéo",
+  },
+  // Lot « partager vers Spotto » : ce que la feuille de partage d'iOS remet à
+  // Spotto. Textes à valider par le fondateur.
+  share: {
+    signInFirst: "Connectez-vous : ce que vous avez partagé s'ouvrira ensuite dans Spotter.",
+    // Partage reçu pendant une recherche, une saisie ou une page à part : on
+    // ne quitte pas l'écran, et rien ne s'ouvre tout seul ensuite ; l'onglet
+    // Spotter porte une pastille en attendant (à valider).
+    waiting: "Votre partage vous attend dans Spotter.",
+    // VoiceOver : onglet Spotter marqué de cette pastille (à valider).
+    tabWaiting: (label: string) => `${label}, un partage vous attend`,
+    several: "Spotto ouvre un seul élément à la fois : partagez une seule photo ou une seule vidéo.",
+    unsupported: "Spotto ne peut pas ouvrir ce contenu. Partagez un lien TikTok, Instagram ou Pinterest, une capture d'écran, une photo ou une vidéo.",
+    unreadable: "Ce que vous avez partagé n'a pas pu être ouvert. Réessayez, ou ajoutez la photo ou la vidéo ci-dessous.",
+    imageUnreadable: (button: string) => `Cette image n'a pas pu être ouverte. Réessayez, ou ajoutez-la avec « ${button} ».`,
   },
   // Lot « premier essai » : le bon geste (la capture d'écran d'abord),
   // « Comment ça marche », les Envies après « Garder », la boutique à
@@ -266,6 +287,69 @@ export const fr = {
       resending: "Envoi…",
       resendIn: (seconds: number) => `Renvoyer l'e-mail dans ${seconds} s`,
       resent: "E-mail renvoyé. Pensez à regarder aussi dans les courriers indésirables.",
+    },
+  },
+  // Lot « lecteur intégré » (app iPhone) : la vidéo TikTok ou Instagram
+  // s'ouvre dans Spotto, dans le lecteur officiel ; « Spotter ce moment »
+  // prend l'image affichée. TEXTES À VALIDER PAR LE FONDATEUR (§1.7 de la
+  // conception, corrigé par la contre-expertise : lien court n° 4a, accord
+  // préalable n° 5). Espaces insécables avant « : » et « ? », et dans « … ».
+  player: {
+    linkQuestion: "Vous avez un lien TikTok ou Instagram ?",
+    linkLabel: "Lien TikTok ou Instagram",
+    linkHint: "La vidéo s'ouvre ici, dans Spotto : vous la mettrez en pause sur la pièce.",
+    open: "Ouvrir la vidéo",
+    opening: "Ouverture de la vidéo…",
+    instruction: "Mettez la vidéo en pause quand la pièce est bien visible.",
+    frameTitle: (platform: string) => `Vidéo ${platform}`,
+    spot: "Spotter ce moment",
+    taking: "Spotto prend l'image…",
+    recording: "Enregistrement de l'écran…",
+    privacy: (platform: string) => `Vidéo lue par ${platform}, sans téléchargement. Seule l'image de ce moment est envoyée.`,
+    tapToPlay: "Touchez la vidéo pour la lancer.",
+    leaveLink: (platform: string) => `Ce lien s'ouvre dans ${platform}.`,
+    openIn: (platform: string) => `Ouvrir dans ${platform}`,
+    reloaded: "Le lecteur a redémarré : retrouvez le bon moment.",
+    gate: {
+      body: (platform: string) => `Cette vidéo est lue par ${platform}, qui peut utiliser ses propres traceurs.`,
+      play: "Lire la vidéo ici",
+    },
+    unavailableTitle: "Cette vidéo ne s'ouvre pas dans Spotto",
+    unavailable: {
+      notPublic: "Elle est peut-être privée ou supprimée, ou son auteur ne permet pas de l'afficher ailleurs.",
+      notAVideo: (platform: string) => `Ce lien ${platform} ne mène pas à une vidéo.`,
+      shortLink: (platform: string) => `Ce lien ne s'ouvre pas ici pour le moment. Ouvrez la vidéo dans ${platform}, ou ajoutez une capture d'écran.`,
+      noAnswer: (platform: string) => `${platform} ne répond pas pour le moment. Réessayez dans un instant.`,
+      playerError: (platform: string) => `Le lecteur ${platform} n'a pas pu lire cette vidéo.`,
+      crashed: "Le lecteur s'est arrêté.",
+    },
+    screenConsent: {
+      title: "Encore une étape",
+      body: "Votre iPhone va vous demander d'autoriser l'enregistrement de l'écran. Spotto n'en garde qu'une image, celle de ce moment : rien d'autre n'est enregistré ni envoyé.",
+      continue: "Continuer",
+      myself: "Faire une capture moi-même",
+    },
+    captureFailed: {
+      title: "Spotto n'a pas pu prendre l'image",
+      body: (shortcut: string) => `Faites une capture d'écran maintenant (${shortcut}) : la vidéo reste en pause ici. Puis ajoutez-la.`,
+      declined: (shortcut: string) => `Sans votre accord, Spotto ne peut pas prendre l'image. Faites une capture d'écran maintenant (${shortcut}), puis ajoutez-la.`,
+      phoneCall: (shortcut: string) => `Impossible pendant un appel. Faites une capture d'écran (${shortcut}), puis ajoutez-la.`,
+    },
+    blackImage: "L'image prise était noire ou vide ? Réessayer autrement",
+    howItWorksSteps: (spot: string) => [
+      "Partagez la vidéo TikTok ou Instagram vers Spotto, ou collez son lien.",
+      `Mettez-la en pause sur la pièce, touchez « ${spot} », puis entourez la pièce.`,
+      "Spotto vous montre où l'acheter, en 10 à 20 secondes.",
+    ],
+    linkNotice: {
+      title: "Cette vidéo peut s'ouvrir dans Spotto",
+      body: "Ouvrez-la ici même : vous la mettrez en pause sur la pièce.",
+    },
+    settings: {
+      title: "Vidéos lues dans Spotto",
+      on: "Vous avez accepté que les vidéos TikTok ou Instagram soient lues ici, dans leur lecteur officiel.",
+      withdraw: "Retirer mon accord",
+      withdrawn: "Accord retiré : la question vous sera reposée à la prochaine vidéo.",
     },
   },
   preview: {
@@ -320,10 +404,20 @@ export const fr = {
     missing: "Ce parcours n'est plus disponible. Recommencez depuis Spotter.",
     back: "Retour à Spotter",
   },
+  // Lot entourer la pièce (décision du fondateur : entourer seulement) : la
+  // pièce s'entoure au doigt, ou à la souris sur un ordinateur. Textes à valider.
   targeting: {
     title: "Entourez la pièce",
-    caption: "Seule la zone choisie sera analysée. Faites glisser le cadre ou ses coins.",
-    reset: "Réinitialiser le cadre",
+    caption: "Seule la zone entourée sera analysée. Pour corriger, entourez à nouveau la pièce.",
+    // Consigne avant le premier tracé.
+    instruction: {
+      finger: "Entourez la pièce avec votre doigt",
+      mouse: "Entourez la pièce avec la souris ou le doigt",
+    },
+    // Le tracé n'est pas retenu : un toucher, un trait, un balayage, ou une
+    // boucle trop petite ou pas refermée. À valider.
+    tooSmall: "Faites un tour complet, un peu plus large que la pièce.",
+    wholeImage: "Utiliser toute l'image",
     launch: "Lancer l'identification",
   },
   analysis: {
@@ -346,7 +440,7 @@ export const fr = {
     relaunch: "Relancer",
     checkAgain: "Vérifier à nouveau",
     cancelled:
-      "Recherche annulée. Elle a pu continuer de notre côté : relancez-la sans changer le cadre ni les mots, et son résultat s'affichera s'il existe déjà.",
+      "Recherche annulée. Elle a pu continuer de notre côté : relancez-la sans changer la zone ni les mots, et son résultat s'affichera s'il existe déjà.",
   },
   result: {
     title: "Résultats",
@@ -354,7 +448,13 @@ export const fr = {
     count: (n: number, query: string | null | undefined) =>
       `${n} proposition${n > 1 ? "s" : ""}${query ? ` pour « ${query} »` : ""}`,
     sortedByWords: "Triées selon vos mots",
+    // Prix d'abord : la première proposition remontée par vos mots n'a pas de
+    // prix, elle est repliée plus bas (relecture F4, à valider).
+    sortedByWordsPriceFirst: "Avec prix d'abord, puis selon vos mots",
     bestProposal: "Meilleure proposition",
+    // Prix d'abord : la grande carte proposée d'office quand ce n'est pas la
+    // première de la recherche (relecture E4, à valider).
+    bestWithPrice: "Meilleure proposition avec prix",
     otherProposal: "Autre proposition",
     otherProposals: "Autres propositions",
     showMore: (n: number) => `Voir plus (${n})`,
@@ -380,7 +480,8 @@ export const fr = {
     boughtError: "L'ajout au Vault a échoué.",
     categoryTitle: "Dans quelle catégorie ?",
     share: "Partager",
-    shareMessage: (name: string, url: string) => `${name}\n${url} (lien affilié)\n\nRepérée avec Spotto.`,
+    // La mention seulement pour un vrai lien affilié (lot garde-fous, lib/affiliate-link.ts).
+    shareMessage: (name: string, url: string, affiliate: boolean) => `${name}\n${url}${affiliate ? " (lien affilié)" : ""}\n\nRepérée avec Spotto.`,
     linkCopied: "Message copié, avec le lien",
     merchantLinkBlocked: "Votre navigateur a bloqué l'ouverture. Touchez ici pour continuer vers le marchand.",
     loading: "Chargement du résultat",
@@ -392,16 +493,29 @@ export const fr = {
     backToSpotter: "Retour à Spotter",
     notRight: "Ce n'est pas la bonne pièce ?",
     correctionsLead: "Montrez la pièce autrement à Spotto :",
+    // Prix d'abord : avant les corrections, qui relancent une recherche, voir
+    // gratuitement les propositions repliées sans prix (relecture ORD-5, à valider).
+    notRightWithoutPriceLead: "Elle est peut-être parmi les propositions sans prix :",
     // Sans nom de fournisseur (décision du fondateur, 2026-10-21). Lot « premier
     // essai » : ne pousse plus à relancer la même image (même résultat, une
     // recherche de plus).
     noMatchTitle: "Notre recherche visuelle n'a rien trouvé sur cette image.",
     noMatchTip:
-      "Relancer la même image donnerait le même résultat. Essayez plutôt de resserrer le cadre sur la pièce seule, de choisir un autre moment de la vidéo où elle se voit bien ou, pour une vidéo, de préciser vos mots.",
-    // Aucune proposition gardée n'a de prix (textes validés le 2026-10-21).
+      "Relancer la même image donnerait le même résultat. Essayez plutôt d'entourer la pièce seule, de choisir un autre moment de la vidéo où elle se voit bien ou, pour une vidéo, de préciser vos mots.",
+    // Aucune proposition gardée n'a de prix (textes validés le 2026-10-21 ; la
+    // fin de noPriceText parle d'entourer, plus de cadre : à valider).
     noPriceTitle: "Aucune de ces propositions n'affiche de prix.",
     noPriceText:
-      "Ce sont des pièces qui ressemblent à la vôtre, trouvées par notre recherche visuelle. Elles ne sont pas forcément en vente : ouvrez-les pour vérifier, ou essayez un autre cadre.",
+      "Ce sont des pièces qui ressemblent à la vôtre, trouvées par notre recherche visuelle. Elles ne sont pas forcément en vente : ouvrez-les pour vérifier, ou entourez la pièce autrement.",
+    // Prix d'abord (décision du fondateur du 2026-11-03) : les propositions
+    // sans prix rangées en dernier, derrière un bouton. Textes à valider.
+    // Titre de la section, au-dessus du bouton (relecture E5, à valider).
+    withoutPriceTitle: "Sans prix affiché",
+    showWithoutPrice: (n: number) => (n > 1 ? `Voir les ${n} propositions sans prix` : "Voir la proposition sans prix"),
+    hideWithoutPrice: (n: number) => (n > 1 ? "Masquer les propositions sans prix" : "Masquer la proposition sans prix"),
+    // VoiceOver, après le bouton : la liste apparaît ou disparaît dessous (à valider).
+    withoutPriceShown: (n: number) => (n > 1 ? `${n} propositions sans prix, affichées ci-dessous.` : "La proposition sans prix est affichée ci-dessous."),
+    withoutPriceHidden: (n: number) => (n > 1 ? "Propositions sans prix masquées." : "Proposition sans prix masquée."),
     technicalTitle: "La recherche n'a pas abouti",
     // Panne du service, pas de la connexion de la personne (lot recherche coupée).
     technicalTip: "Le service de recherche n'a pas répondu. Réessayez dans un instant.",
@@ -419,6 +533,9 @@ export const fr = {
     capacityUserTip: "Réessayez demain.",
     previewUnavailableTitle: "L'image de la vidéo n'est plus disponible",
     previewUnavailableTip: "Importez une capture d'écran de la pièce pour continuer.",
+    // Lot garde-fous : recherche en pause, notre fournisseur est en panne (disjoncteur). À relire.
+    pausedTitle: "La recherche est momentanément en pause",
+    pausedTip: "Notre fournisseur de recherche rencontre une panne et nous sommes prévenus. Cette tentative n'a pas été comptée. Réessayez dans quelques minutes.",
     // Bouton « Résultat incohérent » (fiabilité des résultats, motifs validés
     // par le fondateur le 2026-10-15).
     reportMenuLabel: "Signaler un résultat incohérent",
@@ -443,16 +560,19 @@ export const fr = {
     reportWithdrawError: "Le signalement n'a pas pu être retiré. Vérifiez votre connexion, puis réessayez.",
     // Voie C (lot c) : sections sous les propositions de la recherche
     // visuelle, puis la recherche par les mots (« Que cherchez-vous ? »).
-    // Textes à valider par le fondateur ; sans nom de fournisseur, sans « IA ».
+    // Textes à valider par le fondateur ; sans nom de fournisseur. La requête
+    // des boutiques dit qu'elle est écrite par une IA (document pour l'avocat
+    // du 2026-11-05, point 4.3).
     complementTitleAi: "Cette pièce dans d'autres boutiques",
     complementTitleWords: "Résultats pour vos mots",
-    complementQuery: (query: string) => `Recherche : “${query}”`,
+    complementQuery: (query: string) => `Recherche écrite par une IA : “${query}”`,
     // Proposition sans lien direct vers le marchand : le lien ouvre la page produit de Google.
     viewOffer: "Voir l'offre",
     textSearchIntro: "Pas tout à fait ça ?",
     textSearchButton: "Chercher",
-    // Mention provisoire : la politique de confidentialité change avant la mise en ligne, après l'avocat.
-    textSearchNote: "Vos mots partent vers la recherche en ligne.",
+    // Option A du document pour l'avocat (2026-11-05, point 4.2), comme la politique « projet-2026-11-05 ».
+    textSearchNote:
+      "Vos mots seront envoyés à Google Shopping par notre prestataire SerpApi, sans votre nom ni votre e-mail. Spotto ne les garde pas ; il garde les pièces trouvées avec votre recherche.",
     textSearchRunning: "Recherche en cours…",
     textSearchAlreadyUsed: "La recherche avec vos mots a déjà été lancée pour cette photo.",
     textSearchEmpty: "Aucune proposition pour vos mots.",
@@ -782,6 +902,49 @@ export const fr = {
     linkHint: "Ouvre votre messagerie pour nous écrire.",
     openFailed: "Votre messagerie n'a pas pu s'ouvrir : copiez l'adresse ci-dessus pour nous écrire.",
   },
+  // Chantier 3 (comptes et modération) : page « Aide et contact » (/aide),
+  // publique, connecté ou non. Elle sert aussi d'adresse d'assistance
+  // (« Support URL ») de la fiche App Store.
+  help: {
+    title: "Aide et contact",
+    entry: "Aide et contact",
+    intro: "Les réponses aux questions les plus fréquentes, et le moyen de nous écrire.",
+    faqTitle: "Questions fréquentes",
+    faq: [
+      {
+        q: "Comment retrouver une pièce ?",
+        a: "Dans le Spotter, importez une photo, une capture d'écran ou une vidéo, puis entourez la pièce si besoin. Spotto cherche la même pièce, ou les plus proches, et vous indique où l'acheter quand il trouve une boutique et un prix.",
+      },
+      {
+        q: "Combien de recherches puis-je lancer ?",
+        a: "Le nombre de recherches est limité chaque jour, pour chaque personne et pour l'ensemble du service. Le compteur repart chaque jour.",
+      },
+      {
+        q: "J'ai oublié mon mot de passe",
+        a: "Sur l'écran de connexion, touchez « Mot de passe oublié ? » et indiquez votre adresse e-mail. Vous recevrez un lien valable une heure : ouvrez-le sur l'appareil où vous avez fait la demande (le même téléphone, ou le même navigateur).",
+      },
+      {
+        q: "Je n'ai pas reçu l'e-mail de confirmation",
+        a: "Regardez dans vos courriers indésirables. Sur l'écran d'inscription, vous pouvez renvoyer l'e-mail au bout d'une minute.",
+      },
+      {
+        q: "Signaler un contenu, bloquer un compte",
+        a: "Ouvrez le menu d'une publication, d'un commentaire, d'un profil ou d'une pièce reçue, puis choisissez « Signaler » ou « Bloquer ce compte ». Ce que vous signalez disparaît aussitôt de votre fil. Chaque signalement est examiné par l'équipe de Spotto ; un contenu signalé par plusieurs personnes est masqué en attendant cet examen. Vos comptes bloqués se gèrent dans les Réglages.",
+      },
+      {
+        q: "Quels contenus sont interdits ?",
+        a: "Les insultes, les propos haineux, le harcèlement et les contenus sexuels ou violents, comme le détaillent les conditions d'utilisation. Un texte qui contient un mot interdit ne peut pas être publié.",
+      },
+      {
+        q: "Mes données et mon compte",
+        a: "Dans les Réglages, vous pouvez télécharger toutes vos données et supprimer votre compte. La suppression est définitive.",
+      },
+    ],
+    contactTitle: "Nous écrire",
+    contactBody: "Une question, un problème, un contenu à nous signaler : écrivez-nous à cette adresse.",
+    write: "Écrire un e-mail",
+    documentsTitle: "Documents",
+  },
   legal: {
     draftBanner: "Projet — à faire valider par un professionnel.",
     version: (label: string) => `Version : ${label}`,
@@ -800,8 +963,9 @@ export const fr = {
       "Aidez-nous à améliorer Spotto : acceptez-vous de partager des statistiques d'usage ? Jamais vos contenus, votre nom ni votre e-mail. Modifiable à tout moment dans les Réglages.",
     analyticsPromptYes: "Oui, volontiers",
     analyticsPromptNo: "Non merci",
+    // Information de la version « projet-2026-11-05 » (POLICY_UPDATE_NOTICE, shared-types).
     updateNotice:
-      "Notre politique de confidentialité a été mise à jour : votre serveur est désormais en Europe, et elle décrit le suivi des erreurs et les statistiques d'usage (facultatives).",
+      "Notre politique de confidentialité a été mise à jour : elle décrit les nouvelles recherches dans d'autres boutiques et avec vos mots. Une IA lit les titres des résultats, jamais votre photo.",
     updateNoticeRead: "Lire la politique",
     updateNoticeDismiss: "OK",
     updateNoticeDismissLabel: "Fermer cette information",
@@ -955,6 +1119,22 @@ export const fr = {
     unblockError: "Le déblocage a échoué.",
     loadError: "Impossible de charger les comptes bloqués.",
   },
+  // Chantier 3 (comptes et modération) : lien « mot de passe oublié » ouvert
+  // sur un autre appareil (échange PKCE), contenu signalé retiré du fil,
+  // masquage automatique vu par un administrateur.
+  accountSafety: {
+    resetOtherDeviceTitle: "Ouvrez ce lien sur le bon appareil",
+    resetOtherDeviceBody:
+      "Pour votre sécurité, ce lien ne fonctionne que sur l'appareil où vous avez demandé un nouveau mot de passe (le même téléphone, ou le même navigateur). Ouvrez-le là-bas, ou refaites la demande ici.",
+    emailConfirmed: "Votre adresse e-mail est confirmée. Connectez-vous pour continuer.",
+    reportedHidden: "Signalement envoyé. Ce contenu ne vous sera plus montré.",
+    autoHidden: "Masqué automatiquement",
+    autoHiddenHint:
+      "Masqué après les signalements de plusieurs personnes, en attente de votre décision : confirmez le masquage, ou classez sans suite pour le rétablir.",
+    automatic: "automatique (plusieurs signalements)",
+    confirmAutoHide: "Confirmer le masquage",
+    dismissAndRestore: "Classer sans suite et rétablir",
+  },
   connection: {
     connectingTitle: "Connexion à Spotto…",
     // Après quelques secondes d'attente (demande du fondateur, 2026-10-16) :
@@ -1036,5 +1216,27 @@ export const fr = {
         `Nous avons envoyé un lien de confirmation à ${email}. Cliquez dessus pour activer votre compte, puis revenez vous connecter.`,
       backToSignIn: "Retour à la connexion",
     },
+  },
+  // Lot « app iPhone prête » (chantier 4) : mise à jour obligatoire (point 11)
+  // et bouton appareil photo du Spotter (point 14).
+  appUpdate: {
+    title: "Mettez à jour Spotto",
+    body: "Cette version de Spotto n'est plus prise en charge. Installez la dernière version depuis l'App Store pour continuer.",
+    openStore: "Ouvrir l'App Store",
+    searchStore: "Ouvrez l'App Store, cherchez « Spotto », puis touchez « Mettre à jour ».",
+  },
+  cameraCapture: {
+    takePhoto: "Prendre une photo",
+    denied: "Spotto n'a pas accès à l'appareil photo. Pour prendre une photo, autorisez-le dans les Réglages de l'iPhone, puis Spotto.",
+    unavailable: (addPhoto: string) => `L'appareil photo n'a pas pu s'ouvrir. Réessayez, ou choisissez une photo avec « ${addPhoto} ».`,
+  },
+  // Lot « anti-robots » (point 17) : vérification Cloudflare Turnstile avant
+  // connexion, inscription, « mot de passe oublié » et renvoi de l'e-mail.
+  robotCheck: {
+    checking: "Vérification anti-robots en cours…",
+    failed: "Vérification impossible : réessayez.",
+    retry: "Réessayer",
+    rejected: "La vérification anti-robots a échoué : réessayez.",
+    frameTitle: "Vérification anti-robots",
   },
 } as const;

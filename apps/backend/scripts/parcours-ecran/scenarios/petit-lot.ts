@@ -22,7 +22,7 @@ import { z } from "zod";
 import type { Parcours, TestAccount } from "../boite-a-outils.js";
 import { genererVideosEssai } from "../../lib/videos-essai.js";
 import { COMBOS, type Combo } from "./lot-3.js";
-import { attendreEnvoi, check, choisirFichier, ouvrirSpotter, suivreRequetes, visible, type Envoi } from "./spotter-outils.js";
+import { attendreBoutonActif, attendreEnvoi, check, choisirFichier, ouvrirSpotter, suivreRequetes, visible, type Envoi } from "./spotter-outils.js";
 import { aucunChamp, capteur, champPhotoVide, champPret, lancerPhoto, nouveauCompte, ralentir, simulerResultats, TEXTES } from "./lot-4-ter-outils.js";
 
 export const name = "Petit lot — les mots ne partent plus avec l'image ; message « aucun prix » (site)";
@@ -49,7 +49,10 @@ async function photo(p: Parcours, page: Page, combo: Combo, fichier: string, pro
   await capture("01-photo");
 
   // Propositions sans aucun prix : le message, au-dessus d'elles, visible sans défilement.
+  // « Lancer » attend une zone (lot entourer la pièce) : l'image entière, la zone importe peu ici.
   await simulerResultats(page, T.description, { sansPrix: true });
+  await page.getByRole("button", { name: T.touteImage, exact: true }).filter({ visible: true }).click();
+  await attendreBoutonActif(page, T.lancer);
   await page.getByRole("button", { name: T.lancer, exact: true }).filter({ visible: true }).click();
   await visible(page, T.aucunPrix).waitFor({ timeout: 30_000 });
   check((await visible(page, T.aucunPrixTexte).count()) === 1, "aucun prix : l'explication est affichée");

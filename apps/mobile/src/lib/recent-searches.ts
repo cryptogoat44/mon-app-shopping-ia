@@ -29,3 +29,12 @@ export function recentDayLabel(iso: string, locale: Locale, now: Date = new Date
   const text = date.toLocaleDateString(INTL[locale], { weekday: "long", day: "numeric", month: "long", ...(sameYear ? {} : { year: "numeric" }) });
   return locale === "fr" && date.getDate() === 1 ? text.replace(/ 1 /, " 1er ") : text;
 }
+
+/** Paramètres de l'écran Résultat pour rouvrir une recherche depuis
+ * « Récemment spottées » (accueil et « Tout voir ») : la recherche, et la
+ * proposition de sa vignette, que l'écran met en grand — sinon « prix
+ * d'abord » pouvait en montrer une autre et replier celle-ci tout en bas
+ * (relecture, F2 ; lib/price-first.ts, startProposalIndex). */
+export function reopenParams(entry: { searchId: string; piece: { id: string } }): { searchId: string; matchId: string } {
+  return { searchId: entry.searchId, matchId: entry.piece.id };
+}

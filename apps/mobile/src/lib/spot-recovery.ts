@@ -40,6 +40,8 @@ export function searchProgress(search: Pick<ProductSearch, "status" | "errorMess
  * la relit. Les autres refus (limite atteinte, image refusée, session
  * expirée…) arrivent avant tout appel à la recherche : ils se montrent tels quels. */
 export function launchOutcomeUnknown(error: unknown): boolean {
+  // Recherche en pause (disjoncteur, lot garde-fous) : un 503 refusé avant tout appel, l'issue est connue.
+  if (error instanceof ApiError && error.body.error === "search_paused") return false;
   if (error instanceof ApiError) return error.status >= 500 || error.status === 408 || error.status === 409;
   return isNetworkError(error);
 }

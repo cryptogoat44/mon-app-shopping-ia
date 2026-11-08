@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -6,18 +6,19 @@ import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
 import { translateAuthError } from "@/lib/auth-errors";
 import { INITIAL_WEB_URL } from "@/lib/initial-url";
-import { newPasswordProblem, parseRecoveryUrl } from "@/lib/password-recovery";
+import { newPasswordProblem, parseRecoveryUrl, recoveryExchangeProblem } from "@/lib/password-recovery";
 import { useToast } from "@/lib/toast-context";
 import { t } from "@/i18n";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
 
-type Phase = "checking" | "ready" | "expired" | "invalid";
+type Phase = "checking" | "ready" | "expired" | "invalid" | "other_device";
 
-/** Site : retire la partie « # » (jetons du lien) de l'adresse affichée. */
+/** Site : retire de l'adresse affichée la partie « # » (jetons des anciens
+ * liens) et la partie « ? » (code du flux PKCE, chantier 3). */
 function clearAddressHash(): void {
-  if (Platform.OS === "web" && typeof window !== "undefined" && window.location.hash) {
+  if (Platform.OS === "web" && typeof window !== "undefined" && (window.location.hash || window.location.search)) {
     window.history.replaceState(null, "", window.location.pathname);
   }
 }
@@ -40,6 +41,8 @@ export default function NewPasswordScreen() {
   const [submitting, setSubmitting] = useState(false);
 
   const url = Platform.OS === "web" ? INITIAL_WEB_URL : nativeUrl;
+  // Un code ne s'échange qu'une fois (l'effet peut être rejoué en développement).
+  const exchangedCode = useRef<string | null>(null);
 
   useEffect(() => {
     if (phase !== "checking") return;
@@ -58,6 +61,18 @@ export default function NewPasswordScreen() {
       setPhase("invalid");
       return;
     }
+    // Flux PKCE (chantier 3) : le code contre une session de réinitialisation,
+    // seulement sur l'appareil qui a fait la demande.
+    if (link.kind === "code") {
+      if (exchangedCode.current === link.code) return;
+      exchangedCode.current = link.code;
+      supabase.auth
+        .exchangeCodeForSession(link.code)
+        .then(({ error: exchangeError }) => setPhase(exchangeError ? recoveryExchangeProblem(exchangeError) : "ready"))
+        .catch(() => setPhase("expired"));
+      return;
+    }
+    // Ancien lien (jetons dans la partie « # »), envoyé avant le passage au flux PKCE.
     supabase.auth
       .setSession({ access_token: link.accessToken, refresh_token: link.refreshToken })
       .then(({ error: sessionError }) => setPhase(sessionError ? "expired" : "ready"))
@@ -69,7 +84,7 @@ export default function NewPasswordScreen() {
   // mise à jour (constaté sur le site, lot 3bis). Vidée une fois le lien traité.
   useEffect(() => {
     if (phase === "checking") return;
-    router.setParams({ "#": "" });
+    router.setParams({ "#": "", code: undefined });
     clearAddressHash();
   }, [phase, router]);
 
@@ -146,9 +161,11 @@ export default function NewPasswordScreen() {
             ) : (
               <>
                 <Text style={styles.title} accessibilityRole="header">
-                  {phase === "expired" ? t.auth.reset.expiredTitle : t.auth.reset.invalidTitle}
+                  {phase === "expired" ? t.auth.reset.expiredTitle : phase === "other_device" ? t.accountSafety.resetOtherDeviceTitle : t.auth.reset.invalidTitle}
                 </Text>
-                <Text style={styles.subtitle}>{phase === "expired" ? t.auth.reset.expiredBody : t.auth.reset.invalidBody}</Text>
+                <Text style={styles.subtitle}>
+                  {phase === "expired" ? t.auth.reset.expiredBody : phase === "other_device" ? t.accountSafety.resetOtherDeviceBody : t.auth.reset.invalidBody}
+                </Text>
                 <Pressable style={styles.cta} onPress={() => router.replace("/mot-de-passe-oublie")} accessibilityRole="button">
                   <Text style={styles.ctaLabel}>{t.auth.reset.newLink}</Text>
                 </Pressable>

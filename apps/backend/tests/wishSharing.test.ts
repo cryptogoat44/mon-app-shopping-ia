@@ -225,7 +225,10 @@ describe("partage d'une envie", () => {
 
   it("signaler une pièce reçue ; la modération la masque (chez la personne, avec sa notification) puis la rétablit", async () => {
     const piece = (await received(friend))[0]!;
+    const hiddenAt = async () => (await app.supabaseAdmin.from("piece_sends").select("hidden_at").eq("id", piece.id).single()).data?.hidden_at;
     expect((await request(friend, "POST", "/api/reports", { targetType: "piece", targetId: piece.id, reason: "inappropriate" })).statusCode).toBe(204);
+    // Ce que la personne signale disparaît aussitôt de ses pièces reçues (lib/reportedByViewer.ts).
+    expect(await received(friend)).toEqual([]);
 
     const queue = (await request(admin, "GET", "/api/admin/moderation?status=open")).json();
     const item = queue.items.find((i: { targetId: string }) => i.targetId === piece.id);
@@ -234,13 +237,16 @@ describe("partage d'une envie", () => {
 
     const decision = await request(admin, "POST", "/api/admin/moderation/actions", { targetType: "piece", targetId: piece.id, action: "hide", reason: "inappropriate" });
     expect(decision.statusCode).toBe(200);
+    expect(await hiddenAt()).toEqual(expect.any(String));
     expect(await received(friend)).toEqual([]);
     expect((await notifications(friend)).some((n) => n.type === "piece_received")).toBe(false);
     expect((await notifications(owner)).find((n) => n.type === "moderation")?.moderation).toMatchObject({ action: "hide", targetType: "piece" });
     expect((await notifications(friend)).find((n) => n.type === "report_handled")?.reportedType).toBe("piece");
 
     expect((await request(admin, "POST", `/api/admin/moderation/actions/${decision.json().actionId}/undo`, {})).statusCode).toBe(200);
-    expect(await received(friend)).toHaveLength(1);
+    // Rétablie pour tous ; mais `friend` l'a signalée : elle reste hors de SES pièces reçues.
+    expect(await hiddenAt()).toBeNull();
+    expect(await received(friend)).toEqual([]);
   });
 
   it("compte suspendu : ni republier, ni envoyer", async () => {
@@ -255,11 +261,17 @@ describe("partage d'une envie", () => {
   });
 
   it("retirer une pièce reçue : elle disparaît avec la copie de son image ; seule la personne qui l'a reçue peut le faire", async () => {
-    const piece = (await received(friend))[0]!;
+    // La pièce de `friend`, lue dans la base : signalée au test précédent, elle
+    // n'est plus dans ses pièces reçues, mais elle peut encore la retirer.
+    const { data: rows } = await app.supabaseAdmin.from("piece_sends").select("id, image_url").eq("recipient_id", friend.id);
+    expect(rows).toHaveLength(1);
+    const piece = rows![0]! as { id: string; image_url: string | null };
+    expect(await storageFiles(owner.id)).toContain(fileName(piece.image_url));
     expect((await request(stranger, "DELETE", `/api/pieces/received/${piece.id}`)).statusCode).toBe(404);
     expect((await request(friend, "DELETE", `/api/pieces/received/${piece.id}`)).statusCode).toBe(204);
-    expect(await received(friend)).toEqual([]);
-    expect(await storageFiles(owner.id)).not.toContain(fileName(piece.imageUrl));
+    const { data: left } = await app.supabaseAdmin.from("piece_sends").select("id").eq("recipient_id", friend.id);
+    expect(left).toEqual([]);
+    expect(await storageFiles(owner.id)).not.toContain(fileName(piece.image_url));
   });
 
   it("limite de débit : 20 envois par heure au plus", async () => {

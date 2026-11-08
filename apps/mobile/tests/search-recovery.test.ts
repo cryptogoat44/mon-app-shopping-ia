@@ -102,6 +102,8 @@ describe("où en est une recherche relue", () => {
   it("une recherche en cours n'est jamais prise pour « rien trouvé », et n'offre aucune correction payante", () => {
     expect(toSpotResult(search("processing"))).toMatchObject({ status: "failed", failReason: "running" });
     expect(failureCorrections("running", { hasDraft: true, hasVideo: true, remainingMoments: 2, fromLink: false })).toEqual([]);
+    // En pause (lot garde-fous) : un nouvel essai serait refusé jusqu'à la fin de la pause.
+    expect(failureCorrections("paused", { hasDraft: true, hasVideo: true, remainingMoments: 2, fromLink: false })).toEqual([]);
   });
 });
 
@@ -115,6 +117,8 @@ describe("issue du lancement inconnue : la recherche est relue", () => {
     ["délai dépassé (serveur)", new ApiError(504, { error: "unknown", message: "…" }), true],
     ["déjà lancée (relance croisée)", new ApiError(409, { error: "search_already_run", message: "…" }), true],
     ["plafond atteint, avant tout appel", new ApiError(429, { error: "search_capacity_user", message: "…" }), false],
+    // Lot garde-fous : le disjoncteur refuse avant tout appel ; l'écran dit « en pause », sans relire.
+    ["recherche en pause (fournisseur en panne), avant tout appel", new ApiError(503, { error: "search_paused", message: "…" }), false],
     ["image refusée, avant tout appel", new ApiError(422, { error: "preview_unavailable", message: "…" }), false],
     ["session expirée", new ApiError(401, { error: "unauthorized", message: "…" }), false],
     ["erreur de l'app", new Error("image illisible"), false],

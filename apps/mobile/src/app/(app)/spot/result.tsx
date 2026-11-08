@@ -1,6 +1,6 @@
 import { formatPrice } from "@/lib/format";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { Keyboard, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { AccessibilityInfo, Keyboard, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
@@ -8,17 +8,36 @@ import * as WebBrowser from "expo-web-browser";
 import * as Haptics from "expo-haptics";
 import type { MatchFeedbackReason, ProductSearch, VaultCategory } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
-import { getActiveLocale, t } from "@/i18n";
+import { acceptLanguage, getActiveLocale, t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { addToWishlist, loadSpotResult } from "@/api/client";
 import { clearLastSpotResult, getLastSpotResult, rememberLaunchExtras, withLaunchExtras } from "@/api/spotSession";
 import type { Piece, SpotFailReason, SpotResult } from "@/api/types";
 import { addVaultItemFromMatch } from "@/lib/api";
 import { openMerchantLink } from "@/lib/merchant-links";
-import { chooseInitialResult, noPriceShown, pieceTitle, withoutTextPrompt, withTextSearch, type InitialResultState } from "@/lib/spot-result";
-import { allPieces, merchantContextFor, opensOfferPage, otherPiecesBySection } from "@/lib/result-sections";
+import { chooseInitialResult, pieceTitle, withoutTextPrompt, withTextSearch, type InitialResultState } from "@/lib/spot-result";
+import { allPieces, merchantContextFor, opensOfferPage } from "@/lib/result-sections";
+import {
+  bestProposalIndex,
+  bigCardLabel,
+  chooseCard,
+  clickPlacements,
+  holdCard,
+  NO_CHOICE,
+  noPriceAnywhere,
+  noPriceNoticeShown,
+  priceFirstSections,
+  startIndexOf,
+  wordsArrivalReveal,
+  wordsSortNote,
+  type BigCardChoice,
+  type BigCardLabel,
+  type ClickPlacement,
+  type StartOptions,
+} from "@/lib/price-first";
+import { searchCountryFrom } from "@/lib/foreign-shop";
 import { getDraft } from "@/lib/spot-draft";
-import { failureCorrections, successCorrections, type Correction } from "@/lib/spot-corrections";
+import { failureCorrections, successCorrections, successSheetActions, type Correction } from "@/lib/spot-corrections";
 import { withIds } from "@/lib/owned-marks";
 import { capacityMessages } from "@/lib/use-search-limits";
 import { VAULT_CATEGORIES } from "@/lib/vault-labels";
@@ -33,6 +52,7 @@ import { ReportedLine, ResultFeedbackButton, ResultFeedbackSheet } from "@/compo
 import { ResultComplement, textSearchStatusNote } from "@/components/result-complement";
 import { TextSearchAlreadyUsed, TextSearchPrompt } from "@/components/text-search-prompt";
 import { ProposalCard } from "@/components/proposal-card";
+import { NoPriceSection } from "@/components/no-price-section";
 import { YourPiece } from "@/components/your-piece";
 import { yourPieceImage } from "@/lib/your-piece";
 import { useHeroReveal } from "@/lib/use-hero-reveal";
@@ -40,11 +60,18 @@ import { ForeignShopNote } from "@/components/foreign-shop-note";
 import { KeptNotice } from "@/components/kept-notice";
 import { track } from "@/lib/analytics";
 import { openWishlistFromSpotter } from "@/lib/wishlist-link";
+import { isAffiliateLink } from "@/lib/affiliate-link";
 import { themedStyles } from "@/theme/themed-styles";
 
 function displayPrice(piece: Piece): string {
   if (piece.priceFrom === null) return t.result.priceOnSite;
   return formatPrice(piece.priceFrom, piece.currency, getActiveLocale());
+}
+
+/** Libellé de la grande carte (lib/price-first.ts, bigCardLabel). */
+function bigCardLabelText(label: BigCardLabel): string {
+  if (label === "best") return t.result.bestProposal;
+  return label === "bestWithPrice" ? t.result.bestWithPrice : t.result.otherProposal;
 }
 
 const OTHERS_SHOWN_FIRST = 11;
@@ -54,21 +81,35 @@ type ScreenState = InitialResultState | { kind: "error"; searchId: string };
 export default function ResultScreen() {
   const router = useRouter();
   const { showToast } = useToast();
-  const { searchId } = useLocalSearchParams<{ searchId?: string }>();
+  // matchId : proposition de la vignette touchée dans « Récemment spottées » (lib/recent-searches.ts).
+  const { searchId, matchId } = useLocalSearchParams<{ searchId?: string; matchId?: string }>();
   const [state, setState] = useState<ScreenState>(() => chooseInitialResult(getLastSpotResult(), searchId));
   // La copie en mémoire ne sert qu'au passage depuis l'écran Analyse : lue une
   // fois, elle est oubliée (ses mentions propres au lancement sont gardées à
   // part). Tout retour sur cet écran relit donc la recherche sur le serveur.
   const fromLaunch = useRef(state.kind === "ready");
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  // Ce que la personne a fait de la grande carte (lib/price-first.ts,
+  // BigCardChoice) : aucun geste, elle suit l'ordre « prix d'abord » ; dès
+  // qu'elle en touche une ou agit sur la grande carte, celle-ci ne change plus
+  // d'elle-même. La ref, tenue à jour avec l'état, sert à handleTextSearchDone,
+  // appelé depuis le rendu où « Chercher » a été touché.
+  const [choice, setChoice] = useState<BigCardChoice>(NO_CHOICE);
+  const choiceRef = useRef<BigCardChoice>(NO_CHOICE);
   const [kept, setKept] = useState<Set<string>>(new Set());
   // Ajout aux Envies confirmé par le serveur : « Ajoutée à vos Envies · Voir mes Envies » (lot « premier essai »).
   const [keptSaved, setKeptSaved] = useState<Set<string>>(new Set());
   const [bought, setBought] = useState<Set<string>>(new Set());
   const [categoryOpen, setCategoryOpen] = useState(false);
+  // Proposition visée par la feuille ouverte (« Je l'ai achetée », « … ») :
+  // celle de la grande carte quand la personne a touché le bouton, quoi qu'il
+  // arrive ensuite à l'écran (relecture ORD-1).
+  const [categoryTarget, setCategoryTarget] = useState<Piece | null>(null);
+  const [reportTarget, setReportTarget] = useState<Piece | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [blockedMerchantUrl, setBlockedMerchantUrl] = useState<string | null>(null);
   const [showAllOthers, setShowAllOthers] = useState(false);
+  // Section « Sans prix » dépliée : son bouton, ou « Ce n'est pas la bonne pièce ? » (relecture ORD-5).
+  const [noPriceOpen, setNoPriceOpen] = useState(false);
   const [affiliateInfoOpen, setAffiliateInfoOpen] = useState(false);
   const [correctionsOpen, setCorrectionsOpen] = useState(false);
   // « Résultat incohérent » : motif changé ou retiré dans cet écran (null : retiré).
@@ -78,6 +119,12 @@ export default function ResultScreen() {
   const [textSearchUsed, setTextSearchUsed] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const heroReveal = useHeroReveal(scrollRef);
+  // Pour amener l'écran sur une section (relecture E2, ORD-5).
+  const noPriceSection = useRef<View>(null);
+  const noPriceTop = useRef(0);
+  const revealWords = useRef(false);
+  // À faire une fois « Ce n'est pas la bonne pièce ? » refermée.
+  const afterCorrectionsSheet = useRef<(() => void) | null>(null);
   // « Votre pièce » : l'image du lancement, encore sur l'appareil ; lue une
   // fois (un autre essai préparé ensuite depuis cet écran ne la change pas).
   // Rien pour un résultat rouvert : son image n'est gardée nulle part.
@@ -85,8 +132,28 @@ export default function ResultScreen() {
 
   const result = state.kind === "ready" ? state.result : null;
   // Voie C (lot c) : l'indice désigne toutes les propositions de l'écran —
-  // recherche visuelle d'abord, puis les sections du complément.
+  // recherche visuelle d'abord, puis les sections du complément. Prix
+  // d'abord (lib/price-first.ts) : sans choix de la personne, la grande carte
+  // est la mieux classée avec un prix, d'abord dans la devise du pays de la
+  // recherche (comme « Boutique à l'étranger ») — ou, rouverte depuis
+  // « Récemment spottées », la proposition de la vignette ; une pièce déjà
+  // gardée ou achetée passe devant.
+  const startOptions: StartOptions = { country: searchCountryFrom(acceptLanguage()), matchId: matchId ?? null };
+  const bestIndex = result ? bestProposalIndex(result, startOptions.country) : 0;
+  const startIndex = result ? startIndexOf(choice, result, startOptions) : 0;
+  const selectedIndex = choice.chosen ?? startIndex;
   const piece = result ? (allPieces(result)[selectedIndex] ?? null) : null;
+  // Place de chaque proposition pour les statistiques du clic, dans la disposition de l'écran.
+  const placements: ReadonlyMap<number, ClickPlacement> = result ? clickPlacements(result, startIndex) : new Map();
+
+  // La grande carte a changé (une autre touchée, ou « vos mots » sans geste) :
+  // le lien de secours « navigateur a bloqué » et l'erreur d'une action
+  // parlaient de l'ancienne (relecture F7).
+  const pieceId = piece?.id ?? null;
+  useEffect(() => {
+    setBlockedMerchantUrl(null);
+    setActionError(null);
+  }, [pieceId]);
 
   // Résultat absent de la mémoire (rouvert depuis « Récemment spottées »,
   // page rechargée) : relu sur le serveur, sans relancer d'identification.
@@ -138,16 +205,33 @@ export default function ResultScreen() {
 
   // ---- Actions sur une proposition ----
 
+  function updateChoice(change: (current: BigCardChoice) => BigCardChoice) {
+    const next = change(choiceRef.current);
+    choiceRef.current = next;
+    setChoice(next);
+  }
+
+  /** Agir sur la grande carte la retient (relecture ORD-1, E1, F1) : elle ne
+   * change plus d'elle-même, même si « vos mots » répondent pendant qu'une
+   * feuille est ouverte ; la règle annoncée ne vaut que sans aucun geste. */
+  function holdPiece() {
+    updateChoice((current) => holdCard(current, startIndex));
+  }
+
   async function handleOpenMerchant() {
     const url = piece?.affiliateUrl ?? piece?.merchantUrl;
     if (!piece || !url) return;
+    holdPiece();
     setBlockedMerchantUrl(null);
-    const outcome = await openMerchantLink({ matchId: piece.real ? piece.id : null, url, context: merchantContextFor(piece) });
+    // Où la personne l'a trouvée : la place notée quand elle l'a touchée, sinon la grande carte d'office.
+    const placement = choice.placement ?? placements.get(selectedIndex);
+    const outcome = await openMerchantLink({ matchId: piece.real ? piece.id : null, url, context: merchantContextFor(piece), placement });
     if (outcome.blocked) setBlockedMerchantUrl(outcome.url ?? url);
   }
 
   async function handleKeep() {
     if (!piece || kept.has(piece.id)) return;
+    holdPiece();
     setActionError(null);
     setKept((prev) => new Set(prev).add(piece.id));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -164,13 +248,22 @@ export default function ResultScreen() {
     }
   }
 
+  function openCategory() {
+    if (!piece) return;
+    holdPiece();
+    setCategoryTarget(piece);
+    setCategoryOpen(true);
+  }
+
+  /** La proposition retenue à l'ouverture de la feuille, jamais celle affichée au moment du choix. */
   async function handleBought(category: VaultCategory) {
     setCategoryOpen(false);
-    if (!piece || bought.has(piece.id)) return;
+    const target = categoryTarget;
+    if (!target || bought.has(target.id)) return;
     setActionError(null);
     try {
-      await addVaultItemFromMatch({ title: pieceTitle(piece.name), imageUrl: piece.imageUrl, category, productMatchId: piece.id });
-      setBought((prev) => new Set(prev).add(piece.id));
+      await addVaultItemFromMatch({ title: pieceTitle(target.name), imageUrl: target.imageUrl, category, productMatchId: target.id });
+      setBought((prev) => new Set(prev).add(target.id));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       showToast(t.result.boughtToast);
     } catch {
@@ -178,10 +271,19 @@ export default function ResultScreen() {
     }
   }
 
+  /** « … » et la ligne « Signalé : … » : la feuille vise la grande carte de ce moment. */
+  function openReport() {
+    if (!piece) return;
+    holdPiece();
+    setReportTarget(piece);
+    setReportOpen(true);
+  }
+
   async function handleShare() {
     if (!piece) return;
+    holdPiece();
     const url = piece.affiliateUrl ?? piece.merchantUrl ?? "";
-    const message = t.result.shareMessage(piece.name, url);
+    const message = t.result.shareMessage(piece.name, url, isAffiliateLink(piece));
     try {
       if (Platform.OS === "web" && !(typeof navigator !== "undefined" && "share" in navigator)) {
         // Le message entier, pas le lien seul : la mention « lien affilié »
@@ -203,10 +305,20 @@ export default function ResultScreen() {
     setState({ kind: "ready", result: next });
   }
 
-  /** La recherche par les mots a répondu, ou elle est relue avec son issue. */
+  /** La recherche par les mots a répondu, ou elle est relue avec son issue
+   * (après « Annuler », un 409 ou une panne). Appelée depuis le rendu où
+   * « Chercher » a été touché : le geste de la personne est lu dans la ref.
+   * Sans geste, la grande carte peut changer (règle annoncée) : l'écran
+   * remonte la montrer et VoiceOver le dit (relecture E3) ; sinon, il amène
+   * « Résultats pour vos mots » en haut s'ils sont arrivés au-dessus de la
+   * partie visible, une fois la section placée (relecture E2, onWordsLayout). */
   function handleTextSearchDone(search: ProductSearch) {
     if (!result) return;
-    replaceResult(withTextSearch(result, search));
+    const next = withTextSearch(result, search);
+    const reveal = wordsArrivalReveal(result, next, choiceRef.current, startOptions);
+    revealWords.current = reveal === "words";
+    replaceResult(next);
+    if (reveal === "hero") heroReveal.revealHero(allPieces(next)[startIndexOf(choiceRef.current, next, startOptions)]?.name ?? null);
   }
 
   /** Le serveur ne la propose plus (déjà lancée, coupée, non admissible) :
@@ -218,12 +330,39 @@ export default function ResultScreen() {
   }
 
   function selectPiece(index: number) {
-    setSelectedIndex(index);
+    // Elle garde la place où la personne l'a trouvée, pour les statistiques du clic.
+    updateChoice((current) => chooseCard(current, index, startIndex, placements.get(index)));
     setBlockedMerchantUrl(null);
     setActionError(null);
     // Comparer sans remonter : la page reste où elle est, sauf si la grande
     // image n'est plus assez visible pour voir le changement.
     heroReveal.revealHero(result ? (allPieces(result)[index]?.name ?? null) : null);
+  }
+
+  /** « Résultats pour vos mots » vient d'arriver et de prendre sa place : une
+   * fois, l'écran l'amène en haut s'il est arrivé au-dessus de la partie
+   * visible (section « Sans prix » dépliée) ; sinon il ne bouge pas — la
+   * personne a pu toucher une carte pendant l'attente, passée en grand en haut. */
+  function onWordsLayout(event: LayoutChangeEvent) {
+    const { y, height } = event.nativeEvent.layout;
+    if (!revealWords.current || height === 0) return;
+    revealWords.current = false;
+    heroReveal.revealArrivedSection(y);
+  }
+
+  /** La section « Sans prix » en haut de l'écran. Sa place est mesurée au
+   * moment du geste : sur le site, onLayout ne suit pas une section qui se
+   * déplace sans changer de taille (« Voir plus » au-dessus, vos mots). */
+  function scrollToWithoutPrice() {
+    const content = (scrollRef.current as unknown as { getInnerViewRef?: () => View | null } | null)?.getInnerViewRef?.();
+    const fallback = () => heroReveal.scrollToSection(noPriceTop.current);
+    if (!noPriceSection.current || !content) return fallback();
+    noPriceSection.current.measureLayout(content, (_x, y) => heroReveal.scrollToSection(y), fallback);
+  }
+
+  function announceWithoutPrice(open: boolean, count: number) {
+    // En file d'attente : dit après ce que VoiceOver lit déjà, sans le couper.
+    if (Platform.OS === "ios") AccessibilityInfo.announceForAccessibilityWithOptions(open ? t.result.withoutPriceShown(count) : t.result.withoutPriceHidden(count), { queue: true });
   }
 
   // ---- Rendus ----
@@ -311,14 +450,59 @@ export default function ResultScreen() {
     );
   }
 
-  const successList = successCorrections(corrections.context);
-  const reported = feedbackOverrides.has(piece.id) ? (feedbackOverrides.get(piece.id) ?? null) : (piece.feedbackReason ?? null);
-  const sections = otherPiecesBySection(result, selectedIndex);
-  const others = sections.lens;
+  const reportedFor = (p: Piece) => (feedbackOverrides.has(p.id) ? (feedbackOverrides.get(p.id) ?? null) : (p.feedbackReason ?? null));
+  const reported = reportedFor(piece);
+  // La feuille « … » vise la proposition retenue à son ouverture (relecture ORD-1).
+  const reportPiece = reportTarget ?? piece;
+  // Prix d'abord (lib/price-first.ts) : « Autres propositions » avec un prix,
+  // le complément, puis la section repliée « Sans prix » ; tout comme avant
+  // quand rien n'a de prix. Chaque clic garde son rang d'origine.
+  const sections = priceFirstSections(result, selectedIndex);
+  const others = sections.others;
+  const withoutPriceCount = sections.withoutPrice.length;
   // 11 autres propositions d'emblée (la meilleure + 11 = 12 images à
   // charger), le reste — jusqu'à 40 au total avec la règle des prix — sur demande.
   const visibleOthers = showAllOthers ? others : others.slice(0, OTHERS_SHOWN_FIRST);
   const hiddenCount = others.length - visibleOthers.length;
+  // Le message « aucun prix » et le texte du tri suivent la grande carte d'office, pas celle que la personne choisit.
+  const noticeShown = noPriceNoticeShown(result, startIndex);
+  const wordsNote = wordsSortNote(result, startIndex);
+  // « Ce n'est pas la bonne pièce ? » : voir gratuitement les propositions repliées avant toute nouvelle recherche (relecture ORD-5).
+  const successList = successCorrections(corrections.context);
+  const sheetActions = successSheetActions(successList, withoutPriceCount);
+
+  function toggleWithoutPrice() {
+    const open = !noPriceOpen;
+    setNoPriceOpen(open);
+    if (open) track("no_price_results_opened", { results_count: withoutPriceCount, context: "section" });
+    announceWithoutPrice(open, withoutPriceCount);
+  }
+
+  /** Depuis « Ce n'est pas la bonne pièce ? » : la feuille se referme, la
+   * section s'ouvre et l'écran y descend, une fois la feuille refermée — sur
+   * le site, le lien qui l'a ouverte reprend alors le focus, ce qui fait
+   * remonter la page jusqu'à lui. Filet si la fermeture n'est pas signalée. */
+  function showWithoutPriceFromSheet() {
+    afterCorrectionsSheet.current = scrollToWithoutPrice;
+    setCorrectionsOpen(false);
+    if (!noPriceOpen) {
+      setNoPriceOpen(true);
+      track("no_price_results_opened", { results_count: withoutPriceCount, context: "not_right" });
+    }
+    announceWithoutPrice(true, withoutPriceCount);
+    setTimeout(runAfterCorrectionsSheet, 700);
+  }
+
+  function runAfterCorrectionsSheet() {
+    const next = afterCorrectionsSheet.current;
+    afterCorrectionsSheet.current = null;
+    next?.();
+  }
+
+  /** Le lien a repris le focus (site) et la page a fini de remonter : l'écran peut descendre. */
+  function onCorrectionsSheetDismissed() {
+    setTimeout(runAfterCorrectionsSheet, 80);
+  }
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -333,17 +517,19 @@ export default function ResultScreen() {
         scrollEventThrottle={32}
         onLayout={heroReveal.onViewportLayout}
       >
-        {/* Voie C : le décompte, le tri et l'absence de prix parlent de la recherche visuelle seule. */}
+        {/* Voie C : le décompte, le tri et l'absence de prix parlent de la recherche visuelle seule.
+            Prix d'abord : « aucun prix » quand la recherche visuelle n'en a aucun et que la grande carte
+            d'office n'en a pas non plus (sinon elles sont toutes repliées en bas, avec le même texte). */}
         {result.pieces.length > 0 ? <Text style={styles.count}>{t.result.count(result.pieces.length, result.query)}</Text> : null}
-        {result.sortedByWords ? <Text style={styles.count}>{t.result.sortedByWords}</Text> : null}
-        {noPriceShown(result.pieces) ? <NoPriceNotice /> : null}
+        {wordsNote ? <Text style={styles.count}>{wordsNote === "words" ? t.result.sortedByWords : t.result.sortedByWordsPriceFirst}</Text> : null}
+        {noticeShown ? <NoPriceNotice /> : null}
 
         {yourPiece ? <YourPiece image={yourPiece} /> : null}
         <View style={styles.hero} onLayout={heroReveal.onHeroLayout}>
           <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} accessibilityLabel={piece.name} />
         </View>
 
-        <Text style={styles.rankLabel}>{selectedIndex === 0 ? t.result.bestProposal : t.result.otherProposal}</Text>
+        <Text style={styles.rankLabel}>{bigCardLabelText(bigCardLabel(selectedIndex, bestIndex))}</Text>
         <Text style={styles.name} accessibilityRole="header">
           {piece.name}
         </Text>
@@ -352,7 +538,7 @@ export default function ResultScreen() {
         </Text>
         <ForeignShopNote piece={piece} />
         {/* Juste sous la proposition, visible sans défilement (décision du fondateur, lot 4 ter). */}
-        {successList.length > 0 ? <CorrectionsLink style={styles.notRight} onPress={() => setCorrectionsOpen(true)} /> : null}
+        {sheetActions.length > 0 ? <CorrectionsLink style={styles.notRight} onPress={() => setCorrectionsOpen(true)} /> : null}
 
         {piece.merchantUrl ? (
           <Pressable style={styles.primary} onPress={handleOpenMerchant} accessibilityRole="link">
@@ -370,38 +556,36 @@ export default function ResultScreen() {
             <Text style={styles.blockedLink}>{t.result.merchantLinkBlocked}</Text>
           </Pressable>
         ) : null}
-        <Pressable
-          onPress={() => setAffiliateInfoOpen((open) => !open)}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityState={{ expanded: affiliateInfoOpen }}
-          accessibilityHint={t.result.affiliateHint}
-        >
-          <Text style={styles.disclosure}>
-            {t.result.affiliateDisclosure} <Text style={styles.disclosureMore}>{affiliateInfoOpen ? "–" : "ⓘ"}</Text>
-          </Text>
-        </Pressable>
-        {affiliateInfoOpen ? <Text style={styles.disclosureText}>{t.result.affiliateExplanation}</Text> : null}
+        {/* « Lien affilié » seulement pour un vrai lien affilié (lot garde-fous, lib/affiliate-link.ts). */}
+        {isAffiliateLink(piece) ? (
+          <Pressable
+            onPress={() => setAffiliateInfoOpen((open) => !open)}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: affiliateInfoOpen }}
+            accessibilityHint={t.result.affiliateHint}
+          >
+            <Text style={styles.disclosure}>
+              {t.result.affiliateDisclosure} <Text style={styles.disclosureMore}>{affiliateInfoOpen ? "–" : "ⓘ"}</Text>
+            </Text>
+          </Pressable>
+        ) : null}
+        {isAffiliateLink(piece) && affiliateInfoOpen ? <Text style={styles.disclosureText}>{t.result.affiliateExplanation}</Text> : null}
 
         <View style={styles.actions}>
           <Pressable style={styles.action} onPress={handleKeep} disabled={kept.has(piece.id)} accessibilityRole="button">
             <Text style={styles.actionLabel}>{kept.has(piece.id) ? t.result.kept : t.result.keep}</Text>
           </Pressable>
-          <Pressable
-            style={styles.action}
-            onPress={() => setCategoryOpen(true)}
-            disabled={bought.has(piece.id)}
-            accessibilityRole="button"
-          >
+          <Pressable style={styles.action} onPress={openCategory} disabled={bought.has(piece.id)} accessibilityRole="button">
             <Text style={styles.actionLabel}>{bought.has(piece.id) ? t.result.bought : t.result.markAsBought}</Text>
           </Pressable>
           <Pressable style={styles.action} onPress={handleShare} accessibilityRole="button">
             <Text style={styles.actionLabel}>{t.result.share}</Text>
           </Pressable>
-          {piece.real ? <ResultFeedbackButton onPress={() => setReportOpen(true)} /> : null}
+          {piece.real ? <ResultFeedbackButton onPress={openReport} /> : null}
         </View>
         {keptSaved.has(piece.id) ? <KeptNotice onOpen={() => openWishlistFromSpotter(router)} /> : null}
-        {piece.real && reported ? <ReportedLine reason={reported} onPress={() => setReportOpen(true)} /> : null}
+        {piece.real && reported ? <ReportedLine reason={reported} onPress={openReport} /> : null}
         {actionError ? <ErrorMessage style={styles.actionError}>{actionError}</ErrorMessage> : null}
 
         {others.length > 0 ? (
@@ -412,7 +596,7 @@ export default function ResultScreen() {
             <View style={styles.grid}>
               {/* Cartes (image, nom, boutique, prix, « Voir chez … ») : components/proposal-card.tsx. */}
               {visibleOthers.map(({ piece: p, index }) => (
-                <ProposalCard key={p.id} piece={p} onSelect={() => selectPiece(index)} />
+                <ProposalCard key={p.id} piece={p} onSelect={() => selectPiece(index)} placement={placements.get(index)} />
               ))}
             </View>
             {hiddenCount > 0 ? (
@@ -420,7 +604,8 @@ export default function ResultScreen() {
                 style={styles.secondary}
                 onPress={() => {
                   setShowAllOthers(true);
-                  track("similar_results_opened");
+                  // price_first : cette section ne montre que des propositions avec prix (analytics-events.ts, relecture F5).
+                  track("similar_results_opened", { price_first: !noPriceAnywhere(result) });
                 }}
                 accessibilityRole="button"
               >
@@ -430,23 +615,47 @@ export default function ResultScreen() {
           </>
         ) : null}
 
-        {/* Voie C (lot c) : le complément, sous la recherche visuelle — jamais à sa place. */}
-        <ResultComplement source="ai" others={sections.shopping} query={result.complement?.query} onSelect={selectPiece} />
-        <ResultComplement source="words" others={sections.words} textStatus={result.complement?.textStatus} onSelect={selectPiece} />
+        {/* Voie C (lot c) : le complément, sous « Autres propositions » — jamais à leur place. Prix d'abord : la
+            grande carte n'en vient que si aucune proposition de la recherche visuelle n'a de prix. */}
+        <ResultComplement source="ai" others={sections.shopping} query={result.complement?.query} onSelect={selectPiece} placements={placements} />
+        <View onLayout={onWordsLayout}>
+          <ResultComplement source="words" others={sections.words} textStatus={result.complement?.textStatus} onSelect={selectPiece} placements={placements} />
+        </View>
+        {/* Prix d'abord : les propositions sans prix en dernier, repliées ; « Que cherchez-vous ? » reste tout en bas (clavier). */}
+        <View
+          ref={noPriceSection}
+          onLayout={(event) => {
+            noPriceTop.current = event.nativeEvent.layout.y;
+          }}
+        >
+          <NoPriceSection
+            pieces={sections.withoutPrice}
+            open={noPriceOpen}
+            onToggle={toggleWithoutPrice}
+            caption={!noticeShown}
+            onSelect={selectPiece}
+            placements={placements}
+          />
+        </View>
         {textSearch(true)}
       </ScrollView>
 
-      {piece.real ? (
+      {reportPiece.real ? (
         <ResultFeedbackSheet
           visible={reportOpen}
-          matchId={piece.id}
-          current={reported}
+          matchId={reportPiece.id}
+          current={reportedFor(reportPiece)}
           onClose={() => setReportOpen(false)}
-          onChanged={(reason) => setFeedbackOverrides((previous) => new Map(previous).set(piece.id, reason))}
+          onChanged={(reason) => setFeedbackOverrides((previous) => new Map(previous).set(reportPiece.id, reason))}
         />
       ) : null}
 
-      <CorrectionsSheet visible={correctionsOpen} onClose={() => setCorrectionsOpen(false)}>
+      <CorrectionsSheet
+        visible={correctionsOpen}
+        onClose={() => setCorrectionsOpen(false)}
+        onDismiss={onCorrectionsSheetDismissed}
+        withoutPrice={sheetActions[0] === "show_without_price" ? { label: t.result.showWithoutPrice(withoutPriceCount), onPress: showWithoutPriceFromSheet } : null}
+      >
         {successList.length === 1 && successList[0] === "add_video" ? (
           <CorrectionButtons list={successList} actions={corrections.actions} onAddVideo={fromSheet(corrections.actions.add_video).onPress} importing={corrections.importing} />
         ) : (
@@ -526,6 +735,8 @@ function FailureView({
     capacity_user: capacityMessages("capacity_user", resumesOn),
     // Recherche relue encore en cours (lot recherche coupée) : jamais « rien trouvé ».
     running: [t.searchRecovery.runningTitle, t.searchRecovery.runningTip],
+    // Fournisseur en panne (disjoncteur, lot garde-fous) : rien n'a été compté.
+    paused: [t.result.pausedTitle, t.result.pausedTip],
   }[reason];
 
   return (

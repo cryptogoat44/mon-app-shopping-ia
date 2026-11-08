@@ -226,3 +226,31 @@ describe("lien qui n'est pas une adresse web : rien ne s'ouvre, rien n'est compt
     expect(result).toEqual({ blocked: true, url: "https://marchand.example/affilie" });
   });
 });
+
+// Prix d'abord (2026-11-03) : depuis l'écran Résultat, la statistique du clic
+// dit aussi le rang d'origine et la place affichée ; le clic enregistré par
+// le serveur, lui, ne change pas (la proposition, donc son rang d'origine).
+describe("prix d'abord : place de la proposition dans la statistique du clic", () => {
+  it("écran Résultat : rang d'origine, place affichée et section « Sans prix » ajoutés", async () => {
+    vi.stubGlobal("window", { open: vi.fn(() => createFakeTab()) } satisfies FakeWindow);
+
+    await openMerchantLink({
+      matchId: "match-prix-d-abord",
+      url: "https://marchand.example/sans-prix",
+      context: "result",
+      placement: { rank: 3, displayed_position: 9, in_no_price_section: true },
+    });
+
+    expect(analyticsMock).toHaveBeenCalledOnce();
+    expect(analyticsMock).toHaveBeenCalledWith("merchant_link_opened", { context: "result", rank: 3, displayed_position: 9, in_no_price_section: true });
+    expect(trackMock).toHaveBeenCalledWith("match-prix-d-abord", "result");
+  });
+
+  it("sans place (Envies, Vault, publication…) : le même événement qu'avant, le contexte seul", async () => {
+    vi.stubGlobal("window", { open: vi.fn(() => createFakeTab()) } satisfies FakeWindow);
+
+    await openMerchantLink({ matchId: "match-envie", url: "https://marchand.example/envie", context: "wishlist" });
+
+    expect(analyticsMock).toHaveBeenCalledWith("merchant_link_opened", { context: "wishlist" });
+  });
+});

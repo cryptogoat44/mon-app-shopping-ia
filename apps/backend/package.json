@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:ci": "tsx scripts/tests-ci.ts",
+    "test:hors-base": "tsx scripts/tests-hors-base.ts",
     "nettoyer-captures": "tsx scripts/nettoyer-captures.ts",
     "configurer-base-dev": "tsx scripts/configurer-base-dev.ts",
     "configurer-env-dev": "tsx scripts/configurer-env-dev.ts",
@@ -23,6 +24,7 @@
     "mesure-latence-dev": "tsx scripts/mesure-latence-dev.ts",
     "nettoyer-comptes-test-dev": "tsx scripts/nettoyer-comptes-test-dev.ts",
     "render-bride": "tsx scripts/render-bride.ts",
+    "etiqueter-version": "tsx scripts/etiqueter-version.ts",
     "configurer-render": "tsx scripts/configurer-render.ts",
     "configurer-anthropic-essai": "tsx scripts/configurer-anthropic-essai.ts",
     "configurer-anthropic-prod": "tsx scripts/configurer-anthropic-prod.ts",
@@ -33,7 +35,8 @@
     "essai-type-recherche": "tsx scripts/essai-type-recherche.ts",
     "parcours-ecran": "tsx scripts/parcours-ecran/index.ts",
     "images-marque": "tsx scripts/images-marque.ts",
-    "parcours-iphone": "tsx scripts/parcours-iphone/index.ts"
+    "parcours-iphone": "tsx scripts/parcours-iphone/index.ts",
+    "sauvegarder-photos": "tsx scripts/sauvegarder-photos.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
@@ -44,10 +47,11 @@
     "dotenv": "^16.4.5",
     "fastify": "^5.0.0",
     "fastify-plugin": "^5.0.1",
-    "sharp": "0.35.4",
+    "sharp": "0.35.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "3.1153.0",
     "@types/node": "^22.7.4",
     "@types/pg": "^8.23.1",
     "@vitest/coverage-v8": "^2.1.4",

@@ -6,7 +6,7 @@ import { CONSENT_VERSIONS, SEARCH_FAILURE_MESSAGES, type MatchOrigin, type Searc
 import type { Parcours, TestAccount } from "../boite-a-outils.js";
 import { rgb, SEGMENTS } from "../../lib/videos-essai.js";
 import type { Combo, Locale } from "./lot-3.js";
-import { check, choisirFichier, controlerAffichage, visible } from "./spotter-outils.js";
+import { attendreBoutonActif, check, choisirFichier, controlerAffichage, visible } from "./spotter-outils.js";
 
 const FR = {
   ajouterVideo: "Ajouter une vidéo",
@@ -30,10 +30,15 @@ const FR = {
   curseur: "Choisissez l'image",
   utiliser: "Utiliser cette image",
   ciblage: "Entourez la pièce",
+  // Nom de l'image à entourer : sur le site, suivi de son état (« Zone analysée, Pièce pas encore entourée »).
   zone: "Zone analysée",
-  reinitialiser: "Réinitialiser le cadre",
-  rienTrouve: "Notre recherche visuelle n'a rien trouvé pour le moment.",
-  rienTrouveConseil: "Essayez avec un autre cadre ou réessayez dans quelques minutes.",
+  // Lot entourer la pièce : plus de cadre à poignées ; la pièce s'entoure, ou ce bouton choisit l'image entière.
+  touteImage: "Utiliser toute l'image",
+  traceRefuse: "Faites un tour complet, un peu plus large que la pièce.",
+  // Lot « premier essai » (textes de l'app depuis ce lot).
+  rienTrouve: "Notre recherche visuelle n'a rien trouvé sur cette image.",
+  rienTrouveConseil:
+    "Relancer la même image donnerait le même résultat. Essayez plutôt d'entourer la pièce seule, de choisir un autre moment de la vidéo où elle se voit bien ou, pour une vidéo, de préciser vos mots.",
   // Retiré au petit lot (2026-10-25) : les scénarios vérifient qu'il n'apparaît plus.
   sansTexte: "Réessayer sans le texte",
   motsIA: "Ces mots aident l'IA à retrouver la pièce dans la vidéo.",
@@ -42,7 +47,7 @@ const FR = {
   // Ancien libellé, remplacé le 2026-10-25 : les scénarios vérifient qu'il n'apparaît plus.
   ancienPrixSurSite: "prix affiché sur le site",
   aucunPrix: "Aucune de ces propositions n'affiche de prix.",
-  aucunPrixTexte: "Ce sont des pièces qui ressemblent à la vôtre, trouvées par notre recherche visuelle. Elles ne sont pas forcément en vente : ouvrez-les pour vérifier, ou essayez un autre cadre.",
+  aucunPrixTexte: "Ce sont des pièces qui ressemblent à la vôtre, trouvées par notre recherche visuelle. Elles ne sont pas forcément en vente : ouvrez-les pour vérifier, ou entourez la pièce autrement.",
   nonReperee: "Pièce non repérée",
   modifier: "Modifier la description",
   interrompue: "Analyse automatique interrompue",
@@ -64,8 +69,11 @@ const FR = {
   // Petit lot 2 (2026-10-27) : les mots facultatifs d'une photo trient les propositions.
   champPhoto: "Quelle pièce ? (facultatif)",
   exemplePhoto: "ex. la veste en cuir noir",
-  motsTri: "Vos mots servent à trier les propositions. Seule l'image part vers la recherche.",
-  conseilCadre: "Plusieurs pièces sur la photo ? Entourez celle que vous cherchez.",
+  // Texte du 2026-11-05 (lot politique exacte, point 4.1 du document pour l'avocat).
+  motsTri:
+    "Vos mots servent seulement à trier les propositions : ils ne partent pas avec l'image vers la recherche. Ils ne sont envoyés à un moteur de recherche que si vous lancez vous-même une recherche avec vos mots.",
+  // Lots « premier essai » et « entourer la pièce » : montré tant que la pièce n'est pas entourée, avec ou sans mots.
+  conseilCadre: "Entourez la pièce seule, sans visage ni texte autour : Spotto la retrouvera plus facilement.",
   triees: "Triées selon vos mots",
   motsPhoto: "veste en cuir noir",
   identifier: "Lancer l'identification",
@@ -95,18 +103,20 @@ export const TEXTES: Record<Locale, Textes> = {
     reessayer: "Try again",
     curseur: "Choose the frame",
     utiliser: "Use this frame",
-    ciblage: "Frame the piece",
+    ciblage: "Circle the piece",
     zone: "Area to analyze",
-    reinitialiser: "Reset the frame",
-    rienTrouve: "Our visual search didn't find anything for now.",
-    rienTrouveConseil: "Try another frame, or try again in a few minutes.",
+    touteImage: "Use the whole image",
+    traceRefuse: "Draw a full loop, a little wider than the piece.",
+    rienTrouve: "Our visual search didn't find anything in this image.",
+    rienTrouveConseil:
+      "Searching the same image again would give the same result. Instead, try circling the piece alone, picking another moment in the video where it's clearly visible or, for a video, describing it more precisely.",
     sansTexte: "Try again without the text",
     motsIA: "These words help the AI find the piece in the video.",
     votreVideo: "Your video",
     prixAVerifier: "Check the price with the retailer",
     ancienPrixSurSite: "price shown on the site",
     aucunPrix: "None of these suggestions show a price.",
-    aucunPrixTexte: "These are pieces that look like yours, found by our visual search. They are not necessarily for sale: open them to check, or try another frame.",
+    aucunPrixTexte: "These are pieces that look like yours, found by our visual search. They are not necessarily for sale: open them to check, or circle the piece differently.",
     nonReperee: "Piece not spotted",
     modifier: "Edit the description",
     interrompue: "Automatic analysis interrupted",
@@ -127,8 +137,9 @@ export const TEXTES: Record<Locale, Textes> = {
     fermer: "Close",
     champPhoto: "Which piece? (optional)",
     exemplePhoto: "e.g. the black leather jacket",
-    motsTri: "Your words are used to sort the suggestions. Only the image goes to the search.",
-    conseilCadre: "Several pieces in the photo? Circle the one you're looking for.",
+    motsTri:
+      "Your words are only used to sort the suggestions: they aren't sent with the image to the search. They only go to a search engine if you start a search with your words yourself.",
+    conseilCadre: "Circle the piece alone, with no faces or text around it: Spotto will find it more easily.",
     triees: "Sorted by your words",
     motsPhoto: "black leather jacket",
     identifier: "Identify the piece",
@@ -265,11 +276,14 @@ export async function fermerFeuille(page: Page, T: Textes): Promise<void> {
   check((await lien.count()) === 1, "feuille des corrections refermée");
 }
 
-/** Depuis Spotter : photo choisie → « Lancer » (cadre « Entourez la pièce » laissé tel quel, champ de mots facultatif laissé vide). */
+/** Depuis Spotter : photo choisie → « Utiliser toute l'image » (la zone importe peu ici : « Lancer » attend
+ * une zone depuis le lot entourer la pièce) → « Lancer », champ de mots facultatif laissé vide. */
 export async function lancerPhoto(p: Parcours, page: Page, T: Textes, fichier: string): Promise<void> {
   await page.goto(`${p.siteUrl}/`);
   await choisirFichier(page, T.ajouterPhoto, fichier);
   await page.getByRole("heading", { name: T.ciblage, exact: true }).filter({ visible: true }).waitFor({ timeout: 30_000 });
+  await page.getByRole("button", { name: T.touteImage, exact: true }).filter({ visible: true }).click();
+  await attendreBoutonActif(page, T.lancer);
   await page.getByRole("button", { name: T.lancer, exact: true }).filter({ visible: true }).click();
 }
 
@@ -285,13 +299,34 @@ export async function champPhotoVide(page: Page, T: Textes): Promise<boolean> {
   return (await champ.count()) === 1 && (await champ.inputValue()) === "" && (await champ.getAttribute("placeholder")) === T.exemplePhoto;
 }
 
-/** Cadre de la photo (option B) : sa place et sa taille à l'écran. */
-export async function cadrePhoto(page: Page, T: Textes): Promise<{ x: number; y: number; width: number; height: number }> {
-  const cadre = page.getByRole("slider", { name: T.zone, exact: true }).filter({ visible: true });
-  await cadre.waitFor({ timeout: 15_000 });
-  const boite = await cadre.boundingBox();
-  check(boite !== null, "cadre de la photo affiché");
+/** L'image à entourer (lot entourer la pièce) : ce qui prend la souris, l'image et une petite
+ * marge ; son nom commence par « Zone analysée » (suivi de son état sur le site). */
+export async function surfaceTrace(page: Page, T: Textes): Promise<{ x: number; y: number; width: number; height: number }> {
+  const surface = page.getByRole("img", { name: T.zone }).filter({ visible: true });
+  await surface.waitFor({ timeout: 15_000 });
+  await surface.scrollIntoViewIfNeeded();
+  const boite = await surface.boundingBox();
+  check(boite !== null, "image à entourer affichée");
   return boite;
+}
+
+/** Entoure le milieu de la photo à la souris, d'un tour fermé (un peu plus d'un tiers de l'image en largeur et en hauteur). */
+export async function entourerPiece(page: Page, T: Textes): Promise<void> {
+  const boite = await surfaceTrace(page, T);
+  const point = (angle: number) => ({ x: boite.x + boite.width * (0.5 + 0.18 * Math.cos(angle)), y: boite.y + boite.height * (0.5 + 0.18 * Math.sin(angle)) });
+  await page.mouse.move(point(0).x, point(0).y);
+  await page.mouse.down();
+  for (let pas = 1; pas <= 36; pas += 1) await page.mouse.move(point((pas / 36) * 2 * Math.PI).x, point((pas / 36) * 2 * Math.PI).y);
+  await page.mouse.up();
+}
+
+/** Un trait droit à la souris, sur l'image : il n'entoure rien, il n'est pas retenu. */
+export async function tracerTrait(page: Page, T: Textes): Promise<void> {
+  const boite = await surfaceTrace(page, T);
+  await page.mouse.move(boite.x + boite.width * 0.3, boite.y + boite.height * 0.7);
+  await page.mouse.down();
+  await page.mouse.move(boite.x + boite.width * 0.7, boite.y + boite.height * 0.3, { steps: 12 });
+  await page.mouse.up();
 }
 
 /** Zone envoyée à l'identification (corps de la requête « run »). */

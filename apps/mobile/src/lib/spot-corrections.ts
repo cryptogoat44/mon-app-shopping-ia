@@ -29,6 +29,18 @@ export function successCorrections(context: CorrectionContext): Correction[] {
   return list.length === 0 && context.fromLink ? ["add_video"] : list;
 }
 
+/** Ce que propose « Ce n'est pas la bonne pièce ? » sous des résultats. Prix
+ * d'abord : la pièce cherchée peut être repliée tout en bas, sans prix (le
+ * rang 1 de Google parfois) ; la voir est gratuit, alors que chaque
+ * correction lance une nouvelle recherche, comptée. Ces propositions passent
+ * donc en premier, dès que la section « Sans prix » n'est pas vide (relecture,
+ * ORD-5). Sans correction possible (résultat rouvert), rien ne change : pas
+ * de lien. */
+export function successSheetActions(corrections: Correction[], withoutPriceCount: number): ("show_without_price" | Correction)[] {
+  if (corrections.length === 0 || withoutPriceCount === 0) return corrections;
+  return ["show_without_price", ...corrections];
+}
+
 const LIMIT_REASONS: readonly SpotFailReason[] = ["rate_limited", "capacity_day", "capacity_month", "capacity_user"];
 
 /** Après une recherche sans résultat ou qui n'a pas abouti. */
@@ -36,7 +48,8 @@ export function failureCorrections(reason: SpotFailReason, context: CorrectionCo
   // Limite atteinte (personne ou service entier) : rien à proposer, un nouvel essai serait refusé.
   if (LIMIT_REASONS.includes(reason)) return [];
   // Encore en cours : rien à corriger, une autre recherche serait payée pour rien (lot recherche coupée).
-  if (reason === "running") return [];
+  // En pause (fournisseur en panne, lot garde-fous) : un nouvel essai serait refusé jusqu'à la fin de la pause.
+  if (reason === "running" || reason === "paused") return [];
   if (reason === "needs_photo" || !context.hasDraft) return context.fromLink ? ["add_video"] : [];
   // Panne : réessayer d'abord ; l'image reste la bonne.
   if (reason === "technical") return ["retry", context.hasVideo ? "choose_myself" : "reframe"];

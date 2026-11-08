@@ -15,6 +15,7 @@ import { useToast } from "@/lib/toast-context";
 import { hasAnalyticsConsent } from "@/lib/policy-notice";
 import { ErrorMessage } from "@/components/error-message";
 import { LatestVideoSetting } from "@/components/latest-video-setting";
+import { PlayerConsentSetting } from "@/components/player-consent-setting";
 import { VideoAiSetting } from "@/components/video-ai-setting";
 import { PieceSendsSetting } from "@/components/piece-sends-setting";
 import { DeleteAccountSection } from "@/components/delete-account-section";
@@ -184,13 +185,14 @@ export default function SettingsScreen() {
           <Text style={styles.sectionBody}>{consentLine("privacy_policy")}</Text>
         </View>
 
-        {/* « Nous contacter » : section entière masquée sans adresse réelle. */}
-        {CONTACT_EMAIL ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>{t.contact.settingsSection}</Text>
-            <ContactEntry email={CONTACT_EMAIL} linkStyle={styles.link} textStyle={styles.sectionBody} />
-          </View>
-        ) : null}
+        {/* Aide : « Aide et contact » toujours (chantier 3) ; « Nous contacter » seulement avec une adresse réelle. */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>{t.contact.settingsSection}</Text>
+          <Pressable accessibilityRole="link" onPress={() => router.push("/aide")} hitSlop={12}>
+            <Text style={styles.link}>{t.help.entry}</Text>
+          </Pressable>
+          {CONTACT_EMAIL ? <ContactEntry email={CONTACT_EMAIL} style={styles.secondLink} linkStyle={styles.link} textStyle={styles.sectionBody} /> : null}
+        </View>
 
         <PieceSendsSetting />
 
@@ -218,6 +220,7 @@ export default function SettingsScreen() {
           {analyticsError ? <ErrorMessage style={styles.sectionBody}>{t.settings.analyticsFailed}</ErrorMessage> : null}
           <VideoAiSetting consents={consents} failed={consentsFailed} onChange={setConsents} />
           <LatestVideoSetting />
+          <PlayerConsentSetting />
           {!choosingExport ? (
             <Pressable accessibilityRole="button" onPress={() => setChoosingExport(true)} hitSlop={12} style={styles.secondLink}>
               <Text style={styles.link}>{t.settings.exportData}</Text>

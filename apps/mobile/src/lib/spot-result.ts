@@ -96,11 +96,14 @@ export function toSpotResult(search: ProductSearch): SpotResult {
 /** Après la recherche par les mots (voie B), le résultat est remplacé sur
  * place par la recherche renvoyée. Les propositions de la recherche visuelle
  * n'ont pas changé : le tri par les mots du lancement et la requête de la
- * section « shopping » (réponse du lancement seulement) restent affichés. */
+ * section « shopping » (réponse du lancement seulement) restent affichés,
+ * comme ce que la personne a déjà gardé ou acheté sur un résultat relu (la
+ * grande carte d'office en dépend : lib/price-first.ts). */
 export function withTextSearch(previous: SpotResult, search: ProductSearch): SpotResult {
   const next = toSpotResult(search);
   if (next.status === "success" && previous.sortedByWords) next.sortedByWords = true;
   if (next.complement) next.complement = { ...next.complement, query: previous.complement?.query ?? null };
+  if (previous.owned) next.owned = previous.owned;
   return next;
 }
 

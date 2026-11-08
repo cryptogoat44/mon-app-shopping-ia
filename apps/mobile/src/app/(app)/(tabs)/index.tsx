@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { useCallback, useRef, useState } from "react";
+import { AccessibilityInfo, Platform, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
@@ -17,14 +17,19 @@ import { EntryTiles, LatestVideoCard, LatestVideoNote, LatestVideoQuestion } fro
 import { SpotImage } from "@/components/spot-image";
 import { SearchLimitsNotice } from "@/components/search-limits-notice";
 import { useAuth } from "@/lib/auth-context";
-import { importPhotoForSpotter } from "@/lib/image-import";
+import { importPhotoForSpotter, prepareSharedPhoto, takePhotoForSpotter, type ImportResult } from "@/lib/image-import";
 import { latestVideoUri, loadLatestVideo, saveLatestVideoChoice } from "@/lib/latest-video";
 import type { LatestVideo, LatestVideoChoice, LatestVideoState } from "@/lib/latest-video-state";
-import { RECENT_SEARCHES_LIMIT } from "@/lib/recent-searches";
+import { RECENT_SEARCHES_LIMIT, reopenParams } from "@/lib/recent-searches";
+import { sharedRefusalMessage, type SharedItem } from "@/lib/shared-item";
 import { beginFromPhoto } from "@/lib/spot-flow";
+import { isPlayerAvailable } from "@/lib/player-capture";
 import { LINK_COVER_ENABLED } from "@/lib/spot-flags";
 import { adoptSpotVideo, videoImportMessage } from "@/lib/spot-video";
+import { useLinkEntry } from "@/lib/use-link-entry";
+import { useSharedItemOpener } from "@/lib/use-shared-item";
 import { useVideoImport } from "@/lib/use-video-import";
+import { discardLocalFile } from "@/lib/video-frames";
 import { useSearchLimits } from "@/lib/use-search-limits";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -85,9 +90,10 @@ function RecentRow({ recent }: { recent: { searchId: string; piece: Piece }[] })
             onPress={() => {
               // Rouverte depuis l'historique : toujours relue sur le serveur (gratuit), jamais
               // la copie en mémoire du dernier lancement, qui peut être périmée (voie B lancée
-              // ou plus admissible, propositions de vos mots arrivées depuis).
+              // ou plus admissible, propositions de vos mots arrivées depuis). La proposition
+              // de la vignette s'y affiche en grand (lib/recent-searches.ts).
               clearLastSpotResult();
-              router.push({ pathname: "/spot/result", params: { searchId } });
+              router.push({ pathname: "/spot/result", params: reopenParams({ searchId, piece }) });
             }}
             accessibilityRole="button"
             accessibilityLabel={piece.name}
@@ -105,35 +111,91 @@ function RecentRow({ recent }: { recent: { searchId: string; piece: Piece }[] })
   );
 }
 
-/** Lien collé ou partagé : aide discrète — la capture d'écran d'abord, puis l'enregistrement de l'écran (lot « premier essai »). */
-function LinkHelp({ onAddPhoto, onAddVideo, importing }: { onAddPhoto: () => void; onAddVideo: () => void; importing: boolean }) {
+/** Lien collé ou partagé : aide discrète — la capture d'écran d'abord, puis l'enregistrement de l'écran (lot « premier essai »).
+ * App iPhone avec le lecteur intégré allumé : la question déplie le champ de lien, qui ouvre la vidéo dans Spotto. */
+function LinkHelp({ onAddPhoto, onAddVideo, onHelp, importing }: { onAddPhoto: () => void; onAddVideo: () => void; onHelp: () => void; importing: boolean }) {
   const [open, setOpen] = useState(false);
-  if (LINK_COVER_ENABLED) return <LinkEntry />;
+  if (LINK_COVER_ENABLED) return <LinkEntry onHelp={onHelp} />;
+  const player = isPlayerAvailable();
   return (
     <>
       <Pressable onPress={() => setOpen((value) => !value)} style={styles.linkQuestion} accessibilityRole="button" accessibilityState={{ expanded: open }}>
-        <Text style={styles.linkQuestionLabel}>{t.spotter.linkQuestion}</Text>
+        <Text style={styles.linkQuestionLabel}>{player ? t.player.linkQuestion : t.spotter.linkQuestion}</Text>
       </Pressable>
-      {open ? <ScreenshotHelp onAddScreenshot={onAddPhoto} onAddVideo={onAddVideo} busy={importing} /> : null}
+      {open ? player ? <LinkEntry mode="player" onHelp={onHelp} /> : <ScreenshotHelp onAddScreenshot={onAddPhoto} onAddVideo={onAddVideo} busy={importing} /> : null}
     </>
   );
 }
 
-/** Entrées du Spotter : vidéo (sélecteur), photo, dernière vidéo de la galerie. */
-function useSpotterEntries() {
+/** Entrées du Spotter : vidéo (sélecteur), photo, dernière vidéo de la galerie,
+ * et ce qui arrive par la feuille de partage d'iOS (lot « partager vers Spotto »).
+ * `reveal` remonte en haut de l'écran, où s'affichent l'aide et les messages. */
+function useSpotterEntries(reveal: () => void) {
   const router = useRouter();
+  const openLink = useLinkEntry();
   const [message, setMessage] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"photo" | "latest" | null>(null);
+  const [busy, setBusy] = useState<"photo" | "camera" | "latest" | null>(null);
+  // Lien partagé qui ne se lit pas : l'aide « capture d'écran d'abord », en haut de l'écran.
+  const [linkHelp, setLinkHelp] = useState(false);
   const [query, setQuery] = useState("");
-  const { importing, importVideo } = useVideoImport(setMessage);
+  const { importing, importVideo, importSharedVideo } = useVideoImport(setMessage);
+  // Elle ne sert qu'à ce moment-là : refermée quand on quitte Spotter.
+  useFocusEffect(useCallback(() => () => setLinkHelp(false), []));
 
-  async function addPhoto() {
-    setMessage(null);
-    const picked = await importPhotoForSpotter();
-    if (picked.kind === "unavailable") return setMessage(t.common.photoUnavailable);
+  /** Photo prête, choisie ou partagée : l'écran « Entourez la pièce ». */
+  function openPhoto(picked: ImportResult, unavailable: string) {
+    if (picked.kind === "unavailable") return setMessage(unavailable);
     if (picked.kind !== "picked") return;
     beginFromPhoto(picked.uri, { width: picked.width, height: picked.height });
     router.push({ pathname: "/spot/lancer", params: { source: "photo" } });
+  }
+
+  async function addPhoto() {
+    setMessage(null);
+    openPhoto(await importPhotoForSpotter(), t.common.photoUnavailable);
+  }
+
+  /** « Prendre une photo » (app iPhone, lot « app iPhone prête ») : la même
+   * suite qu'une photo choisie ; autorisation refusée : on dit où la donner. */
+  async function takePhoto() {
+    setMessage(null);
+    setBusy("camera");
+    try {
+      const taken = await takePhotoForSpotter();
+      if (taken.kind === "denied") return setMessage(t.cameraCapture.denied);
+      openPhoto(taken, t.cameraCapture.unavailable(t.spotter.addPhoto));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** Élément partagé : les mêmes chemins que les boutons de l'écran. */
+  async function openShared(item: SharedItem) {
+    setMessage(null);
+    setLinkHelp(false);
+    // Spotter déjà défilé vers le bas : l'aide ou le message serait hors de vue.
+    reveal();
+    if (item.kind === "refused") return setMessage(sharedRefusalMessage(item.reason));
+    if (item.kind === "video") return importSharedVideo(item.uri, item.sizeBytes);
+    if (item.kind === "link") {
+      const outcome = await openLink(item.text, "share");
+      if (outcome.kind === "refused") setMessage(outcome.message);
+      if (outcome.kind === "help") {
+        setLinkHelp(true);
+        // VoiceOver : l'aide apparaît sans rien dire (un message d'erreur, lui, s'annonce).
+        if (Platform.OS === "ios") AccessibilityInfo.announceForAccessibility(t.firstTry.linkHelp.title);
+      }
+      return;
+    }
+    setBusy("photo");
+    try {
+      const prepared = await prepareSharedPhoto(item.uri, item.width, item.height);
+      // L'image préparée est un nouveau fichier : la copie reçue n'a plus d'usage.
+      discardLocalFile(item.uri);
+      openPhoto(prepared, t.share.imageUnreadable(t.spotter.addPhoto));
+    } finally {
+      setBusy(null);
+    }
   }
 
   /** « Lancer » sur la dernière vidéo : elle s'ouvre (téléchargée depuis
@@ -156,6 +218,9 @@ function useSpotterEntries() {
 
   return {
     message,
+    linkHelp,
+    showLinkHelp: () => setLinkHelp(true),
+    openShared: (item: SharedItem) => void openShared(item),
     query,
     onQuery: (value: string) => {
       setQuery(value);
@@ -165,6 +230,8 @@ function useSpotterEntries() {
     importing,
     addVideo: () => void importVideo(),
     addPhoto: () => void addPhoto(),
+    // L'appareil photo : sur l'app iPhone seulement (le site garde l'import).
+    takePhoto: Platform.OS === "ios" ? () => void takePhoto() : undefined,
     launchLatest: (latest: LatestVideo) => void launchLatest(latest),
   };
 }
@@ -177,11 +244,14 @@ export default function SpotterScreen() {
   // Historique relu au moins une fois : « Comment ça marche » ne s'affiche pas avant.
   const [recentLoaded, setRecentLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const entries = useSpotterEntries();
+  const scroll = useRef<ScrollView>(null);
+  const entries = useSpotterEntries(() => scroll.current?.scrollTo({ y: 0, animated: true }));
   const latestVideo = useLatestVideo();
   const latest = latestVideo.state.kind === "ready" ? latestVideo.state.video : null;
   // Lot limites annoncées : pause du service ou dernières recherches, dites avant de choisir une photo.
   const limits = useSearchLimits();
+  // Lot « partager vers Spotto » : l'élément partagé s'ouvre ici, Spotter affiché et libre.
+  useSharedItemOpener(entries.openShared, entries.busy === null);
 
   const loadRecent = useCallback(() => getRecentSearches(RECENT_SEARCHES_LIMIT).then(setRecent).then(() => setRecentLoaded(true)).catch(() => {}), []);
   useFocusEffect(
@@ -200,6 +270,7 @@ export default function SpotterScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView
+        ref={scroll}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
@@ -210,6 +281,11 @@ export default function SpotterScreen() {
         </Text>
         <Text style={styles.lead}>{t.spotter.lead}</Text>
         <SearchLimitsNotice notice={limits.notice} />
+        {entries.linkHelp ? (
+          <View style={styles.sharedHelp}>
+            <ScreenshotHelp onAddScreenshot={entries.addPhoto} onAddVideo={entries.addVideo} busy={entries.importing} />
+          </View>
+        ) : null}
         {latest ? (
           <LatestVideoCard
             video={latest}
@@ -221,10 +297,16 @@ export default function SpotterScreen() {
           />
         ) : null}
         {entries.message ? <ErrorMessage style={styles.feedback}>{entries.message}</ErrorMessage> : null}
-        <EntryTiles videoLabel={latest ? t.spotter.otherVideo : t.spotter.addVideo} onVideo={entries.addVideo} onPhoto={entries.addPhoto} busy={entries.busy} />
+        <EntryTiles
+          videoLabel={latest ? t.spotter.otherVideo : t.spotter.addVideo}
+          onVideo={entries.addVideo}
+          onPhoto={entries.addPhoto}
+          onCamera={entries.takePhoto}
+          busy={entries.busy}
+        />
         {latestVideo.state.kind === "ask" ? <LatestVideoQuestion onAnswer={latestVideo.choose} saving={latestVideo.saving} failed={latestVideo.failed} /> : null}
         {latestVideo.note ? <LatestVideoNote message={latestVideo.note} /> : null}
-        <LinkHelp onAddPhoto={entries.addPhoto} onAddVideo={entries.addVideo} importing={entries.importing} />
+        <LinkHelp onAddPhoto={entries.addPhoto} onAddVideo={entries.addVideo} onHelp={entries.showLinkHelp} importing={entries.importing} />
         <RecentRow recent={recent} />
         {recentLoaded && recent.length === 0 ? <HowItWorksCard /> : null}
       </ScrollView>
@@ -238,6 +320,7 @@ const styles = themedStyles(() => ({
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, color: color.encre },
   lead: { fontSize: font.secondary, color: color.acier, marginTop: space.xs, lineHeight: 21 },
   feedback: { fontSize: font.caption, marginTop: space.sm, lineHeight: 18 },
+  sharedHelp: { marginTop: space.lg },
   linkQuestion: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: space.sm },
   linkQuestionLabel: { fontSize: font.secondary, color: color.acier, textDecorationLine: "underline", textAlign: "center" },
   recentSection: { marginTop: space.xxl - space.xs },

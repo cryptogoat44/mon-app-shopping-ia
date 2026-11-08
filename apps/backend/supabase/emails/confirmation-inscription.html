@@ -1,0 +1,54 @@
+<!doctype html>
+<!-- Spotto — modèle « Confirm signup » (confirmation de l'inscription, et « Renvoyer l'e-mail »). FR par défaut, EN si le compte a été créé en anglais. À coller dans Supabase : voir REGLAGES-SUPABASE.md. -->
+<html lang="{{ if eq .Data.locale "en" }}en{{ else }}fr{{ end }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>Spotto</title>
+</head>
+<body style="margin:0;padding:0;background-color:#FBFBFA;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#FBFBFA;">
+<tr>
+<td align="center" style="padding:32px 16px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;background-color:#FFFFFF;border:1px solid #E4E4E0;border-radius:12px;">
+<tr>
+<td style="padding:32px 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1D1D1F;font-size:16px;line-height:24px;">
+<p style="margin:0 0 28px 0;font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:30px;letter-spacing:-0.5px;color:#1D1D1F;">spotto</p>
+{{ if eq .Data.locale "en" }}
+<h1 style="margin:0 0 16px 0;font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:22px;line-height:28px;color:#1D1D1F;">Confirm your email address</h1>
+<p style="margin:0 0 16px 0;">Welcome to Spotto. To activate your account, please confirm that <strong>{{ .Email }}</strong> is your address.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 24px 0;">
+<tr>
+<td style="border-radius:10px;background-color:#1E3D32;">
+<a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;font-weight:600;line-height:20px;color:#FFFFFF;text-decoration:none;border-radius:10px;">Confirm my address</a>
+</td>
+</tr>
+</table>
+<p style="margin:0 0 12px 0;font-size:13px;line-height:20px;color:#6E6E73;">If the button doesn't work, copy this link into your browser:</p>
+<p style="margin:0 0 20px 0;font-size:13px;line-height:20px;word-break:break-all;"><a href="{{ .ConfirmationURL }}" style="color:#1E3D32;">{{ .ConfirmationURL }}</a></p>
+<p style="margin:0 0 12px 0;font-size:13px;line-height:20px;color:#6E6E73;">This link is valid for one hour. If you didn't create a Spotto account, you can ignore this email: no account will be activated.</p>
+{{ else }}
+<h1 style="margin:0 0 16px 0;font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:22px;line-height:28px;color:#1D1D1F;">Confirmez votre adresse e-mail</h1>
+<p style="margin:0 0 16px 0;">Bienvenue sur Spotto. Pour activer votre compte, confirmez que <strong>{{ .Email }}</strong> est bien votre adresse.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 24px 0;">
+<tr>
+<td style="border-radius:10px;background-color:#1E3D32;">
+<a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;font-weight:600;line-height:20px;color:#FFFFFF;text-decoration:none;border-radius:10px;">Confirmer mon adresse</a>
+</td>
+</tr>
+</table>
+<p style="margin:0 0 12px 0;font-size:13px;line-height:20px;color:#6E6E73;">Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :</p>
+<p style="margin:0 0 20px 0;font-size:13px;line-height:20px;word-break:break-all;"><a href="{{ .ConfirmationURL }}" style="color:#1E3D32;">{{ .ConfirmationURL }}</a></p>
+<p style="margin:0 0 12px 0;font-size:13px;line-height:20px;color:#6E6E73;">Ce lien est valable une heure. Si vous n'avez pas créé de compte Spotto, ignorez cet e-mail : aucun compte ne sera activé.</p>
+{{ end }}
+</td>
+</tr>
+</table>
+<p style="margin:20px 0 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#6E6E73;">Spotto</p>
+</td>
+</tr>
+</table>
+</body>
+</html>

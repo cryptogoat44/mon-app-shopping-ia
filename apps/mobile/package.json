@@ -26,11 +26,13 @@
     "expo-localization": "~57.0.2",
     "expo-media-library": "~57.0.5",
     "expo-router": "~57.0.24",
+    "expo-share-intent": "~8.0.1",
     "expo-sharing": "~57.0.22",
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "expo-symbols": "~57.0.3",
     "expo-system-ui": "~57.0.4",
+    "expo-updates": "57.0.24",
     "expo-video": "~57.0.5",
     "expo-web-browser": "~57.0.3",
     "fflate": "0.8.3",
@@ -44,6 +46,7 @@
     "react-native-svg": "15.15.4",
     "react-native-url-polyfill": "^4.0.0",
     "react-native-web": "~0.21.0",
+    "react-native-webview": "13.16.1",
     "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
@@ -58,7 +61,8 @@
     "web": "expo start --web",
     "build:web": "expo export --platform web",
     "lint": "expo lint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "eas-build-pre-install": "node scripts/verifier-build.js"
   },
   "private": true
 }
