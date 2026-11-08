@@ -17,7 +17,9 @@
 // - journaux : des nombres et des valeurs de listes fermées seulement ; jamais
 //   la requête, un titre, une marque, un modèle, vos mots, une adresse ni un
 //   identifiant. La requête de l'IA n'est rendue que dans la réponse du
-//   lancement ; vos mots ne sont ni enregistrés, ni journalisés, ni mis en cache.
+//   lancement (ou, boutiques ensuite, dans celle de POST
+//   /api/searches/:id/complement) ; vos mots ne sont ni enregistrés, ni
+//   journalisés, ni mis en cache.
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { z } from "zod";
 import { SEARCH_QUERY_MAX_LENGTH, type ComplementStatus, type SearchComplement, type TextSearchStatus } from "@monapp/shared-types";
@@ -434,7 +436,8 @@ export interface ComplementResult {
    * 20 au plus, rangs 1..n (la route les range après le dernier rang Lens). */
   matches: ShoppingMatch[];
   columns: ComplementColumns;
-  /** Pour la réponse du lancement (la requête n'y figure que là). */
+  /** Pour la réponse du lancement, ou de POST /api/searches/:id/complement
+   * (la requête n'y figure que là). */
   reply: SearchComplement;
   /** Pour la ligne « Mesure complément » (complementLogLine), écrite après l'enregistrement. */
   measure: ComplementMeasure;
@@ -648,6 +651,15 @@ async function callShoppingOnce(ports: ComplementPorts, input: ComplementInput, 
     if (error.kind === "refused") state.refusalReleased = await ports.release(reservation.reservationId).catch(() => false);
     return { kind: "stop", status: "shopping_failed" };
   }
+}
+
+/** Boutiques ensuite : le complément aura-t-il besoin d'un appel (cache, IA
+ * ou Google Shopping) ? Faux : runComplement répond tout de suite, sans aucun
+ * port (Lens en panne, aucune proposition Lens, IA coupée) ; le lancement
+ * enregistre alors l'issue lui-même, comme avant. Mêmes conditions que
+ * l'étape a de runComplement (tests/voieC.test.ts le vérifie). */
+export function complementNeedsCalls(input: Pick<ComplementInput, "lens" | "lensFailed" | "aiEnabled">): boolean {
+  return !input.lensFailed && input.lens.length > 0 && input.aiEnabled;
 }
 
 /** Le complément d'un lancement (source « ai ») : requête écrite par l'IA à

@@ -48,7 +48,7 @@ import type {
   PostComment,
   VideoMoment,
 } from "@monapp/shared-types";
-import { CONSENT_VERSIONS, parseSearchCapacityStatus, parseVideoMomentsResponse, type SearchCapacityStatus } from "@monapp/shared-types";
+import { COMPLEMENT_DEFERRED, CONSENT_VERSIONS, parseSearchCapacityStatus, parseVideoMomentsResponse, type SearchCapacityStatus } from "@monapp/shared-types";
 import { supabase } from "./supabase";
 import { setAnalyticsConsent, track } from "./analytics";
 import { acceptLanguage, t } from "../i18n";
@@ -56,6 +56,7 @@ import { imageFileFromUri } from "./image-file";
 import { ApiError } from "./api-error";
 import { isAdjustedCrop } from "./crop-geometry";
 import { textSearchFailure } from "./spot-result";
+import { requestShops } from "./spot-shops";
 import { deviceTimeZone, type ExportFormat, type ExportResponse } from "./export-file";
 import { searchLaunched } from "./search-limits";
 import { appBuildHeaders, isUpdateRequiredResponse, markUpdateRequired, parseStoreUrl, readAppVersionInfo } from "./app-update";
@@ -157,7 +158,11 @@ export async function prepareSearch(payload: CreateSearchRequest): Promise<Produ
  * puis, voie C, le complément ; la recherche par les mots compte dans les
  * mêmes 3) : lance l'identification sur la zone choisie. `imageUri` (capture
  * ou photo importée) remplace l'image préparée. `signal` permet d'abandonner
- * la requête (bouton « Annuler »). */
+ * la requête (bouton « Annuler »). Boutiques ensuite (2026-11-08) : la
+ * réponse arrive dès la recherche visuelle ; quand le serveur annonce les
+ * boutiques en attente, leur demande part aussitôt (lib/spot-shops.ts), et
+ * l'écran Résultat la retrouve. Un serveur plus ancien ignore la demande :
+ * tout arrive alors en une fois, comme avant. */
 export async function runSearch(
   searchId: string,
   params: { crop: CropRect | null; imageUri: string | null; words?: string | null; zoneByAi?: boolean },
@@ -170,6 +175,8 @@ export async function runSearch(
   // Mots d'une photo : le serveur s'en sert seulement pour trier les
   // propositions ; jamais envoyés à Google Lens, jamais enregistrés (petit lot 2).
   if (params.words) formData.append("query", params.words);
+  // Boutiques ensuite : les résultats d'abord, les autres boutiques juste après.
+  formData.append("complement", COMPLEMENT_DEFERRED);
 
   // Ciblage : seulement des oui / non (statistiques : ni les mots, ni leur présence).
   // « Zone ajustée » : la personne a entouré la pièce — ni l'image entière, ni
@@ -178,16 +185,41 @@ export async function runSearch(
   track("spot_launched", { zone_adjusted: params.zoneByAi === true || isAdjustedCrop(params.crop), image_imported: params.imageUri !== null });
   const response = await authorizedFetch(`/api/searches/${searchId}/run`, { method: "POST", body: formData, signal });
   const search: ProductSearch = await response.json();
-  // Voie C (lot c) : results_count reste celui de la recherche visuelle ; le
-  // complément a son issue et son nombre (jamais la requête).
-  const lensCount = search.matches.filter((match) => match.origin === undefined || match.origin === "lens").length;
-  track("spot_completed", {
-    outcome: search.status === "failed" ? "failed" : search.matches.length > 0 ? "results" : "none",
-    results_count: lensCount,
-    complement: search.complement?.status ?? "none",
-    complement_count: search.matches.length - lensCount,
-  });
+  if (search.complement?.pending) {
+    // spot_completed attend l'issue des boutiques, pour la compter une fois.
+    void requestShops(search.id, (shopsSignal) => fetchShops(search.id, shopsSignal)).then((outcome) =>
+      trackSpotCompleted(search, outcome.kind === "added" ? outcome.search : null)
+    );
+  } else {
+    trackSpotCompleted(search, search);
+  }
   return search;
+}
+
+const isLensMatch = (match: ProductSearch["matches"][number]) => match.origin === undefined || match.origin === "lens";
+
+/** spot_completed, une fois par lancement. Voie C (lot c) : results_count
+ * reste celui de la recherche visuelle (réponse du lancement) ; le complément
+ * a son issue et son nombre (jamais la requête). Boutiques ensuite : compté
+ * quand l'issue des boutiques est connue (`final`) ; « unknown » quand l'app
+ * ne l'a pas reçue (réseau, délai, refus). */
+function trackSpotCompleted(launched: ProductSearch, final: ProductSearch | null): void {
+  track("spot_completed", {
+    outcome: launched.status === "failed" ? "failed" : launched.matches.length > 0 ? "results" : "none",
+    results_count: launched.matches.filter(isLensMatch).length,
+    complement: final ? (final.complement?.status ?? "none") : "unknown",
+    complement_count: final ? final.matches.filter((match) => !isLensMatch(match)).length : 0,
+  });
+}
+
+/** Boutiques ensuite (2026-11-08) : « Cette pièce dans d'autres boutiques »
+ * pour une recherche lancée avec « complement: deferred », dont les
+ * résultats sont déjà affichés. Le serveur ne fait l'étape payante qu'une
+ * fois par recherche et renvoie la recherche entière, avec son complément
+ * (et la requête de l'IA, seulement dans cette réponse). */
+export async function fetchShops(searchId: string, signal?: AbortSignal): Promise<ProductSearch> {
+  const response = await authorizedFetch(`/api/searches/${searchId}/complement`, { method: "POST", signal });
+  return response.json();
 }
 
 /** Voie B (lot c) — « Que cherchez-vous ? » sous un résultat : 1 recherche

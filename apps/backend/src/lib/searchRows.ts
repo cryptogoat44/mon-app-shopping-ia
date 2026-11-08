@@ -12,6 +12,7 @@ import {
   type ProductSearch,
   type SearchComplement,
 } from "@monapp/shared-types";
+import { deferredPending, deferredStateOf } from "./deferredComplement.js";
 import { parisDayStart } from "./matchFeedback.js";
 import { FAILURE_KINDS } from "./searchMeasure.js";
 
@@ -42,6 +43,9 @@ export const SEARCH_ROW = z.object({
   text_requested_at: z.string().nullable().optional(),
   text_status: z.enum(TEXT_SEARCH_STATUSES).nullable().optional(),
   total_seconds: z.number().int().nonnegative().nullable().optional(),
+  // Boutiques ensuite (0031) : facultatives aussi, pour une base sans 0031.
+  complement_deferred: z.enum(["pending", "running", "done"]).nullable().optional(),
+  complement_deferred_at: z.string().nullable().optional(),
 });
 export type SearchRow = z.infer<typeof SEARCH_ROW>;
 
@@ -61,6 +65,9 @@ export const MATCH_ROW = z.object({
   merchant_url: z.string(),
   // Voie C (0028) : origine de la proposition ; absente avant 0028 (= « lens »).
   origin: z.enum(MATCH_ORIGINS).optional(),
+  // Boutiques ensuite (0031) : place dans la réponse Lens avant le tri par
+  // les mots, gardée seulement jusqu'au début de l'étape des boutiques.
+  lens_rank: z.number().int().positive().nullable().optional(),
 });
 export type MatchRow = z.infer<typeof MATCH_ROW>;
 
@@ -126,14 +133,19 @@ export function textSearchCountable(row: Pick<SearchRow, "served_from_cache" | "
  * recherche servie par le cache un jour précédent, voir textSearchCountable,
  * la route répondrait 409) ; l'issue et les sections, elles, restent. La
  * requête de l'IA n'est jamais enregistrée : une recherche relue n'en dit
- * rien. */
+ * rien. Boutiques ensuite (0031) : `pending` tant que les boutiques peuvent
+ * encore arriver (étape en attente depuis moins de 5 minutes, ou en cours),
+ * voie C en service ; absent sinon. */
 export function complementOf(row: SearchRow, textSearchOn: boolean, now: Date = new Date()): SearchComplement | undefined {
   const status = row.complement_status ?? null;
   const textStatus = row.text_status ?? null;
   const textRequested = row.text_requested_at != null;
-  const ran = status !== null || textStatus !== null || textRequested || row.text_suggested === true || (row.shopping_calls ?? 0) > 0 || row.lens_from_cache === true;
+  const deferred = deferredStateOf(row, now.getTime());
+  const ran =
+    status !== null || textStatus !== null || textRequested || row.text_suggested === true || (row.shopping_calls ?? 0) > 0 || row.lens_from_cache === true || deferred !== "none";
   if (!ran) return undefined;
-  return { status, suggestText: textSearchOn && row.text_suggested === true && !textRequested && textSearchCountable(row, now), textStatus };
+  const pending = textSearchOn && deferredPending(deferred);
+  return { status, suggestText: textSearchOn && row.text_suggested === true && !textRequested && textSearchCountable(row, now), textStatus, ...(pending ? { pending: true } : {}) };
 }
 
 /** `textSearchOn` : « Que cherchez-vous ? » peut être lancé maintenant (voie

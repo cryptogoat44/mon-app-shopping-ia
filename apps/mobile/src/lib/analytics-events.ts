@@ -39,7 +39,15 @@ export const ANALYTICS_EVENTS = {
   spot_cancelled: {},
   // Voie C (lot c) : results_count compte la recherche visuelle seule ; le
   // complément a son issue (« none » quand il n'a pas tourné) et son nombre.
-  spot_completed: { outcome: oneOf(["results", "none", "failed"]), results_count: count, complement: oneOf([...COMPLEMENT_STATUSES, "none"]), complement_count: count },
+  // Boutiques ensuite (2026-11-08) : envoyé quand l'issue des boutiques est
+  // connue, quelques secondes après l'affichage ; « unknown » quand l'app ne
+  // l'a pas reçue (réseau, délai dépassé, refus du serveur).
+  spot_completed: {
+    outcome: oneOf(["results", "none", "failed"]),
+    results_count: count,
+    complement: oneOf([...COMPLEMENT_STATUSES, "none", "unknown"]),
+    complement_count: count,
+  },
   // Voie C (lot c) : recherche par les mots — l'issue et un nombre, jamais les mots ni la requête.
   text_search_launched: {},
   text_search_completed: { outcome: oneOf([...TEXT_SEARCH_STATUSES, "failed"]), results_count: count },

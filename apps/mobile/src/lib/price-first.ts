@@ -4,6 +4,11 @@
 // seulement : le serveur garde les résultats Lens, leur ordre et leurs rangs,
 // jamais remplacés (voie C). Les indices restent ceux de la liste complète de
 // l'écran (allPieces) : la grande carte et ses actions ne changent pas.
+// Boutiques ensuite (2026-11-08) : les boutiques qui arrivent APRÈS le premier
+// affichage (complement.late) s'ajoutent en dessous ; elles ne changent ni la
+// grande carte (choisie au premier affichage, sur la recherche visuelle
+// seule), ni ce qui est replié. Sans prix dans la recherche visuelle, la
+// grande carte reste donc la première de la recherche visuelle.
 // Logique pure, testée. Imports relatifs : fichier testé par vitest.
 import type { Piece, SpotResult } from "../api/types";
 import { isForeignPrice } from "./foreign-shop";
@@ -24,9 +29,12 @@ function promotable(piece: Pick<Piece, "priceFrom">): boolean {
 }
 
 /** Aucune proposition n'a de prix, nulle part (recherche visuelle et
- * complément) : rien n'est replié, l'écran reste comme avant. */
+ * complément) : rien n'est replié, l'écran reste comme avant. Boutiques
+ * arrivées après le premier affichage (`late`) : seule la recherche visuelle
+ * compte — leurs prix ne replient rien de ce qui était déjà affiché. */
 export function noPriceAnywhere(result: ResultLists): boolean {
-  return !allPieces(result).some(hasPrice);
+  const counted = result.complement?.late ? result.pieces : allPieces(result);
+  return !counted.some(hasPrice);
 }
 
 /** La proposition que « prix d'abord » met en grand d'office : la mieux
@@ -38,12 +46,15 @@ export function noPriceAnywhere(result: ResultLists): boolean {
  * (lib/foreign-shop.ts) — le serveur garde les 6 premières de Google à leur
  * place, même avec un prix en $MX, et ne remonte les prix en euros qu'après
  * elles (relecture, ORD-4). Sans pays, ou pour un pays dont la devise n'est
- * pas connue ici, la devise ne compte pas. */
+ * pas connue ici, la devise ne compte pas. Boutiques arrivées après le
+ * premier affichage (`late`) : jamais en grand d'office — sans prix dans la
+ * recherche visuelle, la grande carte reste sa première proposition. */
 export function bestProposalIndex(result: ResultLists, country?: string): number {
   const local = country === undefined ? -1 : result.pieces.findIndex((piece) => promotable(piece) && !isForeignPrice(piece.priceFrom, piece.currency, country));
   if (local !== -1) return local;
   const lensWithPrice = result.pieces.findIndex(promotable);
   if (lensWithPrice !== -1) return lensWithPrice;
+  if (result.complement?.late && result.pieces.length > 0) return 0;
   const firstComplement = allPieces(result)[result.pieces.length];
   return firstComplement && promotable(firstComplement) ? result.pieces.length : 0;
 }

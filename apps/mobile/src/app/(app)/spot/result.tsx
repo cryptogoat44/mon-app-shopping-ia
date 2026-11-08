@@ -13,9 +13,10 @@ import { closeSpotter } from "@/lib/spot-navigation";
 import { addToWishlist, loadSpotResult } from "@/api/client";
 import { clearLastSpotResult, getLastSpotResult, rememberLaunchExtras, withLaunchExtras } from "@/api/spotSession";
 import type { Piece, SpotFailReason, SpotResult } from "@/api/types";
-import { addVaultItemFromMatch } from "@/lib/api";
+import { addVaultItemFromMatch, fetchShops } from "@/lib/api";
 import { openMerchantLink } from "@/lib/merchant-links";
 import { chooseInitialResult, pieceTitle, withoutTextPrompt, withTextSearch, type InitialResultState } from "@/lib/spot-result";
+import { afterShops, requestShops, shopsPending } from "@/lib/spot-shops";
 import { allPieces, merchantContextFor, opensOfferPage } from "@/lib/result-sections";
 import {
   bestProposalIndex,
@@ -49,7 +50,7 @@ import { NoPriceNotice } from "@/components/no-price-notice";
 import { CorrectionButtons, CorrectionsLink, CorrectionsSheet, useCorrections } from "@/components/spot-corrections";
 import { ActionButtons, type Action } from "@/components/spot-launch-views";
 import { ReportedLine, ResultFeedbackButton, ResultFeedbackSheet } from "@/components/result-feedback-sheet";
-import { ResultComplement, textSearchStatusNote } from "@/components/result-complement";
+import { ResultComplement, ShopsPending, textSearchStatusNote } from "@/components/result-complement";
 import { TextSearchAlreadyUsed, TextSearchPrompt } from "@/components/text-search-prompt";
 import { ProposalCard } from "@/components/proposal-card";
 import { NoPriceSection } from "@/components/no-price-section";
@@ -188,6 +189,30 @@ export default function ResultScreen() {
     rememberLaunchExtras(state.result);
     clearLastSpotResult();
   }, []);
+
+  // Boutiques ensuite (lib/spot-shops.ts) : la ligne « Recherche dans
+  // d'autres boutiques… », puis les boutiques ajoutées dessous — ou la ligne
+  // retirée, sans message. La demande est celle partie avec la réponse du
+  // lancement (ou, résultat relu encore en attente, une nouvelle). La grande
+  // carte ne change pas (complement.late, lib/price-first.ts).
+  const shopsSearchId = result && shopsPending(result) ? result.searchId : null;
+  useEffect(() => {
+    if (!shopsSearchId) return;
+    let active = true;
+    void requestShops(shopsSearchId, (signal) => fetchShops(shopsSearchId, signal)).then((outcome) => {
+      if (!active) return;
+      setState((current) => (current.kind === "ready" ? { kind: "ready", result: afterShops(current.result, shopsSearchId, outcome) } : current));
+    });
+    return () => {
+      active = false;
+    };
+  }, [shopsSearchId]);
+
+  // La requête des boutiques arrive après le premier affichage : gardée comme celle du lancement (résultat rouvert).
+  const lateQuery = result?.complement?.late ? result.complement.query : null;
+  useEffect(() => {
+    if (result && lateQuery) rememberLaunchExtras(result);
+  }, [lateQuery]);
 
   useScrollToEndOnKeyboard(scrollRef, result?.complement?.suggestText === true);
 
@@ -616,7 +641,9 @@ export default function ResultScreen() {
         ) : null}
 
         {/* Voie C (lot c) : le complément, sous « Autres propositions » — jamais à leur place. Prix d'abord : la
-            grande carte n'en vient que si aucune proposition de la recherche visuelle n'a de prix. */}
+            grande carte n'en vient que si aucune proposition de la recherche visuelle n'a de prix, et jamais
+            quand les boutiques arrivent après l'affichage (boutiques ensuite : la ligne d'attente, à leur place). */}
+        {result.complement?.pending ? <ShopsPending /> : null}
         <ResultComplement source="ai" others={sections.shopping} query={result.complement?.query} onSelect={selectPiece} placements={placements} />
         <View onLayout={onWordsLayout}>
           <ResultComplement source="words" others={sections.words} textStatus={result.complement?.textStatus} onSelect={selectPiece} placements={placements} />

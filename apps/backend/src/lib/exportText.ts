@@ -145,6 +145,10 @@ export const EXPORT_COLUMNS = {
     text_requested_at: technical("Heure de la recherche avec vos mots", "Time of the search with your words"),
     text_status: technical("Issue de la recherche avec vos mots (mesure)", "Outcome of the search with your words (measure)"),
     total_seconds: technical("Durée du lancement (secondes)", "Launch duration (seconds)"),
+    // Colonnes de la migration 0031 (boutiques ensuite), décrites d'avance :
+    // l'état de la recherche dans d'autres boutiques faite après l'affichage.
+    complement_deferred: technical("Recherche dans d'autres boutiques après l'affichage : état", "Search at other retailers after display: state"),
+    complement_deferred_at: technical("Recherche dans d'autres boutiques après l'affichage : heure de l'état", "Search at other retailers after display: time of the state"),
   },
   productMatches: {
     id: ID,
@@ -170,6 +174,10 @@ export const EXPORT_COLUMNS = {
     // Colonne de la migration 0028 (voie C), décrite d'avance : recherche
     // visuelle, boutiques ou vos mots (libellés : MATCH_ORIGIN_LABELS).
     origin: shown("Origine", "Origin"),
+    // Colonne de la migration 0031 (boutiques ensuite), décrite d'avance :
+    // place dans la réponse de la recherche visuelle avant le tri par vos
+    // mots, effacée dès que la recherche dans d'autres boutiques démarre.
+    lens_rank: technical("Place dans la réponse de la recherche visuelle (avant le tri par vos mots)", "Place in the visual search answer (before sorting by your words)"),
   },
   resultFeedback: {
     id: ID,

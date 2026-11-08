@@ -1,9 +1,12 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
+  COMPLEMENT_DEFERRED,
+  COMPLEMENT_ERRORS,
   SEARCH_FAILURE_MESSAGES,
   SEARCH_QUERY_MAX_LENGTH,
   TEXT_SEARCH_ERRORS,
+  type ComplementStatus,
   type MatchOrigin,
   type PlatformSource,
   type ProductSearch,
@@ -54,6 +57,8 @@ import { lightSort } from "../lib/lightSort.js";
 import { cacheKey, imageHash, purgeExpiredCache, readCache, writeCache } from "../lib/searchCache.js";
 import {
   complementAfterSaveFailure,
+  complementNeedsCalls,
+  emptyComplementMeasure,
   launchColumns,
   lensStep,
   runComplement,
@@ -61,11 +66,21 @@ import {
   sanitizeShoppingQuery,
   voieCActive,
   type CachePorts,
+  type ComplementInput,
   type ComplementPorts,
   type ComplementResult,
   type LensAnswer,
   type TextComplementPorts,
 } from "../lib/voieC.js";
+import {
+  COMPLEMENT_PENDING_MAX_MS,
+  COMPLEMENT_RUNNING_MAX_MS,
+  COMPLEMENT_WAIT_STEP_MS,
+  deferredComplementReady,
+  deferredStateOf,
+  hasLensRanks,
+  lensInGoogleOrder,
+} from "../lib/deferredComplement.js";
 import { consumeRateLimit, RATE_LIMITED_MESSAGE } from "../plugins/rateLimit.js";
 import { aiQuotaFor } from "../lib/aiQuota.js";
 import { noteFailure } from "../lib/alerts.js";
@@ -96,6 +111,11 @@ const runSearchSchema = z.object({
   // enregistrés ; ils servent seulement à trier les propositions (petit lot 2,
   // décision du fondateur du 2026-10-27, lib/wordSort.ts).
   query: z.string().max(SEARCH_QUERY_MAX_LENGTH).optional(),
+  // Boutiques ensuite (2026-11-08) : envoyé par la nouvelle app seulement.
+  // Voie C en service : la réponse arrive dès Lens, et « Cette pièce dans
+  // d'autres boutiques » est cherchée ensuite (POST /api/searches/:id/complement).
+  // Absent (apps déjà installées) ou voie C coupée : rien ne change.
+  complement: z.literal(COMPLEMENT_DEFERRED).optional(),
 });
 
 // RGPD : l'image analysée (capture importée ou zone recadrée) n'est
@@ -116,10 +136,17 @@ async function discardAnalysisImage(fastify: FastifyInstance, storagePaths: stri
 
 const INSERTED_MATCH_ROWS = z.array(z.object({ id: z.string(), merchant_url: z.string() }));
 
-function toMatchRow(searchId: string, m: VisualMatch, rank: number) {
+/** Boutiques ensuite : place de chaque proposition Lens avant le tri par les
+ * mots (ordre de Google), quand les mots l'ont changé ; null sinon. */
+type LensRanks = ReadonlyMap<VisualMatch, number> | null;
+
+function toMatchRow(searchId: string, m: VisualMatch, rank: number, lensRanks: LensRanks = null) {
+  const lensRank = lensRanks?.get(m);
   return {
     search_id: searchId,
     rank,
+    // Seulement avec 0031 et des mots qui ont changé l'ordre (lancement « boutiques ensuite »).
+    ...(lensRank !== undefined ? { lens_rank: lensRank } : {}),
     product_name: m.productName,
     image_url: m.imageUrl,
     image_hd_url: m.imageHdUrl,
@@ -136,14 +163,14 @@ function toMatchRow(searchId: string, m: VisualMatch, rank: number) {
  * base refuse (valeur inattendue) est écartée seule, jamais les autres : on
  * reprend alors une par une, rangs renumérotés sans trou (fiabilité des
  * résultats, 2026-10-15). 0 : rien n'a pu être rangé. */
-async function insertMatches(fastify: FastifyInstance, searchId: string, matches: VisualMatch[]): Promise<number> {
+async function insertMatches(fastify: FastifyInstance, searchId: string, matches: VisualMatch[], lensRanks: LensRanks): Promise<number> {
   const table = () => fastify.supabaseAdmin.from("product_matches");
-  const { error } = await table().insert(matches.map((m, index) => toMatchRow(searchId, m, index + 1)));
+  const { error } = await table().insert(matches.map((m, index) => toMatchRow(searchId, m, index + 1, lensRanks)));
   if (!error) return matches.length;
 
   let saved = 0;
   for (const match of matches) {
-    const { error: rowError } = await table().insert(toMatchRow(searchId, match, saved + 1));
+    const { error: rowError } = await table().insert(toMatchRow(searchId, match, saved + 1, lensRanks));
     if (!rowError) saved += 1;
   }
   if (saved === 0) fastify.log.error({ error }, "Échec d'enregistrement des product_matches");
@@ -157,10 +184,11 @@ async function insertMatches(fastify: FastifyInstance, searchId: string, matches
 async function saveMatches(
   fastify: FastifyInstance,
   searchId: string,
-  matches: VisualMatch[]
+  matches: VisualMatch[],
+  lensRanks: LensRanks = null
 ): Promise<boolean> {
   if (matches.length === 0) return true;
-  if ((await insertMatches(fastify, searchId, matches)) === 0) return false;
+  if ((await insertMatches(fastify, searchId, matches, lensRanks)) === 0) return false;
 
   // Un lien affilié par produit identifié. Pour l'instant "direct" (aucun
   // réseau d'affiliation rejoint) : le lien pointe tel quel vers le
@@ -266,7 +294,7 @@ async function readRunForm(request: FastifyRequest, reply: FastifyReply): Promis
       return null;
     }
   }
-  const input = parseInput(runSearchSchema, { crop: rawCrop, query: fields.query }, reply, {
+  const input = parseInput(runSearchSchema, { crop: rawCrop, query: fields.query, complement: fields.complement }, reply, {
     error: "invalid_body",
     message: "Zone de recadrage ou texte invalide.",
   });
@@ -587,6 +615,17 @@ function withoutSuggestion(complement: ComplementResult): ComplementResult {
   };
 }
 
+/** Boutiques ensuite : le complément pas encore fait, tel que le lancement
+ * l'enregistre (aucune issue, aucun appel, pas d'invitation) et l'annonce. */
+function pendingComplement(): ComplementResult {
+  return {
+    matches: [],
+    columns: { complement_status: null, shopping_calls: 0, text_suggested: false },
+    reply: { status: null, suggestText: false, textStatus: null, pending: true },
+    measure: emptyComplementMeasure("ai"),
+  };
+}
+
 /** Enregistre un lancement de la voie C et renvoie la recherche complète
  * (null : illisible ou non enregistrée) avec le complément tel qu'enregistré.
  * - Les propositions Lens passent par saveMatches, INCHANGÉ (insertion, puis
@@ -599,19 +638,27 @@ function withoutSuggestion(complement: ComplementResult): ComplementResult {
  * - Les colonnes de la voie C ne sont écrites qu'ici. Lens venu du cache :
  *   run_started_at est vidé, le disjoncteur ignore alors cette issue copiée.
  * - Lignes de journal : « Mesure recherche » d'abord (avec fromCache), puis
- *   « Mesure complément », avec la durée totale depuis T0. */
+ *   « Mesure complément », avec la durée totale depuis T0.
+ * - Boutiques ensuite (`deferred`) : le complément est « pending »
+ *   (pendingComplement) ; l'étape est notée en attente
+ *   (complement_deferred, 0031), avec l'ordre de Google quand les mots l'ont
+ *   changé (lens_rank), et « Mesure complément » sera écrite par
+ *   POST /api/searches/:id/complement. Lens non enregistré : rien n'attend. */
 async function saveVoieCOutcome(
   fastify: FastifyInstance,
   request: FastifyRequest,
   launch: VoieCLaunch,
   outcome: SearchOutcome,
-  run: { lensFromCache: boolean; complement: ComplementResult }
+  run: { lensFromCache: boolean; complement: ComplementResult; deferred?: { lensRanks: LensRanks } }
 ): Promise<{ search: ProductSearch | null; complement: ComplementResult }> {
-  const saved = await saveMatches(fastify, launch.id, outcome.matches);
+  const saved = await saveMatches(fastify, launch.id, outcome.matches, run.deferred?.lensRanks ?? null);
+  const pending = run.deferred !== undefined && saved;
   let complement = run.complement;
   let complementSaved = 0;
   if (!saved) {
     complement = complement.matches.length > 0 ? complementAfterSaveFailure(complement) : withoutSuggestion(complement);
+    // Boutiques ensuite : une recherche en panne n'attend aucune boutique.
+    if (run.deferred) complement = { ...complement, reply: { status: null, suggestText: false, textStatus: null } };
   } else if (complement.matches.length > 0) {
     const count = await saveComplementRows(fastify, launch.id, complement.matches, "shopping", outcome.matches.length);
     if (count === null) complement = complementAfterSaveFailure(complement);
@@ -631,9 +678,10 @@ async function saveVoieCOutcome(
     provider: provider.provider,
     provider_status_code: provider.statusCode,
     ...launchColumns(run.lensFromCache, complement, Date.now() - launch.t0),
+    ...(pending ? { complement_deferred: "pending", complement_deferred_at: new Date().toISOString() } : {}),
     ...(run.lensFromCache ? { run_started_at: null } : {}),
   });
-  fastify.log.info(complementLogLine(complement.measure, { lensFromCache: run.lensFromCache, totalMs: Date.now() - launch.t0 }), COMPLEMENT_LOG_MESSAGE);
+  if (!pending) fastify.log.info(complementLogLine(complement.measure, { lensFromCache: run.lensFromCache, totalMs: Date.now() - launch.t0 }), COMPLEMENT_LOG_MESSAGE);
   return { search, complement };
 }
 
@@ -646,8 +694,14 @@ async function saveVoieCOutcome(
  * 3. Le complément (lib/voieC.ts, runComplement) : il ne lève jamais
  *    d'erreur ; toute issue autre que « shown » laisse les résultats Lens seuls.
  * 4. Enregistrement (saveVoieCOutcome), puis la réponse : la recherche, avec
- *    le complément (la requête de l'IA n'existe que dans cette réponse). */
-async function launchWithVoieC(fastify: FastifyInstance, request: FastifyRequest, reply: FastifyReply, launch: VoieCLaunch) {
+ *    le complément (la requête de l'IA n'existe que dans cette réponse).
+ * Boutiques ensuite (`deferred`, nouvelle app, 0031 vue) : les étapes 1 et 2
+ *    sont les mêmes ; quand une boutique est à chercher (complementNeedsCalls),
+ *    l'étape 3 attend POST /api/searches/:id/complement et la réponse part
+ *    tout de suite, avec complement.pending. Rien de payant pour le
+ *    complément dans ce lancement. Sinon (Lens en panne ou vide, IA coupée),
+ *    l'issue est enregistrée ici, comme avant. */
+async function launchWithVoieC(fastify: FastifyInstance, request: FastifyRequest, reply: FastifyReply, launch: VoieCLaunch, deferred: boolean) {
   const locale = searchLocaleFor(request);
   const lens = await lensStep(cachePorts(fastify, request), {
     imageHash: imageHash(launch.image),
@@ -681,7 +735,7 @@ async function launchWithVoieC(fastify: FastifyInstance, request: FastifyRequest
 
   // Les mots remontent en tête les propositions dont le nom les contient ; rien n'est retiré.
   const byWords = sortByWords(searched.matches, launch.input.query);
-  const complement = await runComplement(complementPorts(fastify, request, launch), {
+  const input: ComplementInput = {
     // Ordre de Google, avant le tri par les mots : ceux-ci ne partent nulle part.
     lens: searched.matches,
     lensFailed: searched.measure.outcome === "failure",
@@ -690,7 +744,20 @@ async function launchWithVoieC(fastify: FastifyInstance, request: FastifyRequest
     locale,
     deadline: startDeadline(launch.t0, VOIE_C_BUDGET.totalMs),
     aiEnabled: voieCAiEnabled(),
-  });
+  };
+  if (deferred && complementNeedsCalls(input) && !request.raw.socket?.destroyed && (await deferredComplementReady(fastify))) {
+    // L'ordre de Google n'est gardé que si les mots l'ont changé (sinon, les rangs le donnent déjà).
+    const lensRanks = byWords.sorted ? new Map(searched.matches.map((match, index) => [match, index + 1] as const)) : null;
+    const saved = await saveVoieCOutcome(fastify, request, launch, { ...searched, matches: byWords.matches }, {
+      lensFromCache: lens.lensFromCache,
+      complement: pendingComplement(),
+      deferred: { lensRanks },
+    });
+    if (!lens.lensFromCache) await observeBreakerAfter(fastify, "image", IMAGE_SEARCH_PROVIDER.name, launch.id);
+    if (!saved.search) return reply.code(500).send(SAVE_FAILED);
+    return reply.send({ ...saved.search, sortedByWords: byWords.sorted, complement: saved.complement.reply });
+  }
+  const complement = await runComplement(complementPorts(fastify, request, launch), input);
   // Échecs répétés de l'IA ou de Google Shopping : une alerte (lib/alerts.ts).
   if (complement.columns.complement_status === "ai_failed") noteFailure(request.log, "ia_voie_c");
   if (complement.columns.complement_status === "shopping_failed") noteFailure(request.log, "google_shopping");
@@ -776,21 +843,230 @@ async function unlockTextSearch(fastify: FastifyInstance, row: SearchRow): Promi
 }
 
 /** La recherche complète, comme GET /api/searches/:id la renvoie
- * (propositions, liens, signalements de la personne) ; null : illisible. */
+ * (propositions, liens, signalements de la personne) ; null : illisible.
+ * Appelée par « Que cherchez-vous ? » et par les boutiques ensuite, voie C en service. */
 async function readSearchForReply(fastify: FastifyInstance, request: FastifyRequest, id: string, userId: string): Promise<ProductSearch | null> {
   const { data: search } = await fastify.supabaseAdmin.from("product_searches").select("*").eq("id", id).eq("user_id", userId).maybeSingle();
   const { data: matchRows, error: matchesError } = await fastify.supabaseAdmin.from("product_matches").select("*").eq("search_id", id);
   const row = parseSearchRow(search);
   const matches = parseMatchRows(matchRows);
   if (matchesError || !row || !matches) {
-    request.log.error({ code: matchesError?.code ?? null }, "Recherche ou propositions illisibles après la recherche avec vos mots");
+    request.log.error({ code: matchesError?.code ?? null }, "Recherche ou propositions illisibles après un complément");
     return null;
   }
   const matchIds = matches.map((m) => m.id);
   const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, matchIds);
   const feedbackByMatchId = await fetchFeedbackReasons(fastify, userId, matchIds);
-  // Appelée seulement par la route « Que cherchez-vous ? », voie C en service.
   return toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, true);
+}
+
+// ---- Boutiques ensuite (POST /api/searches/:id/complement, 0031) ----
+
+// L'app se fie au code (COMPLEMENT_ERRORS) et retire sa ligne d'attente sans
+// rien dire ; ces messages ne servent que de repli.
+const COMPLEMENT_REFUSALS = {
+  unavailable: { status: 404, body: { error: COMPLEMENT_ERRORS.unavailable, message: "Page introuvable." } },
+  notFound: { status: 404, body: { error: "search_not_found", message: "Recherche introuvable." } },
+  notDeferred: { status: 409, body: { error: COMPLEMENT_ERRORS.notDeferred, message: "Requête invalide." } },
+} as const;
+
+function sendComplementRefusal(reply: FastifyReply, refusal: keyof typeof COMPLEMENT_REFUSALS): FastifyReply {
+  const { status, body } = COMPLEMENT_REFUSALS[refusal];
+  return reply.code(status).send(body);
+}
+
+/** Pendant qu'une autre demande fait l'étape, l'issue est attendue au plus ce
+ * temps (le budget de l'étape est de 14 s) ; au-delà, la recherche est
+ * renvoyée telle quelle, encore « pending » : l'app retire sa ligne. */
+const COMPLEMENT_WAIT_MAX_MS = 20_000;
+
+/** La recherche de la personne ; « not_found » pour toute autre (même
+ * réponse qu'une recherche inexistante), null : illisible. */
+async function readOwnSearch(fastify: FastifyInstance, request: FastifyRequest, id: string, userId: string): Promise<SearchRow | "not_found" | null> {
+  const { data, error } = await fastify.supabaseAdmin.from("product_searches").select("*").eq("id", id).eq("user_id", userId).maybeSingle();
+  if (!error && !data) return "not_found";
+  const row = parseSearchRow(data);
+  if (error || !row) request.log.error({ code: error?.code ?? null }, "Recherche illisible avant les boutiques ensuite");
+  return error ? null : row;
+}
+
+/** Verrou des boutiques ensuite : « pending » → « running », en une seule
+ * instruction conditionnelle (seule la demande qui la change fait l'étape
+ * payante, même avec deux appels simultanés, une relance ou un second
+ * appareil), et seulement si l'étape attend depuis moins de 5 minutes. Dans
+ * la même instruction, la recherche cesse d'être « servie par le cache » :
+ * elle peut faire un appel réel, et compte dès maintenant dans la part de 8
+ * par personne (comme au lancement, et comme lockTextSearch). */
+async function claimDeferred(fastify: FastifyInstance, row: SearchRow): Promise<boolean> {
+  const now = Date.now();
+  const { data, error } = await fastify.supabaseAdmin
+    .from("product_searches")
+    .update({ complement_deferred: "running", complement_deferred_at: new Date(now).toISOString(), served_from_cache: false })
+    .eq("id", row.id)
+    .eq("user_id", row.user_id)
+    .eq("complement_deferred", "pending")
+    .gte("complement_deferred_at", new Date(now - COMPLEMENT_PENDING_MAX_MS).toISOString())
+    .select("id");
+  if (error) fastify.log.error({ code: error.code ?? null }, "Verrou des boutiques ensuite non posé");
+  return !error && Array.isArray(data) && data.length > 0;
+}
+
+/** L'ordre de Google n'est gardé que jusqu'au début de l'étape (ou son
+ * expiration) : il est effacé. Un échec est journalisé, sans bloquer. */
+async function forgetLensRanks(fastify: FastifyInstance, searchId: string): Promise<void> {
+  const { error } = await fastify.supabaseAdmin.from("product_matches").update({ lens_rank: null }).eq("search_id", searchId);
+  if (error) fastify.log.error({ code: error.code ?? null }, "Ordre de Google non effacé après les boutiques ensuite");
+}
+
+/** Étape jamais demandée à temps (« pending » de plus de 5 minutes :
+ * « no_time ») ou abandonnée en cours (« running » de plus d'une minute,
+ * serveur redémarré : « error ») : close sans aucun appel, en une
+ * instruction conditionnelle, avec sa ligne « Mesure complément ». */
+async function closeDeferred(fastify: FastifyInstance, row: SearchRow, from: "pending" | "running", status: ComplementStatus): Promise<void> {
+  const now = Date.now();
+  const maxAge = from === "pending" ? COMPLEMENT_PENDING_MAX_MS : COMPLEMENT_RUNNING_MAX_MS;
+  const { data, error } = await fastify.supabaseAdmin
+    .from("product_searches")
+    .update({ complement_deferred: "done", complement_deferred_at: new Date(now).toISOString(), complement_status: status, text_suggested: false })
+    .eq("id", row.id)
+    .eq("complement_deferred", from)
+    .lt("complement_deferred_at", new Date(now - maxAge).toISOString())
+    .select("id");
+  if (error) {
+    fastify.log.error({ code: error.code ?? null }, "Boutiques ensuite expirées non closes");
+    return;
+  }
+  if (!Array.isArray(data) || data.length === 0) return;
+  if (from === "pending") await forgetLensRanks(fastify, row.id);
+  fastify.log.info(complementLogLine({ ...emptyComplementMeasure("ai"), status }, { lensFromCache: row.lens_from_cache === true, totalMs: 0, deferred: true }), COMPLEMENT_LOG_MESSAGE);
+}
+
+/** Une autre demande fait l'étape : son issue est relue toutes les 0,5 s,
+ * jusqu'à 20 s ; rien n'est payé ici. */
+async function waitForOtherClaim(fastify: FastifyInstance, request: FastifyRequest, id: string): Promise<void> {
+  const until = Date.now() + COMPLEMENT_WAIT_MAX_MS;
+  while (Date.now() < until && !request.raw.socket?.destroyed) {
+    await new Promise((resolve) => setTimeout(resolve, COMPLEMENT_WAIT_STEP_MS));
+    const { data } = await fastify.supabaseAdmin.from("product_searches").select("complement_deferred, complement_deferred_at").eq("id", id).maybeSingle();
+    const read = z.object({ complement_deferred: z.enum(["pending", "running", "done"]).nullable(), complement_deferred_at: z.string().nullable() }).safeParse(data);
+    if (!read.success || deferredStateOf(read.data, Date.now()) !== "running") return;
+  }
+}
+
+/** La recherche telle qu'enregistrée (aucun appel payant) : son complément
+ * lu dans la ligne, sans la requête de l'IA (jamais enregistrée). */
+async function sendSavedComplement(fastify: FastifyInstance, request: FastifyRequest, reply: FastifyReply, id: string, userId: string): Promise<FastifyReply> {
+  const result = await readSearchForReply(fastify, request, id, userId);
+  if (!result) return reply.code(500).send(SAVE_FAILED);
+  return reply.send(result);
+}
+
+/** L'étape des boutiques, une fois le verrou posé par cette demande : les
+ * mêmes ports qu'au lancement (limite de l'IA, plafond et place réservée de
+ * Google Shopping, garde des images), sur les propositions Lens enregistrées,
+ * dans l'ordre de Google, avec le budget d'aujourd'hui (14 s, enregistrement
+ * compris) compté depuis l'arrivée de cette demande : le temps de Lens n'y est
+ * plus. Puis, comme au lancement : lignes des boutiques après le dernier rang
+ * Lens, colonnes de la voie C, « Que cherchez-vous ? » selon les mêmes règles,
+ * « Mesure complément », et la réponse avec la requête de l'IA (seulement là). */
+async function runDeferredComplement(
+  fastify: FastifyInstance,
+  request: FastifyRequest,
+  reply: FastifyReply,
+  target: { row: SearchRow; matches: MatchRow[]; t0: number }
+): Promise<FastifyReply> {
+  const { row, matches, t0 } = target;
+  if (hasLensRanks(matches)) await forgetLensRanks(fastify, row.id);
+  const lensFromCache = row.lens_from_cache === true;
+  const complement = await runComplement(complementPorts(fastify, request, { id: row.id, userId: row.user_id }), {
+    lens: lensInGoogleOrder(matches),
+    lensFailed: false,
+    lensCalled: !lensFromCache,
+    shoppingCalls: row.shopping_calls ?? 0,
+    locale: searchLocaleFor(request),
+    deadline: startDeadline(t0, VOIE_C_BUDGET.totalMs),
+    aiEnabled: voieCAiEnabled(),
+  });
+  if (complement.columns.complement_status === "ai_failed") noteFailure(request.log, "ia_voie_c");
+  if (complement.columns.complement_status === "shopping_failed") noteFailure(request.log, "google_shopping");
+  // Comme au lancement : Lens venu du cache mais Google Shopping appelé, la limite horaire compte ce lancement ici.
+  if (lensFromCache && complement.measure.calls > 0) fastify.countRateLimitHit(request, "searchCreate");
+  const servedFromCache = lensFromCache && complement.columns.shopping_calls === 0;
+  const offered = textSearchCountable({ served_from_cache: servedFromCache, created_at: row.created_at }) ? complement : withoutSuggestion(complement);
+
+  let final = offered;
+  let savedCount = 0;
+  if (offered.matches.length > 0) {
+    const lastRank = matches.reduce((max, match) => Math.max(max, match.rank), 0);
+    const count = await saveComplementRows(fastify, row.id, offered.matches, "shopping", lastRank);
+    if (count === null) final = complementAfterSaveFailure(offered);
+    else savedCount = count;
+  }
+  // Sans condition sur « running » : une issue réelle l'emporte toujours.
+  const { error } = await fastify.supabaseAdmin
+    .from("product_searches")
+    .update({
+      complement_deferred: "done",
+      complement_deferred_at: new Date().toISOString(),
+      complement_status: final.columns.complement_status,
+      shopping_calls: final.columns.shopping_calls,
+      text_suggested: final.columns.text_suggested,
+      served_from_cache: lensFromCache && final.columns.shopping_calls === 0,
+      ...(savedCount > 0 && row.status === "failed" ? { status: "completed", error_message: null } : {}),
+    })
+    .eq("id", row.id);
+  fastify.log.info(complementLogLine(final.measure, { lensFromCache, totalMs: Date.now() - t0, deferred: true }), COMPLEMENT_LOG_MESSAGE);
+  if (error) {
+    request.log.error({ code: error.code ?? null }, "Issue des boutiques ensuite non enregistrée");
+    return reply.code(500).send(SAVE_FAILED);
+  }
+  const result = await readSearchForReply(fastify, request, row.id, row.user_id);
+  if (!result) return reply.code(500).send(SAVE_FAILED);
+  return reply.send({ ...result, complement: final.reply });
+}
+
+/** Les boutiques ensuite d'une recherche, selon son état (lib/deferredComplement.ts) :
+ * - « pending » : cette demande pose le verrou et fait l'étape ; verrou déjà
+ *   pris par une autre : son issue est attendue ;
+ * - « running » : l'étape d'une autre demande est attendue, sans rien payer ;
+ * - « done » : l'issue enregistrée, sans appel ;
+ * - « expired », « stale » : close sans appel, puis renvoyée ;
+ * - « none » : lancée sans boutiques ensuite, refusée (409).
+ * « Annuler » (connexion coupée) avant le verrou : rien n'est pris. */
+async function serveDeferredComplement(
+  fastify: FastifyInstance,
+  request: FastifyRequest,
+  reply: FastifyReply,
+  target: { id: string; userId: string; t0: number }
+): Promise<FastifyReply | undefined> {
+  // Deux tours au plus : un verrou perdu ne se perd qu'une fois (l'étape est alors « running » ou close).
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const row = await readOwnSearch(fastify, request, target.id, target.userId);
+    if (row === "not_found") return sendComplementRefusal(reply, "notFound");
+    if (!row) return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue, réessayez." });
+    const state = deferredStateOf(row, Date.now());
+    if (state === "none") return sendComplementRefusal(reply, "notDeferred");
+    if (state === "done") break;
+    if (state === "expired" || state === "stale") {
+      await closeDeferred(fastify, row, state === "expired" ? "pending" : "running", state === "expired" ? "no_time" : "error");
+      break;
+    }
+    if (state === "running") {
+      await waitForOtherClaim(fastify, request, target.id);
+      break;
+    }
+    // « pending » : les propositions Lens, puis le verrou.
+    const { data: matchRows, error: matchesError } = await fastify.supabaseAdmin.from("product_matches").select("*").eq("search_id", target.id);
+    const matches = parseMatchRows(matchRows);
+    if (matchesError || !matches) {
+      request.log.error({ code: matchesError?.code ?? null }, "Propositions illisibles avant les boutiques ensuite");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue, réessayez." });
+    }
+    if (request.raw.socket?.destroyed) return undefined;
+    if (await claimDeferred(fastify, row)) return runDeferredComplement(fastify, request, reply, { row, matches, t0: target.t0 });
+  }
+  if (request.raw.socket?.destroyed) return undefined;
+  return sendSavedComplement(fastify, request, reply, target.id, target.userId);
 }
 
 /** La recherche à lancer : celle de la personne, encore en attente. null :
@@ -1021,8 +1297,10 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
   // photo, voir la voie C plus haut) : formulaire multipart avec, au choix,
   // une image importée (champ "file" — photo ou capture au bon moment de la
   // vidéo) ou, à défaut, la vignette officielle préparée au temps 1 ; plus la
-  // zone choisie ("crop", JSON en proportions 0–1). Un texte ("query") envoyé
-  // par une ancienne version de l'app est ignoré. Le serveur recadre lui-même : identique sur
+  // zone choisie ("crop", JSON en proportions 0–1). Les mots ("query") ne
+  // servent qu'à trier les propositions. "complement" = "deferred" (nouvelle
+  // app, boutiques ensuite) : la réponse part dès Lens, les autres boutiques
+  // sont cherchées par POST /api/searches/:id/complement. Le serveur recadre lui-même : identique sur
   // le web et sur iPhone, et sans les restrictions du navigateur sur les
   // images d'un autre site.
   fastify.post(
@@ -1068,7 +1346,8 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       // Voie C (lot c) : interrupteur allumé ET migration 0028 vue. Sinon,
       // exactement le chemin d'avant : Lens seul, 15 s, aucune colonne nouvelle.
       if (await voieCActive(fastify)) {
-        return launchWithVoieC(fastify, request, reply, { id, userId, t0, image: prepared.image, input: form.input, createdAt });
+        const deferred = form.input.complement === COMPLEMENT_DEFERRED;
+        return launchWithVoieC(fastify, request, reply, { id, userId, t0, image: prepared.image, input: form.input, createdAt }, deferred);
       }
 
       const call = await callLens(fastify, request, { id, userId, image: prepared.image });
@@ -1190,6 +1469,30 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       const result = await readSearchForReply(fastify, request, id, userId);
       if (!result) return reply.code(500).send(SAVE_FAILED);
       return reply.send(result);
+    }
+  );
+
+  // Boutiques ensuite (2026-11-08, migration 0031) : « Cette pièce dans
+  // d'autres boutiques » pour une recherche lancée par la nouvelle app avec
+  // `complement: "deferred"`, dont les résultats Lens sont déjà affichés.
+  // L'étape payante (l'IA, puis Google Shopping) ne tourne qu'une fois par
+  // recherche (serveDeferredComplement) ; toute autre demande reçoit l'issue
+  // enregistrée. La recherche de la personne seulement (404 sinon). Voie C
+  // coupée, ou 0031 absente : 404. Limite propre (searchComplement) ; un
+  // appel réel aux boutiques compte aussi dans searchCreate, comme au lancement.
+  fastify.post(
+    "/api/searches/:id/complement",
+    {
+      preHandler: [fastify.requireAuth, fastify.rateLimit("searchComplement")],
+      config: { rateLimitName: "searchComplement" },
+    },
+    async (request, reply) => {
+      // Budget de l'étape : depuis l'arrivée de la demande (le temps de Lens n'y est plus).
+      const t0 = Date.now();
+      if (!(await voieCActive(fastify)) || !(await deferredComplementReady(fastify))) return sendComplementRefusal(reply, "unavailable");
+      const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
+      if (!params) return;
+      return serveDeferredComplement(fastify, request, reply, { id: params.id, userId: request.user!.id, t0 });
     }
   );
 

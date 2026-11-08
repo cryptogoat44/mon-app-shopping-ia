@@ -456,7 +456,7 @@ describe("voie C : « Mesure complément », étapes des boutiques, réponses du
     noQueryReason: null,
     shoppingFailureKind: null,
   });
-  const complement = (mesure: ComplementMeasure, run: { lensFromCache: boolean; totalMs: number }, heure = "2026-11-02T08:00:00Z") => ({
+  const complement = (mesure: ComplementMeasure, run: { lensFromCache: boolean; totalMs: number; deferred?: boolean }, heure = "2026-11-02T08:00:00Z") => ({
     ...ligne({ ...complementLogLine(mesure, run), msg: COMPLEMENT_LOG_MESSAGE, compte: COMPTE, adresse: IP, texte: TEXTE, query: REQUETE, brand: MARQUE }),
     timestamp: heure,
   });
@@ -528,6 +528,16 @@ describe("voie C : « Mesure complément », étapes des boutiques, réponses du
 
     const echecIA = extraireComplement(complement({ ...mesureVide("ai"), status: "ai_failed", aiErrorKind: "refused", aiMs: 2_000 }, { lensFromCache: false, totalMs: 8_000 }).message)!;
     expect(decrireComplement(echecIA)).toBe("boutiques : échec de l'IA (refused) ; 0 appel(s), IA 2000 ms ; total 8,0 s");
+  });
+
+  it("boutiques ensuite : la ligne le dit (durée comptée depuis la demande des boutiques) ; les lignes d'avant restent lues", () => {
+    const differe = extraireComplement(complement(MONTRE, { lensFromCache: false, totalMs: 3_400, deferred: true }).message)!;
+    expect(differe).toMatchObject({ deferred: true, totalMs: 3_400 });
+    expect(decrireComplement(differe)).toContain("total 3,4 s, après l'affichage des résultats Lens (boutiques ensuite)");
+    const { deferred: _absent, ...avant } = complementLogLine(MONTRE, { lensFromCache: false, totalMs: 9_430 });
+    const ancienne = extraireComplement(ligne({ ...avant, msg: COMPLEMENT_LOG_MESSAGE }).message)!;
+    expect(ancienne).not.toHaveProperty("deferred");
+    expect(decrireComplement(ancienne)).not.toContain("boutiques ensuite");
   });
 
   it("bilan de la période par source, et ordre des événements, sans identifiant, adresse ni texte", () => {
