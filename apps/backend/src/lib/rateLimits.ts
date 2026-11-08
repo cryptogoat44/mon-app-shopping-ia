@@ -33,6 +33,14 @@ export const RATE_LIMITS = {
   // (aucun appel, donc hors des plafonds) : chacun écrit encore une recherche
   // et ses propositions. Au-delà : 429, comme toute limite.
   searchCacheServed: { max: 30, windowMs: HOUR },
+  // Boutiques ensuite (2026-11-08) : POST /api/searches/:id/complement, une
+  // demande par lancement en usage normal (10 lancements avec appel + 30
+  // servis par le cache par heure, au plus). Chaque demande compte, même sans
+  // appel payant (l'étape payante, elle, ne tourne qu'une fois par recherche).
+  // Pas la limite searchCreate : le dernier lancement permis de l'heure
+  // perdrait ses boutiques ; un appel réel aux boutiques y est compté, comme
+  // au lancement. Au-delà : 429, et l'app retire la ligne d'attente sans rien dire.
+  searchComplement: { max: 60, windowMs: HOUR },
   // Lecture du compteur des recherches (lot limites annoncées) : gratuite,
   // mais chaque lecture interroge la base. L'app relit au plus toutes les
   // 20 s en usage normal ; au-delà, l'app n'affiche simplement rien.

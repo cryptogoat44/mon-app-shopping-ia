@@ -522,6 +522,7 @@ export const en: Catalog = {
     complementTitleAi: "This piece at other shops",
     complementTitleWords: "Results for your words",
     complementQuery: (query: string) => `Search written by an AI: “${query}”`,
+    shopsPending: "Searching other shops…",
     viewOffer: "View offer",
     textSearchIntro: "Not quite right?",
     textSearchButton: "Search",

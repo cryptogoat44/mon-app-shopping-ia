@@ -118,6 +118,36 @@ describe("prix d'abord : la grande carte proposée d'office", () => {
   });
 });
 
+describe("boutiques ensuite (2026-11-08) : des boutiques arrivées après l'affichage ne changent rien au-dessus", () => {
+  /** Les mêmes listes, boutiques arrivées après le premier affichage. */
+  const late = (result: Lists): Lists => ({ ...result, complement: { ...result.complement!, late: true } });
+
+  it("Lens sans aucun prix : la grande carte reste la première proposition Lens, même avec des boutiques à prix", () => {
+    const result = late(lists("---", "€€"));
+    expect(bestProposalIndex(result)).toBe(0);
+    expect(idAt(result, startProposalIndex(result))).toBe("l1");
+    // Rien n'est replié : les propositions Lens restent affichées comme avant l'arrivée des boutiques.
+    expect(noPriceAnywhere(result)).toBe(true);
+    const sections = priceFirstSections(result, 0);
+    expect(ids(sections.others)).toEqual(["l2", "l3"]);
+    expect(ids(sections.shopping)).toEqual(["s1€", "s2€"]);
+    expect(sections.withoutPrice).toEqual([]);
+    // Le message « aucun prix » suit la grande carte d'office, comme au premier affichage.
+    expect(noPriceNoticeShown(result, 0)).toBe(true);
+  });
+
+  it("Lens avec prix : les mêmes règles qu'avant (la mieux classée avec prix, les autres sans prix repliées)", () => {
+    const result = late(lists("-€-", "€"));
+    expect(idAt(result, bestProposalIndex(result))).toBe("l2€");
+    expect(ids(priceFirstSections(result, 1).withoutPrice)).toEqual(["l1", "l3"]);
+  });
+
+  it("vos mots ensuite, avec prix : toujours pas de bascule de la grande carte", () => {
+    const result = late(lists("--", "-", "€"));
+    expect(bestProposalIndex(result)).toBe(0);
+  });
+});
+
 describe("prix d'abord : les sections, dans leur ordre d'origine", () => {
   it("avec prix : « Autres propositions » avec prix, le complément inchangé, puis « Sans prix »", () => {
     const result = lists("-€-€€-", "€-", "€");

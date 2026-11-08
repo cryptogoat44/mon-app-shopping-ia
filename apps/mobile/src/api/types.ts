@@ -87,6 +87,14 @@ export interface SpotComplement {
   suggestText: boolean;
   /** Issue de la recherche par les mots ; null tant qu'elle n'a pas été lancée. */
   textStatus: TextSearchStatus | null;
+  /** Boutiques ensuite (2026-11-08) : la recherche dans d'autres boutiques
+   * n'est pas encore faite — l'écran montre la ligne « Recherche dans
+   * d'autres boutiques… » et attend son issue (lib/spot-shops.ts). */
+  pending?: boolean;
+  /** Boutiques arrivées après le premier affichage du résultat : elles
+   * s'ajoutent en dessous, sans changer la grande carte ni la disposition
+   * des propositions de la recherche visuelle (lib/price-first.ts). */
+  late?: boolean;
 }
 
 export type VaultVerificationState = "pending" | "verified" | "refused";

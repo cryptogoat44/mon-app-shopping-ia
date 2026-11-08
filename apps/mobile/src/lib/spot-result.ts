@@ -45,7 +45,8 @@ export function noPriceShown(pieces: readonly Pick<Piece, "priceFrom">[]): boole
  * pas tourné sur cette recherche (interrupteur coupé, recherche plus ancienne).
  * L'invitation « Que cherchez-vous ? » et l'issue de la recherche par les mots
  * viennent du serveur, qui les garde (rechargement, historique) ; la requête
- * n'existe que dans la réponse du lancement. */
+ * n'existe que dans la réponse du lancement (ou des boutiques ensuite).
+ * `pending` : les boutiques arrivent encore (lib/spot-shops.ts). */
 function complementOf(search: ProductSearch, pieces: readonly Piece[]): SpotComplement | undefined {
   const shopping = pieces.filter((piece) => piece.origin === "shopping");
   const words = pieces.filter((piece) => piece.origin === "words");
@@ -58,6 +59,7 @@ function complementOf(search: ProductSearch, pieces: readonly Piece[]): SpotComp
     query: complement?.query?.trim() || null,
     suggestText: complement?.suggestText === true,
     textStatus: complement?.textStatus ?? null,
+    ...(complement?.pending === true ? { pending: true } : {}),
   };
 }
 
@@ -98,11 +100,14 @@ export function toSpotResult(search: ProductSearch): SpotResult {
  * n'ont pas changé : le tri par les mots du lancement et la requête de la
  * section « shopping » (réponse du lancement seulement) restent affichés,
  * comme ce que la personne a déjà gardé ou acheté sur un résultat relu (la
- * grande carte d'office en dépend : lib/price-first.ts). */
+ * grande carte d'office en dépend : lib/price-first.ts). Boutiques arrivées
+ * après le premier affichage (`late`) : toujours sans effet sur la grande carte. */
 export function withTextSearch(previous: SpotResult, search: ProductSearch): SpotResult {
   const next = toSpotResult(search);
   if (next.status === "success" && previous.sortedByWords) next.sortedByWords = true;
-  if (next.complement) next.complement = { ...next.complement, query: previous.complement?.query ?? null };
+  if (next.complement) {
+    next.complement = { ...next.complement, query: previous.complement?.query ?? null, ...(previous.complement?.late ? { late: true } : {}) };
+  }
   if (previous.owned) next.owned = previous.owned;
   return next;
 }

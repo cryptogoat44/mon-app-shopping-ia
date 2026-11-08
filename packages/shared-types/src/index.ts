@@ -200,8 +200,9 @@ export interface ProductSearch {
 export interface SearchComplement {
   /** Issue du complément ; null quand il n'a pas tourné sur cette recherche. */
   status: ComplementStatus | null;
-  /** Requête envoyée à la recherche Shopping : réponse du lancement
-   * seulement, jamais enregistrée — une recherche relue n'en dit rien. */
+  /** Requête envoyée à la recherche Shopping : réponse du lancement (ou,
+   * boutiques ensuite, de POST /api/searches/:id/complement) seulement,
+   * jamais enregistrée — une recherche relue n'en dit rien. */
   query?: string;
   /** Proposer « Que cherchez-vous ? » (voie B) : enregistré par le serveur
    * (text_suggested), et faux dès que la recherche par mots a été lancée.
@@ -209,7 +210,29 @@ export interface SearchComplement {
   suggestText: boolean;
   /** Issue de la recherche par mots ; null tant qu'elle n'a pas été lancée. */
   textStatus: TextSearchStatus | null;
+  /** Boutiques ensuite (lancement avec `complement: "deferred"`) : la
+   * recherche dans d'autres boutiques n'est pas encore faite. L'app montre
+   * les résultats Lens, puis appelle POST /api/searches/:id/complement, qui
+   * renvoie la recherche avec son complément. Absent sinon (un ancien serveur
+   * ne l'envoie jamais) ; `status` est alors null. */
+  pending?: boolean;
 }
+
+/** Boutiques ensuite : valeur du champ « complement » du lancement
+ * (POST /api/searches/:id/run). Avec elle, et la voie C en service, la
+ * réponse arrive dès Lens ; « Cette pièce dans d'autres boutiques » est
+ * cherchée ensuite, par POST /api/searches/:id/complement. Sans elle (app
+ * déjà installée), rien ne change. */
+export const COMPLEMENT_DEFERRED = "deferred";
+
+/** Refus propres à POST /api/searches/:id/complement (l'app retire alors la
+ * ligne « Recherche dans d'autres boutiques… », sans rien dire) :
+ * - unavailable : voie C coupée sur le serveur (404) ;
+ * - notDeferred : recherche lancée sans « boutiques ensuite » (409). */
+export const COMPLEMENT_ERRORS = {
+  unavailable: "complement_unavailable",
+  notDeferred: "complement_not_deferred",
+} as const;
 
 /** Zone choisie par l'utilisateur sur l'image, en proportions (0 à 1) de
  * la largeur et de la hauteur de l'image : indépendante de la taille à

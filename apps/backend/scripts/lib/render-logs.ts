@@ -447,6 +447,10 @@ const COMPLEMENT = z.object({
   shoppingMs: z.number().nullable(),
   totalMs: z.number(),
   overBudget: z.boolean(),
+  // Boutiques ensuite (2026-11-08) : complément fait après la réponse du
+  // lancement ; totalMs se compte alors depuis sa propre demande. Absent des
+  // lignes d'avant.
+  deferred: z.boolean().optional(),
   received: z.number().nullable(),
   kept: z.number().nullable(),
   keptWithPrice: z.number().nullable(),
@@ -478,6 +482,7 @@ export function extraireComplement(message: string): LigneComplement | null {
     shoppingMs: d.shoppingMs,
     totalMs: d.totalMs,
     overBudget: d.overBudget,
+    ...(d.deferred ? { deferred: true } : {}),
     received: d.received,
     kept: d.kept,
     keptWithPrice: d.keptWithPrice,
@@ -527,7 +532,7 @@ export function decrireComplement(ligne: LigneComplement): string {
   const durees = [ligne.aiMs !== null ? `IA ${ligne.aiMs} ms` : null, ligne.shoppingMs !== null ? `recherche ${ligne.shoppingMs} ms` : null].filter((duree) => duree !== null);
   if (ligne.inputTokens !== null) durees.push(`jetons ${ligne.inputTokens} lus / ${ligne.outputTokens ?? "?"} écrits`);
   parties.push(`${ligne.calls} appel(s)${durees.length > 0 ? `, ${durees.join(", ")}` : ""}`);
-  parties.push(`total ${secondes(ligne.totalMs)}${ligne.overBudget ? " (15 s ou plus)" : ""}`);
+  parties.push(`total ${secondes(ligne.totalMs)}${ligne.overBudget ? " (15 s ou plus)" : ""}${ligne.deferred ? ", après l'affichage des résultats Lens (boutiques ensuite)" : ""}`);
   return parties.join(" ; ");
 }
 

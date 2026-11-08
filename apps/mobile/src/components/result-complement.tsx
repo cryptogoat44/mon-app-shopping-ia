@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import type { TextSearchStatus } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
@@ -23,6 +23,18 @@ export function textSearchStatusNote(textStatus: TextSearchStatus | null | undef
   if (textStatus === "empty") return t.result.textSearchEmpty;
   if (textStatus === "shopping_failed") return t.result.textSearchFailed;
   return null;
+}
+
+/** Boutiques ensuite (2026-11-08) : ligne discrète à la place de « Cette
+ * pièce dans d'autres boutiques », le temps de la recherche ; elle disparaît
+ * à l'arrivée des boutiques, ou sans message si rien n'est trouvé. */
+export function ShopsPending() {
+  return (
+    <View style={styles.pending} accessibilityLiveRegion="polite" testID="shops-pending">
+      <ActivityIndicator size="small" color={color.acier} />
+      <Text style={styles.pendingText}>{t.result.shopsPending}</Text>
+    </View>
+  );
 }
 
 export function ResultComplement({
@@ -79,4 +91,6 @@ const styles = themedStyles(() => ({
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.lg },
   secondary: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: space.sm },
   secondaryLabel: { color: color.encre, fontSize: font.body, fontWeight: "500" },
+  pending: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.xl, minHeight: 24 },
+  pendingText: { fontSize: font.caption, color: color.acier },
 }));

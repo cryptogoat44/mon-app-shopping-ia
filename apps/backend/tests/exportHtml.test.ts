@@ -502,6 +502,43 @@ describe("colonnes de la migration 0028, décrites d'avance", () => {
   });
 });
 
+describe("colonnes de la migration 0031 (boutiques ensuite), décrites d'avance", () => {
+  // Même règle que pour 0028 : la base migrée renvoie ces colonnes à tout
+  // serveur. Chacune a déjà son libellé, et leurs valeurs (par défaut, ou
+  // celles d'une recherche dont les boutiques sont arrivées après
+  // l'affichage) ne changent rien à la page lisible.
+  const COLONNES_0031: [keyof typeof EXPORT_COLUMNS, string][] = [
+    ["productSearches", "complement_deferred"],
+    ["productSearches", "complement_deferred_at"],
+    ["productMatches", "lens_rank"],
+  ];
+
+  it("chaque nouvelle colonne a son libellé en français et en anglais, dans la version JSON seulement", () => {
+    for (const [section, colonne] of COLONNES_0031) {
+      const entry = (EXPORT_COLUMNS[section] as Record<string, { label: Bilingual; technical?: boolean }>)[colonne];
+      expect(entry?.label.fr.trim(), `${section}.${colonne}`).toBeTruthy();
+      expect(entry?.label.en.trim(), `${section}.${colonne}`).toBeTruthy();
+      expect(entry?.technical, `${section}.${colonne}`).toBe(true);
+    }
+  });
+
+  it("valeurs par défaut, puis étape faite : page lisible inchangée, aucune colonne inconnue", () => {
+    for (const values of [
+      { complement_deferred: null, complement_deferred_at: null, lens_rank: null },
+      { complement_deferred: "done", complement_deferred_at: "2026-11-08T10:00:03Z", lens_rank: 2 },
+    ]) {
+      const migrated = fixture();
+      for (const row of migrated.productSearches) Object.assign(row, { complement_deferred: values.complement_deferred, complement_deferred_at: values.complement_deferred_at });
+      for (const row of migrated.productMatches) Object.assign(row, { lens_rank: values.lens_rank });
+      for (const locale of ["fr", "en"] as const) {
+        const onUnknownColumn = vi.fn();
+        expect(visibleText(render({ locale, onUnknownColumn }, migrated))).toBe(visibleText(render({ locale })));
+        expect(onUnknownColumn).not.toHaveBeenCalled();
+      }
+    }
+  });
+});
+
 describe("colonne de la migration 0028 (voie C) : origine des pièces proposées", () => {
   /** Le jeu de données, avec une origine par pièce (dans l'ordre des rangs). */
   const withOrigins = (origins: readonly string[]) => {

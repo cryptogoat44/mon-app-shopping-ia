@@ -216,6 +216,10 @@ export interface ComplementLogLine {
   totalMs: number;
   /** Lancement de 15 secondes ou plus (enregistrement compris). */
   overBudget: boolean;
+  /** Boutiques ensuite : complément fait par POST /api/searches/:id/complement,
+   * après la réponse du lancement ; totalMs et overBudget se comptent alors
+   * depuis l'arrivée de cette demande (la personne voit déjà les résultats Lens). */
+  deferred: boolean;
   received: number | null;
   kept: number | null;
   keptWithPrice: number | null;
@@ -229,8 +233,9 @@ export interface ComplementLogLine {
   shoppingFailureKind: ProviderFailureKind | null;
 }
 
-/** `totalMs` : depuis T0 jusqu'à la fin de l'enregistrement. */
-export function complementLogLine(measure: ComplementMeasure, run: { lensFromCache: boolean; totalMs: number }): ComplementLogLine {
+/** `totalMs` : depuis T0 jusqu'à la fin de l'enregistrement ; `deferred` :
+ * boutiques ensuite (T0 : l'arrivée de la demande du complément). */
+export function complementLogLine(measure: ComplementMeasure, run: { lensFromCache: boolean; totalMs: number; deferred?: boolean }): ComplementLogLine {
   const totalMs = Math.max(0, Math.round(run.totalMs));
   return {
     source: measure.source,
@@ -243,6 +248,7 @@ export function complementLogLine(measure: ComplementMeasure, run: { lensFromCac
     shoppingMs: measure.shoppingMs,
     totalMs,
     overBudget: totalMs >= COMPLEMENT_PROMISE_MS,
+    deferred: run.deferred === true,
     received: measure.received,
     kept: measure.kept,
     keptWithPrice: measure.keptWithPrice,

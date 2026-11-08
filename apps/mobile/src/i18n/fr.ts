@@ -566,6 +566,10 @@ export const fr = {
     complementTitleAi: "Cette pièce dans d'autres boutiques",
     complementTitleWords: "Résultats pour vos mots",
     complementQuery: (query: string) => `Recherche écrite par une IA : “${query}”`,
+    // Boutiques ensuite (2026-11-08) : les résultats s'affichent tout de suite ;
+    // cette ligne discrète attend « Cette pièce dans d'autres boutiques », puis
+    // disparaît (sans message si rien n'est trouvé). Texte à valider.
+    shopsPending: "Recherche dans d'autres boutiques…",
     // Proposition sans lien direct vers le marchand : le lien ouvre la page produit de Google.
     viewOffer: "Voir l'offre",
     textSearchIntro: "Pas tout à fait ça ?",
