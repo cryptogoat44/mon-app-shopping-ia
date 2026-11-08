@@ -29,6 +29,10 @@ export default function AppLayout() {
             perdus (lot « premier essai », à confirmer sur iPhone). Retour par « ‹ »
             ou « Fermer ». */}
         <Stack.Screen name="spot/lancer" options={{ gestureEnabled: false }} />
+        {/* Lecteur intégré (app iPhone) : glisser vers la droite (n'importe où sous
+            iOS 26) ramènerait à Spotter pendant qu'on fait avancer la vidéo ou
+            défiler les photos d'une publication. Retour par « ‹ » ou « Fermer ». */}
+        <Stack.Screen name="spot/lecteur" options={{ gestureEnabled: false }} />
       </Stack>
       {/* Messages discrets (information de mise à jour, demande « statistiques ») et réglage de la collecte. */}
       <AppNotices />

@@ -23,6 +23,7 @@ import type { LatestVideo, LatestVideoChoice, LatestVideoState } from "@/lib/lat
 import { RECENT_SEARCHES_LIMIT, reopenParams } from "@/lib/recent-searches";
 import { sharedRefusalMessage, type SharedItem } from "@/lib/shared-item";
 import { beginFromPhoto } from "@/lib/spot-flow";
+import { isPlayerAvailable } from "@/lib/player-capture";
 import { LINK_COVER_ENABLED } from "@/lib/spot-flags";
 import { adoptSpotVideo, videoImportMessage } from "@/lib/spot-video";
 import { useLinkEntry } from "@/lib/use-link-entry";
@@ -110,16 +111,18 @@ function RecentRow({ recent }: { recent: { searchId: string; piece: Piece }[] })
   );
 }
 
-/** Lien collé ou partagé : aide discrète — la capture d'écran d'abord, puis l'enregistrement de l'écran (lot « premier essai »). */
+/** Lien collé ou partagé : aide discrète — la capture d'écran d'abord, puis l'enregistrement de l'écran (lot « premier essai »).
+ * App iPhone avec le lecteur intégré allumé : la question déplie le champ de lien, qui ouvre la vidéo dans Spotto. */
 function LinkHelp({ onAddPhoto, onAddVideo, onHelp, importing }: { onAddPhoto: () => void; onAddVideo: () => void; onHelp: () => void; importing: boolean }) {
   const [open, setOpen] = useState(false);
   if (LINK_COVER_ENABLED) return <LinkEntry onHelp={onHelp} />;
+  const player = isPlayerAvailable();
   return (
     <>
       <Pressable onPress={() => setOpen((value) => !value)} style={styles.linkQuestion} accessibilityRole="button" accessibilityState={{ expanded: open }}>
-        <Text style={styles.linkQuestionLabel}>{t.spotter.linkQuestion}</Text>
+        <Text style={styles.linkQuestionLabel}>{player ? t.player.linkQuestion : t.spotter.linkQuestion}</Text>
       </Pressable>
-      {open ? <ScreenshotHelp onAddScreenshot={onAddPhoto} onAddVideo={onAddVideo} busy={importing} /> : null}
+      {open ? player ? <LinkEntry mode="player" onHelp={onHelp} /> : <ScreenshotHelp onAddScreenshot={onAddPhoto} onAddVideo={onAddVideo} busy={importing} /> : null}
     </>
   );
 }
@@ -175,7 +178,7 @@ function useSpotterEntries(reveal: () => void) {
     if (item.kind === "refused") return setMessage(sharedRefusalMessage(item.reason));
     if (item.kind === "video") return importSharedVideo(item.uri, item.sizeBytes);
     if (item.kind === "link") {
-      const outcome = await openLink(item.text);
+      const outcome = await openLink(item.text, "share");
       if (outcome.kind === "refused") setMessage(outcome.message);
       if (outcome.kind === "help") {
         setLinkHelp(true);

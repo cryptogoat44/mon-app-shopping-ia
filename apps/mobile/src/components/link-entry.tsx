@@ -10,9 +10,11 @@ import { linkRefusal } from "@/lib/link-step";
 import { useLinkEntry } from "@/lib/use-link-entry";
 import { themedStyles } from "@/theme/themed-styles";
 
-// Champ de lien du Spotter (Lot S) : analyse de l'image de couverture.
-// DÉSACTIVÉ au lot 4 ter (voir lib/spot-flags.ts) ; gardé pour pouvoir le rétablir.
-// « Continuer » passe par la même fonction qu'un lien partagé (lib/use-link-entry.ts).
+// Champ de lien du Spotter. Mode « player » : le lecteur intégré (app iPhone,
+// lot « lecteur intégré », coupé tant que LINK_PLAYER_ENABLED vaut false).
+// Mode « cover » : l'analyse de l'image de couverture (Lot S), DÉSACTIVÉE au
+// lot 4 ter (voir lib/spot-flags.ts) ; gardée pour pouvoir la rétablir. Le
+// bouton passe par la même fonction qu'un lien partagé (lib/use-link-entry.ts).
 
 function DetectionCard({ detection }: { detection: LinkDetection }) {
   if (detection.kind === "supported") {
@@ -30,7 +32,8 @@ function DetectionCard({ detection }: { detection: LinkDetection }) {
 }
 
 /** `onHelp` : le lien ne peut pas être lu — le Spotter montre l'aide « capture d'écran d'abord ». */
-export function LinkEntry({ onHelp }: { onHelp: () => void }) {
+export function LinkEntry({ onHelp, mode = "cover" }: { onHelp: () => void; mode?: "cover" | "player" }) {
+  const label = mode === "player" ? t.player.linkLabel : t.spotter.linkLabel;
   const openLink = useLinkEntry();
   const [link, setLink] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -58,7 +61,7 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
     setMessage(null);
     setBusy(true);
     try {
-      const outcome = await openLink(link);
+      const outcome = await openLink(link, "paste");
       if (outcome.kind === "refused") setMessage(outcome.message);
       if (outcome.kind === "help") onHelp();
     } finally {
@@ -68,7 +71,8 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
 
   return (
     <>
-      <Text style={styles.label}>{t.spotter.linkLabel}</Text>
+      <Text style={styles.label}>{label}</Text>
+      {mode === "player" ? <Text style={styles.hint}>{t.player.linkHint}</Text> : null}
       <View style={styles.field}>
         <TextInput
           style={styles.input}
@@ -84,7 +88,7 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
           keyboardType="url"
           returnKeyType="go"
           onSubmitEditing={handleContinue}
-          accessibilityLabel={t.spotter.linkLabel}
+          accessibilityLabel={label}
         />
         <Pressable onPress={handlePaste} hitSlop={10} style={styles.pasteButton} accessibilityRole="button">
           <ClipboardIcon size={16} tint={color.vert} />
@@ -95,7 +99,9 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
       {message ? <ErrorMessage style={styles.feedback}>{message}</ErrorMessage> : null}
       <Pressable style={[styles.primary, !canContinue ? styles.primaryDisabled : null]} onPress={handleContinue} disabled={!canContinue} accessibilityRole="button">
         {busy ? <ActivityIndicator color={color.blanc} /> : null}
-        <Text style={[styles.primaryLabel, !canContinue ? styles.primaryLabelDisabled : null]}>{busy ? t.spotter.preparing : t.spotter.continue}</Text>
+        <Text style={[styles.primaryLabel, !canContinue ? styles.primaryLabelDisabled : null]}>
+          {busy ? t.spotter.preparing : mode === "player" ? t.player.open : t.spotter.continue}
+        </Text>
       </Pressable>
     </>
   );
@@ -103,6 +109,7 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
 
 const styles = themedStyles(() => ({
   label: { fontSize: font.caption, color: color.acier, marginTop: space.xl },
+  hint: { fontSize: font.caption, color: color.acier, marginTop: space.xs, lineHeight: 18 },
   field: { flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: color.filet, gap: space.sm },
   input: { flex: 1, fontSize: font.body, color: color.encre, paddingVertical: 12 },
   pasteButton: { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 44 },

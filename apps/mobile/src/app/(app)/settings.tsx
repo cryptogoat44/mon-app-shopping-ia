@@ -15,6 +15,7 @@ import { useToast } from "@/lib/toast-context";
 import { hasAnalyticsConsent } from "@/lib/policy-notice";
 import { ErrorMessage } from "@/components/error-message";
 import { LatestVideoSetting } from "@/components/latest-video-setting";
+import { PlayerConsentSetting } from "@/components/player-consent-setting";
 import { VideoAiSetting } from "@/components/video-ai-setting";
 import { PieceSendsSetting } from "@/components/piece-sends-setting";
 import { DeleteAccountSection } from "@/components/delete-account-section";
@@ -219,6 +220,7 @@ export default function SettingsScreen() {
           {analyticsError ? <ErrorMessage style={styles.sectionBody}>{t.settings.analyticsFailed}</ErrorMessage> : null}
           <VideoAiSetting consents={consents} failed={consentsFailed} onChange={setConsents} />
           <LatestVideoSetting />
+          <PlayerConsentSetting />
           {!choosingExport ? (
             <Pressable accessibilityRole="button" onPress={() => setChoosingExport(true)} hitSlop={12} style={styles.secondLink}>
               <Text style={styles.link}>{t.settings.exportData}</Text>
