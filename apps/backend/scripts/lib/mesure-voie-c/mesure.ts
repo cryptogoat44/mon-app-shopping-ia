@@ -35,8 +35,8 @@ import {
   type ResultatCas,
 } from "./resultats.js";
 
-/** main en ligne quand cet outil a été écrit : le serveur mesuré doit en avoir le même code. */
-export const COMMIT_MAIN = "9ad5420";
+/** main en ligne (mis en production le 8 novembre 2026) : le serveur mesuré doit en avoir le même code. */
+export const COMMIT_MAIN = "3db7dda";
 /** Réponse attendue de la sonde gratuite quand la voie C est en service (recherche pas encore lancée). */
 const SONDE_VOIE_C_ATTENDUE = "text_search_not_allowed";
 /** Deux pannes de Lens de suite : arrêt net (le service va mal, inutile de dépenser). */

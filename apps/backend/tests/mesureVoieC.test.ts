@@ -469,7 +469,7 @@ describe("rapport", () => {
     expect(rapport).toContain("# Mesure de la voie C — 5 novembre 2026 à 09:00 (heure de Paris)");
     expect(rapport).toContain("relancée avant le 6 novembre 2026 à 09:00");
     expect(rapport).toContain("Issues du complément : shown 1, no_query 1.");
-    expect(rapport).toContain("code du serveur identique à main en ligne, 9ad5420");
+    expect(rapport).toContain("code du serveur identique à main en ligne, 3db7dda");
     expect(rapport).toContain(REGLE_BONNE_PIECE);
     expect(rapport).not.toMatch(/jeton-secret|cle-serpapi/);
   });
@@ -1049,7 +1049,7 @@ function metaFaite(): MetaMesure {
     version: 1,
     debut: "2026-11-05T08:00:00.000Z",
     fin: "2026-11-05T08:10:00.000Z",
-    serveur: { commit: "abc1234", identiqueAMain: true, commitMain: "9ad5420" },
+    serveur: { commit: "abc1234", identiqueAMain: true, commitMain: "3db7dda" },
     jeu: "/jeu",
     cadres: { chemin: "/jeu/cadres-traces.txt", nombre: 2, tracesParClaude: true },
     mots: "avec",
