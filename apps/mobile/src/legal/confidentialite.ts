@@ -21,7 +21,7 @@ export const privacyPolicy: LegalDocument = {
         "Spotto vous aide à identifier des pièces de mode à partir d'une image, à garder celles que vous possédez dans votre Vault et à partager vos publications avec les personnes de votre choix.",
         [
           "Nous ne vendons pas vos données et n'affichons aucune publicité.",
-          "Votre Vault et vos Envies ne sont visibles que par vous.",
+          "Votre Vault n'est visible que par vous. Vos Envies aussi, sauf celles que vous rangez dans une collection montrée à vos amis.",
           "L'image que vous faites analyser est supprimée de nos serveurs dès que le résultat est connu.",
           "Si vous importez une vidéo, elle reste sur votre appareil : seule l'image que vous y choisissez est envoyée — ou, si vous acceptez l'analyse automatique, quelques images réduites de la vidéo, analysées par une IA et jamais conservées par Spotto.",
           "Pour élargir les résultats, Spotto peut chercher la même pièce dans d'autres boutiques : une IA lit les titres et les noms de sites des premiers résultats, jamais votre image ni vos mots, et écrit une courte recherche. Si vous lancez « Que cherchez-vous ? », vos mots sont envoyés à un moteur de recherche, sans votre nom ni votre e-mail.",
@@ -46,6 +46,7 @@ export const privacyPolicy: LegalDocument = {
         "Votre Vault et vos Envies : les pièces que vous y ajoutez (nom, catégorie, photo, lien vers la pièce d'origine).",
         "Vos publications et interactions : photos, légendes, visibilité choisie, commentaires, « j'aime », notifications, comptes bloqués et signalements que vous faites.",
         "Vos messages privés : le texte de vos messages, l'envie que vous y joignez (son titre, son prix, le lien vers la boutique et une copie de son image faite par Spotto), leur date, et l'état de vos conversations (invitation envoyée, acceptée ou refusée, messages lus). Seuls vous et la personne avec qui vous échangez les voyez. L'équipe de modération ne lit que les messages signalés, avec quelques messages autour pour comprendre le contexte. Ils sont conservés jusqu'à la suppression de votre compte, ou de celui de la personne avec qui vous échangez : la conversation disparaît alors pour vous deux. [À vérifier : base légale retenue (exécution du contrat), durée de conservation, et information de la personne qui reçoit une invitation.]",
+        "Vos collections d'Envies : leur nom, qui les voit et les Envies que vous y rangez. Une collection reste privée tant que vous ne choisissez pas « Mes amis ». Vos amis, c'est-à-dire les membres que vous suivez et qui vous suivent, voient alors son nom et, pour chaque Envie, son titre, une copie de son image faite par Spotto, son prix et le lien vers la boutique ; jamais vos notes. Un compte bloqué, dans un sens ou dans l'autre, ne voit rien. La copie de l'image est effacée dès que l'Envie n'est plus montrée à vos amis, et tout part avec la suppression de votre compte. [À vérifier : base légale retenue (exécution du contrat), et information des amis qui voient ces collections.]",
         "Vos clics vers les marchands : la pièce concernée, l'endroit de l'app d'où vous avez cliqué, la date, et l'identification technique de votre navigateur ou de votre téléphone (« user agent »).",
         "Vos consentements : la date et la version des documents que vous avez acceptés, votre déclaration d'avoir au moins 15 ans, et vos choix (accord, refus ou retrait) pour les statistiques d'usage et l'analyse automatique des vidéos.",
         "Des données techniques : comme tout serveur web, le nôtre reçoit votre adresse IP et des informations techniques à chaque requête ; elles figurent dans ses journaux, utilisés pour la sécurité et la correction des erreurs.",
@@ -76,7 +77,7 @@ export const privacyPolicy: LegalDocument = {
       title: "Qui peut voir quoi dans Spotto",
       blocks: [
         [
-          "Votre Vault et vos Envies : vous seul.",
+          "Votre Vault : vous seul. Vos Envies : vous seul, sauf celles que vous rangez dans une collection montrée à vos amis.",
           "Vos publications : selon la visibilité que vous choisissez pour chacune — tout le monde, vos abonnés, ou vous seul. Vous pouvez la modifier à tout moment.",
           "Votre profil (nom d'utilisateur, nom affiché, photo, bio, nombre d'abonnés et d'abonnements) : les autres utilisateurs, sauf ceux que vous avez bloqués.",
         ],
@@ -131,7 +132,7 @@ export const privacyPolicy: LegalDocument = {
           "Les journaux techniques du serveur : [À vérifier : durée de conservation chez notre hébergeur].",
           "Les rapports d'erreur (Sentry) et les statistiques d'usage (PostHog) : [À vérifier : durées de conservation de ces services pour notre offre, et durée à retenir].",
         ],
-        "Quand vous supprimez votre compte, vos données et vos photos sont effacées immédiatement et définitivement : profil, recherches, Vault, Envies, publications, commentaires, « j'aime », abonnements, notifications, clics vers les marchands, consentements. Les réponses du cache, qui ne sont reliées à aucun compte, ne sont pas concernées : elles s'effacent d'elles-mêmes (voir ci-dessus).",
+        "Quand vous supprimez votre compte, vos données et vos photos sont effacées immédiatement et définitivement : profil, recherches, Vault, Envies, collections, publications, commentaires, « j'aime », abonnements, notifications, clics vers les marchands, consentements. Les réponses du cache, qui ne sont reliées à aucun compte, ne sont pas concernées : elles s'effacent d'elles-mêmes (voir ci-dessus).",
       ],
     },
     {

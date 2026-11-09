@@ -55,6 +55,7 @@ import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
 import { INVALID_ID, idParamsSchema, parseDbRows, parseInput, userIdParamsSchema, webUrlOrNull } from "../lib/validation.js";
 import { isBlockedEitherWay } from "../lib/visibility.js";
 import { WishImageError, copyWishImage, deleteWishCopy, findOwnWish } from "../lib/wishShare.js";
+import { sharedWishForMessage } from "../lib/collections.js";
 
 /** Messages par page d'une conversation. */
 const THREAD_PAGE_SIZE = 50;
@@ -73,12 +74,16 @@ const TIMESTAMP_PARAM = z
   .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/);
 const threadQuerySchema = z.object({ after: TIMESTAMP_PARAM.optional(), before: TIMESTAMP_PARAM.optional() }).refine((q) => !(q.after && q.before));
 const listQuerySchema = z.object({ cursor: TIMESTAMP_PARAM.optional() });
-const sendSchema = z.object({
-  recipientId: ID,
-  // Limite large avant le nettoyage des espaces ; la vraie limite suit.
-  text: z.string().max(MESSAGE_MAX_LENGTH * 4).optional(),
-  wishId: ID.optional(),
-});
+const sendSchema = z
+  .object({
+    recipientId: ID,
+    // Limite large avant le nettoyage des espaces ; la vraie limite suit.
+    text: z.string().max(MESSAGE_MAX_LENGTH * 4).optional(),
+    wishId: ID.optional(),
+    // Lot collections : « En parler » d'une envie d'une collection de la personne.
+    collectionItemId: ID.optional(),
+  })
+  .refine((body) => !(body.wishId && body.collectionItemId));
 
 const INVALID_QUERY = { error: "invalid_query", message: "Paramètre de liste invalide." } as const;
 const WISH_NOT_FOUND = { error: "wishlist_item_not_found", message: "Envie introuvable." } as const;
@@ -427,7 +432,7 @@ export default async function conversationsRoutes(fastify: FastifyInstance) {
       if (!body) return;
       const userId = request.user!.id;
       const text = body.text?.trim() ?? "";
-      if (text === "" && !body.wishId) return reply.code(400).send(MESSAGE_EMPTY);
+      if (text === "" && !body.wishId && !body.collectionItemId) return reply.code(400).send(MESSAGE_EMPTY);
       if (text.length > MESSAGE_MAX_LENGTH) return reply.code(400).send(MESSAGE_TOO_LONG);
       // Filtre des mots interdits (chantier 3) : le texte, comme un commentaire.
       if (containsBannedWords(text)) return reply.code(400).send(CONTENT_NOT_ALLOWED);
@@ -448,8 +453,15 @@ export default async function conversationsRoutes(fastify: FastifyInstance) {
 
       // Envie jointe : une des Envies de l'expéditeur, image copiée dans notre
       // stockage (jamais l'adresse du marchand), comptée comme une pièce envoyée.
-      const wish = body.wishId ? await findOwnWish(fastify, userId, body.wishId) : null;
-      if (body.wishId && !wish) return reply.code(404).send(WISH_NOT_FOUND);
+      // Lot collections : ou une envie d'une collection de la personne à qui il
+      // écrit, montrée à ses amis (« En parler ») ; la copie est rangée chez
+      // l'expéditeur, comme pour ses propres envies.
+      const wish = body.wishId
+        ? await findOwnWish(fastify, userId, body.wishId)
+        : body.collectionItemId
+          ? await sharedWishForMessage(fastify, userId, body.recipientId, body.collectionItemId)
+          : null;
+      if ((body.wishId || body.collectionItemId) && !wish) return reply.code(404).send(WISH_NOT_FOUND);
       let copy: { url: string; thumbUrl: string } | null = null;
       if (wish) {
         if (!consumeRateLimit(request, "pieceSend")) return sendLimit(reply, "pieceSend");

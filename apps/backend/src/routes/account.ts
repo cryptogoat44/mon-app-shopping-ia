@@ -21,6 +21,7 @@ import { deleteUserStorageFiles, removeOwnedFiles, storageLeftovers } from "../l
 import { parseDbRows, parseInput } from "../lib/validation.js";
 import { WISH_COPY_BUCKET } from "../lib/wishShare.js";
 import { messagesReady, otherMembersMessageCopies } from "../lib/messaging.js";
+import { allOwnCopies, collectionsReady } from "../lib/collections.js";
 
 /** Corps de DELETE /api/me : le mot tapé par la personne (revérifié ici). */
 const deleteAccountSchema = z.object({ confirmation: z.string().max(40).refine((value) => isAccountDeletionWord(value)) });
@@ -269,9 +270,23 @@ export default async function accountRoutes(fastify: FastifyInstance) {
         return reply.code(500).send({ error: "internal_error", message: "La suppression a échoué." });
       }
     }
+    // Lot collections : ses collections partent avec le compte (cascade en
+    // base) ; les copies des images montrées à ses amis sont effacées ici
+    // (elles sont aussi dans son dossier, vidé juste après). Sans la
+    // migration 0033, il n'y a rien à effacer.
+    let collectionCopies: { ownerId: string; url: string }[] = [];
+    if (await collectionsReady(fastify)) {
+      try {
+        collectionCopies = await allOwnCopies(fastify, userId);
+      } catch {
+        request.log.error("Lecture des collections impossible avant suppression du compte");
+        return reply.code(500).send({ error: "internal_error", message: "La suppression a échoué." });
+      }
+    }
     const receivedCopies = await removeOwnedFiles(fastify, WISH_COPY_BUCKET, [
       ...received.flatMap((piece) => [piece.image_url, piece.image_thumb_url].flatMap((url) => (url ? [{ ownerId: piece.sender_id, url }] : []))),
       ...messageCopies,
+      ...collectionCopies,
     ]);
 
     // Le droit à l'effacement ne dépend pas d'un incident de stockage

@@ -1,5 +1,5 @@
 import type { Locale } from "./locale.js";
-import { COMMENT_MAX_LENGTH, MESSAGE_MAX_LENGTH } from "@monapp/shared-types";
+import { COLLECTION_ITEMS_MAX, COLLECTION_NAME_MAX_LENGTH, COLLECTIONS_MAX, COMMENT_MAX_LENGTH, MESSAGE_MAX_LENGTH } from "@monapp/shared-types";
 import { RATE_LIMITED_MESSAGE } from "../plugins/rateLimit.js";
 import { SEARCH_CAPACITY_MESSAGES } from "./searchCapacity.js";
 import { UPDATE_REQUIRED_MESSAGE } from "./appVersion.js";
@@ -165,6 +165,22 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
     "You've sent a lot of messages in a short time. Please try again in a moment.",
   "Vous avez envoyé beaucoup d'invitations en peu de temps. Réessayez dans une heure.":
     "You've sent a lot of invitations in a short time. Please try again in an hour.",
+  // Collections d'envies (lot collections, migration 0033).
+  "Les collections ne sont pas encore disponibles.": "Collections aren't available yet.",
+  "Collection introuvable.": "Collection not found.",
+  "Collection invalide.": "Invalid collection.",
+  "Donnez un nom à la collection.": "Please give the collection a name.",
+  [`Le nom est trop long (${COLLECTION_NAME_MAX_LENGTH} caractères maximum).`]: `The name is too long (${COLLECTION_NAME_MAX_LENGTH} characters maximum).`,
+  [`Vous avez déjà ${COLLECTIONS_MAX} collections : supprimez-en une pour en créer une autre.`]:
+    `You already have ${COLLECTIONS_MAX} collections: delete one to create another.`,
+  [`Cette collection contient déjà ${COLLECTION_ITEMS_MAX} envies : retirez-en une pour en ajouter une autre.`]:
+    `This collection already holds ${COLLECTION_ITEMS_MAX} wishes: remove one to add another.`,
+  "Vous avez modifié beaucoup de collections en peu de temps. Réessayez dans un moment.":
+    "You've changed a lot of collections in a short time. Please try again in a moment.",
+  "Vous avez changé souvent la visibilité de vos collections. Réessayez dans une heure.":
+    "You've changed the visibility of your collections many times. Please try again in an hour.",
+  "Vous avez gardé beaucoup d'envies en peu de temps. Réessayez dans un moment.":
+    "You've saved a lot of wishes in a short time. Please try again in a moment.",
   // Mise à jour obligatoire de l'app iPhone (lot « app iPhone prête », lib/appVersion.ts).
   [UPDATE_REQUIRED_MESSAGE]: "This version of Spotto is no longer supported. Please update the app from the App Store.",
 };

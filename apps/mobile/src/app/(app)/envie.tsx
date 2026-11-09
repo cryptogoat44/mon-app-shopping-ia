@@ -9,6 +9,7 @@ import { ApiError, deleteWishlistItem, fetchWishlistItem, republishWish } from "
 import { useToast } from "@/lib/toast-context";
 import { useAuth } from "@/lib/auth-context";
 import { useMessagesStatus } from "@/lib/use-messages-status";
+import { useCollectionsStatus } from "@/lib/use-collections-status";
 import { shareWishOutside } from "@/lib/share-wish";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
@@ -16,6 +17,7 @@ import { ProductFrame } from "@/components/product-frame";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { ErrorMessage } from "@/components/error-message";
 import { WishBoughtButton } from "@/components/wish-bought-button";
+import { AddToCollectionSheet } from "@/components/add-to-collection-sheet";
 import { isAffiliateLink } from "@/lib/affiliate-link";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -46,6 +48,9 @@ export default function WishlistItemScreen() {
   const [republishing, setRepublishing] = useState(false);
   // Lot messages : « Envoyer dans une conversation », si la messagerie est disponible.
   const messages = useMessagesStatus();
+  // Lot collections : « Ajouter à une collection », si les collections sont disponibles.
+  const collections = useCollectionsStatus();
+  const [collectionSheet, setCollectionSheet] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -149,6 +154,17 @@ export default function WishlistItemScreen() {
             <WishBoughtButton item={item} onAdded={() => setItem((current) => (current ? { ...current, inVault: true } : current))} />
           </View>
 
+          {collections.enabled ? (
+            <Pressable
+              accessibilityRole="button"
+              style={[styles.secondaryButton, styles.collectionButton]}
+              onPress={() => setCollectionSheet(true)}
+              testID="ajouter-a-une-collection"
+            >
+              <Text style={styles.secondaryLabel}>{t.collections.addToCollection}</Text>
+            </Pressable>
+          ) : null}
+
           <View style={styles.shareSection}>
             <Text style={styles.sectionTitle} accessibilityRole="header">{t.wishlistItem.shareTitle}</Text>
             <Text style={styles.hint}>{t.wishlistItem.shareHint}</Text>
@@ -242,6 +258,7 @@ export default function WishlistItemScreen() {
               </View>
             </View>
           )}
+          {collections.enabled ? <AddToCollectionSheet wishId={item.id} visible={collectionSheet} onClose={() => setCollectionSheet(false)} /> : null}
         </ScrollView>
       )}
     </SafeAreaView>
@@ -273,6 +290,7 @@ const styles = themedStyles(() => ({
   republishButton: { marginTop: space.xs },
   labelBusy: { color: color.acier },
   secondaryButton: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, minHeight: 48, alignItems: "center", justifyContent: "center" },
+  collectionButton: { marginBottom: space.lg },
   secondaryLabel: { color: color.vert, fontSize: font.secondary, fontWeight: "600" },
   sharedBox: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, gap: 6 },
   sharedTitle: { fontSize: font.secondary, fontWeight: "600", color: color.encre },

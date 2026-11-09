@@ -34,6 +34,7 @@ import {
   REPORT_HANDLED_LABELS,
   REPORT_REASON_LABELS,
   FEEDBACK_REASON_LABELS,
+  COLLECTION_VISIBILITY_LABELS,
   INVITATION_LABELS,
   MATCH_ORIGIN_LABELS,
   MESSAGES_FROM_LABELS,
@@ -471,6 +472,44 @@ function wishlistSection(ctx: Ctx): Html {
   return section(ctx, "wishlist", cards);
 }
 
+/** Une envie rangée dans une collection : son titre, et l'image montrée à
+ * vos amis (copie de notre stockage), s'il y en a une. */
+function collectionItemCard(ctx: Ctx, row: ExportRow): Html {
+  const viewImage = (site: string) => tr(ctx, EXPORT_TEXT.viewImage, { site });
+  return new Card(ctx, "collectionItems", row)
+    .use("wishlist_item_title")
+    .line(tr(ctx, EXPORT_COLUMNS.collectionItems.friends_image_url.label), imageOrLink(ctx, row.friends_image_thumb_url ?? row.friends_image_url, viewImage), [
+      "friends_image_url",
+      "friends_image_thumb_url",
+    ])
+    .field("created_at")
+    .render(str(row.wishlist_item_title));
+}
+
+/** Chaque collection (nom, qui la voit), puis les envies qui y sont rangées. */
+function collectionsSection(ctx: Ctx): Html {
+  const byCollection = groupBy(ctx.data.collectionItems, "collection_id");
+  const known = new Set(ctx.data.collections.map((row) => String(row.id)));
+  const cards = ctx.data.collections.map((row) => {
+    const items = newestFirst(byCollection.get(String(row.id)) ?? [], "created_at");
+    const card = new Card(ctx, "collections", row)
+      .use("name")
+      .field("visibility", enumLabel(ctx, COLLECTION_VISIBILITY_LABELS, row.visibility))
+      .field("created_at")
+      .field("updated_at")
+      .field("visibility_changed_at");
+    const nested =
+      items.length > 0 ? html`<h4>${tr(ctx, EXPORT_TEXT.collectionItemsTitle, { count: String(items.length) })}</h4>${items.map((item) => collectionItemCard(ctx, item))}` : null;
+    return card.render(str(row.name), nested);
+  });
+  // Envies sans collection retrouvée : jamais perdues.
+  const orphans = ctx.data.collectionItems.filter((row) => !known.has(String(row.collection_id)));
+  return section(ctx, "collections", [
+    cards,
+    orphans.length > 0 ? html`<h3 class="sub">${tr(ctx, EXPORT_TEXT.orphanCollectionItems)}</h3>${orphans.map((row) => collectionItemCard(ctx, row))}` : null,
+  ]);
+}
+
 function vaultSection(ctx: Ctx): Html {
   const cards = newestFirst(ctx.data.vaultItems, "created_at").map((row) =>
     new Card(ctx, "vaultItems", row)
@@ -880,6 +919,7 @@ function sectionCount(data: ExportData, id: ExportSectionId): number | null {
     account: null,
     searches: data.productSearches.length,
     wishlist: data.wishlistItems.length,
+    collections: data.collections.length,
     vault: data.vaultItems.length,
     posts: data.posts.length,
     comments: data.comments.length,
@@ -904,6 +944,7 @@ const SECTION_RENDERERS: Record<ExportSectionId, (ctx: Ctx) => Html> = {
   account: accountSection,
   searches: searchesSection,
   wishlist: wishlistSection,
+  collections: collectionsSection,
   vault: vaultSection,
   posts: postsSection,
   comments: commentsSection,

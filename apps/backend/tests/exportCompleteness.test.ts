@@ -49,6 +49,11 @@ const NON_EMPTY_SECTIONS = [
 const messagesProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("messages").select("id").limit(0);
 const MESSAGE_SECTIONS = messagesProbe.error ? [] : (["conversations", "messages"] as const);
 
+// Lot collections : collections et envies rangées, seulement une fois la
+// migration 0033 appliquée sur la base des tests (sans elle, sections vides).
+const collectionsProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("collections").select("id").limit(0);
+const COLLECTION_SECTIONS = collectionsProbe.error ? [] : (["collections", "collectionItems"] as const);
+
 // Sections qui sont un objet (ou null), pas une liste.
 const OBJECT_SECTIONS = ["account", "profile", "adminRole", "suspension"] as const;
 
@@ -85,6 +90,9 @@ const JSON_KEYS = [
   // Lot messages : ajoutées à la fin (les anciennes clés gardent leur ordre).
   "conversations",
   "messages",
+  // Lot collections, de même.
+  "collections",
+  "collectionItems",
 ];
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
@@ -204,6 +212,16 @@ describe("export RGPD complet", () => {
       expect(sent.statusCode).toBe(201);
     }
 
+    // Collections (lot collections) : une collection privée, avec l'Envie
+    // (un compte suspendu range toujours ses propres envies).
+    if (COLLECTION_SECTIONS.length > 0) {
+      const created = await app.inject({ method: "POST", url: "/api/collections", headers: authHeaders(user.token), payload: { name: "Idées" } });
+      expect(created.statusCode).toBe(201);
+      const [wish] = (await app.inject({ method: "GET", url: "/api/wishlist", headers: authHeaders(user.token) })).json().items as { id: string }[];
+      const placed = await app.inject({ method: "PUT", url: `/api/wishlist/${wish!.id}/collections`, headers: authHeaders(user.token), payload: { collectionIds: [created.json().id] } });
+      expect(placed.statusCode).toBe(200);
+    }
+
     // Un premier export, pour que le second contienne cette demande.
     await exportOf(user);
     // Beaucoup d'écritures réelles vers spotto-dev : plus que le délai par défaut.
@@ -225,7 +243,7 @@ describe("export RGPD complet", () => {
     const body = res.json();
 
     expect(body.profile.id).toBe(user.id);
-    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS]) {
+    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...COLLECTION_SECTIONS]) {
       expect(Array.isArray(body[section]), section).toBe(true);
       expect(body[section].length, section).toBeGreaterThan(0);
     }

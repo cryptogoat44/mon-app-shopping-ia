@@ -11,6 +11,7 @@ import {
   acceptInvitation,
   declineInvitation,
   fetchConversation,
+  fetchCollectionItem,
   fetchConversationWith,
   fetchMessagesStatus,
   fetchWishlistItem,
@@ -24,6 +25,7 @@ import { useToast } from "@/lib/toast-context";
 import { usePolling } from "@/lib/use-polling";
 import { MoreIcon, PlusIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
+import { ImageUnavailable } from "@/components/image-unavailable";
 import { MessageWishCard } from "@/components/message-wish-card";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { SpotImage } from "@/components/spot-image";
@@ -54,11 +56,12 @@ function Bubble({ message, onOptions }: { message: ChatMessage; onOptions: () =>
 
 // Une conversation (lot messages) : ouverte depuis la liste (`id`), depuis un
 // profil (`userId`, la conversation peut ne pas exister encore) ou depuis une
-// envie (`wishId`, jointe d'avance). Relue toutes les 5 s environ tant que
+// envie (`wishId`, jointe d'avance). Lot collections : « En parler » d'une
+// envie d'une collection d'un ami (`userId` et `collectionItemId`, jointe d'avance). Relue toutes les 5 s environ tant que
 // l'écran est ouvert ; marquée comme lue à l'ouverture et à chaque nouveau
 // message. Une invitation reçue s'accepte, se refuse ou mène au blocage.
 export default function ConversationScreen() {
-  const { id, userId, wishId } = useLocalSearchParams<{ id?: string; userId?: string; wishId?: string }>();
+  const { id, userId, wishId, collectionItemId } = useLocalSearchParams<{ id?: string; userId?: string; wishId?: string; collectionItemId?: string }>();
   const router = useRouter();
   const { showToast } = useToast();
   const [thread, setThread] = useState<ConversationThread | null>(null);
@@ -118,6 +121,14 @@ export default function ConversationScreen() {
       .catch(() => {});
   }, [wishId]);
 
+  // « En parler » (lot collections) : l'envie de l'ami, avec la copie de son image.
+  useEffect(() => {
+    if (!collectionItemId) return;
+    fetchCollectionItem(collectionItemId)
+      .then((item) => setWish({ id: item.id, title: item.title, imageUrl: item.imageThumbUrl, kind: "collectionItem" }))
+      .catch(() => {});
+  }, [collectionItemId]);
+
   const poll = useCallback(async (): Promise<"new" | "same"> => {
     const conversationId = thread?.id;
     if (!conversationId) return "same";
@@ -154,7 +165,8 @@ export default function ConversationScreen() {
     setSendError(null);
     try {
       const text = draft.trim();
-      const sent = await sendMessage({ recipientId: thread.other.id, ...(text ? { text } : {}), ...(wish ? { wishId: wish.id } : {}) });
+      const attached = wish ? (wish.kind === "collectionItem" ? { collectionItemId: wish.id } : { wishId: wish.id }) : {};
+      const sent = await sendMessage({ recipientId: thread.other.id, ...(text ? { text } : {}), ...attached });
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       stickToEnd.current = true;
       setMessages((current) => mergeMessages(current, [sent.message]));
@@ -339,7 +351,7 @@ export default function ConversationScreen() {
               {wish ? (
                 <View style={styles.attached}>
                   <View style={styles.attachedThumb}>
-                    <SpotImage hdUri={null} fallbackUri={wish.imageUrl} style={styles.fill} fit="cover" size="small" />
+                    {wish.imageUrl ? <SpotImage hdUri={null} fallbackUri={wish.imageUrl} style={styles.fill} fit="cover" size="small" /> : <ImageUnavailable variant="thumb" />}
                   </View>
                   <Text style={styles.attachedTitle} numberOfLines={1}>
                     {t.messages.attachedWish(wish.title)}

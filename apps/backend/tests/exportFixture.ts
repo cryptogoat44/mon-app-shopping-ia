@@ -46,6 +46,8 @@ const RECEIVED = "4e000000-0000-4000-8000-000000000001";
 export const CONVERSATION = "c0000000-0000-4000-8000-0000000000c1";
 const CONVERSATION_BLOCKER = "c0000000-0000-4000-8000-0000000000c2";
 export const HIDDEN_REPLY = "Reponse masquee";
+export const COLLECTION_FRIENDS = "c0000000-0000-4000-8000-0000000000d1";
+const COLLECTION_PRIVATE = "c0000000-0000-4000-8000-0000000000d2";
 export const GOOGLE_THUMB = "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcQexemple";
 export const TIKTOK_THUMB = `https://p16-common-sign.tiktokcdn-eu.com/tos-alisg-p-0037/abc~tplv-tiktokx-origin.image?dr=14575&x-expires=1760400000&x-signature=${"a".repeat(180)}`;
 export const TIKTOK_VIDEO = "https://www.tiktok.com/@createur/video/7550000000000000000?is_from_webapp=1&sender_device=pc&web_id=7550000000000000001";
@@ -306,6 +308,37 @@ export function fixture(): ExportData {
       // décision ne s'écrit jamais dans le fichier lisible.
       message("02", CONVERSATION, FRIEND, "2026-10-20T08:30:00+00:00", { body: HIDDEN_REPLY, hidden_at: "2026-10-22T10:00:00+00:00" }),
       message("03", CONVERSATION_BLOCKER, BLOCKER, "2026-10-21T09:00:00+00:00", { body: "Bonjour, une question" }),
+    ],
+    // Lot collections : une collection montrée aux amis (une envie, avec la
+    // copie de son image), une collection privée vide.
+    collections: [
+      {
+        id: COLLECTION_FRIENDS,
+        name: "Cadeaux pour Noel",
+        visibility: "friends",
+        visibility_changed_at: "2026-10-05T10:00:00+00:00",
+        created_at: "2026-10-01T10:00:00+00:00",
+        updated_at: "2026-10-05T10:00:00+00:00",
+      },
+      {
+        id: COLLECTION_PRIVATE,
+        name: "Plus tard",
+        visibility: "private",
+        visibility_changed_at: null,
+        created_at: "2026-10-02T10:00:00+00:00",
+        updated_at: "2026-10-02T10:00:00+00:00",
+      },
+    ],
+    collectionItems: [
+      {
+        id: "c1000000-0000-4000-8000-000000000001",
+        collection_id: COLLECTION_FRIENDS,
+        wishlist_item_id: "wi000000-0000-4000-8000-000000000001",
+        created_at: "2026-10-05T10:00:00+00:00",
+        wishlist_item_title: "Envie dangereuse",
+        friends_image_url: own("post-media", "collection.jpg"),
+        friends_image_thumb_url: own("post-media", "collection-mini.jpg"),
+      },
     ],
   };
 }

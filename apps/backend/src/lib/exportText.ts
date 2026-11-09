@@ -1,6 +1,7 @@
 import {
   MINIMUM_AGE,
   type AppLocale,
+  type CollectionVisibility,
   type ConsentType,
   type MatchFeedbackReason,
   type MatchOrigin,
@@ -384,6 +385,25 @@ export const EXPORT_COLUMNS = {
     hidden_at: shown("Masqué par la modération le", "Hidden by moderation on"),
     created_at: shown("Envoyé le", "Sent on"),
   },
+  // Lot collections (migration 0033) : vos collections…
+  collections: {
+    id: ID,
+    name: shown("Nom", "Name"),
+    visibility: shown("Qui la voit", "Who can see it"),
+    visibility_changed_at: shown("Visibilité changée le", "Visibility changed on"),
+    created_at: shown("Créée le", "Created on"),
+    updated_at: shown("Modifiée le", "Updated on"),
+  },
+  // … et les envies rangées dans chacune.
+  collectionItems: {
+    id: ID,
+    collection_id: technical("Collection", "Collection"),
+    wishlist_item_id: technical("Envie rangée", "Saved wish"),
+    wishlist_item_title: shown("Envie", "Wish"),
+    friends_image_url: shown("Image montrée à vos amis (copie Spotto)", "Image shown to your friends (Spotto copy)"),
+    friends_image_thumb_url: shown("Miniature montrée à vos amis (copie Spotto)", "Thumbnail shown to your friends (Spotto copy)"),
+    created_at: shown("Ajoutée le", "Added on"),
+  },
 } as const satisfies Record<ExportDataKey, Record<string, ExportColumn>>;
 
 export type ExportColumnName<K extends ExportDataKey> = keyof (typeof EXPORT_COLUMNS)[K] & string;
@@ -410,10 +430,18 @@ export const EXPORT_SECTIONS = {
   wishlist: {
     title: { fr: "Vos Envies", en: "Your Wishlist" },
     intro: {
-      fr: "Les pièces que vous avez gardées pour plus tard. Vos Envies sont privées.",
-      en: "The pieces you saved for later. Your Wishlist is private.",
+      fr: "Les pièces que vous avez gardées pour plus tard. Vos Envies sont privées, sauf celles que vous rangez dans une collection montrée à vos amis.",
+      en: "The pieces you saved for later. Your Wishlist is private, except the wishes you put in a collection shown to your friends.",
     },
     keys: ["wishlistItems"],
+  },
+  collections: {
+    title: { fr: "Vos collections", en: "Your collections" },
+    intro: {
+      fr: "Les collections où vous rangez vos Envies, et qui peut les voir : vous seul, ou vos amis (les membres que vous suivez et qui vous suivent).",
+      en: "The collections where you sort your Wishlist, and who can see them: you alone, or your friends (members you follow who follow you back).",
+    },
+    keys: ["collections", "collectionItems"],
   },
   vault: {
     title: { fr: "Votre Vault", en: "Your Vault" },
@@ -545,6 +573,12 @@ export const MESSAGES_FROM_LABELS: Record<MessagesFrom, Bilingual> = {
   following: { fr: "Vos amis et les comptes que vous suivez", en: "Your friends and accounts you follow" },
   everyone: { fr: "Tout le monde (sous forme d'invitation)", en: "Everyone (as an invitation)" },
   nobody: { fr: "Seulement vos amis", en: "Only your friends" },
+};
+
+/** Qui voit une collection (lot collections). */
+export const COLLECTION_VISIBILITY_LABELS: Record<CollectionVisibility, Bilingual> = {
+  private: { fr: "Vous seul (privée)", en: "You alone (private)" },
+  friends: { fr: "Vos amis", en: "Your friends" },
 };
 
 /** Votre côté d'une conversation (conversation_participants.invitation). */
@@ -821,6 +855,9 @@ export const EXPORT_TEXT = {
   conversationWith: { fr: "Conversation avec {person}", en: "Conversation with {person}" },
   messagesTitle: { fr: "Messages échangés ({count})", en: "Messages exchanged ({count})" },
   orphanMessages: { fr: "Messages d'une conversation introuvable", en: "Messages from a conversation that could not be found" },
+  // Collections (lot collections).
+  collectionItemsTitle: { fr: "Envies rangées ({count})", en: "Saved wishes ({count})" },
+  orphanCollectionItems: { fr: "Envies d'une collection introuvable", en: "Wishes from a collection that could not be found" },
   // Signalements.
   followUp: { fr: "Suivi", en: "Follow-up" },
   handledOn: { fr: "Traité le {date}", en: "Handled on {date}" },

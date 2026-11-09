@@ -28,6 +28,7 @@ import piecesRoutes from "./routes/pieces.js";
 import searchCapacityRoutes from "./routes/searchCapacity.js";
 import appVersionRoutes from "./routes/appVersion.js";
 import conversationsRoutes from "./routes/conversations.js";
+import collectionsRoutes from "./routes/collections.js";
 import { captureServerError, captureServerFailure } from "./lib/sentry.js";
 import { GENERIC_CLIENT_ERROR, isErrorBody, localizeMessage } from "./lib/messages.js";
 import { requestLocale } from "./lib/locale.js";
@@ -150,6 +151,7 @@ export async function buildApp(options: { logger?: LoggerOption } = {}): Promise
   await fastify.register(searchCapacityRoutes);
   await fastify.register(appVersionRoutes);
   await fastify.register(conversationsRoutes);
+  await fastify.register(collectionsRoutes);
 
   // Exclue du filet anti-abus "default" : les sondes de disponibilité de
   // Render l'appellent très régulièrement, ça n'a rien à voir avec un abus.

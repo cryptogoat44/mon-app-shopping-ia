@@ -13,6 +13,7 @@ import { ReportBlockMenu } from "@/components/report-block-menu";
 import { SpotImage } from "@/components/spot-image";
 import { ImageUnavailable } from "@/components/image-unavailable";
 import { ErrorMessage } from "@/components/error-message";
+import { FriendCollections } from "@/components/friend-collections";
 import { useToast } from "@/lib/toast-context";
 import { useMessagesStatus } from "@/lib/use-messages-status";
 import { themedStyles } from "@/theme/themed-styles";
@@ -176,6 +177,8 @@ export default function UserProfileScreen() {
           </Pressable>
         ) : null}
       </View>
+      {/* Lot collections : ses collections montrées aux amis (rien pour les autres). */}
+      <FriendCollections userId={profile.id} displayName={profile.displayName} refreshKey={String(profile.isFollowing)} />
       <Text style={styles.sectionTitle}>{t.userProfile.posts}</Text>
     </View>
   );

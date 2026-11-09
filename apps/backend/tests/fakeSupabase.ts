@@ -4,8 +4,9 @@ import { randomUUID } from "node:crypto";
 // des tables, et juste ce que les routes des messages demandent au client
 // (select, insert, update, delete ; eq, neq, in, is, not, gt, lt ; order,
 // limit, range ; single, maybeSingle ; compte exact). Les règles de la base
-// utiles à ces tests sont imitées : paire unique d'une conversation, et le
-// déclencheur de la migration 0032 (aperçu, ordre, « non lu »).
+// utiles à ces tests sont imitées : clés uniques (paire d'une conversation,
+// envie une seule fois par collection, une copie par envie), suppressions en
+// cascade, et le déclencheur de la migration 0032 (aperçu, ordre, « non lu »).
 // Une table absente (`missing`) répond comme une base sans la migration.
 
 export type Row = Record<string, unknown>;
@@ -17,7 +18,7 @@ interface DbError {
 }
 
 export interface FakeDbOptions {
-  /** Tables absentes (base sans la migration 0032). */
+  /** Tables absentes (base sans la migration 0032 ou 0033). */
   missing?: string[];
   /** Fait échouer une écriture (table, action) : son erreur est renvoyée. */
   failWrite?: (table: string, action: "insert" | "update" | "delete", values: unknown) => DbError | null;
@@ -49,6 +50,32 @@ const DEFAULTS: Record<string, () => Row> = {
     created_at: nextTimestamp(),
   }),
   reports: () => ({ id: randomUUID(), note: null, handled_at: null, moderation_action_id: null, created_at: new Date().toISOString() }),
+  // Lot collections (migration 0033).
+  collections: () => ({ id: randomUUID(), visibility: "private", visibility_changed_at: null, created_at: nextTimestamp(), updated_at: nextTimestamp() }),
+  collection_items: () => ({ id: randomUUID(), created_at: nextTimestamp() }),
+  collection_image_copies: () => ({ created_at: nextTimestamp() }),
+  wishlist_items: () => ({ id: randomUUID(), reference: null, created_at: nextTimestamp() }),
+};
+
+/** Clés uniques imitées (doublon : erreur 23505, comme Postgres). */
+const UNIQUE: Record<string, string[][]> = {
+  conversations: [["user_low", "user_high"]],
+  collection_items: [["collection_id", "wishlist_item_id"]],
+  collection_image_copies: [["wishlist_item_id"]],
+};
+
+/** Suppressions en cascade imitées : en supprimant une ligne de la table,
+ * celles des tables filles qui la désignent partent aussi. */
+const CASCADES: Record<string, { table: string; column: string }[]> = {
+  conversations: [
+    { table: "conversation_participants", column: "conversation_id" },
+    { table: "messages", column: "conversation_id" },
+  ],
+  collections: [{ table: "collection_items", column: "collection_id" }],
+  wishlist_items: [
+    { table: "collection_items", column: "wishlist_item_id" },
+    { table: "collection_image_copies", column: "wishlist_item_id" },
+  ],
 };
 
 // Dates strictement croissantes, jamais avant l'heure réelle (les routes
@@ -122,11 +149,12 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
         const failure = options.failWrite?.(name, "insert", values);
         if (failure) return { data: null, error: failure };
         const list = (Array.isArray(values) ? values : [values!]).map((value) => ({ ...(DEFAULTS[name]?.() ?? {}), ...value }));
-        if (name === "conversations") {
+        for (const columns of UNIQUE[name] ?? []) {
+          const key = (row: Row) => JSON.stringify(columns.map((column) => row[column]));
+          const seen = new Set(rows.map(key));
           for (const row of list) {
-            if (rows.some((other) => other.user_low === row.user_low && other.user_high === row.user_high)) {
-              return { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } };
-            }
+            if (seen.has(key(row))) return { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } };
+            seen.add(key(row));
           }
         }
         rows.push(...list);
@@ -148,10 +176,9 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
           name,
           rows.filter((row) => !matching.includes(row))
         );
-        if (name === "conversations") {
-          const ids = new Set(matching.map((row) => row.id));
-          tables.set("conversation_participants", table("conversation_participants").filter((row) => !ids.has(row.conversation_id)));
-          tables.set("messages", table("messages").filter((row) => !ids.has(row.conversation_id)));
+        const ids = new Set(matching.map((row) => row.id));
+        for (const child of CASCADES[name] ?? []) {
+          tables.set(child.table, table(child.table).filter((row) => !ids.has(row[child.column])));
         }
         return { data: returning ? matching.map((row) => pick(row, columns)) : null, error: null };
       }

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { chunks, readAll } from "./pagedReads.js";
 import { messagesReady } from "./messaging.js";
+import { collectionsReady } from "./collections.js";
 
 // Export RGPD (droit d'accès et de portabilité) : lecture de TOUTES les
 // données personnelles d'un compte. Toute nouvelle table contenant des
@@ -52,6 +53,12 @@ export interface ExportData {
   conversations: ExportRow[];
   /** … et tous les messages de ces conversations, envoyés et reçus. */
   messages: ExportRow[];
+  /** Collections d'envies (lot collections, migration 0033) : nom et
+   * visibilité (vous seul, ou vos amis)… */
+  collections: ExportRow[];
+  /** … et les envies rangées dans chacune (identifiant et titre de l'envie,
+   * adresses de la copie de son image montrée aux amis, s'il y en a une). */
+  collectionItems: ExportRow[];
 }
 
 /** Sections de l'export (toutes les clés sauf la date de l'export). */
@@ -94,6 +101,29 @@ function compareRows(a: ExportRow, b: ExportRow, orderBy: readonly string[]): nu
 }
 
 const BY_DATE = ["created_at", "id"] as const;
+
+/** Colonnes d'une collection (lot collections). */
+export const COLLECTION_EXPORT_COLUMNS = "id, name, visibility, visibility_changed_at, created_at, updated_at";
+
+/** Les envies rangées dans ses collections, avec le titre de chaque envie et
+ * la copie de son image montrée aux amis (une par envie), s'il y en a une. */
+async function listCollectionItems(db: Db, userId: string, wishlistItems: readonly ExportRow[]): Promise<ExportRow[]> {
+  const [items, copies] = await Promise.all([
+    listWhere(db, "collection_items", "id, collection_id, wishlist_item_id, created_at", "user_id", userId, BY_DATE),
+    listWhere(db, "collection_image_copies", "wishlist_item_id, image_url, image_thumb_url, created_at", "user_id", userId, ["created_at", "wishlist_item_id"]),
+  ]);
+  const titles = new Map(wishlistItems.map((row) => [String(row.id), typeof row.title === "string" ? row.title : null]));
+  const copyByWish = new Map(copies.map((row) => [String(row.wishlist_item_id), row]));
+  return items.map((row) => {
+    const copy = copyByWish.get(String(row.wishlist_item_id));
+    return {
+      ...row,
+      wishlist_item_title: titles.get(String(row.wishlist_item_id)) ?? null,
+      friends_image_url: copy?.image_url ?? null,
+      friends_image_thumb_url: copy?.image_thumb_url ?? null,
+    };
+  });
+}
 
 /** Colonnes de son côté d'une conversation (jamais celui de l'autre membre :
  * il dirait, par exemple, qu'il a refusé une invitation). */
@@ -144,6 +174,8 @@ export async function collectExport(
   // plus sûr qu'un filtre sur une ressource jointe.
   // Lot messages : sans la migration 0032, aucune conversation (sections vides).
   const withMessages = await messagesReady(fastify);
+  // Lot collections : sans la migration 0033, aucune collection (sections vides).
+  const withCollections = await collectionsReady(fastify);
   const [productSearches, posts, affiliateClicks, conversations] = await Promise.all([
     section("productSearches", () => listWhere(db, "product_searches", "*", "user_id", userId, BY_DATE), none),
     section("posts", () => listWhere(db, "posts", "*", "user_id", userId, BY_DATE), none),
@@ -179,6 +211,7 @@ export async function collectExport(
     moderationDecisionsTaken,
     resultFeedback,
     messages,
+    collections,
   ] = await Promise.all([
     section(
       "profile",
@@ -233,7 +266,9 @@ export async function collectExport(
     section("resultFeedback", () => listWhere(db, "match_feedback", "*", "user_id", userId, BY_DATE), none),
     // Messages envoyés et reçus, masqués compris (comme les pièces).
     section("messages", () => listIn(db, "messages", "*", "conversation_id", conversationIds, BY_DATE), none),
+    section("collections", () => (withCollections ? listWhere(db, "collections", COLLECTION_EXPORT_COLUMNS, "user_id", userId, BY_DATE) : Promise.resolve(none)), none),
   ]);
+  const collectionItems = await section("collectionItems", () => (withCollections ? listCollectionItems(db, userId, wishlistItems) : Promise.resolve(none)), none);
 
   const data: ExportData = {
     exportedAt: new Date().toISOString(),
@@ -265,6 +300,8 @@ export async function collectExport(
     resultFeedback,
     conversations,
     messages,
+    collections,
+    collectionItems,
   };
   return { data, failures };
 }

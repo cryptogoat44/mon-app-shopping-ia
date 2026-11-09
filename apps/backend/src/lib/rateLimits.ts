@@ -85,6 +85,32 @@ export const RATE_LIMITS = {
     message: "Vous avez envoyé beaucoup d'invitations en peu de temps. Réessayez dans une heure.",
   },
 
+  // Collections d'envies (lot collections) : créer, renommer, supprimer une
+  // collection, y ranger ou en retirer une envie. Large pour ranger ses
+  // envies, bloque un script.
+  collectionWrite: {
+    max: 120,
+    windowMs: HOUR,
+    error: "collection_write_limit",
+    message: "Vous avez modifié beaucoup de collections en peu de temps. Réessayez dans un moment.",
+  },
+  // Montrer une collection à ses amis, ou la rendre privée : chaque passage
+  // à « Mes amis » copie les images de ses envies (jusqu'à 100). Compté en
+  // plus de collectionWrite.
+  collectionVisibility: {
+    max: 20,
+    windowMs: HOUR,
+    error: "collection_visibility_limit",
+    message: "Vous avez changé souvent la visibilité de vos collections. Réessayez dans une heure.",
+  },
+  // « Garder » une envie d'une collection d'un ami.
+  collectionKeep: {
+    max: 60,
+    windowMs: HOUR,
+    error: "collection_keep_limit",
+    message: "Vous avez gardé beaucoup d'envies en peu de temps. Réessayez dans un moment.",
+  },
+
   // Export des données (RGPD) : chaque export relit toutes les tables du
   // compte. Large pour une personne, mais protège la base d'un script. Le
   // fichier lisible et le format technique comptent ensemble.
