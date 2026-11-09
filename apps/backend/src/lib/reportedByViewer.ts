@@ -2,7 +2,8 @@
 // (chantier 3, point 6 de la feuille de route V1 ; règle 1.2 d'Apple) : une
 // publication signalée sort de son fil et des profils qu'elle consulte, un
 // commentaire signalé de la liste des commentaires, une pièce reçue signalée
-// de ses pièces reçues, un message de sa conversation (lot messages) —
+// de ses pièces reçues, un message de sa conversation (lot messages), une
+// collection d'un ami de son profil (lot modération des collections) —
 // quelle que soit la suite
 // donnée au signalement. Les autres personnes continuent de les voir tant
 // qu'un administrateur (ou le masquage automatique, lib/autoHide.ts) ne les a
@@ -23,7 +24,7 @@ export async function reportedIdsFor(
   fastify: Pick<FastifyInstance, "supabaseAdmin">,
   log: Pick<FastifyBaseLogger, "error">,
   viewerId: string,
-  targetType: "post" | "comment" | "piece" | "message"
+  targetType: "post" | "comment" | "piece" | "message" | "collection"
 ): Promise<string[]> {
   const { data, error } = await fastify.supabaseAdmin
     .from("reports")

@@ -1,13 +1,21 @@
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Image } from "expo-image";
-import type { ModerationAuthor, ModerationItem, ModerationLogEntry, ModerationPreview, ModerationStatus, ReportReason } from "@monapp/shared-types";
+import type {
+  ModerationAuthor,
+  ModerationCollectionItem,
+  ModerationItem,
+  ModerationLogEntry,
+  ModerationPreview,
+  ModerationStatus,
+  ReportReason,
+} from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { timeAgo } from "@/lib/format";
 import { applyModerationDecision, removeCopiedImage, undoModerationDecision } from "@/lib/api";
 import { loadErrorMessage } from "@/lib/load-error";
-import { moderationActionLabel, moderationReasonLabel, mostReportedReason, reasonsSummary } from "@/lib/moderation-labels";
+import { collectionPreviewView, hideRestoreLabels, moderationActionLabel, moderationReasonLabel, mostReportedReason, reasonsSummary } from "@/lib/moderation-labels";
 import { useToast } from "@/lib/toast-context";
 import { ErrorMessage } from "@/components/error-message";
 import { PersonIcon } from "@/components/icons";
@@ -17,18 +25,32 @@ import { themedStyles } from "@/theme/themed-styles";
 
 // Un contenu signalé, vu par un administrateur (lot 5) : les signalements
 // regroupés (jamais qui les a faits), l'aperçu du contenu, les décisions
-// possibles et leur historique (qui, quoi, quand, motif).
+// possibles et leur historique (qui, quoi, quand, motif). Lot modération des
+// collections : une collection montre son nom, son auteur et ses dernières
+// envies (titre et copie de l'image), chacune avec « Retirer l'image ».
 
 const ago = (iso: string) => timeAgo(iso, getActiveLocale());
 
-function ActionButton({ label, onPress, disabled, danger }: { label: string; onPress: () => void; disabled: boolean; danger?: boolean }) {
+function ActionButton({
+  label,
+  accessibilityLabel,
+  onPress,
+  disabled,
+  danger,
+}: {
+  label: string;
+  accessibilityLabel?: string;
+  onPress: () => void;
+  disabled: boolean;
+  danger?: boolean;
+}) {
   return (
     <Pressable
       style={[styles.action, disabled ? styles.actionDisabled : null]}
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled }}
     >
       <Text style={[styles.actionLabel, danger ? styles.actionDanger : null, disabled ? styles.actionLabelDisabled : null]}>{label}</Text>
@@ -72,7 +94,58 @@ function PreviewImage({ uri, removed, label }: { uri: string | null; removed: bo
   );
 }
 
-function ItemPreview({ preview, autoHidden }: { preview: ModerationPreview; autoHidden: boolean }) {
+/** Lot modération des collections : les dernières envies d'une collection
+ * signalée, comme les amis les voient (titre, copie de l'image). */
+function CollectionExtract({
+  preview,
+  busy,
+  onRemoveImage,
+}: {
+  preview: Extract<ModerationPreview, { kind: "collection" }>;
+  busy: boolean;
+  onRemoveImage: (item: ModerationCollectionItem) => void;
+}) {
+  const view = collectionPreviewView(preview);
+  return (
+    <View style={styles.extract} testID="apercu-collection">
+      <Text style={styles.collectionName}>{view.name}</Text>
+      <Text style={styles.meta}>{view.visibility}</Text>
+      <Text style={styles.sectionLabel}>{view.itemsTitle}</Text>
+      {view.items.map((entry, index) => (
+        <View key={entry.id} style={styles.collectionItem}>
+          {entry.imageUrl ? (
+            <Image source={{ uri: entry.imageUrl }} style={styles.itemImage} contentFit="cover" accessible accessibilityLabel={entry.title} />
+          ) : (
+            <View style={styles.itemImage}>
+              <ImageUnavailable variant="thumb" />
+            </View>
+          )}
+          <View style={styles.postText}>
+            <Text style={styles.body} numberOfLines={2}>
+              {entry.title}
+            </Text>
+            {entry.removedLabel ? <Text style={styles.badge}>{entry.removedLabel}</Text> : null}
+            {entry.removeLabel ? (
+              <ActionButton label={t.moderationQueue.removeImage} accessibilityLabel={entry.removeLabel} onPress={() => onRemoveImage(preview.items[index]!)} disabled={busy} danger />
+            ) : null}
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function ItemPreview({
+  preview,
+  autoHidden,
+  busy,
+  onRemoveItemImage,
+}: {
+  preview: ModerationPreview;
+  autoHidden: boolean;
+  busy: boolean;
+  onRemoveItemImage: (item: ModerationCollectionItem) => void;
+}) {
   if (preview.kind === "missing") return <Text style={styles.missing}>{t.moderationQueue.missing}</Text>;
   return (
     <View style={styles.preview}>
@@ -97,6 +170,8 @@ function ItemPreview({ preview, autoHidden }: { preview: ModerationPreview; auto
         <Text style={styles.body}>{t.common.quoted(preview.body)}</Text>
       ) : preview.kind === "message" ? (
         <MessageExtract preview={preview} />
+      ) : preview.kind === "collection" ? (
+        <CollectionExtract preview={preview} busy={busy} onRemoveImage={onRemoveItemImage} />
       ) : preview.bio ? (
         <Text style={styles.body}>{preview.bio}</Text>
       ) : null}
@@ -203,41 +278,60 @@ function useDecisions(item: ModerationItem, onChanged: () => void) {
       t.moderationQueue.saved
     );
   const undo = (actionId: string, kind: DecisionKind) => run(() => undoModerationDecision(actionId, kind), t.moderationQueue.undone);
-  // Lot 5, partie B : seulement pour une copie faite par Spotto (item.canRemoveImage).
-  const removeImage = async (note: string) => {
+  // Lot 5, partie B : seulement pour une copie faite par Spotto (item.canRemoveImage) ;
+  // une collection : la copie d'une de ses envies (`itemId`).
+  const removeImage = async (note: string, itemId?: string) => {
     const targetType = item.targetType;
+    const extra = note ? { note } : {};
+    if (targetType === "collection") {
+      if (!itemId) return false;
+      return run(() => removeCopiedImage({ targetType, targetId: item.targetId, itemId, ...extra }), t.moderationQueue.imageRemovedSaved);
+    }
     if (targetType !== "post" && targetType !== "piece") return false;
-    return run(() => removeCopiedImage({ targetType, targetId: item.targetId, ...(note ? { note } : {}) }), t.moderationQueue.imageRemovedSaved);
+    return run(() => removeCopiedImage({ targetType, targetId: item.targetId, ...extra }), t.moderationQueue.imageRemovedSaved);
   };
   return { busy, error, decide, undo, removeImage };
 }
 
-function ItemDecisions({ item, status, onChanged }: { item: ModerationItem; status: ModerationStatus; onChanged: () => void }) {
+function ItemDecisions({
+  item,
+  status,
+  decisions,
+  itemToClear,
+  onItemPanelClose,
+}: {
+  item: ModerationItem;
+  status: ModerationStatus;
+  decisions: ReturnType<typeof useDecisions>;
+  /** Lot modération des collections : l'envie dont on retire la copie de l'image. */
+  itemToClear: ModerationCollectionItem | null;
+  onItemPanelClose: () => void;
+}) {
   const [panel, setPanel] = useState<DecisionKind | "remove_image" | null>(null);
-  const { busy, error, decide, undo, removeImage } = useDecisions(item, onChanged);
+  const { busy, error, decide, undo, removeImage } = decisions;
   const { preview, activeHideActionId, activeSuspendActionId } = item;
   // Chantier 3 : masqué automatiquement, signalements encore à traiter.
   // « Masquer » confirme le masquage, « Classer sans suite » le lève (le
   // serveur rétablit le contenu) : « Rétablir » ferait doublon.
   const pendingAutoHide = status === "open" && item.activeHideAutomatic && activeHideActionId !== null;
-  const content = preview.kind === "post" || preview.kind === "comment" || preview.kind === "piece" || preview.kind === "message" ? preview : null;
-  const hideLabel =
-    content?.kind === "post"
-      ? t.moderationQueue.hidePost
-      : content?.kind === "piece"
-        ? t.moderationQueue.hidePiece
-        : content?.kind === "message"
-          ? t.moderationQueue.hideMessage
-          : t.moderationQueue.hideComment;
-  const restoreLabel =
-    content?.kind === "post"
-      ? t.moderationQueue.restorePost
-      : content?.kind === "piece"
-        ? t.moderationQueue.restorePiece
-        : content?.kind === "message"
-          ? t.moderationQueue.restoreMessage
-          : t.moderationQueue.restoreComment;
+  const content = preview.kind !== "user" && preview.kind !== "missing" ? preview : null;
+  const { hide: hideLabel, restore: restoreLabel } = hideRestoreLabels(content?.kind ?? "comment");
   const errorView = error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null;
+
+  if (itemToClear) {
+    return (
+      <>
+        <RemoveImagePanel
+          warning={t.moderationQueue.removeItemImageWarning}
+          subject={itemToClear.title}
+          busy={busy}
+          onCancel={onItemPanelClose}
+          onConfirm={(note) => void removeImage(note, itemToClear.id).then((done) => done && onItemPanelClose())}
+        />
+        {errorView}
+      </>
+    );
+  }
 
   if (panel === "remove_image") {
     return (
@@ -289,13 +383,15 @@ function ItemDecisions({ item, status, onChanged }: { item: ModerationItem; stat
 }
 
 export function ModerationItemCard({ item, status, onChanged }: { item: ModerationItem; status: ModerationStatus; onChanged: () => void }) {
+  const decisions = useDecisions(item, onChanged);
+  const [itemToClear, setItemToClear] = useState<ModerationCollectionItem | null>(null);
   return (
     <View style={styles.card} testID={`moderation-${item.targetType}-${item.targetId}`}>
       <Text style={styles.title}>{[t.moderationQueue.target[item.targetType], t.moderationQueue.reportCount(item.reportCount)].join(" · ")}</Text>
       <Text style={styles.meta}>{t.moderationQueue.lastReport(ago(item.lastReportedAt))}</Text>
-      <ItemPreview preview={item.preview} autoHidden={item.activeHideAutomatic} />
+      <ItemPreview preview={item.preview} autoHidden={item.activeHideAutomatic} busy={decisions.busy} onRemoveItemImage={setItemToClear} />
       <ReportDetails item={item} />
-      <ItemDecisions item={item} status={status} onChanged={onChanged} />
+      <ItemDecisions item={item} status={status} decisions={decisions} itemToClear={itemToClear} onItemPanelClose={() => setItemToClear(null)} />
       <ItemHistory history={item.history} />
     </View>
   );
@@ -339,6 +435,9 @@ const styles = themedStyles(() => ({
   extract: { gap: space.xs },
   extractEntry: { paddingVertical: space.xs, paddingHorizontal: space.sm, borderRadius: radius.sm, borderWidth: 1, borderColor: color.filet },
   extractReported: { borderColor: color.danger },
+  collectionName: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
+  collectionItem: { flexDirection: "row", gap: space.sm, paddingVertical: space.xs, borderTopWidth: 1, borderTopColor: color.filet },
+  itemImage: { width: 56, height: 56, borderRadius: radius.sm, backgroundColor: color.plinthe, overflow: "hidden" },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.md },
   fullWidth: { width: "100%" },
   action: {

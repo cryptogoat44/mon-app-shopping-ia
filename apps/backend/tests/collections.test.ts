@@ -206,7 +206,7 @@ describe("sans la migration 0033", () => {
   it("les collections se disent indisponibles ; chaque route répond « indisponible », rien n'est écrit", async () => {
     const fake = seeded({ follows: friends(ALICE, BOB) }, missing);
     const target = await collectionsApp(fake.db);
-    expect((await as(target, ALICE).get("/api/collections/status")).json()).toEqual({ enabled: false });
+    expect((await as(target, ALICE).get("/api/collections/status")).json()).toEqual({ enabled: false, reportable: false });
     const alice = as(target, ALICE);
     for (const res of [
       await alice.get("/api/collections"),
@@ -278,9 +278,9 @@ describe("créer, renommer, supprimer", () => {
   it("une nouvelle collection est privée ; liste dans l'ordre de création, avec le nombre d'envies", async () => {
     const fake = seeded();
     const target = await collectionsApp(fake.db);
-    expect((await as(target, ALICE).get("/api/collections/status")).json()).toEqual({ enabled: true });
+    expect((await as(target, ALICE).get("/api/collections/status")).json()).toEqual({ enabled: true, reportable: true });
     const summer = await create(target, ALICE, "  Été   2027 ");
-    expect(summer).toMatchObject({ name: "Été 2027", visibility: "private", itemCount: 0 });
+    expect(summer).toMatchObject({ name: "Été 2027", visibility: "private", itemCount: 0, hidden: false });
     const gifts = await create(target, ALICE, "Cadeaux");
     await place(target, ALICE, WISH, [summer.id, gifts.id]);
     await place(target, ALICE, WISH_2, [gifts.id]);

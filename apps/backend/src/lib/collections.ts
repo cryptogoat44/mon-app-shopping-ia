@@ -17,6 +17,11 @@
 // Ici aussi : la sonde du schéma (le serveur fonctionne sans 0033 : routes
 // « indisponibles », app sans collections). Le nom d'une collection n'est
 // jamais écrit au journal.
+// Lot modération des collections (migration 0034) : une collection masquée
+// par la modération, ou signalée par la personne qui regarde, n'est plus
+// montrée (même réponse « introuvable ») ; la copie d'une image retirée par
+// la modération reste en base sans adresse (« Image indisponible », jamais
+// recopiée). Sans 0034, rien de tout cela n'existe et tout marche comme avant.
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
@@ -55,13 +60,22 @@ export const COLLECTION_FULL = {
   error: "collection_full",
   message: `Cette collection contient déjà ${COLLECTION_ITEMS_MAX} envies : retirez-en une pour en ajouter une autre.`,
 } as const;
+/** Lot modération des collections : « Mes amis » refusé tant que la
+ * modération la masque. */
+export const COLLECTION_HIDDEN = {
+  error: "collection_hidden",
+  message: "Cette collection a été masquée par la modération : vous ne pouvez pas la montrer à vos amis.",
+} as const;
 
 // ---- Lignes de la base ----
 
 const ID = z.string().uuid();
 const TIMESTAMP = z.string().min(1);
 
-export const COLLECTION_COLUMNS = "id, user_id, name, visibility, visibility_changed_at, created_at, updated_at";
+// Toutes les colonnes : `hidden_at` n'existe qu'après la migration 0034, et
+// les collections doivent se lire avec ou sans elle (comme le journal de la
+// modération avant 0030).
+export const COLLECTION_COLUMNS = "*";
 export const COLLECTION_ROWS = z.array(
   z.object({
     id: ID,
@@ -71,6 +85,8 @@ export const COLLECTION_ROWS = z.array(
     visibility_changed_at: TIMESTAMP.nullable(),
     created_at: TIMESTAMP,
     updated_at: TIMESTAMP,
+    // Masquée par la modération (migration 0034) ; absente avant : jamais masquée.
+    hidden_at: TIMESTAMP.nullable().default(null),
   })
 );
 export type CollectionRow = z.infer<typeof COLLECTION_ROWS>[number];
@@ -79,8 +95,15 @@ export const ITEM_COLUMNS = "id, collection_id, wishlist_item_id, user_id, creat
 export const ITEM_ROWS = z.array(z.object({ id: ID, collection_id: ID, wishlist_item_id: ID, user_id: ID, created_at: TIMESTAMP }));
 export type ItemRow = z.infer<typeof ITEM_ROWS>[number];
 
-const COPY_ROWS = z.array(z.object({ wishlist_item_id: ID, image_url: z.string(), image_thumb_url: z.string() }));
-type CopyRow = z.infer<typeof COPY_ROWS>[number];
+// Adresses vides : copie retirée par la modération (migration 0034). La ligne
+// reste, pour que l'image ne soit jamais recopiée.
+const COPY_ROWS = z.array(z.object({ wishlist_item_id: ID, image_url: z.string().nullable(), image_thumb_url: z.string().nullable() }));
+export type CopyRow = z.infer<typeof COPY_ROWS>[number];
+
+/** La copie a été retirée par la modération (fichier effacé, ligne gardée). */
+export function isRemovedCopy(copy: CopyRow): boolean {
+  return copy.image_url === null || copy.image_thumb_url === null;
+}
 
 // Ce que les amis peuvent lire d'une envie : jamais image_url (l'adresse du
 // marchand) ni reference (une note de la personne).
@@ -113,7 +136,7 @@ function priceOf(value: string | number | null): number | null {
 }
 
 export function toCollectionSummary(row: CollectionRow, itemCount: number): CollectionSummary {
-  return { id: row.id, name: row.name, visibility: row.visibility, itemCount, createdAt: row.created_at };
+  return { id: row.id, name: row.name, visibility: row.visibility, itemCount, createdAt: row.created_at, hidden: row.hidden_at !== null };
 }
 
 // ---- Qui voit quoi ----
@@ -144,12 +167,41 @@ export async function readOwnCollection(fastify: FastifyInstance, userId: string
   return row && row.user_id === userId ? row : null;
 }
 
-/** La collection `id` telle qu'un ami la voit : montrée aux amis et visible
- * par `viewerId` (son auteur compris) ; sinon null, quelle que soit la raison. */
-export async function readSharedCollection(fastify: FastifyInstance, viewerId: string, id: string): Promise<CollectionRow | null> {
+/** La collection `id` si elle est montrée aux amis, pas masquée par la
+ * modération, et visible par `viewerId` (son auteur compris) ; sinon null.
+ * C'est la règle pour la signaler (lib/collectionModeration.ts). */
+export async function readVisibleCollection(fastify: FastifyInstance, viewerId: string, id: string): Promise<CollectionRow | null> {
   const row = await readCollection(fastify, id);
-  if (!row || row.visibility !== "friends") return null;
+  if (!row || row.visibility !== "friends" || row.hidden_at !== null) return null;
   return (await canSeeFriendCollections(fastify, viewerId, row.user_id)) ? row : null;
+}
+
+/** `viewerId` a-t-il signalé la collection `id` ? Lecture impossible : non
+ * (elle reste montrée, comme lib/reportedByViewer.ts), code au journal. */
+async function reportedBy(fastify: FastifyInstance, viewerId: string, id: string): Promise<boolean> {
+  const { data, error } = await fastify.supabaseAdmin
+    .from("reports")
+    .select("target_id")
+    .eq("reporter_id", viewerId)
+    .eq("target_type", "collection")
+    .eq("target_id", id)
+    .limit(1);
+  if (error) {
+    fastify.log.error({ code: error.code ?? null }, "Collections : signalements illisibles, rien n'est retiré");
+    return false;
+  }
+  return Array.isArray(data) && data.length > 0;
+}
+
+/** La collection `id` telle qu'un ami la voit : montrée aux amis, pas
+ * masquée par la modération, visible par `viewerId` (son auteur compris), et
+ * jamais une collection qu'il a signalée (elle disparaît aussitôt de ce
+ * qu'il voit) ; sinon null, quelle que soit la raison. */
+export async function readSharedCollection(fastify: FastifyInstance, viewerId: string, id: string): Promise<CollectionRow | null> {
+  const row = await readVisibleCollection(fastify, viewerId, id);
+  if (!row) return null;
+  if (row.user_id !== viewerId && (await reportedBy(fastify, viewerId, row.id))) return null;
+  return row;
 }
 
 /** Une envie d'une collection montrée aux amis, visible par `viewerId`, ou null. */
@@ -172,12 +224,14 @@ export async function readItemWish(fastify: FastifyInstance, item: ItemRow): Pro
 }
 
 /** Copie montrée aux amis : seulement une adresse de notre stockage, dans le
- * dossier de l'auteur de l'envie (jamais une autre adresse, même rangée par erreur). */
-function ownCopyUrl(url: string, ownerId: string): string | null {
-  return extractOwnedStoragePath(url, WISH_COPY_BUCKET, ownerId) ? url : null;
+ * dossier de l'auteur de l'envie (jamais une autre adresse, même rangée par
+ * erreur). Copie retirée par la modération (adresse vide) : null. */
+export function ownCopyUrl(url: string | null, ownerId: string): string | null {
+  return url !== null && extractOwnedStoragePath(url, WISH_COPY_BUCKET, ownerId) ? url : null;
 }
 
-async function readCopies(fastify: FastifyInstance, ownerId: string, wishIds: string[]): Promise<Map<string, CopyRow>> {
+/** Les copies (retirées comprises) des envies `wishIds` de `ownerId`. */
+export async function readCopies(fastify: FastifyInstance, ownerId: string, wishIds: string[]): Promise<Map<string, CopyRow>> {
   const copies = new Map<string, CopyRow>();
   for (const part of chunks([...new Set(wishIds)])) {
     const rows = parseDbRows(
@@ -264,7 +318,7 @@ export async function collectionStats(
   for (const item of [...items].reverse()) {
     const entry = stats.get(item.collection_id);
     const copy = copies.get(item.wishlist_item_id);
-    if (entry && entry.coverUrl === null && copy) entry.coverUrl = ownCopyUrl(copy.image_thumb_url, ownerId);
+    if (entry && entry.coverUrl === null && copy && !isRemovedCopy(copy)) entry.coverUrl = ownCopyUrl(copy.image_thumb_url, ownerId);
   }
   return stats;
 }
@@ -342,7 +396,9 @@ export async function syncFriendCopies(fastify: FastifyInstance, log: FastifyBas
   const db = fastify.supabaseAdmin;
   const [visible, copies] = await Promise.all([friendVisibleWishes(fastify, userId, ids), readCopies(fastify, userId, ids)]);
 
-  const stale = [...copies.values()].filter((copy) => !visible.has(copy.wishlist_item_id));
+  // Une copie retirée par la modération reste (sans fichier) : l'image n'est
+  // jamais recopiée, même si l'envie est montrée de nouveau plus tard.
+  const stale = [...copies.values()].filter((copy) => !visible.has(copy.wishlist_item_id) && !isRemovedCopy(copy));
   for (const part of chunks(stale)) {
     const { error } = await db
       .from("collection_image_copies")
@@ -397,10 +453,9 @@ export async function allOwnCopies(fastify: FastifyInstance, userId: string): Pr
     () => fastify.supabaseAdmin.from("collection_image_copies").select("wishlist_item_id, image_url, image_thumb_url", { count: "exact" }).eq("user_id", userId),
     ["wishlist_item_id"]
   );
-  return parseDbRows(COPY_ROWS, { data: rows, error: null }, "Copies des images des collections").flatMap((row) => [
-    { ownerId: userId, url: row.image_url },
-    { ownerId: userId, url: row.image_thumb_url },
-  ]);
+  return parseDbRows(COPY_ROWS, { data: rows, error: null }, "Copies des images des collections").flatMap((row) =>
+    [row.image_url, row.image_thumb_url].flatMap((url) => (url ? [{ ownerId: userId, url }] : []))
+  );
 }
 
 // ---- Schéma de la base (migration 0033) ----

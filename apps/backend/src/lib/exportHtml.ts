@@ -473,15 +473,16 @@ function wishlistSection(ctx: Ctx): Html {
 }
 
 /** Une envie rangée dans une collection : son titre, et l'image montrée à
- * vos amis (copie de notre stockage), s'il y en a une. */
+ * vos amis (copie de notre stockage), s'il y en a une — ou la date à
+ * laquelle la modération l'a retirée (lot modération des collections). */
 function collectionItemCard(ctx: Ctx, row: ExportRow): Html {
   const viewImage = (site: string) => tr(ctx, EXPORT_TEXT.viewImage, { site });
+  const image = str(row.friends_image_removed_at)
+    ? tr(ctx, EXPORT_TEXT.imageRemovedOn, { date: plainDate(ctx, row.friends_image_removed_at) })
+    : imageOrLink(ctx, row.friends_image_thumb_url ?? row.friends_image_url, viewImage);
   return new Card(ctx, "collectionItems", row)
     .use("wishlist_item_title")
-    .line(tr(ctx, EXPORT_COLUMNS.collectionItems.friends_image_url.label), imageOrLink(ctx, row.friends_image_thumb_url ?? row.friends_image_url, viewImage), [
-      "friends_image_url",
-      "friends_image_thumb_url",
-    ])
+    .line(tr(ctx, EXPORT_COLUMNS.collectionItems.friends_image_url.label), image, ["friends_image_url", "friends_image_thumb_url", "friends_image_removed_at"])
     .field("created_at")
     .render(str(row.wishlist_item_title));
 }
@@ -497,7 +498,9 @@ function collectionsSection(ctx: Ctx): Html {
       .field("visibility", enumLabel(ctx, COLLECTION_VISIBILITY_LABELS, row.visibility))
       .field("created_at")
       .field("updated_at")
-      .field("visibility_changed_at");
+      .field("visibility_changed_at")
+      // Lot modération des collections : masquée par la modération (vos amis ne la voient plus).
+      .field("hidden_at");
     const nested =
       items.length > 0 ? html`<h4>${tr(ctx, EXPORT_TEXT.collectionItemsTitle, { count: String(items.length) })}</h4>${items.map((item) => collectionItemCard(ctx, item))}` : null;
     return card.render(str(row.name), nested);

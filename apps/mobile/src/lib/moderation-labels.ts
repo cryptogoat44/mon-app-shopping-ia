@@ -8,6 +8,7 @@ import {
   type ModerationActionType,
   type ModerationItem,
   type ModerationNotice,
+  type ModerationPreview,
   type ModerationReason,
   type ReportReason,
 } from "@monapp/shared-types";
@@ -45,11 +46,52 @@ export function moderationActionLabel(action: ModerationActionType): string {
   return t.moderationQueue.actions[action];
 }
 
+type HideableKind = Exclude<ModerationPreview["kind"], "user" | "missing">;
+
+/** « Masquer … » et « Rétablir … » selon le contenu signalé. */
+export function hideRestoreLabels(kind: HideableKind): { hide: string; restore: string } {
+  const q = t.moderationQueue;
+  const labels: Record<HideableKind, { hide: string; restore: string }> = {
+    post: { hide: q.hidePost, restore: q.restorePost },
+    comment: { hide: q.hideComment, restore: q.restoreComment },
+    piece: { hide: q.hidePiece, restore: q.restorePiece },
+    message: { hide: q.hideMessage, restore: q.restoreMessage },
+    collection: { hide: q.hideCollection, restore: q.restoreCollection },
+  };
+  return labels[kind];
+}
+
+/** Lot modération des collections : ce que l'administrateur lit d'une
+ * collection signalée — son nom, qui la voit, ses dernières envies (titre,
+ * copie de l'image, « Image retirée »), et pour chacune encore en place le
+ * libellé du bouton qui retire la copie. */
+export function collectionPreviewView(preview: Extract<ModerationPreview, { kind: "collection" }>) {
+  const q = t.moderationQueue;
+  return {
+    name: preview.name,
+    visibility: q.collectionVisibility[preview.visibility],
+    itemsTitle: preview.items.length > 0 ? q.collectionItems(preview.items.length, preview.itemCount) : q.collectionEmpty,
+    items: preview.items.map((item) => ({
+      id: item.id,
+      title: item.title,
+      imageUrl: item.imageUrl,
+      removedLabel: item.imageRemoved ? q.imageRemoved : null,
+      removeLabel: item.canRemoveImage ? q.removeItemImageLabel(item.title) : null,
+    })),
+  };
+}
+
 function noticeSentence({ action, targetType }: ModerationNotice): string {
   const comment = targetType === "comment";
-  // Lot 5, partie B : l'image copiée d'une envie partagée.
+  // Lot 5, partie B : l'image copiée d'une envie partagée ; lot modération
+  // des collections : celle d'une envie d'une collection montrée aux amis.
   if (action === "remove_image") {
+    if (targetType === "collection") return t.notifications.moderationImageRemovedCollection;
     return targetType === "piece" ? t.notifications.moderationImageRemovedPiece : t.notifications.moderationImageRemovedPost;
+  }
+  // Lot modération des collections : une collection montrée aux amis.
+  if (targetType === "collection" && (action === "hide" || action === "restore")) {
+    return action === "hide" ? t.notifications.moderationHiddenCollection : t.notifications.moderationRestoredCollection;
   }
   // Lot 5 : une pièce envoyée à une personne.
   if (targetType === "piece" && (action === "hide" || action === "restore")) {

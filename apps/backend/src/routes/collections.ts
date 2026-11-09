@@ -3,7 +3,10 @@
 // une envie) et celles de ses amis (sur leur profil : la liste, une
 // collection, « Garder » une envie). Règles et copies des images :
 // lib/collections.ts. Aucune notification (décision du lot). Le nom d'une
-// collection n'est jamais écrit au journal.
+// collection n'est jamais écrit au journal. Lot modération des collections
+// (migration 0034) : une collection masquée par la modération n'est plus
+// montrée aux amis, ni remontrable par son auteur tant qu'elle l'est ; celle
+// qu'un ami a signalée disparaît de ce qu'il voit.
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import {
@@ -23,6 +26,7 @@ import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import {
   COLLECTION_COLUMNS,
   COLLECTION_FULL,
+  COLLECTION_HIDDEN,
   COLLECTION_LIMIT,
   COLLECTION_NAME_EMPTY,
   COLLECTION_NAME_TOO_LONG,
@@ -47,11 +51,13 @@ import {
   type CollectionRow,
   type ItemRow,
 } from "../lib/collections.js";
+import { collectionModerationReady } from "../lib/collectionModeration.js";
 import { CONTENT_NOT_ALLOWED, containsBannedWords } from "../lib/contentFilter.js";
 import { ACCOUNT_SUSPENDED, isSuspended } from "../lib/moderation.js";
 import { readAll, chunks } from "../lib/pagedReads.js";
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
 import { RATE_LIMITS } from "../lib/rateLimits.js";
+import { reportedIdsFor } from "../lib/reportedByViewer.js";
 import { INVALID_ID, idParamsSchema, parseDbRows, parseInput, userIdParamsSchema, webUrlOrNull } from "../lib/validation.js";
 import { findOwnWish } from "../lib/wishShare.js";
 import { consumeRateLimit } from "../plugins/rateLimit.js";
@@ -146,10 +152,12 @@ export default async function collectionsRoutes(fastify: FastifyInstance) {
     config: { rateLimitName: "collectionWrite" as const },
   };
 
-  // Disponibilité : l'app cache toutes les collections sans 0033.
+  // Disponibilité : l'app cache toutes les collections sans 0033, et
+  // « Signaler » une collection sans 0034.
   fastify.get("/api/collections/status", auth, async (_request, reply) => {
     reply.header("Cache-Control", "no-store");
-    return reply.send({ enabled: await collectionsReady(fastify) } satisfies CollectionsStatus);
+    const enabled = await collectionsReady(fastify);
+    return reply.send({ enabled, reportable: enabled && (await collectionModerationReady(fastify)) } satisfies CollectionsStatus);
   });
 
   // Ses collections, dans l'ordre de création, avec leur nombre d'envies.
@@ -210,6 +218,8 @@ export default async function collectionsRoutes(fastify: FastifyInstance) {
     if (visibilityChanges) {
       // Montrer ses envies à d'autres : refusé à un compte suspendu (ses collections sont cachées).
       if (body.visibility === "friends" && (await isSuspended(fastify, userId))) return reply.code(403).send(ACCOUNT_SUSPENDED);
+      // Masquée par la modération : elle ne revient pas chez les amis tant que la décision tient.
+      if (body.visibility === "friends" && collection.hidden_at !== null) return reply.code(409).send(COLLECTION_HIDDEN);
       if (!consumeRateLimit(request, "collectionVisibility")) return sendLimit(reply, "collectionVisibility");
     }
     const now = new Date().toISOString();
@@ -315,14 +325,15 @@ export default async function collectionsRoutes(fastify: FastifyInstance) {
 
   // Les collections qu'un membre montre à ses amis (section « Collections »
   // de son profil). Pour tout autre visiteur : une liste vide, comme un ami
-  // qui n'en montre aucune (rien ne dit pourquoi).
+  // qui n'en montre aucune (rien ne dit pourquoi). Jamais une collection
+  // masquée par la modération, ni une que le visiteur a signalée.
   fastify.get("/api/users/:userId/collections", auth, async (request, reply) => {
     if (!(await ensureReady(fastify, reply))) return;
     const params = parseInput(userIdParamsSchema, request.params, reply, INVALID_ID);
     if (!params) return;
     reply.header("Cache-Control", "no-store");
     if (!(await canSeeFriendCollections(fastify, request.user!.id, params.userId))) return reply.send({ collections: [] } satisfies SharedCollectionsList);
-    const rows = parseDbRows(
+    const all = parseDbRows(
       COLLECTION_ROWS,
       await fastify.supabaseAdmin
         .from("collections")
@@ -333,6 +344,8 @@ export default async function collectionsRoutes(fastify: FastifyInstance) {
         .order("id", { ascending: true }),
       "Collections montrées aux amis"
     );
+    const reported = params.userId === request.user!.id ? new Set<string>() : new Set(await reportedIdsFor(fastify, request.log, request.user!.id, "collection"));
+    const rows = all.filter((row) => row.hidden_at === null && !reported.has(row.id));
     const stats = await collectionStats(fastify, params.userId, rows.map((row) => row.id), true);
     const list: SharedCollectionsList = {
       collections: rows.map((row: CollectionRow) => ({ id: row.id, name: row.name, itemCount: stats.get(row.id)?.itemCount ?? 0, coverUrl: stats.get(row.id)?.coverUrl ?? null })),

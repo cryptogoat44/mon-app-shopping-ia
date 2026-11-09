@@ -3,11 +3,13 @@
 // leur annulation. Réservé aux administrateurs (`requireAdmin`, revérifié par
 // les fonctions de la base) ; chaque décision est journalisée et appliquée en
 // une seule transaction (migration 0023). Lot 5, partie B : retirer l'image
-// copiée d'une envie partagée (lib/imageRemoval.ts, migration 0026).
+// copiée d'une envie partagée (lib/imageRemoval.ts, migration 0026). Lot
+// modération des collections (migration 0034) : une collection se masque, se
+// rétablit et voit son auteur suspendu comme les autres contenus ; « Retirer
+// l'image » vise la copie d'UNE de ses envies.
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import {
-  IMAGE_REMOVAL_TARGET_TYPES,
   MODERATION_DECISIONS,
   MODERATION_NOTE_MAX_LENGTH,
   REPORT_REASONS,
@@ -18,7 +20,8 @@ import {
 import { DatabaseReadError, INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { buildModerationItems, QUEUE_ROWS } from "../lib/moderationQueue.js";
-import { eraseCopiedImage } from "../lib/imageRemoval.js";
+import { eraseCollectionCopy, eraseCopiedImage, type ImageErasureRefusal } from "../lib/imageRemoval.js";
+import { collectionModerationReady } from "../lib/collectionModeration.js";
 
 const PAGE_SIZE = 20;
 
@@ -42,7 +45,11 @@ const decisionSchema = z
 
 const undoSchema = z.object({ note: noteSchema });
 
-const removeImageSchema = z.object({ targetType: z.enum(IMAGE_REMOVAL_TARGET_TYPES), targetId: z.string().uuid(), note: noteSchema });
+// Une collection : `itemId`, l'envie de la collection dont la copie est retirée.
+const removeImageSchema = z.union([
+  z.object({ targetType: z.enum(["post", "piece"]), targetId: z.string().uuid(), note: noteSchema }),
+  z.object({ targetType: z.literal("collection"), targetId: z.string().uuid(), itemId: z.string().uuid(), note: noteSchema }),
+]);
 
 const OUTCOME = z.array(z.object({ outcome: z.string(), action_id: z.string().uuid().nullable() })).length(1);
 
@@ -58,6 +65,13 @@ const REFUSALS: Record<string, { status: number; error: string; message: string 
   // Retrait d'une image copiée (lot 5, partie B).
   not_a_copy: { status: 409, error: "not_a_copy", message: "Cette image a été publiée par la personne elle-même : utilisez « Masquer »." },
   already_removed: { status: 409, error: "already_removed", message: "L'image a déjà été retirée." },
+  // Lot modération des collections : l'envie n'a pas de copie (ses amis la voient déjà sans image).
+  no_copy: { status: 409, error: "no_copy", message: "Cette envie n'a pas d'image copiée par Spotto : il n'y a rien à retirer." },
+  collection_moderation_unavailable: {
+    status: 404,
+    error: "collection_moderation_unavailable",
+    message: "Le signalement des collections n'est pas encore disponible.",
+  },
   shared_copy: {
     status: 409,
     error: "shared_copy",
@@ -133,21 +147,33 @@ export default async function moderationRoutes(fastify: FastifyInstance) {
   fastify.post("/api/admin/moderation/remove-image", adminOnly, async (request, reply) => {
     const body = parseInput(removeImageSchema, request.body, reply, INVALID_DECISION);
     if (!body) return;
-    let refusal: string | null;
+    if (body.targetType === "collection" && !(await collectionModerationReady(fastify))) return sendRefusal(reply, "collection_moderation_unavailable");
+    let refusal: ImageErasureRefusal | null;
     try {
-      refusal = await eraseCopiedImage(fastify, request.log, body.targetType, body.targetId);
+      refusal =
+        body.targetType === "collection"
+          ? await eraseCollectionCopy(fastify, request.log, body.targetId, body.itemId)
+          : await eraseCopiedImage(fastify, request.log, body.targetType, body.targetId);
     } catch (readError) {
       if (!(readError instanceof DatabaseReadError)) throw readError;
       request.log.error({ readError }, "Retrait d'image : lecture impossible");
       return reply.code(500).send({ error: "internal_error", message: GENERIC_SERVER_ERROR });
     }
     if (refusal) return sendRefusal(reply, refusal);
-    const { data, error } = await fastify.supabaseAdmin.rpc("moderation_remove_image", {
-      p_admin_id: request.user!.id,
-      p_target_type: body.targetType,
-      p_target_id: body.targetId,
-      p_note: body.note || null,
-    });
+    const { data, error } =
+      body.targetType === "collection"
+        ? await fastify.supabaseAdmin.rpc("moderation_remove_collection_image", {
+            p_admin_id: request.user!.id,
+            p_collection_id: body.targetId,
+            p_item_id: body.itemId,
+            p_note: body.note || null,
+          })
+        : await fastify.supabaseAdmin.rpc("moderation_remove_image", {
+            p_admin_id: request.user!.id,
+            p_target_type: body.targetType,
+            p_target_id: body.targetId,
+            p_note: body.note || null,
+          });
     return sendOutcome(request.log, reply, data, error, "Retrait d'une image copiée");
   });
 }

@@ -137,7 +137,10 @@ describe("invitations : accepter, refuser, bloquer", () => {
 
   it("signaler un message reçu passe par le menu « Signaler / Bloquer » existant", () => {
     const menu = readFileSync(join(__dirname, "../src/components/report-block-menu.tsx"), "utf8");
-    expect(menu).toContain('{ targetType: "message", targetId: messageId, reason }');
+    expect(menu).toContain("await reportContent(reportRequest(target, reason));");
+    // La demande elle-même : lib/report-target.ts (lot modération des collections).
+    const target = readFileSync(join(__dirname, "../src/lib/report-target.ts"), "utf8");
+    expect(target).toContain('{ targetType: "message", targetId: messageId, reason }');
     expect(t.messages.reportMessage).toBe("Signaler ce message");
   });
 });

@@ -8,7 +8,7 @@ import type { CollectionSummary } from "@monapp/shared-types";
 import { getCollectionWishlist, getWishlist } from "@/api/client";
 import type { Piece, WishlistItem } from "@/api/types";
 import { ApiError, fetchCollections } from "@/lib/api";
-import { collectionChips, selectedCollection, visibilityState } from "@/lib/collections";
+import { collectionChips, collectionState, selectedCollection } from "@/lib/collections";
 import { useCollectionsStatus } from "@/lib/use-collections-status";
 import { useToast } from "@/lib/toast-context";
 import { ClockIcon, PlusIcon } from "@/components/icons";
@@ -231,7 +231,7 @@ function MyWishlist() {
                 >
                   <Text style={[styles.chipLabel, active ? styles.chipLabelActive : null]} numberOfLines={1}>
                     {chip.label}
-                    {chip.shared ? ` · ${t.collections.sharedBadge}` : ""}
+                    {chip.hidden ? ` · ${t.collections.hiddenBadge}` : chip.shared ? ` · ${t.collections.sharedBadge}` : ""}
                   </Text>
                 </Pressable>
               );
@@ -243,7 +243,7 @@ function MyWishlist() {
           </ScrollView>
           {selected ? (
             <View style={styles.selectedRow}>
-              <Text style={styles.selectedState}>{visibilityState(selected.visibility)}</Text>
+              <Text style={styles.selectedState}>{collectionState(selected)}</Text>
               <Pressable onPress={() => setManaging(selected)} hitSlop={10} accessibilityRole="button" accessibilityLabel={t.collections.manageLabel(selected.name)} testID="gerer-collection">
                 <Text style={styles.manage}>{t.collections.manage}</Text>
               </Pressable>

@@ -50,11 +50,12 @@ describe("cachées quand les collections ne sont pas disponibles", () => {
   it("serveur sans 0033, ancien serveur, réponse illisible : rien n'est affiché", () => {
     for (const body of [{ enabled: false }, null, "Not Found", { error: "collections_unavailable" }, { enabled: "oui" }]) {
       const status = readCollectionsStatus(body);
-      expect(status).toEqual({ enabled: false });
+      expect(status).toEqual({ enabled: false, reportable: false });
       expect(collectionChips(status, [collection({})])).toBeNull();
       expect(friendSectionVisible(status, [{ id: "c1", name: "Cadeaux", itemCount: 1, coverUrl: null }])).toBe(false);
     }
-    expect(readCollectionsStatus({ enabled: true })).toEqual({ enabled: true });
+    // Serveur sans 0034 (ou plus ancien) : les collections, sans « Signaler ».
+    expect(readCollectionsStatus({ enabled: true })).toEqual({ enabled: true, reportable: false });
   });
 
   it("chaque écran ne montre les collections que si elles sont disponibles", () => {

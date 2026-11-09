@@ -12,6 +12,9 @@
 //   4. puis seulement enregistrer la décision (fonction moderation_remove_image,
 //      migration 0026), appelée par la route.
 // Un fichier déjà absent ne bloque rien : le stockage l'accepte comme effacé.
+// Lot modération des collections (migration 0034) : même ordre pour la copie
+// de l'image d'une envie d'une collection montrée aux amis (une par envie) ;
+// la décision est enregistrée par moderation_remove_collection_image.
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { IMAGE_REMOVAL_TARGET_TYPES } from "@monapp/shared-types";
@@ -19,10 +22,12 @@ import { removeOwnedFiles } from "./storage.js";
 import { parseDbRows } from "./validation.js";
 import { WISH_COPY_BUCKET } from "./wishShare.js";
 
-export type ImageRemovalTarget = (typeof IMAGE_REMOVAL_TARGET_TYPES)[number];
+/** Publication « envie » ou pièce envoyée (une collection : eraseCollectionCopy). */
+export type ImageRemovalTarget = Exclude<(typeof IMAGE_REMOVAL_TARGET_TYPES)[number], "collection">;
 
-/** Refus possibles avant l'enregistrement de la décision. */
-export type ImageErasureRefusal = "target_not_found" | "not_a_copy" | "already_removed" | "shared_copy" | "storage_failed";
+/** Refus possibles avant l'enregistrement de la décision. « no_copy » :
+ * l'envie d'une collection n'a pas de copie (déjà montrée sans image). */
+export type ImageErasureRefusal = "target_not_found" | "not_a_copy" | "no_copy" | "already_removed" | "shared_copy" | "storage_failed";
 
 const ID = z.string().uuid();
 const POST_ROWS = z.array(
@@ -38,6 +43,8 @@ const PIECE_ROWS = z.array(
   z.object({ sender_id: ID, image_url: z.string().nullable(), image_thumb_url: z.string().nullable(), image_removed_at: z.string().nullable() })
 );
 const ID_ROWS = z.array(z.object({ id: ID }));
+const COLLECTION_ITEM_ROWS = z.array(z.object({ user_id: ID, wishlist_item_id: ID }));
+const COLLECTION_COPY_ROWS = z.array(z.object({ image_url: z.string().nullable(), image_thumb_url: z.string().nullable() }));
 
 type CopyLookup = { ownerId: string; urls: string[] } | { refusal: "target_not_found" | "not_a_copy" | "already_removed" };
 
@@ -83,6 +90,22 @@ async function usedElsewhere(fastify: FastifyInstance, targetType: ImageRemovalT
   return results.some((result) => parseDbRows(ID_ROWS, result, "Autres usages de la copie").length > 0);
 }
 
+/** Efface les fichiers d'une copie (étape 3), 3 essais. null : effacés (ou
+ * déjà absents) ; « storage_failed » sinon (rien n'est enregistré). */
+async function eraseFiles(fastify: FastifyInstance, log: FastifyInstance["log"], ownerId: string, urls: string[]): Promise<"storage_failed" | null> {
+  const report = await removeOwnedFiles(
+    fastify,
+    WISH_COPY_BUCKET,
+    urls.map((url) => ({ ownerId, url }))
+  );
+  if (report.failed > 0) {
+    // Des nombres, jamais un chemin ni un identifiant (comme à la suppression de compte).
+    log.error({ failed: report.failed }, "Retrait d'image : le stockage refuse l'effacement après 3 essais, rien n'est enregistré");
+    return "storage_failed";
+  }
+  return null;
+}
+
 /** Étapes 1 à 3. null : fichiers effacés (ou déjà absents), la décision peut
  * être enregistrée ; sinon le refus, sans rien avoir changé. Relève
  * DatabaseReadError si une lecture échoue. */
@@ -98,15 +121,53 @@ export async function eraseCopiedImage(
     log.warn({ targetType }, "Retrait d'image : copie utilisée par un autre contenu, rien n'est effacé");
     return "shared_copy";
   }
-  const report = await removeOwnedFiles(
-    fastify,
-    WISH_COPY_BUCKET,
-    copy.urls.map((url) => ({ ownerId: copy.ownerId, url }))
+  return eraseFiles(fastify, log, copy.ownerId, copy.urls);
+}
+
+/** Les mêmes étapes pour la copie de l'image de l'envie `itemId` de la
+ * collection `collectionId` (lot modération des collections) : l'envie doit
+ * être dans cette collection et avoir une copie encore en place ; aucun autre
+ * contenu ne doit citer ces fichiers ; puis les fichiers sont effacés. null :
+ * la décision peut être enregistrée ; sinon le refus, sans rien avoir changé.
+ * Relève DatabaseReadError si une lecture échoue. */
+export async function eraseCollectionCopy(
+  fastify: FastifyInstance,
+  log: FastifyInstance["log"],
+  collectionId: string,
+  itemId: string
+): Promise<ImageErasureRefusal | null> {
+  const db = fastify.supabaseAdmin;
+  const item = parseDbRows(
+    COLLECTION_ITEM_ROWS,
+    await db.from("collection_items").select("user_id, wishlist_item_id").eq("id", itemId).eq("collection_id", collectionId).limit(1),
+    "Envie de la collection visée"
+  )[0];
+  if (!item) return "target_not_found";
+  const copy = parseDbRows(
+    COLLECTION_COPY_ROWS,
+    await db.from("collection_image_copies").select("image_url, image_thumb_url").eq("wishlist_item_id", item.wishlist_item_id).eq("user_id", item.user_id).limit(1),
+    "Copie de l'image visée"
+  )[0];
+  if (!copy) return "no_copy";
+  if (copy.image_url === null || copy.image_thumb_url === null) return "already_removed";
+  const urls = [copy.image_url, copy.image_thumb_url];
+  const uses: [table: "posts" | "piece_sends" | "collection_image_copies", column: string][] = [
+    ["posts", "media_url"],
+    ["posts", "media_thumb_url"],
+    ["piece_sends", "image_url"],
+    ["piece_sends", "image_thumb_url"],
+    ["collection_image_copies", "image_url"],
+    ["collection_image_copies", "image_thumb_url"],
+  ];
+  const results = await Promise.all(
+    uses.map(([table, column]) => {
+      if (table !== "collection_image_copies") return db.from(table).select("id").in(column, urls).limit(1);
+      return db.from(table).select("wishlist_item_id").in(column, urls).neq("wishlist_item_id", item.wishlist_item_id).limit(1);
+    })
   );
-  if (report.failed > 0) {
-    // Des nombres, jamais un chemin ni un identifiant (comme à la suppression de compte).
-    log.error({ failed: report.failed }, "Retrait d'image : le stockage refuse l'effacement après 3 essais, rien n'est enregistré");
-    return "storage_failed";
+  if (results.some((result) => parseDbRows(z.array(z.unknown()), result, "Autres usages de la copie").length > 0)) {
+    log.warn({ targetType: "collection" }, "Retrait d'image : copie utilisée par un autre contenu, rien n'est effacé");
+    return "shared_copy";
   }
-  return null;
+  return eraseFiles(fastify, log, item.user_id, urls);
 }

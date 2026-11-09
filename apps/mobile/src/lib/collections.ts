@@ -2,6 +2,10 @@
 // part (tests/collections.test.ts). Sans les collections sur le serveur
 // (migration 0033 absente, ancien serveur, réponse illisible), l'app les
 // cache toutes : puces, « Ajouter à une collection », section des profils.
+// Lot modération des collections (migration 0034) : « Signaler » la
+// collection d'un ami, seulement si le serveur le permet ; une de ses
+// collections masquée par la modération le dit, et ne peut pas être
+// remontrée aux amis.
 import {
   COLLECTION_NAME_MAX_LENGTH,
   type CollectionSummary,
@@ -14,10 +18,13 @@ import { t } from "../i18n";
 import { formatPrice } from "./format";
 import type { Locale } from "./preferences";
 
-/** Réponse de GET /api/collections/status : seul `enabled: true` les montre. */
+/** Réponse de GET /api/collections/status : seul `enabled: true` les montre ;
+ * seul `reportable: true` montre « Signaler » (absent : ancien serveur). */
 export function readCollectionsStatus(body: unknown): CollectionsStatus {
-  if (typeof body !== "object" || body === null) return { enabled: false };
-  return { enabled: (body as Record<string, unknown>).enabled === true };
+  if (typeof body !== "object" || body === null) return { enabled: false, reportable: false };
+  const fields = body as Record<string, unknown>;
+  const enabled = fields.enabled === true;
+  return { enabled, reportable: enabled && fields.reportable === true };
 }
 
 /** Nom tel que le serveur le gardera : espaces de début et de fin retirés,
@@ -45,6 +52,8 @@ export interface CollectionChip {
   label: string;
   accessibilityLabel: string;
   shared: boolean;
+  /** Masquée par la modération (lot modération des collections). */
+  hidden: boolean;
 }
 
 /** Puces de l'écran Envies : « Toutes », puis une par collection. null
@@ -52,10 +61,13 @@ export interface CollectionChip {
 export function collectionChips(status: CollectionsStatus, collections: readonly CollectionSummary[] | null): CollectionChip[] | null {
   if (!status.enabled || collections === null) return null;
   return [
-    { key: "all", collectionId: null, label: t.collections.all, accessibilityLabel: t.collections.all, shared: false },
+    { key: "all", collectionId: null, label: t.collections.all, accessibilityLabel: t.collections.all, shared: false, hidden: false },
     ...collections.map((collection) => {
-      const shared = collection.visibility === "friends";
-      return { key: collection.id, collectionId: collection.id, label: collection.name, accessibilityLabel: t.collections.chipLabel(collection.name, shared), shared };
+      // Ancien serveur : `hidden` absent, jamais masquée.
+      const hidden = collection.hidden === true;
+      const shared = collection.visibility === "friends" && !hidden;
+      const accessibilityLabel = hidden ? t.collections.hiddenChipLabel(collection.name) : t.collections.chipLabel(collection.name, shared);
+      return { key: collection.id, collectionId: collection.id, label: collection.name, accessibilityLabel, shared, hidden };
     }),
   ];
 }
@@ -69,6 +81,17 @@ export function selectedCollection(collections: readonly CollectionSummary[] | n
 /** Phrase sous les puces : qui voit la collection choisie. */
 export function visibilityState(visibility: CollectionVisibility): string {
   return visibility === "friends" ? t.collections.friendsState : t.collections.privateState;
+}
+
+/** Comme visibilityState, et « masquée par la modération » quand elle l'est. */
+export function collectionState(collection: Pick<CollectionSummary, "visibility" | "hidden">): string {
+  return collection.hidden === true ? t.collections.hiddenState : visibilityState(collection.visibility);
+}
+
+/** « Mes amis » refusé tant que la modération masque la collection (le
+ * serveur le refuse aussi) ; « Privée » reste toujours possible. */
+export function shareBlockedByModeration(collection: Pick<CollectionSummary, "hidden">, next: CollectionVisibility): boolean {
+  return collection.hidden === true && next === "friends";
 }
 
 /** Les choix de visibilité, dans l'ordre (« Privée » par défaut). */
@@ -112,9 +135,20 @@ export function sharedItemPrice(item: Pick<SharedCollectionItem, "priceMin" | "c
   return item.priceMin === null ? null : formatPrice(item.priceMin, item.currency, locale);
 }
 
+/** « Signaler » une collection d'un ami : seulement si le serveur le permet
+ * (migration 0034), et jamais la sienne. */
+export function canReportCollection(status: CollectionsStatus, ownerId: string, viewerId: string | null | undefined): boolean {
+  return status.enabled && status.reportable === true && typeof viewerId === "string" && ownerId !== viewerId;
+}
+
+/** Après un signalement : la collection disparaît de la liste du profil. */
+export function withoutCollection<T extends { id: string }>(collections: readonly T[] | null, id: string): T[] | null {
+  return collections === null ? null : collections.filter((collection) => collection.id !== id);
+}
+
 // ---- Disponibilité, partagée entre les écrans ----
 
-let current: CollectionsStatus = { enabled: false };
+let current: CollectionsStatus = { enabled: false, reportable: false };
 const listeners = new Set<(status: CollectionsStatus) => void>();
 
 export function collectionsStatus(): CollectionsStatus {
@@ -123,7 +157,7 @@ export function collectionsStatus(): CollectionsStatus {
 
 /** Nouvel état lu sur le serveur : les écrans abonnés sont prévenus s'il change. */
 export function setCollectionsStatus(next: CollectionsStatus): void {
-  if (next.enabled === current.enabled) return;
+  if (next.enabled === current.enabled && (next.reportable === true) === (current.reportable === true)) return;
   current = next;
   for (const listener of listeners) listener(current);
 }

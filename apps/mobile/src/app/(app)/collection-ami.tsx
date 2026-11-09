@@ -7,13 +7,17 @@ import type { PostAuthor, SharedCollectionItem, SharedCollectionPage } from "@mo
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { ApiError, fetchSharedCollection, keepSharedItem } from "@/lib/api";
-import { sharedItemImage, sharedItemPrice } from "@/lib/collections";
+import { canReportCollection, sharedItemImage, sharedItemPrice } from "@/lib/collections";
 import { loadErrorMessage } from "@/lib/load-error";
+import { useAuth } from "@/lib/auth-context";
+import { useCollectionsStatus } from "@/lib/use-collections-status";
 import { useMessagesStatus } from "@/lib/use-messages-status";
 import { useToast } from "@/lib/toast-context";
 import { ErrorMessage } from "@/components/error-message";
+import { MoreIcon } from "@/components/icons";
 import { ImageUnavailable } from "@/components/image-unavailable";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
+import { ReportBlockMenu } from "@/components/report-block-menu";
 import { SpotImage } from "@/components/spot-image";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -89,10 +93,15 @@ function ItemRow({ item, owner, canTalk }: { item: SharedCollectionItem; owner: 
 // leur image faite par Spotto, leur prix et le lien vers la boutique ;
 // « Garder » (dans mes Envies) et « En parler » (la conversation avec cet
 // ami, l'envie jointe d'avance). Introuvable pour quiconque n'est pas son ami.
+// Lot modération des collections : « Signaler cette collection » (ou bloquer
+// son auteur), dans le menu « … » ; signalée, elle disparaît aussitôt.
 export default function FriendCollectionScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const router = useRouter();
   const messages = useMessagesStatus();
+  const collections = useCollectionsStatus();
+  const { session } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
   const [page, setPage] = useState<SharedCollectionPage | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "not_found" | "error">("loading");
   const [loadingMore, setLoadingMore] = useState(false);
@@ -135,11 +144,17 @@ export default function FriendCollectionScreen() {
     else router.replace("/feed");
   }
 
+  const reportable = page !== null && canReportCollection(collections, page.collection.owner.id, session?.user.id);
   const nav = (
     <View style={styles.nav}>
       <Pressable onPress={goBack} hitSlop={12} style={styles.navBack} accessibilityRole="button" accessibilityLabel={t.collections.back}>
         <Text style={styles.backLabel}>‹ {t.collections.back}</Text>
       </Pressable>
+      {state === "ready" && reportable ? (
+        <Pressable onPress={() => setMenuOpen(true)} hitSlop={12} style={styles.navMore} accessibilityRole="button" accessibilityLabel={t.collections.options} testID="options-collection">
+          <MoreIcon size={20} tint={color.encre} />
+        </Pressable>
+      ) : null}
     </View>
   );
 
@@ -194,14 +209,26 @@ export default function FriendCollectionScreen() {
           </Pressable>
         ) : null}
       </ScrollView>
+      {reportable ? (
+        <ReportBlockMenu
+          visible={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          userId={collection.owner.id}
+          collectionId={collection.id}
+          // Signalée, ou son auteur bloqué : elle ne vous est plus montrée.
+          onReported={goBack}
+          onBlocked={goBack}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
 
 const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
-  nav: { height: 47, justifyContent: "center", paddingHorizontal: space.lg },
-  navBack: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
+  nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.lg },
+  navBack: { minHeight: 44, justifyContent: "center" },
+  navMore: { minHeight: 44, minWidth: 44, alignItems: "flex-end", justifyContent: "center" },
   backLabel: { color: color.encre, fontSize: font.secondary },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl },
   message: { fontSize: font.secondary, textAlign: "center", marginTop: space.xs },

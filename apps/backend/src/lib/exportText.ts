@@ -391,6 +391,8 @@ export const EXPORT_COLUMNS = {
     name: shown("Nom", "Name"),
     visibility: shown("Qui la voit", "Who can see it"),
     visibility_changed_at: shown("Visibilité changée le", "Visibility changed on"),
+    // Lot modération des collections (migration 0034).
+    hidden_at: shown("Masquée par la modération le", "Hidden by moderation on"),
     created_at: shown("Créée le", "Created on"),
     updated_at: shown("Modifiée le", "Updated on"),
   },
@@ -402,6 +404,8 @@ export const EXPORT_COLUMNS = {
     wishlist_item_title: shown("Envie", "Wish"),
     friends_image_url: shown("Image montrée à vos amis (copie Spotto)", "Image shown to your friends (Spotto copy)"),
     friends_image_thumb_url: shown("Miniature montrée à vos amis (copie Spotto)", "Thumbnail shown to your friends (Spotto copy)"),
+    // Lot modération des collections (migration 0034).
+    friends_image_removed_at: shown("Image montrée à vos amis retirée par la modération le", "Image shown to your friends removed by moderation on"),
     created_at: shown("Ajoutée le", "Added on"),
   },
 } as const satisfies Record<ExportDataKey, Record<string, ExportColumn>>;
@@ -684,6 +688,8 @@ export const REPORT_TARGET_LABELS: Record<ReportTargetType, Bilingual> = {
   comment: { fr: "Un commentaire", en: "A comment" },
   piece: { fr: "Une pièce reçue", en: "A piece you received" },
   message: { fr: "Un message reçu", en: "A message you received" },
+  // Lot modération des collections : la collection d'un ami (ou la vôtre, pour une décision qui vous concerne).
+  collection: { fr: "Une collection", en: "A collection" },
 };
 
 /** « Signalement traité » : seulement le type du contenu signalé, jamais la
@@ -694,6 +700,7 @@ export const REPORT_HANDLED_LABELS: Record<ReportTargetType, Bilingual> = {
   comment: { fr: "Votre signalement d'un commentaire a été traité.", en: "Your report about a comment was handled." },
   piece: { fr: "Votre signalement d'une pièce reçue a été traité.", en: "Your report about a piece you received was handled." },
   message: { fr: "Votre signalement d'un message a été traité.", en: "Your report about a message was handled." },
+  collection: { fr: "Votre signalement d'une collection a été traité.", en: "Your report about a collection was handled." },
 };
 
 export const REPORT_REASON_LABELS: Record<ReportReason, Bilingual> = {

@@ -70,7 +70,8 @@ describe.skipIf(!migrated)("collections d'envies, sur la base de développement 
   });
 
   it("les collections sont disponibles ; une nouvelle collection est privée", async () => {
-    expect((await request(alice, "GET", "/api/collections/status")).json()).toEqual({ enabled: true });
+    // « Signaler » une collection suit la migration 0034 (moderationCollectionsBase.test.ts).
+    expect((await request(alice, "GET", "/api/collections/status")).json()).toMatchObject({ enabled: true });
     const res = await request(alice, "POST", "/api/collections", { name: "Cadeaux" });
     expect(res.statusCode).toBe(201);
     gifts = res.json();
