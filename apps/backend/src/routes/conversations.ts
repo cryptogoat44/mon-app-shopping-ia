@@ -3,7 +3,9 @@
 // message (texte et/ou carte jointe : une envie, ou un résultat d'une de vos
 // recherches), accepter ou refuser une invitation.
 // Règles d'envoi : lib/messaging.ts. Pas de temps réel : l'app relit toutes
-// les 5 s environ pendant qu'un écran des messages est ouvert.
+// les 5 s environ pendant qu'un écran des messages est ouvert ; la personne
+// qui reçoit un message peut aussi être prévenue sur son téléphone
+// (lot notifications, lib/push.ts, coupé par défaut).
 // Confidentialité : le texte d'un message n'est jamais écrit au journal.
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -61,6 +63,7 @@ import { INVALID_ID, idParamsSchema, parseDbRows, parseInput, userIdParamsSchema
 import { isBlockedEitherWay } from "../lib/visibility.js";
 import { WishImageError, copyWishImage, deleteWishCopy, findOwnWish } from "../lib/wishShare.js";
 import { sharedWishForMessage } from "../lib/collections.js";
+import { notifyNewMessage, pushAvailable } from "../lib/push.js";
 
 /** Messages par page d'une conversation. */
 const THREAD_PAGE_SIZE = 50;
@@ -238,10 +241,12 @@ export default async function conversationsRoutes(fastify: FastifyInstance) {
 
   // Disponibilité (l'app cache l'entrée Messages sans 0032) et nombre de
   // conversations avec un message non lu, invitations reçues comprises —
-  // relu avec les notifications.
+  // relu avec les notifications. `push` (lot notifications) : les
+  // notifications sur le téléphone sont allumées (PUSH_ENABLED et 0035) ;
+  // sinon, l'app ne les propose jamais et ne demande aucune autorisation.
   fastify.get("/api/messages/status", auth, async (request, reply) => {
     reply.header("Cache-Control", "no-store");
-    if (!(await messagesReady(fastify))) return reply.send({ enabled: false, unreadCount: 0 } satisfies MessagesStatus);
+    if (!(await messagesReady(fastify))) return reply.send({ enabled: false, unreadCount: 0, push: false } satisfies MessagesStatus);
     const userId = request.user!.id;
     const blocked = blockedFilter(await fetchBlockedUserIds(fastify, userId));
     let query = fastify.supabaseAdmin
@@ -256,7 +261,7 @@ export default async function conversationsRoutes(fastify: FastifyInstance) {
       request.log.error({ error }, "Échec de lecture des messages non lus");
       return reply.code(500).send(SERVER_ERROR);
     }
-    return reply.send({ enabled: true, unreadCount: count ?? 0 } satisfies MessagesStatus);
+    return reply.send({ enabled: true, unreadCount: count ?? 0, push: await pushAvailable(fastify) } satisfies MessagesStatus);
   });
 
   // Conversations (ouvertes, invitations envoyées), des plus récentes aux
@@ -520,6 +525,9 @@ export default async function conversationsRoutes(fastify: FastifyInstance) {
       const [message] = await toChatMessages(fastify, parseDbRows(MESSAGE_ROWS, { data: [data], error: null }, "Message envoyé"), userId);
       // Jamais le titre ni le lien de la carte : sa nature seulement.
       request.log.info({ invitation: plan.invitation, withWish: card !== null, fromResult: match !== null }, "Message envoyé");
+      // Lot notifications : la personne qui reçoit est prévenue sur son
+      // téléphone, sans faire attendre cette réponse (lib/push.ts).
+      notifyNewMessage(fastify, request.log, { senderId: userId, recipientId: body.recipientId, conversationId: written.conversationId });
       const response: SendMessageResponse = {
         conversationId: written.conversationId,
         message: message!,

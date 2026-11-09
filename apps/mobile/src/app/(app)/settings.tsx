@@ -19,6 +19,7 @@ import { PlayerConsentSetting } from "@/components/player-consent-setting";
 import { VideoAiSetting } from "@/components/video-ai-setting";
 import { PieceSendsSetting } from "@/components/piece-sends-setting";
 import { MessagesFromSetting } from "@/components/messages-from-setting";
+import { MessagePushSetting } from "@/components/message-push-setting";
 import { DeleteAccountSection } from "@/components/delete-account-section";
 import { ContactEntry } from "@/components/contact-entry";
 import { CONTACT_EMAIL } from "@/lib/contact";
@@ -197,6 +198,8 @@ export default function SettingsScreen() {
 
         <PieceSendsSetting />
         <MessagesFromSetting />
+        {/* Lot notifications : caché sur le site et tant que le serveur ne les propose pas. */}
+        <MessagePushSetting />
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>{t.settings.dataSection}</Text>

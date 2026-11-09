@@ -187,6 +187,11 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
     "This collection was hidden by moderation: you can't show it to your friends.",
   "Le signalement des collections n'est pas encore disponible.": "Reporting collections isn't available yet.",
   "Cette envie n'a pas d'image copiée par Spotto : il n'y a rien à retirer.": "This wish has no image copied by Spotto: there's nothing to remove.",
+  // Notifications sur le téléphone (lot notifications, lib/push.ts).
+  "Les notifications ne sont pas disponibles.": "Notifications aren't available.",
+  "Jeton de notification invalide.": "Invalid notification token.",
+  "Trop de changements des notifications en peu de temps. Réessayez dans une heure.":
+    "Too many notification changes in a short time. Please try again in an hour.",
   // Mise à jour obligatoire de l'app iPhone (lot « app iPhone prête », lib/appVersion.ts).
   [UPDATE_REQUIRED_MESSAGE]: "This version of Spotto is no longer supported. Please update the app from the App Store.",
 };

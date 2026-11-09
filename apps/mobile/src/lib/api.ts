@@ -44,6 +44,9 @@ import type {
   PieceSendsFrom,
   MessagesFrom,
   MessagesStatus,
+  PushPlatform,
+  RegisterPushTokenRequest,
+  DeletePushTokenRequest,
   ConversationsPage,
   ConversationThread,
   SendMessageRequest,
@@ -560,6 +563,22 @@ export async function declineInvitation(id: string): Promise<void> {
 /** Réglage « Qui peut m'écrire ». */
 export async function updateMessagesFrom(messagesFrom: MessagesFrom): Promise<void> {
   await authorizedFetch("/api/me/messages-from", { method: "PUT", body: JSON.stringify({ messagesFrom }) });
+}
+
+// ---- Notifications des nouveaux messages sur le téléphone (lot notifications) ----
+// Appelées seulement par lib/push.ts (app iPhone), jamais par le site.
+
+/** Enregistre (ou rafraîchit) cet appareil pour les notifications. */
+export async function registerPushToken(token: string, platform: PushPlatform): Promise<void> {
+  const payload: RegisterPushTokenRequest = { token, platform };
+  await authorizedFetch("/api/me/push-token", { method: "PUT", body: JSON.stringify(payload) });
+}
+
+/** Oublie cet appareil (notifications coupées, déconnexion). `signal` : la
+ * déconnexion n'attend jamais longtemps. */
+export async function deletePushToken(token: string, signal?: AbortSignal): Promise<void> {
+  const payload: DeletePushTokenRequest = { token };
+  await authorizedFetch("/api/me/push-token", { method: "DELETE", body: JSON.stringify(payload), ...(signal ? { signal } : {}) });
 }
 
 // ---- Collections d'envies (lot collections) ----

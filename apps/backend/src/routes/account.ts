@@ -22,6 +22,7 @@ import { parseDbRows, parseInput } from "../lib/validation.js";
 import { WISH_COPY_BUCKET } from "../lib/wishShare.js";
 import { messagesReady, otherMembersMessageCopies } from "../lib/messaging.js";
 import { allOwnCopies, collectionsReady } from "../lib/collections.js";
+import { deleteAllPushTokens, pushReady } from "../lib/push.js";
 
 /** Corps de DELETE /api/me : le mot tapé par la personne (revérifié ici). */
 const deleteAccountSchema = z.object({ confirmation: z.string().max(40).refine((value) => isAccountDeletionWord(value)) });
@@ -295,6 +296,17 @@ export default async function accountRoutes(fastify: FastifyInstance) {
     // identifiant —, puis le compte est supprimé quand même.
     const leftovers = storageLeftovers([receivedCopies, ...(await deleteUserStorageFiles(fastify, userId))]);
     if (leftovers.length > 0) request.log.warn({ leftovers }, "Suppression de compte : fichiers restés dans le stockage, à nettoyer");
+
+    // Lot notifications : ses appareils sont oubliés tout de suite (la base
+    // les efface aussi en cascade avec le compte). Un échec ne bloque pas la
+    // suppression : la cascade s'en charge. Sans la migration 0035 : rien.
+    if (await pushReady(fastify)) {
+      try {
+        await deleteAllPushTokens(fastify, userId);
+      } catch {
+        request.log.warn("Suppression de compte : appareils des notifications laissés à la cascade");
+      }
+    }
 
     const { error } = await fastify.supabaseAdmin.auth.admin.deleteUser(userId);
     if (error) {

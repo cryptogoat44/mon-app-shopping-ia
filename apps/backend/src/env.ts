@@ -57,6 +57,25 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => value === "true"),
+  // Notifications des nouveaux messages sur le téléphone (lot notifications,
+  // migration 0035), COUPÉES par défaut. Même règle que les interrupteurs de
+  // la voie C : seule la valeur exacte "true" les allume ; toute autre valeur
+  // les laisse coupées, sans jamais arrêter le serveur. Coupées : aucun jeton
+  // d'appareil enregistré, rien d'envoyé, et l'app ne demande jamais
+  // l'autorisation. Lu seulement par lib/push.ts ; le fondateur seul le
+  // change, à la main, dans Render.
+  PUSH_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "true"),
+  // Facultatif : jeton d'accès d'Expo, seulement si la « sécurité renforcée
+  // des notifications » est activée dans le compte Expo. Absent : les
+  // notifications partent sans jeton (le service d'Expo est gratuit). Une
+  // valeur vide vaut « absent », jamais un arrêt du serveur.
+  EXPO_ACCESS_TOKEN: z
+    .string()
+    .optional()
+    .transform((value) => value?.trim() || undefined),
   // Non requis à l'exécution (jamais utilisée par le serveur lui-même) —
   // seulement par les tests, pour se connecter en tant qu'utilisateur de
   // test via mot de passe. Clé publique, sans risque à exiger.
