@@ -816,6 +816,25 @@ export const en: Catalog = {
     tabsLabel: "Show",
     mine: "My wishlist",
     received: "Received",
+    // Search, sort and total (2026-11-09, lib/wishlist-view.ts).
+    searchPlaceholder: "Search by name or shop",
+    searchLabel: "Search your wishlist by name or shop",
+    clearSearch: "Clear search",
+    searchEmpty: (query: string, inCollection: boolean) => (inCollection ? `No wishes in this collection match “${query}”.` : `No wishes match “${query}”.`),
+    sortLabel: "Sort your wishlist",
+    sortRecent: "Recent",
+    sortPriceAsc: "Price: low to high",
+    sortPriceDesc: "Price: high to low",
+    // Total of the wishes shown, in the most common currency, never converted.
+    totalLine: (n: number, total: string, scope: "all" | "collection" | "search") =>
+      `${n} ${n === 1 ? "wish" : "wishes"}${scope === "search" ? " found" : scope === "collection" ? " in this collection" : ""} · total ${total}`,
+    noPriceLine: (n: number, scope: "all" | "collection" | "search") =>
+      `${n} ${n === 1 ? "wish" : "wishes"}${scope === "search" ? " found" : scope === "collection" ? " in this collection" : ""} · no price given`,
+    totalOtherCurrency: (n: number) => (n === 1 ? "+ 1 in another currency" : `+ ${n} in other currencies`),
+    totalWithoutPrice: (n: number) => `+ ${n} without a price`,
+    totalLoading: "Adding up the total…",
+    // Beyond 500 wishes, or when a page could not be loaded.
+    partialNote: (n: number) => `Based on the ${n} wishes loaded so far: scroll down to see more.`,
   },
   profile: {
     vault: "Vault",

@@ -10,6 +10,7 @@ import { updateMyLocale } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { track } from "@/lib/analytics";
 import { DEFAULT_RESULT_VIEW, parseResultView, RESULT_VIEW_STORAGE_KEY, resultViewChangeProps, serializeResultView, type ResultView } from "@/lib/result-sort";
+import { readWishlistSort, saveWishlistSort, wishlistSortChangeProps, type WishlistSort } from "@/lib/wishlist-view";
 import {
   LOCALE_STORAGE_KEY,
   THEME_STORAGE_KEY,
@@ -33,6 +34,9 @@ import {
 // Tri et filtre de l'écran Résultat (2026-11-08, lib/result-sort.ts) : gardés
 // sur l'appareil seulement, lus avec la langue (aucun saut d'affichage à
 // l'ouverture d'un résultat) ; les changer ne remonte rien.
+//
+// Tri de l'écran Envies (2026-11-09, lib/wishlist-view.ts) : de même, gardé
+// sur l'appareil seulement, lu au démarrage, sous try/catch.
 
 interface PreferencesValue {
   locale: Locale;
@@ -41,6 +45,8 @@ interface PreferencesValue {
   chooseTheme: (preference: ThemePreference) => Promise<void>;
   resultView: ResultView;
   chooseResultView: (view: ResultView) => void;
+  wishlistSort: WishlistSort;
+  chooseWishlistSort: (sort: WishlistSort, context: { inCollection: boolean }) => void;
 }
 
 const PreferencesContext = createContext<PreferencesValue | null>(null);
@@ -49,6 +55,7 @@ interface Stored {
   locale: Locale;
   theme: ThemePreference;
   resultView: ResultView;
+  wishlistSort: WishlistSort;
 }
 
 /** Tri et filtre gardés ; stockage illisible ou refusé (navigation privée) : le choix par défaut. */
@@ -61,15 +68,17 @@ async function readResultView(): Promise<ResultView> {
 }
 
 async function readStored(): Promise<Stored> {
-  const [locale, theme, resultView] = await Promise.all([
+  const [locale, theme, resultView, wishlistSort] = await Promise.all([
     AsyncStorage.getItem(LOCALE_STORAGE_KEY).catch(() => null),
     AsyncStorage.getItem(THEME_STORAGE_KEY).catch(() => null),
     readResultView(),
+    readWishlistSort((key) => AsyncStorage.getItem(key)),
   ]);
   return {
     locale: parseLocale(locale) ?? detectLocale(getLocales().map((entry) => entry.languageCode)),
     theme: parseThemePreference(theme),
     resultView,
+    wishlistSort,
   };
 }
 
@@ -148,8 +157,20 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     })();
   }
 
+  /** Écran Envies : le nouveau tri tout de suite, gardé pour la prochaine fois. */
+  function chooseWishlistSort(next: WishlistSort, context: { inCollection: boolean }) {
+    if (!stored) return;
+    const change = wishlistSortChangeProps(stored.wishlistSort, next, context.inCollection);
+    if (!change) return;
+    setStored((current) => (current ? { ...current, wishlistSort: next } : current));
+    track("wishlist_sort_changed", change);
+    void saveWishlistSort((key, value) => AsyncStorage.setItem(key, value), next);
+  }
+
   return (
-    <PreferencesContext.Provider value={{ locale, themePreference: stored.theme, chooseLocale, chooseTheme, resultView: stored.resultView, chooseResultView }}>
+    <PreferencesContext.Provider
+      value={{ locale, themePreference: stored.theme, chooseLocale, chooseTheme, resultView: stored.resultView, chooseResultView, wishlistSort: stored.wishlistSort, chooseWishlistSort }}
+    >
       <StatusBar style={scheme === "dark" ? "light" : "dark"} />
       <Fragment key={`${scheme}-${locale}`}>{children}</Fragment>
     </PreferencesContext.Provider>

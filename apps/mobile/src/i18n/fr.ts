@@ -879,6 +879,26 @@ export const fr = {
     tabsLabel: "Afficher",
     mine: "Mes envies",
     received: "Reçues",
+    // Recherche, tri et total (2026-11-09, lib/wishlist-view.ts). Textes à valider.
+    searchPlaceholder: "Rechercher par nom ou boutique",
+    searchLabel: "Rechercher dans vos envies, par nom ou par boutique",
+    clearSearch: "Effacer la recherche",
+    searchEmpty: (query: string, inCollection: boolean) =>
+      inCollection ? `Aucune envie de cette collection ne correspond à « ${query} ».` : `Aucune envie ne correspond à « ${query} ».`,
+    sortLabel: "Trier vos envies",
+    sortRecent: "Récentes",
+    sortPriceAsc: "Prix croissant",
+    sortPriceDesc: "Prix décroissant",
+    // Total des envies affichées, dans la devise la plus fréquente, sans conversion.
+    totalLine: (n: number, total: string, scope: "all" | "collection" | "search") =>
+      `${n} ${n > 1 ? "envies" : "envie"}${scope === "search" ? (n > 1 ? " trouvées" : " trouvée") : scope === "collection" ? " dans cette collection" : ""} · total ${total}`,
+    noPriceLine: (n: number, scope: "all" | "collection" | "search") =>
+      `${n} ${n > 1 ? "envies" : "envie"}${scope === "search" ? (n > 1 ? " trouvées" : " trouvée") : scope === "collection" ? " dans cette collection" : ""} · aucun prix indiqué`,
+    totalOtherCurrency: (n: number) => (n > 1 ? `+ ${n} dans d'autres devises` : "+ 1 dans une autre devise"),
+    totalWithoutPrice: (n: number) => `+ ${n} sans prix`,
+    totalLoading: "Calcul du total…",
+    // Au-delà de 500 envies, ou si une page n'a pas pu être lue.
+    partialNote: (n: number) => `Calculé sur les ${n} envies chargées : faites défiler pour voir les suivantes.`,
   },
   profile: {
     vault: "Vault",

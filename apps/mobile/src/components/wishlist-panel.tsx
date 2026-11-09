@@ -1,9 +1,9 @@
 import { formatPrice } from "@/lib/format";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { color, font, radius, space } from "@/theme/tokens";
-import { getActiveLocale, t } from "@/i18n";
+import { acceptLanguage, getActiveLocale, t } from "@/i18n";
 import type { CollectionSummary } from "@monapp/shared-types";
 import { getCollectionWishlist, getWishlist } from "@/api/client";
 import type { Piece, WishlistItem } from "@/api/types";
@@ -21,6 +21,10 @@ import { SpotImage } from "@/components/spot-image";
 import { SegmentedChoice } from "@/components/segmented-choice";
 import { ReceivedPieces } from "@/components/received-pieces";
 import { isAffiliateLink } from "@/lib/affiliate-link";
+import { searchCountryFrom } from "@/lib/foreign-shop";
+import { usePreferences } from "@/lib/preferences-context";
+import { appendPage, loadAllPages, WISHLIST_LOAD_MAX, wishlistScope, wishlistTotalText, wishlistView, type WishlistPageOf, type WishlistSort } from "@/lib/wishlist-view";
+import { WishlistSearchEmpty, WishlistTools } from "@/components/wishlist-tools";
 import { themedStyles } from "@/theme/themed-styles";
 
 function displayPrice(item: Piece): string | null {
@@ -42,6 +46,8 @@ function chunk<T>(items: T[], size: number): T[][] {
 // Lot collections : « Toutes » puis une puce par collection (cachées sans
 // les collections sur le serveur), « Nouvelle collection », et « Gérer » la
 // collection choisie (nom, qui la voit, suppression).
+// Recherche, tri par prix et total (2026-11-09) : en haut de la liste, sur
+// les envies de la puce choisie (lib/wishlist-view.ts, wishlist-tools.tsx).
 export function WishlistPanel() {
   const [view, setView] = useState<"mine" | "received">("mine");
   return (
@@ -71,11 +77,18 @@ export function WishlistPanel() {
 function MyWishlist() {
   const router = useRouter();
   const { showToast } = useToast();
-  const [items, setItems] = useState<WishlistItem[] | null>(null);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  // Envies lues pour la puce choisie, dans l'ordre récent, et le curseur de
+  // la page suivante (null : toutes sont lues). null : pas encore lues.
+  const [list, setList] = useState<WishlistPageOf<WishlistItem> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingAll, setLoadingAll] = useState(false);
+  // Numéro de la lecture en cours : une plus récente (autre puce, retour sur
+  // l'écran, écran quitté) l'abandonne.
+  const loadRun = useRef(0);
+  const [query, setQuery] = useState("");
+  const { wishlistSort: sort, chooseWishlistSort } = usePreferences();
   const collectionsAvailable = useCollectionsStatus();
   const [collections, setCollections] = useState<CollectionSummary[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -87,20 +100,39 @@ function MyWishlist() {
   const selectedKey = selected?.id ?? null;
   const fetchPage = useCallback((cursor?: string) => (selectedKey ? getCollectionWishlist(selectedKey, cursor) : getWishlist(cursor)), [selectedKey]);
 
-  const load = useCallback(
-    () =>
-      fetchPage()
-        .then((page) => {
-          setItems(page.items);
-          setNextCursor(page.nextCursor);
-          setError(null);
-        })
-        .catch((e) => {
-          setItems([]);
-          setNextCursor(null);
-          setError(e instanceof ApiError ? e.message : t.wishlist.loadError);
-        }),
-    [fetchPage]
+  // Recherche, tri et total portent sur toutes les envies, pas seulement la
+  // première page (lib/wishlist-view.ts, loadAllPages) : elle s'affiche tout
+  // de suite, les suivantes sont lues derrière (100 au plus dans une
+  // collection, 500 pour « Toutes »). Relecture (retour sur l'écran, tirer
+  // pour rafraîchir) : la liste affichée reste en place jusqu'à la fin.
+  const load = useCallback(async () => {
+    const run = ++loadRun.current;
+    const active = () => run === loadRun.current;
+    setLoadingAll(true);
+    try {
+      const all = await loadAllPages(fetchPage, {
+        max: WISHLIST_LOAD_MAX,
+        active,
+        onFirstPage: (page) => setList((current) => current ?? page),
+      });
+      if (!all) return;
+      setList(all);
+      setError(null);
+    } catch (e) {
+      if (!active()) return;
+      setList({ items: [], nextCursor: null });
+      setError(e instanceof ApiError ? e.message : t.wishlist.loadError);
+    } finally {
+      if (active()) setLoadingAll(false);
+    }
+  }, [fetchPage]);
+
+  // Écran quitté (Vault, « Reçues ») : la lecture des pages suivantes s'arrête.
+  useEffect(
+    () => () => {
+      loadRun.current += 1;
+    },
+    []
   );
 
   // Les puces : relues à chaque retour sur l'écran (une envie a pu être rangée
@@ -133,13 +165,16 @@ function MyWishlist() {
     setRefreshing(false);
   }
 
+  // Au-delà de 500 envies, ou après une page en échec : la suite au défilement.
   async function handleLoadMore() {
-    if (!nextCursor || loadingMore || refreshing) return;
+    const cursor = list?.nextCursor;
+    if (!cursor || loadingMore || loadingAll || refreshing) return;
+    const run = loadRun.current;
     setLoadingMore(true);
     try {
-      const page = await fetchPage(nextCursor);
-      setItems((prev) => (prev ? [...prev, ...page.items] : page.items));
-      setNextCursor(page.nextCursor);
+      const page = await fetchPage(cursor);
+      if (run !== loadRun.current) return;
+      setList((current) => (current ? { items: appendPage(current.items, page.items), nextCursor: page.nextCursor } : current));
     } catch {
       // silencieux : re-scroller vers le bas redéclenche onEndReached
     } finally {
@@ -147,13 +182,33 @@ function MyWishlist() {
     }
   }
 
-  const loading = items === null;
-  const isEmpty = !error && items?.length === 0;
+  const loading = list === null;
+  const isEmpty = !error && list?.items.length === 0;
+  const hasItems = (list?.items.length ?? 0) > 0;
+  const inCollection = selectedKey !== null;
+  // Ce qui est affiché : la puce choisie, puis la recherche, puis le tri.
+  const view = wishlistView(list?.items ?? [], { query, sort, country: searchCountryFrom(acceptLanguage()) });
+  const complete = list?.nextCursor === null;
+  // Pages suivantes en cours de lecture : le total attend d'avoir tout.
+  const readingNext = loadingAll && !complete;
+  const totalLine =
+    !hasItems || view.visible.length === 0
+      ? null
+      : readingNext
+        ? { text: t.wishlist.totalLoading, label: t.wishlist.totalLoading }
+        : wishlistTotalText(view.total, wishlistScope(query, inCollection), getActiveLocale());
+  const partialNote = list && hasItems && !complete && !readingNext ? t.wishlist.partialNote(list.items.length) : null;
 
   function choose(collectionId: string | null) {
     if (collectionId === selectedId) return;
+    loadRun.current += 1;
     setSelectedId(collectionId);
-    setItems(null);
+    setList(null);
+    setError(null);
+  }
+
+  function changeSort(next: WishlistSort) {
+    chooseWishlistSort(next, { inCollection });
   }
 
   return (
@@ -230,9 +285,11 @@ function MyWishlist() {
         </View>
       ) : (
         <FlatList
-          data={chunk(items ?? [], 3)}
+          data={chunk(view.visible, 3)}
           keyExtractor={(row) => row.map((item) => item.id).join("-")}
           contentContainerStyle={isEmpty || error ? styles.emptyContent : styles.gridContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
           renderItem={({ item: row }) => (
             <View style={styles.gridRow}>
@@ -269,9 +326,20 @@ function MyWishlist() {
               ))}
             </View>
           )}
-          ListHeaderComponent={error ? <ErrorMessage style={styles.emptyText}>{error}</ErrorMessage> : null}
+          ListHeaderComponent={
+            <>
+              {error ? <ErrorMessage style={styles.emptyText}>{error}</ErrorMessage> : null}
+              {/* Recherche, tri et total : seulement quand il y a des envies à chercher. */}
+              {hasItems ? <WishlistTools query={query} onQueryChange={setQuery} sort={sort} onSortChange={changeSort} total={totalLine} note={partialNote} /> : null}
+            </>
+          }
           ListEmptyComponent={
-            error ? null : selected ? (
+            error ? null : hasItems ? (
+              // Recherche sans résultat ; pages suivantes encore en lecture : le chargement en bas.
+              readingNext ? null : (
+                <WishlistSearchEmpty message={t.wishlist.searchEmpty(query.trim(), inCollection)} onClear={() => setQuery("")} />
+              )
+            ) : selected ? (
               <View style={styles.empty}>
                 <Text style={styles.emptyText}>{t.collections.empty}</Text>
               </View>
@@ -286,7 +354,7 @@ function MyWishlist() {
           }
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.4}
-          ListFooterComponent={loadingMore ? <ActivityIndicator color={color.encre} style={styles.footerLoader} /> : null}
+          ListFooterComponent={loadingMore || readingNext ? <ActivityIndicator color={color.encre} style={styles.footerLoader} /> : null}
         />
       )}
     </>
