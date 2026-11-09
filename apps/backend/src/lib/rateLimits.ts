@@ -67,6 +67,24 @@ export const RATE_LIMITS = {
     message: "Vous avez envoyé beaucoup de pièces en peu de temps. Réessayez dans une heure.",
   },
 
+  // Messages privés (lot messages) : chaque message envoyé (texte, envie
+  // jointe ou les deux). Large pour une vraie conversation, bloque un script.
+  // Une envie jointe compte aussi dans pieceSend (elle copie une image).
+  messageSend: {
+    max: 120,
+    windowMs: HOUR,
+    error: "message_send_limit",
+    message: "Vous avez envoyé beaucoup de messages en peu de temps. Réessayez dans un moment.",
+  },
+  // Invitations (premier message à un membre qui n'est pas un ami) : comptées
+  // seulement quand une invitation est vraiment créée (consumeRateLimit).
+  messageInvite: {
+    max: 10,
+    windowMs: HOUR,
+    error: "invitation_limit",
+    message: "Vous avez envoyé beaucoup d'invitations en peu de temps. Réessayez dans une heure.",
+  },
+
   // Export des données (RGPD) : chaque export relit toutes les tables du
   // compte. Large pour une personne, mais protège la base d'un script. Le
   // fichier lisible et le format technique comptent ensemble.

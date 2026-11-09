@@ -8,6 +8,7 @@ import { PRIVACY_LEVELS, type PrivacyLevel, type WishlistItemDetail } from "@mon
 import { ApiError, deleteWishlistItem, fetchWishlistItem, republishWish } from "@/lib/api";
 import { useToast } from "@/lib/toast-context";
 import { useAuth } from "@/lib/auth-context";
+import { useMessagesStatus } from "@/lib/use-messages-status";
 import { shareWishOutside } from "@/lib/share-wish";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
@@ -43,6 +44,8 @@ export default function WishlistItemScreen() {
   const [error, setError] = useState<string | null>(null);
   const [privacy, setPrivacy] = useState<PrivacyLevel>(profile?.defaultPrivacy ?? "followers");
   const [republishing, setRepublishing] = useState(false);
+  // Lot messages : « Envoyer dans une conversation », si la messagerie est disponible.
+  const messages = useMessagesStatus();
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -202,6 +205,16 @@ export default function WishlistItemScreen() {
             >
               <Text style={styles.secondaryLabel}>{t.wishlistItem.sendToSomeone}</Text>
             </Pressable>
+            {messages.enabled ? (
+              <Pressable
+                accessibilityRole="button"
+                style={styles.secondaryButton}
+                onPress={() => router.push({ pathname: "/choisir-conversation", params: { wishId: item.id } })}
+                testID="envoyer-dans-conversation"
+              >
+                <Text style={styles.secondaryLabel}>{t.messages.sendToConversation}</Text>
+              </Pressable>
+            ) : null}
             {item.merchantUrl ? (
               <Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={handleShareOutside}>
                 <Text style={styles.secondaryLabel}>{t.wishlistItem.shareOutside}</Text>

@@ -34,7 +34,9 @@ import {
   REPORT_HANDLED_LABELS,
   REPORT_REASON_LABELS,
   FEEDBACK_REASON_LABELS,
+  INVITATION_LABELS,
   MATCH_ORIGIN_LABELS,
+  MESSAGES_FROM_LABELS,
   REPORT_TARGET_LABELS,
   SEARCH_FAILURE_LABELS,
   SEARCH_STATUS_LABELS,
@@ -365,6 +367,7 @@ function accountSection(ctx: Ctx): Html {
     .field("locale", enumLabel(ctx, APP_LOCALE_LABELS, row.locale))
     .field("default_privacy", enumLabel(ctx, PRIVACY_LABELS, row.default_privacy))
     .field("piece_sends_from", enumLabel(ctx, PIECE_SENDS_FROM_LABELS, row.piece_sends_from))
+    .field("messages_from", enumLabel(ctx, MESSAGES_FROM_LABELS, row.messages_from))
     .field("created_at")
     .field("updated_at");
   return section(ctx, "account", article(null, account.rows(), profile.rows()));
@@ -637,6 +640,71 @@ function piecesReceivedSection(ctx: Ctx): Html {
   );
 }
 
+/** Un message (lot messages), envoyé ou reçu. Comme pour une pièce reçue,
+ * un message reçu masqué par la modération (souvent après votre signalement)
+ * n'est jamais présenté comme tel (version JSON seulement), et l'image de son
+ * envie jointe (copie rangée chez l'expéditeur) reste un simple lien. */
+function messageCard(ctx: Ctx, row: ExportRow): Html {
+  const mine = typeof row.sender_id === "string" && row.sender_id === ctx.selfId;
+  const merchant = str(row.wish_merchant_name);
+  const viewImage = (site: string) => tr(ctx, EXPORT_TEXT.viewImage, { site });
+  const image = row.wish_image_thumb_url ?? row.wish_image_url;
+  const card = new Card(ctx, "messages", row)
+    .use("created_at")
+    .field("sender_id", capitalize(person(ctx, row.sender_id)))
+    .field("body", multiline(row.body))
+    .field("wish_title")
+    .line(tr(ctx, EXPORT_COLUMNS.messages.wish_image_url.label), mine ? imageOrLink(ctx, image, viewImage) : link(ctx, image, viewImage), [
+      "wish_image_url",
+      "wish_image_thumb_url",
+    ])
+    .line(tr(ctx, EXPORT_COLUMNS.messages.wish_price_min.label), price(ctx, row.wish_price_min, null, row.wish_currency), ["wish_price_min", "wish_currency"])
+    .field("wish_merchant_name")
+    .field(
+      "wish_merchant_url",
+      link(ctx, row.wish_merchant_url, (site) => (merchant ? tr(ctx, EXPORT_TEXT.viewPieceAt, { merchant }) : tr(ctx, EXPORT_TEXT.viewPiece, { site })))
+    );
+  if (mine) card.field("hidden_at");
+  else card.use("hidden_at");
+  return card.render(plainDate(ctx, row.created_at));
+}
+
+/** Du plus ancien au plus récent : une conversation se lit dans l'ordre. */
+function oldestFirst(rows: readonly ExportRow[], column: string): ExportRow[] {
+  return newestFirst(rows, column).reverse();
+}
+
+/** Chaque conversation (votre côté seulement), avec l'autre membre — jamais
+ * nommé s'il est en relation de blocage avec vous —, puis ses messages. */
+function messagesSection(ctx: Ctx): Html {
+  const byConversation = groupBy(ctx.data.messages, "conversation_id");
+  const known = new Set(ctx.data.conversations.map((row) => String(row.conversation_id)));
+  const cards = newestFirst(ctx.data.conversations, "last_message_at").map((row) => {
+    const messages = oldestFirst(byConversation.get(String(row.conversation_id)) ?? [], "created_at");
+    const card = new Card(ctx, "conversations", row)
+      .use("other_username")
+      .field("invitation", enumLabel(ctx, INVITATION_LABELS, row.invitation))
+      .field("created_at")
+      .field("last_message_at")
+      .field("last_read_at")
+      .field("unread", row.unread === true ? tr(ctx, EXPORT_TEXT.yes) : null)
+      .field("invitation_at")
+      .field("cleared_at");
+    const nested =
+      messages.length > 0 ? html`<h4>${tr(ctx, EXPORT_TEXT.messagesTitle, { count: String(messages.length) })}</h4>${messages.map((message) => messageCard(ctx, message))}` : null;
+    return card.render(tr(ctx, EXPORT_TEXT.conversationWith, { person: person(ctx, row.other_user_id) }), nested);
+  });
+  // Messages sans conversation retrouvée : jamais perdus.
+  const orphans = oldestFirst(
+    ctx.data.messages.filter((row) => !known.has(String(row.conversation_id))),
+    "created_at"
+  );
+  return section(ctx, "messages", [
+    cards,
+    orphans.length > 0 ? html`<h3 class="sub">${tr(ctx, EXPORT_TEXT.orphanMessages)}</h3>${orphans.map((row) => messageCard(ctx, row))}` : null,
+  ]);
+}
+
 /** Une décision de la modération : quoi, sur quel type de contenu, pourquoi
  * (jamais qui l'a prise). */
 function decisionLines(ctx: Ctx, decision: ExportRow): string[] {
@@ -821,6 +889,7 @@ function sectionCount(data: ExportData, id: ExportSectionId): number | null {
     blocked: data.blockedAccounts.length,
     piecesSent: data.piecesSent.length,
     piecesReceived: data.piecesReceived.length,
+    messages: data.conversations.length,
     notifications: data.notifications.length,
     clicks: data.affiliateClicks.length,
     reports: data.reportsSubmitted.length,
@@ -844,6 +913,7 @@ const SECTION_RENDERERS: Record<ExportSectionId, (ctx: Ctx) => Html> = {
   blocked: blockedSection,
   piecesSent: piecesSentSection,
   piecesReceived: piecesReceivedSection,
+  messages: messagesSection,
   notifications: notificationsSection,
   clicks: clicksSection,
   reports: reportsSection,

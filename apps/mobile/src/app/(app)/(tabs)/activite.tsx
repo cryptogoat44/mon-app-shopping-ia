@@ -7,11 +7,13 @@ import type { AppNotification, PostAuthor } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { unreadChanged } from "@/lib/unread-notifications";
-import { NOTIFICATIONS_PAGE_SIZE, fetchNotifications, markNotificationsRead } from "@/lib/api";
+import { NOTIFICATIONS_PAGE_SIZE, fetchMessagesStatus, fetchNotifications, markNotificationsRead } from "@/lib/api";
+import { messagesEntry } from "@/lib/conversations";
+import { useMessagesStatus } from "@/lib/use-messages-status";
 import { loadErrorMessage } from "@/lib/load-error";
 import { systemNotificationLines } from "@/lib/moderation-labels";
 import { timeAgo } from "@/lib/format";
-import { BellIcon, PersonIcon } from "@/components/icons";
+import { BellIcon, CommentIcon, PersonIcon } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { LoadFailure } from "@/components/load-failure";
@@ -45,6 +47,25 @@ function NotificationRow({ notification, actor, onPress }: { notification: AppNo
         </Text>
         <Text style={styles.rowTime}>{timeAgo(notification.createdAt, getActiveLocale())}</Text>
       </View>
+    </Pressable>
+  );
+}
+
+/** Lot messages : l'entrée « Messages », avec le nombre de conversations non
+ * lues. Cachée tant que la messagerie n'est pas disponible sur le serveur. */
+function MessagesEntry({ label, badge, onPress }: { label: string; badge: string | null; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={styles.messagesEntry} accessibilityRole="button" accessibilityLabel={label} testID="entree-messages">
+      <View style={styles.avatar}>
+        <CommentIcon size={18} tint={color.encre} />
+      </View>
+      <Text style={styles.messagesLabel}>{t.messages.entry}</Text>
+      {badge ? (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{badge}</Text>
+        </View>
+      ) : null}
+      <Text style={styles.chevron}>›</Text>
     </Pressable>
   );
 }
@@ -129,9 +150,11 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const { notifications, error, hasMore, loadingMore, moreError, load, loadMore } = useNotifications();
   const [refreshing, setRefreshing] = useState(false);
+  const entry = messagesEntry(useMessagesStatus());
 
   useFocusEffect(
     useCallback(() => {
+      fetchMessagesStatus().catch(() => {});
       load().then(() =>
         markNotificationsRead()
           .then(unreadChanged)
@@ -142,7 +165,7 @@ export default function NotificationsScreen() {
 
   async function handleRefresh() {
     setRefreshing(true);
-    await load();
+    await Promise.all([load(), fetchMessagesStatus().catch(() => {})]);
     setRefreshing(false);
   }
 
@@ -170,6 +193,11 @@ export default function NotificationsScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle} accessibilityRole="header">{t.notifications.title}</Text>
       </View>
+      {entry ? (
+        <View style={styles.entryWrap}>
+          <MessagesEntry label={entry.label} badge={entry.badge} onPress={() => router.push("/messages")} />
+        </View>
+      ) : null}
 
       {notifications === null && !error ? (
         <ListSkeleton />
@@ -254,4 +282,19 @@ const styles = themedStyles(() => ({
   rowDetail: { fontSize: font.secondary, color: color.encre, lineHeight: 19, marginTop: 2 },
   rowName: { fontWeight: "600" },
   rowTime: { fontSize: font.caption, color: color.acier, marginTop: 2 },
+  entryWrap: { paddingHorizontal: space.lg, maxWidth: 480, alignSelf: "center", width: "100%" },
+  messagesEntry: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.sm,
+    minHeight: 52,
+    paddingVertical: space.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: color.filet,
+    marginBottom: space.sm,
+  },
+  messagesLabel: { flex: 1, fontSize: font.body, fontWeight: "600", color: color.encre },
+  badge: { minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 6, backgroundColor: color.vert, alignItems: "center", justifyContent: "center" },
+  badgeText: { fontSize: font.caption, fontWeight: "700", color: color.blanc },
+  chevron: { fontSize: 22, color: color.acier },
 }));

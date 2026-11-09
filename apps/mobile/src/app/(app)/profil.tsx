@@ -14,6 +14,7 @@ import { SpotImage } from "@/components/spot-image";
 import { ImageUnavailable } from "@/components/image-unavailable";
 import { ErrorMessage } from "@/components/error-message";
 import { useToast } from "@/lib/toast-context";
+import { useMessagesStatus } from "@/lib/use-messages-status";
 import { themedStyles } from "@/theme/themed-styles";
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -37,6 +38,8 @@ export default function UserProfileScreen() {
   const [state, setState] = useState<"loading" | "ready" | "not_found" | "error">("loading");
   const [followBusy, setFollowBusy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Lot messages : bouton « Message », seulement si la messagerie est disponible.
+  const messages = useMessagesStatus();
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -150,16 +153,29 @@ export default function UserProfileScreen() {
       <Text style={styles.counts}>
         {t.userProfile.posts_count(profile.postsCount)} · {t.userProfile.followers(profile.followersCount)} · {t.userProfile.following(profile.followingCount)}
       </Text>
-      <Pressable
-        style={[styles.follow, profile.isFollowing ? styles.following : null, followBusy ? styles.busy : null]}
-        onPress={handleFollow}
-        disabled={followBusy}
-        accessibilityRole="button"
-      >
-        <Text style={[styles.followLabel, profile.isFollowing ? styles.followingLabel : null]}>
-          {profile.isFollowing ? t.userProfile.unfollow : t.userProfile.follow}
-        </Text>
-      </Pressable>
+      <View style={styles.actions}>
+        <Pressable
+          style={[styles.follow, profile.isFollowing ? styles.following : null, followBusy ? styles.busy : null]}
+          onPress={handleFollow}
+          disabled={followBusy}
+          accessibilityRole="button"
+        >
+          <Text style={[styles.followLabel, profile.isFollowing ? styles.followingLabel : null]}>
+            {profile.isFollowing ? t.userProfile.unfollow : t.userProfile.follow}
+          </Text>
+        </Pressable>
+        {messages.enabled ? (
+          <Pressable
+            style={[styles.follow, styles.following]}
+            onPress={() => router.push({ pathname: "/conversation", params: { userId: profile.id } })}
+            accessibilityRole="button"
+            accessibilityLabel={t.messages.messageButtonLabel(profile.displayName)}
+            testID="bouton-message"
+          >
+            <Text style={[styles.followLabel, styles.followingLabel]}>{t.messages.messageButton}</Text>
+          </Pressable>
+        ) : null}
+      </View>
       <Text style={styles.sectionTitle}>{t.userProfile.posts}</Text>
     </View>
   );
@@ -233,7 +249,8 @@ const styles = themedStyles(() => ({
   handle: { fontSize: font.secondary, color: color.acier, marginTop: 2 },
   bio: { fontSize: font.secondary, color: color.encre, textAlign: "center", marginTop: space.sm, lineHeight: 20 },
   counts: { fontSize: font.caption, color: color.acier, marginTop: space.sm },
-  follow: { marginTop: space.md, minHeight: 44, minWidth: 160, paddingHorizontal: space.lg, borderRadius: radius.md, backgroundColor: color.vert, alignItems: "center", justifyContent: "center" },
+  actions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: space.sm, marginTop: space.md },
+  follow: { minHeight: 44, minWidth: 130, paddingHorizontal: space.lg, borderRadius: radius.md, backgroundColor: color.vert, alignItems: "center", justifyContent: "center" },
   following: { backgroundColor: "transparent", borderWidth: 1, borderColor: color.filet },
   busy: { opacity: 0.6 },
   followLabel: { color: color.blanc, fontSize: font.secondary, fontWeight: "600" },

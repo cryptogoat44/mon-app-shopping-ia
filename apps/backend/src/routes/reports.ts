@@ -4,8 +4,10 @@ import { REPORT_REASONS, REPORT_TARGET_TYPES } from "@monapp/shared-types";
 import { parseInput } from "../lib/validation.js";
 import { autoHideIfReported } from "../lib/autoHide.js";
 import { captureModerationEvent } from "../lib/sentry.js";
+import { MESSAGES_UNAVAILABLE, messagesReady } from "../lib/messaging.js";
 
-// Lot 5 : une pièce reçue (« piece ») se signale aussi.
+// Lot 5 : une pièce reçue (« piece ») se signale aussi ; lot messages : un
+// message reçu (« message »).
 const createReportSchema = z.object({
   targetType: z.enum(REPORT_TARGET_TYPES),
   targetId: z.string().uuid(),
@@ -38,6 +40,15 @@ export default async function reportsRoutes(fastify: FastifyInstance) {
       });
       if (!body) return;
 
+      // Un message ne se signale que dans sa propre conversation, et pas le
+      // sien : la modération ne lit jamais un message qu'on n'a pas reçu.
+      if (body.targetType === "message") {
+        if (!(await messagesReady(fastify))) return reply.code(404).send(MESSAGES_UNAVAILABLE);
+        if (!(await canReportMessage(fastify, reporterId, body.targetId))) {
+          return reply.code(404).send({ error: "target_not_found", message: "Contenu introuvable." });
+        }
+      }
+
       const note = body.note?.trim().slice(0, 500) || null;
 
       const { error } = await fastify.supabaseAdmin.from("reports").insert({
@@ -68,4 +79,20 @@ export default async function reportsRoutes(fastify: FastifyInstance) {
       return reply.code(204).send();
     }
   );
+}
+
+/** Le message existe, a été envoyé par l'autre membre, dans une conversation
+ * de `reporterId` (même une invitation refusée). */
+async function canReportMessage(fastify: FastifyInstance, reporterId: string, messageId: string): Promise<boolean> {
+  const { data: message, error } = await fastify.supabaseAdmin.from("messages").select("conversation_id, sender_id").eq("id", messageId).maybeSingle();
+  if (error || !message) return false;
+  const row = message as { conversation_id: string; sender_id: string };
+  if (row.sender_id === reporterId) return false;
+  const { data: side, error: sideError } = await fastify.supabaseAdmin
+    .from("conversation_participants")
+    .select("user_id")
+    .eq("conversation_id", row.conversation_id)
+    .eq("user_id", reporterId)
+    .maybeSingle();
+  return !sideError && side !== null;
 }

@@ -71,7 +71,7 @@ export async function collectLookups(fastify: FastifyInstance, userId: string, d
   const postAuthors = new Map(postRows.flatMap((row) => (text(row.id) && text(row.user_id) ? [[row.id as string, row.user_id as string] as const] : [])));
 
   // Personnes citées : abonnés, abonnements, auteurs des notifications,
-  // destinataires et expéditeurs des pièces, auteurs des publications aimées
+  // destinataires et expéditeurs des pièces, membres des conversations, auteurs des publications aimées
   // ou commentées, comptes signalés. Un compte en relation de blocage avec la
   // personne (dans un sens ou dans l'autre) n'en fait jamais partie : ailleurs
   // que dans « Comptes bloqués », il reste « un compte Spotto ».
@@ -83,6 +83,8 @@ export async function collectLookups(fastify: FastifyInstance, userId: string, d
     ...ids(data.notifications, "actor_id"),
     ...ids(data.piecesSent, "recipient_id"),
     ...ids(data.piecesReceived, "sender_id"),
+    // Lot messages : l'autre membre de chaque conversation.
+    ...ids(data.conversations, "other_user_id"),
     ...postAuthors.values(),
     ...ids(data.reportsSubmitted.filter((report) => report.target_type === "user"), "target_id"),
   ].filter((id) => id !== userId && !blockedMe.has(id) && !blockedIds.has(id));

@@ -43,6 +43,9 @@ const BLOCKER_POST = "90000000-0000-4000-8000-000000000003";
 const DECISION = "de000000-0000-4000-8000-000000000001";
 const LINK = "11000000-0000-4000-8000-000000000001";
 const RECEIVED = "4e000000-0000-4000-8000-000000000001";
+export const CONVERSATION = "c0000000-0000-4000-8000-0000000000c1";
+const CONVERSATION_BLOCKER = "c0000000-0000-4000-8000-0000000000c2";
+export const HIDDEN_REPLY = "Reponse masquee";
 export const GOOGLE_THUMB = "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcQexemple";
 export const TIKTOK_THUMB = `https://p16-common-sign.tiktokcdn-eu.com/tos-alisg-p-0037/abc~tplv-tiktokx-origin.image?dr=14575&x-expires=1760400000&x-signature=${"a".repeat(180)}`;
 export const TIKTOK_VIDEO = "https://www.tiktok.com/@createur/video/7550000000000000000?is_from_webapp=1&sender_device=pc&web_id=7550000000000000001";
@@ -64,6 +67,7 @@ export function fixture(): ExportData {
       created_at: "2026-09-01T08:00:00+00:00",
       updated_at: "2026-10-01T08:00:00+00:00",
       piece_sends_from: "following",
+      messages_from: "everyone",
     },
     productSearches: [
       {
@@ -259,6 +263,70 @@ export function fixture(): ExportData {
         updated_at: "2026-10-15T20:00:00+00:00",
       },
     ],
+    // Lot messages : une conversation ouverte avec un ami, une invitation
+    // refusée d'un compte qui a bloqué la personne (jamais nommé).
+    conversations: [
+      {
+        conversation_id: CONVERSATION,
+        other_user_id: FRIEND,
+        other_username: "alexis",
+        invitation: "none",
+        invitation_at: null,
+        unread: false,
+        last_read_at: "2026-10-20T09:00:00+00:00",
+        cleared_at: null,
+        last_message_at: "2026-10-20T08:30:00+00:00",
+        created_at: "2026-10-20T08:00:00+00:00",
+      },
+      {
+        conversation_id: CONVERSATION_BLOCKER,
+        other_user_id: BLOCKER,
+        other_username: null,
+        invitation: "declined",
+        invitation_at: "2026-10-21T10:00:00+00:00",
+        unread: false,
+        last_read_at: null,
+        cleared_at: "2026-10-21T09:00:00+00:00",
+        last_message_at: "2026-10-21T09:00:00+00:00",
+        created_at: "2026-10-21T09:00:00+00:00",
+      },
+    ],
+    messages: [
+      message("01", CONVERSATION, SELF, "2026-10-20T08:00:00+00:00", {
+        body: "Regarde ce sac",
+        wish_title: "Sac cabas",
+        wish_image_url: own("post-media", "message.jpg"),
+        wish_image_thumb_url: own("post-media", "message-mini.jpg"),
+        wish_merchant_name: "Boutique",
+        wish_merchant_url: "https://boutique.example/sac",
+        wish_price_min: "89.00",
+        wish_currency: "EUR",
+      }),
+      // Masqué par la modération après le signalement de la personne : la
+      // décision ne s'écrit jamais dans le fichier lisible.
+      message("02", CONVERSATION, FRIEND, "2026-10-20T08:30:00+00:00", { body: HIDDEN_REPLY, hidden_at: "2026-10-22T10:00:00+00:00" }),
+      message("03", CONVERSATION_BLOCKER, BLOCKER, "2026-10-21T09:00:00+00:00", { body: "Bonjour, une question" }),
+    ],
+  };
+}
+
+function message(id: string, conversationId: string, senderId: string, createdAt: string, fields: Record<string, unknown>): Record<string, unknown> {
+  return {
+    id: `d${id}00000-0000-4000-8000-000000000001`,
+    conversation_id: conversationId,
+    sender_id: senderId,
+    body: null,
+    wish_title: null,
+    wish_image_url: null,
+    wish_image_thumb_url: null,
+    wish_merchant_name: null,
+    wish_merchant_url: null,
+    wish_product_match_id: null,
+    wish_price_min: null,
+    wish_currency: null,
+    hidden_at: null,
+    created_at: createdAt,
+    ...fields,
   };
 }
 

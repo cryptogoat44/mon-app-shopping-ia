@@ -19,6 +19,7 @@ function profile(username: string | null): Profile {
     updatedAt: "2026-09-01T00:00:00.000Z",
     isAdmin: false,
     pieceSendsFrom: "following",
+    messagesFrom: "everyone",
   };
 }
 

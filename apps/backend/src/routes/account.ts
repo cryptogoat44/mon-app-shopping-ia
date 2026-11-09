@@ -20,6 +20,7 @@ import { isAdmin } from "../lib/moderation.js";
 import { deleteUserStorageFiles, removeOwnedFiles, storageLeftovers } from "../lib/storage.js";
 import { parseDbRows, parseInput } from "../lib/validation.js";
 import { WISH_COPY_BUCKET } from "../lib/wishShare.js";
+import { messagesReady, otherMembersMessageCopies } from "../lib/messaging.js";
 
 /** Corps de DELETE /api/me : le mot tapé par la personne (revérifié ici). */
 const deleteAccountSchema = z.object({ confirmation: z.string().max(40).refine((value) => isAccountDeletionWord(value)) });
@@ -255,11 +256,23 @@ export default async function accountRoutes(fastify: FastifyInstance) {
       request.log.error("Lecture des pièces reçues impossible avant suppression du compte");
       return reply.code(500).send({ error: "internal_error", message: "La suppression a échoué." });
     }
-    const receivedCopies = await removeOwnedFiles(
-      fastify,
-      WISH_COPY_BUCKET,
-      received.flatMap((piece) => [piece.image_url, piece.image_thumb_url].flatMap((url) => (url ? [{ ownerId: piece.sender_id, url }] : [])))
-    );
+    // Lot messages : ses conversations disparaissent avec le compte (cascade
+    // en base), pour les deux membres ; les copies des envies jointes par
+    // l'autre membre, rangées chez lui, sont effacées ici. Sans la migration
+    // 0032, il n'y a rien à effacer.
+    let messageCopies: { ownerId: string; url: string }[] = [];
+    if (await messagesReady(fastify)) {
+      try {
+        messageCopies = await otherMembersMessageCopies(fastify, userId);
+      } catch {
+        request.log.error("Lecture des messages impossible avant suppression du compte");
+        return reply.code(500).send({ error: "internal_error", message: "La suppression a échoué." });
+      }
+    }
+    const receivedCopies = await removeOwnedFiles(fastify, WISH_COPY_BUCKET, [
+      ...received.flatMap((piece) => [piece.image_url, piece.image_thumb_url].flatMap((url) => (url ? [{ ownerId: piece.sender_id, url }] : []))),
+      ...messageCopies,
+    ]);
 
     // Le droit à l'effacement ne dépend pas d'un incident de stockage
     // (décision du fondateur, 2026-10-15) : un fichier qui refuse de

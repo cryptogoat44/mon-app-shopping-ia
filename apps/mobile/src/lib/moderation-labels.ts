@@ -55,6 +55,10 @@ function noticeSentence({ action, targetType }: ModerationNotice): string {
   if (targetType === "piece" && (action === "hide" || action === "restore")) {
     return action === "hide" ? t.notifications.moderationHiddenPiece : t.notifications.moderationRestoredPiece;
   }
+  // Lot messages : un message envoyé.
+  if (targetType === "message" && (action === "hide" || action === "restore")) {
+    return action === "hide" ? t.notifications.moderationHiddenMessage : t.notifications.moderationRestoredMessage;
+  }
   switch (action) {
     case "hide":
       return comment ? t.notifications.moderationHiddenComment : t.notifications.moderationHiddenPost;

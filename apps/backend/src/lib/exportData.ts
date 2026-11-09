@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { chunks, readAll } from "./pagedReads.js";
+import { messagesReady } from "./messaging.js";
 
 // Export RGPD (droit d'accès et de portabilité) : lecture de TOUTES les
 // données personnelles d'un compte. Toute nouvelle table contenant des
@@ -45,6 +46,12 @@ export interface ExportData {
   moderationDecisionsTaken: ExportRow[];
   /** Bouton « Résultat incohérent » (migration 0025) : propositions signalées et motif. */
   resultFeedback: ExportRow[];
+  /** Messages privés (lot messages, migration 0032) : son côté de chaque
+   * conversation, avec le nom d'utilisateur de l'autre membre (null pour un
+   * compte en relation de blocage avec la personne)… */
+  conversations: ExportRow[];
+  /** … et tous les messages de ces conversations, envoyés et reçus. */
+  messages: ExportRow[];
 }
 
 /** Sections de l'export (toutes les clés sauf la date de l'export). */
@@ -88,6 +95,30 @@ function compareRows(a: ExportRow, b: ExportRow, orderBy: readonly string[]): nu
 
 const BY_DATE = ["created_at", "id"] as const;
 
+/** Colonnes de son côté d'une conversation (jamais celui de l'autre membre :
+ * il dirait, par exemple, qu'il a refusé une invitation). */
+export const CONVERSATION_EXPORT_COLUMNS =
+  "conversation_id, other_user_id, invitation, invitation_at, unread, last_read_at, cleared_at, last_message_at, created_at";
+
+/** Son côté de chaque conversation, avec le nom d'utilisateur de l'autre
+ * membre — jamais celui d'un compte en relation de blocage avec la personne
+ * (règle 8, comme dans le reste de l'export). */
+async function listConversations(db: Db, userId: string): Promise<ExportRow[]> {
+  const rows = await listWhere(db, "conversation_participants", CONVERSATION_EXPORT_COLUMNS, "user_id", userId, ["created_at", "conversation_id"]);
+  if (rows.length === 0) return rows;
+  const [blockedByMe, blockingMe, profiles] = await Promise.all([
+    listWhere(db, "blocks", "blocked_id", "blocker_id", userId, ["blocked_id"]),
+    listWhere(db, "blocks", "blocker_id", "blocked_id", userId, ["blocker_id"]),
+    listIn(db, "profiles", "id, username", "id", rows.map((row) => String(row.other_user_id)), ["id"]),
+  ]);
+  const blocked = new Set([...blockedByMe.map((row) => String(row.blocked_id)), ...blockingMe.map((row) => String(row.blocker_id))]);
+  const usernames = new Map(profiles.map((row) => [String(row.id), typeof row.username === "string" ? row.username : null]));
+  return rows.map((row) => {
+    const other = String(row.other_user_id);
+    return { ...row, other_username: blocked.has(other) ? null : (usernames.get(other) ?? null) };
+  });
+}
+
 export async function collectExport(
   fastify: FastifyInstance,
   userId: string,
@@ -111,14 +142,18 @@ export async function collectExport(
   // affiliate_conversions) : on récupère d'abord les lignes parentes de
   // l'utilisateur, puis leurs enfants par identifiant — plus simple et
   // plus sûr qu'un filtre sur une ressource jointe.
-  const [productSearches, posts, affiliateClicks] = await Promise.all([
+  // Lot messages : sans la migration 0032, aucune conversation (sections vides).
+  const withMessages = await messagesReady(fastify);
+  const [productSearches, posts, affiliateClicks, conversations] = await Promise.all([
     section("productSearches", () => listWhere(db, "product_searches", "*", "user_id", userId, BY_DATE), none),
     section("posts", () => listWhere(db, "posts", "*", "user_id", userId, BY_DATE), none),
     section("affiliateClicks", () => listWhere(db, "affiliate_clicks", "*", "user_id", userId, ["clicked_at", "id"]), none),
+    section("conversations", () => (withMessages ? listConversations(db, userId) : Promise.resolve(none)), none),
   ]);
   const searchIds = productSearches.map((s) => s.id as string);
   const postIds = posts.map((p) => p.id as string);
   const clickIds = affiliateClicks.map((c) => c.id as string);
+  const conversationIds = conversations.map((c) => c.conversation_id as string);
 
   const [
     profile,
@@ -143,6 +178,7 @@ export async function collectExport(
     moderationDecisionsAboutMe,
     moderationDecisionsTaken,
     resultFeedback,
+    messages,
   ] = await Promise.all([
     section(
       "profile",
@@ -195,6 +231,8 @@ export async function collectExport(
     section("moderationDecisionsAboutMe", () => listWhere(db, "moderation_actions", MODERATION_EXPORT_COLUMNS, "target_user_id", userId, BY_DATE), none),
     section("moderationDecisionsTaken", () => listWhere(db, "moderation_actions", MODERATION_EXPORT_COLUMNS, "admin_id", userId, BY_DATE), none),
     section("resultFeedback", () => listWhere(db, "match_feedback", "*", "user_id", userId, BY_DATE), none),
+    // Messages envoyés et reçus, masqués compris (comme les pièces).
+    section("messages", () => listIn(db, "messages", "*", "conversation_id", conversationIds, BY_DATE), none),
   ]);
 
   const data: ExportData = {
@@ -225,6 +263,8 @@ export async function collectExport(
     moderationDecisionsAboutMe,
     moderationDecisionsTaken,
     resultFeedback,
+    conversations,
+    messages,
   };
   return { data, failures };
 }

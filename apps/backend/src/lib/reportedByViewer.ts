@@ -2,7 +2,8 @@
 // (chantier 3, point 6 de la feuille de route V1 ; règle 1.2 d'Apple) : une
 // publication signalée sort de son fil et des profils qu'elle consulte, un
 // commentaire signalé de la liste des commentaires, une pièce reçue signalée
-// de ses pièces reçues — quelle que soit la suite
+// de ses pièces reçues, un message de sa conversation (lot messages) —
+// quelle que soit la suite
 // donnée au signalement. Les autres personnes continuent de les voir tant
 // qu'un administrateur (ou le masquage automatique, lib/autoHide.ts) ne les a
 // pas masqués. Aucune migration : la table `reports` existe depuis 0011.
@@ -22,7 +23,7 @@ export async function reportedIdsFor(
   fastify: Pick<FastifyInstance, "supabaseAdmin">,
   log: Pick<FastifyBaseLogger, "error">,
   viewerId: string,
-  targetType: "post" | "comment" | "piece"
+  targetType: "post" | "comment" | "piece" | "message"
 ): Promise<string[]> {
   const { data, error } = await fastify.supabaseAdmin
     .from("reports")

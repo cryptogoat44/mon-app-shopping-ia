@@ -2,12 +2,13 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { PHOTO_SIZES, optimizePhoto } from "../lib/photos.js";
 import { z } from "zod";
-import { APP_LOCALES, PIECE_SENDS_FROM, PRIVACY_LEVELS, type Profile } from "@monapp/shared-types";
+import { APP_LOCALES, DEFAULT_MESSAGES_FROM, MESSAGES_FROM, PIECE_SENDS_FROM, PRIVACY_LEVELS, type Profile } from "@monapp/shared-types";
 import { parseInput } from "../lib/validation.js";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { isAdmin } from "../lib/moderation.js";
 import { CONTENT_NOT_ALLOWED, firstBannedText } from "../lib/contentFilter.js";
+import { MESSAGES_UNAVAILABLE, messagesReady } from "../lib/messaging.js";
 
 const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
 
@@ -22,6 +23,7 @@ const updateMeSchema = z.object({
 
 const updateLocaleSchema = z.object({ locale: z.enum(APP_LOCALES) });
 const updatePieceSendsFromSchema = z.object({ pieceSendsFrom: z.enum(PIECE_SENDS_FROM) });
+const updateMessagesFromSchema = z.object({ messagesFrom: z.enum(MESSAGES_FROM) });
 
 // Ligne brute de la table `profiles` (colonnes en snake_case, cf. schema.sql), relue sans lui faire confiance.
 const profileRowSchema = z.object({
@@ -34,6 +36,8 @@ const profileRowSchema = z.object({
   default_privacy: z.enum(PRIVACY_LEVELS),
   // Lot 5 (migration 0024) ; valeur par défaut tant que la colonne n'existe pas.
   piece_sends_from: z.enum(PIECE_SENDS_FROM).default("following"),
+  // Lot messages (migration 0032) ; valeur par défaut tant que la colonne n'existe pas.
+  messages_from: z.enum(MESSAGES_FROM).default(DEFAULT_MESSAGES_FROM),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -62,6 +66,7 @@ function toProfile(row: unknown, counts: ProfileCounts, admin: boolean): Profile
     updatedAt: profile.updated_at,
     isAdmin: admin,
     pieceSendsFrom: profile.piece_sends_from,
+    messagesFrom: profile.messages_from,
   };
 }
 
@@ -225,6 +230,24 @@ export default async function meRoutes(fastify: FastifyInstance) {
       .eq("id", request.user!.id);
     if (error) {
       request.log.error({ error }, "Échec de mise à jour du réglage des pièces reçues");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+    return reply.code(204).send();
+  });
+
+  // « Qui peut m'écrire » (lot messages) : invitations des membres qui ne
+  // sont pas vos amis. Un réglage de confidentialité : modifiable même par un
+  // compte suspendu. Sans la migration 0032 : indisponible.
+  fastify.put("/api/me/messages-from", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    if (!(await messagesReady(fastify))) return reply.code(404).send(MESSAGES_UNAVAILABLE);
+    const body = parseInput(updateMessagesFromSchema, request.body, reply, { error: "invalid_body", message: "Réglage invalide." });
+    if (!body) return;
+    const { error } = await fastify.supabaseAdmin
+      .from("profiles")
+      .update({ messages_from: body.messagesFrom, updated_at: new Date().toISOString() })
+      .eq("id", request.user!.id);
+    if (error) {
+      request.log.error({ error }, "Échec de mise à jour du réglage des messages");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
     return reply.code(204).send();

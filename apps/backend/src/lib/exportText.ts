@@ -5,6 +5,7 @@ import {
   type MatchFeedbackReason,
   type MatchOrigin,
   type MerchantLinkContext,
+  type MessagesFrom,
   type ModerationActionType,
   type ModerationReason,
   type NotificationType,
@@ -82,6 +83,17 @@ const MODERATION_DECISION_COLUMNS = {
   created_at: shown("Date", "Date"),
 } as const;
 
+const MESSAGE_WISH_COLUMNS = {
+  wish_title: shown("Envie jointe", "Attached wish"),
+  wish_image_url: shown("Image de l'envie (copie Spotto)", "Wish image (Spotto copy)"),
+  wish_image_thumb_url: shown("Miniature de l'envie (copie Spotto)", "Wish thumbnail (Spotto copy)"),
+  wish_merchant_name: shown("Marchand", "Retailer"),
+  wish_merchant_url: shown("Lien vers la pièce", "Link to the piece"),
+  wish_product_match_id: technical("Pièce proposée d'origine", "Original suggested piece"),
+  wish_price_min: shown("Prix", "Price"),
+  wish_currency: shown("Devise", "Currency"),
+} as const;
+
 /** Libellé de chaque colonne connue, par section de l'export. */
 export const EXPORT_COLUMNS = {
   account: {
@@ -96,6 +108,8 @@ export const EXPORT_COLUMNS = {
     locale: shown("Langue de l'app", "App language"),
     default_privacy: shown("Visibilité proposée pour vos publications", "Suggested visibility for your posts"),
     piece_sends_from: shown("Qui peut vous envoyer des pièces", "Who can send you pieces"),
+    // Lot messages (migration 0032).
+    messages_from: shown("Qui peut vous écrire", "Who can write to you"),
     created_at: shown("Compte créé le", "Account created on"),
     updated_at: shown("Profil modifié le", "Profile updated on"),
   },
@@ -347,6 +361,29 @@ export const EXPORT_COLUMNS = {
   },
   moderationDecisionsAboutMe: MODERATION_DECISION_COLUMNS,
   moderationDecisionsTaken: MODERATION_DECISION_COLUMNS,
+  // Lot messages (migration 0032) : votre côté de chaque conversation…
+  conversations: {
+    conversation_id: technical("Conversation", "Conversation"),
+    other_user_id: technical("Autre membre", "Other member"),
+    other_username: shown("Avec", "With"),
+    invitation: shown("Invitation", "Invitation"),
+    invitation_at: shown("Invitation envoyée ou réponse le", "Invitation sent or answered on"),
+    unread: shown("Message non lu", "Unread message"),
+    last_read_at: shown("Lue pour la dernière fois le", "Last read on"),
+    cleared_at: shown("Messages antérieurs cachés pour vous depuis le", "Earlier messages hidden for you since"),
+    last_message_at: shown("Dernier message le", "Last message on"),
+    created_at: shown("Commencée le", "Started on"),
+  },
+  // … et ses messages, envoyés et reçus.
+  messages: {
+    id: ID,
+    conversation_id: technical("Conversation", "Conversation"),
+    sender_id: shown("De", "From"),
+    body: shown("Message", "Message"),
+    ...MESSAGE_WISH_COLUMNS,
+    hidden_at: shown("Masqué par la modération le", "Hidden by moderation on"),
+    created_at: shown("Envoyé le", "Sent on"),
+  },
 } as const satisfies Record<ExportDataKey, Record<string, ExportColumn>>;
 
 export type ExportColumnName<K extends ExportDataKey> = keyof (typeof EXPORT_COLUMNS)[K] & string;
@@ -435,6 +472,14 @@ export const EXPORT_SECTIONS = {
     intro: { fr: "Les pièces que d'autres membres vous ont envoyées.", en: "The pieces other members sent you." },
     keys: ["piecesReceived"],
   },
+  messages: {
+    title: { fr: "Vos messages", en: "Your messages" },
+    intro: {
+      fr: "Vos conversations privées avec d'autres membres : les messages que vous avez envoyés et ceux que vous avez reçus.",
+      en: "Your private conversations with other members: the messages you sent and the ones you received.",
+    },
+    keys: ["conversations", "messages"],
+  },
   notifications: {
     title: { fr: "Vos notifications", en: "Your notifications" },
     intro: { fr: "Les notifications de l'onglet Activité de l'app.", en: "The notifications from the app's Activity tab." },
@@ -493,6 +538,21 @@ export const PIECE_SENDS_FROM_LABELS: Record<PieceSendsFrom, Bilingual> = {
   following: { fr: "Les comptes que vous suivez", en: "Accounts you follow" },
   everyone: { fr: "Tout le monde", en: "Everyone" },
   nobody: { fr: "Personne", en: "Nobody" },
+};
+
+/** « Qui peut m'écrire » (lot messages) : vos amis peuvent toujours vous écrire. */
+export const MESSAGES_FROM_LABELS: Record<MessagesFrom, Bilingual> = {
+  following: { fr: "Vos amis et les comptes que vous suivez", en: "Your friends and accounts you follow" },
+  everyone: { fr: "Tout le monde (sous forme d'invitation)", en: "Everyone (as an invitation)" },
+  nobody: { fr: "Seulement vos amis", en: "Only your friends" },
+};
+
+/** Votre côté d'une conversation (conversation_participants.invitation). */
+export const INVITATION_LABELS: Record<"none" | "sent" | "received" | "declined", Bilingual> = {
+  none: { fr: "Aucune : conversation ouverte", en: "None: open conversation" },
+  sent: { fr: "Envoyée par vous, en attente de réponse", en: "Sent by you, awaiting a reply" },
+  received: { fr: "Reçue, en attente de votre réponse", en: "Received, awaiting your reply" },
+  declined: { fr: "Reçue, refusée par vous", en: "Received, declined by you" },
 };
 
 export const APP_LOCALE_LABELS: Record<AppLocale, Bilingual> = {
@@ -589,6 +649,7 @@ export const REPORT_TARGET_LABELS: Record<ReportTargetType, Bilingual> = {
   post: { fr: "Une publication", en: "A post" },
   comment: { fr: "Un commentaire", en: "A comment" },
   piece: { fr: "Une pièce reçue", en: "A piece you received" },
+  message: { fr: "Un message reçu", en: "A message you received" },
 };
 
 /** « Signalement traité » : seulement le type du contenu signalé, jamais la
@@ -598,6 +659,7 @@ export const REPORT_HANDLED_LABELS: Record<ReportTargetType, Bilingual> = {
   post: { fr: "Votre signalement d'une publication a été traité.", en: "Your report about a post was handled." },
   comment: { fr: "Votre signalement d'un commentaire a été traité.", en: "Your report about a comment was handled." },
   piece: { fr: "Votre signalement d'une pièce reçue a été traité.", en: "Your report about a piece you received was handled." },
+  message: { fr: "Votre signalement d'un message a été traité.", en: "Your report about a message was handled." },
 };
 
 export const REPORT_REASON_LABELS: Record<ReportReason, Bilingual> = {
@@ -755,6 +817,10 @@ export const EXPORT_TEXT = {
     fr: "Les achats qu'un marchand partenaire a signalés après un de vos clics.",
     en: "Purchases a partner retailer reported after one of your clicks.",
   },
+  // Messages (lot messages).
+  conversationWith: { fr: "Conversation avec {person}", en: "Conversation with {person}" },
+  messagesTitle: { fr: "Messages échangés ({count})", en: "Messages exchanged ({count})" },
+  orphanMessages: { fr: "Messages d'une conversation introuvable", en: "Messages from a conversation that could not be found" },
   // Signalements.
   followUp: { fr: "Suivi", en: "Follow-up" },
   handledOn: { fr: "Traité le {date}", en: "Handled on {date}" },
