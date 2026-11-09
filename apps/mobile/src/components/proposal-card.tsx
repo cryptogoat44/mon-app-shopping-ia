@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import type { Piece } from "@/api/types";
 import { color, font, radius, size, space } from "@/theme/tokens";
@@ -22,17 +22,62 @@ import { themedStyles } from "@/theme/themed-styles";
 
 /** Toucher l'image ou le nom montre la proposition en grand ; le lien, juste
  * dessous, ouvre la boutique. `placement` : sa place à l'écran, pour les
- * statistiques du clic (prix d'abord, lib/price-first.ts). */
-export function ProposalCard({ piece, onSelect, placement }: { piece: Piece; onSelect: () => void; placement?: ClickPlacement }) {
+ * statistiques du clic (prix d'abord, lib/price-first.ts). `cheapest` : la
+ * moins chère de la devise dominante (lib/result-sort.ts). `variant` :
+ * « row », une ligne pleine largeur de la liste triée par prix (prix en
+ * évidence, une ligne par proposition : la page ne saute pas quand une
+ * boutique arrive au-dessus). */
+export function ProposalCard({
+  piece,
+  onSelect,
+  placement,
+  cheapest = false,
+  variant = "grid",
+}: {
+  piece: Piece;
+  onSelect: () => void;
+  placement?: ClickPlacement;
+  cheapest?: boolean;
+  variant?: "grid" | "row";
+}) {
   const price = piece.priceFrom !== null ? formatPrice(piece.priceFrom, piece.currency, getActiveLocale()) : null;
+  // Ligne de la liste triée : « Prix à vérifier chez le marchand » s'affiche aussi sans prix, et se lit.
+  const shownPrice = price ?? (variant === "row" ? t.result.priceOnSite : null);
+  const label = [piece.name, piece.merchantName, shownPrice, cheapest ? t.result.cheapestBadge : null].filter(Boolean).join(", ");
+
+  if (variant === "row") {
+    return (
+      <View style={styles.row} testID="price-row">
+        <Pressable onPress={onSelect} style={styles.rowMain} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={t.result.showLargeHint}>
+          <View style={styles.rowImage}>
+            <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} size="small" />
+          </View>
+          <View style={styles.rowText}>
+            <Text style={styles.cardName} numberOfLines={2}>
+              {piece.name}
+            </Text>
+            {piece.merchantName ? (
+              <Text style={styles.cardMeta} numberOfLines={1}>
+                {piece.merchantName}
+              </Text>
+            ) : null}
+            <Text style={price ? styles.rowPrice : styles.rowNoPrice}>{shownPrice}</Text>
+            {cheapest ? <CheapestBadge /> : null}
+            <ForeignShopNote piece={piece} compact />
+          </View>
+        </Pressable>
+        {piece.merchantUrl ? (
+          <View style={styles.rowLink}>
+            <ShopLink piece={piece} placement={placement} />
+          </View>
+        ) : null}
+      </View>
+    );
+  }
+
   return (
     <View style={styles.card}>
-      <Pressable
-        onPress={onSelect}
-        accessibilityRole="button"
-        accessibilityLabel={[piece.name, piece.merchantName, price].filter(Boolean).join(", ")}
-        accessibilityHint={t.result.showLargeHint}
-      >
+      <Pressable onPress={onSelect} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={t.result.showLargeHint}>
         <View style={styles.cardImage}>
           <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} size="small" />
         </View>
@@ -42,10 +87,24 @@ export function ProposalCard({ piece, onSelect, placement }: { piece: Piece; onS
         <Text style={styles.cardMeta} numberOfLines={1}>
           {[piece.merchantName, price].filter(Boolean).join(" · ")}
         </Text>
+        {cheapest ? <CheapestBadge /> : null}
         {/* Lot premier essai : prix dans la devise d'un autre pays que celui de la recherche. */}
         <ForeignShopNote piece={piece} compact />
       </Pressable>
       {piece.merchantUrl ? <ShopLink piece={piece} placement={placement} /> : null}
+    </View>
+  );
+}
+
+/** Pastille « Le moins cher » (lib/result-sort.ts, cheapestIndex) : sur une
+ * carte, une ligne de la liste triée ou la grande carte. Lue avec la carte
+ * par VoiceOver (son libellé la contient). */
+export function CheapestBadge() {
+  return (
+    <View style={styles.badge} testID="cheapest-badge">
+      <Text style={styles.badgeLabel} numberOfLines={1}>
+        {t.result.cheapestBadge}
+      </Text>
     </View>
   );
 }
@@ -95,6 +154,8 @@ function ShopLink({ piece, placement }: { piece: Piece; placement?: ClickPlaceme
   );
 }
 
+const ROW_IMAGE_WIDTH = 76;
+
 // Mêmes mesures que l'ancienne carte de la grille ; le lien a la zone
 // tactile minimale (44 points).
 const styles = themedStyles(() => ({
@@ -106,4 +167,15 @@ const styles = themedStyles(() => ({
   shopLink: { minHeight: size.touchTarget, justifyContent: "center" },
   shopLinkLabel: { fontSize: font.caption, color: color.vert, fontWeight: "600", lineHeight: 17 },
   blockedLink: { fontSize: font.caption, color: color.vert, fontWeight: "600", textDecorationLine: "underline", marginBottom: space.xs },
+  // Ligne de la liste triée par prix : vignette à gauche, texte et prix à droite, le lien sous le texte.
+  row: { width: "100%", paddingVertical: space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.filet },
+  rowMain: { flexDirection: "row", gap: 12 },
+  rowImage: { width: ROW_IMAGE_WIDTH, aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.sm, overflow: "hidden" },
+  rowText: { flex: 1, minWidth: 0 },
+  rowPrice: { fontSize: font.secondary, color: color.encre, fontWeight: "600", marginTop: 4 },
+  rowNoPrice: { fontSize: 12, color: color.acier, marginTop: 4 },
+  rowLink: { marginLeft: ROW_IMAGE_WIDTH + 12 },
+  // Pastille pleine : blanc sur vert (contraste AA vérifié, tests/contrast.test.ts).
+  badge: { alignSelf: "flex-start", backgroundColor: color.vert, borderRadius: radius.full, paddingHorizontal: space.sm, paddingVertical: 2, marginTop: 4 },
+  badgeLabel: { fontSize: 12, color: color.blanc, fontWeight: "600" },
 }));

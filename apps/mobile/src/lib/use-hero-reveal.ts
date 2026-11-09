@@ -8,8 +8,9 @@ import { t } from "../i18n";
 import { sectionArrivedAbove, shouldRevealHero, type Area, type Viewport } from "./result-scroll";
 
 /** « Réduire les animations » (iPhone, ou réglage du navigateur) : la page
- * saute d'un coup au lieu de défiler. Lu une fois, comme l'écran d'attente. */
-function useReduceMotion(): boolean {
+ * saute d'un coup au lieu de défiler. Lu une fois, comme l'écran d'attente.
+ * Aussi pour l'apparition des boutiques dans la liste triée par prix. */
+export function useReduceMotion(): boolean {
   const [reduceMotion, setReduceMotion] = useState(false);
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
