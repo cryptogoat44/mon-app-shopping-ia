@@ -20,6 +20,7 @@ import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { SpotImage } from "@/components/spot-image";
 import { themedStyles } from "@/theme/themed-styles";
+import { Avatar } from "@/components/avatar";
 
 function ItemRow({ item, owner, canTalk }: { item: SharedCollectionItem; owner: PostAuthor; canTalk: boolean }) {
   const router = useRouter();
@@ -191,9 +192,11 @@ export default function FriendCollectionScreen() {
         <Pressable
           onPress={() => router.push({ pathname: "/profil", params: { id: collection.owner.id } })}
           hitSlop={6}
+          style={styles.ownerLine}
           accessibilityRole="link"
           accessibilityLabel={t.common.viewProfile(collection.owner.displayName)}
         >
+          <Avatar uri={collection.owner.avatarUrl} userId={collection.owner.id} displayName={collection.owner.displayName} username={collection.owner.username} size={24} />
           <Text style={styles.owner}>
             {t.collections.by(collection.owner.displayName)} · {t.collections.itemCount(collection.itemCount)}
           </Text>
@@ -236,7 +239,8 @@ const styles = themedStyles(() => ({
   retryLabel: { fontSize: font.body, color: color.vert, fontWeight: "600" },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 640, alignSelf: "center", width: "100%" },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre },
-  owner: { fontSize: font.secondary, color: color.acier, marginTop: 4, marginBottom: space.md },
+  ownerLine: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: 4, marginBottom: space.md },
+  owner: { flexShrink: 1, fontSize: font.secondary, color: color.acier },
   empty: { fontSize: font.secondary, color: color.acier, lineHeight: 20 },
   row: { flexDirection: "row", gap: space.md, paddingVertical: space.md, borderTopWidth: 1, borderTopColor: color.filet },
   thumb: { width: 96, height: 96, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },

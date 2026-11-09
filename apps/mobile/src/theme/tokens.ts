@@ -82,6 +82,18 @@ export const darkPalette: Palette = {
 
 export type ColorScheme = "light" | "dark";
 
+// Photo de profil par défaut (lot « profil et icône des réglages ») : les
+// initiales sur une couleur stable, tirée de l'identifiant du compte
+// (lib/avatar-look.ts). Huit teintes sourdes de la famille de la palette —
+// vert (le `vert` du thème clair), brique (proche de `danger`), acier, olive,
+// ardoise, prune, camel, pétrole —, déclinées pour chaque thème au même
+// rang. Initiales écrites en `blanc` du thème (blanc en clair, brun très
+// profond en sombre) : au moins 6:1 partout (tests/avatar-look.test.ts).
+export const avatarBackgrounds: Readonly<Record<ColorScheme, readonly string[]>> = {
+  light: ["#1E3D32", "#A1412C", "#57575C", "#5B5A2C", "#3E5266", "#6A3F57", "#855A2E", "#2F5D62"],
+  dark: ["#9CC3AE", "#E8917B", "#B3AFA8", "#C8C38A", "#A7BBCF", "#D4A7BE", "#D8B48A", "#9CC8CC"],
+};
+
 let activePalette: Palette = lightPalette;
 let activeScheme: ColorScheme = "light";
 

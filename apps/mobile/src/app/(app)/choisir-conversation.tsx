@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Image } from "expo-image";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import type { ConversationSummary, PublicProfile } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
@@ -10,8 +9,9 @@ import { fetchConversations, searchUsers } from "@/lib/api";
 import { loadErrorMessage } from "@/lib/load-error";
 import { ConversationRow } from "@/components/conversation-row";
 import { ErrorMessage } from "@/components/error-message";
-import { PersonIcon, SearchIcon } from "@/components/icons";
+import { SearchIcon } from "@/components/icons";
 import { themedStyles } from "@/theme/themed-styles";
+import { Avatar } from "@/components/avatar";
 
 // « Envoyer dans une conversation » (lot messages), depuis une envie
 // (`wishId`), ou « Envoyer à un ami » depuis l'écran Résultat (`matchId`, une
@@ -98,9 +98,7 @@ export default function ChooseConversationScreen() {
             accessibilityRole="button"
             accessibilityLabel={t.messages.chooseLabel(person.displayName)}
           >
-            <View style={styles.avatar}>
-              {person.avatarUrl ? <Image source={{ uri: person.avatarUrl }} style={styles.avatarImage} contentFit="cover" /> : <PersonIcon size={20} tint={color.acier} />}
-            </View>
+            <Avatar uri={person.avatarUrl} userId={person.id} displayName={person.displayName} username={person.username} size={40} />
             <View style={styles.personText}>
               <Text style={styles.displayName} numberOfLines={1}>
                 {person.displayName}
@@ -185,8 +183,6 @@ const styles = themedStyles(() => ({
   },
   searchInput: { flex: 1, fontSize: font.body, color: color.encre, padding: 0 },
   person: { flexDirection: "row", alignItems: "center", gap: space.sm, minHeight: 56, paddingVertical: space.sm, borderBottomWidth: 1, borderBottomColor: color.filet },
-  avatar: { width: 40, height: 40, borderRadius: radius.full, backgroundColor: color.plinthe, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  avatarImage: { width: "100%", height: "100%" },
   personText: { flex: 1, minWidth: 0 },
   displayName: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   username: { fontSize: font.caption, color: color.acier },

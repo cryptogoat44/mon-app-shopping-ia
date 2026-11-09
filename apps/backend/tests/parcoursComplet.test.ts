@@ -259,7 +259,8 @@ describe.sequential("parcours complet : de l'inscription à la suppression du co
 
     const avatar = await upload(a, "/api/me/avatar", {}, PHOTO);
     expect(avatar.statusCode).toBe(200);
-    expect(avatar.json().avatarUrl).toContain(`/avatars/${a.id}/avatar.jpg`);
+    // Lot « profil et icône des réglages » : un nom nouveau à chaque photo.
+    expect(avatar.json().avatarUrl).toMatch(new RegExp(`/avatars/${a.id}/avatar-[0-9a-f-]{36}\\.jpg$`));
   });
 
   step("2. Spotter : une photo importée, préparée puis lancée ; propositions rangées, image analysée effacée", async () => {
@@ -523,7 +524,7 @@ describe.sequential("parcours complet : de l'inscription à la suppression du co
     "7. suppression du compte de A : plus aucune ligne ni aucun fichier de A, et B ne voit plus rien de A",
     async () => {
       // Avant : A a bien des fichiers (photo de profil, Vault, publication et copies d'envie).
-      expect(await storageFiles("avatars", a.id)).toContain("avatar.jpg");
+      expect((await storageFiles("avatars", a.id)).some((name) => /^avatar-[0-9a-f-]{36}\.jpg$/.test(name))).toBe(true);
       expect((await storageFiles("vault-media", a.id)).length).toBeGreaterThan(0);
       expect((await storageFiles("post-media", a.id)).length).toBeGreaterThanOrEqual(6);
 

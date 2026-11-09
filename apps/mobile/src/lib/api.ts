@@ -163,6 +163,13 @@ export async function uploadAvatar(imageUri: string): Promise<Profile> {
   return profile;
 }
 
+/** « Supprimer ma photo » (lot « profil et icône des réglages ») : le fichier
+ * est effacé du stockage, puis la photo retirée du profil. */
+export async function deleteAvatar(): Promise<Profile> {
+  const response = await authorizedFetch("/api/me/avatar", { method: "DELETE" });
+  return response.json();
+}
+
 /** Temps 1 du Spotter — gratuit : crée la recherche et renvoie l'image qui
  * sera analysée (`thumbnailUrl`), sans aucun appel SerpApi. */
 export async function prepareSearch(payload: CreateSearchRequest): Promise<ProductSearch & { previewIssue?: PreviewIssue | null }> {

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import type { PublicProfile } from "@monapp/shared-types";
@@ -9,10 +8,11 @@ import { ApiError, searchUsers, sendPiece } from "@/lib/api";
 import { loadErrorMessage } from "@/lib/load-error";
 import { useToast } from "@/lib/toast-context";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
-import { PersonIcon, SearchIcon } from "@/components/icons";
+import { SearchIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
 import { t } from "@/i18n";
+import { Avatar } from "@/components/avatar";
 
 // Envoyer une envie à une personne sur Spotto (lot 5, 5.C) : un geste
 // volontaire, vers une personne choisie. Le serveur applique son réglage
@@ -114,13 +114,7 @@ export default function SendPieceScreen() {
           const busy = sendingTo === person.id;
           return (
             <View key={person.id} style={styles.row}>
-              <View style={styles.avatar}>
-                {person.avatarUrl ? (
-                  <Image source={{ uri: person.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
-                ) : (
-                  <PersonIcon size={20} tint={color.acier} />
-                )}
-              </View>
+              <Avatar uri={person.avatarUrl} userId={person.id} displayName={person.displayName} username={person.username} size={40} />
               <View style={styles.rowText}>
                 <Text style={styles.displayName}>{person.displayName}</Text>
                 <Text style={styles.username}>@{person.username}</Text>
@@ -166,8 +160,6 @@ const styles = themedStyles(() => ({
   loader: { marginTop: space.md },
   empty: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginTop: space.lg },
   row: { flexDirection: "row", alignItems: "center", gap: space.sm, paddingVertical: space.sm, borderBottomWidth: 1, borderBottomColor: color.filet },
-  avatar: { width: 40, height: 40, borderRadius: radius.full, backgroundColor: color.plinthe, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  avatarImage: { width: "100%", height: "100%" },
   rowText: { flex: 1 },
   displayName: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   username: { fontSize: font.caption, color: color.acier },

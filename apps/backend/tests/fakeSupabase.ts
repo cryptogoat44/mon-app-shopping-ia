@@ -183,11 +183,19 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
         return mode === "many" ? { data: returning ? data : null, error: null } : { data: data[0] ?? null, error: null };
       }
       const matching = rows.filter((row) => filters.every((filter) => filter(row)));
+      // Lignes rendues par une écriture suivie de select() : une seule avec single()/maybeSingle().
+      const returned = (written: Row[]): { data: unknown; error: DbError | null } => {
+        if (!returning) return { data: null, error: null };
+        const data = written.map((row) => pick(row, columns));
+        if (mode === "single") return data.length === 1 ? { data: data[0], error: null } : { data: null, error: { code: "PGRST116", message: "no rows" } };
+        if (mode === "maybe") return { data: data[0] ?? null, error: null };
+        return { data, error: null };
+      };
       if (action === "update") {
         const failure = options.failWrite?.(name, "update", values);
         if (failure) return { data: null, error: failure };
         for (const row of matching) Object.assign(row, values);
-        return { data: returning ? matching.map((row) => pick(row, columns)) : null, error: null };
+        return returned(matching);
       }
       if (action === "delete") {
         const failure = options.failWrite?.(name, "delete", null);
@@ -200,7 +208,7 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
         for (const child of CASCADES[name] ?? []) {
           tables.set(child.table, table(child.table).filter((row) => !ids.has(row[child.column])));
         }
-        return { data: returning ? matching.map((row) => pick(row, columns)) : null, error: null };
+        return returned(matching);
       }
       let result = [...matching];
       for (const order of [...orders].reverse()) {
@@ -301,18 +309,34 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
     return chain;
   }
 
+  // Fichiers du stockage (« bucket/chemin » → contenu) : un envoi sans
+  // « upsert » sur un chemin déjà pris est refusé, comme chez Supabase ;
+  // list() rend les fichiers d'un dossier (lot « profil et icône des réglages »).
+  const files = new Map<string, Buffer>();
   const storage = {
     from: (bucket: string) => ({
-      upload: async (path: string) => {
-        uploads.push(`${bucket}/${path}`);
+      upload: async (path: string, body?: unknown, uploadOptions?: { upsert?: boolean }) => {
+        const key = `${bucket}/${path}`;
+        if (files.has(key) && !uploadOptions?.upsert) return { error: { message: "The resource already exists", statusCode: "409" } };
+        uploads.push(key);
+        files.set(key, Buffer.isBuffer(body) ? body : Buffer.alloc(0));
         return { error: null };
       },
       remove: async (paths: string[]) => {
         if (options.failStorageRemove?.()) return { data: null, error: { message: "panne simulée du stockage" } };
         removed.push(...paths.map((path) => `${bucket}/${path}`));
+        for (const path of paths) files.delete(`${bucket}/${path}`);
         return { error: null };
       },
-      list: async () => ({ data: [], error: null }),
+      list: async (folder = "", listOptions?: { limit?: number; offset?: number }) => {
+        const prefix = `${bucket}/${folder}/`;
+        const names = [...files.keys()]
+          .filter((key) => key.startsWith(prefix) && !key.slice(prefix.length).includes("/"))
+          .map((key) => key.slice(prefix.length))
+          .sort();
+        const offset = listOptions?.offset ?? 0;
+        return { data: names.slice(offset, offset + (listOptions?.limit ?? 100)).map((name) => ({ name, id: name })), error: null };
+      },
       getPublicUrl: (path: string) => ({ data: { publicUrl: `${STORAGE_ORIGIN}/storage/v1/object/public/${bucket}/${path}` } }),
     }),
   };
@@ -328,7 +352,7 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
 
   const rpc = async (fn: string, args: Record<string, unknown> = {}) =>
     options.rpc ? options.rpc(fn, args) : { data: null, error: { code: "PGRST202", message: "absente" } };
-  return { db: { from, storage, auth, rpc }, tables, table, uploads, removed, deletedUsers };
+  return { db: { from, storage, auth, rpc }, tables, table, uploads, removed, files, deletedUsers };
 }
 
 /** Origine du stockage des tests (celle de SUPABASE_URL dans tests:hors-base). */

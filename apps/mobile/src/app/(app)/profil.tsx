@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import type { Post, UserProfile } from "@monapp/shared-types";
 import { ApiError, fetchUserPosts, fetchUserProfile, followUser, unfollowUser } from "@/lib/api";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
-import { MoreIcon, PersonIcon } from "@/components/icons";
+import { MoreIcon } from "@/components/icons";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { SpotImage } from "@/components/spot-image";
 import { ImageUnavailable } from "@/components/image-unavailable";
@@ -17,6 +16,7 @@ import { FriendCollections } from "@/components/friend-collections";
 import { useToast } from "@/lib/toast-context";
 import { useMessagesStatus } from "@/lib/use-messages-status";
 import { themedStyles } from "@/theme/themed-styles";
+import { Avatar } from "@/components/avatar";
 
 function chunk<T>(items: T[], size: number): T[][] {
   const rows: T[][] = [];
@@ -141,13 +141,7 @@ export default function UserProfileScreen() {
 
   const header = (
     <View style={styles.header}>
-      <View style={styles.avatar}>
-        {profile.avatarUrl ? (
-          <Image source={{ uri: profile.avatarUrl }} style={styles.fill} contentFit="cover" accessibilityLabel={profile.displayName} />
-        ) : (
-          <PersonIcon size={34} tint={color.acier} />
-        )}
-      </View>
+      <Avatar uri={profile.avatarUrl} userId={profile.id} displayName={profile.displayName} username={profile.username} size={88} accessibilityLabel={profile.displayName} />
       <Text style={styles.name} accessibilityRole="header">{profile.displayName}</Text>
       <Text style={styles.handle}>@{profile.username}</Text>
       {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
@@ -246,7 +240,6 @@ const styles = themedStyles(() => ({
   retryLabel: { fontSize: font.body, color: color.vert, fontWeight: "600" },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 640, alignSelf: "center", width: "100%" },
   header: { alignItems: "center", paddingBottom: space.md },
-  avatar: { width: 88, height: 88, borderRadius: radius.full, backgroundColor: color.plinthe, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   fill: { width: "100%", height: "100%" },
   name: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, marginTop: space.md },
   handle: { fontSize: font.secondary, color: color.acier, marginTop: 2 },

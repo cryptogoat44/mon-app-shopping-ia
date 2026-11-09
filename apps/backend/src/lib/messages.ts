@@ -192,6 +192,13 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Jeton de notification invalide.": "Invalid notification token.",
   "Trop de changements des notifications en peu de temps. Réessayez dans une heure.":
     "Too many notification changes in a short time. Please try again in an hour.",
+  // Profil (lot « profil et icône des réglages ») : bio et photo de profil.
+  "La bio est trop longue (160 caractères maximum).": "Your bio is too long (160 characters maximum).",
+  "La bio ne peut pas dépasser 3 lignes.": "Your bio can't be longer than 3 lines.",
+  "La photo est trop lourde (5 Mo maximum).": "The photo is too large (5 MB maximum).",
+  "Format non accepté : choisissez une photo JPEG, PNG ou HEIC.": "Format not accepted: choose a JPEG, PNG or HEIC photo.",
+  "La photo n'a pas pu être effacée : rien n'a été changé. Réessayez dans un instant.":
+    "The photo couldn't be deleted: nothing was changed. Please try again in a moment.",
   // Mise à jour obligatoire de l'app iPhone (lot « app iPhone prête », lib/appVersion.ts).
   [UPDATE_REQUIRED_MESSAGE]: "This version of Spotto is no longer supported. Please update the app from the App Store.",
 };

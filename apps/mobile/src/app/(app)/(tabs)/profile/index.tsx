@@ -1,20 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Image } from "expo-image";
 import { SpotImage } from "@/components/spot-image";
 import { ImageUnavailable } from "@/components/image-unavailable";
 import { WishlistPanel } from "@/components/wishlist-panel";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import * as ImagePicker from "expo-image-picker";
-import * as Haptics from "expo-haptics";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
-import { ApiError, fetchMyLifestylePosts, fetchVault, uploadAvatar } from "@/lib/api";
+import { ApiError, fetchMyLifestylePosts, fetchVault } from "@/lib/api";
 import type { Post, VaultItem } from "@monapp/shared-types";
-import { CameraIcon, ClockIcon, GearIcon, PersonIcon, PlusIcon, TagIcon, VerifiedIcon } from "@/components/icons";
-import { useToast } from "@/lib/toast-context";
+import { CameraIcon, ClockIcon, PlusIcon, SettingsIcon, TagIcon, VerifiedIcon } from "@/components/icons";
+import { Avatar } from "@/components/avatar";
+import { AvatarPhotoFlow } from "@/components/avatar-photo-flow";
 import { onVaultChanged } from "@/lib/vault-changes";
 import { requestedProfileSegment, type ProfileSegment } from "@/lib/wishlist-link";
 import { Skeleton } from "@/components/skeleton";
@@ -31,7 +29,6 @@ export default function ProfileScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { profile, refreshProfile } = useAuth();
-  const { showToast } = useToast();
   const [items, setItems] = useState<VaultItem[]>([]);
   const [vaultTotal, setVaultTotal] = useState(0);
   const [vaultNextCursor, setVaultNextCursor] = useState<string | null>(null);
@@ -42,7 +39,8 @@ export default function ProfileScreen() {
   // « Voir mes Envies » (Spotter) ouvre l'onglet Envies ; sinon le Vault, comme toujours.
   const { segment: segmentParam } = useLocalSearchParams<{ segment?: string }>();
   const [segment, setSegment] = useState<ProfileSegment>(() => requestedProfileSegment(segmentParam) ?? "vault");
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  // Lot « profil et icône des réglages » : choix, cadrage ou suppression de la photo.
+  const [photoOpen, setPhotoOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -128,65 +126,34 @@ export default function ProfileScreen() {
     router.push("/vault-item/new");
   }
 
-  async function handlePickAvatar() {
-    if (uploadingAvatar) return;
-    // Aucune autorisation demandée : le sélecteur ne remet que la photo choisie.
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.8,
-      allowsEditing: true,
-      aspect: [1, 1],
-    });
-    if (result.canceled || !result.assets[0]) return;
-
-    setUploadingAvatar(true);
-    try {
-      await uploadAvatar(result.assets[0].uri);
-      await refreshProfile();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      showToast(t.profile.avatarUpdated);
-    } catch (e) {
-      showToast(e instanceof ApiError ? e.message : t.profile.avatarError);
-    } finally {
-      setUploadingAvatar(false);
-    }
-  }
-
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.nav}>
         <Text style={styles.navHandle}>@{profile?.username}</Text>
-        <Pressable onPress={() => router.push("/settings")} hitSlop={12} accessibilityRole="button" accessibilityLabel={t.settings.title}>
-          <GearIcon size={21} tint={color.encre} />
+        <Pressable onPress={() => router.push("/settings")} hitSlop={12} style={styles.navButton} accessibilityRole="button" accessibilityLabel={t.settings.title}>
+          <SettingsIcon tint={color.encre} />
         </Pressable>
       </View>
 
       <View style={styles.head}>
-        <Pressable
-          style={styles.avatar}
-          onPress={handlePickAvatar}
-          disabled={uploadingAvatar}
-          accessibilityRole="button"
-          accessibilityLabel={t.profile.changeAvatar}
-        >
-          {profile?.avatarUrl ? (
-            <Image source={{ uri: profile.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
-          ) : (
-            <PersonIcon size={26} tint={color.encre} />
-          )}
-          {uploadingAvatar ? (
-            <View style={styles.avatarOverlay}>
-              <ActivityIndicator color={color.surImage} size="small" />
-            </View>
-          ) : (
-            <View style={styles.avatarBadge}>
-              <CameraIcon size={12} tint={color.blanc} strokeWidth={1.6} />
-            </View>
-          )}
+        <Pressable style={styles.avatar} onPress={() => setPhotoOpen(true)} accessibilityRole="button" accessibilityLabel={t.profile.changeAvatar}>
+          <Avatar uri={profile?.avatarUrl} userId={profile?.id ?? ""} displayName={profile?.displayName} username={profile?.username} size={72} />
+          <View style={styles.avatarBadge}>
+            <CameraIcon size={12} tint={color.blanc} strokeWidth={1.6} />
+          </View>
         </Pressable>
         <View style={styles.who}>
           <Text style={styles.name} accessibilityRole="header">{profile?.displayName}</Text>
           {profile?.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
+          <Pressable
+            onPress={() => router.push("/edit-profile")}
+            hitSlop={{ top: 4, bottom: 4 }}
+            style={styles.editButton}
+            accessibilityRole="button"
+            accessibilityLabel={t.editProfile.title}
+          >
+            <Text style={styles.editLabel}>{t.editProfile.title}</Text>
+          </Pressable>
         </View>
       </View>
       <View style={styles.stats}>
@@ -361,6 +328,7 @@ export default function ProfileScreen() {
           )}
         </ScrollView>
       )}
+      <AvatarPhotoFlow open={photoOpen} onClose={() => setPhotoOpen(false)} />
     </SafeAreaView>
   );
 }
@@ -370,26 +338,8 @@ const styles = themedStyles(() => ({
   nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.lg },
   navHandle: { fontSize: font.body, fontWeight: "600", color: color.encre },
   head: { paddingHorizontal: space.lg, flexDirection: "row", gap: space.lg, alignItems: "center" },
-  avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: radius.full,
-    backgroundColor: color.plinthe,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  avatarImage: { width: "100%", height: "100%" },
-  avatarOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: color.voileImage,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  navButton: { minWidth: 44, minHeight: 44, alignItems: "flex-end", justifyContent: "center" },
+  avatar: { width: 72, height: 72 },
   avatarBadge: {
     position: "absolute",
     bottom: 0,
@@ -412,6 +362,18 @@ const styles = themedStyles(() => ({
   who: { flex: 1 },
   name: { fontSize: font.body, fontWeight: "600", color: color.encre },
   bio: { fontSize: font.secondary, color: color.acier, marginTop: 4, lineHeight: 19 },
+  editButton: {
+    alignSelf: "flex-start",
+    // 36 points + 4 au-dessus et au-dessous (hitSlop) : zone tactile de 44.
+    minHeight: 36,
+    justifyContent: "center",
+    paddingHorizontal: space.md,
+    marginTop: space.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: color.filet,
+  },
+  editLabel: { fontSize: font.caption, fontWeight: "600", color: color.encre },
   seg: { flexDirection: "row", gap: 22, paddingHorizontal: space.lg, paddingTop: space.lg, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: color.filet },
   segItem: { fontSize: 14.5, color: color.acier, paddingBottom: 12 },
   segItemActive: { color: color.encre, fontWeight: "600" },

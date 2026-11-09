@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import type { AppNotification, PostAuthor } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
@@ -13,11 +12,12 @@ import { useMessagesStatus } from "@/lib/use-messages-status";
 import { loadErrorMessage } from "@/lib/load-error";
 import { systemNotificationLines } from "@/lib/moderation-labels";
 import { timeAgo } from "@/lib/format";
-import { BellIcon, CommentIcon, PersonIcon } from "@/components/icons";
+import { BellIcon, CommentIcon } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { LoadFailure } from "@/components/load-failure";
 import { themedStyles } from "@/theme/themed-styles";
+import { Avatar } from "@/components/avatar";
 
 function actionText(notification: AppNotification): string {
   if (notification.type === "follow") return t.notifications.follow;
@@ -34,13 +34,7 @@ function NotificationRow({ notification, actor, onPress }: { notification: AppNo
       accessibilityRole="link"
       accessibilityLabel={`${actor.displayName} ${actionText(notification)}`}
     >
-      <View style={styles.avatar}>
-        {actor.avatarUrl ? (
-          <Image source={{ uri: actor.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
-        ) : (
-          <PersonIcon size={18} tint={color.acier} />
-        )}
-      </View>
+      <Avatar uri={actor.avatarUrl} userId={actor.id} displayName={actor.displayName} username={actor.username} size={36} />
       <View style={styles.rowText}>
         <Text style={styles.rowLine}>
           <Text style={styles.rowName}>{actor.displayName}</Text> {actionText(notification)}
@@ -276,7 +270,6 @@ const styles = themedStyles(() => ({
     justifyContent: "center",
     overflow: "hidden",
   },
-  avatarImage: { width: "100%", height: "100%" },
   rowText: { flex: 1 },
   rowLine: { fontSize: font.secondary, color: color.encre, lineHeight: 19 },
   rowDetail: { fontSize: font.secondary, color: color.encre, lineHeight: 19, marginTop: 2 },

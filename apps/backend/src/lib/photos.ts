@@ -1,4 +1,5 @@
 import sharp, { type Sharp } from "sharp";
+import { AVATAR_SIDE } from "@monapp/shared-types";
 import { ImageSourceError } from "./imageProcessing.js";
 import { MAX_INPUT_PIXELS, imageFormatOf } from "./imageSafety.js";
 
@@ -9,10 +10,10 @@ import { MAX_INPUT_PIXELS, imageFormatOf } from "./imageSafety.js";
 // - « affichage » : 1 600 px sur le grand côté — plus que les 1 170 px d'un
 //   écran d'iPhone en pleine largeur (390 points × 3) ;
 // - « miniature » : 480 px, pour les grilles (≈ 320 px nécessaires) ;
-// - avatar : 512 px.
+// - avatar : un carré de 512 px (encodeAvatar, plus bas).
 // sharp retire aussi les métadonnées (dont la position GPS des photos).
 // Format et taille sont vérifiés avant tout décodage (lib/imageSafety.ts).
-export const PHOTO_SIZES = { display: 1600, thumb: 480, avatar: 512 } as const;
+export const PHOTO_SIZES = { display: 1600, thumb: 480, avatar: AVATAR_SIDE } as const;
 
 /** Comme optimizePhoto, avec la taille finale (ex. images envoyées à l'IA,
  * dont les coordonnées renvoyées dépendent de cette taille). */
@@ -34,6 +35,57 @@ export async function optimizePhotoWithSize(input: Buffer, maxSide: number, qual
 
 export async function optimizePhoto(input: Buffer, maxSide: number, quality = 82): Promise<Buffer> {
   return (await optimizePhotoWithSize(input, maxSide, quality)).data;
+}
+
+// Photo de profil (lot « profil et icône des réglages ») : JPEG ou PNG
+// seulement (l'app convertit les photos HEIC d'iPhone en JPEG avant l'envoi :
+// le sharp du serveur ne sait pas les lire). Toujours un carré de
+// PHOTO_SIZES.avatar px de côté (moins si la photo est plus petite : jamais
+// agrandie), centré, orientation EXIF appliquée, fond blanc sous la
+// transparence d'un PNG. Aucune métadonnée gardée (ni EXIF, ni position
+// GPS) : sharp les retire tant qu'on ne demande pas withMetadata.
+export const AVATAR_FORMATS: ReadonlySet<string> = new Set(["jpeg", "png"]);
+// Marques des photos HEIC d'iPhone (codées en HEVC) : le sharp du serveur ne sait pas les lire.
+const HEVC_BRANDS: ReadonlySet<string> = new Set(["heic", "heix", "hevc", "hevx"]);
+
+/** Vraie image d'un format permis ailleurs mais pas pour la photo de
+ * profil (WebP, GIF, AVIF, HEIC envoyé sans conversion) : la personne doit
+ * savoir quoi envoyer. Seul l'en-tête est lu (rien n'est décodé) ; un faux
+ * en-tête devant autre chose (SVG déguisé) n'en est pas une et reste
+ * « illisible », comme le veut la sécurité des images. */
+export async function isOtherImageFormat(input: Buffer): Promise<boolean> {
+  const format = imageFormatOf(input);
+  if (!format || AVATAR_FORMATS.has(format)) return false;
+  if (format === "heif" && HEVC_BRANDS.has(input.toString("latin1", 8, 12))) return true;
+  try {
+    const { width, height } = await sharp(input, { failOn: "error", limitInputPixels: MAX_INPUT_PIXELS }).metadata();
+    return Boolean(width && height);
+  } catch {
+    return false;
+  }
+}
+
+/** Photo de profil prête à enregistrer, et son côté. Relève ImageSourceError
+ * si l'image est illisible, trop grande ou d'un autre format (vérifié sur
+ * les premiers octets, avant sharp). */
+export async function encodeAvatar(input: Buffer): Promise<{ data: Buffer; side: number }> {
+  const format = imageFormatOf(input);
+  if (!format || !AVATAR_FORMATS.has(format)) throw new ImageSourceError("Image illisible");
+  try {
+    const image = sharp(input, { failOn: "error", limitInputPixels: MAX_INPUT_PIXELS, autoOrient: true });
+    // Dimensions lues dans l'en-tête seul, sans décoder l'image.
+    const { autoOrient } = await image.metadata();
+    const side = Math.min(PHOTO_SIZES.avatar, autoOrient.width, autoOrient.height);
+    if (!side) throw new ImageSourceError("Image illisible");
+    const data = await image
+      .resize({ width: side, height: side, fit: "cover", position: "centre" })
+      .flatten({ background: "#ffffff" })
+      .jpeg({ quality: 85, mozjpeg: true })
+      .toBuffer();
+    return { data, side };
+  } catch {
+    throw new ImageSourceError("Image illisible");
+  }
 }
 
 // Copie de l'image d'une envie partagée (lot 5, 5.C : republiée sur un

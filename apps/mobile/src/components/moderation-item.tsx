@@ -18,10 +18,10 @@ import { loadErrorMessage } from "@/lib/load-error";
 import { collectionPreviewView, hideRestoreLabels, moderationActionLabel, moderationReasonLabel, mostReportedReason, reasonsSummary } from "@/lib/moderation-labels";
 import { useToast } from "@/lib/toast-context";
 import { ErrorMessage } from "@/components/error-message";
-import { PersonIcon } from "@/components/icons";
 import { ImageUnavailable } from "@/components/image-unavailable";
 import { DecisionPanel, RemoveImagePanel, type DecisionKind } from "@/components/moderation-decision";
 import { themedStyles } from "@/theme/themed-styles";
+import { Avatar } from "@/components/avatar";
 
 // Un contenu signalé, vu par un administrateur (lot 5) : les signalements
 // regroupés (jamais qui les a faits), l'aperçu du contenu, les décisions
@@ -61,13 +61,7 @@ function ActionButton({
 function AuthorLine({ author }: { author: ModerationAuthor }) {
   return (
     <View style={styles.authorRow}>
-      <View style={styles.avatar} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        {author.avatarUrl ? (
-          <Image source={{ uri: author.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
-        ) : (
-          <PersonIcon size={16} tint={color.acier} />
-        )}
-      </View>
+      <Avatar uri={author.avatarUrl} userId={author.id} displayName={author.displayName} username={author.username} size={28} />
       <Text style={styles.authorName}>{author.displayName}</Text>
       <Text style={styles.meta}>@{author.username}</Text>
     </View>
@@ -410,16 +404,6 @@ const styles = themedStyles(() => ({
   meta: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
   preview: { marginTop: space.md, gap: space.sm },
   authorRow: { flexDirection: "row", alignItems: "center", gap: space.sm, flexWrap: "wrap" },
-  avatar: {
-    width: 28,
-    height: 28,
-    borderRadius: radius.full,
-    backgroundColor: color.plinthe,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  avatarImage: { width: "100%", height: "100%" },
   authorName: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   postRow: { flexDirection: "row", gap: space.sm },
   postImage: { width: 72, height: 72, borderRadius: radius.sm, backgroundColor: color.plinthe },
