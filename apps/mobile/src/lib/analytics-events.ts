@@ -13,6 +13,7 @@ import {
   REPORT_TARGET_TYPES,
   TEXT_SEARCH_STATUSES,
 } from "@monapp/shared-types";
+import { RESULT_SORTS } from "./result-sort";
 
 type Rule = { kind: "enum"; values: readonly string[] } | { kind: "count" } | { kind: "bool" };
 
@@ -63,6 +64,10 @@ export const ANALYTICS_EVENTS = {
   // nombre de propositions, et d'où : son bouton (« section ») ou « Ce n'est
   // pas la bonne pièce ? » (« not_right », avant toute nouvelle recherche).
   no_price_results_opened: { results_count: count, context: oneOf(["section", "not_right"]) },
+  // Tri des résultats (2026-11-08, lib/result-sort.ts) : tri ou filtre « Avec
+  // prix seulement » changé sur l'écran Résultat — le nouveau choix et ce qui
+  // a changé, jamais la recherche ni les pièces.
+  result_view_changed: { sort: oneOf(RESULT_SORTS), with_price_only: bool, change: oneOf(["sort", "filter"]) },
   wishlist_item_added: { context: oneOf(["result"]) },
   vault_item_added: { source: oneOf(["spotter", "photo"]), category: oneOf(["clothing", "watches", "accessories", "shoes", "bags", "home", "other"]) },
   // Prix d'abord (2026-11-03), écran Résultat seulement (lib/price-first.ts) :

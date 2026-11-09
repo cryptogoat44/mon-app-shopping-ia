@@ -44,6 +44,7 @@ export function ResultComplement({
   textStatus,
   onSelect,
   placements,
+  cheapestIndex = null,
 }: {
   source: "ai" | "words";
   /** Propositions de la section, sans celle montrée en grand ; `index` désigne la liste complète de l'écran. */
@@ -55,6 +56,8 @@ export function ResultComplement({
   onSelect: (index: number) => void;
   /** Place de chaque proposition à l'écran, pour les statistiques du clic (lib/price-first.ts). */
   placements?: ReadonlyMap<number, ClickPlacement>;
+  /** Proposition marquée « Le moins cher » (lib/result-sort.ts), indice dans la liste complète de l'écran. */
+  cheapestIndex?: number | null;
 }) {
   const [showAll, setShowAll] = useState(false);
   const note = source === "words" && others.length === 0 ? textSearchStatusNote(textStatus) : null;
@@ -71,7 +74,7 @@ export function ResultComplement({
       {visible.length > 0 ? (
         <View style={styles.grid}>
           {visible.map(({ piece, index }) => (
-            <ProposalCard key={piece.id} piece={piece} onSelect={() => onSelect(index)} placement={placements?.get(index)} />
+            <ProposalCard key={piece.id} piece={piece} onSelect={() => onSelect(index)} placement={placements?.get(index)} cheapest={index === cheapestIndex} />
           ))}
         </View>
       ) : null}

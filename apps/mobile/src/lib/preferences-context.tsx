@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth-context";
 import { updateMyLocale } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { track } from "@/lib/analytics";
+import { DEFAULT_RESULT_VIEW, parseResultView, RESULT_VIEW_STORAGE_KEY, resultViewChangeProps, serializeResultView, type ResultView } from "@/lib/result-sort";
 import {
   LOCALE_STORAGE_KEY,
   THEME_STORAGE_KEY,
@@ -28,29 +29,52 @@ import {
 // textes et couleurs sont lus au rendu, et le compilateur React garde en
 // mémoire les parties qui n'ont pas changé. L'adresse de la page (site) est
 // conservée ; la session aussi (AuthProvider est au-dessus).
+//
+// Tri et filtre de l'écran Résultat (2026-11-08, lib/result-sort.ts) : gardés
+// sur l'appareil seulement, lus avec la langue (aucun saut d'affichage à
+// l'ouverture d'un résultat) ; les changer ne remonte rien.
 
 interface PreferencesValue {
   locale: Locale;
   themePreference: ThemePreference;
   chooseLocale: (locale: Locale, context: "welcome" | "settings") => Promise<void>;
   chooseTheme: (preference: ThemePreference) => Promise<void>;
+  resultView: ResultView;
+  chooseResultView: (view: ResultView) => void;
 }
 
 const PreferencesContext = createContext<PreferencesValue | null>(null);
 
-async function readStored(): Promise<{ locale: Locale; theme: ThemePreference }> {
-  const [locale, theme] = await Promise.all([
+interface Stored {
+  locale: Locale;
+  theme: ThemePreference;
+  resultView: ResultView;
+}
+
+/** Tri et filtre gardés ; stockage illisible ou refusé (navigation privée) : le choix par défaut. */
+async function readResultView(): Promise<ResultView> {
+  try {
+    return parseResultView(await AsyncStorage.getItem(RESULT_VIEW_STORAGE_KEY));
+  } catch {
+    return DEFAULT_RESULT_VIEW;
+  }
+}
+
+async function readStored(): Promise<Stored> {
+  const [locale, theme, resultView] = await Promise.all([
     AsyncStorage.getItem(LOCALE_STORAGE_KEY).catch(() => null),
     AsyncStorage.getItem(THEME_STORAGE_KEY).catch(() => null),
+    readResultView(),
   ]);
   return {
     locale: parseLocale(locale) ?? detectLocale(getLocales().map((entry) => entry.languageCode)),
     theme: parseThemePreference(theme),
+    resultView,
   };
 }
 
 export function PreferencesProvider({ children }: { children: ReactNode }) {
-  const [stored, setStored] = useState<{ locale: Locale; theme: ThemePreference } | null>(null);
+  const [stored, setStored] = useState<Stored | null>(null);
   const system = useColorScheme();
   const { session, profile } = useAuth();
   const synced = useRef<string | null>(null);
@@ -108,8 +132,24 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem(THEME_STORAGE_KEY, next).catch(() => {});
   }
 
+  /** Écran Résultat : le nouveau tri ou filtre tout de suite, gardé pour les recherches suivantes. */
+  function chooseResultView(next: ResultView) {
+    if (!stored) return;
+    const change = resultViewChangeProps(stored.resultView, next);
+    if (!change) return;
+    setStored((current) => (current ? { ...current, resultView: next } : current));
+    track("result_view_changed", change);
+    void (async () => {
+      try {
+        await AsyncStorage.setItem(RESULT_VIEW_STORAGE_KEY, serializeResultView(next));
+      } catch {
+        // Stockage refusé : le choix vaut pour cette session seulement.
+      }
+    })();
+  }
+
   return (
-    <PreferencesContext.Provider value={{ locale, themePreference: stored.theme, chooseLocale, chooseTheme }}>
+    <PreferencesContext.Provider value={{ locale, themePreference: stored.theme, chooseLocale, chooseTheme, resultView: stored.resultView, chooseResultView }}>
       <StatusBar style={scheme === "dark" ? "light" : "dark"} />
       <Fragment key={`${scheme}-${locale}`}>{children}</Fragment>
     </PreferencesContext.Provider>

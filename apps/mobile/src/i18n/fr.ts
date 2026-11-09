@@ -570,6 +570,18 @@ export const fr = {
     // cette ligne discrète attend « Cette pièce dans d'autres boutiques », puis
     // disparaît (sans message si rien n'est trouvé). Texte à valider.
     shopsPending: "Recherche dans d'autres boutiques…",
+    // Tri des résultats (2026-11-08, lib/result-sort.ts). Textes à valider.
+    sortLabel: "Trier les résultats",
+    sortRelevance: "Pertinence",
+    sortPriceAsc: "Prix croissant",
+    sortPriceDesc: "Prix décroissant",
+    withPriceOnly: "Avec prix seulement",
+    withPriceOnlyHint: "Masque les propositions sans prix.",
+    // Offres avec un prix dans la devise la plus fréquente ; le prix le plus bas, sans conversion.
+    offersSummary: (n: number, price: string) => (n > 1 ? `${n} offres · à partir de ${price}` : `1 offre · ${price}`),
+    cheapestBadge: "Le moins cher",
+    // « Avec prix seulement » et aucune proposition avec prix : retirer le filtre.
+    showAllProposals: "Afficher aussi les propositions sans prix",
     // Proposition sans lien direct vers le marchand : le lien ouvre la page produit de Google.
     viewOffer: "Voir l'offre",
     textSearchIntro: "Pas tout à fait ça ?",
