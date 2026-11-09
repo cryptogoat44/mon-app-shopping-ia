@@ -14,6 +14,7 @@ import {
   TEXT_SEARCH_STATUSES,
 } from "@monapp/shared-types";
 import { RESULT_SORTS } from "./result-sort";
+import { WISHLIST_SORTS } from "./wishlist-view";
 
 type Rule = { kind: "enum"; values: readonly string[] } | { kind: "count" } | { kind: "bool" };
 
@@ -68,6 +69,9 @@ export const ANALYTICS_EVENTS = {
   // prix seulement » changé sur l'écran Résultat — le nouveau choix et ce qui
   // a changé, jamais la recherche ni les pièces.
   result_view_changed: { sort: oneOf(RESULT_SORTS), with_price_only: bool, change: oneOf(["sort", "filter"]) },
+  // Écran Envies (2026-11-09, lib/wishlist-view.ts) : tri changé — le nouveau
+  // tri et s'il est choisi dans une collection, jamais la recherche tapée.
+  wishlist_sort_changed: { sort: oneOf(WISHLIST_SORTS), in_collection: bool },
   wishlist_item_added: { context: oneOf(["result"]) },
   vault_item_added: { source: oneOf(["spotter", "photo"]), category: oneOf(["clothing", "watches", "accessories", "shoes", "bags", "home", "other"]) },
   // Prix d'abord (2026-11-03), écran Résultat seulement (lib/price-first.ts) :
