@@ -61,6 +61,7 @@ Les dates de 0001 à 0028 ne sont pas notées dans le dépôt : celles du tablea
 | 0032 | le fichier de la migration lui-même (**après 0030** ; ne pas relancer 0030 ensuite) | `supabase/verifications/0032-verification.sql` | en tête du fichier de la migration |
 | 0033 | le fichier de la migration lui-même | `supabase/verifications/0033-verification.sql` | en tête du fichier de la migration |
 | 0034 | le fichier de la migration lui-même (**après 0030, 0032 et 0033** ; ne pas relancer 0030 ni 0032 ensuite) | `supabase/verifications/0034-verification.sql` | en tête du fichier de la migration |
+| 0030, 0032, 0033 et 0034 ensemble | `supabase/mise-en-ligne/social-production.sql` (un seul copier-coller, dans le bon ordre, rejouable en entier ; vérifié deux fois sur spotto-dev-2 le 9 nov. 2026) | `supabase/mise-en-ligne/social-verification.sql` (4 lignes, toutes `true`) | en tête de chaque migration, dans l'ordre inverse |
 | 0035 | le fichier de la migration lui-même | `supabase/verifications/0035-verification.sql` | en tête du fichier de la migration |
 
 ## Avant d'appliquer 0029, 0030, 0032, 0033, 0034 et 0035
