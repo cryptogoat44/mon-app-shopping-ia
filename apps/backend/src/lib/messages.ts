@@ -182,6 +182,11 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
     "You've changed the visibility of your collections many times. Please try again in an hour.",
   "Vous avez gardé beaucoup d'envies en peu de temps. Réessayez dans un moment.":
     "You've saved a lot of wishes in a short time. Please try again in a moment.",
+  // Modération des collections (lot modération des collections, migration 0034).
+  "Cette collection a été masquée par la modération : vous ne pouvez pas la montrer à vos amis.":
+    "This collection was hidden by moderation: you can't show it to your friends.",
+  "Le signalement des collections n'est pas encore disponible.": "Reporting collections isn't available yet.",
+  "Cette envie n'a pas d'image copiée par Spotto : il n'y a rien à retirer.": "This wish has no image copied by Spotto: there's nothing to remove.",
   // Mise à jour obligatoire de l'app iPhone (lot « app iPhone prête », lib/appVersion.ts).
   [UPDATE_REQUIRED_MESSAGE]: "This version of Spotto is no longer supported. Please update the app from the App Store.",
 };

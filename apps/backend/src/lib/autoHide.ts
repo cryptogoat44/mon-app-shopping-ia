@@ -21,8 +21,10 @@ import { z } from "zod";
  * un contenu en attendant la décision d'un administrateur. */
 export const AUTO_HIDE_DISTINCT_REPORTERS = 3;
 
-/** Contenus qui se masquent (un profil ne se masque pas : il se suspend). */
-export const AUTO_HIDE_TARGET_TYPES = ["post", "comment", "piece"] as const;
+/** Contenus qui se masquent (un profil ne se masque pas : il se suspend).
+ * Lot modération des collections : une collection montrée aux amis aussi
+ * (migration 0034 ; sans elle, une collection ne peut pas être signalée). */
+export const AUTO_HIDE_TARGET_TYPES = ["post", "comment", "piece", "collection"] as const;
 export type AutoHideTargetType = (typeof AUTO_HIDE_TARGET_TYPES)[number];
 
 export function isAutoHideTarget(targetType: string): targetType is AutoHideTargetType {

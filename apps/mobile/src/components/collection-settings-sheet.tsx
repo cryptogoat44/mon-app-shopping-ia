@@ -5,7 +5,7 @@ import type { CollectionSummary, CollectionVisibility } from "@monapp/shared-typ
 import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { ApiError, deleteCollection, updateCollection } from "@/lib/api";
-import { canSaveName, cleanCollectionName, needsShareConfirmation, visibilityOptions, visibilityState } from "@/lib/collections";
+import { canSaveName, cleanCollectionName, collectionState, needsShareConfirmation, shareBlockedByModeration, visibilityOptions } from "@/lib/collections";
 import { useToast } from "@/lib/toast-context";
 import { CollectionNameField } from "@/components/collection-name-sheet";
 import { ErrorMessage } from "@/components/error-message";
@@ -14,7 +14,10 @@ import { themedStyles } from "@/theme/themed-styles";
 
 // « Gérer » une collection (lot collections) : la renommer, choisir qui la
 // voit (« Privée » par défaut, ou « Mes amis » après une confirmation qui dit
-// ce que les amis verront), ou la supprimer (ses envies restent).
+// ce que les amis verront), ou la supprimer (ses envies restent). Lot
+// modération des collections : masquée par la modération, elle le dit, et
+// « Mes amis » est refusé (le serveur le refuse aussi) ; « Privée » reste
+// possible.
 export function CollectionSettingsSheet({
   collection,
   onClose,
@@ -75,6 +78,10 @@ export function CollectionSettingsSheet({
   }
 
   function handleVisibility(visibility: CollectionVisibility) {
+    if (shareBlockedByModeration(current, visibility)) {
+      setError(t.collections.hiddenCannotShare);
+      return;
+    }
     // Passer à « Mes amis » : d'abord ce que les amis verront.
     if (needsShareConfirmation(current.visibility, visibility)) setConfirmShare(true);
     else applyVisibility(visibility);
@@ -118,7 +125,7 @@ export function CollectionSettingsSheet({
             onChange={handleVisibility}
             disabled={busy}
           />
-          <Text style={styles.hint}>{visibilityState(current.visibility)}</Text>
+          <Text style={[styles.hint, current.hidden ? styles.hidden : null]}>{collectionState(current)}</Text>
           {confirmShare ? (
             <View style={styles.confirm} testID="confirmer-amis">
               <Text style={styles.confirmTitle} accessibilityRole="alert">
@@ -180,6 +187,7 @@ const styles = themedStyles(() => ({
   title: { fontSize: font.body, fontWeight: "600", color: color.encre },
   label: { fontSize: font.caption, color: color.acier, marginTop: space.sm },
   hint: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
+  hidden: { color: color.danger, fontWeight: "600" },
   button: { minHeight: 44, borderRadius: radius.md, borderWidth: 1, borderColor: color.filet, alignItems: "center", justifyContent: "center" },
   buttonDisabled: { opacity: 0.5 },
   buttonLabel: { fontSize: font.secondary, fontWeight: "600", color: color.vert },

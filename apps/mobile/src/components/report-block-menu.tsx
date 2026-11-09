@@ -7,6 +7,7 @@ import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { useToast } from "@/lib/toast-context";
 import { reportReasonLabel } from "@/lib/moderation-labels";
+import { isContentReport, reportMenuLabel, reportRequest } from "@/lib/report-target";
 import { themedStyles } from "@/theme/themed-styles";
 
 type Step = "root" | "report" | "confirmBlock";
@@ -22,6 +23,8 @@ interface ReportBlockMenuProps {
   pieceId?: string;
   /** Signaler un message reçu (lot messages) ; `userId` est la personne qui l'a envoyé. */
   messageId?: string;
+  /** Signaler la collection d'un ami (lot modération des collections) ; `userId` est son auteur. */
+  collectionId?: string;
   onBlocked?: (userId: string) => void;
   /** Chantier 3 (règle 1.2 d'Apple) : le contenu signalé (publication,
    * commentaire, pièce reçue) disparaît aussitôt de ce que voit la personne
@@ -29,10 +32,11 @@ interface ReportBlockMenuProps {
   onReported?: () => void;
 }
 
-export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, pieceId, messageId, onBlocked, onReported }: ReportBlockMenuProps) {
+export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, pieceId, messageId, collectionId, onBlocked, onReported }: ReportBlockMenuProps) {
   const [step, setStep] = useState<Step>("root");
   const { showToast } = useToast();
-  const reportLabel = messageId ? t.messages.reportMessage : pieceId ? t.received.report : postId ? t.moderation.reportPost : t.moderation.reportUser;
+  const target = { userId, postId, commentId, pieceId, messageId, collectionId };
+  const reportLabel = reportMenuLabel(target);
 
   function close() {
     onClose();
@@ -42,17 +46,9 @@ export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, p
   async function handleReport(reason: ReportReason) {
     close();
     try {
-      await reportContent(
-        messageId
-          ? { targetType: "message", targetId: messageId, reason }
-          : commentId
-            ? { targetType: "comment", targetId: commentId, reason }
-            : pieceId
-              ? { targetType: "piece", targetId: pieceId, reason }
-              : { targetType: postId ? "post" : "user", targetId: postId ?? userId, reason }
-      );
+      await reportContent(reportRequest(target, reason));
       // Un contenu (pas un profil) signalé ne vous est plus montré.
-      const content = Boolean(messageId || commentId || pieceId || postId);
+      const content = isContentReport(target);
       showToast(content && onReported ? t.accountSafety.reportedHidden : t.moderation.reportSuccess);
       if (content) onReported?.();
     } catch (e) {

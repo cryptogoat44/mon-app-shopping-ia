@@ -909,9 +909,11 @@ export interface AppNotification {
 }
 
 /** « piece » (lot 5) : une pièce reçue d'une autre personne. « message »
- * (lot messages) : un message reçu dans une conversation. */
-export type ReportTargetType = "user" | "post" | "comment" | "piece" | "message";
-export const REPORT_TARGET_TYPES = ["user", "post", "comment", "piece", "message"] as const satisfies readonly ReportTargetType[];
+ * (lot messages) : un message reçu dans une conversation. « collection »
+ * (lot modération des collections, migration 0034) : une collection qu'un
+ * ami vous montre. */
+export type ReportTargetType = "user" | "post" | "comment" | "piece" | "message" | "collection";
+export const REPORT_TARGET_TYPES = ["user", "post", "comment", "piece", "message", "collection"] as const satisfies readonly ReportTargetType[];
 export type ReportReason = "spam" | "inappropriate" | "harassment" | "other";
 export const REPORT_REASONS = ["spam", "inappropriate", "harassment", "other"] as const satisfies readonly ReportReason[];
 /** Motif d'une décision de la modération : ceux des signalements, plus le
@@ -973,7 +975,36 @@ export type ModerationPreview =
       /** Le message signalé et quelques messages autour (jamais toute la conversation). */
       context: ModerationMessageContext[];
     }
+  | {
+      kind: "collection";
+      author: ModerationAuthor;
+      name: string;
+      visibility: CollectionVisibility;
+      itemCount: number;
+      /** Les envies les plus récemment ajoutées (MODERATION_COLLECTION_PREVIEW_ITEMS
+       * au plus), telles que les amis les voient : titre et copie de l'image. */
+      items: ModerationCollectionItem[];
+      createdAt: string;
+      /** Masquée par la modération : les amis ne la voient plus. */
+      hidden: boolean;
+    }
   | { kind: "missing" };
+
+/** Envies montrées dans l'aperçu d'une collection signalée. */
+export const MODERATION_COLLECTION_PREVIEW_ITEMS = 6;
+
+/** Une envie d'une collection signalée (vue de la modération). */
+export interface ModerationCollectionItem {
+  /** L'envie dans la collection (à donner pour retirer la copie de son image). */
+  id: string;
+  title: string;
+  /** Copie faite par Spotto (miniature) ; null sans copie, ou après un retrait. */
+  imageUrl: string | null;
+  /** Copie retirée par la modération : les amis voient « Image indisponible ». */
+  imageRemoved: boolean;
+  /** Une copie est en place : « Retirer l'image » est proposé. */
+  canRemoveImage: boolean;
+}
 
 /** Un message de l'extrait montré à la modération autour d'un message signalé. */
 export interface ModerationMessageContext {
@@ -1043,15 +1074,22 @@ export interface ModerationUndoRequest {
   note?: string;
 }
 
-/** Contenus dont l'image peut être une copie faite par Spotto (lot 5). */
-export const IMAGE_REMOVAL_TARGET_TYPES = ["post", "piece"] as const satisfies readonly ReportTargetType[];
+/** Contenus dont l'image peut être une copie faite par Spotto (lot 5) ; lot
+ * modération des collections : la copie de l'image d'une envie d'une
+ * collection montrée aux amis. */
+export const IMAGE_REMOVAL_TARGET_TYPES = ["post", "piece", "collection"] as const satisfies readonly ReportTargetType[];
 
-/** Retirer l'image copiée d'une publication « envie » ou d'une pièce envoyée
- * (lot 5) : motif neutre fixé par le serveur, note facultative. Le serveur
- * efface d'abord le fichier ; s'il n'y parvient pas, rien n'est changé. */
+/** Retirer l'image copiée d'une publication « envie », d'une pièce envoyée
+ * (lot 5) ou d'une envie d'une collection : motif neutre fixé par le serveur,
+ * note facultative. Le serveur efface d'abord le fichier ; s'il n'y parvient
+ * pas, rien n'est changé. */
 export interface RemoveImageRequest {
   targetType: (typeof IMAGE_REMOVAL_TARGET_TYPES)[number];
+  /** Le contenu signalé (pour une collection : la collection). */
   targetId: string;
+  /** Collection seulement (obligatoire) : l'envie de la collection dont la
+   * copie est retirée (ModerationCollectionItem.id). */
+  itemId?: string;
   note?: string;
 }
 
@@ -1247,6 +1285,10 @@ export const DEFAULT_COLLECTION_VISIBILITY: CollectionVisibility = "private";
  * le serveur (migration 0033 appliquée) ? Sinon l'app les cache toutes. */
 export interface CollectionsStatus {
   enabled: boolean;
+  /** Lot modération des collections (migration 0034) : une collection d'un
+   * ami peut être signalée. Faux (ou absent : ancien serveur) : l'app cache
+   * « Signaler ». Le serveur l'envoie toujours. */
+  reportable?: boolean;
 }
 
 /** Codes d'erreur propres aux collections. */
@@ -1259,6 +1301,8 @@ export const COLLECTIONS_ERRORS = {
   limit: "collection_limit",
   /** 100 envies déjà dans la collection (409). */
   full: "collection_full",
+  /** Masquée par la modération : elle ne peut pas être remontrée aux amis (409). */
+  hidden: "collection_hidden",
 } as const;
 
 /** Une de vos collections. */
@@ -1268,6 +1312,10 @@ export interface CollectionSummary {
   visibility: CollectionVisibility;
   itemCount: number;
   createdAt: string;
+  /** Lot modération des collections : masquée par la modération (vos amis ne
+   * la voient plus ; « Mes amis » est refusé tant qu'elle l'est). Absent
+   * (ancien serveur) : non. Le serveur l'envoie toujours. */
+  hidden?: boolean;
 }
 
 export interface CollectionsList {

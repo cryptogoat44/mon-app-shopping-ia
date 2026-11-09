@@ -8,22 +8,29 @@
 // Lot messages : un message signalé est montré avec quelques messages
 // autour (MODERATION_MESSAGE_CONTEXT avant et après), jamais toute la
 // conversation.
+// Lot modération des collections : une collection signalée est montrée avec
+// son nom, son auteur et ses dernières envies (titre et copie de l'image,
+// comme les amis les voient), chacune avec « Retirer l'image » si une copie
+// est en place.
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   MODERATION_ACTION_TYPES,
+  MODERATION_COLLECTION_PREVIEW_ITEMS,
   MODERATION_MESSAGE_CONTEXT,
   MODERATION_REASONS,
   PRIVACY_LEVELS,
   REPORT_REASONS,
   REPORT_TARGET_TYPES,
   type ModerationAuthor,
+  type ModerationCollectionItem,
   type ModerationItem,
   type ModerationLogEntry,
   type ModerationMessageContext,
   type ModerationPreview,
 } from "@monapp/shared-types";
-import { parseDbRows } from "./validation.js";
+import { COLLECTION_ROWS, ITEM_COLUMNS, ITEM_ROWS, isRemovedCopy, ownCopyUrl, readCopies, type CollectionRow } from "./collections.js";
+import { DatabaseReadError, parseDbRows } from "./validation.js";
 
 /** Décisions affichées par contenu (les plus récentes). */
 const HISTORY_LIMIT = 10;
@@ -90,6 +97,7 @@ const MESSAGE_ROWS = z.array(
   })
 );
 type MessageRow = z.infer<typeof MESSAGE_ROWS>[number];
+const WISH_TITLE_ROWS = z.array(z.object({ id: ID, title: z.string() }));
 const MESSAGE_COLUMNS = "id, conversation_id, sender_id, body, wish_title, created_at, hidden_at";
 const PROFILE_ROWS = z.array(
   z.object({ id: ID, username: z.string().nullable(), display_name: z.string(), avatar_url: z.string().nullable(), bio: z.string().nullable() })
@@ -122,6 +130,9 @@ interface Loaded {
   /** Messages signalés (lot messages), et l'extrait autour de chacun (du plus ancien au plus récent). */
   messages: Map<string, MessageRow>;
   messageContext: Map<string, MessageRow[]>;
+  /** Collections signalées (lot modération des collections), et leurs dernières envies. */
+  collections: Map<string, CollectionRow>;
+  collectionPreviews: Map<string, { itemCount: number; items: ModerationCollectionItem[] }>;
   /** Compte suspendu → décision de suspension en vigueur. */
   suspensions: Map<string, string>;
   /** Du plus récent au plus ancien. */
@@ -142,7 +153,8 @@ async function loadTargets(fastify: FastifyInstance, rows: QueueRow[]) {
   const commentIds = idsOf(rows, "comment");
   const pieceIds = idsOf(rows, "piece");
   const messageIds = idsOf(rows, "message");
-  const [posts, comments, pieces, messages, actions] = await Promise.all([
+  const collectionIds = idsOf(rows, "collection");
+  const [posts, comments, pieces, messages, collections, actions] = await Promise.all([
     postIds.length > 0
       ? db
           .from("posts")
@@ -154,6 +166,8 @@ async function loadTargets(fastify: FastifyInstance, rows: QueueRow[]) {
       ? db.from("piece_sends").select("id, sender_id, title, image_url, image_thumb_url, image_removed_at, created_at, hidden_at").in("id", pieceIds)
       : NO_ROWS,
     messageIds.length > 0 ? db.from("messages").select(MESSAGE_COLUMNS).in("id", messageIds) : NO_ROWS,
+    // Toutes les colonnes, comme lib/collections.ts (hidden_at vient de 0034).
+    collectionIds.length > 0 ? db.from("collections").select("*").in("id", collectionIds) : NO_ROWS,
     db
       .from("moderation_actions")
       // Toutes les colonnes : `automatic` n'existe qu'après la migration 0030,
@@ -168,6 +182,7 @@ async function loadTargets(fastify: FastifyInstance, rows: QueueRow[]) {
     comments: parseDbRows(COMMENT_ROWS, comments, "Commentaires signalés"),
     pieces: parseDbRows(PIECE_ROWS, pieces, "Pièces envoyées signalées"),
     messages: parseDbRows(MESSAGE_ROWS, messages, "Messages signalés"),
+    collections: parseDbRows(COLLECTION_ROWS, collections, "Collections signalées"),
     actions: parseDbRows(ACTION_ROWS, actions, "Journal de modération"),
   };
 }
@@ -194,6 +209,52 @@ async function loadMessageContext(fastify: FastifyInstance, messages: MessageRow
   return new Map(entries);
 }
 
+/** Les dernières envies de chaque collection signalée (comme les amis les
+ * voient : titre, copie de l'image) et leur nombre. Rien d'autre de la
+ * collection n'est lu (ni prix, ni lien, ni notes). */
+async function loadCollectionPreviews(fastify: FastifyInstance, collections: CollectionRow[]): Promise<Map<string, { itemCount: number; items: ModerationCollectionItem[] }>> {
+  const db = fastify.supabaseAdmin;
+  const entries = await Promise.all(
+    collections.map(async (collection) => {
+      const [items, counted] = await Promise.all([
+        db
+          .from("collection_items")
+          .select(ITEM_COLUMNS)
+          .eq("collection_id", collection.id)
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .limit(MODERATION_COLLECTION_PREVIEW_ITEMS)
+          .then((result) => parseDbRows(ITEM_ROWS, result, "Envies d'une collection signalée")),
+        db.from("collection_items").select("id", { count: "exact", head: true }).eq("collection_id", collection.id),
+      ]);
+      if (counted.error) throw new DatabaseReadError("Nombre d'envies d'une collection signalée illisible");
+      const wishIds = items.map((item) => item.wishlist_item_id);
+      const [titles, copies] = await Promise.all([
+        wishIds.length > 0
+          ? db
+              .from("wishlist_items")
+              .select("id, title")
+              .eq("user_id", collection.user_id)
+              .in("id", wishIds)
+              .then((result) => parseDbRows(WISH_TITLE_ROWS, result, "Titres des envies d'une collection signalée"))
+          : Promise.resolve([]),
+        readCopies(fastify, collection.user_id, wishIds),
+      ]);
+      const titleById = new Map(titles.map((row) => [row.id, row.title]));
+      const preview: ModerationCollectionItem[] = items.flatMap((item) => {
+        const title = titleById.get(item.wishlist_item_id);
+        if (title === undefined) return [];
+        const copy = copies.get(item.wishlist_item_id);
+        const removed = copy !== undefined && isRemovedCopy(copy);
+        const imageUrl = copy && !removed ? (ownCopyUrl(copy.image_thumb_url, collection.user_id) ?? ownCopyUrl(copy.image_url, collection.user_id)) : null;
+        return [{ id: item.id, title, imageUrl, imageRemoved: removed, canRemoveImage: copy !== undefined && !removed }];
+      });
+      return [collection.id, { itemCount: counted.count ?? items.length, items: preview }] as const;
+    })
+  );
+  return new Map(entries);
+}
+
 /** Profils (comptes signalés, auteurs des contenus, administrateurs du journal) et suspensions en vigueur. */
 async function loadPeople(fastify: FastifyInstance, userIds: string[]) {
   if (userIds.length === 0) return { profiles: [], suspensions: [] };
@@ -214,7 +275,11 @@ async function loadAll(fastify: FastifyInstance, rows: QueueRow[]): Promise<Load
   for (const post of targets.posts) userIds.add(post.user_id);
   for (const comment of targets.comments) userIds.add(comment.user_id);
   for (const piece of targets.pieces) userIds.add(piece.sender_id);
-  const messageContext = await loadMessageContext(fastify, targets.messages);
+  for (const collection of targets.collections) userIds.add(collection.user_id);
+  const [messageContext, collectionPreviews] = await Promise.all([
+    loadMessageContext(fastify, targets.messages),
+    loadCollectionPreviews(fastify, targets.collections),
+  ]);
   for (const extract of messageContext.values()) for (const message of extract) userIds.add(message.sender_id);
   for (const action of targets.actions) if (action.admin_id) userIds.add(action.admin_id);
   const people = await loadPeople(fastify, [...userIds]);
@@ -224,6 +289,8 @@ async function loadAll(fastify: FastifyInstance, rows: QueueRow[]): Promise<Load
     pieces: new Map(targets.pieces.map((piece) => [piece.id, piece])),
     messages: new Map(targets.messages.map((message) => [message.id, message])),
     messageContext,
+    collections: new Map(targets.collections.map((collection) => [collection.id, collection])),
+    collectionPreviews,
     profiles: new Map(people.profiles.map((profile) => [profile.id, profile])),
     suspensions: new Map(people.suspensions.map((s) => [s.user_id, s.moderation_action_id])),
     actions: targets.actions,
@@ -301,12 +368,29 @@ function previewOf(row: QueueRow, data: Loaded): ModerationPreview {
       context,
     };
   }
+  if (row.target_type === "collection") {
+    const collection = data.collections.get(row.target_id);
+    const author = collection ? authorOf(collection.user_id, data) : null;
+    const preview = collection ? data.collectionPreviews.get(collection.id) : undefined;
+    if (!collection || !author || !preview) return MISSING;
+    return {
+      kind: "collection",
+      author,
+      name: collection.name,
+      visibility: collection.visibility,
+      itemCount: preview.itemCount,
+      items: preview.items,
+      createdAt: collection.created_at,
+      hidden: collection.hidden_at !== null,
+    };
+  }
   const author = authorOf(row.target_id, data);
   return author ? { kind: "user", author, bio: data.profiles.get(row.target_id)?.bio ?? null } : MISSING;
 }
 
 /** L'image est une copie faite par Spotto (publication « envie », pièce
- * envoyée), encore en place : « Retirer l'image » est proposé. */
+ * envoyée), encore en place : « Retirer l'image » est proposé. Une
+ * collection le propose envie par envie (aperçu), jamais pour elle entière. */
 function canRemoveImage(row: QueueRow, preview: ModerationPreview, data: Loaded): boolean {
   if (preview.kind === "piece") return !preview.imageRemoved;
   if (preview.kind !== "post") return false;
@@ -334,7 +418,7 @@ function toLogEntry(action: ActionRow, data: Loaded): ModerationLogEntry {
 function toItem(row: QueueRow, data: Loaded): ModerationItem {
   const history = data.actions.filter((action) => action.target_type === row.target_type && action.target_id === row.target_id);
   const preview = previewOf(row, data);
-  const hidden = (preview.kind === "post" || preview.kind === "comment" || preview.kind === "piece" || preview.kind === "message") && preview.hidden;
+  const hidden = preview.kind !== "user" && preview.kind !== "missing" && preview.hidden;
   const hide = hidden ? activeHide(history) : null;
   return {
     targetType: row.target_type,

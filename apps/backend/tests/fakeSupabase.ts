@@ -7,7 +7,10 @@ import { randomUUID } from "node:crypto";
 // utiles à ces tests sont imitées : clés uniques (paire d'une conversation,
 // envie une seule fois par collection, une copie par envie), suppressions en
 // cascade, et le déclencheur de la migration 0032 (aperçu, ordre, « non lu »).
-// Une table absente (`missing`) répond comme une base sans la migration.
+// Une table absente (`missing`) répond comme une base sans la migration ; de
+// même une colonne absente (`missingColumns`, lot modération des
+// collections : base sans 0034). Les fonctions de la base (`rpc`) sont
+// fournies par le test qui en a besoin ; sinon, elles sont « absentes ».
 
 export type Row = Record<string, unknown>;
 type Filter = (row: Row) => boolean;
@@ -22,6 +25,13 @@ export interface FakeDbOptions {
   missing?: string[];
   /** Fait échouer une écriture (table, action) : son erreur est renvoyée. */
   failWrite?: (table: string, action: "insert" | "update" | "delete", values: unknown) => DbError | null;
+  /** Colonnes absentes, par table (base sans la migration 0034) : les nommer
+   * dans un select, une écriture ou un filtre renvoie l'erreur de Postgres. */
+  missingColumns?: Record<string, string[]>;
+  /** Le stockage refuse d'effacer (chaque essai compte). */
+  failStorageRemove?: () => boolean;
+  /** Les fonctions de la base (moderation_apply…), imitées par le test. */
+  rpc?: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: DbError | null }>;
 }
 
 const DEFAULTS: Record<string, () => Row> = {
@@ -55,6 +65,9 @@ const DEFAULTS: Record<string, () => Row> = {
   collection_items: () => ({ id: randomUUID(), created_at: nextTimestamp() }),
   collection_image_copies: () => ({ created_at: nextTimestamp() }),
   wishlist_items: () => ({ id: randomUUID(), reference: null, created_at: nextTimestamp() }),
+  // Modération (imitée par les tests de la modération des collections).
+  moderation_actions: () => ({ id: randomUUID(), admin_id: null, reason: null, note: null, undoes_action_id: null, automatic: false, created_at: nextTimestamp() }),
+  notifications: () => ({ id: randomUUID(), actor_id: null, post_id: null, moderation_action_id: null, read_at: null, hidden_at: null, created_at: nextTimestamp() }),
 };
 
 /** Clés uniques imitées (doublon : erreur 23505, comme Postgres). */
@@ -142,8 +155,15 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
     let values: Row | Row[] | null = null;
     let returning = false;
 
+    const named: string[] = [];
+
     function run(mode: "many" | "single" | "maybe"): { data: unknown; error: DbError | null; count?: number | null } {
       if (options.missing?.includes(name)) return { data: null, error: { code: "42P01", message: `relation "${name}" does not exist` } };
+      const absent = options.missingColumns?.[name] ?? [];
+      const written = action === "insert" || action === "update" ? (Array.isArray(values) ? values : [values ?? {}]).flatMap((value) => Object.keys(value)) : [];
+      const asked = [...named, ...written, ...(columns.trim() === "*" ? [] : columns.split(",").map((c) => c.trim()))];
+      const unknownColumn = asked.find((column) => absent.includes(column));
+      if (unknownColumn) return { data: null, error: { code: "42703", message: `column ${name}.${unknownColumn} does not exist` } };
       const rows = table(name);
       if (action === "insert") {
         const failure = options.failWrite?.(name, "insert", values);
@@ -219,6 +239,7 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
         return chain;
       },
       eq(column: string, value: unknown) {
+        named.push(column);
         filters.push((row) => row[column] === value);
         return chain;
       },
@@ -231,6 +252,7 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
         return chain;
       },
       is(column: string, value: null) {
+        named.push(column);
         filters.push((row) => (row[column] ?? null) === value);
         return chain;
       },
@@ -286,6 +308,7 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
         return { error: null };
       },
       remove: async (paths: string[]) => {
+        if (options.failStorageRemove?.()) return { data: null, error: { message: "panne simulée du stockage" } };
         removed.push(...paths.map((path) => `${bucket}/${path}`));
         return { error: null };
       },
@@ -303,7 +326,9 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
     },
   };
 
-  return { db: { from, storage, auth, rpc: async () => ({ data: null, error: { code: "PGRST202", message: "absente" } }) }, tables, table, uploads, removed, deletedUsers };
+  const rpc = async (fn: string, args: Record<string, unknown> = {}) =>
+    options.rpc ? options.rpc(fn, args) : { data: null, error: { code: "PGRST202", message: "absente" } };
+  return { db: { from, storage, auth, rpc }, tables, table, uploads, removed, deletedUsers };
 }
 
 /** Origine du stockage des tests (celle de SUPABASE_URL dans tests:hors-base). */

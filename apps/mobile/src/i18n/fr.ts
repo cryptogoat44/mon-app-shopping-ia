@@ -792,6 +792,14 @@ export const fr = {
     keepError: "L'ajout a échoué. Réessayez.",
     talk: "En parler",
     talkLabel: (title: string, name: string) => `Parler de ${title} avec ${name}`,
+    // Lot modération des collections : signaler la collection d'un ami ; la sienne, masquée par la modération.
+    report: "Signaler cette collection",
+    options: "Options de la collection",
+    optionsLabel: (name: string) => `Options de la collection ${name} : la signaler, bloquer ce compte`,
+    hiddenBadge: "Masquée",
+    hiddenChipLabel: (name: string) => `${name}, masquée par la modération`,
+    hiddenState: "Masquée par la modération : vos amis ne la voient plus.",
+    hiddenCannotShare: "Cette collection a été masquée par la modération : vous ne pouvez pas la montrer à vos amis.",
   },
   // Lot 5 : pièces reçues (onglet « Reçues » des Envies).
   received: {
@@ -1183,7 +1191,7 @@ export const fr = {
     loadMoreError: "La suite n'a pas pu être chargée. Réessayez.",
     // Lot 5 : décisions de la modération (jamais le nom d'un administrateur).
     reportHandled: "Votre signalement a été traité. Merci.",
-    reportHandledAbout: { post: "Votre signalement d'une publication a été traité. Merci.", comment: "Votre signalement d'un commentaire a été traité. Merci.", user: "Votre signalement d'un profil a été traité. Merci.", piece: "Votre signalement d'une pièce reçue a été traité. Merci.", message: "Votre signalement d'un message a été traité. Merci." },
+    reportHandledAbout: { post: "Votre signalement d'une publication a été traité. Merci.", comment: "Votre signalement d'un commentaire a été traité. Merci.", user: "Votre signalement d'un profil a été traité. Merci.", piece: "Votre signalement d'une pièce reçue a été traité. Merci.", message: "Votre signalement d'un message a été traité. Merci.", collection: "Votre signalement d'une collection a été traité. Merci." },
     moderationHiddenPost: "Votre publication a été masquée par la modération.",
     moderationHiddenComment: "Votre commentaire a été masqué par la modération.",
     moderationHiddenPiece: "Une pièce que vous avez envoyée a été masquée par la modération.",
@@ -1197,6 +1205,10 @@ export const fr = {
     moderationUnsuspended: "La suspension de votre compte a été levée.",
     moderationImageRemovedPost: "L'image de votre publication « envie » a été retirée par la modération. La publication reste visible, sans son image.",
     moderationImageRemovedPiece: "L'image d'une pièce que vous avez envoyée a été retirée par la modération. La pièce reste visible, sans son image.",
+    // Lot modération des collections : une de vos collections montrées aux amis.
+    moderationHiddenCollection: "Une de vos collections a été masquée par la modération : vos amis ne la voient plus.",
+    moderationRestoredCollection: "Une de vos collections n'est plus masquée par la modération.",
+    moderationImageRemovedCollection: "L'image d'une envie de votre collection a été retirée par la modération. Vos amis voient l'envie sans son image.",
     moderationOther: "Une décision de la modération vous concerne.",
     moderationReason: (reason: string) => `Motif : ${reason}`,
     moderationNote: (note: string) => `Précision : ${note}`,
@@ -1255,7 +1267,7 @@ export const fr = {
     refresh: "Actualiser",
     loadError: "Impossible de charger les signalements.",
     loadMore: "Afficher la suite",
-    target: { post: "Publication", comment: "Commentaire", user: "Profil", piece: "Pièce envoyée", message: "Message privé" },
+    target: { post: "Publication", comment: "Commentaire", user: "Profil", piece: "Pièce envoyée", message: "Message privé", collection: "Collection d'envies" },
     reportCount: (n: number) => `${n} signalement${n > 1 ? "s" : ""}`,
     lastReport: (ago: string) => `Dernier signalement ${ago}`,
     reasons: "Motifs signalés",
@@ -1273,6 +1285,15 @@ export const fr = {
     restoreComment: "Rétablir le commentaire",
     restorePiece: "Rétablir la pièce",
     restoreMessage: "Rétablir le message",
+    // Lot modération des collections : le nom, l'auteur et les dernières envies (titre et copie de l'image).
+    hideCollection: "Masquer la collection",
+    restoreCollection: "Rétablir la collection",
+    collectionVisibility: { private: "Privée : son auteur seul la voit", friends: "Montrée à ses amis" },
+    collectionItems: (shown: number, total: number) => `Dernières envies ajoutées (${shown} sur ${total})`,
+    collectionEmpty: "Aucune envie dans cette collection.",
+    removeItemImageLabel: (title: string) => `Retirer l'image de ${title}`,
+    removeItemImageWarning:
+      "Retirer l'image de cette envie ? Son fichier sera effacé définitivement : cette décision ne s'annule pas. Les amis verront l'envie avec « Image indisponible », son titre et le lien du marchand. La personne sera prévenue, avec le motif « droits sur l'image ».",
     // Lot messages : seulement le message signalé et quelques messages autour.
     messageContext: "Extrait de la conversation (le message signalé est marqué)",
     messageReported: "Message signalé",

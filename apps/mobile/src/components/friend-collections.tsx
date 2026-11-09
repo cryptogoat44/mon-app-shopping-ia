@@ -5,9 +5,12 @@ import type { SharedCollectionSummary } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { fetchUserCollections } from "@/lib/api";
-import { friendSectionVisible } from "@/lib/collections";
+import { useAuth } from "@/lib/auth-context";
+import { canReportCollection, friendSectionVisible, withoutCollection } from "@/lib/collections";
 import { useCollectionsStatus } from "@/lib/use-collections-status";
+import { MoreIcon } from "@/components/icons";
 import { ImageUnavailable } from "@/components/image-unavailable";
+import { ReportBlockMenu } from "@/components/report-block-menu";
 import { SpotImage } from "@/components/spot-image";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -15,11 +18,16 @@ import { themedStyles } from "@/theme/themed-styles";
 // collections qu'il montre à ses amis — nom, couverture (copie Spotto de
 // l'image de sa première envie), nombre d'envies. Rien pour les autres
 // visiteurs, ni sans les collections sur le serveur. `refreshKey` : relue
-// quand l'abonnement change (devenir amis, ou ne plus l'être).
+// quand l'abonnement change (devenir amis, ou ne plus l'être). Lot modération
+// des collections : « … » sur chaque collection pour la signaler (ou bloquer
+// ce compte) ; signalée, elle disparaît aussitôt de la section.
 export function FriendCollections({ userId, displayName, refreshKey }: { userId: string; displayName: string; refreshKey: string }) {
   const router = useRouter();
   const status = useCollectionsStatus();
+  const { session } = useAuth();
   const [collections, setCollections] = useState<SharedCollectionSummary[] | null>(null);
+  const [menuFor, setMenuFor] = useState<SharedCollectionSummary | null>(null);
+  const reportable = canReportCollection(status, userId, session?.user.id);
 
   useEffect(() => {
     if (!status.enabled) {
@@ -49,27 +57,54 @@ export function FriendCollections({ userId, displayName, refreshKey }: { userId:
       <Text style={styles.hint}>{t.collections.friendSectionHint(displayName)}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {collections.map((collection) => (
-          <Pressable
-            key={collection.id}
-            style={styles.card}
-            onPress={() => router.push({ pathname: "/collection-ami", params: { id: collection.id } })}
-            accessibilityRole="button"
-            accessibilityLabel={t.collections.openCollection(collection.name, collection.itemCount)}
-          >
-            <View style={styles.cover}>
-              {collection.coverUrl ? (
-                <SpotImage hdUri={null} fallbackUri={collection.coverUrl} style={styles.fill} fit="cover" size="small" recyclingKey={collection.id} />
-              ) : (
-                <ImageUnavailable variant="thumb" accessible={false} />
-              )}
-            </View>
-            <Text style={styles.name} numberOfLines={1}>
-              {collection.name}
-            </Text>
-            <Text style={styles.count}>{t.collections.itemCount(collection.itemCount)}</Text>
-          </Pressable>
+          <View key={collection.id} style={styles.card}>
+            <Pressable
+              onPress={() => router.push({ pathname: "/collection-ami", params: { id: collection.id } })}
+              accessibilityRole="button"
+              accessibilityLabel={t.collections.openCollection(collection.name, collection.itemCount)}
+            >
+              <View style={styles.cover}>
+                {collection.coverUrl ? (
+                  <SpotImage hdUri={null} fallbackUri={collection.coverUrl} style={styles.fill} fit="cover" size="small" recyclingKey={collection.id} />
+                ) : (
+                  <ImageUnavailable variant="thumb" accessible={false} />
+                )}
+              </View>
+              <Text style={styles.name} numberOfLines={1}>
+                {collection.name}
+              </Text>
+              <Text style={styles.count}>{t.collections.itemCount(collection.itemCount)}</Text>
+            </Pressable>
+            {/* Un bouton à part, jamais dans celui qui ouvre la collection. */}
+            {reportable ? (
+              <Pressable
+                style={styles.more}
+                onPress={() => setMenuFor(collection)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={t.collections.optionsLabel(collection.name)}
+                testID={`options-collection-${collection.id}`}
+              >
+                <MoreIcon size={16} tint={color.encre} />
+              </Pressable>
+            ) : null}
+          </View>
         ))}
       </ScrollView>
+      {reportable ? (
+        <ReportBlockMenu
+          visible={menuFor !== null}
+          onClose={() => setMenuFor(null)}
+          userId={userId}
+          collectionId={menuFor?.id}
+          onReported={() => {
+            const reportedId = menuFor?.id;
+            if (reportedId) setCollections((current) => withoutCollection(current, reportedId));
+          }}
+          // Compte bloqué : plus aucune de ses collections.
+          onBlocked={() => setCollections([])}
+        />
+      ) : null}
     </View>
   );
 }
@@ -80,6 +115,17 @@ const styles = themedStyles(() => ({
   hint: { fontSize: font.caption, color: color.acier, marginTop: 2, marginBottom: space.sm },
   row: { gap: space.sm },
   card: { width: 120 },
+  more: {
+    position: "absolute",
+    top: space.xs,
+    right: space.xs,
+    width: 32,
+    height: 32,
+    borderRadius: radius.full,
+    backgroundColor: color.porcelaine,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   cover: { width: 120, height: 120, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
   fill: { width: "100%", height: "100%" },
   name: { fontSize: font.caption, fontWeight: "600", color: color.encre, marginTop: space.xs },

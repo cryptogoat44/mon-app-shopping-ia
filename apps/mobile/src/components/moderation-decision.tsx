@@ -73,12 +73,26 @@ export function DecisionPanel({
 
 /** Retirer l'image copiée (lot 5, partie B) : motif neutre fixé par le
  * serveur (« droits sur l'image ») ; précision facultative ; définitif, donc
- * toujours annoncé avant d'être confirmé. */
-export function RemoveImagePanel({ busy, onCancel, onConfirm }: { busy: boolean; onCancel: () => void; onConfirm: (note: string) => void }) {
+ * toujours annoncé avant d'être confirmé. Lot modération des collections :
+ * `subject`, le titre de l'envie visée, et son propre avertissement. */
+export function RemoveImagePanel({
+  busy,
+  onCancel,
+  onConfirm,
+  warning,
+  subject,
+}: {
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: (note: string) => void;
+  warning?: string;
+  subject?: string;
+}) {
   const [note, setNote] = useState("");
   return (
     <View style={styles.panel}>
-      <Text style={styles.warningFirst}>{t.moderationQueue.removeImageWarning}</Text>
+      {subject ? <Text style={styles.subject}>{subject}</Text> : null}
+      <Text style={styles.warningFirst}>{warning ?? t.moderationQueue.removeImageWarning}</Text>
       <Text style={[styles.label, styles.spaced]}>{t.moderationQueue.noteLabel}</Text>
       <TextInput
         style={styles.input}
@@ -127,6 +141,7 @@ const styles = themedStyles(() => ({
   hint: { fontSize: font.caption, color: color.acier, marginTop: space.xs, lineHeight: 18 },
   warning: { fontSize: font.secondary, color: color.encre, marginTop: space.md, lineHeight: 20 },
   warningFirst: { fontSize: font.secondary, color: color.encre, lineHeight: 20 },
+  subject: { fontSize: font.secondary, fontWeight: "600", color: color.encre, marginBottom: space.xs },
   row: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: space.sm, marginTop: space.md },
   secondary: { minHeight: 44, minWidth: 44, paddingHorizontal: space.md, alignItems: "center", justifyContent: "center" },
   secondaryLabel: { fontSize: font.secondary, fontWeight: "600", color: color.acier },

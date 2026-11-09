@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { chunks, readAll } from "./pagedReads.js";
 import { messagesReady } from "./messaging.js";
 import { collectionsReady } from "./collections.js";
+import { collectionModerationReady } from "./collectionModeration.js";
 
 // Export RGPD (droit d'accès et de portabilité) : lecture de TOUTES les
 // données personnelles d'un compte. Toute nouvelle table contenant des
@@ -102,15 +103,19 @@ function compareRows(a: ExportRow, b: ExportRow, orderBy: readonly string[]): nu
 
 const BY_DATE = ["created_at", "id"] as const;
 
-/** Colonnes d'une collection (lot collections). */
+/** Colonnes d'une collection (lot collections) ; avec la migration 0034, la
+ * date de son masquage par la modération. */
 export const COLLECTION_EXPORT_COLUMNS = "id, name, visibility, visibility_changed_at, created_at, updated_at";
+export const COLLECTION_EXPORT_COLUMNS_MODERATED = `${COLLECTION_EXPORT_COLUMNS}, hidden_at`;
 
 /** Les envies rangées dans ses collections, avec le titre de chaque envie et
- * la copie de son image montrée aux amis (une par envie), s'il y en a une. */
-async function listCollectionItems(db: Db, userId: string, wishlistItems: readonly ExportRow[]): Promise<ExportRow[]> {
+ * la copie de son image montrée aux amis (une par envie), s'il y en a une ;
+ * avec la migration 0034, la date à laquelle la modération l'a retirée. */
+async function listCollectionItems(db: Db, userId: string, wishlistItems: readonly ExportRow[], moderated: boolean): Promise<ExportRow[]> {
+  const copyColumns = `wishlist_item_id, image_url, image_thumb_url, created_at${moderated ? ", image_removed_at" : ""}`;
   const [items, copies] = await Promise.all([
     listWhere(db, "collection_items", "id, collection_id, wishlist_item_id, created_at", "user_id", userId, BY_DATE),
-    listWhere(db, "collection_image_copies", "wishlist_item_id, image_url, image_thumb_url, created_at", "user_id", userId, ["created_at", "wishlist_item_id"]),
+    listWhere(db, "collection_image_copies", copyColumns, "user_id", userId, ["created_at", "wishlist_item_id"]),
   ]);
   const titles = new Map(wishlistItems.map((row) => [String(row.id), typeof row.title === "string" ? row.title : null]));
   const copyByWish = new Map(copies.map((row) => [String(row.wishlist_item_id), row]));
@@ -121,6 +126,7 @@ async function listCollectionItems(db: Db, userId: string, wishlistItems: readon
       wishlist_item_title: titles.get(String(row.wishlist_item_id)) ?? null,
       friends_image_url: copy?.image_url ?? null,
       friends_image_thumb_url: copy?.image_thumb_url ?? null,
+      ...(moderated ? { friends_image_removed_at: copy?.image_removed_at ?? null } : {}),
     };
   });
 }
@@ -176,6 +182,8 @@ export async function collectExport(
   const withMessages = await messagesReady(fastify);
   // Lot collections : sans la migration 0033, aucune collection (sections vides).
   const withCollections = await collectionsReady(fastify);
+  // Lot modération des collections : sans la migration 0034, ni masquage ni image retirée.
+  const moderatedCollections = withCollections && (await collectionModerationReady(fastify));
   const [productSearches, posts, affiliateClicks, conversations] = await Promise.all([
     section("productSearches", () => listWhere(db, "product_searches", "*", "user_id", userId, BY_DATE), none),
     section("posts", () => listWhere(db, "posts", "*", "user_id", userId, BY_DATE), none),
@@ -266,9 +274,16 @@ export async function collectExport(
     section("resultFeedback", () => listWhere(db, "match_feedback", "*", "user_id", userId, BY_DATE), none),
     // Messages envoyés et reçus, masqués compris (comme les pièces).
     section("messages", () => listIn(db, "messages", "*", "conversation_id", conversationIds, BY_DATE), none),
-    section("collections", () => (withCollections ? listWhere(db, "collections", COLLECTION_EXPORT_COLUMNS, "user_id", userId, BY_DATE) : Promise.resolve(none)), none),
+    section(
+      "collections",
+      () =>
+        withCollections
+          ? listWhere(db, "collections", moderatedCollections ? COLLECTION_EXPORT_COLUMNS_MODERATED : COLLECTION_EXPORT_COLUMNS, "user_id", userId, BY_DATE)
+          : Promise.resolve(none),
+      none
+    ),
   ]);
-  const collectionItems = await section("collectionItems", () => (withCollections ? listCollectionItems(db, userId, wishlistItems) : Promise.resolve(none)), none);
+  const collectionItems = await section("collectionItems", () => (withCollections ? listCollectionItems(db, userId, wishlistItems, moderatedCollections) : Promise.resolve(none)), none);
 
   const data: ExportData = {
     exportedAt: new Date().toISOString(),

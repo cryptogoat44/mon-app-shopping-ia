@@ -5,9 +5,11 @@ import { parseInput } from "../lib/validation.js";
 import { autoHideIfReported } from "../lib/autoHide.js";
 import { captureModerationEvent } from "../lib/sentry.js";
 import { MESSAGES_UNAVAILABLE, messagesReady } from "../lib/messaging.js";
+import { COLLECTION_MODERATION_UNAVAILABLE, canReportCollection, collectionModerationReady } from "../lib/collectionModeration.js";
 
 // Lot 5 : une pièce reçue (« piece ») se signale aussi ; lot messages : un
-// message reçu (« message »).
+// message reçu (« message ») ; lot modération des collections : une
+// collection montrée par un ami (« collection », migration 0034).
 const createReportSchema = z.object({
   targetType: z.enum(REPORT_TARGET_TYPES),
   targetId: z.string().uuid(),
@@ -23,6 +25,8 @@ const createReportSchema = z.object({
 // masqué aussitôt, en attendant la décision d'un administrateur
 // (lib/autoHide.ts, migration 0030). La personne qui signale ne voit plus
 // ce contenu (lib/reportedByViewer.ts).
+const TARGET_NOT_FOUND = { error: "target_not_found", message: "Contenu introuvable." } as const;
+
 export default async function reportsRoutes(fastify: FastifyInstance) {
   fastify.post(
     "/api/reports",
@@ -45,8 +49,17 @@ export default async function reportsRoutes(fastify: FastifyInstance) {
       if (body.targetType === "message") {
         if (!(await messagesReady(fastify))) return reply.code(404).send(MESSAGES_UNAVAILABLE);
         if (!(await canReportMessage(fastify, reporterId, body.targetId))) {
-          return reply.code(404).send({ error: "target_not_found", message: "Contenu introuvable." });
+          return reply.code(404).send(TARGET_NOT_FOUND);
         }
+      }
+
+      // Une collection ne se signale que si on la voit vraiment (ami de son
+      // auteur, montrée aux amis, pas masquée), et pas la sienne ; sinon la
+      // même réponse qu'une collection inexistante. Sans la migration 0034 :
+      // « indisponible » (la base refuserait ce type de signalement).
+      if (body.targetType === "collection") {
+        if (!(await collectionModerationReady(fastify))) return reply.code(404).send(COLLECTION_MODERATION_UNAVAILABLE);
+        if (!(await canReportCollection(fastify, reporterId, body.targetId))) return reply.code(404).send(TARGET_NOT_FOUND);
       }
 
       const note = body.note?.trim().slice(0, 500) || null;
