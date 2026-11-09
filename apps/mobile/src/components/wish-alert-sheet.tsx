@@ -41,7 +41,10 @@ import { themedStyles } from "@/theme/themed-styles";
 //   étape de la feuille, la même que pour les messages) ; quelle que soit la
 //   réponse, l'alerte est enregistrée ;
 // - notifications pas encore allumées sur le serveur : on le dit ; sur le
-//   site, elles n'arrivent que sur l'app iPhone.
+//   site, elles n'arrivent que sur l'app iPhone ;
+// - un seul enregistrement à la fois : pendant qu'il part, l'explication des
+//   notifications n'accepte plus de réponse (« Plus tard » défairait l'accord
+//   que la personne vient de donner) et rien ne ferme la feuille.
 
 /** La cloche d'une envie dans une liste : un bouton rond, posé sur le coin
  * de la vignette (zone tactile de 44 points avec la marge). Pleine quand une
@@ -107,6 +110,8 @@ export function WishAlertSheet({
   const [step, setStep] = useState<"choose" | "push">("choose");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Un seul envoi à la fois, vu tout de suite (l'état React n'arrive qu'au rendu suivant).
+  const sending = useRef(false);
   // Seconde étape : « Activer » ou « Plus tard », puis l'alerte est enregistrée.
   const offer = usePushOfferAnswer("alerts", () => void send(), step === "push");
 
@@ -119,6 +124,7 @@ export function WishAlertSheet({
     setStep("choose");
     setError(null);
     setSaving(false);
+    sending.current = false;
   }, [visible, wish?.id]);
 
   /** Sur l'iPhone : faut-il d'abord l'explication des notifications ? */
@@ -149,7 +155,8 @@ export function WishAlertSheet({
   }
 
   async function send() {
-    if (!wish) return;
+    if (!wish || sending.current) return;
+    sending.current = true;
     const request = watchRequest(choice, status);
     setSaving(true);
     setError(null);
@@ -171,11 +178,13 @@ export function WishAlertSheet({
       setError(watchErrorMessage(e));
       setStep("choose");
     } finally {
+      sending.current = false;
       setSaving(false);
     }
   }
 
-  const dismiss = () => (step === "push" ? offer.dismiss() : saving ? undefined : onClose());
+  // Pendant l'enregistrement : ni fermeture, ni réponse à l'explication.
+  const dismiss = () => (saving ? undefined : step === "push" ? offer.dismiss() : onClose());
   const turnsOn = switchTurnsOn(choice, status);
   const canSave = !saving && (choiceChanged(initial.current, choice) || turnsOn);
   const note = pushNoteText(pushNote(status, Platform.OS));
@@ -186,7 +195,7 @@ export function WishAlertSheet({
       <View style={[styles.sheet, { paddingBottom: space.xl + insets.bottom }]}>
         <View style={styles.grab} />
         {step === "push" ? (
-          <PushOfferPanel kind="alerts" offer={offer} />
+          <PushOfferPanel kind="alerts" offer={offer} saving={saving} />
         ) : (
           <>
             <Text style={styles.title} accessibilityRole="header">

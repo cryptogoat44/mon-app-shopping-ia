@@ -1,13 +1,18 @@
 // Alertes prix et stock (lot 2, migration 0036) : l'envoi, sans tâche de
-// fond. Une alerte est créée par une observation (lib/wishObserve.ts) avec un
-// délai tiré au hasard de 2 à 8 h ; elle n'est donc JAMAIS envoyée par la
-// demande qui l'a créée (sinon la notification dirait à un ami « quelqu'un
-// vient de chercher cette pièce »).
+// fond. Une alerte est due dès sa création par une observation
+// (lib/wishObserve.ts) : décision du fondateur, le membre doit le savoir « à
+// la seconde près ». Le passage d'envoi part donc JUSTE APRÈS l'observation
+// qui l'a créée (sendWishAlertsNow), en arrière-plan après la réponse de la
+// recherche ou de l'achat — jamais en la ralentissant. La notification ne
+// dit jamais qui a cherché, acheté ou signalé la pièce : la base ne le garde
+// nulle part.
 //
-// Le passage d'envoi (flushWishAlerts) est déclenché par les routes
-// fréquentes des membres connectés (fil, notifications, messages,
-// préparation d'une recherche, Envies : scheduleWishAlertsFlush), au plus une
-// fois par minute et par serveur, par lots bornés :
+// Les alertes restées en attente (pas d'appareil, notifications coupées,
+// limites) partent par le passage déclenché par les routes fréquentes des
+// membres connectés (fil, notifications, messages, préparation d'une
+// recherche, Envies : scheduleWishAlertsFlush), au plus une fois par minute
+// et par serveur. Un passage, par lots bornés, toujours par le même chemin
+// atomique (deux serveurs n'envoient jamais la même alerte) :
 // 1. wish_alerts_claim, dans la base, d'un bloc : expire les alertes de plus
 //    de 72 h, désactive celles dont l'interrupteur ou la cloche est coupé,
 //    revérifie chaque alerte due (périmée si la baisse ou le stock a
@@ -16,10 +21,16 @@
 // 2. notifications coupées sur le serveur (PUSH_ENABLED) : seulement l'étape
 //    d'entretien ; les alertes restent en attente et expireront à 72 h ;
 // 3. une notification par personne (plusieurs alertes : une seule,
-//    « 3 de vos envies ont du nouveau »), par sendPush (lib/push.ts) ;
-// 4. acceptée par Expo : « envoyée » (wish_alerts_mark_sent : la référence
-//    d'une baisse bouge alors, règle B) ; sinon, la réservation est rendue
-//    (wish_alerts_release) et l'alerte sera retentée, jusqu'à 72 h.
+//    « 3 de vos envies ont du nouveau »), par sendPush (lib/push.ts) ; juste
+//    avant de la demander à Expo, ses alertes sont notées « peut-être
+//    envoyées » (wish_alerts_mark_pushing) ;
+// 4. acceptée par Expo : « envoyée » (wish_alerts_mark_sent, retenté 3 fois :
+//    la référence d'une baisse bouge alors, règle B). Refusée par Expo, ou
+//    aucun appareil : la réservation est rendue (wish_alerts_release) et
+//    l'alerte sera retentée, jusqu'à 72 h. Issue inconnue (délai dépassé,
+//    réponse illisible) ou envoi impossible à noter : rien n'est rendu, et
+//    le passage suivant la note « envoyée » (wish_alerts_claim) — jamais deux
+//    fois la même notification, au pire une alerte perdue.
 // Journal racine : des nombres seulement, jamais un compte, un titre ni un prix.
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -34,6 +45,8 @@ export const FLUSH_INTERVAL_MS = 60_000;
 export const FLUSH_BATCH = 50;
 /** Alertes et signalements effacés au plus par purge (chaque table). */
 export const PURGE_BATCH = 500;
+/** Essais pour noter un envoi (une panne passagère ne fait jamais renvoyer). */
+export const MARK_SENT_ATTEMPTS = 3;
 
 const AMOUNT = z.union([z.number(), z.string()]).transform((value) => Number(value));
 const CLAIM_ROWS = z.array(
@@ -127,16 +140,33 @@ export function alertPushContent(group: RecipientAlerts): { body: string; data: 
   return { body: PUSH_TEXTS[group.locale].grouped(items.length), data: { kind: WISH_ALERT_PUSH_KIND } };
 }
 
-/** Bilan d'un passage : des nombres. */
+/** Bilan d'un passage : des nombres. `uncertain` : peut-être envoyées, jamais renvoyées. */
 export interface FlushSummary {
   claimed: number;
   recipients: number;
   sent: number;
   released: number;
+  uncertain: number;
   push: boolean;
 }
 
-const EMPTY: FlushSummary = { claimed: 0, recipients: 0, sent: 0, released: 0, push: false };
+const EMPTY: FlushSummary = { claimed: 0, recipients: 0, sent: 0, released: 0, uncertain: 0, push: false };
+
+/** Note les alertes « envoyées », en réessayant une panne passagère ; faux
+ * si rien n'a pu être noté (elles le seront au passage suivant). */
+async function markSent(fastify: FastifyInstance, log: FastifyBaseLogger, ids: string[]): Promise<boolean> {
+  let code: string | null = null;
+  for (let attempt = 1; attempt <= MARK_SENT_ATTEMPTS; attempt += 1) {
+    const marked = await fastify.supabaseAdmin.rpc("wish_alerts_mark_sent", { p_ids: ids }).then(
+      (result) => result.error,
+      () => ({ code: null })
+    );
+    if (!marked) return true;
+    code = marked.code ?? null;
+  }
+  log.warn({ code, alerts: ids.length }, "Alertes prix : envoi non noté (il le sera au passage suivant, jamais renvoyé)");
+  return false;
+}
 
 /** Un passage d'envoi. Ne lève jamais d'erreur vers l'appelant (scheduleWishAlertsFlush) ; testée à part. */
 export async function flushWishAlerts(fastify: FastifyInstance, log: FastifyBaseLogger = fastify.log): Promise<FlushSummary> {
@@ -157,25 +187,35 @@ export async function flushWishAlerts(fastify: FastifyInstance, log: FastifyBase
   const groups = groupByRecipient(parsed.data);
   const sent: string[] = [];
   const released: string[] = [];
+  const uncertain: string[] = [];
   for (const group of groups) {
     const ids = group.alerts.map((alert) => alert.event_id);
+    // Noté avant la demande à Expo : sans cette marque, rien ne part.
+    const pushing = await db.rpc("wish_alerts_mark_pushing", { p_ids: ids }).then(
+      (result) => !result.error && typeof result.data === "number" && result.data === ids.length,
+      () => false
+    );
+    if (!pushing) {
+      released.push(...ids);
+      continue;
+    }
     try {
       const content = alertPushContent(group);
       const outcome = await sendPush(fastify, log, group.userId, { kind: "wish_alert", body: content.body, data: content.data });
-      (outcome.delivered > 0 ? sent : released).push(...ids);
+      if (outcome.delivered > 0) sent.push(...ids);
+      else if (outcome.uncertain) uncertain.push(...ids);
+      else released.push(...ids);
     } catch {
+      // Erreur avant la demande à Expo (appareils illisibles) : rien n'est parti.
       released.push(...ids);
     }
   }
-  if (sent.length > 0) {
-    const marked = await db.rpc("wish_alerts_mark_sent", { p_ids: sent });
-    if (marked.error) log.warn({ code: marked.error.code ?? null }, "Alertes prix : envoi non noté");
-  }
+  if (sent.length > 0) await markSent(fastify, log, sent);
   if (released.length > 0) {
     const freed = await db.rpc("wish_alerts_release", { p_ids: released });
     if (freed.error) log.warn({ code: freed.error.code ?? null }, "Alertes prix : réservation non rendue (elle expire seule en 15 minutes)");
   }
-  const summary = { claimed: parsed.data.length, recipients: groups.length, sent: sent.length, released: released.length, push };
+  const summary = { claimed: parsed.data.length, recipients: groups.length, sent: sent.length, released: released.length, uncertain: uncertain.length, push };
   if (summary.claimed > 0) log.info(summary, "Alertes prix : passage d'envoi");
   return summary;
 }
@@ -194,11 +234,10 @@ export const FLUSH_ROUTES: ReadonlySet<string> = new Set([
 
 let lastFlushAt = 0;
 let running: Promise<void> | null = null;
+/** Une alerte est née pendant un passage : un autre passage suit aussitôt. */
+let again = false;
 
-/** Lance un passage d'envoi si le dernier date de plus d'une minute, sans
- * jamais l'attendre ni échouer. */
-export function scheduleWishAlertsFlush(fastify: FastifyInstance, now: number = Date.now()): void {
-  if (running || now - lastFlushAt < FLUSH_INTERVAL_MS) return;
+function startFlush(fastify: FastifyInstance, now: number): void {
   lastFlushAt = now;
   running = flushWishAlerts(fastify)
     .then(() => undefined)
@@ -207,7 +246,30 @@ export function scheduleWishAlertsFlush(fastify: FastifyInstance, now: number = 
     })
     .finally(() => {
       running = null;
+      if (again) {
+        again = false;
+        startFlush(fastify, Date.now());
+      }
     });
+}
+
+/** Lance un passage d'envoi si le dernier date de plus d'une minute, sans
+ * jamais l'attendre ni échouer. */
+export function scheduleWishAlertsFlush(fastify: FastifyInstance, now: number = Date.now()): void {
+  if (running || now - lastFlushAt < FLUSH_INTERVAL_MS) return;
+  startFlush(fastify, now);
+}
+
+/** Une observation vient de créer des alertes : un passage d'envoi tout de
+ * suite, sans attendre la minute (si un passage est en cours, un autre le
+ * suit dès sa fin). Jamais attendu, jamais d'erreur : à appeler après la
+ * réponse. Le même chemin atomique que les autres passages (wish_alerts_claim). */
+export function sendWishAlertsNow(fastify: FastifyInstance): void {
+  if (running) {
+    again = true;
+    return;
+  }
+  startFlush(fastify, Date.now());
 }
 
 /** Crochet « onResponse » de l'app : après la réponse d'une route fréquente
@@ -218,14 +280,15 @@ export async function flushAfterResponse(fastify: FastifyInstance, request: Fast
   scheduleWishAlertsFlush(fastify);
 }
 
-/** Tests seulement : attend le passage en cours. */
+/** Tests seulement : attend le passage en cours (et ceux qui le suivent). */
 export async function waitForWishAlertsFlush(): Promise<void> {
-  await running;
+  while (running) await running;
 }
 
 /** Tests seulement : attend le passage en cours, et oublie le dernier. */
 export async function resetWishAlertsFlush(): Promise<void> {
-  await running;
+  while (running) await running;
+  again = false;
   lastFlushAt = 0;
 }
 

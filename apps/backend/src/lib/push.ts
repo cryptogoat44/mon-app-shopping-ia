@@ -24,9 +24,15 @@
 //
 // Lot alertes prix et stock (migration 0036) : l'envoi lui-même est commun
 // (sendPush : un destinataire, une sorte, un texte, des données), et sert aussi
-// aux alertes (lib/wishAlertsSend.ts). Un appareil peut rester enregistré pour
-// les seules alertes (push_tokens.notify_messages = false) : il ne reçoit
-// alors aucune notification de message. Sans 0036, tout est comme avant.
+// aux alertes (lib/wishAlertsSend.ts). Chaque appareil dit ce qu'il reçoit :
+// les messages (push_tokens.notify_messages) et les alertes
+// (push_tokens.notify_alerts, seulement après l'« Activer » donné pour elles
+// sur cet appareil). Un appareil des seules alertes ne reçoit aucune
+// notification de message. Sans 0036, les messages sont comme avant.
+// Quand la base ne dit pas si 0036 est là (sonde « inconnue »), aucun choix
+// de la personne n'est trahi : « messages coupés » oublie l'appareil, et
+// aucune notification de message ne part (elle pourrait aller vers un
+// appareil des seules alertes).
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { z } from "zod";
 import { EXPO_PUSH_TOKEN_PATTERN, PUSH_PLATFORMS, type PushPlatform } from "@monapp/shared-types";
@@ -34,9 +40,9 @@ import { env } from "../env.js";
 import { readSide } from "./messaging.js";
 import { isSuspended } from "./moderation.js";
 import { safeFetch } from "./safeFetch.js";
-import { parseDbRows } from "./validation.js";
+import { DatabaseReadError, parseDbRows } from "./validation.js";
 import { isBlockedEitherWay } from "./visibility.js";
-import { wishAlertsReady } from "./wishAlertsSchema.js";
+import { wishAlertsSchemaState } from "./wishAlertsSchema.js";
 
 // ---- Réponses ----
 
@@ -44,11 +50,12 @@ export const PUSH_UNAVAILABLE = { error: "push_unavailable", message: "Les notif
 export const INVALID_PUSH_TOKEN = { error: "invalid_push_token", message: "Jeton de notification invalide." } as const;
 
 /** Corps de PUT /api/me/push-token : un jeton d'Expo, son système, et
- * (lot alertes prix) s'il reçoit les notifications des messages. */
+ * (lot alertes prix) s'il reçoit les notifications des messages, des alertes. */
 export const registerPushTokenSchema = z.object({
   token: z.string().max(200).regex(EXPO_PUSH_TOKEN_PATTERN),
   platform: z.enum(PUSH_PLATFORMS),
   messages: z.boolean().optional(),
+  alerts: z.boolean().optional(),
 });
 /** Corps de DELETE /api/me/push-token. */
 export const deletePushTokenSchema = z.object({ token: z.string().max(200).regex(EXPO_PUSH_TOKEN_PATTERN) });
@@ -119,16 +126,34 @@ export class PushTokenStoreError extends Error {}
 
 const TOKEN_ROWS = z.array(z.object({ token: z.string() }));
 
+/** Ce que reçoit un appareil (lot alertes prix) ; absent : inchangé. */
+export interface PushTokenKinds {
+  messages?: boolean;
+  alerts?: boolean;
+}
+
 /** Enregistre l'appareil pour ce compte, ou le rafraîchit. Un jeton est à un
  * seul compte : le même téléphone connecté à un autre compte change de
  * propriétaire (l'ancien ne reçoit plus rien sur ce téléphone).
- * `messages` (lot alertes prix) : seulement avec 0036 ; absent, la valeur
- * enregistrée ne change pas (oui pour un nouvel appareil). */
-export async function savePushToken(fastify: FastifyInstance, userId: string, token: string, platform: PushPlatform, messages?: boolean): Promise<void> {
+ * `kinds` (lot alertes prix) : ce que reçoit cet appareil, écrit seulement
+ * avec 0036 ; absent, la valeur enregistrée ne change pas (messages : oui,
+ * alertes : non, pour un nouvel appareil). Les deux à false : l'appareil est
+ * oublié. Sans 0036 (ou sans savoir si elle est là), un appareil ne peut pas
+ * être gardé pour les seules alertes : `messages: false` l'oublie, comme
+ * avant 0036 ; un autre choix, quand la base ne répond pas, est refusé
+ * (PushTokenStoreError) plutôt que d'être perdu en silence. */
+export async function savePushToken(fastify: FastifyInstance, userId: string, token: string, platform: PushPlatform, kinds: PushTokenKinds = {}): Promise<void> {
   const db = fastify.supabaseAdmin;
   const now = new Date().toISOString();
-  const kinds = messages !== undefined && (await wishAlertsReady(fastify)) ? { notify_messages: messages } : {};
-  const values = { user_id: userId, platform, updated_at: now, last_error: null, ...kinds };
+  const asked = kinds.messages !== undefined || kinds.alerts !== undefined;
+  const schema = asked ? await wishAlertsSchemaState(fastify) : "absent";
+  if (asked && (kinds.messages === false && (schema !== "ready" || kinds.alerts === false))) return deletePushToken(fastify, userId, token);
+  if (asked && schema === "unknown") throw new PushTokenStoreError("Appareil : ce qu'il reçoit ne peut pas être enregistré (schéma des alertes inconnu)");
+  const flags =
+    schema === "ready"
+      ? { ...(kinds.messages !== undefined ? { notify_messages: kinds.messages } : {}), ...(kinds.alerts !== undefined ? { notify_alerts: kinds.alerts } : {}) }
+      : {};
+  const values = { user_id: userId, platform, updated_at: now, last_error: null, ...flags };
   const foreign = await db.from("push_tokens").delete().eq("token", token).neq("user_id", userId);
   if (foreign.error) throw new PushTokenStoreError("Appareil d'un autre compte : suppression impossible");
   const refresh = async (): Promise<boolean> => {
@@ -136,12 +161,17 @@ export async function savePushToken(fastify: FastifyInstance, userId: string, to
     if (updated.error) throw new PushTokenStoreError("Appareil : mise à jour impossible");
     return parseDbRows(TOKEN_ROWS, updated, "Appareil mis à jour").length > 0;
   };
-  if (await refresh()) return;
-  await makeRoom(fastify, userId);
-  const inserted = await db.from("push_tokens").insert({ token, ...values, created_at: now });
-  // Deux enregistrements simultanés du même appareil : la base n'en garde qu'un.
-  if (inserted.error?.code === "23505" && (await refresh())) return;
-  if (inserted.error) throw new PushTokenStoreError("Appareil : enregistrement impossible");
+  if (!(await refresh())) {
+    await makeRoom(fastify, userId);
+    const inserted = await db.from("push_tokens").insert({ token, ...values, created_at: now });
+    // Deux enregistrements simultanés du même appareil : la base n'en garde qu'un.
+    if (inserted.error && !(inserted.error.code === "23505" && (await refresh()))) throw new PushTokenStoreError("Appareil : enregistrement impossible");
+  }
+  // Messages coupés, alertes laissées telles quelles : s'il ne reçoit plus rien, l'appareil est oublié.
+  if (schema === "ready" && kinds.messages === false && kinds.alerts === undefined) {
+    const { error } = await db.from("push_tokens").delete().eq("token", token).eq("user_id", userId).eq("notify_messages", false).eq("notify_alerts", false);
+    if (error) throw new PushTokenStoreError("Appareil sans aucune notification : suppression impossible");
+  }
 }
 
 /** Place pour un nouvel appareil : les plus anciens au-delà de la limite sont oubliés. */
@@ -335,29 +365,47 @@ export interface PushContent {
   data: Record<string, string>;
 }
 
-/** Issue d'un envoi : appareils visés, et appareils pour lesquels Expo a accepté. */
+/** Issue d'un envoi : appareils visés, appareils pour lesquels Expo a
+ * accepté, et `uncertain` : la demande est peut-être arrivée chez Expo sans
+ * qu'on sache s'il l'a acceptée (délai dépassé, réponse illisible) — une
+ * alerte dans ce cas n'est jamais renvoyée (lib/wishAlertsSend.ts). */
 export interface PushOutcome {
   devices: number;
   delivered: number;
+  uncertain: boolean;
 }
 
 /** Les appareils d'une personne pour cette sorte de notification (10 au plus,
  * les plus récents). Avec 0036, une notification de message ne va qu'aux
- * appareils qui les reçoivent (notify_messages) ; une alerte, à tous. */
+ * appareils qui les reçoivent (notify_messages), une alerte qu'à ceux qui
+ * les reçoivent (notify_alerts). Sans 0036 : les messages à tous (comme
+ * avant), aucune alerte. Sans savoir si 0036 est là : erreur, rien ne part
+ * (un appareil des seules alertes recevrait des messages refusés). */
 export async function readPushTokens(fastify: FastifyInstance, recipientId: string, kind: PushKind): Promise<string[]> {
+  const schema = await wishAlertsSchemaState(fastify);
+  if (schema === "unknown") throw new DatabaseReadError("Appareils : on ne sait pas lesquels reçoivent cette sorte de notification");
+  const family = PUSH_FAMILY[kind];
+  if (family === "alerts" && schema !== "ready") return [];
   let query = fastify.supabaseAdmin.from("push_tokens").select("token").eq("user_id", recipientId);
-  if (PUSH_FAMILY[kind] === "messages" && (await wishAlertsReady(fastify))) query = query.eq("notify_messages", true);
+  if (schema === "ready") query = query.eq(family === "messages" ? "notify_messages" : "notify_alerts", true);
   return parseDbRows(TOKEN_ROWS, await query.order("updated_at", { ascending: false }).limit(MAX_DEVICES_PER_ACCOUNT), "Appareils de la personne qui reçoit").map(
     (row) => row.token
   );
 }
 
 /** Une notification à une personne : ses appareils, puis l'envoi par Expo.
- * Sans appareil : rien n'est envoyé (devices = 0). */
+ * Sans appareil : rien n'est envoyé (devices = 0). Une erreur avant l'envoi
+ * (appareils illisibles) remonte : rien n'est parti. Une erreur pendant ou
+ * après la demande à Expo ne remonte pas : `uncertain` (peut-être parti). */
 export async function sendPush(fastify: FastifyInstance, log: FastifyBaseLogger, recipientId: string, content: PushContent): Promise<PushOutcome> {
   const tokens = await readPushTokens(fastify, recipientId, content.kind);
-  if (tokens.length === 0) return { devices: 0, delivered: 0 };
-  return deliverPush(fastify, log, tokens, content);
+  if (tokens.length === 0) return { devices: 0, delivered: 0, uncertain: false };
+  try {
+    return await deliverPush(fastify, log, tokens, content);
+  } catch (error) {
+    log.warn({ code: error instanceof Error ? error.name : null, devices: tokens.length }, PUSH_LOG_MESSAGES[PUSH_FAMILY[content.kind]].unreadable);
+    return { devices: tokens.length, delivered: 0, uncertain: true };
+  }
 }
 
 /** Envoi par le service d'Expo, puis les reçus : un appareil désinscrit est
@@ -380,12 +428,13 @@ async function deliverPush(fastify: FastifyInstance, log: FastifyBaseLogger, tok
   if (!response.ok) {
     await response.body?.cancel();
     log.warn({ status: response.status, devices: tokens.length }, logMessages.refused);
-    return { devices: tokens.length, delivered: 0 };
+    return { devices: tokens.length, delivered: 0, uncertain: false };
   }
+  // Acceptée par Expo, reçus illisibles : peut-être partie.
   const parsed = TICKETS.safeParse(await response.json().catch(() => null));
   if (!parsed.success || parsed.data.data.length !== tokens.length) {
     log.warn({ devices: tokens.length }, logMessages.unreadable);
-    return { devices: tokens.length, delivered: 0 };
+    return { devices: tokens.length, delivered: 0, uncertain: true };
   }
 
   // Un reçu par appareil, dans l'ordre de l'envoi.
@@ -411,5 +460,5 @@ async function deliverPush(fastify: FastifyInstance, log: FastifyBaseLogger, tok
     { devices: tokens.length, sent: tokens.length - failures, failed: failures, removed: gone.length, codes: [...new Set([...(gone.length ? ["DeviceNotRegistered"] : []), ...failed.keys()])] },
     logMessages.sent
   );
-  return { devices: tokens.length, delivered: tokens.length - failures };
+  return { devices: tokens.length, delivered: tokens.length - failures, uncertain: false };
 }

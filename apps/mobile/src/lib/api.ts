@@ -575,10 +575,10 @@ export async function updateMessagesFrom(messagesFrom: MessagesFrom): Promise<vo
 // Appelées seulement par lib/push.ts (app iPhone), jamais par le site.
 
 /** Enregistre (ou rafraîchit) cet appareil pour les notifications.
- * `messages` (lot alertes prix) : false garde l'appareil pour les seules
- * alertes prix et stock (aucune notification de message). */
-export async function registerPushToken(token: string, platform: PushPlatform, messages: boolean): Promise<void> {
-  const payload: RegisterPushTokenRequest = { token, platform, messages };
+ * Lot alertes prix : `messages` et `alerts` disent ce qu'il reçoit (messages
+ * coupés, alertes acceptées : gardé pour les seules alertes). */
+export async function registerPushToken(token: string, platform: PushPlatform, messages: boolean, alerts: boolean): Promise<void> {
+  const payload: RegisterPushTokenRequest = { token, platform, messages, alerts };
   await authorizedFetch("/api/me/push-token", { method: "PUT", body: JSON.stringify(payload) });
 }
 

@@ -175,7 +175,8 @@ Avant chaque build envoyé à Apple, si l'un de ces changements est entré dans 
 - les alertes (sorte, ancien et nouveau prix, date au jour près), effacées au bout de 30 jours (table `wish_alert_events`), sans jamais l'auteur de la recherche, l'acheteur ou l'auteur d'un signalement ;
 - les signalements « Plus disponible » (qui a signalé, empreinte de la pièce, jour), effacés au bout de 30 jours (table `stock_reports`) ;
 - les résultats des recherches et les achats « Je l'ai achetée » faits dans Spotto servent aussi à prévenir d'AUTRES membres (comparaison avec leurs envies), sans jamais dire qui a cherché ou acheté ;
-- une notification d'alerte passe par Expo puis Apple (titre de la pièce, boutique, prix, identifiant de l'envie) ; l'appareil peut rester enregistré pour les seules alertes (`push_tokens.notify_messages = false`).
+- une notification d'alerte passe par Expo puis Apple (titre de la pièce, boutique, prix, identifiant de l'envie) ; l'appareil dit ce qu'il reçoit (`push_tokens.notify_messages`, `push_tokens.notify_alerts` : les alertes seulement après l'« Activer » donné pour elles sur cet appareil) et peut rester enregistré pour les seules alertes ;
+- une alerte part tout de suite, dès que la baisse ou le retour en stock est constaté (décision du fondateur), sans jamais dire qui a cherché, acheté ou signalé la pièce.
 
 **Effet attendu sur les réponses** (suivi : toujours **non**) :
 

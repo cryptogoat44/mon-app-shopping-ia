@@ -770,7 +770,7 @@ export const fr = {
     bellOnLabel: (title: string, kinds: string) => `Alerte activée pour ${title} : ${kinds}. Toucher pour la modifier`,
     sheetTitle: "Alerte pour cette pièce",
     sheetIntro:
-      "Spotto vous prévient quand une recherche ou un achat fait dans Spotto montre cette pièce dans la même boutique, moins chère ou de nouveau en stock. Personne ne sait qui l'a cherchée, ni qui la suit.",
+      "Spotto vous prévient tout de suite quand une recherche ou un achat fait dans Spotto montre cette pièce dans la même boutique, moins chère ou de nouveau en stock. Personne ne sait qui l'a cherchée, ni qui la suit.",
     switchTurnsOn: "Cela active aussi « Alertes prix et stock » dans les Réglages.",
     pushSoon: "Les alertes sont enregistrées ; les notifications seront bientôt disponibles.",
     iphoneOnly: "Les notifications des alertes arrivent sur l'app Spotto pour iPhone.",
@@ -781,6 +781,7 @@ export const fr = {
     removed: "Alerte retirée",
     saveError: "Votre choix n'a pas pu être enregistré. Vérifiez votre connexion, puis réessayez.",
     notTrackable: "Cette pièce ne peut pas être suivie : sa boutique ou son produit n'est pas reconnu.",
+    bought: "Cette pièce est dans votre Vault : aucune alerte ne partira pour elle.",
     tooManyChanges: "Vous avez modifié beaucoup d'alertes : réessayez dans un moment.",
     pushOfferTitle: "Être prévenu sur cet iPhone ?",
     pushOfferBody:

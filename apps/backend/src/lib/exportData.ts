@@ -150,12 +150,13 @@ async function listCollectionItems(db: Db, userId: string, wishlistItems: readon
  * technique de l'appareil chez Apple et Expo), ni `last_error`. Avec la
  * migration 0036, s'il reçoit aussi les notifications des messages. */
 export const PUSH_DEVICE_EXPORT_COLUMNS = "platform, created_at, updated_at";
-export const PUSH_DEVICE_EXPORT_COLUMNS_ALERTS = "platform, notify_messages, created_at, updated_at";
+export const PUSH_DEVICE_EXPORT_COLUMNS_ALERTS = "platform, notify_messages, notify_alerts, created_at, updated_at";
 
 // Alertes prix et stock (lot 2, migration 0036). Jamais : la clé de la pièce
 // (empreinte), le pays d'une observation, ni une heure précise venue d'une
-// observation (elle dirait quand quelqu'un a cherché la pièce) — seulement
-// des jours.
+// observation — seulement des jours. Le suivi et les alertes sont montrés tels
+// qu'ils sont (le stock et les alertes vont vite, c'est le but), jamais qui a
+// cherché, acheté ou signalé la pièce : la base ne le garde nulle part.
 export const WISH_WATCH_EXPORT_COLUMNS = "wishlist_item_id, notify_price_drop, notify_restock, notify_sold_out, created_at, updated_at";
 export const WISH_TRACKING_EXPORT_COLUMNS = "wishlist_item_id, ref_price, ref_currency, ref_set_on, last_price, last_currency, last_seen_on, stock_state, stock_on";
 export const WISH_ALERT_EVENT_EXPORT_COLUMNS = "id, wishlist_item_id, kind, old_price, new_price, currency, status, created_on";

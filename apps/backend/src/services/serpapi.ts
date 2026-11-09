@@ -182,7 +182,7 @@ export const serpApiProvider: SearchProvider = {
 export const SHOPPING_SETTINGS = { engine: "google_shopping_light" } as const;
 
 // Domaine de Google : liste FERMÉE des quatre pays dont la devise est connue
-// (services/textSearch.ts, SHOPPING_CURRENCIES) ; tout autre pays : google.com.
+// (COUNTRY_CURRENCIES, packages/shared-types) ; tout autre pays : google.com.
 const GOOGLE_DOMAINS: Record<string, string> = {
   fr: "google.fr",
   gb: "google.co.uk",

@@ -420,6 +420,7 @@ export const EXPORT_COLUMNS = {
     platform: shown("Appareil", "Device"),
     // Lot alertes prix et stock (migration 0036).
     notify_messages: shown("Prévenu des nouveaux messages", "Notified of new messages"),
+    notify_alerts: shown("Prévenu des alertes prix et stock", "Notified of price and stock alerts"),
     created_at: shown("Notifications activées le", "Notifications turned on on"),
     updated_at: shown("Dernière mise à jour le", "Last updated on"),
   },
@@ -506,8 +507,8 @@ export const EXPORT_SECTIONS = {
   alerts: {
     title: { fr: "Vos alertes prix et stock", en: "Your price and stock alerts" },
     intro: {
-      fr: "Les envies dont vous suivez le prix ou le stock (la cloche), ce que Spotto sait de leur dernier prix et de leur stock, les alertes préparées pour vous, et les pièces que vous avez signalées « Plus disponible ». Les dates sont au jour près ; d'où vient une observation n'est jamais gardé.",
-      en: "The wishes whose price or stock you follow (the bell), what Spotto knows about their last price and stock, the alerts prepared for you, and the pieces you reported as no longer available. Dates are to the day; where an observation came from is never kept.",
+      fr: "Les envies dont vous suivez le prix ou le stock (la cloche), ce que Spotto sait de leur dernier prix et de leur stock, les alertes préparées pour vous, et les pièces que vous avez signalées « Plus disponible ». Les dates sont au jour près ; qui a cherché, acheté ou signalé une pièce n'est jamais gardé.",
+      en: "The wishes whose price or stock you follow (the bell), what Spotto knows about their last price and stock, the alerts prepared for you, and the pieces you reported as no longer available. Dates are to the day; who searched for, bought or reported a piece is never kept.",
     },
     keys: ["wishWatches", "wishTracking", "wishAlertEvents", "stockReports"],
   },

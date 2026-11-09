@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { ALERT_CURRENCY_MARKS, alertCurrency } from "@monapp/shared-types";
-import { ALERT_EXCLUDED_MARKETPLACES, ALERT_KEY_VERSION, alertKeyHash, alertKeyString, googleProductId, merchantKey, trackingKeyOf } from "../src/lib/alertKeys.js";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { ALERT_CURRENCY_MARKS, alertCurrency, COUNTRY_CURRENCIES, isCountryCurrency } from "@monapp/shared-types";
+import { isLocalCurrency } from "../src/services/lensMeasure.js";
+import { ALERT_EXCLUDED_MARKETPLACES, ALERT_KEY_VERSION, alertKeyHash, alertKeyString, googleProductId, isMarketplaceMerchant, merchantKey, trackingKeyOf } from "../src/lib/alertKeys.js";
 import { TRACKING_PARAMS } from "../src/services/matchFilters.js";
 
 // Alertes prix et stock (lot 2) : la clé « même pièce » (même boutique ET même
@@ -76,6 +79,49 @@ describe("clé « même pièce » : lien d'une boutique", () => {
   });
 });
 
+describe("clé « même pièce » : places de marché, liens courts et pages de liste (décision 4)", () => {
+  it("une offre d'une place de marché n'a jamais de clé, même sur une page de Google avec productid, même avec un nom de vendeur", () => {
+    const google = "https://www.google.fr/shopping/product/1?prds=productid:4455667788";
+    for (const source of ["eBay", "eBay - vendeurx", "Amazon.fr", "Amazon Marketplace", "Vinted", "Etsy", "Farfetch", "Temu", "DHgate"]) {
+      expect(alertKeyString(google, source), source).toBeNull();
+      expect(alertKeyString(GOOGLE, source), source).toBeNull();
+      // Même sur le lien d'une autre boutique : dans le doute, pas de clé.
+      expect(alertKeyString("https://boutique.example/p/1", source), source).toBeNull();
+    }
+    expect(isMarketplaceMerchant("ebayvendeurx")).toBe(true);
+    expect(isMarketplaceMerchant("amazonfrseller")).toBe(true);
+    expect(isMarketplaceMerchant("boutiqueexemple")).toBe(false);
+    expect(isMarketplaceMerchant(null)).toBe(false);
+    // Une vraie boutique sur une page de Google garde sa clé.
+    expect(alertKeyString(google, "Boutique Exemple")).toBe("v1|g|google.fr|4455667788|boutiqueexemple");
+  });
+
+  it("liens courts d'Amazon (amzn.to, amzn.eu, amzn.asia, amzn.com, a.co) et des autres places de marché : aucune clé", () => {
+    for (const link of ["https://amzn.to/3abcd", "https://amzn.eu/d/abc123", "https://amzn.asia/d/xyz", "https://amzn.com/B000123", "https://a.co/d/xyz", "https://ebay.us/abc", "https://etsy.me/abc"]) {
+      expect(alertKeyString(link, "Boutique"), link).toBeNull();
+    }
+  });
+
+  it("pages de catégorie ou de collection (sans segment de produit), pagination ou tri : aucune clé ; un produit rangé dans une collection garde la sienne", () => {
+    for (const link of [
+      "https://boutique.example/collections/vestes",
+      "https://boutique.example/collections/all",
+      "https://boutique.example/category/vestes",
+      "https://boutique.example/femme/categories/vestes",
+      "https://boutique.example/fr/c/robes-123",
+      "https://boutique.example/catalogue/vestes",
+      "https://boutique.example/vestes?page=2",
+      "https://boutique.example/vestes?sort=price",
+    ]) {
+      expect(alertKeyString(link, "Boutique"), link).toBeNull();
+    }
+    expect(alertKeyString("https://boutique.example/collections/vestes/products/veste-nuage", "Boutique")).toBe("v1|u|boutique.example/collections/vestes/products/veste-nuage");
+    expect(alertKeyString("https://boutique.example/c/robes/p/123", "Boutique")).toBe("v1|u|boutique.example/c/robes/p/123");
+    // Une page de produit à un seul segment garde sa clé (la reconnaître comme liste écarterait de vraies pièces).
+    expect(alertKeyString("https://boutique.example/veste-nuage-07", "Boutique")).toBe("v1|u|boutique.example/veste-nuage-07");
+  });
+});
+
 describe("clé « même pièce » : page de Google", () => {
   it("le productid lu strictement dans « prds », avec la boutique normalisée", () => {
     expect(googleProductId(GOOGLE)).toBe("4455667788");
@@ -134,6 +180,23 @@ describe("devise des alertes (alertCurrency, packages/shared-types)", () => {
     expect(alertCurrency("$", "ca")).toBeNull();
     expect(alertCurrency("$", "fr")).toBeNull();
     expect(alertCurrency("$", null)).toBeNull();
+  });
+
+  it("UNE seule table pour toute l'app : Lens, Google Shopping, le tri et « Boutique à l'étranger » la lisent (aucune copie qui pourrait diverger)", () => {
+    expect(COUNTRY_CURRENCIES).toEqual({ fr: "EUR", gb: "GBP", ch: "CHF", us: "USD" });
+    const marks = [...Object.keys(ALERT_CURRENCY_MARKS), "$", "EUR", "USD", "GBP", "CHF", "CAD", "¥", "euros", "€  ", null];
+    for (const country of ["fr", "us", "gb", "ch", "de"]) {
+      for (const mark of marks) expect(isLocalCurrency(mark, country), `${mark} ${country}`).toBe(isCountryCurrency(mark, country));
+    }
+    expect(isCountryCurrency("€", "fr")).toBe(true);
+    expect(isCountryCurrency("$", "us")).toBe(true);
+    expect(isCountryCurrency("$", "fr")).toBe(false);
+    expect(isCountryCurrency("€", "de")).toBeNull();
+    // Plus aucune table d'écritures de devise dans ces quatre fichiers.
+    for (const file of ["src/services/lensMeasure.ts", "src/services/textSearch.ts", "../mobile/src/lib/result-sort.ts", "../mobile/src/lib/foreign-shop.ts"]) {
+      const source = readFileSync(join(__dirname, "..", file), "utf8");
+      expect(source, file).not.toMatch(/["']€["']|["']£["']|US\$|\$US/);
+    }
   });
 
   it("code ISO : lui-même ; espaces d'une colonne char(3) retirées ; toute autre écriture : aucune comparaison", () => {

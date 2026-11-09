@@ -11,7 +11,9 @@
 //   « Que cherchez-vous ? », seulement les nouvelles propositions ; rien quand
 //   l'enregistrement a échoué (routes/searches.ts décide, ici on compte) ;
 // - un achat via Spotto (« Je l'ai achetée ») annonce seulement « disponible
-//   chez cette boutique aujourd'hui », sans prix ;
+//   chez cette boutique aujourd'hui », sans prix — sauf si l'acheteur a
+//   lui-même signalé la pièce « Plus disponible » ces 30 derniers jours (un
+//   seul membre ne fabrique jamais un « De retour en stock » chez les autres) ;
 // - par lot, une observation par clé ; une clé dont les observations ne
 //   s'accordent pas (prix, devise, pays, stock, boutique) est écartée ;
 // - prix ≤ 0 ou devise inconnue : pas de prix (alertCurrency) ; en centimes ;
@@ -22,11 +24,15 @@
 //   produits de SerpApi et les clés — même sans 0036, pour savoir si un
 //   « épuisé » arrive un jour. Journal racine, jamais de compte, de titre ni d'adresse ;
 // - lancé puis oublié : au plus 4 observations en cours par serveur (au-delà,
-//   celle-ci est sautée et comptée), aucune erreur ne remonte.
+//   celle-ci est sautée et comptée), aucune erreur ne remonte ;
+// - une observation qui crée des alertes lance aussitôt un passage d'envoi
+//   (sendWishAlertsNow, lib/wishAlertsSend.ts) : le membre est prévenu à la
+//   seconde près, toujours après la réponse de la recherche ou de l'achat.
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { alertCurrency } from "@monapp/shared-types";
+import { alertCurrency, WISH_ALERT_RULES } from "@monapp/shared-types";
 import { trackingKeyOf } from "./alertKeys.js";
+import { sendWishAlertsNow } from "./wishAlertsSend.js";
 import { wishAlertsReady } from "./wishAlertsSchema.js";
 
 /** D'où vient l'observation (valeur d'une liste fermée, pour le journal). */
@@ -148,6 +154,9 @@ export interface ObserveInput {
   rows: readonly ObservedRow[];
   /** Pays de la recherche (searchLocaleFor) ; null pour un achat. */
   country: string | null;
+  /** Achat : rien n'est observé si cette personne (l'acheteur) a signalé
+   * l'une de ces pièces « Plus disponible » récemment. */
+  skipIfReportedBy?: string;
 }
 
 const inFlight = new Set<Promise<void>>();
@@ -168,9 +177,38 @@ export function observeResults(fastify: FastifyInstance, input: ObserveInput): v
 }
 
 /** « Je l'ai achetée » sur une proposition : disponible chez cette boutique
- * aujourd'hui (aucun prix, aucune personne). */
-export function observePurchase(fastify: FastifyInstance, match: { merchantUrl: string; merchantName: string | null }): void {
-  observeResults(fastify, { source: "purchase", rows: [{ merchantUrl: match.merchantUrl, merchantName: match.merchantName, priceValue: null, currency: null, inStock: true }], country: null });
+ * aujourd'hui (aucun prix, aucune personne envoyée à la base). `buyerId` ne
+ * sert qu'à vérifier, avant, que l'acheteur n'a pas signalé lui-même la pièce
+ * « Plus disponible » (WISH_ALERT_RULES.purchaseAfterOwnReportDays) : sinon,
+ * signaler puis acheter ferait partir un faux « De retour en stock » chez
+ * tous les membres qui la surveillent. Jamais dans le journal. */
+export function observePurchase(fastify: FastifyInstance, buyerId: string, match: { merchantUrl: string; merchantName: string | null }): void {
+  observeResults(fastify, {
+    source: "purchase",
+    rows: [{ merchantUrl: match.merchantUrl, merchantName: match.merchantName, priceValue: null, currency: null, inStock: true }],
+    country: null,
+    skipIfReportedBy: buyerId,
+  });
+}
+
+/** Le jour de Paris il y a `days` jours, « AAAA-MM-JJ ». */
+function parisDayBefore(days: number, now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(now.getTime() - days * 86_400_000));
+}
+
+/** Cette personne a-t-elle signalé l'une de ces pièces « Plus disponible »
+ * récemment ? Lecture impossible : oui (dans le doute, l'achat ne vaut pas
+ * « disponible »). */
+async function reportedRecently(fastify: FastifyInstance, userId: string, keys: readonly string[]): Promise<boolean> {
+  const { data, error } = await fastify.supabaseAdmin
+    .from("stock_reports")
+    .select("id")
+    .eq("user_id", userId)
+    .in("match_key_hash", [...keys])
+    .gte("created_on", parisDayBefore(WISH_ALERT_RULES.purchaseAfterOwnReportDays))
+    .limit(1);
+  if (error || !Array.isArray(data)) return true;
+  return data.length > 0;
 }
 
 /** Tests seulement : attend la fin des observations en cours. */
@@ -180,10 +218,13 @@ export async function flushObservations(): Promise<void> {
 
 async function runObservation(fastify: FastifyInstance, input: ObserveInput): Promise<void> {
   const { observations, counts } = buildObservations(input.rows, input.country);
-  let outcome: "counted" | "observed" | "failed" = "counted";
+  let outcome: "counted" | "observed" | "failed" | "own_report" = "counted";
   let matched = 0;
   let events = 0;
-  if (observations.length > 0 && (await wishAlertsReady(fastify))) {
+  const ready = observations.length > 0 && (await wishAlertsReady(fastify));
+  if (ready && input.skipIfReportedBy && (await reportedRecently(fastify, input.skipIfReportedBy, observations.map((observation) => observation.k)))) {
+    outcome = "own_report";
+  } else if (ready) {
     const { data, error } = await fastify.supabaseAdmin.rpc("wish_observe", { p_batch: observations });
     const parsed = OBSERVE_ROWS.safeParse(data);
     if (error || !parsed.success) {
@@ -197,4 +238,6 @@ async function runObservation(fastify: FastifyInstance, input: ObserveInput): Pr
   }
   // Journal racine : des nombres et des valeurs d'une liste fermée.
   fastify.log.info({ source: input.source, ...counts, matched, events, outcome }, OBSERVATION_LOG_MESSAGE);
+  // Des alertes viennent de naître : envoyées tout de suite (« à la seconde près »).
+  if (events > 0) sendWishAlertsNow(fastify);
 }

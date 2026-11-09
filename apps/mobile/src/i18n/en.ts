@@ -706,7 +706,7 @@ export const en: Catalog = {
     bellOnLabel: (title: string, kinds: string) => `Alert on for ${title}: ${kinds}. Tap to change it`,
     sheetTitle: "Alert for this piece",
     sheetIntro:
-      "Spotto tells you when a search or a purchase made in Spotto shows this piece at the same shop, cheaper or back in stock. Nobody knows who searched for it, or who follows it.",
+      "Spotto tells you right away when a search or a purchase made in Spotto shows this piece at the same shop, cheaper or back in stock. Nobody knows who searched for it, or who follows it.",
     switchTurnsOn: "This also turns on “Price and stock alerts” in Settings.",
     pushSoon: "Your alerts are saved; notifications will be available soon.",
     iphoneOnly: "Alert notifications arrive in the Spotto iPhone app.",
@@ -717,6 +717,7 @@ export const en: Catalog = {
     removed: "Alert removed",
     saveError: "Your choice couldn't be saved. Check your connection, then try again.",
     notTrackable: "This piece can't be followed: its shop or product isn't recognized.",
+    bought: "This piece is in your Vault: no alert will be sent for it.",
     tooManyChanges: "You've changed a lot of alerts: try again in a moment.",
     pushOfferTitle: "Get notified on this iPhone?",
     pushOfferBody:

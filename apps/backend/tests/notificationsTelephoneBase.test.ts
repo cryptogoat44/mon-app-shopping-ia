@@ -19,7 +19,7 @@ vi.mock("../src/env.js", async (importOriginal) => {
 const admin = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const [pushProbe, messagesProbe] = await Promise.all([admin.from("push_tokens").select("token").limit(0), admin.from("messages").select("id").limit(0)]);
 const migrated = !pushProbe.error && !messagesProbe.error;
-// Lot alertes prix (0036) : l'export dit aussi si l'appareil reçoit les messages.
+// Lot alertes prix (0036) : l'export dit aussi si l'appareil reçoit les messages, les alertes.
 const alertsProbe = await admin.rpc("wish_alerts_version");
 const alertsMigrated = !alertsProbe.error && alertsProbe.data === 1;
 
@@ -106,7 +106,7 @@ describe.skipIf(!migrated)("notifications sur le téléphone, sur la base de dé
     expect((await request(alice, "PUT", "/api/me/push-token", { token: phone, platform: "ios" })).statusCode).toBe(204);
     const exported = await request(alice, "GET", "/api/me/export");
     expect(exported.json().pushDevices).toEqual([
-      { platform: "ios", created_at: expect.any(String), updated_at: expect.any(String), ...(alertsMigrated ? { notify_messages: true } : {}) },
+      { platform: "ios", created_at: expect.any(String), updated_at: expect.any(String), ...(alertsMigrated ? { notify_messages: true, notify_alerts: false } : {}) },
     ]);
     expect(exported.body).not.toContain(phone);
     expect((await request(alice, "DELETE", "/api/me/push-token", { token: phone })).statusCode).toBe(204);

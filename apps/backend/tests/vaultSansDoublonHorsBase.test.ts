@@ -139,13 +139,14 @@ afterEach(async () => {
 });
 
 describe("alertes prix : « Je l'ai achetée » annonce la pièce disponible chez cette boutique (sans base)", () => {
-  it("pièce créée depuis une proposition de sa recherche : une annonce, après la réponse, avec le lien et la boutique rangés par le serveur (jamais l'acheteur)", async () => {
+  it("pièce créée depuis une proposition de sa recherche : une annonce, après la réponse, avec le lien et la boutique rangés par le serveur ; l'acheteur, à part, seulement pour vérifier qu'il n'a pas signalé la pièce lui-même", async () => {
     const { db } = fakeDb(standardAnswer());
     const res = await post(await vaultApp(db), FROM_MATCH);
     expect(res.statusCode).toBe(200);
     expect(purchaseMock).toHaveBeenCalledTimes(1);
-    expect(purchaseMock.mock.calls[0]![1]).toEqual({ merchantUrl: "https://marchand.example/veste", merchantName: null });
-    expect(JSON.stringify(purchaseMock.mock.calls[0]![1])).not.toContain(USER);
+    expect(purchaseMock.mock.calls[0]![1]).toBe(USER);
+    expect(purchaseMock.mock.calls[0]![2]).toEqual({ merchantUrl: "https://marchand.example/veste", merchantName: null });
+    expect(JSON.stringify(purchaseMock.mock.calls[0]![2])).not.toContain(USER);
   });
 
   it("déjà dans le Vault, ou ajout à la main (sans proposition) : aucune annonce", async () => {

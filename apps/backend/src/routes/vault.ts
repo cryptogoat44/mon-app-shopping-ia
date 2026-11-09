@@ -342,7 +342,7 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
     // Alertes prix et stock (lot 2) : « Je l'ai achetée » sur une proposition
     // de sa recherche annonce, après la réponse, « disponible chez cette
     // boutique aujourd'hui » (sans prix, sans jamais l'acheteur).
-    if (match) observePurchase(fastify, { merchantUrl: match.merchantUrl, merchantName: match.merchantName });
+    if (match) observePurchase(fastify, userId, { merchantUrl: match.merchantUrl, merchantName: match.merchantName });
     return sent;
   });
 

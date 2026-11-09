@@ -20,6 +20,8 @@ export function matchToPiece(match: ProductMatch): Piece {
     feedbackReason: match.feedbackReason ?? null,
     // Voie C (lot c) : absente = « lens » ; un ancien serveur ne l'envoie jamais.
     ...(match.origin ? { origin: match.origin } : {}),
+    // Alertes prix (lot 2) : la pièce a une clé (« Plus disponible ? »).
+    ...(match.alertTrackable === true ? { alertTrackable: true } : {}),
   };
 }
 

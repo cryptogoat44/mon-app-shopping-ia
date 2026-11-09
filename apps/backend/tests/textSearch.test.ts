@@ -10,7 +10,8 @@ vi.mock("../src/lib/safeFetch.js", () => ({
 
 import { safeFetch } from "../src/lib/safeFetch.js";
 import { callShopping, googleDomainFor, serpApiTextProvider, SHOPPING_SETTINGS } from "../src/services/serpapi.js";
-import { filterShoppingItems, isGoogleLink, MAX_TEXT_MATCHES, searchProductsByText, SHOPPING_CURRENCIES } from "../src/services/textSearch.js";
+import { COUNTRY_CURRENCIES } from "@monapp/shared-types";
+import { filterShoppingItems, isGoogleLink, MAX_TEXT_MATCHES, searchProductsByText } from "../src/services/textSearch.js";
 import { ProviderFailure } from "../src/services/searchProvider.js";
 import { MAX_PRICE } from "../src/services/visualSearch.js";
 
@@ -163,7 +164,7 @@ describe("Google Shopping — prix et devises", () => {
   });
 
   it("pays dont la devise n'est pas connue ici (en-DE) : prix en euros caché, pièce gardée", async () => {
-    expect(SHOPPING_CURRENCIES.de).toBeUndefined();
+    expect(COUNTRY_CURRENCIES.de).toBeUndefined();
     const result = await search([item(1)], { country: "de", hl: "en" });
     expect(result.matches).toHaveLength(1);
     expect(result.matches[0]).toMatchObject({ priceValue: null, currency: null });

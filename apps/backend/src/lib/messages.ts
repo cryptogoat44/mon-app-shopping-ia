@@ -195,6 +195,7 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   // Alertes prix et stock (lot 2, routes/wishAlerts.ts, lib/rateLimits.ts).
   "Vous avez signalé beaucoup de pièces aujourd'hui. Réessayez demain.": "You've reported a lot of pieces today. Please try again tomorrow.",
   "Vous avez changé beaucoup d'alertes en peu de temps. Réessayez dans un moment.": "You've changed a lot of alerts in a short time. Please try again in a moment.",
+  "Cette pièce est dans votre Vault : aucune alerte ne partira pour elle.": "This piece is in your Vault: no alert will be sent for it.",
   // Mise à jour obligatoire de l'app iPhone (lot « app iPhone prête », lib/appVersion.ts).
   [UPDATE_REQUIRED_MESSAGE]: "This version of Spotto is no longer supported. Please update the app from the App Store.",
 };

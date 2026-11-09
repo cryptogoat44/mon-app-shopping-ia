@@ -8,7 +8,8 @@
 // lancement. Version site : push.web.ts (aucune notification, aucun appel).
 // Lot alertes prix (0036) : une réponse par sorte (messages, alertes) ;
 // l'appareil reste enregistré tant que l'une des deux est allumée
-// (deviceRegistration, push-state.ts), sinon il est oublié.
+// (deviceRegistration, push-state.ts), sinon il est oublié. Le serveur sait,
+// pour chaque appareil, s'il reçoit les messages et s'il reçoit les alertes.
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
@@ -80,20 +81,23 @@ export async function savePushDecision(userId: string, decision: PushDecision, k
 
 /** Les réponses de cet appareil (messages, alertes) et ce que le serveur doit
  * en garder : l'appareil tant que l'une des deux est allumée. */
-async function currentRegistration(userId: string): Promise<{ keep: boolean; messages: boolean }> {
+async function currentRegistration(userId: string): Promise<{ keep: boolean; messages: boolean; alerts: boolean }> {
   const [messages, alerts] = await Promise.all([loadPushDecision(userId, "messages"), loadPushDecision(userId, "alerts")]);
   return deviceRegistration({ messages, alerts }, alertsKeepDevice(wishAlertsStatus()));
 }
 
-/** Jeton d'Expo de cet appareil, enregistré sur le serveur. `messages` : le
- * serveur lui envoie aussi les notifications des messages (false : les
- * seules alertes prix et stock). */
-async function registerThisDevice(notifications: NotificationsModule, messages: boolean): Promise<void> {
+/** Ce que reçoit cet appareil, dit au serveur à chaque enregistrement. */
+type DeviceKinds = { messages: boolean; alerts: boolean };
+
+/** Jeton d'Expo de cet appareil, enregistré sur le serveur, avec ce qu'il
+ * reçoit : les messages, les alertes prix et stock (chacune selon la réponse
+ * donnée pour elle sur cet appareil). */
+async function registerThisDevice(notifications: NotificationsModule, kinds: DeviceKinds): Promise<void> {
   const id = projectId();
   if (!id) throw new Error("push_unavailable");
   const { data } = await notifications.getExpoPushTokenAsync({ projectId: id });
   if (!isExpoPushToken(data)) throw new Error("push_token_invalid");
-  await registerPushToken(data, "ios", messages);
+  await registerPushToken(data, "ios", kinds.messages, kinds.alerts);
   await AsyncStorage.setItem(PUSH_TOKEN_KEY, data);
 }
 
@@ -111,36 +115,39 @@ export async function enablePush(userId: string, kind: PushKind = "messages"): P
     await savePushDecision(userId, "off", kind);
     return permission;
   }
-  const messages = kind === "messages" || (await loadPushDecision(userId, "messages")) === "on";
-  await registerThisDevice(notifications, messages);
+  // Accepter une sorte ne rallume jamais l'autre si elle est coupée.
+  const [messagesDecision, alertsDecision] = await Promise.all([loadPushDecision(userId, "messages"), loadPushDecision(userId, "alerts")]);
+  await registerThisDevice(notifications, {
+    messages: kind === "messages" || messagesDecision === "on",
+    alerts: kind === "alerts" || alertsDecision === "on",
+  });
   await savePushDecision(userId, "on", kind);
   return permission;
 }
 
 /** « Plus tard » ou interrupteur coupé, pour une sorte : l'appareil est
  * oublié sur le serveur, sauf si l'autre sorte est allumée — il y reste
- * alors, pour elle seule (messages coupés, alertes allumées : réenregistré
- * avec `messages: false`). Si ce réenregistrement échoue, l'appareil est
- * oublié plutôt que de garder des notifications de messages coupées ; il
- * revient à la prochaine ouverture de l'app (refreshPushToken). */
+ * alors, pour elle seule (réenregistré avec `messages: false`, ou
+ * `alerts: false`). Si ce réenregistrement échoue, l'appareil est oublié
+ * plutôt que de garder des notifications coupées ; il revient à la prochaine
+ * ouverture de l'app (refreshPushToken). */
 export async function disablePush(userId: string, kind: PushKind = "messages"): Promise<void> {
   await savePushDecision(userId, "off", kind);
   const registration = await currentRegistration(userId);
   if (!registration.keep) return forgetPushToken();
-  if (kind === "alerts") return;
   try {
-    await registerAgain(registration.messages);
+    await registerAgain(registration);
   } catch {
     await forgetPushToken();
   }
 }
 
 /** Réenregistre l'appareil (iOS doit déjà le permettre ; ne demande rien). */
-async function registerAgain(messages: boolean): Promise<void> {
+async function registerAgain(kinds: DeviceKinds): Promise<void> {
   const notifications = await loadNotifications();
   if (!notifications || !projectId()) throw new Error("push_unavailable");
   if (permissionFrom(await notifications.getPermissionsAsync()) !== "granted") throw new Error("push_not_allowed");
-  await registerThisDevice(notifications, messages);
+  await registerThisDevice(notifications, kinds);
 }
 
 /** L'interrupteur des alertes vient de changer (Réglages ou première
@@ -170,7 +177,7 @@ export async function refreshPushToken(userId: string): Promise<void> {
   const registration = await currentRegistration(userId);
   if (!registration.keep) return;
   if (permissionFrom(await notifications.getPermissionsAsync()) !== "granted") return;
-  await registerThisDevice(notifications, registration.messages);
+  await registerThisDevice(notifications, registration);
 }
 
 /** Notifications reçues app ouverte (bannière, sauf pour la conversation à

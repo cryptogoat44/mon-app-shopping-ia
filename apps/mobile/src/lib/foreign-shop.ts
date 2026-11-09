@@ -3,14 +3,10 @@
 // prise) : la proposition est seulement signalée. Imports relatifs : fichier
 // testé par vitest.
 
-// Devise du pays, telle que Google Lens l'écrit (symbole ou code) : même
-// table que le serveur (apps/backend/src/services/lensMeasure.ts).
-const LOCAL_CURRENCIES: Record<string, readonly string[]> = {
-  fr: ["€", "EUR"],
-  us: ["$", "USD", "US$"],
-  gb: ["£", "GBP"],
-  ch: ["CHF"],
-};
+// Devise du pays, telle que Google Lens l'écrit (symbole ou code) : LA table
+// de packages/shared-types (isCountryCurrency), la même que le serveur
+// (services/lensMeasure.ts) et les alertes prix ; jamais une copie ici.
+import { isCountryCurrency } from "@monapp/shared-types";
 
 /** Pays de la recherche visuelle, lu dans l'en-tête Accept-Language que l'app
  * envoie (i18n/index.ts), comme le fait le serveur (lib/locale.ts) : français
@@ -25,8 +21,7 @@ export function searchCountryFrom(acceptLanguage: string): string {
  * sans devise, ou pour un pays dont la devise n'est pas connue ici : rien à
  * signaler. La base complète la devise par des espaces (« €  », char(3)). */
 export function isForeignPrice(price: number | null, currency: string | null, country: string): boolean {
-  const local = LOCAL_CURRENCIES[country];
   const code = currency?.trim();
-  if (price === null || !code || !local) return false;
-  return !local.includes(code);
+  if (price === null || !code) return false;
+  return isCountryCurrency(code, country) === false;
 }

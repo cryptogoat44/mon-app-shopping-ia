@@ -41,8 +41,10 @@ function displayPrice(item: WishlistItemDetail): string | null {
 // tard ; republier passe en bouton secondaire.
 // Lot 2 (alertes prix et stock) : la cloche de l'envie et « Plus
 // disponible ? », seulement si le serveur a les alertes et reconnaît la
-// pièce (`trackable`). Ouverte par une alerte (`from=alerte`) : le clic vers
-// la boutique est compté « price_alert ».
+// pièce (`trackable`). Pas de cloche pour une pièce achetée (`bought` du
+// serveur, ou `inVault` juste après « Je l'ai achetée ») : aucune alerte ne
+// partirait. Ouverte par une alerte (`from=alerte`) : le clic vers la
+// boutique est compté « price_alert ».
 export default function WishlistItemScreen() {
   const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
   const router = useRouter();
@@ -180,10 +182,10 @@ export default function WishlistItemScreen() {
             <WishBoughtButton item={item} onAdded={() => setItem((current) => (current ? { ...current, inVault: true } : current))} />
           </View>
 
-          {/* Lot 2 : la cloche, puis « Plus disponible ? » (discret), pour une pièce reconnue. */}
-          {bellVisible(alerts, alertState) || canReportWish(alerts, alertState) ? (
+          {/* Lot 2 : la cloche (jamais pour une pièce achetée : aucune alerte ne partirait), puis « Plus disponible ? » (discret), pour une pièce reconnue. */}
+          {bellVisible(alerts, alertState, item.inVault) || canReportWish(alerts, alertState) ? (
             <View style={styles.alerts}>
-              {bellVisible(alerts, alertState) ? <WishAlertButton title={item.title} state={alertState} onPress={() => setAlertSheet(true)} /> : null}
+              {bellVisible(alerts, alertState, item.inVault) ? <WishAlertButton title={item.title} state={alertState} onPress={() => setAlertSheet(true)} /> : null}
               {canReportWish(alerts, alertState) ? (
                 <StockReportLink pieceName={item.title} onPress={() => setStockReport({ kind: "wish", id: item.id, title: item.title })} style={styles.stockReport} />
               ) : null}

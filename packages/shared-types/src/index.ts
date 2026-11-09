@@ -165,6 +165,11 @@ export interface ProductMatch {
    * serveur ne l'envoie que pour « shopping » et « words », et un ancien
    * serveur ne l'envoie jamais. */
   origin?: MatchOrigin;
+  /** Alertes prix et stock (lot 2) : la pièce a une clé « même pièce »
+   * (même boutique, même produit) ; seulement alors « Plus disponible ? »
+   * s'affiche sur sa carte. Envoyée seulement quand elle est vraie ; absente
+   * (ancien serveur, place de marché, page de liste…) = non. */
+  alertTrackable?: true;
 }
 
 // ---- Bouton « Résultat incohérent » (fiabilité des résultats, 2026-10-15) ----
@@ -1170,15 +1175,20 @@ export function isExpoPushToken(value: unknown): value is string {
 }
 
 /** PUT /api/me/push-token : enregistrer (ou rafraîchir) l'appareil.
- * `messages` (lot alertes prix, migration 0036) : cet appareil reçoit-il les
- * notifications des nouveaux messages ? false garde l'appareil pour les
- * seules alertes prix et stock (interrupteur des Réglages). Absent : inchangé
- * pour un appareil déjà enregistré, oui pour un nouveau (comme avant). Ignoré
- * par un serveur sans 0036. */
+ * Lot alertes prix (migration 0036), une réponse par sorte, sur CET appareil :
+ * - `messages` : reçoit-il les notifications des nouveaux messages ? false
+ *   le garde pour les seules alertes. Absent : inchangé pour un appareil déjà
+ *   enregistré, oui pour un nouveau (comme avant) ;
+ * - `alerts` : reçoit-il les notifications des alertes prix et stock ?
+ *   Absent : inchangé pour un appareil déjà enregistré, non pour un nouveau
+ *   (jamais d'alerte sans la réponse « Activer » donnée pour elles).
+ * Les deux à false : l'appareil est oublié. Un serveur sans 0036 ne sait pas
+ * garder un appareil pour les seules alertes : `messages: false` l'oublie. */
 export interface RegisterPushTokenRequest {
   token: string;
   platform: PushPlatform;
   messages?: boolean;
+  alerts?: boolean;
 }
 
 /** DELETE /api/me/push-token : oublier cet appareil (déconnexion, notifications coupées). */
@@ -1446,9 +1456,11 @@ export type WishAlertStatus = (typeof WISH_ALERT_STATUSES)[number];
 
 /** Règles chiffrées des alertes (tenues par la base, migration 0036). */
 export const WISH_ALERT_RULES = {
-  /** Délai d'envoi tiré au hasard après l'événement, en heures. */
-  sendDelayMinHours: 2,
-  sendDelayMaxHours: 8,
+  /** Une alerte est due dès sa création (décision du fondateur : « à la
+   * seconde près ») : envoyée juste après l'observation qui l'a créée, en
+   * arrière-plan après la réponse ; sinon (pas d'appareil, notifications
+   * coupées, limites) au prochain passage d'envoi. */
+  sendDelayHours: 0,
   /** Au-delà, une alerte jamais envoyée expire. */
   expiryHours: 72,
   /** Au plus une alerte envoyée par envie et par sorte sur ce nombre de jours. */
@@ -1457,9 +1469,21 @@ export const WISH_ALERT_RULES = {
   perPersonPerDay: 5,
   /** « Plus disponible » : signalements par membre et par jour (heure de Paris). */
   stockReportsPerDay: 20,
+  /** « Je l'ai achetée » ne vaut pas « disponible » quand l'acheteur a lui-même
+   * signalé la pièce « Plus disponible » dans ce nombre de jours (jamais de
+   * faux « De retour en stock » fabriqué par un seul membre). */
+  purchaseAfterOwnReportDays: 30,
   /** Alertes et signalements effacés au bout de ce nombre de jours. */
   retentionDays: 30,
 } as const;
+
+// ---- Devises : LA table de l'app et du serveur ----
+// Une seule table des écritures d'une devise, partagée par les alertes
+// (alertCurrency), la mesure et le classement de Lens (services/lensMeasure.ts),
+// Google Shopping (services/textSearch.ts), le tri des résultats
+// (mobile lib/result-sort.ts) et « Boutique à l'étranger » (mobile
+// lib/foreign-shop.ts). Jamais de copie ailleurs : une écriture ajoutée ici
+// vaut partout à la fois.
 
 /** Écritures d'une devise vues chez Google (Lens écrit souvent un symbole,
  * Google Shopping un code) → code ISO. Table FERMÉE : toute autre écriture
@@ -1489,6 +1513,18 @@ export function alertCurrency(raw: string | null | undefined, country: string | 
   return /^[A-Z]{3}$/.test(text) ? text : null;
 }
 
+/** Devise de chaque pays de recherche connu (les quatre pays du domaine de
+ * Google, serpapi.ts) ; un autre pays : devise inconnue ici. */
+export const COUNTRY_CURRENCIES: Readonly<Record<string, string>> = { fr: "EUR", gb: "GBP", ch: "CHF", us: "USD" };
+
+/** Le prix est-il dans la devise du pays de la recherche ? null : la devise
+ * de ce pays n'est pas connue ici. Sans devise lisible : non. */
+export function isCountryCurrency(raw: string | null | undefined, country: string): boolean | null {
+  const local = COUNTRY_CURRENCIES[country];
+  if (!local) return null;
+  return alertCurrency(raw, country) === local;
+}
+
 /** GET /api/alerts/status : les alertes sont-elles disponibles (migration
  * 0036 appliquée) ? Faux : l'app cache la cloche, l'interrupteur et « Plus
  * disponible ». `enabled` : l'interrupteur « Alertes prix et stock » de la
@@ -1507,10 +1543,15 @@ export interface UpdateWishAlertsSettingsRequest {
 }
 
 /** La cloche d'une envie. `trackable` : la pièce a une clé (lien de boutique
- * reconnu) ; sinon, ni cloche ni « Plus disponible ». */
+ * reconnu) ; sinon, ni cloche ni « Plus disponible ». `bought` : la pièce est
+ * dans votre Vault (« Je l'ai achetée ») ; aucune alerte ne part pour elle,
+ * la cloche est cachée. `stock` : le dernier état connu, en direct (décision
+ * du fondateur : le savoir tout de suite est le but) ; jamais qui a cherché,
+ * acheté ou signalé la pièce. */
 export interface WishAlertState {
   wishlistItemId: string;
   trackable: boolean;
+  bought: boolean;
   priceDrop: boolean;
   restock: boolean;
   soldOut: boolean;
@@ -1549,6 +1590,8 @@ export const WISH_ALERT_ERRORS = {
   notTrackable: "alert_not_trackable",
   /** 20 signalements « Plus disponible » déjà aujourd'hui (429). */
   reportLimit: "stock_report_limit",
+  /** La pièce est dans votre Vault (422) : pas de cloche, aucune alerte ne partirait. */
+  bought: "alert_wish_bought",
 } as const;
 
 /** Sorte des données jointes à une notification d'alerte. */

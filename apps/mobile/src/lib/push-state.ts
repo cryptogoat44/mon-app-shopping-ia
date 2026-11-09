@@ -13,7 +13,9 @@
 // avec la réponse de la personne sur cet appareil — les messages et les
 // alertes prix et stock. L'appareil reste enregistré sur le serveur tant que
 // l'une des deux est allumée (messages, ou alertes avec l'interrupteur des
-// Réglages) ; `messages` dit au serveur s'il lui envoie aussi les messages.
+// Réglages) ; `messages` et `alerts` disent au serveur ce qu'il lui envoie.
+// Avoir accepté les messages ne vaut JAMAIS accord pour les alertes : la
+// première cloche montre leur explication, même quand iOS les permet déjà.
 // Toucher une alerte ouvre l'envie (ou vos Envies pour une alerte groupée).
 // Module natif et appels au serveur : push.ts (site : push.web.ts).
 import { parseWishAlertPushData, type MessagesStatus, type WishAlertsStatus } from "@monapp/shared-types";
@@ -100,33 +102,35 @@ export interface PushDecisions {
 
 /** Allumer les alertes (première cloche, ou interrupteur des Réglages), sur
  * cet appareil :
- * - « offer » : la feuille d'explication d'abord (jamais encore répondu pour
- *   les alertes, et iOS ne les a pas refusées) ;
+ * - « offer » : la feuille d'explication des ALERTES d'abord (jamais encore
+ *   répondu pour elles, et iOS ne les a pas refusées) — même si les messages
+ *   sont acceptés : leur accord ne vaut pas pour les alertes (« Activer »
+ *   ne redemande alors rien à iOS) ;
  * - « adopt » : sans rien demander, l'appareil les reçoit déjà (alertes déjà
- *   acceptées, ou messages acceptés et iOS d'accord : le serveur envoie les
- *   alertes à tous les appareils de la personne) ;
+ *   acceptées sur cet appareil) ;
  * - « none » : rien à faire ici (site, notifications coupées sur le serveur,
  *   « Plus tard » déjà répondu, iOS les refuse). */
 export function alertsPushStep(context: AlertsPushContext, decisions: PushDecisions, permission: PushPermission): "offer" | "adopt" | "none" {
   if (!alertsPushPossible(context)) return "none";
   if (decisions.alerts === "on") return "adopt";
   if (decisions.alerts === "off" || permission === "denied") return "none";
-  if (decisions.messages === "on" && permission === "granted") return "adopt";
   return "offer";
 }
 
 /** Cet appareil reçoit les notifications des alertes : la personne a dit oui
- * (pour les alertes, ou pour les messages) et iOS le permet. */
+ * POUR ELLES sur cet appareil, et iOS le permet. */
 export function alertsPushOn(decisions: PushDecisions, permission: PushPermission): boolean {
-  return permission === "granted" && (decisions.alerts === "on" || decisions.messages === "on");
+  return permission === "granted" && decisions.alerts === "on";
 }
 
-/** L'appareil sur le serveur : gardé tant que les messages OU les alertes
- * sont allumés (`alertsActive` : alertes disponibles et interrupteur des
- * Réglages allumé) ; `messages` : le serveur lui envoie aussi les messages. */
-export function deviceRegistration(decisions: PushDecisions, alertsActive: boolean): { keep: boolean; messages: boolean } {
+/** Ce que le serveur garde de l'appareil : gardé tant que les messages OU les
+ * alertes sont allumés (`alertsActive` : alertes disponibles et interrupteur
+ * des Réglages allumé) ; `messages` et `alerts` : ce que le serveur lui
+ * envoie (les alertes seulement après l'« Activer » donné pour elles). */
+export function deviceRegistration(decisions: PushDecisions, alertsActive: boolean): { keep: boolean; messages: boolean; alerts: boolean } {
   const messages = decisions.messages === "on";
-  return { keep: messages || (decisions.alerts === "on" && alertsActive), messages };
+  const alerts = decisions.alerts === "on";
+  return { keep: messages || (alerts && alertsActive), messages, alerts };
 }
 
 /** Réponse d'iOS → autorisation. « Provisoire » (3) et « éphémère » (4)

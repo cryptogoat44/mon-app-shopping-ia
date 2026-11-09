@@ -28,6 +28,9 @@ export interface Piece {
   /** Voie C (lot c) : d'où vient la proposition (résultats d'une recherche
    * seulement). Absente = « lens », la recherche visuelle. */
   origin?: MatchOrigin;
+  /** Alertes prix et stock (lot 2) : le serveur reconnaît la pièce (même
+   * boutique, même produit) ; seulement alors « Plus disponible ? ». */
+  alertTrackable?: boolean;
 }
 
 export type SpotStatus = "success" | "failed";

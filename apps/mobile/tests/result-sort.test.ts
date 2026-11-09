@@ -125,7 +125,11 @@ describe("devises : jamais comparées entre elles", () => {
     expect(currencyKey("£")).toBe("GBP");
     expect(currencyKey("$US")).toBe("USD");
     expect(currencyKey("US$")).toBe("USD");
-    expect(currencyKey("$MX")).toBe("$MX");
+    // La table unique des devises (packages/shared-types) : « $MX » est le peso mexicain, comme « MXN ».
+    expect(currencyKey("$MX")).toBe("MXN");
+    expect(currencyKey("MXN")).toBe("MXN");
+    // Une écriture que la table ne connaît pas reste à part, jamais mêlée aux autres.
+    expect(currencyKey("¥")).toBe("¥");
     expect(currencyKey(null)).toBeNull();
     expect(currencyKey("  ")).toBeNull();
   });

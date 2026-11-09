@@ -2,6 +2,7 @@
 // fondateur du 2026-10-15) : des nombres et des valeurs d'une liste fermée,
 // jamais d'image, de titre, d'adresse ni de texte. Rangée avec la recherche
 // (migration 0025).
+import { COUNTRY_CURRENCIES, isCountryCurrency } from "@monapp/shared-types";
 import type { VisualMatch } from "./visualSearch.js";
 
 /** Rubriques de la réponse de Google Lens que la mesure relève (liste fermée,
@@ -50,20 +51,12 @@ export interface LensMeasure extends FilterCounts {
   googleState: "empty" | "other" | null;
 }
 
-// Devise du pays de la recherche, telle que SerpApi l'écrit (symbole ou code).
-const LOCAL_CURRENCIES: Record<string, readonly string[]> = {
-  fr: ["€", "EUR"],
-  us: ["$", "USD", "US$"],
-  gb: ["£", "GBP"],
-  ch: ["CHF"],
-};
-
 /** La devise est-elle celle du pays de la recherche ? null si la devise du pays
- * n'est pas connue ici. Sert à la mesure et au classement (règle des prix). */
+ * n'est pas connue ici. Sert à la mesure et au classement (règle des prix).
+ * Écritures d'une devise (symbole ou code, comme SerpApi les donne) : LA table
+ * de packages/shared-types (isCountryCurrency), jamais une copie ici. */
 export function isLocalCurrency(currency: string | null, country: string): boolean | null {
-  const local = LOCAL_CURRENCIES[country];
-  if (!local) return null;
-  return currency !== null && local.includes(currency);
+  return isCountryCurrency(currency, country);
 }
 
 function siteOf(link: string): string | null {
@@ -86,7 +79,7 @@ export function measureLens(
     received: response.received,
     kept: kept.length,
     keptWithPrice: priced.length,
-    keptOtherCurrency: LOCAL_CURRENCIES[country] ? priced.filter((match) => match.currency !== null && isLocalCurrency(match.currency, country) === false).length : null,
+    keptOtherCurrency: COUNTRY_CURRENCIES[country] ? priced.filter((match) => match.currency !== null && isLocalCurrency(match.currency, country) === false).length : null,
     distinctSites: new Set(kept.map((match) => siteOf(match.merchantUrl)).filter((site) => site !== null)).size,
     sections: response.sections,
     googleState: response.googleState,

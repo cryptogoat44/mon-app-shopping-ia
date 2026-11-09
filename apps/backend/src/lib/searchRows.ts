@@ -1,5 +1,6 @@
 // Recherches et propositions lues dans la base, validées (charte, règle 19 :
 // aucune conversion « de confiance »), puis mises en forme pour l'app.
+import { alertKeyString } from "./alertKeys.js";
 import { z } from "zod";
 import {
   COMPLEMENT_STATUSES,
@@ -191,6 +192,9 @@ export function toProductSearch(
         feedbackReason: feedbackByMatchId.get(m.id) ?? null,
         // Voie C : seulement pour « shopping » et « words » (absente = « lens »).
         ...(m.origin && m.origin !== "lens" ? { origin: m.origin } : {}),
+        // Alertes prix et stock (lot 2) : « Plus disponible ? » seulement sur
+        // une pièce qui a une clé (même calcul que la route du signalement).
+        ...(alertKeyString(m.merchant_url, m.merchant_name) !== null ? { alertTrackable: true as const } : {}),
       })),
   };
 }

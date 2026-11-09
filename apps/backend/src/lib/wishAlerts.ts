@@ -13,13 +13,23 @@
 //   (lib/alertKeys.ts) ; la base n'en garde que l'empreinte.
 // - Prix de référence de départ (règle B) : celui que le SERVEUR a rangé pour
 //   la proposition d'origine (product_matches), daté de sa recherche, jamais
-//   celui envoyé par l'app. Sans proposition (envie à la main, « Garder »), ou
-//   devise inconnue : aucune référence ; la première observation la fixera.
+//   celui envoyé par l'app. Sans proposition (envie à la main, « Garder »),
+//   devise inconnue, ou proposition rangée avant le 4 novembre 2026 (elle a
+//   pu recevoir « EUR » par défaut quand la devise manquait) : aucune
+//   référence ; la première observation la fixera, sans alerte. Une envie
+//   d'avant 0036 (suivi créé au rattrapage, ou à la première lecture de sa
+//   cloche) n'a jamais de référence : le pays de sa recherche n'est connu
+//   nulle part.
+// - La cloche dit le dernier état de stock connu, en direct (décision du
+//   fondateur : savoir tout de suite qu'une pièce revient est le but) ; jamais
+//   qui a cherché, acheté ou signalé la pièce (personne n'est gardé avec le
+//   suivi ni avec une alerte).
 // Journal : des codes, jamais un compte, un titre ni une adresse.
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { z } from "zod";
 import { alertCurrency, WISH_ALERT_RULES, STOCK_STATES, type WishAlertState, type WishAlertsStatus } from "@monapp/shared-types";
 import { ALERT_KEY_VERSION, trackingKeyOf, type TrackingKey } from "./alertKeys.js";
+import { keptMatchIds } from "./keptPieces.js";
 import { pushAvailable } from "./push.js";
 import { chunks, readAll } from "./pagedReads.js";
 import { DatabaseReadError, parseDbRows } from "./validation.js";
@@ -96,9 +106,14 @@ interface Reference {
   ref_set_on: string;
 }
 
+/** Avant cet instant (le 4 novembre 2026, minuit à Paris : lendemain de la
+ * mise en ligne de 2e258d9), une proposition sans devise était rangée avec
+ * « EUR » par défaut : son prix ne sert jamais de référence. */
+export const RELIABLE_MATCH_CURRENCY_SINCE = "2026-11-03T23:00:00Z";
+
 /** La proposition d'origine telle que le serveur l'a rangée : son prix (s'il
  * est sûr) et le nom de sa boutique. `country` : pays de la recherche de la
- * personne (lib/locale.ts) ; null (rattrapage) : aucune référence. */
+ * personne (lib/locale.ts) ; null (rattrapage, envie d'avant 0036) : aucune référence. */
 async function readOriginMatch(fastify: Db, matchId: string, country: string | null): Promise<{ reference: Reference | null; merchantName: string | null } | null> {
   const { data, error } = await fastify.supabaseAdmin.from("product_matches").select("price_min, currency, merchant_name, created_at").eq("id", matchId).maybeSingle();
   if (error) throw new DatabaseReadError("Proposition d'origine illisible");
@@ -107,7 +122,8 @@ async function readOriginMatch(fastify: Db, matchId: string, country: string | n
   const price = row.data.price_min === null ? null : Number(row.data.price_min);
   const currency = alertCurrency(row.data.currency, country);
   const day = parisDay(row.data.created_at);
-  const usable = price !== null && Number.isFinite(price) && price > 0 && currency !== null && country !== null && day !== null;
+  const reliable = Date.parse(row.data.created_at) >= Date.parse(RELIABLE_MATCH_CURRENCY_SINCE);
+  const usable = reliable && price !== null && Number.isFinite(price) && price > 0 && currency !== null && country !== null && day !== null;
   return {
     reference: usable ? { ref_price: Math.round(price * 100) / 100, ref_currency: currency, ref_country: country, ref_set_on: day } : null,
     merchantName: row.data.merchant_name,
@@ -172,25 +188,52 @@ const TRACKING_ROW = z.object({
   stock_state: z.enum(STOCK_STATES),
 });
 type TrackingRow = z.infer<typeof TRACKING_ROW>;
+const TRACKING_COLUMNS = "wishlist_item_id, match_key_hash, merchant_key, stock_state";
 
 async function readTracking(fastify: Db, userId: string, wishId: string): Promise<TrackingRow | null> {
   const rows = parseDbRows(
     z.array(TRACKING_ROW),
-    await fastify.supabaseAdmin.from("wish_tracking").select("wishlist_item_id, match_key_hash, merchant_key, stock_state").eq("user_id", userId).eq("wishlist_item_id", wishId).limit(1),
+    await fastify.supabaseAdmin.from("wish_tracking").select(TRACKING_COLUMNS).eq("user_id", userId).eq("wishlist_item_id", wishId).limit(1),
     "Suivi d'une envie"
   );
   return rows[0] ?? null;
 }
 
-/** Le suivi d'une envie de la personne, créé s'il manque (envie d'avant 0036
- * ou d'avant le rattrapage). null : l'envie n'existe pas pour elle. */
-export async function ensureTracking(fastify: Db, log: FastifyBaseLogger, userId: string, wishId: string, country: string | null): Promise<TrackingRow | null> {
+/** Le suivi d'une envie de la personne, créé s'il manque. null : l'envie
+ * n'existe pas pour elle. Créé ici, c'est une envie d'avant 0036 (ou dont le
+ * suivi n'a pas pu être créé) : comme au rattrapage, aucune référence — le
+ * pays de sa recherche n'est connu nulle part, et sa proposition d'origine a
+ * pu ranger une devise par défaut. Le choix de qui passe en premier (le
+ * rattrapage ou la fiche de l'envie) ne change donc rien. */
+export async function ensureTracking(fastify: Db, log: FastifyBaseLogger, userId: string, wishId: string): Promise<TrackingRow | null> {
   const found = await readTracking(fastify, userId, wishId);
   if (found) return found;
   const wish = await readOwnWish(fastify, userId, wishId);
   if (!wish) return null;
-  await trackNewWish(fastify, log, wish, country);
+  await trackNewWish(fastify, log, wish, null);
   return (await readTracking(fastify, userId, wishId)) ?? { wishlist_item_id: wishId, match_key_hash: null, merchant_key: null, stock_state: "unknown" };
+}
+
+/** Parmi ces envies de la personne, celles dont la pièce est dans son Vault
+ * (« Je l'ai achetée ») : aucune alerte ne part pour elles (wish_observe,
+ * wish_alerts_claim), la cloche est donc cachée. Lecture impossible : aucune
+ * (la cloche reste, comme avant). */
+async function boughtWishIds(fastify: Db, userId: string, wishIds: readonly string[]): Promise<Set<string>> {
+  const matchByWish = new Map<string, string>();
+  for (const part of chunks(wishIds)) {
+    const { data, error } = await fastify.supabaseAdmin.from("wishlist_items").select("id, product_match_id").eq("user_id", userId).in("id", part);
+    const rows = z.array(z.object({ id: z.string(), product_match_id: z.string().nullable() })).safeParse(data);
+    if (error || !rows.success) return new Set();
+    for (const row of rows.data) if (row.product_match_id) matchByWish.set(row.id, row.product_match_id);
+  }
+  if (matchByWish.size === 0) return new Set();
+  const bought = new Set(await keptMatchIds(fastify, "vault_items", userId, [...new Set(matchByWish.values())]));
+  return new Set([...matchByWish].filter(([, matchId]) => bought.has(matchId)).map(([wishId]) => wishId));
+}
+
+/** La pièce de cette envie est-elle dans le Vault de la personne ? */
+export async function wishBought(fastify: Db, userId: string, wishId: string): Promise<boolean> {
+  return (await boughtWishIds(fastify, userId, [wishId])).has(wishId);
 }
 
 // ---- Cloche (wish_watches) ----
@@ -204,10 +247,11 @@ const WATCH_ROW = z.object({
 type WatchRow = z.infer<typeof WATCH_ROW>;
 const WATCH_COLUMNS = "wishlist_item_id, notify_price_drop, notify_restock, notify_sold_out";
 
-function toState(wishId: string, tracking: TrackingRow | null, watch: WatchRow | null): WishAlertState {
+function toState(wishId: string, tracking: TrackingRow | null, watch: WatchRow | null, bought: boolean): WishAlertState {
   return {
     wishlistItemId: wishId,
     trackable: Boolean(tracking?.match_key_hash),
+    bought,
     priceDrop: watch?.notify_price_drop ?? false,
     restock: watch?.notify_restock ?? false,
     soldOut: watch?.notify_sold_out ?? false,
@@ -225,10 +269,11 @@ async function readWatch(fastify: Db, userId: string, wishId: string): Promise<W
 }
 
 /** La cloche d'une envie de la personne (son suivi créé s'il manque) ; null : envie introuvable. */
-export async function readWishAlertState(fastify: Db, log: FastifyBaseLogger, userId: string, wishId: string, country: string | null): Promise<WishAlertState | null> {
-  const tracking = await ensureTracking(fastify, log, userId, wishId, country);
+export async function readWishAlertState(fastify: Db, log: FastifyBaseLogger, userId: string, wishId: string): Promise<WishAlertState | null> {
+  const tracking = await ensureTracking(fastify, log, userId, wishId);
   if (!tracking) return null;
-  return toState(wishId, tracking, await readWatch(fastify, userId, wishId));
+  const [watch, bought] = await Promise.all([readWatch(fastify, userId, wishId), wishBought(fastify, userId, wishId)]);
+  return toState(wishId, tracking, watch, bought);
 }
 
 /** Au plus ce nombre d'envies dans GET /api/alerts/wishes. */
@@ -239,7 +284,7 @@ export async function readWishAlertStates(fastify: Db, userId: string): Promise<
   const [trackings, watches] = await Promise.all([
     fastify.supabaseAdmin
       .from("wish_tracking")
-      .select("wishlist_item_id, match_key_hash, merchant_key, stock_state")
+      .select(TRACKING_COLUMNS)
       .eq("user_id", userId)
       .order("wishlist_item_id", { ascending: true })
       .limit(MAX_ALERT_STATES)
@@ -255,7 +300,8 @@ export async function readWishAlertStates(fastify: Db, userId: string): Promise<
   const trackingById = new Map(trackings.map((row) => [row.wishlist_item_id, row]));
   const watchById = new Map(watches.map((row) => [row.wishlist_item_id, row]));
   const ids = [...new Set([...trackingById.keys(), ...watchById.keys()])].sort().slice(0, MAX_ALERT_STATES);
-  return ids.map((id) => toState(id, trackingById.get(id) ?? null, watchById.get(id) ?? null));
+  const bought = await boughtWishIds(fastify, userId, ids.filter((id) => trackingById.get(id)?.match_key_hash));
+  return ids.map((id) => toState(id, trackingById.get(id) ?? null, watchById.get(id) ?? null, bought.has(id)));
 }
 
 /** Ce que la personne a choisi sur la cloche d'une envie. */

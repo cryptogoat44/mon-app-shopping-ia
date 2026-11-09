@@ -77,9 +77,11 @@ export function usePushOfferAnswer(kind: PushKind, onClose: (enabled: boolean) =
 }
 
 /** Le contenu de la feuille : à quoi servent les notifications, ce qu'elles
- * montrent, « Activer » et « Plus tard ». */
-export function PushOfferPanel({ kind, offer }: { kind: PushKind; offer: PushOfferAnswer }) {
-  const { busy, outcome, denied, accept, later } = offer;
+ * montrent, « Activer » et « Plus tard ». `saving` : la réponse donnée est en
+ * train d'être enregistrée ailleurs (cloche) — plus aucune autre réponse. */
+export function PushOfferPanel({ kind, offer, saving = false }: { kind: PushKind; offer: PushOfferAnswer; saving?: boolean }) {
+  const { outcome, denied, accept, later } = offer;
+  const busy = offer.busy || saving;
   return (
     <>
       <Text style={styles.title} accessibilityRole="header">

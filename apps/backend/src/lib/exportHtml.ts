@@ -924,6 +924,7 @@ function devicesSection(ctx: Ctx): Html {
     new Card(ctx, "pushDevices", row)
       .use("platform")
       .field("notify_messages")
+      .field("notify_alerts")
       .field("created_at")
       .field("updated_at")
       .render(enumLabel(ctx, PUSH_PLATFORM_LABELS, row.platform))

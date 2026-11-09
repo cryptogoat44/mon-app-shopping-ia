@@ -80,6 +80,7 @@ const ON = { available: true, enabled: true, push: true };
 const state = (overrides: Partial<WishAlertState> = {}): WishAlertState => ({
   wishlistItemId: WISH,
   trackable: true,
+  bought: false,
   priceDrop: false,
   restock: false,
   soldOut: false,
@@ -114,7 +115,7 @@ describe("tout est caché sans les alertes sur le serveur (migration 0036 absent
   });
 
   it("ni cloche ni « Plus disponible » sans les alertes, même pour une pièce reconnue", () => {
-    const real = { real: true, merchantUrl: "https://boutique.example/veste" };
+    const real = { real: true, merchantUrl: "https://boutique.example/veste", alertTrackable: true };
     expect(bellVisible(ALERTS_UNAVAILABLE, state())).toBe(false);
     expect(canReportWish(ALERTS_UNAVAILABLE, state())).toBe(false);
     expect(canReportResult(ALERTS_UNAVAILABLE, real)).toBe(false);
@@ -146,7 +147,7 @@ describe("tout est caché sans les alertes sur le serveur (migration 0036 absent
   });
 
   it("les écrans ne montrent rien sans `available` (cloche, feuilles, interrupteur, « Plus disponible »)", () => {
-    expect(envie).toContain("{bellVisible(alerts, alertState) ? <WishAlertButton");
+    expect(envie).toContain("{bellVisible(alerts, alertState, item.inVault) ? <WishAlertButton");
     expect(envie).toContain("{canReportWish(alerts, alertState) ? (");
     expect(envie).toContain("{alerts.available ? (");
     expect(envie).toContain("setAlertState(status.available ? await fetchWishAlert(id) : null);");
@@ -170,6 +171,25 @@ describe("la cloche et sa feuille", () => {
     expect(states.get(WISH)?.priceDrop).toBe(true);
     expect(readWishAlertStates({ items: "rien" }).size).toBe(0);
     expect(readWishAlertState({ wishlistItemId: WISH, trackable: "oui", stock: "vendu" })).toEqual(state({ trackable: false }));
+  });
+
+  it("l'état de stock en direct (décision du fondateur) : lu tel quel s'il est connu, « unknown » sinon ; rien d'autre n'est gardé", () => {
+    expect(readWishAlertState({ ...state(), stock: "sold_out", lastPrice: 79 })).toEqual(state({ stock: "sold_out" }));
+    expect(readWishAlertState({ ...state(), stock: "in_stock" })?.stock).toBe("in_stock");
+    expect(Object.keys(readWishAlertState({ ...state(), searcher: "x" })!).sort()).toEqual(["bought", "priceDrop", "restock", "soldOut", "stock", "trackable", "wishlistItemId"]);
+  });
+
+  it("pièce déjà achetée (dans votre Vault) : pas de cloche — aucune alerte ne partirait ; « Plus disponible ? » reste possible", () => {
+    expect(bellVisible(ON, state({ bought: true }))).toBe(false);
+    expect(bellVisible(ON, state(), true)).toBe(false);
+    expect(bellVisible(ON, state(), false)).toBe(true);
+    expect(canReportWish(ON, state({ bought: true }))).toBe(true);
+    expect(readWishAlertState({ ...state(), bought: true })?.bought).toBe(true);
+    expect(readWishAlertState({ ...state(), bought: "oui" })?.bought).toBe(false);
+    // La fiche le sait tout de suite après « Je l'ai achetée » (inVault), la liste par le serveur (bought).
+    expect(envie).toContain("bellVisible(alerts, alertState, item.inVault)");
+    expect(panel).toContain("{bellVisible(alerts, alertStates.get(item.id)) ? (");
+    expect(watchErrorMessage(apiError(422, "alert_wish_bought"))).toBe(fr.wishAlerts.bought);
   });
 
   it("« Baisse de prix » et « Retour en stock » ; « Épuisé » reste caché (décision du fondateur)", () => {
@@ -240,9 +260,10 @@ describe("la première cloche allume l'interrupteur, après l'explication des no
   it("sur l'iPhone : l'explication si la personne n'a encore rien répondu pour les alertes", () => {
     expect(alertsPushStep(context(), { messages: null, alerts: null }, "undetermined")).toBe("offer");
     expect(alertsPushStep(context(), { messages: "off", alerts: null }, "granted")).toBe("offer");
-    // Déjà d'accord : rien à demander, l'appareil les reçoit.
+    // Déjà d'accord POUR LES ALERTES : rien à demander, l'appareil les reçoit.
     expect(alertsPushStep(context(), { messages: null, alerts: "on" }, "granted")).toBe("adopt");
-    expect(alertsPushStep(context(), { messages: "on", alerts: null }, "granted")).toBe("adopt");
+    // Messages acceptés : leur accord ne vaut pas pour les alertes, l'explication des alertes d'abord.
+    expect(alertsPushStep(context(), { messages: "on", alerts: null }, "granted")).toBe("offer");
     // « Plus tard » déjà répondu, iOS les refuse, site, notifications coupées sur le serveur, build sans module.
     expect(alertsPushStep(context(), { messages: null, alerts: "off" }, "undetermined")).toBe("none");
     expect(alertsPushStep(context(), { messages: null, alerts: null }, "denied")).toBe("none");
@@ -250,6 +271,18 @@ describe("la première cloche allume l'interrupteur, après l'explication des no
     expect(alertsPushStep(context({ status: { ...ON, push: false } }), { messages: null, alerts: null }, "undetermined")).toBe("none");
     expect(alertsPushStep(context({ supported: false }), { messages: null, alerts: null }, "undetermined")).toBe("none");
     expect(alertsPushPossible(context({ status: { available: false, push: true } }))).toBe(false);
+  });
+
+  it("un seul enregistrement à la fois : pendant qu'il part, ni « Plus tard », ni « Activer », ni fermeture (l'accord donné n'est jamais défait)", () => {
+    const send = body(sheet, "async function send()", "const dismiss");
+    expect(send).toContain("if (!wish || sending.current) return;\n    sending.current = true;");
+    expect(send).toContain("sending.current = false;\n      setSaving(false);");
+    // Fermer (fond, geste de retour) pendant l'enregistrement : ignoré, même sur l'explication.
+    expect(sheet).toContain('const dismiss = () => (saving ? undefined : step === "push" ? offer.dismiss() : onClose());');
+    expect(sheet).toContain('<PushOfferPanel kind="alerts" offer={offer} saving={saving} />');
+    // Les boutons de l'explication restent désactivés tant que la cloche s'enregistre.
+    expect(offer).toContain("const busy = offer.busy || saving;");
+    expect(body(offer, "export function PushOfferPanel(", "const styles")).toContain("onPress={later} disabled={busy}");
   });
 
   it("la feuille de la cloche : l'explication d'abord (seconde étape), puis l'alerte est enregistrée quelle que soit la réponse", () => {
@@ -260,7 +293,7 @@ describe("la première cloche allume l'interrupteur, après l'explication des no
     expect(save.indexOf('setStep("push")')).toBeLessThan(save.indexOf("await send();"));
     // « Activer » ou « Plus tard » de la seconde étape : l'alerte part ensuite, interrupteur compris.
     expect(sheet).toContain('const offer = usePushOfferAnswer("alerts", () => void send(), step === "push");');
-    expect(sheet).toContain('<PushOfferPanel kind="alerts" offer={offer} />');
+    expect(sheet).toContain('<PushOfferPanel kind="alerts" offer={offer} saving={saving} />');
     const send = body(sheet, "async function send()", "const dismiss");
     expect(send).toContain("const request = watchRequest(choice, status);");
     expect(send).toContain("await updateWishAlert(wish.id, request);");
@@ -336,11 +369,19 @@ describe("« Plus disponible », avec une confirmation", () => {
     expect(stockReportRequest({ kind: "wish", id: WISH, title: "Veste" })).toEqual({ wishlistItemId: WISH });
   });
 
+  it("seulement sur une pièce qui a une clé selon le serveur (décision 8) : jamais une place de marché, une page de liste ou de Google sans identifiant", () => {
+    // Le serveur le dit pour chaque proposition (alertTrackable) ; absent (ancien serveur, Amazon…) : pas de lien.
+    expect(canReportResult(ON, { real: true, merchantUrl: "https://www.amazon.fr/dp/B000123" })).toBe(false);
+    expect(canReportResult(ON, { real: true, merchantUrl: "https://boutique.example/veste", alertTrackable: false })).toBe(false);
+    expect(canReportResult(ON, { real: true, merchantUrl: "https://boutique.example/veste", alertTrackable: true })).toBe(true);
+    expect(read("lib/spot-result.ts")).toContain("...(match.alertTrackable === true ? { alertTrackable: true } : {}),");
+  });
+
   it("sur la grande carte, les sections et la liste triée — seulement de vraies propositions avec un lien", () => {
-    expect(canReportResult(ON, { real: false, merchantUrl: "https://boutique.example/veste" })).toBe(false);
-    expect(canReportResult(ON, { merchantUrl: "https://boutique.example/veste" })).toBe(false);
-    expect(canReportResult(ON, { real: true, merchantUrl: null })).toBe(false);
-    expect(canReportResult(ON, { real: true, merchantUrl: "" })).toBe(false);
+    expect(canReportResult(ON, { real: false, merchantUrl: "https://boutique.example/veste", alertTrackable: true })).toBe(false);
+    expect(canReportResult(ON, { merchantUrl: "https://boutique.example/veste", alertTrackable: true })).toBe(false);
+    expect(canReportResult(ON, { real: true, merchantUrl: null, alertTrackable: true })).toBe(false);
+    expect(canReportResult(ON, { real: true, merchantUrl: "", alertTrackable: true })).toBe(false);
     expect(result).toContain("onReportGone={stockFrom(p)} />");
     expect(result.match(/stockAction=\{stockFrom\}/g)?.length).toBe(4);
     for (const path of ["components/result-complement.tsx", "components/no-price-section.tsx", "components/price-sorted-list.tsx"]) {
@@ -405,12 +446,14 @@ describe("une alerte touchée ouvre l'envie", () => {
 
 describe("l'appareil reste enregistré tant que les messages OU les alertes sont allumés", () => {
   it("messages allumés : gardé, avec les messages ; seulement les alertes : gardé, sans les messages", () => {
-    expect(deviceRegistration({ messages: "on", alerts: null }, false)).toEqual({ keep: true, messages: true });
-    expect(deviceRegistration({ messages: "on", alerts: "on" }, true)).toEqual({ keep: true, messages: true });
-    expect(deviceRegistration({ messages: "off", alerts: "on" }, true)).toEqual({ keep: true, messages: false });
+    expect(deviceRegistration({ messages: "on", alerts: null }, false)).toEqual({ keep: true, messages: true, alerts: false });
+    expect(deviceRegistration({ messages: "on", alerts: "on" }, true)).toEqual({ keep: true, messages: true, alerts: true });
+    expect(deviceRegistration({ messages: "off", alerts: "on" }, true)).toEqual({ keep: true, messages: false, alerts: true });
+    // « Plus tard » pour les alertes, messages acceptés : gardé pour les messages, JAMAIS pour les alertes.
+    expect(deviceRegistration({ messages: "on", alerts: "off" }, true)).toEqual({ keep: true, messages: true, alerts: false });
     // Alertes acceptées mais interrupteur coupé (ou alertes indisponibles) : oublié.
-    expect(deviceRegistration({ messages: "off", alerts: "on" }, false)).toEqual({ keep: false, messages: false });
-    expect(deviceRegistration({ messages: null, alerts: null }, true)).toEqual({ keep: false, messages: false });
+    expect(deviceRegistration({ messages: "off", alerts: "on" }, false)).toEqual({ keep: false, messages: false, alerts: true });
+    expect(deviceRegistration({ messages: null, alerts: null }, true)).toEqual({ keep: false, messages: false, alerts: false });
     expect(alertsKeepDevice(ON)).toBe(true);
     expect(alertsKeepDevice({ ...ON, enabled: false })).toBe(false);
     expect(alertsKeepDevice({ available: false, enabled: true, push: true })).toBe(false);
@@ -421,7 +464,9 @@ describe("l'appareil reste enregistré tant que les messages OU les alertes sont
     expect(pushDecisionKey("u1", "messages")).toBe("spotto.push-decision.u1");
     expect(pushDecisionKey("u1", "alerts")).toBe("spotto.alerts-push-decision.u1");
     expect(alertsPushOn({ messages: null, alerts: "on" }, "granted")).toBe(true);
-    expect(alertsPushOn({ messages: "on", alerts: null }, "granted")).toBe(true);
+    // Les messages acceptés ne font jamais recevoir les alertes (« Plus tard » respecté).
+    expect(alertsPushOn({ messages: "on", alerts: null }, "granted")).toBe(false);
+    expect(alertsPushOn({ messages: "on", alerts: "off" }, "granted")).toBe(false);
     expect(alertsPushOn({ messages: null, alerts: "on" }, "denied")).toBe(false);
     expect(alertsPushOn({ messages: "off", alerts: "off" }, "granted")).toBe(false);
   });
@@ -430,14 +475,15 @@ describe("l'appareil reste enregistré tant que les messages OU les alertes sont
     const disable = body(push, "export async function disablePush(", "/** Réenregistre l'appareil");
     expect(disable).toContain('await savePushDecision(userId, "off", kind);');
     expect(disable).toContain("if (!registration.keep) return forgetPushToken();");
-    expect(disable).toContain("await registerAgain(registration.messages);");
+    expect(disable).toContain("await registerAgain(registration);");
     expect(disable).toContain("} catch {\n    await forgetPushToken();");
-    // Le jeton part toujours avec `messages` (contrat du serveur, migration 0036).
-    expect(push).toContain('await registerPushToken(data, "ios", messages);');
-    expect(api).toContain("const payload: RegisterPushTokenRequest = { token, platform, messages };");
-    // Accepter les alertes ne rallume jamais les messages coupés.
+    // Le jeton part toujours avec `messages` ET `alerts` (contrat du serveur, migration 0036).
+    expect(push).toContain('await registerPushToken(data, "ios", kinds.messages, kinds.alerts);');
+    expect(api).toContain("const payload: RegisterPushTokenRequest = { token, platform, messages, alerts };");
+    // Accepter une sorte ne rallume jamais l'autre si elle est coupée.
     const enable = body(push, "export async function enablePush(", "/** « Plus tard »");
-    expect(enable).toContain('const messages = kind === "messages" || (await loadPushDecision(userId, "messages")) === "on";');
+    expect(enable).toContain('messages: kind === "messages" || messagesDecision === "on",');
+    expect(enable).toContain('alerts: kind === "alerts" || alertsDecision === "on",');
   });
 
   it("l'interrupteur des alertes change : l'appareil suit, sans jamais rien demander à iOS", () => {
@@ -506,6 +552,9 @@ describe("politique de confidentialité et App Privacy (brouillons « à vérifi
       "Personne n'est identifié à personne",
       "le prix de référence et le dernier prix vu",
       "l'état du stock et leurs dates au jour près",
+      "Une alerte est envoyée tout de suite, dès que la baisse ou le retour en stock est constaté",
+      "aucun membre ne peut savoir qui c'était",
+      "Votre Vault reste visible par vous seul",
       "Les alertes sont effacées au bout de 30 jours",
       "Expo (650 Industries, Inc., États-Unis)",
       "Apple (Apple Inc., États-Unis)",
@@ -514,8 +563,30 @@ describe("politique de confidentialité et App Privacy (brouillons « à vérifi
       expect(paragraph).toContain(sentence);
     }
     const english = enText.slice(enText.indexOf("Your price and stock alerts:"), enText.indexOf("Your clicks to retailers"));
-    for (const sentence of ["are compared with the wishes saved by other members", "Nobody is identified to anyone", "Alerts are deleted after 30 days", "Expo (650 Industries, Inc., United States)", "[To be verified: legal basis chosen"]) {
+    // Plus aucun délai ni décalage d'un jour : envoyée tout de suite.
+    expect(paragraph).not.toMatch(/2 à 8|la veille|le lendemain|ne vous montre ni le stock/);
+    for (const sentence of ["are compared with the wishes saved by other members", "An alert is sent right away", "no member can find out who it was", "Nobody is identified to anyone", "Alerts are deleted after 30 days", "Expo (650 Industries, Inc., United States)", "[To be verified: legal basis chosen"]) {
       expect(english).toContain(sentence);
+    }
+  });
+
+  it("Expo et Apple (sous-traitants) : les notifications des messages ET des alertes, ce qu'une alerte contient, et l'adresse de l'appareil gardée tant que l'une des deux est activée", () => {
+    const frExpo = all(privacyPolicy).split("\n").find((line) => line.startsWith("Expo (650 Industries, Inc., États-Unis) :"))!;
+    for (const sentence of [
+      "les notifications de messages ou celles des alertes prix et stock",
+      "Une notification de message contient seulement « Spotto »",
+      "Une notification d'alerte contient « Spotto », le titre de la pièce, la boutique et le prix",
+      "jamais qui a cherché, acheté ou signalé la pièce",
+      "tant que les notifications de messages ou celles des alertes y sont activées",
+      "elle est effacée quand vous coupez les deux",
+      "[À vérifier :",
+    ]) {
+      expect(frExpo).toContain(sentence);
+    }
+    expect(frExpo).not.toContain("si vous activez les notifications de messages sur votre iPhone");
+    const enExpo = all(privacyPolicyEn).split("\n").find((line) => line.startsWith("Expo (650 Industries, Inc., United States):"))!;
+    for (const sentence of ["message notifications or price and stock alert notifications", "An alert notification contains", "it is deleted when you turn both off", "[To be verified:"]) {
+      expect(enExpo).toContain(sentence);
     }
   });
 

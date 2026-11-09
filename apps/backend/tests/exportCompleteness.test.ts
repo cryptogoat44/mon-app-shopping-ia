@@ -295,8 +295,8 @@ describe("export RGPD complet", () => {
     }
     expect(body.adminRole).toEqual({ created_at: expect.any(String) });
     expect(body.suspension).toMatchObject({ moderation_action_id: expect.any(String) });
-    // Un appareil : son système et ses dates (avec 0036 : s'il reçoit les messages), jamais son jeton.
-    const deviceColumns = ALERT_SECTIONS.length > 0 ? ["created_at", "notify_messages", "platform", "updated_at"] : ["created_at", "platform", "updated_at"];
+    // Un appareil : son système et ses dates (avec 0036 : s'il reçoit les messages, les alertes), jamais son jeton.
+    const deviceColumns = ALERT_SECTIONS.length > 0 ? ["created_at", "notify_alerts", "notify_messages", "platform", "updated_at"] : ["created_at", "platform", "updated_at"];
     for (const device of body.pushDevices) expect(Object.keys(device).sort()).toEqual(deviceColumns);
     expect(JSON.stringify(body)).not.toContain("ExponentPushToken[");
   });

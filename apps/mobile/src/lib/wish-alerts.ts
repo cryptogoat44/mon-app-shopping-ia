@@ -7,7 +7,11 @@
 //   tant que le serveur ne dit pas exactement `available: true` (migration
 //   0036 absente, ancien serveur, réponse illisible) ;
 // - la cloche d'une envie n'apparaît que si le serveur la dit suivable
-//   (`trackable` : même boutique, même produit reconnus) ;
+//   (`trackable` : même boutique, même produit reconnus) et pas déjà achetée
+//   (`bought` : dans votre Vault, aucune alerte ne partirait) ;
+// - « Plus disponible ? » sur une carte de résultat seulement si le serveur
+//   dit que la pièce a une clé (`alertTrackable`) : jamais sur une place de
+//   marché, une page de liste ou de Google sans identifiant produit ;
 // - « Épuisé » est construit côté serveur mais caché ici
 //   (SOLD_OUT_ALERTS_VISIBLE, décision du fondateur) ;
 // - la première cloche allume aussi l'interrupteur général, après la feuille
@@ -56,6 +60,7 @@ export function readWishAlertState(body: unknown): WishAlertState | null {
   return {
     wishlistItemId: fields.wishlistItemId,
     trackable: fields.trackable === true,
+    bought: fields.bought === true,
     priceDrop: fields.priceDrop === true,
     restock: fields.restock === true,
     soldOut: fields.soldOut === true,
@@ -107,9 +112,15 @@ export function bellOn(state: Pick<WishAlertState, "priceDrop" | "restock" | "so
   return activeKinds(choiceOf(state), soldOutVisible).length > 0;
 }
 
-/** La cloche s'affiche : alertes disponibles et pièce suivable. */
-export function bellVisible(status: Pick<WishAlertsStatus, "available">, state: Pick<WishAlertState, "trackable"> | null | undefined): boolean {
-  return status.available && state?.trackable === true;
+/** La cloche s'affiche : alertes disponibles, pièce suivable, pas déjà
+ * achetée (le serveur le dit par `bought` ; la fiche le sait aussi par
+ * `inVault`, juste après « Je l'ai achetée »). */
+export function bellVisible(
+  status: Pick<WishAlertsStatus, "available">,
+  state: Pick<WishAlertState, "trackable"> & Partial<Pick<WishAlertState, "bought">> | null | undefined,
+  inVault = false
+): boolean {
+  return status.available && state?.trackable === true && state.bought !== true && !inVault;
 }
 
 /** Le corps de PUT /api/wishlist/:id/alerts. « Épuisé », caché, n'est jamais
@@ -175,6 +186,7 @@ export function pushNoteText(note: "push_soon" | "iphone_only" | null): string |
 /** Message d'une cloche non enregistrée. */
 export function watchErrorMessage(error: unknown): string {
   if (error instanceof ApiError && error.body.error === WISH_ALERT_ERRORS.notTrackable) return t.wishAlerts.notTrackable;
+  if (error instanceof ApiError && error.body.error === WISH_ALERT_ERRORS.bought) return t.wishAlerts.bought;
   if (error instanceof ApiError && error.status === 429) return t.wishAlerts.tooManyChanges;
   return t.wishAlerts.saveError;
 }
@@ -195,15 +207,17 @@ export function stockReportRequest(target: StockReportTarget): StockReportReques
 
 /** « Plus disponible ? » sur une proposition : alertes disponibles, vraie
  * proposition d'une recherche (jamais une pièce de démonstration), avec un
- * lien de boutique. Le serveur seul sait si la pièce a une clé : sans clé, il
- * répond 422 et l'app le dit (notTrackable). */
-export function canReportResult(status: Pick<WishAlertsStatus, "available">, piece: { real?: boolean; merchantUrl: string | null }): boolean {
-  return status.available && piece.real === true && typeof piece.merchantUrl === "string" && piece.merchantUrl.length > 0;
+ * lien de boutique, et une pièce qui a une clé selon le serveur
+ * (`alertTrackable`, décision 8 du fondateur) : jamais un lien qui ne mène à
+ * rien (et qui userait la part du jour pour rien). */
+export function canReportResult(status: Pick<WishAlertsStatus, "available">, piece: { real?: boolean; merchantUrl: string | null; alertTrackable?: boolean }): boolean {
+  return status.available && piece.real === true && piece.alertTrackable === true && typeof piece.merchantUrl === "string" && piece.merchantUrl.length > 0;
 }
 
-/** « Plus disponible ? » sur une envie : seulement si le serveur la dit suivable. */
+/** « Plus disponible ? » sur une envie : seulement si le serveur la dit
+ * suivable (même déjà achetée : la pièce peut avoir disparu depuis). */
 export function canReportWish(status: Pick<WishAlertsStatus, "available">, state: Pick<WishAlertState, "trackable"> | null | undefined): boolean {
-  return bellVisible(status, state);
+  return status.available && state?.trackable === true;
 }
 
 /** Message d'un signalement refusé. */

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { trackingKeyOf } from "../src/lib/alertKeys.js";
 import { buildObservations, flushObservations, MAX_OBSERVATIONS, OBSERVATION_LOG_MESSAGE, observePurchase, observeResults, type ObservedRow } from "../src/lib/wishObserve.js";
 import { resetWishAlertsProbe } from "../src/lib/wishAlertsSchema.js";
+import { resetWishAlertsFlush, waitForWishAlertsFlush } from "../src/lib/wishAlertsSend.js";
 import { scrubLogLine } from "../src/lib/logPrivacy.js";
 
 // Alertes prix et stock (lot 2) : l'observation des résultats frais, sans
@@ -17,6 +18,10 @@ const URL_B = "https://autre-boutique.fr/vestes/nuage-07";
 const KEY_A = trackingKeyOf(URL_A, "Boutique Exemple")!;
 const KEY_B = trackingKeyOf(URL_B, "Boutique Exemple")!;
 const GOOGLE = "https://www.google.fr/search?q=veste&prds=productid:123456";
+const BUYER = "b0000000-0000-4000-8000-0000000000b1";
+const OTHER_MEMBER = "c0000000-0000-4000-8000-0000000000c1";
+/** Le jour de Paris il y a `days` jours. */
+const parisDayAgo = (days: number) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(new Date(Date.now() - days * 86_400_000));
 
 describe("observations d'une réponse (une par clé, en centimes)", () => {
   it("baisse de prix : le prix part en centimes entiers, avec la devise ISO et le pays de la recherche", () => {
@@ -85,9 +90,38 @@ let lines: string[] = [];
 let rpcCalls: { fn: string; args: Record<string, unknown> }[] = [];
 let app: FastifyInstance | null = null;
 
-async function observerApp(options: { migrated: boolean; observe?: () => Promise<{ data: unknown; error: { code: string } | null }> }): Promise<FastifyInstance> {
+interface StockReportRow {
+  user_id: string;
+  match_key_hash: string;
+  created_on: string;
+}
+
+/** Une lecture de stock_reports (select, eq, in, gte, limit), imitée. */
+function stockReportsTable(rows: readonly StockReportRow[], fail: boolean) {
+  const filters: ((row: StockReportRow) => boolean)[] = [];
+  const chain = {
+    select: () => chain,
+    eq: (column: keyof StockReportRow, value: string) => (filters.push((row) => row[column] === value), chain),
+    in: (column: keyof StockReportRow, values: string[]) => (filters.push((row) => values.includes(row[column])), chain),
+    gte: (column: keyof StockReportRow, value: string) => (filters.push((row) => row[column] >= value), chain),
+    limit: async (n: number) =>
+      fail ? { data: null, error: { code: "57014", message: "délai dépassé" } } : { data: rows.filter((row) => filters.every((keep) => keep(row))).slice(0, n).map(() => ({ id: "r" })), error: null },
+  };
+  return chain;
+}
+
+async function observerApp(options: {
+  migrated: boolean;
+  observe?: () => Promise<{ data: unknown; error: { code: string } | null }>;
+  reports?: StockReportRow[];
+  reportsFail?: boolean;
+}): Promise<FastifyInstance> {
   app = Fastify({ logger: { level: "info", stream: { write: (line: string) => void lines.push(line) }, hooks: { streamWrite: scrubLogLine } } });
   app.decorate("supabaseAdmin", {
+    from: (table: string) => {
+      if (table !== "stock_reports") throw new Error(`table inattendue : ${table}`);
+      return stockReportsTable(options.reports ?? [], options.reportsFail === true);
+    },
     rpc: async (fn: string, args: Record<string, unknown> = {}) => {
       rpcCalls.push({ fn, args });
       if (!options.migrated) return { data: null, error: { code: "PGRST202", message: "absente" } };
@@ -110,6 +144,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   await flushObservations();
+  await resetWishAlertsFlush();
   await app?.close();
   app = null;
   resetWishAlertsProbe();
@@ -165,11 +200,63 @@ describe("observeResults", () => {
   });
 
   it("achat via Spotto : « disponible chez cette boutique aujourd'hui », sans prix, sans pays, sans l'acheteur", async () => {
-    const target = await observerApp({ migrated: true });
-    observePurchase(target, { merchantUrl: URL_A, merchantName: "Boutique Exemple" });
+    // Un signalement d'un AUTRE membre, ou de l'acheteur sur une autre pièce, ou trop ancien : sans effet.
+    const target = await observerApp({
+      migrated: true,
+      reports: [
+        { user_id: OTHER_MEMBER, match_key_hash: KEY_A.hash, created_on: parisDayAgo(0) },
+        { user_id: BUYER, match_key_hash: KEY_B.hash, created_on: parisDayAgo(0) },
+        { user_id: BUYER, match_key_hash: KEY_A.hash, created_on: parisDayAgo(31) },
+      ],
+    });
+    observePurchase(target, BUYER, { merchantUrl: URL_A, merchantName: "Boutique Exemple" });
     await flushObservations();
     expect(rpcCalls.find((call) => call.fn === "wish_observe")!.args).toEqual({ p_batch: [{ k: KEY_A.hash, m: "boutiqueexemple", p: null, c: null, n: null, s: true }] });
-    expect(observationLines()).toEqual([expect.objectContaining({ source: "purchase", inStockTrue: 1 })]);
+    expect(observationLines()).toEqual([expect.objectContaining({ source: "purchase", inStockTrue: 1, outcome: "observed" })]);
+    expect(lines.join("\n")).not.toContain(BUYER);
+  });
+
+  it("« Plus disponible » puis « Je l'ai achetée » par le MÊME membre : l'achat ne vaut pas « disponible » (aucun faux retour en stock chez les autres)", async () => {
+    const target = await observerApp({ migrated: true, reports: [{ user_id: BUYER, match_key_hash: KEY_A.hash, created_on: parisDayAgo(3) }] });
+    observePurchase(target, BUYER, { merchantUrl: URL_A, merchantName: "Boutique Exemple" });
+    await flushObservations();
+    expect(rpcCalls.filter((call) => call.fn === "wish_observe")).toEqual([]);
+    expect(observationLines()).toEqual([expect.objectContaining({ source: "purchase", outcome: "own_report", matched: 0, events: 0 })]);
+    // Jamais l'acheteur dans le journal.
+    expect(lines.join("\n")).not.toContain(BUYER);
+  });
+
+  it("signalements illisibles : dans le doute, l'achat ne vaut pas « disponible »", async () => {
+    const target = await observerApp({ migrated: true, reportsFail: true });
+    observePurchase(target, BUYER, { merchantUrl: URL_A, merchantName: "Boutique Exemple" });
+    await flushObservations();
+    expect(rpcCalls.filter((call) => call.fn === "wish_observe")).toEqual([]);
+    expect(observationLines()).toEqual([expect.objectContaining({ outcome: "own_report" })]);
+  });
+
+  it("des alertes viennent de naître : un passage d'envoi part AUSSITÔT après l'observation (« à la seconde près »), par le même chemin atomique (wish_alerts_claim) ; une seconde observation n'attend pas la minute", async () => {
+    const target = await observerApp({ migrated: true });
+    observeResults(target, { source: "lens", rows: [row(URL_A)], country: "fr" });
+    await flushObservations();
+    await waitForWishAlertsFlush();
+    const fns = rpcCalls.map((call) => call.fn);
+    expect(fns.filter((fn) => fn === "wish_alerts_claim")).toHaveLength(1);
+    expect(fns.indexOf("wish_alerts_claim")).toBeGreaterThan(fns.indexOf("wish_observe"));
+    // Une autre recherche, quelques secondes après, qui crée aussi une alerte : un autre passage, tout de suite.
+    observeResults(target, { source: "shopping", rows: [row(URL_B)], country: "fr" });
+    await flushObservations();
+    await waitForWishAlertsFlush();
+    expect(rpcCalls.filter((call) => call.fn === "wish_alerts_claim")).toHaveLength(2);
+    // Jamais qui a cherché : le passage ne reçoit qu'une limite.
+    for (const call of rpcCalls.filter((entry) => entry.fn === "wish_alerts_claim")) expect(Object.keys(call.args)).toEqual(["p_limit"]);
+  });
+
+  it("aucune alerte créée (ou observation refusée) : aucun passage d'envoi lancé par l'observation", async () => {
+    const target = await observerApp({ migrated: true, observe: async () => ({ data: [{ matched: 3, events: 0 }], error: null }) });
+    observeResults(target, { source: "lens", rows: [row(URL_A)], country: "fr" });
+    await flushObservations();
+    await waitForWishAlertsFlush();
+    expect(rpcCalls.filter((call) => call.fn === "wish_alerts_claim")).toEqual([]);
   });
 
   it("rien à observer : aucun appel, aucune ligne", async () => {
