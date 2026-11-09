@@ -42,8 +42,8 @@ Les dates de 0001 à 0028 ne sont pas notées dans le dépôt : celles du tablea
 | 0028 | Voie C (compléments « boutiques », cache) | appliquée en production | 3 ou 4 nov. 2026 (à confirmer) |
 | 0029 | Garde-fous : index, compteurs de l'IA dans la base, part du jour plus juste | **à appliquer** | — |
 | 0030 | Masquage automatique après 3 signalements | **à appliquer** | — |
-| 0031 | Boutiques ensuite : résultats Lens tout de suite, autres boutiques juste après | **à appliquer** | — |
-| 0032 | Messages privés entre membres (conversations, invitations, envie jointe) | **à appliquer** | — |
+| 0031 | Boutiques ensuite : résultats Lens tout de suite, autres boutiques juste après | appliquée en production (sans Supabase Pro : décision du fondateur, 3 colonnes vides ajoutées) | 9 nov. 2026 |
+| 0032 | Messages privés entre membres (conversations, invitations, envie jointe) | **à appliquer** (après 0030) | — |
 
 ## Fichiers utiles par migration
 
@@ -57,9 +57,9 @@ Les dates de 0001 à 0028 ne sont pas notées dans le dépôt : celles du tablea
 | 0031 | le fichier de la migration lui-même | `supabase/verifications/0031-verification.sql` | en tête du fichier de la migration |
 | 0032 | le fichier de la migration lui-même (**après 0030** ; ne pas relancer 0030 ensuite) | `supabase/verifications/0032-verification.sql` | en tête du fichier de la migration |
 
-## Avant d'appliquer 0029, 0030, 0031 et 0032
+## Avant d'appliquer 0029, 0030 et 0032
 
-1. **L'offre Supabase Pro sur spotto-prod** (sauvegardes quotidiennes), comme décidé dans la feuille de route : aucun nouveau SQL en production avant. Que faire si ça tourne mal : [RESTAURATION.md](RESTAURATION.md).
+1. **L'offre Supabase Pro sur spotto-prod** (sauvegardes quotidiennes), comme décidé dans la feuille de route : aucun nouveau SQL en production avant. Exception décidée par le fondateur le 9 novembre 2026 : 0031, qui ajoute seulement trois colonnes vides, appliquée sans Pro. Que faire si ça tourne mal : [RESTAURATION.md](RESTAURATION.md).
 2. Chacune a d'abord été appliquée sur **spotto-dev-2** (`pnpm --filter backend migrer-dev …`, sur votre Mac), puis vérifiée.
 3. Le serveur fonctionne avec ou sans elles : sans 0029, il garde ses compteurs de l'IA en mémoire ; sans 0030, il ne masque rien automatiquement ; sans 0031, il cherche les autres boutiques avant de répondre, comme avant (la nouvelle app attend alors le même temps qu'aujourd'hui) ; sans 0032, les messages sont « indisponibles » et l'app cache l'entrée Messages. Un serveur plus ancien fonctionne aussi sur une base qui les a.
 4. Toutes sont rejouables : relancer le fichier une seconde fois ne change rien.

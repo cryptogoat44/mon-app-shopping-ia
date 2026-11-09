@@ -23,11 +23,11 @@ import {
   bigCardLabel,
   chooseCard,
   clickPlacements,
+  hasPrice,
   holdCard,
   NO_CHOICE,
   noPriceAnywhere,
   noPriceNoticeShown,
-  priceFirstSections,
   startIndexOf,
   wordsArrivalReveal,
   wordsSortNote,
@@ -36,6 +36,8 @@ import {
   type ClickPlacement,
   type StartOptions,
 } from "@/lib/price-first";
+import { isPriceSort, resultLayout, type ResultView } from "@/lib/result-sort";
+import { usePreferences } from "@/lib/preferences-context";
 import { searchCountryFrom } from "@/lib/foreign-shop";
 import { getDraft } from "@/lib/spot-draft";
 import { failureCorrections, successCorrections, successSheetActions, type Correction } from "@/lib/spot-corrections";
@@ -52,7 +54,9 @@ import { ActionButtons, type Action } from "@/components/spot-launch-views";
 import { ReportedLine, ResultFeedbackButton, ResultFeedbackSheet } from "@/components/result-feedback-sheet";
 import { ResultComplement, ShopsPending, textSearchStatusNote } from "@/components/result-complement";
 import { TextSearchAlreadyUsed, TextSearchPrompt } from "@/components/text-search-prompt";
-import { ProposalCard } from "@/components/proposal-card";
+import { CheapestBadge, ProposalCard } from "@/components/proposal-card";
+import { ResultSortBar, WithPriceOnlyEmpty } from "@/components/result-sort-bar";
+import { PriceSortedList } from "@/components/price-sorted-list";
 import { NoPriceSection } from "@/components/no-price-section";
 import { YourPiece } from "@/components/your-piece";
 import { yourPieceImage } from "@/lib/your-piece";
@@ -130,6 +134,16 @@ export default function ResultScreen() {
   // fois (un autre essai préparé ensuite depuis cet écran ne la change pas).
   // Rien pour un résultat rouvert : son image n'est gardée nulle part.
   const [yourPiece] = useState(() => yourPieceImage(fromLaunch.current, getDraft()));
+  // Tri et filtre (lib/result-sort.ts) : gardés sur l'appareil, les mêmes à
+  // chaque nouvelle recherche. Tri par prix : pas de grande carte, sauf une
+  // carte de la liste triée que la personne vient de toucher.
+  const { resultView: view, chooseResultView } = usePreferences();
+  const priceSort = isPriceSort(view.sort) ? view.sort : null;
+  const [pickedInPriceList, setPickedInPriceList] = useState(false);
+  // Carte touchée dans la liste triée : l'écran remonte la montrer, une fois affichée.
+  const [priceListReveal, setPriceListReveal] = useState(0);
+  // Le tri au moment où « Chercher » a été touché ne suffit pas (handleTextSearchDone) : le tri en cours.
+  const priceSortRef = useRef(priceSort);
 
   const result = state.kind === "ready" ? state.result : null;
   // Voie C (lot c) : l'indice désigne toutes les propositions de l'écran —
@@ -215,6 +229,10 @@ export default function ResultScreen() {
   }, [lateQuery]);
 
   useScrollToEndOnKeyboard(scrollRef, result?.complement?.suggestText === true);
+
+  useEffect(() => {
+    if (priceListReveal > 0) heroReveal.scrollToSection(0);
+  }, [priceListReveal]);
 
   // ---- Corrections (lot 4 ter) : recadrer, autres moments, choisir l'image soi-même ----
 
@@ -340,7 +358,8 @@ export default function ResultScreen() {
   function handleTextSearchDone(search: ProductSearch) {
     if (!result) return;
     const next = withTextSearch(result, search);
-    const reveal = wordsArrivalReveal(result, next, choiceRef.current, startOptions);
+    // Tri par prix : ni section ni grande carte d'office à montrer, les propositions des mots prennent leur place dans la liste triée.
+    const reveal = priceSortRef.current ? null : wordsArrivalReveal(result, next, choiceRef.current, startOptions);
     revealWords.current = reveal === "words";
     replaceResult(next);
     if (reveal === "hero") heroReveal.revealHero(allPieces(next)[startIndexOf(choiceRef.current, next, startOptions)]?.name ?? null);
@@ -362,6 +381,31 @@ export default function ResultScreen() {
     // Comparer sans remonter : la page reste où elle est, sauf si la grande
     // image n'est plus assez visible pour voir le changement.
     heroReveal.revealHero(result ? (allPieces(result)[index]?.name ?? null) : null);
+  }
+
+  /** Tri par prix : une carte de la liste triée touchée passe en grand, en
+   * haut, avec ses boutons (elle quitte la liste) ; l'écran y remonte. Comme
+   * en « Pertinence », elle ne change plus d'elle-même ensuite. */
+  function selectFromPriceList(index: number) {
+    updateChoice((current) => chooseCard(current, index, startIndex, placements.get(index)));
+    setBlockedMerchantUrl(null);
+    setActionError(null);
+    setPickedInPriceList(true);
+    setPriceListReveal((count) => count + 1);
+    const name = result ? (allPieces(result)[index]?.name ?? null) : null;
+    if (name && Platform.OS === "ios") AccessibilityInfo.announceForAccessibilityWithOptions(t.result.shownAbove(name), { queue: true });
+  }
+
+  /** Nouveau tri ou filtre, gardé pour les recherches suivantes. Changer de
+   * tri retire la carte touchée dans la liste triée ; la grande carte de
+   * « Pertinence », elle, reste celle d'avant (aucun geste n'est perdu). */
+  function changeView(next: ResultView) {
+    if (next.sort !== view.sort) {
+      setPickedInPriceList(false);
+      priceSortRef.current = isPriceSort(next.sort) ? next.sort : null;
+      revealWords.current = false;
+    }
+    chooseResultView(next);
   }
 
   /** « Résultats pour vos mots » vient d'arriver et de prendre sa place : une
@@ -482,7 +526,13 @@ export default function ResultScreen() {
   // Prix d'abord (lib/price-first.ts) : « Autres propositions » avec un prix,
   // le complément, puis la section repliée « Sans prix » ; tout comme avant
   // quand rien n'a de prix. Chaque clic garde son rang d'origine.
-  const sections = priceFirstSections(result, selectedIndex);
+  // Tri des résultats (lib/result-sort.ts) : en « Pertinence » sans filtre,
+  // exactement l'écran d'avant. « Avec prix seulement » : les mêmes sections,
+  // sans les propositions sans prix. La ligne des prix et « Le moins cher »
+  // portent sur toutes les propositions, boutiques arrivées ensuite
+  // comprises : elles changent à leur arrivée, jamais la grande carte.
+  const layout = resultLayout(result, view, { selectedIndex, pickedInPriceList, country: startOptions.country });
+  const sections = layout.sections;
   const others = sections.others;
   const withoutPriceCount = sections.withoutPrice.length;
   // 11 autres propositions d'emblée (la meilleure + 11 = 12 images à
@@ -494,7 +544,15 @@ export default function ResultScreen() {
   const wordsNote = wordsSortNote(result, startIndex);
   // « Ce n'est pas la bonne pièce ? » : voir gratuitement les propositions repliées avant toute nouvelle recherche (relecture ORD-5).
   const successList = successCorrections(corrections.context);
-  const sheetActions = successSheetActions(successList, withoutPriceCount);
+  // Trié par prix, pas de section « Sans prix » où descendre : les propositions sans prix sont en fin de liste.
+  const sheetActions = successSheetActions(successList, priceSort ? 0 : withoutPriceCount);
+  const showBigCard = layout.bigCard !== null;
+  const cheapest = layout.cheapest;
+  const lowest = layout.summary ? layout.summary.cheapest.piece : null;
+  const summaryText =
+    layout.summary && lowest && lowest.priceFrom !== null ? t.result.offersSummary(layout.summary.count, formatPrice(lowest.priceFrom, lowest.currency, getActiveLocale())) : null;
+  // « Aucun prix » : en « Pertinence », comme avant ; trié par prix, quand rien n'a de prix ; jamais avec « Avec prix seulement ».
+  const noPriceNotice = !view.withPriceOnly && (priceSort ? result.pieces.length > 0 && !allPieces(result).some(hasPrice) : noticeShown);
 
   function toggleWithoutPrice() {
     const open = !noPriceOpen;
@@ -541,129 +599,160 @@ export default function ResultScreen() {
         onScroll={heroReveal.onScroll}
         scrollEventThrottle={32}
         onLayout={heroReveal.onViewportLayout}
+        // Trié par prix : la ligne regardée reste à sa place quand une boutique arrive au-dessus
+        // (iPhone ; le navigateur le fait de lui-même). « Pertinence » : inchangé.
+        maintainVisibleContentPosition={priceSort && Platform.OS !== "web" ? { minIndexForVisible: 0 } : undefined}
       >
         {/* Voie C : le décompte, le tri et l'absence de prix parlent de la recherche visuelle seule.
             Prix d'abord : « aucun prix » quand la recherche visuelle n'en a aucun et que la grande carte
             d'office n'en a pas non plus (sinon elles sont toutes repliées en bas, avec le même texte). */}
         {result.pieces.length > 0 ? <Text style={styles.count}>{t.result.count(result.pieces.length, result.query)}</Text> : null}
-        {wordsNote ? <Text style={styles.count}>{wordsNote === "words" ? t.result.sortedByWords : t.result.sortedByWordsPriceFirst}</Text> : null}
-        {noticeShown ? <NoPriceNotice /> : null}
+        {wordsNote && !priceSort ? <Text style={styles.count}>{wordsNote === "words" ? t.result.sortedByWords : t.result.sortedByWordsPriceFirst}</Text> : null}
+        {/* Tri des résultats : en haut de la liste, la ligne des prix avec. */}
+        <ResultSortBar view={view} onChange={changeView} summary={summaryText} />
+        {layout.emptyWithFilter ? <WithPriceOnlyEmpty onShowAll={() => changeView({ ...view, withPriceOnly: false })} /> : null}
+        {noPriceNotice ? <NoPriceNotice /> : null}
 
         {yourPiece ? <YourPiece image={yourPiece} /> : null}
-        <View style={styles.hero} onLayout={heroReveal.onHeroLayout}>
-          <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} accessibilityLabel={piece.name} />
-        </View>
-
-        <Text style={styles.rankLabel}>{bigCardLabelText(bigCardLabel(selectedIndex, bestIndex))}</Text>
-        <Text style={styles.name} accessibilityRole="header">
-          {piece.name}
-        </Text>
-        <Text style={styles.meta}>
-          {[piece.merchantName, displayPrice(piece)].filter(Boolean).join(" · ")}
-        </Text>
-        <ForeignShopNote piece={piece} />
-        {/* Juste sous la proposition, visible sans défilement (décision du fondateur, lot 4 ter). */}
-        {sheetActions.length > 0 ? <CorrectionsLink style={styles.notRight} onPress={() => setCorrectionsOpen(true)} /> : null}
-
-        {piece.merchantUrl ? (
-          <Pressable style={styles.primary} onPress={handleOpenMerchant} accessibilityRole="link">
-            <Text style={styles.primaryLabel}>{opensOfferPage(piece) ? t.result.viewOffer : t.result.viewAt(piece.merchantName ?? "")}</Text>
-          </Pressable>
-        ) : null}
-        {blockedMerchantUrl ? (
-          <Pressable
-            onPress={() => {
-              WebBrowser.openBrowserAsync(blockedMerchantUrl).catch(() => {});
-              setBlockedMerchantUrl(null);
-            }}
-            accessibilityRole="link"
-          >
-            <Text style={styles.blockedLink}>{t.result.merchantLinkBlocked}</Text>
-          </Pressable>
-        ) : null}
-        {/* « Lien affilié » seulement pour un vrai lien affilié (lot garde-fous, lib/affiliate-link.ts). */}
-        {isAffiliateLink(piece) ? (
-          <Pressable
-            onPress={() => setAffiliateInfoOpen((open) => !open)}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: affiliateInfoOpen }}
-            accessibilityHint={t.result.affiliateHint}
-          >
-            <Text style={styles.disclosure}>
-              {t.result.affiliateDisclosure} <Text style={styles.disclosureMore}>{affiliateInfoOpen ? "–" : "ⓘ"}</Text>
-            </Text>
-          </Pressable>
-        ) : null}
-        {isAffiliateLink(piece) && affiliateInfoOpen ? <Text style={styles.disclosureText}>{t.result.affiliateExplanation}</Text> : null}
-
-        <View style={styles.actions}>
-          <Pressable style={styles.action} onPress={handleKeep} disabled={kept.has(piece.id)} accessibilityRole="button">
-            <Text style={styles.actionLabel}>{kept.has(piece.id) ? t.result.kept : t.result.keep}</Text>
-          </Pressable>
-          <Pressable style={styles.action} onPress={openCategory} disabled={bought.has(piece.id)} accessibilityRole="button">
-            <Text style={styles.actionLabel}>{bought.has(piece.id) ? t.result.bought : t.result.markAsBought}</Text>
-          </Pressable>
-          <Pressable style={styles.action} onPress={handleShare} accessibilityRole="button">
-            <Text style={styles.actionLabel}>{t.result.share}</Text>
-          </Pressable>
-          {piece.real ? <ResultFeedbackButton onPress={openReport} /> : null}
-        </View>
-        {keptSaved.has(piece.id) ? <KeptNotice onOpen={() => openWishlistFromSpotter(router)} /> : null}
-        {piece.real && reported ? <ReportedLine reason={reported} onPress={openReport} /> : null}
-        {actionError ? <ErrorMessage style={styles.actionError}>{actionError}</ErrorMessage> : null}
-
-        {others.length > 0 ? (
+        {/* Tri par prix : pas de grande carte, sauf une carte touchée dans la liste ; « Avec prix seulement » : pas sans prix. */}
+        {showBigCard ? (
           <>
-            <Text style={styles.sectionTitle} accessibilityRole="header">
-              {t.result.otherProposals}
-            </Text>
-            <View style={styles.grid}>
-              {/* Cartes (image, nom, boutique, prix, « Voir chez … ») : components/proposal-card.tsx. */}
-              {visibleOthers.map(({ piece: p, index }) => (
-                <ProposalCard key={p.id} piece={p} onSelect={() => selectPiece(index)} placement={placements.get(index)} />
-              ))}
+            <View style={styles.hero} onLayout={heroReveal.onHeroLayout}>
+              <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} accessibilityLabel={piece.name} />
             </View>
-            {hiddenCount > 0 ? (
-              <Pressable
-                style={styles.secondary}
-                onPress={() => {
-                  setShowAllOthers(true);
-                  // price_first : cette section ne montre que des propositions avec prix (analytics-events.ts, relecture F5).
-                  track("similar_results_opened", { price_first: !noPriceAnywhere(result) });
-                }}
-                accessibilityRole="button"
-              >
-                <Text style={styles.secondaryLabel}>{t.result.showMore(hiddenCount)}</Text>
+
+            <Text style={styles.rankLabel}>{bigCardLabelText(bigCardLabel(selectedIndex, bestIndex))}</Text>
+            <Text style={styles.name} accessibilityRole="header">
+              {piece.name}
+            </Text>
+            <Text style={styles.meta}>
+              {[piece.merchantName, displayPrice(piece)].filter(Boolean).join(" · ")}
+            </Text>
+            {selectedIndex === cheapest ? <CheapestBadge /> : null}
+            <ForeignShopNote piece={piece} />
+            {/* Juste sous la proposition, visible sans défilement (décision du fondateur, lot 4 ter). */}
+            {sheetActions.length > 0 ? <CorrectionsLink style={styles.notRight} onPress={() => setCorrectionsOpen(true)} /> : null}
+
+            {piece.merchantUrl ? (
+              <Pressable style={styles.primary} onPress={handleOpenMerchant} accessibilityRole="link">
+                <Text style={styles.primaryLabel}>{opensOfferPage(piece) ? t.result.viewOffer : t.result.viewAt(piece.merchantName ?? "")}</Text>
               </Pressable>
             ) : null}
+            {blockedMerchantUrl ? (
+              <Pressable
+                onPress={() => {
+                  WebBrowser.openBrowserAsync(blockedMerchantUrl).catch(() => {});
+                  setBlockedMerchantUrl(null);
+                }}
+                accessibilityRole="link"
+              >
+                <Text style={styles.blockedLink}>{t.result.merchantLinkBlocked}</Text>
+              </Pressable>
+            ) : null}
+            {/* « Lien affilié » seulement pour un vrai lien affilié (lot garde-fous, lib/affiliate-link.ts). */}
+            {isAffiliateLink(piece) ? (
+              <Pressable
+                onPress={() => setAffiliateInfoOpen((open) => !open)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: affiliateInfoOpen }}
+                accessibilityHint={t.result.affiliateHint}
+              >
+                <Text style={styles.disclosure}>
+                  {t.result.affiliateDisclosure} <Text style={styles.disclosureMore}>{affiliateInfoOpen ? "–" : "ⓘ"}</Text>
+                </Text>
+              </Pressable>
+            ) : null}
+            {isAffiliateLink(piece) && affiliateInfoOpen ? <Text style={styles.disclosureText}>{t.result.affiliateExplanation}</Text> : null}
+
+            <View style={styles.actions}>
+              <Pressable style={styles.action} onPress={handleKeep} disabled={kept.has(piece.id)} accessibilityRole="button">
+                <Text style={styles.actionLabel}>{kept.has(piece.id) ? t.result.kept : t.result.keep}</Text>
+              </Pressable>
+              <Pressable style={styles.action} onPress={openCategory} disabled={bought.has(piece.id)} accessibilityRole="button">
+                <Text style={styles.actionLabel}>{bought.has(piece.id) ? t.result.bought : t.result.markAsBought}</Text>
+              </Pressable>
+              <Pressable style={styles.action} onPress={handleShare} accessibilityRole="button">
+                <Text style={styles.actionLabel}>{t.result.share}</Text>
+              </Pressable>
+              {piece.real ? <ResultFeedbackButton onPress={openReport} /> : null}
+            </View>
+            {keptSaved.has(piece.id) ? <KeptNotice onOpen={() => openWishlistFromSpotter(router)} /> : null}
+            {piece.real && reported ? <ReportedLine reason={reported} onPress={openReport} /> : null}
+            {actionError ? <ErrorMessage style={styles.actionError}>{actionError}</ErrorMessage> : null}
           </>
         ) : null}
+        {/* Sans grande carte, le lien reste en haut de la liste, visible sans défilement. */}
+        {!showBigCard && sheetActions.length > 0 ? <CorrectionsLink style={styles.notRight} onPress={() => setCorrectionsOpen(true)} /> : null}
 
-        {/* Voie C (lot c) : le complément, sous « Autres propositions » — jamais à leur place. Prix d'abord : la
-            grande carte n'en vient que si aucune proposition de la recherche visuelle n'a de prix, et jamais
-            quand les boutiques arrivent après l'affichage (boutiques ensuite : la ligne d'attente, à leur place). */}
-        {result.complement?.pending ? <ShopsPending /> : null}
-        <ResultComplement source="ai" others={sections.shopping} query={result.complement?.query} onSelect={selectPiece} placements={placements} />
-        <View onLayout={onWordsLayout}>
-          <ResultComplement source="words" others={sections.words} textStatus={result.complement?.textStatus} onSelect={selectPiece} placements={placements} />
-        </View>
-        {/* Prix d'abord : les propositions sans prix en dernier, repliées ; « Que cherchez-vous ? » reste tout en bas (clavier). */}
-        <View
-          ref={noPriceSection}
-          onLayout={(event) => {
-            noPriceTop.current = event.nativeEvent.layout.y;
-          }}
-        >
-          <NoPriceSection
-            pieces={sections.withoutPrice}
-            open={noPriceOpen}
-            onToggle={toggleWithoutPrice}
-            caption={!noticeShown}
-            onSelect={selectPiece}
-            placements={placements}
-          />
-        </View>
+        {priceSort ? (
+          <>
+            {/* Une seule liste triée par prix, sans titre de section ; boutiques en attente : la ligne d'attente, en haut. */}
+            {result.complement?.pending ? <ShopsPending /> : null}
+            <PriceSortedList key={priceSort} items={layout.priceList ?? []} cheapestIndex={cheapest} onSelect={selectFromPriceList} placements={placements} />
+          </>
+        ) : (
+          <>
+            {others.length > 0 ? (
+              <>
+                <Text style={styles.sectionTitle} accessibilityRole="header">
+                  {t.result.otherProposals}
+                </Text>
+                <View style={styles.grid}>
+                  {/* Cartes (image, nom, boutique, prix, « Voir chez … ») : components/proposal-card.tsx. */}
+                  {visibleOthers.map(({ piece: p, index }) => (
+                    <ProposalCard key={p.id} piece={p} onSelect={() => selectPiece(index)} placement={placements.get(index)} cheapest={index === cheapest} />
+                  ))}
+                </View>
+                {hiddenCount > 0 ? (
+                  <Pressable
+                    style={styles.secondary}
+                    onPress={() => {
+                      setShowAllOthers(true);
+                      // price_first : cette section ne montre que des propositions avec prix (analytics-events.ts, relecture F5).
+                      track("similar_results_opened", { price_first: !noPriceAnywhere(result) });
+                    }}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.secondaryLabel}>{t.result.showMore(hiddenCount)}</Text>
+                  </Pressable>
+                ) : null}
+              </>
+            ) : null}
+
+            {/* Voie C (lot c) : le complément, sous « Autres propositions » — jamais à leur place. Prix d'abord : la
+                grande carte n'en vient que si aucune proposition de la recherche visuelle n'a de prix, et jamais
+                quand les boutiques arrivent après l'affichage (boutiques ensuite : la ligne d'attente, à leur place). */}
+            {result.complement?.pending ? <ShopsPending /> : null}
+            <ResultComplement source="ai" others={sections.shopping} query={result.complement?.query} onSelect={selectPiece} placements={placements} cheapestIndex={cheapest} />
+            <View onLayout={onWordsLayout}>
+              <ResultComplement
+                source="words"
+                others={sections.words}
+                textStatus={result.complement?.textStatus}
+                onSelect={selectPiece}
+                placements={placements}
+                cheapestIndex={cheapest}
+              />
+            </View>
+            {/* Prix d'abord : les propositions sans prix en dernier, repliées ; « Que cherchez-vous ? » reste tout en bas (clavier). */}
+            <View
+              ref={noPriceSection}
+              onLayout={(event) => {
+                noPriceTop.current = event.nativeEvent.layout.y;
+              }}
+            >
+              <NoPriceSection
+                pieces={sections.withoutPrice}
+                open={noPriceOpen}
+                onToggle={toggleWithoutPrice}
+                caption={!noticeShown}
+                onSelect={selectPiece}
+                placements={placements}
+              />
+            </View>
+          </>
+        )}
         {textSearch(true)}
       </ScrollView>
 
