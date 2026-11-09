@@ -160,4 +160,40 @@ Avant chaque build envoyé à Apple, si l'un de ces changements est entré dans 
 - le **lecteur intégré** TikTok / Instagram (branche `lot-lecteur`) : le lecteur officiel de ces plateformes peut déposer ses propres traceurs. Il faudrait alors revoir « Suivi » et « Historique de navigation » ;
 - le **service anti-robots** (point 17) : il reçoit l'adresse IP et des données de l'appareil ;
 - la **copie des photos** pour les sauvegardes (point 10) ;
-- tout nouveau prestataire, toute nouvelle autorisation, tout nouvel événement de statistiques.
+- tout nouveau prestataire, toute nouvelle autorisation, tout nouvel événement de statistiques ;
+- les **alertes prix et stock** (branche `lot-alertes-prix`) : voir le brouillon de la section 7.
+
+---
+
+## 7. BROUILLON — alertes prix et stock (lot 2, branche `lot-alertes-prix`) — à vérifier
+
+*Ajouté le 9 novembre 2026, avant toute mise en ligne : les alertes n'existent que sur la branche `lot-alertes-prix` (migration 0036, appliquée seulement sur spotto-dev-2). **Rien à changer dans App Store Connect tant que les alertes ne sont pas dans `main` et dans un build envoyé à Apple.** Chaque ligne ci-dessous est « à vérifier » à l'écran, avec la page officielle d'Apple.*
+
+**Ce que le lot ajoute** (d'après le code de la branche) :
+- la cloche d'une envie (ce que la personne suit : baisse de prix, retour en stock) et l'interrupteur « Alertes prix et stock » des Réglages, coupé par défaut (`apps/backend/supabase/migrations/0036_alertes_prix.sql`, tables `wish_watches`, `profiles.price_alerts_enabled`) ;
+- pour chaque envie, une empreinte de la pièce (jamais son lien), le nom de la boutique, le prix de référence, le dernier prix vu, la devise, le pays de la recherche, l'état du stock et leurs dates au jour près (table `wish_tracking`) ;
+- les alertes (sorte, ancien et nouveau prix, date au jour près), effacées au bout de 30 jours (table `wish_alert_events`), sans jamais l'auteur de la recherche, l'acheteur ou l'auteur d'un signalement ;
+- les signalements « Plus disponible » (qui a signalé, empreinte de la pièce, jour), effacés au bout de 30 jours (table `stock_reports`) ;
+- les résultats des recherches et les achats « Je l'ai achetée » faits dans Spotto servent aussi à prévenir d'AUTRES membres (comparaison avec leurs envies), sans jamais dire qui a cherché ou acheté ;
+- une notification d'alerte passe par Expo puis Apple (titre de la pièce, boutique, prix, identifiant de l'envie) ; l'appareil peut rester enregistré pour les seules alertes (`push_tokens.notify_messages = false`).
+
+**Effet attendu sur les réponses** (suivi : toujours **non**) :
+
+| Type d'Apple | Déjà coché ? | Changement proposé | Finalités | À vérifier |
+|---|---|---|---|---|
+| **Achats → Historique des achats** (*Purchases → Purchase History*) | ✅ (Vault) | Rien à cocher de plus ; ajouter la finalité si elle manque : un achat « Je l'ai achetée » sert aussi de signal « disponible aujourd'hui » pour les alertes des autres membres (sans prix, sans l'acheteur) | Fonctionnalité de l'app | à vérifier : Apple compte-t-il un signal anonyme tiré d'un achat comme une nouvelle utilisation ? |
+| **Données d'utilisation → Interaction avec le produit** (*Usage Data → Product Interaction*) | ✅ (Analyses) | **Ajouter la finalité « Fonctionnalité de l'app »** : cloches réglées, interrupteur des alertes, signalements « Plus disponible », rangés sous le compte | Analyses ; Fonctionnalité de l'app | à vérifier : ou bien « Autres données d'utilisation » (*Other Usage Data*) |
+| **Historique des recherches** (*Search History*) | ✅ | Rien à cocher de plus : les résultats servent aussi aux alertes des autres membres, sans l'auteur de la recherche | Fonctionnalité de l'app | à vérifier |
+| **Identifiants → Identifiant de l'appareil** (*Identifiers → Device ID*) | ✅ (par prudence) | Rien à cocher de plus : l'adresse de notification de l'appareil (jeton Expo) peut maintenant rester pour les seules alertes | Fonctionnalité de l'app | à vérifier : Apple range-t-il le jeton de notification sous « Device ID » ? |
+| Liée à la personne | Oui | Inchangé : tout est rangé sous le compte | — | — |
+| Suivi (*Tracking*) | Non | Inchangé : aucune donnée des alertes n'est croisée avec d'autres sociétés ni utilisée pour de la publicité | — | — |
+
+**Résumé de la fiche** : a priori inchangé (« Achats » et « Données d'utilisation » y figurent déjà dans « Données liées à vous ») — à vérifier une fois les réponses saisies.
+
+**Qui reçoit quoi, en plus** :
+
+| Prestataire | Ce qu'il reçoit | Preuve |
+|---|---|---|
+| **Expo, puis Apple** (notifications) | pour une alerte : « Spotto », le titre de la pièce, la boutique, le prix (ou « 3 de vos envies ont du nouveau ») et l'identifiant de l'envie ; jamais un autre membre | `apps/backend/src/lib/wishAlertsSend.ts`, `apps/backend/src/lib/push.ts` (`sendPush`) |
+
+**Politique de confidentialité** : un paragraphe « [À vérifier] » a été ajouté sur la branche (`apps/mobile/src/legal/confidentialite.ts`, `confidentialite.en.ts`, section « Les données que nous utilisons ») ; la version (`LEGAL_DOCUMENT_VERSIONS`) n'a **pas** été changée : à dater après relecture, avant la mise en ligne des alertes.

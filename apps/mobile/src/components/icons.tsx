@@ -148,12 +148,14 @@ export function PlusIcon({ size = 24, tint = color.blanc, strokeWidth = 1.6 }: I
   );
 }
 
-export function BellIcon({ size = 24, tint = color.encre, strokeWidth = 1.4 }: IconProps) {
+/** `filled` : cloche pleine (alerte allumée sur une envie, lot alertes prix). */
+export function BellIcon({ size = 24, tint = color.encre, strokeWidth = 1.4, filled = false }: IconProps & { filled?: boolean }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
         d="M6 10.5a6 6 0 0 1 12 0v3.8l1.6 2.7H4.4L6 14.3v-3.8Z"
         stroke={tint}
+        fill={filled ? tint : "none"}
         strokeWidth={strokeWidth}
         strokeLinejoin="round"
       />

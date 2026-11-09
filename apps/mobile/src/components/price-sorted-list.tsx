@@ -6,6 +6,7 @@ import { firstShown, type IndexedPiece } from "@/lib/result-sections";
 import { PRICE_LIST_SHOWN_FIRST } from "@/lib/result-sort";
 import type { ClickPlacement } from "@/lib/price-first";
 import type { SendAction } from "@/lib/send-to-friend";
+import type { StockAction } from "@/lib/wish-alerts";
 import { useReduceMotion } from "@/lib/use-hero-reveal";
 import { ProposalCard } from "@/components/proposal-card";
 import { themedStyles } from "@/theme/themed-styles";
@@ -27,12 +28,15 @@ export function PriceSortedList({
   onSelect,
   placements,
   sendAction,
+  stockAction,
 }: {
   items: IndexedPiece[];
   cheapestIndex: number | null;
   onSelect: (index: number) => void;
   placements: ReadonlyMap<number, ClickPlacement>;
   sendAction?: SendAction;
+  /** Lot 2 : « Plus disponible ? » de chaque carte, sur sa propre pièce (lib/wish-alerts.ts). */
+  stockAction?: StockAction;
 }) {
   const [showAll, setShowAll] = useState(false);
   const reduceMotion = useReduceMotion();
@@ -49,7 +53,7 @@ export function PriceSortedList({
     <>
       {visible.map(({ piece, index }) => (
         <FadeIn key={piece.id} active={known !== null && !known.has(piece.id) && !reduceMotion}>
-          <ProposalCard variant="row" piece={piece} onSelect={() => onSelect(index)} placement={placements.get(index)} cheapest={index === cheapestIndex} onSend={sendAction?.(piece)} />
+          <ProposalCard variant="row" piece={piece} onSelect={() => onSelect(index)} placement={placements.get(index)} cheapest={index === cheapestIndex} onSend={sendAction?.(piece)} onReportGone={stockAction?.(piece)} />
         </FadeIn>
       ))}
       {hiddenCount > 0 ? (

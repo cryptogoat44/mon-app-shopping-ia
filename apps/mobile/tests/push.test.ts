@@ -8,6 +8,7 @@ import { readMessagesStatus } from "../src/lib/conversations";
 import {
   conversationHref,
   conversationIdFromNotification,
+  notificationHref,
   firstTimeHandled,
   parsePushDecision,
   permissionFrom,
@@ -124,7 +125,8 @@ describe("jamais d'autorisation demandée au lancement", () => {
     expect(using(/\benablePush\(/)).toEqual(["components/message-push-setting.tsx", "components/push-offer-sheet.tsx", "lib/push.ts", "lib/push.web.ts"]);
     const sheet = read("components/push-offer-sheet.tsx");
     const accept = sheet.slice(sheet.indexOf("async function accept()"), sheet.indexOf("function later()"));
-    expect(accept).toContain("await enablePush(userId)");
+    // Lot alertes prix : la sorte acceptée (messages ou alertes) part avec la demande.
+    expect(accept).toContain("await enablePush(userId, kind)");
     expect(sheet).toContain('onPress={() => void accept()}');
     expect(sheet).toContain('testID="notifications-activer"');
   });
@@ -138,9 +140,11 @@ describe("jamais d'autorisation demandée au lancement", () => {
     const hook = read("lib/use-push-notifications.ts");
     expect(hook).toContain("listenToNotifications(");
     expect(hook).toContain("refreshPushToken(userId)");
-    // Le jeton n'est rafraîchi que si la personne a dit oui et que iOS le permet déjà.
+    // Le jeton n'est rafraîchi que si la personne a dit oui (messages, ou
+    // alertes avec l'interrupteur allumé) et que iOS le permet déjà.
     const refresh = read("lib/push.ts").slice(read("lib/push.ts").indexOf("export async function refreshPushToken"));
-    expect(refresh).toContain('(await loadPushDecision(userId)) !== "on"');
+    expect(refresh).toContain("const registration = await currentRegistration(userId);");
+    expect(refresh).toContain("if (!registration.keep) return;");
     expect(refresh).toContain('!== "granted") return;');
   });
 
@@ -161,7 +165,7 @@ describe("l'explication d'abord", () => {
     for (const key of ["offerTitle", "offerBody", "offerSettingsHint", "offerAccept", "offerLater"]) expect(sheet).toContain(`t.push.${key}`);
     // « Plus tard » ne demande rien à iOS, et la feuille ne revient pas.
     const later = sheet.slice(sheet.indexOf("function later()"), sheet.indexOf("const denied"));
-    expect(later).toContain("disablePush(userId)");
+    expect(later).toContain("disablePush(userId, kind)");
     expect(later).not.toContain("enablePush");
     // Déjà refusées par iOS : on dit où les autoriser.
     expect(sheet).toContain("Linking.openSettings()");
@@ -219,7 +223,8 @@ describe("une notification touchée ouvre la conversation", () => {
   it("le lien de l'écran de la conversation, celui qu'il lit (`id`)", () => {
     expect(conversationHref(CONVERSATION)).toEqual({ pathname: "/conversation", params: { id: CONVERSATION } });
     expect(read("app/(app)/conversation.tsx")).toContain("const { id, userId, wishId, collectionItemId, matchId } = useLocalSearchParams<{");
-    expect(read("lib/use-push-notifications.ts")).toContain("listenToNotifications((id) => router.push(conversationHref(id)))");
+    expect(read("lib/use-push-notifications.ts")).toContain("listenToNotifications((target) => router.push(notificationHref(target)))");
+    expect(notificationHref({ kind: "conversation", id: CONVERSATION })).toEqual(conversationHref(CONVERSATION));
   });
 
   it("la notification qui a lancé l'app aussi, une seule fois ; seulement un appui sur la notification elle-même", () => {

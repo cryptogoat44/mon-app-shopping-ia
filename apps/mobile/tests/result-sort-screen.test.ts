@@ -94,7 +94,7 @@ describe("tri par prix : une seule liste, sans grande carte ni titre de section"
     const branch = screen.slice(screen.indexOf("{priceSort ? ("), screen.indexOf(") : (", screen.indexOf("{priceSort ? (")));
     expect(branch).toContain("{result.complement?.pending ? <ShopsPending /> : null}");
     expect(branch).toContain(
-      '<PriceSortedList key={priceSort} items={layout.priceList ?? []} cheapestIndex={cheapest} onSelect={selectFromPriceList} placements={placements} sendAction={sendFrom("price_list")} />'
+      '<PriceSortedList key={priceSort} items={layout.priceList ?? []} cheapestIndex={cheapest} onSelect={selectFromPriceList} placements={placements} sendAction={sendFrom("price_list")} stockAction={stockFrom} />'
     );
     expect(branch).not.toContain("sectionTitle");
     expect(branch.indexOf("<ShopsPending />")).toBeLessThan(branch.indexOf("<PriceSortedList"));
@@ -102,7 +102,7 @@ describe("tri par prix : une seule liste, sans grande carte ni titre de section"
 
   it("une ligne par proposition, posée directement dans la page (aucun cadre autour) ; image et lien séparés, chacun sur sa pièce", () => {
     expect(list).toContain(
-      '<ProposalCard variant="row" piece={piece} onSelect={() => onSelect(index)} placement={placements.get(index)} cheapest={index === cheapestIndex} onSend={sendAction?.(piece)} />'
+      '<ProposalCard variant="row" piece={piece} onSelect={() => onSelect(index)} placement={placements.get(index)} cheapest={index === cheapestIndex} onSend={sendAction?.(piece)} onReportGone={stockAction?.(piece)} />'
     );
     const returned = list.slice(list.indexOf("  return (\n    <>"));
     expect(returned).toMatch(/^ {2}return \(\n {4}<>\n {6}\{visible\.map/);

@@ -9,16 +9,28 @@
 //   une seule fois après un premier message envoyé ou reçu, ou depuis
 //   l'interrupteur des Réglages ;
 // - toucher une notification ouvre la conversation.
+// Lot alertes prix (migration 0036) : deux sortes de notifications, chacune
+// avec la réponse de la personne sur cet appareil — les messages et les
+// alertes prix et stock. L'appareil reste enregistré sur le serveur tant que
+// l'une des deux est allumée (messages, ou alertes avec l'interrupteur des
+// Réglages) ; `messages` dit au serveur s'il lui envoie aussi les messages.
+// Toucher une alerte ouvre l'envie (ou vos Envies pour une alerte groupée).
 // Module natif et appels au serveur : push.ts (site : push.web.ts).
-import type { MessagesStatus } from "@monapp/shared-types";
+import { parseWishAlertPushData, type MessagesStatus, type WishAlertsStatus } from "@monapp/shared-types";
+import { WISHLIST_SEGMENT } from "./wishlist-link";
 
 /** Réponse de la personne, gardée sur l'appareil, par compte. */
 export type PushDecision = "on" | "off";
 /** Autorisation d'iOS. */
 export type PushPermission = "granted" | "denied" | "undetermined";
 
-export function pushDecisionKey(userId: string): string {
-  return `spotto.push-decision.${userId}`;
+/** Les deux sortes de notifications (lot alertes prix). */
+export type PushKind = "messages" | "alerts";
+
+/** Réponse gardée par compte et par sorte. Les messages gardent la clé
+ * d'avant le lot alertes (rien ne change pour un appareil déjà réglé). */
+export function pushDecisionKey(userId: string, kind: PushKind = "messages"): string {
+  return kind === "alerts" ? `spotto.alerts-push-decision.${userId}` : `spotto.push-decision.${userId}`;
 }
 
 /** Dernier jeton enregistré par cet appareil (à oublier à la déconnexion). */
@@ -63,6 +75,60 @@ export function shouldRefreshToken(context: PushContext, decision: PushDecision 
   return pushPossible(context) && pushSwitchValue(decision, permission);
 }
 
+// ---- Alertes prix et stock (lot 2, migration 0036) ----
+
+/** Ce dont dépendent les notifications des alertes sur cet appareil. */
+export interface AlertsPushContext {
+  /** Platform.OS */
+  platform: string;
+  status: Pick<WishAlertsStatus, "available" | "push">;
+  /** Ce build a le module natif et l'identifiant du projet chez Expo. */
+  supported: boolean;
+}
+
+/** Notifications d'alertes possibles : iPhone, build prêt, alertes
+ * disponibles et notifications allumées sur le serveur (jamais sur le site). */
+export function alertsPushPossible({ platform, status, supported }: AlertsPushContext): boolean {
+  return platform === "ios" && supported && status.available && status.push;
+}
+
+/** Les réponses de cet appareil, par sorte. */
+export interface PushDecisions {
+  messages: PushDecision | null;
+  alerts: PushDecision | null;
+}
+
+/** Allumer les alertes (première cloche, ou interrupteur des Réglages), sur
+ * cet appareil :
+ * - « offer » : la feuille d'explication d'abord (jamais encore répondu pour
+ *   les alertes, et iOS ne les a pas refusées) ;
+ * - « adopt » : sans rien demander, l'appareil les reçoit déjà (alertes déjà
+ *   acceptées, ou messages acceptés et iOS d'accord : le serveur envoie les
+ *   alertes à tous les appareils de la personne) ;
+ * - « none » : rien à faire ici (site, notifications coupées sur le serveur,
+ *   « Plus tard » déjà répondu, iOS les refuse). */
+export function alertsPushStep(context: AlertsPushContext, decisions: PushDecisions, permission: PushPermission): "offer" | "adopt" | "none" {
+  if (!alertsPushPossible(context)) return "none";
+  if (decisions.alerts === "on") return "adopt";
+  if (decisions.alerts === "off" || permission === "denied") return "none";
+  if (decisions.messages === "on" && permission === "granted") return "adopt";
+  return "offer";
+}
+
+/** Cet appareil reçoit les notifications des alertes : la personne a dit oui
+ * (pour les alertes, ou pour les messages) et iOS le permet. */
+export function alertsPushOn(decisions: PushDecisions, permission: PushPermission): boolean {
+  return permission === "granted" && (decisions.alerts === "on" || decisions.messages === "on");
+}
+
+/** L'appareil sur le serveur : gardé tant que les messages OU les alertes
+ * sont allumés (`alertsActive` : alertes disponibles et interrupteur des
+ * Réglages allumé) ; `messages` : le serveur lui envoie aussi les messages. */
+export function deviceRegistration(decisions: PushDecisions, alertsActive: boolean): { keep: boolean; messages: boolean } {
+  const messages = decisions.messages === "on";
+  return { keep: messages || (decisions.alerts === "on" && alertsActive), messages };
+}
+
 /** Réponse d'iOS → autorisation. « Provisoire » (3) et « éphémère » (4)
  * permettent de recevoir : comptées comme accordées. */
 export function permissionFrom(response: { granted: boolean; status: string; ios?: { status?: number } | null }): PushPermission {
@@ -95,6 +161,35 @@ export function conversationIdFromNotification(data: unknown): string | null {
 /** L'écran de la conversation, comme depuis la liste des messages. */
 export function conversationHref(id: string) {
   return { pathname: "/conversation" as const, params: { id } };
+}
+
+/** Ce qu'ouvre une notification touchée : la conversation d'un message,
+ * l'envie d'une alerte, ou vos Envies (alerte groupée) ; null si les
+ * données sont illisibles (rien ne s'ouvre). */
+export type NotificationTarget = { kind: "conversation"; id: string } | { kind: "wish"; id: string } | { kind: "wishes" };
+
+export function notificationTarget(data: unknown): NotificationTarget | null {
+  const alert = parseWishAlertPushData(data);
+  if (alert) return alert.wishlistItemId ? { kind: "wish", id: alert.wishlistItemId } : { kind: "wishes" };
+  const conversation = conversationIdFromNotification(data);
+  return conversation ? { kind: "conversation", id: conversation } : null;
+}
+
+/** Paramètre `from` de la fiche d'une envie ouverte par une alerte : le clic
+ * vers la boutique est alors compté « price_alert » (MERCHANT_LINK_CONTEXTS). */
+export const FROM_ALERT = "alerte";
+
+/** L'écran à ouvrir pour une notification touchée. Vos Envies : l'onglet
+ * Envies du Profil (lib/wishlist-link.ts, `segment`). */
+export function notificationHref(target: NotificationTarget) {
+  switch (target.kind) {
+    case "conversation":
+      return conversationHref(target.id);
+    case "wish":
+      return { pathname: "/envie" as const, params: { id: target.id, from: FROM_ALERT } };
+    case "wishes":
+      return { pathname: "/profile" as const, params: { segment: WISHLIST_SEGMENT } };
+  }
 }
 
 // ---- Conversation affichée (pas de bannière pour elle : l'écran se relit déjà) ----
