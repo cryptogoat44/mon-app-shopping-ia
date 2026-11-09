@@ -729,6 +729,30 @@ export const fr = {
     pieceSent: (name: string) => `Pièce envoyée à ${name}`,
     pieceSentInvitation: (name: string) => `Invitation envoyée à ${name}, avec la pièce`,
   },
+  // Lot notifications : être prévenu des nouveaux messages sur l'iPhone
+  // (feuille d'explication avant l'autorisation d'iOS, interrupteur des Réglages).
+  push: {
+    offerTitle: "Être prévenu de vos nouveaux messages ?",
+    offerBody:
+      "Spotto peut vous envoyer une notification quand quelqu'un vous écrit ou vous invite à discuter. Elle dit seulement qui vous écrit, jamais ce qu'il vous écrit.",
+    offerSettingsHint: "Vous pourrez les arrêter à tout moment dans les Réglages.",
+    offerAccept: "Activer les notifications",
+    offerLater: "Plus tard",
+    offerClose: "Fermer",
+    enabling: "Activation…",
+    enabled: "Notifications activées",
+    deniedHint:
+      "Les notifications de Spotto sont coupées dans les Réglages de l'iPhone. Pour les recevoir, ouvrez Réglages, puis Spotto, puis Notifications.",
+    openSettings: "Ouvrir les Réglages de l'iPhone",
+    openSettingsFailed: "Les Réglages de l'iPhone n'ont pas pu s'ouvrir : passez par l'app Réglages, puis Spotto.",
+    failed: "Les notifications n'ont pas pu être activées. Vérifiez votre connexion, puis réessayez.",
+    settingTitle: "Notifications de messages",
+    settingSwitchLabel: "Recevoir une notification pour chaque nouveau message",
+    settingOn: "Activées : une notification vous prévient d'un nouveau message ou d'une invitation, avec le nom de la personne, jamais le contenu.",
+    settingOff: "Désactivées : vous voyez vos nouveaux messages en ouvrant Spotto.",
+    settingLoading: "Chargement de votre choix…",
+    settingFailed: "Votre choix n'a pas pu être enregistré. Réessayez.",
+  },
   // Lot collections : collections d'envies, privées ou montrées aux amis
   // (puces de l'écran Envies, « Ajouter à une collection », profil d'un ami).
   collections: {

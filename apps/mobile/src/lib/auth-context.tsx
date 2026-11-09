@@ -6,6 +6,7 @@ import { ApiError, fetchMyProfile } from "./api";
 import { PROFILE_ATTEMPT_TIMEOUT_MS, PROFILE_RETRY_DELAYS_MS, RetryCancelledError, retryWithDelays, withTimeout } from "./retry";
 import type { ProfileStatus } from "./root-route";
 import { sessionRejectedBySupabase } from "./session-check";
+import { forgetPushToken } from "./push";
 import { supabase } from "./supabase";
 
 interface AuthContextValue {
@@ -135,6 +136,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadProfile]);
 
   const signOut = useCallback(async () => {
+    // Lot notifications : cet appareil ne reçoit plus rien pour ce compte
+    // (4 s au plus ; un échec n'empêche jamais la déconnexion).
+    await forgetPushToken().catch(() => {});
     await supabase.auth.signOut();
   }, []);
 

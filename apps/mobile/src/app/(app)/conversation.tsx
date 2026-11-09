@@ -32,6 +32,8 @@ import { MessageWishCard } from "@/components/message-wish-card";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { SpotImage } from "@/components/spot-image";
 import { WishPicker, type PickedWish } from "@/components/wish-picker";
+import { usePushOffer } from "@/components/push-offer-sheet";
+import { setOpenConversation } from "@/lib/push-state";
 import { themedStyles } from "@/theme/themed-styles";
 
 function Bubble({ message, onOptions }: { message: ChatMessage; onOptions: () => void }) {
@@ -65,6 +67,9 @@ function Bubble({ message, onOptions }: { message: ChatMessage; onOptions: () =>
 // « Envoyer à un ami » (écran Résultat) : une proposition d'une de vos
 // recherches (`matchId`), jointe d'avance ; une fois envoyée, retour au
 // résultat, laissé tel quel, avec une courte confirmation.
+// Lot notifications (app iPhone) : après un message envoyé, ou un message
+// reçu affiché, la feuille « Être prévenu de vos nouveaux messages ? » est
+// proposée une fois ; une notification touchée ouvre cet écran avec `id`.
 export default function ConversationScreen() {
   const { id, userId, wishId, collectionItemId, matchId } = useLocalSearchParams<{
     id?: string;
@@ -88,6 +93,9 @@ export default function ConversationScreen() {
   const [confirmDecline, setConfirmDecline] = useState(false);
   const [answering, setAnswering] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  // Lot notifications : proposées une fois, après un message envoyé ou reçu.
+  const pushOffer = usePushOffer();
+  const offerPush = pushOffer.offer;
   const messagesRef = useRef<ChatMessage[]>([]);
   const scrollRef = useRef<ScrollView>(null);
   const stickToEnd = useRef(true);
@@ -113,10 +121,11 @@ export default function ConversationScreen() {
       setMessages(data.messages);
       setState("ready");
       if (data.id) markRead(data.id);
+      if (data.messages.some((message) => !message.mine)) offerPush();
     } catch (e) {
       setState(e instanceof ApiError && e.status === 404 ? "not_found" : "error");
     }
-  }, [id, userId, markRead]);
+  }, [id, userId, markRead, offerPush]);
 
   useFocusEffect(
     useCallback(() => {
@@ -168,10 +177,21 @@ export default function ConversationScreen() {
       setMessages(merged);
     }
     setThread((current) => (current ? { ...current, other: data.other, state: data.state, sendMode: data.sendMode } : data));
-    if (fresh) markRead(conversationId);
+    if (fresh) {
+      markRead(conversationId);
+      offerPush();
+    }
     return changed ? "new" : "same";
-  }, [thread?.id, thread?.sendMode, thread?.state, markRead]);
+  }, [thread?.id, thread?.sendMode, thread?.state, markRead, offerPush]);
   const { kick } = usePolling(poll);
+
+  // Pas de bannière pour la conversation à l'écran (elle se relit déjà).
+  useFocusEffect(
+    useCallback(() => {
+      setOpenConversation(thread?.id ?? null);
+      return () => setOpenConversation(null);
+    }, [thread?.id])
+  );
 
   function goBack() {
     if (router.canGoBack()) router.back();
@@ -203,6 +223,7 @@ export default function ConversationScreen() {
       setDraft("");
       setWish(null);
       kick();
+      offerPush();
     } catch (e) {
       setSendError(e instanceof ApiError ? e.message : loadErrorMessage(e, t.messages.sendError));
       // Invitation en attente, réglage changé : l'état réel est relu.
@@ -451,6 +472,7 @@ export default function ConversationScreen() {
         }}
       />
       <ReportBlockMenu visible={profileMenu} onClose={() => setProfileMenu(false)} userId={other.id} onBlocked={() => goBack()} />
+      {pushOffer.sheet}
     </SafeAreaView>
   );
 }

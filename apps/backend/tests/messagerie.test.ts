@@ -198,7 +198,7 @@ describe("sans la migration 0032", () => {
   it("la messagerie se dit indisponible ; chaque route répond « indisponible », rien n'est écrit", async () => {
     const fake = seeded({}, missing);
     const target = await messagesApp(fake.db);
-    expect((await as(target, ALICE).get("/api/messages/status")).json()).toEqual({ enabled: false, unreadCount: 0 });
+    expect((await as(target, ALICE).get("/api/messages/status")).json()).toEqual({ enabled: false, unreadCount: 0, push: false });
     for (const res of [
       await as(target, ALICE).get("/api/conversations"),
       await as(target, ALICE).get(`/api/conversations/with/${BOB}`),

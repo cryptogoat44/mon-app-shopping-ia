@@ -30,6 +30,7 @@ import {
   PLATFORM_LABELS,
   POST_TYPE_LABELS,
   PRIVACY_LABELS,
+  PUSH_PLATFORM_LABELS,
   RECOGNITION_METHOD_LABELS,
   REPORT_HANDLED_LABELS,
   REPORT_REASON_LABELS,
@@ -905,6 +906,14 @@ function moderationSection(ctx: Ctx): Html {
   ]);
 }
 
+/** Lot notifications : chaque appareil prévenu des nouveaux messages, sans son jeton. */
+function devicesSection(ctx: Ctx): Html {
+  const cards = newestFirst(ctx.data.pushDevices, "created_at").map((row) =>
+    new Card(ctx, "pushDevices", row).use("platform").field("created_at").field("updated_at").render(enumLabel(ctx, PUSH_PLATFORM_LABELS, row.platform))
+  );
+  return section(ctx, "devices", cards);
+}
+
 function exportsSection(ctx: Ctx): Html {
   const cards = newestFirst(ctx.data.dataExportRequests, "requested_at").map((row) =>
     new Card(ctx, "dataExportRequests", row)
@@ -933,6 +942,7 @@ function sectionCount(data: ExportData, id: ExportSectionId): number | null {
     piecesSent: data.piecesSent.length,
     piecesReceived: data.piecesReceived.length,
     messages: data.conversations.length,
+    devices: data.pushDevices.length,
     notifications: data.notifications.length,
     clicks: data.affiliateClicks.length,
     reports: data.reportsSubmitted.length,
@@ -958,6 +968,7 @@ const SECTION_RENDERERS: Record<ExportSectionId, (ctx: Ctx) => Html> = {
   piecesSent: piecesSentSection,
   piecesReceived: piecesReceivedSection,
   messages: messagesSection,
+  devices: devicesSection,
   notifications: notificationsSection,
   clicks: clicksSection,
   reports: reportsSection,

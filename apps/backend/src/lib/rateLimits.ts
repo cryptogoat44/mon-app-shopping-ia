@@ -85,6 +85,17 @@ export const RATE_LIMITS = {
     message: "Vous avez envoyé beaucoup d'invitations en peu de temps. Réessayez dans une heure.",
   },
 
+  // Notifications sur le téléphone (lot notifications) : enregistrer ou
+  // oublier un appareil (PUT et DELETE /api/me/push-token, comptés ensemble).
+  // L'app rafraîchit son jeton à l'ouverture et l'oublie à la déconnexion :
+  // quelques appels par jour en usage normal ; au-delà, un script.
+  pushToken: {
+    max: 30,
+    windowMs: HOUR,
+    error: "push_token_limit",
+    message: "Trop de changements des notifications en peu de temps. Réessayez dans une heure.",
+  },
+
   // Collections d'envies (lot collections) : créer, renommer, supprimer une
   // collection, y ranger ou en retirer une envie. Large pour ranger ses
   // envies, bloque un script.

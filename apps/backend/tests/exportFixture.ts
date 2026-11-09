@@ -340,6 +340,8 @@ export function fixture(): ExportData {
         friends_image_thumb_url: own("post-media", "collection-mini.jpg"),
       },
     ],
+    // Lot notifications : un iPhone prévenu des nouveaux messages (jamais son jeton).
+    pushDevices: [{ platform: "ios", created_at: "2026-10-03T09:00:00+00:00", updated_at: "2026-10-06T09:00:00+00:00" }],
   };
 }
 

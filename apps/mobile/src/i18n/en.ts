@@ -668,6 +668,27 @@ export const en: Catalog = {
     pieceSent: (name: string) => `Piece sent to ${name}`,
     pieceSentInvitation: (name: string) => `Invitation sent to ${name}, with the piece`,
   },
+  // Notifications lot: being told about new messages on the iPhone.
+  push: {
+    offerTitle: "Get notified of new messages?",
+    offerBody: "Spotto can send you a notification when someone writes to you or invites you to chat. It only says who is writing, never what they wrote.",
+    offerSettingsHint: "You can turn them off at any time in Settings.",
+    offerAccept: "Turn on notifications",
+    offerLater: "Not now",
+    offerClose: "Close",
+    enabling: "Turning on…",
+    enabled: "Notifications turned on",
+    deniedHint: "Spotto notifications are turned off in iPhone Settings. To receive them, open Settings, then Spotto, then Notifications.",
+    openSettings: "Open iPhone Settings",
+    openSettingsFailed: "iPhone Settings couldn't be opened: go through the Settings app, then Spotto.",
+    failed: "Notifications couldn't be turned on. Check your connection, then try again.",
+    settingTitle: "Message notifications",
+    settingSwitchLabel: "Get a notification for each new message",
+    settingOn: "On: a notification tells you about a new message or invitation, with the person's name, never the content.",
+    settingOff: "Off: you see your new messages when you open Spotto.",
+    settingLoading: "Loading your choice…",
+    settingFailed: "Your choice couldn't be saved. Please try again.",
+  },
   // Collections lot: wish collections, private or shown to friends.
   collections: {
     all: "All",

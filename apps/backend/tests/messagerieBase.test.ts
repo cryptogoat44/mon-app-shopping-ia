@@ -55,7 +55,8 @@ describe.skipIf(!migrated)("messages privés, sur la base de développement (003
   });
 
   it("la messagerie est disponible", async () => {
-    expect((await request(alice, "GET", "/api/messages/status")).json()).toEqual({ enabled: true, unreadCount: 0 });
+    // `push` dépend de PUSH_ENABLED et de la migration 0035 sur cette base (lot notifications).
+    expect((await request(alice, "GET", "/api/messages/status")).json()).toEqual({ enabled: true, unreadCount: 0, push: expect.any(Boolean) });
     expect((await request(alice, "GET", "/api/me")).json().messagesFrom).toBe("everyone");
   });
 

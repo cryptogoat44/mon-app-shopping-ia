@@ -3,6 +3,7 @@ import { chunks, readAll } from "./pagedReads.js";
 import { messagesReady } from "./messaging.js";
 import { collectionsReady } from "./collections.js";
 import { collectionModerationReady } from "./collectionModeration.js";
+import { pushReady } from "./push.js";
 
 // Export RGPD (droit d'accès et de portabilité) : lecture de TOUTES les
 // données personnelles d'un compte. Toute nouvelle table contenant des
@@ -60,6 +61,10 @@ export interface ExportData {
   /** … et les envies rangées dans chacune (identifiant et titre de l'envie,
    * adresses de la copie de son image montrée aux amis, s'il y en a une). */
   collectionItems: ExportRow[];
+  /** Appareils qui reçoivent les notifications des nouveaux messages (lot
+   * notifications, migration 0035) : le système et les dates seulement,
+   * jamais le jeton de l'appareil. */
+  pushDevices: ExportRow[];
 }
 
 /** Sections de l'export (toutes les clés sauf la date de l'export). */
@@ -130,6 +135,10 @@ async function listCollectionItems(db: Db, userId: string, wishlistItems: readon
     };
   });
 }
+
+/** Colonnes d'un appareil des notifications : jamais `token` (l'adresse
+ * technique de l'appareil chez Apple et Expo), ni `last_error`. */
+export const PUSH_DEVICE_EXPORT_COLUMNS = "platform, created_at, updated_at";
 
 /** Colonnes de son côté d'une conversation (jamais celui de l'autre membre :
  * il dirait, par exemple, qu'il a refusé une invitation). */
@@ -284,6 +293,13 @@ export async function collectExport(
     ),
   ]);
   const collectionItems = await section("collectionItems", () => (withCollections ? listCollectionItems(db, userId, wishlistItems, moderatedCollections) : Promise.resolve(none)), none);
+  // Lot notifications : sans la migration 0035, aucun appareil (section vide).
+  // Triés par date, puis par jeton (ordre stable), sans jamais le lire.
+  const pushDevices = await section(
+    "pushDevices",
+    async () => ((await pushReady(fastify)) ? listWhere(db, "push_tokens", PUSH_DEVICE_EXPORT_COLUMNS, "user_id", userId, ["created_at", "token"]) : none),
+    none
+  );
 
   const data: ExportData = {
     exportedAt: new Date().toISOString(),
@@ -317,6 +333,7 @@ export async function collectExport(
     messages,
     collections,
     collectionItems,
+    pushDevices,
   };
   return { data, failures };
 }

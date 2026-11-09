@@ -54,6 +54,11 @@ const MESSAGE_SECTIONS = messagesProbe.error ? [] : (["conversations", "messages
 const collectionsProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("collections").select("id").limit(0);
 const COLLECTION_SECTIONS = collectionsProbe.error ? [] : (["collections", "collectionItems"] as const);
 
+// Lot notifications : un appareil enregistré, seulement une fois la migration
+// 0035 appliquée sur la base des tests (sans elle, section vide).
+const pushProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("push_tokens").select("token").limit(0);
+const PUSH_SECTIONS = pushProbe.error ? [] : (["pushDevices"] as const);
+
 // Sections qui sont un objet (ou null), pas une liste.
 const OBJECT_SECTIONS = ["account", "profile", "adminRole", "suspension"] as const;
 
@@ -93,6 +98,8 @@ const JSON_KEYS = [
   // Lot collections, de même.
   "collections",
   "collectionItems",
+  // Lot notifications, de même.
+  "pushDevices",
 ];
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
@@ -222,6 +229,15 @@ describe("export RGPD complet", () => {
       expect(placed.statusCode).toBe(200);
     }
 
+    // Notifications (lot notifications) : un appareil, inséré directement
+    // (l'interrupteur PUSH_ENABLED peut être coupé sur ce serveur de tests).
+    if (PUSH_SECTIONS.length > 0) {
+      const { error: pushError } = await app.supabaseAdmin
+        .from("push_tokens")
+        .insert({ token: `ExponentPushToken[export${user.id.slice(0, 8)}]`, user_id: user.id, platform: "ios" });
+      if (pushError) throw pushError;
+    }
+
     // Un premier export, pour que le second contienne cette demande.
     await exportOf(user);
     // Beaucoup d'écritures réelles vers spotto-dev : plus que le délai par défaut.
@@ -243,12 +259,15 @@ describe("export RGPD complet", () => {
     const body = res.json();
 
     expect(body.profile.id).toBe(user.id);
-    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...COLLECTION_SECTIONS]) {
+    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...COLLECTION_SECTIONS, ...PUSH_SECTIONS]) {
       expect(Array.isArray(body[section]), section).toBe(true);
       expect(body[section].length, section).toBeGreaterThan(0);
     }
     expect(body.adminRole).toEqual({ created_at: expect.any(String) });
     expect(body.suspension).toMatchObject({ moderation_action_id: expect.any(String) });
+    // Un appareil : son système et ses dates, jamais son jeton.
+    for (const device of body.pushDevices) expect(Object.keys(device).sort()).toEqual(["created_at", "platform", "updated_at"]);
+    expect(JSON.stringify(body)).not.toContain("ExponentPushToken[");
   });
 
   it("sans format : le même JSON qu'avant (mêmes clés), plus l'adresse e-mail du compte, jamais mis en cache", async () => {

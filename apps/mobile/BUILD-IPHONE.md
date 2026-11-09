@@ -110,3 +110,54 @@ il s'ouvre quand on ouvre Spotto à la main (dans les 24 heures).
 Plan B si Apple refuse l'extension : retirer de `app.json` les deux entrées
 `expo-share-intent` et `./plugins/extension-partage.js`, puis refaire un build
 (à vérifier par ce build).
+
+## 8. Notifications des nouveaux messages (coupées par défaut)
+
+Spotto peut prévenir un membre sur son iPhone quand quelqu'un lui écrit
+(« Nouveau message de @pseudo », jamais le texte du message). Tout est prêt
+dans le code, mais **coupé** : tant que `PUSH_ENABLED` ne vaut pas `true` chez
+Render, rien n'est envoyé et l'app ne demande jamais l'autorisation. Les
+notifications passent par le service d'Expo, gratuit et sans clé à saisir.
+
+Pour les allumer, dans cet ordre :
+
+1. **Le projet relié à Expo** (section 1, `eas init`) : sans l'identifiant du
+   projet dans `app.json`, l'app ne propose pas les notifications.
+2. **La clé de notifications d'Apple, chez EAS.** Au prochain
+   `eas build --profile preview --platform ios`, EAS propose de configurer les
+   notifications (« Would you like to set up Push Notifications for your
+   project? », libellé à vérifier) : répondre **oui**. EAS crée alors la clé
+   de notifications d'Apple (« Apple Push Notifications service key ») dans
+   votre compte Apple Developer et la garde pour vous. Autre chemin :
+   `eas credentials` → iOS → le profil → « Push Notifications: Manage your
+   Apple Push Notifications Key » → « Set up a new key » (libellés à
+   vérifier). Pour contrôler : expo.dev → projet Spotto → **Credentials** →
+   iOS : une clé de notifications y figure (à vérifier).
+3. **Un nouveau build iPhone** (le module des notifications est natif) : une
+   mise à jour à distance ne suffit pas. Si un build est déjà sur l'App Store
+   ou TestFlight, augmenter d'abord `version` dans `app.json` (section 6). Un
+   ancien build qui reçoit le nouveau code n'a simplement pas les
+   notifications : rien ne plante.
+4. **La migration 0035** : d'abord sur spotto-dev-2 (`pnpm --filter backend
+   migrer-dev supabase/migrations/0035_notifications_telephone.sql --verifier
+   supabase/verifications/0035-verification.sql`), puis sur spotto-prod, dans
+   l'éditeur SQL de Supabase ; vérifier avec
+   `supabase/verifications/0035-verification.sql` (une ligne, tout à `true`),
+   puis noter la date dans `apps/backend/supabase/REGISTRE-MIGRATIONS.md`.
+5. **L'interrupteur** : Render → spotto-api → Environment → ajouter
+   `PUSH_ENABLED` = `true` (exactement, en minuscules), puis enregistrer
+   (le serveur redémarre). Pour couper : supprimer la variable.
+   `EXPO_ACCESS_TOKEN` ne sert que si la « sécurité renforcée des
+   notifications » est activée dans le compte Expo (à vérifier) ; sinon, ne
+   rien ajouter.
+
+Ensuite, sur un iPhone avec le nouveau build : ouvrir une conversation où
+l'on a reçu un message (ou en envoyer un) ; la feuille « Être prévenu de vos
+nouveaux messages ? » s'affiche une fois, puis la fenêtre d'iOS. Le réglage
+est aussi dans Réglages → « Notifications de messages ». Un message envoyé
+depuis un autre compte fait arriver la notification ; la toucher ouvre la
+conversation.
+
+Avant d'allumer : faire relire le paragraphe « Expo » de la politique de
+confidentialité (« [À vérifier] ») et revoir les réponses « App Privacy »
+d'Apple (`app-store/CONFIDENTIALITE-APPLE.md`).

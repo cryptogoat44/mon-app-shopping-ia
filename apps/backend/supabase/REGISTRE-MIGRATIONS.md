@@ -46,6 +46,7 @@ Les dates de 0001 à 0028 ne sont pas notées dans le dépôt : celles du tablea
 | 0032 | Messages privés entre membres (conversations, invitations, envie jointe) | **à appliquer** (après 0030) | — |
 | 0033 | Collections d'envies, privées ou montrées aux amis | **à appliquer** | — |
 | 0034 | Modération des collections : les signaler, les masquer, retirer une image copiée | **à appliquer** (après 0030, 0032 et 0033) | — |
+| 0035 | Notifications des nouveaux messages sur le téléphone : les appareils prévenus | **à appliquer** (ne sert qu'avec 0032) | — |
 
 ## Fichiers utiles par migration
 
@@ -60,12 +61,13 @@ Les dates de 0001 à 0028 ne sont pas notées dans le dépôt : celles du tablea
 | 0032 | le fichier de la migration lui-même (**après 0030** ; ne pas relancer 0030 ensuite) | `supabase/verifications/0032-verification.sql` | en tête du fichier de la migration |
 | 0033 | le fichier de la migration lui-même | `supabase/verifications/0033-verification.sql` | en tête du fichier de la migration |
 | 0034 | le fichier de la migration lui-même (**après 0030, 0032 et 0033** ; ne pas relancer 0030 ni 0032 ensuite) | `supabase/verifications/0034-verification.sql` | en tête du fichier de la migration |
+| 0035 | le fichier de la migration lui-même | `supabase/verifications/0035-verification.sql` | en tête du fichier de la migration |
 
-## Avant d'appliquer 0029, 0030, 0032, 0033 et 0034
+## Avant d'appliquer 0029, 0030, 0032, 0033, 0034 et 0035
 
 1. **L'offre Supabase Pro sur spotto-prod** (sauvegardes quotidiennes), comme décidé dans la feuille de route : aucun nouveau SQL en production avant. Exception décidée par le fondateur le 9 novembre 2026 : 0031, qui ajoute seulement trois colonnes vides, appliquée sans Pro. Que faire si ça tourne mal : [RESTAURATION.md](RESTAURATION.md).
 2. Chacune a d'abord été appliquée sur **spotto-dev-2** (`pnpm --filter backend migrer-dev …`, sur votre Mac), puis vérifiée.
-3. Le serveur fonctionne avec ou sans elles : sans 0029, il garde ses compteurs de l'IA en mémoire ; sans 0030, il ne masque rien automatiquement ; sans 0031, il cherche les autres boutiques avant de répondre, comme avant (la nouvelle app attend alors le même temps qu'aujourd'hui) ; sans 0032, les messages sont « indisponibles » et l'app cache l'entrée Messages. Sans 0033, les collections sont « indisponibles » et l'app les cache. Sans 0034, les collections fonctionnent comme avant, mais « Signaler » n'est pas proposé pour une collection. Un serveur plus ancien fonctionne aussi sur une base qui les a (pour 0034 : il ne tient pas compte des collections masquées par la modération ; à éviter une fois des collections modérées).
+3. Le serveur fonctionne avec ou sans elles : sans 0029, il garde ses compteurs de l'IA en mémoire ; sans 0030, il ne masque rien automatiquement ; sans 0031, il cherche les autres boutiques avant de répondre, comme avant (la nouvelle app attend alors le même temps qu'aujourd'hui) ; sans 0032, les messages sont « indisponibles » et l'app cache l'entrée Messages. Sans 0033, les collections sont « indisponibles » et l'app les cache. Sans 0034, les collections fonctionnent comme avant, mais « Signaler » n'est pas proposé pour une collection. Sans 0035, aucune notification sur le téléphone, même avec `PUSH_ENABLED=true` : l'app ne les propose pas. Un serveur plus ancien fonctionne aussi sur une base qui les a (pour 0034 : il ne tient pas compte des collections masquées par la modération ; à éviter une fois des collections modérées).
 4. Toutes sont rejouables : relancer le fichier une seconde fois ne change rien.
 
 Une fois appliquée, changez sa ligne : « appliquée en production », avec la date.

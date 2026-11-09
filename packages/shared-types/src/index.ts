@@ -1146,10 +1146,38 @@ export const INVITATION_DECLINE_COOLDOWN_DAYS = 30;
 
 /** GET /api/messages/status : la messagerie est-elle disponible sur le
  * serveur (migration 0032 appliquée), et combien de conversations ont un
- * message non lu (invitations comprises). */
+ * message non lu (invitations comprises). `push` : les notifications sur le
+ * téléphone sont allumées sur le serveur (PUSH_ENABLED et migration 0035) ;
+ * absent chez un serveur plus ancien (lu comme faux). */
 export interface MessagesStatus {
   enabled: boolean;
   unreadCount: number;
+  push?: boolean;
+}
+
+// ---- Notifications des nouveaux messages sur le téléphone (migration 0035) ----
+
+/** Systèmes d'un appareil enregistré pour les notifications. */
+export const PUSH_PLATFORMS = ["ios", "android"] as const;
+export type PushPlatform = (typeof PUSH_PLATFORMS)[number];
+
+/** Forme d'un jeton de notification d'Expo : « ExponentPushToken[…] » ou
+ * « ExpoPushToken[…] », lettres, chiffres, « - » et « _ » entre crochets. */
+export const EXPO_PUSH_TOKEN_PATTERN = /^Expo(?:nent)?PushToken\[[A-Za-z0-9_-]{8,128}\]$/;
+
+export function isExpoPushToken(value: unknown): value is string {
+  return typeof value === "string" && EXPO_PUSH_TOKEN_PATTERN.test(value);
+}
+
+/** PUT /api/me/push-token : enregistrer (ou rafraîchir) l'appareil. */
+export interface RegisterPushTokenRequest {
+  token: string;
+  platform: PushPlatform;
+}
+
+/** DELETE /api/me/push-token : oublier cet appareil (déconnexion, notifications coupées). */
+export interface DeletePushTokenRequest {
+  token: string;
 }
 
 /** Codes d'erreur propres aux messages. */

@@ -55,12 +55,15 @@ export function hasNewFromOther(before: readonly ChatMessage[], after: readonly 
 }
 
 /** Réponse de GET /api/messages/status : un serveur plus ancien, ou une
- * réponse illisible, valent « messagerie indisponible » (l'entrée est cachée). */
+ * réponse illisible, valent « messagerie indisponible » (l'entrée est cachée).
+ * `push` (lot notifications) : vrai seulement si le serveur le dit
+ * exactement ; absent (serveur plus ancien) ou illisible, les notifications
+ * ne sont jamais proposées. */
 export function readMessagesStatus(body: unknown): MessagesStatus {
-  if (typeof body !== "object" || body === null) return { enabled: false, unreadCount: 0 };
-  const { enabled, unreadCount } = body as Record<string, unknown>;
+  if (typeof body !== "object" || body === null) return { enabled: false, unreadCount: 0, push: false };
+  const { enabled, unreadCount, push } = body as Record<string, unknown>;
   const count = typeof unreadCount === "number" && Number.isInteger(unreadCount) && unreadCount > 0 ? unreadCount : 0;
-  return enabled === true ? { enabled: true, unreadCount: count } : { enabled: false, unreadCount: 0 };
+  return enabled === true ? { enabled: true, unreadCount: count, push: push === true } : { enabled: false, unreadCount: 0, push: false };
 }
 
 /** Pastille de l'onglet Activité : notifications ou messages non lus. */
@@ -146,7 +149,7 @@ export function wishCardPrice(card: Pick<MessageWishCard, "priceMin" | "currency
 
 // ---- Disponibilité et non-lus, partagés entre les écrans ----
 
-let current: MessagesStatus = { enabled: false, unreadCount: 0 };
+let current: MessagesStatus = { enabled: false, unreadCount: 0, push: false };
 const listeners = new Set<(status: MessagesStatus) => void>();
 
 export function messagesStatus(): MessagesStatus {
@@ -155,7 +158,7 @@ export function messagesStatus(): MessagesStatus {
 
 /** Nouvel état lu sur le serveur : les écrans abonnés sont prévenus s'il change. */
 export function setMessagesStatus(next: MessagesStatus): void {
-  if (next.enabled === current.enabled && next.unreadCount === current.unreadCount) return;
+  if (next.enabled === current.enabled && next.unreadCount === current.unreadCount && (next.push === true) === (current.push === true)) return;
   current = next;
   for (const listener of listeners) listener(current);
 }

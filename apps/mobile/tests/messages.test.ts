@@ -54,7 +54,7 @@ describe("entrée « Messages » de l'Activité", () => {
   it("cachée quand la messagerie n'est pas disponible (serveur sans 0032, ancien serveur, réponse illisible)", () => {
     for (const body of [{ enabled: false, unreadCount: 3 }, null, "Not Found", { error: "messages_unavailable" }, { enabled: "oui", unreadCount: 2 }]) {
       const status = readMessagesStatus(body);
-      expect(status).toEqual({ enabled: false, unreadCount: 0 });
+      expect(status).toEqual({ enabled: false, unreadCount: 0, push: false });
       expect(messagesEntry(status)).toBeNull();
     }
   });
@@ -64,7 +64,7 @@ describe("entrée « Messages » de l'Activité", () => {
     expect(messagesEntry(readMessagesStatus({ enabled: true, unreadCount: 3 }))).toEqual({ label: "Messages, 3 conversations non lues", badge: "3" });
     expect(messagesEntry(readMessagesStatus({ enabled: true, unreadCount: 1 }))?.label).toBe("Messages, 1 conversation non lue");
     expect(unreadBadge(120)).toBe("99+");
-    expect(readMessagesStatus({ enabled: true, unreadCount: -2 })).toEqual({ enabled: true, unreadCount: 0 });
+    expect(readMessagesStatus({ enabled: true, unreadCount: -2 })).toEqual({ enabled: true, unreadCount: 0, push: false });
   });
 
   it("la pastille de l'onglet Activité compte aussi les messages non lus, seulement quand la messagerie est là", () => {

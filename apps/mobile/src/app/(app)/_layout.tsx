@@ -1,12 +1,16 @@
 import { Stack } from "expo-router";
 import { AppNotices } from "@/components/app-notices";
 import { useSharedItemArrival } from "@/lib/use-shared-item";
+import { usePushNotifications } from "@/lib/use-push-notifications";
 
 export default function AppLayout() {
   // Partage reçu pendant qu'un autre écran est affiché : retour au Spotter, qui
   // l'ouvre, seulement si rien ne se perd ; pendant une recherche ou une saisie,
   // il attend le retour au Spotter.
   useSharedItemArrival();
+  // Lot notifications (app iPhone) : une notification touchée ouvre sa
+  // conversation ; jamais de demande d'autorisation ici.
+  usePushNotifications();
   return (
     <>
       <Stack screenOptions={{ headerShown: false }}>

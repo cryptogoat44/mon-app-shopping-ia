@@ -14,6 +14,7 @@ import {
   type PlatformSource,
   type PostType,
   type PrivacyLevel,
+  type PushPlatform,
   type RecognitionMethod,
   type ReportReason,
   type ReportTargetType,
@@ -408,6 +409,13 @@ export const EXPORT_COLUMNS = {
     friends_image_removed_at: shown("Image montrée à vos amis retirée par la modération le", "Image shown to your friends removed by moderation on"),
     created_at: shown("Ajoutée le", "Added on"),
   },
+  // Lot notifications (migration 0035) : les appareils prévenus des nouveaux
+  // messages ; jamais le jeton de l'appareil.
+  pushDevices: {
+    platform: shown("Appareil", "Device"),
+    created_at: shown("Notifications activées le", "Notifications turned on on"),
+    updated_at: shown("Dernière mise à jour le", "Last updated on"),
+  },
 } as const satisfies Record<ExportDataKey, Record<string, ExportColumn>>;
 
 export type ExportColumnName<K extends ExportDataKey> = keyof (typeof EXPORT_COLUMNS)[K] & string;
@@ -512,6 +520,14 @@ export const EXPORT_SECTIONS = {
     },
     keys: ["conversations", "messages"],
   },
+  devices: {
+    title: { fr: "Vos appareils pour les notifications", en: "Your devices for notifications" },
+    intro: {
+      fr: "Les téléphones sur lesquels une notification vous prévient d'un nouveau message. Pour chacun, Spotto garde une adresse technique, donnée par Apple et Expo pour vous envoyer ces notifications ; elle n'est pas recopiée ici.",
+      en: "The phones on which a notification tells you about a new message. For each one, Spotto keeps a technical address, given by Apple and Expo to send you these notifications; it isn't copied here.",
+    },
+    keys: ["pushDevices"],
+  },
   notifications: {
     title: { fr: "Vos notifications", en: "Your notifications" },
     intro: { fr: "Les notifications de l'onglet Activité de l'app.", en: "The notifications from the app's Activity tab." },
@@ -583,6 +599,12 @@ export const MESSAGES_FROM_LABELS: Record<MessagesFrom, Bilingual> = {
 export const COLLECTION_VISIBILITY_LABELS: Record<CollectionVisibility, Bilingual> = {
   private: { fr: "Vous seul (privée)", en: "You alone (private)" },
   friends: { fr: "Vos amis", en: "Your friends" },
+};
+
+/** Système d'un appareil des notifications (lot notifications). */
+export const PUSH_PLATFORM_LABELS: Record<PushPlatform, Bilingual> = {
+  ios: { fr: "iPhone", en: "iPhone" },
+  android: { fr: "Téléphone Android", en: "Android phone" },
 };
 
 /** Votre côté d'une conversation (conversation_participants.invitation). */
