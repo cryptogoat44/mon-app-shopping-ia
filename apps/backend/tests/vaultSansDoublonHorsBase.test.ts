@@ -4,6 +4,16 @@ import sharp from "sharp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import vaultRoutes from "../src/routes/vault.js";
 import { keptMatchIds } from "../src/lib/keptPieces.js";
+import { observePurchase } from "../src/lib/wishObserve.js";
+
+// Alertes prix et stock (lot 2) : l'annonce « disponible chez cette boutique
+// aujourd'hui » après un achat est remplacée par un espion (sa logique :
+// alertesPrixObservation.test.ts).
+vi.mock("../src/lib/wishObserve.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/lib/wishObserve.js")>();
+  return { ...original, observePurchase: vi.fn() };
+});
+const purchaseMock = vi.mocked(observePurchase);
 
 // Lot « Retrouver ses pièces », partie sans base (aucun réseau) : la route
 // POST /api/vault sur une fausse base en mémoire, et la lecture des pièces
@@ -125,6 +135,28 @@ const FROM_MATCH = { title: "Veste", category: "clothing", productMatchId: MATCH
 afterEach(async () => {
   await app?.close();
   app = null;
+  purchaseMock.mockReset();
+});
+
+describe("alertes prix : « Je l'ai achetée » annonce la pièce disponible chez cette boutique (sans base)", () => {
+  it("pièce créée depuis une proposition de sa recherche : une annonce, après la réponse, avec le lien et la boutique rangés par le serveur (jamais l'acheteur)", async () => {
+    const { db } = fakeDb(standardAnswer());
+    const res = await post(await vaultApp(db), FROM_MATCH);
+    expect(res.statusCode).toBe(200);
+    expect(purchaseMock).toHaveBeenCalledTimes(1);
+    expect(purchaseMock.mock.calls[0]![1]).toEqual({ merchantUrl: "https://marchand.example/veste", merchantName: null });
+    expect(JSON.stringify(purchaseMock.mock.calls[0]![1])).not.toContain(USER);
+  });
+
+  it("déjà dans le Vault, ou ajout à la main (sans proposition) : aucune annonce", async () => {
+    const { db } = fakeDb(standardAnswer({ existing: [vaultRow(EXISTING)] }));
+    expect((await post(await vaultApp(db), FROM_MATCH)).json()).toMatchObject({ alreadyInVault: true });
+    await app?.close();
+    const manual = fakeDb(standardAnswer());
+    const photo = await sharp({ create: { width: 32, height: 32, channels: 3, background: "#806040" } }).jpeg().toBuffer();
+    expect((await post(await vaultApp(manual.db), { title: "Veste", category: "clothing" }, photo)).statusCode).toBe(200);
+    expect(purchaseMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST /api/vault : une même proposition, une seule pièce (sans base)", () => {

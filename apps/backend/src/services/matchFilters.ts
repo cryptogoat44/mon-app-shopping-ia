@@ -70,12 +70,25 @@ export function isExcludedMerchant(link: string): boolean {
   return exclusionReason(link) !== null;
 }
 
+/** Page de Google (google.fr, www.google.co.uk, shopping.google.com…).
+ * Ici, sans dépendance, pour la clé des alertes prix (lib/alertKeys.ts) ;
+ * reprise telle quelle par services/textSearch.ts. */
+export function isGoogleLink(link: string): boolean {
+  try {
+    return /(^|\.)google(\.[a-z]{2,3}){1,2}$/i.test(new URL(link).hostname);
+  } catch {
+    return false;
+  }
+}
+
 // Paramètres de suivi publicitaire : ils ne changent jamais la page affichée.
 // Liste FERMÉE : un paramètre inconnu peut désigner une variante (couleur,
-// taille) et compte toujours.
-const TRACKING_PARAMS = new Set(["gclid", "gbraid", "wbraid", "dclid", "fbclid", "msclkid", "ttclid", "twclid", "igshid", "yclid", "srsltid", "mc_cid", "mc_eid", "_ga", "_gl"]);
+// taille) et compte toujours. Exportée pour la clé des alertes prix
+// (lib/alertKeys.ts), qui suit les mêmes règles.
+export const TRACKING_PARAMS: ReadonlySet<string> = new Set(["gclid", "gbraid", "wbraid", "dclid", "fbclid", "msclkid", "ttclid", "twclid", "igshid", "yclid", "srsltid", "mc_cid", "mc_eid", "_ga", "_gl"]);
 
-function isTrackingParam(name: string): boolean {
+/** Paramètre de suivi : « utm_… » ou un de TRACKING_PARAMS (sans tenir compte de la casse). */
+export function isTrackingParam(name: string): boolean {
   const lower = name.toLowerCase();
   return lower.startsWith("utm_") || TRACKING_PARAMS.has(lower);
 }

@@ -16,6 +16,10 @@ export interface VisualMatch {
   merchantUrl: string;
   priceValue: number | null;
   currency: string | null;
+  /** Stock annoncé par Google Lens (alertes prix et stock), seulement quand
+   * il l'annonce : true (en stock) ou false (épuisé). Jamais rangé dans
+   * product_matches ; gardé dans le cache avec la réponse. */
+  inStock?: boolean;
 }
 
 /** Le fournisseur de la recherche par image (un seul adaptateur pour
@@ -82,6 +86,7 @@ function toVisualMatch(match: UsableMatch, index: number): VisualMatch {
     merchantName: match.source ?? null,
     merchantUrl: match.link,
     ...storablePrice(match.price),
+    ...(typeof match.in_stock === "boolean" ? { inStock: match.in_stock } : {}),
   };
 }
 

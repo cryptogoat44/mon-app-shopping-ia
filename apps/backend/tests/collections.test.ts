@@ -20,6 +20,8 @@ import accountRoutes from "../src/routes/account.js";
 import { RATE_LIMITS } from "../src/lib/rateLimits.js";
 import { collectionsReady, normalizeCollectionName, resetCollectionsProbe } from "../src/lib/collections.js";
 import { resetMessagesProbe } from "../src/lib/messaging.js";
+import { resetWishAlertsProbe } from "../src/lib/wishAlertsSchema.js";
+import { trackingKeyOf } from "../src/lib/alertKeys.js";
 import { requestLogFields, scrubLogLine, withoutErrorDetails } from "../src/lib/logPrivacy.js";
 import { STORAGE_ORIGIN, fakeSupabase, type FakeDbOptions, type Row } from "./fakeSupabase.js";
 
@@ -190,6 +192,7 @@ const originalNodeEnv = process.env.NODE_ENV;
 beforeEach(() => {
   resetCollectionsProbe();
   resetMessagesProbe();
+  resetWishAlertsProbe();
   downloads.images.clear();
   downloads.calls.length = 0;
 });
@@ -646,6 +649,28 @@ describe("« Garder » et « En parler »", () => {
     // Un non-ami : 404.
     expect((await as(target, CHLOE).post(`/api/collection-items/${itemId}/keep`)).statusCode).toBe(404);
     expect(fake.table("wishlist_items").filter((row) => row.user_id === CHLOE)).toHaveLength(0);
+    // Sans la migration 0036 : aucun suivi pour les alertes prix.
+    expect(fake.table("wish_tracking")).toHaveLength(0);
+  });
+
+  it("alertes prix (0036) : « Garder » crée le suivi de l'envie copiée (clé de la pièce, sans prix de référence), une seule fois", async () => {
+    const fake = seeded({ follows: friends(ALICE, BOB) }, { rpc: async (fn) => (fn === "wish_alerts_version" ? { data: 1, error: null } : { data: null, error: { code: "PGRST202", message: "absente" } }) });
+    const target = await collectionsApp(fake.db);
+    const itemId = await sharedBag(fake, target);
+    expect((await as(target, BOB).post(`/api/collection-items/${itemId}/keep`)).statusCode).toBe(201);
+    expect((await as(target, BOB).post(`/api/collection-items/${itemId}/keep`)).statusCode).toBe(200);
+    const bobs = fake.table("wishlist_items").filter((row) => row.user_id === BOB);
+    expect(fake.table("wish_tracking")).toEqual([
+      expect.objectContaining({
+        wishlist_item_id: bobs[0]!.id,
+        user_id: BOB,
+        match_key_hash: trackingKeyOf("https://boutique.example/sac", "Boutique")!.hash,
+        merchant_key: "boutique",
+        key_version: 1,
+      }),
+    ]);
+    // Aucune proposition d'origine : la première observation fixera la référence.
+    expect(fake.table("wish_tracking")[0]).not.toHaveProperty("ref_price");
   });
 
   it("En parler : l'envie jointe au message pour son auteur, image copiée chez l'expéditeur ; jamais pour quelqu'un d'autre", async () => {

@@ -96,6 +96,25 @@ export const RATE_LIMITS = {
     message: "Trop de changements des notifications en peu de temps. Réessayez dans une heure.",
   },
 
+  // Alertes prix et stock (lot 2) : régler une cloche ou l'interrupteur des
+  // Réglages. Large pour un vrai usage, bloque un script.
+  wishAlertWrite: {
+    max: 120,
+    windowMs: HOUR,
+    error: "wish_alert_write_limit",
+    message: "Vous avez changé beaucoup d'alertes en peu de temps. Réessayez dans un moment.",
+  },
+  // « Plus disponible » : 20 signalements par jour et par membre. Ici, la
+  // limite en mémoire (filet) ; la vraie limite, par jour de Paris, est
+  // comptée dans la base (wish_stock_report, migration 0036), où chaque
+  // signalement est gardé 30 jours.
+  stockReport: {
+    max: 20,
+    windowMs: DAY,
+    error: "stock_report_limit",
+    message: "Vous avez signalé beaucoup de pièces aujourd'hui. Réessayez demain.",
+  },
+
   // Collections d'envies (lot collections) : créer, renommer, supprimer une
   // collection, y ranger ou en retirer une envie. Large pour ranger ses
   // envies, bloque un script.

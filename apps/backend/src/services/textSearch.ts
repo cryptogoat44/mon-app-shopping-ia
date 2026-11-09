@@ -17,7 +17,7 @@
 //   tri par vos mots), jamais avant.
 // - Aucune requête, aucun mot, aucun titre ni aucune adresse dans les journaux
 //   ou les erreurs : seulement des nombres (mesure).
-import { exclusionReason, pageKey, withoutDuplicates } from "./matchFilters.js";
+import { exclusionReason, isGoogleLink, pageKey, withoutDuplicates } from "./matchFilters.js";
 import type { SearchLocale } from "./lensSettings.js";
 import type { ProviderShoppingItem, TextSearchProvider, TextSearchResponse } from "./searchProvider.js";
 import { storablePrice, type VisualMatch } from "./visualSearch.js";
@@ -40,8 +40,10 @@ export const SHOPPING_CURRENCIES: Record<string, { code: string; marks: readonly
 };
 
 /** Une proposition de Google Shopping, rangée comme une proposition Lens.
- * `priceHidden` : un prix existait, dans une autre devise (caché, pour la mesure). */
-export type ShoppingMatch = VisualMatch & { priceHidden: boolean };
+ * `priceHidden` : un prix existait, dans une autre devise (caché, pour la mesure).
+ * `hasProductId` : SerpApi donnait un identifiant produit (seulement compté
+ * dans le journal des alertes prix, jamais rangé). */
+export type ShoppingMatch = VisualMatch & { priceHidden: boolean; hasProductId?: true };
 
 /** Ce que les filtres gardent d'une réponse (avant les pages Lens, le tri et
  * la coupe à 20) : c'est ce qui va dans le cache, pour une requête de l'IA. */
@@ -80,14 +82,8 @@ function usableUrl(text: string | undefined): string | undefined {
   }
 }
 
-/** Page de Google (google.fr, www.google.co.uk, shopping.google.com…). */
-export function isGoogleLink(link: string): boolean {
-  try {
-    return /(^|\.)google(\.[a-z]{2,3}){1,2}$/i.test(new URL(link).hostname);
-  } catch {
-    return false;
-  }
-}
+/** Page de Google (google.fr, www.google.co.uk, shopping.google.com…) : services/matchFilters.ts. */
+export { isGoogleLink };
 
 /** Le lien direct vers le marchand s'il n'est pas une page de Google, sinon la page produit de Google. */
 function chosenLink(item: ProviderShoppingItem): string | undefined {
@@ -150,6 +146,7 @@ export function filterShoppingItems(response: Pick<TextSearchResponse, "items" |
       merchantName: candidate.source,
       merchantUrl: candidate.link,
       ...shoppingPrice(candidate.item, country),
+      ...(candidate.item.product_id ? { hasProductId: true as const } : {}),
     })),
     received: response.received,
     droppedDataThumbnails,

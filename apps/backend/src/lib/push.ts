@@ -21,6 +21,12 @@
 // le compte à zéro : au pire, une notification de plus).
 // Envoi « lancé puis oublié » : la réponse de l'envoi du message n'attend
 // jamais Expo, et une panne d'Expo ne change rien à l'envoi.
+//
+// Lot alertes prix et stock (migration 0036) : l'envoi lui-même est commun
+// (sendPush : un destinataire, une sorte, un texte, des données), et sert aussi
+// aux alertes (lib/wishAlertsSend.ts). Un appareil peut rester enregistré pour
+// les seules alertes (push_tokens.notify_messages = false) : il ne reçoit
+// alors aucune notification de message. Sans 0036, tout est comme avant.
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { z } from "zod";
 import { EXPO_PUSH_TOKEN_PATTERN, PUSH_PLATFORMS, type PushPlatform } from "@monapp/shared-types";
@@ -30,16 +36,19 @@ import { isSuspended } from "./moderation.js";
 import { safeFetch } from "./safeFetch.js";
 import { parseDbRows } from "./validation.js";
 import { isBlockedEitherWay } from "./visibility.js";
+import { wishAlertsReady } from "./wishAlertsSchema.js";
 
 // ---- Réponses ----
 
 export const PUSH_UNAVAILABLE = { error: "push_unavailable", message: "Les notifications ne sont pas disponibles." } as const;
 export const INVALID_PUSH_TOKEN = { error: "invalid_push_token", message: "Jeton de notification invalide." } as const;
 
-/** Corps de PUT /api/me/push-token : un jeton d'Expo, rien d'autre. */
+/** Corps de PUT /api/me/push-token : un jeton d'Expo, son système, et
+ * (lot alertes prix) s'il reçoit les notifications des messages. */
 export const registerPushTokenSchema = z.object({
   token: z.string().max(200).regex(EXPO_PUSH_TOKEN_PATTERN),
   platform: z.enum(PUSH_PLATFORMS),
+  messages: z.boolean().optional(),
 });
 /** Corps de DELETE /api/me/push-token. */
 export const deletePushTokenSchema = z.object({ token: z.string().max(200).regex(EXPO_PUSH_TOKEN_PATTERN) });
@@ -112,11 +121,14 @@ const TOKEN_ROWS = z.array(z.object({ token: z.string() }));
 
 /** Enregistre l'appareil pour ce compte, ou le rafraîchit. Un jeton est à un
  * seul compte : le même téléphone connecté à un autre compte change de
- * propriétaire (l'ancien ne reçoit plus rien sur ce téléphone). */
-export async function savePushToken(fastify: FastifyInstance, userId: string, token: string, platform: PushPlatform): Promise<void> {
+ * propriétaire (l'ancien ne reçoit plus rien sur ce téléphone).
+ * `messages` (lot alertes prix) : seulement avec 0036 ; absent, la valeur
+ * enregistrée ne change pas (oui pour un nouvel appareil). */
+export async function savePushToken(fastify: FastifyInstance, userId: string, token: string, platform: PushPlatform, messages?: boolean): Promise<void> {
   const db = fastify.supabaseAdmin;
   const now = new Date().toISOString();
-  const values = { user_id: userId, platform, updated_at: now, last_error: null };
+  const kinds = messages !== undefined && (await wishAlertsReady(fastify)) ? { notify_messages: messages } : {};
+  const values = { user_id: userId, platform, updated_at: now, last_error: null, ...kinds };
   const foreign = await db.from("push_tokens").delete().eq("token", token).neq("user_id", userId);
   if (foreign.error) throw new PushTokenStoreError("Appareil d'un autre compte : suppression impossible");
   const refresh = async (): Promise<boolean> => {
@@ -161,16 +173,18 @@ export async function deleteAllPushTokens(fastify: FastifyInstance, userId: stri
 // ---- Contenu d'une notification ----
 
 export const PUSH_TITLE = "Spotto";
-type PushKind = "direct" | "invitation";
+/** Sortes de notifications : un message, une invitation, une alerte prix ou stock. */
+export type PushKind = "direct" | "invitation" | "wish_alert";
+type MessagePushKind = Exclude<PushKind, "wish_alert">;
 type PushLocale = "fr" | "en";
 
-const PUSH_BODIES: Record<PushKind, Record<PushLocale, (username: string) => string>> = {
+const PUSH_BODIES: Record<MessagePushKind, Record<PushLocale, (username: string) => string>> = {
   direct: { fr: (username) => `Nouveau message de @${username}`, en: (username) => `New message from @${username}` },
   invitation: { fr: (username) => `Invitation de @${username}`, en: (username) => `Invitation from @${username}` },
 };
 
 /** Le texte d'une notification : qui écrit, jamais ce qui est écrit. */
-export function pushBody(kind: PushKind, username: string, locale: string | null | undefined): string {
+export function pushBody(kind: MessagePushKind, username: string, locale: string | null | undefined): string {
   return PUSH_BODIES[kind][locale === "en" ? "en" : "fr"](username);
 }
 
@@ -274,11 +288,7 @@ async function sendNewMessagePush(fastify: FastifyInstance, log: FastifyBaseLogg
     log.info({ outcome: "skipped" }, "Notification de message non due");
     return;
   }
-  const tokens = parseDbRows(
-    TOKEN_ROWS,
-    await db.from("push_tokens").select("token").eq("user_id", recipientId).order("updated_at", { ascending: false }).limit(MAX_DEVICES_PER_ACCOUNT),
-    "Appareils de la personne qui reçoit"
-  ).map((row) => row.token);
+  const tokens = await readPushTokens(fastify, recipientId, "direct");
   if (tokens.length === 0) return;
   const profiles = parseDbRows(PROFILE_ROWS, await db.from("profiles").select("id, username, locale").in("id", [senderId, recipientId]), "Profils de la notification");
   const username = profiles.find((row) => row.id === senderId)?.username;
@@ -294,8 +304,69 @@ async function sendNewMessagePush(fastify: FastifyInstance, log: FastifyBaseLogg
   }
   rememberPush(key, now);
 
-  const body = pushBody(side.invitation === "received" ? "invitation" : "direct", username, locale);
-  const messages = tokens.map((to) => ({ to, title: PUSH_TITLE, body, data: { conversationId }, sound: "default" }));
+  const kind = side.invitation === "received" ? "invitation" : "direct";
+  await deliverPush(fastify, log, tokens, { kind, body: pushBody(kind, username, locale), data: { conversationId } });
+}
+
+// ---- Envoi commun (messages et alertes) ----
+
+/** Messages ou alertes : seulement pour le journal et le choix des appareils. */
+type PushFamily = "messages" | "alerts";
+const PUSH_FAMILY: Record<PushKind, PushFamily> = { direct: "messages", invitation: "messages", wish_alert: "alerts" };
+const PUSH_LOG_MESSAGES: Record<PushFamily, { refused: string; unreadable: string; sent: string }> = {
+  messages: {
+    refused: "Notification de message refusée par Expo",
+    unreadable: "Notification de message : réponse d'Expo illisible",
+    sent: "Notification de message envoyée",
+  },
+  alerts: {
+    refused: "Alerte prix refusée par Expo",
+    unreadable: "Alerte prix : réponse d'Expo illisible",
+    sent: "Alerte prix envoyée",
+  },
+};
+
+/** Ce qu'une notification montre et transporte : jamais un jeton. */
+export interface PushContent {
+  kind: PushKind;
+  /** Texte de la notification (le titre est toujours « Spotto »). */
+  body: string;
+  /** Données jointes, lues par l'app quand la notification est touchée. */
+  data: Record<string, string>;
+}
+
+/** Issue d'un envoi : appareils visés, et appareils pour lesquels Expo a accepté. */
+export interface PushOutcome {
+  devices: number;
+  delivered: number;
+}
+
+/** Les appareils d'une personne pour cette sorte de notification (10 au plus,
+ * les plus récents). Avec 0036, une notification de message ne va qu'aux
+ * appareils qui les reçoivent (notify_messages) ; une alerte, à tous. */
+export async function readPushTokens(fastify: FastifyInstance, recipientId: string, kind: PushKind): Promise<string[]> {
+  let query = fastify.supabaseAdmin.from("push_tokens").select("token").eq("user_id", recipientId);
+  if (PUSH_FAMILY[kind] === "messages" && (await wishAlertsReady(fastify))) query = query.eq("notify_messages", true);
+  return parseDbRows(TOKEN_ROWS, await query.order("updated_at", { ascending: false }).limit(MAX_DEVICES_PER_ACCOUNT), "Appareils de la personne qui reçoit").map(
+    (row) => row.token
+  );
+}
+
+/** Une notification à une personne : ses appareils, puis l'envoi par Expo.
+ * Sans appareil : rien n'est envoyé (devices = 0). */
+export async function sendPush(fastify: FastifyInstance, log: FastifyBaseLogger, recipientId: string, content: PushContent): Promise<PushOutcome> {
+  const tokens = await readPushTokens(fastify, recipientId, content.kind);
+  if (tokens.length === 0) return { devices: 0, delivered: 0 };
+  return deliverPush(fastify, log, tokens, content);
+}
+
+/** Envoi par le service d'Expo, puis les reçus : un appareil désinscrit est
+ * oublié, une autre erreur est notée (son code seulement). Journal : des
+ * nombres et des codes, jamais un jeton ni un texte. */
+async function deliverPush(fastify: FastifyInstance, log: FastifyBaseLogger, tokens: string[], content: PushContent): Promise<PushOutcome> {
+  const db = fastify.supabaseAdmin;
+  const logMessages = PUSH_LOG_MESSAGES[PUSH_FAMILY[content.kind]];
+  const messages = tokens.map((to) => ({ to, title: PUSH_TITLE, body: content.body, data: content.data, sound: "default" }));
   const headers: Record<string, string> = { accept: "application/json", "content-type": "application/json" };
   if (env.EXPO_ACCESS_TOKEN) headers.authorization = `Bearer ${env.EXPO_ACCESS_TOKEN}`;
 
@@ -308,13 +379,13 @@ async function sendNewMessagePush(fastify: FastifyInstance, log: FastifyBaseLogg
   });
   if (!response.ok) {
     await response.body?.cancel();
-    log.warn({ status: response.status, devices: tokens.length }, "Notification de message refusée par Expo");
-    return;
+    log.warn({ status: response.status, devices: tokens.length }, logMessages.refused);
+    return { devices: tokens.length, delivered: 0 };
   }
   const parsed = TICKETS.safeParse(await response.json().catch(() => null));
   if (!parsed.success || parsed.data.data.length !== tokens.length) {
-    log.warn({ devices: tokens.length }, "Notification de message : réponse d'Expo illisible");
-    return;
+    log.warn({ devices: tokens.length }, logMessages.unreadable);
+    return { devices: tokens.length, delivered: 0 };
   }
 
   // Un reçu par appareil, dans l'ordre de l'envoi.
@@ -338,6 +409,7 @@ async function sendNewMessagePush(fastify: FastifyInstance, log: FastifyBaseLogg
   const failures = [...failed.values()].reduce((sum, list) => sum + list.length, 0) + gone.length;
   log.info(
     { devices: tokens.length, sent: tokens.length - failures, failed: failures, removed: gone.length, codes: [...new Set([...(gone.length ? ["DeviceNotRegistered"] : []), ...failed.keys()])] },
-    "Notification de message envoyée"
+    logMessages.sent
   );
+  return { devices: tokens.length, delivered: tokens.length - failures };
 }

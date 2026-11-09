@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 // Fausse base Supabase en mémoire, pour les tests sans base (aucun réseau) :
 // des tables, et juste ce que les routes des messages demandent au client
-// (select, insert, update, delete ; eq, neq, in, is, not, gt, lt ; order,
+// (select, insert, upsert, update, delete ; eq, neq, in, is, not, gt, lt ; order,
 // limit, range ; single, maybeSingle ; compte exact). Les règles de la base
 // utiles à ces tests sont imitées : clés uniques (paire d'une conversation,
 // envie une seule fois par collection, une copie par envie), suppressions en
@@ -68,6 +68,9 @@ const DEFAULTS: Record<string, () => Row> = {
   // Modération (imitée par les tests de la modération des collections).
   moderation_actions: () => ({ id: randomUUID(), admin_id: null, reason: null, note: null, undoes_action_id: null, automatic: false, created_at: nextTimestamp() }),
   notifications: () => ({ id: randomUUID(), actor_id: null, post_id: null, moderation_action_id: null, read_at: null, hidden_at: null, created_at: nextTimestamp() }),
+  // Lot alertes prix et stock (migration 0036) : les valeurs par défaut de la base.
+  wish_tracking: () => ({ stock_state: "unknown" }),
+  wish_watches: () => ({ notify_price_drop: false, notify_restock: false, notify_sold_out: false, created_at: nextTimestamp(), updated_at: nextTimestamp() }),
 };
 
 /** Clés uniques imitées (doublon : erreur 23505, comme Postgres). */
@@ -75,6 +78,9 @@ const UNIQUE: Record<string, string[][]> = {
   conversations: [["user_low", "user_high"]],
   collection_items: [["collection_id", "wishlist_item_id"]],
   collection_image_copies: [["wishlist_item_id"]],
+  // Lot alertes prix et stock (0036) : un suivi et une cloche par envie.
+  wish_tracking: [["wishlist_item_id"]],
+  wish_watches: [["wishlist_item_id"]],
 };
 
 /** Suppressions en cascade imitées : en supprimant une ligne de la table,
@@ -88,6 +94,9 @@ const CASCADES: Record<string, { table: string; column: string }[]> = {
   wishlist_items: [
     { table: "collection_items", column: "wishlist_item_id" },
     { table: "collection_image_copies", column: "wishlist_item_id" },
+    { table: "wish_tracking", column: "wishlist_item_id" },
+    { table: "wish_watches", column: "wishlist_item_id" },
+    { table: "wish_alert_events", column: "wishlist_item_id" },
   ],
 };
 
@@ -146,7 +155,9 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
   function from(name: string) {
     const filters: Filter[] = [];
     const orders: { column: string; ascending: boolean }[] = [];
-    let action: "select" | "insert" | "update" | "delete" = "select";
+    let action: "select" | "insert" | "upsert" | "update" | "delete" = "select";
+    // upsert : colonnes du conflit (comme Postgres, deux NULL ne se rencontrent jamais).
+    let conflict: string[] = [];
     let columns = "*";
     let countExact = false;
     let head = false;
@@ -160,11 +171,29 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
     function run(mode: "many" | "single" | "maybe"): { data: unknown; error: DbError | null; count?: number | null } {
       if (options.missing?.includes(name)) return { data: null, error: { code: "42P01", message: `relation "${name}" does not exist` } };
       const absent = options.missingColumns?.[name] ?? [];
-      const written = action === "insert" || action === "update" ? (Array.isArray(values) ? values : [values ?? {}]).flatMap((value) => Object.keys(value)) : [];
+      const written = action === "insert" || action === "upsert" || action === "update" ? (Array.isArray(values) ? values : [values ?? {}]).flatMap((value) => Object.keys(value)) : [];
       const asked = [...named, ...written, ...(columns.trim() === "*" ? [] : columns.split(",").map((c) => c.trim()))];
       const unknownColumn = asked.find((column) => absent.includes(column));
       if (unknownColumn) return { data: null, error: { code: "42703", message: `column ${name}.${unknownColumn} does not exist` } };
       const rows = table(name);
+      if (action === "upsert") {
+        const failure = options.failWrite?.(name, "insert", values);
+        if (failure) return { data: null, error: failure };
+        const written: Row[] = [];
+        for (const value of Array.isArray(values) ? values : [values!]) {
+          const existing = rows.find((row) => conflict.length > 0 && conflict.every((column) => value[column] != null && row[column] === value[column]));
+          if (existing) {
+            Object.assign(existing, value);
+            written.push(existing);
+          } else {
+            const row = { ...(DEFAULTS[name]?.() ?? {}), ...value };
+            rows.push(row);
+            written.push(row);
+          }
+        }
+        const data = written.map((row) => pick(row, columns));
+        return mode === "many" ? { data: returning ? data : null, error: null } : { data: data[0] ?? null, error: null };
+      }
       if (action === "insert") {
         const failure = options.failWrite?.(name, "insert", values);
         if (failure) return { data: null, error: failure };
@@ -227,6 +256,12 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
       insert(value: Row | Row[]) {
         action = "insert";
         values = value;
+        return chain;
+      },
+      upsert(value: Row | Row[], opts?: { onConflict?: string }) {
+        action = "upsert";
+        values = value;
+        conflict = (opts?.onConflict ?? "").split(",").map((column) => column.trim()).filter(Boolean);
         return chain;
       },
       update(value: Row) {

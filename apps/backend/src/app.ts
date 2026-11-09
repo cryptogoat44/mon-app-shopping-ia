@@ -30,6 +30,8 @@ import appVersionRoutes from "./routes/appVersion.js";
 import conversationsRoutes from "./routes/conversations.js";
 import collectionsRoutes from "./routes/collections.js";
 import pushTokensRoutes from "./routes/pushTokens.js";
+import wishAlertsRoutes from "./routes/wishAlerts.js";
+import { flushAfterResponse } from "./lib/wishAlertsSend.js";
 import { captureServerError, captureServerFailure } from "./lib/sentry.js";
 import { GENERIC_CLIENT_ERROR, isErrorBody, localizeMessage } from "./lib/messages.js";
 import { requestLocale } from "./lib/locale.js";
@@ -112,6 +114,11 @@ export async function buildApp(options: { logger?: LoggerOption } = {}): Promise
     }
   });
 
+  // Alertes prix et stock (lot 2) : après la réponse d'une route fréquente
+  // d'un membre connecté, un passage d'envoi des alertes dues, au plus une
+  // fois par minute (lib/wishAlertsSend.ts). Jamais attendu, jamais en erreur.
+  fastify.addHook("onResponse", async (request, reply) => flushAfterResponse(fastify, request, reply));
+
   // Messages d'erreur dans la langue de l'utilisateur (lot 3) — voir lib/messages.ts.
   fastify.addHook("preSerialization", async (request, reply, payload) => {
     if (reply.statusCode < 400 || !isErrorBody(payload)) return payload;
@@ -154,6 +161,7 @@ export async function buildApp(options: { logger?: LoggerOption } = {}): Promise
   await fastify.register(conversationsRoutes);
   await fastify.register(collectionsRoutes);
   await fastify.register(pushTokensRoutes);
+  await fastify.register(wishAlertsRoutes);
 
   // Exclue du filet anti-abus "default" : les sondes de disponibilité de
   // Render l'appellent très régulièrement, ça n'a rien à voir avec un abus.

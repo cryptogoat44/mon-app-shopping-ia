@@ -35,7 +35,8 @@
     "parcours-ecran": "tsx scripts/parcours-ecran/index.ts",
     "images-marque": "tsx scripts/images-marque.ts",
     "parcours-iphone": "tsx scripts/parcours-iphone/index.ts",
-    "sauvegarder-photos": "tsx scripts/sauvegarder-photos.ts"
+    "sauvegarder-photos": "tsx scripts/sauvegarder-photos.ts",
+    "rattraper-suivi-envies-dev": "tsx scripts/rattraper-suivi-envies-dev.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",

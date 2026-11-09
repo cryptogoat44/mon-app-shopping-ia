@@ -4,6 +4,7 @@ import { messagesReady } from "./messaging.js";
 import { collectionsReady } from "./collections.js";
 import { collectionModerationReady } from "./collectionModeration.js";
 import { pushReady } from "./push.js";
+import { wishAlertsReady } from "./wishAlertsSchema.js";
 
 // Export RGPD (droit d'accès et de portabilité) : lecture de TOUTES les
 // données personnelles d'un compte. Toute nouvelle table contenant des
@@ -65,6 +66,15 @@ export interface ExportData {
    * notifications, migration 0035) : le système et les dates seulement,
    * jamais le jeton de l'appareil. */
   pushDevices: ExportRow[];
+  /** Alertes prix et stock (lot 2, migration 0036) : la cloche de vos envies… */
+  wishWatches: ExportRow[];
+  /** … le suivi de vos envies (prix de référence, dernier prix vu, stock,
+   * dates au jour près ; jamais d'où vient une observation, ni la clé de la pièce)… */
+  wishTracking: ExportRow[];
+  /** … vos alertes (au jour près)… */
+  wishAlertEvents: ExportRow[];
+  /** … et vos signalements « Plus disponible » (au jour près). */
+  stockReports: ExportRow[];
 }
 
 /** Sections de l'export (toutes les clés sauf la date de l'export). */
@@ -137,8 +147,25 @@ async function listCollectionItems(db: Db, userId: string, wishlistItems: readon
 }
 
 /** Colonnes d'un appareil des notifications : jamais `token` (l'adresse
- * technique de l'appareil chez Apple et Expo), ni `last_error`. */
+ * technique de l'appareil chez Apple et Expo), ni `last_error`. Avec la
+ * migration 0036, s'il reçoit aussi les notifications des messages. */
 export const PUSH_DEVICE_EXPORT_COLUMNS = "platform, created_at, updated_at";
+export const PUSH_DEVICE_EXPORT_COLUMNS_ALERTS = "platform, notify_messages, created_at, updated_at";
+
+// Alertes prix et stock (lot 2, migration 0036). Jamais : la clé de la pièce
+// (empreinte), le pays d'une observation, ni une heure précise venue d'une
+// observation (elle dirait quand quelqu'un a cherché la pièce) — seulement
+// des jours.
+export const WISH_WATCH_EXPORT_COLUMNS = "wishlist_item_id, notify_price_drop, notify_restock, notify_sold_out, created_at, updated_at";
+export const WISH_TRACKING_EXPORT_COLUMNS = "wishlist_item_id, ref_price, ref_currency, ref_set_on, last_price, last_currency, last_seen_on, stock_state, stock_on";
+export const WISH_ALERT_EVENT_EXPORT_COLUMNS = "id, wishlist_item_id, kind, old_price, new_price, currency, status, created_on";
+export const STOCK_REPORT_EXPORT_COLUMNS = "id, match_key_hash, created_on";
+
+/** Ajoute le titre de l'envie à chaque ligne (lisible sans l'identifiant). */
+function withWishTitles(rows: readonly ExportRow[], wishlistItems: readonly ExportRow[]): ExportRow[] {
+  const titles = new Map(wishlistItems.map((row) => [String(row.id), typeof row.title === "string" ? row.title : null]));
+  return rows.map((row) => ({ ...row, wishlist_item_title: titles.get(String(row.wishlist_item_id)) ?? null }));
+}
 
 /** Colonnes de son côté d'une conversation (jamais celui de l'autre membre :
  * il dirait, par exemple, qu'il a refusé une invitation). */
@@ -295,11 +322,34 @@ export async function collectExport(
   const collectionItems = await section("collectionItems", () => (withCollections ? listCollectionItems(db, userId, wishlistItems, moderatedCollections) : Promise.resolve(none)), none);
   // Lot notifications : sans la migration 0035, aucun appareil (section vide).
   // Triés par date, puis par jeton (ordre stable), sans jamais le lire.
+  // Lot alertes prix : sans la migration 0036, sections vides.
+  const withAlerts = await wishAlertsReady(fastify);
   const pushDevices = await section(
     "pushDevices",
-    async () => ((await pushReady(fastify)) ? listWhere(db, "push_tokens", PUSH_DEVICE_EXPORT_COLUMNS, "user_id", userId, ["created_at", "token"]) : none),
+    async () =>
+      (await pushReady(fastify))
+        ? listWhere(db, "push_tokens", withAlerts ? PUSH_DEVICE_EXPORT_COLUMNS_ALERTS : PUSH_DEVICE_EXPORT_COLUMNS, "user_id", userId, ["created_at", "token"])
+        : none,
     none
   );
+  const [wishWatches, wishTracking, wishAlertEvents, stockReports] = await Promise.all([
+    section(
+      "wishWatches",
+      async () => (withAlerts ? withWishTitles(await listWhere(db, "wish_watches", WISH_WATCH_EXPORT_COLUMNS, "user_id", userId, ["created_at", "wishlist_item_id"]), wishlistItems) : none),
+      none
+    ),
+    section(
+      "wishTracking",
+      async () => (withAlerts ? withWishTitles(await listWhere(db, "wish_tracking", WISH_TRACKING_EXPORT_COLUMNS, "user_id", userId, ["wishlist_item_id"]), wishlistItems) : none),
+      none
+    ),
+    section(
+      "wishAlertEvents",
+      async () => (withAlerts ? withWishTitles(await listWhere(db, "wish_alert_events", WISH_ALERT_EVENT_EXPORT_COLUMNS, "user_id", userId, ["created_on", "id"]), wishlistItems) : none),
+      none
+    ),
+    section("stockReports", () => (withAlerts ? listWhere(db, "stock_reports", STOCK_REPORT_EXPORT_COLUMNS, "user_id", userId, ["created_on", "id"]) : Promise.resolve(none)), none),
+  ]);
 
   const data: ExportData = {
     exportedAt: new Date().toISOString(),
@@ -334,6 +384,10 @@ export async function collectExport(
     collections,
     collectionItems,
     pushDevices,
+    wishWatches,
+    wishTracking,
+    wishAlertEvents,
+    stockReports,
   };
   return { data, failures };
 }
