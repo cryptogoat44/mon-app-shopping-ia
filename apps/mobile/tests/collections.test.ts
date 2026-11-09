@@ -5,6 +5,7 @@ import { COLLECTION_NAME_MAX_LENGTH, type CollectionSummary } from "@monapp/shar
 import { setActiveLocale, t } from "../src/i18n";
 import { fr } from "../src/i18n/fr";
 import { en } from "../src/i18n/en";
+import { attachmentFor } from "../src/lib/conversations";
 import {
   canSaveName,
   cleanCollectionName,
@@ -215,7 +216,9 @@ describe("profil d'un ami : section « Collections »", () => {
     expect(screen).toContain("canTalk={messages.enabled}");
     const conversation = source("app/(app)/conversation.tsx");
     expect(conversation).toContain("fetchCollectionItem(collectionItemId)");
-    expect(conversation).toContain('wish.kind === "collectionItem" ? { collectionItemId: wish.id } : { wishId: wish.id }');
+    // L'envie de l'ami part comme `collectionItemId` (lib/conversations.ts, attachmentFor).
+    expect(conversation).toContain("...attachmentFor(wish)");
+    expect(attachmentFor({ id: "ci-1", kind: "collectionItem" })).toEqual({ collectionItemId: "ci-1" });
   });
 });
 

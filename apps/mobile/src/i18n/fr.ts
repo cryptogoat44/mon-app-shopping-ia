@@ -707,13 +707,27 @@ export const fr = {
     sendToConversation: "Envoyer dans une conversation",
     chooseTitle: "Envoyer dans…",
     chooseHint: "Choisissez une conversation : l'envie y sera jointe, et vous pourrez ajouter un mot avant d'envoyer.",
-    chooseEmpty: "Aucune conversation ouverte pour l'instant. Pour écrire à quelqu'un, ouvrez son profil et touchez « Message ».",
+    chooseEmpty: "Aucune conversation ouverte pour l'instant. Cherchez une personne ci-dessous pour lui écrire.",
     chooseLabel: (name: string) => `Envoyer à ${name}`,
     pickerTitle: "Joindre une envie",
     pickerEmpty: "Aucune envie pour l'instant. Gardez une pièce depuis un résultat pour pouvoir la partager.",
     pickerError: "Impossible de charger vos Envies.",
     pickerClose: "Fermer",
     pickWish: (title: string) => `Joindre ${title}`,
+    // « Envoyer à un ami » depuis l'écran Résultat : une proposition d'une de
+    // vos recherches part dans une conversation, sans être gardée dans vos Envies.
+    sendToFriend: "Envoyer à un ami",
+    sendToFriendLabel: (title: string) => `Envoyer ${title} à un ami`,
+    chooseHintPiece: "Choisissez une conversation : la pièce y sera jointe, et vous pourrez ajouter un mot avant d'envoyer.",
+    chooseSomeoneElse: "Écrire à une autre personne",
+    chooseSearchLabel: "Rechercher une personne",
+    chooseSearchEmpty: "Aucun profil trouvé.",
+    chooseSearchError: "La recherche a échoué. Réessayez.",
+    attachedPiece: (title: string) => `Pièce jointe : ${title}`,
+    attachedPieceFallback: "Pièce de votre recherche",
+    removePiece: "Retirer la pièce jointe",
+    pieceSent: (name: string) => `Pièce envoyée à ${name}`,
+    pieceSentInvitation: (name: string) => `Invitation envoyée à ${name}, avec la pièce`,
   },
   // Lot collections : collections d'envies, privées ou montrées aux amis
   // (puces de l'écran Envies, « Ajouter à une collection », profil d'un ami).

@@ -1202,8 +1202,9 @@ export interface ConversationThread {
 }
 
 /** POST /api/messages : à une personne (la conversation est trouvée ou
- * créée par le serveur). Un texte, une envie (`wishId`, une de vos Envies,
- * ou `collectionItemId`, une envie d'une de ses collections), ou les deux. */
+ * créée par le serveur). Un texte, une carte (`wishId`, une de vos Envies,
+ * `collectionItemId`, une envie d'une de ses collections, ou `matchId`, un
+ * résultat d'une de vos recherches), ou les deux. Une seule carte à la fois. */
 export interface SendMessageRequest {
   recipientId: string;
   text?: string;
@@ -1211,6 +1212,9 @@ export interface SendMessageRequest {
   /** Lot collections : une envie d'une collection de la personne à qui vous
    * écrivez (« En parler »), au lieu d'une de vos Envies. */
   collectionItemId?: string;
+  /** « Envoyer à un ami » depuis l'écran Résultat : une proposition d'une de
+   * vos recherches (product_matches), sans la garder dans vos Envies. */
+  matchId?: string;
 }
 
 export interface SendMessageResponse {
