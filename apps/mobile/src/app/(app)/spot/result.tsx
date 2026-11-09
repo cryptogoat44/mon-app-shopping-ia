@@ -13,7 +13,7 @@ import { closeSpotter } from "@/lib/spot-navigation";
 import { addToWishlist, loadSpotResult } from "@/api/client";
 import { clearLastSpotResult, getLastSpotResult, rememberLaunchExtras, withLaunchExtras } from "@/api/spotSession";
 import type { Piece, SpotFailReason, SpotResult } from "@/api/types";
-import { addVaultItemFromMatch, fetchShops } from "@/lib/api";
+import { addVaultItemFromMatch, fetchMessagesStatus, fetchShops } from "@/lib/api";
 import { openMerchantLink } from "@/lib/merchant-links";
 import { chooseInitialResult, pieceTitle, withoutTextPrompt, withTextSearch, type InitialResultState } from "@/lib/spot-result";
 import { afterShops, requestShops, shopsPending } from "@/lib/spot-shops";
@@ -45,6 +45,9 @@ import { withIds } from "@/lib/owned-marks";
 import { capacityMessages } from "@/lib/use-search-limits";
 import { VAULT_CATEGORIES } from "@/lib/vault-labels";
 import { useToast } from "@/lib/toast-context";
+import { messagesStatus } from "@/lib/conversations";
+import { useMessagesStatus } from "@/lib/use-messages-status";
+import { canSendToFriend, sendToFriend, type SendAction, type SendToFriendFrom } from "@/lib/send-to-friend";
 import { Skeleton } from "@/components/skeleton";
 import { SpotImage } from "@/components/spot-image";
 import { ErrorMessage } from "@/components/error-message";
@@ -63,6 +66,7 @@ import { yourPieceImage } from "@/lib/your-piece";
 import { useHeroReveal } from "@/lib/use-hero-reveal";
 import { ForeignShopNote } from "@/components/foreign-shop-note";
 import { KeptNotice } from "@/components/kept-notice";
+import { SendToFriendLink } from "@/components/send-to-friend-link";
 import { track } from "@/lib/analytics";
 import { openWishlistFromSpotter } from "@/lib/wishlist-link";
 import { isAffiliateLink } from "@/lib/affiliate-link";
@@ -144,6 +148,8 @@ export default function ResultScreen() {
   const [priceListReveal, setPriceListReveal] = useState(0);
   // Le tri au moment où « Chercher » a été touché ne suffit pas (handleTextSearchDone) : le tri en cours.
   const priceSortRef = useRef(priceSort);
+  // « Envoyer à un ami » (lib/send-to-friend.ts) : seulement avec la messagerie du serveur.
+  const messages = useMessagesStatus();
 
   const result = state.kind === "ready" ? state.result : null;
   // Voie C (lot c) : l'indice désigne toutes les propositions de l'écran —
@@ -229,6 +235,11 @@ export default function ResultScreen() {
   }, [lateQuery]);
 
   useScrollToEndOnKeyboard(scrollRef, result?.complement?.suggestText === true);
+
+  // Messagerie pas encore lue (site rechargé sur cet écran) : lue une fois ici.
+  useEffect(() => {
+    if (!messagesStatus().enabled) fetchMessagesStatus().catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (priceListReveal > 0) heroReveal.scrollToSection(0);
@@ -320,6 +331,23 @@ export default function ResultScreen() {
     holdPiece();
     setReportTarget(piece);
     setReportOpen(true);
+  }
+
+  /** « Envoyer à un ami » depuis la grande carte : sa pièce, retenue comme
+   * pour ses autres boutons (elle ne change plus d'elle-même), jamais
+   * remplacée ; le choix d'une conversation s'ouvre par-dessus cet écran,
+   * qui reste tel quel au retour. */
+  function handleSendToFriend() {
+    if (!piece || !canSendToFriend(piece, messages)) return;
+    holdPiece();
+    router.push(sendToFriend(piece, "big_card"));
+  }
+
+  /** « Envoyer à un ami » d'une carte des sections ou d'une ligne de la liste
+   * triée : seulement sa pièce. Rien ne change à l'écran (ni la grande carte,
+   * ni la liste) : aucun choix n'est noté. */
+  function sendFrom(from: Exclude<SendToFriendFrom, "big_card">): SendAction {
+    return (target) => (canSendToFriend(target, messages) ? () => router.push(sendToFriend(target, from)) : undefined);
   }
 
   async function handleShare() {
@@ -677,6 +705,7 @@ export default function ResultScreen() {
               </Pressable>
               {piece.real ? <ResultFeedbackButton onPress={openReport} /> : null}
             </View>
+            {canSendToFriend(piece, messages) ? <SendToFriendLink style={styles.sendToFriend} pieceName={piece.name} onPress={handleSendToFriend} /> : null}
             {keptSaved.has(piece.id) ? <KeptNotice onOpen={() => openWishlistFromSpotter(router)} /> : null}
             {piece.real && reported ? <ReportedLine reason={reported} onPress={openReport} /> : null}
             {actionError ? <ErrorMessage style={styles.actionError}>{actionError}</ErrorMessage> : null}
@@ -689,7 +718,7 @@ export default function ResultScreen() {
           <>
             {/* Une seule liste triée par prix, sans titre de section ; boutiques en attente : la ligne d'attente, en haut. */}
             {result.complement?.pending ? <ShopsPending /> : null}
-            <PriceSortedList key={priceSort} items={layout.priceList ?? []} cheapestIndex={cheapest} onSelect={selectFromPriceList} placements={placements} />
+            <PriceSortedList key={priceSort} items={layout.priceList ?? []} cheapestIndex={cheapest} onSelect={selectFromPriceList} placements={placements} sendAction={sendFrom("price_list")} />
           </>
         ) : (
           <>
@@ -701,7 +730,7 @@ export default function ResultScreen() {
                 <View style={styles.grid}>
                   {/* Cartes (image, nom, boutique, prix, « Voir chez … ») : components/proposal-card.tsx. */}
                   {visibleOthers.map(({ piece: p, index }) => (
-                    <ProposalCard key={p.id} piece={p} onSelect={() => selectPiece(index)} placement={placements.get(index)} cheapest={index === cheapest} />
+                    <ProposalCard key={p.id} piece={p} onSelect={() => selectPiece(index)} placement={placements.get(index)} cheapest={index === cheapest} onSend={sendFrom("section")(p)} />
                   ))}
                 </View>
                 {hiddenCount > 0 ? (
@@ -724,7 +753,7 @@ export default function ResultScreen() {
                 grande carte n'en vient que si aucune proposition de la recherche visuelle n'a de prix, et jamais
                 quand les boutiques arrivent après l'affichage (boutiques ensuite : la ligne d'attente, à leur place). */}
             {result.complement?.pending ? <ShopsPending /> : null}
-            <ResultComplement source="ai" others={sections.shopping} query={result.complement?.query} onSelect={selectPiece} placements={placements} cheapestIndex={cheapest} />
+            <ResultComplement source="ai" others={sections.shopping} query={result.complement?.query} onSelect={selectPiece} placements={placements} cheapestIndex={cheapest} sendAction={sendFrom("section")} />
             <View onLayout={onWordsLayout}>
               <ResultComplement
                 source="words"
@@ -733,6 +762,7 @@ export default function ResultScreen() {
                 onSelect={selectPiece}
                 placements={placements}
                 cheapestIndex={cheapest}
+                sendAction={sendFrom("section")}
               />
             </View>
             {/* Prix d'abord : les propositions sans prix en dernier, repliées ; « Que cherchez-vous ? » reste tout en bas (clavier). */}
@@ -749,6 +779,7 @@ export default function ResultScreen() {
                 caption={!noticeShown}
                 onSelect={selectPiece}
                 placements={placements}
+                sendAction={sendFrom("section")}
               />
             </View>
           </>
@@ -900,6 +931,7 @@ const styles = themedStyles(() => ({
   action: { flex: 1, minHeight: 44, borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   actionLabel: { fontSize: font.caption, color: color.encre, fontWeight: "500", textAlign: "center" },
   actionError: { fontSize: font.caption, marginTop: space.sm },
+  sendToFriend: { alignSelf: "center", marginTop: 4 },
   sectionTitle: { fontSize: font.body, fontWeight: "600", color: color.encre, marginTop: space.xl, marginBottom: space.md },
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.lg },
   failContent: { flexGrow: 1, justifyContent: "center", paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },

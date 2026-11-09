@@ -646,13 +646,27 @@ export const en: Catalog = {
     sendToConversation: "Send in a conversation",
     chooseTitle: "Send in…",
     chooseHint: "Choose a conversation: the wish will be attached, and you can add a few words before sending.",
-    chooseEmpty: "No open conversations yet. To write to someone, open their profile and tap “Message”.",
+    chooseEmpty: "No open conversations yet. Search for someone below to write to them.",
     chooseLabel: (name: string) => `Send to ${name}`,
     pickerTitle: "Attach a wish",
     pickerEmpty: "No wishes yet. Save a piece from a result to be able to share it.",
     pickerError: "Couldn't load your Wishlist.",
     pickerClose: "Close",
     pickWish: (title: string) => `Attach ${title}`,
+    // “Send to a friend” from the Result screen: a find from one of your
+    // searches goes into a conversation, without being saved to your Wishlist.
+    sendToFriend: "Send to a friend",
+    sendToFriendLabel: (title: string) => `Send ${title} to a friend`,
+    chooseHintPiece: "Choose a conversation: the piece will be attached, and you can add a few words before sending.",
+    chooseSomeoneElse: "Write to someone else",
+    chooseSearchLabel: "Search for someone",
+    chooseSearchEmpty: "No profiles found.",
+    chooseSearchError: "The search failed. Please try again.",
+    attachedPiece: (title: string) => `Attached piece: ${title}`,
+    attachedPieceFallback: "Piece from your search",
+    removePiece: "Remove the attached piece",
+    pieceSent: (name: string) => `Piece sent to ${name}`,
+    pieceSentInvitation: (name: string) => `Invitation sent to ${name}, with the piece`,
   },
   // Collections lot: wish collections, private or shown to friends.
   collections: {

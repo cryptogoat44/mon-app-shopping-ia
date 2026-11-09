@@ -39,6 +39,7 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Cette personne ne reçoit pas de pièces de votre part.": "This person doesn't accept pieces from you.",
   "Destinataire invalide.": "Invalid recipient.",
   "L'image de cette envie n'a pas pu être récupérée. Réessayez plus tard.": "This wish's image couldn't be retrieved. Please try again later.",
+  "L'image de cette pièce n'a pas pu être récupérée. Réessayez plus tard.": "This piece's image couldn't be retrieved. Please try again later.",
   "Personne introuvable.": "Person not found.",
   "Pièce introuvable.": "Piece not found.",
   "Réglage invalide.": "Invalid setting.",

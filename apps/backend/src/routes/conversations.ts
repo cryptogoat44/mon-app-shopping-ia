@@ -1,6 +1,7 @@
 // Messages privés (lot messages, migration 0032) : la liste des
 // conversations (et des invitations reçues), une conversation, l'envoi d'un
-// message (texte et/ou envie jointe), accepter ou refuser une invitation.
+// message (texte et/ou carte jointe : une envie, ou un résultat d'une de vos
+// recherches), accepter ou refuser une invitation.
 // Règles d'envoi : lib/messaging.ts. Pas de temps réel : l'app relit toutes
 // les 5 s environ pendant qu'un écran des messages est ouvert.
 // Confidentialité : le texte d'un message n'est jamais écrit au journal.
@@ -38,6 +39,7 @@ import {
   SIDE_COLUMNS,
   SIDE_ROWS,
   findConversationId,
+  matchCard,
   messagesReady,
   needsRelation,
   orderedPair,
@@ -47,12 +49,15 @@ import {
   sendModeFor,
   toChatMessages,
   viewerState,
+  wishCard,
+  type AttachedCard,
   type MessageRow,
   type SendPlan,
   type Side,
 } from "../lib/messaging.js";
+import { PRODUCT_MATCH_NOT_FOUND, findOwnMatchRow } from "../lib/ownMatches.js";
 import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
-import { INVALID_ID, idParamsSchema, parseDbRows, parseInput, userIdParamsSchema, webUrlOrNull } from "../lib/validation.js";
+import { INVALID_ID, idParamsSchema, parseDbRows, parseInput, userIdParamsSchema } from "../lib/validation.js";
 import { isBlockedEitherWay } from "../lib/visibility.js";
 import { WishImageError, copyWishImage, deleteWishCopy, findOwnWish } from "../lib/wishShare.js";
 import { sharedWishForMessage } from "../lib/collections.js";
@@ -82,14 +87,22 @@ const sendSchema = z
     wishId: ID.optional(),
     // Lot collections : « En parler » d'une envie d'une collection de la personne.
     collectionItemId: ID.optional(),
+    // « Envoyer à un ami » depuis l'écran Résultat : un résultat d'une de vos recherches.
+    matchId: ID.optional(),
   })
-  .refine((body) => !(body.wishId && body.collectionItemId));
+  // Une seule carte par message.
+  .refine((body) => [body.wishId, body.collectionItemId, body.matchId].filter(Boolean).length <= 1);
 
 const INVALID_QUERY = { error: "invalid_query", message: "Paramètre de liste invalide." } as const;
 const WISH_NOT_FOUND = { error: "wishlist_item_not_found", message: "Envie introuvable." } as const;
 const IMAGE_UNAVAILABLE = {
   error: "wish_image_unavailable",
   message: "L'image de cette envie n'a pas pu être récupérée. Réessayez plus tard.",
+} as const;
+// Même refus pour un résultat envoyé (même code), avec le mot qui lui va.
+const MATCH_IMAGE_UNAVAILABLE = {
+  error: "wish_image_unavailable",
+  message: "L'image de cette pièce n'a pas pu être récupérée. Réessayez plus tard.",
 } as const;
 const SERVER_ERROR = { error: "internal_error", message: "Une erreur est survenue." } as const;
 
@@ -419,7 +432,7 @@ export default async function conversationsRoutes(fastify: FastifyInstance) {
 
   // Envoyer un message à une personne : la conversation est trouvée ou créée
   // ici. Refusé à un compte suspendu, et limité (messages, invitations,
-  // envies jointes).
+  // cartes jointes).
   fastify.post(
     "/api/messages",
     {
@@ -432,7 +445,7 @@ export default async function conversationsRoutes(fastify: FastifyInstance) {
       if (!body) return;
       const userId = request.user!.id;
       const text = body.text?.trim() ?? "";
-      if (text === "" && !body.wishId && !body.collectionItemId) return reply.code(400).send(MESSAGE_EMPTY);
+      if (text === "" && !body.wishId && !body.collectionItemId && !body.matchId) return reply.code(400).send(MESSAGE_EMPTY);
       if (text.length > MESSAGE_MAX_LENGTH) return reply.code(400).send(MESSAGE_TOO_LONG);
       // Filtre des mots interdits (chantier 3) : le texte, comme un commentaire.
       if (containsBannedWords(text)) return reply.code(400).send(CONTENT_NOT_ALLOWED);
@@ -462,13 +475,19 @@ export default async function conversationsRoutes(fastify: FastifyInstance) {
           ? await sharedWishForMessage(fastify, userId, body.recipientId, body.collectionItemId)
           : null;
       if ((body.wishId || body.collectionItemId) && !wish) return reply.code(404).send(WISH_NOT_FOUND);
+      // « Envoyer à un ami » : un résultat d'une recherche de l'expéditeur (celui
+      // d'une autre personne : même 404 qu'un résultat inexistant), sans passer
+      // par ses Envies. Même carte, même copie de l'image, mêmes limites.
+      const match = body.matchId ? await findOwnMatchRow(fastify, userId, body.matchId) : null;
+      const card: AttachedCard | null = wish ? wishCard(wish) : match ? matchCard(match) : null;
+      if (body.matchId && !card) return reply.code(404).send(PRODUCT_MATCH_NOT_FOUND);
       let copy: { url: string; thumbUrl: string } | null = null;
-      if (wish) {
+      if (card) {
         if (!consumeRateLimit(request, "pieceSend")) return sendLimit(reply, "pieceSend");
         try {
-          copy = await copyWishImage(fastify, request.log, userId, wish);
+          copy = await copyWishImage(fastify, request.log, userId, card.imageSource);
         } catch (error) {
-          if (error instanceof WishImageError) return reply.code(422).send(IMAGE_UNAVAILABLE);
+          if (error instanceof WishImageError) return reply.code(422).send(match ? MATCH_IMAGE_UNAVAILABLE : IMAGE_UNAVAILABLE);
           throw error;
         }
       }
@@ -487,19 +506,7 @@ export default async function conversationsRoutes(fastify: FastifyInstance) {
           conversation_id: written.conversationId,
           sender_id: userId,
           body: text === "" ? null : text,
-          ...(wish && copy
-            ? {
-                wish_title: wish.title.trim().slice(0, 120),
-                wish_image_url: copy.url,
-                wish_image_thumb_url: copy.thumbUrl,
-                wish_merchant_name: wish.merchant_name?.slice(0, 120) ?? null,
-                // Recopié seulement si c'est un lien web ordinaire (envie rangée plus tôt).
-                wish_merchant_url: webUrlOrNull(wish.merchant_url),
-                wish_product_match_id: wish.product_match_id,
-                wish_price_min: wish.price_min,
-                wish_currency: wish.currency,
-              }
-            : {}),
+          ...(card && copy ? { ...card.columns, wish_image_url: copy.url, wish_image_thumb_url: copy.thumbUrl } : {}),
         })
         .select(MESSAGE_COLUMNS)
         .single();
@@ -511,7 +518,8 @@ export default async function conversationsRoutes(fastify: FastifyInstance) {
         return reply.code(500).send(SERVER_ERROR);
       }
       const [message] = await toChatMessages(fastify, parseDbRows(MESSAGE_ROWS, { data: [data], error: null }, "Message envoyé"), userId);
-      request.log.info({ invitation: plan.invitation, withWish: wish !== null }, "Message envoyé");
+      // Jamais le titre ni le lien de la carte : sa nature seulement.
+      request.log.info({ invitation: plan.invitation, withWish: card !== null, fromResult: match !== null }, "Message envoyé");
       const response: SendMessageResponse = {
         conversationId: written.conversationId,
         message: message!,

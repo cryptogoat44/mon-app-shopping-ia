@@ -23,9 +23,11 @@ import {
   type MessagesFrom,
 } from "@monapp/shared-types";
 import { fetchAffiliateUrls } from "./affiliateLinks.js";
+import type { OwnMatchRow } from "./ownMatches.js";
 import { chunks, readAll } from "./pagedReads.js";
 import { isFollowing } from "./visibility.js";
-import { parseDbRows, webUrlOrNull } from "./validation.js";
+import { WEB_URL_MAX_LENGTH, parseDbRows, webUrlOrNull } from "./validation.js";
+import type { ImageCopySource, WishRow } from "./wishShare.js";
 
 // ---- Réponses ----
 
@@ -218,6 +220,76 @@ export async function findConversationId(fastify: FastifyInstance, a: string, b:
     "Conversation d'une paire"
   );
   return rows[0]?.id ?? null;
+}
+
+// ---- Carte jointe (colonnes wish_* de messages, migration 0032) ----
+
+/** Titre et nom de la boutique d'une carte : 120 caractères au plus (base). */
+const CARD_TEXT_MAX = 120;
+
+/** Les colonnes wish_* d'un message, sans l'image (copiée à part). */
+export interface CardColumns {
+  wish_title: string;
+  wish_merchant_name: string | null;
+  wish_merchant_url: string | null;
+  wish_product_match_id: string | null;
+  wish_price_min: string | number | null;
+  wish_currency: string | null;
+}
+
+/** Une carte jointe à un message : ses colonnes, et d'où copier son image
+ * (lib/wishShare.ts, copyWishImage : même choix de la plus grande image). */
+export interface AttachedCard {
+  columns: CardColumns;
+  imageSource: ImageCopySource;
+}
+
+/** Coupe sans laisser une moitié d'émoji à la fin. */
+function clip(text: string, max: number): string {
+  const cut = text.slice(0, max);
+  return /[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut;
+}
+
+/** Une envie jointe (la sienne, ou celle d'une collection de la personne). */
+export function wishCard(wish: WishRow): AttachedCard {
+  return {
+    columns: {
+      wish_title: wish.title.trim().slice(0, CARD_TEXT_MAX),
+      wish_merchant_name: wish.merchant_name?.slice(0, CARD_TEXT_MAX) ?? null,
+      // Recopié seulement si c'est un lien web ordinaire (envie rangée plus tôt).
+      wish_merchant_url: webUrlOrNull(wish.merchant_url),
+      wish_product_match_id: wish.product_match_id,
+      wish_price_min: wish.price_min,
+      wish_currency: wish.currency,
+    },
+    imageSource: wish,
+  };
+}
+
+/** Un résultat d'une recherche de l'expéditeur, envoyé à un ami sans être
+ * gardé dans ses Envies. Titre : le nom du produit (sinon la marque, puis la
+ * boutique) ; null s'il n'y a rien à montrer. Lien : seulement un lien web
+ * ordinaire que la base peut garder (2 048 caractères au plus). Sans lui, la
+ * carte ne garde pas le résultat d'origine : son lien affilié (« direct »,
+ * le même lien) ne passerait pas à sa place. L'image haute définition du
+ * résultat sert quand même à la copie. */
+export function matchCard(match: OwnMatchRow): AttachedCard | null {
+  const title = [match.product_name, match.brand, match.merchant_name]
+    .map((text) => clip(text?.trim() ?? "", CARD_TEXT_MAX).trim())
+    .find((text) => text !== "");
+  if (!title) return null;
+  const merchantUrl = match.merchant_url.length <= WEB_URL_MAX_LENGTH ? webUrlOrNull(match.merchant_url) : null;
+  return {
+    columns: {
+      wish_title: title,
+      wish_merchant_name: match.merchant_name ? clip(match.merchant_name, CARD_TEXT_MAX) : null,
+      wish_merchant_url: merchantUrl,
+      wish_product_match_id: merchantUrl ? match.id : null,
+      wish_price_min: match.price_min,
+      wish_currency: match.currency,
+    },
+    imageSource: { image_url: match.image_url, product_match_id: match.id },
+  };
 }
 
 function priceOf(value: string | number | null): number | null {

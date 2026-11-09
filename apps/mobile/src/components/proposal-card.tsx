@@ -10,6 +10,7 @@ import { merchantContextFor, opensOfferPage } from "@/lib/result-sections";
 import type { ClickPlacement } from "@/lib/price-first";
 import { SpotImage } from "@/components/spot-image";
 import { ForeignShopNote } from "@/components/foreign-shop-note";
+import { SendToFriendLink } from "@/components/send-to-friend-link";
 import { isAffiliateLink } from "@/lib/affiliate-link";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -26,19 +27,23 @@ import { themedStyles } from "@/theme/themed-styles";
  * moins chère de la devise dominante (lib/result-sort.ts). `variant` :
  * « row », une ligne pleine largeur de la liste triée par prix (prix en
  * évidence, une ligne par proposition : la page ne saute pas quand une
- * boutique arrive au-dessus). */
+ * boutique arrive au-dessus). `onSend` : « Envoyer à un ami » pour CETTE
+ * pièce (lib/send-to-friend.ts), sous le lien ; absent, rien ne s'affiche
+ * (messagerie indisponible, pièce de démonstration). */
 export function ProposalCard({
   piece,
   onSelect,
   placement,
   cheapest = false,
   variant = "grid",
+  onSend,
 }: {
   piece: Piece;
   onSelect: () => void;
   placement?: ClickPlacement;
   cheapest?: boolean;
   variant?: "grid" | "row";
+  onSend?: () => void;
 }) {
   const price = piece.priceFrom !== null ? formatPrice(piece.priceFrom, piece.currency, getActiveLocale()) : null;
   // Ligne de la liste triée : « Prix à vérifier chez le marchand » s'affiche aussi sans prix, et se lit.
@@ -66,9 +71,10 @@ export function ProposalCard({
             <ForeignShopNote piece={piece} compact />
           </View>
         </Pressable>
-        {piece.merchantUrl ? (
+        {piece.merchantUrl || onSend ? (
           <View style={styles.rowLink}>
-            <ShopLink piece={piece} placement={placement} />
+            {piece.merchantUrl ? <ShopLink piece={piece} placement={placement} /> : null}
+            {onSend ? <SendToFriendLink pieceName={piece.name} onPress={onSend} /> : null}
           </View>
         ) : null}
       </View>
@@ -92,6 +98,7 @@ export function ProposalCard({
         <ForeignShopNote piece={piece} compact />
       </Pressable>
       {piece.merchantUrl ? <ShopLink piece={piece} placement={placement} /> : null}
+      {onSend ? <SendToFriendLink pieceName={piece.name} onPress={onSend} /> : null}
     </View>
   );
 }
