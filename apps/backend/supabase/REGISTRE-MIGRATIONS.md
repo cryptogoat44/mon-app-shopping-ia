@@ -41,11 +41,11 @@ Les dates de 0001 à 0028 ne sont pas notées dans le dépôt : celles du tablea
 | 0027 | Fournisseur de recherche, place rendue, disjoncteurs, recherche par texte | appliquée en production | au plus tard le 28 oct. 2026 |
 | 0028 | Voie C (compléments « boutiques », cache) | appliquée en production | 3 ou 4 nov. 2026 (à confirmer) |
 | 0029 | Garde-fous : index, compteurs de l'IA dans la base, part du jour plus juste | **à appliquer** | — |
-| 0030 | Masquage automatique après 3 signalements | **à appliquer** | — |
+| 0030 | Masquage automatique après 3 signalements | appliquée en production (fichier groupé `social-production.sql`, sans Supabase Pro : décision du fondateur) | 9 nov. 2026 |
 | 0031 | Boutiques ensuite : résultats Lens tout de suite, autres boutiques juste après | appliquée en production (sans Supabase Pro : décision du fondateur, 3 colonnes vides ajoutées) | 9 nov. 2026 |
-| 0032 | Messages privés entre membres (conversations, invitations, envie jointe) | **à appliquer** (après 0030) | — |
-| 0033 | Collections d'envies, privées ou montrées aux amis | **à appliquer** | — |
-| 0034 | Modération des collections : les signaler, les masquer, retirer une image copiée | **à appliquer** (après 0030, 0032 et 0033) | — |
+| 0032 | Messages privés entre membres (conversations, invitations, envie jointe) | appliquée en production (fichier groupé `social-production.sql`, sans Supabase Pro : décision du fondateur) | 9 nov. 2026 |
+| 0033 | Collections d'envies, privées ou montrées aux amis | appliquée en production (fichier groupé `social-production.sql`, sans Supabase Pro : décision du fondateur) | 9 nov. 2026 |
+| 0034 | Modération des collections : les signaler, les masquer, retirer une image copiée | appliquée en production (fichier groupé `social-production.sql`, sans Supabase Pro : décision du fondateur) | 9 nov. 2026 |
 | 0035 | Notifications des nouveaux messages sur le téléphone : les appareils prévenus | **à appliquer** (ne sert qu'avec 0032) | — |
 
 ## Fichiers utiles par migration
@@ -64,9 +64,9 @@ Les dates de 0001 à 0028 ne sont pas notées dans le dépôt : celles du tablea
 | 0030, 0032, 0033 et 0034 ensemble | `supabase/mise-en-ligne/social-production.sql` (un seul copier-coller, dans le bon ordre, rejouable en entier ; vérifié deux fois sur spotto-dev-2 le 9 nov. 2026) | `supabase/mise-en-ligne/social-verification.sql` (4 lignes, toutes `true`) | en tête de chaque migration, dans l'ordre inverse |
 | 0035 | le fichier de la migration lui-même | `supabase/verifications/0035-verification.sql` | en tête du fichier de la migration |
 
-## Avant d'appliquer 0029, 0030, 0032, 0033, 0034 et 0035
+## Avant d'appliquer 0029 et 0035
 
-1. **L'offre Supabase Pro sur spotto-prod** (sauvegardes quotidiennes), comme décidé dans la feuille de route : aucun nouveau SQL en production avant. Exception décidée par le fondateur le 9 novembre 2026 : 0031, qui ajoute seulement trois colonnes vides, appliquée sans Pro. Que faire si ça tourne mal : [RESTAURATION.md](RESTAURATION.md).
+1. **L'offre Supabase Pro sur spotto-prod** (sauvegardes quotidiennes), comme décidé dans la feuille de route : aucun nouveau SQL en production avant. Exceptions décidées par le fondateur le 9 novembre 2026, sans Pro : 0031 (trois colonnes vides), puis 0030, 0032, 0033 et 0034 ensemble (fichier groupé `supabase/mise-en-ligne/social-production.sql`, vérifié deux fois sur spotto-dev-2). Que faire si ça tourne mal : [RESTAURATION.md](RESTAURATION.md).
 2. Chacune a d'abord été appliquée sur **spotto-dev-2** (`pnpm --filter backend migrer-dev …`, sur votre Mac), puis vérifiée.
 3. Le serveur fonctionne avec ou sans elles : sans 0029, il garde ses compteurs de l'IA en mémoire ; sans 0030, il ne masque rien automatiquement ; sans 0031, il cherche les autres boutiques avant de répondre, comme avant (la nouvelle app attend alors le même temps qu'aujourd'hui) ; sans 0032, les messages sont « indisponibles » et l'app cache l'entrée Messages. Sans 0033, les collections sont « indisponibles » et l'app les cache. Sans 0034, les collections fonctionnent comme avant, mais « Signaler » n'est pas proposé pour une collection. Sans 0035, aucune notification sur le téléphone, même avec `PUSH_ENABLED=true` : l'app ne les propose pas. Un serveur plus ancien fonctionne aussi sur une base qui les a (pour 0034 : il ne tient pas compte des collections masquées par la modération ; à éviter une fois des collections modérées).
 4. Toutes sont rejouables : relancer le fichier une seconde fois ne change rien.
