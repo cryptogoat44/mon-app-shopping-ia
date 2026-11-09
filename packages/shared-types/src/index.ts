@@ -1202,12 +1202,15 @@ export interface ConversationThread {
 }
 
 /** POST /api/messages : à une personne (la conversation est trouvée ou
- * créée par le serveur). Un texte, une envie (`wishId`, une de vos Envies),
- * ou les deux. */
+ * créée par le serveur). Un texte, une envie (`wishId`, une de vos Envies,
+ * ou `collectionItemId`, une envie d'une de ses collections), ou les deux. */
 export interface SendMessageRequest {
   recipientId: string;
   text?: string;
   wishId?: string;
+  /** Lot collections : une envie d'une collection de la personne à qui vous
+   * écrivez (« En parler »), au lieu d'une de vos Envies. */
+  collectionItemId?: string;
 }
 
 export interface SendMessageResponse {
@@ -1215,4 +1218,116 @@ export interface SendMessageResponse {
   message: ChatMessage;
   state: ConversationState;
   sendMode: ConversationSendMode;
+}
+
+// ---- Collections d'envies (lot collections, migration 0033) ----
+// Un membre range ses envies dans des collections nommées. Une collection
+// est privée par défaut ; « Mes amis » la montre aux membres qui le suivent
+// et qu'il suit (les mêmes amis que pour les messages). Les amis voient le
+// titre, la copie de l'image faite par Spotto, le prix et le lien vers la
+// boutique — jamais l'image du marchand elle-même.
+
+/** Longueur maximale du nom d'une collection. */
+export const COLLECTION_NAME_MAX_LENGTH = 40;
+/** Nombre maximal de collections par membre. */
+export const COLLECTIONS_MAX = 50;
+/** Nombre maximal d'envies dans une collection. */
+export const COLLECTION_ITEMS_MAX = 100;
+
+/** Qui voit une collection : vous seul, ou vos amis. */
+export type CollectionVisibility = "private" | "friends";
+export const COLLECTION_VISIBILITIES = ["private", "friends"] as const satisfies readonly CollectionVisibility[];
+export const DEFAULT_COLLECTION_VISIBILITY: CollectionVisibility = "private";
+
+/** GET /api/collections/status : les collections sont-elles disponibles sur
+ * le serveur (migration 0033 appliquée) ? Sinon l'app les cache toutes. */
+export interface CollectionsStatus {
+  enabled: boolean;
+}
+
+/** Codes d'erreur propres aux collections. */
+export const COLLECTIONS_ERRORS = {
+  /** Migration 0033 absente (404) : l'app cache les collections. */
+  unavailable: "collections_unavailable",
+  /** Collection inexistante, d'un autre, ou pas visible pour vous (404). */
+  notFound: "collection_not_found",
+  /** 50 collections déjà (409). */
+  limit: "collection_limit",
+  /** 100 envies déjà dans la collection (409). */
+  full: "collection_full",
+} as const;
+
+/** Une de vos collections. */
+export interface CollectionSummary {
+  id: string;
+  name: string;
+  visibility: CollectionVisibility;
+  itemCount: number;
+  createdAt: string;
+}
+
+export interface CollectionsList {
+  collections: CollectionSummary[];
+}
+
+export interface CreateCollectionRequest {
+  name: string;
+}
+
+/** Renommer et/ou changer la visibilité. */
+export interface UpdateCollectionRequest {
+  name?: string;
+  visibility?: CollectionVisibility;
+}
+
+/** Les collections qui contiennent une envie (GET et PUT
+ * /api/wishlist/:id/collections). */
+export interface WishCollections {
+  collectionIds: string[];
+}
+
+/** Une collection d'un ami, sur son profil. */
+export interface SharedCollectionSummary {
+  id: string;
+  name: string;
+  itemCount: number;
+  /** Couverture : la copie Spotto de l'image de la première envie, ou null. */
+  coverUrl: string | null;
+}
+
+export interface SharedCollectionsList {
+  collections: SharedCollectionSummary[];
+}
+
+/** Une envie d'une collection d'un ami. L'image est toujours la copie faite
+ * par Spotto ; null si la copie n'a pas pu être faite (« Image indisponible »). */
+export interface SharedCollectionItem {
+  id: string;
+  title: string;
+  imageUrl: string | null;
+  imageThumbUrl: string | null;
+  merchantName: string | null;
+  /** Lien à ouvrir : affilié s'il existe, sinon le lien marchand ; null sans lien web. */
+  merchantUrl: string | null;
+  /** Lien affilié (mention obligatoire). */
+  isAffiliate: boolean;
+  productMatchId: string | null;
+  priceMin: number | null;
+  currency: string | null;
+  addedAt: string;
+}
+
+/** GET /api/collections/:id/shared : une collection d'un ami, ses envies
+ * (les plus récemment ajoutées d'abord). */
+export interface SharedCollectionPage {
+  collection: { id: string; name: string; itemCount: number; owner: PostAuthor };
+  items: SharedCollectionItem[];
+  nextCursor: string | null;
+}
+
+/** POST /api/collection-items/:id/keep : « Garder » une envie d'un ami. */
+export interface KeepSharedItemResponse {
+  item: WishlistItem;
+  /** Déjà dans vos Envies : rien n'a été ajouté. */
+  alreadyKept: boolean;
 }

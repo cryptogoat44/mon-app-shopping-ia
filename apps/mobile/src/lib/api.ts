@@ -49,6 +49,16 @@ import type {
   SendMessageRequest,
   SendMessageResponse,
   ReceivedPiecesPage,
+  CollectionSummary,
+  CollectionsList,
+  CollectionsStatus,
+  KeepSharedItemResponse,
+  SharedCollectionItem,
+  SharedCollectionPage,
+  SharedCollectionSummary,
+  SharedCollectionsList,
+  UpdateCollectionRequest,
+  WishCollections,
   UserProfile,
   CommentsPage,
   PostComment,
@@ -67,6 +77,7 @@ import { deviceTimeZone, type ExportFormat, type ExportResponse } from "./export
 import { searchLaunched } from "./search-limits";
 import { appBuildHeaders, isUpdateRequiredResponse, markUpdateRequired, parseStoreUrl, readAppVersionInfo } from "./app-update";
 import { readMessagesStatus, setMessagesStatus } from "./conversations";
+import { readCollectionsStatus, setCollectionsStatus } from "./collections";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -549,6 +560,90 @@ export async function declineInvitation(id: string): Promise<void> {
 /** Réglage « Qui peut m'écrire ». */
 export async function updateMessagesFrom(messagesFrom: MessagesFrom): Promise<void> {
   await authorizedFetch("/api/me/messages-from", { method: "PUT", body: JSON.stringify({ messagesFrom }) });
+}
+
+// ---- Collections d'envies (lot collections) ----
+
+/** Disponibilité des collections. Un serveur sans elles (ou en erreur) vaut
+ * « indisponible » : tout est caché. L'état est partagé avec les écrans
+ * abonnés (lib/collections.ts). */
+export async function fetchCollectionsStatus(): Promise<CollectionsStatus> {
+  let status: CollectionsStatus;
+  try {
+    const response = await authorizedFetch("/api/collections/status");
+    status = readCollectionsStatus(await response.json().catch(() => null));
+  } catch (e) {
+    // Hors ligne : l'état connu reste affiché.
+    if (e instanceof TypeError) throw e;
+    status = readCollectionsStatus(null);
+  }
+  setCollectionsStatus(status);
+  return status;
+}
+
+/** Ses collections, dans l'ordre de création. */
+export async function fetchCollections(): Promise<CollectionSummary[]> {
+  const response = await authorizedFetch("/api/collections");
+  return ((await response.json()) as CollectionsList).collections;
+}
+
+/** Nouvelle collection (toujours privée). */
+export async function createCollection(name: string): Promise<CollectionSummary> {
+  const response = await authorizedFetch("/api/collections", { method: "POST", body: JSON.stringify({ name }) });
+  return response.json();
+}
+
+/** Renommer, et/ou montrer à ses amis ou rendre privée. */
+export async function updateCollection(id: string, payload: UpdateCollectionRequest): Promise<CollectionSummary> {
+  const response = await authorizedFetch(`/api/collections/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) });
+  return response.json();
+}
+
+/** Supprimer une collection (ses envies restent dans les Envies). */
+export async function deleteCollection(id: string): Promise<void> {
+  await authorizedFetch(`/api/collections/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+/** Ses envies rangées dans une collection, les plus récemment ajoutées d'abord. */
+export async function fetchCollectionWishlist(id: string, cursor?: string | null): Promise<WishlistPage> {
+  const response = await authorizedFetch(`/api/collections/${encodeURIComponent(id)}/wishlist${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+  return response.json();
+}
+
+/** Les collections qui contiennent une de ses envies. */
+export async function fetchWishCollections(wishId: string): Promise<string[]> {
+  const response = await authorizedFetch(`/api/wishlist/${encodeURIComponent(wishId)}/collections`);
+  return ((await response.json()) as WishCollections).collectionIds;
+}
+
+/** Ranger une de ses envies dans ces collections (et la retirer des autres). */
+export async function setWishCollections(wishId: string, collectionIds: string[]): Promise<string[]> {
+  const response = await authorizedFetch(`/api/wishlist/${encodeURIComponent(wishId)}/collections`, { method: "PUT", body: JSON.stringify({ collectionIds }) });
+  return ((await response.json()) as WishCollections).collectionIds;
+}
+
+/** Les collections qu'un membre montre à ses amis (vide pour les autres). */
+export async function fetchUserCollections(userId: string): Promise<SharedCollectionSummary[]> {
+  const response = await authorizedFetch(`/api/users/${encodeURIComponent(userId)}/collections`);
+  return ((await response.json()) as SharedCollectionsList).collections;
+}
+
+/** Une collection d'un ami et ses envies. */
+export async function fetchSharedCollection(id: string, cursor?: string | null): Promise<SharedCollectionPage> {
+  const response = await authorizedFetch(`/api/collections/${encodeURIComponent(id)}/shared${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+  return response.json();
+}
+
+/** Une envie d'une collection d'un ami (carte jointe d'avance à « En parler »). */
+export async function fetchCollectionItem(id: string): Promise<SharedCollectionItem> {
+  const response = await authorizedFetch(`/api/collection-items/${encodeURIComponent(id)}`);
+  return response.json();
+}
+
+/** « Garder » une envie d'un ami dans ses Envies. */
+export async function keepSharedItem(id: string): Promise<KeepSharedItemResponse> {
+  const response = await authorizedFetch(`/api/collection-items/${encodeURIComponent(id)}/keep`, { method: "POST" });
+  return response.json();
 }
 
 export async function deleteWishlistItem(id: string): Promise<void> {

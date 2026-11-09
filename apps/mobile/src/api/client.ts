@@ -1,5 +1,5 @@
 import type { WishlistItem as RemoteWishlistItem } from "@monapp/shared-types";
-import { addWishlistItem, fetchSearch, fetchWishlist, listRecentSearches } from "@/lib/api";
+import { addWishlistItem, fetchCollectionWishlist, fetchSearch, fetchWishlist, listRecentSearches } from "@/lib/api";
 import { matchToPiece, pieceTitle, toSpotResult } from "@/lib/spot-result";
 import { ownedMarks } from "@/lib/owned-marks";
 import * as mock from "./mock";
@@ -67,6 +67,13 @@ export async function getRecentSearches(limit?: number): Promise<{ searchId: str
 // vraiment pour les pièces issues d'une recherche réelle.
 export async function getWishlist(cursor?: string): Promise<{ items: WishlistItem[]; nextCursor: string | null }> {
   const page = await fetchWishlist(cursor);
+  return { items: page.items.map(wishlistRowToItem), nextCursor: page.nextCursor };
+}
+
+// Lot collections : les envies d'une de ses collections (puce de l'écran
+// Envies), sous la même forme que getWishlist.
+export async function getCollectionWishlist(collectionId: string, cursor?: string): Promise<{ items: WishlistItem[]; nextCursor: string | null }> {
+  const page = await fetchCollectionWishlist(collectionId, cursor);
   return { items: page.items.map(wishlistRowToItem), nextCursor: page.nextCursor };
 }
 

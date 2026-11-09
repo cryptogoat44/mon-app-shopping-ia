@@ -37,7 +37,7 @@ describe("langues de l'interface (lot 3)", () => {
   });
 
   it("aucun texte laissé identique à l'anglais dans le catalogue français, sauf noms propres", () => {
-    const allowed = new Set(["Spotter", "TikTok", "Instagram", "Pinterest", "Vault", "Lifestyle", "Bio", "Spam", "OK", "Public", "English", "Français", "Documents", "Email", "Message", "Messages", "Invitations", "Conversations"]);
+    const allowed = new Set(["Spotter", "TikTok", "Instagram", "Pinterest", "Vault", "Lifestyle", "Bio", "Spam", "OK", "Public", "English", "Français", "Documents", "Email", "Message", "Messages", "Invitations", "Conversations", "Collections"]);
     const enTexts = texts(en);
     const same = texts(fr).filter((text, index) => text === enTexts[index] && !allowed.has(text) && !/^[\d\s·(),.]+$/.test(text));
     expect(same).toEqual([]);

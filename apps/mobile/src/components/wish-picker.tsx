@@ -9,11 +9,14 @@ import { ErrorMessage } from "@/components/error-message";
 import { SpotImage } from "@/components/spot-image";
 import { themedStyles } from "@/theme/themed-styles";
 
-/** Une envie choisie pour être jointe à un message. */
+/** Une envie choisie pour être jointe à un message : une de vos Envies, ou
+ * (lot collections, « En parler ») une envie d'une collection de la personne
+ * à qui vous écrivez, dont l'image est la copie de Spotto (ou null). */
 export interface PickedWish {
   id: string;
   title: string;
-  imageUrl: string;
+  imageUrl: string | null;
+  kind?: "wish" | "collectionItem";
 }
 
 // « Joindre une envie » (lot messages) : une de vos Envies, choisie dans la

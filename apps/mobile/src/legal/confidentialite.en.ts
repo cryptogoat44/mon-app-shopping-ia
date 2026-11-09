@@ -18,7 +18,7 @@ export const privacyPolicyEn: LegalDocument = {
         "Spotto helps you identify fashion pieces from an image, keep the ones you own in your Vault, and share your posts with the people of your choice.",
         [
           "We do not sell your data and show no advertising.",
-          "Your Vault and your Wishlist are visible to you alone.",
+          "Your Vault is visible to you alone. So is your Wishlist, except the wishes you put in a collection shown to your friends.",
           "The image you submit for analysis is deleted from our servers as soon as the result is known.",
           "If you import a video, it stays on your device: only the frame you choose from it is sent — or, if you accept automatic analysis, a few reduced frames from the video, analyzed by an AI and never kept by Spotto.",
           "To widen the results, Spotto may look for the same piece at other retailers: an AI reads the titles and site names of the first results, never your image or your words, and writes a short search. If you start “What are you looking for?”, your words are sent to a search engine, without your name or email address.",
@@ -43,6 +43,7 @@ export const privacyPolicyEn: LegalDocument = {
         "Your Vault and your Wishlist: the pieces you add to them (name, category, photo, link to the original piece).",
         "Your posts and interactions: photos, captions, chosen visibility, comments, likes, notifications, blocked accounts and the reports you make.",
         "Your private messages: the text of your messages, the wish you attach to them (its title, price, link to the shop and a copy of its image made by Spotto), their date, and the state of your conversations (invitation sent, accepted or declined, messages read). Only you and the person you are talking with can see them. The moderation team only reads reported messages, with a few messages around them to understand the context. They are kept until your account is deleted, or the account of the person you are talking with: the conversation then disappears for both of you. [To be verified: legal basis retained (performance of the contract), retention period, and information given to the person who receives an invitation.]",
+        "Your Wishlist collections: their name, who can see them and the wishes you put in them. A collection stays private until you choose “My friends”. Your friends, meaning members you follow who follow you back, then see its name and, for each wish, its title, a copy of its image made by Spotto, its price and the link to the shop; never your notes. An account blocked either way sees nothing. The copy of the image is deleted as soon as the wish is no longer shown to your friends, and everything goes when you delete your account. [To be verified: legal basis retained (performance of the contract), and information given to the friends who see these collections.]",
         "Your clicks to retailers: the piece concerned, the place in the app you clicked from, the date, and the technical identification of your browser or phone (“user agent”).",
         "Your consents: the date and version of the documents you accepted, your declaration that you are at least 15 years old, and your choices (consent, refusal or withdrawal) for usage statistics and automatic video analysis.",
         "Technical data: like any web server, ours receives your IP address and technical information with each request; they appear in its logs, used for security and to fix errors.",
@@ -73,7 +74,7 @@ export const privacyPolicyEn: LegalDocument = {
       title: "Who can see what in Spotto",
       blocks: [
         [
-          "Your Vault and your Wishlist: you alone.",
+          "Your Vault: you alone. Your Wishlist: you alone, except the wishes you put in a collection shown to your friends.",
           "Your posts: according to the visibility you choose for each one — everyone, your followers, or you alone. You can change it at any time.",
           "Your profile (username, display name, photo, bio, number of followers and accounts followed): other users, except those you have blocked.",
         ],
@@ -128,7 +129,7 @@ export const privacyPolicyEn: LegalDocument = {
           "The server's technical logs: [To be verified: retention period at our hosting provider].",
           "Error reports (Sentry) and usage statistics (PostHog): [To be verified: retention periods of these services for our plan, and the period to retain].",
         ],
-        "When you delete your account, your data and photos are erased immediately and permanently: profile, searches, Vault, Wishlist, posts, comments, likes, follows, notifications, clicks to retailers, consents. Cached answers, which are linked to no account, are not affected: they are deleted on their own (see above).",
+        "When you delete your account, your data and photos are erased immediately and permanently: profile, searches, Vault, Wishlist, collections, posts, comments, likes, follows, notifications, clicks to retailers, consents. Cached answers, which are linked to no account, are not affected: they are deleted on their own (see above).",
       ],
     },
     {

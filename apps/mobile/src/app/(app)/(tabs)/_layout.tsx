@@ -4,7 +4,8 @@ import { Tabs, usePathname, useRouter } from "expo-router";
 import { color, radius } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { BellIcon, FeedIcon, PersonIcon, PlusIcon, SearchIcon } from "@/components/icons";
-import { fetchMessagesStatus, fetchUnreadNotificationCount } from "@/lib/api";
+import { fetchCollectionsStatus, fetchMessagesStatus, fetchUnreadNotificationCount } from "@/lib/api";
+import { collectionsStatus } from "@/lib/collections";
 import { activityUnread } from "@/lib/conversations";
 import { useMessagesStatus } from "@/lib/use-messages-status";
 import { spotterTab } from "@/lib/shared-item";
@@ -38,6 +39,8 @@ export default function TabsLayout() {
       .then(setNotificationsUnread)
       .catch(() => {});
     fetchMessagesStatus().catch(() => {});
+    // Lot collections : lue jusqu'à ce qu'elles soient disponibles (puis plus rien à relire).
+    if (!collectionsStatus().enabled) fetchCollectionsStatus().catch(() => {});
   }, [pathname]);
   // … et tout de suite quand l'écran Activité a tout marqué comme lu.
   useEffect(

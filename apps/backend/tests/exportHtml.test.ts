@@ -373,6 +373,7 @@ describe("export lisible : textes", () => {
     // Données de la personne sans accent, pour ne vérifier que les textes du fichier.
     data.piecesReceived[0]!.title = "Received piece";
     data.wishlistItems[0]!.title = "Wish";
+    data.collectionItems[0]!.wishlist_item_title = "Wish";
     data.profile!.bio = "Fashion";
     const en = visibleText(renderExportHtml(data, lookups(), options({ locale: "en", timeZone: "UTC" })));
     expect(en).not.toMatch(/[àâäçéèêëîïôöùûüÿœæ«»]/i);
@@ -609,5 +610,32 @@ describe("messages privés (lot messages, migration 0032)", () => {
     const account = spaces(decode(sectionHtml(render(), "account")));
     expect(account).toContain("Qui peut vous écrire");
     expect(account).toContain("Tout le monde (sous forme d'invitation)");
+  });
+});
+
+describe("collections d'envies (lot collections, migration 0033)", () => {
+  it("chaque collection, qui la voit, puis ses envies avec l'image montrée aux amis (copie Spotto)", () => {
+    const collections = spaces(decode(sectionHtml(render(), "collections")));
+    expect(collections).toContain("Vos collections");
+    expect(collections).toContain("Cadeaux pour Noel");
+    expect(collections).toContain("Qui la voit");
+    expect(collections).toContain("Vos amis");
+    expect(collections).toContain("Plus tard");
+    expect(collections).toContain("Vous seul (privée)");
+    expect(collections).toContain("Envies rangées (1)");
+    expect(collections).toContain("Envie dangereuse");
+    expect(collections).toContain(`<img src="${own("post-media", "collection-mini.jpg")}"`);
+    // Le sommaire compte les collections.
+    expect(visibleText(render())).toContain("Vos collections (2)");
+  });
+
+  it("en anglais, et l'intro des Envies dit l'exception des collections montrées aux amis", () => {
+    const en = spaces(decode(sectionHtml(renderExportHtml(fixture(), lookups(), options({ locale: "en", timeZone: "UTC" })), "collections")));
+    expect(en).toContain("Your collections");
+    expect(en).toContain("Who can see it");
+    expect(en).toContain("Your friends");
+    expect(en).toContain("You alone (private)");
+    expect(en).toContain("Saved wishes (1)");
+    expect(visibleText(render())).toContain("Vos Envies sont privées, sauf celles que vous rangez dans une collection montrée à vos amis.");
   });
 });

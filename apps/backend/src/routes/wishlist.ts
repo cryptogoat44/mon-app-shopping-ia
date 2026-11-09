@@ -7,6 +7,7 @@ import { findOwnMatch } from "../lib/ownMatches.js";
 import { keptMatchIds } from "../lib/keptPieces.js";
 import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput, webUrlOrNull, webUrlSchema } from "../lib/validation.js";
 import { deleteWishCopy, findWishPost } from "../lib/wishShare.js";
+import { collectionsReady, readCopy } from "../lib/collections.js";
 
 // Liens d'une envie rangés tels que l'app les envoie : http ou https
 // seulement, 2 048 caractères au plus (lib/validation.ts, webUrlSchema).
@@ -31,7 +32,7 @@ const createWishlistItemSchema = z
 
 const PRODUCT_MATCH_NOT_FOUND = { error: "product_match_not_found", message: "Produit introuvable." } as const;
 
-interface WishlistItemRow {
+export interface WishlistItemRow {
   id: string;
   title: string;
   image_url: string;
@@ -44,7 +45,7 @@ interface WishlistItemRow {
   created_at: string;
 }
 
-function toWishlistItem(
+export function toWishlistItem(
   row: WishlistItemRow,
   affiliateUrls: Map<string, string> = new Map(),
   imageHdUrl: string | null = null
@@ -204,6 +205,9 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
       .select("media_url, media_thumb_url")
       .eq("wishlist_item_id", id)
       .eq("user_id", userId);
+    // Lot collections : l'envie quitte ses collections (cascade en base) ; la
+    // copie de son image montrée aux amis, rangée chez son auteur, est effacée.
+    const friendsCopy = (await collectionsReady(fastify)) ? await readCopy(fastify, userId, id) : null;
 
     const { error } = await fastify.supabaseAdmin.from("wishlist_items").delete().eq("id", id).eq("user_id", userId);
     if (error) {
@@ -213,6 +217,7 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
     for (const post of (wishPosts as { media_url: string | null; media_thumb_url: string | null }[] | null) ?? []) {
       await deleteWishCopy(fastify, userId, [post.media_url, post.media_thumb_url]);
     }
+    if (friendsCopy) await deleteWishCopy(fastify, userId, [friendsCopy.image_url, friendsCopy.image_thumb_url]);
 
     return reply.code(204).send();
   });

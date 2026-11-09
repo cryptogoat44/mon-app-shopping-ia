@@ -4,10 +4,16 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Tex
 import { useFocusEffect, useRouter } from "expo-router";
 import { color, font, radius, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
-import { getWishlist } from "@/api/client";
+import type { CollectionSummary } from "@monapp/shared-types";
+import { getCollectionWishlist, getWishlist } from "@/api/client";
 import type { Piece, WishlistItem } from "@/api/types";
-import { ApiError } from "@/lib/api";
-import { ClockIcon } from "@/components/icons";
+import { ApiError, fetchCollections } from "@/lib/api";
+import { collectionChips, selectedCollection, visibilityState } from "@/lib/collections";
+import { useCollectionsStatus } from "@/lib/use-collections-status";
+import { useToast } from "@/lib/toast-context";
+import { ClockIcon, PlusIcon } from "@/components/icons";
+import { CollectionNameSheet } from "@/components/collection-name-sheet";
+import { CollectionSettingsSheet } from "@/components/collection-settings-sheet";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
@@ -33,6 +39,9 @@ function chunk<T>(items: T[], size: number): T[][] {
 // profil, jamais sur le profil vu par quelqu'un d'autre. Lot 5 : « Mes
 // envies » ou « Reçues » (les pièces envoyées par d'autres personnes) ; une
 // envie ne se partage que par un geste volontaire, depuis son détail.
+// Lot collections : « Toutes » puis une puce par collection (cachées sans
+// les collections sur le serveur), « Nouvelle collection », et « Gérer » la
+// collection choisie (nom, qui la voit, suppression).
 export function WishlistPanel() {
   const [view, setView] = useState<"mine" | "received">("mine");
   return (
@@ -61,15 +70,26 @@ export function WishlistPanel() {
 
 function MyWishlist() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [items, setItems] = useState<WishlistItem[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const collectionsAvailable = useCollectionsStatus();
+  const [collections, setCollections] = useState<CollectionSummary[] | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [managing, setManaging] = useState<CollectionSummary | null>(null);
+  const selected = selectedCollection(collections, selectedId);
+  const chips = collectionChips(collectionsAvailable, collections);
+  // Identifiant seul (jamais l'objet, recréé à chaque relecture des puces) : pas de rechargement en boucle.
+  const selectedKey = selected?.id ?? null;
+  const fetchPage = useCallback((cursor?: string) => (selectedKey ? getCollectionWishlist(selectedKey, cursor) : getWishlist(cursor)), [selectedKey]);
 
   const load = useCallback(
     () =>
-      getWishlist()
+      fetchPage()
         .then((page) => {
           setItems(page.items);
           setNextCursor(page.nextCursor);
@@ -80,17 +100,35 @@ function MyWishlist() {
           setNextCursor(null);
           setError(e instanceof ApiError ? e.message : t.wishlist.loadError);
         }),
-    []
+    [fetchPage]
   );
+
+  // Les puces : relues à chaque retour sur l'écran (une envie a pu être rangée
+  // depuis sa fiche). En échec : pas de puces, les envies restent affichées.
+  const loadCollections = useCallback(() => {
+    if (!collectionsAvailable.enabled) {
+      setCollections(null);
+      return;
+    }
+    fetchCollections()
+      .then(setCollections)
+      .catch(() => setCollections(null));
+  }, [collectionsAvailable.enabled]);
 
   useFocusEffect(
     useCallback(() => {
       load();
     }, [load])
   );
+  useFocusEffect(
+    useCallback(() => {
+      loadCollections();
+    }, [loadCollections])
+  );
 
   async function handleRefresh() {
     setRefreshing(true);
+    loadCollections();
     await load();
     setRefreshing(false);
   }
@@ -99,7 +137,7 @@ function MyWishlist() {
     if (!nextCursor || loadingMore || refreshing) return;
     setLoadingMore(true);
     try {
-      const page = await getWishlist(nextCursor);
+      const page = await fetchPage(nextCursor);
       setItems((prev) => (prev ? [...prev, ...page.items] : page.items));
       setNextCursor(page.nextCursor);
     } catch {
@@ -112,9 +150,75 @@ function MyWishlist() {
   const loading = items === null;
   const isEmpty = !error && items?.length === 0;
 
+  function choose(collectionId: string | null) {
+    if (collectionId === selectedId) return;
+    setSelectedId(collectionId);
+    setItems(null);
+  }
+
   return (
     <>
-      <Text style={styles.privateNote}>{t.wishlist.privateNote}</Text>
+      <Text style={styles.privateNote}>{collectionsAvailable.enabled ? t.wishlist.privateNoteCollections : t.wishlist.privateNote}</Text>
+      {chips ? (
+        <View style={styles.chipsWrap}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} accessibilityRole="tablist" accessibilityLabel={t.collections.chipsLabel}>
+            {chips.map((chip) => {
+              const active = selectedKey === chip.collectionId;
+              return (
+                <Pressable
+                  key={chip.key}
+                  style={[styles.chip, active ? styles.chipActive : null]}
+                  onPress={() => choose(chip.collectionId)}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                  aria-selected={active}
+                  accessibilityLabel={chip.accessibilityLabel}
+                >
+                  <Text style={[styles.chipLabel, active ? styles.chipLabelActive : null]} numberOfLines={1}>
+                    {chip.label}
+                    {chip.shared ? ` · ${t.collections.sharedBadge}` : ""}
+                  </Text>
+                </Pressable>
+              );
+            })}
+            <Pressable style={[styles.chip, styles.chipNew]} onPress={() => setCreating(true)} accessibilityRole="button" testID="puce-nouvelle-collection">
+              <PlusIcon size={12} tint={color.vert} />
+              <Text style={styles.chipNewLabel}>{t.collections.newCollection}</Text>
+            </Pressable>
+          </ScrollView>
+          {selected ? (
+            <View style={styles.selectedRow}>
+              <Text style={styles.selectedState}>{visibilityState(selected.visibility)}</Text>
+              <Pressable onPress={() => setManaging(selected)} hitSlop={10} accessibilityRole="button" accessibilityLabel={t.collections.manageLabel(selected.name)} testID="gerer-collection">
+                <Text style={styles.manage}>{t.collections.manage}</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+      <CollectionNameSheet
+        visible={creating}
+        onClose={() => setCreating(false)}
+        onCreated={(collection) => {
+          setCreating(false);
+          showToast(t.collections.created);
+          setCollections((current) => [...(current ?? []), collection]);
+          choose(collection.id);
+        }}
+      />
+      <CollectionSettingsSheet
+        collection={managing}
+        onClose={() => setManaging(null)}
+        onChanged={(updated) => {
+          setManaging(updated);
+          setCollections((current) => current?.map((collection) => (collection.id === updated.id ? updated : collection)) ?? current);
+        }}
+        onDeleted={(id) => {
+          setManaging(null);
+          setCollections((current) => current?.filter((collection) => collection.id !== id) ?? current);
+          choose(null);
+        }}
+      />
       {loading ? (
         <View style={styles.grid}>
           {[0, 1, 2].map((i) => (
@@ -167,14 +271,18 @@ function MyWishlist() {
           )}
           ListHeaderComponent={error ? <ErrorMessage style={styles.emptyText}>{error}</ErrorMessage> : null}
           ListEmptyComponent={
-            !error ? (
+            error ? null : selected ? (
+              <View style={styles.empty}>
+                <Text style={styles.emptyText}>{t.collections.empty}</Text>
+              </View>
+            ) : (
               <View style={styles.empty}>
                 <Text style={styles.emptyText}>{t.wishlist.empty}</Text>
                 <Pressable accessibilityRole="button" onPress={() => router.push("/")}>
                   <Text style={styles.emptyCta}>{t.wishlist.emptyCta}</Text>
                 </Pressable>
               </View>
-            ) : null
+            )
           }
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.4}
@@ -188,6 +296,17 @@ function MyWishlist() {
 const styles = themedStyles(() => ({
   switcher: { paddingHorizontal: space.lg, paddingTop: space.sm, maxWidth: 640, alignSelf: "center", width: "100%" },
   privateNote: { fontSize: font.caption, color: color.acier, paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.xs, maxWidth: 640, alignSelf: "center", width: "100%" },
+  chipsWrap: { maxWidth: 640, alignSelf: "center", width: "100%", paddingBottom: space.xs },
+  chips: { paddingHorizontal: space.lg, gap: space.xs, alignItems: "center" },
+  chip: { minHeight: 36, maxWidth: 220, paddingHorizontal: space.md, borderRadius: radius.full, borderWidth: 1, borderColor: color.filet, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 4 },
+  chipActive: { backgroundColor: color.vert, borderColor: color.vert },
+  chipLabel: { fontSize: font.caption, color: color.encre },
+  chipLabelActive: { color: color.blanc, fontWeight: "600" },
+  chipNew: { borderStyle: "dashed", borderColor: color.vert },
+  chipNewLabel: { fontSize: font.caption, color: color.vert, fontWeight: "600" },
+  selectedRow: { flexDirection: "row", alignItems: "center", gap: space.sm, paddingHorizontal: space.lg, paddingTop: space.xs },
+  selectedState: { flex: 1, fontSize: font.caption, color: color.acier, lineHeight: 18 },
+  manage: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   emptyContent: { flexGrow: 1 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl, marginTop: -60 },
   emptyText: { fontSize: font.secondary, color: color.acier, textAlign: "center", lineHeight: 20, marginBottom: space.md },
