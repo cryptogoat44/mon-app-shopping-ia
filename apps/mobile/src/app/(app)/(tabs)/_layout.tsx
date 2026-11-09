@@ -4,7 +4,9 @@ import { Tabs, usePathname, useRouter } from "expo-router";
 import { color, radius } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { BellIcon, FeedIcon, PersonIcon, PlusIcon, SearchIcon } from "@/components/icons";
-import { fetchUnreadNotificationCount } from "@/lib/api";
+import { fetchMessagesStatus, fetchUnreadNotificationCount } from "@/lib/api";
+import { activityUnread } from "@/lib/conversations";
+import { useMessagesStatus } from "@/lib/use-messages-status";
 import { spotterTab } from "@/lib/shared-item";
 import { onUnreadChanged } from "@/lib/unread-notifications";
 import { usePendingSharedItem } from "@/lib/use-shared-item";
@@ -20,25 +22,31 @@ const dot = () => ({ minWidth: 9, maxHeight: 9, borderRadius: 5, backgroundColor
 export default function TabsLayout() {
   const router = useRouter();
   const pathname = usePathname();
-  const [unread, setUnread] = useState(0);
+  const [notificationsUnread, setNotificationsUnread] = useState(0);
+  // Lot messages : les conversations non lues comptent aussi pour la pastille.
+  const messages = useMessagesStatus();
+  const unread = activityUnread(notificationsUnread, messages);
   // Lot « partager vers Spotto » : un partage reçu pendant une recherche ou une
   // saisie attend le Spotter ; une pastille le rappelle jusqu'à son ouverture.
   const spotter = spotterTab(usePendingSharedItem());
 
   // Relu à chaque changement d'écran : l'écran Activité marque tout comme
   // lu, la pastille disparaît au changement suivant.
+  // Les messages non lus sont relus en même temps que les notifications.
   useEffect(() => {
     fetchUnreadNotificationCount()
-      .then(setUnread)
+      .then(setNotificationsUnread)
       .catch(() => {});
+    fetchMessagesStatus().catch(() => {});
   }, [pathname]);
   // … et tout de suite quand l'écran Activité a tout marqué comme lu.
   useEffect(
     () =>
       onUnreadChanged(() => {
         fetchUnreadNotificationCount()
-          .then(setUnread)
+          .then(setNotificationsUnread)
           .catch(() => {});
+        fetchMessagesStatus().catch(() => {});
       }),
     []
   );

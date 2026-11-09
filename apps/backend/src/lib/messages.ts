@@ -1,5 +1,5 @@
 import type { Locale } from "./locale.js";
-import { COMMENT_MAX_LENGTH } from "@monapp/shared-types";
+import { COMMENT_MAX_LENGTH, MESSAGE_MAX_LENGTH } from "@monapp/shared-types";
 import { RATE_LIMITED_MESSAGE } from "../plugins/rateLimit.js";
 import { SEARCH_CAPACITY_MESSAGES } from "./searchCapacity.js";
 import { UPDATE_REQUIRED_MESSAGE } from "./appVersion.js";
@@ -150,6 +150,21 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   // Lot garde-fous : disjoncteur de la recherche par image (lib/searchBreaker.ts).
   "La recherche est en pause : notre fournisseur de recherche rencontre une panne. Nous sommes prévenus. Réessayez dans quelques minutes.":
     "Search is paused: our search provider is having an outage. We've been notified. Please try again in a few minutes.",
+  // Messages privés (lot messages, migration 0032).
+  "La messagerie n'est pas encore disponible.": "Messaging isn't available yet.",
+  "Conversation introuvable.": "Conversation not found.",
+  "Cette personne ne reçoit pas de messages de votre part.": "This person doesn't accept messages from you.",
+  "Votre invitation attend une réponse : vous pourrez écrire de nouveau quand elle sera acceptée.":
+    "Your invitation is waiting for a reply: you'll be able to write again once it's accepted.",
+  "Cette conversation n'est pas une invitation.": "This conversation isn't an invitation.",
+  "Le message est vide.": "The message is empty.",
+  [`Le message est trop long (${MESSAGE_MAX_LENGTH} caractères maximum).`]: `The message is too long (${MESSAGE_MAX_LENGTH} characters maximum).`,
+  "Message invalide.": "Invalid message.",
+  "Vous ne pouvez pas vous écrire.": "You can't write to yourself.",
+  "Vous avez envoyé beaucoup de messages en peu de temps. Réessayez dans un moment.":
+    "You've sent a lot of messages in a short time. Please try again in a moment.",
+  "Vous avez envoyé beaucoup d'invitations en peu de temps. Réessayez dans une heure.":
+    "You've sent a lot of invitations in a short time. Please try again in an hour.",
   // Mise à jour obligatoire de l'app iPhone (lot « app iPhone prête », lib/appVersion.ts).
   [UPDATE_REQUIRED_MESSAGE]: "This version of Spotto is no longer supported. Please update the app from the App Store.",
 };

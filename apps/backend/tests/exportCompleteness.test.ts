@@ -5,6 +5,8 @@ import { EXPORT_APPENDIX_ID } from "../src/lib/exportHtml.js";
 import { RATE_LIMITS } from "../src/lib/rateLimits.js";
 import { EXPORT_COLUMNS, EXPORT_SECTIONS, EXPORT_TEXT, type ExportColumn } from "../src/lib/exportText.js";
 import { decodeHtml, visibleText } from "./exportFixture.js";
+import { createClient } from "@supabase/supabase-js";
+import { env } from "../src/env.js";
 import { authHeaders, buildMultipart, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
 
 const PNG = Buffer.from(
@@ -42,6 +44,11 @@ const NON_EMPTY_SECTIONS = [
   "resultFeedback",
 ] as const;
 
+// Lot messages : conversations et messages, seulement une fois la migration
+// 0032 appliquée sur la base des tests (sans elle, ces sections restent vides).
+const messagesProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("messages").select("id").limit(0);
+const MESSAGE_SECTIONS = messagesProbe.error ? [] : (["conversations", "messages"] as const);
+
 // Sections qui sont un objet (ou null), pas une liste.
 const OBJECT_SECTIONS = ["account", "profile", "adminRole", "suspension"] as const;
 
@@ -75,6 +82,9 @@ const JSON_KEYS = [
   "moderationDecisionsAboutMe",
   "moderationDecisionsTaken",
   "resultFeedback",
+  // Lot messages : ajoutées à la fin (les anciennes clés gardent leur ordre).
+  "conversations",
+  "messages",
 ];
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
@@ -188,6 +198,12 @@ describe("export RGPD complet", () => {
     expect((await decide({ targetType: "post", targetId: postId, action: "hide", reason: "spam" })).statusCode).toBe(200);
     expect((await decide({ targetType: "user", targetId: user.id, action: "suspend", reason: "spam", note: "Essai d'export" })).statusCode).toBe(200);
 
+    // Messages privés (lot messages) : un message à un ami (chacun suit l'autre).
+    if (MESSAGE_SECTIONS.length > 0) {
+      const sent = await app.inject({ method: "POST", url: "/api/messages", headers: authHeaders(friend.token), payload: { recipientId: user.id, text: "Bonjour" } });
+      expect(sent.statusCode).toBe(201);
+    }
+
     // Un premier export, pour que le second contienne cette demande.
     await exportOf(user);
     // Beaucoup d'écritures réelles vers spotto-dev : plus que le délai par défaut.
@@ -209,7 +225,7 @@ describe("export RGPD complet", () => {
     const body = res.json();
 
     expect(body.profile.id).toBe(user.id);
-    for (const section of NON_EMPTY_SECTIONS) {
+    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS]) {
       expect(Array.isArray(body[section]), section).toBe(true);
       expect(body[section].length, section).toBeGreaterThan(0);
     }

@@ -5,10 +5,14 @@
 // n'y figure jamais. Tout ce qui vient de la base est relu avec zod.
 // Lot 5, partie B : une image copiée peut avoir été retirée (« Image
 // indisponible ») ; « Retirer l'image » n'est proposé que pour une copie.
+// Lot messages : un message signalé est montré avec quelques messages
+// autour (MODERATION_MESSAGE_CONTEXT avant et après), jamais toute la
+// conversation.
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   MODERATION_ACTION_TYPES,
+  MODERATION_MESSAGE_CONTEXT,
   MODERATION_REASONS,
   PRIVACY_LEVELS,
   REPORT_REASONS,
@@ -16,6 +20,7 @@ import {
   type ModerationAuthor,
   type ModerationItem,
   type ModerationLogEntry,
+  type ModerationMessageContext,
   type ModerationPreview,
 } from "@monapp/shared-types";
 import { parseDbRows } from "./validation.js";
@@ -73,6 +78,19 @@ const PIECE_ROWS = z.array(
     hidden_at: TIMESTAMP.nullable(),
   })
 );
+const MESSAGE_ROWS = z.array(
+  z.object({
+    id: ID,
+    conversation_id: ID,
+    sender_id: ID,
+    body: z.string().nullable(),
+    wish_title: z.string().nullable(),
+    created_at: TIMESTAMP,
+    hidden_at: TIMESTAMP.nullable(),
+  })
+);
+type MessageRow = z.infer<typeof MESSAGE_ROWS>[number];
+const MESSAGE_COLUMNS = "id, conversation_id, sender_id, body, wish_title, created_at, hidden_at";
 const PROFILE_ROWS = z.array(
   z.object({ id: ID, username: z.string().nullable(), display_name: z.string(), avatar_url: z.string().nullable(), bio: z.string().nullable() })
 );
@@ -101,6 +119,9 @@ interface Loaded {
   /** Pièces envoyées signalées (lot 5, 5.C). */
   pieces: Map<string, z.infer<typeof PIECE_ROWS>[number]>;
   profiles: Map<string, z.infer<typeof PROFILE_ROWS>[number]>;
+  /** Messages signalés (lot messages), et l'extrait autour de chacun (du plus ancien au plus récent). */
+  messages: Map<string, MessageRow>;
+  messageContext: Map<string, MessageRow[]>;
   /** Compte suspendu → décision de suspension en vigueur. */
   suspensions: Map<string, string>;
   /** Du plus récent au plus ancien. */
@@ -114,13 +135,14 @@ function idsOf(rows: QueueRow[], type: QueueRow["target_type"]): string[] {
   return rows.filter((row) => row.target_type === type).map((row) => row.target_id);
 }
 
-/** Publications, commentaires et pièces envoyées signalés, et les décisions déjà prises sur ces contenus. */
+/** Publications, commentaires, pièces envoyées et messages signalés, et les décisions déjà prises sur ces contenus. */
 async function loadTargets(fastify: FastifyInstance, rows: QueueRow[]) {
   const db = fastify.supabaseAdmin;
   const postIds = idsOf(rows, "post");
   const commentIds = idsOf(rows, "comment");
   const pieceIds = idsOf(rows, "piece");
-  const [posts, comments, pieces, actions] = await Promise.all([
+  const messageIds = idsOf(rows, "message");
+  const [posts, comments, pieces, messages, actions] = await Promise.all([
     postIds.length > 0
       ? db
           .from("posts")
@@ -131,6 +153,7 @@ async function loadTargets(fastify: FastifyInstance, rows: QueueRow[]) {
     pieceIds.length > 0
       ? db.from("piece_sends").select("id, sender_id, title, image_url, image_thumb_url, image_removed_at, created_at, hidden_at").in("id", pieceIds)
       : NO_ROWS,
+    messageIds.length > 0 ? db.from("messages").select(MESSAGE_COLUMNS).in("id", messageIds) : NO_ROWS,
     db
       .from("moderation_actions")
       // Toutes les colonnes : `automatic` n'existe qu'après la migration 0030,
@@ -144,8 +167,31 @@ async function loadTargets(fastify: FastifyInstance, rows: QueueRow[]) {
     posts: parseDbRows(POST_ROWS, posts, "Publications signalées"),
     comments: parseDbRows(COMMENT_ROWS, comments, "Commentaires signalés"),
     pieces: parseDbRows(PIECE_ROWS, pieces, "Pièces envoyées signalées"),
+    messages: parseDbRows(MESSAGE_ROWS, messages, "Messages signalés"),
     actions: parseDbRows(ACTION_ROWS, actions, "Journal de modération"),
   };
+}
+
+/** Quelques messages avant et après chaque message signalé, dans sa
+ * conversation : rien d'autre de la conversation n'est lu. */
+async function loadMessageContext(fastify: FastifyInstance, messages: MessageRow[]): Promise<Map<string, MessageRow[]>> {
+  const db = fastify.supabaseAdmin;
+  const around = (message: MessageRow, direction: "before" | "after") => {
+    const base = db.from("messages").select(MESSAGE_COLUMNS).eq("conversation_id", message.conversation_id);
+    const query =
+      direction === "before"
+        ? base.lt("created_at", message.created_at).order("created_at", { ascending: false })
+        : base.gt("created_at", message.created_at).order("created_at", { ascending: true });
+    return query.limit(MODERATION_MESSAGE_CONTEXT).then((result) => parseDbRows(MESSAGE_ROWS, result, "Messages autour d'un message signalé"));
+  };
+  const entries = await Promise.all(
+    messages.map(async (message) => {
+      const [before, after] = await Promise.all([around(message, "before"), around(message, "after")]);
+      const extract: MessageRow[] = [...before.reverse(), message, ...after];
+      return [message.id, extract] as [string, MessageRow[]];
+    })
+  );
+  return new Map(entries);
 }
 
 /** Profils (comptes signalés, auteurs des contenus, administrateurs du journal) et suspensions en vigueur. */
@@ -168,12 +214,16 @@ async function loadAll(fastify: FastifyInstance, rows: QueueRow[]): Promise<Load
   for (const post of targets.posts) userIds.add(post.user_id);
   for (const comment of targets.comments) userIds.add(comment.user_id);
   for (const piece of targets.pieces) userIds.add(piece.sender_id);
+  const messageContext = await loadMessageContext(fastify, targets.messages);
+  for (const extract of messageContext.values()) for (const message of extract) userIds.add(message.sender_id);
   for (const action of targets.actions) if (action.admin_id) userIds.add(action.admin_id);
   const people = await loadPeople(fastify, [...userIds]);
   return {
     posts: new Map(targets.posts.map((post) => [post.id, post])),
     comments: new Map(targets.comments.map((comment) => [comment.id, comment])),
     pieces: new Map(targets.pieces.map((piece) => [piece.id, piece])),
+    messages: new Map(targets.messages.map((message) => [message.id, message])),
+    messageContext,
     profiles: new Map(people.profiles.map((profile) => [profile.id, profile])),
     suspensions: new Map(people.suspensions.map((s) => [s.user_id, s.moderation_action_id])),
     actions: targets.actions,
@@ -229,6 +279,28 @@ function previewOf(row: QueueRow, data: Loaded): ModerationPreview {
       hidden: piece.hidden_at !== null,
     };
   }
+  if (row.target_type === "message") {
+    const message = data.messages.get(row.target_id);
+    const author = message ? authorOf(message.sender_id, data) : null;
+    if (!message || !author) return MISSING;
+    const context: ModerationMessageContext[] = (data.messageContext.get(message.id) ?? [message]).map((entry) => ({
+      authorUsername: data.profiles.get(entry.sender_id)?.username ?? "",
+      text: entry.body,
+      wishTitle: entry.wish_title,
+      createdAt: entry.created_at,
+      reported: entry.id === message.id,
+      hidden: entry.hidden_at !== null,
+    }));
+    return {
+      kind: "message",
+      author,
+      text: message.body,
+      wishTitle: message.wish_title,
+      createdAt: message.created_at,
+      hidden: message.hidden_at !== null,
+      context,
+    };
+  }
   const author = authorOf(row.target_id, data);
   return author ? { kind: "user", author, bio: data.profiles.get(row.target_id)?.bio ?? null } : MISSING;
 }
@@ -262,7 +334,7 @@ function toLogEntry(action: ActionRow, data: Loaded): ModerationLogEntry {
 function toItem(row: QueueRow, data: Loaded): ModerationItem {
   const history = data.actions.filter((action) => action.target_type === row.target_type && action.target_id === row.target_id);
   const preview = previewOf(row, data);
-  const hidden = (preview.kind === "post" || preview.kind === "comment" || preview.kind === "piece") && preview.hidden;
+  const hidden = (preview.kind === "post" || preview.kind === "comment" || preview.kind === "piece" || preview.kind === "message") && preview.hidden;
   const hide = hidden ? activeHide(history) : null;
   return {
     targetType: row.target_type,

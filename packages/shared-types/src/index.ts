@@ -22,6 +22,10 @@ export interface Profile {
   isAdmin: boolean;
   /** Qui peut vous envoyer des pièces (lot 5, section 5.C). */
   pieceSendsFrom: PieceSendsFrom;
+  /** Qui peut vous écrire (lot messages, migration 0032) : invitations des
+   * membres qui ne sont pas vos amis. « everyone » tant que la migration
+   * n'est pas appliquée. */
+  messagesFrom: MessagesFrom;
 }
 
 /** Réglage « Qui peut m'envoyer des pièces » : les comptes que je suis (par
@@ -31,6 +35,21 @@ export const PIECE_SENDS_FROM = ["following", "everyone", "nobody"] as const sat
 
 export interface UpdatePieceSendsFromRequest {
   pieceSendsFrom: PieceSendsFrom;
+}
+
+/** Réglage « Qui peut m'écrire » (lot messages) : mêmes valeurs que celui
+ * des pièces, mais pour les invitations. Vos amis (vous vous suivez l'un
+ * l'autre) peuvent toujours vous écrire ; « everyone » : tout membre peut
+ * vous envoyer UNE invitation ; « following » : seulement les comptes que
+ * vous suivez ; « nobody » : seulement vos amis. */
+export type MessagesFrom = PieceSendsFrom;
+export const MESSAGES_FROM = PIECE_SENDS_FROM;
+/** Valeur par défaut (migration 0032) : une invitation reste une demande,
+ * que la personne accepte, refuse ou bloque. */
+export const DEFAULT_MESSAGES_FROM: MessagesFrom = "everyone";
+
+export interface UpdateMessagesFromRequest {
+  messagesFrom: MessagesFrom;
 }
 
 /** True once the user has picked a username — the app shows the
@@ -889,9 +908,10 @@ export interface AppNotification {
   reportedType: ReportTargetType | null;
 }
 
-/** « piece » (lot 5) : une pièce reçue d'une autre personne. */
-export type ReportTargetType = "user" | "post" | "comment" | "piece";
-export const REPORT_TARGET_TYPES = ["user", "post", "comment", "piece"] as const satisfies readonly ReportTargetType[];
+/** « piece » (lot 5) : une pièce reçue d'une autre personne. « message »
+ * (lot messages) : un message reçu dans une conversation. */
+export type ReportTargetType = "user" | "post" | "comment" | "piece" | "message";
+export const REPORT_TARGET_TYPES = ["user", "post", "comment", "piece", "message"] as const satisfies readonly ReportTargetType[];
 export type ReportReason = "spam" | "inappropriate" | "harassment" | "other";
 export const REPORT_REASONS = ["spam", "inappropriate", "harassment", "other"] as const satisfies readonly ReportReason[];
 /** Motif d'une décision de la modération : ceux des signalements, plus le
@@ -942,7 +962,32 @@ export type ModerationPreview =
   | { kind: "comment"; author: ModerationAuthor; body: string; postId: string; createdAt: string; hidden: boolean }
   | { kind: "user"; author: ModerationAuthor; bio: string | null }
   | { kind: "piece"; author: ModerationAuthor; title: string; imageUrl: string | null; imageRemoved: boolean; createdAt: string; hidden: boolean }
+  | {
+      kind: "message";
+      author: ModerationAuthor;
+      text: string | null;
+      /** Titre de l'envie jointe, sinon null. */
+      wishTitle: string | null;
+      createdAt: string;
+      hidden: boolean;
+      /** Le message signalé et quelques messages autour (jamais toute la conversation). */
+      context: ModerationMessageContext[];
+    }
   | { kind: "missing" };
+
+/** Un message de l'extrait montré à la modération autour d'un message signalé. */
+export interface ModerationMessageContext {
+  authorUsername: string;
+  text: string | null;
+  wishTitle: string | null;
+  createdAt: string;
+  /** Le message signalé lui-même. */
+  reported: boolean;
+  hidden: boolean;
+}
+
+/** Messages lus avant et après un message signalé (vue de la modération). */
+export const MODERATION_MESSAGE_CONTEXT = 2;
 
 export interface ModerationLogEntry {
   id: string;
@@ -1046,4 +1091,128 @@ export interface AppVersionInfo {
     minimumBuild: number | null;
     storeUrl: string | null;
   };
+}
+
+// ---- Messages privés (lot messages, migration 0032) ----
+// Deux amis (chacun suit l'autre) s'écrivent directement. Sinon, UNE
+// invitation : la personne l'accepte (la conversation s'ouvre), la refuse
+// (elle disparaît pour elle ; pas de nouvelle invitation pendant 30 jours)
+// ou bloque. Texte seul, et une envie jointe en option.
+
+/** Longueur maximale d'un message (texte). */
+export const MESSAGE_MAX_LENGTH = 1000;
+/** Le compteur de caractères s'affiche à partir de cette longueur. */
+export const MESSAGE_COUNTER_FROM = 900;
+/** Après un refus, pas de nouvelle invitation à cette personne pendant ce délai. */
+export const INVITATION_DECLINE_COOLDOWN_DAYS = 30;
+
+/** GET /api/messages/status : la messagerie est-elle disponible sur le
+ * serveur (migration 0032 appliquée), et combien de conversations ont un
+ * message non lu (invitations comprises). */
+export interface MessagesStatus {
+  enabled: boolean;
+  unreadCount: number;
+}
+
+/** Codes d'erreur propres aux messages. */
+export const MESSAGES_ERRORS = {
+  /** Migration 0032 absente (404) : l'app cache les messages. */
+  unavailable: "messages_unavailable",
+  /** Invitation déjà envoyée, en attente de réponse (409). */
+  invitationPending: "invitation_pending",
+  /** La personne n'accepte pas de message de vous (403). */
+  notAccepting: "recipient_not_accepting",
+} as const;
+
+/** Une envie jointe à un message : l'image est la copie faite par Spotto
+ * (jamais l'adresse du marchand), le lien est un lien web ordinaire. */
+export interface MessageWishCard {
+  title: string;
+  imageUrl: string;
+  imageThumbUrl: string;
+  merchantName: string | null;
+  merchantUrl: string | null;
+  /** Lien affilié (mention obligatoire). */
+  isAffiliate: boolean;
+  productMatchId: string | null;
+  priceMin: number | null;
+  currency: string | null;
+}
+
+export interface ChatMessage {
+  id: string;
+  /** Envoyé par la personne qui lit. */
+  mine: boolean;
+  text: string | null;
+  wish: MessageWishCard | null;
+  createdAt: string;
+}
+
+/** État d'une conversation, vu par la personne qui la lit :
+ * - open : conversation ouverte ;
+ * - invitation_sent : vous avez invité, en attente de réponse ;
+ * - invitation_received : on vous invite (section « Invitations ») ;
+ * - new : aucune conversation visible pour vous (premier message à écrire). */
+export type ConversationState = "open" | "invitation_sent" | "invitation_received" | "new";
+
+/** Ce que la personne qui lit peut écrire :
+ * - direct : envoyer librement ;
+ * - invitation : le prochain message est une invitation (une seule) ;
+ * - waiting : invitation envoyée, en attente de réponse ;
+ * - answer : invitation reçue, à accepter, refuser ou bloquer ;
+ * - not_allowed : la personne n'accepte pas de message de vous. */
+export type ConversationSendMode = "direct" | "invitation" | "waiting" | "answer" | "not_allowed";
+
+export interface ConversationLastMessage {
+  text: string | null;
+  hasWish: boolean;
+  mine: boolean;
+  /** Masqué par la modération, ou signalé par vous : son texte n'est pas montré. */
+  hidden: boolean;
+  createdAt: string;
+}
+
+export interface ConversationSummary {
+  id: string;
+  other: PostAuthor;
+  state: Exclude<ConversationState, "new">;
+  lastMessage: ConversationLastMessage | null;
+  lastMessageAt: string;
+  unread: boolean;
+}
+
+/** GET /api/conversations : conversations (ouvertes et invitations
+ * envoyées), et invitations reçues (première page seulement). */
+export interface ConversationsPage {
+  conversations: ConversationSummary[];
+  invitations: ConversationSummary[];
+  nextCursor: string | null;
+}
+
+/** Une conversation et ses messages (du plus ancien au plus récent). `id`
+ * null : pas encore de conversation avec cette personne. */
+export interface ConversationThread {
+  id: string | null;
+  other: PostAuthor;
+  state: ConversationState;
+  sendMode: ConversationSendMode;
+  messages: ChatMessage[];
+  /** Des messages plus anciens restent à charger. */
+  hasOlder: boolean;
+}
+
+/** POST /api/messages : à une personne (la conversation est trouvée ou
+ * créée par le serveur). Un texte, une envie (`wishId`, une de vos Envies),
+ * ou les deux. */
+export interface SendMessageRequest {
+  recipientId: string;
+  text?: string;
+  wishId?: string;
+}
+
+export interface SendMessageResponse {
+  conversationId: string;
+  message: ChatMessage;
+  state: ConversationState;
+  sendMode: ConversationSendMode;
 }

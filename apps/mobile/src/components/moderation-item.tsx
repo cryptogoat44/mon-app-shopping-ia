@@ -95,6 +95,8 @@ function ItemPreview({ preview, autoHidden }: { preview: ModerationPreview; auto
         </View>
       ) : preview.kind === "comment" ? (
         <Text style={styles.body}>{t.common.quoted(preview.body)}</Text>
+      ) : preview.kind === "message" ? (
+        <MessageExtract preview={preview} />
       ) : preview.bio ? (
         <Text style={styles.body}>{preview.bio}</Text>
       ) : null}
@@ -104,6 +106,26 @@ function ItemPreview({ preview, autoHidden }: { preview: ModerationPreview; auto
         suspended={preview.author.suspended}
         imageRemoved={(preview.kind === "post" || preview.kind === "piece") && preview.imageRemoved}
       />
+    </View>
+  );
+}
+
+/** Lot messages : le message signalé et quelques messages autour, jamais toute la conversation. */
+function MessageExtract({ preview }: { preview: Extract<ModerationPreview, { kind: "message" }> }) {
+  return (
+    <View style={styles.extract}>
+      <Text style={styles.sectionLabel}>{t.moderationQueue.messageContext}</Text>
+      {preview.context.map((entry, index) => (
+        <View key={`${entry.createdAt}-${index}`} style={[styles.extractEntry, entry.reported ? styles.extractReported : null]}>
+          <Text style={styles.meta}>
+            {[`@${entry.authorUsername}`, ago(entry.createdAt), entry.reported ? t.moderationQueue.messageReported : null, entry.hidden ? t.moderationQueue.hidden : null]
+              .filter((part): part is string => part !== null)
+              .join(" · ")}
+          </Text>
+          {entry.text ? <Text style={styles.body}>{t.common.quoted(entry.text)}</Text> : null}
+          {entry.wishTitle ? <Text style={styles.meta}>{t.moderationQueue.messageWish(entry.wishTitle)}</Text> : null}
+        </View>
+      ))}
     </View>
   );
 }
@@ -198,10 +220,23 @@ function ItemDecisions({ item, status, onChanged }: { item: ModerationItem; stat
   // « Masquer » confirme le masquage, « Classer sans suite » le lève (le
   // serveur rétablit le contenu) : « Rétablir » ferait doublon.
   const pendingAutoHide = status === "open" && item.activeHideAutomatic && activeHideActionId !== null;
-  const content = preview.kind === "post" || preview.kind === "comment" || preview.kind === "piece" ? preview : null;
-  const hideLabel = content?.kind === "post" ? t.moderationQueue.hidePost : content?.kind === "piece" ? t.moderationQueue.hidePiece : t.moderationQueue.hideComment;
+  const content = preview.kind === "post" || preview.kind === "comment" || preview.kind === "piece" || preview.kind === "message" ? preview : null;
+  const hideLabel =
+    content?.kind === "post"
+      ? t.moderationQueue.hidePost
+      : content?.kind === "piece"
+        ? t.moderationQueue.hidePiece
+        : content?.kind === "message"
+          ? t.moderationQueue.hideMessage
+          : t.moderationQueue.hideComment;
   const restoreLabel =
-    content?.kind === "post" ? t.moderationQueue.restorePost : content?.kind === "piece" ? t.moderationQueue.restorePiece : t.moderationQueue.restoreComment;
+    content?.kind === "post"
+      ? t.moderationQueue.restorePost
+      : content?.kind === "piece"
+        ? t.moderationQueue.restorePiece
+        : content?.kind === "message"
+          ? t.moderationQueue.restoreMessage
+          : t.moderationQueue.restoreComment;
   const errorView = error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null;
 
   if (panel === "remove_image") {
@@ -301,6 +336,9 @@ const styles = themedStyles(() => ({
   spaced: { marginTop: space.sm },
   note: { fontSize: font.secondary, color: color.encre, lineHeight: 20, marginTop: space.xs },
   historyEntry: { marginTop: space.xs },
+  extract: { gap: space.xs },
+  extractEntry: { paddingVertical: space.xs, paddingHorizontal: space.sm, borderRadius: radius.sm, borderWidth: 1, borderColor: color.filet },
+  extractReported: { borderColor: color.danger },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.md },
   fullWidth: { width: "100%" },
   action: {

@@ -568,3 +568,46 @@ describe("colonne de la migration 0028 (voie C) : origine des pièces proposées
     expect(en).not.toMatch(/Origin (Visual search|lens|shopping|words)/);
   });
 });
+
+describe("messages privés (lot messages, migration 0032)", () => {
+  it("chaque conversation avec l'autre membre, puis ses messages dans l'ordre, l'envie jointe comprise", () => {
+    const page = render();
+    const messages = spaces(decode(sectionHtml(page, "messages")));
+    expect(messages).toContain("Vos messages");
+    expect(messages).toContain("Conversation avec @alexis (Alexis Martin)");
+    expect(messages).toContain("Messages échangés (2)");
+    expect(messages.indexOf("Regarde ce sac")).toBeLessThan(messages.indexOf("Reponse masquee"));
+    expect(messages).toContain("Sac cabas");
+    expect(messages).toContain("89 €");
+    expect(messages).toContain("Voir la pièce chez Boutique");
+    // Image d'un message envoyé : la copie de notre stockage, affichée.
+    expect(messages).toContain(`<img src="${own("post-media", "message-mini.jpg")}"`);
+    expect(messages).toContain("Aucune : conversation ouverte");
+  });
+
+  it("un compte qui a bloqué la personne n'est jamais nommé ; un message reçu masqué n'est jamais présenté comme tel", () => {
+    const messages = spaces(decode(sectionHtml(render(), "messages")));
+    expect(messages).toContain("Conversation avec un compte Spotto");
+    expect(messages).not.toContain("bloqueur");
+    expect(messages).not.toContain("Nom Secret");
+    expect(messages).toContain("Reçue, refusée par vous");
+    // Le texte du message reçu reste (c'est une donnée de la personne), jamais la décision.
+    expect(messages).toContain("Reponse masquee");
+    expect(messages).not.toContain("Masqué par la modération");
+  });
+
+  it("en anglais", () => {
+    const data = fixture();
+    const messages = spaces(decode(sectionHtml(renderExportHtml(data, lookups(), options({ locale: "en", timeZone: "UTC" })), "messages")));
+    expect(messages).toContain("Your messages");
+    expect(messages).toContain("Conversation with @alexis (Alexis Martin)");
+    expect(messages).toContain("Messages exchanged (2)");
+    expect(messages).toContain("None: open conversation");
+  });
+
+  it("le réglage « Qui peut vous écrire » est dans le profil", () => {
+    const account = spaces(decode(sectionHtml(render(), "account")));
+    expect(account).toContain("Qui peut vous écrire");
+    expect(account).toContain("Tout le monde (sous forme d'invitation)");
+  });
+});

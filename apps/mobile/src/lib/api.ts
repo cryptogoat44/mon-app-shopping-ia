@@ -42,6 +42,12 @@ import type {
   WishlistItemDetail,
   WishlistPage,
   PieceSendsFrom,
+  MessagesFrom,
+  MessagesStatus,
+  ConversationsPage,
+  ConversationThread,
+  SendMessageRequest,
+  SendMessageResponse,
   ReceivedPiecesPage,
   UserProfile,
   CommentsPage,
@@ -60,6 +66,7 @@ import { requestShops } from "./spot-shops";
 import { deviceTimeZone, type ExportFormat, type ExportResponse } from "./export-file";
 import { searchLaunched } from "./search-limits";
 import { appBuildHeaders, isUpdateRequiredResponse, markUpdateRequired, parseStoreUrl, readAppVersionInfo } from "./app-update";
+import { readMessagesStatus, setMessagesStatus } from "./conversations";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -482,6 +489,66 @@ export async function removeReceivedPiece(id: string): Promise<void> {
 export async function updatePieceSendsFrom(pieceSendsFrom: PieceSendsFrom): Promise<void> {
   await authorizedFetch("/api/me/piece-sends-from", { method: "PUT", body: JSON.stringify({ pieceSendsFrom }) });
   track("piece_sends_setting_changed", { value: pieceSendsFrom });
+}
+
+// ---- Messages privés (lot messages) ----
+
+/** Disponibilité de la messagerie et conversations non lues. Un serveur sans
+ * la messagerie (ou en erreur) vaut « indisponible » : l'entrée est cachée.
+ * L'état est partagé avec les écrans abonnés (lib/conversations.ts). */
+export async function fetchMessagesStatus(): Promise<MessagesStatus> {
+  let status: MessagesStatus;
+  try {
+    const response = await authorizedFetch("/api/messages/status");
+    status = readMessagesStatus(await response.json().catch(() => null));
+  } catch (e) {
+    // Hors ligne : l'état connu reste affiché.
+    if (e instanceof TypeError) throw e;
+    status = readMessagesStatus(null);
+  }
+  setMessagesStatus(status);
+  return status;
+}
+
+export async function fetchConversations(cursor?: string | null): Promise<ConversationsPage> {
+  const response = await authorizedFetch(`/api/conversations${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+  return response.json();
+}
+
+/** Une conversation : les derniers messages, ou seulement les nouveaux
+ * depuis `after` (relecture), ou les plus anciens avant `before`. */
+export async function fetchConversation(id: string, options: { after?: string | null; before?: string | null } = {}): Promise<ConversationThread> {
+  const query = options.after ? `?after=${encodeURIComponent(options.after)}` : options.before ? `?before=${encodeURIComponent(options.before)}` : "";
+  const response = await authorizedFetch(`/api/conversations/${encodeURIComponent(id)}${query}`);
+  return response.json();
+}
+
+/** La conversation avec une personne (bouton « Message » d'un profil). */
+export async function fetchConversationWith(userId: string): Promise<ConversationThread> {
+  const response = await authorizedFetch(`/api/conversations/with/${encodeURIComponent(userId)}`);
+  return response.json();
+}
+
+export async function sendMessage(payload: SendMessageRequest): Promise<SendMessageResponse> {
+  const response = await authorizedFetch("/api/messages", { method: "POST", body: JSON.stringify(payload) });
+  return response.json();
+}
+
+export async function markConversationRead(id: string): Promise<void> {
+  await authorizedFetch(`/api/conversations/${encodeURIComponent(id)}/read`, { method: "POST" });
+}
+
+export async function acceptInvitation(id: string): Promise<void> {
+  await authorizedFetch(`/api/conversations/${encodeURIComponent(id)}/accept`, { method: "POST" });
+}
+
+export async function declineInvitation(id: string): Promise<void> {
+  await authorizedFetch(`/api/conversations/${encodeURIComponent(id)}/decline`, { method: "POST" });
+}
+
+/** Réglage « Qui peut m'écrire ». */
+export async function updateMessagesFrom(messagesFrom: MessagesFrom): Promise<void> {
+  await authorizedFetch("/api/me/messages-from", { method: "PUT", body: JSON.stringify({ messagesFrom }) });
 }
 
 export async function deleteWishlistItem(id: string): Promise<void> {
