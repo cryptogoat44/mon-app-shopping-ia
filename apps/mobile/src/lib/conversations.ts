@@ -2,7 +2,7 @@
 // (tests/messages.test.ts). Pas de temps réel : l'app relit pendant qu'un
 // écran des messages est ouvert, toutes les 5 s, puis plus lentement quand
 // rien ne bouge ou que le réseau échoue.
-import type { ChatMessage, ConversationSendMode, ConversationSummary, MessagesStatus, MessageWishCard } from "@monapp/shared-types";
+import type { ChatMessage, ConversationSendMode, ConversationSummary, MessagesStatus, MessageWishCard, SendMessageRequest } from "@monapp/shared-types";
 import { t } from "../i18n";
 import { formatPrice } from "./format";
 import type { Locale } from "./preferences";
@@ -117,6 +117,26 @@ export function composerNotice(mode: ConversationSendMode, otherName: string): s
 export function canSend(text: string, wishId: string | null, maxLength: number): boolean {
   const trimmed = text.trim();
   return (trimmed.length > 0 || wishId !== null) && trimmed.length <= maxLength;
+}
+
+/** Nature de la carte jointe au message en cours : une de vos Envies (par
+ * défaut), une envie d'une collection de la personne (« En parler »), ou une
+ * proposition d'une de vos recherches (« Envoyer à un ami », écran Résultat). */
+export type AttachedKind = "wish" | "collectionItem" | "match";
+
+/** La carte telle que POST /api/messages l'attend (une seule à la fois). */
+export function attachmentFor(card: { id: string; kind?: AttachedKind } | null): Pick<SendMessageRequest, "wishId" | "collectionItemId" | "matchId"> {
+  if (!card) return {};
+  if (card.kind === "collectionItem") return { collectionItemId: card.id };
+  if (card.kind === "match") return { matchId: card.id };
+  return { wishId: card.id };
+}
+
+/** Ce qui s'affiche au-dessus du champ pour la carte jointe, et son bouton « retirer ». */
+export function attachedLabels(card: { title: string; kind?: AttachedKind }): { title: string; remove: string } {
+  return card.kind === "match"
+    ? { title: t.messages.attachedPiece(card.title), remove: t.messages.removePiece }
+    : { title: t.messages.attachedWish(card.title), remove: t.messages.removeWish };
 }
 
 /** Prix de la carte d'une envie, ou null. */

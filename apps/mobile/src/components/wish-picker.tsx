@@ -4,6 +4,7 @@ import type { WishlistItem } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { fetchWishlist } from "@/lib/api";
+import type { AttachedKind } from "@/lib/conversations";
 import { loadErrorMessage } from "@/lib/load-error";
 import { ErrorMessage } from "@/components/error-message";
 import { SpotImage } from "@/components/spot-image";
@@ -11,12 +12,14 @@ import { themedStyles } from "@/theme/themed-styles";
 
 /** Une envie choisie pour être jointe à un message : une de vos Envies, ou
  * (lot collections, « En parler ») une envie d'une collection de la personne
- * à qui vous écrivez, dont l'image est la copie de Spotto (ou null). */
+ * à qui vous écrivez, dont l'image est la copie de Spotto (ou null). Aussi
+ * une proposition d'une de vos recherches (« Envoyer à un ami »), avec sa
+ * vignette telle que l'écran Résultat la montrait. */
 export interface PickedWish {
   id: string;
   title: string;
   imageUrl: string | null;
-  kind?: "wish" | "collectionItem";
+  kind?: AttachedKind;
 }
 
 // « Joindre une envie » (lot messages) : une de vos Envies, choisie dans la

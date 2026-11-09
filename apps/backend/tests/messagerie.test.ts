@@ -9,7 +9,7 @@ import reportsRoutes from "../src/routes/reports.js";
 import accountRoutes from "../src/routes/account.js";
 import meRoutes from "../src/routes/me.js";
 import { RATE_LIMITS } from "../src/lib/rateLimits.js";
-import { acceptsInvitation, cooldownOver, messagesReady, planSend, resetMessagesProbe, sendModeFor, viewerState } from "../src/lib/messaging.js";
+import { acceptsInvitation, cooldownOver, matchCard, messagesReady, planSend, resetMessagesProbe, sendModeFor, viewerState } from "../src/lib/messaging.js";
 import { requestLogFields, scrubLogLine, withoutErrorDetails } from "../src/lib/logPrivacy.js";
 import { STORAGE_ORIGIN, fakeSupabase, type FakeDbOptions, type Row } from "./fakeSupabase.js";
 
@@ -113,7 +113,7 @@ function as(target: FastifyInstance, user: string) {
   };
 }
 
-async function send(target: FastifyInstance, from: string, to: string, body: { text?: string; wishId?: string }) {
+async function send(target: FastifyInstance, from: string, to: string, body: { text?: string; wishId?: string; collectionItemId?: string; matchId?: string }) {
   return as(target, from).post("/api/messages", { recipientId: to, ...body });
 }
 
@@ -647,6 +647,265 @@ describe("envie jointe", () => {
     expect(limited.json().error).toBe("piece_send_limit");
     // Un message sans envie part toujours.
     expect((await send(target, sender, BOB, { text: "Sans envie" })).statusCode).toBe(201);
+  });
+});
+
+describe("résultat envoyé à un ami (sans passer par les Envies)", () => {
+  const ALICE_SEARCH = "a1000000-0000-4000-8000-000000000011";
+  const BOB_SEARCH = "b1000000-0000-4000-8000-000000000012";
+  const RESULT = "a2000000-0000-4000-8000-000000000021";
+  const BOB_RESULT = "b2000000-0000-4000-8000-000000000022";
+  const RESULT_THUMB = "https://encrypted-tbn0.gstatic.com/images?q=tbn:resultat";
+  const RESULT_HD = "https://boutique.example/images/veste-hd.jpg";
+  const RESULT_LINK = "https://boutique.example/veste-daim";
+  const NOT_FOUND = { error: "product_match_not_found", message: "Produit introuvable." };
+
+  const resultRow = (overrides: Row = {}): Row => ({
+    id: RESULT,
+    search_id: ALICE_SEARCH,
+    rank: 1,
+    product_name: "Veste en daim marron",
+    brand: "Maison",
+    image_url: RESULT_THUMB,
+    image_hd_url: RESULT_HD,
+    price_min: "189.00",
+    price_max: "189.00",
+    currency: "EUR",
+    merchant_name: "Boutique",
+    merchant_url: RESULT_LINK,
+    ...overrides,
+  });
+
+  /** Un résultat d'une recherche d'Alice, et un d'une recherche de Bob. */
+  function withResults(fake: ReturnType<typeof seeded>, overrides: Row = {}, owner = ALICE) {
+    fake.table("product_searches").push({ id: ALICE_SEARCH, user_id: owner }, { id: BOB_SEARCH, user_id: BOB });
+    fake.table("product_matches").push(resultRow(overrides), resultRow({ id: BOB_RESULT, search_id: BOB_SEARCH, product_name: "Sac de Bob", merchant_url: "https://autre.example/sac" }));
+    // Lien « direct » : le lien du marchand tel quel, comme saveMatches le range.
+    fake.table("affiliate_links").push({ product_match_id: RESULT, affiliate_url: String(overrides.merchant_url ?? RESULT_LINK) });
+  }
+
+  it("la carte reprend le résultat (sans réseau) : nom, sinon marque puis boutique ; titre coupé proprement ; lien trop long écarté", () => {
+    const row = { ...resultRow(), price_min: "189.00" } as Parameters<typeof matchCard>[0];
+    expect(matchCard(row)?.columns).toEqual({
+      wish_title: "Veste en daim marron",
+      wish_merchant_name: "Boutique",
+      wish_merchant_url: RESULT_LINK,
+      wish_product_match_id: RESULT,
+      wish_price_min: "189.00",
+      wish_currency: "EUR",
+    });
+    expect(matchCard(row)?.imageSource).toEqual({ image_url: RESULT_THUMB, product_match_id: RESULT });
+    expect(matchCard({ ...row, product_name: "   ", brand: null })?.columns.wish_title).toBe("Boutique");
+    expect(matchCard({ ...row, product_name: "", brand: " ", merchant_name: null })).toBeNull();
+    // 119 caractères puis un émoji : jamais une moitié d'émoji en fin de titre.
+    expect(matchCard({ ...row, product_name: `${"a".repeat(119)}👜 suite` })?.columns.wish_title).toBe("a".repeat(119));
+    const long = matchCard({ ...row, merchant_url: `https://boutique.example/${"a".repeat(2100)}` })!;
+    expect(long.columns).toMatchObject({ wish_merchant_url: null, wish_product_match_id: null });
+    // L'image haute définition du résultat sert quand même à la copie.
+    expect(long.imageSource.product_match_id).toBe(RESULT);
+  });
+
+  it("son propre résultat : carte complète, image copiée dans notre stockage (jamais l'adresse du marchand) ; rien n'est ajouté à ses Envies", async () => {
+    const fake = seeded({ follows: friends(ALICE, BOB) });
+    withResults(fake);
+    downloads.images.set(RESULT_THUMB, await jpeg(180, 240));
+    downloads.images.set(RESULT_HD, await jpeg(600, 800));
+    const target = await messagesApp(fake.db);
+    const res = await send(target, ALICE, BOB, { matchId: RESULT, text: "Regarde cette veste" });
+    expect(res.statusCode).toBe(201);
+    const sent: SendMessageResponse = res.json();
+    expect(sent.message.text).toBe("Regarde cette veste");
+    const card = sent.message.wish!;
+    expect(card).toMatchObject({
+      title: "Veste en daim marron",
+      merchantName: "Boutique",
+      merchantUrl: RESULT_LINK,
+      isAffiliate: false,
+      productMatchId: RESULT,
+      priceMin: 189,
+      currency: "EUR",
+    });
+    for (const url of [card.imageUrl, card.imageThumbUrl]) expect(url.startsWith(`${STORAGE_ORIGIN}/storage/v1/object/public/post-media/${ALICE}/`)).toBe(true);
+    expect(JSON.stringify(sent)).not.toContain("gstatic");
+    expect(JSON.stringify(sent)).not.toContain("veste-hd.jpg");
+    expect(fake.uploads.filter((path) => path.startsWith(`post-media/${ALICE}/`))).toHaveLength(2);
+    // Même choix que pour une envie : les deux sources, la plus grande gardée.
+    expect(downloads.calls.sort()).toEqual([RESULT_HD, RESULT_THUMB].sort());
+    expect(fake.table("messages")[0]).toMatchObject({ wish_image_url: card.imageUrl, wish_product_match_id: RESULT });
+    expect(fake.table("wishlist_items")).toEqual([]);
+    // Bob voit la même carte.
+    const thread: ConversationThread = (await as(target, BOB).get(`/api/conversations/${sent.conversationId}`)).json();
+    expect(thread.messages[0]!.wish).toEqual(card);
+    // Lien affilié, comme ailleurs : seulement s'il diffère du lien du marchand.
+    fake.table("affiliate_links")[0]!.affiliate_url = "https://partenaire.example/veste?aff=spotto";
+    const again: ConversationThread = (await as(target, BOB).get(`/api/conversations/${sent.conversationId}`)).json();
+    expect(again.messages[0]!.wish).toMatchObject({ merchantUrl: "https://partenaire.example/veste?aff=spotto", isAffiliate: true });
+  });
+
+  it("le résultat d'une autre personne : même 404 qu'un résultat inexistant ; rien n'est téléchargé ni écrit", async () => {
+    const fake = seeded({ follows: friends(ALICE, BOB) });
+    withResults(fake);
+    downloads.images.set(RESULT_THUMB, await jpeg(300, 300));
+    const target = await messagesApp(fake.db);
+    const bodies = new Set<string>();
+    for (const matchId of [BOB_RESULT, UNKNOWN]) {
+      const res = await send(target, ALICE, BOB, { matchId, text: "Regarde" });
+      expect(res.statusCode).toBe(404);
+      bodies.add(res.body);
+    }
+    // Celui d'Alice, envoyé par Bob : introuvable aussi.
+    const fromBob = await send(target, BOB, ALICE, { matchId: RESULT });
+    expect(fromBob.statusCode).toBe(404);
+    bodies.add(fromBob.body);
+    expect([...bodies]).toEqual([JSON.stringify(NOT_FOUND)]);
+    expect(downloads.calls).toEqual([]);
+    expect(fake.uploads).toEqual([]);
+    expect(fake.table("messages")).toHaveLength(0);
+    expect(fake.table("conversations")).toHaveLength(0);
+  });
+
+  it("aucune image récupérable : 422 (même code que pour une envie), rien n'est écrit ni gardé", async () => {
+    const fake = seeded({ follows: friends(ALICE, BOB) });
+    withResults(fake);
+    const target = await messagesApp(fake.db);
+    const res = await send(target, ALICE, BOB, { matchId: RESULT, text: "Regarde" });
+    expect(res.statusCode).toBe(422);
+    expect(res.json()).toEqual({ error: "wish_image_unavailable", message: "L'image de cette pièce n'a pas pu être récupérée. Réessayez plus tard." });
+    expect(downloads.calls.sort()).toEqual([RESULT_HD, RESULT_THUMB].sort());
+    expect(fake.uploads).toEqual([]);
+    expect(fake.table("messages")).toHaveLength(0);
+    expect(fake.table("conversations")).toHaveLength(0);
+  });
+
+  it("un lien marchand qui n'est pas un lien web ordinaire, ou trop long, n'est jamais recopié (ni remplacé par son lien affilié)", async () => {
+    for (const unsafe of ["javascript:alert(1)", `https://boutique.example/${"a".repeat(2100)}`]) {
+      const fake = seeded({ follows: friends(ALICE, BOB) });
+      withResults(fake, { merchant_url: unsafe });
+      downloads.images.set(RESULT_THUMB, await jpeg(300, 300));
+      const target = await messagesApp(fake.db);
+      const res = await send(target, ALICE, BOB, { matchId: RESULT });
+      expect(res.statusCode).toBe(201);
+      expect(res.json().message).toMatchObject({ text: null, wish: { title: "Veste en daim marron", merchantUrl: null, isAffiliate: false, productMatchId: null } });
+      expect(fake.table("messages")[0]).toMatchObject({ wish_merchant_url: null, wish_product_match_id: null });
+      // L'image haute définition du résultat a quand même été essayée.
+      expect(downloads.calls).toContain(RESULT_HD);
+      await app?.close();
+      app = null;
+    }
+  });
+
+  it("une seule carte par message : jamais avec une envie ou une envie de collection ; identifiant mal formé refusé", async () => {
+    const fake = seeded({ follows: friends(ALICE, BOB) });
+    withResults(fake);
+    downloads.images.set(RESULT_THUMB, await jpeg(300, 300));
+    const target = await messagesApp(fake.db);
+    for (const body of [{ matchId: RESULT, wishId: WISH }, { matchId: RESULT, collectionItemId: UNKNOWN }, { matchId: "pas-un-id" }]) {
+      const res = await send(target, ALICE, BOB, { text: "Regarde", ...body });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toEqual({ error: "invalid_body", message: "Message invalide." });
+    }
+    expect(downloads.calls).toEqual([]);
+    expect(fake.table("messages")).toHaveLength(0);
+  });
+
+  it("blocage, compte suspendu, mots interdits : les mêmes règles qu'un message ; rien n'est copié", async () => {
+    for (const block of [[ALICE, BOB] as [string, string], [BOB, ALICE] as [string, string]]) {
+      const fake = seeded({ follows: friends(ALICE, BOB), blocks: [block] });
+      withResults(fake);
+      downloads.images.set(RESULT_THUMB, await jpeg(300, 300));
+      const target = await messagesApp(fake.db);
+      const res = await send(target, ALICE, BOB, { matchId: RESULT });
+      expect(res.statusCode).toBe(404);
+      expect(res.json().error).toBe("recipient_not_found");
+      await app?.close();
+      app = null;
+    }
+    const fake = seeded({ follows: friends(ALICE, BOB), suspended: [ALICE] });
+    withResults(fake);
+    downloads.images.set(RESULT_THUMB, await jpeg(300, 300));
+    const target = await messagesApp(fake.db);
+    const suspended = await send(target, ALICE, BOB, { matchId: RESULT });
+    expect(suspended.statusCode).toBe(403);
+    expect(suspended.json().error).toBe("account_suspended");
+    fake.table("suspensions").length = 0;
+    const banned = await send(target, ALICE, BOB, { matchId: RESULT, text: "Espèce de connard" });
+    expect(banned.statusCode).toBe(400);
+    expect(banned.json().error).toBe("content_not_allowed");
+    expect(downloads.calls).toEqual([]);
+    expect(fake.uploads).toEqual([]);
+    expect(fake.table("messages")).toHaveLength(0);
+  });
+
+  it("invitations : refusé selon le réglage de la personne ; sinon UNE invitation, avec la carte, puis rien avant sa réponse", async () => {
+    const fake = seeded({ profiles: [profile(ALICE, "alice"), profile(BOB, "bob"), profile(CHLOE, "chloe", "nobody"), profile(DAN, "dan")] });
+    withResults(fake);
+    downloads.images.set(RESULT_THUMB, await jpeg(300, 300));
+    const target = await messagesApp(fake.db);
+    const refused = await send(target, ALICE, CHLOE, { matchId: RESULT });
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json().error).toBe("recipient_not_accepting");
+    expect(downloads.calls).toEqual([]);
+    const invitation = await send(target, ALICE, DAN, { matchId: RESULT, text: "Elle vous plairait" });
+    expect(invitation.statusCode).toBe(201);
+    expect(invitation.json()).toMatchObject({ state: "invitation_sent", sendMode: "waiting", message: { wish: { title: "Veste en daim marron" } } });
+    expect((await list(target, DAN)).invitations[0]!.lastMessage).toMatchObject({ hasWish: true, text: "Elle vous plairait" });
+    const pending = await send(target, ALICE, DAN, { matchId: RESULT });
+    expect(pending.statusCode).toBe(409);
+    expect(pending.json().error).toBe("invitation_pending");
+    expect(fake.table("messages")).toHaveLength(1);
+  });
+
+  it("compte comme une pièce envoyée (limite par heure)", async () => {
+    process.env.NODE_ENV = "development";
+    const sender = "30000000-0000-4000-8000-000000000002";
+    const fake = seeded({ profiles: [profile(sender, "envoi"), profile(BOB, "bob")], follows: friends(sender, BOB) });
+    withResults(fake, {}, sender);
+    downloads.images.set(RESULT_THUMB, await jpeg(200, 200));
+    const target = await messagesApp(fake.db);
+    for (let i = 0; i < RATE_LIMITS.pieceSend.max; i += 1) expect((await send(target, sender, BOB, { matchId: RESULT })).statusCode).toBe(201);
+    const limited = await send(target, sender, BOB, { matchId: RESULT });
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json().error).toBe("piece_send_limit");
+    expect((await send(target, sender, BOB, { text: "Sans carte" })).statusCode).toBe(201);
+  });
+
+  it("sans la migration 0032 : « indisponible », comme les autres routes des messages ; rien n'est lu ni copié", async () => {
+    const fake = seeded({}, { missing: ["conversations", "conversation_participants", "messages"] });
+    withResults(fake);
+    downloads.images.set(RESULT_THUMB, await jpeg(300, 300));
+    const target = await messagesApp(fake.db);
+    const res = await send(target, ALICE, BOB, { matchId: RESULT });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error).toBe("messages_unavailable");
+    expect(downloads.calls).toEqual([]);
+  });
+
+  it("le journal ne contient jamais le texte, ni le titre, ni l'adresse du résultat ; échec après la copie : copie effacée", async () => {
+    const secret = "Mon code secret est 4242 violette";
+    const lines: string[] = [];
+    let failNext = false;
+    const fake = seeded(
+      { follows: friends(ALICE, BOB) },
+      {
+        failWrite: (table, action, values) =>
+          failNext && table === "messages" && action === "insert"
+            ? { code: "23514", message: `new row violates check constraint, Failing row contains (${JSON.stringify(values)})` }
+            : null,
+      }
+    );
+    withResults(fake);
+    downloads.images.set(RESULT_THUMB, await jpeg(180, 240));
+    downloads.images.set(RESULT_HD, await jpeg(600, 800));
+    const target = await messagesApp(fake.db, lines);
+    expect((await send(target, ALICE, BOB, { matchId: RESULT, text: secret })).statusCode).toBe(201);
+    failNext = true;
+    const uploadedBefore = fake.uploads.length;
+    expect((await send(target, ALICE, BOB, { matchId: RESULT, text: secret })).statusCode).toBe(500);
+    expect(fake.removed.sort()).toEqual(fake.uploads.slice(uploadedBefore).sort());
+    const log = lines.join("\n");
+    expect(log).toContain("Échec de l'envoi d'un message");
+    expect(log).toContain("Message envoyé");
+    for (const hidden of ["4242", "violette", "Veste en daim", "veste-daim", "veste-hd.jpg", "tbn:resultat", RESULT]) expect(log).not.toContain(hidden);
   });
 });
 

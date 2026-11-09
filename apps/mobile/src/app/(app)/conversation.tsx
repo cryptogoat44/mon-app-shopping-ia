@@ -18,7 +18,9 @@ import {
   markConversationRead,
   sendMessage,
 } from "@/lib/api";
-import { canSend, canWrite, composerNotice, hasNewFromOther, mergeMessages, newestCreatedAt } from "@/lib/conversations";
+import { attachedLabels, attachmentFor, canSend, canWrite, composerNotice, hasNewFromOther, mergeMessages, newestCreatedAt } from "@/lib/conversations";
+import { track } from "@/lib/analytics";
+import { forgetPieceToSend, pieceToSend } from "@/lib/send-to-friend";
 import { timeAgo } from "@/lib/format";
 import { loadErrorMessage } from "@/lib/load-error";
 import { useToast } from "@/lib/toast-context";
@@ -60,8 +62,17 @@ function Bubble({ message, onOptions }: { message: ChatMessage; onOptions: () =>
 // envie d'une collection d'un ami (`userId` et `collectionItemId`, jointe d'avance). Relue toutes les 5 s environ tant que
 // l'écran est ouvert ; marquée comme lue à l'ouverture et à chaque nouveau
 // message. Une invitation reçue s'accepte, se refuse ou mène au blocage.
+// « Envoyer à un ami » (écran Résultat) : une proposition d'une de vos
+// recherches (`matchId`), jointe d'avance ; une fois envoyée, retour au
+// résultat, laissé tel quel, avec une courte confirmation.
 export default function ConversationScreen() {
-  const { id, userId, wishId, collectionItemId } = useLocalSearchParams<{ id?: string; userId?: string; wishId?: string; collectionItemId?: string }>();
+  const { id, userId, wishId, collectionItemId, matchId } = useLocalSearchParams<{
+    id?: string;
+    userId?: string;
+    wishId?: string;
+    collectionItemId?: string;
+    matchId?: string;
+  }>();
   const router = useRouter();
   const { showToast } = useToast();
   const [thread, setThread] = useState<ConversationThread | null>(null);
@@ -129,6 +140,14 @@ export default function ConversationScreen() {
       .catch(() => {});
   }, [collectionItemId]);
 
+  // « Envoyer à un ami » : la proposition, telle que l'écran Résultat la montrait
+  // (gardée en mémoire ; page rechargée sur le site : un libellé sans image).
+  useEffect(() => {
+    if (!matchId) return;
+    const piece = pieceToSend(matchId);
+    setWish({ id: matchId, title: piece?.title ?? t.messages.attachedPieceFallback, imageUrl: piece?.imageUrl ?? null, kind: "match" });
+  }, [matchId]);
+
   const poll = useCallback(async (): Promise<"new" | "same"> => {
     const conversationId = thread?.id;
     if (!conversationId) return "same";
@@ -165,9 +184,19 @@ export default function ConversationScreen() {
     setSendError(null);
     try {
       const text = draft.trim();
-      const attached = wish ? (wish.kind === "collectionItem" ? { collectionItemId: wish.id } : { wishId: wish.id }) : {};
-      const sent = await sendMessage({ recipientId: thread.other.id, ...(text ? { text } : {}), ...attached });
+      const sent = await sendMessage({ recipientId: thread.other.id, ...(text ? { text } : {}), ...attachmentFor(wish) });
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      if (wish?.kind === "match") {
+        // Statistiques : d'où la pièce est partie, rien d'autre (liste fermée, consentement).
+        track("piece_sent_to_friend", { from: pieceToSend(wish.id)?.from });
+        forgetPieceToSend();
+        showToast(sent.state === "invitation_sent" ? t.messages.pieceSentInvitation(thread.other.displayName) : t.messages.pieceSent(thread.other.displayName));
+        // Retour au résultat, tel qu'il était (même grande carte, liste au même endroit).
+        if (matchId && router.canGoBack()) {
+          router.back();
+          return;
+        }
+      }
       stickToEnd.current = true;
       setMessages((current) => mergeMessages(current, [sent.message]));
       setThread((current) => (current ? { ...current, id: sent.conversationId, state: sent.state, sendMode: sent.sendMode } : current));
@@ -354,9 +383,9 @@ export default function ConversationScreen() {
                     {wish.imageUrl ? <SpotImage hdUri={null} fallbackUri={wish.imageUrl} style={styles.fill} fit="cover" size="small" /> : <ImageUnavailable variant="thumb" />}
                   </View>
                   <Text style={styles.attachedTitle} numberOfLines={1}>
-                    {t.messages.attachedWish(wish.title)}
+                    {attachedLabels(wish).title}
                   </Text>
-                  <Pressable onPress={() => setWish(null)} hitSlop={10} accessibilityRole="button" accessibilityLabel={t.messages.removeWish}>
+                  <Pressable onPress={() => setWish(null)} hitSlop={10} accessibilityRole="button" accessibilityLabel={attachedLabels(wish).remove}>
                     <Text style={styles.attachedRemove}>×</Text>
                   </Pressable>
                 </View>

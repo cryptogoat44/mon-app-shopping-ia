@@ -99,6 +99,10 @@ export const ANALYTICS_EVENTS = {
   // Lot 5 : partage d'une envie — le canal et des choix, jamais la pièce ni la personne.
   wish_republished: { visibility: VISIBILITY },
   piece_sent: {},
+  // « Envoyer à un ami » (écran Résultat, lib/send-to-friend.ts) : une proposition
+  // envoyée dans une conversation, et d'où (grande carte, carte d'une section,
+  // ligne de la liste triée par prix) — jamais la pièce, le texte ni la personne.
+  piece_sent_to_friend: { from: oneOf(["big_card", "section", "price_list"]) },
   wish_shared_external: { method: oneOf(["native", "copy"]), affiliate: bool },
   received_piece_removed: {},
   piece_sends_setting_changed: { value: oneOf(PIECE_SENDS_FROM) },

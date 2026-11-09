@@ -56,6 +56,10 @@ export async function findWishPost(fastify: FastifyInstance, wishId: string) {
   return rows[0] ?? null;
 }
 
+/** Ce que la copie lit d'une envie, ou d'un résultat envoyé dans un message
+ * (son image et le résultat d'origine, pour l'image haute définition). */
+export type ImageCopySource = Pick<WishRow, "image_url" | "product_match_id">;
+
 /** Une source possible de la copie, et sa nature (pour le journal). */
 interface ImageSource {
   kind: "hd" | "thumbnail";
@@ -78,7 +82,7 @@ const KIND_ORDER: Record<ImageSource["kind"], number> = { hd: 0, thumbnail: 1 };
  * Google). La « haute définition » n'en est pas toujours une : beaucoup de
  * marchands donnent une petite version (constaté : 200 à 513 px de large),
  * parfois plus petite que la vignette — d'où le choix par la taille réelle. */
-async function imageSources(fastify: FastifyInstance, wish: WishRow): Promise<ImageSource[]> {
+async function imageSources(fastify: FastifyInstance, wish: ImageCopySource): Promise<ImageSource[]> {
   const [hd] = await fetchHdImageUrls(fastify, [wish]);
   const sources: ImageSource[] = hd ? [{ kind: "hd", url: hd }] : [];
   if (wish.image_url && wish.image_url !== hd) sources.push({ kind: "thumbnail", url: wish.image_url });
@@ -116,7 +120,7 @@ export async function copyWishImage(
   fastify: FastifyInstance,
   log: FastifyBaseLogger,
   userId: string,
-  wish: WishRow
+  wish: ImageCopySource
 ): Promise<{ url: string; thumbUrl: string }> {
   const discard = (source: ImageSource, error: unknown) =>
     log.warn(
