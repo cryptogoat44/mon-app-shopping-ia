@@ -18,11 +18,11 @@ import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
 const MAX_TAGGED_PIECES = 10;
 
 const taggedPieceInputSchema = z.union([
-  z.object({ vaultItemId: z.string().uuid() }).strict(),
-  z.object({ productMatchId: z.string().uuid() }).strict(),
+  z.object({ vaultItemId: z.guid() }).strict(),
+  z.object({ productMatchId: z.guid() }).strict(),
 ]);
 const postOptionalFieldsSchema = z.object({
-  vaultItemId: z.string().uuid().optional(),
+  vaultItemId: z.guid().optional(),
   privacy: z.enum(PRIVACY_LEVELS).optional(),
 });
 
@@ -38,11 +38,11 @@ const updatePostSchema = z.object({
 
 // Ligne de la table `posts` lue avec select("*"), relue sans lui faire confiance.
 const postRowSchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
+  id: z.guid(),
+  user_id: z.guid(),
   type: z.enum(POST_TYPES),
-  vault_item_id: z.string().uuid().nullable(),
-  wishlist_item_id: z.string().uuid().nullable().optional(),
+  vault_item_id: z.guid().nullable(),
+  wishlist_item_id: z.guid().nullable().optional(),
   caption: z.string().nullable(),
   media_url: z.string().nullable(),
   media_thumb_url: z.string().nullable().optional(),
@@ -60,7 +60,7 @@ function parsePostRow(data: unknown): PostRow {
   return parsed.data;
 }
 
-const ALREADY_SHARED_ROWS = z.array(z.object({ id: z.string().uuid(), hidden_at: z.string().nullable() }));
+const ALREADY_SHARED_ROWS = z.array(z.object({ id: z.guid(), hidden_at: z.string().nullable() }));
 
 interface ProfileRow {
   id: string;
@@ -79,11 +79,11 @@ interface VaultItemRow {
 
 const WISH_ROWS = z.array(
   z.object({
-    id: z.string().uuid(),
+    id: z.guid(),
     title: z.string(),
     merchant_name: z.string().nullable(),
     merchant_url: z.string().nullable(),
-    product_match_id: z.string().uuid().nullable(),
+    product_match_id: z.guid().nullable(),
     price_min: z.union([z.string(), z.number()]).nullable(),
     currency: z.string().nullable(),
   })

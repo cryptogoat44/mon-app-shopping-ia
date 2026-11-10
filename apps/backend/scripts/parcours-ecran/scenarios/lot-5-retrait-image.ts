@@ -71,11 +71,11 @@ const fichier = (adresse: string | null) => (adresse ?? "").split("/").pop() ?? 
 /** Sans écran : Louise republie et envoie ; Camille signale les deux. */
 async function partager(p: Parcours, c: Comptes): Promise<Partages> {
   const post = z
-    .object({ id: z.string().uuid(), mediaUrl: z.string(), mediaThumbUrl: z.string() })
+    .object({ id: z.guid(), mediaUrl: z.string(), mediaThumbUrl: z.string() })
     .parse(await (await ok(await p.api(c.louise, "POST", `/api/wishlist/${c.wishId}/republish`, { privacy: "followers" }), "republication")).json());
-  const sent = z.object({ id: z.string().uuid() }).parse(await (await ok(await p.api(c.louise, "POST", `/api/wishlist/${c.wishId}/send`, { recipientId: c.camille.id }), "envoi à Camille")).json());
+  const sent = z.object({ id: z.guid() }).parse(await (await ok(await p.api(c.louise, "POST", `/api/wishlist/${c.wishId}/send`, { recipientId: c.camille.id }), "envoi à Camille")).json());
   const recues = z
-    .object({ pieces: z.array(z.object({ id: z.string().uuid(), imageUrl: z.string(), imageThumbUrl: z.string() })) })
+    .object({ pieces: z.array(z.object({ id: z.guid(), imageUrl: z.string(), imageThumbUrl: z.string() })) })
     .parse(await (await ok(await p.api(c.camille, "GET", "/api/pieces/received"), "pièces de Camille")).json());
   const piece = recues.pieces.find((r) => r.id === sent.id);
   check(piece !== undefined, "la pièce envoyée est dans « Reçues »");

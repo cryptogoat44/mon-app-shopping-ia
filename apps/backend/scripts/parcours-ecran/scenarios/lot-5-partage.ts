@@ -118,14 +118,14 @@ export async function preparer(p: Parcours, combo: Combo): Promise<Comptes> {
   const source = p.admin.storage.from("post-media").getPublicUrl(chemin).data.publicUrl;
 
   // Résultat d'une recherche de Louise, avec un lien affilié (inséré directement : aucun appel SerpApi).
-  const search = z.object({ id: z.string().uuid() }).parse(
+  const search = z.object({ id: z.guid() }).parse(
     (await p.admin.from("product_searches").insert({ user_id: louise.id, source_url: "https://www.tiktok.com/@test/video/1", source_platform: "tiktok", method: "oembed", status: "completed" }).select("id").single()).data
   );
-  const match = z.object({ id: z.string().uuid() }).parse(
+  const match = z.object({ id: z.guid() }).parse(
     (await p.admin.from("product_matches").insert({ search_id: search.id, rank: 1, product_name: TITRE, image_url: source, merchant_url: "https://example.com/kelly" }).select("id").single()).data
   );
   check(!(await p.admin.from("affiliate_links").insert({ product_match_id: match.id, network: "direct", affiliate_url: "https://example.com/kelly?aff=spotto" })).error, "lien affilié");
-  const wish = z.object({ id: z.string().uuid() }).parse(
+  const wish = z.object({ id: z.guid() }).parse(
     await (
       await ok(
         await p.api(louise, "POST", "/api/wishlist", { title: TITRE, imageUrl: source, merchantName: "Boutique (test)", merchantUrl: "https://example.com/kelly", priceMin: 1290, currency: "EUR", productMatchId: match.id }),
@@ -215,7 +215,7 @@ async function recevoir(p: Parcours, combo: Combo, c: Comptes, envois: Envoi[], 
 /** Alix masque la pièce ; elle disparaît chez Camille ; Louise en est informée. */
 async function moderer(p: Parcours, combo: Combo, c: Comptes, envois: Envoi[], problemes: string[]) {
   const M = T[combo.locale];
-  const pieces = z.object({ pieces: z.array(z.object({ id: z.string().uuid() })) }).parse(await (await ok(await p.api(c.camille, "GET", "/api/pieces/received"), "pièces de Camille")).json());
+  const pieces = z.object({ pieces: z.array(z.object({ id: z.guid() })) }).parse(await (await ok(await p.api(c.camille, "GET", "/api/pieces/received"), "pièces de Camille")).json());
   const pieceId = pieces.pieces[0]?.id;
   check(pieceId !== undefined, "une pièce reçue par Camille");
 

@@ -69,7 +69,7 @@ export const COLLECTION_HIDDEN = {
 
 // ---- Lignes de la base ----
 
-const ID = z.string().uuid();
+const ID = z.guid();
 const TIMESTAMP = z.string().min(1);
 
 // Toutes les colonnes : `hidden_at` n'existe qu'après la migration 0034, et

@@ -102,7 +102,7 @@ export type CacheStep = "lens" | "query" | "shopping";
 
 /** Lecture du cache (lib/searchCache.ts, readCache, base et journal liés) :
  * null = absent ; ne lève jamais d'erreur. */
-export type CacheReader = <T>(key: string, schema: z.ZodType<T, z.ZodTypeDef, unknown>, signal: AbortSignal) => Promise<T | null>;
+export type CacheReader = <T>(key: string, schema: z.ZodType<T>, signal: AbortSignal) => Promise<T | null>;
 /** Écriture du cache (writeCache, base et journal liés), jamais attendue par
  * le lancement. */
 export type CacheWriter = (key: string, step: CacheStep, payload: unknown) => unknown;
@@ -196,7 +196,7 @@ function signalAfter(ports: Pick<CachePorts, "timeoutSignal">, ms: number): Abor
 }
 
 /** Lecture bornée à 800 ms ; une erreur vaut « absent ». */
-async function readCacheSafely<T>(ports: CachePorts, key: string, schema: z.ZodType<T, z.ZodTypeDef, unknown>): Promise<T | null> {
+async function readCacheSafely<T>(ports: CachePorts, key: string, schema: z.ZodType<T>): Promise<T | null> {
   try {
     return await ports.readCache(key, schema, signalAfter(ports, VOIE_C_BUDGET.cacheReadMs));
   } catch {

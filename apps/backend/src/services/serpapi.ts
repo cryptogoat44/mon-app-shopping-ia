@@ -94,7 +94,7 @@ export function isRefusalStatus(status: number): boolean {
  * Shopping, où il pourrait reprendre la requête : seulement le type et le code. */
 async function fetchSerpApi<T extends SerpApiStatusFields>(
   params: URLSearchParams,
-  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
+  schema: z.ZodType<T>,
   signal: AbortSignal,
   echo: boolean
 ): Promise<{ data: T; status: number }> {
