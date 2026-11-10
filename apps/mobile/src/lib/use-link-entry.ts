@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { track } from "./analytics";
 import { linkStep } from "./link-step";
-import { playerPlatforms } from "./player-capture";
+import { playerPlatforms } from "./player-access";
 import { holdPlayerLink, type PlayerLinkSource } from "./player-link";
 import { beginFromLink, prepareErrorMessage } from "./spot-flow";
 

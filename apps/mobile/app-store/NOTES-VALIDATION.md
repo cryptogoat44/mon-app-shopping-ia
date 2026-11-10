@@ -18,6 +18,7 @@ Tous les morceaux entre crochets `[…]` de la version anglaise :
 1. **`[À compléter]`** (3 fois) : l'e-mail et le mot de passe du compte de démonstration, et le nom d'utilisateur du second compte (celui qu'il suit). Voir [CONTROLE-BUILD.md](CONTROLE-BUILD.md), partie E.
 2. **`[8]` et `[25]`** : les plafonds réels de Render (`SERPAPI_USER_DAILY_CAP` et `SERPAPI_DAILY_CAP`). 8 et 25 sont les valeurs par défaut du code ; elles seront relevées avec l'offre SerpApi payante.
 3. **`[ON/OFF]`** : l'état de la voie C chez Render le jour de l'envoi (`VOIE_C_ENABLED`). Gardez un seul des deux mots. Le paragraphe reste dans tous les cas (règle 2.5.19 : aucune fonction dormante non décrite).
+   *Lecteur intégré TikTok / Instagram : rien à écrire.* Le module natif qui prenait l'image du lecteur est retiré de l'app depuis le lot « nettoyage avant le premier build » (10 novembre 2026) et le lecteur n'est proposé nulle part : le build ne contient aucun code de capture. La phrase « Un lien TikTok, Instagram ou Pinterest collé n'est pas lu » reste exacte. S'il revenait un jour (`apps/mobile/BUILD-IPHONE.md`, section 9), ces notes devraient le décrire.
 4. **Le paragraphe « SERVER »** : supprimez-le si le serveur est passé sur une offre Render sans veille (c'est ce qu'il faut faire avant l'envoi, point 16).
 5. **La phrase « We review reports within 24 hours »** : ne la laissez que si vous prenez cet engagement (alerte Sentry reçue sur votre téléphone, week-end compris).
 

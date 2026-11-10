@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fr } from "../src/i18n/fr";
-import { sanitizeProps } from "../src/lib/analytics-events";
+import { ANALYTICS_EVENTS, sanitizeProps } from "../src/lib/analytics-events";
 import { detectLink } from "../src/lib/link-detection";
 import { linkStep } from "../src/lib/link-step";
 import { normalizeSharedLink } from "../src/lib/shared-item";
@@ -83,13 +83,9 @@ describe("lien → lecteur intégré (app iPhone, lecteur allumé)", () => {
 describe("statistiques du lecteur : jamais le lien ni l'image", () => {
   it("valeurs admises seulement", () => {
     expect(sanitizeProps("player_opened", { platform: "tiktok", source: "share", url: "https://vm.tiktok.com/x" })).toEqual({ platform: "tiktok", source: "share" });
-    expect(sanitizeProps("player_capture", { platform: "instagram", method: "pdf", outcome: "ok", remembered: true, attempts: 2, uri: "file:///x.jpg" })).toEqual({
-      platform: "instagram",
-      method: "pdf",
-      outcome: "ok",
-      remembered: true,
-      attempts: 2,
-    });
+    // Plus aucun événement de capture : le module natif est sorti de l'app.
+    expect(Object.keys(ANALYTICS_EVENTS)).not.toContain("player_capture");
+    expect(sanitizeProps("player_fallback", { platform: "tiktok", choice: "black_reported" })).toEqual({ platform: "tiktok" });
     expect(sanitizeProps("player_unavailable", { platform: "pinterest", reason: "not_public" })).toEqual({ reason: "not_public" });
     expect(sanitizeProps("player_fallback", { platform: "tiktok", choice: "embed" })).toEqual({ platform: "tiktok", choice: "embed" });
     expect(sanitizeProps("player_consent", { platform: "tiktok", choice: "play", text: "libre" })).toEqual({ platform: "tiktok", choice: "play" });

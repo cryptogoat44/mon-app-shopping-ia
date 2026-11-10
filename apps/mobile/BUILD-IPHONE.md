@@ -181,3 +181,30 @@ conversation.
 Avant d'allumer : faire relire le paragraphe « Expo » de la politique de
 confidentialité (« [À vérifier] ») et revoir les réponses « App Privacy »
 d'Apple (`app-store/CONFIDENTIALITE-APPLE.md`).
+
+## 9. Lecteur intégré TikTok / Instagram : hors du build
+
+Le lecteur intégré (lot « lecteur intégré ») ouvrait une vidéo TikTok ou
+Instagram dans Spotto, et « Spotter ce moment » en prenait l'image grâce à un
+module natif écrit en Swift (`apps/mobile/modules/spotto-frame-capture`).
+Aucune plateforme n'a autorisé cet usage par écrit, et Apple refuse les
+fonctions cachées ou dormantes (règle 2.5.19) comme l'usage non autorisé du
+contenu d'un autre service (règle 5.2.3).
+
+Depuis le lot « nettoyage avant le premier build » (10 novembre 2026) :
+
+- le module natif de capture et son pont (`src/lib/player-capture.ts`) sont
+  **retirés** de l'app : un build iPhone ne contient plus aucun code natif de
+  capture, le dossier `apps/mobile/modules` n'existe plus ;
+- le lecteur n'est proposé nulle part (`LINK_PLAYER_ENABLED = false`, et de
+  toute façon jamais sans le module : `src/lib/player-access.ts`) ; un lien
+  collé ou partagé affiche l'aide « capture d'écran d'abord », comme avant ;
+- le reste du code du lecteur (lecture de la vidéo, accord préalable) reste
+  dans le dépôt, éteint, sans « Spotter ce moment ».
+
+**Pour le faire revenir**, seulement après l'accord écrit d'une plateforme :
+demander à Claude d'annuler le commit de ce lot (`git revert` du commit
+« App iPhone : module natif de capture du lecteur retiré »), puis de passer
+`LINK_PLAYER_ENABLED` à `true`, puis refaire un build iPhone (le module est
+natif : une mise à jour à distance ne suffit pas). Il faudra alors revoir les
+notes pour Apple et les réponses « App Privacy » (`app-store/`).

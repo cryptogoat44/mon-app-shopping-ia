@@ -120,19 +120,13 @@ export const ANALYTICS_EVENTS = {
   video_ai_result: { outcome: oneOf(["found", "not_found", "unavailable", "limit"]), moments_count: count },
   // Moment essayé parmi les 3 proposés (1 = le meilleur).
   video_ai_moment_tried: { rank: count },
-  // Lot « lecteur intégré » (app iPhone) : la plateforme, l'origine du lien
-  // (collé ou partagé), la méthode de capture et son issue — jamais le lien,
-  // la vidéo ni l'image.
+  // Lot « lecteur intégré » (app iPhone) : la plateforme et l'origine du lien
+  // (collé ou partagé) — jamais le lien, la vidéo ni l'image. L'événement de
+  // la capture (« player_capture ») est parti avec le module natif de capture
+  // (lot « nettoyage avant le premier build »).
   player_opened: { platform: PLAYER_PLATFORM, source: oneOf(["paste", "share"]) },
   player_unavailable: { platform: PLAYER_PLATFORM, reason: oneOf(["not_public", "not_a_video", "no_answer", "short_link", "network", "player_error", "crashed"]) },
-  player_capture: {
-    platform: PLAYER_PLATFORM,
-    method: oneOf(["pdf", "snapshot", "screen", "none"]),
-    outcome: oneOf(["ok", "blank", "declined", "failed"]),
-    remembered: bool,
-    attempts: count,
-  },
-  player_fallback: { platform: PLAYER_PLATFORM, choice: oneOf(["screenshot", "open_app", "black_reported", "embed"]) },
+  player_fallback: { platform: PLAYER_PLATFORM, choice: oneOf(["screenshot", "open_app", "embed"]) },
   player_consent: { platform: PLAYER_PLATFORM, choice: oneOf(["play", "screenshot"]) },
 } as const satisfies Record<string, Record<string, Rule>>;
 

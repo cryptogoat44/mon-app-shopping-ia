@@ -157,7 +157,7 @@ Rien d'autre : les statistiques avec accord et sans cookie, les rapports d'erreu
 ## 6. Quand revoir ces réponses
 
 Avant chaque build envoyé à Apple, si l'un de ces changements est entré dans `main` :
-- le **lecteur intégré** TikTok / Instagram (branche `lot-lecteur`) : le lecteur officiel de ces plateformes peut déposer ses propres traceurs. Il faudrait alors revoir « Suivi » et « Historique de navigation » ;
+- le **lecteur intégré** TikTok / Instagram (éteint, et son module natif de capture retiré de l'app : `apps/mobile/BUILD-IPHONE.md`, section 9) : s'il revenait, le lecteur officiel de ces plateformes peut déposer ses propres traceurs. Il faudrait alors revoir « Suivi » et « Historique de navigation » ;
 - le **service anti-robots** (point 17) : il reçoit l'adresse IP et des données de l'appareil ;
 - la **copie des photos** pour les sauvegardes (point 10) ;
 - tout nouveau prestataire, toute nouvelle autorisation, tout nouvel événement de statistiques ;

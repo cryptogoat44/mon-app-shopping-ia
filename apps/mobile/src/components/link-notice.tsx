@@ -3,7 +3,7 @@ import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { VideoIcon } from "@/components/icons";
 import { linkStep } from "@/lib/link-step";
-import { playerPlatforms } from "@/lib/player-capture";
+import { playerPlatforms } from "@/lib/player-access";
 import { recordingDevice } from "@/lib/screen-recording";
 import { useLinkEntry } from "@/lib/use-link-entry";
 import { themedStyles } from "@/theme/themed-styles";

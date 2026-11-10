@@ -7,7 +7,7 @@ import { Pressable, Text } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { color, font, space } from "@/theme/tokens";
 import { t } from "@/i18n";
-import { isPlayerAvailable, readPlayerConsent, withdrawPlayerConsent } from "@/lib/player-capture";
+import { isPlayerAvailable, readPlayerConsent, withdrawPlayerConsent } from "@/lib/player-access";
 import { themedStyles } from "@/theme/themed-styles";
 
 export function PlayerConsentSetting() {
