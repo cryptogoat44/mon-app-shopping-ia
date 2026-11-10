@@ -186,6 +186,9 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Cette collection a été masquée par la modération : vous ne pouvez pas la montrer à vos amis.":
     "This collection was hidden by moderation: you can't show it to your friends.",
   "Le signalement des collections n'est pas encore disponible.": "Reporting collections isn't available yet.",
+  // Lot « conformité Apple » (migration 0037) : retirer une bio ou une photo de profil.
+  "Le retrait d'une bio ou d'une photo de profil n'est pas encore disponible.": "Removing a bio or a profile photo isn't available yet.",
+  "Il n'y a rien à retirer : la bio ou la photo de ce profil a déjà disparu.": "There is nothing to remove: this profile's bio or photo is already gone.",
   "Cette envie n'a pas d'image copiée par Spotto : il n'y a rien à retirer.": "This wish has no image copied by Spotto: there's nothing to remove.",
   // Notifications sur le téléphone (lot notifications, lib/push.ts).
   "Les notifications ne sont pas disponibles.": "Notifications aren't available.",

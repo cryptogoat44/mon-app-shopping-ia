@@ -12,6 +12,9 @@
 // son nom, son auteur et ses dernières envies (titre et copie de l'image,
 // comme les amis les voient), chacune avec « Retirer l'image » si une copie
 // est en place.
+// Lot « conformité Apple » (migration 0037) : pour un profil signalé,
+// « Retirer la bio » et « Retirer la photo de profil » sont proposés s'il en
+// a une et si la base a la migration (sinon : jamais).
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
@@ -415,11 +418,19 @@ function toLogEntry(action: ActionRow, data: Loaded): ModerationLogEntry {
   };
 }
 
-function toItem(row: QueueRow, data: Loaded): ModerationItem {
+/** Ce que la base permet (sondes des migrations facultatives). */
+export interface QueueOptions {
+  /** Migration 0037 : retirer la bio ou la photo d'un profil. */
+  profileModeration: boolean;
+}
+
+function toItem(row: QueueRow, data: Loaded, options: QueueOptions): ModerationItem {
   const history = data.actions.filter((action) => action.target_type === row.target_type && action.target_id === row.target_id);
   const preview = previewOf(row, data);
   const hidden = preview.kind !== "user" && preview.kind !== "missing" && preview.hidden;
   const hide = hidden ? activeHide(history) : null;
+  // Un profil signalé : sa bio et sa photo, telles que la modération les lit.
+  const reportedProfile = options.profileModeration && preview.kind === "user" ? preview : null;
   return {
     targetType: row.target_type,
     targetId: row.target_id,
@@ -433,13 +444,19 @@ function toItem(row: QueueRow, data: Loaded): ModerationItem {
     activeHideAutomatic: hide?.automatic ?? false,
     activeSuspendActionId: preview.kind === "missing" ? null : (data.suspensions.get(preview.author.id) ?? null),
     canRemoveImage: canRemoveImage(row, preview, data),
+    canRemoveBio: reportedProfile !== null && (reportedProfile.bio ?? "").trim() !== "",
+    canRemoveAvatar: reportedProfile !== null && reportedProfile.author.avatarUrl !== null,
     history: history.slice(0, HISTORY_LIMIT).map((action) => toLogEntry(action, data)),
   };
 }
 
 /** Éléments de la file, dans l'ordre des lignes reçues. Relève DatabaseReadError si une lecture échoue. */
-export async function buildModerationItems(fastify: FastifyInstance, rows: QueueRow[]): Promise<ModerationItem[]> {
+export async function buildModerationItems(
+  fastify: FastifyInstance,
+  rows: QueueRow[],
+  options: QueueOptions = { profileModeration: false }
+): Promise<ModerationItem[]> {
   if (rows.length === 0) return [];
   const data = await loadAll(fastify, rows);
-  return rows.map((row) => toItem(row, data));
+  return rows.map((row) => toItem(row, data, options));
 }

@@ -1225,7 +1225,8 @@ export const en: Catalog = {
     moderationHiddenPiece: "A piece you sent was hidden by moderation.",
     moderationHiddenMessage: "A message you sent was hidden by moderation.",
     moderationRestoredMessage: "A message you sent was restored.",
-    moderationSuspended: "Your account was suspended: you can no longer post, comment, follow, react or edit your profile.",
+    moderationSuspended:
+      "Your account was suspended: you can no longer post, comment, follow, react or edit your profile. Your bio and profile photo are no longer shown to other members.",
     moderationRestoredPost: "Your post was restored.",
     moderationRestoredComment: "Your comment was restored.",
     moderationRestoredPiece: "A piece you sent was restored.",
@@ -1235,6 +1236,8 @@ export const en: Catalog = {
     moderationHiddenCollection: "One of your collections was hidden by moderation: your friends can no longer see it.",
     moderationRestoredCollection: "One of your collections is no longer hidden by moderation.",
     moderationImageRemovedCollection: "The image of a wish in your collection was removed by moderation. Your friends see the wish without its image.",
+    moderationBioRemoved: "Your bio was removed by moderation.",
+    moderationAvatarRemoved: "Your profile photo was removed by moderation: its file has been deleted.",
     moderationOther: "A moderation decision concerns you.",
     moderationReason: (reason: string) => `Reason: ${reason}`,
     moderationNote: (note: string) => `Details: ${note}`,
@@ -1322,7 +1325,7 @@ export const en: Catalog = {
     noteHint: "They will see it with the reason. Never mention who reported.",
     confirmHide: "Confirm hiding",
     suspendWarning:
-      "Suspend this account? It will no longer be able to post, comment, follow, react or edit its profile, and will no longer appear in search. You can lift the suspension.",
+      "Suspend this account? It will no longer be able to post, comment, follow, react or edit its profile, and will no longer appear in search. Its bio and profile photo will no longer be shown to other members. You can lift the suspension.",
     confirmSuspend: "Confirm suspension",
     saved: "Decision saved.",
     undone: "Decision reversed.",
@@ -1333,6 +1336,14 @@ export const en: Catalog = {
     confirmRemoveImage: "Confirm removal",
     imageRemoved: "Image removed",
     imageRemovedSaved: "Image removed: its file has been deleted.",
+    removeBio: "Remove the bio",
+    removeAvatar: "Remove the profile photo",
+    removeBioWarning:
+      "Remove this profile's bio? It will be erased: this decision cannot be undone. The person will be notified, with the reason you choose. They can write another one, unless their account is suspended.",
+    removeAvatarWarning:
+      "Remove this profile's photo? Its file will be deleted for good: this decision cannot be undone. The person will be notified, with the reason you choose. They can pick another one, unless their account is suspended.",
+    bioRemovedSaved: "Bio removed.",
+    avatarRemovedSaved: "Profile photo removed: its file has been deleted.",
     history: "Decisions",
     actions: {
       dismiss: "Dismissed",
@@ -1341,6 +1352,8 @@ export const en: Catalog = {
       restore: "Restored",
       unsuspend: "Suspension lifted",
       remove_image: "Image removed",
+      remove_bio: "Bio removed",
+      remove_avatar: "Profile photo removed",
     },
     by: (username: string) => `by @${username}`,
   },

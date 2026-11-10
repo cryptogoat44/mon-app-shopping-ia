@@ -1310,7 +1310,8 @@ export const fr = {
     // Lot messages : un message envoyé.
     moderationHiddenMessage: "Un message que vous avez envoyé a été masqué par la modération.",
     moderationRestoredMessage: "Un message que vous avez envoyé a été rétabli.",
-    moderationSuspended: "Votre compte a été suspendu : vous ne pouvez plus publier, commenter, suivre, réagir ni modifier votre profil.",
+    moderationSuspended:
+      "Votre compte a été suspendu : vous ne pouvez plus publier, commenter, suivre, réagir ni modifier votre profil. Votre bio et votre photo de profil ne sont plus montrées aux autres membres.",
     moderationRestoredPost: "Votre publication a été rétablie.",
     moderationRestoredComment: "Votre commentaire a été rétabli.",
     moderationRestoredPiece: "Une pièce que vous avez envoyée a été rétablie.",
@@ -1321,6 +1322,9 @@ export const fr = {
     moderationHiddenCollection: "Une de vos collections a été masquée par la modération : vos amis ne la voient plus.",
     moderationRestoredCollection: "Une de vos collections n'est plus masquée par la modération.",
     moderationImageRemovedCollection: "L'image d'une envie de votre collection a été retirée par la modération. Vos amis voient l'envie sans son image.",
+    // Lot « conformité Apple » (migration 0037) : la bio ou la photo du profil.
+    moderationBioRemoved: "Votre bio a été retirée par la modération.",
+    moderationAvatarRemoved: "Votre photo de profil a été retirée par la modération : son fichier est effacé.",
     moderationOther: "Une décision de la modération vous concerne.",
     moderationReason: (reason: string) => `Motif : ${reason}`,
     moderationNote: (note: string) => `Précision : ${note}`,
@@ -1416,7 +1420,7 @@ export const fr = {
     noteHint: "Elle lui sera montrée avec le motif. Ne mentionnez jamais l'auteur d'un signalement.",
     confirmHide: "Confirmer le masquage",
     suspendWarning:
-      "Suspendre ce compte ? Il ne pourra plus publier, commenter, suivre, réagir ni modifier son profil, et n'apparaîtra plus en recherche. Vous pourrez lever la suspension.",
+      "Suspendre ce compte ? Il ne pourra plus publier, commenter, suivre, réagir ni modifier son profil, et n'apparaîtra plus en recherche. Sa bio et sa photo de profil ne seront plus montrées aux autres membres. Vous pourrez lever la suspension.",
     confirmSuspend: "Confirmer la suspension",
     saved: "Décision enregistrée.",
     undone: "Décision annulée.",
@@ -1428,6 +1432,15 @@ export const fr = {
     confirmRemoveImage: "Confirmer le retrait",
     imageRemoved: "Image retirée",
     imageRemovedSaved: "Image retirée : son fichier est effacé.",
+    // Lot « conformité Apple » (migration 0037) : retirer la bio ou la photo d'un profil signalé.
+    removeBio: "Retirer la bio",
+    removeAvatar: "Retirer la photo de profil",
+    removeBioWarning:
+      "Retirer la bio de ce profil ? Elle sera effacée : cette décision ne s'annule pas. La personne sera prévenue, avec le motif choisi. Elle pourra en écrire une autre, sauf si son compte est suspendu.",
+    removeAvatarWarning:
+      "Retirer la photo de ce profil ? Son fichier sera effacé définitivement : cette décision ne s'annule pas. La personne sera prévenue, avec le motif choisi. Elle pourra en choisir une autre, sauf si son compte est suspendu.",
+    bioRemovedSaved: "Bio retirée.",
+    avatarRemovedSaved: "Photo de profil retirée : son fichier est effacé.",
     history: "Décisions",
     actions: {
       dismiss: "Classé sans suite",
@@ -1436,6 +1449,8 @@ export const fr = {
       restore: "Rétabli",
       unsuspend: "Suspension levée",
       remove_image: "Image retirée",
+      remove_bio: "Bio retirée",
+      remove_avatar: "Photo de profil retirée",
     },
     by: (username: string) => `par @${username}`,
   },

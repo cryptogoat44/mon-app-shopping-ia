@@ -28,6 +28,7 @@ import type {
   PublicProfile,
   ReactToPostResponse,
   RemoveImageRequest,
+  RemoveProfilePartRequest,
   RunTextSearchRequest,
   TaggedPieceInput,
   UpdateMeRequest,
@@ -820,6 +821,14 @@ export async function applyModerationDecision(payload: ModerationActionRequest):
 export async function removeCopiedImage(payload: RemoveImageRequest): Promise<void> {
   await authorizedFetch("/api/admin/moderation/remove-image", { method: "POST", body: JSON.stringify(payload) });
   track("moderation_decision", { decision: "remove_image", target_type: payload.targetType });
+}
+
+/** Retire la bio ou la photo d'un profil (lot « conformité Apple », migration
+ * 0037) : motif obligatoire ; pour la photo, le serveur efface d'abord le
+ * fichier ; définitif. */
+export async function removeProfilePart(payload: RemoveProfilePartRequest): Promise<void> {
+  await authorizedFetch("/api/admin/moderation/remove-profile-part", { method: "POST", body: JSON.stringify(payload) });
+  track("moderation_decision", { decision: payload.part === "bio" ? "remove_bio" : "remove_avatar", target_type: "user" });
 }
 
 /** Annule un masquage (`hide`) ou une suspension (`suspend`) encore en vigueur. */

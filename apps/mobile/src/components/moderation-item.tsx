@@ -8,14 +8,23 @@ import type {
   ModerationLogEntry,
   ModerationPreview,
   ModerationStatus,
+  ProfilePart,
   ReportReason,
 } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { timeAgo } from "@/lib/format";
-import { applyModerationDecision, removeCopiedImage, undoModerationDecision } from "@/lib/api";
+import { applyModerationDecision, removeCopiedImage, removeProfilePart, undoModerationDecision } from "@/lib/api";
 import { loadErrorMessage } from "@/lib/load-error";
-import { collectionPreviewView, hideRestoreLabels, moderationActionLabel, moderationReasonLabel, mostReportedReason, reasonsSummary } from "@/lib/moderation-labels";
+import {
+  collectionPreviewView,
+  hideRestoreLabels,
+  moderationActionLabel,
+  moderationReasonLabel,
+  mostReportedReason,
+  profileRemovalActions,
+  reasonsSummary,
+} from "@/lib/moderation-labels";
 import { useToast } from "@/lib/toast-context";
 import { ErrorMessage } from "@/components/error-message";
 import { ImageUnavailable } from "@/components/image-unavailable";
@@ -28,6 +37,9 @@ import { Avatar } from "@/components/avatar";
 // possibles et leur historique (qui, quoi, quand, motif). Lot modération des
 // collections : une collection montre son nom, son auteur et ses dernières
 // envies (titre et copie de l'image), chacune avec « Retirer l'image ».
+// Lot « conformité Apple » (migration 0037) : un profil signalé propose
+// « Retirer la bio » et « Retirer la photo de profil », si le serveur les
+// annonce (lib/moderation-labels.ts, profileRemovalActions).
 
 const ago = (iso: string) => timeAgo(iso, getActiveLocale());
 
@@ -284,7 +296,10 @@ function useDecisions(item: ModerationItem, onChanged: () => void) {
     if (targetType !== "post" && targetType !== "piece") return false;
     return run(() => removeCopiedImage({ targetType, targetId: item.targetId, ...extra }), t.moderationQueue.imageRemovedSaved);
   };
-  return { busy, error, decide, undo, removeImage };
+  // Lot « conformité Apple » : la bio ou la photo du profil signalé (motif obligatoire).
+  const removePart = (part: ProfilePart, reason: ReportReason, note: string, saved: string) =>
+    run(() => removeProfilePart({ userId: item.targetId, part, reason, ...(note ? { note } : {}) }), saved);
+  return { busy, error, decide, undo, removeImage, removePart };
 }
 
 function ItemDecisions({
@@ -302,7 +317,10 @@ function ItemDecisions({
   onItemPanelClose: () => void;
 }) {
   const [panel, setPanel] = useState<DecisionKind | "remove_image" | null>(null);
-  const { busy, error, decide, undo, removeImage } = decisions;
+  const [partToRemove, setPartToRemove] = useState<ProfilePart | null>(null);
+  const { busy, error, decide, undo, removeImage, removePart } = decisions;
+  const removals = profileRemovalActions(item);
+  const removal = removals.find((entry) => entry.part === partToRemove) ?? null;
   const { preview, activeHideActionId, activeSuspendActionId } = item;
   // Chantier 3 : masqué automatiquement, signalements encore à traiter.
   // « Masquer » confirme le masquage, « Classer sans suite » le lève (le
@@ -321,6 +339,22 @@ function ItemDecisions({
           busy={busy}
           onCancel={onItemPanelClose}
           onConfirm={(note) => void removeImage(note, itemToClear.id).then((done) => done && onItemPanelClose())}
+        />
+        {errorView}
+      </>
+    );
+  }
+
+  if (removal) {
+    return (
+      <>
+        <DecisionPanel
+          kind="hide"
+          removal={{ warning: removal.warning }}
+          initialReason={mostReportedReason(item.reasons)}
+          busy={busy}
+          onCancel={() => setPartToRemove(null)}
+          onConfirm={(reason, note) => void removePart(removal.part, reason, note, removal.saved).then((done) => done && setPartToRemove(null))}
         />
         {errorView}
       </>
@@ -360,6 +394,9 @@ function ItemDecisions({
       ) : null}
       {pendingAutoHide ? <ActionButton label={t.accountSafety.confirmAutoHide} onPress={() => setPanel("hide")} disabled={busy} /> : null}
       {item.canRemoveImage ? <ActionButton label={t.moderationQueue.removeImage} onPress={() => setPanel("remove_image")} disabled={busy} danger /> : null}
+      {removals.map((entry) => (
+        <ActionButton key={entry.part} label={entry.label} onPress={() => setPartToRemove(entry.part)} disabled={busy} danger />
+      ))}
       {preview.kind !== "missing" && !preview.author.suspended ? (
         <ActionButton label={t.moderationQueue.suspend} onPress={() => setPanel("suspend")} disabled={busy} danger />
       ) : null}

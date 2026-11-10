@@ -12,6 +12,7 @@ import {
 import { fetchBlockedUserIds } from "../lib/blocks.js";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { INVALID_CURSOR, cursorQuerySchema, parseDbRows, parseInput } from "../lib/validation.js";
+import { withoutSuspendedFaces } from "../lib/profileModeration.js";
 
 // Pagination par curseur (date de la dernière notification reçue) : la
 // réponse reste une liste, comme avant (compatible avec l'app déjà en ligne) ;
@@ -53,11 +54,12 @@ function visibleActorsFilter(blockedIds: Set<string>): string | null {
   return blockedIds.size > 0 ? `actor_id.is.null,actor_id.not.in.(${[...blockedIds].join(",")})` : null;
 }
 
-async function fetchActors(fastify: FastifyInstance, rows: NotificationRow[]): Promise<Map<string, PostAuthor>> {
+async function fetchActors(fastify: FastifyInstance, rows: NotificationRow[], viewerId: string): Promise<Map<string, PostAuthor>> {
   const ids = [...new Set(rows.map((row) => row.actor_id).filter((id): id is string => id !== null))];
   if (ids.length === 0) return new Map();
   const result = await fastify.supabaseAdmin.from("profiles").select("id, username, display_name, avatar_url").in("id", ids);
-  const profiles = parseDbRows(ACTOR_ROWS, result, "Auteurs des notifications");
+  // Lot « conformité Apple » : la photo d'un compte suspendu n'est plus montrée aux autres.
+  const profiles = await withoutSuspendedFaces(fastify, parseDbRows(ACTOR_ROWS, result, "Auteurs des notifications"), viewerId);
   return new Map(
     profiles.map((p) => [p.id, { id: p.id, username: p.username ?? "", displayName: p.display_name, avatarUrl: p.avatar_url }])
   );
@@ -115,7 +117,7 @@ export default async function notificationsRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: "internal_error", message: GENERIC_SERVER_ERROR });
     }
     const rows = parseDbRows(NOTIFICATION_ROWS, result, "Notifications");
-    const [actors, notices] = await Promise.all([fetchActors(fastify, rows), fetchNotices(fastify, rows)]);
+    const [actors, notices] = await Promise.all([fetchActors(fastify, rows, request.user!.id), fetchNotices(fastify, rows)]);
     return reply.send(rows.map((row) => toNotification(row, actors, notices)));
   });
 
