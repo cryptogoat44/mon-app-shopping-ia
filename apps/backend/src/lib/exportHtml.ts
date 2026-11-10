@@ -2,6 +2,7 @@ import { SEARCH_FAILURE_MESSAGES } from "@monapp/shared-types";
 import type { ExportData, ExportDataKey, ExportRow } from "./exportData.js";
 import {
   formatDateTime,
+  formatDay,
   formatNumber,
   formatPercent,
   formatPrice,
@@ -42,7 +43,10 @@ import {
   REPORT_TARGET_LABELS,
   SEARCH_FAILURE_LABELS,
   SEARCH_STATUS_LABELS,
+  STOCK_STATE_LABELS,
   VAULT_CATEGORY_LABELS,
+  WISH_ALERT_KIND_LABELS,
+  WISH_ALERT_STATUS_LABELS,
   type Bilingual,
   type ExportColumn,
   type ExportColumnName,
@@ -147,6 +151,13 @@ function plainDate(ctx: Ctx, value: unknown): string {
 function date(ctx: Ctx, value: unknown): Part {
   if (typeof value !== "string" || value === "") return null;
   const text = formatDateTime(value, ctx.locale, ctx.timeZone);
+  return text === null ? value : html`<time datetime="${value}">${text}</time>`;
+}
+
+/** Un jour sans heure (alertes prix : jamais l'heure d'une observation). */
+function day(ctx: Ctx, value: unknown): Part {
+  if (typeof value !== "string" || value === "") return null;
+  const text = formatDay(value, ctx.locale);
   return text === null ? value : html`<time datetime="${value}">${text}</time>`;
 }
 
@@ -370,6 +381,7 @@ function accountSection(ctx: Ctx): Html {
     .field("default_privacy", enumLabel(ctx, PRIVACY_LABELS, row.default_privacy))
     .field("piece_sends_from", enumLabel(ctx, PIECE_SENDS_FROM_LABELS, row.piece_sends_from))
     .field("messages_from", enumLabel(ctx, MESSAGES_FROM_LABELS, row.messages_from))
+    .field("price_alerts_enabled")
     .field("created_at")
     .field("updated_at");
   return section(ctx, "account", article(null, account.rows(), profile.rows()));
@@ -909,9 +921,66 @@ function moderationSection(ctx: Ctx): Html {
 /** Lot notifications : chaque appareil prévenu des nouveaux messages, sans son jeton. */
 function devicesSection(ctx: Ctx): Html {
   const cards = newestFirst(ctx.data.pushDevices, "created_at").map((row) =>
-    new Card(ctx, "pushDevices", row).use("platform").field("created_at").field("updated_at").render(enumLabel(ctx, PUSH_PLATFORM_LABELS, row.platform))
+    new Card(ctx, "pushDevices", row)
+      .use("platform")
+      .field("notify_messages")
+      .field("notify_alerts")
+      .field("created_at")
+      .field("updated_at")
+      .render(enumLabel(ctx, PUSH_PLATFORM_LABELS, row.platform))
   );
   return section(ctx, "devices", cards);
+}
+
+/** Lot alertes prix et stock : les cloches, le suivi des envies, les alertes
+ * et les signalements « Plus disponible », au jour près. */
+function alertsSection(ctx: Ctx): Html {
+  const { wishWatches, wishTracking, wishAlertEvents, stockReports } = ctx.data;
+  const watches = wishWatches.map((row) =>
+    new Card(ctx, "wishWatches", row)
+      .use("wishlist_item_title")
+      .field("notify_price_drop")
+      .field("notify_restock")
+      .field("notify_sold_out")
+      .field("created_at")
+      .field("updated_at")
+      .render(str(row.wishlist_item_title))
+  );
+  const tracking = wishTracking.map((row) =>
+    new Card(ctx, "wishTracking", row)
+      .use("wishlist_item_title")
+      .line(tr(ctx, EXPORT_COLUMNS.wishTracking.ref_price.label), price(ctx, row.ref_price, null, row.ref_currency), ["ref_price", "ref_currency"])
+      .field("ref_set_on", day(ctx, row.ref_set_on))
+      .line(tr(ctx, EXPORT_COLUMNS.wishTracking.last_price.label), price(ctx, row.last_price, null, row.last_currency), ["last_price", "last_currency"])
+      .field("last_seen_on", day(ctx, row.last_seen_on))
+      .field("stock_state", enumLabel(ctx, STOCK_STATE_LABELS, row.stock_state))
+      .field("stock_on", day(ctx, row.stock_on))
+      .render(str(row.wishlist_item_title))
+  );
+  const events = newestFirst(wishAlertEvents, "created_on").map((row) =>
+    new Card(ctx, "wishAlertEvents", row)
+      .use("kind")
+      .field("wishlist_item_title")
+      .line(tr(ctx, EXPORT_COLUMNS.wishAlertEvents.old_price.label), price(ctx, row.old_price, null, row.currency), ["old_price"])
+      .line(tr(ctx, EXPORT_COLUMNS.wishAlertEvents.new_price.label), price(ctx, row.new_price, null, row.currency), ["new_price", "currency"])
+      .field("status", enumLabel(ctx, WISH_ALERT_STATUS_LABELS, row.status))
+      .field("created_on", day(ctx, row.created_on))
+      .render(enumLabel(ctx, WISH_ALERT_KIND_LABELS, row.kind))
+  );
+  const reports = newestFirst(stockReports, "created_on").map((row) =>
+    new Card(ctx, "stockReports", row).field("created_on", day(ctx, row.created_on)).render(tr(ctx, EXPORT_TEXT.stockReportPiece))
+  );
+  const parts: [Bilingual, Html[]][] = [
+    [EXPORT_TEXT.alertWatchesTitle, watches],
+    [EXPORT_TEXT.alertTrackingTitle, tracking],
+    [EXPORT_TEXT.alertEventsTitle, events],
+    [EXPORT_TEXT.stockReportsTitle, reports],
+  ];
+  return section(
+    ctx,
+    "alerts",
+    parts.filter(([, cards]) => cards.length > 0).map(([title, cards]) => subsection(ctx, tr(ctx, title, { count: String(cards.length) }), null, cards))
+  );
 }
 
 function exportsSection(ctx: Ctx): Html {
@@ -932,6 +1001,7 @@ function sectionCount(data: ExportData, id: ExportSectionId): number | null {
     searches: data.productSearches.length,
     wishlist: data.wishlistItems.length,
     collections: data.collections.length,
+    alerts: data.wishWatches.length,
     vault: data.vaultItems.length,
     posts: data.posts.length,
     comments: data.comments.length,
@@ -958,6 +1028,7 @@ const SECTION_RENDERERS: Record<ExportSectionId, (ctx: Ctx) => Html> = {
   searches: searchesSection,
   wishlist: wishlistSection,
   collections: collectionsSection,
+  alerts: alertsSection,
   vault: vaultSection,
   posts: postsSection,
   comments: commentsSection,

@@ -4,10 +4,12 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Tex
 import { useFocusEffect, useRouter } from "expo-router";
 import { color, font, radius, space } from "@/theme/tokens";
 import { acceptLanguage, getActiveLocale, t } from "@/i18n";
-import type { CollectionSummary } from "@monapp/shared-types";
+import type { CollectionSummary, WishAlertState } from "@monapp/shared-types";
 import { getCollectionWishlist, getWishlist } from "@/api/client";
 import type { Piece, WishlistItem } from "@/api/types";
-import { ApiError, fetchCollections } from "@/lib/api";
+import { ApiError, fetchCollections, fetchWishAlertStates, fetchWishAlertsStatus } from "@/lib/api";
+import { useWishAlertsStatus } from "@/lib/use-wish-alerts-status";
+import { bellVisible } from "@/lib/wish-alerts";
 import { collectionChips, collectionState, selectedCollection } from "@/lib/collections";
 import { useCollectionsStatus } from "@/lib/use-collections-status";
 import { useToast } from "@/lib/toast-context";
@@ -25,6 +27,7 @@ import { searchCountryFrom } from "@/lib/foreign-shop";
 import { usePreferences } from "@/lib/preferences-context";
 import { appendPage, loadAllPages, WISHLIST_LOAD_MAX, wishlistScope, wishlistTotalText, wishlistView, type WishlistPageOf, type WishlistSort } from "@/lib/wishlist-view";
 import { WishlistSearchEmpty, WishlistTools } from "@/components/wishlist-tools";
+import { WishAlertBell, WishAlertSheet } from "@/components/wish-alert-sheet";
 import { themedStyles } from "@/theme/themed-styles";
 
 function displayPrice(item: Piece): string | null {
@@ -48,6 +51,9 @@ function chunk<T>(items: T[], size: number): T[][] {
 // collection choisie (nom, qui la voit, suppression).
 // Recherche, tri par prix et total (2026-11-09) : en haut de la liste, sur
 // les envies de la puce choisie (lib/wishlist-view.ts, wishlist-tools.tsx).
+// Lot 2 (alertes prix et stock) : une cloche sur chaque envie que le serveur
+// reconnaît (dans « Toutes » comme dans vos collections), cachée sans les
+// alertes sur le serveur ; elle ouvre la feuille de la cloche.
 export function WishlistPanel() {
   const [view, setView] = useState<"mine" | "received">("mine");
   return (
@@ -99,6 +105,10 @@ function MyWishlist() {
   // Identifiant seul (jamais l'objet, recréé à chaque relecture des puces) : pas de rechargement en boucle.
   const selectedKey = selected?.id ?? null;
   const fetchPage = useCallback((cursor?: string) => (selectedKey ? getCollectionWishlist(selectedKey, cursor) : getWishlist(cursor)), [selectedKey]);
+  // Lot 2 : les cloches, par envie (vide sans les alertes sur le serveur).
+  const alerts = useWishAlertsStatus();
+  const [alertStates, setAlertStates] = useState<ReadonlyMap<string, WishAlertState>>(new Map());
+  const [alertTarget, setAlertTarget] = useState<WishlistItem | null>(null);
 
   // Recherche, tri et total portent sur toutes les envies, pas seulement la
   // première page (lib/wishlist-view.ts, loadAllPages) : elle s'affiche tout
@@ -158,9 +168,24 @@ function MyWishlist() {
     }, [loadCollections])
   );
 
+  // Les cloches : relues à chaque retour sur l'écran (une cloche a pu être
+  // réglée depuis la fiche). En échec ou sans les alertes : aucune cloche.
+  const loadAlerts = useCallback(() => {
+    fetchWishAlertsStatus()
+      .then((status) => (status.available ? fetchWishAlertStates() : new Map<string, WishAlertState>()))
+      .then(setAlertStates)
+      .catch(() => setAlertStates(new Map()));
+  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadAlerts();
+    }, [loadAlerts])
+  );
+
   async function handleRefresh() {
     setRefreshing(true);
     loadCollections();
+    loadAlerts();
     await load();
     setRefreshing(false);
   }
@@ -274,6 +299,15 @@ function MyWishlist() {
           choose(null);
         }}
       />
+      {alerts.available ? (
+        <WishAlertSheet
+          wish={alertTarget ? { id: alertTarget.id, title: alertTarget.name } : null}
+          state={alertTarget ? (alertStates.get(alertTarget.id) ?? null) : null}
+          visible={alertTarget !== null}
+          onClose={() => setAlertTarget(null)}
+          onSaved={(saved) => setAlertStates((current) => new Map(current).set(saved.wishlistItemId, saved))}
+        />
+      ) : null}
       {loading ? (
         <View style={styles.grid}>
           {[0, 1, 2].map((i) => (
@@ -312,6 +346,10 @@ function MyWishlist() {
                     </Text>
                     {displayPrice(item) ? <Text style={styles.price}>{displayPrice(item)}</Text> : null}
                   </Pressable>
+                  {/* Lot 2 : la cloche, sur le coin de la vignette — zone à part, jamais dans celle qui ouvre la fiche. */}
+                  {bellVisible(alerts, alertStates.get(item.id)) ? (
+                    <WishAlertBell title={item.name} state={alertStates.get(item.id) ?? null} onPress={() => setAlertTarget(item)} style={styles.bell} />
+                  ) : null}
                   {item.merchantUrl ? (
                     <MerchantLinkButton
                       url={item.affiliateUrl ?? item.merchantUrl}
@@ -400,6 +438,7 @@ const styles = themedStyles(() => ({
   },
   gridRow: { flexDirection: "row", gap: space.md, marginBottom: space.md },
   card: { width: "31%" },
+  bell: { position: "absolute", top: space.xs, right: space.xs },
   thumb: { backgroundColor: color.plinthe, borderRadius: radius.sm, aspectRatio: 1, alignItems: "center", justifyContent: "center", marginBottom: space.xs, overflow: "hidden" },
   thumbImage: { width: "100%", height: "100%" },
   name: { fontSize: font.caption, color: color.encre },

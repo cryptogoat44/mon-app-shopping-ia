@@ -3,6 +3,9 @@
 // jeton d'Expo quand la personne accepte les notifications (et le rafraîchit
 // à l'ouverture), et l'oublie quand elle les coupe ou se déconnecte.
 // Un réglage personnel : permis à un compte suspendu, comme les autres.
+// Lot alertes prix (0036) : `messages` et `alerts` disent ce que reçoit cet
+// appareil ; `messages: false` le garde pour les seules alertes (aucune
+// notification de message ne lui est envoyée), les deux à false l'oublient.
 // Jamais le jeton dans le journal : seulement le système de l'appareil.
 import type { FastifyInstance } from "fastify";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
@@ -30,7 +33,7 @@ export default async function pushTokensRoutes(fastify: FastifyInstance) {
     const body = parseInput(registerPushTokenSchema, request.body, reply, INVALID_PUSH_TOKEN);
     if (!body) return;
     try {
-      await savePushToken(fastify, request.user!.id, body.token, body.platform);
+      await savePushToken(fastify, request.user!.id, body.token, body.platform, { messages: body.messages, alerts: body.alerts });
     } catch (error) {
       request.log.error({ error }, "Appareil non enregistré pour les notifications");
       return reply.code(500).send(SERVER_ERROR);

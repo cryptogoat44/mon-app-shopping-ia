@@ -59,6 +59,11 @@ const COLLECTION_SECTIONS = collectionsProbe.error ? [] : (["collections", "coll
 const pushProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("push_tokens").select("token").limit(0);
 const PUSH_SECTIONS = pushProbe.error ? [] : (["pushDevices"] as const);
 
+// Lot alertes prix et stock : cloche, suivi, alerte et signalement, seulement
+// une fois la migration 0036 appliquée sur la base des tests (sans elle, sections vides).
+const alertsProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).rpc("wish_alerts_version");
+const ALERT_SECTIONS = alertsProbe.error || alertsProbe.data !== 1 ? [] : (["wishWatches", "wishTracking", "wishAlertEvents", "stockReports"] as const);
+
 // Sections qui sont un objet (ou null), pas une liste.
 const OBJECT_SECTIONS = ["account", "profile", "adminRole", "suspension"] as const;
 
@@ -100,6 +105,11 @@ const JSON_KEYS = [
   "collectionItems",
   // Lot notifications, de même.
   "pushDevices",
+  // Lot alertes prix et stock, de même.
+  "wishWatches",
+  "wishTracking",
+  "wishAlertEvents",
+  "stockReports",
 ];
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
@@ -238,6 +248,26 @@ describe("export RGPD complet", () => {
       if (pushError) throw pushError;
     }
 
+    // Alertes prix et stock (lot 2) : une cloche sur l'Envie (son suivi est
+    // créé au besoin), une alerte et un signalement « Plus disponible »,
+    // insérés directement (aucune observation, aucun envoi).
+    if (ALERT_SECTIONS.length > 0) {
+      const [wish] = (await app.inject({ method: "GET", url: "/api/wishlist", headers: authHeaders(user.token) })).json().items as { id: string }[];
+      const watched = await app.inject({ method: "PUT", url: `/api/wishlist/${wish!.id}/alerts`, headers: authHeaders(user.token), payload: { priceDrop: true, restock: true } });
+      // Envie sans lien de boutique (créée à la main ci-dessus) : pas de clé, pas de cloche.
+      expect([200, 422]).toContain(watched.statusCode);
+      if (watched.statusCode === 422) {
+        const { error } = await app.supabaseAdmin.from("wish_watches").insert({ wishlist_item_id: wish!.id, user_id: user.id, notify_price_drop: true });
+        if (error) throw error;
+      }
+      const { error: eventError } = await app.supabaseAdmin
+        .from("wish_alert_events")
+        .insert({ wishlist_item_id: wish!.id, user_id: user.id, kind: "restock", created_on: "2026-11-09", send_after: new Date().toISOString(), status: "expired" });
+      if (eventError) throw eventError;
+      const { error: reportError } = await app.supabaseAdmin.from("stock_reports").insert({ user_id: user.id, match_key_hash: "b".repeat(64), created_on: "2026-11-09" });
+      if (reportError) throw reportError;
+    }
+
     // Un premier export, pour que le second contienne cette demande.
     await exportOf(user);
     // Beaucoup d'écritures réelles vers spotto-dev : plus que le délai par défaut.
@@ -259,14 +289,15 @@ describe("export RGPD complet", () => {
     const body = res.json();
 
     expect(body.profile.id).toBe(user.id);
-    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...COLLECTION_SECTIONS, ...PUSH_SECTIONS]) {
+    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...COLLECTION_SECTIONS, ...PUSH_SECTIONS, ...ALERT_SECTIONS]) {
       expect(Array.isArray(body[section]), section).toBe(true);
       expect(body[section].length, section).toBeGreaterThan(0);
     }
     expect(body.adminRole).toEqual({ created_at: expect.any(String) });
     expect(body.suspension).toMatchObject({ moderation_action_id: expect.any(String) });
-    // Un appareil : son système et ses dates, jamais son jeton.
-    for (const device of body.pushDevices) expect(Object.keys(device).sort()).toEqual(["created_at", "platform", "updated_at"]);
+    // Un appareil : son système et ses dates (avec 0036 : s'il reçoit les messages, les alertes), jamais son jeton.
+    const deviceColumns = ALERT_SECTIONS.length > 0 ? ["created_at", "notify_alerts", "notify_messages", "platform", "updated_at"] : ["created_at", "platform", "updated_at"];
+    for (const device of body.pushDevices) expect(Object.keys(device).sort()).toEqual(deviceColumns);
     expect(JSON.stringify(body)).not.toContain("ExponentPushToken[");
   });
 

@@ -13,7 +13,7 @@ import { closeSpotter } from "@/lib/spot-navigation";
 import { addToWishlist, loadSpotResult } from "@/api/client";
 import { clearLastSpotResult, getLastSpotResult, rememberLaunchExtras, withLaunchExtras } from "@/api/spotSession";
 import type { Piece, SpotFailReason, SpotResult } from "@/api/types";
-import { addVaultItemFromMatch, fetchMessagesStatus, fetchShops } from "@/lib/api";
+import { addVaultItemFromMatch, fetchMessagesStatus, fetchShops, fetchWishAlertsStatus } from "@/lib/api";
 import { openMerchantLink } from "@/lib/merchant-links";
 import { chooseInitialResult, pieceTitle, withoutTextPrompt, withTextSearch, type InitialResultState } from "@/lib/spot-result";
 import { afterShops, requestShops, shopsPending } from "@/lib/spot-shops";
@@ -48,6 +48,8 @@ import { useToast } from "@/lib/toast-context";
 import { messagesStatus } from "@/lib/conversations";
 import { useMessagesStatus } from "@/lib/use-messages-status";
 import { canSendToFriend, sendToFriend, type SendAction, type SendToFriendFrom } from "@/lib/send-to-friend";
+import { useWishAlertsStatus } from "@/lib/use-wish-alerts-status";
+import { canReportResult, wishAlertsStatus, type StockAction, type StockReportTarget } from "@/lib/wish-alerts";
 import { Skeleton } from "@/components/skeleton";
 import { SpotImage } from "@/components/spot-image";
 import { ErrorMessage } from "@/components/error-message";
@@ -67,6 +69,7 @@ import { useHeroReveal } from "@/lib/use-hero-reveal";
 import { ForeignShopNote } from "@/components/foreign-shop-note";
 import { KeptNotice } from "@/components/kept-notice";
 import { SendToFriendLink } from "@/components/send-to-friend-link";
+import { StockReportLink, StockReportSheet } from "@/components/stock-report-sheet";
 import { track } from "@/lib/analytics";
 import { openWishlistFromSpotter } from "@/lib/wishlist-link";
 import { isAffiliateLink } from "@/lib/affiliate-link";
@@ -150,6 +153,9 @@ export default function ResultScreen() {
   const priceSortRef = useRef(priceSort);
   // « Envoyer à un ami » (lib/send-to-friend.ts) : seulement avec la messagerie du serveur.
   const messages = useMessagesStatus();
+  // Lot 2 : « Plus disponible ? » (lib/wish-alerts.ts), seulement avec les alertes du serveur.
+  const alerts = useWishAlertsStatus();
+  const [stockReport, setStockReport] = useState<StockReportTarget | null>(null);
 
   const result = state.kind === "ready" ? state.result : null;
   // Voie C (lot c) : l'indice désigne toutes les propositions de l'écran —
@@ -237,8 +243,10 @@ export default function ResultScreen() {
   useScrollToEndOnKeyboard(scrollRef, result?.complement?.suggestText === true);
 
   // Messagerie pas encore lue (site rechargé sur cet écran) : lue une fois ici.
+  // Les alertes aussi (lot 2) : « Plus disponible ? » n'apparaît qu'avec elles.
   useEffect(() => {
     if (!messagesStatus().enabled) fetchMessagesStatus().catch(() => {});
+    if (!wishAlertsStatus().available) fetchWishAlertsStatus().catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -368,6 +376,19 @@ export default function ResultScreen() {
       // Partage annulé par l'utilisateur : rien à signaler.
     }
   }
+
+  /** « Plus disponible ? » de la grande carte : sa pièce, retenue comme pour
+   * ses autres boutons ; la confirmation s'ouvre par-dessus l'écran. */
+  function handleStockReport() {
+    if (!piece || !canReportResult(alerts, piece)) return;
+    holdPiece();
+    setStockReport({ kind: "match", id: piece.id, title: pieceTitle(piece.name) });
+  }
+
+  /** « Plus disponible ? » d'une carte des sections ou d'une ligne de la liste
+   * triée : seulement sa pièce, rien ne change à l'écran. */
+  const stockFrom: StockAction = (target) =>
+    canReportResult(alerts, target) ? () => setStockReport({ kind: "match", id: target.id, title: pieceTitle(target.name) }) : undefined;
 
   /** Voie B (lot c) : le résultat est remplacé sur place, dans cet écran
    * seulement. Un retour sur l'écran relit la recherche sur le serveur, qui a
@@ -706,6 +727,7 @@ export default function ResultScreen() {
               {piece.real ? <ResultFeedbackButton onPress={openReport} /> : null}
             </View>
             {canSendToFriend(piece, messages) ? <SendToFriendLink style={styles.sendToFriend} pieceName={piece.name} onPress={handleSendToFriend} /> : null}
+            {canReportResult(alerts, piece) ? <StockReportLink style={styles.sendToFriend} pieceName={piece.name} onPress={handleStockReport} /> : null}
             {keptSaved.has(piece.id) ? <KeptNotice onOpen={() => openWishlistFromSpotter(router)} /> : null}
             {piece.real && reported ? <ReportedLine reason={reported} onPress={openReport} /> : null}
             {actionError ? <ErrorMessage style={styles.actionError}>{actionError}</ErrorMessage> : null}
@@ -718,7 +740,7 @@ export default function ResultScreen() {
           <>
             {/* Une seule liste triée par prix, sans titre de section ; boutiques en attente : la ligne d'attente, en haut. */}
             {result.complement?.pending ? <ShopsPending /> : null}
-            <PriceSortedList key={priceSort} items={layout.priceList ?? []} cheapestIndex={cheapest} onSelect={selectFromPriceList} placements={placements} sendAction={sendFrom("price_list")} />
+            <PriceSortedList key={priceSort} items={layout.priceList ?? []} cheapestIndex={cheapest} onSelect={selectFromPriceList} placements={placements} sendAction={sendFrom("price_list")} stockAction={stockFrom} />
           </>
         ) : (
           <>
@@ -730,7 +752,7 @@ export default function ResultScreen() {
                 <View style={styles.grid}>
                   {/* Cartes (image, nom, boutique, prix, « Voir chez … ») : components/proposal-card.tsx. */}
                   {visibleOthers.map(({ piece: p, index }) => (
-                    <ProposalCard key={p.id} piece={p} onSelect={() => selectPiece(index)} placement={placements.get(index)} cheapest={index === cheapest} onSend={sendFrom("section")(p)} />
+                    <ProposalCard key={p.id} piece={p} onSelect={() => selectPiece(index)} placement={placements.get(index)} cheapest={index === cheapest} onSend={sendFrom("section")(p)} onReportGone={stockFrom(p)} />
                   ))}
                 </View>
                 {hiddenCount > 0 ? (
@@ -753,7 +775,7 @@ export default function ResultScreen() {
                 grande carte n'en vient que si aucune proposition de la recherche visuelle n'a de prix, et jamais
                 quand les boutiques arrivent après l'affichage (boutiques ensuite : la ligne d'attente, à leur place). */}
             {result.complement?.pending ? <ShopsPending /> : null}
-            <ResultComplement source="ai" others={sections.shopping} query={result.complement?.query} onSelect={selectPiece} placements={placements} cheapestIndex={cheapest} sendAction={sendFrom("section")} />
+            <ResultComplement source="ai" others={sections.shopping} query={result.complement?.query} onSelect={selectPiece} placements={placements} cheapestIndex={cheapest} sendAction={sendFrom("section")} stockAction={stockFrom} />
             <View onLayout={onWordsLayout}>
               <ResultComplement
                 source="words"
@@ -763,6 +785,7 @@ export default function ResultScreen() {
                 placements={placements}
                 cheapestIndex={cheapest}
                 sendAction={sendFrom("section")}
+                stockAction={stockFrom}
               />
             </View>
             {/* Prix d'abord : les propositions sans prix en dernier, repliées ; « Que cherchez-vous ? » reste tout en bas (clavier). */}
@@ -780,6 +803,7 @@ export default function ResultScreen() {
                 onSelect={selectPiece}
                 placements={placements}
                 sendAction={sendFrom("section")}
+                stockAction={stockFrom}
               />
             </View>
           </>
@@ -796,6 +820,8 @@ export default function ResultScreen() {
           onChanged={(reason) => setFeedbackOverrides((previous) => new Map(previous).set(reportPiece.id, reason))}
         />
       ) : null}
+
+      {alerts.available ? <StockReportSheet target={stockReport} onClose={() => setStockReport(null)} /> : null}
 
       <CorrectionsSheet
         visible={correctionsOpen}

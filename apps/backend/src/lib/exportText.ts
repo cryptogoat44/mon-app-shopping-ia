@@ -19,7 +19,10 @@ import {
   type ReportReason,
   type ReportTargetType,
   type SearchStatus,
+  type StockState,
   type VaultCategory,
+  type WishAlertKind,
+  type WishAlertStatus,
   type SEARCH_FAILURE_MESSAGES,
 } from "@monapp/shared-types";
 import type { ExportDataKey } from "./exportData.js";
@@ -112,6 +115,8 @@ export const EXPORT_COLUMNS = {
     piece_sends_from: shown("Qui peut vous envoyer des pièces", "Who can send you pieces"),
     // Lot messages (migration 0032).
     messages_from: shown("Qui peut vous écrire", "Who can write to you"),
+    // Lot alertes prix et stock (migration 0036).
+    price_alerts_enabled: shown("Alertes prix et stock", "Price and stock alerts"),
     created_at: shown("Compte créé le", "Account created on"),
     updated_at: shown("Profil modifié le", "Profile updated on"),
   },
@@ -413,8 +418,52 @@ export const EXPORT_COLUMNS = {
   // messages ; jamais le jeton de l'appareil.
   pushDevices: {
     platform: shown("Appareil", "Device"),
+    // Lot alertes prix et stock (migration 0036).
+    notify_messages: shown("Prévenu des nouveaux messages", "Notified of new messages"),
+    notify_alerts: shown("Prévenu des alertes prix et stock", "Notified of price and stock alerts"),
     created_at: shown("Notifications activées le", "Notifications turned on on"),
     updated_at: shown("Dernière mise à jour le", "Last updated on"),
+  },
+  // Lot alertes prix et stock (migration 0036) : la cloche de vos envies…
+  wishWatches: {
+    wishlist_item_id: technical("Envie", "Wish"),
+    wishlist_item_title: shown("Envie", "Wish"),
+    notify_price_drop: shown("Prévenir d'une baisse de prix", "Notify me of a price drop"),
+    notify_restock: shown("Prévenir d'un retour en stock", "Notify me when back in stock"),
+    notify_sold_out: shown("Prévenir quand elle est épuisée", "Notify me when sold out"),
+    created_at: shown("Cloche activée le", "Bell turned on on"),
+    updated_at: shown("Cloche modifiée le", "Bell changed on"),
+  },
+  // … le suivi de vos envies (jamais d'où vient une observation)…
+  wishTracking: {
+    wishlist_item_id: technical("Envie", "Wish"),
+    wishlist_item_title: shown("Envie", "Wish"),
+    ref_price: shown("Prix de référence", "Reference price"),
+    ref_currency: shown("Devise du prix de référence", "Reference price currency"),
+    ref_set_on: shown("Prix de référence depuis le", "Reference price since"),
+    last_price: shown("Dernier prix vu", "Last price seen"),
+    last_currency: shown("Devise du dernier prix vu", "Last price seen currency"),
+    last_seen_on: shown("Dernière fois vue le", "Last seen on"),
+    stock_state: shown("Stock", "Stock"),
+    stock_on: shown("Stock connu le", "Stock known on"),
+  },
+  // … vos alertes…
+  wishAlertEvents: {
+    id: ID,
+    wishlist_item_id: technical("Envie", "Wish"),
+    wishlist_item_title: shown("Envie", "Wish"),
+    kind: shown("Alerte", "Alert"),
+    old_price: shown("Ancien prix", "Previous price"),
+    new_price: shown("Nouveau prix", "New price"),
+    currency: shown("Devise", "Currency"),
+    status: shown("État", "Status"),
+    created_on: shown("Le", "On"),
+  },
+  // … et vos signalements « Plus disponible ».
+  stockReports: {
+    id: ID,
+    match_key_hash: technical("Empreinte de la pièce signalée", "Fingerprint of the reported piece"),
+    created_on: shown("Signalée « Plus disponible » le", "Reported “No longer available” on"),
   },
 } as const satisfies Record<ExportDataKey, Record<string, ExportColumn>>;
 
@@ -454,6 +503,14 @@ export const EXPORT_SECTIONS = {
       en: "The collections where you sort your Wishlist, and who can see them: you alone, or your friends (members you follow who follow you back).",
     },
     keys: ["collections", "collectionItems"],
+  },
+  alerts: {
+    title: { fr: "Vos alertes prix et stock", en: "Your price and stock alerts" },
+    intro: {
+      fr: "Les envies dont vous suivez le prix ou le stock (la cloche), ce que Spotto sait de leur dernier prix et de leur stock, les alertes préparées pour vous, et les pièces que vous avez signalées « Plus disponible ». Les dates sont au jour près ; qui a cherché, acheté ou signalé une pièce n'est jamais gardé.",
+      en: "The wishes whose price or stock you follow (the bell), what Spotto knows about their last price and stock, the alerts prepared for you, and the pieces you reported as no longer available. Dates are to the day; who searched for, bought or reported a piece is never kept.",
+    },
+    keys: ["wishWatches", "wishTracking", "wishAlertEvents", "stockReports"],
   },
   vault: {
     title: { fr: "Votre Vault", en: "Your Vault" },
@@ -599,6 +656,30 @@ export const MESSAGES_FROM_LABELS: Record<MessagesFrom, Bilingual> = {
 export const COLLECTION_VISIBILITY_LABELS: Record<CollectionVisibility, Bilingual> = {
   private: { fr: "Vous seul (privée)", en: "You alone (private)" },
   friends: { fr: "Vos amis", en: "Your friends" },
+};
+
+/** Sorte d'une alerte (lot alertes prix et stock). */
+export const WISH_ALERT_KIND_LABELS: Record<WishAlertKind, Bilingual> = {
+  price_drop: { fr: "Baisse de prix", en: "Price drop" },
+  restock: { fr: "De retour en stock", en: "Back in stock" },
+  sold_out: { fr: "Épuisée", en: "Sold out" },
+};
+
+/** État d'une alerte (lot alertes prix et stock). */
+export const WISH_ALERT_STATUS_LABELS: Record<WishAlertStatus, Bilingual> = {
+  pending: { fr: "En attente d'envoi", en: "Waiting to be sent" },
+  sent: { fr: "Envoyée", en: "Sent" },
+  expired: { fr: "Jamais envoyée (expirée)", en: "Never sent (expired)" },
+  stale: { fr: "Jamais envoyée (plus d'actualité)", en: "Never sent (no longer accurate)" },
+  limited: { fr: "Jamais envoyée (trop d'alertes)", en: "Never sent (too many alerts)" },
+  disabled: { fr: "Jamais envoyée (alertes coupées)", en: "Never sent (alerts turned off)" },
+};
+
+/** Dernier état de stock connu (lot alertes prix et stock). */
+export const STOCK_STATE_LABELS: Record<StockState, Bilingual> = {
+  unknown: { fr: "Inconnu", en: "Unknown" },
+  in_stock: { fr: "Disponible", en: "Available" },
+  sold_out: { fr: "Épuisée", en: "Sold out" },
 };
 
 /** Système d'un appareil des notifications (lot notifications). */
@@ -886,6 +967,12 @@ export const EXPORT_TEXT = {
   orphanMessages: { fr: "Messages d'une conversation introuvable", en: "Messages from a conversation that could not be found" },
   // Collections (lot collections).
   collectionItemsTitle: { fr: "Envies rangées ({count})", en: "Saved wishes ({count})" },
+  // Alertes prix et stock (lot 2).
+  alertWatchesTitle: { fr: "Cloches ({count})", en: "Bells ({count})" },
+  alertTrackingTitle: { fr: "Suivi de vos envies ({count})", en: "Tracking of your wishes ({count})" },
+  alertEventsTitle: { fr: "Alertes ({count})", en: "Alerts ({count})" },
+  stockReportsTitle: { fr: "Signalements « Plus disponible » ({count})", en: "“No longer available” reports ({count})" },
+  stockReportPiece: { fr: "Une pièce signalée « Plus disponible »", en: "A piece reported as no longer available" },
   orphanCollectionItems: { fr: "Envies d'une collection introuvable", en: "Wishes from a collection that could not be found" },
   // Signalements.
   followUp: { fr: "Suivi", en: "Follow-up" },

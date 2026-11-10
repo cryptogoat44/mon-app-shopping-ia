@@ -4,12 +4,15 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { PRIVACY_LEVELS, type PrivacyLevel, type WishlistItemDetail } from "@monapp/shared-types";
-import { ApiError, deleteWishlistItem, fetchWishlistItem, republishWish } from "@/lib/api";
+import { PRIVACY_LEVELS, type PrivacyLevel, type WishAlertState, type WishlistItemDetail } from "@monapp/shared-types";
+import { ApiError, deleteWishlistItem, fetchWishAlert, fetchWishAlertsStatus, fetchWishlistItem, republishWish } from "@/lib/api";
 import { useToast } from "@/lib/toast-context";
 import { useAuth } from "@/lib/auth-context";
 import { useMessagesStatus } from "@/lib/use-messages-status";
 import { useCollectionsStatus } from "@/lib/use-collections-status";
+import { useWishAlertsStatus } from "@/lib/use-wish-alerts-status";
+import { bellVisible, canReportWish, type StockReportTarget } from "@/lib/wish-alerts";
+import { FROM_ALERT } from "@/lib/push-state";
 import { shareWishOutside } from "@/lib/share-wish";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
@@ -18,6 +21,8 @@ import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { ErrorMessage } from "@/components/error-message";
 import { WishBoughtButton } from "@/components/wish-bought-button";
 import { AddToCollectionSheet } from "@/components/add-to-collection-sheet";
+import { WishAlertButton, WishAlertSheet } from "@/components/wish-alert-sheet";
+import { StockReportLink, StockReportSheet } from "@/components/stock-report-sheet";
 import { isAffiliateLink } from "@/lib/affiliate-link";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -34,8 +39,14 @@ function displayPrice(item: WishlistItemDetail): string | null {
 // Lot « Retrouver ses pièces » : « Voir chez … » devient le bouton principal
 // et « Je l'ai achetée » le suit — garder puis acheter quelques jours plus
 // tard ; republier passe en bouton secondaire.
+// Lot 2 (alertes prix et stock) : la cloche de l'envie et « Plus
+// disponible ? », seulement si le serveur a les alertes et reconnaît la
+// pièce (`trackable`). Pas de cloche pour une pièce achetée (`bought` du
+// serveur, ou `inVault` juste après « Je l'ai achetée ») : aucune alerte ne
+// partirait. Ouverte par une alerte (`from=alerte`) : le clic vers la
+// boutique est compté « price_alert ».
 export default function WishlistItemScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
   const router = useRouter();
   const { showToast } = useToast();
   const { profile } = useAuth();
@@ -51,16 +62,33 @@ export default function WishlistItemScreen() {
   // Lot collections : « Ajouter à une collection », si les collections sont disponibles.
   const collections = useCollectionsStatus();
   const [collectionSheet, setCollectionSheet] = useState(false);
+  // Lot 2 : la cloche (null : pas encore lue, ou alertes indisponibles).
+  const alerts = useWishAlertsStatus();
+  const [alertState, setAlertState] = useState<WishAlertState | null>(null);
+  const [alertSheet, setAlertSheet] = useState(false);
+  const [stockReport, setStockReport] = useState<StockReportTarget | null>(null);
+
+  const loadAlert = useCallback(async () => {
+    if (!id) return;
+    try {
+      const status = await fetchWishAlertsStatus();
+      setAlertState(status.available ? await fetchWishAlert(id) : null);
+    } catch {
+      // Sans réponse : ni cloche ni « Plus disponible », l'envie reste affichée.
+      setAlertState(null);
+    }
+  }, [id]);
 
   const load = useCallback(async () => {
     if (!id) return;
+    void loadAlert();
     try {
       setItem(await fetchWishlistItem(id));
       setState("ready");
     } catch (e) {
       setState(e instanceof ApiError && e.status === 404 ? "not_found" : "error");
     }
-  }, [id]);
+  }, [id, loadAlert]);
 
   // Relu à chaque retour sur l'écran : une publication supprimée depuis son
   // détail rend l'envie de nouveau republiable.
@@ -146,13 +174,23 @@ export default function WishlistItemScreen() {
                 url={item.affiliateUrl ?? item.merchantUrl}
                 merchantName={item.merchantName}
                 matchId={item.productMatchId}
-                context="wishlist"
+                context={from === FROM_ALERT ? "price_alert" : "wishlist"}
                 isAffiliate={isAffiliateLink(item)}
                 primary
               />
             ) : null}
             <WishBoughtButton item={item} onAdded={() => setItem((current) => (current ? { ...current, inVault: true } : current))} />
           </View>
+
+          {/* Lot 2 : la cloche (jamais pour une pièce achetée : aucune alerte ne partirait), puis « Plus disponible ? » (discret), pour une pièce reconnue. */}
+          {bellVisible(alerts, alertState, item.inVault) || canReportWish(alerts, alertState) ? (
+            <View style={styles.alerts}>
+              {bellVisible(alerts, alertState, item.inVault) ? <WishAlertButton title={item.title} state={alertState} onPress={() => setAlertSheet(true)} /> : null}
+              {canReportWish(alerts, alertState) ? (
+                <StockReportLink pieceName={item.title} onPress={() => setStockReport({ kind: "wish", id: item.id, title: item.title })} style={styles.stockReport} />
+              ) : null}
+            </View>
+          ) : null}
 
           {collections.enabled ? (
             <Pressable
@@ -259,6 +297,12 @@ export default function WishlistItemScreen() {
             </View>
           )}
           {collections.enabled ? <AddToCollectionSheet wishId={item.id} visible={collectionSheet} onClose={() => setCollectionSheet(false)} /> : null}
+          {alerts.available ? (
+            <>
+              <WishAlertSheet wish={{ id: item.id, title: item.title }} state={alertState} visible={alertSheet} onClose={() => setAlertSheet(false)} onSaved={setAlertState} />
+              <StockReportSheet target={stockReport} onClose={() => setStockReport(null)} onReported={() => void loadAlert()} />
+            </>
+          ) : null}
         </ScrollView>
       )}
     </SafeAreaView>
@@ -278,6 +322,8 @@ const styles = themedStyles(() => ({
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, marginTop: space.md },
   meta: { fontSize: font.secondary, color: color.acier, marginTop: 4, marginBottom: space.lg },
   merchant: { marginBottom: space.lg },
+  alerts: { marginBottom: space.lg },
+  stockReport: { alignSelf: "center" },
   shareSection: { borderTopWidth: 1, borderTopColor: color.filet, paddingTop: space.lg, marginBottom: space.lg, gap: space.sm },
   sectionTitle: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   hint: { fontSize: font.caption, color: color.acier, lineHeight: 18 },

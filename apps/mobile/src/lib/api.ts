@@ -66,6 +66,11 @@ import type {
   CommentsPage,
   PostComment,
   VideoMoment,
+  StockReportRequest,
+  UpdateWishAlertRequest,
+  UpdateWishAlertsSettingsRequest,
+  WishAlertState,
+  WishAlertsStatus,
 } from "@monapp/shared-types";
 import { COMPLEMENT_DEFERRED, CONSENT_VERSIONS, parseSearchCapacityStatus, parseVideoMomentsResponse, type SearchCapacityStatus } from "@monapp/shared-types";
 import { supabase } from "./supabase";
@@ -81,6 +86,7 @@ import { searchLaunched } from "./search-limits";
 import { appBuildHeaders, isUpdateRequiredResponse, markUpdateRequired, parseStoreUrl, readAppVersionInfo } from "./app-update";
 import { readMessagesStatus, setMessagesStatus } from "./conversations";
 import { readCollectionsStatus, setCollectionsStatus } from "./collections";
+import { ALERTS_UNAVAILABLE, isAlertsUnavailable, readWishAlertState, readWishAlertStates, readWishAlertsStatus, setWishAlertsStatus } from "./wish-alerts";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -575,9 +581,11 @@ export async function updateMessagesFrom(messagesFrom: MessagesFrom): Promise<vo
 // ---- Notifications des nouveaux messages sur le téléphone (lot notifications) ----
 // Appelées seulement par lib/push.ts (app iPhone), jamais par le site.
 
-/** Enregistre (ou rafraîchit) cet appareil pour les notifications. */
-export async function registerPushToken(token: string, platform: PushPlatform): Promise<void> {
-  const payload: RegisterPushTokenRequest = { token, platform };
+/** Enregistre (ou rafraîchit) cet appareil pour les notifications.
+ * Lot alertes prix : `messages` et `alerts` disent ce qu'il reçoit (messages
+ * coupés, alertes acceptées : gardé pour les seules alertes). */
+export async function registerPushToken(token: string, platform: PushPlatform, messages: boolean, alerts: boolean): Promise<void> {
+  const payload: RegisterPushTokenRequest = { token, platform, messages, alerts };
   await authorizedFetch("/api/me/push-token", { method: "PUT", body: JSON.stringify(payload) });
 }
 
@@ -586,6 +594,92 @@ export async function registerPushToken(token: string, platform: PushPlatform): 
 export async function deletePushToken(token: string, signal?: AbortSignal): Promise<void> {
   const payload: DeletePushTokenRequest = { token };
   await authorizedFetch("/api/me/push-token", { method: "DELETE", body: JSON.stringify(payload), ...(signal ? { signal } : {}) });
+}
+
+// ---- Alertes prix et stock (lot 2, migration 0036) ----
+// Sans 0036 sur le serveur, GET /api/alerts/status dit « indisponible » et
+// les autres routes répondent 404 « alerts_unavailable » : l'état partagé
+// (lib/wish-alerts.ts) passe alors à « indisponible » et tout est caché.
+
+/** Les alertes sont-elles disponibles, l'interrupteur allumé, les
+ * notifications possibles ? Un serveur sans elles (ou en erreur) vaut
+ * « indisponible ». L'état est partagé avec les écrans abonnés. */
+export async function fetchWishAlertsStatus(): Promise<WishAlertsStatus> {
+  let status: WishAlertsStatus;
+  try {
+    const response = await authorizedFetch("/api/alerts/status");
+    status = readWishAlertsStatus(await response.json().catch(() => null));
+  } catch (e) {
+    // Hors ligne : l'état connu reste affiché.
+    if (e instanceof TypeError) throw e;
+    status = readWishAlertsStatus(null);
+  }
+  setWishAlertsStatus(status);
+  return status;
+}
+
+/** Une route des alertes a répondu « indisponibles » : tout est caché. */
+function forgetAlertsOn(e: unknown): never {
+  if (isAlertsUnavailable(e)) setWishAlertsStatus(ALERTS_UNAVAILABLE);
+  throw e;
+}
+
+/** L'interrupteur « Alertes prix et stock » des Réglages. */
+export async function updateWishAlertsSettings(enabled: boolean): Promise<WishAlertsStatus> {
+  const payload: UpdateWishAlertsSettingsRequest = { enabled };
+  try {
+    const response = await authorizedFetch("/api/alerts/settings", { method: "PUT", body: JSON.stringify(payload) });
+    const status = readWishAlertsStatus(await response.json().catch(() => null));
+    setWishAlertsStatus(status);
+    return status;
+  } catch (e) {
+    return forgetAlertsOn(e);
+  }
+}
+
+/** Les cloches de vos envies suivies (liste des Envies, collections). Une
+ * envie absente n'a pas encore d'état : pas de cloche dans la liste. */
+export async function fetchWishAlertStates(): Promise<Map<string, WishAlertState>> {
+  try {
+    const response = await authorizedFetch("/api/alerts/wishes");
+    return readWishAlertStates(await response.json().catch(() => null));
+  } catch (e) {
+    return forgetAlertsOn(e);
+  }
+}
+
+/** La cloche d'une de vos envies (créée sur le serveur si elle manque). null :
+ * réponse illisible (pas de cloche). */
+export async function fetchWishAlert(id: string): Promise<WishAlertState | null> {
+  try {
+    const response = await authorizedFetch(`/api/wishlist/${encodeURIComponent(id)}/alerts`);
+    return readWishAlertState(await response.json().catch(() => null));
+  } catch (e) {
+    return forgetAlertsOn(e);
+  }
+}
+
+/** Régler la cloche d'une de vos envies. Renvoie la cloche enregistrée ; l'état
+ * général (interrupteur allumé par la première cloche) est partagé. */
+export async function updateWishAlert(id: string, payload: UpdateWishAlertRequest): Promise<WishAlertState | null> {
+  try {
+    const response = await authorizedFetch(`/api/wishlist/${encodeURIComponent(id)}/alerts`, { method: "PUT", body: JSON.stringify(payload) });
+    const body = (await response.json().catch(() => null)) as { state?: unknown; status?: unknown } | null;
+    if (body?.status !== undefined) setWishAlertsStatus(readWishAlertsStatus(body.status));
+    return readWishAlertState(body?.state);
+  } catch (e) {
+    return forgetAlertsOn(e);
+  }
+}
+
+/** « Plus disponible » : sur une proposition d'une de vos recherches, ou sur
+ * une de vos envies. Rien n'est renvoyé (aucune alerte ne part). */
+export async function reportStockGone(payload: StockReportRequest): Promise<void> {
+  try {
+    await authorizedFetch("/api/alerts/stock-reports", { method: "POST", body: JSON.stringify(payload) });
+  } catch (e) {
+    forgetAlertsOn(e);
+  }
 }
 
 // ---- Collections d'envies (lot collections) ----

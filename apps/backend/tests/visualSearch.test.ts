@@ -67,7 +67,7 @@ describe("searchProductsByImageUrl", () => {
   // Réponses fabriquées sur le modèle documenté de « visual_matches »
   // (serpapi.com/google-lens-visual-matches-api, lu le 2026-10-20) : mêmes
   // champs que « products », plus quelques-uns que le serveur ignore.
-  it("visual_matches : propositions lues comme avant ; les champs en plus sont ignorés ; les réseaux sociaux restent écartés", async () => {
+  it("visual_matches : propositions lues comme avant ; les champs en plus sont ignorés, sauf le stock annoncé (alertes prix) ; les réseaux sociaux restent écartés", async () => {
     const visuelle = {
       ...PRODUCT_MATCH,
       image: "https://www.polene-paris.com/sac-grand.jpg",
@@ -84,9 +84,36 @@ describe("searchProductsByImageUrl", () => {
     const { matches, measure } = await searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg");
 
     expect(matches).toEqual([
-      { rank: 1, productName: "Sac Polène", imageUrl: "https://example.com/thumb.jpg", imageHdUrl: "https://www.polene-paris.com/sac-grand.jpg", merchantName: "Polène", merchantUrl: "https://www.polene-paris.com/sac", priceValue: 640, currency: "€" },
+      {
+        rank: 1,
+        productName: "Sac Polène",
+        imageUrl: "https://example.com/thumb.jpg",
+        imageHdUrl: "https://www.polene-paris.com/sac-grand.jpg",
+        merchantName: "Polène",
+        merchantUrl: "https://www.polene-paris.com/sac",
+        priceValue: 640,
+        currency: "€",
+        inStock: true,
+      },
     ]);
     expect(measure).toMatchObject({ received: 2, removedSocial: 1, kept: 1, keptWithPrice: 1, sections: ["visual_matches"] });
+  });
+
+  it("alertes prix : un stock annoncé qui n'est pas un booléen est ignoré, sans jamais écarter la proposition ; « épuisé » explicite est lu", async () => {
+    safeFetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        search_metadata: { status: "Success" },
+        visual_matches: [
+          { ...PRODUCT_MATCH, in_stock: "yes" },
+          { ...PRODUCT_MATCH, position: 2, link: "https://www.polene-paris.com/sac-2", in_stock: false },
+        ],
+      })
+    );
+    const { matches } = await searchProductsByImageUrl(fakeFastify(), "https://example.com/photo.jpg");
+    expect(matches.map((match) => [match.merchantUrl, "inStock" in match ? match.inStock : "absent"])).toEqual([
+      ["https://www.polene-paris.com/sac", "absent"],
+      ["https://www.polene-paris.com/sac-2", false],
+    ]);
   });
 
   it("une réponse avec d'autres rubriques (correspondances exactes, contenus liés) : seules les correspondances visuelles sont lues, les autres sont comptées par la mesure", async () => {

@@ -84,6 +84,8 @@ import {
 import { consumeRateLimit, RATE_LIMITED_MESSAGE } from "../plugins/rateLimit.js";
 import { aiQuotaFor } from "../lib/aiQuota.js";
 import { noteFailure } from "../lib/alerts.js";
+import { observeResults, type ObservationSource, type ObservedRow } from "../lib/wishObserve.js";
+import { purgeWishAlerts } from "../lib/wishAlertsSend.js";
 
 const createSearchSchema = z.object({
   sourceUrl: z.string().url().max(2048).optional(),
@@ -501,6 +503,15 @@ function sendWithoutCall(reply: FastifyReply, call: Exclude<LensCall, { kind: "s
 
 const SAVE_FAILED = { error: "search_save_failed", message: "Le résultat n'a pas pu être enregistré, réessayez." } as const;
 
+/** Alertes prix et stock (lot 2, lib/wishObserve.ts) : APRÈS reply.send, les
+ * propositions que la personne vient de recevoir, seulement si elles sont
+ * fraîches (jamais le cache de 24 h, jamais la réponse d'un appel identique
+ * en cours) et enregistrées. Lancé puis oublié : ne retarde ni ne change la réponse. */
+function observeFresh(fastify: FastifyInstance, request: FastifyRequest, source: Exclude<ObservationSource, "purchase">, rows: readonly ObservedRow[], fresh: boolean): void {
+  if (!fresh || rows.length === 0) return;
+  observeResults(fastify, { source, rows, country: searchLocaleFor(request).country });
+}
+
 /** Écrit les colonnes finales de la recherche, puis la relit avec ses
  * propositions et leurs liens ; null : résultat illisible ou non enregistré. */
 async function writeOutcome(fastify: FastifyInstance, request: FastifyRequest, id: string, columns: Record<string, unknown>): Promise<ProductSearch | null> {
@@ -520,13 +531,19 @@ async function writeOutcome(fastify: FastifyInstance, request: FastifyRequest, i
 /** Enregistre l'issue de l'appel et sa mesure, et renvoie la recherche
  * complète ; null : résultat illisible ou non enregistré. La ligne « Mesure
  * recherche » est écrite d'abord : elle reste, même si l'enregistrement échoue. */
-async function saveOutcome(fastify: FastifyInstance, request: FastifyRequest, id: string, outcome: SearchOutcome, cropPct: number): Promise<ProductSearch | null> {
+async function saveOutcome(
+  fastify: FastifyInstance,
+  request: FastifyRequest,
+  id: string,
+  outcome: SearchOutcome,
+  cropPct: number
+): Promise<{ search: ProductSearch | null; saved: boolean }> {
   const saved = await saveMatches(fastify, id, outcome.matches);
   const measure = saved ? outcome.measure : failedColumns("save_failed", outcome.measure.call_seconds);
   const reply = { provider: IMAGE_SEARCH_PROVIDER.name, statusCode: outcome.providerStatusCode };
   // Journal racine (sans le contexte de la requête) : ni identifiant de requête, ni chemin, ni compte.
   fastify.log.info(measureLogLine(measure, outcome.addedRanks, reply), MEASURE_LOG_MESSAGE);
-  return writeOutcome(fastify, request, id, {
+  const search = await writeOutcome(fastify, request, id, {
     screenshot_url: null,
     status: saved ? outcome.status : "failed",
     error_message: saved ? outcome.errorMessage : TECHNICAL_FAILURE_MESSAGE,
@@ -535,6 +552,7 @@ async function saveOutcome(fastify: FastifyInstance, request: FastifyRequest, id
     provider: reply.provider,
     provider_status_code: reply.statusCode,
   });
+  return { search, saved };
 }
 
 // ---------------------------------------------------------------------
@@ -650,7 +668,7 @@ async function saveVoieCOutcome(
   launch: VoieCLaunch,
   outcome: SearchOutcome,
   run: { lensFromCache: boolean; complement: ComplementResult; deferred?: { lensRanks: LensRanks } }
-): Promise<{ search: ProductSearch | null; complement: ComplementResult }> {
+): Promise<{ search: ProductSearch | null; complement: ComplementResult; lensSaved: boolean }> {
   const saved = await saveMatches(fastify, launch.id, outcome.matches, run.deferred?.lensRanks ?? null);
   const pending = run.deferred !== undefined && saved;
   let complement = run.complement;
@@ -682,7 +700,7 @@ async function saveVoieCOutcome(
     ...(run.lensFromCache ? { run_started_at: null } : {}),
   });
   if (!pending) fastify.log.info(complementLogLine(complement.measure, { lensFromCache: run.lensFromCache, totalMs: Date.now() - launch.t0 }), COMPLEMENT_LOG_MESSAGE);
-  return { search, complement };
+  return { search, complement, lensSaved: saved };
 }
 
 /** Lancement avec la voie C (interrupteur allumé, 0028 vue).
@@ -755,7 +773,9 @@ async function launchWithVoieC(fastify: FastifyInstance, request: FastifyRequest
     });
     if (!lens.lensFromCache) await observeBreakerAfter(fastify, "image", IMAGE_SEARCH_PROVIDER.name, launch.id);
     if (!saved.search) return reply.code(500).send(SAVE_FAILED);
-    return reply.send({ ...saved.search, sortedByWords: byWords.sorted, complement: saved.complement.reply });
+    const sent = reply.send({ ...saved.search, sortedByWords: byWords.sorted, complement: saved.complement.reply });
+    observeFresh(fastify, request, "lens", searched.matches, !lens.lensFromCache && saved.lensSaved);
+    return sent;
   }
   const complement = await runComplement(complementPorts(fastify, request, launch), input);
   // Échecs répétés de l'IA ou de Google Shopping : une alerte (lib/alerts.ts).
@@ -776,7 +796,11 @@ async function launchWithVoieC(fastify: FastifyInstance, request: FastifyRequest
   if (!lens.lensFromCache) await observeBreakerAfter(fastify, "image", IMAGE_SEARCH_PROVIDER.name, launch.id);
   // Résultat illisible ou non enregistré : une panne annoncée comme telle, jamais « aucune pièce ».
   if (!saved.search) return reply.code(500).send(SAVE_FAILED);
-  return reply.send({ ...saved.search, sortedByWords: byWords.sorted, complement: saved.complement.reply });
+  const sent = reply.send({ ...saved.search, sortedByWords: byWords.sorted, complement: saved.complement.reply });
+  observeFresh(fastify, request, "lens", searched.matches, !lens.lensFromCache && saved.lensSaved);
+  // Les boutiques : seulement celles enregistrées, et jamais lues dans le cache.
+  observeFresh(fastify, request, "shopping", saved.complement.matches, saved.lensSaved && !saved.complement.measure.shoppingFromCache);
+  return sent;
 }
 
 // ---- « Que cherchez-vous ? » (voie B, POST /api/searches/:id/text) ----
@@ -1022,7 +1046,10 @@ async function runDeferredComplement(
   }
   const result = await readSearchForReply(fastify, request, row.id, row.user_id);
   if (!result) return reply.code(500).send(SAVE_FAILED);
-  return reply.send({ ...result, complement: final.reply });
+  const sent = reply.send({ ...result, complement: final.reply });
+  // Seulement les nouvelles propositions des boutiques, enregistrées, jamais lues dans le cache.
+  observeFresh(fastify, request, "shopping", final.matches, savedCount > 0 && !final.measure.shoppingFromCache);
+  return sent;
 }
 
 /** Les boutiques ensuite d'une recherche, selon son état (lib/deferredComplement.ts) :
@@ -1273,9 +1300,12 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     // jamais d'erreur, et un échec de l'historique ne le saute donc jamais.
     // Images analysées restées plus d'une heure (lot garde-fous) : même
     // principe, en même temps que le cache ; ne lève jamais d'erreur non plus.
+    // Alertes prix et stock (lot 2) : alertes et signalements « Plus
+    // disponible » de plus de 30 jours, par lots bornés ; sans 0036, rien.
     await Promise.all([
       purgeExpiredCache(fastify.supabaseAdmin, request.log),
       purgeStaleAnalysisImages(fastify.supabaseAdmin.storage.from(ANALYSIS_BUCKET), request.log),
+      purgeWishAlerts(fastify, request.log),
     ]);
     try {
       await purgeExpiredSearches(fastify, userId);
@@ -1355,11 +1385,14 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       // Les mots remontent en tête les propositions dont le nom les contient ; rien n'est retiré.
       const byWords = sortByWords(call.outcome.matches, form.input.query);
       const outcome = { ...call.outcome, matches: byWords.matches };
-      const result = await saveOutcome(fastify, request, id, outcome, cropAreaPct(form.input.crop));
+      const { search: result, saved } = await saveOutcome(fastify, request, id, outcome, cropAreaPct(form.input.crop));
       await observeBreakerAfter(fastify, "image", IMAGE_SEARCH_PROVIDER.name, id);
       // Résultat illisible ou non enregistré : une panne annoncée comme telle, jamais « aucune pièce ».
       if (!result) return reply.code(500).send(SAVE_FAILED);
-      return reply.send({ ...result, sortedByWords: byWords.sorted });
+      const sent = reply.send({ ...result, sortedByWords: byWords.sorted });
+      // Chemin d'avant la voie C : toujours un vrai appel à Lens (aucun cache).
+      observeFresh(fastify, request, "lens", call.outcome.matches, saved);
+      return sent;
     }
   );
 
@@ -1468,7 +1501,10 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       }
       const result = await readSearchForReply(fastify, request, id, userId);
       if (!result) return reply.code(500).send(SAVE_FAILED);
-      return reply.send(result);
+      const sent = reply.send(result);
+      // « Que cherchez-vous ? » n'est jamais mis en cache : les nouvelles propositions enregistrées.
+      observeFresh(fastify, request, "words", text.matches, (saved ?? 0) > 0);
+      return sent;
     }
   );
 

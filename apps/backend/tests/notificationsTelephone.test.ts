@@ -18,6 +18,7 @@ import {
   resetPushProbe,
 } from "../src/lib/push.js";
 import { requestLogFields, scrubLogLine, withoutErrorDetails } from "../src/lib/logPrivacy.js";
+import { resetWishAlertsProbe } from "../src/lib/wishAlertsSchema.js";
 import { fakeSupabase, type FakeDbOptions, type Row } from "./fakeSupabase.js";
 
 // Notifications des nouveaux messages sur le téléphone (lot notifications,
@@ -153,6 +154,7 @@ beforeEach(() => {
   resetMessagesProbe();
   resetPushProbe();
   resetPushCollapse();
+  resetWishAlertsProbe();
   expoCalls = [];
   env.PUSH_ENABLED = false;
   env.EXPO_ACCESS_TOKEN = undefined;
@@ -188,6 +190,47 @@ describe("interrupteur coupé (par défaut)", () => {
     const target = await pushApp(fake.db);
     expect((await as(target, BOB).del("/api/me/push-token", { token: BOB_PHONE })).statusCode).toBe(204);
     expect(tokensOf(fake, BOB)).toEqual([]);
+  });
+});
+
+describe("alertes prix et stock (migration 0036) : un appareil gardé pour les seules alertes", () => {
+  const migrated0036 = { rpc: async (fn: string) => (fn === "wish_alerts_version" ? { data: 1, error: null } : { data: null, error: { code: "PGRST202", message: "absente" } }) };
+
+  it("ne reçoit aucune notification de message ; un appareil qui les reçoit, si ; sans 0036, tous comme avant", async () => {
+    env.PUSH_ENABLED = true;
+    const fake = seeded({ follows: friends(ALICE, BOB), tokens: [{ token: BOB_PHONE, user_id: BOB }, { token: BOB_TABLET, user_id: BOB }] }, migrated0036);
+    fake.table("push_tokens").find((row) => row.token === BOB_PHONE)!.notify_messages = false;
+    fake.table("push_tokens").find((row) => row.token === BOB_TABLET)!.notify_messages = true;
+    const target = await pushApp(fake.db);
+    expect((await send(target, ALICE, BOB)).statusCode).toBe(201);
+    expect(expoCalls).toHaveLength(1);
+    expect(expoCalls[0]!.messages.map((message) => message.to)).toEqual([BOB_TABLET]);
+    expect(expoCalls[0]!.messages[0]).toMatchObject({ title: "Spotto", body: "Nouveau message de @alice", data: { conversationId: expect.any(String) } });
+  });
+
+  it("base qui ne dit pas si 0036 est là (sonde en panne) : AUCUNE notification de message (un appareil des seules alertes la recevrait), l'envoi du message marche", async () => {
+    env.PUSH_ENABLED = true;
+    const unknown = { rpc: async () => ({ data: null, error: { code: "57014", message: "délai dépassé" } }) };
+    const fake = seeded({ follows: friends(ALICE, BOB), tokens: [{ token: BOB_PHONE, user_id: BOB }] }, unknown);
+    fake.table("push_tokens")[0]!.notify_messages = false;
+    const target = await pushApp(fake.db);
+    expect((await send(target, ALICE, BOB)).statusCode).toBe(201);
+    expect(expoCalls).toEqual([]);
+  });
+
+  it("enregistré avec « messages: false » : gardé (pour les alertes), mais sans notification de message", async () => {
+    env.PUSH_ENABLED = true;
+    const fake = seeded({ follows: friends(ALICE, BOB) }, migrated0036);
+    const target = await pushApp(fake.db);
+    expect((await as(target, BOB).put("/api/me/push-token", { token: BOB_PHONE, platform: "ios", messages: false, alerts: true })).statusCode).toBe(204);
+    expect(fake.table("push_tokens")).toEqual([expect.objectContaining({ token: BOB_PHONE, user_id: BOB, notify_messages: false, notify_alerts: true })]);
+    expect((await send(target, ALICE, BOB)).statusCode).toBe(201);
+    expect(expoCalls).toEqual([]);
+    // De nouveau « messages: true » : les notifications de message reviennent.
+    expect((await as(target, BOB).put("/api/me/push-token", { token: BOB_PHONE, platform: "ios", messages: true })).statusCode).toBe(204);
+    resetPushCollapse();
+    expect((await send(target, ALICE, BOB)).statusCode).toBe(201);
+    expect(expoCalls).toHaveLength(1);
   });
 });
 

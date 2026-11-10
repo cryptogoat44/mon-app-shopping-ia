@@ -14,6 +14,7 @@
 // - Les indices restent ceux de la liste complète de l'écran (allPieces) :
 //   chaque carte et ses boutons visent toujours sa propre pièce.
 // Logique pure, testée. Imports relatifs : fichier testé par vitest.
+import { alertCurrency, COUNTRY_CURRENCIES } from "@monapp/shared-types";
 import type { Piece, SpotResult } from "../api/types";
 import { allPieces, type IndexedPiece } from "./result-sections";
 import { hasPrice, priceFirstSections, type PriceFirstSections } from "./price-first";
@@ -60,21 +61,20 @@ export function serializeResultView(view: ResultView): string {
 
 // ---- Devises ----
 
-// Écritures d'une même devise : Google Lens écrit souvent un symbole (« € »,
-// « $US »), Google Shopping un code (« EUR ») — même table que
-// lib/foreign-shop.ts et le serveur. « $ » seul n'est le dollar américain que
-// pour une recherche faite aux États-Unis (ailleurs : dollar canadien,
-// australien…) ; il reste à part sinon.
-const CURRENCY_ALIASES: Record<string, string> = { "€": "EUR", "£": "GBP", US$: "USD", $US: "USD" };
-const COUNTRY_CURRENCY: Record<string, string> = { fr: "EUR", us: "USD", gb: "GBP", ch: "CHF" };
+// Écritures d'une même devise : Google Lens écrit souvent un symbole, Google
+// Shopping un code (« EUR ») — LA table de packages/shared-types
+// (alertCurrency, COUNTRY_CURRENCIES), la même que lib/foreign-shop.ts, le
+// serveur et les alertes prix ; jamais une copie ici. « $ » seul n'est le
+// dollar américain que pour une recherche faite aux États-Unis (ailleurs :
+// dollar canadien, australien…) ; il reste à part sinon, comme toute écriture
+// que la table ne connaît pas (un groupe à elle, jamais mêlé aux autres).
 
 /** La devise d'un prix, écrite d'une seule façon (« € » et « EUR » → « EUR »).
  * null sans devise. `country` : pays de la recherche (lib/foreign-shop.ts). */
 export function currencyKey(currency: string | null | undefined, country?: string): string | null {
   const code = currency?.trim().toUpperCase();
   if (!code) return null;
-  if (code === "$") return country === "us" ? "USD" : "$";
-  return CURRENCY_ALIASES[code] ?? code;
+  return alertCurrency(code, country ?? null) ?? code;
 }
 
 /** Un prix qu'on peut trier : supérieur à 0 (un prix à 0 est une donnée
@@ -104,7 +104,7 @@ export function currencyGroups(items: readonly IndexedPiece[], country?: string)
     list.push(item);
     groups.set(price.currency, list);
   }
-  const preferred = country ? COUNTRY_CURRENCY[country] : undefined;
+  const preferred = country ? COUNTRY_CURRENCIES[country] : undefined;
   const firstIndex = (group: CurrencyGroup) => Math.min(...group.items.map(({ index }) => index));
   return [...groups]
     .map(([currency, list]) => ({ currency, items: [...list].sort((a, b) => a.index - b.index) }))

@@ -17,6 +17,8 @@ export interface ProviderVisualMatch {
   thumbnail?: string;
   image?: string;
   price?: { value?: string; extracted_value?: number; currency?: string };
+  /** Stock annoncé par Google (alertes prix et stock), seulement s'il est donné. */
+  in_stock?: boolean;
 }
 
 /** Réponse d'une recherche par image. */
@@ -54,6 +56,8 @@ export interface ProviderShoppingItem {
   price?: string;
   extracted_price?: number;
   thumbnail?: string;
+  /** Identifiant produit de SerpApi, s'il est donné : seulement compté (alertes prix). */
+  product_id?: string;
 }
 
 /** Réponse d'une recherche par texte. */
