@@ -24,6 +24,23 @@ function body(name: string): string {
 const ROLLBACK = SQL.slice(SQL.indexOf("-- Retour en arrière"), SQL.indexOf("-- Ce qu'elle ajoute :"));
 const FUNCTIONS = ["wish_alerts_version", "wish_observe", "wish_alerts_claim", "wish_alerts_mark_pushing", "wish_alerts_mark_sent", "wish_alerts_release", "wish_stock_report", "wish_alerts_purge"];
 
+// Registre des migrations : « 0036 demande 0035 ». Une base « avec 0036,
+// sans 0035 » ne peut donc pas exister (les autres combinaisons :
+// alertesPrixRoutes.test.ts et notificationsTelephone.test.ts).
+describe("ordre des migrations", () => {
+  it("0036 refuse de s'appliquer sans 0035 (push_tokens), avant de créer ou de modifier quoi que ce soit", () => {
+    // Le fichier sans ses commentaires : le refus est sa toute première instruction.
+    const statements = SQL.split("\n")
+      .filter((line) => !line.trimStart().startsWith("--"))
+      .join("\n")
+      .trimStart();
+    expect(statements).toMatch(/^do \$\$\s*begin\s*if to_regclass\('public\.push_tokens'\) is null then\s*raise exception '0036 demande la migration 0035 \(push_tokens\)/);
+    // Elle ajoute ses colonnes à la table de 0035 : sans cette table, rien ne tiendrait.
+    expect(statements).toContain("alter table push_tokens add column if not exists notify_messages");
+    expect(statements).toContain("alter table push_tokens add column if not exists notify_alerts");
+  });
+});
+
 describe("retour en arrière de 0036", () => {
   it("oublie d'abord les appareils des seules alertes, AVANT de remettre l'ancien serveur (il envoie les messages à tous les appareils) et avant de retirer la colonne", () => {
     const deleteLine = "--   delete from push_tokens where notify_messages = false;";

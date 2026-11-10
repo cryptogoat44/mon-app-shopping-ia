@@ -25,6 +25,7 @@ import pushTokensRoutes from "../src/routes/pushTokens.js";
 import accountRoutes from "../src/routes/account.js";
 import moderationPlugin from "../src/plugins/moderation.js";
 import { findOwnMatch } from "../src/lib/ownMatches.js";
+import { env } from "../src/env.js";
 import { resetWishAlertsProbe } from "../src/lib/wishAlertsSchema.js";
 import { resetPushProbe } from "../src/lib/push.js";
 import { trackingKeyOf } from "../src/lib/alertKeys.js";
@@ -54,6 +55,8 @@ type Rpc = (fn: string, args: Record<string, unknown>) => Promise<{ data: unknow
 interface Setup {
   /** La base a la migration 0036 (sonde wish_alerts_version). */
   migrated?: boolean;
+  /** La base n'a pas la migration 0035 (table push_tokens absente). */
+  without0035?: boolean;
   /** Réponse de wish_stock_report. */
   reportAllowed?: boolean;
 }
@@ -69,7 +72,7 @@ function seeded(setup: Setup = {}) {
     if (fn === "wish_stock_report") return { data: [{ allowed: setup.reportAllowed ?? true, matched: 2 }], error: null };
     return { data: null, error: { code: "PGRST202", message: "absente" } };
   };
-  const fake = fakeSupabase({ rpc });
+  const fake = fakeSupabase({ rpc, ...(setup.without0035 ? { missing: ["push_tokens"] } : {}) });
   fake.table("profiles").push({ id: ALICE, username: "alice", locale: "fr", price_alerts_enabled: false }, { id: BOB, username: "bob", locale: "fr", price_alerts_enabled: false });
   // La proposition d'origine, telle que le SERVEUR l'a rangée (prix en symbole, comme Lens).
   fake.table("product_matches").push({ id: MATCH, price_min: "120.00", currency: "€  ", merchant_name: "Boutique Exemple", merchant_url: SHOP_URL, created_at: "2026-11-08T23:30:00+00:00" });
@@ -137,6 +140,7 @@ async function newWish(target: FastifyInstance, body: Record<string, unknown>, u
 beforeEach(() => {
   resetWishAlertsProbe();
   resetPushProbe();
+  env.PUSH_ENABLED = true;
   rpcCalls = [];
   logs = [];
   ownMatchMock.mockReset();
@@ -190,6 +194,58 @@ describe("sans la migration 0036 : tout se tait, l'app cache tout", () => {
     expect(fake.table("push_tokens")).toEqual([expect.objectContaining({ token: PHONE, notify_messages: true, notify_alerts: true })]);
     expect((await as(target, ALICE).put("/api/me/push-token", { token: PHONE, platform: "ios", messages: false, alerts: true })).statusCode).toBe(204);
     expect(fake.table("push_tokens")).toEqual([]);
+  });
+});
+
+// Registre des migrations (supabase/REGISTRE-MIGRATIONS.md) : le serveur
+// fonctionne avec ou sans 0035, avec ou sans PUSH_ENABLED, avec ou sans 0036.
+// Les huit combinaisons, vues par l'app : l'état des alertes (ce qui montre
+// ou cache la cloche, l'interrupteur et « Plus disponible »), l'appareil des
+// notifications, le suivi d'une envie et sa cloche. La première est celle
+// de la production tant que 0035 et 0036 sont « à appliquer » et que
+// l'interrupteur est coupé. 0036 refuse de s'appliquer sans 0035
+// (alertesPrixMigration.test.ts) : les deux dernières ne peuvent pas
+// exister ; le serveur tient quand même. Les messages, l'export et la
+// suppression du compte : notificationsTelephone.test.ts.
+describe("avec ou sans 0035, PUSH_ENABLED et 0036 (registre des migrations)", () => {
+  // [nom, 0035 présente, interrupteur PUSH_ENABLED allumé, 0036 présente]
+  it.each<[string, boolean, boolean, boolean]>([
+    ["sans 0035, interrupteur coupé, sans 0036 : ni appareil, ni cloche", false, false, false],
+    ["sans 0035, interrupteur allumé, sans 0036 : ni appareil, ni cloche", false, true, false],
+    ["avec 0035, interrupteur coupé, sans 0036 : ni appareil, ni cloche", true, false, false],
+    ["avec 0035, interrupteur allumé, sans 0036 : l'appareil est enregistré, pas de cloche", true, true, false],
+    ["avec 0035, interrupteur coupé, avec 0036 : la cloche est enregistrée, sans appareil ni notification", true, false, true],
+    ["avec 0035, interrupteur allumé, avec 0036 : l'appareil et la cloche", true, true, true],
+    ["sans 0035, interrupteur coupé, avec 0036 (ordre refusé par la migration) : la cloche, sans appareil", false, false, true],
+    ["sans 0035, interrupteur allumé, avec 0036 (ordre refusé par la migration) : la cloche, sans appareil", false, true, true],
+  ])("%s", async (_name, with0035, pushOn, with0036) => {
+    env.PUSH_ENABLED = pushOn;
+    const fake = seeded({ migrated: with0036, without0035: !with0035 });
+    const target = await alertsApp(fake.db);
+    // Une notification n'est possible qu'avec 0035 ET l'interrupteur.
+    const push = with0035 && pushOn;
+
+    const status = await as(target, ALICE).get("/api/alerts/status");
+    expect(status.statusCode).toBe(200);
+    expect(status.json()).toEqual({ available: with0036, enabled: false, push: with0036 && push } satisfies WishAlertsStatus);
+
+    // L'appareil : enregistré seulement si une notification est possible.
+    const device = await as(target, ALICE).put("/api/me/push-token", { token: PHONE, platform: "ios", messages: true, alerts: with0036 });
+    expect(device.statusCode).toBe(push ? 204 : 404);
+    expect(fake.table("push_tokens")).toHaveLength(push ? 1 : 0);
+
+    // Garder une envie marche toujours ; son suivi et sa cloche n'existent qu'avec 0036.
+    const id = await newWish(target, { productMatchId: MATCH });
+    const bell = await as(target, ALICE).put(`/api/wishlist/${id}/alerts`, { priceDrop: true, restock: false, enableAlerts: true });
+    if (with0036) {
+      expect(bell.statusCode).toBe(200);
+      expect(bell.json().status).toEqual({ available: true, enabled: true, push } satisfies WishAlertsStatus);
+    } else {
+      expect(bell.statusCode).toBe(404);
+      expect(bell.json()).toMatchObject({ error: "alerts_unavailable" });
+    }
+    expect([fake.table("wish_tracking").length, fake.table("wish_watches").length]).toEqual(with0036 ? [1, 1] : [0, 0]);
+    expect(fake.table("profiles").find((row) => row.id === ALICE)!.price_alerts_enabled).toBe(with0036);
   });
 });
 

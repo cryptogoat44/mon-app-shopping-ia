@@ -73,6 +73,9 @@ const friends = (a: string, b: string): [string, string][] => [
   [b, a],
 ];
 
+/** La base a la migration 0036 (sonde wish_alerts_version). */
+const migrated0036: FakeDbOptions = { rpc: async (fn) => (fn === "wish_alerts_version" ? { data: 1, error: null } : { data: null, error: { code: "PGRST202", message: "absente" } }) };
+
 // ---- Faux service d'Expo ----
 
 interface ExpoCall {
@@ -191,11 +194,34 @@ describe("interrupteur coupé (par défaut)", () => {
     expect((await as(target, BOB).del("/api/me/push-token", { token: BOB_PHONE })).statusCode).toBe(204);
     expect(tokensOf(fake, BOB)).toEqual([]);
   });
+
+  // Registre des migrations : interrupteur coupé, rien ne dépend de la base.
+  // « Ni 0035 ni 0036 » est la production tant que ces migrations sont « à
+  // appliquer ». (Avec 0035, sans 0036 : les deux tests ci-dessus. Les
+  // alertes dans chaque combinaison : alertesPrixRoutes.test.ts.)
+  it.each<[string, FakeDbOptions]>([
+    ["sans 0035 ni 0036", { missing: ["push_tokens"] }],
+    ["avec 0035 et 0036", migrated0036],
+  ])("%s : push false, rien d'enregistré ni d'envoyé ; l'envoi des messages, l'export et la suppression du compte marchent", async (_base, options) => {
+    const with0035 = !options.missing?.includes("push_tokens");
+    const fake = seeded({ follows: friends(ALICE, BOB), tokens: with0035 ? [{ token: BOB_PHONE, user_id: BOB }] : [] }, options);
+    const target = await pushApp(fake.db);
+    expect((await as(target, ALICE).get("/api/messages/status")).json()).toEqual({ enabled: true, unreadCount: 0, push: false });
+    expect((await as(target, ALICE).put("/api/me/push-token", { token: ALICE_PHONE, platform: "ios", messages: true, alerts: true })).statusCode).toBe(404);
+    expect(tokensOf(fake, ALICE)).toEqual([]);
+    expect((await as(target, ALICE).del("/api/me/push-token", { token: ALICE_PHONE })).statusCode).toBe(204);
+    // Le message part ; aucune notification, même vers un appareil déjà enregistré.
+    expect((await send(target, ALICE, BOB)).statusCode).toBe(201);
+    expect(expoCalls).toEqual([]);
+    const exported = await as(target, ALICE).get("/api/me/export");
+    expect(exported.statusCode).toBe(200);
+    expect(exported.json().pushDevices).toEqual([]);
+    expect((await as(target, ALICE).del("/api/me", { confirmation: "SUPPRIMER" })).statusCode).toBe(204);
+    expect(fake.deletedUsers).toEqual([ALICE]);
+  });
 });
 
 describe("alertes prix et stock (migration 0036) : un appareil gardé pour les seules alertes", () => {
-  const migrated0036 = { rpc: async (fn: string) => (fn === "wish_alerts_version" ? { data: 1, error: null } : { data: null, error: { code: "PGRST202", message: "absente" } }) };
-
   it("ne reçoit aucune notification de message ; un appareil qui les reçoit, si ; sans 0036, tous comme avant", async () => {
     env.PUSH_ENABLED = true;
     const fake = seeded({ follows: friends(ALICE, BOB), tokens: [{ token: BOB_PHONE, user_id: BOB }, { token: BOB_TABLET, user_id: BOB }] }, migrated0036);
