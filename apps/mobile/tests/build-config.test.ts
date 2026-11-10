@@ -1,6 +1,9 @@
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { describe, expect, it } from "vitest";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, describe, expect, it } from "vitest";
 
 // Lot « app iPhone prête » (chantier 4, points 2 et 11) : réglages des builds
 // iPhone. Les adresses et la clé publique ne sont plus écrites dans eas.json :
@@ -8,7 +11,7 @@ import { describe, expect, it } from "vitest";
 // que lisent aussi les mises à jour à distance (eas update). Un contrôle au
 // début de chaque build EAS arrête un build inutilisable ou dangereux.
 const require = createRequire(import.meta.url);
-const { problemesBuild } = require("../scripts/verifier-build.js");
+const { problemesBuild, textesInacheves, passagesProvisoires, REGLAGES_EDITEUR, DOSSIER_LEGAL } = require("../scripts/verifier-build.js");
 
 const lire = (chemin: string) => readFileSync(new URL(chemin, import.meta.url), "utf8");
 const eas = JSON.parse(lire("../eas.json"));
@@ -93,6 +96,12 @@ describe("contrôle au début d'un build EAS (scripts/verifier-build.js)", () =>
     // Clé publique de test documentée par Cloudflare (24 caractères).
     EXPO_PUBLIC_TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
     SENTRY_AUTH_TOKEN: "sntrys_factice",
+    // Identité de l'éditeur (lot « conformité Apple ») : valeurs factices.
+    EXPO_PUBLIC_PUBLISHER_NAME: "Nom Factice",
+    EXPO_PUBLIC_PUBLISHER_STATUS: "statut factice",
+    EXPO_PUBLIC_PUBLISHER_ADDRESS: "1 rue Factice, 75000 Paris",
+    EXPO_PUBLIC_PUBLISHER_EMAIL: "contact@exemple.test",
+    EXPO_PUBLIC_PUBLISHER_PHONE: "+33 1 00 00 00 00",
   };
 
   it("réglages complets : rien à signaler ; profil de développement : rien n'est vérifié", () => {
@@ -226,5 +235,155 @@ describe("contrôle au début d'un build EAS (scripts/verifier-build.js)", () =>
     const { erreurs, avertissements } = problemesBuild({ ...BON, EXPO_PUBLIC_POSTHOG_KEY: "" });
     expect(erreurs).toEqual([]);
     expect(avertissements[0]).toContain("EXPO_PUBLIC_POSTHOG_KEY");
+  });
+
+  // Lot « conformité Apple » : règle 2.1 (a) d'Apple, aucun texte provisoire.
+  describe("textes provisoires : build « production » arrêté, simple avertissement pour « preview »", () => {
+    const dossiers: string[] = [];
+    /** Un faux dossier de textes légaux, avec ces fichiers. */
+    function dossier(fichiers: Record<string, string>): string {
+      const racineTest = mkdtempSync(join(tmpdir(), "textes-legaux-"));
+      dossiers.push(racineTest);
+      for (const [nom, contenu] of Object.entries(fichiers)) {
+        mkdirSync(join(racineTest, nom, ".."), { recursive: true });
+        writeFileSync(join(racineTest, nom), contenu);
+      }
+      return racineTest;
+    }
+    const PROPRE = { "conditions.ts": 'export const TEXTE = "Texte validé.";\n' };
+    const SECRET = "Société Très Secrète";
+
+    it("identité de l'éditeur : un réglage absent, vide ou encore entre crochets arrête le build de production, sans afficher aucune valeur", () => {
+      expect(REGLAGES_EDITEUR).toEqual(["NAME", "STATUS", "ADDRESS", "EMAIL", "PHONE"].map((nom) => `EXPO_PUBLIC_PUBLISHER_${nom}`));
+      for (const nom of REGLAGES_EDITEUR) {
+        for (const valeur of [undefined, "", "   ", "[À compléter : plus tard]"]) {
+          const { erreurs } = problemesBuild({ ...BON, EXPO_PUBLIC_PUBLISHER_NAME: SECRET, [nom]: valeur }, dossier(PROPRE));
+          expect(erreurs, `${nom} = ${valeur}`).toHaveLength(1);
+          expect(erreurs[0]).toContain("Identité de l'éditeur incomplète");
+          expect(erreurs[0]).toContain(`${nom} manque chez Expo`);
+          expect(erreurs[0]).toContain("environnement « production »");
+          expect(erreurs[0]).toContain("règle 2.1");
+          expect(erreurs[0]).not.toContain(SECRET);
+          expect(erreurs[0]).not.toContain("plus tard");
+          expect(erreurs[0]).not.toContain("exemple.test");
+        }
+      }
+      const { erreurs } = problemesBuild({ ...BON, EXPO_PUBLIC_PUBLISHER_EMAIL: "", EXPO_PUBLIC_PUBLISHER_PHONE: "" }, dossier(PROPRE));
+      expect(erreurs).toHaveLength(1);
+      expect(erreurs[0]).toContain("EXPO_PUBLIC_PUBLISHER_EMAIL, EXPO_PUBLIC_PUBLISHER_PHONE manquent");
+    });
+
+    it("identité de l'éditeur : pour « preview », le même constat n'est qu'un avertissement ; rien pour « development »", () => {
+      const { erreurs, avertissements } = problemesBuild({ ...BON, EAS_BUILD_PROFILE: "preview", EXPO_PUBLIC_PUBLISHER_PHONE: "" }, dossier(PROPRE));
+      expect(erreurs).toEqual([]);
+      expect(avertissements).toHaveLength(1);
+      expect(avertissements[0]).toContain("EXPO_PUBLIC_PUBLISHER_PHONE manque");
+      expect(avertissements[0]).toContain("Ce build « preview » continue ; un build « production » serait arrêté.");
+      expect(problemesBuild({ EAS_BUILD_PROFILE: "development" }, dossier({ "conditions.ts": '"[À compléter : tout]"' }))).toEqual({ erreurs: [], avertissements: [] });
+    });
+
+    it("textes légaux : chaque crochet resté arrête le build de production, avec la liste des fichiers et jamais leur texte", () => {
+      for (const crochet of ["[À compléter", "[À vérifier", "[To be completed", "[To be verified", "[À décider", "[To be decided"]) {
+        const { erreurs } = problemesBuild(BON, dossier({ "conditions.ts": `export const T = "Délai : ${crochet} : phrase à garder secrète]";\n` }));
+        expect(erreurs, crochet).toHaveLength(1);
+        expect(erreurs[0]).toContain("Textes légaux inachevés");
+        expect(erreurs[0]).toContain("apps/mobile/src/legal — conditions.ts (1 passage)");
+        expect(erreurs[0]).toContain("règle 2.1");
+        expect(erreurs[0]).not.toContain("phrase à garder secrète");
+      }
+      const plusieurs = dossier({
+        "confidentialite.ts": 'const A = "[À vérifier : a]";\nconst B = "[À vérifier : b] et [À compléter : c]";\n',
+        "conditions.en.ts": 'const A = "[To be completed: a]";\n',
+        "en/annexe.ts": 'const A = "[To be verified: a]";\n',
+        "propre.ts": 'const A = "Rien à signaler [entre crochets ordinaires].";\n',
+      });
+      expect(textesInacheves(plusieurs)).toEqual({
+        illisible: false,
+        fichiers: [
+          { nom: "conditions.en.ts", passages: 1 },
+          { nom: "confidentialite.ts", passages: 3 },
+          { nom: "en/annexe.ts", passages: 1 },
+        ],
+      });
+      expect(problemesBuild(BON, plusieurs).erreurs[0]).toContain("conditions.en.ts (1 passage), confidentialite.ts (3 passages), en/annexe.ts (1 passage)");
+    });
+
+    it("textes légaux : pour « preview », avertissement seulement ; textes propres, rien à signaler", () => {
+      const inacheve = dossier({ "conditions.ts": 'const T = "[À compléter : délais]";\n' });
+      const preview = problemesBuild({ ...BON, EAS_BUILD_PROFILE: "preview" }, inacheve);
+      expect(preview.erreurs).toEqual([]);
+      expect(preview.avertissements).toHaveLength(1);
+      expect(preview.avertissements[0]).toContain("Textes légaux inachevés");
+      expect(preview.avertissements[0]).toContain("Ce build « preview » continue");
+      expect(problemesBuild(BON, dossier(PROPRE))).toEqual({ erreurs: [], avertissements: [] });
+      expect(problemesBuild({ ...BON, EAS_BUILD_PROFILE: "preview" }, dossier(PROPRE))).toEqual({ erreurs: [], avertissements: [] });
+    });
+
+    it("ne comptent pas : les commentaires, ni les textes de repli des cinq réglages de l'éditeur (déjà couverts par le contrôle des réglages)", () => {
+      const publisher = [
+        "// Une variable absente affiche « [À compléter : …] ».",
+        "const PLACEHOLDERS = {",
+        '  fr: { name: "[À compléter : nom de l\'éditeur]" },',
+        '  en: { name: "[To be completed: publisher\'s name]" },',
+        "};",
+        "/** Complète par « [À compléter : …] »",
+        " * ou « [To be completed: …] ». */",
+        "export const HOSTS = {",
+        '  supabase: "Supabase — [À compléter : téléphone]",',
+        "};",
+      ].join("\n");
+      expect(passagesProvisoires(publisher, "publisher.ts")).toBe(1);
+      // Le même bloc dans un autre fichier n'est pas un texte de repli : il compte.
+      expect(passagesProvisoires(publisher, "conditions.ts")).toBe(3);
+      expect(passagesProvisoires('/* [À vérifier : x] */\nconst A = "ok";\n', "a.ts")).toBe(0);
+    });
+
+    it("dossier des textes introuvable : le build de production est arrêté (rien n'a pu être vérifié)", () => {
+      const absent = join(tmpdir(), "textes-legaux-absents-" + Date.now());
+      expect(textesInacheves(absent)).toEqual({ illisible: true, fichiers: [] });
+      expect(problemesBuild(BON, absent).erreurs[0]).toContain("introuvable ou illisible");
+      expect(problemesBuild({ ...BON, EAS_BUILD_PROFILE: "preview" }, absent).erreurs).toEqual([]);
+    });
+
+    it("lancé par EAS : le script lit les vrais textes de l'app, et son verdict suit leur état", () => {
+      expect(existsSync(join(DOSSIER_LEGAL, "conditions.ts"))).toBe(true);
+      expect(existsSync(join(DOSSIER_LEGAL, "confidentialite.ts"))).toBe(true);
+      expect(lire("../scripts/verifier-build.js")).toContain("problemesBuild(process.env, DOSSIER_LEGAL)");
+      // Sans dépendance : il tourne avant l'installation.
+      const modules = [...lire("../scripts/verifier-build.js").matchAll(/require\("([^"]+)"\)/g)].map((match) => match[1]);
+      expect(modules.every((nom) => nom!.startsWith("node:"))).toBe(true);
+
+      const reste = textesInacheves(DOSSIER_LEGAL);
+      expect(reste.illisible).toBe(false);
+      const lancer = (profilBuild: string) =>
+        spawnSync(process.execPath, ["scripts/verifier-build.js"], {
+          cwd: new URL("..", import.meta.url),
+          // Seulement ces réglages factices : rien de l'ordinateur qui lance les tests.
+          env: { ...BON, EAS_BUILD_PROFILE: profilBuild, EXPO_PUBLIC_PUBLISHER_NAME: SECRET, PATH: process.env.PATH ?? "" } as unknown as NodeJS.ProcessEnv,
+          encoding: "utf8",
+        });
+      const production = lancer("production");
+      const preview = lancer("preview");
+      // « preview » n'est jamais arrêté par des textes provisoires.
+      expect(preview.status).toBe(0);
+      if (reste.fichiers.length > 0) {
+        // Tant que les textes légaux ne sont pas validés : build App Store arrêté, fichiers nommés.
+        expect(production.status).toBe(1);
+        expect(production.stderr).toContain("Build iPhone arrêté avant de commencer");
+        for (const fichier of reste.fichiers) expect(production.stderr).toContain(`${fichier.nom} (${fichier.passages} passage`);
+        expect(preview.stderr).toContain("Textes légaux inachevés");
+      } else {
+        expect(production.status).toBe(0);
+      }
+      for (const sortie of [production.stdout, production.stderr, preview.stdout, preview.stderr]) {
+        expect(sortie).not.toContain(SECRET);
+        expect(sortie).not.toContain("[À compléter :");
+        expect(sortie).not.toContain("[À vérifier :");
+      }
+    });
+
+    afterAll(() => {
+      for (const racineTest of dossiers) rmSync(racineTest, { recursive: true, force: true });
+    });
   });
 });

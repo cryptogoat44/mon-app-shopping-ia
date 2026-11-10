@@ -13,10 +13,21 @@
 //   serait lisible par tous dans l'app) ;
 // - sans le jeton Sentry qui rend les plantages lisibles (sauf si
 //   SENTRY_DISABLE_AUTO_UPLOAD vaut « true », choix assumé d'un build d'essai) ;
-// - avec la clé SECRÈTE du widget anti-robots à la place de sa clé publique.
+// - avec la clé SECRÈTE du widget anti-robots à la place de sa clé publique ;
+// - pour le profil « production » (App Store) seulement, avec un texte
+//   provisoire visible dans l'app (règle 2.1 (a) d'Apple : « placeholder
+//   text […] should be scrubbed before submission ») : un des cinq réglages
+//   de l'identité de l'éditeur absent (les pages légales afficheraient
+//   « [À compléter : …] »), ou un passage entre crochets resté dans les
+//   textes légaux (apps/mobile/src/legal, lus directement dans les fichiers
+//   sources). Pour « preview » (TestFlight), les mêmes constats ne sont que
+//   des avertissements : le build continue.
 // Profils « development » : rien à vérifier (le code vient du Mac).
-// Aucune valeur n'est jamais affichée : seulement les noms des réglages.
-// Sans dépendance (il tourne avant l'installation) ; testé par vitest.
+// Aucune valeur n'est jamais affichée : seulement les noms des réglages et
+// des fichiers. Sans dépendance (il tourne avant l'installation : seulement
+// les modules de Node) ; testé par vitest.
+const fs = require("node:fs");
+const path = require("node:path");
 
 /** spotto-prod : la SEULE base permise pour un build destiné à Apple
  * (TestFlight comme App Store ; BUILD-IPHONE.md, section 2). Ces identifiants
@@ -29,6 +40,79 @@ const PROJET_TEST = "sedfepcpmhilaxbrgdif";
 const ANCIEN_PROJET = "qcwnlqkxnhqpyjpkooiw";
 /** Les deux profils des builds destinés à Apple : tous deux visent spotto-prod. */
 const PROFILS_VERIFIES = ["preview", "production"];
+
+/** L'identité de l'éditeur, affichée dans les pages légales et la page d'aide
+ * (src/legal/publisher.ts). Le dépôt est public : ces coordonnées ne sont
+ * saisies que chez Expo (et chez Render pour le site). */
+const REGLAGES_EDITEUR = [
+  "EXPO_PUBLIC_PUBLISHER_NAME",
+  "EXPO_PUBLIC_PUBLISHER_STATUS",
+  "EXPO_PUBLIC_PUBLISHER_ADDRESS",
+  "EXPO_PUBLIC_PUBLISHER_EMAIL",
+  "EXPO_PUBLIC_PUBLISHER_PHONE",
+];
+/** Les textes légaux de l'app (fichiers sources). */
+const DOSSIER_LEGAL = path.join(__dirname, "..", "src", "legal");
+/** Débuts des passages laissés au fondateur ou à son avocat : la même
+ * famille que PLACEHOLDER_PATTERN (src/legal/types.ts). */
+const CROCHETS = ["[À compléter", "[À décider", "[À vérifier", "[To be completed", "[To be decided", "[To be verified"];
+
+/** Nombre de passages provisoires dans le texte d'un fichier source. Ne
+ * comptent pas : les commentaires (lignes « // » et blocs « /* … *\/ » : ils
+ * ne sont jamais affichés), ni, dans publisher.ts, les textes de repli des
+ * cinq réglages de l'éditeur (le bloc « const PLACEHOLDERS ») : ils ne
+ * s'affichent que si un réglage manque, ce que ce contrôle arrête déjà. */
+function passagesProvisoires(texte, nomFichier) {
+  let total = 0;
+  let commentaire = false;
+  let repli = false;
+  for (const ligne of texte.split("\n")) {
+    const debut = ligne.trim();
+    if (commentaire) {
+      if (debut.includes("*/")) commentaire = false;
+      continue;
+    }
+    if (debut.startsWith("//")) continue;
+    if (debut.startsWith("/*")) {
+      commentaire = !debut.includes("*/");
+      continue;
+    }
+    if (repli) {
+      if (debut === "};") repli = false;
+      continue;
+    }
+    if (nomFichier === "publisher.ts" && /^const PLACEHOLDERS\b/.test(debut)) {
+      repli = true;
+      continue;
+    }
+    for (const crochet of CROCHETS) total += ligne.split(crochet).length - 1;
+  }
+  return total;
+}
+
+/** Fichiers de `dossier` (sous-dossiers compris) où il reste un passage
+ * provisoire, par ordre alphabétique : leur chemin dans le dossier et le
+ * nombre de passages — jamais le texte lui-même. `illisible` : le dossier
+ * n'a pas pu être lu (le contrôle n'a rien pu vérifier). */
+function textesInacheves(dossier) {
+  const fichiers = [];
+  function parcourir(courant, prefixe) {
+    for (const entree of fs.readdirSync(courant, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const chemin = path.join(courant, entree.name);
+      if (entree.isDirectory()) parcourir(chemin, `${prefixe}${entree.name}/`);
+      else if (/\.(ts|tsx|js|jsx|json|md|txt)$/.test(entree.name)) {
+        const passages = passagesProvisoires(fs.readFileSync(chemin, "utf8"), entree.name);
+        if (passages > 0) fichiers.push({ nom: `${prefixe}${entree.name}`, passages });
+      }
+    }
+  }
+  try {
+    parcourir(dossier, "");
+  } catch {
+    return { illisible: true, fichiers: [] };
+  }
+  return { illisible: false, fichiers };
+}
 
 function vide(valeur) {
   return typeof valeur !== "string" || valeur.trim() === "";
@@ -49,8 +133,11 @@ function contenuJwt(cle) {
   }
 }
 
-/** Problèmes du build décrit par ces variables : erreurs (build arrêté) et avertissements. */
-function problemesBuild(env) {
+/** Problèmes du build décrit par ces variables : erreurs (build arrêté) et
+ * avertissements. `dossierLegal` : le dossier des textes légaux à lire
+ * (celui de l'app quand le script est lancé par EAS) ; sans lui, les textes
+ * ne sont pas lus (tests des seuls réglages). */
+function problemesBuild(env, dossierLegal) {
   const profil = env.EAS_BUILD_PROFILE || "";
   const erreurs = [];
   const avertissements = [];
@@ -132,19 +219,45 @@ function problemesBuild(env) {
   } else if (!/^[0-9A-Za-z_-]+$/.test(turnstile)) {
     erreurs.push("EXPO_PUBLIC_TURNSTILE_SITE_KEY n'a pas la forme d'une clé Turnstile (lettres, chiffres, « - » et « _ » seulement).");
   }
+
+  // Textes provisoires (règle 2.1 (a) d'Apple). « production » : build
+  // arrêté. « preview » : avertissement, le build continue.
+  const provisoire = (message) => {
+    if (profil === "production") erreurs.push(message);
+    else avertissements.push(`${message} Ce build « ${profil} » continue ; un build « production » serait arrêté.`);
+  };
+  const refusApple = "Apple refuse tout texte provisoire (règle 2.1)";
+  // Un réglage vide, ou rempli avec un texte entre crochets, laisse un texte provisoire à l'écran.
+  const incomplets = REGLAGES_EDITEUR.filter((nom) => vide(env[nom]) || CROCHETS.some((crochet) => env[nom].includes(crochet)));
+  if (incomplets.length > 0) {
+    provisoire(
+      `Identité de l'éditeur incomplète : ${incomplets.join(", ")} ${incomplets.length > 1 ? "manquent" : "manque"} ${chezExpo}. Sans ${incomplets.length > 1 ? "eux" : "lui"}, les pages légales et la page d'aide affichent « [À compléter : …] » à la place de vos coordonnées. ${refusApple}.`
+    );
+  }
+  if (dossierLegal !== undefined) {
+    const { illisible, fichiers } = textesInacheves(dossierLegal);
+    if (illisible) {
+      provisoire(`Le dossier des textes légaux (apps/mobile/src/legal) est introuvable ou illisible : impossible de vérifier qu'il n'y reste aucun texte provisoire.`);
+    } else if (fichiers.length > 0) {
+      const liste = fichiers.map(({ nom, passages }) => `${nom} (${passages} passage${passages > 1 ? "s" : ""})`).join(", ");
+      provisoire(
+        `Textes légaux inachevés : des passages entre crochets (« [À compléter », « [À vérifier », « [To be completed », « [To be verified »…) restent dans apps/mobile/src/legal — ${liste}. ${refusApple} : faites valider ces textes, puis faites retirer les crochets.`
+      );
+    }
+  }
   return { erreurs, avertissements };
 }
 
-module.exports = { problemesBuild };
+module.exports = { problemesBuild, textesInacheves, passagesProvisoires, REGLAGES_EDITEUR, DOSSIER_LEGAL };
 
 if (require.main === module) {
-  const { erreurs, avertissements } = problemesBuild(process.env);
+  const { erreurs, avertissements } = problemesBuild(process.env, DOSSIER_LEGAL);
   for (const message of avertissements) console.warn(`⚠️  Spotto — ${message}`);
   if (erreurs.length > 0) {
-    console.error("\n❌ Build iPhone arrêté avant de commencer : réglages à corriger chez Expo.\n");
+    console.error("\n❌ Build iPhone arrêté avant de commencer : réglages ou textes à corriger.\n");
     for (const message of erreurs) console.error(`   • ${message}`);
     console.error("\n   Marche à suivre : apps/mobile/BUILD-IPHONE.md\n");
     process.exit(1);
   }
-  console.log(`✅ Spotto — réglages du build « ${process.env.EAS_BUILD_PROFILE || "?"} » vérifiés.`);
+  console.log(`✅ Spotto — réglages et textes du build « ${process.env.EAS_BUILD_PROFILE || "?"} » vérifiés.`);
 }

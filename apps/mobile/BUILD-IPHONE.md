@@ -59,14 +59,37 @@ message en français :
   commence par `eyJ`) d'un autre projet que spotto-prod ;
 - si une clé **secrète** a été collée à la place de la clé publique (Supabase
   ou widget anti-robots) ;
-- si le jeton Sentry manque.
+- si le jeton Sentry manque ;
+- pour un build `production` (App Store) seulement, s'il resterait un **texte
+  provisoire** à l'écran, ce qu'Apple refuse (règle 2.1 : « placeholder
+  text […] should be scrubbed before submission ») :
+  - un des cinq réglages de l'éditeur `EXPO_PUBLIC_PUBLISHER_NAME`, `_STATUS`,
+    `_ADDRESS`, `_EMAIL`, `_PHONE` manque (ou contient encore un texte entre
+    crochets) : les pages légales afficheraient « [À compléter : …] » ;
+  - un passage entre crochets « [À compléter », « [À vérifier », « [À décider »
+    (ou en anglais « [To be completed », « [To be verified », « [To be
+    decided ») reste dans les textes légaux, `apps/mobile/src/legal`. Le
+    message donne la liste des fichiers concernés et le nombre de passages.
+
+  Pour un build `preview` (TestFlight), ces deux constats ne sont que des
+  avertissements : le build continue, pour que vous puissiez essayer l'app
+  avant que les textes soient validés. **Aujourd'hui, les textes légaux
+  contiennent encore de tels passages : un build `production` sera donc
+  arrêté tant que votre avocat ne les a pas validés et que les crochets
+  n'ont pas été retirés.** C'est voulu.
 
 Limite : une clé `sb_publishable_…` ne dit pas à quel projet elle appartient,
 le contrôle ne peut donc pas la vérifier. Copiez-la bien depuis **spotto-prod**
 (Supabase → spotto-prod → Project Settings → API Keys) ; avec la clé d'une
 autre base, personne ne pourrait se connecter dans le build.
 
-Le contrôle n'affiche jamais une valeur, seulement le nom du réglage. Sans
+Autre limite : le contrôle lit les textes légaux, pas le reste de l'app. Le
+bandeau « Projet — à faire valider par un professionnel » des pages légales
+(affiché tant que leur version commence par « projet- ») et les pages du site
+en ligne restent à vérifier à la main (`app-store/CONTROLE-BUILD.md`).
+
+Le contrôle n'affiche jamais une valeur, seulement le nom du réglage ou du
+fichier. Sans
 `EXPO_PUBLIC_TURNSTILE_SITE_KEY`, il prévient seulement : ce build n'aurait pas
 la protection anti-robots (`ANTI-ROBOTS.md`).
 
