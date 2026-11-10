@@ -49,9 +49,20 @@ function Bubble({ message, onOptions }: { message: ChatMessage; onOptions: () =>
         {message.text ? <Text style={[styles.bubbleText, message.mine ? styles.bubbleTextMine : null]}>{message.text}</Text> : null}
         <Text style={[styles.bubbleTime, message.mine ? styles.bubbleTimeMine : null]}>{timeAgo(message.createdAt, getActiveLocale())}</Text>
       </Pressable>
-      {/* Signaler un message reçu : aussi par un bouton (le site n'a pas d'appui long). */}
+      {/* Signaler un message reçu : un bouton « ••• » toujours visible à côté
+          du message (règle 1.2 d'Apple ; le site n'a pas d'appui long), en plus
+          de l'appui long. Il ouvre le menu « Signaler ce message / Bloquer ».
+          Jamais sur ses propres messages. */}
       {message.mine ? null : (
-        <Pressable onPress={onOptions} hitSlop={10} style={styles.bubbleMore} accessibilityRole="button" accessibilityLabel={t.messages.messageOptions}>
+        <Pressable
+          onPress={onOptions}
+          hitSlop={10}
+          style={styles.bubbleMore}
+          testID={`message-options-${message.id}`}
+          accessibilityRole="button"
+          accessibilityLabel={t.messages.messageOptions}
+          accessibilityHint={t.messages.messageOptionsHint}
+        >
           <MoreIcon size={16} tint={color.acier} />
         </Pressable>
       )}

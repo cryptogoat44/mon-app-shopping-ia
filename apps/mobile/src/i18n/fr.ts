@@ -701,6 +701,8 @@ export const fr = {
     loadOlder: "Afficher les messages précédents",
     emptyThread: "Aucun message pour l'instant.",
     messageOptions: "Options pour ce message",
+    // Lu par VoiceOver après le nom du bouton « ••• » d'un message reçu.
+    messageOptionsHint: "Signaler ce message ou bloquer cette personne",
     reportMessage: "Signaler ce message",
     more: "Signaler ou bloquer",
     wishLabel: (title: string) => `Envie : ${title}`,

@@ -640,6 +640,7 @@ export const en: Catalog = {
     loadOlder: "Show earlier messages",
     emptyThread: "No messages yet.",
     messageOptions: "Options for this message",
+    messageOptionsHint: "Report this message or block this person",
     reportMessage: "Report this message",
     more: "Report or block",
     wishLabel: (title: string) => `Wish: ${title}`,
