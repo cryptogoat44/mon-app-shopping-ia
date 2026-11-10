@@ -119,6 +119,8 @@ describe("POST /api/posts — pièces taguées (étape 1.E)", () => {
       productName: "Sac de test",
       merchantName: "Marchand Test",
       merchantUrl: match.affiliateUrl,
+      // Lien différent de celui du marchand : la mention « Lien affilié » suit la pièce.
+      isAffiliate: true,
       productMatchId: match.matchId,
     });
   });
@@ -140,6 +142,7 @@ describe("POST /api/posts — pièces taguées (étape 1.E)", () => {
       productName: "Sac privé",
       merchantName: null,
       merchantUrl: null,
+      isAffiliate: false,
       productMatchId: null,
     });
   });

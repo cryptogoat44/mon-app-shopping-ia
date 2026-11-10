@@ -1100,6 +1100,7 @@ export const fr = {
     deleteConfirm: "Cette action est définitive. Toutes vos données seront supprimées sans possibilité de récupération.",
     terms: "Conditions d'utilisation",
     privacyPolicy: "Politique de confidentialité",
+    // Titre de l'explication dépliée sous « Lien affilié » (components/affiliate-mention.tsx).
     howWeEarn: "Comment Spotto se rémunère",
     signOut: "Se déconnecter",
     documents: "Documents",

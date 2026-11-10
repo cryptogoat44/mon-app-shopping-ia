@@ -752,7 +752,10 @@ export interface PostTaggedPiece {
   productName: string;
   imageUrl: string;
   merchantName: string | null;
+  /** Lien à ouvrir : affilié s'il existe, sinon le lien marchand ; null pour une pièce du Vault. */
   merchantUrl: string | null;
+  /** true quand `merchantUrl` est un lien affilié (mention obligatoire). */
+  isAffiliate: boolean;
   productMatchId: string | null;
 }
 

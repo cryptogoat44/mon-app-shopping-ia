@@ -164,7 +164,9 @@ describe("envoi et envie jointe", () => {
     const card = readFileSync(join(__dirname, "../src/components/message-wish-card.tsx"), "utf8");
     expect(card).toContain("fallbackUri={card.imageThumbUrl}");
     expect(card).toContain("hdUri={null}");
-    expect(card).toContain("t.result.affiliateDisclosure");
+    // La mention « Lien affilié » : affichée par le bouton lui-même (affiliate-mention.test.ts).
+    expect(card).toContain("isAffiliate={card.isAffiliate}");
+    expect(card).not.toContain("t.result.affiliateDisclosure");
   });
 });
 

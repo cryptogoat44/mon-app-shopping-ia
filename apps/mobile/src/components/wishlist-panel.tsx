@@ -358,6 +358,8 @@ function MyWishlist() {
                       context="wishlist"
                       isAffiliate={isAffiliateLink(item)}
                       compact
+                      // Vignette étroite : la mention seule ; ce qu'elle signifie se lit sur la fiche de l'envie.
+                      explain={false}
                     />
                   ) : null}
                 </View>

@@ -5,6 +5,7 @@ import type { MerchantLinkContext } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { openMerchantLink } from "@/lib/merchant-links";
+import { AffiliateMention } from "@/components/affiliate-mention";
 import { themedStyles } from "@/theme/themed-styles";
 
 // « Voir chez le marchand » pour une pièce déjà gardée (Vault, Envies).
@@ -12,6 +13,8 @@ import { themedStyles } from "@/theme/themed-styles";
 // L'appelant n'affiche rien quand la pièce n'a pas de lien marchand (pièce
 // ajoutée à la main). Le lien de secours (ouverture bloquée par le
 // navigateur) est celui qu'openMerchantLink renvoie, donc déjà vérifié.
+// La mention « Lien affilié » est affichée ici, sous le bouton, dans ses deux
+// formes (plein et compact) : aucun appelant n'a à y penser, ni à la répéter.
 export function MerchantLinkButton({
   url,
   merchantName,
@@ -20,6 +23,7 @@ export function MerchantLinkButton({
   isAffiliate,
   compact = false,
   primary = false,
+  explain = true,
 }: {
   url: string;
   merchantName: string | null;
@@ -30,6 +34,9 @@ export function MerchantLinkButton({
   /** Bouton principal de l'écran (plein, vert) : la fiche d'une envie, où
    * acheter est le geste attendu (lot « Retrouver ses pièces »). */
   primary?: boolean;
+  /** false là où la place manque pour déplier l'explication (vignette de la
+   * grille des envies) : la mention reste visible, seule. */
+  explain?: boolean;
 }) {
   const [blockedUrl, setBlockedUrl] = useState<string | null>(null);
   const label = t.merchant.viewAt(merchantName);
@@ -54,7 +61,7 @@ export function MerchantLinkButton({
           {compact ? " ›" : ""}
         </Text>
       </Pressable>
-      {!compact && isAffiliate ? <Text style={styles.disclosure}>{t.result.affiliateDisclosure}</Text> : null}
+      <AffiliateMention isAffiliate={isAffiliate} explain={explain} centered={!compact} />
       {blockedUrl ? (
         <Pressable
           onPress={() => {
@@ -85,6 +92,5 @@ const styles = themedStyles(() => ({
   primaryLabel: { color: color.blanc },
   compact: { minHeight: 32, justifyContent: "center" },
   compactLabel: { fontSize: 11.5, color: color.vert, fontWeight: "600" },
-  disclosure: { textAlign: "center", fontSize: 11.5, color: color.acier, marginTop: 6 },
   blocked: { fontSize: font.caption, color: color.vert, marginTop: 6 },
 }));

@@ -73,6 +73,7 @@ import { StockReportLink, StockReportSheet } from "@/components/stock-report-she
 import { track } from "@/lib/analytics";
 import { openWishlistFromSpotter } from "@/lib/wishlist-link";
 import { isAffiliateLink } from "@/lib/affiliate-link";
+import { AffiliateMention } from "@/components/affiliate-mention";
 import { themedStyles } from "@/theme/themed-styles";
 
 function displayPrice(piece: Piece): string {
@@ -122,7 +123,6 @@ export default function ResultScreen() {
   const [showAllOthers, setShowAllOthers] = useState(false);
   // Section « Sans prix » dépliée : son bouton, ou « Ce n'est pas la bonne pièce ? » (relecture ORD-5).
   const [noPriceOpen, setNoPriceOpen] = useState(false);
-  const [affiliateInfoOpen, setAffiliateInfoOpen] = useState(false);
   const [correctionsOpen, setCorrectionsOpen] = useState(false);
   // « Résultat incohérent » : motif changé ou retiré dans cet écran (null : retiré).
   const [reportOpen, setReportOpen] = useState(false);
@@ -699,20 +699,7 @@ export default function ResultScreen() {
               </Pressable>
             ) : null}
             {/* « Lien affilié » seulement pour un vrai lien affilié (lot garde-fous, lib/affiliate-link.ts). */}
-            {isAffiliateLink(piece) ? (
-              <Pressable
-                onPress={() => setAffiliateInfoOpen((open) => !open)}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityState={{ expanded: affiliateInfoOpen }}
-                accessibilityHint={t.result.affiliateHint}
-              >
-                <Text style={styles.disclosure}>
-                  {t.result.affiliateDisclosure} <Text style={styles.disclosureMore}>{affiliateInfoOpen ? "–" : "ⓘ"}</Text>
-                </Text>
-              </Pressable>
-            ) : null}
-            {isAffiliateLink(piece) && affiliateInfoOpen ? <Text style={styles.disclosureText}>{t.result.affiliateExplanation}</Text> : null}
+            <AffiliateMention isAffiliate={isAffiliateLink(piece)} explain centered />
 
             <View style={styles.actions}>
               <Pressable style={styles.action} onPress={handleKeep} disabled={kept.has(piece.id)} accessibilityRole="button">
@@ -950,9 +937,6 @@ const styles = themedStyles(() => ({
   textButton: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: space.sm },
   textButtonLabel: { fontSize: font.secondary, color: color.acier, fontWeight: "600" },
   blockedLink: { textAlign: "center", fontSize: font.caption, color: color.vert, fontWeight: "600", marginTop: 10, textDecorationLine: "underline" },
-  disclosure: { textAlign: "center", fontSize: 11.5, color: color.acier, marginTop: 8, minHeight: 24, lineHeight: 24 },
-  disclosureMore: { fontSize: 12 },
-  disclosureText: { textAlign: "center", fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: 2, paddingHorizontal: space.md },
   actions: { flexDirection: "row", gap: 10, marginTop: space.md },
   action: { flex: 1, minHeight: 44, borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   actionLabel: { fontSize: font.caption, color: color.encre, fontWeight: "500", textAlign: "center" },

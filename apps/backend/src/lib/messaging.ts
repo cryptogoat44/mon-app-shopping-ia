@@ -22,7 +22,7 @@ import {
   type ConversationState,
   type MessagesFrom,
 } from "@monapp/shared-types";
-import { fetchAffiliateUrls } from "./affiliateLinks.js";
+import { fetchAffiliateUrls, isAffiliateLink } from "./affiliateLinks.js";
 import type { OwnMatchRow } from "./ownMatches.js";
 import { chunks, readAll } from "./pagedReads.js";
 import { isFollowing } from "./visibility.js";
@@ -311,7 +311,7 @@ export async function toChatMessages(fastify: FastifyInstance, rows: MessageRow[
             imageThumbUrl: row.wish_image_thumb_url,
             merchantName: row.wish_merchant_name,
             merchantUrl: webUrlOrNull(affiliateUrl ?? row.wish_merchant_url),
-            isAffiliate: affiliateUrl !== null && affiliateUrl !== row.wish_merchant_url,
+            isAffiliate: isAffiliateLink(affiliateUrl, row.wish_merchant_url),
             productMatchId: row.wish_product_match_id,
             priceMin: priceOf(row.wish_price_min),
             currency: row.wish_currency,

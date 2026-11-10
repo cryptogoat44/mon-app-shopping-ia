@@ -56,11 +56,9 @@ function ItemRow({ item, owner, canTalk }: { item: SharedCollectionItem; owner: 
           {item.title}
         </Text>
         {meta ? <Text style={styles.meta}>{meta}</Text> : null}
+        {/* La mention « Lien affilié » est affichée par le bouton lui-même. */}
         {item.merchantUrl ? (
-          <>
-            <MerchantLinkButton url={item.merchantUrl} merchantName={item.merchantName} matchId={item.productMatchId} context="received" isAffiliate={item.isAffiliate} compact />
-            {item.isAffiliate ? <Text style={styles.disclosure}>{t.result.affiliateDisclosure}</Text> : null}
-          </>
+          <MerchantLinkButton url={item.merchantUrl} merchantName={item.merchantName} matchId={item.productMatchId} context="received" isAffiliate={item.isAffiliate} compact />
         ) : null}
         <View style={styles.actions}>
           <Pressable
@@ -248,7 +246,6 @@ const styles = themedStyles(() => ({
   rowText: { flex: 1, gap: 4 },
   itemTitle: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   meta: { fontSize: font.caption, color: color.acier },
-  disclosure: { fontSize: 11.5, color: color.acier },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.xs },
   action: { minHeight: 40, paddingHorizontal: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: color.filet, alignItems: "center", justifyContent: "center" },
   actionDone: { borderColor: color.plinthe, backgroundColor: color.plinthe },

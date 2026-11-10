@@ -20,3 +20,11 @@ export async function fetchAffiliateUrls(fastify: FastifyInstance, matchIds: str
     (data as { product_match_id: string; affiliate_url: string }[]).map((l) => [l.product_match_id, l.affiliate_url])
   );
 }
+
+/** « Lien affilié » : une seule règle côté serveur, la même que dans l'app
+ * (apps/mobile/src/lib/affiliate-link.ts). Un lien n'est affilié que s'il
+ * diffère du lien du marchand : la mention accompagne alors la pièce
+ * (`isAffiliate`) partout où le serveur ne renvoie que le lien à ouvrir. */
+export function isAffiliateLink(affiliateUrl: string | null | undefined, merchantUrl: string | null): boolean {
+  return affiliateUrl != null && affiliateUrl !== merchantUrl;
+}
