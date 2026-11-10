@@ -1680,3 +1680,22 @@ export function parseWishAlertPushData(data: unknown): WishAlertPushData | null 
   if (id === undefined) return { kind: WISH_ALERT_PUSH_KIND };
   return typeof id === "string" && PUSH_DATA_UUID.test(id) ? { kind: WISH_ALERT_PUSH_KIND, wishlistItemId: id } : null;
 }
+
+// ---- Nom du produit (lot « nom et identifiants configurables ») ----
+// Le nom et les identifiants qui en dépendent sont écrits à UN seul endroit :
+// packages/shared-types/marque.json (voir MARQUE.md à la racine du dépôt).
+// L'app (apps/mobile/src/constants/brand.ts), le serveur
+// (apps/backend/src/lib/brand.ts) et la configuration Expo
+// (apps/mobile/app.config.js) lisent ce fichier ; rien n'est recopié ici.
+
+/** Nom du produit pour un nom de fichier (« Spotto » → « spotto ») :
+ * minuscules, sans accent, tirets à la place de tout autre signe. */
+export function brandFileSlug(name: string): string {
+  const slug = name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug === "" ? "app" : slug;
+}

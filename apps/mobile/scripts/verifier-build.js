@@ -14,6 +14,9 @@
 // Aucune valeur n'est jamais affichée : seulement les noms des réglages.
 // Sans dépendance (il tourne avant l'installation) ; testé par vitest.
 
+// Nom du produit : lu dans le fichier unique de la marque (MARQUE.md, à la racine du dépôt).
+const { nom: NOM } = require("../../../packages/shared-types/marque.json");
+
 /** Ancien projet Supabase (« l'ancienne PRODUCTION ») : plus personne n'y a de compte. */
 const ANCIEN_PROJET = "qcwnlqkxnhqpyjpkooiw";
 const PROFILS_VERIFIES = ["preview", "production"];
@@ -40,7 +43,7 @@ function problemesBuild(env) {
   const erreurs = [];
   const avertissements = [];
   if (!PROFILS_VERIFIES.includes(profil)) return { erreurs, avertissements };
-  const chezExpo = `chez Expo (expo.dev → projet Spotto → Environment variables, environnement « ${profil} »)`;
+  const chezExpo = `chez Expo (expo.dev → projet ${NOM} → Environment variables, environnement « ${profil} »)`;
 
   for (const nom of ["EXPO_PUBLIC_API_URL", "EXPO_PUBLIC_SUPABASE_URL", "EXPO_PUBLIC_SUPABASE_ANON_KEY"]) {
     if (vide(env[nom])) erreurs.push(`${nom} manque : saisissez-la ${chezExpo}.`);
@@ -104,12 +107,12 @@ module.exports = { problemesBuild };
 
 if (require.main === module) {
   const { erreurs, avertissements } = problemesBuild(process.env);
-  for (const message of avertissements) console.warn(`⚠️  Spotto — ${message}`);
+  for (const message of avertissements) console.warn(`⚠️  ${NOM} — ${message}`);
   if (erreurs.length > 0) {
     console.error("\n❌ Build iPhone arrêté avant de commencer : réglages à corriger chez Expo.\n");
     for (const message of erreurs) console.error(`   • ${message}`);
     console.error("\n   Marche à suivre : apps/mobile/BUILD-IPHONE.md\n");
     process.exit(1);
   }
-  console.log(`✅ Spotto — réglages du build « ${process.env.EAS_BUILD_PROFILE || "?"} » vérifiés.`);
+  console.log(`✅ ${NOM} — réglages du build « ${process.env.EAS_BUILD_PROFILE || "?"} » vérifiés.`);
 }

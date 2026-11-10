@@ -9,6 +9,7 @@
 // l'image » vise la copie d'UNE de ses envies.
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
+import { BRAND } from "../lib/brand.js";
 import {
   MODERATION_DECISIONS,
   MODERATION_NOTE_MAX_LENGTH,
@@ -66,7 +67,7 @@ const REFUSALS: Record<string, { status: number; error: string; message: string 
   not_a_copy: { status: 409, error: "not_a_copy", message: "Cette image a été publiée par la personne elle-même : utilisez « Masquer »." },
   already_removed: { status: 409, error: "already_removed", message: "L'image a déjà été retirée." },
   // Lot modération des collections : l'envie n'a pas de copie (ses amis la voient déjà sans image).
-  no_copy: { status: 409, error: "no_copy", message: "Cette envie n'a pas d'image copiée par Spotto : il n'y a rien à retirer." },
+  no_copy: { status: 409, error: "no_copy", message: `Cette envie n'a pas d'image copiée par ${BRAND} : il n'y a rien à retirer.` },
   collection_moderation_unavailable: {
     status: 404,
     error: "collection_moderation_unavailable",

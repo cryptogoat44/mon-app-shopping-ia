@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { BRAND_FILE_SLUG } from "../lib/brand.js";
 import {
   ACCEPTED_CONSENT_VERSIONS,
   CONSENT_TYPES,
@@ -59,7 +60,7 @@ function isVersioned(type: ConsentType): type is VersionedConsentType {
 // « html » : le fichier lisible, qui contient aussi le JSON complet.
 const exportQuerySchema = z.object({ format: z.enum(["json", "html"]).default("json") });
 
-const EXPORT_FILE_BASE = { fr: "spotto-mes-donnees", en: "spotto-my-data" } as const;
+const EXPORT_FILE_BASE = { fr: `${BRAND_FILE_SLUG}-mes-donnees`, en: `${BRAND_FILE_SLUG}-my-data` } as const;
 
 /** Origine de notre stockage (seules images affichées dans le fichier). */
 function storageOrigin(): string | null {

@@ -35,6 +35,7 @@
 // appareil des seules alertes).
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { z } from "zod";
+import { BRAND } from "./brand.js";
 import { EXPO_PUSH_TOKEN_PATTERN, PUSH_PLATFORMS, type PushPlatform } from "@monapp/shared-types";
 import { env } from "../env.js";
 import { readSide } from "./messaging.js";
@@ -202,7 +203,7 @@ export async function deleteAllPushTokens(fastify: FastifyInstance, userId: stri
 
 // ---- Contenu d'une notification ----
 
-export const PUSH_TITLE = "Spotto";
+export const PUSH_TITLE = BRAND;
 /** Sortes de notifications : un message, une invitation, une alerte prix ou stock. */
 export type PushKind = "direct" | "invitation" | "wish_alert";
 type MessagePushKind = Exclude<PushKind, "wish_alert">;

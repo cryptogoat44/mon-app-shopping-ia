@@ -4,6 +4,7 @@
 // champs « [À compléter : …] » sont à remplir par le fondateur. Toute
 // modification du texte ⇒ changer la version dans LEGAL_DOCUMENT_VERSIONS
 // (packages/shared-types).
+import { APP_NAME_DISPLAY as BRAND } from "../constants/brand";
 import { HOSTS, PUBLISHER } from "./publisher";
 import type { LegalDocument } from "./types";
 
@@ -12,9 +13,9 @@ export const termsOfUse: LegalDocument = {
   title: "Conditions d'utilisation",
   sections: [
     {
-      title: "Qui édite Spotto",
+      title: `Qui édite ${BRAND}`,
       blocks: [
-        `Spotto est édité par ${PUBLISHER.name}, ${PUBLISHER.status}, ${PUBLISHER.address}.`,
+        `${BRAND} est édité par ${PUBLISHER.name}, ${PUBLISHER.status}, ${PUBLISHER.address}.`,
         `Directeur de la publication : ${PUBLISHER.name}.`,
         `Contact : ${PUBLISHER.email} — téléphone : ${PUBLISHER.phone}.`,
         `Hébergement du serveur et du site : ${HOSTS.render}.`,
@@ -24,7 +25,7 @@ export const termsOfUse: LegalDocument = {
     {
       title: "Objet",
       blocks: [
-        "Ces conditions encadrent votre utilisation de Spotto, sur l'application et sur le site. En créant votre compte, vous les acceptez, ainsi que la politique de confidentialité.",
+        `Ces conditions encadrent votre utilisation de ${BRAND}, sur l'application et sur le site. En créant votre compte, vous les acceptez, ainsi que la politique de confidentialité.`,
       ],
     },
     {
@@ -39,24 +40,24 @@ export const termsOfUse: LegalDocument = {
       ],
     },
     {
-      title: "Ce que fait Spotto",
+      title: `Ce que fait ${BRAND}`,
       blocks: [
-        "Spotto propose, à partir d'une image ou d'un lien que vous soumettez, des pièces de mode qui y ressemblent. Ces propositions viennent d'une recherche visuelle automatique : elles peuvent être inexactes ou incomplètes, et une pièce proposée n'est pas forcément celle de l'image.",
+        `${BRAND} propose, à partir d'une image ou d'un lien que vous soumettez, des pièces de mode qui y ressemblent. Ces propositions viennent d'une recherche visuelle automatique : elles peuvent être inexactes ou incomplètes, et une pièce proposée n'est pas forcément celle de l'image.`,
         "Les prix, la disponibilité et les caractéristiques affichés viennent des marchands et peuvent avoir changé : seules font foi les informations du site du marchand.",
-        "Spotto ne vend rien. Si vous achetez une pièce, vous le faites directement auprès du marchand, selon ses propres conditions ; Spotto n'est pas partie à cet achat.",
+        `${BRAND} ne vend rien. Si vous achetez une pièce, vous le faites directement auprès du marchand, selon ses propres conditions ; ${BRAND} n'est pas partie à cet achat.`,
         "Le nombre d'identifications peut être limité dans le temps, pour garantir le service à tous.",
       ],
     },
     {
       title: "Liens vers les marchands",
       blocks: [
-        "Les liens marqués « Lien affilié » peuvent, à l'avenir, rapporter une commission à Spotto lorsque vous achetez, sans aucun surcoût pour vous. À la date de cette version, aucun programme d'affiliation n'est actif : Spotto ne perçoit aucune commission.",
+        `Les liens marqués « Lien affilié » peuvent, à l'avenir, rapporter une commission à ${BRAND} lorsque vous achetez, sans aucun surcoût pour vous. À la date de cette version, aucun programme d'affiliation n'est actif : ${BRAND} ne perçoit aucune commission.`,
       ],
     },
     {
       title: "Vos contenus",
       blocks: [
-        "Vous restez propriétaire des photos, textes et commentaires que vous publiez. Pour que Spotto puisse les héberger et les montrer aux personnes que vous avez choisies, vous accordez à l'éditeur, gratuitement et pour le monde entier, le droit de les stocker, de les reproduire (y compris en taille réduite) et de les afficher dans Spotto, selon la visibilité que vous avez choisie. Ce droit prend fin quand vous supprimez le contenu ou votre compte.",
+        `Vous restez propriétaire des photos, textes et commentaires que vous publiez. Pour que ${BRAND} puisse les héberger et les montrer aux personnes que vous avez choisies, vous accordez à l'éditeur, gratuitement et pour le monde entier, le droit de les stocker, de les reproduire (y compris en taille réduite) et de les afficher dans ${BRAND}, selon la visibilité que vous avez choisie. Ce droit prend fin quand vous supprimez le contenu ou votre compte.`,
         "Vous garantissez disposer des droits nécessaires sur ce que vous publiez, notamment l'accord des personnes reconnaissables sur vos photos.",
       ],
     },
@@ -71,7 +72,7 @@ export const termsOfUse: LegalDocument = {
           "des contenus qui portent atteinte aux droits d'autrui (droit d'auteur, marques, image) ;",
           "du spam, des arnaques ou de la publicité non sollicitée.",
         ],
-        "Il est également interdit d'utiliser Spotto de façon automatisée (robots, collecte massive de données) ou de tenter d'en contourner les protections.",
+        `Il est également interdit d'utiliser ${BRAND} de façon automatisée (robots, collecte massive de données) ou de tenter d'en contourner les protections.`,
       ],
     },
     {
@@ -84,13 +85,13 @@ export const termsOfUse: LegalDocument = {
     {
       title: "Propriété intellectuelle",
       blocks: [
-        "Le nom Spotto, l'application, son design et ses textes appartiennent à l'éditeur. Les images et noms des pièces proposées appartiennent à leurs titulaires (marques, marchands) ; elles sont affichées depuis leurs propres sites.",
+        `Le nom ${BRAND}, l'application, son design et ses textes appartiennent à l'éditeur. Les images et noms des pièces proposées appartiennent à leurs titulaires (marques, marchands) ; elles sont affichées depuis leurs propres sites.`,
       ],
     },
     {
       title: "Disponibilité et responsabilité",
       blocks: [
-        "L'éditeur s'efforce de rendre Spotto disponible et fiable, mais le service peut être interrompu, notamment pour maintenance, et évoluer. [À vérifier : clauses de responsabilité, à faire valider par un professionnel.]",
+        `L'éditeur s'efforce de rendre ${BRAND} disponible et fiable, mais le service peut être interrompu, notamment pour maintenance, et évoluer. [À vérifier : clauses de responsabilité, à faire valider par un professionnel.]`,
         "L'éditeur n'est pas responsable des sites des marchands ni des achats que vous y faites.",
       ],
     },

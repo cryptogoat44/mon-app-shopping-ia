@@ -2,6 +2,7 @@
 // (conditions.ts), itself a draft: both must be reviewed by a legal
 // professional. Same publisher variables, same version number
 // (LEGAL_DOCUMENT_VERSIONS): any change to one text must be made to the other.
+import { APP_NAME_DISPLAY as BRAND } from "../constants/brand";
 import { HOSTS_EN, PUBLISHER_EN } from "./publisher";
 import type { LegalDocument } from "./types";
 
@@ -10,9 +11,9 @@ export const termsOfUseEn: LegalDocument = {
   title: "Terms of use",
   sections: [
     {
-      title: "Who publishes Spotto",
+      title: `Who publishes ${BRAND}`,
       blocks: [
-        `Spotto is published by ${PUBLISHER_EN.name}, ${PUBLISHER_EN.status}, ${PUBLISHER_EN.address}.`,
+        `${BRAND} is published by ${PUBLISHER_EN.name}, ${PUBLISHER_EN.status}, ${PUBLISHER_EN.address}.`,
         `Publication director: ${PUBLISHER_EN.name}.`,
         `Contact: ${PUBLISHER_EN.email} — telephone: ${PUBLISHER_EN.phone}.`,
         `Server and website hosting: ${HOSTS_EN.render}.`,
@@ -22,7 +23,7 @@ export const termsOfUseEn: LegalDocument = {
     {
       title: "Purpose",
       blocks: [
-        "These terms govern your use of Spotto, in the app and on the website. By creating your account, you accept them, together with the privacy policy.",
+        `These terms govern your use of ${BRAND}, in the app and on the website. By creating your account, you accept them, together with the privacy policy.`,
       ],
     },
     {
@@ -37,24 +38,24 @@ export const termsOfUseEn: LegalDocument = {
       ],
     },
     {
-      title: "What Spotto does",
+      title: `What ${BRAND} does`,
       blocks: [
-        "From an image or a link you submit, Spotto suggests fashion pieces that resemble it. These suggestions come from an automated visual search: they may be inaccurate or incomplete, and a suggested piece is not necessarily the one in the image.",
+        `From an image or a link you submit, ${BRAND} suggests fashion pieces that resemble it. These suggestions come from an automated visual search: they may be inaccurate or incomplete, and a suggested piece is not necessarily the one in the image.`,
         "Prices, availability and details shown come from retailers and may have changed: only the information on the retailer's website is authoritative.",
-        "Spotto sells nothing. If you buy a piece, you do so directly from the retailer, under its own terms; Spotto is not a party to that purchase.",
+        `${BRAND} sells nothing. If you buy a piece, you do so directly from the retailer, under its own terms; ${BRAND} is not a party to that purchase.`,
         "The number of identifications may be limited over time, to keep the service available to everyone.",
       ],
     },
     {
       title: "Links to retailers",
       blocks: [
-        "Links marked “Affiliate link” may, in the future, earn Spotto a commission when you make a purchase, at no extra cost to you. As of this version, no affiliate program is active: Spotto receives no commission.",
+        `Links marked “Affiliate link” may, in the future, earn ${BRAND} a commission when you make a purchase, at no extra cost to you. As of this version, no affiliate program is active: ${BRAND} receives no commission.`,
       ],
     },
     {
       title: "Your content",
       blocks: [
-        "You remain the owner of the photos, texts and comments you publish. So that Spotto can host them and show them to the people you have chosen, you grant the publisher, free of charge and worldwide, the right to store, reproduce (including in reduced size) and display them within Spotto, according to the visibility you have chosen. This right ends when you delete the content or your account.",
+        `You remain the owner of the photos, texts and comments you publish. So that ${BRAND} can host them and show them to the people you have chosen, you grant the publisher, free of charge and worldwide, the right to store, reproduce (including in reduced size) and display them within ${BRAND}, according to the visibility you have chosen. This right ends when you delete the content or your account.`,
         "You guarantee that you hold the necessary rights to what you publish, in particular the consent of any recognizable person in your photos.",
       ],
     },
@@ -69,7 +70,7 @@ export const termsOfUseEn: LegalDocument = {
           "content that infringes the rights of others (copyright, trademarks, image rights);",
           "spam, scams or unsolicited advertising.",
         ],
-        "You may also not use Spotto in an automated way (bots, mass data collection) or attempt to circumvent its protections.",
+        `You may also not use ${BRAND} in an automated way (bots, mass data collection) or attempt to circumvent its protections.`,
       ],
     },
     {
@@ -82,13 +83,13 @@ export const termsOfUseEn: LegalDocument = {
     {
       title: "Intellectual property",
       blocks: [
-        "The Spotto name, the app, its design and its texts belong to the publisher. Images and names of suggested pieces belong to their owners (brands, retailers); they are displayed from their own websites.",
+        `The ${BRAND} name, the app, its design and its texts belong to the publisher. Images and names of suggested pieces belong to their owners (brands, retailers); they are displayed from their own websites.`,
       ],
     },
     {
       title: "Availability and liability",
       blocks: [
-        "The publisher strives to keep Spotto available and reliable, but the service may be interrupted, in particular for maintenance, and may change. [To be verified: liability clauses, to be reviewed by a legal professional.]",
+        `The publisher strives to keep ${BRAND} available and reliable, but the service may be interrupted, in particular for maintenance, and may change. [To be verified: liability clauses, to be reviewed by a legal professional.]`,
         "The publisher is not responsible for retailers' websites or for the purchases you make there.",
       ],
     },
