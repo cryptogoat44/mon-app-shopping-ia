@@ -42,13 +42,33 @@ dans `eas.json` : les comparer avec celles du site sur Render.
 En ligne de commande, la même chose, par exemple :
 `eas env:set --name EXPO_PUBLIC_API_URL --value https://spotto-api.onrender.com --environment preview --environment production --visibility plaintext`
 
+**Une seule base pour Apple : spotto-prod.** Les builds `preview` (TestFlight)
+et `production` (App Store) visent tous les deux spotto-prod, jamais une autre
+base. La base de test (spotto-dev-2) ne sert qu'au profil `development`
+(section 4) et aux tests.
+
 **Filet de sécurité.** Au début de chaque build `preview` ou `production`, un
 contrôle (`scripts/verifier-build.js`) arrête le build en une minute, avec un
-message en français, si une adresse ou la clé publique manque, si l'adresse
-vise encore l'ancien projet Supabase, si une clé **secrète** a été collée à la
-place de la clé publique (Supabase ou widget anti-robots), ou si le jeton
-Sentry manque. Sans `EXPO_PUBLIC_TURNSTILE_SITE_KEY`, il prévient seulement :
-ce build n'aurait pas la protection anti-robots (`ANTI-ROBOTS.md`).
+message en français :
+
+- si une adresse ou la clé publique manque ;
+- si `EXPO_PUBLIC_SUPABASE_URL` n'est pas exactement l'adresse de spotto-prod :
+  le message dit si c'est la base de test (spotto-dev-2), l'ancien projet
+  Supabase ou une autre base ;
+- si `EXPO_PUBLIC_SUPABASE_ANON_KEY` est une ancienne clé « anon » (longue, qui
+  commence par `eyJ`) d'un autre projet que spotto-prod ;
+- si une clé **secrète** a été collée à la place de la clé publique (Supabase
+  ou widget anti-robots) ;
+- si le jeton Sentry manque.
+
+Limite : une clé `sb_publishable_…` ne dit pas à quel projet elle appartient,
+le contrôle ne peut donc pas la vérifier. Copiez-la bien depuis **spotto-prod**
+(Supabase → spotto-prod → Project Settings → API Keys) ; avec la clé d'une
+autre base, personne ne pourrait se connecter dans le build.
+
+Le contrôle n'affiche jamais une valeur, seulement le nom du réglage. Sans
+`EXPO_PUBLIC_TURNSTILE_SITE_KEY`, il prévient seulement : ce build n'aurait pas
+la protection anti-robots (`ANTI-ROBOTS.md`).
 
 ## 3. Le jeton Sentry (plantages lisibles)
 

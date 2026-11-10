@@ -18,7 +18,7 @@ Copiez cette page dans une note, cochez au fur et à mesure. Chaque ligne dit **
 
 ## B. Chez Expo (expo.dev → Spotto → Environment variables, environnement « production »)
 
-- [ ] `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` (clé **publique**), `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_WEB_URL` : remplies (`apps/mobile/BUILD-IPHONE.md`, section 2). Le contrôle du début de build arrête un build qui en manque une (`apps/mobile/scripts/verifier-build.js`).
+- [ ] `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` (clé **publique**), `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_WEB_URL` : remplies (`apps/mobile/BUILD-IPHONE.md`, section 2). Le contrôle du début de build arrête un build qui en manque une, ou dont l'adresse n'est pas celle de **spotto-prod** — base de test spotto-dev-2 comprise (`apps/mobile/scripts/verifier-build.js`). Une clé `sb_publishable_…` ne dit pas son projet : vérifiez vous-même qu'elle vient de spotto-prod.
 - [ ] `EXPO_PUBLIC_ENVIRONMENT` = `production`.
 - [ ] **Les 5 réglages de l'éditeur** `EXPO_PUBLIC_PUBLISHER_NAME`, `_STATUS`, `_ADDRESS`, `_EMAIL`, `_PHONE` : remplis. Sans eux, les pages légales de l'app affichent « [À compléter] » (refus d'Apple, règle 2.1) et « Nous contacter » disparaît (`apps/mobile/src/lib/contact.ts:37`). Le contrôle du début de build ne les vérifie **pas** : regardez vous-même.
 - [ ] **Sentry** : `EXPO_PUBLIC_SENTRY_DSN` rempli, `SENTRY_AUTH_TOKEN` en **Secret**, et **pas** de `SENTRY_DISABLE_AUTO_UPLOAD` dans l'environnement production (`apps/mobile/BUILD-IPHONE.md`, section 3).

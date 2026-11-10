@@ -112,6 +112,80 @@ describe("contrôle au début d'un build EAS (scripts/verifier-build.js)", () =>
     expect(problemesBuild({ ...BON, EXPO_PUBLIC_API_URL: "http://localhost:3000" }).erreurs[0]).toContain("https://");
   });
 
+  // Lot « nettoyage avant le premier build » : un build destiné à Apple ne
+  // vise que spotto-prod, jamais la base de test ni une autre base.
+  const DEV2 = "https://sedfepcpmhilaxbrgdif.supabase.co";
+  const jwt = (charge: Record<string, unknown>) => `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify(charge)).toString("base64url")}.signature`;
+
+  it("spotto-prod, avec ou sans « / » final : accepté pour preview comme pour production", () => {
+    for (const profil of ["preview", "production"]) {
+      for (const adresse of ["https://selhqdqfrflsqivgxypf.supabase.co", "https://selhqdqfrflsqivgxypf.supabase.co/", "  https://selhqdqfrflsqivgxypf.supabase.co  "]) {
+        expect(problemesBuild({ ...BON, EAS_BUILD_PROFILE: profil, EXPO_PUBLIC_ENVIRONMENT: "x", EXPO_PUBLIC_SUPABASE_URL: adresse }).erreurs, `${profil} ${adresse}`).toEqual([]);
+      }
+    }
+  });
+
+  it("base de TEST (spotto-dev-2) : build arrêté, pour preview comme pour production, avec un message qui la nomme — sans afficher l'adresse", () => {
+    for (const profil of ["preview", "production"]) {
+      for (const adresse of [DEV2, `${DEV2}/`]) {
+        const { erreurs } = problemesBuild({ ...BON, EAS_BUILD_PROFILE: profil, EXPO_PUBLIC_SUPABASE_URL: adresse });
+        expect(erreurs).toHaveLength(1);
+        expect(erreurs[0]).toContain("EXPO_PUBLIC_SUPABASE_URL vise spotto-dev-2, la base de TEST");
+        expect(erreurs[0]).toContain("spotto-prod");
+        expect(erreurs[0]).toContain(`« ${profil} »`);
+        expect(erreurs[0]).not.toContain("sedfepcpmhilaxbrgdif");
+      }
+    }
+  });
+
+  it("toute autre base que spotto-prod : build arrêté, sans afficher l'adresse saisie", () => {
+    for (const adresse of ["https://abcdefghijklmnopqrst.supabase.co", "https://selhqdqfrflsqivgxypg.supabase.co", "https://selhqdqfrflsqivgxypf.supabase.co/rest"]) {
+      const { erreurs } = problemesBuild({ ...BON, EXPO_PUBLIC_SUPABASE_URL: adresse });
+      expect(erreurs, adresse).toHaveLength(1);
+      expect(erreurs[0]).toMatch(/ne vise pas spotto-prod|forme attendue/);
+      expect(erreurs[0]).not.toContain(adresse.slice(8, 28));
+    }
+    expect(problemesBuild({ ...BON, EXPO_PUBLIC_SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co" }).erreurs[0]).toContain("ne vise pas spotto-prod");
+    // Une adresse qui contient spotto-prod sans l'être : refusée aussi.
+    expect(problemesBuild({ ...BON, EXPO_PUBLIC_SUPABASE_URL: "https://selhqdqfrflsqivgxypf.supabase.co.exemple.com" }).erreurs[0]).toContain("forme attendue");
+    expect(problemesBuild({ ...BON, EXPO_PUBLIC_SUPABASE_URL: "http://selhqdqfrflsqivgxypf.supabase.co" }).erreurs[0]).toContain("forme attendue");
+  });
+
+  it("profils de développement : la base de test reste permise (rien n'est vérifié)", () => {
+    for (const profil of ["development", "development-simulator", ""]) {
+      expect(problemesBuild({ EAS_BUILD_PROFILE: profil, EXPO_PUBLIC_SUPABASE_URL: DEV2 })).toEqual({ erreurs: [], avertissements: [] });
+    }
+  });
+
+  it("clé publique au format JWT : son projet (« ref ») doit être spotto-prod ; la clé n'est jamais affichée", () => {
+    expect(problemesBuild({ ...BON, EXPO_PUBLIC_SUPABASE_ANON_KEY: jwt({ iss: "supabase", ref: "selhqdqfrflsqivgxypf", role: "anon" }) }).erreurs).toEqual([]);
+    for (const [charge, attendu] of [
+      [{ iss: "supabase", ref: "sedfepcpmhilaxbrgdif", role: "anon" }, "de spotto-dev-2, la base de TEST"],
+      [{ iss: "supabase", ref: "qcwnlqkxnhqpyjpkooiw", role: "anon" }, "de l'ancien projet Supabase"],
+      [{ iss: "supabase", ref: "abcdefghijklmnopqrst", role: "anon" }, "d'un autre projet que spotto-prod"],
+      // Sans « ref » : pas la clé d'un projet Supabase en ligne.
+      [{ role: "anon" }, "d'un autre projet que spotto-prod"],
+    ] as const) {
+      const cle = jwt(charge);
+      const { erreurs } = problemesBuild({ ...BON, EXPO_PUBLIC_SUPABASE_ANON_KEY: cle });
+      expect(erreurs, attendu).toHaveLength(1);
+      expect(erreurs[0]).toContain(`EXPO_PUBLIC_SUPABASE_ANON_KEY est la clé publique ${attendu}`);
+      expect(erreurs[0]).not.toContain(cle);
+      expect(erreurs[0]).not.toContain(cle.split(".")[1]);
+    }
+  });
+
+  it("adresse ET clé de la base de test : les deux erreurs, l'adresse d'abord", () => {
+    const { erreurs } = problemesBuild({ ...BON, EXPO_PUBLIC_SUPABASE_URL: DEV2, EXPO_PUBLIC_SUPABASE_ANON_KEY: jwt({ ref: "sedfepcpmhilaxbrgdif", role: "anon" }) });
+    expect(erreurs).toHaveLength(2);
+    expect(erreurs[0]).toContain("EXPO_PUBLIC_SUPABASE_URL vise spotto-dev-2");
+    expect(erreurs[1]).toContain("EXPO_PUBLIC_SUPABASE_ANON_KEY est la clé publique de spotto-dev-2");
+  });
+
+  it("clé « sb_publishable_… » : elle ne dit pas son projet, le contrôle ne peut pas la vérifier (acceptée)", () => {
+    expect(problemesBuild({ ...BON, EXPO_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_cle-d-un-projet-inconnu" }).erreurs).toEqual([]);
+  });
+
   it("clé SECRÈTE de Supabase à la place de la clé publique : build arrêté, sans jamais afficher la clé", () => {
     const charge = Buffer.from(JSON.stringify({ role: "service_role" })).toString("base64url");
     for (const cle of ["sb_secret_abcdef", `eyJhbGciOiJIUzI1NiJ9.${charge}.signature`]) {
@@ -120,8 +194,11 @@ describe("contrôle au début d'un build EAS (scripts/verifier-build.js)", () =>
       expect(erreurs[0]).toContain("SECRÈTE");
       expect(erreurs[0]).not.toContain(cle);
     }
-    const anon = Buffer.from(JSON.stringify({ role: "anon" })).toString("base64url");
+    // Clé « anon » de spotto-prod : publique, acceptée. Clé secrète de spotto-prod : toujours refusée.
+    const anon = Buffer.from(JSON.stringify({ ref: "selhqdqfrflsqivgxypf", role: "anon" })).toString("base64url");
     expect(problemesBuild({ ...BON, EXPO_PUBLIC_SUPABASE_ANON_KEY: `eyJ.${anon}.sig` }).erreurs).toEqual([]);
+    const secreteProd = Buffer.from(JSON.stringify({ ref: "selhqdqfrflsqivgxypf", role: "service_role" })).toString("base64url");
+    expect(problemesBuild({ ...BON, EXPO_PUBLIC_SUPABASE_ANON_KEY: `eyJ.${secreteProd}.sig` }).erreurs[0]).toContain("SECRÈTE");
   });
 
   it("Sentry : jeton d'organisation exigé, sauf build d'essai assumé (SENTRY_DISABLE_AUTO_UPLOAD)", () => {
