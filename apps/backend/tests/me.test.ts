@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
-import { authHeaders, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
+import sharp from "sharp";
+import { authHeaders, buildMultipart, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
 
 describe("me", () => {
   let app: FastifyInstance;
@@ -94,5 +95,56 @@ describe("me", () => {
     expect(anonymous.statusCode).toBe(401);
     const me = await app.inject({ method: "GET", url: "/api/me", headers: authHeaders(user.token) });
     expect(me.json().locale).toBe("fr");
+  });
+
+  // Lot « profil et icône des réglages » : contre spotto-dev-2 (Mac du fondateur).
+  it("bio : lignes vides et espaces retirés, 160 caractères et 3 lignes au plus", async () => {
+    const patch = (bio: string) =>
+      app.inject({ method: "PATCH", url: "/api/me", headers: authHeaders(user.token), payload: { username: user.username, displayName: "Updated Name", bio } });
+    const tidy = await patch("  Mode lente  \n\n\n\nParis  ");
+    expect(tidy.statusCode).toBe(200);
+    expect(tidy.json().bio).toBe("Mode lente\n\nParis");
+    const me = await app.inject({ method: "GET", url: "/api/me", headers: authHeaders(user.token) });
+    expect(me.json().bio).toBe("Mode lente\n\nParis");
+
+    expect((await patch("a".repeat(161))).json().error).toBe("bio_too_long");
+    expect((await patch("1\n2\n3\n4")).json().error).toBe("bio_too_many_lines");
+    expect((await patch("salope")).json().error).toBe("content_not_allowed");
+    const still = await app.inject({ method: "GET", url: "/api/me", headers: authHeaders(user.token) });
+    expect(still.json().bio).toBe("Mode lente\n\nParis");
+  });
+
+  it("photo de profil : carré sans métadonnées, ancienne effacée, « Supprimer ma photo » efface le fichier", async () => {
+    const files = async () => {
+      const { data, error } = await app.supabaseAdmin.storage.from("avatars").list(user.id, { limit: 100 });
+      expect(error).toBeNull();
+      return (data ?? []).map((file) => file.name);
+    };
+    const send = async (image: Buffer) => {
+      const { payload, headers } = buildMultipart({}, { fieldname: "file", filename: "photo.jpg", contentType: "image/jpeg", data: image });
+      return app.inject({ method: "POST", url: "/api/me/avatar", headers: { ...authHeaders(user.token), ...headers }, payload });
+    };
+    const withGps = await sharp({ create: { width: 900, height: 600, channels: 3, background: "#806040" } })
+      .withExif({ IFD0: { Model: "iPhone 15" }, IFD3: { GPSLatitudeRef: "N", GPSLatitude: "48/1 51/1 2400/100" } })
+      .jpeg()
+      .toBuffer();
+
+    const first = await send(withGps);
+    expect(first.statusCode).toBe(200);
+    const firstName = String(first.json().avatarUrl).split("/").pop()!;
+    expect(firstName).toMatch(/^avatar-[0-9a-f-]{36}\.jpg$/);
+    const { data: stored } = await app.supabaseAdmin.storage.from("avatars").download(`${user.id}/${firstName}`);
+    const meta = await sharp(Buffer.from(await stored!.arrayBuffer())).metadata();
+    expect([meta.width, meta.height, meta.exif]).toEqual([512, 512, undefined]);
+
+    const second = await send(await sharp({ create: { width: 300, height: 300, channels: 3, background: "#123" } }).jpeg().toBuffer());
+    expect(second.statusCode).toBe(200);
+    const secondName = String(second.json().avatarUrl).split("/").pop()!;
+    expect(await files()).toEqual([secondName]);
+
+    const removed = await app.inject({ method: "DELETE", url: "/api/me/avatar", headers: authHeaders(user.token) });
+    expect(removed.statusCode).toBe(200);
+    expect(removed.json().avatarUrl).toBeNull();
+    expect(await files()).toEqual([]);
   });
 });

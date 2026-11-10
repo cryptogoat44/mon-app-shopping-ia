@@ -1,17 +1,16 @@
 import { useCallback, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import type { BlockedUser } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { ApiError, fetchBlockedUsers, unblockUser } from "@/lib/api";
-import { PersonIcon } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
 import { useToast } from "@/lib/toast-context";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
+import { Avatar } from "@/components/avatar";
 
 function BlockedUserRow({ user, onUnblocked }: { user: BlockedUser; onUnblocked: (id: string) => void }) {
   const { showToast } = useToast();
@@ -31,13 +30,7 @@ function BlockedUserRow({ user, onUnblocked }: { user: BlockedUser; onUnblocked:
 
   return (
     <View style={styles.row}>
-      <View style={styles.avatar}>
-        {user.avatarUrl ? (
-          <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
-        ) : (
-          <PersonIcon size={20} tint={color.acier} />
-        )}
-      </View>
+      <Avatar uri={user.avatarUrl} userId={user.id} displayName={user.displayName} username={user.username} size={40} />
       <View style={styles.rowText}>
         <Text style={styles.displayName}>{user.displayName}</Text>
         <Text style={styles.username}>@{user.username}</Text>
@@ -134,7 +127,6 @@ const styles = themedStyles(() => ({
     justifyContent: "center",
     overflow: "hidden",
   },
-  avatarImage: { width: "100%", height: "100%" },
   rowText: { flex: 1 },
   displayName: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   username: { fontSize: font.caption, color: color.acier },

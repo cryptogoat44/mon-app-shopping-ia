@@ -1,12 +1,11 @@
 import { Pressable, Text, View } from "react-native";
-import { Image } from "expo-image";
 import type { ConversationSummary } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { timeAgo } from "@/lib/format";
 import { conversationPreview } from "@/lib/conversations";
-import { PersonIcon } from "@/components/icons";
 import { themedStyles } from "@/theme/themed-styles";
+import { Avatar } from "@/components/avatar";
 
 // Une conversation dans la liste des messages (lot messages) : l'autre
 // membre, le dernier message, sa date et une pastille quand il n'est pas lu.
@@ -20,13 +19,7 @@ export function ConversationRow({ summary, onPress, label }: { summary: Conversa
       accessibilityLabel={label ?? t.messages.rowLabel(summary.other.displayName, preview, summary.unread)}
       testID={`conversation-${summary.id}`}
     >
-      <View style={styles.avatar}>
-        {summary.other.avatarUrl ? (
-          <Image source={{ uri: summary.other.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
-        ) : (
-          <PersonIcon size={20} tint={color.acier} />
-        )}
-      </View>
+      <Avatar uri={summary.other.avatarUrl} userId={summary.other.id} displayName={summary.other.displayName} username={summary.other.username} size={44} />
       <View style={styles.text}>
         <View style={styles.topLine}>
           <Text style={[styles.name, summary.unread ? styles.nameUnread : null]} numberOfLines={1}>
@@ -45,16 +38,6 @@ export function ConversationRow({ summary, onPress, label }: { summary: Conversa
 
 const styles = themedStyles(() => ({
   row: { flexDirection: "row", alignItems: "center", gap: space.sm, paddingVertical: space.sm, minHeight: 60 },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.full,
-    backgroundColor: color.plinthe,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  avatarImage: { width: "100%", height: "100%" },
   text: { flex: 1, gap: 2 },
   topLine: { flexDirection: "row", alignItems: "baseline", gap: space.sm },
   name: { flex: 1, fontSize: font.secondary, fontWeight: "500", color: color.encre },

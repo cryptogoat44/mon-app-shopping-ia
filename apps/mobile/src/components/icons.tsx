@@ -126,16 +126,20 @@ export function HeartIcon({ size = 19, tint = color.acier, filled = false }: Ico
   );
 }
 
-export function GearIcon({ size = 22, tint = color.encre, strokeWidth = 1.3 }: IconProps) {
+/** Réglages (lot « profil et icône des réglages ») : une roue dentée à six
+ * dents, au trait, à la place de l'ancien soleil (un rond et huit rayons, lu
+ * comme « luminosité »). Même grille (24), même taille et même épaisseur de
+ * trait (1,4) que les icônes de la barre d'onglets (Profil, Activité, Fil). */
+export function SettingsIcon({ size = 24, tint = color.encre, strokeWidth = 1.4 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Circle cx={12} cy={12} r={3.2} stroke={tint} strokeWidth={strokeWidth} />
       <Path
-        d="M12 3.5v2M12 18.5v2M20.5 12h-2M5.5 12h-2M17.7 6.3l-1.4 1.4M7.7 16.3l-1.4 1.4M17.7 17.7l-1.4-1.4M7.7 7.7L6.3 6.3"
+        d="M10.13 5.88L10.36 3.56A8.6 8.6 0 0 1 13.64 3.56L13.87 5.88A6.4 6.4 0 0 1 16.36 7.32L18.49 6.36A8.6 8.6 0 0 1 20.13 9.2L18.24 10.56A6.4 6.4 0 0 1 18.24 13.44L20.13 14.8A8.6 8.6 0 0 1 18.49 17.64L16.36 16.68A6.4 6.4 0 0 1 13.87 18.12L13.64 20.44A8.6 8.6 0 0 1 10.36 20.44L10.13 18.12A6.4 6.4 0 0 1 7.64 16.68L5.51 17.64A8.6 8.6 0 0 1 3.87 14.8L5.76 13.44A6.4 6.4 0 0 1 5.76 10.56L3.87 9.2A8.6 8.6 0 0 1 5.51 6.36L7.64 7.32A6.4 6.4 0 0 1 10.13 5.88Z"
         stroke={tint}
         strokeWidth={strokeWidth}
-        strokeLinecap="round"
+        strokeLinejoin="round"
       />
+      <Circle cx={12} cy={12} r={2.8} stroke={tint} strokeWidth={strokeWidth} />
     </Svg>
   );
 }
@@ -144,6 +148,15 @@ export function PlusIcon({ size = 24, tint = color.blanc, strokeWidth = 1.6 }: I
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M12 5v14M5 12h14" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** « Dézoomer » du recadrage de la photo de profil (pendant de PlusIcon). */
+export function MinusIcon({ size = 24, tint = color.encre, strokeWidth = 1.6 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M5 12h14" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" />
     </Svg>
   );
 }

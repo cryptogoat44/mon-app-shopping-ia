@@ -35,6 +35,7 @@ import { WishPicker, type PickedWish } from "@/components/wish-picker";
 import { usePushOffer } from "@/components/push-offer-sheet";
 import { setOpenConversation } from "@/lib/push-state";
 import { themedStyles } from "@/theme/themed-styles";
+import { Avatar } from "@/components/avatar";
 
 function Bubble({ message, onOptions }: { message: ChatMessage; onOptions: () => void }) {
   return (
@@ -291,12 +292,15 @@ export default function ConversationScreen() {
           accessibilityRole="link"
           accessibilityLabel={t.common.viewProfile(other.displayName)}
         >
-          <Text style={styles.navName} numberOfLines={1} accessibilityRole="header">
-            {other.displayName}
-          </Text>
-          <Text style={styles.navHandle} numberOfLines={1}>
-            @{other.username}
-          </Text>
+          <Avatar uri={other.avatarUrl} userId={other.id} displayName={other.displayName} username={other.username} size={32} />
+          <View style={styles.navText}>
+            <Text style={styles.navName} numberOfLines={1} accessibilityRole="header">
+              {other.displayName}
+            </Text>
+            <Text style={styles.navHandle} numberOfLines={1}>
+              @{other.username}
+            </Text>
+          </View>
         </Pressable>
       ) : (
         <View style={styles.navTitle} />
@@ -483,7 +487,8 @@ const styles = themedStyles(() => ({
   nav: { height: 52, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: color.filet },
   navSide: { minWidth: 44, height: 44, justifyContent: "center" },
   navRight: { alignItems: "flex-end" },
-  navTitle: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 44 },
+  navTitle: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.sm, minHeight: 44 },
+  navText: { flexShrink: 1 },
   navName: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   navHandle: { fontSize: font.caption, color: color.acier },
   back: { fontSize: 26, color: color.encre },

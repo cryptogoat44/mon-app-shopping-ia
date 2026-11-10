@@ -89,6 +89,69 @@ export interface UpdateMeRequest {
   bio?: string;
 }
 
+// Bio du profil (lot « profil et icône des réglages ») : 160 caractères et
+// 3 lignes au plus. Mêmes règles dans l'app (compteur) et au serveur (seul juge).
+export const BIO_MAX_LENGTH = 160;
+export const BIO_MAX_LINES = 3;
+
+/** Retire une moitié d'émoji restée seule en fin de texte (coupure à N caractères). */
+function withoutBrokenEnd(text: string): string {
+  return /[\uD800-\uDBFF]$/.test(text) ? text.slice(0, -1) : text;
+}
+
+/** Bio telle qu'enregistrée : retours à la ligne unifiés, espaces de fin de
+ * ligne retirés, plusieurs lignes vides de suite réduites à une seule, puis
+ * espaces et lignes vides retirés au début et à la fin. */
+export function normalizeBio(text: string): string {
+  return text
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/[ \t ]+$/, ""))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** Nombre de lignes d'une bio (0 si elle est vide). */
+export function bioLineCount(text: string): number {
+  return text === "" ? 0 : text.split("\n").length;
+}
+
+export type BioProblem = "too_long" | "too_many_lines";
+
+/** Ce qui empêche d'enregistrer une bio déjà normalisée, ou null. */
+export function bioProblem(normalized: string): BioProblem | null {
+  if (normalized.length > BIO_MAX_LENGTH) return "too_long";
+  if (bioLineCount(normalized) > BIO_MAX_LINES) return "too_many_lines";
+  return null;
+}
+
+/** Pendant la saisie : 3 lignes au plus (le texte d'éventuelles lignes en
+ * plus, collé par exemple, rejoint la 3ᵉ ; un retour à la ligne de trop est
+ * ignoré), une seule ligne vide de suite, 160 caractères au plus. Les espaces
+ * ne sont pas retirés ici (on tape une espace avant le mot suivant) :
+ * normalizeBio s'en charge à l'enregistrement. */
+export function limitBioInput(text: string): string {
+  const lines = text.replace(/\r\n?/g, "\n").replace(/\n{3,}/g, "\n\n").split("\n");
+  if (lines.length > BIO_MAX_LINES) {
+    const last = lines
+      .slice(BIO_MAX_LINES - 1)
+      .map((line) => line.trim())
+      .filter((line) => line !== "")
+      .join(" ");
+    lines.splice(BIO_MAX_LINES - 1, lines.length, last);
+  }
+  return withoutBrokenEnd(lines.join("\n").slice(0, BIO_MAX_LENGTH));
+}
+
+// Photo de profil (même lot) : l'app envoie un carré JPEG déjà recadré sur
+// l'appareil (une photo HEIC d'iPhone y est convertie) ; le serveur le refait
+// en AVATAR_SIDE × AVATAR_SIDE, sans aucune métadonnée.
+/** Taille maximale du fichier reçu par le serveur. */
+export const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+/** Côté du carré enregistré, en pixels. */
+export const AVATAR_SIDE = 512;
+
 export interface ApiErrorBody {
   error: string;
   message: string;

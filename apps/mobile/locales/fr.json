@@ -1,5 +1,5 @@
 {
   "CFBundleDisplayName": "Spotto",
   "NSPhotoLibraryUsageDescription": "Pour vous proposer dans Spotter votre dernière vidéo, comme vous l'avez demandé. Spotto ne lit que la plus récente et ne modifie jamais votre galerie ; seules quelques images en partent, quand vous appuyez sur « Lancer ».",
-  "NSCameraUsageDescription": "Pour prendre en photo, depuis Spotter, une pièce que vous voulez retrouver. La photo n'est pas enregistrée dans votre galerie ; elle ne part qu'au moment où vous appuyez sur « Lancer »."
+  "NSCameraUsageDescription": "Pour prendre en photo une pièce que vous voulez retrouver dans Spotter, ou votre photo de profil. La photo n'est pas enregistrée dans votre galerie ; elle ne part qu'au moment où vous appuyez sur « Lancer » ou « Valider »."
 }
