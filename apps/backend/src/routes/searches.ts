@@ -9,6 +9,7 @@ import {
   type ComplementStatus,
   type MatchOrigin,
   type PlatformSource,
+  type PreviewIssue,
   type ProductSearch,
   type SearchStatus,
 } from "@monapp/shared-types";
@@ -52,6 +53,7 @@ import {
 import { breakerPause, observeBreakerAfter, SEARCH_PAUSED } from "../lib/searchBreaker.js";
 import { sortByWords } from "../lib/wordSort.js";
 import { assertNoUserImage, voieCAiEnabled } from "../lib/aiSwitches.js";
+import { linkPreviewEnabled } from "../lib/linkPreview.js";
 import { photoCallsLeft, startDeadline, VOIE_C_BUDGET } from "../lib/deadline.js";
 import { lightSort } from "../lib/lightSort.js";
 import { cacheKey, imageHash, purgeExpiredCache, readCache, writeCache } from "../lib/searchCache.js";
@@ -316,11 +318,16 @@ const RUN_REFUSALS = {
 type RunRefusal = keyof typeof RUN_REFUSALS;
 
 /** Image à analyser — celle importée en priorité, sinon la vignette
- * officielle —, recadrée sur la zone choisie ; sinon la raison du refus. */
+ * officielle —, recadrée sur la zone choisie ; sinon la raison du refus.
+ * Interrupteur des liens coupé (lib/linkPreview.ts) : une vignette enregistrée
+ * avant la coupure n'est jamais téléchargée ni analysée ; sans image importée,
+ * le lancement est refusé comme pour une vignette disparue (« importez une
+ * capture »), sans aucun appel à TikTok, à Meta ni à SerpApi. */
 async function prepareRunImage(request: FastifyRequest, row: SearchRow, form: RunForm): Promise<{ image: Buffer } | { refusal: RunRefusal }> {
   let source: Buffer;
   try {
     if (form.fileBuffer) source = form.fileBuffer;
+    else if (row.thumbnail_url && !linkPreviewEnabled()) return { refusal: "preview_unavailable" };
     else if (row.thumbnail_url) source = await downloadThumbnail(row.thumbnail_url);
     else return { refusal: "image_required" };
   } catch (error) {
@@ -1260,6 +1267,12 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
   // l'utilisateur la VOIE avant de lancer quoi que ce soit (aperçu). Sans
   // lien (import d'une photo) ou sans vignette officielle, la recherche
   // attend simplement une image au lancement.
+  // Interrupteur des liens (LINK_PREVIEW_ENABLED, lib/linkPreview.ts), COUPÉ
+  // par défaut : un lien envoyé (ancienne version de l'app, requête fabriquée)
+  // est ignoré. Aucun appel à TikTok ni à Meta ; ni le lien ni l'adresse d'une
+  // couverture ne sont enregistrés : la recherche est créée comme pour une
+  // photo, et la réponse dit à l'app qu'il faut une capture
+  // (« no_official_access », la raison déjà connue des apps installées).
   fastify.post("/api/searches/prepare", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const body = parseInput(createSearchSchema, request.body ?? {}, reply, {
       error: "invalid_body",
@@ -1268,7 +1281,8 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     if (!body) return;
 
     const userId = request.user!.id;
-    const sourceUrl = body.sourceUrl ?? null;
+    const linkIgnored = body.sourceUrl !== undefined && !linkPreviewEnabled();
+    const sourceUrl = linkIgnored ? null : (body.sourceUrl ?? null);
     const platform: PlatformSource = sourceUrl ? detectPlatform(sourceUrl) : "photo";
     const preview = sourceUrl ? await fetchOfficialPreview(sourceUrl, platform) : null;
     const thumbnail = preview?.ok ? { thumbnailUrl: preview.thumbnailUrl } : null;
@@ -1313,8 +1327,9 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       request.log.error({ purgeError }, "Échec de la suppression des recherches de plus de 12 mois");
     }
 
-    // Sans image : la raison précise, pour que l'app dise quoi faire.
-    const previewIssue = preview && !preview.ok ? preview.issue : null;
+    // Sans image : la raison précise, pour que l'app dise quoi faire. Lien
+    // ignoré (interrupteur coupé) : la capture d'écran est la seule voie.
+    const previewIssue: PreviewIssue | null = linkIgnored ? "no_official_access" : preview && !preview.ok ? preview.issue : null;
     const row = parseSearchRow(inserted);
     if (!row) {
       request.log.error("Recherche préparée illisible");
@@ -1326,7 +1341,8 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
   // Temps 2 — LANCER (une seule fois par recherche ; 1 à 3 recherches par
   // photo, voir la voie C plus haut) : formulaire multipart avec, au choix,
   // une image importée (champ "file" — photo ou capture au bon moment de la
-  // vidéo) ou, à défaut, la vignette officielle préparée au temps 1 ; plus la
+  // vidéo) ou, à défaut, la vignette officielle préparée au temps 1 (jamais
+  // quand l'interrupteur des liens est coupé, prepareRunImage) ; plus la
   // zone choisie ("crop", JSON en proportions 0–1). Les mots ("query") ne
   // servent qu'à trier les propositions. "complement" = "deferred" (nouvelle
   // app, boutiques ensuite) : la réponse part dès Lens, les autres boutiques

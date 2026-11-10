@@ -1,5 +1,6 @@
 import type { PlatformSource, PreviewIssue } from "@monapp/shared-types";
 import { env } from "../env.js";
+import { linkPreviewEnabled } from "../lib/linkPreview.js";
 import { safeFetch } from "../lib/safeFetch.js";
 
 // Vraie correspondance de domaine (exact ou sous-domaine), pas une simple
@@ -75,8 +76,12 @@ function isPinterest(sourceUrl: string): boolean {
 }
 
 /** Voie officielle uniquement : l'image du lien, ou la raison précise pour
- * laquelle elle est indisponible (voir PreviewIssue). */
+ * laquelle elle est indisponible (voir PreviewIssue). Interrupteur des liens
+ * coupé (lib/linkPreview.ts) : aucun appel à TikTok ni à Meta, d'où qu'on
+ * vienne ; la réponse est celle d'un lien sans voie officielle (l'app invite
+ * alors à importer une capture). */
 export async function fetchOfficialPreview(sourceUrl: string, platform: PlatformSource): Promise<OfficialPreview> {
+  if ((platform === "tiktok" || platform === "instagram") && !linkPreviewEnabled()) return { ok: false, issue: "no_official_access" };
   try {
     if (platform === "tiktok") return await fetchTikTokOEmbed(sourceUrl);
     if (platform === "instagram") return await fetchInstagramOEmbed(sourceUrl);
