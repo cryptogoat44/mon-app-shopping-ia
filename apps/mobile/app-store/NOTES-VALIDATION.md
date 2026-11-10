@@ -1,100 +1,101 @@
 # Les notes pour l'équipe de validation d'Apple
 
-*Chantier 8, point 8 de la feuille de route V1. Pour le fondateur.*
+*Chantier 8, point 8 de la feuille de route V1. Pour le fondateur. Brouillon remis à jour le 10 novembre 2026 (lot « conformité Apple ») : messages, invitations, collections, notifications, alertes, modèle économique, source des résultats, interrupteurs du serveur.*
 
-**Où coller** : App Store Connect → Spotto → la version → section **Informations pour la validation de l'app** (*App Review Information*) :
+**Où coller** : App Store Connect → votre app → la version → section **Informations pour la validation de l'app** (*App Review Information*) :
 - **Identifiant** et **mot de passe** du compte de démonstration : dans leurs deux cases (pas seulement dans les notes) ;
-- **Remarques** (*Notes*) : la **version anglaise** ci-dessous (partie 3). Apple lit l'anglais. Limite : 4 000 octets ; le texte en fait 3 494, crochets compris : il reste de la marge pour vos identifiants.
-- **Pièce jointe** (facultative, conseillée) : une courte vidéo d'écran de votre iPhone qui montre « Partager vers Spotto » depuis Photos. Elle évite un aller-retour si le testeur ne trouve pas l'extension.
+- **Remarques** (*Notes*) : la **version anglaise** ci-dessous (partie 3). Apple lit l'anglais. **Limite d'Apple : 4 000 caractères.** Le texte anglais en fait **3 857** (3 865 octets), crochets compris : il reste environ 135 caractères de marge. La version française (partie 2, pour vous) en fait **3 990** (4 147 octets : elle n'est pas collée chez Apple).
+- **Pièce jointe** (facultative, conseillée) : une courte vidéo d'écran de votre iPhone qui montre le partage d'une photo vers l'app depuis Photos. Elle évite un aller-retour si le testeur ne trouve pas l'extension.
 
-**Règle** : chaque phrase a été vérifiée dans le code de `main` (b99e884). La preuve (fichier:ligne) est dans un commentaire invisible sous chaque paragraphe de la version française. Si le code change d'ici l'envoi, revérifiez le paragraphe concerné.
+**Règle** : Apple refuse les descriptions vagues (règle 2.3.1 (a) : « All new features, functionality, and product changes must be described with specificity in the Notes for Review section of App Store Connect (generic descriptions will be rejected) and accessible for review. »). Chaque phrase vient du code de la branche du build ; les preuves sont en partie 4. Si le code change d'ici l'envoi, revérifiez le paragraphe concerné, **et recomptez** : `wc -m` sur le texte copié dans un fichier.
+
+Le nom de l'app va changer : le texte dit « the app ». Seuls les libellés lus à l'écran sont cités entre guillemets ; relisez-les sur le build.
 
 ---
 
-## 1. Avant de coller : ce qu'il reste à remplir
+## 1. Avant de coller : ce qu'il reste à remplir, à vérifier ou à décider
 
-Tous les morceaux entre crochets `[…]` de la version anglaise :
+**À remplir** (tous les crochets `[…]` de la version anglaise) :
 
-1. **`[À compléter]`** (3 fois) : l'e-mail et le mot de passe du compte de démonstration, et le nom d'utilisateur du second compte (celui qu'il suit). Voir [CONTROLE-BUILD.md](CONTROLE-BUILD.md), partie E.
-2. **`[8]` et `[25]`** : les plafonds réels de Render (`SERPAPI_USER_DAILY_CAP` et `SERPAPI_DAILY_CAP`). 8 et 25 sont les valeurs par défaut du code ; elles seront relevées avec l'offre SerpApi payante.
-3. **`[ON/OFF]`** : l'état de la voie C chez Render le jour de l'envoi (`VOIE_C_ENABLED`). Gardez un seul des deux mots. Le paragraphe reste dans tous les cas (règle 2.5.19 : aucune fonction dormante non décrite).
-   *Lecteur intégré TikTok / Instagram : rien à écrire.* Le module natif qui prenait l'image du lecteur est retiré de l'app depuis le lot « nettoyage avant le premier build » (10 novembre 2026) et le lecteur n'est proposé nulle part : le build ne contient aucun code de capture. La phrase « Un lien TikTok, Instagram ou Pinterest collé n'est pas lu » reste exacte. S'il revenait un jour (`apps/mobile/BUILD-IPHONE.md`, section 9), ces notes devraient le décrire.
-4. **Le paragraphe « SERVER »** : supprimez-le si le serveur est passé sur une offre Render sans veille (c'est ce qu'il faut faire avant l'envoi, point 16).
-5. **La phrase « We review reports within 24 hours »** : ne la laissez que si vous prenez cet engagement (alerte Sentry reçue sur votre téléphone, week-end compris).
+1. **`[À compléter]`** (4 fois) : l'e-mail et le mot de passe du compte de démonstration ; le nom d'utilisateur du compte **ami** (ils se suivent l'un l'autre) ; celui du **troisième compte**, qui lui a envoyé une invitation. Le scénario à préparer est dans [CONTROLE-BUILD.md](CONTROLE-BUILD.md), partie E.
+2. **`[8]` et `[25]`** : les plafonds réels de Render (`SERPAPI_USER_DAILY_CAP` et `SERPAPI_DAILY_CAP`). 8 et 25 sont les valeurs par défaut du code.
+3. **`[ON/OFF]`** (4 fois), l'état **le jour de l'envoi** chez Render (gardez un seul des deux mots) : `PUSH_ENABLED`, `VOIE_C_ENABLED`, `VOIE_C_AI_ENABLED`, et l'analyse des vidéos (ON si `ANTHROPIC_API_KEY` est saisie). Règle 2.5.19 d'Apple : aucune fonction cachée, dormante ou non décrite ; chaque interrupteur est donc décrit avec son état, même coupé.
+
+**À vérifier** (sinon la phrase est fausse : corrigez-la ou retirez-la) :
+
+4. **`ANTHROPIC_PHOTO_ENABLED` et `LINK_PREVIEW_ENABLED` sont bien coupés** chez Render (absents, ou différents de `true`). Les notes disent « OFF » : s'ils sont allumés, n'envoyez pas.
+5. **Les migrations en production** ([REGISTRE-MIGRATIONS.md](../../backend/supabase/REGISTRE-MIGRATIONS.md)) : les paragraphes « MESSAGES » et « COLLECTIONS » supposent 0032, 0033 et 0034 (appliquées le 9 novembre 2026) ; « hidden until reviewed » suppose 0030 (appliquée) ; « NOTIFICATIONS AND ALERTS » suppose 0035 et 0036 (**à appliquer** à ce jour : sans elles, l'app cache ces fonctions, et le paragraphe doit partir) ; « (bios and profile photos included) » suppose **0037** (à appliquer : sans elle, retirez ces mots).
+6. **« backup copy of photos: 7 days at most »** : vrai si la copie de sécurité hebdomadaire des photos est en service (`apps/backend/supabase/SAUVEGARDE-PHOTOS.md`). Sans copie de sécurité, retirez la parenthèse.
+7. **« No link is affiliated today »** : vrai tant qu'aucun programme d'affiliation n'est actif. À réécrire le jour où un lien rapporte une commission.
+
+**À décider** (ce sont des engagements pris en votre nom) :
+
+8. **« We review within 24 hours »** : ne laissez cette phrase que si vous prenez cet engagement (alerte reçue sur votre téléphone, week-end compris).
+9. **Si `PUSH_ENABLED` reste coupé le jour de l'envoi** : une personne qui allume la cloche d'une envie lit « les notifications seront bientôt disponibles » (`apps/mobile/src/i18n/fr.ts`, `wishAlerts.pushSoon`). Apple refuse les fonctions annoncées « pour bientôt » (règles 2.1 et 2.2). Deux sorties : allumer les notifications avant l'envoi, ou faire masquer les alertes ou réécrire cette phrase.
+10. **Une phrase facultative**, à ajouter à la fin de « SERVER SWITCHES TODAY » seulement si vous vous y tenez : `Switches that are OFF will only be turned on with a new submission.` (67 caractères). C'est la lecture prudente de la règle 2.5.19 : allumer plus tard une fonction qu'Apple n'a pas vue passe par une nouvelle version.
+11. **Si le serveur s'endort encore** (offre gratuite de Render) le jour de l'envoi, ajoutez : `SERVER: it may sleep when unused; the first launch can then take up to one minute (a wake-up message is shown).` (111 caractères ; vérifiez que le total reste sous 4 000). Le mieux reste une offre sans veille (CONTROLE-BUILD.md, partie C).
+
+*Lecteur intégré TikTok / Instagram : rien à écrire.* Le module natif qui prenait l'image du lecteur est retiré de l'app depuis le lot « nettoyage avant le premier build » (10 novembre 2026) : le build ne contient aucun code de capture. S'il revenait un jour (`apps/mobile/BUILD-IPHONE.md`, section 9), ces notes devraient le décrire.
+
+*Ce que ces notes ne disent pas, faute de place* : l'écran « Mettez à jour » (`APP_MIN_IOS_BUILD`, coupé par défaut : CONTROLE-BUILD.md, partie C), l'alerte « Épuisé » (construite, cachée dans l'app : décision à prendre, rapport d'audit partie 2), et le détail des « autres boutiques » (3 recherches au plus par photo).
 
 ---
 
 ## 2. Version française (pour vous : ce que dit le texte anglais)
 
-### Compte de démonstration
+```text
+COMPTE DE DÉMO
+E-mail : [À compléter] / Mot de passe : [À compléter]
+E-mail confirmé ; exemples : Vault, Envies, collection, publications. Ami @[À compléter] (abonnement mutuel) : publication, commentaire, collection montrée, conversation ouverte. @[À compléter] lui a envoyé une invitation.
 
-E-mail : [À compléter]. Mot de passe : [À compléter]. L'adresse est confirmée, le compte contient des exemples (Vault, Envies, publications) et suit un second compte, @[À compléter], dont une publication et un commentaire permettent d'essayer « Signaler » et « Bloquer ». Spotto demande un compte : l'inscription marche aussi, mais elle exige de confirmer une adresse e-mail.
+POURQUOI UN COMPTE
+Recherches gardées et limitées par personne ; Envies, Vault, publications, abonnements et messages demandent une identité. Inscription gratuite (e-mail à confirmer).
 
-<!-- Preuves : compte obligatoire, groupes d'écrans protégés : apps/mobile/src/app/_layout.tsx:78-96 et apps/mobile/src/lib/root-route.ts:23-37 ; confirmation de l'e-mail : apps/mobile/src/i18n/fr.ts:1089 (auth.errors.emailNotConfirmed) et apps/mobile/src/app/sign-up.tsx:69 ; le fil montre les publications des comptes suivis : apps/backend/src/routes/posts.ts:377-386 (d'où le second compte à suivre) ; compte non administrateur obligatoire : apps/backend/src/routes/account.ts:241. -->
+SPOTTER UNE PIÈCE (onglet Spotter)
+« Ajouter une photo », « Prendre une photo » ou « Ajouter une vidéo » (reste sur l'iPhone). Entourez la pièce, « Lancer » : résultats en 10 à 20 s, prix d'abord. « Garder » > Envies ; « Je l'ai achetée » > Vault. Lien TikTok, Instagram ou Pinterest collé : non lu (l'app explique la capture d'écran).
+Extension de partage : Photos > Partager > l'app.
 
-### Comment spotter une pièce (onglet Spotter)
+SOURCE DES RÉSULTATS
+Google Lens, par notre prestataire SerpApi (image recadrée lue par un lien de 5 minutes) ; mots tapés : Google Shopping, par SerpApi.
 
-1. Touchez « Ajouter une photo » (galerie ou capture d'écran), « Prendre une photo » (appareil photo) ou « Ajouter une vidéo ». La vidéo reste sur l'iPhone ; vous choisissez une image.
-2. Pour une photo : entourez la pièce (ou « Utiliser toute l'image »), puis « Lancer ». Pour une vidéo : décrivez la pièce en quelques mots, puis « Lancer ».
-3. Les résultats arrivent en 10 à 20 secondes ; ceux qui ont un prix passent en premier. « Voir chez [boutique] » ouvre la page du marchand dans une fenêtre Safari intégrée à l'app.
-4. « Garder » ajoute un résultat aux Envies ; « Je l'ai achetée », au Vault (onglet Profil).
+MODÈLE ÉCONOMIQUE
+Gratuit : ni achat intégré, ni abonnement, ni publicité, ni suivi. Rien n'y est vendu : « Voir chez [boutique] » ouvre le site du marchand (fenêtre Safari intégrée), où se fait l'achat. Aucun lien affilié aujourd'hui ; un tel lien porterait « Lien affilié ».
 
-Un lien TikTok, Instagram ou Pinterest collé n'est pas lu : Spotto explique comment ajouter une capture d'écran à la place.
+MESSAGES (onglet Activité > Messages, ou « Message » sur un profil)
+Texte (1 000 caractères) et cartes d'envies, pas de photo libre. Entre amis : directement. Sinon UNE invitation : acceptée, refusée (sans le dire ; aucune pendant 30 jours) ou bloquée ; 10 par heure. Réglages > « Qui peut m'écrire » : Tout le monde (par défaut), Comptes que je suis, Mes amis seulement.
+Signaler : « ••• » à côté d'un message reçu (ou appui long) > « Signaler ce message ».
 
-<!-- Preuves : les trois boutons : apps/mobile/src/app/(app)/(tabs)/index.tsx:228-231 (« Prendre une photo » sur iPhone seulement, :231), apps/mobile/src/lib/image-import.ts:59 (appareil photo) ; textes fr.ts:100-101 et :1166 ; la vidéo reste sur l'appareil : fr.ts:139 ; entourer : apps/mobile/src/components/spot-launch-views.tsx:86-97, fr.ts:347-357 ; « Lancer » attend la zone (photo) ou des mots (vidéo avec analyse) : apps/mobile/src/app/(app)/spot/lancer.tsx:139 et :156 ; durée annoncée : fr.ts:362 ; prix d'abord : fr.ts:394 et :450 ; Safari intégré : apps/mobile/src/lib/merchant-links.ts:90-93 (WebBrowser.openBrowserAsync) ; « Garder » fr.ts:411, « Je l'ai achetée » fr.ts:414 ; lien non lu : apps/mobile/src/lib/spot-flags.ts:7, apps/mobile/src/lib/link-step.ts:35-38, apps/mobile/src/lib/use-link-entry.ts:14 (aucun appel au serveur), aide fr.ts:255-260. -->
+COLLECTIONS (Envies)
+Groupes d'envies, privés ou montrés aux amis (titre, image, prix, lien ; jamais les notes). Signalables (« ••• »).
 
-### L'analyse automatique des vidéos (avec accord)
+NOTIFICATIONS ET ALERTES
+Facultatives. Autorisation d'iOS demandée seulement après « Activer les notifications », jamais au lancement. Réglages : « Notifications de messages » (qui écrit, jamais le texte) et « Alertes prix et stock » (cloche d'une envie : pièce moins chère ou de retour en stock dans la même boutique).
 
-Avec une vidéo, Spotto peut trouver le bon moment. Avant qu'aucune image ne quitte l'iPhone, un écran d'accord explique que 12 images réduites au plus et la description tapée sont envoyées à Anthropic (prestataire d'IA, États-Unis). « Choisir l'image moi-même » refuse : rien n'est envoyé. Le serveur revérifie l'accord avant chaque analyse ; il se retire dans Réglages → Vos données.
+INTERRUPTEURS DU SERVEUR
+- Notifications (PUSH_ENABLED) : [ON/OFF]. Coupé : autorisation jamais demandée.
+- Autres boutiques (VOIE_C_ENABLED) : [ON/OFF] ; étape IA (VOIE_C_AI_ENABLED) : [ON/OFF]. Allumé : une IA (Anthropic) lit titres et noms de sites des 15 premiers résultats, jamais l'image, pour interroger Google Shopping ; on peut aussi taper des mots.
+- Analyse des vidéos (clé Anthropic) : [ON/OFF]. Avec accord : un écran nomme Anthropic (États-Unis) avant l'envoi de 12 images réduites au plus ; refuser n'envoie rien.
+- ANTHROPIC_PHOTO_ENABLED : OFF. Aucune photo de membre envoyée à une IA.
+- LINK_PREVIEW_ENABLED : OFF. Rien n'est demandé à TikTok ni à Meta.
 
-<!-- Preuves : écran d'accord : apps/mobile/src/components/spot-launch-views.tsx:237-268, texte fr.ts:167-171 ; affiché avant tout envoi quand l'accord n'est pas donné : apps/mobile/src/lib/use-spot-launch.ts:224 ; refus = curseur manuel, aucun envoi : fr.ts:164 (chooseMyself) et spot-launch-views.tsx:265-267 ; 12 images au plus : packages/shared-types/src/index.ts:237 ; revérifié par le serveur : apps/backend/src/routes/videoMoments.ts:147 ; réglage : fr.ts:786-790 ; la fonction n'est proposée que si la clé Anthropic est saisie chez Render : apps/backend/src/routes/videoMoments.ts:107-110. -->
+PLAFONDS
+[8] recherches par personne et par jour, [25] pour tout le service, 10 par heure (minuit, heure de Paris). À zéro, « Lancer » est désactivé ; rouvrir un résultat est gratuit.
 
-### L'extension de partage
+MODÉRATION (1.2)
+- Filtre de mots interdits (FR/EN) : légendes, commentaires, messages, noms, bios, noms de collections.
+- Signaler : « ••• » de tout contenu (publication, commentaire, profil, pièce ou message reçus, collection d'un ami) ; il disparaît aussitôt pour qui signale.
+- Bloquer : même menu ; cache publications et conversation. Réglages > Comptes bloqués.
+- 3 signalements de personnes différentes : publication, commentaire, pièce ou collection masqués avant examen.
+- Chaque signalement nous prévient. Examen sous 24 heures ; contenus retirés (bios, photos de profil comprises), comptes suspendus.
+- Contact : Réglages > Aide et contact.
 
-Dans Photos ou une autre app, touchez « Partager », puis « Spotto » : une photo ou une vidéo s'ouvre directement dans Spotter ; un lien ouvre l'aide « capture d'écran ». Un seul élément à la fois ; déconnecté, il s'ouvre après la connexion.
+SUPPRESSION DU COMPTE
+Profil > roue dentée > Supprimer mon compte > taper SUPPRIMER > Confirmer. Tout est effacé aussitôt (copie de sécurité des photos : 7 jours au plus).
 
-<!-- Preuves : extension déclarée : apps/mobile/app.json:111-125, types acceptés :115-118 (un lien, une image, une vidéo, du texte) ; nom affiché « Spotto » : apps/mobile/plugins/extension-partage.js:5-8 ; ouverture dans Spotter : apps/mobile/src/app/(app)/(tabs)/index.tsx:170-197 (lien → aide, :177-186) ; un seul élément : fr.ts:243 ; déconnecté : fr.ts:236 ; partage gardé 24 h si iOS ne rouvre pas l'app : apps/mobile/src/lib/shared-item.ts:126. -->
+Autorisations : appareil photo ; photos seulement pour la suggestion « dernière vidéo ».
+```
 
-### Le serveur (seulement en offre gratuite)
-
-Le serveur peut s'endormir quand personne ne s'en sert. Le premier lancement peut alors prendre jusqu'à une minute et affiche « Spotto se réveille… » ; une recherche lente affiche « le service redémarre peut-être ».
-
-<!-- Preuves : message au démarrage après 3 s : apps/mobile/src/lib/root-route.ts:53, textes fr.ts:1079-1080 (en.ts:1004-1005) ; essais répétés pendant environ une minute : apps/mobile/src/lib/retry.ts:1-4 ; recherche lente après 20 s : apps/mobile/src/app/(app)/spot/analysis.tsx:17, fr.ts:363 (en.ts:343). -->
-
-### Les plafonds de recherche
-
-Chaque personne a [8] recherches par jour, tout le service [25] par jour, et 10 par heure. Les jours repartent à minuit, heure de Paris (15 h à Cupertino). À 3 restantes ou moins, l'onglet Spotter dit combien il en reste ; à zéro, il affiche « Vous avez utilisé vos [8] recherches du jour » et le bouton « Lancer » est désactivé. Rouvrir un ancien résultat est gratuit.
-
-<!-- Preuves : plafonds par défaut 25 par jour pour tous, 8 par personne : apps/backend/src/env.ts:17 et :22 ; 10 par heure : apps/backend/src/lib/rateLimits.ts:31 et fr.ts:460 ; minuit de Paris : apps/backend/src/lib/searchCapacityStatus.ts:14 et :25 ; annonce à 3 ou moins : apps/mobile/src/lib/search-limits.ts:15 et :36 ; « Vous avez utilisé vos N recherches du jour » : fr.ts:959 (en.ts:891) ; lancement bloqué : search-limits.ts:41-43 ; plafond atteint au lancement : fr.ts:464-470 ; rouvrir est gratuit : fr.ts:556 (en.ts:507). Attention : avec la voie C, une photo peut coûter jusqu'à 3 recherches du plafond de tout le service (apps/backend/src/lib/deadline.ts:36, apps/backend/src/lib/searchCapacityStatus.ts:47-49). -->
-
-### Autres boutiques (interrupteur du serveur, aujourd'hui [allumé/coupé])
-
-Allumé, sous les résultats de la recherche visuelle, Spotto ajoute « Cette pièce dans d'autres boutiques » : une IA (Anthropic) lit seulement les titres et les noms de sites des 15 premiers résultats, jamais l'image ni les mots de la personne, et écrit une courte recherche envoyée à Google Shopping par SerpApi. Quand rien de fiable n'est trouvé, « Pas tout à fait ça ? » permet de taper quelques mots, envoyés une fois à Google Shopping. 3 recherches au plus par photo. Aucune nouvelle autorisation, aucune photo envoyée à une IA. Coupé, ces sections n'apparaissent jamais.
-
-<!-- Preuves : interrupteurs coupés par défaut, seule la valeur exacte "true" les allume : apps/backend/src/env.ts:30-51, apps/backend/src/lib/aiSwitches.ts:22-29 ; actif seulement interrupteur allumé ET migration 0028 : apps/backend/src/lib/voieC.ts:863-867 ; coupé = le chemin d'avant, Lens seul : apps/backend/src/routes/searches.ts:1068-1083 ; route des mots refusée (404) quand c'est coupé : searches.ts:1103 ; titres et sites des 15 premiers résultats, jamais d'image : apps/backend/src/services/shoppingQueryAi.ts:8 et :181-186 ; image refusée tant que ANTHROPIC_PHOTO_ENABLED est coupé : aiSwitches.ts:65-68 ; « Que cherchez-vous ? » proposé quand Lens ne trouve rien ou rien de fiable : voieC.ts:663 et :689-693 ; une seule fois par recherche : searches.ts:1125-1127 ; 3 recherches au plus : apps/backend/src/lib/deadline.ts:36 ; titres affichés : fr.ts:503-505 (en.ts:461-463), « Pas tout à fait ça ? » fr.ts:508 (en.ts:465), mention SerpApi et Google Shopping : fr.ts:511-512. L'IA de la voie C a en plus son propre interrupteur (VOIE_C_AI_ENABLED, env.ts:48-51) : coupé, seul « Que cherchez-vous ? » peut apparaître, quand Lens ne trouve rien (voieC.ts:663-664 : Lens vide, puis IA coupée). -->
-
-### La modération (règle 1.2)
-
-- Un filtre de mots interdits (français et anglais) refuse les légendes, commentaires, noms d'utilisateur, noms affichés et bios qui en contiennent.
-- Signaler : menu « ••• » de toute publication, tout commentaire, tout profil, toute pièce reçue. Le contenu disparaît aussitôt pour la personne qui le signale.
-- Bloquer : même menu ; on ne voit plus les publications de ce compte, et il ne peut plus vous suivre. Réglages → Comptes bloqués.
-- Un contenu signalé par 3 personnes différentes est masqué automatiquement en attendant l'examen.
-- Chaque signalement prévient notre équipe. Nous traitons les signalements en moins de 24 heures, retirons les contenus choquants et suspendons les comptes abusifs.
-- Contact : Réglages → Aide et contact, et l'adresse d'assistance de la fiche.
-
-<!-- Preuves : filtre : apps/backend/src/lib/contentFilter.ts:1-21 (listes FR/EN), appliqué aux commentaires apps/backend/src/routes/comments.ts:120, légendes apps/backend/src/routes/posts.ts:483, nom d'utilisateur, nom affiché et bio apps/backend/src/routes/me.ts:185 ; menu « ••• » (Plus d'options) : apps/mobile/src/components/post-card.tsx:131, apps/mobile/src/components/comments-section.tsx:154, apps/mobile/src/app/(app)/profil.tsx:110, pièces reçues apps/mobile/src/components/received-pieces.tsx (ReportBlockMenu) ; signalement enregistré, alerte, masquage : apps/backend/src/routes/reports.ts:43-66 ; disparaît pour qui signale : apps/backend/src/routes/posts.ts:393, comments.ts:88, apps/backend/src/routes/pieces.ts:266, texte fr.ts:1067 ; blocage : apps/backend/src/routes/blocks.ts:13-51, texte fr.ts:981 (blockConfirm) ; comptes bloqués dans Réglages : apps/mobile/src/app/(app)/settings.tsx:149-150 ; 3 personnes différentes : apps/backend/src/lib/autoHide.ts:22, apps/backend/supabase/migrations/0030_masquage_automatique.sql:39-114 (⚠️ vrai seulement si 0030 est appliquée sur spotto-prod : CONTROLE-BUILD.md, partie D) ; alerte à chaque signalement : apps/backend/src/lib/sentry.ts (captureModerationEvent) et apps/backend/ALERTES.md ; masquer, suspendre (administrateurs) : apps/backend/src/routes/moderation.ts:102, compte suspendu bloqué : apps/backend/src/plugins/moderation.ts:27-29 ; « moins de 24 heures » : un ENGAGEMENT du fondateur, pas du code (le code fournit l'alerte) ; contact : apps/mobile/src/app/(app)/settings.tsx:187-193, page apps/mobile/src/app/aide.tsx, adresse lue à la construction apps/mobile/src/lib/contact.ts:37. -->
-
-### La suppression du compte
-
-Profil → icône des réglages → « Supprimer mon compte » → taper SUPPRIMER (DELETE en anglais) → « Confirmer la suppression ». Le compte, ses données et ses photos sont effacés aussitôt.
-
-<!-- Preuves : accès aux Réglages depuis le Profil : apps/mobile/src/app/(app)/(tabs)/profile/index.tsx:159 ; section : apps/mobile/src/components/delete-account-section.tsx:44-78 ; mot à taper : packages/shared-types/src/index.ts:52 ; suppression des fichiers puis du compte : apps/backend/src/routes/account.ts:238-280 ; un compte administrateur ne peut pas être supprimé (d'où un compte de démonstration jamais administrateur) : account.ts:28-32 et :241. -->
-
-### Le reste
-
-Pas de publicité, pas d'achat intégré, pas de suivi publicitaire. Autorisations : l'appareil photo, et les photos seulement pour la suggestion facultative « dernière vidéo ».
-
-<!-- Preuves : aucune bibliothèque de publicité ni de suivi (aucun « tracking-transparency », « AdSupport » ni « IDFA » dans apps/mobile) ; statistiques sans cookie, avec accord : apps/mobile/src/lib/analytics.ts:1-12 ; autorisations : apps/mobile/app.json:90-92 (photos, appareil photo, micro coupé) et :104 ; l'import d'une photo passe par le sélecteur d'iOS, sans autorisation ; seule « Votre dernière vidéo » demande l'accès aux photos : fr.ts:105-107. -->
+3 990 caractères (4 147 octets), crochets compris.
 
 ---
 
@@ -102,54 +103,86 @@ Pas de publicité, pas d'achat intégré, pas de suivi publicitaire. Autorisatio
 
 ```text
 DEMO ACCOUNT
-Email: [À compléter]
-Password: [À compléter]
-Confirmed email, sample content (Vault, Wishlist, posts). It follows a second account, @[À compléter], whose post and comment can be used to test Report and Block. Spotto requires an account; sign-up also works but needs email confirmation.
+Email: [À compléter] / Password: [À compléter]
+Email confirmed; sample Vault, Wishlist, collection, posts. Friend @[À compléter] (mutual follow): a post, a comment, a shared collection, an open conversation. @[À compléter] sent it an invitation. Use them to test Report, Block, messages.
 
-HOW TO SPOT A PIECE (Spotter tab)
-1. Tap "Add a photo" (library or screenshot), "Take a photo" (camera) or "Add a video" (the video stays on the device).
-2. Photo: circle the piece (or "Use the whole image"), then tap "Search". Video: describe the piece in a few words, then tap "Search".
-3. Results take 10-20 s; results with a price come first. "View at [shop]" opens the shop page in an in-app Safari view.
-4. "Save" adds a result to the Wishlist, "I bought it" to the Vault (Profile tab).
-A pasted TikTok, Instagram or Pinterest link is not read: Spotto shows how to add a screenshot instead.
+WHY AN ACCOUNT
+Searches are saved per person and count against a personal daily limit; Wishlist, Vault, posts, follows and messages need an identity. Sign-up is free (email confirmation).
 
-AUTOMATIC VIDEO ANALYSIS (opt-in)
-With a video, Spotto can find the right moment. Before any frame leaves the device, a consent screen explains that up to 12 reduced frames and the user's description are sent to Anthropic (AI provider, USA). "Choose the frame myself" declines: nothing is sent. The server re-checks consent before each analysis; it can be withdrawn in Settings > Your data.
+SPOT A PIECE (Spotter tab)
+"Add a photo", "Take a photo" or "Add a video" (stays on device; pick a frame). Circle the piece, tap "Search": results in 10-20 s, priced ones first. "Save" > Wishlist; "I bought it" > Vault. A pasted TikTok/Instagram/Pinterest link is not read: the app shows how to add a screenshot.
+Share extension: Photos > Share > the app.
 
-SHARE EXTENSION
-In Photos or another app, tap Share, then "Spotto": a photo or video opens directly in Spotter; a link opens the screenshot help. One item at a time; if signed out, it opens after sign-in.
+SEARCH SOURCE
+Results come from Google Lens via our provider SerpApi (it reads the cropped image through a 5-minute link); typed words go to Google Shopping via SerpApi.
 
-SERVER
-Our server may sleep when unused. The first launch can then take up to one minute and shows "Spotto is waking up..."; a slow search shows "the service may be restarting".
+BUSINESS MODEL
+Free. No in-app purchase, subscription, ads or tracking. Nothing is sold in the app: "View at [shop]" opens the merchant's own site in an in-app Safari view, where any purchase happens. No link is affiliated today; one that may later earn a commission will be labelled "Affiliate link".
 
-SEARCH LIMITS
-Each person has [8] searches per day, the whole service [25] per day, and 10 per hour. Days reset at midnight Paris time (3 pm in Cupertino). With 3 or fewer left, the Spotter tab says how many remain; at zero it shows "You've used your [8] searches for today" and the Search button is disabled. Reopening past results is free.
+MESSAGES (Activity tab > Messages, or "Message" on a profile)
+Text (1,000 characters) and wish cards, no free photos. Friends write directly. Anyone else can send ONE invitation: the recipient accepts, declines (silently; none for 30 days) or blocks. Max 10 invitations per hour. Settings > "Who can write to me": Everyone (default), Accounts I follow, Friends only.
+Report a message: tap "..." next to a received message (or long-press it) > "Report this message".
 
-OTHER SHOPS (server switch, currently [ON/OFF])
-When on, below the visual results Spotto adds "This piece at other shops": an AI (Anthropic) reads only the titles and site names of the first 15 results, never the image or the user's words, and writes a short query sent to Google Shopping via SerpApi. When nothing reliable is found, "Not quite right?" lets the user type a few words, sent once to Google Shopping. At most 3 searches per photo. No new permission, no photo sent to an AI. When off, these sections never appear.
+COLLECTIONS (Wishlist)
+Groups of wishes, private or shown to friends (title, image, price, shop link; never notes). Reportable from "...".
 
-MODERATION (Guideline 1.2)
-- A banned-words filter (French and English) refuses captions, comments, usernames, display names and bios containing those words.
-- Report: "..." menu on any post, comment, profile or received piece. The item disappears at once for the reporter.
-- Block: same menu; you no longer see that account's posts and it can no longer follow you. Settings > Blocked accounts.
-- Content reported by 3 different people is hidden automatically until reviewed.
-- Each report alerts our team. We review reports within 24 hours, remove objectionable content and suspend abusive accounts.
-- Contact: Settings > Help and contact, and the Support URL.
+NOTIFICATIONS AND ALERTS
+Optional. iOS permission is asked only after "Enable notifications" on an explanation sheet, never at launch. Two switches in Settings: "Message notifications" (who writes, never the text) and "Price and stock alerts" (bell on a wish: piece seen cheaper or back in stock at the same shop).
+
+SERVER SWITCHES TODAY
+- Push (PUSH_ENABLED): [ON/OFF]. Off: permission never asked.
+- Other shops (VOIE_C_ENABLED): [ON/OFF]; its AI step (VOIE_C_AI_ENABLED): [ON/OFF]. On: an AI (Anthropic) reads only titles and site names of the first 15 results, never the image, to query Google Shopping; users can also type words.
+- Video analysis (Anthropic key): [ON/OFF]. Opt-in: a consent screen names Anthropic (USA) before up to 12 reduced frames are sent; declining sends nothing.
+- ANTHROPIC_PHOTO_ENABLED: OFF. No user photo goes to an AI.
+- LINK_PREVIEW_ENABLED: OFF. Nothing is fetched from TikTok or Meta.
+
+LIMITS
+[8] searches per person per day, [25] for the whole service, 10 per hour (reset at midnight, Paris). At zero "Search" is disabled; past results reopen for free.
+
+MODERATION (1.2)
+- Banned-words filter (FR/EN) on captions, comments, messages, names, bios, collection names.
+- Report: "..." on any post, comment, profile, received piece or message, friend's collection. It disappears at once for the reporter.
+- Block: same menu; hides posts and the conversation. Settings > Blocked accounts.
+- A post, comment, piece or collection reported by 3 different people is hidden until reviewed.
+- Each report alerts our team. We review within 24 hours, remove content (bios and profile photos included) and suspend accounts.
+- Contact: Settings > Help and contact.
 
 ACCOUNT DELETION
-Profile > gear icon (Settings) > Delete my account > type DELETE > Confirm deletion. The account, its data and photos are deleted at once.
+Profile > gear > Delete my account > type DELETE > Confirm. Account, data and photos are deleted at once (backup copy of photos: 7 days at most).
 
-No ads, no in-app purchases, no tracking. Permissions: camera, and photos only for the optional "latest video" suggestion.
+Permissions: camera; photos only for the optional "latest video" suggestion.
 ```
 
-3 494 octets (limite d'Apple : 4 000), crochets compris. Sans le paragraphe « SERVER » : environ 3 300.
+3 857 caractères (3 865 octets), crochets compris. Limite d'Apple : 4 000 caractères.
 
 ---
 
-## 4. Si Apple pose une question
+## 4. Les preuves, paragraphe par paragraphe
+
+Les paragraphes déjà présents avant le 10 novembre 2026 ont été vérifiés sur `main` (b99e884) : leurs fichiers sont les bons, leurs numéros de ligne ont pu glisser. Les paragraphes nouveaux citent le fichier et le nom à y chercher, relus sur la branche `lot-conformite-apple`.
+
+- **DEMO ACCOUNT / WHY AN ACCOUNT** : compte obligatoire, groupes d'écrans protégés : `apps/mobile/src/app/_layout.tsx` et `apps/mobile/src/lib/root-route.ts` ; confirmation de l'e-mail : `apps/mobile/src/app/sign-up.tsx` ; recherches comptées par personne : `apps/backend/src/env.ts:22` (`SERPAPI_USER_DAILY_CAP`) ; le fil montre les publications des comptes suivis : `apps/backend/src/routes/posts.ts` ; amis = chacun suit l'autre : `apps/backend/src/lib/messaging.ts:1-12` ; compte de démonstration jamais administrateur (sa suppression serait refusée) : `apps/backend/src/routes/account.ts`.
+- **SPOT A PIECE** : les trois boutons : `apps/mobile/src/app/(app)/(tabs)/index.tsx`, textes `fr.ts` (`addPhoto`, `addVideo`) ; « Lancer » : `fr.ts` (`launch.launch`) ; « Garder » : `fr.ts` (`keep`) ; lien non lu : `apps/mobile/src/lib/spot-flags.ts:7`, `apps/mobile/src/lib/link-step.ts` ; extension : `apps/mobile/app.json` (`expo-share-intent`), `apps/mobile/plugins/extension-partage.js`.
+- **SEARCH SOURCE** : `apps/backend/src/services/serpapi.ts` (moteurs `google_lens` et `google_shopping`) ; lien signé de 5 minutes vers l'image recadrée : `apps/backend/src/lib/storage.ts` (« Images analysées »).
+- **BUSINESS MODEL** : aucun achat intégré ni publicité dans le code ; lien du marchand ouvert dans la fenêtre Safari intégrée : `apps/mobile/src/lib/merchant-links.ts` (`WebBrowser.openBrowserAsync`) ; un lien n'est « affilié » que s'il diffère du lien du marchand : `apps/mobile/src/lib/affiliate-link.ts` ; mention prête : `fr.ts:468` et `en.ts:442` (`affiliateDisclosure`) ; « aucun programme d'affiliation n'est actif » : `apps/mobile/src/legal/conditions.ts:53`.
+- **MESSAGES** : règles (amis, une invitation, refus discret, 30 jours, blocage) : `apps/backend/src/lib/messaging.ts:1-12` ; 1 000 caractères et 30 jours : `packages/shared-types/src/index.ts` (`MESSAGE_MAX_LENGTH`, `INVITATION_DECLINE_COOLDOWN_DAYS`) ; 10 invitations par heure : `apps/backend/src/lib/rateLimits.ts` (`messageInvite`) ; « Qui peut m'écrire », défaut « tout le monde » : `packages/shared-types/src/index.ts` (`DEFAULT_MESSAGES_FROM`), `fr.ts` (`messagesFromTitle`) ; entrée « Messages » de l'onglet Activité : `apps/mobile/src/app/(app)/(tabs)/activite.tsx` ; bouton « ••• » d'un message reçu et appui long : `apps/mobile/src/app/(app)/conversation.tsx` (`Bubble`), test `apps/mobile/tests/messages.test.ts` ; filtre de mots sur les messages : `apps/backend/src/routes/conversations.ts`.
+- **COLLECTIONS** : privées ou montrées aux amis, ce que les amis voient : `en.ts` (`collections.shareConfirmTitle` et la phrase suivante) ; signalement : `apps/mobile/src/app/(app)/collection-ami.tsx`, `apps/backend/src/lib/collectionModeration.ts`.
+- **NOTIFICATIONS AND ALERTS** : coupées par défaut, texte limité à « qui écrit » : `apps/backend/src/lib/push.ts:1-16` ; autorisation demandée seulement après « Activer les notifications » : `apps/mobile/src/lib/push.ts`, `fr.ts` (`offerAccept`) ; les deux interrupteurs : `apps/mobile/src/components/message-push-setting.tsx` et `wish-alerts-setting.tsx` ; cloche et alertes : `fr.ts` (`wishAlerts.sheetIntro`).
+- **SERVER SWITCHES TODAY** : `apps/backend/src/env.ts` — `LINK_PREVIEW_ENABLED` (:37), `ANTHROPIC_API_KEY` (:44), `VOIE_C_ENABLED` (:56), `VOIE_C_AI_ENABLED` (:63), `ANTHROPIC_PHOTO_ENABLED` (:71), `PUSH_ENABLED` (:82) : seule la valeur exacte `true` allume ; titres et noms de sites des 15 premiers résultats : `apps/backend/src/services/shoppingQueryAi.ts` ; écran d'accord des vidéos, 12 images au plus : `apps/mobile/src/components/spot-launch-views.tsx`, accord revérifié par `apps/backend/src/routes/videoMoments.ts`.
+- **LIMITS** : `apps/backend/src/env.ts:17` et `:22` ; 10 par heure : `apps/backend/src/lib/rateLimits.ts:31` ; minuit de Paris : `apps/backend/src/lib/searchCapacityStatus.ts`.
+- **MODERATION** : filtre : `apps/backend/src/lib/contentFilter.ts`, appliqué dans `routes/posts.ts`, `comments.ts`, `conversations.ts`, `me.ts`, `collections.ts` ; six types signalables : `packages/shared-types/src/index.ts` (`REPORT_TARGET_TYPES`) ; disparaît pour qui signale : `apps/backend/src/lib/reportedByViewer.ts` ; blocage : `apps/backend/src/routes/blocks.ts` ; masquage à 3 personnes : `apps/backend/src/lib/autoHide.ts:27` (publication, commentaire, pièce, collection ; pas un message ni un profil) ; alerte à chaque signalement : `apps/backend/ALERTES.md` ; retirer une bio ou une photo de profil : `apps/backend/src/routes/moderation.ts` (route `remove-profile-part`), migration 0037 ; bio et photo d'un compte suspendu cachées : `apps/backend/src/lib/profileModeration.ts` ; « 24 heures » : un ENGAGEMENT du fondateur, pas du code.
+- **ACCOUNT DELETION** : `apps/mobile/src/components/delete-account-section.tsx` ; mot à taper : `packages/shared-types/src/index.ts:71` ; suppression des fichiers puis du compte : `apps/backend/src/routes/account.ts` ; copie de sécurité, 7 jours au plus : `apps/backend/supabase/SAUVEGARDE-PHOTOS.md:10`.
+- **Permissions** : `apps/mobile/app.json` (phrases de l'appareil photo et des photos, micro coupé).
+
+---
+
+## 5. Si Apple pose une question
 
 Répondez dans App Store Connect (Centre de résolution), en anglais, court et factuel. Les cas les plus probables :
 - **« Nous n'avons pas pu nous connecter »** : vérifiez que le compte existe encore (Apple essaie souvent la suppression du compte, et peut l'avoir supprimé), qu'il n'est pas suspendu, puis recréez-le si besoin et redonnez les identifiants.
 - **« Le serveur ne répond pas »** : ouvrez https://spotto-api.onrender.com/health puis /health/deep ([CONTROLE-BUILD.md](CONTROLE-BUILD.md), partie F).
 - **« Nous ne trouvons pas l'extension de partage »** : joignez la vidéo d'écran (Photos → Partager → Spotto ; si « Spotto » n'apparaît pas, « Modifier les actions » en bas de la feuille de partage).
-- **Une question sur l'IA ou les données** : renvoyez aux paragraphes « AUTOMATIC VIDEO ANALYSIS » et « OTHER SHOPS », et à la politique de confidentialité.
+- **Une question sur l'IA ou les données** : renvoyez aux paragraphes « SEARCH SOURCE » et « SERVER SWITCHES TODAY », et à la politique de confidentialité.
+- **« Comment gagnez-vous de l'argent ? »** : le paragraphe « BUSINESS MODEL ». Ne promettez rien de plus que ce qu'il dit.
+- **« Pourquoi faut-il un compte ? »** (règle 5.1.1 (v)) : le paragraphe « WHY AN ACCOUNT ».
+- **Une question sur vos droits d'afficher les résultats de Google** (règle 5.2.2) : ne répondez pas seul ; c'est un point pour votre avocat (voir le rapport d'audit, partie 2).

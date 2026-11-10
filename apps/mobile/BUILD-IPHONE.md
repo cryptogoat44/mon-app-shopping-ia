@@ -131,10 +131,44 @@ validation et les réponses « App Privacy » sont dans
 
 ## 6. Corriger l'app après sa sortie
 
-- **Correction du code de l'app** (textes, écrans, logique) sans repasser par
-  Apple : `eas update --channel production --environment production --message "…"`.
+- **Correction du code de l'app, à distance** (`expo-updates`), sans repasser
+  par Apple : `eas update --channel production --environment production --message "…"`.
   Les iPhone la reçoivent au lancement suivant. Pour que Sentry lise aussi ses
   plantages : `npx sentry-expo-upload-sourcemaps dist` juste après.
+
+  **À n'utiliser que pour corriger, jamais pour ajouter.** La règle 2.5.2
+  d'Apple dit : « Apps should be self-contained in their bundles, and may not
+  read or write data outside the designated container area, nor may they
+  download, install, or execute code which introduces or changes features or
+  functionality of the app, including other apps. » (une app ne télécharge
+  pas de code qui ajoute ou change ses fonctions). Une mise à jour à distance
+  est justement du code téléchargé après la validation. La lecture prudente,
+  à suivre tant que vous n'avez pas décidé autre chose avec votre avocat :
+
+  | Permis par une mise à jour à distance | Jamais par une mise à jour à distance : nouveau build, revu par Apple |
+  | --- | --- |
+  | une panne, un plantage, un calcul faux | une fonction nouvelle, un nouvel écran, un nouvel onglet |
+  | une faute dans un texte, une traduction, un libellé | une fonction coupée qu'on rallume : basculer une constante figée (`apps/mobile/src/lib/spot-flags.ts`, l'alerte « Épuisé »), remettre le lecteur |
+  | un défaut d'affichage ou d'accessibilité | un changement de ce à quoi sert l'app, de son modèle économique, ou des données qu'elle collecte |
+  | un réglage de sécurité | un nouveau prestataire, une nouvelle autorisation (impossible de toute façon : c'est du natif) |
+
+  Deux conséquences pratiques :
+  - **les interrupteurs du serveur** (`PUSH_ENABLED`, `VOIE_C_ENABLED`,
+    `VOIE_C_AI_ENABLED`, `LINK_PREVIEW_ENABLED`, `ANTHROPIC_PHOTO_ENABLED`)
+    suivent la même prudence, au titre de la règle 2.5.19 (aucune fonction
+    cachée, dormante ou non décrite) : ce qui est allumé le jour de l'envoi
+    est décrit comme allumé dans les notes pour Apple ; allumer plus tard une
+    fonction qu'Apple a vue coupée passe par une nouvelle version et de
+    nouvelles notes (`app-store/NOTES-VALIDATION.md`) ;
+  - **en cas de doute, faites un nouveau build.** Un refus d'Apple coûte
+    quelques jours ; une app retirée pour avoir changé après sa validation
+    coûte bien plus.
+
+  Cette règle d'usage est une décision qui vous appartient (rapport d'audit,
+  partie 2, décision 5 : réserver les mises à jour à distance aux corrections,
+  ou retirer `expo-updates` de la première version). Le contrat de licence du
+  programme développeur d'Apple, qui encadre aussi ce point, n'a pas été lu :
+  à voir avec votre avocat à l'inscription.
 - **Changement natif** (nouveau module, nouvelle autorisation, `app.json`) : un
   nouveau build, en augmentant `version` dans `app.json` (1.0.0 → 1.0.1) ; les
   mises à jour à distance ne visent que les builds de la même version.
