@@ -10,7 +10,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { PIECE_SENDS_FROM, PRIVACY_LEVELS, type ReceivedPiece } from "@monapp/shared-types";
-import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
+import { fetchAffiliateUrls, isAffiliateLink } from "../lib/affiliateLinks.js";
 import { fetchBlockedUserIds } from "../lib/blocks.js";
 import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseDbRows, parseInput, webUrlOrNull } from "../lib/validation.js";
 import { isBlockedEitherWay, isFollowing } from "../lib/visibility.js";
@@ -87,7 +87,7 @@ async function toReceivedPieces(fastify: FastifyInstance, rows: PieceRow[], view
       imageRemoved: row.image_removed_at !== null,
       merchantName: row.merchant_name,
       merchantUrl,
-      isAffiliate: affiliateUrl !== null && affiliateUrl !== row.merchant_url,
+      isAffiliate: isAffiliateLink(affiliateUrl, row.merchant_url),
       productMatchId: row.product_match_id,
       priceMin: priceOf(row.price_min),
       currency: row.currency,

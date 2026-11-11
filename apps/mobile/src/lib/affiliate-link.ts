@@ -15,3 +15,17 @@ export interface MerchantLinks {
 export function isAffiliateLink(links: MerchantLinks): boolean {
   return links.affiliateUrl !== null && links.affiliateUrl !== links.merchantUrl;
 }
+
+/** Les formes de la mention visible (components/affiliate-mention.tsx) :
+ * "none" (rien à l'écran), "inline" (à la suite d'un libellé), "plain" (le
+ * texte seul, là où la place manque), "explain" (touchée, elle déplie ce
+ * que signifie « lien affilié »). */
+export type AffiliateMentionForm = "none" | "inline" | "plain" | "explain";
+
+/** Ce que la mention affiche. Sans lien affilié : rien, quelle que soit la
+ * forme demandée — `undefined` compris (réponse d'un ancien serveur). */
+export function affiliateMentionForm(isAffiliate: boolean | undefined, options: { explain?: boolean; inline?: boolean } = {}): AffiliateMentionForm {
+  if (isAffiliate !== true) return "none";
+  if (options.inline) return "inline";
+  return options.explain ? "explain" : "plain";
+}

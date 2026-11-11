@@ -13,6 +13,7 @@ import { ForeignShopNote } from "@/components/foreign-shop-note";
 import { SendToFriendLink } from "@/components/send-to-friend-link";
 import { StockReportLink } from "@/components/stock-report-sheet";
 import { isAffiliateLink } from "@/lib/affiliate-link";
+import { AffiliateMention } from "@/components/affiliate-mention";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Carte d'une proposition dans les grilles de l'écran Résultat (« Autres
@@ -126,7 +127,9 @@ export function CheapestBadge() {
 /** Même lien et même libellé que le bouton de la grande carte, par le point
  * de passage unique (openMerchantLink : adresses web seulement, clic suivi).
  * Le lien de secours, si le navigateur bloque l'ouverture, est celui
- * qu'openMerchantLink renvoie, donc déjà vérifié. */
+ * qu'openMerchantLink renvoie, donc déjà vérifié. La mention « Lien
+ * affilié » est écrite sous le lien (et lue avec lui par VoiceOver) ; ce
+ * qu'elle signifie se lit sur la grande carte, en touchant la pièce. */
 function ShopLink({ piece, placement }: { piece: Piece; placement?: ClickPlacement }) {
   const [blockedUrl, setBlockedUrl] = useState<string | null>(null);
   const label = opensOfferPage(piece) ? t.result.viewOffer : t.result.viewAt(piece.merchantName ?? "");
@@ -153,6 +156,7 @@ function ShopLink({ piece, placement }: { piece: Piece; placement?: ClickPlaceme
           {label} ›
         </Text>
       </Pressable>
+      <AffiliateMention isAffiliate={isAffiliate} />
       {blockedUrl ? (
         <Pressable
           onPress={() => {
