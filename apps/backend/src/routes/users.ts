@@ -4,6 +4,7 @@ import type { Post, PublicProfile, UserProfile } from "@monapp/shared-types";
 import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, parseDbRows, parseInput, userIdParamsSchema } from "../lib/validation.js";
 import { isBlockedEitherWay, isFollowing, shownPosts, visiblePrivacies } from "../lib/visibility.js";
 import { suspendedAmong } from "../lib/moderation.js";
+import { withoutSuspendedFaces } from "../lib/profileModeration.js";
 import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
 import { POST_ROWS, hydratePosts } from "./posts.js";
 
@@ -112,7 +113,8 @@ export default async function usersRoutes(fastify: FastifyInstance) {
   // Profil d'un autre utilisateur (Lot Q, décision 6) : identité, bio et
   // nombres d'abonnés / d'abonnements. JAMAIS le Vault ni son nombre de
   // pièces. Un blocage, dans un sens ou dans l'autre, rend le profil
-  // introuvable (404, sans dire pourquoi).
+  // introuvable (404, sans dire pourquoi). Lot « conformité Apple » : la bio
+  // et la photo d'un compte suspendu ne sont montrées qu'à lui-même.
   fastify.get("/api/users/:userId", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const params = parseInput(userIdParamsSchema, request.params, reply, INVALID_ID);
     if (!params) return;
@@ -120,15 +122,21 @@ export default async function usersRoutes(fastify: FastifyInstance) {
     const targetId = params.userId;
     const notFound = () => reply.code(404).send({ error: "user_not_found", message: "Profil introuvable." });
 
-    const { data: row } = await fastify.supabaseAdmin
+    const { data: stored } = await fastify.supabaseAdmin
       .from("profiles")
       .select("id, username, display_name, avatar_url, bio")
       .eq("id", targetId)
       .maybeSingle();
     // Profil pas encore complété (sans nom d'utilisateur) : pas de page publique.
-    if (!row || !row.username) return notFound();
+    if (!stored || !stored.username) return notFound();
     const isMe = targetId === viewerId;
     if (!isMe && (await isBlockedEitherWay(fastify, viewerId, targetId))) return notFound();
+    const [row] = await withoutSuspendedFaces(
+      fastify,
+      [{ ...stored, id: stored.id as string, avatar_url: (stored.avatar_url as string | null) ?? null, bio: (stored.bio as string | null) ?? null }],
+      viewerId
+    );
+    if (!row) return notFound();
 
     const viewerFollows = isMe ? false : await isFollowing(fastify, viewerId, targetId);
     const [followers, following, posts] = await Promise.all([
@@ -145,8 +153,8 @@ export default async function usersRoutes(fastify: FastifyInstance) {
       id: row.id as string,
       username: row.username as string,
       displayName: row.display_name as string,
-      avatarUrl: (row.avatar_url as string | null) ?? null,
-      bio: (row.bio as string | null) ?? null,
+      avatarUrl: row.avatar_url,
+      bio: row.bio,
       followersCount: followers.count ?? 0,
       followingCount: following.count ?? 0,
       postsCount: posts.count ?? 0,

@@ -6,12 +6,14 @@
 // copiée d'une envie partagée (lib/imageRemoval.ts, migration 0026). Lot
 // modération des collections (migration 0034) : une collection se masque, se
 // rétablit et voit son auteur suspendu comme les autres contenus ; « Retirer
-// l'image » vise la copie d'UNE de ses envies.
+// l'image » vise la copie d'UNE de ses envies. Lot « conformité Apple »
+// (migration 0037) : retirer la bio ou la photo d'un profil.
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import {
   MODERATION_DECISIONS,
   MODERATION_NOTE_MAX_LENGTH,
+  PROFILE_PARTS,
   REPORT_REASONS,
   REPORT_TARGET_TYPES,
   type ModerationItem,
@@ -22,6 +24,8 @@ import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { buildModerationItems, QUEUE_ROWS } from "../lib/moderationQueue.js";
 import { eraseCollectionCopy, eraseCopiedImage, type ImageErasureRefusal } from "../lib/imageRemoval.js";
 import { collectionModerationReady } from "../lib/collectionModeration.js";
+import { AVATAR_BUCKET, profileModerationReady } from "../lib/profileModeration.js";
+import { emptyUserFolder } from "../lib/storage.js";
 
 const PAGE_SIZE = 20;
 
@@ -50,6 +54,14 @@ const removeImageSchema = z.union([
   z.object({ targetType: z.enum(["post", "piece"]), targetId: z.guid(), note: noteSchema }),
   z.object({ targetType: z.literal("collection"), targetId: z.guid(), itemId: z.guid(), note: noteSchema }),
 ]);
+
+// Lot « conformité Apple » : un motif est obligatoire, comme pour masquer ou suspendre.
+const removeProfilePartSchema = z.object({
+  userId: z.guid(),
+  part: z.enum(PROFILE_PARTS),
+  reason: z.enum(REPORT_REASONS),
+  note: noteSchema,
+});
 
 const OUTCOME = z.array(z.object({ outcome: z.string(), action_id: z.guid().nullable() })).length(1);
 
@@ -83,6 +95,13 @@ const REFUSALS: Record<string, { status: number; error: string; message: string 
     message: "L'image n'a pas pu être effacée du stockage : rien n'a été changé. Réessayez dans un instant.",
   },
   not_undoable: { status: 409, error: "not_undoable", message: "Le retrait d'une image ne s'annule pas : le fichier a été effacé." },
+  // Retrait d'une bio ou d'une photo de profil (lot « conformité Apple », migration 0037).
+  profile_moderation_unavailable: {
+    status: 404,
+    error: "profile_moderation_unavailable",
+    message: "Le retrait d'une bio ou d'une photo de profil n'est pas encore disponible.",
+  },
+  nothing_to_remove: { status: 409, error: "nothing_to_remove", message: "Il n'y a rien à retirer : la bio ou la photo de ce profil a déjà disparu." },
 };
 
 export default async function moderationRoutes(fastify: FastifyInstance) {
@@ -104,7 +123,7 @@ export default async function moderationRoutes(fastify: FastifyInstance) {
     const pageRows = rows.data.slice(0, PAGE_SIZE);
     let items: ModerationItem[];
     try {
-      items = await buildModerationItems(fastify, pageRows);
+      items = await buildModerationItems(fastify, pageRows, { profileModeration: await profileModerationReady(fastify) });
     } catch (buildError) {
       request.log.error({ buildError }, "Aperçus de modération illisibles");
       return reply.code(500).send({ error: "internal_error", message: GENERIC_SERVER_ERROR });
@@ -175,6 +194,35 @@ export default async function moderationRoutes(fastify: FastifyInstance) {
             p_note: body.note || null,
           });
     return sendOutcome(request.log, reply, data, error, "Retrait d'une image copiée");
+  });
+
+  // Lot « conformité Apple » (migration 0037) : retirer la bio ou la photo
+  // d'un profil. Photo : tous les fichiers du dossier de la personne sont
+  // effacés D'ABORD (3 essais), comme « Supprimer ma photo » (routes/me.ts) ;
+  // la décision n'est enregistrée qu'ensuite. Si le stockage refuse, rien
+  // n'est changé : jamais une photo « retirée » encore en ligne. La fonction
+  // de la base vide la bio ou l'adresse, écrit la décision au journal,
+  // prévient la personne et classe les signalements de son profil. Rien du
+  // profil (ni bio, ni adresse) n'est écrit dans les journaux du serveur.
+  fastify.post("/api/admin/moderation/remove-profile-part", adminOnly, async (request, reply) => {
+    const body = parseInput(removeProfilePartSchema, request.body, reply, INVALID_DECISION);
+    if (!body) return;
+    if (!(await profileModerationReady(fastify))) return sendRefusal(reply, "profile_moderation_unavailable");
+    if (body.part === "avatar") {
+      const cleanup = await emptyUserFolder(fastify.supabaseAdmin.storage.from(AVATAR_BUCKET), AVATAR_BUCKET, body.userId);
+      if (cleanup.failed > 0 || cleanup.unreadable) {
+        request.log.warn({ bucket: AVATAR_BUCKET, failed: cleanup.failed, unreadable: cleanup.unreadable }, "Retrait d'une photo de profil : effacement refusé par le stockage");
+        return sendRefusal(reply, "storage_failed");
+      }
+    }
+    const { data, error } = await fastify.supabaseAdmin.rpc("moderation_remove_profile_part", {
+      p_admin_id: request.user!.id,
+      p_user_id: body.userId,
+      p_part: body.part,
+      p_reason: body.reason,
+      p_note: body.note || null,
+    });
+    return sendOutcome(request.log, reply, data, error, body.part === "bio" ? "Retrait d'une bio" : "Retrait d'une photo de profil");
   });
 }
 

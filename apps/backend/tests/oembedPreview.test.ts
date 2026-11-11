@@ -1,9 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Aucun appel réel à TikTok : safeFetch est simulé. Les réponses reprennent
 // ce que TikTok renvoie vraiment (constaté le 2026-09-24).
 vi.mock("../src/lib/safeFetch.js", () => ({ safeFetch: vi.fn() }));
+// Interrupteur des liens (LINK_PREVIEW_ENABLED, lot « nettoyage avant le premier
+// build ») : ALLUMÉ pour les cas d'avant, quel que soit le .env du Mac ; le
+// dernier bloc le coupe (la valeur par défaut). Jamais de jeton Meta ici.
+vi.mock("../src/env.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/env.js")>();
+  return { env: { ...original.env, LINK_PREVIEW_ENABLED: true, META_OEMBED_ACCESS_TOKEN: undefined } };
+});
 
+import { env } from "../src/env.js";
 import { safeFetch } from "../src/lib/safeFetch.js";
 import { fetchOfficialPreview } from "../src/services/oembed.js";
 
@@ -46,5 +54,44 @@ describe("image officielle d'un lien : la raison précise quand elle manque", ()
     expect(await fetchOfficialPreview("https://www.instagram.com/p/abc/", "instagram")).toEqual({ ok: false, issue: "no_official_access" });
     expect(await fetchOfficialPreview("https://www.zara.com/fr/veste", "other")).toEqual({ ok: false, issue: "unsupported_site" });
     expect(safeFetchMock).not.toHaveBeenCalled();
+  });
+});
+
+// Lot « nettoyage avant le premier build » : l'interrupteur des liens est
+// coupé par défaut. Le service lui-même ne part alors jamais chez TikTok ni
+// chez Meta, même si une route oubliait de le vérifier.
+describe("interrupteur des liens coupé (valeur par défaut) : aucun appel à TikTok ni à Meta", () => {
+  beforeEach(() => {
+    safeFetchMock.mockReset();
+    Object.assign(env, { LINK_PREVIEW_ENABLED: false });
+  });
+  afterEach(() => {
+    Object.assign(env, { LINK_PREVIEW_ENABLED: true, META_OEMBED_ACCESS_TOKEN: undefined });
+  });
+
+  it("lien TikTok : « no_official_access », sans aucun appel", async () => {
+    expect(await fetchOfficialPreview(VIDEO, "tiktok")).toEqual({ ok: false, issue: "no_official_access" });
+    expect(safeFetchMock).not.toHaveBeenCalled();
+  });
+
+  it("lien Instagram, même avec un jeton Meta saisi : « no_official_access », sans aucun appel", async () => {
+    Object.assign(env, { META_OEMBED_ACCESS_TOKEN: "jeton-factice-des-tests" });
+    expect(await fetchOfficialPreview("https://www.instagram.com/p/abc/", "instagram")).toEqual({ ok: false, issue: "no_official_access" });
+    expect(safeFetchMock).not.toHaveBeenCalled();
+  });
+
+  it("les réponses qui n'appelaient déjà personne ne changent pas (Pinterest, autre site)", async () => {
+    expect(await fetchOfficialPreview("https://pin.it/abc", "other")).toEqual({ ok: false, issue: "no_official_access" });
+    expect(await fetchOfficialPreview("https://www.zara.com/fr/veste", "other")).toEqual({ ok: false, issue: "unsupported_site" });
+    expect(safeFetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rallumé : Instagram avec un jeton part de nouveau chez Meta (comportement d'avant)", async () => {
+    Object.assign(env, { LINK_PREVIEW_ENABLED: true, META_OEMBED_ACCESS_TOKEN: "jeton-factice-des-tests" });
+    safeFetchMock.mockResolvedValueOnce(json({ type: "rich" }));
+    expect(await fetchOfficialPreview("https://www.instagram.com/p/abc/", "instagram")).toEqual({ ok: false, issue: "not_a_video" });
+    expect(safeFetchMock).toHaveBeenCalledOnce();
+    expect(String(safeFetchMock.mock.calls[0]![0])).toContain("graph.facebook.com");
+    expect(safeFetchMock.mock.calls[0]![1]).toMatchObject({ allowedHosts: ["facebook.com"] });
   });
 });

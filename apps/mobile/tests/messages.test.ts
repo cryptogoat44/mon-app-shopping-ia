@@ -143,6 +143,37 @@ describe("invitations : accepter, refuser, bloquer", () => {
     expect(target).toContain('{ targetType: "message", targetId: messageId, reason }');
     expect(t.messages.reportMessage).toBe("Signaler ce message");
   });
+
+  // Règle 1.2 d'Apple : le signalement ne doit pas dépendre d'un geste caché.
+  it("un message reçu a un bouton « ••• » toujours visible, en plus de l'appui long ; jamais sur ses propres messages", () => {
+    const screen = readFileSync(join(__dirname, "../src/app/(app)/conversation.tsx"), "utf8");
+    const bubble = screen.slice(screen.indexOf("function Bubble("), screen.indexOf("// Une conversation (lot messages)"));
+    // Le bouton : rendu sans condition de plateforme, seulement pour un message reçu.
+    const button = /\{message\.mine \? null : \(\s*<Pressable([^>]*)>\s*<MoreIcon size=\{16\} tint=\{color\.acier\} \/>\s*<\/Pressable>\s*\)\}/.exec(bubble);
+    expect(button).not.toBeNull();
+    const props = button![1]!;
+    expect(props).toContain("onPress={onOptions}");
+    expect(props).toContain('accessibilityRole="button"');
+    expect(props).toContain("accessibilityLabel={t.messages.messageOptions}");
+    expect(props).toContain("accessibilityHint={t.messages.messageOptionsHint}");
+    // Zone de toucher : 28 px + 10 px de marge de chaque côté (au moins 44 px).
+    expect(props).toContain("hitSlop={10}");
+    expect(screen).toContain("bubbleMore: { minWidth: 28, minHeight: 28,");
+    expect(bubble).not.toContain("Platform.OS");
+    // Le même menu que l'appui long, pour CE message ; le message signalé quitte l'écran.
+    expect(bubble).toContain("onLongPress={message.mine ? undefined : onOptions}");
+    expect(screen).toMatch(/<Bubble key=\{message\.id\} message=\{message\} onOptions=\{\(\) => setMenuFor\(message\)\} \/>/);
+    expect(screen).toContain("messageId={menuFor?.id}");
+    expect(screen).toContain("setMessages((current) => current.filter((message) => message.id !== reportedId));");
+  });
+
+  it("le bouton dit à quoi il sert, en français et en anglais", () => {
+    expect(fr.messages.messageOptions).toBe("Options pour ce message");
+    expect(fr.messages.messageOptionsHint).toBe("Signaler ce message ou bloquer cette personne");
+    expect(en.messages.messageOptions).toBe("Options for this message");
+    expect(en.messages.messageOptionsHint).toBe("Report this message or block this person");
+    expect(en.messages.reportMessage).toBe("Report this message");
+  });
 });
 
 describe("envoi et envie jointe", () => {

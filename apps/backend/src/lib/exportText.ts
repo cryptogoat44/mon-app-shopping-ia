@@ -839,6 +839,9 @@ export const MODERATION_ACTION_LABELS: Record<ModerationActionType, Bilingual> =
   restore: { fr: "Contenu rétabli", en: "Content restored" },
   unsuspend: { fr: "Suspension levée", en: "Suspension lifted" },
   remove_image: { fr: "Image retirée", en: "Image removed" },
+  // Lot « conformité Apple » (migration 0037).
+  remove_bio: { fr: "Bio retirée", en: "Bio removed" },
+  remove_avatar: { fr: "Photo de profil retirée", en: "Profile photo removed" },
 };
 
 /** Liste locale (aucune constante partagée) : type conversion_status de la base. */

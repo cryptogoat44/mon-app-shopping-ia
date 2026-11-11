@@ -23,7 +23,7 @@ export interface EmbeddedPlayerProps {
   /** Code d'intégration plus haut que la place : on le laisse défiler. */
   scrollable: boolean;
   webRef: RefObject<WebView | null>;
-  /** Conteneur natif retrouvé par le module de capture (findNodeHandle). */
+  /** Conteneur natif de la vue web (il servait au module de capture, sorti de l'app : lib/player-access.ts). */
   frameRef: RefObject<View | null>;
   onMessage: (message: HostMessage) => void;
   /** Un lien du lecteur voulait quitter la page : rien ne s'ouvre, l'écran propose d'ouvrir l'app. */

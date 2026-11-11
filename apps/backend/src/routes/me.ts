@@ -20,12 +20,11 @@ import { isAdmin } from "../lib/moderation.js";
 import { CONTENT_NOT_ALLOWED, firstBannedText } from "../lib/contentFilter.js";
 import { MESSAGES_UNAVAILABLE, messagesReady } from "../lib/messaging.js";
 import { emptyUserFolder, extractOwnedStoragePath, removeOwnedFiles } from "../lib/storage.js";
+import { AVATAR_BUCKET } from "../lib/profileModeration.js";
 
 const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
 /** Bio reçue, avant d'en retirer espaces et lignes vides en trop. */
 const BIO_RAW_MAX_LENGTH = 1000;
-/** Bucket public des photos de profil (migration 0009). */
-const AVATAR_BUCKET = "avatars";
 
 const updateMeSchema = z.object({
   username: z

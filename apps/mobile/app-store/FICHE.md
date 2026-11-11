@@ -1,12 +1,12 @@
 # La fiche App Store de Spotto (textes à coller)
 
-*Chantier 8, point 8 de la feuille de route V1. Pour le fondateur.*
+*Chantier 8, point 8 de la feuille de route V1. Pour le fondateur. Brouillon : la description a été remise à jour le 10 novembre 2026 (lot « conformité Apple ») pour les messages privés et les collections ; les alertes et les notifications sont dans un paragraphe à part, à n'ajouter que si elles sont allumées le jour de l'envoi.*
 
 **Où coller** : App Store Connect → Apps → Spotto → onglet **Distribution** → la version (1.0) → une langue à la fois (**Français**, puis **Anglais (États-Unis)** ou **Anglais (Royaume-Uni)** selon les pays choisis).
 
 **Comment copier** : chaque texte est dans un cadre gris. Copiez tout le contenu du cadre, sans rien ajouter. Les longueurs ont été comptées par un script (le nombre est indiqué sous chaque cadre) ; Apple refuse l'enregistrement au-delà de la limite.
 
-**Ce qui est vrai dans tous les cas** : ces textes ne parlent ni de la « voie C » (autres boutiques, « Que cherchez-vous ? ») ni du lecteur intégré. Ils restent justes que la voie C soit allumée ou coupée. Ils ne citent aucune marque d'une autre société (TikTok, Instagram, Google…) : la règle 2.3.7 d'Apple l'interdit dans les mots-clés, et c'est plus sûr ailleurs aussi.
+**Ce qui est vrai dans tous les cas** : ces textes ne parlent ni de la « voie C » (autres boutiques, « Que cherchez-vous ? ») ni du lecteur intégré. Ils restent justes que la voie C soit allumée ou coupée. Ils supposent que les messages et les collections marchent en production (migrations 0032 et 0033, appliquées le 9 novembre 2026). Les alertes prix et stock et les notifications dépendent d'un interrupteur du serveur (`PUSH_ENABLED`) et des migrations 0035 et 0036 : leur paragraphe est facultatif (partie 4), parce qu'une fiche ne doit décrire que ce que l'app fait vraiment (règle 2.3.1 d'Apple). Ils ne citent aucune marque d'une autre société (TikTok, Instagram, Google…) : la règle 2.3.7 d'Apple l'interdit dans les mots-clés, et c'est plus sûr ailleurs aussi.
 
 ---
 
@@ -92,8 +92,12 @@ VOS PIÈCES
 PARTAGEZ VOTRE STYLE
 Publiez vos tenues et vos achats, suivez d'autres passionnés de mode, aimez et commentez. Pour chaque publication, vous choisissez qui la voit : tout le monde, vos abonnés ou vous seul.
 
+ENTRE AMIS
+• Messages privés : écrivez à vos amis, ou envoyez une invitation à un autre membre, qui choisit de l'accepter ou non. Vous décidez qui peut vous écrire.
+• Collections : rangez vos envies par thème, pour vous seul ou pour vos amis.
+
 UN ESPACE RESPECTUEUX
-Les textes injurieux sont refusés avant publication. Vous pouvez signaler une publication, un commentaire ou un profil, et bloquer un compte. Chaque signalement est examiné par l'équipe de Spotto.
+Les textes injurieux sont refusés avant publication. Vous pouvez signaler une publication, un commentaire, un message, une collection ou un profil, et bloquer un compte. Chaque signalement est examiné par notre équipe.
 
 VOS DONNÉES
 Aucune publicité, aucune revente de vos données. Le partage de statistiques d'usage est facultatif. Depuis les Réglages, vous pouvez à tout moment télécharger toutes vos données ou supprimer votre compte.
@@ -104,7 +108,7 @@ BON À SAVOIR
 • Spotto ne vend rien lui-même : les liens ouvrent le site du marchand. Les résultats viennent d'une recherche visuelle et ne sont pas toujours exacts : vérifiez la pièce et son prix chez le marchand.
 • Spotto ne lit pas une vidéo à partir de son lien : faites plutôt une capture d'écran du bon moment.
 ```
-2 215 caractères.
+2 481 caractères.
 
 Anglais :
 ```text
@@ -129,8 +133,12 @@ YOUR PIECES
 SHARE YOUR STYLE
 Post your outfits and purchases, follow other fashion lovers, like and comment. For each post, you choose who sees it: everyone, your followers, or only you.
 
+WITH FRIENDS
+• Private messages: write to your friends, or send an invitation to another member, who chooses whether to accept it. You decide who can write to you.
+• Collections: group your wishes by theme, for yourself or for your friends.
+
 A RESPECTFUL SPACE
-Abusive text is refused before it is posted. You can report a post, a comment or a profile, and block an account. Every report is reviewed by the Spotto team.
+Abusive text is refused before it is posted. You can report a post, a comment, a message, a collection or a profile, and block an account. Every report is reviewed by our team.
 
 YOUR DATA
 No ads, and we never sell your data. Sharing usage statistics is optional. From Settings, you can download all your data or delete your account at any time.
@@ -141,10 +149,33 @@ GOOD TO KNOW
 • Spotto doesn't sell anything itself: links open the shop's website. Results come from a visual search and aren't always exact: check the piece and its price with the shop.
 • Spotto can't read a video from its link: take a screenshot of the right moment instead.
 ```
-1 886 caractères.
+2 146 caractères.
+
+**Paragraphe facultatif : alertes et notifications.** À insérer après « ENTRE AMIS » / « WITH FRIENDS » **seulement si**, le jour de l'envoi, `PUSH_ENABLED` vaut `true` chez Render et les migrations 0035 et 0036 sont appliquées en production (sinon l'app ne propose pas ces fonctions, et la fiche mentirait). Décision à prendre avec celle des notes ([NOTES-VALIDATION.md](NOTES-VALIDATION.md), partie 1, point 9).
+
+Français :
+```text
+ALERTES ET NOTIFICATIONS
+Activez la cloche d'une envie pour être prévenu quand son prix baisse ou quand elle revient en stock dans la même boutique. Vous pouvez aussi être prévenu d'un nouveau message. Tout est facultatif et se coupe dans les Réglages.
+```
+252 caractères (description complète avec lui : 2 735).
+
+Anglais :
+```text
+ALERTS AND NOTIFICATIONS
+Turn on the bell of a wish to be told when its price drops or when it is back in stock at the same shop. You can also be notified of a new message. Everything is optional and can be turned off in Settings.
+```
+230 caractères (description complète avec lui : 2 378).
+
+**À relire avant de coller** (ce sont vos affirmations, pas des faits que le code garantit seul) :
+- « Aucune publicité, aucune revente de vos données » : vrai aujourd'hui. À préciser le jour où un lien affilié rapporte une commission (décision 10 de l'audit, partie 2).
+- « Chaque signalement est examiné par notre équipe » : c'est vous ; l'audit demande qui vous remplace pendant vos absences (décision E).
+- Le nom de l'app apparaît dans ces textes : il changera avec le nouveau nom (partie 1).
 
 <!--
-Preuves (tout est vrai d'après le code de main b99e884) :
+Preuves (tout est vrai d'après le code de main b99e884 ; les lignes « 10 novembre 2026 » ont été relues sur la branche lot-conformite-apple) :
+- 10 novembre 2026 — messages privés, invitation acceptée ou non, « Qui peut m'écrire » : apps/backend/src/lib/messaging.ts:1-12, apps/mobile/src/i18n/fr.ts (messagesFromTitle) ; collections privées ou montrées aux amis : apps/mobile/src/i18n/en.ts (collections.shareConfirmTitle) ; signaler un message ou une collection : packages/shared-types/src/index.ts (REPORT_TARGET_TYPES), apps/mobile/src/app/(app)/conversation.tsx (bouton « ••• »), apps/mobile/src/app/(app)/collection-ami.tsx
+- 10 novembre 2026 — paragraphe facultatif : cloche d'une envie, baisse de prix et retour en stock dans la même boutique : fr.ts (wishAlerts.sheetIntro, kinds) ; notification d'un nouveau message : fr.ts (offerBody) ; interrupteurs des Réglages : apps/mobile/src/components/message-push-setting.tsx, wish-alerts-setting.tsx ; coupées par défaut sur le serveur : apps/backend/src/env.ts:82
 - capture, photo de la galerie, vidéo, appareil photo : apps/mobile/src/app/(app)/(tabs)/index.tsx:228-231 ; appareil photo : apps/mobile/src/lib/image-import.ts:59 (iPhone seulement, index.tsx:231)
 - entourer la pièce : apps/mobile/src/i18n/fr.ts:347-358
 - propositions avec prix d'abord : fr.ts:394 (« Meilleure proposition avec prix ») et :450 (« Sans prix affiché »)

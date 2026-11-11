@@ -6,6 +6,7 @@ import { CONTENT_NOT_ALLOWED, containsBannedWords } from "../lib/contentFilter.j
 import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
 import { findViewablePost } from "../lib/visibility.js";
 import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput } from "../lib/validation.js";
+import { withoutSuspendedFaces } from "../lib/profileModeration.js";
 
 // Commentaires (Lot F, section 5.A du programme) : à plat, ordre
 // chronologique, 1 000 caractères au plus. Seules les personnes qui peuvent
@@ -37,13 +38,17 @@ const POST_NOT_FOUND = { error: "post_not_found", message: "Publication introuva
 async function toComments(fastify: FastifyInstance, rows: CommentRow[], viewerId: string, postAuthorId: string): Promise<PostComment[]> {
   if (rows.length === 0) return [];
   const authorIds = [...new Set(rows.map((r) => r.user_id))];
-  const { data: profiles } = await fastify.supabaseAdmin
+  const { data: storedProfiles } = await fastify.supabaseAdmin
     .from("profiles")
     .select("id, username, display_name, avatar_url")
     .in("id", authorIds);
-  const byId = new Map(
-    ((profiles as { id: string; username: string | null; display_name: string; avatar_url: string | null }[]) ?? []).map((p) => [p.id, p])
+  // Lot « conformité Apple » : la photo d'un auteur suspendu n'est plus montrée aux autres.
+  const profiles = await withoutSuspendedFaces(
+    fastify,
+    (storedProfiles as { id: string; username: string | null; display_name: string; avatar_url: string | null }[]) ?? [],
+    viewerId
   );
+  const byId = new Map(profiles.map((p) => [p.id, p]));
   return rows.map((row) => {
     const profile = byId.get(row.user_id);
     const author: PostAuthor = {

@@ -11,6 +11,7 @@ import { PHOTO_SIZES, optimizePhoto } from "../lib/photos.js";
 import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.js";
 import { CONTENT_NOT_ALLOWED, containsBannedWords } from "../lib/contentFilter.js";
 import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
+import { withoutSuspendedFaces } from "../lib/profileModeration.js";
 
 // Une publication ne peut pas devenir une liste sans fin de tags — reste
 // large pour un usage légitime (plusieurs pièces sur une même tenue) sans
@@ -221,7 +222,7 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
   const vaultItemIds = [...new Set(rows.map((r) => r.vault_item_id).filter((id): id is string => !!id))];
   const postIds = rows.map((r) => r.id);
 
-  const [{ data: profiles }, { data: vaultItems }, { data: reactions }, { data: tagRows }, { data: commentRows }] = await Promise.all([
+  const [{ data: storedProfiles }, { data: vaultItems }, { data: reactions }, { data: tagRows }, { data: commentRows }] = await Promise.all([
     fastify.supabaseAdmin.from("profiles").select("id, username, display_name, avatar_url").in("id", authorIds),
     vaultItemIds.length > 0
       ? fastify.supabaseAdmin.from("vault_items").select("id, title, verified, image_url, product_match_id").in("id", vaultItemIds)
@@ -240,7 +241,9 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
     commentCountByPost.set(c.post_id, (commentCountByPost.get(c.post_id) ?? 0) + 1);
   }
 
-  const profileById = new Map(((profiles as ProfileRow[]) ?? []).map((p) => [p.id, p]));
+  // Lot « conformité Apple » : la photo d'un auteur suspendu n'est plus montrée aux autres.
+  const profiles = await withoutSuspendedFaces(fastify, (storedProfiles as ProfileRow[]) ?? [], viewerId);
+  const profileById = new Map(profiles.map((p) => [p.id, p]));
   const vaultItemById = new Map(((vaultItems as VaultItemRow[]) ?? []).map((v) => [v.id, v]));
 
   const reactionCountByPost = new Map<string, number>();

@@ -35,7 +35,10 @@ vi.mock("../src/lib/imageProcessing.js", async (importOriginal) => {
 // être effacées après chaque cas.
 vi.mock("../src/env.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/env.js")>();
-  return { env: { ...original.env, VOIE_C_ENABLED: false, VOIE_C_AI_ENABLED: false, ANTHROPIC_PHOTO_ENABLED: false } };
+  // Interrupteur des liens (lot « nettoyage avant le premier build ») : ALLUMÉ
+  // pour les cas d'avant (préparer un lien, lancer sur sa vignette) ; le cas
+  // « interrupteur des liens coupé » le coupe lui-même, puis le rallume.
+  return { env: { ...original.env, VOIE_C_ENABLED: false, VOIE_C_AI_ENABLED: false, ANTHROPIC_PHOTO_ENABLED: false, LINK_PREVIEW_ENABLED: true } };
 });
 vi.mock("../src/services/serpapi.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/services/serpapi.js")>();
@@ -184,6 +187,37 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     expect(search.status).toBe("pending");
     expect(search.thumbnailUrl).toBeNull();
     expect(search.previewIssue).toBe("unavailable");
+  });
+
+  it("interrupteur des liens coupé (valeur par défaut) : le lien est ignoré, rien n'en est enregistré, et une vignette d'avant n'est jamais téléchargée", async () => {
+    const { fetchOfficialPreview } = await import("../src/services/oembed.js");
+    // Préparée AVANT la coupure : la ligne a son lien et sa vignette.
+    const before = await prepare("https://www.tiktok.com/@x/video/1");
+    vi.mocked(fetchOfficialPreview).mockClear();
+    env.LINK_PREVIEW_ENABLED = false;
+    try {
+      const search = await prepare("https://www.tiktok.com/@x/video/1");
+      expect(search).toMatchObject({ status: "pending", sourceUrl: null, sourcePlatform: "photo", method: "manual_screenshot", thumbnailUrl: null, previewIssue: "no_official_access" });
+      expect(fetchOfficialPreview).not.toHaveBeenCalled();
+      const { data: row } = await app.supabaseAdmin.from("product_searches").select("source_url, source_platform, method, thumbnail_url").eq("id", search.id).single();
+      expect(row).toEqual({ source_url: null, source_platform: "photo", method: "manual_screenshot", thumbnail_url: null });
+
+      // Lancer sans capture la recherche d'avant : refusé, sans téléchargement ni appel SerpApi.
+      const refused = await run(before.id, {});
+      expect(refused.statusCode).toBe(422);
+      expect(refused.json().error).toBe("preview_unavailable");
+      expect(downloadMock).not.toHaveBeenCalled();
+      expect(searchMock).not.toHaveBeenCalled();
+
+      // Avec la capture de la personne : lancée comme avant, sans téléchargement.
+      const launched = await run(before.id, {}, IMAGE);
+      expect(launched.statusCode).toBe(200);
+      expect(launched.json().status).toBe("completed");
+      expect(downloadMock).not.toHaveBeenCalled();
+      expect(searchMock).toHaveBeenCalledOnce();
+    } finally {
+      env.LINK_PREVIEW_ENABLED = true;
+    }
   });
 
   it("préparer sans lien crée une recherche « photo » en attente d'image", async () => {

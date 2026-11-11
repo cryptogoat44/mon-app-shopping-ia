@@ -994,9 +994,20 @@ export const MODERATION_REASONS = [...REPORT_REASONS, "image_rights"] as const s
 
 /** Décisions possibles : classer sans suite, masquer un contenu, suspendre un
  * compte, et leurs annulations (rétablir, lever la suspension) ; retirer une
- * image copiée par Spotto (lot 5 : définitif, le fichier est effacé). */
-export type ModerationActionType = "dismiss" | "hide" | "suspend" | "restore" | "unsuspend" | "remove_image";
-export const MODERATION_ACTION_TYPES = ["dismiss", "hide", "suspend", "restore", "unsuspend", "remove_image"] as const satisfies readonly ModerationActionType[];
+ * image copiée par Spotto (lot 5 : définitif, le fichier est effacé) ;
+ * retirer la bio ou la photo d'un profil (lot modération des profils,
+ * migration 0037 : définitif aussi). */
+export type ModerationActionType = "dismiss" | "hide" | "suspend" | "restore" | "unsuspend" | "remove_image" | "remove_bio" | "remove_avatar";
+export const MODERATION_ACTION_TYPES = [
+  "dismiss",
+  "hide",
+  "suspend",
+  "restore",
+  "unsuspend",
+  "remove_image",
+  "remove_bio",
+  "remove_avatar",
+] as const satisfies readonly ModerationActionType[];
 export const MODERATION_DECISIONS = ["dismiss", "hide", "suspend"] as const satisfies readonly ModerationActionType[];
 export type ModerationDecision = (typeof MODERATION_DECISIONS)[number];
 /** Longueur maximale de la note d'une décision (montrée à la personne concernée). */
@@ -1122,6 +1133,11 @@ export interface ModerationItem {
   /** Lot 5 : l'image est une copie faite par Spotto (publication « envie »,
    * pièce envoyée), encore en place — elle peut être retirée. */
   canRemoveImage: boolean;
+  /** Lot modération des profils (migration 0037) : profil signalé dont la bio
+   * peut être retirée (il en a une, et la base a la migration). */
+  canRemoveBio: boolean;
+  /** Idem pour sa photo de profil. */
+  canRemoveAvatar: boolean;
   history: ModerationLogEntry[];
 }
 
@@ -1158,6 +1174,22 @@ export interface RemoveImageRequest {
   /** Collection seulement (obligatoire) : l'envie de la collection dont la
    * copie est retirée (ModerationCollectionItem.id). */
   itemId?: string;
+  note?: string;
+}
+
+/** Lot modération des profils (migration 0037 ; règle 1.2 d'Apple) : ce
+ * qu'un administrateur peut retirer d'un profil. */
+export const PROFILE_PARTS = ["bio", "avatar"] as const;
+export type ProfilePart = (typeof PROFILE_PARTS)[number];
+
+/** Retirer la bio ou la photo d'un profil : motif obligatoire (comme masquer
+ * ou suspendre), note facultative montrée à la personne. Définitif. Pour la
+ * photo, le serveur efface d'abord le fichier ; s'il n'y parvient pas, rien
+ * n'est changé. */
+export interface RemoveProfilePartRequest {
+  userId: string;
+  part: ProfilePart;
+  reason: ReportReason;
   note?: string;
 }
 

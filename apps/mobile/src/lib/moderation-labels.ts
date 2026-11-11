@@ -10,6 +10,7 @@ import {
   type ModerationNotice,
   type ModerationPreview,
   type ModerationReason,
+  type ProfilePart,
   type ReportReason,
 } from "@monapp/shared-types";
 import { t } from "../i18n";
@@ -81,8 +82,30 @@ export function collectionPreviewView(preview: Extract<ModerationPreview, { kind
   };
 }
 
+/** Lot « conformité Apple » (migration 0037) : ce que l'administrateur peut
+ * retirer d'un profil signalé — seulement ce que le serveur annonce
+ * (`canRemoveBio`, `canRemoveAvatar` : absents d'un ancien serveur ou sans
+ * la migration, donc rien). Pour chaque partie : le bouton, l'avertissement
+ * lu avant de confirmer, et le message de réussite. */
+export function profileRemovalActions(item: Pick<ModerationItem, "preview"> & Partial<Pick<ModerationItem, "canRemoveBio" | "canRemoveAvatar">>): {
+  part: ProfilePart;
+  label: string;
+  warning: string;
+  saved: string;
+}[] {
+  if (item.preview.kind !== "user") return [];
+  const q = t.moderationQueue;
+  return [
+    ...(item.canRemoveBio === true ? [{ part: "bio" as const, label: q.removeBio, warning: q.removeBioWarning, saved: q.bioRemovedSaved }] : []),
+    ...(item.canRemoveAvatar === true ? [{ part: "avatar" as const, label: q.removeAvatar, warning: q.removeAvatarWarning, saved: q.avatarRemovedSaved }] : []),
+  ];
+}
+
 function noticeSentence({ action, targetType }: ModerationNotice): string {
   const comment = targetType === "comment";
+  // Lot « conformité Apple » (migration 0037) : la bio ou la photo du profil.
+  if (action === "remove_bio") return t.notifications.moderationBioRemoved;
+  if (action === "remove_avatar") return t.notifications.moderationAvatarRemoved;
   // Lot 5, partie B : l'image copiée d'une envie partagée ; lot modération
   // des collections : celle d'une envie d'une collection montrée aux amis.
   if (action === "remove_image") {

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { BlockedUser } from "@monapp/shared-types";
 import { INVALID_ID, parseInput, userIdParamsSchema } from "../lib/validation.js";
+import { withoutSuspendedFaces } from "../lib/profileModeration.js";
 
 interface ProfileRow {
   id: string;
@@ -89,12 +90,14 @@ export default async function blocksRoutes(fastify: FastifyInstance) {
       return reply.send([]);
     }
 
-    const { data: profiles } = await fastify.supabaseAdmin
+    const { data: storedProfiles } = await fastify.supabaseAdmin
       .from("profiles")
       .select("id, username, display_name, avatar_url")
       .in("id", blockedIds);
+    // Lot « conformité Apple » : la photo d'un compte suspendu n'est plus montrée aux autres.
+    const profiles = await withoutSuspendedFaces(fastify, (storedProfiles as ProfileRow[]) ?? [], blockerId);
 
-    const profileById = new Map(((profiles as ProfileRow[]) ?? []).map((p) => [p.id, p]));
+    const profileById = new Map(profiles.map((p) => [p.id, p]));
 
     const result: BlockedUser[] = (rows ?? [])
       .map((row) => {
