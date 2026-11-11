@@ -18,7 +18,7 @@ import { INVALID_CURSOR, cursorQuerySchema, parseDbRows, parseInput } from "../l
 // une page pleine signale qu'il peut en rester.
 const PAGE_SIZE = 50;
 
-const ID = z.string().uuid();
+const ID = z.guid();
 const NOTIFICATION_ROWS = z.array(
   z.object({
     id: ID,

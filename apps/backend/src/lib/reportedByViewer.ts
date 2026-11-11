@@ -15,7 +15,7 @@ import { z } from "zod";
  * (filtre « not in »), qui doit rester courte. */
 export const REPORTED_IDS_LIMIT = 100;
 
-const ROWS = z.array(z.object({ target_id: z.string().uuid() }));
+const ROWS = z.array(z.object({ target_id: z.guid() }));
 
 /** Identifiants des contenus de ce type signalés par `viewerId`, les plus
  * récents d'abord. Lecture impossible : liste vide (le fil s'affiche quand

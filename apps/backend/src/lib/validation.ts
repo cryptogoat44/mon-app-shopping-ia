@@ -7,8 +7,12 @@ import { z } from "zod";
 // ...`) et comptaient sur Postgres pour refuser une valeur absurde — par
 // accident, et parfois avec une erreur 500 (POST /api/reports sans corps).
 
-export const idParamsSchema = z.object({ id: z.string().uuid() });
-export const userIdParamsSchema = z.object({ userId: z.string().uuid() });
+// Identifiants : z.guid() partout dans le serveur (8-4-4-4-12 caractères
+// hexadécimaux), la règle exacte du .uuid() de zod 3. Le z.uuid() de zod 4
+// est plus strict (numéro de version et variante) : il refuserait des
+// identifiants acceptés jusqu'ici.
+export const idParamsSchema = z.object({ id: z.guid() });
+export const userIdParamsSchema = z.object({ userId: z.guid() });
 
 /** Curseur de pagination : la date de création du dernier élément reçu,
  * normalisée en ISO. */
@@ -66,7 +70,7 @@ export function webUrlOrNull(value: string | null): string | null {
 /** Valide `value` avec `schema`. En cas d'échec, répond 400 avec le
  * contrat d'erreur habituel ({ error, message }) et renvoie null : l'appelant
  * n'a plus qu'à `return` immédiatement. */
-export function parseInput<S extends z.ZodTypeAny>(
+export function parseInput<S extends z.ZodType>(
   schema: S,
   value: unknown,
   reply: FastifyReply,
@@ -85,7 +89,7 @@ export class DatabaseReadError extends Error {}
 
 /** Relit une LISTE lue dans la base avec `schema`. Une erreur ou une forme
  * inattendue relève DatabaseReadError : jamais une liste vide par défaut. */
-export function parseDbRows<S extends z.ZodTypeAny>(schema: S, result: { data: unknown; error: unknown }, what: string): z.infer<S> {
+export function parseDbRows<S extends z.ZodType>(schema: S, result: { data: unknown; error: unknown }, what: string): z.infer<S> {
   if (result.error) throw new DatabaseReadError(`${what} : lecture impossible`);
   const parsed = schema.safeParse(result.data ?? []);
   if (!parsed.success) throw new DatabaseReadError(`${what} : réponse illisible`);

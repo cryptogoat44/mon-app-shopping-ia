@@ -34,7 +34,7 @@ const ADMIN_ACCOUNT_DELETION = {
   message: "Ce compte est administrateur et ne peut pas être supprimé tant qu'il a ce rôle. Retirez d'abord le rôle d'administrateur, puis recommencez.",
 } as const;
 const RECEIVED_PIECE_ROWS = z.array(
-  z.object({ sender_id: z.string().uuid(), image_url: z.string().nullable(), image_thumb_url: z.string().nullable() })
+  z.object({ sender_id: z.guid(), image_url: z.string().nullable(), image_thumb_url: z.string().nullable() })
 );
 
 const recordConsentsSchema = z.object({

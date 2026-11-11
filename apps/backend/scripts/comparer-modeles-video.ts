@@ -57,7 +57,7 @@ const ATTENDU = z.union([z.tuple([z.number(), z.number()]), z.literal("aucun")])
 const CAS = z.object({ fichier: z.string().min(1), description: z.string().min(2), attendu: ATTENDU.optional() });
 const DESCRIPTIONS = z.union([
   z.array(CAS).min(1),
-  z.record(z.union([z.string().min(2), z.object({ description: z.string().min(2), attendu: ATTENDU.optional() })])),
+  z.record(z.string(), z.union([z.string().min(2), z.object({ description: z.string().min(2), attendu: ATTENDU.optional() })])),
 ]);
 
 /** Plage de secondes où la pièce est bien visible ; « aucun » : elle n'apparaît pas dans la vidéo. */

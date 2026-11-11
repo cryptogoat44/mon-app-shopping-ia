@@ -49,12 +49,12 @@ async function evaluer(expression: string): Promise<unknown> {
 const CIBLES = z.array(z.object({ webSocketDebuggerUrl: z.string().optional(), title: z.string().optional(), description: z.string().optional() }));
 const REPONSE_CDP = z.object({
   id: z.number().optional(),
-  result: z.object({ result: z.object({ value: z.unknown() }).optional(), exceptionDetails: z.object({ text: z.string().optional() }).optional() }).optional(),
+  result: z.object({ result: z.object({ value: z.unknown().optional() }).optional(), exceptionDetails: z.object({ text: z.string().optional() }).optional() }).optional(),
 });
 const RESULTAT = z.object({ envois: z.array(z.string()), fini: z.boolean(), hote: z.string() });
 // Paquet Sentry : [en-tête, [[en-tête d'élément, contenu], …]].
 const PAQUET = z.tuple([z.unknown(), z.array(z.tuple([z.unknown(), z.unknown()]))]);
-const EVENEMENT = z.object({ user: z.unknown(), environment: z.string().optional(), contexts: z.record(z.unknown()).optional() });
+const EVENEMENT = z.object({ user: z.unknown().optional(), environment: z.string().optional(), contexts: z.record(z.string(), z.unknown()).optional() });
 
 // Exécuté dans l'app : branche l'interception, lève l'erreur de test, range le résultat.
 const LANCER = `(() => {

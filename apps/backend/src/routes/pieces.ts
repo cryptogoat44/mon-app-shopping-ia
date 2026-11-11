@@ -21,7 +21,7 @@ import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
 const RECEIVED_PAGE_SIZE = 24;
 
 const republishSchema = z.object({ privacy: z.enum(PRIVACY_LEVELS) });
-const sendSchema = z.object({ recipientId: z.string().uuid() });
+const sendSchema = z.object({ recipientId: z.guid() });
 
 const WISH_NOT_FOUND = { error: "wishlist_item_not_found", message: "Envie introuvable." } as const;
 const IMAGE_UNAVAILABLE = {
@@ -35,7 +35,7 @@ const RECIPIENT_NOT_ACCEPTING = {
   message: "Cette personne ne reçoit pas de pièces de votre part.",
 } as const;
 
-const ID = z.string().uuid();
+const ID = z.guid();
 const RECIPIENT_ROWS = z.array(z.object({ id: ID, username: z.string().nullable(), piece_sends_from: z.enum(PIECE_SENDS_FROM) }));
 const PIECE_ROWS = z.array(
   z.object({

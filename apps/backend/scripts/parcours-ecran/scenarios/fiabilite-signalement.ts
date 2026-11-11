@@ -100,7 +100,7 @@ async function rechercheFaite(p: Parcours, compte: TestAccount, nombre = PIECES.
 
 async function motifsRanges(p: Parcours, compte: TestAccount): Promise<string[]> {
   const { data } = await p.admin.from("match_feedback").select("*").eq("user_id", compte.id);
-  const lignes = z.array(z.record(z.unknown())).parse(data ?? []);
+  const lignes = z.array(z.record(z.string(), z.unknown())).parse(data ?? []);
   for (const ligne of lignes) {
     check(Object.keys(ligne).sort().join(",") === "created_at,id,match_id,reason,updated_at,user_id", "seul le motif est rangé, rien d'autre");
   }

@@ -12,7 +12,7 @@ import { findOwnMatch } from "../lib/ownMatches.js";
 import { shownPosts } from "../lib/visibility.js";
 import { observePurchase } from "../lib/wishObserve.js";
 
-const SHARED_POST_ROWS = z.array(z.object({ id: z.string().uuid(), privacy: z.enum(PRIVACY_LEVELS), created_at: z.string() }));
+const SHARED_POST_ROWS = z.array(z.object({ id: z.guid(), privacy: z.enum(PRIVACY_LEVELS), created_at: z.string() }));
 
 const VAULT_CATEGORIES: VaultCategory[] = [
   "clothing",
@@ -28,7 +28,7 @@ const VAULT_CATEGORIES: VaultCategory[] = [
 // confidentialité par pièce ; un champ « privacy » encore envoyé par un
 // ancien client est simplement ignoré.
 const vaultOptionalFieldsSchema = z.object({
-  productMatchId: z.string().uuid().optional(),
+  productMatchId: z.guid().optional(),
 });
 
 const updateVaultItemSchema = z.object({

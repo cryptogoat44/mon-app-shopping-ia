@@ -19,7 +19,7 @@
 
 import { createHash } from "node:crypto";
 import type { FastifyBaseLogger } from "fastify";
-import type { ZodType, ZodTypeDef } from "zod";
+import type { ZodType } from "zod";
 
 /** Étapes mises en cache (contrainte search_cache.step, 0028). */
 export type CacheStep = "lens" | "query" | "shopping";
@@ -127,7 +127,7 @@ const ROW_SHAPE = (row: unknown): row is { payload: unknown; expires_at: string 
 export async function readCache<T>(
   db: CacheDb,
   key: string,
-  schema: ZodType<T, ZodTypeDef, unknown>,
+  schema: ZodType<T>,
   log: CacheLog,
   signal: AbortSignal
 ): Promise<T | null> {

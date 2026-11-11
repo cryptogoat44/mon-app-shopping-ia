@@ -52,7 +52,7 @@ export const SELF_MESSAGE = { error: "invalid_body", message: "Vous ne pouvez pa
 export const INVITATION_COLUMNS = ["none", "sent", "received", "declined"] as const;
 export type InvitationColumn = (typeof INVITATION_COLUMNS)[number];
 
-const ID = z.string().uuid();
+const ID = z.guid();
 const TIMESTAMP = z.string().min(1);
 
 export const SIDE_COLUMNS = "conversation_id, user_id, other_user_id, invitation, invitation_at, unread, last_read_at, cleared_at, last_message_at";

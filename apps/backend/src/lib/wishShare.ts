@@ -19,7 +19,7 @@ export const WISH_COPY_BUCKET = "post-media";
 
 export class WishImageError extends Error {}
 
-const ID = z.string().uuid();
+const ID = z.guid();
 export const wishRowSchema = z.object({
   id: ID,
   user_id: ID,

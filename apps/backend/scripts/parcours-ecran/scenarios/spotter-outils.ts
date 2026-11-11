@@ -6,7 +6,7 @@ import { z } from "zod";
 import type { Parcours, TestAccount } from "../boite-a-outils.js";
 import { BACKGROUND, ENGLISH, FRENCH, LANGUAGE_NAMES, screenText, type Combo } from "./lot-3.js";
 
-const ENVOI = z.object({ event: z.string().optional(), properties: z.record(z.unknown()).optional() });
+const ENVOI = z.object({ event: z.string().optional(), properties: z.record(z.string(), z.unknown()).optional() });
 const COULEUR = z.array(z.number()).length(3).nullable();
 
 export type Envoi = { event: string; properties: Record<string, unknown> };

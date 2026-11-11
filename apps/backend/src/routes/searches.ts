@@ -88,7 +88,14 @@ import { observeResults, type ObservationSource, type ObservedRow } from "../lib
 import { purgeWishAlerts } from "../lib/wishAlertsSend.js";
 
 const createSearchSchema = z.object({
-  sourceUrl: z.string().url().max(2048).optional(),
+  // Lien lisible par le parseur d'URL standard, gardé tel qu'il a été envoyé
+  // (règle inchangée depuis zod 3 ; le .url() de zod 4, lui, retirerait les
+  // espaces et les retours à la ligne avant de le ranger).
+  sourceUrl: z
+    .string()
+    .refine((value) => URL.canParse(value))
+    .max(2048)
+    .optional(),
 });
 
 const SIGNED_URL_TTL_SECONDS = 300;

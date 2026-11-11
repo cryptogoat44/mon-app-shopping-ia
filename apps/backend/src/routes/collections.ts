@@ -69,7 +69,7 @@ import { toWishlistItem, type WishlistItemRow } from "./wishlist.js";
 const OWN_PAGE_SIZE = 24;
 const SHARED_PAGE_SIZE = 30;
 
-const ID = z.string().uuid();
+const ID = z.guid();
 // Date d'ajout telle que la base la renvoie (microsecondes comprises), jamais
 // réécrite : la page suivante ne saute ni ne répète aucune envie.
 const TIMESTAMP_PARAM = z

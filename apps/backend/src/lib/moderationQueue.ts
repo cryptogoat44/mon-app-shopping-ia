@@ -37,7 +37,7 @@ const HISTORY_LIMIT = 10;
 /** Garde-fou de lecture du journal pour une page de la file. */
 const ACTIONS_READ_LIMIT = 1000;
 
-const ID = z.string().uuid();
+const ID = z.guid();
 const TIMESTAMP = z.string().min(1);
 const TARGET_TYPE = z.enum(REPORT_TARGET_TYPES);
 const REASON = z.enum(REPORT_REASONS);
@@ -48,7 +48,9 @@ export const QUEUE_ROWS = z.array(
     target_type: TARGET_TYPE,
     target_id: ID,
     report_count: z.number().int().positive(),
-    reasons: z.record(REASON, z.number().int().positive()),
+    // partialRecord : un motif absent reste permis, comme avec zod 3 (le
+    // z.record de zod 4 exigerait tous les motifs à chaque ligne).
+    reasons: z.partialRecord(REASON, z.number().int().positive()),
     notes: z.array(z.string()),
     first_at: TIMESTAMP,
     last_at: z.string().datetime({ offset: true }),

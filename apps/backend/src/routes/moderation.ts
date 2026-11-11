@@ -35,7 +35,7 @@ const noteSchema = z.string().trim().max(MODERATION_NOTE_MAX_LENGTH).optional();
 const decisionSchema = z
   .object({
     targetType: z.enum(REPORT_TARGET_TYPES),
-    targetId: z.string().uuid(),
+    targetId: z.guid(),
     action: z.enum(MODERATION_DECISIONS),
     reason: z.enum(REPORT_REASONS).optional(),
     note: noteSchema,
@@ -47,11 +47,11 @@ const undoSchema = z.object({ note: noteSchema });
 
 // Une collection : `itemId`, l'envie de la collection dont la copie est retirée.
 const removeImageSchema = z.union([
-  z.object({ targetType: z.enum(["post", "piece"]), targetId: z.string().uuid(), note: noteSchema }),
-  z.object({ targetType: z.literal("collection"), targetId: z.string().uuid(), itemId: z.string().uuid(), note: noteSchema }),
+  z.object({ targetType: z.enum(["post", "piece"]), targetId: z.guid(), note: noteSchema }),
+  z.object({ targetType: z.literal("collection"), targetId: z.guid(), itemId: z.guid(), note: noteSchema }),
 ]);
 
-const OUTCOME = z.array(z.object({ outcome: z.string(), action_id: z.string().uuid().nullable() })).length(1);
+const OUTCOME = z.array(z.object({ outcome: z.string(), action_id: z.guid().nullable() })).length(1);
 
 const INVALID_DECISION = { error: "invalid_body", message: "Décision invalide." };
 const REFUSALS: Record<string, { status: number; error: string; message: string }> = {

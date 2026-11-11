@@ -5,7 +5,7 @@ import { fetchBlockedUserIds } from "../lib/blocks.js";
 import { INVALID_ID, idParamsSchema, parseDbRows, parseInput } from "../lib/validation.js";
 import { shownPosts } from "../lib/visibility.js";
 
-const TAGGING_POST_ROWS = z.array(z.object({ user_id: z.string().uuid(), privacy: z.enum(PRIVACY_LEVELS) }));
+const TAGGING_POST_ROWS = z.array(z.object({ user_id: z.guid(), privacy: z.enum(PRIVACY_LEVELS) }));
 
 const clickBodySchema = z.object({ context: z.enum(MERCHANT_LINK_CONTEXTS).optional() }).optional();
 
@@ -19,8 +19,8 @@ async function isOwnSearchMatch(fastify: FastifyInstance, searchId: string, user
   return !!data;
 }
 
-const ID_ROWS = z.array(z.object({ id: z.string().uuid() }));
-const SENDER_ROWS = z.array(z.object({ sender_id: z.string().uuid() }));
+const ID_ROWS = z.array(z.object({ id: z.guid() }));
+const SENDER_ROWS = z.array(z.object({ sender_id: z.guid() }));
 
 /** Publications qui montrent ce produit : pièce taguée, ou publication
  * « envie » (lot 5) dont l'envie vient de ce résultat. */
