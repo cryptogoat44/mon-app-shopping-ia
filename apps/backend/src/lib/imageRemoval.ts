@@ -29,7 +29,7 @@ export type ImageRemovalTarget = Exclude<(typeof IMAGE_REMOVAL_TARGET_TYPES)[num
  * l'envie d'une collection n'a pas de copie (déjà montrée sans image). */
 export type ImageErasureRefusal = "target_not_found" | "not_a_copy" | "no_copy" | "already_removed" | "shared_copy" | "storage_failed";
 
-const ID = z.string().uuid();
+const ID = z.guid();
 const POST_ROWS = z.array(
   z.object({
     user_id: ID,

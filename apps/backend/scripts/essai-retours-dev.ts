@@ -25,7 +25,7 @@ const AVANT_0025 = ["0", "false"];
 /** Listes du journal avant 0026, telles que la base les décrit. */
 const LISTE_DECISIONS = "CHECK ((action = ANY (ARRAY['dismiss'::text, 'hide'::text, 'suspend'::text, 'restore'::text, 'unsuspend'::text])))";
 const LISTE_MOTIFS = "CHECK (((reason IS NULL) OR (reason = ANY (ARRAY['spam'::text, 'inappropriate'::text, 'harassment'::text, 'other'::text]))))";
-const LIGNES = z.array(z.record(z.unknown()));
+const LIGNES = z.array(z.record(z.string(), z.unknown()));
 const CONTROLE = z.object({ pret_pour_les_migrations: z.boolean(), liste_decisions_actuelle: z.string().nullable(), liste_motifs_actuelle: z.string().nullable() });
 
 const lire = (nom: string) => readFileSync(resolve(DOCS, nom), "utf8");

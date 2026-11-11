@@ -12,7 +12,7 @@ import { COLLECTION_MODERATION_UNAVAILABLE, canReportCollection, collectionModer
 // collection montrée par un ami (« collection », migration 0034).
 const createReportSchema = z.object({
   targetType: z.enum(REPORT_TARGET_TYPES),
-  targetId: z.string().uuid(),
+  targetId: z.guid(),
   reason: z.enum(REPORT_REASONS),
   note: z.string().max(2000).optional(),
 });

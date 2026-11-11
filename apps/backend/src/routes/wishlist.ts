@@ -22,7 +22,7 @@ const createWishlistItemSchema = z
     currency: z.string().trim().max(3).nullish(),
     merchantName: z.string().trim().max(120).nullish(),
     merchantUrl: z.string().nullish(),
-    productMatchId: z.string().uuid().nullish(),
+    productMatchId: z.guid().nullish(),
   })
   // Liens vérifiés quand ce sont eux qui sont rangés : envie sans résultat du
   // Spotter. Avec un résultat, ceux de la base les remplacent (plus bas) et la

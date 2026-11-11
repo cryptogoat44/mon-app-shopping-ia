@@ -73,7 +73,7 @@ const POLL_MAX = 100;
 const LIST_PAGE_SIZE = 50;
 const INVITATIONS_MAX = 50;
 
-const ID = z.string().uuid();
+const ID = z.guid();
 // Date d'un message telle que la base la renvoie (microsecondes comprises),
 // jamais réécrite : une relecture `after` ne renvoie pas le dernier message reçu.
 const TIMESTAMP_PARAM = z

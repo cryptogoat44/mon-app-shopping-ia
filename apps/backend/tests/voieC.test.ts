@@ -109,7 +109,7 @@ function fakeCache() {
   const entries = new Map<string, { step: CacheStep; payload: unknown }>();
   return {
     entries,
-    readCache: async <T>(key: string, schema: z.ZodType<T, z.ZodTypeDef, unknown>): Promise<T | null> => {
+    readCache: async <T>(key: string, schema: z.ZodType<T>): Promise<T | null> => {
       const entry = entries.get(key);
       if (!entry) return null;
       const parsed = schema.safeParse(entry.payload);

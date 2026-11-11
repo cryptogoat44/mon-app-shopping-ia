@@ -114,7 +114,7 @@ async function preparer(p: Parcours, combo: Combo): Promise<Comptes> {
   form.append("privacy", "public");
   form.append("caption", "Kelly 28");
   form.append("file", new Blob([new Uint8Array(photo)], { type: "image/jpeg" }), "kelly.jpg");
-  const post = z.object({ id: z.string().uuid() }).parse(await (await ok(await p.api(louise, "POST", "/api/posts", form), "publication de Louise")).json());
+  const post = z.object({ id: z.guid() }).parse(await (await ok(await p.api(louise, "POST", "/api/posts", form), "publication de Louise")).json());
   await ok(await p.api(camille, "POST", `/api/follows/${louise.id}`), "abonnement de Camille");
   await ok(await p.api(camille, "POST", "/api/reports", { targetType: "post", targetId: post.id, reason: "harassment", note: "✦ 1" }), "signalement");
   await ok(await p.api(camille, "POST", "/api/reports", { targetType: "user", targetId: louise.id, reason: "spam", note: "✦ 2" }), "signalement");

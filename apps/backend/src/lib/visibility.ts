@@ -57,7 +57,7 @@ export async function canViewPost(
   return isFollowing(fastify, viewerId, post.user_id);
 }
 
-const postRefSchema = z.object({ id: z.string().uuid(), user_id: z.string().uuid(), privacy: z.enum(PRIVACY_LEVELS) });
+const postRefSchema = z.object({ id: z.guid(), user_id: z.guid(), privacy: z.enum(PRIVACY_LEVELS) });
 export type PostRef = z.infer<typeof postRefSchema>;
 
 /** La publication `postId` si ce visiteur peut la voir (masquage, blocages,

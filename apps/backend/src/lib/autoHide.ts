@@ -46,7 +46,7 @@ export interface AutoHideLog {
 /** Fonction inconnue : code de Postgres, puis celui de PostgREST (absente de son cache de schéma). */
 const MISSING_FUNCTION_CODES = new Set(["42883", "PGRST202"]);
 const RETRY_MS = 5 * 60_000;
-const OUTCOME = z.array(z.object({ outcome: z.string(), action_id: z.string().uuid().nullable() })).length(1);
+const OUTCOME = z.array(z.object({ outcome: z.string(), action_id: z.guid().nullable() })).length(1);
 
 let missingAt: number | null = null;
 

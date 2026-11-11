@@ -134,7 +134,7 @@ async function compteOrdinaire(p: Parcours, combo: Combo, envois: Envoi[], probl
   form.append("file", new Blob([new Uint8Array(photo)], { type: "image/jpeg" }), "kelly.jpg");
   const publication = await p.api(louise, "POST", "/api/posts", form);
   check(publication.ok, `publication de Louise (${publication.status})`);
-  z.object({ id: z.string().uuid() }).parse(await publication.json());
+  z.object({ id: z.guid() }).parse(await publication.json());
   const avant = await p.admin.storage.from("post-media").list(louise.id);
   check((avant.data ?? []).length >= 1, "photo de la publication enregistrée");
 

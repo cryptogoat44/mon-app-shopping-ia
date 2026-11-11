@@ -13,10 +13,10 @@ import { DatabaseReadError, parseDbRows } from "./validation.js";
 export const PRODUCT_MATCH_NOT_FOUND = { error: "product_match_not_found", message: "Produit introuvable." } as const;
 
 const OWN_MATCH_ROW = z.object({
-  id: z.string().uuid(),
+  id: z.guid(),
   image_url: z.string(),
   merchant_url: z.string(),
-  product_searches: z.object({ user_id: z.string().uuid() }),
+  product_searches: z.object({ user_id: z.guid() }),
 });
 
 /** Un résultat d'une recherche de la personne, avec ses liens tels que la
@@ -46,8 +46,8 @@ export async function findOwnMatch(fastify: FastifyInstance, userId: string, mat
 
 const MATCH_CARD_COLUMNS = "id, search_id, product_name, brand, image_url, price_min, currency, merchant_name, merchant_url";
 const MATCH_CARD_ROW = z.object({
-  id: z.string().uuid(),
-  search_id: z.string().uuid(),
+  id: z.guid(),
+  search_id: z.guid(),
   product_name: z.string(),
   brand: z.string().nullable(),
   image_url: z.string(),
@@ -59,7 +59,7 @@ const MATCH_CARD_ROW = z.object({
 });
 /** Un résultat tel que la recherche l'a rangé (venu du fournisseur). */
 export type OwnMatchRow = z.infer<typeof MATCH_CARD_ROW>;
-const SEARCH_ROWS = z.array(z.object({ id: z.string().uuid() }));
+const SEARCH_ROWS = z.array(z.object({ id: z.guid() }));
 
 /** Le résultat `matchId`, avec ce qu'une carte de message en reprend, s'il
  * vient d'une recherche de `userId` ; null sinon (inexistant ou recherche

@@ -6,7 +6,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { chunks } from "./pagedReads.js";
 
-const KEPT_ROWS = z.array(z.object({ product_match_id: z.string().uuid().nullable() }));
+const KEPT_ROWS = z.array(z.object({ product_match_id: z.guid().nullable() }));
 
 /** Parmi `matchIds`, les propositions que `userId` a déjà dans `table`.
  * « Gardée » et « Ajoutée au Vault » ne sont qu'un repère : lecture

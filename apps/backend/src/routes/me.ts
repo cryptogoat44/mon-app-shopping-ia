@@ -27,7 +27,7 @@ const updateMessagesFromSchema = z.object({ messagesFrom: z.enum(MESSAGES_FROM) 
 
 // Ligne brute de la table `profiles` (colonnes en snake_case, cf. schema.sql), relue sans lui faire confiance.
 const profileRowSchema = z.object({
-  id: z.string().uuid(),
+  id: z.guid(),
   username: z.string().nullable(),
   display_name: z.string(),
   avatar_url: z.string().nullable(),
