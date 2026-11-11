@@ -37,7 +37,6 @@ const INTERNES: RegExp[] = [
   /spotto-(?:verification-robot|player)/g, // étiquettes des messages entre l'app et ses pages
   /data-spotto/g, // marque posée sur le lecteur intégré
   /spottoTurnstileLoaded/g, // fonction de la page anti-robots
-  /SpottoFrameCapture/g, // module natif local (modules/spotto-frame-capture)
   /x-spotto-build/g, // en-tête technique entre l'app et le serveur
   /spotto-api\.onrender\.com/g, // adresse du service Render (se change à la main, MARQUE.md)
   /spotto-(?:prod|dev)(?:-\d)?/g, // noms des projets Supabase, cités au fondateur pendant un build

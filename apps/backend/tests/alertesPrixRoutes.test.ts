@@ -412,6 +412,111 @@ describe("la cloche d'une envie", () => {
   });
 });
 
+// Assemblage du build : ces routes, écrites pour zod 3, relisent maintenant
+// leurs identifiants avec z.guid() (zod 4). Mêmes refus et mêmes codes
+// d'erreur qu'avant ; et un identifiant accepté par zod 3 l'est toujours.
+describe("entrées des routes après le passage à zod 4 : mêmes refus, mêmes codes d'erreur", () => {
+  const MAL_FORMES = [
+    "pas-un-identifiant",
+    "e0000000-0000-4000-8000-00000000000", // un caractère de moins
+    "e0000000-0000-4000-8000-0000000000088", // un caractère de plus
+    "e0000000000040008000000000000008", // sans tirets
+    "{e0000000-0000-4000-8000-000000000008}",
+    "e0000000-0000-4000-8000-00000000000g",
+    "e0000000-0000-4000-8000-000000000008\n",
+    " e0000000-0000-4000-8000-000000000008",
+    "e0000000-0000-4000-8000-000000000008,id.neq.x",
+  ];
+  // Sans numéro de version ni variante RFC : lus par le .uuid() de zod 3,
+  // donc toujours lus (le z.uuid() de zod 4, plus strict, les refuserait).
+  const SANS_VERSION = ["00000000-0000-0000-0000-000000000000", "E0000000-0000-0000-0000-00000000ABCD", "ffffffff-ffff-ffff-ffff-ffffffffffff"];
+
+  it("identifiant d'une envie dans l'adresse : mal formé, 400 « invalid_params », rien n'est lu ni écrit ; bien formé mais inconnu, 404", async () => {
+    const fake = seeded();
+    const target = await alertsApp(fake.db);
+    for (const id of MAL_FORMES) {
+      const url = `/api/wishlist/${encodeURIComponent(id)}/alerts`;
+      for (const res of [await as(target, ALICE).get(url), await as(target, ALICE).put(url, { priceDrop: true, restock: true })]) {
+        expect(res.statusCode, JSON.stringify(id)).toBe(400);
+        expect(res.json()).toEqual({ error: "invalid_params", message: "Identifiant invalide." });
+      }
+    }
+    for (const id of SANS_VERSION) {
+      for (const res of [await as(target, ALICE).get(`/api/wishlist/${id}/alerts`), await as(target, ALICE).put(`/api/wishlist/${id}/alerts`, { priceDrop: true, restock: true })]) {
+        expect(res.statusCode, id).toBe(404);
+        expect(res.json()).toMatchObject({ error: "wishlist_item_not_found" });
+      }
+    }
+    expect(fake.table("wish_watches")).toHaveLength(0);
+    expect(fake.table("wish_tracking")).toHaveLength(0);
+  });
+
+  it("« Plus disponible » : identifiant mal formé, champ en trop, deux identifiants, aucun ou corps absent : 400 « invalid_body », rien n'est signalé", async () => {
+    const fake = seeded();
+    const target = await alertsApp(fake.db);
+    const refuses: (object | undefined)[] = [
+      ...MAL_FORMES.flatMap((id) => [{ wishlistItemId: id }, { productMatchId: id }]),
+      { wishlistItemId: OLD_WISH, autre: 1 },
+      { productMatchId: MATCH, autre: 1 },
+      { wishlistItemId: OLD_WISH, productMatchId: MATCH },
+      { wishlistItemId: [OLD_WISH] },
+      { productMatchId: null },
+      {},
+      undefined,
+    ];
+    for (const payload of refuses) {
+      const res = await as(target, ALICE).post("/api/alerts/stock-reports", payload);
+      expect(res.statusCode, JSON.stringify(payload)).toBe(400);
+      expect(res.json()).toEqual({ error: "invalid_body", message: "Requête invalide." });
+    }
+    expect(ownMatchMock).not.toHaveBeenCalled();
+    expect(rpcCalls.filter((call) => call.fn === "wish_stock_report")).toEqual([]);
+    // Bien formés (même sans numéro de version) : lus, puis introuvables.
+    ownMatchMock.mockResolvedValue(null);
+    for (const id of SANS_VERSION) {
+      const wish = await as(target, ALICE).post("/api/alerts/stock-reports", { wishlistItemId: id });
+      expect(wish.statusCode, id).toBe(404);
+      expect(wish.json()).toMatchObject({ error: "wishlist_item_not_found" });
+      const match = await as(target, ALICE).post("/api/alerts/stock-reports", { productMatchId: id });
+      expect(match.statusCode, id).toBe(404);
+      expect(match.json()).toMatchObject({ error: "product_match_not_found" });
+      expect(ownMatchMock).toHaveBeenLastCalledWith(expect.anything(), ALICE, id);
+    }
+    expect(rpcCalls.filter((call) => call.fn === "wish_stock_report")).toEqual([]);
+  });
+
+  it("cloche et interrupteur : un réglage absent ou qui n'est pas un vrai booléen : 400 « invalid_body », rien n'est enregistré", async () => {
+    const fake = seeded();
+    const target = await alertsApp(fake.db);
+    const wish = await newWish(target, { merchantUrl: SHOP_URL, merchantName: "Boutique Exemple" });
+    const cloches: object[] = [
+      {},
+      { priceDrop: true },
+      { restock: true },
+      { priceDrop: "true", restock: true },
+      { priceDrop: 1, restock: 0 },
+      { priceDrop: null, restock: true },
+      { priceDrop: true, restock: false, soldOut: "oui" },
+      { priceDrop: true, restock: false, soldOut: null },
+      { priceDrop: true, restock: false, enableAlerts: "true" },
+      { priceDrop: true, restock: false, enableAlerts: 1 },
+      [true, true],
+    ];
+    for (const payload of cloches) {
+      const res = await as(target, ALICE).put(`/api/wishlist/${wish}/alerts`, payload);
+      expect(res.statusCode, JSON.stringify(payload)).toBe(400);
+      expect(res.json()).toEqual({ error: "invalid_body", message: "Requête invalide." });
+    }
+    expect(fake.table("wish_watches")).toHaveLength(0);
+    for (const payload of [{}, { enabled: "true" }, { enabled: 1 }, { enabled: null }, { activé: true }, [true]] as object[]) {
+      const res = await as(target, ALICE).put("/api/alerts/settings", payload);
+      expect(res.statusCode, JSON.stringify(payload)).toBe(400);
+      expect(res.json()).toEqual({ error: "invalid_body", message: "Requête invalide." });
+    }
+    expect((await as(target, ALICE).get("/api/alerts/status")).json()).toMatchObject({ enabled: false });
+  });
+});
+
 describe("l'interrupteur des Réglages et les appareils", () => {
   it("un appareil reste enregistré tant que les messages OU les alertes sont allumés", async () => {
     const fake = seeded();

@@ -59,7 +59,7 @@ Ces endroits ne sont pas dans le code de l'app : le fichier unique ne peut pas l
 | **Apple et Expo** | Voir la section 3 : une fois enregistrés, l'identifiant et le projet ne se renomment pas simplement. |
 | **Identité de l'éditeur** | Rien à voir avec le nom du produit : elle vient des variables `EXPO_PUBLIC_PUBLISHER_*` (`apps/mobile/src/legal/publisher.ts`). |
 
-Ce qui garde l'ancien nom de travail, exprès, parce que personne ne le voit : le nom des dossiers et des paquets, les clés de rangement sur l'appareil (`spotto.langue`, `spotto.apparence`…), l'en-tête technique `x-spotto-build`, le module natif `SpottoFrameCapture`, les commentaires du code, les données des tests, les scripts et les documents internes.
+Ce qui garde l'ancien nom de travail, exprès, parce que personne ne le voit : le nom des dossiers et des paquets, les clés de rangement sur l'appareil (`spotto.langue`, `spotto.apparence`…), l'en-tête technique `x-spotto-build`, les commentaires du code, les données des tests, les scripts et les documents internes.
 
 ## 3. À choisir AVANT
 

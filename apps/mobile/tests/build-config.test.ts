@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
+import marque from "@monapp/shared-types/marque.json";
 
 // Lot « app iPhone prête » (chantier 4, points 2 et 11) : réglages des builds
 // iPhone. Les adresses et la clé publique ne sont plus écrites dans eas.json :
@@ -237,6 +238,44 @@ describe("contrôle au début d'un build EAS (scripts/verifier-build.js)", () =>
     expect(avertissements[0]).toContain("EXPO_PUBLIC_POSTHOG_KEY");
   });
 
+  // Assemblage des lots « conformité Apple » et « nom configurable » : le nom
+  // montré au fondateur pendant un build vient du fichier unique de la marque
+  // (MARQUE.md), et de lui seul. Prouvé en lançant une copie du script à côté
+  // d'un fichier de la marque qui porte un autre nom.
+  it("nom du produit : lu dans le fichier unique de la marque — avec un autre nom, plus aucun message ne porte l'ancien", () => {
+    const AUTRE_NOM = "Zorglub Été";
+    const depot = mkdtempSync(join(tmpdir(), "marque-build-"));
+    try {
+      mkdirSync(join(depot, "apps/mobile/scripts"), { recursive: true });
+      mkdirSync(join(depot, "packages/shared-types"), { recursive: true });
+      writeFileSync(join(depot, "apps/mobile/scripts/verifier-build.js"), lire("../scripts/verifier-build.js"));
+      writeFileSync(join(depot, "packages/shared-types/marque.json"), JSON.stringify({ ...marque, nom: AUTRE_NOM }));
+      const lancer = (reglages: Record<string, string>) =>
+        spawnSync(process.execPath, ["scripts/verifier-build.js"], {
+          cwd: join(depot, "apps/mobile"),
+          // Seulement ces réglages factices : rien de l'ordinateur qui lance les tests.
+          env: { ...BON, ...reglages, PATH: process.env.PATH ?? "" } as unknown as NodeJS.ProcessEnv,
+          encoding: "utf8",
+        });
+      // « preview » accepté : le dossier des textes, absent de la copie, n'est qu'un avertissement.
+      const accepte = lancer({ EAS_BUILD_PROFILE: "preview" });
+      expect(accepte.status).toBe(0);
+      expect(accepte.stdout).toContain(`✅ ${AUTRE_NOM} — réglages et textes du build « preview » vérifiés.`);
+      expect(accepte.stderr).toContain(`⚠️  ${AUTRE_NOM} — `);
+      // Build arrêté : le message dit où saisir le réglage, dans le projet au nouveau nom.
+      const arrete = lancer({ EAS_BUILD_PROFILE: "production", EXPO_PUBLIC_API_URL: "" });
+      expect(arrete.status).toBe(1);
+      expect(arrete.stderr).toContain(`projet ${AUTRE_NOM} → Environment variables`);
+      // Les noms des projets Supabase (« spotto-prod », « spotto-dev-2 ») sont des noms internes : ils restent.
+      const ancienNom = new RegExp(marque.nom.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      for (const sortie of [accepte.stdout, accepte.stderr, arrete.stdout, arrete.stderr]) {
+        expect(sortie.replace(/spotto-(?:prod|dev)(?:-\d)?/g, "")).not.toMatch(ancienNom);
+      }
+    } finally {
+      rmSync(depot, { recursive: true, force: true });
+    }
+  });
+
   // Lot « conformité Apple » : règle 2.1 (a) d'Apple, aucun texte provisoire.
   describe("textes provisoires : build « production » arrêté, simple avertissement pour « preview »", () => {
     const dossiers: string[] = [];
@@ -371,6 +410,8 @@ describe("contrôle au début d'un build EAS (scripts/verifier-build.js)", () =>
       const preview = lancer("preview");
       // « preview » n'est jamais arrêté par des textes provisoires.
       expect(preview.status).toBe(0);
+      // Le nom affiché est celui du fichier unique de la marque.
+      expect(preview.stdout).toContain(`✅ ${marque.nom} — réglages et textes du build « preview » vérifiés.`);
       if (reste.fichiers.length > 0) {
         // Tant que les textes légaux ne sont pas validés : build App Store arrêté, fichiers nommés.
         expect(production.status).toBe(1);
