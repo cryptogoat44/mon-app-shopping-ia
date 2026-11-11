@@ -160,11 +160,11 @@ export async function trackNewWish(fastify: Db, log: FastifyBaseLogger, wish: Wi
 }
 
 const WISH_ROW = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
+  id: z.guid(),
+  user_id: z.guid(),
   merchant_url: z.string().nullable(),
   merchant_name: z.string().nullable(),
-  product_match_id: z.string().uuid().nullable(),
+  product_match_id: z.guid().nullable(),
 });
 
 /** L'envie de la personne (null : inexistante ou d'une autre personne). */
@@ -182,7 +182,7 @@ export async function readOwnWish(fastify: Db, userId: string, wishId: string): 
 }
 
 const TRACKING_ROW = z.object({
-  wishlist_item_id: z.string().uuid(),
+  wishlist_item_id: z.guid(),
   match_key_hash: z.string().nullable(),
   merchant_key: z.string().nullable(),
   stock_state: z.enum(STOCK_STATES),
@@ -239,7 +239,7 @@ export async function wishBought(fastify: Db, userId: string, wishId: string): P
 // ---- Cloche (wish_watches) ----
 
 const WATCH_ROW = z.object({
-  wishlist_item_id: z.string().uuid(),
+  wishlist_item_id: z.guid(),
   notify_price_drop: z.boolean(),
   notify_restock: z.boolean(),
   notify_sold_out: z.boolean(),
@@ -355,7 +355,7 @@ export async function reportSoldOut(fastify: Db, userId: string, key: Pick<Track
 // ---- Rattrapage des envies d'avant 0036 (scripts/rattraper-suivi-envies-dev.ts) ----
 
 const BACKFILL_WISH_ROW = WISH_ROW;
-const BACKFILL_TRACKING_ROWS = z.array(z.object({ wishlist_item_id: z.string().uuid(), key_version: z.number().int() }));
+const BACKFILL_TRACKING_ROWS = z.array(z.object({ wishlist_item_id: z.guid(), key_version: z.number().int() }));
 
 /** Bilan du rattrapage : des nombres. */
 export interface BackfillSummary {

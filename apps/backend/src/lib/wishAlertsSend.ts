@@ -51,9 +51,9 @@ export const MARK_SENT_ATTEMPTS = 3;
 const AMOUNT = z.union([z.number(), z.string()]).transform((value) => Number(value));
 const CLAIM_ROWS = z.array(
   z.object({
-    event_id: z.string().uuid(),
-    user_id: z.string().uuid(),
-    wishlist_item_id: z.string().uuid(),
+    event_id: z.guid(),
+    user_id: z.guid(),
+    wishlist_item_id: z.guid(),
     kind: z.enum(WISH_ALERT_KINDS),
     old_price: AMOUNT.nullable(),
     new_price: AMOUNT.nullable(),

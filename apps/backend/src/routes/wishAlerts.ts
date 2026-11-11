@@ -49,8 +49,8 @@ const watchSchema = z.object({
   enableAlerts: z.boolean().optional(),
 });
 const stockReportSchema = z.union([
-  z.object({ productMatchId: z.string().uuid() }).strict(),
-  z.object({ wishlistItemId: z.string().uuid() }).strict(),
+  z.object({ productMatchId: z.guid() }).strict(),
+  z.object({ wishlistItemId: z.guid() }).strict(),
 ]);
 
 export default async function wishAlertsRoutes(fastify: FastifyInstance) {
