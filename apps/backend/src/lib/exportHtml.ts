@@ -1,4 +1,5 @@
 import { SEARCH_FAILURE_MESSAGES } from "@monapp/shared-types";
+import { BRAND } from "./brand.js";
 import type { ExportData, ExportDataKey, ExportRow } from "./exportData.js";
 import {
   formatDateTime,
@@ -821,7 +822,7 @@ function browserSummary(ctx: Ctx, value: unknown): string | null {
   const userAgent = str(value);
   if (userAgent === null) return null;
   const { browser, device, app } = summarizeUserAgent(userAgent);
-  const first = browser ?? (app ? tr(ctx, EXPORT_TEXT.spottoApp) : tr(ctx, EXPORT_TEXT.unknownBrowser));
+  const first = browser ?? (app ? tr(ctx, EXPORT_TEXT.ownApp) : tr(ctx, EXPORT_TEXT.unknownBrowser));
   return device ? `${first} · ${device}` : first;
 }
 
@@ -1125,7 +1126,7 @@ export function renderExportHtml(data: ExportData, lookups: ExportLookups, optio
 <body>
 <main>
 <header>
-<p class="brand">Spotto</p>
+<p class="brand">${BRAND}</p>
 <h1>${title}</h1>
 ${accountName ? html`<p class="meta">${tr(ctx, EXPORT_TEXT.accountLine, { account: accountName })}</p>` : null}
 <p class="meta">${tr(ctx, EXPORT_TEXT.createdLine, { date: plainDate(ctx, data.exportedAt), zone: ctx.timeZone })}</p>

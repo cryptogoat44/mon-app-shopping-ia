@@ -1,5 +1,6 @@
 import type { AppVersionInfo, UpdateRequiredErrorBody } from "@monapp/shared-types";
 import { UPDATE_REQUIRED_ERROR } from "@monapp/shared-types";
+import { BRAND } from "./brand.js";
 
 // Mise à jour obligatoire de l'app iPhone (lot « app iPhone prête »,
 // chantier 4, point 11). Le site se met à jour à chaque mise en ligne ;
@@ -17,7 +18,7 @@ import { UPDATE_REQUIRED_ERROR } from "@monapp/shared-types";
 /** Plus grand numéro de build admis (au-delà : faute de frappe). */
 const MAX_BUILD = 1_000_000;
 
-export const UPDATE_REQUIRED_MESSAGE = "Cette version de Spotto n'est plus prise en charge. Mettez à jour l'app depuis l'App Store.";
+export const UPDATE_REQUIRED_MESSAGE = `Cette version de ${BRAND} n'est plus prise en charge. Mettez à jour l'app depuis l'App Store.`;
 
 /** Numéro de build : un entier positif écrit en chiffres seuls ; sinon null. */
 export function parseBuildNumber(value: unknown): number | null {

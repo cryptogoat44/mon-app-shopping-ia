@@ -3,6 +3,7 @@
 // restrained English — quiet and editorial — rather than word for word.
 
 import { MINIMUM_AGE } from "@monapp/shared-types";
+import { APP_FILE_SLUG, APP_NAME_DISPLAY as BRAND } from "../constants/brand";
 import type { Catalog } from "./types";
 
 export const en: Catalog = {
@@ -34,7 +35,7 @@ export const en: Catalog = {
   },
   welcome: {
     baseline: "Quietly identifying the pieces that matter.",
-    explain: "Add a video or a photo. Spotto finds the piece and tells you where to buy it.",
+    explain: `Add a video or a photo. ${BRAND} finds the piece and tells you where to buy it.`,
     cta: "Get started",
     login: "Already have an account? Sign in",
     terms: "Terms of use",
@@ -57,7 +58,7 @@ export const en: Catalog = {
     like: "Like",
     unlike: "Unlike",
     viewPieceAt: (piece: string, merchant: string) => `View ${piece} at ${merchant}`,
-    shareMessage: (name: string, caption: string | null) => `${name} on Spotto${caption ? `: “${caption}”` : ""}`,
+    shareMessage: (name: string, caption: string | null) => `${name} on ${BRAND}${caption ? `: “${caption}”` : ""}`,
     wishLabel: "Wish",
     wishBy: (name: string) => `${name}'s wish`,
   },
@@ -101,12 +102,12 @@ export const en: Catalog = {
     latestVideoLabel: (duration: string) => `Preview of your latest video, ${duration}`,
     latestVideoAsk: "Suggest my latest video automatically?",
     latestVideoAskBody:
-      "Spotto can show your gallery's latest video here, ready to be analyzed. iOS will then ask for access to your photos. The video stays on your iPhone: only a few frames leave it, when you tap “Search”.",
+      `${BRAND} can show your gallery's latest video here, ready to be analyzed. iOS will then ask for access to your photos. The video stays on your iPhone: only a few frames leave it, when you tap “Search”.`,
     latestVideoYes: "Yes, suggest it",
     latestVideoNo: "No thanks",
     latestVideoAskNote: "Your answer changes nothing else: “Add a video” is still available. You can change this anytime in Settings.",
     latestVideoNoAccess:
-      "Without full access to your photos, Spotto can't find your latest video: choose it with “Add a video”. Access can be changed in the iPhone Settings.",
+      `Without full access to your photos, ${BRAND} can't find your latest video: choose it with “Add a video”. Access can be changed in the iPhone Settings.`,
     latestVideoEmpty: "No video in your gallery yet: the most recent one will appear here.",
     latestVideoChoiceFailed: "Your answer couldn't be saved. Please try again.",
     linkQuestion: "Have a TikTok, Instagram or Pinterest link?",
@@ -126,10 +127,10 @@ export const en: Catalog = {
       pinterest: "This link leads to a Pinterest board or page, not a Pin. Open the Pin, tap “Share”, then “Copy link”.",
     },
     unsupportedLink:
-      "This link isn't supported. Spotto recognizes TikTok, Instagram and Pinterest links; for any other site, import a screenshot.",
+      `This link isn't supported. ${BRAND} recognizes TikTok, Instagram and Pinterest links; for any other site, import a screenshot.`,
     prepareError: "Preparation didn't go through. Check your connection, then try again.",
     networkError: "Unable to connect. Check your internet connection, then try again.",
-    serverError: "Spotto isn't responding right now. Please try again in a minute.",
+    serverError: `${BRAND} isn't responding right now. Please try again in a minute.`,
   },
   video: {
     title: "Choose the frame",
@@ -159,12 +160,12 @@ export const en: Catalog = {
   // Automatic video analysis (lot 4, temps 1 bis): consent, fallbacks.
   videoAuto: {
     chooseMyself: "Choose the frame myself",
-    privacyNote: "The video stays on your device. With your consent, a few reduced frames are analyzed by an AI, without being kept by Spotto.",
+    privacyNote: `The video stays on your device. With your consent, a few reduced frames are analyzed by an AI, without being kept by ${BRAND}.`,
     checkFailed: "Automatic analysis couldn't be set up. Check your connection, then try again.",
     consentTitle: "Automatic video analysis",
     consentBody: [
-      "To find the piece for you, Spotto sends a few reduced frames from this video (12 at most) and your description to an artificial intelligence provider, Anthropic, based in the United States.",
-      "They are used only to find the piece. Spotto does not keep them; Anthropic may not use them to train its models and deletes them automatically, within 30 days at most (exceptions described in the privacy policy). The full video never leaves your device.",
+      `To find the piece for you, ${BRAND} sends a few reduced frames from this video (12 at most) and your description to an artificial intelligence provider, Anthropic, based in the United States.`,
+      `They are used only to find the piece. ${BRAND} does not keep them; Anthropic may not use them to train its models and deletes them automatically, within 30 days at most (exceptions described in the privacy policy). The full video never leaves your device.`,
       "You can withdraw your consent at any time in Settings.",
     ],
     consentPolicy: "Read the privacy policy",
@@ -199,11 +200,11 @@ export const en: Catalog = {
     photoWordsNote:
       "Your words are only used to sort the suggestions: they aren't sent with the image to the search. They only go to a search engine if you start a search with your words yourself.",
     // Shown until the piece is circled (nothing drawn, or the whole image), with or without words.
-    frameHint: "Circle the piece alone, with no faces or text around it: Spotto will find it more easily.",
+    frameHint: `Circle the piece alone, with no faces or text around it: ${BRAND} will find it more easily.`,
     videoPreview: (duration: string) => `Preview of your video, ${duration}`,
     photoPreview: "Your photo",
     yourVideo: "Your video",
-    waitingVideo: "Spotto is finding the piece…",
+    waitingVideo: `${BRAND} is finding the piece…`,
     usualVideo: "This usually takes 15 to 30 seconds.",
   },
   // Website (lot 4 ter): a tab left open offers the version now online.
@@ -214,7 +215,7 @@ export const en: Catalog = {
   // Pasted link (lot 4 ter): cover analysis is turned off.
   linkNotice: {
     title: "A video can't be read from a link",
-    body: (how: string) => `Spotto can't read the video from its link. Record your screen while it plays (${how}), then add the recording.`,
+    body: (how: string) => `${BRAND} can't read the video from its link. Record your screen while it plays (${how}), then add the recording.`,
     how: {
       ios: "on iPhone, from Control Center",
       android: "on Android, from Quick Settings",
@@ -230,8 +231,8 @@ export const en: Catalog = {
     waiting: "What you shared is waiting for you in Spotter.",
     // VoiceOver: Spotter tab marked with that dot (to be approved).
     tabWaiting: (label: string) => `${label}, something you shared is waiting`,
-    several: "Spotto opens one item at a time: share a single photo or a single video.",
-    unsupported: "Spotto can't open this content. Share a TikTok, Instagram or Pinterest link, a screenshot, a photo or a video.",
+    several: `${BRAND} opens one item at a time: share a single photo or a single video.`,
+    unsupported: `${BRAND} can't open this content. Share a TikTok, Instagram or Pinterest link, a screenshot, a photo or a video.`,
     unreadable: "What you shared couldn't be opened. Try again, or add the photo or video below.",
     imageUnreadable: (button: string) => `This image couldn't be opened. Try again, or add it with “${button}”.`,
   },
@@ -240,7 +241,7 @@ export const en: Catalog = {
   firstTry: {
     linkHelp: {
       title: "The easiest way: a screenshot",
-      lead: "Spotto can't read a video from its link. Show it the piece instead:",
+      lead: `${BRAND} can't read a video from its link. Show it the piece instead:`,
       lastStep: (button: string) => `Come back here and tap “${button}”.`,
       addScreenshot: "Add a screenshot",
       recording: (how: string) => `Prefer the video? Record your screen while it plays (${how}), then add the recording.`,
@@ -250,7 +251,7 @@ export const en: Catalog = {
       steps: (addPhoto: string) => [
         "Pause the video when the piece is clearly visible, and take a screenshot.",
         `Add it with “${addPhoto}”, then circle the piece.`,
-        "Spotto shows you where to buy it, in 10 to 20 seconds.",
+        `${BRAND} shows you where to buy it, in 10 to 20 seconds.`,
       ],
     },
     kept: "Added to your Wishlist",
@@ -280,7 +281,7 @@ export const en: Catalog = {
   player: {
     linkQuestion: "Have a TikTok or Instagram link?",
     linkLabel: "TikTok or Instagram link",
-    linkHint: "The video opens here, in Spotto: you'll pause it on the piece.",
+    linkHint: `The video opens here, in ${BRAND}: you'll pause it on the piece.`,
     open: "Open the video",
     opening: "Opening the video…",
     instruction: "Pause the video when the piece is clearly visible.",
@@ -297,7 +298,7 @@ export const en: Catalog = {
       body: (platform: string) => `This video is played by ${platform}, which may use its own trackers.`,
       play: "Play the video here",
     },
-    unavailableTitle: "This video won't open in Spotto",
+    unavailableTitle: `This video won't open in ${BRAND}`,
     unavailable: {
       notPublic: "It may be private or deleted, or its creator doesn't allow it to be shown elsewhere.",
       notAVideo: (platform: string) => `This ${platform} link doesn't lead to a video.`,
@@ -308,28 +309,28 @@ export const en: Catalog = {
     },
     screenConsent: {
       title: "One more step",
-      body: "Your iPhone will ask you to allow screen recording. Spotto keeps only one frame, the one of this moment: nothing else is recorded or sent.",
+      body: `Your iPhone will ask you to allow screen recording. ${BRAND} keeps only one frame, the one of this moment: nothing else is recorded or sent.`,
       continue: "Continue",
       myself: "Take a screenshot myself",
     },
     captureFailed: {
-      title: "Spotto couldn't take the frame",
+      title: `${BRAND} couldn't take the frame`,
       body: (shortcut: string) => `Take a screenshot now (${shortcut}): the video stays paused here. Then add it.`,
-      declined: (shortcut: string) => `Without your permission, Spotto can't take the frame. Take a screenshot now (${shortcut}), then add it.`,
+      declined: (shortcut: string) => `Without your permission, ${BRAND} can't take the frame. Take a screenshot now (${shortcut}), then add it.`,
       phoneCall: (shortcut: string) => `Not possible during a call. Take a screenshot (${shortcut}), then add it.`,
     },
     blackImage: "Was the frame black or empty? Try another way",
     howItWorksSteps: (spot: string) => [
-      "Share the TikTok or Instagram video to Spotto, or paste its link.",
+      `Share the TikTok or Instagram video to ${BRAND}, or paste its link.`,
       `Pause it on the piece, tap “${spot}”, then circle the piece.`,
-      "Spotto shows you where to buy it, in 10 to 20 seconds.",
+      `${BRAND} shows you where to buy it, in 10 to 20 seconds.`,
     ],
     linkNotice: {
-      title: "This video can open in Spotto",
+      title: `This video can open in ${BRAND}`,
       body: "Open it right here: you'll pause it on the piece.",
     },
     settings: {
-      title: "Videos played in Spotto",
+      title: `Videos played in ${BRAND}`,
       on: "You agreed to TikTok or Instagram videos being played here, in their official player.",
       withdraw: "Withdraw my consent",
       withdrawn: "Consent withdrawn: you'll be asked again with the next video.",
@@ -341,7 +342,7 @@ export const en: Catalog = {
     captureCaption: "Your screenshot.",
     notOnImageTitle: "The piece isn't in this image?",
     notOnImageWhy: (platform: string) =>
-      `${platform} only shares this cover image, not the rest of the video. Show Spotto the right moment with a screenshot:`,
+      `${platform} only shares this cover image, not the rest of the video. Show ${BRAND} the right moment with a screenshot:`,
     captureSteps: (platform: string, shortcut: string) => [
       `Open the video in ${platform}.`,
       "Pause it when the piece is clearly visible.",
@@ -359,7 +360,7 @@ export const en: Catalog = {
     target: "Circle the piece",
     noPreviewTitle: "Import a screenshot of the piece",
     noPreviewBody: (platform: string) =>
-      `Spotto can't retrieve the image from this ${platform} link. Take a screenshot when the piece is clearly visible, then import it.`,
+      `${BRAND} can't retrieve the image from this ${platform} link. Take a screenshot when the piece is clearly visible, then import it.`,
     issue: {
       unavailable: {
         title: (content: string) => `${content[0]!.toUpperCase()}${content.slice(1)} not found`,
@@ -377,7 +378,7 @@ export const en: Catalog = {
       },
       noAccess: {
         title: "Import a screenshot of the piece",
-        body: (platform: string) => `${platform} doesn't let Spotto retrieve the image from this link. Show it the piece with a screenshot:`,
+        body: (platform: string) => `${platform} doesn't let ${BRAND} retrieve the image from this link. Show it the piece with a screenshot:`,
       },
     },
     content: { tiktok: "video", instagram: "post", pinterest: "Pin" },
@@ -399,7 +400,7 @@ export const en: Catalog = {
     launch: "Identify the piece",
   },
   analysis: {
-    title: "Spotto is browsing the boutiques…",
+    title: `${BRAND} is browsing the boutiques…`,
     usual: "This usually takes 10 to 20 seconds.",
     slow: "This is taking longer than usual: the service may be restarting. Thank you for your patience.",
     cancel: "Cancel",
@@ -409,7 +410,7 @@ export const en: Catalog = {
     notStartedText: "It was interrupted before the image was analyzed and hasn't been counted. Launch it again whenever you like.",
     unreachableTitle: "Your search may still be running",
     unreachableText:
-      "Spotto isn't responding right now. If your search went out, it carries on on our side: check again in a moment to see its result, without launching anything again.",
+      `${BRAND} isn't responding right now. If your search went out, it carries on on our side: check again in a moment to see its result, without launching anything again.`,
     runningTitle: "Your search is still running…",
     stillRunningText: "It's taking longer than usual. Check again in a moment to see its result, without launching anything again.",
     runningTip: "If it goes through, its result will appear in “Recently spotted”, on the Spotter home screen.",
@@ -441,7 +442,7 @@ export const en: Catalog = {
     viewAt: (merchant: string) => (merchant ? `View at ${merchant}` : "View the piece"),
     affiliateDisclosure: "Affiliate link",
     affiliateExplanation:
-      "If you buy through this link, Spotto may in the future receive a commission from the retailer, at no extra cost to you. No affiliate program is active at this time.",
+      `If you buy through this link, ${BRAND} may in the future receive a commission from the retailer, at no extra cost to you. No affiliate program is active at this time.`,
     affiliateHint: "Explains what “affiliate link” means.",
     keep: "Save",
     kept: "Saved",
@@ -452,7 +453,7 @@ export const en: Catalog = {
     boughtError: "The piece couldn't be added to the Vault.",
     categoryTitle: "Which category?",
     share: "Share",
-    shareMessage: (name: string, url: string, affiliate: boolean) => `${name}\n${url}${affiliate ? " (affiliate link)" : ""}\n\nSpotted with Spotto.`,
+    shareMessage: (name: string, url: string, affiliate: boolean) => `${name}\n${url}${affiliate ? " (affiliate link)" : ""}\n\nSpotted with ${BRAND}.`,
     linkCopied: "Message copied, with the link",
     merchantLinkBlocked: "Your browser blocked the page from opening. Tap here to continue to the retailer.",
     loading: "Loading the result",
@@ -463,7 +464,7 @@ export const en: Catalog = {
     retry: "Try again",
     backToSpotter: "Back to Spotter",
     notRight: "Not the right piece?",
-    correctionsLead: "Show Spotto the piece another way:",
+    correctionsLead: `Show ${BRAND} the piece another way:`,
     // Price first: before the corrections, which start a new search, see the
     // suggestions without a price for free (review ORD-5, to be validated).
     notRightWithoutPriceLead: "It may be among the suggestions without a price:",
@@ -536,7 +537,7 @@ export const en: Catalog = {
     textSearchIntro: "Not quite right?",
     textSearchButton: "Search",
     textSearchNote:
-      "Your words will be sent to Google Shopping through our provider SerpApi, without your name or email address. Spotto doesn't keep them; it keeps the pieces found with your search.",
+      `Your words will be sent to Google Shopping through our provider SerpApi, without your name or email address. ${BRAND} doesn't keep them; it keeps the pieces found with your search.`,
     textSearchRunning: "Searching…",
     textSearchAlreadyUsed: "A search with your words has already been run for this photo.",
     textSearchEmpty: "No suggestions for your words.",
@@ -566,10 +567,10 @@ export const en: Catalog = {
     sharedState: (privacy: string) => `On your profile · ${privacy}`,
     viewPost: "View post",
     shareAgainHint: "To change who can see it, edit the visibility from the post. To get a new image, delete the post, then post the wish again.",
-    sendToSomeone: "Send to someone on Spotto",
-    shareOutside: "Share outside Spotto",
+    sendToSomeone: `Send to someone on ${BRAND}`,
+    shareOutside: `Share outside ${BRAND}`,
     linkCopied: "Link copied",
-    shareMessage: (title: string, merchant: string | null) => `Spotted on Spotto: ${title}${merchant ? ` at ${merchant}` : ""}`,
+    shareMessage: (title: string, merchant: string | null) => `Spotted on ${BRAND}: ${title}${merchant ? ` at ${merchant}` : ""}`,
     affiliateMention: "(affiliate link)",
   },
   retrouverPieces: {
@@ -672,21 +673,21 @@ export const en: Catalog = {
   // Notifications lot: being told about new messages on the iPhone.
   push: {
     offerTitle: "Get notified of new messages?",
-    offerBody: "Spotto can send you a notification when someone writes to you or invites you to chat. It only says who is writing, never what they wrote.",
+    offerBody: `${BRAND} can send you a notification when someone writes to you or invites you to chat. It only says who is writing, never what they wrote.`,
     offerSettingsHint: "You can turn them off at any time in Settings.",
     offerAccept: "Turn on notifications",
     offerLater: "Not now",
     offerClose: "Close",
     enabling: "Turning on…",
     enabled: "Notifications turned on",
-    deniedHint: "Spotto notifications are turned off in iPhone Settings. To receive them, open Settings, then Spotto, then Notifications.",
+    deniedHint: `${BRAND} notifications are turned off in iPhone Settings. To receive them, open Settings, then ${BRAND}, then Notifications.`,
     openSettings: "Open iPhone Settings",
-    openSettingsFailed: "iPhone Settings couldn't be opened: go through the Settings app, then Spotto.",
+    openSettingsFailed: `iPhone Settings couldn't be opened: go through the Settings app, then ${BRAND}.`,
     failed: "Notifications couldn't be turned on. Check your connection, then try again.",
     settingTitle: "Message notifications",
     settingSwitchLabel: "Get a notification for each new message",
     settingOn: "On: a notification tells you about a new message or invitation, with the person's name, never the content.",
-    settingOff: "Off: you see your new messages when you open Spotto.",
+    settingOff: `Off: you see your new messages when you open ${BRAND}.`,
     settingLoading: "Loading your choice…",
     settingFailed: "Your choice couldn't be saved. Please try again.",
   },
@@ -707,10 +708,10 @@ export const en: Catalog = {
     bellOnLabel: (title: string, kinds: string) => `Alert on for ${title}: ${kinds}. Tap to change it`,
     sheetTitle: "Alert for this piece",
     sheetIntro:
-      "Spotto tells you right away when a search or a purchase made in Spotto shows this piece at the same shop, cheaper or back in stock. Nobody knows who searched for it, or who follows it.",
+      `${BRAND} tells you right away when a search or a purchase made in ${BRAND} shows this piece at the same shop, cheaper or back in stock. Nobody knows who searched for it, or who follows it.`,
     switchTurnsOn: "This also turns on “Price and stock alerts” in Settings.",
     pushSoon: "Your alerts are saved; notifications will be available soon.",
-    iphoneOnly: "Alert notifications arrive in the Spotto iPhone app.",
+    iphoneOnly: `Alert notifications arrive in the ${BRAND} iPhone app.`,
     save: "Save",
     saving: "Saving…",
     cancel: "Cancel",
@@ -722,10 +723,10 @@ export const en: Catalog = {
     tooManyChanges: "You've changed a lot of alerts: try again in a moment.",
     pushOfferTitle: "Get notified on this iPhone?",
     pushOfferBody:
-      "Spotto can send you a notification when a wish you follow drops in price or is back in stock. It shows the piece, the shop and the price, never who searched for it.",
+      `${BRAND} can send you a notification when a wish you follow drops in price or is back in stock. It shows the piece, the shop and the price, never who searched for it.`,
     settingTitle: "Price and stock alerts",
     settingSwitchLabel: "Receive price and stock alerts for your wishes",
-    settingOn: "On: Spotto tells you about the wishes whose bell you turned on.",
+    settingOn: `On: ${BRAND} tells you about the wishes whose bell you turned on.`,
     settingOff: "Off: no alert is sent to you. To follow a wish, tap its bell.",
     settingFailed: "Your choice couldn't be saved. Try again.",
     devicePushOff: "Alert notifications are off on this iPhone.",
@@ -734,7 +735,7 @@ export const en: Catalog = {
     reportLinkLabel: (title: string) => `Report that ${title} is no longer available`,
     reportTitle: "Is this piece no longer available?",
     reportBody:
-      "You're saying it's no longer for sale at this shop. This helps Spotto tell members who follow it when it comes back. Nobody will know it was you.",
+      `You're saying it's no longer for sale at this shop. This helps ${BRAND} tell members who follow it when it comes back. Nobody will know it was you.`,
     reportConfirm: "Yes, no longer available",
     reportSending: "Sending…",
     reportCancel: "Cancel",
@@ -1029,7 +1030,7 @@ export const en: Catalog = {
     deleteConfirm: "This cannot be undone. All your data will be deleted with no possibility of recovery.",
     terms: "Terms of use",
     privacyPolicy: "Privacy policy",
-    howWeEarn: "How Spotto earns money",
+    howWeEarn: `How ${BRAND} earns money`,
     signOut: "Sign out",
     documents: "Documents",
     analyticsTitle: "Usage statistics",
@@ -1041,20 +1042,20 @@ export const en: Catalog = {
     videoAiTitle: "Automatic video analysis",
     videoAiSwitchLabel: "Automatic video analysis by an AI",
     videoAiOn:
-      "On: when you start it, a few reduced frames from the video and your description are sent to Anthropic (United States) to find the piece, without being kept by Spotto.",
+      `On: when you start it, a few reduced frames from the video and your description are sent to Anthropic (United States) to find the piece, without being kept by ${BRAND}.`,
     videoAiOff: "Off: no frame from your videos is sent; you choose the frame yourself.",
     videoAiFailed: "Your choice couldn't be saved. Please try again.",
     latestVideoTitle: "Suggest my latest video",
     latestVideoSwitchLabel: "Automatically suggest my latest video in Spotter",
     latestVideoOn: "On: Spotter suggests your gallery's latest video, ready to be analyzed.",
     latestVideoOnNoAccess:
-      "On, but Spotto doesn't have full access to your photos: your latest video can't be found. You choose it with “Add a video”.",
-    latestVideoOff: "Off: you choose the video with “Add a video”, without Spotto reading your gallery.",
-    latestVideoAccessLeft: "Spotto still has access to your photos, without using it: you can remove it in the iPhone Settings.",
+      `On, but ${BRAND} doesn't have full access to your photos: your latest video can't be found. You choose it with “Add a video”.`,
+    latestVideoOff: `Off: you choose the video with “Add a video”, without ${BRAND} reading your gallery.`,
+    latestVideoAccessLeft: `${BRAND} still has access to your photos, without using it: you can remove it in the iPhone Settings.`,
     latestVideoOpenSettings: "Open iPhone Settings",
     latestVideoFailed: "Your choice couldn't be saved. Please try again.",
     latestVideoUnavailable: "Setting unavailable for now.",
-    latestVideoOpenFailed: "The iPhone Settings couldn't be opened: go through the Settings app, then Spotto.",
+    latestVideoOpenFailed: `The iPhone Settings couldn't be opened: go through the Settings app, then ${BRAND}.`,
     consentLoading: "Loading the status of your acceptance…",
     consentFailed: "The status of your acceptance is unavailable right now.",
     acceptedOn: (date: string) => `Current version accepted on ${date}.`,
@@ -1081,7 +1082,7 @@ export const en: Catalog = {
     exportReadableHint: "Opens in your browser, with everything explained in plain language. The technical version is included at the end.",
     exportJson: "Technical format (JSON)",
     exportJsonHint: "To move your data to another service.",
-    exportFileBase: "spotto-my-data",
+    exportFileBase: `${APP_FILE_SLUG}-my-data`,
     exportDone: "File downloaded: open it from your downloads.",
     dangerZone: "Danger zone",
     deleting: "Deleting…",
@@ -1105,7 +1106,7 @@ export const en: Catalog = {
     faq: [
       {
         q: "How do I find a piece?",
-        a: "In the Spotter, import a photo, a screenshot or a video, then circle the piece if needed. Spotto looks for the same piece, or the closest ones, and tells you where to buy it when it finds a shop and a price.",
+        a: `In the Spotter, import a photo, a screenshot or a video, then circle the piece if needed. ${BRAND} looks for the same piece, or the closest ones, and tells you where to buy it when it finds a shop and a price.`,
       },
       {
         q: "How many searches can I run?",
@@ -1121,7 +1122,7 @@ export const en: Catalog = {
       },
       {
         q: "Reporting content, blocking an account",
-        a: "Open the menu of a post, a comment, a profile or a piece you received, then choose \"Report\" or \"Block this account\". What you report disappears from your feed right away. Every report is reviewed by the Spotto team; content reported by several people is hidden until that review. You can manage blocked accounts in Settings.",
+        a: `Open the menu of a post, a comment, a profile or a piece you received, then choose \"Report\" or \"Block this account\". What you report disappears from your feed right away. Every report is reviewed by the ${BRAND} team; content reported by several people is hidden until that review. You can manage blocked accounts in Settings.`,
       },
       {
         q: "What content is not allowed?",
@@ -1152,7 +1153,7 @@ export const en: Catalog = {
     statusFailed: "Unable to check your acceptance of this document.",
     retry: "Try again",
     analyticsPrompt:
-      "Help us improve Spotto: would you like to share usage statistics? Never your content, your name or your email. You can change this at any time in Settings.",
+      `Help us improve ${BRAND}: would you like to share usage statistics? Never your content, your name or your email. You can change this at any time in Settings.`,
     analyticsPromptYes: "Yes, gladly",
     analyticsPromptNo: "No, thank you",
     updateNotice:
@@ -1189,7 +1190,7 @@ export const en: Catalog = {
     chooseFile: "Choose a file",
     takePhoto: "Take a photo",
     remove: "Remove my photo",
-    removeConfirm: "Your profile photo will be deleted from Spotto. Your initials will show instead.",
+    removeConfirm: `Your profile photo will be deleted from ${BRAND}. Your initials will show instead.`,
     cancel: "Cancel",
     cropTitle: "Frame your photo",
     cropHint: "Drag the photo to place it in the circle. Pinch to zoom.",
@@ -1205,7 +1206,7 @@ export const en: Catalog = {
     sendError: "The photo couldn't be uploaded. Please try again.",
     removeError: "The photo couldn't be removed. Please try again.",
     refusedFormat: "Format not accepted: choose a JPEG, PNG or HEIC photo.",
-    refusedHeicBrowser: "This browser can't open HEIC photos. Choose a JPEG or PNG photo, or use Safari or the Spotto iPhone app.",
+    refusedHeicBrowser: `This browser can't open HEIC photos. Choose a JPEG or PNG photo, or use Safari or the ${BRAND} iPhone app.`,
     refusedTooLarge: (max: number) => `This photo is too large (${max} MB maximum). Please choose another one.`,
     refusedUnreadable: "This photo couldn't be opened. Please choose another one.",
   },
@@ -1380,10 +1381,10 @@ export const en: Catalog = {
     dismissAndRestore: "Dismiss and restore",
   },
   connection: {
-    connectingTitle: "Connecting to Spotto…",
-    wakingTitle: "Spotto is waking up…",
+    connectingTitle: `Connecting to ${BRAND}…`,
+    wakingTitle: `${BRAND} is waking up…`,
     wakingBody: "After a while without visitors, the server goes to sleep. It can take up to a minute to start again.",
-    failedTitle: "Spotto is temporarily unreachable.",
+    failedTitle: `${BRAND} is temporarily unreachable.`,
     failedBody: "Check your internet connection, then try again. Your data is safe.",
     retry: "Try again",
     signOut: "Sign out",
@@ -1448,8 +1449,8 @@ export const en: Catalog = {
       ageDeclaration: `I confirm that I am at least ${MINIMUM_AGE} years old.`,
       consentRequired: "Please accept the terms of use and the privacy policy to continue.",
       analyticsConsent:
-        "Optional: help improve Spotto by sharing usage statistics (never your content, your name or your email).",
-      ageRequired: `Spotto is reserved for people aged at least ${MINIMUM_AGE}: please confirm this to continue.`,
+        `Optional: help improve ${BRAND} by sharing usage statistics (never your content, your name or your email).`,
+      ageRequired: `${BRAND} is reserved for people aged at least ${MINIMUM_AGE}: please confirm this to continue.`,
       cta: "Create my account",
       ctaLoading: "Creating…",
       hasAccount: "Already have an account? Sign in",
@@ -1462,14 +1463,14 @@ export const en: Catalog = {
   // “iPhone app ready” batch (chantier 4): required update (point 11) and the
   // Spotter's camera button (point 14).
   appUpdate: {
-    title: "Update Spotto",
-    body: "This version of Spotto is no longer supported. Install the latest version from the App Store to continue.",
+    title: `Update ${BRAND}`,
+    body: `This version of ${BRAND} is no longer supported. Install the latest version from the App Store to continue.`,
     openStore: "Open the App Store",
-    searchStore: "Open the App Store, search for “Spotto”, then tap “Update”.",
+    searchStore: `Open the App Store, search for “${BRAND}”, then tap “Update”.`,
   },
   cameraCapture: {
     takePhoto: "Take a photo",
-    denied: "Spotto doesn't have access to the camera. To take a photo, allow it in your iPhone's Settings, under Spotto.",
+    denied: `${BRAND} doesn't have access to the camera. To take a photo, allow it in your iPhone's Settings, under ${BRAND}.`,
     unavailable: (addPhoto: string) => `The camera couldn't open. Try again, or choose a photo with “${addPhoto}”.`,
   },
   // “Anti-robots” batch (point 17): Cloudflare Turnstile check before sign-in,

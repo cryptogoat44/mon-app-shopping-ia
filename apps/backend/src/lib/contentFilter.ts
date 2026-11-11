@@ -20,6 +20,8 @@
 // baiser » serait absurde.
 // Fonctions pures, testées par tests/contentFilter.test.ts.
 
+import { BRAND } from "./brand.js";
+
 /** Mots refusés tels quels (forme simplifiée), avec leur pluriel en -s/-x. */
 const EXACT_WORDS: readonly string[] = [
   // Français : insultes et termes sexuels crus.
@@ -178,7 +180,7 @@ export function containsBannedWords(text: string | null | undefined): boolean {
 /** Réponse d'un texte refusé (400). Traduite en anglais par lib/messages.ts. */
 export const CONTENT_NOT_ALLOWED = {
   error: "content_not_allowed",
-  message: "Ce texte contient un mot interdit sur Spotto (insulte, propos haineux ou contenu sexuel). Modifiez-le pour continuer.",
+  message: `Ce texte contient un mot interdit sur ${BRAND} (insulte, propos haineux ou contenu sexuel). Modifiez-le pour continuer.`,
 } as const;
 
 /** Premier texte refusé parmi ceux fournis, ou null s'ils passent tous. */

@@ -349,9 +349,14 @@ describe("contrôle au début d'un build EAS (scripts/verifier-build.js)", () =>
       expect(existsSync(join(DOSSIER_LEGAL, "conditions.ts"))).toBe(true);
       expect(existsSync(join(DOSSIER_LEGAL, "confidentialite.ts"))).toBe(true);
       expect(lire("../scripts/verifier-build.js")).toContain("problemesBuild(process.env, DOSSIER_LEGAL)");
-      // Sans dépendance : il tourne avant l'installation.
+      // Sans dépendance : il tourne avant l'installation. Seuls sont permis
+      // les modules de Node et le fichier unique de la marque — un fichier du
+      // dépôt, lu par son chemin, pas un paquet à installer.
+      const FICHIER_MARQUE = "../../../packages/shared-types/marque.json";
       const modules = [...lire("../scripts/verifier-build.js").matchAll(/require\("([^"]+)"\)/g)].map((match) => match[1]);
-      expect(modules.every((nom) => nom!.startsWith("node:"))).toBe(true);
+      expect(modules.every((nom) => nom!.startsWith("node:") || nom === FICHIER_MARQUE)).toBe(true);
+      expect(modules).toContain(FICHIER_MARQUE);
+      expect(existsSync(new URL(`../scripts/${FICHIER_MARQUE}`, import.meta.url))).toBe(true);
 
       const reste = textesInacheves(DOSSIER_LEGAL);
       expect(reste.illisible).toBe(false);

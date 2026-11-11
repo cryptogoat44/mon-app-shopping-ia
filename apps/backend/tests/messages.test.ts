@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { EN_MESSAGES, localizeMessage } from "../src/lib/messages.js";
+import { BRAND } from "../src/lib/brand.js";
 import { requestLocale, searchLocaleFor } from "../src/lib/locale.js";
 
 function sourceFiles(dir: string): string[] {
@@ -20,6 +21,12 @@ describe("messages d'erreur en deux langues (lot 3)", () => {
       const text = readFileSync(file, "utf8");
       for (const match of text.matchAll(/message(?::|\s*=)\s*"([^"]+)"/g)) {
         if (!(match[1]! in EN_MESSAGES)) missing.push(`${file.split("/src/")[1]} : ${match[1]}`);
+      }
+      // Messages qui citent le nom du produit (lot « nom et identifiants
+      // configurables ») : écrits `… ${BRAND} …`, jamais avec le nom en dur.
+      for (const match of text.matchAll(/message(?::|\s*=)\s*`([^`]*\$\{BRAND\}[^`]*)`/g)) {
+        const french = match[1]!.replaceAll("${BRAND}", BRAND);
+        if (french.includes("${") || !(french in EN_MESSAGES)) missing.push(`${file.split("/src/")[1]} : ${match[1]}`);
       }
     }
     expect(missing).toEqual([]);

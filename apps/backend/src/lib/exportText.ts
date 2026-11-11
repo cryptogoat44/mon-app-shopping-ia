@@ -26,6 +26,7 @@ import {
   type SEARCH_FAILURE_MESSAGES,
 } from "@monapp/shared-types";
 import type { ExportDataKey } from "./exportData.js";
+import { BRAND } from "./brand.js";
 
 // Textes du fichier lisible de l'export RGPD, en français et en anglais
 // (langue de l'app sur l'appareil). Vouvoiement, mots simples : le fichier
@@ -66,8 +67,8 @@ const USER_ID = technical("Votre identifiant interne", "Your internal identifier
 const PIECE_SEND_COLUMNS = {
   id: ID,
   title: shown("Pièce", "Piece"),
-  image_url: shown("Image (copie Spotto)", "Image (Spotto copy)"),
-  image_thumb_url: shown("Miniature (copie Spotto)", "Thumbnail (Spotto copy)"),
+  image_url: shown(`Image (copie ${BRAND})`, `Image (${BRAND} copy)`),
+  image_thumb_url: shown(`Miniature (copie ${BRAND})`, `Thumbnail (${BRAND} copy)`),
   merchant_name: shown("Marchand", "Retailer"),
   merchant_url: shown("Lien vers la pièce", "Link to the piece"),
   product_match_id: technical("Pièce proposée d'origine", "Original suggested piece"),
@@ -90,8 +91,8 @@ const MODERATION_DECISION_COLUMNS = {
 
 const MESSAGE_WISH_COLUMNS = {
   wish_title: shown("Envie jointe", "Attached wish"),
-  wish_image_url: shown("Image de l'envie (copie Spotto)", "Wish image (Spotto copy)"),
-  wish_image_thumb_url: shown("Miniature de l'envie (copie Spotto)", "Wish thumbnail (Spotto copy)"),
+  wish_image_url: shown(`Image de l'envie (copie ${BRAND})`, `Wish image (${BRAND} copy)`),
+  wish_image_thumb_url: shown(`Miniature de l'envie (copie ${BRAND})`, `Wish thumbnail (${BRAND} copy)`),
   wish_merchant_name: shown("Marchand", "Retailer"),
   wish_merchant_url: shown("Lien vers la pièce", "Link to the piece"),
   wish_product_match_id: technical("Pièce proposée d'origine", "Original suggested piece"),
@@ -318,7 +319,7 @@ export const EXPORT_COLUMNS = {
     external_conversion_id: technical("Référence du marchand", "Retailer reference"),
     amount: shown("Montant", "Amount"),
     currency: shown("Devise", "Currency"),
-    commission: shown("Commission versée à Spotto", "Commission paid to Spotto"),
+    commission: shown(`Commission versée à ${BRAND}`, `Commission paid to ${BRAND}`),
     status: shown("État", "Status"),
     confirmed_at: shown("Confirmé le", "Confirmed on"),
     created_at: shown("Enregistré le", "Recorded on"),
@@ -408,8 +409,8 @@ export const EXPORT_COLUMNS = {
     collection_id: technical("Collection", "Collection"),
     wishlist_item_id: technical("Envie rangée", "Saved wish"),
     wishlist_item_title: shown("Envie", "Wish"),
-    friends_image_url: shown("Image montrée à vos amis (copie Spotto)", "Image shown to your friends (Spotto copy)"),
-    friends_image_thumb_url: shown("Miniature montrée à vos amis (copie Spotto)", "Thumbnail shown to your friends (Spotto copy)"),
+    friends_image_url: shown(`Image montrée à vos amis (copie ${BRAND})`, `Image shown to your friends (${BRAND} copy)`),
+    friends_image_thumb_url: shown(`Miniature montrée à vos amis (copie ${BRAND})`, `Thumbnail shown to your friends (${BRAND} copy)`),
     // Lot modération des collections (migration 0034).
     friends_image_removed_at: shown("Image montrée à vos amis retirée par la modération le", "Image shown to your friends removed by moderation on"),
     created_at: shown("Ajoutée le", "Added on"),
@@ -483,8 +484,8 @@ export const EXPORT_SECTIONS = {
   searches: {
     title: { fr: "Vos recherches", en: "Your searches" },
     intro: {
-      fr: "Chaque recherche faite à partir d'une vidéo, d'un lien ou d'une photo, avec les pièces que Spotto vous a proposées.",
-      en: "Every search made from a video, a link or a photo, with the pieces Spotto suggested to you.",
+      fr: `Chaque recherche faite à partir d'une vidéo, d'un lien ou d'une photo, avec les pièces que ${BRAND} vous a proposées.`,
+      en: `Every search made from a video, a link or a photo, with the pieces ${BRAND} suggested to you.`,
     },
     keys: ["productSearches", "productMatches", "resultFeedback"],
   },
@@ -507,8 +508,8 @@ export const EXPORT_SECTIONS = {
   alerts: {
     title: { fr: "Vos alertes prix et stock", en: "Your price and stock alerts" },
     intro: {
-      fr: "Les envies dont vous suivez le prix ou le stock (la cloche), ce que Spotto sait de leur dernier prix et de leur stock, les alertes préparées pour vous, et les pièces que vous avez signalées « Plus disponible ». Les dates sont au jour près ; qui a cherché, acheté ou signalé une pièce n'est jamais gardé.",
-      en: "The wishes whose price or stock you follow (the bell), what Spotto knows about their last price and stock, the alerts prepared for you, and the pieces you reported as no longer available. Dates are to the day; who searched for, bought or reported a piece is never kept.",
+      fr: `Les envies dont vous suivez le prix ou le stock (la cloche), ce que ${BRAND} sait de leur dernier prix et de leur stock, les alertes préparées pour vous, et les pièces que vous avez signalées « Plus disponible ». Les dates sont au jour près ; qui a cherché, acheté ou signalé une pièce n'est jamais gardé.`,
+      en: `The wishes whose price or stock you follow (the bell), what ${BRAND} knows about their last price and stock, the alerts prepared for you, and the pieces you reported as no longer available. Dates are to the day; who searched for, bought or reported a piece is never kept.`,
     },
     keys: ["wishWatches", "wishTracking", "wishAlertEvents", "stockReports"],
   },
@@ -559,8 +560,8 @@ export const EXPORT_SECTIONS = {
   piecesSent: {
     title: { fr: "Pièces envoyées", en: "Pieces sent" },
     intro: {
-      fr: "Les pièces de vos Envies que vous avez envoyées à une personne sur Spotto.",
-      en: "The pieces from your Wishlist that you sent to someone on Spotto.",
+      fr: `Les pièces de vos Envies que vous avez envoyées à une personne sur ${BRAND}.`,
+      en: `The pieces from your Wishlist that you sent to someone on ${BRAND}.`,
     },
     keys: ["piecesSent"],
   },
@@ -580,8 +581,8 @@ export const EXPORT_SECTIONS = {
   devices: {
     title: { fr: "Vos appareils pour les notifications", en: "Your devices for notifications" },
     intro: {
-      fr: "Les téléphones sur lesquels une notification vous prévient d'un nouveau message. Pour chacun, Spotto garde une adresse technique, donnée par Apple et Expo pour vous envoyer ces notifications ; elle n'est pas recopiée ici.",
-      en: "The phones on which a notification tells you about a new message. For each one, Spotto keeps a technical address, given by Apple and Expo to send you these notifications; it isn't copied here.",
+      fr: `Les téléphones sur lesquels une notification vous prévient d'un nouveau message. Pour chacun, ${BRAND} garde une adresse technique, donnée par Apple et Expo pour vous envoyer ces notifications ; elle n'est pas recopiée ici.`,
+      en: `The phones on which a notification tells you about a new message. For each one, ${BRAND} keeps a technical address, given by Apple and Expo to send you these notifications; it isn't copied here.`,
     },
     keys: ["pushDevices"],
   },
@@ -593,8 +594,8 @@ export const EXPORT_SECTIONS = {
   clicks: {
     title: { fr: "Vos clics vers les marchands", en: "Your clicks to retailers" },
     intro: {
-      fr: "Chaque fois que vous avez ouvert le site d'un marchand depuis Spotto : la pièce, l'endroit de l'app, le navigateur utilisé et la date.",
-      en: "Each time you opened a retailer's site from Spotto: the piece, where in the app, the browser used and the date.",
+      fr: `Chaque fois que vous avez ouvert le site d'un marchand depuis ${BRAND} : la pièce, l'endroit de l'app, le navigateur utilisé et la date.`,
+      en: `Each time you opened a retailer's site from ${BRAND}: the piece, where in the app, the browser used and the date.`,
     },
     keys: ["affiliateClicks", "affiliateConversions"],
   },
@@ -862,12 +863,12 @@ export const EXPORT_STATUS_LABELS: Record<"requested" | "processing" | "ready" |
 // ---- Phrases du fichier ({nom} : valeur insérée, puis échappée) ----
 
 export const EXPORT_TEXT = {
-  documentTitle: { fr: "Vos données Spotto", en: "Your Spotto data" },
+  documentTitle: { fr: `Vos données ${BRAND}`, en: `Your ${BRAND} data` },
   accountLine: { fr: "Compte {account}", en: "Account {account}" },
   createdLine: { fr: "Fichier créé le {date} (fuseau horaire : {zone})", en: "File created on {date} (time zone: {zone})" },
   introWhat: {
-    fr: "Ce fichier rassemble toutes les données personnelles que Spotto conserve sur votre compte, au moment de votre demande. Il s'ouvre sans connexion, dans n'importe quel navigateur.",
-    en: "This file brings together all the personal data Spotto holds about your account, at the time of your request. It opens offline, in any browser.",
+    fr: `Ce fichier rassemble toutes les données personnelles que ${BRAND} conserve sur votre compte, au moment de votre demande. Il s'ouvre sans connexion, dans n'importe quel navigateur.`,
+    en: `This file brings together all the personal data ${BRAND} holds about your account, at the time of your request. It opens offline, in any browser.`,
   },
   introPrivate: {
     fr: "Il contient des informations personnelles : gardez-le pour vous et partagez-le avec prudence.",
@@ -891,12 +892,12 @@ export const EXPORT_TEXT = {
   emptyValue: { fr: "(vide)", en: "(empty)" },
   yes: { fr: "Oui", en: "Yes" },
   no: { fr: "Non", en: "No" },
-  someone: { fr: "un compte Spotto", en: "a Spotto account" },
-  moderationActor: { fr: "Spotto (modération)", en: "Spotto (moderation)" },
+  someone: { fr: `un compte ${BRAND}`, en: `a ${BRAND} account` },
+  moderationActor: { fr: `${BRAND} (modération)`, en: `${BRAND} (moderation)` },
   yourself: { fr: "vous", en: "you" },
   yourPost: { fr: "votre publication", en: "your post" },
   postBy: { fr: "une publication de {person}", en: "a post by {person}" },
-  postBySomeone: { fr: "une publication d'un compte Spotto", en: "a post by a Spotto account" },
+  postBySomeone: { fr: `une publication d'un compte ${BRAND}`, en: `a post by a ${BRAND} account` },
   priceRange: { fr: "{min} à {max}", en: "{min} to {max}" },
   // Liens : toujours un libellé court, jamais l'adresse elle-même.
   openTiktok: { fr: "Ouvrir la vidéo TikTok", en: "Open the TikTok video" },
@@ -958,7 +959,7 @@ export const EXPORT_TEXT = {
   // Clics et achats suivis.
   pieceAt: { fr: "{piece} chez {merchant}", en: "{piece} at {merchant}" },
   unknownBrowser: { fr: "Navigateur non reconnu", en: "Unknown browser" },
-  spottoApp: { fr: "App Spotto", en: "Spotto app" },
+  ownApp: { fr: `App ${BRAND}`, en: `${BRAND} app` },
   conversionsTitle: { fr: "Achats suivis", en: "Tracked purchases" },
   conversionsIntro: {
     fr: "Les achats qu'un marchand partenaire a signalés après un de vos clics.",
@@ -982,7 +983,7 @@ export const EXPORT_TEXT = {
   handledOn: { fr: "Traité le {date}", en: "Handled on {date}" },
   notHandled: { fr: "Pas encore traité", en: "Not handled yet" },
   // Modération.
-  adminSince: { fr: "Vous avez un rôle d'administration sur Spotto depuis le {date}.", en: "You have had an administrator role on Spotto since {date}." },
+  adminSince: { fr: `Vous avez un rôle d'administration sur ${BRAND} depuis le {date}.`, en: `You have had an administrator role on ${BRAND} since {date}.` },
   adminNone: { fr: "Vous n'avez pas de rôle d'administration.", en: "You do not have an administrator role." },
   suspendedSince: { fr: "Votre compte est suspendu depuis le {date}.", en: "Your account has been suspended since {date}." },
   suspendedNone: { fr: "Votre compte n'est pas suspendu.", en: "Your account is not suspended." },

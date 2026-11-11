@@ -1,4 +1,5 @@
 import fp from "fastify-plugin";
+import { BRAND } from "../lib/brand.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { isAuthApiError, isAuthSessionMissingError, type AuthError, type User } from "@supabase/supabase-js";
 
@@ -19,7 +20,7 @@ declare module "fastify" {
   }
 }
 
-export const AUTH_UNAVAILABLE_MESSAGE = "Spotto est momentanément injoignable. Réessayez dans un instant.";
+export const AUTH_UNAVAILABLE_MESSAGE = `${BRAND} est momentanément injoignable. Réessayez dans un instant.`;
 
 /** Session refusée : seulement sur une réponse explicite de Supabase (jeton
  * invalide ou expiré, session fermée, compte supprimé). Une connexion coupée,

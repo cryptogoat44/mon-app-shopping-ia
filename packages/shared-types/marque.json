@@ -1,0 +1,10 @@
+{
+  "_aLire": "Le nom du produit et tous les identifiants qui en dépendent se changent ICI, et nulle part ailleurs. Chaque ligne est expliquée dans MARQUE.md, à la racine du dépôt.",
+  "nom": "Spotto",
+  "slugExpo": "spotto",
+  "schemaLiens": "spotto",
+  "identifiantApple": "com.spottoapp.ios",
+  "groupeApple": "group.com.spottoapp.ios",
+  "identifiantExtensionPartage": "com.spottoapp.ios.share-extension",
+  "adresseSite": "https://mon-app-shopping-ia-web.onrender.com"
+}
