@@ -174,6 +174,15 @@ const surfaces: Surface[] = [
     options: viaButton,
     form: "explain",
   },
+  {
+    // Mission « liens vidéo » : « isAffiliate » calculé par le serveur pour chaque pièce de la mémoire collective.
+    name: "Vidéo partagée — pièce déjà repérée",
+    file: "components/video-products.tsx",
+    wiring: ["<MerchantLinkButton", "isAffiliate={product.isAffiliate}"],
+    flag: serverFlag,
+    options: viaButton,
+    form: "explain",
+  },
 ];
 
 describe.each(surfaces)("$name", ({ file, wiring, flag, options, form }) => {

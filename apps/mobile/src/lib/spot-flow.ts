@@ -1,6 +1,6 @@
 import { t } from "../i18n";
 import { ApiError, prepareSearch } from "./api";
-import { getDraft, startDraft, updateDraft, type ImageSize, type SpotDraft } from "./spot-draft";
+import { getDraft, startDraft, updateDraft, type DraftVideoContext, type ImageSize, type SpotDraft } from "./spot-draft";
 import type { UnsettledLaunch } from "./spot-recovery";
 
 // Enchaînement du parcours Spotter. « Préparer » est gratuit (aucun appel
@@ -11,8 +11,8 @@ import type { UnsettledLaunch } from "./spot-recovery";
 /** Photo, ou image d'une vidéo : brouillon local. La recherche, gratuite,
  * n'est préparée qu'au lancement (freshSearchId) : l'écran suivant s'ouvre
  * sans attendre le serveur — même quand l'offre gratuite le réveille (lot 4 ter). */
-export function beginFromPhoto(uri: string, size: ImageSize): SpotDraft {
-  return startDraft({ searchId: null, localImageUri: uri, imageSize: size });
+export function beginFromPhoto(uri: string, size: ImageSize, options: { video?: DraftVideoContext | null; discardImageAfterSearch?: boolean } = {}): SpotDraft {
+  return startDraft({ searchId: null, localImageUri: uri, imageSize: size, video: options.video ?? null, discardImageAfterSearch: options.discardImageAfterSearch ?? false });
 }
 
 /** Identifiant d'une recherche encore jamais lancée pour ce brouillon : la

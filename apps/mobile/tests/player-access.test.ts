@@ -1,19 +1,30 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Lot « nettoyage avant le premier build » : le module natif qui prenait
-// l'image du lecteur intégré est HORS de l'app. Ce fichier vérifie qu'il n'en
-// reste rien (ni dossier, ni pont, ni appel), que le lecteur n'est proposé
-// nulle part — même interrupteurs allumés —, et que l'accord préalable (sans
-// rapport avec la capture) marche toujours. Doubles du stockage seulement.
-const { storage, flags } = vi.hoisted(() => ({
+// Mission « liens vidéo » : le lecteur officiel revient, avec « Spotter ce
+// moment ». Ce fichier vérifie les invariants de la prise d'image (règle
+// absolue n° 2) : un seul module natif local, qui ne fait que mettre en pause
+// la vue web et en prendre l'instantané (WKWebView.takeSnapshot) — jamais
+// ReplayKit, jamais createPDF, jamais un fichier de la plateforme téléchargé.
+// Puis la disponibilité du lecteur d'après les options du build, et l'accord
+// préalable. Doubles du stockage et des options seulement.
+// (Remplace l'ancien test « le module natif n'existe plus » du lot
+// « nettoyage avant le premier build » : la mission a remis le lecteur.)
+const { storage, flags, os } = vi.hoisted(() => ({
   storage: new Map<string, string>(),
-  flags: { LINK_PLAYER_ENABLED: false, PLAYER_TIKTOK_ENABLED: true, PLAYER_INSTAGRAM_ENABLED: false },
+  flags: { tiktokPlayer: true, instagramPlayer: true },
+  os: { OS: "ios" },
 }));
 
-vi.mock("react-native", () => ({ Platform: { OS: "ios", Version: "26.1" } }));
+vi.mock("react-native", () => ({
+  Platform: {
+    get OS() {
+      return os.OS;
+    },
+  },
+}));
 vi.mock("@react-native-async-storage/async-storage", () => ({
   default: {
     getItem: vi.fn(async (key: string) => storage.get(key) ?? null),
@@ -21,81 +32,119 @@ vi.mock("@react-native-async-storage/async-storage", () => ({
     removeItem: vi.fn(async (key: string) => void storage.delete(key)),
   },
 }));
-// Les interrupteurs, lus au moment de l'appel : le second bloc les allume tous.
-vi.mock("../src/lib/spot-flags", () => ({
-  PLAYER_CONSENT_GATE: true,
-  get LINK_PLAYER_ENABLED() {
-    return flags.LINK_PLAYER_ENABLED;
-  },
-  get PLAYER_TIKTOK_ENABLED() {
-    return flags.PLAYER_TIKTOK_ENABLED;
-  },
-  get PLAYER_INSTAGRAM_ENABLED() {
-    return flags.PLAYER_INSTAGRAM_ENABLED;
+// Options du build, lues au moment de l'appel.
+vi.mock("../src/lib/features", () => ({
+  features: {
+    get tiktokPlayer() {
+      return flags.tiktokPlayer;
+    },
+    get instagramPlayer() {
+      return flags.instagramPlayer;
+    },
   },
 }));
 
-import { linkStep } from "../src/lib/link-step";
-import { PLAYER_CAPTURE_IN_BUILD, grantPlayerConsent, isPlayerAvailable, playerPlatforms, readPlayerConsent, withdrawPlayerConsent } from "../src/lib/player-access";
+import { grantPlayerConsent, isPlayerAvailable, readPlayerConsent, withdrawPlayerConsent } from "../src/lib/player-access";
 
 const MOBILE = fileURLToPath(new URL("..", import.meta.url));
+const MODULE = join(MOBILE, "modules", "spotto-player-snapshot");
+const SWIFT = join(MODULE, "ios", "SpottoPlayerSnapshotModule.swift");
+const read = (path: string) => readFileSync(path, "utf8");
+/** Code Swift sans ses commentaires (ils citent ce qui est interdit). */
+const swiftCode = (path: string) => read(path).replace(/\/\/.*$/gm, "");
 
-/** Tous les fichiers de code de l'app (hors dépendances et dossiers générés). */
-function codeFiles(dir: string): string[] {
+/** Tous les fichiers de l'app (hors dépendances et dossiers générés). */
+function files(dir: string, pattern: RegExp): string[] {
   return readdirSync(dir).flatMap((name) => {
-    if (["node_modules", "dist", ".expo", "ios", "android"].includes(name)) return [];
+    if (["node_modules", "dist", ".expo", "ios", "android"].includes(name) && dir === MOBILE) return [];
+    if (name === "node_modules") return [];
     const path = join(dir, name);
-    if (statSync(path).isDirectory()) return codeFiles(path);
-    return /\.(ts|tsx|js|jsx|json|swift|m|mm|h|podspec)$/.test(name) ? [path] : [];
+    if (statSync(path).isDirectory()) return files(path, pattern);
+    return pattern.test(name) ? [path] : [];
   });
 }
 
 beforeEach(() => {
   storage.clear();
-  Object.assign(flags, { LINK_PLAYER_ENABLED: false, PLAYER_TIKTOK_ENABLED: true, PLAYER_INSTAGRAM_ENABLED: false });
+  Object.assign(flags, { tiktokPlayer: true, instagramPlayer: true });
+  os.OS = "ios";
 });
 
-describe("module natif de capture du lecteur : hors de l'app", () => {
-  it("le dossier du module et son pont n'existent plus", () => {
-    expect(existsSync(join(MOBILE, "modules", "spotto-frame-capture"))).toBe(false);
-    // Plus aucun module natif local : Expo n'en relie donc aucun au build.
-    expect(existsSync(join(MOBILE, "modules"))).toBe(false);
-    expect(existsSync(join(MOBILE, "src", "lib", "player-capture.ts"))).toBe(false);
-    expect(existsSync(join(MOBILE, "src", "lib", "player-capture.web.ts"))).toBe(false);
+describe("module natif de l'instantané : takeSnapshot, et rien d'autre", () => {
+  it("un module local Expo, iOS seulement, une seule classe", () => {
+    expect(JSON.parse(read(join(MODULE, "expo-module.config.json")))).toEqual({ platforms: ["apple"], apple: { modules: ["SpottoPlayerSnapshotModule"] } });
+    expect(existsSync(SWIFT)).toBe(true);
+    expect(read(join(MODULE, "ios", "SpottoPlayerSnapshot.podspec"))).toMatch(/s\.frameworks\s*=\s*'WebKit', 'UIKit'\n/);
   });
 
-  it("aucun fichier de code de l'app ne charge le module ni n'appelle une capture de la vue web ou de l'écran", () => {
-    const interdits = /SpottoFrameCapture|FrameCaptureModule|captureWebView|captureScreen|cancelScreenCapture|screenCaptureAvailable|takeSnapshot|RPScreenRecorder|ReplayKit|pauseAllMediaPlayback|requestMediaPlaybackState/;
-    const fautifs = [...codeFiles(join(MOBILE, "src")), join(MOBILE, "app.json"), join(MOBILE, "package.json")].filter((file) => interdits.test(readFileSync(file, "utf8")));
-    expect(fautifs).toEqual([]);
-    expect(codeFiles(MOBILE).filter((file) => /\.(swift|m|mm|h|podspec)$/.test(file))).toEqual([]);
+  it("une seule fonction, `snapshot` : pause des médias de la vue web, puis WKWebView.takeSnapshot ; JPEG 1 600 px, qualité 0,8", () => {
+    const code = swiftCode(SWIFT);
+    expect([...code.matchAll(/(?:Async)?Function\("([^"]+)"\)/g)].map((match) => match[1])).toEqual(["snapshot"]);
+    expect(code).toContain("webView.pauseAllMediaPlayback");
+    expect(code).toContain("webView.takeSnapshot(with: configuration)");
+    expect(code).toContain("maxSide: CGFloat = 1600");
+    expect(code).toContain("quality: CGFloat = 0.8");
+    expect(code).toContain("jpegData(compressionQuality: quality)");
+    expect(code).toContain("config.cacheDirectory");
   });
 
-  it("la constante le dit : le module de capture n'est pas dans le build", () => {
-    expect(PLAYER_CAPTURE_IN_BUILD).toBe(false);
+  it("jamais d'enregistrement de l'écran, de PDF, de réseau ni de lecture d'un fichier de la plateforme", () => {
+    const code = swiftCode(SWIFT);
+    for (const forbidden of ["ReplayKit", "RPScreenRecorder", "startCapture", "createPDF", "PDFKit", "URLSession", "URLRequest", "Data(contentsOf", "AVAsset", "AVPlayer", "evaluateJavaScript", "callAsyncJavaScript"]) {
+      expect(code, forbidden).not.toContain(forbidden);
+    }
+    // L'avertissement du fondateur reste en tête du fichier.
+    expect(read(SWIFT)).toContain("SI L'INSTANTANÉ SORT NOIR SUR UN VRAI IPHONE : S'ARRÊTER LÀ");
+    expect(read(join(MOBILE, "src", "lib", "player-snapshot.ts"))).toContain("SI L'INSTANTANÉ SORT NOIR SUR UN VRAI IPHONE : S'ARRÊTER LÀ");
+  });
+
+  it("aucun autre code natif dans l'app : ce module seulement", () => {
+    const native = files(MOBILE, /\.(swift|m|mm|h|podspec)$/).map((path) => relative(MOBILE, path).split("\\").join("/"));
+    expect(native.sort()).toEqual(["modules/spotto-player-snapshot/ios/SpottoPlayerSnapshot.podspec", "modules/spotto-player-snapshot/ios/SpottoPlayerSnapshotModule.swift"].sort());
+    expect(readdirSync(join(MOBILE, "modules"))).toEqual(["spotto-player-snapshot"]);
+  });
+
+  it("aucun fichier de l'app n'appelle une autre capture ni ne télécharge un média", () => {
+    const forbidden = /ReplayKit|RPScreenRecorder|captureScreen|createPDF|captureWebView|downloadFileAsync|downloadAsync|createDownloadResumable|XMLHttpRequest/;
+    const code = [...files(join(MOBILE, "src"), /\.(ts|tsx)$/), ...files(join(MOBILE, "plugins"), /\.(js|swift)$/), join(MOBILE, "app.json"), join(MOBILE, "package.json")];
+    expect(code.filter((path) => forbidden.test(read(path)))).toEqual([]);
+    // Le module natif n'est appelé que par son pont.
+    expect(code.filter((path) => read(path).includes("SpottoPlayerSnapshot")).map((path) => relative(MOBILE, path))).toEqual([join("src", "lib", "player-snapshot.ts")]);
+  });
+
+  it("les fichiers du lecteur ne font aucun appel réseau (ni fetch, ni oEmbed) : tout passe par le serveur de l'app", () => {
+    for (const name of ["src/lib/player-link.ts", "src/lib/player-host-page.ts", "src/lib/player-state.ts", "src/lib/player-decision.ts", "src/lib/player-snapshot.ts", "src/components/embedded-player.tsx", "src/app/(app)/spot/lecteur.tsx"]) {
+      const code = read(join(MOBILE, name));
+      expect(code, name).not.toMatch(/\bfetch\(|oembed|graph\.facebook\.com/i);
+    }
   });
 });
 
-describe("lecteur intégré : proposé nulle part", () => {
-  it("interrupteurs d'aujourd'hui (LINK_PLAYER_ENABLED = false) : le parcours lien reste l'aide « capture d'écran d'abord »", () => {
-    expect(isPlayerAvailable()).toBe(false);
+describe("lecteur possible d'après les options du build (app iPhone seulement)", () => {
+  it("les deux options allumées (par défaut) : TikTok et Instagram", () => {
+    expect(isPlayerAvailable()).toBe(true);
+    expect(isPlayerAvailable("tiktok")).toBe(true);
+    expect(isPlayerAvailable("instagram")).toBe(true);
+  });
+
+  it("une option coupée ne coupe pas l'autre ; les deux coupées : aucun lecteur", () => {
+    flags.tiktokPlayer = false;
     expect(isPlayerAvailable("tiktok")).toBe(false);
-    expect(playerPlatforms()).toEqual([]);
-    expect(linkStep("https://vm.tiktok.com/ZMabc123/", playerPlatforms())).toEqual({ kind: "help" });
-    expect(linkStep("https://www.instagram.com/reel/Cxyz/", playerPlatforms())).toEqual({ kind: "help" });
+    expect(isPlayerAvailable("instagram")).toBe(true);
+    flags.instagramPlayer = false;
+    expect(isPlayerAvailable()).toBe(false);
   });
 
-  it("même sur iPhone avec TOUS les interrupteurs allumés : sans le module de capture, aucune plateforme, toujours l'aide", () => {
-    Object.assign(flags, { LINK_PLAYER_ENABLED: true, PLAYER_TIKTOK_ENABLED: true, PLAYER_INSTAGRAM_ENABLED: true });
-    expect(playerPlatforms()).toEqual([]);
-    expect(isPlayerAvailable()).toBe(false);
-    expect(isPlayerAvailable("tiktok")).toBe(false);
-    expect(isPlayerAvailable("instagram")).toBe(false);
-    expect(linkStep("https://vm.tiktok.com/ZMabc123/", playerPlatforms())).toEqual({ kind: "help" });
+  it("jamais sur le site ni sur Android", () => {
+    for (const platform of ["web", "android"]) {
+      os.OS = platform;
+      expect(isPlayerAvailable()).toBe(false);
+      expect(isPlayerAvailable("tiktok")).toBe(false);
+    }
   });
 });
 
-describe("accord préalable au lecteur officiel (sans rapport avec la capture)", () => {
+describe("accord préalable au lecteur officiel (CNIL)", () => {
   it("donné par plateforme, retiré dans Réglages", async () => {
     expect(await readPlayerConsent()).toEqual({ tiktok: false, instagram: false });
     await grantPlayerConsent("tiktok");

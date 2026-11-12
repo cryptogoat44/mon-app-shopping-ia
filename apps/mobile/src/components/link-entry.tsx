@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, Text, TextInput, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
@@ -10,10 +10,9 @@ import { linkRefusal } from "@/lib/link-step";
 import { useLinkEntry } from "@/lib/use-link-entry";
 import { themedStyles } from "@/theme/themed-styles";
 
-// Champ de lien du Spotter, pour le lecteur intégré seulement (app iPhone,
-// lot « lecteur intégré », coupé tant que LINK_PLAYER_ENABLED vaut false) :
-// ailleurs, le champ n'est pas affiché. Le bouton passe par la même fonction
-// qu'un lien partagé (lib/use-link-entry.ts).
+// Champ de lien du Spotter (mission « liens vidéo »), sur l'app iPhone comme
+// sur le site : un lien TikTok ou Instagram ouvre l'écran « vidéo partagée ».
+// Le bouton passe par la même fonction qu'un lien partagé (lib/use-link-entry.ts).
 
 function DetectionCard({ detection }: { detection: LinkDetection }) {
   if (detection.kind === "supported") {
@@ -71,7 +70,7 @@ export function LinkEntry({ onHelp }: { onHelp: () => void }) {
   return (
     <>
       <Text style={styles.label}>{label}</Text>
-      <Text style={styles.hint}>{t.player.linkHint}</Text>
+      <Text style={styles.hint}>{Platform.OS === "web" ? t.player.linkHintWeb : t.player.linkHint}</Text>
       <View style={styles.field}>
         <TextInput
           style={styles.input}

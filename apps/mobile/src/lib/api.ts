@@ -70,6 +70,10 @@ import type {
   UpdateWishAlertsSettingsRequest,
   WishAlertState,
   WishAlertsStatus,
+  InstagramEmbedResponse,
+  VideoConfirmRequest,
+  VideoLookupResponse,
+  VideoSpotRequest,
 } from "@monapp/shared-types";
 import { COMPLEMENT_DEFERRED, CONSENT_VERSIONS, parseSearchCapacityStatus, parseVideoMomentsResponse, type SearchCapacityStatus } from "@monapp/shared-types";
 import { supabase } from "./supabase";
@@ -957,6 +961,44 @@ export async function recordVideoAiChoice(granted: boolean): Promise<void> {
 }
 
 /** L'analyse automatique est-elle active sur le serveur (clé d'API présente) ? */
+// ---- Liens vidéo (mission « liens vidéo ») ----
+// Le serveur reconnaît la vidéo (liens courts TikTok compris), dit quels
+// lecteurs il laisse allumés et rend la mémoire collective. Rien de TikTok ni
+// d'Instagram n'est jamais téléchargé par l'app.
+
+/** Vidéo reconnue, interrupteurs des lecteurs et pièces déjà repérées.
+ * Interrupteurs illisibles : coupés (ils ne peuvent que couper). */
+export async function lookupVideoLink(url: string, signal?: AbortSignal): Promise<VideoLookupResponse> {
+  const response = await authorizedFetch(`/api/video-links/lookup?url=${encodeURIComponent(url)}`, signal ? { signal } : undefined);
+  const body = (await response.json()) as Partial<VideoLookupResponse> | null;
+  const players = body?.players;
+  return {
+    link: body?.link ?? null,
+    linkIssue: body?.linkIssue ?? null,
+    players: { tiktok: players?.tiktok === true, instagram: players?.instagram === true },
+    memoryAvailable: body?.memoryAvailable === true,
+    products: Array.isArray(body?.products) ? body.products : [],
+  };
+}
+
+/** Code d'intégration officiel d'une publication Instagram (404 « player_off »
+ * ou « embed_unavailable », 503 « embed_busy » : ApiError, écran de secours). */
+export async function fetchInstagramEmbed(url: string, signal?: AbortSignal): Promise<InstagramEmbedResponse> {
+  const response = await authorizedFetch(`/api/video-links/instagram-embed?url=${encodeURIComponent(url)}`, signal ? { signal } : undefined);
+  const body = (await response.json()) as Partial<InstagramEmbedResponse> | null;
+  return { html: typeof body?.html === "string" ? body.html : "", creatorHandle: typeof body?.creatorHandle === "string" ? body.creatorHandle : null };
+}
+
+/** Spot noté pour la vidéo, après une recherche terminée avec des résultats. */
+export async function recordVideoSpot(request: VideoSpotRequest): Promise<void> {
+  await authorizedFetch("/api/video-links/spots", { method: "POST", body: JSON.stringify(request) });
+}
+
+/** « C'est bien cette pièce ». */
+export async function confirmVideoProduct(request: VideoConfirmRequest): Promise<void> {
+  await authorizedFetch("/api/video-links/confirm", { method: "POST", body: JSON.stringify(request) });
+}
+
 export async function fetchVideoAiEnabled(): Promise<boolean> {
   const response = await authorizedFetch("/api/video-moments/status");
   const body: unknown = await response.json();

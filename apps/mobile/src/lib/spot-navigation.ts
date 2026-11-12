@@ -1,5 +1,4 @@
 import type { useRouter } from "expo-router";
-import { clearPlayerLink } from "./player-link";
 import { clearDraft } from "./spot-draft";
 
 type Router = ReturnType<typeof useRouter>;
@@ -11,6 +10,5 @@ type Router = ReturnType<typeof useRouter>;
  * l'accueil remplace simplement l'écran courant. */
 export function closeSpotter(router: Router): void {
   clearDraft();
-  clearPlayerLink();
   router.dismissTo("/");
 }

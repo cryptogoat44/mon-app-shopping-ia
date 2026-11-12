@@ -123,6 +123,7 @@
         }
       ],
       "./plugins/extension-partage.js",
+      "./plugins/lecteur-integre.js",
       [
         "@sentry/react-native/expo",
         {

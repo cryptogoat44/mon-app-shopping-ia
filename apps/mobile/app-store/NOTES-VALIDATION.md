@@ -35,7 +35,7 @@ Le nom de l'app va changer : le texte dit « the app ». Seuls les libellés lus
 10. **Une phrase facultative**, à ajouter à la fin de « SERVER SWITCHES TODAY » seulement si vous vous y tenez : `Switches that are OFF will only be turned on with a new submission.` (67 caractères). C'est la lecture prudente de la règle 2.5.19 : allumer plus tard une fonction qu'Apple n'a pas vue passe par une nouvelle version.
 11. **Si le serveur s'endort encore** (offre gratuite de Render) le jour de l'envoi, ajoutez : `SERVER: it may sleep when unused; the first launch can then take up to one minute (a wake-up message is shown).` (111 caractères ; vérifiez que le total reste sous 4 000). Le mieux reste une offre sans veille (CONTROLE-BUILD.md, partie C).
 
-*Lecteur intégré TikTok / Instagram : rien à écrire.* Le module natif qui prenait l'image du lecteur est retiré de l'app depuis le lot « nettoyage avant le premier build » (10 novembre 2026) : le build ne contient aucun code de capture. S'il revenait un jour (`apps/mobile/BUILD-IPHONE.md`, section 9), ces notes devraient le décrire.
+*Lecteur intégré TikTok / Instagram : de retour (mission « liens vidéo »), sous réserve de la décision du fondateur avant l'envoi.* Un lien TikTok ou Instagram s'ouvre dans le lecteur officiel de la plateforme (page `www.tiktok.com/player/v1/…`, ou code d'intégration officiel d'Instagram avec `embed.js`), jamais masqué ni modifié, après un accord préalable. « Spotter ce moment » prend seulement l'instantané de ce que la vue affiche (`WKWebView.takeSnapshot`) : aucune vidéo ni image n'est téléchargée depuis TikTok ou Instagram, et l'instantané est effacé du téléphone dès que la recherche est partie. Ces notes devront le décrire pour Apple si le build part avec le lecteur (`apps/mobile/BUILD-IPHONE.md`, section 9).
 
 *Ce que ces notes ne disent pas, faute de place* : l'écran « Mettez à jour » (`APP_MIN_IOS_BUILD`, coupé par défaut : CONTROLE-BUILD.md, partie C), l'alerte « Épuisé » (construite, cachée dans l'app : décision à prendre, rapport d'audit partie 2), et le détail des « autres boutiques » (3 recherches au plus par photo).
 
@@ -52,7 +52,7 @@ POURQUOI UN COMPTE
 Recherches gardées et limitées par personne ; Envies, Vault, publications, abonnements et messages demandent une identité. Inscription gratuite (e-mail à confirmer).
 
 SPOTTER UNE PIÈCE (onglet Spotter)
-« Ajouter une photo », « Prendre une photo » ou « Ajouter une vidéo » (reste sur l'iPhone). Entourez la pièce, « Lancer » : résultats en 10 à 20 s, prix d'abord. « Garder » > Envies ; « Je l'ai achetée » > Vault. Lien TikTok, Instagram ou Pinterest collé : non lu (l'app explique la capture d'écran).
+« Ajouter une photo », « Prendre une photo » ou « Ajouter une vidéo » (reste sur l'iPhone). Entourez la pièce, « Lancer » : résultats en 10 à 20 s, prix d'abord. « Garder » > Envies ; « Je l'ai achetée » > Vault. Lien TikTok ou Instagram collé ou partagé : la vidéo s'ouvre dans son lecteur officiel, « Spotter ce moment » (ou, lecteur coupé, l'app explique la capture d'écran). Lien Pinterest : non lu (l'app explique la capture d'écran).
 Extension de partage : Photos > Partager > l'app.
 
 SOURCE DES RÉSULTATS

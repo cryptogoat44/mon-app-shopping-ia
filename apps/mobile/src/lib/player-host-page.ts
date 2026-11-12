@@ -1,28 +1,36 @@
-// Page hôte du lecteur intégré (lot « lecteur intégré ») : chargée dans la vue
-// web par source={{ html, baseUrl }} (react-native-webview 13.16.1). Elle ne
-// contient AUCUN texte visible : tout texte d'interface reste dans l'app
-// (tests/no-hardcoded-text.test.ts). Elle ne touche jamais au contenu du
-// lecteur officiel : elle relaie ses messages, et rien d'autre.
-// Elle tourne à l'adresse du site de Spotto et a accès au pont vers l'app :
-// aucun texte venu de TikTok ou d'Instagram n'y est jamais écrit. Les codes
-// d'intégration sont reconstruits ici, à partir de l'identifiant ou de
-// l'adresse déjà vérifiés par lib/player-link.ts.
+// Pages hôtes du lecteur intégré (mission « liens vidéo ») : écrites par
+// l'app, chargées dans la vue web par source={{ html, baseUrl }}
+// (react-native-webview 13.16.1). Elles ne contiennent AUCUN texte visible :
+// tout texte d'interface reste dans l'app (tests/no-hardcoded-text.test.ts).
+// Elles ne touchent jamais au lecteur officiel : rien n'est posé dessus,
+// masqué ni modifié ; elles relaient ses messages, et rien d'autre.
+// - TikTok : le cadre https://www.tiktok.com/player/v1/{id}, construit à
+//   partir du seul identifiant de la vidéo (aucun appel à TikTok par l'app).
+// - Instagram : le code d'intégration officiel rendu par le serveur
+//   (GET /api/video-links/instagram-embed), vérifié ici, puis le seul script
+//   officiel https://www.instagram.com/embed.js.
+// Elles tournent à l'adresse du site de l'app et ont accès au pont vers
+// l'app : une règle de sécurité (Content-Security-Policy) par page n'admet
+// que le script de relais écrit ici (et, pour Instagram, embed.js).
 // Imports relatifs : fichier testé par vitest.
-import { TIKTOK_ORIGIN } from "./player-link";
+import { TIKTOK_ORIGIN, tiktokPlayerUrl } from "./player-link";
 
 /** Marque des messages de la page hôte vers l'app (lib/player-state.ts). */
 export const HOST_MESSAGE_SOURCE = "spotto-player";
+
+/** Seul script tiers admis, dans la page Instagram seulement. */
+export const INSTAGRAM_EMBED_SCRIPT = "https://www.instagram.com/embed.js";
 
 export function escapeHtmlAttribute(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-// Relais TikTok (protocole « x-tiktok-player » : note R1 §2 ; Video.js
-// player-api.js l.4, adapter.js l.303-347) : message de NOTRE cadre, venu de
-// l'origine du lecteur officiel (si le cadre a été dirigé ailleurs, on
-// l'ignore), marqué → relayé à l'app ; commande de l'app (MessageEvent sans
-// source, RNCWebViewImpl.m l.1111-1119) → transmise au lecteur, à sa seule
-// origine. Une commande sans valeur n'en porte aucune.
+// Relais TikTok (protocole « x-tiktok-player ») : message de NOTRE cadre,
+// venu de l'origine du lecteur officiel (si le cadre a été dirigé ailleurs,
+// on l'ignore), marqué → relayé à l'app ; commande de l'app (MessageEvent
+// sans source) → transmise au lecteur, à sa seule origine, sous la forme
+// { type, value, "x-tiktok-player": true }. Une commande sans valeur n'en
+// porte aucune.
 export const TIKTOK_RELAY = `(function () {
   var frame = document.getElementById("player");
   var ORIGIN = "${TIKTOK_ORIGIN}";
@@ -49,18 +57,14 @@ export const TIKTOK_RELAY = `(function () {
   });
 })();`;
 
-// Relais des codes d'intégration officiels (Instagram, et repli TikTok) :
-// embed.js remplace le blockquote par un cadre ; quand ce cadre a fini de
-// charger, la page le dit à l'app (« embedReady ») ; elle donne aussi la
-// hauteur du contenu (« size ») pour que l'app dimensionne la vue web
-// (contre-expertise n° 13). Aucune commande : ni Instagram ni ce code n'en
-// offrent (note R2 §3.5). Ce script ajoute lui-même le embed.js officiel
-// (adresse fixe, choisie par data-sdk) : la règle de sécurité de la page
-// n'admet que les scripts écrits ici et ceux qu'ils ajoutent. Pour
-// Instagram, instgrm.Embeds.process() une fois embed.js chargé (note R2 §1).
-export const EMBED_RELAY = `(function () {
+// Relais Instagram : embed.js remplace le blockquote par un cadre ; quand ce
+// cadre a fini de charger, la page le dit à l'app (« embedReady ») ; elle
+// donne aussi la hauteur du contenu (« size ») pour que l'app dimensionne la
+// vue web. Aucune commande : Instagram n'en offre pas. Ce script ajoute
+// lui-même le embed.js officiel (adresse fixe), puis appelle
+// instgrm.Embeds.process().
+export const INSTAGRAM_RELAY = `(function () {
   var post = document.getElementById("post");
-  var SDK = { instagram: "https://www.instagram.com/embed.js", tiktok: "https://www.tiktok.com/embed.js" };
   var lastHeight = 0;
   function toApp(message) {
     message.source = "${HOST_MESSAGE_SOURCE}";
@@ -86,76 +90,99 @@ export const EMBED_RELAY = `(function () {
   new MutationObserver(scan).observe(post, { childList: true, subtree: true, attributes: true });
   if (window.ResizeObserver) new ResizeObserver(size).observe(post);
   scan();
-  var sdk = post.getAttribute("data-sdk");
-  if (sdk && Object.prototype.hasOwnProperty.call(SDK, sdk)) {
-    var script = document.createElement("script");
-    script.async = true;
-    script.src = SDK[sdk];
-    if (sdk === "instagram") script.onload = function () { if (window.instgrm) window.instgrm.Embeds.process(); };
-    document.body.appendChild(script);
-  }
+  var script = document.createElement("script");
+  script.async = true;
+  script.src = "${INSTAGRAM_EMBED_SCRIPT}";
+  script.onload = function () { if (window.instgrm) window.instgrm.Embeds.process(); };
+  document.body.appendChild(script);
 })();`;
 
-// Empreintes SHA-256 des deux scripts ci-dessus, les seuls écrits dans la
-// page. À recalculer à chaque modification d'un script :
-// tests/player-host-page.test.ts compare et donne la bonne valeur.
+// Empreintes SHA-256 des deux scripts ci-dessus. À recalculer à chaque
+// modification d'un script : tests/player-host-page.test.ts compare et donne
+// la bonne valeur.
 export const TIKTOK_RELAY_SHA256 = "lSyRWY0mEaOyRvs3p4mTbjTubE4aVijcssn11WVfetQ=";
-export const EMBED_RELAY_SHA256 = "kMO6979RwOTE6PW1vjuESdTPYDuI1BITd63NpIajRKQ=";
+export const INSTAGRAM_RELAY_SHA256 = "DFlg4CL6MK6FlSQI9yt8LiOEhmTqS7Dh33hD+7u8W9s=";
 
-// Règle de sécurité de la page (Content-Security-Policy), en plus du reste :
-// seuls les deux scripts ci-dessus s'exécutent, et ce qu'ils ajoutent
-// (embed.js et ce qu'il charge : « strict-dynamic ») ; aucun attribut
-// onerror/onload, aucun lien javascript:, aucun plugin, aucun <base>, aucun
-// formulaire ; cadres de TikTok et d'Instagram seulement. Les deux adresses
-// après « strict-dynamic » ne servent qu'aux vues web qui l'ignoreraient.
-export const HOST_PAGE_CSP = [
-  `script-src 'sha256-${TIKTOK_RELAY_SHA256}' 'sha256-${EMBED_RELAY_SHA256}' 'strict-dynamic' https://www.tiktok.com https://www.instagram.com`,
-  "script-src-attr 'none'",
-  "object-src 'none'",
-  "base-uri 'none'",
-  "form-action 'none'",
-  "frame-src https://tiktok.com https://*.tiktok.com https://instagram.com https://*.instagram.com",
+// Règles communes : aucun attribut onerror/onload, aucun lien javascript:,
+// aucun plugin, aucun <base>, aucun formulaire.
+const COMMON_CSP = ["script-src-attr 'none'", "object-src 'none'", "base-uri 'none'", "form-action 'none'"];
+
+/** TikTok : seul le relais s'exécute ; un seul cadre admis, le lecteur officiel. */
+export const TIKTOK_PAGE_CSP = [`script-src 'sha256-${TIKTOK_RELAY_SHA256}'`, ...COMMON_CSP, `frame-src ${TIKTOK_ORIGIN}`].join("; ");
+
+/** Instagram : le relais et embed.js (cette adresse exacte, sans « strict-dynamic » :
+ * aucun autre script ne peut s'ajouter) ; cadres d'Instagram seulement. */
+export const INSTAGRAM_PAGE_CSP = [
+  `script-src 'sha256-${INSTAGRAM_RELAY_SHA256}' ${INSTAGRAM_EMBED_SCRIPT}`,
+  ...COMMON_CSP,
+  "frame-src https://www.instagram.com https://instagram.com",
 ].join("; ");
 
 // Règle écrite telle quelle dans l'attribut : texte fixe, sans guillemet ni chevron (vérifié par le test).
-const HEAD = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${HOST_PAGE_CSP}"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">`;
+const head = (csp: string) =>
+  `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">`;
 
-// Formes admises, revérifiées ici même si player-link.ts les a déjà lues :
-// une valeur inattendue donne une page vide, jamais du code.
-const TIKTOK_PLAYER_URL = /^https:\/\/www\.tiktok\.com\/player\/v1\/\d{1,25}(?:\?|$)/;
-const TIKTOK_ID = /^\d{8,25}$/;
-const INSTAGRAM_CANONICAL = /^https:\/\/www\.instagram\.com\/(?:p|reel)\/[A-Za-z0-9_-]+\/$/;
-
-/** Code d'intégration TikTok (forme officielle de l'oEmbed), écrit à partir de l'identifiant seul (chiffres). */
-export function tiktokEmbedMarkup(id: string): string {
-  if (!TIKTOK_ID.test(id)) return "";
-  return `<blockquote class="tiktok-embed" cite="${TIKTOK_ORIGIN}/@_/video/${id}" data-video-id="${id}" style="max-width:605px;min-width:325px"><section></section></blockquote>`;
+/** TikTok : le lecteur officiel en plein cadre, construit depuis l'identifiant seul. null : identifiant refusé. */
+export function tiktokHostPage(videoId: string, title: string): string | null {
+  const src = tiktokPlayerUrl(videoId);
+  if (!src) return null;
+  return `${head(TIKTOK_PAGE_CSP)}<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}#player{position:absolute;top:0;left:0;width:100%;height:100%;border:0}</style></head><body><iframe id="player" src="${escapeHtmlAttribute(src)}" allow="autoplay; encrypted-media" title="${escapeHtmlAttribute(title)}"></iframe><script>${TIKTOK_RELAY}</script></body></html>`;
 }
 
-/** Code d'intégration Instagram (forme officielle de l'oEmbed, sans légende), écrit à partir de l'adresse canonique. */
-export function instagramEmbedMarkup(canonical: string): string {
-  if (!INSTAGRAM_CANONICAL.test(canonical)) return "";
-  return `<blockquote class="instagram-media" data-instgrm-permalink="${escapeHtmlAttribute(canonical)}" data-instgrm-version="14" style="background:#fff;border:0;margin:1px;max-width:540px;min-width:326px;padding:0;width:calc(100% - 2px)"></blockquote>`;
+// ---- Code d'intégration Instagram : vérifié avant d'être écrit ----
+
+const EMBED_MAX_LENGTH = 30_000;
+/** Balises refusées partout dans le code d'intégration (même dans un SVG). */
+const FORBIDDEN_TAG =
+  /<\s*\/?\s*(?:script|iframe|frame|frameset|object|embed|applet|link|meta|base|form|input|button|textarea|select|option|style|template|noscript|foreignobject|use|animate|animatemotion|animatetransform|set|handler|portal|math|image)\b/i;
+/** Attribut d'événement (onload, onerror…) ou cadre en ligne. */
+const EVENT_ATTRIBUTE = /[\s"'/;]on[a-z]+\s*=|\ssrcdoc\s*=/i;
+/** Valeur d'attribut qui est une adresse exécutant ou contenant du code. */
+const DANGEROUS_URL = /^(?:javascript|vbscript|data|blob|file):/i;
+const ATTRIBUTE_VALUE = /=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/g;
+const OPENING = /^<blockquote\s[^>]*\bclass\s*=\s*"[^"]*\binstagram-media\b[^"]*"[^>]*>/i;
+const PERMALINK = /\bdata-instgrm-permalink\s*=\s*"https:\/\/www\.instagram\.com\/(?:[A-Za-z0-9._]{1,30}\/)?(?:p|reel|reels|tv)\/[A-Za-z0-9_-]{5,64}\/?[^"]*"/i;
+
+/** Valeurs d'attributs décodées (entités numériques et nommées utiles,
+ * blancs retirés) : « &#106;avascript: » ou « java&Tab;script: » sont lus
+ * comme le navigateur les lirait. */
+function decodedForCheck(html: string): string {
+  return html
+    .replace(/&#x([0-9a-f]+);?/gi, (_match, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16) || 32))
+    .replace(/&#(\d+);?/g, (_match, decimal: string) => String.fromCodePoint(Number(decimal) || 32))
+    .replace(/&colon;/gi, ":")
+    .replace(/&(?:tab|newline);/gi, "")
+    .replace(/[\u0000- ]+/g, "");
 }
 
-/** TikTok : le lecteur officiel en plein cadre (les réglages sont dans l'adresse, lib/player-link.ts). */
-export function tiktokHostPage(playerUrl: string, title: string): string {
-  const src = TIKTOK_PLAYER_URL.test(playerUrl) ? playerUrl : "about:blank";
-  return `${HEAD}<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}#player{position:absolute;top:0;left:0;width:100%;height:100%;border:0}</style></head><body><iframe id="player" src="${escapeHtmlAttribute(src)}" allow="autoplay; encrypted-media" title="${escapeHtmlAttribute(title)}"></iframe><script>${TIKTOK_RELAY}</script></body></html>`;
+function hasDangerousUrl(markup: string): boolean {
+  for (const match of markup.matchAll(ATTRIBUTE_VALUE)) {
+    if (DANGEROUS_URL.test(decodedForCheck(match[1] ?? match[2] ?? match[3] ?? ""))) return true;
+  }
+  return false;
 }
 
-function embedHostPage(markup: string, title: string, sdk: "instagram" | "tiktok"): string {
-  // Code refusé (forme inattendue) : page vide, embed.js n'est pas chargé.
-  const loaded = markup ? sdk : "";
-  return `${HEAD}<style>html,body{margin:0;background:#fff}#post{display:flex;justify-content:center}</style></head><body><div id="post" role="region" aria-label="${escapeHtmlAttribute(title)}" data-sdk="${loaded}">${markup}</div><script>${EMBED_RELAY}</script></body></html>`;
+/** Le code d'intégration rendu par le serveur, tel qu'il sera écrit dans la
+ * page ; null s'il n'a pas la forme officielle attendue : un seul blockquote
+ * « instagram-media » qui porte l'adresse d'une publication Instagram, sans
+ * aucun script (le seul admis, embed.js, est ajouté par la page elle-même),
+ * sans cadre, attribut d'événement, adresse javascript:/data: ni balise
+ * active. Refusé : l'app montre l'écran de secours. */
+export function sanitizeInstagramEmbed(html: unknown): string | null {
+  if (typeof html !== "string") return null;
+  const markup = html.trim();
+  if (markup.length === 0 || markup.length > EMBED_MAX_LENGTH) return null;
+  const opening = OPENING.exec(markup);
+  if (!opening || !PERMALINK.test(opening[0]) || !/<\/blockquote>$/i.test(markup)) return null;
+  if (FORBIDDEN_TAG.test(markup) || EVENT_ATTRIBUTE.test(markup)) return null;
+  if (hasDangerousUrl(markup)) return null;
+  return markup;
 }
 
-/** Instagram : le code officiel, reconstruit depuis l'adresse canonique, puis embed.js et instgrm.Embeds.process() (note R2 §1). */
-export function instagramHostPage(canonical: string, title: string): string {
-  return embedHostPage(instagramEmbedMarkup(canonical), title, "instagram");
-}
-
-/** TikTok, repli documenté (contre-expertise n° 9) : le blockquote officiel, reconstruit depuis l'identifiant, puis embed.js de TikTok. */
-export function tiktokEmbedHostPage(id: string, title: string): string {
-  return embedHostPage(tiktokEmbedMarkup(id), title, "tiktok");
+/** Instagram : le code officiel vérifié, puis embed.js et instgrm.Embeds.process().
+ * null : code refusé (écran de secours). */
+export function instagramHostPage(embedHtml: unknown, title: string): string | null {
+  const markup = sanitizeInstagramEmbed(embedHtml);
+  if (!markup) return null;
+  return `${head(INSTAGRAM_PAGE_CSP)}<style>html,body{margin:0;background:#fff}#post{display:flex;justify-content:center}</style></head><body><div id="post" role="region" aria-label="${escapeHtmlAttribute(title)}">${markup}</div><script>${INSTAGRAM_RELAY}</script></body></html>`;
 }

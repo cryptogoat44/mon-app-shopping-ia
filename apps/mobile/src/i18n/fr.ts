@@ -289,23 +289,24 @@ export const fr = {
       resent: "E-mail renvoyé. Pensez à regarder aussi dans les courriers indésirables.",
     },
   },
-  // Lot « lecteur intégré » (app iPhone) : la vidéo TikTok ou Instagram
-  // s'ouvre dans Spotto, dans le lecteur officiel ; « Spotter ce moment »
-  // prend l'image affichée. TEXTES À VALIDER PAR LE FONDATEUR (§1.7 de la
-  // conception, corrigé par la contre-expertise : lien court n° 4a, accord
-  // préalable n° 5). Espaces insécables avant « : » et « ? », et dans « … ».
+  // Mission « liens vidéo » : la vidéo TikTok ou Instagram, partagée ou
+  // collée, s'ouvre dans son lecteur officiel (app iPhone) ; « Spotter ce
+  // moment » prend l'instantané de ce que la vue montre. Sur le site, ou
+  // lecteur coupé : l'écran « Spottez cette vidéo ». TEXTES À VALIDER PAR LE
+  // FONDATEUR. Espaces insécables avant « : » et « ? », et dans « … ».
   player: {
     linkQuestion: "Vous avez un lien TikTok ou Instagram ?",
     linkLabel: "Lien TikTok ou Instagram",
     linkHint: `La vidéo s'ouvre ici, dans ${BRAND} : vous la mettrez en pause sur la pièce.`,
+    linkHintWeb: "Les pièces déjà repérées dans cette vidéo s'affichent ici, avec la marche à suivre.",
     open: "Ouvrir la vidéo",
     opening: "Ouverture de la vidéo…",
     instruction: "Mettez la vidéo en pause quand la pièce est bien visible.",
     frameTitle: (platform: string) => `Vidéo ${platform}`,
+    videoBy: (platform: string, handle: string) => `Vidéo ${platform} de @${handle}`,
     spot: "Spotter ce moment",
     taking: `${BRAND} prend l'image…`,
-    recording: "Enregistrement de l'écran…",
-    privacy: (platform: string) => `Vidéo lue par ${platform}, sans téléchargement. Seule l'image de ce moment est envoyée.`,
+    privacy: (platform: string) => `Vidéo lue par ${platform}, sans téléchargement. Seule l'image de ce moment est envoyée, puis effacée de votre téléphone.`,
     tapToPlay: "Touchez la vidéo pour la lancer.",
     leaveLink: (platform: string) => `Ce lien s'ouvre dans ${platform}.`,
     openIn: (platform: string) => `Ouvrir dans ${platform}`,
@@ -313,29 +314,8 @@ export const fr = {
     gate: {
       body: (platform: string) => `Cette vidéo est lue par ${platform}, qui peut utiliser ses propres traceurs.`,
       play: "Lire la vidéo ici",
+      refuse: "Non merci",
     },
-    unavailableTitle: `Cette vidéo ne s'ouvre pas dans ${BRAND}`,
-    unavailable: {
-      notPublic: "Elle est peut-être privée ou supprimée, ou son auteur ne permet pas de l'afficher ailleurs.",
-      notAVideo: (platform: string) => `Ce lien ${platform} ne mène pas à une vidéo.`,
-      shortLink: (platform: string) => `Ce lien ne s'ouvre pas ici pour le moment. Ouvrez la vidéo dans ${platform}, ou ajoutez une capture d'écran.`,
-      noAnswer: (platform: string) => `${platform} ne répond pas pour le moment. Réessayez dans un instant.`,
-      playerError: (platform: string) => `Le lecteur ${platform} n'a pas pu lire cette vidéo.`,
-      crashed: "Le lecteur s'est arrêté.",
-    },
-    screenConsent: {
-      title: "Encore une étape",
-      body: `Votre iPhone va vous demander d'autoriser l'enregistrement de l'écran. ${BRAND} n'en garde qu'une image, celle de ce moment : rien d'autre n'est enregistré ni envoyé.`,
-      continue: "Continuer",
-      myself: "Faire une capture moi-même",
-    },
-    captureFailed: {
-      title: `${BRAND} n'a pas pu prendre l'image`,
-      body: (shortcut: string) => `Faites une capture d'écran maintenant (${shortcut}) : la vidéo reste en pause ici. Puis ajoutez-la.`,
-      declined: (shortcut: string) => `Sans votre accord, ${BRAND} ne peut pas prendre l'image. Faites une capture d'écran maintenant (${shortcut}), puis ajoutez-la.`,
-      phoneCall: (shortcut: string) => `Impossible pendant un appel. Faites une capture d'écran (${shortcut}), puis ajoutez-la.`,
-    },
-    blackImage: "L'image prise était noire ou vide ? Réessayer autrement",
     howItWorksSteps: (spot: string) => [
       `Partagez la vidéo TikTok ou Instagram vers ${BRAND}, ou collez son lien.`,
       `Mettez-la en pause sur la pièce, touchez « ${spot} », puis entourez la pièce.`,
@@ -344,6 +324,7 @@ export const fr = {
     linkNotice: {
       title: `Cette vidéo peut s'ouvrir dans ${BRAND}`,
       body: "Ouvrez-la ici même : vous la mettrez en pause sur la pièce.",
+      bodyWeb: "Ouvrez-la ici : vous verrez les pièces déjà repérées, et comment la spotter.",
     },
     settings: {
       title: `Vidéos lues dans ${BRAND}`,
@@ -351,6 +332,34 @@ export const fr = {
       withdraw: "Retirer mon accord",
       withdrawn: "Accord retiré : la question vous sera reposée à la prochaine vidéo.",
     },
+  },
+  // Mission « liens vidéo » : écran de secours, pièces déjà repérées par
+  // d'autres membres (jamais qui), lien en attente. TEXTES À VALIDER.
+  videoLink: {
+    fallbackTitle: "Spottez cette vidéo",
+    fallbackLead: {
+      notHere: "Cette vidéo ne peut pas être lue ici. Trois gestes suffisent :",
+      refused: "La vidéo ne sera pas lue ici. Trois gestes suffisent :",
+      snapshot: `${BRAND} n'a pas pu prendre l'image de ce moment. Trois gestes suffisent :`,
+      unchecked: "Cette vidéo n'a pas pu être vérifiée pour le moment. Trois gestes suffisent :",
+    },
+    steps: [
+      "Faites une capture d'écran quand la pièce est bien visible.",
+      `Touchez « Recherche d'image » (iPhone compatibles, iOS 26 et suivants) ou Partager → ${BRAND}.`,
+      "Entourez la pièce.",
+    ],
+    held: "Pendant 10 minutes, votre prochaine recherche sera associée à cette vidéo.",
+    productsTitle: "Pièces déjà repérées dans cette vidéo",
+    confirm: "C'est bien cette pièce",
+    thanks: "Merci",
+    confirmFailed: "Votre confirmation n'a pas pu être envoyée. Réessayez dans un instant.",
+    firstToSpot: "Personne n'a encore spotté cette vidéo : à vous de commencer.",
+    attached: (handle: string) => `Associée à la vidéo de @${handle}`,
+    attachedPlatform: (platform: string) => `Associée à la vidéo ${platform}`,
+    detach: "Ne plus associer cette recherche à la vidéo",
+    webInstruction: "Faites une capture de la vidéo au bon moment, puis glissez-déposez ou collez l'image ici.",
+    dropHint: "Sur ordinateur, vous pouvez aussi glisser-déposer une image sur cette page, ou la coller (Ctrl+V ou ⌘V).",
+    notAnImage: "Ce fichier n'est pas une image. Déposez ou collez une capture d'écran.",
   },
   // Étapes de la capture d'écran (aide d'un lien collé ou partagé, lecteur) et
   // messages d'un parcours qui n'existe plus (page rechargée).

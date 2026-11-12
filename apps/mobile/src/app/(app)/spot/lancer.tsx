@@ -19,6 +19,7 @@ import { AskView, ConsentView, FallbackView, LaunchPreview, PhotoFrame, type Act
 import { SpotWaitingScreen } from "@/components/spot-waiting";
 import { CancelledNote, SearchRecoveryView } from "@/components/search-recovery";
 import { SearchLimitsNotice } from "@/components/search-limits-notice";
+import { VideoContextLabel } from "@/components/video-context-label";
 import { themedStyles } from "@/theme/themed-styles";
 
 const PREVIEW_EDGE = 900;
@@ -238,6 +239,8 @@ export default function LaunchScreen() {
       </View>
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content} scrollEnabled={!dragging} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         {flow.phase.kind === "ask" && blocked ? <SearchLimitsNotice notice={limits.notice} style={styles.limits} /> : null}
+        {/* Mission « liens vidéo » : recherche associée à une vidéo (lecteur, ou lien en attente), avec sa croix. */}
+        {flow.phase.kind === "ask" && photoUri ? <VideoContextLabel /> : null}
         {flow.phase.kind === "ask" && photoUri ? (
           <PhotoFrame uri={photoUri} zone={zone} onChange={setZone} onDragChange={setDragging} height={Math.min(Math.max(windowHeight * 0.42, 220), 400)} />
         ) : flow.phase.kind === "ask" ? (

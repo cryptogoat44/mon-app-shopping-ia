@@ -41,6 +41,7 @@ const INTERNES: RegExp[] = [
   /spotto-api\.onrender\.com/g, // adresse du service Render (se change à la main, MARQUE.md)
   /spotto-(?:prod|dev)(?:-\d)?/g, // noms des projets Supabase, cités au fondateur pendant un build
   /Spotto\.icon/g, // fichier de l'icône (assets/marque)
+  /SpottoPlayerSnapshot/g, // nom du module natif local de l'instantané (modules/spotto-player-snapshot), jamais montré
 ];
 
 const sansInternes = (texte: string) => INTERNES.reduce((reste, interne) => reste.replace(interne, ""), texte);

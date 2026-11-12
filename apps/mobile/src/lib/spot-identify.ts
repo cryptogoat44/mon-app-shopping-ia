@@ -25,7 +25,32 @@ import {
   type RecoveryPorts,
   type UnsettledState,
 } from "./spot-recovery";
-import type { SpotDraft } from "./spot-draft";
+import { getDraft, type SpotDraft } from "./spot-draft";
+
+/** Issue d'une recherche montrée, avec le brouillon dont elle vient : la
+ * mission « liens vidéo » y note le spot et efface l'image à ne pas garder
+ * (lib/video-context.ts s'y abonne ; ce fichier n'en dépend pas). */
+export type SearchShownListener = (draft: SpotDraft, search: ProductSearch) => void;
+const shownListeners = new Set<SearchShownListener>();
+
+export function onSearchShown(listener: SearchShownListener): () => void {
+  shownListeners.add(listener);
+  return () => {
+    shownListeners.delete(listener);
+  };
+}
+
+function notifyShown(draft: SpotDraft | null, search: ProductSearch): void {
+  if (!draft) return;
+  for (const listener of shownListeners) {
+    try {
+      listener(draft, search);
+    } catch (error) {
+      // Jamais au prix du résultat : l'erreur est seulement signalée.
+      reportUnexpectedError(error, "spot_analysis");
+    }
+  }
+}
 
 /** `done` : résultat à afficher (`searchId` null si aucune recherche n'a pu
  * partir) ; `unsettled` : issue encore inconnue — l'écran propose « Relancer »
@@ -81,14 +106,15 @@ function failureOf(error: unknown): Pick<SpotResult, "failReason" | "resumesOn">
 
 /** Issue connue (résultat, « rien trouvé » ou échec du service) : gardée pour
  * l'écran Résultat ; plus rien à retrouver pour ce lancement. */
-function show(search: ProductSearch): IdentifyOutcome {
+function show(search: ProductSearch, draft: SpotDraft | null): IdentifyOutcome {
   settleLaunch(search.id);
   setLastSpotResult(toSpotResult(search));
+  notifyShown(draft, search);
   return { kind: "done", searchId: search.id };
 }
 
-function afterRecovery(recovery: Recovery, searchId: string): IdentifyOutcome {
-  if (recovery.kind === "settled") return show(recovery.search);
+function afterRecovery(recovery: Recovery, searchId: string, draft: SpotDraft | null): IdentifyOutcome {
+  if (recovery.kind === "settled") return show(recovery.search, draft);
   if (recovery.kind === "unsettled") return { kind: "unsettled", searchId, state: recovery.state };
   return recovery;
 }
@@ -145,7 +171,7 @@ export async function identifyDraft(draft: SpotDraft, signal: AbortSignal): Prom
     if (sameLaunch(draft.unsettled, launch)) {
       const previous = draft.unsettled.searchId;
       const step = resumeStep(await recoverSearch(previous, ports, signal));
-      if (step.kind === "show") return show(step.search);
+      if (step.kind === "show") return show(step.search, draft);
       if (step.kind === "unsettled") return { kind: "unsettled", searchId: previous, state: step.state };
       if (step.kind === "cancelled") return step;
       // Jamais partie : la même recherche. En échec côté service : une nouvelle, celle du geste.
@@ -157,10 +183,10 @@ export async function identifyDraft(draft: SpotDraft, signal: AbortSignal): Prom
     markSearchUsed({ ...launch, searchId });
     const search = await runWatched(searchId, draft, signal);
     if (signal.aborted) return { kind: "cancelled" };
-    return show(search);
+    return show(search, draft);
   } catch (error) {
     if (signal.aborted) return { kind: "cancelled" };
-    if (searchId && launchOutcomeUnknown(error)) return afterRecovery(await recoverSearch(searchId, ports, signal), searchId);
+    if (searchId && launchOutcomeUnknown(error)) return afterRecovery(await recoverSearch(searchId, ports, signal), searchId, draft);
     if (searchId) settleLaunch(searchId);
     setLastSpotResult({ searchId: null, status: "failed", pieces: [], similarPieces: [], ...failureOf(error), query: null });
     return { kind: "done", searchId: null };
@@ -170,5 +196,6 @@ export async function identifyDraft(draft: SpotDraft, signal: AbortSignal): Prom
 /** « Vérifier à nouveau », ou retour dans l'app sur une recherche restée sans
  * issue : relecture seule, rien n'est jamais relancé. */
 export async function checkSearch(searchId: string, signal: AbortSignal): Promise<IdentifyOutcome> {
-  return afterRecovery(await recoverSearch(searchId, ports, signal), searchId);
+  const draft = getDraft();
+  return afterRecovery(await recoverSearch(searchId, ports, signal), searchId, draft?.unsettled?.searchId === searchId ? draft : null);
 }

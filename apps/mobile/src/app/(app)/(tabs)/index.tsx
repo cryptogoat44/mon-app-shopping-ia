@@ -22,8 +22,8 @@ import { latestVideoUri, loadLatestVideo, saveLatestVideoChoice } from "@/lib/la
 import type { LatestVideo, LatestVideoChoice, LatestVideoState } from "@/lib/latest-video-state";
 import { RECENT_SEARCHES_LIMIT, reopenParams } from "@/lib/recent-searches";
 import { sharedRefusalMessage, type SharedItem } from "@/lib/shared-item";
-import { beginFromPhoto } from "@/lib/spot-flow";
-import { isPlayerAvailable } from "@/lib/player-access";
+import { useImageDrop } from "@/lib/image-drop";
+import { beginPhotoSearch, type PhotoOrigin } from "@/lib/video-context";
 import { adoptSpotVideo, videoImportMessage } from "@/lib/spot-video";
 import { useLinkEntry } from "@/lib/use-link-entry";
 import { useSharedItemOpener } from "@/lib/use-shared-item";
@@ -110,17 +110,18 @@ function RecentRow({ recent }: { recent: { searchId: string; piece: Piece }[] })
   );
 }
 
-/** Lien collé ou partagé : aide discrète — la capture d'écran d'abord, puis l'enregistrement de l'écran (lot « premier essai »).
- * App iPhone avec le lecteur intégré allumé : la question déplie le champ de lien, qui ouvre la vidéo dans Spotto. */
-function LinkHelp({ onAddPhoto, onAddVideo, onHelp, importing }: { onAddPhoto: () => void; onAddVideo: () => void; onHelp: () => void; importing: boolean }) {
+/** Lien TikTok ou Instagram (mission « liens vidéo ») : la question déplie le
+ * champ de lien, qui ouvre l'écran « vidéo partagée » (lecteur officiel sur
+ * l'app iPhone ; pièces déjà repérées et consigne sur le site). Un lien sans
+ * vidéo lisible (Pinterest) montre l'aide « capture d'écran d'abord ». */
+function LinkHelp({ onHelp }: { onHelp: () => void }) {
   const [open, setOpen] = useState(false);
-  const player = isPlayerAvailable();
   return (
     <>
       <Pressable onPress={() => setOpen((value) => !value)} style={styles.linkQuestion} accessibilityRole="button" accessibilityState={{ expanded: open }}>
-        <Text style={styles.linkQuestionLabel}>{player ? t.player.linkQuestion : t.spotter.linkQuestion}</Text>
+        <Text style={styles.linkQuestionLabel}>{t.player.linkQuestion}</Text>
       </Pressable>
-      {open ? player ? <LinkEntry onHelp={onHelp} /> : <ScreenshotHelp onAddScreenshot={onAddPhoto} onAddVideo={onAddVideo} busy={importing} /> : null}
+      {open ? <LinkEntry onHelp={onHelp} /> : null}
     </>
   );
 }
@@ -140,18 +141,32 @@ function useSpotterEntries(reveal: () => void) {
   // Elle ne sert qu'à ce moment-là : refermée quand on quitte Spotter.
   useFocusEffect(useCallback(() => () => setLinkHelp(false), []));
 
-  /** Photo prête, choisie ou partagée : l'écran « Entourez la pièce ». */
-  function openPhoto(picked: ImportResult, unavailable: string) {
+  /** Photo prête, choisie, partagée ou déposée : l'écran « Entourez la pièce ».
+   * Un lien de vidéo en attente (10 minutes) lui est associé (lib/video-context.ts). */
+  async function openPhoto(picked: ImportResult, unavailable: string, origin: PhotoOrigin, options: { discardImageAfterSearch?: boolean } = {}) {
     if (picked.kind === "unavailable") return setMessage(unavailable);
     if (picked.kind !== "picked") return;
-    beginFromPhoto(picked.uri, { width: picked.width, height: picked.height });
+    await beginPhotoSearch(picked, origin, options);
     router.push({ pathname: "/spot/lancer", params: { source: "photo" } });
   }
 
+  const photoOrigin: PhotoOrigin = Platform.OS === "web" ? "web" : "app";
+
   async function addPhoto() {
     setMessage(null);
-    openPhoto(await importPhotoForSpotter(), t.common.photoUnavailable);
+    await openPhoto(await importPhotoForSpotter(), t.common.photoUnavailable, photoOrigin);
   }
+
+  // Site : une image glissée-déposée sur la page, ou collée (Ctrl+V / ⌘V).
+  useImageDrop(
+    useCallback((picked: ImportResult) => {
+      setMessage(null);
+      void openPhoto(picked, t.common.photoUnavailable, "web");
+      // openPhoto ne dépend que de setters stables et du routeur.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+    useCallback(() => setMessage(t.videoLink.notAnImage), [])
+  );
 
   /** « Prendre une photo » (app iPhone, lot « app iPhone prête ») : la même
    * suite qu'une photo choisie ; autorisation refusée : on dit où la donner. */
@@ -161,7 +176,7 @@ function useSpotterEntries(reveal: () => void) {
     try {
       const taken = await takePhotoForSpotter();
       if (taken.kind === "denied") return setMessage(t.cameraCapture.denied);
-      openPhoto(taken, t.cameraCapture.unavailable(t.spotter.addPhoto));
+      await openPhoto(taken, t.cameraCapture.unavailable(t.spotter.addPhoto), "app");
     } finally {
       setBusy(null);
     }
@@ -190,7 +205,7 @@ function useSpotterEntries(reveal: () => void) {
       const prepared = await prepareSharedPhoto(item.uri, item.width, item.height);
       // L'image préparée est un nouveau fichier : la copie reçue n'a plus d'usage.
       discardLocalFile(item.uri);
-      openPhoto(prepared, t.share.imageUnreadable(t.spotter.addPhoto));
+      await openPhoto(prepared, t.share.imageUnreadable(t.spotter.addPhoto), "share");
     } finally {
       setBusy(null);
     }
@@ -304,7 +319,8 @@ export default function SpotterScreen() {
         />
         {latestVideo.state.kind === "ask" ? <LatestVideoQuestion onAnswer={latestVideo.choose} saving={latestVideo.saving} failed={latestVideo.failed} /> : null}
         {latestVideo.note ? <LatestVideoNote message={latestVideo.note} /> : null}
-        <LinkHelp onAddPhoto={entries.addPhoto} onAddVideo={entries.addVideo} onHelp={entries.showLinkHelp} importing={entries.importing} />
+        {Platform.OS === "web" ? <Text style={styles.dropHint}>{t.videoLink.dropHint}</Text> : null}
+        <LinkHelp onHelp={entries.showLinkHelp} />
         <RecentRow recent={recent} />
         {recentLoaded && recent.length === 0 ? <HowItWorksCard /> : null}
       </ScrollView>
@@ -319,6 +335,7 @@ const styles = themedStyles(() => ({
   lead: { fontSize: font.secondary, color: color.acier, marginTop: space.xs, lineHeight: 21 },
   feedback: { fontSize: font.caption, marginTop: space.sm, lineHeight: 18 },
   sharedHelp: { marginTop: space.lg },
+  dropHint: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginTop: space.md, textAlign: "center" },
   linkQuestion: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: space.sm },
   linkQuestionLabel: { fontSize: font.secondary, color: color.acier, textDecorationLine: "underline", textAlign: "center" },
   recentSection: { marginTop: space.xxl - space.xs },

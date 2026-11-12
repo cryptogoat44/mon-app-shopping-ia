@@ -3,7 +3,6 @@ import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { VideoIcon } from "@/components/icons";
 import { linkStep } from "@/lib/link-step";
-import { playerPlatforms } from "@/lib/player-access";
 import { recordingDevice } from "@/lib/screen-recording";
 import { useLinkEntry } from "@/lib/use-link-entry";
 import { themedStyles } from "@/theme/themed-styles";
@@ -18,17 +17,16 @@ export function currentDevice() {
  * ajouter la vidéo (enregistrement de l'écran), et le bouton pour le faire. */
 export function LinkNotice({ onAddVideo, busy = false, style, link }: { onAddVideo: () => void; busy?: boolean; style?: StyleProp<ViewStyle>; link?: string }) {
   const openLink = useLinkEntry();
-  // App iPhone, lecteur intégré allumé : une vidéo TikTok ou Instagram collée
-  // dans les mots du Spotter s'ouvre dans Spotto. Seul l'accueil du Spotter
-  // passe `link` : depuis « Entourez la pièce », le brouillon serait écrasé
-  // (contre-expertise n° 22).
-  if (link !== undefined && linkStep(link, playerPlatforms()).kind === "player") {
+  // Une vidéo TikTok ou Instagram collée dans les mots du Spotter ouvre
+  // l'écran « vidéo partagée ». Seul l'accueil du Spotter passe `link` :
+  // depuis « Entourez la pièce », le brouillon serait écrasé (contre-expertise n° 22).
+  if (link !== undefined && linkStep(link).kind === "video") {
     return (
       <View style={[styles.box, style]} accessibilityLiveRegion="polite">
         <Text style={styles.title} accessibilityRole="header">
           {t.player.linkNotice.title}
         </Text>
-        <Text style={styles.body}>{t.player.linkNotice.body}</Text>
+        <Text style={styles.body}>{Platform.OS === "web" ? t.player.linkNotice.bodyWeb : t.player.linkNotice.body}</Text>
         <Pressable style={styles.button} onPress={() => void openLink(link, "paste")} accessibilityRole="button">
           <VideoIcon size={18} tint={color.encre} />
           <Text style={styles.buttonLabel}>{t.player.open}</Text>

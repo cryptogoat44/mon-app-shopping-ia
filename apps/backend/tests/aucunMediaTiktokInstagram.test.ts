@@ -14,8 +14,11 @@ import { describe, expect, it } from "vitest";
 // Non lus : ce fichier (il doit bien nommer ce qu'il interdit) et
 // apps/mobile/src/legal/ (textes juridiques publiés).
 // Le mot « instagram_oembed » n'est PAS interdit : le seul appel oEmbed admis
-// plus tard est celui de Meta, pour obtenir le code d'intégration officiel
-// (jamais une image).
+// est celui de Meta, par le serveur, pour obtenir le code d'intégration
+// officiel (jamais une image).
+// Le lecteur intégré de l'app (mission « liens vidéo ») a été repris : il ne
+// nomme plus aucun hébergeur de fichiers ni l'oEmbed de TikTok (l'exception
+// provisoire qui le couvrait a été retirée, aucune autre ne l'a remplacée).
 const REPO = join(__dirname, "../../..");
 const SCANNED_DIRS = ["apps/backend/src", "apps/mobile/src", "packages/shared-types/src"] as const;
 const EXCLUDED_DIRS = ["apps/mobile/src/legal/"] as const;
@@ -56,16 +59,6 @@ const ALLOWED_LINES: readonly { file: string; name: string; line: string; why: s
   },
 ];
 
-/** Exception PROVISOIRE : le lecteur intégré de l'app (coupé : LINK_PLAYER_ENABLED
- * vaut false, lib/spot-flags.ts) n'a pas été touché par le retrait de la voie
- * « couverture » : il est repris juste après, dans la même mission « liens
- * vidéo ». Son fichier nomme encore les hébergeurs que la vue web du lecteur
- * officiel a le droit de charger, et l'oEmbed de TikTok. À VIDER quand le
- * lecteur est repris : une entrée devenue inutile fait échouer le test. */
-const PLAYER_PENDING: Readonly<Record<string, readonly string[]>> = {
-  "apps/mobile/src/lib/player-link.ts": ["tiktokcdn", "cdninstagram", "fbcdn", "tiktok.com/oembed"],
-};
-
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
@@ -94,7 +87,6 @@ function forbiddenIn(file: string, source: string): Hit[] {
 }
 
 function isAllowed(hit: Hit): boolean {
-  if (PLAYER_PENDING[hit.file]?.includes(hit.name)) return true;
   return ALLOWED_LINES.some((allowed) => allowed.file === hit.file && allowed.name === hit.name && allowed.line === hit.text);
 }
 
@@ -138,9 +130,6 @@ describe("aucune image, vignette ni vidéo de TikTok ou d'Instagram : le code n'
     const unused: string[] = [];
     for (const allowed of ALLOWED_LINES) {
       if (!hits.some((hit) => hit.file === allowed.file && hit.name === allowed.name && hit.text === allowed.line)) unused.push(`${allowed.file} — ${allowed.name}`);
-    }
-    for (const [file, names] of Object.entries(PLAYER_PENDING)) {
-      for (const name of names) if (!hits.some((hit) => hit.file === file && hit.name === name)) unused.push(`${file} — ${name}`);
     }
     expect(unused).toEqual([]);
   });
