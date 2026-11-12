@@ -11,6 +11,16 @@
 // 2. imageFormatOf : les premiers octets sont vérifiés AVANT sharp ;
 // 3. MAX_INPUT_PIXELS : une image trop grande est refusée dès la lecture de
 //    son en-tête, avant d'être décodée.
+// Revue de sécurité du 12 novembre 2026 : le plafond de pixels ne suffisait
+// pas. Certaines images ne se décodent que d'un seul bloc, en entier, en
+// mémoire : un PNG entrelacé de 0,6 Mo (7200 × 7200, 16 bits) montait à
+// 530 Mo, un AVIF de 2 Ko à 1 Go, sur un serveur de 512 Mo. Deux barrières
+// de plus :
+// 4. fullDecodeBytes / isTooHeavyToDecode : la mémoire d'un tel décodage est
+//    estimée d'après l'en-tête, et l'image refusée au-delà de MAX_DECODE_BYTES,
+//    avant tout décodage ;
+// 5. oneImageAtATime : les traitements passent un par un, pour que des
+//    envois simultanés ne s'additionnent jamais.
 // Importé en tête de app.ts, et par imageProcessing.ts et photos.ts.
 import sharp from "sharp";
 
@@ -36,14 +46,107 @@ sharp.unblock({ operation: ALLOWED_IMAGE_LOADERS });
 /** Plafond des images envoyées, en pixels (largeur × hauteur) : 52 millions.
  * Passent une photo d'iPhone de 48 Mpx envoyée telle quelle (8064 × 6048 =
  * 48,8 millions) et celles des capteurs de 50 Mpx (8192 × 6144 = 50,3
- * millions). Chaque million de plus coûte de la mémoire : mesuré le
- * 2026-11-04, une image à ce plafond ajoute au plus ≈ 200 Mo pendant son
- * traitement en photo (PNG entrelacé, le pire format) ; le serveur a 512 Mo.
+ * millions). Chaque million de plus coûte de la mémoire ; le serveur a
+ * 512 Mo. Ce plafond seul ne protège que des images lues par bandes : celles
+ * qui se décodent d'un seul bloc (PNG entrelacé, JPEG progressif, GIF, AVIF)
+ * ont en plus un plafond de mémoire, bien plus bas (MAX_DECODE_BYTES).
  * Au-delà, l'image est refusée dès son en-tête, sans être décodée : sans ce
  * plafond, un WebP de 38 octets (12 000 × 12 000) envoyé au Spotter faisait
  * monter la mémoire à 1,2 Go. La copie d'une envie garde son plafond de
  * 40 millions (photos.ts). */
 export const MAX_INPUT_PIXELS = 52_000_000;
+
+/** Mémoire qu'un décodage « d'un seul bloc » peut demander au plus : 128 Mo.
+ * Avec le serveur chargé (≈ 90 Mo) et un seul traitement à la fois
+ * (oneImageAtATime), le pic reste loin des 512 Mo. Passent : un JPEG
+ * progressif jusqu'à ≈ 38 Mpx, un PNG entrelacé avec transparence jusqu'à
+ * ≈ 26 Mpx, un GIF jusqu'à ≈ 24 Mpx, un AVIF jusqu'à ≈ 7 Mpx
+ * (2 700 × 2 700). Les photos d'appareil (JPEG ordinaire, PNG non entrelacé,
+ * WebP) se lisent par bandes : elles ne sont pas concernées et gardent le
+ * plafond de 52 Mpx. */
+export const MAX_DECODE_BYTES = 128 * 1024 * 1024;
+
+/** Ce que l'en-tête d'une image dit d'elle (sharp : metadata()), sans la décoder. */
+export interface ImageHeader {
+  format?: string | undefined;
+  width?: number | undefined;
+  height?: number | undefined;
+  channels?: number | undefined;
+  depth?: string | undefined;
+  isProgressive?: boolean | undefined;
+}
+
+/** Octets par valeur d'une couche (« uchar » : 1, « ushort » : 2, le reste : 4). */
+function sampleBytes(depth: string | undefined): number {
+  if (depth === undefined || depth === "uchar" || depth === "char") return 1;
+  if (depth === "ushort" || depth === "short") return 2;
+  return 4;
+}
+
+/** Mémoire (en octets) qu'il faut pour décoder l'image quand elle ne peut
+ * l'être que d'un seul bloc, estimée d'après son en-tête ; 0 quand elle se
+ * lit par bandes (JPEG ordinaire, PNG non entrelacé, WebP). Coûts par pixel
+ * mesurés le 12 novembre 2026 sur des images de 4 à 52 Mpx (pic de mémoire
+ * du traitement, arrondi au-dessus) :
+ * - AVIF/HEIF : 18 octets par pixel (le décodeur garde plusieurs copies) ;
+ * - GIF : 5,5 ;
+ * - JPEG progressif : 3,5 en couleurs ordinaires, 8,5 en CMJN (4 couches) ;
+ * - PNG entrelacé : couches × octets par valeur × 1,25 (10 pour 4 couches
+ *   de 16 bits) ;
+ * - format inconnu : compté comme un PNG entrelacé (dans le doute, en entier).
+ * Dimensions inconnues : infini (refusé). */
+export function fullDecodeBytes(header: ImageHeader): number {
+  const { format, width, height } = header;
+  if (!width || !height) return Number.POSITIVE_INFINITY;
+  const pixels = width * height;
+  const channels = header.channels ?? 4;
+  const whole = pixels * channels * sampleBytes(header.depth) * 1.25;
+  switch (format) {
+    case "heif":
+      return pixels * 18;
+    case "gif":
+      return pixels * 5.5;
+    case "jpeg":
+      if (!header.isProgressive) return 0;
+      return pixels * (channels > 3 ? 8.5 : 3.5);
+    case "png":
+      return header.isProgressive ? whole : 0;
+    case "webp":
+      return 0;
+    default:
+      return whole;
+  }
+}
+
+/** Message d'un refus pour cette raison (ImageSourceError) : l'app reçoit la
+ * même réponse que pour une image illisible ; le message sert aux tests et
+ * au diagnostic. */
+export const IMAGE_TOO_HEAVY = "Image trop lourde à décoder";
+
+/** Vrai si décoder cette image demanderait plus de mémoire que permis : à
+ * refuser dès l'en-tête, avant tout décodage. */
+export function isTooHeavyToDecode(header: ImageHeader, maxBytes: number = MAX_DECODE_BYTES): boolean {
+  return fullDecodeBytes(header) > maxBytes;
+}
+
+// File des traitements d'images : un seul à la fois dans tout le serveur.
+// Sans elle, quatre envois simultanés (sharp décode sur quatre fils)
+// additionnaient leur mémoire : quatre images permises chacune pouvaient
+// dépasser ensemble les 512 Mo. L'attente est courte (un traitement dure de
+// 0,1 à 2 s) et dans l'ordre d'arrivée.
+let imageQueue: Promise<unknown> = Promise.resolve();
+
+/** Lance `job` quand le traitement d'image précédent est terminé (réussi ou
+ * non), et rend son résultat. Seul le décodage passe ici : la lecture d'un
+ * en-tête (metadata) ne coûte rien et n'attend pas. */
+export function oneImageAtATime<T>(job: () => Promise<T>): Promise<T> {
+  const run = imageQueue.then(job, job);
+  imageQueue = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+}
 
 /** Formats permis, reconnus à leurs premiers octets. */
 export type ImageFormat = "jpeg" | "png" | "webp" | "gif" | "heif";

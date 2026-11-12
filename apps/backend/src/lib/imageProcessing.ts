@@ -1,7 +1,7 @@
 import sharp, { type Sharp } from "sharp";
 import type { CropRect } from "@monapp/shared-types";
 import { safeFetch } from "./safeFetch.js";
-import { MAX_INPUT_PIXELS, imageFormatOf } from "./imageSafety.js";
+import { IMAGE_TOO_HEAVY, MAX_INPUT_PIXELS, imageFormatOf, isTooHeavyToDecode, oneImageAtATime } from "./imageSafety.js";
 
 // Hébergeurs des vignettes renvoyées par les voies officielles (oEmbed) :
 // seules adresses que le serveur accepte de télécharger pour les recadrer
@@ -101,15 +101,21 @@ export async function prepareImageForAnalysis(input: Buffer, crop: CropRect | nu
   let storedWidth: number | undefined;
   let storedHeight: number | undefined;
   let orientation: number;
+  let tooHeavy: boolean;
   try {
     const meta = await sharp(input, options).metadata();
     storedWidth = meta.width;
     storedHeight = meta.height;
     orientation = meta.orientation ?? 1;
+    tooHeavy = isTooHeavyToDecode(meta);
   } catch {
     throw new ImageSourceError("Image illisible");
   }
   if (!storedWidth || !storedHeight) throw new ImageSourceError("Image illisible");
+  // Revue de sécurité du 12 novembre 2026 : une image qui ne se décode que
+  // d'un seul bloc (PNG entrelacé, JPEG progressif, GIF, AVIF) et demanderait
+  // trop de mémoire est refusée ici, sur son en-tête (lib/imageSafety.ts).
+  if (tooHeavy) throw new ImageSourceError(IMAGE_TOO_HEAVY);
 
   let image: Sharp;
   if (crop) {
@@ -135,10 +141,13 @@ export async function prepareImageForAnalysis(input: Buffer, crop: CropRect | nu
   }
 
   try {
-    return await image
-      .resize({ width: MAX_ANALYSIS_EDGE, height: MAX_ANALYSIS_EDGE, fit: "inside", withoutEnlargement: true })
-      .jpeg({ quality: 88 })
-      .toBuffer();
+    // Un seul traitement d'image à la fois dans tout le serveur (lib/imageSafety.ts).
+    return await oneImageAtATime(() =>
+      image
+        .resize({ width: MAX_ANALYSIS_EDGE, height: MAX_ANALYSIS_EDGE, fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 88 })
+        .toBuffer()
+    );
   } catch {
     // Le décodage se fait ici : un fichier tronqué ou corrompu est une image
     // illisible (400), comme avant, jamais une erreur du serveur.

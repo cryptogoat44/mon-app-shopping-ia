@@ -23,3 +23,20 @@ export function isTooManyPartsError(error: unknown): boolean {
       error.code === "ERR_STREAM_PREMATURE_CLOSE")
   );
 }
+
+/** Plafonds de tout formulaire avec fichier (app.ts), sauf route qui pose les
+ * siens. Revue de sécurité du 12 novembre 2026 : sans plafond de champs, une
+ * seule requête pouvait faire garder 1 Go de texte en mémoire au serveur
+ * (1 000 champs de 1 Mo, les réglages par défaut de la bibliothèque).
+ * L'app envoie un fichier et quelques champs courts (titre, catégorie,
+ * recadrage, pièces taguées…) : au plus 20 champs de 64 Ko, soit 1,3 Mo de
+ * texte par requête. Au-delà : 413 (FST_FIELDS_LIMIT, FST_PARTS_LIMIT,
+ * FST_FILES_LIMIT) ; un champ plus long que 64 Ko est coupé par la
+ * bibliothèque, et la route le refuse comme tout champ illisible. */
+export const MULTIPART_LIMITS = {
+  fileSize: 10 * 1024 * 1024,
+  files: 1,
+  fields: 20,
+  fieldSize: 64 * 1024,
+  parts: 24,
+} as const;

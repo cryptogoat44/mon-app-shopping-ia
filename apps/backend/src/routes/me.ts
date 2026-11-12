@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { encodeAvatar, isOtherImageFormat } from "../lib/photos.js";
 import { z } from "zod";
 import {
@@ -14,13 +14,17 @@ import {
   type Profile,
 } from "@monapp/shared-types";
 import { DatabaseReadError, parseInput } from "../lib/validation.js";
-import { isFileTooLargeError } from "../lib/multipartErrors.js";
+import { isFileTooLargeError, isTooManyPartsError } from "../lib/multipartErrors.js";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { isAdmin } from "../lib/moderation.js";
 import { CONTENT_NOT_ALLOWED, firstBannedText } from "../lib/contentFilter.js";
 import { MESSAGES_UNAVAILABLE, messagesReady } from "../lib/messaging.js";
 import { emptyUserFolder, extractOwnedStoragePath, removeOwnedFiles } from "../lib/storage.js";
 import { AVATAR_BUCKET } from "../lib/profileModeration.js";
+
+/** Comptes dont une photo de profil est en cours d'envoi (un seul envoi à la fois par compte). */
+const avatarUploads = new Set<string>();
+const AVATAR_IN_PROGRESS = { error: "avatar_in_progress", message: "Une photo est déjà en cours d'envoi. Réessayez dans un instant." } as const;
 
 const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
 /** Bio reçue, avant d'en retirer espaces et lignes vides en trop. */
@@ -137,20 +141,42 @@ export default async function meRoutes(fastify: FastifyInstance) {
   // 512 px sans métadonnées (encodeAvatar). Chaque photo a un nom nouveau
   // (« <compte>/avatar-<aléatoire>.jpg », adresse publique) : aucun cache ne
   // ressert l'ancienne, qui est effacée une fois la nouvelle en place.
-  fastify.post("/api/me/avatar", { preHandler: [fastify.requireAuth, fastify.requireActiveAccount] }, async (request, reply) => {
-    const userId = request.user!.id;
-
-    const file = await request.file({ limits: { fileSize: AVATAR_MAX_BYTES } });
-    if (!file || !file.mimetype.startsWith("image/")) {
-      return reply.code(400).send({ error: "invalid_file", message: "Merci d'envoyer une image." });
+  // Revue de sécurité du 12 novembre 2026 : 20 envois ou suppressions par
+  // heure (refus compris), un seul fichier et aucun autre champ dans le
+  // formulaire, une image de 2 048 × 2 048 px au plus (encodeAvatar), et un
+  // seul envoi à la fois par compte (deux envois simultanés laissaient un
+  // fichier public que plus rien n'effaçait).
+  fastify.post(
+    "/api/me/avatar",
+    { preHandler: [fastify.requireAuth, fastify.requireActiveAccount, fastify.rateLimit("avatarWrite")], config: { rateLimitName: "avatarWrite" as const } },
+    async (request, reply) => {
+      const userId = request.user!.id;
+      if (avatarUploads.has(userId)) return reply.code(429).send(AVATAR_IN_PROGRESS);
+      avatarUploads.add(userId);
+      try {
+        return await receiveAvatar(request, reply, userId);
+      } finally {
+        avatarUploads.delete(userId);
+      }
     }
+  );
 
+  async function receiveAvatar(request: FastifyRequest, reply: FastifyReply, userId: string) {
     let buffer: Buffer;
     try {
+      // L'app n'envoie que le fichier : tout autre champ, ou un second
+      // fichier, fait refuser l'envoi sans rien garder en mémoire.
+      const file = await request.file({ limits: { fileSize: AVATAR_MAX_BYTES, files: 1, fields: 0, parts: 1 } });
+      if (!file || !file.mimetype.startsWith("image/")) {
+        return reply.code(400).send({ error: "invalid_file", message: "Merci d'envoyer une image." });
+      }
       buffer = await file.toBuffer();
     } catch (error) {
       if (isFileTooLargeError(error)) {
         return reply.code(413).send({ error: "file_too_large", message: "La photo est trop lourde (5 Mo maximum)." });
+      }
+      if (isTooManyPartsError(error)) {
+        return reply.code(413).send({ error: "invalid_file", message: "Merci d'envoyer une seule image, sans autre champ." });
       }
       throw error;
     }
@@ -210,7 +236,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       return reply.code(500).send(PROFILE_UNREADABLE);
     }
     return reply.send(profile);
-  });
+  }
 
   // « Supprimer ma photo » (lot « profil et icône des réglages ») : tous les
   // fichiers du dossier de la personne dans le bucket des photos de profil
@@ -218,7 +244,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
   // qu'ensuite. Si le stockage refuse, rien n'est changé (503) : jamais une
   // photo « supprimée » encore en ligne. Permis à un compte suspendu : on
   // retire seulement quelque chose de son profil public.
-  fastify.delete("/api/me/avatar", { preHandler: fastify.requireAuth }, async (request, reply) => {
+  fastify.delete("/api/me/avatar", { preHandler: [fastify.requireAuth, fastify.rateLimit("avatarWrite")], config: { rateLimitName: "avatarWrite" as const } }, async (request, reply) => {
     const userId = request.user!.id;
     const admin = await isAdmin(fastify, userId);
 

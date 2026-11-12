@@ -1,7 +1,7 @@
-import sharp, { type Sharp } from "sharp";
+import sharp, { type Metadata, type Sharp } from "sharp";
 import { AVATAR_SIDE } from "@monapp/shared-types";
 import { ImageSourceError } from "./imageProcessing.js";
-import { MAX_INPUT_PIXELS, imageFormatOf } from "./imageSafety.js";
+import { IMAGE_TOO_HEAVY, MAX_INPUT_PIXELS, imageFormatOf, isTooHeavyToDecode, oneImageAtATime } from "./imageSafety.js";
 
 // Photos envoyées par les utilisateurs (publications, Vault, avatar) —
 // lot « images et fluidité ». Une photo d'iPhone pèse 3 à 4 Mo (3024 × 4032) :
@@ -12,8 +12,23 @@ import { MAX_INPUT_PIXELS, imageFormatOf } from "./imageSafety.js";
 // - « miniature » : 480 px, pour les grilles (≈ 320 px nécessaires) ;
 // - avatar : un carré de 512 px (encodeAvatar, plus bas).
 // sharp retire aussi les métadonnées (dont la position GPS des photos).
-// Format et taille sont vérifiés avant tout décodage (lib/imageSafety.ts).
+// Format, taille et mémoire du décodage sont vérifiés avant tout décodage, et
+// les traitements passent un par un (lib/imageSafety.ts).
 export const PHOTO_SIZES = { display: 1600, thumb: 480, avatar: AVATAR_SIDE } as const;
+
+/** L'en-tête d'une image (jamais décodée ici) ; ImageSourceError s'il est
+ * illisible ou si l'image dépasse `maxPixels`, ou si la décoder demanderait
+ * trop de mémoire. */
+async function readHeader(input: Buffer, maxPixels: number): Promise<Metadata> {
+  let header: Metadata;
+  try {
+    header = await sharp(input, { failOn: "error", limitInputPixels: maxPixels }).metadata();
+  } catch {
+    throw new ImageSourceError("Image illisible");
+  }
+  if (isTooHeavyToDecode(header)) throw new ImageSourceError(IMAGE_TOO_HEAVY);
+  return header;
+}
 
 /** Comme optimizePhoto, avec la taille finale (ex. images envoyées à l'IA,
  * dont les coordonnées renvoyées dépendent de cette taille). */
@@ -21,12 +36,17 @@ export async function optimizePhotoWithSize(input: Buffer, maxSide: number, qual
   // Premiers octets vérifiés AVANT sharp : un SVG n'est jamais lu, même
   // annoncé comme une photo.
   if (!imageFormatOf(input)) throw new ImageSourceError("Image illisible");
+  // En-tête seul : une image qui ne se décode que d'un bloc et demanderait
+  // trop de mémoire est refusée ici, avant tout décodage.
+  await readHeader(input, MAX_INPUT_PIXELS);
   try {
-    const { data, info } = await sharp(input, { failOn: "error", limitInputPixels: MAX_INPUT_PIXELS })
-      .rotate() // orientation EXIF appliquée avant de retirer les métadonnées
-      .resize({ width: maxSide, height: maxSide, fit: "inside", withoutEnlargement: true })
-      .jpeg({ quality, mozjpeg: true })
-      .toBuffer({ resolveWithObject: true });
+    const { data, info } = await oneImageAtATime(() =>
+      sharp(input, { failOn: "error", limitInputPixels: MAX_INPUT_PIXELS })
+        .rotate() // orientation EXIF appliquée avant de retirer les métadonnées
+        .resize({ width: maxSide, height: maxSide, fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality, mozjpeg: true })
+        .toBuffer({ resolveWithObject: true })
+    );
     return { data, width: info.width, height: info.height };
   } catch {
     throw new ImageSourceError("Image illisible");
@@ -45,6 +65,12 @@ export async function optimizePhoto(input: Buffer, maxSide: number, quality = 82
 // transparence d'un PNG. Aucune métadonnée gardée (ni EXIF, ni position
 // GPS) : sharp les retire tant qu'on ne demande pas withMetadata.
 export const AVATAR_FORMATS: ReadonlySet<string> = new Set(["jpeg", "png"]);
+/** Plus grande image acceptée pour une photo de profil : 2 048 × 2 048
+ * pixels (revue de sécurité du 12 novembre 2026). L'app envoie toujours un
+ * carré de 1 024 px au plus, déjà recadré sur l'appareil : le plafond général
+ * de 52 Mpx n'avait aucune raison d'être ici, et laissait passer un PNG de
+ * 0,6 Mo qui demandait 530 Mo de mémoire au serveur. Refus dès l'en-tête. */
+export const AVATAR_MAX_INPUT_PIXELS = 2048 * 2048;
 // Marques des photos HEIC d'iPhone (codées en HEVC) : le sharp du serveur ne sait pas les lire.
 const HEVC_BRANDS: ReadonlySet<string> = new Set(["heic", "heix", "hevc", "hevx"]);
 
@@ -66,22 +92,25 @@ export async function isOtherImageFormat(input: Buffer): Promise<boolean> {
 }
 
 /** Photo de profil prête à enregistrer, et son côté. Relève ImageSourceError
- * si l'image est illisible, trop grande ou d'un autre format (vérifié sur
- * les premiers octets, avant sharp). */
+ * si l'image est illisible, trop grande (AVATAR_MAX_INPUT_PIXELS, et la
+ * mémoire de son décodage) ou d'un autre format (vérifié sur les premiers
+ * octets, avant sharp). Rien n'est décodé avant ces contrôles. */
 export async function encodeAvatar(input: Buffer): Promise<{ data: Buffer; side: number }> {
   const format = imageFormatOf(input);
   if (!format || !AVATAR_FORMATS.has(format)) throw new ImageSourceError("Image illisible");
+  // Dimensions lues dans l'en-tête seul, sans décoder l'image.
+  const header = await readHeader(input, MAX_INPUT_PIXELS);
+  if ((header.width ?? 0) * (header.height ?? 0) > AVATAR_MAX_INPUT_PIXELS) throw new ImageSourceError(IMAGE_TOO_HEAVY);
+  const side = Math.min(PHOTO_SIZES.avatar, header.autoOrient.width, header.autoOrient.height);
+  if (!side) throw new ImageSourceError("Image illisible");
   try {
-    const image = sharp(input, { failOn: "error", limitInputPixels: MAX_INPUT_PIXELS, autoOrient: true });
-    // Dimensions lues dans l'en-tête seul, sans décoder l'image.
-    const { autoOrient } = await image.metadata();
-    const side = Math.min(PHOTO_SIZES.avatar, autoOrient.width, autoOrient.height);
-    if (!side) throw new ImageSourceError("Image illisible");
-    const data = await image
-      .resize({ width: side, height: side, fit: "cover", position: "centre" })
-      .flatten({ background: "#ffffff" })
-      .jpeg({ quality: 85, mozjpeg: true })
-      .toBuffer();
+    const data = await oneImageAtATime(() =>
+      sharp(input, { failOn: "error", limitInputPixels: AVATAR_MAX_INPUT_PIXELS, autoOrient: true })
+        .resize({ width: side, height: side, fit: "cover", position: "centre" })
+        .flatten({ background: "#ffffff" })
+        .jpeg({ quality: 85, mozjpeg: true })
+        .toBuffer()
+    );
     return { data, side };
   } catch {
     throw new ImageSourceError("Image illisible");
@@ -126,12 +155,10 @@ async function openSharedSource(input: Buffer): Promise<{ image: Sharp; width: n
   // metadata() fait déjà lire le fichier par sharp : le format se vérifie
   // donc avant, sur les premiers octets.
   if (!imageFormatOf(input)) throw new ImageSourceError("Image illisible");
-  try {
-    const image = sharp(input, { failOn: "error", limitInputPixels: SHARED_COPY_MAX_PIXELS });
-    const { format, width, height } = await image.metadata();
-    if (format && SHARED_COPY_FORMATS.has(format) && width && height) return { image, width, height };
-  } catch {
-    // Illisible, ou plus de 40 mégapixels : même refus ci-dessous.
+  // Illisible, plus de 40 mégapixels, ou trop de mémoire pour la décoder : refus.
+  const { format, width, height } = await readHeader(input, SHARED_COPY_MAX_PIXELS);
+  if (format && SHARED_COPY_FORMATS.has(format) && width && height) {
+    return { image: sharp(input, { failOn: "error", limitInputPixels: SHARED_COPY_MAX_PIXELS }), width, height };
   }
   throw new ImageSourceError("Image illisible");
 }
@@ -152,20 +179,23 @@ export async function encodeSharedCopy(input: Buffer): Promise<SharedCopy> {
   const longSide = Math.max(width, height);
   try {
     const prepared = image.rotate().flatten({ background: "#ffffff" });
-    const { data: display, info } = await prepared
-      .clone()
-      .resize({ width: PHOTO_SIZES.display, height: PHOTO_SIZES.display, fit: "inside", withoutEnlargement: true })
-      .jpeg(longSide <= SHARED_COPY_SMALL_SIDE ? { quality: 92, chromaSubsampling: "4:4:4", mozjpeg: true } : { quality: 85, mozjpeg: true })
-      .toBuffer({ resolveWithObject: true });
-    const thumb =
-      longSide <= PHOTO_SIZES.thumb
-        ? display
-        : await prepared
-            .clone()
-            .resize({ width: PHOTO_SIZES.thumb, height: PHOTO_SIZES.thumb, fit: "inside" })
-            .jpeg({ quality: 82, mozjpeg: true })
-            .toBuffer();
-    return { display, thumb, width: info.width, height: info.height };
+    // Les deux tailles dans le même passage de la file : jamais deux décodages en même temps.
+    return await oneImageAtATime(async () => {
+      const { data: display, info } = await prepared
+        .clone()
+        .resize({ width: PHOTO_SIZES.display, height: PHOTO_SIZES.display, fit: "inside", withoutEnlargement: true })
+        .jpeg(longSide <= SHARED_COPY_SMALL_SIDE ? { quality: 92, chromaSubsampling: "4:4:4", mozjpeg: true } : { quality: 85, mozjpeg: true })
+        .toBuffer({ resolveWithObject: true });
+      const thumb =
+        longSide <= PHOTO_SIZES.thumb
+          ? display
+          : await prepared
+              .clone()
+              .resize({ width: PHOTO_SIZES.thumb, height: PHOTO_SIZES.thumb, fit: "inside" })
+              .jpeg({ quality: 82, mozjpeg: true })
+              .toBuffer();
+      return { display, thumb, width: info.width, height: info.height };
+    });
   } catch {
     throw new ImageSourceError("Image illisible");
   }

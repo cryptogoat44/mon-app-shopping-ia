@@ -5,6 +5,8 @@ import sharp from "sharp";
 import { afterEach, describe, expect, it } from "vitest";
 import { AVATAR_MAX_BYTES, AVATAR_SIDE, BIO_MAX_LENGTH, type ModerationPage, type Profile } from "@monapp/shared-types";
 import meRoutes from "../src/routes/me.js";
+import rateLimitPlugin from "../src/plugins/rateLimit.js";
+import { RATE_LIMITS } from "../src/lib/rateLimits.js";
 import moderationRoutes from "../src/routes/moderation.js";
 import { CONTENT_NOT_ALLOWED } from "../src/lib/contentFilter.js";
 import { EN_MESSAGES, localizeMessage } from "../src/lib/messages.js";
@@ -67,6 +69,8 @@ async function routesApp(routes: FastifyPluginAsync, fake: Fake, lines: string[]
   });
   app.decorate("requireActiveAccount", async () => {});
   app.decorate("requireAdmin", async () => {});
+  // Les vraies limites de débit (coupées par NODE_ENV=test, sauf test qui les rallume).
+  await app.register(rateLimitPlugin);
   await app.register(routes);
   await app.ready();
   return app;
@@ -353,6 +357,75 @@ describe("photo de profil : formats acceptés et refusés", () => {
     // Juste sous la limite : accepté.
     const justUnder = Buffer.concat([jpeg, Buffer.alloc(AVATAR_MAX_BYTES - 1024 - jpeg.length)]);
     expect((await target.inject({ method: "POST", url: "/api/me/avatar", ...upload(justUnder) })).statusCode).toBe(200);
+  });
+});
+
+// Revue de sécurité du 12 novembre 2026 (points « entrees-01 » à « entrees-03 »).
+describe("photo de profil : garde-fous de la revue de sécurité", () => {
+  /** Formulaire avec un champ texte AVANT le fichier. */
+  function uploadWithField(file: Buffer, field: string) {
+    const boundary = "limiteDeTest";
+    const head = Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="note"\r\n\r\n${field}\r\n` +
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="photo.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`
+    );
+    return { payload: Buffer.concat([head, file, Buffer.from(`\r\n--${boundary}--\r\n`)]), headers: { "content-type": `multipart/form-data; boundary=${boundary}` } };
+  }
+
+  it("une image de plus de 2 048 × 2 048 px est refusée sur son en-tête ; à 2 048 × 2 048, acceptée", async () => {
+    const fake = setup();
+    const target = await routesApp(meRoutes, fake);
+    const res = await target.inject({ method: "POST", url: "/api/me/avatar", ...upload(bigPng(2049, 2048), "image/png", "photo.png") });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "invalid_file", message: "Cette photo n'a pas pu être lue." });
+    expect(fake.uploads).toEqual([]);
+    expect((await target.inject({ method: "POST", url: "/api/me/avatar", ...upload(bigPng(2048, 2048), "image/png", "photo.png") })).statusCode).toBe(200);
+  });
+
+  it("un champ texte en plus du fichier : envoi refusé (413), rien n'est gardé ni enregistré", async () => {
+    const fake = setup();
+    const target = await routesApp(meRoutes, fake);
+    const res = await target.inject({ method: "POST", url: "/api/me/avatar", ...uploadWithField(await iphonePhoto(), "a".repeat(100_000)) });
+    expect(res.statusCode).toBe(413);
+    expect(res.json()).toEqual({ error: "invalid_file", message: "Merci d'envoyer une seule image, sans autre champ." });
+    expect(fake.uploads).toEqual([]);
+  });
+
+  it("deux envois en même temps pour le même compte : un seul passe, aucun fichier ne reste sans profil", async () => {
+    const fake = setup();
+    const target = await routesApp(meRoutes, fake);
+    const jpeg = await iphonePhoto();
+    const answers = await Promise.all([1, 2, 3].map(() => target.inject({ method: "POST", url: "/api/me/avatar", ...upload(jpeg) })));
+    const codes = answers.map((res) => res.statusCode).sort();
+    expect(codes).toEqual([200, 429, 429]);
+    expect(answers.find((res) => res.statusCode === 429)!.json()).toEqual({ error: "avatar_in_progress", message: "Une photo est déjà en cours d'envoi. Réessayez dans un instant." });
+    expect(storedAvatars(fake)).toEqual([pathOf(saved(fake).avatar_url as string)]);
+    // Une fois l'envoi terminé, le suivant passe.
+    expect((await target.inject({ method: "POST", url: "/api/me/avatar", ...upload(jpeg) })).statusCode).toBe(200);
+    expect(storedAvatars(fake)).toHaveLength(1);
+  });
+
+  it("20 envois ou suppressions par heure et par compte, refus compris ; la limite par défaut ne s'y ajoute pas", async () => {
+    expect(RATE_LIMITS.avatarWrite).toMatchObject({ max: 20, windowMs: 60 * 60 * 1000, error: "avatar_limit" });
+    const member = "c0000000-0000-4000-8000-00000000000c";
+    const fake = setup();
+    const target = await routesApp(meRoutes, fake, [], member);
+    const before = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      const notAnImage = upload(Buffer.from("bonjour"), "text/plain", "note.txt");
+      for (let attempt = 0; attempt < 19; attempt++) {
+        expect((await target.inject({ method: "POST", url: "/api/me/avatar", ...notAnImage })).statusCode).toBe(400);
+      }
+      // La suppression compte dans la même limite : le 20ᵉ appel passe encore, le 21ᵉ non, pour l'une comme pour l'autre.
+      expect((await target.inject({ method: "DELETE", url: "/api/me/avatar" })).statusCode).not.toBe(429);
+      const refused = await target.inject({ method: "POST", url: "/api/me/avatar", ...notAnImage });
+      expect(refused.statusCode).toBe(429);
+      expect(refused.json()).toEqual({ error: "avatar_limit", message: "Vous avez changé de photo de profil plusieurs fois en peu de temps. Réessayez dans une heure." });
+      expect((await target.inject({ method: "DELETE", url: "/api/me/avatar" })).statusCode).toBe(429);
+    } finally {
+      process.env.NODE_ENV = before;
+    }
   });
 });
 

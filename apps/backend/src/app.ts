@@ -32,6 +32,7 @@ import collectionsRoutes from "./routes/collections.js";
 import pushTokensRoutes from "./routes/pushTokens.js";
 import wishAlertsRoutes from "./routes/wishAlerts.js";
 import { flushAfterResponse } from "./lib/wishAlertsSend.js";
+import { MULTIPART_LIMITS, isTooManyPartsError } from "./lib/multipartErrors.js";
 import { captureServerError, captureServerFailure } from "./lib/sentry.js";
 import { GENERIC_CLIENT_ERROR, isErrorBody, localizeMessage } from "./lib/messages.js";
 import { requestLocale } from "./lib/locale.js";
@@ -76,7 +77,12 @@ export async function buildApp(options: { logger?: LoggerOption } = {}): Promise
   const fastify = Fastify({ logger: loggerOptions(options.logger ?? true) });
 
   await fastify.register(cors, { origin: true });
-  await fastify.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
+  // Formulaires avec fichier : 10 Mo par fichier, et (revue de sécurité du
+  // 12 novembre 2026) des plafonds pour tout le reste. Sans eux, la
+  // bibliothèque gardait en mémoire jusqu'à 1 000 champs texte de 1 Mo par
+  // requête. L'app envoie au plus un fichier et une poignée de champs courts ;
+  // la route des vidéos pose ses propres plafonds (routes/videoMoments.ts).
+  await fastify.register(multipart, { limits: MULTIPART_LIMITS });
   // Déclaré AVANT l'enregistrement des routes : Fastify ne transmet un
   // gestionnaire d'erreurs qu'aux routes enregistrées après lui. Déclaré
   // en fin de fichier (comme avant), il ne s'appliquait à AUCUNE route et
@@ -91,6 +97,12 @@ export async function buildApp(options: { logger?: LoggerOption } = {}): Promise
   fastify.setErrorHandler((error: FastifyError, request, reply) => {
     if (error.code === "FST_REQ_FILE_TOO_LARGE") {
       return reply.code(413).send({ error: "file_too_large", message: "Le fichier est trop volumineux (10 Mo maximum)." });
+    }
+
+    // Trop de fichiers, de champs ou de parties, ou envoi coupé en route :
+    // un envoi refusé, jamais une erreur du serveur.
+    if (isTooManyPartsError(error)) {
+      return reply.code(413).send({ error: "invalid_request", message: "Requête invalide." });
     }
 
     if (error.validation || (error.statusCode && error.statusCode < 500)) {

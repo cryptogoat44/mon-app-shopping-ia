@@ -96,6 +96,17 @@ export const RATE_LIMITS = {
     message: "Trop de changements des notifications en peu de temps. Réessayez dans une heure.",
   },
 
+  // Photo de profil (revue de sécurité du 12 novembre 2026) : envoyer ou
+  // supprimer sa photo (POST et DELETE /api/me/avatar, comptés ensemble,
+  // refus compris). Chaque envoi fait décoder une image au serveur : la
+  // limite par défaut (300 par minute) ne suffisait pas.
+  avatarWrite: {
+    max: 20,
+    windowMs: HOUR,
+    error: "avatar_limit",
+    message: "Vous avez changé de photo de profil plusieurs fois en peu de temps. Réessayez dans une heure.",
+  },
+
   // Alertes prix et stock (lot 2) : régler une cloche ou l'interrupteur des
   // Réglages. Large pour un vrai usage, bloque un script.
   wishAlertWrite: {
