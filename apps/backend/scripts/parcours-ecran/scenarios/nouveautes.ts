@@ -16,7 +16,9 @@
 //   f. Alertes prix et stock : la cloche d'une envie et sa feuille,
 //      l'interrupteur des Réglages, « Plus disponible ? » sur un résultat ;
 //   g. Modération des profils (administratrice) : retirer la bio ou la photo
-//      d'un profil signalé, et ce que la personne en voit.
+//      d'un profil signalé, et ce que la personne en voit ;
+//   z. Profil d'une amie ouvert DIRECTEMENT par son adresse, puis rechargé :
+//      « Message » et la section « Collections » y sont aussi.
 //
 // Trois comptes de test : Louise, Camille (son amie : elles se suivent l'une
 // l'autre) et Inès (qui ne suit personne) ; deux de plus pour la partie g : Zoé
@@ -28,11 +30,13 @@
 // Chaque étape est indépendante (nouveautes-outils.ts) : un échec est
 // photographié et noté, les suivantes passent, le bilan est donné à la fin.
 //
-// Le profil d'une autre personne s'ouvre ici DEPUIS le fil (« Profils »),
-// jamais par son adresse : le bouton « Message » et la section « Collections »
-// n'apparaissent que si l'app a lu, depuis ses onglets, que la messagerie et
-// les collections sont disponibles — une adresse ouverte directement
-// recharge le site sans passer par les onglets.
+// Le profil d'une autre personne s'ouvre ici DEPUIS le fil (« Profils »), sauf
+// dans la partie z, qui l'ouvre par son adresse puis recharge la page : le
+// bouton « Message » et la section « Collections » n'apparaissaient que si
+// l'app avait lu, depuis ses onglets, que la messagerie et les collections
+// sont disponibles — une adresse ouverte directement recharge le site sans
+// passer par les onglets (corrigé : la mise en page commune aux écrans
+// connectés le demande, apps/mobile/src/lib/use-statuses-loaded.ts).
 import type { Page } from "playwright-core";
 import type { Parcours, TestAccount } from "../boite-a-outils.js";
 import { check } from "./spotter-outils.js";
@@ -73,7 +77,7 @@ export const name = "Nouveautés avant lancement — tri, Envies, messagerie, co
 export const outputDir = "nouveautes-captures";
 export const buildEnv = { EXPO_PUBLIC_POSTHOG_KEY: "phc_parcoursEcranFausseCle000000000", EXPO_PUBLIC_ENVIRONMENT: "development" };
 
-const PARTIES = ["a", "b", "c", "d", "e", "f", "g"];
+const PARTIES = ["a", "b", "c", "d", "e", "f", "g", "z"];
 
 // Textes et libellés de l'app qui servent de repères (apps/mobile/src/i18n/fr.ts),
 // jamais ceux qui contiennent le nom du produit (il est configurable).
@@ -466,6 +470,33 @@ async function moderationDesProfils(p: Parcours, d: Donnees, telephones: Telepho
   await photographier(p, membre, "g-05-activite-bio-retiree");
 }
 
+// ---------- z. Profil ouvert directement par son adresse ----------
+
+/** « Message » et la section « Collections », attendus sur le profil affiché (mêmes repères que c2 et d2). */
+async function messageEtCollections(page: Page, membre: TestAccount, comment: string): Promise<void> {
+  await attendre(page, `le bouton « Message » du profil de ${membre.displayName} (${comment})`, repere(page, "bouton-message"));
+  await attendre(page, `la section « Collections » du profil de ${membre.displayName} (${comment})`, repere(page, "collections-ami"));
+  await calme(page);
+}
+
+/** Le profil d'une amie, sans passer par les onglets : par son adresse, puis page rechargée. */
+async function profilParSonAdresse(p: Parcours, d: Donnees, telephones: Telephones): Promise<void> {
+  await exiger(p, d.louise, "messagerie");
+  await exiger(p, d.louise, "collections");
+  // Camille est l'amie de Louise, et lui montre une collection.
+  await d.collections();
+  const page = await telephones.connecter(d.louise);
+  const amie = d.camille;
+  // `aller` charge l'adresse comme un lien reçu ou un favori : l'app repart de zéro, sans barre d'onglets.
+  await aller(p, page, `/profil?id=${amie.id}`, `le profil de ${amie.displayName}, ouvert par son adresse`, texte(page, `@${amie.username}`));
+  await messageEtCollections(page, amie, "ouvert par son adresse");
+  await photographier(p, page, "z-01-profil-ouvert-par-son-adresse", repere(page, "collections-ami"));
+  await page.reload();
+  await attendre(page, `le profil de ${amie.displayName}, page rechargée`, texte(page, `@${amie.username}`));
+  await messageEtCollections(page, amie, "page rechargée");
+  await photographier(p, page, "z-02-profil-recharge", repere(page, "collections-ami"));
+}
+
 export async function run(p: Parcours): Promise<void> {
   const inconnues = p.args.filter((partie) => !PARTIES.includes(partie));
   check(inconnues.length === 0, `parties inconnues (${inconnues.join(", ")}) : choisissez parmi ${PARTIES.join(", ")}, ou aucune pour tout jouer`);
@@ -476,7 +507,7 @@ export async function run(p: Parcours): Promise<void> {
   const camille = await p.createAccount("camil", "Camille (test)", { settled: true });
   const ines = await p.createAccount("ines", "Inès (test)", { settled: true });
   // Comme le reste des données : préparé par la première étape qui en a besoin
-  // (c1, c3, d1, d2), pour qu'un refus ici n'arrête pas les autres parties.
+  // (c1, c3, d1, d2, z), pour qu'un refus ici n'arrête pas les autres parties.
   const amies = uneFois(async () => {
     await demande(p, louise, "POST", `/api/follows/${camille.id}`, undefined, "Louise suit Camille");
     await demande(p, camille, "POST", `/api/follows/${louise.id}`, undefined, "Camille suit Louise");
@@ -519,6 +550,7 @@ export async function run(p: Parcours): Promise<void> {
   await etape(p, bilan, "f2", "Alertes : l'interrupteur « Alertes prix et stock » des Réglages", (t) => interrupteurDesReglages(p, d, t));
   await etape(p, bilan, "f3", "Alertes : « Plus disponible ? » sur un résultat, et sa confirmation", (t) => plusDisponible(p, d, t));
   await etape(p, bilan, "g", "Modération des profils (administratrice) : retirer la bio ou la photo d'un profil signalé", (t) => moderationDesProfils(p, d, t));
+  await etape(p, bilan, "z", "Profil d'une amie ouvert directement par son adresse, puis rechargé : « Message » et « Collections »", (t) => profilParSonAdresse(p, d, t));
 
   process.stdout.write(`${bilan.resume()}\n`);
   check(bilan.echecs.length === 0, `${bilan.echecs.length} étape(s) en échec (captures ECHEC-… dans docs/${outputDir}/) :\n${bilan.echecs.join("\n")}`);

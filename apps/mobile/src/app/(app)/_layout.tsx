@@ -2,6 +2,7 @@ import { Stack } from "expo-router";
 import { AppNotices } from "@/components/app-notices";
 import { useSharedItemArrival } from "@/lib/use-shared-item";
 import { usePushNotifications } from "@/lib/use-push-notifications";
+import { useStatusesLoaded } from "@/lib/use-statuses-loaded";
 
 export default function AppLayout() {
   // Partage reçu pendant qu'un autre écran est affiché : retour au Spotter, qui
@@ -11,6 +12,11 @@ export default function AppLayout() {
   // Lot notifications (app iPhone) : une notification touchée ouvre sa
   // conversation ; jamais de demande d'autorisation ici.
   usePushNotifications();
+  // Messagerie, collections, alertes : sont-elles disponibles ? Demandé ici,
+  // au-dessus de la barre d'onglets, pour qu'un écran ouvert directement par
+  // son adresse ou rechargé (profil d'un membre, collection d'un ami, envie,
+  // Réglages…) montre lui aussi « Message », « Collections »…
+  useStatusesLoaded();
   return (
     <>
       <Stack screenOptions={{ headerShown: false }}>

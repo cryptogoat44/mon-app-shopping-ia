@@ -88,6 +88,7 @@ import { appBuildHeaders, isUpdateRequiredResponse, markUpdateRequired, parseSto
 import { readMessagesStatus, setMessagesStatus } from "./conversations";
 import { readCollectionsStatus, setCollectionsStatus } from "./collections";
 import { ALERTS_UNAVAILABLE, isAlertsUnavailable, readWishAlertState, readWishAlertStates, readWishAlertsStatus, setWishAlertsStatus } from "./wish-alerts";
+import { createStatusLoader } from "./status-loading";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -519,12 +520,30 @@ export async function updatePieceSendsFrom(pieceSendsFrom: PieceSendsFrom): Prom
   track("piece_sends_setting_changed", { value: pieceSendsFrom });
 }
 
+// ---- Disponibilités (messagerie, collections, alertes prix et stock) ----
+// Chaque demande de disponibilité passe par ce suivi (lib/status-loading.ts) :
+// `ensureStatuses` sait ainsi ce qui a déjà une réponse ou une demande en cours.
+const statuses = createStatusLoader({ messages: loadMessagesStatus, collections: loadCollectionsStatus, alerts: loadWishAlertsStatus });
+
+/** S'assure que les disponibilités ont été demandées pour ce compte, quel que
+ * soit l'écran ouvert en premier (un profil ouvert par son adresse n'a pas de
+ * barre d'onglets) : rien n'est redemandé si la réponse est connue ou en
+ * route, rien sans compte connecté. Appelée par la mise en page commune aux
+ * écrans connectés (lib/use-statuses-loaded.ts). */
+export function ensureStatuses(userId: string | null | undefined): Promise<void> {
+  return statuses.ensure(userId);
+}
+
 // ---- Messages privés (lot messages) ----
 
 /** Disponibilité de la messagerie et conversations non lues. Un serveur sans
  * la messagerie (ou en erreur) vaut « indisponible » : l'entrée est cachée.
  * L'état est partagé avec les écrans abonnés (lib/conversations.ts). */
-export async function fetchMessagesStatus(): Promise<MessagesStatus> {
+export function fetchMessagesStatus(): Promise<MessagesStatus> {
+  return statuses.request("messages");
+}
+
+async function loadMessagesStatus(): Promise<MessagesStatus> {
   let status: MessagesStatus;
   try {
     const response = await authorizedFetch("/api/messages/status");
@@ -605,7 +624,11 @@ export async function deletePushToken(token: string, signal?: AbortSignal): Prom
 /** Les alertes sont-elles disponibles, l'interrupteur allumé, les
  * notifications possibles ? Un serveur sans elles (ou en erreur) vaut
  * « indisponible ». L'état est partagé avec les écrans abonnés. */
-export async function fetchWishAlertsStatus(): Promise<WishAlertsStatus> {
+export function fetchWishAlertsStatus(): Promise<WishAlertsStatus> {
+  return statuses.request("alerts");
+}
+
+async function loadWishAlertsStatus(): Promise<WishAlertsStatus> {
   let status: WishAlertsStatus;
   try {
     const response = await authorizedFetch("/api/alerts/status");
@@ -688,7 +711,11 @@ export async function reportStockGone(payload: StockReportRequest): Promise<void
 /** Disponibilité des collections. Un serveur sans elles (ou en erreur) vaut
  * « indisponible » : tout est caché. L'état est partagé avec les écrans
  * abonnés (lib/collections.ts). */
-export async function fetchCollectionsStatus(): Promise<CollectionsStatus> {
+export function fetchCollectionsStatus(): Promise<CollectionsStatus> {
+  return statuses.request("collections");
+}
+
+async function loadCollectionsStatus(): Promise<CollectionsStatus> {
   let status: CollectionsStatus;
   try {
     const response = await authorizedFetch("/api/collections/status");

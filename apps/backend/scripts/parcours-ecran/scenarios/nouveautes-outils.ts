@@ -29,7 +29,7 @@ export class Bilan {
   readonly passees: string[] = [];
   readonly echecs: string[] = [];
 
-  /** `demandees` : lettres des parties à jouer (« a » à « g ») ; aucune : toutes. */
+  /** `demandees` : lettres des parties à jouer (« a » à « g », et « z ») ; aucune : toutes. */
   constructor(private readonly demandees: readonly string[]) {}
 
   demandee(etape: string): boolean {
