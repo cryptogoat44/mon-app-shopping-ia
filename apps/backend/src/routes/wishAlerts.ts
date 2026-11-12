@@ -147,10 +147,17 @@ export default async function wishAlertsRoutes(fastify: FastifyInstance) {
   // sans aucune alerte. 20 par jour (heure de Paris) au plus. La limite en
   // mémoire ne compte qu'un signalement possible (pièce trouvée, avec une
   // clé) : une demande refusée (404, 422) n'use jamais la part du jour.
+  // Toute demande, refusée ou non, compte en revanche dans la limite par
+  // défaut (300 par minute), comme sur les autres routes (revue de sécurité
+  // du 12 novembre 2026 : avant, les demandes refusées n'étaient comptées
+  // nulle part).
   // Refusé à un compte suspendu : il change les envies des autres membres.
   fastify.post(
     "/api/alerts/stock-reports",
-    { preHandler: [fastify.requireAuth, fastify.requireActiveAccount, fastify.rateLimitCheck("stockReport")], config: { rateLimitName: "stockReport" as const } },
+    {
+      preHandler: [fastify.requireAuth, fastify.requireActiveAccount, fastify.rateLimit("default"), fastify.rateLimitCheck("stockReport")],
+      config: { rateLimitName: "stockReport" as const },
+    },
     async (request, reply) => {
       if (!(await ensureReady(reply))) return;
       const body = parseInput(stockReportSchema, request.body, reply, INVALID_BODY);

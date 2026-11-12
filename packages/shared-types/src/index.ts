@@ -99,12 +99,32 @@ function withoutBrokenEnd(text: string): string {
   return /[\uD800-\uDBFF]$/.test(text) ? text.slice(0, -1) : text;
 }
 
-/** Bio telle qu'enregistrée : retours à la ligne unifiés, espaces de fin de
- * ligne retirés, plusieurs lignes vides de suite réduites à une seule, puis
- * espaces et lignes vides retirés au début et à la fin. */
+// Revue de sécurité du 12 novembre 2026 : tout ce qui fait un retour à la
+// ligne compte pour une ligne (retour Windows, tabulation verticale, saut de
+// page, et les séparateurs Unicode « ligne suivante » U+0085, « ligne »
+// U+2028 et « paragraphe » U+2029, qui coupent la ligne sur iPhone), et les
+// caractères de contrôle, invisibles, ne sont jamais gardés (la base refuse
+// le caractère nul).
+const LINE_BREAKS = /\r\n?|[\u000B\u000C\u0085\u2028\u2029]/g;
+const CONTROL_CHARACTERS = /[\u0000-\u0008\u000E-\u001F\u007F-\u009F]/g;
+
+/** Retours à la ligne de toute sorte ramenés à « \n », caractères de contrôle retirés (la tabulation reste). */
+function withPlainLineBreaks(text: string): string {
+  return text.replace(LINE_BREAKS, "\n").replace(CONTROL_CHARACTERS, "");
+}
+
+/** Texte d'une seule ligne (nom affiché) : retours à la ligne et tabulations
+ * remplacés par une espace, caractères de contrôle retirés, espaces retirés
+ * au début et à la fin. */
+export function singleLine(text: string): string {
+  return withPlainLineBreaks(text).replace(/[\n\t]+/g, " ").trim();
+}
+
+/** Bio telle qu'enregistrée : retours à la ligne unifiés (withPlainLineBreaks),
+ * espaces de fin de ligne retirés, plusieurs lignes vides de suite réduites à
+ * une seule, puis espaces et lignes vides retirés au début et à la fin. */
 export function normalizeBio(text: string): string {
-  return text
-    .replace(/\r\n?/g, "\n")
+  return withPlainLineBreaks(text)
     .split("\n")
     .map((line) => line.replace(/[ \t ]+$/, ""))
     .join("\n")
@@ -132,7 +152,7 @@ export function bioProblem(normalized: string): BioProblem | null {
  * ne sont pas retirés ici (on tape une espace avant le mot suivant) :
  * normalizeBio s'en charge à l'enregistrement. */
 export function limitBioInput(text: string): string {
-  const lines = text.replace(/\r\n?/g, "\n").replace(/\n{3,}/g, "\n\n").split("\n");
+  const lines = withPlainLineBreaks(text).replace(/\n{3,}/g, "\n\n").split("\n");
   if (lines.length > BIO_MAX_LINES) {
     const last = lines
       .slice(BIO_MAX_LINES - 1)

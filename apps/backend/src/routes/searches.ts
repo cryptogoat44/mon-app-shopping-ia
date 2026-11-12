@@ -84,6 +84,7 @@ import {
   lensInGoogleOrder,
 } from "../lib/deferredComplement.js";
 import { consumeRateLimit, RATE_LIMITED_MESSAGE } from "../plugins/rateLimit.js";
+import { RATE_LIMITS } from "../lib/rateLimits.js";
 import { aiQuotaFor } from "../lib/aiQuota.js";
 import { noteFailure } from "../lib/alerts.js";
 import { observeResults, type ObservationSource, type ObservedRow } from "../lib/wishObserve.js";
@@ -1291,6 +1292,10 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     const linkIgnored = body.sourceUrl !== undefined && !linkPreviewEnabled();
     const sourceUrl = linkIgnored ? null : (body.sourceUrl ?? null);
     const platform: PlatformSource = sourceUrl ? detectPlatform(sourceUrl) : "photo";
+    // Un lien préparé fait partir une demande vers TikTok ou Meta : 20 par heure et par membre.
+    if (sourceUrl && !consumeRateLimit(request, "linkPrepare")) {
+      return reply.code(429).send({ error: RATE_LIMITS.linkPrepare.error, message: RATE_LIMITS.linkPrepare.message });
+    }
     const preview = sourceUrl ? await fetchOfficialPreview(sourceUrl, platform) : null;
     const thumbnail = preview?.ok ? { thumbnailUrl: preview.thumbnailUrl } : null;
 
@@ -1359,7 +1364,8 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
   fastify.post(
     "/api/searches/:id/run",
     {
-      preHandler: [fastify.requireAuth, fastify.rateLimitCheck("searchCreate")],
+      // Toute demande, refusée ou non, compte dans la limite par défaut (revue de sécurité du 12 novembre 2026).
+      preHandler: [fastify.requireAuth, fastify.rateLimit("default"), fastify.rateLimitCheck("searchCreate")],
       config: { rateLimitName: "searchCreate" },
     },
     async (request, reply) => {
@@ -1429,7 +1435,8 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
   fastify.post(
     "/api/searches/:id/text",
     {
-      preHandler: [fastify.requireAuth, fastify.rateLimitCheck("searchCreate")],
+      // Toute demande, refusée ou non, compte dans la limite par défaut (revue de sécurité du 12 novembre 2026).
+      preHandler: [fastify.requireAuth, fastify.rateLimit("default"), fastify.rateLimitCheck("searchCreate")],
       config: { rateLimitName: "searchCreate" },
     },
     async (request, reply) => {

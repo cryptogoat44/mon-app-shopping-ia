@@ -1,7 +1,7 @@
 import sharp, { type Metadata, type Sharp } from "sharp";
 import { AVATAR_SIDE } from "@monapp/shared-types";
 import { ImageSourceError } from "./imageProcessing.js";
-import { IMAGE_TOO_HEAVY, MAX_INPUT_PIXELS, imageFormatOf, isTooHeavyToDecode, oneImageAtATime } from "./imageSafety.js";
+import { IMAGE_TOO_HEAVY, ImageQueueFullError, MAX_INPUT_PIXELS, imageFormatOf, isTooHeavyToDecode, oneImageAtATime } from "./imageSafety.js";
 
 // Photos envoyées par les utilisateurs (publications, Vault, avatar) —
 // lot « images et fluidité ». Une photo d'iPhone pèse 3 à 4 Mo (3024 × 4032) :
@@ -15,6 +15,13 @@ import { IMAGE_TOO_HEAVY, MAX_INPUT_PIXELS, imageFormatOf, isTooHeavyToDecode, o
 // Format, taille et mémoire du décodage sont vérifiés avant tout décodage, et
 // les traitements passent un par un (lib/imageSafety.ts).
 export const PHOTO_SIZES = { display: 1600, thumb: 480, avatar: AVATAR_SIDE } as const;
+
+/** L'erreur à relever après un traitement manqué : « image illisible »
+ * (fichier tronqué ou corrompu), sauf quand la file des traitements est
+ * pleine — ce n'est pas la faute de l'image, l'erreur passe telle quelle. */
+function unreadable(error: unknown): Error {
+  return error instanceof ImageQueueFullError ? error : new ImageSourceError("Image illisible");
+}
 
 /** L'en-tête d'une image (jamais décodée ici) ; ImageSourceError s'il est
  * illisible ou si l'image dépasse `maxPixels`, ou si la décoder demanderait
@@ -48,8 +55,8 @@ export async function optimizePhotoWithSize(input: Buffer, maxSide: number, qual
         .toBuffer({ resolveWithObject: true })
     );
     return { data, width: info.width, height: info.height };
-  } catch {
-    throw new ImageSourceError("Image illisible");
+  } catch (error) {
+    throw unreadable(error);
   }
 }
 
@@ -112,8 +119,8 @@ export async function encodeAvatar(input: Buffer): Promise<{ data: Buffer; side:
         .toBuffer()
     );
     return { data, side };
-  } catch {
-    throw new ImageSourceError("Image illisible");
+  } catch (error) {
+    throw unreadable(error);
   }
 }
 
@@ -196,7 +203,7 @@ export async function encodeSharedCopy(input: Buffer): Promise<SharedCopy> {
               .toBuffer();
       return { display, thumb, width: info.width, height: info.height };
     });
-  } catch {
-    throw new ImageSourceError("Image illisible");
+  } catch (error) {
+    throw unreadable(error);
   }
 }

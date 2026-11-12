@@ -3,7 +3,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import multipart from "@fastify/multipart";
 import sharp from "sharp";
 import { afterEach, describe, expect, it } from "vitest";
-import { IMAGE_TOO_HEAVY, MAX_DECODE_BYTES, fullDecodeBytes, isTooHeavyToDecode, oneImageAtATime } from "../src/lib/imageSafety.js";
+import { IMAGE_TOO_HEAVY, ImageQueueFullError, MAX_DECODE_BYTES, MAX_WAITING_IMAGES, fullDecodeBytes, isTooHeavyToDecode, oneImageAtATime } from "../src/lib/imageSafety.js";
 import { ImageSourceError, prepareImageForAnalysis } from "../src/lib/imageProcessing.js";
 import { AVATAR_MAX_INPUT_PIXELS, encodeAvatar, encodeSharedCopy, optimizePhoto } from "../src/lib/photos.js";
 import { MULTIPART_LIMITS, isTooManyPartsError } from "../src/lib/multipartErrors.js";
@@ -131,6 +131,32 @@ describe("oneImageAtATime : un seul traitement d'image à la fois", () => {
     expect(most).toBe(1);
     expect(order).toEqual([1, 2, 3, 4]);
     expect(results.map((result) => result.status)).toEqual(["fulfilled", "rejected", "fulfilled", "fulfilled"]);
+  });
+
+  it("file pleine (12 traitements en attente) : le suivant est refusé aussitôt, sans être lancé ; la file se vide, tout repasse", async () => {
+    expect(MAX_WAITING_IMAGES).toBe(12);
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    let started = 0;
+    const slow = () => oneImageAtATime(async () => {
+      started += 1;
+      await gate;
+    });
+    const first = slow(); // en cours
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const waiting = Array.from({ length: 12 }, slow); // en attente
+    await expect(slow()).rejects.toBeInstanceOf(ImageQueueFullError);
+    expect(started).toBe(1);
+    // Une vraie photo envoyée à ce moment : « réessayez », jamais « image illisible ».
+    const jpeg = await flat(64, 64).jpeg().toBuffer();
+    await expect(optimizePhoto(jpeg, 480)).rejects.toBeInstanceOf(ImageQueueFullError);
+    await expect(encodeAvatar(jpeg)).rejects.toBeInstanceOf(ImageQueueFullError);
+    await expect(prepareImageForAnalysis(jpeg, null)).rejects.toBeInstanceOf(ImageQueueFullError);
+    await expect(encodeSharedCopy(jpeg)).rejects.toBeInstanceOf(ImageQueueFullError);
+    open();
+    await Promise.all([first, ...waiting]);
+    expect(started).toBe(13);
+    expect((await optimizePhoto(jpeg, 480)).length).toBeGreaterThan(0);
   });
 
   it("quatre photos envoyées en même temps sont toutes traitées", async () => {

@@ -268,6 +268,28 @@ describe("interrupteur des liens allumé : le comportement d'avant, inchangé", 
     expect(rows()[0]).toMatchObject({ source_url: TIKTOK, source_platform: "tiktok", method: "oembed", thumbnail_url: COVER });
   });
 
+  // Revue de sécurité du 12 novembre 2026 (point « entrees-09 »).
+  it("« préparer » un lien : 20 par heure et par membre (chacun fait partir une demande vers TikTok ou Meta) ; sans lien, jamais compté", async () => {
+    const target = await buildApp();
+    safeFetchMock.mockImplementation(async () => new Response("", { status: 404 }));
+    const before = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      for (let attempt = 0; attempt < 20; attempt++) expect((await prepare(target, { sourceUrl: TIKTOK })).statusCode).toBe(200);
+      const outgoing = safeFetchMock.mock.calls.length;
+      const refused = await prepare(target, { sourceUrl: TIKTOK });
+      expect(refused.statusCode).toBe(429);
+      expect(refused.json()).toEqual({ error: "link_prepare_limit", message: "Vous avez préparé beaucoup de liens en peu de temps. Réessayez dans une heure." });
+      // Refusé avant tout appel sortant et sans rien enregistrer.
+      expect(safeFetchMock.mock.calls.length).toBe(outgoing);
+      expect(rows()).toHaveLength(20);
+      // La capture de la personne (sans lien) n'est pas concernée.
+      expect((await prepare(target, {})).statusCode).toBe(200);
+    } finally {
+      process.env.NODE_ENV = before;
+    }
+  });
+
   it("« lancer » sans capture télécharge la couverture enregistrée et lance la recherche", async () => {
     safeFetchMock.mockResolvedValueOnce(new Response(PHOTO, { status: 200, headers: { "content-type": "image/jpeg" } }));
     const target = await buildApp();

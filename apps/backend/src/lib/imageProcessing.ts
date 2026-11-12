@@ -1,7 +1,7 @@
 import sharp, { type Sharp } from "sharp";
 import type { CropRect } from "@monapp/shared-types";
 import { safeFetch } from "./safeFetch.js";
-import { IMAGE_TOO_HEAVY, MAX_INPUT_PIXELS, imageFormatOf, isTooHeavyToDecode, oneImageAtATime } from "./imageSafety.js";
+import { IMAGE_TOO_HEAVY, ImageQueueFullError, MAX_INPUT_PIXELS, imageFormatOf, isTooHeavyToDecode, oneImageAtATime } from "./imageSafety.js";
 
 // Hébergeurs des vignettes renvoyées par les voies officielles (oEmbed) :
 // seules adresses que le serveur accepte de télécharger pour les recadrer
@@ -148,7 +148,9 @@ export async function prepareImageForAnalysis(input: Buffer, crop: CropRect | nu
         .jpeg({ quality: 88 })
         .toBuffer()
     );
-  } catch {
+  } catch (error) {
+    // File des traitements pleine : pas la faute de l'image, l'erreur passe telle quelle.
+    if (error instanceof ImageQueueFullError) throw error;
     // Le décodage se fait ici : un fichier tronqué ou corrompu est une image
     // illisible (400), comme avant, jamais une erreur du serveur.
     throw new ImageSourceError("Image illisible");

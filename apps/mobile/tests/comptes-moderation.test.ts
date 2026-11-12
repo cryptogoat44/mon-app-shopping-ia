@@ -31,12 +31,10 @@ describe("mot de passe oublié en flux PKCE (point 13)", () => {
     expect(parseRecoveryUrl("https://site.example/nouveau-mot-de-passe?code=")).toEqual({ kind: "none" });
   });
 
-  it("lit encore les anciens liens (jetons dans la partie « # »)", () => {
-    expect(parseRecoveryUrl("https://site.example/nouveau-mot-de-passe#access_token=abc&refresh_token=def&type=recovery")).toEqual({
-      kind: "tokens",
-      accessToken: "abc",
-      refreshToken: "def",
-    });
+  it("ne lit plus les anciens liens (jetons dans la partie « # »), sauf pour la base d'essai", () => {
+    const link = "https://site.example/nouveau-mot-de-passe#access_token=abc&refresh_token=def&type=recovery";
+    expect(parseRecoveryUrl(link)).toEqual({ kind: "none" });
+    expect(parseRecoveryUrl(link, { testLinks: true })).toEqual({ kind: "tokens", accessToken: "abc", refreshToken: "def" });
   });
 
   it("explique un lien ouvert sur un autre appareil que celui de la demande", () => {

@@ -107,6 +107,66 @@ describe("s'assurer que les disponibilités sont demandées (logique)", () => {
     await loader.ensure(CAMILLE);
     expect(comptes).toEqual({ messages: 2, collections: 2, alerts: 2 });
   });
+
+  // Revue de sécurité du 12 novembre 2026 (point « app-04 ») : sur un
+  // ordinateur partagé, rien du compte précédent n'est montré au suivant.
+  describe("changement de compte : la mémoire est vidée, les réponses de l'ancien compte ne valent pas pour le nouveau", () => {
+    /** Une seule disponibilité, dont chaque réponse attend qu'on la donne. */
+    function lente() {
+      const reponses: ((value: string) => void)[] = [];
+      let vidages = 0;
+      const loader = createStatusLoader({ messages: () => new Promise<string>((resolve) => reponses.push(resolve)) }, () => {
+        vidages += 1;
+      });
+      return { reponses, loader, vidages: () => vidages };
+    }
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    it("un autre compte : mémoire vidée aussitôt, avant toute réponse ; le même compte : jamais", async () => {
+      const { reponses, loader, vidages } = lente();
+      void loader.ensure(LOUISE);
+      void loader.ensure(LOUISE);
+      expect(vidages()).toBe(0);
+      void loader.ensure(CAMILLE);
+      expect(vidages()).toBe(1);
+      // La demande de Louise ne compte plus : une nouvelle est partie pour Camille.
+      expect(reponses).toHaveLength(2);
+    });
+
+    it("la réponse de l'ancien compte arrive APRÈS celle du nouveau : la disponibilité est redemandée pour le nouveau", async () => {
+      const { reponses, loader } = lente();
+      void loader.ensure(LOUISE);
+      const camille = loader.ensure(CAMILLE);
+      reponses[1]!("camille");
+      await camille;
+      reponses[0]!("louise (en retard)");
+      await tick();
+      expect(reponses).toHaveLength(3);
+      // Arrivée AVANT celle du nouveau compte, elle sera recouverte : rien à redemander.
+      const autre = lente();
+      void autre.loader.ensure(LOUISE);
+      const suite = autre.loader.ensure(CAMILLE);
+      autre.reponses[0]!("louise (en retard)");
+      await tick();
+      autre.reponses[1]!("camille");
+      await suite;
+      expect(autre.reponses).toHaveLength(2);
+    });
+
+    it("déconnexion : mémoire vidée ; une réponse arrivée ensuite est effacée à la connexion suivante", async () => {
+      const { reponses, loader, vidages } = lente();
+      void loader.ensure(LOUISE);
+      await loader.ensure(null);
+      expect(vidages()).toBe(1);
+      reponses[0]!("louise (en retard)");
+      await tick();
+      // Sans compte, rien n'est redemandé.
+      expect(reponses).toHaveLength(1);
+      void loader.ensure(CAMILLE);
+      expect(vidages()).toBe(2);
+      expect(reponses).toHaveLength(2);
+    });
+  });
 });
 
 describe("écran ouvert directement par son adresse, ou rechargé (appels du serveur)", () => {
@@ -303,7 +363,9 @@ describe("branchement dans l'app", () => {
 
   it("chaque demande de disponibilité passe par le même suivi", () => {
     const api = source("lib/api.ts");
-    expect(api).toContain("const statuses = createStatusLoader({ messages: loadMessagesStatus, collections: loadCollectionsStatus, alerts: loadWishAlertsStatus });");
+    expect(api).toContain("const statuses = createStatusLoader({ messages: loadMessagesStatus, collections: loadCollectionsStatus, alerts: loadWishAlertsStatus }, () => {");
+    // Changement de compte : les trois états en mémoire redeviennent « indisponible ».
+    for (const reset of ["setMessagesStatus({ enabled: false, unreadCount: 0, push: false });", "setCollectionsStatus({ enabled: false, reportable: false });", "setWishAlertsStatus(ALERTS_UNAVAILABLE);"]) expect(api).toContain(reset);
     for (const kind of ["messages", "collections", "alerts"]) expect(api).toContain(`return statuses.request("${kind}");`);
     expect(api).toContain("return statuses.ensure(userId);");
     // Une seule lecture de chaque adresse dans tout le code de l'app.

@@ -33,6 +33,7 @@ import pushTokensRoutes from "./routes/pushTokens.js";
 import wishAlertsRoutes from "./routes/wishAlerts.js";
 import { flushAfterResponse } from "./lib/wishAlertsSend.js";
 import { MULTIPART_LIMITS, isTooManyPartsError } from "./lib/multipartErrors.js";
+import { ImageQueueFullError } from "./lib/imageSafety.js";
 import { captureServerError, captureServerFailure } from "./lib/sentry.js";
 import { GENERIC_CLIENT_ERROR, isErrorBody, localizeMessage } from "./lib/messages.js";
 import { requestLocale } from "./lib/locale.js";
@@ -97,6 +98,11 @@ export async function buildApp(options: { logger?: LoggerOption } = {}): Promise
   fastify.setErrorHandler((error: FastifyError, request, reply) => {
     if (error.code === "FST_REQ_FILE_TOO_LARGE") {
       return reply.code(413).send({ error: "file_too_large", message: "Le fichier est trop volumineux (10 Mo maximum)." });
+    }
+
+    // Trop d'images à traiter en même temps (lib/imageSafety.ts) : à réessayer.
+    if (error instanceof ImageQueueFullError) {
+      return reply.code(503).send({ error: "server_busy", message: "Le service est très demandé en ce moment. Réessayez dans un instant." });
     }
 
     // Trop de fichiers, de champs ou de parties, ou envoi coupé en route :

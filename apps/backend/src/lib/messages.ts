@@ -203,6 +203,14 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Format non accepté : choisissez une photo JPEG, PNG ou HEIC.": "Format not accepted: choose a JPEG, PNG or HEIC photo.",
   "La photo n'a pas pu être effacée : rien n'a été changé. Réessayez dans un instant.":
     "The photo couldn't be deleted: nothing was changed. Please try again in a moment.",
+  // Revue de sécurité du 12 novembre 2026 (routes/me.ts, lib/rateLimits.ts).
+  "Merci d'envoyer une seule image, sans autre champ.": "Please send a single image, with no other field.",
+  "Une photo est déjà en cours d'envoi. Réessayez dans un instant.": "A photo is already being uploaded. Please try again in a moment.",
+  "Vous avez changé de photo de profil plusieurs fois en peu de temps. Réessayez dans une heure.":
+    "You've changed your profile photo several times in a short time. Please try again in an hour.",
+  "Le nom affiché doit compter de 1 à 60 caractères.": "Your display name must be 1 to 60 characters long.",
+  "Le service est très demandé en ce moment. Réessayez dans un instant.": "The service is very busy right now. Please try again in a moment.",
+  "Vous avez préparé beaucoup de liens en peu de temps. Réessayez dans une heure.": "You've prepared a lot of links in a short time. Please try again in an hour.",
   // Alertes prix et stock (lot 2, routes/wishAlerts.ts, lib/rateLimits.ts).
   "Vous avez signalé beaucoup de pièces aujourd'hui. Réessayez demain.": "You've reported a lot of pieces today. Please try again tomorrow.",
   "Vous avez changé beaucoup d'alertes en peu de temps. Réessayez dans un moment.": "You've changed a lot of alerts in a short time. Please try again in a moment.",

@@ -3,7 +3,7 @@ import Fastify, { type FastifyInstance, type FastifyPluginAsync, type FastifyReq
 import multipart from "@fastify/multipart";
 import sharp from "sharp";
 import { afterEach, describe, expect, it } from "vitest";
-import { AVATAR_MAX_BYTES, AVATAR_SIDE, BIO_MAX_LENGTH, type ModerationPage, type Profile } from "@monapp/shared-types";
+import { AVATAR_MAX_BYTES, AVATAR_SIDE, BIO_MAX_LENGTH, normalizeBio, singleLine, type ModerationPage, type Profile } from "@monapp/shared-types";
 import meRoutes from "../src/routes/me.js";
 import rateLimitPlugin from "../src/plugins/rateLimit.js";
 import { RATE_LIMITS } from "../src/lib/rateLimits.js";
@@ -142,6 +142,39 @@ describe("bio : 160 caractères, 3 lignes, lignes vides et espaces retirés", ()
     const blankRuns = await patchBio(target, "Une\n\n\nDeux\n\n\nTrois");
     expect(blankRuns.statusCode).toBe(400);
     expect(saved(fake).bio).toBe("Une\n\nDeux");
+  });
+
+  // Revue de sécurité du 12 novembre 2026 (point « entrees-04 »).
+  it("les séparateurs de ligne Unicode comptent pour des lignes ; les caractères de contrôle ne sont jamais enregistrés", async () => {
+    const fake = setup();
+    const target = await routesApp(meRoutes, fake);
+    for (const separator of ["\u2028", "\u2029", "\u0085", "\u000B", "\u000C"]) {
+      const res = await patchBio(target, Array.from({ length: 80 }, () => "a").join(separator));
+      expect(res.statusCode, `U+${separator.charCodeAt(0).toString(16)}`).toBe(400);
+      expect(res.json()).toEqual({ error: "bio_too_many_lines", message: "La bio ne peut pas dépasser 3 lignes." });
+    }
+    expect(saved(fake).bio ?? null).toBeNull();
+    const kept = await patchBio(target, "Paris\u2028Vintage\u0000 et\u0007 cuir \u2029Taille 38\u009F");
+    expect(kept.statusCode).toBe(200);
+    expect(saved(fake).bio).toBe("Paris\nVintage et cuir\nTaille 38");
+    expect(normalizeBio("a\tb \t\nc")).toBe("a\tb\nc");
+  });
+
+  it("nom affiché : une seule ligne, sans caractère de contrôle ; vide une fois nettoyé, refusé avec un message en français", async () => {
+    const fake = setup();
+    const target = await routesApp(meRoutes, fake);
+    const patchName = (displayName: unknown) => target.inject({ method: "PATCH", url: "/api/me", payload: { username: "camille", displayName } });
+    expect((await patchName("  Cam\u0000ille\u2028Martin\n\tD. ")).statusCode).toBe(200);
+    expect(saved(fake).display_name).toBe("Camille Martin D.");
+    for (const empty of ["", " \u0000\u2028\n ", "a".repeat(61), 42, undefined]) {
+      const res = await patchName(empty);
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toEqual({ error: "invalid_body", message: "Le nom affiché doit compter de 1 à 60 caractères." });
+    }
+    expect(saved(fake).display_name).toBe("Camille Martin D.");
+    const badUsername = await target.inject({ method: "PATCH", url: "/api/me", payload: { username: "Camille Martin", displayName: "Camille" } });
+    expect(badUsername.json()).toEqual({ error: "invalid_body", message: "3 à 20 caractères : lettres minuscules, chiffres, underscore." });
+    expect(singleLine(" a\r\nb\u2029c\u0001 ")).toBe("a b c");
   });
 
   it("un mot interdit dans la bio : le même refus 400 content_not_allowed, rien n'est enregistré", async () => {
@@ -561,5 +594,61 @@ describe("modération : un profil signalé est montré avec sa bio", () => {
       author: { id: USER, username: "camille", displayName: "Camille", avatarUrl: `${PUBLIC}/${USER}/avatar-a.jpg`, suspended: false },
       bio: BIO,
     });
+  });
+});
+
+// Revue de sécurité du 12 novembre 2026 (points « acces-1 » et « app-03 ») :
+// le bucket des photos de profil est public ; cacher l'adresse de la photo
+// d'un compte suspendu dans les réponses ne suffisait pas.
+describe("suspension : la photo de profil change d'adresse", () => {
+  const ACTION = "5a000000-0000-4000-8000-00000000000a";
+  const LEGACY = `avatars/${USER}/avatar.jpg`;
+  const suspend = (target: FastifyInstance, action = "suspend") =>
+    target.inject({ method: "POST", url: "/api/admin/moderation/actions", payload: { targetType: "user", targetId: USER, action, reason: "inappropriate" } });
+
+  function suspended(options: FakeDbOptions = {}): Fake {
+    const fake = setup(
+      { rpc: async (fn) => (fn === "moderation_apply" ? { data: [{ outcome: "ok", action_id: ACTION }], error: null } : { data: null, error: { message: "absente" } }), ...options },
+      { avatar_url: `${PUBLIC}/${USER}/avatar.jpg` }
+    );
+    fake.files.set(LEGACY, Buffer.from("photo"));
+    fake.table("suspensions").push({ user_id: USER, moderation_action_id: ACTION });
+    return fake;
+  }
+
+  it("l'ancienne adresse (« <compte>/avatar.jpg », devinable) ne montre plus rien ; la photo, intacte, a un nom au hasard", async () => {
+    const fake = suspended();
+    const res = await suspend(await routesApp(moderationRoutes, fake, [], ADMIN));
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ actionId: ACTION });
+    expect(fake.files.has(LEGACY)).toBe(false);
+    expect(saved(fake).avatar_url).toMatch(AVATAR_URL);
+    expect(storedAvatars(fake)).toEqual([pathOf(saved(fake).avatar_url as string)]);
+    expect(fake.files.get(storedAvatars(fake)[0]!)).toEqual(Buffer.from("photo"));
+    expect(fake.removed).toEqual([]);
+  });
+
+  it("une autre décision (classer sans suite) ne déplace rien ; un compte sans photo non plus", async () => {
+    const fake = suspended();
+    expect((await suspend(await routesApp(moderationRoutes, fake, [], ADMIN), "dismiss")).statusCode).toBe(200);
+    expect(fake.files.has(LEGACY)).toBe(true);
+    expect(saved(fake).avatar_url).toBe(`${PUBLIC}/${USER}/avatar.jpg`);
+
+    const noPhoto = suspended();
+    saved(noPhoto).avatar_url = null;
+    expect((await suspend(await routesApp(moderationRoutes, noPhoto, [], ADMIN))).statusCode).toBe(200);
+    expect(noPhoto.files.has(LEGACY)).toBe(true);
+  });
+
+  it("le stockage refuse : la suspension est enregistrée quand même, la photo garde son adresse, le journal ne donne ni chemin ni compte", async () => {
+    const fake = suspended({ failStorageRemove: () => true });
+    const lines: string[] = [];
+    const res = await suspend(await routesApp(moderationRoutes, fake, lines, ADMIN));
+    expect(res.statusCode).toBe(200);
+    expect(fake.files.has(LEGACY)).toBe(true);
+    expect(saved(fake).avatar_url).toBe(`${PUBLIC}/${USER}/avatar.jpg`);
+    const journal = lines.join("\n");
+    expect(journal).toContain("la photo de profil n'a pas pu changer d'adresse");
+    expect(journal).not.toContain(USER);
   });
 });

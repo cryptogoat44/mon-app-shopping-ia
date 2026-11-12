@@ -523,7 +523,13 @@ export async function updatePieceSendsFrom(pieceSendsFrom: PieceSendsFrom): Prom
 // ---- Disponibilités (messagerie, collections, alertes prix et stock) ----
 // Chaque demande de disponibilité passe par ce suivi (lib/status-loading.ts) :
 // `ensureStatuses` sait ainsi ce qui a déjà une réponse ou une demande en cours.
-const statuses = createStatusLoader({ messages: loadMessagesStatus, collections: loadCollectionsStatus, alerts: loadWishAlertsStatus });
+// Changement de compte ou déconnexion : ce qui est gardé en mémoire redevient
+// « indisponible », rien du compte précédent n'est montré au suivant.
+const statuses = createStatusLoader({ messages: loadMessagesStatus, collections: loadCollectionsStatus, alerts: loadWishAlertsStatus }, () => {
+  setMessagesStatus({ enabled: false, unreadCount: 0, push: false });
+  setCollectionsStatus({ enabled: false, reportable: false });
+  setWishAlertsStatus(ALERTS_UNAVAILABLE);
+});
 
 /** S'assure que les disponibilités ont été demandées pour ce compte, quel que
  * soit l'écran ouvert en premier (un profil ouvert par son adresse n'a pas de

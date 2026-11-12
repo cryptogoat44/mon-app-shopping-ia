@@ -11,6 +11,7 @@ import {
   PRIVACY_LEVELS,
   bioProblem,
   normalizeBio,
+  singleLine,
   type Profile,
 } from "@monapp/shared-types";
 import { DatabaseReadError, parseInput } from "../lib/validation.js";
@@ -30,15 +31,23 @@ const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
 /** Bio reçue, avant d'en retirer espaces et lignes vides en trop. */
 const BIO_RAW_MAX_LENGTH = 1000;
 
+/** Nom affiché reçu, avant nettoyage. */
+const DISPLAY_NAME_RAW_MAX_LENGTH = 500;
+// Messages des refus de PATCH /api/me, par champ : toujours en français,
+// jamais le message technique (en anglais) de la bibliothèque de validation.
+const UPDATE_ME_MESSAGES: Record<string, string> = {
+  username: "3 à 20 caractères : lettres minuscules, chiffres, underscore.",
+  displayName: "Le nom affiché doit compter de 1 à 60 caractères.",
+  bio: "La bio est trop longue (160 caractères maximum).",
+};
+
 const updateMeSchema = z.object({
-  username: z
-    .string()
-    .toLowerCase()
-    .regex(USERNAME_REGEX, "3 à 20 caractères : lettres minuscules, chiffres, underscore."),
-  displayName: z.string().trim().min(1).max(60),
+  username: z.string().toLowerCase().regex(USERNAME_REGEX),
+  // Une seule ligne, sans caractère de contrôle (singleLine), puis 1 à 60 caractères.
+  displayName: z.string().max(DISPLAY_NAME_RAW_MAX_LENGTH).transform(singleLine).pipe(z.string().min(1).max(60)),
   // Bio : normalisée puis contrôlée dans la route (160 caractères, 3 lignes :
   // normalizeBio, bioProblem). Ici, seul un texte démesuré est écarté d'emblée.
-  bio: z.string().max(BIO_RAW_MAX_LENGTH, "La bio est trop longue (160 caractères maximum).").nullable().optional(),
+  bio: z.string().max(BIO_RAW_MAX_LENGTH).nullable().optional(),
 });
 
 const updateLocaleSchema = z.object({ locale: z.enum(APP_LOCALES) });
@@ -277,9 +286,10 @@ export default async function meRoutes(fastify: FastifyInstance) {
     const parsed = updateMeSchema.safeParse(request.body);
 
     if (!parsed.success) {
+      const field = parsed.error.issues[0]?.path[0];
       return reply.code(400).send({
         error: "invalid_body",
-        message: parsed.error.issues[0]?.message ?? "Requête invalide.",
+        message: (typeof field === "string" ? UPDATE_ME_MESSAGES[field] : undefined) ?? "Requête invalide.",
       });
     }
 

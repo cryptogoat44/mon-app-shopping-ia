@@ -451,6 +451,47 @@ describe("entrées des routes après le passage à zod 4 : mêmes refus, mêmes 
     expect(fake.table("wish_tracking")).toHaveLength(0);
   });
 
+  // Revue de sécurité du 12 novembre 2026 (point « entrees-05 »).
+  it("« Plus disponible » : les demandes refusées comptent dans la limite par défaut (300 par minute), plus jamais sans limite", async () => {
+    const target = await alertsApp(seeded().db);
+    const member = "d0000000-0000-4000-8000-00000000000d";
+    const before = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      for (let attempt = 0; attempt < 300; attempt++) {
+        const res = await as(target, member).post("/api/alerts/stock-reports", {});
+        if (res.statusCode !== 400) throw new Error(`demande ${attempt + 1} : ${res.statusCode}`);
+      }
+      const refused = await as(target, member).post("/api/alerts/stock-reports", {});
+      expect(refused.statusCode).toBe(429);
+      expect(refused.json()).toMatchObject({ error: "rate_limited" });
+      // Un autre membre n'est pas touché.
+      expect((await as(target, ALICE).post("/api/alerts/stock-reports", {})).statusCode).toBe(400);
+    } finally {
+      process.env.NODE_ENV = before;
+    }
+  });
+
+  // Revue de sécurité du 12 novembre 2026 (point « app-02 ») : le nom de la
+  // boutique d'une envie ne vient jamais de la requête quand un lien est rangé.
+  it("envie créée : le nom de la boutique est celui du résultat ; sans résultat, le nom de domaine du lien (jamais « Zara » vers un autre site)", async () => {
+    const fake = seeded();
+    const target = await alertsApp(fake.db);
+    const stored = (id: string) => fake.table("wishlist_items").find((row) => row.id === id)!;
+
+    // Appel direct, sans résultat : un nom de confiance et un lien vers un autre site.
+    const forged = await newWish(target, { title: "Veste piégée", merchantName: "Zara", merchantUrl: "https://www.zara.exemple-pirate.com/connexion?x=1" });
+    expect(stored(forged)).toMatchObject({ merchant_name: "zara.exemple-pirate.com", merchant_url: "https://www.zara.exemple-pirate.com/connexion?x=1", product_match_id: null });
+
+    // Sans lien, il n'y a pas de bouton : le nom envoyé reste un simple texte.
+    const noLink = await newWish(target, { title: "Veste sans lien", merchantName: "Friperie du coin" });
+    expect(stored(noLink)).toMatchObject({ merchant_name: "Friperie du coin", merchant_url: null });
+
+    // Avec un résultat de recherche : lien ET nom rangés avec ce résultat, quoi que dise la requête.
+    const kept = await newWish(target, { title: "Veste Nuage 07", merchantName: "Zara", merchantUrl: "https://exemple-pirate.com/", productMatchId: MATCH });
+    expect(stored(kept)).toMatchObject({ merchant_name: "Boutique Exemple", merchant_url: SHOP_URL, product_match_id: MATCH });
+  });
+
   it("« Plus disponible » : identifiant mal formé, champ en trop, deux identifiants, aucun ou corps absent : 400 « invalid_body », rien n'est signalé", async () => {
     const fake = seeded();
     const target = await alertsApp(fake.db);

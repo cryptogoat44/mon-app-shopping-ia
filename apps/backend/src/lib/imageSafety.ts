@@ -135,12 +135,35 @@ export function isTooHeavyToDecode(header: ImageHeader, maxBytes: number = MAX_D
 // dépasser ensemble les 512 Mo. L'attente est courte (un traitement dure de
 // 0,1 à 2 s) et dans l'ordre d'arrivée.
 let imageQueue: Promise<unknown> = Promise.resolve();
+/** Traitements qui attendent leur tour (celui en cours n'est pas compté). */
+let waitingImages = 0;
+
+/** Traitements en attente au plus : 12. Chaque image qui attend garde son
+ * fichier en mémoire (10 Mo au plus) : sans plafond, un flot d'envois ferait
+ * grossir la file, donc la mémoire, sans fin. Au-delà, l'envoi est refusé
+ * aussitôt (ImageQueueFullError : « réessayez », 503). */
+export const MAX_WAITING_IMAGES = 12;
+
+/** File des traitements d'images pleine : à réessayer dans un instant. */
+export class ImageQueueFullError extends Error {
+  constructor() {
+    super("File des traitements d'images pleine");
+    this.name = "ImageQueueFullError";
+  }
+}
 
 /** Lance `job` quand le traitement d'image précédent est terminé (réussi ou
  * non), et rend son résultat. Seul le décodage passe ici : la lecture d'un
- * en-tête (metadata) ne coûte rien et n'attend pas. */
+ * en-tête (metadata) ne coûte rien et n'attend pas. File pleine
+ * (MAX_WAITING_IMAGES) : ImageQueueFullError, sans rien lancer. */
 export function oneImageAtATime<T>(job: () => Promise<T>): Promise<T> {
-  const run = imageQueue.then(job, job);
+  if (waitingImages >= MAX_WAITING_IMAGES) return Promise.reject(new ImageQueueFullError());
+  waitingImages += 1;
+  const start = () => {
+    waitingImages -= 1;
+    return job();
+  };
+  const run = imageQueue.then(start, start);
   imageQueue = run.then(
     () => undefined,
     () => undefined

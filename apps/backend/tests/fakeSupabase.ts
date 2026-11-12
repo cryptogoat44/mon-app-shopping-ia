@@ -357,6 +357,14 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
         files.set(key, Buffer.isBuffer(body) ? body : Buffer.alloc(0));
         return { error: null };
       },
+      // Déplace un fichier (nouveau nom) ; refusé si la source manque ou si la cible existe.
+      move: async (fromPath: string, toPath: string) => {
+        const source = files.get(`${bucket}/${fromPath}`);
+        if (options.failStorageRemove?.() || source === undefined || files.has(`${bucket}/${toPath}`)) return { data: null, error: { message: "déplacement refusé" } };
+        files.delete(`${bucket}/${fromPath}`);
+        files.set(`${bucket}/${toPath}`, source);
+        return { data: { message: "Successfully moved" }, error: null };
+      },
       remove: async (paths: string[]) => {
         if (options.failStorageRemove?.()) return { data: null, error: { message: "panne simulée du stockage" } };
         removed.push(...paths.map((path) => `${bucket}/${path}`));
