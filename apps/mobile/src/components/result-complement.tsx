@@ -7,6 +7,7 @@ import { COMPLEMENT_SHOWN_FIRST, firstShown, type IndexedPiece } from "@/lib/res
 import type { ClickPlacement } from "@/lib/price-first";
 import { ProposalCard } from "@/components/proposal-card";
 import type { SendAction } from "@/lib/send-to-friend";
+import type { StockAction } from "@/lib/wish-alerts";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Voie C (lot c) : une section du complément, sous les propositions de la
@@ -47,6 +48,7 @@ export function ResultComplement({
   placements,
   cheapestIndex = null,
   sendAction,
+  stockAction,
 }: {
   source: "ai" | "words";
   /** Propositions de la section, sans celle montrée en grand ; `index` désigne la liste complète de l'écran. */
@@ -62,6 +64,8 @@ export function ResultComplement({
   cheapestIndex?: number | null;
   /** « Envoyer à un ami » de chaque carte, sur sa propre pièce (lib/send-to-friend.ts). */
   sendAction?: SendAction;
+  /** Lot 2 : « Plus disponible ? » de chaque carte, sur sa propre pièce (lib/wish-alerts.ts). */
+  stockAction?: StockAction;
 }) {
   const [showAll, setShowAll] = useState(false);
   const note = source === "words" && others.length === 0 ? textSearchStatusNote(textStatus) : null;
@@ -78,7 +82,7 @@ export function ResultComplement({
       {visible.length > 0 ? (
         <View style={styles.grid}>
           {visible.map(({ piece, index }) => (
-            <ProposalCard key={piece.id} piece={piece} onSelect={() => onSelect(index)} placement={placements?.get(index)} cheapest={index === cheapestIndex} onSend={sendAction?.(piece)} />
+            <ProposalCard key={piece.id} piece={piece} onSelect={() => onSelect(index)} placement={placements?.get(index)} cheapest={index === cheapestIndex} onSend={sendAction?.(piece)} onReportGone={stockAction?.(piece)} />
           ))}
         </View>
       ) : null}

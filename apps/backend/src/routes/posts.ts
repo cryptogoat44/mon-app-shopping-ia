@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { POST_TYPES, PRIVACY_LEVELS, type Post, type PostTaggedPiece, type PostWish, type PrivacyLevel, type TaggedPieceInput } from "@monapp/shared-types";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
-import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
+import { fetchAffiliateUrls, isAffiliateLink } from "../lib/affiliateLinks.js";
 import { DatabaseReadError, INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseDbRows, parseInput, webUrlOrNull } from "../lib/validation.js";
 import { canViewPost, findViewablePost, shownPosts } from "../lib/visibility.js";
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
@@ -11,6 +11,7 @@ import { PHOTO_SIZES, optimizePhoto } from "../lib/photos.js";
 import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.js";
 import { CONTENT_NOT_ALLOWED, containsBannedWords } from "../lib/contentFilter.js";
 import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
+import { withoutSuspendedFaces } from "../lib/profileModeration.js";
 
 // Une publication ne peut pas devenir une liste sans fin de tags — reste
 // large pour un usage légitime (plusieurs pièces sur une même tenue) sans
@@ -116,7 +117,7 @@ async function fetchPostWishes(fastify: FastifyInstance, rows: PostRow[]): Promi
           merchantName: wish.merchant_name,
           // Seulement un lien web ordinaire (lib/validation.ts), même pour une envie rangée plus tôt.
           merchantUrl: webUrlOrNull(affiliateUrl ?? wish.merchant_url),
-          isAffiliate: affiliateUrl !== null && affiliateUrl !== wish.merchant_url,
+          isAffiliate: isAffiliateLink(affiliateUrl, wish.merchant_url),
           productMatchId: wish.product_match_id,
           priceMin: wish.price_min === null ? null : Number(wish.price_min),
           currency: wish.currency,
@@ -221,7 +222,7 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
   const vaultItemIds = [...new Set(rows.map((r) => r.vault_item_id).filter((id): id is string => !!id))];
   const postIds = rows.map((r) => r.id);
 
-  const [{ data: profiles }, { data: vaultItems }, { data: reactions }, { data: tagRows }, { data: commentRows }] = await Promise.all([
+  const [{ data: storedProfiles }, { data: vaultItems }, { data: reactions }, { data: tagRows }, { data: commentRows }] = await Promise.all([
     fastify.supabaseAdmin.from("profiles").select("id, username, display_name, avatar_url").in("id", authorIds),
     vaultItemIds.length > 0
       ? fastify.supabaseAdmin.from("vault_items").select("id, title, verified, image_url, product_match_id").in("id", vaultItemIds)
@@ -240,7 +241,9 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
     commentCountByPost.set(c.post_id, (commentCountByPost.get(c.post_id) ?? 0) + 1);
   }
 
-  const profileById = new Map(((profiles as ProfileRow[]) ?? []).map((p) => [p.id, p]));
+  // Lot « conformité Apple » : la photo d'un auteur suspendu n'est plus montrée aux autres.
+  const profiles = await withoutSuspendedFaces(fastify, (storedProfiles as ProfileRow[]) ?? [], viewerId);
+  const profileById = new Map(profiles.map((p) => [p.id, p]));
   const vaultItemById = new Map(((vaultItems as VaultItemRow[]) ?? []).map((v) => [v.id, v]));
 
   const reactionCountByPost = new Map<string, number>();
@@ -287,18 +290,22 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
           imageUrl: v.image_url,
           merchantName: null,
           merchantUrl: null,
+          isAffiliate: false,
           productMatchId: null,
         };
       }
     } else if (tag.product_match_id) {
       const m = taggedMatchById.get(tag.product_match_id);
       if (m) {
+        const affiliateUrl = affiliateUrlByMatchId.get(tag.product_match_id) ?? null;
         piece = {
           id: tag.id,
           productName: m.product_name,
           imageUrl: m.image_url,
           merchantName: m.merchant_name,
-          merchantUrl: affiliateUrlByMatchId.get(tag.product_match_id) ?? m.merchant_url,
+          merchantUrl: affiliateUrl ?? m.merchant_url,
+          // La mention « Lien affilié » suit la pièce taguée (lot « mention Lien affilié »).
+          isAffiliate: isAffiliateLink(affiliateUrl, m.merchant_url),
           productMatchId: tag.product_match_id,
         };
       }

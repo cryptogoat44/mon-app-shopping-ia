@@ -2,8 +2,9 @@
 // expo-share-intent ; deux retouches, faites une fois tous ses fichiers écrits
 // (modification « finale », qui passe après la sienne quel que soit l'ordre
 // dans app.json) :
-// - le nom affiché dans la feuille de partage : « Spotto ». L'option
-//   iosShareExtensionName du module nomme AUSSI la cible Xcode, et « Spotto »
+// - le nom affiché dans la feuille de partage : le nom du produit (« name »
+//   de la configuration Expo, lu dans le fichier unique de la marque). L'option
+//   iosShareExtensionName du module nomme AUSSI la cible Xcode, et ce nom
 //   y entrerait en conflit avec la cible de l'app : on garde sa cible
 //   « ShareExtension » et on ne change que le nom vu par la personne ;
 // - le manifeste de confidentialité : l'extension écrit dans les réglages
@@ -45,26 +46,31 @@ function declarerGroupe(manifeste) {
 const FICHIER_EN_ATTENTE = "partage-en-attente.txt";
 const LIGNE_ADRESSE = 'let url = URL(string: "\\(shareProtocol)://dataUrl=\\(sharedKey)?nonce=\\(nonce)#\\(type)")!';
 const ALERTE_ANGLAISE = 'title: "Error", message: "Error loading application: \\(message!)", preferredStyle: .alert)';
-const MESSAGE_FR = "Spotto n’a pas pu s’ouvrir. Ouvrez Spotto : si votre partage n’y est pas, partagez-le à nouveau.";
-const MESSAGE_EN = "Spotto couldn’t open. Open Spotto: if your share isn’t there, share it again.";
+const messageFr = (nom) => `${nom} n’a pas pu s’ouvrir. Ouvrez ${nom} : si votre partage n’y est pas, partagez-le à nouveau.`;
+const messageEn = (nom) => `${nom} couldn’t open. Open ${nom}: if your share isn’t there, share it again.`;
 
-/** Contrôleur de l'extension avec le repli et le message traduit ; null si son format a changé. */
-function retoucherControleur(swift) {
+/** Nom du produit dans une chaîne Swift (les barres obliques inverses et les guillemets droits y sont protégés). */
+const pourSwift = (texte) => texte.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+
+/** Contrôleur de l'extension avec le repli et le message traduit (au nom du
+ * produit, « name » de la configuration Expo) ; null si son format a changé. */
+function retoucherControleur(swift, nomProduit) {
   if (swift.includes(FICHIER_EN_ATTENTE)) return swift;
   const debut = swift.indexOf(LIGNE_ADRESSE);
   if (debut === -1 || swift.indexOf(LIGNE_ADRESSE, debut + 1) !== -1 || !swift.includes(ALERTE_ANGLAISE)) return null;
   const finLigne = debut + LIGNE_ADRESSE.length;
   const retrait = swift.slice(swift.lastIndexOf("\n", debut) + 1, debut);
+  const nom = pourSwift(nomProduit);
   const depot = [
     "",
-    "// Spotto (repli du partage) : l'adresse est aussi déposée dans le groupe d'apps ;",
-    "// si iOS ne rouvre pas Spotto, l'app la relit quand on l'ouvre à la main.",
+    `// ${nom} (repli du partage) : l'adresse est aussi déposée dans le groupe d'apps ;`,
+    `// si iOS ne rouvre pas ${nom}, l'app la relit quand on l'ouvre à la main.`,
     "if let dossier = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: hostAppGroupIdentifier) {",
     `  _ = try? url.absoluteString.write(to: dossier.appendingPathComponent("${FICHIER_EN_ATTENTE}"), atomically: true, encoding: .utf8)`,
     "}",
   ].join(`\n${retrait}`);
   const avecDepot = swift.slice(0, finLigne) + depot + swift.slice(finLigne);
-  const alerte = `title: "Spotto", message: Locale.preferredLanguages.first?.hasPrefix("fr") == true ? "${MESSAGE_FR}" : "${MESSAGE_EN}", preferredStyle: .alert)`;
+  const alerte = `title: "${nom}", message: Locale.preferredLanguages.first?.hasPrefix("fr") == true ? "${messageFr(nom)}" : "${messageEn(nom)}", preferredStyle: .alert)`;
   return avecDepot.replace(ALERTE_ANGLAISE, alerte);
 }
 
@@ -83,7 +89,7 @@ function withExtensionPartage(config) {
       const racine = config.modRequest.platformProjectRoot;
       retoucher(racine, "ShareExtension-Info.plist", (contenu) => nommer(contenu, config.name));
       retoucher(racine, "PrivacyInfo.xcprivacy", declarerGroupe);
-      retoucher(racine, "ShareViewController.swift", retoucherControleur);
+      retoucher(racine, "ShareViewController.swift", (contenu) => retoucherControleur(contenu, config.name));
       return config;
     },
   ]);

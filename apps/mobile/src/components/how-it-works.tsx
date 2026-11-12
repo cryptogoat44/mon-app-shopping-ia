@@ -4,7 +4,7 @@ import Svg, { Path } from "react-native-svg";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { TagIcon, VideoIcon } from "@/components/icons";
-import { isPlayerAvailable } from "@/lib/player-capture";
+import { isPlayerAvailable } from "@/lib/player-access";
 import { themedStyles } from "@/theme/themed-styles";
 
 /** Un rond tracé à main levée, qui se chevauche : « entourez la pièce » (lot entourer la pièce). */

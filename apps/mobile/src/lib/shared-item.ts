@@ -4,15 +4,16 @@
 // écrans qui le prennent n'existent qu'à ce moment-là), sans jamais couper ce
 // qui est en cours à l'écran. Logique pure, testée ; la réception elle-même :
 // share-intake.ts (app iPhone) ; les écrans : use-shared-item.ts.
+import { APP_GROUP, APP_SCHEME } from "../constants/brand";
 import { t } from "../i18n";
 import { extractUrl } from "./link-detection";
 
-/** Schéma de l'app (app.json « scheme ») : l'extension rouvre l'app par « spotto://dataUrl=spottoShareKey?… ». */
-export const APP_SCHEME = "spotto";
+// Schéma de l'app (l'extension rouvre l'app par « spotto://dataUrl=spottoShareKey?… »)
+// et groupe d'apps de l'app et de son extension (module expo-share-intent) :
+// lus dans le fichier unique de la marque (constants/brand.ts), comme app.config.js.
+export { APP_GROUP, APP_SCHEME };
 /** Clé sous laquelle l'extension dépose le partage (réglages du groupe d'apps). */
 export const SHARE_KEY = `${APP_SCHEME}ShareKey`;
-/** Groupe d'apps de l'app et de son extension (app.json, module expo-share-intent). */
-export const APP_GROUP = "group.com.spottoapp.ios";
 // Au-delà, ce n'est plus un lien de partage ordinaire.
 const MAX_LINK_LENGTH = 2048;
 

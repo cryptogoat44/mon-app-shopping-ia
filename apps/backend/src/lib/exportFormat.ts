@@ -43,6 +43,17 @@ export function formatDateTime(value: string, locale: Locale, timeZone: string):
   return locale === "fr" ? text.replace(/^1 /, "1er ") : text;
 }
 
+/** Jour enregistré par la base, sans heure (« AAAA-MM-JJ », alertes prix) :
+ * « 10 mars 2031 » / « March 10, 2031 » ; null si ce n'est pas un jour. */
+export function formatDay(value: string, locale: Locale): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12));
+  if (Number.isNaN(date.getTime())) return null;
+  const text = new Intl.DateTimeFormat(INTL[locale], { dateStyle: "long", timeZone: "UTC" }).format(date);
+  return locale === "fr" ? text.replace(/^1 /, "1er ") : text;
+}
+
 /** Texte qui ressemble à une date enregistrée par la base (ISO 8601). */
 export function looksLikeTimestamp(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value) && !Number.isNaN(Date.parse(value));

@@ -20,6 +20,7 @@ import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { SpotImage } from "@/components/spot-image";
 import { themedStyles } from "@/theme/themed-styles";
+import { Avatar } from "@/components/avatar";
 
 function ItemRow({ item, owner, canTalk }: { item: SharedCollectionItem; owner: PostAuthor; canTalk: boolean }) {
   const router = useRouter();
@@ -55,11 +56,9 @@ function ItemRow({ item, owner, canTalk }: { item: SharedCollectionItem; owner: 
           {item.title}
         </Text>
         {meta ? <Text style={styles.meta}>{meta}</Text> : null}
+        {/* La mention « Lien affilié » est affichée par le bouton lui-même. */}
         {item.merchantUrl ? (
-          <>
-            <MerchantLinkButton url={item.merchantUrl} merchantName={item.merchantName} matchId={item.productMatchId} context="received" isAffiliate={item.isAffiliate} compact />
-            {item.isAffiliate ? <Text style={styles.disclosure}>{t.result.affiliateDisclosure}</Text> : null}
-          </>
+          <MerchantLinkButton url={item.merchantUrl} merchantName={item.merchantName} matchId={item.productMatchId} context="received" isAffiliate={item.isAffiliate} compact />
         ) : null}
         <View style={styles.actions}>
           <Pressable
@@ -191,9 +190,11 @@ export default function FriendCollectionScreen() {
         <Pressable
           onPress={() => router.push({ pathname: "/profil", params: { id: collection.owner.id } })}
           hitSlop={6}
+          style={styles.ownerLine}
           accessibilityRole="link"
           accessibilityLabel={t.common.viewProfile(collection.owner.displayName)}
         >
+          <Avatar uri={collection.owner.avatarUrl} userId={collection.owner.id} displayName={collection.owner.displayName} username={collection.owner.username} size={24} />
           <Text style={styles.owner}>
             {t.collections.by(collection.owner.displayName)} · {t.collections.itemCount(collection.itemCount)}
           </Text>
@@ -236,7 +237,8 @@ const styles = themedStyles(() => ({
   retryLabel: { fontSize: font.body, color: color.vert, fontWeight: "600" },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 640, alignSelf: "center", width: "100%" },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre },
-  owner: { fontSize: font.secondary, color: color.acier, marginTop: 4, marginBottom: space.md },
+  ownerLine: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: 4, marginBottom: space.md },
+  owner: { flexShrink: 1, fontSize: font.secondary, color: color.acier },
   empty: { fontSize: font.secondary, color: color.acier, lineHeight: 20 },
   row: { flexDirection: "row", gap: space.md, paddingVertical: space.md, borderTopWidth: 1, borderTopColor: color.filet },
   thumb: { width: 96, height: 96, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
@@ -244,7 +246,6 @@ const styles = themedStyles(() => ({
   rowText: { flex: 1, gap: 4 },
   itemTitle: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   meta: { fontSize: font.caption, color: color.acier },
-  disclosure: { fontSize: 11.5, color: color.acier },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.xs },
   action: { minHeight: 40, paddingHorizontal: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: color.filet, alignItems: "center", justifyContent: "center" },
   actionDone: { borderColor: color.plinthe, backgroundColor: color.plinthe },

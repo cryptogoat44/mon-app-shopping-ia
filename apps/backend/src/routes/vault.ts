@@ -10,6 +10,7 @@ import { PHOTO_SIZES, optimizePhoto } from "../lib/photos.js";
 import { DatabaseReadError, INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseDbRows, parseInput } from "../lib/validation.js";
 import { findOwnMatch } from "../lib/ownMatches.js";
 import { shownPosts } from "../lib/visibility.js";
+import { observePurchase } from "../lib/wishObserve.js";
 
 const SHARED_POST_ROWS = z.array(z.object({ id: z.guid(), privacy: z.enum(PRIVACY_LEVELS), created_at: z.string() }));
 
@@ -337,7 +338,12 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
 
     const [imageHdUrl] = await fetchHdImageUrls(fastify, [inserted as VaultItemRow]);
     const created: CreateVaultItemResponse = { ...toVaultItem(inserted as VaultItemRow, imageHdUrl ?? null), alreadyInVault: false };
-    return reply.send(created);
+    const sent = reply.send(created);
+    // Alertes prix et stock (lot 2) : « Je l'ai achetée » sur une proposition
+    // de sa recherche annonce, après la réponse, « disponible chez cette
+    // boutique aujourd'hui » (sans prix, sans jamais l'acheteur).
+    if (match) observePurchase(fastify, userId, { merchantUrl: match.merchantUrl, merchantName: match.merchantName });
+    return sent;
   });
 
   fastify.patch("/api/vault/:id", { preHandler: fastify.requireAuth }, async (request, reply) => {

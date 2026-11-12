@@ -8,6 +8,8 @@ import { keptMatchIds } from "../lib/keptPieces.js";
 import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput, webUrlOrNull, webUrlSchema } from "../lib/validation.js";
 import { deleteWishCopy, findWishPost } from "../lib/wishShare.js";
 import { collectionsReady, readCopy } from "../lib/collections.js";
+import { trackNewWish } from "../lib/wishAlerts.js";
+import { searchLocaleFor } from "../lib/locale.js";
 
 // Liens d'une envie rangés tels que l'app les envoie : http ou https
 // seulement, 2 048 caractères au plus (lib/validation.ts, webUrlSchema).
@@ -154,7 +156,17 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    return reply.send(toWishlistItem(inserted as WishlistItemRow));
+    // Alertes prix et stock (lot 2, 0036) : le suivi de l'envie (clé « même
+    // pièce », prix de référence relu dans la base). Ne fait jamais échouer
+    // « Garder » ; sans 0036, rien.
+    const row = inserted as WishlistItemRow;
+    await trackNewWish(
+      fastify,
+      request.log,
+      { id: row.id, userId, merchantUrl: row.merchant_url, merchantName: row.merchant_name, productMatchId: row.product_match_id },
+      searchLocaleFor(request).country
+    );
+    return reply.send(toWishlistItem(row));
   });
 
   // Détail d'une Envie (Lot Q, bloc 3, UX-04) — seulement la sienne. Lot 5 :

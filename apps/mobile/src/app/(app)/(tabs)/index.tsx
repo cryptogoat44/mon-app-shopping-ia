@@ -23,7 +23,7 @@ import type { LatestVideo, LatestVideoChoice, LatestVideoState } from "@/lib/lat
 import { RECENT_SEARCHES_LIMIT, reopenParams } from "@/lib/recent-searches";
 import { sharedRefusalMessage, type SharedItem } from "@/lib/shared-item";
 import { beginFromPhoto } from "@/lib/spot-flow";
-import { isPlayerAvailable } from "@/lib/player-capture";
+import { isPlayerAvailable } from "@/lib/player-access";
 import { LINK_COVER_ENABLED } from "@/lib/spot-flags";
 import { adoptSpotVideo, videoImportMessage } from "@/lib/spot-video";
 import { useLinkEntry } from "@/lib/use-link-entry";

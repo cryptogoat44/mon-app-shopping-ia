@@ -1,12 +1,11 @@
 import { useRef, useState } from "react";
 import { Animated, Pressable, Text, View } from "react-native";
-import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import type { Post } from "@monapp/shared-types";
 import { reactToPost } from "@/lib/api";
 import { openMerchantLink } from "@/lib/merchant-links";
 import { color, font, radius, space } from "@/theme/tokens";
-import { CommentIcon, HeartIcon, MoreIcon, PersonIcon, ShareIcon, VerifiedIcon } from "@/components/icons";
+import { CommentIcon, HeartIcon, MoreIcon, ShareIcon, VerifiedIcon } from "@/components/icons";
 import { sharePost } from "@/lib/share-post";
 import { SpotImage } from "@/components/spot-image";
 import { ProductFrame } from "@/components/product-frame";
@@ -16,7 +15,9 @@ import { useToast } from "@/lib/toast-context";
 import { getActiveLocale, t } from "@/i18n";
 import { formatPrice, timeAgo } from "@/lib/format";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
+import { AffiliateMention } from "@/components/affiliate-mention";
 import { themedStyles } from "@/theme/themed-styles";
+import { Avatar } from "@/components/avatar";
 
 const DOUBLE_TAP_DELAY_MS = 300;
 
@@ -115,13 +116,7 @@ export function PostCard({
           accessibilityRole={onPressAuthor ? "link" : undefined}
           accessibilityLabel={onPressAuthor ? t.common.viewProfile(post.author.displayName) : undefined}
         >
-          <View style={styles.avatar}>
-            {post.author.avatarUrl ? (
-              <Image source={{ uri: post.author.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
-            ) : (
-              <PersonIcon size={16} tint={color.acier} />
-            )}
-          </View>
+          <Avatar uri={post.author.avatarUrl} userId={post.author.id} displayName={post.author.displayName} username={post.author.username} size={32} />
           <Text style={styles.authorName}>{post.author.displayName}</Text>
         </Pressable>
         {/* Badge « achat vérifié » : jamais sur une envie (lot 5). */}
@@ -157,7 +152,8 @@ export function PostCard({
       {post.caption ? <Text style={styles.caption}>{post.caption}</Text> : null}
 
       {/* Publication « envie » (lot 5) : une pièce qu'on aimerait avoir,
-          distincte d'un achat. Lien marchand avec la mention « lien affilié ». */}
+          distincte d'un achat. Lien marchand ; la mention « lien affilié »
+          est affichée par le bouton lui-même. */}
       {post.wish ? (
         <View style={styles.wishBox} testID="publication-envie">
           <Text style={styles.wishLabel}>{t.post.wishLabel}</Text>
@@ -170,17 +166,14 @@ export function PostCard({
             </Text>
           ) : null}
           {post.wish.merchantUrl ? (
-            <>
-              <MerchantLinkButton
-                url={post.wish.merchantUrl}
-                merchantName={post.wish.merchantName}
-                matchId={post.wish.productMatchId}
-                context="post"
-                isAffiliate={post.wish.isAffiliate}
-                compact
-              />
-              {post.wish.isAffiliate ? <Text style={styles.wishDisclosure}>{t.result.affiliateDisclosure}</Text> : null}
-            </>
+            <MerchantLinkButton
+              url={post.wish.merchantUrl}
+              merchantName={post.wish.merchantName}
+              matchId={post.wish.productMatchId}
+              context="post"
+              isAffiliate={post.wish.isAffiliate}
+              compact
+            />
           ) : null}
         </View>
       ) : null}
@@ -197,11 +190,18 @@ export function PostCard({
                   openMerchantLink({ matchId: piece.productMatchId, url: piece.merchantUrl!, context: "post" })
                 }
                 accessibilityRole="button"
-                accessibilityLabel={
-                  piece.merchantName ? t.post.viewPieceAt(piece.productName, piece.merchantName) : piece.productName
-                }
+                accessibilityLabel={[
+                  piece.merchantName ? t.post.viewPieceAt(piece.productName, piece.merchantName) : piece.productName,
+                  piece.isAffiliate ? t.result.affiliateDisclosure : null,
+                ]
+                  .filter(Boolean)
+                  .join(", ")}
               >
-                <Text style={styles.tagChipLabel}>{piece.productName}</Text>
+                {/* Pièce taguée : la pastille ouvre la boutique, la mention « Lien affilié » s'écrit dedans. */}
+                <Text style={styles.tagChipLabel}>
+                  {piece.productName}
+                  <AffiliateMention isAffiliate={piece.isAffiliate} inline />
+                </Text>
               </Pressable>
             ) : (
               <View key={piece.id} style={styles.tagChip}>
@@ -255,16 +255,6 @@ export function PostCard({
 const styles = themedStyles(() => ({
   post: { paddingHorizontal: space.lg, paddingBottom: 26 },
   author: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.full,
-    backgroundColor: color.plinthe,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  avatarImage: { width: "100%", height: "100%" },
   authorName: { fontSize: 14, fontWeight: "600", color: color.encre },
   timestamp: { fontSize: 12, color: color.acier, marginLeft: "auto" },
   moreButton: { marginLeft: space.xs, padding: 2 },
@@ -276,7 +266,6 @@ const styles = themedStyles(() => ({
   wishLabel: { alignSelf: "flex-start", fontSize: 11.5, fontWeight: "600", color: color.acier, borderWidth: 1, borderColor: color.filet, borderRadius: radius.full, paddingHorizontal: 9, paddingVertical: 2, marginBottom: 4 },
   wishTitle: { fontSize: 14.5, fontWeight: "600", color: color.encre },
   wishMeta: { fontSize: font.caption, color: color.acier },
-  wishDisclosure: { fontSize: 11.5, color: color.acier },
   tagChip: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.full, paddingVertical: 5, paddingHorizontal: 11 },
   tagChipLabel: { fontSize: font.caption, color: color.encre },
   actions: { flexDirection: "row", alignItems: "center", gap: space.lg, marginTop: 12 },

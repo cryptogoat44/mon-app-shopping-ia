@@ -27,7 +27,7 @@ export function linkRefusal(detection: LinkDetection): string | null {
 }
 
 /** `playerPlatforms` : plateformes ouvertes dans le lecteur intégré (app
- * iPhone, lib/player-capture.ts) ; aucune par défaut — le site, et l'app tant
+ * iPhone, lib/player-access.ts) ; aucune par défaut — le site, et l'app tant
  * que LINK_PLAYER_ENABLED est coupé, gardent exactement le parcours actuel. */
 export function linkStep(text: string, coverEnabled: boolean = LINK_COVER_ENABLED, playerPlatforms: readonly PlayerPlatform[] = []): LinkStep {
   const detection = detectLink(text);

@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
-import { Image } from "expo-image";
 import { COMMENT_COUNTER_FROM, COMMENT_MAX_LENGTH, type PostComment } from "@monapp/shared-types";
 import { ApiError, createComment, deleteComment, fetchComments } from "@/lib/api";
 import { useToast } from "@/lib/toast-context";
 import { timeAgo } from "@/lib/format";
 import { color, font, radius, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
-import { MoreIcon, PersonIcon } from "@/components/icons";
+import { MoreIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { themedStyles } from "@/theme/themed-styles";
+import { Avatar } from "@/components/avatar";
 
 // Commentaires d'une publication (Lot F, section 5.A) : à plat, ordre
 // chronologique ; compteur de caractères visible seulement à partir de 900,
@@ -113,15 +113,10 @@ export function CommentsSection({
           <Pressable
             onPress={() => onOpenProfile?.(comment.author.id)}
             disabled={!onOpenProfile || comment.author.id === viewerId}
-            style={styles.avatar}
             accessibilityRole="link"
             accessibilityLabel={t.common.viewProfile(comment.author.displayName)}
           >
-            {comment.author.avatarUrl ? (
-              <Image source={{ uri: comment.author.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
-            ) : (
-              <PersonIcon size={14} tint={color.acier} />
-            )}
+            <Avatar uri={comment.author.avatarUrl} userId={comment.author.id} displayName={comment.author.displayName} username={comment.author.username} size={28} />
           </Pressable>
           <View style={styles.commentBody}>
             <Text style={styles.commentText}>
@@ -212,8 +207,6 @@ const styles = themedStyles(() => ({
   message: { fontSize: font.caption, marginVertical: space.xs },
   empty: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm },
   comment: { flexDirection: "row", gap: 10, paddingVertical: 8 },
-  avatar: { width: 28, height: 28, borderRadius: radius.full, backgroundColor: color.plinthe, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  avatarImage: { width: "100%", height: "100%" },
   commentBody: { flex: 1 },
   commentText: { fontSize: font.secondary, color: color.encre, lineHeight: 20 },
   commentAuthor: { fontWeight: "600" },

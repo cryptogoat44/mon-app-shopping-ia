@@ -18,6 +18,7 @@
 import { lookup as dnsLookup } from "node:dns/promises";
 import https from "node:https";
 import net from "node:net";
+import { BRAND_HTTP_TOKEN, PUBLIC_SITE_URL } from "./brand.js";
 import type { IncomingMessage } from "node:http";
 
 export const MAX_PUBLIC_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -29,11 +30,11 @@ const TIMEOUT_MS = 10_000;
 // jamais celle d'un vrai navigateur. Un simple « Spotto/1.0 » est plus
 // souvent refusé par les serveurs d'images des marchands. Aucune variable du
 // serveur ne porte l'adresse du site public : c'est celle de la version web
-// (même valeur que PUBLIC_WEB_URL dans l'app, apps/mobile/src/constants/brand.ts).
-const SPOTTO_SITE_URL = "https://mon-app-shopping-ia-web.onrender.com";
+// (même valeur que PUBLIC_WEB_URL dans l'app) ; le nom et cette adresse viennent
+// du fichier unique de la marque (lib/brand.ts).
 export const IMAGE_REQUEST_HEADERS = {
   accept: "image/avif,image/webp,image/jpeg,image/png,image/*;q=0.8",
-  "user-agent": `Mozilla/5.0 (compatible; Spotto/1.0; +${SPOTTO_SITE_URL})`,
+  "user-agent": `Mozilla/5.0 (compatible; ${BRAND_HTTP_TOKEN}/1.0; +${PUBLIC_SITE_URL})`,
 } as const;
 
 export class PublicImageError extends Error {

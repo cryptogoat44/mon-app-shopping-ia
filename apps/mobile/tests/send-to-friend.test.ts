@@ -111,9 +111,9 @@ describe("l'action envoie la bonne pièce", () => {
   it("chaque carte des sections et chaque ligne de la liste triée vise sa propre pièce", () => {
     // Grille « Autres propositions » : la pièce de la carte, avec « section ».
     expect(screen).toContain(
-      '<ProposalCard key={p.id} piece={p} onSelect={() => selectPiece(index)} placement={placements.get(index)} cheapest={index === cheapest} onSend={sendFrom("section")(p)} />'
+      '<ProposalCard key={p.id} piece={p} onSelect={() => selectPiece(index)} placement={placements.get(index)} cheapest={index === cheapest} onSend={sendFrom("section")(p)} onReportGone={stockFrom(p)} />'
     );
-    expect(screen).toContain('sendAction={sendFrom("price_list")} />');
+    expect(screen).toContain('sendAction={sendFrom("price_list")} stockAction={stockFrom} />');
     expect(screen.match(/sendAction=\{sendFrom\("section"\)\}/g)?.length).toBe(3);
     for (const [name, source] of [
       ["liste triée", list],

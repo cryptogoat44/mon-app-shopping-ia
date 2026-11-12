@@ -1079,6 +1079,20 @@ describe("recherches relues : origine et complément (lib/searchRows.ts)", () =>
     expect(before.matches[0]).not.toHaveProperty("origin");
   });
 
+  it("alertes prix (lot 2) : « alertTrackable » seulement sur une pièce qui a une clé (jamais une place de marché, une page de liste ou de Google sans productid)", async () => {
+    const { parseMatchRows, parseSearchRow, toProductSearch } = await import("../src/lib/searchRows.js");
+    const matches = parseMatchRows([
+      MATCH,
+      { ...MATCH, id: "00000000-0000-4000-8000-000000000011", rank: 2, merchant_url: "https://www.amazon.fr/dp/B000123", merchant_name: "Amazon" },
+      { ...MATCH, id: "00000000-0000-4000-8000-000000000012", rank: 3, merchant_url: "https://boutique-exemple.fr/collections/vestes" },
+      { ...MATCH, id: "00000000-0000-4000-8000-000000000013", rank: 4, merchant_url: "https://www.google.fr/search?ibp=oshop&q=veste", merchant_name: "Boutique" },
+      { ...MATCH, id: "00000000-0000-4000-8000-000000000014", rank: 5, merchant_url: "https://www.google.fr/search?prds=productid:123", merchant_name: "eBay - vendeur" },
+    ])!;
+    const search = toProductSearch(parseSearchRow(BASE_ROW)!, matches, new Map(), new Map());
+    expect(search.matches.map((match) => match.alertTrackable ?? false)).toEqual([true, false, false, false, false]);
+    expect(search.matches[1]).not.toHaveProperty("alertTrackable");
+  });
+
   it("voie C lancée : origine des propositions des boutiques et de vos mots, complément relu ; l'invitation disparaît une fois vos mots lancés ; jamais la requête", async () => {
     const { parseMatchRows, parseSearchRow, toProductSearch } = await import("../src/lib/searchRows.js");
     const row = { ...BASE_ROW, complement_status: "empty", shopping_calls: 1, lens_from_cache: true, served_from_cache: false, text_suggested: true, text_requested_at: null, text_status: null, total_seconds: 9 };

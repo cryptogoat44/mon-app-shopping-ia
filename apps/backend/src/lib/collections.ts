@@ -32,7 +32,7 @@ import {
   type CollectionSummary,
   type SharedCollectionItem,
 } from "@monapp/shared-types";
-import { fetchAffiliateUrls } from "./affiliateLinks.js";
+import { fetchAffiliateUrls, isAffiliateLink } from "./affiliateLinks.js";
 import { isSuspended } from "./moderation.js";
 import { chunks, readAll } from "./pagedReads.js";
 import { extractOwnedStoragePath } from "./storage.js";
@@ -276,7 +276,7 @@ export async function toSharedItems(fastify: FastifyInstance, ownerId: string, i
         imageThumbUrl: imageUrl && imageThumbUrl ? imageThumbUrl : null,
         merchantName: wish.merchant_name,
         merchantUrl: webUrlOrNull(affiliateUrl ?? wish.merchant_url),
-        isAffiliate: affiliateUrl !== null && affiliateUrl !== wish.merchant_url,
+        isAffiliate: isAffiliateLink(affiliateUrl, wish.merchant_url),
         productMatchId: wish.product_match_id,
         priceMin: priceOf(wish.price_min),
         currency: wish.currency,

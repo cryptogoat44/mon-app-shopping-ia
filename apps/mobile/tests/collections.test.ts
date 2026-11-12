@@ -205,8 +205,9 @@ describe("profil d'un ami : section « Collections »", () => {
     const screen = source("app/(app)/collection-ami.tsx");
     expect(screen).toContain("image === null ? <ImageUnavailable");
     expect(screen).toContain("hdUri={null} fallbackUri={image}");
+    // La mention « Lien affilié » : affichée par le bouton lui-même (affiliate-mention.test.ts).
     expect(screen).toContain("isAffiliate={item.isAffiliate}");
-    expect(screen).toContain("t.result.affiliateDisclosure");
+    expect(screen).not.toContain("t.result.affiliateDisclosure");
   });
 
   it("« Garder » et « En parler » (la conversation avec l'ami, l'envie jointe d'avance ; seulement avec la messagerie)", () => {

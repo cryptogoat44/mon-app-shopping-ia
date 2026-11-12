@@ -1,4 +1,5 @@
 import type { Locale } from "./locale.js";
+import { BRAND } from "./brand.js";
 import { COLLECTION_ITEMS_MAX, COLLECTION_NAME_MAX_LENGTH, COLLECTIONS_MAX, COMMENT_MAX_LENGTH, MESSAGE_MAX_LENGTH } from "@monapp/shared-types";
 import { RATE_LIMITED_MESSAGE } from "../plugins/rateLimit.js";
 import { SEARCH_CAPACITY_MESSAGES } from "./searchCapacity.js";
@@ -20,8 +21,8 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
     "This document has been updated. Please read it again, then accept it.",
   "Ce nom d'utilisateur est déjà pris.": "This username is already taken.",
   // Chantier 3 (comptes et modération) : filtre des mots interdits.
-  "Ce texte contient un mot interdit sur Spotto (insulte, propos haineux ou contenu sexuel). Modifiez-le pour continuer.":
-    "This text contains a word that isn't allowed on Spotto (insult, hateful or sexual content). Please change it to continue.",
+  [`Ce texte contient un mot interdit sur ${BRAND} (insulte, propos haineux ou contenu sexuel). Modifiez-le pour continuer.`]:
+    `This text contains a word that isn't allowed on ${BRAND} (insult, hateful or sexual content). Please change it to continue.`,
   "Cette image n'a pas pu être lue, ou la zone choisie est trop petite.":
     "This image couldn't be read, or the selected area is too small.",
   "Cette image n'est pas autorisée.": "This image isn't allowed.",
@@ -72,7 +73,7 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Impossible de se suivre soi-même.": "You can't follow yourself.",
   "Jeton d'authentification invalide ou expiré.": "Your session is invalid or has expired.",
   "Jeton d'authentification manquant.": "You are not signed in.",
-  "Spotto est momentanément injoignable. Réessayez dans un instant.": "Spotto is temporarily unreachable. Please try again in a moment.",
+  [`${BRAND} est momentanément injoignable. Réessayez dans un instant.`]: `${BRAND} is temporarily unreachable. Please try again in a moment.`,
   "L'envoi de l'image a échoué, réessayez.": "The image couldn't be uploaded. Please try again.",
   "L'envoi de la photo a échoué.": "The photo couldn't be uploaded.",
   "L'export a échoué, réessayez.": "The export failed. Please try again.",
@@ -186,14 +187,28 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Cette collection a été masquée par la modération : vous ne pouvez pas la montrer à vos amis.":
     "This collection was hidden by moderation: you can't show it to your friends.",
   "Le signalement des collections n'est pas encore disponible.": "Reporting collections isn't available yet.",
-  "Cette envie n'a pas d'image copiée par Spotto : il n'y a rien à retirer.": "This wish has no image copied by Spotto: there's nothing to remove.",
+  // Lot « conformité Apple » (migration 0037) : retirer une bio ou une photo de profil.
+  "Le retrait d'une bio ou d'une photo de profil n'est pas encore disponible.": "Removing a bio or a profile photo isn't available yet.",
+  "Il n'y a rien à retirer : la bio ou la photo de ce profil a déjà disparu.": "There is nothing to remove: this profile's bio or photo is already gone.",
+  [`Cette envie n'a pas d'image copiée par ${BRAND} : il n'y a rien à retirer.`]: `This wish has no image copied by ${BRAND}: there's nothing to remove.`,
   // Notifications sur le téléphone (lot notifications, lib/push.ts).
   "Les notifications ne sont pas disponibles.": "Notifications aren't available.",
   "Jeton de notification invalide.": "Invalid notification token.",
   "Trop de changements des notifications en peu de temps. Réessayez dans une heure.":
     "Too many notification changes in a short time. Please try again in an hour.",
+  // Profil (lot « profil et icône des réglages ») : bio et photo de profil.
+  "La bio est trop longue (160 caractères maximum).": "Your bio is too long (160 characters maximum).",
+  "La bio ne peut pas dépasser 3 lignes.": "Your bio can't be longer than 3 lines.",
+  "La photo est trop lourde (5 Mo maximum).": "The photo is too large (5 MB maximum).",
+  "Format non accepté : choisissez une photo JPEG, PNG ou HEIC.": "Format not accepted: choose a JPEG, PNG or HEIC photo.",
+  "La photo n'a pas pu être effacée : rien n'a été changé. Réessayez dans un instant.":
+    "The photo couldn't be deleted: nothing was changed. Please try again in a moment.",
+  // Alertes prix et stock (lot 2, routes/wishAlerts.ts, lib/rateLimits.ts).
+  "Vous avez signalé beaucoup de pièces aujourd'hui. Réessayez demain.": "You've reported a lot of pieces today. Please try again tomorrow.",
+  "Vous avez changé beaucoup d'alertes en peu de temps. Réessayez dans un moment.": "You've changed a lot of alerts in a short time. Please try again in a moment.",
+  "Cette pièce est dans votre Vault : aucune alerte ne partira pour elle.": "This piece is in your Vault: no alert will be sent for it.",
   // Mise à jour obligatoire de l'app iPhone (lot « app iPhone prête », lib/appVersion.ts).
-  [UPDATE_REQUIRED_MESSAGE]: "This version of Spotto is no longer supported. Please update the app from the App Store.",
+  [UPDATE_REQUIRED_MESSAGE]: `This version of ${BRAND} is no longer supported. Please update the app from the App Store.`,
 };
 
 /** Message dans la langue voulue. Un message inconnu (par exemple un texte

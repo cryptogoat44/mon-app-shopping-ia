@@ -32,6 +32,13 @@ const SERPAPI_VISUAL_MATCH = z.object({
   thumbnail: z.string().optional(),
   image: z.string().optional(),
   price: z.object({ value: z.string().optional(), extracted_value: z.number().optional(), currency: z.string().optional() }).optional(),
+  // Alertes prix et stock (lot 2) : le stock annoncé par Google, seulement
+  // s'il est un vrai booléen ; toute autre valeur est ignorée, sans jamais
+  // écarter la proposition.
+  in_stock: z
+    .unknown()
+    .optional()
+    .transform((value) => (typeof value === "boolean" ? value : undefined)),
 });
 // Erreur annoncée et statut de la recherche chez SerpApi : lus pour classer
 // les pannes, quel que soit le moteur.
@@ -62,6 +69,12 @@ const SERPAPI_SHOPPING_ITEM = z.object({
   price: z.string().optional(),
   extracted_price: z.number().optional(),
   thumbnail: z.string().optional(),
+  // Alertes prix (lot 2) : seulement compté dans le journal (« compteur
+  // gratuit ») ; jamais rangé ni envoyé.
+  product_id: z
+    .unknown()
+    .optional()
+    .transform((value) => (typeof value === "string" && value !== "" ? value : typeof value === "number" ? String(value) : undefined)),
 });
 const SERPAPI_SHOPPING_RESPONSE = z
   .object({
@@ -169,7 +182,7 @@ export const serpApiProvider: SearchProvider = {
 export const SHOPPING_SETTINGS = { engine: "google_shopping_light" } as const;
 
 // Domaine de Google : liste FERMÉE des quatre pays dont la devise est connue
-// (services/textSearch.ts, SHOPPING_CURRENCIES) ; tout autre pays : google.com.
+// (COUNTRY_CURRENCIES, packages/shared-types) ; tout autre pays : google.com.
 const GOOGLE_DOMAINS: Record<string, string> = {
   fr: "google.fr",
   gb: "google.co.uk",

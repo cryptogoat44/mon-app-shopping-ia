@@ -60,6 +60,8 @@ import { RATE_LIMITS } from "../lib/rateLimits.js";
 import { reportedIdsFor } from "../lib/reportedByViewer.js";
 import { INVALID_ID, idParamsSchema, parseDbRows, parseInput, userIdParamsSchema, webUrlOrNull } from "../lib/validation.js";
 import { findOwnWish } from "../lib/wishShare.js";
+import { trackNewWish } from "../lib/wishAlerts.js";
+import { searchLocaleFor } from "../lib/locale.js";
 import { consumeRateLimit } from "../plugins/rateLimit.js";
 import { toWishlistItem, type WishlistItemRow } from "./wishlist.js";
 
@@ -481,7 +483,17 @@ export default async function collectionsRoutes(fastify: FastifyInstance) {
         request.log.error({ error }, "Échec de « Garder » une envie d'un ami");
         return reply.code(500).send(SERVER_ERROR);
       }
-      return reply.code(201).send({ item: toWishlistItem(data as WishlistItemRow), alreadyKept: false } satisfies KeepSharedItemResponse);
+      // Alertes prix et stock (lot 2, 0036) : le suivi de l'envie, sans prix
+      // de référence (aucune proposition d'origine : la première observation
+      // le fixera). Ne fait jamais échouer « Garder » ; sans 0036, rien.
+      const kept = data as WishlistItemRow;
+      await trackNewWish(
+        fastify,
+        request.log,
+        { id: kept.id, userId, merchantUrl: kept.merchant_url, merchantName: kept.merchant_name, productMatchId: kept.product_match_id },
+        searchLocaleFor(request).country
+      );
+      return reply.code(201).send({ item: toWishlistItem(kept), alreadyKept: false } satisfies KeepSharedItemResponse);
     }
   );
 }

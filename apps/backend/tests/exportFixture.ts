@@ -342,6 +342,47 @@ export function fixture(): ExportData {
     ],
     // Lot notifications : un iPhone prévenu des nouveaux messages (jamais son jeton).
     pushDevices: [{ platform: "ios", created_at: "2026-10-03T09:00:00+00:00", updated_at: "2026-10-06T09:00:00+00:00" }],
+    // Lot alertes prix et stock : une cloche, le suivi de l'envie (au jour
+    // près), une alerte envoyée, un signalement « Plus disponible ».
+    wishWatches: [
+      {
+        wishlist_item_id: "wi000000-0000-4000-8000-000000000001",
+        wishlist_item_title: "Envie dangereuse",
+        notify_price_drop: true,
+        notify_restock: true,
+        notify_sold_out: false,
+        created_at: "2026-10-07T09:00:00+00:00",
+        updated_at: "2026-10-07T09:00:00+00:00",
+      },
+    ],
+    wishTracking: [
+      {
+        wishlist_item_id: "wi000000-0000-4000-8000-000000000001",
+        wishlist_item_title: "Envie dangereuse",
+        ref_price: 99.9,
+        ref_currency: "EUR",
+        ref_set_on: "2026-10-08",
+        last_price: 99.9,
+        last_currency: "EUR",
+        last_seen_on: "2026-10-08",
+        stock_state: "in_stock",
+        stock_on: "2026-10-08",
+      },
+    ],
+    wishAlertEvents: [
+      {
+        id: "ae000000-0000-4000-8000-000000000001",
+        wishlist_item_id: "wi000000-0000-4000-8000-000000000001",
+        wishlist_item_title: "Envie dangereuse",
+        kind: "price_drop",
+        old_price: 120,
+        new_price: 99.9,
+        currency: "EUR",
+        status: "sent",
+        created_on: "2026-10-08",
+      },
+    ],
+    stockReports: [{ id: "5c000000-0000-4000-8000-000000000001", match_key_hash: "a".repeat(64), created_on: "2026-10-09" }],
   };
 }
 

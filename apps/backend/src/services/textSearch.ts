@@ -10,14 +10,16 @@
 //   sinon la page produit de Google (comptée dans la mesure : le bouton « Voir
 //   chez … » mène alors à Google, texte à revoir avec le fondateur).
 // - Prix : jamais convertis. Seule la devise du pays de la recherche est
-//   gardée (SHOPPING_CURRENCIES) ; une autre devise, ou un pays dont la devise
+//   gardée (COUNTRY_CURRENCIES et isCountryCurrency, la table unique de
+//   packages/shared-types) ; une autre devise, ou un pays dont la devise
 //   n'est pas connue ici (en-DE, en-ES…), et le prix est caché (« Prix à
 //   vérifier chez le marchand ») : la proposition, elle, reste.
 // - 20 propositions au plus, après le tri (tri léger par marque et modèle, ou
 //   tri par vos mots), jamais avant.
 // - Aucune requête, aucun mot, aucun titre ni aucune adresse dans les journaux
 //   ou les erreurs : seulement des nombres (mesure).
-import { exclusionReason, pageKey, withoutDuplicates } from "./matchFilters.js";
+import { COUNTRY_CURRENCIES, isCountryCurrency } from "@monapp/shared-types";
+import { exclusionReason, isGoogleLink, pageKey, withoutDuplicates } from "./matchFilters.js";
 import type { SearchLocale } from "./lensSettings.js";
 import type { ProviderShoppingItem, TextSearchProvider, TextSearchResponse } from "./searchProvider.js";
 import { storablePrice, type VisualMatch } from "./visualSearch.js";
@@ -28,20 +30,11 @@ export const MAX_TEXT_MATCHES = 20;
 // Google Shopping renvoie d'habitude, mais le contenu du cache reste borné.
 const MAX_SHOPPING_CANDIDATES = 60;
 
-/** Devise de chaque pays, pour Google Shopping seulement (Lens garde sa propre
- * liste, lensMeasure.ts) : le code rangé, et les écritures acceptées dans le
- * texte du prix (« 49,99 € », « EUR 49.99 », « US$30 »). Liste FERMÉE, les
- * quatre pays du domaine de Google (serpapi.ts, googleDomainFor). */
-export const SHOPPING_CURRENCIES: Record<string, { code: string; marks: readonly string[] }> = {
-  fr: { code: "EUR", marks: ["€", "EUR"] },
-  gb: { code: "GBP", marks: ["£", "GBP"] },
-  ch: { code: "CHF", marks: ["CHF"] },
-  us: { code: "USD", marks: ["US$", "USD", "$"] },
-};
-
 /** Une proposition de Google Shopping, rangée comme une proposition Lens.
- * `priceHidden` : un prix existait, dans une autre devise (caché, pour la mesure). */
-export type ShoppingMatch = VisualMatch & { priceHidden: boolean };
+ * `priceHidden` : un prix existait, dans une autre devise (caché, pour la mesure).
+ * `hasProductId` : SerpApi donnait un identifiant produit (seulement compté
+ * dans le journal des alertes prix, jamais rangé). */
+export type ShoppingMatch = VisualMatch & { priceHidden: boolean; hasProductId?: true };
 
 /** Ce que les filtres gardent d'une réponse (avant les pages Lens, le tri et
  * la coupe à 20) : c'est ce qui va dans le cache, pour une requête de l'IA. */
@@ -80,14 +73,8 @@ function usableUrl(text: string | undefined): string | undefined {
   }
 }
 
-/** Page de Google (google.fr, www.google.co.uk, shopping.google.com…). */
-export function isGoogleLink(link: string): boolean {
-  try {
-    return /(^|\.)google(\.[a-z]{2,3}){1,2}$/i.test(new URL(link).hostname);
-  } catch {
-    return false;
-  }
-}
+/** Page de Google (google.fr, www.google.co.uk, shopping.google.com…) : services/matchFilters.ts. */
+export { isGoogleLink };
 
 /** Le lien direct vers le marchand s'il n'est pas une page de Google, sinon la page produit de Google. */
 function chosenLink(item: ProviderShoppingItem): string | undefined {
@@ -102,12 +89,14 @@ function currencyMark(price: string): string {
   return price.replace(/[\d\s.,'’]/gu, "");
 }
 
-/** Prix rangeable dans la devise du pays ; sinon aucun prix (caché si un prix existait). */
+/** Prix rangeable dans la devise du pays (« 49,99 € », « EUR 49.99 »,
+ * lus avec la table unique des devises) ; sinon aucun prix (caché
+ * si un prix existait). Un pays dont la devise n'est pas connue ici : caché. */
 function shoppingPrice(item: ProviderShoppingItem, country: string): Pick<ShoppingMatch, "priceValue" | "currency" | "priceHidden"> {
   if (item.extracted_price === undefined) return { priceValue: null, currency: null, priceHidden: false };
-  const local = SHOPPING_CURRENCIES[country];
-  if (!local || !item.price || !local.marks.includes(currencyMark(item.price))) return { priceValue: null, currency: null, priceHidden: true };
-  return { ...storablePrice({ extracted_value: item.extracted_price, currency: local.code }), priceHidden: false };
+  const local = COUNTRY_CURRENCIES[country];
+  if (!local || !item.price || isCountryCurrency(currencyMark(item.price), country) !== true) return { priceValue: null, currency: null, priceHidden: true };
+  return { ...storablePrice({ extracted_value: item.extracted_price, currency: local }), priceHidden: false };
 }
 
 interface Candidate {
@@ -150,6 +139,7 @@ export function filterShoppingItems(response: Pick<TextSearchResponse, "items" |
       merchantName: candidate.source,
       merchantUrl: candidate.link,
       ...shoppingPrice(candidate.item, country),
+      ...(candidate.item.product_id ? { hasProductId: true as const } : {}),
     })),
     received: response.received,
     droppedDataThumbnails,

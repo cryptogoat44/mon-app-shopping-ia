@@ -11,7 +11,9 @@ import type { ClickPlacement } from "@/lib/price-first";
 import { SpotImage } from "@/components/spot-image";
 import { ForeignShopNote } from "@/components/foreign-shop-note";
 import { SendToFriendLink } from "@/components/send-to-friend-link";
+import { StockReportLink } from "@/components/stock-report-sheet";
 import { isAffiliateLink } from "@/lib/affiliate-link";
+import { AffiliateMention } from "@/components/affiliate-mention";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Carte d'une proposition dans les grilles de l'écran Résultat (« Autres
@@ -29,7 +31,9 @@ import { themedStyles } from "@/theme/themed-styles";
  * évidence, une ligne par proposition : la page ne saute pas quand une
  * boutique arrive au-dessus). `onSend` : « Envoyer à un ami » pour CETTE
  * pièce (lib/send-to-friend.ts), sous le lien ; absent, rien ne s'affiche
- * (messagerie indisponible, pièce de démonstration). */
+ * (messagerie indisponible, pièce de démonstration). `onReportGone` (lot 2) :
+ * « Plus disponible ? » pour CETTE pièce, en dernier, discret ; absent sans
+ * les alertes sur le serveur (lib/wish-alerts.ts, canReportResult). */
 export function ProposalCard({
   piece,
   onSelect,
@@ -37,6 +41,7 @@ export function ProposalCard({
   cheapest = false,
   variant = "grid",
   onSend,
+  onReportGone,
 }: {
   piece: Piece;
   onSelect: () => void;
@@ -44,6 +49,7 @@ export function ProposalCard({
   cheapest?: boolean;
   variant?: "grid" | "row";
   onSend?: () => void;
+  onReportGone?: () => void;
 }) {
   const price = piece.priceFrom !== null ? formatPrice(piece.priceFrom, piece.currency, getActiveLocale()) : null;
   // Ligne de la liste triée : « Prix à vérifier chez le marchand » s'affiche aussi sans prix, et se lit.
@@ -71,10 +77,11 @@ export function ProposalCard({
             <ForeignShopNote piece={piece} compact />
           </View>
         </Pressable>
-        {piece.merchantUrl || onSend ? (
+        {piece.merchantUrl || onSend || onReportGone ? (
           <View style={styles.rowLink}>
             {piece.merchantUrl ? <ShopLink piece={piece} placement={placement} /> : null}
             {onSend ? <SendToFriendLink pieceName={piece.name} onPress={onSend} /> : null}
+            {onReportGone ? <StockReportLink pieceName={piece.name} onPress={onReportGone} /> : null}
           </View>
         ) : null}
       </View>
@@ -99,6 +106,7 @@ export function ProposalCard({
       </Pressable>
       {piece.merchantUrl ? <ShopLink piece={piece} placement={placement} /> : null}
       {onSend ? <SendToFriendLink pieceName={piece.name} onPress={onSend} /> : null}
+      {onReportGone ? <StockReportLink pieceName={piece.name} onPress={onReportGone} /> : null}
     </View>
   );
 }
@@ -119,7 +127,9 @@ export function CheapestBadge() {
 /** Même lien et même libellé que le bouton de la grande carte, par le point
  * de passage unique (openMerchantLink : adresses web seulement, clic suivi).
  * Le lien de secours, si le navigateur bloque l'ouverture, est celui
- * qu'openMerchantLink renvoie, donc déjà vérifié. */
+ * qu'openMerchantLink renvoie, donc déjà vérifié. La mention « Lien
+ * affilié » est écrite sous le lien (et lue avec lui par VoiceOver) ; ce
+ * qu'elle signifie se lit sur la grande carte, en touchant la pièce. */
 function ShopLink({ piece, placement }: { piece: Piece; placement?: ClickPlacement }) {
   const [blockedUrl, setBlockedUrl] = useState<string | null>(null);
   const label = opensOfferPage(piece) ? t.result.viewOffer : t.result.viewAt(piece.merchantName ?? "");
@@ -146,6 +156,7 @@ function ShopLink({ piece, placement }: { piece: Piece; placement?: ClickPlaceme
           {label} ›
         </Text>
       </Pressable>
+      <AffiliateMention isAffiliate={isAffiliate} />
       {blockedUrl ? (
         <Pressable
           onPress={() => {

@@ -63,18 +63,16 @@ function PieceRow({ piece, onOpenMenu, onRemoved }: { piece: ReceivedPiece; onOp
             {[t.received.from(piece.sender.displayName), timeAgo(piece.createdAt, getActiveLocale()), price].filter(Boolean).join(" · ")}
           </Text>
         </Pressable>
+        {/* La mention « Lien affilié » est affichée par le bouton lui-même. */}
         {piece.merchantUrl ? (
-          <>
-            <MerchantLinkButton
-              url={piece.merchantUrl}
-              merchantName={piece.merchantName}
-              matchId={piece.productMatchId}
-              context="received"
-              isAffiliate={piece.isAffiliate}
-              compact
-            />
-            {piece.isAffiliate ? <Text style={styles.disclosure}>{t.result.affiliateDisclosure}</Text> : null}
-          </>
+          <MerchantLinkButton
+            url={piece.merchantUrl}
+            merchantName={piece.merchantName}
+            matchId={piece.productMatchId}
+            context="received"
+            isAffiliate={piece.isAffiliate}
+            compact
+          />
         ) : null}
         {/* Retrait définitif (la copie de l'image est effacée) : toujours confirmé. */}
         {!confirming ? (
@@ -208,7 +206,6 @@ const styles = themedStyles(() => ({
   rowText: { flex: 1, gap: 2 },
   title: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   meta: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
-  disclosure: { fontSize: 11.5, color: color.acier },
   remove: { alignSelf: "flex-start", minHeight: 32, justifyContent: "center" },
   removeLabel: { fontSize: font.caption, color: color.danger, fontWeight: "600" },
   confirm: { backgroundColor: color.plinthe, borderRadius: radius.md, padding: space.sm, marginTop: space.xs },

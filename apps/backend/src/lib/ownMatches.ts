@@ -16,6 +16,8 @@ const OWN_MATCH_ROW = z.object({
   id: z.guid(),
   image_url: z.string(),
   merchant_url: z.string(),
+  // Alertes prix (clé « même pièce ») ; absent d'une lecture plus ancienne.
+  merchant_name: z.string().nullable().optional(),
   product_searches: z.object({ user_id: z.guid() }),
 });
 
@@ -25,6 +27,7 @@ export interface OwnMatch {
   id: string;
   imageUrl: string;
   merchantUrl: string;
+  merchantName: string | null;
 }
 
 /** Le résultat `matchId` s'il vient d'une recherche de `userId` ; null s'il
@@ -33,7 +36,7 @@ export interface OwnMatch {
 export async function findOwnMatch(fastify: FastifyInstance, userId: string, matchId: string): Promise<OwnMatch | null> {
   const { data, error } = await fastify.supabaseAdmin
     .from("product_matches")
-    .select("id, image_url, merchant_url, product_searches!inner(user_id)")
+    .select("id, image_url, merchant_url, merchant_name, product_searches!inner(user_id)")
     .eq("id", matchId)
     .maybeSingle();
   if (error) throw new DatabaseReadError("Lecture d'un résultat de recherche impossible");
@@ -41,7 +44,7 @@ export async function findOwnMatch(fastify: FastifyInstance, userId: string, mat
   const row = OWN_MATCH_ROW.safeParse(data);
   if (!row.success) throw new DatabaseReadError("Résultat de recherche illisible");
   if (row.data.product_searches.user_id !== userId) return null;
-  return { id: row.data.id, imageUrl: row.data.image_url, merchantUrl: row.data.merchant_url };
+  return { id: row.data.id, imageUrl: row.data.image_url, merchantUrl: row.data.merchant_url, merchantName: row.data.merchant_name ?? null };
 }
 
 const MATCH_CARD_COLUMNS = "id, search_id, product_name, brand, image_url, price_min, currency, merchant_name, merchant_url";

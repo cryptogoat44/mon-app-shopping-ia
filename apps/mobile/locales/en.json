@@ -1,5 +1,5 @@
 {
-  "CFBundleDisplayName": "Spotto",
-  "NSPhotoLibraryUsageDescription": "To suggest your latest video in Spotter, as you asked. Spotto only reads the most recent one and never changes your gallery; only a few frames leave your iPhone, when you tap “Search”.",
-  "NSCameraUsageDescription": "To take a photo, from Spotter, of a piece you want to find. The photo isn't saved to your gallery; it only leaves your iPhone when you tap “Search”."
+  "CFBundleDisplayName": "{nom}",
+  "NSPhotoLibraryUsageDescription": "To suggest your latest video in Spotter, as you asked. {nom} only reads the most recent one and never changes your gallery; only a few frames leave your iPhone, when you tap “Search”.",
+  "NSCameraUsageDescription": "To take a photo of a piece you want to find in Spotter, or your profile photo. The photo isn't saved to your gallery; it only leaves your iPhone when you tap “Search” or “Confirm”."
 }

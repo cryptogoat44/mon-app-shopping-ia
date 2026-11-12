@@ -2,12 +2,16 @@ import { useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { BIO_MAX_LENGTH, BIO_MAX_LINES, normalizeBio } from "@monapp/shared-types";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, updateMyProfile } from "@/lib/api";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { useToast } from "@/lib/toast-context";
 import { ErrorMessage } from "@/components/error-message";
+import { Avatar } from "@/components/avatar";
+import { AvatarPhotoFlow } from "@/components/avatar-photo-flow";
+import { bioCounter, bioError, nextBioInput } from "@/lib/bio-input";
 import { themedStyles } from "@/theme/themed-styles";
 
 const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
@@ -22,6 +26,10 @@ export default function EditProfileScreen() {
   const [bio, setBio] = useState(profile?.bio ?? "");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Lot « profil et icône des réglages » : photo de profil et bio limitée.
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const counter = bioCounter(bio);
+  const bioIssue = bioError(bio);
 
   function safeBack() {
     if (router.canGoBack()) router.back();
@@ -40,13 +48,17 @@ export default function EditProfileScreen() {
       setError(t.editProfile.displayNameError);
       return;
     }
+    if (bioIssue) {
+      setError(bioIssue);
+      return;
+    }
 
     setSubmitting(true);
     try {
       await updateMyProfile({
         username: normalizedUsername,
         displayName: displayName.trim(),
-        bio: bio.trim() || undefined,
+        bio: normalizeBio(bio),
       });
       await refreshProfile();
       showToast(t.editProfile.saved);
@@ -75,6 +87,15 @@ export default function EditProfileScreen() {
 
           {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
+          <View style={styles.photoRow}>
+            <Pressable onPress={() => setPhotoOpen(true)} accessibilityRole="button" accessibilityLabel={t.profile.changeAvatar}>
+              <Avatar uri={profile?.avatarUrl} userId={profile?.id ?? ""} displayName={displayName || profile?.displayName} username={username} size={72} />
+            </Pressable>
+            <Pressable onPress={() => setPhotoOpen(true)} hitSlop={8} accessibilityRole="button" style={styles.photoLink}>
+              <Text style={styles.photoLinkLabel}>{profile?.avatarUrl ? t.editProfile.changePhoto : t.editProfile.addPhoto}</Text>
+            </Pressable>
+          </View>
+
           <View style={styles.field}>
             <Text style={styles.label}>{t.editProfile.username}</Text>
             <TextInput
@@ -101,30 +122,41 @@ export default function EditProfileScreen() {
             />
           </View>
           <View style={styles.field}>
-            <Text style={styles.label}>{t.editProfile.bio}</Text>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>{t.editProfile.bio}</Text>
+              <Text style={[styles.counter, counter.over ? styles.counterOver : null]} accessibilityLabel={counter.label} accessibilityLiveRegion="polite" testID="compteur-bio">
+                {counter.text}
+              </Text>
+            </View>
             <TextInput
               style={[styles.input, styles.bioInput]}
               placeholderTextColor={color.acier}
               placeholder={t.editProfile.bioPlaceholder}
               value={bio}
-              onChangeText={setBio}
-              maxLength={280}
+              onChangeText={(typed) => setBio((previous) => nextBioInput(previous, typed))}
+              maxLength={Math.max(BIO_MAX_LENGTH, bio.length)}
               multiline
+              numberOfLines={4}
               accessibilityLabel={t.editProfile.bio}
+              accessibilityHint={t.editProfile.bioHint(BIO_MAX_LENGTH, BIO_MAX_LINES)}
             />
+            {bioIssue ? <ErrorMessage style={styles.fieldError}>{bioIssue}</ErrorMessage> : <Text style={styles.hint}>{t.editProfile.bioHint(BIO_MAX_LENGTH, BIO_MAX_LINES)}</Text>}
           </View>
 
           <Pressable
-            style={[styles.cta, submitting || !username || !displayName ? styles.ctaDisabled : null]}
+            style={[styles.cta, submitting || !username || !displayName || bioIssue ? styles.ctaDisabled : null]}
             onPress={handleSubmit}
-            disabled={submitting || !username || !displayName}
+            disabled={submitting || !username || !displayName || bioIssue !== null}
             accessibilityRole="button"
             accessibilityLabel={t.editProfile.save}
           >
-            <Text style={[styles.ctaLabel, submitting || !username || !displayName ? styles.ctaLabelDisabled : null]}>{submitting ? t.editProfile.saving : t.editProfile.save}</Text>
+            <Text style={[styles.ctaLabel, submitting || !username || !displayName || bioIssue ? styles.ctaLabelDisabled : null]}>
+              {submitting ? t.editProfile.saving : t.editProfile.save}
+            </Text>
           </Pressable>
         </ScrollView>
       </View>
+      <AvatarPhotoFlow open={photoOpen} onClose={() => setPhotoOpen(false)} />
     </SafeAreaView>
   );
 }
@@ -140,7 +172,16 @@ const styles = themedStyles(() => ({
   field: { marginBottom: space.md },
   label: { fontSize: font.caption, color: color.acier, marginBottom: space.xs },
   input: { borderBottomWidth: 1, borderBottomColor: color.filet, paddingVertical: 10, fontSize: font.body, color: color.encre },
-  bioInput: { minHeight: 70, textAlignVertical: "top" },
+  // Trois lignes de bio, dont une longue qui passe à la ligne : toutes visibles.
+  bioInput: { minHeight: 112, textAlignVertical: "top" },
+  labelRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
+  counter: { fontSize: font.caption, color: color.acier, fontVariant: ["tabular-nums"] },
+  counterOver: { color: color.erreur, fontWeight: "600" },
+  hint: { fontSize: font.caption, color: color.acier, marginTop: space.xs },
+  fieldError: { fontSize: font.caption, marginTop: space.xs },
+  photoRow: { flexDirection: "row", alignItems: "center", gap: space.md, marginBottom: space.lg },
+  photoLink: { minHeight: 44, justifyContent: "center" },
+  photoLinkLabel: { fontSize: font.body, color: color.vert, fontWeight: "600" },
   cta: { backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", marginTop: space.lg },
   ctaDisabled: { backgroundColor: color.inactif, borderColor: color.inactif },
   ctaLabelDisabled: { color: color.surInactif },

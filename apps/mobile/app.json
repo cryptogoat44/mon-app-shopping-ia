@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Spotto",
-    "slug": "spotto",
+    "name": "{nom}",
+    "slug": "{slugExpo}",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "spotto",
+    "scheme": "{schemaLiens}",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -15,7 +15,7 @@
     },
     "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "com.spottoapp.ios",
+      "bundleIdentifier": "{identifiantApple}",
       "buildNumber": "1",
       "supportsTablet": false,
       "icon": "./assets/marque/Spotto.icon",
@@ -87,8 +87,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Pour vous proposer dans Spotter votre dernière vidéo, comme vous l'avez demandé. Spotto ne lit que la plus récente et ne modifie jamais votre galerie ; seules quelques images en partent, quand vous appuyez sur « Lancer ».",
-          "cameraPermission": "Pour prendre en photo, depuis Spotter, une pièce que vous voulez retrouver. La photo n'est pas enregistrée dans votre galerie ; elle ne part qu'au moment où vous appuyez sur « Lancer ».",
+          "photosPermission": "Pour vous proposer dans Spotter votre dernière vidéo, comme vous l'avez demandé. {nom} ne lit que la plus récente et ne modifie jamais votre galerie ; seules quelques images en partent, quand vous appuyez sur « Lancer ».",
+          "cameraPermission": "Pour prendre en photo une pièce que vous voulez retrouver dans Spotter, ou votre photo de profil. La photo n'est pas enregistrée dans votre galerie ; elle ne part qu'au moment où vous appuyez sur « Lancer » ou « Valider ».",
           "microphonePermission": false
         }
       ],
@@ -101,7 +101,7 @@
       [
         "expo-media-library",
         {
-          "photosPermission": "Pour vous proposer dans Spotter votre dernière vidéo, comme vous l'avez demandé. Spotto ne lit que la plus récente et ne modifie jamais votre galerie ; seules quelques images en partent, quand vous appuyez sur « Lancer ».",
+          "photosPermission": "Pour vous proposer dans Spotter votre dernière vidéo, comme vous l'avez demandé. {nom} ne lit que la plus récente et ne modifie jamais votre galerie ; seules quelques images en partent, quand vous appuyez sur « Lancer ».",
           "savePhotosPermission": false,
           "isAccessMediaLocationEnabled": false,
           "preventAutomaticLimitedAccessAlert": true,
@@ -117,8 +117,8 @@
             "NSExtensionActivationSupportsMovieWithMaxCount": 1,
             "NSExtensionActivationSupportsText": true
           },
-          "iosAppGroupIdentifier": "group.com.spottoapp.ios",
-          "iosShareExtensionBundleIdentifier": "com.spottoapp.ios.share-extension",
+          "iosAppGroupIdentifier": "{groupeApple}",
+          "iosShareExtensionBundleIdentifier": "{identifiantExtensionPartage}",
           "disableAndroid": true
         }
       ],

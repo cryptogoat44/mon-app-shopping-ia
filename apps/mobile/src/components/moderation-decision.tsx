@@ -11,15 +11,18 @@ export type DecisionKind = "hide" | "suspend";
 
 /** Masquer ou suspendre (lot 5) : motif obligatoire, précision facultative
  * montrée à la personne concernée ; la suspension s'annonce avant d'être
- * confirmée. */
+ * confirmée. Lot « conformité Apple » : `removal`, retirer la bio ou la
+ * photo d'un profil — même panneau, avec son avertissement (définitif). */
 export function DecisionPanel({
   kind,
+  removal,
   initialReason,
   busy,
   onCancel,
   onConfirm,
 }: {
   kind: DecisionKind;
+  removal?: { warning: string };
   initialReason: ReportReason;
   busy: boolean;
   onCancel: () => void;
@@ -28,7 +31,9 @@ export function DecisionPanel({
   const [reason, setReason] = useState<ReportReason>(initialReason);
   const [note, setNote] = useState("");
   const suspend = kind === "suspend";
-  const confirmLabel = suspend ? t.moderationQueue.confirmSuspend : t.moderationQueue.confirmHide;
+  const danger = suspend || removal !== undefined;
+  const warning = removal?.warning ?? (suspend ? t.moderationQueue.suspendWarning : null);
+  const confirmLabel = removal ? t.moderationQueue.confirmRemoveImage : suspend ? t.moderationQueue.confirmSuspend : t.moderationQueue.confirmHide;
 
   return (
     <View style={styles.panel}>
@@ -51,13 +56,13 @@ export function DecisionPanel({
         placeholderTextColor={color.acier}
       />
       <Text style={styles.hint}>{t.moderationQueue.noteHint}</Text>
-      {suspend ? <Text style={styles.warning}>{t.moderationQueue.suspendWarning}</Text> : null}
+      {warning ? <Text style={styles.warning}>{warning}</Text> : null}
       <View style={styles.row}>
         <Pressable style={styles.secondary} onPress={onCancel} disabled={busy} accessibilityRole="button" accessibilityLabel={t.common.cancel}>
           <Text style={styles.secondaryLabel}>{t.common.cancel}</Text>
         </Pressable>
         <Pressable
-          style={[styles.primary, suspend ? styles.primaryDanger : null, busy ? styles.primaryBusy : null]}
+          style={[styles.primary, danger ? styles.primaryDanger : null, busy ? styles.primaryBusy : null]}
           onPress={() => onConfirm(reason, note.trim())}
           disabled={busy}
           accessibilityRole="button"

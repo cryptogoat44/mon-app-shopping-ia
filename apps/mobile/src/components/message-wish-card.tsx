@@ -9,7 +9,8 @@ import { themedStyles } from "@/theme/themed-styles";
 
 // Envie jointe à un message (lot messages) : la copie de son image faite par
 // Spotto (jamais l'image du marchand), son titre, son prix et le lien vers la
-// boutique (mention « lien affilié » quand c'est le cas).
+// boutique (mention « lien affilié » quand c'est le cas, affichée par le
+// bouton lui-même).
 export function MessageWishCard({ card, mine }: { card: WishCard; mine: boolean }) {
   const price = wishCardPrice(card, getActiveLocale());
   const meta = [card.merchantName, price].filter(Boolean).join(" · ");
@@ -24,17 +25,14 @@ export function MessageWishCard({ card, mine }: { card: WishCard; mine: boolean 
         </Text>
         {meta ? <Text style={styles.meta}>{meta}</Text> : null}
         {card.merchantUrl ? (
-          <>
-            <MerchantLinkButton
-              url={card.merchantUrl}
-              merchantName={card.merchantName}
-              matchId={card.productMatchId}
-              context={mine ? "wishlist" : "received"}
-              isAffiliate={card.isAffiliate}
-              compact
-            />
-            {card.isAffiliate ? <Text style={styles.disclosure}>{t.result.affiliateDisclosure}</Text> : null}
-          </>
+          <MerchantLinkButton
+            url={card.merchantUrl}
+            merchantName={card.merchantName}
+            matchId={card.productMatchId}
+            context={mine ? "wishlist" : "received"}
+            isAffiliate={card.isAffiliate}
+            compact
+          />
         ) : null}
       </View>
     </View>
@@ -48,5 +46,4 @@ const styles = themedStyles(() => ({
   body: { padding: space.sm, gap: 4 },
   title: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   meta: { fontSize: font.caption, color: color.acier },
-  disclosure: { fontSize: 11.5, color: color.acier },
 }));

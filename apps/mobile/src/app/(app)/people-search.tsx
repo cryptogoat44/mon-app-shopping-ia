@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import type { PublicProfile } from "@monapp/shared-types";
 import { ApiError, followUser, searchUsers, unfollowUser } from "@/lib/api";
 import { color, font, radius, space } from "@/theme/tokens";
-import { MoreIcon, PersonIcon, SearchIcon } from "@/components/icons";
+import { MoreIcon, SearchIcon } from "@/components/icons";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { useToast } from "@/lib/toast-context";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
 import { t } from "@/i18n";
+import { Avatar } from "@/components/avatar";
 
 function PersonRow({
   person,
@@ -61,13 +61,7 @@ function PersonRow({
         accessibilityRole="link"
         accessibilityLabel={t.common.viewProfile(person.displayName)}
       >
-        <View style={styles.avatar}>
-          {person.avatarUrl ? (
-            <Image source={{ uri: person.avatarUrl }} style={styles.avatarImage} contentFit="cover" />
-          ) : (
-            <PersonIcon size={20} tint={color.acier} />
-          )}
-        </View>
+        <Avatar uri={person.avatarUrl} userId={person.id} displayName={person.displayName} username={person.username} size={40} />
         <View style={styles.rowText}>
           <Text style={styles.displayName}>{person.displayName}</Text>
           <Text style={styles.username}>@{person.username}</Text>
@@ -218,16 +212,6 @@ const styles = themedStyles(() => ({
     borderBottomWidth: 1,
     borderBottomColor: color.filet,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.full,
-    backgroundColor: color.plinthe,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  avatarImage: { width: "100%", height: "100%" },
   rowText: { flex: 1 },
   personLink: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.sm, minHeight: 44 },
   displayName: { fontSize: font.secondary, fontWeight: "600", color: color.encre },

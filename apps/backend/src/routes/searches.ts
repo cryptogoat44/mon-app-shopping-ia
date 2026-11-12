@@ -9,6 +9,7 @@ import {
   type ComplementStatus,
   type MatchOrigin,
   type PlatformSource,
+  type PreviewIssue,
   type ProductSearch,
   type SearchStatus,
 } from "@monapp/shared-types";
@@ -52,6 +53,7 @@ import {
 import { breakerPause, observeBreakerAfter, SEARCH_PAUSED } from "../lib/searchBreaker.js";
 import { sortByWords } from "../lib/wordSort.js";
 import { assertNoUserImage, voieCAiEnabled } from "../lib/aiSwitches.js";
+import { linkPreviewEnabled } from "../lib/linkPreview.js";
 import { photoCallsLeft, startDeadline, VOIE_C_BUDGET } from "../lib/deadline.js";
 import { lightSort } from "../lib/lightSort.js";
 import { cacheKey, imageHash, purgeExpiredCache, readCache, writeCache } from "../lib/searchCache.js";
@@ -84,6 +86,8 @@ import {
 import { consumeRateLimit, RATE_LIMITED_MESSAGE } from "../plugins/rateLimit.js";
 import { aiQuotaFor } from "../lib/aiQuota.js";
 import { noteFailure } from "../lib/alerts.js";
+import { observeResults, type ObservationSource, type ObservedRow } from "../lib/wishObserve.js";
+import { purgeWishAlerts } from "../lib/wishAlertsSend.js";
 
 const createSearchSchema = z.object({
   // Lien lisible par le parseur d'URL standard, gardé tel qu'il a été envoyé
@@ -321,11 +325,16 @@ const RUN_REFUSALS = {
 type RunRefusal = keyof typeof RUN_REFUSALS;
 
 /** Image à analyser — celle importée en priorité, sinon la vignette
- * officielle —, recadrée sur la zone choisie ; sinon la raison du refus. */
+ * officielle —, recadrée sur la zone choisie ; sinon la raison du refus.
+ * Interrupteur des liens coupé (lib/linkPreview.ts) : une vignette enregistrée
+ * avant la coupure n'est jamais téléchargée ni analysée ; sans image importée,
+ * le lancement est refusé comme pour une vignette disparue (« importez une
+ * capture »), sans aucun appel à TikTok, à Meta ni à SerpApi. */
 async function prepareRunImage(request: FastifyRequest, row: SearchRow, form: RunForm): Promise<{ image: Buffer } | { refusal: RunRefusal }> {
   let source: Buffer;
   try {
     if (form.fileBuffer) source = form.fileBuffer;
+    else if (row.thumbnail_url && !linkPreviewEnabled()) return { refusal: "preview_unavailable" };
     else if (row.thumbnail_url) source = await downloadThumbnail(row.thumbnail_url);
     else return { refusal: "image_required" };
   } catch (error) {
@@ -508,6 +517,15 @@ function sendWithoutCall(reply: FastifyReply, call: Exclude<LensCall, { kind: "s
 
 const SAVE_FAILED = { error: "search_save_failed", message: "Le résultat n'a pas pu être enregistré, réessayez." } as const;
 
+/** Alertes prix et stock (lot 2, lib/wishObserve.ts) : APRÈS reply.send, les
+ * propositions que la personne vient de recevoir, seulement si elles sont
+ * fraîches (jamais le cache de 24 h, jamais la réponse d'un appel identique
+ * en cours) et enregistrées. Lancé puis oublié : ne retarde ni ne change la réponse. */
+function observeFresh(fastify: FastifyInstance, request: FastifyRequest, source: Exclude<ObservationSource, "purchase">, rows: readonly ObservedRow[], fresh: boolean): void {
+  if (!fresh || rows.length === 0) return;
+  observeResults(fastify, { source, rows, country: searchLocaleFor(request).country });
+}
+
 /** Écrit les colonnes finales de la recherche, puis la relit avec ses
  * propositions et leurs liens ; null : résultat illisible ou non enregistré. */
 async function writeOutcome(fastify: FastifyInstance, request: FastifyRequest, id: string, columns: Record<string, unknown>): Promise<ProductSearch | null> {
@@ -527,13 +545,19 @@ async function writeOutcome(fastify: FastifyInstance, request: FastifyRequest, i
 /** Enregistre l'issue de l'appel et sa mesure, et renvoie la recherche
  * complète ; null : résultat illisible ou non enregistré. La ligne « Mesure
  * recherche » est écrite d'abord : elle reste, même si l'enregistrement échoue. */
-async function saveOutcome(fastify: FastifyInstance, request: FastifyRequest, id: string, outcome: SearchOutcome, cropPct: number): Promise<ProductSearch | null> {
+async function saveOutcome(
+  fastify: FastifyInstance,
+  request: FastifyRequest,
+  id: string,
+  outcome: SearchOutcome,
+  cropPct: number
+): Promise<{ search: ProductSearch | null; saved: boolean }> {
   const saved = await saveMatches(fastify, id, outcome.matches);
   const measure = saved ? outcome.measure : failedColumns("save_failed", outcome.measure.call_seconds);
   const reply = { provider: IMAGE_SEARCH_PROVIDER.name, statusCode: outcome.providerStatusCode };
   // Journal racine (sans le contexte de la requête) : ni identifiant de requête, ni chemin, ni compte.
   fastify.log.info(measureLogLine(measure, outcome.addedRanks, reply), MEASURE_LOG_MESSAGE);
-  return writeOutcome(fastify, request, id, {
+  const search = await writeOutcome(fastify, request, id, {
     screenshot_url: null,
     status: saved ? outcome.status : "failed",
     error_message: saved ? outcome.errorMessage : TECHNICAL_FAILURE_MESSAGE,
@@ -542,6 +566,7 @@ async function saveOutcome(fastify: FastifyInstance, request: FastifyRequest, id
     provider: reply.provider,
     provider_status_code: reply.statusCode,
   });
+  return { search, saved };
 }
 
 // ---------------------------------------------------------------------
@@ -657,7 +682,7 @@ async function saveVoieCOutcome(
   launch: VoieCLaunch,
   outcome: SearchOutcome,
   run: { lensFromCache: boolean; complement: ComplementResult; deferred?: { lensRanks: LensRanks } }
-): Promise<{ search: ProductSearch | null; complement: ComplementResult }> {
+): Promise<{ search: ProductSearch | null; complement: ComplementResult; lensSaved: boolean }> {
   const saved = await saveMatches(fastify, launch.id, outcome.matches, run.deferred?.lensRanks ?? null);
   const pending = run.deferred !== undefined && saved;
   let complement = run.complement;
@@ -689,7 +714,7 @@ async function saveVoieCOutcome(
     ...(run.lensFromCache ? { run_started_at: null } : {}),
   });
   if (!pending) fastify.log.info(complementLogLine(complement.measure, { lensFromCache: run.lensFromCache, totalMs: Date.now() - launch.t0 }), COMPLEMENT_LOG_MESSAGE);
-  return { search, complement };
+  return { search, complement, lensSaved: saved };
 }
 
 /** Lancement avec la voie C (interrupteur allumé, 0028 vue).
@@ -762,7 +787,9 @@ async function launchWithVoieC(fastify: FastifyInstance, request: FastifyRequest
     });
     if (!lens.lensFromCache) await observeBreakerAfter(fastify, "image", IMAGE_SEARCH_PROVIDER.name, launch.id);
     if (!saved.search) return reply.code(500).send(SAVE_FAILED);
-    return reply.send({ ...saved.search, sortedByWords: byWords.sorted, complement: saved.complement.reply });
+    const sent = reply.send({ ...saved.search, sortedByWords: byWords.sorted, complement: saved.complement.reply });
+    observeFresh(fastify, request, "lens", searched.matches, !lens.lensFromCache && saved.lensSaved);
+    return sent;
   }
   const complement = await runComplement(complementPorts(fastify, request, launch), input);
   // Échecs répétés de l'IA ou de Google Shopping : une alerte (lib/alerts.ts).
@@ -783,7 +810,11 @@ async function launchWithVoieC(fastify: FastifyInstance, request: FastifyRequest
   if (!lens.lensFromCache) await observeBreakerAfter(fastify, "image", IMAGE_SEARCH_PROVIDER.name, launch.id);
   // Résultat illisible ou non enregistré : une panne annoncée comme telle, jamais « aucune pièce ».
   if (!saved.search) return reply.code(500).send(SAVE_FAILED);
-  return reply.send({ ...saved.search, sortedByWords: byWords.sorted, complement: saved.complement.reply });
+  const sent = reply.send({ ...saved.search, sortedByWords: byWords.sorted, complement: saved.complement.reply });
+  observeFresh(fastify, request, "lens", searched.matches, !lens.lensFromCache && saved.lensSaved);
+  // Les boutiques : seulement celles enregistrées, et jamais lues dans le cache.
+  observeFresh(fastify, request, "shopping", saved.complement.matches, saved.lensSaved && !saved.complement.measure.shoppingFromCache);
+  return sent;
 }
 
 // ---- « Que cherchez-vous ? » (voie B, POST /api/searches/:id/text) ----
@@ -1029,7 +1060,10 @@ async function runDeferredComplement(
   }
   const result = await readSearchForReply(fastify, request, row.id, row.user_id);
   if (!result) return reply.code(500).send(SAVE_FAILED);
-  return reply.send({ ...result, complement: final.reply });
+  const sent = reply.send({ ...result, complement: final.reply });
+  // Seulement les nouvelles propositions des boutiques, enregistrées, jamais lues dans le cache.
+  observeFresh(fastify, request, "shopping", final.matches, savedCount > 0 && !final.measure.shoppingFromCache);
+  return sent;
 }
 
 /** Les boutiques ensuite d'une recherche, selon son état (lib/deferredComplement.ts) :
@@ -1240,6 +1274,12 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
   // l'utilisateur la VOIE avant de lancer quoi que ce soit (aperçu). Sans
   // lien (import d'une photo) ou sans vignette officielle, la recherche
   // attend simplement une image au lancement.
+  // Interrupteur des liens (LINK_PREVIEW_ENABLED, lib/linkPreview.ts), COUPÉ
+  // par défaut : un lien envoyé (ancienne version de l'app, requête fabriquée)
+  // est ignoré. Aucun appel à TikTok ni à Meta ; ni le lien ni l'adresse d'une
+  // couverture ne sont enregistrés : la recherche est créée comme pour une
+  // photo, et la réponse dit à l'app qu'il faut une capture
+  // (« no_official_access », la raison déjà connue des apps installées).
   fastify.post("/api/searches/prepare", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const body = parseInput(createSearchSchema, request.body ?? {}, reply, {
       error: "invalid_body",
@@ -1248,7 +1288,8 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     if (!body) return;
 
     const userId = request.user!.id;
-    const sourceUrl = body.sourceUrl ?? null;
+    const linkIgnored = body.sourceUrl !== undefined && !linkPreviewEnabled();
+    const sourceUrl = linkIgnored ? null : (body.sourceUrl ?? null);
     const platform: PlatformSource = sourceUrl ? detectPlatform(sourceUrl) : "photo";
     const preview = sourceUrl ? await fetchOfficialPreview(sourceUrl, platform) : null;
     const thumbnail = preview?.ok ? { thumbnailUrl: preview.thumbnailUrl } : null;
@@ -1280,9 +1321,12 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     // jamais d'erreur, et un échec de l'historique ne le saute donc jamais.
     // Images analysées restées plus d'une heure (lot garde-fous) : même
     // principe, en même temps que le cache ; ne lève jamais d'erreur non plus.
+    // Alertes prix et stock (lot 2) : alertes et signalements « Plus
+    // disponible » de plus de 30 jours, par lots bornés ; sans 0036, rien.
     await Promise.all([
       purgeExpiredCache(fastify.supabaseAdmin, request.log),
       purgeStaleAnalysisImages(fastify.supabaseAdmin.storage.from(ANALYSIS_BUCKET), request.log),
+      purgeWishAlerts(fastify, request.log),
     ]);
     try {
       await purgeExpiredSearches(fastify, userId);
@@ -1290,8 +1334,9 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       request.log.error({ purgeError }, "Échec de la suppression des recherches de plus de 12 mois");
     }
 
-    // Sans image : la raison précise, pour que l'app dise quoi faire.
-    const previewIssue = preview && !preview.ok ? preview.issue : null;
+    // Sans image : la raison précise, pour que l'app dise quoi faire. Lien
+    // ignoré (interrupteur coupé) : la capture d'écran est la seule voie.
+    const previewIssue: PreviewIssue | null = linkIgnored ? "no_official_access" : preview && !preview.ok ? preview.issue : null;
     const row = parseSearchRow(inserted);
     if (!row) {
       request.log.error("Recherche préparée illisible");
@@ -1303,7 +1348,8 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
   // Temps 2 — LANCER (une seule fois par recherche ; 1 à 3 recherches par
   // photo, voir la voie C plus haut) : formulaire multipart avec, au choix,
   // une image importée (champ "file" — photo ou capture au bon moment de la
-  // vidéo) ou, à défaut, la vignette officielle préparée au temps 1 ; plus la
+  // vidéo) ou, à défaut, la vignette officielle préparée au temps 1 (jamais
+  // quand l'interrupteur des liens est coupé, prepareRunImage) ; plus la
   // zone choisie ("crop", JSON en proportions 0–1). Les mots ("query") ne
   // servent qu'à trier les propositions. "complement" = "deferred" (nouvelle
   // app, boutiques ensuite) : la réponse part dès Lens, les autres boutiques
@@ -1362,11 +1408,14 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       // Les mots remontent en tête les propositions dont le nom les contient ; rien n'est retiré.
       const byWords = sortByWords(call.outcome.matches, form.input.query);
       const outcome = { ...call.outcome, matches: byWords.matches };
-      const result = await saveOutcome(fastify, request, id, outcome, cropAreaPct(form.input.crop));
+      const { search: result, saved } = await saveOutcome(fastify, request, id, outcome, cropAreaPct(form.input.crop));
       await observeBreakerAfter(fastify, "image", IMAGE_SEARCH_PROVIDER.name, id);
       // Résultat illisible ou non enregistré : une panne annoncée comme telle, jamais « aucune pièce ».
       if (!result) return reply.code(500).send(SAVE_FAILED);
-      return reply.send({ ...result, sortedByWords: byWords.sorted });
+      const sent = reply.send({ ...result, sortedByWords: byWords.sorted });
+      // Chemin d'avant la voie C : toujours un vrai appel à Lens (aucun cache).
+      observeFresh(fastify, request, "lens", call.outcome.matches, saved);
+      return sent;
     }
   );
 
@@ -1475,7 +1524,10 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       }
       const result = await readSearchForReply(fastify, request, id, userId);
       if (!result) return reply.code(500).send(SAVE_FAILED);
-      return reply.send(result);
+      const sent = reply.send(result);
+      // « Que cherchez-vous ? » n'est jamais mis en cache : les nouvelles propositions enregistrées.
+      observeFresh(fastify, request, "words", text.matches, (saved ?? 0) > 0);
+      return sent;
     }
   );
 

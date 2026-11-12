@@ -64,6 +64,7 @@ import { isBlockedEitherWay } from "../lib/visibility.js";
 import { WishImageError, copyWishImage, deleteWishCopy, findOwnWish } from "../lib/wishShare.js";
 import { sharedWishForMessage } from "../lib/collections.js";
 import { notifyNewMessage, pushAvailable } from "../lib/push.js";
+import { withoutSuspendedFaces } from "../lib/profileModeration.js";
 
 /** Messages par page d'une conversation. */
 const THREAD_PAGE_SIZE = 50;
@@ -125,13 +126,16 @@ function author(row: ProfileRow | undefined, id: string): PostAuthor {
   return { id, username: row?.username ?? "", displayName: row?.display_name ?? "", avatarUrl: row?.avatar_url ?? null };
 }
 
-async function readProfiles(fastify: FastifyInstance, ids: string[]): Promise<Map<string, ProfileRow>> {
+/** Profils des autres personnes, tels que `viewerId` peut les voir (lot
+ * « conformité Apple » : sans la photo d'un compte suspendu). */
+async function readProfiles(fastify: FastifyInstance, ids: string[], viewerId: string): Promise<Map<string, ProfileRow>> {
   if (ids.length === 0) return new Map();
-  const rows = parseDbRows(
+  const stored = parseDbRows(
     PROFILE_ROWS,
     await fastify.supabaseAdmin.from("profiles").select("id, username, display_name, avatar_url, messages_from").in("id", [...new Set(ids)]),
     "Profils des conversations"
   );
+  const rows = await withoutSuspendedFaces(fastify, stored, viewerId);
   return new Map(rows.map((row) => [row.id, row]));
 }
 
@@ -294,7 +298,7 @@ export default async function conversationsRoutes(fastify: FastifyInstance) {
     const pageRows = mainRows.slice(0, LIST_PAGE_SIZE);
     const all = [...pageRows, ...invitationRows];
     const [profiles, previews] = await Promise.all([
-      readProfiles(fastify, all.map((side) => side.other_user_id)),
+      readProfiles(fastify, all.map((side) => side.other_user_id), userId),
       lastMessages(fastify, request, userId, all),
     ]);
     const summary = (side: Side): ConversationSummary => ({
@@ -323,7 +327,7 @@ export default async function conversationsRoutes(fastify: FastifyInstance) {
     if (!params) return;
     const userId = request.user!.id;
     if (params.userId === userId) return reply.code(400).send(SELF_MESSAGE);
-    const profiles = await readProfiles(fastify, [params.userId]);
+    const profiles = await readProfiles(fastify, [params.userId], userId);
     const other = profiles.get(params.userId);
     if (!other?.username || (await isBlockedEitherWay(fastify, userId, params.userId))) return reply.code(404).send(RECIPIENT_NOT_FOUND);
 
@@ -353,7 +357,7 @@ export default async function conversationsRoutes(fastify: FastifyInstance) {
     if (!query) return;
     const side = await visibleSide(fastify, reply, params.id, request.user!.id);
     if (!side) return;
-    const profiles = await readProfiles(fastify, [side.other_user_id]);
+    const profiles = await readProfiles(fastify, [side.other_user_id], request.user!.id);
     reply.header("Cache-Control", "no-store");
     return reply.send(await buildThread(fastify, request, side, profiles.get(side.other_user_id), query));
   });
@@ -457,7 +461,7 @@ export default async function conversationsRoutes(fastify: FastifyInstance) {
       if (body.recipientId === userId) return reply.code(400).send(SELF_MESSAGE);
 
       // « Introuvable » sans dire pourquoi (profil inexistant, incomplet ou blocage).
-      const recipient = (await readProfiles(fastify, [body.recipientId])).get(body.recipientId);
+      const recipient = (await readProfiles(fastify, [body.recipientId], userId)).get(body.recipientId);
       if (!recipient?.username || (await isBlockedEitherWay(fastify, userId, body.recipientId))) return reply.code(404).send(RECIPIENT_NOT_FOUND);
 
       const existingId = await findConversationId(fastify, userId, body.recipientId);

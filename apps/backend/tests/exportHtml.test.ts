@@ -639,3 +639,42 @@ describe("collections d'envies (lot collections, migration 0033)", () => {
     expect(visibleText(render())).toContain("Vos Envies sont privées, sauf celles que vous rangez dans une collection montrée à vos amis.");
   });
 });
+
+describe("export lisible : alertes prix et stock (lot 2, migration 0036)", () => {
+  it("cloches, suivi, alertes et signalements, en français : au jour près, jamais l'empreinte de la pièce", () => {
+    const page = render();
+    const section = spaces(visibleText(sectionHtml(page, "alerts")));
+    expect(section).toContain(EXPORT_SECTIONS.alerts.title.fr);
+    expect(section).toContain("Cloches (1)");
+    expect(section).toContain("Prévenir d'une baisse de prix Oui");
+    expect(section).toContain("Prévenir quand elle est épuisée Non");
+    expect(section).toContain("Prix de référence 99,90 €");
+    expect(section).toContain("Dernière fois vue le 8 octobre 2026");
+    expect(section).toContain("Stock Disponible");
+    expect(section).toContain("Baisse de prix");
+    expect(section).toContain("Ancien prix 120 €");
+    expect(section).toContain("Nouveau prix 99,90 €");
+    expect(section).toContain("État Envoyée");
+    expect(section).toContain("Signalée « Plus disponible » le 9 octobre 2026");
+    // Jamais l'heure d'une observation, ni l'empreinte de la pièce signalée (seulement dans le JSON).
+    expect(section).not.toContain("vue le 8 octobre 2026 à");
+    expect(section).not.toContain("Plus disponible » le 9 octobre 2026 à");
+    expect(section).not.toContain("a".repeat(64));
+    // Une ligne dans le sommaire, avec le nombre de cloches.
+    expect(spaces(visibleText(page))).toContain(`${EXPORT_SECTIONS.alerts.title.fr} (1)`);
+  });
+
+  it("en anglais", () => {
+    const section = spaces(visibleText(sectionHtml(render({ locale: "en", timeZone: "UTC" }), "alerts")));
+    expect(section).toContain("Your price and stock alerts");
+    expect(section).toContain("Price drop");
+    expect(section).toContain("Last seen on October 8, 2026");
+    expect(section).toContain("Status Sent");
+    expect(section).toContain("Reported “No longer available” on October 9, 2026");
+  });
+
+  it("sans alerte : la section dit « Aucune donnée »", () => {
+    const data = { ...fixture(), wishWatches: [], wishTracking: [], wishAlertEvents: [], stockReports: [] };
+    expect(visibleText(sectionHtml(render({}, data), "alerts"))).toContain(EXPORT_TEXT.noData.fr);
+  });
+});

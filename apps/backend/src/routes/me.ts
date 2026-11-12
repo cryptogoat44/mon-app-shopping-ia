@@ -1,16 +1,30 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
-import { PHOTO_SIZES, optimizePhoto } from "../lib/photos.js";
+import { encodeAvatar, isOtherImageFormat } from "../lib/photos.js";
 import { z } from "zod";
-import { APP_LOCALES, DEFAULT_MESSAGES_FROM, MESSAGES_FROM, PIECE_SENDS_FROM, PRIVACY_LEVELS, type Profile } from "@monapp/shared-types";
-import { parseInput } from "../lib/validation.js";
+import {
+  APP_LOCALES,
+  AVATAR_MAX_BYTES,
+  DEFAULT_MESSAGES_FROM,
+  MESSAGES_FROM,
+  PIECE_SENDS_FROM,
+  PRIVACY_LEVELS,
+  bioProblem,
+  normalizeBio,
+  type Profile,
+} from "@monapp/shared-types";
+import { DatabaseReadError, parseInput } from "../lib/validation.js";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { isAdmin } from "../lib/moderation.js";
 import { CONTENT_NOT_ALLOWED, firstBannedText } from "../lib/contentFilter.js";
 import { MESSAGES_UNAVAILABLE, messagesReady } from "../lib/messaging.js";
+import { emptyUserFolder, extractOwnedStoragePath, removeOwnedFiles } from "../lib/storage.js";
+import { AVATAR_BUCKET } from "../lib/profileModeration.js";
 
 const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
+/** Bio reçue, avant d'en retirer espaces et lignes vides en trop. */
+const BIO_RAW_MAX_LENGTH = 1000;
 
 const updateMeSchema = z.object({
   username: z
@@ -18,7 +32,9 @@ const updateMeSchema = z.object({
     .toLowerCase()
     .regex(USERNAME_REGEX, "3 à 20 caractères : lettres minuscules, chiffres, underscore."),
   displayName: z.string().trim().min(1).max(60),
-  bio: z.string().trim().max(280).optional(),
+  // Bio : normalisée puis contrôlée dans la route (160 caractères, 3 lignes :
+  // normalizeBio, bioProblem). Ici, seul un texte démesuré est écarté d'emblée.
+  bio: z.string().max(BIO_RAW_MAX_LENGTH, "La bio est trop longue (160 caractères maximum).").nullable().optional(),
 });
 
 const updateLocaleSchema = z.object({ locale: z.enum(APP_LOCALES) });
@@ -81,6 +97,14 @@ async function fetchFollowCounts(fastify: FastifyInstance, userId: string): Prom
   return { followersCount: followers.count ?? 0, followingCount: following.count ?? 0, postsCount: posts.count ?? 0 };
 }
 
+/** Adresse de la photo de profil actuelle (null : aucune). Lecture impossible : DatabaseReadError. */
+async function readAvatarUrl(fastify: FastifyInstance, userId: string): Promise<string | null> {
+  const { data, error } = await fastify.supabaseAdmin.from("profiles").select("avatar_url").eq("id", userId).maybeSingle();
+  if (error) throw new DatabaseReadError("Lecture de la photo de profil impossible");
+  const row = z.object({ avatar_url: z.string().nullable() }).nullable().safeParse(data);
+  return row.success ? (row.data?.avatar_url ?? null) : null;
+}
+
 const PROFILE_UNREADABLE = { error: "internal_error", message: GENERIC_SERVER_ERROR } as const;
 
 export default async function meRoutes(fastify: FastifyInstance) {
@@ -108,10 +132,15 @@ export default async function meRoutes(fastify: FastifyInstance) {
   });
 
   // Profil public (photo, nom, bio) : non modifiable par un compte suspendu (lot 5).
+  // Lot « profil et icône des réglages » : l'app envoie un carré JPEG déjà
+  // recadré ; ici, JPEG ou PNG seulement, 5 Mo au plus, refait en carré de
+  // 512 px sans métadonnées (encodeAvatar). Chaque photo a un nom nouveau
+  // (« <compte>/avatar-<aléatoire>.jpg », adresse publique) : aucun cache ne
+  // ressert l'ancienne, qui est effacée une fois la nouvelle en place.
   fastify.post("/api/me/avatar", { preHandler: [fastify.requireAuth, fastify.requireActiveAccount] }, async (request, reply) => {
     const userId = request.user!.id;
 
-    const file = await request.file();
+    const file = await request.file({ limits: { fileSize: AVATAR_MAX_BYTES } });
     if (!file || !file.mimetype.startsWith("image/")) {
       return reply.code(400).send({ error: "invalid_file", message: "Merci d'envoyer une image." });
     }
@@ -121,38 +150,36 @@ export default async function meRoutes(fastify: FastifyInstance) {
       buffer = await file.toBuffer();
     } catch (error) {
       if (isFileTooLargeError(error)) {
-        return reply.code(413).send({ error: "file_too_large", message: "Le fichier est trop volumineux (10 Mo maximum)." });
+        return reply.code(413).send({ error: "file_too_large", message: "La photo est trop lourde (5 Mo maximum)." });
       }
       throw error;
     }
 
-    // Avatar optimisé (512 px, sans métadonnées) — lot « images et fluidité ».
-    let optimized: Buffer;
+    // Format reconnu à ses premiers octets, jamais au type annoncé. Inconnu
+    // ou déguisé (SVG, texte…) : « illisible », comme avant. Vraie image
+    // d'un autre format (HEIC envoyé sans conversion, WebP, GIF, AVIF) : on
+    // dit quoi envoyer.
+    if (await isOtherImageFormat(buffer)) {
+      return reply.code(400).send({ error: "unsupported_format", message: "Format non accepté : choisissez une photo JPEG, PNG ou HEIC." });
+    }
+    let encoded: Buffer;
     try {
-      optimized = await optimizePhoto(buffer, PHOTO_SIZES.avatar);
+      encoded = (await encodeAvatar(buffer)).data;
     } catch {
       return reply.code(400).send({ error: "invalid_file", message: "Cette photo n'a pas pu être lue." });
     }
-    // Lu avant toute écriture : une lecture impossible n'enregistre rien.
+    // Lus avant toute écriture : une lecture impossible n'enregistre rien.
     const admin = await isAdmin(fastify, userId);
+    const previousUrl = await readAvatarUrl(fastify, userId);
 
-    // upsert avec un nom fixe par utilisateur : une photo de profil n'a
-    // qu'une seule version à la fois, contrairement aux photos du vault.
-    const path = `${userId}/avatar.jpg`;
-
-    const { error: uploadError } = await fastify.supabaseAdmin.storage
-      .from("avatars")
-      .upload(path, optimized, { contentType: "image/jpeg", upsert: true });
-
+    const bucket = fastify.supabaseAdmin.storage.from(AVATAR_BUCKET);
+    const path = `${userId}/avatar-${randomUUID()}.jpg`;
+    const { error: uploadError } = await bucket.upload(path, encoded, { contentType: "image/jpeg", upsert: false });
     if (uploadError) {
       request.log.error({ uploadError }, "Échec d'upload de la photo de profil");
       return reply.code(500).send({ error: "upload_failed", message: "L'envoi de la photo a échoué." });
     }
-
-    // Un paramètre anti-cache : upsert écrase le même chemin, donc le CDN /
-    // le cache navigateur doit être invité à revalider plutôt que resservir
-    // l'ancienne image sous la même URL.
-    const publicUrl = `${fastify.supabaseAdmin.storage.from("avatars").getPublicUrl(path).data.publicUrl}?v=${randomUUID()}`;
+    const publicUrl = bucket.getPublicUrl(path).data.publicUrl;
 
     const { data: updated, error: updateError } = await fastify.supabaseAdmin
       .from("profiles")
@@ -163,6 +190,52 @@ export default async function meRoutes(fastify: FastifyInstance) {
 
     if (updateError || !updated) {
       request.log.error({ updateError }, "Échec de mise à jour de avatar_url");
+      // La nouvelle photo ne sert à rien : effacée, l'ancienne reste en place.
+      await bucket.remove([path]);
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+
+    // Ancienne photo effacée, si elle est bien dans le dossier de la personne
+    // (ancien nom fixe « avatar.jpg » compris). Un échec ne change rien pour
+    // elle : le fichier resté partira avec le compte ; journal sans chemin.
+    const previousPath = previousUrl ? extractOwnedStoragePath(previousUrl, AVATAR_BUCKET, userId) : null;
+    if (previousUrl && previousPath && previousPath !== path) {
+      const cleanup = await removeOwnedFiles(fastify, AVATAR_BUCKET, [{ ownerId: userId, url: previousUrl }]);
+      if (cleanup.failed > 0) request.log.warn({ bucket: AVATAR_BUCKET, failed: cleanup.failed }, "Ancienne photo de profil restée dans le stockage");
+    }
+
+    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin);
+    if (!profile) {
+      request.log.error("Profil illisible");
+      return reply.code(500).send(PROFILE_UNREADABLE);
+    }
+    return reply.send(profile);
+  });
+
+  // « Supprimer ma photo » (lot « profil et icône des réglages ») : tous les
+  // fichiers du dossier de la personne dans le bucket des photos de profil
+  // sont effacés D'ABORD (3 essais par appel) ; le profil n'est changé
+  // qu'ensuite. Si le stockage refuse, rien n'est changé (503) : jamais une
+  // photo « supprimée » encore en ligne. Permis à un compte suspendu : on
+  // retire seulement quelque chose de son profil public.
+  fastify.delete("/api/me/avatar", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    const userId = request.user!.id;
+    const admin = await isAdmin(fastify, userId);
+
+    const cleanup = await emptyUserFolder(fastify.supabaseAdmin.storage.from(AVATAR_BUCKET), AVATAR_BUCKET, userId);
+    if (cleanup.failed > 0 || cleanup.unreadable) {
+      request.log.warn({ bucket: AVATAR_BUCKET, failed: cleanup.failed, unreadable: cleanup.unreadable }, "Photo de profil : effacement refusé par le stockage");
+      return reply.code(503).send({ error: "storage_failed", message: "La photo n'a pas pu être effacée : rien n'a été changé. Réessayez dans un instant." });
+    }
+
+    const { data: updated, error: updateError } = await fastify.supabaseAdmin
+      .from("profiles")
+      .update({ avatar_url: null, updated_at: new Date().toISOString() })
+      .eq("id", userId)
+      .select("*")
+      .single();
+    if (updateError || !updated) {
+      request.log.error({ updateError }, "Échec de la suppression de avatar_url");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
@@ -185,7 +258,14 @@ export default async function meRoutes(fastify: FastifyInstance) {
     }
 
     const userId = request.user!.id;
-    const { username, displayName, bio } = parsed.data;
+    const { username, displayName } = parsed.data;
+    // Bio (lot « profil et icône des réglages ») : lignes vides en trop et
+    // espaces retirés, puis 160 caractères et 3 lignes au plus. Le texte de
+    // la bio n'est jamais journalisé.
+    const bio = normalizeBio(parsed.data.bio ?? "");
+    const problem = bioProblem(bio);
+    if (problem === "too_long") return reply.code(400).send({ error: "bio_too_long", message: "La bio est trop longue (160 caractères maximum)." });
+    if (problem === "too_many_lines") return reply.code(400).send({ error: "bio_too_many_lines", message: "La bio ne peut pas dépasser 3 lignes." });
     // Filtre des mots interdits (chantier 3, règle 1.2 d'Apple) : noms et bio sont vus des autres.
     if (firstBannedText(username, displayName, bio) !== null) return reply.code(400).send(CONTENT_NOT_ALLOWED);
     // Lu avant toute écriture : une lecture impossible n'enregistre rien.
@@ -193,7 +273,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
 
     const { data, error } = await fastify.supabaseAdmin
       .from("profiles")
-      .update({ username, display_name: displayName, bio: bio ?? null, updated_at: new Date().toISOString() })
+      .update({ username, display_name: displayName, bio: bio === "" ? null : bio, updated_at: new Date().toISOString() })
       .eq("id", userId)
       .select("*")
       .single();

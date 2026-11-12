@@ -48,6 +48,9 @@ const VISUAL_MATCH = z.object({
   merchantUrl: z.string().min(1),
   priceValue: z.number().nonnegative().nullable(),
   currency: z.string().nullable(),
+  // Alertes prix et stock (lot 2) : le stock annoncé par Lens, gardé avec la
+  // réponse (une réponse du cache n'est jamais observée, mais elle est rejouée telle quelle).
+  inStock: z.boolean().optional(),
 });
 const COUNT = z.number().int().nonnegative();
 
@@ -87,7 +90,7 @@ export const QUERY_CACHE_PAYLOAD = z.union([
 /** Réponse de Google Shopping filtrée (avant les pages Lens, le tri et la
  * coupe à 20), pour une requête de l'IA seulement. */
 export const SHOPPING_CACHE_PAYLOAD = z.object({
-  matches: z.array(VISUAL_MATCH.extend({ priceHidden: z.boolean() })).max(60),
+  matches: z.array(VISUAL_MATCH.extend({ priceHidden: z.boolean(), hasProductId: z.literal(true).optional() })).max(60),
   received: COUNT,
   droppedDataThumbnails: COUNT,
 });
@@ -170,8 +173,10 @@ export interface ComplementPorts extends CachePorts {
 // ---- Clés du cache ----
 
 /** Version des clés : à changer dès que les filtres de Lens ou de Google Shopping changent.
- * v2 (lot « premier essai ») : Threads et pages sans vente écartés, prix sans devise retirés. */
-const CACHE_KEY_VERSION = "v2";
+ * v2 (lot « premier essai ») : Threads et pages sans vente écartés, prix sans devise retirés.
+ * v3 (lot alertes prix et stock) : le stock annoncé par Lens (inStock) et la
+ * présence d'un identifiant produit de Google Shopping sont gardés. */
+const CACHE_KEY_VERSION = "v3";
 
 /** Parties de la clé Lens : moteur, type, pays, langue et empreinte de l'image préparée. */
 export function lensCacheParts(locale: SearchLocale, imageHash: string): string[] {

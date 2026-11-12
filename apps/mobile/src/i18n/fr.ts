@@ -3,6 +3,7 @@
 // pour les règles complètes.
 
 import { MINIMUM_AGE } from "@monapp/shared-types";
+import { APP_FILE_SLUG, APP_NAME_DISPLAY as BRAND } from "../constants/brand";
 
 export const fr = {
   common: {
@@ -35,7 +36,7 @@ export const fr = {
   },
   welcome: {
     baseline: "L'identification discrète des pièces qui comptent.",
-    explain: "Ajoutez une vidéo ou une photo. Spotto retrouve la pièce et vous dit où l'acheter.",
+    explain: `Ajoutez une vidéo ou une photo. ${BRAND} retrouve la pièce et vous dit où l'acheter.`,
     cta: "Commencer",
     login: "Déjà un compte ? Se connecter",
     terms: "Conditions d'utilisation",
@@ -58,7 +59,7 @@ export const fr = {
     like: "Aimer",
     unlike: "Je n'aime plus",
     viewPieceAt: (piece: string, merchant: string) => `Voir ${piece} chez ${merchant}`,
-    shareMessage: (name: string, caption: string | null) => `${name} sur Spotto${caption ? ` : « ${caption} »` : ""}`,
+    shareMessage: (name: string, caption: string | null) => `${name} sur ${BRAND}${caption ? ` : « ${caption} »` : ""}`,
     // Lot 5 : publication « envie » (jamais un achat).
     wishLabel: "Envie",
     wishBy: (name: string) => `Envie de ${name}`,
@@ -104,12 +105,12 @@ export const fr = {
     latestVideoLabel: (duration: string) => `Aperçu de votre dernière vidéo, ${duration}`,
     latestVideoAsk: "Proposer automatiquement ma dernière vidéo ?",
     latestVideoAskBody:
-      "Spotto peut afficher ici la dernière vidéo de votre galerie, prête à être analysée. iOS vous demandera alors l'accès à vos photos. La vidéo reste sur votre iPhone : seules quelques images en partent, quand vous appuyez sur « Lancer ».",
+      `${BRAND} peut afficher ici la dernière vidéo de votre galerie, prête à être analysée. iOS vous demandera alors l'accès à vos photos. La vidéo reste sur votre iPhone : seules quelques images en partent, quand vous appuyez sur « Lancer ».`,
     latestVideoYes: "Oui, me la proposer",
     latestVideoNo: "Non merci",
     latestVideoAskNote: "Votre réponse ne change rien d'autre : « Ajouter une vidéo » reste disponible. Modifiable à tout moment dans Réglages.",
     latestVideoNoAccess:
-      "Sans l'accès complet à vos photos, Spotto ne peut pas repérer votre dernière vidéo : choisissez-la avec « Ajouter une vidéo ». L'accès se modifie dans les Réglages de l'iPhone.",
+      `Sans l'accès complet à vos photos, ${BRAND} ne peut pas repérer votre dernière vidéo : choisissez-la avec « Ajouter une vidéo ». L'accès se modifie dans les Réglages de l'iPhone.`,
     latestVideoEmpty: "Aucune vidéo dans votre galerie pour l'instant : la plus récente apparaîtra ici.",
     latestVideoChoiceFailed: "Votre réponse n'a pas pu être enregistrée. Réessayez.",
     linkQuestion: "Vous avez un lien TikTok, Instagram ou Pinterest ?",
@@ -127,10 +128,10 @@ export const fr = {
       pinterest: "Ce lien mène à un tableau ou à une page Pinterest, pas à une épingle. Ouvrez l'épingle, touchez « Partager » puis « Copier le lien ».",
     },
     unsupportedLink:
-      "Ce lien n'est pas pris en charge. Spotto reconnaît les liens TikTok, Instagram et Pinterest ; pour tout autre site, importez une capture d'écran.",
+      `Ce lien n'est pas pris en charge. ${BRAND} reconnaît les liens TikTok, Instagram et Pinterest ; pour tout autre site, importez une capture d'écran.`,
     prepareError: "La préparation a échoué. Vérifiez votre connexion, puis réessayez.",
     networkError: "Connexion impossible. Vérifiez votre connexion internet, puis réessayez.",
-    serverError: "Spotto ne répond pas pour le moment. Réessayez dans une minute.",
+    serverError: `${BRAND} ne répond pas pour le moment. Réessayez dans une minute.`,
   },
   // Lot 4 : choix d'une image dans une vidéo importée (la vidéo reste sur l'appareil).
   video: {
@@ -162,12 +163,12 @@ export const fr = {
   // Analyse automatique d'une vidéo (lot 4, temps 1 bis) : accord, replis.
   videoAuto: {
     chooseMyself: "Choisir l'image moi-même",
-    privacyNote: "La vidéo reste sur votre appareil. Avec votre accord, quelques images réduites sont analysées par une IA, sans être conservées par Spotto.",
+    privacyNote: `La vidéo reste sur votre appareil. Avec votre accord, quelques images réduites sont analysées par une IA, sans être conservées par ${BRAND}.`,
     checkFailed: "L'analyse automatique n'a pas pu être préparée. Vérifiez votre connexion, puis réessayez.",
     consentTitle: "Analyse automatique de la vidéo",
     consentBody: [
-      "Pour trouver la pièce à votre place, Spotto envoie quelques images réduites de cette vidéo (12 au plus) et votre description à un prestataire d'intelligence artificielle, Anthropic, situé aux États-Unis.",
-      "Elles servent uniquement à repérer la pièce. Spotto ne les conserve pas ; Anthropic ne peut pas s'en servir pour entraîner ses modèles et les supprime automatiquement, sous 30 jours au plus (exceptions décrites dans la politique de confidentialité). La vidéo entière ne quitte jamais votre appareil.",
+      `Pour trouver la pièce à votre place, ${BRAND} envoie quelques images réduites de cette vidéo (12 au plus) et votre description à un prestataire d'intelligence artificielle, Anthropic, situé aux États-Unis.`,
+      `Elles servent uniquement à repérer la pièce. ${BRAND} ne les conserve pas ; Anthropic ne peut pas s'en servir pour entraîner ses modèles et les supprime automatiquement, sous 30 jours au plus (exceptions décrites dans la politique de confidentialité). La vidéo entière ne quitte jamais votre appareil.`,
       "Vous pouvez retirer votre accord à tout moment dans Réglages.",
     ],
     consentPolicy: "Lire la politique de confidentialité",
@@ -205,12 +206,12 @@ export const fr = {
       "Vos mots servent seulement à trier les propositions : ils ne partent pas avec l'image vers la recherche. Ils ne sont envoyés à un moteur de recherche que si vous lancez vous-même une recherche avec vos mots.",
     // Montré tant que la pièce n'est pas entourée (rien de tracé, ou toute
     // l'image), avec ou sans mots (lots « premier essai » et « entourer la pièce »).
-    frameHint: "Entourez la pièce seule, sans visage ni texte autour : Spotto la retrouvera plus facilement.",
+    frameHint: `Entourez la pièce seule, sans visage ni texte autour : ${BRAND} la retrouvera plus facilement.`,
     videoPreview: (duration: string) => `Aperçu de votre vidéo, ${duration}`,
     photoPreview: "Votre photo",
     // Titre de la vidéo sans l'analyse automatique (texte du fondateur, 2026-10-25).
     yourVideo: "Votre vidéo",
-    waitingVideo: "Spotto repère la pièce…",
+    waitingVideo: `${BRAND} repère la pièce…`,
     usualVideo: "Cela prend en général 15 à 30 secondes.",
   },
   // Site (lot 4 ter) : un onglet resté ouvert propose la version en ligne.
@@ -222,7 +223,7 @@ export const fr = {
   linkNotice: {
     title: "Une vidéo ne se lit pas depuis un lien",
     body: (how: string) =>
-      `Spotto ne peut pas lire la vidéo à partir de son lien. Enregistrez votre écran pendant qu'elle passe (${how}), puis ajoutez cet enregistrement.`,
+      `${BRAND} ne peut pas lire la vidéo à partir de son lien. Enregistrez votre écran pendant qu'elle passe (${how}), puis ajoutez cet enregistrement.`,
     how: {
       ios: "sur iPhone, depuis le Centre de contrôle",
       android: "sur Android, depuis les Réglages rapides",
@@ -240,8 +241,8 @@ export const fr = {
     waiting: "Votre partage vous attend dans Spotter.",
     // VoiceOver : onglet Spotter marqué de cette pastille (à valider).
     tabWaiting: (label: string) => `${label}, un partage vous attend`,
-    several: "Spotto ouvre un seul élément à la fois : partagez une seule photo ou une seule vidéo.",
-    unsupported: "Spotto ne peut pas ouvrir ce contenu. Partagez un lien TikTok, Instagram ou Pinterest, une capture d'écran, une photo ou une vidéo.",
+    several: `${BRAND} ouvre un seul élément à la fois : partagez une seule photo ou une seule vidéo.`,
+    unsupported: `${BRAND} ne peut pas ouvrir ce contenu. Partagez un lien TikTok, Instagram ou Pinterest, une capture d'écran, une photo ou une vidéo.`,
     unreadable: "Ce que vous avez partagé n'a pas pu être ouvert. Réessayez, ou ajoutez la photo ou la vidéo ci-dessous.",
     imageUnreadable: (button: string) => `Cette image n'a pas pu être ouverte. Réessayez, ou ajoutez-la avec « ${button} ».`,
   },
@@ -253,7 +254,7 @@ export const fr = {
   firstTry: {
     linkHelp: {
       title: "Le plus simple : une capture d'écran",
-      lead: "Spotto ne peut pas lire une vidéo à partir de son lien. Montrez-lui plutôt la pièce :",
+      lead: `${BRAND} ne peut pas lire une vidéo à partir de son lien. Montrez-lui plutôt la pièce :`,
       // Dernière étape, après les trois premières de preview.captureSteps.
       lastStep: (button: string) => `Revenez ici et touchez « ${button} ».`,
       addScreenshot: "Ajouter une capture d'écran",
@@ -264,7 +265,7 @@ export const fr = {
       steps: (addPhoto: string) => [
         "Mettez la vidéo en pause quand la pièce est bien visible, et faites une capture d'écran.",
         `Ajoutez-la avec « ${addPhoto} », puis entourez la pièce.`,
-        "Spotto vous montre où l'acheter, en 10 à 20 secondes.",
+        `${BRAND} vous montre où l'acheter, en 10 à 20 secondes.`,
       ],
     },
     kept: "Ajoutée à vos Envies",
@@ -297,13 +298,13 @@ export const fr = {
   player: {
     linkQuestion: "Vous avez un lien TikTok ou Instagram ?",
     linkLabel: "Lien TikTok ou Instagram",
-    linkHint: "La vidéo s'ouvre ici, dans Spotto : vous la mettrez en pause sur la pièce.",
+    linkHint: `La vidéo s'ouvre ici, dans ${BRAND} : vous la mettrez en pause sur la pièce.`,
     open: "Ouvrir la vidéo",
     opening: "Ouverture de la vidéo…",
     instruction: "Mettez la vidéo en pause quand la pièce est bien visible.",
     frameTitle: (platform: string) => `Vidéo ${platform}`,
     spot: "Spotter ce moment",
-    taking: "Spotto prend l'image…",
+    taking: `${BRAND} prend l'image…`,
     recording: "Enregistrement de l'écran…",
     privacy: (platform: string) => `Vidéo lue par ${platform}, sans téléchargement. Seule l'image de ce moment est envoyée.`,
     tapToPlay: "Touchez la vidéo pour la lancer.",
@@ -314,7 +315,7 @@ export const fr = {
       body: (platform: string) => `Cette vidéo est lue par ${platform}, qui peut utiliser ses propres traceurs.`,
       play: "Lire la vidéo ici",
     },
-    unavailableTitle: "Cette vidéo ne s'ouvre pas dans Spotto",
+    unavailableTitle: `Cette vidéo ne s'ouvre pas dans ${BRAND}`,
     unavailable: {
       notPublic: "Elle est peut-être privée ou supprimée, ou son auteur ne permet pas de l'afficher ailleurs.",
       notAVideo: (platform: string) => `Ce lien ${platform} ne mène pas à une vidéo.`,
@@ -325,28 +326,28 @@ export const fr = {
     },
     screenConsent: {
       title: "Encore une étape",
-      body: "Votre iPhone va vous demander d'autoriser l'enregistrement de l'écran. Spotto n'en garde qu'une image, celle de ce moment : rien d'autre n'est enregistré ni envoyé.",
+      body: `Votre iPhone va vous demander d'autoriser l'enregistrement de l'écran. ${BRAND} n'en garde qu'une image, celle de ce moment : rien d'autre n'est enregistré ni envoyé.`,
       continue: "Continuer",
       myself: "Faire une capture moi-même",
     },
     captureFailed: {
-      title: "Spotto n'a pas pu prendre l'image",
+      title: `${BRAND} n'a pas pu prendre l'image`,
       body: (shortcut: string) => `Faites une capture d'écran maintenant (${shortcut}) : la vidéo reste en pause ici. Puis ajoutez-la.`,
-      declined: (shortcut: string) => `Sans votre accord, Spotto ne peut pas prendre l'image. Faites une capture d'écran maintenant (${shortcut}), puis ajoutez-la.`,
+      declined: (shortcut: string) => `Sans votre accord, ${BRAND} ne peut pas prendre l'image. Faites une capture d'écran maintenant (${shortcut}), puis ajoutez-la.`,
       phoneCall: (shortcut: string) => `Impossible pendant un appel. Faites une capture d'écran (${shortcut}), puis ajoutez-la.`,
     },
     blackImage: "L'image prise était noire ou vide ? Réessayer autrement",
     howItWorksSteps: (spot: string) => [
-      "Partagez la vidéo TikTok ou Instagram vers Spotto, ou collez son lien.",
+      `Partagez la vidéo TikTok ou Instagram vers ${BRAND}, ou collez son lien.`,
       `Mettez-la en pause sur la pièce, touchez « ${spot} », puis entourez la pièce.`,
-      "Spotto vous montre où l'acheter, en 10 à 20 secondes.",
+      `${BRAND} vous montre où l'acheter, en 10 à 20 secondes.`,
     ],
     linkNotice: {
-      title: "Cette vidéo peut s'ouvrir dans Spotto",
+      title: `Cette vidéo peut s'ouvrir dans ${BRAND}`,
       body: "Ouvrez-la ici même : vous la mettrez en pause sur la pièce.",
     },
     settings: {
-      title: "Vidéos lues dans Spotto",
+      title: `Vidéos lues dans ${BRAND}`,
       on: "Vous avez accepté que les vidéos TikTok ou Instagram soient lues ici, dans leur lecteur officiel.",
       withdraw: "Retirer mon accord",
       withdrawn: "Accord retiré : la question vous sera reposée à la prochaine vidéo.",
@@ -359,7 +360,7 @@ export const fr = {
     // Espace insécable : le « ? » ne passe jamais seul à la ligne.
     notOnImageTitle: "La pièce n'apparaît pas sur cette image ?",
     notOnImageWhy: (platform: string) =>
-      `${platform} ne donne accès qu'à cette image de couverture, pas au reste de la vidéo. Montrez à Spotto le bon moment avec une capture d'écran :`,
+      `${platform} ne donne accès qu'à cette image de couverture, pas au reste de la vidéo. Montrez à ${BRAND} le bon moment avec une capture d'écran :`,
     captureSteps: (platform: string, shortcut: string) => [
       `Ouvrez la vidéo dans ${platform}.`,
       "Mettez-la en pause quand la pièce est bien visible.",
@@ -376,7 +377,7 @@ export const fr = {
     target: "Cibler la pièce",
     noPreviewTitle: "Importez une capture de la pièce",
     noPreviewBody: (platform: string) =>
-      `Spotto ne peut pas récupérer l'image de ce lien ${platform}. Faites une capture d'écran au moment où la pièce est bien visible, puis importez-la.`,
+      `${BRAND} ne peut pas récupérer l'image de ce lien ${platform}. Faites une capture d'écran au moment où la pièce est bien visible, puis importez-la.`,
     // Raisons précises (voir PreviewIssue) : chaque message dit quoi faire.
     issue: {
       unavailable: {
@@ -395,7 +396,7 @@ export const fr = {
       },
       noAccess: {
         title: "Importez une capture de la pièce",
-        body: (platform: string) => `${platform} ne permet pas à Spotto de récupérer l'image de ce lien. Montrez-lui la pièce avec une capture d'écran :`,
+        body: (platform: string) => `${platform} ne permet pas à ${BRAND} de récupérer l'image de ce lien. Montrez-lui la pièce avec une capture d'écran :`,
       },
     },
     content: { tiktok: "vidéo", instagram: "publication", pinterest: "épingle" },
@@ -421,7 +422,7 @@ export const fr = {
     launch: "Lancer l'identification",
   },
   analysis: {
-    title: "Spotto parcourt les boutiques…",
+    title: `${BRAND} parcourt les boutiques…`,
     usual: "Cela prend en général 10 à 20 secondes.",
     slow: "C'est plus long que d'habitude : le service redémarre peut-être. Merci de patienter.",
     cancel: "Annuler",
@@ -433,7 +434,7 @@ export const fr = {
     notStartedText: "Elle a été interrompue avant l'analyse de l'image et n'a pas été comptée. Relancez-la quand vous voulez.",
     unreachableTitle: "Votre recherche continue peut-être",
     unreachableText:
-      "Spotto ne répond pas pour l'instant. Si votre recherche est partie, elle continue de notre côté : vérifiez à nouveau dans un instant pour voir son résultat, sans rien relancer.",
+      `${BRAND} ne répond pas pour l'instant. Si votre recherche est partie, elle continue de notre côté : vérifiez à nouveau dans un instant pour voir son résultat, sans rien relancer.`,
     runningTitle: "Votre recherche continue…",
     stillRunningText: "Elle prend plus de temps que d'habitude. Vérifiez à nouveau dans un instant pour voir son résultat, sans rien relancer.",
     runningTip: "Si elle aboutit, son résultat apparaîtra dans « Récemment spottées », sur l'accueil de Spotter.",
@@ -469,7 +470,7 @@ export const fr = {
     // Aligné sur les conditions d'utilisation (projet, bloc 5 du Lot Q) —
     // à revoir le jour où un programme d'affiliation sera actif.
     affiliateExplanation:
-      "Si vous achetez en passant par ce lien, Spotto pourra à l'avenir percevoir une commission du marchand, sans surcoût pour vous. Aucun programme d'affiliation n'est actif à ce jour.",
+      `Si vous achetez en passant par ce lien, ${BRAND} pourra à l'avenir percevoir une commission du marchand, sans surcoût pour vous. Aucun programme d'affiliation n'est actif à ce jour.`,
     affiliateHint: "Affiche ce que signifie « lien affilié ».",
     keep: "Garder",
     kept: "Gardée",
@@ -481,7 +482,7 @@ export const fr = {
     categoryTitle: "Dans quelle catégorie ?",
     share: "Partager",
     // La mention seulement pour un vrai lien affilié (lot garde-fous, lib/affiliate-link.ts).
-    shareMessage: (name: string, url: string, affiliate: boolean) => `${name}\n${url}${affiliate ? " (lien affilié)" : ""}\n\nRepérée avec Spotto.`,
+    shareMessage: (name: string, url: string, affiliate: boolean) => `${name}\n${url}${affiliate ? " (lien affilié)" : ""}\n\nRepérée avec ${BRAND}.`,
     linkCopied: "Message copié, avec le lien",
     merchantLinkBlocked: "Votre navigateur a bloqué l'ouverture. Touchez ici pour continuer vers le marchand.",
     loading: "Chargement du résultat",
@@ -492,7 +493,7 @@ export const fr = {
     retry: "Réessayer",
     backToSpotter: "Retour à Spotter",
     notRight: "Ce n'est pas la bonne pièce ?",
-    correctionsLead: "Montrez la pièce autrement à Spotto :",
+    correctionsLead: `Montrez la pièce autrement à ${BRAND} :`,
     // Prix d'abord : avant les corrections, qui relancent une recherche, voir
     // gratuitement les propositions repliées sans prix (relecture ORD-5, à valider).
     notRightWithoutPriceLead: "Elle est peut-être parmi les propositions sans prix :",
@@ -588,7 +589,7 @@ export const fr = {
     textSearchButton: "Chercher",
     // Option A du document pour l'avocat (2026-11-05, point 4.2), comme la politique « projet-2026-11-05 ».
     textSearchNote:
-      "Vos mots seront envoyés à Google Shopping par notre prestataire SerpApi, sans votre nom ni votre e-mail. Spotto ne les garde pas ; il garde les pièces trouvées avec votre recherche.",
+      `Vos mots seront envoyés à Google Shopping par notre prestataire SerpApi, sans votre nom ni votre e-mail. ${BRAND} ne les garde pas ; il garde les pièces trouvées avec votre recherche.`,
     textSearchRunning: "Recherche en cours…",
     textSearchAlreadyUsed: "La recherche avec vos mots a déjà été lancée pour cette photo.",
     textSearchEmpty: "Aucune proposition pour vos mots.",
@@ -621,10 +622,10 @@ export const fr = {
     viewPost: "Voir la publication",
     shareAgainHint:
       "Pour changer qui la voit, modifiez la visibilité depuis la publication. Pour obtenir une nouvelle image, supprimez la publication puis republiez l'envie.",
-    sendToSomeone: "Envoyer à quelqu'un sur Spotto",
-    shareOutside: "Partager hors de Spotto",
+    sendToSomeone: `Envoyer à quelqu'un sur ${BRAND}`,
+    shareOutside: `Partager hors de ${BRAND}`,
     linkCopied: "Lien copié",
-    shareMessage: (title: string, merchant: string | null) => `Une pièce repérée sur Spotto : ${title}${merchant ? ` chez ${merchant}` : ""}`,
+    shareMessage: (title: string, merchant: string | null) => `Une pièce repérée sur ${BRAND} : ${title}${merchant ? ` chez ${merchant}` : ""}`,
     affiliateMention: "(lien affilié)",
   },
   // Lot « Retrouver ses pièces » : toutes les recherches récentes (« Tout
@@ -701,6 +702,8 @@ export const fr = {
     loadOlder: "Afficher les messages précédents",
     emptyThread: "Aucun message pour l'instant.",
     messageOptions: "Options pour ce message",
+    // Lu par VoiceOver après le nom du bouton « ••• » d'un message reçu.
+    messageOptionsHint: "Signaler ce message ou bloquer cette personne",
     reportMessage: "Signaler ce message",
     more: "Signaler ou bloquer",
     wishLabel: (title: string) => `Envie : ${title}`,
@@ -734,7 +737,7 @@ export const fr = {
   push: {
     offerTitle: "Être prévenu de vos nouveaux messages ?",
     offerBody:
-      "Spotto peut vous envoyer une notification quand quelqu'un vous écrit ou vous invite à discuter. Elle dit seulement qui vous écrit, jamais ce qu'il vous écrit.",
+      `${BRAND} peut vous envoyer une notification quand quelqu'un vous écrit ou vous invite à discuter. Elle dit seulement qui vous écrit, jamais ce qu'il vous écrit.`,
     offerSettingsHint: "Vous pourrez les arrêter à tout moment dans les Réglages.",
     offerAccept: "Activer les notifications",
     offerLater: "Plus tard",
@@ -742,16 +745,70 @@ export const fr = {
     enabling: "Activation…",
     enabled: "Notifications activées",
     deniedHint:
-      "Les notifications de Spotto sont coupées dans les Réglages de l'iPhone. Pour les recevoir, ouvrez Réglages, puis Spotto, puis Notifications.",
+      `Les notifications de ${BRAND} sont coupées dans les Réglages de l'iPhone. Pour les recevoir, ouvrez Réglages, puis ${BRAND}, puis Notifications.`,
     openSettings: "Ouvrir les Réglages de l'iPhone",
-    openSettingsFailed: "Les Réglages de l'iPhone n'ont pas pu s'ouvrir : passez par l'app Réglages, puis Spotto.",
+    openSettingsFailed: `Les Réglages de l'iPhone n'ont pas pu s'ouvrir : passez par l'app Réglages, puis ${BRAND}.`,
     failed: "Les notifications n'ont pas pu être activées. Vérifiez votre connexion, puis réessayez.",
     settingTitle: "Notifications de messages",
     settingSwitchLabel: "Recevoir une notification pour chaque nouveau message",
     settingOn: "Activées : une notification vous prévient d'un nouveau message ou d'une invitation, avec le nom de la personne, jamais le contenu.",
-    settingOff: "Désactivées : vous voyez vos nouveaux messages en ouvrant Spotto.",
+    settingOff: `Désactivées : vous voyez vos nouveaux messages en ouvrant ${BRAND}.`,
     settingLoading: "Chargement de votre choix…",
     settingFailed: "Votre choix n'a pas pu être enregistré. Réessayez.",
+  },
+  // Lot 2 : alertes prix et stock (cloche des envies, Réglages, « Plus
+  // disponible »). « Épuisé » est construit mais caché (SOLD_OUT_ALERTS_VISIBLE).
+  wishAlerts: {
+    kinds: { price_drop: "Baisse de prix", restock: "Retour en stock", sold_out: "Épuisé" },
+    kindsInline: { price_drop: "baisse de prix", restock: "retour en stock", sold_out: "épuisé" },
+    kindHints: {
+      price_drop: "Quand son prix baisse dans cette boutique.",
+      restock: "Quand elle revient en stock dans cette boutique.",
+      sold_out: "Quand elle est épuisée dans cette boutique.",
+    },
+    lastJoin: (first: string, last: string) => `${first} et ${last}`,
+    bellOff: "Créer une alerte",
+    bellOn: (kinds: string) => `Alerte : ${kinds}`,
+    bellOffLabel: (title: string) => `Créer une alerte pour ${title}`,
+    bellOnLabel: (title: string, kinds: string) => `Alerte activée pour ${title} : ${kinds}. Toucher pour la modifier`,
+    sheetTitle: "Alerte pour cette pièce",
+    sheetIntro:
+      `${BRAND} vous prévient tout de suite quand une recherche ou un achat fait dans ${BRAND} montre cette pièce dans la même boutique, moins chère ou de nouveau en stock. Personne ne sait qui l'a cherchée, ni qui la suit.`,
+    switchTurnsOn: "Cela active aussi « Alertes prix et stock » dans les Réglages.",
+    pushSoon: "Les alertes sont enregistrées ; les notifications seront bientôt disponibles.",
+    iphoneOnly: `Les notifications des alertes arrivent sur l'app ${BRAND} pour iPhone.`,
+    save: "Enregistrer",
+    saving: "Enregistrement…",
+    cancel: "Annuler",
+    saved: "Alerte enregistrée",
+    removed: "Alerte retirée",
+    saveError: "Votre choix n'a pas pu être enregistré. Vérifiez votre connexion, puis réessayez.",
+    notTrackable: "Cette pièce ne peut pas être suivie : sa boutique ou son produit n'est pas reconnu.",
+    bought: "Cette pièce est dans votre Vault : aucune alerte ne partira pour elle.",
+    tooManyChanges: "Vous avez modifié beaucoup d'alertes : réessayez dans un moment.",
+    pushOfferTitle: "Être prévenu sur cet iPhone ?",
+    pushOfferBody:
+      `${BRAND} peut vous envoyer une notification quand une envie que vous suivez baisse de prix ou revient en stock. Elle dit la pièce, la boutique et le prix, jamais qui l'a cherchée.`,
+    settingTitle: "Alertes prix et stock",
+    settingSwitchLabel: "Recevoir les alertes prix et stock de vos envies",
+    settingOn: `Activées : ${BRAND} vous prévient pour les envies dont vous avez allumé la cloche.`,
+    settingOff: "Désactivées : aucune alerte ne vous est envoyée. Pour suivre une envie, touchez sa cloche.",
+    settingFailed: "Votre choix n'a pas pu être enregistré. Réessayez.",
+    devicePushOff: "Les notifications des alertes sont coupées sur cet iPhone.",
+    devicePushTurnOn: "Recevoir les notifications sur cet iPhone",
+    reportLink: "Plus disponible ?",
+    reportLinkLabel: (title: string) => `Signaler que ${title} n'est plus disponible`,
+    reportTitle: "Cette pièce n'est plus disponible ?",
+    reportBody:
+      `Vous indiquez qu'elle n'est plus en vente dans cette boutique. Cela aide ${BRAND} à prévenir les membres qui la suivent quand elle reviendra. Personne ne saura que c'est vous.`,
+    reportConfirm: "Oui, plus disponible",
+    reportSending: "Envoi…",
+    reportCancel: "Annuler",
+    reportDone: "Merci, c'est noté",
+    reportLimit: "Vous avez signalé beaucoup de pièces aujourd'hui. Réessayez demain.",
+    reportNotTrackable: "Cette pièce ne peut pas être signalée : sa boutique ou son produit n'est pas reconnu.",
+    reportNotFound: "Cette pièce est introuvable.",
+    reportError: "Le signalement n'a pas pu être envoyé. Vérifiez votre connexion, puis réessayez.",
   },
   // Lot collections : collections d'envies, privées ou montrées aux amis
   // (puces de l'écran Envies, « Ajouter à une collection », profil d'un ami).
@@ -1046,7 +1103,8 @@ export const fr = {
     deleteConfirm: "Cette action est définitive. Toutes vos données seront supprimées sans possibilité de récupération.",
     terms: "Conditions d'utilisation",
     privacyPolicy: "Politique de confidentialité",
-    howWeEarn: "Comment Spotto se rémunère",
+    // Titre de l'explication dépliée sous « Lien affilié » (components/affiliate-mention.tsx).
+    howWeEarn: `Comment ${BRAND} se rémunère`,
     signOut: "Se déconnecter",
     documents: "Documents",
     analyticsTitle: "Statistiques d'usage",
@@ -1058,20 +1116,20 @@ export const fr = {
     videoAiTitle: "Analyse automatique des vidéos",
     videoAiSwitchLabel: "Analyse automatique des vidéos par une IA",
     videoAiOn:
-      "Activée : quand vous la lancez, quelques images réduites de la vidéo et votre description sont envoyées à Anthropic (États-Unis) pour trouver la pièce, sans être conservées par Spotto.",
+      `Activée : quand vous la lancez, quelques images réduites de la vidéo et votre description sont envoyées à Anthropic (États-Unis) pour trouver la pièce, sans être conservées par ${BRAND}.`,
     videoAiOff: "Désactivée : aucune image de vos vidéos n'est envoyée ; vous choisissez l'image vous-même.",
     videoAiFailed: "Votre choix n'a pas pu être enregistré. Réessayez.",
     latestVideoTitle: "Proposer ma dernière vidéo",
     latestVideoSwitchLabel: "Proposer automatiquement ma dernière vidéo dans Spotter",
     latestVideoOn: "Activé : Spotter vous propose la dernière vidéo de votre galerie, prête à être analysée.",
     latestVideoOnNoAccess:
-      "Activé, mais Spotto n'a pas l'accès complet à vos photos : la dernière vidéo ne peut pas être repérée. Vous la choisissez avec « Ajouter une vidéo ».",
-    latestVideoOff: "Désactivé : vous choisissez la vidéo avec « Ajouter une vidéo », sans que Spotto lise votre galerie.",
-    latestVideoAccessLeft: "Spotto a encore accès à vos photos, sans s'en servir : vous pouvez le lui retirer dans les Réglages de l'iPhone.",
+      `Activé, mais ${BRAND} n'a pas l'accès complet à vos photos : la dernière vidéo ne peut pas être repérée. Vous la choisissez avec « Ajouter une vidéo ».`,
+    latestVideoOff: `Désactivé : vous choisissez la vidéo avec « Ajouter une vidéo », sans que ${BRAND} lise votre galerie.`,
+    latestVideoAccessLeft: `${BRAND} a encore accès à vos photos, sans s'en servir : vous pouvez le lui retirer dans les Réglages de l'iPhone.`,
     latestVideoOpenSettings: "Ouvrir les Réglages de l'iPhone",
     latestVideoFailed: "Votre choix n'a pas pu être enregistré. Réessayez.",
     latestVideoUnavailable: "Réglage indisponible pour le moment.",
-    latestVideoOpenFailed: "Les Réglages de l'iPhone n'ont pas pu s'ouvrir : passez par l'app Réglages, puis Spotto.",
+    latestVideoOpenFailed: `Les Réglages de l'iPhone n'ont pas pu s'ouvrir : passez par l'app Réglages, puis ${BRAND}.`,
     consentLoading: "Statut de votre acceptation en cours de chargement…",
     consentFailed: "Statut de votre acceptation indisponible pour le moment.",
     acceptedOn: (date: string) => `Version en vigueur acceptée le ${date}.`,
@@ -1101,7 +1159,7 @@ export const fr = {
     exportReadableHint: "S'ouvre dans votre navigateur, tout y est expliqué simplement. La version technique est incluse à la fin.",
     exportJson: "Format technique (JSON)",
     exportJsonHint: "Pour transférer vos données vers un autre service.",
-    exportFileBase: "spotto-mes-donnees",
+    exportFileBase: `${APP_FILE_SLUG}-mes-donnees`,
     exportDone: "Fichier téléchargé : ouvrez-le depuis vos téléchargements.",
     dangerZone: "Zone sensible",
     deleting: "Suppression…",
@@ -1130,7 +1188,7 @@ export const fr = {
     faq: [
       {
         q: "Comment retrouver une pièce ?",
-        a: "Dans le Spotter, importez une photo, une capture d'écran ou une vidéo, puis entourez la pièce si besoin. Spotto cherche la même pièce, ou les plus proches, et vous indique où l'acheter quand il trouve une boutique et un prix.",
+        a: `Dans le Spotter, importez une photo, une capture d'écran ou une vidéo, puis entourez la pièce si besoin. ${BRAND} cherche la même pièce, ou les plus proches, et vous indique où l'acheter quand il trouve une boutique et un prix.`,
       },
       {
         q: "Combien de recherches puis-je lancer ?",
@@ -1146,7 +1204,7 @@ export const fr = {
       },
       {
         q: "Signaler un contenu, bloquer un compte",
-        a: "Ouvrez le menu d'une publication, d'un commentaire, d'un profil ou d'une pièce reçue, puis choisissez « Signaler » ou « Bloquer ce compte ». Ce que vous signalez disparaît aussitôt de votre fil. Chaque signalement est examiné par l'équipe de Spotto ; un contenu signalé par plusieurs personnes est masqué en attendant cet examen. Vos comptes bloqués se gèrent dans les Réglages.",
+        a: `Ouvrez le menu d'une publication, d'un commentaire, d'un profil ou d'une pièce reçue, puis choisissez « Signaler » ou « Bloquer ce compte ». Ce que vous signalez disparaît aussitôt de votre fil. Chaque signalement est examiné par l'équipe de ${BRAND} ; un contenu signalé par plusieurs personnes est masqué en attendant cet examen. Vos comptes bloqués se gèrent dans les Réglages.`,
       },
       {
         q: "Quels contenus sont interdits ?",
@@ -1177,7 +1235,7 @@ export const fr = {
     statusFailed: "Impossible de vérifier votre acceptation de ce document.",
     retry: "Réessayer",
     analyticsPrompt:
-      "Aidez-nous à améliorer Spotto : acceptez-vous de partager des statistiques d'usage ? Jamais vos contenus, votre nom ni votre e-mail. Modifiable à tout moment dans les Réglages.",
+      `Aidez-nous à améliorer ${BRAND} : acceptez-vous de partager des statistiques d'usage ? Jamais vos contenus, votre nom ni votre e-mail. Modifiable à tout moment dans les Réglages.`,
     analyticsPromptYes: "Oui, volontiers",
     analyticsPromptNo: "Non merci",
     // Information de la version « projet-2026-11-05 » (POLICY_UPDATE_NOTICE, shared-types).
@@ -1202,6 +1260,40 @@ export const fr = {
     usernameTaken: "Ce nom d'utilisateur est déjà pris.",
     displayNameError: "Le nom affiché est obligatoire.",
     saveError: "Une erreur est survenue, réessayez.",
+    // Lot « profil et icône des réglages ».
+    bioHint: (max: number, lines: number) => `${max} caractères et ${lines} lignes au plus.`,
+    bioCounterLabel: (count: number, max: number) => `${count} caractères sur ${max}`,
+    bioTooLong: (max: number) => `Votre bio dépasse ${max} caractères : raccourcissez-la pour enregistrer.`,
+    bioTooManyLines: (lines: number) => `Votre bio dépasse ${lines} lignes : raccourcissez-la pour enregistrer.`,
+    changePhoto: "Changer la photo",
+    addPhoto: "Ajouter une photo",
+  },
+  // Photo de profil : choix, recadrage, suppression (lot « profil et icône des réglages »).
+  avatarPhoto: {
+    menuTitle: "Photo de profil",
+    chooseFromLibrary: "Choisir dans la galerie",
+    chooseFile: "Choisir un fichier",
+    takePhoto: "Prendre une photo",
+    remove: "Supprimer ma photo",
+    removeConfirm: `Votre photo de profil sera effacée de ${BRAND}. Vos initiales s'afficheront à la place.`,
+    cancel: "Annuler",
+    cropTitle: "Cadrez votre photo",
+    cropHint: "Faites glisser la photo pour la placer dans le cercle. Pincez pour zoomer.",
+    cropHintWeb: "Faites glisser la photo pour la placer dans le cercle.",
+    cropArea: "Zone de recadrage de la photo",
+    zoomIn: "Zoomer",
+    zoomOut: "Dézoomer",
+    preview: "Aperçu",
+    validate: "Valider",
+    sending: "Envoi…",
+    deleting: "Suppression…",
+    removed: "Photo de profil supprimée",
+    sendError: "L'envoi de la photo a échoué. Réessayez.",
+    removeError: "La photo n'a pas pu être supprimée. Réessayez.",
+    refusedFormat: "Format non accepté : choisissez une photo JPEG, PNG ou HEIC.",
+    refusedHeicBrowser: `Ce navigateur ne sait pas ouvrir les photos HEIC. Choisissez une photo JPEG ou PNG, ou utilisez Safari ou l'app ${BRAND} sur iPhone.`,
+    refusedTooLarge: (max: number) => `Cette photo est trop lourde (${max} Mo maximum). Choisissez-en une autre.`,
+    refusedUnreadable: "Cette photo n'a pas pu être ouverte. Choisissez-en une autre.",
   },
   notifications: {
     title: "Activité",
@@ -1222,7 +1314,8 @@ export const fr = {
     // Lot messages : un message envoyé.
     moderationHiddenMessage: "Un message que vous avez envoyé a été masqué par la modération.",
     moderationRestoredMessage: "Un message que vous avez envoyé a été rétabli.",
-    moderationSuspended: "Votre compte a été suspendu : vous ne pouvez plus publier, commenter, suivre, réagir ni modifier votre profil.",
+    moderationSuspended:
+      "Votre compte a été suspendu : vous ne pouvez plus publier, commenter, suivre, réagir ni modifier votre profil. Votre bio et votre photo de profil ne sont plus montrées aux autres membres.",
     moderationRestoredPost: "Votre publication a été rétablie.",
     moderationRestoredComment: "Votre commentaire a été rétabli.",
     moderationRestoredPiece: "Une pièce que vous avez envoyée a été rétablie.",
@@ -1233,6 +1326,9 @@ export const fr = {
     moderationHiddenCollection: "Une de vos collections a été masquée par la modération : vos amis ne la voient plus.",
     moderationRestoredCollection: "Une de vos collections n'est plus masquée par la modération.",
     moderationImageRemovedCollection: "L'image d'une envie de votre collection a été retirée par la modération. Vos amis voient l'envie sans son image.",
+    // Lot « conformité Apple » (migration 0037) : la bio ou la photo du profil.
+    moderationBioRemoved: "Votre bio a été retirée par la modération.",
+    moderationAvatarRemoved: "Votre photo de profil a été retirée par la modération : son fichier est effacé.",
     moderationOther: "Une décision de la modération vous concerne.",
     moderationReason: (reason: string) => `Motif : ${reason}`,
     moderationNote: (note: string) => `Précision : ${note}`,
@@ -1328,7 +1424,7 @@ export const fr = {
     noteHint: "Elle lui sera montrée avec le motif. Ne mentionnez jamais l'auteur d'un signalement.",
     confirmHide: "Confirmer le masquage",
     suspendWarning:
-      "Suspendre ce compte ? Il ne pourra plus publier, commenter, suivre, réagir ni modifier son profil, et n'apparaîtra plus en recherche. Vous pourrez lever la suspension.",
+      "Suspendre ce compte ? Il ne pourra plus publier, commenter, suivre, réagir ni modifier son profil, et n'apparaîtra plus en recherche. Sa bio et sa photo de profil ne seront plus montrées aux autres membres. Vous pourrez lever la suspension.",
     confirmSuspend: "Confirmer la suspension",
     saved: "Décision enregistrée.",
     undone: "Décision annulée.",
@@ -1340,6 +1436,15 @@ export const fr = {
     confirmRemoveImage: "Confirmer le retrait",
     imageRemoved: "Image retirée",
     imageRemovedSaved: "Image retirée : son fichier est effacé.",
+    // Lot « conformité Apple » (migration 0037) : retirer la bio ou la photo d'un profil signalé.
+    removeBio: "Retirer la bio",
+    removeAvatar: "Retirer la photo de profil",
+    removeBioWarning:
+      "Retirer la bio de ce profil ? Elle sera effacée : cette décision ne s'annule pas. La personne sera prévenue, avec le motif choisi. Elle pourra en écrire une autre, sauf si son compte est suspendu.",
+    removeAvatarWarning:
+      "Retirer la photo de ce profil ? Son fichier sera effacé définitivement : cette décision ne s'annule pas. La personne sera prévenue, avec le motif choisi. Elle pourra en choisir une autre, sauf si son compte est suspendu.",
+    bioRemovedSaved: "Bio retirée.",
+    avatarRemovedSaved: "Photo de profil retirée : son fichier est effacé.",
     history: "Décisions",
     actions: {
       dismiss: "Classé sans suite",
@@ -1348,6 +1453,8 @@ export const fr = {
       restore: "Rétabli",
       unsuspend: "Suspension levée",
       remove_image: "Image retirée",
+      remove_bio: "Bio retirée",
+      remove_avatar: "Photo de profil retirée",
     },
     by: (username: string) => `par @${username}`,
   },
@@ -1375,12 +1482,12 @@ export const fr = {
     dismissAndRestore: "Classer sans suite et rétablir",
   },
   connection: {
-    connectingTitle: "Connexion à Spotto…",
+    connectingTitle: `Connexion à ${BRAND}…`,
     // Après quelques secondes d'attente (demande du fondateur, 2026-10-16) :
     // le serveur gratuit se met en veille ; réveils mesurés de 37 à 60 s.
-    wakingTitle: "Spotto se réveille…",
+    wakingTitle: `${BRAND} se réveille…`,
     wakingBody: "Après un moment sans visite, le serveur se met en veille. Il lui faut jusqu'à une minute pour redémarrer.",
-    failedTitle: "Spotto est momentanément injoignable.",
+    failedTitle: `${BRAND} est momentanément injoignable.`,
     failedBody: "Vérifiez votre connexion internet, puis réessayez. Vos données sont intactes.",
     retry: "Réessayer",
     signOut: "Se déconnecter",
@@ -1445,8 +1552,8 @@ export const fr = {
       consent: "J'accepte les conditions d'utilisation et la politique de confidentialité.",
       ageDeclaration: `Je certifie avoir au moins ${MINIMUM_AGE} ans.`,
       consentRequired: "Merci d'accepter les conditions d'utilisation et la politique de confidentialité pour continuer.",
-      analyticsConsent: "Facultatif : aider à améliorer Spotto en partageant des statistiques d'usage (jamais vos contenus, votre nom ni votre e-mail).",
-      ageRequired: `Spotto est réservé aux personnes âgées d'au moins ${MINIMUM_AGE} ans : merci de le certifier pour continuer.`,
+      analyticsConsent: `Facultatif : aider à améliorer ${BRAND} en partageant des statistiques d'usage (jamais vos contenus, votre nom ni votre e-mail).`,
+      ageRequired: `${BRAND} est réservé aux personnes âgées d'au moins ${MINIMUM_AGE} ans : merci de le certifier pour continuer.`,
       cta: "Créer mon compte",
       ctaLoading: "Création…",
       hasAccount: "Déjà un compte ? Connectez-vous",
@@ -1459,14 +1566,14 @@ export const fr = {
   // Lot « app iPhone prête » (chantier 4) : mise à jour obligatoire (point 11)
   // et bouton appareil photo du Spotter (point 14).
   appUpdate: {
-    title: "Mettez à jour Spotto",
-    body: "Cette version de Spotto n'est plus prise en charge. Installez la dernière version depuis l'App Store pour continuer.",
+    title: `Mettez à jour ${BRAND}`,
+    body: `Cette version de ${BRAND} n'est plus prise en charge. Installez la dernière version depuis l'App Store pour continuer.`,
     openStore: "Ouvrir l'App Store",
-    searchStore: "Ouvrez l'App Store, cherchez « Spotto », puis touchez « Mettre à jour ».",
+    searchStore: `Ouvrez l'App Store, cherchez « ${BRAND} », puis touchez « Mettre à jour ».`,
   },
   cameraCapture: {
     takePhoto: "Prendre une photo",
-    denied: "Spotto n'a pas accès à l'appareil photo. Pour prendre une photo, autorisez-le dans les Réglages de l'iPhone, puis Spotto.",
+    denied: `${BRAND} n'a pas accès à l'appareil photo. Pour prendre une photo, autorisez-le dans les Réglages de l'iPhone, puis ${BRAND}.`,
     unavailable: (addPhoto: string) => `L'appareil photo n'a pas pu s'ouvrir. Réessayez, ou choisissez une photo avec « ${addPhoto} ».`,
   },
   // Lot « anti-robots » (point 17) : vérification Cloudflare Turnstile avant

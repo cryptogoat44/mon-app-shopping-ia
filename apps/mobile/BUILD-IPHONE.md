@@ -42,13 +42,56 @@ dans `eas.json` : les comparer avec celles du site sur Render.
 En ligne de commande, la même chose, par exemple :
 `eas env:set --name EXPO_PUBLIC_API_URL --value https://spotto-api.onrender.com --environment preview --environment production --visibility plaintext`
 
+**Une seule base pour Apple : spotto-prod.** Les builds `preview` (TestFlight)
+et `production` (App Store) visent tous les deux spotto-prod, jamais une autre
+base. La base de test (spotto-dev-2) ne sert qu'au profil `development`
+(section 4) et aux tests.
+
 **Filet de sécurité.** Au début de chaque build `preview` ou `production`, un
 contrôle (`scripts/verifier-build.js`) arrête le build en une minute, avec un
-message en français, si une adresse ou la clé publique manque, si l'adresse
-vise encore l'ancien projet Supabase, si une clé **secrète** a été collée à la
-place de la clé publique (Supabase ou widget anti-robots), ou si le jeton
-Sentry manque. Sans `EXPO_PUBLIC_TURNSTILE_SITE_KEY`, il prévient seulement :
-ce build n'aurait pas la protection anti-robots (`ANTI-ROBOTS.md`).
+message en français :
+
+- si une adresse ou la clé publique manque ;
+- si `EXPO_PUBLIC_SUPABASE_URL` n'est pas exactement l'adresse de spotto-prod :
+  le message dit si c'est la base de test (spotto-dev-2), l'ancien projet
+  Supabase ou une autre base ;
+- si `EXPO_PUBLIC_SUPABASE_ANON_KEY` est une ancienne clé « anon » (longue, qui
+  commence par `eyJ`) d'un autre projet que spotto-prod ;
+- si une clé **secrète** a été collée à la place de la clé publique (Supabase
+  ou widget anti-robots) ;
+- si le jeton Sentry manque ;
+- pour un build `production` (App Store) seulement, s'il resterait un **texte
+  provisoire** à l'écran, ce qu'Apple refuse (règle 2.1 : « placeholder
+  text […] should be scrubbed before submission ») :
+  - un des cinq réglages de l'éditeur `EXPO_PUBLIC_PUBLISHER_NAME`, `_STATUS`,
+    `_ADDRESS`, `_EMAIL`, `_PHONE` manque (ou contient encore un texte entre
+    crochets) : les pages légales afficheraient « [À compléter : …] » ;
+  - un passage entre crochets « [À compléter », « [À vérifier », « [À décider »
+    (ou en anglais « [To be completed », « [To be verified », « [To be
+    decided ») reste dans les textes légaux, `apps/mobile/src/legal`. Le
+    message donne la liste des fichiers concernés et le nombre de passages.
+
+  Pour un build `preview` (TestFlight), ces deux constats ne sont que des
+  avertissements : le build continue, pour que vous puissiez essayer l'app
+  avant que les textes soient validés. **Aujourd'hui, les textes légaux
+  contiennent encore de tels passages : un build `production` sera donc
+  arrêté tant que votre avocat ne les a pas validés et que les crochets
+  n'ont pas été retirés.** C'est voulu.
+
+Limite : une clé `sb_publishable_…` ne dit pas à quel projet elle appartient,
+le contrôle ne peut donc pas la vérifier. Copiez-la bien depuis **spotto-prod**
+(Supabase → spotto-prod → Project Settings → API Keys) ; avec la clé d'une
+autre base, personne ne pourrait se connecter dans le build.
+
+Autre limite : le contrôle lit les textes légaux, pas le reste de l'app. Le
+bandeau « Projet — à faire valider par un professionnel » des pages légales
+(affiché tant que leur version commence par « projet- ») et les pages du site
+en ligne restent à vérifier à la main (`app-store/CONTROLE-BUILD.md`).
+
+Le contrôle n'affiche jamais une valeur, seulement le nom du réglage ou du
+fichier. Sans
+`EXPO_PUBLIC_TURNSTILE_SITE_KEY`, il prévient seulement : ce build n'aurait pas
+la protection anti-robots (`ANTI-ROBOTS.md`).
 
 ## 3. Le jeton Sentry (plantages lisibles)
 
@@ -88,10 +131,44 @@ validation et les réponses « App Privacy » sont dans
 
 ## 6. Corriger l'app après sa sortie
 
-- **Correction du code de l'app** (textes, écrans, logique) sans repasser par
-  Apple : `eas update --channel production --environment production --message "…"`.
+- **Correction du code de l'app, à distance** (`expo-updates`), sans repasser
+  par Apple : `eas update --channel production --environment production --message "…"`.
   Les iPhone la reçoivent au lancement suivant. Pour que Sentry lise aussi ses
   plantages : `npx sentry-expo-upload-sourcemaps dist` juste après.
+
+  **À n'utiliser que pour corriger, jamais pour ajouter.** La règle 2.5.2
+  d'Apple dit : « Apps should be self-contained in their bundles, and may not
+  read or write data outside the designated container area, nor may they
+  download, install, or execute code which introduces or changes features or
+  functionality of the app, including other apps. » (une app ne télécharge
+  pas de code qui ajoute ou change ses fonctions). Une mise à jour à distance
+  est justement du code téléchargé après la validation. La lecture prudente,
+  à suivre tant que vous n'avez pas décidé autre chose avec votre avocat :
+
+  | Permis par une mise à jour à distance | Jamais par une mise à jour à distance : nouveau build, revu par Apple |
+  | --- | --- |
+  | une panne, un plantage, un calcul faux | une fonction nouvelle, un nouvel écran, un nouvel onglet |
+  | une faute dans un texte, une traduction, un libellé | une fonction coupée qu'on rallume : basculer une constante figée (`apps/mobile/src/lib/spot-flags.ts`, l'alerte « Épuisé »), remettre le lecteur |
+  | un défaut d'affichage ou d'accessibilité | un changement de ce à quoi sert l'app, de son modèle économique, ou des données qu'elle collecte |
+  | un réglage de sécurité | un nouveau prestataire, une nouvelle autorisation (impossible de toute façon : c'est du natif) |
+
+  Deux conséquences pratiques :
+  - **les interrupteurs du serveur** (`PUSH_ENABLED`, `VOIE_C_ENABLED`,
+    `VOIE_C_AI_ENABLED`, `LINK_PREVIEW_ENABLED`, `ANTHROPIC_PHOTO_ENABLED`)
+    suivent la même prudence, au titre de la règle 2.5.19 (aucune fonction
+    cachée, dormante ou non décrite) : ce qui est allumé le jour de l'envoi
+    est décrit comme allumé dans les notes pour Apple ; allumer plus tard une
+    fonction qu'Apple a vue coupée passe par une nouvelle version et de
+    nouvelles notes (`app-store/NOTES-VALIDATION.md`) ;
+  - **en cas de doute, faites un nouveau build.** Un refus d'Apple coûte
+    quelques jours ; une app retirée pour avoir changé après sa validation
+    coûte bien plus.
+
+  Cette règle d'usage est une décision qui vous appartient (rapport d'audit,
+  partie 2, décision 5 : réserver les mises à jour à distance aux corrections,
+  ou retirer `expo-updates` de la première version). Le contrat de licence du
+  programme développeur d'Apple, qui encadre aussi ce point, n'a pas été lu :
+  à voir avec votre avocat à l'inscription.
 - **Changement natif** (nouveau module, nouvelle autorisation, `app.json`) : un
   nouveau build, en augmentant `version` dans `app.json` (1.0.0 → 1.0.1) ; les
   mises à jour à distance ne visent que les builds de la même version.
@@ -161,3 +238,30 @@ conversation.
 Avant d'allumer : faire relire le paragraphe « Expo » de la politique de
 confidentialité (« [À vérifier] ») et revoir les réponses « App Privacy »
 d'Apple (`app-store/CONFIDENTIALITE-APPLE.md`).
+
+## 9. Lecteur intégré TikTok / Instagram : hors du build
+
+Le lecteur intégré (lot « lecteur intégré ») ouvrait une vidéo TikTok ou
+Instagram dans Spotto, et « Spotter ce moment » en prenait l'image grâce à un
+module natif écrit en Swift (`apps/mobile/modules/spotto-frame-capture`).
+Aucune plateforme n'a autorisé cet usage par écrit, et Apple refuse les
+fonctions cachées ou dormantes (règle 2.5.19) comme l'usage non autorisé du
+contenu d'un autre service (règle 5.2.3).
+
+Depuis le lot « nettoyage avant le premier build » (10 novembre 2026) :
+
+- le module natif de capture et son pont (`src/lib/player-capture.ts`) sont
+  **retirés** de l'app : un build iPhone ne contient plus aucun code natif de
+  capture, le dossier `apps/mobile/modules` n'existe plus ;
+- le lecteur n'est proposé nulle part (`LINK_PLAYER_ENABLED = false`, et de
+  toute façon jamais sans le module : `src/lib/player-access.ts`) ; un lien
+  collé ou partagé affiche l'aide « capture d'écran d'abord », comme avant ;
+- le reste du code du lecteur (lecture de la vidéo, accord préalable) reste
+  dans le dépôt, éteint, sans « Spotter ce moment ».
+
+**Pour le faire revenir**, seulement après l'accord écrit d'une plateforme :
+demander à Claude d'annuler le commit de ce lot (`git revert` du commit
+« App iPhone : module natif de capture du lecteur retiré »), puis de passer
+`LINK_PLAYER_ENABLED` à `true`, puis refaire un build iPhone (le module est
+natif : une mise à jour à distance ne suffit pas). Il faudra alors revoir les
+notes pour Apple et les réponses « App Privacy » (`app-store/`).
