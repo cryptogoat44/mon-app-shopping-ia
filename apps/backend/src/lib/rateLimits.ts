@@ -96,6 +96,21 @@ export const RATE_LIMITS = {
     message: "Trop de changements des notifications en peu de temps. Réessayez dans une heure.",
   },
 
+  // Liens de vidéos TikTok et Instagram (mission « liens vidéo ») :
+  // - lire ce que la mémoire sait d'une vidéo (chaque lien partagé ou collé) ;
+  videoLookup: { max: 120, windowMs: HOUR },
+  // - résoudre un lien court TikTok : une demande part vers TikTok (en-têtes
+  //   seulement). Comptée seulement quand elle part vraiment (pas pour une
+  //   réponse gardée en mémoire), par membre et pour tout le service ;
+  videoShortLink: { max: 30, windowMs: HOUR },
+  videoShortLinkGlobal: { max: 2_000, windowMs: HOUR, scope: "global" },
+  // - code d'intégration Instagram (Meta limite à 1 000 demandes par heure,
+  //   le serveur en garde chacun 24 h : lib/instagramEmbed.ts) ;
+  videoEmbed: { max: 60, windowMs: HOUR },
+  // - noter un spot (une fois par recherche) et « C'est bien cette pièce ».
+  videoSpot: { max: 60, windowMs: HOUR },
+  videoConfirm: { max: 120, windowMs: HOUR },
+
   // Photo de profil (revue de sécurité du 12 novembre 2026) : envoyer ou
   // supprimer sa photo (POST et DELETE /api/me/avatar, comptés ensemble,
   // refus compris). Chaque envoi fait décoder une image au serveur : la

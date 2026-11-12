@@ -65,6 +65,19 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => value === "true"),
+  // Lecteurs TikTok et Instagram de l'app (mission « liens vidéo ») : ils ne
+  // peuvent que COUPER un lecteur déjà compilé dans l'app (elle retombe alors
+  // sur l'écran de secours), jamais faire apparaître une fonction absente.
+  // Allumés par défaut ; seule la valeur exacte « false » coupe. Lus par
+  // lib/videoPlayers.ts. Voir docs/liens-video/interrupteurs.md.
+  TIKTOK_PLAYER_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value !== "false"),
+  INSTAGRAM_PLAYER_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value !== "false"),
   // Facultatif : jeton d'accès d'Expo, seulement si la « sécurité renforcée
   // des notifications » est activée dans le compte Expo. Absent : les
   // notifications partent sans jeton (le service d'Expo est gratuit). Une

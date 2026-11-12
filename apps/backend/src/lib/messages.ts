@@ -208,6 +208,16 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
     "You've changed your profile photo several times in a short time. Please try again in an hour.",
   "Le nom affiché doit compter de 1 à 60 caractères.": "Your display name must be 1 to 60 characters long.",
   "Le service est très demandé en ce moment. Réessayez dans un instant.": "The service is very busy right now. Please try again in a moment.",
+  // Liens de vidéos TikTok et Instagram (routes/videoLinks.ts).
+  "Ce lien n'est pas celui d'une vidéo TikTok ou Instagram.": "This link isn't a TikTok or Instagram video.",
+  "Ce lien n'a pas pu être vérifié pour le moment. Réessayez dans un instant.": "This link couldn't be checked right now. Please try again in a moment.",
+  "Les pièces déjà repérées ne sont pas encore disponibles.": "Pieces already spotted aren't available yet.",
+  "Cette recherche n'est pas terminée.": "This search isn't finished.",
+  "Cette recherche n'a donné aucune pièce.": "This search didn't find any piece.",
+  "Cette pièce n'a pas été repérée dans cette vidéo.": "This piece hasn't been spotted in this video.",
+  "Le lecteur Instagram est désactivé.": "The Instagram player is turned off.",
+  "Cette publication ne peut pas être affichée ici.": "This post can't be shown here.",
+  "Le lecteur Instagram est momentanément indisponible.": "The Instagram player is temporarily unavailable.",
   // Alertes prix et stock (lot 2, routes/wishAlerts.ts, lib/rateLimits.ts).
   "Vous avez signalé beaucoup de pièces aujourd'hui. Réessayez demain.": "You've reported a lot of pieces today. Please try again tomorrow.",
   "Vous avez changé beaucoup d'alertes en peu de temps. Réessayez dans un moment.": "You've changed a lot of alerts in a short time. Please try again in a moment.",

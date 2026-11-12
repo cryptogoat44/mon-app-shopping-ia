@@ -31,6 +31,7 @@ import conversationsRoutes from "./routes/conversations.js";
 import collectionsRoutes from "./routes/collections.js";
 import pushTokensRoutes from "./routes/pushTokens.js";
 import wishAlertsRoutes from "./routes/wishAlerts.js";
+import videoLinksRoutes from "./routes/videoLinks.js";
 import { flushAfterResponse } from "./lib/wishAlertsSend.js";
 import { MULTIPART_LIMITS, isTooManyPartsError } from "./lib/multipartErrors.js";
 import { ImageQueueFullError } from "./lib/imageSafety.js";
@@ -180,6 +181,7 @@ export async function buildApp(options: { logger?: LoggerOption } = {}): Promise
   await fastify.register(collectionsRoutes);
   await fastify.register(pushTokensRoutes);
   await fastify.register(wishAlertsRoutes);
+  await fastify.register(videoLinksRoutes);
 
   // Exclue du filet anti-abus "default" : les sondes de disponibilité de
   // Render l'appellent très régulièrement, ça n'a rien à voir avec un abus.

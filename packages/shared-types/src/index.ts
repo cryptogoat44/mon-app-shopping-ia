@@ -1905,3 +1905,87 @@ export function normalizeVideoLink(input: string | null | undefined): VideoLink 
 export function videoPlatformName(platform: VideoPlatform): string {
   return platform === "tiktok" ? "TikTok" : "Instagram";
 }
+
+// ---- Mémoire collective et lecteurs (mission « liens vidéo ») ----
+
+/** D'où vient l'image d'un spot : le lecteur intégré (« Spotter ce moment »),
+ * une capture partagée à l'app, la recherche d'image d'iOS, une photo choisie
+ * dans l'app, ou le site. */
+export const VIDEO_SPOT_SOURCES = ["tiktok_player", "instagram_player", "share", "visual_intelligence", "app", "web"] as const;
+export type VideoSpotSource = (typeof VIDEO_SPOT_SOURCES)[number];
+
+/** Pièces déjà repérées montrées pour une vidéo, au plus. */
+export const VIDEO_PRODUCTS_LIMIT = 12;
+
+/** Une pièce déjà repérée dans une vidéo, telle que tous les membres la
+ * voient : jamais l'identité de qui l'a trouvée. `productKey` : la clé
+ * « même page » (empreinte de l'adresse de la boutique nettoyée), à renvoyer
+ * pour « C'est bien cette pièce ». */
+export interface VideoProduct {
+  productKey: string;
+  productName: string;
+  brand: string | null;
+  imageUrl: string;
+  priceMin: number | null;
+  currency: string | null;
+  merchantName: string | null;
+  /** Lien à ouvrir : affilié s'il existe (mention obligatoire), sinon le lien de la boutique. */
+  merchantUrl: string;
+  isAffiliate: boolean;
+  /** Nombre de « C'est bien cette pièce ». */
+  confirmations: number;
+  /** Nombre de spots de cette vidéo où la pièce est apparue. */
+  appearances: number;
+  /** La personne qui regarde a déjà confirmé cette pièce. */
+  confirmedByMe: boolean;
+}
+
+/** Lecteurs laissés allumés par le serveur (ils ne peuvent que couper). */
+export interface VideoPlayersStatus {
+  tiktok: boolean;
+  instagram: boolean;
+}
+
+/** GET /api/video-links/status */
+export interface VideoLinksStatus {
+  players: VideoPlayersStatus;
+  /** La mémoire collective est-elle en place (migration 0038) ? */
+  memory: boolean;
+}
+
+/** Pourquoi un lien n'a pas donné de vidéo : lien court TikTok qui ne mène à
+ * aucune vidéo, hôte refusé, trop de redirections, TikTok injoignable, ou
+ * limite de débit (les deux derniers : à réessayer). */
+export type VideoLinkIssue = "not_a_video" | "host_not_allowed" | "too_many_hops" | "unreachable" | "rate_limited";
+
+/** GET /api/video-links/lookup?url= */
+export interface VideoLookupResponse {
+  /** La vidéo reconnue, ou null (aucun lien TikTok ou Instagram reconnu). */
+  link: VideoLink | null;
+  linkIssue: VideoLinkIssue | null;
+  players: VideoPlayersStatus;
+  memoryAvailable: boolean;
+  /** Pièces déjà repérées (vide si la vidéo est inconnue), triées par
+   * confirmations, puis apparitions, puis récence — jamais par commission. */
+  products: VideoProduct[];
+}
+
+/** GET /api/video-links/instagram-embed?url= : le code d'intégration officiel. */
+export interface InstagramEmbedResponse {
+  html: string;
+  creatorHandle: string | null;
+}
+
+/** POST /api/video-links/spots */
+export interface VideoSpotRequest {
+  url: string;
+  searchId: string;
+  source: VideoSpotSource;
+  momentSeconds?: number | null;
+}
+
+/** POST /api/video-links/confirm */
+export interface VideoConfirmRequest {
+  url: string;
+  productKey: string;
+}
