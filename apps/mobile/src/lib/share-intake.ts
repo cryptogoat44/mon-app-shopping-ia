@@ -16,6 +16,7 @@ import * as Linking from "expo-linking";
 import { Directory, File, Paths } from "expo-file-system";
 import { ShareIntentModule, parseShareIntent } from "expo-share-intent";
 import { discardLocalFile } from "./video-frames";
+import { PENDING_VISUAL_SEARCH_FILE, VISUAL_SEARCH_FOLDER } from "./visual-search-link";
 import {
   APP_GROUP,
   PENDING_SHARE_FILE,
@@ -80,14 +81,20 @@ async function intoCache(item: SharedItem): Promise<SharedItem> {
   }
 }
 
-/** Le groupe d'apps ne garde rien : vignettes laissées par l'extension, copies
- * de partages jamais ouverts. Un fichier caché (nom commençant par « . ») est
- * un fichier du système, présent dans tout groupe d'apps : jamais touché. */
+/** Fichiers du groupe d'apps qui n'appartiennent pas au partage : le
+ * fichier caché du système (nom commençant par « . »), présent dans tout
+ * groupe d'apps, et ceux de la recherche d'image d'iOS (dossier
+ * « recherche-image/ » et son lien en attente), lus et effacés par
+ * lib/visual-search-intake.ts. Jamais touchés ici. */
+export function sparedInSharedContainer(file: { name: string; uri: string }): boolean {
+  return file.name.startsWith(".") || file.name === PENDING_VISUAL_SEARCH_FILE || file.uri.includes(`/${VISUAL_SEARCH_FOLDER}/`);
+}
+
+/** Le groupe d'apps ne garde rien du partage : vignettes laissées par
+ * l'extension, copies de partages jamais ouverts. Seuls les fichiers placés
+ * à sa racine sont effacés, jamais les dossiers (sparedInSharedContainer). */
 function clearSharedContainer(): void {
-  deleteFiles(
-    () => Paths.appleSharedContainers[APP_GROUP]?.list() ?? [],
-    (file) => file.name.startsWith(".")
-  );
+  deleteFiles(() => Paths.appleSharedContainers[APP_GROUP]?.list() ?? [], sparedInSharedContainer);
 }
 
 /** Au lancement, avant de lire le moindre partage : les copies laissées par un

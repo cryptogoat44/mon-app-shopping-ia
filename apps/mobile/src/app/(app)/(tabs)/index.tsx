@@ -16,6 +16,7 @@ import { ScreenshotHelp } from "@/components/screenshot-help";
 import { EntryTiles, LatestVideoCard, LatestVideoNote, LatestVideoQuestion } from "@/components/spot-entry";
 import { SpotImage } from "@/components/spot-image";
 import { SearchLimitsNotice } from "@/components/search-limits-notice";
+import { VisualSearchTip } from "@/components/visual-search-tip";
 import { useAuth } from "@/lib/auth-context";
 import { importPhotoForSpotter, prepareSharedPhoto, takePhotoForSpotter, type ImportResult } from "@/lib/image-import";
 import { latestVideoUri, loadLatestVideo, saveLatestVideoChoice } from "@/lib/latest-video";
@@ -205,7 +206,9 @@ function useSpotterEntries(reveal: () => void) {
       const prepared = await prepareSharedPhoto(item.uri, item.width, item.height);
       // L'image préparée est un nouveau fichier : la copie reçue n'a plus d'usage.
       discardLocalFile(item.uri);
-      await openPhoto(prepared, t.share.imageUnreadable(t.spotter.addPhoto), "share");
+      // Capture de la recherche d'image d'iOS : jamais gardée après la recherche (règle n° 4).
+      const visual = item.origin === "visual_intelligence";
+      await openPhoto(prepared, t.share.imageUnreadable(t.spotter.addPhoto), visual ? "visual_intelligence" : "share", { discardImageAfterSearch: visual });
     } finally {
       setBusy(null);
     }
@@ -294,6 +297,7 @@ export default function SpotterScreen() {
         </Text>
         <Text style={styles.lead}>{t.spotter.lead}</Text>
         <SearchLimitsNotice notice={limits.notice} />
+        <VisualSearchTip />
         {entries.linkHelp ? (
           <View style={styles.sharedHelp}>
             <ScreenshotHelp onAddScreenshot={entries.addPhoto} onAddVideo={entries.addVideo} busy={entries.importing} />

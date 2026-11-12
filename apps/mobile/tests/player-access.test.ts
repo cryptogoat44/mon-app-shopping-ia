@@ -98,9 +98,11 @@ describe("module natif de l'instantané : takeSnapshot, et rien d'autre", () => 
     expect(read(join(MOBILE, "src", "lib", "player-snapshot.ts"))).toContain("SI L'INSTANTANÉ SORT NOIR SUR UN VRAI IPHONE : S'ARRÊTER LÀ");
   });
 
-  it("aucun autre code natif dans l'app : ce module seulement", () => {
+  it("aucun autre code natif dans l'app : ce module, et la recherche d'image d'iOS (plugin)", () => {
     const native = files(MOBILE, /\.(swift|m|mm|h|podspec)$/).map((path) => relative(MOBILE, path).split("\\").join("/"));
-    expect(native.sort()).toEqual(["modules/spotto-player-snapshot/ios/SpottoPlayerSnapshot.podspec", "modules/spotto-player-snapshot/ios/SpottoPlayerSnapshotModule.swift"].sort());
+    expect(native.sort()).toEqual(
+      ["modules/spotto-player-snapshot/ios/SpottoPlayerSnapshot.podspec", "modules/spotto-player-snapshot/ios/SpottoPlayerSnapshotModule.swift", "plugins/recherche-image/SpottoRechercheImage.swift"].sort()
+    );
     expect(readdirSync(join(MOBILE, "modules"))).toEqual(["spotto-player-snapshot"]);
   });
 

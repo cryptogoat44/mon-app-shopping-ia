@@ -123,6 +123,13 @@
         }
       ],
       "./plugins/extension-partage.js",
+      [
+        "./plugins/recherche-image.js",
+        {
+          "groupe": "{groupeApple}",
+          "schema": "{schemaLiens}"
+        }
+      ],
       "./plugins/lecteur-integre.js",
       [
         "@sentry/react-native/expo",

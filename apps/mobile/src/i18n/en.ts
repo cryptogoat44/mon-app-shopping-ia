@@ -343,6 +343,11 @@ export const en: Catalog = {
     dropHint: "On a computer, you can also drag and drop an image onto this page, or paste it (Ctrl+V or ⌘V).",
     notAnImage: "This file isn't an image. Drop or paste a screenshot.",
   },
+  visualSearchTip: {
+    title: "Tip",
+    body: `In any app, take a screenshot, tap Image Search, then ${BRAND} (compatible iPhones).`,
+    dismiss: "Got it",
+  },
   preview: {
     captureSteps: (platform: string, shortcut: string) => [
       `Open the video in ${platform}.`,

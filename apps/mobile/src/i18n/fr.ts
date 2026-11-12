@@ -361,6 +361,12 @@ export const fr = {
     dropHint: "Sur ordinateur, vous pouvez aussi glisser-déposer une image sur cette page, ou la coller (Ctrl+V ou ⌘V).",
     notAnImage: "Ce fichier n'est pas une image. Déposez ou collez une capture d'écran.",
   },
+  // Recherche d'image d'iOS (iOS 26 et suivants) : carte montrée une fois.
+  visualSearchTip: {
+    title: "Astuce",
+    body: `Dans n'importe quelle app, faites une capture, touchez Recherche d'image, puis ${BRAND} (iPhone compatibles).`,
+    dismiss: "J'ai compris",
+  },
   // Étapes de la capture d'écran (aide d'un lien collé ou partagé, lecteur) et
   // messages d'un parcours qui n'existe plus (page rechargée).
   preview: {

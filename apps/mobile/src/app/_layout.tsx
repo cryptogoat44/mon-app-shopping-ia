@@ -11,6 +11,7 @@ import { NewVersionBanner } from "@/components/new-version-banner";
 import { resolveRootRoute, rootContent } from "@/lib/root-route";
 import { StartupWaiting } from "@/components/connecting";
 import { useShareIntake } from "@/lib/share-intake";
+import { useVisualSearchIntake } from "@/lib/visual-search-intake";
 import { useSharedItemWaitingNotice } from "@/lib/use-shared-item";
 import { useAppFonts } from "@/theme/fonts";
 import { useMinimumVersionCheck, useUpdateRequired } from "@/lib/use-app-update";
@@ -112,6 +113,8 @@ function RootNavigator() {
  * ou non. Composant à part : ses changements ne redessinent pas toute l'app. */
 function ShareIntake() {
   useShareIntake();
+  // Recherche d'image d'iOS (mission « liens vidéo ») : la capture attend le Spotter comme une image partagée.
+  useVisualSearchIntake();
   return null;
 }
 
