@@ -1754,3 +1754,157 @@ export function brandFileSlug(name: string): string {
     .replace(/^-+|-+$/g, "");
   return slug === "" ? "app" : slug;
 }
+
+// ---------------------------------------------------------------------
+// Liens de vidéos TikTok et Instagram (mission « liens vidéo »)
+// ---------------------------------------------------------------------
+// Reconnaître un lien partagé depuis TikTok ou Instagram, sans jamais rien
+// télécharger : tout se lit dans l'adresse elle-même. Sert à l'app (lien reçu
+// de l'extension de partage ou collé), au site (lien collé) et au serveur
+// (mémoire collective : une vidéo = une plateforme et une clé).
+//
+// Un lien court TikTok (vm.tiktok.com/…, vt.tiktok.com/…, tiktok.com/t/…) ne
+// contient pas l'identifiant de la vidéo : seul le serveur peut le résoudre,
+// en suivant sa redirection (en-têtes seulement, jamais le contenu de la
+// page). `parseVideoLink` le signale ; `normalizeVideoLink` rend alors null.
+
+export const VIDEO_PLATFORMS = ["tiktok", "instagram"] as const;
+export type VideoPlatform = (typeof VIDEO_PLATFORMS)[number];
+
+/** Une vidéo reconnue. `videoKey` : l'identifiant numérique TikTok, ou le
+ * code Instagram (majuscules et minuscules comptent). `canonicalUrl` :
+ * l'adresse publique sans aucun paramètre de suivi. `creatorHandle` : le
+ * pseudo sans « @ », seulement s'il figure dans l'adresse. */
+export interface VideoLink {
+  platform: VideoPlatform;
+  videoKey: string;
+  canonicalUrl: string;
+  creatorHandle: string | null;
+}
+
+/** Ce qu'un texte partagé contient : une vidéo reconnue, ou un lien court
+ * TikTok à faire résoudre par le serveur. */
+export type ParsedVideoLink = { kind: "video"; link: VideoLink } | { kind: "tiktok_short"; shortUrl: string };
+
+/** Hôtes des liens courts TikTok : les seuls que le serveur accepte de suivre. */
+export const TIKTOK_SHORT_HOSTS = ["vm.tiktok.com", "vt.tiktok.com"] as const;
+const TIKTOK_HOSTS: ReadonlySet<string> = new Set(["tiktok.com", "www.tiktok.com", "m.tiktok.com"]);
+const INSTAGRAM_HOSTS: ReadonlySet<string> = new Set(["instagram.com", "www.instagram.com", "m.instagram.com", "instagr.am", "www.instagr.am"]);
+
+/** Longueur maximale d'un texte examiné (un texte de partage fait quelques centaines de caractères). */
+export const VIDEO_LINK_INPUT_MAX_LENGTH = 4096;
+
+const TIKTOK_ID = /^\d{6,25}$/;
+const TIKTOK_HANDLE = /^[a-z0-9._]{1,30}$/;
+const TIKTOK_SHORT_CODE = /^[A-Za-z0-9_-]{4,40}$/;
+const INSTAGRAM_CODE = /^[A-Za-z0-9_-]{5,64}$/;
+const INSTAGRAM_HANDLE = /^[a-z0-9._]{1,30}$/;
+/** Types de publication Instagram reconnus, et celui gardé dans l'adresse canonique. */
+const INSTAGRAM_KINDS: Record<string, string> = { reel: "reel", reels: "reel", p: "p", tv: "tv" };
+
+/** Adresses contenues dans un texte, dans l'ordre : « https://… », ou un hôte
+ * TikTok ou Instagram écrit sans « https:// » (jamais au milieu d'un autre
+ * nom de domaine, ni derrière un autre protocole comme « ftp:// »). La
+ * ponctuation de fin de phrase est retirée. */
+function urlCandidates(text: string): string[] {
+  const found = text.match(/(?:https?:\/\/|(?<![A-Za-z0-9.@:\/-])(?:(?:www|m|vm|vt)\.)?(?:tiktok\.com|instagram\.com|instagr\.am)\/)[^\s<>"'`]+/gi) ?? [];
+  return found.map((candidate) => (/^https?:\/\//i.test(candidate) ? candidate : `https://${candidate}`).replace(/[.,;:!?)\]}»…]+$/u, ""));
+}
+
+function tiktokCanonical(kind: "video" | "photo", id: string, handle: string | null): string {
+  return `https://www.tiktok.com/@${handle ?? ""}/${kind}/${id}`;
+}
+
+function parseTikTok(host: string, segments: string[]): ParsedVideoLink | null {
+  if ((TIKTOK_SHORT_HOSTS as readonly string[]).includes(host)) {
+    const code = segments[0];
+    return segments.length === 1 && code !== undefined && TIKTOK_SHORT_CODE.test(code) ? { kind: "tiktok_short", shortUrl: `https://${host}/${code}/` } : null;
+  }
+  if (!TIKTOK_HOSTS.has(host)) return null;
+  const [first, second, third] = segments;
+  // tiktok.com/t/CODE : lien court, lui aussi.
+  if (first === "t" && segments.length === 2 && second !== undefined && TIKTOK_SHORT_CODE.test(second)) {
+    return { kind: "tiktok_short", shortUrl: `https://www.tiktok.com/t/${second}/` };
+  }
+  const video = (kind: "video" | "photo", id: string, handle: string | null): ParsedVideoLink => ({
+    kind: "video",
+    link: { platform: "tiktok", videoKey: id, canonicalUrl: tiktokCanonical(kind, id, handle), creatorHandle: handle },
+  });
+  // tiktok.com/@pseudo/video/ID (ou /photo/ID pour une publication d'images).
+  if (first !== undefined && first.startsWith("@") && segments.length === 3 && (second === "video" || second === "photo") && third !== undefined && TIKTOK_ID.test(third)) {
+    const handle = first.slice(1).toLowerCase();
+    if (handle !== "" && !TIKTOK_HANDLE.test(handle)) return null;
+    return video(second, third, handle === "" ? null : handle);
+  }
+  // m.tiktok.com/v/ID.html
+  if (first === "v" && segments.length === 2 && second !== undefined) {
+    const id = second.replace(/\.html$/i, "");
+    return TIKTOK_ID.test(id) ? video("video", id, null) : null;
+  }
+  // Adresses du lecteur officiel : /player/v1/ID et /embed/v2/ID.
+  if ((first === "player" && second === "v1") || (first === "embed" && second === "v2")) {
+    return segments.length === 3 && third !== undefined && TIKTOK_ID.test(third) ? video("video", third, null) : null;
+  }
+  return null;
+}
+
+function parseInstagram(host: string, segments: string[]): ParsedVideoLink | null {
+  if (!INSTAGRAM_HOSTS.has(host)) return null;
+  // instagram.com/reel/CODE/ ou, depuis 2024, instagram.com/pseudo/reel/CODE/.
+  const withHandle = segments.length === 3;
+  if (segments.length !== 2 && !withHandle) return null;
+  const [kindSegment, code] = withHandle ? [segments[1]!, segments[2]!] : [segments[0]!, segments[1]!];
+  const kind = INSTAGRAM_KINDS[kindSegment.toLowerCase()];
+  if (kind === undefined || !INSTAGRAM_CODE.test(code)) return null;
+  let handle: string | null = null;
+  if (withHandle) {
+    handle = segments[0]!.toLowerCase();
+    // « share », « reels »… ne sont pas des pseudos : ces adresses ne sont pas reconnues.
+    if (!INSTAGRAM_HANDLE.test(handle) || handle === "share" || handle in INSTAGRAM_KINDS) return null;
+  }
+  return { kind: "video", link: { platform: "instagram", videoKey: code, canonicalUrl: `https://www.instagram.com/${kind}/${code}/`, creatorHandle: handle } };
+}
+
+function parseVideoUrl(candidate: string): ParsedVideoLink | null {
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return null;
+  }
+  // Un vrai lien web, sans identifiant ni port : « https://tiktok.com@ailleurs.example/ » n'est pas TikTok.
+  if ((url.protocol !== "https:" && url.protocol !== "http:") || url.username !== "" || url.password !== "" || url.port !== "") return null;
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
+  let segments: string[];
+  try {
+    segments = url.pathname.split("/").filter((segment) => segment !== "").map((segment) => decodeURIComponent(segment));
+  } catch {
+    return null;
+  }
+  return parseTikTok(host, segments) ?? parseInstagram(host, segments);
+}
+
+/** La première adresse TikTok ou Instagram d'un texte (une adresse seule, ou
+ * un texte de partage qui en contient une) : une vidéo reconnue, un lien
+ * court TikTok à résoudre, ou null. Les paramètres de suivi (igsh, _r,
+ * utm_…) ne sont jamais gardés. */
+export function parseVideoLink(input: string | null | undefined): ParsedVideoLink | null {
+  if (typeof input !== "string" || input.length > VIDEO_LINK_INPUT_MAX_LENGTH) return null;
+  for (const candidate of urlCandidates(input)) {
+    const parsed = parseVideoUrl(candidate);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
+/** La vidéo TikTok ou Instagram qu'un texte désigne, ou null (aucune adresse
+ * reconnue, ou lien court TikTok : voir parseVideoLink). */
+export function normalizeVideoLink(input: string | null | undefined): VideoLink | null {
+  const parsed = parseVideoLink(input);
+  return parsed?.kind === "video" ? parsed.link : null;
+}
+
+/** « TikTok » ou « Instagram », pour les textes. */
+export function videoPlatformName(platform: VideoPlatform): string {
+  return platform === "tiktok" ? "TikTok" : "Instagram";
+}
