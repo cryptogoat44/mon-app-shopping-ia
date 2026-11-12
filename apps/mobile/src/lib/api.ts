@@ -6,7 +6,6 @@ import type {
   VersionedConsentType,
   RecordConsentsRequest,
   CreateReportRequest,
-  CreateSearchRequest,
   CreateVaultItemResponse,
   CreateWishlistItemRequest,
   CropRect,
@@ -20,7 +19,6 @@ import type {
   ModerationPage,
   ModerationStatus,
   Post,
-  PreviewIssue,
   PrivacyLevel,
   Profile,
   ProductMatchClickResponse,
@@ -178,22 +176,25 @@ export async function deleteAvatar(): Promise<Profile> {
   return response.json();
 }
 
-/** Temps 1 du Spotter — gratuit : crée la recherche et renvoie l'image qui
- * sera analysée (`thumbnailUrl`), sans aucun appel SerpApi. */
-export async function prepareSearch(payload: CreateSearchRequest): Promise<ProductSearch & { previewIssue?: PreviewIssue | null }> {
+/** Temps 1 du Spotter — gratuit : crée la recherche, sans aucun appel
+ * SerpApi. L'image analysée est celle que la personne envoie au lancement
+ * (runSearch) : l'app ne joint aucun lien, et rien n'est demandé à TikTok ni
+ * à Instagram. */
+export async function prepareSearch(): Promise<ProductSearch> {
   const response = await authorizedFetch("/api/searches/prepare", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({}),
   });
-  const search: ProductSearch & { previewIssue?: PreviewIssue | null } = await response.json();
-  track("spot_started", { source: payload.sourceUrl ? "link" : "photo", platform: search.sourcePlatform });
+  const search: ProductSearch = await response.json();
+  track("spot_started", { source: "photo", platform: search.sourcePlatform });
   return search;
 }
 
 /** Temps 2 du Spotter — 1 à 3 recherches par photo (la recherche visuelle,
  * puis, voie C, le complément ; la recherche par les mots compte dans les
- * mêmes 3) : lance l'identification sur la zone choisie. `imageUri` (capture
- * ou photo importée) remplace l'image préparée. `signal` permet d'abandonner
+ * mêmes 3) : lance l'identification sur la zone choisie. `imageUri` : la
+ * capture ou la photo importée, seule image analysée (sans elle, le serveur
+ * refuse le lancement). `signal` permet d'abandonner
  * la requête (bouton « Annuler »). Boutiques ensuite (2026-11-08) : la
  * réponse arrive dès la recherche visuelle ; quand le serveur annonce les
  * boutiques en attente, leur demande part aussitôt (lib/spot-shops.ts), et

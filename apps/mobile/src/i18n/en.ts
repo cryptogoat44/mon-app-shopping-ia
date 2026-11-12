@@ -88,12 +88,10 @@ export const en: Catalog = {
     title: "Spotter",
     close: "Close",
     lead: "Find a piece you saw in a video or a photo.",
-    linkLabel: "TikTok, Instagram or Pinterest link",
     linkPlaceholder: "Paste or type a link",
     paste: "Paste",
     pasteEmpty: "There's no link on your clipboard.",
     pasteDenied: "Paste the link directly into the field.",
-    continue: "Continue",
     preparing: "Preparing…",
     addVideo: "Add a video",
     addPhoto: "Add a photo",
@@ -212,7 +210,8 @@ export const en: Catalog = {
     available: "A new version is available.",
     reload: "Reload",
   },
-  // Pasted link (lot 4 ter): cover analysis is turned off.
+  // Pasted link (lot 4 ter): a video can't be read from a link, and its cover
+  // image is never requested.
   linkNotice: {
     title: "A video can't be read from a link",
     body: (how: string) => `${BRAND} can't read the video from its link. Record your screen while it plays (${how}), then add the recording.`,
@@ -337,17 +336,10 @@ export const en: Catalog = {
     },
   },
   preview: {
-    title: "This is the image that will be analyzed",
-    caption: (platform: string) => `Cover image of the ${platform} ${platform === "TikTok" ? "video" : "post"}.`,
-    captureCaption: "Your screenshot.",
-    notOnImageTitle: "The piece isn't in this image?",
-    notOnImageWhy: (platform: string) =>
-      `${platform} only shares this cover image, not the rest of the video. Show ${BRAND} the right moment with a screenshot:`,
     captureSteps: (platform: string, shortcut: string) => [
       `Open the video in ${platform}.`,
       "Pause it when the piece is clearly visible.",
       `Take a screenshot (${shortcut}).`,
-      "Come back here and tap “Import a screenshot”.",
     ],
     screenshotShortcut: {
       ios: "side button + volume up",
@@ -355,35 +347,6 @@ export const en: Catalog = {
       web: "Cmd + Shift + 4 on Mac, Windows + Shift + S on PC",
     },
     theApp: "the app",
-    importCapture: "Import a screenshot",
-    // Opens "Circle the piece" (circle-the-piece lot). To be validated (à valider).
-    target: "Circle the piece",
-    noPreviewTitle: "Import a screenshot of the piece",
-    noPreviewBody: (platform: string) =>
-      `${BRAND} can't retrieve the image from this ${platform} link. Take a screenshot when the piece is clearly visible, then import it.`,
-    issue: {
-      unavailable: {
-        title: (content: string) => `${content[0]!.toUpperCase()}${content.slice(1)} not found`,
-        body: (platform: string, content: string) =>
-          `${platform} can't find this ${content}: it may be private or deleted, or the link may be incomplete. Check that it opens in ${platform}, then copy its link again. If it shows up for you, you can also import a screenshot of it.`,
-      },
-      notAVideo: {
-        title: (content: string) => `This link doesn't lead to a ${content}`,
-        body: (platform: string, content: string) =>
-          `It opens a ${platform} profile or page. Open the ${content}, tap “Share”, then “Copy link”, and paste that link into Spotter.`,
-      },
-      serviceDown: {
-        title: (platform: string) => `${platform} isn't responding right now`,
-        body: "Please try again in a few minutes. You can also import a screenshot of the piece.",
-      },
-      noAccess: {
-        title: "Import a screenshot of the piece",
-        body: (platform: string) => `${platform} doesn't let ${BRAND} retrieve the image from this link. Show it the piece with a screenshot:`,
-      },
-    },
-    content: { tiktok: "video", instagram: "post", pinterest: "Pin" },
-    fixLink: "Correct the link",
-    retry: "Try again",
     missing: "This step is no longer available. Start again from Spotter.",
     back: "Back to Spotter",
   },

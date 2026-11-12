@@ -34,7 +34,7 @@ describe("lecteur coupé sur cette branche : parcours lien inchangé", () => {
   });
 
   it.each(LINKS)("« %s » : sans plateforme ouverte, même décision qu'avant le lot", (text) => {
-    expect(linkStep(text, false, [])).toEqual(linkStep(text));
+    expect(linkStep(text, [])).toEqual(linkStep(text));
     const step = linkStep(text);
     expect(step.kind).not.toBe("player");
     const detection = detectLink(text);
@@ -53,29 +53,29 @@ describe("lien → lecteur intégré (app iPhone, lecteur allumé)", () => {
   ])("« %s » : le lecteur", (text, platform) => {
     const detection = detectLink(text);
     if (detection.kind !== "supported") throw new Error("lien attendu");
-    expect(linkStep(text, false, ["tiktok", "instagram"])).toEqual({ kind: "player", url: detection.url, platform });
+    expect(linkStep(text, ["tiktok", "instagram"])).toEqual({ kind: "player", url: detection.url, platform });
   });
 
   it("une plateforme coupée garde l'aide « capture d'écran d'abord » (contre-expertise n° 6)", () => {
-    expect(linkStep("https://www.instagram.com/reel/Cxyz/", false, ["tiktok"])).toEqual({ kind: "help" });
-    expect(linkStep("https://vm.tiktok.com/ZMabc123/", false, ["tiktok"])).toMatchObject({ kind: "player", platform: "tiktok" });
+    expect(linkStep("https://www.instagram.com/reel/Cxyz/", ["tiktok"])).toEqual({ kind: "help" });
+    expect(linkStep("https://vm.tiktok.com/ZMabc123/", ["tiktok"])).toMatchObject({ kind: "player", platform: "tiktok" });
   });
 
   it("profil TikTok ou Instagram : refus clair, ni aide ni lecteur", () => {
-    expect(linkStep("https://www.tiktok.com/@mayelasjourney", false, ["tiktok", "instagram"])).toEqual({ kind: "refused", message: fr.spotter.notAVideo.tiktok });
-    expect(linkStep("https://www.instagram.com/zara/", false, ["tiktok", "instagram"])).toEqual({ kind: "refused", message: fr.spotter.notAVideo.instagram });
+    expect(linkStep("https://www.tiktok.com/@mayelasjourney", ["tiktok", "instagram"])).toEqual({ kind: "refused", message: fr.spotter.notAVideo.tiktok });
+    expect(linkStep("https://www.instagram.com/zara/", ["tiktok", "instagram"])).toEqual({ kind: "refused", message: fr.spotter.notAVideo.instagram });
   });
 
   it("Pinterest : l'aide, comme aujourd'hui ; autre site : refus", () => {
-    expect(linkStep("https://pin.it/4xYz", false, ["tiktok", "instagram"])).toEqual({ kind: "help" });
-    expect(linkStep("https://www.zara.com/fr/veste", false, ["tiktok", "instagram"])).toEqual({ kind: "refused", message: fr.spotter.unsupportedLink });
+    expect(linkStep("https://pin.it/4xYz", ["tiktok", "instagram"])).toEqual({ kind: "help" });
+    expect(linkStep("https://www.zara.com/fr/veste", ["tiktok", "instagram"])).toEqual({ kind: "refused", message: fr.spotter.unsupportedLink });
   });
 
   it("lien partagé et lien collé : même décision", () => {
     for (const text of ["https://vm.tiktok.com/ZMabc123/", "https://www.instagram.com/reel/Cxyz/?igsh=abc"]) {
       const shared = normalizeSharedLink(text);
       if (!shared) throw new Error("lien attendu");
-      expect(linkStep(shared, false, ["tiktok", "instagram"])).toEqual(linkStep(text, false, ["tiktok", "instagram"]));
+      expect(linkStep(shared, ["tiktok", "instagram"])).toEqual(linkStep(text, ["tiktok", "instagram"]));
     }
   });
 });

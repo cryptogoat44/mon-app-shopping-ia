@@ -26,7 +26,7 @@ export function useCorrections(result: SpotResult | null, onMessage: (message: s
     hasDraft: Boolean(draft),
     hasVideo: Boolean(video),
     remainingMoments: remaining.length,
-    fromLink: Boolean(result?.sourceUrl ?? draft?.sourceUrl),
+    fromLink: Boolean(result?.sourceUrl),
   };
 
   // Chaque autre moment est un geste de la personne : une identification consentie.

@@ -13,16 +13,16 @@ export function currentDevice() {
   return recordingDevice(Platform.OS, browser?.userAgent ?? null, browser?.maxTouchPoints ?? 0);
 }
 
-/** Lien collé (lot 4 ter) : la vidéo ne peut pas être lue depuis un lien —
- * l'analyse de la couverture est désactivée. Message court : comment ajouter
- * la vidéo (enregistrement de l'écran), et le bouton pour le faire. */
+/** Lien collé (lot 4 ter) : la vidéo ne peut pas être lue depuis un lien, et
+ * son image de couverture n'est jamais demandée. Message court : comment
+ * ajouter la vidéo (enregistrement de l'écran), et le bouton pour le faire. */
 export function LinkNotice({ onAddVideo, busy = false, style, link }: { onAddVideo: () => void; busy?: boolean; style?: StyleProp<ViewStyle>; link?: string }) {
   const openLink = useLinkEntry();
   // App iPhone, lecteur intégré allumé : une vidéo TikTok ou Instagram collée
   // dans les mots du Spotter s'ouvre dans Spotto. Seul l'accueil du Spotter
   // passe `link` : depuis « Entourez la pièce », le brouillon serait écrasé
   // (contre-expertise n° 22).
-  if (link !== undefined && linkStep(link, false, playerPlatforms()).kind === "player") {
+  if (link !== undefined && linkStep(link, playerPlatforms()).kind === "player") {
     return (
       <View style={[styles.box, style]} accessibilityLiveRegion="polite">
         <Text style={styles.title} accessibilityRole="header">

@@ -442,7 +442,6 @@ describe("textes du tracé", () => {
 
   it("plus aucun texte ne parle de faire glisser le cadre ou ses coins, ni d'essayer un autre cadre", () => {
     for (const text of [fr.targeting.caption, fr.crop.hint("x", "y"), fr.launch.frameHint, fr.result.noPriceText]) expect(text).not.toMatch(/cadre|coins/);
-    for (const text of [en.targeting.caption, en.crop.hint("x", "y"), en.launch.frameHint, en.result.noPriceText, en.preview.target]) expect(text).not.toMatch(/frame|corners/i);
-    expect(en.preview.target).toBe("Circle the piece");
+    for (const text of [en.targeting.caption, en.crop.hint("x", "y"), en.launch.frameHint, en.result.noPriceText]) expect(text).not.toMatch(/frame|corners/i);
   });
 });

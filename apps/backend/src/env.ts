@@ -20,24 +20,6 @@ const envSchema = z.object({
   // Part de chaque personne, par jour : qu'une seule personne ne puisse pas
   // épuiser la journée des autres (8 sur 25 : un tiers au plus).
   SERPAPI_USER_DAILY_CAP: z.coerce.number().int().min(1).default(8),
-  // Non requis pour que l'app démarre : sans jeton Meta, la reconnaissance
-  // automatique Instagram est simplement sautée au profit du repli manuel.
-  META_OEMBED_ACCESS_TOKEN: z.string().min(1).optional(),
-  // Liens TikTok et Instagram (lot « nettoyage avant le premier build »,
-  // 2026-11-10), COUPÉS par défaut. Même règle que les interrupteurs de la
-  // voie C plus bas : seule la valeur exacte "true" l'allume ; toute autre
-  // valeur le laisse coupé, sans jamais arrêter le serveur. Coupé : un lien
-  // envoyé à « préparer » est ignoré — aucun appel à TikTok ni à Meta, ni le
-  // lien ni l'adresse d'une couverture ne sont enregistrés — et le lancement
-  // ne télécharge jamais une couverture déjà enregistrée. L'app, elle, n'envoie
-  // plus de lien depuis le 7 octobre 2026 (LINK_COVER_ENABLED). Lu seulement
-  // par lib/linkPreview.ts. Hors de la liste des variables modifiables par les
-  // outils (render-guard) : le fondateur seul l'allume, à la main, dans
-  // Render, une fois l'accord écrit de la plateforme reçu.
-  LINK_PREVIEW_ENABLED: z
-    .string()
-    .optional()
-    .transform((value) => value === "true"),
   // Analyse automatique des vidéos (lot 4, temps 1 bis) : clé secrète
   // d'Anthropic, saisie par le fondateur dans Render. Absente : la fonction se
   // désactive proprement et l'app propose le curseur manuel.

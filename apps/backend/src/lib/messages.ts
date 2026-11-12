@@ -81,8 +81,6 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Vous avez demandé plusieurs exports en peu de temps. Réessayez dans une heure.":
     "You've requested several exports in a short time. Please try again in an hour.",
   "Le résultat n'a pas pu être enregistré, réessayez.": "The result couldn't be saved. Please try again.",
-  "L'image de la vidéo n'est plus disponible. Importez une capture de la pièce.":
-    "The video's image is no longer available. Please import a screenshot of the piece.",
   "La suppression a échoué.": "Deletion failed.",
   // Suppression de son compte (lot 5) : mot de confirmation, compte administrateur.
   "Pour confirmer la suppression, tapez le mot demandé.": "To confirm the deletion, type the requested word.",
@@ -210,7 +208,6 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
     "You've changed your profile photo several times in a short time. Please try again in an hour.",
   "Le nom affiché doit compter de 1 à 60 caractères.": "Your display name must be 1 to 60 characters long.",
   "Le service est très demandé en ce moment. Réessayez dans un instant.": "The service is very busy right now. Please try again in a moment.",
-  "Vous avez préparé beaucoup de liens en peu de temps. Réessayez dans une heure.": "You've prepared a lot of links in a short time. Please try again in an hour.",
   // Alertes prix et stock (lot 2, routes/wishAlerts.ts, lib/rateLimits.ts).
   "Vous avez signalé beaucoup de pièces aujourd'hui. Réessayez demain.": "You've reported a lot of pieces today. Please try again tomorrow.",
   "Vous avez changé beaucoup d'alertes en peu de temps. Réessayez dans un moment.": "You've changed a lot of alerts in a short time. Please try again in a moment.",

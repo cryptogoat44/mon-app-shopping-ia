@@ -23,7 +23,6 @@ vi.mock("@react-native-async-storage/async-storage", () => ({
 }));
 // Les interrupteurs, lus au moment de l'appel : le second bloc les allume tous.
 vi.mock("../src/lib/spot-flags", () => ({
-  LINK_COVER_ENABLED: false,
   PLAYER_CONSENT_GATE: true,
   get LINK_PLAYER_ENABLED() {
     return flags.LINK_PLAYER_ENABLED;
@@ -82,8 +81,8 @@ describe("lecteur intégré : proposé nulle part", () => {
     expect(isPlayerAvailable()).toBe(false);
     expect(isPlayerAvailable("tiktok")).toBe(false);
     expect(playerPlatforms()).toEqual([]);
-    expect(linkStep("https://vm.tiktok.com/ZMabc123/", undefined, playerPlatforms())).toEqual({ kind: "help" });
-    expect(linkStep("https://www.instagram.com/reel/Cxyz/", undefined, playerPlatforms())).toEqual({ kind: "help" });
+    expect(linkStep("https://vm.tiktok.com/ZMabc123/", playerPlatforms())).toEqual({ kind: "help" });
+    expect(linkStep("https://www.instagram.com/reel/Cxyz/", playerPlatforms())).toEqual({ kind: "help" });
   });
 
   it("même sur iPhone avec TOUS les interrupteurs allumés : sans le module de capture, aucune plateforme, toujours l'aide", () => {
@@ -92,7 +91,7 @@ describe("lecteur intégré : proposé nulle part", () => {
     expect(isPlayerAvailable()).toBe(false);
     expect(isPlayerAvailable("tiktok")).toBe(false);
     expect(isPlayerAvailable("instagram")).toBe(false);
-    expect(linkStep("https://vm.tiktok.com/ZMabc123/", undefined, playerPlatforms())).toEqual({ kind: "help" });
+    expect(linkStep("https://vm.tiktok.com/ZMabc123/", playerPlatforms())).toEqual({ kind: "help" });
   });
 });
 

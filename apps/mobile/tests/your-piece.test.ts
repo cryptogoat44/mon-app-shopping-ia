@@ -10,9 +10,6 @@ const ZONE = { x: 0.25, y: 0.5, width: 0.5, height: 0.25 };
 function draft(overrides: Partial<SpotDraft> = {}): SpotDraft {
   return {
     searchId: null,
-    sourceUrl: null,
-    platform: "photo",
-    previewUrl: null,
     localImageUri: "file:///cache/photo.jpg",
     imageSize: { width: 1200, height: 1600 },
     crop: ZONE,
@@ -36,7 +33,7 @@ describe("« Votre pièce » : présente ou non", () => {
   });
 
   it("aucune image : rien", () => {
-    expect(yourPieceImage(true, draft({ localImageUri: null, previewUrl: null }))).toBeNull();
+    expect(yourPieceImage(true, draft({ localImageUri: null }))).toBeNull();
   });
 
   it("zone connue mais taille de l'image inconnue : rien plutôt qu'une mauvaise zone", () => {
@@ -47,11 +44,6 @@ describe("« Votre pièce » : présente ou non", () => {
   it("sans zone (image entière analysée) : l'image entière, même sans sa taille", () => {
     expect(yourPieceImage(true, draft({ crop: null }))).toEqual({ uri: "file:///cache/photo.jpg", size: { width: 1200, height: 1600 }, crop: null });
     expect(yourPieceImage(true, draft({ crop: null, imageSize: null }))).toEqual({ uri: "file:///cache/photo.jpg", size: null, crop: null });
-  });
-
-  it("même image que l'écran d'attente : la photo importée avant la vignette d'un lien", () => {
-    expect(yourPieceImage(true, draft({ previewUrl: "https://cdn.test/couverture.jpg" }))?.uri).toBe("file:///cache/photo.jpg");
-    expect(yourPieceImage(true, draft({ localImageUri: null, previewUrl: "https://cdn.test/couverture.jpg" }))?.uri).toBe("https://cdn.test/couverture.jpg");
   });
 });
 

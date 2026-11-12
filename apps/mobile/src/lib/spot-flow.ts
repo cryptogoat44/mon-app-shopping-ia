@@ -1,36 +1,18 @@
 import { t } from "../i18n";
 import { ApiError, prepareSearch } from "./api";
 import { getDraft, startDraft, updateDraft, type ImageSize, type SpotDraft } from "./spot-draft";
-import type { LinkPlatform } from "./link-detection";
 import type { UnsettledLaunch } from "./spot-recovery";
 
 // Enchaînement du parcours Spotter. « Préparer » est gratuit (aucun appel
 // SerpApi) : on peut le refaire sans scrupule pour chaque nouveau lancement.
-
-export async function beginFromLink(url: string, platform: LinkPlatform): Promise<SpotDraft> {
-  const search = await prepareSearch({ sourceUrl: url });
-  return startDraft({
-    searchId: search.id,
-    sourceUrl: url,
-    platform,
-    previewUrl: search.thumbnailUrl,
-    previewIssue: search.previewIssue ?? null,
-    localImageUri: null,
-  });
-}
+// Le parcours part toujours d'une image que la personne apporte (photo,
+// capture, image de sa vidéo) : jamais de l'image d'un lien.
 
 /** Photo, ou image d'une vidéo : brouillon local. La recherche, gratuite,
  * n'est préparée qu'au lancement (freshSearchId) : l'écran suivant s'ouvre
  * sans attendre le serveur — même quand l'offre gratuite le réveille (lot 4 ter). */
 export function beginFromPhoto(uri: string, size: ImageSize): SpotDraft {
-  return startDraft({
-    searchId: null,
-    sourceUrl: null,
-    platform: "photo",
-    previewUrl: null,
-    localImageUri: uri,
-    imageSize: size,
-  });
+  return startDraft({ searchId: null, localImageUri: uri, imageSize: size });
 }
 
 /** Identifiant d'une recherche encore jamais lancée pour ce brouillon : la
@@ -38,8 +20,8 @@ export function beginFromPhoto(uri: string, size: ImageSize): SpotDraft {
  * lance qu'une fois, côté serveur). */
 export async function freshSearchId(draft: SpotDraft): Promise<string> {
   if (draft.searchId) return draft.searchId;
-  const search = await prepareSearch(draft.sourceUrl ? { sourceUrl: draft.sourceUrl } : {});
-  updateDraft({ searchId: search.id, previewUrl: draft.localImageUri ? draft.previewUrl : search.thumbnailUrl });
+  const search = await prepareSearch();
+  updateDraft({ searchId: search.id });
   return search.id;
 }
 

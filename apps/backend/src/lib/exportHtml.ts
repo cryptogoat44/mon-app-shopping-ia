@@ -449,7 +449,9 @@ function searchesSection(ctx: Ctx): Html {
               : tr(ctx, EXPORT_TEXT.openLink, { site })
         )
       )
-      // Miniature fournie par la plateforme : adresse signée qui expire.
+      // Recherches d'avant le 12 novembre 2026 seulement (voie « couverture »
+      // retirée) : adresse signée, expirée, montrée comme un simple lien que le
+      // serveur n'ouvre jamais.
       .field("thumbnail_url", link(ctx, row.thumbnail_url, (site) => tr(ctx, EXPORT_TEXT.temporaryImage, { site })))
       .field("method", enumLabel(ctx, RECOGNITION_METHOD_LABELS, row.method))
       .field("query", multiline(row.query))

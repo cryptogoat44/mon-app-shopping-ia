@@ -154,7 +154,9 @@ validation et les réponses « App Privacy » sont dans
 
   Deux conséquences pratiques :
   - **les interrupteurs du serveur** (`PUSH_ENABLED`, `VOIE_C_ENABLED`,
-    `VOIE_C_AI_ENABLED`, `LINK_PREVIEW_ENABLED`, `ANTHROPIC_PHOTO_ENABLED`)
+    `VOIE_C_AI_ENABLED`, `ANTHROPIC_PHOTO_ENABLED` ; celui des liens n'existe
+    plus : la voie « couverture » a été retirée du code le 12 novembre 2026,
+    archivée sur la branche `archive/couverture-oembed`)
     suivent la même prudence, au titre de la règle 2.5.19 (aucune fonction
     cachée, dormante ou non décrite) : ce qui est allumé le jour de l'envoi
     est décrit comme allumé dans les notes pour Apple ; allumer plus tard une

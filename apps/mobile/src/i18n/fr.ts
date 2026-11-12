@@ -91,12 +91,10 @@ export const fr = {
     title: "Spotter",
     close: "Fermer",
     lead: "Retrouvez une pièce vue dans une vidéo ou sur une photo.",
-    linkLabel: "Lien TikTok, Instagram ou Pinterest",
     linkPlaceholder: "Collez ou tapez un lien",
     paste: "Coller",
     pasteEmpty: "Le presse-papiers ne contient pas de lien.",
     pasteDenied: "Collez le lien directement dans le champ.",
-    continue: "Continuer",
     preparing: "Préparation…",
     addVideo: "Ajouter une vidéo",
     addPhoto: "Ajouter une photo",
@@ -219,7 +217,8 @@ export const fr = {
     available: "Nouvelle version disponible.",
     reload: "Recharger",
   },
-  // Lien collé (lot 4 ter) : l'analyse de la couverture est désactivée.
+  // Lien collé (lot 4 ter) : une vidéo ne se lit pas depuis un lien, et son
+  // image de couverture n'est jamais demandée.
   linkNotice: {
     title: "Une vidéo ne se lit pas depuis un lien",
     body: (how: string) =>
@@ -353,19 +352,13 @@ export const fr = {
       withdrawn: "Accord retiré : la question vous sera reposée à la prochaine vidéo.",
     },
   },
+  // Étapes de la capture d'écran (aide d'un lien collé ou partagé, lecteur) et
+  // messages d'un parcours qui n'existe plus (page rechargée).
   preview: {
-    title: "Voici l'image qui sera analysée",
-    caption: (platform: string) => `Image de couverture de la ${platform === "TikTok" ? "vidéo" : "publication"} ${platform}.`,
-    captureCaption: "Votre capture d'écran.",
-    // Espace insécable : le « ? » ne passe jamais seul à la ligne.
-    notOnImageTitle: "La pièce n'apparaît pas sur cette image ?",
-    notOnImageWhy: (platform: string) =>
-      `${platform} ne donne accès qu'à cette image de couverture, pas au reste de la vidéo. Montrez à ${BRAND} le bon moment avec une capture d'écran :`,
     captureSteps: (platform: string, shortcut: string) => [
       `Ouvrez la vidéo dans ${platform}.`,
       "Mettez-la en pause quand la pièce est bien visible.",
       `Faites une capture d'écran (${shortcut}).`,
-      "Revenez ici et touchez « Importer une capture ».",
     ],
     screenshotShortcut: {
       ios: "bouton latéral + bouton volume haut",
@@ -373,35 +366,6 @@ export const fr = {
       web: "Cmd + Maj + 4 sur Mac, Windows + Maj + S sur PC",
     },
     theApp: "l'application",
-    importCapture: "Importer une capture",
-    target: "Cibler la pièce",
-    noPreviewTitle: "Importez une capture de la pièce",
-    noPreviewBody: (platform: string) =>
-      `${BRAND} ne peut pas récupérer l'image de ce lien ${platform}. Faites une capture d'écran au moment où la pièce est bien visible, puis importez-la.`,
-    // Raisons précises (voir PreviewIssue) : chaque message dit quoi faire.
-    issue: {
-      unavailable: {
-        title: (content: string) => `${content[0]!.toUpperCase()}${content.slice(1)} introuvable`,
-        body: (platform: string, content: string) =>
-          `${platform} ne trouve pas cette ${content} : elle est peut-être privée ou a été supprimée, ou le lien est incomplet. Vérifiez qu'elle s'ouvre bien dans ${platform}, puis recopiez son lien. Si elle s'affiche chez vous, vous pouvez aussi en importer une capture d'écran.`,
-      },
-      notAVideo: {
-        title: (content: string) => `Ce lien ne mène pas à une ${content}`,
-        body: (platform: string, content: string) =>
-          `Il ouvre un profil ou une page ${platform}. Ouvrez la ${content}, touchez « Partager » puis « Copier le lien », et collez ce lien dans Spotter.`,
-      },
-      serviceDown: {
-        title: (platform: string) => `${platform} ne répond pas pour le moment`,
-        body: "Réessayez dans quelques minutes. Vous pouvez aussi importer une capture d'écran de la pièce.",
-      },
-      noAccess: {
-        title: "Importez une capture de la pièce",
-        body: (platform: string) => `${platform} ne permet pas à ${BRAND} de récupérer l'image de ce lien. Montrez-lui la pièce avec une capture d'écran :`,
-      },
-    },
-    content: { tiktok: "vidéo", instagram: "publication", pinterest: "épingle" },
-    fixLink: "Corriger le lien",
-    retry: "Réessayer",
     missing: "Ce parcours n'est plus disponible. Recommencez depuis Spotter.",
     back: "Retour à Spotter",
   },

@@ -3,7 +3,6 @@ import { track } from "./analytics";
 import { linkStep } from "./link-step";
 import { playerPlatforms } from "./player-access";
 import { holdPlayerLink, type PlayerLinkSource } from "./player-link";
-import { beginFromLink, prepareErrorMessage } from "./spot-flow";
 
 export type LinkOutcome = { kind: "opened" } | { kind: "help" } | { kind: "refused"; message: string };
 
@@ -16,20 +15,11 @@ export type LinkOutcome = { kind: "opened" } | { kind: "help" } | { kind: "refus
 export function useLinkEntry(): (text: string, source: PlayerLinkSource) => Promise<LinkOutcome> {
   const router = useRouter();
   return async function openLink(text, source) {
-    const step = linkStep(text, undefined, playerPlatforms());
-    if (step.kind === "player") {
-      holdPlayerLink({ url: step.url, platform: step.platform, source });
-      track("player_opened", { platform: step.platform, source });
-      router.push("/spot/lecteur");
-      return { kind: "opened" };
-    }
-    if (step.kind !== "cover") return step;
-    try {
-      const draft = await beginFromLink(step.url, step.platform);
-      router.push({ pathname: "/spot/apercu", params: { searchId: draft.searchId ?? "" } });
-      return { kind: "opened" };
-    } catch (error) {
-      return { kind: "refused", message: prepareErrorMessage(error) };
-    }
+    const step = linkStep(text, playerPlatforms());
+    if (step.kind !== "player") return step;
+    holdPlayerLink({ url: step.url, platform: step.platform, source });
+    track("player_opened", { platform: step.platform, source });
+    router.push("/spot/lecteur");
+    return { kind: "opened" };
   };
 }

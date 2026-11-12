@@ -1,24 +1,6 @@
 import sharp, { type Sharp } from "sharp";
 import type { CropRect } from "@monapp/shared-types";
-import { safeFetch } from "./safeFetch.js";
 import { IMAGE_TOO_HEAVY, ImageQueueFullError, MAX_INPUT_PIXELS, imageFormatOf, isTooHeavyToDecode, oneImageAtATime } from "./imageSafety.js";
-
-// Hébergeurs des vignettes renvoyées par les voies officielles (oEmbed) :
-// seules adresses que le serveur accepte de télécharger pour les recadrer
-// (règle 9 : liste blanche, redirections revérifiées par safeFetch). Les
-// vignettes TikTok viennent de tiktokcdn-eu.com (constaté le 2026-09-24),
-// d'autres régions existent ; celles d'Instagram (si un jeton Meta est un
-// jour configuré) de cdninstagram.com / fbcdn.net.
-export const THUMBNAIL_HOSTS = [
-  "tiktokcdn.com",
-  "tiktokcdn-eu.com",
-  "tiktokcdn-us.com",
-  "cdninstagram.com",
-  "fbcdn.net",
-];
-
-const MAX_REMOTE_IMAGE_BYTES = 15 * 1024 * 1024;
-const DOWNLOAD_TIMEOUT_MS = 10_000;
 
 // Taille maximale de l'image envoyée à l'analyse : au-delà, Google Lens
 // n'y gagne rien et l'envoi est plus lent.
@@ -27,22 +9,6 @@ const MAX_ANALYSIS_EDGE = 1600;
 const MIN_CROP_PIXELS = 32;
 
 export class ImageSourceError extends Error {}
-
-/** Télécharge une vignette officielle (liste blanche d'hébergeurs,
- * contrôle du type et de la taille). */
-export async function downloadThumbnail(url: string): Promise<Buffer> {
-  const response = await safeFetch(url, {
-    allowedHosts: THUMBNAIL_HOSTS,
-    signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
-  });
-  if (!response.ok) throw new ImageSourceError(`Vignette indisponible (${response.status})`);
-  if (!response.headers.get("content-type")?.startsWith("image/")) {
-    throw new ImageSourceError("La vignette n'est pas une image");
-  }
-  const buffer = Buffer.from(await response.arrayBuffer());
-  if (buffer.length > MAX_REMOTE_IMAGE_BYTES) throw new ImageSourceError("Vignette trop volumineuse");
-  return buffer;
-}
 
 /** Zone en pixels (gauche, haut, largeur, hauteur). */
 interface PixelRect {

@@ -29,17 +29,9 @@ vi.mock("../src/services/visualSearch.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/services/visualSearch.js")>();
   return { ...original, searchProductsByImageUrl: vi.fn() };
 });
-vi.mock("../src/services/oembed.js", () => ({
-  detectPlatform: () => "tiktok",
-  fetchOfficialPreview: vi.fn(async () => ({ ok: true, thumbnailUrl: "https://p16-common-sign.tiktokcdn-eu.com/vignette.jpeg" })),
-}));
 vi.mock("../src/lib/searchCapacity.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/lib/searchCapacity.js")>();
   return { ...original, reserveSearch: vi.fn(), releaseReservation: vi.fn(), searchCapacityBeforeComplementAi: vi.fn() };
-});
-vi.mock("../src/lib/imageProcessing.js", async (importOriginal) => {
-  const original = await importOriginal<typeof import("../src/lib/imageProcessing.js")>();
-  return { ...original, downloadThumbnail: vi.fn() };
 });
 // Voie C et IA coupées, quel que soit le .env du Mac : le chemin d'une photo
 // importée est alors Lens seul (simulé ci-dessus).

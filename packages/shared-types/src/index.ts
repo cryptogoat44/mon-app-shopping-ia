@@ -181,6 +181,9 @@ export interface ApiErrorBody {
 // dans la base (charte, règle 19).
 export const PLATFORM_SOURCES = ["tiktok", "instagram", "other", "photo"] as const;
 export type PlatformSource = (typeof PLATFORM_SOURCES)[number];
+// « oembed » : valeur de la base gardée pour relire les recherches d'avant le
+// 12 novembre 2026 (image de la vidéo demandée à la plateforme : voie
+// retirée) ; plus aucune recherche n'est créée avec.
 export const RECOGNITION_METHODS = ["oembed", "manual_screenshot"] as const;
 export type RecognitionMethod = (typeof RECOGNITION_METHODS)[number];
 export const SEARCH_STATUSES = ["pending", "processing", "completed", "failed"] as const;
@@ -273,10 +276,11 @@ export interface MatchFeedbackRequest {
 
 export interface ProductSearch {
   id: string;
+  /** Adresse publique de la vidéo TikTok ou Instagram jointe à la recherche
+   * (sans paramètre de suivi) ; null pour une photo. Jamais une image. */
   sourceUrl: string | null;
   sourcePlatform: PlatformSource;
   method: RecognitionMethod;
-  thumbnailUrl: string | null;
   status: SearchStatus;
   errorMessage: string | null;
   /** Texte « Que cherchez-vous ? » saisi au lancement, s'il y en a un. */
@@ -508,17 +512,6 @@ export function parseVideoMomentsResponse(value: unknown, frameCount: number): V
   return moments.length <= VIDEO_AI.moments ? moments : null;
 }
 
-/** Pourquoi l'image d'un lien n'a pas pu être récupérée à la préparation
- * (Spotter, Lot S2) — l'app affiche un message précis et la suite à donner.
- * - unavailable : la plateforme ne trouve pas le contenu (vidéo privée,
- *   supprimée, ou lien incomplet — TikTok ne distingue pas ces cas) ;
- * - not_a_video : le lien mène à un profil ou une page, pas à une vidéo ;
- * - service_down : la plateforme ne répond pas (lente, en panne) ;
- * - no_official_access : aucune voie officielle pour ce site (Instagram
- *   sans jeton Meta, Pinterest) — seule la capture d'écran est possible ;
- * - unsupported_site : site qui n'est ni TikTok, ni Instagram, ni Pinterest. */
-export type PreviewIssue = "unavailable" | "not_a_video" | "service_down" | "no_official_access" | "unsupported_site";
-
 /** Messages enregistrés par le serveur quand une recherche échoue : l'app
  * s'en sert pour distinguer « rien trouvé » (proposer de recadrer) d'une
  * panne (proposer de réessayer). Source unique pour les deux côtés. */
@@ -527,6 +520,10 @@ export const SEARCH_FAILURE_MESSAGES = {
   technical: "La recherche visuelle a échoué.",
 } as const;
 
+/** Corps de POST /api/searches/prepare. `sourceUrl` (facultatif) : le lien
+ * de la vidéo d'où vient la capture. Le serveur n'en garde que l'adresse
+ * publique d'une vidéo TikTok ou Instagram reconnue (normalizeVideoLink) ; il
+ * ne demande rien à la plateforme et ne récupère aucune image. */
 export interface CreateSearchRequest {
   sourceUrl?: string;
 }

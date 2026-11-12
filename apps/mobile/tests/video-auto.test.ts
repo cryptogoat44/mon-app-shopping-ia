@@ -30,7 +30,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Brouillon local, sans appel au serveur (lot 4 ter) : la recherche se prépare au lancement.
   beginFromPhoto.mockImplementation((uri: string, size: { width: number; height: number }) =>
-    startDraft({ searchId: null, sourceUrl: null, platform: "photo", previewUrl: null, localImageUri: uri, imageSize: size })
+    startDraft({ searchId: null, localImageUri: uri, imageSize: size })
   );
 });
 

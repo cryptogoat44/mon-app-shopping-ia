@@ -24,7 +24,6 @@ import { RECENT_SEARCHES_LIMIT, reopenParams } from "@/lib/recent-searches";
 import { sharedRefusalMessage, type SharedItem } from "@/lib/shared-item";
 import { beginFromPhoto } from "@/lib/spot-flow";
 import { isPlayerAvailable } from "@/lib/player-access";
-import { LINK_COVER_ENABLED } from "@/lib/spot-flags";
 import { adoptSpotVideo, videoImportMessage } from "@/lib/spot-video";
 import { useLinkEntry } from "@/lib/use-link-entry";
 import { useSharedItemOpener } from "@/lib/use-shared-item";
@@ -115,14 +114,13 @@ function RecentRow({ recent }: { recent: { searchId: string; piece: Piece }[] })
  * App iPhone avec le lecteur intégré allumé : la question déplie le champ de lien, qui ouvre la vidéo dans Spotto. */
 function LinkHelp({ onAddPhoto, onAddVideo, onHelp, importing }: { onAddPhoto: () => void; onAddVideo: () => void; onHelp: () => void; importing: boolean }) {
   const [open, setOpen] = useState(false);
-  if (LINK_COVER_ENABLED) return <LinkEntry onHelp={onHelp} />;
   const player = isPlayerAvailable();
   return (
     <>
       <Pressable onPress={() => setOpen((value) => !value)} style={styles.linkQuestion} accessibilityRole="button" accessibilityState={{ expanded: open }}>
         <Text style={styles.linkQuestionLabel}>{player ? t.player.linkQuestion : t.spotter.linkQuestion}</Text>
       </Pressable>
-      {open ? player ? <LinkEntry mode="player" onHelp={onHelp} /> : <ScreenshotHelp onAddScreenshot={onAddPhoto} onAddVideo={onAddVideo} busy={importing} /> : null}
+      {open ? player ? <LinkEntry onHelp={onHelp} /> : <ScreenshotHelp onAddScreenshot={onAddPhoto} onAddVideo={onAddVideo} busy={importing} /> : null}
     </>
   );
 }

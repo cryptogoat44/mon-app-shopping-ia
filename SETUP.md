@@ -52,8 +52,7 @@ Le plus simple, pour travailler sur spotto-dev-2 : `pnpm --filter backend config
 | `VOIE_C_ENABLED`, `VOIE_C_AI_ENABLED`, `ANTHROPIC_PHOTO_ENABLED` | non | Interrupteurs de la voie C, coupés sauf valeur exacte `true` |
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | non | Suivi des erreurs et alertes (`production` sur Render) |
 | `APP_MIN_IOS_BUILD`, `APP_STORE_URL` | non | Mise à jour obligatoire de l'app iPhone |
-| `LINK_PREVIEW_ENABLED` | non | Interrupteur des liens TikTok et Instagram, coupé sauf valeur exacte `true`. Coupé : le serveur ignore un lien envoyé (aucun appel à TikTok ni à Meta, rien d'enregistré). À n'allumer qu'avec l'accord écrit de la plateforme. |
-| `META_OEMBED_ACCESS_TOKEN` | non | Reconnaissance des liens Instagram (ne sert que si `LINK_PREVIEW_ENABLED` est allumé) |
+| ~~`LINK_PREVIEW_ENABLED`~~, ~~`META_OEMBED_ACCESS_TOKEN`~~ | plus lues | La voie « couverture » (image d'un lien demandée à TikTok ou à Meta) a été retirée du code le 12 novembre 2026 (archivée sur la branche `archive/couverture-oembed`). Ces deux variables ne servent plus à rien : si elles existent encore chez Render, elles peuvent être supprimées. |
 | `RENDER_GIT_COMMIT` | jamais à la main | Remplie par Render : la version donnée par /health |
 
 Pour la copie hebdomadaire des photos seulement (tâche planifiée de Render) : `PHOTO_BACKUP_S3_ENDPOINT`, `PHOTO_BACKUP_S3_REGION`, `PHOTO_BACKUP_S3_BUCKET`, `PHOTO_BACKUP_S3_ACCESS_KEY_ID`, `PHOTO_BACKUP_S3_SECRET_ACCESS_KEY` (voir [apps/backend/supabase/SAUVEGARDE-PHOTOS.md](apps/backend/supabase/SAUVEGARDE-PHOTOS.md)).

@@ -10,11 +10,10 @@ import { linkRefusal } from "@/lib/link-step";
 import { useLinkEntry } from "@/lib/use-link-entry";
 import { themedStyles } from "@/theme/themed-styles";
 
-// Champ de lien du Spotter. Mode « player » : le lecteur intégré (app iPhone,
-// lot « lecteur intégré », coupé tant que LINK_PLAYER_ENABLED vaut false).
-// Mode « cover » : l'analyse de l'image de couverture (Lot S), DÉSACTIVÉE au
-// lot 4 ter (voir lib/spot-flags.ts) ; gardée pour pouvoir la rétablir. Le
-// bouton passe par la même fonction qu'un lien partagé (lib/use-link-entry.ts).
+// Champ de lien du Spotter, pour le lecteur intégré seulement (app iPhone,
+// lot « lecteur intégré », coupé tant que LINK_PLAYER_ENABLED vaut false) :
+// ailleurs, le champ n'est pas affiché. Le bouton passe par la même fonction
+// qu'un lien partagé (lib/use-link-entry.ts).
 
 function DetectionCard({ detection }: { detection: LinkDetection }) {
   if (detection.kind === "supported") {
@@ -32,8 +31,8 @@ function DetectionCard({ detection }: { detection: LinkDetection }) {
 }
 
 /** `onHelp` : le lien ne peut pas être lu — le Spotter montre l'aide « capture d'écran d'abord ». */
-export function LinkEntry({ onHelp, mode = "cover" }: { onHelp: () => void; mode?: "cover" | "player" }) {
-  const label = mode === "player" ? t.player.linkLabel : t.spotter.linkLabel;
+export function LinkEntry({ onHelp }: { onHelp: () => void }) {
+  const label = t.player.linkLabel;
   const openLink = useLinkEntry();
   const [link, setLink] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -72,7 +71,7 @@ export function LinkEntry({ onHelp, mode = "cover" }: { onHelp: () => void; mode
   return (
     <>
       <Text style={styles.label}>{label}</Text>
-      {mode === "player" ? <Text style={styles.hint}>{t.player.linkHint}</Text> : null}
+      <Text style={styles.hint}>{t.player.linkHint}</Text>
       <View style={styles.field}>
         <TextInput
           style={styles.input}
@@ -100,7 +99,7 @@ export function LinkEntry({ onHelp, mode = "cover" }: { onHelp: () => void; mode
       <Pressable style={[styles.primary, !canContinue ? styles.primaryDisabled : null]} onPress={handleContinue} disabled={!canContinue} accessibilityRole="button">
         {busy ? <ActivityIndicator color={color.blanc} /> : null}
         <Text style={[styles.primaryLabel, !canContinue ? styles.primaryLabelDisabled : null]}>
-          {busy ? t.spotter.preparing : mode === "player" ? t.player.open : t.spotter.continue}
+          {busy ? t.spotter.preparing : t.player.open}
         </Text>
       </Pressable>
     </>

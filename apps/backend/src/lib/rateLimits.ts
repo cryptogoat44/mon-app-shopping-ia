@@ -96,19 +96,6 @@ export const RATE_LIMITS = {
     message: "Trop de changements des notifications en peu de temps. Réessayez dans une heure.",
   },
 
-  // Lien TikTok ou Instagram préparé (POST /api/searches/prepare avec un
-  // lien, interrupteur LINK_PREVIEW_ENABLED allumé) : chaque préparation fait
-  // partir une demande du serveur vers TikTok ou Meta. Sans cette limite
-  // (revue de sécurité du 12 novembre 2026), un membre pouvait en faire
-  // partir 300 par minute et faire brider le serveur par ces plateformes.
-  // Interrupteur coupé (aujourd'hui) : le lien est ignoré, rien n'est compté.
-  linkPrepare: {
-    max: 20,
-    windowMs: HOUR,
-    error: "link_prepare_limit",
-    message: "Vous avez préparé beaucoup de liens en peu de temps. Réessayez dans une heure.",
-  },
-
   // Photo de profil (revue de sécurité du 12 novembre 2026) : envoyer ou
   // supprimer sa photo (POST et DELETE /api/me/avatar, comptés ensemble,
   // refus compris). Chaque envoi fait décoder une image au serveur : la
