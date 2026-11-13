@@ -297,3 +297,12 @@ revoke all on function video_products(text, text, uuid, integer, integer) from p
 grant execute on function video_products(text, text, uuid, integer, integer) to service_role;
 revoke all on function video_memory_remove(text, text, text) from public, anon, authenticated;
 grant execute on function video_memory_remove(text, text, text) to service_role;
+
+-- ---- Suppression d'un compte qui a spotté une vidéo ----
+-- Le déclencheur du compteur (0038) doit s'exécuter avec les droits de son
+-- propriétaire : sinon le système de comptes de Supabase ne peut plus
+-- supprimer un membre qui a un spot (« Database error deleting user »,
+-- constaté sur spotto-dev-2 le 13 novembre 2026). 0038 le déclare désormais
+-- elle-même ; répété ici pour une base où l'ancienne 0038 est déjà appliquée.
+alter function video_spots_after_delete() security definer;
+alter function video_spots_after_delete() set search_path = public;

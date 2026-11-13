@@ -122,9 +122,19 @@ grant select, insert, update, delete on table video_sources, video_spots, video_
 
 -- Un spot supprimé (recherche de plus de 12 mois, compte supprimé) : le
 -- compteur de la vidéo suit, sans jamais passer sous zéro.
+-- « security definer » OBLIGATOIRE : quand un membre supprime son compte,
+-- c'est le système de comptes de Supabase (rôle supabase_auth_admin, sans
+-- aucun droit sur video_sources) qui déclenche la suppression en cascade de
+-- ses spots. Sans ce réglage, la mise à jour du compteur était refusée
+-- (« permission denied for table video_sources ») et TOUTE la suppression du
+-- compte échouait (« Database error deleting user »), constaté sur
+-- spotto-dev-2 le 13 novembre 2026. Comme handle_new_user (0002), la fonction
+-- s'exécute avec les droits de son propriétaire ; elle ne fait que baisser un
+-- compteur, et une fonction de déclencheur ne s'appelle pas directement.
 create or replace function video_spots_after_delete()
 returns trigger
 language plpgsql
+security definer
 set search_path = public
 as $$
 begin
