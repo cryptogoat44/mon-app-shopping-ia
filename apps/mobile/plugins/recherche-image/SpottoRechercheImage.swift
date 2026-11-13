@@ -164,9 +164,12 @@ enum SpottoCaptures {
 /// Le résultat montré par iOS : la capture, à chercher dans l'app.
 @available(iOS 26.0, *)
 struct SpottoCaptureEntity: AppEntity {
-  static var typeDisplayRepresentation: TypeDisplayRepresentation {
-    TypeDisplayRepresentation(name: LocalizedStringResource(String.LocalizationValue(SpottoCaptures.french ? "Pièce" : "Piece")))
-  }
+  // Lu par l'outil d'Apple qui extrait les App Intents à la compilation : il
+  // exige un appel direct à l'initialiseur avec un texte fixe (refus constaté
+  // le 13 novembre 2026, Xcode 26.5 : « must be initialized with a call to its
+  // initializer »). Le texte montré à la personne est le titre de
+  // displayRepresentation, plus bas, en français ou en anglais.
+  static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Piece")
 
   static let defaultQuery = SpottoCaptureEntityQuery()
 
