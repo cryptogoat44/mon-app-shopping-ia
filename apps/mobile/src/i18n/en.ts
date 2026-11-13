@@ -735,7 +735,7 @@ export const en: Catalog = {
     reportLinkLabel: (title: string) => `Report that ${title} is no longer available`,
     reportTitle: "Is this piece no longer available?",
     reportBody:
-      `You're saying it's no longer for sale at this shop. This helps ${BRAND} tell members who follow it when it comes back. Nobody will know it was you.`,
+      "You're saying it's no longer for sale at this shop. It's marked sold out in your wishes, and in those of members who follow it once another member reports it too. Nobody will know it was you.",
     reportConfirm: "Yes, no longer available",
     reportSending: "Sending…",
     reportCancel: "Cancel",

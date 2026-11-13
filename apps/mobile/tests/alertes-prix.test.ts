@@ -518,6 +518,11 @@ describe("textes en français et en anglais", () => {
     // Jamais qui a cherché ni qui suit la pièce.
     expect(fr.wishAlerts.sheetIntro).toContain("Personne ne sait qui l'a cherchée, ni qui la suit.");
     expect(fr.wishAlerts.reportBody).toContain("Personne ne saura que c'est vous.");
+    // Lot « durcissement des alertes » (0040) : un signalement seul ne change que vos envies ;
+    // il ne promet plus de prévenir les autres membres d'un retour en stock.
+    expect(fr.wishAlerts.reportBody).toContain("dès qu'un autre membre la signale aussi");
+    expect(en.wishAlerts.reportBody).toContain("once another member reports it too");
+    for (const text of [fr.wishAlerts.reportBody, en.wishAlerts.reportBody]) expect(text).not.toMatch(/reviendra|comes back/);
   });
 
   it("les libellés composés suivent la langue de l'app", () => {

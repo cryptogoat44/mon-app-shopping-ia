@@ -799,8 +799,10 @@ export const fr = {
     reportLink: "Plus disponible ?",
     reportLinkLabel: (title: string) => `Signaler que ${title} n'est plus disponible`,
     reportTitle: "Cette pièce n'est plus disponible ?",
+    // Lot « durcissement des alertes » (0040) : un signalement seul ne change
+    // que vos envies ; celles des autres à partir de deux membres différents.
     reportBody:
-      `Vous indiquez qu'elle n'est plus en vente dans cette boutique. Cela aide ${BRAND} à prévenir les membres qui la suivent quand elle reviendra. Personne ne saura que c'est vous.`,
+      "Vous indiquez qu'elle n'est plus en vente dans cette boutique. Elle est notée épuisée dans vos envies, et dans celles des membres qui la suivent dès qu'un autre membre la signale aussi. Personne ne saura que c'est vous.",
     reportConfirm: "Oui, plus disponible",
     reportSending: "Envoi…",
     reportCancel: "Annuler",
