@@ -669,9 +669,10 @@ function forgetAlertsOn(e: unknown): never {
   throw e;
 }
 
-/** L'interrupteur « Alertes prix et stock » des Réglages. */
-export async function updateWishAlertsSettings(enabled: boolean): Promise<WishAlertsStatus> {
-  const payload: UpdateWishAlertsSettingsRequest = { enabled };
+/** Les réglages des alertes : « Alertes prix et stock » (un booléen, comme
+ * avant) ou « Aider les autres membres » (0041). */
+export async function updateWishAlertsSettings(choice: boolean | UpdateWishAlertsSettingsRequest): Promise<WishAlertsStatus> {
+  const payload: UpdateWishAlertsSettingsRequest = typeof choice === "boolean" ? { enabled: choice } : choice;
   try {
     const response = await authorizedFetch("/api/alerts/settings", { method: "PUT", body: JSON.stringify(payload) });
     const status = readWishAlertsStatus(await response.json().catch(() => null));

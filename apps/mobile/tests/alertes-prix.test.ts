@@ -21,8 +21,11 @@ import {
   canReportWish,
   choiceChanged,
   choiceOf,
+  currencySymbol,
+  initialTarget,
   isAlertsUnavailable,
   onWishAlertsStatus,
+  parseTargetPrice,
   pushNote,
   pushNoteText,
   readWishAlertState,
@@ -32,6 +35,7 @@ import {
   stockReportErrorMessage,
   stockReportRequest,
   switchTurnsOn,
+  targetPriceText,
   visibleAlertKinds,
   watchErrorMessage,
   watchRequest,
@@ -47,6 +51,7 @@ import {
   notificationHref,
   notificationTarget,
   pushDecisionKey,
+  setOpenConversation,
   shouldShowBanner,
   type AlertsPushContext,
 } from "../src/lib/push-state";
@@ -76,7 +81,7 @@ const sources = files(ROOT).map((path) => ({ name: relative(ROOT, path), text: r
 const using = (pattern: RegExp) => sources.filter((file) => pattern.test(file.text)).map((file) => file.name).sort();
 
 const WISH = "a0000000-0000-4000-8000-000000000001";
-const ON = { available: true, enabled: true, push: true };
+const ON = { available: true, enabled: true, helpOthers: true, push: true };
 const state = (overrides: Partial<WishAlertState> = {}): WishAlertState => ({
   wishlistItemId: WISH,
   trackable: true,
@@ -85,6 +90,10 @@ const state = (overrides: Partial<WishAlertState> = {}): WishAlertState => ({
   restock: false,
   soldOut: false,
   stock: "unknown",
+  targetPrice: null,
+  targetCurrency: null,
+  lastPrice: null,
+  lastCurrency: null,
   ...overrides,
 });
 const apiError = (status: number, error: string) => new ApiError(status, { error, message: "Message du serveur" });
@@ -107,8 +116,11 @@ afterEach(() => {
 
 describe("tout est caché sans les alertes sur le serveur (migration 0036 absente)", () => {
   it("seul `available: true` montre les alertes ; sinon interrupteur et notifications valent « non »", () => {
-    expect(readWishAlertsStatus({ available: true, enabled: true, push: true })).toEqual(ON);
-    expect(readWishAlertsStatus({ available: true })).toEqual({ available: true, enabled: false, push: false });
+    expect(readWishAlertsStatus({ available: true, enabled: true, helpOthers: true, push: true })).toEqual(ON);
+    expect(readWishAlertsStatus({ available: true })).toEqual({ available: true, enabled: false, helpOthers: true, push: false });
+    // « Aider les autres membres » : allumé sauf si le serveur dit exactement non.
+    expect(readWishAlertsStatus({ available: true, helpOthers: false }).helpOthers).toBe(false);
+    expect(readWishAlertsStatus({ available: true, helpOthers: "non" }).helpOthers).toBe(true);
     for (const body of [null, undefined, "oui", {}, { available: "true", enabled: true, push: true }, { available: false, enabled: true, push: true }]) {
       expect(readWishAlertsStatus(body)).toEqual(ALERTS_UNAVAILABLE);
     }
@@ -127,7 +139,7 @@ describe("tout est caché sans les alertes sur le serveur (migration 0036 absent
     expect(isAlertsUnavailable(apiError(404, "alerts_unavailable"))).toBe(true);
     expect(isAlertsUnavailable(apiError(404, "wishlist_item_not_found"))).toBe(false);
     expect(isAlertsUnavailable(new TypeError("réseau"))).toBe(false);
-    const forget = body(api, "function forgetAlertsOn(", "/** L'interrupteur");
+    const forget = body(api, "function forgetAlertsOn(", "/** Les réglages des alertes");
     expect(forget).toContain("if (isAlertsUnavailable(e)) setWishAlertsStatus(ALERTS_UNAVAILABLE);");
     // Chaque route des alertes (sauf l'état, toujours 200) passe par là.
     expect(api.match(/return forgetAlertsOn\(e\);/g)?.length).toBe(4);
@@ -174,9 +186,23 @@ describe("la cloche et sa feuille", () => {
   });
 
   it("l'état de stock en direct (décision du fondateur) : lu tel quel s'il est connu, « unknown » sinon ; rien d'autre n'est gardé", () => {
-    expect(readWishAlertState({ ...state(), stock: "sold_out", lastPrice: 79 })).toEqual(state({ stock: "sold_out" }));
+    expect(readWishAlertState({ ...state(), stock: "sold_out", lastPrice: 79, lastCurrency: "EUR" })).toEqual(state({ stock: "sold_out", lastPrice: 79, lastCurrency: "EUR" }));
     expect(readWishAlertState({ ...state(), stock: "in_stock" })?.stock).toBe("in_stock");
-    expect(Object.keys(readWishAlertState({ ...state(), searcher: "x" })!).sort()).toEqual(["bought", "priceDrop", "restock", "soldOut", "stock", "trackable", "wishlistItemId"]);
+    expect(Object.keys(readWishAlertState({ ...state(), searcher: "x" })!).sort()).toEqual([
+      "bought",
+      "lastCurrency",
+      "lastPrice",
+      "priceDrop",
+      "restock",
+      "soldOut",
+      "stock",
+      "targetCurrency",
+      "targetPrice",
+      "trackable",
+      "wishlistItemId",
+    ]);
+    // Un seuil ou un prix illisible : aucun.
+    expect(readWishAlertState({ ...state(), targetPrice: "89", targetCurrency: "€", lastPrice: -1 })).toEqual(state());
   });
 
   it("pièce déjà achetée (dans votre Vault) : pas de cloche — aucune alerte ne partirait ; « Plus disponible ? » reste possible", () => {
@@ -234,7 +260,7 @@ describe("la cloche et sa feuille", () => {
     const off = choiceOf(null);
     expect(choiceChanged(off, { ...off, price_drop: true })).toBe(true);
     expect(choiceChanged(off, { ...off, sold_out: true })).toBe(false);
-    expect(sheet).toContain("const canSave = !saving && (choiceChanged(initial.current, choice) || turnsOn);");
+    expect(sheet).toContain("const canSave = !saving && !targetInvalid && (choiceChanged(initial.current, choice) || turnsOn || targetChanged);");
   });
 
   it("erreurs : pièce non reconnue, trop de changements, ou réseau", () => {
@@ -295,7 +321,7 @@ describe("la première cloche allume l'interrupteur, après l'explication des no
     expect(sheet).toContain('const offer = usePushOfferAnswer("alerts", () => void send(), step === "push");');
     expect(sheet).toContain('<PushOfferPanel kind="alerts" offer={offer} saving={saving} />');
     const send = body(sheet, "async function send()", "const dismiss");
-    expect(send).toContain("const request = watchRequest(choice, status);");
+    expect(send).toContain("const request = watchRequest(choice, status, undefined, changedTarget);");
     expect(send).toContain("await updateWishAlert(wish.id, request);");
     expect(send).toContain("if (request.enableAlerts && userId) syncPushDevice(userId).catch(() => {});");
   });
@@ -416,16 +442,38 @@ describe("« Plus disponible », avec une confirmation", () => {
 });
 
 describe("une alerte touchée ouvre l'envie", () => {
-  it("lit seulement `kind` et l'envie dans les données ; une alerte groupée ouvre vos Envies", () => {
-    expect(notificationTarget({ kind: "wish_alert", wishlistItemId: WISH })).toEqual({ kind: "wish", id: WISH });
-    expect(notificationTarget({ kind: "wish_alert" })).toEqual({ kind: "wishes" });
-    for (const data of [{ kind: "wish_alert", wishlistItemId: "../reglages" }, { kind: "wish_alert", wishlistItemId: 12 }, { kind: "autre" }, null, "texte"]) {
-      expect(notificationTarget(data)).toBeNull();
+  it("nouvelle version (0041) : les données d'une alerte ne sont QUE l'envie ({ wishlistItemId }) ; une alerte groupée n'a aucune donnée et ouvre vos Envies", () => {
+    expect(notificationTarget({ wishlistItemId: WISH })).toEqual({ kind: "wish", id: WISH });
+    expect(notificationTarget({})).toEqual({ kind: "wishes" });
+    expect(notificationTarget(null)).toEqual({ kind: "wishes" });
+    expect(notificationTarget(undefined)).toEqual({ kind: "wishes" });
+    for (const data of [
+      { wishlistItemId: "../reglages" },
+      { wishlistItemId: 12 },
+      // Rien d'autre que l'envie : une donnée en plus (sorte, titre, prix…), et rien ne s'ouvre.
+      { kind: "wish_alert", wishlistItemId: WISH },
+      { wishlistItemId: WISH, title: "Veste" },
+      { autre: "x" },
+      "texte",
+      [WISH],
+    ]) {
+      expect(notificationTarget(data), JSON.stringify(data)).toBeNull();
     }
-    // Les messages : inchangés.
+  });
+
+  it("une notification de message n'est jamais prise pour une alerte (elle porte toujours `conversationId`, lue en premier)", () => {
     const conversation = "c0000000-0000-4000-8000-000000000001";
     expect(notificationTarget({ conversationId: conversation })).toEqual({ kind: "conversation", id: conversation });
     expect(notificationHref({ kind: "conversation", id: conversation })).toEqual(conversationHref(conversation));
+    // Un identifiant de conversation illisible : rien ne s'ouvre (jamais vos Envies à sa place).
+    expect(notificationTarget({ conversationId: "pas-un-id" })).toBeNull();
+    expect(notificationTarget({ conversationId: conversation, wishlistItemId: WISH })).toEqual({ kind: "conversation", id: conversation });
+    // La bannière d'une conversation à l'écran reste cachée ; celle d'une alerte s'affiche.
+    setOpenConversation(conversation);
+    expect(shouldShowBanner({ conversationId: conversation })).toBe(false);
+    expect(shouldShowBanner({ wishlistItemId: WISH })).toBe(true);
+    expect(shouldShowBanner({})).toBe(true);
+    setOpenConversation(null);
   });
 
   it("la fiche de l'envie (clic vers la boutique compté « price_alert »), ou l'onglet Envies du Profil", () => {
@@ -440,7 +488,7 @@ describe("une alerte touchée ouvre l'envie", () => {
     expect(read("lib/use-push-notifications.ts")).toContain("listenToNotifications((target) => router.push(notificationHref(target)))");
     expect(push).toContain("const target = notificationTarget(response.notification.request.content.data);");
     expect(push).toContain("if (target && firstTimeHandled(response.notification.request.identifier)) open(target);");
-    expect(shouldShowBanner({ kind: "wish_alert", wishlistItemId: WISH })).toBe(true);
+    expect(shouldShowBanner({ wishlistItemId: WISH })).toBe(true);
   });
 });
 
@@ -456,7 +504,7 @@ describe("l'appareil reste enregistré tant que les messages OU les alertes sont
     expect(deviceRegistration({ messages: null, alerts: null }, true)).toEqual({ keep: false, messages: false, alerts: false });
     expect(alertsKeepDevice(ON)).toBe(true);
     expect(alertsKeepDevice({ ...ON, enabled: false })).toBe(false);
-    expect(alertsKeepDevice({ available: false, enabled: true, push: true })).toBe(false);
+    expect(alertsKeepDevice({ available: false, enabled: true, helpOthers: true, push: true })).toBe(false);
   });
 
   it("une réponse par sorte et par compte ; celle des messages garde sa clé d'avant", () => {
@@ -518,10 +566,16 @@ describe("textes en français et en anglais", () => {
     // Jamais qui a cherché ni qui suit la pièce.
     expect(fr.wishAlerts.sheetIntro).toContain("Personne ne sait qui l'a cherchée, ni qui la suit.");
     expect(fr.wishAlerts.reportBody).toContain("Personne ne saura que c'est vous.");
-    // Lot « durcissement des alertes » (0040) : un signalement seul ne change que vos envies ;
-    // il ne promet plus de prévenir les autres membres d'un retour en stock.
-    expect(fr.wishAlerts.reportBody).toContain("dès qu'un autre membre la signale aussi");
-    expect(en.wishAlerts.reportBody).toContain("once another member reports it too");
+    // Nouvelle version (0041) : un signalement seul ne change que vos envies ; celles des
+    // autres une fois la pièce signalée par trois membres d'affilée.
+    expect(fr.wishAlerts.reportBody).toContain("une fois que trois membres l'ont signalée d'affilée");
+    expect(en.wishAlerts.reportBody).toContain("once three members have reported it in a row");
+    // Un achat ne sert plus aux alertes des autres : plus jamais promis.
+    expect(fr.wishAlerts.sheetIntro).not.toMatch(/achat/);
+    expect(en.wishAlerts.sheetIntro).not.toMatch(/purchase/);
+    // La notification ne dit ni la pièce, ni la boutique, ni le prix.
+    expect(fr.wishAlerts.pushOfferBody).toContain("Elle ne dit ni la pièce, ni la boutique, ni le prix");
+    expect(en.wishAlerts.pushOfferBody).toContain("It doesn't show the piece, the shop or the price");
     for (const text of [fr.wishAlerts.reportBody, en.wishAlerts.reportBody]) expect(text).not.toMatch(/reviendra|comes back/);
   });
 
@@ -542,6 +596,73 @@ describe("textes en français et en anglais", () => {
     ] as const) {
       expect(source, name).toMatch(/t\.wishAlerts\./);
     }
+  });
+});
+
+describe("nouvelle version (0041) : le seuil de la baisse de prix", () => {
+  it("pré-rempli avec le seuil enregistré, sinon le dernier prix vu ; vide sans prix connu", () => {
+    expect(initialTarget(state({ targetPrice: 80, lastPrice: 120 }))).toBe(80);
+    expect(initialTarget(state({ lastPrice: 120 }))).toBe(120);
+    expect(initialTarget(state())).toBeNull();
+    expect(initialTarget(null)).toBeNull();
+    expect(targetPriceText(89.9, "fr")).toBe("89,9");
+    expect(targetPriceText(89.9, "en")).toBe("89.9");
+    expect(targetPriceText(null, "fr")).toBe("");
+    expect(currencySymbol("EUR")).toBe("€");
+    expect(currencySymbol("GBP")).toBe("£");
+    expect(currencySymbol("CHF")).toBe("CHF");
+  });
+
+  it("un prix saisi : virgule ou point, au centime ; vide : aucun ; sinon invalide", () => {
+    expect(parseTargetPrice("89,90")).toBe(89.9);
+    expect(parseTargetPrice(" 89.9 ")).toBe(89.9);
+    expect(parseTargetPrice("120")).toBe(120);
+    expect(parseTargetPrice("1 200,5")).toBe(1200.5);
+    expect(parseTargetPrice("")).toBeNull();
+    for (const text of ["0", "0,00", "-5", "abc", "12,345", "1e3", "89,9€", "999999999"]) expect(parseTargetPrice(text), text).toBe("invalid");
+  });
+
+  it("le seuil part seulement si « Baisse de prix » est cochée et que la personne l'a changé (null : champ vidé)", () => {
+    const priceDrop = choiceOf(state({ priceDrop: true }));
+    expect(watchRequest(priceDrop, ON, false, 80)).toEqual({ priceDrop: true, restock: false, targetPrice: 80 });
+    expect(watchRequest(priceDrop, ON, false, null)).toEqual({ priceDrop: true, restock: false, targetPrice: null });
+    expect(watchRequest(priceDrop, ON)).toEqual({ priceDrop: true, restock: false });
+    expect(watchRequest(choiceOf(state({ restock: true })), ON, false, 80)).toEqual({ priceDrop: false, restock: true });
+  });
+
+  it("la feuille montre « Prévenez-moi si le prix passe sous [ ] € » sous « Baisse de prix », clavier décimal, nommé pour VoiceOver", () => {
+    expect(fr.wishAlerts.targetLabel).toBe("Prévenez-moi si le prix passe sous");
+    expect(en.wishAlerts.targetLabel).toBe("Notify me if the price drops below");
+    expect(sheet).toContain("{choice.price_drop && targetFieldShown ? (");
+    expect(sheet).toContain('keyboardType="decimal-pad"');
+    expect(sheet).toContain("accessibilityLabel={t.wishAlerts.targetFieldLabel(currencySymbol(targetCurrency))}");
+    expect(sheet).toContain("const changedTarget = targetFieldShown && targetText !== initialTargetText.current && target !== \"invalid\" ? target : undefined;");
+  });
+});
+
+describe("nouvelle version (0041) : « Aider les autres membres »", () => {
+  it("un réglage à part, sous « Alertes prix et stock », allumé par défaut, avec ses textes FR et EN", () => {
+    expect(fr.wishAlerts.helpOthersTitle).toBe("Aider les autres membres");
+    expect(fr.wishAlerts.helpOthersOn).toBe("Vos recherches et vos signalements « Plus disponible » aident, sans votre nom, les alertes des autres membres.");
+    expect(en.wishAlerts.helpOthersTitle).toBe("Help other members");
+    expect(en.wishAlerts.helpOthersOn).toBe("Your searches and your “No longer available” reports help other members' alerts, without your name.");
+    expect(fr.wishAlerts.helpOthersOff).toContain("ne servent qu'à vos propres envies");
+    expect(ALERTS_UNAVAILABLE.helpOthers).toBe(true);
+    // Sous l'interrupteur des alertes, avec son propre interrupteur et son propre enregistrement.
+    expect(setting.indexOf('testID="interrupteur-aider-membres"')).toBeGreaterThan(setting.indexOf('testID="interrupteur-alertes-prix"'));
+    expect(setting).toContain("value={status.helpOthers}");
+    expect(setting).toContain("await updateWishAlertsSettings({ helpOthers: on });");
+    expect(setting).toContain("accessibilityLabel={t.wishAlerts.helpOthersSwitchLabel}");
+    expect(api).toContain('const payload: UpdateWishAlertsSettingsRequest = typeof choice === "boolean" ? { enabled: choice } : choice;');
+  });
+
+  it("l'état partagé suit ce réglage (les écrans sont prévenus quand il change)", () => {
+    const seen: boolean[] = [];
+    const stop = onWishAlertsStatus((status) => seen.push(status.helpOthers));
+    setWishAlertsStatus(ON);
+    setWishAlertsStatus({ ...ON, helpOthers: false });
+    stop();
+    expect(seen).toEqual([true, false]);
   });
 });
 

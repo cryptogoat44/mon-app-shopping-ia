@@ -23,13 +23,17 @@ type Device = { supported: boolean; decisions: PushDecisions; permission: PushPe
 // restent ; l'appareil n'est oublié que si les messages ne le gardent pas.
 // Le site : l'interrupteur se règle, les notifications n'arrivent que sur
 // l'app iPhone. Notifications pas encore allumées sur le serveur : on le dit.
+// Dessous (nouvelle version, 0041) : « Aider les autres membres », un réglage
+// à part, allumé par défaut — coupé, vos recherches et vos signalements « Plus
+// disponible » ne servent qu'à vos propres envies (vos alertes marchent toujours).
 export function WishAlertsSetting() {
   const { session } = useAuth();
   const userId = session?.user.id ?? null;
   const status = useWishAlertsStatus();
   const [device, setDevice] = useState<Device | null>(null);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<"save" | "open" | null>(null);
+  const [error, setError] = useState<"save" | "open" | "help" | null>(null);
+  const [savingHelp, setSavingHelp] = useState(false);
   // Explication des notifications ouverte : avant d'allumer l'interrupteur,
   // ou pour les recevoir sur cet iPhone (interrupteur déjà allumé).
   const [explaining, setExplaining] = useState<"enable" | "device" | null>(null);
@@ -63,6 +67,19 @@ export function WishAlertsSetting() {
     } finally {
       setSaving(false);
       void reloadDevice();
+    }
+  }
+
+  async function toggleHelp(on: boolean) {
+    if (savingHelp) return;
+    setSavingHelp(true);
+    setError(null);
+    try {
+      await updateWishAlertsSettings({ helpOthers: on });
+    } catch (e) {
+      if (!isAlertsUnavailable(e)) setError("help");
+    } finally {
+      setSavingHelp(false);
     }
   }
 
@@ -119,6 +136,19 @@ export function WishAlertsSetting() {
       ) : null}
       {error === "save" ? <ErrorMessage style={styles.body}>{t.wishAlerts.settingFailed}</ErrorMessage> : null}
       {error === "open" ? <ErrorMessage style={styles.body}>{t.push.openSettingsFailed}</ErrorMessage> : null}
+      <View style={[styles.row, styles.helpRow]}>
+        <Text style={styles.title}>{t.wishAlerts.helpOthersTitle}</Text>
+        <Switch
+          accessibilityLabel={t.wishAlerts.helpOthersSwitchLabel}
+          value={status.helpOthers}
+          disabled={savingHelp}
+          onValueChange={(on) => void toggleHelp(on)}
+          trackColor={{ true: color.vert, false: color.filet }}
+          testID="interrupteur-aider-membres"
+        />
+      </View>
+      <Text style={styles.body}>{status.helpOthers ? t.wishAlerts.helpOthersOn : t.wishAlerts.helpOthersOff}</Text>
+      {error === "help" ? <ErrorMessage style={styles.body}>{t.wishAlerts.settingFailed}</ErrorMessage> : null}
       <PushOfferSheet
         kind="alerts"
         visible={explaining !== null}
@@ -137,6 +167,7 @@ export function WishAlertsSetting() {
 const styles = themedStyles(() => ({
   section: { marginBottom: space.lg },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44, gap: space.sm },
+  helpRow: { marginTop: space.sm },
   title: { flex: 1, fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   body: { fontSize: font.secondary, color: color.acier, marginBottom: space.sm, lineHeight: 19 },
   link: { minHeight: 44, justifyContent: "center", marginBottom: space.sm },

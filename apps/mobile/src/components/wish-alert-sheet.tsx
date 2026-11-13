@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Modal, Platform, Pressable, Switch, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { Modal, Platform, Pressable, Switch, Text, TextInput, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { WishAlertState } from "@monapp/shared-types";
 import { color, font, radius, serifFont, size, space } from "@/theme/tokens";
-import { t } from "@/i18n";
+import { getActiveLocale, t } from "@/i18n";
 import { updateWishAlert } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { loadPushDecision, pushPermission, pushSupported, savePushDecision, syncPushDevice } from "@/lib/push";
@@ -18,10 +18,14 @@ import {
   bellOn,
   choiceChanged,
   choiceOf,
+  currencySymbol,
+  initialTarget,
   isAlertsUnavailable,
+  parseTargetPrice,
   pushNote,
   pushNoteText,
   switchTurnsOn,
+  targetPriceText,
   visibleAlertKinds,
   watchErrorMessage,
   watchRequest,
@@ -44,7 +48,12 @@ import { themedStyles } from "@/theme/themed-styles";
 //   site, elles n'arrivent que sur l'app iPhone ;
 // - un seul enregistrement à la fois : pendant qu'il part, l'explication des
 //   notifications n'accepte plus de réponse (« Plus tard » défairait l'accord
-//   que la personne vient de donner) et rien ne ferme la feuille.
+//   que la personne vient de donner) et rien ne ferme la feuille ;
+// - nouvelle version (0041) : sous « Baisse de prix », « Prévenez-moi si le
+//   prix passe sous [ ] € », pré-rempli avec le seuil enregistré ou le
+//   dernier prix vu (le serveur les dit) ; la personne peut le baisser ; vide,
+//   le premier prix vu servira de seuil. Le champ n'apparaît que si la devise
+//   du membre est connue.
 
 /** La cloche d'une envie dans une liste : un bouton rond, posé sur le coin
  * de la vignette (zone tactile de 44 points avec la marge). Pleine quand une
@@ -107,6 +116,9 @@ export function WishAlertSheet({
   const { showToast } = useToast();
   const [choice, setChoice] = useState<AlertChoice>(() => choiceOf(state));
   const initial = useRef<AlertChoice>(choiceOf(state));
+  const locale = getActiveLocale();
+  const [targetText, setTargetText] = useState(() => targetPriceText(initialTarget(state), locale));
+  const initialTargetText = useRef(targetPriceText(initialTarget(state), locale));
   const [step, setStep] = useState<"choose" | "push">("choose");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,6 +133,9 @@ export function WishAlertSheet({
     const saved = choiceOf(state);
     initial.current = saved;
     setChoice(saved);
+    const text = targetPriceText(initialTarget(state), locale);
+    initialTargetText.current = text;
+    setTargetText(text);
     setStep("choose");
     setError(null);
     setSaving(false);
@@ -157,7 +172,16 @@ export function WishAlertSheet({
   async function send() {
     if (!wish || sending.current) return;
     sending.current = true;
-    const request = watchRequest(choice, status);
+    const target = parseTargetPrice(targetText);
+    if (choice.price_drop && targetFieldShown && target === "invalid") {
+      sending.current = false;
+      setError(t.wishAlerts.targetInvalid);
+      setStep("choose");
+      return;
+    }
+    // Seuil inchangé : rien n'est envoyé (le serveur garde le sien ou le pré-remplit) ; vidé : null.
+    const changedTarget = targetFieldShown && targetText !== initialTargetText.current && target !== "invalid" ? target : undefined;
+    const request = watchRequest(choice, status, undefined, changedTarget);
     setSaving(true);
     setError(null);
     try {
@@ -186,7 +210,11 @@ export function WishAlertSheet({
   // Pendant l'enregistrement : ni fermeture, ni réponse à l'explication.
   const dismiss = () => (saving ? undefined : step === "push" ? offer.dismiss() : onClose());
   const turnsOn = switchTurnsOn(choice, status);
-  const canSave = !saving && (choiceChanged(initial.current, choice) || turnsOn);
+  const targetCurrency = state?.targetCurrency ?? state?.lastCurrency ?? null;
+  const targetFieldShown = targetCurrency !== null;
+  const targetChanged = choice.price_drop && targetFieldShown && targetText !== initialTargetText.current;
+  const targetInvalid = choice.price_drop && targetFieldShown && parseTargetPrice(targetText) === "invalid";
+  const canSave = !saving && !targetInvalid && (choiceChanged(initial.current, choice) || turnsOn || targetChanged);
   const note = pushNoteText(pushNote(status, Platform.OS));
 
   return (
@@ -224,6 +252,30 @@ export function WishAlertSheet({
                 />
               </View>
             ))}
+            {choice.price_drop && targetFieldShown ? (
+              <View style={styles.target}>
+                <View style={styles.targetRow}>
+                  <Text style={styles.targetLabel}>{t.wishAlerts.targetLabel}</Text>
+                  <TextInput
+                    style={styles.targetInput}
+                    value={targetText}
+                    onChangeText={(text) => {
+                      setTargetText(text);
+                      setError(null);
+                    }}
+                    keyboardType="decimal-pad"
+                    inputMode="decimal"
+                    maxLength={12}
+                    editable={!saving}
+                    accessibilityLabel={t.wishAlerts.targetFieldLabel(currencySymbol(targetCurrency))}
+                    testID="seuil-baisse-prix"
+                  />
+                  <Text style={styles.targetLabel}>{currencySymbol(targetCurrency)}</Text>
+                </View>
+                <Text style={styles.optionHint}>{targetText === "" ? t.wishAlerts.targetHintNone : t.wishAlerts.targetHintLast}</Text>
+                {targetInvalid ? <ErrorMessage style={styles.error}>{t.wishAlerts.targetInvalid}</ErrorMessage> : null}
+              </View>
+            ) : null}
             {turnsOn ? <Text style={styles.note}>{t.wishAlerts.switchTurnsOn}</Text> : null}
             {note ? <Text style={styles.note}>{note}</Text> : null}
             {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
@@ -294,6 +346,20 @@ const styles = themedStyles(() => ({
   optionLabel: { fontSize: font.body, color: color.encre },
   optionHint: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
   note: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
+  target: { gap: space.xs, paddingBottom: space.xs },
+  targetRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: space.sm },
+  targetLabel: { fontSize: font.secondary, color: color.encre },
+  targetInput: {
+    minHeight: size.touchTarget,
+    minWidth: 96,
+    borderWidth: 1,
+    borderColor: color.filet,
+    borderRadius: radius.md,
+    paddingHorizontal: space.sm,
+    fontSize: font.body,
+    color: color.encre,
+    textAlign: "right",
+  },
   error: { fontSize: font.caption },
   row: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: space.sm, marginTop: space.sm },
   secondary: { minHeight: size.touchTarget, minWidth: size.touchTarget, paddingHorizontal: space.md, alignItems: "center", justifyContent: "center" },

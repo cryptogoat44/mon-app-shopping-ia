@@ -1,6 +1,6 @@
-// Alertes prix et stock (lot 2, migration 0036) : la logique sans écran,
-// testée à part (tests/alertes-prix.test.ts). Imports relatifs : fichier
-// testé par vitest.
+// Alertes prix et stock (lot 2, migration 0036 ; nouvelle version, 0041) : la
+// logique sans écran, testée à part (tests/alertes-prix.test.ts). Imports
+// relatifs : fichier testé par vitest.
 //
 // Règles :
 // - tout est caché (cloche, interrupteur des Réglages, « Plus disponible »)
@@ -16,8 +16,13 @@
 //   (SOLD_OUT_ALERTS_VISIBLE, décision du fondateur) ;
 // - la première cloche allume aussi l'interrupteur général, après la feuille
 //   d'explication des notifications (composants wish-alert-sheet.tsx) ;
+// - baisse de prix : « Prévenez-moi si le prix passe sous… », pré-rempli avec
+//   le dernier prix vu (le serveur le dit) ; la personne peut le baisser ;
+// - « Aider les autres membres » (allumé par défaut) est un réglage à part de
+//   « Alertes prix et stock » (coupé par défaut) ;
 // - sur le site : les cloches se règlent, aucune notification n'y arrive.
 import {
+  MAX_TARGET_PRICE,
   SOLD_OUT_ALERTS_VISIBLE,
   STOCK_STATES,
   WISH_ALERT_ERRORS,
@@ -33,22 +38,31 @@ import { t } from "../i18n";
 import { ApiError } from "./api-error";
 
 /** Alertes indisponibles : tout est caché. */
-export const ALERTS_UNAVAILABLE: WishAlertsStatus = { available: false, enabled: false, push: false };
+export const ALERTS_UNAVAILABLE: WishAlertsStatus = { available: false, enabled: false, helpOthers: true, push: false };
 
 /** Réponse de GET /api/alerts/status (ou du `status` d'une cloche
  * enregistrée). Seul `available: true` montre les alertes ; sans elles,
- * l'interrupteur et les notifications valent « non ». */
+ * l'interrupteur et les notifications valent « non ». « Aider les autres
+ * membres » vaut « oui » sauf si le serveur dit exactement non (son défaut). */
 export function readWishAlertsStatus(body: unknown): WishAlertsStatus {
   if (typeof body !== "object" || body === null) return ALERTS_UNAVAILABLE;
-  const { available, enabled, push } = body as Record<string, unknown>;
+  const { available, enabled, helpOthers, push } = body as Record<string, unknown>;
   if (available !== true) return ALERTS_UNAVAILABLE;
-  return { available: true, enabled: enabled === true, push: push === true };
+  return { available: true, enabled: enabled === true, helpOthers: helpOthers !== false, push: push === true };
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isStockState(value: unknown): value is StockState {
   return typeof value === "string" && (STOCK_STATES as readonly string[]).includes(value);
+}
+
+function priceOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function currencyOrNull(value: unknown): string | null {
+  return typeof value === "string" && /^[A-Z]{3}$/.test(value) ? value : null;
 }
 
 /** La cloche d'une envie telle que le serveur la renvoie, ou null si elle est
@@ -65,6 +79,10 @@ export function readWishAlertState(body: unknown): WishAlertState | null {
     restock: fields.restock === true,
     soldOut: fields.soldOut === true,
     stock: isStockState(fields.stock) ? fields.stock : "unknown",
+    targetPrice: priceOrNull(fields.targetPrice),
+    targetCurrency: currencyOrNull(fields.targetCurrency),
+    lastPrice: priceOrNull(fields.lastPrice),
+    lastCurrency: currencyOrNull(fields.lastCurrency),
   };
 }
 
@@ -125,12 +143,54 @@ export function bellVisible(
 
 /** Le corps de PUT /api/wishlist/:id/alerts. « Épuisé », caché, n'est jamais
  * envoyé (absent : non). `enableAlerts` : la cloche allume aussi
- * l'interrupteur général (seulement s'il est coupé et qu'une sorte est cochée). */
-export function watchRequest(choice: AlertChoice, status: Pick<WishAlertsStatus, "enabled">, soldOutVisible: boolean = SOLD_OUT_ALERTS_VISIBLE): UpdateWishAlertRequest {
+ * l'interrupteur général (seulement s'il est coupé et qu'une sorte est cochée).
+ * `targetPrice` : le seuil de la baisse de prix, seulement s'il est coché et
+ * que la personne l'a changé (absent : le serveur garde le seuil ou le
+ * pré-remplit ; null : champ vidé, le dernier prix vu ou le premier qui sera vu). */
+export function watchRequest(
+  choice: AlertChoice,
+  status: Pick<WishAlertsStatus, "enabled">,
+  soldOutVisible: boolean = SOLD_OUT_ALERTS_VISIBLE,
+  targetPrice?: number | null
+): UpdateWishAlertRequest {
   const request: UpdateWishAlertRequest = { priceDrop: choice.price_drop, restock: choice.restock };
   if (soldOutVisible) request.soldOut = choice.sold_out;
   if (switchTurnsOn(choice, status, soldOutVisible)) request.enableAlerts = true;
+  if (choice.price_drop && targetPrice !== undefined) request.targetPrice = targetPrice;
   return request;
+}
+
+// ---- Le seuil de la baisse de prix ----
+
+/** Le seuil à montrer à l'ouverture de la feuille : celui enregistré, sinon
+ * le dernier prix vu (pays et devise de la personne), sinon rien. */
+export function initialTarget(state: Pick<WishAlertState, "targetPrice" | "lastPrice"> | null): number | null {
+  return state?.targetPrice ?? state?.lastPrice ?? null;
+}
+
+/** Un prix saisi (« 89,90 », « 89.9 », « 120 ») en nombre, arrondi au
+ * centime ; null : vide ; « invalide » : pas un prix possible. */
+export function parseTargetPrice(text: string): number | null | "invalid" {
+  const clean = text.replace(/[\s\u00a0\u202f]/g, "").replace(",", ".");
+  if (clean === "") return null;
+  if (!/^\d{1,8}(\.\d{0,2})?$/.test(clean)) return "invalid";
+  const value = Math.round(Number(clean) * 100) / 100;
+  return value > 0 && value <= MAX_TARGET_PRICE ? value : "invalid";
+}
+
+/** Un seuil écrit pour le champ de saisie (« 89,9 » en français, « 89.9 » en anglais). */
+export function targetPriceText(value: number | null, locale: string): string {
+  if (value === null) return "";
+  const text = String(Math.round(value * 100) / 100);
+  return locale.startsWith("fr") ? text.replace(".", ",") : text;
+}
+
+/** Le symbole de la devise du seuil (« € », « £ », « $ », sinon le code). */
+export function currencySymbol(currency: string | null): string {
+  if (currency === "EUR") return "€";
+  if (currency === "GBP") return "£";
+  if (currency === "USD") return "$";
+  return currency ?? "";
 }
 
 /** Enregistrer ce choix allume l'interrupteur général : une sorte cochée,
@@ -239,7 +299,7 @@ export function wishAlertsStatus(): WishAlertsStatus {
 
 /** Nouvel état lu sur le serveur : les écrans abonnés sont prévenus s'il change. */
 export function setWishAlertsStatus(next: WishAlertsStatus): void {
-  if (next.available === current.available && next.enabled === current.enabled && next.push === current.push) return;
+  if (next.available === current.available && next.enabled === current.enabled && next.helpOthers === current.helpOthers && next.push === current.push) return;
   current = next;
   for (const listener of listeners) listener(current);
 }
