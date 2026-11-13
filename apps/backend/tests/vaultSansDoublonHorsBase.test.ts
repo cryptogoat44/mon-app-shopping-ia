@@ -1,21 +1,23 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import multipart from "@fastify/multipart";
 import sharp from "sharp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import vaultRoutes from "../src/routes/vault.js";
 import { keptMatchIds } from "../src/lib/keptPieces.js";
-import { observePurchase } from "../src/lib/wishObserve.js";
+import { observeResults } from "../src/lib/wishObserve.js";
 import { trackingKeyOf } from "../src/lib/alertKeys.js";
 import { resetWishAlertsProbe } from "../src/lib/wishAlertsSchema.js";
 
-// Alertes prix et stock (lot 2) : l'annonce « disponible chez cette boutique
-// aujourd'hui » après un achat est remplacée par un espion (sa logique :
-// alertesPrixObservation.test.ts).
+// Alertes prix et stock (nouvelle version, 0041) : un achat n'est plus
+// jamais observé (aucune comparaison avec les envies des autres membres).
+// L'observation est remplacée par un espion, qui ne doit jamais être appelé ici.
 vi.mock("../src/lib/wishObserve.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/lib/wishObserve.js")>();
-  return { ...original, observePurchase: vi.fn() };
+  return { ...original, observeResults: vi.fn() };
 });
-const purchaseMock = vi.mocked(observePurchase);
+const observeMock = vi.mocked(observeResults);
 
 // Lot « Retrouver ses pièces », partie sans base (aucun réseau) : la route
 // POST /api/vault sur une fausse base en mémoire, et la lecture des pièces
@@ -137,70 +139,55 @@ const FROM_MATCH = { title: "Veste", category: "clothing", productMatchId: MATCH
 afterEach(async () => {
   await app?.close();
   app = null;
-  purchaseMock.mockReset();
+  observeMock.mockReset();
   resetWishAlertsProbe();
 });
 
-/** La base a les alertes et leurs garde-fous (sonde à 2) ; wish_mark_bought répond `marked`. */
+/** La base a les alertes, nouvelle version (sonde à 3) ; wish_mark_bought répond `marked`. */
 function withAlerts(db: object, order: string[], marked: { error: unknown }) {
   return {
     ...db,
     rpc: async (fn: string, args: Record<string, unknown>) => {
       order.push(fn === "wish_mark_bought" ? `wish_mark_bought:${JSON.stringify(args)}` : fn);
-      if (fn === "wish_alerts_version") return { data: 2, error: null };
+      if (fn === "wish_alerts_version") return { data: 3, error: null };
       if (fn === "wish_mark_bought") return marked.error ? { data: null, error: marked.error } : { data: 2, error: null };
       return { data: null, error: { code: "PGRST202", message: "absente" } };
     },
   };
 }
 
-// Lot « durcissement des alertes » (alertes-04) : « Je l'ai achetée » note
-// achetées TOUTES les envies de l'acheteur de la même pièce (même depuis un
-// autre résultat), AVANT la réponse et avant l'annonce « disponible » : il
-// ne reçoit jamais « De retour en stock » pour sa propre envie.
-describe("alertes prix : « Je l'ai achetée » note achetées les envies de la même pièce (sans base)", () => {
-  it("wish_mark_bought (l'acheteur, l'empreinte de la pièce) est appelée avant l'annonce", async () => {
+// Lot « durcissement des alertes » (alertes-04) puis nouvelle version (0041) :
+// « Je l'ai achetée » note achetées TOUTES les envies de l'acheteur de la même
+// pièce (même depuis un autre résultat), AVANT la réponse. Et c'est tout : un
+// achat ne compare plus rien avec les envies des autres membres.
+describe("alertes prix : « Je l'ai achetée » note achetées les envies de l'acheteur, et rien d'autre (sans base)", () => {
+  it("wish_mark_bought (l'acheteur, l'empreinte de la pièce) est la SEULE fonction des alertes appelée : aucune observation, rien pour les autres membres", async () => {
     const order: string[] = [];
-    purchaseMock.mockImplementation(() => void order.push("observePurchase"));
     const { db } = fakeDb(standardAnswer());
     const res = await post(await vaultApp(withAlerts(db, order, { error: null })), FROM_MATCH);
     expect(res.statusCode).toBe(200);
+    // Laisser passer tout ce qui serait lancé après la réponse.
+    for (let turn = 0; turn < 5; turn += 1) await new Promise((resolve) => setImmediate(resolve));
     const key = trackingKeyOf("https://marchand.example/veste", null)!;
     expect(order.filter((step) => step !== "wish_alerts_version")).toEqual([
       `wish_mark_bought:${JSON.stringify({ p_user_id: USER, p_key: key.hash, p_merchant: key.merchant, p_bought: true })}`,
-      "observePurchase",
     ]);
+    expect(observeMock).not.toHaveBeenCalled();
   });
 
-  it("refus de la base : l'achat est rangé quand même, mais AUCUNE annonce (jamais un retour en stock pour sa propre envie)", async () => {
+  it("refus de la base : l'achat est rangé quand même, toujours sans observation", async () => {
     const order: string[] = [];
     const { db } = fakeDb(standardAnswer());
     const res = await post(await vaultApp(withAlerts(db, order, { error: { code: "57014", message: "délai dépassé" } })), FROM_MATCH);
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ id: CREATED, alreadyInVault: false });
-    expect(purchaseMock).not.toHaveBeenCalled();
-  });
-});
-
-describe("alertes prix : « Je l'ai achetée » annonce la pièce disponible chez cette boutique (sans base)", () => {
-  it("pièce créée depuis une proposition de sa recherche : une annonce, après la réponse, avec le lien et la boutique rangés par le serveur ; l'acheteur, à part, seulement pour vérifier qu'il n'a pas signalé la pièce lui-même", async () => {
-    const { db } = fakeDb(standardAnswer());
-    const res = await post(await vaultApp(db), FROM_MATCH);
-    expect(res.statusCode).toBe(200);
-    expect(purchaseMock).toHaveBeenCalledTimes(1);
-    expect(purchaseMock.mock.calls[0]![1]).toBe(USER);
-    expect(purchaseMock.mock.calls[0]![2]).toEqual({ merchantUrl: "https://marchand.example/veste", merchantName: null });
-    expect(JSON.stringify(purchaseMock.mock.calls[0]![2])).not.toContain(USER);
+    expect(observeMock).not.toHaveBeenCalled();
+    expect(order).not.toContain("wish_observe");
   });
 
-  it("déjà dans le Vault, ou ajout à la main (sans proposition) : aucune annonce", async () => {
-    const { db } = fakeDb(standardAnswer({ existing: [vaultRow(EXISTING)] }));
-    expect((await post(await vaultApp(db), FROM_MATCH)).json()).toMatchObject({ alreadyInVault: true });
-    await app?.close();
-    const manual = fakeDb(standardAnswer());
-    const photo = await sharp({ create: { width: 32, height: 32, channels: 3, background: "#806040" } }).jpeg().toBuffer();
-    expect((await post(await vaultApp(manual.db), { title: "Veste", category: "clothing" }, photo)).statusCode).toBe(200);
-    expect(purchaseMock).not.toHaveBeenCalled();
+  it("la route du Vault n'appelle plus du tout l'observation des résultats", () => {
+    const route = readFileSync(join(__dirname, "../src/routes/vault.ts"), "utf8");
+    expect(route).not.toMatch(/wishObserve|observeResults|observePurchase|wish_observe/);
   });
 });
 

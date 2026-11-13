@@ -1,8 +1,8 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Alertes prix et stock (lot 2, migration 0036) : l'envoi, SANS base ni
-// réseau. La file (wish_alerts_claim, ses limites et son expiration) est
+// Alertes prix et stock (lot 2, migration 0036 ; nouvelle version, 0041) :
+// l'envoi, SANS base ni réseau. La file (wish_alerts_claim, ses limites et son expiration) est
 // imitée ici par une fausse fonction de la base ; sa vraie logique est
 // vérifiée sur spotto-dev-2 (alertesPrix.test.ts). Aucun test n'envoie une
 // vraie notification : le service d'Expo est remplacé par un faux
@@ -17,6 +17,7 @@ import { env } from "../src/env.js";
 import { resetPushProbe } from "../src/lib/push.js";
 import { resetWishAlertsProbe } from "../src/lib/wishAlertsSchema.js";
 import {
+  ALERT_PUSH_TEXTS,
   alertPushContent,
   FLUSH_BATCH,
   FLUSH_INTERVAL_MS,
@@ -43,6 +44,8 @@ const WISH_C = "e0000000-0000-4000-8000-00000000000c";
 const ALICE_PHONE = "ExponentPushToken[alicePhoneAlicePhone01]";
 const BOB_PHONE = "ExponentPushToken[bobPhoneBobPhoneBob0001]";
 const ALICE_TABLET = "ExponentPushToken[aliceTabletAliceTabl02]";
+/** Le membre qui cherche (jamais dans une notification, jamais au journal). */
+const SEARCHER = "c0000000-0000-4000-8000-0000000000cc";
 
 let counter = 0;
 function alert(fields: Partial<ClaimedAlert> = {}): ClaimedAlert {
@@ -52,11 +55,6 @@ function alert(fields: Partial<ClaimedAlert> = {}): ClaimedAlert {
     user_id: ALICE,
     wishlist_item_id: WISH_A,
     kind: "price_drop",
-    old_price: 120,
-    new_price: 89.9,
-    currency: "EUR",
-    title: "Veste Nuage 07",
-    merchant_name: "Boutique Exemple",
     locale: "fr",
     ...fields,
   };
@@ -65,36 +63,40 @@ function alert(fields: Partial<ClaimedAlert> = {}): ClaimedAlert {
 /** Espaces insécables d'Intl ramenées à des espaces. */
 const plain = (text: string) => text.replace(/[  ]/g, " ");
 
-describe("texte de la notification (FR/EN) et regroupement", () => {
-  it("baisse de prix : « Baisse de prix : {titre} à {prix} chez {boutique} (au lieu de {ancien}) » ; données : la sorte et l'envie, rien d'autre", () => {
-    const [group] = groupByRecipient([alert()]);
-    const content = alertPushContent(group!);
-    expect(plain(content.body)).toBe("Baisse de prix : Veste Nuage 07 à 89,90 € chez Boutique Exemple (au lieu de 120 €)");
-    expect(content.data).toEqual({ kind: "wish_alert", wishlistItemId: WISH_A });
-    const en = alertPushContent(groupByRecipient([alert({ locale: "en" })])[0]!);
-    expect(plain(en.body)).toBe("Price drop: Veste Nuage 07 now €89.90 at Boutique Exemple (was €120)");
+describe("texte de la notification (FR/EN, « vous ») et regroupement : générique, données = l'envie seulement", () => {
+  it("baisse de prix : « Baisse de prix sur l'une de vos Envies », sans titre, boutique ni prix ; données : { wishlistItemId } seul", () => {
+    const content = alertPushContent(groupByRecipient([alert()])[0]!);
+    expect(content).toEqual({ body: "Baisse de prix sur l'une de vos Envies", data: { wishlistItemId: WISH_A } });
+    expect(Object.keys(content.data)).toEqual(["wishlistItemId"]);
+    expect(alertPushContent(groupByRecipient([alert({ locale: "en" })])[0]!)).toEqual({ body: "Price drop on one of your Wishes", data: { wishlistItemId: WISH_A } });
   });
 
-  it("retour en stock et épuisé (caché dans l'app) ; sans boutique, sans « chez » ; titre trop long raccourci", () => {
-    expect(alertPushContent(groupByRecipient([alert({ kind: "restock", old_price: null, new_price: null, currency: null })])[0]!).body).toBe("De retour en stock : Veste Nuage 07 chez Boutique Exemple");
-    expect(alertPushContent(groupByRecipient([alert({ kind: "restock", old_price: null, new_price: null, currency: null, locale: "en" })])[0]!).body).toBe("Back in stock: Veste Nuage 07 at Boutique Exemple");
-    expect(alertPushContent(groupByRecipient([alert({ kind: "sold_out", old_price: null, new_price: null, currency: null, merchant_name: null })])[0]!).body).toBe("Épuisé : Veste Nuage 07");
-    const long = alertPushContent(groupByRecipient([alert({ kind: "restock", title: "V".repeat(90) })])[0]!).body;
-    expect(long).toBe(`De retour en stock : ${"V".repeat(59)}… chez Boutique Exemple`);
+  it("retour en stock, et « épuisée » (sorte gardée, cachée dans l'app) : même règle", () => {
+    expect(alertPushContent(groupByRecipient([alert({ kind: "restock" })])[0]!)).toEqual({ body: "L'une de vos Envies est de nouveau disponible", data: { wishlistItemId: WISH_A } });
+    expect(alertPushContent(groupByRecipient([alert({ kind: "restock", locale: "en" })])[0]!).body).toBe("One of your Wishes is available again");
+    expect(alertPushContent(groupByRecipient([alert({ kind: "sold_out" })])[0]!)).toEqual({ body: "L'une de vos Envies n'est plus disponible", data: { wishlistItemId: WISH_A } });
+    expect(alertPushContent(groupByRecipient([alert({ kind: "sold_out", locale: "en" })])[0]!).body).toBe("One of your Wishes is no longer available");
   });
 
-  it("plusieurs envies pour une personne : UNE notification « {n} de vos envies ont du nouveau », sans envie jointe (toucher ouvre vos Envies)", () => {
+  it("aucun texte ne contient de quoi reconnaître une pièce, une boutique ou un prix (aucun gabarit, aucun chiffre)", () => {
+    for (const texts of Object.values(ALERT_PUSH_TEXTS)) {
+      for (const text of Object.values(texts)) {
+        expect(text).not.toMatch(/[0-9€$£{}]|chez|\bat\b|:/);
+      }
+    }
+  });
+
+  it("plusieurs envies pour une personne : UNE notification « Plusieurs de vos Envies ont du nouveau », sans AUCUNE donnée (toucher ouvre vos Envies)", () => {
     const groups = groupByRecipient([alert(), alert({ wishlist_item_id: WISH_B, kind: "restock" }), alert({ user_id: BOB, wishlist_item_id: WISH_C, locale: "en" }), alert({ wishlist_item_id: WISH_C })]);
     expect(groups.map((group) => [group.userId, group.alerts.length])).toEqual([
       [ALICE, 3],
       [BOB, 1],
     ]);
-    expect(alertPushContent(groups[0]!)).toEqual({ body: "3 de vos envies ont du nouveau", data: { kind: "wish_alert" } });
-    expect(alertPushContent(groupByRecipient([alert({ locale: "en" }), alert({ locale: "en", wishlist_item_id: WISH_B })])[0]!).body).toBe("2 of your wishes have news");
+    expect(alertPushContent(groups[0]!)).toEqual({ body: "Plusieurs de vos Envies ont du nouveau", data: {} });
+    expect(alertPushContent(groupByRecipient([alert({ locale: "en" }), alert({ locale: "en", wishlist_item_id: WISH_B })])[0]!)).toEqual({ body: "Several of your Wishes have news", data: {} });
     // Deux alertes pour la même envie : la baisse est montrée, l'envie est jointe.
-    const same = alertPushContent(groupByRecipient([alert({ kind: "restock", old_price: null, new_price: null, currency: null }), alert()])[0]!);
-    expect(plain(same.body)).toContain("Baisse de prix");
-    expect(same.data).toEqual({ kind: "wish_alert", wishlistItemId: WISH_A });
+    const same = alertPushContent(groupByRecipient([alert({ kind: "restock" }), alert()])[0]!);
+    expect(same).toEqual({ body: "Baisse de prix sur l'une de vos Envies", data: { wishlistItemId: WISH_A } });
   });
 });
 
@@ -121,7 +123,7 @@ function seeded(options: { migrated?: boolean } = {}) {
     rpc: async (fn, args) => {
       rpcCalls.push({ fn, args });
       if (!migrated) return { data: null, error: { code: "PGRST202", message: "absente" } };
-      if (fn === "wish_alerts_version") return { data: 2, error: null };
+      if (fn === "wish_alerts_version") return { data: 3, error: null };
       if (fn === "wish_observe") return { data: [{ matched: observeEvents, events: observeEvents }], error: null };
       if (fn === "wish_alerts_claim") return { data: (args.p_limit as number) > 0 ? claimRows : [], error: null };
       if (fn === "wish_alerts_mark_pushing") return pushingFails ? { data: null, error: { code: "08006", message: "connexion perdue" } } : { data: (args.p_ids as string[]).length, error: null };
@@ -186,7 +188,7 @@ afterEach(async () => {
 
 describe("flushWishAlerts", () => {
   it("une notification par personne, aux SEULS appareils qui ont accepté les alertes (même gardés pour elles seules) ; notée « peut-être envoyée » avant Expo, puis « envoyée »", async () => {
-    claimRows = [alert(), alert({ wishlist_item_id: WISH_B, kind: "restock", old_price: null, new_price: null, currency: null }), alert({ user_id: BOB, wishlist_item_id: WISH_C, locale: "en" })];
+    claimRows = [alert(), alert({ wishlist_item_id: WISH_B, kind: "restock" }), alert({ user_id: BOB, wishlist_item_id: WISH_C, locale: "en" })];
     const target = await senderApp(seeded().db);
     const summary = await flushWishAlerts(target);
     expect(summary).toEqual({ claimed: 3, recipients: 2, sent: 3, released: 0, uncertain: 0, push: true });
@@ -199,20 +201,17 @@ describe("flushWishAlerts", () => {
     const order = rpcCalls.map((call) => call.fn).filter((fn) => fn !== "wish_alerts_version");
     expect(order.slice(0, 2)).toEqual(["wish_alerts_claim", "wish_alerts_mark_pushing"]);
     expect(expoCalls.map((call) => call.messages.map((message) => message.to))).toEqual([[ALICE_PHONE], [BOB_PHONE]]);
-    expect(expoCalls[0]!.messages[0]).toEqual({ to: ALICE_PHONE, title: "Spotto", body: "2 de vos envies ont du nouveau", data: { kind: "wish_alert" }, sound: "default" });
-    expect(expoCalls[1]!.messages[0]!.data).toEqual({ kind: "wish_alert", wishlistItemId: WISH_C });
+    expect(expoCalls[0]!.messages[0]).toEqual({ to: ALICE_PHONE, title: "Spotto", body: "Plusieurs de vos Envies ont du nouveau", data: {}, sound: "default" });
+    expect(expoCalls[1]!.messages[0]).toEqual({ to: BOB_PHONE, title: "Spotto", body: "Price drop on one of your Wishes", data: { wishlistItemId: WISH_C }, sound: "default" });
     expect(calls("wish_alerts_mark_sent")).toEqual([{ fn: "wish_alerts_mark_sent", args: { p_ids: claimRows.map((row) => row.event_id) } }]);
     expect(calls("wish_alerts_release")).toEqual([]);
-    // Journal : des nombres, jamais un compte, un titre ni un prix.
+    // Journal : des nombres, jamais un compte ni une envie.
     const journal = lines.join("\n");
     expect(journal).toContain("Alerte prix envoyée");
-    expect(journal).not.toContain(ALICE);
-    expect(journal).not.toContain("Veste");
-    expect(journal).not.toMatch(/89[.,]9/);
-    expect(journal).not.toContain("Boutique Exemple");
+    for (const id of [ALICE, BOB, WISH_A, WISH_B, WISH_C]) expect(journal).not.toContain(id);
   });
 
-  it("Expo refuse (erreur HTTP) : certainement pas envoyée, la réservation est rendue (retentée plus tard, jusqu'à 72 h), rien n'est noté « envoyée »", async () => {
+  it("Expo refuse (erreur HTTP) : certainement pas envoyée, la réservation est rendue (retentée plus tard, dans ses 3 jours), rien n'est noté « envoyée »", async () => {
     claimRows = [alert()];
     expoReply = () => new Response("panne", { status: 500 });
     const target = await senderApp(seeded().db);
@@ -279,7 +278,7 @@ describe("flushWishAlerts", () => {
     expect(calls("wish_alerts_mark_sent")).toEqual([]);
   });
 
-  it("sans la migration 0036 : aucune file lue, rien n'est envoyé", async () => {
+  it("sans les migrations des alertes : aucune file lue, rien n'est envoyé", async () => {
     const target = await senderApp(seeded({ migrated: false }).db);
     expect(await flushWishAlerts(target)).toMatchObject({ claimed: 0, push: false });
     expect(rpcCalls.map((call) => call.fn)).toEqual(["wish_alerts_version"]);
@@ -290,20 +289,28 @@ describe("flushWishAlerts", () => {
     observeEvents = 1;
     claimRows = [alert()];
     const target = await senderApp(seeded().db);
-    observeResults(target, { source: "lens", rows: [{ merchantUrl: "https://boutique-exemple.fr/p/1", merchantName: "Boutique", priceValue: 50, currency: "€" }], country: "fr" });
+    observeResults(target, { source: "lens", rows: [{ merchantUrl: "https://boutique-exemple.fr/p/1", merchantName: "Boutique", priceValue: 50, currency: "€" }], country: "fr", observerId: SEARCHER });
     await flushObservations();
     await waitForWishAlertsFlush();
     const order = rpcCalls.map((call) => call.fn).filter((fn) => fn !== "wish_alerts_version");
     expect(order).toEqual(["wish_observe", "wish_alerts_claim", "wish_alerts_mark_pushing", "wish_alerts_mark_sent"]);
+    // Le membre qui cherche part vers la base (son réglage, la règle des auteurs), et nulle part ailleurs.
+    expect(calls("wish_observe")[0]!.args.p_observer).toBe(SEARCHER);
+    for (const fn of ["wish_alerts_claim", "wish_alerts_mark_pushing", "wish_alerts_mark_sent"]) expect(JSON.stringify(calls(fn)), fn).not.toContain(SEARCHER);
     expect(expoCalls.map((call) => call.messages.map((message) => message.to))).toEqual([[ALICE_PHONE]]);
-    // La notification ne dit jamais qui a cherché : ni compte, ni recherche.
+    // La notification ne dit jamais qui a cherché : ni compte, ni recherche ; l'envie seulement.
     expect(JSON.stringify(expoCalls)).not.toMatch(/searchId|userId|searcher/);
+    expect(JSON.stringify(expoCalls)).not.toContain(SEARCHER);
+    expect(expoCalls[0]!.messages[0]!.data).toEqual({ wishlistItemId: WISH_A });
+    // Journal : jamais le membre qui cherche avec l'envie ou le membre prévenus (ni l'un ni l'autre, en fait).
+    const journal = lines.join("\n");
+    for (const id of [SEARCHER, ALICE, WISH_A]) expect(journal).not.toContain(id);
   });
 
   it("observation sans alerte créée : aucun passage lancé par elle", async () => {
     claimRows = [alert()];
     const target = await senderApp(seeded().db);
-    observeResults(target, { source: "lens", rows: [{ merchantUrl: "https://boutique-exemple.fr/p/1", merchantName: "Boutique", priceValue: 50, currency: "€" }], country: "fr" });
+    observeResults(target, { source: "lens", rows: [{ merchantUrl: "https://boutique-exemple.fr/p/1", merchantName: "Boutique", priceValue: 50, currency: "€" }], country: "fr", observerId: SEARCHER });
     await flushObservations();
     await waitForWishAlertsFlush();
     expect(calls("wish_alerts_claim")).toEqual([]);
@@ -374,7 +381,7 @@ describe("déclenchement par les routes fréquentes, au plus une fois par minute
 });
 
 describe("purge à 30 jours", () => {
-  it("par lots bornés, à côté de la purge du cache ; jamais d'erreur ; sans 0036, rien", async () => {
+  it("par lots bornés, à côté de la purge du cache ; jamais d'erreur ; sans les alertes, rien", async () => {
     const target = await senderApp(seeded().db);
     await purgeWishAlerts(target, target.log);
     expect(calls("wish_alerts_purge")).toEqual([{ fn: "wish_alerts_purge", args: { p_limit: 500 } }]);

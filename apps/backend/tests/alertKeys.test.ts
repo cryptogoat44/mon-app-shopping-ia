@@ -3,39 +3,70 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ALERT_CURRENCY_MARKS, alertCurrency, COUNTRY_CURRENCIES, isCountryCurrency } from "@monapp/shared-types";
 import { isLocalCurrency } from "../src/services/lensMeasure.js";
-import { ALERT_EXCLUDED_MARKETPLACES, ALERT_KEY_VERSION, alertKeyHash, alertKeyString, googleProductId, isMarketplaceMerchant, merchantKey, trackingKeyOf } from "../src/lib/alertKeys.js";
+import { ALERT_EXCLUDED_MARKETPLACES, ALERT_KEY_VERSION, alertKeyHash, alertKeyString, isMarketplaceMerchant, merchantKey, trackingKeyOf } from "../src/lib/alertKeys.js";
 import { TRACKING_PARAMS } from "../src/services/matchFilters.js";
 
-// Alertes prix et stock (lot 2) : la clé « même pièce » (même boutique ET même
-// produit, jamais le titre ni l'image) et la devise des prix, sans réseau ni
-// base. Boutiques et produits fictifs.
+// Alertes prix et stock (lot 2 ; nouvelle version, 0041) : l'empreinte
+// « même pièce » (le SHA-256 du lien normalisé de la boutique, jamais le
+// titre ni l'image) et la devise des prix, sans réseau ni base. Boutiques et
+// produits fictifs.
 
 const GOOGLE = "https://www.google.fr/search?ibp=oshop&q=veste+exemple&prds=catalogid:111,headlineOfferDocid:222,productid:4455667788,pvt:hg";
 
-describe("clé « même pièce » : lien d'une boutique", () => {
-  it("règles de pageKey : hôte en minuscules, un seul « www. » retiré, chemin tel quel, sans fragment ni « / » final", () => {
-    expect(alertKeyString("https://WWW.Boutique-Exemple.fr/Vestes/Nuage-07/#avis", "Boutique Exemple")).toBe(`v${ALERT_KEY_VERSION}|u|boutique-exemple.fr/Vestes/Nuage-07`);
-    // m., fr. et www2. gardés : ce peuvent être d'autres sites.
-    expect(alertKeyString("https://www2.boutique.example/p/1", null)).toBe("v1|u|www2.boutique.example/p/1");
-    expect(alertKeyString("https://m.boutique.example/p/1", null)).toBe("v1|u|m.boutique.example/p/1");
-    expect(alertKeyString("https://www.www.boutique.example/p/1", null)).toBe("v1|u|www.boutique.example/p/1");
+describe("empreinte « même pièce » : le lien normalisé de la boutique (0041)", () => {
+  it("version 2 des empreintes : le script de rattrapage les recalcule", () => {
+    expect(ALERT_KEY_VERSION).toBe(2);
+  });
+
+  it("https imposé, hôte en minuscules sans « www. », sans fragment ni « / » final, chemin tel quel", () => {
+    const base = alertKeyString("https://boutique-exemple.fr/Vestes/Nuage-07", "Boutique Exemple");
+    expect(base).toBe("https://boutique-exemple.fr/Vestes/Nuage-07");
+    for (const variant of [
+      "http://boutique-exemple.fr/Vestes/Nuage-07",
+      "https://WWW.Boutique-Exemple.fr/Vestes/Nuage-07",
+      "http://www.boutique-exemple.fr/Vestes/Nuage-07/",
+      "https://boutique-exemple.fr/Vestes/Nuage-07#avis",
+      "https://boutique-exemple.fr/Vestes/Nuage-07//",
+    ]) {
+      expect(alertKeyString(variant, "Boutique Exemple"), variant).toBe(base);
+      expect(trackingKeyOf(variant, "Boutique Exemple")!.hash, variant).toBe(trackingKeyOf(base, "Boutique Exemple")!.hash);
+    }
+    // m., fr. et www2. gardés : ce peuvent être d'autres sites ; un seul « www. » retiré.
+    expect(alertKeyString("https://www2.boutique.example/p/1", null)).toBe("https://www2.boutique.example/p/1");
+    expect(alertKeyString("https://m.boutique.example/p/1", null)).toBe("https://m.boutique.example/p/1");
+    expect(alertKeyString("https://www.www.boutique.example/p/1", null)).toBe("https://www.boutique.example/p/1");
     // La casse du chemin compte.
     expect(alertKeyString("https://boutique.example/P/1", null)).not.toBe(alertKeyString("https://boutique.example/p/1", null));
   });
 
-  it("paramètres de suivi retirés, paramètres de variante gardés (valeurs vides comprises), triés par nom puis valeur", () => {
+  it("paramètres de suivi retirés (utm_… et TOUTE la liste TRACKING_PARAMS), les autres gardés (valeurs vides comprises), triés par nom puis valeur", () => {
     const plain = alertKeyString("https://boutique.example/veste?couleur=bleu&taille=M", null);
-    const tracked = alertKeyString("https://boutique.example/veste?utm_source=google&taille=M&gclid=abc&couleur=bleu&srsltid=x&UTM_Medium=cpc", null);
+    expect(plain).toBe("https://boutique.example/veste?couleur=bleu&taille=M");
+    // Avec et sans paramètres de suivi, dans un autre ordre : la même pièce.
+    const tracked = alertKeyString("http://www.boutique.example/veste/?utm_source=google&taille=M&gclid=abc&couleur=bleu&srsltid=x&UTM_Medium=cpc#haut", null);
     expect(tracked).toBe(plain);
-    expect(plain).toBe("v1|u|boutique.example/veste?couleur=bleu&taille=M");
+    expect(alertKeyString("https://boutique.example/veste?taille=M&couleur=bleu", null)).toBe(plain);
     // Une autre couleur : une autre pièce.
     expect(alertKeyString("https://boutique.example/veste?couleur=rouge&taille=M", null)).not.toBe(plain);
     // Un paramètre inconnu (ref, cid, variant) compte toujours : le garder ne coûte qu'une alerte manquée.
-    expect(alertKeyString("https://boutique.example/veste?ref=abc", null)).toBe("v1|u|boutique.example/veste?ref=abc");
-    expect(alertKeyString("https://boutique.example/veste?variant=", null)).toBe("v1|u|boutique.example/veste?variant=");
-    expect(alertKeyString("https://boutique.example/veste?a=2&a=1&b=", null)).toBe("v1|u|boutique.example/veste?a=1&a=2&b=");
-    // La liste fermée des paramètres de suivi est celle des filtres des résultats.
-    for (const name of TRACKING_PARAMS) expect(alertKeyString(`https://boutique.example/veste?${name}=1`, null)).toBe("v1|u|boutique.example/veste");
+    expect(alertKeyString("https://boutique.example/veste?ref=abc", null)).toBe("https://boutique.example/veste?ref=abc");
+    expect(alertKeyString("https://boutique.example/veste?variant=", null)).toBe("https://boutique.example/veste?variant=");
+    expect(alertKeyString("https://boutique.example/veste?a=2&a=1&b=", null)).toBe("https://boutique.example/veste?a=1&a=2&b=");
+    // La liste fermée des paramètres de suivi est celle des filtres des résultats, en entier.
+    expect([...TRACKING_PARAMS].length).toBeGreaterThanOrEqual(15);
+    for (const name of TRACKING_PARAMS) {
+      expect(alertKeyString(`https://boutique.example/veste?${name}=1`, null), name).toBe("https://boutique.example/veste");
+      expect(alertKeyString(`https://boutique.example/veste?${name.toUpperCase()}=1&taille=M`, null), name).toBe("https://boutique.example/veste?taille=M");
+    }
+    for (const name of ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "utm_id"]) {
+      expect(alertKeyString(`https://boutique.example/veste?${name}=x`, null), name).toBe("https://boutique.example/veste");
+    }
+  });
+
+  it("l'empreinte est le SHA-256 du lien normalisé (rien d'autre : ni version, ni nom de boutique)", () => {
+    const key = trackingKeyOf("http://www.boutique.example/veste/?taille=M&utm_source=x", "Boutique Exemple")!;
+    expect(key.hash).toBe(alertKeyHash("https://boutique.example/veste?taille=M"));
+    expect(key.hash).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it("semblable mais différente : un autre chemin chez la même boutique n'a pas la même clé", () => {
@@ -80,7 +111,7 @@ describe("clé « même pièce » : lien d'une boutique", () => {
 });
 
 describe("clé « même pièce » : places de marché, liens courts et pages de liste (décision 4)", () => {
-  it("une offre d'une place de marché n'a jamais de clé, même sur une page de Google avec productid, même avec un nom de vendeur", () => {
+  it("une offre d'une place de marché n'a jamais d'empreinte, quel que soit le lien, même avec un nom de vendeur", () => {
     const google = "https://www.google.fr/shopping/product/1?prds=productid:4455667788";
     for (const source of ["eBay", "eBay - vendeurx", "Amazon.fr", "Amazon Marketplace", "Vinted", "Etsy", "Farfetch", "Temu", "DHgate"]) {
       expect(alertKeyString(google, source), source).toBeNull();
@@ -92,8 +123,6 @@ describe("clé « même pièce » : places de marché, liens courts et pages de 
     expect(isMarketplaceMerchant("amazonfrseller")).toBe(true);
     expect(isMarketplaceMerchant("boutiqueexemple")).toBe(false);
     expect(isMarketplaceMerchant(null)).toBe(false);
-    // Une vraie boutique sur une page de Google garde sa clé.
-    expect(alertKeyString(google, "Boutique Exemple")).toBe("v1|g|google.fr|4455667788|boutiqueexemple");
   });
 
   it("liens courts d'Amazon (amzn.to, amzn.eu, amzn.asia, amzn.com, a.co) et des autres places de marché : aucune clé", () => {
@@ -115,44 +144,34 @@ describe("clé « même pièce » : places de marché, liens courts et pages de 
     ]) {
       expect(alertKeyString(link, "Boutique"), link).toBeNull();
     }
-    expect(alertKeyString("https://boutique.example/collections/vestes/products/veste-nuage", "Boutique")).toBe("v1|u|boutique.example/collections/vestes/products/veste-nuage");
-    expect(alertKeyString("https://boutique.example/c/robes/p/123", "Boutique")).toBe("v1|u|boutique.example/c/robes/p/123");
-    // Une page de produit à un seul segment garde sa clé (la reconnaître comme liste écarterait de vraies pièces).
-    expect(alertKeyString("https://boutique.example/veste-nuage-07", "Boutique")).toBe("v1|u|boutique.example/veste-nuage-07");
+    expect(alertKeyString("https://boutique.example/collections/vestes/products/veste-nuage", "Boutique")).toBe("https://boutique.example/collections/vestes/products/veste-nuage");
+    expect(alertKeyString("https://boutique.example/c/robes/p/123", "Boutique")).toBe("https://boutique.example/c/robes/p/123");
+    // Une page de produit à un seul segment garde son empreinte (la reconnaître comme liste écarterait de vraies pièces).
+    expect(alertKeyString("https://boutique.example/veste-nuage-07", "Boutique")).toBe("https://boutique.example/veste-nuage-07");
   });
 });
 
-describe("clé « même pièce » : page de Google", () => {
-  it("le productid lu strictement dans « prds », avec la boutique normalisée", () => {
-    expect(googleProductId(GOOGLE)).toBe("4455667788");
-    expect(alertKeyString(GOOGLE, "Boutique Exemple")).toBe("v1|g|google.fr|4455667788|boutiqueexemple");
-    // Jamais les mots de la recherche dans la clé.
-    expect(alertKeyString(GOOGLE, "Boutique Exemple")).not.toContain("veste");
-  });
-
-  it("lien Google sans productid : aucune clé (jamais de clé « lien » sur une page de Google)", () => {
-    expect(alertKeyString("https://www.google.fr/search?ibp=oshop&q=veste", "Boutique")).toBeNull();
-    expect(alertKeyString("https://www.google.fr/shopping/product/4455667788", "Boutique")).toBeNull();
-    expect(alertKeyString("https://www.google.fr/search?prds=productid:12a34", "Boutique")).toBeNull();
-    expect(alertKeyString("https://www.google.fr/search?prds=productid:1,productid:2", "Boutique")).toBeNull();
-    expect(googleProductId("https://www.google.fr/search?prds=pid:123")).toBeNull();
-  });
-
-  it("sans boutique, aucune clé ; même productid chez une autre boutique : autre clé", () => {
-    expect(alertKeyString(GOOGLE, null)).toBeNull();
-    expect(alertKeyString(GOOGLE, "Boutique A")).not.toBe(alertKeyString(GOOGLE, "Boutique B"));
-    // Autre domaine de Google (autre pays) : autre clé.
-    expect(alertKeyString(GOOGLE.replace("google.fr", "google.com"), "Boutique A")).not.toBe(alertKeyString(GOOGLE, "Boutique A"));
+describe("un résultat sans lien direct vers la boutique (page de Google seulement) : aucune empreinte, jamais d'alerte", () => {
+  it("page de Google, même avec un productid et une vraie boutique : aucune empreinte (l'ancienne clé « google » n'existe plus)", () => {
+    for (const link of [
+      GOOGLE,
+      "https://www.google.fr/shopping/product/1?prds=productid:4455667788",
+      "https://www.google.com/search?ibp=oshop&q=veste",
+      "https://www.google.fr/shopping/product/4455667788",
+      "http://google.fr/search?prds=productid:1",
+    ]) {
+      expect(alertKeyString(link, "Boutique Exemple"), link).toBeNull();
+      expect(trackingKeyOf(link, "Boutique Exemple"), link).toBeNull();
+    }
   });
 });
 
 describe("empreinte et boutique normalisée", () => {
-  it("la base ne garde que l'empreinte SHA-256 de la clé, jamais l'adresse", () => {
+  it("la base ne garde que l'empreinte SHA-256 du lien, jamais l'adresse, et la boutique normalisée à part", () => {
     const key = trackingKeyOf("https://boutique.example/veste?taille=M", "Boutique Exemple")!;
     expect(key.hash).toMatch(/^[0-9a-f]{64}$/);
-    expect(key.hash).toBe(alertKeyHash("v1|u|boutique.example/veste?taille=M"));
-    expect(key).toEqual({ hash: key.hash, merchant: "boutiqueexemple", kind: "link" });
-    expect(trackingKeyOf(GOOGLE, "Boutique")?.kind).toBe("google");
+    expect(key).toEqual({ hash: alertKeyHash("https://boutique.example/veste?taille=M"), merchant: "boutiqueexemple" });
+    expect(trackingKeyOf(GOOGLE, "Boutique")).toBeNull();
     expect(trackingKeyOf("https://www.amazon.fr/dp/1", "Amazon")).toBeNull();
   });
 

@@ -692,6 +692,36 @@ describe("export lisible : alertes prix et stock (lot 2, migration 0036)", () =>
     expect(plain).not.toContain("Achetée le");
   });
 
+  // Nouvelle version des alertes (0041) : le seuil de la cloche, le jour
+  // d'envoi (aucune heure), et pour chaque signalement s'il aidait les
+  // autres membres ; « Aider les autres membres » dans le compte.
+  it("nouvelle version (0041) : seuil, jour d'envoi, signalement qui aide les autres, « Aider les autres membres », en français et en anglais", () => {
+    const base = fixture();
+    const data = {
+      ...base,
+      profile: { ...base.profile!, price_alerts_enabled: true, help_others: false },
+      wishWatches: [{ ...base.wishWatches[0]!, target_price: 89.9, target_currency: "EUR", target_country: "fr", below_target: true }],
+      wishTracking: [{ ...base.wishTracking[0]!, ref_price: undefined, ref_currency: undefined, ref_set_on: undefined, sold_out_source: "reported", stock_state: "sold_out" }],
+      wishAlertEvents: [{ ...base.wishAlertEvents[0]!, sent_on: "2026-10-08" }],
+      stockReports: [{ ...base.stockReports[0]!, helps_others: true, in_streak: false }],
+    };
+    const fr = spaces(visibleText(sectionHtml(render({}, data), "alerts")));
+    expect(fr).toContain("Prévenir si le prix passe sous 89,90 €");
+    expect(fr).toContain("Envoyée le 8 octobre 2026");
+    expect(fr).toContain("Comptait pour les autres membres");
+    expect(fr).toContain("Dans la série en cours");
+    expect(fr).toContain("Épuisée selon vous");
+    expect(fr).not.toMatch(/Envoyée le 8 octobre 2026 à/);
+    const account = spaces(visibleText(sectionHtml(render({}, data), "account")));
+    expect(account).toContain("Aider les autres membres");
+    const en = spaces(visibleText(sectionHtml(renderExportHtml(data, lookups(), options({ locale: "en", timeZone: "UTC" })), "alerts")));
+    expect(en).toContain("Notify me if the price drops below €89.90");
+    expect(en).toContain("Sent on October 8, 2026");
+    expect(en).toContain("Counted for other members");
+    expect(en).toContain("Sold out according to you");
+    expect(spaces(visibleText(sectionHtml(renderExportHtml(data, lookups(), options({ locale: "en", timeZone: "UTC" })), "account")))).toContain("Help other members");
+  });
+
   it("sans alerte : la section dit « Aucune donnée »", () => {
     const data = { ...fixture(), wishWatches: [], wishTracking: [], wishAlertEvents: [], stockReports: [] };
     expect(visibleText(sectionHtml(render({}, data), "alerts"))).toContain(EXPORT_TEXT.noData.fr);

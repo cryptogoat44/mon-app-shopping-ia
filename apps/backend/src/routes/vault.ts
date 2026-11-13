@@ -10,7 +10,6 @@ import { PHOTO_SIZES, optimizePhoto } from "../lib/photos.js";
 import { DatabaseReadError, INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseDbRows, parseInput } from "../lib/validation.js";
 import { findOwnMatch } from "../lib/ownMatches.js";
 import { shownPosts } from "../lib/visibility.js";
-import { observePurchase } from "../lib/wishObserve.js";
 import { forgetPurchase, markPurchase } from "../lib/wishAlerts.js";
 
 const SHARED_POST_ROWS = z.array(z.object({ id: z.guid(), privacy: z.enum(PRIVACY_LEVELS), created_at: z.string() }));
@@ -342,16 +341,10 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
     // Alertes prix et stock (0040) : toutes les envies de l'acheteur de la
     // même pièce (même depuis un autre résultat) sont notées achetées AVANT la
     // réponse : plus aucune alerte pour elles, cloche cachée. Ne fait jamais
-    // échouer l'achat.
-    const marked = match ? await markPurchase(fastify, request.log, userId, { merchantUrl: match.merchantUrl, merchantName: match.merchantName }) : false;
-    const sent = reply.send(created);
-    // Alertes prix et stock (lot 2) : « Je l'ai achetée » sur une proposition
-    // de sa recherche annonce, après la réponse, « disponible chez cette
-    // boutique aujourd'hui » (sans prix, sans jamais l'acheteur) — seulement
-    // si ses envies ont bien été notées achetées (jamais de « De retour en
-    // stock » pour sa propre envie).
-    if (match && marked) observePurchase(fastify, userId, { merchantUrl: match.merchantUrl, merchantName: match.merchantName });
-    return sent;
+    // échouer l'achat. Nouvelle version (0041) : c'est tout — un achat ne
+    // compare rien avec les envies des autres membres (aucune observation).
+    if (match) await markPurchase(fastify, request.log, userId, { merchantUrl: match.merchantUrl, merchantName: match.merchantName });
+    return reply.send(created);
   });
 
   fastify.patch("/api/vault/:id", { preHandler: fastify.requireAuth }, async (request, reply) => {

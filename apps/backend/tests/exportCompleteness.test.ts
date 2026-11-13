@@ -62,8 +62,9 @@ const PUSH_SECTIONS = pushProbe.error ? [] : (["pushDevices"] as const);
 // Lot alertes prix et stock : cloche, suivi, alerte et signalement, seulement
 // une fois la migration 0036 appliquée sur la base des tests (sans elle, sections vides).
 const alertsProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).rpc("wish_alerts_version");
-// 1 : 0036 seule ; 2 : avec ses garde-fous (0040) — les données sont exportées dans les deux cas.
+// 1 : 0036 seule ; 2 : avec ses garde-fous (0040) ; 3 : nouvelle version (0041) — les données sont exportées dans tous les cas.
 const ALERT_SECTIONS = alertsProbe.error || typeof alertsProbe.data !== "number" || alertsProbe.data < 1 ? [] : (["wishWatches", "wishTracking", "wishAlertEvents", "stockReports"] as const);
+const ALERTS_V2 = !alertsProbe.error && typeof alertsProbe.data === "number" && alertsProbe.data >= 3;
 
 // Sections qui sont un objet (ou null), pas une liste.
 const OBJECT_SECTIONS = ["account", "profile", "adminRole", "suspension"] as const;
@@ -261,9 +262,10 @@ describe("export RGPD complet", () => {
         const { error } = await app.supabaseAdmin.from("wish_watches").insert({ wishlist_item_id: wish!.id, user_id: user.id, notify_price_drop: true });
         if (error) throw error;
       }
+      // 0041 : plus aucune heure (send_after retiré), le jour seulement.
       const { error: eventError } = await app.supabaseAdmin
         .from("wish_alert_events")
-        .insert({ wishlist_item_id: wish!.id, user_id: user.id, kind: "restock", created_on: "2026-11-09", send_after: new Date().toISOString(), status: "expired" });
+        .insert({ wishlist_item_id: wish!.id, user_id: user.id, kind: "restock", created_on: "2026-11-09", status: "expired", ...(ALERTS_V2 ? {} : { send_after: new Date().toISOString() }) });
       if (eventError) throw eventError;
       const { error: reportError } = await app.supabaseAdmin.from("stock_reports").insert({ user_id: user.id, match_key_hash: "b".repeat(64), created_on: "2026-11-09" });
       if (reportError) throw reportError;
@@ -300,6 +302,14 @@ describe("export RGPD complet", () => {
     const deviceColumns = ALERT_SECTIONS.length > 0 ? ["created_at", "notify_alerts", "notify_messages", "platform", "updated_at"] : ["created_at", "platform", "updated_at"];
     for (const device of body.pushDevices) expect(Object.keys(device).sort()).toEqual(deviceColumns);
     expect(JSON.stringify(body)).not.toContain("ExponentPushToken[");
+    // Alertes, nouvelle version (0041) : un signalement « Plus disponible » garde son auteur (sa table, son export),
+    // « Aider les autres membres » est exporté, et aucune heure d'alerte.
+    if (ALERTS_V2) {
+      expect(body.stockReports).toEqual([expect.objectContaining({ match_key_hash: "b".repeat(64), created_on: "2026-11-09", helps_others: true, in_streak: true })]);
+      expect(body.profile).toMatchObject({ help_others: true, price_alerts_enabled: expect.any(Boolean) });
+      expect(body.wishAlertEvents[0]).toMatchObject({ created_on: "2026-11-09", sent_on: null });
+      expect(JSON.stringify(body.wishAlertEvents)).not.toMatch(/created_at|send_after|sent_at|claimed_at|pushing_at/);
+    }
   });
 
   it("sans format : le même JSON qu'avant (mêmes clés), plus l'adresse e-mail du compte, jamais mis en cache", async () => {

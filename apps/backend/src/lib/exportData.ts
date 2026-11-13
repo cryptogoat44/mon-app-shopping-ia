@@ -4,7 +4,7 @@ import { messagesReady } from "./messaging.js";
 import { collectionsReady } from "./collections.js";
 import { collectionModerationReady } from "./collectionModeration.js";
 import { pushReady } from "./push.js";
-import { wishAlertsReady, wishAlertsSchemaState } from "./wishAlertsSchema.js";
+import { wishAlertsSchemaState, wishAlertsSchemaVersion } from "./wishAlertsSchema.js";
 
 // Export RGPD (droit d'accès et de portabilité) : lecture de TOUTES les
 // données personnelles d'un compte. Toute nouvelle table contenant des
@@ -164,6 +164,29 @@ export const WISH_TRACKING_EXPORT_COLUMNS = "wishlist_item_id, ref_price, ref_cu
 export const WISH_TRACKING_EXPORT_COLUMNS_GUARDED = `${WISH_TRACKING_EXPORT_COLUMNS}, member_country, sold_out_source, bought_on`;
 export const WISH_ALERT_EVENT_EXPORT_COLUMNS = "id, wishlist_item_id, kind, old_price, new_price, currency, status, created_on";
 export const STOCK_REPORT_EXPORT_COLUMNS = "id, match_key_hash, created_on";
+/** Nouvelle version des alertes (migration 0041) : le seuil de chaque cloche
+ * (et s'il est franchi), le suivi sans prix de référence (retiré), le JOUR
+ * d'envoi de chaque alerte (aucune heure n'est gardée), et, pour chaque
+ * signalement « Plus disponible », s'il aidait les autres membres et s'il
+ * fait encore partie de la série en cours. Jamais d'où vient une alerte. */
+export const WISH_WATCH_EXPORT_COLUMNS_V2 = `${WISH_WATCH_EXPORT_COLUMNS}, target_price, target_currency, target_country, below_target`;
+export const WISH_TRACKING_EXPORT_COLUMNS_V2 = "wishlist_item_id, last_price, last_currency, last_seen_on, stock_state, stock_on, member_country, sold_out_source, bought_on";
+export const WISH_ALERT_EVENT_EXPORT_COLUMNS_V2 = `${WISH_ALERT_EVENT_EXPORT_COLUMNS}, sent_on`;
+export const STOCK_REPORT_EXPORT_COLUMNS_V2 = `${STOCK_REPORT_EXPORT_COLUMNS}, helps_others, in_streak`;
+
+/** Les colonnes exportées des alertes selon la version de la base (1 : 0036,
+ * 2 : 0040, 3 : 0041). */
+export function alertExportColumns(version: number): { watches: string; tracking: string; events: string; reports: string } {
+  if (version >= 3) {
+    return { watches: WISH_WATCH_EXPORT_COLUMNS_V2, tracking: WISH_TRACKING_EXPORT_COLUMNS_V2, events: WISH_ALERT_EVENT_EXPORT_COLUMNS_V2, reports: STOCK_REPORT_EXPORT_COLUMNS_V2 };
+  }
+  return {
+    watches: WISH_WATCH_EXPORT_COLUMNS,
+    tracking: version >= 2 ? WISH_TRACKING_EXPORT_COLUMNS_GUARDED : WISH_TRACKING_EXPORT_COLUMNS,
+    events: WISH_ALERT_EVENT_EXPORT_COLUMNS,
+    reports: STOCK_REPORT_EXPORT_COLUMNS,
+  };
+}
 
 /** Ajoute le titre de l'envie à chaque ligne (lisible sans l'identifiant). */
 function withWishTitles(rows: readonly ExportRow[], wishlistItems: readonly ExportRow[]): ExportRow[] {
@@ -330,7 +353,7 @@ export async function collectExport(
   // ses garde-fous (0040), les alertes sont coupées mais leurs données sont
   // là : elles sont exportées quand même.
   const withAlerts = (await wishAlertsSchemaState(fastify)) === "ready";
-  const trackingColumns = withAlerts && (await wishAlertsReady(fastify)) ? WISH_TRACKING_EXPORT_COLUMNS_GUARDED : WISH_TRACKING_EXPORT_COLUMNS;
+  const alertColumns = alertExportColumns(withAlerts ? await wishAlertsSchemaVersion(fastify) : 1);
   const pushDevices = await section(
     "pushDevices",
     async () =>
@@ -342,20 +365,20 @@ export async function collectExport(
   const [wishWatches, wishTracking, wishAlertEvents, stockReports] = await Promise.all([
     section(
       "wishWatches",
-      async () => (withAlerts ? withWishTitles(await listWhere(db, "wish_watches", WISH_WATCH_EXPORT_COLUMNS, "user_id", userId, ["created_at", "wishlist_item_id"]), wishlistItems) : none),
+      async () => (withAlerts ? withWishTitles(await listWhere(db, "wish_watches", alertColumns.watches, "user_id", userId, ["created_at", "wishlist_item_id"]), wishlistItems) : none),
       none
     ),
     section(
       "wishTracking",
-      async () => (withAlerts ? withWishTitles(await listWhere(db, "wish_tracking", trackingColumns, "user_id", userId, ["wishlist_item_id"]), wishlistItems) : none),
+      async () => (withAlerts ? withWishTitles(await listWhere(db, "wish_tracking", alertColumns.tracking, "user_id", userId, ["wishlist_item_id"]), wishlistItems) : none),
       none
     ),
     section(
       "wishAlertEvents",
-      async () => (withAlerts ? withWishTitles(await listWhere(db, "wish_alert_events", WISH_ALERT_EVENT_EXPORT_COLUMNS, "user_id", userId, ["created_on", "id"]), wishlistItems) : none),
+      async () => (withAlerts ? withWishTitles(await listWhere(db, "wish_alert_events", alertColumns.events, "user_id", userId, ["created_on", "id"]), wishlistItems) : none),
       none
     ),
-    section("stockReports", () => (withAlerts ? listWhere(db, "stock_reports", STOCK_REPORT_EXPORT_COLUMNS, "user_id", userId, ["created_on", "id"]) : Promise.resolve(none)), none),
+    section("stockReports", () => (withAlerts ? listWhere(db, "stock_reports", alertColumns.reports, "user_id", userId, ["created_on", "id"]) : Promise.resolve(none)), none),
   ]);
 
   const data: ExportData = {

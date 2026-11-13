@@ -654,8 +654,8 @@ describe("« Garder » et « En parler »", () => {
     expect(fake.table("wish_tracking")).toHaveLength(0);
   });
 
-  it("alertes prix (0036) : « Garder » crée le suivi de l'envie copiée (clé de la pièce, sans prix de référence), une seule fois", async () => {
-    const fake = seeded({ follows: friends(ALICE, BOB) }, { rpc: async (fn) => (fn === "wish_alerts_version" ? { data: 2, error: null } : { data: null, error: { code: "PGRST202", message: "absente" } }) });
+  it("alertes prix (0036, 0041) : « Garder » crée le suivi de l'envie copiée (empreinte de la pièce, sans prix), une seule fois", async () => {
+    const fake = seeded({ follows: friends(ALICE, BOB) }, { rpc: async (fn) => (fn === "wish_alerts_version" ? { data: 3, error: null } : { data: null, error: { code: "PGRST202", message: "absente" } }) });
     const target = await collectionsApp(fake.db);
     const itemId = await sharedBag(fake, target);
     expect((await as(target, BOB).post(`/api/collection-items/${itemId}/keep`)).statusCode).toBe(201);
@@ -667,11 +667,11 @@ describe("« Garder » et « En parler »", () => {
         user_id: BOB,
         match_key_hash: trackingKeyOf("https://boutique.example/sac", "Boutique")!.hash,
         merchant_key: "boutique",
-        key_version: 1,
+        key_version: 2,
       }),
     ]);
-    // Aucune proposition d'origine : la première observation fixera la référence.
-    expect(fake.table("wish_tracking")[0]).not.toHaveProperty("ref_price");
+    // Aucune proposition d'origine : aucun prix vu (le premier prix vu fixera le seuil d'une cloche).
+    expect(fake.table("wish_tracking")[0]).not.toHaveProperty("last_price");
   });
 
   // Lot « durcissement des alertes » (entrees-07) : le plafond d'envies par membre vaut aussi ici.

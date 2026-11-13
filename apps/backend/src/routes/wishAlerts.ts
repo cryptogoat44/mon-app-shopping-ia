@@ -1,17 +1,19 @@
-// Alertes prix et stock (lot 2, migration 0036) : l'interrupteur des
-// Réglages, la cloche de chaque envie et « Plus disponible ».
-// - GET /api/alerts/status : toujours 200 ; sans 0036, tout est faux et
-//   l'app cache la cloche, l'interrupteur et « Plus disponible » ;
-// - les autres routes répondent 404 « alerts_unavailable » sans 0036.
-// La cloche et l'interrupteur sont des réglages personnels : permis à un
+// Alertes prix et stock (lot 2, migration 0036 ; nouvelle version, 0041) :
+// les réglages « Alertes prix et stock » et « Aider les autres membres », la
+// cloche de chaque envie (et son seuil) et « Plus disponible ».
+// - GET /api/alerts/status : toujours 200 ; sans 0041, tout est faux et
+//   l'app cache la cloche, les réglages et « Plus disponible » ;
+// - les autres routes répondent 404 « alerts_unavailable » sans 0041.
+// La cloche et les réglages sont des réglages personnels : permis à un
 // compte suspendu, comme les autres. « Plus disponible » n'en est pas un : il
-// change les envies des AUTRES membres (épuisées, et leurs alertes en
-// attente périmées) — refusé à un compte suspendu (403), comme commenter ou suivre.
-// Journal : des codes, jamais un compte, un titre ni une adresse.
+// peut changer les envies des AUTRES membres (rupture établie à 3) — refusé
+// à un compte suspendu (403), comme commenter ou suivre.
+// Journal : des codes, jamais un compte, un titre, une adresse ni une envie.
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
-import { WISH_ALERT_ERRORS, type UpdateWishAlertResponse, type WishAlertStatesList } from "@monapp/shared-types";
+import { MAX_TARGET_PRICE, WISH_ALERT_ERRORS, type UpdateWishAlertResponse, type WishAlertStatesList } from "@monapp/shared-types";
 import { trackingKeyOf } from "../lib/alertKeys.js";
+import { searchLocaleFor } from "../lib/locale.js";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { findOwnMatch, PRODUCT_MATCH_NOT_FOUND } from "../lib/ownMatches.js";
 import { INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
@@ -21,10 +23,12 @@ import {
   readWishAlertStates,
   reportSoldOut,
   saveWatch,
+  saveWishAlertSettings,
   setWishAlertsEnabled,
   wishAlertsReady,
   wishAlertsStatus,
   wishBought,
+  WishTargetUnknownCurrencyError,
 } from "../lib/wishAlerts.js";
 
 const SERVER_ERROR = { error: "internal_error", message: GENERIC_SERVER_ERROR } as const;
@@ -41,12 +45,17 @@ const REPORT_LIMIT = {
 } as const;
 const INVALID_BODY = { error: "invalid_body", message: "Requête invalide." } as const;
 
-const settingsSchema = z.object({ enabled: z.boolean() });
+const settingsSchema = z
+  .object({ enabled: z.boolean().optional(), helpOthers: z.boolean().optional() })
+  .strict()
+  .refine((body) => body.enabled !== undefined || body.helpOthers !== undefined);
 const watchSchema = z.object({
   priceDrop: z.boolean(),
   restock: z.boolean(),
   soldOut: z.boolean().optional(),
   enableAlerts: z.boolean().optional(),
+  // « Prévenez-moi si le prix passe sous… » (dans la devise du pays du membre).
+  targetPrice: z.number().finite().min(0.01).max(MAX_TARGET_PRICE).nullable().optional(),
 });
 const stockReportSchema = z.union([
   z.object({ productMatchId: z.guid() }).strict(),
@@ -73,16 +82,17 @@ export default async function wishAlertsRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // L'interrupteur « Alertes prix et stock » des Réglages.
+  // Les réglages des Réglages : « Alertes prix et stock » (coupé par
+  // défaut) et « Aider les autres membres » (allumé par défaut).
   fastify.put("/api/alerts/settings", write, async (request, reply) => {
     if (!(await ensureReady(reply))) return;
     const body = parseInput(settingsSchema, request.body, reply, INVALID_BODY);
     if (!body) return;
     try {
-      await setWishAlertsEnabled(fastify, request.user!.id, body.enabled);
+      await saveWishAlertSettings(fastify, request.user!.id, body);
       return reply.send(await wishAlertsStatus(fastify, request.user!.id));
     } catch (error) {
-      request.log.error({ error }, "Alertes prix : interrupteur non enregistré");
+      request.log.error({ error }, "Alertes prix : réglages non enregistrés");
       return reply.code(500).send(SERVER_ERROR);
     }
   });
@@ -117,6 +127,8 @@ export default async function wishAlertsRoutes(fastify: FastifyInstance) {
   // cloche (422), une pièce déjà dans votre Vault non plus (422 : aucune
   // alerte ne partirait). `enableAlerts` : la première cloche allume aussi
   // l'interrupteur général (après la feuille d'explication de l'app).
+  // `targetPrice` : le seuil de la baisse de prix (absent : pré-rempli avec
+  // le dernier prix vu, ou inchangé) ; impossible sans pays connu (422).
   fastify.put("/api/wishlist/:id/alerts", write, async (request, reply) => {
     if (!(await ensureReady(reply))) return;
     const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
@@ -124,34 +136,38 @@ export default async function wishAlertsRoutes(fastify: FastifyInstance) {
     const body = parseInput(watchSchema, request.body, reply, INVALID_BODY);
     if (!body) return;
     const userId = request.user!.id;
-    const choice = { priceDrop: body.priceDrop, restock: body.restock, soldOut: body.soldOut ?? false };
+    const choice = { priceDrop: body.priceDrop, restock: body.restock, soldOut: body.soldOut ?? false, targetPrice: body.targetPrice };
     const anyOn = choice.priceDrop || choice.restock || choice.soldOut;
     try {
       const tracking = await ensureTracking(fastify, request.log, userId, params.id);
       if (!tracking) return reply.code(404).send(WISH_NOT_FOUND);
       if (anyOn && !tracking.match_key_hash) return reply.code(422).send(NOT_TRACKABLE);
       if (anyOn && (await wishBought(fastify, userId, params.id))) return reply.code(422).send(WISH_BOUGHT);
-      await saveWatch(fastify, userId, params.id, choice);
+      await saveWatch(fastify, userId, params.id, choice, tracking, searchLocaleFor(request).country);
       if (anyOn && body.enableAlerts) await setWishAlertsEnabled(fastify, userId, true);
       const [state, status] = await Promise.all([readWishAlertState(fastify, request.log, userId, params.id), wishAlertsStatus(fastify, userId)]);
       if (!state) return reply.code(404).send(WISH_NOT_FOUND);
       return reply.send({ state, status } satisfies UpdateWishAlertResponse);
     } catch (error) {
+      if (error instanceof WishTargetUnknownCurrencyError) return reply.code(422).send(INVALID_BODY);
       request.log.error({ error }, "Alertes prix : cloche non enregistrée");
       return reply.code(500).send(SERVER_ERROR);
     }
   });
 
   // « Plus disponible » : sur un résultat d'une de vos recherches, ou sur une
-  // de vos envies. Toutes les envies de la même pièce passent « épuisée »,
-  // sans aucune alerte. 20 par jour (heure de Paris) au plus. La limite en
+  // de vos envies. Vos envies de la même pièce passent « épuisée » ; celles
+  // des autres membres une fois la pièce signalée par 3 membres différents
+  // d'affilée (et seulement si vous aidez les autres membres). Le
+  // signalement garde son auteur, jamais lié à une alerte ; le journal ne dit
+  // ni la pièce, ni les envies touchées. 20 par jour (heure de Paris) au plus. La limite en
   // mémoire ne compte qu'un signalement possible (pièce trouvée, avec une
   // clé) : une demande refusée (404, 422) n'use jamais la part du jour.
   // Toute demande, refusée ou non, compte en revanche dans la limite par
   // défaut (300 par minute), comme sur les autres routes (revue de sécurité
   // du 12 novembre 2026 : avant, les demandes refusées n'étaient comptées
   // nulle part).
-  // Refusé à un compte suspendu : il change les envies des autres membres.
+  // Refusé à un compte suspendu : il peut changer les envies des autres membres.
   fastify.post(
     "/api/alerts/stock-reports",
     {
