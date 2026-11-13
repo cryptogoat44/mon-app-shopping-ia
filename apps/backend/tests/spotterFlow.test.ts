@@ -281,12 +281,16 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     const previousEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = "development"; // la limite est coupée sous Vitest par défaut
     try {
-      const prepareFor = async () =>
-        (await app.inject({ method: "POST", url: "/api/searches/prepare", headers: authHeaders(counted.token), payload: { sourceUrl: "https://www.tiktok.com/@x/video/1" } })).json();
+      // Préparer un lien compte aussi dans sa propre limite (20 par heure,
+      // revue de sécurité du 12 novembre 2026) : les lancements refusés
+      // partent donc d'une photo, pour que ce test n'atteigne pas cette
+      // autre limite (23 liens préparés au total sinon).
+      const prepareFor = async (link = true) =>
+        (await app.inject({ method: "POST", url: "/api/searches/prepare", headers: authHeaders(counted.token), payload: link ? { sourceUrl: "https://www.tiktok.com/@x/video/1" } : {} })).json();
 
       // 12 lancements refusés avant tout appel (zone invalide) : aucun ne compte.
       for (let i = 0; i < 12; i++) {
-        const search = await prepareFor();
+        const search = await prepareFor(false);
         const res = await run(search.id, { crop: JSON.stringify({ x: 0.9, y: 0.9, width: 0.5, height: 0.5 }) }, undefined, counted.token);
         expect(res.statusCode).toBe(400);
       }

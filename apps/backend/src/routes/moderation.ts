@@ -25,7 +25,7 @@ import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { buildModerationItems, QUEUE_ROWS } from "../lib/moderationQueue.js";
 import { eraseCollectionCopy, eraseCopiedImage, type ImageErasureRefusal } from "../lib/imageRemoval.js";
 import { collectionModerationReady } from "../lib/collectionModeration.js";
-import { AVATAR_BUCKET, profileModerationReady } from "../lib/profileModeration.js";
+import { AVATAR_BUCKET, moveSuspendedAvatar, profileModerationReady } from "../lib/profileModeration.js";
 import { emptyUserFolder } from "../lib/storage.js";
 
 const PAGE_SIZE = 20;
@@ -145,6 +145,12 @@ export default async function moderationRoutes(fastify: FastifyInstance) {
       p_reason: decision.reason ?? null,
       p_note: decision.note || null,
     });
+    // Compte suspendu : sa photo de profil change d'adresse (l'ancienne,
+    // publique, ne doit plus la montrer). Jamais bloquant pour la décision.
+    const applied = OUTCOME.safeParse(data);
+    if (!error && decision.action === "suspend" && applied.success && applied.data[0]!.outcome === "ok" && applied.data[0]!.action_id) {
+      await moveSuspendedAvatar(fastify, request.log, applied.data[0]!.action_id);
+    }
     return sendOutcome(request.log, reply, data, error, "Décision de modération");
   });
 

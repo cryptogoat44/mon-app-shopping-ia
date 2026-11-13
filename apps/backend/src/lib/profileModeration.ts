@@ -11,8 +11,10 @@
 //    les remontre. Aucune migration pour cela (table « suspensions », 0023).
 //    La personne suspendue voit toujours son propre profil, et
 //    l'administrateur voit tout dans la file de modération.
-import type { FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
+import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { suspendedAmong } from "./moderation.js";
+import { extractOwnedStoragePath } from "./storage.js";
 
 export const PROFILE_MODERATION_UNAVAILABLE = {
   error: "profile_moderation_unavailable",
@@ -96,4 +98,49 @@ export async function withoutSuspendedFaces<T extends PublicFace>(fastify: Fasti
     if (profile.id === viewerId || !suspended.has(profile.id)) return profile;
     return { ...profile, avatar_url: null, ...("bio" in profile ? { bio: null } : {}) };
   });
+}
+
+/** Revue de sécurité du 12 novembre 2026 : à la suspension d'un compte, sa
+ * photo de profil change d'adresse. Le bucket des photos de profil est
+ * public : cacher l'adresse dans les réponses du serveur ne suffisait pas,
+ * la photo restait lisible par quiconque connaissait son adresse (pour les
+ * photos d'avant le 12 novembre : « <compte>/avatar.jpg », devinable). Le
+ * fichier est déplacé sous un nom au hasard, que seuls la personne suspendue
+ * et l'administrateur reçoivent ; rien n'est effacé, lever la suspension
+ * remontre la photo. `actionId` : la décision de suspension enregistrée.
+ * Ne relève jamais d'erreur et ne défait jamais la suspension : un échec
+ * laisse la photo à son ancienne adresse (journal sans chemin ni identifiant). */
+export async function moveSuspendedAvatar(fastify: Pick<FastifyInstance, "supabaseAdmin">, log: FastifyBaseLogger, actionId: string): Promise<void> {
+  try {
+    const db = fastify.supabaseAdmin;
+    const suspension = await db.from("suspensions").select("user_id").eq("moderation_action_id", actionId).maybeSingle();
+    const userId = (suspension.data as { user_id?: unknown } | null)?.user_id;
+    if (suspension.error || typeof userId !== "string") return;
+    const profile = await db.from("profiles").select("avatar_url").eq("id", userId).maybeSingle();
+    const previousUrl = (profile.data as { avatar_url?: unknown } | null)?.avatar_url;
+    if (profile.error || typeof previousUrl !== "string") return;
+    const previousPath = extractOwnedStoragePath(previousUrl, AVATAR_BUCKET, userId);
+    if (!previousPath) return;
+
+    const bucket = db.storage.from(AVATAR_BUCKET);
+    const path = `${userId}/avatar-${randomUUID()}.jpg`;
+    const moved = await bucket.move(previousPath, path);
+    if (moved.error) {
+      log.warn({ bucket: AVATAR_BUCKET }, "Suspension : la photo de profil n'a pas pu changer d'adresse");
+      return;
+    }
+    const updated = await db
+      .from("profiles")
+      .update({ avatar_url: bucket.getPublicUrl(path).data.publicUrl, updated_at: new Date().toISOString() })
+      .eq("id", userId)
+      .eq("avatar_url", previousUrl)
+      .select("id");
+    if (updated.error || !Array.isArray(updated.data) || updated.data.length !== 1) {
+      // Profil non mis à jour (ou photo changée entre-temps) : le fichier retrouve son nom.
+      await bucket.move(path, previousPath);
+      log.warn({ bucket: AVATAR_BUCKET }, "Suspension : la nouvelle adresse de la photo de profil n'a pas pu être enregistrée");
+    }
+  } catch {
+    log.warn({ bucket: AVATAR_BUCKET }, "Suspension : la photo de profil n'a pas pu changer d'adresse");
+  }
 }

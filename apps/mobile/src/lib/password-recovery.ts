@@ -7,9 +7,18 @@
 //   (« ?code=… »), échangé contre une session SEULEMENT par l'appareil qui a
 //   fait la demande (il garde la clé secrète de l'échange). Sur iPhone, une
 //   autre app qui intercepterait le lien « spotto:// » n'en ferait rien ;
-// - avant (liens déjà envoyés) : dans la partie « # », les jetons d'une
-//   session de réinitialisation (type=recovery) ;
 // - ou une erreur (lien expiré ou déjà utilisé).
+//
+// Avant le flux PKCE, le lien portait les jetons d'une session dans la partie
+// « # » (type=recovery). Revue de sécurité du 12 novembre 2026 : ce format
+// n'est plus accepté par l'app en ligne. N'importe qui pouvait fabriquer un
+// tel lien avec les jetons de SON compte, à la vraie adresse du site : la
+// personne qui l'ouvrait se retrouvait connectée au compte de l'expéditeur,
+// sans le voir, et ce qu'elle y ajoutait ensuite lui était lisible. Les liens
+// envoyés depuis le 5 novembre portent tous un code, et un lien expire en une
+// heure : plus aucun ancien lien valable n'existe. Seule exception : une app
+// construite pour la base d'essai (isTestBackend), où les parcours
+// automatiques ouvrent leurs comptes de test par ce format.
 
 export const RECOVERY_PATH = "/nouveau-mot-de-passe";
 
@@ -19,7 +28,22 @@ export type RecoveryLink =
   | { kind: "error"; code: string | null }
   | { kind: "none" };
 
-export function parseRecoveryUrl(url: string | null | undefined): RecoveryLink {
+/** Hôte du projet Supabase d'essai (spotto-dev-2), le même que dans scripts/verifier-build.js. */
+const TEST_BACKEND_HOST = "sedfepcpmhilaxbrgdif.supabase.co";
+
+/** Vrai si l'app est construite pour la base d'essai, et elle seule (adresse
+ * absente, illisible ou d'un autre projet : faux). */
+export function isTestBackend(supabaseUrl: string | null | undefined): boolean {
+  try {
+    return new URL(supabaseUrl ?? "").hostname === TEST_BACKEND_HOST;
+  } catch {
+    return false;
+  }
+}
+
+/** `testLinks` : accepter aussi l'ancien format (jetons dans la partie
+ * « # ») — jamais en production, voir l'en-tête. */
+export function parseRecoveryUrl(url: string | null | undefined, options: { testLinks?: boolean } = {}): RecoveryLink {
   if (!url) return { kind: "none" };
   const hashIndex = url.indexOf("#");
   const queryIndex = url.indexOf("?");
@@ -39,7 +63,7 @@ export function parseRecoveryUrl(url: string | null | undefined): RecoveryLink {
 
   const accessToken = params.get("access_token");
   const refreshToken = params.get("refresh_token");
-  if (accessToken && refreshToken && params.get("type") === "recovery") {
+  if (options.testLinks === true && accessToken && refreshToken && params.get("type") === "recovery") {
     return { kind: "tokens", accessToken, refreshToken };
   }
   return { kind: "none" };

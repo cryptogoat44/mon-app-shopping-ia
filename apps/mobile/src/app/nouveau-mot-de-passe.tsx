@@ -6,7 +6,7 @@ import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
 import { translateAuthError } from "@/lib/auth-errors";
 import { INITIAL_WEB_URL } from "@/lib/initial-url";
-import { newPasswordProblem, parseRecoveryUrl, recoveryExchangeProblem } from "@/lib/password-recovery";
+import { isTestBackend, newPasswordProblem, parseRecoveryUrl, recoveryExchangeProblem } from "@/lib/password-recovery";
 import { useToast } from "@/lib/toast-context";
 import { t } from "@/i18n";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
@@ -14,6 +14,10 @@ import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
 
 type Phase = "checking" | "ready" | "expired" | "invalid" | "other_device";
+
+/** Ancien format de lien (jetons dans la partie « # ») : seulement dans une
+ * app construite pour la base d'essai, jamais en production (lib/password-recovery.ts). */
+const TEST_LINKS = isTestBackend(process.env.EXPO_PUBLIC_SUPABASE_URL);
 
 /** Site : retire de l'adresse affichée la partie « # » (jetons des anciens
  * liens) et la partie « ? » (code du flux PKCE, chantier 3). */
@@ -46,7 +50,7 @@ export default function NewPasswordScreen() {
 
   useEffect(() => {
     if (phase !== "checking") return;
-    const link = parseRecoveryUrl(url);
+    const link = parseRecoveryUrl(url, { testLinks: TEST_LINKS });
 
     // Les jetons ne doivent pas rester dans l'adresse (historique, partage)
     // ni dans la mémoire du système (iPhone).
@@ -72,7 +76,7 @@ export default function NewPasswordScreen() {
         .catch(() => setPhase("expired"));
       return;
     }
-    // Ancien lien (jetons dans la partie « # »), envoyé avant le passage au flux PKCE.
+    // Ancien format (jetons dans la partie « # ») : base d'essai seulement (TEST_LINKS).
     supabase.auth
       .setSession({ access_token: link.accessToken, refresh_token: link.refreshToken })
       .then(({ error: sessionError }) => setPhase(sessionError ? "expired" : "ready"))

@@ -34,6 +34,16 @@ const createWishlistItemSchema = z
 
 const PRODUCT_MATCH_NOT_FOUND = { error: "product_match_not_found", message: "Produit introuvable." } as const;
 
+/** Nom de domaine d'un lien web, sans « www. » (« boutique.example ») : le
+ * nom montré pour un lien dont la boutique n'est pas connue du serveur. */
+export function siteNameOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").slice(0, 120) || null;
+  } catch {
+    return null;
+  }
+}
+
 export interface WishlistItemRow {
   id: string;
   title: string;
@@ -123,13 +133,22 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
     // liens (image, marchand) sont repris de la base, jamais de la requête.
     // L'app envoie exactement ceux du résultat : rien ne change pour elle.
     // Sans résultat : les liens envoyés, vérifiés par typedLinksSchema.
+    // Revue de sécurité du 12 novembre 2026 : le nom de la boutique ne vient
+    // plus jamais de la requête quand un lien est rangé. Avant, un appel
+    // direct pouvait ranger « Zara » avec un lien vers n'importe quel site,
+    // et le bouton « Voir chez Zara » montré aux autres membres (publication,
+    // message, pièce envoyée, collection) y menait. Avec un résultat : le nom
+    // rangé avec ce résultat. Sans résultat (l'app n'en crée jamais) : le nom
+    // de domaine du lien, pour que le bouton dise où il mène.
     let imageUrl = parsed.data.imageUrl;
     let merchantUrl = parsed.data.merchantUrl ?? null;
+    let merchantName = merchantUrl === null ? (parsed.data.merchantName ?? null) : siteNameOf(merchantUrl);
     if (parsed.data.productMatchId) {
       const match = await findOwnMatch(fastify, userId, parsed.data.productMatchId);
       if (!match) return reply.code(404).send(PRODUCT_MATCH_NOT_FOUND);
       imageUrl = match.imageUrl;
       merchantUrl = webUrlOrNull(match.merchantUrl);
+      merchantName = match.merchantName ?? parsed.data.merchantName ?? null;
     }
 
     const { data: inserted, error: insertError } = await fastify.supabaseAdmin
@@ -142,7 +161,7 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
           reference: parsed.data.reference ?? null,
           price_min: parsed.data.priceMin ?? null,
           currency: parsed.data.currency ?? "EUR",
-          merchant_name: parsed.data.merchantName ?? null,
+          merchant_name: merchantName,
           merchant_url: merchantUrl,
           product_match_id: parsed.data.productMatchId ?? null,
         },
