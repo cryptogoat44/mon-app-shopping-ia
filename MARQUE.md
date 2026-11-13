@@ -17,6 +17,7 @@ Il est rangé dans ce dossier parce que c'est le seul que l'app, le site, le ser
 | `groupeApple` | `group.com.spottoapp.ios` | Le « groupe d'apps » qui relie l'app à son extension de partage. Doit commencer par `group.`. |
 | `identifiantExtensionPartage` | `com.spottoapp.ios.share-extension` | L'identifiant de l'extension de partage. Doit commencer par l'identifiant de l'app, suivi d'un point. |
 | `adresseSite` | `https://mon-app-shopping-ia-web.onrender.com` | L'adresse publique du site : elle est mise dans les liens partagés depuis l'app iPhone et annoncée aux boutiques quand le serveur va chercher une image. À changer le jour où vous avez un nom de domaine. Sans `/` à la fin. |
+| `adresseServeur` | `https://spotto-api.onrender.com` | L'adresse du serveur de production. Le contrôle du début d'un build iPhone (`apps/mobile/scripts/verifier-build.js`) arrête un build « preview » ou « production » dont la variable `EXPO_PUBLIC_API_URL` n'est pas **exactement** cette adresse (par exemple le serveur de test) ; les en-têtes de sécurité du site (`apps/mobile/web-headers.ts`) et le garde-fou du script `render-bride` la lisent aussi ici. Sans `/` à la fin. |
 
 La ligne `_aLire` est un simple rappel : elle ne sert à rien d'autre.
 
@@ -29,7 +30,7 @@ Trois choses se déduisent du nom, sans ligne à part :
 ### Comment c'est garanti
 
 - `apps/mobile/app.json` et `apps/mobile/locales/*.json` n'écrivent plus le nom : ils portent des repères entre accolades (`{nom}`, `{identifiantApple}`…) que `apps/mobile/app.config.js` remplace par les lignes du fichier unique.
-- L'app lit le fichier dans `apps/mobile/src/constants/brand.ts`, le serveur dans `apps/backend/src/lib/brand.ts`.
+- L'app lit le fichier dans `apps/mobile/src/constants/brand.ts`, le serveur dans `apps/backend/src/lib/brand.ts` ; le contrôle du début d'un build (`apps/mobile/scripts/verifier-build.js`) et les en-têtes du site (`apps/mobile/web-headers.ts`) le lisent directement.
 - Deux tests échouent si le nom est de nouveau écrit en dur dans un endroit que les personnes voient : `apps/mobile/tests/marque.test.ts` et `apps/backend/tests/marque.test.ts`. Ils essaient aussi un autre nom et vérifient que l'ancien a disparu partout.
 
 ### Le jour du changement : ce qu'il reste à relire
@@ -50,7 +51,7 @@ Ces endroits ne sont pas dans le code de l'app : le fichier unique ne peut pas l
 | **Supabase** (projets spotto-prod et spotto-dev-2) | Les trois modèles d'e-mails (`apps/backend/supabase/emails/*.html`, à recoller dans Supabase) et leurs sujets, le nom de l'expéditeur (« Sender name »), l'adresse du site (« Site URL ») et les adresses de retour (« Redirect URLs », dont `spotto://nouveau-mot-de-passe`, qui suit `schemaLiens`). Marche à suivre : `apps/backend/supabase/emails/REGLAGES-SUPABASE.md`. Le nom des projets Supabase eux-mêmes peut rester : personne ne le voit. |
 | **Logo et écran de démarrage** | Les images de `apps/mobile/assets/marque` (icône, « S » de l'écran de démarrage) et de `apps/mobile/assets/images`. Si le logo change, Claude les régénère (`pnpm --filter backend images-marque`). |
 | **Fiche App Store** | Les brouillons de `apps/mobile/app-store` (nom, sous-titre, description, notes pour la validation, captures d'écran) : à réécrire avec le nouveau nom, puis à saisir dans App Store Connect. |
-| **Render** | Le nom des deux services et leurs adresses (`spotto-api.onrender.com` pour le serveur, `mon-app-shopping-ia-web.onrender.com` pour le site). Si l'adresse du serveur change : la variable `EXPO_PUBLIC_API_URL` (sur Render pour le site, chez Expo pour l'app), `apps/mobile/web-headers.ts` et `apps/backend/scripts/lib/render-guard.ts`, avec Claude. Si l'adresse du site change : la ligne `adresseSite` du fichier unique, la variable `EXPO_PUBLIC_WEB_URL` si elle est réglée, et les réglages Supabase ci-dessus. |
+| **Render** | Le nom des deux services et leurs adresses (`spotto-api.onrender.com` pour le serveur, `mon-app-shopping-ia-web.onrender.com` pour le site). Si l'adresse du serveur change : la ligne `adresseServeur` du fichier unique, puis la variable `EXPO_PUBLIC_API_URL` (sur Render pour le site, chez Expo pour l'app) ; recopiez aussi la nouvelle adresse dans `apps/mobile/EN-TETES-SITE.md` (les en-têtes à coller chez Render), avec Claude. Si l'adresse du site change : la ligne `adresseSite` du fichier unique, la variable `EXPO_PUBLIC_WEB_URL` si elle est réglée, et les réglages Supabase ci-dessus. |
 | **Nom de domaine** | À acheter et à brancher sur le site (Render), puis reporter l'adresse dans `adresseSite`. L'adresse d'expédition des e-mails devrait être sur ce domaine. |
 | **Sentry** | Le nom du projet (affiché à vous seul). Rien à changer dans le code : l'app et le serveur le désignent par un numéro. |
 | **PostHog** | Le nom du projet (affiché à vous seul). |

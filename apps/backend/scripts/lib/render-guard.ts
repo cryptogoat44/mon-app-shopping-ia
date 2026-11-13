@@ -2,6 +2,7 @@
 // une liste FERMÉE de services et d'actions. Tout le reste est refusé.
 import { fileURLToPath } from "node:url";
 import { SENTRY_EU_DSN_PATTERN } from "@monapp/shared-types";
+import { PRODUCTION_API_URL } from "../../src/lib/brand.js";
 
 /** Fichier local de la clé d'API Render (ignoré par Git, jamais affiché). */
 export const RENDER_KEY_PATH = fileURLToPath(new URL("../../.render-api-key", import.meta.url));
@@ -34,7 +35,7 @@ const SENTRY_EU_DSN = SENTRY_EU_DSN_PATTERN;
 
 export const EDITABLE_VARIABLES: Record<AllowedServiceName, Record<string, VariableRule>> = {
   site: {
-    EXPO_PUBLIC_API_URL: { check: (v) => (ALLOWED_API_URLS as readonly string[]).includes(v), expected: "https://spotto-api.onrender.com", mustExist: true },
+    EXPO_PUBLIC_API_URL: { check: (v) => (ALLOWED_API_URLS as readonly string[]).includes(v), expected: PRODUCTION_API_URL, mustExist: true },
     EXPO_PUBLIC_SENTRY_DSN: { check: (v) => SENTRY_EU_DSN.test(v), expected: "adresse Sentry de la région UE (…ingest.de.sentry.io/…)", mustExist: false },
     EXPO_PUBLIC_POSTHOG_KEY: { check: (v) => /^phc_[A-Za-z0-9]{20,64}$/.test(v), expected: "clé publique de projet PostHog (phc_…)", mustExist: false },
     EXPO_PUBLIC_ENVIRONMENT: { check: (v) => v === "production", expected: "production", mustExist: false },
@@ -80,8 +81,9 @@ export function isAnthropicKeyShape(value: string): boolean {
 }
 
 /** Adresse admise pour EXPO_PUBLIC_API_URL : un serveur Render, en https,
- * sans chemin, et jamais l'ancien serveur (Oregon). */
-export const ALLOWED_API_URLS = ["https://spotto-api.onrender.com"] as const;
+ * sans chemin, et jamais l'ancien serveur (Oregon). Lue dans le fichier
+ * unique de la marque (ligne « adresseServeur », MARQUE.md). */
+export const ALLOWED_API_URLS: readonly string[] = [PRODUCTION_API_URL];
 
 export function resolveService(nameOrId: string | undefined): { name: AllowedServiceName; id: string } {
   if (!nameOrId) throw new RenderGuardError("Service manquant : « spotto-api » ou « site ».");
