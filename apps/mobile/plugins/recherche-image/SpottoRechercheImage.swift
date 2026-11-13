@@ -113,15 +113,22 @@ enum SpottoCaptures {
   /// Range l'image de la capture (JPEG, 1 600 px au plus) ; rend son identifiant.
   static func save(_ pixelBuffer: CVReadOnlyPixelBuffer) -> String? {
     removeAll()
-    let image = CIImage(cvPixelBuffer: pixelBuffer)
-    let extent = image.extent
-    guard extent.width > 0, extent.height > 0 else { return nil }
-    let scale = min(1, maxSide / max(extent.width, extent.height))
-    let scaled = scale < 1 ? image.transformed(by: CGAffineTransform(scaleX: scale, y: scale)) : image
-    let options = [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): quality]
-    guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
-          let data = CIContext().jpegRepresentation(of: scaled, colorSpace: colorSpace, options: options)
-    else { return nil }
+    // CVReadOnlyPixelBuffer (iOS 26) ne prête son contenu qu'à l'intérieur de
+    // withUnsafeBuffer : l'image est donc lue ET encodée en JPEG dans ce bloc,
+    // et rien qui pointe vers le tampon n'en sort (seulement les octets du JPEG).
+    // Vérifié par la compilation pour iPhone du 13 novembre 2026 : passer
+    // directement CVReadOnlyPixelBuffer à CIImage(cvPixelBuffer:) ne compile pas.
+    let encoded: Data? = pixelBuffer.withUnsafeBuffer { buffer -> Data? in
+      let image = CIImage(cvPixelBuffer: buffer)
+      let extent = image.extent
+      guard extent.width > 0, extent.height > 0 else { return nil }
+      let scale = min(1, maxSide / max(extent.width, extent.height))
+      let scaled = scale < 1 ? image.transformed(by: CGAffineTransform(scaleX: scale, y: scale)) : image
+      let options = [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): quality]
+      guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+      return CIContext().jpegRepresentation(of: scaled, colorSpace: colorSpace, options: options)
+    }
+    guard let data = encoded else { return nil }
     let id = UUID().uuidString.lowercased()
     guard let url = fileURL(id) else { return nil }
     do {
