@@ -2,13 +2,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { WISH_ALERT_RULES } from "@monapp/shared-types";
-import { WISH_ALERTS_GUARDED_VERSION } from "../src/lib/wishAlertsSchema.js";
 
 // Lot « durcissement des alertes » (revue de sécurité : acces-2, alertes-01
 // à 04, entrees-06 à 08) : ce que le FICHIER de la migration 0040 doit
 // garantir, vérifié sans base. Son comportement est vérifié sur une base
 // Postgres locale et jetable (scénarios A à E, jamais Supabase), puis sur
-// spotto-dev-2 par alertesPrix.test.ts.
+// spotto-dev-2 par alertesPrix.test.ts. Le fichier 0040 reste tel quel :
+// 0041 (alertesV2Migration.test.ts) remplace ses fonctions et sa sonde (3).
 
 const SQL = readFileSync(join(__dirname, "../supabase/migrations/0040_alertes_garde_fous.sql"), "utf8");
 const VERIFICATION = readFileSync(join(__dirname, "../supabase/verifications/0040-verification.sql"), "utf8");
@@ -69,8 +69,8 @@ describe("0040 : ordre, retour en arrière, droits", () => {
     expect(VERIFICATION).toContain(`= ${FUNCTIONS.length} as fonctions_serveur_seul`);
   });
 
-  it("la sonde répond la version attendue par le serveur (garde-fous présents)", () => {
-    expect(body("wish_alerts_version")).toContain(`return ${WISH_ALERTS_GUARDED_VERSION};`);
+  it("la sonde de 0040 répond 2 (le serveur de 0041 attend 3 : avec 0040 seule, il coupe les alertes)", () => {
+    expect(body("wish_alerts_version")).toContain("return 2;");
   });
 
   it("verrous : partagé pour les observations, les signalements et les achats (avant tout verrou de ligne), exclusif pour l'envoi", () => {
@@ -95,7 +95,7 @@ describe("A : un membre seul ne change jamais ce que reçoivent les autres", () 
     const report = body("wish_stock_report");
     expect(report).toContain("count(distinct r.user_id)");
     expect(report).toContain(`r.created_on >= v_today - ${WISH_ALERT_RULES.retentionDays}`);
-    expect(report).toContain(`v_reporters >= ${WISH_ALERT_RULES.stockReportersForOthers} or t.user_id = p_user_id`);
+    expect(report).toContain("v_reporters >= 2 or t.user_id = p_user_id");
     expect(report).toContain("else 'members' end");
     expect(report).not.toContain("insert into wish_alert_events");
   });
