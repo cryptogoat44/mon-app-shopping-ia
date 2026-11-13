@@ -48,7 +48,8 @@ describe.skipIf(!migrated)("mémoire collective des vidéos sur la base (0038 et
       pieces.map((piece, index) => ({
         search_id: search!.id,
         rank: index + 1,
-        product_name: `${piece} (recherche de ${who.username})`,
+        // Jamais le pseudo du membre ici : le test vérifie plus bas qu'aucun pseudo n'apparaît.
+        product_name: `${piece} (pièce d'essai)`,
         image_url: `https://images.example/${piece}.jpg`,
         merchant_url: `${shop(piece)}?utm_source=essai-${index}`,
         merchant_name: "Boutique Mémoire",
@@ -166,7 +167,8 @@ describe.skipIf(!migrated)("mémoire collective des vidéos sur la base (0038 et
   it("modération : un administrateur retire la veste de la vidéo ; un membre ne le peut pas", async () => {
     const veste = keyOf(await products(alice), "veste");
     const remove = (who: TestUser) => post(who, "/api/admin/moderation/video-memory/remove", { url: VIDEO_URL, productKey: veste });
-    expect((await remove(bob)).statusCode).toBe(403);
+    // Un non-administrateur reçoit « page introuvable » (404), comme sur toutes les routes d'administration.
+    expect((await remove(bob)).statusCode).toBe(404);
     const res = await remove(admin);
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ removed: true, items: 2, confirmations: 2 });
@@ -201,7 +203,11 @@ describe.skipIf(!migrated)("mémoire collective des vidéos sur la base (0038 et
   });
 
   it("le compte de Dave est supprimé : son spot et ses pièces partent, la jupe redevient cachée, le compteur suit", async () => {
-    await deleteTestUser(app, dave.id);
+    // Suppression vérifiée ici (l'outil commun des tests ignore les erreurs) : un échec doit se voir.
+    const { error: deleteError } = await app.supabaseAdmin.auth.admin.deleteUser(dave.id);
+    expect(deleteError?.message ?? null).toBeNull();
+    const { count: daveSpots } = await app.supabaseAdmin.from("video_spots").select("id", { count: "exact", head: true }).eq("user_id", dave.id);
+    expect(daveSpots).toBe(0);
     expect((await products(alice)).products).toEqual([]);
     const { data: source } = await app.supabaseAdmin.from("video_sources").select("spot_count").eq("platform", "tiktok").eq("video_key", VIDEO_ID).single();
     expect(source).toEqual({ spot_count: 3 });
