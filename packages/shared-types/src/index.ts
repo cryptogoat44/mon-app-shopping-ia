@@ -1596,11 +1596,11 @@ export const WISH_ALERT_RULES = {
   stockReportsPerDay: 20,
   /** Alertes et signalements effacés au bout de ce nombre de jours. */
   retentionDays: 30,
-  /** « Plus disponible » : la rupture d'une pièce n'est établie pour TOUS
-   * ses membres qu'une fois signalée par ce nombre de membres différents
-   * d'affilée (sans aucun « en stock » observé entre deux signalements ; les
-   * membres qui n'aident pas les autres ne comptent pas). Avant, seules les
-   * envies de l'auteur passent « épuisée ». */
+  /** « Plus disponible » : la rupture d'une pièce n'est établie pour les
+   * membres d'un pays qu'une fois signalée par ce nombre de membres
+   * différents d'affilée depuis ce pays (sans aucun « en stock » observé dans
+   * ce pays entre deux signalements ; les membres qui n'aident pas les autres
+   * ne comptent pas). Avant, seules les envies de l'auteur passent « épuisée ». */
   stockReportersToConfirm: 3,
   /** Réservation d'une alerte pendant son envoi (la seule heure précise
    * gardée, effacée dès la fin de l'envoi). */
@@ -1693,8 +1693,11 @@ export interface UpdateWishAlertsSettingsRequest {
  * pour elle, la cloche est cachée. `stock` : le dernier état connu, en direct
  * (décision du fondateur : le savoir tout de suite est le but) ; jamais qui a
  * cherché ou signalé la pièce. `targetPrice` : « Prévenez-moi si le prix passe
- * sous… » (dans `targetCurrency`) ; `lastPrice` : le dernier prix vu dans
- * votre pays (`lastCurrency`), qui pré-remplit ce seuil. */
+ * sous… » (dans `targetCurrency`, la devise de votre pays ; pour une envie dont
+ * le pays n'est pas encore connu, celle du pays de votre recherche, s'il est
+ * pris en charge ; sinon null et pas de champ) ; `lastPrice` : le dernier prix
+ * vu dans votre pays (`lastCurrency`), qui pré-remplit ce seuil et que la
+ * fiche de l'envie affiche. */
 export interface WishAlertState {
   wishlistItemId: string;
   trackable: boolean;

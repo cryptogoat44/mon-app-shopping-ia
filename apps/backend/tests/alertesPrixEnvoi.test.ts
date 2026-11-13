@@ -24,9 +24,12 @@ import {
   flushAfterResponse,
   flushWishAlerts,
   groupByRecipient,
+  LEASE_CLEANUP_DELAY_MS,
+  leaseCleanupPending,
   MARK_SENT_ATTEMPTS,
   purgeWishAlerts,
   resetWishAlertsFlush,
+  scheduleLeaseCleanup,
   scheduleWishAlertsFlush,
   sendWishAlertsNow,
   waitForWishAlertsFlush,
@@ -114,6 +117,7 @@ let app: FastifyInstance | null = null;
 /** Pannes imitées : « peut-être envoyée » non notée ; « envoyée » non notée (ce nombre de fois). */
 let pushingFails = false;
 let markSentFailures = 0;
+let releaseFails = false;
 /** Alertes créées par la prochaine observation (wish_observe imitée). */
 let observeEvents = 0;
 
@@ -131,6 +135,7 @@ function seeded(options: { migrated?: boolean } = {}) {
         markSentFailures -= 1;
         return { data: null, error: { code: "40P01", message: "interblocage" } };
       }
+      if (fn === "wish_alerts_release" && releaseFails) return { data: null, error: { code: "08006", message: "connexion perdue" } };
       if (fn === "wish_alerts_mark_sent" || fn === "wish_alerts_release") return { data: (args.p_ids as string[]).length, error: null };
       if (fn === "wish_alerts_purge") return { data: 0, error: null };
       return { data: null, error: { code: "PGRST202", message: "absente" } };
@@ -165,6 +170,7 @@ beforeEach(async () => {
   expoCalls = [];
   pushingFails = false;
   markSentFailures = 0;
+  releaseFails = false;
   observeEvents = 0;
   expoReply = (messages) => Response.json({ data: messages.map(() => ({ status: "ok" })) });
   vi.stubGlobal("fetch", async (input: unknown, init?: RequestInit) => {
@@ -332,6 +338,59 @@ describe("flushWishAlerts", () => {
     sendWishAlertsNow(target);
     await waitForWishAlertsFlush();
     expect(calls("wish_alerts_claim")).toHaveLength(3);
+  });
+});
+
+// Point 6 (0041, revue) : une réservation laissée en route ne garde jamais
+// son heure exacte plus que nécessaire, même sans aucun membre connecté.
+describe("ménage des réservations : un passage 16 minutes après un envoi qui en a laissé une, et au démarrage", () => {
+  it("passage sans réservation laissée : aucun ménage prévu", async () => {
+    claimRows = [alert()];
+    const target = await senderApp(seeded().db);
+    await flushWishAlerts(target);
+    expect(leaseCleanupPending()).toBe(false);
+  });
+
+  it("envoi incertain, envoi non noté ou réservation non rendue : un passage de ménage est prévu (16 minutes, sans retenir le serveur)", async () => {
+    expect(LEASE_CLEANUP_DELAY_MS).toBe(16 * 60_000);
+    const cases: [string, () => void][] = [
+      ["incertain", () => (expoReply = () => new Response("pas du JSON", { status: 200 }))],
+      ["non noté", () => (markSentFailures = 10)],
+      ["non rendue", () => ((expoReply = () => new Response("panne", { status: 500 })), (releaseFails = true))],
+    ];
+    for (const [name, setUp] of cases) {
+      await resetWishAlertsFlush();
+      expoReply = (messages) => Response.json({ data: messages.map(() => ({ status: "ok" })) });
+      markSentFailures = 0;
+      releaseFails = false;
+      setUp();
+      claimRows = [alert()];
+      const target = await senderApp(seeded().db);
+      await flushWishAlerts(target);
+      expect(leaseCleanupPending(), name).toBe(true);
+      await target.close();
+      app = null;
+    }
+  });
+
+  it("le passage de ménage repasse par la file (wish_alerts_claim, qui efface les réservations échues), une seule fois", async () => {
+    const target = await senderApp(seeded().db);
+    scheduleLeaseCleanup(target, 5);
+    scheduleLeaseCleanup(target, 1);
+    expect(leaseCleanupPending()).toBe(true);
+    await vi.waitFor(() => expect(calls("wish_alerts_claim")).toHaveLength(1));
+    await waitForWishAlertsFlush();
+    expect(leaseCleanupPending()).toBe(false);
+    expect(calls("wish_alerts_claim")).toHaveLength(1);
+  });
+
+  it("au démarrage du serveur, un passage de ménage est prévu (un arrêt brutal a pu laisser des réservations) ; le journal ne promet plus « elle expire seule »", async () => {
+    const { readFileSync } = await import("node:fs");
+    const server = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
+    expect(server).toMatch(/\.listen\([\s\S]*?scheduleLeaseCleanup\(fastify\);/);
+    const send = readFileSync(new URL("../src/lib/wishAlertsSend.ts", import.meta.url), "utf8");
+    expect(send).not.toContain("elle expire seule en 15 minutes");
+    expect(send).toContain("cleanupTimer.unref?.();");
   });
 });
 

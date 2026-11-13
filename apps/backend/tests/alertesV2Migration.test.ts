@@ -56,9 +56,13 @@ describe("0041 : ordre, rejouable, droits, aucun déclencheur", () => {
       expect(SQL, name).toMatch(new RegExp(`grant execute on function ${name}\\([^)]*\\) to service_role`));
       expect(VERIFICATION, name).toContain(`'${name}'`);
     }
-    expect(VERIFICATION).toContain(`= ${FUNCTIONS.length} as fonctions_serveur_seul`);
+    expect(VERIFICATION).toContain(`and not has_function_privilege('authenticated', p.oid, 'execute')) = ${FUNCTIONS.length}`);
+    expect(VERIFICATION).toContain("to_regprocedure('public.wish_stock_report(uuid, text, text, integer, timestamptz)') is null as fonctions_serveur_seul");
     expect(STATEMENTS).toContain("drop function if exists wish_observe(jsonb, timestamptz);");
     expect(STATEMENTS).toContain("grant execute on function wish_observe(jsonb, uuid, timestamptz) to service_role;");
+    // « Plus disponible » prend le pays de la recherche : l'ancienne signature disparaît.
+    expect(STATEMENTS).toContain("drop function if exists wish_stock_report(uuid, text, text, integer, timestamptz);");
+    expect(STATEMENTS).toContain("grant execute on function wish_stock_report(uuid, text, text, integer, text, timestamptz) to service_role;");
   });
 
   it("la sonde répond la version attendue par le serveur (3 : alertes allumées seulement avec 0041)", () => {
@@ -73,6 +77,7 @@ describe("0041 : ordre, rejouable, droits, aucun déclencheur", () => {
     for (const text of [
       "drop function if exists wish_observe(jsonb, uuid, timestamptz)",
       "drop function if exists wish_alerts_claim(integer, timestamptz)",
+      "drop function if exists wish_stock_report(uuid, text, text, integer, text, timestamptz)",
       "drop constraint if exists wish_tracking_sold_out_source_check",
       "update wish_tracking set sold_out_source = 'members' where sold_out_source = 'reported'",
       "add column if not exists ref_price",
@@ -82,7 +87,7 @@ describe("0041 : ordre, rejouable, droits, aucun déclencheur", () => {
       expect(ROLLBACK.indexOf(text), text).toBeGreaterThan(0);
       expect(ROLLBACK.indexOf(text), text).toBeLessThan(replay);
     }
-    for (const text of ["drop column if exists target_price", "drop column if exists sent_on", "drop column if exists in_streak", "drop column if exists help_others"]) {
+    for (const text of ["drop column if exists target_price", "drop column if exists sent_on", "drop column if exists in_streak", "drop column if exists country", "drop column if exists help_others"]) {
       expect(ROLLBACK.indexOf(text), text).toBeGreaterThan(replay);
     }
   });
@@ -117,8 +122,16 @@ describe("point 5 : aucune alerte ne désigne sa recherche, son signalement ou l
     for (const insert of report.split("insert into wish_alert_events").slice(1)) expect(insert.slice(0, insert.indexOf(";"))).not.toMatch(/p_user_id|stock_reports\.id/);
   });
 
-  it("le signalement garde son auteur (et s'il aidait les autres), dans sa propre table", () => {
-    expect(body("wish_stock_report")).toContain("insert into stock_reports (user_id, match_key_hash, created_on, in_streak, helps_others)");
+  it("le signalement garde son auteur (s'il aidait les autres, et le pays de sa recherche), dans sa propre table", () => {
+    expect(body("wish_stock_report")).toContain("insert into stock_reports (user_id, match_key_hash, created_on, in_streak, helps_others, country)");
+    expect(body("wish_stock_report")).toContain("values (p_user_id, p_key, v_today, v_country is not null, v_help, v_country);");
+    expect(STATEMENTS).toContain("alter table stock_reports add column if not exists country text check (country is null or country ~ '^[a-z]{2}$');");
+  });
+
+  it("l'en-tête ne promet pas plus que le schéma : aucune colonne d'origine, mais un rapprochement reste possible pour qui a toute la base", () => {
+    expect(HEADER).toContain("Aucune colonne ne relie une alerte à son origine");
+    expect(HEADER).not.toContain("Rien ne relie une alerte à son origine");
+    expect(HEADER.replace(/\n--\s+/g, " ")).toContain("quelqu'un qui aurait un accès complet à la base pourrait encore rapprocher une alerte d'une recherche faite ce jour-là");
   });
 });
 
@@ -135,31 +148,66 @@ describe("point 2 : seuil, série de 3 d'affilée, « Aider les autres membres �
     expect(body("wish_alerts_claim")).toContain("elsif e.alert_kind = 'price_drop' and (not e.below_target or e.stock_state = 'sold_out') then");
   });
 
-  it(`rupture : ${WISH_ALERT_RULES.stockReportersToConfirm} membres différents d'affilée qui aident les autres ; un « en stock » clôt la série ; Google l'établit tout de suite`, () => {
+  it(`rupture : ${WISH_ALERT_RULES.stockReportersToConfirm} membres différents d'affilée, du même pays, qui aident les autres ; un signalement sans pays ne compte dans aucune série`, () => {
     expect(WISH_ALERT_RULES.stockReportersToConfirm).toBe(3);
     const report = body("wish_stock_report");
-    expect(report).toContain("where r.match_key_hash = p_key and r.in_streak and r.helps_others and p.help_others;");
-    expect(report).toContain(`v_confirmed := v_help and v_reporters >= ${WISH_ALERT_RULES.stockReportersToConfirm};`);
-    expect(report).toContain("and (v_confirmed or t.user_id = p_user_id)");
+    expect(report).toContain("where r.match_key_hash = p_key and r.country = v_country and r.in_streak and r.helps_others and p.help_others;");
+    expect(report).toContain(`v_confirmed := v_help and v_country is not null and v_reporters >= ${WISH_ALERT_RULES.stockReportersToConfirm};`);
+    expect(report).toContain("v_country text := case when coalesce(p_country, '') ~ '^[a-z]{2}$' then p_country end;");
     // Plus aucune fenêtre de jours (seulement l'effacement des signalements à 30 jours).
     expect(report).not.toMatch(/created_on >= v_today -/);
+    expect(STATEMENTS).toContain("create index if not exists stock_reports_streak_idx on stock_reports (match_key_hash, country) where in_streak;");
+  });
+
+  it("rupture établie : dans ce pays seulement, une envie par membre (la même sélection que wish_observe), plus toutes les envies de l'auteur", () => {
+    const report = body("wish_stock_report");
+    const selection = report.slice(report.indexOf("select distinct on (tr.user_id)"), report.indexOf("tr.wishlist_item_id) c;"));
+    expect(selection).toContain("and coalesce(tr.member_country, tr.last_country) = v_country");
+    const order = (text: string) => {
+      const start = text.indexOf("(coalesce(ww.notify_price_drop");
+      return text.slice(start, text.indexOf("desc,", start));
+    };
     const observe = body("wish_observe");
-    expect(observe).toMatch(/if v_help then\s*update stock_reports set in_streak = false where match_key_hash = v_key and in_streak;/);
+    expect(order(selection)).toBe(order(observe.slice(observe.indexOf("select distinct on (tr.user_id)"))));
+    expect(report).toContain("and (t.wishlist_item_id = any(v_selected) or t.user_id = p_user_id)");
+    expect(report).toContain("when tr.wishlist_item_id = any(v_selected) then 'members'");
+    expect(report).toMatch(/where tr\.wishlist_item_id = any\(v_selected\)\s*and not \(tr\.stock_state = 'sold_out'/);
+    // L'observation regarde d'abord l'envie du pays, puis la même règle (cloche, identifiant) ; « en stock » remet les autres envies de qui cherche.
+    expect(observe).toContain("coalesce(coalesce(tr.member_country, tr.last_country) = v_country, false) desc,");
+    expect(observe).toMatch(/where o\.user_id = p_observer and o\.match_key_hash = v_key[\s\S]*?and o\.stock_state = 'sold_out' and not \(o\.wishlist_item_id = any\(v_ids\)\)/);
+  });
+
+  it("stock par pays : une observation ne touche le stock des autres que dans son pays (les deux connus) ; sans pays, seulement les envies de qui cherche", () => {
+    const observe = body("wish_observe");
+    expect(observe).toContain("v_apply_stock := v_stock is not null and (v_mine or (v_others and v_row_country = v_country));");
+    expect(observe).toContain("v_others := v_help and v_country is not null and not (v_reporter_here and v_established);");
+    expect(observe).toContain("update stock_reports set in_streak = false where match_key_hash = v_key and country = v_country and in_streak;");
     expect(observe).toMatch(/v_new_source := case when t\.stock_state = 'sold_out' and t\.sold_out_source = 'members' then 'members' else 'shop' end;/);
   });
 
-  it("retour en stock : seulement après une rupture établie, et jamais quand le membre qui la voit en stock est l'un des auteurs de la série en cours", () => {
+  it("fin d'une rupture : avant qu'elle soit établie, tout « en stock » d'un membre qui aide les autres clôt la série ; une fois établie, celui d'un auteur ne change que ses envies ; le premier non-auteur envoie « De retour en stock »", () => {
     const observe = body("wish_observe");
     expect(observe).toContain("v_confirmed := t.stock_state = 'sold_out' and t.sold_out_source in ('shop', 'members');");
-    expect(observe).toContain("if v_confirmed and not v_observer_reported and v_alerts and t.watch_restock then");
-    expect(observe.indexOf("v_observer_reported := exists")).toBeLessThan(observe.indexOf("update stock_reports set in_streak = false"));
+    expect(observe).toMatch(/if v_confirmed and not v_reporter_here and not \(v_mine and v_reporter_any\)\s*and v_alerts and t\.watch_restock then/);
+    // Établie : une envie de ce pays 'shop' ou 'members' (Google, ou 3 d'affilée).
+    expect(observe).toMatch(/v_established := exists \(select 1 from wish_tracking e[\s\S]*?e\.sold_out_source in \('shop', 'members'\)[\s\S]*?= v_country\);/);
+    // La série n'est close que si l'observation touche les autres (jamais pour l'auteur devant une rupture établie).
+    expect(observe.indexOf("v_others := v_help")).toBeLessThan(observe.indexOf("if v_others and v_stock is true then"));
+    expect(observe.indexOf("v_reporter_here := ")).toBeLessThan(observe.indexOf("v_others := v_help"));
   });
 
   it("« Aider les autres membres » coupé : seulement ses envies (observation et signalement), sans toucher la série ni compter", () => {
     const observe = body("wish_observe");
-    expect(observe.match(/and \(v_help or tr\.user_id = p_observer\)/g)).toHaveLength(2);
+    expect(observe).toContain("and (tr.user_id = p_observer or v_others)");
+    expect(observe).toContain("(tr.user_id = p_observer\n                    or (v_others and");
     expect(body("wish_stock_report")).toContain("select coalesce(p.help_others, false) into v_help from profiles p where p.id = p_user_id;");
     expect(STATEMENTS).toContain("alter table profiles add column if not exists help_others boolean not null default true;");
+  });
+
+  it("un seuil choisi sans prix connu part armé (décision du fondateur) ; la limite « devise du pays seulement » est écrite", () => {
+    expect(HEADER).toContain("seuil choisi alors qu'aucun prix n'avait encore été vu part armé");
+    expect(HEADER).toContain("seuls les prix dans la devise du pays de la");
+    expect(body("wish_observe")).toContain("un seuil choisi sans prix connu est armé.");
   });
 
   it("plus de limite « 1 par envie et par sorte sur 7 jours » ; « 5 par personne et par jour » gardée", () => {
@@ -183,7 +231,17 @@ describe("point 6 : le jour seulement ; une heure exacte seulement pendant l'env
     expect(STATEMENTS).toContain("check (status = 'pending' or (claimed_at is null and pushing_at is null))");
     expect(body("wish_alerts_mark_sent")).toMatch(/claimed_at = null,\s*pushing_at = null/);
     expect(body("wish_alerts_mark_sent")).toContain("sent_on = coalesce((ev.pushing_at at time zone 'Europe/Paris')::date, v_today)");
-    expect(HEADER).toContain("15 minutes au plus");
+    expect(HEADER).toContain("(claimed_at, pushing_at, 15 minutes)");
+  });
+
+  it("une réservation échue sans envoi demandé est effacée à chaque passage, que l'alerte soit reprise ou non ; une alerte gardée pour le lendemain n'en garde pas", () => {
+    const claim = body("wish_alerts_claim");
+    const reconcile = claim.indexOf("perform wish_alerts_mark_sent(");
+    const cleanup = claim.indexOf("set claimed_at = null\n   where ev.status = 'pending' and ev.pushing_at is null and ev.claimed_at < v_lease");
+    expect(cleanup).toBeGreaterThan(reconcile);
+    expect(cleanup).toBeLessThan(claim.indexOf("set status = 'expired'"));
+    expect(claim).toMatch(/if v_status = 'held' then[\s\S]*?update wish_alert_events set claimed_at = null where id = e\.id and claimed_at is not null;/);
+    expect(HEADER).toContain("le serveur relance un passage 16 minutes après un");
   });
 
   it(`une alerte jamais envoyée expire le ${WISH_ALERT_RULES.expiryDays}e jour (par date) ; alertes et signalements effacés à ${WISH_ALERT_RULES.retentionDays} jours (par date)`, () => {

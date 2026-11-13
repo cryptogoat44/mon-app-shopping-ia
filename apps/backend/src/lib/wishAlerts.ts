@@ -35,7 +35,10 @@
 //   avec les envies des autres membres) ; la pièce retirée du Vault, elles ne
 //   le sont plus, sauf si une autre pièce du Vault est la même (forgetPurchase) ;
 // - « Plus disponible » ne touche les envies des autres qu'une fois la pièce
-//   signalée par 3 membres différents d'affilée (wish_stock_report) ;
+//   signalée par 3 membres différents d'affilée depuis le même pays
+//   (wish_stock_report : le pays de la recherche part avec le signalement) ;
+// - le stock se compare pays par pays, comme les prix : un suivi sans pays
+//   prend celui de la recherche en cours quand la personne règle sa cloche ;
 // - « Aider les autres membres » coupé : ses recherches et ses signalements
 //   ne servent qu'à ses propres envies (la base lit ce réglage).
 // Journal : des codes, jamais un compte, un titre ni une adresse.
@@ -66,7 +69,7 @@ export function parisDay(value: string | Date): string | null {
 // ---- Réglages « Alertes prix et stock » et « Aider les autres membres » ----
 
 // help_others (0041) absent d'une ligne lue : son défaut, allumé.
-const SETTINGS_ROW = z.object({ price_alerts_enabled: z.boolean(), help_others: z.boolean().optional() });
+const SETTINGS_ROW = z.object({ price_alerts_enabled: z.boolean(), help_others: z.boolean().nullable().optional() });
 
 async function readAlertSettings(fastify: Db, userId: string): Promise<{ enabled: boolean; helpOthers: boolean }> {
   const { data, error } = await fastify.supabaseAdmin.from("profiles").select("price_alerts_enabled, help_others").eq("id", userId).maybeSingle();
@@ -168,10 +171,14 @@ async function readOriginMatch(fastify: Db, matchId: string, country: string | n
   };
 }
 
-/** Un pays de recherche pris en charge (lib/locale.ts), sinon null. */
-function memberCountry(country: string | null): string | null {
+/** Un pays de recherche pris en charge par les alertes (lib/locale.ts,
+ * SEARCH_COUNTRIES), sinon null : le pays d'un signalement « Plus
+ * disponible » (0041 : les séries se comptent pays par pays), celui gardé sur
+ * le suivi d'une envie. */
+export function alertSearchCountry(country: string | null): string | null {
   return country !== null && (SEARCH_COUNTRIES as readonly string[]).includes(country) ? country : null;
 }
+const memberCountry = alertSearchCountry;
 
 /** La ligne de suivi d'une envie (sans écrire). `country` : le pays de la
  * recherche de la personne, gardé sur le suivi (member_country, 0040) ; null
@@ -321,7 +328,8 @@ const WATCH_ROW = z.object({
   target_price: AMOUNT.nullable(),
   target_currency: z.string().nullable(),
   target_country: z.string().nullable(),
-  below_target: z.boolean(),
+  // Faux par défaut dans la base (une cloche sans baisse de prix ne l'écrit pas).
+  below_target: z.boolean().nullable(),
 });
 type WatchRow = z.infer<typeof WATCH_ROW>;
 const WATCH_COLUMNS = "wishlist_item_id, notify_price_drop, notify_restock, notify_sold_out, target_price, target_currency, target_country, below_target";
@@ -341,8 +349,11 @@ function lastSeenPrice(tracking: TrackingRow | null, country: string | null): { 
   return { price: tracking.last_price, currency };
 }
 
-function toState(wishId: string, tracking: TrackingRow | null, watch: WatchRow | null, bought: boolean): WishAlertState {
-  const country = alertCountry(tracking);
+/** `requestCountry` : le pays de la recherche en cours, pour un suivi qui
+ * n'en connaît aucun (la devise du seuil est alors celle de ce pays, comme à
+ * l'enregistrement de la cloche, qui le gardera sur le suivi). */
+function toState(wishId: string, tracking: TrackingRow | null, watch: WatchRow | null, bought: boolean, requestCountry: string | null = null): WishAlertState {
+  const country = alertCountry(tracking, requestCountry);
   const last = lastSeenPrice(tracking, country);
   return {
     wishlistItemId: wishId,
@@ -368,19 +379,21 @@ async function readWatch(fastify: Db, userId: string, wishId: string): Promise<W
   return rows[0] ?? null;
 }
 
-/** La cloche d'une envie de la personne (son suivi créé s'il manque) ; null : envie introuvable. */
-export async function readWishAlertState(fastify: Db, log: FastifyBaseLogger, userId: string, wishId: string): Promise<WishAlertState | null> {
+/** La cloche d'une envie de la personne (son suivi créé s'il manque) ; null :
+ * envie introuvable. `requestCountry` : le pays de la recherche en cours. */
+export async function readWishAlertState(fastify: Db, log: FastifyBaseLogger, userId: string, wishId: string, requestCountry: string | null = null): Promise<WishAlertState | null> {
   const tracking = await ensureTracking(fastify, log, userId, wishId);
   if (!tracking) return null;
   const [watch, boughtByMatch] = await Promise.all([readWatch(fastify, userId, wishId), boughtWishIds(fastify, userId, [wishId])]);
-  return toState(wishId, tracking, watch, Boolean(tracking.bought_on) || boughtByMatch.has(wishId));
+  return toState(wishId, tracking, watch, Boolean(tracking.bought_on) || boughtByMatch.has(wishId), requestCountry);
 }
 
 /** Au plus ce nombre d'envies dans GET /api/alerts/wishes. */
 export const MAX_ALERT_STATES = 1000;
 
-/** La cloche de chacune des envies suivies de la personne (envies avec un suivi ou une cloche). */
-export async function readWishAlertStates(fastify: Db, userId: string): Promise<WishAlertState[]> {
+/** La cloche de chacune des envies suivies de la personne (envies avec un
+ * suivi ou une cloche). `requestCountry` : le pays de la recherche en cours. */
+export async function readWishAlertStates(fastify: Db, userId: string, requestCountry: string | null = null): Promise<WishAlertState[]> {
   const [trackings, watches] = await Promise.all([
     fastify.supabaseAdmin
       .from("wish_tracking")
@@ -403,7 +416,7 @@ export async function readWishAlertStates(fastify: Db, userId: string): Promise<
   const bought = await boughtWishIds(fastify, userId, ids.filter((id) => trackingById.get(id)?.match_key_hash));
   return ids.map((id) => {
     const tracking = trackingById.get(id) ?? null;
-    return toState(id, tracking, watchById.get(id) ?? null, Boolean(tracking?.bought_on) || bought.has(id));
+    return toState(id, tracking, watchById.get(id) ?? null, Boolean(tracking?.bought_on) || bought.has(id), requestCountry);
   });
 }
 
@@ -441,7 +454,9 @@ function targetValues(choice: WatchChoice, existing: WatchRow | null, tracking: 
 
 /** Enregistre la cloche (et son seuil) ; tout coupé : la cloche est retirée.
  * `tracking` : le suivi de l'envie ; `requestCountry` : le pays de la
- * recherche en cours (si le suivi n'en connaît aucun). */
+ * recherche en cours, pour un suivi qui n'en connaît aucun : il est alors
+ * gardé sur le suivi (member_country) dans le même enregistrement, pour que
+ * les prix et le stock de ce pays soient ceux comparés ensuite (wish_observe). */
 export async function saveWatch(fastify: Db, userId: string, wishId: string, choice: WatchChoice, tracking: TrackingRow | null = null, requestCountry: string | null = null): Promise<void> {
   const db = fastify.supabaseAdmin;
   if (!choice.priceDrop && !choice.restock && !choice.soldOut) {
@@ -451,6 +466,11 @@ export async function saveWatch(fastify: Db, userId: string, wishId: string, cho
   }
   const existing = await readWatch(fastify, userId, wishId);
   const target = targetValues(choice, existing, tracking, requestCountry);
+  const pinned = alertCountry(tracking) === null ? memberCountry(requestCountry) : null;
+  if (tracking && pinned !== null) {
+    const { error } = await db.from("wish_tracking").update({ member_country: pinned }).eq("user_id", userId).eq("wishlist_item_id", wishId).is("member_country", null);
+    if (error) throw new WishAlertsStoreError("Pays du suivi non enregistré");
+  }
   const values = {
     notify_price_drop: choice.priceDrop,
     notify_restock: choice.restock,
@@ -475,19 +495,22 @@ export async function saveWatch(fastify: Db, userId: string, wishId: string, cho
 const REPORT_ROWS = z.array(z.object({ allowed: z.boolean(), matched: z.number().int().nonnegative() })).length(1);
 
 /** Signalement « Plus disponible » d'une pièce (son empreinte) par la
- * personne. Le signalement garde son auteur, dans sa propre table (limite du
- * jour, export, effacé à 30 jours), jamais lié à une alerte. Ses envies de la
- * même pièce passent « épuisée » ; celles des autres membres seulement une
- * fois la pièce signalée par 3 membres différents d'affilée qui aident les
- * autres (0041) ; « Aider les autres membres » coupé : seulement les siennes,
- * et il ne compte pas (la base lit le réglage). « limited » : 20
- * signalements déjà aujourd'hui (heure de Paris). */
-export async function reportSoldOut(fastify: Db, userId: string, key: Pick<TrackingKey, "hash" | "merchant">): Promise<"reported" | "limited"> {
+ * personne, depuis le pays de sa recherche (`country` : un pays pris en
+ * charge, sinon null). Le signalement garde son auteur et ce pays, dans sa
+ * propre table (limite du jour, série, export, effacé à 30 jours), jamais lié
+ * à une alerte. Ses envies de la même pièce passent « épuisée » ; celles des
+ * autres membres de ce pays seulement une fois la pièce signalée par 3
+ * membres différents d'affilée depuis ce pays, qui aident les autres (0041) ;
+ * sans pays, il ne compte dans aucune série ; « Aider les autres membres »
+ * coupé : seulement les siennes, et il ne compte pas (la base lit le
+ * réglage). « limited » : 20 signalements déjà aujourd'hui (heure de Paris). */
+export async function reportSoldOut(fastify: Db, userId: string, key: Pick<TrackingKey, "hash" | "merchant">, country: string | null): Promise<"reported" | "limited"> {
   const { data, error } = await fastify.supabaseAdmin.rpc("wish_stock_report", {
     p_user_id: userId,
     p_key: key.hash,
     p_merchant: key.merchant,
     p_daily_cap: WISH_ALERT_RULES.stockReportsPerDay,
+    p_country: alertSearchCountry(country),
   });
   if (error) throw new WishAlertsStoreError("Signalement « Plus disponible » non enregistré");
   const parsed = REPORT_ROWS.safeParse(data);

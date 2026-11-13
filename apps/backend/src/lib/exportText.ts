@@ -478,6 +478,7 @@ export const EXPORT_COLUMNS = {
     match_key_hash: technical("Empreinte de la pièce signalée", "Fingerprint of the reported piece"),
     created_on: shown("Signalée « Plus disponible » le", "Reported “No longer available” on"),
     // Migration 0041.
+    country: shown("Pays de la recherche", "Search country"),
     helps_others: shown("Comptait pour les autres membres", "Counted for other members"),
     in_streak: shown("Dans la série en cours", "In the current series"),
   },

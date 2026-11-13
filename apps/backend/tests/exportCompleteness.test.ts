@@ -267,7 +267,10 @@ describe("export RGPD complet", () => {
         .from("wish_alert_events")
         .insert({ wishlist_item_id: wish!.id, user_id: user.id, kind: "restock", created_on: "2026-11-09", status: "expired", ...(ALERTS_V2 ? {} : { send_after: new Date().toISOString() }) });
       if (eventError) throw eventError;
-      const { error: reportError } = await app.supabaseAdmin.from("stock_reports").insert({ user_id: user.id, match_key_hash: "b".repeat(64), created_on: "2026-11-09" });
+      // 0041 : le pays de la recherche du signalement est gardé (et exporté).
+      const { error: reportError } = await app.supabaseAdmin
+        .from("stock_reports")
+        .insert({ user_id: user.id, match_key_hash: "b".repeat(64), created_on: "2026-11-09", ...(ALERTS_V2 ? { country: "fr" } : {}) });
       if (reportError) throw reportError;
     }
 
@@ -305,7 +308,7 @@ describe("export RGPD complet", () => {
     // Alertes, nouvelle version (0041) : un signalement « Plus disponible » garde son auteur (sa table, son export),
     // « Aider les autres membres » est exporté, et aucune heure d'alerte.
     if (ALERTS_V2) {
-      expect(body.stockReports).toEqual([expect.objectContaining({ match_key_hash: "b".repeat(64), created_on: "2026-11-09", helps_others: true, in_streak: true })]);
+      expect(body.stockReports).toEqual([expect.objectContaining({ match_key_hash: "b".repeat(64), created_on: "2026-11-09", country: "fr", helps_others: true, in_streak: true })]);
       expect(body.profile).toMatchObject({ help_others: true, price_alerts_enabled: expect.any(Boolean) });
       expect(body.wishAlertEvents[0]).toMatchObject({ created_on: "2026-11-09", sent_on: null });
       expect(JSON.stringify(body.wishAlertEvents)).not.toMatch(/created_at|send_after|sent_at|claimed_at|pushing_at/);

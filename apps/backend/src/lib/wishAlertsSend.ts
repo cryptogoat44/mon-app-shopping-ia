@@ -18,7 +18,8 @@
 //    jour après leur création, désactive celles dont l'interrupteur ou la
 //    cloche est coupé, revérifie chaque alerte (périmée si la baisse ou le
 //    stock a disparu), garde pour le lendemain celles d'une personne qui en a
-//    déjà reçu 5 ce jour de Paris, et réserve les autres ;
+//    déjà reçu 5 ce jour de Paris, efface l'heure de toute réservation échue,
+//    et réserve les autres ;
 // 2. notifications coupées sur le serveur (PUSH_ENABLED) : seulement l'étape
 //    d'entretien ; les alertes restent en attente et expireront ;
 // 3. une notification par personne, générique, en « vous » : ni titre, ni
@@ -35,7 +36,12 @@
 //    inconnue (délai dépassé, réponse illisible) ou envoi impossible à noter :
 //    rien n'est rendu, et le passage suivant la note « envoyée »
 //    (wish_alerts_claim) — jamais deux fois la même notification, au pire une
-//    alerte perdue.
+//    alerte perdue ;
+// 5. une réservation laissée (envoi incertain, non noté, réservation non
+//    rendue, passage interrompu) : un passage de ménage est prévu 16 minutes
+//    après (scheduleLeaseCleanup), et un autre 16 minutes après le démarrage
+//    du serveur ; la base efface alors l'heure exacte de toute réservation
+//    échue, que l'alerte soit reprise ou non (point 6 : 15 minutes au plus).
 // Journal racine : des nombres seulement, jamais un compte, une envie, un titre ni un prix.
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -51,6 +57,8 @@ export const FLUSH_BATCH = 50;
 export const PURGE_BATCH = 500;
 /** Essais pour noter un envoi (une panne passagère ne fait jamais renvoyer). */
 export const MARK_SENT_ATTEMPTS = 3;
+/** Un passage de ménage un peu après la durée d'une réservation (15 minutes). */
+export const LEASE_CLEANUP_DELAY_MS = 16 * 60_000;
 
 /** Ce que la base renvoie d'une alerte réservée (0041) : l'alerte, sa
  * sorte, l'envie et la langue de la personne, rien d'autre. */
@@ -187,11 +195,19 @@ export async function flushWishAlerts(fastify: FastifyInstance, log: FastifyBase
       released.push(...ids);
     }
   }
-  if (sent.length > 0) await markSent(fastify, log, sent);
+  const marked = sent.length > 0 ? await markSent(fastify, log, sent) : true;
+  let freedOk = true;
   if (released.length > 0) {
-    const freed = await db.rpc("wish_alerts_release", { p_ids: released });
-    if (freed.error) log.warn({ code: freed.error.code ?? null }, "Alertes prix : réservation non rendue (elle expire seule en 15 minutes)");
+    const freed = await db.rpc("wish_alerts_release", { p_ids: released }).then(
+      (result) => result.error,
+      () => ({ code: null })
+    );
+    freedOk = !freed;
+    if (freed) log.warn({ code: freed.code ?? null }, "Alertes prix : réservation non rendue (effacée au prochain passage, dans 16 minutes au plus)");
   }
+  // Une réservation reste (envoi incertain, non noté, réservation non rendue) :
+  // un passage de ménage est prévu juste après sa fin, sans attendre un membre.
+  if (uncertain.length > 0 || !marked || !freedOk) scheduleLeaseCleanup(fastify);
   const summary = { claimed: parsed.data.length, recipients: groups.length, sent: sent.length, released: released.length, uncertain: uncertain.length, push };
   if (summary.claimed > 0) log.info(summary, "Alertes prix : passage d'envoi");
   return summary;
@@ -220,6 +236,8 @@ function startFlush(fastify: FastifyInstance, now: number): void {
     .then(() => undefined)
     .catch((error: unknown) => {
       fastify.log.warn({ code: error instanceof Error ? error.name : null }, "Alertes prix : passage d'envoi impossible");
+      // Interrompu en route : des réservations ont pu rester.
+      scheduleLeaseCleanup(fastify);
     })
     .finally(() => {
       running = null;
@@ -262,11 +280,44 @@ export async function waitForWishAlertsFlush(): Promise<void> {
   while (running) await running;
 }
 
-/** Tests seulement : attend le passage en cours, et oublie le dernier. */
+// ---- Ménage des réservations (point 6 : une heure exacte 15 minutes au plus) ----
+
+let cleanupTimer: ReturnType<typeof setTimeout> | null = null;
+let cleanupDueAt = 0;
+
+/** Un passage de la file dans `delayMs` (16 minutes par défaut), sans
+ * retenir le serveur (unref) et sans attendre qu'un membre se connecte : il
+ * efface les réservations échues (wish_alerts_claim, étapes 0 et 0 bis).
+ * Prévu après un passage qui a laissé une réservation (envoi incertain, non
+ * noté, réservation non rendue, passage interrompu) et au démarrage du serveur
+ * (server.ts : un arrêt brutal a pu en laisser). Un seul en attente, repoussé
+ * à la fin de la dernière réservation laissée. */
+export function scheduleLeaseCleanup(fastify: FastifyInstance, delayMs: number = LEASE_CLEANUP_DELAY_MS): void {
+  const dueAt = Date.now() + delayMs;
+  if (cleanupTimer && cleanupDueAt >= dueAt) return;
+  if (cleanupTimer) clearTimeout(cleanupTimer);
+  cleanupDueAt = dueAt;
+  cleanupTimer = setTimeout(() => {
+    cleanupTimer = null;
+    cleanupDueAt = 0;
+    sendWishAlertsNow(fastify);
+  }, delayMs);
+  cleanupTimer.unref?.();
+}
+
+/** Tests seulement : un passage de ménage est-il prévu ? */
+export function leaseCleanupPending(): boolean {
+  return cleanupTimer !== null;
+}
+
+/** Tests seulement : attend le passage en cours, oublie le dernier et le ménage prévu. */
 export async function resetWishAlertsFlush(): Promise<void> {
   while (running) await running;
   again = false;
   lastFlushAt = 0;
+  if (cleanupTimer) clearTimeout(cleanupTimer);
+  cleanupTimer = null;
+  cleanupDueAt = 0;
 }
 
 // ---- Purge (30 jours) ----

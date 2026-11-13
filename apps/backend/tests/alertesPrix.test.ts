@@ -121,10 +121,10 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036, 0040 et 004
     return res.json() as { id: string };
   }
 
-  /** « Plus disponible » de `who` sur la pièce de `url` (wish_stock_report). */
-  async function report(who: TestUser, url: string, hours = 0) {
+  /** « Plus disponible » de `who` sur la pièce de `url` (wish_stock_report), depuis une recherche faite dans `country`. */
+  async function report(who: TestUser, url: string, hours = 0, country: string | null = "fr") {
     const key = trackingKeyOf(url, "Boutique Essai")!;
-    const { data, error } = await app.supabaseAdmin.rpc("wish_stock_report", { p_user_id: who.id, p_key: key.hash, p_merchant: key.merchant, p_daily_cap: 20, p_now: at(hours) });
+    const { data, error } = await app.supabaseAdmin.rpc("wish_stock_report", { p_user_id: who.id, p_key: key.hash, p_merchant: key.merchant, p_daily_cap: 20, p_country: country, p_now: at(hours) });
     expect(error).toBeNull();
     return data as { allowed: boolean; matched: number }[];
   }
@@ -135,9 +135,10 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036, 0040 et 004
     return data as number;
   }
 
+  /** Une observation d'une recherche faite en France (le pays part avec chaque observation, avec ou sans prix). */
   const obs = (url: string, cents: number | null, extra: Partial<Observation> = {}): Observation => {
     const key = trackingKeyOf(url, "Boutique Essai")!;
-    return { k: key.hash, m: key.merchant, p: cents, c: cents === null ? null : "EUR", n: cents === null ? null : "fr", s: null, ...extra };
+    return { k: key.hash, m: key.merchant, p: cents, c: cents === null ? null : "EUR", n: "fr", s: null, ...extra };
   };
 
   /** Une observation, faite par la recherche de `by` (par défaut : searcher, qui aide les autres membres). */
@@ -356,22 +357,101 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036, 0040 et 004
     expect(await observe([obs(url, 5000)], 7)).toMatchObject({ events: 0 });
   });
 
-  it("retour en stock après une rupture établie par des membres : jamais quand c'est l'un des auteurs de la série qui la voit en stock ; un autre membre, oui", async () => {
+  it("rupture établie : la recherche « en stock » d'un auteur de la série ne change que SES envies (série ouverte, les autres restent épuisée) ; le premier non-auteur envoie « De retour en stock »", async () => {
     const url = uniqueUrl("auteur-voit-stock");
+    const key = trackingKeyOf(url, "Boutique Essai")!.hash;
     const watcher = await freshOwner("apc7");
     const wish = await wishFromResult(watcher, url);
     await bell(watcher, wish, { priceDrop: false, restock: true });
     const reporters = [await freshOwner("apc8"), await freshOwner("apc9"), await freshOwner("apca")];
+    const firstReporterWish = await wishFromResult(reporters[0]!, url);
     for (const [index, who] of reporters.entries()) await report(who, url, index);
     expect(await tracking(wish)).toMatchObject({ stock_state: "sold_out", sold_out_source: "members" });
-    // L'un des auteurs cherche et la voit en stock : aucune alerte (la série est close, la pièce disponible).
+    // Deux auteurs cherchent et la voient en stock : rien chez le membre qui suit la pièce.
     expect(await observe([obs(url, null, { s: true })], 4, reporters[0]!)).toMatchObject({ events: 0 });
+    expect(await observe([obs(url, null, { s: true })], 5, reporters[1]!)).toMatchObject({ events: 0 });
     expect(await events(wish)).toEqual([]);
-    expect((await tracking(wish)).stock_state).toBe("in_stock");
-    // Nouvelle série de 3, puis un membre qui n'en est pas auteur : « De retour en stock ».
-    for (const [index, who] of reporters.entries()) await report(who, url, 5 + index);
-    expect(await observe([obs(url, null, { s: true })], 9)).toMatchObject({ events: 1 });
+    expect(await tracking(wish)).toMatchObject({ stock_state: "sold_out", sold_out_source: "members" });
+    expect((await tracking(firstReporterWish)).stock_state).toBe("in_stock");
+    const { data: open } = await app.supabaseAdmin.from("stock_reports").select("id").eq("match_key_hash", key).eq("in_streak", true);
+    expect(open).toHaveLength(3);
+    // Le premier membre qui aide les autres et n'est pas auteur : « De retour en stock », la série close.
+    expect(await observe([obs(url, null, { s: true })], 6)).toMatchObject({ events: 1 });
     expect((await events(wish)).map((event) => event.kind)).toEqual(["restock"]);
+    expect((await tracking(wish)).stock_state).toBe("in_stock");
+    const { data: closed } = await app.supabaseAdmin.from("stock_reports").select("id").eq("match_key_hash", key).eq("in_streak", true);
+    expect(closed).toEqual([]);
+  });
+
+  it("rupture annoncée par Google, un signalement en cours : la recherche « en stock » de son auteur ne prive pas les autres de « De retour en stock »", async () => {
+    const url = uniqueUrl("google-puis-auteur");
+    const watcher = await freshOwner("apcj");
+    const wish = await wishFromResult(watcher, url);
+    await bell(watcher, wish, { priceDrop: false, restock: true });
+    const author = await freshOwner("apck");
+    await report(author, url);
+    await observe([obs(url, null, { s: false })], 1);
+    expect(await tracking(wish)).toMatchObject({ stock_state: "sold_out", sold_out_source: "shop" });
+    expect(await observe([obs(url, null, { s: true })], 2, author)).toMatchObject({ events: 0 });
+    expect(await tracking(wish)).toMatchObject({ stock_state: "sold_out", sold_out_source: "shop" });
+    expect(await observe([obs(url, null, { s: true })], 3)).toMatchObject({ events: 1 });
+  });
+
+  it("stock par pays (point 2) : une rupture vue dans un autre pays, ou signalée depuis un autre pays, ne touche pas une envie suivie en France ; sans pays, seulement les envies de qui cherche", async () => {
+    const url = uniqueUrl("par-pays");
+    const watcher = await freshOwner("apcl");
+    const wish = await wishFromResult(watcher, url);
+    await bell(watcher, wish, { priceDrop: false, restock: true });
+    await observe([obs(url, null, { s: true })]);
+    // Google annonce « épuisé » aux États-Unis, ou sans pays pris en charge : rien en France.
+    await observe([obs(url, null, { s: false, n: "us" })], 1);
+    await observe([obs(url, null, { s: false, n: null })], 2);
+    expect((await tracking(wish)).stock_state).toBe("in_stock");
+    // Trois signalements depuis le Royaume-Uni : aucune série française.
+    for (const [index, who] of [await freshOwner("apcm"), await freshOwner("apcn"), await freshOwner("apco")].entries()) await report(who, url, 3 + index, "gb");
+    expect((await tracking(wish)).stock_state).toBe("in_stock");
+    const { data: rows } = await app.supabaseAdmin.from("stock_reports").select("country, in_streak").eq("match_key_hash", trackingKeyOf(url, "Boutique Essai")!.hash);
+    expect((rows ?? []).map((row) => row.country)).toEqual(["gb", "gb", "gb"]);
+    // Un signalement sans pays : gardé avec son auteur, dans aucune série.
+    const nowhere = await freshOwner("apcp");
+    await report(nowhere, url, 7, null);
+    const { data: mine } = await app.supabaseAdmin.from("stock_reports").select("country, in_streak").eq("user_id", nowhere.id);
+    expect(mine).toEqual([{ country: null, in_streak: false }]);
+  });
+
+  it("envies en double chez un membre : la rupture établie n'en marque qu'une (celle que la recherche regarde) ; supprimée après le retour en stock, la suivante n'envoie pas un deuxième « De retour en stock »", async () => {
+    const url = uniqueUrl("doublons");
+    const member = await freshOwner("apcq");
+    const first = await wishFromResult(member, url);
+    const second = await wishFromResult(member, url);
+    await bell(member, first, { priceDrop: false, restock: true });
+    await bell(member, second, { priceDrop: false, restock: true });
+    await observe([obs(url, null, { s: true })]);
+    for (const [index, who] of [await freshOwner("apcr"), await freshOwner("apcs"), await freshOwner("apct")].entries()) await report(who, url, 1 + index);
+    const stateOf = { [first]: (await tracking(first)).stock_state, [second]: (await tracking(second)).stock_state };
+    const marked = stateOf[first] === "sold_out" ? first : second;
+    const other = marked === first ? second : first;
+    expect(stateOf[marked]).toBe("sold_out");
+    expect(stateOf[other]).not.toBe("sold_out");
+    expect(await observe([obs(url, null, { s: true })], 5)).toMatchObject({ events: 1 });
+    expect((await events(marked)).map((event) => event.kind)).toEqual(["restock"]);
+    // L'envie regardée supprimée après le retour en stock : la recherche suivante n'envoie rien de plus.
+    await app.supabaseAdmin.from("wishlist_items").delete().eq("id", marked);
+    expect(await observe([obs(url, null, { s: true })], 6)).toMatchObject({ events: 0 });
+    expect(await events(other)).toEqual([]);
+  });
+
+  it("seuil choisi sans aucun prix connu (décision du fondateur : il part armé) : le premier prix vu sous lui envoie une alerte, une seule fois", async () => {
+    const member = await freshOwner("apcu");
+    const url = uniqueUrl("seuil-sans-prix");
+    const res = await app.inject({ method: "POST", url: "/api/wishlist", headers: { ...authHeaders(member.token), "accept-language": "fr-FR" }, payload: { title: "Veste Essai", imageUrl: "https://images.example/veste.jpg", merchantUrl: url } });
+    expect(res.statusCode).toBe(200);
+    const wish = res.json().id as string;
+    expect(await bell(member, wish, { priceDrop: true, restock: false, targetPrice: 80 })).toMatchObject({ targetPrice: 80, lastPrice: null });
+    expect(await watch(wish)).toMatchObject({ below_target: false });
+    expect(await observe([obs(url, 6000)])).toEqual({ matched: 1, events: 1 });
+    expect((await events(wish)).map((event) => [event.kind, Number(event.old_price), Number(event.new_price)])).toEqual([["price_drop", 80, 60]]);
+    expect(await observe([obs(url, 5500)], 1)).toEqual({ matched: 1, events: 0 });
   });
 
   it("« Aider les autres membres » coupé : ses recherches et ses signalements ne servent qu'à SES envies, et ses signalements ne comptent pas parmi les 3", async () => {
@@ -423,7 +503,7 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036, 0040 et 004
 
   it("« Plus disponible » : au plus N par membre et par jour de Paris ; le lendemain, de nouveau permis", async () => {
     const key = trackingKeyOf(uniqueUrl("limite-signalement"), "Boutique Essai")!;
-    const report = (hours: number) => app.supabaseAdmin.rpc("wish_stock_report", { p_user_id: searcher.id, p_key: key.hash, p_merchant: null, p_daily_cap: 2, p_now: at(hours) });
+    const report = (hours: number) => app.supabaseAdmin.rpc("wish_stock_report", { p_user_id: searcher.id, p_key: key.hash, p_merchant: null, p_daily_cap: 2, p_country: "fr", p_now: at(hours) });
     expect((await report(0)).data).toEqual([{ allowed: true, matched: 0 }]);
     expect((await report(1)).data).toEqual([{ allowed: true, matched: 0 }]);
     expect((await report(2)).data).toEqual([{ allowed: false, matched: 0 }]);
@@ -645,7 +725,26 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036, 0040 et 004
     expect((await app.supabaseAdmin.from("wish_alert_events").insert({ ...base, kind: "sold_out", pushing_at: at() })).error?.code).toBe("23514");
     expect((await app.supabaseAdmin.from("wish_alert_events").insert({ ...base, kind: "sold_out", status: "sent" })).error?.code).toBe("23514");
     expect((await app.supabaseAdmin.from("wish_alert_events").insert({ ...base, kind: "sold_out", status: "expired", claimed_at: at() })).error?.code).toBe("23514");
-    expect((await app.supabaseAdmin.from("wish_watches").insert({ wishlist_item_id: wish, user_id: searcher.id })).error?.code).toBe("23503");
+    // Une cloche au nom d'un autre membre que celui de l'envie : refusée (sur une envie sans cloche).
+    const bare = await wishFromResult(owner, uniqueUrl("contraintes-fk"));
+    expect((await app.supabaseAdmin.from("wish_watches").insert({ wishlist_item_id: bare, user_id: searcher.id })).error?.code).toBe("23503");
+  });
+
+  it("réservation échue sans envoi demandé (redémarrage) : son heure exacte est effacée au passage suivant, même si l'alerte n'est pas reprise", async () => {
+    const member = await freshOwner("apcv");
+    const base = 24 * 390;
+    const url = uniqueUrl("bail");
+    const wish = await wishFromResult(member, url);
+    await bell(member, wish, { priceDrop: true, restock: false });
+    await observe([obs(url, 9000)], base);
+    expect(await claimFor(wish, base + 1)).toHaveLength(1);
+    expect((await events(wish))[0]!.claimed_at).not.toBeNull();
+    // Le serveur redémarre avant de demander l'envoi ; l'appareil ne reçoit plus les alertes (l'alerte n'est plus reprise).
+    await app.supabaseAdmin.from("push_tokens").update({ notify_alerts: false }).eq("user_id", member.id);
+    await claim(0, base + 1 + 10 / 60);
+    expect((await events(wish))[0]!.claimed_at).not.toBeNull();
+    await claim(0, base + 1 + 16 / 60);
+    expect((await events(wish))[0]).toMatchObject({ status: "pending", claimed_at: null, pushing_at: null });
   });
 
   it("purge à 30 jours (par date) : alertes et signalements", async () => {
@@ -680,8 +779,13 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036, 0040 et 004
       expect(Object.keys(row).sort()).toEqual(["created_on", "currency", "id", "kind", "new_price", "old_price", "sent_on", "status", "wishlist_item_id", "wishlist_item_title"]);
     }
     expect(body.profile).toMatchObject({ help_others: true });
+    // Un signalement « Plus disponible » garde son auteur : il est dans SON export (pays de la recherche compris).
+    const reportedUrl = uniqueUrl("export-signalement");
+    await report(reporter, reportedUrl);
     const reporterExport = (await app.inject({ method: "GET", url: "/api/me/export", headers: authHeaders(reporter.token) })).json();
-    expect(reporterExport.stockReports.length).toBeGreaterThan(0);
+    expect(reporterExport.stockReports).toContainEqual(
+      expect.objectContaining({ match_key_hash: trackingKeyOf(reportedUrl, "Boutique Essai")!.hash, created_on: parisDay(), country: "fr", helps_others: true, in_streak: true })
+    );
   });
 
   it("suppression du compte : suivi, cloches, alertes et signalements partent avec lui (cascade)", async () => {
@@ -690,7 +794,7 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036, 0040 et 004
     const wish = await wishFromResult(gone, url);
     await bell(gone, wish, { priceDrop: true, restock: true });
     await observe([obs(url, 9000)]);
-    await app.supabaseAdmin.rpc("wish_stock_report", { p_user_id: gone.id, p_key: trackingKeyOf(url, "Boutique Essai")!.hash, p_merchant: null, p_daily_cap: 20, p_now: at() });
+    await app.supabaseAdmin.rpc("wish_stock_report", { p_user_id: gone.id, p_key: trackingKeyOf(url, "Boutique Essai")!.hash, p_merchant: null, p_daily_cap: 20, p_country: "fr", p_now: at() });
     const res = await app.inject({ method: "DELETE", url: "/api/me", headers: authHeaders(gone.token), payload: { confirmation: "SUPPRIMER" } });
     expect(res.statusCode).toBe(204);
     for (const table of ["wish_tracking", "wish_watches", "wish_alert_events", "stock_reports"]) {

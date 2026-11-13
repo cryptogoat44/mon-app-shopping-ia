@@ -980,6 +980,7 @@ function alertsSection(ctx: Ctx): Html {
   const reports = newestFirst(stockReports, "created_on").map((row) =>
     new Card(ctx, "stockReports", row)
       .field("created_on", day(ctx, row.created_on))
+      .field("country", str(row.country))
       .field("helps_others")
       .field("in_streak")
       .render(tr(ctx, EXPORT_TEXT.stockReportPiece))

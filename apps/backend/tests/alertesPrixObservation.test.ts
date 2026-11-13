@@ -48,16 +48,26 @@ describe("observations d'une réponse (une par clé, en centimes)", () => {
       [row(URL_A, { currency: "$US" }), row(URL_B, { currency: "$" }), row("https://troisieme.fr/p/1", { currency: "euros" })],
       "fr"
     );
-    for (const observation of observations) expect(observation).toMatchObject({ p: null, c: null, n: null });
+    // Sans prix, mais avec le pays de la recherche (le stock se compare aussi pays par pays).
+    for (const observation of observations) expect(observation).toMatchObject({ p: null, c: null, n: "fr" });
     expect(observations).toHaveLength(3);
     expect(buildObservations([row(URL_A, { currency: "$" })], "us").observations[0]).toMatchObject({ p: 8990, c: "USD", n: "us" });
     expect(buildObservations([row(URL_A, { currency: "£" })], "gb").observations[0]).toMatchObject({ p: 8990, c: "GBP", n: "gb" });
-    expect(buildObservations([row(URL_A, { currency: "€" })], "gb").observations[0]).toMatchObject({ p: null, c: null, n: null });
+    expect(buildObservations([row(URL_A, { currency: "€" })], "gb").observations[0]).toMatchObject({ p: null, c: null, n: "gb" });
   });
 
   it("prix nul ou négatif ignoré ; sans prix, la pièce est quand même vue (jour et stock)", () => {
-    expect(buildObservations([row(URL_A, { priceValue: 0 })], "fr").observations[0]).toMatchObject({ p: null, c: null, n: null });
-    expect(buildObservations([row(URL_A, { priceValue: null, currency: null, inStock: true })], "fr").observations[0]).toEqual({ k: KEY_A.hash, m: "boutiqueexemple", p: null, c: null, n: null, s: true });
+    expect(buildObservations([row(URL_A, { priceValue: 0 })], "fr").observations[0]).toMatchObject({ p: null, c: null, n: "fr" });
+    expect(buildObservations([row(URL_A, { priceValue: null, currency: null, inStock: true })], "fr").observations[0]).toEqual({ k: KEY_A.hash, m: "boutiqueexemple", p: null, c: null, n: "fr", s: true });
+  });
+
+  it("le pays de la recherche part avec CHAQUE observation d'un pays pris en charge, avec ou sans prix ; jamais celui d'une autre région (stock comparé pays par pays)", () => {
+    for (const country of ["fr", "gb", "ch", "us"]) {
+      expect(buildObservations([row(URL_A, { priceValue: null, currency: null, inStock: false })], country).observations[0], country).toMatchObject({ p: null, n: country, s: false });
+    }
+    for (const country of ["nz", "de", null]) {
+      expect(buildObservations([row(URL_A, { inStock: false })], country).observations[0], String(country)).toMatchObject({ p: null, c: null, n: null, s: false });
+    }
   });
 
   it("place de marché, page de Google (même avec un productid) : rien n'est observé pour elles", () => {

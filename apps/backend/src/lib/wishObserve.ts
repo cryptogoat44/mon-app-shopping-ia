@@ -24,6 +24,9 @@
 // - prix ≤ 0, devise inconnue, ou devise qui n'est pas celle du pays de la
 //   recherche : pas de prix (une baisse ne se compare qu'à pays et devise
 //   identiques) ; en centimes ;
+// - le pays de la recherche part avec chaque observation d'un pays pris en
+//   charge (le stock se compare aussi pays par pays) ; sans lui, la base ne
+//   touche que les envies de qui cherche ;
 // - « compteur gratuit » : pour chaque réponse fraîche, le journal compte (et
 //   seulement compte) les stocks annoncés (true/false), les identifiants
 //   produits de SerpApi et les empreintes — même sans les alertes, pour
@@ -67,7 +70,7 @@ export interface Observation {
   p: number | null;
   /** Devise ISO du prix. */
   c: string | null;
-  /** Pays de la recherche. */
+  /** Pays de la recherche (un pays pris en charge par les alertes, avec ou sans prix ; sinon null). */
   n: string | null;
   /** Stock annoncé. */
   s: boolean | null;
@@ -114,11 +117,14 @@ export function buildObservations(rows: readonly ObservedRow[], country: string 
     counts.keyed += 1;
     const currency = alertCurrency(row.currency, country);
     // Lot « durcissement des alertes » : un prix ne sert aux alertes que venu
-    // d'un pays que la recherche prend en charge (SEARCH_COUNTRIES). Une
-    // recherche faite avec une autre région (« en-NZ ») garde son pays pour la
-    // recherche elle-même, mais n'apporte aux alertes que l'état du stock :
-    // elle ne peut jamais fixer le seuil des autres membres. Nouvelle version
-    // (0041) : seulement dans la devise de ce pays (même pays, même devise).
+    // d'un pays que la recherche prend en charge (SEARCH_COUNTRIES), et
+    // (0041) seulement dans la devise de ce pays (même pays, même devise ;
+    // limite connue : une boutique qui affiche une autre devise dans ce pays
+    // n'a pas d'alerte de prix). Nouvelle version, revue : le pays part avec
+    // CHAQUE observation d'un pays pris en charge, avec ou sans prix — le
+    // stock aussi se compare pays par pays. Une recherche faite avec une autre
+    // région (« en-NZ ») part sans pays : elle ne sert qu'aux envies de qui
+    // cherche (la base le décide), jamais aux autres membres.
     const local = supported && country !== null && currency !== null && COUNTRY_CURRENCIES[country] === currency;
     const price = local ? cents(row.priceValue) : null;
     const observation: Observation = {
@@ -126,7 +132,7 @@ export function buildObservations(rows: readonly ObservedRow[], country: string 
       m: key.merchant,
       p: price,
       c: price === null ? null : currency,
-      n: price === null ? null : country,
+      n: supported ? country : null,
       s: typeof row.inStock === "boolean" ? row.inStock : null,
     };
     const known = byKey.get(key.hash);

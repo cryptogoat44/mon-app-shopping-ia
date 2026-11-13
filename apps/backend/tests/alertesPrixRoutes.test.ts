@@ -604,11 +604,15 @@ describe("la cloche d'une envie", () => {
       soldOut: false,
       stock: "unknown",
       targetPrice: null,
-      targetCurrency: null,
+      // Suivi sans pays : la devise du pays de la recherche en cours (France), comme à l'enregistrement.
+      targetCurrency: "EUR",
       lastPrice: null,
       lastCurrency: null,
     } satisfies WishAlertState);
     expect(fake.table("wish_tracking")).toEqual([expect.objectContaining({ wishlist_item_id: OLD_WISH, match_key_hash: KEY.hash })]);
+    // Depuis une région que les alertes ne prennent pas en charge : aucune devise, donc pas de champ de seuil.
+    expect((await as(target, ALICE, "en-NZ").get(`/api/wishlist/${OLD_WISH}/alerts`)).json()).toMatchObject({ targetCurrency: null });
+    expect((await as(target, ALICE, "en-GB").get("/api/alerts/wishes")).json().items.find((state: WishAlertState) => state.wishlistItemId === OLD_WISH)).toMatchObject({ targetCurrency: "GBP" });
   });
 
   it("envie d'avant 0036 gardée depuis un résultat : suivi créé SANS prix, comme au rattrapage (le pays de sa recherche n'est connu nulle part)", async () => {
@@ -829,7 +833,7 @@ describe("« Aider les autres membres »", () => {
     const target = await alertsApp(fake.db);
     expect((await as(target, ALICE).post("/api/alerts/stock-reports", { wishlistItemId: OLD_WISH })).statusCode).toBe(204);
     expect(rpcCalls.filter((call) => call.fn === "wish_stock_report")).toEqual([
-      { fn: "wish_stock_report", args: { p_user_id: ALICE, p_key: KEY.hash, p_merchant: "boutiqueexemple", p_daily_cap: 20 } },
+      { fn: "wish_stock_report", args: { p_user_id: ALICE, p_key: KEY.hash, p_merchant: "boutiqueexemple", p_daily_cap: 20, p_country: "fr" } },
     ]);
   });
 });
@@ -871,13 +875,30 @@ describe("le seuil de la baisse de prix, sur la cloche", () => {
     const chosen = await as(target, ALICE, "en-GB").put(`/api/wishlist/${manual}/alerts`, { priceDrop: true, restock: false, targetPrice: 70 });
     // Le pays gardé sur le suivi (sa recherche, à la création : France) l'emporte sur celui de la demande.
     expect(chosen.json().state).toMatchObject({ targetPrice: 70, targetCurrency: "EUR" });
-    // Envie d'avant 0036, membre sans pays pris en charge : impossible.
+    // Envie d'avant 0036, membre sans pays pris en charge : impossible, et rien n'est gardé sur le suivi.
     const kiwi = await as(target, ALICE, "en-NZ").put(`/api/wishlist/${OLD_WISH}/alerts`, { priceDrop: true, restock: false, targetPrice: 70 });
     expect(kiwi.statusCode).toBe(422);
     expect(fake.table("wish_watches").filter((row) => row.wishlist_item_id === OLD_WISH)).toHaveLength(0);
-    // … mais la même demande depuis la France : le pays de la recherche en cours.
+    expect(fake.table("wish_tracking").find((row) => row.wishlist_item_id === OLD_WISH)?.member_country ?? null).toBeNull();
+    // … mais la même demande depuis la France : le pays de la recherche en cours, gardé sur le suivi au même moment
+    // (les prix et le stock de France sont alors ceux comparés ; un premier prix d'un autre pays ne le change plus).
     const french = await as(target, ALICE).put(`/api/wishlist/${OLD_WISH}/alerts`, { priceDrop: true, restock: false, targetPrice: 70 });
     expect(french.json().state).toMatchObject({ targetPrice: 70, targetCurrency: "EUR" });
+    expect(fake.table("wish_tracking").find((row) => row.wishlist_item_id === OLD_WISH)).toMatchObject({ member_country: "fr" });
+    expect(fake.table("wish_watches").find((row) => row.wishlist_item_id === OLD_WISH)).toMatchObject({ target_country: "fr", target_currency: "EUR" });
+  });
+
+  it("une cloche enregistrée sur un suivi sans pays depuis une région prise en charge garde ce pays sur le suivi (retour en stock compris) ; un pays déjà connu n'est jamais remplacé", async () => {
+    const fake = seeded();
+    const target = await alertsApp(fake.db);
+    expect((await as(target, ALICE, "en-GB").put(`/api/wishlist/${OLD_WISH}/alerts`, { priceDrop: false, restock: true })).statusCode).toBe(200);
+    expect(fake.table("wish_tracking").find((row) => row.wishlist_item_id === OLD_WISH)).toMatchObject({ member_country: "gb" });
+    expect((await as(target, ALICE).put(`/api/wishlist/${OLD_WISH}/alerts`, { priceDrop: true, restock: true })).statusCode).toBe(200);
+    expect(fake.table("wish_tracking").find((row) => row.wishlist_item_id === OLD_WISH)).toMatchObject({ member_country: "gb" });
+    // Depuis une région non prise en charge : la cloche est gardée, le suivi reste sans pays.
+    fake.table("wish_tracking").find((row) => row.wishlist_item_id === OLD_WISH)!.member_country = null;
+    expect((await as(target, ALICE, "en-NZ").put(`/api/wishlist/${OLD_WISH}/alerts`, { priceDrop: true, restock: true })).statusCode).toBe(200);
+    expect(fake.table("wish_tracking").find((row) => row.wishlist_item_id === OLD_WISH)?.member_country ?? null).toBeNull();
   });
 });
 
@@ -925,8 +946,13 @@ describe("« Plus disponible »", () => {
     const target = await alertsApp(fake.db);
     expect((await as(target, ALICE).post("/api/alerts/stock-reports", { wishlistItemId: OLD_WISH })).statusCode).toBe(204);
     expect(rpcCalls.filter((call) => call.fn === "wish_stock_report")).toEqual([
-      { fn: "wish_stock_report", args: { p_user_id: ALICE, p_key: KEY.hash, p_merchant: "boutiqueexemple", p_daily_cap: 20 } },
+      { fn: "wish_stock_report", args: { p_user_id: ALICE, p_key: KEY.hash, p_merchant: "boutiqueexemple", p_daily_cap: 20, p_country: "fr" } },
     ]);
+    // Le pays de la recherche part avec le signalement (seulement un pays pris en charge par les alertes).
+    rpcCalls = [];
+    await as(target, ALICE, "en-GB").post("/api/alerts/stock-reports", { wishlistItemId: OLD_WISH });
+    await as(target, ALICE, "en-NZ").post("/api/alerts/stock-reports", { wishlistItemId: OLD_WISH });
+    expect(rpcCalls.filter((call) => call.fn === "wish_stock_report").map((call) => call.args.p_country)).toEqual(["gb", null]);
     const amazon = await newWish(target, { merchantUrl: "https://www.amazon.fr/dp/B000123", merchantName: "Amazon" });
     const none = await as(target, ALICE).post("/api/alerts/stock-reports", { wishlistItemId: amazon });
     expect(none.statusCode).toBe(422);
@@ -1020,8 +1046,8 @@ describe("export RGPD et suppression du compte", () => {
     fake.table("wish_watches").push({ wishlist_item_id: OLD_WISH, user_id: ALICE, notify_price_drop: true, notify_restock: false, notify_sold_out: false, target_price: 100, target_currency: "EUR", target_country: "fr", below_target: true, created_at: "2026-11-02T10:00:00+00:00", updated_at: "2026-11-02T10:00:00+00:00" });
     fake.table("wish_alert_events").push({ id: "0e000000-0000-4000-8000-000000000001", wishlist_item_id: OLD_WISH, user_id: ALICE, kind: "price_drop", old_price: 100, new_price: 99, currency: "EUR", status: "sent", created_on: "2026-11-08", sent_on: "2026-11-08", claimed_at: null, pushing_at: null });
     fake.table("stock_reports").push(
-      { id: "5c000000-0000-4000-8000-000000000001", user_id: ALICE, match_key_hash: KEY.hash, created_on: "2026-11-09", helps_others: true, in_streak: true },
-      { id: "5c000000-0000-4000-8000-000000000002", user_id: BOB, match_key_hash: KEY.hash, created_on: "2026-11-09", helps_others: true, in_streak: true }
+      { id: "5c000000-0000-4000-8000-000000000001", user_id: ALICE, match_key_hash: KEY.hash, created_on: "2026-11-09", country: "fr", helps_others: true, in_streak: true },
+      { id: "5c000000-0000-4000-8000-000000000002", user_id: BOB, match_key_hash: KEY.hash, created_on: "2026-11-09", country: "fr", helps_others: true, in_streak: true }
     );
     fake.table("profiles").find((row) => row.id === ALICE)!.help_others = false;
     const target = await alertsApp(fake.db);
@@ -1063,7 +1089,7 @@ describe("export RGPD et suppression du compte", () => {
       { id: "0e000000-0000-4000-8000-000000000001", wishlist_item_id: OLD_WISH, kind: "price_drop", old_price: 100, new_price: 99, currency: "EUR", status: "sent", created_on: "2026-11-08", sent_on: "2026-11-08", wishlist_item_title: "Ancienne envie" },
     ]);
     // Seulement ses propres signalements (leur auteur : elle), au jour près, s'ils aidaient les autres et s'ils sont dans la série en cours.
-    expect(body.stockReports).toEqual([{ id: "5c000000-0000-4000-8000-000000000001", match_key_hash: KEY.hash, created_on: "2026-11-09", helps_others: true, in_streak: true }]);
+    expect(body.stockReports).toEqual([{ id: "5c000000-0000-4000-8000-000000000001", match_key_hash: KEY.hash, created_on: "2026-11-09", country: "fr", helps_others: true, in_streak: true }]);
     // Jamais le pays ni l'heure d'une observation, ni d'où vient une alerte.
     const json = JSON.stringify(body);
     expect(json).not.toContain('"gb"');

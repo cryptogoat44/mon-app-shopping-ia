@@ -167,12 +167,13 @@ export const STOCK_REPORT_EXPORT_COLUMNS = "id, match_key_hash, created_on";
 /** Nouvelle version des alertes (migration 0041) : le seuil de chaque cloche
  * (et s'il est franchi), le suivi sans prix de référence (retiré), le JOUR
  * d'envoi de chaque alerte (aucune heure n'est gardée), et, pour chaque
- * signalement « Plus disponible », s'il aidait les autres membres et s'il
- * fait encore partie de la série en cours. Jamais d'où vient une alerte. */
+ * signalement « Plus disponible », le pays de sa recherche, s'il aidait les
+ * autres membres et s'il fait encore partie de la série en cours. Jamais
+ * d'où vient une alerte. */
 export const WISH_WATCH_EXPORT_COLUMNS_V2 = `${WISH_WATCH_EXPORT_COLUMNS}, target_price, target_currency, target_country, below_target`;
 export const WISH_TRACKING_EXPORT_COLUMNS_V2 = "wishlist_item_id, last_price, last_currency, last_seen_on, stock_state, stock_on, member_country, sold_out_source, bought_on";
 export const WISH_ALERT_EVENT_EXPORT_COLUMNS_V2 = `${WISH_ALERT_EVENT_EXPORT_COLUMNS}, sent_on`;
-export const STOCK_REPORT_EXPORT_COLUMNS_V2 = `${STOCK_REPORT_EXPORT_COLUMNS}, helps_others, in_streak`;
+export const STOCK_REPORT_EXPORT_COLUMNS_V2 = `${STOCK_REPORT_EXPORT_COLUMNS}, country, helps_others, in_streak`;
 
 /** Les colonnes exportées des alertes selon la version de la base (1 : 0036,
  * 2 : 0040, 3 : 0041). */

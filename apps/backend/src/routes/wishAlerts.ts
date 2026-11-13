@@ -101,7 +101,7 @@ export default async function wishAlertsRoutes(fastify: FastifyInstance) {
   fastify.get("/api/alerts/wishes", { preHandler: fastify.requireAuth }, async (request, reply) => {
     if (!(await ensureReady(reply))) return;
     try {
-      return reply.send({ items: await readWishAlertStates(fastify, request.user!.id) } satisfies WishAlertStatesList);
+      return reply.send({ items: await readWishAlertStates(fastify, request.user!.id, searchLocaleFor(request).country) } satisfies WishAlertStatesList);
     } catch (error) {
       request.log.error({ error }, "Alertes prix : cloches illisibles");
       return reply.code(500).send(SERVER_ERROR);
@@ -114,7 +114,7 @@ export default async function wishAlertsRoutes(fastify: FastifyInstance) {
     const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
     if (!params) return;
     try {
-      const state = await readWishAlertState(fastify, request.log, request.user!.id, params.id);
+      const state = await readWishAlertState(fastify, request.log, request.user!.id, params.id, searchLocaleFor(request).country);
       if (!state) return reply.code(404).send(WISH_NOT_FOUND);
       return reply.send(state);
     } catch (error) {
@@ -128,7 +128,9 @@ export default async function wishAlertsRoutes(fastify: FastifyInstance) {
   // alerte ne partirait). `enableAlerts` : la première cloche allume aussi
   // l'interrupteur général (après la feuille d'explication de l'app).
   // `targetPrice` : le seuil de la baisse de prix (absent : pré-rempli avec
-  // le dernier prix vu, ou inchangé) ; impossible sans pays connu (422).
+  // le dernier prix vu, ou inchangé) ; impossible sans pays connu (422). Un
+  // suivi sans pays prend celui de la recherche en cours (pris en charge),
+  // gardé sur le suivi au même moment.
   fastify.put("/api/wishlist/:id/alerts", write, async (request, reply) => {
     if (!(await ensureReady(reply))) return;
     const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
@@ -145,7 +147,7 @@ export default async function wishAlertsRoutes(fastify: FastifyInstance) {
       if (anyOn && (await wishBought(fastify, userId, params.id))) return reply.code(422).send(WISH_BOUGHT);
       await saveWatch(fastify, userId, params.id, choice, tracking, searchLocaleFor(request).country);
       if (anyOn && body.enableAlerts) await setWishAlertsEnabled(fastify, userId, true);
-      const [state, status] = await Promise.all([readWishAlertState(fastify, request.log, userId, params.id), wishAlertsStatus(fastify, userId)]);
+      const [state, status] = await Promise.all([readWishAlertState(fastify, request.log, userId, params.id, searchLocaleFor(request).country), wishAlertsStatus(fastify, userId)]);
       if (!state) return reply.code(404).send(WISH_NOT_FOUND);
       return reply.send({ state, status } satisfies UpdateWishAlertResponse);
     } catch (error) {
@@ -158,9 +160,10 @@ export default async function wishAlertsRoutes(fastify: FastifyInstance) {
   // « Plus disponible » : sur un résultat d'une de vos recherches, ou sur une
   // de vos envies. Vos envies de la même pièce passent « épuisée » ; celles
   // des autres membres une fois la pièce signalée par 3 membres différents
-  // d'affilée (et seulement si vous aidez les autres membres). Le
-  // signalement garde son auteur, jamais lié à une alerte ; le journal ne dit
-  // ni la pièce, ni les envies touchées. 20 par jour (heure de Paris) au plus. La limite en
+  // d'affilée depuis le même pays (et seulement si vous aidez les autres
+  // membres). Le signalement garde son auteur et le pays de sa recherche,
+  // jamais lié à une alerte ; le journal ne dit ni la pièce, ni les envies
+  // touchées. 20 par jour (heure de Paris) au plus. La limite en
   // mémoire ne compte qu'un signalement possible (pièce trouvée, avec une
   // clé) : une demande refusée (404, 422) n'use jamais la part du jour.
   // Toute demande, refusée ou non, compte en revanche dans la limite par
@@ -192,7 +195,7 @@ export default async function wishAlertsRoutes(fastify: FastifyInstance) {
         }
         if (!key) return reply.code(422).send(NOT_TRACKABLE);
         fastify.countRateLimitHit(request, "stockReport");
-        if ((await reportSoldOut(fastify, userId, key)) === "limited") return reply.code(429).send(REPORT_LIMIT);
+        if ((await reportSoldOut(fastify, userId, key, searchLocaleFor(request).country)) === "limited") return reply.code(429).send(REPORT_LIMIT);
         request.log.info({ outcome: "reported" }, "Alertes prix : « Plus disponible » signalé");
         return reply.code(204).send();
       } catch (error) {
