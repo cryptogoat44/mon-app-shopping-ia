@@ -40,7 +40,7 @@ import { requestLocale } from "./lib/locale.js";
 import { APP_BUILD_HEADER } from "@monapp/shared-types";
 import { env } from "./env.js";
 import { buildFromHeader, isBelowMinimum, isVersionGuardExempt, updateRequiredBody } from "./lib/appVersion.js";
-import { requestLogFields, scrubLogLine, withoutErrorDetails } from "./lib/logPrivacy.js";
+import { LOG_REDACT_PATHS, MASKED_DATA, requestLogFields, scrubLogLine, withoutErrorDetails } from "./lib/logPrivacy.js";
 
 /** La base répond-elle en 3 secondes ? Une lecture sans ligne (limit 0). */
 async function databaseResponds(fastify: FastifyInstance): Promise<boolean> {
@@ -55,13 +55,15 @@ async function databaseResponds(fastify: FastifyInstance): Promise<boolean> {
 type LoggerOption = FastifyServerOptions["logger"];
 
 /** Journal de Fastify, sans donnée personnelle (lib/logPrivacy.ts) : route
- * déclarée au lieu de l'adresse, erreurs réduites à leur nom et leur code.
+ * déclarée au lieu de l'adresse, erreurs réduites à leur nom et leur code,
+ * corps, images et dates de naissance masqués (essayage virtuel).
  * Les options d'un test (niveau, flux) s'y ajoutent ; « false » le coupe. */
 function loggerOptions(logger: LoggerOption): LoggerOption {
   if (logger === false) return false;
   const custom = typeof logger === "object" && logger !== null ? logger : {};
   return {
     ...custom,
+    redact: { paths: LOG_REDACT_PATHS, censor: MASKED_DATA },
     serializers: { req: requestLogFields, ...custom.serializers },
     formatters: { log: withoutErrorDetails, ...custom.formatters },
     hooks: { streamWrite: scrubLogLine, ...custom.hooks },

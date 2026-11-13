@@ -7,6 +7,7 @@
 // sont transmises — voir le gestionnaire d'erreurs de app.ts.
 import * as Sentry from "@sentry/node";
 import type { ErrorEvent } from "@sentry/node";
+import { scrubBinaryText } from "./logPrivacy.js";
 
 let enabled = false;
 
@@ -24,8 +25,27 @@ export const NO_PERSONAL_DATA: NonNullable<Parameters<typeof Sentry.init>[0]>["d
   genAI: { inputs: false, outputs: false },
 };
 
+/** Profondeur maximale parcourue dans les données jointes à un événement. */
+const MAX_SCRUB_DEPTH = 8;
+
+/** Les mêmes valeurs, sans aucune image en « data URI » ni longue suite en
+ * base64 (essayage virtuel), à toute profondeur raisonnable. */
+function withoutBinary(value: unknown, depth = 0): unknown {
+  if (typeof value === "string") return scrubBinaryText(value);
+  if (depth >= MAX_SCRUB_DEPTH || value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map((item) => withoutBinary(item, depth + 1));
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, withoutBinary(item, depth + 1)]));
+}
+
 /** Retire tout ce qui pourrait contenir une donnée personnelle (fonction pure, testée). */
 export function scrubEvent(event: ErrorEvent): ErrorEvent {
+  if (typeof event.message === "string") event.message = scrubBinaryText(event.message);
+  for (const exception of event.exception?.values ?? []) {
+    if (typeof exception.value === "string") exception.value = scrubBinaryText(exception.value);
+  }
+  if (event.extra) event.extra = withoutBinary(event.extra) as typeof event.extra;
+  if (event.contexts) event.contexts = withoutBinary(event.contexts) as typeof event.contexts;
+  if (event.tags) event.tags = withoutBinary(event.tags) as typeof event.tags;
   if (event.request) {
     const url = event.request.url ? event.request.url.split("?")[0] : undefined;
     event.request = { method: event.request.method, url };
@@ -35,7 +55,8 @@ export function scrubEvent(event: ErrorEvent): ErrorEvent {
   if (event.breadcrumbs) {
     event.breadcrumbs = event.breadcrumbs.map((crumb) => {
       const data = crumb.data && typeof crumb.data.url === "string" ? { ...crumb.data, url: crumb.data.url.split("?")[0] } : crumb.data;
-      return { ...crumb, data };
+      const message = typeof crumb.message === "string" ? scrubBinaryText(crumb.message) : crumb.message;
+      return { ...crumb, message, data: data ? (withoutBinary(data) as typeof data) : data };
     });
   }
   return event;

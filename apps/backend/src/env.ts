@@ -116,6 +116,38 @@ const envSchema = z.object({
   // par /health en 7 caractères. Jamais à saisir à la main ; absente ou
   // illisible : version null, jamais un arrêt du serveur.
   RENDER_GIT_COMMIT: z.string().optional().transform(parseServedCommit),
+  // Essayage virtuel photo (lot « essayage virtuel », migration 0042),
+  // ÉTEINT par défaut. Interrupteur double : TRYON_ENABLED (seule la valeur
+  // exacte "true" l'allume, même règle que la voie C) ET le drapeau
+  // feature_flags.tryon de la base (pnpm tryon:flag). Lu seulement par
+  // lib/tryon/config.ts ; hors de la liste des variables modifiables par les
+  // outils (render-guard) : le fondateur seul l'allume, à la main, dans
+  // Render, après l'accord de son avocat.
+  TRYON_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "true"),
+  // Clé secrète de FASHN, serveur seulement (jamais dans l'app ni le site).
+  // Une valeur vide vaut « absente ». lib/tryon/config.ts ne la lit que si
+  // TRYON_ENABLED est allumé avec le fournisseur « fashn ».
+  FASHN_API_KEY: z
+    .string()
+    .optional()
+    .transform((value) => value?.trim() || undefined),
+  // Les autres réglages de l'essayage restent du texte ici :
+  // lib/tryon/config.ts les vérifie. Une valeur invalide laisse l'essayage
+  // éteint, avec un avertissement dans le journal, jamais un arrêt du serveur.
+  TRYON_PROVIDER: z.string().optional(),
+  FASHN_API_BASE_URL: z.string().optional(),
+  TRYON_FREE_PER_MONTH: z.string().optional(),
+  TRYON_BONUS_PER_PURCHASE: z.string().optional(),
+  TRYON_BONUS_VALIDITY_DAYS: z.string().optional(),
+  TRYON_REQUIRE_BUY_LINK: z.string().optional(),
+  TRYON_MONTHLY_BUDGET_USD: z.string().optional(),
+  TRYON_ALERT_THRESHOLD: z.string().optional(),
+  TRYON_PRICE_PER_CREDIT_USD: z.string().optional(),
+  TRYON_MIN_FASHN_CREDITS: z.string().optional(),
+  TRYON_TIMEZONE: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

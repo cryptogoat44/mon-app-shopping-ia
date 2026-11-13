@@ -3,12 +3,14 @@
 // de tests (vitest.config.ts, setupFiles) : `fetch` refuse alors tout appel à
 // serpapi.com ou à anthropic.com (et leurs sous-domaines), avant tout envoi,
 // et au service des notifications d'Expo (exp.host, lot notifications).
+// Essayage virtuel : FASHN (fashn.ai et ses sous-domaines, dont l'API
+// api.fashn.ai) aussi ; seul le script tryon:smoke l'appelle pour de vrai.
 // Un faux posé par un test (vi.stubGlobal, vi.spyOn, faux safeFetch) passe
 // devant cette garde, comme avant ; les autres adresses (Supabase de
 // développement, serveur local des tests) ne changent pas. Le message ne dit
 // que le nom de l'hôte : jamais l'adresse complète, qui porterait la clé.
 
-const PAID_HOSTS = ["serpapi.com", "anthropic.com"];
+const PAID_HOSTS = ["serpapi.com", "anthropic.com", "fashn.ai"];
 // Lot notifications : le service d'Expo est gratuit, mais aucun test ne doit
 // envoyer une vraie notification à un téléphone.
 const PUSH_HOSTS = ["exp.host"];
