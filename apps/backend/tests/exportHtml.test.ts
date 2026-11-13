@@ -678,3 +678,45 @@ describe("export lisible : alertes prix et stock (lot 2, migration 0036)", () =>
     expect(visibleText(sectionHtml(render({}, data), "alerts"))).toContain(EXPORT_TEXT.noData.fr);
   });
 });
+
+describe("export lisible : essayage virtuel (migration 0042)", () => {
+  it("statut d'âge, consentement, essais, essais offerts et signalements, en français ; jamais d'image", () => {
+    const page = render();
+    const html = sectionHtml(page, "tryon");
+    const section = spaces(visibleText(html));
+    expect(section).toContain(EXPORT_SECTIONS.tryon.title.fr);
+    expect(section).toContain("Ni vos photos ni les images produites ne sont conservées");
+    expect(section).toContain("Statut d'âge Majeur (18 ans ou plus)");
+    expect(section).toContain("Version du texte accepté 2026-11-v1");
+    expect(section).toContain("Essais (2)");
+    expect(section).toContain("Résultat Réussi");
+    expect(section).toContain("Décompté sur Essais gratuits du mois");
+    expect(section).toContain("Résultat Échoué (non décompté)");
+    expect(section).toContain("Raison de l'échec Silhouette non reconnue sur la photo");
+    expect(section).toContain("Essais offerts (1)");
+    expect(section).toContain("5 essais offerts");
+    expect(section).toContain("Référence de la commande CMD-2026-0042");
+    expect(section).toContain("Essais restants 4");
+    expect(section).toContain("Ce n'est pas la bonne pièce");
+    expect(section).toContain("Votre précision Ce n'est pas la bonne veste.");
+    // Identifiants internes (pièce, essai) : seulement dans la version JSON.
+    expect(section).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-/);
+    expect(html).not.toContain("<img");
+    expect(spaces(visibleText(page))).toContain(`${EXPORT_SECTIONS.tryon.title.fr} (2)`);
+  });
+
+  it("en anglais", () => {
+    const section = spaces(visibleText(sectionHtml(render({ locale: "en", timeZone: "UTC" }), "tryon")));
+    expect(section).toContain("Your virtual try-on");
+    expect(section).toContain("Age status Adult (18 or older)");
+    expect(section).toContain("Try-ons (2)");
+    expect(section).toContain("Reason for the failure Figure not detected in the photo");
+    expect(section).toContain("Free try-ons granted (1)");
+    expect(section).toContain("Not the right piece");
+  });
+
+  it("sans essayage : la section dit « Aucune donnée »", () => {
+    const data = { ...fixture(), tryonProfile: null, tryonEvents: [], tryonBonusGrants: [], tryonReports: [] };
+    expect(visibleText(sectionHtml(render({}, data), "tryon"))).toContain(EXPORT_TEXT.noData.fr);
+  });
+});

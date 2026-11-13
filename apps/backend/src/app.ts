@@ -31,6 +31,7 @@ import conversationsRoutes from "./routes/conversations.js";
 import collectionsRoutes from "./routes/collections.js";
 import pushTokensRoutes from "./routes/pushTokens.js";
 import wishAlertsRoutes from "./routes/wishAlerts.js";
+import tryonRoutes from "./routes/tryon.js";
 import { flushAfterResponse } from "./lib/wishAlertsSend.js";
 import { MULTIPART_LIMITS, isTooManyPartsError } from "./lib/multipartErrors.js";
 import { ImageQueueFullError } from "./lib/imageSafety.js";
@@ -182,6 +183,9 @@ export async function buildApp(options: { logger?: LoggerOption } = {}): Promise
   await fastify.register(collectionsRoutes);
   await fastify.register(pushTokensRoutes);
   await fastify.register(wishAlertsRoutes);
+  // Essayage virtuel photo (lot « essayage virtuel »), éteint par défaut :
+  // TRYON_ENABLED et le drapeau feature_flags.tryon (routes/tryon.ts).
+  await fastify.register(tryonRoutes);
 
   // Exclue du filet anti-abus "default" : les sondes de disponibilité de
   // Render l'appellent très régulièrement, ça n'a rien à voir avec un abus.

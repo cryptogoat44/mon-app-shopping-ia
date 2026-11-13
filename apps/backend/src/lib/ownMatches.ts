@@ -1,7 +1,8 @@
 // Propriété d'un résultat de recherche (product_matches) : un résultat n'a
 // pas de user_id, il appartient à la personne dont la recherche parente
 // (product_searches.user_id) l'a produit. Utilisée par POST /api/wishlist,
-// POST /api/vault et POST /api/messages (résultat envoyé à un ami). Même
+// POST /api/vault, POST /api/messages (résultat envoyé à un ami) et POST
+// /api/tryon (essayage virtuel). Même
 // règle que les pièces taguées d'une publication, le signalement d'une
 // proposition et le clic vers le marchand (cas « sa propre recherche »), qui
 // la vérifient encore chacun de leur côté.
@@ -80,4 +81,52 @@ export async function findOwnMatchRow(fastify: FastifyInstance, userId: string, 
     "Recherche d'un résultat"
   );
   return searches.length > 0 ? row.data : null;
+}
+
+// Essayage virtuel (lot « essayage virtuel ») : la pièce à essayer, avec ses
+// images (l'originale de la boutique, puis la vignette) et ses liens d'achat
+// (celui du marchand et le lien affilié rangé avec elle). Trois lectures
+// simples, toutes venues de la base : l'app n'envoie qu'un identifiant.
+const TRYON_MATCH_ROW = z.object({
+  id: z.guid(),
+  search_id: z.guid(),
+  image_url: z.string(),
+  image_hd_url: z.string().nullable(),
+  merchant_url: z.string(),
+});
+const AFFILIATE_ROWS = z.array(z.object({ affiliate_url: z.string() }));
+
+/** Un résultat d'une recherche de la personne, avec ses images et ses liens. */
+export interface OwnMatchLinks {
+  id: string;
+  imageUrl: string;
+  imageHdUrl: string | null;
+  merchantUrl: string;
+  /** Lien affilié rangé avec le résultat, s'il y en a un. */
+  affiliateUrl: string | null;
+}
+
+/** Le résultat `matchId` avec ses images et ses liens, s'il vient d'une
+ * recherche de `userId` ; null sinon (inexistant ou recherche d'une autre
+ * personne : même réponse). Lecture impossible : DatabaseReadError. */
+export async function findOwnMatchWithLinks(fastify: FastifyInstance, userId: string, matchId: string): Promise<OwnMatchLinks | null> {
+  const { data, error } = await fastify.supabaseAdmin.from("product_matches").select("id, search_id, image_url, image_hd_url, merchant_url").eq("id", matchId).maybeSingle();
+  if (error) throw new DatabaseReadError("Lecture d'un résultat de recherche impossible");
+  if (data === null) return null;
+  const row = TRYON_MATCH_ROW.safeParse(data);
+  if (!row.success) throw new DatabaseReadError("Résultat de recherche illisible");
+  const searches = parseDbRows(
+    SEARCH_ROWS,
+    await fastify.supabaseAdmin.from("product_searches").select("id").eq("id", row.data.search_id).eq("user_id", userId).limit(1),
+    "Recherche d'un résultat"
+  );
+  if (searches.length === 0) return null;
+  const links = parseDbRows(AFFILIATE_ROWS, await fastify.supabaseAdmin.from("affiliate_links").select("affiliate_url").eq("product_match_id", matchId).limit(1), "Lien affilié d'un résultat");
+  return {
+    id: row.data.id,
+    imageUrl: row.data.image_url,
+    imageHdUrl: row.data.image_hd_url,
+    merchantUrl: row.data.merchant_url,
+    affiliateUrl: links[0]?.affiliate_url ?? null,
+  };
 }

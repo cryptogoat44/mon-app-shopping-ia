@@ -217,6 +217,38 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Cette pièce est dans votre Vault : aucune alerte ne partira pour elle.": "This piece is in your Vault: no alert will be sent for it.",
   // Mise à jour obligatoire de l'app iPhone (lot « app iPhone prête », lib/appVersion.ts).
   [UPDATE_REQUIRED_MESSAGE]: `This version of ${BRAND} is no longer supported. Please update the app from the App Store.`,
+  // Essayage virtuel photo (lot « essayage virtuel », routes/tryon.ts, lib/rateLimits.ts).
+  "L'essayage virtuel n'est pas disponible.": "Virtual try-on isn't available.",
+  "Cette date de naissance n'est pas valide.": "This date of birth isn't valid.",
+  "Votre âge a déjà été vérifié.": "Your age has already been verified.",
+  "Indiquez d'abord votre date de naissance.": "Please enter your date of birth first.",
+  "L'essayage virtuel est réservé aux personnes majeures.": "Virtual try-on is only available to adults.",
+  "Acceptez d'abord les conditions de l'essayage virtuel.": "Please accept the virtual try-on terms first.",
+  "Les conditions de l'essayage virtuel ont changé. Relisez-les, puis acceptez-les à nouveau.":
+    "The virtual try-on terms have changed. Please read them again, then accept them.",
+  "Confirmez que cette photo est la vôtre.": "Please confirm that this photo is of you.",
+  "Cette pièce ne peut pas être essayée.": "This piece can't be tried on.",
+  "Cette photo n'a pas pu être lue. Choisissez une photo JPEG, PNG ou WebP.": "This photo couldn't be read. Please choose a JPEG, PNG or WebP photo.",
+  "Un essai est déjà en cours. Patientez quelques secondes.": "A try-on is already in progress. Please wait a few seconds.",
+  "Vous avez utilisé tous vos essais de ce mois-ci.": "You've used all your try-ons for this month.",
+  "Les essais sont momentanément indisponibles.": "Try-ons are temporarily unavailable.",
+  "Les essais sont très demandés en ce moment. Réessayez dans un instant.": "Try-ons are in high demand right now. Please try again in a moment.",
+  "Le service d'essayage est momentanément indisponible. Réessayez plus tard.": "The try-on service is temporarily unavailable. Please try again later.",
+  "L'essai a pris trop de temps. Réessayez dans un instant.": "The try-on took too long. Please try again in a moment.",
+  "Votre silhouette n'a pas été reconnue sur cette photo. Choisissez une photo en pied ou à mi-corps, avec une seule personne et une bonne lumière.":
+    "We couldn't detect your figure in this photo. Please choose a full-length or half-length photo with only one person and good lighting.",
+  "Cet essai a été refusé par la modération. Choisissez une autre pièce ou une autre photo.":
+    "This try-on was blocked by moderation. Please choose another piece or another photo.",
+  "Votre photo ou l'image de la pièce n'a pas pu être utilisée. Essayez une autre photo ou une autre pièce.":
+    "Your photo or the piece's image couldn't be used. Please try another photo or another piece.",
+  "Trop de demandes en peu de temps. Réessayez dans un instant.": "Too many requests in a short time. Please try again in a moment.",
+  "Trop de tentatives en peu de temps. Réessayez dans une heure.": "Too many attempts in a short time. Please try again in an hour.",
+  "Vous avez changé votre consentement plusieurs fois en peu de temps. Réessayez dans une heure.":
+    "You've changed your consent several times in a short time. Please try again in an hour.",
+  "Vous avez lancé beaucoup d'essais en peu de temps. Réessayez dans une heure.": "You've started a lot of try-ons in a short time. Please try again in an hour.",
+  "Vous avez lancé beaucoup d'essais aujourd'hui. Réessayez demain.": "You've started a lot of try-ons today. Please try again tomorrow.",
+  "Les essais sont très demandés en ce moment. Réessayez dans un moment.": "Try-ons are in high demand right now. Please try again shortly.",
+  "Vous avez envoyé beaucoup de signalements en peu de temps. Réessayez dans une heure.": "You've sent a lot of reports in a short time. Please try again in an hour.",
 };
 
 /** Message dans la langue voulue. Un message inconnu (par exemple un texte

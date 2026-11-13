@@ -203,6 +203,60 @@ export const RATE_LIMITS = {
   // résultats Lens sont montrés seuls — jamais de 429.
   shoppingQueryAiGlobal: { max: 300, windowMs: DAY, scope: "global" },
 
+  // Essayage virtuel photo (lot « essayage virtuel ») : chaque route a sa
+  // limite par membre, au code commun « tryon_rate_limited » (contrat
+  // partagé avec le site). Un essai n'est décompté du quota que s'il réussit :
+  // ces limites comptent chaque demande, contre les abus (décision 9 du plan).
+  // Le statut : l'app le relit à l'ouverture des pièces.
+  tryonStatus: {
+    max: 60,
+    windowMs: MINUTE,
+    error: "tryon_rate_limited",
+    message: "Trop de demandes en peu de temps. Réessayez dans un instant.",
+  },
+  // La porte d'âge ne se passe qu'une fois ; 5 essais par heure suffisent.
+  tryonAgeGate: {
+    max: 5,
+    windowMs: HOUR,
+    error: "tryon_rate_limited",
+    message: "Trop de tentatives en peu de temps. Réessayez dans une heure.",
+  },
+  // Accepter ou retirer le consentement (comptés ensemble).
+  tryonConsent: {
+    max: 20,
+    windowMs: HOUR,
+    error: "tryon_rate_limited",
+    message: "Vous avez changé votre consentement plusieurs fois en peu de temps. Réessayez dans une heure.",
+  },
+  // Les essais : 10 par heure et 30 par jour par membre, et un plafond commun
+  // à tout le service (le budget, lui, est tenu par la base).
+  tryonRunUser: {
+    max: 10,
+    windowMs: HOUR,
+    error: "tryon_rate_limited",
+    message: "Vous avez lancé beaucoup d'essais en peu de temps. Réessayez dans une heure.",
+  },
+  tryonRunUserDaily: {
+    max: 30,
+    windowMs: DAY,
+    error: "tryon_rate_limited",
+    message: "Vous avez lancé beaucoup d'essais aujourd'hui. Réessayez demain.",
+  },
+  tryonRunGlobal: {
+    max: 100,
+    windowMs: HOUR,
+    scope: "global",
+    error: "tryon_rate_limited",
+    message: "Les essais sont très demandés en ce moment. Réessayez dans un moment.",
+  },
+  // Signaler un résultat.
+  tryonReport: {
+    max: 10,
+    windowMs: HOUR,
+    error: "tryon_rate_limited",
+    message: "Vous avez envoyé beaucoup de signalements en peu de temps. Réessayez dans une heure.",
+  },
+
   // ---- Limite large, appliquée automatiquement à toutes les autres routes ----
   // Sert de simple filet anti-script — je préfère être trop permissif que
   // bloquer un vrai utilisateur. Voir le plugin rateLimit.ts : appliquée
