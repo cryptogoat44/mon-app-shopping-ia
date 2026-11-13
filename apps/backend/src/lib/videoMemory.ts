@@ -1,4 +1,5 @@
-// Mémoire collective des vidéos (mission « liens vidéo », migration 0038).
+// Mémoire collective des vidéos (mission « liens vidéo », migrations 0038 et
+// 0039).
 //
 // Quand un membre « spotte » une vidéo TikTok ou Instagram, les pièces
 // trouvées par sa recherche sont rattachées à cette vidéo ; le membre suivant
@@ -10,8 +11,18 @@
 // l'identité d'un membre dans ce qui est montré aux autres : la lecture passe
 // par la fonction video_products, qui ne rend aucun identifiant de membre.
 //
-// Sans la migration 0038 (sonde video_memory_version) : la mémoire est
-// « indisponible », rien n'est lu ni noté, et le reste du parcours marche.
+// Garde-fous (revue de sécurité, migration 0039) : une pièce n'est montrée
+// qu'une fois trouvée par VIDEO_MEMORY_MIN_MEMBERS membres distincts ; un
+// membre ne note qu'un spot par vidéo, avec une recherche de moins de
+// 30 minutes ; il ne peut pas confirmer une pièce qu'il a lui-même apportée ;
+// les spots et confirmations d'un compte suspendu ne comptent plus ; un
+// administrateur peut retirer une pièce d'une vidéo.
+//
+// Sonde video_memory_version : la mémoire n'est « disponible » qu'avec 0039
+// (version 2). Avec 0038 seule (version 1), elle reste « indisponible » (rien
+// n'est lu ni noté, un avertissement dit que les garde-fous manquent) :
+// l'option la plus simple et la plus sûre, plutôt que de servir la mémoire
+// sans garde-fous. L'export RGPD, lui, lit ce qui est déjà noté dès 0038.
 import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -23,36 +34,47 @@ import { DatabaseReadError, parseDbRows, webUrlOrNull } from "./validation.js";
 
 /** Pièces rattachées à un spot, au plus (les premières de la recherche). */
 export const SPOT_ITEMS_MAX = 10;
-/** Sonde refaite au plus toutes les 5 minutes tant que 0038 manque. */
+/** Nombre de membres DISTINCTS qui doivent avoir trouvé une pièce dans une
+ * vidéo pour qu'elle soit montrée aux autres. Compromis : à 1, une pièce
+ * apparaît dès le premier membre (la mémoire se remplit plus vite), mais un
+ * seul compte peut alors placer ses produits sous n'importe quelle vidéo, et
+ * celui qui a envoyé un lien confidentiel peut deviner qui l'a spotté. À 2,
+ * il faut deux membres qui trouvent la même page de boutique. */
+export const VIDEO_MEMORY_MIN_MEMBERS = 2;
+/** Version de la mémoire exigée : 2 = migration 0039 (garde-fous). */
+export const VIDEO_MEMORY_REQUIRED_VERSION = 2;
+/** Sonde refaite au plus toutes les 5 minutes tant que 0039 manque. */
 const SCHEMA_RETRY_MS = 5 * 60_000;
 
 type Server = Pick<FastifyInstance, "supabaseAdmin" | "log">;
 
-let schemaReadyAt: number | null = null;
-let schemaMissingAt: number | null = null;
-let schemaProbe: Promise<boolean> | null = null;
+let knownVersion: { version: number; at: number } | null = null;
+let schemaProbe: Promise<number> | null = null;
 
-async function probeSchema(fastify: Server): Promise<boolean> {
+async function probeSchema(fastify: Server): Promise<number> {
   try {
     const { data, error } = await fastify.supabaseAdmin.rpc("video_memory_version");
-    if (!error && typeof data === "number" && data >= 1) return true;
+    if (!error && typeof data === "number" && data >= VIDEO_MEMORY_REQUIRED_VERSION) return data;
+    if (!error && typeof data === "number" && data >= 1) {
+      fastify.log.warn({ version: data }, "Mémoire des vidéos coupée : migration 0039 absente (garde-fous manquants)");
+      return data;
+    }
     fastify.log.warn({ code: (error as { code?: string } | null)?.code ?? null }, "Mémoire des vidéos coupée : migration 0038 absente");
   } catch {
     fastify.log.warn({ code: null }, "Mémoire des vidéos coupée : base illisible");
   }
-  return false;
+  return 0;
 }
 
-/** La base a-t-elle la migration 0038 ? Mémorisé une fois vu ; absente, un
- * avertissement, puis la sonde n'est refaite qu'au bout de 5 minutes. */
-export async function videoMemoryReady(fastify: Server, now: () => number = Date.now): Promise<boolean> {
-  if (schemaReadyAt !== null) return true;
-  if (schemaMissingAt !== null && now() - schemaMissingAt < SCHEMA_RETRY_MS) return false;
+/** Version de la mémoire dans la base (0 : migration 0038 absente).
+ * Mémorisée une fois la version exigée vue ; sinon la sonde n'est refaite
+ * qu'au bout de 5 minutes. */
+export async function videoMemoryVersion(fastify: Server, now: () => number = Date.now): Promise<number> {
+  if (knownVersion && (knownVersion.version >= VIDEO_MEMORY_REQUIRED_VERSION || now() - knownVersion.at < SCHEMA_RETRY_MS)) return knownVersion.version;
   schemaProbe ??= probeSchema(fastify)
-    .then((ready) => {
-      if (ready) schemaReadyAt = now();
-      else schemaMissingAt = now();
-      return ready;
+    .then((version) => {
+      knownVersion = { version, at: now() };
+      return version;
     })
     .finally(() => {
       schemaProbe = null;
@@ -60,10 +82,20 @@ export async function videoMemoryReady(fastify: Server, now: () => number = Date
   return schemaProbe;
 }
 
+/** La mémoire est-elle servie ? Seulement avec la migration 0039. */
+export async function videoMemoryReady(fastify: Server, now: () => number = Date.now): Promise<boolean> {
+  return (await videoMemoryVersion(fastify, now)) >= VIDEO_MEMORY_REQUIRED_VERSION;
+}
+
+/** Les tables de la mémoire existent-elles (0038) ? Pour l'export RGPD : ce
+ * qui a été noté doit y figurer, même si la mémoire est coupée. */
+export async function videoMemoryStored(fastify: Server): Promise<boolean> {
+  return (await videoMemoryVersion(fastify)) >= 1;
+}
+
 /** Tests seulement : oublie la sonde. */
 export function resetVideoMemoryProbe(): void {
-  schemaReadyAt = null;
-  schemaMissingAt = null;
+  knownVersion = null;
   schemaProbe = null;
 }
 
@@ -96,13 +128,21 @@ const PRODUCT_ROWS = z.array(
 );
 
 /** Les pièces déjà repérées dans une vidéo, pour la personne `viewerId` :
- * triées par la base (confirmations, puis apparitions, puis récence — jamais
- * d'après une commission), sans aucun identifiant de membre. Vidéo inconnue :
- * liste vide. Lecture impossible : DatabaseReadError. */
+ * celles trouvées par au moins VIDEO_MEMORY_MIN_MEMBERS membres distincts
+ * (comptes suspendus écartés), triées par la base (confirmations d'autres
+ * membres que ceux qui l'ont apportée, puis nombre de membres, puis récence —
+ * jamais d'après une commission), sans aucun identifiant de membre. Vidéo
+ * inconnue : liste vide. Lecture impossible : DatabaseReadError. */
 export async function readVideoProducts(fastify: FastifyInstance, link: VideoLink, viewerId: string, limit: number = VIDEO_PRODUCTS_LIMIT): Promise<VideoProduct[]> {
   const rows = parseDbRows(
     PRODUCT_ROWS,
-    await fastify.supabaseAdmin.rpc("video_products", { p_platform: link.platform, p_video_key: link.videoKey, p_viewer_id: viewerId, p_limit: limit }),
+    await fastify.supabaseAdmin.rpc("video_products", {
+      p_platform: link.platform,
+      p_video_key: link.videoKey,
+      p_viewer_id: viewerId,
+      p_limit: limit,
+      p_min_members: VIDEO_MEMORY_MIN_MEMBERS,
+    }),
     "Pièces d'une vidéo"
   );
   // Une pièce sans lien web ordinaire n'est pas montrée (rien à ouvrir).
@@ -136,12 +176,14 @@ const SEARCH_ROWS = z.array(z.object({ id: z.guid(), status: z.string() }));
 const MATCH_ROWS = z.array(z.object({ id: z.guid(), merchant_url: z.string() }));
 const OUTCOME_ROWS = z.array(z.object({ outcome: z.string() })).length(1);
 
-export type SpotOutcome = "ok" | "already_recorded" | "search_not_found" | "search_not_finished" | "no_products";
+export type SpotOutcome = "ok" | "already_recorded" | "search_not_found" | "search_not_finished" | "search_too_old" | "no_products";
 
-/** Note qu'un membre a spotté une vidéo avec une de SES recherches, terminée
- * et qui a donné au moins une pièce. Les pièces rattachées : les
- * SPOT_ITEMS_MAX premières de la recherche. Une recherche ne donne qu'un
- * spot. Lecture ou écriture impossible : DatabaseReadError. */
+/** Note qu'un membre a spotté une vidéo avec une de SES recherches, terminée,
+ * de moins de 30 minutes (vérifié par la base : « search_too_old ») et qui a
+ * donné au moins une pièce. Les pièces rattachées : les SPOT_ITEMS_MAX
+ * premières de la recherche. Une recherche ne donne qu'un spot, et un membre
+ * n'a qu'un spot par vidéo (« already_recorded »). Lecture ou écriture
+ * impossible : DatabaseReadError. */
 export async function recordVideoSpot(
   fastify: FastifyInstance,
   spot: { userId: string; link: VideoLink; searchId: string; source: VideoSpotSource; momentSeconds: number | null }
@@ -178,7 +220,7 @@ export async function recordVideoSpot(
     p_items: items,
   });
   const outcome = parseDbRows(OUTCOME_ROWS, { data, error }, "Enregistrement d'un spot")[0]!.outcome;
-  if (outcome === "ok" || outcome === "already_recorded" || outcome === "search_not_found") return outcome;
+  if (outcome === "ok" || outcome === "already_recorded" || outcome === "search_not_found" || outcome === "search_too_old") return outcome;
   throw new DatabaseReadError(`Enregistrement d'un spot : réponse inattendue (${outcome})`);
 }
 
@@ -195,4 +237,23 @@ export async function confirmVideoProduct(fastify: FastifyInstance, userId: stri
   const outcome = parseDbRows(OUTCOME_ROWS, { data, error }, "Confirmation d'une pièce")[0]!.outcome;
   if (outcome === "ok" || outcome === "already_confirmed" || outcome === "unknown_video" || outcome === "unknown_product") return outcome;
   throw new DatabaseReadError(`Confirmation d'une pièce : réponse inattendue (${outcome})`);
+}
+
+const REMOVAL_ROWS = z.array(z.object({ outcome: z.string(), items: z.number().int().nonnegative(), confirmations: z.number().int().nonnegative() })).length(1);
+
+export type RemovalOutcome = { outcome: "ok"; items: number; confirmations: number } | { outcome: "unknown_video" | "unknown_product" };
+
+/** Modération : retire une pièce (clé « même page ») d'une vidéo — ses
+ * rattachements à tous les spots de cette vidéo et ses confirmations. Les
+ * recherches des membres ne sont pas touchées. */
+export async function removeVideoProduct(fastify: FastifyInstance, link: VideoLink, productKey: string): Promise<RemovalOutcome> {
+  const { data, error } = await fastify.supabaseAdmin.rpc("video_memory_remove", {
+    p_platform: link.platform,
+    p_video_key: link.videoKey,
+    p_product_key: productKey,
+  });
+  const row = parseDbRows(REMOVAL_ROWS, { data, error }, "Retrait d'une pièce d'une vidéo")[0]!;
+  if (row.outcome === "ok") return { outcome: "ok", items: row.items, confirmations: row.confirmations };
+  if (row.outcome === "unknown_video" || row.outcome === "unknown_product") return { outcome: row.outcome };
+  throw new DatabaseReadError(`Retrait d'une pièce d'une vidéo : réponse inattendue (${row.outcome})`);
 }

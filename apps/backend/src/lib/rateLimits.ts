@@ -101,12 +101,18 @@ export const RATE_LIMITS = {
   videoLookup: { max: 120, windowMs: HOUR },
   // - résoudre un lien court TikTok : une demande part vers TikTok (en-têtes
   //   seulement). Comptée seulement quand elle part vraiment (pas pour une
-  //   réponse gardée en mémoire), par membre et pour tout le service ;
-  videoShortLink: { max: 30, windowMs: HOUR },
+  //   réponse gardée en mémoire), par membre et pour tout le service. 10 par
+  //   membre (revue de sécurité : à 30, 67 comptes suffisaient à épuiser le
+  //   plafond commun avec des liens inventés ; il en faut maintenant 200) ;
+  videoShortLink: { max: 10, windowMs: HOUR },
   videoShortLinkGlobal: { max: 2_000, windowMs: HOUR, scope: "global" },
   // - code d'intégration Instagram (Meta limite à 1 000 demandes par heure,
-  //   le serveur en garde chacun 24 h : lib/instagramEmbed.ts) ;
+  //   le serveur en garde chacun 24 h : lib/instagramEmbed.ts). videoEmbed
+  //   compte chaque appel de la route ; videoEmbedFetch, seulement les
+  //   demandes qui partent vraiment vers Meta (vidéo absente de la mémoire) :
+  //   il faut 90 comptes, et non plus 15, pour épuiser le budget du service ;
   videoEmbed: { max: 60, windowMs: HOUR },
+  videoEmbedFetch: { max: 10, windowMs: HOUR },
   // - noter un spot (une fois par recherche) et « C'est bien cette pièce ».
   videoSpot: { max: 60, windowMs: HOUR },
   videoConfirm: { max: 120, windowMs: HOUR },

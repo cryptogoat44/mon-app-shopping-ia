@@ -4,6 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // d'Instagram, seul appel du serveur vers Meta. Tout est simulé : aucun appel
 // réel. Vérifié ici : un seul hôte interrogé, la miniature jamais lue, le
 // cache de 24 h, la limite horaire, le silence après « trop de demandes ».
+// Revue de sécurité : le pseudo d'un lien n'entre jamais dans la mémoire
+// partagée, la limite par membre ne compte que les demandes qui partent vers
+// Meta, et les réponses « indisponible » ont leur propre petite mémoire.
 vi.mock("../src/lib/safeFetch.js", () => ({ safeFetch: vi.fn() }));
 
 import type { VideoLink } from "@monapp/shared-types";
@@ -12,6 +15,7 @@ import {
   INSTAGRAM_EMBED_CACHE_SIZE,
   INSTAGRAM_EMBED_COOLDOWN_MS,
   INSTAGRAM_EMBED_HOURLY_BUDGET,
+  INSTAGRAM_EMBED_MISSING_CACHE_SIZE,
   handleInEmbed,
   instagramEmbed,
   instagramEmbedCalls,
@@ -55,11 +59,34 @@ describe("instagramEmbed : le code d'intégration officiel, et lui seul", () => 
     expect(Object.keys(first)).toEqual(["ok", "html", "creatorHandle"]);
   });
 
-  it("le pseudo : celui de l'adresse s'il y figure, sinon celui écrit dans le code, sinon aucun", async () => {
-    safeFetchMock.mockResolvedValue(json({ html: HTML }));
-    expect((await instagramEmbed(reel("AAAAAAAAAAA", "boutique_x")) as { creatorHandle: string | null }).creatorHandle).toBe("boutique_x");
+  it("le pseudo : celui écrit par Meta dans le code, sinon celui du lien de la personne qui demande, sinon aucun", async () => {
+    safeFetchMock.mockResolvedValueOnce(json({ html: HTML }));
+    expect(((await instagramEmbed(reel("AAAAAAAAAAA", "boutique_x"))) as { creatorHandle: string | null }).creatorHandle).toBe("mode.paris");
+    safeFetchMock.mockResolvedValueOnce(json({ html: '<blockquote class="instagram-media">Sans pseudo</blockquote>' }));
+    expect(((await instagramEmbed(reel("BBBBBBBBBBB", "boutique_x"))) as { creatorHandle: string | null }).creatorHandle).toBe("boutique_x");
+    expect(((await instagramEmbed(reel("BBBBBBBBBBB"))) as { creatorHandle: string | null }).creatorHandle).toBeNull();
     expect(handleInEmbed("<blockquote class=\"instagram-media\">Publication (@Mode.Paris)</blockquote>")).toBe("mode.paris");
     expect(handleInEmbed("<blockquote class=\"instagram-media\">Sans pseudo</blockquote>")).toBeNull();
+  });
+
+  it("revue de sécurité : le pseudo glissé dans un lien fabriqué n'est jamais servi aux autres membres (cache partagé)", async () => {
+    safeFetchMock.mockResolvedValue(json({ html: '<blockquote class="instagram-media">Une publication partagée par Vrai (@vrai.createur)</blockquote>' }));
+    const attacker = await instagramEmbed(reel("C8abcDEF123", "arnaque.promo"));
+    const victim = await instagramEmbed(reel("C8abcDEF123"));
+    const other = await instagramEmbed(reel("C8abcDEF123", "autre.lien"));
+    expect(safeFetchMock).toHaveBeenCalledTimes(1);
+    expect([attacker, victim, other].map((embed) => (embed as { creatorHandle: string | null }).creatorHandle)).toEqual(["vrai.createur", "vrai.createur", "vrai.createur"]);
+
+    // Sans pseudo dans le code de Meta : chacun ne reçoit que celui de SON lien.
+    resetInstagramEmbed();
+    safeFetchMock.mockResolvedValue(json({ html: '<blockquote class="instagram-media">Sans pseudo</blockquote>' }));
+    expect(((await instagramEmbed(reel("C8abcDEF123", "arnaque.promo"))) as { creatorHandle: string | null }).creatorHandle).toBe("arnaque.promo");
+    expect(((await instagramEmbed(reel("C8abcDEF123"))) as { creatorHandle: string | null }).creatorHandle).toBeNull();
+    expect(((await instagramEmbed(reel("C8abcDEF123", "vrai.createur"))) as { creatorHandle: string | null }).creatorHandle).toBe("vrai.createur");
+  });
+
+  it("le pseudo retenu est la DERNIÈRE occurrence « (@…) » (celle que Meta écrit), pas celle glissée dans le nom affiché", () => {
+    expect(handleInEmbed('<blockquote class="instagram-media"><p>Promo (@arnaque.promo) !</p><a>A post shared by Vrai (@Vrai.Createur)</a></blockquote>')).toBe("vrai.createur");
   });
 
   it("une publication TikTok n'est jamais demandée à Meta", async () => {
@@ -131,6 +158,44 @@ describe("cache de 24 h par vidéo", () => {
     await instagramEmbed(reel("CODE0000000"), () => now);
     await instagramEmbed(reel(`CODE${String(INSTAGRAM_EMBED_CACHE_SIZE + 4).padStart(7, "0")}`), () => now);
     expect(safeFetchMock.mock.calls.length - before).toBe(1);
+  });
+});
+
+describe("revue de sécurité : codes inventés et limite par membre", () => {
+  it("beforeFetch n'est appelée que pour une demande qui part vraiment vers Meta ; refusée : « rate_limited », aucun appel", async () => {
+    safeFetchMock.mockImplementation(async () => json({ html: HTML }));
+    const beforeFetch = vi.fn(() => true);
+    await instagramEmbed(reel(), Date.now, { beforeFetch });
+    await instagramEmbed(reel(), Date.now, { beforeFetch });
+    expect(beforeFetch).toHaveBeenCalledTimes(1);
+    expect(await instagramEmbed(reel("NOUVEAU0001"), Date.now, { beforeFetch: () => false })).toEqual({ ok: false, issue: "rate_limited" });
+    expect(safeFetchMock).toHaveBeenCalledTimes(1);
+    expect(instagramEmbedCalls()).toBe(1);
+    // Réponse « indisponible » gardée : servie sans recompter le membre.
+    safeFetchMock.mockResolvedValueOnce(json({ error: { code: 100 } }, 400));
+    await instagramEmbed(reel("INCONNU0001"), Date.now, { beforeFetch });
+    expect(await instagramEmbed(reel("INCONNU0001"), Date.now, { beforeFetch })).toEqual({ ok: false, issue: "unavailable" });
+    expect(beforeFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it(`les codes inventés (« indisponible ») ont leur propre mémoire de ${INSTAGRAM_EMBED_MISSING_CACHE_SIZE} places : ils ne chassent jamais un vrai code`, async () => {
+    let now = 0;
+    const clock = () => now;
+    safeFetchMock.mockResolvedValueOnce(json({ html: HTML }));
+    expect((await instagramEmbed(reel(), clock)).ok).toBe(true);
+    safeFetchMock.mockImplementation(async () => json({ error: { code: 100 } }, 400));
+    for (let index = 0; index < INSTAGRAM_EMBED_MISSING_CACHE_SIZE + 100; index++) {
+      now += 1_000;
+      expect(await instagramEmbed(reel(`FAUX${String(index).padStart(7, "0")}`), clock)).toEqual({ ok: false, issue: "unavailable" });
+    }
+    const before = safeFetchMock.mock.calls.length;
+    // Le vrai code est toujours servi par la mémoire, sans appel.
+    expect(await instagramEmbed(reel(), clock)).toEqual({ ok: true, html: HTML, creatorHandle: "mode.paris" });
+    // Le plus récent des codes inventés est encore gardé ; le premier est sorti de la petite mémoire.
+    await instagramEmbed(reel(`FAUX${String(INSTAGRAM_EMBED_MISSING_CACHE_SIZE + 99).padStart(7, "0")}`), clock);
+    expect(safeFetchMock.mock.calls.length).toBe(before);
+    await instagramEmbed(reel("FAUX0000000"), clock);
+    expect(safeFetchMock.mock.calls.length).toBe(before + 1);
   });
 });
 

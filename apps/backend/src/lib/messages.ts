@@ -213,6 +213,7 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Ce lien n'a pas pu être vérifié pour le moment. Réessayez dans un instant.": "This link couldn't be checked right now. Please try again in a moment.",
   "Les pièces déjà repérées ne sont pas encore disponibles.": "Pieces already spotted aren't available yet.",
   "Cette recherche n'est pas terminée.": "This search isn't finished.",
+  "Cette recherche est trop ancienne pour être associée à une vidéo.": "This search is too old to be linked to a video.",
   "Cette recherche n'a donné aucune pièce.": "This search didn't find any piece.",
   "Cette pièce n'a pas été repérée dans cette vidéo.": "This piece hasn't been spotted in this video.",
   "Le lecteur Instagram est désactivé.": "The Instagram player is turned off.",

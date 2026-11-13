@@ -383,6 +383,17 @@ export function fixture(): ExportData {
       },
     ],
     stockReports: [{ id: "5c000000-0000-4000-8000-000000000001", match_key_hash: "a".repeat(64), created_on: "2026-10-09" }],
+    // Mémoire des vidéos (migrations 0038 et 0039).
+    videoSpots: [
+      {
+        canonical_url: "https://www.instagram.com/reel/C8abcDEF123/",
+        source: "instagram_player",
+        moment_seconds: 75,
+        created_at: "2026-10-10T08:30:00+00:00",
+        search_id: "5e000000-0000-4000-8000-000000000001",
+      },
+    ],
+    videoConfirmations: [{ canonical_url: "https://www.tiktok.com/@/video/7412345678901234567", product: "Veste <b>reperee</b>", created_at: "2026-10-10T09:00:00+00:00" }],
   };
 }
 

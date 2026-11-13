@@ -5,33 +5,44 @@ import type { VideoLookupResponse } from "@monapp/shared-types";
 import { env } from "../src/env.js";
 import { authHeaders, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
 
-// Mémoire collective des vidéos (mission « liens vidéo », migration 0038) sur
-// la VRAIE base de développement (spotto-dev-2 seulement : tests:ci refuse
-// toute autre base), sans aucun appel à SerpApi, à TikTok ni à Meta. Vérifié
-// ici, ce que la fausse base ne peut pas montrer : le tri réel des pièces
-// (confirmations, puis apparitions, puis récence), les droits (un membre ne
-// lit ni les spots ni les confirmations de personne, même avec sa propre
-// session), les suppressions en cascade et le compteur de la vidéo.
-// Sauté tant que 0038 n'est pas appliquée. Vidéo, boutiques et pièces fictives.
+// Mémoire collective des vidéos (mission « liens vidéo », migrations 0038 et
+// 0039) sur la VRAIE base de développement (spotto-dev-2 seulement : tests:ci
+// refuse toute autre base), sans aucun appel à SerpApi, à TikTok ni à Meta.
+// Vérifié ici, ce que la fausse base ne peut pas montrer : les garde-fous de
+// 0039 (une pièce n'est montrée qu'une fois trouvée par 2 membres distincts,
+// un spot par membre et par vidéo, recherche de moins de 30 minutes, pas de
+// confirmation de sa propre pièce, comptes suspendus écartés, retrait par la
+// modération), le tri réel des pièces (confirmations, puis membres, puis
+// récence), les droits (un membre ne lit ni les spots ni les confirmations de
+// personne, même avec sa propre session), les suppressions en cascade et le
+// compteur de la vidéo. Sauté tant que 0039 n'est pas appliquée. Vidéo,
+// boutiques et pièces fictives.
 
 const service = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const probe = await service.rpc("video_memory_version");
-const migrated = !probe.error && probe.data === 1;
+const migrated = !probe.error && probe.data === 2;
 
 /** Une vidéo TikTok fictive, différente à chaque passage. */
 const VIDEO_ID = `74${Date.now()}${Math.floor(Math.random() * 1000)}`.padEnd(19, "0").slice(0, 19);
 const VIDEO_URL = `https://www.tiktok.com/@essai.memoire/video/${VIDEO_ID}`;
+const INVENTED_ID = `75${Date.now()}`.padEnd(19, "9").slice(0, 19);
 const shop = (piece: string) => `https://boutique-memoire-${VIDEO_ID}.example/${piece}`;
 
-describe.skipIf(!migrated)("mémoire collective des vidéos sur la base (0038)", () => {
+describe.skipIf(!migrated)("mémoire collective des vidéos sur la base (0038 et 0039)", () => {
   let app: FastifyInstance;
   let alice: TestUser;
   let bob: TestUser;
   let carol: TestUser;
+  let dave: TestUser;
+  let admin: TestUser;
 
-  /** Une recherche terminée de `who`, avec ces pièces dans l'ordre. */
-  async function searchOf(who: TestUser, pieces: string[]): Promise<string> {
-    const { data: search, error } = await app.supabaseAdmin.from("product_searches").insert({ user_id: who.id, source_platform: "photo", method: "manual_screenshot", status: "completed" }).select("id").single();
+  /** Une recherche terminée de `who`, avec ces pièces dans l'ordre (créée il y a `minutesAgo` minutes). */
+  async function searchOf(who: TestUser, pieces: string[], minutesAgo = 0): Promise<string> {
+    const { data: search, error } = await app.supabaseAdmin
+      .from("product_searches")
+      .insert({ user_id: who.id, source_platform: "photo", method: "manual_screenshot", status: "completed", created_at: new Date(Date.now() - minutesAgo * 60_000).toISOString() })
+      .select("id")
+      .single();
     if (error) throw error;
     const { error: matchError } = await app.supabaseAdmin.from("product_matches").insert(
       pieces.map((piece, index) => ({
@@ -64,11 +75,15 @@ describe.skipIf(!migrated)("mémoire collective des vidéos sur la base (0038)",
     alice = await createTestUser(app, "memoirea");
     bob = await createTestUser(app, "memoireb");
     carol = await createTestUser(app, "memoirec");
+    dave = await createTestUser(app, "memoired");
+    admin = await createTestUser(app, "memoireadm");
+    const { error } = await app.supabaseAdmin.from("admins").insert({ user_id: admin.id });
+    if (error) throw error;
   });
 
   afterAll(async () => {
-    for (const user of [alice, bob, carol]) await deleteTestUser(app, user.id);
-    await app.supabaseAdmin.from("video_sources").delete().eq("platform", "tiktok").eq("video_key", VIDEO_ID);
+    for (const user of [alice, bob, carol, dave, admin]) await deleteTestUser(app, user.id);
+    await app.supabaseAdmin.from("video_sources").delete().eq("platform", "tiktok").in("video_key", [VIDEO_ID, INVENTED_ID]);
     await app.close();
   });
 
@@ -78,19 +93,37 @@ describe.skipIf(!migrated)("mémoire collective des vidéos sur la base (0038)",
     expect(body).toMatchObject({ memoryAvailable: true, products: [] });
   });
 
-  it("trois spots : la pièce vue deux fois passe devant, puis la plus récente ; une recherche ne compte qu'une fois", async () => {
+  it("un seul membre : rien n'est montré ; deux membres distincts : la pièce trouvée par les deux apparaît ; un spot par recherche et par membre", async () => {
     const first = await searchOf(alice, ["veste", "jupe"]);
     expect((await post(alice, "/api/video-links/spots", { url: VIDEO_URL, searchId: first, source: "tiktok_player", momentSeconds: 12 })).json()).toEqual({ recorded: true });
-    // La même recherche, rejouée : aucun doublon.
+    expect((await products(carol)).products).toEqual([]);
+    // La même recherche, rejouée, puis une 2ᵉ recherche d'Alice sur la même vidéo : aucun doublon.
     expect((await post(alice, "/api/video-links/spots", { url: VIDEO_URL, searchId: first, source: "tiktok_player" })).statusCode).toBe(200);
+    expect((await post(alice, "/api/video-links/spots", { url: VIDEO_URL, searchId: await searchOf(alice, ["bottes"]), source: "app" })).json()).toEqual({ recorded: true });
     expect((await post(bob, "/api/video-links/spots", { url: `${VIDEO_URL}?_r=1`, searchId: await searchOf(bob, ["veste", "sac"]), source: "share" })).statusCode).toBe(200);
+    // Carol trouve les bottes : seule à les avoir notées (le 2ᵉ spot d'Alice n'a pas compté).
     expect((await post(carol, "/api/video-links/spots", { url: VIDEO_URL, searchId: await searchOf(carol, ["bottes"]), source: "visual_intelligence" })).statusCode).toBe(200);
 
     const body = await products(carol);
-    expect(names(body)).toEqual(["veste", "bottes", "sac", "jupe"]);
+    expect(names(body)).toEqual(["veste"]);
     expect(body.products[0]).toMatchObject({ appearances: 2, confirmations: 0, confirmedByMe: false, merchantName: "Boutique Mémoire" });
     const { data: source } = await app.supabaseAdmin.from("video_sources").select("spot_count, creator_handle, canonical_url").eq("platform", "tiktok").eq("video_key", VIDEO_ID).single();
     expect(source).toEqual({ spot_count: 3, creator_handle: "essai.memoire", canonical_url: VIDEO_URL });
+  });
+
+  it("recherche de plus de 30 minutes : 409 « search_too_old », rien n'est noté", async () => {
+    const res = await post(dave, "/api/video-links/spots", { url: VIDEO_URL, searchId: await searchOf(dave, ["jupe"], 31), source: "share" });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe("search_too_old");
+    const { count } = await app.supabaseAdmin.from("video_spots").select("id", { count: "exact", head: true }).eq("user_id", dave.id);
+    expect(count).toBe(0);
+  });
+
+  it("recherche déjà notée, renvoyée avec une vidéo inventée : aucune vidéo créée", async () => {
+    const { data: spot } = await app.supabaseAdmin.from("video_spots").select("search_id").eq("user_id", alice.id).single();
+    expect((await post(alice, "/api/video-links/spots", { url: `https://www.tiktok.com/@x/video/${INVENTED_ID}`, searchId: spot!.search_id, source: "app" })).statusCode).toBe(200);
+    const { data: invented } = await app.supabaseAdmin.from("video_sources").select("id").eq("platform", "tiktok").eq("video_key", INVENTED_ID);
+    expect(invented).toEqual([]);
   });
 
   it("un membre ne peut pas faire noter la recherche d'un autre", async () => {
@@ -100,18 +133,45 @@ describe.skipIf(!migrated)("mémoire collective des vidéos sur la base (0038)",
     expect(names(await products(bob))).not.toContain("foulard");
   });
 
-  it("« C'est bien cette pièce » : deux confirmations font passer la jupe première ; une seule par membre ; « confirmée par moi » ne parle que de soi", async () => {
-    const jupe = keyOf(await products(alice), "jupe");
-    expect((await post(carol, "/api/video-links/confirm", { url: VIDEO_URL, productKey: jupe })).json()).toEqual({ confirmed: true });
-    expect((await post(carol, "/api/video-links/confirm", { url: VIDEO_URL, productKey: jupe })).json()).toEqual({ confirmed: true });
-    expect((await post(alice, "/api/video-links/confirm", { url: VIDEO_URL, productKey: jupe })).statusCode).toBe(200);
+  it("« C'est bien cette pièce » : celle d'un membre qui a apporté la pièce ne compte pas ; une seule par membre ; « confirmée par moi » ne parle que de soi", async () => {
+    const veste = keyOf(await products(alice), "veste");
+    expect((await post(alice, "/api/video-links/confirm", { url: VIDEO_URL, productKey: veste })).json()).toEqual({ confirmed: true });
+    expect((await products(alice)).products[0]).toMatchObject({ confirmations: 0, confirmedByMe: true });
+    expect((await post(carol, "/api/video-links/confirm", { url: VIDEO_URL, productKey: veste })).json()).toEqual({ confirmed: true });
+    expect((await post(carol, "/api/video-links/confirm", { url: VIDEO_URL, productKey: veste })).json()).toEqual({ confirmed: true });
+    expect((await products(carol)).products[0]).toMatchObject({ confirmations: 1, confirmedByMe: true });
+    expect((await products(bob)).products[0]).toMatchObject({ confirmations: 1, confirmedByMe: false });
 
-    const seenByCarol = await products(carol);
-    expect(names(seenByCarol)).toEqual(["jupe", "veste", "bottes", "sac"]);
-    expect(seenByCarol.products[0]).toMatchObject({ confirmations: 2, confirmedByMe: true });
-    expect((await products(bob)).products[0]).toMatchObject({ confirmations: 2, confirmedByMe: false });
+    // Dave trouve aussi la jupe : elle apparaît (Alice et Dave), derrière la veste confirmée…
+    expect((await post(dave, "/api/video-links/spots", { url: VIDEO_URL, searchId: await searchOf(dave, ["jupe"]), source: "share" })).statusCode).toBe(200);
+    expect(names(await products(carol))).toEqual(["veste", "jupe"]);
+    // … puis devant elle, avec deux confirmations de membres qui ne l'ont pas apportée.
+    const jupe = keyOf(await products(carol), "jupe");
+    for (const who of [bob, carol]) expect((await post(who, "/api/video-links/confirm", { url: VIDEO_URL, productKey: jupe })).statusCode).toBe(200);
+    expect(names(await products(carol))).toEqual(["jupe", "veste"]);
     // Une pièce jamais repérée dans cette vidéo ne se confirme pas.
     expect((await post(bob, "/api/video-links/confirm", { url: VIDEO_URL, productKey: "e".repeat(64) })).statusCode).toBe(404);
+  });
+
+  it("compte suspendu : ses spots et ses confirmations ne comptent plus ; rétabli, tout revient", async () => {
+    const decide = await app.inject({ method: "POST", url: "/api/admin/moderation/actions", headers: authHeaders(admin.token), payload: { targetType: "user", targetId: dave.id, action: "suspend", reason: "spam" } });
+    expect(decide.statusCode).toBe(200);
+    // La jupe n'a plus qu'un membre (Alice) : cachée.
+    expect(names(await products(carol))).toEqual(["veste"]);
+    const undo = await app.inject({ method: "POST", url: `/api/admin/moderation/actions/${decide.json().actionId as string}/undo`, headers: authHeaders(admin.token), payload: {} });
+    expect(undo.statusCode).toBe(200);
+    expect(names(await products(carol))).toEqual(["jupe", "veste"]);
+  });
+
+  it("modération : un administrateur retire la veste de la vidéo ; un membre ne le peut pas", async () => {
+    const veste = keyOf(await products(alice), "veste");
+    const remove = (who: TestUser) => post(who, "/api/admin/moderation/video-memory/remove", { url: VIDEO_URL, productKey: veste });
+    expect((await remove(bob)).statusCode).toBe(403);
+    const res = await remove(admin);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ removed: true, items: 2, confirmations: 2 });
+    expect(names(await products(carol))).toEqual(["jupe"]);
+    expect((await remove(admin)).statusCode).toBe(404);
   });
 
   it("ce que voit un membre ne contient l'identité de personne", async () => {
@@ -132,19 +192,18 @@ describe.skipIf(!migrated)("mémoire collective des vidéos sur la base (0038)",
     const insert = await asBob.from("video_item_confirmations").insert({ user_id: bob.id, video_source_id: "00000000-0000-0000-0000-000000000000", product_key: "a".repeat(64) });
     expect(insert.error).not.toBeNull();
     for (const [fn, args] of [
-      ["video_products", { p_platform: "tiktok", p_video_key: VIDEO_ID, p_viewer_id: bob.id, p_limit: 12 }],
+      ["video_products", { p_platform: "tiktok", p_video_key: VIDEO_ID, p_viewer_id: bob.id, p_limit: 12, p_min_members: 1 }],
       ["video_confirm", { p_user_id: alice.id, p_platform: "tiktok", p_video_key: VIDEO_ID, p_product_key: "a".repeat(64) }],
+      ["video_memory_remove", { p_platform: "tiktok", p_video_key: VIDEO_ID, p_product_key: "a".repeat(64) }],
     ] as const) {
       expect((await asBob.rpc(fn, args)).error, fn).not.toBeNull();
     }
   });
 
-  it("le compte de Bob est supprimé : son spot et ses pièces partent, la veste retombe à une apparition, le compteur suit", async () => {
-    await deleteTestUser(app, bob.id);
-    const body = await products(alice);
-    expect(names(body)).toEqual(["jupe", "bottes", "veste"]);
-    expect(body.products.find((product) => product.productName.startsWith("veste"))).toMatchObject({ appearances: 1 });
+  it("le compte de Dave est supprimé : son spot et ses pièces partent, la jupe redevient cachée, le compteur suit", async () => {
+    await deleteTestUser(app, dave.id);
+    expect((await products(alice)).products).toEqual([]);
     const { data: source } = await app.supabaseAdmin.from("video_sources").select("spot_count").eq("platform", "tiktok").eq("video_key", VIDEO_ID).single();
-    expect(source).toEqual({ spot_count: 2 });
+    expect(source).toEqual({ spot_count: 3 });
   });
 });

@@ -640,6 +640,40 @@ describe("collections d'envies (lot collections, migration 0033)", () => {
   });
 });
 
+describe("export lisible : vidéos spottées (revue de sécurité, migrations 0038 et 0039)", () => {
+  it("spots et confirmations, en français : la vidéo en lien, d'où venait l'image, le moment, la date ; jamais l'identifiant de la recherche", () => {
+    const page = render();
+    const section = spaces(visibleText(sectionHtml(page, "videos")));
+    expect(section).toContain(EXPORT_SECTIONS.videos.title.fr);
+    expect(section).toContain("sans votre nom");
+    expect(section).toContain("Vidéos spottées (1)");
+    expect(section).toContain("Vidéo Instagram");
+    expect(section).toContain("D'où venait l'image Image du lecteur Instagram");
+    expect(section).toContain("Moment de la vidéo à 1 min 15 s");
+    expect(section).toContain("Associée le 10 octobre 2026");
+    expect(section).toContain("Pièces confirmées (1)");
+    expect(section).toContain("Veste <b>reperee</b>");
+    expect(section).toContain("Ouvrir la vidéo (tiktok.com)");
+    expect(section).not.toContain("5e000000");
+    expect(sectionHtml(page, "videos")).not.toContain("<b>reperee</b>");
+    expect(spaces(visibleText(page))).toContain(`${EXPORT_SECTIONS.videos.title.fr} (1)`);
+  });
+
+  it("en anglais", () => {
+    const section = spaces(visibleText(sectionHtml(render({ locale: "en", timeZone: "UTC" }), "videos")));
+    expect(section).toContain("Your spotted videos");
+    expect(section).toContain("Instagram video");
+    expect(section).toContain("Image from the Instagram player");
+    expect(section).toContain("at 1 min 15 s");
+    expect(section).toContain("Confirmed pieces (1)");
+  });
+
+  it("sans spot ni confirmation : la section dit « Aucune donnée »", () => {
+    const data = { ...fixture(), videoSpots: [], videoConfirmations: [] };
+    expect(visibleText(sectionHtml(render({}, data), "videos"))).toContain(EXPORT_TEXT.noData.fr);
+  });
+});
+
 describe("export lisible : alertes prix et stock (lot 2, migration 0036)", () => {
   it("cloches, suivi, alertes et signalements, en français : au jour près, jamais l'empreinte de la pièce", () => {
     const page = render();

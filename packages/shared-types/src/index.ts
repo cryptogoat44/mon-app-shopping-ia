@@ -1932,9 +1932,11 @@ export interface VideoProduct {
   /** Lien à ouvrir : affilié s'il existe (mention obligatoire), sinon le lien de la boutique. */
   merchantUrl: string;
   isAffiliate: boolean;
-  /** Nombre de « C'est bien cette pièce ». */
+  /** Nombre de « C'est bien cette pièce » de membres qui n'ont pas eux-mêmes
+   * apporté cette pièce (comptes suspendus écartés). */
   confirmations: number;
-  /** Nombre de spots de cette vidéo où la pièce est apparue. */
+  /** Nombre de membres distincts qui ont trouvé cette pièce dans cette vidéo
+   * (2 au moins pour qu'elle soit montrée : migration 0039). */
   appearances: number;
   /** La personne qui regarde a déjà confirmé cette pièce. */
   confirmedByMe: boolean;
@@ -1965,8 +1967,9 @@ export interface VideoLookupResponse {
   linkIssue: VideoLinkIssue | null;
   players: VideoPlayersStatus;
   memoryAvailable: boolean;
-  /** Pièces déjà repérées (vide si la vidéo est inconnue), triées par
-   * confirmations, puis apparitions, puis récence — jamais par commission. */
+  /** Pièces déjà repérées par plusieurs membres (vide si la vidéo est
+   * inconnue), triées par confirmations, puis apparitions, puis récence —
+   * jamais par commission. */
   products: VideoProduct[];
 }
 

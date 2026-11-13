@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mission « liens vidéo », étapes 2, 3 et 5 côté serveur : routes
 // /api/video-links. Sans base ni réseau : fausse base en mémoire, fonctions
-// de la migration 0038 imitées, TikTok et Meta simulés. (Le tri réel des
-// pièces et les droits de la base sont vérifiés avec la base d'essai :
-// tests/memoireVideos.test.ts.)
+// des migrations 0038 et 0039 imitées, TikTok et Meta simulés. (Le tri réel
+// des pièces, les garde-fous de 0039 et les droits de la base sont vérifiés
+// avec la base d'essai : tests/memoireVideos.test.ts.) Revue de sécurité :
+// comptes suspendus refusés, limite par membre des demandes vers Meta,
+// « search_too_old », retrait d'une pièce par la modération, export RGPD.
 vi.mock("../src/lib/safeFetch.js", () => ({ safeFetch: vi.fn() }));
 vi.mock("../src/env.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/env.js")>();
@@ -21,6 +23,8 @@ import { productKeyOf, resetVideoMemoryProbe } from "../src/lib/videoMemory.js";
 import { RATE_LIMITS } from "../src/lib/rateLimits.js";
 import rateLimitPlugin from "../src/plugins/rateLimit.js";
 import videoLinksRoutes from "../src/routes/videoLinks.js";
+import moderationPlugin from "../src/plugins/moderation.js";
+import accountRoutes from "../src/routes/account.js";
 import { fakeSupabase, type Row } from "./fakeSupabase.js";
 
 const safeFetchMock = vi.mocked(safeFetch);
@@ -38,10 +42,14 @@ interface RpcCall {
   args: Record<string, unknown>;
 }
 
-/** Ce que les fonctions de 0038 répondent dans un test. */
+/** Ce que les fonctions de 0038 et 0039 répondent dans un test. */
 interface Memory {
   /** false : base sans la migration 0038. */
   present: boolean;
+  /** Réponse de video_memory_version : 1 = 0038 seule, 2 = avec 0039. */
+  version: number;
+  /** Réponse de video_memory_remove. */
+  remove: string;
   products: Row[];
   productsError: boolean;
   spot: string;
@@ -53,6 +61,7 @@ let calls: RpcCall[] = [];
 let memory: Memory;
 let fake: ReturnType<typeof fakeSupabase>;
 let suspended = false;
+let admin = false;
 
 function productRow(letter: string, extra: Row = {}): Row {
   return {
@@ -79,7 +88,8 @@ async function buildApp(): Promise<FastifyInstance> {
     rpc: async (fn, args) => {
       calls.push({ fn, args });
       if (!memory.present) return { data: null, error: { code: "PGRST202", message: "absente" } };
-      if (fn === "video_memory_version") return { data: 1, error: null };
+      if (fn === "video_memory_version") return { data: memory.version, error: null };
+      if (fn === "video_memory_remove") return { data: [{ outcome: memory.remove, items: memory.remove === "ok" ? 2 : 0, confirmations: memory.remove === "ok" ? 1 : 0 }], error: null };
       if (fn === "video_products") return memory.productsError ? { data: null, error: { message: "panne" } } : { data: memory.products, error: null };
       if (fn === "video_spot_record") return { data: [{ outcome: memory.spot, items: 2 }], error: null };
       if (fn === "video_confirm") return { data: [{ outcome: memory.confirm }], error: null };
@@ -96,6 +106,9 @@ async function buildApp(): Promise<FastifyInstance> {
   });
   app.decorate("requireActiveAccount", async (_request: FastifyRequest, reply: FastifyReply) => {
     if (suspended) return reply.code(403).send({ error: "account_suspended", message: "Compte suspendu." });
+  });
+  app.decorate("requireAdmin", async (_request: FastifyRequest, reply: FastifyReply) => {
+    if (!admin) return reply.code(403).send({ error: "forbidden", message: "Accès réservé aux administrateurs." });
   });
   await app.register(rateLimitPlugin);
   await app.register(videoLinksRoutes);
@@ -116,7 +129,8 @@ const called = (fn: string) => calls.filter((call) => call.fn === fn);
 beforeEach(() => {
   calls = [];
   suspended = false;
-  memory = { present: true, products: [], productsError: false, spot: "ok", confirm: "ok" };
+  admin = false;
+  memory = { present: true, version: 2, remove: "ok", products: [], productsError: false, spot: "ok", confirm: "ok" };
   resetVideoMemoryProbe();
   resetShortLinkCache();
   resetInstagramEmbed();
@@ -132,6 +146,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   await app?.close();
   app = null;
 });
@@ -146,6 +161,7 @@ describe("toutes les routes demandent un compte connecté", () => {
       await anonymous.get(`/api/video-links/instagram-embed?url=${encodeURIComponent(REEL)}`),
       await anonymous.post("/api/video-links/spots", { url: TIKTOK, searchId: SEARCH, source: "tiktok_player" }),
       await anonymous.post("/api/video-links/confirm", { url: TIKTOK, productKey: KEY("a") }),
+      await anonymous.post("/api/admin/moderation/video-memory/remove", { url: TIKTOK, productKey: KEY("a") }),
     ]) {
       expect(res.statusCode).toBe(401);
     }
@@ -154,16 +170,19 @@ describe("toutes les routes demandent un compte connecté", () => {
 
   it("chaque route a sa propre limite de débit", () => {
     expect(RATE_LIMITS.videoLookup).toMatchObject({ max: 120 });
-    expect(RATE_LIMITS.videoShortLink).toMatchObject({ max: 30 });
+    // Revue de sécurité : 10 liens courts par membre (et non 30), 10 demandes vers Meta par membre.
+    expect(RATE_LIMITS.videoShortLink).toMatchObject({ max: 10 });
     expect(RATE_LIMITS.videoShortLinkGlobal).toMatchObject({ scope: "global" });
     expect(RATE_LIMITS.videoEmbed).toMatchObject({ max: 60 });
+    expect(RATE_LIMITS.videoEmbedFetch).toMatchObject({ max: 10, windowMs: 60 * 60 * 1000 });
+    expect("scope" in RATE_LIMITS.videoEmbedFetch).toBe(false);
     expect(RATE_LIMITS.videoSpot).toMatchObject({ max: 60 });
     expect(RATE_LIMITS.videoConfirm).toMatchObject({ max: 120 });
   });
 });
 
 describe("interrupteurs du serveur : ils ne peuvent que couper", () => {
-  it("allumés par défaut ; chacun se coupe à part ; la mémoire dit si la migration 0038 est là", async () => {
+  it("allumés par défaut ; chacun se coupe à part ; la mémoire dit si les migrations 0038 et 0039 sont là", async () => {
     const target = await buildApp();
     expect((await as(target).get("/api/video-links/status")).json()).toEqual({ players: { tiktok: true, instagram: true }, memory: true });
     Object.assign(env, { TIKTOK_PLAYER_ENABLED: false });
@@ -185,6 +204,18 @@ describe("interrupteurs du serveur : ils ne peuvent que couper", () => {
     expect((await as(target).post("/api/video-links/confirm", { url: TIKTOK, productKey: KEY("a") })).statusCode).toBe(404);
     expect(called("video_spot_record")).toEqual([]);
   });
+
+  it("revue de sécurité : base avec 0038 mais sans 0039 (garde-fous) : mémoire « indisponible », rien n'est lu ni noté", async () => {
+    memory.version = 1;
+    const target = await buildApp();
+    expect((await as(target).get("/api/video-links/status")).json().memory).toBe(false);
+    expect((await lookup(target, TIKTOK)).json()).toMatchObject({ link: TIKTOK_LINK, memoryAvailable: false, products: [] });
+    expect((await as(target).post("/api/video-links/spots", { url: TIKTOK, searchId: SEARCH, source: "tiktok_player" })).statusCode).toBe(404);
+    expect((await as(target).post("/api/video-links/confirm", { url: TIKTOK, productKey: KEY("a") })).statusCode).toBe(404);
+    admin = true;
+    expect((await as(target).post("/api/admin/moderation/video-memory/remove", { url: TIKTOK, productKey: KEY("a") })).statusCode).toBe(404);
+    expect(calls.map((call) => call.fn).filter((fn) => fn !== "video_memory_version")).toEqual([]);
+  });
 });
 
 describe("GET /api/video-links/lookup : reconnaître le lien, montrer les pièces déjà repérées", () => {
@@ -193,7 +224,8 @@ describe("GET /api/video-links/lookup : reconnaître le lien, montrer les pièce
     const res = await lookup(target, `Regarde ! ${TIKTOK}?_r=1&_t=8abc`);
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ link: TIKTOK_LINK, linkIssue: null, players: { tiktok: true, instagram: true }, memoryAvailable: true, products: [] });
-    expect(called("video_products")[0]!.args).toEqual({ p_platform: "tiktok", p_video_key: ID, p_viewer_id: ALICE, p_limit: 12 });
+    // Une pièce n'est montrée qu'une fois trouvée par 2 membres distincts (VIDEO_MEMORY_MIN_MEMBERS).
+    expect(called("video_products")[0]!.args).toEqual({ p_platform: "tiktok", p_video_key: ID, p_viewer_id: ALICE, p_limit: 12, p_min_members: 2 });
     expect(fetch).not.toHaveBeenCalled();
     expect(safeFetchMock).not.toHaveBeenCalled();
   });
@@ -278,7 +310,16 @@ describe("POST /api/video-links/spots : noter un spot après une recherche réus
     expect(items.every((item) => /^[0-9a-f]{64}$/.test(item.k))).toBe(true);
   });
 
-  it("déjà noté pour cette recherche : même réponse, sans doublon", async () => {
+  it("revue de sécurité : recherche de plus de 30 minutes (« search_too_old », vérifié par la base) : 409, message clair", async () => {
+    memory.spot = "search_too_old";
+    const target = await buildApp();
+    seedSearch();
+    const res = await as(target).post("/api/video-links/spots", { url: TIKTOK, searchId: SEARCH, source: "share" });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: "search_too_old", message: "Cette recherche est trop ancienne pour être associée à une vidéo." });
+  });
+
+  it("déjà noté pour cette recherche (ou ce membre a déjà un spot sur cette vidéo) : même réponse, sans doublon", async () => {
     memory.spot = "already_recorded";
     const target = await buildApp();
     seedSearch();
@@ -319,14 +360,19 @@ describe("POST /api/video-links/spots : noter un spot après une recherche réus
     expect(called("video_spot_record")).toEqual([]);
   });
 
-  it("compte suspendu : ni spot ni confirmation (ils changent ce que les autres voient) ; la lecture reste permise", async () => {
+  it("compte suspendu : ni spot, ni confirmation, ni lecture, ni code Instagram (revue de sécurité : aucun appel vers TikTok ou Meta)", async () => {
     suspended = true;
     const target = await buildApp();
     seedSearch();
     expect((await as(target).post("/api/video-links/spots", { url: TIKTOK, searchId: SEARCH, source: "share" })).statusCode).toBe(403);
     expect((await as(target).post("/api/video-links/confirm", { url: TIKTOK, productKey: KEY("a") })).statusCode).toBe(403);
-    expect((await lookup(target, TIKTOK)).statusCode).toBe(200);
-    expect(called("video_spot_record").length + called("video_confirm").length).toBe(0);
+    expect((await lookup(target, "https://vm.tiktok.com/ZMabcdEFG/")).statusCode).toBe(403);
+    expect((await as(target).get(`/api/video-links/instagram-embed?url=${encodeURIComponent(REEL)}`)).statusCode).toBe(403);
+    expect(calls).toEqual([]);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(safeFetchMock).not.toHaveBeenCalled();
+    // L'état des interrupteurs reste lisible.
+    expect((await as(target).get("/api/video-links/status")).statusCode).toBe(200);
   });
 
   it("la base ne répond pas : 500 avec le message générique, jamais un détail technique", async () => {
@@ -401,5 +447,143 @@ describe("GET /api/video-links/instagram-embed : le code d'intégration officiel
     const limited = await embedOf(target, "https://www.instagram.com/reel/AUTREcode12/");
     expect(limited.statusCode).toBe(503);
     expect(limited.json()).toEqual({ error: "embed_busy", message: "Le lecteur Instagram est momentanément indisponible." });
+  });
+});
+
+describe("revue de sécurité : limite par membre des demandes vers Meta (videoEmbedFetch)", () => {
+  const HTML = '<blockquote class="instagram-media">Publication (@mode.paris)</blockquote>';
+  const meta = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
+  it("seules les demandes qui partent vers Meta comptent : 10 codes inventés, puis 429 sans appel ; une vidéo déjà en mémoire reste servie", async () => {
+    // Limites actives pour ce test (coupées par défaut sous Vitest) ; un membre à part.
+    vi.stubEnv("NODE_ENV", "production");
+    const MALLORY = "d0000000-0000-4000-8000-000000000004";
+    const target = await buildApp();
+    safeFetchMock.mockResolvedValueOnce(meta({ html: HTML }));
+    expect((await as(target, BOB).get(`/api/video-links/instagram-embed?url=${encodeURIComponent(REEL)}`)).statusCode).toBe(200);
+    safeFetchMock.mockImplementation(async () => meta({ error: { code: 100 } }, 400));
+    for (let index = 0; index < 10; index++) {
+      const res = await as(target, MALLORY).get(`/api/video-links/instagram-embed?url=${encodeURIComponent(`https://www.instagram.com/reel/FAUX${String(index).padStart(7, "0")}/`)}`);
+      expect(res.statusCode).toBe(404);
+    }
+    expect(safeFetchMock).toHaveBeenCalledTimes(11);
+    const refused = await as(target, MALLORY).get(`/api/video-links/instagram-embed?url=${encodeURIComponent("https://www.instagram.com/reel/FAUX0000010/")}`);
+    expect(refused.statusCode).toBe(429);
+    expect(refused.json()).toEqual({ error: "rate_limited", message: "Trop de tentatives en peu de temps. Réessayez dans quelques instants." });
+    expect(safeFetchMock).toHaveBeenCalledTimes(11);
+    // Réponses gardées en mémoire : servies sans appel, même limite atteinte.
+    expect((await as(target, MALLORY).get(`/api/video-links/instagram-embed?url=${encodeURIComponent(REEL)}`)).json()).toEqual({ html: HTML, creatorHandle: "mode.paris" });
+    expect((await as(target, MALLORY).get(`/api/video-links/instagram-embed?url=${encodeURIComponent("https://www.instagram.com/reel/FAUX0000003/")}`)).statusCode).toBe(404);
+    expect(safeFetchMock).toHaveBeenCalledTimes(11);
+  });
+});
+
+describe("POST /api/admin/moderation/video-memory/remove : la modération retire une pièce d'une vidéo", () => {
+  const remove = (target: FastifyInstance, payload: object, user: string = ALICE) => as(target, user).post("/api/admin/moderation/video-memory/remove", payload);
+
+  it("administrateur : la base reçoit la vidéo et la clé de la pièce ; réponse avec ce qui a été retiré", async () => {
+    admin = true;
+    const target = await buildApp();
+    const res = await remove(target, { url: `${TIKTOK}?_r=1`, productKey: KEY("a") });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ removed: true, items: 2, confirmations: 1 });
+    expect(called("video_memory_remove").map((call) => call.args)).toEqual([{ p_platform: "tiktok", p_video_key: ID, p_product_key: KEY("a") }]);
+  });
+
+  it("membre ordinaire : 403, rien n'est retiré", async () => {
+    const target = await buildApp();
+    expect((await remove(target, { url: TIKTOK, productKey: KEY("a") })).statusCode).toBe(403);
+    expect(called("video_memory_remove")).toEqual([]);
+  });
+
+  it("vidéo ou pièce inconnue : 404 ; corps invalide : 400 ; lien qui n'est pas une vidéo : 422 ; réponse inattendue : 500", async () => {
+    admin = true;
+    const target = await buildApp();
+    for (const outcome of ["unknown_video", "unknown_product"]) {
+      memory.remove = outcome;
+      const res = await remove(target, { url: TIKTOK, productKey: KEY("a") });
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toEqual({ error: "video_product_not_found", message: "Cette pièce n'a pas été repérée dans cette vidéo." });
+    }
+    for (const payload of [{ url: TIKTOK, productKey: "abc" }, { url: TIKTOK }, { url: TIKTOK, productKey: KEY("a"), userId: BOB }]) {
+      expect((await remove(target, payload)).statusCode).toBe(400);
+    }
+    expect((await remove(target, { url: "https://www.tiktok.com/@scout2015", productKey: KEY("a") })).statusCode).toBe(422);
+    memory.remove = "inattendu";
+    expect((await remove(target, { url: TIKTOK, productKey: KEY("a") })).statusCode).toBe(500);
+  });
+});
+
+describe("revue de sécurité : l'export RGPD contient les spots et les confirmations du membre", () => {
+  const SOURCE = "70000000-0000-4000-8000-000000000001";
+  const OTHER_SEARCH = "50000000-0000-4000-8000-000000000009";
+
+  async function exportApp(): Promise<FastifyInstance> {
+    app = Fastify({ logger: false });
+    app.decorate("supabaseAdmin", fake.db as unknown as FastifyInstance["supabaseAdmin"]);
+    app.decorateRequest("user", null);
+    app.decorate("requireAuth", async (request: FastifyRequest, reply: FastifyReply) => {
+      const id = request.headers["x-test-user"];
+      if (typeof id !== "string") return reply.code(401).send({ error: "unauthorized", message: "Jeton d'authentification manquant." });
+      request.user = { id, email: null };
+    });
+    await app.register(rateLimitPlugin);
+    await app.register(moderationPlugin);
+    await app.register(accountRoutes);
+    await app.ready();
+    return app;
+  }
+
+  function seed(): void {
+    fake = fakeSupabase({
+      rpc: async (fn, args) => {
+        calls.push({ fn, args });
+        if (fn === "video_memory_version") return { data: memory.version, error: null };
+        return { data: null, error: { code: "PGRST202", message: "absente" } };
+      },
+    });
+    fake.table("profiles").push({ id: ALICE, username: "alice", locale: "fr" }, { id: BOB, username: "bob", locale: "fr" });
+    fake.table("video_sources").push({ id: SOURCE, platform: "tiktok", video_key: ID, canonical_url: TIKTOK, creator_handle: null, spot_count: 2 });
+    fake.table("video_spots").push(
+      { id: "71000000-0000-4000-8000-000000000001", video_source_id: SOURCE, user_id: ALICE, search_id: SEARCH, source: "tiktok_player", moment_seconds: 72, created_at: "2026-11-12T10:05:00+00:00" },
+      { id: "71000000-0000-4000-8000-000000000002", video_source_id: SOURCE, user_id: BOB, search_id: OTHER_SEARCH, source: "share", moment_seconds: null, created_at: "2026-11-12T10:10:00+00:00" }
+    );
+    // La pièce confirmée par Alice vient du spot de Bob : son nom est lu, jamais le nom de Bob.
+    fake.table("product_matches").push({ id: "61000000-0000-4000-8000-000000000001", search_id: OTHER_SEARCH, rank: 1, product_name: "Veste de Bob", merchant_url: "https://boutique.example/veste", created_at: "2026-11-12T10:09:00+00:00" });
+    fake.table("video_spot_items").push({ video_spot_id: "71000000-0000-4000-8000-000000000002", product_match_id: "61000000-0000-4000-8000-000000000001", video_source_id: SOURCE, product_key: KEY("a") });
+    fake.table("video_item_confirmations").push(
+      { user_id: ALICE, video_source_id: SOURCE, product_key: KEY("a"), created_at: "2026-11-12T10:20:00+00:00" },
+      { user_id: ALICE, video_source_id: SOURCE, product_key: KEY("e"), created_at: "2026-11-12T10:21:00+00:00" },
+      { user_id: BOB, video_source_id: SOURCE, product_key: KEY("a"), created_at: "2026-11-12T10:22:00+00:00" }
+    );
+  }
+
+  it("ses spots (vidéo, source, moment, date, recherche) et ses confirmations (vidéo, pièce, date), jamais ceux d'un autre membre", async () => {
+    seed();
+    const body = (await as(await exportApp(), ALICE).get("/api/me/export")).json();
+    expect(body.videoSpots).toEqual([{ canonical_url: TIKTOK, source: "tiktok_player", moment_seconds: 72, created_at: "2026-11-12T10:05:00+00:00", search_id: SEARCH }]);
+    expect(body.videoConfirmations).toEqual([
+      { canonical_url: TIKTOK, product: "Veste de Bob", created_at: "2026-11-12T10:20:00+00:00" },
+      // Pièce dont aucun résultat n'est plus rattaché : sa clé « même page ».
+      { canonical_url: TIKTOK, product: KEY("e"), created_at: "2026-11-12T10:21:00+00:00" },
+    ]);
+    expect(JSON.stringify([body.videoSpots, body.videoConfirmations])).not.toContain(BOB);
+    // Lisible aussi dans le fichier HTML.
+    const page = (await as(app!, ALICE).get("/api/me/export?format=html")).body;
+    expect(page).toContain("Vos vidéos spottées");
+    expect(page).toContain("Image du lecteur TikTok");
+    expect(page).toContain("à 1 min 12 s");
+    expect(page).toContain("Veste de Bob");
+  });
+
+  it("lu dès 0038, même quand la mémoire est coupée faute de 0039 ; sans 0038 : sections vides", async () => {
+    seed();
+    memory.version = 1;
+    expect((await as(await exportApp(), ALICE).get("/api/me/export")).json().videoSpots).toHaveLength(1);
+    await app!.close();
+    resetVideoMemoryProbe();
+    memory.version = 0;
+    const body = (await as(await exportApp(), ALICE).get("/api/me/export")).json();
+    expect([body.videoSpots, body.videoConfirmations]).toEqual([[], []]);
   });
 });

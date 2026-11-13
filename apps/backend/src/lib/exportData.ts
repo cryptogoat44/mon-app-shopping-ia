@@ -5,6 +5,7 @@ import { collectionsReady } from "./collections.js";
 import { collectionModerationReady } from "./collectionModeration.js";
 import { pushReady } from "./push.js";
 import { wishAlertsReady } from "./wishAlertsSchema.js";
+import { videoMemoryStored } from "./videoMemory.js";
 
 // Export RGPD (droit d'accès et de portabilité) : lecture de TOUTES les
 // données personnelles d'un compte. Toute nouvelle table contenant des
@@ -75,6 +76,13 @@ export interface ExportData {
   wishAlertEvents: ExportRow[];
   /** … et vos signalements « Plus disponible » (au jour près). */
   stockReports: ExportRow[];
+  /** Mémoire collective des vidéos (migrations 0038 et 0039) : vos spots — la
+   * vidéo (adresse publique), d'où venait l'image, le moment de la vidéo, la
+   * date et la recherche liée… */
+  videoSpots: ExportRow[];
+  /** … et vos « C'est bien cette pièce » : la vidéo, la pièce (son nom, sinon
+   * sa clé « même page ») et la date. */
+  videoConfirmations: ExportRow[];
 }
 
 /** Sections de l'export (toutes les clés sauf la date de l'export). */
@@ -166,6 +174,56 @@ export const STOCK_REPORT_EXPORT_COLUMNS = "id, match_key_hash, created_on";
 function withWishTitles(rows: readonly ExportRow[], wishlistItems: readonly ExportRow[]): ExportRow[] {
   const titles = new Map(wishlistItems.map((row) => [String(row.id), typeof row.title === "string" ? row.title : null]));
   return rows.map((row) => ({ ...row, wishlist_item_title: titles.get(String(row.wishlist_item_id)) ?? null }));
+}
+
+/** Adresse publique de chaque vidéo (mémoire des vidéos), par identifiant. */
+async function videoUrls(db: Db, sourceIds: readonly string[]): Promise<Map<string, string | null>> {
+  const rows = await listIn(db, "video_sources", "id, canonical_url", "id", sourceIds, ["id"]);
+  return new Map(rows.map((row) => [String(row.id), typeof row.canonical_url === "string" ? row.canonical_url : null]));
+}
+
+/** Ses spots : la vidéo, d'où venait l'image, le moment, la date, la recherche liée. */
+async function listVideoSpots(db: Db, userId: string): Promise<ExportRow[]> {
+  const rows = await listWhere(db, "video_spots", "id, video_source_id, source, moment_seconds, created_at, search_id", "user_id", userId, BY_DATE);
+  if (rows.length === 0) return rows;
+  const urls = await videoUrls(
+    db,
+    rows.map((row) => String(row.video_source_id))
+  );
+  return rows.map((row) => ({
+    canonical_url: urls.get(String(row.video_source_id)) ?? null,
+    source: row.source,
+    moment_seconds: row.moment_seconds,
+    created_at: row.created_at,
+    search_id: row.search_id,
+  }));
+}
+
+/** Ses « C'est bien cette pièce » : la vidéo, la pièce (le nom d'un résultat
+ * rattaché à cette vidéo avec la même clé, sinon la clé elle-même), la date. */
+async function listVideoConfirmations(db: Db, userId: string): Promise<ExportRow[]> {
+  const rows = await listWhere(db, "video_item_confirmations", "video_source_id, product_key, created_at", "user_id", userId, ["created_at", "video_source_id", "product_key"]);
+  if (rows.length === 0) return rows;
+  const sourceIds = rows.map((row) => String(row.video_source_id));
+  const [urls, items] = await Promise.all([
+    videoUrls(db, sourceIds),
+    listIn(db, "video_spot_items", "video_source_id, product_key, product_match_id", "video_source_id", sourceIds, ["video_source_id", "product_key", "product_match_id"]),
+  ]);
+  const pieceOf = (row: ExportRow) => `${String(row.video_source_id)}:${String(row.product_key)}`;
+  const wanted = new Set(rows.map(pieceOf));
+  const matchOf = new Map<string, string>();
+  for (const item of items) {
+    const piece = pieceOf(item);
+    if (wanted.has(piece) && !matchOf.has(piece)) matchOf.set(piece, String(item.product_match_id));
+  }
+  const names = new Map(
+    (await listIn(db, "product_matches", "id, product_name", "id", [...matchOf.values()], ["id"])).map((row) => [String(row.id), typeof row.product_name === "string" ? row.product_name : null])
+  );
+  return rows.map((row) => ({
+    canonical_url: urls.get(String(row.video_source_id)) ?? null,
+    product: names.get(matchOf.get(pieceOf(row)) ?? "") ?? row.product_key,
+    created_at: row.created_at,
+  }));
 }
 
 /** Colonnes de son côté d'une conversation (jamais celui de l'autre membre :
@@ -352,6 +410,14 @@ export async function collectExport(
     section("stockReports", () => (withAlerts ? listWhere(db, "stock_reports", STOCK_REPORT_EXPORT_COLUMNS, "user_id", userId, ["created_on", "id"]) : Promise.resolve(none)), none),
   ]);
 
+  // Mémoire des vidéos : lue dès que ses tables existent (0038), même si la
+  // mémoire est coupée faute de 0039 : ce qui a été noté doit y figurer.
+  const withVideoMemory = await videoMemoryStored(fastify);
+  const [videoSpots, videoConfirmations] = await Promise.all([
+    section("videoSpots", () => (withVideoMemory ? listVideoSpots(db, userId) : Promise.resolve(none)), none),
+    section("videoConfirmations", () => (withVideoMemory ? listVideoConfirmations(db, userId) : Promise.resolve(none)), none),
+  ]);
+
   const data: ExportData = {
     exportedAt: new Date().toISOString(),
     account: { email },
@@ -389,6 +455,8 @@ export async function collectExport(
     wishTracking,
     wishAlertEvents,
     stockReports,
+    videoSpots,
+    videoConfirmations,
   };
   return { data, failures };
 }
