@@ -30,6 +30,7 @@ import { useLinkEntry } from "@/lib/use-link-entry";
 import { useSharedItemOpener } from "@/lib/use-shared-item";
 import { useVideoImport } from "@/lib/use-video-import";
 import { discardLocalFile } from "@/lib/video-frames";
+import { moveIntoCaptureCache } from "@/lib/visual-search-intake";
 import { useSearchLimits } from "@/lib/use-search-limits";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -206,9 +207,11 @@ function useSpotterEntries(reveal: () => void) {
       const prepared = await prepareSharedPhoto(item.uri, item.width, item.height);
       // L'image préparée est un nouveau fichier : la copie reçue n'a plus d'usage.
       discardLocalFile(item.uri);
-      // Capture de la recherche d'image d'iOS : jamais gardée après la recherche (règle n° 4).
+      // Capture de la recherche d'image d'iOS : jamais gardée après la recherche (règle n° 4) ;
+      // rangée dans « recherche-image/ » du cache, vidé à chaque lancement (app fermée en plein parcours).
       const visual = item.origin === "visual_intelligence";
-      await openPhoto(prepared, t.share.imageUnreadable(t.spotter.addPhoto), visual ? "visual_intelligence" : "share", { discardImageAfterSearch: visual });
+      const ready = visual && prepared.kind === "picked" ? { ...prepared, uri: await moveIntoCaptureCache(prepared.uri) } : prepared;
+      await openPhoto(ready, t.share.imageUnreadable(t.spotter.addPhoto), visual ? "visual_intelligence" : "share", { discardImageAfterSearch: visual });
     } finally {
       setBusy(null);
     }

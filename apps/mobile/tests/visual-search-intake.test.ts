@@ -21,6 +21,8 @@ const { linking, disk, appState } = vi.hoisted(() => {
     GROUP,
     CACHE,
     files: new Map<string, number>(),
+    /** Date de modification d'un fichier (ms), quand le test la donne. */
+    times: new Map<string, number>(),
     texts: new Map<string, { content: string; at: number | null }>(),
     deleted: [] as string[],
     copied: [] as [string, string][],
@@ -36,8 +38,11 @@ const { linking, disk, appState } = vi.hoisted(() => {
     get exists() {
       return disk.files.has(this.uri) || disk.texts.has(this.uri);
     }
+    get name() {
+      return this.uri.split("/").pop() ?? "";
+    }
     get lastModified() {
-      return disk.texts.get(this.uri)?.at ?? null;
+      return disk.texts.get(this.uri)?.at ?? disk.times.get(this.uri) ?? null;
     }
     textSync() {
       const text = disk.texts.get(this.uri);
@@ -50,6 +55,13 @@ const { linking, disk, appState } = vi.hoisted(() => {
       if (size === undefined) throw new Error("introuvable");
       disk.files.set(target.uri, size);
       disk.copied.push([this.uri, target.uri]);
+    }
+    async move(target: { uri: string }) {
+      const size = disk.files.get(this.uri);
+      if (size === undefined) throw new Error("introuvable");
+      disk.files.delete(this.uri);
+      disk.files.set(target.uri, size);
+      this.uri = target.uri;
     }
     delete() {
       disk.files.delete(this.uri);
@@ -81,7 +93,9 @@ const { linking, disk, appState } = vi.hoisted(() => {
   return { linking, disk: { ...disk, File, Directory }, appState };
 });
 
+const { discardLocalFile } = vi.hoisted(() => ({ discardLocalFile: vi.fn() }));
 vi.mock("react-native", () => ({ Platform: { OS: "ios" }, AppState: appState }));
+vi.mock("../src/lib/video-frames", () => ({ discardLocalFile }));
 vi.mock("expo-linking", () => ({ getLinkingURL: linking.getLinkingURL, addEventListener: linking.addEventListener }));
 vi.mock("expo-file-system", () => ({
   File: disk.File,
@@ -90,11 +104,13 @@ vi.mock("expo-file-system", () => ({
 }));
 
 import { redirectSystemPath } from "../src/app/+native-intent";
-import { peekSharedItem, takeSharedItem } from "../src/lib/shared-item";
+import { peekSharedItem, receiveSharedItem, takeSharedItem } from "../src/lib/shared-item";
 import {
   PENDING_VISUAL_SEARCH_FILE,
   VISUAL_SEARCH_FOLDER,
+  VISUAL_SEARCH_MAX_AGE_MS,
   isCaptureId,
+  moveIntoCaptureCache,
   pendingVisualSearchOpening,
   startVisualSearchIntake,
   supportsVisualSearch,
@@ -111,6 +127,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   takeSharedItem();
   disk.files.clear();
+  disk.times.clear();
   disk.texts.clear();
   disk.deleted.length = 0;
   disk.copied.length = 0;
@@ -147,9 +164,10 @@ describe("lien d'ouverture de la recherche d'image : vérifié strictement", () 
     expect(disk.copied).toEqual([]);
   });
 
-  it("fichier d'attente : seule une adresse d'ouverture exacte, de moins d'une heure", () => {
-    expect(pendingVisualSearchOpening(`  ${opening(ID)}\n`, 1_000, 1_000 + 59 * 60_000)).toBe(opening(ID));
-    expect(pendingVisualSearchOpening(opening(ID), 1_000, 1_000 + 61 * 60_000)).toBeNull();
+  it("fichier d'attente : seule une adresse d'ouverture exacte, de moins de 10 minutes (au-delà, la capture est effacée)", () => {
+    expect(VISUAL_SEARCH_MAX_AGE_MS).toBe(10 * 60_000);
+    expect(pendingVisualSearchOpening(`  ${opening(ID)}\n`, 1_000, 1_000 + 9 * 60_000)).toBe(opening(ID));
+    expect(pendingVisualSearchOpening(opening(ID), 1_000, 1_000 + 11 * 60_000)).toBeNull();
     expect(pendingVisualSearchOpening(opening(ID), null, 0)).toBe(opening(ID));
     expect(pendingVisualSearchOpening("spotto://ailleurs", null, 0)).toBeNull();
   });
@@ -205,10 +223,34 @@ describe("capture reçue : copiée dans le cache, fichier du groupe d'apps effac
     stop();
   });
 
-  it("capture introuvable : refus « illisible », dit par le Spotter", async () => {
+  it("revue de sécurité : capture introuvable (lien forgé, capture effacée) : ignorée sans rien dire, l'élément en attente reste", async () => {
+    const shared = { kind: "image" as const, uri: `${disk.CACHE}partage/photo.jpg`, width: 10, height: 10 };
+    receiveSharedItem(shared);
+    const stop = startVisualSearchIntake();
+    linking.open(opening(ID));
+    linking.open(opening("0a0b0c0d-0000-4000-8000-000000000000"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(peekSharedItem()).toEqual(shared);
+    expect(discardLocalFile).not.toHaveBeenCalled();
+    stop();
+  });
+
+  it("copie impossible : refus « illisible », dit par le Spotter", async () => {
+    disk.files.set(inGroup(ID), 120_000);
+    disk.faults.copy = true;
     const stop = startVisualSearchIntake();
     linking.open(opening(ID));
     await vi.waitFor(() => expect(peekSharedItem()).toEqual({ kind: "refused", reason: "unreadable" }));
+    stop();
+  });
+
+  it("revue de sécurité : la capture remplace un élément partagé en attente : la copie de celui-ci est effacée", async () => {
+    receiveSharedItem({ kind: "video", uri: `${disk.CACHE}partage/video.mov`, sizeBytes: 10 } as Parameters<typeof receiveSharedItem>[0]);
+    disk.files.set(inGroup(ID), 120_000);
+    const stop = startVisualSearchIntake();
+    linking.open(opening(ID));
+    await vi.waitFor(() => expect(peekSharedItem()).toMatchObject({ kind: "image", origin: "visual_intelligence" }));
+    expect(discardLocalFile).toHaveBeenCalledWith(`${disk.CACHE}partage/video.mov`);
     stop();
   });
 
@@ -219,5 +261,46 @@ describe("capture reçue : copiée dans le cache, fichier du groupe d'apps effac
     appState.change("active");
     await vi.waitFor(() => expect(peekSharedItem()).toMatchObject({ kind: "image" }));
     stop();
+  });
+});
+
+describe("revue de sécurité : captures jamais ouvertes, effacées par l'app", () => {
+  const OTHER = "11111111-2222-4333-8444-555555555555";
+  const OLD = Date.now() - 11 * 60_000;
+
+  it("au lancement : les captures du groupe d'apps de plus de 10 minutes sont effacées, sauf celle qu'on ouvre ; les récentes restent", async () => {
+    const RECENT = "22222222-3333-4444-8555-666666666666";
+    for (const [id, at] of [[ID, OLD], [OTHER, OLD], [RECENT, Date.now() - 60_000]] as const) {
+      disk.files.set(inGroup(id), 1);
+      disk.times.set(inGroup(id), at);
+    }
+    linking.getLinkingURL.mockReturnValue(opening(ID));
+    const stop = startVisualSearchIntake();
+    expect(disk.deleted).toContain(inGroup(OTHER));
+    expect(disk.files.has(inGroup(RECENT))).toBe(true);
+    // La capture ouverte n'est pas effacée par le nettoyage : elle est copiée d'abord.
+    await vi.waitFor(() => expect(peekSharedItem()).toMatchObject({ kind: "image", uri: inCache(ID) }));
+    expect(disk.copied).toEqual([[inGroup(ID), inCache(ID)]]);
+    stop();
+  });
+
+  it("au retour au premier plan : même nettoyage", () => {
+    const stop = startVisualSearchIntake();
+    disk.files.set(inGroup(OTHER), 1);
+    disk.times.set(inGroup(OTHER), OLD);
+    appState.change("background");
+    expect(disk.files.has(inGroup(OTHER))).toBe(true);
+    appState.change("active");
+    expect(disk.files.has(inGroup(OTHER))).toBe(false);
+    stop();
+  });
+
+  it("image préparée d'une capture : rangée dans « recherche-image/ » du cache (vidé à chaque lancement)", async () => {
+    disk.files.set(`${disk.CACHE}ImageManipulator/abc.jpg`, 5);
+    expect(await moveIntoCaptureCache(`${disk.CACHE}ImageManipulator/abc.jpg`)).toBe(`${disk.CACHE}recherche-image/abc.jpg`);
+    expect(disk.files.has(`${disk.CACHE}ImageManipulator/abc.jpg`)).toBe(false);
+    // Déjà rangée, ou introuvable : l'adresse reste la même.
+    expect(await moveIntoCaptureCache(`${disk.CACHE}recherche-image/abc.jpg`)).toBe(`${disk.CACHE}recherche-image/abc.jpg`);
+    expect(await moveIntoCaptureCache(`${disk.CACHE}ImageManipulator/absente.jpg`)).toBe(`${disk.CACHE}ImageManipulator/absente.jpg`);
   });
 });

@@ -7,6 +7,8 @@ import { PROFILE_ATTEMPT_TIMEOUT_MS, PROFILE_RETRY_DELAYS_MS, RetryCancelledErro
 import type { ProfileStatus } from "./root-route";
 import { sessionRejectedBySupabase } from "./session-check";
 import { forgetPushToken } from "./push";
+import { sessionUserChanged } from "./pending-video-link";
+import { pendingVideoLinks } from "./pending-video-link-store";
 import { supabase } from "./supabase";
 
 interface AuthContextValue {
@@ -108,6 +110,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // l'objet sans changer d'utilisateur, et ne doit pas recharger le profil.
   const userId = session?.user.id;
   const sessionResolved = session !== undefined;
+  // Compte de la session changé (déconnexion d'ailleurs, autre compte) : le
+  // lien de vidéo en attente de la personne d'avant est oublié.
+  const previousUserRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!sessionResolved) return;
+    const current = userId ?? null;
+    if (sessionUserChanged(previousUserRef.current, current)) void pendingVideoLinks.clear();
+    previousUserRef.current = current;
+  }, [userId, sessionResolved]);
   useEffect(() => {
     if (!sessionResolved) return;
 
@@ -139,6 +150,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Lot notifications : cet appareil ne reçoit plus rien pour ce compte
     // (4 s au plus ; un échec n'empêche jamais la déconnexion).
     await forgetPushToken().catch(() => {});
+    // Revue de sécurité : le lien de vidéo en attente ne passe jamais au compte suivant.
+    await pendingVideoLinks.clear();
     await supabase.auth.signOut();
   }, []);
 

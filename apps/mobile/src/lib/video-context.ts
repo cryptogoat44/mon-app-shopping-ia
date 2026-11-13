@@ -10,16 +10,16 @@
 // - l'image à ne pas garder (instantané du lecteur, capture de la recherche
 //   d'image d'iOS) est effacée dès que la recherche est partie, ou quand le
 //   parcours est abandonné (règle n° 4 : jamais gardée sur l'appareil).
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { ProductSearch, VideoSpotSource } from "@monapp/shared-types";
 import { recordVideoSpot } from "./api";
-import { createPendingLinkStore, type PendingVideoLink } from "./pending-video-link";
+import type { PendingVideoLink } from "./pending-video-link";
+import { pendingVideoLinks } from "./pending-video-link-store";
 import { beginFromPhoto } from "./spot-flow";
 import { discardSearchedImage, getDraft, setDraftImageDiscarder, updateDraft, type DraftVideoContext, type SpotDraft } from "./spot-draft";
 import { onSearchShown } from "./spot-identify";
 import { discardLocalFile } from "./video-frames";
 
-export const pendingVideoLinks = createPendingLinkStore(AsyncStorage, () => Date.now());
+export { pendingVideoLinks };
 
 /** D'où vient une image cherchée hors du lecteur. */
 export type PhotoOrigin = Extract<VideoSpotSource, "share" | "visual_intelligence" | "app" | "web">;

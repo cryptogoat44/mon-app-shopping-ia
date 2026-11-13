@@ -9,7 +9,7 @@ import { containsLink } from "@/lib/link-detection";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { isAdjustedCrop } from "@/lib/crop-geometry";
 import { zoneReady, type PieceZone } from "@/lib/piece-trace";
-import { draftImageUri, getDraft, type SpotDraft } from "@/lib/spot-draft";
+import { draftImageUri, getDraft, leaveLaunchScreen, type SpotDraft } from "@/lib/spot-draft";
 import { getSpotVideo, holdSpotVideo, importSpotVideo, letGoSpotVideo, videoImportMessage } from "@/lib/spot-video";
 import { blocksLaunch } from "@/lib/search-limits";
 import { useSearchLimits } from "@/lib/use-search-limits";
@@ -201,6 +201,11 @@ export default function LaunchScreen() {
     holdSpotVideo();
     return letGoSpotVideo;
   }, []);
+  // Écran quitté (« ‹ », ou retiré de la pile) : l'image à ne pas garder
+  // (instantané du lecteur, capture de la recherche d'image d'iOS) est effacée
+  // avec son brouillon. Les résultats s'ouvrent par-dessus cet écran : il
+  // reste en place pendant la recherche, et après un échec (« Relancer »).
+  useEffect(() => leaveLaunchScreen, []);
   // Une autre vidéo choisie entre-temps (depuis le curseur) : c'est elle qui compte.
   useFocusEffect(
     useCallback(() => {

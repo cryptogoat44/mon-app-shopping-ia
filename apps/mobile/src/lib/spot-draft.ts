@@ -94,6 +94,15 @@ export function clearDraft(): void {
   current = null;
 }
 
+/** L'écran « Entourez la pièce » est quitté (« ‹ », ou écran retiré) : un
+ * brouillon dont l'image n'est pas à garder (instantané du lecteur, capture
+ * de la recherche d'image d'iOS) est abandonné, et son image effacée. Tant
+ * que l'écran reste (recherche échouée, « Relancer »), rien ne change ; les
+ * autres brouillons (photo choisie) sont gardés tels quels. */
+export function leaveLaunchScreen(): void {
+  if (current?.discardImageAfterSearch) clearDraft();
+}
+
 /** La recherche de `searched` est partie : son image à ne pas garder est
  * effacée, et le brouillon n'y renvoie plus (« Recadrer » n'est alors plus
  * proposé). */

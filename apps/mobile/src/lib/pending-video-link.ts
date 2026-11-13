@@ -60,6 +60,15 @@ export function parsePendingLink(raw: string | null, now: number): PendingVideoL
   return link && isPendingLinkFresh(link, now) ? link : null;
 }
 
+/** Le compte de la session a changé (déconnexion, compte supprimé ou
+ * expiré, autre compte connecté) : le lien en attente, vu par la personne
+ * d'avant, est oublié (revue de sécurité : sur un appareil partagé, il
+ * rattachait la recherche suivante d'une autre personne à cette vidéo).
+ * `undefined` : session pas encore connue (démarrage) — rien n'est oublié. */
+export function sessionUserChanged(previous: string | null | undefined, next: string | null | undefined): boolean {
+  return previous !== undefined && next !== undefined && previous !== next;
+}
+
 /** Ce qu'il faut du stockage (AsyncStorage dans l'app). */
 export interface KeyValueStore {
   getItem(key: string): Promise<string | null>;

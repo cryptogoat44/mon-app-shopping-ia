@@ -34,9 +34,10 @@ import {
   isPendingLinkFresh,
   makePendingLink,
   parsePendingLink,
+  sessionUserChanged,
   type KeyValueStore,
 } from "../src/lib/pending-video-link";
-import { clearDraft, getDraft, startDraft } from "../src/lib/spot-draft";
+import { clearDraft, getDraft, leaveLaunchScreen, startDraft } from "../src/lib/spot-draft";
 import { identifyDraft } from "../src/lib/spot-identify";
 import { beginPhotoSearch, detachVideoFromDraft, pendingVideoLinks, spotWorthRecording } from "../src/lib/video-context";
 
@@ -232,5 +233,40 @@ describe("recherche associée au lien en attente, puis spot noté", () => {
     await pendingVideoLinks.hold({ url: URL_TIKTOK, platform: "tiktok" });
     await beginPhotoSearch({ uri: "file:///cache/b.jpg", width: 10, height: 20 }, "app");
     await expect(launch(search({ id: "s-3" }))).resolves.toBeUndefined();
+  });
+});
+
+describe("revue de sécurité : restes locaux et changement de compte", () => {
+  it("« Entourez la pièce » quitté (« ‹ ») : l'instantané ou la capture iOS est effacé avec son brouillon ; une photo ordinaire reste", () => {
+    startDraft({ searchId: null, localImageUri: "file:///cache/lecteur-instantane/a.jpg", imageSize: null, discardImageAfterSearch: true });
+    leaveLaunchScreen();
+    expect(discardLocalFile).toHaveBeenCalledWith("file:///cache/lecteur-instantane/a.jpg");
+    expect(getDraft()).toBeNull();
+    discardLocalFile.mockClear();
+    startDraft({ searchId: null, localImageUri: "file:///cache/photo.jpg", imageSize: null });
+    leaveLaunchScreen();
+    expect(discardLocalFile).not.toHaveBeenCalled();
+    expect(getDraft()?.localImageUri).toBe("file:///cache/photo.jpg");
+  });
+
+  it("recherche échouée : l'image reste pour « Relancer » tant que l'écran est là ; effacée quand on le quitte", async () => {
+    startDraft({ searchId: null, localImageUri: "file:///cache/recherche-image/capture.jpg", imageSize: { width: 1, height: 1 }, discardImageAfterSearch: true });
+    prepareSearch.mockResolvedValueOnce({ id: "s-9" });
+    runSearch.mockRejectedValueOnce(new Error("réseau"));
+    await identifyDraft(getDraft()!, new AbortController().signal).catch(() => undefined);
+    expect(discardLocalFile).not.toHaveBeenCalled();
+    expect(getDraft()?.localImageUri).toBe("file:///cache/recherche-image/capture.jpg");
+    leaveLaunchScreen();
+    expect(discardLocalFile).toHaveBeenCalledWith("file:///cache/recherche-image/capture.jpg");
+  });
+
+  it("compte de la session changé : le lien en attente est oublié ; premier état connu (démarrage) : gardé", () => {
+    expect(sessionUserChanged(undefined, "a")).toBe(false);
+    expect(sessionUserChanged(undefined, null)).toBe(false);
+    expect(sessionUserChanged("a", "a")).toBe(false);
+    expect(sessionUserChanged("a", null)).toBe(true);
+    expect(sessionUserChanged(null, "b")).toBe(true);
+    expect(sessionUserChanged("a", "b")).toBe(true);
+    expect(sessionUserChanged("a", undefined)).toBe(false);
   });
 });

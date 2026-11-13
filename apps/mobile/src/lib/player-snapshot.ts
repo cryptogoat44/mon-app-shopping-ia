@@ -13,12 +13,15 @@
 // Version site : player-snapshot.web.ts (jamais de capture sur le site).
 import { requireOptionalNativeModule } from "expo";
 import { Image } from "react-native";
+import { discardLocalFile } from "./video-frames";
 
 /** Nom du module natif local (modules/spotto-player-snapshot/ios). */
 const NATIVE_MODULE = "SpottoPlayerSnapshot";
 
 interface PlayerSnapshotModule {
-  /** JPEG de 1 600 px au plus, qualité 0,8, dans le cache de l'app : son adresse file://. */
+  /** JPEG de 1 600 px au plus, qualité 0,8, dans le sous-dossier
+   * « lecteur-instantane/ » du cache (vidé à chaque lancement :
+   * player-snapshot-files.ts) : son adresse file://. */
   snapshot(viewTag: number): Promise<string>;
 }
 
@@ -38,11 +41,17 @@ function imageSize(uri: string): Promise<{ width: number; height: number }> {
 
 /** Instantané du conteneur natif `viewTag` (celui qui entoure la vue web du
  * lecteur). Le fichier est à effacer par l'appelant (discardLocalFile) dès
- * que la recherche est partie, ou si elle est abandonnée. */
+ * que la recherche est partie, ou si elle est abandonnée. Taille illisible :
+ * le fichier est effacé ici, avant l'erreur (son adresse serait perdue). */
 export async function snapshotPlayer(viewTag: number): Promise<PlayerSnapshot> {
   if (!native) throw new Error("player snapshot module missing");
   const uri = await native.snapshot(viewTag);
   if (typeof uri !== "string" || !uri.startsWith("file://")) throw new Error("player snapshot: unexpected answer");
-  const { width, height } = await imageSize(uri);
-  return { uri, width, height };
+  try {
+    const { width, height } = await imageSize(uri);
+    return { uri, width, height };
+  } catch (error) {
+    discardLocalFile(uri);
+    throw error;
+  }
 }

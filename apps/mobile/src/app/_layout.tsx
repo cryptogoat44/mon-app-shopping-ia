@@ -12,6 +12,7 @@ import { resolveRootRoute, rootContent } from "@/lib/root-route";
 import { StartupWaiting } from "@/components/connecting";
 import { useShareIntake } from "@/lib/share-intake";
 import { useVisualSearchIntake } from "@/lib/visual-search-intake";
+import { clearPlayerSnapshots } from "@/lib/player-snapshot-files";
 import { useSharedItemWaitingNotice } from "@/lib/use-shared-item";
 import { useAppFonts } from "@/theme/fonts";
 import { useMinimumVersionCheck, useUpdateRequired } from "@/lib/use-app-update";
@@ -115,6 +116,8 @@ function ShareIntake() {
   useShareIntake();
   // Recherche d'image d'iOS (mission « liens vidéo ») : la capture attend le Spotter comme une image partagée.
   useVisualSearchIntake();
+  // Instantanés du lecteur laissés par une app fermée en plein parcours : effacés au lancement.
+  useEffect(clearPlayerSnapshots, []);
   return null;
 }
 

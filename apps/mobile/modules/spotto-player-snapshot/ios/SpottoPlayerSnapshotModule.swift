@@ -4,9 +4,12 @@
 //      (WKWebView.pauseAllMediaPlayback, iOS 15+) ;
 //   2. prend l'instantané de ce que la vue montre
 //      (WKWebView.takeSnapshot(with:completionHandler:)) ;
-//   3. l'écrit en JPEG (1 600 px au plus, qualité 0,8) dans le dossier de
-//      cache de l'app, et rend l'adresse du fichier. Le JS l'efface dès que
-//      la recherche est partie (src/lib/video-context.ts).
+//   3. l'écrit en JPEG (1 600 px au plus, qualité 0,8) dans le sous-dossier
+//      « lecteur-instantane/ » du cache de l'app, et rend l'adresse du
+//      fichier. Le JS l'efface dès que la recherche est partie ou que le
+//      parcours est abandonné (src/lib/video-context.ts), et vide ce dossier
+//      à chaque lancement de l'app (src/lib/player-snapshot-files.ts) : un
+//      instantané laissé par une app fermée en plein parcours ne reste pas.
 // Rien d'autre : pas d'enregistrement de l'écran (ReplayKit), pas de PDF,
 // aucun appel réseau, aucun fichier de la plateforme lu ou téléchargé.
 //
@@ -30,6 +33,9 @@ public final class SpottoPlayerSnapshotModule: Module {
   private static let maxSide: CGFloat = 1600
   /// Qualité du JPEG écrit.
   private static let quality: CGFloat = 0.8
+  /// Sous-dossier du cache, vidé par l'app à chaque lancement (même nom que
+  /// PLAYER_SNAPSHOT_FOLDER, src/lib/player-snapshot-files.ts).
+  static let folder = "lecteur-instantane"
 
   public func definition() -> ModuleDefinition {
     Name("SpottoPlayerSnapshot")
@@ -41,10 +47,11 @@ public final class SpottoPlayerSnapshotModule: Module {
           promise.reject(WebViewNotFoundException())
           return
         }
-        guard let directory = self.appContext?.config.cacheDirectory else {
+        guard let cache = self.appContext?.config.cacheDirectory else {
           promise.reject(Exceptions.AppContextLost())
           return
         }
+        let directory = cache.appendingPathComponent(Self.folder, isDirectory: true)
         let area = webView.bounds
         guard area.width >= 1, area.height >= 1 else {
           promise.reject(EmptyAreaException())
@@ -80,7 +87,8 @@ public final class SpottoPlayerSnapshotModule: Module {
 }
 
 /// Réduit l'image (1 600 px au plus sur son plus grand côté), l'encode en JPEG
-/// hors du fil principal, l'écrit dans le cache, puis rend l'adresse du fichier.
+/// hors du fil principal, l'écrit dans le sous-dossier du cache (créé au
+/// besoin), puis rend l'adresse du fichier.
 private func writeJPEG(_ image: UIImage, maxSide: CGFloat, quality: CGFloat, into directory: URL, promise: Promise) {
   DispatchQueue.global(qos: .userInitiated).async {
     let pixels = CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale)
@@ -98,6 +106,7 @@ private func writeJPEG(_ image: UIImage, maxSide: CGFloat, quality: CGFloat, int
     }
     let file = directory.appendingPathComponent("lecteur-instantane-\(UUID().uuidString).jpg")
     do {
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
       try data.write(to: file, options: .atomic)
     } catch {
       promise.reject(SnapshotFailedException("write: \(error.localizedDescription)"))

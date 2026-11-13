@@ -13,8 +13,14 @@
 //      le lien « <schéma>://recherche-image?fichier=<identifiant> ».
 //      L'app lit le fichier, lance sa recherche habituelle, puis l'efface
 //      (apps/mobile/src/lib/visual-search-intake.ts).
-// Une capture jamais ouverte est effacée au bout d'une heure (au passage
-// suivant). Rien n'est gardé ailleurs, rien n'est envoyé d'ici.
+// iOS demande le résultat AVANT que la personne choisisse l'app (et à chaque
+// zone redessinée) : la capture est donc écrite même si elle ne touche jamais
+// « Trouver cette pièce ». Revue de sécurité : chaque nouvelle capture efface
+// TOUTES les précédentes (une seule capture au plus dans le dossier), le
+// dossier est exclu des sauvegardes iCloud et ordinateur, et l'app efface au
+// lancement et à chaque retour au premier plan toute capture de plus de
+// 10 minutes (sauf celle qu'elle ouvre). Rien n'est gardé ailleurs, rien
+// n'est envoyé d'ici.
 //
 // Ce fichier est ajouté à la cible principale de l'app par le plugin
 // apps/mobile/plugins/recherche-image.js (le dossier ios/ est généré à chaque
@@ -51,8 +57,6 @@ enum SpottoCaptures {
   static let maxSide: CGFloat = 1600
   /// Qualité du JPEG rangé.
   static let quality: CGFloat = 0.8
-  /// Une capture jamais ouverte est effacée au bout d'une heure.
-  static let maxAge: TimeInterval = 3600
 
   static var appGroup: String? { Bundle.main.object(forInfoDictionaryKey: "SpottoAppGroup") as? String }
   static var scheme: String? { Bundle.main.object(forInfoDictionaryKey: "SpottoScheme") as? String }
@@ -76,8 +80,13 @@ enum SpottoCaptures {
 
   static var directory: URL? {
     guard let container else { return nil }
-    let url = container.appendingPathComponent(folder, isDirectory: true)
+    var url = container.appendingPathComponent(folder, isDirectory: true)
     try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    // Jamais dans les sauvegardes iCloud ou ordinateur (le conteneur du groupe
+    // d'apps, lui, y entre par défaut).
+    var values = URLResourceValues()
+    values.isExcludedFromBackup = true
+    try? url.setResourceValues(values)
     return url
   }
 
@@ -92,21 +101,18 @@ enum SpottoCaptures {
     return FileManager.default.fileExists(atPath: url.path)
   }
 
-  /// Efface les captures de plus d'une heure, jamais ouvertes.
-  static func purge() {
+  /// Efface TOUTES les captures déjà rangées, ouvertes ou non : il n'en reste
+  /// jamais plus d'une (la dernière demandée par iOS).
+  static func removeAll() {
     guard let directory,
-          let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey])
+          let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
     else { return }
-    let limit = Date().addingTimeInterval(-maxAge)
-    for file in files {
-      let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-      if let modified, modified < limit { try? FileManager.default.removeItem(at: file) }
-    }
+    for file in files { try? FileManager.default.removeItem(at: file) }
   }
 
   /// Range l'image de la capture (JPEG, 1 600 px au plus) ; rend son identifiant.
   static func save(_ pixelBuffer: CVReadOnlyPixelBuffer) -> String? {
-    purge()
+    removeAll()
     let image = CIImage(cvPixelBuffer: pixelBuffer)
     let extent = image.extent
     guard extent.width > 0, extent.height > 0 else { return nil }

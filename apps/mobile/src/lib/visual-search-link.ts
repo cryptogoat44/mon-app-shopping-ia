@@ -8,8 +8,12 @@ import { APP_SCHEME } from "../constants/brand";
 export const VISUAL_SEARCH_FOLDER = "recherche-image";
 /** Lien d'ouverture en attente, dans le groupe d'apps (même nom que dans le Swift). */
 export const PENDING_VISUAL_SEARCH_FILE = "recherche-image-en-attente.txt";
-/** Au-delà, une capture jamais ouverte est oubliée (le Swift l'efface au bout d'une heure). */
-export const VISUAL_SEARCH_MAX_AGE_MS = 60 * 60_000;
+/** Au-delà, une capture du groupe d'apps est effacée par l'app (au lancement
+ * et à chaque retour au premier plan, sauf celle qu'elle ouvre), et un lien
+ * resté dans le fichier d'attente n'est plus relu. iOS écrit la capture dès
+ * qu'il montre le résultat, avant tout choix de la personne (revue de
+ * sécurité) : elle ne doit pas rester. */
+export const VISUAL_SEARCH_MAX_AGE_MS = 10 * 60_000;
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const CAPTURE_ID = new RegExp(`^${UUID}$`);
@@ -41,6 +45,14 @@ export function pendingVisualSearchOpening(content: string, modifiedAt: number |
 /** Nom du fichier d'une capture dans le dossier du groupe d'apps. */
 export function captureFileName(id: string): string {
   return `${id}.jpg`;
+}
+
+/** Fichiers du dossier des captures à effacer : ceux de plus de 10 minutes,
+ * sauf les captures en cours d'ouverture. Date illisible : laissé (il peut
+ * s'agir de la capture qu'on va ouvrir) ; la capture suivante l'efface. */
+export function staleCaptureNames(entries: readonly { name: string; modifiedAt: number | null }[], opening: Iterable<string>, now: number): string[] {
+  const kept = new Set([...opening].map(captureFileName));
+  return entries.filter((entry) => !kept.has(entry.name) && entry.modifiedAt !== null && now - entry.modifiedAt > VISUAL_SEARCH_MAX_AGE_MS).map((entry) => entry.name);
 }
 
 /** Un identifiant de capture : un UUID en minuscules, rien d'autre (jamais un chemin). */

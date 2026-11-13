@@ -77,3 +77,31 @@ describe("fichier Swift de la recherche d'image", () => {
     expect(code).toContain(`static let pendingFile = "${link.PENDING_VISUAL_SEARCH_FILE}"`);
   });
 });
+
+describe("revue de sécurité : une capture ne reste pas (écrite avant tout choix de la personne)", () => {
+  /** Corps de la fonction Swift `name` (jusqu'à la fonction suivante). */
+  const body = (name: string) => code.slice(code.indexOf(`static func ${name}(`), code.indexOf("static func", code.indexOf(`static func ${name}(`) + 1));
+
+  it("save() efface TOUTES les captures précédentes avant d'écrire la nouvelle, sans condition d'âge", () => {
+    const save = body("save");
+    expect(save.indexOf("removeAll()")).toBeGreaterThan(-1);
+    expect(save.indexOf("removeAll()")).toBeLessThan(save.indexOf("data.write"));
+    const removeAll = body("removeAll");
+    expect(removeAll).toContain("contentsOfDirectory(at: directory");
+    expect(removeAll).toContain("for file in files { try? FileManager.default.removeItem(at: file) }");
+    // Plus aucun délai d'une heure : ni maxAge, ni comparaison de dates.
+    for (const gone of ["maxAge", "purge()", "contentModificationDate", "3600"]) expect(code, gone).not.toContain(gone);
+  });
+
+  it("le dossier des captures est exclu des sauvegardes iCloud et ordinateur", () => {
+    const directory = code.slice(code.indexOf("static var directory: URL?"), code.indexOf("static func fileURL("));
+    expect(directory).toContain("URLResourceValues()");
+    expect(directory).toContain("isExcludedFromBackup = true");
+    expect(directory).toContain("setResourceValues(values)");
+  });
+
+  it("le commentaire d'en-tête ne promet plus « effacée au bout d'une heure »", () => {
+    expect(swift).not.toMatch(/au bout d'une heure/);
+    expect(swift).toContain("TOUTES les précédentes");
+  });
+});
