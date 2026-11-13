@@ -11,6 +11,7 @@ import { ApiError } from "../src/lib/api-error";
 import {
   ALERTS_UNAVAILABLE,
   activeKinds,
+  alertDetails,
   alertKindsText,
   alertsKeepDevice,
   bellButtonText,
@@ -35,6 +36,7 @@ import {
   stockReportErrorMessage,
   stockReportRequest,
   switchTurnsOn,
+  targetHint,
   targetPriceText,
   visibleAlertKinds,
   watchErrorMessage,
@@ -637,6 +639,65 @@ describe("nouvelle version (0041) : le seuil de la baisse de prix", () => {
     expect(sheet).toContain('keyboardType="decimal-pad"');
     expect(sheet).toContain("accessibilityLabel={t.wishAlerts.targetFieldLabel(currencySymbol(targetCurrency))}");
     expect(sheet).toContain("const changedTarget = targetFieldShown && targetText !== initialTargetText.current && target !== \"invalid\" ? target : undefined;");
+  });
+});
+
+describe("revue (0041) : la fiche dit ce qui a changé, la feuille dit d'où vient le prix, le clavier se ferme", () => {
+  /** Espaces insécables d'Intl ramenées à des espaces. */
+  const plain = (text: string | null) => (text ?? "").replace(/[\u00a0\u202f]/g, " ");
+
+  it("fiche d'une envie : « Dernier prix vu : 89,90 € » et l'état du stock, seulement quand ils sont connus (FR et EN)", () => {
+    expect(alertDetails(state({ lastPrice: 89.9, lastCurrency: "EUR", stock: "sold_out" }), "fr").stock).toBe("Épuisée");
+    expect(plain(alertDetails(state({ lastPrice: 89.9, lastCurrency: "EUR" }), "fr").lastPrice)).toBe("Dernier prix vu : 89,90 €");
+    expect(alertDetails(state({ stock: "in_stock" }), "fr")).toEqual({ lastPrice: null, stock: "Disponible" });
+    expect(alertDetails(state(), "fr")).toEqual({ lastPrice: null, stock: null });
+    expect(alertDetails(null, "fr")).toEqual({ lastPrice: null, stock: null });
+    setActiveLocale("en");
+    expect(plain(alertDetails(state({ lastPrice: 120, lastCurrency: "GBP", stock: "in_stock" }), "en").lastPrice)).toBe("Last price seen: £120");
+    expect(alertDetails(state({ stock: "sold_out" }), "en").stock).toBe("Sold out");
+  });
+
+  it("la fiche affiche ces lignes depuis l'état de la cloche qu'elle charge déjà (la notification reste générique)", () => {
+    expect(envie).toContain("const details = alertDetails(alertState, getActiveLocale());");
+    expect(envie).toContain('testID="dernier-prix-vu"');
+    expect(envie).toContain('testID="etat-du-stock"');
+    expect(envie).toContain("setAlertState(status.available ? await fetchWishAlert(id) : null);");
+  });
+
+  it("indication sous le seuil : seuil enregistré, pré-rempli par le dernier prix vu, tapé par la personne, ou champ vide", () => {
+    const saved = state({ targetPrice: 120, lastPrice: 89, lastCurrency: "EUR" });
+    expect(plain(targetHint(saved, "120", "120", "fr"))).toBe("Votre seuil enregistré. Dernier prix vu : 89 €.");
+    expect(targetHint(state({ targetPrice: 120 }), "120", "120", "fr")).toBe("Votre seuil enregistré.");
+    const prefilled = state({ lastPrice: 89, lastCurrency: "EUR" });
+    expect(targetHint(prefilled, "89", "89", "fr")).toBe("Pré-rempli avec le dernier prix vu. Vous pouvez le baisser.");
+    // Tapé par la personne : jamais « pré-rempli ».
+    expect(plain(targetHint(prefilled, "75", "89", "fr"))).toBe("Dernier prix vu : 89 €.");
+    expect(targetHint(state(), "75", "", "fr")).toBeNull();
+    // Champ vide : le dernier prix vu servira de seuil s'il est connu, sinon le premier prix vu.
+    expect(plain(targetHint(prefilled, "", "89", "fr"))).toBe("Sans prix indiqué, le dernier prix vu (89 €) servira de seuil.");
+    expect(targetHint(state(), "", "", "fr")).toBe("Sans prix indiqué, le premier prix vu servira de seuil.");
+    setActiveLocale("en");
+    expect(plain(targetHint(saved, "120", "120", "en"))).toBe("Your saved threshold. Last price seen: €89.");
+    for (const text of [fr.wishAlerts.targetHintSaved, fr.wishAlerts.targetHintNoCountry, fr.wishAlerts.lastSeenPrice("89 €")]) expect(text).not.toMatch(/[Pp]ré-rempli/);
+    expect(sheet).toContain("const hint = targetHint(state, targetText, initialTargetText.current, locale);");
+    expect(sheet).not.toContain("targetText === \"\" ? t.wishAlerts.targetHintNone : t.wishAlerts.targetHintLast");
+  });
+
+  it("devise inconnue (aucun pays pris en charge) : pas de champ, mais une indication honnête sous « Baisse de prix »", () => {
+    expect(fr.wishAlerts.targetHintNoCountry).toBe("Le premier prix vu en France, au Royaume-Uni, en Suisse ou aux États-Unis servira de seuil ; vous pourrez ensuite le baisser.");
+    expect(en.wishAlerts.targetHintNoCountry).toContain("The first price seen in France, the UK, Switzerland or the US");
+    expect(sheet).toMatch(/\) : choice\.price_drop \? \(\s*<Text style=\{styles\.optionHint\}>\{t\.wishAlerts\.targetHintNoCountry\}<\/Text>/);
+  });
+
+  it("iPhone : le pavé numérique se ferme (« OK » / « Done ») et la feuille remonte au-dessus du clavier, comme l'écran de connexion", () => {
+    expect(sheet).toContain('returnKeyType="done"');
+    expect(sheet).toContain("inputAccessoryViewButtonLabel={t.wishAlerts.keyboardDone}");
+    expect(sheet).toContain("onSubmitEditing={() => Keyboard.dismiss()}");
+    expect(sheet).toContain('<KeyboardAvoidingView style={styles.avoider} behavior={Platform.OS === "ios" ? "padding" : undefined}>');
+    expect(sheet.indexOf("<KeyboardAvoidingView")).toBeLessThan(sheet.indexOf('testID="enregistrer-alerte"'));
+    expect(sheet.indexOf("</KeyboardAvoidingView>")).toBeGreaterThan(sheet.indexOf('testID="enregistrer-alerte"'));
+    expect(fr.wishAlerts.keyboardDone).toBe("OK");
+    expect(en.wishAlerts.keyboardDone).toBe("Done");
   });
 });
 

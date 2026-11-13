@@ -36,6 +36,8 @@ import {
 import type { Piece } from "../api/types";
 import { t } from "../i18n";
 import { ApiError } from "./api-error";
+import { formatPrice } from "./format";
+import type { Locale } from "./preferences";
 
 /** Alertes indisponibles : tout est caché. */
 export const ALERTS_UNAVAILABLE: WishAlertsStatus = { available: false, enabled: false, helpOthers: true, push: false };
@@ -183,6 +185,37 @@ export function targetPriceText(value: number | null, locale: string): string {
   if (value === null) return "";
   const text = String(Math.round(value * 100) / 100);
   return locale.startsWith("fr") ? text.replace(".", ",") : text;
+}
+
+/** Le dernier prix vu, écrit dans la langue de l'app (« 89 € »), ou null. */
+function lastSeenText(state: Pick<WishAlertState, "lastPrice" | "lastCurrency"> | null, locale: Locale): string | null {
+  return state && state.lastPrice !== null && state.lastCurrency ? formatPrice(state.lastPrice, state.lastCurrency, locale) : null;
+}
+
+/** L'indication sous le seuil, selon d'où vient le prix du champ : le seuil
+ * enregistré (inchangé), le dernier prix vu qui le pré-remplit (inchangé),
+ * un prix tapé par la personne (aucun « pré-rempli »), ou un champ vide (le
+ * dernier prix vu servira de seuil, ou le premier prix vu s'il n'y en a pas). */
+export function targetHint(
+  state: Pick<WishAlertState, "targetPrice" | "lastPrice" | "lastCurrency"> | null,
+  text: string,
+  initialText: string,
+  locale: Locale
+): string | null {
+  const last = lastSeenText(state, locale);
+  if (text.trim() === "") return last ? t.wishAlerts.targetHintEmptyLast(last) : t.wishAlerts.targetHintNone;
+  if (text === initialText && state?.targetPrice != null) return last ? t.wishAlerts.targetHintSavedWithLast(last) : t.wishAlerts.targetHintSaved;
+  if (text === initialText && state?.lastPrice != null) return t.wishAlerts.targetHintLast;
+  return last ? `${t.wishAlerts.lastSeenPrice(last)}.` : null;
+}
+
+/** Ce que la fiche d'une envie montre de son suivi, chargé depuis le serveur
+ * (la notification d'une alerte reste générique) : le dernier prix vu (pays
+ * et devise de la personne) et l'état du stock, quand ils sont connus. */
+export function alertDetails(state: Pick<WishAlertState, "lastPrice" | "lastCurrency" | "stock"> | null, locale: Locale): { lastPrice: string | null; stock: string | null } {
+  const last = lastSeenText(state, locale);
+  const stock = state?.stock === "in_stock" ? t.wishAlerts.stockAvailable : state?.stock === "sold_out" ? t.wishAlerts.stockSoldOut : null;
+  return { lastPrice: last ? t.wishAlerts.lastSeenPrice(last) : null, stock };
 }
 
 /** Le symbole de la devise du seuil (« € », « £ », « $ », sinon le code). */

@@ -779,7 +779,18 @@ export const fr = {
     targetFieldLabel: (currency: string) => `Seuil de prix, en ${currency}`,
     targetHintLast: "Pré-rempli avec le dernier prix vu. Vous pouvez le baisser.",
     targetHintNone: "Sans prix indiqué, le premier prix vu servira de seuil.",
+    // Revue : chaque indication dit d'où vient le prix affiché.
+    targetHintSaved: "Votre seuil enregistré.",
+    targetHintSavedWithLast: (price: string) => `Votre seuil enregistré. Dernier prix vu : ${price}.`,
+    targetHintEmptyLast: (price: string) => `Sans prix indiqué, le dernier prix vu (${price}) servira de seuil.`,
+    targetHintNoCountry:
+      "Le premier prix vu en France, au Royaume-Uni, en Suisse ou aux États-Unis servira de seuil ; vous pourrez ensuite le baisser.",
     targetInvalid: "Indiquez un prix, par exemple 89,90.",
+    keyboardDone: "OK",
+    // La fiche d'une envie dit ce qui a changé (la notification reste générique).
+    lastSeenPrice: (price: string) => `Dernier prix vu : ${price}`,
+    stockAvailable: "Disponible",
+    stockSoldOut: "Épuisée",
     switchTurnsOn: "Cela active aussi « Alertes prix et stock » dans les Réglages.",
     pushSoon: "Les alertes sont enregistrées ; les notifications seront bientôt disponibles.",
     iphoneOnly: `Les notifications des alertes arrivent sur l'app ${BRAND} pour iPhone.`,
