@@ -15,7 +15,7 @@ import { formatDayMonth } from "./format";
 import { isNetworkError } from "./network-error";
 import type { Locale } from "./preferences";
 import { PHOTO_SOURCE_MAX_BYTES, PHOTO_UPLOAD_MAX_BYTES, type PhotoRefusal } from "./tryon-photo.web";
-import { tryonItemId, type PieceForTryon } from "./tryon-read.web";
+import { tryonItemId, type BirthDateIssue, type PieceForTryon } from "./tryon-read.web";
 
 /** Fuseau des quotas (mois civil) et de la porte d'âge, comme le serveur. */
 const PARIS_TIME_ZONE = "Europe/Paris";
@@ -216,6 +216,20 @@ export function reportFailureMessage(failure: TryonFailure, status: TryonStatus,
 /** Retrait du consentement non enregistré. */
 export function withdrawFailureMessage(failure: TryonFailure): string {
   return failure.kind === "offline" ? tryonText.fallback.offline : tryonText.settings.error;
+}
+
+/** Date de naissance refusée avant l'envoi (lib/tryon-read.web.ts, checkBirthDate). */
+export function birthDateIssueMessage(issue: BirthDateIssue): string {
+  switch (issue) {
+    case "incomplete":
+      return tryonText.age.incomplete;
+    case "invalid":
+      return tryonText.age.invalid;
+    case "future":
+      return tryonText.age.future;
+    case "too_old":
+      return tryonText.age.tooOld;
+  }
 }
 
 const megabytes = (bytes: number) => Math.round(bytes / (1024 * 1024));

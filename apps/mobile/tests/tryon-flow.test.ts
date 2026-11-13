@@ -6,6 +6,7 @@ import { tryonEn } from "../src/i18n/tryon-en.web";
 import { ApiError } from "../src/lib/api-error";
 import {
   LOADING,
+  birthDateIssueMessage,
   canWithdrawConsent,
   entryItemId,
   failureNeedsStatus,
@@ -175,6 +176,15 @@ describe("porte d'âge : contrôle immédiat avant l'envoi (le serveur décide d
     for (const value of ["2023-02-29", "1990-13-01", "1990-04-31", "1990-00-10"]) expect(checkBirthDate(value, today), value).toBe("invalid");
     expect(checkBirthDate("1899-12-31", today)).toBe("too_old");
     expect(checkBirthDate("2026-11-14", today)).toBe("future");
+  });
+
+  it("un message par motif, dans la langue de l'app", () => {
+    expect(birthDateIssueMessage("incomplete")).toBe("Indiquez une date de naissance complète.");
+    expect(birthDateIssueMessage("invalid")).toBe("Cette date n'existe pas. Vérifiez-la, puis réessayez.");
+    expect(birthDateIssueMessage("future")).toBe("Cette date est dans le futur.");
+    expect(birthDateIssueMessage("too_old")).toBe("Indiquez une date à partir du 1er janvier 1900.");
+    setActiveLocale("en");
+    expect(birthDateIssueMessage("too_old")).toBe("Enter a date from 1 January 1900 onwards.");
   });
 
   it("le jour de référence est celui de Paris", () => {
