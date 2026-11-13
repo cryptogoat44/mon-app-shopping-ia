@@ -36,7 +36,13 @@
     "images-marque": "tsx scripts/images-marque.ts",
     "parcours-iphone": "tsx scripts/parcours-iphone/index.ts",
     "sauvegarder-photos": "tsx scripts/sauvegarder-photos.ts",
-    "rattraper-suivi-envies-dev": "tsx scripts/rattraper-suivi-envies-dev.ts"
+    "rattraper-suivi-envies-dev": "tsx scripts/rattraper-suivi-envies-dev.ts",
+    "tryon:report": "tsx scripts/tryon-report.ts",
+    "tryon:flag": "tsx scripts/tryon-flag.ts",
+    "tryon:grant-bonus": "tsx scripts/tryon-grant-bonus.ts",
+    "tryon:reset-age": "tsx scripts/tryon-reset-age.ts",
+    "tryon:purge": "tsx scripts/tryon-purge.ts",
+    "tryon:smoke": "tsx scripts/tryon-smoke.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",

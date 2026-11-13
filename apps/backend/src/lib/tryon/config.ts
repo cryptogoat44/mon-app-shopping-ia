@@ -168,19 +168,16 @@ function readApiKey(source: TryonEnvSource, problems: string[]): string | null {
   return key;
 }
 
-/** Réglages de l'essayage, vérifiés. `nodeEnv` : celui du processus (le
- * faux fournisseur est refusé en production). */
-export function readTryonConfig(source: TryonEnvSource, nodeEnv: string | undefined): TryonConfigState {
-  if (source.TRYON_ENABLED !== true) return { state: "off" };
-  const problems: string[] = [];
-  const provider = readProvider(source.TRYON_PROVIDER, problems);
-  if (provider === "fake" && nodeEnv === "production") {
-    problems.push("TRYON_PROVIDER : le faux fournisseur est refusé en production");
-  }
-  const apiKey = provider === "fashn" ? readApiKey(source, problems) : null;
-  const config: TryonConfig = {
-    provider,
-    apiKey,
+/** Les réglages sans la clé ni l'interrupteur. */
+export type TryonSettings = Omit<TryonConfig, "apiKey">;
+
+/** Les réglages de l'essayage, hors interrupteur et hors clé (jamais lue
+ * ici) : les scripts du fondateur s'en servent même essayage éteint
+ * (rapport du mois, essais offerts). Chaque valeur invalide ajoute une
+ * raison à `problems` et prend sa valeur par défaut. */
+export function readTryonSettings(source: TryonEnvSource, problems: string[]): TryonSettings {
+  return {
+    provider: readProvider(source.TRYON_PROVIDER, problems),
     apiBaseUrl: readBaseUrl(source.FASHN_API_BASE_URL, problems),
     freePerMonth: readNumber("TRYON_FREE_PER_MONTH", source.TRYON_FREE_PER_MONTH, problems),
     bonusPerPurchase: readNumber("TRYON_BONUS_PER_PURCHASE", source.TRYON_BONUS_PER_PURCHASE, problems),
@@ -192,6 +189,19 @@ export function readTryonConfig(source: TryonEnvSource, nodeEnv: string | undefi
     minProviderCredits: readNumber("TRYON_MIN_FASHN_CREDITS", source.TRYON_MIN_FASHN_CREDITS, problems),
     timeZone: readTimeZone(source.TRYON_TIMEZONE, problems),
   };
+}
+
+/** Réglages de l'essayage, vérifiés. `nodeEnv` : celui du processus (le
+ * faux fournisseur est refusé en production). */
+export function readTryonConfig(source: TryonEnvSource, nodeEnv: string | undefined): TryonConfigState {
+  if (source.TRYON_ENABLED !== true) return { state: "off" };
+  const problems: string[] = [];
+  const settings = readTryonSettings(source, problems);
+  if (settings.provider === "fake" && nodeEnv === "production") {
+    problems.push("TRYON_PROVIDER : le faux fournisseur est refusé en production");
+  }
+  const apiKey = settings.provider === "fashn" ? readApiKey(source, problems) : null;
+  const config: TryonConfig = { ...settings, apiKey };
   return problems.length > 0 ? { state: "invalid", problems } : { state: "ready", config };
 }
 
