@@ -1646,22 +1646,15 @@ export function alertCurrency(raw: string | null | undefined, country: string | 
  * Google, serpapi.ts) ; un autre pays : devise inconnue ici. */
 export const COUNTRY_CURRENCIES: Readonly<Record<string, string>> = { fr: "EUR", gb: "GBP", ch: "CHF", us: "USD" };
 
-/** Pays de recherche pris en charge : liste FERMÉE, celle dont la devise
+/** Pays pris en charge par les ALERTES : liste FERMÉE, celle dont la devise
  * (COUNTRY_CURRENCIES) et le domaine de Google (serveur, services/serpapi.ts)
- * sont connus. Le pays d'une recherche en anglais vient de la région de
- * l'appareil (en-tête Accept-Language) ; toute autre région vaut les
- * États-Unis (serveur lib/locale.ts, app lib/foreign-shop.ts). Revue de
- * sécurité : avant, n'importe quelles deux lettres étaient acceptées, et une
- * recherche « en-NZ » pouvait figer le prix de référence des autres membres. */
+ * sont connus. La recherche elle-même garde le pays de l'appareil, quel qu'il
+ * soit (serveur lib/locale.ts) ; mais seul un prix observé dans l'un de ces
+ * pays sert aux alertes (lib/wishObserve.ts), et seul l'un d'eux est gardé
+ * comme pays du membre (lib/wishAlerts.ts). Revue de sécurité : une recherche
+ * « en-NZ » pouvait figer le prix de référence des autres membres. */
 export const SEARCH_COUNTRIES = ["fr", "gb", "ch", "us"] as const;
 export type SearchCountry = (typeof SEARCH_COUNTRIES)[number];
-
-/** Le pays de recherche d'une région d'appareil (« GB », « nz »…) : un pays
- * pris en charge, sinon les États-Unis. */
-export function searchCountryOfRegion(region: string | null | undefined): SearchCountry {
-  const code = typeof region === "string" ? region.toLowerCase() : "";
-  return (SEARCH_COUNTRIES as readonly string[]).includes(code) ? (code as SearchCountry) : "us";
-}
 
 /** Le prix est-il dans la devise du pays de la recherche ? null : la devise
  * de ce pays n'est pas connue ici. Sans devise lisible : non. */

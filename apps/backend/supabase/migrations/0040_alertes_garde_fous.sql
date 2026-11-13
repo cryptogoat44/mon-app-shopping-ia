@@ -78,6 +78,12 @@ alter table wish_tracking add column if not exists sold_out_source text;
 alter table wish_tracking add column if not exists member_country text;
 alter table wish_tracking add column if not exists bought_on date;
 
+-- Pays du membre pour les suivis déjà là : en français, la recherche se fait
+-- toujours en France ; en anglais, la région n'est pas connue (aucun pays).
+update wish_tracking t set member_country = 'fr'
+  from profiles p
+  where p.id = t.user_id and p.locale = 'fr' and t.member_country is null;
+
 -- Origine inconnue (avant 0040) : comme un signalement (aucune alerte « retour en stock »).
 update wish_tracking set sold_out_source = 'members' where stock_state = 'sold_out' and sold_out_source is null;
 update wish_tracking set sold_out_source = null where stock_state <> 'sold_out' and sold_out_source is not null;

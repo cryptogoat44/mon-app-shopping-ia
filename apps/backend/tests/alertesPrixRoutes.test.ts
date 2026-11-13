@@ -34,6 +34,7 @@ import { backfillWishTracking, forgetPurchase, markPurchase } from "../src/lib/w
 import { resetWishAlertsProbe, wishAlertsReady, wishAlertsSchemaState } from "../src/lib/wishAlertsSchema.js";
 import { WISHLIST_ITEMS_MAX } from "@monapp/shared-types";
 import { readFileSync } from "node:fs";
+import { RATE_LIMITS } from "../src/lib/rateLimits.js";
 import { join } from "node:path";
 
 const ownMatchMock = vi.mocked(findOwnMatch);
@@ -250,18 +251,25 @@ describe("avec 0036 sans 0040 (garde-fous absents) : les alertes se taisent", ()
 });
 
 describe("pays de la personne sur le suivi (entrees-08)", () => {
-  it("gardé à la création ; une région que la recherche ne prend pas en charge vaut les États-Unis", async () => {
+  it("gardé à la création, seulement pour un pays pris en charge par les alertes ; le rattrapage donne « fr » aux membres francophones", async () => {
     const fake = seeded();
     const target = await alertsApp(fake.db);
     const british = await newWish(target, { merchantUrl: "https://boutique-exemple.fr/a", merchantName: "Boutique Exemple" }, ALICE, "en-GB");
     const kiwi = await newWish(target, { merchantUrl: "https://boutique-exemple.fr/b", merchantName: "Boutique Exemple" }, ALICE, "en-NZ");
     const countryOf = (id: string) => fake.table("wish_tracking").find((row) => row.wishlist_item_id === id)?.member_country;
     expect(countryOf(british)).toBe("gb");
-    expect(countryOf(kiwi)).toBe("us");
-    // Le rattrapage (envies d'avant) : aucun pays, comme avant.
+    // Région non prise en charge : la recherche garde « nz », mais aucun pays n'est gardé pour les alertes.
+    expect(countryOf(kiwi) ?? null).toBeNull();
+    // Le rattrapage (envies d'avant) : « fr » pour un membre francophone (la recherche se fait alors toujours en France),
+    // aucun pays pour un membre anglophone (sa région n'est pas connue ici).
     fake.table("wish_tracking").length = 0;
+    fake.table("profiles").find((row) => row.id === BOB)!.locale = "en";
+    fake.table("wishlist_items").push({ id: "e0000000-0000-4000-8000-0000000000b9", user_id: BOB, title: "Sac", image_url: "https://images.example/sac.jpg", merchant_url: "https://boutique-exemple.fr/sac", merchant_name: "Boutique Exemple", product_match_id: null, created_at: "2026-11-01T10:00:00+00:00" });
     await backfillWishTracking(target);
-    expect(fake.table("wish_tracking").every((row) => !("member_country" in row))).toBe(true);
+    const tracked = fake.table("wish_tracking");
+    expect(tracked.filter((row) => row.user_id === ALICE).length).toBeGreaterThan(0);
+    expect(tracked.filter((row) => row.user_id === ALICE).every((row) => row.member_country === "fr")).toBe(true);
+    expect(tracked.filter((row) => row.user_id === BOB).every((row) => (row.member_country ?? null) === null)).toBe(true);
   });
 });
 
@@ -315,21 +323,34 @@ describe("oublier un appareil par son seul jeton, sans session (alertes-03, app-
     expect(fake.table("push_tokens")).toHaveLength(1);
   });
 
-  it("limite stricte par adresse IP : au-delà de 10 par heure, 429 ; une autre adresse n'est pas touchée", async () => {
+  it("limite par appareil (jamais par adresse IP, souvent commune chez l'hébergeur) : au-delà de 10 par heure pour un même jeton, 429 ; un autre appareil, même depuis la même adresse, n'est pas touché", async () => {
     const fake = seeded();
     const target = await alertsApp(fake.db);
     // Les limites sont coupées sous vitest (NODE_ENV « test ») : rallumées ici.
     const before = process.env.NODE_ENV;
     process.env.NODE_ENV = "development";
     try {
-      for (let index = 0; index < 10; index += 1) expect((await forget(target, { token: TABLET }, "198.51.100.42")).statusCode).toBe(204);
-      const limited = await forget(target, { token: TABLET }, "198.51.100.42");
+      // Même adresse pour tout le monde, comme derrière le relais de l'hébergeur.
+      const relay = "10.0.0.1";
+      for (let index = 0; index < 10; index += 1) expect((await forget(target, { token: TABLET }, relay)).statusCode).toBe(204);
+      const limited = await forget(target, { token: TABLET }, relay);
       expect(limited.statusCode).toBe(429);
       expect(limited.json()).toMatchObject({ error: "push_token_forget_limit" });
-      expect((await forget(target, { token: TABLET }, "198.51.100.43")).statusCode).toBe(204);
+      // Changer d'adresse ne contourne pas la limite de cet appareil…
+      expect((await forget(target, { token: TABLET }, "198.51.100.43")).statusCode).toBe(429);
+      // … et un autre appareil, derrière la même adresse, oublie normalement.
+      expect((await forget(target, { token: PHONE }, relay)).statusCode).toBe(204);
     } finally {
       process.env.NODE_ENV = before;
     }
+  });
+
+  it("plafond commun large pour tout le service, et jamais le jeton dans la clé de la limite", () => {
+    expect(RATE_LIMITS.pushTokenForget).toMatchObject({ max: 10, windowMs: 60 * 60 * 1000 });
+    expect(RATE_LIMITS.pushTokenForgetGlobal).toMatchObject({ max: 3000, scope: "global" });
+    const route = readFileSync(join(__dirname, "../src/routes/pushTokens.ts"), "utf8");
+    expect(route).toContain('createHash("sha256").update(body.token)');
+    expect(route).not.toMatch(/consumeRateLimitFor\(body\.token/);
   });
 
   it("sans la migration 0035 : 204, rien à oublier", async () => {
@@ -903,9 +924,16 @@ describe("export RGPD et suppression du compte", () => {
         last_seen_on: "2026-11-08",
         stock_state: "in_stock",
         stock_on: "2026-11-08",
+        // Garde-fous (0040) : SON pays, l'origine d'un « épuisée », son achat. Jamais le pays des observations
+        // (ref_country, last_country), qui peut venir de la recherche d'un autre membre.
+        member_country: null,
+        sold_out_source: null,
+        bought_on: null,
         wishlist_item_title: "Ancienne envie",
       },
     ]);
+    expect(body.wishTracking[0]).not.toHaveProperty("ref_country");
+    expect(body.wishTracking[0]).not.toHaveProperty("last_country");
     expect(body.wishAlertEvents).toEqual([
       { id: "0e000000-0000-4000-8000-000000000001", wishlist_item_id: OLD_WISH, kind: "price_drop", old_price: 120, new_price: 99, currency: "EUR", status: "sent", created_on: "2026-11-08", wishlist_item_title: "Ancienne envie" },
     ]);

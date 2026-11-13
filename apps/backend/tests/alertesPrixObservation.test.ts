@@ -30,6 +30,19 @@ describe("observations d'une réponse (une par clé, en centimes)", () => {
     expect(counts).toMatchObject({ rows: 1, keyed: 1, observations: 1, conflicts: 0 });
   });
 
+  // Lot « durcissement des alertes » (entrees-08) : une recherche faite avec une
+  // région que les alertes ne prennent pas en charge (« en-NZ ») ne peut jamais
+  // fixer le prix de référence des autres membres ; son état du stock compte.
+  it("pays non pris en charge par les alertes : ni prix, ni devise, ni pays ; l'état du stock part quand même", () => {
+    for (const country of ["nz", "au", "zz"]) {
+      const { observations } = buildObservations([row(URL_A, { priceValue: 89.9, inStock: true })], country);
+      expect(observations, country).toEqual([{ k: KEY_A.hash, m: "boutiqueexemple", p: null, c: null, n: null, s: true }]);
+    }
+    for (const country of ["fr", "gb", "ch", "us"]) {
+      expect(buildObservations([row(URL_A, { priceValue: 89.9, currency: "€" })], country).observations[0]!.n, country).toBe(country);
+    }
+  });
+
   it("devise différente ou inconnue : la devise ISO part telle quelle, une écriture inconnue ne part pas (aucune comparaison possible)", () => {
     const { observations } = buildObservations(
       [row(URL_A, { currency: "$US" }), row(URL_B, { currency: "$" }), row("https://troisieme.fr/p/1", { currency: "euros" })],

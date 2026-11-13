@@ -6,17 +6,15 @@
 // Devise du pays, telle que Google Lens l'écrit (symbole ou code) : LA table
 // de packages/shared-types (isCountryCurrency), la même que le serveur
 // (services/lensMeasure.ts) et les alertes prix ; jamais une copie ici.
-import { isCountryCurrency, searchCountryOfRegion } from "@monapp/shared-types";
+import { isCountryCurrency } from "@monapp/shared-types";
 
 /** Pays de la recherche visuelle, lu dans l'en-tête Accept-Language que l'app
  * envoie (i18n/index.ts), comme le fait le serveur (lib/locale.ts) : français
- * → France ; anglais → région de l'appareil si la recherche la prend en
- * charge (France, Royaume-Uni, Suisse, États-Unis : SEARCH_COUNTRIES), sinon
- * États-Unis. */
+ * → France ; anglais → région de l'appareil, sinon États-Unis. */
 export function searchCountryFrom(acceptLanguage: string): string {
   const [language, region] = acceptLanguage.toLowerCase().split("-");
   if (language !== "en") return "fr";
-  return searchCountryOfRegion(region);
+  return region && /^[a-z]{2}$/.test(region) ? region : "us";
 }
 
 /** Prix affiché dans une devise étrangère au pays de la recherche. Sans prix,

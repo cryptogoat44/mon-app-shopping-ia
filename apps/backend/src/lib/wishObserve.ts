@@ -37,7 +37,7 @@
 //   seconde près, toujours après la réponse de la recherche ou de l'achat.
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { alertCurrency, WISH_ALERT_RULES } from "@monapp/shared-types";
+import { alertCurrency, WISH_ALERT_RULES, SEARCH_COUNTRIES } from "@monapp/shared-types";
 import { trackingKeyOf } from "./alertKeys.js";
 import { sendWishAlertsNow } from "./wishAlertsSend.js";
 import { wishAlertsReady } from "./wishAlertsSchema.js";
@@ -105,6 +105,7 @@ function agree<T>(a: T | null, b: T | null): boolean {
 export function buildObservations(rows: readonly ObservedRow[], country: string | null): { observations: Observation[]; counts: ObservationCounts } {
   const counts: ObservationCounts = { rows: rows.length, keyed: 0, googleKeys: 0, inStockTrue: 0, inStockFalse: 0, productIdField: 0, conflicts: 0, observations: 0 };
   const byKey = new Map<string, Observation | "conflict">();
+  const supported = country !== null && (SEARCH_COUNTRIES as readonly string[]).includes(country);
   for (const row of rows) {
     if (row.inStock === true) counts.inStockTrue += 1;
     if (row.inStock === false) counts.inStockFalse += 1;
@@ -114,7 +115,12 @@ export function buildObservations(rows: readonly ObservedRow[], country: string 
     counts.keyed += 1;
     if (key.kind === "google") counts.googleKeys += 1;
     const currency = alertCurrency(row.currency, country);
-    const price = currency !== null && country !== null ? cents(row.priceValue) : null;
+    // Lot « durcissement des alertes » : un prix ne sert aux alertes que venu
+    // d'un pays que la recherche prend en charge (SEARCH_COUNTRIES). Une
+    // recherche faite avec une autre région (« en-NZ ») garde son pays pour la
+    // recherche elle-même, mais n'apporte aux alertes que l'état du stock :
+    // elle ne peut jamais fixer le prix de référence des autres membres.
+    const price = currency !== null && supported ? cents(row.priceValue) : null;
     const observation: Observation = {
       k: key.hash,
       m: key.merchant,

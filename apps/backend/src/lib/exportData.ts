@@ -4,7 +4,7 @@ import { messagesReady } from "./messaging.js";
 import { collectionsReady } from "./collections.js";
 import { collectionModerationReady } from "./collectionModeration.js";
 import { pushReady } from "./push.js";
-import { wishAlertsSchemaState } from "./wishAlertsSchema.js";
+import { wishAlertsReady, wishAlertsSchemaState } from "./wishAlertsSchema.js";
 
 // Export RGPD (droit d'accès et de portabilité) : lecture de TOUTES les
 // données personnelles d'un compte. Toute nouvelle table contenant des
@@ -159,6 +159,9 @@ export const PUSH_DEVICE_EXPORT_COLUMNS_ALERTS = "platform, notify_messages, not
 // cherché, acheté ou signalé la pièce : la base ne le garde nulle part.
 export const WISH_WATCH_EXPORT_COLUMNS = "wishlist_item_id, notify_price_drop, notify_restock, notify_sold_out, created_at, updated_at";
 export const WISH_TRACKING_EXPORT_COLUMNS = "wishlist_item_id, ref_price, ref_currency, ref_set_on, last_price, last_currency, last_seen_on, stock_state, stock_on";
+/** Avec les garde-fous des alertes (migration 0040) : le pays gardé pour vos
+ * prix, l'origine d'un « épuisée » et le jour d'un achat sont exportés aussi. */
+export const WISH_TRACKING_EXPORT_COLUMNS_GUARDED = `${WISH_TRACKING_EXPORT_COLUMNS}, member_country, sold_out_source, bought_on`;
 export const WISH_ALERT_EVENT_EXPORT_COLUMNS = "id, wishlist_item_id, kind, old_price, new_price, currency, status, created_on";
 export const STOCK_REPORT_EXPORT_COLUMNS = "id, match_key_hash, created_on";
 
@@ -327,6 +330,7 @@ export async function collectExport(
   // ses garde-fous (0040), les alertes sont coupées mais leurs données sont
   // là : elles sont exportées quand même.
   const withAlerts = (await wishAlertsSchemaState(fastify)) === "ready";
+  const trackingColumns = withAlerts && (await wishAlertsReady(fastify)) ? WISH_TRACKING_EXPORT_COLUMNS_GUARDED : WISH_TRACKING_EXPORT_COLUMNS;
   const pushDevices = await section(
     "pushDevices",
     async () =>
@@ -343,7 +347,7 @@ export async function collectExport(
     ),
     section(
       "wishTracking",
-      async () => (withAlerts ? withWishTitles(await listWhere(db, "wish_tracking", WISH_TRACKING_EXPORT_COLUMNS, "user_id", userId, ["wishlist_item_id"]), wishlistItems) : none),
+      async () => (withAlerts ? withWishTitles(await listWhere(db, "wish_tracking", trackingColumns, "user_id", userId, ["wishlist_item_id"]), wishlistItems) : none),
       none
     ),
     section(

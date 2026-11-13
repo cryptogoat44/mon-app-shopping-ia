@@ -673,6 +673,25 @@ describe("export lisible : alertes prix et stock (lot 2, migration 0036)", () =>
     expect(section).toContain("Reported “No longer available” on October 9, 2026");
   });
 
+  // Lot « durcissement des alertes » (0040) : le pays gardé pour vos prix,
+  // l'origine d'un « épuisée » et le jour d'un achat sont exportés aussi.
+  it("garde-fous des alertes : « épuisée selon », pays de vos prix et jour d'achat, en français et en anglais", () => {
+    const base = fixture();
+    const row = { ...base.wishTracking[0]!, stock_state: "sold_out", sold_out_source: "members", member_country: "fr", bought_on: "2026-10-10" };
+    const data = { ...base, wishTracking: [row] };
+    const fr = visibleText(sectionHtml(render({}, data), "alerts"));
+    expect(fr).toContain("Épuisée selon des membres");
+    expect(fr).toContain("Pays de vos prix fr");
+    expect(fr).toContain("Achetée le 10 octobre 2026");
+    const en = visibleText(sectionHtml(renderExportHtml(data, lookups(), options({ locale: "en", timeZone: "UTC" })), "alerts"));
+    expect(en).toContain("Sold out according to members");
+    expect(en).toContain("Bought on October 10, 2026");
+    // Sans ces informations (base sans 0040) : rien ne s'affiche à leur place.
+    const plain = visibleText(sectionHtml(render({}, base), "alerts"));
+    expect(plain).not.toContain("Épuisée selon");
+    expect(plain).not.toContain("Achetée le");
+  });
+
   it("sans alerte : la section dit « Aucune donnée »", () => {
     const data = { ...fixture(), wishWatches: [], wishTracking: [], wishAlertEvents: [], stockReports: [] };
     expect(visibleText(sectionHtml(render({}, data), "alerts"))).toContain(EXPORT_TEXT.noData.fr);

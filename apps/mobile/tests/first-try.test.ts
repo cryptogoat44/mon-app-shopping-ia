@@ -117,9 +117,6 @@ describe("boutique à l'étranger", () => {
     expect(searchCountryFrom("en")).toBe("us");
     expect(searchCountryFrom("en-GB")).toBe("gb");
     expect(searchCountryFrom("en-FR")).toBe("fr");
-    // Comme le serveur (revue de sécurité, entrees-08) : seulement les pays que la recherche prend en charge.
-    expect(searchCountryFrom("en-CH")).toBe("ch");
-    for (const header of ["en-NZ", "en-AU", "en-CA", "en-ZZ", "en-419"]) expect(searchCountryFrom(header), header).toBe("us");
   });
 
   it("France : un prix en pesos mexicains ou en dollars est signalé, pas un prix en euros (symbole, code, ou complété d'espaces par la base)", () => {

@@ -45,6 +45,7 @@ import {
   SEARCH_FAILURE_LABELS,
   SEARCH_STATUS_LABELS,
   STOCK_STATE_LABELS,
+  SOLD_OUT_SOURCE_LABELS,
   VAULT_CATEGORY_LABELS,
   WISH_ALERT_KIND_LABELS,
   WISH_ALERT_STATUS_LABELS,
@@ -956,6 +957,9 @@ function alertsSection(ctx: Ctx): Html {
       .field("last_seen_on", day(ctx, row.last_seen_on))
       .field("stock_state", enumLabel(ctx, STOCK_STATE_LABELS, row.stock_state))
       .field("stock_on", day(ctx, row.stock_on))
+      .field("sold_out_source", enumLabel(ctx, SOLD_OUT_SOURCE_LABELS, row.sold_out_source))
+      .field("member_country", str(row.member_country))
+      .field("bought_on", day(ctx, row.bought_on))
       .render(str(row.wishlist_item_title))
   );
   const events = newestFirst(wishAlertEvents, "created_on").map((row) =>

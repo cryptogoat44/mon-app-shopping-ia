@@ -457,6 +457,8 @@ export interface BackfillSummary {
  * effet. Aucun prix de référence (le pays de la recherche d'origine n'est
  * connu nulle part) : la première observation de chaque pièce le fixera,
  * sans alerte. Les envies sont lues page après page (lib/pagedReads.ts). */
+const BACKFILL_LOCALE_ROWS = z.array(z.object({ id: z.string(), locale: z.string().nullable() }));
+
 export async function backfillWishTracking(fastify: Db): Promise<BackfillSummary> {
   const db = fastify.supabaseAdmin;
   const wishes = (
@@ -476,13 +478,23 @@ export async function backfillWishTracking(fastify: Db): Promise<BackfillSummary
       "Suivi déjà là"
     );
     const versions = new Map(existing.map((row) => [row.wishlist_item_id, row.key_version]));
+    // Pays du membre (lot « durcissement des alertes ») : en français, la
+    // recherche se fait toujours en France ; en anglais, la région n'est pas
+    // connue ici (aucun pays, règle d'avant 0040).
+    const locales = new Map(
+      parseDbRows(
+        BACKFILL_LOCALE_ROWS,
+        await db.from("profiles").select("id, locale").in("id", [...new Set(part.map((wish) => wish.userId))]),
+        "Langue des membres"
+      ).map((row) => [row.id, row.locale])
+    );
     for (const wish of part) {
       const version = versions.get(wish.id);
       if (version !== undefined && version >= ALERT_KEY_VERSION) {
         summary.unchanged += 1;
         continue;
       }
-      const row = await trackingRowFor(fastify, wish, null);
+      const row = await trackingRowFor(fastify, wish, locales.get(wish.userId) === "fr" ? "fr" : null);
       if (version === undefined) {
         const { error } = await db.from("wish_tracking").insert(row);
         if (error && error.code !== "23505") throw new WishAlertsStoreError("Suivi d'une envie non créé");

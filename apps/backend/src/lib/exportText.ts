@@ -447,6 +447,9 @@ export const EXPORT_COLUMNS = {
     last_seen_on: shown("Dernière fois vue le", "Last seen on"),
     stock_state: shown("Stock", "Stock"),
     stock_on: shown("Stock connu le", "Stock known on"),
+    sold_out_source: shown("Épuisée selon", "Sold out according to"),
+    member_country: shown("Pays de vos prix", "Country of your prices"),
+    bought_on: shown("Achetée le", "Bought on"),
   },
   // … vos alertes…
   wishAlertEvents: {
@@ -681,6 +684,12 @@ export const STOCK_STATE_LABELS: Record<StockState, Bilingual> = {
   unknown: { fr: "Inconnu", en: "Unknown" },
   in_stock: { fr: "Disponible", en: "Available" },
   sold_out: { fr: "Épuisée", en: "Sold out" },
+};
+
+/** D'où vient un « épuisée » (lot « durcissement des alertes », 0040). */
+export const SOLD_OUT_SOURCE_LABELS: Record<"shop" | "members", Bilingual> = {
+  shop: { fr: "la boutique", en: "the shop" },
+  members: { fr: "des membres", en: "members" },
 };
 
 /** Système d'un appareil des notifications (lot notifications). */

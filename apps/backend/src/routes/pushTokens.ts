@@ -11,9 +11,14 @@
 // (avoir le jeton, c'est être cet appareil) : l'app l'appelle quand la
 // session a été fermée ailleurs, ou que l'oubli normal a échoué (hors réseau),
 // jusqu'à ce qu'il réussisse. Réponse 204 que le jeton ait existé ou non
-// (rien n'est appris), limite stricte par adresse IP.
+// (rien n'est appris). Limite : 10 par heure et par appareil (empreinte du
+// jeton, jamais l'adresse IP, souvent commune chez l'hébergeur), et un
+// plafond commun large pour tout le service.
 // Jamais le jeton dans le journal : seulement le système de l'appareil.
+import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
+import { consumeRateLimitFor } from "../plugins/rateLimit.js";
+import { RATE_LIMITS } from "../lib/rateLimits.js";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import {
   INVALID_PUSH_TOKEN,
@@ -71,10 +76,16 @@ export default async function pushTokensRoutes(fastify: FastifyInstance) {
   // a rien à oublier.
   fastify.post(
     "/api/push-token/forget",
-    { preHandler: [fastify.rateLimit("pushTokenForget")], config: { rateLimitName: "pushTokenForget" as const } },
+    { preHandler: [fastify.rateLimit("pushTokenForgetGlobal")], config: { rateLimitName: "pushTokenForgetGlobal" as const } },
     async (request, reply) => {
       const body = parseInput(deletePushTokenSchema, request.body, reply, INVALID_PUSH_TOKEN);
       if (!body) return;
+      const device = createHash("sha256").update(body.token).digest("hex");
+      const limit = consumeRateLimitFor(device, "pushTokenForget");
+      if (!limit.allowed) {
+        reply.header("Retry-After", Math.ceil(limit.retryAfterMs / 1000).toString());
+        return reply.code(429).send({ error: RATE_LIMITS.pushTokenForget.error, message: RATE_LIMITS.pushTokenForget.message });
+      }
       if (!(await pushReady(fastify))) return reply.code(204).send();
       try {
         await forgetPushTokenEverywhere(fastify, body.token);
