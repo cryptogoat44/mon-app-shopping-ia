@@ -32,6 +32,26 @@ describe("chaque envie créée a son suivi", () => {
   });
 });
 
+// Lot « durcissement des alertes » (entrees-07, alertes-02) : le plafond
+// d'envies par membre est vérifié par CHAQUE chemin qui crée une envie, avant
+// l'insertion. Un nouveau chemin sans ce contrôle fait échouer ce test.
+describe("chaque chemin qui crée une envie vérifie le plafond d'envies", () => {
+  it("toute insertion dans wishlist_items est précédée de wishlistFull dans le même fichier (409 « wishlist_full »)", () => {
+    const inserting = sourceFiles(SRC).filter((file) => /from\("wishlist_items"\)\s*\.(?:insert|upsert)\(/.test(readFileSync(file, "utf8")));
+    expect(inserting.length).toBeGreaterThan(0);
+    for (const file of inserting) {
+      const text = readFileSync(file, "utf8");
+      const firstInsert = text.search(/from\("wishlist_items"\)\s*\.(?:insert|upsert)\(/);
+      const check = text.indexOf("await wishlistFull(");
+      expect(check, file).toBeGreaterThan(-1);
+      expect(text.slice(check, check + 200), file).toContain("WISHLIST_FULL");
+      // Dans la route qui insère, le contrôle vient avant l'insertion.
+      const routeStart = text.lastIndexOf("fastify.post(", firstInsert);
+      expect(text.slice(routeStart, firstInsert), file).toContain("await wishlistFull(");
+    }
+  });
+});
+
 describe("jamais qui a cherché, acheté ou signalé avec une observation", () => {
   it("wish_observe ne reçoit que le lot d'observations", () => {
     const text = readFileSync(join(SRC, "lib/wishObserve.ts"), "utf8");

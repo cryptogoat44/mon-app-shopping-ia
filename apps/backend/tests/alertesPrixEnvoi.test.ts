@@ -121,7 +121,7 @@ function seeded(options: { migrated?: boolean } = {}) {
     rpc: async (fn, args) => {
       rpcCalls.push({ fn, args });
       if (!migrated) return { data: null, error: { code: "PGRST202", message: "absente" } };
-      if (fn === "wish_alerts_version") return { data: 1, error: null };
+      if (fn === "wish_alerts_version") return { data: 2, error: null };
       if (fn === "wish_observe") return { data: [{ matched: observeEvents, events: observeEvents }], error: null };
       if (fn === "wish_alerts_claim") return { data: (args.p_limit as number) > 0 ? claimRows : [], error: null };
       if (fn === "wish_alerts_mark_pushing") return pushingFails ? { data: null, error: { code: "08006", message: "connexion perdue" } } : { data: (args.p_ids as string[]).length, error: null };

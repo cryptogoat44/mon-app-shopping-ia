@@ -125,7 +125,7 @@ async function observerApp(options: {
     rpc: async (fn: string, args: Record<string, unknown> = {}) => {
       rpcCalls.push({ fn, args });
       if (!options.migrated) return { data: null, error: { code: "PGRST202", message: "absente" } };
-      if (fn === "wish_alerts_version") return { data: 1, error: null };
+      if (fn === "wish_alerts_version") return { data: 2, error: null };
       if (fn === "wish_observe") return options.observe ? options.observe() : { data: [{ matched: 2, events: 1 }], error: null };
       return { data: null, error: { code: "PGRST202", message: "absente" } };
     },

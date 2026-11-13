@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import vaultRoutes from "../src/routes/vault.js";
 import { keptMatchIds } from "../src/lib/keptPieces.js";
 import { observePurchase } from "../src/lib/wishObserve.js";
+import { trackingKeyOf } from "../src/lib/alertKeys.js";
+import { resetWishAlertsProbe } from "../src/lib/wishAlertsSchema.js";
 
 // Alertes prix et stock (lot 2) : l'annonce « disponible chez cette boutique
 // aujourd'hui » après un achat est remplacée par un espion (sa logique :
@@ -136,6 +138,48 @@ afterEach(async () => {
   await app?.close();
   app = null;
   purchaseMock.mockReset();
+  resetWishAlertsProbe();
+});
+
+/** La base a les alertes et leurs garde-fous (sonde à 2) ; wish_mark_bought répond `marked`. */
+function withAlerts(db: object, order: string[], marked: { error: unknown }) {
+  return {
+    ...db,
+    rpc: async (fn: string, args: Record<string, unknown>) => {
+      order.push(fn === "wish_mark_bought" ? `wish_mark_bought:${JSON.stringify(args)}` : fn);
+      if (fn === "wish_alerts_version") return { data: 2, error: null };
+      if (fn === "wish_mark_bought") return marked.error ? { data: null, error: marked.error } : { data: 2, error: null };
+      return { data: null, error: { code: "PGRST202", message: "absente" } };
+    },
+  };
+}
+
+// Lot « durcissement des alertes » (alertes-04) : « Je l'ai achetée » note
+// achetées TOUTES les envies de l'acheteur de la même pièce (même depuis un
+// autre résultat), AVANT la réponse et avant l'annonce « disponible » : il
+// ne reçoit jamais « De retour en stock » pour sa propre envie.
+describe("alertes prix : « Je l'ai achetée » note achetées les envies de la même pièce (sans base)", () => {
+  it("wish_mark_bought (l'acheteur, l'empreinte de la pièce) est appelée avant l'annonce", async () => {
+    const order: string[] = [];
+    purchaseMock.mockImplementation(() => void order.push("observePurchase"));
+    const { db } = fakeDb(standardAnswer());
+    const res = await post(await vaultApp(withAlerts(db, order, { error: null })), FROM_MATCH);
+    expect(res.statusCode).toBe(200);
+    const key = trackingKeyOf("https://marchand.example/veste", null)!;
+    expect(order.filter((step) => step !== "wish_alerts_version")).toEqual([
+      `wish_mark_bought:${JSON.stringify({ p_user_id: USER, p_key: key.hash, p_merchant: key.merchant, p_bought: true })}`,
+      "observePurchase",
+    ]);
+  });
+
+  it("refus de la base : l'achat est rangé quand même, mais AUCUNE annonce (jamais un retour en stock pour sa propre envie)", async () => {
+    const order: string[] = [];
+    const { db } = fakeDb(standardAnswer());
+    const res = await post(await vaultApp(withAlerts(db, order, { error: { code: "57014", message: "délai dépassé" } })), FROM_MATCH);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ id: CREATED, alreadyInVault: false });
+    expect(purchaseMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("alertes prix : « Je l'ai achetée » annonce la pièce disponible chez cette boutique (sans base)", () => {

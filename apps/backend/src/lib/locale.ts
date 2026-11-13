@@ -1,4 +1,5 @@
 import type { FastifyRequest } from "fastify";
+import { searchCountryOfRegion } from "@monapp/shared-types";
 import type { SearchLocale } from "../services/lensSettings.js";
 
 // Langue de l'utilisateur, transmise par l'app dans l'en-tête Accept-Language
@@ -20,9 +21,12 @@ export function requestLocale(request: Pick<FastifyRequest, "headers">): Locale 
 
 /** Paramètres hl et country de la recherche visuelle. Français : toujours
  * fr/fr (réglage validé au Lot S). Anglais : pays de l'appareil s'il est
- * fourni, sinon les États-Unis. */
+ * l'un des pays pris en charge (SEARCH_COUNTRIES : France, Royaume-Uni,
+ * Suisse, États-Unis), sinon les États-Unis. Revue de sécurité (lot
+ * « durcissement des alertes ») : avant, n'importe quelles deux lettres
+ * (« en-NZ ») devenaient le pays de la recherche, et celui des observations
+ * de prix des alertes. */
 export function searchLocaleFor(request: Pick<FastifyRequest, "headers">): SearchLocale {
   if (requestLocale(request) === "fr") return { hl: "fr", country: "fr" };
-  const region = firstTag(request).split("-")[1]?.toLowerCase();
-  return { hl: "en", country: region && /^[a-z]{2}$/.test(region) ? region : "us" };
+  return { hl: "en", country: searchCountryOfRegion(firstTag(request).split("-")[1]) };
 }

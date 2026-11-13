@@ -1438,6 +1438,12 @@ export const COLLECTIONS_MAX = 50;
 /** Nombre maximal d'envies dans une collection. */
 export const COLLECTION_ITEMS_MAX = 100;
 
+/** Nombre maximal d'envies par membre (lot « durcissement des alertes »,
+ * revue de sécurité : chaque envie a son suivi de prix et de stock). Au-delà,
+ * POST /api/wishlist et « Garder » une envie d'un ami répondent 409
+ * « wishlist_full ». */
+export const WISHLIST_ITEMS_MAX = 1000;
+
 /** Qui voit une collection : vous seul, ou vos amis. */
 export type CollectionVisibility = "private" | "friends";
 export const COLLECTION_VISIBILITIES = ["private", "friends"] as const satisfies readonly CollectionVisibility[];
@@ -1593,6 +1599,11 @@ export const WISH_ALERT_RULES = {
   purchaseAfterOwnReportDays: 30,
   /** Alertes et signalements effacés au bout de ce nombre de jours. */
   retentionDays: 30,
+  /** « Plus disponible » ne change les envies des AUTRES membres qu'une fois
+   * la pièce signalée par ce nombre de membres différents sur retentionDays
+   * jours (migration 0040) ; avant, seules celles de l'auteur. Un « épuisée »
+   * venu des membres ne fait jamais partir de « De retour en stock ». */
+  stockReportersForOthers: 2,
 } as const;
 
 // ---- Devises : LA table de l'app et du serveur ----
@@ -1634,6 +1645,23 @@ export function alertCurrency(raw: string | null | undefined, country: string | 
 /** Devise de chaque pays de recherche connu (les quatre pays du domaine de
  * Google, serpapi.ts) ; un autre pays : devise inconnue ici. */
 export const COUNTRY_CURRENCIES: Readonly<Record<string, string>> = { fr: "EUR", gb: "GBP", ch: "CHF", us: "USD" };
+
+/** Pays de recherche pris en charge : liste FERMÉE, celle dont la devise
+ * (COUNTRY_CURRENCIES) et le domaine de Google (serveur, services/serpapi.ts)
+ * sont connus. Le pays d'une recherche en anglais vient de la région de
+ * l'appareil (en-tête Accept-Language) ; toute autre région vaut les
+ * États-Unis (serveur lib/locale.ts, app lib/foreign-shop.ts). Revue de
+ * sécurité : avant, n'importe quelles deux lettres étaient acceptées, et une
+ * recherche « en-NZ » pouvait figer le prix de référence des autres membres. */
+export const SEARCH_COUNTRIES = ["fr", "gb", "ch", "us"] as const;
+export type SearchCountry = (typeof SEARCH_COUNTRIES)[number];
+
+/** Le pays de recherche d'une région d'appareil (« GB », « nz »…) : un pays
+ * pris en charge, sinon les États-Unis. */
+export function searchCountryOfRegion(region: string | null | undefined): SearchCountry {
+  const code = typeof region === "string" ? region.toLowerCase() : "";
+  return (SEARCH_COUNTRIES as readonly string[]).includes(code) ? (code as SearchCountry) : "us";
+}
 
 /** Le prix est-il dans la devise du pays de la recherche ? null : la devise
  * de ce pays n'est pas connue ici. Sans devise lisible : non. */

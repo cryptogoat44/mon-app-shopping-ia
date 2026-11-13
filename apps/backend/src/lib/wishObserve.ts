@@ -12,8 +12,15 @@
 //   l'enregistrement a échoué (routes/searches.ts décide, ici on compte) ;
 // - un achat via Spotto (« Je l'ai achetée ») annonce seulement « disponible
 //   chez cette boutique aujourd'hui », sans prix — sauf si l'acheteur a
-//   lui-même signalé la pièce « Plus disponible » ces 30 derniers jours (un
-//   seul membre ne fabrique jamais un « De retour en stock » chez les autres) ;
+//   lui-même signalé la pièce « Plus disponible » ces 30 derniers jours ;
+//   les envies de l'acheteur de la même pièce sont notées achetées AVANT
+//   (markPurchase, lib/wishAlerts.ts, route du Vault) : l'achat ne lui envoie
+//   jamais « De retour en stock » pour sa propre envie ;
+// - un seul membre ne fabrique jamais un « De retour en stock » chez les
+//   autres : la base (migration 0040) n'annonce le retour en stock qu'après
+//   un « épuisé » annoncé par la boutique, jamais après des signalements
+//   « Plus disponible », et un signalement ne touche les envies des autres
+//   qu'à partir de deux membres différents ;
 // - par lot, une observation par clé ; une clé dont les observations ne
 //   s'accordent pas (prix, devise, pays, stock, boutique) est écartée ;
 // - prix ≤ 0 ou devise inconnue : pas de prix (alertCurrency) ; en centimes ;
@@ -179,9 +186,9 @@ export function observeResults(fastify: FastifyInstance, input: ObserveInput): v
 /** « Je l'ai achetée » sur une proposition : disponible chez cette boutique
  * aujourd'hui (aucun prix, aucune personne envoyée à la base). `buyerId` ne
  * sert qu'à vérifier, avant, que l'acheteur n'a pas signalé lui-même la pièce
- * « Plus disponible » (WISH_ALERT_RULES.purchaseAfterOwnReportDays) : sinon,
- * signaler puis acheter ferait partir un faux « De retour en stock » chez
- * tous les membres qui la surveillent. Jamais dans le journal. */
+ * « Plus disponible » (WISH_ALERT_RULES.purchaseAfterOwnReportDays). Jamais
+ * dans le journal. À n'appeler qu'une fois les envies de l'acheteur notées
+ * achetées (markPurchase a répondu true). */
 export function observePurchase(fastify: FastifyInstance, buyerId: string, match: { merchantUrl: string; merchantName: string | null }): void {
   observeResults(fastify, {
     source: "purchase",

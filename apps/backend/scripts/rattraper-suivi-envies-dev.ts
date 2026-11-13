@@ -19,7 +19,7 @@ async function main(): Promise<void> {
   const app = await buildApp({ logger: false });
   try {
     if (!(await wishAlertsReady(app))) {
-      console.error("La migration 0036 n'est pas appliquée sur cette base : rien à faire.");
+      console.error("Les migrations 0036 et 0040 (garde-fous) ne sont pas toutes deux appliquées sur cette base : rien à faire.");
       process.exitCode = 1;
       return;
     }

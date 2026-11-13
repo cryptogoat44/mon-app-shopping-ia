@@ -26,12 +26,13 @@ import accountRoutes from "../src/routes/account.js";
 import moderationPlugin from "../src/plugins/moderation.js";
 import { findOwnMatch } from "../src/lib/ownMatches.js";
 import { env } from "../src/env.js";
-import { resetWishAlertsProbe } from "../src/lib/wishAlertsSchema.js";
 import { resetPushProbe } from "../src/lib/push.js";
 import { trackingKeyOf } from "../src/lib/alertKeys.js";
 import { requestLogFields, scrubLogLine, withoutErrorDetails } from "../src/lib/logPrivacy.js";
 import { fakeSupabase, type Row } from "./fakeSupabase.js";
-import { backfillWishTracking } from "../src/lib/wishAlerts.js";
+import { backfillWishTracking, forgetPurchase, markPurchase } from "../src/lib/wishAlerts.js";
+import { resetWishAlertsProbe, wishAlertsReady, wishAlertsSchemaState } from "../src/lib/wishAlertsSchema.js";
+import { WISHLIST_ITEMS_MAX } from "@monapp/shared-types";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -59,6 +60,10 @@ interface Setup {
   without0035?: boolean;
   /** Réponse de wish_stock_report. */
   reportAllowed?: boolean;
+  /** Réponse de la sonde wish_alerts_version : 2 avec les garde-fous (0040), 1 avec 0036 seule. */
+  version?: number;
+  /** wish_mark_bought refusé par la base. */
+  markBoughtFails?: boolean;
 }
 
 let rpcCalls: { fn: string; args: Record<string, unknown> }[] = [];
@@ -68,8 +73,9 @@ function seeded(setup: Setup = {}) {
   const rpc: Rpc = async (fn, args) => {
     rpcCalls.push({ fn, args });
     if (!migrated) return { data: null, error: { code: "PGRST202", message: "absente" } };
-    if (fn === "wish_alerts_version") return { data: 1, error: null };
+    if (fn === "wish_alerts_version") return { data: setup.version ?? 2, error: null };
     if (fn === "wish_stock_report") return { data: [{ allowed: setup.reportAllowed ?? true, matched: 2 }], error: null };
+    if (fn === "wish_mark_bought") return setup.markBoughtFails ? { data: null, error: { code: "57014", message: "délai dépassé" } } : { data: 1, error: null };
     return { data: null, error: { code: "PGRST202", message: "absente" } };
   };
   const fake = fakeSupabase({ rpc, ...(setup.without0035 ? { missing: ["push_tokens"] } : {}) });
@@ -122,8 +128,8 @@ async function alertsApp(db: unknown): Promise<FastifyInstance> {
   return app;
 }
 
-function as(target: FastifyInstance, user: string) {
-  const headers = { "x-test-user": user, "accept-language": "fr-FR" };
+function as(target: FastifyInstance, user: string, language = "fr-FR") {
+  const headers = { "x-test-user": user, "accept-language": language };
   return {
     get: (url: string) => target.inject({ method: "GET", url, headers }),
     post: (url: string, payload?: object) => target.inject({ method: "POST", url, headers, ...(payload ? { payload } : {}) }),
@@ -131,8 +137,8 @@ function as(target: FastifyInstance, user: string) {
   };
 }
 
-async function newWish(target: FastifyInstance, body: Record<string, unknown>, user: string = ALICE): Promise<string> {
-  const res = await as(target, user).post("/api/wishlist", { title: "Veste Nuage 07", imageUrl: "https://images.example/veste.jpg", ...body });
+async function newWish(target: FastifyInstance, body: Record<string, unknown>, user: string = ALICE, language = "fr-FR"): Promise<string> {
+  const res = await as(target, user, language).post("/api/wishlist", { title: "Veste Nuage 07", imageUrl: "https://images.example/veste.jpg", ...body });
   expect(res.statusCode).toBe(200);
   return res.json().id as string;
 }
@@ -194,6 +200,183 @@ describe("sans la migration 0036 : tout se tait, l'app cache tout", () => {
     expect(fake.table("push_tokens")).toEqual([expect.objectContaining({ token: PHONE, notify_messages: true, notify_alerts: true })]);
     expect((await as(target, ALICE).put("/api/me/push-token", { token: PHONE, platform: "ios", messages: false, alerts: true })).statusCode).toBe(204);
     expect(fake.table("push_tokens")).toEqual([]);
+  });
+});
+
+// Lot « durcissement des alertes » (revue de sécurité) : 0036 SANS ses
+// garde-fous (0040, sonde à 1) vaut « alertes indisponibles » ; les colonnes
+// de 0036 (ce que reçoit chaque appareil) restent utilisées.
+describe("avec 0036 sans 0040 (garde-fous absents) : les alertes se taisent", () => {
+  it("état tout faux, routes 404, envie créée sans suivi, et le journal le dit ; l'appareil gardé pour les seules alertes reste possible", async () => {
+    const fake = seeded({ version: 1 });
+    const target = await alertsApp(fake.db);
+    expect((await as(target, ALICE).get("/api/alerts/status")).json()).toEqual({ available: false, enabled: false, push: false } satisfies WishAlertsStatus);
+    for (const res of [
+      await as(target, ALICE).put("/api/alerts/settings", { enabled: true }),
+      await as(target, ALICE).get("/api/alerts/wishes"),
+      await as(target, ALICE).put(`/api/wishlist/${OLD_WISH}/alerts`, { priceDrop: true, restock: false }),
+      await as(target, ALICE).post("/api/alerts/stock-reports", { wishlistItemId: OLD_WISH }),
+    ]) {
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toMatchObject({ error: "alerts_unavailable" });
+    }
+    await newWish(target, { productMatchId: MATCH });
+    expect(fake.table("wish_tracking")).toHaveLength(0);
+    expect(rpcCalls.map((call) => call.fn).filter((fn) => fn !== "wish_alerts_version")).toEqual([]);
+    expect(logs.join("\n")).toContain("Alertes prix coupées : garde-fous de la migration 0040 absents");
+    // Les colonnes de 0036 sont là : « messages: false » garde l'appareil pour les alertes.
+    expect((await as(target, ALICE).put("/api/me/push-token", { token: PHONE, platform: "ios", messages: false, alerts: true })).statusCode).toBe(204);
+    expect(fake.table("push_tokens")).toEqual([expect.objectContaining({ token: PHONE, notify_messages: false, notify_alerts: true })]);
+  });
+
+  it("0040 appliquée ensuite : vue au plus tard 5 minutes après (sonde refaite)", async () => {
+    let version = 1;
+    const fake = fakeSupabase({ rpc: async (fn) => (fn === "wish_alerts_version" ? { data: version, error: null } : { data: null, error: { code: "PGRST202", message: "absente" } }) });
+    const server = { supabaseAdmin: fake.db, log: { warn: () => {}, info: () => {} } } as unknown as Pick<FastifyInstance, "supabaseAdmin" | "log">;
+    let clock = 1_000_000;
+    const now = () => clock;
+    expect(await wishAlertsReady(server, now)).toBe(false);
+    expect(await wishAlertsSchemaState(server, now)).toBe("ready");
+    version = 2;
+    clock += 60_000;
+    expect(await wishAlertsReady(server, now)).toBe(false);
+    clock += 5 * 60_000;
+    expect(await wishAlertsReady(server, now)).toBe(true);
+    // Vue une fois : gardée (plus aucune sonde).
+    version = 1;
+    clock += 60 * 60_000;
+    expect(await wishAlertsReady(server, now)).toBe(true);
+  });
+});
+
+describe("pays de la personne sur le suivi (entrees-08)", () => {
+  it("gardé à la création ; une région que la recherche ne prend pas en charge vaut les États-Unis", async () => {
+    const fake = seeded();
+    const target = await alertsApp(fake.db);
+    const british = await newWish(target, { merchantUrl: "https://boutique-exemple.fr/a", merchantName: "Boutique Exemple" }, ALICE, "en-GB");
+    const kiwi = await newWish(target, { merchantUrl: "https://boutique-exemple.fr/b", merchantName: "Boutique Exemple" }, ALICE, "en-NZ");
+    const countryOf = (id: string) => fake.table("wish_tracking").find((row) => row.wishlist_item_id === id)?.member_country;
+    expect(countryOf(british)).toBe("gb");
+    expect(countryOf(kiwi)).toBe("us");
+    // Le rattrapage (envies d'avant) : aucun pays, comme avant.
+    fake.table("wish_tracking").length = 0;
+    await backfillWishTracking(target);
+    expect(fake.table("wish_tracking").every((row) => !("member_country" in row))).toBe(true);
+  });
+});
+
+describe("plafond d'envies par membre (entrees-07, alertes-02)", () => {
+  function fill(fake: ReturnType<typeof seeded>, count: number, matchId: string | null = null) {
+    for (let index = fake.table("wishlist_items").filter((row) => row.user_id === BOB).length; index < count; index += 1) {
+      fake.table("wishlist_items").push({ id: `e1000000-0000-4000-8000-${String(index).padStart(12, "0")}`, user_id: BOB, title: "x", image_url: "https://images.example/x.jpg", merchant_url: SHOP_URL, product_match_id: index === 0 ? matchId : null, created_at: "2026-11-01T10:00:00+00:00" });
+    }
+  }
+
+  it(`au-delà de ${WISHLIST_ITEMS_MAX} envies : 409 « wishlist_full », en français et en anglais, rien n'est créé ni suivi`, async () => {
+    const fake = seeded();
+    fill(fake, WISHLIST_ITEMS_MAX - 1);
+    const target = await alertsApp(fake.db);
+    await newWish(target, { merchantUrl: SHOP_URL, merchantName: "Boutique Exemple" }, BOB);
+    const before = fake.table("wishlist_items").length;
+    const refused = await as(target, BOB).post("/api/wishlist", { title: "Une de trop", imageUrl: "https://images.example/x.jpg", merchantUrl: SHOP_URL });
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json()).toEqual({ error: "wishlist_full", message: `Vous avez déjà ${WISHLIST_ITEMS_MAX} envies : retirez-en une pour en garder une autre.` });
+    expect(fake.table("wishlist_items")).toHaveLength(before);
+    expect(fake.table("wish_tracking").filter((row) => row.user_id === BOB)).toHaveLength(1);
+  });
+
+  it("garder de nouveau une proposition déjà gardée reste permis (rien n'est créé) ; les autres membres ne sont pas touchés", async () => {
+    const fake = seeded();
+    fill(fake, WISHLIST_ITEMS_MAX, MATCH);
+    ownMatchMock.mockResolvedValue({ id: MATCH, imageUrl: "https://images.example/veste.jpg", merchantUrl: SHOP_URL, merchantName: "Boutique Exemple" });
+    const target = await alertsApp(fake.db);
+    expect((await as(target, BOB).post("/api/wishlist", { title: "Veste", imageUrl: "https://images.example/x.jpg", productMatchId: MATCH })).statusCode).toBe(200);
+    expect(fake.table("wishlist_items").filter((row) => row.user_id === BOB)).toHaveLength(WISHLIST_ITEMS_MAX);
+    await newWish(target, { merchantUrl: SHOP_URL, merchantName: "Boutique Exemple" }, ALICE);
+  });
+});
+
+describe("oublier un appareil par son seul jeton, sans session (alertes-03, app-06)", () => {
+  const forget = (target: FastifyInstance, payload: object, ip = "203.0.113.7") =>
+    target.inject({ method: "POST", url: "/api/push-token/forget", payload, remoteAddress: ip });
+
+  it("204, et seules les lignes de ce jeton partent, quel que soit le compte ; un jeton inconnu : la même réponse", async () => {
+    const fake = seeded();
+    fake.table("push_tokens").push({ token: PHONE, user_id: ALICE, platform: "ios" }, { token: TABLET, user_id: BOB, platform: "ios" });
+    const target = await alertsApp(fake.db);
+    const known = await forget(target, { token: PHONE });
+    expect(known.statusCode).toBe(204);
+    expect(fake.table("push_tokens").map((row) => row.token)).toEqual([TABLET]);
+    const unknown = await forget(target, { token: "ExponentPushToken[inconnuInconnuInconnu]" });
+    expect([unknown.statusCode, unknown.body]).toEqual([known.statusCode, known.body]);
+    expect(fake.table("push_tokens").map((row) => row.token)).toEqual([TABLET]);
+    // Jeton mal formé : refusé, sans rien toucher.
+    expect((await forget(target, { token: "pas-un-jeton" })).statusCode).toBe(400);
+    expect(fake.table("push_tokens")).toHaveLength(1);
+  });
+
+  it("limite stricte par adresse IP : au-delà de 10 par heure, 429 ; une autre adresse n'est pas touchée", async () => {
+    const fake = seeded();
+    const target = await alertsApp(fake.db);
+    // Les limites sont coupées sous vitest (NODE_ENV « test ») : rallumées ici.
+    const before = process.env.NODE_ENV;
+    process.env.NODE_ENV = "development";
+    try {
+      for (let index = 0; index < 10; index += 1) expect((await forget(target, { token: TABLET }, "198.51.100.42")).statusCode).toBe(204);
+      const limited = await forget(target, { token: TABLET }, "198.51.100.42");
+      expect(limited.statusCode).toBe(429);
+      expect(limited.json()).toMatchObject({ error: "push_token_forget_limit" });
+      expect((await forget(target, { token: TABLET }, "198.51.100.43")).statusCode).toBe(204);
+    } finally {
+      process.env.NODE_ENV = before;
+    }
+  });
+
+  it("sans la migration 0035 : 204, rien à oublier", async () => {
+    const fake = seeded({ without0035: true });
+    const target = await alertsApp(fake.db);
+    expect((await forget(target, { token: PHONE }, "192.0.2.9")).statusCode).toBe(204);
+  });
+});
+
+describe("« Je l'ai achetée » : toutes les envies de la même pièce (alertes-04)", () => {
+  const server = (fake: ReturnType<typeof seeded>) => ({ supabaseAdmin: fake.db, log: { warn: () => {}, info: () => {} } }) as unknown as FastifyInstance;
+  const silent = { warn: () => {} } as unknown as FastifyInstance["log"];
+
+  it("markPurchase : la clé de la pièce achetée part à wish_mark_bought (la personne, l'empreinte, la boutique) ; refus de la base : false", async () => {
+    const fake = seeded();
+    expect(await markPurchase(server(fake), silent, ALICE, { merchantUrl: SHOP_URL, merchantName: "Boutique Exemple" })).toBe(true);
+    expect(rpcCalls.filter((call) => call.fn === "wish_mark_bought")).toEqual([{ fn: "wish_mark_bought", args: { p_user_id: ALICE, p_key: KEY.hash, p_merchant: KEY.merchant, p_bought: true } }]);
+    // Sans clé (place de marché…) : rien à noter, l'achat continue.
+    rpcCalls = [];
+    expect(await markPurchase(server(fake), silent, ALICE, { merchantUrl: "pas une adresse", merchantName: null })).toBe(true);
+    expect(rpcCalls.filter((call) => call.fn === "wish_mark_bought")).toEqual([]);
+    resetWishAlertsProbe();
+    expect(await markPurchase(server(seeded({ markBoughtFails: true })), silent, ALICE, { merchantUrl: SHOP_URL, merchantName: "Boutique Exemple" })).toBe(false);
+  });
+
+  it("forgetPurchase : la pièce quitte le Vault — remise seulement si aucune autre pièce du Vault n'a la même empreinte", async () => {
+    const OTHER = "f0000000-0000-4000-8000-000000000009";
+    const fake = seeded();
+    fake.table("product_matches").push({ id: OTHER, merchant_name: "Boutique Exemple", merchant_url: "https://www.boutique-exemple.fr/vestes/nuage-07?couleur=bleu", created_at: "2026-11-10T10:00:00+00:00" });
+    // Une autre pièce du Vault, rangée avec une autre proposition de la même pièce.
+    fake.table("vault_items").push({ id: "v1", user_id: ALICE, product_match_id: OTHER });
+    await forgetPurchase(server(fake), silent, ALICE, MATCH);
+    expect(rpcCalls.filter((call) => call.fn === "wish_mark_bought")).toEqual([]);
+    fake.table("vault_items").length = 0;
+    await forgetPurchase(server(fake), silent, ALICE, MATCH);
+    expect(rpcCalls.filter((call) => call.fn === "wish_mark_bought")).toEqual([{ fn: "wish_mark_bought", args: { p_user_id: ALICE, p_key: KEY.hash, p_merchant: KEY.merchant, p_bought: false } }]);
+  });
+
+  it("la cloche d'une envie notée achetée (bought_on) est cachée, et ne peut pas être allumée", async () => {
+    const fake = seeded();
+    const target = await alertsApp(fake.db);
+    const id = await newWish(target, { merchantUrl: SHOP_URL, merchantName: "Boutique Exemple" });
+    fake.table("wish_tracking").find((row) => row.wishlist_item_id === id)!.bought_on = "2026-11-13";
+    expect((await as(target, ALICE).get(`/api/wishlist/${id}/alerts`)).json()).toMatchObject({ bought: true });
+    expect((await as(target, ALICE).get("/api/alerts/wishes")).json().items.find((state: WishAlertState) => state.wishlistItemId === id)).toMatchObject({ bought: true });
+    const refused = await as(target, ALICE).put(`/api/wishlist/${id}/alerts`, { priceDrop: true, restock: true });
+    expect(refused.statusCode).toBe(422);
   });
 });
 
@@ -267,6 +450,8 @@ describe("création d'une envie : le suivi (chaque chemin, une seule fois)", () 
         ref_country: "fr",
         // 23 h 30 UTC le 8 novembre : déjà le 9 à Paris.
         ref_set_on: "2026-11-09",
+        // Migration 0040 : le pays de la personne (sa recherche), gardé sur le suivi.
+        member_country: "fr",
         stock_state: "unknown",
       },
     ]);
@@ -287,6 +472,7 @@ describe("création d'une envie : le suivi (chaque chemin, une seule fois)", () 
       match_key_hash: trackingKeyOf("https://boutique-exemple.fr/sacs/cabas", "Boutique Exemple")!.hash,
       key_version: 1,
       merchant_key: "boutiqueexemple",
+      member_country: "fr",
       stock_state: "unknown",
     });
     fake.table("product_matches")[0]!.currency = "$";

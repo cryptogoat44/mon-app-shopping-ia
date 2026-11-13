@@ -62,7 +62,8 @@ const PUSH_SECTIONS = pushProbe.error ? [] : (["pushDevices"] as const);
 // Lot alertes prix et stock : cloche, suivi, alerte et signalement, seulement
 // une fois la migration 0036 appliquée sur la base des tests (sans elle, sections vides).
 const alertsProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).rpc("wish_alerts_version");
-const ALERT_SECTIONS = alertsProbe.error || alertsProbe.data !== 1 ? [] : (["wishWatches", "wishTracking", "wishAlertEvents", "stockReports"] as const);
+// 1 : 0036 seule ; 2 : avec ses garde-fous (0040) — les données sont exportées dans les deux cas.
+const ALERT_SECTIONS = alertsProbe.error || typeof alertsProbe.data !== "number" || alertsProbe.data < 1 ? [] : (["wishWatches", "wishTracking", "wishAlertEvents", "stockReports"] as const);
 
 // Sections qui sont un objet (ou null), pas une liste.
 const OBJECT_SECTIONS = ["account", "profile", "adminRole", "suspension"] as const;

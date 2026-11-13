@@ -4,7 +4,7 @@ import { messagesReady } from "./messaging.js";
 import { collectionsReady } from "./collections.js";
 import { collectionModerationReady } from "./collectionModeration.js";
 import { pushReady } from "./push.js";
-import { wishAlertsReady } from "./wishAlertsSchema.js";
+import { wishAlertsSchemaState } from "./wishAlertsSchema.js";
 
 // Export RGPD (droit d'accès et de portabilité) : lecture de TOUTES les
 // données personnelles d'un compte. Toute nouvelle table contenant des
@@ -323,8 +323,10 @@ export async function collectExport(
   const collectionItems = await section("collectionItems", () => (withCollections ? listCollectionItems(db, userId, wishlistItems, moderatedCollections) : Promise.resolve(none)), none);
   // Lot notifications : sans la migration 0035, aucun appareil (section vide).
   // Triés par date, puis par jeton (ordre stable), sans jamais le lire.
-  // Lot alertes prix : sans la migration 0036, sections vides.
-  const withAlerts = await wishAlertsReady(fastify);
+  // Lot alertes prix : sans la migration 0036, sections vides. Avec 0036 sans
+  // ses garde-fous (0040), les alertes sont coupées mais leurs données sont
+  // là : elles sont exportées quand même.
+  const withAlerts = (await wishAlertsSchemaState(fastify)) === "ready";
   const pushDevices = await section(
     "pushDevices",
     async () =>

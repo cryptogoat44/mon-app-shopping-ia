@@ -6,6 +6,12 @@
 // Lot alertes prix (0036) : `messages` et `alerts` disent ce que reçoit cet
 // appareil ; `messages: false` le garde pour les seules alertes (aucune
 // notification de message ne lui est envoyée), les deux à false l'oublient.
+// Lot « durcissement des alertes » (revue de sécurité) : POST
+// /api/push-token/forget oublie un appareil par son seul jeton, SANS session
+// (avoir le jeton, c'est être cet appareil) : l'app l'appelle quand la
+// session a été fermée ailleurs, ou que l'oubli normal a échoué (hors réseau),
+// jusqu'à ce qu'il réussisse. Réponse 204 que le jeton ait existé ou non
+// (rien n'est appris), limite stricte par adresse IP.
 // Jamais le jeton dans le journal : seulement le système de l'appareil.
 import type { FastifyInstance } from "fastify";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
@@ -14,6 +20,7 @@ import {
   PUSH_UNAVAILABLE,
   deletePushToken,
   deletePushTokenSchema,
+  forgetPushTokenEverywhere,
   pushAvailable,
   pushReady,
   registerPushTokenSchema,
@@ -57,4 +64,25 @@ export default async function pushTokensRoutes(fastify: FastifyInstance) {
     }
     return reply.code(204).send();
   });
+
+  // Oublier cet appareil sans session (déconnexion forcée, oubli normal
+  // échoué). Toujours 204, que le jeton ait été enregistré ou non : la
+  // réponse ne dit jamais si un jeton existe. Sans la migration 0035, il n'y
+  // a rien à oublier.
+  fastify.post(
+    "/api/push-token/forget",
+    { preHandler: [fastify.rateLimit("pushTokenForget")], config: { rateLimitName: "pushTokenForget" as const } },
+    async (request, reply) => {
+      const body = parseInput(deletePushTokenSchema, request.body, reply, INVALID_PUSH_TOKEN);
+      if (!body) return;
+      if (!(await pushReady(fastify))) return reply.code(204).send();
+      try {
+        await forgetPushTokenEverywhere(fastify, body.token);
+      } catch (error) {
+        request.log.error({ error }, "Appareil non oublié pour les notifications (sans session)");
+        return reply.code(500).send(SERVER_ERROR);
+      }
+      return reply.code(204).send();
+    }
+  );
 }

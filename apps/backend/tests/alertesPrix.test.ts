@@ -7,19 +7,21 @@ import { trackingKeyOf } from "../src/lib/alertKeys.js";
 import { flushObservations, type Observation } from "../src/lib/wishObserve.js";
 import { authHeaders, buildMultipart, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
 
-// Alertes prix et stock (lot 2, migration 0036) sur la VRAIE base de
+// Alertes prix et stock (lot 2, migrations 0036 et 0040) sur la VRAIE base de
 // développement (spotto-dev-2 seulement : tests:ci refuse toute autre base),
 // sans aucun appel à SerpApi ni à Expo : les fonctions de la base
 // (wish_observe, wish_alerts_claim, wish_alerts_mark_sent, wish_stock_report,
-// wish_alerts_purge), leurs contraintes, les cascades, l'export et la
-// suppression du compte. Sauté tant que 0036 n'est pas appliquée.
+// wish_mark_bought, wish_alerts_purge), leurs contraintes, les cascades,
+// l'export et la suppression du compte. Sauté tant que 0036 ET ses
+// garde-fous (0040, sonde à 2) ne sont pas appliqués : sans 0040, le serveur
+// coupe les alertes.
 // Instants fixés dans une année tirée au hasard entre 2080 et 2099 : jamais
 // dus pour un vrai serveur qui tournerait sur la même base (rien n'expire ni
 // ne part tout seul : une alerte est due dès sa création, mais à un instant
 // de cette année-là). Boutiques et pièces fictives.
 
 const probe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).rpc("wish_alerts_version");
-const migrated = !probe.error && probe.data === 1;
+const migrated = !probe.error && probe.data === 2;
 
 const HOUR = 3_600_000;
 const YEAR = 2080 + Math.floor(Math.random() * 20);
@@ -46,7 +48,7 @@ const EVENT_ROWS = z.array(
 let counter = 0;
 const uniqueUrl = (label: string) => `https://boutique-essai-${YEAR}.example/${label}-${Date.now().toString(36)}-${(counter += 1)}`;
 
-describe.skipIf(!migrated)("alertes prix et stock sur la base (0036)", () => {
+describe.skipIf(!migrated)("alertes prix et stock sur la base (0036 et 0040)", () => {
   let app: FastifyInstance;
   let owner: TestUser;
   let searcher: TestUser;
@@ -62,7 +64,7 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036)", () => {
   }
 
   /** Une envie de `who`, gardée depuis un résultat de sa recherche (prix rangé par le serveur : 100 €). */
-  async function wishFromResult(who: TestUser, url: string, price = 100, merchant = "Boutique Essai"): Promise<string> {
+  async function wishFromResult(who: TestUser, url: string, price = 100, merchant = "Boutique Essai", language = "fr-FR"): Promise<string> {
     const { data: search, error } = await app.supabaseAdmin.from("product_searches").insert({ user_id: who.id, source_platform: "photo", method: "manual_screenshot", status: "completed" }).select("id").single();
     if (error) throw error;
     const { data: match, error: matchError } = await app.supabaseAdmin
@@ -74,7 +76,7 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036)", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/wishlist",
-      headers: { ...authHeaders(who.token), "accept-language": "fr-FR" },
+      headers: { ...authHeaders(who.token), "accept-language": language },
       payload: { title: "Veste Essai", imageUrl: "https://images.example/veste.jpg", productMatchId: match!.id, priceMin: 1, currency: "USD" },
     });
     expect(res.statusCode).toBe(200);
@@ -105,6 +107,14 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036)", () => {
     const res = await app.inject({ method: "POST", url: "/api/vault", headers: { ...authHeaders(who.token), ...form.headers }, payload: form.payload });
     expect(res.statusCode).toBe(200);
     await flushObservations();
+  }
+
+  /** « Plus disponible » de `who` sur la pièce de `url` (wish_stock_report). */
+  async function report(who: TestUser, url: string, hours = 0) {
+    const key = trackingKeyOf(url, "Boutique Essai")!;
+    const { data, error } = await app.supabaseAdmin.rpc("wish_stock_report", { p_user_id: who.id, p_key: key.hash, p_merchant: key.merchant, p_daily_cap: 20, p_now: at(hours) });
+    expect(error).toBeNull();
+    return data as { allowed: boolean; matched: number }[];
   }
 
   async function markPushing(ids: string[], hours: number) {
@@ -176,7 +186,7 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036)", () => {
   it("création d'une envie : suivi avec la clé et la référence du SERVEUR (100 €, jamais le prix envoyé par l'app)", async () => {
     const url = uniqueUrl("creation");
     const wish = await wishFromResult(owner, url);
-    expect(await tracking(wish)).toMatchObject({ match_key_hash: trackingKeyOf(url, "Boutique Essai")!.hash, merchant_key: "boutiqueessai", ref_currency: "EUR", ref_country: "fr", stock_state: "unknown" });
+    expect(await tracking(wish)).toMatchObject({ match_key_hash: trackingKeyOf(url, "Boutique Essai")!.hash, merchant_key: "boutiqueessai", ref_currency: "EUR", ref_country: "fr", member_country: "fr", stock_state: "unknown", sold_out_source: null, bought_on: null });
     expect(Number((await tracking(wish)).ref_price)).toBe(100);
   });
 
@@ -228,14 +238,43 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036)", () => {
     expect((await tracking(wish)).last_price).toBeNull();
   });
 
-  it("devise différente, pays différent : aucune alerte (le dernier prix vu est noté)", async () => {
+  it("devise différente : aucune alerte (le dernier prix vu est noté) ; autre pays que celui du membre : ignoré (0040)", async () => {
     const url = uniqueUrl("devise");
     const wish = await wishFromResult(owner, url);
     await bell(owner, wish, { priceDrop: true, restock: true });
     await observe([{ ...obs(url, 5000), c: "USD" }]);
-    await observe([{ ...obs(url, 5000), n: "be" }], 1);
+    await observe([{ ...obs(url, 4000), n: "gb" }], 1);
     expect(await events(wish)).toEqual([]);
-    expect(await tracking(wish)).toMatchObject({ last_currency: "EUR", last_country: "be" });
+    expect(await tracking(wish)).toMatchObject({ last_currency: "USD", last_country: "fr", ref_country: "fr" });
+    expect(Number((await tracking(wish)).last_price)).toBe(50);
+  });
+
+  it("pays du membre (0040) : envie gardée en anglais depuis le Royaume-Uni → référence fixée et comparée seulement avec les observations « gb »", async () => {
+    const member = await freshOwner("apb8");
+    const url = uniqueUrl("pays-membre");
+    // Envie à la main (aucune référence de départ), en anglais depuis le Royaume-Uni.
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/wishlist",
+      headers: { ...authHeaders(member.token), "accept-language": "en-GB" },
+      payload: { title: "Veste Essai", imageUrl: "https://images.example/veste.jpg", merchantUrl: url },
+    });
+    expect(res.statusCode).toBe(200);
+    const wish = res.json().id as string;
+    await bell(member, wish, { priceDrop: true, restock: false });
+    const key = (await tracking(wish)).match_key_hash as string;
+    const seen = (cents: number, country: string): Observation => ({ k: key, m: null, p: cents, c: "EUR", n: country, s: null });
+    expect(await tracking(wish)).toMatchObject({ member_country: "gb", ref_price: null });
+    // Une observation venue d'ailleurs ne fixe rien (avant 0040 : elle figeait la référence).
+    await observe([seen(10000, "nz")]);
+    await observe([seen(10000, "fr")], 1);
+    expect(await tracking(wish)).toMatchObject({ ref_price: null, last_price: null });
+    await observe([seen(10000, "gb")], 2);
+    expect(await tracking(wish)).toMatchObject({ ref_country: "gb" });
+    await observe([seen(5000, "fr")], 3);
+    expect(await events(wish)).toEqual([]);
+    await observe([seen(5000, "gb")], 4);
+    expect((await events(wish)).map((event) => event.kind)).toEqual(["price_drop"]);
   });
 
   it("épuisé explicite (Google « in_stock: false ») : épuisé, alerte seulement avec la cloche « épuisé » ; retour en stock ensuite", async () => {
@@ -250,20 +289,49 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036)", () => {
     expect((await events(wish)).map((event) => event.kind)).toEqual(["sold_out", "restock"]);
   });
 
-  it("« Plus disponible » : épuisé en SILENCE (jamais d'alerte d'un signalement), gardé pour le membre au jour près ; puis retour en stock", async () => {
+  it("« Plus disponible » (0040) : un seul membre ne touche que SES envies ; à deux membres différents, toutes passent épuisée — en SILENCE, et le retour en stock ensuite n'envoie RIEN", async () => {
     const url = uniqueUrl("signalement");
-    const wish = await wishFromResult(owner, url);
-    await bell(owner, wish, { priceDrop: false, restock: true, soldOut: true });
-    const key = trackingKeyOf(url, "Boutique Essai")!;
-    const { data, error } = await app.supabaseAdmin.rpc("wish_stock_report", { p_user_id: reporter.id, p_key: key.hash, p_merchant: key.merchant, p_daily_cap: 20, p_now: at() });
-    expect(error).toBeNull();
-    expect(data).toEqual([{ allowed: true, matched: 1 }]);
-    expect((await tracking(wish)).stock_state).toBe("sold_out");
+    const watcher = await freshOwner("apc1");
+    const wish = await wishFromResult(watcher, url);
+    await bell(watcher, wish, { priceDrop: true, restock: true, soldOut: true });
+    const first = await freshOwner("apc2");
+    const firstWish = await wishFromResult(first, url);
+    // Un seul auteur : seule son envie change.
+    expect(await report(first, url)).toEqual([{ allowed: true, matched: 1 }]);
+    expect(await tracking(firstWish)).toMatchObject({ stock_state: "sold_out", sold_out_source: "members" });
+    expect(await tracking(wish)).toMatchObject({ stock_state: "unknown", sold_out_source: null });
+    // Le même membre encore : toujours un seul auteur.
+    expect(await report(first, url, 1)).toEqual([{ allowed: true, matched: 0 }]);
+    expect((await tracking(wish)).stock_state).toBe("unknown");
+    const { data: reports } = await app.supabaseAdmin.from("stock_reports").select("user_id, match_key_hash, created_on").eq("user_id", first.id);
+    expect(reports).toContainEqual({ user_id: first.id, match_key_hash: trackingKeyOf(url, "Boutique Essai")!.hash, created_on: parisDay() });
+    // Un deuxième membre : toutes les envies de la pièce, sans alerte.
+    const second = await freshOwner("apc3");
+    expect((await report(second, url, 2))[0]!.allowed).toBe(true);
+    expect(await tracking(wish)).toMatchObject({ stock_state: "sold_out", sold_out_source: "members" });
     expect(await events(wish)).toEqual([]);
-    const { data: reports } = await app.supabaseAdmin.from("stock_reports").select("user_id, match_key_hash, created_on").eq("user_id", reporter.id);
-    expect(reports).toContainEqual({ user_id: reporter.id, match_key_hash: key.hash, created_on: parisDay() });
-    await observe([obs(url, null, { s: true })], 1);
-    expect((await events(wish)).map((event) => event.kind)).toEqual(["restock"]);
+    // Une baisse de prix n'est pas bloquée par des signalements.
+    await observe([obs(url, 8000)], 3);
+    expect((await events(wish)).map((event) => event.kind)).toEqual(["price_drop"]);
+    // La pièce revue en stock : l'état revient, sans « De retour en stock ».
+    await observe([obs(url, 8000, { s: true })], 4);
+    expect(await tracking(wish)).toMatchObject({ stock_state: "in_stock", sold_out_source: null });
+    expect((await events(wish)).map((event) => event.kind)).toEqual(["price_drop"]);
+  });
+
+  it("une seule envie regardée par membre et par pièce (0040) : trois envies de la même pièce chez un membre, une seule mise à jour", async () => {
+    const member = await freshOwner("apc4");
+    const url = uniqueUrl("trois-envies");
+    const wishes = [];
+    for (let index = 0; index < 3; index += 1) {
+      const res = await app.inject({ method: "POST", url: "/api/wishlist", headers: { ...authHeaders(member.token), "accept-language": "fr-FR" }, payload: { title: `Veste ${index}`, imageUrl: "https://images.example/veste.jpg", merchantUrl: url } });
+      expect(res.statusCode).toBe(200);
+      wishes.push(res.json().id as string);
+    }
+    const key = (await tracking(wishes[0]!)).match_key_hash as string;
+    expect(await observe([{ k: key, m: null, p: 9000, c: "EUR", n: "fr", s: true }])).toMatchObject({ matched: 1 });
+    const seen = await Promise.all(wishes.map(async (wish) => (await tracking(wish)).last_seen_on));
+    expect(seen.filter((day) => day !== null)).toHaveLength(1);
   });
 
   it("« Plus disponible » : au plus N par membre et par jour de Paris ; le lendemain, de nouveau permis", async () => {
@@ -279,8 +347,8 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036)", () => {
     const url = uniqueUrl("achat");
     const wish = await wishFromResult(owner, url);
     await bell(owner, wish, { priceDrop: false, restock: true });
-    const key = trackingKeyOf(url, "Boutique Essai")!;
-    await app.supabaseAdmin.rpc("wish_stock_report", { p_user_id: reporter.id, p_key: key.hash, p_merchant: null, p_daily_cap: 20 });
+    // La boutique annonce la pièce épuisée (seul un tel « épuisé » est suivi d'un retour en stock, 0040).
+    await observe([obs(url, null, { s: false })], -1);
     // L'acheteur (searcher) a la même pièce dans ses envies, et l'achète.
     const buyerWish = await wishFromResult(searcher, url);
     await app.inject({ method: "PUT", url: `/api/wishlist/${buyerWish}/alerts`, headers: authHeaders(searcher.token), payload: { priceDrop: false, restock: true, enableAlerts: true } });
@@ -291,6 +359,8 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036)", () => {
     await flushObservations();
     expect((await events(wish)).map((event) => event.kind)).toEqual(["restock"]);
     expect(await events(buyerWish)).toEqual([]);
+    // Les envies de l'acheteur de cette pièce sont notées achetées (0040).
+    expect((await tracking(buyerWish)).bought_on).not.toBeNull();
     const { data: rows } = await app.supabaseAdmin.from("wish_alert_events").select("*").eq("wishlist_item_id", wish);
     for (const row of rows ?? []) {
       expect(row.user_id).toBe(owner.id);
@@ -355,7 +425,7 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036)", () => {
     expect(Number((await tracking(wish)).ref_price)).toBe(100);
   });
 
-  it("baisse de prix d'une pièce épuisée : aucune alerte (« in_stock: false ») ; baisse en attente puis « Plus disponible » : « périmée » à l'envoi", async () => {
+  it("baisse de prix d'une pièce épuisée par la boutique : aucune alerte (« in_stock: false ») ; baisse en attente puis épuisé annoncé : « périmée » à l'envoi ; puis signalements : PAS périmée (0040)", async () => {
     const member = await freshOwner("apb7");
     const base = 24 * 330;
     const soldOutUrl = uniqueUrl("baisse-epuisee");
@@ -367,13 +437,21 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036)", () => {
     const wish = await wishFromResult(member, url);
     await bell(member, wish, { priceDrop: true, restock: false });
     await observe([obs(url, 8000)], base);
-    const key = trackingKeyOf(url, "Boutique Essai")!;
-    await app.supabaseAdmin.rpc("wish_stock_report", { p_user_id: reporter.id, p_key: key.hash, p_merchant: key.merchant, p_daily_cap: 20, p_now: at(base + 1) });
+    await observe([obs(url, null, { s: false })], base + 1);
     expect(await claimFor(wish, base + 12)).toEqual([]);
     expect((await events(wish))[0]!.status).toBe("stale");
+    // Une baisse en attente, puis deux signalements « Plus disponible » : elle part quand même.
+    const reportedUrl = uniqueUrl("baisse-puis-signalements");
+    const reportedWish = await wishFromResult(member, reportedUrl);
+    await bell(member, reportedWish, { priceDrop: true, restock: false });
+    await observe([obs(reportedUrl, 8000)], base + 24);
+    await report(reporter, reportedUrl, base + 25);
+    await report(searcher, reportedUrl, base + 25);
+    expect(await tracking(reportedWish)).toMatchObject({ stock_state: "sold_out", sold_out_source: "members" });
+    expect(await claimFor(reportedWish, base + 26)).toHaveLength(1);
   });
 
-  it("« Plus disponible » puis « Je l'ai achetée » par le MÊME membre : aucun faux « De retour en stock » chez les autres", async () => {
+  it("« Plus disponible » (un ou deux comptes), puis une recherche ou un achat : jamais de faux « De retour en stock » chez les autres (acces-2, alertes-01, entrees-06)", async () => {
     const url = uniqueUrl("signale-puis-achete");
     const watcher = await freshOwner("apb6");
     const wish = await wishFromResult(watcher, url);
@@ -382,15 +460,44 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036)", () => {
     const cheaterWish = await wishFromResult(cheater, url);
     const reported = await app.inject({ method: "POST", url: "/api/alerts/stock-reports", headers: authHeaders(cheater.token), payload: { wishlistItemId: cheaterWish } });
     expect(reported.statusCode).toBe(204);
-    expect((await tracking(wish)).stock_state).toBe("sold_out");
-    await buy(cheater, cheaterWish);
+    // Un seul membre : l'envie du membre qui surveille ne change pas.
+    expect((await tracking(wish)).stock_state).toBe("unknown");
+    // Sa propre recherche montre la pièce en stock : rien chez les autres.
+    await observe([obs(url, null, { s: true })], 1);
     expect(await events(wish)).toEqual([]);
-    expect((await tracking(wish)).stock_state).toBe("sold_out");
-    // Un AUTRE membre qui achète annonce bien la disponibilité.
-    const buyer = await freshOwner("apb6c");
-    const buyerWish = await wishFromResult(buyer, url);
-    await buy(buyer, buyerWish);
-    expect((await events(wish)).map((event) => event.kind)).toEqual(["restock"]);
+    // Avec un deuxième compte : épuisée chez tous… puis achat et recherche : toujours rien.
+    const accomplice = await freshOwner("apb6c");
+    const accompliceWish = await wishFromResult(accomplice, url);
+    expect((await app.inject({ method: "POST", url: "/api/alerts/stock-reports", headers: authHeaders(accomplice.token), payload: { wishlistItemId: accompliceWish } })).statusCode).toBe(204);
+    expect(await tracking(wish)).toMatchObject({ stock_state: "sold_out", sold_out_source: "members" });
+    await buy(accomplice, accompliceWish);
+    await observe([obs(url, null, { s: true })], 2);
+    expect(await events(wish)).toEqual([]);
+    expect((await tracking(wish)).stock_state).toBe("in_stock");
+  });
+
+  it("« Je l'ai achetée » depuis un AUTRE résultat de la même pièce (alertes-04) : toutes les envies du membre de cette pièce sont achetées — cloche cachée, aucune alerte ; retirée du Vault : les alertes reviennent", async () => {
+    const member = await freshOwner("apc5");
+    const url = uniqueUrl("autre-resultat");
+    const wish = await wishFromResult(member, url);
+    await bell(member, wish, { priceDrop: true, restock: true });
+    // Une autre recherche retrouve la même pièce (autre proposition) : achetée là.
+    const other = await wishFromResult(member, url);
+    const { data: otherRow } = await app.supabaseAdmin.from("wishlist_items").select("product_match_id").eq("id", other).single();
+    await app.supabaseAdmin.from("wishlist_items").delete().eq("id", other);
+    const form = buildMultipart({ title: "Veste Essai", category: "clothing", productMatchId: String(otherRow!.product_match_id) });
+    const bought = await app.inject({ method: "POST", url: "/api/vault", headers: { ...authHeaders(member.token), ...form.headers }, payload: form.payload });
+    expect(bought.statusCode).toBe(200);
+    await flushObservations();
+    expect((await tracking(wish)).bought_on).not.toBeNull();
+    const state = await app.inject({ method: "GET", url: `/api/wishlist/${wish}/alerts`, headers: authHeaders(member.token) });
+    expect(state.json()).toMatchObject({ bought: true });
+    await observe([obs(url, 7000)], 1);
+    expect(await events(wish)).toEqual([]);
+    // Retirée du Vault : de nouveau suivie.
+    const removed = await app.inject({ method: "DELETE", url: `/api/vault/${bought.json().id}`, headers: authHeaders(member.token) });
+    expect(removed.statusCode).toBe(204);
+    expect((await tracking(wish)).bought_on).toBeNull();
   });
 
   it("envoi demandé à Expo mais jamais noté : jamais renvoyé, noté « envoyée » au passage suivant (référence comprise) ; jamais expiré pendant son envoi", async () => {
@@ -476,8 +583,7 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036)", () => {
     const restockUrl = uniqueUrl("cinq-retour");
     const restockWish = await wishFromResult(member, restockUrl);
     await bell(member, restockWish, { priceDrop: false, restock: true });
-    const key = trackingKeyOf(restockUrl, "Boutique Essai")!;
-    await app.supabaseAdmin.rpc("wish_stock_report", { p_user_id: reporter.id, p_key: key.hash, p_merchant: key.merchant, p_daily_cap: 20, p_now: at(day) });
+    await observe([obs(restockUrl, null, { s: false })], day);
     await observe([obs(restockUrl, null, { s: true })], day + 0.5);
     expect(await claimFor(restockWish, day + 9.5)).toEqual([]);
     const [restock] = await events(restockWish);

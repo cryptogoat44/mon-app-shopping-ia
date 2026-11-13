@@ -11,6 +11,7 @@ import { DatabaseReadError, INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idPar
 import { findOwnMatch } from "../lib/ownMatches.js";
 import { shownPosts } from "../lib/visibility.js";
 import { observePurchase } from "../lib/wishObserve.js";
+import { forgetPurchase, markPurchase } from "../lib/wishAlerts.js";
 
 const SHARED_POST_ROWS = z.array(z.object({ id: z.guid(), privacy: z.enum(PRIVACY_LEVELS), created_at: z.string() }));
 
@@ -338,11 +339,18 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
 
     const [imageHdUrl] = await fetchHdImageUrls(fastify, [inserted as VaultItemRow]);
     const created: CreateVaultItemResponse = { ...toVaultItem(inserted as VaultItemRow, imageHdUrl ?? null), alreadyInVault: false };
+    // Alertes prix et stock (0040) : toutes les envies de l'acheteur de la
+    // même pièce (même depuis un autre résultat) sont notées achetées AVANT la
+    // réponse : plus aucune alerte pour elles, cloche cachée. Ne fait jamais
+    // échouer l'achat.
+    const marked = match ? await markPurchase(fastify, request.log, userId, { merchantUrl: match.merchantUrl, merchantName: match.merchantName }) : false;
     const sent = reply.send(created);
     // Alertes prix et stock (lot 2) : « Je l'ai achetée » sur une proposition
     // de sa recherche annonce, après la réponse, « disponible chez cette
-    // boutique aujourd'hui » (sans prix, sans jamais l'acheteur).
-    if (match) observePurchase(fastify, userId, { merchantUrl: match.merchantUrl, merchantName: match.merchantName });
+    // boutique aujourd'hui » (sans prix, sans jamais l'acheteur) — seulement
+    // si ses envies ont bien été notées achetées (jamais de « De retour en
+    // stock » pour sa propre envie).
+    if (match && marked) observePurchase(fastify, userId, { merchantUrl: match.merchantUrl, merchantName: match.merchantName });
     return sent;
   });
 
@@ -469,7 +477,7 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
 
     const { data: existing } = await fastify.supabaseAdmin
       .from("vault_items")
-      .select("image_url")
+      .select("image_url, product_match_id")
       .eq("id", id)
       .eq("user_id", userId)
       .single();
@@ -499,6 +507,12 @@ export default async function vaultRoutes(fastify: FastifyInstance) {
       request.log.error({ error }, "Échec de suppression du vault_item");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
+
+    // Alertes prix et stock (0040) : la pièce quitte le Vault, ses envies de
+    // la même pièce ne sont plus « achetées » (sauf si une autre pièce du
+    // Vault est la même). Ne fait jamais échouer la suppression.
+    const removedMatchId = (existing as { product_match_id?: string | null }).product_match_id;
+    if (removedMatchId) await forgetPurchase(fastify, request.log, userId, removedMatchId);
 
     // Best-effort : si la photo était hébergée par nous (ajout manuel), on
     // la supprime aussi — mais seulement si son URL prouve qu'elle nous
