@@ -16,6 +16,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
+import { PieceExtraActions } from "@/components/piece-extra-actions";
 import { SegmentedChoice } from "@/components/segmented-choice";
 import { VAULT_TITLE_MAX_LENGTH, checkVaultEdit, vaultCategoryChoices, vaultFormIssueMessage, vaultSaveErrorMessage } from "@/lib/vault-form";
 import { vaultChanged } from "@/lib/vault-changes";
@@ -320,6 +321,14 @@ export default function VaultItemDetailScreen() {
               context="vault"
               isAffiliate={isAffiliateLink(item)}
             />
+            {/* Actions propres au site, rien sur iPhone (components/piece-extra-actions). */}
+            <PieceExtraActions
+              matchId={item.productMatchId}
+              imageUrls={[item.imageHdUrl, item.imageUrl]}
+              buyUrl={item.affiliateUrl ?? item.merchantUrl}
+              title={item.title}
+              style={styles.extraActions}
+            />
           </View>
         ) : null}
 
@@ -431,6 +440,7 @@ const styles = themedStyles(() => ({
   saveLabel: { color: color.blanc, fontSize: font.secondary, fontWeight: "600" },
   saveLabelDisabled: { color: color.surInactif },
   merchant: { marginBottom: space.lg },
+  extraActions: { marginTop: space.sm },
   verifiedBadge: {
     flexDirection: "row",
     alignItems: "center",

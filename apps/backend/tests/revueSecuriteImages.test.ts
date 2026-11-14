@@ -7,6 +7,8 @@ import { IMAGE_TOO_HEAVY, ImageQueueFullError, MAX_DECODE_BYTES, MAX_WAITING_IMA
 import { ImageSourceError, prepareImageForAnalysis } from "../src/lib/imageProcessing.js";
 import { AVATAR_MAX_INPUT_PIXELS, encodeAvatar, encodeSharedCopy, optimizePhoto } from "../src/lib/photos.js";
 import { MULTIPART_LIMITS, isTooManyPartsError } from "../src/lib/multipartErrors.js";
+import { prepareGarmentImage, prepareTryonPhoto } from "../src/lib/tryon/images.js";
+import { addAiBand } from "../src/lib/tryon/band.js";
 
 // Revue de sécurité du 12 novembre 2026 (points « entrees-01 » et
 // « entrees-02 ») : une image de 0,6 Mo qui se décode d'un seul bloc
@@ -93,6 +95,12 @@ describe("chaque entrée d'image refuse l'image lourde sur son en-tête", () => 
     expect(await refusal(() => prepareImageForAnalysis(heavy, null))).toBe(IMAGE_TOO_HEAVY);
     // La copie d'une envie a son propre plafond de 40 Mpx : 6 000 × 6 000 passe ce plafond, pas celui de la mémoire.
     expect(await refusal(() => encodeSharedCopy(pngHeader(6000, 6000, { depth: 16, interlaced: true })))).toBe(IMAGE_TOO_HEAVY);
+  });
+
+  it("essayage virtuel : photo du membre, image de la pièce téléchargée et image rendue par le fournisseur", async () => {
+    expect(await refusal(() => prepareTryonPhoto(heavy))).toBe(IMAGE_TOO_HEAVY);
+    expect(await refusal(() => prepareGarmentImage(heavy))).toBe(IMAGE_TOO_HEAVY);
+    expect(await refusal(() => addAiBand(heavy, "fr"))).toBe(IMAGE_TOO_HEAVY);
   });
 
   it("photo de profil : 2 048 × 2 048 px au plus, quel que soit le format ; juste en dessous, acceptée", async () => {

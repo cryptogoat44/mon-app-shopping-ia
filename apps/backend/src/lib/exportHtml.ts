@@ -46,6 +46,11 @@ import {
   SEARCH_STATUS_LABELS,
   STOCK_STATE_LABELS,
   SOLD_OUT_SOURCE_LABELS,
+  TRYON_AGE_STATUS_LABELS,
+  TRYON_EVENT_STATUS_LABELS,
+  TRYON_FAILURE_LABELS,
+  TRYON_QUOTA_SOURCE_LABELS,
+  TRYON_REPORT_REASON_LABELS,
   VAULT_CATEGORY_LABELS,
   WISH_ALERT_KIND_LABELS,
   WISH_ALERT_STATUS_LABELS,
@@ -998,6 +1003,55 @@ function alertsSection(ctx: Ctx): Html {
   );
 }
 
+/** Essayage virtuel : statut d'âge et consentement, essais, essais offerts,
+ * signalements. Aucune image : ni la photo, ni l'image produite n'existent
+ * dans la base. */
+function tryonSection(ctx: Ctx): Html {
+  const { tryonProfile, tryonEvents, tryonBonusGrants, tryonReports } = ctx.data;
+  const profile = tryonProfile
+    ? new Card(ctx, "tryonProfile", tryonProfile)
+        .field("age_status", enumLabel(ctx, TRYON_AGE_STATUS_LABELS, tryonProfile.age_status))
+        .field("age_checked_at")
+        .field("consent_version")
+        .field("consent_accepted_at")
+        .field("consent_withdrawn_at")
+        .render(tr(ctx, EXPORT_TEXT.tryonProfileTitle))
+    : null;
+  const events = newestFirst(tryonEvents, "created_at").map((row) =>
+    new Card(ctx, "tryonEvents", row)
+      .use("created_at")
+      .field("status", enumLabel(ctx, TRYON_EVENT_STATUS_LABELS, row.status))
+      .field("quota_source", enumLabel(ctx, TRYON_QUOTA_SOURCE_LABELS, row.quota_source))
+      .field("error_code", enumLabel(ctx, TRYON_FAILURE_LABELS, row.error_code))
+      .render(tr(ctx, EXPORT_TEXT.tryonEventTitle, { date: plainDate(ctx, row.created_at) }))
+  );
+  const grants = newestFirst(tryonBonusGrants, "created_at").map((row) =>
+    new Card(ctx, "tryonBonusGrants", row)
+      .use("quantity")
+      .field("order_ref")
+      .field("remaining")
+      .field("expires_at")
+      .field("created_at")
+      .render(tr(ctx, EXPORT_TEXT.tryonGrantTitle, { count: String(row.quantity ?? "") }))
+  );
+  const reports = newestFirst(tryonReports, "created_at").map((row) =>
+    new Card(ctx, "tryonReports", row)
+      .use("reason")
+      .field("comment", multiline(row.comment))
+      .field("created_at")
+      .render(enumLabel(ctx, TRYON_REPORT_REASON_LABELS, row.reason))
+  );
+  const parts: [Bilingual, Html[]][] = [
+    [EXPORT_TEXT.tryonEventsTitle, events],
+    [EXPORT_TEXT.tryonGrantsTitle, grants],
+    [EXPORT_TEXT.tryonReportsTitle, reports],
+  ];
+  return section(ctx, "tryon", [
+    profile,
+    ...parts.filter(([, cards]) => cards.length > 0).map(([title, cards]) => subsection(ctx, tr(ctx, title, { count: String(cards.length) }), null, cards)),
+  ]);
+}
+
 function exportsSection(ctx: Ctx): Html {
   const cards = newestFirst(ctx.data.dataExportRequests, "requested_at").map((row) =>
     new Card(ctx, "dataExportRequests", row)
@@ -1018,6 +1072,7 @@ function sectionCount(data: ExportData, id: ExportSectionId): number | null {
     collections: data.collections.length,
     alerts: data.wishWatches.length,
     vault: data.vaultItems.length,
+    tryon: data.tryonEvents.length,
     posts: data.posts.length,
     comments: data.comments.length,
     likes: data.reactionsGiven.length,
@@ -1045,6 +1100,7 @@ const SECTION_RENDERERS: Record<ExportSectionId, (ctx: Ctx) => Html> = {
   collections: collectionsSection,
   alerts: alertsSection,
   vault: vaultSection,
+  tryon: tryonSection,
   posts: postsSection,
   comments: commentsSection,
   likes: likesSection,

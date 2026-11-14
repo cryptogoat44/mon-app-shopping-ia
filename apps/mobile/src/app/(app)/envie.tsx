@@ -20,6 +20,7 @@ import { ProductFrame } from "@/components/product-frame";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { ErrorMessage } from "@/components/error-message";
 import { WishBoughtButton } from "@/components/wish-bought-button";
+import { PieceExtraActions } from "@/components/piece-extra-actions";
 import { AddToCollectionSheet } from "@/components/add-to-collection-sheet";
 import { WishAlertButton, WishAlertSheet } from "@/components/wish-alert-sheet";
 import { StockReportLink, StockReportSheet } from "@/components/stock-report-sheet";
@@ -201,6 +202,14 @@ export default function WishlistItemScreen() {
               />
             ) : null}
             <WishBoughtButton item={item} onAdded={() => setItem((current) => (current ? { ...current, inVault: true } : current))} />
+            {/* Actions propres au site, rien sur iPhone (components/piece-extra-actions). */}
+            <PieceExtraActions
+              matchId={item.productMatchId}
+              imageUrls={[item.imageHdUrl, item.imageUrl]}
+              buyUrl={item.affiliateUrl ?? item.merchantUrl}
+              title={item.title}
+              style={styles.extraActions}
+            />
           </View>
 
           {/* Lot 2 : la cloche (jamais pour une pièce achetée : aucune alerte ne partirait), puis « Plus disponible ? » (discret), pour une pièce reconnue. */}
@@ -346,6 +355,7 @@ const styles = themedStyles(() => ({
   alertDetail: { fontSize: font.secondary, color: color.encre },
   alertSoldOut: { fontWeight: "600" },
   merchant: { marginBottom: space.lg },
+  extraActions: { marginTop: space.sm },
   alerts: { marginBottom: space.lg },
   stockReport: { alignSelf: "center" },
   shareSection: { borderTopWidth: 1, borderTopColor: color.filet, paddingTop: space.lg, marginBottom: space.lg, gap: space.sm },

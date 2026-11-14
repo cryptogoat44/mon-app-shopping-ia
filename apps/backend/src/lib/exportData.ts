@@ -5,6 +5,7 @@ import { collectionsReady } from "./collections.js";
 import { collectionModerationReady } from "./collectionModeration.js";
 import { pushReady } from "./push.js";
 import { wishAlertsSchemaState, wishAlertsSchemaVersion } from "./wishAlertsSchema.js";
+import { tryonSchemaReady } from "./tryon/schema.js";
 
 // Export RGPD (droit d'accès et de portabilité) : lecture de TOUTES les
 // données personnelles d'un compte. Toute nouvelle table contenant des
@@ -75,6 +76,16 @@ export interface ExportData {
   wishAlertEvents: ExportRow[];
   /** … et vos signalements « Plus disponible » (au jour près). */
   stockReports: ExportRow[];
+  /** Essayage virtuel (lot « essayage virtuel », migration 0042) : statut
+   * d'âge (jamais la date de naissance) et consentement… */
+  tryonProfile: ExportRow | null;
+  /** … les essais (jamais une image : la pièce, le résultat, la source du
+   * quota, un code d'échec, la durée, les dates)… */
+  tryonEvents: ExportRow[];
+  /** … les essais offerts (commande, quantité, reste, expiration)… */
+  tryonBonusGrants: ExportRow[];
+  /** … et les signalements d'un résultat (motif, précision). */
+  tryonReports: ExportRow[];
 }
 
 /** Sections de l'export (toutes les clés sauf la date de l'export). */
@@ -188,6 +199,13 @@ export function alertExportColumns(version: number): { watches: string; tracking
     reports: STOCK_REPORT_EXPORT_COLUMNS,
   };
 }
+
+// Essayage virtuel (migration 0042). Aucune image n'existe dans la base :
+// ni la photo du membre, ni l'image produite (jamais gardées).
+export const TRYON_PROFILE_EXPORT_COLUMNS = "age_status, age_checked_at, consent_version, consent_accepted_at, consent_withdrawn_at";
+export const TRYON_EVENT_EXPORT_COLUMNS = "id, item_id, status, credits_used, quota_source, bonus_grant_id, error_code, duration_ms, month, created_at, finished_at";
+export const TRYON_BONUS_GRANT_EXPORT_COLUMNS = "id, order_ref, quantity, remaining, expires_at, created_at";
+export const TRYON_REPORT_EXPORT_COLUMNS = "id, item_id, reason, comment, created_at";
 
 /** Ajoute le titre de l'envie à chaque ligne (lisible sans l'identifiant). */
 function withWishTitles(rows: readonly ExportRow[], wishlistItems: readonly ExportRow[]): ExportRow[] {
@@ -381,6 +399,23 @@ export async function collectExport(
     ),
     section("stockReports", () => (withAlerts ? listWhere(db, "stock_reports", alertColumns.reports, "user_id", userId, ["created_on", "id"]) : Promise.resolve(none)), none),
   ]);
+  // Essayage virtuel : sans la migration 0042, sections vides.
+  const withTryon = await tryonSchemaReady(fastify);
+  const [tryonProfile, tryonEvents, tryonBonusGrants, tryonReports] = await Promise.all([
+    section(
+      "tryonProfile",
+      async () => {
+        if (!withTryon) return null;
+        const { data, error } = await db.from("tryon_profiles").select(TRYON_PROFILE_EXPORT_COLUMNS).eq("user_id", userId).maybeSingle();
+        if (error) throw error;
+        return (data as ExportRow | null) ?? null;
+      },
+      null
+    ),
+    section("tryonEvents", () => (withTryon ? listWhere(db, "tryon_events", TRYON_EVENT_EXPORT_COLUMNS, "user_id", userId, BY_DATE) : Promise.resolve(none)), none),
+    section("tryonBonusGrants", () => (withTryon ? listWhere(db, "tryon_bonus_grants", TRYON_BONUS_GRANT_EXPORT_COLUMNS, "user_id", userId, BY_DATE) : Promise.resolve(none)), none),
+    section("tryonReports", () => (withTryon ? listWhere(db, "tryon_reports", TRYON_REPORT_EXPORT_COLUMNS, "user_id", userId, BY_DATE) : Promise.resolve(none)), none),
+  ]);
 
   const data: ExportData = {
     exportedAt: new Date().toISOString(),
@@ -419,6 +454,10 @@ export async function collectExport(
     wishTracking,
     wishAlertEvents,
     stockReports,
+    tryonProfile,
+    tryonEvents,
+    tryonBonusGrants,
+    tryonReports,
   };
   return { data, failures };
 }

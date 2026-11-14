@@ -89,6 +89,7 @@ import { aiQuotaFor } from "../lib/aiQuota.js";
 import { noteFailure } from "../lib/alerts.js";
 import { observeResults, type ObservationSource, type ObservedRow } from "../lib/wishObserve.js";
 import { purgeWishAlerts } from "../lib/wishAlertsSend.js";
+import { purgeTryonHistory } from "../lib/tryon/purge.js";
 
 const createSearchSchema = z.object({
   // Lien lisible par le parseur d'URL standard, gardé tel qu'il a été envoyé
@@ -1332,10 +1333,13 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     // principe, en même temps que le cache ; ne lève jamais d'erreur non plus.
     // Alertes prix et stock (lot 2) : alertes et signalements « Plus
     // disponible » de plus de 30 jours, par lots bornés ; sans 0036, rien.
+    // Essayage virtuel : ses données de plus de 12 mois, même fonction
+    // éteinte (TRYON_ENABLED ou drapeau) ; sans 0042, rien.
     await Promise.all([
       purgeExpiredCache(fastify.supabaseAdmin, request.log),
       purgeStaleAnalysisImages(fastify.supabaseAdmin.storage.from(ANALYSIS_BUCKET), request.log),
       purgeWishAlerts(fastify, request.log),
+      purgeTryonHistory(fastify, request.log),
     ]);
     try {
       await purgeExpiredSearches(fastify, userId);

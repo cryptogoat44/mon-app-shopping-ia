@@ -66,8 +66,16 @@ const alertsProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_RO
 const ALERT_SECTIONS = alertsProbe.error || typeof alertsProbe.data !== "number" || alertsProbe.data < 1 ? [] : (["wishWatches", "wishTracking", "wishAlertEvents", "stockReports"] as const);
 const ALERTS_V2 = !alertsProbe.error && typeof alertsProbe.data === "number" && alertsProbe.data >= 3;
 
+// Essayage virtuel : profil d'essayage, essais, essais offerts et
+// signalements, seulement une fois la migration 0042 appliquée sur la base des
+// tests (sans elle, sections vides). Rien n'allume l'essayage : les lignes
+// sont écrites directement, sans photo ni appel au fournisseur.
+const tryonProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).rpc("tryon_version");
+const TRYON_MIGRATED = !tryonProbe.error && tryonProbe.data === 1;
+const TRYON_SECTIONS = TRYON_MIGRATED ? (["tryonEvents", "tryonBonusGrants", "tryonReports"] as const) : [];
+
 // Sections qui sont un objet (ou null), pas une liste.
-const OBJECT_SECTIONS = ["account", "profile", "adminRole", "suspension"] as const;
+const OBJECT_SECTIONS = ["account", "profile", "adminRole", "suspension", ...(TRYON_MIGRATED ? (["tryonProfile"] as const) : [])] as const;
 
 // Clés du JSON, dans l'ordre : celles d'avant (anciennes versions de l'app
 // iPhone, qui lisent ce JSON) et `account`, la seule ajoutée.
@@ -112,6 +120,11 @@ const JSON_KEYS = [
   "wishTracking",
   "wishAlertEvents",
   "stockReports",
+  // Lot essayage virtuel, de même.
+  "tryonProfile",
+  "tryonEvents",
+  "tryonBonusGrants",
+  "tryonReports",
 ];
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
@@ -274,6 +287,37 @@ describe("export RGPD complet", () => {
       if (reportError) throw reportError;
     }
 
+    // Essayage virtuel (lot essayage virtuel) : statut d'âge, consentement,
+    // un essai échoué, des essais offerts et un signalement, écrits
+    // directement (aucune photo, aucun appel au fournisseur).
+    if (TRYON_MIGRATED) {
+      const age = await app.supabaseAdmin.rpc("tryon_set_age", { p_user_id: user.id, p_status: "adult" });
+      if (age.error) throw age.error;
+      const consent = await app.supabaseAdmin
+        .from("tryon_profiles")
+        .update({ consent_version: "2026-11-v1", consent_accepted_at: new Date().toISOString() })
+        .eq("user_id", user.id);
+      if (consent.error) throw consent.error;
+      const finished = new Date().toISOString();
+      const event = await app.supabaseAdmin.from("tryon_events").insert({
+        user_id: user.id,
+        item_id: match!.id,
+        status: "failed",
+        error_code: "pose_not_detected",
+        duration_ms: 9000,
+        month: finished.slice(0, 7),
+        finished_at: finished,
+      });
+      if (event.error) throw event.error;
+      // La référence de commande est montrée dans le fichier lisible : aucun identifiant interne
+      // dedans (le test « aucun identifiant interne dans le texte visible »), unique à chaque passage.
+      const orderRef = `TEST-ESSAI-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+      const grant = await app.supabaseAdmin.rpc("tryon_grant_bonus", { p_user_id: user.id, p_order_ref: orderRef });
+      if (grant.error) throw grant.error;
+      const report = await app.supabaseAdmin.from("tryon_reports").insert({ user_id: user.id, item_id: match!.id, reason: "wrong_piece", comment: "Essai d'export" });
+      if (report.error) throw report.error;
+    }
+
     // Un premier export, pour que le second contienne cette demande.
     await exportOf(user);
     // Beaucoup d'écritures réelles vers spotto-dev : plus que le délai par défaut.
@@ -295,7 +339,7 @@ describe("export RGPD complet", () => {
     const body = res.json();
 
     expect(body.profile.id).toBe(user.id);
-    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...COLLECTION_SECTIONS, ...PUSH_SECTIONS, ...ALERT_SECTIONS]) {
+    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...COLLECTION_SECTIONS, ...PUSH_SECTIONS, ...ALERT_SECTIONS, ...TRYON_SECTIONS]) {
       expect(Array.isArray(body[section]), section).toBe(true);
       expect(body[section].length, section).toBeGreaterThan(0);
     }
@@ -312,6 +356,12 @@ describe("export RGPD complet", () => {
       expect(body.profile).toMatchObject({ help_others: true, price_alerts_enabled: expect.any(Boolean) });
       expect(body.wishAlertEvents[0]).toMatchObject({ created_on: "2026-11-09", sent_on: null });
       expect(JSON.stringify(body.wishAlertEvents)).not.toMatch(/created_at|send_after|sent_at|claimed_at|pushing_at/);
+    }
+    // Essayage virtuel : le statut d'âge, jamais une date de naissance ni une image.
+    if (TRYON_MIGRATED) {
+      expect(body.tryonProfile).toMatchObject({ age_status: "adult", consent_version: "2026-11-v1", consent_withdrawn_at: null });
+      expect(Object.keys(body.tryonProfile).sort()).toEqual(["age_checked_at", "age_status", "consent_accepted_at", "consent_version", "consent_withdrawn_at"]);
+      expect(JSON.stringify([body.tryonProfile, body.tryonEvents, body.tryonReports])).not.toMatch(/base64|data:image|birth/i);
     }
   });
 
