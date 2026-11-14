@@ -325,8 +325,8 @@ describe("faux fournisseur : aucun réseau, la photo revient avec « TEST – FA
 
 describe("choix du fournisseur par TRYON_PROVIDER", () => {
   it("fake → le faux ; fashn → FASHN (avec sa clé)", () => {
-    const fake = readTryonConfig({ TRYON_ENABLED: true, TRYON_PROVIDER: "fake" } as never, "development");
-    const fashn = readTryonConfig({ TRYON_ENABLED: true, TRYON_PROVIDER: "fashn", FASHN_API_KEY: KEY } as never, "production");
+    const fake = readTryonConfig({ TRYON_ENABLED: true, TRYON_PROVIDER: "fake" } as never, false);
+    const fashn = readTryonConfig({ TRYON_ENABLED: true, TRYON_PROVIDER: "fashn", FASHN_API_KEY: KEY } as never, true);
     if (fake.state !== "ready" || fashn.state !== "ready") throw new Error("réglages attendus prêts");
     expect(createTryonProvider(fake.config)).toBeInstanceOf(FakeProvider);
     expect(createTryonProvider(fashn.config)).toBeInstanceOf(FashnProvider);

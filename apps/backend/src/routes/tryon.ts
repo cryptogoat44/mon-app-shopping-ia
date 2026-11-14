@@ -29,7 +29,7 @@ import { ageStatusFor } from "../lib/tryon/ageGate.js";
 import { notifyTryonAlert, type TryonAlertKind } from "../lib/tryon/alerts.js";
 import { addAiBand } from "../lib/tryon/band.js";
 import { dayIn, dayKeyAt, monthKeyAt, nextMonthStart } from "../lib/tryon/calendar.js";
-import { logTryonConfigState, readTryonConfig, TRYON_CONSENT_VERSION, type TryonConfig, type TryonConfigState } from "../lib/tryon/config.js";
+import { isProductionServer, logTryonConfigState, readTryonConfig, TRYON_CONSENT_VERSION, type TryonConfig, type TryonConfigState } from "../lib/tryon/config.js";
 import { accessRefusal, ageGateOf, consentStateOf, type TryonAccessRefusal } from "../lib/tryon/consent.js";
 import { tryonGarmentUrls } from "../lib/tryon/eligibility.js";
 import type { TryonFailureCode } from "../lib/tryon/failures.js";
@@ -199,7 +199,7 @@ export interface TryonRoutesOptions {
 
 export default async function tryonRoutes(fastify: FastifyInstance, options: TryonRoutesOptions) {
   // Réglages lus et vérifiés une seule fois, au démarrage (jamais la clé quand l'essayage est coupé).
-  const configState = options.configState ?? readTryonConfig(env, process.env.NODE_ENV);
+  const configState = options.configState ?? readTryonConfig(env, isProductionServer(process.env.NODE_ENV, env.SENTRY_ENVIRONMENT));
   logTryonConfigState(configState, fastify.log);
   const provider = configState.state === "ready" ? (options.provider ?? createTryonProvider(configState.config)) : null;
   const flag = featureFlagReader(fastify, "tryon");
@@ -488,7 +488,7 @@ export default async function tryonRoutes(fastify: FastifyInstance, options: Try
             }
           } else {
             // L'image est remise quand même : le membre n'a pas à payer une panne de la base.
-            request.log.error({ completed: false }, "Essayage réussi mais non décompté");
+            request.log.error({ completed: false }, "Essayage réussi, décompte non confirmé par la base");
           }
           const remaining = completion?.status === "completed" ? { free: completion.free, bonus: completion.bonus } : estimatedRemaining(reservation);
           request.log.info(

@@ -191,13 +191,20 @@ export function readTryonSettings(source: TryonEnvSource, problems: string[]): T
   };
 }
 
-/** Réglages de l'essayage, vérifiés. `nodeEnv` : celui du processus (le
- * faux fournisseur est refusé en production). */
-export function readTryonConfig(source: TryonEnvSource, nodeEnv: string | undefined): TryonConfigState {
+/** Le serveur de production ? NODE_ENV=production, ou SENTRY_ENVIRONMENT=
+ * production (réglage exigé chez Render, voir .env.example) : dans le doute,
+ * production. */
+export function isProductionServer(nodeEnv: string | undefined, sentryEnvironment: string | undefined): boolean {
+  return nodeEnv === "production" || sentryEnvironment === "production";
+}
+
+/** Réglages de l'essayage, vérifiés. `production` : le faux fournisseur y
+ * est refusé (isProductionServer). */
+export function readTryonConfig(source: TryonEnvSource, production: boolean): TryonConfigState {
   if (source.TRYON_ENABLED !== true) return { state: "off" };
   const problems: string[] = [];
   const settings = readTryonSettings(source, problems);
-  if (settings.provider === "fake" && nodeEnv === "production") {
+  if (settings.provider === "fake" && production) {
     problems.push("TRYON_PROVIDER : le faux fournisseur est refusé en production");
   }
   const apiKey = settings.provider === "fashn" ? readApiKey(source, problems) : null;

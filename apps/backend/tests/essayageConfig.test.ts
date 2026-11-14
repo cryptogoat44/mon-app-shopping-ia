@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import type { FastifyInstance } from "fastify";
-import { DEFAULT_FASHN_API_BASE_URL, logTryonConfigState, readTryonConfig, type TryonEnvSource } from "../src/lib/tryon/config.js";
+import { DEFAULT_FASHN_API_BASE_URL, isProductionServer, logTryonConfigState, readTryonConfig, type TryonEnvSource } from "../src/lib/tryon/config.js";
 import { FEATURE_FLAG_TTL_MS, featureFlagReader } from "../src/lib/tryon/featureFlag.js";
 import { fakeSupabase, type FakeDbOptions } from "./fakeSupabase.js";
 
@@ -33,8 +33,8 @@ function source(vars: Partial<TryonEnvSource> = {}): TryonEnvSource {
   };
 }
 
-const problemsOf = (vars: Partial<TryonEnvSource>, nodeEnv = "development") => {
-  const state = readTryonConfig(source(vars), nodeEnv);
+const problemsOf = (vars: Partial<TryonEnvSource>, production = false) => {
+  const state = readTryonConfig(source(vars), production);
   return state.state === "invalid" ? state.problems : [];
 };
 
@@ -43,12 +43,12 @@ describe("réglages de l'essayage : éteint par défaut, éteint au moindre dout
     const read = vi.fn(() => FAKE_KEY);
     const off = { ...source({ TRYON_ENABLED: false, TRYON_PROVIDER: "fashn" }) };
     Object.defineProperty(off, "FASHN_API_KEY", { get: read, enumerable: true });
-    expect(readTryonConfig(off, "production")).toEqual({ state: "off" });
+    expect(readTryonConfig(off, true)).toEqual({ state: "off" });
     expect(read).not.toHaveBeenCalled();
   });
 
   it("allumé sans autre réglage : le faux fournisseur et les valeurs de la mission (hors production)", () => {
-    expect(readTryonConfig(source(), "development")).toEqual({
+    expect(readTryonConfig(source(), false)).toEqual({
       state: "ready",
       config: {
         provider: "fake",
@@ -67,20 +67,24 @@ describe("réglages de l'essayage : éteint par défaut, éteint au moindre dout
     });
   });
 
-  it("le faux fournisseur est refusé en production", () => {
-    expect(problemsOf({}, "production")).toEqual(["TRYON_PROVIDER : le faux fournisseur est refusé en production"]);
-    expect(problemsOf({ TRYON_PROVIDER: "fake" }, "production")).toHaveLength(1);
+  it("le faux fournisseur est refusé en production (NODE_ENV ou SENTRY_ENVIRONMENT : production)", () => {
+    expect(problemsOf({}, true)).toEqual(["TRYON_PROVIDER : le faux fournisseur est refusé en production"]);
+    expect(problemsOf({ TRYON_PROVIDER: "fake" }, true)).toHaveLength(1);
+    expect(isProductionServer("production", "development")).toBe(true);
+    expect(isProductionServer(undefined, "production")).toBe(true);
+    expect(isProductionServer("development", "development")).toBe(false);
+    expect(isProductionServer(undefined, undefined)).toBe(false);
   });
 
   it("FASHN sans clé : éteint ; avec une clé, prêt (la clé n'est lue qu'avec FASHN)", () => {
     expect(problemsOf({ TRYON_PROVIDER: "fashn" })).toEqual(["FASHN_API_KEY : absente (obligatoire avec TRYON_PROVIDER=fashn)"]);
     expect(problemsOf({ TRYON_PROVIDER: "fashn", FASHN_API_KEY: "avec espace dedans" })).toEqual(["FASHN_API_KEY : forme invalide"]);
-    const ready = readTryonConfig(source({ TRYON_PROVIDER: "fashn", FASHN_API_KEY: FAKE_KEY }), "production");
+    const ready = readTryonConfig(source({ TRYON_PROVIDER: "fashn", FASHN_API_KEY: FAKE_KEY }), true);
     expect(ready).toMatchObject({ state: "ready", config: { provider: "fashn", apiKey: FAKE_KEY } });
     const read = vi.fn(() => FAKE_KEY);
     const fake = source();
     Object.defineProperty(fake, "FASHN_API_KEY", { get: read, enumerable: true });
-    readTryonConfig(fake, "development");
+    readTryonConfig(fake, false);
     expect(read).not.toHaveBeenCalled();
   });
 
@@ -129,21 +133,21 @@ describe("réglages de l'essayage : éteint par défaut, éteint au moindre dout
     for (const url of ["ftp://api.fashn.ai/v1", "https://cle:secret@api.fashn.ai/v1", "https://api.fashn.ai/v1?debug=1", "pas une adresse"]) {
       expect(problemsOf({ FASHN_API_BASE_URL: url }), url).toEqual(["FASHN_API_BASE_URL : adresse https attendue, sans identifiants ni paramètres"]);
     }
-    expect(readTryonConfig(source({ FASHN_API_BASE_URL: "https://api.fashn.ai/v1/" }), "development")).toMatchObject({ config: { apiBaseUrl: "https://api.fashn.ai/v1" } });
+    expect(readTryonConfig(source({ FASHN_API_BASE_URL: "https://api.fashn.ai/v1/" }), false)).toMatchObject({ config: { apiBaseUrl: "https://api.fashn.ai/v1" } });
   });
 
   it("lien d'achat exigé par défaut ; « false » exact le lève", () => {
-    expect(readTryonConfig(source({ TRYON_REQUIRE_BUY_LINK: "false" }), "development")).toMatchObject({ config: { requireBuyLink: false } });
-    expect(readTryonConfig(source({ TRYON_REQUIRE_BUY_LINK: "" }), "development")).toMatchObject({ config: { requireBuyLink: true } });
+    expect(readTryonConfig(source({ TRYON_REQUIRE_BUY_LINK: "false" }), false)).toMatchObject({ config: { requireBuyLink: false } });
+    expect(readTryonConfig(source({ TRYON_REQUIRE_BUY_LINK: "" }), false)).toMatchObject({ config: { requireBuyLink: true } });
   });
 
   it("le journal dit une seule fois quelles variables corriger, sans aucune valeur", () => {
     const warn = vi.fn();
-    logTryonConfigState(readTryonConfig(source({ TRYON_PROVIDER: "fashn", FASHN_API_KEY: "x y" }), "development"), { warn });
+    logTryonConfigState(readTryonConfig(source({ TRYON_PROVIDER: "fashn", FASHN_API_KEY: "x y" }), false), { warn });
     expect(warn).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(warn.mock.calls)).not.toContain("x y");
     logTryonConfigState({ state: "off" }, { warn });
-    logTryonConfigState(readTryonConfig(source(), "development"), { warn });
+    logTryonConfigState(readTryonConfig(source(), false), { warn });
     expect(warn).toHaveBeenCalledTimes(1);
   });
 });
@@ -175,7 +179,7 @@ describe("réglages lus de bout en bout (variables d'environnement → src/env.t
     Object.assign(process.env, REQUIRED, vars);
     vi.resetModules();
     const [{ env }, config] = await Promise.all([import("../src/env.js"), import("../src/lib/tryon/config.js")]);
-    return config.readTryonConfig(env, "development");
+    return config.readTryonConfig(env, false);
   }
 
   it("absent, « TRUE », « 1 », « true » avec une espace : éteint ; « true » exact : allumé", async () => {

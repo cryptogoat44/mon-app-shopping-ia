@@ -41,7 +41,7 @@ async function main(): Promise<void> {
   }
   // Les réglages du serveur, pour FASHN seulement, dans ce script seulement
   // (rien n'est allumé ailleurs) : clé et adresse vérifiées.
-  const state = readTryonConfig({ ...(process.env as unknown as TryonEnvSource), TRYON_ENABLED: true, TRYON_PROVIDER: "fashn" }, "production");
+  const state = readTryonConfig({ ...(process.env as unknown as TryonEnvSource), TRYON_ENABLED: true, TRYON_PROVIDER: "fashn" }, true);
   if (state.state !== "ready" || !state.config.apiKey) {
     throw new Error(`Réglages invalides : ${state.state === "invalid" ? state.problems.join(" ; ") : "clé absente"}`);
   }
