@@ -267,12 +267,18 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036, 0040 et 004
     await observe([obs(uniqueUrl("autre-piece"), 5000)]);
     // Semblable mais différente : une autre variante (paramètre gardé dans l'empreinte).
     await observe([obs(`${url}?couleur=rouge`, 5000)]);
-    // Autre boutique moins chère : même chemin, autre site.
+    // Autre boutique moins chère : même chemin, autre site (l'hôte de la boutique est dans l'empreinte).
     await observe([obs(url.replace("boutique-essai", "boutique-concurrente"), 5000)]);
-    // Même empreinte, autre boutique annoncée : ce n'est pas la même pièce.
-    await observe([{ ...obs(url, 5000), m: "boutiqueconcurrente" }]);
     expect(await events(wish)).toEqual([]);
     expect(Number((await tracking(wish)).last_price)).toBe(100);
+  });
+
+  it("même lien, nom de boutique annoncé autrement (« & Other Stories » pour stories.com) : même pièce, car le suivi ne garde plus de nom de boutique", async () => {
+    const url = uniqueUrl("autre-nom");
+    const wish = await wishFromResult(owner, url);
+    await bell(owner, wish, { priceDrop: true, restock: false, targetPrice: 90 });
+    expect(await observe([{ ...obs(url, 5000), m: "autrenomdelaboutique" }])).toEqual({ matched: 1, events: 1 });
+    expect((await events(wish)).map((event) => [event.kind, Number(event.new_price)])).toEqual([["price_drop", 50]]);
   });
 
   it("devise ou pays différents de ceux du seuil : aucune alerte ; un autre pays que celui du membre : ignoré", async () => {
