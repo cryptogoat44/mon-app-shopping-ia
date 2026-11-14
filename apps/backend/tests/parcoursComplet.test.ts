@@ -524,6 +524,18 @@ describe.sequential("parcours complet : de l'inscription à la suppression du co
       expect((await request(a, "DELETE", "/api/me", { confirmation: "oui" })).statusCode).toBe(400);
       expect((await request(a, "GET", "/api/me")).statusCode).toBe(200);
 
+      // Essayage virtuel (avec 0042) : un profil d'essayage, un essai, des
+      // essais offerts et un signalement, écrits directement : ils doivent
+      // partir avec le compte (cascades, sans erreur de droits).
+      const tryonMigrated = !(await app.supabaseAdmin.rpc("tryon_version")).error;
+      if (tryonMigrated) {
+        expect((await app.supabaseAdmin.rpc("tryon_set_age", { p_user_id: a.id, p_status: "adult" })).error).toBeNull();
+        const month = new Date().toISOString().slice(0, 7);
+        expect((await app.supabaseAdmin.from("tryon_events").insert({ user_id: a.id, item_id: a.id, status: "failed", error_code: "timeout", month, finished_at: new Date().toISOString() })).error).toBeNull();
+        expect((await app.supabaseAdmin.rpc("tryon_grant_bonus", { p_user_id: a.id, p_order_ref: `test-parcours-${a.id}` })).error).toBeNull();
+        expect((await app.supabaseAdmin.from("tryon_reports").insert({ user_id: a.id, item_id: a.id, reason: "other" })).error).toBeNull();
+      }
+
       expect((await request(a, "DELETE", "/api/me", { confirmation: ACCOUNT_DELETION_WORDS.fr })).statusCode).toBe(204);
       expect((await request(a, "GET", "/api/me")).statusCode).toBe(401);
       const { data: auth } = await app.supabaseAdmin.auth.admin.getUserById(a.id);
@@ -556,6 +568,7 @@ describe.sequential("parcours complet : de l'inscription à la suppression du co
         ["moderation_actions", "target_user_id"],
       ];
       if (await migration0029Applied(app)) columns.push(["ai_calls", "user_id"]);
+      if (tryonMigrated) columns.push(["tryon_profiles", "user_id"], ["tryon_events", "user_id"], ["tryon_bonus_grants", "user_id"], ["tryon_reports", "user_id"]);
       for (const [table, column] of columns) {
         const { count, error } = await app.supabaseAdmin.from(table).select("*", { count: "exact", head: true }).eq(column, a.id);
         expect(error, `${table}.${column}`).toBeNull();

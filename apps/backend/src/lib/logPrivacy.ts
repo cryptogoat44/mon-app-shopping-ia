@@ -20,6 +20,13 @@
 //    adresse e-mail ou la partie « ?… » d'une adresse qui resterait (message
 //    interne de Fastify, texte écrit plus tard sans y penser) est remplacé
 //    par « :id », « :email » ou « ?… ».
+// 4. Essayage virtuel (lot « essayage virtuel ») : jamais une image dans un
+//    journal ni à Sentry. Les champs qui pourraient en porter (corps des
+//    requêtes et des réponses, photo, image, date de naissance…) sont
+//    masqués par le journal lui-même (LOG_REDACT_PATHS, app.ts) ; et, filet
+//    final, toute image en « data URI » ou longue suite en base64 qui
+//    resterait dans une ligne (ou dans un événement Sentry, lib/sentry.ts)
+//    est remplacée par « [données masquées] » (scrubBinaryText).
 // Les adresses inconnues du serveur ont leur propre réponse 404 (app.ts) :
 // celle de Fastify notait « Route GET:/… not found », adresse entière comprise.
 //
@@ -97,8 +104,48 @@ const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 // l'échappement JSON suivant : la ligne reste un JSON valide.
 const QUERY = /(\/[^\s"'?\\]*)\?[^\s"'\\]+/g;
 
-/** « hooks.streamWrite » du journal : la ligne JSON, sans identifiant, e-mail
- * ni partie « ?… » d'adresse. */
+/** Ce qui remplace une image ou une donnée binaire (sans guillemet ni barre
+ * oblique inverse : la ligne reste un JSON valide). */
+export const MASKED_DATA = "[données masquées]";
+// Une image en « data URI » (« data:image/jpeg;base64,… »), et toute suite de
+// 100 caractères base64 ou plus : jamais du texte, toujours des octets.
+const DATA_URI = /data:[a-z]+\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/]*={0,2}/gi;
+const BASE64_RUN = /[A-Za-z0-9+/]{100,}={0,2}/g;
+
+/** Le texte sans aucune image en « data URI » ni longue suite en base64. */
+export function scrubBinaryText(text: string): string {
+  return text.replace(DATA_URI, `data:${MASKED_DATA}`).replace(BASE64_RUN, MASKED_DATA);
+}
+
+/** Champs masqués par le journal lui-même (option « redact » de pino) : le
+ * corps d'une requête ou d'une réponse, et tout champ qui porterait une
+ * image, une photo ou une date de naissance, à la racine d'une ligne ou
+ * juste en dessous. Aucune route ne les journalise ; c'est un filet. */
+export const LOG_REDACT_PATHS = [
+  "body",
+  "*.body",
+  "payload",
+  "*.payload",
+  "image",
+  "*.image",
+  "photo",
+  "*.photo",
+  "personImage",
+  "*.personImage",
+  "garmentImage",
+  "*.garmentImage",
+  "model_image",
+  "*.model_image",
+  "garment_image",
+  "*.garment_image",
+  "output",
+  "*.output",
+  "birthDate",
+  "*.birthDate",
+];
+
+/** « hooks.streamWrite » du journal : la ligne JSON, sans image, identifiant,
+ * e-mail ni partie « ?… » d'adresse. */
 export function scrubLogLine(line: string): string {
-  return line.replace(QUERY, "$1?…").replace(UUID, ":id").replace(EMAIL, ":email");
+  return scrubBinaryText(line).replace(QUERY, "$1?…").replace(UUID, ":id").replace(EMAIL, ":email");
 }

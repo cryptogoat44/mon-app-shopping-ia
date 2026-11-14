@@ -100,7 +100,10 @@ if (!apiUrl) {
 
 export { ApiError };
 
-async function authorizedFetch(path: string, init?: RequestInit): Promise<Response> {
+/** Appel au serveur avec la session de la personne (jeton, langue de l'app,
+ * numéro de build sur iPhone). Réponse en erreur : ApiError. Exporté pour les
+ * modules qui gardent leurs propres appels dans un fichier à part. */
+export async function authorizedFetch(path: string, init?: RequestInit): Promise<Response> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
 

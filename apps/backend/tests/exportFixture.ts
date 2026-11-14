@@ -43,6 +43,7 @@ const BLOCKER_POST = "90000000-0000-4000-8000-000000000003";
 const DECISION = "de000000-0000-4000-8000-000000000001";
 const LINK = "11000000-0000-4000-8000-000000000001";
 const RECEIVED = "4e000000-0000-4000-8000-000000000001";
+const TRIED_ITEM = "11000000-0000-4000-8000-0000000000e1";
 export const CONVERSATION = "c0000000-0000-4000-8000-0000000000c1";
 const CONVERSATION_BLOCKER = "c0000000-0000-4000-8000-0000000000c2";
 export const HIDDEN_REPLY = "Reponse masquee";
@@ -383,6 +384,46 @@ export function fixture(): ExportData {
       },
     ],
     stockReports: [{ id: "5c000000-0000-4000-8000-000000000001", match_key_hash: "a".repeat(64), created_on: "2026-10-09" }],
+    // Essayage virtuel (migration 0042) : jamais d'image, jamais la date de naissance.
+    tryonProfile: {
+      age_status: "adult",
+      age_checked_at: "2026-10-05T09:00:00+00:00",
+      consent_version: "2026-11-v1",
+      consent_accepted_at: "2026-10-05T09:01:00+00:00",
+      consent_withdrawn_at: null,
+    },
+    tryonEvents: [
+      {
+        id: "7e000000-0000-4000-8000-000000000001",
+        item_id: TRIED_ITEM,
+        status: "succeeded",
+        credits_used: 1,
+        quota_source: "free",
+        bonus_grant_id: null,
+        error_code: null,
+        duration_ms: 8200,
+        month: "2026-10",
+        created_at: "2026-10-06T18:00:00+00:00",
+        finished_at: "2026-10-06T18:00:08+00:00",
+      },
+      {
+        id: "7e000000-0000-4000-8000-000000000002",
+        item_id: TRIED_ITEM,
+        status: "failed",
+        credits_used: 0,
+        quota_source: null,
+        bonus_grant_id: null,
+        error_code: "pose_not_detected",
+        duration_ms: 9100,
+        month: "2026-10",
+        created_at: "2026-10-07T18:00:00+00:00",
+        finished_at: "2026-10-07T18:00:09+00:00",
+      },
+    ],
+    tryonBonusGrants: [
+      { id: "7b000000-0000-4000-8000-000000000001", order_ref: "CMD-2026-0042", quantity: 5, remaining: 4, expires_at: "2027-10-06T18:00:00+00:00", created_at: "2026-10-06T17:00:00+00:00" },
+    ],
+    tryonReports: [{ id: "7c000000-0000-4000-8000-000000000001", item_id: TRIED_ITEM, reason: "wrong_piece", comment: "Ce n'est pas la bonne veste.", created_at: "2026-10-06T18:05:00+00:00" }],
     // Mémoire des vidéos (migrations 0038 et 0039).
     videoSpots: [
       {

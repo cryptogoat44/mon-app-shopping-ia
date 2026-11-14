@@ -5,6 +5,7 @@ import { collectionsReady } from "./collections.js";
 import { collectionModerationReady } from "./collectionModeration.js";
 import { pushReady } from "./push.js";
 import { wishAlertsReady } from "./wishAlertsSchema.js";
+import { tryonSchemaReady } from "./tryon/schema.js";
 import { videoMemoryStored } from "./videoMemory.js";
 
 // Export RGPD (droit d'accès et de portabilité) : lecture de TOUTES les
@@ -76,6 +77,16 @@ export interface ExportData {
   wishAlertEvents: ExportRow[];
   /** … et vos signalements « Plus disponible » (au jour près). */
   stockReports: ExportRow[];
+  /** Essayage virtuel (lot « essayage virtuel », migration 0042) : statut
+   * d'âge (jamais la date de naissance) et consentement… */
+  tryonProfile: ExportRow | null;
+  /** … les essais (jamais une image : la pièce, le résultat, la source du
+   * quota, un code d'échec, la durée, les dates)… */
+  tryonEvents: ExportRow[];
+  /** … les essais offerts (commande, quantité, reste, expiration)… */
+  tryonBonusGrants: ExportRow[];
+  /** … et les signalements d'un résultat (motif, précision). */
+  tryonReports: ExportRow[];
   /** Mémoire collective des vidéos (migrations 0038 et 0039) : vos spots — la
    * vidéo (adresse publique), d'où venait l'image, le moment de la vidéo, la
    * date et la recherche liée… */
@@ -169,6 +180,13 @@ export const WISH_WATCH_EXPORT_COLUMNS = "wishlist_item_id, notify_price_drop, n
 export const WISH_TRACKING_EXPORT_COLUMNS = "wishlist_item_id, ref_price, ref_currency, ref_set_on, last_price, last_currency, last_seen_on, stock_state, stock_on";
 export const WISH_ALERT_EVENT_EXPORT_COLUMNS = "id, wishlist_item_id, kind, old_price, new_price, currency, status, created_on";
 export const STOCK_REPORT_EXPORT_COLUMNS = "id, match_key_hash, created_on";
+
+// Essayage virtuel (migration 0042). Aucune image n'existe dans la base :
+// ni la photo du membre, ni l'image produite (jamais gardées).
+export const TRYON_PROFILE_EXPORT_COLUMNS = "age_status, age_checked_at, consent_version, consent_accepted_at, consent_withdrawn_at";
+export const TRYON_EVENT_EXPORT_COLUMNS = "id, item_id, status, credits_used, quota_source, bonus_grant_id, error_code, duration_ms, month, created_at, finished_at";
+export const TRYON_BONUS_GRANT_EXPORT_COLUMNS = "id, order_ref, quantity, remaining, expires_at, created_at";
+export const TRYON_REPORT_EXPORT_COLUMNS = "id, item_id, reason, comment, created_at";
 
 /** Ajoute le titre de l'envie à chaque ligne (lisible sans l'identifiant). */
 function withWishTitles(rows: readonly ExportRow[], wishlistItems: readonly ExportRow[]): ExportRow[] {
@@ -409,6 +427,23 @@ export async function collectExport(
     ),
     section("stockReports", () => (withAlerts ? listWhere(db, "stock_reports", STOCK_REPORT_EXPORT_COLUMNS, "user_id", userId, ["created_on", "id"]) : Promise.resolve(none)), none),
   ]);
+  // Essayage virtuel : sans la migration 0042, sections vides.
+  const withTryon = await tryonSchemaReady(fastify);
+  const [tryonProfile, tryonEvents, tryonBonusGrants, tryonReports] = await Promise.all([
+    section(
+      "tryonProfile",
+      async () => {
+        if (!withTryon) return null;
+        const { data, error } = await db.from("tryon_profiles").select(TRYON_PROFILE_EXPORT_COLUMNS).eq("user_id", userId).maybeSingle();
+        if (error) throw error;
+        return (data as ExportRow | null) ?? null;
+      },
+      null
+    ),
+    section("tryonEvents", () => (withTryon ? listWhere(db, "tryon_events", TRYON_EVENT_EXPORT_COLUMNS, "user_id", userId, BY_DATE) : Promise.resolve(none)), none),
+    section("tryonBonusGrants", () => (withTryon ? listWhere(db, "tryon_bonus_grants", TRYON_BONUS_GRANT_EXPORT_COLUMNS, "user_id", userId, BY_DATE) : Promise.resolve(none)), none),
+    section("tryonReports", () => (withTryon ? listWhere(db, "tryon_reports", TRYON_REPORT_EXPORT_COLUMNS, "user_id", userId, BY_DATE) : Promise.resolve(none)), none),
+  ]);
 
   // Mémoire des vidéos : lue dès que ses tables existent (0038), même si la
   // mémoire est coupée faute de 0039 : ce qui a été noté doit y figurer.
@@ -455,6 +490,10 @@ export async function collectExport(
     wishTracking,
     wishAlertEvents,
     stockReports,
+    tryonProfile,
+    tryonEvents,
+    tryonBonusGrants,
+    tryonReports,
     videoSpots,
     videoConfirmations,
   };

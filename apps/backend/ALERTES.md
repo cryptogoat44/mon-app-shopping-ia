@@ -23,6 +23,23 @@ Jamais de compte, d'adresse ni de contenu : le type, et des valeurs comme
 lignes portent aussi le tag `moderation` (chantier 3) : une règle déjà créée
 sur ce tag continue de marcher.
 
+## Essayage virtuel (éteint par défaut)
+
+Ses alertes ne partent ni à Sentry ni par e-mail (aucun service d'e-mail n'est
+branché) : chacune est enregistrée **une seule fois par période** dans la table
+`tryon_alerts` de la base, et écrit une ligne d'avertissement
+`Alerte de l'essayage virtuel` dans le journal de Render :
+
+| Champ `alerte` | Quand | Combien de fois |
+| --- | --- | --- |
+| `essayage_budget_80` | la dépense FASHN du mois atteint 80 % du budget (`TRYON_ALERT_THRESHOLD`) | une par mois |
+| `essayage_budget_100` | le budget du mois ne permet plus un essai de plus : les essais sont refusés jusqu'au mois suivant | une par mois |
+| `essayage_low_credits` | le solde de crédits FASHN est sous `TRYON_MIN_FASHN_CREDITS` (ou épuisé) : les essais sont refusés | une par jour |
+
+`pnpm --filter backend tryon:report` les liste avec la dépense du mois. Le jour
+où un e-mail est branché, il part d'un seul endroit : `notifyTryonAlert`
+(`src/lib/tryon/alerts.ts`).
+
 ## À régler dans Sentry (une fois)
 
 1. Sur Render, service `spotto-api`, vérifier que `SENTRY_ENVIRONMENT` vaut
