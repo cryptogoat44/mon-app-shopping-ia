@@ -195,6 +195,14 @@ export async function deletePushToken(fastify: FastifyInstance, userId: string, 
   if (error) throw new PushTokenStoreError("Appareil : suppression impossible");
 }
 
+/** Oublie cet appareil, quel que soit son compte (POST
+ * /api/push-token/forget, sans session : avoir le jeton, c'est être cet
+ * appareil). Seulement les lignes de ce jeton ; sans effet s'il n'y est pas. */
+export async function forgetPushTokenEverywhere(fastify: FastifyInstance, token: string): Promise<void> {
+  const { error } = await fastify.supabaseAdmin.from("push_tokens").delete().eq("token", token);
+  if (error) throw new PushTokenStoreError("Appareil : suppression impossible");
+}
+
 /** Suppression du compte : tous ses appareils (la base les efface aussi en cascade). */
 export async function deleteAllPushTokens(fastify: FastifyInstance, userId: string): Promise<void> {
   const { error } = await fastify.supabaseAdmin.from("push_tokens").delete().eq("user_id", userId);

@@ -522,10 +522,14 @@ const SAVE_FAILED = { error: "search_save_failed", message: "Le résultat n'a pa
 /** Alertes prix et stock (lot 2, lib/wishObserve.ts) : APRÈS reply.send, les
  * propositions que la personne vient de recevoir, seulement si elles sont
  * fraîches (jamais le cache de 24 h, jamais la réponse d'un appel identique
- * en cours) et enregistrées. Lancé puis oublié : ne retarde ni ne change la réponse. */
-function observeFresh(fastify: FastifyInstance, request: FastifyRequest, source: Exclude<ObservationSource, "purchase">, rows: readonly ObservedRow[], fresh: boolean): void {
-  if (!fresh || rows.length === 0) return;
-  observeResults(fastify, { source, rows, country: searchLocaleFor(request).country });
+ * en cours) et enregistrées. Lancé puis oublié, détaché de la requête (ni
+ * son journal, ni Sentry) : ne retarde ni ne change la réponse. Le membre
+ * qui cherche part vers la base seulement (son réglage « Aider les autres
+ * membres » et la règle des auteurs, 0041). */
+function observeFresh(fastify: FastifyInstance, request: FastifyRequest, source: ObservationSource, rows: readonly ObservedRow[], fresh: boolean): void {
+  const observerId = request.user?.id;
+  if (!fresh || rows.length === 0 || !observerId) return;
+  observeResults(fastify, { source, rows, country: searchLocaleFor(request).country, observerId });
 }
 
 /** Écrit les colonnes finales de la recherche, puis la relit avec ses

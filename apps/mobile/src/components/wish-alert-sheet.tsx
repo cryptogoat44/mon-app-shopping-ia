@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Modal, Platform, Pressable, Switch, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, Switch, Text, TextInput, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { WishAlertState } from "@monapp/shared-types";
 import { color, font, radius, serifFont, size, space } from "@/theme/tokens";
-import { t } from "@/i18n";
+import { getActiveLocale, t } from "@/i18n";
 import { updateWishAlert } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { loadPushDecision, pushPermission, pushSupported, savePushDecision, syncPushDevice } from "@/lib/push";
@@ -18,10 +18,15 @@ import {
   bellOn,
   choiceChanged,
   choiceOf,
+  currencySymbol,
+  initialTarget,
   isAlertsUnavailable,
+  parseTargetPrice,
   pushNote,
   pushNoteText,
   switchTurnsOn,
+  targetHint,
+  targetPriceText,
   visibleAlertKinds,
   watchErrorMessage,
   watchRequest,
@@ -44,7 +49,16 @@ import { themedStyles } from "@/theme/themed-styles";
 //   site, elles n'arrivent que sur l'app iPhone ;
 // - un seul enregistrement à la fois : pendant qu'il part, l'explication des
 //   notifications n'accepte plus de réponse (« Plus tard » défairait l'accord
-//   que la personne vient de donner) et rien ne ferme la feuille.
+//   que la personne vient de donner) et rien ne ferme la feuille ;
+// - nouvelle version (0041) : sous « Baisse de prix », « Prévenez-moi si le
+//   prix passe sous [ ] € », pré-rempli avec le seuil enregistré ou le
+//   dernier prix vu (le serveur les dit) ; la personne peut le baisser ;
+//   l'indication dit d'où vient le prix affiché (targetHint). Le champ
+//   n'apparaît que si la devise du membre est connue (le serveur la déduit au
+//   besoin du pays de la recherche) ; sinon, une indication le dit ;
+// - le pavé numérique de l'iPhone se ferme (« OK » au-dessus des touches) et
+//   ne cache jamais le champ ni « Enregistrer » (la feuille remonte au-dessus
+//   du clavier).
 
 /** La cloche d'une envie dans une liste : un bouton rond, posé sur le coin
  * de la vignette (zone tactile de 44 points avec la marge). Pleine quand une
@@ -107,6 +121,9 @@ export function WishAlertSheet({
   const { showToast } = useToast();
   const [choice, setChoice] = useState<AlertChoice>(() => choiceOf(state));
   const initial = useRef<AlertChoice>(choiceOf(state));
+  const locale = getActiveLocale();
+  const [targetText, setTargetText] = useState(() => targetPriceText(initialTarget(state), locale));
+  const initialTargetText = useRef(targetPriceText(initialTarget(state), locale));
   const [step, setStep] = useState<"choose" | "push">("choose");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,6 +138,9 @@ export function WishAlertSheet({
     const saved = choiceOf(state);
     initial.current = saved;
     setChoice(saved);
+    const text = targetPriceText(initialTarget(state), locale);
+    initialTargetText.current = text;
+    setTargetText(text);
     setStep("choose");
     setError(null);
     setSaving(false);
@@ -157,7 +177,16 @@ export function WishAlertSheet({
   async function send() {
     if (!wish || sending.current) return;
     sending.current = true;
-    const request = watchRequest(choice, status);
+    const target = parseTargetPrice(targetText);
+    if (choice.price_drop && targetFieldShown && target === "invalid") {
+      sending.current = false;
+      setError(t.wishAlerts.targetInvalid);
+      setStep("choose");
+      return;
+    }
+    // Seuil inchangé : rien n'est envoyé (le serveur garde le sien ou le pré-remplit) ; vidé : null.
+    const changedTarget = targetFieldShown && targetText !== initialTargetText.current && target !== "invalid" ? target : undefined;
+    const request = watchRequest(choice, status, undefined, changedTarget);
     setSaving(true);
     setError(null);
     try {
@@ -186,65 +215,101 @@ export function WishAlertSheet({
   // Pendant l'enregistrement : ni fermeture, ni réponse à l'explication.
   const dismiss = () => (saving ? undefined : step === "push" ? offer.dismiss() : onClose());
   const turnsOn = switchTurnsOn(choice, status);
-  const canSave = !saving && (choiceChanged(initial.current, choice) || turnsOn);
+  const targetCurrency = state?.targetCurrency ?? state?.lastCurrency ?? null;
+  const targetFieldShown = targetCurrency !== null;
+  const targetChanged = choice.price_drop && targetFieldShown && targetText !== initialTargetText.current;
+  const targetInvalid = choice.price_drop && targetFieldShown && parseTargetPrice(targetText) === "invalid";
+  const hint = targetHint(state, targetText, initialTargetText.current, locale);
+  const canSave = !saving && !targetInvalid && (choiceChanged(initial.current, choice) || turnsOn || targetChanged);
   const note = pushNoteText(pushNote(status, Platform.OS));
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={dismiss}>
-      <Pressable style={styles.backdrop} onPress={dismiss} accessibilityRole="button" accessibilityLabel={t.common.close} />
-      <View style={[styles.sheet, { paddingBottom: space.xl + insets.bottom }]}>
-        <View style={styles.grab} />
-        {step === "push" ? (
-          <PushOfferPanel kind="alerts" offer={offer} saving={saving} />
-        ) : (
-          <>
-            <Text style={styles.title} accessibilityRole="header">
-              {t.wishAlerts.sheetTitle}
-            </Text>
-            {wish ? (
-              <Text style={styles.pieceTitle} numberOfLines={2}>
-                {wish.title}
+      <KeyboardAvoidingView style={styles.avoider} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <Pressable style={styles.backdrop} onPress={dismiss} accessibilityRole="button" accessibilityLabel={t.common.close} />
+        <View style={[styles.sheet, { paddingBottom: space.xl + insets.bottom }]}>
+          <View style={styles.grab} />
+          {step === "push" ? (
+            <PushOfferPanel kind="alerts" offer={offer} saving={saving} />
+          ) : (
+            <>
+              <Text style={styles.title} accessibilityRole="header">
+                {t.wishAlerts.sheetTitle}
               </Text>
-            ) : null}
-            <Text style={styles.intro}>{t.wishAlerts.sheetIntro}</Text>
-            {visibleAlertKinds().map((kind) => (
-              <View key={kind} style={styles.option}>
-                <View style={styles.optionText}>
-                  <Text style={styles.optionLabel}>{alertKindLabel(kind)}</Text>
-                  <Text style={styles.optionHint}>{t.wishAlerts.kindHints[kind]}</Text>
+              {wish ? (
+                <Text style={styles.pieceTitle} numberOfLines={2}>
+                  {wish.title}
+                </Text>
+              ) : null}
+              <Text style={styles.intro}>{t.wishAlerts.sheetIntro}</Text>
+              {visibleAlertKinds().map((kind) => (
+                <View key={kind} style={styles.option}>
+                  <View style={styles.optionText}>
+                    <Text style={styles.optionLabel}>{alertKindLabel(kind)}</Text>
+                    <Text style={styles.optionHint}>{t.wishAlerts.kindHints[kind]}</Text>
+                  </View>
+                  <Switch
+                    value={choice[kind]}
+                    onValueChange={(on) => setChoice((current) => ({ ...current, [kind]: on }))}
+                    disabled={saving}
+                    accessibilityLabel={alertKindLabel(kind)}
+                    accessibilityHint={t.wishAlerts.kindHints[kind]}
+                    trackColor={{ true: color.vert, false: color.filet }}
+                    testID={`alerte-${kind}`}
+                  />
                 </View>
-                <Switch
-                  value={choice[kind]}
-                  onValueChange={(on) => setChoice((current) => ({ ...current, [kind]: on }))}
-                  disabled={saving}
-                  accessibilityLabel={alertKindLabel(kind)}
-                  accessibilityHint={t.wishAlerts.kindHints[kind]}
-                  trackColor={{ true: color.vert, false: color.filet }}
-                  testID={`alerte-${kind}`}
-                />
+              ))}
+              {choice.price_drop && targetFieldShown ? (
+                <View style={styles.target}>
+                  <View style={styles.targetRow}>
+                    <Text style={styles.targetLabel}>{t.wishAlerts.targetLabel}</Text>
+                    <TextInput
+                      style={styles.targetInput}
+                      value={targetText}
+                      onChangeText={(text) => {
+                        setTargetText(text);
+                        setError(null);
+                      }}
+                      keyboardType="decimal-pad"
+                      inputMode="decimal"
+                      returnKeyType="done"
+                      inputAccessoryViewButtonLabel={t.wishAlerts.keyboardDone}
+                      onSubmitEditing={() => Keyboard.dismiss()}
+                      maxLength={12}
+                      editable={!saving}
+                      accessibilityLabel={t.wishAlerts.targetFieldLabel(currencySymbol(targetCurrency))}
+                      testID="seuil-baisse-prix"
+                    />
+                    <Text style={styles.targetLabel}>{currencySymbol(targetCurrency)}</Text>
+                  </View>
+                  {hint ? <Text style={styles.optionHint}>{hint}</Text> : null}
+                  {targetInvalid ? <ErrorMessage style={styles.error}>{t.wishAlerts.targetInvalid}</ErrorMessage> : null}
+                </View>
+              ) : choice.price_drop ? (
+                <Text style={styles.optionHint}>{t.wishAlerts.targetHintNoCountry}</Text>
+              ) : null}
+              {turnsOn ? <Text style={styles.note}>{t.wishAlerts.switchTurnsOn}</Text> : null}
+              {note ? <Text style={styles.note}>{note}</Text> : null}
+              {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
+              <View style={styles.row}>
+                <Pressable style={styles.secondary} onPress={onClose} disabled={saving} accessibilityRole="button">
+                  <Text style={styles.secondaryLabel}>{t.wishAlerts.cancel}</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.primary, canSave ? null : styles.primaryOff]}
+                  onPress={() => void save()}
+                  disabled={!canSave}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: !canSave, busy: saving }}
+                  testID="enregistrer-alerte"
+                >
+                  <Text style={[styles.primaryLabel, canSave ? null : styles.primaryLabelOff]}>{saving ? t.wishAlerts.saving : t.wishAlerts.save}</Text>
+                </Pressable>
               </View>
-            ))}
-            {turnsOn ? <Text style={styles.note}>{t.wishAlerts.switchTurnsOn}</Text> : null}
-            {note ? <Text style={styles.note}>{note}</Text> : null}
-            {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
-            <View style={styles.row}>
-              <Pressable style={styles.secondary} onPress={onClose} disabled={saving} accessibilityRole="button">
-                <Text style={styles.secondaryLabel}>{t.wishAlerts.cancel}</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.primary, canSave ? null : styles.primaryOff]}
-                onPress={() => void save()}
-                disabled={!canSave}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: !canSave, busy: saving }}
-                testID="enregistrer-alerte"
-              >
-                <Text style={[styles.primaryLabel, canSave ? null : styles.primaryLabelOff]}>{saving ? t.wishAlerts.saving : t.wishAlerts.save}</Text>
-              </Pressable>
-            </View>
-          </>
-        )}
-      </View>
+            </>
+          )}
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -273,6 +338,7 @@ const styles = themedStyles(() => ({
     paddingHorizontal: space.md,
   },
   buttonLabel: { flexShrink: 1, color: color.vert, fontSize: font.secondary, fontWeight: "600", textAlign: "center" },
+  avoider: { flex: 1, justifyContent: "flex-end" },
   backdrop: { flex: 1, backgroundColor: color.voile },
   sheet: {
     backgroundColor: color.porcelaine,
@@ -294,6 +360,20 @@ const styles = themedStyles(() => ({
   optionLabel: { fontSize: font.body, color: color.encre },
   optionHint: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
   note: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
+  target: { gap: space.xs, paddingBottom: space.xs },
+  targetRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: space.sm },
+  targetLabel: { fontSize: font.secondary, color: color.encre },
+  targetInput: {
+    minHeight: size.touchTarget,
+    minWidth: 96,
+    borderWidth: 1,
+    borderColor: color.filet,
+    borderRadius: radius.md,
+    paddingHorizontal: space.sm,
+    fontSize: font.body,
+    color: color.encre,
+    textAlign: "right",
+  },
   error: { fontSize: font.caption },
   row: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: space.sm, marginTop: space.sm },
   secondary: { minHeight: size.touchTarget, minWidth: size.touchTarget, paddingHorizontal: space.md, alignItems: "center", justifyContent: "center" },

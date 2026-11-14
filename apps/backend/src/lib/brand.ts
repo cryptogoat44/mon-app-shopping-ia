@@ -20,3 +20,7 @@ export const BRAND_HTTP_TOKEN: string =
     .replace(/[^A-Za-z0-9]+/g, "") || "App";
 /** Adresse publique du site (la même que PUBLIC_WEB_URL dans l'app). */
 export const PUBLIC_SITE_URL: string = marque.adresseSite;
+/** Adresse du serveur de production (EXPO_PUBLIC_API_URL du site et des
+ * builds destinés à Apple ; vérifiée par apps/mobile/scripts/verifier-build.js
+ * et par le garde-fou de render-bride). */
+export const PRODUCTION_API_URL: string = marque.adresseServeur;

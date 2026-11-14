@@ -23,6 +23,8 @@ import {
   shouldShowBanner,
   type PushContext,
 } from "../src/lib/push-state";
+import { PENDING_FORGET_KEY, clearForget, createSerialQueue, flushForget, pendingForget, rememberForget } from "../src/lib/push-forget";
+import { SIGN_OUT_SCOPES } from "@supabase/supabase-js";
 
 // Lot notifications : être prévenu des nouveaux messages sur l'iPhone. La
 // logique sans écran ni module natif (push-state.ts), puis les écrans lus
@@ -251,9 +253,114 @@ describe("déconnexion", () => {
     const auth = read("lib/auth-context.tsx");
     const signOut = auth.slice(auth.indexOf("const signOut = useCallback"));
     expect(signOut.indexOf("await forgetPushToken().catch(() => {});")).toBeGreaterThan(-1);
-    expect(signOut.indexOf("await forgetPushToken()")).toBeLessThan(signOut.indexOf("await supabase.auth.signOut()"));
+    expect(signOut.indexOf("await forgetPushToken()")).toBeLessThan(signOut.indexOf("await supabase.auth.signOut("));
     // Au plus 4 s d'attente.
     expect(read("lib/push.ts")).toContain("withTimeout(FORGET_TIMEOUT_MS, (signal) => deletePushToken(token, signal))");
+  });
+
+  // Lot « durcissement des alertes » (revue de sécurité app-06, alertes-03).
+  it("« Se déconnecter » ferme la session de CET appareil seulement (« local », accepté par la bibliothèque installée), jamais celles des autres", () => {
+    expect(SIGN_OUT_SCOPES).toContain("local");
+    const auth = read("lib/auth-context.tsx");
+    const calls = auth.match(/supabase\.auth\.signOut\([^)]*\)/g) ?? [];
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    for (const call of calls) expect(call).toBe('supabase.auth.signOut({ scope: "local" })');
+    expect(using(/auth\.signOut\(/)).toEqual(["lib/auth-context.tsx"]);
+  });
+
+  it("session fermée ailleurs (refusée par Supabase, ou terminée) : l'appareil est noté « à oublier » AVANT la déconnexion locale", () => {
+    const auth = read("lib/auth-context.tsx");
+    const forced = auth.slice(auth.indexOf("if (rejected) {"));
+    expect(forced.indexOf("await queueForgetPushToken().catch(() => {});")).toBeGreaterThan(-1);
+    expect(forced.indexOf("await queueForgetPushToken()")).toBeLessThan(forced.indexOf("await supabase.auth.signOut("));
+    expect(auth).toContain('if (event === "SIGNED_OUT") queueForgetPushToken().catch(() => {});');
+  });
+
+  it("un oubli en attente est refait à l'ouverture, à chaque retour au premier plan et à chaque connexion ; avant tout nouvel enregistrement de l'appareil", () => {
+    const auth = read("lib/auth-context.tsx");
+    expect(auth.match(/flushPendingForget\(\)\.catch\(\(\) => \{\}\)/g)).toHaveLength(3);
+    expect(auth).toMatch(/if \(state === "active"\) \{\s*supabase\.auth\.startAutoRefresh\(\);\s*flushPendingForget\(\)/);
+    expect(auth).toContain("if (userId) flushPendingForget().catch(() => {});");
+    const push = read("lib/push.ts");
+    const register = push.slice(push.indexOf("async function registerThisDevice"), push.indexOf("export async function enablePush"));
+    expect(register.indexOf("await flushPendingForgetNow();")).toBeGreaterThan(-1);
+    expect(register.indexOf("await flushPendingForgetNow();")).toBeLessThan(register.indexOf("await registerPushToken("));
+    expect(register).toContain("await serial(async () => {");
+    // L'oubli normal qui échoue laisse l'appareil « à oublier ».
+    const forget = push.slice(push.indexOf("export async function forgetPushToken"), push.indexOf("export async function queueForgetPushToken"));
+    expect(forget).toMatch(/catch \(error\) \{\s*await rememberForget\(AsyncStorage, token\);/);
+    // Sans session : seulement le jeton, vers la route qui ne demande pas de compte.
+    const api = read("lib/api.ts");
+    const anonymous = api.slice(api.indexOf("export async function forgetPushTokenWithoutSession"), api.indexOf("// ---- Alertes prix et stock"));
+    expect(anonymous).toContain("fetch(`${apiUrl}/api/push-token/forget`");
+    expect(anonymous).not.toMatch(/authorizedFetch|Authorization/);
+  });
+});
+
+describe("oubli en attente (push-forget.ts)", () => {
+  const TOKEN = "ExponentPushToken[abcdefghijklmnop01]";
+  const OTHER = "ExponentPushToken[abcdefghijklmnop02]";
+  function memoryStore(broken = false) {
+    const values = new Map<string, string>();
+    const fail = () => {
+      if (broken) throw new Error("rangement indisponible");
+    };
+    return {
+      values,
+      getItem: async (key: string) => (fail(), values.get(key) ?? null),
+      setItem: async (key: string, value: string) => void (fail(), values.set(key, value)),
+      removeItem: async (key: string) => void (fail(), values.delete(key)),
+    };
+  }
+
+  it("noté, puis oublié par le serveur : plus rien en attente ; sans réponse : la note reste pour la fois suivante", async () => {
+    const store = memoryStore();
+    expect(await rememberForget(store, TOKEN)).toBe(true);
+    expect(await pendingForget(store)).toBe(TOKEN);
+    const sent: string[] = [];
+    expect(await flushForget(store, async () => Promise.reject(new Error("hors réseau")))).toBe(false);
+    expect(await pendingForget(store)).toBe(TOKEN);
+    expect(await flushForget(store, async (token) => void sent.push(token))).toBe(true);
+    expect(sent).toEqual([TOKEN]);
+    expect(await pendingForget(store)).toBeNull();
+    // Rien en attente : aucun appel.
+    expect(await flushForget(store, async (token) => void sent.push(token))).toBe(true);
+    expect(sent).toEqual([TOKEN]);
+  });
+
+  it("jamais autre chose qu'un jeton d'Expo ; rangement en panne : rien ne plante", async () => {
+    const store = memoryStore();
+    expect(await rememberForget(store, "pas-un-jeton")).toBe(false);
+    store.values.set(PENDING_FORGET_KEY, "https://ailleurs.example");
+    expect(await pendingForget(store)).toBeNull();
+    const broken = memoryStore(true);
+    expect(await rememberForget(broken, TOKEN)).toBe(false);
+    expect(await pendingForget(broken)).toBeNull();
+    await clearForget(broken);
+    expect(await flushForget(broken, async () => {})).toBe(true);
+  });
+
+  it("le même jeton enregistré de nouveau efface la note ; un autre jeton ne l'efface pas", async () => {
+    const store = memoryStore();
+    await rememberForget(store, TOKEN);
+    await clearForget(store, OTHER);
+    expect(await pendingForget(store)).toBe(TOKEN);
+    await clearForget(store, TOKEN);
+    expect(await pendingForget(store)).toBeNull();
+  });
+
+  it("file d'une seule place : un oubli lancé avant un enregistrement arrive toujours avant lui, même lent ou en échec", async () => {
+    const serial = createSerialQueue();
+    const order: string[] = [];
+    const slowForget = serial(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      order.push("oubli");
+      throw new Error("hors réseau");
+    });
+    const register = serial(async () => void order.push("enregistrement"));
+    await expect(slowForget).rejects.toThrow("hors réseau");
+    await register;
+    expect(order).toEqual(["oubli", "enregistrement"]);
   });
 });
 

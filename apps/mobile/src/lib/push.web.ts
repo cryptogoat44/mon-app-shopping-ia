@@ -29,6 +29,10 @@ export async function syncPushDevice(): Promise<void> {}
 
 export async function forgetPushToken(): Promise<void> {}
 
+export async function queueForgetPushToken(): Promise<void> {}
+
+export async function flushPendingForget(): Promise<void> {}
+
 export async function refreshPushToken(): Promise<void> {}
 
 export async function listenToNotifications(): Promise<() => void> {

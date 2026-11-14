@@ -2,10 +2,10 @@ import type { FastifyInstance } from "fastify";
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { fetchHdImageUrls } from "../lib/pieceImages.js";
 import { z } from "zod";
-import type { WishlistItem, WishlistItemDetail } from "@monapp/shared-types";
+import { WISHLIST_ITEMS_MAX, type WishlistItem, type WishlistItemDetail } from "@monapp/shared-types";
 import { findOwnMatch } from "../lib/ownMatches.js";
 import { keptMatchIds } from "../lib/keptPieces.js";
-import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput, webUrlOrNull, webUrlSchema } from "../lib/validation.js";
+import { DatabaseReadError, INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput, webUrlOrNull, webUrlSchema } from "../lib/validation.js";
 import { deleteWishCopy, findWishPost } from "../lib/wishShare.js";
 import { collectionsReady, readCopy } from "../lib/collections.js";
 import { trackNewWish } from "../lib/wishAlerts.js";
@@ -33,6 +33,30 @@ const createWishlistItemSchema = z
   .refine((body) => Boolean(body.productMatchId) || typedLinksSchema.safeParse(body).success);
 
 const PRODUCT_MATCH_NOT_FOUND = { error: "product_match_not_found", message: "Produit introuvable." } as const;
+
+/** Plafond d'envies par membre atteint (lot « durcissement des alertes »,
+ * revue de sécurité : chaque envie a son suivi de prix et de stock ; sans
+ * plafond, un script pouvait en créer des dizaines de milliers sur la même
+ * pièce et faire travailler la base à chaque recherche). */
+export const WISHLIST_FULL = {
+  error: "wishlist_full",
+  message: `Vous avez déjà ${WISHLIST_ITEMS_MAX} envies : retirez-en une pour en garder une autre.`,
+} as const;
+
+/** La personne a-t-elle déjà WISHLIST_ITEMS_MAX envies ? `matchId` : garder
+ * une proposition déjà gardée ne crée rien (même envie, mise à jour) : jamais
+ * refusé. Lecture impossible : DatabaseReadError (500, rien n'est créé).
+ * Course connue : deux créations simultanées peuvent dépasser d'une ou deux. */
+export async function wishlistFull(fastify: FastifyInstance, userId: string, matchId: string | null = null): Promise<boolean> {
+  const db = fastify.supabaseAdmin;
+  const { count, error } = await db.from("wishlist_items").select("id", { count: "exact", head: true }).eq("user_id", userId);
+  if (error || typeof count !== "number") throw new DatabaseReadError("Nombre d'envies illisible");
+  if (count < WISHLIST_ITEMS_MAX) return false;
+  if (!matchId) return true;
+  const { data, error: matchError } = await db.from("wishlist_items").select("id").eq("user_id", userId).eq("product_match_id", matchId).limit(1);
+  if (matchError || !Array.isArray(data)) throw new DatabaseReadError("Envie déjà gardée illisible");
+  return data.length === 0;
+}
 
 /** Nom de domaine d'un lien web, sans « www. » (« boutique.example ») : le
  * nom montré pour un lien dont la boutique n'est pas connue du serveur. */
@@ -140,6 +164,15 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
     // message, pièce envoyée, collection) y menait. Avec un résultat : le nom
     // rangé avec ce résultat. Sans résultat (l'app n'en crée jamais) : le nom
     // de domaine du lien, pour que le bouton dise où il mène.
+    // Plafond de WISHLIST_ITEMS_MAX envies par membre (garder de nouveau une
+    // proposition déjà gardée reste permis : rien n'est créé).
+    try {
+      if (await wishlistFull(fastify, userId, parsed.data.productMatchId ?? null)) return reply.code(409).send(WISHLIST_FULL);
+    } catch (error) {
+      request.log.error({ error }, "Échec de lecture du nombre d'envies");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+
     let imageUrl = parsed.data.imageUrl;
     let merchantUrl = parsed.data.merchantUrl ?? null;
     let merchantName = merchantUrl === null ? (parsed.data.merchantName ?? null) : siteNameOf(merchantUrl);

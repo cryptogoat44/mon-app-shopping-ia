@@ -96,6 +96,29 @@ export const RATE_LIMITS = {
     message: "Trop de changements des notifications en peu de temps. Réessayez dans une heure.",
   },
 
+  // Oublier un appareil par son seul jeton, sans session (POST
+  // /api/push-token/forget, lot « durcissement des alertes ») : l'app le fait
+  // après une déconnexion forcée ou hors réseau, à l'ouverture suivante. Sans
+  // compte, comptée par adresse IP : quelques appels en usage normal ;
+  // stricte, pour qu'un script ne puisse pas essayer des jetons en masse.
+  // Comptée par appareil (empreinte du jeton, routes/pushTokens.ts), jamais
+  // par adresse IP : chez l'hébergeur, tous les appareils peuvent arriver par
+  // la même adresse, et 10 oublis par heure auraient suffi à bloquer tout le
+  // monde. Plus un plafond commun, large, pour tout le service.
+  pushTokenForget: {
+    max: 10,
+    windowMs: HOUR,
+    error: "push_token_forget_limit",
+    message: "Trop de demandes pour les notifications en peu de temps. Réessayez dans une heure.",
+  },
+  pushTokenForgetGlobal: {
+    max: 3_000,
+    windowMs: HOUR,
+    scope: "global",
+    error: "push_token_forget_limit",
+    message: "Trop de demandes pour les notifications en peu de temps. Réessayez dans une heure.",
+  },
+
   // Lien TikTok ou Instagram préparé (POST /api/searches/prepare avec un
   // lien, interrupteur LINK_PREVIEW_ENABLED allumé) : chaque préparation fait
   // partir une demande du serveur vers TikTok ou Meta. Sans cette limite

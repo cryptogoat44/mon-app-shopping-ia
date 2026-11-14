@@ -11,7 +11,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useMessagesStatus } from "@/lib/use-messages-status";
 import { useCollectionsStatus } from "@/lib/use-collections-status";
 import { useWishAlertsStatus } from "@/lib/use-wish-alerts-status";
-import { bellVisible, canReportWish, type StockReportTarget } from "@/lib/wish-alerts";
+import { alertDetails, bellVisible, canReportWish, type StockReportTarget } from "@/lib/wish-alerts";
 import { FROM_ALERT } from "@/lib/push-state";
 import { shareWishOutside } from "@/lib/share-wish";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
@@ -45,7 +45,10 @@ function displayPrice(item: WishlistItemDetail): string | null {
 // pièce (`trackable`). Pas de cloche pour une pièce achetée (`bought` du
 // serveur, ou `inVault` juste après « Je l'ai achetée ») : aucune alerte ne
 // partirait. Ouverte par une alerte (`from=alerte`) : le clic vers la
-// boutique est compté « price_alert ».
+// boutique est compté « price_alert ». Nouvelle version (0041) : la
+// notification ne dit plus ni la pièce, ni la boutique, ni le prix ; la fiche
+// montre ce qui a changé, chargé depuis le serveur (la cloche : dernier prix
+// vu dans votre pays, et l'état du stock quand il est connu).
 export default function WishlistItemScreen() {
   const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
   const router = useRouter();
@@ -168,6 +171,24 @@ export default function WishlistItemScreen() {
           <ProductFrame hdUri={item.imageHdUrl} fallbackUri={item.imageUrl} accessibilityLabel={item.title} />
           <Text style={styles.title} accessibilityRole="header">{item.title}</Text>
           <Text style={styles.meta}>{[item.merchantName, displayPrice(item)].filter(Boolean).join(" · ")}</Text>
+          {(() => {
+            const details = alertDetails(alertState, getActiveLocale());
+            if (!details.lastPrice && !details.stock) return null;
+            return (
+              <View style={styles.alertDetails}>
+                {details.lastPrice ? (
+                  <Text style={styles.alertDetail} testID="dernier-prix-vu">
+                    {details.lastPrice}
+                  </Text>
+                ) : null}
+                {details.stock ? (
+                  <Text style={[styles.alertDetail, alertState?.stock === "sold_out" ? styles.alertSoldOut : null]} testID="etat-du-stock">
+                    {details.stock}
+                  </Text>
+                ) : null}
+              </View>
+            );
+          })()}
 
           <View style={styles.merchant}>
             {item.merchantUrl ? (
@@ -330,6 +351,9 @@ const styles = themedStyles(() => ({
   content: { padding: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, marginTop: space.md },
   meta: { fontSize: font.secondary, color: color.acier, marginTop: 4, marginBottom: space.lg },
+  alertDetails: { marginTop: -space.md, marginBottom: space.lg, gap: 2 },
+  alertDetail: { fontSize: font.secondary, color: color.encre },
+  alertSoldOut: { fontWeight: "600" },
   merchant: { marginBottom: space.lg },
   extraActions: { marginTop: space.sm },
   alerts: { marginBottom: space.lg },

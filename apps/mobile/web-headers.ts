@@ -10,6 +10,8 @@
 // la page, il pourrait la lire. La « Content-Security-Policy » n'autorise que
 // le code du site lui-même, et seulement les services que le site appelle.
 
+import marque from "@monapp/shared-types/marque.json";
+
 /** Le seul script écrit dans la page par Expo (export du site) : autorisé par son empreinte. */
 export const EXPO_INLINE_SCRIPT = "globalThis.__EXPO_ROUTER_HYDRATE__=true;";
 /** SHA-256 de EXPO_INLINE_SCRIPT, en base 64 (vérifiée par le test). */
@@ -23,9 +25,10 @@ export interface SiteServices {
   supabaseUrl: string;
 }
 
-/** Production, telle que réglée sur Render pour le site (base spotto-prod). */
+/** Production, telle que réglée sur Render pour le site (base spotto-prod).
+ * L'adresse du serveur vient du fichier unique de la marque (adresseServeur, MARQUE.md). */
 export const PRODUCTION_SERVICES: SiteServices = {
-  apiUrl: "https://spotto-api.onrender.com",
+  apiUrl: marque.adresseServeur,
   supabaseUrl: "https://selhqdqfrflsqivgxypf.supabase.co",
 };
 

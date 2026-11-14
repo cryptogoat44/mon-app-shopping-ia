@@ -21,7 +21,8 @@ const [pushProbe, messagesProbe] = await Promise.all([admin.from("push_tokens").
 const migrated = !pushProbe.error && !messagesProbe.error;
 // Lot alertes prix (0036) : l'export dit aussi si l'appareil reçoit les messages, les alertes.
 const alertsProbe = await admin.rpc("wish_alerts_version");
-const alertsMigrated = !alertsProbe.error && alertsProbe.data === 1;
+// 1 : 0036 seule ; 2 : avec ses garde-fous (0040). Les colonnes des appareils sont celles de 0036.
+const alertsMigrated = !alertsProbe.error && typeof alertsProbe.data === "number" && alertsProbe.data >= 1;
 
 const token = (label: string) => `ExponentPushToken[base${label}${Date.now().toString(36)}]`;
 
