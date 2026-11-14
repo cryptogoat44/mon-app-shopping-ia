@@ -10,20 +10,23 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = join(__dirname, "../../..");
 const TEXT_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".json"]);
-const SKIPPED = new Set(["node_modules", ".expo", "dist", "build", "ios", "android", ".git", "coverage", "web-build"]);
+// Hors du code livré : dépendances, constructions, et tests (les tests du
+// site citent ces mots exprès, pour vérifier que le code n'en contient pas).
+const SKIPPED = new Set(["node_modules", ".expo", "dist", "build", "ios", "android", ".git", "coverage", "web-build", "tests", "__tests__"]);
+const TEST_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
 
-function textFiles(directory: string): string[] {
+function shippedTextFiles(directory: string): string[] {
   return readdirSync(directory).flatMap((name) => {
     if (SKIPPED.has(name)) return [];
     const path = join(directory, name);
-    if (statSync(path).isDirectory()) return textFiles(path);
-    return TEXT_EXTENSIONS.has(extname(name)) ? [path] : [];
+    if (statSync(path).isDirectory()) return shippedTextFiles(path);
+    return TEXT_EXTENSIONS.has(extname(name)) && !TEST_FILE.test(name) ? [path] : [];
   });
 }
 
 describe("aucune clé ni aucun appel à FASHN côté site ou app", () => {
-  it("apps/mobile et packages ne citent ni l'API de FASHN, ni sa clé, ni son modèle", () => {
-    const files = [...textFiles(join(ROOT, "apps/mobile")), ...textFiles(join(ROOT, "packages"))];
+  it("le code livré du site, de l'app et des paquets partagés ne cite ni l'API de FASHN, ni sa clé, ni son modèle", () => {
+    const files = [...shippedTextFiles(join(ROOT, "apps/mobile")), ...shippedTextFiles(join(ROOT, "packages"))];
     expect(files.length).toBeGreaterThan(50);
     const found: string[] = [];
     for (const file of files) {
@@ -39,11 +42,15 @@ describe("aucune clé ni aucun appel à FASHN côté site ou app", () => {
     const source = readFileSync(join(ROOT, "packages/shared-types/src/index.ts"), "utf8");
     const start = source.indexOf("// ---- Essayage virtuel photo");
     expect(start).toBeGreaterThan(0);
-    expect(source.slice(start)).not.toMatch(/^export\s+(?:const|let|var|function|class|enum|default)\b/m);
+    // Le bloc de l'essayage, jusqu'au prochain bloc « // ---- » (ou la fin du fichier).
+    const next = source.indexOf("\n// ---- ", start + 1);
+    const block = source.slice(start, next < 0 ? source.length : next);
+    expect(block).toContain("export type TryonStatus");
+    expect(block).not.toMatch(/^export\s+(?:const|let|var|function|class|enum|default)\b/m);
   });
 
   it("seul le serveur lit FASHN_API_KEY : ses réglages (env.ts, lib/tryon/config.ts) et ses scripts", () => {
-    const readers = textFiles(join(ROOT, "apps/backend/src"))
+    const readers = shippedTextFiles(join(ROOT, "apps/backend/src"))
       .filter((file) => readFileSync(file, "utf8").includes("FASHN_API_KEY"))
       .map((file) => relative(join(ROOT, "apps/backend"), file))
       .sort();
