@@ -105,6 +105,21 @@ describe("0041 : ordre, rejouable, droits, aucun déclencheur", () => {
   });
 });
 
+describe("plus aucun nom de boutique sur le suivi : l'empreinte du lien suffit (envies créées à la main)", () => {
+  it("les noms déjà rangés sont effacés une fois pour toutes ; les fonctions laissent passer un suivi sans nom", () => {
+    expect(STATEMENTS).toContain("update wish_tracking set merchant_key = null where merchant_key is not null;");
+    for (const name of ["wish_observe", "wish_stock_report"]) {
+      for (const match of body(name).matchAll(/\((\w)\.merchant_key is null or v_merchant is null or \1\.merchant_key = v_merchant\)/g)) expect(match[0], name).toContain("merchant_key is null or");
+    }
+    expect(HEADER).toContain("Plus aucun nom de");
+    expect(VERIFICATION).toContain("not exists (select 1 from wish_tracking where merchant_key is not null)");
+  });
+
+  it("retour en arrière : les empreintes repassent en version 1 pour que le rattrapage d'un serveur d'avant les recalcule", () => {
+    expect(ROLLBACK).toContain("update wish_tracking set key_version = 1;");
+  });
+});
+
 describe("point 5 : aucune alerte ne désigne sa recherche, son signalement ou le membre à son origine", () => {
   it("schéma : aucune colonne d'origine sur les tables des alertes (0036 + 0041)", () => {
     const definition = SQL_0036.slice(SQL_0036.indexOf("create table if not exists wish_alert_events ("), SQL_0036.indexOf(");", SQL_0036.indexOf("create table if not exists wish_alert_events (")));

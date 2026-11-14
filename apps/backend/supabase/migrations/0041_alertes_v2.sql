@@ -39,6 +39,9 @@
 --   alter table stock_reports drop column if exists in_streak, drop column if exists helps_others,
 --     drop column if exists country;
 --   alter table profiles drop column if exists help_others;
+--   update wish_tracking set key_version = 1;
+--    puis relancer le script de rattrapage du serveur d'avant (il recalcule
+--    les empreintes « v1 » et le nom de boutique de chaque suivi).
 -- Ce qui est perdu : les seuils choisis par les membres (la règle B de 0036
 -- reprend : la première observation refixe la référence), les séries de
 -- signalements en cours et le pays de chaque signalement, le réglage « Aider
@@ -49,7 +52,13 @@
 -- 1. Empreinte d'une pièce : le SHA-256 du lien normalisé de la boutique
 --    (serveur, lib/alertKeys.ts, version 2 ; le script de rattrapage recalcule
 --    les empreintes). Plus aucune clé « page de Google » : un résultat sans
---    lien direct vers la boutique n'a jamais d'alerte.
+--    lien direct vers la boutique n'a jamais d'alerte. Plus aucun nom de
+--    boutique sur le suivi (wish_tracking.merchant_key, effacé ici, plus
+--    écrit par le serveur) : l'hôte de la boutique est déjà dans l'empreinte,
+--    et le nom gardé pour une envie créée à la main vient du domaine du lien
+--    (« stories.com ») alors que Google affiche le sien (« & Other Stories ») :
+--    les comparer faisait manquer toutes les observations de ces envies. Les
+--    fonctions laissent passer un suivi sans nom de boutique.
 -- 2. Baisse de prix : un SEUIL choisi par le membre sur chaque cloche
 --    (wish_watches.target_price, target_currency, target_country) remplace
 --    le prix de référence de 0036 (wish_tracking.ref_*, retirées ; un seuil
@@ -191,6 +200,8 @@ alter table wish_tracking drop column if exists ref_price;
 alter table wish_tracking drop column if exists ref_currency;
 alter table wish_tracking drop column if exists ref_country;
 alter table wish_tracking drop column if exists ref_set_on;
+-- ---- Plus de nom de boutique sur le suivi (l'empreinte du lien suffit) ----
+update wish_tracking set merchant_key = null where merchant_key is not null;
 alter table wish_watches drop column if exists last_sent_price_drop_at;
 alter table wish_watches drop column if exists last_sent_restock_at;
 alter table wish_watches drop column if exists last_sent_sold_out_at;

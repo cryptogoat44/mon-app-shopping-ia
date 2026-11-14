@@ -204,7 +204,8 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036, 0040 et 004
   it("création d'une envie : suivi avec l'empreinte et le dernier prix vu du SERVEUR (100 €, jamais le prix envoyé par l'app) ; la cloche pré-remplit son seuil avec lui", async () => {
     const url = uniqueUrl("creation");
     const wish = await wishFromResult(owner, url);
-    expect(await tracking(wish)).toMatchObject({ match_key_hash: trackingKeyOf(url, "Boutique Essai")!.hash, key_version: 2, merchant_key: "boutiqueessai", last_currency: "EUR", last_country: "fr", member_country: "fr", stock_state: "unknown", sold_out_source: null, bought_on: null });
+    // Plus de nom de boutique sur le suivi : l'empreinte du lien contient déjà l'hôte de la boutique.
+    expect(await tracking(wish)).toMatchObject({ match_key_hash: trackingKeyOf(url, "Boutique Essai")!.hash, key_version: 2, merchant_key: null, last_currency: "EUR", last_country: "fr", member_country: "fr", stock_state: "unknown", sold_out_source: null, bought_on: null });
     expect(Number((await tracking(wish)).last_price)).toBe(100);
     expect(await tracking(wish)).not.toHaveProperty("ref_price");
     const state = await bell(owner, wish, { priceDrop: true, restock: false });
@@ -249,6 +250,9 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036, 0040 et 004
     expect(res.statusCode).toBe(200);
     const wish = res.json().id as string;
     expect(await bell(member, wish, { priceDrop: true, restock: false })).toMatchObject({ targetPrice: null, targetCurrency: "EUR" });
+    // Envie créée à la main : le serveur range le domaine du lien comme nom de boutique (boutique-essai-AAAA.example),
+    // alors que le résultat Google porte « Boutique Essai » ; le suivi ne garde aucun nom, la pièce est reconnue par son lien.
+    expect(await tracking(wish)).toMatchObject({ merchant_key: null, member_country: "fr", last_price: null });
     expect(await observe([obs(url, 12000)])).toEqual({ matched: 1, events: 0 });
     expect(await watch(wish)).toMatchObject({ target_currency: "EUR", target_country: "fr", below_target: false });
     expect(Number((await watch(wish)).target_price)).toBe(120);
@@ -449,6 +453,7 @@ describe.skipIf(!migrated)("alertes prix et stock sur la base (0036, 0040 et 004
     const wish = res.json().id as string;
     expect(await bell(member, wish, { priceDrop: true, restock: false, targetPrice: 80 })).toMatchObject({ targetPrice: 80, lastPrice: null });
     expect(await watch(wish)).toMatchObject({ below_target: false });
+    expect(await tracking(wish)).toMatchObject({ merchant_key: null, member_country: "fr" });
     expect(await observe([obs(url, 6000)])).toEqual({ matched: 1, events: 1 });
     expect((await events(wish)).map((event) => [event.kind, Number(event.old_price), Number(event.new_price)])).toEqual([["price_drop", 80, 60]]);
     expect(await observe([obs(url, 5500)], 1)).toEqual({ matched: 1, events: 0 });

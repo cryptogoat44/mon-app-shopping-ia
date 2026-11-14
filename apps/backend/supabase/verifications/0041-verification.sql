@@ -9,7 +9,7 @@
 --     d'envoi sont là ;
 --   jours_seulement = true : plus aucune heure de création ni d'envoi
 --     (wish_alert_events.created_at, send_after, sent_at, wish_watches.last_sent_*_at,
---     wish_tracking.ref_*) ;
+--     wish_tracking.ref_*), ni aucun nom de boutique sur les suivis ;
 --   reservation_effacee = true : aucune alerte close ne garde d'heure de
 --     réservation, et la règle de la base l'interdit ;
 --   aucune_origine = true : aucune colonne d'alerte ne désigne une recherche,
@@ -29,7 +29,8 @@ select
                where table_schema = 'public'
                  and ((table_name = 'wish_alert_events' and column_name in ('created_at', 'send_after', 'sent_at'))
                    or (table_name = 'wish_watches' and column_name like 'last\_sent\_%')
-                   or (table_name = 'wish_tracking' and column_name like 'ref\_%'))) as jours_seulement,
+                   or (table_name = 'wish_tracking' and column_name like 'ref\_%')))
+    and not exists (select 1 from wish_tracking where merchant_key is not null) as jours_seulement,
   exists (select 1 from pg_constraint
            where conrelid = 'public.wish_alert_events'::regclass and conname = 'wish_alert_events_lease_cleared_check')
     and not exists (select 1 from wish_alert_events where status <> 'pending' and (claimed_at is not null or pushing_at is not null)) as reservation_effacee,

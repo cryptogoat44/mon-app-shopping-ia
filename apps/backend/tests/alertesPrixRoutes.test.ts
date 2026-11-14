@@ -466,7 +466,8 @@ describe("création d'une envie : le suivi (chaque chemin, une seule fois)", () 
         user_id: ALICE,
         match_key_hash: KEY.hash,
         key_version: 2,
-        merchant_key: "boutiqueexemple",
+        // Plus de nom de boutique sur le suivi (0041) : l'empreinte du lien suffit.
+        merchant_key: null,
         // 0041 : le prix de la proposition d'origine est le dernier prix vu
         // (il pré-remplit le seuil de la cloche) ; plus de prix de référence.
         last_price: 120,
@@ -495,7 +496,7 @@ describe("création d'une envie : le suivi (chaque chemin, une seule fois)", () 
       user_id: ALICE,
       match_key_hash: trackingKeyOf("https://boutique-exemple.fr/sacs/cabas", "Boutique Exemple")!.hash,
       key_version: 2,
-      merchant_key: "boutiqueexemple",
+      merchant_key: null,
       member_country: "fr",
       stock_state: "unknown",
     });
@@ -833,7 +834,7 @@ describe("« Aider les autres membres »", () => {
     const target = await alertsApp(fake.db);
     expect((await as(target, ALICE).post("/api/alerts/stock-reports", { wishlistItemId: OLD_WISH })).statusCode).toBe(204);
     expect(rpcCalls.filter((call) => call.fn === "wish_stock_report")).toEqual([
-      { fn: "wish_stock_report", args: { p_user_id: ALICE, p_key: KEY.hash, p_merchant: "boutiqueexemple", p_daily_cap: 20, p_country: "fr" } },
+      { fn: "wish_stock_report", args: { p_user_id: ALICE, p_key: KEY.hash, p_merchant: null, p_daily_cap: 20, p_country: "fr" } },
     ]);
   });
 });
@@ -946,7 +947,7 @@ describe("« Plus disponible »", () => {
     const target = await alertsApp(fake.db);
     expect((await as(target, ALICE).post("/api/alerts/stock-reports", { wishlistItemId: OLD_WISH })).statusCode).toBe(204);
     expect(rpcCalls.filter((call) => call.fn === "wish_stock_report")).toEqual([
-      { fn: "wish_stock_report", args: { p_user_id: ALICE, p_key: KEY.hash, p_merchant: "boutiqueexemple", p_daily_cap: 20, p_country: "fr" } },
+      { fn: "wish_stock_report", args: { p_user_id: ALICE, p_key: KEY.hash, p_merchant: null, p_daily_cap: 20, p_country: "fr" } },
     ]);
     // Le pays de la recherche part avec le signalement (seulement un pays pris en charge par les alertes).
     rpcCalls = [];
@@ -1034,7 +1035,7 @@ describe("export RGPD et suppression du compte", () => {
       user_id: ALICE,
       match_key_hash: KEY.hash,
       key_version: 2,
-      merchant_key: "boutiqueexemple",
+      merchant_key: null,
       last_price: 99,
       last_currency: "EUR",
       last_country: "gb",

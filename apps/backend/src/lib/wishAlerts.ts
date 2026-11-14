@@ -11,7 +11,8 @@
 // pour les envies d'avant, par le script de rattrapage
 // (scripts/rattraper-suivi-envies-dev.ts) ou à la première lecture de leur cloche.
 // - L'empreinte « même pièce » vient du lien de la boutique (lib/alertKeys.ts) ;
-//   la base n'en garde que l'empreinte.
+//   la base n'en garde que l'empreinte (plus aucun nom de boutique sur le
+//   suivi : l'hôte de la boutique est déjà dans l'empreinte).
 // - Dernier prix vu de départ : celui que le SERVEUR a rangé pour la
 //   proposition d'origine (product_matches), daté de sa recherche, jamais
 //   celui envoyé par l'app. Sans proposition (envie à la main, « Garder »),
@@ -193,7 +194,13 @@ export async function trackingRowFor(fastify: Db, wish: WishForTracking, country
     user_id: wish.userId,
     match_key_hash: key?.hash ?? null,
     key_version: ALERT_KEY_VERSION,
-    merchant_key: key?.merchant ?? null,
+    // Plus de nom de boutique sur le suivi (0041) : l'empreinte du lien
+    // contient déjà l'hôte de la boutique. Le nom gardé pour une envie créée
+    // à la main vient du domaine du lien (« boutique-essai.example »,
+    // « stories.com ») et ne ressemble pas toujours à celui que Google affiche
+    // (« Boutique Essai », « & Other Stories ») : le comparer faisait manquer
+    // toutes les observations de ces envies. Écrit à null, rattrapage compris.
+    merchant_key: null,
     ...(member ? { member_country: member } : {}),
     ...(key && origin?.lastSeen ? origin.lastSeen : {}),
   };

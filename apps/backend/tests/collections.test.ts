@@ -666,7 +666,7 @@ describe("« Garder » et « En parler »", () => {
         wishlist_item_id: bobs[0]!.id,
         user_id: BOB,
         match_key_hash: trackingKeyOf("https://boutique.example/sac", "Boutique")!.hash,
-        merchant_key: "boutique",
+        merchant_key: null,
         key_version: 2,
       }),
     ]);
