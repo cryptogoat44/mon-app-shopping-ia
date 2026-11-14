@@ -1,12 +1,13 @@
 // Essai RÉEL de l'essayage virtuel chez FASHN (modèle tryon-v1.6) : le SEUL
-// script autorisé à appeler FASHN pour de vrai. Chaque essai réussi coûte
-// 1 crédit, soit 0,075 $. Il ne passe ni par le serveur, ni par la base, ni
-// par le drapeau : il prend deux fichiers du Mac (votre photo, l'image d'une
-// pièce), les prépare comme le serveur (JPEG ré-encodé sans métadonnées,
-// 1 296 px au plus), les envoie en base64 à FASHN avec les réglages du
-// serveur (modération « conservative »), ajoute le bandeau « Image générée
-// par IA », puis écrit le résultat dans un dossier temporaire du Mac, HORS
-// du dépôt, et affiche son chemin. Rien d'autre n'est gardé.
+// script autorisé à envoyer un vrai essai à FASHN (tryon:report n'y lit le
+// solde, gratuit, que sur demande explicite : --solde-fashn). Chaque essai
+// réussi coûte 1 crédit, soit 0,075 $. Il ne passe ni par le serveur, ni par
+// la base, ni par le drapeau : il prend deux fichiers du Mac (votre photo,
+// l'image d'une pièce), les prépare comme le serveur (JPEG ré-encodé sans
+// métadonnées, 1 296 px au plus), les envoie en base64 à FASHN avec les
+// réglages du serveur (modération « conservative »), ajoute le bandeau
+// « Image générée par IA », puis écrit le résultat dans un dossier temporaire
+// du Mac, HORS du dépôt, et affiche son chemin. Rien d'autre n'est gardé.
 //
 //   pnpm --filter backend tryon:smoke --photo <chemin de votre photo> --garment <chemin de l'image de la pièce> --i-understand-this-costs-money
 //   (--lang en : bandeau en anglais)

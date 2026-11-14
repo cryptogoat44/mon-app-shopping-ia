@@ -2,14 +2,26 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { COSTS_MONEY_FLAG, describeTarget, flagRequest, formatMonthReport, isInsideDirectory, optionValue, smokeRequest, targetProjectOf } from "../scripts/lib/tryon-admin.js";
+import {
+  balanceRefusal,
+  COSTS_MONEY_FLAG,
+  describeTarget,
+  FASHN_BALANCE_FLAG,
+  flagRequest,
+  formatMonthReport,
+  isInsideDirectory,
+  optionValue,
+  smokeRequest,
+  targetProjectOf,
+} from "../scripts/lib/tryon-admin.js";
 import { DEV_PROJECT_REF, PROD_PROJECT_REF } from "../scripts/lib/dev-database.js";
 
 // Essayage virtuel : les garde-fous des scripts d'administration, sans base
 // ni réseau. Le drapeau ne s'allume jamais sans --confirm (et --production
 // hors de spotto-dev-2) ; l'essai réel (tryon:smoke) ne part jamais sans la
-// clé, les deux fichiers et --i-understand-this-costs-money ; la base visée
-// est toujours dite. Aucun script n'est lancé ici.
+// clé, les deux fichiers et --i-understand-this-costs-money ; le rapport ne
+// lit le solde FASHN qu'avec --solde-fashn ; la base visée est toujours
+// dite. Aucun script n'est lancé ici.
 
 const DEV = targetProjectOf(`https://${DEV_PROJECT_REF}.supabase.co`);
 const PROD = targetProjectOf(`https://${PROD_PROJECT_REF}.supabase.co`);
@@ -74,12 +86,40 @@ describe("tryon:smoke : jamais d'appel payant sans tout confirmer", () => {
     expect(isInsideDirectory(`${repository}-autre/x.jpg`, repository)).toBe(false);
   });
 
-  it("seul tryon:smoke appelle FASHN pour de vrai, avec une confirmation explicite ; aucun test ne le lance", () => {
+  it("seul tryon:smoke envoie un vrai essai à FASHN, avec une confirmation explicite ; aucun test ne le lance", () => {
     const smoke = readFileSync(join(__dirname, "../scripts/tryon-smoke.ts"), "utf8");
     expect(smoke).toContain("smokeRequest(process.argv.slice(2)");
     const packageJson = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf8")) as { scripts: Record<string, string> };
     expect(packageJson.scripts["tryon:smoke"]).toBe("tsx scripts/tryon-smoke.ts");
     for (const name of ["tryon:report", "tryon:flag", "tryon:grant-bonus", "tryon:reset-age", "tryon:purge"]) expect(packageJson.scripts[name], name).toMatch(/^tsx scripts\/tryon-[a-z-]+\.ts$/);
+  });
+});
+
+describe("tryon:report : le solde FASHN seulement sur demande explicite (--solde-fashn)", () => {
+  it("sans l'option : non lu, et le rapport dit comment l'obtenir ; avec : seulement si FASHN est le fournisseur réglé", () => {
+    expect(FASHN_BALANCE_FLAG).toBe("--solde-fashn");
+    for (const args of [[], ["--mois", "2026-11"]]) {
+      const refusal = balanceRefusal(args, "fashn");
+      expect(refusal).toContain("--solde-fashn");
+      expect(refusal).toContain("non lu");
+    }
+    expect(balanceRefusal([FASHN_BALANCE_FLAG], "fake")).toBe("non lu (TRYON_PROVIDER n'est pas « fashn »)");
+    expect(balanceRefusal([FASHN_BALANCE_FLAG, "--mois", "2026-11"], "fashn")).toBeNull();
+  });
+
+  it("le script ne lit la clé qu'après l'option, et ne joint FASHN que pour le solde", () => {
+    const report = readFileSync(join(__dirname, "../scripts/tryon-report.ts"), "utf8");
+    const code = report
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("//") && !line.trimStart().startsWith("*") && !line.trimStart().startsWith("/**"))
+      .join("\n");
+    const refusal = code.indexOf("balanceRefusal(args, settings.provider)");
+    expect(refusal).toBeGreaterThan(0);
+    expect(code.match(/process\.env\.FASHN_API_KEY/g)).toHaveLength(1);
+    expect(code.indexOf("process.env.FASHN_API_KEY")).toBeGreaterThan(refusal);
+    expect(code.match(/new FashnProvider\(/g)).toHaveLength(1);
+    expect(code.indexOf("new FashnProvider(")).toBeGreaterThan(refusal);
+    expect(code).not.toMatch(/\.run\(/);
   });
 });
 

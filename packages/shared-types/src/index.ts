@@ -1811,6 +1811,17 @@ export interface TryonConsentResponse {
   consent: TryonConsentState;
 }
 
+/** GET /api/tryon/consent : le consentement du membre, lisible même fonction
+ * éteinte (Réglages du site : le retrait reste toujours possible). */
+export interface TryonConsentReadResponse {
+  consent: {
+    /** Un consentement accepté et jamais retiré depuis (quelle que soit sa version). */
+    given: boolean;
+    /** Version du texte de consentement en vigueur sur le serveur. */
+    version: string;
+  };
+}
+
 /** POST /api/tryon (multipart : photo, itemId, attestSelf). */
 export interface TryonRunResponse {
   /** « data:image/jpeg;base64,… », avec le bandeau « Image générée par IA ». */

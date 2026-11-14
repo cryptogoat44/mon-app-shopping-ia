@@ -1,7 +1,8 @@
 // Outils communs aux scripts d'administration de l'essayage virtuel (lot
 // « essayage virtuel ») : la base visée (toujours affichée), les options de
 // la ligne de commande, la décision d'allumer ou d'éteindre le drapeau, le
-// texte du rapport du mois, les garde-fous de l'essai réel (tryon:smoke).
+// texte du rapport du mois et sa lecture du solde FASHN (seulement sur
+// demande), les garde-fous de l'essai réel (tryon:smoke).
 // Fonctions pures : testées sans base ni réseau (tests/essayageScripts.test.ts).
 // Rien de secret n'est jamais affiché : ni clé, ni mot de passe.
 import { isAbsolute, relative, resolve } from "node:path";
@@ -82,6 +83,20 @@ export function flagRequest(args: readonly string[], project: TargetProject): Fl
 }
 
 // ---- tryon:report ----
+
+/** Option de tryon:report qui demande le solde de crédits FASHN (GET /credits, gratuit). */
+export const FASHN_BALANCE_FLAG = "--solde-fashn";
+
+/** Pourquoi le solde FASHN n'est pas lu, ou null s'il peut l'être : il faut
+ * le demander (--solde-fashn), avec TRYON_PROVIDER=fashn. Sans l'option, rien
+ * ne part chez FASHN ; la clé n'est regardée qu'ensuite, par le script. */
+export function balanceRefusal(args: readonly string[], provider: string): string | null {
+  if (!hasFlag(args, FASHN_BALANCE_FLAG)) {
+    return `non lu (ajoutez ${FASHN_BALANCE_FLAG} pour le lire : lecture gratuite chez FASHN, avec TRYON_PROVIDER=fashn et FASHN_API_KEY)`;
+  }
+  if (provider !== "fashn") return "non lu (TRYON_PROVIDER n'est pas « fashn »)";
+  return null;
+}
 
 export interface MonthReport {
   month: string;

@@ -13,7 +13,7 @@ import type { AgeStatus } from "./ageGate.js";
 import type { TryonAlertKind } from "./alerts.js";
 import type { BudgetAlertKind } from "./budget.js";
 import { TRYON_CONSENT_VERSION, type TryonConfig } from "./config.js";
-import { TRYON_PROFILE_ROW, type TryonProfileRow } from "./consent.js";
+import { hasStandingConsent, TRYON_PROFILE_ROW, type TryonProfileRow } from "./consent.js";
 import type { TryonFailureCode } from "./failures.js";
 
 type Db = FastifyInstance["supabaseAdmin"];
@@ -53,6 +53,18 @@ export async function readTryonProfile(db: Db, userId: string): Promise<TryonPro
   const parsed = TRYON_PROFILE_ROW.safeParse(data);
   if (!parsed.success) throw new TryonStoreError("lecture du profil d'essayage");
   return parsed.data;
+}
+
+/** Un consentement est-il donné (accepté, jamais retiré depuis, quelle que
+ * soit sa version) ? Lisible même fonction éteinte ; base sans 0042 : rien
+ * n'a pu être accepté. */
+export async function readConsentGiven(db: Db, userId: string): Promise<boolean> {
+  try {
+    return hasStandingConsent(await readTryonProfile(db, userId));
+  } catch (error) {
+    if (error instanceof TryonStoreError && MISSING_TABLE_CODES.has(error.code ?? "")) return false;
+    throw error;
+  }
 }
 
 /** Enregistre le statut d'âge, une seule fois : false s'il l'était déjà. */

@@ -4,8 +4,9 @@
 // tryon-v1.6, ou le faux fournisseur en développement).
 // Interrupteur double (lib/tryon/switch.ts) : TRYON_ENABLED et le drapeau
 // feature_flags.tryon. Éteint, GET /api/tryon/status répond { enabled: false }
-// et toutes les autres routes 503 « feature_disabled », sauf le retrait du
-// consentement, toujours possible (décision 2 du plan).
+// et toutes les autres routes 503 « feature_disabled », sauf la lecture et le
+// retrait du consentement, toujours possibles (décision 2 du plan : le droit
+// de retrait prime).
 // Déroulé d'un essai, dans l'ordre de la mission (§ 5.5) : accès (âge,
 // consentement, « cette photo est la mienne »), pièce retrouvée dans la base
 // (jamais une adresse venue de l'app), réservation atomique dans la base
@@ -21,7 +22,15 @@
 // stockage, ni disque, ni journal, ni Sentry ; leurs octets sont effacés dès
 // la réponse.
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import type { TryonAgeGateResponse, TryonConsentResponse, TryonErrorCode, TryonReportReason, TryonRunResponse, TryonStatus } from "@monapp/shared-types";
+import type {
+  TryonAgeGateResponse,
+  TryonConsentReadResponse,
+  TryonConsentResponse,
+  TryonErrorCode,
+  TryonReportReason,
+  TryonRunResponse,
+  TryonStatus,
+} from "@monapp/shared-types";
 import { z } from "zod";
 import { env } from "../env.js";
 import { ImageSourceError } from "../lib/imageProcessing.js";
@@ -49,6 +58,7 @@ import {
   failTry,
   hasTriedItem,
   insertReport,
+  readConsentGiven,
   readRemaining,
   readTryonProfile,
   recordAgeStatus,
@@ -433,6 +443,27 @@ export default async function tryonRoutes(fastify: FastifyInstance, options: Try
         return reply.code(500).send(INTERNAL_ERROR);
       }
       const response: TryonConsentResponse = { consent: { required: false, version: TRYON_CONSENT_VERSION } };
+      return reply.send(response);
+    }
+  );
+
+  // ---- Consentement : le lire, toujours possible (même éteint, même suspendu) ----
+  // Les Réglages du site montrent la ligne de retrait tant qu'un consentement
+  // est donné, fonction allumée ou non. Rien d'autre n'est lu : ni les
+  // interrupteurs, ni les réglages, ni la clé du fournisseur.
+  fastify.get(
+    "/api/tryon/consent",
+    { preHandler: [fastify.requireAuth, fastify.rateLimit("tryonStatus")], config: { rateLimitName: "tryonStatus" } },
+    async (request, reply) => {
+      reply.header("Cache-Control", "no-store");
+      let given: boolean;
+      try {
+        given = await readConsentGiven(db, request.user!.id);
+      } catch (error) {
+        request.log.error({ error }, "Essayage : consentement illisible");
+        return reply.code(500).send(INTERNAL_ERROR);
+      }
+      const response: TryonConsentReadResponse = { consent: { given, version: TRYON_CONSENT_VERSION } };
       return reply.send(response);
     }
   );

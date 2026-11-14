@@ -218,6 +218,11 @@ describe("éteint : rien n'est proposé, rien ne part", () => {
         expect(response.json()).toEqual(disabled);
       }
       expect(events(fake)).toEqual([]);
+      // Le consentement se lit toujours (Réglages du site : le retrait reste possible).
+      const consent = await target.inject({ method: "GET", url: "/api/tryon/consent" });
+      expect(consent.statusCode).toBe(200);
+      expect(consent.headers["cache-control"]).toBe("no-store");
+      expect(consent.json()).toEqual({ consent: { given: true, version: TRYON_CONSENT_VERSION } });
     });
   }
 
@@ -236,6 +241,54 @@ describe("éteint : rien n'est proposé, rien ne part", () => {
     const fake = database({ db: { missing: ["tryon_profiles", "feature_flags"] } });
     const target = await tryonApp(fake);
     expect((await target.inject({ method: "DELETE", url: "/api/tryon/consent" })).statusCode).toBe(200);
+  });
+});
+
+describe("lecture du consentement (GET /api/tryon/consent) : toujours possible, fonction allumée ou non", () => {
+  const read = async (target: FastifyInstance) => (await target.inject({ method: "GET", url: "/api/tryon/consent" })).json() as unknown;
+  const adult = { age_status: "adult", age_checked_at: NOW.toISOString(), consent_version: null, consent_accepted_at: null, consent_withdrawn_at: null };
+
+  it("donné : oui tant qu'il n'est pas retiré, même pour une ancienne version ; jamais donné ou retiré : non", async () => {
+    const version = TRYON_CONSENT_VERSION;
+    expect(await read(await tryonApp(database()))).toEqual({ consent: { given: true, version } });
+    expect(await read(await tryonApp(database({ profile: null })))).toEqual({ consent: { given: false, version } });
+    expect(await read(await tryonApp(database({ profile: adult })))).toEqual({ consent: { given: false, version } });
+    expect(await read(await tryonApp(database({ profile: { ...adult, consent_version: "2025-01-v0", consent_accepted_at: NOW.toISOString() } })))).toEqual({ consent: { given: true, version } });
+    const withdrawn = { ...adult, consent_version: version, consent_accepted_at: NOW.toISOString(), consent_withdrawn_at: NOW.toISOString() };
+    expect(await read(await tryonApp(database({ profile: withdrawn }), { config: { state: "off" } }))).toEqual({ consent: { given: false, version } });
+  });
+
+  it("puis retiré, fonction éteinte : la lecture suit", async () => {
+    const target = await tryonApp(database({ flag: false }));
+    expect(await read(target)).toMatchObject({ consent: { given: true } });
+    expect((await target.inject({ method: "DELETE", url: "/api/tryon/consent" })).statusCode).toBe(200);
+    expect(await read(target)).toMatchObject({ consent: { given: false } });
+  });
+
+  it("base sans 0042 : rien n'a pu être accepté (non), sans erreur", async () => {
+    const target = await tryonApp(database({ db: { missing: ["tryon_profiles", "feature_flags"] } }), { config: { state: "off" } });
+    const response = await target.inject({ method: "GET", url: "/api/tryon/consent" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ consent: { given: false, version: TRYON_CONSENT_VERSION } });
+  });
+
+  it("ne lit ni le drapeau, ni la clé du fournisseur, et n'appelle jamais le fournisseur", async () => {
+    const config = { ...CONFIG, provider: "fashn" as const };
+    Object.defineProperty(config, "apiKey", {
+      get() {
+        throw new Error("clé lue");
+      },
+    });
+    const untouchable: TryOnProvider = {
+      name: "fashn",
+      run: () => Promise.reject(new Error("fournisseur appelé")),
+      getCreditBalance: () => Promise.reject(new Error("fournisseur appelé")),
+    };
+    const fake = database({ db: { missing: ["feature_flags"] } });
+    const target = await tryonApp(fake, { config: { state: "ready", config }, provider: untouchable });
+    const response = await target.inject({ method: "GET", url: "/api/tryon/consent" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ consent: { given: true, version: TRYON_CONSENT_VERSION } });
   });
 });
 
@@ -793,6 +846,14 @@ describe("limites par membre (rallumées le temps du test)", () => {
     expect(limited.statusCode).toBe(429);
     expect(limited.json()).toEqual({ error: "tryon_rate_limited", message: "Too many attempts in a short time. Please try again in an hour." });
     expect(limited.headers["retry-after"]).toBeDefined();
+  });
+
+  it("lecture du consentement : la limite du statut (60 par minute), puis 429, fonction éteinte comprise", async () => {
+    const target = await tryonApp(database({ flag: false }), { userId: "c0000000-0000-4000-8000-000000000005" });
+    for (let index = 0; index < RATE_LIMITS.tryonStatus.max; index += 1) expect((await target.inject({ method: "GET", url: "/api/tryon/consent" })).statusCode).toBe(200);
+    const limited = await target.inject({ method: "GET", url: "/api/tryon/consent" });
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json().error).toBe("tryon_rate_limited");
   });
 
   it("essais : 10 par heure par membre (chaque demande compte), puis 429", async () => {

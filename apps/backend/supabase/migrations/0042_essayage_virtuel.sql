@@ -220,8 +220,9 @@ $$;
 
 -- Purge (minimisation) : essais, signalements et alertes de plus de
 -- p_months mois, essais offerts expirés depuis plus de p_months mois.
--- Appelée par le serveur à chaque réservation (sans rien à effacer, quatre
--- lectures d'index), et par pnpm tryon:purge.
+-- Appelée par le serveur au passage, que l'essayage soit allumé ou non
+-- (route des recherches, lib/tryon/purge.ts), à chaque réservation, et par
+-- pnpm tryon:purge ; sans rien à effacer : quatre lectures d'index.
 create or replace function tryon_purge(p_months integer default 12)
 returns table (events integer, reports integer, alerts integer, grants integer)
 language plpgsql

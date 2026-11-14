@@ -4,7 +4,8 @@
 // serpapi.com ou à anthropic.com (et leurs sous-domaines), avant tout envoi,
 // et au service des notifications d'Expo (exp.host, lot notifications).
 // Essayage virtuel : FASHN (fashn.ai et ses sous-domaines, dont l'API
-// api.fashn.ai) aussi ; seul le script tryon:smoke l'appelle pour de vrai.
+// api.fashn.ai) aussi ; seul le script tryon:smoke y envoie un vrai essai
+// (tryon:report n'y lit le solde, gratuit, qu'avec --solde-fashn).
 // Un faux posé par un test (vi.stubGlobal, vi.spyOn, faux safeFetch) passe
 // devant cette garde, comme avant ; les autres adresses (Supabase de
 // développement, serveur local des tests) ne changent pas. Le message ne dit

@@ -1,8 +1,9 @@
 // Purge de l'essayage virtuel (fonction tryon_purge, migration 0042) : efface
 // les essais, signalements et alertes de plus de 12 mois, et les essais
-// offerts expirés depuis plus de 12 mois. Le serveur la fait déjà au passage
-// à chaque réservation d'un essai ; ce script la lance à la demande. Les
-// compteurs mensuels du budget (sans membre) sont gardés.
+// offerts expirés depuis plus de 12 mois. Le serveur la fait déjà au passage,
+// que l'essayage soit allumé ou non (à chaque recherche préparée, et à chaque
+// réservation d'un essai) ; ce script la lance à la demande. Les compteurs
+// mensuels du budget (sans membre) sont gardés.
 //
 //   pnpm --filter backend tryon:purge
 //

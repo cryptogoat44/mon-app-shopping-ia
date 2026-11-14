@@ -303,7 +303,10 @@ describe("export RGPD complet", () => {
         finished_at: finished,
       });
       if (event.error) throw event.error;
-      const grant = await app.supabaseAdmin.rpc("tryon_grant_bonus", { p_user_id: user.id, p_order_ref: `test-essayage-${user.id}` });
+      // La référence de commande est montrée dans le fichier lisible : aucun identifiant interne
+      // dedans (le test « aucun identifiant interne dans le texte visible »), unique à chaque passage.
+      const orderRef = `TEST-ESSAI-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+      const grant = await app.supabaseAdmin.rpc("tryon_grant_bonus", { p_user_id: user.id, p_order_ref: orderRef });
       if (grant.error) throw grant.error;
       const report = await app.supabaseAdmin.from("tryon_reports").insert({ user_id: user.id, item_id: match!.id, reason: "wrong_piece", comment: "Essai d'export" });
       if (report.error) throw report.error;

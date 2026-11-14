@@ -21,8 +21,9 @@ export function ageGateOf(profile: TryonProfileRow | null): TryonAgeGate {
   return profile?.age_status ?? "unknown";
 }
 
-/** Un consentement accepté et jamais retiré depuis (quelle que soit sa version). */
-function hasStandingConsent(profile: TryonProfileRow | null): profile is TryonProfileRow & { consent_version: string } {
+/** Un consentement accepté et jamais retiré depuis (quelle que soit sa
+ * version) : celui que le membre peut retirer. */
+export function hasStandingConsent(profile: TryonProfileRow | null): profile is TryonProfileRow & { consent_version: string } {
   return profile !== null && profile.consent_version !== null && profile.consent_accepted_at !== null && profile.consent_withdrawn_at === null;
 }
 
