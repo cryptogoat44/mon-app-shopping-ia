@@ -181,6 +181,9 @@ export interface ApiErrorBody {
 // dans la base (charte, règle 19).
 export const PLATFORM_SOURCES = ["tiktok", "instagram", "other", "photo"] as const;
 export type PlatformSource = (typeof PLATFORM_SOURCES)[number];
+// « oembed » : valeur de la base gardée pour relire les recherches d'avant le
+// 12 novembre 2026 (image de la vidéo demandée à la plateforme : voie
+// retirée) ; plus aucune recherche n'est créée avec.
 export const RECOGNITION_METHODS = ["oembed", "manual_screenshot"] as const;
 export type RecognitionMethod = (typeof RECOGNITION_METHODS)[number];
 export const SEARCH_STATUSES = ["pending", "processing", "completed", "failed"] as const;
@@ -273,10 +276,11 @@ export interface MatchFeedbackRequest {
 
 export interface ProductSearch {
   id: string;
+  /** Adresse publique de la vidéo TikTok ou Instagram jointe à la recherche
+   * (sans paramètre de suivi) ; null pour une photo. Jamais une image. */
   sourceUrl: string | null;
   sourcePlatform: PlatformSource;
   method: RecognitionMethod;
-  thumbnailUrl: string | null;
   status: SearchStatus;
   errorMessage: string | null;
   /** Texte « Que cherchez-vous ? » saisi au lancement, s'il y en a un. */
@@ -508,17 +512,6 @@ export function parseVideoMomentsResponse(value: unknown, frameCount: number): V
   return moments.length <= VIDEO_AI.moments ? moments : null;
 }
 
-/** Pourquoi l'image d'un lien n'a pas pu être récupérée à la préparation
- * (Spotter, Lot S2) — l'app affiche un message précis et la suite à donner.
- * - unavailable : la plateforme ne trouve pas le contenu (vidéo privée,
- *   supprimée, ou lien incomplet — TikTok ne distingue pas ces cas) ;
- * - not_a_video : le lien mène à un profil ou une page, pas à une vidéo ;
- * - service_down : la plateforme ne répond pas (lente, en panne) ;
- * - no_official_access : aucune voie officielle pour ce site (Instagram
- *   sans jeton Meta, Pinterest) — seule la capture d'écran est possible ;
- * - unsupported_site : site qui n'est ni TikTok, ni Instagram, ni Pinterest. */
-export type PreviewIssue = "unavailable" | "not_a_video" | "service_down" | "no_official_access" | "unsupported_site";
-
 /** Messages enregistrés par le serveur quand une recherche échoue : l'app
  * s'en sert pour distinguer « rien trouvé » (proposer de recadrer) d'une
  * panne (proposer de réessayer). Source unique pour les deux côtés. */
@@ -527,6 +520,10 @@ export const SEARCH_FAILURE_MESSAGES = {
   technical: "La recherche visuelle a échoué.",
 } as const;
 
+/** Corps de POST /api/searches/prepare. `sourceUrl` (facultatif) : le lien
+ * de la vidéo d'où vient la capture. Le serveur n'en garde que l'adresse
+ * publique d'une vidéo TikTok ou Instagram reconnue (normalizeVideoLink) ; il
+ * ne demande rien à la plateforme et ne récupère aucune image. */
 export interface CreateSearchRequest {
   sourceUrl?: string;
 }
@@ -1438,6 +1435,12 @@ export const COLLECTIONS_MAX = 50;
 /** Nombre maximal d'envies dans une collection. */
 export const COLLECTION_ITEMS_MAX = 100;
 
+/** Nombre maximal d'envies par membre (lot « durcissement des alertes »,
+ * revue de sécurité : chaque envie a son suivi de prix et de stock). Au-delà,
+ * POST /api/wishlist et « Garder » une envie d'un ami répondent 409
+ * « wishlist_full ». */
+export const WISHLIST_ITEMS_MAX = 1000;
+
 /** Qui voit une collection : vous seul, ou vos amis. */
 export type CollectionVisibility = "private" | "friends";
 export const COLLECTION_VISIBILITIES = ["private", "friends"] as const satisfies readonly CollectionVisibility[];
@@ -1546,16 +1549,17 @@ export interface KeepSharedItemResponse {
   alreadyKept: boolean;
 }
 
-// ---- Alertes prix et stock (lot 2, migration 0036) ----
+// ---- Alertes prix et stock (lot 2, migration 0036 ; nouvelle version, 0041) ----
 // Une envie surveillée (la cloche) prévient son membre quand une recherche
-// ou un achat fait dans Spotto montre la même pièce (même boutique, même
-// produit) moins chère, ou de retour en stock. Aucune surveillance en tâche
-// de fond : seulement les recherches que les membres font déjà. Jamais qui a
-// cherché, acheté ou signalé.
+// faite dans Spotto montre la même pièce (même lien de boutique) sous le prix
+// qu'il a choisi, ou de retour en stock. Aucune surveillance en tâche de
+// fond : seulement les recherches que les membres font déjà. Un achat ne
+// sert jamais aux alertes des autres. Une alerte ne dit jamais quelle
+// recherche, quel signalement ni quel membre est à son origine.
 
 /** « Épuisé » est construit côté serveur mais caché dans l'app (décision du
- * fondateur du 9 novembre 2026) : il ne part que sur un « in_stock: false »
- * explicite de Google, jamais observé jusqu'ici. */
+ * fondateur du 9 novembre 2026) : il ne part que sur une rupture établie
+ * (Google l'annonce, ou trois membres l'ont signalée d'affilée). */
 export const SOLD_OUT_ALERTS_VISIBLE = false;
 
 /** Les trois sortes d'alertes. */
@@ -1567,32 +1571,37 @@ export const STOCK_STATES = ["unknown", "in_stock", "sold_out"] as const;
 export type StockState = (typeof STOCK_STATES)[number];
 
 /** États d'une alerte (wish_alert_events.status) : en attente, envoyée,
- * expirée (72 h sans envoi), périmée (la baisse ou le stock a disparu avant
- * l'envoi), limitée (anti-répétition), désactivée (interrupteur ou cloche coupés). */
+ * expirée (3 jours sans envoi), périmée (la baisse ou le stock a disparu
+ * avant l'envoi), limitée (ancienne règle, avant 0041), désactivée
+ * (interrupteur ou cloche coupés). */
 export const WISH_ALERT_STATUSES = ["pending", "sent", "expired", "stale", "limited", "disabled"] as const;
 export type WishAlertStatus = (typeof WISH_ALERT_STATUSES)[number];
 
-/** Règles chiffrées des alertes (tenues par la base, migration 0036). */
+/** Règles chiffrées des alertes (tenues par la base, migration 0041). */
 export const WISH_ALERT_RULES = {
   /** Une alerte est due dès sa création (décision du fondateur : « à la
    * seconde près ») : envoyée juste après l'observation qui l'a créée, en
    * arrière-plan après la réponse ; sinon (pas d'appareil, notifications
-   * coupées, limites) au prochain passage d'envoi. */
+   * coupées, limite du jour) au prochain passage d'envoi. */
   sendDelayHours: 0,
-  /** Au-delà, une alerte jamais envoyée expire. */
-  expiryHours: 72,
-  /** Au plus une alerte envoyée par envie et par sorte sur ce nombre de jours. */
-  perWishKindDays: 7,
+  /** Une alerte jamais envoyée expire le 3e jour après celui de sa création
+   * (jours de Paris : seule la date est gardée). */
+  expiryDays: 3,
   /** Au plus ce nombre d'alertes envoyées par personne et par jour (heure de Paris). */
   perPersonPerDay: 5,
   /** « Plus disponible » : signalements par membre et par jour (heure de Paris). */
   stockReportsPerDay: 20,
-  /** « Je l'ai achetée » ne vaut pas « disponible » quand l'acheteur a lui-même
-   * signalé la pièce « Plus disponible » dans ce nombre de jours (jamais de
-   * faux « De retour en stock » fabriqué par un seul membre). */
-  purchaseAfterOwnReportDays: 30,
   /** Alertes et signalements effacés au bout de ce nombre de jours. */
   retentionDays: 30,
+  /** « Plus disponible » : la rupture d'une pièce n'est établie pour les
+   * membres d'un pays qu'une fois signalée par ce nombre de membres
+   * différents d'affilée depuis ce pays (sans aucun « en stock » observé dans
+   * ce pays entre deux signalements ; les membres qui n'aident pas les autres
+   * ne comptent pas). Avant, seules les envies de l'auteur passent « épuisée ». */
+  stockReportersToConfirm: 3,
+  /** Réservation d'une alerte pendant son envoi (la seule heure précise
+   * gardée, effacée dès la fin de l'envoi). */
+  leaseMinutes: 15,
 } as const;
 
 // ---- Devises : LA table de l'app et du serveur ----
@@ -1635,6 +1644,16 @@ export function alertCurrency(raw: string | null | undefined, country: string | 
  * Google, serpapi.ts) ; un autre pays : devise inconnue ici. */
 export const COUNTRY_CURRENCIES: Readonly<Record<string, string>> = { fr: "EUR", gb: "GBP", ch: "CHF", us: "USD" };
 
+/** Pays pris en charge par les ALERTES : liste FERMÉE, celle dont la devise
+ * (COUNTRY_CURRENCIES) et le domaine de Google (serveur, services/serpapi.ts)
+ * sont connus. La recherche elle-même garde le pays de l'appareil, quel qu'il
+ * soit (serveur lib/locale.ts) ; mais seul un prix observé dans l'un de ces
+ * pays sert aux alertes (lib/wishObserve.ts), et seul l'un d'eux est gardé
+ * comme pays du membre (lib/wishAlerts.ts). Revue de sécurité : une recherche
+ * « en-NZ » pouvait figer le prix de référence des autres membres. */
+export const SEARCH_COUNTRIES = ["fr", "gb", "ch", "us"] as const;
+export type SearchCountry = (typeof SEARCH_COUNTRIES)[number];
+
 /** Le prix est-il dans la devise du pays de la recherche ? null : la devise
  * de ce pays n'est pas connue ici. Sans devise lisible : non. */
 export function isCountryCurrency(raw: string | null | undefined, country: string): boolean | null {
@@ -1643,29 +1662,39 @@ export function isCountryCurrency(raw: string | null | undefined, country: strin
   return alertCurrency(raw, country) === local;
 }
 
-/** GET /api/alerts/status : les alertes sont-elles disponibles (migration
- * 0036 appliquée) ? Faux : l'app cache la cloche, l'interrupteur et « Plus
- * disponible ». `enabled` : l'interrupteur « Alertes prix et stock » de la
- * personne (coupé par défaut). `push` : les notifications sur le téléphone
- * sont allumées sur le serveur (PUSH_ENABLED et migration 0035) ; faux : les
- * alertes sont enregistrées mais ne partent pas encore. */
+/** GET /api/alerts/status : les alertes sont-elles disponibles (migrations
+ * 0036 à 0041 appliquées) ? Faux : l'app cache la cloche, les réglages et
+ * « Plus disponible ». `enabled` : l'interrupteur « Alertes prix et stock »
+ * de la personne (coupé par défaut). `helpOthers` : « Aider les autres
+ * membres » (allumé par défaut) : ses recherches et ses signalements « Plus
+ * disponible » servent, sans son nom, aux alertes des autres membres ;
+ * coupé, ils ne servent qu'à ses propres envies. `push` : les notifications
+ * sur le téléphone sont allumées sur le serveur (PUSH_ENABLED et migration
+ * 0035) ; faux : les alertes sont enregistrées mais ne partent pas encore. */
 export interface WishAlertsStatus {
   available: boolean;
   enabled: boolean;
+  helpOthers: boolean;
   push: boolean;
 }
 
-/** PUT /api/alerts/settings : l'interrupteur des Réglages. */
+/** PUT /api/alerts/settings : les réglages des alertes (au moins un des deux). */
 export interface UpdateWishAlertsSettingsRequest {
-  enabled: boolean;
+  enabled?: boolean;
+  helpOthers?: boolean;
 }
 
-/** La cloche d'une envie. `trackable` : la pièce a une clé (lien de boutique
- * reconnu) ; sinon, ni cloche ni « Plus disponible ». `bought` : la pièce est
- * dans votre Vault (« Je l'ai achetée ») ; aucune alerte ne part pour elle,
- * la cloche est cachée. `stock` : le dernier état connu, en direct (décision
- * du fondateur : le savoir tout de suite est le but) ; jamais qui a cherché,
- * acheté ou signalé la pièce. */
+/** La cloche d'une envie. `trackable` : la pièce a une empreinte (lien de
+ * boutique reconnu) ; sinon, ni cloche ni « Plus disponible ». `bought` : la
+ * pièce est dans votre Vault (« Je l'ai achetée ») ; aucune alerte ne part
+ * pour elle, la cloche est cachée. `stock` : le dernier état connu, en direct
+ * (décision du fondateur : le savoir tout de suite est le but) ; jamais qui a
+ * cherché ou signalé la pièce. `targetPrice` : « Prévenez-moi si le prix passe
+ * sous… » (dans `targetCurrency`, la devise de votre pays ; pour une envie dont
+ * le pays n'est pas encore connu, celle du pays de votre recherche, s'il est
+ * pris en charge ; sinon null et pas de champ) ; `lastPrice` : le dernier prix
+ * vu dans votre pays (`lastCurrency`), qui pré-remplit ce seuil et que la
+ * fiche de l'envie affiche. */
 export interface WishAlertState {
   wishlistItemId: string;
   trackable: boolean;
@@ -1674,6 +1703,10 @@ export interface WishAlertState {
   restock: boolean;
   soldOut: boolean;
   stock: StockState;
+  targetPrice: number | null;
+  targetCurrency: string | null;
+  lastPrice: number | null;
+  lastCurrency: string | null;
 }
 
 /** GET /api/alerts/wishes : la cloche de chacune de vos envies suivies. */
@@ -1681,14 +1714,20 @@ export interface WishAlertStatesList {
   items: WishAlertState[];
 }
 
+/** Plus haut seuil accepté pour une baisse de prix. */
+export const MAX_TARGET_PRICE = 99_999_999.99;
+
 /** PUT /api/wishlist/:id/alerts. Tout à false : la cloche est retirée.
  * `enableAlerts` : allume aussi l'interrupteur général (première cloche,
- * après la feuille d'explication des notifications). */
+ * après la feuille d'explication des notifications). `targetPrice` : le
+ * seuil de la baisse de prix (absent : inchangé ; null : le dernier prix vu,
+ * ou le premier qui sera vu). */
 export interface UpdateWishAlertRequest {
   priceDrop: boolean;
   restock: boolean;
   soldOut?: boolean;
   enableAlerts?: boolean;
+  targetPrice?: number | null;
 }
 
 export interface UpdateWishAlertResponse {
@@ -1702,9 +1741,9 @@ export type StockReportRequest = { productMatchId: string; wishlistItemId?: neve
 
 /** Codes d'erreur propres aux alertes. */
 export const WISH_ALERT_ERRORS = {
-  /** Migration 0036 absente (404) : l'app cache tout. */
+  /** Migrations des alertes absentes (404) : l'app cache tout. */
   unavailable: "alerts_unavailable",
-  /** La pièce n'a pas de clé (422) : ni cloche ni « Plus disponible ». */
+  /** La pièce n'a pas d'empreinte (422) : ni cloche ni « Plus disponible ». */
   notTrackable: "alert_not_trackable",
   /** 20 signalements « Plus disponible » déjà aujourd'hui (429). */
   reportLimit: "stock_report_limit",
@@ -1712,28 +1751,28 @@ export const WISH_ALERT_ERRORS = {
   bought: "alert_wish_bought",
 } as const;
 
-/** Sorte des données jointes à une notification d'alerte. */
-export const WISH_ALERT_PUSH_KIND = "wish_alert";
-
 /** Données d'une notification d'alerte : `wishlistItemId` quand elle ne
- * concerne qu'une envie (toucher ouvre sa fiche) ; absent pour une
- * notification groupée (toucher ouvre vos Envies). Rien d'autre. */
+ * concerne qu'une envie (toucher ouvre sa fiche, qui charge tout depuis le
+ * serveur) ; rien du tout pour une notification groupée (toucher ouvre vos
+ * Envies). Jamais un titre, une boutique, un prix ni une sorte d'alerte. Une
+ * notification de message porte toujours `conversationId` : jamais confondue. */
 export interface WishAlertPushData {
-  kind: typeof WISH_ALERT_PUSH_KIND;
   wishlistItemId?: string;
 }
 
 const PUSH_DATA_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Les données d'une notification d'alerte, ou null si ce n'en est pas une
- * (ou si elles sont illisibles). */
+ * (une notification de message porte `conversationId`) ou si elles sont
+ * illisibles. Données vides (ou absentes) : la notification groupée. */
 export function parseWishAlertPushData(data: unknown): WishAlertPushData | null {
-  if (typeof data !== "object" || data === null) return null;
-  const record = data as Record<string, unknown>;
-  if (record.kind !== WISH_ALERT_PUSH_KIND) return null;
-  const id = record.wishlistItemId;
-  if (id === undefined) return { kind: WISH_ALERT_PUSH_KIND };
-  return typeof id === "string" && PUSH_DATA_UUID.test(id) ? { kind: WISH_ALERT_PUSH_KIND, wishlistItemId: id } : null;
+  if (data === null || data === undefined) return {};
+  if (typeof data !== "object" || Array.isArray(data)) return null;
+  const keys = Object.keys(data);
+  if (keys.length === 0) return {};
+  if (keys.length !== 1 || keys[0] !== "wishlistItemId") return null;
+  const id = (data as Record<string, unknown>).wishlistItemId;
+  return typeof id === "string" && PUSH_DATA_UUID.test(id) ? { wishlistItemId: id } : null;
 }
 
 // ---- Nom du produit (lot « nom et identifiants configurables ») ----
@@ -1753,6 +1792,247 @@ export function brandFileSlug(name: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return slug === "" ? "app" : slug;
+}
+
+// ---------------------------------------------------------------------
+// Liens de vidéos TikTok et Instagram (mission « liens vidéo »)
+// ---------------------------------------------------------------------
+// Reconnaître un lien partagé depuis TikTok ou Instagram, sans jamais rien
+// télécharger : tout se lit dans l'adresse elle-même. Sert à l'app (lien reçu
+// de l'extension de partage ou collé), au site (lien collé) et au serveur
+// (mémoire collective : une vidéo = une plateforme et une clé).
+//
+// Un lien court TikTok (vm.tiktok.com/…, vt.tiktok.com/…, tiktok.com/t/…) ne
+// contient pas l'identifiant de la vidéo : seul le serveur peut le résoudre,
+// en suivant sa redirection (en-têtes seulement, jamais le contenu de la
+// page). `parseVideoLink` le signale ; `normalizeVideoLink` rend alors null.
+
+export const VIDEO_PLATFORMS = ["tiktok", "instagram"] as const;
+export type VideoPlatform = (typeof VIDEO_PLATFORMS)[number];
+
+/** Une vidéo reconnue. `videoKey` : l'identifiant numérique TikTok, ou le
+ * code Instagram (majuscules et minuscules comptent). `canonicalUrl` :
+ * l'adresse publique sans aucun paramètre de suivi. `creatorHandle` : le
+ * pseudo sans « @ », seulement s'il figure dans l'adresse. */
+export interface VideoLink {
+  platform: VideoPlatform;
+  videoKey: string;
+  canonicalUrl: string;
+  creatorHandle: string | null;
+}
+
+/** Ce qu'un texte partagé contient : une vidéo reconnue, ou un lien court
+ * TikTok à faire résoudre par le serveur. */
+export type ParsedVideoLink = { kind: "video"; link: VideoLink } | { kind: "tiktok_short"; shortUrl: string };
+
+/** Hôtes des liens courts TikTok : les seuls que le serveur accepte de suivre. */
+export const TIKTOK_SHORT_HOSTS = ["vm.tiktok.com", "vt.tiktok.com"] as const;
+const TIKTOK_HOSTS: ReadonlySet<string> = new Set(["tiktok.com", "www.tiktok.com", "m.tiktok.com"]);
+const INSTAGRAM_HOSTS: ReadonlySet<string> = new Set(["instagram.com", "www.instagram.com", "m.instagram.com", "instagr.am", "www.instagr.am"]);
+
+/** Longueur maximale d'un texte examiné (un texte de partage fait quelques centaines de caractères). */
+export const VIDEO_LINK_INPUT_MAX_LENGTH = 4096;
+
+const TIKTOK_ID = /^\d{6,25}$/;
+const TIKTOK_HANDLE = /^[a-z0-9._]{1,30}$/;
+const TIKTOK_SHORT_CODE = /^[A-Za-z0-9_-]{4,40}$/;
+const INSTAGRAM_CODE = /^[A-Za-z0-9_-]{5,64}$/;
+const INSTAGRAM_HANDLE = /^[a-z0-9._]{1,30}$/;
+/** Types de publication Instagram reconnus, et celui gardé dans l'adresse canonique. */
+const INSTAGRAM_KINDS: Record<string, string> = { reel: "reel", reels: "reel", p: "p", tv: "tv" };
+
+/** Adresses contenues dans un texte, dans l'ordre : « https://… », ou un hôte
+ * TikTok ou Instagram écrit sans « https:// » (jamais au milieu d'un autre
+ * nom de domaine, ni derrière un autre protocole comme « ftp:// »). La
+ * ponctuation de fin de phrase est retirée. */
+function urlCandidates(text: string): string[] {
+  const found = text.match(/(?:https?:\/\/|(?<![A-Za-z0-9.@:\/-])(?:(?:www|m|vm|vt)\.)?(?:tiktok\.com|instagram\.com|instagr\.am)\/)[^\s<>"'`]+/gi) ?? [];
+  return found.map((candidate) => (/^https?:\/\//i.test(candidate) ? candidate : `https://${candidate}`).replace(/[.,;:!?)\]}»…]+$/u, ""));
+}
+
+function tiktokCanonical(kind: "video" | "photo", id: string, handle: string | null): string {
+  return `https://www.tiktok.com/@${handle ?? ""}/${kind}/${id}`;
+}
+
+function parseTikTok(host: string, segments: string[]): ParsedVideoLink | null {
+  if ((TIKTOK_SHORT_HOSTS as readonly string[]).includes(host)) {
+    const code = segments[0];
+    return segments.length === 1 && code !== undefined && TIKTOK_SHORT_CODE.test(code) ? { kind: "tiktok_short", shortUrl: `https://${host}/${code}/` } : null;
+  }
+  if (!TIKTOK_HOSTS.has(host)) return null;
+  const [first, second, third] = segments;
+  // tiktok.com/t/CODE : lien court, lui aussi.
+  if (first === "t" && segments.length === 2 && second !== undefined && TIKTOK_SHORT_CODE.test(second)) {
+    return { kind: "tiktok_short", shortUrl: `https://www.tiktok.com/t/${second}/` };
+  }
+  const video = (kind: "video" | "photo", id: string, handle: string | null): ParsedVideoLink => ({
+    kind: "video",
+    link: { platform: "tiktok", videoKey: id, canonicalUrl: tiktokCanonical(kind, id, handle), creatorHandle: handle },
+  });
+  // tiktok.com/@pseudo/video/ID (ou /photo/ID pour une publication d'images).
+  if (first !== undefined && first.startsWith("@") && segments.length === 3 && (second === "video" || second === "photo") && third !== undefined && TIKTOK_ID.test(third)) {
+    const handle = first.slice(1).toLowerCase();
+    if (handle !== "" && !TIKTOK_HANDLE.test(handle)) return null;
+    return video(second, third, handle === "" ? null : handle);
+  }
+  // m.tiktok.com/v/ID.html
+  if (first === "v" && segments.length === 2 && second !== undefined) {
+    const id = second.replace(/\.html$/i, "");
+    return TIKTOK_ID.test(id) ? video("video", id, null) : null;
+  }
+  // Adresses du lecteur officiel : /player/v1/ID et /embed/v2/ID.
+  if ((first === "player" && second === "v1") || (first === "embed" && second === "v2")) {
+    return segments.length === 3 && third !== undefined && TIKTOK_ID.test(third) ? video("video", third, null) : null;
+  }
+  return null;
+}
+
+function parseInstagram(host: string, segments: string[]): ParsedVideoLink | null {
+  if (!INSTAGRAM_HOSTS.has(host)) return null;
+  // instagram.com/reel/CODE/ ou, depuis 2024, instagram.com/pseudo/reel/CODE/.
+  const withHandle = segments.length === 3;
+  if (segments.length !== 2 && !withHandle) return null;
+  const [kindSegment, code] = withHandle ? [segments[1]!, segments[2]!] : [segments[0]!, segments[1]!];
+  const kind = INSTAGRAM_KINDS[kindSegment.toLowerCase()];
+  if (kind === undefined || !INSTAGRAM_CODE.test(code)) return null;
+  let handle: string | null = null;
+  if (withHandle) {
+    handle = segments[0]!.toLowerCase();
+    // « share », « reels »… ne sont pas des pseudos : ces adresses ne sont pas reconnues.
+    if (!INSTAGRAM_HANDLE.test(handle) || handle === "share" || handle in INSTAGRAM_KINDS) return null;
+  }
+  return { kind: "video", link: { platform: "instagram", videoKey: code, canonicalUrl: `https://www.instagram.com/${kind}/${code}/`, creatorHandle: handle } };
+}
+
+function parseVideoUrl(candidate: string): ParsedVideoLink | null {
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return null;
+  }
+  // Un vrai lien web, sans identifiant ni port : « https://tiktok.com@ailleurs.example/ » n'est pas TikTok.
+  if ((url.protocol !== "https:" && url.protocol !== "http:") || url.username !== "" || url.password !== "" || url.port !== "") return null;
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
+  let segments: string[];
+  try {
+    segments = url.pathname.split("/").filter((segment) => segment !== "").map((segment) => decodeURIComponent(segment));
+  } catch {
+    return null;
+  }
+  return parseTikTok(host, segments) ?? parseInstagram(host, segments);
+}
+
+/** La première adresse TikTok ou Instagram d'un texte (une adresse seule, ou
+ * un texte de partage qui en contient une) : une vidéo reconnue, un lien
+ * court TikTok à résoudre, ou null. Les paramètres de suivi (igsh, _r,
+ * utm_…) ne sont jamais gardés. */
+export function parseVideoLink(input: string | null | undefined): ParsedVideoLink | null {
+  if (typeof input !== "string" || input.length > VIDEO_LINK_INPUT_MAX_LENGTH) return null;
+  for (const candidate of urlCandidates(input)) {
+    const parsed = parseVideoUrl(candidate);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
+/** La vidéo TikTok ou Instagram qu'un texte désigne, ou null (aucune adresse
+ * reconnue, ou lien court TikTok : voir parseVideoLink). */
+export function normalizeVideoLink(input: string | null | undefined): VideoLink | null {
+  const parsed = parseVideoLink(input);
+  return parsed?.kind === "video" ? parsed.link : null;
+}
+
+/** « TikTok » ou « Instagram », pour les textes. */
+export function videoPlatformName(platform: VideoPlatform): string {
+  return platform === "tiktok" ? "TikTok" : "Instagram";
+}
+
+// ---- Mémoire collective et lecteurs (mission « liens vidéo ») ----
+
+/** D'où vient l'image d'un spot : le lecteur intégré (« Spotter ce moment »),
+ * une capture partagée à l'app, la recherche d'image d'iOS, une photo choisie
+ * dans l'app, ou le site. */
+export const VIDEO_SPOT_SOURCES = ["tiktok_player", "instagram_player", "share", "visual_intelligence", "app", "web"] as const;
+export type VideoSpotSource = (typeof VIDEO_SPOT_SOURCES)[number];
+
+/** Pièces déjà repérées montrées pour une vidéo, au plus. */
+export const VIDEO_PRODUCTS_LIMIT = 12;
+
+/** Une pièce déjà repérée dans une vidéo, telle que tous les membres la
+ * voient : jamais l'identité de qui l'a trouvée. `productKey` : la clé
+ * « même page » (empreinte de l'adresse de la boutique nettoyée), à renvoyer
+ * pour « C'est bien cette pièce ». */
+export interface VideoProduct {
+  productKey: string;
+  productName: string;
+  brand: string | null;
+  imageUrl: string;
+  priceMin: number | null;
+  currency: string | null;
+  merchantName: string | null;
+  /** Lien à ouvrir : affilié s'il existe (mention obligatoire), sinon le lien de la boutique. */
+  merchantUrl: string;
+  isAffiliate: boolean;
+  /** Nombre de « C'est bien cette pièce » de membres qui n'ont pas eux-mêmes
+   * apporté cette pièce (comptes suspendus écartés). */
+  confirmations: number;
+  /** Nombre de membres distincts qui ont trouvé cette pièce dans cette vidéo
+   * (2 au moins pour qu'elle soit montrée : migration 0039). */
+  appearances: number;
+  /** La personne qui regarde a déjà confirmé cette pièce. */
+  confirmedByMe: boolean;
+}
+
+/** Lecteurs laissés allumés par le serveur (ils ne peuvent que couper). */
+export interface VideoPlayersStatus {
+  tiktok: boolean;
+  instagram: boolean;
+}
+
+/** GET /api/video-links/status */
+export interface VideoLinksStatus {
+  players: VideoPlayersStatus;
+  /** La mémoire collective est-elle en place (migration 0038) ? */
+  memory: boolean;
+}
+
+/** Pourquoi un lien n'a pas donné de vidéo : lien court TikTok qui ne mène à
+ * aucune vidéo, hôte refusé, trop de redirections, TikTok injoignable, ou
+ * limite de débit (les deux derniers : à réessayer). */
+export type VideoLinkIssue = "not_a_video" | "host_not_allowed" | "too_many_hops" | "unreachable" | "rate_limited";
+
+/** GET /api/video-links/lookup?url= */
+export interface VideoLookupResponse {
+  /** La vidéo reconnue, ou null (aucun lien TikTok ou Instagram reconnu). */
+  link: VideoLink | null;
+  linkIssue: VideoLinkIssue | null;
+  players: VideoPlayersStatus;
+  memoryAvailable: boolean;
+  /** Pièces déjà repérées par plusieurs membres (vide si la vidéo est
+   * inconnue), triées par confirmations, puis apparitions, puis récence —
+   * jamais par commission. */
+  products: VideoProduct[];
+}
+
+/** GET /api/video-links/instagram-embed?url= : le code d'intégration officiel. */
+export interface InstagramEmbedResponse {
+  html: string;
+  creatorHandle: string | null;
+}
+
+/** POST /api/video-links/spots */
+export interface VideoSpotRequest {
+  url: string;
+  searchId: string;
+  source: VideoSpotSource;
+  momentSeconds?: number | null;
+}
+
+/** POST /api/video-links/confirm */
+export interface VideoConfirmRequest {
+  url: string;
+  productKey: string;
 }
 
 // ---- Essayage virtuel photo (lot « essayage virtuel », novembre 2026) ----

@@ -6,15 +6,14 @@ import {
   SEARCH_FAILURE_MESSAGES,
   SEARCH_QUERY_MAX_LENGTH,
   TEXT_SEARCH_ERRORS,
+  normalizeVideoLink,
   type ComplementStatus,
   type MatchOrigin,
   type PlatformSource,
-  type PreviewIssue,
   type ProductSearch,
   type SearchStatus,
 } from "@monapp/shared-types";
 import { env } from "../env.js";
-import { detectPlatform, fetchOfficialPreview } from "../services/oembed.js";
 import { IMAGE_SEARCH_PROVIDER, searchProductsByImageUrl, type VisualMatch } from "../services/visualSearch.js";
 import { ProviderFailure, type TextSearchProvider } from "../services/searchProvider.js";
 import { serpApiTextProvider } from "../services/serpapi.js";
@@ -42,7 +41,7 @@ import { ANALYSIS_BUCKET, analysisImagePath, legacyAnalysisImagePath, purgeStale
 import { fetchAffiliateUrls } from "../lib/affiliateLinks.js";
 import { searchLocaleFor } from "../lib/locale.js";
 import { INVALID_ID, idParamsSchema, parseInput } from "../lib/validation.js";
-import { ImageSourceError, downloadThumbnail, prepareImageForAnalysis } from "../lib/imageProcessing.js";
+import { ImageSourceError, prepareImageForAnalysis } from "../lib/imageProcessing.js";
 import {
   releaseReservation,
   reserveSearch,
@@ -53,7 +52,6 @@ import {
 import { breakerPause, observeBreakerAfter, SEARCH_PAUSED } from "../lib/searchBreaker.js";
 import { sortByWords } from "../lib/wordSort.js";
 import { assertNoUserImage, voieCAiEnabled } from "../lib/aiSwitches.js";
-import { linkPreviewEnabled } from "../lib/linkPreview.js";
 import { photoCallsLeft, startDeadline, VOIE_C_BUDGET } from "../lib/deadline.js";
 import { lightSort } from "../lib/lightSort.js";
 import { cacheKey, imageHash, purgeExpiredCache, readCache, writeCache } from "../lib/searchCache.js";
@@ -84,7 +82,6 @@ import {
   lensInGoogleOrder,
 } from "../lib/deferredComplement.js";
 import { consumeRateLimit, RATE_LIMITED_MESSAGE } from "../plugins/rateLimit.js";
-import { RATE_LIMITS } from "../lib/rateLimits.js";
 import { aiQuotaFor } from "../lib/aiQuota.js";
 import { noteFailure } from "../lib/alerts.js";
 import { observeResults, type ObservationSource, type ObservedRow } from "../lib/wishObserve.js";
@@ -92,9 +89,9 @@ import { purgeWishAlerts } from "../lib/wishAlertsSend.js";
 import { purgeTryonHistory } from "../lib/tryon/purge.js";
 
 const createSearchSchema = z.object({
-  // Lien lisible par le parseur d'URL standard, gardé tel qu'il a été envoyé
-  // (règle inchangée depuis zod 3 ; le .url() de zod 4, lui, retirerait les
-  // espaces et les retours à la ligne avant de le ranger).
+  // Lien lisible par le parseur d'URL standard (règle inchangée depuis zod 3).
+  // Il n'est jamais ouvert ni rangé tel quel : seule l'adresse publique d'une
+  // vidéo TikTok ou Instagram reconnue est gardée (normalizeVideoLink).
   sourceUrl: z
     .string()
     .refine((value) => URL.canParse(value))
@@ -273,7 +270,7 @@ async function saveComplementRows(
 type RunInput = z.infer<typeof runSearchSchema>;
 interface RunForm {
   input: RunInput;
-  /** Image importée (photo ou capture), sinon null : la vignette officielle servira. */
+  /** Image importée (photo ou capture) ; null : le lancement est refusé. */
   fileBuffer: Buffer | null;
 }
 
@@ -314,38 +311,23 @@ async function readRunForm(request: FastifyRequest, reply: FastifyReply): Promis
   return input ? { input, fileBuffer } : null;
 }
 
-// Lancements refusés avant l'appel à SerpApi (aucun crédit). Les deux
-// derniers sont comptés dans la mesure : un cadre inutilisable repéré par nous.
+// Lancements refusés avant l'appel à SerpApi (aucun crédit). Le dernier est
+// compté dans la mesure : un cadre inutilisable repéré par nous.
 const RUN_REFUSALS = {
   image_required: { status: 400, body: { error: "image_required", message: "Importez une capture de la pièce." } },
-  preview_unavailable: {
-    status: 422,
-    body: { error: "preview_unavailable", message: "L'image de la vidéo n'est plus disponible. Importez une capture de la pièce." },
-  },
   invalid_image: { status: 400, body: { error: "invalid_image", message: "Cette image n'a pas pu être lue, ou la zone choisie est trop petite." } },
 } as const;
 type RunRefusal = keyof typeof RUN_REFUSALS;
 
-/** Image à analyser — celle importée en priorité, sinon la vignette
- * officielle —, recadrée sur la zone choisie ; sinon la raison du refus.
- * Interrupteur des liens coupé (lib/linkPreview.ts) : une vignette enregistrée
- * avant la coupure n'est jamais téléchargée ni analysée ; sans image importée,
- * le lancement est refusé comme pour une vignette disparue (« importez une
- * capture »), sans aucun appel à TikTok, à Meta ni à SerpApi. */
-async function prepareRunImage(request: FastifyRequest, row: SearchRow, form: RunForm): Promise<{ image: Buffer } | { refusal: RunRefusal }> {
-  let source: Buffer;
+/** Image à analyser : toujours celle que la personne a importée (photo ou
+ * capture), recadrée sur la zone choisie ; sinon la raison du refus. Le
+ * serveur ne va jamais chercher une image ailleurs : sans image importée, le
+ * lancement est refusé (« importez une capture »), que la recherche vienne
+ * d'un lien ou non, sans aucun appel sortant. */
+async function prepareRunImage(form: RunForm): Promise<{ image: Buffer } | { refusal: RunRefusal }> {
+  if (!form.fileBuffer) return { refusal: "image_required" };
   try {
-    if (form.fileBuffer) source = form.fileBuffer;
-    else if (row.thumbnail_url && !linkPreviewEnabled()) return { refusal: "preview_unavailable" };
-    else if (row.thumbnail_url) source = await downloadThumbnail(row.thumbnail_url);
-    else return { refusal: "image_required" };
-  } catch (error) {
-    request.log.warn({ error }, "Vignette officielle indisponible au lancement");
-    return { refusal: "preview_unavailable" };
-  }
-
-  try {
-    return { image: await prepareImageForAnalysis(source, form.input.crop ?? null) };
+    return { image: await prepareImageForAnalysis(form.fileBuffer, form.input.crop ?? null) };
   } catch (error) {
     if (error instanceof ImageSourceError) return { refusal: "invalid_image" };
     throw error;
@@ -522,10 +504,14 @@ const SAVE_FAILED = { error: "search_save_failed", message: "Le résultat n'a pa
 /** Alertes prix et stock (lot 2, lib/wishObserve.ts) : APRÈS reply.send, les
  * propositions que la personne vient de recevoir, seulement si elles sont
  * fraîches (jamais le cache de 24 h, jamais la réponse d'un appel identique
- * en cours) et enregistrées. Lancé puis oublié : ne retarde ni ne change la réponse. */
-function observeFresh(fastify: FastifyInstance, request: FastifyRequest, source: Exclude<ObservationSource, "purchase">, rows: readonly ObservedRow[], fresh: boolean): void {
-  if (!fresh || rows.length === 0) return;
-  observeResults(fastify, { source, rows, country: searchLocaleFor(request).country });
+ * en cours) et enregistrées. Lancé puis oublié, détaché de la requête (ni
+ * son journal, ni Sentry) : ne retarde ni ne change la réponse. Le membre
+ * qui cherche part vers la base seulement (son réglage « Aider les autres
+ * membres » et la règle des auteurs, 0041). */
+function observeFresh(fastify: FastifyInstance, request: FastifyRequest, source: ObservationSource, rows: readonly ObservedRow[], fresh: boolean): void {
+  const observerId = request.user?.id;
+  if (!fresh || rows.length === 0 || !observerId) return;
+  observeResults(fastify, { source, rows, country: searchLocaleFor(request).country, observerId });
 }
 
 /** Écrit les colonnes finales de la recherche, puis la relit avec ses
@@ -1271,17 +1257,17 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
   // nouveau site en ligne (plus aucun appel ne les utilisait).
   // ---------------------------------------------------------------------
 
-  // Temps 1 — PRÉPARER (gratuit, aucun appel SerpApi) : crée la recherche
-  // et récupère par la voie officielle l'image qui sera analysée, pour que
-  // l'utilisateur la VOIE avant de lancer quoi que ce soit (aperçu). Sans
-  // lien (import d'une photo) ou sans vignette officielle, la recherche
-  // attend simplement une image au lancement.
-  // Interrupteur des liens (LINK_PREVIEW_ENABLED, lib/linkPreview.ts), COUPÉ
-  // par défaut : un lien envoyé (ancienne version de l'app, requête fabriquée)
-  // est ignoré. Aucun appel à TikTok ni à Meta ; ni le lien ni l'adresse d'une
-  // couverture ne sont enregistrés : la recherche est créée comme pour une
-  // photo, et la réponse dit à l'app qu'il faut une capture
-  // (« no_official_access », la raison déjà connue des apps installées).
+  // Temps 1 — PRÉPARER (gratuit, aucun appel sortant : ni SerpApi, ni TikTok,
+  // ni Meta) : crée la recherche, qui attend l'image que la personne importera
+  // au lancement (photo, ou capture du bon moment de la vidéo).
+  // Lien joint (`sourceUrl`, facultatif) : rien n'est demandé à aucune
+  // plateforme, aucune page n'est ouverte, aucune image n'est récupérée. Tout
+  // se lit dans l'adresse elle-même (normalizeVideoLink) : une vidéo TikTok ou
+  // Instagram reconnue est rangée sous son adresse publique, sans paramètre de
+  // suivi, avec sa plateforme. Tout autre lien (autre site, profil, lien court
+  // TikTok) est ignoré : la recherche est créée comme pour une photo, et rien
+  // du lien n'est enregistré. La voie « couverture » (image de la vidéo
+  // demandée à la plateforme) a été retirée le 12 novembre 2026.
   fastify.post("/api/searches/prepare", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const body = parseInput(createSearchSchema, request.body ?? {}, reply, {
       error: "invalid_body",
@@ -1290,24 +1276,17 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
     if (!body) return;
 
     const userId = request.user!.id;
-    const linkIgnored = body.sourceUrl !== undefined && !linkPreviewEnabled();
-    const sourceUrl = linkIgnored ? null : (body.sourceUrl ?? null);
-    const platform: PlatformSource = sourceUrl ? detectPlatform(sourceUrl) : "photo";
-    // Un lien préparé fait partir une demande vers TikTok ou Meta : 20 par heure et par membre.
-    if (sourceUrl && !consumeRateLimit(request, "linkPrepare")) {
-      return reply.code(429).send({ error: RATE_LIMITS.linkPrepare.error, message: RATE_LIMITS.linkPrepare.message });
-    }
-    const preview = sourceUrl ? await fetchOfficialPreview(sourceUrl, platform) : null;
-    const thumbnail = preview?.ok ? { thumbnailUrl: preview.thumbnailUrl } : null;
+    const video = normalizeVideoLink(body.sourceUrl);
+    const platform: PlatformSource = video ? video.platform : "photo";
 
     const { data: inserted, error } = await fastify.supabaseAdmin
       .from("product_searches")
       .insert({
         user_id: userId,
-        source_url: sourceUrl,
+        source_url: video ? video.canonicalUrl : null,
         source_platform: platform,
-        method: thumbnail ? "oembed" : "manual_screenshot",
-        thumbnail_url: thumbnail?.thumbnailUrl ?? null,
+        method: "manual_screenshot",
+        thumbnail_url: null,
         status: "pending",
       })
       .select("*")
@@ -1343,23 +1322,19 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       request.log.error({ purgeError }, "Échec de la suppression des recherches de plus de 12 mois");
     }
 
-    // Sans image : la raison précise, pour que l'app dise quoi faire. Lien
-    // ignoré (interrupteur coupé) : la capture d'écran est la seule voie.
-    const previewIssue: PreviewIssue | null = linkIgnored ? "no_official_access" : preview && !preview.ok ? preview.issue : null;
     const row = parseSearchRow(inserted);
     if (!row) {
       request.log.error("Recherche préparée illisible");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
-    return reply.send({ ...toProductSearch(row, [], new Map(), new Map()), previewIssue });
+    return reply.send(toProductSearch(row, [], new Map(), new Map()));
   });
 
   // Temps 2 — LANCER (une seule fois par recherche ; 1 à 3 recherches par
-  // photo, voir la voie C plus haut) : formulaire multipart avec, au choix,
-  // une image importée (champ "file" — photo ou capture au bon moment de la
-  // vidéo) ou, à défaut, la vignette officielle préparée au temps 1 (jamais
-  // quand l'interrupteur des liens est coupé, prepareRunImage) ; plus la
-  // zone choisie ("crop", JSON en proportions 0–1). Les mots ("query") ne
+  // photo, voir la voie C plus haut) : formulaire multipart avec l'image
+  // importée par la personne (champ "file" — photo ou capture au bon moment
+  // de la vidéo ; sans elle, le lancement est refusé, prepareRunImage) ; plus
+  // la zone choisie ("crop", JSON en proportions 0–1). Les mots ("query") ne
   // servent qu'à trier les propositions. "complement" = "deferred" (nouvelle
   // app, boutiques ensuite) : la réponse part dès Lens, les autres boutiques
   // sont cherchées par POST /api/searches/:id/complement. Le serveur recadre lui-même : identique sur
@@ -1392,7 +1367,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       // En pause : refusé AVANT tout appel ; la recherche reste en attente,
       // rien n'est réservé ni compté dans la part de la personne.
       if (await breakerPause(fastify, "image", IMAGE_SEARCH_PROVIDER.name)) return reply.code(503).send(SEARCH_PAUSED);
-      const prepared = await prepareRunImage(request, row, form);
+      const prepared = await prepareRunImage(form);
       if ("refusal" in prepared) {
         if (prepared.refusal !== "image_required") await countRefusalBeforeCall(fastify, row);
         const refusal = RUN_REFUSALS[prepared.refusal];

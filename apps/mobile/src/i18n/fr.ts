@@ -91,12 +91,10 @@ export const fr = {
     title: "Spotter",
     close: "Fermer",
     lead: "Retrouvez une pièce vue dans une vidéo ou sur une photo.",
-    linkLabel: "Lien TikTok, Instagram ou Pinterest",
     linkPlaceholder: "Collez ou tapez un lien",
     paste: "Coller",
     pasteEmpty: "Le presse-papiers ne contient pas de lien.",
     pasteDenied: "Collez le lien directement dans le champ.",
-    continue: "Continuer",
     preparing: "Préparation…",
     addVideo: "Ajouter une vidéo",
     addPhoto: "Ajouter une photo",
@@ -219,7 +217,8 @@ export const fr = {
     available: "Nouvelle version disponible.",
     reload: "Recharger",
   },
-  // Lien collé (lot 4 ter) : l'analyse de la couverture est désactivée.
+  // Lien collé (lot 4 ter) : une vidéo ne se lit pas depuis un lien, et son
+  // image de couverture n'est jamais demandée.
   linkNotice: {
     title: "Une vidéo ne se lit pas depuis un lien",
     body: (how: string) =>
@@ -290,23 +289,24 @@ export const fr = {
       resent: "E-mail renvoyé. Pensez à regarder aussi dans les courriers indésirables.",
     },
   },
-  // Lot « lecteur intégré » (app iPhone) : la vidéo TikTok ou Instagram
-  // s'ouvre dans Spotto, dans le lecteur officiel ; « Spotter ce moment »
-  // prend l'image affichée. TEXTES À VALIDER PAR LE FONDATEUR (§1.7 de la
-  // conception, corrigé par la contre-expertise : lien court n° 4a, accord
-  // préalable n° 5). Espaces insécables avant « : » et « ? », et dans « … ».
+  // Mission « liens vidéo » : la vidéo TikTok ou Instagram, partagée ou
+  // collée, s'ouvre dans son lecteur officiel (app iPhone) ; « Spotter ce
+  // moment » prend l'instantané de ce que la vue montre. Sur le site, ou
+  // lecteur coupé : l'écran « Spottez cette vidéo ». TEXTES À VALIDER PAR LE
+  // FONDATEUR. Espaces insécables avant « : » et « ? », et dans « … ».
   player: {
     linkQuestion: "Vous avez un lien TikTok ou Instagram ?",
     linkLabel: "Lien TikTok ou Instagram",
     linkHint: `La vidéo s'ouvre ici, dans ${BRAND} : vous la mettrez en pause sur la pièce.`,
+    linkHintWeb: "Les pièces déjà repérées dans cette vidéo s'affichent ici, avec la marche à suivre.",
     open: "Ouvrir la vidéo",
     opening: "Ouverture de la vidéo…",
     instruction: "Mettez la vidéo en pause quand la pièce est bien visible.",
     frameTitle: (platform: string) => `Vidéo ${platform}`,
+    videoBy: (platform: string, handle: string) => `Vidéo ${platform} de @${handle}`,
     spot: "Spotter ce moment",
     taking: `${BRAND} prend l'image…`,
-    recording: "Enregistrement de l'écran…",
-    privacy: (platform: string) => `Vidéo lue par ${platform}, sans téléchargement. Seule l'image de ce moment est envoyée.`,
+    privacy: (platform: string) => `Vidéo lue par ${platform}, sans téléchargement. Seule l'image de ce moment est envoyée, puis effacée de votre téléphone.`,
     tapToPlay: "Touchez la vidéo pour la lancer.",
     leaveLink: (platform: string) => `Ce lien s'ouvre dans ${platform}.`,
     openIn: (platform: string) => `Ouvrir dans ${platform}`,
@@ -314,29 +314,8 @@ export const fr = {
     gate: {
       body: (platform: string) => `Cette vidéo est lue par ${platform}, qui peut utiliser ses propres traceurs.`,
       play: "Lire la vidéo ici",
+      refuse: "Non merci",
     },
-    unavailableTitle: `Cette vidéo ne s'ouvre pas dans ${BRAND}`,
-    unavailable: {
-      notPublic: "Elle est peut-être privée ou supprimée, ou son auteur ne permet pas de l'afficher ailleurs.",
-      notAVideo: (platform: string) => `Ce lien ${platform} ne mène pas à une vidéo.`,
-      shortLink: (platform: string) => `Ce lien ne s'ouvre pas ici pour le moment. Ouvrez la vidéo dans ${platform}, ou ajoutez une capture d'écran.`,
-      noAnswer: (platform: string) => `${platform} ne répond pas pour le moment. Réessayez dans un instant.`,
-      playerError: (platform: string) => `Le lecteur ${platform} n'a pas pu lire cette vidéo.`,
-      crashed: "Le lecteur s'est arrêté.",
-    },
-    screenConsent: {
-      title: "Encore une étape",
-      body: `Votre iPhone va vous demander d'autoriser l'enregistrement de l'écran. ${BRAND} n'en garde qu'une image, celle de ce moment : rien d'autre n'est enregistré ni envoyé.`,
-      continue: "Continuer",
-      myself: "Faire une capture moi-même",
-    },
-    captureFailed: {
-      title: `${BRAND} n'a pas pu prendre l'image`,
-      body: (shortcut: string) => `Faites une capture d'écran maintenant (${shortcut}) : la vidéo reste en pause ici. Puis ajoutez-la.`,
-      declined: (shortcut: string) => `Sans votre accord, ${BRAND} ne peut pas prendre l'image. Faites une capture d'écran maintenant (${shortcut}), puis ajoutez-la.`,
-      phoneCall: (shortcut: string) => `Impossible pendant un appel. Faites une capture d'écran (${shortcut}), puis ajoutez-la.`,
-    },
-    blackImage: "L'image prise était noire ou vide ? Réessayer autrement",
     howItWorksSteps: (spot: string) => [
       `Partagez la vidéo TikTok ou Instagram vers ${BRAND}, ou collez son lien.`,
       `Mettez-la en pause sur la pièce, touchez « ${spot} », puis entourez la pièce.`,
@@ -345,6 +324,7 @@ export const fr = {
     linkNotice: {
       title: `Cette vidéo peut s'ouvrir dans ${BRAND}`,
       body: "Ouvrez-la ici même : vous la mettrez en pause sur la pièce.",
+      bodyWeb: "Ouvrez-la ici : vous verrez les pièces déjà repérées, et comment la spotter.",
     },
     settings: {
       title: `Vidéos lues dans ${BRAND}`,
@@ -353,19 +333,48 @@ export const fr = {
       withdrawn: "Accord retiré : la question vous sera reposée à la prochaine vidéo.",
     },
   },
+  // Mission « liens vidéo » : écran de secours, pièces déjà repérées par
+  // d'autres membres (jamais qui), lien en attente. TEXTES À VALIDER.
+  videoLink: {
+    fallbackTitle: "Spottez cette vidéo",
+    fallbackLead: {
+      notHere: "Cette vidéo ne peut pas être lue ici. Trois gestes suffisent :",
+      refused: "La vidéo ne sera pas lue ici. Trois gestes suffisent :",
+      snapshot: `${BRAND} n'a pas pu prendre l'image de ce moment. Trois gestes suffisent :`,
+      unchecked: "Cette vidéo n'a pas pu être vérifiée pour le moment. Trois gestes suffisent :",
+    },
+    steps: [
+      "Faites une capture d'écran quand la pièce est bien visible.",
+      `Touchez « Recherche d'image » (iPhone compatibles, iOS 26 et suivants) ou Partager → ${BRAND}.`,
+      "Entourez la pièce.",
+    ],
+    held: "Pendant 10 minutes, votre prochaine recherche sera associée à cette vidéo.",
+    productsTitle: "Pièces déjà repérées dans cette vidéo",
+    confirm: "C'est bien cette pièce",
+    thanks: "Merci",
+    confirmFailed: "Votre confirmation n'a pas pu être envoyée. Réessayez dans un instant.",
+    firstToSpot: "Aucune pièce n'a encore été repérée dans cette vidéo : à vous de commencer.",
+    attached: (handle: string) => `Associée à la vidéo de @${handle}`,
+    attachedPlatform: (platform: string) => `Associée à la vidéo ${platform}`,
+    detach: "Ne plus associer cette recherche à la vidéo",
+    sharedAnonymously: "Les pièces trouvées seront ajoutées, sans votre nom, aux pièces repérées de cette vidéo.",
+    webInstruction: "Faites une capture de la vidéo au bon moment, puis glissez-déposez ou collez l'image ici.",
+    dropHint: "Sur ordinateur, vous pouvez aussi glisser-déposer une image sur cette page, ou la coller (Ctrl+V ou ⌘V).",
+    notAnImage: "Ce fichier n'est pas une image. Déposez ou collez une capture d'écran.",
+  },
+  // Recherche d'image d'iOS (iOS 26 et suivants) : carte montrée une fois.
+  visualSearchTip: {
+    title: "Astuce",
+    body: `Dans n'importe quelle app, faites une capture, touchez Recherche d'image, puis ${BRAND} (iPhone compatibles).`,
+    dismiss: "J'ai compris",
+  },
+  // Étapes de la capture d'écran (aide d'un lien collé ou partagé, lecteur) et
+  // messages d'un parcours qui n'existe plus (page rechargée).
   preview: {
-    title: "Voici l'image qui sera analysée",
-    caption: (platform: string) => `Image de couverture de la ${platform === "TikTok" ? "vidéo" : "publication"} ${platform}.`,
-    captureCaption: "Votre capture d'écran.",
-    // Espace insécable : le « ? » ne passe jamais seul à la ligne.
-    notOnImageTitle: "La pièce n'apparaît pas sur cette image ?",
-    notOnImageWhy: (platform: string) =>
-      `${platform} ne donne accès qu'à cette image de couverture, pas au reste de la vidéo. Montrez à ${BRAND} le bon moment avec une capture d'écran :`,
     captureSteps: (platform: string, shortcut: string) => [
       `Ouvrez la vidéo dans ${platform}.`,
       "Mettez-la en pause quand la pièce est bien visible.",
       `Faites une capture d'écran (${shortcut}).`,
-      "Revenez ici et touchez « Importer une capture ».",
     ],
     screenshotShortcut: {
       ios: "bouton latéral + bouton volume haut",
@@ -373,35 +382,6 @@ export const fr = {
       web: "Cmd + Maj + 4 sur Mac, Windows + Maj + S sur PC",
     },
     theApp: "l'application",
-    importCapture: "Importer une capture",
-    target: "Cibler la pièce",
-    noPreviewTitle: "Importez une capture de la pièce",
-    noPreviewBody: (platform: string) =>
-      `${BRAND} ne peut pas récupérer l'image de ce lien ${platform}. Faites une capture d'écran au moment où la pièce est bien visible, puis importez-la.`,
-    // Raisons précises (voir PreviewIssue) : chaque message dit quoi faire.
-    issue: {
-      unavailable: {
-        title: (content: string) => `${content[0]!.toUpperCase()}${content.slice(1)} introuvable`,
-        body: (platform: string, content: string) =>
-          `${platform} ne trouve pas cette ${content} : elle est peut-être privée ou a été supprimée, ou le lien est incomplet. Vérifiez qu'elle s'ouvre bien dans ${platform}, puis recopiez son lien. Si elle s'affiche chez vous, vous pouvez aussi en importer une capture d'écran.`,
-      },
-      notAVideo: {
-        title: (content: string) => `Ce lien ne mène pas à une ${content}`,
-        body: (platform: string, content: string) =>
-          `Il ouvre un profil ou une page ${platform}. Ouvrez la ${content}, touchez « Partager » puis « Copier le lien », et collez ce lien dans Spotter.`,
-      },
-      serviceDown: {
-        title: (platform: string) => `${platform} ne répond pas pour le moment`,
-        body: "Réessayez dans quelques minutes. Vous pouvez aussi importer une capture d'écran de la pièce.",
-      },
-      noAccess: {
-        title: "Importez une capture de la pièce",
-        body: (platform: string) => `${platform} ne permet pas à ${BRAND} de récupérer l'image de ce lien. Montrez-lui la pièce avec une capture d'écran :`,
-      },
-    },
-    content: { tiktok: "vidéo", instagram: "publication", pinterest: "épingle" },
-    fixLink: "Corriger le lien",
-    retry: "Réessayer",
     missing: "Ce parcours n'est plus disponible. Recommencez depuis Spotter.",
     back: "Retour à Spotter",
   },
@@ -762,7 +742,7 @@ export const fr = {
     kinds: { price_drop: "Baisse de prix", restock: "Retour en stock", sold_out: "Épuisé" },
     kindsInline: { price_drop: "baisse de prix", restock: "retour en stock", sold_out: "épuisé" },
     kindHints: {
-      price_drop: "Quand son prix baisse dans cette boutique.",
+      price_drop: "Quand son prix passe sous le seuil que vous choisissez, dans cette boutique.",
       restock: "Quand elle revient en stock dans cette boutique.",
       sold_out: "Quand elle est épuisée dans cette boutique.",
     },
@@ -773,7 +753,24 @@ export const fr = {
     bellOnLabel: (title: string, kinds: string) => `Alerte activée pour ${title} : ${kinds}. Toucher pour la modifier`,
     sheetTitle: "Alerte pour cette pièce",
     sheetIntro:
-      `${BRAND} vous prévient tout de suite quand une recherche ou un achat fait dans ${BRAND} montre cette pièce dans la même boutique, moins chère ou de nouveau en stock. Personne ne sait qui l'a cherchée, ni qui la suit.`,
+      `${BRAND} vous prévient tout de suite quand une recherche faite dans ${BRAND} montre cette pièce dans la même boutique, sous votre prix ou de nouveau en stock. Personne ne sait qui l'a cherchée, ni qui la suit.`,
+    // Nouvelle version (0041) : « Prévenez-moi si le prix passe sous [ ] € ».
+    targetLabel: "Prévenez-moi si le prix passe sous",
+    targetFieldLabel: (currency: string) => `Seuil de prix, en ${currency}`,
+    targetHintLast: "Pré-rempli avec le dernier prix vu. Vous pouvez le baisser.",
+    targetHintNone: "Sans prix indiqué, le premier prix vu servira de seuil.",
+    // Revue : chaque indication dit d'où vient le prix affiché.
+    targetHintSaved: "Votre seuil enregistré.",
+    targetHintSavedWithLast: (price: string) => `Votre seuil enregistré. Dernier prix vu : ${price}.`,
+    targetHintEmptyLast: (price: string) => `Sans prix indiqué, le dernier prix vu (${price}) servira de seuil.`,
+    targetHintNoCountry:
+      "Le premier prix vu en France, au Royaume-Uni, en Suisse ou aux États-Unis servira de seuil ; vous pourrez ensuite le baisser.",
+    targetInvalid: "Indiquez un prix, par exemple 89,90.",
+    keyboardDone: "OK",
+    // La fiche d'une envie dit ce qui a changé (la notification reste générique).
+    lastSeenPrice: (price: string) => `Dernier prix vu : ${price}`,
+    stockAvailable: "Disponible",
+    stockSoldOut: "Épuisée",
     switchTurnsOn: "Cela active aussi « Alertes prix et stock » dans les Réglages.",
     pushSoon: "Les alertes sont enregistrées ; les notifications seront bientôt disponibles.",
     iphoneOnly: `Les notifications des alertes arrivent sur l'app ${BRAND} pour iPhone.`,
@@ -788,19 +785,26 @@ export const fr = {
     tooManyChanges: "Vous avez modifié beaucoup d'alertes : réessayez dans un moment.",
     pushOfferTitle: "Être prévenu sur cet iPhone ?",
     pushOfferBody:
-      `${BRAND} peut vous envoyer une notification quand une envie que vous suivez baisse de prix ou revient en stock. Elle dit la pièce, la boutique et le prix, jamais qui l'a cherchée.`,
+      `${BRAND} peut vous envoyer une notification quand une envie que vous suivez passe sous votre prix ou revient en stock. Elle ne dit ni la pièce, ni la boutique, ni le prix : vous voyez le détail en l'ouvrant. Jamais qui l'a cherchée.`,
     settingTitle: "Alertes prix et stock",
     settingSwitchLabel: "Recevoir les alertes prix et stock de vos envies",
     settingOn: `Activées : ${BRAND} vous prévient pour les envies dont vous avez allumé la cloche.`,
     settingOff: "Désactivées : aucune alerte ne vous est envoyée. Pour suivre une envie, touchez sa cloche.",
     settingFailed: "Votre choix n'a pas pu être enregistré. Réessayez.",
+    // Nouvelle version (0041) : un réglage à part, allumé par défaut.
+    helpOthersTitle: "Aider les autres membres",
+    helpOthersSwitchLabel: "Aider les alertes des autres membres avec vos recherches et vos signalements",
+    helpOthersOn: "Vos recherches et vos signalements « Plus disponible » aident, sans votre nom, les alertes des autres membres.",
+    helpOthersOff: "Désactivé : vos recherches et vos signalements ne servent qu'à vos propres envies. Vos alertes continuent de marcher.",
     devicePushOff: "Les notifications des alertes sont coupées sur cet iPhone.",
     devicePushTurnOn: "Recevoir les notifications sur cet iPhone",
     reportLink: "Plus disponible ?",
     reportLinkLabel: (title: string) => `Signaler que ${title} n'est plus disponible`,
     reportTitle: "Cette pièce n'est plus disponible ?",
+    // Nouvelle version (0041) : un signalement seul ne change que vos envies ;
+    // celles des autres une fois la pièce signalée par trois membres d'affilée.
     reportBody:
-      `Vous indiquez qu'elle n'est plus en vente dans cette boutique. Cela aide ${BRAND} à prévenir les membres qui la suivent quand elle reviendra. Personne ne saura que c'est vous.`,
+      "Vous indiquez qu'elle n'est plus en vente dans cette boutique. Elle est notée épuisée dans vos envies, et dans celles des membres qui la suivent une fois que trois membres l'ont signalée d'affilée. Personne ne saura que c'est vous.",
     reportConfirm: "Oui, plus disponible",
     reportSending: "Envoi…",
     reportCancel: "Annuler",

@@ -65,7 +65,6 @@ function search(id: string, matches: number): ProductSearch {
     sourceUrl: null,
     sourcePlatform: "photo",
     method: "manual_screenshot",
-    thumbnailUrl: null,
     status: "completed",
     errorMessage: null,
     query: "veste en daim",
@@ -76,7 +75,7 @@ function search(id: string, matches: number): ProductSearch {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  prepareSearch.mockResolvedValue({ id: "recherche-1", thumbnailUrl: null });
+  prepareSearch.mockResolvedValue({ id: "recherche-1" });
   runSearch.mockResolvedValue(search("recherche-1", 3));
 });
 
@@ -116,6 +115,8 @@ describe("vidéo : « Lancer » enchaîne analyse, cadrage et identification", (
     const outcome = await launchVideo(video, " veste en daim ", new AbortController().signal, shown);
     expect(outcome).toEqual({ kind: "result", searchId: "recherche-1" });
     expect(prepareSearch).toHaveBeenCalledTimes(1);
+    // « Préparer » part sans rien : jamais un lien, jamais une image.
+    expect(prepareSearch).toHaveBeenCalledWith();
     expect(runSearch).toHaveBeenCalledTimes(1);
     const [, params] = runSearch.mock.calls[0]!;
     // Les mots ont servi à l'IA seulement : ils ne partent pas avec l'image (petit lot, 2026-10-25).
@@ -241,7 +242,7 @@ describe("identification : une panne n'est jamais présentée comme « pièce in
   // est relue au lieu d'être montrée en échec (tests/search-recovery.test.ts).
   it.each([
     [new ApiError(429, { error: "rate_limited", message: "…" }), "rate_limited", false],
-    [new ApiError(422, { error: "preview_unavailable", message: "…" }), "needs_photo", false],
+    [new ApiError(400, { error: "image_required", message: "…" }), "technical", false],
     [new Error("image illisible"), "technical", true],
   ])("échec %#: « %s », signalé à Sentry seulement s'il vient de l'app", async (error, failReason, reported) => {
     runSearch.mockRejectedValue(error);

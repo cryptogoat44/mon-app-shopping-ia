@@ -21,6 +21,7 @@ import {
   type SearchStatus,
   type StockState,
   type VaultCategory,
+  type VideoSpotSource,
   type WishAlertKind,
   type WishAlertStatus,
   type SEARCH_FAILURE_MESSAGES,
@@ -120,6 +121,8 @@ export const EXPORT_COLUMNS = {
     messages_from: shown("Qui peut vous écrire", "Who can write to you"),
     // Lot alertes prix et stock (migration 0036).
     price_alerts_enabled: shown("Alertes prix et stock", "Price and stock alerts"),
+    // Nouvelle version des alertes (migration 0041).
+    help_others: shown("Aider les autres membres", "Help other members"),
     created_at: shown("Compte créé le", "Account created on"),
     updated_at: shown("Profil modifié le", "Profile updated on"),
   },
@@ -436,6 +439,11 @@ export const EXPORT_COLUMNS = {
     notify_sold_out: shown("Prévenir quand elle est épuisée", "Notify me when sold out"),
     created_at: shown("Cloche activée le", "Bell turned on on"),
     updated_at: shown("Cloche modifiée le", "Bell changed on"),
+    // Nouvelle version des alertes (migration 0041) : le seuil de la baisse de prix.
+    target_price: shown("Prévenir si le prix passe sous", "Notify me if the price drops below"),
+    target_currency: shown("Devise du seuil", "Threshold currency"),
+    target_country: shown("Pays du seuil", "Threshold country"),
+    below_target: shown("Prix actuellement sous le seuil", "Price currently below the threshold"),
   },
   // … le suivi de vos envies (jamais d'où vient une observation)…
   wishTracking: {
@@ -449,6 +457,9 @@ export const EXPORT_COLUMNS = {
     last_seen_on: shown("Dernière fois vue le", "Last seen on"),
     stock_state: shown("Stock", "Stock"),
     stock_on: shown("Stock connu le", "Stock known on"),
+    sold_out_source: shown("Épuisée selon", "Sold out according to"),
+    member_country: shown("Pays de vos prix", "Country of your prices"),
+    bought_on: shown("Achetée le", "Bought on"),
   },
   // … vos alertes…
   wishAlertEvents: {
@@ -461,12 +472,18 @@ export const EXPORT_COLUMNS = {
     currency: shown("Devise", "Currency"),
     status: shown("État", "Status"),
     created_on: shown("Le", "On"),
+    // Migration 0041 : le jour d'envoi (aucune heure n'est gardée).
+    sent_on: shown("Envoyée le", "Sent on"),
   },
   // … et vos signalements « Plus disponible ».
   stockReports: {
     id: ID,
     match_key_hash: technical("Empreinte de la pièce signalée", "Fingerprint of the reported piece"),
     created_on: shown("Signalée « Plus disponible » le", "Reported “No longer available” on"),
+    // Migration 0041.
+    country: shown("Pays de la recherche", "Search country"),
+    helps_others: shown("Comptait pour les autres membres", "Counted for other members"),
+    in_streak: shown("Dans la série en cours", "In the current series"),
   },
   // Essayage virtuel (migration 0042) : statut d'âge et consentement…
   tryonProfile: {
@@ -507,6 +524,20 @@ export const EXPORT_COLUMNS = {
     comment: shown("Votre précision", "Your note"),
     created_at: shown("Signalé le", "Reported on"),
   },
+  // Mémoire collective des vidéos (migrations 0038 et 0039) : vos spots…
+  videoSpots: {
+    canonical_url: shown("Vidéo", "Video"),
+    source: shown("D'où venait l'image", "Where the image came from"),
+    moment_seconds: shown("Moment de la vidéo", "Moment in the video"),
+    created_at: shown("Associée le", "Linked on"),
+    search_id: technical("Recherche associée", "Linked search"),
+  },
+  // … et vos « C'est bien cette pièce ».
+  videoConfirmations: {
+    canonical_url: shown("Vidéo", "Video"),
+    product: shown("Pièce", "Piece"),
+    created_at: shown("Confirmée le", "Confirmed on"),
+  },
 } as const satisfies Record<ExportDataKey, Record<string, ExportColumn>>;
 
 export type ExportColumnName<K extends ExportDataKey> = keyof (typeof EXPORT_COLUMNS)[K] & string;
@@ -545,6 +576,14 @@ export const EXPORT_SECTIONS = {
       en: "The collections where you sort your Wishlist, and who can see them: you alone, or your friends (members you follow who follow you back).",
     },
     keys: ["collections", "collectionItems"],
+  },
+  videos: {
+    title: { fr: "Vos vidéos spottées", en: "Your spotted videos" },
+    intro: {
+      fr: `Les vidéos TikTok et Instagram auxquelles une de vos recherches a été associée, et les pièces dont vous avez dit « C'est bien cette pièce ». Les pièces trouvées sont ajoutées, sans votre nom, aux pièces repérées de chaque vidéo ; ${BRAND} ne garde aucune image de ces vidéos.`,
+      en: `The TikTok and Instagram videos one of your searches was linked to, and the pieces you marked “That's the piece”. The pieces found are added, without your name, to the pieces spotted in each video; ${BRAND} keeps no image from these videos.`,
+    },
+    keys: ["videoSpots", "videoConfirmations"],
   },
   alerts: {
     title: { fr: "Vos alertes prix et stock", en: "Your price and stock alerts" },
@@ -732,6 +771,14 @@ export const STOCK_STATE_LABELS: Record<StockState, Bilingual> = {
   sold_out: { fr: "Épuisée", en: "Sold out" },
 };
 
+/** D'où vient un « épuisée » (0040 ; « vous », 0041 : votre signalement,
+ * pas encore confirmé par trois membres). */
+export const SOLD_OUT_SOURCE_LABELS: Record<"shop" | "members" | "reported", Bilingual> = {
+  shop: { fr: "la boutique", en: "the shop" },
+  members: { fr: "des membres", en: "members" },
+  reported: { fr: "vous", en: "you" },
+};
+
 /** Statut d'âge de l'essayage virtuel (jamais la date de naissance). */
 export const TRYON_AGE_STATUS_LABELS: Record<"adult" | "minor", Bilingual> = {
   adult: { fr: "Majeur (18 ans ou plus)", en: "Adult (18 or older)" },
@@ -785,6 +832,16 @@ export const TRYON_FAILURE_LABELS: Record<TryonFailureCode, Bilingual> = {
   garment_unavailable: { fr: "Image de la pièce introuvable", en: "Piece image not found" },
   result_unreadable: TRYON_TECHNICAL_FAILURE,
   internal: TRYON_TECHNICAL_FAILURE,
+};
+
+/** D'où venait l'image d'un spot (mémoire des vidéos). */
+export const VIDEO_SPOT_SOURCE_LABELS: Record<VideoSpotSource, Bilingual> = {
+  tiktok_player: { fr: "Image du lecteur TikTok", en: "Image from the TikTok player" },
+  instagram_player: { fr: "Image du lecteur Instagram", en: "Image from the Instagram player" },
+  share: { fr: `Image partagée avec ${BRAND}`, en: `Image shared with ${BRAND}` },
+  visual_intelligence: { fr: "Recherche d'image de l'iPhone", en: "iPhone image lookup" },
+  app: { fr: "Image choisie dans l'app", en: "Image chosen in the app" },
+  web: { fr: "Image choisie sur le site", en: "Image chosen on the website" },
 };
 
 /** Système d'un appareil des notifications (lot notifications). */
@@ -1081,6 +1138,13 @@ export const EXPORT_TEXT = {
   alertEventsTitle: { fr: "Alertes ({count})", en: "Alerts ({count})" },
   stockReportsTitle: { fr: "Signalements « Plus disponible » ({count})", en: "“No longer available” reports ({count})" },
   stockReportPiece: { fr: "Une pièce signalée « Plus disponible »", en: "A piece reported as no longer available" },
+  // Mémoire des vidéos (migrations 0038 et 0039).
+  videoSpotsTitle: { fr: "Vidéos spottées ({count})", en: "Spotted videos ({count})" },
+  videoConfirmationsTitle: { fr: "Pièces confirmées ({count})", en: "Confirmed pieces ({count})" },
+  videoTiktok: { fr: "Vidéo TikTok", en: "TikTok video" },
+  videoInstagram: { fr: "Vidéo Instagram", en: "Instagram video" },
+  videoMoment: { fr: "à {minutes} min {seconds} s", en: "at {minutes} min {seconds} s" },
+  openVideo: { fr: "Ouvrir la vidéo ({site})", en: "Open the video ({site})" },
   orphanCollectionItems: { fr: "Envies d'une collection introuvable", en: "Wishes from a collection that could not be found" },
   // Essayage virtuel (lot essayage virtuel).
   tryonProfileTitle: { fr: "Statut d'âge et consentement", en: "Age status and consent" },

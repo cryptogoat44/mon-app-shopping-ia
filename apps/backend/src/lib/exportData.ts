@@ -4,8 +4,9 @@ import { messagesReady } from "./messaging.js";
 import { collectionsReady } from "./collections.js";
 import { collectionModerationReady } from "./collectionModeration.js";
 import { pushReady } from "./push.js";
-import { wishAlertsReady } from "./wishAlertsSchema.js";
+import { wishAlertsSchemaState, wishAlertsSchemaVersion } from "./wishAlertsSchema.js";
 import { tryonSchemaReady } from "./tryon/schema.js";
+import { videoMemoryStored } from "./videoMemory.js";
 
 // Export RGPD (droit d'accès et de portabilité) : lecture de TOUTES les
 // données personnelles d'un compte. Toute nouvelle table contenant des
@@ -86,6 +87,13 @@ export interface ExportData {
   tryonBonusGrants: ExportRow[];
   /** … et les signalements d'un résultat (motif, précision). */
   tryonReports: ExportRow[];
+  /** Mémoire collective des vidéos (migrations 0038 et 0039) : vos spots — la
+   * vidéo (adresse publique), d'où venait l'image, le moment de la vidéo, la
+   * date et la recherche liée… */
+  videoSpots: ExportRow[];
+  /** … et vos « C'est bien cette pièce » : la vidéo, la pièce (son nom, sinon
+   * sa clé « même page ») et la date. */
+  videoConfirmations: ExportRow[];
 }
 
 /** Sections de l'export (toutes les clés sauf la date de l'export). */
@@ -170,8 +178,35 @@ export const PUSH_DEVICE_EXPORT_COLUMNS_ALERTS = "platform, notify_messages, not
 // cherché, acheté ou signalé la pièce : la base ne le garde nulle part.
 export const WISH_WATCH_EXPORT_COLUMNS = "wishlist_item_id, notify_price_drop, notify_restock, notify_sold_out, created_at, updated_at";
 export const WISH_TRACKING_EXPORT_COLUMNS = "wishlist_item_id, ref_price, ref_currency, ref_set_on, last_price, last_currency, last_seen_on, stock_state, stock_on";
+/** Avec les garde-fous des alertes (migration 0040) : le pays gardé pour vos
+ * prix, l'origine d'un « épuisée » et le jour d'un achat sont exportés aussi. */
+export const WISH_TRACKING_EXPORT_COLUMNS_GUARDED = `${WISH_TRACKING_EXPORT_COLUMNS}, member_country, sold_out_source, bought_on`;
 export const WISH_ALERT_EVENT_EXPORT_COLUMNS = "id, wishlist_item_id, kind, old_price, new_price, currency, status, created_on";
 export const STOCK_REPORT_EXPORT_COLUMNS = "id, match_key_hash, created_on";
+/** Nouvelle version des alertes (migration 0041) : le seuil de chaque cloche
+ * (et s'il est franchi), le suivi sans prix de référence (retiré), le JOUR
+ * d'envoi de chaque alerte (aucune heure n'est gardée), et, pour chaque
+ * signalement « Plus disponible », le pays de sa recherche, s'il aidait les
+ * autres membres et s'il fait encore partie de la série en cours. Jamais
+ * d'où vient une alerte. */
+export const WISH_WATCH_EXPORT_COLUMNS_V2 = `${WISH_WATCH_EXPORT_COLUMNS}, target_price, target_currency, target_country, below_target`;
+export const WISH_TRACKING_EXPORT_COLUMNS_V2 = "wishlist_item_id, last_price, last_currency, last_seen_on, stock_state, stock_on, member_country, sold_out_source, bought_on";
+export const WISH_ALERT_EVENT_EXPORT_COLUMNS_V2 = `${WISH_ALERT_EVENT_EXPORT_COLUMNS}, sent_on`;
+export const STOCK_REPORT_EXPORT_COLUMNS_V2 = `${STOCK_REPORT_EXPORT_COLUMNS}, country, helps_others, in_streak`;
+
+/** Les colonnes exportées des alertes selon la version de la base (1 : 0036,
+ * 2 : 0040, 3 : 0041). */
+export function alertExportColumns(version: number): { watches: string; tracking: string; events: string; reports: string } {
+  if (version >= 3) {
+    return { watches: WISH_WATCH_EXPORT_COLUMNS_V2, tracking: WISH_TRACKING_EXPORT_COLUMNS_V2, events: WISH_ALERT_EVENT_EXPORT_COLUMNS_V2, reports: STOCK_REPORT_EXPORT_COLUMNS_V2 };
+  }
+  return {
+    watches: WISH_WATCH_EXPORT_COLUMNS,
+    tracking: version >= 2 ? WISH_TRACKING_EXPORT_COLUMNS_GUARDED : WISH_TRACKING_EXPORT_COLUMNS,
+    events: WISH_ALERT_EVENT_EXPORT_COLUMNS,
+    reports: STOCK_REPORT_EXPORT_COLUMNS,
+  };
+}
 
 // Essayage virtuel (migration 0042). Aucune image n'existe dans la base :
 // ni la photo du membre, ni l'image produite (jamais gardées).
@@ -184,6 +219,56 @@ export const TRYON_REPORT_EXPORT_COLUMNS = "id, item_id, reason, comment, create
 function withWishTitles(rows: readonly ExportRow[], wishlistItems: readonly ExportRow[]): ExportRow[] {
   const titles = new Map(wishlistItems.map((row) => [String(row.id), typeof row.title === "string" ? row.title : null]));
   return rows.map((row) => ({ ...row, wishlist_item_title: titles.get(String(row.wishlist_item_id)) ?? null }));
+}
+
+/** Adresse publique de chaque vidéo (mémoire des vidéos), par identifiant. */
+async function videoUrls(db: Db, sourceIds: readonly string[]): Promise<Map<string, string | null>> {
+  const rows = await listIn(db, "video_sources", "id, canonical_url", "id", sourceIds, ["id"]);
+  return new Map(rows.map((row) => [String(row.id), typeof row.canonical_url === "string" ? row.canonical_url : null]));
+}
+
+/** Ses spots : la vidéo, d'où venait l'image, le moment, la date, la recherche liée. */
+async function listVideoSpots(db: Db, userId: string): Promise<ExportRow[]> {
+  const rows = await listWhere(db, "video_spots", "id, video_source_id, source, moment_seconds, created_at, search_id", "user_id", userId, BY_DATE);
+  if (rows.length === 0) return rows;
+  const urls = await videoUrls(
+    db,
+    rows.map((row) => String(row.video_source_id))
+  );
+  return rows.map((row) => ({
+    canonical_url: urls.get(String(row.video_source_id)) ?? null,
+    source: row.source,
+    moment_seconds: row.moment_seconds,
+    created_at: row.created_at,
+    search_id: row.search_id,
+  }));
+}
+
+/** Ses « C'est bien cette pièce » : la vidéo, la pièce (le nom d'un résultat
+ * rattaché à cette vidéo avec la même clé, sinon la clé elle-même), la date. */
+async function listVideoConfirmations(db: Db, userId: string): Promise<ExportRow[]> {
+  const rows = await listWhere(db, "video_item_confirmations", "video_source_id, product_key, created_at", "user_id", userId, ["created_at", "video_source_id", "product_key"]);
+  if (rows.length === 0) return rows;
+  const sourceIds = rows.map((row) => String(row.video_source_id));
+  const [urls, items] = await Promise.all([
+    videoUrls(db, sourceIds),
+    listIn(db, "video_spot_items", "video_source_id, product_key, product_match_id", "video_source_id", sourceIds, ["video_source_id", "product_key", "product_match_id"]),
+  ]);
+  const pieceOf = (row: ExportRow) => `${String(row.video_source_id)}:${String(row.product_key)}`;
+  const wanted = new Set(rows.map(pieceOf));
+  const matchOf = new Map<string, string>();
+  for (const item of items) {
+    const piece = pieceOf(item);
+    if (wanted.has(piece) && !matchOf.has(piece)) matchOf.set(piece, String(item.product_match_id));
+  }
+  const names = new Map(
+    (await listIn(db, "product_matches", "id, product_name", "id", [...matchOf.values()], ["id"])).map((row) => [String(row.id), typeof row.product_name === "string" ? row.product_name : null])
+  );
+  return rows.map((row) => ({
+    canonical_url: urls.get(String(row.video_source_id)) ?? null,
+    product: names.get(matchOf.get(pieceOf(row)) ?? "") ?? row.product_key,
+    created_at: row.created_at,
+  }));
 }
 
 /** Colonnes de son côté d'une conversation (jamais celui de l'autre membre :
@@ -341,8 +426,11 @@ export async function collectExport(
   const collectionItems = await section("collectionItems", () => (withCollections ? listCollectionItems(db, userId, wishlistItems, moderatedCollections) : Promise.resolve(none)), none);
   // Lot notifications : sans la migration 0035, aucun appareil (section vide).
   // Triés par date, puis par jeton (ordre stable), sans jamais le lire.
-  // Lot alertes prix : sans la migration 0036, sections vides.
-  const withAlerts = await wishAlertsReady(fastify);
+  // Lot alertes prix : sans la migration 0036, sections vides. Avec 0036 sans
+  // ses garde-fous (0040), les alertes sont coupées mais leurs données sont
+  // là : elles sont exportées quand même.
+  const withAlerts = (await wishAlertsSchemaState(fastify)) === "ready";
+  const alertColumns = alertExportColumns(withAlerts ? await wishAlertsSchemaVersion(fastify) : 1);
   const pushDevices = await section(
     "pushDevices",
     async () =>
@@ -354,20 +442,20 @@ export async function collectExport(
   const [wishWatches, wishTracking, wishAlertEvents, stockReports] = await Promise.all([
     section(
       "wishWatches",
-      async () => (withAlerts ? withWishTitles(await listWhere(db, "wish_watches", WISH_WATCH_EXPORT_COLUMNS, "user_id", userId, ["created_at", "wishlist_item_id"]), wishlistItems) : none),
+      async () => (withAlerts ? withWishTitles(await listWhere(db, "wish_watches", alertColumns.watches, "user_id", userId, ["created_at", "wishlist_item_id"]), wishlistItems) : none),
       none
     ),
     section(
       "wishTracking",
-      async () => (withAlerts ? withWishTitles(await listWhere(db, "wish_tracking", WISH_TRACKING_EXPORT_COLUMNS, "user_id", userId, ["wishlist_item_id"]), wishlistItems) : none),
+      async () => (withAlerts ? withWishTitles(await listWhere(db, "wish_tracking", alertColumns.tracking, "user_id", userId, ["wishlist_item_id"]), wishlistItems) : none),
       none
     ),
     section(
       "wishAlertEvents",
-      async () => (withAlerts ? withWishTitles(await listWhere(db, "wish_alert_events", WISH_ALERT_EVENT_EXPORT_COLUMNS, "user_id", userId, ["created_on", "id"]), wishlistItems) : none),
+      async () => (withAlerts ? withWishTitles(await listWhere(db, "wish_alert_events", alertColumns.events, "user_id", userId, ["created_on", "id"]), wishlistItems) : none),
       none
     ),
-    section("stockReports", () => (withAlerts ? listWhere(db, "stock_reports", STOCK_REPORT_EXPORT_COLUMNS, "user_id", userId, ["created_on", "id"]) : Promise.resolve(none)), none),
+    section("stockReports", () => (withAlerts ? listWhere(db, "stock_reports", alertColumns.reports, "user_id", userId, ["created_on", "id"]) : Promise.resolve(none)), none),
   ]);
   // Essayage virtuel : sans la migration 0042, sections vides.
   const withTryon = await tryonSchemaReady(fastify);
@@ -385,6 +473,14 @@ export async function collectExport(
     section("tryonEvents", () => (withTryon ? listWhere(db, "tryon_events", TRYON_EVENT_EXPORT_COLUMNS, "user_id", userId, BY_DATE) : Promise.resolve(none)), none),
     section("tryonBonusGrants", () => (withTryon ? listWhere(db, "tryon_bonus_grants", TRYON_BONUS_GRANT_EXPORT_COLUMNS, "user_id", userId, BY_DATE) : Promise.resolve(none)), none),
     section("tryonReports", () => (withTryon ? listWhere(db, "tryon_reports", TRYON_REPORT_EXPORT_COLUMNS, "user_id", userId, BY_DATE) : Promise.resolve(none)), none),
+  ]);
+
+  // Mémoire des vidéos : lue dès que ses tables existent (0038), même si la
+  // mémoire est coupée faute de 0039 : ce qui a été noté doit y figurer.
+  const withVideoMemory = await videoMemoryStored(fastify);
+  const [videoSpots, videoConfirmations] = await Promise.all([
+    section("videoSpots", () => (withVideoMemory ? listVideoSpots(db, userId) : Promise.resolve(none)), none),
+    section("videoConfirmations", () => (withVideoMemory ? listVideoConfirmations(db, userId) : Promise.resolve(none)), none),
   ]);
 
   const data: ExportData = {
@@ -428,6 +524,8 @@ export async function collectExport(
     tryonEvents,
     tryonBonusGrants,
     tryonReports,
+    videoSpots,
+    videoConfirmations,
   };
   return { data, failures };
 }

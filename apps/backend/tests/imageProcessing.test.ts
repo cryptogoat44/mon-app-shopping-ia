@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import sharp from "sharp";
-import { ImageSourceError, downloadThumbnail, prepareImageForAnalysis } from "../src/lib/imageProcessing.js";
+import { ImageSourceError, prepareImageForAnalysis } from "../src/lib/imageProcessing.js";
 
 async function image(width: number, height: number, orientation?: number): Promise<Buffer> {
   const base = sharp({ create: { width, height, channels: 3, background: "#806040" } }).jpeg();
@@ -83,10 +83,5 @@ describe("préparation de l'image analysée (recadrage côté serveur)", () => {
     const whole = await image(1200, 900);
     await expect(prepareImageForAnalysis(whole.subarray(0, Math.floor(whole.length / 2)), null)).rejects.toBeInstanceOf(ImageSourceError);
     await expect(prepareImageForAnalysis(whole.subarray(0, Math.floor(whole.length / 2)), { x: 0.1, y: 0.1, width: 0.5, height: 0.5 })).rejects.toBeInstanceOf(ImageSourceError);
-  });
-
-  it("ne télécharge jamais une vignette hors de la liste blanche d'hébergeurs", async () => {
-    await expect(downloadThumbnail("https://exemple-malveillant.com/image.jpg")).rejects.toThrow("hôte non autorisé");
-    await expect(downloadThumbnail("http://p16-common-sign.tiktokcdn-eu.com/image.jpg")).rejects.toThrow("schéma non autorisé");
   });
 });

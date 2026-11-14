@@ -6,5 +6,6 @@
   "identifiantApple": "com.spottoapp.ios",
   "groupeApple": "group.com.spottoapp.ios",
   "identifiantExtensionPartage": "com.spottoapp.ios.share-extension",
-  "adresseSite": "https://mon-app-shopping-ia-web.onrender.com"
+  "adresseSite": "https://mon-app-shopping-ia-web.onrender.com",
+  "adresseServeur": "https://spotto-api.onrender.com"
 }

@@ -88,12 +88,10 @@ export const en: Catalog = {
     title: "Spotter",
     close: "Close",
     lead: "Find a piece you saw in a video or a photo.",
-    linkLabel: "TikTok, Instagram or Pinterest link",
     linkPlaceholder: "Paste or type a link",
     paste: "Paste",
     pasteEmpty: "There's no link on your clipboard.",
     pasteDenied: "Paste the link directly into the field.",
-    continue: "Continue",
     preparing: "Preparing…",
     addVideo: "Add a video",
     addPhoto: "Add a photo",
@@ -212,7 +210,8 @@ export const en: Catalog = {
     available: "A new version is available.",
     reload: "Reload",
   },
-  // Pasted link (lot 4 ter): cover analysis is turned off.
+  // Pasted link (lot 4 ter): a video can't be read from a link, and its cover
+  // image is never requested.
   linkNotice: {
     title: "A video can't be read from a link",
     body: (how: string) => `${BRAND} can't read the video from its link. Record your screen while it plays (${how}), then add the recording.`,
@@ -275,21 +274,23 @@ export const en: Catalog = {
       resent: "Email sent again. Remember to check your spam folder too.",
     },
   },
-  // "Built-in player" lot (iPhone app): the TikTok or Instagram video opens in
-  // Spotto, in the official player; "Spot this moment" takes the frame shown.
-  // Texts to be approved by the founder.
+  // "Video links" mission: the shared or pasted TikTok or Instagram video
+  // opens in its official player (iPhone app); "Spot this moment" takes a
+  // snapshot of what the view shows. On the website, or player off: the
+  // "Spot this video" screen. Texts to be approved by the founder.
   player: {
     linkQuestion: "Have a TikTok or Instagram link?",
     linkLabel: "TikTok or Instagram link",
     linkHint: `The video opens here, in ${BRAND}: you'll pause it on the piece.`,
+    linkHintWeb: "Pieces already spotted in this video appear here, with what to do next.",
     open: "Open the video",
     opening: "Opening the video…",
     instruction: "Pause the video when the piece is clearly visible.",
     frameTitle: (platform: string) => `${platform} video`,
+    videoBy: (platform: string, handle: string) => `${platform} video by @${handle}`,
     spot: "Spot this moment",
     taking: "Taking the frame…",
-    recording: "Recording the screen…",
-    privacy: (platform: string) => `Played by ${platform}, nothing is downloaded. Only the frame of this moment is sent.`,
+    privacy: (platform: string) => `Played by ${platform}, nothing is downloaded. Only the frame of this moment is sent, then deleted from your phone.`,
     tapToPlay: "Tap the video to play it.",
     leaveLink: (platform: string) => `This link opens in ${platform}.`,
     openIn: (platform: string) => `Open in ${platform}`,
@@ -297,29 +298,8 @@ export const en: Catalog = {
     gate: {
       body: (platform: string) => `This video is played by ${platform}, which may use its own trackers.`,
       play: "Play the video here",
+      refuse: "No thanks",
     },
-    unavailableTitle: `This video won't open in ${BRAND}`,
-    unavailable: {
-      notPublic: "It may be private or deleted, or its creator doesn't allow it to be shown elsewhere.",
-      notAVideo: (platform: string) => `This ${platform} link doesn't lead to a video.`,
-      shortLink: (platform: string) => `This link won't open here right now. Open the video in ${platform}, or add a screenshot.`,
-      noAnswer: (platform: string) => `${platform} isn't responding right now. Try again in a moment.`,
-      playerError: (platform: string) => `The ${platform} player couldn't play this video.`,
-      crashed: "The player stopped.",
-    },
-    screenConsent: {
-      title: "One more step",
-      body: `Your iPhone will ask you to allow screen recording. ${BRAND} keeps only one frame, the one of this moment: nothing else is recorded or sent.`,
-      continue: "Continue",
-      myself: "Take a screenshot myself",
-    },
-    captureFailed: {
-      title: `${BRAND} couldn't take the frame`,
-      body: (shortcut: string) => `Take a screenshot now (${shortcut}): the video stays paused here. Then add it.`,
-      declined: (shortcut: string) => `Without your permission, ${BRAND} can't take the frame. Take a screenshot now (${shortcut}), then add it.`,
-      phoneCall: (shortcut: string) => `Not possible during a call. Take a screenshot (${shortcut}), then add it.`,
-    },
-    blackImage: "Was the frame black or empty? Try another way",
     howItWorksSteps: (spot: string) => [
       `Share the TikTok or Instagram video to ${BRAND}, or paste its link.`,
       `Pause it on the piece, tap “${spot}”, then circle the piece.`,
@@ -328,6 +308,7 @@ export const en: Catalog = {
     linkNotice: {
       title: `This video can open in ${BRAND}`,
       body: "Open it right here: you'll pause it on the piece.",
+      bodyWeb: "Open it here: you'll see the pieces already spotted, and how to spot it.",
     },
     settings: {
       title: `Videos played in ${BRAND}`,
@@ -336,18 +317,43 @@ export const en: Catalog = {
       withdrawn: "Consent withdrawn: you'll be asked again with the next video.",
     },
   },
+  videoLink: {
+    fallbackTitle: "Spot this video",
+    fallbackLead: {
+      notHere: "This video can't be played here. Three steps are enough:",
+      refused: "The video won't be played here. Three steps are enough:",
+      snapshot: `${BRAND} couldn't take the frame of this moment. Three steps are enough:`,
+      unchecked: "This video couldn't be checked right now. Three steps are enough:",
+    },
+    steps: [
+      "Take a screenshot when the piece is clearly visible.",
+      `Tap “Image Search” (compatible iPhones, iOS 26 and later) or Share → ${BRAND}.`,
+      "Circle the piece.",
+    ],
+    held: "For 10 minutes, your next search will be linked to this video.",
+    productsTitle: "Pieces already spotted in this video",
+    confirm: "That's the piece",
+    thanks: "Thank you",
+    confirmFailed: "Your confirmation couldn't be sent. Try again in a moment.",
+    firstToSpot: "No pieces have been spotted in this video yet: you can be the first.",
+    attached: (handle: string) => `Linked to the video by @${handle}`,
+    attachedPlatform: (platform: string) => `Linked to the ${platform} video`,
+    detach: "Stop linking this search to the video",
+    sharedAnonymously: "The pieces found will be added, without your name, to the pieces spotted in this video.",
+    webInstruction: "Take a screenshot of the video at the right moment, then drag and drop or paste the image here.",
+    dropHint: "On a computer, you can also drag and drop an image onto this page, or paste it (Ctrl+V or ⌘V).",
+    notAnImage: "This file isn't an image. Drop or paste a screenshot.",
+  },
+  visualSearchTip: {
+    title: "Tip",
+    body: `In any app, take a screenshot, tap Image Search, then ${BRAND} (compatible iPhones).`,
+    dismiss: "Got it",
+  },
   preview: {
-    title: "This is the image that will be analyzed",
-    caption: (platform: string) => `Cover image of the ${platform} ${platform === "TikTok" ? "video" : "post"}.`,
-    captureCaption: "Your screenshot.",
-    notOnImageTitle: "The piece isn't in this image?",
-    notOnImageWhy: (platform: string) =>
-      `${platform} only shares this cover image, not the rest of the video. Show ${BRAND} the right moment with a screenshot:`,
     captureSteps: (platform: string, shortcut: string) => [
       `Open the video in ${platform}.`,
       "Pause it when the piece is clearly visible.",
       `Take a screenshot (${shortcut}).`,
-      "Come back here and tap “Import a screenshot”.",
     ],
     screenshotShortcut: {
       ios: "side button + volume up",
@@ -355,35 +361,6 @@ export const en: Catalog = {
       web: "Cmd + Shift + 4 on Mac, Windows + Shift + S on PC",
     },
     theApp: "the app",
-    importCapture: "Import a screenshot",
-    // Opens "Circle the piece" (circle-the-piece lot). To be validated (à valider).
-    target: "Circle the piece",
-    noPreviewTitle: "Import a screenshot of the piece",
-    noPreviewBody: (platform: string) =>
-      `${BRAND} can't retrieve the image from this ${platform} link. Take a screenshot when the piece is clearly visible, then import it.`,
-    issue: {
-      unavailable: {
-        title: (content: string) => `${content[0]!.toUpperCase()}${content.slice(1)} not found`,
-        body: (platform: string, content: string) =>
-          `${platform} can't find this ${content}: it may be private or deleted, or the link may be incomplete. Check that it opens in ${platform}, then copy its link again. If it shows up for you, you can also import a screenshot of it.`,
-      },
-      notAVideo: {
-        title: (content: string) => `This link doesn't lead to a ${content}`,
-        body: (platform: string, content: string) =>
-          `It opens a ${platform} profile or page. Open the ${content}, tap “Share”, then “Copy link”, and paste that link into Spotter.`,
-      },
-      serviceDown: {
-        title: (platform: string) => `${platform} isn't responding right now`,
-        body: "Please try again in a few minutes. You can also import a screenshot of the piece.",
-      },
-      noAccess: {
-        title: "Import a screenshot of the piece",
-        body: (platform: string) => `${platform} doesn't let ${BRAND} retrieve the image from this link. Show it the piece with a screenshot:`,
-      },
-    },
-    content: { tiktok: "video", instagram: "post", pinterest: "Pin" },
-    fixLink: "Correct the link",
-    retry: "Try again",
     missing: "This step is no longer available. Start again from Spotter.",
     back: "Back to Spotter",
   },
@@ -697,7 +674,7 @@ export const en: Catalog = {
     kinds: { price_drop: "Price drop", restock: "Back in stock", sold_out: "Sold out" },
     kindsInline: { price_drop: "price drop", restock: "back in stock", sold_out: "sold out" },
     kindHints: {
-      price_drop: "When its price drops at this shop.",
+      price_drop: "When its price drops below the threshold you choose, at this shop.",
       restock: "When it is back in stock at this shop.",
       sold_out: "When it sells out at this shop.",
     },
@@ -708,7 +685,20 @@ export const en: Catalog = {
     bellOnLabel: (title: string, kinds: string) => `Alert on for ${title}: ${kinds}. Tap to change it`,
     sheetTitle: "Alert for this piece",
     sheetIntro:
-      `${BRAND} tells you right away when a search or a purchase made in ${BRAND} shows this piece at the same shop, cheaper or back in stock. Nobody knows who searched for it, or who follows it.`,
+      `${BRAND} tells you right away when a search made in ${BRAND} shows this piece at the same shop, below your price or back in stock. Nobody knows who searched for it, or who follows it.`,
+    targetLabel: "Notify me if the price drops below",
+    targetFieldLabel: (currency: string) => `Price threshold, in ${currency}`,
+    targetHintLast: "Prefilled with the last price seen. You can lower it.",
+    targetHintNone: "Without a price, the first price seen will be the threshold.",
+    targetHintSaved: "Your saved threshold.",
+    targetHintSavedWithLast: (price: string) => `Your saved threshold. Last price seen: ${price}.`,
+    targetHintEmptyLast: (price: string) => `Without a price, the last price seen (${price}) will be the threshold.`,
+    targetHintNoCountry: "The first price seen in France, the UK, Switzerland or the US will be the threshold; you can lower it afterwards.",
+    targetInvalid: "Enter a price, for example 89.90.",
+    keyboardDone: "Done",
+    lastSeenPrice: (price: string) => `Last price seen: ${price}`,
+    stockAvailable: "Available",
+    stockSoldOut: "Sold out",
     switchTurnsOn: "This also turns on “Price and stock alerts” in Settings.",
     pushSoon: "Your alerts are saved; notifications will be available soon.",
     iphoneOnly: `Alert notifications arrive in the ${BRAND} iPhone app.`,
@@ -723,19 +713,23 @@ export const en: Catalog = {
     tooManyChanges: "You've changed a lot of alerts: try again in a moment.",
     pushOfferTitle: "Get notified on this iPhone?",
     pushOfferBody:
-      `${BRAND} can send you a notification when a wish you follow drops in price or is back in stock. It shows the piece, the shop and the price, never who searched for it.`,
+      `${BRAND} can send you a notification when a wish you follow drops below your price or is back in stock. It doesn't show the piece, the shop or the price: you see the details when you open it. Never who searched for it.`,
     settingTitle: "Price and stock alerts",
     settingSwitchLabel: "Receive price and stock alerts for your wishes",
     settingOn: `On: ${BRAND} tells you about the wishes whose bell you turned on.`,
     settingOff: "Off: no alert is sent to you. To follow a wish, tap its bell.",
     settingFailed: "Your choice couldn't be saved. Try again.",
+    helpOthersTitle: "Help other members",
+    helpOthersSwitchLabel: "Help other members' alerts with your searches and your reports",
+    helpOthersOn: "Your searches and your “No longer available” reports help other members' alerts, without your name.",
+    helpOthersOff: "Off: your searches and your reports only serve your own wishes. Your alerts keep working.",
     devicePushOff: "Alert notifications are off on this iPhone.",
     devicePushTurnOn: "Get notifications on this iPhone",
     reportLink: "No longer available?",
     reportLinkLabel: (title: string) => `Report that ${title} is no longer available`,
     reportTitle: "Is this piece no longer available?",
     reportBody:
-      `You're saying it's no longer for sale at this shop. This helps ${BRAND} tell members who follow it when it comes back. Nobody will know it was you.`,
+      "You're saying it's no longer for sale at this shop. It's marked sold out in your wishes, and in those of members who follow it once three members have reported it in a row. Nobody will know it was you.",
     reportConfirm: "Yes, no longer available",
     reportSending: "Sending…",
     reportCancel: "Cancel",

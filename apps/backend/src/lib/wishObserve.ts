@@ -1,8 +1,9 @@
-// Alertes prix et stock (lot 2, migration 0036) : l'observation des
-// résultats. Après la réponse d'une recherche (jamais avant, jamais en la
-// ralentissant), les propositions FRAÎCHES que la personne vient de recevoir
-// sont comparées aux envies des membres, dans la base, en un seul appel
-// atomique (wish_observe). Aucune surveillance en tâche de fond, aucun appel payé.
+// Alertes prix et stock (lot 2, migration 0036 ; nouvelle version, 0041) :
+// l'observation des résultats. Après la réponse d'une recherche (jamais
+// avant, jamais en la ralentissant), les propositions FRAÎCHES que la
+// personne vient de recevoir sont comparées aux envies des membres, dans la
+// base, en un seul appel atomique (wish_observe). Aucune surveillance en
+// tâche de fond, aucun appel payé.
 //
 // Règles :
 // - seulement les réponses fraîches : Lens appelé (jamais le cache de 24 h,
@@ -10,33 +11,42 @@
 //   (jamais le cache), « Que cherchez-vous ? » ; pour les boutiques ensuite et
 //   « Que cherchez-vous ? », seulement les nouvelles propositions ; rien quand
 //   l'enregistrement a échoué (routes/searches.ts décide, ici on compte) ;
-// - un achat via Spotto (« Je l'ai achetée ») annonce seulement « disponible
-//   chez cette boutique aujourd'hui », sans prix — sauf si l'acheteur a
-//   lui-même signalé la pièce « Plus disponible » ces 30 derniers jours (un
-//   seul membre ne fabrique jamais un « De retour en stock » chez les autres) ;
-// - par lot, une observation par clé ; une clé dont les observations ne
-//   s'accordent pas (prix, devise, pays, stock, boutique) est écartée ;
-// - prix ≤ 0 ou devise inconnue : pas de prix (alertCurrency) ; en centimes ;
-// - jamais qui a cherché ou acheté : la base ne reçoit que des empreintes de
-//   clés, des prix, des devises, des pays et des stocks ;
+// - un achat (« Je l'ai achetée ») n'est JAMAIS observé (0041) : il ne
+//   compare rien avec les envies des autres membres ; il ne fait que noter
+//   achetées les envies de l'acheteur de la même pièce (markPurchase) ;
+// - la base reçoit le membre qui a cherché (p_observer) pour deux règles
+//   seulement : « Aider les autres membres » coupé, ses recherches ne servent
+//   qu'à ses propres envies ; et « De retour en stock » ne part jamais quand
+//   il est l'un des auteurs de la série de signalements « Plus disponible »
+//   en cours. Elle ne le garde nulle part, et le journal ne le dit jamais ;
+// - par lot, une observation par empreinte ; une empreinte dont les
+//   observations ne s'accordent pas (prix, devise, pays, stock, boutique) est écartée ;
+// - prix ≤ 0, devise inconnue, ou devise qui n'est pas celle du pays de la
+//   recherche : pas de prix (une baisse ne se compare qu'à pays et devise
+//   identiques) ; en centimes ;
+// - le pays de la recherche part avec chaque observation d'un pays pris en
+//   charge (le stock se compare aussi pays par pays) ; sans lui, la base ne
+//   touche que les envies de qui cherche ;
 // - « compteur gratuit » : pour chaque réponse fraîche, le journal compte (et
 //   seulement compte) les stocks annoncés (true/false), les identifiants
-//   produits de SerpApi et les clés — même sans 0036, pour savoir si un
-//   « épuisé » arrive un jour. Journal racine, jamais de compte, de titre ni d'adresse ;
+//   produits de SerpApi et les empreintes — même sans les alertes, pour
+//   savoir si un « épuisé » arrive un jour. Journal racine (détaché de la
+//   requête), jamais de compte, d'envie, de titre ni d'adresse ;
 // - lancé puis oublié : au plus 4 observations en cours par serveur (au-delà,
 //   celle-ci est sautée et comptée), aucune erreur ne remonte ;
 // - une observation qui crée des alertes lance aussitôt un passage d'envoi
-//   (sendWishAlertsNow, lib/wishAlertsSend.ts) : le membre est prévenu à la
-//   seconde près, toujours après la réponse de la recherche ou de l'achat.
+//   (sendWishAlertsNow, lib/wishAlertsSend.ts), lui aussi détaché de la
+//   requête : le membre est prévenu à la seconde près, toujours après la
+//   réponse de la recherche.
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { alertCurrency, WISH_ALERT_RULES } from "@monapp/shared-types";
+import { alertCurrency, COUNTRY_CURRENCIES, SEARCH_COUNTRIES } from "@monapp/shared-types";
 import { trackingKeyOf } from "./alertKeys.js";
 import { sendWishAlertsNow } from "./wishAlertsSend.js";
 import { wishAlertsReady } from "./wishAlertsSchema.js";
 
 /** D'où vient l'observation (valeur d'une liste fermée, pour le journal). */
-export type ObservationSource = "lens" | "shopping" | "words" | "purchase";
+export type ObservationSource = "lens" | "shopping" | "words";
 
 /** Une proposition observée, telle que la recherche l'a reçue (VisualMatch,
  * ShoppingMatch). */
@@ -49,9 +59,10 @@ export interface ObservedRow {
   hasProductId?: true;
 }
 
-/** Ce qui part vers wish_observe : jamais une adresse ni une personne. */
+/** Ce qui part vers wish_observe pour chaque pièce : jamais une adresse ni
+ * une personne (le membre qui cherche part à côté, p_observer). */
 export interface Observation {
-  /** Empreinte de la clé « même pièce ». */
+  /** Empreinte du lien de la boutique (« même pièce »). */
   k: string;
   /** Boutique normalisée. */
   m: string | null;
@@ -59,7 +70,7 @@ export interface Observation {
   p: number | null;
   /** Devise ISO du prix. */
   c: string | null;
-  /** Pays de la recherche. */
+  /** Pays de la recherche (un pays pris en charge par les alertes, avec ou sans prix ; sinon null). */
   n: string | null;
   /** Stock annoncé. */
   s: boolean | null;
@@ -69,7 +80,6 @@ export interface Observation {
 export interface ObservationCounts {
   rows: number;
   keyed: number;
-  googleKeys: number;
   inStockTrue: number;
   inStockFalse: number;
   productIdField: number;
@@ -92,12 +102,12 @@ function agree<T>(a: T | null, b: T | null): boolean {
   return a === null || b === null || a === b;
 }
 
-/** Les observations d'une réponse, une par clé, et le compteur gratuit. Sans
- * réseau ni base (testée à part). `country` : pays de la recherche ; null
- * pour un achat (aucun prix). */
+/** Les observations d'une réponse, une par empreinte, et le compteur
+ * gratuit. Sans réseau ni base (testée à part). `country` : pays de la recherche. */
 export function buildObservations(rows: readonly ObservedRow[], country: string | null): { observations: Observation[]; counts: ObservationCounts } {
-  const counts: ObservationCounts = { rows: rows.length, keyed: 0, googleKeys: 0, inStockTrue: 0, inStockFalse: 0, productIdField: 0, conflicts: 0, observations: 0 };
+  const counts: ObservationCounts = { rows: rows.length, keyed: 0, inStockTrue: 0, inStockFalse: 0, productIdField: 0, conflicts: 0, observations: 0 };
   const byKey = new Map<string, Observation | "conflict">();
+  const supported = country !== null && (SEARCH_COUNTRIES as readonly string[]).includes(country);
   for (const row of rows) {
     if (row.inStock === true) counts.inStockTrue += 1;
     if (row.inStock === false) counts.inStockFalse += 1;
@@ -105,15 +115,24 @@ export function buildObservations(rows: readonly ObservedRow[], country: string 
     const key = trackingKeyOf(row.merchantUrl, row.merchantName);
     if (!key) continue;
     counts.keyed += 1;
-    if (key.kind === "google") counts.googleKeys += 1;
     const currency = alertCurrency(row.currency, country);
-    const price = currency !== null && country !== null ? cents(row.priceValue) : null;
+    // Lot « durcissement des alertes » : un prix ne sert aux alertes que venu
+    // d'un pays que la recherche prend en charge (SEARCH_COUNTRIES), et
+    // (0041) seulement dans la devise de ce pays (même pays, même devise ;
+    // limite connue : une boutique qui affiche une autre devise dans ce pays
+    // n'a pas d'alerte de prix). Nouvelle version, revue : le pays part avec
+    // CHAQUE observation d'un pays pris en charge, avec ou sans prix — le
+    // stock aussi se compare pays par pays. Une recherche faite avec une autre
+    // région (« en-NZ ») part sans pays : elle ne sert qu'aux envies de qui
+    // cherche (la base le décide), jamais aux autres membres.
+    const local = supported && country !== null && currency !== null && COUNTRY_CURRENCIES[country] === currency;
+    const price = local ? cents(row.priceValue) : null;
     const observation: Observation = {
       k: key.hash,
       m: key.merchant,
       p: price,
       c: price === null ? null : currency,
-      n: price === null ? null : country,
+      n: supported ? country : null,
       s: typeof row.inStock === "boolean" ? row.inStock : null,
     };
     const known = byKey.get(key.hash);
@@ -152,11 +171,11 @@ export const OBSERVATION_LOG_MESSAGE = "Alertes prix : observation";
 export interface ObserveInput {
   source: ObservationSource;
   rows: readonly ObservedRow[];
-  /** Pays de la recherche (searchLocaleFor) ; null pour un achat. */
+  /** Pays de la recherche (searchLocaleFor). */
   country: string | null;
-  /** Achat : rien n'est observé si cette personne (l'acheteur) a signalé
-   * l'une de ces pièces « Plus disponible » récemment. */
-  skipIfReportedBy?: string;
+  /** Le membre qui a cherché : envoyé à la base pour son réglage « Aider les
+   * autres membres » et la règle des auteurs, jamais au journal. */
+  observerId: string;
 }
 
 const inFlight = new Set<Promise<void>>();
@@ -176,41 +195,6 @@ export function observeResults(fastify: FastifyInstance, input: ObserveInput): v
   void task.finally(() => inFlight.delete(task));
 }
 
-/** « Je l'ai achetée » sur une proposition : disponible chez cette boutique
- * aujourd'hui (aucun prix, aucune personne envoyée à la base). `buyerId` ne
- * sert qu'à vérifier, avant, que l'acheteur n'a pas signalé lui-même la pièce
- * « Plus disponible » (WISH_ALERT_RULES.purchaseAfterOwnReportDays) : sinon,
- * signaler puis acheter ferait partir un faux « De retour en stock » chez
- * tous les membres qui la surveillent. Jamais dans le journal. */
-export function observePurchase(fastify: FastifyInstance, buyerId: string, match: { merchantUrl: string; merchantName: string | null }): void {
-  observeResults(fastify, {
-    source: "purchase",
-    rows: [{ merchantUrl: match.merchantUrl, merchantName: match.merchantName, priceValue: null, currency: null, inStock: true }],
-    country: null,
-    skipIfReportedBy: buyerId,
-  });
-}
-
-/** Le jour de Paris il y a `days` jours, « AAAA-MM-JJ ». */
-function parisDayBefore(days: number, now: Date = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(now.getTime() - days * 86_400_000));
-}
-
-/** Cette personne a-t-elle signalé l'une de ces pièces « Plus disponible »
- * récemment ? Lecture impossible : oui (dans le doute, l'achat ne vaut pas
- * « disponible »). */
-async function reportedRecently(fastify: FastifyInstance, userId: string, keys: readonly string[]): Promise<boolean> {
-  const { data, error } = await fastify.supabaseAdmin
-    .from("stock_reports")
-    .select("id")
-    .eq("user_id", userId)
-    .in("match_key_hash", [...keys])
-    .gte("created_on", parisDayBefore(WISH_ALERT_RULES.purchaseAfterOwnReportDays))
-    .limit(1);
-  if (error || !Array.isArray(data)) return true;
-  return data.length > 0;
-}
-
 /** Tests seulement : attend la fin des observations en cours. */
 export async function flushObservations(): Promise<void> {
   await Promise.allSettled([...inFlight]);
@@ -218,14 +202,12 @@ export async function flushObservations(): Promise<void> {
 
 async function runObservation(fastify: FastifyInstance, input: ObserveInput): Promise<void> {
   const { observations, counts } = buildObservations(input.rows, input.country);
-  let outcome: "counted" | "observed" | "failed" | "own_report" = "counted";
+  let outcome: "counted" | "observed" | "failed" = "counted";
   let matched = 0;
   let events = 0;
   const ready = observations.length > 0 && (await wishAlertsReady(fastify));
-  if (ready && input.skipIfReportedBy && (await reportedRecently(fastify, input.skipIfReportedBy, observations.map((observation) => observation.k)))) {
-    outcome = "own_report";
-  } else if (ready) {
-    const { data, error } = await fastify.supabaseAdmin.rpc("wish_observe", { p_batch: observations });
+  if (ready) {
+    const { data, error } = await fastify.supabaseAdmin.rpc("wish_observe", { p_batch: observations, p_observer: input.observerId });
     const parsed = OBSERVE_ROWS.safeParse(data);
     if (error || !parsed.success) {
       outcome = "failed";
@@ -236,7 +218,8 @@ async function runObservation(fastify: FastifyInstance, input: ObserveInput): Pr
       events = parsed.data[0]!.events;
     }
   }
-  // Journal racine : des nombres et des valeurs d'une liste fermée.
+  // Journal racine : des nombres et des valeurs d'une liste fermée (jamais le
+  // membre qui a cherché, ni une envie, ni un membre prévenu).
   fastify.log.info({ source: input.source, ...counts, matched, events, outcome }, OBSERVATION_LOG_MESSAGE);
   // Des alertes viennent de naître : envoyées tout de suite (« à la seconde près »).
   if (events > 0) sendWishAlertsNow(fastify);

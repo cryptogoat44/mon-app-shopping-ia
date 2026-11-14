@@ -4,7 +4,8 @@ import ts from "typescript";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import marque from "@monapp/shared-types/marque.json" with { type: "json" };
 import { brandFileSlug } from "@monapp/shared-types";
-import { BRAND, BRAND_FILE_SLUG, BRAND_HTTP_TOKEN, PUBLIC_SITE_URL } from "../src/lib/brand.js";
+import { BRAND, BRAND_FILE_SLUG, BRAND_HTTP_TOKEN, PRODUCTION_API_URL, PUBLIC_SITE_URL } from "../src/lib/brand.js";
+import { ALLOWED_API_URLS } from "../scripts/lib/render-guard.js";
 import { IMAGE_REQUEST_HEADERS } from "../src/lib/publicImage.js";
 import { PUSH_TITLE } from "../src/lib/push.js";
 
@@ -18,7 +19,7 @@ import { PUSH_TITLE } from "../src/lib/push.js";
 const SRC = join(__dirname, "../src");
 
 /** Un autre nom, pour l'essai : rien de commun avec le nom actuel. */
-const AUTRE = { ...marque, nom: "Zorglub Été", adresseSite: "https://zorglub.exemple.test" };
+const AUTRE = { ...marque, nom: "Zorglub Été", adresseSite: "https://zorglub.exemple.test", adresseServeur: "https://api.zorglub.exemple.test" };
 
 /** Le nom actuel, où qu'il soit et quelle que soit la casse. */
 const NOM = new RegExp(marque.nom.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
@@ -83,6 +84,10 @@ describe("nom du produit : un seul fichier (packages/shared-types/marque.json)",
     expect(BRAND).not.toBe("");
     expect(BRAND_FILE_SLUG).toBe(brandFileSlug(marque.nom));
     expect(PUBLIC_SITE_URL).toBe(marque.adresseSite);
+    // Lot « durcissement des alertes » (app-05) : l'adresse du serveur de production, au même endroit.
+    expect(PRODUCTION_API_URL).toBe(marque.adresseServeur);
+    expect(marque.adresseServeur).toMatch(/^https:\/\/[a-z0-9.-]+$/);
+    expect(ALLOWED_API_URLS).toEqual([marque.adresseServeur]);
     expect(PUSH_TITLE).toBe(marque.nom);
     // En-tête HTTP : le nom sans accent ni espace (un autre signe ferait échouer l'appel).
     expect(BRAND_HTTP_TOKEN).toMatch(/^[A-Za-z0-9]+$/);

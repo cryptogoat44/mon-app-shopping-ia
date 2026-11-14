@@ -272,7 +272,6 @@ function search(matches: ProductMatch[], complement: SearchComplement): ProductS
     sourceUrl: null,
     sourcePlatform: "photo",
     method: "manual_screenshot",
-    thumbnailUrl: null,
     status: "completed",
     errorMessage: null,
     query: null,

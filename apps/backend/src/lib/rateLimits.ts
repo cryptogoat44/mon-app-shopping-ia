@@ -96,17 +96,47 @@ export const RATE_LIMITS = {
     message: "Trop de changements des notifications en peu de temps. Réessayez dans une heure.",
   },
 
-  // Lien TikTok ou Instagram préparé (POST /api/searches/prepare avec un
-  // lien, interrupteur LINK_PREVIEW_ENABLED allumé) : chaque préparation fait
-  // partir une demande du serveur vers TikTok ou Meta. Sans cette limite
-  // (revue de sécurité du 12 novembre 2026), un membre pouvait en faire
-  // partir 300 par minute et faire brider le serveur par ces plateformes.
-  // Interrupteur coupé (aujourd'hui) : le lien est ignoré, rien n'est compté.
-  linkPrepare: {
-    max: 20,
+  // Liens de vidéos TikTok et Instagram (mission « liens vidéo ») :
+  // - lire ce que la mémoire sait d'une vidéo (chaque lien partagé ou collé) ;
+  videoLookup: { max: 120, windowMs: HOUR },
+  // - résoudre un lien court TikTok : une demande part vers TikTok (en-têtes
+  //   seulement). Comptée seulement quand elle part vraiment (pas pour une
+  //   réponse gardée en mémoire), par membre et pour tout le service. 10 par
+  //   membre (revue de sécurité : à 30, 67 comptes suffisaient à épuiser le
+  //   plafond commun avec des liens inventés ; il en faut maintenant 200) ;
+  videoShortLink: { max: 10, windowMs: HOUR },
+  videoShortLinkGlobal: { max: 2_000, windowMs: HOUR, scope: "global" },
+  // - code d'intégration Instagram (Meta limite à 1 000 demandes par heure,
+  //   le serveur en garde chacun 24 h : lib/instagramEmbed.ts). videoEmbed
+  //   compte chaque appel de la route ; videoEmbedFetch, seulement les
+  //   demandes qui partent vraiment vers Meta (vidéo absente de la mémoire) :
+  //   il faut 90 comptes, et non plus 15, pour épuiser le budget du service ;
+  videoEmbed: { max: 60, windowMs: HOUR },
+  videoEmbedFetch: { max: 10, windowMs: HOUR },
+  // - noter un spot (une fois par recherche) et « C'est bien cette pièce ».
+  videoSpot: { max: 60, windowMs: HOUR },
+  videoConfirm: { max: 120, windowMs: HOUR },
+  // Oublier un appareil par son seul jeton, sans session (POST
+  // /api/push-token/forget, lot « durcissement des alertes ») : l'app le fait
+  // après une déconnexion forcée ou hors réseau, à l'ouverture suivante. Sans
+  // compte, comptée par adresse IP : quelques appels en usage normal ;
+  // stricte, pour qu'un script ne puisse pas essayer des jetons en masse.
+  // Comptée par appareil (empreinte du jeton, routes/pushTokens.ts), jamais
+  // par adresse IP : chez l'hébergeur, tous les appareils peuvent arriver par
+  // la même adresse, et 10 oublis par heure auraient suffi à bloquer tout le
+  // monde. Plus un plafond commun, large, pour tout le service.
+  pushTokenForget: {
+    max: 10,
     windowMs: HOUR,
-    error: "link_prepare_limit",
-    message: "Vous avez préparé beaucoup de liens en peu de temps. Réessayez dans une heure.",
+    error: "push_token_forget_limit",
+    message: "Trop de demandes pour les notifications en peu de temps. Réessayez dans une heure.",
+  },
+  pushTokenForgetGlobal: {
+    max: 3_000,
+    windowMs: HOUR,
+    scope: "global",
+    error: "push_token_forget_limit",
+    message: "Trop de demandes pour les notifications en peu de temps. Réessayez dans une heure.",
   },
 
   // Photo de profil (revue de sécurité du 12 novembre 2026) : envoyer ou

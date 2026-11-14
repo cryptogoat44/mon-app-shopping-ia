@@ -10,12 +10,16 @@
 // l'appareil reste enregistré tant que l'une des deux est allumée
 // (deviceRegistration, push-state.ts), sinon il est oublié. Le serveur sait,
 // pour chaque appareil, s'il reçoit les messages et s'il reçoit les alertes.
+// Lot « durcissement des alertes » : un appareil dont la session se termine
+// (déconnexion forcée, oubli échoué hors réseau) est oublié par son seul
+// jeton, à la prochaine occasion (push-forget.ts).
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { requireOptionalNativeModule } from "expo";
 import { isExpoPushToken } from "@monapp/shared-types";
-import { deletePushToken, registerPushToken } from "./api";
+import { deletePushToken, forgetPushTokenWithoutSession, registerPushToken } from "./api";
+import { clearForget, createSerialQueue, flushForget, rememberForget } from "./push-forget";
 import { withTimeout } from "./retry";
 import {
   PUSH_TOKEN_KEY,
@@ -38,6 +42,9 @@ type NotificationsModule = typeof import("expo-notifications");
 
 /** La déconnexion n'attend jamais le serveur plus longtemps. */
 const FORGET_TIMEOUT_MS = 4_000;
+
+/** Oublis et enregistrements de l'appareil, l'un après l'autre (push-forget.ts). */
+const serial = createSerialQueue();
 
 let loading: Promise<NotificationsModule | null> | null = null;
 
@@ -97,8 +104,14 @@ async function registerThisDevice(notifications: NotificationsModule, kinds: Dev
   if (!id) throw new Error("push_unavailable");
   const { data } = await notifications.getExpoPushTokenAsync({ projectId: id });
   if (!isExpoPushToken(data)) throw new Error("push_token_invalid");
-  await registerPushToken(data, "ios", kinds.messages, kinds.alerts);
-  await AsyncStorage.setItem(PUSH_TOKEN_KEY, data);
+  await serial(async () => {
+    // Un oubli en attente passe AVANT le nouvel enregistrement (jamais après : il l'effacerait).
+    await flushPendingForgetNow();
+    await registerPushToken(data, "ios", kinds.messages, kinds.alerts);
+    await AsyncStorage.setItem(PUSH_TOKEN_KEY, data);
+    // Ce même jeton vient d'être enregistré : plus rien à oublier pour lui.
+    await clearForget(AsyncStorage, data);
+  });
 }
 
 /** La personne a touché « Activer » : la SEULE fonction qui demande
@@ -160,12 +173,60 @@ export async function syncPushDevice(userId: string): Promise<void> {
 }
 
 /** Oublie cet appareil sur le serveur (notifications coupées, déconnexion).
- * Échec : le jeton reste noté, pour réessayer la fois suivante. */
+ * Échec (hors réseau, serveur qui se réveille) : le jeton est noté « à
+ * oublier » et l'oubli sera refait sans session (flushPendingForget), à la
+ * prochaine ouverture ou au prochain retour au premier plan ; l'erreur est
+ * rendue à l'appelant. */
 export async function forgetPushToken(): Promise<void> {
-  const token = await AsyncStorage.getItem(PUSH_TOKEN_KEY);
+  const token = await readNotedToken();
   if (!token) return;
-  await withTimeout(FORGET_TIMEOUT_MS, (signal) => deletePushToken(token, signal));
-  await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
+  try {
+    await serial(() => withTimeout(FORGET_TIMEOUT_MS, (signal) => deletePushToken(token, signal)));
+  } catch (error) {
+    await rememberForget(AsyncStorage, token);
+    await forgetNotedToken();
+    throw error;
+  }
+  await forgetNotedToken();
+}
+
+/** La session de cet appareil vient de se terminer sans qu'il ait pu être
+ * oublié (session fermée ailleurs, refusée par Supabase) : son jeton est noté
+ * « à oublier », et l'oubli sans session est tenté tout de suite. */
+export async function queueForgetPushToken(): Promise<void> {
+  const token = await readNotedToken();
+  if (!token) return;
+  await rememberForget(AsyncStorage, token);
+  await forgetNotedToken();
+  await flushPendingForget();
+}
+
+/** Un oubli en attente ? Il est demandé au serveur (sans session, 4 s au
+ * plus) ; sans réponse, il reste noté pour la fois suivante. À l'ouverture,
+ * à chaque retour au premier plan et à chaque connexion. */
+export async function flushPendingForget(): Promise<void> {
+  await serial(flushPendingForgetNow);
+}
+
+async function flushPendingForgetNow(): Promise<void> {
+  await flushForget(AsyncStorage, (token) => withTimeout(FORGET_TIMEOUT_MS, (signal) => forgetPushTokenWithoutSession(token, signal)));
+}
+
+/** Le jeton noté pour cet appareil (null : rien, ou rangement illisible). */
+async function readNotedToken(): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(PUSH_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+async function forgetNotedToken(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(PUSH_TOKEN_KEY);
+  } catch {
+    // Rien à faire : la note « à oublier » suffit.
+  }
 }
 
 /** À l'ouverture (connecté, notifications allumées sur le serveur) : le jeton

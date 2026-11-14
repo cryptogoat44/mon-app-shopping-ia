@@ -38,7 +38,9 @@ export type SharedRefusal = "several" | "unsupported" | "unreadable";
 export type SharedItem =
   /** Lien web, déjà extrait du texte qui l'accompagne. */
   | { kind: "link"; text: string }
-  | { kind: "image"; uri: string; width: number | null; height: number | null }
+  /** `origin` : « visual_intelligence » pour une capture reçue de la recherche
+   * d'image d'iOS (lib/visual-search-intake.ts) ; absent : feuille de partage. */
+  | { kind: "image"; uri: string; width: number | null; height: number | null; origin?: "share" | "visual_intelligence" }
   | { kind: "video"; uri: string; sizeBytes: number | null }
   /** Plusieurs éléments, fichier quelconque, texte sans lien, ou partage illisible. */
   | { kind: "refused"; reason: SharedRefusal };

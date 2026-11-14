@@ -4,6 +4,10 @@
 // un build iPhone qui serait inutilisable ou dangereux :
 // - sans l'adresse du serveur, ni l'adresse et la clé publique de spotto-prod
 //   (variables d'environnement saisies chez Expo, BUILD-IPHONE.md) ;
+// - avec une autre adresse du serveur que celle de la production (ligne
+//   « adresseServeur » du fichier de la marque) : par exemple le serveur de
+//   TEST, qui lit la base de test et refuserait chaque compte de spotto-prod
+//   (revue de sécurité, lot « durcissement des alertes ») ;
 // - visant une autre base que spotto-prod : la base de TEST (spotto-dev-2),
 //   l'ancien projet Supabase (personne ne pourrait se connecter), ou n'importe
 //   quel autre projet — un build destiné à Apple ne vise que spotto-prod ;
@@ -30,8 +34,9 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-// Nom du produit : lu dans le fichier unique de la marque (MARQUE.md, à la racine du dépôt).
-const { nom: NOM } = require("../../../packages/shared-types/marque.json");
+// Nom du produit et adresse du serveur de production : lus dans le fichier
+// unique de la marque (MARQUE.md, à la racine du dépôt).
+const { nom: NOM, adresseServeur: ADRESSE_SERVEUR } = require("../../../packages/shared-types/marque.json");
 
 /** spotto-prod : la SEULE base permise pour un build destiné à Apple
  * (TestFlight comme App Store ; BUILD-IPHONE.md, section 2). Ces identifiants
@@ -168,8 +173,16 @@ function problemesBuild(env, dossierLegal) {
     }
   }
 
+  // L'adresse du serveur : exactement celle de la production (ligne
+  // « adresseServeur » du fichier de la marque). Sa valeur n'est jamais
+  // affichée, comme les autres réglages.
   const api = (env.EXPO_PUBLIC_API_URL || "").trim();
   if (api && !api.startsWith("https://")) erreurs.push("EXPO_PUBLIC_API_URL doit commencer par https://.");
+  else if (api && api !== ADRESSE_SERVEUR) {
+    erreurs.push(
+      `EXPO_PUBLIC_API_URL n'est pas l'adresse du serveur de production : un build « ${profil} » part chez Apple et ne doit viser que lui. Mettez exactement la valeur de la ligne « adresseServeur » de packages/shared-types/marque.json (sans « / » à la fin) ${chezExpo}.`
+    );
+  }
 
   // La clé publique doit être celle du même projet que l'adresse : spotto-prod.
   // - Ancienne clé « anon » (un JWT) : elle porte l'identifiant de son projet

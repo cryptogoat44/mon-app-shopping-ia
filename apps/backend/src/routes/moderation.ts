@@ -7,7 +7,8 @@
 // modération des collections (migration 0034) : une collection se masque, se
 // rétablit et voit son auteur suspendu comme les autres contenus ; « Retirer
 // l'image » vise la copie d'UNE de ses envies. Lot « conformité Apple »
-// (migration 0037) : retirer la bio ou la photo d'un profil.
+// (migration 0037) : retirer la bio ou la photo d'un profil. Retirer une
+// pièce de la mémoire d'une vidéo : routes/videoLinks.ts (migration 0039).
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import { BRAND } from "../lib/brand.js";

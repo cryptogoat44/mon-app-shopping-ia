@@ -175,7 +175,7 @@ Turn on the bell of a wish to be told when its price drops or when it is back in
 <!--
 Preuves (tout est vrai d'après le code de main b99e884 ; les lignes « 10 novembre 2026 » ont été relues sur la branche lot-conformite-apple) :
 - 10 novembre 2026 — messages privés, invitation acceptée ou non, « Qui peut m'écrire » : apps/backend/src/lib/messaging.ts:1-12, apps/mobile/src/i18n/fr.ts (messagesFromTitle) ; collections privées ou montrées aux amis : apps/mobile/src/i18n/en.ts (collections.shareConfirmTitle) ; signaler un message ou une collection : packages/shared-types/src/index.ts (REPORT_TARGET_TYPES), apps/mobile/src/app/(app)/conversation.tsx (bouton « ••• »), apps/mobile/src/app/(app)/collection-ami.tsx
-- 10 novembre 2026 — paragraphe facultatif : cloche d'une envie, baisse de prix et retour en stock dans la même boutique : fr.ts (wishAlerts.sheetIntro, kinds) ; notification d'un nouveau message : fr.ts (offerBody) ; interrupteurs des Réglages : apps/mobile/src/components/message-push-setting.tsx, wish-alerts-setting.tsx ; coupées par défaut sur le serveur : apps/backend/src/env.ts:82
+- 10 novembre 2026 — paragraphe facultatif : cloche d'une envie, baisse de prix et retour en stock dans la même boutique : fr.ts (wishAlerts.sheetIntro, kinds) ; notification d'un nouveau message : fr.ts (offerBody) ; interrupteurs des Réglages : apps/mobile/src/components/message-push-setting.tsx, wish-alerts-setting.tsx ; coupées par défaut sur le serveur : apps/backend/src/env.ts:64
 - capture, photo de la galerie, vidéo, appareil photo : apps/mobile/src/app/(app)/(tabs)/index.tsx:228-231 ; appareil photo : apps/mobile/src/lib/image-import.ts:59 (iPhone seulement, index.tsx:231)
 - entourer la pièce : apps/mobile/src/i18n/fr.ts:347-358
 - propositions avec prix d'abord : fr.ts:394 (« Meilleure proposition avec prix ») et :450 (« Sans prix affiché »)
@@ -186,7 +186,7 @@ Preuves (tout est vrai d'après le code de main b99e884 ; les lignes « 10 novem
 - textes injurieux refusés : apps/backend/src/routes/comments.ts:120, posts.ts:483, me.ts:185 ; signaler / bloquer : apps/mobile/src/components/report-block-menu.tsx ; « examiné par l'équipe » : texte de l'app fr.ts (help.faq, « Signaler un contenu »)
 - aucune publicité, statistiques facultatives : apps/mobile/src/lib/analytics.ts:5-9 ; export et suppression : apps/backend/src/routes/account.ts:170 et :238
 - 15 ans : packages/shared-types/src/index.ts:775 ; recherches limitées : apps/backend/src/env.ts:17-22
-- un lien ne se lit pas : apps/mobile/src/lib/spot-flags.ts:7, apps/mobile/src/lib/link-step.ts:35-38
+- un lien ne se lit pas : apps/mobile/src/lib/link-step.ts
 -->
 
 ---

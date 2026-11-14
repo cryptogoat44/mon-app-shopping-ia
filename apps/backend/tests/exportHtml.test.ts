@@ -640,6 +640,40 @@ describe("collections d'envies (lot collections, migration 0033)", () => {
   });
 });
 
+describe("export lisible : vidéos spottées (revue de sécurité, migrations 0038 et 0039)", () => {
+  it("spots et confirmations, en français : la vidéo en lien, d'où venait l'image, le moment, la date ; jamais l'identifiant de la recherche", () => {
+    const page = render();
+    const section = spaces(visibleText(sectionHtml(page, "videos")));
+    expect(section).toContain(EXPORT_SECTIONS.videos.title.fr);
+    expect(section).toContain("sans votre nom");
+    expect(section).toContain("Vidéos spottées (1)");
+    expect(section).toContain("Vidéo Instagram");
+    expect(section).toContain("D'où venait l'image Image du lecteur Instagram");
+    expect(section).toContain("Moment de la vidéo à 1 min 15 s");
+    expect(section).toContain("Associée le 10 octobre 2026");
+    expect(section).toContain("Pièces confirmées (1)");
+    expect(section).toContain("Veste <b>reperee</b>");
+    expect(section).toContain("Ouvrir la vidéo (tiktok.com)");
+    expect(section).not.toContain("5e000000");
+    expect(sectionHtml(page, "videos")).not.toContain("<b>reperee</b>");
+    expect(spaces(visibleText(page))).toContain(`${EXPORT_SECTIONS.videos.title.fr} (1)`);
+  });
+
+  it("en anglais", () => {
+    const section = spaces(visibleText(sectionHtml(render({ locale: "en", timeZone: "UTC" }), "videos")));
+    expect(section).toContain("Your spotted videos");
+    expect(section).toContain("Instagram video");
+    expect(section).toContain("Image from the Instagram player");
+    expect(section).toContain("at 1 min 15 s");
+    expect(section).toContain("Confirmed pieces (1)");
+  });
+
+  it("sans spot ni confirmation : la section dit « Aucune donnée »", () => {
+    const data = { ...fixture(), videoSpots: [], videoConfirmations: [] };
+    expect(visibleText(sectionHtml(render({}, data), "videos"))).toContain(EXPORT_TEXT.noData.fr);
+  });
+});
+
 describe("export lisible : alertes prix et stock (lot 2, migration 0036)", () => {
   it("cloches, suivi, alertes et signalements, en français : au jour près, jamais l'empreinte de la pièce", () => {
     const page = render();
@@ -671,6 +705,57 @@ describe("export lisible : alertes prix et stock (lot 2, migration 0036)", () =>
     expect(section).toContain("Last seen on October 8, 2026");
     expect(section).toContain("Status Sent");
     expect(section).toContain("Reported “No longer available” on October 9, 2026");
+  });
+
+  // Lot « durcissement des alertes » (0040) : le pays gardé pour vos prix,
+  // l'origine d'un « épuisée » et le jour d'un achat sont exportés aussi.
+  it("garde-fous des alertes : « épuisée selon », pays de vos prix et jour d'achat, en français et en anglais", () => {
+    const base = fixture();
+    const row = { ...base.wishTracking[0]!, stock_state: "sold_out", sold_out_source: "members", member_country: "fr", bought_on: "2026-10-10" };
+    const data = { ...base, wishTracking: [row] };
+    const fr = visibleText(sectionHtml(render({}, data), "alerts"));
+    expect(fr).toContain("Épuisée selon des membres");
+    expect(fr).toContain("Pays de vos prix fr");
+    expect(fr).toContain("Achetée le 10 octobre 2026");
+    const en = visibleText(sectionHtml(renderExportHtml(data, lookups(), options({ locale: "en", timeZone: "UTC" })), "alerts"));
+    expect(en).toContain("Sold out according to members");
+    expect(en).toContain("Bought on October 10, 2026");
+    // Sans ces informations (base sans 0040) : rien ne s'affiche à leur place.
+    const plain = visibleText(sectionHtml(render({}, base), "alerts"));
+    expect(plain).not.toContain("Épuisée selon");
+    expect(plain).not.toContain("Achetée le");
+  });
+
+  // Nouvelle version des alertes (0041) : le seuil de la cloche, le jour
+  // d'envoi (aucune heure), et pour chaque signalement s'il aidait les
+  // autres membres ; « Aider les autres membres » dans le compte.
+  it("nouvelle version (0041) : seuil, jour d'envoi, signalement qui aide les autres, « Aider les autres membres », en français et en anglais", () => {
+    const base = fixture();
+    const data = {
+      ...base,
+      profile: { ...base.profile!, price_alerts_enabled: true, help_others: false },
+      wishWatches: [{ ...base.wishWatches[0]!, target_price: 89.9, target_currency: "EUR", target_country: "fr", below_target: true }],
+      wishTracking: [{ ...base.wishTracking[0]!, ref_price: undefined, ref_currency: undefined, ref_set_on: undefined, sold_out_source: "reported", stock_state: "sold_out" }],
+      wishAlertEvents: [{ ...base.wishAlertEvents[0]!, sent_on: "2026-10-08" }],
+      stockReports: [{ ...base.stockReports[0]!, country: "gb", helps_others: true, in_streak: false }],
+    };
+    const fr = spaces(visibleText(sectionHtml(render({}, data), "alerts")));
+    expect(fr).toContain("Prévenir si le prix passe sous 89,90 €");
+    expect(fr).toContain("Envoyée le 8 octobre 2026");
+    expect(fr).toContain("Comptait pour les autres membres");
+    expect(fr).toContain("Pays de la recherche gb");
+    expect(fr).toContain("Dans la série en cours");
+    expect(fr).toContain("Épuisée selon vous");
+    expect(fr).not.toMatch(/Envoyée le 8 octobre 2026 à/);
+    const account = spaces(visibleText(sectionHtml(render({}, data), "account")));
+    expect(account).toContain("Aider les autres membres");
+    const en = spaces(visibleText(sectionHtml(renderExportHtml(data, lookups(), options({ locale: "en", timeZone: "UTC" })), "alerts")));
+    expect(en).toContain("Notify me if the price drops below €89.90");
+    expect(en).toContain("Sent on October 8, 2026");
+    expect(en).toContain("Counted for other members");
+    expect(en).toContain("Search country gb");
+    expect(en).toContain("Sold out according to you");
+    expect(spaces(visibleText(sectionHtml(renderExportHtml(data, lookups(), options({ locale: "en", timeZone: "UTC" })), "account")))).toContain("Help other members");
   });
 
   it("sans alerte : la section dit « Aucune donnée »", () => {

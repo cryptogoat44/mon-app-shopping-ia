@@ -1,12 +1,13 @@
 // Alertes prix et stock (lot 2, migration 0036) : crée le suivi des envies
-// déjà là avant 0036 (clé « même pièce », sans prix de référence), et
-// recalcule la clé des envies dont la version est plus ancienne. Sur
+// déjà là avant 0036 (empreinte « même pièce »), et recalcule l'empreinte des
+// envies dont la version est plus ancienne (version 2 depuis 0041 : le lien
+// normalisé de la boutique). Sur
 // spotto-dev-2 UNIQUEMENT (même garde-fou que migrer-dev et
 // nettoyer-comptes-test-dev) ; rejouable sans effet.
 //
 //   pnpm --filter backend rattraper-suivi-envies-dev
 //
-// Demande la migration 0036 sur la base visée. N'affiche que des nombres :
+// Demande les migrations des alertes jusqu'à 0041 sur la base visée. N'affiche que des nombres :
 // ni compte, ni titre, ni adresse, ni rien de secret.
 import "dotenv/config";
 import { buildApp } from "../src/app.js";
@@ -19,7 +20,7 @@ async function main(): Promise<void> {
   const app = await buildApp({ logger: false });
   try {
     if (!(await wishAlertsReady(app))) {
-      console.error("La migration 0036 n'est pas appliquée sur cette base : rien à faire.");
+      console.error("Les migrations 0036 et 0040 (garde-fous) ne sont pas toutes deux appliquées sur cette base : rien à faire.");
       process.exitCode = 1;
       return;
     }

@@ -107,7 +107,7 @@ export function safeHref(value: unknown): string | null {
   }
 }
 
-/** Nom court du site d'une adresse (« asos.com », « tiktokcdn-eu.com ») pour
+/** Nom court du site d'une adresse (« asos.com », « gstatic.com ») pour
  * le libellé d'un lien. */
 export function siteOf(href: string): string {
   const host = new URL(href).hostname.replace(/^www\./, "");

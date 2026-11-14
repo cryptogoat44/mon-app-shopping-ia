@@ -52,8 +52,7 @@ Le plus simple, pour travailler sur spotto-dev-2 : `pnpm --filter backend config
 | `VOIE_C_ENABLED`, `VOIE_C_AI_ENABLED`, `ANTHROPIC_PHOTO_ENABLED` | non | Interrupteurs de la voie C, coupés sauf valeur exacte `true` |
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | non | Suivi des erreurs et alertes (`production` sur Render) |
 | `APP_MIN_IOS_BUILD`, `APP_STORE_URL` | non | Mise à jour obligatoire de l'app iPhone |
-| `LINK_PREVIEW_ENABLED` | non | Interrupteur des liens TikTok et Instagram, coupé sauf valeur exacte `true`. Coupé : le serveur ignore un lien envoyé (aucun appel à TikTok ni à Meta, rien d'enregistré). À n'allumer qu'avec l'accord écrit de la plateforme. |
-| `META_OEMBED_ACCESS_TOKEN` | non | Reconnaissance des liens Instagram (ne sert que si `LINK_PREVIEW_ENABLED` est allumé) |
+| ~~`LINK_PREVIEW_ENABLED`~~, ~~`META_OEMBED_ACCESS_TOKEN`~~ | plus lues | La voie « couverture » (image d'un lien demandée à TikTok ou à Meta) a été retirée du code le 12 novembre 2026 (archivée sur la branche `archive/couverture-oembed`). Ces deux variables ne servent plus à rien : si elles existent encore chez Render, elles peuvent être supprimées. |
 | `RENDER_GIT_COMMIT` | jamais à la main | Remplie par Render : la version donnée par /health |
 | `TRYON_ENABLED` | non (`false`) | Essayage virtuel photo, ÉTEINT : seule la valeur exacte `true` l'allume, et il faut aussi le drapeau `tryon` de la base (`pnpm --filter backend tryon:flag`). À n'allumer qu'après l'accord de l'avocat. |
 | `TRYON_PROVIDER`, `FASHN_API_BASE_URL` | non (`fake`, `https://api.fashn.ai/v1`) | Fournisseur de l'essayage : `fake` (faux essai, sans réseau ; refusé en production) ou `fashn` ; adresse de l'API de FASHN (https) |

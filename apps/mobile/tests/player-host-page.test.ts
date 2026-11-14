@@ -1,25 +1,29 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
-  EMBED_RELAY,
-  EMBED_RELAY_SHA256,
   HOST_MESSAGE_SOURCE,
-  HOST_PAGE_CSP,
+  INSTAGRAM_EMBED_SCRIPT,
+  INSTAGRAM_PAGE_CSP,
+  INSTAGRAM_RELAY,
+  INSTAGRAM_RELAY_SHA256,
+  TIKTOK_PAGE_CSP,
   TIKTOK_RELAY,
   TIKTOK_RELAY_SHA256,
   escapeHtmlAttribute,
-  instagramEmbedMarkup,
   instagramHostPage,
-  tiktokEmbedHostPage,
-  tiktokEmbedMarkup,
+  sanitizeInstagramEmbed,
   tiktokHostPage,
 } from "../src/lib/player-host-page";
-import { checkTikTok, instagramOEmbedUrl, openPlayerLink, tiktokPlayerUrl, type FetchLike } from "../src/lib/player-link";
 
-// Lot « lecteur intégré » : la page hôte n'affiche rien d'elle-même et ne fait
-// que relayer les messages du lecteur officiel.
+// Mission « liens vidéo » : les pages hôtes sont écrites par l'app, n'affichent
+// rien d'elles-mêmes, ne touchent jamais au lecteur officiel et ne font que
+// relayer ses messages. TikTok : le lecteur construit depuis l'identifiant
+// seul. Instagram : le code d'intégration du serveur, vérifié, puis embed.js
+// (le seul script tiers admis).
 const ID = "6718335390845095173";
-const CANONICAL = "https://www.instagram.com/reel/Cxyz/";
+const PERMALINK = "https://www.instagram.com/reel/CWqAgUZgCku/?utm_source=ig_embed&amp;utm_campaign=loading";
+/** Forme du code renvoyé par l'oEmbed de Meta (omitscript=true), abrégée. */
+const OFFICIAL = `<blockquote class="instagram-media" data-instgrm-captioned data-instgrm-permalink="${PERMALINK}" data-instgrm-version="14" style=" background:#FFF; border:0; margin: 1px; max-width:540px;"><div style="padding:16px;"> <a href="${PERMALINK}" style=" background:#FFFFFF; text-decoration:none;" target="_blank"> <div style=" display: flex;"><svg width="50px" height="50px" viewBox="0 0 60 60" version="1.1" xmlns="https://www.w3.org/2000/svg" xmlns:xlink="https://www.w3.org/1999/xlink"><g stroke="none" fill="none"><path d="M556.869,30.41 C554.814,30.41"></path></g></svg></div></a><p style=" margin:8px 0 0 0;"><a href="${PERMALINK}" style=" color:#c9c8cd;" target="_blank">Une publication partagée par Big data: la mode (@mode.fr)</a></p></div></blockquote>`;
 
 const visibleText = (html: string) =>
   html
@@ -28,163 +32,40 @@ const visibleText = (html: string) =>
     .replace(/<[^>]+>/g, "")
     .trim();
 const inlineScripts = (page: string) => [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => match[1] ?? "");
-const withoutScripts = (page: string) => page.replace(/<script>[\s\S]*?<\/script>/g, "");
 const sha256 = (text: string) => createHash("sha256").update(text, "utf8").digest("base64");
-const allPages = () => [tiktokHostPage(tiktokPlayerUrl(ID), "Vidéo TikTok"), instagramHostPage(CANONICAL, "Vidéo Instagram"), tiktokEmbedHostPage(ID, "Vidéo TikTok")];
+const tiktokPage = () => tiktokHostPage(ID, "Vidéo TikTok")!;
+const instagramPage = () => instagramHostPage(OFFICIAL, "Vidéo Instagram")!;
+const directive = (csp: string, name: string) => csp.split("; ").find((d) => d.startsWith(`${name} `));
 
-describe("page hôte du lecteur", () => {
-  it("TikTok : lecteur officiel en plein cadre, aucun texte visible", () => {
-    const page = tiktokHostPage("https://www.tiktok.com/player/v1/1?autoplay=1&loop=1", "Vidéo TikTok");
-    expect(page).toContain('src="https://www.tiktok.com/player/v1/1?autoplay=1&amp;loop=1"');
+describe("page hôte TikTok : le lecteur officiel, depuis l'identifiant seul", () => {
+  it("cadre https://www.tiktok.com/player/v1/{id}, lecture automatique, aucun texte visible", () => {
+    const page = tiktokPage();
+    expect(page).toContain(`<iframe id="player" src="https://www.tiktok.com/player/v1/${ID}?autoplay=1"`);
     expect(page).toContain('title="Vidéo TikTok"');
     expect(page).toContain('allow="autoplay; encrypted-media"');
     expect(visibleText(page)).toBe("");
   });
 
-  it("TikTok : seule l'adresse du lecteur officiel est chargée dans le cadre", () => {
-    for (const url of ["javascript:alert(1)", "https://evil.example/player/v1/1", "https://www.tiktok.com.evil.example/player/v1/1", 'https://www.tiktok.com/player/v1/1"><img src=x onerror=alert(1)>']) {
-      const page = tiktokHostPage(url, "t");
-      expect(page).toContain('src="about:blank"');
-      expect(page).not.toContain("evil");
-      expect(page).not.toContain("onerror");
+  it("identifiant qui n'est pas fait de chiffres : aucune page (écran de secours)", () => {
+    for (const id of [`${ID}"><img src=x onerror=alert(1)>`, "abc12345678", "12345 ", "", "12345", `${ID}${ID}`, "../player/v1/1", "1".repeat(26)]) {
+      expect(tiktokHostPage(id, "t")).toBeNull();
     }
   });
 
-  it("Instagram : le code officiel reconstruit depuis l'adresse canonique, puis embed.js", () => {
-    const page = instagramHostPage(CANONICAL, "Vidéo Instagram");
-    expect(page).toContain(`<blockquote class="instagram-media" data-instgrm-permalink="${CANONICAL}" data-instgrm-version="14"`);
-    expect(page).toContain('data-sdk="instagram"');
-    expect(EMBED_RELAY).toContain('instagram: "https://www.instagram.com/embed.js"');
-    expect(EMBED_RELAY).toContain("window.instgrm.Embeds.process()");
-    expect(visibleText(page)).toBe("");
-  });
-
-  it("TikTok, repli (contre-expertise n° 9) : le blockquote reconstruit depuis l'identifiant, puis embed.js de TikTok", () => {
-    const page = tiktokEmbedHostPage(ID, "Vidéo TikTok");
-    expect(page).toContain(`<blockquote class="tiktok-embed" cite="https://www.tiktok.com/@_/video/${ID}" data-video-id="${ID}"`);
-    expect(page).toContain('data-sdk="tiktok"');
-    expect(EMBED_RELAY).toContain('tiktok: "https://www.tiktok.com/embed.js"');
-    expect(visibleText(page)).toBe("");
-  });
-
-  it("attributs échappés", () => {
+  it("titre de l'app échappé", () => {
     expect(escapeHtmlAttribute(`a"<b>&'`)).toBe("a&quot;&lt;b&gt;&amp;&#39;");
+    expect(tiktokHostPage(ID, 'a"><img onerror=x>')).toContain('title="a&quot;&gt;&lt;img onerror=x&gt;"');
   });
 
-  it("scripts de relais : syntaxe valide, marque de la page hôte ; taille du code d'intégration envoyée (n° 13)", () => {
-    for (const page of allPages()) {
-      const scripts = inlineScripts(page);
-      expect(scripts).toHaveLength(1);
-      expect(() => new Function(scripts[0] ?? "")).not.toThrow();
-      expect(scripts[0]).toContain(HOST_MESSAGE_SOURCE);
-    }
-    expect(instagramHostPage(CANONICAL, "t")).toContain('type: "size"');
+  it("aucun autre script que le relais, aucun attribut d'événement", () => {
+    const page = tiktokPage();
+    expect(inlineScripts(page)).toEqual([TIKTOK_RELAY]);
+    expect(page.match(/<script/g)).toHaveLength(1);
+    expect(page.replace(/<script>[\s\S]*?<\/script>/g, "")).not.toMatch(/\son[a-z]+\s*=/i);
   });
 });
 
-describe("page hôte : aucun code venu de TikTok ou d'Instagram", () => {
-  // Légende, nom d'auteur et mots-clés sont écrits par n'importe qui et
-  // reviennent dans le html des oEmbed : rien de ce html ne doit apparaître.
-  const HOSTILE = [
-    '<img src=x onerror="window.ReactNativeWebView.postMessage(1)">',
-    "<svg onload=alert(1)>",
-    '<iframe srcdoc="<script>parent.ReactNativeWebView.postMessage(1)</script>"></iframe>',
-    'légende piégée" onmouseover="alert(1)',
-    "<a href=\"javascript:alert(1)\">#mode</a>",
-  ].join("");
-  const MARKERS = ["onerror", "onload=", "onmouseover", "<img", "<svg", "srcdoc", "<iframe srcdoc", "javascript:", "légende piégée", "#mode", "evil"];
-
-  function network(routes: Record<string, unknown>): FetchLike {
-    return async (url) => ({ ok: true, status: 200, url, json: async () => routes[url] ?? {} });
-  }
-
-  it("Instagram : le html de l'oEmbed ne sert qu'à vérifier ; la page n'en contient rien", async () => {
-    const html = `<blockquote class="instagram-media" data-instgrm-permalink="${CANONICAL}">${HOSTILE}</blockquote>`;
-    const opening = await openPlayerLink(`${CANONICAL}?igsh=abc`, { platform: "instagram", width: 343, fetchImpl: network({ [instagramOEmbedUrl(CANONICAL, 343)]: { html } }) });
-    expect(opening.kind).toBe("embed");
-    if (opening.kind !== "embed" || opening.embed.platform !== "instagram") throw new Error("embed attendu");
-    expect(JSON.stringify(opening)).not.toContain("onerror");
-    const page = instagramHostPage(opening.embed.canonical, "Vidéo Instagram");
-    for (const marker of MARKERS) expect(withoutScripts(page)).not.toContain(marker);
-    expect(page).toContain(`data-instgrm-permalink="${CANONICAL}"`);
-  });
-
-  it("TikTok (repli) : la vérification ne garde qu'un oui/non ; la page n'en contient rien", async () => {
-    const oembed = "https://www.tiktok.com/oembed?url=x";
-    const html = `<blockquote class="tiktok-embed" cite="https://www.tiktok.com/@a/video/${ID}" data-video-id="${ID}"><section>${HOSTILE}</section></blockquote><script async src="https://www.tiktok.com/embed.js"></script>`;
-    const check = await checkTikTok(oembed, network({ [oembed]: { type: "video", html, author_name: HOSTILE, title: HOSTILE } }));
-    expect(check).toEqual({ status: "ok", embeddable: true });
-    const page = tiktokEmbedHostPage(ID, "Vidéo TikTok");
-    for (const marker of MARKERS) expect(withoutScripts(page)).not.toContain(marker);
-  });
-
-  it("identifiant TikTok : chiffres seulement, sinon page vide et embed.js non chargé", () => {
-    expect(tiktokEmbedMarkup(ID)).toContain(`data-video-id="${ID}"`);
-    for (const id of [`${ID}"><img src=x onerror=alert(1)>`, "abc12345678", "12345678 ", "", "1234567", `${ID}${ID}`]) {
-      expect(tiktokEmbedMarkup(id)).toBe("");
-      const page = tiktokEmbedHostPage(id, "t");
-      expect(page).not.toContain("<blockquote");
-      expect(page).not.toContain("onerror");
-      expect(page).toContain('data-sdk=""');
-    }
-  });
-
-  it("adresse Instagram : seulement l'adresse canonique, écrite échappée dans l'attribut", () => {
-    expect(instagramEmbedMarkup("https://www.instagram.com/p/BQ0eAlwhDrw/")).toContain('data-instgrm-permalink="https://www.instagram.com/p/BQ0eAlwhDrw/"');
-    for (const url of [
-      'https://www.instagram.com/reel/X"onmouseover="alert(1)/',
-      "https://www.instagram.com/reel/X/'><svg onload=alert(1)>",
-      "javascript:alert(1)//www.instagram.com/reel/X/",
-      "https://evil.example/reel/X/",
-      "https://www.instagram.com.evil.example/reel/X/",
-    ]) {
-      expect(instagramEmbedMarkup(url)).toBe("");
-      const page = instagramHostPage(url, "t");
-      expect(page).not.toContain("<blockquote");
-      for (const marker of ["onmouseover", "<svg", "javascript:", "evil"]) expect(page).not.toContain(marker);
-      expect(page).toContain('data-sdk=""');
-    }
-    // Titre de l'app échappé aussi (attribut aria-label).
-    expect(instagramHostPage(CANONICAL, 'a"><img onerror=x>')).toContain('aria-label="a&quot;&gt;&lt;img onerror=x&gt;"');
-  });
-
-  it("aucun attribut d'événement (onerror, onload…) hors des scripts de relais", () => {
-    for (const page of allPages()) expect(withoutScripts(page)).not.toMatch(/\son[a-z]+\s*=/i);
-  });
-});
-
-describe("règle de sécurité de la page hôte (Content-Security-Policy)", () => {
-  const directive = (name: string) => HOST_PAGE_CSP.split("; ").find((d) => d.startsWith(`${name} `));
-
-  it("les empreintes correspondent exactement aux deux scripts de relais", () => {
-    expect(sha256(TIKTOK_RELAY)).toBe(TIKTOK_RELAY_SHA256);
-    expect(sha256(EMBED_RELAY)).toBe(EMBED_RELAY_SHA256);
-  });
-
-  it("chaque page la porte avant tout script, et elle autorise chacun de ses scripts", () => {
-    expect(HOST_PAGE_CSP).not.toMatch(/["<>&]/);
-    for (const page of allPages()) {
-      const meta = page.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/);
-      expect(meta?.[1]).toBe(HOST_PAGE_CSP);
-      expect(page.indexOf("Content-Security-Policy")).toBeLessThan(page.indexOf("<script"));
-      for (const script of inlineScripts(page)) expect(directive("script-src")).toContain(`'sha256-${sha256(script)}'`);
-    }
-  });
-
-  it("ni script écrit dans un attribut, ni eval, ni plugin, ni <base>, ni formulaire ; cadres TikTok et Instagram seulement", () => {
-    expect(HOST_PAGE_CSP).not.toContain("unsafe-inline");
-    expect(HOST_PAGE_CSP).not.toContain("unsafe-eval");
-    expect(HOST_PAGE_CSP).not.toContain("unsafe-hashes");
-    expect(directive("script-src")).toBe(`script-src 'sha256-${TIKTOK_RELAY_SHA256}' 'sha256-${EMBED_RELAY_SHA256}' 'strict-dynamic' https://www.tiktok.com https://www.instagram.com`);
-    expect(directive("script-src-attr")).toBe("script-src-attr 'none'");
-    expect(directive("object-src")).toBe("object-src 'none'");
-    expect(directive("base-uri")).toBe("base-uri 'none'");
-    expect(directive("form-action")).toBe("form-action 'none'");
-    expect(directive("frame-src")).toBe("frame-src https://tiktok.com https://*.tiktok.com https://instagram.com https://*.instagram.com");
-  });
-});
-
-describe("relais TikTok : origine des messages vérifiée", () => {
+describe("relais TikTok : messages au format x-tiktok-player, origine vérifiée", () => {
   // Le script de relais exécuté avec une fausse page : un cadre, le pont vers l'app.
   function runRelay() {
     const toApp: string[] = [];
@@ -201,30 +82,163 @@ describe("relais TikTok : origine des messages vérifiée", () => {
     new Function("window", "document", TIKTOK_RELAY)(fakeWindow, fakeDocument);
     return { toApp, toPlayer, contentWindow, dispatch: (event: { source: unknown; origin: string; data: unknown }) => listener?.(event) };
   }
-  const ready = { "x-tiktok-player": true, type: "onPlayerReady" };
+  const fromPlayer = (type: string, value?: unknown) => ({ "x-tiktok-player": true, type, ...(value === undefined ? {} : { value }) });
 
-  it("message du cadre venu de https://www.tiktok.com : relayé ; d'une autre origine : ignoré", () => {
+  it("événements du lecteur (onPlayerReady, onStateChange, onCurrentTime, onPlayerError) relayés à l'app, marqués", () => {
     const relay = runRelay();
-    for (const origin of ["https://evil.example", "https://tiktok.com", "https://www.tiktok.com.evil.example", "null", ""]) {
-      relay.dispatch({ source: relay.contentWindow, origin, data: ready });
-    }
-    expect(relay.toApp).toEqual([]);
-    relay.dispatch({ source: relay.contentWindow, origin: "https://www.tiktok.com", data: ready });
-    expect(relay.toApp.map((message) => JSON.parse(message))).toEqual([{ kind: "tiktok", type: "onPlayerReady", value: null, origin: "https://www.tiktok.com", source: HOST_MESSAGE_SOURCE }]);
+    relay.dispatch({ source: relay.contentWindow, origin: "https://www.tiktok.com", data: fromPlayer("onPlayerReady") });
+    relay.dispatch({ source: relay.contentWindow, origin: "https://www.tiktok.com", data: fromPlayer("onStateChange", 1) });
+    relay.dispatch({ source: relay.contentWindow, origin: "https://www.tiktok.com", data: fromPlayer("onCurrentTime", { currentTime: 3.7, duration: 12 }) });
+    relay.dispatch({ source: relay.contentWindow, origin: "https://www.tiktok.com", data: fromPlayer("onPlayerError", { errorCode: 1001, errorType: "invalid" }) });
+    expect(relay.toApp.map((message) => JSON.parse(message))).toEqual([
+      { kind: "tiktok", type: "onPlayerReady", value: null, origin: "https://www.tiktok.com", source: HOST_MESSAGE_SOURCE },
+      { kind: "tiktok", type: "onStateChange", value: 1, origin: "https://www.tiktok.com", source: HOST_MESSAGE_SOURCE },
+      { kind: "tiktok", type: "onCurrentTime", value: { currentTime: 3.7, duration: 12 }, origin: "https://www.tiktok.com", source: HOST_MESSAGE_SOURCE },
+      { kind: "tiktok", type: "onPlayerError", value: { errorCode: 1001, errorType: "invalid" }, origin: "https://www.tiktok.com", source: HOST_MESSAGE_SOURCE },
+    ]);
   });
 
-  it("message d'un autre cadre, même à la bonne origine : ignoré", () => {
+  it("message d'une autre origine, d'un autre cadre, ou sans la marque x-tiktok-player : ignoré", () => {
     const relay = runRelay();
-    relay.dispatch({ source: { postMessage: () => {} }, origin: "https://www.tiktok.com", data: ready });
+    for (const origin of ["https://evil.example", "https://tiktok.com", "https://www.tiktok.com.evil.example", "null", ""]) {
+      relay.dispatch({ source: relay.contentWindow, origin, data: fromPlayer("onPlayerReady") });
+    }
+    relay.dispatch({ source: { postMessage: () => {} }, origin: "https://www.tiktok.com", data: fromPlayer("onPlayerReady") });
+    relay.dispatch({ source: relay.contentWindow, origin: "https://www.tiktok.com", data: { type: "onPlayerReady" } });
     expect(relay.toApp).toEqual([]);
     expect(relay.toPlayer).toEqual([]);
   });
 
-  it("commande de l'app : transmise au lecteur, adressée à sa seule origine", () => {
+  it("commandes de l'app (play, pause, seekTo, mute, unMute) : { type, value, x-tiktok-player } à la seule origine du lecteur", () => {
     const relay = runRelay();
+    for (const type of ["play", "pause", "mute", "unMute"]) relay.dispatch({ source: null, origin: "", data: JSON.stringify({ type }) });
     relay.dispatch({ source: null, origin: "", data: JSON.stringify({ type: "seekTo", value: 3 }) });
     relay.dispatch({ source: null, origin: "", data: JSON.stringify({ type: "eval" }) });
-    expect(relay.toPlayer).toEqual([[{ "x-tiktok-player": true, type: "seekTo", value: 3 }, "https://www.tiktok.com"]]);
+    relay.dispatch({ source: null, origin: "", data: "pas du JSON" });
+    expect(relay.toPlayer).toEqual([
+      [{ "x-tiktok-player": true, type: "play" }, "https://www.tiktok.com"],
+      [{ "x-tiktok-player": true, type: "pause" }, "https://www.tiktok.com"],
+      [{ "x-tiktok-player": true, type: "mute" }, "https://www.tiktok.com"],
+      [{ "x-tiktok-player": true, type: "unMute" }, "https://www.tiktok.com"],
+      [{ "x-tiktok-player": true, type: "seekTo", value: 3 }, "https://www.tiktok.com"],
+    ]);
     expect(TIKTOK_RELAY).not.toContain('"*"');
+  });
+});
+
+describe("page hôte Instagram : le code officiel du serveur, vérifié, puis embed.js seulement", () => {
+  it("le code est écrit tel quel dans la page, puis le relais ajoute https://www.instagram.com/embed.js", () => {
+    const page = instagramPage();
+    expect(page).toContain(OFFICIAL);
+    expect(INSTAGRAM_EMBED_SCRIPT).toBe("https://www.instagram.com/embed.js");
+    expect(INSTAGRAM_RELAY).toContain('script.src = "https://www.instagram.com/embed.js"');
+    expect(INSTAGRAM_RELAY).toContain("window.instgrm.Embeds.process()");
+    expect(inlineScripts(page)).toEqual([INSTAGRAM_RELAY]);
+    expect(page.match(/<script/g)).toHaveLength(1);
+    // Aucune autre adresse de script dans le relais.
+    expect([...INSTAGRAM_RELAY.matchAll(/https:\/\/[^"\s]+/g)].map((match) => match[0])).toEqual(["https://www.instagram.com/embed.js"]);
+  });
+
+  it("code d'intégration refusé (null : écran de secours) sans le blockquote « instagram-media » ni l'adresse d'une publication Instagram", () => {
+    for (const html of [
+      "",
+      null,
+      42,
+      "<div>rien</div>",
+      '<blockquote class="tiktok-embed" data-instgrm-permalink="https://www.instagram.com/reel/CWqAgUZgCku/"></blockquote>',
+      '<blockquote class="instagram-media"></blockquote>',
+      '<blockquote class="instagram-media" data-instgrm-permalink="https://evil.example/reel/CWqAgUZgCku/"></blockquote>',
+      '<blockquote class="instagram-media" data-instgrm-permalink="https://www.instagram.com.evil.example/reel/CWqAgUZgCku/"></blockquote>',
+      `<p>avant</p>${OFFICIAL}`,
+      `${OFFICIAL}<p>après</p>`,
+      `${OFFICIAL.slice(0, -"</blockquote>".length)}`,
+      "x".repeat(40_000),
+    ]) {
+      expect(sanitizeInstagramEmbed(html), String(html).slice(0, 60)).toBeNull();
+      expect(instagramHostPage(html, "t")).toBeNull();
+    }
+  });
+
+  it("code d'intégration refusé s'il contient un autre <script>, un cadre, un attribut d'événement ou une adresse javascript:/data:", () => {
+    const inject = (piece: string) => OFFICIAL.replace("<p ", `${piece}<p `);
+    for (const piece of [
+      '<script src="https://www.instagram.com/embed.js"></script>',
+      "<script>window.ReactNativeWebView.postMessage(1)</script>",
+      "<SCRIPT>alert(1)</SCRIPT>",
+      '<iframe src="https://www.instagram.com/"></iframe>',
+      '<iframe srcdoc="<script>parent.ReactNativeWebView.postMessage(1)</script>"></iframe>',
+      '<img src=x onerror="alert(1)">',
+      "<svg onload=alert(1)></svg>",
+      '<a href="javascript:alert(1)">#mode</a>',
+      '<a href="  JaVaScRiPt:alert(1)">x</a>',
+      '<a href="&#106;avascript:alert(1)">x</a>',
+      '<a href="java&Tab;script:alert(1)">x</a>',
+      '<a href="data:text/html,<b>x</b>">x</a>',
+      '<object data="x"></object>',
+      '<embed src="x">',
+      '<link rel="stylesheet" href="https://evil.example/x.css">',
+      '<meta http-equiv="refresh" content="0;url=https://evil.example">',
+      '<base href="https://evil.example/">',
+      '<form action="https://evil.example"><input></form>',
+      "<style>body{background:url(https://evil.example)}</style>",
+      '<svg><use href="#x"></use></svg>',
+      '<svg><animate attributeName="href" to="javascript:alert(1)"/></svg>',
+      "<svg><foreignObject><div>x</div></foreignObject></svg>",
+    ]) {
+      expect(sanitizeInstagramEmbed(inject(piece)), piece).toBeNull();
+    }
+  });
+
+  it("le code officiel passe, légende comprise (« Big data: la mode » n'est pas une adresse data:)", () => {
+    expect(sanitizeInstagramEmbed(`  ${OFFICIAL}\n`)).toBe(OFFICIAL);
+    expect(visibleText(instagramPage())).toContain("Une publication partagée");
+    expect(instagramHostPage(OFFICIAL, 'a"><img onerror=x>')).toContain('aria-label="a&quot;&gt;&lt;img onerror=x&gt;"');
+  });
+
+  it("relais Instagram : syntaxe valide, marque de la page hôte, hauteur et chargement du cadre envoyés", () => {
+    expect(() => new Function(INSTAGRAM_RELAY)).not.toThrow();
+    expect(INSTAGRAM_RELAY).toContain(HOST_MESSAGE_SOURCE);
+    expect(INSTAGRAM_RELAY).toContain('type: "size"');
+    expect(INSTAGRAM_RELAY).toContain('type: "embedReady"');
+  });
+});
+
+describe("règle de sécurité de chaque page (Content-Security-Policy)", () => {
+  it("les empreintes correspondent exactement aux scripts de relais (sinon : valeur à recopier)", () => {
+    expect(sha256(TIKTOK_RELAY)).toBe(TIKTOK_RELAY_SHA256);
+    expect(sha256(INSTAGRAM_RELAY)).toBe(INSTAGRAM_RELAY_SHA256);
+  });
+
+  it("chaque page porte sa règle avant tout script, et elle autorise son seul script", () => {
+    for (const [page, csp] of [
+      [tiktokPage(), TIKTOK_PAGE_CSP],
+      [instagramPage(), INSTAGRAM_PAGE_CSP],
+    ] as const) {
+      expect(csp).not.toMatch(/["<>&]/);
+      expect(page.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/)?.[1]).toBe(csp);
+      expect(page.indexOf("Content-Security-Policy")).toBeLessThan(page.indexOf("<script"));
+      for (const script of inlineScripts(page)) expect(directive(csp, "script-src")).toContain(`'sha256-${sha256(script)}'`);
+    }
+  });
+
+  it("TikTok : seul le relais ; cadre du lecteur officiel seulement", () => {
+    expect(directive(TIKTOK_PAGE_CSP, "script-src")).toBe(`script-src 'sha256-${TIKTOK_RELAY_SHA256}'`);
+    expect(directive(TIKTOK_PAGE_CSP, "frame-src")).toBe("frame-src https://www.tiktok.com");
+  });
+
+  it("Instagram : le relais et embed.js (cette adresse exacte, sans strict-dynamic) ; cadres d'Instagram seulement", () => {
+    expect(directive(INSTAGRAM_PAGE_CSP, "script-src")).toBe(`script-src 'sha256-${INSTAGRAM_RELAY_SHA256}' https://www.instagram.com/embed.js`);
+    expect(INSTAGRAM_PAGE_CSP).not.toContain("strict-dynamic");
+    expect(directive(INSTAGRAM_PAGE_CSP, "frame-src")).toBe("frame-src https://www.instagram.com https://instagram.com");
+  });
+
+  it("jamais de script en ligne permis, ni eval, ni plugin, ni <base>, ni formulaire", () => {
+    for (const csp of [TIKTOK_PAGE_CSP, INSTAGRAM_PAGE_CSP]) {
+      expect(csp).not.toMatch(/unsafe-inline|unsafe-eval|unsafe-hashes/);
+      expect(directive(csp, "script-src-attr")).toBe("script-src-attr 'none'");
+      expect(directive(csp, "object-src")).toBe("object-src 'none'");
+      expect(directive(csp, "base-uri")).toBe("base-uri 'none'");
+      expect(directive(csp, "form-action")).toBe("form-action 'none'");
+    }
   });
 });

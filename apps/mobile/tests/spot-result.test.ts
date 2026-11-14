@@ -9,7 +9,6 @@ function search(overrides: Partial<ProductSearch> = {}): ProductSearch {
     sourceUrl: "https://www.tiktok.com/@x/video/1",
     sourcePlatform: "tiktok",
     method: "oembed",
-    thumbnailUrl: null,
     status: "completed",
     errorMessage: null,
     query: null,
@@ -75,7 +74,7 @@ describe("toSpotResult", () => {
     expect(toSpotResult(search()).sortedByWords).toBe(false);
   });
 
-  it("signale une capture nécessaire pour un lien sans miniature exploitable", () => {
+  it("signale une capture nécessaire pour une recherche préparée, jamais lancée", () => {
     const result = toSpotResult(search({ matches: [], method: "manual_screenshot", status: "pending" }));
     expect(result).toMatchObject({ status: "failed", failReason: "needs_photo" });
   });

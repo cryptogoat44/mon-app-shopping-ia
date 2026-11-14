@@ -128,6 +128,15 @@ export function consumeRateLimit(request: FastifyRequest, name: RateLimitName): 
   return registerHit(keyFor(request, name), ruleFor(name)).allowed;
 }
 
+/** Comme consumeRateLimit, mais compté sous une clé choisie par la route (par
+ * exemple l'empreinte d'un jeton d'appareil, quand aucune session ne dit qui
+ * appelle et que l'adresse IP peut être commune à tous : celle du relais de
+ * l'hébergeur). Rend aussi le délai avant de réessayer. */
+export function consumeRateLimitFor(key: string, name: RateLimitName): { allowed: boolean; retryAfterMs: number } {
+  if (isDisabled()) return { allowed: true, retryAfterMs: 0 };
+  return registerHit(`${name}:${key}`, ruleFor(name));
+}
+
 export default fp(async function rateLimitPlugin(fastify: FastifyInstance) {
   fastify.decorate("rateLimit", buildPreHandler);
   fastify.decorate("rateLimitCheck", buildCheckPreHandler);

@@ -40,7 +40,6 @@ const LAUNCHED: ProductSearch = {
   sourceUrl: null,
   sourcePlatform: "photo",
   method: "manual_screenshot",
-  thumbnailUrl: null,
   status: "completed",
   errorMessage: null,
   query: null,

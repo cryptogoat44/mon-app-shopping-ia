@@ -126,9 +126,13 @@ export const ANALYTICS_EVENTS = {
   // la capture (« player_capture ») est parti avec le module natif de capture
   // (lot « nettoyage avant le premier build »).
   player_opened: { platform: PLAYER_PLATFORM, source: oneOf(["paste", "share"]) },
-  player_unavailable: { platform: PLAYER_PLATFORM, reason: oneOf(["not_public", "not_a_video", "no_answer", "short_link", "network", "player_error", "crashed"]) },
-  player_fallback: { platform: PLAYER_PLATFORM, choice: oneOf(["screenshot", "open_app", "embed"]) },
-  player_consent: { platform: PLAYER_PLATFORM, choice: oneOf(["play", "screenshot"]) },
+  player_unavailable: {
+    platform: PLAYER_PLATFORM,
+    reason: oneOf(["build_off", "server_off", "server_unknown", "not_ios", "no_snapshot", "consent_refused", "embed_unavailable", "player_error", "no_answer", "webview_error", "snapshot_failed"]),
+  },
+  player_fallback: { platform: PLAYER_PLATFORM, choice: oneOf(["screenshot", "open_app"]) },
+  player_consent: { platform: PLAYER_PLATFORM, choice: oneOf(["play", "refuse"]) },
+  player_spot: { platform: PLAYER_PLATFORM },
 } as const satisfies Record<string, Record<string, Rule>>;
 
 export type AnalyticsEvent = keyof typeof ANALYTICS_EVENTS;

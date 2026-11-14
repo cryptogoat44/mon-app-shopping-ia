@@ -376,6 +376,8 @@ describe("lancement avec la voie C (tout en une fois)", () => {
       { source: "lens", urls: LENS_URLS, country: "fr" },
       { source: "shopping", urls: SHOP_URLS, country: "fr" },
     ]);
+    // Le membre qui cherche part avec l'observation (pour son réglage « Aider les autres membres », 0041).
+    expect(observeMock.mock.calls.map(([, input]) => input.observerId)).toEqual([USER, USER]);
     // Anglais (région de l'appareil) : le pays de la recherche est celui de l'appareil.
     observeMock.mockReset();
     await launch(target, preparedSearch(), {}, "en-GB");

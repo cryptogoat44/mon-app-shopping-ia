@@ -43,8 +43,10 @@ import {
   MESSAGES_FROM_LABELS,
   REPORT_TARGET_LABELS,
   SEARCH_FAILURE_LABELS,
+  VIDEO_SPOT_SOURCE_LABELS,
   SEARCH_STATUS_LABELS,
   STOCK_STATE_LABELS,
+  SOLD_OUT_SOURCE_LABELS,
   TRYON_AGE_STATUS_LABELS,
   TRYON_EVENT_STATUS_LABELS,
   TRYON_FAILURE_LABELS,
@@ -388,6 +390,7 @@ function accountSection(ctx: Ctx): Html {
     .field("piece_sends_from", enumLabel(ctx, PIECE_SENDS_FROM_LABELS, row.piece_sends_from))
     .field("messages_from", enumLabel(ctx, MESSAGES_FROM_LABELS, row.messages_from))
     .field("price_alerts_enabled")
+    .field("help_others")
     .field("created_at")
     .field("updated_at");
   return section(ctx, "account", article(null, account.rows(), profile.rows()));
@@ -454,7 +457,9 @@ function searchesSection(ctx: Ctx): Html {
               : tr(ctx, EXPORT_TEXT.openLink, { site })
         )
       )
-      // Miniature fournie par la plateforme : adresse signée qui expire.
+      // Recherches d'avant le 12 novembre 2026 seulement (voie « couverture »
+      // retirée) : adresse signée, expirée, montrée comme un simple lien que le
+      // serveur n'ouvre jamais.
       .field("thumbnail_url", link(ctx, row.thumbnail_url, (site) => tr(ctx, EXPORT_TEXT.temporaryImage, { site })))
       .field("method", enumLabel(ctx, RECOGNITION_METHOD_LABELS, row.method))
       .field("query", multiline(row.query))
@@ -948,6 +953,9 @@ function alertsSection(ctx: Ctx): Html {
       .field("notify_price_drop")
       .field("notify_restock")
       .field("notify_sold_out")
+      .line(tr(ctx, EXPORT_COLUMNS.wishWatches.target_price.label), price(ctx, row.target_price, null, row.target_currency), ["target_price", "target_currency"])
+      .field("target_country", str(row.target_country))
+      .field("below_target")
       .field("created_at")
       .field("updated_at")
       .render(str(row.wishlist_item_title))
@@ -961,6 +969,9 @@ function alertsSection(ctx: Ctx): Html {
       .field("last_seen_on", day(ctx, row.last_seen_on))
       .field("stock_state", enumLabel(ctx, STOCK_STATE_LABELS, row.stock_state))
       .field("stock_on", day(ctx, row.stock_on))
+      .field("sold_out_source", enumLabel(ctx, SOLD_OUT_SOURCE_LABELS, row.sold_out_source))
+      .field("member_country", str(row.member_country))
+      .field("bought_on", day(ctx, row.bought_on))
       .render(str(row.wishlist_item_title))
   );
   const events = newestFirst(wishAlertEvents, "created_on").map((row) =>
@@ -971,10 +982,16 @@ function alertsSection(ctx: Ctx): Html {
       .line(tr(ctx, EXPORT_COLUMNS.wishAlertEvents.new_price.label), price(ctx, row.new_price, null, row.currency), ["new_price", "currency"])
       .field("status", enumLabel(ctx, WISH_ALERT_STATUS_LABELS, row.status))
       .field("created_on", day(ctx, row.created_on))
+      .field("sent_on", day(ctx, row.sent_on))
       .render(enumLabel(ctx, WISH_ALERT_KIND_LABELS, row.kind))
   );
   const reports = newestFirst(stockReports, "created_on").map((row) =>
-    new Card(ctx, "stockReports", row).field("created_on", day(ctx, row.created_on)).render(tr(ctx, EXPORT_TEXT.stockReportPiece))
+    new Card(ctx, "stockReports", row)
+      .field("created_on", day(ctx, row.created_on))
+      .field("country", str(row.country))
+      .field("helps_others")
+      .field("in_streak")
+      .render(tr(ctx, EXPORT_TEXT.stockReportPiece))
   );
   const parts: [Bilingual, Html[]][] = [
     [EXPORT_TEXT.alertWatchesTitle, watches],
@@ -1038,6 +1055,46 @@ function tryonSection(ctx: Ctx): Html {
   ]);
 }
 
+/** Mémoire des vidéos : la plateforme d'après l'adresse publique de la vidéo. */
+function videoTitle(ctx: Ctx, url: unknown): string {
+  const href = safeHref(url);
+  if (href !== null && siteOf(href).endsWith("instagram.com")) return tr(ctx, EXPORT_TEXT.videoInstagram);
+  if (href !== null && siteOf(href).endsWith("tiktok.com")) return tr(ctx, EXPORT_TEXT.videoTiktok);
+  return str(url) ?? "";
+}
+
+/** Mémoire collective des vidéos : vos spots (la vidéo, d'où venait l'image,
+ * le moment) et vos « C'est bien cette pièce ». */
+function videosSection(ctx: Ctx): Html {
+  const { videoSpots, videoConfirmations } = ctx.data;
+  const openVideo = (site: string) => tr(ctx, EXPORT_TEXT.openVideo, { site });
+  const spots = newestFirst(videoSpots, "created_at").map((row) => {
+    const seconds = typeof row.moment_seconds === "number" ? row.moment_seconds : null;
+    return new Card(ctx, "videoSpots", row)
+      .field("canonical_url", link(ctx, row.canonical_url, openVideo))
+      .field("source", enumLabel(ctx, VIDEO_SPOT_SOURCE_LABELS, row.source))
+      .field("moment_seconds", seconds === null ? null : tr(ctx, EXPORT_TEXT.videoMoment, { minutes: String(Math.floor(seconds / 60)), seconds: String(seconds % 60) }))
+      .field("created_at")
+      .render(videoTitle(ctx, row.canonical_url));
+  });
+  const confirmations = newestFirst(videoConfirmations, "created_at").map((row) =>
+    new Card(ctx, "videoConfirmations", row)
+      .use("product")
+      .field("canonical_url", link(ctx, row.canonical_url, openVideo))
+      .field("created_at")
+      .render(str(row.product))
+  );
+  const parts: [Bilingual, Html[]][] = [
+    [EXPORT_TEXT.videoSpotsTitle, spots],
+    [EXPORT_TEXT.videoConfirmationsTitle, confirmations],
+  ];
+  return section(
+    ctx,
+    "videos",
+    parts.filter(([, cards]) => cards.length > 0).map(([title, cards]) => subsection(ctx, tr(ctx, title, { count: String(cards.length) }), null, cards))
+  );
+}
+
 function exportsSection(ctx: Ctx): Html {
   const cards = newestFirst(ctx.data.dataExportRequests, "requested_at").map((row) =>
     new Card(ctx, "dataExportRequests", row)
@@ -1054,6 +1111,7 @@ function sectionCount(data: ExportData, id: ExportSectionId): number | null {
   const counts: Record<ExportSectionId, number | null> = {
     account: null,
     searches: data.productSearches.length,
+    videos: data.videoSpots.length,
     wishlist: data.wishlistItems.length,
     collections: data.collections.length,
     alerts: data.wishWatches.length,
@@ -1082,6 +1140,7 @@ function sectionCount(data: ExportData, id: ExportSectionId): number | null {
 const SECTION_RENDERERS: Record<ExportSectionId, (ctx: Ctx) => Html> = {
   account: accountSection,
   searches: searchesSection,
+  videos: videosSection,
   wishlist: wishlistSection,
   collections: collectionsSection,
   alerts: alertsSection,

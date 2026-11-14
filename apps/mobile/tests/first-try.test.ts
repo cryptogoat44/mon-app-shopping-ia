@@ -43,7 +43,6 @@ describe("statistique « cadre ajusté » : n'est plus toujours vraie", () => {
     sourceUrl: null,
     sourcePlatform: "photo",
     method: "manual_screenshot",
-    thumbnailUrl: null,
     status: "completed",
     errorMessage: null,
     query: null,
@@ -155,7 +154,7 @@ describe("« Voir mes Envies » : le Profil s'ouvre sur l'onglet Envies", () => 
   });
 
   it("depuis un résultat : le parcours du Spotter est oublié, puis le Profil s'ouvre sur les Envies", () => {
-    startDraft({ searchId: null, sourceUrl: null, platform: "photo", previewUrl: null, localImageUri: "file:///capture.jpg" });
+    startDraft({ searchId: null, localImageUri: "file:///capture.jpg" });
     const dismissTo = vi.fn();
     openWishlistFromSpotter({ dismissTo } as unknown as Parameters<typeof openWishlistFromSpotter>[0]);
     expect(dismissTo).toHaveBeenCalledWith({ pathname: "/profile", params: { segment: "wishlist" } });
@@ -168,7 +167,7 @@ describe("aide du lien : la capture d'écran d'abord", () => {
     ["fr", fr],
     ["en", en],
   ] as const)("%s : quatre étapes, la dernière nomme le bouton principal ; trois étapes pour « Comment ça marche »", (_locale, catalog) => {
-    const steps = [...catalog.preview.captureSteps(catalog.preview.theApp, catalog.preview.screenshotShortcut.ios).slice(0, 3), catalog.firstTry.linkHelp.lastStep(catalog.firstTry.linkHelp.addScreenshot)];
+    const steps = [...catalog.preview.captureSteps(catalog.preview.theApp, catalog.preview.screenshotShortcut.ios), catalog.firstTry.linkHelp.lastStep(catalog.firstTry.linkHelp.addScreenshot)];
     expect(steps).toHaveLength(4);
     expect(steps[2]).toContain(catalog.preview.screenshotShortcut.ios);
     expect(steps[3]).toContain(catalog.firstTry.linkHelp.addScreenshot);

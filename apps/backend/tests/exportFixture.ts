@@ -424,6 +424,17 @@ export function fixture(): ExportData {
       { id: "7b000000-0000-4000-8000-000000000001", order_ref: "CMD-2026-0042", quantity: 5, remaining: 4, expires_at: "2027-10-06T18:00:00+00:00", created_at: "2026-10-06T17:00:00+00:00" },
     ],
     tryonReports: [{ id: "7c000000-0000-4000-8000-000000000001", item_id: TRIED_ITEM, reason: "wrong_piece", comment: "Ce n'est pas la bonne veste.", created_at: "2026-10-06T18:05:00+00:00" }],
+    // Mémoire des vidéos (migrations 0038 et 0039).
+    videoSpots: [
+      {
+        canonical_url: "https://www.instagram.com/reel/C8abcDEF123/",
+        source: "instagram_player",
+        moment_seconds: 75,
+        created_at: "2026-10-10T08:30:00+00:00",
+        search_id: "5e000000-0000-4000-8000-000000000001",
+      },
+    ],
+    videoConfirmations: [{ canonical_url: "https://www.tiktok.com/@/video/7412345678901234567", product: "Veste <b>reperee</b>", created_at: "2026-10-10T09:00:00+00:00" }],
   };
 }
 
