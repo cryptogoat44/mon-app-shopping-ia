@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { basename, join, relative } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { PRODUCTION_SERVICES, contentSecurityPolicy } from "../web-headers";
@@ -69,8 +69,64 @@ function runtimeImports(source: string): string[] {
 
 /** Ce qui part vraiment dans un paquet : le fichier une fois ses types et ses
  * commentaires effacés (la compilation de TypeScript, comme celle de Metro). */
-function runtimeOf(source: string): string {
-  return ts.transpileModule(source, { compilerOptions: { removeComments: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+function runtimeOf(source: string, fileName = "module.ts"): string {
+  return ts.transpileModule(source, { fileName, compilerOptions: { removeComments: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, jsx: ts.JsxEmit.Preserve } }).outputText;
+}
+
+const CODE_EXTENSIONS = [".tsx", ".ts", ".jsx", ".js"];
+
+/** Le fichier qu'un import désigne pour une plateforme, comme Metro : version
+ * .ios (ou .web) d'abord, puis .native pour l'iPhone, puis le fichier de
+ * base ; un chemin au suffixe écrit en entier désigne ce fichier-là. null :
+ * une bibliothèque, ou un fichier hors de l'app. */
+function resolveFor(platform: "ios" | "web", from: string, specifier: string): string | null {
+  let base: string;
+  if (specifier.startsWith("@/")) base = join(SRC, specifier.slice(2));
+  else if (specifier.startsWith(".")) base = join(dirname(from), specifier);
+  else return null;
+  if (existsSync(base) && statSync(base).isFile()) return base;
+  const suffixes = platform === "ios" ? [".ios", ".native", ""] : [".web", ""];
+  for (const candidate of [base, join(base, "index")]) {
+    for (const suffix of suffixes) {
+      for (const extension of CODE_EXTENSIONS) {
+        const path = `${candidate}${suffix}${extension}`;
+        if (existsSync(path) && statSync(path).isFile()) return path;
+      }
+    }
+  }
+  return null;
+}
+
+/** Fichiers de l'app que reçoit le paquet d'une plateforme à partir de ces
+ * imports d'écran : imports exécutés et réexportations suivis (les imports de
+ * types disparaissent à la compilation). Les fichiers partagés ne sont pas
+ * suivis plus loin : un autre test vérifie qu'ils n'importent rien de
+ * l'essayage ni aucun chemin propre à une plateforme. */
+function bundledFrom(platform: "ios" | "web", screen: string, specifiers: string[]): Set<string> {
+  const seen = new Set<string>();
+  const queue = specifiers.map((specifier) => resolveFor(platform, screen, specifier)).filter((path): path is string => path !== null);
+  while (queue.length > 0) {
+    const file = queue.pop()!;
+    if (seen.has(file)) continue;
+    seen.add(file);
+    if (!/\.(ts|tsx|js|jsx)$/.test(file)) continue;
+    const source = read(file);
+    if (!isPlatformFile(file) && !hasMarker(source)) continue;
+    for (const specifier of importedPaths(runtimeOf(source, file))) {
+      const target = resolveFor(platform, file, specifier);
+      if (target) queue.push(target);
+    }
+  }
+  return seen;
+}
+
+/** Noms exportés par un module : fonctions et réexportations (« export { A } from … »). */
+function exportedNames(source: string): string[] {
+  const functions = [...source.matchAll(/^export function (\w+)/gm)].map((match) => match[1]!);
+  const reexported = [...source.matchAll(/^export \{([^}]+)\} from/gm)].flatMap((match) =>
+    match[1]!.split(",").map((name) => name.trim().split(/\s+as\s+/).pop()!).filter((name) => name && !name.startsWith("type "))
+  );
+  return [...functions, ...reexported].sort();
 }
 
 describe("détecteurs de ce garde-fou", () => {
@@ -168,12 +224,16 @@ describe("points d'entrée neutres", () => {
     }
   });
 
-  it("chaque version de base a sa version site, avec les mêmes noms exportés", () => {
-    const exported = (source: string) => [...source.matchAll(/^export function (\w+)/gm)].map((match) => match[1]).sort();
+  it("chaque version de base a sa version site et sa version iPhone, avec les mêmes noms exportés", () => {
+    expect(exportedNames('export function A() {}\nexport { B, C as D } from "./x";')).toEqual(["A", "B", "D"]);
     for (const entry of NEUTRAL_ENTRIES) {
-      const web = entry.replace(/\.tsx$/, ".web.tsx");
-      expect(existsSync(join(MOBILE, web)), web).toBe(true);
-      expect(exported(read(join(MOBILE, web))), web).toEqual(exported(read(join(MOBILE, entry))));
+      const base = exportedNames(read(join(MOBILE, entry)));
+      expect(base.length, entry).toBeGreaterThan(0);
+      for (const platform of [".web.tsx", ".ios.tsx"]) {
+        const sibling = entry.replace(/\.tsx$/, platform);
+        expect(existsSync(join(MOBILE, sibling)), sibling).toBe(true);
+        expect(exportedNames(read(join(MOBILE, sibling))), sibling).toEqual(base);
+      }
     }
   });
 
@@ -182,6 +242,64 @@ describe("points d'entrée neutres", () => {
       expect(read(join(MOBILE, screen)), screen).toContain('from "@/components/piece-extra-actions"');
     }
     expect(read(join(MOBILE, "src/app/(app)/settings.tsx"))).toContain('from "@/components/extra-data-settings"');
+  });
+});
+
+describe("ce que reçoit chaque paquet, à partir des écrans (résolution par plateforme, comme Metro)", () => {
+  const SCREEN = join(SRC, "app/(app)/settings.tsx");
+  const ENTRIES = ["@/components/piece-extra-actions", "@/components/extra-data-settings"];
+  const at = (path: string) => join(MOBILE, path);
+
+  it("le résolveur suit Metro : version de la plateforme d'abord, chemin au suffixe écrit en entier pris tel quel", () => {
+    expect(resolveFor("ios", SCREEN, "@/components/piece-extra-actions")).toBe(at("src/components/piece-extra-actions.ios.tsx"));
+    expect(resolveFor("web", SCREEN, "@/components/piece-extra-actions")).toBe(at("src/components/piece-extra-actions.web.tsx"));
+    expect(resolveFor("ios", at("src/components/tryon-ui.ios.tsx"), "./tryon-ui.web")).toBe(at("src/components/tryon-ui.web.tsx"));
+    expect(resolveFor("ios", SCREEN, "@/i18n")).toBe(at("src/i18n/index.ts"));
+    expect(resolveFor("ios", SCREEN, "react-native")).toBeNull();
+  });
+
+  it("iPhone : les écrans, la photo, les fichiers temporaires et l'enregistrement de l'iPhone ; jamais la fenêtre du site (choix de fichier, page rechargée, téléchargement)", () => {
+    const ios = bundledFrom("ios", SCREEN, ENTRIES);
+    for (const file of [
+      "src/components/piece-extra-actions.ios.tsx",
+      "src/components/extra-data-settings.ios.tsx",
+      "src/components/tryon-sheet.ios.tsx",
+      "src/components/tryon-steps.ios.tsx",
+      "src/components/tryon-photo-step.ios.tsx",
+      "src/components/tryon-result.ios.tsx",
+      "src/lib/tryon-photo.ios.ts",
+      "src/lib/tryon-files.ios.ts",
+      "src/lib/tryon-image.ios.ts",
+      "src/i18n/tryon-iphone-fr.ios.ts",
+      "src/i18n/tryon-iphone-en.ios.ts",
+      // Logique et textes du site, repris tels quels.
+      "src/lib/tryon-api.web.ts",
+      "src/lib/tryon-flow.web.ts",
+      "src/i18n/tryon-fr.web.ts",
+    ]) {
+      expect(ios.has(at(file)), file).toBe(true);
+    }
+    for (const file of ["src/components/tryon-sheet.web.tsx", "src/components/piece-extra-actions.web.tsx", "src/components/piece-extra-actions.tsx", "src/components/extra-data-settings.tsx"]) {
+      expect(ios.has(at(file)), file).toBe(false);
+    }
+  });
+
+  it("site : la fenêtre du site, et aucun fichier de l'iPhone", () => {
+    const web = bundledFrom("web", SCREEN, ENTRIES);
+    expect(web.has(at("src/components/tryon-sheet.web.tsx"))).toBe(true);
+    expect([...web].filter(isIosFile).map(rel)).toEqual([]);
+  });
+
+  it("iPhone : même délai d'abandon d'un essai que le site (le serveur abandonne le sien avant)", () => {
+    const timeout = (file: string) => /const CLIENT_TIMEOUT_MS = ([\d_]+);/.exec(read(at(file)))?.[1];
+    expect(timeout("src/components/tryon-sheet.ios.tsx")).toBe(timeout("src/components/tryon-sheet.web.tsx"));
+    expect(timeout("src/components/tryon-sheet.ios.tsx")).toBe("120_000");
+  });
+
+  it("iPhone : la fenêtre vide le dossier de l'essayage à l'ouverture et à la fermeture, et efface la photo remplacée", () => {
+    const sheet = withoutComments(read(at("src/components/tryon-sheet.ios.tsx")));
+    expect(sheet.match(/sweepTryonFiles\(\);/g)).toHaveLength(2);
+    expect(sheet).toContain("discardTryonFile(previous.uri)");
   });
 });
 
@@ -225,6 +343,15 @@ describe("photo et image : jamais rangées, suivies, partagées ni envoyées ail
 
   it("iPhone : aucun objet du navigateur dans les fichiers .ios de l'essayage", () => {
     const found = tryonFiles.filter(isIosFile).filter((file) => /\bdocument\.|\bwindow\.|URL\.createObjectURL|<input\b/.test(withoutComments(read(file))));
+    expect(found.map(rel)).toEqual([]);
+  });
+
+  it("iPhone : la photo et l'image produite sont affichées sans aucun cache d'images ; jamais Image.loadAsync ni prefetch (ils écrivent sur le disque)", () => {
+    const images = tryonFiles.filter(isIosFile).flatMap((file) => [...withoutComments(read(file)).matchAll(/<Image\b[\s\S]*?\/>/g)].map((match) => ({ file: rel(file), tag: match[0] })));
+    // L'aperçu de la photo et l'image produite.
+    expect(images.map((image) => image.file).sort()).toEqual(["src/components/tryon-photo-step.ios.tsx", "src/components/tryon-result.ios.tsx"]);
+    for (const image of images) expect(image.tag, image.file).toMatch(/cachePolicy="none"/);
+    const found = tryonFiles.filter(isIosFile).filter((file) => /Image\.(loadAsync|prefetch)|useImage\(|writeToCacheAsync/.test(withoutComments(read(file))));
     expect(found.map(rel)).toEqual([]);
   });
 

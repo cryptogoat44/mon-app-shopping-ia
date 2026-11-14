@@ -84,7 +84,7 @@ export function ResultStep({
 /** Signalement d'un résultat : un motif parmi quatre, un commentaire
  * facultatif (500 caractères au plus). Seuls la pièce, le motif et le
  * commentaire partent ; jamais l'image. */
-function ReportForm({ itemId, onSent, onCancel }: { itemId: string; onSent: () => void; onCancel: () => void }) {
+export function ReportForm({ itemId, onSent, onCancel }: { itemId: string; onSent: () => void; onCancel: () => void }) {
   const status = useTryonStatus();
   const [reason, setReason] = useState<TryonReportReason | null>(null);
   const [comment, setComment] = useState("");
