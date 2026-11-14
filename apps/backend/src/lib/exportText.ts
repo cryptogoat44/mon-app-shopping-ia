@@ -121,6 +121,8 @@ export const EXPORT_COLUMNS = {
     messages_from: shown("Qui peut vous écrire", "Who can write to you"),
     // Lot alertes prix et stock (migration 0036).
     price_alerts_enabled: shown("Alertes prix et stock", "Price and stock alerts"),
+    // Nouvelle version des alertes (migration 0041).
+    help_others: shown("Aider les autres membres", "Help other members"),
     created_at: shown("Compte créé le", "Account created on"),
     updated_at: shown("Profil modifié le", "Profile updated on"),
   },
@@ -437,6 +439,11 @@ export const EXPORT_COLUMNS = {
     notify_sold_out: shown("Prévenir quand elle est épuisée", "Notify me when sold out"),
     created_at: shown("Cloche activée le", "Bell turned on on"),
     updated_at: shown("Cloche modifiée le", "Bell changed on"),
+    // Nouvelle version des alertes (migration 0041) : le seuil de la baisse de prix.
+    target_price: shown("Prévenir si le prix passe sous", "Notify me if the price drops below"),
+    target_currency: shown("Devise du seuil", "Threshold currency"),
+    target_country: shown("Pays du seuil", "Threshold country"),
+    below_target: shown("Prix actuellement sous le seuil", "Price currently below the threshold"),
   },
   // … le suivi de vos envies (jamais d'où vient une observation)…
   wishTracking: {
@@ -450,6 +457,9 @@ export const EXPORT_COLUMNS = {
     last_seen_on: shown("Dernière fois vue le", "Last seen on"),
     stock_state: shown("Stock", "Stock"),
     stock_on: shown("Stock connu le", "Stock known on"),
+    sold_out_source: shown("Épuisée selon", "Sold out according to"),
+    member_country: shown("Pays de vos prix", "Country of your prices"),
+    bought_on: shown("Achetée le", "Bought on"),
   },
   // … vos alertes…
   wishAlertEvents: {
@@ -462,12 +472,18 @@ export const EXPORT_COLUMNS = {
     currency: shown("Devise", "Currency"),
     status: shown("État", "Status"),
     created_on: shown("Le", "On"),
+    // Migration 0041 : le jour d'envoi (aucune heure n'est gardée).
+    sent_on: shown("Envoyée le", "Sent on"),
   },
   // … et vos signalements « Plus disponible ».
   stockReports: {
     id: ID,
     match_key_hash: technical("Empreinte de la pièce signalée", "Fingerprint of the reported piece"),
     created_on: shown("Signalée « Plus disponible » le", "Reported “No longer available” on"),
+    // Migration 0041.
+    country: shown("Pays de la recherche", "Search country"),
+    helps_others: shown("Comptait pour les autres membres", "Counted for other members"),
+    in_streak: shown("Dans la série en cours", "In the current series"),
   },
   // Essayage virtuel (migration 0042) : statut d'âge et consentement…
   tryonProfile: {
@@ -753,6 +769,14 @@ export const STOCK_STATE_LABELS: Record<StockState, Bilingual> = {
   unknown: { fr: "Inconnu", en: "Unknown" },
   in_stock: { fr: "Disponible", en: "Available" },
   sold_out: { fr: "Épuisée", en: "Sold out" },
+};
+
+/** D'où vient un « épuisée » (0040 ; « vous », 0041 : votre signalement,
+ * pas encore confirmé par trois membres). */
+export const SOLD_OUT_SOURCE_LABELS: Record<"shop" | "members" | "reported", Bilingual> = {
+  shop: { fr: "la boutique", en: "the shop" },
+  members: { fr: "des membres", en: "members" },
+  reported: { fr: "vous", en: "you" },
 };
 
 /** Statut d'âge de l'essayage virtuel (jamais la date de naissance). */

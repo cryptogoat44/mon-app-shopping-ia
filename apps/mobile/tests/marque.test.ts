@@ -6,6 +6,7 @@ import marque from "@monapp/shared-types/marque.json";
 import { brandFileSlug } from "@monapp/shared-types";
 import { APP_FILE_SLUG, APP_GROUP, APP_NAME, APP_NAME_DISPLAY, APP_SCHEME, PUBLIC_WEB_URL } from "../src/constants/brand";
 import { configExpo, lireFichier } from "./expo-config";
+import { PRODUCTION_SERVICES } from "../web-headers";
 
 // Lot « nom et identifiants configurables ». Le nom du produit CHANGERA : il
 // est écrit à UN seul endroit, packages/shared-types/marque.json (MARQUE.md),
@@ -25,6 +26,7 @@ const AUTRE = {
   groupeApple: "group.fr.exemple.zorglub",
   identifiantExtensionPartage: "fr.exemple.zorglub.partage",
   adresseSite: "https://zorglub.exemple.test",
+  adresseServeur: "https://api.zorglub.exemple.test",
 };
 
 /** Le nom actuel, où qu'il soit et quelle que soit la casse. */
@@ -114,6 +116,9 @@ describe("fichier unique de la marque (packages/shared-types/marque.json)", () =
     expect(marque.identifiantExtensionPartage.startsWith(`${marque.identifiantApple}.`)).toBe(true);
     expect(marque.identifiantExtensionPartage).toMatch(/^[A-Za-z0-9.-]+$/);
     expect(marque.adresseSite).toMatch(/^https:\/\/[a-z0-9.-]+$/);
+    // Lot « durcissement des alertes » (app-05) : l'adresse du serveur de production, exigée des builds pour Apple.
+    expect(marque.adresseServeur).toMatch(/^https:\/\/[a-z0-9.-]+$/);
+    expect(PRODUCTION_SERVICES.apiUrl).toBe(marque.adresseServeur);
   });
 
   it("l'app lit ce fichier, et rien d'autre", () => {

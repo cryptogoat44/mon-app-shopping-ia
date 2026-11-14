@@ -630,6 +630,21 @@ export async function deletePushToken(token: string, signal?: AbortSignal): Prom
   await authorizedFetch("/api/me/push-token", { method: "DELETE", body: JSON.stringify(payload), ...(signal ? { signal } : {}) });
 }
 
+/** Oublie cet appareil SANS session (lot « durcissement des alertes ») :
+ * après une déconnexion forcée, ou quand l'oubli normal a échoué. Le serveur
+ * répond 204 que le jeton ait été enregistré ou non ; toute autre réponse
+ * (hors réseau, limite, panne) est une erreur : l'oubli reste en attente. */
+export async function forgetPushTokenWithoutSession(token: string, signal?: AbortSignal): Promise<void> {
+  const payload: DeletePushTokenRequest = { token };
+  const response = await fetch(`${apiUrl}/api/push-token/forget`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...appBuildHeaders(), "Accept-Language": acceptLanguage() },
+    body: JSON.stringify(payload),
+    ...(signal ? { signal } : {}),
+  });
+  if (!response.ok) throw new ApiError(response.status, { error: "push_forget_failed", message: t.common.unknownServerError });
+}
+
 // ---- Alertes prix et stock (lot 2, migration 0036) ----
 // Sans 0036 sur le serveur, GET /api/alerts/status dit « indisponible » et
 // les autres routes répondent 404 « alerts_unavailable » : l'état partagé
@@ -662,9 +677,10 @@ function forgetAlertsOn(e: unknown): never {
   throw e;
 }
 
-/** L'interrupteur « Alertes prix et stock » des Réglages. */
-export async function updateWishAlertsSettings(enabled: boolean): Promise<WishAlertsStatus> {
-  const payload: UpdateWishAlertsSettingsRequest = { enabled };
+/** Les réglages des alertes : « Alertes prix et stock » (un booléen, comme
+ * avant) ou « Aider les autres membres » (0041). */
+export async function updateWishAlertsSettings(choice: boolean | UpdateWishAlertsSettingsRequest): Promise<WishAlertsStatus> {
+  const payload: UpdateWishAlertsSettingsRequest = typeof choice === "boolean" ? { enabled: choice } : choice;
   try {
     const response = await authorizedFetch("/api/alerts/settings", { method: "PUT", body: JSON.stringify(payload) });
     const status = readWishAlertsStatus(await response.json().catch(() => null));

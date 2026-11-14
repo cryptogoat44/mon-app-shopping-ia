@@ -1,6 +1,6 @@
 import type { Locale } from "./locale.js";
 import { BRAND } from "./brand.js";
-import { COLLECTION_ITEMS_MAX, COLLECTION_NAME_MAX_LENGTH, COLLECTIONS_MAX, COMMENT_MAX_LENGTH, MESSAGE_MAX_LENGTH } from "@monapp/shared-types";
+import { COLLECTION_ITEMS_MAX, COLLECTION_NAME_MAX_LENGTH, COLLECTIONS_MAX, COMMENT_MAX_LENGTH, MESSAGE_MAX_LENGTH, WISHLIST_ITEMS_MAX } from "@monapp/shared-types";
 import { RATE_LIMITED_MESSAGE } from "../plugins/rateLimit.js";
 import { SEARCH_CAPACITY_MESSAGES } from "./searchCapacity.js";
 import { UPDATE_REQUIRED_MESSAGE } from "./appVersion.js";
@@ -175,6 +175,9 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
     `You already have ${COLLECTIONS_MAX} collections: delete one to create another.`,
   [`Cette collection contient déjà ${COLLECTION_ITEMS_MAX} envies : retirez-en une pour en ajouter une autre.`]:
     `This collection already holds ${COLLECTION_ITEMS_MAX} wishes: remove one to add another.`,
+  // Lot « durcissement des alertes » : plafond d'envies par membre.
+  [`Vous avez déjà ${WISHLIST_ITEMS_MAX} envies : retirez-en une pour en garder une autre.`]:
+    `You already have ${WISHLIST_ITEMS_MAX} wishes: remove one to keep another.`,
   "Vous avez modifié beaucoup de collections en peu de temps. Réessayez dans un moment.":
     "You've changed a lot of collections in a short time. Please try again in a moment.",
   "Vous avez changé souvent la visibilité de vos collections. Réessayez dans une heure.":
@@ -194,6 +197,8 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Jeton de notification invalide.": "Invalid notification token.",
   "Trop de changements des notifications en peu de temps. Réessayez dans une heure.":
     "Too many notification changes in a short time. Please try again in an hour.",
+  "Trop de demandes pour les notifications en peu de temps. Réessayez dans une heure.":
+    "Too many notification requests in a short time. Please try again in an hour.",
   // Profil (lot « profil et icône des réglages ») : bio et photo de profil.
   "La bio est trop longue (160 caractères maximum).": "Your bio is too long (160 characters maximum).",
   "La bio ne peut pas dépasser 3 lignes.": "Your bio can't be longer than 3 lines.",

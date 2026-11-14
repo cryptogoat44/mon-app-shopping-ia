@@ -63,7 +63,7 @@ import { findOwnWish } from "../lib/wishShare.js";
 import { trackNewWish } from "../lib/wishAlerts.js";
 import { searchLocaleFor } from "../lib/locale.js";
 import { consumeRateLimit } from "../plugins/rateLimit.js";
-import { toWishlistItem, type WishlistItemRow } from "./wishlist.js";
+import { toWishlistItem, WISHLIST_FULL, wishlistFull, type WishlistItemRow } from "./wishlist.js";
 
 /** Envies par page (les siennes dans une collection ; celles d'un ami). */
 const OWN_PAGE_SIZE = 24;
@@ -462,6 +462,13 @@ export default async function collectionsRoutes(fastify: FastifyInstance) {
       }
       const already = (existing as WishlistItemRow[] | null)?.[0];
       if (already) return reply.send({ item: toWishlistItem(already), alreadyKept: true } satisfies KeepSharedItemResponse);
+      // Plafond d'envies par membre (lot « durcissement des alertes »), comme POST /api/wishlist.
+      try {
+        if (await wishlistFull(fastify, userId)) return reply.code(409).send(WISHLIST_FULL);
+      } catch (error) {
+        request.log.error({ error }, "Échec de lecture du nombre d'envies avant « Garder »");
+        return reply.code(500).send(SERVER_ERROR);
+      }
 
       const { data, error } = await fastify.supabaseAdmin
         .from("wishlist_items")

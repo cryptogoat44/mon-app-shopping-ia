@@ -3,7 +3,9 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { EN_MESSAGES, localizeMessage } from "../src/lib/messages.js";
 import { BRAND } from "../src/lib/brand.js";
+import { COUNTRY_CURRENCIES, SEARCH_COUNTRIES } from "@monapp/shared-types";
 import { requestLocale, searchLocaleFor } from "../src/lib/locale.js";
+import { googleDomainFor } from "../src/services/serpapi.js";
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -56,5 +58,16 @@ describe("messages d'erreur en deux langues (lot 3)", () => {
     expect(searchLocaleFor(withLanguage("en-GB"))).toEqual({ hl: "en", country: "gb" });
     expect(searchLocaleFor(withLanguage("en-419"))).toEqual({ hl: "en", country: "us" });
     expect(searchLocaleFor(withLanguage())).toEqual({ hl: "fr", country: "fr" });
+  });
+
+  // Lot « durcissement des alertes » : la recherche elle-même garde le pays
+  // de l'appareil (inchangé) ; seules les ALERTES s'en tiennent aux pays dont
+  // la devise et le domaine de Google sont connus (SEARCH_COUNTRIES, lu par
+  // lib/wishAlerts.ts). Cette liste doit rester alignée sur ces deux tables.
+  it("pays des alertes : la liste suit exactement les devises et les domaines de Google connus ; la recherche, elle, n'est pas restreinte", () => {
+    expect([...SEARCH_COUNTRIES].sort()).toEqual(Object.keys(COUNTRY_CURRENCIES).sort());
+    for (const country of SEARCH_COUNTRIES) expect(googleDomainFor(country), country).toMatch(/^google\./);
+    expect(new Set(SEARCH_COUNTRIES.map((country) => googleDomainFor(country))).size).toBe(SEARCH_COUNTRIES.length);
+    expect(searchLocaleFor(withLanguage("en-AU"))).toEqual({ hl: "en", country: "au" });
   });
 });

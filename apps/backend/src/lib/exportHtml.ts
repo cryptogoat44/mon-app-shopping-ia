@@ -46,6 +46,7 @@ import {
   VIDEO_SPOT_SOURCE_LABELS,
   SEARCH_STATUS_LABELS,
   STOCK_STATE_LABELS,
+  SOLD_OUT_SOURCE_LABELS,
   TRYON_AGE_STATUS_LABELS,
   TRYON_EVENT_STATUS_LABELS,
   TRYON_FAILURE_LABELS,
@@ -389,6 +390,7 @@ function accountSection(ctx: Ctx): Html {
     .field("piece_sends_from", enumLabel(ctx, PIECE_SENDS_FROM_LABELS, row.piece_sends_from))
     .field("messages_from", enumLabel(ctx, MESSAGES_FROM_LABELS, row.messages_from))
     .field("price_alerts_enabled")
+    .field("help_others")
     .field("created_at")
     .field("updated_at");
   return section(ctx, "account", article(null, account.rows(), profile.rows()));
@@ -951,6 +953,9 @@ function alertsSection(ctx: Ctx): Html {
       .field("notify_price_drop")
       .field("notify_restock")
       .field("notify_sold_out")
+      .line(tr(ctx, EXPORT_COLUMNS.wishWatches.target_price.label), price(ctx, row.target_price, null, row.target_currency), ["target_price", "target_currency"])
+      .field("target_country", str(row.target_country))
+      .field("below_target")
       .field("created_at")
       .field("updated_at")
       .render(str(row.wishlist_item_title))
@@ -964,6 +969,9 @@ function alertsSection(ctx: Ctx): Html {
       .field("last_seen_on", day(ctx, row.last_seen_on))
       .field("stock_state", enumLabel(ctx, STOCK_STATE_LABELS, row.stock_state))
       .field("stock_on", day(ctx, row.stock_on))
+      .field("sold_out_source", enumLabel(ctx, SOLD_OUT_SOURCE_LABELS, row.sold_out_source))
+      .field("member_country", str(row.member_country))
+      .field("bought_on", day(ctx, row.bought_on))
       .render(str(row.wishlist_item_title))
   );
   const events = newestFirst(wishAlertEvents, "created_on").map((row) =>
@@ -974,10 +982,16 @@ function alertsSection(ctx: Ctx): Html {
       .line(tr(ctx, EXPORT_COLUMNS.wishAlertEvents.new_price.label), price(ctx, row.new_price, null, row.currency), ["new_price", "currency"])
       .field("status", enumLabel(ctx, WISH_ALERT_STATUS_LABELS, row.status))
       .field("created_on", day(ctx, row.created_on))
+      .field("sent_on", day(ctx, row.sent_on))
       .render(enumLabel(ctx, WISH_ALERT_KIND_LABELS, row.kind))
   );
   const reports = newestFirst(stockReports, "created_on").map((row) =>
-    new Card(ctx, "stockReports", row).field("created_on", day(ctx, row.created_on)).render(tr(ctx, EXPORT_TEXT.stockReportPiece))
+    new Card(ctx, "stockReports", row)
+      .field("created_on", day(ctx, row.created_on))
+      .field("country", str(row.country))
+      .field("helps_others")
+      .field("in_streak")
+      .render(tr(ctx, EXPORT_TEXT.stockReportPiece))
   );
   const parts: [Bilingual, Html[]][] = [
     [EXPORT_TEXT.alertWatchesTitle, watches],

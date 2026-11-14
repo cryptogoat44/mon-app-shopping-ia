@@ -10,6 +10,7 @@ import {
   type SharedCollectionPage,
   type SharedCollectionsList,
   type WishlistPage,
+  WISHLIST_ITEMS_MAX,
 } from "@monapp/shared-types";
 import rateLimitPlugin from "../src/plugins/rateLimit.js";
 import moderationPlugin from "../src/plugins/moderation.js";
@@ -653,8 +654,8 @@ describe("« Garder » et « En parler »", () => {
     expect(fake.table("wish_tracking")).toHaveLength(0);
   });
 
-  it("alertes prix (0036) : « Garder » crée le suivi de l'envie copiée (clé de la pièce, sans prix de référence), une seule fois", async () => {
-    const fake = seeded({ follows: friends(ALICE, BOB) }, { rpc: async (fn) => (fn === "wish_alerts_version" ? { data: 1, error: null } : { data: null, error: { code: "PGRST202", message: "absente" } }) });
+  it("alertes prix (0036, 0041) : « Garder » crée le suivi de l'envie copiée (empreinte de la pièce, sans prix), une seule fois", async () => {
+    const fake = seeded({ follows: friends(ALICE, BOB) }, { rpc: async (fn) => (fn === "wish_alerts_version" ? { data: 3, error: null } : { data: null, error: { code: "PGRST202", message: "absente" } }) });
     const target = await collectionsApp(fake.db);
     const itemId = await sharedBag(fake, target);
     expect((await as(target, BOB).post(`/api/collection-items/${itemId}/keep`)).statusCode).toBe(201);
@@ -665,12 +666,26 @@ describe("« Garder » et « En parler »", () => {
         wishlist_item_id: bobs[0]!.id,
         user_id: BOB,
         match_key_hash: trackingKeyOf("https://boutique.example/sac", "Boutique")!.hash,
-        merchant_key: "boutique",
-        key_version: 1,
+        merchant_key: null,
+        key_version: 2,
       }),
     ]);
-    // Aucune proposition d'origine : la première observation fixera la référence.
-    expect(fake.table("wish_tracking")[0]).not.toHaveProperty("ref_price");
+    // Aucune proposition d'origine : aucun prix vu (le premier prix vu fixera le seuil d'une cloche).
+    expect(fake.table("wish_tracking")[0]).not.toHaveProperty("last_price");
+  });
+
+  // Lot « durcissement des alertes » (entrees-07) : le plafond d'envies par membre vaut aussi ici.
+  it(`« Garder » avec déjà ${WISHLIST_ITEMS_MAX} envies : 409 « wishlist_full », rien n'est ajouté`, async () => {
+    const fake = seeded({ follows: friends(ALICE, BOB) });
+    const target = await collectionsApp(fake.db);
+    const itemId = await sharedBag(fake, target);
+    for (let index = fake.table("wishlist_items").filter((row) => row.user_id === BOB).length; index < WISHLIST_ITEMS_MAX; index += 1) {
+      fake.table("wishlist_items").push({ id: `e2000000-0000-4000-8000-${String(index).padStart(12, "0")}`, user_id: BOB, title: `Envie ${index}`, image_url: "https://images.example/x.jpg", created_at: "2026-11-01T10:00:00+00:00" });
+    }
+    const res = await as(target, BOB).post(`/api/collection-items/${itemId}/keep`);
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: "wishlist_full", message: `Vous avez déjà ${WISHLIST_ITEMS_MAX} envies : retirez-en une pour en garder une autre.` });
+    expect(fake.table("wishlist_items").filter((row) => row.user_id === BOB)).toHaveLength(WISHLIST_ITEMS_MAX);
   });
 
   it("En parler : l'envie jointe au message pour son auteur, image copiée chez l'expéditeur ; jamais pour quelqu'un d'autre", async () => {

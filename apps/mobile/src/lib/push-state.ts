@@ -167,16 +167,22 @@ export function conversationHref(id: string) {
   return { pathname: "/conversation" as const, params: { id } };
 }
 
-/** Ce qu'ouvre une notification touchée : la conversation d'un message,
- * l'envie d'une alerte, ou vos Envies (alerte groupée) ; null si les
- * données sont illisibles (rien ne s'ouvre). */
+/** Ce qu'ouvre une notification touchée : la conversation d'un message
+ * (`{ conversationId }`), l'envie d'une alerte (`{ wishlistItemId }` seul :
+ * sa fiche charge tout depuis le serveur), ou vos Envies (alerte groupée,
+ * sans aucune donnée) ; null si les données sont illisibles (rien ne
+ * s'ouvre). Une notification de message porte toujours `conversationId` :
+ * elle est lue en premier, jamais prise pour une alerte. */
 export type NotificationTarget = { kind: "conversation"; id: string } | { kind: "wish"; id: string } | { kind: "wishes" };
 
 export function notificationTarget(data: unknown): NotificationTarget | null {
+  if (typeof data === "object" && data !== null && "conversationId" in data) {
+    const conversation = conversationIdFromNotification(data);
+    return conversation ? { kind: "conversation", id: conversation } : null;
+  }
   const alert = parseWishAlertPushData(data);
-  if (alert) return alert.wishlistItemId ? { kind: "wish", id: alert.wishlistItemId } : { kind: "wishes" };
-  const conversation = conversationIdFromNotification(data);
-  return conversation ? { kind: "conversation", id: conversation } : null;
+  if (!alert) return null;
+  return alert.wishlistItemId ? { kind: "wish", id: alert.wishlistItemId } : { kind: "wishes" };
 }
 
 /** Paramètre `from` de la fiche d'une envie ouverte par une alerte : le clic

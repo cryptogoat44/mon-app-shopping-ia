@@ -104,7 +104,9 @@ describe("reception-05 : lien de vidéo en attente oublié à la déconnexion et
     const auth = code("src/lib/auth-context.tsx");
     const signOut = auth.slice(auth.indexOf("const signOut = useCallback"));
     expect(signOut.indexOf("await pendingVideoLinks.clear()")).toBeGreaterThan(-1);
-    expect(signOut.indexOf("await pendingVideoLinks.clear()")).toBeLessThan(signOut.indexOf("supabase.auth.signOut()"));
+    // « supabase.auth.signOut( » : avec ou sans options (« local » depuis le lot « durcissement des alertes »).
+    expect(signOut.indexOf("supabase.auth.signOut(")).toBeGreaterThan(-1);
+    expect(signOut.indexOf("await pendingVideoLinks.clear()")).toBeLessThan(signOut.indexOf("supabase.auth.signOut("));
     expect(auth).toContain("if (sessionUserChanged(previousUserRef.current, current)) void pendingVideoLinks.clear();");
   });
 });

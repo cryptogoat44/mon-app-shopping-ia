@@ -742,7 +742,7 @@ export const fr = {
     kinds: { price_drop: "Baisse de prix", restock: "Retour en stock", sold_out: "Épuisé" },
     kindsInline: { price_drop: "baisse de prix", restock: "retour en stock", sold_out: "épuisé" },
     kindHints: {
-      price_drop: "Quand son prix baisse dans cette boutique.",
+      price_drop: "Quand son prix passe sous le seuil que vous choisissez, dans cette boutique.",
       restock: "Quand elle revient en stock dans cette boutique.",
       sold_out: "Quand elle est épuisée dans cette boutique.",
     },
@@ -753,7 +753,24 @@ export const fr = {
     bellOnLabel: (title: string, kinds: string) => `Alerte activée pour ${title} : ${kinds}. Toucher pour la modifier`,
     sheetTitle: "Alerte pour cette pièce",
     sheetIntro:
-      `${BRAND} vous prévient tout de suite quand une recherche ou un achat fait dans ${BRAND} montre cette pièce dans la même boutique, moins chère ou de nouveau en stock. Personne ne sait qui l'a cherchée, ni qui la suit.`,
+      `${BRAND} vous prévient tout de suite quand une recherche faite dans ${BRAND} montre cette pièce dans la même boutique, sous votre prix ou de nouveau en stock. Personne ne sait qui l'a cherchée, ni qui la suit.`,
+    // Nouvelle version (0041) : « Prévenez-moi si le prix passe sous [ ] € ».
+    targetLabel: "Prévenez-moi si le prix passe sous",
+    targetFieldLabel: (currency: string) => `Seuil de prix, en ${currency}`,
+    targetHintLast: "Pré-rempli avec le dernier prix vu. Vous pouvez le baisser.",
+    targetHintNone: "Sans prix indiqué, le premier prix vu servira de seuil.",
+    // Revue : chaque indication dit d'où vient le prix affiché.
+    targetHintSaved: "Votre seuil enregistré.",
+    targetHintSavedWithLast: (price: string) => `Votre seuil enregistré. Dernier prix vu : ${price}.`,
+    targetHintEmptyLast: (price: string) => `Sans prix indiqué, le dernier prix vu (${price}) servira de seuil.`,
+    targetHintNoCountry:
+      "Le premier prix vu en France, au Royaume-Uni, en Suisse ou aux États-Unis servira de seuil ; vous pourrez ensuite le baisser.",
+    targetInvalid: "Indiquez un prix, par exemple 89,90.",
+    keyboardDone: "OK",
+    // La fiche d'une envie dit ce qui a changé (la notification reste générique).
+    lastSeenPrice: (price: string) => `Dernier prix vu : ${price}`,
+    stockAvailable: "Disponible",
+    stockSoldOut: "Épuisée",
     switchTurnsOn: "Cela active aussi « Alertes prix et stock » dans les Réglages.",
     pushSoon: "Les alertes sont enregistrées ; les notifications seront bientôt disponibles.",
     iphoneOnly: `Les notifications des alertes arrivent sur l'app ${BRAND} pour iPhone.`,
@@ -768,19 +785,26 @@ export const fr = {
     tooManyChanges: "Vous avez modifié beaucoup d'alertes : réessayez dans un moment.",
     pushOfferTitle: "Être prévenu sur cet iPhone ?",
     pushOfferBody:
-      `${BRAND} peut vous envoyer une notification quand une envie que vous suivez baisse de prix ou revient en stock. Elle dit la pièce, la boutique et le prix, jamais qui l'a cherchée.`,
+      `${BRAND} peut vous envoyer une notification quand une envie que vous suivez passe sous votre prix ou revient en stock. Elle ne dit ni la pièce, ni la boutique, ni le prix : vous voyez le détail en l'ouvrant. Jamais qui l'a cherchée.`,
     settingTitle: "Alertes prix et stock",
     settingSwitchLabel: "Recevoir les alertes prix et stock de vos envies",
     settingOn: `Activées : ${BRAND} vous prévient pour les envies dont vous avez allumé la cloche.`,
     settingOff: "Désactivées : aucune alerte ne vous est envoyée. Pour suivre une envie, touchez sa cloche.",
     settingFailed: "Votre choix n'a pas pu être enregistré. Réessayez.",
+    // Nouvelle version (0041) : un réglage à part, allumé par défaut.
+    helpOthersTitle: "Aider les autres membres",
+    helpOthersSwitchLabel: "Aider les alertes des autres membres avec vos recherches et vos signalements",
+    helpOthersOn: "Vos recherches et vos signalements « Plus disponible » aident, sans votre nom, les alertes des autres membres.",
+    helpOthersOff: "Désactivé : vos recherches et vos signalements ne servent qu'à vos propres envies. Vos alertes continuent de marcher.",
     devicePushOff: "Les notifications des alertes sont coupées sur cet iPhone.",
     devicePushTurnOn: "Recevoir les notifications sur cet iPhone",
     reportLink: "Plus disponible ?",
     reportLinkLabel: (title: string) => `Signaler que ${title} n'est plus disponible`,
     reportTitle: "Cette pièce n'est plus disponible ?",
+    // Nouvelle version (0041) : un signalement seul ne change que vos envies ;
+    // celles des autres une fois la pièce signalée par trois membres d'affilée.
     reportBody:
-      `Vous indiquez qu'elle n'est plus en vente dans cette boutique. Cela aide ${BRAND} à prévenir les membres qui la suivent quand elle reviendra. Personne ne saura que c'est vous.`,
+      "Vous indiquez qu'elle n'est plus en vente dans cette boutique. Elle est notée épuisée dans vos envies, et dans celles des membres qui la suivent une fois que trois membres l'ont signalée d'affilée. Personne ne saura que c'est vous.",
     reportConfirm: "Oui, plus disponible",
     reportSending: "Envoi…",
     reportCancel: "Annuler",

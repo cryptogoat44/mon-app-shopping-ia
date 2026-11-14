@@ -87,7 +87,7 @@ describe("app.json : mises à jour à distance et plantages lisibles", () => {
 describe("contrôle au début d'un build EAS (scripts/verifier-build.js)", () => {
   const BON = {
     EAS_BUILD_PROFILE: "production",
-    EXPO_PUBLIC_API_URL: "https://spotto-api.onrender.com",
+    EXPO_PUBLIC_API_URL: marque.adresseServeur,
     EXPO_PUBLIC_SUPABASE_URL: "https://selhqdqfrflsqivgxypf.supabase.co",
     EXPO_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_cle-factice",
     EXPO_PUBLIC_SENTRY_DSN: "https://abc@o1.ingest.de.sentry.io/2",
@@ -120,6 +120,29 @@ describe("contrôle au début d'un build EAS (scripts/verifier-build.js)", () =>
     expect(problemesBuild({ ...BON, EXPO_PUBLIC_SUPABASE_URL: "https://qcwnlqkxnhqpyjpkooiw.supabase.co" }).erreurs[0]).toContain("ancien projet");
     expect(problemesBuild({ ...BON, EXPO_PUBLIC_SUPABASE_URL: "https://exemple.com" }).erreurs[0]).toContain("forme attendue");
     expect(problemesBuild({ ...BON, EXPO_PUBLIC_API_URL: "http://localhost:3000" }).erreurs[0]).toContain("https://");
+  });
+
+  // Lot « durcissement des alertes » (revue de sécurité, app-05) : pour
+  // « preview » et « production », l'adresse du serveur est EXACTEMENT celle
+  // de la production, lue dans le fichier unique de la marque.
+  it("adresse du serveur : exactement « adresseServeur » du fichier de la marque pour preview et production ; sa valeur n'est jamais affichée", () => {
+    expect(marque.adresseServeur).toBe("https://spotto-api.onrender.com");
+    for (const profil of ["preview", "production"]) {
+      expect(problemesBuild({ ...BON, EAS_BUILD_PROFILE: profil }).erreurs, profil).toEqual([]);
+      for (const autre of ["https://spotto-api-test.onrender.com", `${marque.adresseServeur}/`, `${marque.adresseServeur}/api`, "https://serveur.exemple.test", `${marque.adresseServeur}.exemple.com`]) {
+        const { erreurs } = problemesBuild({ ...BON, EAS_BUILD_PROFILE: profil, EXPO_PUBLIC_API_URL: autre });
+        expect(erreurs, `${profil} ${autre}`).toHaveLength(1);
+        expect(erreurs[0]).toContain("EXPO_PUBLIC_API_URL n'est pas l'adresse du serveur de production");
+        expect(erreurs[0]).toContain("adresseServeur");
+        expect(erreurs[0]).not.toContain(autre);
+        expect(erreurs[0]).not.toContain(marque.adresseServeur);
+      }
+      // Des espaces autour (copier-coller) : acceptée, comme pour les autres réglages.
+      expect(problemesBuild({ ...BON, EAS_BUILD_PROFILE: profil, EXPO_PUBLIC_API_URL: ` ${marque.adresseServeur} ` }).erreurs).toEqual([]);
+    }
+    // Profils de développement : inchangés (rien n'est vérifié).
+    expect(problemesBuild({ EAS_BUILD_PROFILE: "development", EXPO_PUBLIC_API_URL: "http://192.168.1.10:3000" })).toEqual({ erreurs: [], avertissements: [] });
+    expect(problemesBuild({ EAS_BUILD_PROFILE: "development-simulator", EXPO_PUBLIC_API_URL: "https://serveur.exemple.test" })).toEqual({ erreurs: [], avertissements: [] });
   });
 
   // Lot « nettoyage avant le premier build » : un build destiné à Apple ne

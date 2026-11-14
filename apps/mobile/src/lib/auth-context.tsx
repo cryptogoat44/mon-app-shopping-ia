@@ -6,7 +6,7 @@ import { ApiError, fetchMyProfile } from "./api";
 import { PROFILE_ATTEMPT_TIMEOUT_MS, PROFILE_RETRY_DELAYS_MS, RetryCancelledError, retryWithDelays, withTimeout } from "./retry";
 import type { ProfileStatus } from "./root-route";
 import { sessionRejectedBySupabase } from "./session-check";
-import { forgetPushToken } from "./push";
+import { flushPendingForget, forgetPushToken, queueForgetPushToken } from "./push";
 import { sessionUserChanged } from "./pending-video-link";
 import { pendingVideoLinks } from "./pending-video-link-store";
 import { supabase } from "./supabase";
@@ -44,10 +44,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Auto-refresh du jeton uniquement quand l'app est au premier plan,
   // recommandation officielle Supabase pour React Native.
+  // Lot « durcissement des alertes » : un appareil resté « à oublier »
+  // (déconnexion forcée, ou faite hors réseau) est oublié sur le serveur à
+  // l'ouverture et à chaque retour au premier plan (lib/push-forget.ts).
   useEffect(() => {
+    flushPendingForget().catch(() => {});
     const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") supabase.auth.startAutoRefresh();
-      else supabase.auth.stopAutoRefresh();
+      if (state === "active") {
+        supabase.auth.startAutoRefresh();
+        flushPendingForget().catch(() => {});
+      } else supabase.auth.stopAutoRefresh();
     });
     return () => subscription.remove();
   }, []);
@@ -57,7 +63,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(data.session);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      // Session terminée, quelle qu'en soit la raison (fermée sur un autre
+      // appareil, mot de passe changé, jeton refusé) : cet appareil ne doit
+      // plus recevoir les notifications du compte.
+      if (event === "SIGNED_OUT") queueForgetPushToken().catch(() => {});
       setSession(nextSession);
     });
 
@@ -96,8 +106,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // 2026-10-07 : une coupure de 2 ms avait déconnecté l'app, partout).
         const rejected = await sessionRejectedBySupabase();
         if (isStale()) return;
-        if (rejected) await supabase.auth.signOut({ scope: "local" });
-        else setProfileStatus("failed");
+        if (rejected) {
+          // Plus de session pour oublier l'appareil normalement : il est
+          // noté « à oublier » et oublié par son seul jeton (lib/push.ts).
+          await queueForgetPushToken().catch(() => {});
+          await supabase.auth.signOut({ scope: "local" });
+        } else setProfileStatus("failed");
         return;
       }
       console.error("Impossible de charger le profil", error);
@@ -119,6 +133,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (sessionUserChanged(previousUserRef.current, current)) void pendingVideoLinks.clear();
     previousUserRef.current = current;
   }, [userId, sessionResolved]);
+
+  // À chaque connexion : un oubli resté en attente part d'abord (avant tout
+  // nouvel enregistrement de l'appareil, que lib/push.ts fait passer après lui).
+  useEffect(() => {
+    if (userId) flushPendingForget().catch(() => {});
+  }, [userId]);
+
   useEffect(() => {
     if (!sessionResolved) return;
 
@@ -148,11 +169,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     // Lot notifications : cet appareil ne reçoit plus rien pour ce compte
-    // (4 s au plus ; un échec n'empêche jamais la déconnexion).
+    // (4 s au plus ; un échec n'empêche jamais la déconnexion : l'appareil
+    // reste alors « à oublier », et l'est à la prochaine ouverture).
     await forgetPushToken().catch(() => {});
     // Revue de sécurité : le lien de vidéo en attente ne passe jamais au compte suivant.
     await pendingVideoLinks.clear();
-    await supabase.auth.signOut();
+    // Lot « durcissement des alertes » : CET appareil seulement (« local »).
+    // Avant, la portée par défaut de la bibliothèque (« global ») fermait
+    // aussi les sessions des autres appareils, qui restaient enregistrés.
+    await supabase.auth.signOut({ scope: "local" });
   }, []);
 
   return (
