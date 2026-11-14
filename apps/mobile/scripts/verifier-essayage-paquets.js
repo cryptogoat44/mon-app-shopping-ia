@@ -36,8 +36,12 @@ const ENV_FACTICE = {
 };
 
 /** Traces de l'essayage, cherchées telles quelles (casse comprise : « tryOn »
- * se cache dans des noms de bibliothèques, comme « RegistryOnAndroid »). */
-const MARQUEURS = ["/api/tryon", "essayage", "Essayage", "FASHN", "tryon_", "attestSelf", "try-on"];
+ * se cache dans des noms de bibliothèques, comme « RegistryOnAndroid »).
+ * « tryon » et « Tryon » seuls : une valeur glissée dans un objet partagé
+ * (« tryon: "2026-11-v1" » dans CONSENT_VERSIONS…) ou un nom de fonction ;
+ * aucune bibliothèque du paquet iPhone ne les contient (vérifié le
+ * 14 novembre 2026 sur l'export iPhone : 0 et 0). */
+const MARQUEURS = ["/api/tryon", "essayage", "Essayage", "FASHN", "tryon_", "attestSelf", "try-on", "tryon", "Tryon"];
 /** Interdits partout : une adresse de FASHN. */
 const INTERDITS = [/fashn\.ai/gi];
 

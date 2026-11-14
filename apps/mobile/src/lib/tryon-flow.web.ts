@@ -1,15 +1,17 @@
 // Essayage virtuel photo (site) : les étapes du parcours et leurs messages,
 // sans écran. Ordre : statut relu à l'ouverture → porte d'âge (statut
-// inconnu) → message neutre (mineur) → consentement (version à accepter) →
-// photo → essai en cours → résultat. Un refus du serveur qui change l'état
-// (fonction coupée, âge, consentement) fait relire le statut, qui décide de
-// l'étape ; les autres refus restent sur l'étape, avec un message clair.
+// inconnu) → message neutre (mineur) → consentement (le texte affiché par ce
+// site, dans sa version ; une autre version demandée par le serveur : page à
+// recharger) → photo → essai en cours → résultat. Un refus du serveur qui
+// change l'état (fonction coupée, âge, consentement) fait relire le statut,
+// qui décide de l'étape ; les autres refus restent sur l'étape, avec un
+// message clair.
 // Les messages sont calculés à l'affichage (langue de l'app), jamais gardés.
 // Fichier .web : jamais dans l'app iPhone. Logique pure, testée
 // (tests/tryon-flow.test.ts). Imports relatifs : fichier testé par vitest.
 import type { TryonRemaining, TryonStatus } from "@monapp/shared-types";
 import { tryonText } from "../i18n/tryon.web";
-import type { TryonServerCode } from "../i18n/tryon-fr.web";
+import { TRYON_CONSENT_TEXT_VERSION, type TryonServerCode } from "../i18n/tryon-fr.web";
 import { ApiError } from "./api-error";
 import { formatDayMonth } from "./format";
 import { isNetworkError } from "./network-error";
@@ -36,7 +38,12 @@ export type TryonStep =
   | { step: "unavailable" }
   | { step: "age"; failure: TryonFailure | null }
   | { step: "minor" }
+  /** `version` : celle du texte affiché par ce site (TRYON_CONSENT_TEXT_VERSION),
+   * envoyée telle quelle par « J'accepte ». */
   | { step: "consent"; version: string; renewed: boolean; failure: TryonFailure | null }
+  /** Le serveur demande une autre version que celle des textes de ce site
+   * (page ouverte avant une mise à jour) : rien à accepter, page à recharger. */
+  | { step: "consent_reload" }
   | { step: "photo"; failure: TryonFailure | null }
   | { step: "running" }
   | { step: "result"; remaining: TryonRemaining };
@@ -67,6 +74,14 @@ function hasCode(failure: TryonFailure | null | undefined, code: string): boolea
   return failure?.kind === "server" && failure.code === code;
 }
 
+/** Après ce refus, le nombre d'essais restants affiché peut être faux : il est
+ * relu. Pas de réponse dans le délai du site, connexion perdue en route ou
+ * réponse illisible : l'essai a pu aboutir sur le serveur, et y être
+ * décompté ; quota épuisé : les compteurs suivent. */
+export function failureNeedsCounter(failure: TryonFailure): boolean {
+  return failure.kind === "no_answer" || failure.kind === "offline" || failure.kind === "unexpected" || (failure.kind === "server" && failure.code === "tryon_quota_exhausted");
+}
+
 /** Lit une erreur levée par un appel (lib/tryon-api.web.ts). Le corps d'une
  * réponse d'erreur n'est jamais cru sur sa forme. */
 export function failureOf(error: unknown): TryonFailure {
@@ -92,8 +107,12 @@ export function stepForStatus(status: TryonStatus, cause: TryonFailure | null = 
   if (status.ageGate === "minor") return { step: "minor" };
   if (status.ageGate === "unknown") return { step: "age", failure: null };
   if (status.consent.required) {
+    // Jamais d'accord donné à un texte qui n'est pas celui affiché : si le
+    // serveur en demande une autre version, la page est à recharger (le
+    // serveur garde le dernier mot : une autre version reçue, 409).
+    if (status.consent.version !== TRYON_CONSENT_TEXT_VERSION) return { step: "consent_reload" };
     // Version acceptée devenue ancienne : l'écran dit que le texte a changé.
-    return { step: "consent", version: status.consent.version, renewed: hasCode(cause, "tryon_consent_outdated"), failure: null };
+    return { step: "consent", version: TRYON_CONSENT_TEXT_VERSION, renewed: hasCode(cause, "tryon_consent_outdated"), failure: null };
   }
   return { step: "photo", failure: null };
 }
@@ -139,9 +158,13 @@ export function entryItemId(status: TryonStatus, piece: PieceForTryon): string |
   return status.enabled ? tryonItemId(piece) : null;
 }
 
-/** La ligne « retirer mon consentement » : fonction ouverte, consentement donné. */
-export function canWithdrawConsent(status: TryonStatus): boolean {
-  return status.enabled && !status.consent.required;
+/** La ligne « retirer mon consentement » des Réglages : dès qu'un
+ * consentement est donné, fonction ouverte ou non (le droit de retrait
+ * prime). `given` : la réponse de GET /api/tryon/consent (null tant qu'elle
+ * n'est pas lue) ; le statut suit en plus un consentement accepté depuis,
+ * dans la fenêtre de l'essayage. */
+export function canWithdrawConsent(given: boolean | null, status: TryonStatus): boolean {
+  return given === true || (status.enabled && !status.consent.required);
 }
 
 // ---- Dates (fuseau Europe/Paris) ----
@@ -201,6 +224,10 @@ export function failureView(failure: TryonFailure, status: TryonStatus, locale: 
       return { message: tryonText.fallback.generic, tips: false };
     case "server":
       if (failure.code === "tryon_quota_exhausted") return { message: quotaMessage(status, locale), tips: false };
+      // Plusieurs limites partagent ce code (essais par heure, par jour, pour
+      // tout le service, consentement, signalements) : le message du serveur,
+      // déjà dans la langue de l'app, dit laquelle ; sinon celui du catalogue.
+      if (failure.code === "tryon_rate_limited") return { message: failure.message ?? tryonText.errors.tryon_rate_limited, tips: false };
       if (isServerCode(failure.code)) return { message: tryonText.errors[failure.code], tips: failure.code === "tryon_pose_not_detected" };
       return { message: failure.message ?? tryonText.fallback.generic, tips: false };
   }

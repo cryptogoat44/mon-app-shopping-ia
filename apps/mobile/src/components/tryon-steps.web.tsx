@@ -1,7 +1,8 @@
 // Essayage virtuel photo (site) : les étapes d'accès du parcours — attente du
 // statut, essayage indisponible, porte d'âge, message neutre pour une
-// personne mineure, consentement. Les textes viennent du catalogue réservé
-// au site (src/i18n/tryon-*.web.ts). Fichier .web : jamais dans l'app iPhone.
+// personne mineure, consentement, texte mis à jour (page à recharger). Les
+// textes viennent du catalogue réservé au site (src/i18n/tryon-*.web.ts).
+// Fichier .web : jamais dans l'app iPhone.
 import { useState, type CSSProperties } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { color, font, getActiveScheme, radius, space } from "@/theme/tokens";
@@ -166,6 +167,23 @@ export function ConsentStep({
       <ButtonRow>
         <SecondaryButton label={tryonText.consent.cancel} onPress={onCancel} disabled={busy} />
         <PrimaryButton label={busy ? tryonText.consent.accepting : tryonText.consent.accept} onPress={onAccept} busy={busy} />
+      </ButtonRow>
+    </View>
+  );
+}
+
+/** Le serveur demande une autre version du consentement que celle des
+ * textes de cette page (ouverte avant une mise à jour) : rien à accepter
+ * ici, jamais de bouton « J'accepte ». Recharger la page apporte le nouveau
+ * texte. */
+export function ConsentReloadStep({ onReload, onClose }: { onReload: () => void; onClose: () => void }) {
+  return (
+    <View>
+      <StepTitle>{tryonText.consent.reloadTitle}</StepTitle>
+      <Paragraph strong>{tryonText.consent.reloadBody}</Paragraph>
+      <ButtonRow>
+        <SecondaryButton label={tryonText.sheet.close} onPress={onClose} />
+        <PrimaryButton label={tryonText.consent.reload} onPress={onReload} />
       </ButtonRow>
     </View>
   );

@@ -27,7 +27,7 @@ function paquet(plateforme: string, js: string[], html: string[] = []): string {
   return racine;
 }
 
-const SITE_COMPLET = `fetch("/api/tryon/status");const t={a:"Essayage virtuel",b:"votre essayage",c:"FASHN (Royaume-Uni)",d:"Virtual try-on"};const e="tryon_quota_exhausted";form.append("attestSelf","true");`;
+const SITE_COMPLET = `fetch("/api/tryon/status");const t={a:"Essayage virtuel",b:"votre essayage",c:"FASHN (Royaume-Uni)",d:"Virtual try-on"};const e="tryon_quota_exhausted";form.append("attestSelf","true");function useTryonStatus(){}`;
 
 afterEach(() => {
   for (const dossier of dossiers.splice(0)) rmSync(dossier, { recursive: true, force: true });
@@ -47,7 +47,19 @@ describe("contrôle des paquets compilés (iPhone sans trace, site avec)", () =>
   it("une trace dans le paquet iPhone : non conforme, avec le mot et le nombre", () => {
     const ios = analyser(paquet("ios", ['var u="/api/tryon/status";']));
     const site = analyser(paquet("web", [SITE_COMPLET]));
-    expect(ecarts(ios, site)).toEqual(["paquet iPhone : « /api/tryon » trouvé 1 fois"]);
+    expect(ecarts(ios, site)).toEqual(["paquet iPhone : « /api/tryon » trouvé 1 fois", "paquet iPhone : « tryon » trouvé 1 fois"]);
+  });
+
+  it("« tryon » et « Tryon » seuls : une valeur glissée dans un objet partagé, ou un nom, est vue (casse comprise)", () => {
+    expect(MARQUEURS).toEqual(expect.arrayContaining(["tryon", "Tryon"]));
+    const site = analyser(paquet("web", [SITE_COMPLET]));
+    const valeur = analyser(paquet("ios", ['e.CONSENT_VERSIONS={analyse_video_ia:"analyse-video-ia-2026-10-06",tryon:"2026-11-v1"};e.ACCEPTED={tryon:[J.tryon]};']));
+    expect(ecarts(valeur, site)).toEqual(["paquet iPhone : « tryon » trouvé 3 fois"]);
+    const nom = analyser(paquet("ios", ["function TryonSheet(){return null}"]));
+    expect(ecarts(nom, site)).toEqual(["paquet iPhone : « Tryon » trouvé 1 fois"]);
+    // Les noms de bibliothèques où « tryOn » se cache ne comptent pas.
+    const bibliotheques = analyser(paquet("ios", ["var a='useOptimizedViewRegistryOnAndroid';var b='RNSentryOnDrawReporter';var c='tryOnce';"]));
+    expect(Object.values(bibliotheques.marqueurs).every((nombre) => nombre === 0)).toBe(true);
   });
 
   it("contrôle positif : un mot absent du site, une trace dans une page HTML, une adresse de FASHN", () => {

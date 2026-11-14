@@ -12,6 +12,14 @@ import type { Widen } from "./types";
 /** Codes d'erreur qui ont leur message fixe (le quota a le sien, daté). */
 export type TryonServerCode = Exclude<TryonErrorCode, "tryon_quota_exhausted"> | "file_too_large";
 
+/** Version des textes de consentement que CE site affiche (consent.body et
+ * ses détails, en français et en anglais) : c'est elle que « J'accepte »
+ * envoie, jamais celle que le serveur annonce. Un de ces textes change :
+ * cette version change avec lui, en même temps que TRYON_CONSENT_VERSION du
+ * serveur (apps/backend/src/lib/tryon/config.ts). Jamais dans le contrat
+ * partagé, qui part aussi dans l'app iPhone. */
+export const TRYON_CONSENT_TEXT_VERSION = "2026-11-v1";
+
 export const tryonFr = {
   entry: {
     button: "Essayer",
@@ -45,6 +53,9 @@ export const tryonFr = {
     title: "Votre consentement",
     renewedTitle: "Le texte a changé",
     renewedIntro: "Le texte de consentement de l'essayage a été mis à jour. Relisez-le avant votre prochain essai.",
+    reloadTitle: "Le texte a été mis à jour",
+    reloadBody: "Le texte de consentement de l'essayage a été mis à jour depuis l'ouverture de cette page. Rechargez la page pour lire la nouvelle version avant de l'accepter.",
+    reload: "Recharger la page",
     body: `Pour créer votre essayage, votre photo est envoyée à FASHN (Royaume-Uni) et à ses prestataires, dont certains aux États-Unis et en Asie. Elle n'est ni conservée par ${BRAND} ni utilisée pour entraîner une IA. Utilisez uniquement une photo de vous. L'image produite est générée par IA. Vous pouvez retirer votre consentement à tout moment dans Réglages.`,
     accept: "J'accepte",
     accepting: "Enregistrement…",
@@ -143,13 +154,13 @@ export const tryonFr = {
     tryon_provider_unavailable: "Le service d'essayage ne répond pas pour le moment. Réessayez plus tard : cet essai n'a pas été décompté.",
     tryon_timeout: "L'essai a pris trop de temps. Réessayez : il n'a pas été décompté.",
     tryon_pose_not_detected: "Votre silhouette n'a pas été reconnue sur cette photo. Essayez avec une autre, en suivant ces conseils :",
-    tryon_moderation_blocked: "Cet essai a été refusé par la modération du service : certaines pièces, comme les maillots de bain ou la lingerie, ne peuvent pas être essayées. Il n'a pas été décompté.",
-    tryon_image_unreadable: "Une des images n'a pas pu être lue. Essayez avec une autre photo : cet essai n'a pas été décompté.",
+    tryon_moderation_blocked: "Cet essai a été refusé par la modération du service : certaines pièces, comme les maillots de bain ou la lingerie, ne peuvent pas être essayées. Choisissez une autre pièce ou une autre photo : cet essai n'a pas été décompté.",
+    tryon_image_unreadable: "Une des images n'a pas pu être lue. Essayez avec une autre photo ou une autre pièce : cet essai n'a pas été décompté.",
   } satisfies Record<TryonServerCode, string>,
   // Sans réponse lisible du serveur.
   fallback: {
     offline: "Vous semblez hors ligne. Vérifiez votre connexion internet, puis réessayez.",
-    noAnswer: "Le serveur ne répond pas. Réessayez dans un instant.",
+    noAnswer: "Le serveur n'a pas répondu à temps. Un essai interrompu peut tout de même être décompté : vérifiez vos essais restants avant de réessayer.",
     generic: "Une erreur est survenue. Réessayez.",
   },
   settings: {

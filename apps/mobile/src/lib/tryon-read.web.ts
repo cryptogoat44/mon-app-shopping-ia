@@ -9,7 +9,16 @@
 // et testées, comme les autres lecteurs de l'app (lib/collections.ts…).
 // Fichier .web : jamais dans l'app iPhone (règle 2.5.19 d'Apple). Logique
 // pure, testée (tests/tryon-flow.test.ts). Imports de types seulement.
-import type { TryonAgeGate, TryonConsentState, TryonRemaining, TryonReportReason, TryonReportRequest, TryonRunResponse, TryonStatus } from "@monapp/shared-types";
+import type {
+  TryonAgeGate,
+  TryonConsentReadResponse,
+  TryonConsentState,
+  TryonRemaining,
+  TryonReportReason,
+  TryonReportRequest,
+  TryonRunResponse,
+  TryonStatus,
+} from "@monapp/shared-types";
 
 /** Fonction coupée : la seule forme permise d'un statut éteint. */
 export const TRYON_OFF: TryonStatus = { enabled: false };
@@ -83,6 +92,14 @@ export function readAgeGateResponse(body: unknown): "adult" | "minor" | null {
 /** POST et DELETE /api/tryon/consent. */
 export function readConsentResponse(body: unknown): TryonConsentState | null {
   return isRecord(body) ? readConsentState(body.consent) : null;
+}
+
+/** GET /api/tryon/consent : { consent: { given, version } }, rien d'autre. */
+export function readConsentReadResponse(body: unknown): TryonConsentReadResponse["consent"] | null {
+  if (!isRecord(body) || !isRecord(body.consent)) return null;
+  const { given, version } = body.consent;
+  if (typeof given !== "boolean" || typeof version !== "string" || !CONSENT_VERSION.test(version)) return null;
+  return { given, version };
 }
 
 /** L'image produite : « data:image/jpeg;base64,… », base64 valide, taille bornée. */

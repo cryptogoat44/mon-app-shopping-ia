@@ -3,9 +3,9 @@
 // réponses sont relues (lib/tryon-read.web.ts). La photo part dans le corps
 // de la requête, depuis la mémoire : jamais par une adresse, jamais par un
 // fichier écrit quelque part. Aucun suivi d'usage (PostHog) de l'essayage.
-import type { TryonAgeGateRequest, TryonConsentRequest, TryonConsentState, TryonReportRequest, TryonRunResponse, TryonStatus } from "@monapp/shared-types";
+import type { TryonAgeGateRequest, TryonConsentReadResponse, TryonConsentRequest, TryonConsentState, TryonReportRequest, TryonRunResponse, TryonStatus } from "@monapp/shared-types";
 import { authorizedFetch } from "./api";
-import { isGuid, readAgeGateResponse, readConsentResponse, readRunResponse, readTryonStatus } from "./tryon-read.web";
+import { isGuid, readAgeGateResponse, readConsentReadResponse, readConsentResponse, readRunResponse, readTryonStatus } from "./tryon-read.web";
 
 const TRYON_PATH = "/api/tryon";
 
@@ -38,7 +38,17 @@ export async function submitBirthDate(birthDate: string): Promise<"adult" | "min
   return ageGate;
 }
 
-/** Accepte le texte de consentement dans la version lue par la personne. */
+/** Le consentement donné (Réglages), lisible même fonction éteinte : la ligne
+ * de retrait reste là tant qu'il y en a un. Réponse illisible : erreur. */
+export async function fetchTryonConsent(): Promise<TryonConsentReadResponse["consent"]> {
+  const response = await authorizedFetch(`${TRYON_PATH}/consent`, { cache: "no-store" });
+  const consent = readConsentReadResponse(await jsonOf(response));
+  if (!consent) throw new TryonResponseError();
+  return consent;
+}
+
+/** Accepte le texte de consentement dans la version lue par la personne :
+ * celle du texte affiché par ce site (TRYON_CONSENT_TEXT_VERSION). */
 export async function acceptTryonConsent(version: string): Promise<TryonConsentState> {
   const body: TryonConsentRequest = { version };
   const response = await authorizedFetch(`${TRYON_PATH}/consent`, { method: "POST", body: JSON.stringify(body) });

@@ -5,7 +5,7 @@ import marque from "@monapp/shared-types/marque.json";
 import { APP_NAME_DISPLAY } from "../src/constants/brand";
 import { setActiveLocale } from "../src/i18n";
 import { tryonText } from "../src/i18n/tryon.web";
-import { tryonFr } from "../src/i18n/tryon-fr.web";
+import { TRYON_CONSENT_TEXT_VERSION, tryonFr } from "../src/i18n/tryon-fr.web";
 import { tryonEn } from "../src/i18n/tryon-en.web";
 
 // Essayage virtuel photo : le catalogue de textes réservé au site
@@ -103,6 +103,21 @@ describe("textes demandés par le lot", () => {
     expect(tryonFr.photo.launch).toBe("Lancer l'essai");
     expect(tryonFr.running.duration).toBe("Environ 10 secondes.");
     expect([tryonFr.result.save, tryonFr.result.report]).toEqual(["Enregistrer l'image", "Signaler"]);
+  });
+
+  it("texte mis à jour depuis l'ouverture de la page : « rechargez la page », en français et en anglais", () => {
+    expect(tryonFr.consent.reloadTitle).toBe("Le texte a été mis à jour");
+    expect(tryonFr.consent.reloadBody).toContain("Rechargez la page");
+    expect(tryonEn.consent.reloadTitle).toBe("The text has been updated");
+    expect(tryonEn.consent.reloadBody).toContain("Reload the page");
+  });
+
+  it("version des textes de consentement du site : à côté des textes (jamais dans le contrat partagé), celle que le serveur attend", () => {
+    expect(TRYON_CONSENT_TEXT_VERSION).toMatch(/^[A-Za-z0-9._-]{1,40}$/);
+    const server = readFileSync(join(__dirname, "../../backend/src/lib/tryon/config.ts"), "utf8");
+    expect(server).toContain(`export const TRYON_CONSENT_VERSION = "${TRYON_CONSENT_TEXT_VERSION}";`);
+    const contract = readFileSync(join(__dirname, "../../../packages/shared-types/src/index.ts"), "utf8");
+    expect(contract).not.toContain(TRYON_CONSENT_TEXT_VERSION);
   });
 
   it("Réglages : « Essayage virtuel : retirer mon consentement »", () => {

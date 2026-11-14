@@ -48,6 +48,15 @@ describe("appels au serveur", () => {
     await expect(api.submitBirthDate("1990-06-15")).rejects.toBeInstanceOf(api.TryonResponseError);
   });
 
+  it("lecture du consentement (Réglages) : GET /api/tryon/consent, jamais mis en cache ; illisible : erreur", async () => {
+    const { api } = await modules();
+    authorizedFetch.mockResolvedValueOnce(json({ consent: { given: true, version: "2026-11-v1" } }));
+    expect(await api.fetchTryonConsent()).toEqual({ given: true, version: "2026-11-v1" });
+    expect(authorizedFetch).toHaveBeenCalledWith("/api/tryon/consent", { cache: "no-store" });
+    authorizedFetch.mockResolvedValueOnce(json({ consent: { required: true, version: "2026-11-v1" } }));
+    await expect(api.fetchTryonConsent()).rejects.toBeInstanceOf(api.TryonResponseError);
+  });
+
   it("consentement : POST de la version lue ; retrait : DELETE sans corps", async () => {
     const { api } = await modules();
     authorizedFetch.mockResolvedValueOnce(json({ consent: { required: false, version: "2026-11-v1" } }));

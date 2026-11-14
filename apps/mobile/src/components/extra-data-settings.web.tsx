@@ -1,8 +1,9 @@
 // Site, Réglages → Vos données : « Essayage virtuel : retirer mon
-// consentement », seulement quand l'essayage est ouvert et le consentement
-// donné. Le retrait (DELETE /api/tryon/consent) passe par une confirmation ;
-// le consentement sera redemandé avant le prochain essai. Version iPhone :
-// rien (extra-data-settings.tsx), règle 2.5.19 d'Apple.
+// consentement », dès qu'un consentement est donné, essayage allumé ou
+// éteint : le droit de retrait prime (GET /api/tryon/consent se lit même
+// fonction éteinte). Le retrait (DELETE /api/tryon/consent) passe par une
+// confirmation ; le consentement sera redemandé avant le prochain essai.
+// Version iPhone : rien (extra-data-settings.tsx), règle 2.5.19 d'Apple.
 import { useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { color, font, space } from "@/theme/tokens";
@@ -11,6 +12,7 @@ import { tryonText } from "@/i18n/tryon.web";
 import { withdrawTryonConsent } from "@/lib/tryon-api.web";
 import { canWithdrawConsent, failureOf, withdrawFailureMessage } from "@/lib/tryon-flow.web";
 import { updateTryonStatus } from "@/lib/tryon-status.web";
+import { useTryonConsentGiven } from "@/lib/use-tryon-consent.web";
 import { useTryonStatus } from "@/lib/use-tryon-status.web";
 import { ErrorMessage } from "@/components/error-message";
 
@@ -18,6 +20,7 @@ type Phase = "idle" | "confirm" | "withdrawing" | "withdrawn";
 
 export function ExtraDataSettings() {
   const status = useTryonStatus();
+  const given = useTryonConsentGiven();
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
   // Double appui avant le nouveau rendu : un seul retrait part.
@@ -50,7 +53,7 @@ export function ExtraDataSettings() {
       </>
     );
   }
-  if (!canWithdrawConsent(status)) return null;
+  if (!canWithdrawConsent(given, status)) return null;
   const busy = phase === "withdrawing";
   return (
     <>

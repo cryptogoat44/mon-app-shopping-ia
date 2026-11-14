@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { PRODUCTION_SERVICES, contentSecurityPolicy } from "../web-headers";
 
@@ -60,6 +61,12 @@ function runtimeImports(source: string): string[] {
   return [...source.matchAll(/^\s*import\s+(?!type\b)[^;]*?from\s+["']([^"']+)["']/gm)].map((match) => match[1]!);
 }
 
+/** Ce qui part vraiment dans un paquet : le fichier une fois ses types et ses
+ * commentaires effacés (la compilation de TypeScript, comme celle de Metro). */
+function runtimeOf(source: string): string {
+  return ts.transpileModule(source, { compilerOptions: { removeComments: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+}
+
 describe("détecteurs de ce garde-fou", () => {
   it("les mots repérés : oui pour l'essayage, non pour les noms de bibliothèques", () => {
     for (const text of ["essayage", "Essayage virtuel", "FASHN", "/api/tryon/status", "useTryonStatus", "TryonStatus", "tryonText", "Virtual try-on"]) expect(hasMarker(text), text).toBe(true);
@@ -114,14 +121,26 @@ describe("essayage : seulement dans des fichiers .web", () => {
     for (const file of shared) expect(hasMarker(read(join(MOBILE, file))), file).toBe(false);
   });
 
-  it("contrat partagé : seulement des types pour l'essayage (aucune valeur dans l'app iPhone)", () => {
+  it("contrat partagé : seulement des types pour l'essayage ; types effacés, plus aucune trace, même dans un objet existant", () => {
     const contract = read(join(DEPOT, "packages/shared-types/src/index.ts"));
     expect(contract).toMatch(/export type TryonStatus\b/);
-    const runtime = [...contract.matchAll(/^export\s+(?:const|let|var|function|class|enum|async\s+function)\s+(\w+)/gm)].map((match) => match[1]!);
-    expect(runtime.filter((name) => /tryon/i.test(name))).toEqual([]);
-    // Ni chaîne propre à l'essayage écrite comme valeur (« tryon_… », adresse de la route).
-    const values = contract.split("\n").filter((line) => /^export\s+(const|let|var|function|class|enum)\b/.test(line) && hasMarker(line));
-    expect(values).toEqual([]);
+    // Le contrat tel qu'il part dans l'app iPhone : aucune valeur de l'essayage, où qu'elle soit.
+    const runtime = runtimeOf(contract);
+    expect(runtime.length).toBeGreaterThan(1000);
+    expect(hasMarker(runtime)).toBe(false);
+  });
+
+  it("le détecteur du contrat voit une valeur de l'essayage glissée dans un objet existant (CONSENT_VERSIONS…)", () => {
+    const contract = read(join(DEPOT, "packages/shared-types/src/index.ts"));
+    expect(hasMarker(runtimeOf(contract))).toBe(false);
+    const tampered = contract
+      .replace(/export type VersionedConsentType = [^;]*/, (declaration) => `${declaration} | "tryon"`)
+      .replace(/export const CONSENT_VERSIONS: [^=]*= \{/, (start) => `${start}\n  tryon: "2026-11-v1",`)
+      .replace(/export const ACCEPTED_CONSENT_VERSIONS: [^=]*= \{/, (start) => `${start}\n  tryon: [CONSENT_VERSIONS.tryon],`);
+    expect(tampered).not.toBe(contract);
+    expect(hasMarker(runtimeOf(tampered))).toBe(true);
+    // Les types et les commentaires seuls ne comptent pas : ils ne partent jamais dans un paquet.
+    expect(hasMarker(runtimeOf("// Essayage virtuel\nexport type TryonX = { tryon: true };\nexport interface TryonY { a: string }\nexport const autre = 1;"))).toBe(false);
   });
 });
 

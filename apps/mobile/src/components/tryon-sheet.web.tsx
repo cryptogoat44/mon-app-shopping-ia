@@ -16,16 +16,32 @@ import { getActiveLocale } from "@/i18n";
 import { tryonText } from "@/i18n/tryon.web";
 import { useAuth } from "@/lib/auth-context";
 import { acceptTryonConsent, runTryon, submitBirthDate } from "@/lib/tryon-api.web";
-import { LOADING, failureNeedsStatus, failureOf, failureView, parisDay, photoRefusalMessage, quotaMessage, tryonFlow, type TryonFailure } from "@/lib/tryon-flow.web";
+import {
+  LOADING,
+  failureNeedsCounter,
+  failureNeedsStatus,
+  failureOf,
+  failureView,
+  parisDay,
+  photoRefusalMessage,
+  quotaMessage,
+  tryonFlow,
+  type TryonFailure,
+} from "@/lib/tryon-flow.web";
 import { downloadImage, jpegBlobFromDataUri, tryonFileName } from "@/lib/tryon-image.web";
 import { chooseTryonFile, preparePhoto, type PhotoRefusal, type PreparedPhoto } from "@/lib/tryon-photo.web";
 import { refreshTryonStatus, tryonStatus, updateTryonStatus } from "@/lib/tryon-status.web";
 import { useTryonStatus } from "@/lib/use-tryon-status.web";
-import { AgeStep, ConsentStep, LoadFailedStep, LoadingStep, MinorStep, UnavailableStep } from "./tryon-steps.web";
+import { AgeStep, ConsentReloadStep, ConsentStep, LoadFailedStep, LoadingStep, MinorStep, UnavailableStep } from "./tryon-steps.web";
 import { PhotoStep, RunningStep } from "./tryon-photo-step.web";
 import { ResultStep } from "./tryon-result.web";
 
-/** Au-delà, l'essai est abandonné côté site (le serveur arrête le sien à 90 s). */
+/** Au-delà, l'essai est abandonné côté site. Le serveur abandonne le sien au
+ * plus tard 100 s après l'avoir réservé (un seul délai pour tout l'appel au
+ * fournisseur, repli compris : routes/tryon.ts) ; les 20 s de plus couvrent
+ * l'envoi de la photo, le bandeau et le décompte. Abandonné quand même : les
+ * essais restants sont relus, et le message dit que l'essai a pu être
+ * décompté. */
 const CLIENT_TIMEOUT_MS = 120_000;
 
 interface ChosenPhoto {
@@ -202,13 +218,18 @@ export function TryonSheet({ itemId, title, onClose }: { itemId: string; title: 
       dispatch({ type: "succeeded", remaining: result.remaining });
     } catch (e) {
       if (!mounted.current) return;
+      let failure: TryonFailure;
       if (controller.signal.aborted) {
-        dispatch({ type: "failed", failure: { kind: "no_answer" } });
-        return;
+        // Pas de réponse dans le délai du site : l'essai a pu aboutir sur le
+        // serveur, et y être décompté (le message le dit).
+        failure = { kind: "no_answer" };
+        dispatch({ type: "failed", failure });
+      } else {
+        failure = await settleFailure(e);
       }
-      const failure = await settleFailure(e);
-      // Quota épuisé : les compteurs affichés suivent (sans attendre).
-      if (failure.kind === "server" && failure.code === "tryon_quota_exhausted") refreshTryonStatus().catch(() => {});
+      // Issue incertaine, ou quota épuisé : les compteurs affichés suivent ce
+      // que le serveur a vraiment décompté (sans attendre).
+      if (failureNeedsCounter(failure)) refreshTryonStatus().catch(() => {});
     } finally {
       clearTimeout(timer);
       if (running.current === controller) running.current = null;
@@ -220,6 +241,11 @@ export function TryonSheet({ itemId, title, onClose }: { itemId: string; title: 
     resultRef.current = null;
     setResultUrl(null);
     dispatch({ type: "again" });
+  }
+
+  /** Texte du consentement mis à jour depuis l'ouverture de la page : la recharger l'apporte. */
+  function reloadPage() {
+    window.location.reload();
   }
 
   function saveImage() {
@@ -242,9 +268,12 @@ export function TryonSheet({ itemId, title, onClose }: { itemId: string; title: 
       case "minor":
         return <MinorStep onClose={onClose} />;
       case "consent": {
+        // La version du texte affiché ici (jamais celle annoncée par le serveur).
         const version = flow.version;
         return <ConsentStep renewed={flow.renewed} failure={messageOf(flow.failure)} busy={submitting} onAccept={() => acceptConsent(version)} onCancel={onClose} />;
       }
+      case "consent_reload":
+        return <ConsentReloadStep onReload={reloadPage} onClose={onClose} />;
       case "photo":
         return (
           <PhotoStep

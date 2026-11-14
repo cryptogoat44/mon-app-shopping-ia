@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { TryonErrorCode, TryonStatus } from "@monapp/shared-types";
 import { setActiveLocale } from "../src/i18n";
-import { tryonFr } from "../src/i18n/tryon-fr.web";
+import { TRYON_CONSENT_TEXT_VERSION, tryonFr } from "../src/i18n/tryon-fr.web";
 import { tryonEn } from "../src/i18n/tryon-en.web";
 import { ApiError } from "../src/lib/api-error";
 import {
@@ -9,6 +9,7 @@ import {
   birthDateIssueMessage,
   canWithdrawConsent,
   entryItemId,
+  failureNeedsCounter,
   failureNeedsStatus,
   failureOf,
   failureView,
@@ -35,6 +36,7 @@ import {
   isGuid,
   isJpegDataUri,
   readAgeGateResponse,
+  readConsentReadResponse,
   readConsentResponse,
   readRunResponse,
   readTryonStatus,
@@ -102,6 +104,14 @@ describe("autres réponses du serveur", () => {
     expect(readConsentResponse({ consent: { required: false, version: "2026-11-v1" } })).toEqual({ required: false, version: "2026-11-v1" });
     expect(readConsentResponse({ consent: { required: true, version: "2026-11-v1" } })).toEqual({ required: true, version: "2026-11-v1" });
     for (const body of [null, {}, { required: false, version: "2026-11-v1" }, { consent: { required: 0, version: "v" } }]) expect(readConsentResponse(body)).toBeNull();
+  });
+
+  it("lecture du consentement (Réglages) : { consent: { given, version } }, rien d'autre", () => {
+    expect(readConsentReadResponse({ consent: { given: true, version: "2026-11-v1" } })).toEqual({ given: true, version: "2026-11-v1" });
+    expect(readConsentReadResponse({ consent: { given: false, version: "2026-11-v1" } })).toEqual({ given: false, version: "2026-11-v1" });
+    for (const body of [null, {}, { given: true, version: "2026-11-v1" }, { consent: { given: "true", version: "2026-11-v1" } }, { consent: { given: true, version: "<b>" } }, { consent: { given: true } }]) {
+      expect(readConsentReadResponse(body), JSON.stringify(body)).toBeNull();
+    }
   });
 
   it("essai : une image JPEG en base64 et les essais restants, rien d'autre", () => {
@@ -205,10 +215,29 @@ describe("étapes du parcours", () => {
     expect(stepForStatus(ON)).toEqual({ step: "photo", failure: null });
   });
 
-  it("consentement redemandé après un changement de version : l'écran le dit", () => {
-    const status: TryonStatus = { ...ON, consent: { required: true, version: "2026-12-v2" } };
-    expect(stepForStatus(status, server("tryon_consent_outdated"))).toEqual({ step: "consent", version: "2026-12-v2", renewed: true, failure: null });
+  it("consentement redemandé après un changement de version (le texte de ce site est le bon) : l'écran le dit", () => {
+    const status: TryonStatus = { ...ON, consent: { required: true, version: TRYON_CONSENT_TEXT_VERSION } };
+    expect(stepForStatus(status, server("tryon_consent_outdated"))).toEqual({ step: "consent", version: TRYON_CONSENT_TEXT_VERSION, renewed: true, failure: null });
     expect(stepForStatus(status, server("tryon_consent_required"))).toMatchObject({ step: "consent", renewed: false });
+  });
+
+  it("« J'accepte » envoie la version du texte AFFICHÉ par ce site, jamais celle annoncée par le serveur", () => {
+    expect(TRYON_CONSENT_TEXT_VERSION).toBe("2026-11-v1");
+    const step = stepForStatus({ ...ON, consent: { required: true, version: "2026-11-v1" } });
+    expect(step).toEqual({ step: "consent", version: TRYON_CONSENT_TEXT_VERSION, renewed: false, failure: null });
+  });
+
+  it("le serveur demande une autre version que le texte de cette page : « rechargez la page », rien à accepter", () => {
+    for (const version of ["2026-12-v2", "2025-01-v0"]) {
+      const status: TryonStatus = { ...ON, consent: { required: true, version } };
+      expect(stepForStatus(status)).toEqual({ step: "consent_reload" });
+      // Même après un refus « texte changé » (409 du serveur, le dernier mot) : toujours à recharger.
+      expect(tryonFlow({ step: "consent", version: TRYON_CONSENT_TEXT_VERSION, renewed: false, failure: null }, { type: "status", status, cause: server("tryon_consent_outdated") })).toEqual({ step: "consent_reload" });
+      // Aucun refus ne la fait revenir à un écran avec « J'accepte ».
+      expect(tryonFlow({ step: "consent_reload" }, { type: "failed", failure: server("tryon_busy") })).toEqual({ step: "consent_reload" });
+    }
+    // Consentement déjà donné pour la version du serveur : rien à relire, la photo.
+    expect(stepForStatus({ ...ON, consent: { required: false, version: "2026-12-v2" } })).toEqual({ step: "photo", failure: null });
   });
 
   it("essai : photo → en cours → résultat ; « Essayer une autre photo » revient à la photo", () => {
@@ -241,10 +270,24 @@ describe("étapes du parcours", () => {
     expect(failureNeedsStatus({ kind: "offline" })).toBe(false);
   });
 
-  it("Réglages : la ligne de retrait seulement fonction ouverte et consentement donné", () => {
-    expect(canWithdrawConsent(ON)).toBe(true);
-    expect(canWithdrawConsent({ ...ON, consent: { required: true, version: "2026-11-v1" } })).toBe(false);
-    expect(canWithdrawConsent(TRYON_OFF)).toBe(false);
+  it("Réglages : la ligne de retrait dès qu'un consentement est donné, fonction ouverte ou éteinte", () => {
+    // Lu sur le serveur (GET /api/tryon/consent) : fonction éteinte comprise.
+    expect(canWithdrawConsent(true, TRYON_OFF)).toBe(true);
+    expect(canWithdrawConsent(true, { ...ON, consent: { required: true, version: "2026-11-v1" } })).toBe(true);
+    expect(canWithdrawConsent(false, TRYON_OFF)).toBe(false);
+    expect(canWithdrawConsent(null, TRYON_OFF)).toBe(false);
+    // Pas encore lu (ou illisible) : le statut, quand il dit le consentement donné…
+    expect(canWithdrawConsent(null, ON)).toBe(true);
+    expect(canWithdrawConsent(null, { ...ON, consent: { required: true, version: "2026-11-v1" } })).toBe(false);
+    // … ou accepté depuis, dans la fenêtre de l'essayage.
+    expect(canWithdrawConsent(false, ON)).toBe(true);
+  });
+
+  it("essais restants relus quand l'issue est incertaine (abandon du site, connexion perdue, réponse illisible) ou le quota épuisé", () => {
+    for (const failure of [{ kind: "no_answer" }, { kind: "offline" }, { kind: "unexpected" }, server("tryon_quota_exhausted")] as TryonFailure[]) {
+      expect(failureNeedsCounter(failure), JSON.stringify(failure)).toBe(true);
+    }
+    for (const code of ["tryon_pose_not_detected", "tryon_timeout", "tryon_busy", "tryon_consent_required"]) expect(failureNeedsCounter(server(code)), code).toBe(false);
   });
 });
 
@@ -276,16 +319,49 @@ describe("erreurs : chaque code du serveur a son message, en français et en ang
   const codes = [...Object.keys(CODES), "file_too_large"];
 
   it("un message propre à chaque code, jamais le message général, dans les deux langues", () => {
+    // Le refus « trop de demandes » reprend le message du serveur quand il y en a un (test suivant).
+    const fixed = codes.filter((code) => code !== "tryon_rate_limited");
     for (const locale of ["fr", "en"] as const) {
       setActiveLocale(locale);
       const generic = locale === "fr" ? tryonFr.fallback.generic : tryonEn.fallback.generic;
-      const messages = codes.map((code) => failureView(server(code, "Message du serveur."), ON, locale).message);
-      messages.forEach((message, index) => {
-        expect(message, codes[index]).not.toBe(generic);
-        expect(message, codes[index]).not.toBe("Message du serveur.");
-        expect(message.length, codes[index]).toBeGreaterThan(10);
-      });
+      for (const code of fixed) {
+        const message = failureView(server(code, "Message du serveur."), ON, locale).message;
+        expect(message, code).not.toBe(generic);
+        expect(message, code).not.toBe("Message du serveur.");
+        expect(message.length, code).toBeGreaterThan(10);
+      }
+      const fallback = failureView(server("tryon_rate_limited"), ON, locale).message;
+      expect(fallback).toBe(locale === "fr" ? tryonFr.errors.tryon_rate_limited : tryonEn.errors.tryon_rate_limited);
     }
+  });
+
+  it("trop de demandes : le message du serveur (la limite atteinte, déjà dans la langue de l'app), sinon celui du catalogue", () => {
+    const daily = server("tryon_rate_limited", "Vous avez lancé beaucoup d'essais aujourd'hui. Réessayez demain.");
+    const global = server("tryon_rate_limited", "Les essais sont très demandés en ce moment. Réessayez dans un moment.");
+    expect(failureView(daily, ON, "fr")).toEqual({ message: "Vous avez lancé beaucoup d'essais aujourd'hui. Réessayez demain.", tips: false });
+    expect(failureView(global, ON, "fr").message).toBe("Les essais sont très demandés en ce moment. Réessayez dans un moment.");
+    // Signalement ou consentement : le message de leur propre limite.
+    const report = server("tryon_rate_limited", "Vous avez envoyé beaucoup de signalements en peu de temps. Réessayez dans une heure.");
+    expect(reportFailureMessage(report, ON, "fr")).toBe("Vous avez envoyé beaucoup de signalements en peu de temps. Réessayez dans une heure.");
+    setActiveLocale("en");
+    expect(failureView(server("tryon_rate_limited", "Try-ons are in high demand right now. Please try again shortly."), ON, "en").message).toBe(
+      "Try-ons are in high demand right now. Please try again shortly."
+    );
+    expect(failureView(server("tryon_rate_limited", null), ON, "en").message).toBe(tryonEn.errors.tryon_rate_limited);
+  });
+
+  it("image illisible : une autre photo OU une autre pièce ; modération : une autre pièce ou une autre photo (FR et EN)", () => {
+    expect(tryonFr.errors.tryon_image_unreadable).toContain("une autre photo ou une autre pièce");
+    expect(tryonEn.errors.tryon_image_unreadable).toContain("another photo or another piece");
+    expect(tryonFr.errors.tryon_moderation_blocked).toContain("une autre pièce ou une autre photo");
+    expect(tryonEn.errors.tryon_moderation_blocked).toContain("another piece or another photo");
+    for (const text of [tryonFr.errors.tryon_image_unreadable, tryonFr.errors.tryon_moderation_blocked]) expect(text).toContain("n'a pas été décompté");
+  });
+
+  it("pas de réponse dans le délai du site : le message dit qu'un essai interrompu peut avoir été décompté", () => {
+    expect(failureView({ kind: "no_answer" }, ON, "fr").message).toBe(tryonFr.fallback.noAnswer);
+    expect(tryonFr.fallback.noAnswer).toContain("peut tout de même être décompté");
+    expect(tryonEn.fallback.noAnswer).toContain("may still be counted");
   });
 
   it("textes clés du lot", () => {
