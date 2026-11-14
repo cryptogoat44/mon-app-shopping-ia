@@ -154,7 +154,9 @@ validation et les réponses « App Privacy » sont dans
 
   Deux conséquences pratiques :
   - **les interrupteurs du serveur** (`PUSH_ENABLED`, `VOIE_C_ENABLED`,
-    `VOIE_C_AI_ENABLED`, `LINK_PREVIEW_ENABLED`, `ANTHROPIC_PHOTO_ENABLED`)
+    `VOIE_C_AI_ENABLED`, `ANTHROPIC_PHOTO_ENABLED` ; celui des liens n'existe
+    plus : la voie « couverture » a été retirée du code le 12 novembre 2026,
+    archivée sur la branche `archive/couverture-oembed`)
     suivent la même prudence, au titre de la règle 2.5.19 (aucune fonction
     cachée, dormante ou non décrite) : ce qui est allumé le jour de l'envoi
     est décrit comme allumé dans les notes pour Apple ; allumer plus tard une
@@ -239,29 +241,36 @@ Avant d'allumer : faire relire le paragraphe « Expo » de la politique de
 confidentialité (« [À vérifier] ») et revoir les réponses « App Privacy »
 d'Apple (`app-store/CONFIDENTIALITE-APPLE.md`).
 
-## 9. Lecteur intégré TikTok / Instagram : hors du build
+## 9. Lecteur intégré TikTok / Instagram : de retour, avec quatre interrupteurs
 
-Le lecteur intégré (lot « lecteur intégré ») ouvrait une vidéo TikTok ou
-Instagram dans Spotto, et « Spotter ce moment » en prenait l'image grâce à un
-module natif écrit en Swift (`apps/mobile/modules/spotto-frame-capture`).
-Aucune plateforme n'a autorisé cet usage par écrit, et Apple refuse les
-fonctions cachées ou dormantes (règle 2.5.19) comme l'usage non autorisé du
-contenu d'un autre service (règle 5.2.3).
+Mission « liens vidéo » (novembre 2026) : un lien TikTok ou Instagram, partagé
+ou collé, ouvre la vidéo dans son **lecteur officiel**, et « Spotter ce
+moment » en prend l'image. Cette image est **uniquement l'instantané de ce que
+la vue montre** (`WKWebView.takeSnapshot`, module natif local
+`apps/mobile/modules/spotto-player-snapshot`) : ni enregistrement de l'écran,
+ni PDF, ni fichier de la plateforme téléchargé. Si l'instantané sort noir sur
+un vrai iPhone, on s'arrête là : aucune autre méthode sans décision du
+fondateur. L'image est effacée du téléphone dès que la recherche est partie.
 
-Depuis le lot « nettoyage avant le premier build » (10 novembre 2026) :
+Quatre interrupteurs indépendants :
 
-- le module natif de capture et son pont (`src/lib/player-capture.ts`) sont
-  **retirés** de l'app : un build iPhone ne contient plus aucun code natif de
-  capture, le dossier `apps/mobile/modules` n'existe plus ;
-- le lecteur n'est proposé nulle part (`LINK_PLAYER_ENABLED = false`, et de
-  toute façon jamais sans le module : `src/lib/player-access.ts`) ; un lien
-  collé ou partagé affiche l'aide « capture d'écran d'abord », comme avant ;
-- le reste du code du lecteur (lecture de la vidéo, accord préalable) reste
-  dans le dépôt, éteint, sans « Spotter ce moment ».
+- **deux options du build**, une par plateforme : `EXPO_PUBLIC_FEATURE_TIKTOK_PLAYER`
+  et `EXPO_PUBLIC_FEATURE_INSTAGRAM_PLAYER` (réglages du build chez Expo).
+  Allumées par défaut ; seule la valeur exacte `false` coupe un lecteur. Les
+  deux à `false` : le module natif n'est même pas relié à l'app (le plugin
+  `plugins/lecteur-integre.js` l'exclut du Podfile) ;
+- **deux interrupteurs du serveur** (réponse de `/api/video-links/lookup`) :
+  ils ne peuvent que **couper** un lecteur présent dans le build (l'écran
+  « Spottez cette vidéo » prend sa place), jamais en allumer un absent.
 
-**Pour le faire revenir**, seulement après l'accord écrit d'une plateforme :
-demander à Claude d'annuler le commit de ce lot (`git revert` du commit
-« App iPhone : module natif de capture du lecteur retiré »), puis de passer
-`LINK_PLAYER_ENABLED` à `true`, puis refaire un build iPhone (le module est
-natif : une mise à jour à distance ne suffit pas). Il faudra alors revoir les
-notes pour Apple et les réponses « App Privacy » (`app-store/`).
+Un lecteur coupé, un accord refusé ou une vidéo qui ne se lit pas mènent à
+l'écran de secours « Spottez cette vidéo » (capture d'écran, puis « Recherche
+d'image » d'iOS 26 ou Partager → l'app). L'accord préalable (traceurs des
+lecteurs) est demandé avant le premier lecteur, et se retire dans Réglages.
+
+**Décision à confirmer avant tout envoi à Apple** (règles 5.2.2 et 5.2.3) :
+la mission remet le lecteur et la prise d'image, actifs par défaut. Pour
+envoyer un build sans eux : les deux variables à `false` chez Expo, puis un
+nouveau build (le module est natif : une mise à jour à distance ne suffit
+pas). Revoir alors les notes pour Apple et les réponses « App Privacy »
+(`app-store/`).

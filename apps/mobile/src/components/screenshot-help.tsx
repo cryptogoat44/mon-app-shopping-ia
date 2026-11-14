@@ -11,9 +11,8 @@ import { themedStyles } from "@/theme/themed-styles";
 export function ScreenshotHelp({ onAddScreenshot, onAddVideo, busy }: { onAddScreenshot: () => void; onAddVideo: () => void; busy: boolean }) {
   const device = currentDevice();
   const shortcut = t.preview.screenshotShortcut[device === "computer" ? "web" : device];
-  // Pause et capture : les trois premières étapes de l'écran Aperçu (désactivé) ;
-  // la dernière nomme le bouton ci-dessous.
-  const steps = [...t.preview.captureSteps(t.preview.theApp, shortcut).slice(0, 3), t.firstTry.linkHelp.lastStep(t.firstTry.linkHelp.addScreenshot)];
+  // Pause et capture, puis la dernière étape, qui nomme le bouton ci-dessous.
+  const steps = [...t.preview.captureSteps(t.preview.theApp, shortcut), t.firstTry.linkHelp.lastStep(t.firstTry.linkHelp.addScreenshot)];
   return (
     <View style={styles.box} accessibilityLiveRegion="polite">
       <Text style={styles.title} accessibilityRole="header">

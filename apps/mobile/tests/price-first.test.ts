@@ -272,7 +272,6 @@ function searchOf(matches: ProductMatch[], complement?: SearchComplement, extra:
     sourceUrl: null,
     sourcePlatform: "photo",
     method: "manual_screenshot",
-    thumbnailUrl: null,
     status: "completed",
     errorMessage: null,
     query: null,

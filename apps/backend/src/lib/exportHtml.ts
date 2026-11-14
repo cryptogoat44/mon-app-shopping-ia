@@ -43,6 +43,7 @@ import {
   MESSAGES_FROM_LABELS,
   REPORT_TARGET_LABELS,
   SEARCH_FAILURE_LABELS,
+  VIDEO_SPOT_SOURCE_LABELS,
   SEARCH_STATUS_LABELS,
   STOCK_STATE_LABELS,
   SOLD_OUT_SOURCE_LABELS,
@@ -456,7 +457,9 @@ function searchesSection(ctx: Ctx): Html {
               : tr(ctx, EXPORT_TEXT.openLink, { site })
         )
       )
-      // Miniature fournie par la plateforme : adresse signée qui expire.
+      // Recherches d'avant le 12 novembre 2026 seulement (voie « couverture »
+      // retirée) : adresse signée, expirée, montrée comme un simple lien que le
+      // serveur n'ouvre jamais.
       .field("thumbnail_url", link(ctx, row.thumbnail_url, (site) => tr(ctx, EXPORT_TEXT.temporaryImage, { site })))
       .field("method", enumLabel(ctx, RECOGNITION_METHOD_LABELS, row.method))
       .field("query", multiline(row.query))
@@ -1052,6 +1055,46 @@ function tryonSection(ctx: Ctx): Html {
   ]);
 }
 
+/** Mémoire des vidéos : la plateforme d'après l'adresse publique de la vidéo. */
+function videoTitle(ctx: Ctx, url: unknown): string {
+  const href = safeHref(url);
+  if (href !== null && siteOf(href).endsWith("instagram.com")) return tr(ctx, EXPORT_TEXT.videoInstagram);
+  if (href !== null && siteOf(href).endsWith("tiktok.com")) return tr(ctx, EXPORT_TEXT.videoTiktok);
+  return str(url) ?? "";
+}
+
+/** Mémoire collective des vidéos : vos spots (la vidéo, d'où venait l'image,
+ * le moment) et vos « C'est bien cette pièce ». */
+function videosSection(ctx: Ctx): Html {
+  const { videoSpots, videoConfirmations } = ctx.data;
+  const openVideo = (site: string) => tr(ctx, EXPORT_TEXT.openVideo, { site });
+  const spots = newestFirst(videoSpots, "created_at").map((row) => {
+    const seconds = typeof row.moment_seconds === "number" ? row.moment_seconds : null;
+    return new Card(ctx, "videoSpots", row)
+      .field("canonical_url", link(ctx, row.canonical_url, openVideo))
+      .field("source", enumLabel(ctx, VIDEO_SPOT_SOURCE_LABELS, row.source))
+      .field("moment_seconds", seconds === null ? null : tr(ctx, EXPORT_TEXT.videoMoment, { minutes: String(Math.floor(seconds / 60)), seconds: String(seconds % 60) }))
+      .field("created_at")
+      .render(videoTitle(ctx, row.canonical_url));
+  });
+  const confirmations = newestFirst(videoConfirmations, "created_at").map((row) =>
+    new Card(ctx, "videoConfirmations", row)
+      .use("product")
+      .field("canonical_url", link(ctx, row.canonical_url, openVideo))
+      .field("created_at")
+      .render(str(row.product))
+  );
+  const parts: [Bilingual, Html[]][] = [
+    [EXPORT_TEXT.videoSpotsTitle, spots],
+    [EXPORT_TEXT.videoConfirmationsTitle, confirmations],
+  ];
+  return section(
+    ctx,
+    "videos",
+    parts.filter(([, cards]) => cards.length > 0).map(([title, cards]) => subsection(ctx, tr(ctx, title, { count: String(cards.length) }), null, cards))
+  );
+}
+
 function exportsSection(ctx: Ctx): Html {
   const cards = newestFirst(ctx.data.dataExportRequests, "requested_at").map((row) =>
     new Card(ctx, "dataExportRequests", row)
@@ -1068,6 +1111,7 @@ function sectionCount(data: ExportData, id: ExportSectionId): number | null {
   const counts: Record<ExportSectionId, number | null> = {
     account: null,
     searches: data.productSearches.length,
+    videos: data.videoSpots.length,
     wishlist: data.wishlistItems.length,
     collections: data.collections.length,
     alerts: data.wishWatches.length,
@@ -1096,6 +1140,7 @@ function sectionCount(data: ExportData, id: ExportSectionId): number | null {
 const SECTION_RENDERERS: Record<ExportSectionId, (ctx: Ctx) => Html> = {
   account: accountSection,
   searches: searchesSection,
+  videos: videosSection,
   wishlist: wishlistSection,
   collections: collectionsSection,
   alerts: alertsSection,

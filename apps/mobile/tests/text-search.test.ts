@@ -53,7 +53,6 @@ function search(overrides: Partial<ProductSearch> = {}): ProductSearch {
     sourceUrl: null,
     sourcePlatform: "photo",
     method: "manual_screenshot",
-    thumbnailUrl: null,
     status: "completed",
     errorMessage: null,
     query: null,

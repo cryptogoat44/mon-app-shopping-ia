@@ -23,10 +23,11 @@ export function useCorrections(result: SpotResult | null, onMessage: (message: s
   const [preparing, setPreparing] = useState(false);
   const { importing, importVideo } = useVideoImport(onMessage);
   const context: CorrectionContext = {
-    hasDraft: Boolean(draft),
+    // Image effacée après la recherche (instantané du lecteur, capture de la recherche d'image d'iOS) : rien à recadrer.
+    hasDraft: Boolean(draft?.localImageUri),
     hasVideo: Boolean(video),
     remainingMoments: remaining.length,
-    fromLink: Boolean(result?.sourceUrl ?? draft?.sourceUrl),
+    fromLink: Boolean(result?.sourceUrl),
   };
 
   // Chaque autre moment est un geste de la personne : une identification consentie.

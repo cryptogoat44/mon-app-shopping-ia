@@ -9,7 +9,7 @@ import { containsLink } from "@/lib/link-detection";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { isAdjustedCrop } from "@/lib/crop-geometry";
 import { zoneReady, type PieceZone } from "@/lib/piece-trace";
-import { draftImageUri, getDraft, type SpotDraft } from "@/lib/spot-draft";
+import { draftImageUri, getDraft, leaveLaunchScreen, type SpotDraft } from "@/lib/spot-draft";
 import { getSpotVideo, holdSpotVideo, importSpotVideo, letGoSpotVideo, videoImportMessage } from "@/lib/spot-video";
 import { blocksLaunch } from "@/lib/search-limits";
 import { useSearchLimits } from "@/lib/use-search-limits";
@@ -19,6 +19,7 @@ import { AskView, ConsentView, FallbackView, LaunchPreview, PhotoFrame, type Act
 import { SpotWaitingScreen } from "@/components/spot-waiting";
 import { CancelledNote, SearchRecoveryView } from "@/components/search-recovery";
 import { SearchLimitsNotice } from "@/components/search-limits-notice";
+import { VideoContextLabel } from "@/components/video-context-label";
 import { themedStyles } from "@/theme/themed-styles";
 
 const PREVIEW_EDGE = 900;
@@ -200,6 +201,11 @@ export default function LaunchScreen() {
     holdSpotVideo();
     return letGoSpotVideo;
   }, []);
+  // Écran quitté (« ‹ », ou retiré de la pile) : l'image à ne pas garder
+  // (instantané du lecteur, capture de la recherche d'image d'iOS) est effacée
+  // avec son brouillon. Les résultats s'ouvrent par-dessus cet écran : il
+  // reste en place pendant la recherche, et après un échec (« Relancer »).
+  useEffect(() => leaveLaunchScreen, []);
   // Une autre vidéo choisie entre-temps (depuis le curseur) : c'est elle qui compte.
   useFocusEffect(
     useCallback(() => {
@@ -238,6 +244,8 @@ export default function LaunchScreen() {
       </View>
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content} scrollEnabled={!dragging} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         {flow.phase.kind === "ask" && blocked ? <SearchLimitsNotice notice={limits.notice} style={styles.limits} /> : null}
+        {/* Mission « liens vidéo » : recherche associée à une vidéo (lecteur, ou lien en attente), avec sa croix. */}
+        {flow.phase.kind === "ask" && photoUri ? <VideoContextLabel /> : null}
         {flow.phase.kind === "ask" && photoUri ? (
           <PhotoFrame uri={photoUri} zone={zone} onChange={setZone} onDragChange={setDragging} height={Math.min(Math.max(windowHeight * 0.42, 220), 400)} />
         ) : flow.phase.kind === "ask" ? (

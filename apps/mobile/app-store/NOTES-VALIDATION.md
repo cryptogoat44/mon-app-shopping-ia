@@ -4,7 +4,7 @@
 
 **Où coller** : App Store Connect → votre app → la version → section **Informations pour la validation de l'app** (*App Review Information*) :
 - **Identifiant** et **mot de passe** du compte de démonstration : dans leurs deux cases (pas seulement dans les notes) ;
-- **Remarques** (*Notes*) : la **version anglaise** ci-dessous (partie 3). Apple lit l'anglais. **Limite d'Apple : 4 000 caractères.** Le texte anglais en fait **3 857** (3 865 octets), crochets compris : il reste environ 135 caractères de marge. La version française (partie 2, pour vous) en fait **3 990** (4 147 octets : elle n'est pas collée chez Apple).
+- **Remarques** (*Notes*) : la **version anglaise** ci-dessous (partie 3). Apple lit l'anglais. **Limite d'Apple : 4 000 caractères.** Le texte anglais en fait **3 865** (3 873 octets), crochets compris : il reste 135 caractères de marge. La version française (partie 2, pour vous) en fait **4 007** (4 164 octets : elle n'est pas collée chez Apple).
 - **Pièce jointe** (facultative, conseillée) : une courte vidéo d'écran de votre iPhone qui montre le partage d'une photo vers l'app depuis Photos. Elle évite un aller-retour si le testeur ne trouve pas l'extension.
 
 **Règle** : Apple refuse les descriptions vagues (règle 2.3.1 (a) : « All new features, functionality, and product changes must be described with specificity in the Notes for Review section of App Store Connect (generic descriptions will be rejected) and accessible for review. »). Chaque phrase vient du code de la branche du build ; les preuves sont en partie 4. Si le code change d'ici l'envoi, revérifiez le paragraphe concerné, **et recomptez** : `wc -m` sur le texte copié dans un fichier.
@@ -23,7 +23,7 @@ Le nom de l'app va changer : le texte dit « the app ». Seuls les libellés lus
 
 **À vérifier** (sinon la phrase est fausse : corrigez-la ou retirez-la) :
 
-4. **`ANTHROPIC_PHOTO_ENABLED` et `LINK_PREVIEW_ENABLED` sont bien coupés** chez Render (absents, ou différents de `true`). Les notes disent « OFF » : s'ils sont allumés, n'envoyez pas.
+4. **`ANTHROPIC_PHOTO_ENABLED` est bien coupé** chez Render (absent, ou différent de `true`). Les notes disent « OFF » : s'il est allumé, n'envoyez pas. `LINK_PREVIEW_ENABLED` n'est plus à vérifier : la voie « couverture » a été retirée du code le 12 novembre 2026 (archivée sur la branche `archive/couverture-oembed`), le serveur ne lit plus cette variable.
 5. **Les migrations en production** ([REGISTRE-MIGRATIONS.md](../../backend/supabase/REGISTRE-MIGRATIONS.md)) : les paragraphes « MESSAGES » et « COLLECTIONS » supposent 0032, 0033 et 0034 (appliquées le 9 novembre 2026) ; « hidden until reviewed » suppose 0030 (appliquée) ; « NOTIFICATIONS AND ALERTS » suppose 0035 et 0036 (**à appliquer** à ce jour : sans elles, l'app cache ces fonctions, et le paragraphe doit partir) ; « (bios and profile photos included) » suppose **0037** (à appliquer : sans elle, retirez ces mots).
 6. **« backup copy of photos: 7 days at most »** : vrai si la copie de sécurité hebdomadaire des photos est en service (`apps/backend/supabase/SAUVEGARDE-PHOTOS.md`). Sans copie de sécurité, retirez la parenthèse.
 7. **« No link is affiliated today »** : vrai tant qu'aucun programme d'affiliation n'est actif. À réécrire le jour où un lien rapporte une commission.
@@ -35,7 +35,7 @@ Le nom de l'app va changer : le texte dit « the app ». Seuls les libellés lus
 10. **Une phrase facultative**, à ajouter à la fin de « SERVER SWITCHES TODAY » seulement si vous vous y tenez : `Switches that are OFF will only be turned on with a new submission.` (67 caractères). C'est la lecture prudente de la règle 2.5.19 : allumer plus tard une fonction qu'Apple n'a pas vue passe par une nouvelle version.
 11. **Si le serveur s'endort encore** (offre gratuite de Render) le jour de l'envoi, ajoutez : `SERVER: it may sleep when unused; the first launch can then take up to one minute (a wake-up message is shown).` (111 caractères ; vérifiez que le total reste sous 4 000). Le mieux reste une offre sans veille (CONTROLE-BUILD.md, partie C).
 
-*Lecteur intégré TikTok / Instagram : rien à écrire.* Le module natif qui prenait l'image du lecteur est retiré de l'app depuis le lot « nettoyage avant le premier build » (10 novembre 2026) : le build ne contient aucun code de capture. S'il revenait un jour (`apps/mobile/BUILD-IPHONE.md`, section 9), ces notes devraient le décrire.
+*Lecteur intégré TikTok / Instagram : de retour (mission « liens vidéo »), sous réserve de la décision du fondateur avant l'envoi.* Un lien TikTok ou Instagram s'ouvre dans le lecteur officiel de la plateforme (page `www.tiktok.com/player/v1/…`, ou code d'intégration officiel d'Instagram avec `embed.js`), jamais masqué ni modifié, après un accord préalable. « Spotter ce moment » prend seulement l'instantané de ce que la vue affiche (`WKWebView.takeSnapshot`) : aucune vidéo ni image n'est téléchargée depuis TikTok ou Instagram, et l'instantané est effacé du téléphone dès que la recherche est partie. Ces notes devront le décrire pour Apple si le build part avec le lecteur (`apps/mobile/BUILD-IPHONE.md`, section 9).
 
 *Ce que ces notes ne disent pas, faute de place* : l'écran « Mettez à jour » (`APP_MIN_IOS_BUILD`, coupé par défaut : CONTROLE-BUILD.md, partie C), l'alerte « Épuisé » (construite, cachée dans l'app : décision à prendre, rapport d'audit partie 2), et le détail des « autres boutiques » (3 recherches au plus par photo).
 
@@ -52,7 +52,7 @@ POURQUOI UN COMPTE
 Recherches gardées et limitées par personne ; Envies, Vault, publications, abonnements et messages demandent une identité. Inscription gratuite (e-mail à confirmer).
 
 SPOTTER UNE PIÈCE (onglet Spotter)
-« Ajouter une photo », « Prendre une photo » ou « Ajouter une vidéo » (reste sur l'iPhone). Entourez la pièce, « Lancer » : résultats en 10 à 20 s, prix d'abord. « Garder » > Envies ; « Je l'ai achetée » > Vault. Lien TikTok, Instagram ou Pinterest collé : non lu (l'app explique la capture d'écran).
+« Ajouter une photo », « Prendre une photo » ou « Ajouter une vidéo » (reste sur l'iPhone). Entourez la pièce, « Lancer » : résultats en 10 à 20 s, prix d'abord. « Garder » > Envies ; « Je l'ai achetée » > Vault. Lien TikTok ou Instagram collé ou partagé : la vidéo s'ouvre dans son lecteur officiel, « Spotter ce moment » (ou, lecteur coupé, l'app explique la capture d'écran). Lien Pinterest : non lu (l'app explique la capture d'écran).
 Extension de partage : Photos > Partager > l'app.
 
 SOURCE DES RÉSULTATS
@@ -76,7 +76,7 @@ INTERRUPTEURS DU SERVEUR
 - Autres boutiques (VOIE_C_ENABLED) : [ON/OFF] ; étape IA (VOIE_C_AI_ENABLED) : [ON/OFF]. Allumé : une IA (Anthropic) lit titres et noms de sites des 15 premiers résultats, jamais l'image, pour interroger Google Shopping ; on peut aussi taper des mots.
 - Analyse des vidéos (clé Anthropic) : [ON/OFF]. Avec accord : un écran nomme Anthropic (États-Unis) avant l'envoi de 12 images réduites au plus ; refuser n'envoie rien.
 - ANTHROPIC_PHOTO_ENABLED : OFF. Aucune photo de membre envoyée à une IA.
-- LINK_PREVIEW_ENABLED : OFF. Rien n'est demandé à TikTok ni à Meta.
+- Liens TikTok/Instagram : pas d'interrupteur, rien n'est demandé à TikTok ni à Meta.
 
 PLAFONDS
 [8] recherches par personne et par jour, [25] pour tout le service, 10 par heure (minuit, heure de Paris). À zéro, « Lancer » est désactivé ; rouvrir un résultat est gratuit.
@@ -95,7 +95,7 @@ Profil > roue dentée > Supprimer mon compte > taper SUPPRIMER > Confirmer. Tout
 Autorisations : appareil photo ; photos seulement pour la suggestion « dernière vidéo ».
 ```
 
-3 990 caractères (4 147 octets), crochets compris.
+4 007 caractères (4 164 octets), crochets compris.
 
 ---
 
@@ -134,7 +134,7 @@ SERVER SWITCHES TODAY
 - Other shops (VOIE_C_ENABLED): [ON/OFF]; its AI step (VOIE_C_AI_ENABLED): [ON/OFF]. On: an AI (Anthropic) reads only titles and site names of the first 15 results, never the image, to query Google Shopping; users can also type words.
 - Video analysis (Anthropic key): [ON/OFF]. Opt-in: a consent screen names Anthropic (USA) before up to 12 reduced frames are sent; declining sends nothing.
 - ANTHROPIC_PHOTO_ENABLED: OFF. No user photo goes to an AI.
-- LINK_PREVIEW_ENABLED: OFF. Nothing is fetched from TikTok or Meta.
+- TikTok/Instagram links: no switch; nothing is fetched from TikTok or Meta.
 
 LIMITS
 [8] searches per person per day, [25] for the whole service, 10 per hour (reset at midnight, Paris). At zero "Search" is disabled; past results reopen for free.
@@ -153,7 +153,7 @@ Profile > gear > Delete my account > type DELETE > Confirm. Account, data and ph
 Permissions: camera; photos only for the optional "latest video" suggestion.
 ```
 
-3 857 caractères (3 865 octets), crochets compris. Limite d'Apple : 4 000 caractères.
+3 865 caractères (3 873 octets), crochets compris. Limite d'Apple : 4 000 caractères.
 
 ---
 
@@ -162,13 +162,13 @@ Permissions: camera; photos only for the optional "latest video" suggestion.
 Les paragraphes déjà présents avant le 10 novembre 2026 ont été vérifiés sur `main` (b99e884) : leurs fichiers sont les bons, leurs numéros de ligne ont pu glisser. Les paragraphes nouveaux citent le fichier et le nom à y chercher, relus sur la branche `lot-conformite-apple`.
 
 - **DEMO ACCOUNT / WHY AN ACCOUNT** : compte obligatoire, groupes d'écrans protégés : `apps/mobile/src/app/_layout.tsx` et `apps/mobile/src/lib/root-route.ts` ; confirmation de l'e-mail : `apps/mobile/src/app/sign-up.tsx` ; recherches comptées par personne : `apps/backend/src/env.ts:22` (`SERPAPI_USER_DAILY_CAP`) ; le fil montre les publications des comptes suivis : `apps/backend/src/routes/posts.ts` ; amis = chacun suit l'autre : `apps/backend/src/lib/messaging.ts:1-12` ; compte de démonstration jamais administrateur (sa suppression serait refusée) : `apps/backend/src/routes/account.ts`.
-- **SPOT A PIECE** : les trois boutons : `apps/mobile/src/app/(app)/(tabs)/index.tsx`, textes `fr.ts` (`addPhoto`, `addVideo`) ; « Lancer » : `fr.ts` (`launch.launch`) ; « Garder » : `fr.ts` (`keep`) ; lien non lu : `apps/mobile/src/lib/spot-flags.ts:7`, `apps/mobile/src/lib/link-step.ts` ; extension : `apps/mobile/app.json` (`expo-share-intent`), `apps/mobile/plugins/extension-partage.js`.
+- **SPOT A PIECE** : les trois boutons : `apps/mobile/src/app/(app)/(tabs)/index.tsx`, textes `fr.ts` (`addPhoto`, `addVideo`) ; « Lancer » : `fr.ts` (`launch.launch`) ; « Garder » : `fr.ts` (`keep`) ; lien non lu : `apps/mobile/src/lib/link-step.ts` ; extension : `apps/mobile/app.json` (`expo-share-intent`), `apps/mobile/plugins/extension-partage.js`.
 - **SEARCH SOURCE** : `apps/backend/src/services/serpapi.ts` (moteurs `google_lens` et `google_shopping`) ; lien signé de 5 minutes vers l'image recadrée : `apps/backend/src/lib/storage.ts` (« Images analysées »).
 - **BUSINESS MODEL** : aucun achat intégré ni publicité dans le code ; lien du marchand ouvert dans la fenêtre Safari intégrée : `apps/mobile/src/lib/merchant-links.ts` (`WebBrowser.openBrowserAsync`) ; un lien n'est « affilié » que s'il diffère du lien du marchand : `apps/mobile/src/lib/affiliate-link.ts` ; mention prête : `fr.ts:468` et `en.ts:442` (`affiliateDisclosure`) ; « aucun programme d'affiliation n'est actif » : `apps/mobile/src/legal/conditions.ts:53`.
 - **MESSAGES** : règles (amis, une invitation, refus discret, 30 jours, blocage) : `apps/backend/src/lib/messaging.ts:1-12` ; 1 000 caractères et 30 jours : `packages/shared-types/src/index.ts` (`MESSAGE_MAX_LENGTH`, `INVITATION_DECLINE_COOLDOWN_DAYS`) ; 10 invitations par heure : `apps/backend/src/lib/rateLimits.ts` (`messageInvite`) ; « Qui peut m'écrire », défaut « tout le monde » : `packages/shared-types/src/index.ts` (`DEFAULT_MESSAGES_FROM`), `fr.ts` (`messagesFromTitle`) ; entrée « Messages » de l'onglet Activité : `apps/mobile/src/app/(app)/(tabs)/activite.tsx` ; bouton « ••• » d'un message reçu et appui long : `apps/mobile/src/app/(app)/conversation.tsx` (`Bubble`), test `apps/mobile/tests/messages.test.ts` ; filtre de mots sur les messages : `apps/backend/src/routes/conversations.ts`.
 - **COLLECTIONS** : privées ou montrées aux amis, ce que les amis voient : `en.ts` (`collections.shareConfirmTitle` et la phrase suivante) ; signalement : `apps/mobile/src/app/(app)/collection-ami.tsx`, `apps/backend/src/lib/collectionModeration.ts`.
 - **NOTIFICATIONS AND ALERTS** : coupées par défaut, texte limité à « qui écrit » : `apps/backend/src/lib/push.ts:1-16` ; autorisation demandée seulement après « Activer les notifications » : `apps/mobile/src/lib/push.ts`, `fr.ts` (`offerAccept`) ; les deux interrupteurs : `apps/mobile/src/components/message-push-setting.tsx` et `wish-alerts-setting.tsx` ; cloche et alertes : `fr.ts` (`wishAlerts.sheetIntro`).
-- **SERVER SWITCHES TODAY** : `apps/backend/src/env.ts` — `LINK_PREVIEW_ENABLED` (:37), `ANTHROPIC_API_KEY` (:44), `VOIE_C_ENABLED` (:56), `VOIE_C_AI_ENABLED` (:63), `ANTHROPIC_PHOTO_ENABLED` (:71), `PUSH_ENABLED` (:82) : seule la valeur exacte `true` allume ; titres et noms de sites des 15 premiers résultats : `apps/backend/src/services/shoppingQueryAi.ts` ; écran d'accord des vidéos, 12 images au plus : `apps/mobile/src/components/spot-launch-views.tsx`, accord revérifié par `apps/backend/src/routes/videoMoments.ts`.
+- **SERVER SWITCHES TODAY** : `apps/backend/src/env.ts` — `ANTHROPIC_API_KEY` (:26), `VOIE_C_ENABLED` (:38), `VOIE_C_AI_ENABLED` (:45), `ANTHROPIC_PHOTO_ENABLED` (:53), `PUSH_ENABLED` (:64) : seule la valeur exacte `true` allume ; liens TikTok et Instagram : plus d'interrupteur, la voie « couverture » a été retirée du code le 12 novembre 2026 (archivée sur la branche `archive/couverture-oembed`), test `apps/backend/tests/aucunMediaTiktokInstagram.test.ts` ; titres et noms de sites des 15 premiers résultats : `apps/backend/src/services/shoppingQueryAi.ts` ; écran d'accord des vidéos, 12 images au plus : `apps/mobile/src/components/spot-launch-views.tsx`, accord revérifié par `apps/backend/src/routes/videoMoments.ts`.
 - **LIMITS** : `apps/backend/src/env.ts:17` et `:22` ; 10 par heure : `apps/backend/src/lib/rateLimits.ts:31` ; minuit de Paris : `apps/backend/src/lib/searchCapacityStatus.ts`.
 - **MODERATION** : filtre : `apps/backend/src/lib/contentFilter.ts`, appliqué dans `routes/posts.ts`, `comments.ts`, `conversations.ts`, `me.ts`, `collections.ts` ; six types signalables : `packages/shared-types/src/index.ts` (`REPORT_TARGET_TYPES`) ; disparaît pour qui signale : `apps/backend/src/lib/reportedByViewer.ts` ; blocage : `apps/backend/src/routes/blocks.ts` ; masquage à 3 personnes : `apps/backend/src/lib/autoHide.ts:27` (publication, commentaire, pièce, collection ; pas un message ni un profil) ; alerte à chaque signalement : `apps/backend/ALERTES.md` ; retirer une bio ou une photo de profil : `apps/backend/src/routes/moderation.ts` (route `remove-profile-part`), migration 0037 ; bio et photo d'un compte suspendu cachées : `apps/backend/src/lib/profileModeration.ts` ; « 24 heures » : un ENGAGEMENT du fondateur, pas du code.
 - **ACCOUNT DELETION** : `apps/mobile/src/components/delete-account-section.tsx` ; mot à taper : `packages/shared-types/src/index.ts:71` ; suppression des fichiers puis du compte : `apps/backend/src/routes/account.ts` ; copie de sécurité, 7 jours au plus : `apps/backend/supabase/SAUVEGARDE-PHOTOS.md:10`.

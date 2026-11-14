@@ -74,6 +74,13 @@ const tryonProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROL
 const TRYON_MIGRATED = !tryonProbe.error && tryonProbe.data === 1;
 const TRYON_SECTIONS = TRYON_MIGRATED ? (["tryonEvents", "tryonBonusGrants", "tryonReports"] as const) : [];
 
+// Mémoire des vidéos (revue de sécurité) : un spot et une confirmation, dès
+// que la migration 0038 est appliquée sur la base des tests (sans elle,
+// sections vides ; l'export les lit même sans 0039).
+const videoProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).rpc("video_memory_version");
+const VIDEO_SECTIONS = videoProbe.error || typeof videoProbe.data !== "number" || videoProbe.data < 1 ? [] : (["videoSpots", "videoConfirmations"] as const);
+const VIDEO_KEY = `74${Date.now()}`.padEnd(19, "1").slice(0, 19);
+
 // Sections qui sont un objet (ou null), pas une liste.
 const OBJECT_SECTIONS = ["account", "profile", "adminRole", "suspension", ...(TRYON_MIGRATED ? (["tryonProfile"] as const) : [])] as const;
 
@@ -125,6 +132,9 @@ const JSON_KEYS = [
   "tryonEvents",
   "tryonBonusGrants",
   "tryonReports",
+  // Mémoire des vidéos, de même.
+  "videoSpots",
+  "videoConfirmations",
 ];
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
@@ -172,6 +182,25 @@ describe("export RGPD complet", () => {
       .select("id")
       .single();
     await app.supabaseAdmin.from("affiliate_links").insert({ product_match_id: match!.id, network: "direct", affiliate_url: "https://example.com/p" });
+    // Mémoire des vidéos : un spot de cette recherche et une confirmation, insérés directement.
+    if (VIDEO_SECTIONS.length > 0) {
+      const { data: video, error: videoError } = await app.supabaseAdmin
+        .from("video_sources")
+        .insert({ platform: "tiktok", video_key: VIDEO_KEY, canonical_url: `https://www.tiktok.com/@/video/${VIDEO_KEY}` })
+        .select("id")
+        .single();
+      if (videoError) throw videoError;
+      const { data: spot, error: spotError } = await app.supabaseAdmin
+        .from("video_spots")
+        .insert({ video_source_id: video!.id, user_id: user.id, search_id: search!.id, source: "tiktok_player", moment_seconds: 12 })
+        .select("id")
+        .single();
+      if (spotError) throw spotError;
+      const { error: itemError } = await app.supabaseAdmin.from("video_spot_items").insert({ video_spot_id: spot!.id, product_match_id: match!.id, video_source_id: video!.id, product_key: "c".repeat(64) });
+      if (itemError) throw itemError;
+      const { error: confirmError } = await app.supabaseAdmin.from("video_item_confirmations").insert({ user_id: user.id, video_source_id: video!.id, product_key: "c".repeat(64) });
+      if (confirmError) throw confirmError;
+    }
     // Bouton « Résultat incohérent » : la proposition signalée.
     const { error: feedbackError } = await app.supabaseAdmin.from("match_feedback").insert({ user_id: user.id, match_id: match!.id, reason: "wrong_item" });
     if (feedbackError) throw feedbackError;
@@ -330,6 +359,7 @@ describe("export RGPD complet", () => {
     await deleteTestUser(app, friend.id);
     await deleteTestUser(app, stranger.id);
     await deleteTestUser(app, admin.id);
+    if (VIDEO_SECTIONS.length > 0) await app.supabaseAdmin.from("video_sources").delete().eq("platform", "tiktok").eq("video_key", VIDEO_KEY);
     await app.close();
   });
 
@@ -339,7 +369,7 @@ describe("export RGPD complet", () => {
     const body = res.json();
 
     expect(body.profile.id).toBe(user.id);
-    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...COLLECTION_SECTIONS, ...PUSH_SECTIONS, ...ALERT_SECTIONS, ...TRYON_SECTIONS]) {
+    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...COLLECTION_SECTIONS, ...PUSH_SECTIONS, ...ALERT_SECTIONS, ...TRYON_SECTIONS, ...VIDEO_SECTIONS]) {
       expect(Array.isArray(body[section]), section).toBe(true);
       expect(body[section].length, section).toBeGreaterThan(0);
     }
@@ -362,6 +392,10 @@ describe("export RGPD complet", () => {
       expect(body.tryonProfile).toMatchObject({ age_status: "adult", consent_version: "2026-11-v1", consent_withdrawn_at: null });
       expect(Object.keys(body.tryonProfile).sort()).toEqual(["age_checked_at", "age_status", "consent_accepted_at", "consent_version", "consent_withdrawn_at"]);
       expect(JSON.stringify([body.tryonProfile, body.tryonEvents, body.tryonReports])).not.toMatch(/base64|data:image|birth/i);
+    }
+    if (VIDEO_SECTIONS.length > 0) {
+      expect(body.videoSpots).toEqual([{ canonical_url: `https://www.tiktok.com/@/video/${VIDEO_KEY}`, source: "tiktok_player", moment_seconds: 12, created_at: expect.any(String), search_id: expect.any(String) }]);
+      expect(body.videoConfirmations).toEqual([{ canonical_url: `https://www.tiktok.com/@/video/${VIDEO_KEY}`, product: "Sac", created_at: expect.any(String) }]);
     }
   });
 

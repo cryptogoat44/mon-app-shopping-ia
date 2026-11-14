@@ -21,6 +21,7 @@ import {
   type SearchStatus,
   type StockState,
   type VaultCategory,
+  type VideoSpotSource,
   type WishAlertKind,
   type WishAlertStatus,
   type SEARCH_FAILURE_MESSAGES,
@@ -523,6 +524,20 @@ export const EXPORT_COLUMNS = {
     comment: shown("Votre précision", "Your note"),
     created_at: shown("Signalé le", "Reported on"),
   },
+  // Mémoire collective des vidéos (migrations 0038 et 0039) : vos spots…
+  videoSpots: {
+    canonical_url: shown("Vidéo", "Video"),
+    source: shown("D'où venait l'image", "Where the image came from"),
+    moment_seconds: shown("Moment de la vidéo", "Moment in the video"),
+    created_at: shown("Associée le", "Linked on"),
+    search_id: technical("Recherche associée", "Linked search"),
+  },
+  // … et vos « C'est bien cette pièce ».
+  videoConfirmations: {
+    canonical_url: shown("Vidéo", "Video"),
+    product: shown("Pièce", "Piece"),
+    created_at: shown("Confirmée le", "Confirmed on"),
+  },
 } as const satisfies Record<ExportDataKey, Record<string, ExportColumn>>;
 
 export type ExportColumnName<K extends ExportDataKey> = keyof (typeof EXPORT_COLUMNS)[K] & string;
@@ -561,6 +576,14 @@ export const EXPORT_SECTIONS = {
       en: "The collections where you sort your Wishlist, and who can see them: you alone, or your friends (members you follow who follow you back).",
     },
     keys: ["collections", "collectionItems"],
+  },
+  videos: {
+    title: { fr: "Vos vidéos spottées", en: "Your spotted videos" },
+    intro: {
+      fr: `Les vidéos TikTok et Instagram auxquelles une de vos recherches a été associée, et les pièces dont vous avez dit « C'est bien cette pièce ». Les pièces trouvées sont ajoutées, sans votre nom, aux pièces repérées de chaque vidéo ; ${BRAND} ne garde aucune image de ces vidéos.`,
+      en: `The TikTok and Instagram videos one of your searches was linked to, and the pieces you marked “That's the piece”. The pieces found are added, without your name, to the pieces spotted in each video; ${BRAND} keeps no image from these videos.`,
+    },
+    keys: ["videoSpots", "videoConfirmations"],
   },
   alerts: {
     title: { fr: "Vos alertes prix et stock", en: "Your price and stock alerts" },
@@ -809,6 +832,16 @@ export const TRYON_FAILURE_LABELS: Record<TryonFailureCode, Bilingual> = {
   garment_unavailable: { fr: "Image de la pièce introuvable", en: "Piece image not found" },
   result_unreadable: TRYON_TECHNICAL_FAILURE,
   internal: TRYON_TECHNICAL_FAILURE,
+};
+
+/** D'où venait l'image d'un spot (mémoire des vidéos). */
+export const VIDEO_SPOT_SOURCE_LABELS: Record<VideoSpotSource, Bilingual> = {
+  tiktok_player: { fr: "Image du lecteur TikTok", en: "Image from the TikTok player" },
+  instagram_player: { fr: "Image du lecteur Instagram", en: "Image from the Instagram player" },
+  share: { fr: `Image partagée avec ${BRAND}`, en: `Image shared with ${BRAND}` },
+  visual_intelligence: { fr: "Recherche d'image de l'iPhone", en: "iPhone image lookup" },
+  app: { fr: "Image choisie dans l'app", en: "Image chosen in the app" },
+  web: { fr: "Image choisie sur le site", en: "Image chosen on the website" },
 };
 
 /** Système d'un appareil des notifications (lot notifications). */
@@ -1105,6 +1138,13 @@ export const EXPORT_TEXT = {
   alertEventsTitle: { fr: "Alertes ({count})", en: "Alerts ({count})" },
   stockReportsTitle: { fr: "Signalements « Plus disponible » ({count})", en: "“No longer available” reports ({count})" },
   stockReportPiece: { fr: "Une pièce signalée « Plus disponible »", en: "A piece reported as no longer available" },
+  // Mémoire des vidéos (migrations 0038 et 0039).
+  videoSpotsTitle: { fr: "Vidéos spottées ({count})", en: "Spotted videos ({count})" },
+  videoConfirmationsTitle: { fr: "Pièces confirmées ({count})", en: "Confirmed pieces ({count})" },
+  videoTiktok: { fr: "Vidéo TikTok", en: "TikTok video" },
+  videoInstagram: { fr: "Vidéo Instagram", en: "Instagram video" },
+  videoMoment: { fr: "à {minutes} min {seconds} s", en: "at {minutes} min {seconds} s" },
+  openVideo: { fr: "Ouvrir la vidéo ({site})", en: "Open the video ({site})" },
   orphanCollectionItems: { fr: "Envies d'une collection introuvable", en: "Wishes from a collection that could not be found" },
   // Essayage virtuel (lot essayage virtuel).
   tryonProfileTitle: { fr: "Statut d'âge et consentement", en: "Age status and consent" },

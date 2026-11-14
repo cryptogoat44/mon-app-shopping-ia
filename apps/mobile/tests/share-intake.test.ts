@@ -313,3 +313,33 @@ describe("repli : la réouverture par l'extension a échoué (lot « app iPhone 
     stop();
   });
 });
+
+describe("partage et recherche d'image d'iOS (mission « liens vidéo ») : le groupe d'apps est partagé", () => {
+  it("un partage n'efface jamais le dossier « recherche-image/ » ni son lien en attente", async () => {
+    const capture = `${disk.GROUP}recherche-image/3f2c8a1e-9b7d-4c21-a5e0-1d2b3c4d5e6f.jpg`;
+    const waiting = `${disk.GROUP}recherche-image-en-attente.txt`;
+    disk.files.set(capture, 120_000);
+    disk.files.set(waiting, 60);
+    disk.files.set(`${disk.GROUP}vignette.jpg`, 9_000);
+    disk.files.set(`${disk.GROUP}D.PNG`, 500);
+    const stop = startShareIntake();
+    linking.open(opening(20, "media"));
+    share.emit("onChange", JSON.stringify({ files: [{ path: `${disk.GROUP}D.PNG`, mimeType: "image/png", width: 10, height: 20 }] }));
+    await vi.waitFor(() => expect(peekSharedItem()).toMatchObject({ kind: "image" }));
+    expect(disk.deleted).not.toContain(capture);
+    expect(disk.deleted).not.toContain(waiting);
+    expect(disk.files.has(capture)).toBe(true);
+    expect(disk.files.has(waiting)).toBe(true);
+    expect(disk.deleted).toContain(`${disk.GROUP}vignette.jpg`);
+    stop();
+  });
+
+  it("règle des fichiers épargnés : fichier caché du système, dossier et lien de la recherche d'image", async () => {
+    const { sparedInSharedContainer } = await import("../src/lib/share-intake");
+    expect(sparedInSharedContainer({ name: ".com.apple.mobile_container_manager.metadata.plist", uri: `${disk.GROUP}.com.apple…` })).toBe(true);
+    expect(sparedInSharedContainer({ name: "recherche-image-en-attente.txt", uri: `${disk.GROUP}recherche-image-en-attente.txt` })).toBe(true);
+    expect(sparedInSharedContainer({ name: "x.jpg", uri: `${disk.GROUP}recherche-image/x.jpg` })).toBe(true);
+    expect(sparedInSharedContainer({ name: "partage-en-attente.txt", uri: `${disk.GROUP}partage-en-attente.txt` })).toBe(false);
+    expect(sparedInSharedContainer({ name: "vignette.jpg", uri: `${disk.GROUP}vignette.jpg` })).toBe(false);
+  });
+});

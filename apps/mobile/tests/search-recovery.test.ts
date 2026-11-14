@@ -62,7 +62,6 @@ function search(status: SearchStatus, extra: Partial<ProductSearch> = {}): Produ
     sourceUrl: null,
     sourcePlatform: "photo",
     method: "manual_screenshot",
-    thumbnailUrl: null,
     status,
     errorMessage: null,
     query: null,
@@ -119,7 +118,7 @@ describe("issue du lancement inconnue : la recherche est relue", () => {
     ["plafond atteint, avant tout appel", new ApiError(429, { error: "search_capacity_user", message: "…" }), false],
     // Lot garde-fous : le disjoncteur refuse avant tout appel ; l'écran dit « en pause », sans relire.
     ["recherche en pause (fournisseur en panne), avant tout appel", new ApiError(503, { error: "search_paused", message: "…" }), false],
-    ["image refusée, avant tout appel", new ApiError(422, { error: "preview_unavailable", message: "…" }), false],
+    ["image refusée, avant tout appel", new ApiError(400, { error: "invalid_image", message: "…" }), false],
     ["session expirée", new ApiError(401, { error: "unauthorized", message: "…" }), false],
     ["erreur de l'app", new Error("image illisible"), false],
   ])("%s : %s", (_label, error, unknown) => {
@@ -246,7 +245,7 @@ describe("identification d'une photo coupée en route", () => {
     runSearch.mockReset();
     fetchSearch.mockReset();
     prepareSearch.mockReset();
-    prepareSearch.mockResolvedValueOnce({ id: "recherche-1", thumbnailUrl: null }).mockResolvedValue({ id: "recherche-2", thumbnailUrl: null });
+    prepareSearch.mockResolvedValueOnce({ id: "recherche-1" }).mockResolvedValue({ id: "recherche-2" });
   });
   afterEach(() => {
     vi.useRealTimers();

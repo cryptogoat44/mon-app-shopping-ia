@@ -3,28 +3,22 @@ import type { FastifyInstance } from "fastify";
 import { randomBytes } from "node:crypto";
 import sharp from "sharp";
 
-// Aucun appel réel : ni SerpApi (crédits), ni TikTok. La recherche visuelle
-// et la voie officielle sont simulées ; le recadrage (sharp) et le stockage
-// (spotto-dev) sont réels.
+// Aucun appel réel à SerpApi (crédits) : la recherche visuelle est simulée ;
+// le recadrage (sharp) et le stockage (spotto-dev) sont réels. Rien n'est
+// jamais demandé à TikTok ni à Instagram : la voie « couverture » est retirée
+// (12 novembre 2026), l'image analysée est toujours celle que la personne
+// importe (sans base : preparerLienVideo.test.ts).
 // Le reste du module reste le vrai.
 vi.mock("../src/services/visualSearch.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/services/visualSearch.js")>();
   return { ...original, searchProductsByImageUrl: vi.fn() };
 });
-vi.mock("../src/services/oembed.js", () => ({
-  detectPlatform: () => "tiktok",
-  fetchOfficialPreview: vi.fn(async () => ({ ok: true, thumbnailUrl: "https://p16-common-sign.tiktokcdn-eu.com/vignette.jpeg" })),
-}));
 // Plafond global des recherches (lot 4 quater) et place rendue (0027) :
 // simulés ici ; les fonctions réelles de la base sont testées dans
 // searchCapacity.test.ts et placeRendue.test.ts.
 vi.mock("../src/lib/searchCapacity.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/lib/searchCapacity.js")>();
   return { ...original, reserveSearch: vi.fn(), releaseReservation: vi.fn(), searchCapacityBeforeComplementAi: vi.fn() };
-});
-vi.mock("../src/lib/imageProcessing.js", async (importOriginal) => {
-  const original = await importOriginal<typeof import("../src/lib/imageProcessing.js")>();
-  return { ...original, downloadThumbnail: vi.fn() };
 });
 // Voie C (lot c) : interrupteurs forcés à « coupé » pour tout le fichier (un
 // .env du Mac qui les allumerait ne change rien aux cas d'avant) ; le bloc
@@ -35,10 +29,7 @@ vi.mock("../src/lib/imageProcessing.js", async (importOriginal) => {
 // être effacées après chaque cas.
 vi.mock("../src/env.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/env.js")>();
-  // Interrupteur des liens (lot « nettoyage avant le premier build ») : ALLUMÉ
-  // pour les cas d'avant (préparer un lien, lancer sur sa vignette) ; le cas
-  // « interrupteur des liens coupé » le coupe lui-même, puis le rallume.
-  return { env: { ...original.env, VOIE_C_ENABLED: false, VOIE_C_AI_ENABLED: false, ANTHROPIC_PHOTO_ENABLED: false, LINK_PREVIEW_ENABLED: true } };
+  return { env: { ...original.env, VOIE_C_ENABLED: false, VOIE_C_AI_ENABLED: false, ANTHROPIC_PHOTO_ENABLED: false } };
 });
 vi.mock("../src/services/serpapi.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/services/serpapi.js")>();
@@ -55,7 +46,6 @@ vi.mock("../src/lib/searchCache.js", async (importOriginal) => {
 
 import { searchProductsByImageUrl, type VisualMatch, type VisualSearchResult } from "../src/services/visualSearch.js";
 import { ProviderFailure, type TextSearchResponse } from "../src/services/searchProvider.js";
-import { downloadThumbnail } from "../src/lib/imageProcessing.js";
 import { releaseReservation, reserveSearch, searchCapacityBeforeComplementAi } from "../src/lib/searchCapacity.js";
 import { env } from "../src/env.js";
 import { serpApiTextProvider } from "../src/services/serpapi.js";
@@ -67,13 +57,13 @@ import { parisDayStart } from "../src/lib/matchFeedback.js";
 import { authHeaders, buildMultipart, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
 
 const searchMock = vi.mocked(searchProductsByImageUrl);
-const downloadMock = vi.mocked(downloadThumbnail);
 const reserveMock = vi.mocked(reserveSearch);
 const releaseMock = vi.mocked(releaseReservation);
 /** Numéro de place simulé (0027). */
 const RESERVATION = 4242;
 
-// Image de test 400 × 600 (proportions d'une vignette verticale).
+// Image de test 400 × 600 (proportions d'une capture verticale) : celle que
+// la personne importe au lancement.
 const IMAGE = await sharp({ create: { width: 400, height: 600, channels: 3, background: "#6b4a3a" } }).jpeg().toBuffer();
 
 /** Ce que rend la recherche visuelle simulée : les propositions, et une
@@ -143,8 +133,6 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
   beforeEach(() => {
     searchMock.mockReset();
     searchMock.mockResolvedValue(found([MATCH]));
-    downloadMock.mockReset();
-    downloadMock.mockResolvedValue(IMAGE);
     reserveMock.mockReset();
     reserveMock.mockResolvedValue({ allowed: true, reservationId: RESERVATION });
     releaseMock.mockReset();
@@ -162,7 +150,9 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     return res.json();
   }
 
-  function run(searchId: string, fields: Record<string, string>, file?: Buffer, token = user.token, language?: string) {
+  /** Lance avec l'image importée par la personne (IMAGE par défaut) ; `file`
+   * à null : aucun fichier dans le formulaire. */
+  function run(searchId: string, fields: Record<string, string>, file: Buffer | null = IMAGE, token = user.token, language?: string) {
     const mp = buildMultipart(fields, file ? { fieldname: "file", filename: "capture.jpg", contentType: "image/jpeg", data: file } : undefined);
     return app.inject({
       method: "POST",
@@ -172,52 +162,69 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     });
   }
 
-  it("préparer un lien renvoie l'image à analyser, sans aucun appel SerpApi", async () => {
-    const search = await prepare("https://www.tiktok.com/@x/video/1");
-    expect(search.status).toBe("pending");
-    expect(search.method).toBe("oembed");
-    expect(search.thumbnailUrl).toContain("tiktokcdn-eu.com");
+  it("préparer un lien TikTok ou Instagram : son adresse publique et sa plateforme sont rangées, jamais une image ; aucun appel SerpApi", async () => {
+    const tiktok = await prepare("https://www.tiktok.com/@Exemple.Fictif/video/7554393000504266014?_r=1&utm_source=copy");
+    expect(tiktok).toMatchObject({ status: "pending", sourceUrl: "https://www.tiktok.com/@exemple.fictif/video/7554393000504266014", sourcePlatform: "tiktok", method: "manual_screenshot" });
+    expect(tiktok).not.toHaveProperty("thumbnailUrl");
+    expect(tiktok).not.toHaveProperty("previewIssue");
+    const { data: tiktokRow } = await app.supabaseAdmin.from("product_searches").select("source_url, source_platform, method, thumbnail_url").eq("id", tiktok.id).single();
+    expect(tiktokRow).toEqual({ source_url: "https://www.tiktok.com/@exemple.fictif/video/7554393000504266014", source_platform: "tiktok", method: "manual_screenshot", thumbnail_url: null });
+
+    const instagram = await prepare("https://www.instagram.com/reel/ExempleFictif/?igsh=MWZzZXhlbXBsZQ==");
+    expect(instagram).toMatchObject({ status: "pending", sourceUrl: "https://www.instagram.com/reel/ExempleFictif/", sourcePlatform: "instagram", method: "manual_screenshot" });
+    expect(instagram).not.toHaveProperty("thumbnailUrl");
+    const { data: instagramRow } = await app.supabaseAdmin.from("product_searches").select("source_url, source_platform, method, thumbnail_url").eq("id", instagram.id).single();
+    expect(instagramRow).toEqual({ source_url: "https://www.instagram.com/reel/ExempleFictif/", source_platform: "instagram", method: "manual_screenshot", thumbnail_url: null });
     expect(searchMock).not.toHaveBeenCalled();
   });
 
-  it("préparer un lien dont l'image manque renvoie la raison précise (vidéo introuvable)", async () => {
-    const { fetchOfficialPreview } = await import("../src/services/oembed.js");
-    vi.mocked(fetchOfficialPreview).mockResolvedValueOnce({ ok: false, issue: "unavailable" });
-    const search = await prepare("https://www.tiktok.com/@x/video/404");
-    expect(search.status).toBe("pending");
-    expect(search.thumbnailUrl).toBeNull();
-    expect(search.previewIssue).toBe("unavailable");
-  });
-
-  it("interrupteur des liens coupé (valeur par défaut) : le lien est ignoré, rien n'en est enregistré, et une vignette d'avant n'est jamais téléchargée", async () => {
-    const { fetchOfficialPreview } = await import("../src/services/oembed.js");
-    // Préparée AVANT la coupure : la ligne a son lien et sa vignette.
-    const before = await prepare("https://www.tiktok.com/@x/video/1");
-    vi.mocked(fetchOfficialPreview).mockClear();
-    env.LINK_PREVIEW_ENABLED = false;
-    try {
-      const search = await prepare("https://www.tiktok.com/@x/video/1");
-      expect(search).toMatchObject({ status: "pending", sourceUrl: null, sourcePlatform: "photo", method: "manual_screenshot", thumbnailUrl: null, previewIssue: "no_official_access" });
-      expect(fetchOfficialPreview).not.toHaveBeenCalled();
+  it("préparer un lien inconnu (autre site, profil, lien court) : ignoré, la recherche est celle d'une photo et rien du lien n'est enregistré", async () => {
+    for (const link of ["https://www.boutique.example/fr/veste", "https://www.tiktok.com/@exemple.fictif", "https://vm.tiktok.com/ZMabc123/"]) {
+      const search = await prepare(link);
+      expect(search).toMatchObject({ status: "pending", sourceUrl: null, sourcePlatform: "photo", method: "manual_screenshot" });
+      expect(search).not.toHaveProperty("thumbnailUrl");
+      expect(search).not.toHaveProperty("previewIssue");
       const { data: row } = await app.supabaseAdmin.from("product_searches").select("source_url, source_platform, method, thumbnail_url").eq("id", search.id).single();
       expect(row).toEqual({ source_url: null, source_platform: "photo", method: "manual_screenshot", thumbnail_url: null });
-
-      // Lancer sans capture la recherche d'avant : refusé, sans téléchargement ni appel SerpApi.
-      const refused = await run(before.id, {});
-      expect(refused.statusCode).toBe(422);
-      expect(refused.json().error).toBe("preview_unavailable");
-      expect(downloadMock).not.toHaveBeenCalled();
-      expect(searchMock).not.toHaveBeenCalled();
-
-      // Avec la capture de la personne : lancée comme avant, sans téléchargement.
-      const launched = await run(before.id, {}, IMAGE);
-      expect(launched.statusCode).toBe(200);
-      expect(launched.json().status).toBe("completed");
-      expect(downloadMock).not.toHaveBeenCalled();
-      expect(searchMock).toHaveBeenCalledOnce();
-    } finally {
-      env.LINK_PREVIEW_ENABLED = true;
     }
+  });
+
+  it("recherche préparée avec un lien : sans image importée, le lancement est refusé comme pour une photo ; avec la capture de la personne, elle est lancée", async () => {
+    const search = await prepare("https://www.tiktok.com/@exemple.fictif/video/7554393000504266014");
+    const refused = await run(search.id, {}, null);
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json().error).toBe("image_required");
+    expect(searchMock).not.toHaveBeenCalled();
+    expect((await measureOf(app, search.id))!.refused_before_call).toBe(0);
+
+    const launched = await run(search.id, {}, IMAGE);
+    expect(launched.statusCode).toBe(200);
+    expect(launched.json()).toMatchObject({ status: "completed", sourceUrl: "https://www.tiktok.com/@exemple.fictif/video/7554393000504266014", sourcePlatform: "tiktok" });
+    expect(launched.json()).not.toHaveProperty("thumbnailUrl");
+    expect(searchMock).toHaveBeenCalledOnce();
+  });
+
+  it("recherche d'avant le retrait, restée avec l'adresse d'une couverture dans la base : jamais téléchargée, jamais renvoyée", async () => {
+    const search = await prepare();
+    await app.supabaseAdmin
+      .from("product_searches")
+      .update({ source_url: "https://www.tiktok.com/@exemple.fictif/video/7554393000504266014", source_platform: "tiktok", method: "oembed", thumbnail_url: "https://images-anciennes.example/couverture-fictive.jpeg" })
+      .eq("id", search.id);
+
+    const refused = await run(search.id, {}, null);
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json().error).toBe("image_required");
+    expect(searchMock).not.toHaveBeenCalled();
+
+    const read = await app.inject({ method: "GET", url: `/api/searches/${search.id}`, headers: authHeaders(user.token) });
+    expect(read.statusCode).toBe(200);
+    expect(read.json()).not.toHaveProperty("thumbnailUrl");
+    expect(read.body).not.toContain("images-anciennes.example");
+
+    const launched = await run(search.id, {}, IMAGE);
+    expect(launched.statusCode).toBe(200);
+    expect(launched.json().status).toBe("completed");
+    expect(launched.body).not.toContain("images-anciennes.example");
   });
 
   it("préparer sans lien crée une recherche « photo » en attente d'image", async () => {
@@ -226,7 +233,7 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     expect(search.status).toBe("pending");
   });
 
-  it("lancer recadre la vignette, enregistre l'image HD — un seul appel SerpApi ; le texte d'une ancienne app n'est ni transmis ni enregistré", async () => {
+  it("lancer recadre l'image importée, enregistre l'image HD — un seul appel SerpApi ; le texte d'une ancienne app n'est ni transmis ni enregistré", async () => {
     const search = await prepare("https://www.tiktok.com/@x/video/1");
     // L'image n'existe que pendant l'appel SerpApi : on la lit à ce moment-là.
     let analysed: Buffer | null = null;
@@ -281,10 +288,10 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     const previousEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = "development"; // la limite est coupée sous Vitest par défaut
     try {
-      // Préparer un lien compte aussi dans sa propre limite (20 par heure,
-      // revue de sécurité du 12 novembre 2026) : les lancements refusés
-      // partent donc d'une photo, pour que ce test n'atteigne pas cette
-      // autre limite (23 liens préparés au total sinon).
+      // Les lancements refusés partent d'une photo, les autres d'un lien
+      // (repris de la revue de sécurité du 12 novembre 2026, où préparer un
+      // lien avait sa propre limite ; depuis le retrait de la voie
+      // « couverture », préparer un lien ne fait plus aucun appel ni ne compte).
       const prepareFor = async (link = true) =>
         (await app.inject({ method: "POST", url: "/api/searches/prepare", headers: authHeaders(counted.token), payload: link ? { sourceUrl: "https://www.tiktok.com/@x/video/1" } : {} })).json();
 
@@ -521,16 +528,9 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     expect(searchMock).toHaveBeenCalledOnce();
   });
 
-  it("une capture importée remplace la vignette", async () => {
-    const search = await prepare("https://www.tiktok.com/@x/video/1");
-    const res = await run(search.id, {}, IMAGE);
-    expect(res.statusCode).toBe(200);
-    expect(downloadMock).not.toHaveBeenCalled();
-  });
-
   it("une recherche « photo » sans image est refusée, sans appel SerpApi", async () => {
     const search = await prepare();
-    const res = await run(search.id, {});
+    const res = await run(search.id, {}, null);
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toBe("image_required");
     expect(searchMock).not.toHaveBeenCalled();
@@ -763,15 +763,6 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
     ]);
   });
 
-  it("si la vignette n'est plus disponible, invite à importer une capture", async () => {
-    const search = await prepare("https://www.tiktok.com/@x/video/1");
-    downloadMock.mockRejectedValueOnce(new Error("403"));
-    const res = await run(search.id, {});
-    expect(res.statusCode).toBe(422);
-    expect(res.json().error).toBe("preview_unavailable");
-    expect(searchMock).not.toHaveBeenCalled();
-  });
-
   it("recherche dans la langue de l'utilisateur : fr/fr en français, anglais avec le pays de l'appareil (lot 3)", async () => {
     const french = await prepare("https://www.tiktok.com/@x/video/1");
     await run(french.id, {}, undefined, user.token, "fr");
@@ -789,9 +780,9 @@ describe("Spotter en deux temps : préparer puis lancer", () => {
 
   it("les messages d'erreur suivent la langue de l'utilisateur (lot 3)", async () => {
     const search = await prepare();
-    const fr = await run(search.id, {}, undefined, user.token, "fr");
+    const fr = await run(search.id, {}, null, user.token, "fr");
     expect(fr.json().message).toBe("Importez une capture de la pièce.");
-    const en = await run(search.id, {}, undefined, user.token, "en-US");
+    const en = await run(search.id, {}, null, user.token, "en-US");
     expect(en.statusCode).toBe(400);
     expect(en.json()).toEqual({ error: fr.json().error, message: "Please import a screenshot of the piece." });
   });

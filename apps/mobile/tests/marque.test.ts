@@ -43,6 +43,9 @@ const INTERNES: RegExp[] = [
   /spotto-api\.onrender\.com/g, // adresse du service Render (se change à la main, MARQUE.md)
   /spotto-(?:prod|dev)(?:-\d)?/g, // noms des projets Supabase, cités au fondateur pendant un build
   /Spotto\.icon/g, // fichier de l'icône (assets/marque)
+  /SpottoPlayerSnapshot/g, // nom du module natif local de l'instantané (modules/spotto-player-snapshot), jamais montré
+  /Spotto(?:AppGroup|Scheme)/g, // clés d'Info.plist relues par le Swift de la recherche d'image d'iOS (plugins/recherche-image.js)
+  /SpottoRechercheImage/g, // fichier Swift de la recherche d'image d'iOS, ajouté à la cible de l'app (jamais montré)
 ];
 
 const sansInternes = (texte: string) => INTERNES.reduce((reste, interne) => reste.replace(interne, ""), texte);

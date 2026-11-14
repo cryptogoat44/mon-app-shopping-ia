@@ -235,7 +235,6 @@ export async function simulerResultats(page: Page, _description: string, options
       sourceUrl: null,
       sourcePlatform: "photo",
       method: "manual_screenshot",
-      thumbnailUrl: null,
       status: rien ? "failed" : "completed",
       errorMessage: rien ? SEARCH_FAILURE_MESSAGES.noMatch : null,
       query: null,

@@ -220,7 +220,7 @@ function navigation(stacked: string[], { tab = "index", above }: { tab?: string;
 describe("partage reçu pendant qu'un autre écran est affiché (personne connectée)", () => {
   // Écrans de la zone connectée, d'après les fichiers de src/app/(app).
   const APP_DIR = new URL("../src/app/(app)/", import.meta.url);
-  const SPOT_SCREENS = ["spot/lancer", "spot/analysis", "spot/result", "spot/ciblage", "spot/apercu", "spot/video"];
+  const SPOT_SCREENS = ["spot/lancer", "spot/analysis", "spot/result", "spot/ciblage", "spot/video"];
 
   beforeEach(() => {
     takeSharedItem();

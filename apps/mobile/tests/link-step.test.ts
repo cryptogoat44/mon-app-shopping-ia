@@ -3,34 +3,39 @@ import { fr } from "../src/i18n/fr";
 import { detectLink } from "../src/lib/link-detection";
 import { linkRefusal, linkStep } from "../src/lib/link-step";
 import { normalizeSharedLink } from "../src/lib/shared-item";
-import { LINK_COVER_ENABLED } from "../src/lib/spot-flags";
 
 // Lot « partager vers Spotto » : un lien collé dans le champ et un lien
 // partagé depuis une autre app passent par la même décision (link-step.ts).
-// Non-régression du champ : avec l'analyse de la couverture (seul cas où le
-// champ s'affiche), mêmes liens acceptés et mêmes messages qu'avant.
+// La voie « couverture » est retirée (12 novembre 2026) : un lien ne donne
+// jamais d'image. Mission « liens vidéo » : une vidéo TikTok ou Instagram
+// ouvre l'écran « vidéo partagée » ; Pinterest mène à l'aide « capture
+// d'écran d'abord » ; un profil ou un autre site, à un refus clair.
 const VIDEO_LINKS = [
   "https://www.tiktok.com/@x/video/1",
   "https://vm.tiktok.com/ZMabc/",
   "Regarde cette vidéo ! https://vm.tiktok.com/ZMabc123/ #fyp",
   "https://www.instagram.com/reel/abc/",
-  "https://pin.it/4xYz",
-  "pin.it/4xYz",
-  "https://fr.pinterest.com/pin/123/",
 ];
+const PINTEREST_LINKS = ["https://pin.it/4xYz", "pin.it/4xYz", "https://fr.pinterest.com/pin/123/"];
+const PROFILE_LINKS = ["https://www.tiktok.com/@mayelasjourney", "https://www.instagram.com/zara/"];
 
-describe("champ de lien collé (analyse de la couverture active) : rien ne change", () => {
-  it.each(VIDEO_LINKS)("« %s » : analyse de la couverture, même lien et même plateforme", (text) => {
-    const detection = detectLink(text);
-    if (detection.kind !== "supported") throw new Error("lien attendu");
-    expect(linkStep(text, true)).toEqual({ kind: "cover", url: detection.url, platform: detection.platform });
+describe("lien collé ou partagé : jamais d'image de couverture", () => {
+  it.each(VIDEO_LINKS)("« %s » : l'écran « vidéo partagée »", (text) => {
+    expect(linkStep(text).kind).toBe("video");
   });
 
-  it("profil, autre site, simple texte : refusés avec les messages affichés sous le champ", () => {
-    expect(linkStep("https://www.tiktok.com/@mayelasjourney", true)).toEqual({ kind: "refused", message: fr.spotter.notAVideo.tiktok });
-    expect(linkStep("https://www.instagram.com/zara/", true)).toEqual({ kind: "refused", message: fr.spotter.notAVideo.instagram });
-    expect(linkStep("https://www.zara.com/fr/veste", true)).toEqual({ kind: "refused", message: fr.spotter.unsupportedLink });
-    expect(linkStep("veste marron", true)).toEqual({ kind: "refused", message: fr.spotter.notALink });
+  it.each(PINTEREST_LINKS)("« %s » : l'aide « capture d'écran d'abord »", (text) => {
+    expect(linkStep(text)).toEqual({ kind: "help" });
+  });
+
+  it("profil TikTok ou Instagram : refus qui dit quoi faire", () => {
+    expect(linkStep(PROFILE_LINKS[0]!)).toEqual({ kind: "refused", message: fr.spotter.notAVideo.tiktok });
+    expect(linkStep(PROFILE_LINKS[1]!)).toEqual({ kind: "refused", message: fr.spotter.notAVideo.instagram });
+  });
+
+  it("autre site ou simple texte : refusés avec un message clair", () => {
+    expect(linkStep("https://www.zara.com/fr/veste")).toEqual({ kind: "refused", message: fr.spotter.unsupportedLink });
+    expect(linkStep("veste marron")).toEqual({ kind: "refused", message: fr.spotter.notALink });
   });
 
   it("messages sous le champ : un par cas, aucun pour un lien reconnu ou un champ vide", () => {
@@ -42,28 +47,10 @@ describe("champ de lien collé (analyse de la couverture active) : rien ne chang
   });
 });
 
-describe("aujourd'hui (analyse de la couverture coupée)", () => {
-  it("réglage actuel : coupé", () => {
-    expect(LINK_COVER_ENABLED).toBe(false);
-    expect(linkStep("https://vm.tiktok.com/ZMabc/")).toEqual({ kind: "help" });
-  });
-
-  it("tout lien TikTok, Instagram ou Pinterest, vidéo ou profil : l'aide « capture d'écran d'abord »", () => {
-    for (const text of [...VIDEO_LINKS, "https://www.tiktok.com/@mayelasjourney", "https://www.instagram.com/zara/"]) {
-      expect(linkStep(text, false)).toEqual({ kind: "help" });
-    }
-  });
-
-  it("autre site ou texte : le même refus clair qu'avant", () => {
-    expect(linkStep("https://www.zara.com/fr/veste", false)).toEqual({ kind: "refused", message: fr.spotter.unsupportedLink });
-    expect(linkStep("veste marron", false)).toEqual({ kind: "refused", message: fr.spotter.notALink });
-  });
-});
-
 describe("lien partagé et lien collé : une seule décision", () => {
-  it.each([...VIDEO_LINKS, "https://www.tiktok.com/@mayelasjourney", "https://www.zara.com/fr/veste"])("« %s »", (text) => {
+  it.each([...VIDEO_LINKS, ...PINTEREST_LINKS, ...PROFILE_LINKS, "https://www.zara.com/fr/veste"])("« %s »", (text) => {
     const shared = normalizeSharedLink(text);
     if (!shared) throw new Error("lien attendu");
-    for (const coverEnabled of [true, false]) expect(linkStep(shared, coverEnabled)).toEqual(linkStep(text, coverEnabled));
+    expect(linkStep(shared)).toEqual(linkStep(text));
   });
 });
