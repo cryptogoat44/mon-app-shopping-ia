@@ -136,11 +136,11 @@ describe("fonctions : serveur seul, sans « security definer », sans déclenche
   });
 
   it("verrous dans le même ordre partout : la ligne du membre, puis le budget ; l'heure lue après", () => {
-    for (const name of ["tryon_reserve", "tryon_complete"]) {
+    for (const name of ["tryon_reserve", "tryon_complete", "tryon_fail"]) {
       const text = body(name);
       const member = text.indexOf("from tryon_profiles t where t.user_id = p_user_id for update");
       const budget = text.indexOf("perform pg_advisory_xact_lock(hashtext('tryon_budget'));");
-      const clock = text.indexOf("v_at := coalesce(p_at, clock_timestamp());");
+      const clock = name === "tryon_fail" ? text.indexOf("v_at := clock_timestamp();") : text.indexOf("v_at := coalesce(p_at, clock_timestamp());");
       expect(member, name).toBeGreaterThan(0);
       expect(budget, name).toBeGreaterThan(member);
       expect(clock, name).toBeGreaterThan(budget);
@@ -169,9 +169,32 @@ describe("fonctions : serveur seul, sans « security definer », sans déclenche
     expect(complete).toMatch(/if v_spent >= p_alert_threshold \* p_budget_usd then\s*if tryon_alert_once\('budget_80'/);
   });
 
+  it("un essai libéré par la base (plus de 3 minutes) n'est jamais décompté du quota du membre, même rattrapé", () => {
+    const complete = body("tryon_complete");
+    const pendingOnly = complete.indexOf("if v_event.status = 'pending' then");
+    expect(pendingOnly).toBeGreaterThan(0);
+    // Le quota (gratuit, puis offert) n'est pris que dans ce bloc ; plus aucun « gratuit » de rattrapage.
+    expect(complete.indexOf("v_source := 'free';")).toBeGreaterThan(pendingOnly);
+    expect(complete.match(/v_source := 'free';/g)).toHaveLength(1);
+    expect(complete.indexOf("update tryon_bonus_grants g set remaining = g.remaining - 1")).toBeGreaterThan(pendingOnly);
+  });
+
   it("un échec ne garde qu'un code court, jamais un texte du fournisseur", () => {
     expect(body("tryon_fail")).toContain("p_error_code !~ '^[a-z][a-z0-9_]{0,39}$'");
     expect(table("tryon_events")).toContain("error_code text check (error_code is null or error_code ~ '^[a-z][a-z0-9_]{0,39}$')");
+  });
+
+  it("un échec facturé : ses crédits vont aux compteurs du mois (jamais aux essais réussis ni au quota), alertes comprises", () => {
+    const fail = body("tryon_fail");
+    expect(fail).toContain("p_credits_billed integer default 0");
+    expect(fail).toContain("returns table (recorded boolean, new_alerts text[])");
+    expect(fail).toContain("insert into tryon_usage_months as u (month, credits_used, updated_at)");
+    expect(fail).not.toMatch(/tries_succeeded/);
+    expect(fail).not.toMatch(/tryon_bonus_grants|quota_source/);
+    // Un essai déjà noté ne compte jamais deux fois : les crédits seulement après la mise à jour de l'essai en cours.
+    expect(fail.indexOf("insert into tryon_usage_months")).toBeGreaterThan(fail.indexOf("if not found then"));
+    expect(fail).toMatch(/if v_spent >= p_alert_threshold \* p_budget_usd then\s*if tryon_alert_once\('budget_80'/);
+    expect(fail).not.toMatch(/ and tryon_alert_once/);
   });
 
   it("dernière instruction : PostgREST relit le schéma", () => {

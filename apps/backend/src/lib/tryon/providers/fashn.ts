@@ -4,16 +4,24 @@
 //   en « Authorization: Bearer » ; la réponse donne l'identifiant de l'essai ;
 // - GET {base}/status/{id}, interrogé toutes les 1,5 s environ, jusqu'à
 //   « completed » (image en base64 : return_base64) ou « failed » (nom de
-//   l'erreur) ; délai total de 90 s, soumission comprise ;
+//   l'erreur) ; délai total, soumission comprise : le temps qui reste à
+//   l'essai (délai commun fixé par la route), 90 s au plus ;
 // - GET {base}/credits pour le solde (gardé 5 minutes).
 // La photo du membre part toujours en base64 (data URI), jamais par une
 // adresse ; l'image de la pièce part par son adresse publique, ou en base64
 // si FASHN n'a pas pu la charger (le serveur la télécharge alors lui-même).
 // Jamais de double soumission : POST /run n'est retenté (deux fois au plus)
-// que si la connexion n'a jamais pu s'établir, ou si FASHN a répondu une
-// erreur 500 ou 503 (aucun essai créé : « API-level errors » de la
-// documentation) ; jamais après un délai dépassé, une coupure en route, ni
-// une passerelle (502, 504), où l'essai a pu partir quand même.
+// que si la connexion n'a jamais pu s'établir, ou si FASHN a répondu
+// exactement 500 ou 503 (aucun essai créé : « API-level errors » de la
+// documentation) ; jamais sur une autre erreur 5xx (501, 502, 504, 520,
+// 524… : une passerelle, où l'essai a pu partir quand même), ni après un
+// délai dépassé ou une coupure en route.
+// Un échec après que FASHN a accepté l'essai (délai dépassé, résultat ou
+// réponse illisible…) a pu être facturé : l'erreur porte alors les crédits
+// présumés (1, ou ceux de l'en-tête quand FASHN les a donnés), comptés dans
+// le budget du mois. Un échec que FASHN annonce lui-même (« failed ») ne
+// coûte rien. Seules des erreurs de provider.ts sortent d'ici, jamais une
+// erreur brute (lecture d'un corps coupée en route comprise).
 // Rien de ce que renvoie FASHN (messages d'erreur, images) n'est journalisé :
 // les erreurs sont des sortes fixes (provider.ts). Seul l'hôte de l'adresse
 // de l'API est permis, redirections comprises (lib/safeFetch.ts).
@@ -26,7 +34,8 @@ import { TryonProviderError, type TryOnProvider, type TryonGarmentImage, type Tr
 export const FASHN_MODEL = "tryon-v1.6";
 /** Intervalle entre deux lectures de l'état d'un essai. */
 export const FASHN_POLL_INTERVAL_MS = 1_500;
-/** Délai total d'un essai, soumission comprise. */
+/** Délai total d'un essai au plus, soumission comprise (la route en laisse
+ * souvent moins : le temps qui reste à l'essai). */
 export const FASHN_DEADLINE_MS = 90_000;
 /** Durée pendant laquelle le solde de crédits lu est gardé. */
 export const FASHN_BALANCE_TTL_MS = 5 * 60_000;
@@ -104,9 +113,11 @@ export function jobErrorKind(errorName: string | null | undefined): TryonProvide
   return (errorName && JOB_ERRORS[errorName]) || "unavailable";
 }
 
-/** Une réponse 500 ou 503 à la soumission : aucun essai créé, on peut réessayer. */
+/** Exactement 500 ou 503 à la soumission : aucun essai créé (documenté), on
+ * peut réessayer. Toute autre erreur 5xx vient peut-être d'une passerelle,
+ * après que l'essai est parti : jamais retentée. */
 function isRetryableRunStatus(status: number): boolean {
-  return status >= 500 && status !== 502 && status !== 504;
+  return status === 500 || status === 503;
 }
 
 function errorCode(value: unknown): string | undefined {
@@ -125,26 +136,47 @@ function isTimeout(error: unknown): boolean {
   return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
 }
 
-/** Le corps d'une réponse, au plus `maxBytes` octets (sinon : réponse inattendue). */
+/** Une erreur ramenée à une sorte fixe : une erreur brute (lecture coupée en
+ * route, délai) devient « timeout » ou « unavailable ». `creditsBilled` : les
+ * crédits présumés quand FASHN avait déjà accepté l'essai. */
+function typedError(error: unknown, status?: number, creditsBilled = 0): TryonProviderError {
+  if (!(error instanceof TryonProviderError)) return new TryonProviderError(isTimeout(error) ? "timeout" : "unavailable", status, creditsBilled);
+  return error.creditsBilled >= creditsBilled ? error : new TryonProviderError(error.kind, error.status ?? status, creditsBilled);
+}
+
+/** Abandonne le corps d'une réponse dont on n'a pas besoin (sans jamais échouer). */
+async function discardBody(response: Response): Promise<void> {
+  await response.body?.cancel().catch(() => undefined);
+}
+
+/** Le corps d'une réponse, au plus `maxBytes` octets (sinon : réponse
+ * inattendue). Une lecture coupée en route (délai, connexion perdue) lève
+ * l'erreur brute : à l'appelant de la traiter. */
 async function readBody(response: Response, maxBytes: number): Promise<string> {
   const declared = Number(response.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > maxBytes) {
-    await response.body?.cancel();
+    await discardBody(response);
     throw new TryonProviderError("invalid_response", response.status);
   }
   if (!response.body) return "";
   const chunks: Uint8Array[] = [];
   let size = 0;
   const reader = response.body.getReader();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > maxBytes) {
-      await reader.cancel();
-      throw new TryonProviderError("invalid_response", response.status);
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new TryonProviderError("invalid_response", response.status);
+      }
+      chunks.push(value);
     }
-    chunks.push(value);
+  } catch (error) {
+    // Lecture abandonnée : ce qui a déjà été lu ne reste pas en mémoire non plus.
+    for (const chunk of chunks) chunk.fill(0);
+    throw error;
   }
   const bytes = Buffer.concat(chunks);
   const text = bytes.toString("utf8");
@@ -179,16 +211,17 @@ function creditsUsedFrom(headers: Headers): number {
   return raw && /^(?:[0-9]|10)$/.test(raw) ? Number(raw) : DEFAULT_CREDITS_PER_TRY;
 }
 
-/** L'image produite : une donnée base64 (jamais une adresse, jamais suivie), JPEG ou PNG. */
-function decodeOutput(output: readonly string[] | null | undefined): Buffer {
+/** L'image produite : une donnée base64 (jamais une adresse, jamais suivie),
+ * JPEG ou PNG ; null si elle n'a pas cette forme. */
+function decodeOutput(output: readonly string[] | null | undefined): Buffer | null {
   const first = output?.[0];
   const match = typeof first === "string" ? OUTPUT_DATA_URI.exec(first) : null;
-  if (!match) throw new TryonProviderError("invalid_response");
+  if (!match) return null;
   const image = Buffer.from(match[1]!, "base64");
   const format = imageFormatOf(image);
   if (image.length > MAX_RESULT_BYTES || (format !== "jpeg" && format !== "png")) {
     image.fill(0);
-    throw new TryonProviderError("invalid_response");
+    return null;
   }
   return image;
 }
@@ -235,9 +268,19 @@ export class FashnProvider implements TryOnProvider {
   }
 
   async run(input: TryonRunInput): Promise<TryonRunOutput> {
-    const deadline = this.now() + this.deadlineMs;
-    const id = await this.submit(input, deadline);
-    return this.waitForResult(id, deadline);
+    // Le temps qui reste à l'essai (délai commun de la route), jamais plus que le délai de FASHN.
+    const timeLeft = input.timeLeftMs !== undefined && Number.isFinite(input.timeLeftMs) ? Math.min(input.timeLeftMs, this.deadlineMs) : this.deadlineMs;
+    const deadline = this.now() + timeLeft;
+    let accepted = false;
+    try {
+      const id = await this.submit(input, deadline);
+      accepted = true;
+      return await this.waitForResult(id, deadline);
+    } catch (error) {
+      if (error instanceof TryonProviderError) throw error;
+      // Filet : jamais une erreur brute hors du fournisseur.
+      throw typedError(error, undefined, accepted ? DEFAULT_CREDITS_PER_TRY : 0);
+    }
   }
 
   async getCreditBalance(): Promise<number> {
@@ -285,8 +328,16 @@ export class FashnProvider implements TryOnProvider {
         throw new TryonProviderError(isTimeout(error) ? "timeout" : "unavailable");
       }
       if (response.ok) {
-        const parsed = RUN_RESPONSE.safeParse(await readJson(response, MAX_SMALL_RESPONSE_BYTES));
-        if (!parsed.success) throw new TryonProviderError("invalid_response", response.status);
+        // FASHN a accepté l'essai : un échec à partir d'ici a pu être facturé,
+        // et rien n'est jamais renvoyé (l'essai existe peut-être déjà).
+        let body: unknown;
+        try {
+          body = await readJson(response, MAX_SMALL_RESPONSE_BYTES);
+        } catch (error) {
+          throw typedError(error, response.status, DEFAULT_CREDITS_PER_TRY);
+        }
+        const parsed = RUN_RESPONSE.safeParse(body);
+        if (!parsed.success) throw new TryonProviderError("invalid_response", response.status, DEFAULT_CREDITS_PER_TRY);
         return parsed.data.id;
       }
       const kind = httpErrorKind(response.status, await errorNameOf(response));
@@ -298,14 +349,18 @@ export class FashnProvider implements TryOnProvider {
     }
   }
 
-  /** Lit l'état de l'essai toutes les 1,5 s jusqu'au résultat, à un échec, ou au délai. */
+  /** Lit l'état de l'essai toutes les 1,5 s jusqu'au résultat, à un échec, ou
+   * au délai. L'essai est parti chez FASHN : s'il n'aboutit pas ici, FASHN a
+   * pu le facturer quand même (1 crédit présumé, ou ceux de son en-tête),
+   * sauf quand il annonce lui-même son échec. */
   private async waitForResult(id: string, deadline: number): Promise<TryonRunOutput> {
     const url = `${this.baseUrl}/status/${encodeURIComponent(id)}`;
+    const billed = (kind: TryonProviderErrorKind, status?: number, credits = DEFAULT_CREDITS_PER_TRY) => new TryonProviderError(kind, status, credits);
     for (;;) {
-      if (this.remaining(deadline) <= 0) throw new TryonProviderError("timeout");
+      if (this.remaining(deadline) <= 0) throw billed("timeout");
       await this.sleep(Math.min(this.pollIntervalMs, this.remaining(deadline)));
       const left = this.remaining(deadline);
-      if (left <= 0) throw new TryonProviderError("timeout");
+      if (left <= 0) throw billed("timeout");
       let response: Response;
       try {
         response = await safeFetch(url, {
@@ -317,24 +372,41 @@ export class FashnProvider implements TryOnProvider {
       } catch (error) {
         // Redirection vers un autre hôte : jamais suivie, panne. Sinon, une
         // lecture sans effet : la suivante, jusqu'au délai.
-        if (error instanceof SafeFetchError) throw new TryonProviderError("unavailable");
+        if (error instanceof SafeFetchError) throw billed("unavailable");
         continue;
       }
       // Trop de lectures, ou panne passagère : on relit, jusqu'au délai.
       if (response.status === 429 || response.status >= 500) {
-        await response.body?.cancel();
+        await discardBody(response);
         continue;
       }
-      if (!response.ok) throw new TryonProviderError(httpErrorKind(response.status, await errorNameOf(response)), response.status);
-      const parsed = STATUS_RESPONSE.safeParse(await readJson(response, MAX_STATUS_BYTES));
-      if (!parsed.success) throw new TryonProviderError("invalid_response", response.status);
+      if (!response.ok) throw billed(httpErrorKind(response.status, await errorNameOf(response)), response.status);
+      let body: unknown;
+      try {
+        body = await readJson(response, MAX_STATUS_BYTES);
+      } catch (error) {
+        // Réponse trop grosse ou qui n'est pas du JSON : inattendue.
+        if (error instanceof TryonProviderError) throw billed(error.kind, response.status);
+        // Lecture coupée en route (délai de la lecture, connexion perdue) :
+        // comme une lecture qui n'a pas abouti, la suivante, jusqu'au délai
+        // (le résultat reste disponible chez FASHN).
+        continue;
+      }
+      const parsed = STATUS_RESPONSE.safeParse(body);
+      if (!parsed.success) throw billed("invalid_response", response.status);
       switch (parsed.data.status) {
         case "starting":
         case "in_queue":
         case "processing":
           continue;
-        case "completed":
-          return { image: decodeOutput(parsed.data.output), creditsUsed: creditsUsedFrom(response.headers) };
+        case "completed": {
+          const creditsUsed = creditsUsedFrom(response.headers);
+          const image = decodeOutput(parsed.data.output);
+          // Payé (FASHN facture chaque image produite), mais illisible.
+          if (!image) throw billed("invalid_response", response.status, creditsUsed);
+          return { image, creditsUsed };
+        }
+        // Échecs annoncés par FASHN lui-même : jamais facturés.
         case "failed":
           throw new TryonProviderError(jobErrorKind(parsed.data.error?.name));
         // États cités par les exemples des SDK de FASHN.
@@ -343,7 +415,7 @@ export class FashnProvider implements TryOnProvider {
         case "time_out":
           throw new TryonProviderError("timeout");
         default:
-          throw new TryonProviderError("invalid_response", response.status);
+          throw billed("invalid_response", response.status);
       }
     }
   }
@@ -358,10 +430,16 @@ export class FashnProvider implements TryOnProvider {
         signal: AbortSignal.timeout(CREDITS_REQUEST_TIMEOUT_MS),
       });
     } catch (error) {
-      throw new TryonProviderError(isTimeout(error) ? "timeout" : "unavailable");
+      throw typedError(error);
     }
     if (!response.ok) throw new TryonProviderError(httpErrorKind(response.status, await errorNameOf(response)), response.status);
-    const parsed = CREDITS_RESPONSE.safeParse(await readJson(response, MAX_SMALL_RESPONSE_BYTES));
+    let body: unknown;
+    try {
+      body = await readJson(response, MAX_SMALL_RESPONSE_BYTES);
+    } catch (error) {
+      throw typedError(error, response.status);
+    }
+    const parsed = CREDITS_RESPONSE.safeParse(body);
     if (!parsed.success) throw new TryonProviderError("invalid_response", response.status);
     return parsed.data.credits.total;
   }

@@ -86,6 +86,28 @@ describe.skipIf(!migrated)("essayage virtuel : fonctions de la base (0042)", () 
     return (await complete(user, reserved.event_id!, new Date(at.getTime() + 10_000), budget)).quota_source ?? "aucune";
   }
 
+  /** Un essai échoué, avec les crédits que le fournisseur a pu facturer malgré l'échec. */
+  async function fail(user: TestUser, eventId: string, code: string, creditsBilled = 0, budget = 1000) {
+    const { data, error } = await app.supabaseAdmin.rpc("tryon_fail", {
+      p_event_id: eventId,
+      p_user_id: user.id,
+      p_error_code: code,
+      p_duration_ms: 9000,
+      p_credits_billed: creditsBilled,
+      p_budget_usd: budget,
+      p_price_per_credit_usd: 0.075,
+      p_alert_threshold: 0.8,
+    });
+    expect(error).toBeNull();
+    return z.array(z.object({ recorded: z.boolean(), new_alerts: z.array(z.string()) })).length(1).parse(data)[0]!;
+  }
+
+  async function usage(month: number): Promise<{ credits_used: number; tries_succeeded: number } | null> {
+    const { data, error } = await app.supabaseAdmin.from("tryon_usage_months").select("credits_used, tries_succeeded").eq("month", monthKey(month)).maybeSingle();
+    expect(error).toBeNull();
+    return data as { credits_used: number; tries_succeeded: number } | null;
+  }
+
   async function remaining(user: TestUser, at: Date): Promise<string> {
     const { data, error } = await app.supabaseAdmin.rpc("tryon_remaining", { p_user_id: user.id, p_free_per_month: 5, p_timezone: "Europe/Paris", p_at: at.toISOString() });
     expect(error).toBeNull();
@@ -144,7 +166,7 @@ describe.skipIf(!migrated)("essayage virtuel : fonctions de la base (0042)", () 
     const results = await Promise.all([reserve(alice, at), reserve(alice, at)]);
     expect(results.map((result) => result.status).sort()).toEqual(["in_progress", "reserved"]);
     const reserved = results.find((result) => result.status === "reserved")!;
-    expect((await app.supabaseAdmin.rpc("tryon_fail", { p_event_id: reserved.event_id, p_user_id: alice.id, p_error_code: "test_cleanup", p_duration_ms: 0 })).data).toBe(true);
+    expect(await fail(alice, reserved.event_id!, "test_cleanup")).toEqual({ recorded: true, new_alerts: [] });
   });
 
   it("quota : 5 gratuits par mois civil à Paris ; minuit de Paris, pas minuit UTC", async () => {
@@ -197,7 +219,7 @@ describe.skipIf(!migrated)("essayage virtuel : fonctions de la base (0042)", () 
     expect(usage).toEqual({ credits_used: 8, tries_succeeded: 8 });
   });
 
-  it("un essai bloqué plus de 3 minutes est libéré ; un échec n'est jamais décompté", async () => {
+  it("un essai bloqué plus de 3 minutes est libéré, et jamais décompté même rattrapé ; un échec n'est jamais décompté", async () => {
     const first = await reserve(alice, winter(6, 10, 12, 0));
     expect(first.status).toBe("reserved");
     expect((await reserve(alice, winter(6, 10, 12, 2))).status).toBe("in_progress");
@@ -205,8 +227,29 @@ describe.skipIf(!migrated)("essayage virtuel : fonctions de la base (0042)", () 
     expect(second.status).toBe("reserved");
     const { data: released } = await app.supabaseAdmin.from("tryon_events").select("status, error_code").eq("id", first.event_id!).single();
     expect(released).toEqual({ status: "failed", error_code: "expired" });
-    expect((await app.supabaseAdmin.rpc("tryon_fail", { p_event_id: second.event_id, p_user_id: alice.id, p_error_code: "pose_not_detected", p_duration_ms: 9000 })).data).toBe(true);
+    // Rattrapé 2 minutes après sa libération : réussi, sans source de quota ; ses crédits vont aux compteurs du mois.
+    const late = await complete(alice, first.event_id!, winter(6, 10, 12, 6));
+    expect(late).toMatchObject({ status: "completed", quota_source: null, free_remaining: 5, bonus_remaining: 0 });
+    expect(await usage(6)).toEqual({ credits_used: 1, tries_succeeded: 1 });
+    expect(await fail(alice, second.event_id!, "pose_not_detected")).toEqual({ recorded: true, new_alerts: [] });
     expect(await remaining(alice, winter(6, 20))).toBe("5+0");
+  });
+
+  it("un échec que le fournisseur a pu facturer : crédits dans la dépense du mois, jamais dans le quota ; refus et alertes les voient", async () => {
+    // Budget de 0,15 $ à 0,075 $ le crédit : 2 crédits. Bruno, juillet.
+    const budget = 0.15;
+    const first = await reserve(bruno, winter(7, 3, 10), { budget });
+    expect(first.status).toBe("reserved");
+    expect(await fail(bruno, first.event_id!, "timeout", 1, budget)).toEqual({ recorded: true, new_alerts: [] });
+    expect(await usage(7)).toEqual({ credits_used: 1, tries_succeeded: 0 });
+    // Déjà noté : rien de compté deux fois.
+    expect(await fail(bruno, first.event_id!, "invalid_response", 1, budget)).toEqual({ recorded: false, new_alerts: [] });
+    const second = await reserve(bruno, winter(7, 3, 11), { budget });
+    expect(second.status).toBe("reserved");
+    expect((await fail(bruno, second.event_id!, "result_unreadable", 1, budget)).new_alerts).toEqual(["budget_80", "budget_100"]);
+    expect(await usage(7)).toEqual({ credits_used: 2, tries_succeeded: 0 });
+    expect((await reserve(bruno, winter(7, 3, 12), { budget })).status).toBe("budget_reached");
+    expect(await remaining(bruno, winter(7, 4))).toBe("5+0");
   });
 
   it("essais offerts par commande : une seule fois par commande, jamais pour un autre membre", async () => {

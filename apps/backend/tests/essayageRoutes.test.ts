@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import multipart from "@fastify/multipart";
 import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TryonRunResponse, TryonStatus } from "@monapp/shared-types";
-import tryonRoutes from "../src/routes/tryon.js";
+import tryonRoutes, { TRYON_FALLBACK_MIN_MS, TRYON_TRY_DEADLINE_MS } from "../src/routes/tryon.js";
 import rateLimitPlugin from "../src/plugins/rateLimit.js";
 import { RATE_LIMITS } from "../src/lib/rateLimits.js";
 import { MULTIPART_LIMITS } from "../src/lib/multipartErrors.js";
@@ -13,7 +15,7 @@ import { LOG_REDACT_PATHS, MASKED_DATA, requestLogFields, scrubLogLine, withoutE
 import { AI_DIGITAL_SOURCE_TYPE } from "../src/lib/tryon/band.js";
 import { DEFAULT_FASHN_API_BASE_URL, TRYON_CONSENT_VERSION, type TryonConfig, type TryonConfigState } from "../src/lib/tryon/config.js";
 import { FakeProvider, type FakeProviderOptions } from "../src/lib/tryon/providers/fake.js";
-import type { TryOnProvider } from "../src/lib/tryon/provider.js";
+import { TryonProviderError, type TryOnProvider, type TryonRunInput, type TryonRunOutput } from "../src/lib/tryon/provider.js";
 import { downloadPublicImage, PublicImageError } from "../src/lib/publicImage.js";
 import { fakeSupabase, type FakeDbOptions, type Row } from "./fakeSupabase.js";
 import { tryonRpc, type FakeTryonOptions } from "./fakeTryon.js";
@@ -113,9 +115,38 @@ beforeEach(() => {
   download.mockRejectedValue(new PublicImageError("Image injoignable"));
 });
 
+/** Un fournisseur réglé essai par essai : chacun note le temps que la route
+ * lui laisse (délai commun) et la forme de l'image de la pièce, puis joue son
+ * étape (faire avancer l'horloge du test, répondre ou échouer). */
+class ScriptedProvider implements TryOnProvider {
+  readonly name = "fake" as const;
+  readonly timesLeft: (number | undefined)[] = [];
+  readonly garmentKinds: ("url" | "data")[] = [];
+
+  constructor(
+    private readonly steps: ((input: TryonRunInput) => Promise<TryonRunOutput>)[],
+    private readonly balance: () => Promise<number> = async () => 1000
+  ) {}
+
+  async run(input: TryonRunInput): Promise<TryonRunOutput> {
+    this.timesLeft.push(input.timeLeftMs);
+    this.garmentKinds.push(input.garmentImage.kind);
+    const step = this.steps[this.timesLeft.length - 1];
+    if (!step) throw new Error("essai imprévu");
+    return step(input);
+  }
+
+  getCreditBalance(): Promise<number> {
+    return this.balance();
+  }
+}
+
 /** L'app réduite aux routes de l'essayage, avec le journal de production (masquage compris)
  * et la traduction des messages d'erreur (app.ts). */
-async function tryonApp(fake: Fake, options: { config?: TryonConfigState; provider?: TryOnProvider | FakeProviderOptions; userId?: string } = {}): Promise<FastifyInstance> {
+async function tryonApp(
+  fake: Fake,
+  options: { config?: TryonConfigState; provider?: TryOnProvider | FakeProviderOptions; userId?: string; now?: () => Date } = {}
+): Promise<FastifyInstance> {
   app = Fastify({
     logger: {
       level: "info",
@@ -138,7 +169,7 @@ async function tryonApp(fake: Fake, options: { config?: TryonConfigState; provid
   );
   await app.register(rateLimitPlugin);
   const provider = options.provider instanceof FakeProvider || (options.provider && "run" in options.provider) ? (options.provider as TryOnProvider) : new FakeProvider(options.provider as FakeProviderOptions | undefined);
-  await app.register(tryonRoutes, { configState: options.config ?? READY, provider, now: () => NOW });
+  await app.register(tryonRoutes, { configState: options.config ?? READY, provider, now: options.now ?? (() => NOW) });
   await app.ready();
   return app;
 }
@@ -372,6 +403,160 @@ describe("un essai réussi", () => {
   });
 });
 
+describe("un seul délai par essai, dès la réservation (100 s, sous les 120 s du site et les 3 minutes de la base)", () => {
+  /** Horloge du test, que le fournisseur fait avancer. */
+  function testClock() {
+    let current = NOW.getTime();
+    return { now: () => new Date(current), advance: (ms: number) => (current += ms) };
+  }
+  const banded = async (): Promise<TryonRunOutput> => ({ image: Buffer.from(GARMENT), creditsUsed: 1 });
+
+  it("le solde et le premier envoi consomment le délai ; le second envoi n'a que le temps qui reste, jamais un délai neuf", async () => {
+    const clock = testClock();
+    const provider = new ScriptedProvider(
+      [
+        async () => {
+          clock.advance(50_000);
+          throw new TryonProviderError("image_load");
+        },
+        banded,
+      ],
+      async () => {
+        clock.advance(10_000);
+        return 1000;
+      }
+    );
+    download.mockResolvedValue(Buffer.from(GARMENT));
+    const fake = database();
+    const response = await run(await tryonApp(fake, { provider, now: clock.now }));
+    expect(response.statusCode).toBe(200);
+    expect(provider.garmentKinds).toEqual(["url", "data"]);
+    expect(provider.timesLeft).toEqual([TRYON_TRY_DEADLINE_MS - 10_000, TRYON_TRY_DEADLINE_MS - 60_000]);
+    expect(events(fake)[0]).toMatchObject({ status: "succeeded", quota_source: "free" });
+  });
+
+  it("trop peu de temps pour le repli : 504 tryon_timeout, ni téléchargement ni second envoi, jamais décompté, rien de facturé", async () => {
+    const clock = testClock();
+    const provider = new ScriptedProvider([
+      async () => {
+        clock.advance(TRYON_TRY_DEADLINE_MS - TRYON_FALLBACK_MIN_MS + 1);
+        throw new TryonProviderError("image_load");
+      },
+    ]);
+    const fake = database();
+    const target = await tryonApp(fake, { provider, now: clock.now });
+    const response = await run(target, {}, undefined, { "accept-language": "en" });
+    expect(response.statusCode).toBe(504);
+    expect(response.json()).toEqual({ error: "tryon_timeout", message: "The try-on took too long. Please try again in a moment." });
+    expect(download).not.toHaveBeenCalled();
+    expect(provider.timesLeft).toHaveLength(1);
+    expect(events(fake)[0]).toMatchObject({ status: "failed", error_code: "timeout", quota_source: null, credits_used: 0 });
+    expect(fake.table("tryon_usage_months")).toEqual([]);
+    expect(await status(target)).toMatchObject({ remaining: { free: 5 } });
+  });
+
+  it("le téléchargement de la pièce compte aussi : plus le temps d'un second envoi, la vignette n'est pas essayée", async () => {
+    const clock = testClock();
+    const provider = new ScriptedProvider([
+      async () => {
+        clock.advance(70_000);
+        throw new TryonProviderError("image_load");
+      },
+    ]);
+    download.mockImplementation(async () => {
+      clock.advance(10_000);
+      throw new PublicImageError("Image injoignable");
+    });
+    const fake = database();
+    const response = await run(await tryonApp(fake, { provider, now: clock.now }));
+    expect(response.statusCode).toBe(504);
+    expect(response.json().error).toBe("tryon_timeout");
+    expect(download.mock.calls.map(([url]) => url)).toEqual([HD_URL]);
+    expect(provider.timesLeft).toHaveLength(1);
+    expect(events(fake)[0]).toMatchObject({ status: "failed", error_code: "timeout" });
+  });
+
+  it("le délai commun reste sous celui du site (envoi de la photo, bandeau et décompte en plus) et loin de la libération par la base", () => {
+    const sheet = readFileSync(join(__dirname, "../../mobile/src/components/tryon-sheet.web.tsx"), "utf8");
+    const clientTimeout = Number(/const CLIENT_TIMEOUT_MS = ([\d_]+);/.exec(sheet)?.[1]?.replaceAll("_", ""));
+    expect(clientTimeout).toBe(120_000);
+    expect(clientTimeout - TRYON_TRY_DEADLINE_MS).toBeGreaterThanOrEqual(20_000);
+    const migration = readFileSync(join(__dirname, "../supabase/migrations/0042_essayage_virtuel.sql"), "utf8");
+    expect(migration).toContain("v_window_start := v_at - interval '3 minutes';");
+    expect(3 * 60_000 - TRYON_TRY_DEADLINE_MS).toBeGreaterThanOrEqual(60_000);
+    expect(TRYON_FALLBACK_MIN_MS).toBeLessThan(TRYON_TRY_DEADLINE_MS);
+  });
+});
+
+describe("échecs que le fournisseur a pu facturer : jamais pris sur le quota, comptés dans la dépense du mois", () => {
+  it("essai accepté, puis délai dépassé : 504, jamais décompté, 1 crédit dans les compteurs du mois (sans membre)", async () => {
+    const provider = new ScriptedProvider([
+      async () => {
+        throw new TryonProviderError("timeout", undefined, 1);
+      },
+    ]);
+    const fake = database();
+    const target = await tryonApp(fake, { provider });
+    const response = await run(target);
+    expect(response.statusCode).toBe(504);
+    expect(response.json().error).toBe("tryon_timeout");
+    expect(events(fake)[0]).toMatchObject({ status: "failed", error_code: "timeout", quota_source: null, credits_used: 0 });
+    expect(fake.table("tryon_usage_months")).toEqual([{ month: "2026-11", credits_used: 1, tries_succeeded: 0 }]);
+    expect(await status(target)).toMatchObject({ remaining: { free: 5 } });
+    expect(lines.some((line) => line.includes("Essayage échoué") && line.includes('"creditsBilled":1'))).toBe(true);
+  });
+
+  it("résultat payé, mais bandeau impossible (image illisible) : les crédits annoncés vont à la dépense du mois", async () => {
+    const provider = new ScriptedProvider([async () => ({ image: Buffer.from("pas une image"), creditsUsed: 2 })]);
+    const fake = database();
+    const response = await run(await tryonApp(fake, { provider }));
+    expect(response.statusCode).toBe(503);
+    expect(response.json().error).toBe("tryon_provider_unavailable");
+    expect(events(fake)[0]).toMatchObject({ status: "failed", error_code: "result_unreadable", quota_source: null });
+    expect(fake.table("tryon_usage_months")).toEqual([{ month: "2026-11", credits_used: 2, tries_succeeded: 0 }]);
+  });
+
+  it("un échec facturé qui franchit 80 % du budget : alerte budget_80 enregistrée et journalisée une fois", async () => {
+    const fake = database();
+    // Seuil de 80 $ : 1 066 crédits = 79,95 $ ; le crédit facturé le franchit.
+    fake.table("tryon_usage_months").push({ month: "2026-11", credits_used: 1066, tries_succeeded: 1066 });
+    const provider = new ScriptedProvider([
+      async () => {
+        throw new TryonProviderError("invalid_response", 200, 1);
+      },
+      async () => {
+        throw new TryonProviderError("invalid_response", 200, 1);
+      },
+    ]);
+    const target = await tryonApp(fake, { provider });
+    expect((await run(target)).statusCode).toBe(503);
+    expect((await run(target)).statusCode).toBe(503);
+    expect(fake.table("tryon_usage_months")).toEqual([{ month: "2026-11", credits_used: 1068, tries_succeeded: 1066 }]);
+    expect(fake.table("tryon_alerts").map((row) => row.kind)).toEqual(["budget_80"]);
+    const alerts = lines.filter((line) => line.includes("Alerte de l'essayage virtuel"));
+    expect(alerts).toHaveLength(1);
+    expect(JSON.parse(alerts[0]!)).toMatchObject({ alerte: "essayage_budget_80", periode: "2026-11" });
+  });
+
+  it("essai libéré par la base pendant qu'il tournait, puis rattrapé : image remise, jamais décomptée du quota ; ses crédits comptent", async () => {
+    const fake = database();
+    const provider = new ScriptedProvider([
+      async (input) => {
+        // Une réservation d'un autre membre libère l'essai (resté en cours plus de 3 minutes).
+        Object.assign(events(fake)[0]!, { status: "failed", error_code: "expired", finished_at: NOW.toISOString() });
+        return { image: Buffer.from(input.personImage), creditsUsed: 1 };
+      },
+    ]);
+    const target = await tryonApp(fake, { provider });
+    const response = await run(target);
+    expect(response.statusCode).toBe(200);
+    expect((response.json() as TryonRunResponse).remaining).toEqual({ free: 5, bonus: 0, nextReset: NEXT_RESET });
+    expect(events(fake)[0]).toMatchObject({ status: "succeeded", quota_source: null, credits_used: 1 });
+    expect(fake.table("tryon_usage_months")).toEqual([{ month: "2026-11", credits_used: 1, tries_succeeded: 1 }]);
+    expect(await status(target)).toMatchObject({ remaining: { free: 5 } });
+  });
+});
+
 describe("quota : 5 gratuits par mois, puis les essais offerts", () => {
   it("6e essai du mois : 429 ; un essai offert accordé : décompté ensuite", async () => {
     const fake = database();
@@ -486,6 +671,8 @@ describe("échecs du fournisseur : un message clair, jamais décompté", () => {
       expect(response.json()).toEqual({ error, message: english });
       expect(events(fake)[0]).toMatchObject({ status: "failed", error_code: failure, quota_source: null, credits_used: 0 });
       expect(await status(target)).toMatchObject({ remaining: { free: 5 } });
+      // Échec annoncé par le fournisseur (ou refus avant tout essai) : rien de facturé, rien dans la dépense du mois.
+      expect(fake.table("tryon_usage_months")).toEqual([]);
     });
   }
 

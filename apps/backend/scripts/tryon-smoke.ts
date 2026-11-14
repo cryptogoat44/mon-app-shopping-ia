@@ -63,7 +63,13 @@ async function main(): Promise<void> {
     writeFileSync(path, banded, { mode: 0o600 });
     console.log(`Essai réussi (${output.creditsUsed} crédit(s) consommé(s)). Résultat, hors du dépôt : ${path}`);
   } catch (error) {
-    if (error instanceof TryonProviderError) throw new Error(`Essai échoué chez FASHN : ${error.kind}${error.status ? ` (HTTP ${error.status})` : ""}. Un essai échoué n'est pas facturé.`);
+    if (error instanceof TryonProviderError) {
+      const billing =
+        error.creditsBilled > 0
+          ? `FASHN avait accepté l'essai : il a pu le facturer quand même (${error.creditsBilled} crédit(s)).`
+          : "Un essai refusé par FASHN, ou dont FASHN annonce l'échec, n'est pas facturé.";
+      throw new Error(`Essai échoué chez FASHN : ${error.kind}${error.status ? ` (HTTP ${error.status})` : ""}. ${billing}`);
+    }
     throw error;
   } finally {
     for (const buffer of buffers) buffer.fill(0);

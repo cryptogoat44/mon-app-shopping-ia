@@ -38,10 +38,16 @@ export function bonusToConsume(grants: readonly BonusGrant[], reservedAt: Date):
 }
 
 /** D'où vient un essai réussi : du mois (gratuit) tant qu'il en reste, puis
- * d'un essai offert. Sans aucun des deux (cas limite d'un essai rattrapé),
- * compté sur le mois : l'image a été remise. */
-export function quotaSourceFor(freeUsedThisMonth: number, freePerMonth: number, grants: readonly BonusGrant[], reservedAt: Date): { source: "free" | "bonus"; grant: BonusGrant | null } {
+ * d'un essai offert. Sans aucun des deux (ce qui ne devrait jamais arriver :
+ * la réservation a vérifié le quota), null : un essai n'est jamais décompté
+ * au-delà du quota du membre. */
+export function quotaSourceFor(
+  freeUsedThisMonth: number,
+  freePerMonth: number,
+  grants: readonly BonusGrant[],
+  reservedAt: Date
+): { source: "free" | "bonus" | null; grant: BonusGrant | null } {
   if (freeUsedThisMonth < freePerMonth) return { source: "free", grant: null };
   const grant = bonusToConsume(grants, reservedAt);
-  return grant ? { source: "bonus", grant } : { source: "free", grant: null };
+  return grant ? { source: "bonus", grant } : { source: null, grant: null };
 }

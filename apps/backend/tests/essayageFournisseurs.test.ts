@@ -33,6 +33,21 @@ const json = (status: number, body: unknown, headers: Record<string, string> = {
 const completed = (output = `data:image/jpeg;base64,${RESULT.toString("base64")}`, headers: Record<string, string> = { "x-fashn-credits-used": "1" }) =>
   json(200, { id: PREDICTION, status: "completed", output: [output], error: null }, headers);
 const networkError = (code: string) => Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error(code), { code }) });
+const timeoutError = () => Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" });
+/** Une réponse dont le corps se coupe en route : un premier morceau (le début
+ * d'un résultat), puis la lecture échoue avec `error` (ce que fait undici
+ * quand le délai tombe ou que la connexion se perd en cours de lecture). */
+const brokenBody = (error: Error, status = 200) => {
+  let sent = false;
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (sent) return controller.error(error);
+      sent = true;
+      controller.enqueue(new TextEncoder().encode(`{"id":"${PREDICTION}","status":"completed","output":["data:image/jpeg;base64,/9j/4AAQ`));
+    },
+  });
+  return new Response(stream, { status, headers: { "content-type": "application/json" } });
+};
 
 /** Un faux FASHN : chaque appel est noté, `answer` donne la réponse (ou l'erreur levée). */
 function fakeFetch(answer: (call: Call, index: number) => Response | Error) {
@@ -218,7 +233,7 @@ describe("FASHN : jamais de double soumission", () => {
     expect(timeout).toHaveLength(1);
   });
 
-  it("erreur 500 ou 503 (aucun essai créé) : retentée ; 502 et 504 (passerelle, ambigus) : jamais", async () => {
+  it("exactement 500 ou 503 (aucun essai créé) : retentée ; toute autre erreur 5xx (passerelle, ambiguë) : jamais", async () => {
     const recovered = fakeFetch((_call, index) => (index === 0 ? json(503, { error: "ServiceUnavailable" }) : index === 1 ? json(200, { id: PREDICTION }) : completed()));
     await provider().run({ personImage: PERSON, garmentImage: GARMENT_URL, locale: "fr" });
     expect(recovered.filter((call) => call.method === "POST")).toHaveLength(2);
@@ -227,10 +242,28 @@ describe("FASHN : jamais de double soumission", () => {
     expect((await failure(() => provider().run({ personImage: PERSON, garmentImage: GARMENT_URL, locale: "fr" }))).kind).toBe("unavailable");
     expect(always500).toHaveLength(3);
 
-    for (const status of [502, 504]) {
+    for (const status of [501, 502, 504, 505, 507, 520, 522, 524, 530, 599]) {
       const gateway = fakeFetch(() => json(status, { error: "Gateway" }));
-      expect((await failure(() => provider().run({ personImage: PERSON, garmentImage: GARMENT_URL, locale: "fr" }))).kind).toBe("unavailable");
+      const error = await failure(() => provider().run({ personImage: PERSON, garmentImage: GARMENT_URL, locale: "fr" }));
+      expect(error.kind, String(status)).toBe("unavailable");
+      // Refusée avant d'être acceptée : rien n'a pu être facturé.
+      expect(error.creditsBilled, String(status)).toBe(0);
       expect(gateway, String(status)).toHaveLength(1);
+    }
+  });
+
+  it("réponse 2xx à la soumission dont le corps est illisible ou coupé : jamais resoumise, 1 crédit présumé", async () => {
+    for (const [answer, kind] of [
+      [() => new Response("pas du JSON", { status: 200 }), "invalid_response"],
+      [() => json(200, { error: null }), "invalid_response"],
+      [() => brokenBody(timeoutError()), "timeout"],
+      [() => brokenBody(new TypeError("terminated")), "unavailable"],
+    ] as const) {
+      const calls = fakeFetch(answer);
+      const error = await failure(() => provider().run({ personImage: PERSON, garmentImage: GARMENT_URL, locale: "fr" }));
+      expect(error.kind).toBe(kind);
+      expect(error.creditsBilled).toBe(1);
+      expect(calls).toHaveLength(1);
     }
   });
 
@@ -247,11 +280,71 @@ describe("FASHN : jamais de double soumission", () => {
     expect(calls).toHaveLength(5);
   });
 
-  it("délai total de 90 s, soumission comprise : au-delà, « timeout »", async () => {
+  it("délai total de 90 s, soumission comprise : au-delà, « timeout », avec 1 crédit présumé (FASHN finira l'essai)", async () => {
     const calls = fakeFetch((_call, index) => (index === 0 ? json(200, { id: PREDICTION }) : json(200, { id: PREDICTION, status: "processing" })));
-    expect((await failure(() => provider().run({ personImage: PERSON, garmentImage: GARMENT_URL, locale: "fr" }))).kind).toBe("timeout");
+    const error = await failure(() => provider().run({ personImage: PERSON, garmentImage: GARMENT_URL, locale: "fr" }));
+    expect(error.kind).toBe("timeout");
+    expect(error.creditsBilled).toBe(1);
     // Une lecture toutes les 1,5 s avant les 90 s : 59 (la 60e tomberait pile au délai), pas une de plus.
     expect(calls.filter((call) => call.method === "GET")).toHaveLength(59);
+  });
+
+  it("le temps laissé par la route : jamais un délai neuf de 90 s, jamais plus de 90 s ; plus rien : rien n'est soumis", async () => {
+    const processing = () => fakeFetch((_call, index) => (index === 0 ? json(200, { id: PREDICTION }) : json(200, { id: PREDICTION, status: "processing" })));
+    const shortCalls = processing();
+    expect((await failure(() => provider().run({ personImage: PERSON, garmentImage: GARMENT_URL, locale: "fr", timeLeftMs: 30_000 }))).kind).toBe("timeout");
+    // 30 s : 19 lectures (la 20e tomberait pile au délai).
+    expect(shortCalls.filter((call) => call.method === "GET")).toHaveLength(19);
+    const longCalls = processing();
+    await failure(() => provider().run({ personImage: PERSON, garmentImage: GARMENT_URL, locale: "fr", timeLeftMs: 500_000 }));
+    expect(longCalls.filter((call) => call.method === "GET")).toHaveLength(59);
+    for (const timeLeftMs of [0, -5_000]) {
+      const none = fakeFetch(() => json(200, { id: PREDICTION }));
+      const error = await failure(() => provider().run({ personImage: PERSON, garmentImage: GARMENT_URL, locale: "fr", timeLeftMs }));
+      expect(error.kind).toBe("timeout");
+      expect(error.creditsBilled).toBe(0);
+      expect(none).toEqual([]);
+    }
+  });
+
+  it("lecture de l'état coupée en route (délai, connexion perdue) : relue comme une lecture sans effet, jamais une erreur brute", async () => {
+    for (const broken of [timeoutError(), new TypeError("terminated")]) {
+      const calls = fakeFetch((_call, index) => {
+        if (index === 0) return json(200, { id: PREDICTION });
+        // Le résultat complet, coupé au milieu : FASHN le garde, la lecture suivante le rapporte.
+        if (index === 1) return brokenBody(broken);
+        return completed();
+      });
+      const result = await provider().run({ personImage: PERSON, garmentImage: GARMENT_URL, locale: "fr" });
+      expect(result.image.equals(RESULT)).toBe(true);
+      expect(calls.filter((call) => call.method === "POST")).toHaveLength(1);
+      expect(calls).toHaveLength(3);
+    }
+    // Coupée à chaque fois : « timeout » au délai, 1 crédit présumé.
+    fakeFetch((_call, index) => (index === 0 ? json(200, { id: PREDICTION }) : brokenBody(new TypeError("terminated"))));
+    const error = await failure(() => provider().run({ personImage: PERSON, garmentImage: GARMENT_URL, locale: "fr" }));
+    expect([error.kind, error.creditsBilled]).toEqual(["timeout", 1]);
+  });
+
+  it("crédits présumés : ceux de l'en-tête pour un résultat payé mais illisible ; rien pour un échec annoncé par FASHN", async () => {
+    fakeFetch((_call, index) => (index === 0 ? json(200, { id: PREDICTION }) : completed("https://cdn.fashn.ai/x/output_0.png", { "x-fashn-credits-used": "2" })));
+    const unreadable = await failure(() => provider().run({ personImage: PERSON, garmentImage: GARMENT_URL, locale: "fr" }));
+    expect([unreadable.kind, unreadable.creditsBilled]).toEqual(["invalid_response", 2]);
+    fakeFetch((_call, index) => (index === 0 ? json(200, { id: PREDICTION }) : new Response("{pas du JSON", { status: 200 })));
+    expect((await failure(() => provider().run({ personImage: PERSON, garmentImage: GARMENT_URL, locale: "fr" }))).creditsBilled).toBe(1);
+    fakeFetch((_call, index) => (index === 0 ? json(200, { id: PREDICTION }) : json(401, { error: "UnauthorizedAccess" })));
+    expect((await failure(() => provider().run({ personImage: PERSON, garmentImage: GARMENT_URL, locale: "fr" }))).creditsBilled).toBe(1);
+    for (const status of [
+      { status: "failed", error: { name: "PoseError", message: PROVIDER_MESSAGE } },
+      { status: "failed", error: { name: "ImageLoadError", message: PROVIDER_MESSAGE } },
+      { status: "canceled" },
+      { status: "time_out" },
+    ]) {
+      fakeFetch((_call, index) => (index === 0 ? json(200, { id: PREDICTION }) : json(200, { id: PREDICTION, ...status })));
+      expect((await failure(() => provider().run({ personImage: PERSON, garmentImage: GARMENT_URL, locale: "fr" }))).creditsBilled, JSON.stringify(status)).toBe(0);
+    }
+    fakeFetch(() => json(429, { error: "ConcurrencyLimitExceeded" }));
+    expect((await failure(() => provider().run({ personImage: PERSON, garmentImage: GARMENT_URL, locale: "fr" }))).creditsBilled).toBe(0);
   });
 
   it("une redirection vers un autre hôte n'est jamais suivie", async () => {
@@ -280,6 +373,11 @@ describe("FASHN : solde de crédits (« Credits Balance »), gardé 5 minutes", 
     expect((await failure(() => provider().getCreditBalance())).kind).toBe("unauthorized");
     fakeFetch(() => json(200, { credits: { total: "beaucoup" } }));
     expect((await failure(() => provider().getCreditBalance())).kind).toBe("invalid_response");
+    // Corps coupé en route : une erreur du fournisseur, jamais une erreur brute.
+    fakeFetch(() => brokenBody(timeoutError()));
+    expect((await failure(() => provider().getCreditBalance())).kind).toBe("timeout");
+    fakeFetch(() => brokenBody(new TypeError("terminated")));
+    expect((await failure(() => provider().getCreditBalance())).kind).toBe("unavailable");
   });
 
   it("garde des tests : un vrai appel à FASHN est refusé, sous-domaines compris", () => {

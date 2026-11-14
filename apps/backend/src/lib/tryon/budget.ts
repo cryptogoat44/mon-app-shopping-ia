@@ -1,10 +1,13 @@
 // Budget mensuel de l'essayage virtuel, même règle que la base (migration
-// 0042) : dépense du mois = crédits des essais réussis × prix du crédit.
+// 0042) : dépense du mois = crédits consommés dans le mois × prix du crédit.
+// Les crédits consommés : ceux des essais réussis, et ceux que le
+// fournisseur a pu facturer pour un essai échoué après l'avoir accepté.
 // - Réservation (tryon_reserve) : refusée si la dépense du mois, plus les
 //   essais en cours et celui-ci, dépasserait le budget.
-// - Après un essai réussi (tryon_complete) : alerte « budget_80 » dès que la
-//   dépense atteint le seuil (80 % par défaut), alerte « budget_100 » dès que
-//   le budget ne permet plus un essai de plus ; une seule de chaque par mois.
+// - Après un essai réussi, ou un échec facturé (tryon_complete, tryon_fail) :
+//   alerte « budget_80 » dès que la dépense atteint le seuil (80 % par
+//   défaut), alerte « budget_100 » dès que le budget ne permet plus un essai
+//   de plus ; une seule de chaque par mois.
 // Les montants sont comptés en millionièmes de dollar (nombres entiers),
 // comme les nombres exacts de la base : jamais d'écart d'arrondi.
 // Fonctions pures, utilisées par le rapport du fondateur et par la fausse

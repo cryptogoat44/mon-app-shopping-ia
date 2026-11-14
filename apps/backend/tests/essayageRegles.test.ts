@@ -67,10 +67,10 @@ describe("quota : gratuit d'abord, puis l'offert qui expire le plus tôt ; un of
     expect(bonusToConsume([grant("expire", 5, "2030-04-01T00:00:00Z")], at)).toBeNull();
   });
 
-  it("source du quota : gratuit tant qu'il en reste, puis offert ; ni l'un ni l'autre : compté sur le mois", () => {
+  it("source du quota : gratuit tant qu'il en reste, puis offert ; ni l'un ni l'autre : jamais décompté au-delà du quota", () => {
     expect(quotaSourceFor(4, 5, grants, at)).toEqual({ source: "free", grant: null });
     expect(quotaSourceFor(5, 5, grants, at)).toMatchObject({ source: "bonus", grant: { id: "tot" } });
-    expect(quotaSourceFor(5, 5, [], at)).toEqual({ source: "free", grant: null });
+    expect(quotaSourceFor(5, 5, [], at)).toEqual({ source: null, grant: null });
   });
 });
 

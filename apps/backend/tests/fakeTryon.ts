@@ -49,6 +49,21 @@ export function tryonRpc(fake: () => Fake, options: FakeTryonOptions = {}) {
     return true;
   }
 
+  /** Ajoute des crédits aux compteurs du mois (et un essai réussi s'il y a
+   * lieu), puis les alertes du budget nouvelles, comme tryon_complete et tryon_fail. */
+  function addCredits(month: string, credits: number, succeeded: boolean, args: Record<string, unknown>): string[] {
+    let usage = table("tryon_usage_months").find((row) => row.month === month);
+    if (!usage) {
+      usage = { month, credits_used: 0, tries_succeeded: 0 };
+      table("tryon_usage_months").push(usage);
+    }
+    usage.credits_used = Number(usage.credits_used) + credits;
+    if (succeeded) usage.tries_succeeded = Number(usage.tries_succeeded) + 1;
+    const rule = { budgetUsd: Number(args.p_budget_usd), pricePerCreditUsd: Number(args.p_price_per_credit_usd), alertThreshold: Number(args.p_alert_threshold) };
+    const details = { credits: usage.credits_used, budget_usd: rule.budgetUsd };
+    return budgetThresholdsReached(rule, Number(usage.credits_used), credits).filter((kind) => alertOnce(kind, month, details));
+  }
+
   const functions: Record<string, (args: Record<string, unknown>) => unknown> = {
     tryon_version: () => 1,
 
@@ -124,7 +139,10 @@ export function tryonRpc(fake: () => Fake, options: FakeTryonOptions = {}) {
       const late = event?.status === "failed" && event.error_code === "expired" && at(event.finished_at) > moment.getTime() - LATE_COMPLETION_MS;
       if (!event || !(event.status === "pending" || late)) return [{ status: "not_found", quota_source: null, free_remaining: null, bonus_remaining: null, new_alerts: [] }];
       const month = String(event.month);
-      const { source, grant } = quotaSourceFor(freeUsed(args.p_user_id, month), Number(args.p_free_per_month), grantsOf(args.p_user_id), new Date(String(event.created_at)));
+      // Un essai libéré (plus de 3 minutes) n'est jamais décompté du quota du membre.
+      const { source, grant } = late
+        ? { source: null, grant: null }
+        : quotaSourceFor(freeUsed(args.p_user_id, month), Number(args.p_free_per_month), grantsOf(args.p_user_id), new Date(String(event.created_at)));
       if (grant) (grant as BonusGrant & { row: Row }).row.remaining = grant.remaining - 1;
       const credits = Number(args.p_credits_used);
       Object.assign(event, {
@@ -136,16 +154,7 @@ export function tryonRpc(fake: () => Fake, options: FakeTryonOptions = {}) {
         error_code: null,
         finished_at: moment.toISOString(),
       });
-      let usage = table("tryon_usage_months").find((row) => row.month === month);
-      if (!usage) {
-        usage = { month, credits_used: 0, tries_succeeded: 0 };
-        table("tryon_usage_months").push(usage);
-      }
-      usage.credits_used = Number(usage.credits_used) + credits;
-      usage.tries_succeeded = Number(usage.tries_succeeded) + 1;
-      const rule = { budgetUsd: Number(args.p_budget_usd), pricePerCreditUsd: Number(args.p_price_per_credit_usd), alertThreshold: Number(args.p_alert_threshold) };
-      const details = { credits: usage.credits_used, budget_usd: rule.budgetUsd };
-      const newAlerts = budgetThresholdsReached(rule, Number(usage.credits_used), credits).filter((kind) => alertOnce(kind, month, details));
+      const newAlerts = addCredits(month, credits, true, args);
       const nowMonth = monthKeyAt(moment, String(args.p_timezone));
       return [
         {
@@ -158,14 +167,19 @@ export function tryonRpc(fake: () => Fake, options: FakeTryonOptions = {}) {
       ];
     },
 
-    tryon_fail: ({ p_event_id, p_user_id, p_error_code, p_duration_ms }) => {
-      if (!/^[a-z][a-z0-9_]{0,39}$/.test(String(p_error_code))) throw new Error("tryon_fail : paramètres invalides");
+    tryon_fail: (args) => {
+      const credits = Number(args.p_credits_billed ?? 0);
+      const budgetMissing = !(Number(args.p_budget_usd) > 0 && Number(args.p_price_per_credit_usd) > 0 && Number(args.p_alert_threshold) > 0);
+      if (!/^[a-z][a-z0-9_]{0,39}$/.test(String(args.p_error_code)) || !Number.isInteger(credits) || credits < 0 || credits > 10 || (credits > 0 && budgetMissing)) {
+        throw new Error("tryon_fail : paramètres invalides");
+      }
       const event = table("tryon_events").find(
-        (row) => row.id === p_event_id && row.user_id === p_user_id && (row.status === "pending" || (row.status === "failed" && row.error_code === "expired"))
+        (row) => row.id === args.p_event_id && row.user_id === args.p_user_id && (row.status === "pending" || (row.status === "failed" && row.error_code === "expired"))
       );
-      if (!event) return false;
-      Object.assign(event, { status: "failed", error_code: p_error_code, duration_ms: p_duration_ms, finished_at: now().toISOString() });
-      return true;
+      if (!event) return [{ recorded: false, new_alerts: [] }];
+      Object.assign(event, { status: "failed", error_code: args.p_error_code, duration_ms: args.p_duration_ms, finished_at: now().toISOString() });
+      // Crédits facturés malgré l'échec : la dépense du mois, jamais le quota du membre.
+      return [{ recorded: true, new_alerts: credits > 0 ? addCredits(String(event.month), credits, false, args) : [] }];
     },
 
     tryon_alert_once: ({ p_kind, p_period, p_details }) => alertOnce(String(p_kind), String(p_period), p_details),

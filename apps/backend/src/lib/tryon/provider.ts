@@ -19,6 +19,11 @@ export interface TryonRunInput {
   garmentImage: TryonGarmentImage;
   /** Langue de l'app sur l'appareil (texte éventuel du fournisseur). */
   locale: Locale;
+  /** Temps qui reste à l'essai, en millisecondes : le délai commun fixé par
+   * la route dès la réservation (routes/tryon.ts), jamais un délai neuf. Le
+   * fournisseur ne dépasse jamais le sien (FASHN : 90 s) ; sans cette
+   * valeur, il prend le sien. Plus rien : rien n'est soumis (« timeout »). */
+  timeLeftMs?: number;
 }
 
 export interface TryonRunOutput {
@@ -47,7 +52,7 @@ export interface TryOnProvider {
  * - rate_limited : trop de demandes ou d'essais simultanés chez lui ;
  * - out_of_credits : plus de crédits ;
  * - unavailable : panne ou surcharge du fournisseur, réseau ;
- * - timeout : pas de résultat dans le délai (90 s) ;
+ * - timeout : pas de résultat dans le temps laissé à l'essai (90 s au plus) ;
  * - invalid_response : réponse inattendue. */
 export const TRYON_PROVIDER_ERROR_KINDS = [
   "pose_not_detected",
@@ -72,11 +77,18 @@ export class TryonProviderError extends Error {
   readonly kind: TryonProviderErrorKind;
   /** Code HTTP de la réponse du fournisseur, s'il y en a eu une. */
   readonly status: number | undefined;
+  /** Crédits que le fournisseur a pu facturer malgré l'échec : 0 quand rien
+   * n'a pu l'être (essai refusé avant d'être accepté, ou échec que le
+   * fournisseur annonce lui-même) ; sinon ceux qu'il annonce, ou 1 par essai
+   * présumé (essai accepté, puis délai dépassé, résultat illisible…). Ils
+   * comptent dans la dépense du mois, jamais dans le quota du membre. */
+  readonly creditsBilled: number;
 
-  constructor(kind: TryonProviderErrorKind, status?: number) {
+  constructor(kind: TryonProviderErrorKind, status?: number, creditsBilled = 0) {
     super(`tryon_${kind}`);
     this.name = "TryonProviderError";
     this.kind = kind;
     this.status = status;
+    this.creditsBilled = creditsBilled;
   }
 }

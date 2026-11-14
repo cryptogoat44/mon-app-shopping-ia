@@ -13,7 +13,7 @@
 --   drop function if exists tryon_remaining(uuid, integer, text, timestamptz);
 --   drop function if exists tryon_reserve(uuid, uuid, text, integer, numeric, numeric, integer, integer, text, timestamptz);
 --   drop function if exists tryon_complete(uuid, uuid, integer, integer, integer, numeric, numeric, numeric, text, timestamptz);
---   drop function if exists tryon_fail(uuid, uuid, text, integer);
+--   drop function if exists tryon_fail(uuid, uuid, text, integer, integer, numeric, numeric, numeric);
 --   drop function if exists tryon_set_age(uuid, text);
 --   drop function if exists tryon_reset_age(uuid);
 --   drop function if exists tryon_grant_bonus(uuid, text, integer, integer);
@@ -35,10 +35,11 @@
 -- 3. tryon_events : un par essai. La pièce (identifiant du résultat de
 --    recherche, sans clé étrangère : le résultat peut être purgé avant
 --    l'essai), l'état (en cours, réussi, échoué), les crédits consommés, la
---    source du quota (gratuit ou offert, et l'essai offert utilisé), un code
---    d'erreur court (jamais un texte du fournisseur), la durée, le mois de
---    l'essai (heure de Paris) et ses dates. Aucune image, rien de tiré de la
---    photo. Effacés au bout de 12 mois (tryon_purge).
+--    source du quota (gratuit ou offert, et l'essai offert utilisé ; aucune
+--    pour un essai réussi jamais décompté), un code d'erreur court (jamais un
+--    texte du fournisseur), la durée, le mois de l'essai (heure de Paris) et
+--    ses dates. Aucune image, rien de tiré de la photo. Effacés au bout de 12
+--    mois (tryon_purge).
 -- 4. tryon_bonus_grants : les essais offerts (5 par achat confirmé, 365
 --    jours) : la référence de la commande, unique (accorder deux fois la même
 --    commande ne fait rien), la quantité, le reste et l'expiration.
@@ -47,17 +48,20 @@
 -- 6. tryon_alerts : les alertes du budget (80 % et 100 % du mois) et du
 --    solde de crédits bas, une seule par période ; jamais de donnée
 --    personnelle dans leurs détails.
--- 7. tryon_usage_months : crédits consommés et essais réussis par mois, SANS
---    membre : le budget du mois reste juste même après la suppression d'un
---    compte (ses essais partent avec lui).
+-- 7. tryon_usage_months : crédits consommés (essais réussis, et essais
+--    échoués que FASHN a pu facturer après les avoir acceptés) et essais
+--    réussis par mois, SANS membre : le budget du mois reste juste même après
+--    la suppression d'un compte (ses essais partent avec lui).
 -- 8. Les fonctions du serveur (lui seul peut les appeler) : tryon_reserve
 --    (réserve un essai : quota, un seul essai en cours par membre, essais en
 --    cours du service, budget), tryon_complete (essai réussi : décompte,
---    gratuit d'abord, puis l'offert qui expire le plus tôt ; compteurs et
---    alertes du budget), tryon_fail (essai échoué, rien n'est décompté),
---    tryon_remaining (essais restants), tryon_set_age, tryon_reset_age,
---    tryon_grant_bonus, tryon_alert_once, tryon_purge et tryon_version
---    (sonde du serveur).
+--    gratuit d'abord, puis l'offert qui expire le plus tôt ; un essai libéré
+--    puis rattrapé n'est jamais décompté du quota ; compteurs et alertes du
+--    budget), tryon_fail (essai échoué, rien n'est décompté du quota ; les
+--    crédits facturés malgré l'échec vont aux compteurs et alertes du
+--    budget), tryon_remaining (essais restants), tryon_set_age,
+--    tryon_reset_age, tryon_grant_bonus, tryon_alert_once, tryon_purge et
+--    tryon_version (sonde du serveur).
 --    Verrous, toujours dans le même ordre (aucun interblocage) : la ligne
 --    tryon_profiles du membre (ses essais passent un par un), puis le verrou
 --    consultatif commun « tryon_budget », puis les lignes d'essai et d'essais
@@ -305,8 +309,9 @@ $$;
 -- busy (p_max_in_flight essais en cours sur tout le service), budget_reached
 -- (dépense du mois + essais en cours et celui-ci, au prix d'un essai,
 -- au-delà du budget). Un essai en cours depuis plus de 3 minutes a échoué
--- (« expired ») : il est libéré ici. free_remaining et bonus_remaining :
--- les essais restants AVANT celui-ci.
+-- (« expired ») : il est libéré ici, et ne sera jamais décompté du quota du
+-- membre (le serveur, lui, abandonne tout essai au bout de 100 s).
+-- free_remaining et bonus_remaining : les essais restants AVANT celui-ci.
 create or replace function tryon_reserve(
   p_user_id uuid,
   p_item_id uuid,
@@ -410,14 +415,19 @@ begin
 end;
 $$;
 
--- Essai réussi : seulement l'essai en cours du membre (ou libéré depuis moins
--- de 10 minutes : l'image a été remise). Décompte le gratuit du mois de la
--- réservation, sinon l'essai offert, valable à la réservation, qui expire le
--- plus tôt. Met à jour les compteurs du mois et enregistre, une fois par
--- mois, les alertes budget_80 (dépense ≥ p_alert_threshold × budget) et
--- budget_100 (le budget ne permet plus un essai de plus) : new_alerts dit
--- lesquelles viennent d'apparaître. status : « completed » ou « not_found ».
--- free_remaining et bonus_remaining : les essais restants après celui-ci.
+-- Essai réussi : seulement l'essai en cours du membre, ou libéré par la base
+-- depuis moins de 10 minutes (resté en cours plus de 3 minutes, puis
+-- rattrapé : l'image a été remise). L'essai en cours est décompté du gratuit
+-- du mois de la réservation, sinon de l'essai offert, valable à la
+-- réservation, qui expire le plus tôt. Un essai libéré n'est JAMAIS décompté
+-- du quota du membre (quota_source null) : ses crédits comptent seulement
+-- dans les compteurs du mois, sans membre. Met à jour les compteurs du mois
+-- et enregistre, une fois par mois, les alertes budget_80 (dépense ≥
+-- p_alert_threshold × budget) et budget_100 (le budget ne permet plus un
+-- essai de plus) : new_alerts dit lesquelles viennent d'apparaître. status :
+-- « completed » ou « not_found » ; quota_source : « free », « bonus », ou
+-- null (jamais décompté). free_remaining et bonus_remaining : les essais
+-- restants après celui-ci.
 create or replace function tryon_complete(
   p_event_id uuid,
   p_user_id uuid,
@@ -473,25 +483,28 @@ begin
     return;
   end if;
 
-  -- Le gratuit du mois de la réservation d'abord…
-  select count(*) into v_free_used from tryon_events e
-    where e.user_id = p_user_id and e.status = 'succeeded' and e.quota_source = 'free' and e.month = v_event.month;
-  if v_free_used < p_free_per_month then
-    v_source := 'free';
-  else
-    -- … puis l'essai offert qui expire le plus tôt.
-    select g.id into v_grant from tryon_bonus_grants g
-      where g.user_id = p_user_id and g.remaining > 0 and g.expires_at > v_event.created_at
-      order by g.expires_at, g.created_at, g.id
-      limit 1
-      for update;
-    if v_grant is not null then
-      update tryon_bonus_grants g set remaining = g.remaining - 1 where g.id = v_grant;
-      v_source := 'bonus';
-    else
-      -- Cas limite (un essai libéré, puis rattrapé après un autre) : compté
-      -- sur le mois ; l'image a été remise, il n'est jamais perdu.
+  -- Un essai libéré (resté en cours plus de 3 minutes) ne prend jamais rien
+  -- sur le quota du membre : v_source reste null.
+  if v_event.status = 'pending' then
+    -- Le gratuit du mois de la réservation d'abord…
+    select count(*) into v_free_used from tryon_events e
+      where e.user_id = p_user_id and e.status = 'succeeded' and e.quota_source = 'free' and e.month = v_event.month;
+    if v_free_used < p_free_per_month then
       v_source := 'free';
+    else
+      -- … puis l'essai offert qui expire le plus tôt.
+      select g.id into v_grant from tryon_bonus_grants g
+        where g.user_id = p_user_id and g.remaining > 0 and g.expires_at > v_event.created_at
+        order by g.expires_at, g.created_at, g.id
+        limit 1
+        for update;
+      if v_grant is not null then
+        update tryon_bonus_grants g set remaining = g.remaining - 1 where g.id = v_grant;
+        v_source := 'bonus';
+      end if;
+      -- Ni l'un ni l'autre (ce qui ne devrait jamais arriver : la réservation
+      -- a vérifié le quota, et un seul essai est en cours par membre) :
+      -- jamais décompté au-delà du quota.
     end if;
   end if;
 
@@ -535,24 +548,92 @@ end;
 $$;
 
 -- Essai échoué : code court, jamais un texte du fournisseur ; rien n'est
--- décompté. Seulement l'essai en cours du membre (ou libéré, pour garder la
--- vraie raison). true si l'essai a été noté.
-create or replace function tryon_fail(p_event_id uuid, p_user_id uuid, p_error_code text, p_duration_ms integer)
-returns boolean
+-- décompté du quota du membre. Seulement l'essai en cours du membre (ou
+-- libéré, pour garder la vraie raison). p_credits_billed : les crédits que
+-- le fournisseur a pu facturer malgré l'échec (essai accepté, puis délai
+-- dépassé, résultat illisible, bandeau impossible…) ; 0 pour un échec
+-- annoncé par le fournisseur lui-même, ou survenu avant tout envoi. Ils
+-- s'ajoutent aux compteurs du mois de l'essai (jamais aux essais réussis),
+-- avec les mêmes alertes du budget que tryon_complete (p_budget_usd,
+-- p_price_per_credit_usd et p_alert_threshold sont alors exigés). recorded :
+-- true si l'essai a été noté (ses crédits ne comptent qu'alors : jamais deux
+-- fois) ; new_alerts : les alertes du budget qui viennent d'apparaître.
+create or replace function tryon_fail(
+  p_event_id uuid,
+  p_user_id uuid,
+  p_error_code text,
+  p_duration_ms integer,
+  p_credits_billed integer default 0,
+  p_budget_usd numeric default null,
+  p_price_per_credit_usd numeric default null,
+  p_alert_threshold numeric default null
+)
+returns table (recorded boolean, new_alerts text[])
 language plpgsql
 set search_path = public
 as $$
+#variable_conflict use_column
+declare
+  v_at timestamptz;
+  v_month text;
+  v_credits integer;
+  v_spent numeric;
+  v_details jsonb;
+  v_alerts text[] := array[]::text[];
 begin
   if p_event_id is null or p_user_id is null
      or p_error_code is null or p_error_code !~ '^[a-z][a-z0-9_]{0,39}$'
-     or (p_duration_ms is not null and (p_duration_ms < 0 or p_duration_ms > 600000)) then
+     or (p_duration_ms is not null and (p_duration_ms < 0 or p_duration_ms > 600000))
+     or p_credits_billed is null or p_credits_billed < 0 or p_credits_billed > 10
+     or (p_credits_billed > 0
+         and (p_budget_usd is null or p_budget_usd <= 0
+              or p_price_per_credit_usd is null or p_price_per_credit_usd <= 0
+              or p_alert_threshold is null or p_alert_threshold <= 0 or p_alert_threshold > 1)) then
     raise exception 'tryon_fail : paramètres invalides';
   end if;
+
+  -- Même ordre de verrous que tryon_reserve : le membre, puis le budget.
+  perform 1 from tryon_profiles t where t.user_id = p_user_id for update;
+  perform pg_advisory_xact_lock(hashtext('tryon_budget'));
+  v_at := clock_timestamp();
+
   update tryon_events e
-    set status = 'failed', error_code = p_error_code, duration_ms = p_duration_ms, finished_at = clock_timestamp()
+    set status = 'failed', error_code = p_error_code, duration_ms = p_duration_ms, finished_at = v_at
     where e.id = p_event_id and e.user_id = p_user_id
-      and (e.status = 'pending' or (e.status = 'failed' and e.error_code = 'expired'));
-  return found;
+      and (e.status = 'pending' or (e.status = 'failed' and e.error_code = 'expired'))
+    returning e.month into v_month;
+  if not found then
+    return query select false, array[]::text[];
+    return;
+  end if;
+  if p_credits_billed = 0 then
+    return query select true, array[]::text[];
+    return;
+  end if;
+
+  -- Crédits facturés malgré l'échec : la dépense du mois, jamais le quota du
+  -- membre ni les essais réussis.
+  insert into tryon_usage_months as u (month, credits_used, updated_at)
+    values (v_month, p_credits_billed, v_at)
+    on conflict (month) do update
+      set credits_used = u.credits_used + excluded.credits_used,
+          updated_at = excluded.updated_at
+    returning u.credits_used into v_credits;
+
+  v_spent := v_credits * p_price_per_credit_usd;
+  v_details := jsonb_build_object('spent_usd', round(v_spent, 2), 'budget_usd', p_budget_usd, 'credits', v_credits);
+  -- Conditions imbriquées, comme dans tryon_complete (tryon_alert_once écrit).
+  if v_spent >= p_alert_threshold * p_budget_usd then
+    if tryon_alert_once('budget_80', v_month, v_details) then
+      v_alerts := v_alerts || 'budget_80'::text;
+    end if;
+  end if;
+  if v_spent + greatest(p_credits_billed, 1) * p_price_per_credit_usd > p_budget_usd then
+    if tryon_alert_once('budget_100', v_month, v_details) then
+      v_alerts := v_alerts || 'budget_100'::text;
+    end if;
+  end if;
+  return query select true, v_alerts;
 end;
 $$;
 
@@ -650,8 +731,8 @@ revoke all on function tryon_reserve(uuid, uuid, text, integer, numeric, numeric
 grant execute on function tryon_reserve(uuid, uuid, text, integer, numeric, numeric, integer, integer, text, timestamptz) to service_role;
 revoke all on function tryon_complete(uuid, uuid, integer, integer, integer, numeric, numeric, numeric, text, timestamptz) from public, anon, authenticated;
 grant execute on function tryon_complete(uuid, uuid, integer, integer, integer, numeric, numeric, numeric, text, timestamptz) to service_role;
-revoke all on function tryon_fail(uuid, uuid, text, integer) from public, anon, authenticated;
-grant execute on function tryon_fail(uuid, uuid, text, integer) to service_role;
+revoke all on function tryon_fail(uuid, uuid, text, integer, integer, numeric, numeric, numeric) from public, anon, authenticated;
+grant execute on function tryon_fail(uuid, uuid, text, integer, integer, numeric, numeric, numeric) to service_role;
 revoke all on function tryon_set_age(uuid, text) from public, anon, authenticated;
 grant execute on function tryon_set_age(uuid, text) to service_role;
 revoke all on function tryon_reset_age(uuid) from public, anon, authenticated;

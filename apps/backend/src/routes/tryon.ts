@@ -11,9 +11,15 @@
 // (jamais une adresse venue de l'app), réservation atomique dans la base
 // (quota, un essai à la fois, budget), solde de crédits, photo ré-encodée en
 // mémoire, appel au fournisseur, bandeau « Image générée par IA », décompte.
-// Un échec n'est jamais décompté. La photo et l'image produite ne quittent
-// jamais la mémoire : ni base, ni stockage, ni disque, ni journal, ni Sentry ;
-// leurs octets sont effacés dès la réponse.
+// Dès la réservation, un seul délai pour tout l'appel au fournisseur (solde,
+// premier envoi, téléchargement de la pièce, second envoi) : 100 s, sous les
+// 120 s du site et loin des 3 minutes après lesquelles la base libère un
+// essai resté en cours.
+// Un échec n'est jamais décompté du quota du membre ; les crédits que le
+// fournisseur a pu facturer malgré l'échec comptent dans la dépense du mois.
+// La photo et l'image produite ne quittent jamais la mémoire : ni base, ni
+// stockage, ni disque, ni journal, ni Sentry ; leurs octets sont effacés dès
+// la réponse.
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { TryonAgeGateResponse, TryonConsentResponse, TryonErrorCode, TryonReportReason, TryonRunResponse, TryonStatus } from "@monapp/shared-types";
 import { z } from "zod";
@@ -110,6 +116,18 @@ const PROVIDER_FAILURES: Record<TryonProviderErrorKind, { status: number; body: 
   timeout: { status: 504, body: TIMEOUT },
   invalid_response: { status: 503, body: PROVIDER_UNAVAILABLE },
 };
+
+/** Délai commun d'un essai, de sa réservation à la fin de l'appel au
+ * fournisseur : solde de crédits, premier envoi, téléchargement de la pièce
+ * et second envoi s'il le faut, tout compris. Bien sous les 120 s après
+ * lesquelles le site abandonne (envoi de la photo, bandeau et décompte en
+ * plus), et loin des 3 minutes après lesquelles la base libère un essai
+ * resté en cours (tryon_reserve) : un essai libéré ne peut plus aboutir. */
+export const TRYON_TRY_DEADLINE_MS = 100_000;
+/** En deçà, le repli sur les octets de la pièce n'est pas tenté (essai
+ * échoué « timeout », jamais décompté) : il faut le temps d'un téléchargement
+ * (10 s au plus, lib/publicImage.ts) et d'un second essai. */
+export const TRYON_FALLBACK_MIN_MS = 25_000;
 
 /** Motifs d'un signalement (contrat partagé, types seulement côté app). */
 export const TRYON_REPORT_REASONS = ["inappropriate", "wrong_piece", "poor_quality", "other"] as const satisfies readonly TryonReportReason[];
@@ -245,9 +263,11 @@ export default async function tryonRoutes(fastify: FastifyInstance, options: Try
 
   /** L'image de la pièce téléchargée par le serveur (https, adresses publiques
    * seulement, 10 s, 8 Mo : lib/publicImage.ts), puis ré-encodée en mémoire :
-   * la première adresse qui marche. */
-  async function downloadGarment(urls: readonly string[]): Promise<Buffer> {
+   * la première adresse qui marche. Plus le temps d'un téléchargement et d'un
+   * second essai : abandon, « timeout » (jamais décompté). */
+  async function downloadGarment(urls: readonly string[], timeLeft: () => number): Promise<Buffer> {
     for (const url of urls) {
+      if (timeLeft() < TRYON_FALLBACK_MIN_MS) throw new TryonStepFailure("timeout", PROVIDER_FAILURES.timeout.status, PROVIDER_FAILURES.timeout.body);
       let raw: Buffer | null = null;
       try {
         raw = await downloadPublicImage(url);
@@ -262,16 +282,24 @@ export default async function tryonRoutes(fastify: FastifyInstance, options: Try
   }
 
   /** L'essai chez le fournisseur : l'image de la pièce par son adresse ; s'il
-   * n'a pas pu la charger (ImageLoadError, essai non facturé), ses octets. */
-  async function runWithGarmentFallback(tryOn: TryOnProvider, personImage: Buffer, garmentUrls: readonly string[], locale: Locale): Promise<{ output: TryonRunOutput; garment: "url" | "data" }> {
+   * n'a pas pu la charger (ImageLoadError, essai non facturé), ses octets.
+   * Chaque envoi n'a que le temps qui reste à l'essai (`timeLeft`), jamais un
+   * délai neuf. */
+  async function runWithGarmentFallback(
+    tryOn: TryOnProvider,
+    personImage: Buffer,
+    garmentUrls: readonly string[],
+    locale: Locale,
+    timeLeft: () => number
+  ): Promise<{ output: TryonRunOutput; garment: "url" | "data" }> {
     try {
-      return { output: await tryOn.run({ personImage, garmentImage: { kind: "url", url: garmentUrls[0]! }, locale }), garment: "url" };
+      return { output: await tryOn.run({ personImage, garmentImage: { kind: "url", url: garmentUrls[0]! }, locale, timeLeftMs: timeLeft() }), garment: "url" };
     } catch (error) {
       if (!(error instanceof TryonProviderError) || error.kind !== "image_load") throw error;
     }
-    const garment = await downloadGarment(garmentUrls);
+    const garment = await downloadGarment(garmentUrls, timeLeft);
     try {
-      return { output: await tryOn.run({ personImage, garmentImage: { kind: "data", jpeg: garment }, locale }), garment: "data" };
+      return { output: await tryOn.run({ personImage, garmentImage: { kind: "data", jpeg: garment }, locale, timeLeftMs: timeLeft() }), garment: "data" };
     } finally {
       garment.fill(0);
     }
@@ -469,14 +497,20 @@ export default async function tryonRoutes(fastify: FastifyInstance, options: Try
         // 3. Réservation atomique dans la base : quota, un essai à la fois, budget.
         const reservation = await reserveTry(db, userId, itemId.data, config);
         if (reservation.status !== "reserved") return await refusedReservation(request, reply, reservation.status, config);
+        // Un seul délai pour tout l'appel au fournisseur, à partir d'ici.
+        const deadline = now().getTime() + TRYON_TRY_DEADLINE_MS;
+        const timeLeft = () => deadline - now().getTime();
+        // Crédits du résultat déjà payé chez le fournisseur (un échec du bandeau ensuite les a coûtés).
+        let paidCredits = 0;
 
         try {
           // 4. Solde de crédits ; 5. photo ; 6-7. pièce et fournisseur ; 8. bandeau.
           await ensureProviderCredits(request.log, config, provider);
           const personImage = await preparePhoto(upload.photo);
           buffers.push(personImage);
-          const { output, garment } = await runWithGarmentFallback(provider, personImage, garmentUrls, locale);
+          const { output, garment } = await runWithGarmentFallback(provider, personImage, garmentUrls, locale, timeLeft);
           buffers.push(output.image);
+          paidCredits = output.creditsUsed;
           const banded = await bandResult(output.image, locale);
           buffers.push(banded);
 
@@ -501,15 +535,23 @@ export default async function tryonRoutes(fastify: FastifyInstance, options: Try
           };
           return reply.header("Cache-Control", "no-store").send(response);
         } catch (error) {
-          // 9. Échec : un code court dans la base, rien de décompté, un message clair.
+          // 9. Échec : un code court dans la base, rien de décompté du quota, un message clair.
           const failure = failureOf(error);
+          // Crédits que le fournisseur a pu facturer malgré l'échec (essai accepté, puis délai
+          // dépassé, résultat illisible ou bandeau impossible) : dans la dépense du mois seulement.
+          const creditsBilled = error instanceof TryonProviderError ? error.creditsBilled : paidCredits;
           if (failure.code === "internal") request.log.error({ error }, "Essayage : erreur imprévue");
           if (failure.code === "out_of_credits") await raiseAlert(request.log, "low_credits", dayKeyAt(now(), config.timeZone), { solde: 0, minimum: config.minProviderCredits });
           if (failure.code === "unauthorized") request.log.error({ code: failure.code }, "Essayage : clé du fournisseur refusée");
-          await failTry(db, reservation.eventId, userId, failure.code, Date.now() - startedAt).catch((failError: unknown) =>
-            request.log.error({ error: failError }, "Essayage : échec non enregistré")
-          );
-          request.log.warn({ code: failure.code, status: error instanceof TryonProviderError ? error.status : undefined }, "Essayage échoué");
+          try {
+            const failed = await failTry(db, reservation.eventId, userId, failure.code, Date.now() - startedAt, creditsBilled, config);
+            for (const kind of failed.newAlerts) {
+              notifyTryonAlert(request.log, kind, { periode: monthKeyAt(now(), config.timeZone), budget_usd: config.monthlyBudgetUsd });
+            }
+          } catch (failError) {
+            request.log.error({ error: failError }, "Essayage : échec non enregistré");
+          }
+          request.log.warn({ code: failure.code, status: error instanceof TryonProviderError ? error.status : undefined, creditsBilled }, "Essayage échoué");
           return reply.code(failure.status).send(failure.body);
         }
       } catch (error) {

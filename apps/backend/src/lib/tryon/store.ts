@@ -144,8 +144,11 @@ const COMPLETE_ROWS = z
   )
   .length(1);
 
+/** `quotaSource` null : essai réussi, mais jamais décompté du quota du membre
+ * (libéré par la base après 3 minutes, puis rattrapé) ; ses crédits comptent
+ * quand même dans la dépense du mois. */
 export type Completion =
-  | { status: "completed"; quotaSource: "free" | "bonus"; free: number; bonus: number; newAlerts: BudgetAlertKind[] }
+  | { status: "completed"; quotaSource: "free" | "bonus" | null; free: number; bonus: number; newAlerts: BudgetAlertKind[] }
   | { status: "not_found" };
 
 /** Essai réussi : la base le décompte (gratuit, puis offert) et tient le budget. */
@@ -164,14 +167,44 @@ export async function completeTry(db: Db, eventId: string, userId: string, credi
   const parsed = COMPLETE_ROWS.safeParse(data);
   if (error || !parsed.success) throw new TryonStoreError("décompte d'un essai", error?.code);
   const row = parsed.data[0]!;
-  if (row.status === "not_found" || row.quota_source === null || row.free_remaining === null || row.bonus_remaining === null) return { status: "not_found" };
+  if (row.status === "not_found" || row.free_remaining === null || row.bonus_remaining === null) return { status: "not_found" };
   return { status: "completed", quotaSource: row.quota_source, free: row.free_remaining, bonus: row.bonus_remaining, newAlerts: row.new_alerts };
 }
 
-/** Essai échoué : un code court, rien n'est décompté. */
-export async function failTry(db: Db, eventId: string, userId: string, code: TryonFailureCode, durationMs: number): Promise<void> {
-  const { error } = await db.rpc("tryon_fail", { p_event_id: eventId, p_user_id: userId, p_error_code: code, p_duration_ms: storedDuration(durationMs) });
-  if (error) throw new TryonStoreError("échec d'un essai", error.code);
+const FAIL_ROWS = z
+  .array(z.object({ recorded: z.boolean(), new_alerts: z.array(z.enum(["budget_80", "budget_100"])) }))
+  .length(1);
+
+/** Crédits qu'un essai échoué peut avoir coûtés, au plus (comme la base). */
+const MAX_CREDITS_PER_TRY = 10;
+
+/** Essai échoué : un code court, rien n'est décompté du quota du membre.
+ * `creditsBilled` : les crédits que le fournisseur a pu facturer malgré
+ * l'échec (0 le plus souvent) ; la base les ajoute à la dépense du mois
+ * (compteurs sans membre) et dit les alertes du budget qui viennent
+ * d'apparaître. `recorded` : l'essai en cours a bien été noté. */
+export async function failTry(
+  db: Db,
+  eventId: string,
+  userId: string,
+  code: TryonFailureCode,
+  durationMs: number,
+  creditsBilled: number,
+  config: TryonConfig
+): Promise<{ recorded: boolean; newAlerts: BudgetAlertKind[] }> {
+  const { data, error } = await db.rpc("tryon_fail", {
+    p_event_id: eventId,
+    p_user_id: userId,
+    p_error_code: code,
+    p_duration_ms: storedDuration(durationMs),
+    p_credits_billed: Math.min(Math.max(Math.round(creditsBilled), 0), MAX_CREDITS_PER_TRY),
+    p_budget_usd: config.monthlyBudgetUsd,
+    p_price_per_credit_usd: config.pricePerCreditUsd,
+    p_alert_threshold: config.alertThreshold,
+  });
+  const parsed = FAIL_ROWS.safeParse(data);
+  if (error || !parsed.success) throw new TryonStoreError("échec d'un essai", error?.code);
+  return { recorded: parsed.data[0]!.recorded, newAlerts: parsed.data[0]!.new_alerts };
 }
 
 /** Enregistre une alerte une seule fois par période : true si elle est nouvelle. */
