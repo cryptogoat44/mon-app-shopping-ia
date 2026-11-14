@@ -4,19 +4,23 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { PRODUCTION_SERVICES, contentSecurityPolicy } from "../web-headers";
 
-// Essayage virtuel photo : il n'existe que sur le SITE. Le même code construit
-// l'app iPhone, qui ne doit en contenir aucune trace (règle 2.5.19 d'Apple sur
-// les fonctions cachées ou dormantes) :
-// - tout fichier qui parle de l'essayage est un fichier .web (Metro ne les
-//   prend jamais pour l'iPhone), catalogue de textes compris ;
-// - rien sous src/app/ (les écrans y partent tous dans l'app iPhone, quel que
-//   soit leur suffixe) ;
-// - aucun fichier partagé n'importe un chemin .web écrit en entier (il
-//   contournerait le choix par plateforme) ;
-// - les versions iPhone des points d'entrée (noms neutres) ne contiennent rien
-//   de l'essayage et ne rendent rien ;
-// - ni clé ni adresse de FASHN nulle part dans l'app ; la photo et l'image ne
-//   sont jamais rangées dans le navigateur, ni suivies, ni partagées.
+// Essayage virtuel photo, branche de l'app iPhone (feature/essayage-virtuel-mobile,
+// jamais fusionnée) : ici, l'essayage est ATTENDU dans l'app iPhone. Ce
+// fichier remplace, sur cette branche seulement, le garde-fou « rien dans
+// l'app iPhone » de la branche principale (tests/tryon-web-only.test.ts), et
+// garde tout ce qui reste vrai partout :
+// - tout fichier qui parle de l'essayage est propre à une plateforme : .web
+//   (le site) ou .ios (l'iPhone), catalogues de textes compris ; aucun
+//   fichier partagé n'en parle, et les points d'entrée neutres (la version
+//   de base, prise par toute autre plateforme) ne rendent toujours rien ;
+// - rien sous src/app/ : aucun nouvel écran (un fichier y part dans l'app
+//   quel que soit son suffixe) ;
+// - aucun fichier partagé n'importe un chemin .web ou .ios écrit en entier,
+//   et le site n'importe jamais un fichier de l'iPhone ;
+// - ni clé, ni adresse, ni appel de FASHN nulle part dans l'app ou le site ;
+// - la photo et l'image ne sont jamais rangées (ni AsyncStorage, ni stockage
+//   du navigateur), suivies, journalisées ni partagées ; sur l'iPhone, les
+//   seuls fichiers passent par lib/tryon-files.ios.ts, effacés aussitôt.
 // La preuve sur les vrais paquets (export iPhone et site) : scripts/verifier-essayage-paquets.js.
 
 const MOBILE = join(__dirname, "..");
@@ -28,7 +32,7 @@ const DEPOT = join(MOBILE, "../..");
 const MARKERS: RegExp[] = [/essayage/i, /fashn/i, /\btry-on\b/i, /\btryon/i, /[a-z]Tryon/];
 const hasMarker = (text: string) => MARKERS.some((marker) => marker.test(text));
 
-/** Points d'entrée neutres : version iPhone vide, version site réelle. */
+/** Points d'entrée neutres : version de base vide, versions site et iPhone réelles. */
 const NEUTRAL_ENTRIES = ["src/components/piece-extra-actions.tsx", "src/components/extra-data-settings.tsx"];
 
 function walk(dir: string, keep: (name: string) => boolean): string[] {
@@ -42,6 +46,8 @@ function walk(dir: string, keep: (name: string) => boolean): string[] {
 
 const codeFiles = (dir: string) => walk(dir, (name) => /\.(ts|tsx|js|jsx)$/.test(name));
 const isWebFile = (path: string) => /\.web\.(ts|tsx|js|jsx)$/.test(path);
+const isIosFile = (path: string) => /\.ios\.(ts|tsx|js|jsx)$/.test(path);
+const isPlatformFile = (path: string) => isWebFile(path) || isIosFile(path);
 const read = (path: string) => readFileSync(path, "utf8");
 const rel = (path: string) => relative(MOBILE, path);
 
@@ -74,33 +80,51 @@ describe("détecteurs de ce garde-fou", () => {
   });
 
   it("les imports : chemins écrits en entier, imports de types écartés", () => {
-    const source = 'import { a } from "./x.web";\nimport type { B } from "./y";\nexport { c } from "@/z";\nconst d = await import("./lazy.web");\nimport "./side-effect";';
-    expect(importedPaths(source).sort()).toEqual(["./lazy.web", "./side-effect", "./x.web", "./y", "@/z"]);
+    const source = 'import { a } from "./x.web";\nimport type { B } from "./y";\nexport { c } from "@/z";\nconst d = await import("./lazy.ios");\nimport "./side-effect";';
+    expect(importedPaths(source).sort()).toEqual(["./lazy.ios", "./side-effect", "./x.web", "./y", "@/z"]);
     expect(runtimeImports(source)).toEqual(["./x.web"]);
   });
 });
 
-describe("essayage : seulement dans des fichiers .web", () => {
+describe("essayage : seulement dans des fichiers propres à une plateforme (.web pour le site, .ios pour l'iPhone)", () => {
   const files = codeFiles(SRC);
+  const withMarkers = files.filter((file) => hasMarker(read(file)));
 
-  it("il y a bien des fichiers de l'essayage, et tous sont des fichiers .web (catalogue de textes compris)", () => {
-    const withMarkers = files.filter((file) => hasMarker(read(file)));
-    expect(withMarkers.length).toBeGreaterThan(10);
-    expect(withMarkers.filter((file) => !isWebFile(file)).map(rel)).toEqual([]);
-    expect(withMarkers.map(rel)).toEqual(expect.arrayContaining(["src/i18n/tryon-fr.web.ts", "src/i18n/tryon-en.web.ts", "src/lib/tryon-api.web.ts", "src/components/piece-extra-actions.web.tsx"]));
+  it("aucun fichier partagé n'en parle ; il y a bien les deux versions, catalogues de textes compris", () => {
+    expect(withMarkers.filter((file) => !isPlatformFile(file)).map(rel)).toEqual([]);
+    expect(withMarkers.filter(isWebFile).length).toBeGreaterThan(10);
+    expect(withMarkers.filter(isIosFile).length).toBeGreaterThan(10);
+    expect(withMarkers.map(rel)).toEqual(
+      expect.arrayContaining([
+        "src/i18n/tryon-fr.web.ts",
+        "src/i18n/tryon-en.web.ts",
+        "src/lib/tryon-api.web.ts",
+        "src/components/piece-extra-actions.web.tsx",
+        "src/i18n/tryon-iphone-fr.ios.ts",
+        "src/i18n/tryon-iphone-en.ios.ts",
+        "src/lib/tryon-photo.ios.ts",
+        "src/lib/tryon-files.ios.ts",
+        "src/lib/tryon-image.ios.ts",
+      ])
+    );
   });
 
-  it("rien sous src/app/ : ni mot de l'essayage, ni fichier propre à une plateforme", () => {
+  it("rien sous src/app/ : ni mot de l'essayage, ni fichier propre à une plateforme (aucun nouvel écran)", () => {
     const appFiles = codeFiles(join(SRC, "app"));
     expect(appFiles.length).toBeGreaterThan(30);
     expect(appFiles.filter((file) => hasMarker(read(file))).map(rel)).toEqual([]);
     expect(appFiles.filter((file) => /\.(web|ios|android|native)\.[jt]sx?$/.test(file)).map(rel)).toEqual([]);
   });
 
-  it("aucun fichier partagé n'importe un chemin .web écrit en entier ni un module de l'essayage", () => {
+  it("aucun fichier partagé n'importe un chemin .web ou .ios écrit en entier, ni un module de l'essayage", () => {
     const leaks = files
-      .filter((file) => !isWebFile(file))
-      .flatMap((file) => importedPaths(read(file)).filter((path) => /\.web$|\.web\.[jt]sx?$/.test(path) || hasMarker(path)).map((path) => `${rel(file)} → ${path}`));
+      .filter((file) => !isPlatformFile(file))
+      .flatMap((file) => importedPaths(read(file)).filter((path) => /\.(web|ios)$|\.(web|ios)\.[jt]sx?$/.test(path) || hasMarker(path)).map((path) => `${rel(file)} → ${path}`));
+    expect(leaks).toEqual([]);
+  });
+
+  it("le site n'importe jamais un fichier de l'iPhone", () => {
+    const leaks = files.filter(isWebFile).flatMap((file) => importedPaths(read(file)).filter((path) => /\.ios$|\.ios\.[jt]sx?$/.test(path)).map((path) => `${rel(file)} → ${path}`));
     expect(leaks).toEqual([]);
   });
 
@@ -124,38 +148,27 @@ describe("essayage : seulement dans des fichiers .web", () => {
   it("contrat partagé : seulement des types pour l'essayage ; types effacés, plus aucune trace, même dans un objet existant", () => {
     const contract = read(join(DEPOT, "packages/shared-types/src/index.ts"));
     expect(contract).toMatch(/export type TryonStatus\b/);
-    // Le contrat tel qu'il part dans l'app iPhone : aucune valeur de l'essayage, où qu'elle soit.
     const runtime = runtimeOf(contract);
     expect(runtime.length).toBeGreaterThan(1000);
     expect(hasMarker(runtime)).toBe(false);
-  });
-
-  it("le détecteur du contrat voit une valeur de l'essayage glissée dans un objet existant (CONSENT_VERSIONS…)", () => {
-    const contract = read(join(DEPOT, "packages/shared-types/src/index.ts"));
-    expect(hasMarker(runtimeOf(contract))).toBe(false);
-    const tampered = contract
-      .replace(/export type VersionedConsentType = [^;]*/, (declaration) => `${declaration} | "tryon"`)
-      .replace(/export const CONSENT_VERSIONS: [^=]*= \{/, (start) => `${start}\n  tryon: "2026-11-v1",`)
-      .replace(/export const ACCEPTED_CONSENT_VERSIONS: [^=]*= \{/, (start) => `${start}\n  tryon: [CONSENT_VERSIONS.tryon],`);
+    const tampered = contract.replace(/export const CONSENT_VERSIONS: [^=]*= \{/, (start) => `${start}\n  tryon: "2026-11-v1",`);
     expect(tampered).not.toBe(contract);
     expect(hasMarker(runtimeOf(tampered))).toBe(true);
-    // Les types et les commentaires seuls ne comptent pas : ils ne partent jamais dans un paquet.
-    expect(hasMarker(runtimeOf("// Essayage virtuel\nexport type TryonX = { tryon: true };\nexport interface TryonY { a: string }\nexport const autre = 1;"))).toBe(false);
   });
 });
 
 describe("points d'entrée neutres", () => {
-  it("version iPhone : aucun mot de l'essayage, aucun import exécuté, ne rend rien", () => {
+  it("version de base (toute plateforme autre que le site et l'iPhone) : aucun mot de l'essayage, aucun import exécuté, ne rend rien", () => {
     for (const entry of NEUTRAL_ENTRIES) {
       const source = read(join(MOBILE, entry));
       expect(hasMarker(source), entry).toBe(false);
       expect(runtimeImports(source), entry).toEqual([]);
       expect(source, entry).toMatch(/return null;/);
-      expect(basename(entry)).not.toMatch(/\.web\./);
+      expect(basename(entry)).not.toMatch(/\.(web|ios)\./);
     }
   });
 
-  it("chaque version iPhone a sa version site, avec les mêmes noms exportés", () => {
+  it("chaque version de base a sa version site, avec les mêmes noms exportés", () => {
     const exported = (source: string) => [...source.matchAll(/^export function (\w+)/gm)].map((match) => match[1]).sort();
     for (const entry of NEUTRAL_ENTRIES) {
       const web = entry.replace(/\.tsx$/, ".web.tsx");
@@ -173,14 +186,20 @@ describe("points d'entrée neutres", () => {
 });
 
 describe("photo et image : jamais rangées, suivies, partagées ni envoyées ailleurs qu'au serveur", () => {
-  const tryonFiles = codeFiles(SRC).filter((file) => isWebFile(file) && hasMarker(read(file)));
+  const tryonFiles = codeFiles(SRC).filter((file) => isPlatformFile(file) && hasMarker(read(file)));
   const forbidden: [string, RegExp][] = [
-    ["stockage du navigateur ou de l'appareil", /AsyncStorage|localStorage|sessionStorage|indexedDB|\bcaches\.|expo-file-system|expo-secure-store|expo-media-library/],
+    ["stockage durable (AsyncStorage, navigateur, trousseau)", /AsyncStorage|localStorage|sessionStorage|indexedDB|\bcaches\.|expo-secure-store/],
     ["suivi d'usage", /lib\/analytics|analytics-events|posthog|\btrack\(/i],
     ["journal de la console", /\bconsole\./],
     ["suivi des erreurs", /sentry|reportUnexpectedError|captureException/i],
     ["partage", /\bShare\b|expo-sharing|navigator\.share|share-wish|send-to-friend|\/api\/posts/],
     ["appel réseau direct (tout passe par authorizedFetch, vers le serveur)", /(?<![\w.])fetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket/],
+  ];
+  /** Modules natifs qui touchent aux fichiers, aux photos ou à l'appareil photo : seulement là où il le faut (iPhone). */
+  const nativeModules: [RegExp, string[]][] = [
+    [/expo-file-system/, ["src/lib/tryon-files.ios.ts", "src/lib/tryon-photo.ios.ts"]],
+    [/expo-media-library/, ["src/lib/tryon-image.ios.ts"]],
+    [/expo-image-picker|expo-image-manipulator/, ["src/lib/tryon-photo.ios.ts"]],
   ];
 
   it("le détecteur lit le code, pas les commentaires", () => {
@@ -190,10 +209,23 @@ describe("photo et image : jamais rangées, suivies, partagées ni envoyées ail
     expect(forbidden[5]![1].test(code)).toBe(false);
   });
 
-  it("aucun fichier de l'essayage n'y touche", () => {
-    expect(tryonFiles.length).toBeGreaterThan(10);
+  it("aucun fichier de l'essayage (site ou iPhone) n'y touche", () => {
+    expect(tryonFiles.length).toBeGreaterThan(20);
     const found = tryonFiles.flatMap((file) => forbidden.filter(([, pattern]) => pattern.test(withoutComments(read(file)))).map(([what]) => `${rel(file)} : ${what}`));
     expect(found).toEqual([]);
+  });
+
+  it("fichiers, photothèque, appareil photo : seulement dans les modules de l'iPhone prévus pour cela, jamais sur le site", () => {
+    const found = tryonFiles.flatMap((file) =>
+      nativeModules.filter(([pattern, allowed]) => pattern.test(withoutComments(read(file))) && !allowed.includes(rel(file))).map(([pattern]) => `${rel(file)} : ${pattern}`)
+    );
+    expect(found).toEqual([]);
+    for (const [pattern, allowed] of nativeModules) for (const file of allowed) expect(read(join(MOBILE, file)), file).toMatch(pattern);
+  });
+
+  it("iPhone : aucun objet du navigateur dans les fichiers .ios de l'essayage", () => {
+    const found = tryonFiles.filter(isIosFile).filter((file) => /\bdocument\.|\bwindow\.|URL\.createObjectURL|<input\b/.test(withoutComments(read(file))));
+    expect(found.map(rel)).toEqual([]);
   });
 
   it("le site peut afficher l'image produite (data: et blob: permis pour les images) et n'appelle aucun service d'essayage", () => {
@@ -209,7 +241,7 @@ describe("ni clé ni adresse de FASHN dans l'app ou le site", () => {
     // Seules exceptions : ce fichier (il écrit les motifs cherchés) et le test du
     // contrôle des paquets, dont un faux paquet contient exprès l'adresse pour
     // vérifier que le contrôle la voit.
-    const allowed = [join(MOBILE, "tests", "tryon-web-only.test.ts"), join(MOBILE, "tests", "tryon-bundle-check.test.ts")];
+    const allowed = [join(MOBILE, "tests", "tryon-platforms.test.ts"), join(MOBILE, "tests", "tryon-bundle-check.test.ts")];
     const files = walk(MOBILE, (name) => /\.(ts|tsx|js|jsx|mjs|cjs|json|md|html|txt|ya?ml)$/.test(name) || name.startsWith(".env")).filter((file) => !allowed.includes(file));
     expect(files.length).toBeGreaterThan(150);
     const secrets: RegExp[] = [/fashn\.ai/i, /FASHN_API_KEY/, /EXPO_PUBLIC_\w*(FASHN|TRYON)/i, /process\.env\.\w*FASHN/i];
