@@ -1754,3 +1754,111 @@ export function brandFileSlug(name: string): string {
     .replace(/^-+|-+$/g, "");
   return slug === "" ? "app" : slug;
 }
+
+// ---- Essayage virtuel photo (lot « essayage virtuel », novembre 2026) ----
+// Fonction éteinte par défaut (TRYON_ENABLED et feature_flags.tryon). TYPES
+// SEULEMENT dans ce fichier : il est importé par l'app iPhone, et l'app
+// construite depuis main ne doit contenir aucune trace de l'essayage (règle
+// 2.5.19 d'Apple sur les fonctions cachées). Toute valeur utile à l'exécution
+// (version du consentement, listes de motifs…) vit côté serveur ou dans les
+// fichiers .web de l'app, jamais ici.
+
+/** Statut d'âge pour l'essayage (réservé aux 18 ans et plus). */
+export type TryonAgeGate = "unknown" | "adult" | "minor";
+
+/** Essais restants. */
+export interface TryonRemaining {
+  /** Essais gratuits restants ce mois civil (fuseau Europe/Paris). */
+  free: number;
+  /** Essais offerts encore valables. */
+  bonus: number;
+  /** Début du prochain mois civil à Paris (ISO 8601). */
+  nextReset: string;
+}
+
+/** Consentement à l'essayage : demandé tant que la version courante n'est pas acceptée. */
+export interface TryonConsentState {
+  required: boolean;
+  version: string;
+}
+
+/** GET /api/tryon/status. Éteint : seulement { enabled: false }. */
+export type TryonStatus =
+  | { enabled: false }
+  | {
+      enabled: true;
+      ageGate: TryonAgeGate;
+      consent: TryonConsentState;
+      remaining: TryonRemaining;
+    };
+
+/** POST /api/tryon/age-gate : date de naissance AAAA-MM-JJ (jamais gardée). */
+export interface TryonAgeGateRequest {
+  birthDate: string;
+}
+
+export interface TryonAgeGateResponse {
+  ageGate: Exclude<TryonAgeGate, "unknown">;
+}
+
+/** POST /api/tryon/consent : la version lue par le membre. */
+export interface TryonConsentRequest {
+  version: string;
+}
+
+/** POST et DELETE /api/tryon/consent. */
+export interface TryonConsentResponse {
+  consent: TryonConsentState;
+}
+
+/** GET /api/tryon/consent : le consentement du membre, lisible même fonction
+ * éteinte (Réglages du site : le retrait reste toujours possible). */
+export interface TryonConsentReadResponse {
+  consent: {
+    /** Un consentement accepté et jamais retiré depuis (quelle que soit sa version). */
+    given: boolean;
+    /** Version du texte de consentement en vigueur sur le serveur. */
+    version: string;
+  };
+}
+
+/** POST /api/tryon (multipart : photo, itemId, attestSelf). */
+export interface TryonRunResponse {
+  /** « data:image/jpeg;base64,… », avec le bandeau « Image générée par IA ». */
+  image: string;
+  remaining: TryonRemaining;
+}
+
+/** Motifs d'un signalement de résultat. */
+export type TryonReportReason = "inappropriate" | "wrong_piece" | "poor_quality" | "other";
+
+/** POST /api/tryon/report (aucune image). */
+export interface TryonReportRequest {
+  itemId: string;
+  reason: TryonReportReason;
+  comment?: string;
+}
+
+/** Codes d'erreur propres à l'essayage (champ « error » des réponses). */
+export type TryonErrorCode =
+  | "feature_disabled"
+  | "tryon_age_required"
+  | "tryon_minor"
+  | "tryon_age_already_set"
+  | "tryon_birth_date_invalid"
+  | "tryon_consent_required"
+  | "tryon_consent_outdated"
+  | "tryon_attest_required"
+  | "tryon_item_not_found"
+  | "tryon_item_not_eligible"
+  | "tryon_photo_invalid"
+  | "tryon_in_progress"
+  | "tryon_quota_exhausted"
+  | "tryon_budget_reached"
+  | "tryon_busy"
+  | "tryon_pose_not_detected"
+  | "tryon_moderation_blocked"
+  | "tryon_image_unreadable"
+  | "tryon_provider_unavailable"
+  | "tryon_timeout"
+  | "tryon_rate_limited";

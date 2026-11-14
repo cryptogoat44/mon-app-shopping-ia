@@ -7,6 +7,8 @@ import { VIDEO_AI } from "@monapp/shared-types";
 import { ALLOWED_IMAGE_LOADERS, MAX_INPUT_PIXELS, imageFormatOf } from "../src/lib/imageSafety.js";
 import { ImageSourceError, prepareImageForAnalysis } from "../src/lib/imageProcessing.js";
 import { encodeSharedCopy, measureSharedSource, optimizePhoto, optimizePhotoWithSize, PHOTO_SIZES } from "../src/lib/photos.js";
+import { TRYON_PHOTO_FORMATS, prepareGarmentImage, prepareTryonPhoto } from "../src/lib/tryon/images.js";
+import { addAiBand } from "../src/lib/tryon/band.js";
 import meRoutes from "../src/routes/me.js";
 import postsRoutes from "../src/routes/posts.js";
 import searchesRoutes from "../src/routes/searches.js";
@@ -107,13 +109,20 @@ function pngBomb(width: number, height: number): Buffer {
 
 const peakMemoryMb = () => process.resourceUsage().maxRSS / 1024;
 
-/** Tous les points d'entrée qui passent une image reçue à sharp. */
-const ENTRY_POINTS: [string, (input: Buffer) => Promise<unknown>][] = [
+/** Tous les points d'entrée qui passent une image reçue à sharp, et les
+ * formats qu'ils acceptent (les cinq formats permis, sauf mention). */
+const ENTRY_POINTS: [string, (input: Buffer) => Promise<unknown>, ReadonlySet<string>?][] = [
   ["Spotter : image importée ou vignette officielle (prepareImageForAnalysis)", (input) => prepareImageForAnalysis(input, null)],
   ["photo d'une publication, du Vault ou de l'avatar (optimizePhoto)", (input) => optimizePhoto(input, PHOTO_SIZES.display)],
   ["image d'une vidéo pour l'analyse automatique (optimizePhotoWithSize)", (input) => optimizePhotoWithSize(input, VIDEO_AI.frameEdge, 80)],
   ["copie d'une envie : mesure de la source (measureSharedSource)", (input) => measureSharedSource(input)],
   ["copie d'une envie : copie (encodeSharedCopy)", (input) => encodeSharedCopy(input)],
+  // Essayage virtuel : la photo du membre (JPEG, PNG ou WebP seulement),
+  // l'image d'une pièce téléchargée chez le marchand, l'image rendue par le
+  // fournisseur (JPEG ou PNG), avant son bandeau.
+  ["essayage virtuel : photo du membre (prepareTryonPhoto)", (input) => prepareTryonPhoto(input), TRYON_PHOTO_FORMATS],
+  ["essayage virtuel : image de la pièce téléchargée (prepareGarmentImage)", (input) => prepareGarmentImage(input)],
+  ["essayage virtuel : image rendue par le fournisseur (addAiBand)", (input) => addAiBand(input, "fr"), new Set(["jpeg", "png"])],
 ];
 
 // En premier : le pic de mémoire du processus (maxRSS) ne fait que monter,
@@ -210,10 +219,13 @@ describe("chaque point d'entrée refuse un SVG, quel que soit son déguisement",
   }
 });
 
-describe("chaque point d'entrée laisse passer JPEG, PNG, WebP, GIF et AVIF", () => {
-  for (const [name, run] of ENTRY_POINTS) {
+describe("chaque point d'entrée laisse passer JPEG, PNG, WebP, GIF et AVIF (ou les seuls formats qu'il accepte), et refuse les autres", () => {
+  for (const [name, run, accepted] of ENTRY_POINTS) {
     it(name, async () => {
-      for (const [, sample] of ALLOWED_SAMPLES) await expect(run(sample)).resolves.toBeDefined();
+      for (const [, sample, format] of ALLOWED_SAMPLES) {
+        if (!accepted || accepted.has(format)) await expect(run(sample), format).resolves.toBeDefined();
+        else await expect(run(sample), format).rejects.toBeInstanceOf(ImageSourceError);
+      }
     });
   }
 });

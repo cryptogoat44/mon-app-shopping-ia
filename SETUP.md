@@ -55,6 +55,11 @@ Le plus simple, pour travailler sur spotto-dev-2 : `pnpm --filter backend config
 | `LINK_PREVIEW_ENABLED` | non | Interrupteur des liens TikTok et Instagram, coupé sauf valeur exacte `true`. Coupé : le serveur ignore un lien envoyé (aucun appel à TikTok ni à Meta, rien d'enregistré). À n'allumer qu'avec l'accord écrit de la plateforme. |
 | `META_OEMBED_ACCESS_TOKEN` | non | Reconnaissance des liens Instagram (ne sert que si `LINK_PREVIEW_ENABLED` est allumé) |
 | `RENDER_GIT_COMMIT` | jamais à la main | Remplie par Render : la version donnée par /health |
+| `TRYON_ENABLED` | non (`false`) | Essayage virtuel photo, ÉTEINT : seule la valeur exacte `true` l'allume, et il faut aussi le drapeau `tryon` de la base (`pnpm --filter backend tryon:flag`). À n'allumer qu'après l'accord de l'avocat. |
+| `TRYON_PROVIDER`, `FASHN_API_BASE_URL` | non (`fake`, `https://api.fashn.ai/v1`) | Fournisseur de l'essayage : `fake` (faux essai, sans réseau ; refusé en production) ou `fashn` ; adresse de l'API de FASHN (https) |
+| `FASHN_API_KEY` | avec `TRYON_PROVIDER=fashn` | Clé **secrète** de FASHN (serveur seulement, jamais dans l'app ni le site). Lue seulement quand l'essayage est allumé. |
+| `TRYON_FREE_PER_MONTH`, `TRYON_BONUS_PER_PURCHASE`, `TRYON_BONUS_VALIDITY_DAYS`, `TRYON_REQUIRE_BUY_LINK` | non | Règles de l'essayage : 5 essais gratuits par mois civil, 5 offerts par achat confirmé valables 365 jours, lien d'achat exigé |
+| `TRYON_MONTHLY_BUDGET_USD`, `TRYON_ALERT_THRESHOLD`, `TRYON_PRICE_PER_CREDIT_USD`, `TRYON_MIN_FASHN_CREDITS`, `TRYON_TIMEZONE` | non | Budget de l'essayage (100 $ par mois, alerte à 80 %, 0,075 $ le crédit, 20 crédits FASHN au moins, mois de Paris). Une valeur invalide laisse l'essayage éteint. |
 
 Pour la copie hebdomadaire des photos seulement (tâche planifiée de Render) : `PHOTO_BACKUP_S3_ENDPOINT`, `PHOTO_BACKUP_S3_REGION`, `PHOTO_BACKUP_S3_BUCKET`, `PHOTO_BACKUP_S3_ACCESS_KEY_ID`, `PHOTO_BACKUP_S3_SECRET_ACCESS_KEY` (voir [apps/backend/supabase/SAUVEGARDE-PHOTOS.md](apps/backend/supabase/SAUVEGARDE-PHOTOS.md)).
 

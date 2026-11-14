@@ -74,6 +74,7 @@ import { track } from "@/lib/analytics";
 import { openWishlistFromSpotter } from "@/lib/wishlist-link";
 import { isAffiliateLink } from "@/lib/affiliate-link";
 import { AffiliateMention } from "@/components/affiliate-mention";
+import { PieceExtraActions } from "@/components/piece-extra-actions";
 import { themedStyles } from "@/theme/themed-styles";
 
 function displayPrice(piece: Piece): string {
@@ -713,6 +714,14 @@ export default function ResultScreen() {
               </Pressable>
               {piece.real ? <ResultFeedbackButton onPress={openReport} /> : null}
             </View>
+            {/* Actions propres au site, rien sur iPhone (components/piece-extra-actions). */}
+            <PieceExtraActions
+              matchId={piece.real ? piece.id : null}
+              imageUrls={[piece.imageHdUrl, piece.imageUrl]}
+              buyUrl={piece.affiliateUrl ?? piece.merchantUrl}
+              title={piece.name}
+              style={styles.extraActions}
+            />
             {canSendToFriend(piece, messages) ? <SendToFriendLink style={styles.sendToFriend} pieceName={piece.name} onPress={handleSendToFriend} /> : null}
             {canReportResult(alerts, piece) ? <StockReportLink style={styles.sendToFriend} pieceName={piece.name} onPress={handleStockReport} /> : null}
             {keptSaved.has(piece.id) ? <KeptNotice onOpen={() => openWishlistFromSpotter(router)} /> : null}
@@ -941,6 +950,7 @@ const styles = themedStyles(() => ({
   action: { flex: 1, minHeight: 44, borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   actionLabel: { fontSize: font.caption, color: color.encre, fontWeight: "500", textAlign: "center" },
   actionError: { fontSize: font.caption, marginTop: space.sm },
+  extraActions: { marginTop: space.sm },
   sendToFriend: { alignSelf: "center", marginTop: 4 },
   sectionTitle: { fontSize: font.body, fontWeight: "600", color: color.encre, marginTop: space.xl, marginBottom: space.md },
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.lg },

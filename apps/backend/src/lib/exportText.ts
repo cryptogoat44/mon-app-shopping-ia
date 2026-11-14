@@ -24,9 +24,11 @@ import {
   type WishAlertKind,
   type WishAlertStatus,
   type SEARCH_FAILURE_MESSAGES,
+  type TryonReportReason,
 } from "@monapp/shared-types";
 import type { ExportDataKey } from "./exportData.js";
 import { BRAND } from "./brand.js";
+import type { TryonFailureCode } from "./tryon/failures.js";
 
 // Textes du fichier lisible de l'export RGPD, en français et en anglais
 // (langue de l'app sur l'appareil). Vouvoiement, mots simples : le fichier
@@ -466,6 +468,45 @@ export const EXPORT_COLUMNS = {
     match_key_hash: technical("Empreinte de la pièce signalée", "Fingerprint of the reported piece"),
     created_on: shown("Signalée « Plus disponible » le", "Reported “No longer available” on"),
   },
+  // Essayage virtuel (migration 0042) : statut d'âge et consentement…
+  tryonProfile: {
+    age_status: shown("Statut d'âge", "Age status"),
+    age_checked_at: shown("Âge vérifié le", "Age checked on"),
+    consent_version: shown("Version du texte accepté", "Accepted text version"),
+    consent_accepted_at: shown("Consentement donné le", "Consent given on"),
+    consent_withdrawn_at: shown("Consentement retiré le", "Consent withdrawn on"),
+  },
+  // … les essais (jamais une image)…
+  tryonEvents: {
+    id: ID,
+    item_id: technical("Pièce essayée", "Piece tried on"),
+    status: shown("Résultat", "Result"),
+    credits_used: technical("Crédits du fournisseur", "Provider credits"),
+    quota_source: shown("Décompté sur", "Counted against"),
+    bonus_grant_id: technical("Essais offerts utilisés", "Free try-ons used"),
+    error_code: shown("Raison de l'échec", "Reason for the failure"),
+    duration_ms: technical("Durée (millisecondes)", "Duration (milliseconds)"),
+    month: technical("Mois du quota", "Quota month"),
+    created_at: shown("Essayé le", "Tried on"),
+    finished_at: technical("Terminé le", "Finished on"),
+  },
+  // … les essais offerts…
+  tryonBonusGrants: {
+    id: ID,
+    order_ref: shown("Référence de la commande", "Order reference"),
+    quantity: shown("Essais offerts", "Free try-ons granted"),
+    remaining: shown("Essais restants", "Try-ons remaining"),
+    expires_at: shown("Valables jusqu'au", "Valid until"),
+    created_at: shown("Offerts le", "Granted on"),
+  },
+  // … et les signalements d'un résultat.
+  tryonReports: {
+    id: ID,
+    item_id: technical("Pièce essayée", "Piece tried on"),
+    reason: shown("Motif", "Reason"),
+    comment: shown("Votre précision", "Your note"),
+    created_at: shown("Signalé le", "Reported on"),
+  },
 } as const satisfies Record<ExportDataKey, Record<string, ExportColumn>>;
 
 export type ExportColumnName<K extends ExportDataKey> = keyof (typeof EXPORT_COLUMNS)[K] & string;
@@ -520,6 +561,14 @@ export const EXPORT_SECTIONS = {
       en: "The pieces you own, kept in your Vault. It is private.",
     },
     keys: ["vaultItems"],
+  },
+  tryon: {
+    title: { fr: "Votre essayage virtuel", en: "Your virtual try-on" },
+    intro: {
+      fr: `Votre statut d'âge et votre consentement pour l'essayage virtuel, vos essais, vos essais offerts et vos signalements. Ni vos photos ni les images produites ne sont conservées par ${BRAND} : elles ne figurent donc pas ici. Votre date de naissance n'est jamais gardée, seulement « majeur » ou « mineur ».`,
+      en: `Your age status and consent for virtual try-on, your try-ons, your free try-ons and your reports. Neither your photos nor the generated images are kept by ${BRAND}, so they are not included here. Your date of birth is never kept, only "adult" or "minor".`,
+    },
+    keys: ["tryonProfile", "tryonEvents", "tryonBonusGrants", "tryonReports"],
   },
   posts: {
     title: { fr: "Vos publications", en: "Your posts" },
@@ -681,6 +730,61 @@ export const STOCK_STATE_LABELS: Record<StockState, Bilingual> = {
   unknown: { fr: "Inconnu", en: "Unknown" },
   in_stock: { fr: "Disponible", en: "Available" },
   sold_out: { fr: "Épuisée", en: "Sold out" },
+};
+
+/** Statut d'âge de l'essayage virtuel (jamais la date de naissance). */
+export const TRYON_AGE_STATUS_LABELS: Record<"adult" | "minor", Bilingual> = {
+  adult: { fr: "Majeur (18 ans ou plus)", en: "Adult (18 or older)" },
+  minor: { fr: "Mineur (moins de 18 ans)", en: "Minor (under 18)" },
+};
+
+/** Résultat d'un essai : seul un essai réussi est décompté. */
+export const TRYON_EVENT_STATUS_LABELS: Record<"pending" | "succeeded" | "failed", Bilingual> = {
+  pending: { fr: "En cours", en: "In progress" },
+  succeeded: { fr: "Réussi", en: "Succeeded" },
+  failed: { fr: "Échoué (non décompté)", en: "Failed (not counted)" },
+};
+
+/** D'où vient un essai réussi. */
+export const TRYON_QUOTA_SOURCE_LABELS: Record<"free" | "bonus", Bilingual> = {
+  free: { fr: "Essais gratuits du mois", en: "Free try-ons for the month" },
+  bonus: { fr: "Essais offerts", en: "Free try-ons granted" },
+};
+
+/** Motifs d'un signalement de résultat. */
+export const TRYON_REPORT_REASON_LABELS: Record<TryonReportReason, Bilingual> = {
+  inappropriate: { fr: "Image inappropriée", en: "Inappropriate image" },
+  wrong_piece: { fr: "Ce n'est pas la bonne pièce", en: "Not the right piece" },
+  poor_quality: { fr: "Mauvaise qualité", en: "Poor quality" },
+  other: { fr: "Autre", en: "Other" },
+};
+
+const TRYON_TECHNICAL_FAILURE: Bilingual = { fr: "Incident technique", en: "Technical problem" };
+const TRYON_SERVICE_UNAVAILABLE: Bilingual = { fr: "Service momentanément indisponible", en: "Service temporarily unavailable" };
+const TRYON_SERVICE_BUSY: Bilingual = { fr: "Service très demandé", en: "Service very busy" };
+
+/** Raison d'un essai échoué (codes de lib/tryon/failures.ts). */
+export const TRYON_FAILURE_LABELS: Record<TryonFailureCode, Bilingual> = {
+  pose_not_detected: { fr: "Silhouette non reconnue sur la photo", en: "Figure not detected in the photo" },
+  moderation_blocked: { fr: "Refusé par la modération", en: "Blocked by moderation" },
+  image_load: { fr: "Image de la pièce illisible", en: "Piece image unreadable" },
+  invalid_input: { fr: "Images refusées par le fournisseur", en: "Images refused by the provider" },
+  bad_request: TRYON_TECHNICAL_FAILURE,
+  unauthorized: TRYON_SERVICE_UNAVAILABLE,
+  not_found: TRYON_TECHNICAL_FAILURE,
+  rate_limited: TRYON_SERVICE_BUSY,
+  out_of_credits: TRYON_SERVICE_UNAVAILABLE,
+  unavailable: TRYON_SERVICE_UNAVAILABLE,
+  timeout: { fr: "Trop long : interrompu", en: "Took too long: stopped" },
+  invalid_response: TRYON_TECHNICAL_FAILURE,
+  expired: { fr: "Interrompu", en: "Interrupted" },
+  low_credits: TRYON_SERVICE_UNAVAILABLE,
+  balance_unreadable: TRYON_SERVICE_UNAVAILABLE,
+  photo_invalid: { fr: "Photo illisible ou d'un format refusé", en: "Photo unreadable or in a refused format" },
+  server_busy: TRYON_SERVICE_BUSY,
+  garment_unavailable: { fr: "Image de la pièce introuvable", en: "Piece image not found" },
+  result_unreadable: TRYON_TECHNICAL_FAILURE,
+  internal: TRYON_TECHNICAL_FAILURE,
 };
 
 /** Système d'un appareil des notifications (lot notifications). */
@@ -978,6 +1082,13 @@ export const EXPORT_TEXT = {
   stockReportsTitle: { fr: "Signalements « Plus disponible » ({count})", en: "“No longer available” reports ({count})" },
   stockReportPiece: { fr: "Une pièce signalée « Plus disponible »", en: "A piece reported as no longer available" },
   orphanCollectionItems: { fr: "Envies d'une collection introuvable", en: "Wishes from a collection that could not be found" },
+  // Essayage virtuel (lot essayage virtuel).
+  tryonProfileTitle: { fr: "Statut d'âge et consentement", en: "Age status and consent" },
+  tryonEventsTitle: { fr: "Essais ({count})", en: "Try-ons ({count})" },
+  tryonEventTitle: { fr: "Essai du {date}", en: "Try-on on {date}" },
+  tryonGrantsTitle: { fr: "Essais offerts ({count})", en: "Free try-ons granted ({count})" },
+  tryonGrantTitle: { fr: "{count} essais offerts", en: "{count} free try-ons" },
+  tryonReportsTitle: { fr: "Signalements de résultats ({count})", en: "Result reports ({count})" },
   // Signalements.
   followUp: { fr: "Suivi", en: "Follow-up" },
   handledOn: { fr: "Traité le {date}", en: "Handled on {date}" },
