@@ -72,11 +72,14 @@ Les dates de 0001 à 0028 ne sont pas notées dans le dépôt : celles du tablea
 | 0035 | le fichier de la migration lui-même | `supabase/verifications/0035-verification.sql` | en tête du fichier de la migration |
 | 0036 | le fichier de la migration lui-même (**après 0035**) ; puis, une fois, le script `pnpm --filter backend rattraper-suivi-envies-dev` pour les envies déjà là | `supabase/verifications/0036-verification.sql` | en tête du fichier de la migration |
 | 0037 | le fichier de la migration lui-même | `supabase/verifications/0037-verification.sql` (une ligne, trois `true`) | en tête du fichier de la migration |
-| 0038 | le fichier de la migration lui-même | aucun fichier de vérification : tests `memoireVideos.test.ts` (base) et `migrationSuppressionCompte.test.ts` | en tête du fichier de la migration |
-| 0039 | le fichier de la migration lui-même (**après 0038**) | aucun fichier de vérification : mêmes tests | en tête du fichier de la migration |
+| 0038 | le fichier de la migration lui-même | pas de fichier à part : `supabase/mise-en-ligne/prod-2-memoire-videos-verification.sql` vérifie 0038 et 0039 ensemble ; tests `memoireVideos.test.ts` (base) et `migrationSuppressionCompte.test.ts` | en tête du fichier de la migration |
+| 0039 | le fichier de la migration lui-même (**après 0038**) | pas de fichier à part : le même que pour 0038 ; mêmes tests | en tête du fichier de la migration |
 | 0040 | le fichier de la migration lui-même (**après 0036**) | `supabase/verifications/0040-verification.sql` (une ligne, cinq `true`) | en tête du fichier de la migration |
 | 0041 | le fichier de la migration lui-même (**après 0040**) ; puis, une fois, le script `pnpm --filter backend rattraper-suivi-envies-dev` (il recalcule les empreintes des envies, version 2) | `supabase/verifications/0041-verification.sql` (une ligne, six `true`) | en tête du fichier de la migration |
 | 0042 | le fichier de la migration lui-même | `supabase/verifications/0042-verification.sql` (une ligne, huit `true`) | en tête du fichier de la migration |
+| 0029, 0035 et 0037 ensemble | `supabase/mise-en-ligne/prod-1-technique-production.sql` (un seul copier-coller, rejouable en entier ; rien de visible pour les membres ; **avant** prod-3) | `supabase/mise-en-ligne/prod-1-technique-verification.sql` (3 lignes, toutes `true`) | en tête de chaque migration, dans l'ordre inverse |
+| 0038 et 0039 ensemble | `supabase/mise-en-ligne/prod-2-memoire-videos-production.sql` (un seul copier-coller, rejouable en entier ; « Pièces déjà repérées dans cette vidéo ») | `supabase/mise-en-ligne/prod-2-memoire-videos-verification.sql` (une ligne, tout `true`) | en tête de chaque migration, dans l'ordre inverse |
+| 0036, 0040 et 0041 ensemble | `supabase/mise-en-ligne/prod-3-alertes-production.sql` (un seul copier-coller, **après prod-1** : refusé sans 0035 ; alertes prix et stock ; une fois passé, une seconde exécution est arrêtée par sa garde, sans rien changer ; le script de rattrapage, qui ne vise que spotto-dev-2, n'y est pas nécessaire : voir l'en-tête) | `supabase/mise-en-ligne/prod-3-alertes-verification.sql` (3 lignes, toutes `true`) | en tête de chaque migration, dans l'ordre inverse |
 
 ## Avant d'appliquer 0029 et 0035
 
