@@ -16,6 +16,7 @@ import { hasAnalyticsConsent } from "@/lib/policy-notice";
 import { ErrorMessage } from "@/components/error-message";
 import { LatestVideoSetting } from "@/components/latest-video-setting";
 import { PlayerConsentSetting } from "@/components/player-consent-setting";
+import { ExtraDataSettings } from "@/components/extra-data-settings";
 import { VideoAiSetting } from "@/components/video-ai-setting";
 import { PieceSendsSetting } from "@/components/piece-sends-setting";
 import { MessagesFromSetting } from "@/components/messages-from-setting";
@@ -229,6 +230,8 @@ export default function SettingsScreen() {
           <VideoAiSetting consents={consents} failed={consentsFailed} onChange={setConsents} />
           <LatestVideoSetting />
           <PlayerConsentSetting />
+          {/* Lignes propres au site, rien sur iPhone (components/extra-data-settings). */}
+          <ExtraDataSettings />
           {!choosingExport ? (
             <Pressable accessibilityRole="button" onPress={() => setChoosingExport(true)} hitSlop={12} style={styles.secondLink}>
               <Text style={styles.link}>{t.settings.exportData}</Text>
