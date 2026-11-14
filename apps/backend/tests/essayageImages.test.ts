@@ -208,8 +208,13 @@ describe("police du bandeau : un fichier du dépôt, sous licence libre, indépe
       expect(withoutSystemFonts.ink).toBeLessThan(usual.ink * 1.15);
       // Contre-épreuve : sans le fichier, dans cet environnement, aucune
       // police : Pango ne dessine que des cases de remplacement, bien plus petites.
-      expect(controlWithoutAnyFont.height).toBeLessThan(withoutSystemFonts.height * 0.6);
-      expect(Math.abs(controlWithoutAnyFont.width - withoutSystemFonts.width)).toBeGreaterThan(30);
+      // Seulement sous Linux (le serveur chez Render, la vérification de GitHub) :
+      // sur macOS, Pango trouve les polices par le système (CoreText) et ignore
+      // FONTCONFIG_FILE, la contre-épreuve n'y prouverait rien.
+      if (process.platform === "linux") {
+        expect(controlWithoutAnyFont.height).toBeLessThan(withoutSystemFonts.height * 0.6);
+        expect(Math.abs(controlWithoutAnyFont.width - withoutSystemFonts.width)).toBeGreaterThan(30);
+      }
     } finally {
       rmSync(workdir, { recursive: true, force: true });
     }
