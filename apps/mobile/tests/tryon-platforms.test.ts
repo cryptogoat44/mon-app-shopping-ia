@@ -376,8 +376,19 @@ describe("ni clé ni adresse de FASHN dans l'app ou le site", () => {
     expect(found).toEqual([]);
   });
 
-  it("configuration de l'app iPhone : aucun mot de l'essayage", () => {
-    const config = ["app.json", "app.config.js", "eas.json", "package.json", "metro.config.js", ...walk(join(MOBILE, "plugins"), () => true).map(rel), ...walk(join(MOBILE, "locales"), () => true).map(rel)];
-    for (const file of config) expect(hasMarker(read(join(MOBILE, file))), file).toBe(false);
+  it("configuration de l'app iPhone : l'essayage n'y apparaît que dans les textes d'autorisation (appareil photo, photothèque, ajout aux photos)", () => {
+    for (const file of ["app.config.js", "eas.json", "package.json", "metro.config.js", ...walk(join(MOBILE, "plugins"), () => true).map(rel)]) expect(hasMarker(read(join(MOBILE, file))), file).toBe(false);
+    // app.json : les textes des deux modules d'Expo, rien d'autre.
+    const app = read(join(MOBILE, "app.json"));
+    const plugins = (JSON.parse(app) as { expo: { plugins: unknown[] } }).expo.plugins;
+    const options = (name: string) => (plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === name) as [string, Record<string, unknown>])[1];
+    const permissionTexts = [options("expo-image-picker").photosPermission, options("expo-image-picker").cameraPermission, options("expo-media-library").photosPermission, options("expo-media-library").savePhotosPermission] as string[];
+    for (const text of permissionTexts) expect(hasMarker(text), text).toBe(true);
+    expect(hasMarker(permissionTexts.reduce((rest, text) => rest.split(JSON.stringify(text)).join('""'), app))).toBe(false);
+    // Textes traduits d'iOS : les trois textes d'autorisation, rien d'autre.
+    const withTryon = ["NSPhotoLibraryUsageDescription", "NSCameraUsageDescription", "NSPhotoLibraryAddUsageDescription"];
+    for (const file of walk(join(MOBILE, "locales"), () => true)) {
+      for (const [key, value] of Object.entries(JSON.parse(read(file)) as Record<string, string>)) expect(hasMarker(value), `${rel(file)} : ${key}`).toBe(withTryon.includes(key));
+    }
   });
 });
