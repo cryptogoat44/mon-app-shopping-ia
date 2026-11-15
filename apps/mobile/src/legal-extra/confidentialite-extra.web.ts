@@ -52,7 +52,7 @@ export const privacyExtraFr: PrivacyExtra = {
         `Comme pour le reste de ${BRAND}, notre serveur reçoit les données techniques habituelles d'une requête (adresse IP, informations techniques), qui figurent dans ses journaux. Votre photo et l'image produite n'y figurent jamais, ni dans les rapports d'erreur. Aucune donnée de l'essayage n'est envoyée aux statistiques d'usage.`,
         "Qui les reçoit :",
         [
-          "FASHN, au Royaume-Uni : reçoit votre photo et l'image de la pièce, crée l'image (modèle « tryon-v1.6 » à la date de cette version) et la renvoie à notre serveur. FASHN agit pour notre compte, comme sous-traitant. Ni votre nom, ni votre adresse e-mail, ni aucun identifiant de votre compte ne lui sont transmis.",
+          "FASHN, au Royaume-Uni : reçoit votre photo et l'image de la pièce, crée l'image avec son modèle d'essayage virtuel et la renvoie à notre serveur. FASHN agit pour notre compte, comme sous-traitant. Ni votre nom, ni votre adresse e-mail, ni aucun identifiant de votre compte ne lui sont transmis.",
           "Les sous-traitants de FASHN, dont certains sont situés aux États-Unis et en Asie. FASHN en publie la liste sur son site.",
           "Render, qui héberge notre serveur dans l'Union européenne (Francfort) : votre photo et l'image produite y transitent, en mémoire seulement.",
           "Supabase, qui héberge notre base de données : uniquement les informations décrites ci-dessus, jamais votre photo ni l'image produite.",
@@ -115,7 +115,7 @@ export const privacyExtraEn: PrivacyExtra = {
         `As for the rest of ${BRAND}, our server receives the usual technical data of a request (IP address, technical information), which appear in its logs. Your photo and the resulting image never appear in them, nor in error reports. No try-on data is sent to usage statistics.`,
         "Who receives them:",
         [
-          "FASHN, in the United Kingdom: receives your photo and the piece's image, creates the image (model “tryon-v1.6” as of this version) and returns it to our server. FASHN acts on our behalf, as a processor. Neither your name, nor your email address, nor any identifier of your account is sent to it.",
+          "FASHN, in the United Kingdom: receives your photo and the piece's image, creates the image with its virtual try-on model and returns it to our server. FASHN acts on our behalf, as a processor. Neither your name, nor your email address, nor any identifier of your account is sent to it.",
           "FASHN's sub-processors, some of them located in the United States and in Asia. FASHN publishes their list on its website.",
           "Render, which hosts our server in the European Union (Frankfurt): your photo and the resulting image pass through it, in memory only.",
           "Supabase, which hosts our database: only the information described above, never your photo or the resulting image.",
