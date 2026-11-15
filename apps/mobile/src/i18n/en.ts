@@ -161,9 +161,14 @@ export const en: Catalog = {
     privacyNote: `The video stays on your device. With your consent, a few reduced frames are analyzed by an AI, without being kept by ${BRAND}.`,
     checkFailed: "Automatic analysis couldn't be set up. Check your connection, then try again.",
     consentTitle: "Automatic video analysis",
+    // Shared text of both consent screens (phone video, TikTok or Instagram
+    // link), version "analyse-video-ia-2026-11-15": change it together with
+    // CONSENT_VERSIONS.analyse_video_ia (shared-types), never alone.
     consentBody: [
-      `To find the piece for you, ${BRAND} sends a few reduced frames from this video (12 at most) and your description to an artificial intelligence provider, Anthropic, based in the United States.`,
-      `They are used only to find the piece. ${BRAND} does not keep them; Anthropic may not use them to train its models and deletes them automatically, within 30 days at most (exceptions described in the privacy policy). The full video never leaves your device.`,
+      `To find the piece for you, ${BRAND} sends a few reduced frames from the video and your description to an artificial intelligence provider, Anthropic, based in the United States.`,
+      "Video from your phone: 12 frames at most, extracted on your device. The full video never leaves your device.",
+      `TikTok or Instagram link: ${BRAND}'s video service fetches the public video behind this link for the analysis only, without keeping it, and takes 16 frames at most from it.`,
+      `These frames are used only to find the piece. ${BRAND} does not keep them; Anthropic may not use them to train its models and deletes them automatically, within 30 days at most (exceptions described in the privacy policy).`,
       "You can withdraw your consent at any time in Settings.",
     ],
     consentPolicy: "Read the privacy policy",
@@ -359,11 +364,7 @@ export const en: Catalog = {
     capture: "Take a screenshot instead",
     captureLead: "Three steps are enough:",
     backToAuto: "Find the piece automatically",
-    consentBody: [
-      `To find the piece for you, ${BRAND} fetches the public video behind this link for the analysis only, without keeping it. A few reduced frames from this video and your description are sent to an artificial intelligence provider, Anthropic, based in the United States.`,
-      `They are used only to find the piece. ${BRAND} does not keep them; Anthropic may not use them to train its models and deletes them automatically, within 30 days at most (exceptions described in the privacy policy).`,
-      "You can withdraw your consent at any time in Settings.",
-    ],
+    // "analyse_video_ia" consent: the shared text (videoAuto.consentBody); here, only the decline.
     consentDecline: "No thanks, take a screenshot",
     waiting: {
       title: "Analyzing the video",
@@ -1090,7 +1091,7 @@ export const en: Catalog = {
     videoAiTitle: "Automatic video analysis",
     videoAiSwitchLabel: "Automatic video analysis by an AI",
     videoAiOn:
-      `On: when you start it, a few reduced frames from the video and your description are sent to Anthropic (United States) to find the piece, without being kept by ${BRAND}.`,
+      `On: when you start it, a few reduced frames from the video (from your phone, or from a TikTok or Instagram link fetched for the analysis only) and your description are sent to Anthropic (United States) to find the piece, without being kept by ${BRAND}.`,
     videoAiOff: "Off: no frame from your videos is sent; you choose the frame yourself.",
     videoAiFailed: "Your choice couldn't be saved. Please try again.",
     latestVideoTitle: "Suggest my latest video",

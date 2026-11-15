@@ -164,9 +164,14 @@ export const fr = {
     privacyNote: `La vidéo reste sur votre appareil. Avec votre accord, quelques images réduites sont analysées par une IA, sans être conservées par ${BRAND}.`,
     checkFailed: "L'analyse automatique n'a pas pu être préparée. Vérifiez votre connexion, puis réessayez.",
     consentTitle: "Analyse automatique de la vidéo",
+    // Texte commun aux deux écrans d'accord (vidéo du téléphone, lien TikTok
+    // ou Instagram), version « analyse-video-ia-2026-11-15 » : à changer avec
+    // CONSENT_VERSIONS.analyse_video_ia (shared-types), jamais seul.
     consentBody: [
-      `Pour trouver la pièce à votre place, ${BRAND} envoie quelques images réduites de cette vidéo (12 au plus) et votre description à un prestataire d'intelligence artificielle, Anthropic, situé aux États-Unis.`,
-      `Elles servent uniquement à repérer la pièce. ${BRAND} ne les conserve pas ; Anthropic ne peut pas s'en servir pour entraîner ses modèles et les supprime automatiquement, sous 30 jours au plus (exceptions décrites dans la politique de confidentialité). La vidéo entière ne quitte jamais votre appareil.`,
+      `Pour trouver la pièce à votre place, ${BRAND} envoie quelques images réduites de la vidéo et votre description à un prestataire d'intelligence artificielle, Anthropic, situé aux États-Unis.`,
+      "Vidéo de votre téléphone : 12 images au plus, extraites sur votre appareil. La vidéo entière ne quitte jamais votre appareil.",
+      `Lien TikTok ou Instagram : le service vidéo de ${BRAND} récupère la vidéo publique de ce lien le temps de l'analyse, sans la conserver, et en tire 16 images au plus.`,
+      `Ces images servent uniquement à repérer la pièce. ${BRAND} ne les conserve pas ; Anthropic ne peut pas s'en servir pour entraîner ses modèles et les supprime automatiquement, sous 30 jours au plus (exceptions décrites dans la politique de confidentialité).`,
       "Vous pouvez retirer votre accord à tout moment dans Réglages.",
     ],
     consentPolicy: "Lire la politique de confidentialité",
@@ -380,12 +385,7 @@ export const fr = {
     capture: "Faire une capture à la place",
     captureLead: "Trois gestes suffisent :",
     backToAuto: "Trouver la pièce automatiquement",
-    // Accord « analyse_video_ia », dit pour un lien : la vidéo est récupérée par le serveur (à faire valider avec la nouvelle version du consentement).
-    consentBody: [
-      `Pour trouver la pièce à votre place, ${BRAND} récupère la vidéo publique de ce lien le temps de l'analyse, sans la conserver. Quelques images réduites de cette vidéo et votre description sont envoyées à un prestataire d'intelligence artificielle, Anthropic, situé aux États-Unis.`,
-      `Elles servent uniquement à repérer la pièce. ${BRAND} ne les conserve pas ; Anthropic ne peut pas s'en servir pour entraîner ses modèles et les supprime automatiquement, sous 30 jours au plus (exceptions décrites dans la politique de confidentialité).`,
-      "Vous pouvez retirer votre accord à tout moment dans Réglages.",
-    ],
+    // Accord « analyse_video_ia » : le texte commun (videoAuto.consentBody) ; ici, seulement le refus.
     consentDecline: "Non merci, faire une capture",
     waiting: {
       title: "Analyse de la vidéo",
@@ -1178,7 +1178,7 @@ export const fr = {
     videoAiTitle: "Analyse automatique des vidéos",
     videoAiSwitchLabel: "Analyse automatique des vidéos par une IA",
     videoAiOn:
-      `Activée : quand vous la lancez, quelques images réduites de la vidéo et votre description sont envoyées à Anthropic (États-Unis) pour trouver la pièce, sans être conservées par ${BRAND}.`,
+      `Activée : quand vous la lancez, quelques images réduites de la vidéo (de votre téléphone, ou d'un lien TikTok ou Instagram récupéré le temps de l'analyse) et votre description sont envoyées à Anthropic (États-Unis) pour trouver la pièce, sans être conservées par ${BRAND}.`,
     videoAiOff: "Désactivée : aucune image de vos vidéos n'est envoyée ; vous choisissez l'image vous-même.",
     videoAiFailed: "Votre choix n'a pas pu être enregistré. Réessayez.",
     latestVideoTitle: "Proposer ma dernière vidéo",

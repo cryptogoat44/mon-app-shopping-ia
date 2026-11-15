@@ -234,15 +234,14 @@ export function AskView(p: AskProps) {
 /** Accord au premier usage : « Accepter » en bouton principal ; le refus
  * reste libre et ne bloque rien — un lien discret ouvre le curseur, sans IA
  * et sans envoi d'image. Lien TikTok ou Instagram (lot « vidéo auto ») : même
- * accord, avec son texte (la vidéo est récupérée par le serveur) et, au
- * refus, la capture d'écran (`body`, `declineLabel`). */
+ * accord et même texte (commun aux deux écrans : une seule version
+ * enregistrée), et, au refus, la capture d'écran (`declineLabel`). */
 export function ConsentView({
   saving,
   error,
   onAccept,
   onChooseMyself,
   onPolicy,
-  body = t.videoAuto.consentBody,
   declineLabel = t.videoAuto.chooseMyself,
 }: {
   saving: boolean;
@@ -250,7 +249,6 @@ export function ConsentView({
   onAccept: () => void;
   onChooseMyself: () => void;
   onPolicy: () => void;
-  body?: readonly string[];
   declineLabel?: string;
 }) {
   return (
@@ -258,7 +256,7 @@ export function ConsentView({
       <Text style={styles.title} accessibilityRole="header">
         {t.videoAuto.consentTitle}
       </Text>
-      {body.map((paragraph) => (
+      {t.videoAuto.consentBody.map((paragraph) => (
         <Text key={paragraph} style={styles.body}>
           {paragraph}
         </Text>

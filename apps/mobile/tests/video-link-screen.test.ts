@@ -136,12 +136,14 @@ describe("écran « vidéo partagée » : l'analyse d'abord, quand le serveur l'
     expect(screen).toContain("<VideoFallback title={t.videoLinkAuto.capture}");
   });
 
-  it("accord manquant : l'accord « analyse_video_ia » existant, avec son texte pour un lien", () => {
+  it("accord manquant ou donné sur l'ancien texte : l'accord « analyse_video_ia », avec le texte commun (une seule version enregistrée)", () => {
     expect(screen).toContain("<ConsentView");
-    expect(screen).toContain("body={t.videoLinkAuto.consentBody}");
+    const consentView = screen.slice(screen.indexOf("<ConsentView"), screen.indexOf("/>", screen.indexOf("<ConsentView")));
+    expect(consentView).not.toContain("body=");
+    expect(code("src/components/spot-launch-views.tsx")).toContain("t.videoAuto.consentBody.map");
     const hook = code("src/lib/use-video-link-analysis.ts");
     expect(hook).toContain("recordVideoAiChoice(true)");
-    expect(hook).toContain("videoAiChoice");
+    expect(hook).toContain("fetchConsentStatus().then(videoLinkAiChoice)");
   });
 
   it("« Rechercher cette pièce » : la suite habituelle, lancée seule (Entourez la pièce, attente, résultats)", () => {

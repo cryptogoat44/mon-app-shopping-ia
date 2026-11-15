@@ -19,8 +19,9 @@
 //
 // Conditions, dans l'ordre : interrupteur VIDEO_LINK_ANALYSIS_ENABLED et
 // réglages du service vidéo valides, clé d'Anthropic présente (la même que
-// pour /api/video-moments/status) ; consentement « analyse_video_ia » en
-// vigueur ; texte et lien valides (vidéo TikTok ou Instagram, lien court
+// pour /api/video-moments/status) ; consentement « analyse_video_ia » donné
+// sur un texte qui parle des liens (VIDEO_LINK_CONSENT_VERSIONS : l'ancien
+// texte, vidéo du téléphone seulement, ne suffit pas) ; texte et lien valides (vidéo TikTok ou Instagram, lien court
 // TikTok résolu comme partout ailleurs ; profils et autres sites refusés) ;
 // limites de l'IA lues sans réserver, puis plafond des recherches, comme
 // POST /api/video-moments ; capacité du service vidéo ; images demandées
@@ -30,6 +31,7 @@ import { z } from "zod";
 import {
   SEARCH_QUERY_MAX_LENGTH,
   VIDEO_AI,
+  VIDEO_LINK_CONSENT_VERSIONS,
   VIDEO_LINK_INPUT_MAX_LENGTH,
   parseVideoLink,
   type VideoLinkAnalysisErrorCode,
@@ -270,9 +272,10 @@ export default async function videoLinkAnalysisRoutes(fastify: FastifyInstance, 
       const userId = request.user!.id;
       const log = request.log;
 
-      // Sans consentement en vigueur, rien ne part : ni vers le service vidéo, ni vers l'IA.
+      // Sans consentement donné sur le texte qui parle des liens, rien ne part :
+      // ni vers le service vidéo, ni vers l'IA (l'app redemande l'accord).
       try {
-        if (!(await hasCurrentConsent(fastify, userId, "analyse_video_ia"))) return reply.code(403).send(CONSENT_REQUIRED);
+        if (!(await hasCurrentConsent(fastify, userId, "analyse_video_ia", VIDEO_LINK_CONSENT_VERSIONS))) return reply.code(403).send(CONSENT_REQUIRED);
       } catch (error) {
         if (!(error instanceof ConsentLookupError)) throw error;
         log.error("Lecture du consentement impossible (analyse d'un lien vidéo)");

@@ -71,6 +71,8 @@ const DEFAULTS: Record<string, () => Row> = {
   // Lot alertes prix et stock (migration 0036) : les valeurs par défaut de la base.
   wish_tracking: () => ({ stock_state: "unknown" }),
   wish_watches: () => ({ notify_price_drop: false, notify_restock: false, notify_sold_out: false, created_at: nextTimestamp(), updated_at: nextTimestamp() }),
+  // Historique des consentements (lot « vidéo auto ») : la date de chaque choix.
+  consents: () => ({ created_at: nextTimestamp() }),
 };
 
 /** Clés uniques imitées (doublon : erreur 23505, comme Postgres). */

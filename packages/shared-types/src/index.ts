@@ -362,10 +362,11 @@ export const DEFAULT_CROP: CropRect = { x: 0.15, y: 0.15, width: 0.7, height: 0.
 /** Longueur maximale du texte « Que cherchez-vous ? ». */
 export const SEARCH_QUERY_MAX_LENGTH = 60;
 
-/** Lot 4, temps 1 bis : analyse automatique d'une vidéo. Étage 1 sur
- * l'appareil (images nettes et différentes, réduites) ; étage 2 par une IA,
- * seulement avec le consentement « analyse_video_ia ». La vidéo entière ne
- * quitte jamais l'appareil. */
+/** Lot 4, temps 1 bis : analyse automatique d'une vidéo du téléphone. Étage 1
+ * sur l'appareil (images nettes et différentes, réduites) ; étage 2 par une
+ * IA, seulement avec le consentement « analyse_video_ia ». La vidéo entière ne
+ * quitte jamais l'appareil. (Lien TikTok ou Instagram : jusqu'à 16 images,
+ * extraites par le service vidéo séparé.) */
 export const VIDEO_AI = {
   /** Images envoyées au plus (8 à 12 quand la vidéo en offre autant de différentes). */
   maxFrames: 12,
@@ -916,7 +917,12 @@ export const CONSENT_VERSIONS: Record<VersionedConsentType, string> = {
   // Texte de l'écran « Analyse automatique de la vidéo » (lot 4, temps 1 bis).
   // Texte complété le 2026-10-06 (durée de conservation chez Anthropic), avant
   // toute mise en ligne : aucun accord n'avait été donné sur la version du 10-05.
-  analyse_video_ia: "analyse-video-ia-2026-10-06",
+  // « analyse-video-ia-2026-11-15 » (lot « vidéo auto ») : un seul texte pour
+  // les deux écrans d'accord, vidéo du téléphone (12 images au plus, la vidéo
+  // ne quitte pas l'appareil) ET lien TikTok ou Instagram (vidéo publique
+  // récupérée par le service vidéo de Spotto sans être gardée, 16 images au
+  // plus). Texte à faire valider par le juriste avant d'allumer l'analyse des liens.
+  analyse_video_ia: "analyse-video-ia-2026-11-15",
 };
 
 /** Versions dont l'acceptation reste valable. Une mise à jour qui demande
@@ -931,7 +937,24 @@ export const ACCEPTED_CONSENT_VERSIONS: Record<VersionedConsentType, readonly st
   privacy_policy: ["projet-2026-09-25", "projet-2026-09-29", "projet-2026-09-30", "projet-2026-09-30-b", "projet-2026-10-05", "projet-2026-10-05-b", "projet-2026-10-06", "projet-2026-10-25", "projet-2026-10-27", "projet-2026-11-05"],
   age_declaration: [CONSENT_VERSIONS.age_declaration],
   analytics: [CONSENT_VERSIONS.analytics],
-  analyse_video_ia: [CONSENT_VERSIONS.analyse_video_ia],
+  // La version du 2026-10-06 (vidéo du téléphone seulement) reste valable pour
+  // une vidéo du téléphone : personne n'a à accepter de nouveau. Elle ne vaut
+  // PAS pour un lien (VIDEO_LINK_CONSENT_VERSIONS ci-dessous).
+  analyse_video_ia: ["analyse-video-ia-2026-10-06", CONSENT_VERSIONS.analyse_video_ia],
+};
+
+/** Analyse d'un lien TikTok ou Instagram (lot « vidéo auto ») : seuls les
+ * accords donnés sur un texte qui parle des liens comptent (le serveur
+ * refuse l'analyse sinon, l'app redemande l'accord avec le texte commun). */
+export const VIDEO_LINK_CONSENT_VERSIONS: readonly string[] = [CONSENT_VERSIONS.analyse_video_ia];
+
+/** Anciennes versions qu'une app déjà installée peut encore envoyer (POST
+ * /api/consents) : l'accord ou le refus est enregistré sous la version
+ * ENVOYÉE, celle du texte que la personne a lu, et ne vaut que pour ce que
+ * ce texte couvre (une vidéo du téléphone, pas un lien). Toute autre version
+ * que celle en vigueur reste refusée. */
+export const LEGACY_RECORDABLE_CONSENT_VERSIONS: Partial<Record<VersionedConsentType, readonly string[]>> = {
+  analyse_video_ia: ["analyse-video-ia-2026-10-06"],
 };
 
 /** Information à montrer une fois aux personnes connectées après une mise à
@@ -967,8 +990,9 @@ export interface ConsentInput {
   type: ConsentType;
   /** false = refus ou retrait (consentements facultatifs seulement). Par défaut : accord. */
   granted?: boolean;
-  /** Obligatoire (et égale à la version en vigueur, CONSENT_VERSIONS) pour
-   * les documents juridiques et la déclaration d'âge. */
+  /** Obligatoire (et égale à la version en vigueur, CONSENT_VERSIONS, ou à
+   * une ancienne version encore acceptée d'une app installée,
+   * LEGACY_RECORDABLE_CONSENT_VERSIONS) pour les consentements versionnés. */
   version?: string;
 }
 

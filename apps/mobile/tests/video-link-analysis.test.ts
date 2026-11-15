@@ -251,15 +251,27 @@ describe("textes : français avec « vous », anglais à l'identique", () => {
       node && typeof node === "object" && !Array.isArray(node) ? Object.entries(node).flatMap(([key, value]) => keys(value, `${prefix}.${key}`)) : [prefix];
     expect(keys(en.videoLinkAuto)).toEqual(keys(fr.videoLinkAuto));
     expect(en.videoLinkAuto.waiting.steps).toHaveLength(fr.videoLinkAuto.waiting.steps.length);
-    expect(en.videoLinkAuto.consentBody).toHaveLength(fr.videoLinkAuto.consentBody.length);
+    expect(en.videoAuto.consentBody).toHaveLength(fr.videoAuto.consentBody.length);
   });
 
-  it("l'accord dit, pour un lien, que la vidéo est récupérée sans être gardée (et ne prétend pas qu'elle reste sur l'appareil)", () => {
-    const french = fr.videoLinkAuto.consentBody.join(" ");
-    expect(french).toContain("récupère la vidéo publique");
-    expect(french).toContain("sans la conserver");
-    expect(french).toContain("Anthropic");
-    expect(french).not.toContain("ne quitte jamais votre appareil");
-    expect(en.videoLinkAuto.consentBody.join(" ")).not.toContain("never leaves your device");
+  it("texte commun de l'accord : vidéo du téléphone (12 images, elle reste sur l'appareil) et lien (vidéo récupérée sans être gardée, 16 images)", () => {
+    const french = fr.videoAuto.consentBody;
+    const phone = french.find((paragraph) => paragraph.startsWith("Vidéo de votre téléphone"));
+    const link = french.find((paragraph) => paragraph.startsWith("Lien TikTok ou Instagram"));
+    expect(phone).toContain("12 images au plus");
+    expect(phone).toContain("La vidéo entière ne quitte jamais votre appareil");
+    expect(link).toContain("récupère la vidéo publique");
+    expect(link).toContain("sans la conserver");
+    expect(link).toContain("16 images au plus");
+    expect(link).not.toContain("ne quitte jamais");
+    expect(french.join(" ")).toContain("Anthropic");
+    expect(french.join(" ")).toContain("sous 30 jours au plus");
+    const english = en.videoAuto.consentBody;
+    expect(english.find((paragraph) => paragraph.startsWith("Video from your phone"))).toContain("never leaves your device");
+    expect(english.find((paragraph) => paragraph.startsWith("TikTok or Instagram link"))).toContain("16 frames at most");
+    expect(english.find((paragraph) => paragraph.startsWith("TikTok or Instagram link"))).not.toContain("never leaves");
+    // Plus de texte propre aux liens : une seule version enregistrée pour les deux écrans.
+    expect("consentBody" in fr.videoLinkAuto).toBe(false);
+    expect("consentBody" in en.videoLinkAuto).toBe(false);
   });
 });

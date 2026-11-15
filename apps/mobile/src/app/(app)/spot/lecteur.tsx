@@ -487,7 +487,6 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
           onAccept={auto.accept}
           onChooseMyself={auto.decline}
           onPolicy={() => router.push("/confidentialite")}
-          body={t.videoLinkAuto.consentBody}
           declineLabel={t.videoLinkAuto.consentDecline}
         />
       );

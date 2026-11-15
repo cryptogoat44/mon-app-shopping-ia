@@ -19,16 +19,18 @@ vi.mock("../src/lib/aiQuota.js", async (importOriginal) => {
   return { ...original, aiQuotaFor: vi.fn(original.aiQuotaFor) };
 });
 
-import { CONSENT_VERSIONS, type CropRect, type VideoLinkAnalysisResponse } from "@monapp/shared-types";
+import { ACCEPTED_CONSENT_VERSIONS, CONSENT_VERSIONS, VIDEO_LINK_CONSENT_VERSIONS, type ConsentStatus, type CropRect, type VideoLinkAnalysisResponse } from "@monapp/shared-types";
 import { env } from "../src/env.js";
 import { aiQuotaFor } from "../src/lib/aiQuota.js";
 import { RATE_LIMITS } from "../src/lib/rateLimits.js";
 import { resetShortLinkCache } from "../src/lib/videoLinks.js";
 import { VIDEO_WORKER_ERROR_CODES, type VideoWorkerConfigState, type VideoWorkerErrorCode, type VideoWorkerFetch } from "../src/lib/videoWorker.js";
 import { resetAlertsForTests } from "../src/lib/alerts.js";
+import { hasCurrentConsent } from "../src/lib/consents.js";
 import { MASKED_DATA, scrubLogLine } from "../src/lib/logPrivacy.js";
 import { scrubEvent } from "../src/lib/sentry.js";
 import rateLimitPlugin, { registerHit } from "../src/plugins/rateLimit.js";
+import accountRoutes from "../src/routes/account.js";
 import videoLinkAnalysisRoutes, { MAX_PARALLEL_ANALYSES, WORKER_FAILURE_REPLIES, type VideoLinkAnalysisOptions } from "../src/routes/videoLinkAnalysis.js";
 import { VideoAiError, type askVideoMoments, type FrameForAi } from "../src/services/videoMoments.js";
 import { fakeSupabase, type Row } from "./fakeSupabase.js";
@@ -39,6 +41,9 @@ const ALICE = "a0000000-0000-4000-8000-000000000001";
 const BOB = "b0000000-0000-4000-8000-000000000002";
 const CAROL = "c0000000-0000-4000-8000-000000000003";
 const DAVE = "d0000000-0000-4000-8000-000000000004";
+const ERIN = "e0000000-0000-4000-8000-000000000005";
+/** Ancien texte de l'accord : vidéo du téléphone seulement (encore valable pour elle). */
+const PHONE_ONLY_VERSION = "analyse-video-ia-2026-10-06";
 const ID = "7412345678901234567";
 const CANONICAL = `https://www.tiktok.com/@scout2015/video/${ID}`;
 const TIKTOK_LINK = { platform: "tiktok", videoKey: ID, canonicalUrl: CANONICAL, creatorHandle: "scout2015" };
@@ -116,7 +121,7 @@ function consent(userId: string, version: string | null, createdAt: string, gran
   return { user_id: userId, type: "analyse_video_ia", granted_at: granted ? createdAt : null, document_version: version, created_at: createdAt };
 }
 
-async function buildApp(options: Partial<VideoLinkAnalysisOptions> = {}, db: { missing?: string[] } = {}): Promise<FastifyInstance> {
+async function buildApp(options: Partial<VideoLinkAnalysisOptions> = {}, db: { missing?: string[]; withAccountRoutes?: boolean } = {}): Promise<FastifyInstance> {
   fake = fakeSupabase({
     missing: db.missing,
     rpc: async (fn) => {
@@ -132,6 +137,8 @@ async function buildApp(options: Partial<VideoLinkAnalysisOptions> = {}, db: { m
   consents.push(consent(CAROL, CONSENT_VERSIONS.analyse_video_ia, "2026-11-15T09:00:00+00:00"));
   consents.push(consent(CAROL, CONSENT_VERSIONS.analyse_video_ia, "2026-11-15T10:00:00+00:00", false));
   consents.push(consent(DAVE, "analyse-video-ia-ancienne", "2026-11-15T09:00:00+00:00"));
+  // Erin l'a donné sur l'écran d'une vidéo du téléphone (ancien texte, sans les liens).
+  consents.push(consent(ERIN, PHONE_ONLY_VERSION, "2026-11-15T09:00:00+00:00"));
 
   app = Fastify({ logger: { level: "info", stream: { write: (line: string) => logs.push(line) } } });
   app.decorate("supabaseAdmin", fake.db as unknown as FastifyInstance["supabaseAdmin"]);
@@ -146,6 +153,7 @@ async function buildApp(options: Partial<VideoLinkAnalysisOptions> = {}, db: { m
   });
   await app.register(rateLimitPlugin);
   await app.register(videoLinkAnalysisRoutes, { workerConfig: READY, workerFetch, askMoments: askMock, ...options });
+  if (db.withAccountRoutes) await app.register(accountRoutes);
   await app.ready();
   return app;
 }
@@ -265,13 +273,54 @@ describe("statut et accès", () => {
 describe("consentement, texte et lien", () => {
   it("sans consentement, consentement retiré ou donné sur un ancien texte : 403, rien ne part", async () => {
     const target = await buildApp();
-    for (const user of [BOB, CAROL, DAVE]) {
+    // Erin : accord donné sur le texte d'une vidéo du téléphone, qui ne parle pas des liens.
+    for (const user of [BOB, CAROL, DAVE, ERIN]) {
       const res = await analyze(target, { url: SHARED_TEXT, query: QUERY }, user);
       expect(res.statusCode, user).toBe(403);
       expect(res.json()).toEqual({ error: "video_ai_consent_required", message: "Acceptez d'abord l'analyse automatique, ou faites une capture de la vidéo." });
     }
     expect(workerCalls).toEqual([]);
     expect(askMock).not.toHaveBeenCalled();
+  });
+
+  it("texte commun (2026-11-15) : seul valable pour un lien ; l'ancien texte reste valable pour une vidéo du téléphone", async () => {
+    expect(CONSENT_VERSIONS.analyse_video_ia).toBe("analyse-video-ia-2026-11-15");
+    expect(VIDEO_LINK_CONSENT_VERSIONS).toEqual([CONSENT_VERSIONS.analyse_video_ia]);
+    expect(ACCEPTED_CONSENT_VERSIONS.analyse_video_ia).toEqual([PHONE_ONLY_VERSION, CONSENT_VERSIONS.analyse_video_ia]);
+    const target = await buildApp();
+    // Vidéo du téléphone (routes/videoMoments.ts : liste par défaut) : Erin n'a rien à accepter de nouveau.
+    expect(await hasCurrentConsent(target, ERIN, "analyse_video_ia")).toBe(true);
+    expect(await hasCurrentConsent(target, ERIN, "analyse_video_ia", VIDEO_LINK_CONSENT_VERSIONS)).toBe(false);
+    expect(await hasCurrentConsent(target, ALICE, "analyse_video_ia", VIDEO_LINK_CONSENT_VERSIONS)).toBe(true);
+  });
+
+  it("app déjà installée (ancien texte) : accord enregistré sous l'ancienne version, valable pour le téléphone, pas pour un lien ; le texte commun ouvre l'analyse", async () => {
+    const target = await buildApp({}, { withAccountRoutes: true });
+    const record = (version: string, granted = true) =>
+      target.inject({ method: "POST", url: "/api/consents", headers: headersOf(BOB), payload: { consents: [{ type: "analyse_video_ia", version, granted }] } });
+    const videoConsent = async () => ((await target.inject({ method: "GET", url: "/api/consents", headers: headersOf(BOB) })).json() as ConsentStatus[]).find((item) => item.type === "analyse_video_ia");
+    const bobRows = () => fake.table("consents").filter((row) => row.user_id === BOB);
+
+    // Une version inconnue reste refusée, sans rien enregistrer.
+    expect((await record("analyse-video-ia-ancienne")).statusCode).toBe(409);
+    expect(bobRows()).toEqual([]);
+
+    expect((await record(PHONE_ONLY_VERSION)).statusCode).toBe(204);
+    expect(bobRows().at(-1)).toMatchObject({ document_version: PHONE_ONLY_VERSION, revoked_at: null });
+    expect(await videoConsent()).toMatchObject({ version: PHONE_ONLY_VERSION, isCurrent: true });
+    expect((await analyze(target, { url: SHARED_TEXT, query: QUERY }, BOB)).statusCode).toBe(403);
+    expect(workerCalls).toEqual([]);
+
+    expect((await record(CONSENT_VERSIONS.analyse_video_ia)).statusCode).toBe(204);
+    expect(bobRows().at(-1)).toMatchObject({ document_version: CONSENT_VERSIONS.analyse_video_ia, revoked_at: null });
+    expect(await videoConsent()).toMatchObject({ version: CONSENT_VERSIONS.analyse_video_ia, isCurrent: true });
+    expect((await analyze(target, { url: SHARED_TEXT, query: QUERY }, BOB)).statusCode).toBe(200);
+    expect(workerCalls).toHaveLength(1);
+
+    // Un refus envoyé par une app installée est enregistré lui aussi (et l'emporte).
+    expect((await record(PHONE_ONLY_VERSION, false)).statusCode).toBe(204);
+    expect(bobRows().at(-1)).toMatchObject({ document_version: PHONE_ONLY_VERSION, granted_at: null });
+    expect((await analyze(target, { url: SHARED_TEXT, query: QUERY }, BOB)).statusCode).toBe(403);
   });
 
   it("consentement illisible (base en panne) : 500, rien ne part", async () => {

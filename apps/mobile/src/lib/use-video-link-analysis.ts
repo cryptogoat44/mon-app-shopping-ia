@@ -1,7 +1,9 @@
 // Lot « vidéo auto » : enchaînement de l'analyse d'un lien sur l'écran
 // « vidéo partagée » (spot/lecteur) — « Que cherchez-vous dans cette
-// vidéo ? », l'accord « analyse_video_ia » s'il manque (le même que pour une
-// vidéo du téléphone), l'attente, les moments, puis la recherche habituelle.
+// vidéo ? », l'accord « analyse_video_ia » s'il manque ou s'il a été donné
+// sur l'ancien texte, qui ne parlait que des vidéos du téléphone (texte
+// commun aux deux écrans, videoLinkAiChoice), l'attente, les moments, puis la
+// recherche habituelle.
 // La logique sans écran est dans video-link-analysis.ts et video-link-run.ts
 // (testées).
 import { useEffect, useRef, useState } from "react";
@@ -10,7 +12,7 @@ import type { VideoPlatform } from "@monapp/shared-types";
 import { t } from "../i18n";
 import { fetchConsentStatus, recordVideoAiChoice } from "./api";
 import { track } from "./analytics";
-import { videoAiChoice, type VideoAiChoice } from "./spot-launch";
+import { videoLinkAiChoice, type VideoAiChoice } from "./spot-launch";
 import { linkAnalysisRequest, type LinkAnalysis, type LinkFailureInfo, type QueryProblem } from "./video-link-analysis";
 import { runLinkAnalysis, startMomentSearch, type LinkSpotOrigin } from "./video-link-run";
 
@@ -48,7 +50,7 @@ export function useVideoLinkAnalysis({ active, url, platform, origin, onDeclined
   const alive = useRef(true);
 
   function loadChoice(): Promise<VideoAiChoice> {
-    const request = fetchConsentStatus().then(videoAiChoice);
+    const request = fetchConsentStatus().then(videoLinkAiChoice);
     choice.current = request;
     request.catch(() => {
       if (choice.current === request) choice.current = null;
@@ -82,7 +84,8 @@ export function useVideoLinkAnalysis({ active, url, platform, origin, onDeclined
     if (!alive.current || run.current.id !== id || outcome.kind === "cancelled") return;
     run.current.controller = null;
     if (outcome.kind === "found") return setPhase({ kind: "moments", analysis: outcome.analysis, selected: 0 });
-    // Accord retiré entre-temps (sur un autre appareil, par exemple) : il est redemandé.
+    // Accord retiré entre-temps (sur un autre appareil, par exemple), ou
+    // donné sur un texte que le serveur n'accepte pas pour un lien : redemandé.
     if (outcome.info.failure === "consent") {
       choice.current = Promise.resolve("ask");
       return setPhase({ kind: "consent" });
