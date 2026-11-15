@@ -2142,3 +2142,56 @@ export type TryonErrorCode =
   | "tryon_provider_unavailable"
   | "tryon_timeout"
   | "tryon_rate_limited";
+
+// ---- Analyse automatique d'un lien vidéo (lot « vidéo auto », novembre 2026) ----
+// Décision du fondateur (14 et 15 novembre 2026) : un lien TikTok ou Instagram
+// et ce que le membre cherche suffisent. Le service vidéo (apps/video-worker,
+// service à part chez Render) récupère la vidéo publique, sans la garder, et en
+// extrait des images ; le serveur les donne à l'IA (étage 2 existant,
+// askVideoMoments) et renvoie les moments trouvés. L'app enchaîne ensuite
+// exactement comme pour une vidéo du téléphone (image du moment + cadre →
+// recherche habituelle). La capture d'écran reste la roue de secours.
+
+/** POST /api/video-links/analyze : le lien partagé et ce que le membre cherche. */
+export interface VideoLinkAnalysisRequest {
+  url: string;
+  /** Quelques mots (VIDEO_AI.queryMinLength à SEARCH_QUERY_MAX_LENGTH caractères). */
+  query: string;
+}
+
+/** Un moment trouvé par l'IA dans la vidéo du lien. */
+export interface VideoLinkMoment {
+  /** Instant du moment dans la vidéo, en secondes. */
+  timeSeconds: number;
+  /** Image entière du moment, « data:image/jpeg;base64,… » (1 280 px au plus sur le grand côté). */
+  image: string;
+  /** Cadre de la pièce dans cette image, en proportions 0–1. */
+  box: CropRect;
+}
+
+/** Réponse de l'analyse : la vidéo reconnue et 1 à VIDEO_AI.moments moments, le meilleur d'abord. */
+export interface VideoLinkAnalysisResponse {
+  video: VideoLink;
+  moments: VideoLinkMoment[];
+}
+
+/** GET /api/video-links/analyze/status : l'analyse d'un lien est-elle possible ? */
+export interface VideoLinkAnalysisStatus {
+  enabled: boolean;
+}
+
+/** Codes d'erreur de l'analyse d'un lien (champ « error »). Toute erreur
+ * « vidéo indisponible » ramène le membre à la capture d'écran. */
+export type VideoLinkAnalysisErrorCode =
+  | "video_analysis_disabled"
+  | "video_ai_consent_required"
+  | "invalid_query"
+  | "invalid_link"
+  | "video_unavailable"
+  | "video_private"
+  | "video_too_long"
+  | "video_no_moment"
+  | "video_busy"
+  | "video_timeout"
+  | "video_ai_user_limit"
+  | "video_ai_global_limit";
