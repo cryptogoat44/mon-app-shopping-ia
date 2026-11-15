@@ -218,17 +218,18 @@ describe("politique de confidentialité : vidéos, lien analysé, fonctions du s
 
   // Conception finale (revue du lot « vidéo auto ») : le consentement
   // « analyse_video_ia » passe à une nouvelle version qui couvre aussi les
-  // liens, faite côté app (branche lot-video-auto). La politique promet qu'un
-  // accord donné sur une version précédente est redemandé : seule la version
-  // en vigueur peut donc être acceptée, avant comme après cette mise à jour.
-  it("analyse d'un lien : nouvelle version du consentement, accord précédent redemandé, en français comme en anglais", () => {
-    expect(ACCEPTED_CONSENT_VERSIONS.analyse_video_ia).toEqual([CONSENT_VERSIONS.analyse_video_ia]);
+  // liens, faite côté app (branche lot-video-auto). L'ancienne version reste
+  // valable pour une vidéo du téléphone ; l'analyse d'un lien exige la
+  // nouvelle (VIDEO_LINK_CONSENT_VERSIONS, côté serveur et app). La version en
+  // vigueur est toujours acceptée, avant comme après cette mise à jour.
+  it("analyse d'un lien : nouvelle version du consentement, exigée pour un lien, en français comme en anglais", () => {
+    expect(ACCEPTED_CONSENT_VERSIONS.analyse_video_ia).toContain(CONSENT_VERSIONS.analyse_video_ia);
     const fr = section(privacyPolicy, VIDEOS);
     const en = section(privacyPolicyEn, VIDEOS_EN);
     expect(fr).toContain("C'est le même consentement que pour une vidéo de votre téléphone, dans une nouvelle version de son texte, qui couvre à la fois les vidéos de votre téléphone et les liens.");
-    expect(fr).toContain("Un accord donné sur la version précédente, qui ne parlait que des vidéos de votre téléphone, ne suffit pas : l'app vous redemande votre accord avant toute nouvelle analyse automatique, d'une vidéo de votre téléphone comme d'un lien.");
+    expect(fr).toContain("Un accord donné sur la version précédente, qui ne parlait que des vidéos de votre téléphone, reste valable pour elles ; pour un lien, l'app vous demande votre accord sur la nouvelle version avant la première analyse.");
     expect(en).toContain("It is the same consent as for a video from your phone, in a new version of its text, which covers both videos from your phone and links.");
-    expect(en).toContain("Consent given on the previous version, which only covered videos from your phone, is not enough: the app asks for your consent again before any new automatic analysis, of a video from your phone as of a link.");
+    expect(en).toContain("Consent given on the previous version, which only covered videos from your phone, remains valid for them; for a link, the app asks for your consent to the new version before the first analysis.");
     // L'ancienne formule laissait croire que l'accord donné pour une vidéo du téléphone suffisait.
     expect(frText).not.toContain("(le même consentement que pour une vidéo de votre téléphone)");
     expect(enText).not.toContain("(the same consent as for a video from your phone)");
