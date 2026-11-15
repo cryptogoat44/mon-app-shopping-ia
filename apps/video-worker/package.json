@@ -1,0 +1,14 @@
+{
+  "name": "video-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Service vidéo séparé : images d'une vidéo publique TikTok ou Instagram, sans rien garder",
+  "type": "module",
+  "engines": {
+    "node": ">=26.0.0 <27.0.0"
+  },
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "node --test --test-concurrency=1 \"test/*.test.js\""
+  }
+}
