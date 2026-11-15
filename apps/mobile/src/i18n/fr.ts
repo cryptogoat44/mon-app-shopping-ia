@@ -2,7 +2,7 @@
 // Vouvoiement, phrases courtes, verbes d'action. Voir la section 6 du brief
 // pour les règles complètes.
 
-import { MINIMUM_AGE } from "@monapp/shared-types";
+import { MINIMUM_AGE, SEARCH_QUERY_MAX_LENGTH } from "@monapp/shared-types";
 import { APP_FILE_SLUG, APP_NAME_DISPLAY as BRAND } from "../constants/brand";
 
 export const fr = {
@@ -361,6 +361,64 @@ export const fr = {
     webInstruction: "Faites une capture de la vidéo au bon moment, puis glissez-déposez ou collez l'image ici.",
     dropHint: "Sur ordinateur, vous pouvez aussi glisser-déposer une image sur cette page, ou la coller (Ctrl+V ou ⌘V).",
     notAnImage: "Ce fichier n'est pas une image. Déposez ou collez une capture d'écran.",
+  },
+  // Lot « vidéo auto » (décision du fondateur, 14 et 15 novembre 2026) : un
+  // lien TikTok ou Instagram et ce que vous cherchez. La vidéo publique est
+  // récupérée sans être gardée, l'IA trouve le moment ; la capture reste le repli.
+  videoLinkAuto: {
+    title: "Que cherchez-vous dans cette vidéo ?",
+    placeholder: "ex. la veste en cuir beige de la fille à gauche",
+    help: "Décrivez la pièce et, si besoin, où elle se trouve : l'IA s'en sert pour la retrouver dans la vidéo.",
+    find: "Trouver la pièce",
+    privacy: `${BRAND} récupère la vidéo publique le temps de l'analyse, sans la conserver. Avec votre accord, quelques images et votre description sont analysées par une IA.`,
+    query: {
+      too_short: "Décrivez la pièce en quelques mots.",
+      too_long: `Votre description est trop longue : ${SEARCH_QUERY_MAX_LENGTH} caractères au plus.`,
+      link: "Décrivez la pièce avec des mots, sans lien.",
+    },
+    player: (platform: string) => `Regarder la vidéo dans le lecteur ${platform}`,
+    capture: "Faire une capture à la place",
+    captureLead: "Trois gestes suffisent :",
+    backToAuto: "Trouver la pièce automatiquement",
+    // Accord « analyse_video_ia », dit pour un lien : la vidéo est récupérée par le serveur (à faire valider avec la nouvelle version du consentement).
+    consentBody: [
+      `Pour trouver la pièce à votre place, ${BRAND} récupère la vidéo publique de ce lien le temps de l'analyse, sans la conserver. Quelques images réduites de cette vidéo et votre description sont envoyées à un prestataire d'intelligence artificielle, Anthropic, situé aux États-Unis.`,
+      `Elles servent uniquement à repérer la pièce. ${BRAND} ne les conserve pas ; Anthropic ne peut pas s'en servir pour entraîner ses modèles et les supprime automatiquement, sous 30 jours au plus (exceptions décrites dans la politique de confidentialité).`,
+      "Vous pouvez retirer votre accord à tout moment dans Réglages.",
+    ],
+    consentDecline: "Non merci, faire une capture",
+    waiting: {
+      title: "Analyse de la vidéo",
+      steps: ["On récupère la vidéo…", "L'IA cherche la pièce…"],
+      usual: "Cela prend en général 10 à 25 secondes.",
+      slow: "C'est plus long que d'habitude. Patientez encore un peu, ou annulez pour faire une capture.",
+      stepLabel: (step: string, current: boolean) => (current ? `${step} (en cours)` : step),
+    },
+    moments: {
+      title: (count: number) => (count > 1 ? `${count} moments trouvés` : "Moment trouvé"),
+      lead: (count: number) => (count > 1 ? "Le plus probable est sélectionné. Touchez un autre moment pour le choisir." : "Vérifiez que le cadre entoure bien la pièce."),
+      shown: (time: string) => `Moment choisi, à ${time}, avec le cadre de la pièce`,
+      choose: (rank: number, time: string) => `Moment ${rank}, à ${time}`,
+      search: "Rechercher cette pièce",
+      editQuery: "Modifier la description",
+    },
+    failedTitle: "La vidéo n'a pas pu être analysée",
+    notFoundTitle: "Pièce non repérée",
+    failure: {
+      disabled: "L'analyse automatique des liens n'est pas disponible pour le moment. Faites une capture à la place.",
+      invalid_link: `Ce lien ne mène pas à une vidéo que ${BRAND} peut analyser. Faites une capture à la place.`,
+      invalid_query: `Décrivez la pièce en quelques mots, sans lien (${SEARCH_QUERY_MAX_LENGTH} caractères au plus).`,
+      unavailable: "Cette vidéo n'a pas pu être récupérée pour le moment. Réessayez, ou faites une capture à la place.",
+      private: `Cette vidéo est privée ou réservée à certains comptes : ${BRAND} ne peut pas la récupérer. Faites une capture à la place.`,
+      too_long: "Cette vidéo est trop longue pour l'analyse automatique. Faites une capture à la place.",
+      timeout: "La vidéo a mis trop de temps à arriver. Réessayez, ou faites une capture à la place.",
+      busy: "L'analyse automatique est très demandée en ce moment. Réessayez dans un instant, ou faites une capture à la place.",
+      no_moment: "La pièce n'a pas été repérée dans la vidéo. Précisez votre description, ou faites une capture à la place.",
+      user_limit: "Vous avez atteint la limite quotidienne d'analyses automatiques. Faites une capture à la place, ou réessayez demain.",
+      global_limit: "L'analyse automatique est très demandée aujourd'hui et momentanément indisponible. Faites une capture à la place.",
+      rate_limited: "Trop de demandes d'un coup. Réessayez dans quelques minutes, ou faites une capture à la place.",
+      network: "Connexion impossible. Vérifiez votre connexion, puis réessayez.",
+    },
   },
   // Recherche d'image d'iOS (iOS 26 et suivants) : carte montrée une fois.
   visualSearchTip: {
