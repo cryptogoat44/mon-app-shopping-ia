@@ -33,6 +33,7 @@ import pushTokensRoutes from "./routes/pushTokens.js";
 import wishAlertsRoutes from "./routes/wishAlerts.js";
 import tryonRoutes from "./routes/tryon.js";
 import videoLinksRoutes from "./routes/videoLinks.js";
+import videoLinkAnalysisRoutes from "./routes/videoLinkAnalysis.js";
 import { flushAfterResponse } from "./lib/wishAlertsSend.js";
 import { MULTIPART_LIMITS, isTooManyPartsError } from "./lib/multipartErrors.js";
 import { ImageQueueFullError } from "./lib/imageSafety.js";
@@ -188,6 +189,10 @@ export async function buildApp(options: { logger?: LoggerOption } = {}): Promise
   // TRYON_ENABLED et le drapeau feature_flags.tryon (routes/tryon.ts).
   await fastify.register(tryonRoutes);
   await fastify.register(videoLinksRoutes);
+  // Analyse automatique d'un lien TikTok ou Instagram (lot « vidéo auto »),
+  // coupée par défaut : VIDEO_LINK_ANALYSIS_ENABLED et les réglages du
+  // service vidéo séparé (routes/videoLinkAnalysis.ts, lib/videoWorker.ts).
+  await fastify.register(videoLinkAnalysisRoutes);
 
   // Exclue du filet anti-abus "default" : les sondes de disponibilité de
   // Render l'appellent très régulièrement, ça n'a rien à voir avec un abus.
