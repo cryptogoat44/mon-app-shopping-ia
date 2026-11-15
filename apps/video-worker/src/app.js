@@ -1,6 +1,7 @@
 // Serveur HTTP du service vidéo : POST /frames (avec le secret) et GET
 // /health (sans secret). Contrat : contract.js et README.md.
 import http from "node:http";
+import { finished } from "node:stream/promises";
 import { createAuthorizer } from "./config.js";
 import { LIMITS, WorkerError } from "./contract.js";
 import { extractFrames } from "./job.js";
@@ -35,9 +36,14 @@ export function createWorker(options) {
   let shuttingDown = false;
 
   const server = http.createServer((request, response) => {
-    const task = route(request, response).catch(() => {
-      send(response, 500, { error: "unavailable" }, { close: true });
-    });
+    // Une demande compte jusqu'à la fin de l'ENVOI de sa réponse, pas
+    // seulement jusqu'à response.end() : quelques Mo d'images partent encore
+    // après, et un arrêt propre (close) ne doit pas couper ce transfert.
+    const task = route(request, response)
+      .catch(() => {
+        send(response, 500, { error: "unavailable" }, { close: true });
+      })
+      .then(() => finished(response).catch(() => undefined));
     running.add(task);
     task.finally(() => running.delete(task));
   });
@@ -155,7 +161,8 @@ export function createWorker(options) {
     },
     /**
      * Arrêt propre : plus aucune nouvelle demande, celles en cours finissent
-     * (25 s au plus, leur propre délai), puis les connexions sont fermées.
+     * (25 s au plus, leur propre délai) et leur réponse part en entier, puis
+     * les connexions sont fermées (au plus tard après `graceMs`).
      * @param {number} [graceMs]
      */
     async close(graceMs = limits.requestDeadlineMs + 2_000) {

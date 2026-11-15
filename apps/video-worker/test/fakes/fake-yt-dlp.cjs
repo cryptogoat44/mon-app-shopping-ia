@@ -139,6 +139,9 @@ switch (scenario) {
   case "hold":
     setTimeout(() => out(video(8, "varied&d=8")), 1500);
     break;
+  case "heavyhold":
+    setTimeout(() => out(video(8, "heavy&d=8")), 1500);
+    break;
   case "slow":
     hang(60_000);
     break;

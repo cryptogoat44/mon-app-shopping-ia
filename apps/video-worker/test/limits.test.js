@@ -111,4 +111,21 @@ describe("arrêt propre", () => {
     await assert.rejects(fetch(`${service.base}/health`));
     await service.stop();
   });
+
+  it("réponse de plusieurs Mo (comme de vraies images) : elle arrive entière avant la fermeture des connexions", async () => {
+    const service = await startWorker();
+    try {
+      const pending = service.frames(tiktok("heavyhold"));
+      await sleep(200);
+      const closing = service.worker.close(10_000);
+      const result = await pending;
+      assert.equal(result.status, 200);
+      assert.ok(result.body.frames.length >= 6, String(result.body.frames.length));
+      const bytes = result.body.frames.reduce((/** @type {number} */ total, /** @type {{ jpegBase64: string }} */ frame) => total + Buffer.from(frame.jpegBase64, "base64").length, 0);
+      assert.ok(bytes > 3_000_000, String(bytes));
+      await closing;
+    } finally {
+      await service.stop();
+    }
+  });
 });

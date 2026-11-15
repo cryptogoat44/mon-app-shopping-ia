@@ -75,14 +75,16 @@ function run() {
 
 /**
  * Image JPEG n° index, qui porte son numéro dans un commentaire (« fake-index:N »,
- * relu par les tests) ; scénario « big » : les 3 premières dépassent 1 Mo.
+ * relu par les tests) ; scénario « big » : les 3 premières dépassent 1 Mo ;
+ * « heavy » : chacune pèse environ 590 Ko (sous la limite d'une image).
  */
 function jpegFor(index) {
   const label = Buffer.from(`fake-index:${index}`);
   const tag = Buffer.concat([Buffer.from([0xff, 0xfe, 0, 0]), label]);
   tag.writeUInt16BE(label.length + 2, 2);
   const comments = [tag];
-  for (let i = 0; scenario === "big" && index < 3 && i < 17; i += 1) {
+  const segments = scenario === "big" && index < 3 ? 17 : scenario === "heavy" ? 9 : 0;
+  for (let i = 0; i < segments; i += 1) {
     const segment = Buffer.alloc(65535 + 2, 0x78);
     segment[0] = 0xff;
     segment[1] = 0xfe;
