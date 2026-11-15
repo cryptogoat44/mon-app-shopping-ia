@@ -7,10 +7,12 @@
 //   brut, pour juger netteté et doublons sans décoder un JPEG en JavaScript.
 // Le filtre showinfo écrit l'instant de chaque image sur la sortie d'erreur.
 //
-// Sécurité : -protocol_whitelist https,tls,tcp (jamais un fichier local, ni
-// http, ni une liste de lecture), certificat du serveur vérifié
-// (-tls_verify 1), -f mp4 (démultiplexeur imposé), lecture plafonnée à 91 s
-// de vidéo, arrêt net au délai.
+// Sécurité : -protocol_whitelist https,tls,tcp (jamais un fichier local ni
+// une liste de lecture), certificat du serveur vérifié (-tls_verify 1),
+// -f mp4 (démultiplexeur imposé), lecture plafonnée à 91 s de vidéo, arrêt
+// net au délai. Limite connue : seule la première adresse est vérifiée
+// (urls.js) ; ffmpeg suit les redirections HTTP sans contrôle, y compris
+// vers http (« tcp » est dans la liste) ou vers un autre hôte.
 import { existsSync } from "node:fs";
 import { LIMITS, WorkerError } from "./contract.js";
 import { splitJpegStream } from "./jpeg.js";

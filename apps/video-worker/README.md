@@ -87,12 +87,21 @@ secours.
 
 | Variable | Obligatoire | Rôle |
 |---|---|---|
-| `VIDEO_WORKER_SECRET` | oui | Secret partagé avec le serveur principal : la même valeur des deux côtés. 32 à 512 caractères visibles, sans espace. Exemple : `openssl rand -hex 32`. |
+| `VIDEO_WORKER_SECRET` | oui | Secret partagé avec le serveur principal : la même valeur des deux côtés. 32 à 512 caractères visibles, sans espace (ceux du début et de la fin sont retirés). Exemple : `openssl rand -hex 32`. |
 | `PORT` | non | Port d'écoute, 10000 par défaut. |
+
+Les espaces et retours à la ligne autour de la valeur sont retirés, comme
+sur le serveur principal : une valeur collée telle quelle des deux côtés
+vaut la même chose.
 
 Sans secret valide, le service démarre quand même, pour que le journal dise
 pourquoi. Il refuse alors toute demande (401) et `/health` répond 503.
-Chez Render, le déploiement échoue donc au lieu de passer en silence.
+**Le déploiement n'échoue pas pour autant** : Render l'affiche « Live »
+(il ne lit pas le `HEALTHCHECK` de l'image, et ce mode d'emploi ne règle
+aucun « Health Check Path »). Après chaque déploiement, vérifiez donc le
+journal (aucune ligne `"event":"config"`, étape 6 ci-dessous) ou appelez
+`/health` depuis le Shell du serveur principal (réponse 200 attendue,
+étape 8).
 
 Le secret ne figure jamais dans le dépôt, ni dans le journal. Il n'est jamais
 transmis à yt-dlp ni à ffmpeg : leur environnement est réduit au strict
@@ -107,8 +116,9 @@ temps en temps.
 2. Choisissez le dépôt GitHub du projet, branche `main` (une fois le travail
    fusionné).
 3. Réglages :
-   - **Name** : par exemple `video-worker`. Ce nom donne l'adresse interne,
-     `http://video-worker:10000`. Choisissez un nom sans point.
+   - **Name** : par exemple `video-worker`. Choisissez un nom sans point.
+     L'adresse interne vient de ce nom, mais Render peut y ajouter un
+     suffixe : seule compte celle qu'il affiche (étape 7).
    - **Region** : **Frankfurt (EU Central)**, la même région que le serveur
      principal. C'est obligatoire pour le réseau privé.
    - **Runtime / Language** : **Docker** (à vérifier).
@@ -124,11 +134,17 @@ temps en temps.
      yt-dlp et de ffmpeg ;
    - aucune ligne `"event":"config"` ni `"tool_missing"` ne doit apparaître.
 7. Sur le **serveur principal** (onglet Environment), réglez :
-   - `VIDEO_WORKER_URL=http://video-worker:10000` (le nom interne du service ;
-     Render l'affiche dans l'onglet du service, « Internal Address », à
-     vérifier) ;
+   - `VIDEO_WORKER_URL` : copiez l'adresse interne que Render affiche pour le
+     service vidéo (« Connect » → « Internal », ou « Internal Address », à
+     vérifier), avec `http://` devant et le port `:10000` s'il n'y figure
+     pas. Par exemple `http://video-worker:10000`, mais ne recopiez pas cet
+     exemple sans vérifier : un nom faux rend chaque analyse « injoignable » ;
    - `VIDEO_WORKER_SECRET` : **la même valeur** qu'à l'étape 4 ;
    - `VIDEO_LINK_ANALYSIS_ENABLED=true`, quand vous voulez ouvrir la fonction.
+8. Depuis le **Shell** du serveur principal, vérifiez :
+   `curl <adresse de VIDEO_WORKER_URL>/health` doit répondre 200 et
+   `"status":"ok"`. Une réponse 503 : secret absent ou invalide sur le
+   service vidéo ; aucune réponse : adresse interne fausse.
 
 **Aucun port public, aucun domaine.** Un « Private Service » n'est joignable
 que par vos autres services de la même région. Ne créez pas de « Web
@@ -173,7 +189,7 @@ marchent dans un navigateur.
    utiliser « Manual Deploy » (à vérifier).
 5. Vérifiez que la nouvelle version est en ligne : la ligne `"listening"` du
    journal affiche `ytDlp`. On peut aussi appeler `GET /health` depuis le
-   Shell du serveur principal : `curl http://video-worker:10000/health`.
+   Shell du serveur principal : `curl <adresse de VIDEO_WORKER_URL>/health`.
 
 Mettez yt-dlp à jour au moins une fois par mois, même sans panne.
 
@@ -234,10 +250,17 @@ secret, jamais la sortie brute de yt-dlp ou de ffmpeg.
   - Adresse du fichier vidéo, donnée par yt-dlp : https, nom de domaine public
     uniquement (jamais une IP, ni un nom interne du réseau privé).
   - ffmpeg :
-    - `-protocol_whitelist https,tls,tcp` : ni fichier local, ni http, ni
-      liste de lecture ;
+    - `-protocol_whitelist https,tls,tcp` : ni fichier local, ni liste de
+      lecture ;
     - démultiplexeur MP4 imposé ;
-    - certificat du serveur vérifié (`-tls_verify 1`).
+    - certificat du serveur vérifié (`-tls_verify 1`) ;
+    - **limite connue** : seule la première adresse du fichier est vérifiée.
+      ffmpeg suit les redirections HTTP sans les contrôler, y compris vers
+      une adresse en http (« tcp » est autorisé) ou vers un autre hôte.
+      Aujourd'hui, personne d'autre que TikTok ou Meta ne choisit cette
+      adresse (elle vient de leur page, elle-même dans la liste fermée
+      ci-dessus) ; un contrôle de chaque redirection demanderait un petit
+      relais (proxy) dans le service.
 - **Programmes lancés** :
   - toujours avec une liste d'arguments, jamais de shell, jamais `--exec` ;
   - l'adresse est passée après `--` ;

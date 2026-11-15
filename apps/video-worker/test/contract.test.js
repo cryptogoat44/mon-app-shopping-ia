@@ -22,7 +22,7 @@ describe("GET /health", () => {
     assert.equal(response.headers.get("cache-control"), "no-store");
   });
 
-  it("service sans secret valide : 503 (le déploiement chez Render échoue au lieu de tout refuser en silence)", async () => {
+  it("service sans secret valide : /health répond 503 (à vérifier après chaque déploiement) et tout est refusé", async () => {
     const closed = await startWorker({ secret: null });
     try {
       const response = await fetch(`${closed.base}/health`);
