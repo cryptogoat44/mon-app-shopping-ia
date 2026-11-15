@@ -51,6 +51,24 @@ describe("réglages et secret", () => {
     assert.equal(readConfig({ VIDEO_WORKER_SECRET: LONG_SECRET }).secret, LONG_SECRET);
   });
 
+  it("espaces et retour à la ligne autour du secret retirés, comme sur le serveur principal (env.ts)", () => {
+    for (const value of [` ${LONG_SECRET}`, `${LONG_SECRET} `, `${LONG_SECRET}\n`, `\t ${LONG_SECRET}\r\n`]) {
+      const config = readConfig({ VIDEO_WORKER_SECRET: value });
+      assert.equal(config.secret, LONG_SECRET);
+      assert.deepEqual(config.problems, []);
+      // Le serveur envoie la valeur nettoyée : elle est acceptée.
+      assert.equal(createAuthorizer(config.secret)(`Bearer ${LONG_SECRET}`), true);
+    }
+    // Seulement des espaces : « absent » ; espace au milieu ou trop court une fois nettoyé : refusé.
+    assert.match(readConfig({ VIDEO_WORKER_SECRET: "   \n" }).problems[0], /absent/);
+    for (const value of [` ${"a".repeat(16)} ${"a".repeat(16)} `, ` ${"a".repeat(31)} `, `${"a".repeat(512)}b `]) {
+      const config = readConfig({ VIDEO_WORKER_SECRET: value });
+      assert.equal(config.secret, null);
+      assert.match(config.problems[0], /forme invalide/);
+    }
+    assert.equal(readConfig({ VIDEO_WORKER_SECRET: ` ${"a".repeat(512)} ` }).secret, "a".repeat(512));
+  });
+
   it("port : 10000 par défaut, PORT sinon, valeur invalide signalée", () => {
     assert.equal(readConfig({ VIDEO_WORKER_SECRET: LONG_SECRET }).port, 10000);
     assert.equal(readConfig({ VIDEO_WORKER_SECRET: LONG_SECRET, PORT: "8080" }).port, 8080);

@@ -4,8 +4,10 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
 export const DEFAULT_PORT = 10000;
-/** Même forme que celle exigée par le serveur principal (lib/videoWorker.ts) :
- * 32 à 512 caractères visibles, sans espace. */
+/** Même règle que le serveur principal (env.ts puis lib/videoWorker.ts) : les
+ * espaces et retours à la ligne autour de la valeur sont retirés (une valeur
+ * collée telle quelle dans les deux services vaut la même chose des deux
+ * côtés), puis 32 à 512 caractères visibles, sans espace. */
 const SECRET_SHAPE = /^[\x21-\x7e]{32,512}$/;
 const BEARER = /^Bearer ([\x21-\x7e]{1,1024})$/;
 
@@ -16,7 +18,8 @@ const BEARER = /^Bearer ([\x21-\x7e]{1,1024})$/;
 export function readConfig(env) {
   const problems = [];
   let secret = null;
-  const raw = env.VIDEO_WORKER_SECRET;
+  // Valeur vide après nettoyage : « absent », comme sur le serveur principal.
+  const raw = env.VIDEO_WORKER_SECRET?.trim();
   if (!raw) problems.push("VIDEO_WORKER_SECRET : absent (toutes les demandes d'images seront refusées)");
   else if (!SECRET_SHAPE.test(raw)) problems.push("VIDEO_WORKER_SECRET : forme invalide, 32 à 512 caractères visibles sans espace (toutes les demandes d'images seront refusées)");
   else secret = raw;
