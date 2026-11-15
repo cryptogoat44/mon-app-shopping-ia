@@ -121,7 +121,8 @@ describe("écran « vidéo partagée » : l'analyse d'abord, quand le serveur l'
   });
 
   it("le lecteur officiel (iPhone) reste proposé, et la consigne du site reste le bloc de repli", () => {
-    expect(screen).toContain("playerPossible(Platform.OS, features, platform)");
+    // Seulement s'il peut s'ouvrir (vidéo reconnue, serveur, build, instantané) : jamais un bouton vers l'écran de secours.
+    expect(screen).toContain("const withPlayer = platform !== null && link !== null && playerOffered({ platform, os: Platform.OS, build: features, server: lookup?.players ?? null, snapshotReady: snapshotAvailable });");
     expect(screen).toContain("{t.videoLinkAuto.player(name)}");
     expect(screen).toContain("<EmbeddedPlayer");
     expect(screen).toContain("onPress={() => void spotMoment()}");

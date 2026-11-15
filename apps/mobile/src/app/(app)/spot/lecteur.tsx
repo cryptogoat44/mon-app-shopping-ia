@@ -46,7 +46,7 @@ import { importPhotoForSpotter, type ImportResult } from "@/lib/image-import";
 import { useImageDrop } from "@/lib/image-drop";
 import { detectLink } from "@/lib/link-detection";
 import { grantPlayerConsent, readPlayerConsent } from "@/lib/player-access";
-import { decidePlayer, playerPossible, type FallbackReason } from "@/lib/player-decision";
+import { decidePlayer, playerOffered, type FallbackReason } from "@/lib/player-decision";
 import { instagramHostPage, tiktokHostPage } from "@/lib/player-host-page";
 import { isPlayerPlatform, playerBaseUrl, videoOpenUrl, type PlayerPlatform } from "@/lib/player-link";
 import { snapshotAvailable, snapshotPlayer } from "@/lib/player-snapshot";
@@ -140,7 +140,10 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   const name = platform ? t.spotter.platformName[platform] : "";
   const openUrl = platform ? videoOpenUrl(url, platform, link) : null;
   const isTikTokPlayer = stage.kind === "player" && platform === "tiktok";
-  const withPlayer = platform !== null && playerPossible(Platform.OS, features, platform);
+  // « Regarder dans le lecteur » seulement s'il peut vraiment s'ouvrir : vidéo
+  // reconnue par le serveur (sans elle, decide() tombe sur l'écran de secours)
+  // et même décision que decide() pour le reste (lib/player-decision.ts).
+  const withPlayer = platform !== null && link !== null && playerOffered({ platform, os: Platform.OS, build: features, server: lookup?.players ?? null, snapshotReady: snapshotAvailable });
   const auto = useVideoLinkAnalysis({
     active: analysisEnabled,
     url: link?.canonicalUrl ?? url,

@@ -70,6 +70,16 @@ export function decidePlayer(input: PlayerDecisionInput): PlayerDecision {
   return input.consent ? { kind: "player" } : { kind: "consent" };
 }
 
+/** Bouton « Regarder la vidéo dans le lecteur » (lot « vidéo auto ») : seulement
+ * si le lecteur peut vraiment s'ouvrir — même décision que l'écran (build,
+ * interrupteur du serveur, module de l'instantané), l'accord mis à part
+ * (demandé au toucher). Serveur inconnu ou lecteur coupé : pas de bouton qui
+ * mènerait tout droit à l'écran de secours. */
+export function playerOffered(input: Omit<PlayerDecisionInput, "consent">): boolean {
+  const decision = decidePlayer({ ...input, consent: false });
+  return decision.kind === "player" || decision.kind === "consent";
+}
+
 /** Le lecteur de cette plateforme peut-il exister dans ce build, sur cet appareil (sans le serveur ni l'accord) ? */
 export function playerPossible(os: string, build: BuildFeatures, platform?: PlayerPlatform): boolean {
   if (os !== "ios") return false;
