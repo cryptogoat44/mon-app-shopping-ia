@@ -22,6 +22,7 @@ import { t } from "../i18n";
 import { ApiError } from "./api-error";
 import { readJpegDataUri, type PixelSize } from "./data-uri";
 import { containsLink } from "./link-detection";
+import { isNetworkError } from "./network-error";
 import { capacityFailure, capacityMonthTip, type CapacityFailure } from "./spot-capacity";
 import type { Locale } from "./preferences";
 import type { LinkAiFailure } from "./video-link-failures";
@@ -149,15 +150,23 @@ export function linkAiFailure(error: unknown, timedOut = false): LinkFailureInfo
     const capacity = capacityFailure(error.body);
     if (capacity) return { failure: "search_limit", capacity };
     const code = typeof error.body?.error === "string" ? error.body.error : "";
+    // Vidéo introuvable ou sans vidéo (supprimée, publication de photos,
+    // direct) : le serveur l'envoie en 422, jamais pour une panne (5xx).
+    // Un nouvel essai échouerait pareil : message non « réessayable ».
+    if (code === "video_unavailable" && error.status === 422) return { failure: "invalid_link", capacity: null };
     if (isContractCode(code)) return { failure: FAILURE_BY_CODE[code], capacity: null };
     // Codes voisins (analyse des vidéos du téléphone, limites par minute).
     if (code === "video_ai_disabled") return { failure: "disabled", capacity: null };
     if (code === "rate_limited" || error.status === 429) return { failure: "rate_limited", capacity: null };
     if (error.status === 504) return { failure: "timeout", capacity: null };
+    // Autre refus définitif (compte suspendu, par exemple) : jamais « Réessayer ».
+    if (error.status >= 400 && error.status < 500 && error.status !== 401 && error.status !== 408) return { failure: "disabled", capacity: null };
     return { failure: "unavailable", capacity: null };
   }
-  // fetch échoue sans réponse : hors ligne, serveur injoignable.
-  return { failure: error instanceof TypeError ? "network" : "unavailable", capacity: null };
+  // fetch échoue sans réponse : hors ligne, serveur injoignable (TypeError
+  // sur le site, « fetch failed » d'expo/fetch sur iPhone). L'annulation par
+  // la personne est traitée avant (video-link-run.ts).
+  return { failure: isNetworkError(error) ? "network" : "unavailable", capacity: null };
 }
 
 export interface LinkFailureView {

@@ -172,6 +172,27 @@ describe("chaque échec : un message clair, et la capture d'écran toujours prop
     expect(linkAiFailure(new Error("abort")).failure).toBe("unavailable");
   });
 
+  it("iPhone hors ligne : l'erreur d'expo/fetch (« fetch failed: … ») est un problème de connexion, pas une vidéo indisponible", () => {
+    const offline = linkAiFailure(new Error("fetch failed: The Internet connection appears to be offline."));
+    expect(offline).toEqual({ failure: "network", capacity: null });
+    expect(linkFailureView(offline, "fr")).toMatchObject({ retry: true, message: fr.videoLinkAuto.failure.network });
+  });
+
+  it("échec définitif (vidéo supprimée, publication sans vidéo : 422 ; compte suspendu : 403) : jamais « Réessayer »", () => {
+    const gone = linkAiFailure(new ApiError(422, { error: "video_unavailable", message: "x" }));
+    expect(gone).toEqual({ failure: "invalid_link", capacity: null });
+    expect(linkFailureView(gone, "fr")).toMatchObject({ retry: false, message: fr.videoLinkAuto.failure.invalid_link });
+    const suspended = linkAiFailure(new ApiError(403, { error: "account_suspended", message: "x" }));
+    expect(suspended.failure).toBe("disabled");
+    expect(linkFailureView(suspended, "fr").retry).toBe(false);
+    // Une panne du service vidéo (502) ou de l'IA (503) reste « réessayable ».
+    for (const status of [502, 503]) {
+      const outage = linkAiFailure(new ApiError(status, { error: "video_unavailable", message: "x" }));
+      expect(outage.failure, String(status)).toBe("unavailable");
+      expect(linkFailureView(outage, "fr").retry, String(status)).toBe(true);
+    }
+  });
+
   it("« Réessayer » seulement quand un nouvel essai peut aboutir ; « Modifier la description » quand les mots comptent", () => {
     const view = (failure: LinkAiFailure) => linkFailureView({ failure, capacity: null }, "fr");
     for (const failure of ["unavailable", "timeout", "busy", "network"] as const) expect(view(failure).retry, failure).toBe(true);
