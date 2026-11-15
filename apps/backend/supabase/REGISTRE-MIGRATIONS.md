@@ -1,6 +1,6 @@
 # Registre des migrations
 
-*Lot « filets de sécurité », point 31 de la feuille de route V1. État au 6 novembre 2026.*
+*Lot « filets de sécurité », point 31 de la feuille de route V1. État au 15 novembre 2026.*
 
 Une **migration** est un fichier SQL qui fait évoluer la structure de la base de données. Les fichiers sont dans `apps/backend/supabase/migrations/`, numérotés dans l'ordre où il faut les appliquer.
 
@@ -40,20 +40,20 @@ Les dates de 0001 à 0028 ne sont pas notées dans le dépôt : celles du tablea
 | 0026 | « Retirer l'image copiée » (modération) | appliquée en production | au plus tard le 28 oct. 2026 |
 | 0027 | Fournisseur de recherche, place rendue, disjoncteurs, recherche par texte | appliquée en production | au plus tard le 28 oct. 2026 |
 | 0028 | Voie C (compléments « boutiques », cache) | appliquée en production | 3 ou 4 nov. 2026 (à confirmer) |
-| 0029 | Garde-fous : index, compteurs de l'IA dans la base, part du jour plus juste | **à appliquer** | — |
+| 0029 | Garde-fous : index, compteurs de l'IA dans la base, part du jour plus juste | appliquée en production (fichier groupé `prod-1-…-production.sql`, après une copie de secours complète ; vérification juste) | 15 nov. 2026 |
 | 0030 | Masquage automatique après 3 signalements | appliquée en production (fichier groupé `social-production.sql`, sans Supabase Pro : décision du fondateur) | 9 nov. 2026 |
 | 0031 | Boutiques ensuite : résultats Lens tout de suite, autres boutiques juste après | appliquée en production (sans Supabase Pro : décision du fondateur, 3 colonnes vides ajoutées) | 9 nov. 2026 |
 | 0032 | Messages privés entre membres (conversations, invitations, envie jointe) | appliquée en production (fichier groupé `social-production.sql`, sans Supabase Pro : décision du fondateur) | 9 nov. 2026 |
 | 0033 | Collections d'envies, privées ou montrées aux amis | appliquée en production (fichier groupé `social-production.sql`, sans Supabase Pro : décision du fondateur) | 9 nov. 2026 |
 | 0034 | Modération des collections : les signaler, les masquer, retirer une image copiée | appliquée en production (fichier groupé `social-production.sql`, sans Supabase Pro : décision du fondateur) | 9 nov. 2026 |
-| 0035 | Notifications des nouveaux messages sur le téléphone : les appareils prévenus | **à appliquer** (ne sert qu'avec 0032) | — |
-| 0036 | Alertes prix et stock : suivi des envies, cloches, alertes, « Plus disponible » | **à appliquer** (sur spotto-dev-2 seulement pour l'instant ; demande 0035) | — |
-| 0037 | Modération des profils : un administrateur peut retirer une bio ou une photo de profil | **à appliquer** (sur spotto-dev-2 d'abord ; demande 0026, déjà en production) | — |
-| 0038 | Mémoire collective des vidéos TikTok et Instagram (mission « liens vidéo ») : vidéos, spots, pièces repérées, confirmations | **à appliquer** (appliquée sur spotto-dev-2 ; facultative pour le serveur) | — |
-| 0039 | Garde-fous de la mémoire des vidéos (revue de sécurité) : seuil de 2 membres, un spot par membre et par vidéo, comptes suspendus ignorés, retrait par l'administrateur ; suppression d'un compte réparée (`security definer`) | **à appliquer** (appliquée sur spotto-dev-2 ; après 0038) | — |
-| 0040 | Garde-fous des alertes prix et stock (revue de sécurité) : « Plus disponible » d'un seul membre ne touche que ses envies, pas de « De retour en stock » après des signalements, une envie par membre et par pièce, pays du membre, achat reconnu par pièce | **à appliquer** (sur spotto-dev-2 seulement, avec ou après 0036 ; demande 0036) | — |
-| 0041 | Alertes, nouvelle version : seuil de prix choisi par le membre, stock et rupture comparés pays par pays (Google, ou 3 membres d'affilée du même pays ; pays de la recherche gardé avec chaque signalement), « Aider les autres membres », un achat ne sert plus aux alertes des autres, jours seulement (aucune heure gardée hors envoi, réservations échues effacées à chaque passage), notification générique | **à appliquer** (sur spotto-dev-2 seulement, après 0040 ; demande 0040), avec le serveur de ce lot, puis le script de rattrapage (empreintes version 2) | — |
-| 0042 | Essayage virtuel photo, ÉTEINT : drapeau des fonctions, statut d'âge et consentement, essais (sans aucune image), essais offerts, signalements, alertes et compteurs du budget | **à appliquer** (sur spotto-dev-2 seulement ; l'essayage reste éteint) | — |
+| 0035 | Notifications des nouveaux messages sur le téléphone : les appareils prévenus | appliquée en production (fichier groupé `prod-1-…-production.sql`, après une copie de secours complète ; vérification juste) | 15 nov. 2026 |
+| 0036 | Alertes prix et stock : suivi des envies, cloches, alertes, « Plus disponible » | appliquée en production (fichier groupé `prod-3-…-production.sql`, après une copie de secours complète ; vérification juste) | 15 nov. 2026 |
+| 0037 | Modération des profils : un administrateur peut retirer une bio ou une photo de profil | appliquée en production (fichier groupé `prod-1-…-production.sql`, après une copie de secours complète ; vérification juste) | 15 nov. 2026 |
+| 0038 | Mémoire collective des vidéos TikTok et Instagram (mission « liens vidéo ») : vidéos, spots, pièces repérées, confirmations | appliquée en production (fichier groupé `prod-2-…-production.sql`, après une copie de secours complète ; vérification juste) | 15 nov. 2026 |
+| 0039 | Garde-fous de la mémoire des vidéos (revue de sécurité) : seuil de 2 membres, un spot par membre et par vidéo, comptes suspendus ignorés, retrait par l'administrateur ; suppression d'un compte réparée (`security definer`) | appliquée en production (fichier groupé `prod-2-…-production.sql`, après une copie de secours complète ; vérification juste) | 15 nov. 2026 |
+| 0040 | Garde-fous des alertes prix et stock (revue de sécurité) : « Plus disponible » d'un seul membre ne touche que ses envies, pas de « De retour en stock » après des signalements, une envie par membre et par pièce, pays du membre, achat reconnu par pièce | appliquée en production (fichier groupé `prod-3-…-production.sql`, après une copie de secours complète ; vérification juste) | 15 nov. 2026 |
+| 0041 | Alertes, nouvelle version : seuil de prix choisi par le membre, stock et rupture comparés pays par pays (Google, ou 3 membres d'affilée du même pays ; pays de la recherche gardé avec chaque signalement), « Aider les autres membres », un achat ne sert plus aux alertes des autres, jours seulement (aucune heure gardée hors envoi, réservations échues effacées à chaque passage), notification générique | appliquée en production (fichier groupé `prod-3-…-production.sql`, après une copie de secours complète ; vérification juste) | 15 nov. 2026 |
+| 0042 | Essayage virtuel photo, ÉTEINT : drapeau des fonctions, statut d'âge et consentement, essais (sans aucune image), essais offerts, signalements, alertes et compteurs du budget | appliquée en production (le fichier de la migration, après une copie de secours complète ; vérification juste ; drapeau `tryon` allumé à la demande du fondateur) | 15 nov. 2026 |
 
 ## Fichiers utiles par migration
 
