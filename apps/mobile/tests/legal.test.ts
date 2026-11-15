@@ -6,11 +6,12 @@ import { consentFor, parseLegalVersion, pendingConsents, splitPlaceholders } fro
 import { termsOfUse } from "../src/legal/conditions";
 import { buildPrivacyPolicy, privacyPolicy } from "../src/legal/confidentialite";
 import { buildPrivacyPolicyEn, privacyPolicyEn } from "../src/legal/confidentialite.en";
-import type { LegalDocument } from "../src/legal/types";
+import { PLACEHOLDER_PATTERN, type LegalDocument, type PrivacyExtra } from "../src/legal/types";
 import * as iphoneExtra from "../src/legal-extra/confidentialite-extra";
+import * as siteExtra from "../src/legal-extra/confidentialite-extra.web";
 import { fr } from "../src/i18n/fr";
 import { en } from "../src/i18n/en";
-import { PUBLISHER, readPublisher } from "../src/legal/publisher";
+import { PUBLISHER, PUBLISHER_EN, readPublisher } from "../src/legal/publisher";
 
 describe("documents juridiques", () => {
   it("lit la version d'un projet", () => {
@@ -206,6 +207,9 @@ describe("politique de confidentialité : vidéos, lien analysé, fonctions du s
   const VIDEOS_EN = "Videos from your phone, TikTok and Instagram";
   /** Mots de l'essayage : jamais dans les textes de l'app iPhone (règle 2.5.19 d'Apple). */
   const SITE_ONLY = /essayage|fashn|try-on|tryon/i;
+  const FRENCH_MARKS = /[àâçéèêëîïôûùœ«»]|\b(vous|votre|le|la|les|des|une|pour|avec)\b/i;
+  const siteFr = buildPrivacyPolicy(siteExtra.privacyExtraFr);
+  const siteEn = buildPrivacyPolicyEn(siteExtra.privacyExtraEn);
 
   it("ni nouvelle version ni nouvelle acceptation : la politique reste le projet du 2026-11-05", () => {
     expect(LEGAL_DOCUMENT_VERSIONS.privacy_policy).toBe("projet-2026-11-05");
@@ -321,5 +325,95 @@ describe("politique de confidentialité : vidéos, lien analysé, fonctions du s
       "Sécurité",
       "Modifications",
     ]);
+  });
+
+  it("site : l'essayage virtuel photo a sa section, juste après les alertes, et chaque section concernée le mentionne", () => {
+    const titles = siteFr.sections.map((s) => s.title);
+    expect(titles.length).toBe(privacyPolicy.sections.length + 1);
+    expect(titles.indexOf("Essayage virtuel photo")).toBe(titles.indexOf("Alertes prix et stock") + 1);
+    expect(siteEn.sections.map((s) => s.title).indexOf("Virtual photo try-on")).toBe(titles.indexOf("Essayage virtuel photo"));
+    const tryon = section(siteFr, "Essayage virtuel photo");
+    for (const sentence of [
+      "si vous avez 18 ans ou plus",
+      "elle ne démarre qu'avec votre consentement",
+      "Ni votre photo ni l'image produite ne servent à entraîner une IA",
+      "Sur quelle base : votre consentement",
+      "le retrait vaut pour l'avenir",
+      "1 296 pixels au plus sur le grand côté",
+      "Votre date de naissance sert seulement au calcul : elle n'est jamais conservée",
+      "FASHN, au Royaume-Uni",
+      "Ni votre nom, ni votre adresse e-mail, ni aucun identifiant de votre compte ne lui sont transmis",
+      "Les sous-traitants de FASHN, dont certains sont situés aux États-Unis et en Asie",
+      "en mémoire seulement",
+      "aucune conservation",
+      "Les informations d'usage et vos signalements : 12 mois",
+      "compteurs mensuels anonymes",
+      "au plus tard sous un jour",
+      "pendant 60 minutes",
+      "tant que Spotto n'en demande pas la suppression",
+      "« Image générée par IA »",
+      "DigitalSourceType = trainedAlgorithmicMedia",
+      "Aucune donnée de l'essayage n'est envoyée aux statistiques d'usage",
+    ]) {
+      expect(tryon).toContain(sentence);
+    }
+    const tryonEn = section(siteEn, "Virtual photo try-on");
+    for (const sentence of ["if you are 18 or over", "FASHN, in the United Kingdom", "no retention", "for 60 minutes", "within one day at the latest", "DigitalSourceType = trainedAlgorithmicMedia", "Neither your name, nor your email address, nor any identifier of your account is sent to it"]) {
+      expect(tryonEn).toContain(sentence);
+    }
+    // Chaque liste reçoit son ajout, au bon endroit.
+    expect(section(siteFr, "En bref")).toContain("votre photo est envoyée à notre prestataire FASHN pour créer l'image");
+    expect(section(siteFr, "Pourquoi, et sur quelle base")).toContain("Créer un essayage virtuel photo, sur le site : votre consentement");
+    expect(section(siteFr, "Nos prestataires et les services tiers")).toContain("FASHN (Royaume-Uni) : création de l'essayage virtuel photo");
+    expect(section(siteFr, "Transferts hors de l'Union européenne")).toContain("si vous utilisez l'essayage virtuel photo : votre photo et l'image de la pièce, envoyées à FASHN, au Royaume-Uni");
+    expect(section(siteFr, "Combien de temps")).toContain("Les données de l'essayage virtuel photo : voir « Essayage virtuel photo »");
+    expect(section(siteFr, "Vos droits")).toContain("Retirer votre consentement à l'essayage virtuel photo : Réglages → Vos données.");
+    expect(section(siteFr, "Âge minimum")).toContain("réservé aux personnes de 18 ans et plus");
+    // Le reste du texte est celui de l'app iPhone, mot pour mot.
+    const withoutExtra = (doc: LegalDocument, extra: PrivacyExtra) => {
+      const added = new Set([...extra.summary, ...extra.bases, ...extra.providers, ...extra.transfers, ...extra.retention, ...extra.rights, ...extra.age]);
+      const extraTitles = new Set(extra.sections.map((s) => s.title));
+      return doc.sections
+        .filter((s) => !extraTitles.has(s.title))
+        .map((s) => ({ ...s, blocks: s.blocks.filter((b) => typeof b !== "string" || !added.has(b)).map((b) => (typeof b === "string" ? b : b.filter((item) => !added.has(item)))) }));
+    };
+    expect(withoutExtra(siteFr, siteExtra.privacyExtraFr)).toEqual(privacyPolicy.sections);
+    expect(withoutExtra(siteEn, siteExtra.privacyExtraEn)).toEqual(privacyPolicyEn.sections);
+  });
+
+  it("site : même plan en français et en anglais, anglais sans mot français, aucun champ à compléter ni note pour l'avocat", () => {
+    expect(siteEn.sections.length).toBe(siteFr.sections.length);
+    siteEn.sections.forEach((s, index) => {
+      expect(s.blocks.length, s.title).toBe(siteFr.sections[index]!.blocks.length);
+      s.blocks.forEach((block, b) => {
+        const french = siteFr.sections[index]!.blocks[b]!;
+        expect(typeof block, `${s.title} ${b}`).toBe(typeof french);
+        if (typeof block !== "string") expect(block.length, `${s.title} ${b}`).toBe((french as readonly string[]).length);
+      });
+    });
+    const englishLines = siteEn.sections.flatMap((s) => [s.title, ...s.blocks.flat()]).map((line) => line.replace(/\[To be[^\]]*\]/g, ""));
+    expect(englishLines.filter((line) => FRENCH_MARKS.test(line))).toEqual([]);
+    // Les ajouts du site, sans aucun crochet : ni « [À vérifier] », ni les notes des brouillons (« [à confirmer] »…).
+    // Seule exception : l'adresse de contact de l'éditeur, reprise de publisher.ts (« [À compléter] » si absente).
+    for (const extra of [siteExtra.privacyExtraFr, siteExtra.privacyExtraEn]) {
+      const texts = [...extra.summary, ...extra.bases, ...extra.providers, ...extra.transfers, ...extra.retention, ...extra.rights, ...extra.age, ...extra.sections.flatMap((s) => [s.title, ...s.blocks.flat()])].map((text) =>
+        text.replaceAll(PUBLISHER.email, "").replaceAll(PUBLISHER_EN.email, "")
+      );
+      expect(texts.length).toBeGreaterThan(10);
+      expect(texts.filter((text) => PLACEHOLDER_PATTERN.test(text) || /\[/.test(text))).toEqual([]);
+    }
+    // Autant de mentions « à vérifier » dans les deux langues, sur le site comme dans l'app.
+    expect(all(siteEn).match(/\[To be verified/g)!.length).toBe(all(siteFr).match(/\[À vérifier/g)!.length);
+    expect(all(siteFr).match(/\[À vérifier/g)!.length).toBe(frText.match(/\[À vérifier/g)!.length);
+  });
+
+  it("le nom neutre des deux versions : mêmes noms exportés, importés par les deux textes sans suffixe de plateforme", () => {
+    expect(Object.keys(siteExtra).sort()).toEqual(Object.keys(iphoneExtra).sort());
+    const dir = join(__dirname, "../src/legal");
+    for (const file of ["confidentialite.ts", "confidentialite.en.ts"]) {
+      const source = readFileSync(join(dir, file), "utf8");
+      expect(source, file).toContain('from "../legal-extra/confidentialite-extra";');
+      expect(source, file).not.toMatch(/confidentialite-extra\.web/);
+    }
   });
 });

@@ -6,9 +6,11 @@ import { describe, expect, it } from "vitest";
 // repère tout texte en français resté en dur dans les écrans, composants et
 // utilitaires. Exclus : les catalogues eux-mêmes, les documents juridiques
 // (un texte complet par langue), les données de démonstration et les
-// messages destinés aux développeurs (throw new Error, console).
+// messages destinés aux développeurs (throw new Error, console). Les ajouts
+// à la politique de confidentialité propres au site (legal-extra/, lot du
+// 2026-11-15) sont des documents juridiques eux aussi.
 const ROOT = join(__dirname, "../src");
-const EXCLUDED = ["i18n/", "legal/", "api/mock.ts", "lib/format.ts"];
+const EXCLUDED = ["i18n/", "legal/", "legal-extra/", "api/mock.ts", "lib/format.ts"];
 const FRENCH = /[àâçéèêëîïôûùüÿœÉÈÀ]|\b(le|la|les|de|des|du|un|une|et|est|sur|vous|votre|vos|pour|avec|aux|Retour|Annuler|Fermer|Suivre|Profil|Profils|Fil|Rechercher|Aucun|Voir|Plus|Aimer|Publier|Garder|Envies|Partager|Supprimer|Continuer|Enregistrer)\b|[dlnqs]'[a-zà-ÿ]/;
 
 function files(dir: string): string[] {
