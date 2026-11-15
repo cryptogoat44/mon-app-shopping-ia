@@ -729,41 +729,129 @@ describe("nouvelle version (0041) : « Aider les autres membres »", () => {
 
 describe("politique de confidentialité et App Privacy (brouillons « à vérifier »)", () => {
   const all = (doc: typeof privacyPolicy) => doc.sections.flatMap((s) => [s.title, ...s.blocks.flat()]).join("\n");
+  const section = (doc: typeof privacyPolicy, title: string) => {
+    const found = doc.sections.find((s) => s.title === title);
+    expect(found, title).toBeDefined();
+    return found!.blocks.flat().join("\n");
+  };
 
-  it("un paragraphe « [À vérifier] » : la comparaison avec les Envies des autres, personne n'est identifié, ce qui est gardé, Expo et Apple", () => {
-    const frText = all(privacyPolicy);
-    const enText = all(privacyPolicyEn);
-    const paragraph = frText.slice(frText.indexOf("Vos alertes prix et stock :"), frText.indexOf("Vos clics vers les marchands"));
+  // Lot politique du 2026-11-15 : la nouvelle version des alertes (0040,
+  // 0041) a sa section, d'après docs/alertes-v2/changements-confidentialite.md.
+  // Les phrases de l'ancienne version devenues fausses ont disparu.
+  it("section « Alertes prix et stock » : réglage, seuils, signalements par pays, 3 d'affilée, notification générique, jours seulement, 3e jour, 30 jours", () => {
+    const frSection = section(privacyPolicy, "Alertes prix et stock");
     for (const sentence of [
-      "les résultats des recherches et des achats faits dans Spotto, et les signalements « Plus disponible » des membres, sont comparés avec les Envies gardées par les autres membres",
-      "Personne n'est identifié à personne",
-      "le prix de référence et le dernier prix vu",
-      "l'état du stock et leurs dates au jour près",
-      "Une alerte est envoyée tout de suite, dès que la baisse ou le retour en stock est constaté",
+      "l'interrupteur « Alertes prix et stock » des Réglages est coupé par défaut",
+      "vous fixez un seuil : le prix que vous indiquez, ou à défaut le dernier prix vu",
+      "sa devise, son pays et le fait qu'il soit déjà franchi ou non",
+      "Aider les autres membres : ce réglage est activé par défaut",
+      "Si vous le désactivez (Réglages → Alertes prix et stock), ils ne servent qu'à vos propres Envies",
+      "ne comptent pas dans les séries de signalements",
+      "Une pièce notée « Je l'ai achetée » ne sert jamais aux alertes des autres membres",
+      "Les prix et le stock ne se comparent qu'entre recherches faites depuis le même pays",
+      "l'identifiant du membre qui cherche est transmis à notre base de données pour appliquer son réglage et la règle des signalements ; il n'est pas gardé",
+      "3 membres différents d'affilée, depuis ce pays",
+      "le pays de votre recherche (France, Royaume-Uni, Suisse ou États-Unis), si vous aidiez alors les autres membres",
+      "Ils sont effacés au bout de 30 jours, figurent dans l'export de vos données et ne sont jamais reliés à une alerte",
+      "Aucun nom de boutique n'est gardé pour ce suivi",
+      "Le dernier prix vu et l'état du stock s'affichent sur la fiche de l'Envie",
+      "dans la limite de 5 alertes par jour",
+      "« Baisse de prix sur l'une de vos Envies », « L'une de vos Envies est de nouveau disponible » ou « Plusieurs de vos Envies ont du nouveau »",
+      "Elle ne contient ni le titre de la pièce, ni la boutique, ni le prix",
+      "garde seulement le jour de sa création et celui de son envoi",
+      "l'heure exacte n'existe que pendant l'envoi (15 minutes au plus)",
+      "Une alerte qui n'a pas pu partir expire le 3e jour",
+      "Les alertes sont effacées au bout de 30 jours",
       "aucun membre ne peut savoir qui c'était",
       "Votre Vault reste visible par vous seul",
-      "Les alertes sont effacées au bout de 30 jours",
-      "Expo (650 Industries, Inc., États-Unis)",
-      "Apple (Apple Inc., États-Unis)",
-      "[À vérifier : base légale retenue",
+      // La limite écrite honnêtement (section 5 de la liste).
+      "Une limite, cependant",
+      "retrouver la recherche probablement à l'origine d'une alerte",
+      "Les auteurs d'une série de signalements y sont aussi connus",
+      "n'apparaissent dans les journaux du serveur, les rapports d'erreur ou les statistiques d'usage",
     ]) {
-      expect(paragraph).toContain(sentence);
+      expect(frSection).toContain(sentence);
     }
-    const english = enText.slice(enText.indexOf("Your price and stock alerts:"), enText.indexOf("Your clicks to retailers"));
-    // Plus aucun délai ni décalage d'un jour : envoyée tout de suite.
-    expect(paragraph).not.toMatch(/2 à 8|la veille|le lendemain|ne vous montre ni le stock/);
-    for (const sentence of ["are compared with the wishes saved by other members", "An alert is sent right away", "no member can find out who it was", "Nobody is identified to anyone", "Alerts are deleted after 30 days", "Expo (650 Industries, Inc., United States)", "[To be verified: legal basis chosen"]) {
-      expect(english).toContain(sentence);
+    const enSection = section(privacyPolicyEn, "Price and stock alerts");
+    for (const sentence of [
+      "the “Price and stock alerts” switch in Settings is off by default",
+      "you set a threshold: the price you enter or, failing that, the last price seen",
+      "Help other members: this setting is on by default",
+      "they are only used for your own wishes",
+      "A piece marked “I bought it” is never used for other members' alerts",
+      "Prices and stock are only compared between searches made from the same country",
+      "it is not kept",
+      "3 different members in a row, from that country",
+      "whether you were helping other members at the time",
+      "No shop name is kept for this tracking",
+      "up to 5 alerts a day",
+      "“Price drop on one of your Wishes”, “One of your Wishes is available again” or “Several of your Wishes have news”",
+      "It contains neither the title of the piece, nor the shop, nor the price",
+      "only keeps the day it was created and the day it was sent",
+      "An alert that could not go out expires on the 3rd day",
+      "Alerts are deleted after 30 days",
+      "no member can find out who it was",
+      "There is a limit, however",
+      "find the search that probably triggered an alert",
+    ]) {
+      expect(enSection).toContain(sentence);
+    }
+    // Plus aucun délai ni décalage d'un jour.
+    expect(frSection).not.toMatch(/2 à 8|la veille|le lendemain|ne vous montre ni le stock/);
+  });
+
+  it("les phrases de l'ancienne version devenues fausses ont disparu (achats comparés, heure gardée, contenu de la notification, prix de référence), et jamais « personne ne peut savoir »", () => {
+    const frText = all(privacyPolicy);
+    const enText = all(privacyPolicyEn);
+    for (const gone of [
+      "les résultats des recherches et des achats faits dans",
+      "garde en interne l'heure à laquelle elle a été préparée et envoyée",
+      "Une notification d'alerte contient",
+      "3 de vos envies ont du nouveau",
+      "prix de référence",
+      "Personne n'est identifié à personne",
+      "personne ne peut savoir",
+      "jamais qui a cherché, acheté ou signalé",
+    ]) {
+      expect(frText).not.toContain(gone);
+    }
+    for (const gone of [
+      "the results of searches and purchases made in",
+      "keeps internally the time it was prepared and sent",
+      "An alert notification contains",
+      "3 of your wishes have news",
+      "reference price",
+      "Nobody is identified to anyone",
+      "nobody can know",
+      "never who searched for, bought or reported",
+    ]) {
+      expect(enText).not.toContain(gone);
     }
   });
 
-  it("Expo et Apple (sous-traitants) : les notifications des messages ET des alertes, ce qu'une alerte contient, et l'adresse de l'appareil gardée tant que l'une des deux est activée", () => {
+  it("le reste de la politique renvoie à la section : données, qui voit quoi, durées, suppression du compte, droits", () => {
+    const frText = all(privacyPolicy);
+    const enText = all(privacyPolicyEn);
+    expect(frText).toContain("Vos alertes prix et stock : les Envies dont vous allumez la cloche, ce que vous suivez (baisse de prix, retour en stock), vos seuils de prix");
+    expect(section(privacyPolicy, "Qui peut voir quoi dans Spotto")).toContain("Vos alertes, vos seuils de prix et vos signalements « Plus disponible » : vous seul");
+    expect(section(privacyPolicy, "Combien de temps")).toContain("une alerte qui n'a pas pu partir expire le 3e jour");
+    expect(section(privacyPolicy, "Combien de temps")).toContain("alertes et signalements « Plus disponible »");
+    expect(section(privacyPolicy, "Vos droits")).toContain("Couper vos alertes prix et stock, ou ne plus aider les alertes des autres membres : Réglages → Alertes prix et stock.");
+    expect(section(privacyPolicy, "Pourquoi, et sur quelle base")).toContain("(réglage « Aider les autres membres », activé par défaut, que vous pouvez désactiver) : notre intérêt légitime");
+    expect(enText).toContain("Your price and stock alerts: the wishes whose bell you turn on");
+    expect(section(privacyPolicyEn, "Your rights")).toContain("Turn off your price and stock alerts, or stop helping other members' alerts: Settings → Price and stock alerts.");
+    expect(section(privacyPolicyEn, "Why, and on what basis")).toContain("(“Help other members” setting, on by default, which you can turn off): our legitimate interest");
+  });
+
+  it("Expo et Apple (sous-traitants) : les notifications des messages ET des alertes, une notification d'alerte générique, et l'adresse de l'appareil gardée tant que l'une des deux est activée", () => {
     const frExpo = all(privacyPolicy).split("\n").find((line) => line.startsWith("Expo (650 Industries, Inc., États-Unis) :"))!;
     for (const sentence of [
       "les notifications de messages ou celles des alertes prix et stock",
+      "service de notifications d'Apple (Apple Inc., États-Unis)",
       "Une notification de message contient seulement « Spotto »",
-      "Une notification d'alerte contient « Spotto », le titre de la pièce, la boutique et le prix",
-      "jamais qui a cherché, acheté ou signalé la pièce",
+      "Une notification d'alerte est générique (« Baisse de prix sur l'une de vos Envies »",
+      "elle ne contient ni le titre de la pièce, ni la boutique, ni le prix, seulement un identifiant de l'Envie (aucun pour une notification groupée)",
+      "jamais qui a cherché ou signalé la pièce",
       "tant que les notifications de messages ou celles des alertes y sont activées",
       "elle est effacée quand vous coupez les deux",
       "[À vérifier :",
@@ -772,7 +860,13 @@ describe("politique de confidentialité et App Privacy (brouillons « à vérifi
     }
     expect(frExpo).not.toContain("si vous activez les notifications de messages sur votre iPhone");
     const enExpo = all(privacyPolicyEn).split("\n").find((line) => line.startsWith("Expo (650 Industries, Inc., United States):"))!;
-    for (const sentence of ["message notifications or price and stock alert notifications", "An alert notification contains", "it is deleted when you turn both off", "[To be verified:"]) {
+    for (const sentence of [
+      "message notifications or price and stock alert notifications",
+      "An alert notification is generic (“Price drop on one of your Wishes”",
+      "it contains neither the title of the piece, nor the shop, nor the price, only an identifier of the wish (none for a grouped notification)",
+      "it is deleted when you turn both off",
+      "[To be verified:",
+    ]) {
       expect(enExpo).toContain(sentence);
     }
   });
