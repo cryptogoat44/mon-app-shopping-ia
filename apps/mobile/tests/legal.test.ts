@@ -214,7 +214,29 @@ describe("politique de confidentialité : vidéos, lien analysé, fonctions du s
   it("ni nouvelle version ni nouvelle acceptation : la politique reste le projet du 2026-11-05", () => {
     expect(LEGAL_DOCUMENT_VERSIONS.privacy_policy).toBe("projet-2026-11-05");
     expect(ACCEPTED_CONSENT_VERSIONS.privacy_policy.at(-1)).toBe("projet-2026-11-05");
-    expect(CONSENT_VERSIONS.analyse_video_ia).toBe("analyse-video-ia-2026-10-06");
+  });
+
+  // Conception finale (revue du lot « vidéo auto ») : le consentement
+  // « analyse_video_ia » passe à une nouvelle version qui couvre aussi les
+  // liens, faite côté app (branche lot-video-auto). La politique promet qu'un
+  // accord donné sur une version précédente est redemandé : seule la version
+  // en vigueur peut donc être acceptée, avant comme après cette mise à jour.
+  it("analyse d'un lien : nouvelle version du consentement, accord précédent redemandé, en français comme en anglais", () => {
+    expect(ACCEPTED_CONSENT_VERSIONS.analyse_video_ia).toEqual([CONSENT_VERSIONS.analyse_video_ia]);
+    const fr = section(privacyPolicy, VIDEOS);
+    const en = section(privacyPolicyEn, VIDEOS_EN);
+    expect(fr).toContain("C'est le même consentement que pour une vidéo de votre téléphone, dans une nouvelle version de son texte, qui couvre à la fois les vidéos de votre téléphone et les liens.");
+    expect(fr).toContain("Un accord donné sur la version précédente, qui ne parlait que des vidéos de votre téléphone, ne suffit pas : l'app vous redemande votre accord avant toute nouvelle analyse automatique, d'une vidéo de votre téléphone comme d'un lien.");
+    expect(en).toContain("It is the same consent as for a video from your phone, in a new version of its text, which covers both videos from your phone and links.");
+    expect(en).toContain("Consent given on the previous version, which only covered videos from your phone, is not enough: the app asks for your consent again before any new automatic analysis, of a video from your phone as of a link.");
+    // L'ancienne formule laissait croire que l'accord donné pour une vidéo du téléphone suffisait.
+    expect(frText).not.toContain("(le même consentement que pour une vidéo de votre téléphone)");
+    expect(enText).not.toContain("(the same consent as for a video from your phone)");
+    expect(section(privacyPolicy, "Pourquoi, et sur quelle base")).toContain("votre consentement, demandé à la première utilisation et de nouveau quand son texte change, que vous pouvez retirer à tout moment (Réglages → Vos données)");
+    expect(section(privacyPolicyEn, "Why, and on what basis")).toContain("your consent, asked the first time you use it and again when its text changes, which you can withdraw at any time (Settings → Your data)");
+    // Chaque choix est enregistré avec la version du texte présenté (POST /api/consents).
+    expect(section(privacyPolicy, "Les données que nous utilisons")).toContain("pour les statistiques d'usage et l'analyse automatique des vidéos, chacun avec sa date et la version du texte qui vous a été présenté.");
+    expect(section(privacyPolicyEn, "The data we use")).toContain("for usage statistics and automatic video analysis, each with its date and the version of the text shown to you.");
   });
 
   it("les phrases devenues fausses ont disparu : aperçu demandé à TikTok ou Meta, Pinterest, vidéo « qui reste sur l'appareil » sans nuance", () => {
@@ -237,7 +259,7 @@ describe("politique de confidentialité : vidéos, lien analysé, fonctions du s
       "l'app vous demande votre accord avant d'afficher un lecteur pour la première fois",
       "le garde 24 heures : Meta reçoit l'adresse de la publication, jamais votre identité",
       // L'analyse automatique d'un lien (lot « vidéo auto »).
-      "le même consentement que pour une vidéo de votre téléphone",
+      "C'est le même consentement que pour une vidéo de votre téléphone, dans une nouvelle version de son texte",
       "Notre service vidéo, un service distinct de notre serveur, hébergé lui aussi par Render dans l'Union européenne (Francfort)",
       "sans garder la vidéo",
       "TikTok ou Meta reçoivent cette demande de notre service, avec l'adresse de la vidéo : jamais votre identité ni votre adresse IP",
@@ -264,7 +286,7 @@ describe("politique de confidentialité : vidéos, lien analysé, fonctions du s
       "For a short TikTok link, our server only asks TikTok which address it leads to",
       "The link is kept on your device for 10 minutes",
       "the app asks for your agreement before showing a player for the first time",
-      "the same consent as for a video from your phone",
+      "It is the same consent as for a video from your phone, in a new version of its text",
       "Our video service, a service separate from our server, also hosted by Render in the European Union (Frankfurt)",
       "TikTok or Meta receive this request from our service, with the address of the video: never your identity or your IP address",
       "16 at most, 512 pixels on a side",
