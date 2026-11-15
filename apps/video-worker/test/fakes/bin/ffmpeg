@@ -1,0 +1,3 @@
+#!/bin/sh
+# Faux ffmpeg des tests : jamais de réseau (voir ../fake-ffmpeg.cjs).
+exec node "$(dirname "$0")/../fake-ffmpeg.cjs" "$@"

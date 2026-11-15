@@ -233,19 +233,23 @@ export function AskView(p: AskProps) {
 
 /** Accord au premier usage : « Accepter » en bouton principal ; le refus
  * reste libre et ne bloque rien — un lien discret ouvre le curseur, sans IA
- * et sans envoi d'image. */
+ * et sans envoi d'image. Lien TikTok ou Instagram (lot « vidéo auto ») : même
+ * accord et même texte (commun aux deux écrans : une seule version
+ * enregistrée), et, au refus, la capture d'écran (`declineLabel`). */
 export function ConsentView({
   saving,
   error,
   onAccept,
   onChooseMyself,
   onPolicy,
+  declineLabel = t.videoAuto.chooseMyself,
 }: {
   saving: boolean;
   error: string | null;
   onAccept: () => void;
   onChooseMyself: () => void;
   onPolicy: () => void;
+  declineLabel?: string;
 }) {
   return (
     <>
@@ -263,7 +267,7 @@ export function ConsentView({
       {error ? <ErrorMessage style={styles.message}>{error}</ErrorMessage> : null}
       <ActionButtons primary={{ label: t.videoAuto.accept, onPress: onAccept, busy: saving }} />
       <Pressable onPress={onChooseMyself} disabled={saving} style={styles.discreet} accessibilityRole="button">
-        <Text style={styles.discreetLabel}>{t.videoAuto.chooseMyself}</Text>
+        <Text style={styles.discreetLabel}>{declineLabel}</Text>
       </Pressable>
     </>
   );

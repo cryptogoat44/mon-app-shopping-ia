@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decidePlayer, playerPossible, type PlayerDecisionInput } from "../src/lib/player-decision";
+import { decidePlayer, playerOffered, playerPossible, type PlayerDecisionInput } from "../src/lib/player-decision";
 
 // Mission « liens vidéo » : lecteur officiel ou écran de secours ? Option du
 // build × interrupteur du serveur × module de l'instantané × accord ×
@@ -76,6 +76,23 @@ describe("lecteur ou écran de secours", () => {
         }
       }
     }
+  });
+});
+
+describe("bouton « Regarder la vidéo dans le lecteur » (lot « vidéo auto »)", () => {
+  const { consent: _consent, ...offer } = base;
+  it("proposé seulement si le lecteur peut s'ouvrir ; l'accord est demandé au toucher", () => {
+    expect(playerOffered(offer)).toBe(true);
+    expect(playerOffered({ ...offer, platform: "instagram" })).toBe(true);
+  });
+
+  it("interrupteur du serveur coupé, serveur inconnu, module de l'instantané absent, build coupé, site : pas de bouton", () => {
+    expect(playerOffered({ ...offer, server: { tiktok: false, instagram: true } })).toBe(false);
+    expect(playerOffered({ ...offer, server: null })).toBe(false);
+    expect(playerOffered({ ...offer, snapshotReady: false })).toBe(false);
+    expect(playerOffered({ ...offer, build: { tiktokPlayer: false, instagramPlayer: true } })).toBe(false);
+    expect(playerOffered({ ...offer, os: "web" })).toBe(false);
+    expect(playerOffered({ ...offer, os: "android" })).toBe(false);
   });
 });
 

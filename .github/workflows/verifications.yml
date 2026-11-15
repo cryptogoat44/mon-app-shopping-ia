@@ -69,6 +69,13 @@ jobs:
             console.log('Modules d’images chargés.');
           "
 
+      # Service vidéo séparé (lot « vidéo auto ») : aucune dépendance, faux
+      # yt-dlp et ffmpeg, aucun appel au réseau. Les essais avec le vrai
+      # ffmpeg sont sautés s'il n'est pas installé sur la machine.
+      - name: Service vidéo — tests
+        working-directory: apps/video-worker
+        run: node --test --test-concurrency=1 "test/*.test.js"
+
       - name: App — types des routes (générés par Expo, non enregistrés dans Git)
         working-directory: apps/mobile
         run: |

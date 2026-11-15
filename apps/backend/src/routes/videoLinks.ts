@@ -4,11 +4,16 @@
 // officiel d'Instagram, et (administrateurs) retirer une pièce de la mémoire
 // d'une vidéo (/api/admin/moderation/video-memory/remove).
 //
-// Le serveur ne télécharge JAMAIS une vidéo, une image ni une miniature de
-// TikTok ou d'Instagram. Ses deux seuls appels sortants, ici :
+// Le serveur principal ne télécharge toujours JAMAIS lui-même une vidéo, une
+// image ni une miniature de TikTok ou d'Instagram. Ses deux seuls appels
+// sortants vers ces plateformes, ici :
 // - suivre la redirection d'un lien court TikTok (lib/videoLinks.ts) ;
 // - demander à Meta le code d'intégration d'une publication
 //   (lib/instagramEmbed.ts).
+// Depuis la décision du fondateur des 14 et 15 novembre 2026, la vidéo
+// publique d'un lien peut être récupérée, sans être gardée, mais seulement par
+// le service vidéo séparé (apps/video-worker), pour l'analyse automatique d'un
+// lien : routes/videoLinkAnalysis.ts, qui ne reçoit de lui que des images.
 // Toutes les routes demandent un compte connecté et ont leur limite de débit ;
 // toutes, sauf /status, refusent un compte suspendu (revue de sécurité : un
 // compte suspendu ne fait plus partir aucun appel vers TikTok ni Meta).

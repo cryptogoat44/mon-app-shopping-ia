@@ -185,6 +185,15 @@ export default function LaunchScreen() {
   const limits = useSearchLimits();
   const blocked = blocksLaunch(limits.notice);
   const flow = useSpotLaunch({ ...media, preview: preview.source, query, crop: media.source === "photo" ? (zone?.crop ?? null) : null, auto: params.auto === "1" && !blocked });
+  // Lancement automatique : une seule fois (il est déjà parti, effet de
+  // useSpotLaunch). « auto » est aussitôt retiré de l'adresse : sur le site,
+  // revenir sur cet écran par « Précédent » puis « Suivant » du navigateur
+  // rouvre la question, sans relancer une recherche (payante) sans un geste.
+  useEffect(() => {
+    if (params.auto !== undefined) router.setParams({ auto: undefined });
+    // Une seule fois, à l'ouverture.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const ask = useAsk(media, setMedia, query, setQuery, flow, zone);
   // Photo : l'image occupe le haut de l'écran ; quand le clavier s'ouvre, on
   // descend jusqu'à « Lancer », sinon caché dessous (constaté sur iPhone).

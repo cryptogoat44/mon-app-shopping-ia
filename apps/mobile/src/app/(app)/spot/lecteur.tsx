@@ -11,30 +11,42 @@
 // - Site : jamais de lecteur ; les pièces déjà repérées et la consigne
 //   « capture, puis glisser-déposer ou coller l'image ».
 // - Lien non reconnu : l'aide « capture d'écran d'abord ».
-// Rien n'est téléchargé de TikTok ni d'Instagram. Le lien reste en attente
-// 10 minutes (lib/pending-video-link.ts).
+// Lot « vidéo auto » (décision du fondateur, 14 et 15 novembre 2026) : quand
+// le serveur dit l'analyse d'un lien allumée (GET /api/video-links/analyze/status,
+// valeur exacte `true`), l'écran montre D'ABORD « Que cherchez-vous dans
+// cette vidéo ? » et « Trouver la pièce », sur l'app comme sur le site : le
+// serveur fait récupérer la vidéo publique (sans la garder), l'IA y trouve la
+// pièce, puis le moment choisi suit le parcours d'une vidéo du téléphone
+// (lib/use-video-link-analysis.ts). Le lecteur officiel (iPhone) et la
+// capture d'écran restent proposés, et la capture s'affiche à chaque échec.
+// Analyse coupée, ou serveur muet : l'écran reste exactement celui d'avant.
+// L'app ne télécharge rien elle-même : les images des moments arrivent du
+// serveur et restent en mémoire. Le lien reste en attente 10 minutes
+// (lib/pending-video-link.ts).
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, ActivityIndicator, AppState, Linking, Platform, Pressable, ScrollView, Text, View, findNodeHandle, useWindowDimensions } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import type { WebView } from "react-native-webview";
 import type { VideoLink, VideoLookupResponse } from "@monapp/shared-types";
-import { color, font, radius, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { PUBLIC_WEB_URL } from "@/constants/brand";
 import { EmbeddedPlayer } from "@/components/embedded-player";
 import { ErrorMessage } from "@/components/error-message";
 import { ScreenshotHelp } from "@/components/screenshot-help";
+import { ConsentView } from "@/components/spot-launch-views";
 import { VideoFallback } from "@/components/video-fallback";
+import { LinkAskView, LinkFailureView, LinkMomentsView, LinkWaitingView } from "@/components/video-link-analysis";
 import { VideoProducts } from "@/components/video-products";
 import { track } from "@/lib/analytics";
-import { fetchInstagramEmbed, lookupVideoLink } from "@/lib/api";
+import { fetchInstagramEmbed, fetchVideoLinkAnalysisStatus, lookupVideoLink } from "@/lib/api";
 import { features } from "@/lib/features";
 import { importPhotoForSpotter, type ImportResult } from "@/lib/image-import";
 import { useImageDrop } from "@/lib/image-drop";
 import { detectLink } from "@/lib/link-detection";
 import { grantPlayerConsent, readPlayerConsent } from "@/lib/player-access";
-import { decidePlayer, type FallbackReason } from "@/lib/player-decision";
+import { decidePlayer, playerOffered, type FallbackReason } from "@/lib/player-decision";
 import { instagramHostPage, tiktokHostPage } from "@/lib/player-host-page";
 import { isPlayerPlatform, playerBaseUrl, videoOpenUrl, type PlayerPlatform } from "@/lib/player-link";
 import { snapshotAvailable, snapshotPlayer } from "@/lib/player-snapshot";
@@ -43,6 +55,7 @@ import { PLAYER_CONSENT_GATE } from "@/lib/spot-flags";
 import { beginFromPhoto } from "@/lib/spot-flow";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { useVideoImport } from "@/lib/use-video-import";
+import { useVideoLinkAnalysis } from "@/lib/use-video-link-analysis";
 import { beginPhotoSearch, pendingVideoLinks } from "@/lib/video-context";
 import { discardLocalFile } from "@/lib/video-frames";
 import { themedStyles } from "@/theme/themed-styles";
@@ -57,7 +70,11 @@ type Stage =
   | { kind: "preparing" }
   | { kind: "player"; html: string }
   | { kind: "fallback"; reason: FallbackReason }
-  | { kind: "web" };
+  | { kind: "web" }
+  /** Lot « vidéo auto » : l'analyse du lien (question, accord, attente, moments, échec). */
+  | { kind: "auto" }
+  /** App iPhone : la capture d'écran choisie à la place de l'analyse (sur le site : « web »). */
+  | { kind: "capture" };
 type Notice = "tap_to_play" | "leave" | "reloaded";
 
 const BASE_URL = playerBaseUrl(PUBLIC_WEB_URL);
@@ -107,6 +124,8 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   const [notice, setNotice] = useState<Notice | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState<"spot" | "photo" | null>(null);
+  // Lot « vidéo auto » : analyse d'un lien allumée sur le serveur (faux tant qu'il ne l'a pas dit).
+  const [analysisEnabled, setAnalysisEnabled] = useState(false);
   const { importing, importVideo } = useVideoImport(setMessage);
   const webRef = useRef<WebView>(null);
   const frameRef = useRef<View>(null);
@@ -121,6 +140,17 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   const name = platform ? t.spotter.platformName[platform] : "";
   const openUrl = platform ? videoOpenUrl(url, platform, link) : null;
   const isTikTokPlayer = stage.kind === "player" && platform === "tiktok";
+  // « Regarder dans le lecteur » seulement s'il peut vraiment s'ouvrir : vidéo
+  // reconnue par le serveur (sans elle, decide() tombe sur l'écran de secours)
+  // et même décision que decide() pour le reste (lib/player-decision.ts).
+  const withPlayer = platform !== null && link !== null && playerOffered({ platform, os: Platform.OS, build: features, server: lookup?.players ?? null, snapshotReady: snapshotAvailable });
+  const auto = useVideoLinkAnalysis({
+    active: analysisEnabled,
+    url: link?.canonicalUrl ?? url,
+    platform,
+    origin: Platform.OS === "web" ? "web" : "app",
+    onDeclined: () => showCapture(),
+  });
 
   useEffect(
     () => () => {
@@ -186,14 +216,11 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     setStage({ kind: "loading" });
     setMessage(null);
     if (!linkPlatform) return setStage({ kind: "unknown" });
-    let response: VideoLookupResponse | null = null;
-    try {
-      response = await lookupVideoLink(url);
-    } catch {
-      response = null;
-    }
+    // Analyse d'un lien : seule la valeur exacte `true` l'allume ; erreur, serveur plus ancien : l'écran d'avant.
+    const [response, enabled] = await Promise.all([lookupVideoLink(url).catch(() => null), fetchVideoLinkAnalysisStatus().catch(() => false)]);
     if (!alive.current) return;
     setLookup(response);
+    setAnalysisEnabled(enabled);
     if (response?.link) {
       setHandle(response.link.creatorHandle);
       void pendingVideoLinks.learn(url, { url: response.link.canonicalUrl, creatorHandle: response.link.creatorHandle });
@@ -203,9 +230,29 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     if (response && !response.link) {
       const transient = response.linkIssue === "unreachable" || response.linkIssue === "rate_limited";
       if (!transient) return setStage({ kind: "unknown" });
+      if (enabled) return setStage({ kind: "auto" });
       return void decide(null);
     }
+    if (enabled) return setStage({ kind: "auto" });
     void decide(response);
+  }
+
+  /** Le lecteur officiel (iPhone), proposé à côté de l'analyse : accord, lecteur, ou écran de secours. */
+  function openPlayerPath() {
+    setMessage(null);
+    void decide(lookup);
+  }
+
+  /** La capture d'écran à la place de l'analyse : sur le site, la consigne d'avant ; sur iPhone, les trois gestes. */
+  function showCapture() {
+    if (!alive.current) return;
+    setMessage(null);
+    setStage({ kind: Platform.OS === "web" ? "web" : "capture" });
+  }
+
+  function backToAuto() {
+    setMessage(null);
+    setStage({ kind: "auto" });
   }
 
   useEffect(() => {
@@ -278,6 +325,11 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     if (!openUrl || !platform) return;
     track("player_fallback", { platform, choice: "open_app" });
     void Linking.openURL(openUrl).catch(() => {});
+  }
+
+  /** La vidéo d'origine, dans TikTok ou Instagram (lien affiché au-dessus de l'analyse). */
+  function openOriginal() {
+    if (openUrl) void Linking.openURL(openUrl).catch(() => {});
   }
 
   /** Photo prête (choisie, ou déposée sur le site) : « Entourez la pièce », associée au lien en attente. */
@@ -364,6 +416,54 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   const memory = <VideoProducts products={products} videoUrl={link?.canonicalUrl ?? url} showEmpty={Boolean(lookup?.memoryAvailable && link)} />;
   const videoLabel = handle ? t.player.videoBy(name, handle) : t.player.frameTitle(name);
 
+  const errorLine = message ? <ErrorMessage style={styles.message}>{message}</ErrorMessage> : null;
+  // Lot « vidéo auto » : depuis le lecteur ou la capture, retour à l'analyse du lien (seulement si elle est allumée).
+  const autoLink = analysisEnabled ? (
+    <Pressable onPress={backToAuto} style={styles.discreet} accessibilityRole="button">
+      <Text style={styles.discreetLabel}>{t.videoLinkAuto.backToAuto}</Text>
+    </Pressable>
+  ) : null;
+  // App iPhone : le lecteur officiel reste proposé à côté de l'analyse.
+  const playerButton = withPlayer ? (
+    <Pressable style={styles.secondary} onPress={openPlayerPath} accessibilityRole="button">
+      <Text style={styles.secondaryLabel}>{t.videoLinkAuto.player(name)}</Text>
+    </Pressable>
+  ) : null;
+  const captureLink = (
+    <Pressable onPress={showCapture} style={styles.discreet} accessibilityRole="button">
+      <Text style={styles.discreetLabel}>{t.videoLinkAuto.capture}</Text>
+    </Pressable>
+  );
+  /** Consigne du site : capture, puis glisser-déposer ou coller ; `title` : sous un échec de l'analyse. */
+  const webBox = (title?: string) => (
+    <View style={styles.box}>
+      {title ? (
+        <Text style={styles.boxTitle} accessibilityRole="header">
+          {title}
+        </Text>
+      ) : null}
+      <Text style={styles.body}>{t.videoLink.webInstruction}</Text>
+      <Pressable style={styles.primary} onPress={() => void addScreenshot()} disabled={busy !== null} accessibilityRole="button">
+        <Text style={styles.primaryLabel}>{t.spotter.addPhoto}</Text>
+      </Pressable>
+      {openUrl ? (
+        <Pressable style={styles.secondary} onPress={openVideo} accessibilityRole="button">
+          <Text style={styles.secondaryLabel}>{t.player.open}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+  /** La capture d'écran, à la place de l'analyse ou sous son échec : jamais d'impasse. */
+  const captureBlock =
+    Platform.OS === "web" ? (
+      webBox(t.videoLinkAuto.capture)
+    ) : (
+      <>
+        <VideoFallback title={t.videoLinkAuto.capture} lead={t.videoLinkAuto.captureLead} onOpenVideo={openUrl ? openVideo : null} onAddScreenshot={() => void addScreenshot()} busy={busy !== null} />
+        {playerButton}
+      </>
+    );
+
   let body;
   if (stage.kind === "loading" || stage.kind === "preparing") {
     body = (
@@ -376,7 +476,72 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     body = (
       <View style={styles.content}>
         <ScreenshotHelp onAddScreenshot={() => void addScreenshot()} onAddVideo={() => void importVideo()} busy={importing || busy !== null} />
-        {message ? <ErrorMessage style={styles.message}>{message}</ErrorMessage> : null}
+        {errorLine}
+      </View>
+    );
+  } else if (stage.kind === "auto") {
+    const phase = auto.phase;
+    let autoBody;
+    if (phase.kind === "consent") {
+      autoBody = (
+        <ConsentView
+          saving={auto.saving}
+          error={auto.consentError}
+          onAccept={auto.accept}
+          onChooseMyself={auto.decline}
+          onPolicy={() => router.push("/confidentialite")}
+          declineLabel={t.videoLinkAuto.consentDecline}
+        />
+      );
+    } else if (phase.kind === "working") {
+      autoBody = <LinkWaitingView startedAt={phase.startedAt} query={auto.query} onCancel={auto.cancel} />;
+    } else if (phase.kind === "moments") {
+      autoBody = (
+        <>
+          <LinkMomentsView analysis={phase.analysis} selected={phase.selected} onSelect={auto.select} onSearch={auto.search} onEditQuery={auto.editQuery} />
+          {captureLink}
+        </>
+      );
+    } else if (phase.kind === "failed") {
+      autoBody = (
+        <>
+          <LinkFailureView info={phase.info} onRetry={auto.retry} onEditQuery={auto.editQuery} />
+          <View style={styles.fallbackBlock}>{captureBlock}</View>
+        </>
+      );
+    } else {
+      autoBody = (
+        <>
+          <LinkAskView query={auto.query} onQuery={auto.onQuery} onFind={auto.find} problem={phase.problem} checking={auto.checking} />
+          {playerButton}
+          {captureLink}
+        </>
+      );
+    }
+    body = (
+      <View style={styles.content}>
+        <View style={styles.captionRow}>
+          <Text style={styles.caption} numberOfLines={1}>
+            {videoLabel}
+          </Text>
+          {openUrl ? (
+            <Pressable onPress={openOriginal} hitSlop={8} style={styles.link} accessibilityRole="link">
+              <Text style={styles.linkLabel}>{t.player.openIn(name)}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+        {autoBody}
+        {errorLine}
+        {phase.kind === "working" ? null : memory}
+      </View>
+    );
+  } else if (stage.kind === "capture") {
+    body = (
+      <View style={styles.content}>
+        {captureBlock}
+        {autoLink}
+        {errorLine}
+        {memory}
       </View>
     );
   } else if (stage.kind === "consent") {
@@ -389,6 +554,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
         <Pressable style={styles.secondary} onPress={refuseConsent} accessibilityRole="button">
           <Text style={styles.secondaryLabel}>{t.player.gate.refuse}</Text>
         </Pressable>
+        {autoLink}
         {memory}
       </View>
     );
@@ -396,7 +562,8 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     body = (
       <View style={styles.content}>
         <VideoFallback lead={fallbackLead(stage.reason)} onOpenVideo={openUrl ? openVideo : null} onAddScreenshot={() => void addScreenshot()} busy={busy !== null} />
-        {message ? <ErrorMessage style={styles.message}>{message}</ErrorMessage> : null}
+        {autoLink}
+        {errorLine}
         {memory}
       </View>
     );
@@ -404,18 +571,9 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     body = (
       <View style={styles.content}>
         {memory}
-        <View style={styles.box}>
-          <Text style={styles.body}>{t.videoLink.webInstruction}</Text>
-          <Pressable style={styles.primary} onPress={() => void addScreenshot()} disabled={busy !== null} accessibilityRole="button">
-            <Text style={styles.primaryLabel}>{t.spotter.addPhoto}</Text>
-          </Pressable>
-          {openUrl ? (
-            <Pressable style={styles.secondary} onPress={openVideo} accessibilityRole="button">
-              <Text style={styles.secondaryLabel}>{t.player.open}</Text>
-            </Pressable>
-          ) : null}
-        </View>
-        {message ? <ErrorMessage style={styles.message}>{message}</ErrorMessage> : null}
+        {webBox()}
+        {autoLink}
+        {errorLine}
       </View>
     );
   } else {
@@ -459,7 +617,8 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
           <Text style={styles.primaryLabel}>{busy === "spot" ? t.player.taking : t.player.spot}</Text>
         </Pressable>
         <Text style={styles.privacy}>{t.player.privacy(name)}</Text>
-        {message ? <ErrorMessage style={styles.message}>{message}</ErrorMessage> : null}
+        {autoLink}
+        {errorLine}
         {memory}
       </View>
     );
@@ -468,7 +627,8 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   return (
     <SafeAreaView style={styles.screen}>
       <TopBar onBack={back} onClose={close} />
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      {/* Clavier ouvert sur « Que cherchez-vous dans cette vidéo ? » : la vue remonte jusqu'au bouton (iPhone). */}
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         {body}
       </ScrollView>
     </SafeAreaView>
@@ -489,6 +649,10 @@ const styles = themedStyles(() => ({
   close: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   body: { fontSize: font.secondary, color: color.acier, lineHeight: 21 },
   box: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, gap: space.sm, alignSelf: "stretch", marginTop: space.md },
+  boxTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, color: color.encre },
+  fallbackBlock: { marginTop: space.lg, gap: space.sm },
+  discreet: { minHeight: 44, alignItems: "center", justifyContent: "center", alignSelf: "stretch" },
+  discreetLabel: { fontSize: font.secondary, color: color.acier, textDecorationLine: "underline", textAlign: "center" },
   captionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.sm, alignSelf: "stretch", minHeight: 44 },
   caption: { fontSize: font.caption, color: color.acier, flexShrink: 1 },
   link: { minHeight: 44, justifyContent: "center" },

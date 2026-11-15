@@ -15,6 +15,7 @@ import {
 } from "@monapp/shared-types";
 import { RESULT_SORTS } from "./result-sort";
 import { WISHLIST_SORTS } from "./wishlist-view";
+import { LINK_AI_FAILURES } from "./video-link-failures";
 
 type Rule = { kind: "enum"; values: readonly string[] } | { kind: "count" } | { kind: "bool" };
 
@@ -133,6 +134,18 @@ export const ANALYTICS_EVENTS = {
   player_fallback: { platform: PLAYER_PLATFORM, choice: oneOf(["screenshot", "open_app"]) },
   player_consent: { platform: PLAYER_PLATFORM, choice: oneOf(["play", "refuse"]) },
   player_spot: { platform: PLAYER_PLATFORM },
+  // Lot « vidéo auto » : analyse d'une vidéo à partir de son lien — la
+  // plateforme, l'issue, la cause d'un échec et des nombres ; jamais le lien,
+  // les mots, la vidéo ni ses images.
+  video_link_ai_started: { platform: PLAYER_PLATFORM },
+  video_link_ai_result: {
+    platform: PLAYER_PLATFORM,
+    outcome: oneOf(["found", "not_found", "failed", "cancelled"]),
+    reason: oneOf(LINK_AI_FAILURES),
+    moments_count: count,
+  },
+  // Moment choisi parmi ceux proposés (1 = le meilleur) avant la recherche habituelle.
+  video_link_ai_moment_chosen: { platform: PLAYER_PLATFORM, rank: count, moments_count: count },
 } as const satisfies Record<string, Record<string, Rule>>;
 
 export type AnalyticsEvent = keyof typeof ANALYTICS_EVENTS;
