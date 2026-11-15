@@ -149,6 +149,9 @@ export function PieceTracer({ uri, zone, onChange, onImageSize, onDragChange, he
         source={source}
         style={StyleSheet.absoluteFill}
         contentFit="contain"
+        // En mémoire seulement : aucune copie de l'image sur le disque (moment
+        // d'une vidéo reçu d'un lien, gardé en « data: » ; instantané du lecteur).
+        cachePolicy="memory"
         onLoad={(event) => {
           const size = { width: event.source.width, height: event.source.height };
           setImageSize(size);

@@ -101,14 +101,16 @@ export function SpotWaitingScreen({
       </View>
       <View style={styles.content}>
         <View style={[styles.frame, { width: view ? view.frame.width : frameWidth, height: frameHeight }]}>
+          {/* En mémoire seulement (cachePolicy) : aucune copie de l'image sur le disque
+              (image d'un moment reçue d'un lien, instantané du lecteur, photo). */}
           {image && view ? (
             // Le positionnement est porté par une View : sur le web, expo-image
             // ignore un décalage négatif posé directement sur l'image.
             <View style={[styles.absolute, view.image]}>
-              <Image source={image.source} style={styles.fill} contentFit="fill" accessibilityIgnoresInvertColors />
+              <Image source={image.source} style={styles.fill} contentFit="fill" cachePolicy="memory" accessibilityIgnoresInvertColors />
             </View>
           ) : image ? (
-            <Image source={image.source} style={styles.fill} contentFit="contain" />
+            <Image source={image.source} style={styles.fill} contentFit="contain" cachePolicy="memory" />
           ) : null}
           {translateY ? <Animated.View pointerEvents="none" style={[styles.scanLine, { transform: [{ translateY }] }]} /> : null}
         </View>
