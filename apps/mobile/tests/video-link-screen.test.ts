@@ -149,6 +149,18 @@ describe("écran « vidéo partagée » : l'analyse d'abord, quand le serveur l'
   it("« Rechercher cette pièce » : la suite habituelle, lancée seule (Entourez la pièce, attente, résultats)", () => {
     expect(code("src/lib/use-video-link-analysis.ts")).toContain('router.push({ pathname: "/spot/lancer", params: { source: "photo", auto: "1" } })');
   });
+
+  it("lancement automatique une seule fois : « auto » retiré de l'adresse juste après (site : « Précédent » puis « Suivant » ne relance rien)", () => {
+    const launch = code("src/app/(app)/spot/lancer.tsx");
+    const flowAt = launch.indexOf("const flow = useSpotLaunch(");
+    const clearAt = launch.indexOf("if (params.auto !== undefined) router.setParams({ auto: undefined });");
+    // Après useSpotLaunch : son effet de lancement passe d'abord (effets dans l'ordre de déclaration).
+    expect(flowAt).toBeGreaterThan(0);
+    expect(clearAt).toBeGreaterThan(flowAt);
+    expect(launch.slice(clearAt, launch.indexOf("}, []);", clearAt))).not.toContain("params.auto ===");
+    // Le lancement lui-même ne lit « auto » qu'à l'ouverture.
+    expect(code("src/lib/use-spot-launch.ts")).toContain("if (auto) void launch();");
+  });
 });
 
 describe("rien n'est écrit sur l'appareil ni dans le navigateur", () => {
