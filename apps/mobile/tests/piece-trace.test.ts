@@ -10,6 +10,7 @@ import {
   toTracePoint,
   tracePath,
   traceSurface,
+  zoneFromCrop,
   zoneFromTrace,
   zoneReady,
   type TracePoint,
@@ -100,6 +101,25 @@ function pushAndBack(start: Finger, chord: number, radius: number, angleDeg: num
 }
 
 const kept = (fingers: readonly Finger[], image: Size) => zoneFromTrace(replay(fingers, image), image);
+
+describe("cadre de l'IA déjà tracé (moment d'une vidéo choisi après l'analyse d'un lien)", () => {
+  it("la zone garde le cadre de l'IA et le dessine comme un tour fermé, prêt à lancer", () => {
+    const crop = { x: 0.2, y: 0.1, width: 0.5, height: 0.6 };
+    const zone = zoneFromCrop(crop);
+    expect(zone.crop).toEqual(crop);
+    expect(zone.crop).not.toBe(crop);
+    expect(zoneReady(zone)).toBe(true);
+    expect(zone.trace).toEqual([
+      { x: 0.2, y: 0.1 },
+      { x: 0.7, y: 0.1 },
+      { x: 0.7, y: 0.7 },
+      { x: 0.2, y: 0.7 },
+      { x: 0.2, y: 0.1 },
+    ]);
+    // Dessiné sur une image de 100 × 200 points : un rectangle fermé.
+    expect(tracePath(zone.trace!, { left: 0, top: 0, width: 100, height: 200 }, true)).toBe("M20 20L70 20L70 140L20 140L20 20Z");
+  });
+});
 
 describe("du doigt à l'image", () => {
   const box = { left: 20, top: 0, width: 200, height: 400 };

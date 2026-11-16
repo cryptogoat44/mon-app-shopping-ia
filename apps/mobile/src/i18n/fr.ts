@@ -399,7 +399,7 @@ export const fr = {
       lead: (count: number) => (count > 1 ? "Le plus probable est sélectionné. Touchez un autre moment pour le choisir." : "Vérifiez que le cadre entoure bien la pièce."),
       shown: (time: string) => `Moment choisi, à ${time}, avec le cadre de la pièce`,
       choose: (rank: number, time: string) => `Moment ${rank}, à ${time}`,
-      search: "Rechercher cette pièce",
+      search: "Choisir ce moment",
       editQuery: "Modifier la description",
     },
     failedTitle: "La vidéo n'a pas pu être analysée",
@@ -448,6 +448,8 @@ export const fr = {
   targeting: {
     title: "Entourez la pièce",
     caption: "Seule la zone entourée sera analysée. Pour corriger, entourez à nouveau la pièce.",
+    // Moment d'une vidéo choisi après l'analyse d'un lien : le cadre de l'IA est déjà tracé.
+    aiCaption: "L'IA a entouré la pièce. Lancez la recherche, ou entourez-la vous-même pour corriger.",
     // Consigne avant le premier tracé.
     instruction: {
       finger: "Entourez la pièce avec votre doigt",

@@ -8,8 +8,8 @@ import { t } from "@/i18n";
 import { containsLink } from "@/lib/link-detection";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { isAdjustedCrop } from "@/lib/crop-geometry";
-import { zoneReady, type PieceZone } from "@/lib/piece-trace";
-import { draftImageUri, getDraft, leaveLaunchScreen, type SpotDraft } from "@/lib/spot-draft";
+import { zoneFromCrop, zoneReady, type PieceZone } from "@/lib/piece-trace";
+import { draftImageUri, getDraft, leaveLaunchScreen, updateDraft, type SpotDraft } from "@/lib/spot-draft";
 import { getSpotVideo, holdSpotVideo, importSpotVideo, letGoSpotVideo, videoImportMessage } from "@/lib/spot-video";
 import { blocksLaunch } from "@/lib/search-limits";
 import { useSearchLimits } from "@/lib/use-search-limits";
@@ -34,6 +34,15 @@ interface Media {
 
 function initialMedia(source: string | undefined): Media {
   return source === "photo" ? { source: "photo", video: null, draft: getDraft() } : { source: "video", video: getSpotVideo(), draft: null };
+}
+
+/** Photo venue du moment d'une vidéo (lien analysé) : le cadre de l'IA, déjà
+ * tracé ; la personne lance tel quel ou entoure à nouveau la pièce
+ * (demande du fondateur, 16 novembre 2026). Sinon, rien tant qu'elle n'a pas
+ * entouré la pièce. */
+function initialZone(media: Media): PieceZone | null {
+  const draft = media.source === "photo" ? media.draft : null;
+  return draft?.zoneByAi && draft.crop ? zoneFromCrop(draft.crop) : null;
 }
 
 /** Aperçu : une image du milieu de la vidéo, ou la photo elle-même. */
@@ -176,9 +185,19 @@ export default function LaunchScreen() {
   const [query, setQuery] = useState(typeof params.query === "string" ? params.query : "");
   // Photo : la zone entourée (rien tant que la pièce n'est pas entourée) ; le
   // défilement s'arrête pendant le tracé.
-  const [zone, setZone] = useState<PieceZone | null>(null);
+  const [zone, setZone] = useState<PieceZone | null>(() => initialZone(media));
+  // Le cadre affiché est encore celui de l'IA (jamais retouché par la personne).
+  const [zoneFromAi, setZoneFromAi] = useState(() => initialZone(media) !== null);
   const [dragging, setDragging] = useState(false);
   const preview = useLaunchPreview(media);
+  /** La personne entoure la pièce (ou choisit l'image entière) : la zone est la sienne, plus celle de l'IA. */
+  const changeZone = (next: PieceZone) => {
+    setZone(next);
+    if (zoneFromAi) {
+      setZoneFromAi(false);
+      updateDraft({ zoneByAi: false });
+    }
+  };
   // Lot limites annoncées : Spotter en pause ou part du jour épuisée — le
   // serveur refuserait : « Lancer » est désactivé et l'écran dit pourquoi
   // (jamais de lancement automatique non plus). Compteur inconnu : rien ne change.
@@ -256,7 +275,14 @@ export default function LaunchScreen() {
         {/* Mission « liens vidéo » : recherche associée à une vidéo (lecteur, ou lien en attente), avec sa croix. */}
         {flow.phase.kind === "ask" && photoUri ? <VideoContextLabel /> : null}
         {flow.phase.kind === "ask" && photoUri ? (
-          <PhotoFrame uri={photoUri} zone={zone} onChange={setZone} onDragChange={setDragging} height={Math.min(Math.max(windowHeight * 0.42, 220), 400)} />
+          <PhotoFrame
+            uri={photoUri}
+            zone={zone}
+            onChange={changeZone}
+            onDragChange={setDragging}
+            height={Math.min(Math.max(windowHeight * 0.42, 220), 400)}
+            caption={zoneFromAi ? t.targeting.aiCaption : t.targeting.caption}
+          />
         ) : flow.phase.kind === "ask" ? (
           <LaunchPreview
             source={preview.source}

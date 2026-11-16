@@ -259,7 +259,9 @@ describe("textes : français avec « vous », anglais à l'identique", () => {
     expect(en.videoLinkAuto.find).toBe("Find the piece");
     expect(fr.videoLinkAuto.placeholder).toContain("la veste en cuir beige de la fille à gauche");
     expect(fr.videoLinkAuto.capture).toBe("Faire une capture à la place");
-    expect(fr.videoLinkAuto.moments.search).toBe("Rechercher cette pièce");
+    expect(fr.videoLinkAuto.moments.search).toBe("Choisir ce moment");
+    expect(en.videoLinkAuto.moments.search).toBe("Use this moment");
+    expect(fr.targeting.aiCaption).toBe("L'IA a entouré la pièce. Lancez la recherche, ou entourez-la vous-même pour corriger.");
     expect(fr.videoLinkAuto.moments.title(3)).toBe("3 moments trouvés");
     expect(en.videoLinkAuto.moments.title(1)).toBe("Moment found");
   });

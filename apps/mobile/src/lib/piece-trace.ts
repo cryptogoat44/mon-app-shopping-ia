@@ -22,6 +22,26 @@ export interface PieceZone {
 
 export const WHOLE_IMAGE_ZONE: PieceZone = { crop: WHOLE_IMAGE, trace: null };
 
+/** La zone d'un cadre déjà connu (celui de l'IA, pour le moment d'une vidéo
+ * choisi par la personne) : son rectangle, dessiné comme un tracé fermé ; la
+ * personne peut lancer tel quel, ou entourer à nouveau la pièce. */
+export function zoneFromCrop(crop: CropRect): PieceZone {
+  const left = crop.x;
+  const top = crop.y;
+  const right = crop.x + crop.width;
+  const bottom = crop.y + crop.height;
+  return {
+    crop: { ...crop },
+    trace: [
+      { x: left, y: top },
+      { x: right, y: top },
+      { x: right, y: bottom },
+      { x: left, y: bottom },
+      { x: left, y: top },
+    ],
+  };
+}
+
 /** Écart minimal entre deux points gardés, en points écran : un doigt qui
  * glisse en envoie des dizaines par seconde, inutiles au dessin. */
 export const TRACE_STEP = 4;

@@ -131,7 +131,7 @@ describe("la demande d'analyse", () => {
   });
 });
 
-describe("« Rechercher cette pièce » : comme un moment d'une vidéo du téléphone", () => {
+describe("« Choisir ce moment » : comme un moment d'une vidéo du téléphone", () => {
   it("l'image du moment choisi (en mémoire) et le cadre de l'IA deviennent la recherche habituelle, vidéo associée", () => {
     const draft = startMomentSearch(analysis(), 1, "web")!;
     expect(draft.localImageUri).toBe(IMAGE_OTHER);
@@ -152,7 +152,7 @@ describe("« Rechercher cette pièce » : comme un moment d'une vidéo du télé
     expect(getDraft()).toBeNull();
   });
 
-  it("lancée seule (écran « Entourez la pièce », auto=1) : l'image et le cadre de l'IA partent, sans les mots ; le spot est noté pour la vidéo", async () => {
+  it("lancée depuis « Entourez la pièce » avec le cadre de l'IA : l'image et ce cadre partent, sans les mots ; le spot est noté pour la vidéo", async () => {
     startMomentSearch(analysis(), 0, "app");
     prepareSearch.mockResolvedValueOnce({ id: "s-42" });
     runSearch.mockResolvedValueOnce(search("s-42"));
