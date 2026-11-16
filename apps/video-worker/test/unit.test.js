@@ -9,7 +9,7 @@ import { buildBody } from "../src/job.js";
 import { splitJpegStream } from "../src/jpeg.js";
 import { MIN_SHARPNESS, scoreFrame, selectFrames } from "../src/selection.js";
 import { acceptedVideoUrl, isAcceptableMediaUrl, isPublicDomainName } from "../src/urls.js";
-import { chooseFormat, classifyYtDlpError, parseCookies, safeHeaders, videoInfoFrom, ytDlpArgs } from "../src/ytdlp.js";
+import { DOWNLOAD_FALLBACK_FORMATS, chooseFormat, classifyYtDlpError, downloadError, videoInfoFrom, ytDlpArgs, ytDlpDownloadArgs } from "../src/ytdlp.js";
 
 const LONG_SECRET = "a".repeat(32);
 
@@ -195,18 +195,58 @@ describe("yt-dlp : arguments, format choisi, erreurs", () => {
     assert.equal(chooseFormat(pair)?.url, "https://c.test/v");
   });
 
-  it("en-têtes repris sans Cookie ni valeur douteuse ; cookies lus attribut par attribut", () => {
-    assert.deepEqual(safeHeaders({ "User-Agent": "UA", Referer: "https://www.tiktok.com/", Cookie: "x=1", Host: "h", "Bad Name": "x", Accept: "a\r\nInjected: 1", "Accept-Language": "fr" }), {
-      "User-Agent": "UA",
-      Referer: "https://www.tiktok.com/",
-      "Accept-Language": "fr",
-    });
-    assert.deepEqual(parseCookies("tt_chain_token=abc; Domain=.tiktok.com; Path=/; Secure; Expires=1900000000; sid=x=y; Path=/a"), [
-      { name: "tt_chain_token", value: "abc", domain: ".tiktok.com", path: "/" },
-      { name: "sid", value: "x=y", domain: null, path: "/a" },
-    ]);
-    assert.deepEqual(parseCookies("a=1\r\nInjected: 2"), []);
-    assert.deepEqual(parseCookies(undefined), []);
+  it("téléchargement : le format choisi puis les formats de secours, sur la sortie standard, plafonné, adresse après « -- »", () => {
+    const url = "https://www.tiktok.com/@a/video/1234567";
+    const args = ytDlpDownloadArgs(url, "h264_540p_123-0");
+    const at = (/** @type {string} */ flag) => args[args.indexOf(flag) + 1];
+    assert.equal(at("--format"), `h264_540p_123-0/${DOWNLOAD_FALLBACK_FORMATS}`);
+    assert.equal(at("--output"), "-");
+    assert.equal(at("--max-filesize"), String(LIMITS.maxMediaBytes));
+    for (const flag of ["--no-cache-dir", "--no-part", "--ignore-config", "--no-playlist"]) assert.ok(args.includes(flag), flag);
+    assert.deepEqual(args.slice(-2), ["--", url]);
+    for (const forbidden of ["--exec", "--cookies", "--cookies-from-browser", "--write-info-json", "--load-info-json", "--paths"]) assert.ok(!args.includes(forbidden), forbidden);
+    // Identifiant absent ou douteux : formats de secours seulement (jamais un texte reçu dans « -f »).
+    assert.equal(ytDlpDownloadArgs(url, null)[ytDlpDownloadArgs(url, null).indexOf("--format") + 1], DOWNLOAD_FALLBACK_FORMATS);
+    const odd = ytDlpDownloadArgs(url, "a/b+c,d e");
+    assert.equal(odd[odd.indexOf("--format") + 1], DOWNLOAD_FALLBACK_FORMATS);
+    // Jamais le codec maison illisible de TikTok, même en secours.
+    assert.ok(!DOWNLOAD_FALLBACK_FORMATS.includes("bytevc2"));
+    assert.ok(DOWNLOAD_FALLBACK_FORMATS.split("/").every((selector) => selector.includes("ext=mp4") && selector.includes("[protocol=https]") && /vcodec\^=(?:avc|h264)/.test(selector)));
+    // Hors carrousel : pas de « --playlist-items ».
+    assert.ok(!args.includes("--playlist-items"));
+  });
+
+  it("carrousel : seule l'entrée choisie est téléchargée (« --playlist-items »)", () => {
+    const url = "https://www.instagram.com/p/ABCDE12345/";
+    const args = ytDlpDownloadArgs(url, "1080v", 3);
+    assert.equal(args[args.indexOf("--playlist-items") + 1], "3");
+    for (const bad of [0, -1, 1.5, null]) assert.ok(!ytDlpDownloadArgs(url, "1080v", /** @type {any} */ (bad)).includes("--playlist-items"), String(bad));
+    // Numéro de l'entrée : celui donné par yt-dlp, sinon la place dans la liste.
+    assert.equal(videoInfoFrom({ _type: "playlist", entries: [{ formats: [{ url: "https://c.test/i.jpg", vcodec: "none" }] }, { formats: [{ url: "https://c.test/v.mp4", vcodec: "avc1" }] }] })?.playlistIndex, 2);
+    assert.equal(videoInfoFrom({ _type: "playlist", entries: [{ playlist_index: 4, formats: [{ url: "https://c.test/v.mp4", vcodec: "avc1" }] }] })?.playlistIndex, 4);
+    assert.equal(videoInfoFrom({ formats: [{ url: "https://c.test/v.mp4", vcodec: "avc1" }] })?.playlistIndex, null);
+  });
+
+  it("échecs du téléchargement : 403 → blocked, 404 et format manquant → unavailable (jamais not_found)", () => {
+    const pairs = [
+      ["ERROR: unable to download video data: HTTP Error 403: Forbidden", "blocked", "media_forbidden"],
+      ["ERROR: unable to download video data: HTTP Error 404: Not Found", "unavailable", "media_not_found"],
+      ["ERROR: [TikTok] 1: Requested format is not available. Use --list-formats for a list of available formats", "unavailable", "format_unavailable"],
+      ["ERROR: [TikTok] 1: Unable to extract universal data for rehydration", "unavailable", "download_extractor_failed"],
+      ["ERROR: [TikTok] 1: Your IP address is blocked from accessing this post", "blocked", "ip_blocked"],
+    ];
+    for (const [stderr, code, detail] of pairs) {
+      const error = downloadError(stderr);
+      assert.equal(error.code, code, stderr);
+      assert.equal(error.detail, detail, stderr);
+    }
+  });
+
+  it("format choisi : son identifiant est repris s'il est sûr", () => {
+    const info = { durationSeconds: 10, isLive: false, formats: [{ format_id: "h264_720p", url: "https://c.test/720", ext: "mp4", protocol: "https", vcodec: "h264", width: 720, height: 1280 }] };
+    assert.equal(chooseFormat(info)?.formatId, "h264_720p");
+    assert.equal(chooseFormat({ ...info, formats: [{ ...info.formats[0], format_id: "x;rm -rf" }] })?.formatId, null);
+    assert.equal(chooseFormat({ ...info, formats: [{ ...info.formats[0], format_id: undefined }] })?.formatId, null);
   });
 
   it("carrousel : la première entrée qui contient une vidéo ; direct signalé", () => {
@@ -255,38 +295,31 @@ describe("yt-dlp : arguments, format choisi, erreurs", () => {
 });
 
 describe("ffmpeg : arguments et lecture de sa sortie d'erreur", () => {
-  const input = {
-    url: "https://media.example-cdn.test/v.mp4?sig=1",
-    headers: { "User-Agent": "UA essai", Referer: "https://www.tiktok.com/", Accept: "*/*" },
-    cookies: [
-      { name: "tt", value: "abc", domain: ".example-cdn.test", path: "/" },
-      { name: "sid", value: "x", domain: null, path: null },
-    ],
-  };
+  const input = { url: "http://127.0.0.1:45678/0123456789abcdef0123456789abcdef.mp4", protocolWhitelist: "http,tcp" };
 
-  it("https seulement, MP4 imposé, aucune sortie dans un fichier (pipe:1 et pipe:3)", () => {
+  it("le fichier en mémoire sur la boucle locale, MP4 imposé, aucune sortie dans un fichier (pipe:1 et pipe:3)", () => {
     const args = ffmpegArgs({ input, mode: "full", stepSeconds: 0.75 });
     const at = (/** @type {string} */ flag) => args[args.indexOf(flag) + 1];
-    assert.equal(at("-protocol_whitelist"), "https,tls,tcp");
-    assert.equal(at("-tls_verify"), "1");
+    assert.equal(at("-protocol_whitelist"), "http,tcp");
     assert.equal(at("-f"), "mp4");
     assert.equal(at("-i"), input.url);
-    assert.equal(at("-user_agent"), "UA essai");
-    assert.equal(at("-referer"), "https://www.tiktok.com/");
-    assert.equal(at("-headers"), "Accept: */*\r\n");
-    assert.equal(at("-cookies"), "tt=abc; path=/; domain=.example-cdn.test;\nsid=x; path=/; domain=media.example-cdn.test;");
     assert.equal(at("-t"), "91");
     assert.equal(at("-q:v"), "4");
     assert.ok(args.includes("-nostdin"));
+    assert.ok(args.includes("-rw_timeout"));
     assert.ok(!args.includes("-skip_frame"));
+    // ffmpeg ne parle plus jamais aux serveurs de TikTok ou d'Instagram : ni en-têtes ni cookies.
+    for (const flag of ["-user_agent", "-referer", "-headers", "-cookies", "-tls_verify", "-ca_file"]) assert.ok(!args.includes(flag), flag);
     assert.ok(at("-filter_complex").includes("gte(t-prev_selected_t,0.75)"));
     assert.ok(at("-filter_complex").includes("min(1280,iw)"));
-    // Les deux seules sorties sont des tuyaux ; rien d'autre après -i ne ressemble à un fichier.
-    // (seule exception lue, jamais écrite : le fichier des autorités de certification).
-    const outputs = args.filter((arg, index) => args[index - 1] !== "-ca_file" && /^pipe:|^\/|\.(?:jpe?g|png|mp4)$/i.test(arg));
+    // Les deux seules sorties sont des tuyaux ; rien d'autre ne ressemble à un fichier.
+    const outputs = args.filter((arg) => /^pipe:|^\/|\.(?:jpe?g|png)$/i.test(arg));
     assert.deepEqual(outputs, ["pipe:1", "pipe:3"]);
     assert.ok(!args.includes("-y"));
-    assert.equal(ffmpegArgs({ input, mode: "keyframes", stepSeconds: 2 })[ffmpegArgs({ input, mode: "keyframes", stepSeconds: 2 }).indexOf("-skip_frame") + 1], "nokey");
+    const keyframes = ffmpegArgs({ input, mode: "keyframes", stepSeconds: 2 });
+    assert.equal(keyframes[keyframes.indexOf("-skip_frame") + 1], "nokey");
+    // Entrée standard (tests) : pas de délai réseau.
+    assert.ok(!ffmpegArgs({ input: { url: "pipe:0", protocolWhitelist: "pipe" }, mode: "full", stepSeconds: 1 }).includes("-rw_timeout"));
   });
 
   it("décodage complet pour une vidéo courte, images clés au-delà de ≈ 45 s, durée inconnue : images clés", () => {

@@ -1,15 +1,20 @@
 // Vérification avec le VRAI ffmpeg, seulement s'il est installé sur la
 // machine (sinon ignorée) : une vidéo de synthèse (lavfi testsrc2, H.264,
-// 8 s, 720 × 1280) est fabriquée en mémoire, puis envoyée à ffmpeg sur son
-// entrée standard avec exactement le graphe de filtres du service. Aucun
-// fichier, aucun réseau. Vérifie aussi que la liste blanche refuse un
-// fichier local et http, sans rien ouvrir.
+// 8 s, 720 × 1280) est fabriquée, puis lue par ffmpeg avec exactement le
+// graphe de filtres du service : sur son entrée standard, et servie depuis
+// la mémoire sur la boucle locale (memserve.js), y compris un MP4 dont
+// l'index est à la fin (illisible depuis un tuyau). Seul réseau : 127.0.0.1.
+// Vérifie aussi que la liste blanche refuse un fichier local et https.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import { LIMITS } from "../src/contract.js";
 import { extractCandidates } from "../src/ffmpeg.js";
 import { buildBody } from "../src/job.js";
+import { serveInMemory } from "../src/memserve.js";
 import { childEnvironment } from "../src/run.js";
 
 const env = childEnvironment(process.env);
@@ -30,13 +35,28 @@ function syntheticVideo(/** @type {number} */ seconds) {
   return result.stdout;
 }
 
-const noInput = { url: "https://inutile.example.test/v.mp4", headers: {}, cookies: [] };
+/** MP4 ordinaire (index « moov » à la fin, comme beaucoup de fichiers
+ * publiés), passé par un dossier temporaire du test puis lu en mémoire. */
+function plainMp4(/** @type {number} */ seconds) {
+  const dir = mkdtempSync(join(tmpdir(), "video-worker-mp4-"));
+  try {
+    const file = join(dir, "v.mp4");
+    const result = spawnSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", `testsrc2=duration=${seconds}:size=720x1280:rate=30`, ...videoCodec, file], { env, encoding: "utf8" });
+    assert.equal(result.status, 0, String(result.stderr));
+    return readFileSync(file);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** @param {Buffer} video */
+const stdinInput = (video) => ({ url: "pipe:0", protocolWhitelist: "pipe", stdin: video });
 
 describe("vrai ffmpeg (vidéo de synthèse, sans fichier ni réseau)", { skip }, () => {
   it("décodage complet : images JPEG de 720 × 1280, instants croissants, 6 à 12 images choisies", async () => {
     const video = syntheticVideo(8);
     const extracted = await extractCandidates(
-      { input: noInput, mode: "full", stepSeconds: 0.5, override: { url: "pipe:0", protocolWhitelist: "pipe", stdin: video } },
+      { input: stdinInput(video), mode: "full", stepSeconds: 0.5 },
       { env, signal: new AbortController().signal, timeoutMs: 20_000 }
     );
     try {
@@ -62,7 +82,7 @@ describe("vrai ffmpeg (vidéo de synthèse, sans fichier ni réseau)", { skip },
   it("images clés seulement (-skip_frame nokey) : une image par seconde (images clés toutes les 30 images)", async () => {
     const video = syntheticVideo(8);
     const extracted = await extractCandidates(
-      { input: noInput, mode: "keyframes", stepSeconds: 0.5, override: { url: "pipe:0", protocolWhitelist: "pipe", stdin: video } },
+      { input: stdinInput(video), mode: "keyframes", stepSeconds: 0.5 },
       { env, signal: new AbortController().signal, timeoutMs: 20_000 }
     );
     try {
@@ -76,10 +96,30 @@ describe("vrai ffmpeg (vidéo de synthèse, sans fichier ni réseau)", { skip },
     }
   });
 
-  it("liste blanche : un fichier local ou une adresse http sont refusés par ffmpeg lui-même, sans rien ouvrir", async () => {
-    for (const url of ["file:///etc/hostname", "http://127.0.0.1:9/v.mp4"]) {
+  it("fichier en mémoire servi sur la boucle locale : un MP4 à index final se lit comme un fichier", async () => {
+    const video = plainMp4(8);
+    // L'index est bien à la fin (« moov » après « mdat ») : depuis un tuyau, ffmpeg échouerait.
+    assert.ok(video.indexOf("moov") > video.indexOf("mdat"));
+    const served = await serveInMemory(video);
+    let extracted;
+    try {
+      extracted = await extractCandidates({ input: { url: served.url, protocolWhitelist: "http,tcp" }, mode: "full", stepSeconds: 0.5 }, { env, signal: new AbortController().signal, timeoutMs: 20_000 });
+    } finally {
+      await served.close();
+    }
+    try {
+      assert.equal(extracted.candidates.length, 16);
+      assert.equal(extracted.candidates[0].width, 720);
+      assert.ok(Math.abs((extracted.durationSeconds ?? 0) - 8) < 0.1);
+    } finally {
+      extracted.release();
+    }
+  });
+
+  it("liste blanche : un fichier local ou une adresse https sont refusés par ffmpeg lui-même, sans rien ouvrir", async () => {
+    for (const url of ["file:///etc/hostname", "https://127.0.0.1:9/v.mp4"]) {
       await assert.rejects(
-        extractCandidates({ input: { url, headers: {}, cookies: [] }, mode: "full", stepSeconds: 0.5 }, { env, signal: new AbortController().signal, timeoutMs: 10_000 }),
+        extractCandidates({ input: { url, protocolWhitelist: "http,tcp" }, mode: "full", stepSeconds: 0.5 }, { env, signal: new AbortController().signal, timeoutMs: 10_000 }),
         (/** @type {any} */ error) => error.code === "unavailable" && error.detail === "media_protocol_refused",
         url
       );

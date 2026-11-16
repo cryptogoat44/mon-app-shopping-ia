@@ -1,12 +1,14 @@
-// yt-dlp : lecture des seules informations de la vidéo publique (durée,
-// formats disponibles, adresse du fichier et en-têtes à envoyer), jamais de
-// téléchargement par yt-dlp lui-même :
-// - --dump-single-json (-J) : le JSON est écrit sur la sortie standard,
-//   aucun fichier n'est écrit ;
-// - --no-cache-dir, --no-part, --ignore-config : ni cache, ni fichier
-//   partiel, ni réglage lu sur le disque ;
-// - l'adresse est passée après « -- », dans une liste d'arguments (jamais de
-//   shell, jamais --exec).
+// yt-dlp, en deux temps :
+// 1. les informations de la vidéo publique (durée, formats disponibles) :
+//    --dump-single-json (-J), le JSON est écrit sur la sortie standard ;
+// 2. le fichier du format choisi, téléchargé par yt-dlp lui-même et écrit
+//    sur sa sortie standard (« -o - »), lu en mémoire avec un plafond
+//    (LIMITS.maxMediaBytes). TikTok refuse le fichier à ffmpeg (« 403 »,
+//    constaté le 16 novembre 2026) mais le donne à yt-dlp, qui envoie les
+//    cookies et les en-têtes attendus.
+// Dans les deux cas : --no-cache-dir, --no-part, --ignore-config (ni cache,
+// ni fichier partiel, ni réglage lu sur le disque) ; l'adresse est passée
+// après « -- », dans une liste d'arguments (jamais de shell, jamais --exec).
 import { LIMITS, WorkerError } from "./contract.js";
 import { runProgram } from "./run.js";
 
@@ -73,6 +75,8 @@ export function classifyYtDlpError(stderr) {
  * @property {number | null} durationSeconds
  * @property {boolean} isLive
  * @property {Record<string, unknown>[]} formats
+ * @property {number | null} playlistIndex Carrousel : numéro (à partir de 1)
+ *   de l'entrée choisie, pour ne télécharger qu'elle ; null hors carrousel.
  */
 
 /**
@@ -84,26 +88,29 @@ export function classifyYtDlpError(stderr) {
 export function videoInfoFrom(json) {
   if (!isRecord(json)) return null;
   let info = json;
+  /** @type {number | null} */
+  let playlistIndex = null;
   if (json._type === "playlist" || Array.isArray(json.entries)) {
-    const entries = Array.isArray(json.entries) ? json.entries.filter(isRecord) : [];
-    const withVideo = entries.find((entry) => (Array.isArray(entry.formats) ? entry.formats : [entry]).some((format) => isRecord(format) && hasVideo(format)));
-    if (!withVideo) return { durationSeconds: null, isLive: false, formats: [] };
+    const all = Array.isArray(json.entries) ? json.entries : [];
+    const withVideo = all.find((entry) => isRecord(entry) && (Array.isArray(entry.formats) ? entry.formats : [entry]).some((format) => isRecord(format) && hasVideo(format)));
+    if (!withVideo) return { durationSeconds: null, isLive: false, formats: [], playlistIndex: null };
     info = withVideo;
+    const declared = withVideo.playlist_index;
+    playlistIndex = Number.isInteger(declared) && declared >= 1 && declared <= 1000 ? declared : all.indexOf(withVideo) + 1;
   }
   const duration = typeof info.duration === "number" && Number.isFinite(info.duration) && info.duration > 0 ? info.duration : null;
   const formats = Array.isArray(info.formats) ? info.formats.filter(isRecord) : typeof info.url === "string" ? [info] : [];
-  return { durationSeconds: duration, isLive: info.is_live === true || info.live_status === "is_live" || info.live_status === "is_upcoming", formats };
+  return { durationSeconds: duration, isLive: info.is_live === true || info.live_status === "is_live" || info.live_status === "is_upcoming", formats, playlistIndex };
 }
 
 /**
  * @typedef {object} ChosenFormat
- * @property {string} url
+ * @property {string} url Adresse du fichier (vérifiée avant le téléchargement).
+ * @property {string | null} formatId Identifiant du format pour yt-dlp (« -f »).
  * @property {number | null} width
  * @property {number | null} height
  * @property {number | null} fps
  * @property {"h264" | "hevc" | "other" | "unknown"} codec
- * @property {Record<string, string>} headers En-têtes à envoyer (dont User-Agent et Referer).
- * @property {{ name: string, value: string, domain: string | null, path: string | null }[]} cookies
  */
 
 const H264 = /^(?:avc\d?|h\.?264)/i;
@@ -112,6 +119,8 @@ const UNPLAYABLE = /bytevc2|vvc|h\.?266/i;
 const HEVC = /^(?:hvc1|hev1|h\.?265|hevc|bytevc1)/i;
 /** Plus grand petit côté accepté (au-delà, décodage trop lourd). */
 const MAX_SHORT_SIDE = 1080;
+/** Identifiant de format repris dans « -f » : lettres, chiffres, « . _ - ». */
+const FORMAT_ID = /^[A-Za-z0-9._-]{1,128}$/;
 
 /** @param {Record<string, unknown>} format */
 function hasVideo(format) {
@@ -175,8 +184,7 @@ export function chooseFormat(info) {
     height: dimension(best.height),
     fps,
     codec: codecOf(best),
-    headers: safeHeaders(best.http_headers),
-    cookies: parseCookies(best.cookies),
+    formatId: typeof best.format_id === "string" && FORMAT_ID.test(best.format_id) ? best.format_id : null,
   };
 }
 
@@ -184,57 +192,6 @@ export function chooseFormat(info) {
 function compareRanks(a, b) {
   for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return a[i] - b[i];
   return 0;
-}
-
-const HEADER_NAME = /^[A-Za-z0-9-]{1,64}$/;
-/** En-têtes jamais repris (gérés par ffmpeg, ou dangereux). */
-const DROPPED_HEADERS = new Set(["cookie", "host", "content-length", "connection", "range", "transfer-encoding", "proxy-authorization", "authorization", "accept-encoding"]);
-
-/**
- * En-têtes donnés par yt-dlp pour ce format (User-Agent, Referer…), filtrés.
- * @param {unknown} raw
- * @returns {Record<string, string>}
- */
-export function safeHeaders(raw) {
-  /** @type {Record<string, string>} */
-  const headers = {};
-  if (!isRecord(raw)) return headers;
-  for (const [name, value] of Object.entries(raw)) {
-    if (!HEADER_NAME.test(name) || DROPPED_HEADERS.has(name.toLowerCase())) continue;
-    if (typeof value !== "string" || value.length > 4096 || /[\r\n\0]/.test(value)) continue;
-    headers[name] = value;
-  }
-  return headers;
-}
-
-const COOKIE_ATTRIBUTES = new Set(["domain", "path", "expires", "max-age", "version", "secure", "httponly", "samesite", "comment"]);
-
-/**
- * Cookies du format, tels que yt-dlp les écrit (« nom=valeur; Domain=…;
- * Path=…; Secure; Expires=… » à la suite, pour l'adresse du fichier).
- * @param {unknown} raw
- */
-export function parseCookies(raw) {
-  /** @type {{ name: string, value: string, domain: string | null, path: string | null }[]} */
-  const cookies = [];
-  if (typeof raw !== "string" || raw.length > 16 * 1024 || /[\r\n\0]/.test(raw)) return cookies;
-  for (const part of raw.split(";")) {
-    const token = part.trim();
-    if (!token) continue;
-    const equal = token.indexOf("=");
-    const name = equal < 0 ? token : token.slice(0, equal).trim();
-    const value = equal < 0 ? "" : token.slice(equal + 1).trim();
-    const attribute = name.toLowerCase();
-    const current = cookies[cookies.length - 1];
-    if (COOKIE_ATTRIBUTES.has(attribute)) {
-      if (current && attribute === "domain" && /^\.?[A-Za-z0-9.-]{1,253}$/.test(value)) current.domain = value;
-      if (current && attribute === "path" && /^\/[\x21-\x7e]{0,1024}$/.test(value)) current.path = value;
-      continue;
-    }
-    if (equal < 0 || !/^[\x21-\x7e]{1,256}$/.test(name) || /[=,]/.test(name) || !/^[\x21-\x7e]{0,4096}$/.test(value)) continue;
-    cookies.push({ name, value, domain: null, path: null });
-  }
-  return cookies;
 }
 
 /**
@@ -266,6 +223,89 @@ export async function probeVideo(url, { env, signal, timeoutMs, command = "yt-dl
   } finally {
     result.stdout.fill(0);
   }
+}
+
+/** Formats de secours, si l'identifiant choisi n'existe plus au second
+ * passage : un MP4 H.264 en un seul fichier https (jamais le codec maison
+ * illisible de TikTok, ni une liste de lecture ou des fragments). */
+export const DOWNLOAD_FALLBACK_FORMATS = "best[ext=mp4][vcodec^=avc][protocol=https]/best[ext=mp4][vcodec^=h264][protocol=https]";
+
+/**
+ * Arguments du téléchargement : le format choisi (puis les formats de
+ * secours), écrit sur la sortie standard, plafonné en taille.
+ * Carrousel (Instagram) : seule l'entrée choisie au premier passage
+ * (« --playlist-items ») ; sinon yt-dlp écrirait toutes les vidéos à la suite.
+ * @param {string} url Adresse acceptée (urls.js).
+ * @param {string | null} formatId
+ * @param {number | null} [playlistIndex]
+ */
+export function ytDlpDownloadArgs(url, formatId, playlistIndex = null) {
+  const selector = formatId && FORMAT_ID.test(formatId) ? `${formatId}/${DOWNLOAD_FALLBACK_FORMATS}` : DOWNLOAD_FALLBACK_FORMATS;
+  const items = Number.isInteger(playlistIndex) && /** @type {number} */ (playlistIndex) >= 1 ? ["--playlist-items", String(playlistIndex)] : [];
+  return [
+    "--ignore-config",
+    "--no-cache-dir",
+    "--no-part",
+    "--no-playlist",
+    "--no-warnings",
+    "--no-progress",
+    "--socket-timeout",
+    String(LIMITS.networkTimeoutSeconds),
+    "--retries",
+    "1",
+    "--extractor-retries",
+    "1",
+    "--max-filesize",
+    String(LIMITS.maxMediaBytes),
+    ...items,
+    "--format",
+    selector,
+    "--output",
+    "-",
+    "--",
+    url,
+  ];
+}
+
+/**
+ * Télécharge le fichier vidéo en mémoire (jamais sur le disque). Le tampon
+ * rendu appartient à l'appelant, qui l'efface (fill(0)) après usage.
+ * @param {string} url
+ * @param {{ formatId: string | null, playlistIndex: number | null }} choice
+ * @param {{ env: Record<string, string>, signal: AbortSignal, timeoutMs: number, command?: string }} options
+ * @returns {Promise<Buffer>}
+ */
+export async function downloadMedia(url, { formatId, playlistIndex }, { env, signal, timeoutMs, command = "yt-dlp" }) {
+  const result = await runProgram(command, ytDlpDownloadArgs(url, formatId, playlistIndex), { env, signal, timeoutMs, maxStdoutBytes: LIMITS.maxMediaBytes });
+  let kept = false;
+  try {
+    if (result.stopReason === "aborted") throw new WorkerError("timeout", "deadline");
+    if (result.stopReason === "timeout") throw new WorkerError("timeout", "download_timeout");
+    if (result.stopReason === "overflow") throw new WorkerError("unavailable", "media_too_large");
+    if (result.spawnError) throw new WorkerError("unavailable", "ytdlp_missing");
+    if (result.exitCode !== 0) throw downloadError(result.stderr);
+    // --max-filesize : yt-dlp s'arrête sans rien écrire (et sans erreur).
+    if (result.stdout.length === 0) throw new WorkerError("unavailable", "media_empty");
+    kept = true;
+    return result.stdout;
+  } finally {
+    if (!kept) result.stdout.fill(0);
+  }
+}
+
+/**
+ * Échec du téléchargement → code du contrat. La page vient d'être lue avec
+ * succès : un 404 ou un format manquant viennent du serveur de fichiers, pas
+ * d'une vidéo supprimée (« unavailable », compté comme une panne).
+ * @param {string} stderr
+ */
+export function downloadError(stderr) {
+  if (/requested format is not available/i.test(stderr)) return new WorkerError("unavailable", "format_unavailable");
+  const { code, detail } = classifyYtDlpError(stderr);
+  if (code === "blocked" && detail === "forbidden") return new WorkerError("blocked", "media_forbidden");
+  if (code === "not_found") return new WorkerError("unavailable", "media_not_found");
+  if (detail === "extractor_failed" || detail === "unknown_error") return new WorkerError(code, `download_${detail}`);
+  return new WorkerError(code, detail);
 }
 
 /** @param {unknown} value @returns {value is Record<string, any>} */

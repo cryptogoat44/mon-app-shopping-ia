@@ -1,7 +1,8 @@
 // Faux ffmpeg : écrit des images JPEG (sortie standard), les petites images
 // rouge-vert-bleu de 96 × 96 px (descripteur 3) et les lignes « Duration » et
-// showinfo (sortie d'erreur), comme le vrai, selon le scénario lu dans
-// l'adresse du fichier (« ?s=…&d=… »). Jamais de réseau.
+// showinfo (sortie d'erreur), comme le vrai, selon le scénario lu dans le
+// faux fichier servi sur la boucle locale (« fake-media:?s=…&d=… », écrit
+// par le faux yt-dlp). Seul accès réseau : 127.0.0.1.
 "use strict";
 const fs = require("node:fs");
 const { record, hang } = require("./common.cjs");
@@ -18,21 +19,29 @@ const TINY_JPEG = Buffer.from("/9j/4AAQSkZJRgABAgAAAQABAAD//gAQTGF2YzYwLjMxLjEwM
 const EDGE = 96;
 
 const input = args[args.indexOf("-i") + 1] ?? "";
-const params = new URL(input).searchParams;
-const scenario = params.get("s") ?? "varied";
-const duration = Number(params.get("d") ?? "10");
-const announced = Number(params.get("ffdur") ?? String(duration));
+let scenario = "varied";
+let duration = 10;
+let announced = 10;
 const graph = args[args.indexOf("-filter_complex") + 1] ?? "";
 const step = Number(/gte\(t-prev_selected_t,([0-9.]+)\)/.exec(graph)?.[1] ?? "1");
 const maxFrames = Number(args[args.indexOf("-frames:v") + 1] ?? "42");
 const keyframesOnly = args.includes("-skip_frame");
 
-if (scenario === "403") {
-  process.stderr.write("[https @ 0x1] HTTP error 403 Forbidden\n[in#0 @ 0x2] Error opening input: Server returned 403 Forbidden (access denied)\n");
-  process.exit(1);
+main();
+
+async function main() {
+  let query = "";
+  if (input.startsWith("http://127.0.0.1:")) {
+    const text = await (await fetch(input)).text();
+    if (text.startsWith("fake-media:")) query = text.slice("fake-media:".length);
+  }
+  const params = new URLSearchParams(query);
+  scenario = params.get("s") ?? "varied";
+  duration = Number(params.get("d") ?? "10");
+  announced = Number(params.get("ffdur") ?? String(duration));
+  if (scenario === "slow") hang(60_000);
+  else run();
 }
-if (scenario === "slow") hang(60_000);
-else run();
 
 function run() {
   // Instants des images, comme le filtre select : la première, puis au moins « step » plus tard.

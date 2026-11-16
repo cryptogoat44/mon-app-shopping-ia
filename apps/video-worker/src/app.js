@@ -86,7 +86,7 @@ export function createWorker(options) {
     };
     response.on("close", onClose);
     /** @type {import("./job.js").JobStats} */
-    const stats = { attempts: 0, ytDlpMs: 0, ffmpegMs: 0, mode: undefined, codec: undefined, candidates: undefined, frames: undefined, durationSeconds: undefined };
+    const stats = { attempts: 0, ytDlpMs: 0, downloadMs: 0, downloadAttempts: 0, mediaKb: undefined, ffmpegMs: 0, mode: undefined, codec: undefined, candidates: undefined, frames: undefined, durationSeconds: undefined };
     /** @type {(() => void) | null} */
     let releaseSlot = null;
     /** @type {(() => void) | null} */
@@ -130,6 +130,9 @@ export function createWorker(options) {
         ms: Date.now() - startedAt,
         attempts: stats.attempts,
         ytDlpMs: stats.ytDlpMs,
+        downloadMs: stats.downloadMs,
+        downloadAttempts: stats.downloadAttempts,
+        mediaKb: stats.mediaKb,
         ffmpegMs: stats.ffmpegMs,
         mode: stats.mode,
         codec: stats.codec,

@@ -27,7 +27,10 @@ describe("erreurs → codes du contrat", () => {
     { name: "direct", body: tiktok("live"), status: 422, error: "unsupported" },
     { name: "JSON illisible", body: tiktok("badjson"), status: 502, error: "unavailable" },
     { name: "vidéo de plus de 90 s (durée de yt-dlp)", body: tiktok("toolong"), status: 413, error: "too_long" },
-    { name: "fichier refusé par son serveur (403)", body: tiktok("media403"), status: 451, error: "blocked" },
+    { name: "fichier refusé à yt-dlp par son serveur (403)", body: tiktok("media403"), status: 451, error: "blocked" },
+    { name: "fichier vide (plus gros que la limite, arrêté par yt-dlp)", body: tiktok("dlempty"), status: 502, error: "unavailable" },
+    { name: "fichier introuvable chez le serveur de fichiers (404 au téléchargement)", body: tiktok("dl404"), status: 502, error: "unavailable" },
+    { name: "format disparu au second passage", body: tiktok("dlformat"), status: 502, error: "unavailable" },
     { name: "ffmpeg ne rend aucune image", body: tiktok("ffgarbage"), status: 502, error: "unavailable" },
   ];
   for (const { name, body, status, error } of cases) {
@@ -69,6 +72,16 @@ describe("second essai", () => {
     assert.ok(service.logs.some((entry) => entry.event === "frames" && entry.result === "ok" && entry.attempts === 2));
   });
 
+  it("téléchargement : erreur passagère puis réussite, un seul nouvel essai du téléchargement", async () => {
+    const before = service.records("yt-dlp").filter((entry) => entry.scenario === "dlflaky").length;
+    const result = await service.frames(tiktok("dlflaky"));
+    assert.equal(result.status, 200);
+    assert.ok(result.body.frames.length >= 6);
+    // Une lecture des informations, puis deux téléchargements.
+    assert.equal(service.records("yt-dlp").filter((entry) => entry.scenario === "dlflaky").length - before, 3);
+    assert.ok(service.logs.some((entry) => entry.event === "frames" && entry.result === "ok" && entry.downloadAttempts === 2));
+  });
+
   it("erreur définitive (vidéo privée) : aucun nouvel essai", async () => {
     const before = service.records("yt-dlp").filter((entry) => entry.scenario === "private").length;
     await service.frames(tiktok("private"));
@@ -82,6 +95,10 @@ describe("journal des erreurs", () => {
     assert.ok(failures.some((entry) => entry.result === "blocked" && entry.detail === "ip_blocked"));
     assert.ok(failures.some((entry) => entry.result === "blocked" && entry.detail === "geo_restricted"));
     assert.ok(failures.some((entry) => entry.result === "too_long" && entry.detail === "too_long_metadata"));
+    assert.ok(failures.some((entry) => entry.result === "blocked" && entry.detail === "media_forbidden"));
+    assert.ok(failures.some((entry) => entry.result === "unavailable" && entry.detail === "media_empty"));
+    assert.ok(failures.some((entry) => entry.result === "unavailable" && entry.detail === "media_not_found"));
+    assert.ok(failures.some((entry) => entry.result === "unavailable" && entry.detail === "format_unavailable"));
     const text = JSON.stringify(service.logs);
     for (const forbidden of ["ERROR", "Your IP address", "status code", "7000000000000000001"]) assert.ok(!text.includes(forbidden), forbidden);
   });
