@@ -59,7 +59,14 @@ function out(json) {
 
 /** Téléchargement : le format demandé (« --format id/… »), sinon le premier format vidéo. */
 function sendMedia(json) {
-  const info = json._type === "playlist" ? json.entries.find((entry) => Array.isArray(entry.formats) && entry.formats.length > 0) : json;
+  let info = json;
+  if (json._type === "playlist") {
+    // Comme le vrai : sans « --playlist-items », toutes les entrées partiraient à la suite.
+    const items = args.indexOf("--playlist-items");
+    if (items < 0) fail("[fake] carrousel téléchargé sans --playlist-items : toutes les vidéos à la suite");
+    info = json.entries[Number(args[items + 1]) - 1];
+    if (!info || !Array.isArray(info.formats) || info.formats.length === 0) fail("[fake] --playlist-items désigne une entrée sans vidéo");
+  }
   const list = info.formats ?? [];
   const wanted = (args[args.indexOf("--format") + 1] ?? "").split("/")[0];
   const format = list.find((item) => item.format_id === wanted) ?? list.find((item) => item.vcodec && item.vcodec !== "none");
@@ -70,6 +77,9 @@ function sendMedia(json) {
     return;
   }
   if (/[?&]s=dlempty\b/.test(media)) process.exit(0);
+  if (/[?&]s=dl404\b/.test(media)) fail("unable to download video data: HTTP Error 404: Not Found");
+  if (/[?&]s=dlformat\b/.test(media)) fail("[TikTok] 7000000000000000001: Requested format is not available. Use --list-formats for a list of available formats");
+  if (/[?&]s=dlflaky\b/.test(media) && calls === 1) fail("[TikTok] 7000000000000000001: Unable to extract universal data for rehydration");
   process.stdout.write(`fake-media:${media}`);
   process.exit(0);
 }
@@ -109,6 +119,15 @@ switch (scenario) {
     break;
   case "dlempty":
     out(video(10, "dlempty&d=10"));
+    break;
+  case "dl404":
+    out(video(10, "dl404&d=10"));
+    break;
+  case "dlformat":
+    out(video(10, "dlformat&d=10"));
+    break;
+  case "dlflaky":
+    out(video(8, "dlflaky&d=8"));
     break;
   case "ffslow":
     out(video(10, "slow&d=10"));

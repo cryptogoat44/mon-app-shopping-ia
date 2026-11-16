@@ -21,7 +21,8 @@ pas joignable depuis Internet, ni par l'app, ni par le site.
 4. Vidéo de plus de 90 s, direct ou publication sans vidéo : refus immédiat.
 5. Le service choisit un fichier MP4 H.264 de 480 à 720 px (720p au plus).
 6. **yt-dlp** télécharge ce fichier **en mémoire** (64 Mo au plus), jamais
-   sur le disque. TikTok refuse le fichier à ffmpeg directement (« 403 »,
+   sur le disque ; pour un carrousel Instagram, seulement la vidéo choisie.
+   Une erreur passagère de TikTok donne droit à un second essai. TikTok refuse le fichier à ffmpeg directement (« 403 »,
    constaté le 16 novembre 2026), mais le donne à yt-dlp.
 7. **ffmpeg** lit le fichier en mémoire, que le service lui sert sur la
    boucle locale (127.0.0.1, adresse aléatoire, requêtes partielles : un MP4
@@ -256,8 +257,10 @@ secret, jamais la sortie brute de yt-dlp ou de ffmpeg.
     d'une adresse de vidéo. Ni identifiants, ni port, ni paramètres.
   - Adresse du fichier vidéo, donnée par yt-dlp : https, nom de domaine public
     uniquement (jamais une IP, ni un nom interne du réseau privé), vérifiée
-    avant le téléchargement. C'est yt-dlp qui télécharge le fichier, avec
-    ses propres protections ; l'adresse vient de TikTok ou de Meta.
+    au premier passage. **Limite connue** : le fichier vient d'un second
+    passage de yt-dlp, dont l'adresse et les redirections ne sont pas
+    revérifiées (les formats de secours sont limités à un MP4 en https).
+    Aucun tiers ne choisit cette adresse : elle vient de TikTok ou de Meta.
   - ffmpeg ne parle jamais à Internet :
     - il lit seulement le fichier en mémoire, sur 127.0.0.1, à une adresse
       aléatoire servie le temps de l'extraction (`src/memserve.js`) ;

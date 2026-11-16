@@ -9,7 +9,7 @@ import { buildBody } from "../src/job.js";
 import { splitJpegStream } from "../src/jpeg.js";
 import { MIN_SHARPNESS, scoreFrame, selectFrames } from "../src/selection.js";
 import { acceptedVideoUrl, isAcceptableMediaUrl, isPublicDomainName } from "../src/urls.js";
-import { DOWNLOAD_FALLBACK_FORMATS, chooseFormat, classifyYtDlpError, videoInfoFrom, ytDlpArgs, ytDlpDownloadArgs } from "../src/ytdlp.js";
+import { DOWNLOAD_FALLBACK_FORMATS, chooseFormat, classifyYtDlpError, downloadError, videoInfoFrom, ytDlpArgs, ytDlpDownloadArgs } from "../src/ytdlp.js";
 
 const LONG_SECRET = "a".repeat(32);
 
@@ -211,7 +211,35 @@ describe("yt-dlp : arguments, format choisi, erreurs", () => {
     assert.equal(odd[odd.indexOf("--format") + 1], DOWNLOAD_FALLBACK_FORMATS);
     // Jamais le codec maison illisible de TikTok, même en secours.
     assert.ok(!DOWNLOAD_FALLBACK_FORMATS.includes("bytevc2"));
-    assert.ok(DOWNLOAD_FALLBACK_FORMATS.split("/").every((selector) => selector.includes("ext=mp4") && /vcodec\^=(?:avc|h264)/.test(selector)));
+    assert.ok(DOWNLOAD_FALLBACK_FORMATS.split("/").every((selector) => selector.includes("ext=mp4") && selector.includes("[protocol=https]") && /vcodec\^=(?:avc|h264)/.test(selector)));
+    // Hors carrousel : pas de « --playlist-items ».
+    assert.ok(!args.includes("--playlist-items"));
+  });
+
+  it("carrousel : seule l'entrée choisie est téléchargée (« --playlist-items »)", () => {
+    const url = "https://www.instagram.com/p/ABCDE12345/";
+    const args = ytDlpDownloadArgs(url, "1080v", 3);
+    assert.equal(args[args.indexOf("--playlist-items") + 1], "3");
+    for (const bad of [0, -1, 1.5, null]) assert.ok(!ytDlpDownloadArgs(url, "1080v", /** @type {any} */ (bad)).includes("--playlist-items"), String(bad));
+    // Numéro de l'entrée : celui donné par yt-dlp, sinon la place dans la liste.
+    assert.equal(videoInfoFrom({ _type: "playlist", entries: [{ formats: [{ url: "https://c.test/i.jpg", vcodec: "none" }] }, { formats: [{ url: "https://c.test/v.mp4", vcodec: "avc1" }] }] })?.playlistIndex, 2);
+    assert.equal(videoInfoFrom({ _type: "playlist", entries: [{ playlist_index: 4, formats: [{ url: "https://c.test/v.mp4", vcodec: "avc1" }] }] })?.playlistIndex, 4);
+    assert.equal(videoInfoFrom({ formats: [{ url: "https://c.test/v.mp4", vcodec: "avc1" }] })?.playlistIndex, null);
+  });
+
+  it("échecs du téléchargement : 403 → blocked, 404 et format manquant → unavailable (jamais not_found)", () => {
+    const pairs = [
+      ["ERROR: unable to download video data: HTTP Error 403: Forbidden", "blocked", "media_forbidden"],
+      ["ERROR: unable to download video data: HTTP Error 404: Not Found", "unavailable", "media_not_found"],
+      ["ERROR: [TikTok] 1: Requested format is not available. Use --list-formats for a list of available formats", "unavailable", "format_unavailable"],
+      ["ERROR: [TikTok] 1: Unable to extract universal data for rehydration", "unavailable", "download_extractor_failed"],
+      ["ERROR: [TikTok] 1: Your IP address is blocked from accessing this post", "blocked", "ip_blocked"],
+    ];
+    for (const [stderr, code, detail] of pairs) {
+      const error = downloadError(stderr);
+      assert.equal(error.code, code, stderr);
+      assert.equal(error.detail, detail, stderr);
+    }
   });
 
   it("format choisi : son identifiant est repris s'il est sûr", () => {

@@ -14,8 +14,13 @@ import { chooseFormat, downloadMedia, probeVideo } from "./ytdlp.js";
  * passagère) : une seule fois, après une courte pause. */
 const RETRYABLE = new Set(["extractor_failed", "unknown_error", "ytdlp_bad_json"]);
 const RETRY_PAUSE_MS = 800;
-/** Second essai seulement s'il reste au moins ce temps. */
-const RETRY_MIN_REMAINING_MS = 14_000;
+/** Second essai de lecture seulement s'il reste au moins ce temps (second
+ * passage, téléchargement et ffmpeg doivent encore tenir). */
+const RETRY_MIN_REMAINING_MS = 18_000;
+/** Téléchargement : erreurs passagères qui méritent un second essai, s'il
+ * reste au moins ce temps. */
+const DOWNLOAD_RETRYABLE = new Set(["download_extractor_failed", "download_unknown_error"]);
+const DOWNLOAD_RETRY_MIN_REMAINING_MS = 10_000;
 /** Temps laissé au téléchargement, à ffmpeg et à la réponse : la lecture
  * des informations ne peut pas tout prendre. */
 const RESERVED_AFTER_YTDLP_MS = 10_000;
@@ -28,6 +33,7 @@ const RESPONSE_MARGIN_MS = 300;
  * @property {number} attempts
  * @property {number} ytDlpMs
  * @property {number} downloadMs
+ * @property {number} downloadAttempts
  * @property {number | undefined} mediaKb Taille du fichier téléchargé, en Ko.
  * @property {number} ffmpegMs
  * @property {string | undefined} mode
@@ -78,16 +84,30 @@ export async function extractFrames({ url }, { env, signal, deadlineAt, tools, s
   if (!isAcceptableMediaUrl(format.url)) throw new WorkerError("unavailable", "media_url_refused");
   stats.codec = format.codec;
 
-  // 3. Le fichier, téléchargé par yt-dlp en mémoire.
+  // 3. Le fichier, téléchargé par yt-dlp en mémoire (seulement l'entrée
+  //    choisie d'un carrousel), un second essai sur une erreur passagère.
   const downloadStartedAt = Date.now();
+  const choice = { formatId: format.formatId, playlistIndex: info.playlistIndex };
   let media;
   try {
-    media = await downloadMedia(url, format.formatId, {
-      env,
-      signal,
-      timeoutMs: Math.max(Math.min(remaining(), 1000), remaining() - RESERVED_AFTER_DOWNLOAD_MS),
-      command: tools.ytDlp,
-    });
+    for (let attempt = 1; ; attempt += 1) {
+      stats.downloadAttempts = attempt;
+      try {
+        media = await downloadMedia(url, choice, {
+          env,
+          signal,
+          timeoutMs: Math.max(Math.min(remaining(), 1000), remaining() - RESERVED_AFTER_DOWNLOAD_MS),
+          command: tools.ytDlp,
+        });
+        break;
+      } catch (error) {
+        if (attempt === 1 && error instanceof WorkerError && DOWNLOAD_RETRYABLE.has(error.detail) && remaining() > DOWNLOAD_RETRY_MIN_REMAINING_MS) {
+          await pause(RETRY_PAUSE_MS, signal);
+          continue;
+        }
+        throw error;
+      }
+    }
   } finally {
     stats.downloadMs = Date.now() - downloadStartedAt;
   }

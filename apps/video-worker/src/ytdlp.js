@@ -75,6 +75,8 @@ export function classifyYtDlpError(stderr) {
  * @property {number | null} durationSeconds
  * @property {boolean} isLive
  * @property {Record<string, unknown>[]} formats
+ * @property {number | null} playlistIndex Carrousel : numéro (à partir de 1)
+ *   de l'entrée choisie, pour ne télécharger qu'elle ; null hors carrousel.
  */
 
 /**
@@ -86,15 +88,19 @@ export function classifyYtDlpError(stderr) {
 export function videoInfoFrom(json) {
   if (!isRecord(json)) return null;
   let info = json;
+  /** @type {number | null} */
+  let playlistIndex = null;
   if (json._type === "playlist" || Array.isArray(json.entries)) {
-    const entries = Array.isArray(json.entries) ? json.entries.filter(isRecord) : [];
-    const withVideo = entries.find((entry) => (Array.isArray(entry.formats) ? entry.formats : [entry]).some((format) => isRecord(format) && hasVideo(format)));
-    if (!withVideo) return { durationSeconds: null, isLive: false, formats: [] };
+    const all = Array.isArray(json.entries) ? json.entries : [];
+    const withVideo = all.find((entry) => isRecord(entry) && (Array.isArray(entry.formats) ? entry.formats : [entry]).some((format) => isRecord(format) && hasVideo(format)));
+    if (!withVideo) return { durationSeconds: null, isLive: false, formats: [], playlistIndex: null };
     info = withVideo;
+    const declared = withVideo.playlist_index;
+    playlistIndex = Number.isInteger(declared) && declared >= 1 && declared <= 1000 ? declared : all.indexOf(withVideo) + 1;
   }
   const duration = typeof info.duration === "number" && Number.isFinite(info.duration) && info.duration > 0 ? info.duration : null;
   const formats = Array.isArray(info.formats) ? info.formats.filter(isRecord) : typeof info.url === "string" ? [info] : [];
-  return { durationSeconds: duration, isLive: info.is_live === true || info.live_status === "is_live" || info.live_status === "is_upcoming", formats };
+  return { durationSeconds: duration, isLive: info.is_live === true || info.live_status === "is_live" || info.live_status === "is_upcoming", formats, playlistIndex };
 }
 
 /**
@@ -220,17 +226,22 @@ export async function probeVideo(url, { env, signal, timeoutMs, command = "yt-dl
 }
 
 /** Formats de secours, si l'identifiant choisi n'existe plus au second
- * passage : un MP4 H.264 (jamais le codec maison illisible de TikTok). */
-export const DOWNLOAD_FALLBACK_FORMATS = "best[ext=mp4][vcodec^=avc]/best[ext=mp4][vcodec^=h264]";
+ * passage : un MP4 H.264 en un seul fichier https (jamais le codec maison
+ * illisible de TikTok, ni une liste de lecture ou des fragments). */
+export const DOWNLOAD_FALLBACK_FORMATS = "best[ext=mp4][vcodec^=avc][protocol=https]/best[ext=mp4][vcodec^=h264][protocol=https]";
 
 /**
  * Arguments du téléchargement : le format choisi (puis les formats de
  * secours), écrit sur la sortie standard, plafonné en taille.
+ * Carrousel (Instagram) : seule l'entrée choisie au premier passage
+ * (« --playlist-items ») ; sinon yt-dlp écrirait toutes les vidéos à la suite.
  * @param {string} url Adresse acceptée (urls.js).
  * @param {string | null} formatId
+ * @param {number | null} [playlistIndex]
  */
-export function ytDlpDownloadArgs(url, formatId) {
+export function ytDlpDownloadArgs(url, formatId, playlistIndex = null) {
   const selector = formatId && FORMAT_ID.test(formatId) ? `${formatId}/${DOWNLOAD_FALLBACK_FORMATS}` : DOWNLOAD_FALLBACK_FORMATS;
+  const items = Number.isInteger(playlistIndex) && /** @type {number} */ (playlistIndex) >= 1 ? ["--playlist-items", String(playlistIndex)] : [];
   return [
     "--ignore-config",
     "--no-cache-dir",
@@ -246,6 +257,7 @@ export function ytDlpDownloadArgs(url, formatId) {
     "1",
     "--max-filesize",
     String(LIMITS.maxMediaBytes),
+    ...items,
     "--format",
     selector,
     "--output",
@@ -259,23 +271,19 @@ export function ytDlpDownloadArgs(url, formatId) {
  * Télécharge le fichier vidéo en mémoire (jamais sur le disque). Le tampon
  * rendu appartient à l'appelant, qui l'efface (fill(0)) après usage.
  * @param {string} url
- * @param {string | null} formatId
+ * @param {{ formatId: string | null, playlistIndex: number | null }} choice
  * @param {{ env: Record<string, string>, signal: AbortSignal, timeoutMs: number, command?: string }} options
  * @returns {Promise<Buffer>}
  */
-export async function downloadMedia(url, formatId, { env, signal, timeoutMs, command = "yt-dlp" }) {
-  const result = await runProgram(command, ytDlpDownloadArgs(url, formatId), { env, signal, timeoutMs, maxStdoutBytes: LIMITS.maxMediaBytes });
+export async function downloadMedia(url, { formatId, playlistIndex }, { env, signal, timeoutMs, command = "yt-dlp" }) {
+  const result = await runProgram(command, ytDlpDownloadArgs(url, formatId, playlistIndex), { env, signal, timeoutMs, maxStdoutBytes: LIMITS.maxMediaBytes });
   let kept = false;
   try {
     if (result.stopReason === "aborted") throw new WorkerError("timeout", "deadline");
     if (result.stopReason === "timeout") throw new WorkerError("timeout", "download_timeout");
     if (result.stopReason === "overflow") throw new WorkerError("unavailable", "media_too_large");
     if (result.spawnError) throw new WorkerError("unavailable", "ytdlp_missing");
-    if (result.exitCode !== 0) {
-      const { code, detail } = classifyYtDlpError(result.stderr);
-      if (code === "blocked" && detail === "forbidden") throw new WorkerError("blocked", "media_forbidden");
-      throw new WorkerError(code, detail === "extractor_failed" || detail === "unknown_error" ? `download_${detail}` : detail);
-    }
+    if (result.exitCode !== 0) throw downloadError(result.stderr);
     // --max-filesize : yt-dlp s'arrête sans rien écrire (et sans erreur).
     if (result.stdout.length === 0) throw new WorkerError("unavailable", "media_empty");
     kept = true;
@@ -283,6 +291,21 @@ export async function downloadMedia(url, formatId, { env, signal, timeoutMs, com
   } finally {
     if (!kept) result.stdout.fill(0);
   }
+}
+
+/**
+ * Échec du téléchargement → code du contrat. La page vient d'être lue avec
+ * succès : un 404 ou un format manquant viennent du serveur de fichiers, pas
+ * d'une vidéo supprimée (« unavailable », compté comme une panne).
+ * @param {string} stderr
+ */
+export function downloadError(stderr) {
+  if (/requested format is not available/i.test(stderr)) return new WorkerError("unavailable", "format_unavailable");
+  const { code, detail } = classifyYtDlpError(stderr);
+  if (code === "blocked" && detail === "forbidden") return new WorkerError("blocked", "media_forbidden");
+  if (code === "not_found") return new WorkerError("unavailable", "media_not_found");
+  if (detail === "extractor_failed" || detail === "unknown_error") return new WorkerError(code, `download_${detail}`);
+  return new WorkerError(code, detail);
 }
 
 /** @param {unknown} value @returns {value is Record<string, any>} */

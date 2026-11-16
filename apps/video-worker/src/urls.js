@@ -5,9 +5,11 @@
 //   paramètres ni fragment ;
 // - l'adresse du fichier vidéo, trouvée par yt-dlp, doit être en https, sur un
 //   nom de domaine public (jamais une adresse IP, ni un nom interne comme
-//   ceux du réseau privé de Render), vérifiée avant que yt-dlp ne télécharge
-//   le fichier. Elle vient de l'extraction de TikTok ou de Meta, à partir
-//   d'une page de la liste fermée ci-dessous. ffmpeg, lui, ne lit que le
+//   ceux du réseau privé de Render), vérifiée au premier passage de yt-dlp.
+//   Limite connue : le fichier vient d'un second passage, dont l'adresse et
+//   les redirections ne sont pas revérifiées. Aucun tiers ne la choisit :
+//   elle vient de l'extraction de TikTok ou de Meta, à partir d'une page de
+//   la liste fermée ci-dessous. ffmpeg, lui, ne lit que le
 //   fichier en mémoire, sur 127.0.0.1 (memserve.js).
 
 /** Hôtes autorisés, par plateforme (demande du serveur principal). */
