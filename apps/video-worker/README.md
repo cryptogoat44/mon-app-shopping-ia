@@ -20,18 +20,24 @@ pas joignable depuis Internet, ni par l'app, ni par le site.
    disponibles). Rien n'est téléchargé à cette étape.
 4. Vidéo de plus de 90 s, direct ou publication sans vidéo : refus immédiat.
 5. Le service choisit un fichier MP4 H.264 de 480 à 720 px (720p au plus).
-6. **ffmpeg** lit ce fichier directement à son adresse, sans l'enregistrer.
-   Il en tire jusqu'à 40 images candidates, réparties sur toute la vidéo.
-7. Le service garde 6 à 16 images nettes, différentes les unes des autres et
+6. **yt-dlp** télécharge ce fichier **en mémoire** (64 Mo au plus), jamais
+   sur le disque. TikTok refuse le fichier à ffmpeg directement (« 403 »,
+   constaté le 16 novembre 2026), mais le donne à yt-dlp.
+7. **ffmpeg** lit le fichier en mémoire, que le service lui sert sur la
+   boucle locale (127.0.0.1, adresse aléatoire, requêtes partielles : un MP4
+   dont l'index est à la fin se lit aussi). Il en tire jusqu'à 40 images
+   candidates, réparties sur toute la vidéo. Le fichier est effacé aussitôt.
+8. Le service garde 6 à 16 images nettes, différentes les unes des autres et
    réparties dans le temps. Les mesures sont les mêmes que sur le téléphone :
    netteté, empreinte, couleurs.
-8. Il renvoie ces images en JPEG (1 280 px au plus, qualité ≈ 82), puis efface
+9. Il renvoie ces images en JPEG (1 280 px au plus, qualité ≈ 82), puis efface
    tout ce qu'il avait en mémoire.
 
 **Rien n'est écrit sur le disque** : ni la vidéo, ni les images, ni un cache.
 
-- yt-dlp ne fait qu'écrire du JSON (`--dump-single-json`, `--no-cache-dir`,
-  `--no-part`).
+- yt-dlp écrit le JSON puis le fichier sur sa sortie standard
+  (`--dump-single-json`, puis `--output -`), avec `--no-cache-dir` et
+  `--no-part`.
 - ffmpeg écrit ses images dans deux tuyaux (`pipe:1` et `pipe:3`).
 - Python ne crée pas de fichiers `.pyc`.
 
@@ -228,8 +234,9 @@ Une ligne JSON par demande, avec seulement des compteurs et des codes :
 - `result` (`ok` ou le code d'erreur), `detail` (raison fixe, par exemple
   `ip_blocked`, `login_required`, `extractor_failed`, `too_long_metadata`,
   `queue_full`) ;
-- `platform`, `ms`, `ytDlpMs`, `ffmpegMs`, `attempts`, `mode` (`full` ou
-  `keyframes`), `codec` ;
+- `platform`, `ms`, `ytDlpMs` (informations), `downloadMs` et `mediaKb`
+  (téléchargement), `ffmpegMs`, `attempts`, `mode` (`full` ou `keyframes`),
+  `codec` ;
 - `duration` (par tranche : `0-15`, `15-30`…), `candidates`, `frames` ;
 - `active`, `queued`, `served`, `failed`.
 
@@ -248,19 +255,15 @@ secret, jamais la sortie brute de yt-dlp ou de ffmpeg.
     `vm.`, `vt.tiktok.com`, `instagram.com` et `www.instagram.com`, forme
     d'une adresse de vidéo. Ni identifiants, ni port, ni paramètres.
   - Adresse du fichier vidéo, donnée par yt-dlp : https, nom de domaine public
-    uniquement (jamais une IP, ni un nom interne du réseau privé).
-  - ffmpeg :
-    - `-protocol_whitelist https,tls,tcp` : ni fichier local, ni liste de
-      lecture ;
-    - démultiplexeur MP4 imposé ;
-    - certificat du serveur vérifié (`-tls_verify 1`) ;
-    - **limite connue** : seule la première adresse du fichier est vérifiée.
-      ffmpeg suit les redirections HTTP sans les contrôler, y compris vers
-      une adresse en http (« tcp » est autorisé) ou vers un autre hôte.
-      Aujourd'hui, personne d'autre que TikTok ou Meta ne choisit cette
-      adresse (elle vient de leur page, elle-même dans la liste fermée
-      ci-dessus) ; un contrôle de chaque redirection demanderait un petit
-      relais (proxy) dans le service.
+    uniquement (jamais une IP, ni un nom interne du réseau privé), vérifiée
+    avant le téléchargement. C'est yt-dlp qui télécharge le fichier, avec
+    ses propres protections ; l'adresse vient de TikTok ou de Meta.
+  - ffmpeg ne parle jamais à Internet :
+    - il lit seulement le fichier en mémoire, sur 127.0.0.1, à une adresse
+      aléatoire servie le temps de l'extraction (`src/memserve.js`) ;
+    - `-protocol_whitelist http,tcp` : ni fichier local, ni https, ni liste
+      de lecture ;
+    - démultiplexeur MP4 imposé.
 - **Programmes lancés** :
   - toujours avec une liste d'arguments, jamais de shell, jamais `--exec` ;
   - l'adresse est passée après `--` ;
@@ -268,8 +271,8 @@ secret, jamais la sortie brute de yt-dlp ou de ffmpeg.
     leur sortie dépasse le plafond ;
   - `tini` ramasse les processus orphelins.
 - **Mémoire** :
-  - corps de la demande limité à 4 Ko, JSON de yt-dlp à 8 Mo, images de
-    ffmpeg à 48 Mo ;
+  - corps de la demande limité à 4 Ko, JSON de yt-dlp à 8 Mo, fichier vidéo
+    à 64 Mo (effacé dès l'extraction finie), images de ffmpeg à 48 Mo ;
   - une image rendue pèse 1 Mo au plus, l'ensemble 8 Mo au plus ;
   - les tampons sont effacés après la réponse.
 - **Conteneur** :
@@ -292,14 +295,11 @@ secret, jamais la sortie brute de yt-dlp ou de ffmpeg.
     (`fullDecodeMaxFrames` dans `src/contract.js`) ;
   - au-delà, seules les images clés sont lues. Si TikTok en met peu, une
     longue vidéo peut donner moins de 6 images.
-- **Lecture du fichier par ffmpeg.** yt-dlp imite un navigateur pour lire la
-  page ; ffmpeg, lui, lit le fichier avec les en-têtes et les cookies donnés
-  par yt-dlp, mais sans cette imitation. Si les serveurs de fichiers de
-  TikTok ou de Meta le refusent, le journal montrera beaucoup de `blocked`
-  avec le détail `media_forbidden`. Il faudrait alors une variante :
-  - yt-dlp télécharge vers un tuyau (`-o -`) et ffmpeg lit ce tuyau ;
-  - inconvénients : tout le fichier est lu, et le MP4 doit avoir son index au
-    début.
+- **Téléchargement par yt-dlp.** Depuis le 16 novembre 2026, c'est yt-dlp
+  qui télécharge le fichier (ffmpeg se le voyait refuser par TikTok :
+  `blocked` / `media_forbidden`). Si yt-dlp est refusé à son tour, le journal
+  montrera encore `media_forbidden` : il faudra alors essayer l'option
+  `--impersonate` de yt-dlp (imitation d'un navigateur), ou un relais.
 - **Le Dockerfile n'a pas pu être construit sur la machine de développement**
   (pas de Docker) : la première construction chez Render fait foi.
 - **Contrôle de santé** : Render ne propose peut-être pas de contrôle de santé

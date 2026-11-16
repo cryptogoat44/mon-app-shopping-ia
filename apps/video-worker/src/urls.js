@@ -5,13 +5,10 @@
 //   paramètres ni fragment ;
 // - l'adresse du fichier vidéo, trouvée par yt-dlp, doit être en https, sur un
 //   nom de domaine public (jamais une adresse IP, ni un nom interne comme
-//   ceux du réseau privé de Render). Seule cette PREMIÈRE adresse est
-//   vérifiée : ffmpeg suit les redirections HTTP sans les contrôler, y
-//   compris vers http ou vers un autre hôte (sa liste -protocol_whitelist
-//   bloque les fichiers locaux et les listes de lecture, pas une
-//   redirection). Aucun tiers ne choisit cette adresse aujourd'hui : elle
-//   vient de l'extraction de TikTok ou de Meta, à partir d'une page de la
-//   liste fermée ci-dessous.
+//   ceux du réseau privé de Render), vérifiée avant que yt-dlp ne télécharge
+//   le fichier. Elle vient de l'extraction de TikTok ou de Meta, à partir
+//   d'une page de la liste fermée ci-dessous. ffmpeg, lui, ne lit que le
+//   fichier en mémoire, sur 127.0.0.1 (memserve.js).
 
 /** Hôtes autorisés, par plateforme (demande du serveur principal). */
 export const VIDEO_HOSTS = Object.freeze({
@@ -76,7 +73,7 @@ export function isPublicDomainName(hostname) {
 }
 
 /**
- * L'adresse du fichier vidéo (donnée par yt-dlp) peut-elle être lue par ffmpeg ?
+ * L'adresse du fichier vidéo (donnée par yt-dlp) peut-elle être téléchargée ?
  * @param {unknown} raw
  */
 export function isAcceptableMediaUrl(raw) {

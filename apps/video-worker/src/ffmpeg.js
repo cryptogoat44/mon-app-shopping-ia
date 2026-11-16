@@ -1,5 +1,6 @@
-// ffmpeg : lecture du fichier vidéo directement à son adresse (requêtes HTTP
-// partielles, rien n'est écrit sur le disque) et images candidates écrites
+// ffmpeg : lecture du fichier vidéo, que yt-dlp a déjà téléchargé en
+// mémoire et que memserve.js sert sur la boucle locale (127.0.0.1, requêtes
+// partielles, rien n'est écrit sur le disque), et images candidates écrites
 // dans deux tuyaux :
 // - sortie standard (pipe:1) : les images JPEG, 1 280 px au plus sur le
 //   grand côté (image2pipe, mjpeg, -q:v 4 ≈ qualité 82) ;
@@ -7,22 +8,15 @@
 //   brut, pour juger netteté et doublons sans décoder un JPEG en JavaScript.
 // Le filtre showinfo écrit l'instant de chaque image sur la sortie d'erreur.
 //
-// Sécurité : -protocol_whitelist https,tls,tcp (jamais un fichier local ni
-// une liste de lecture), certificat du serveur vérifié (-tls_verify 1),
-// -f mp4 (démultiplexeur imposé), lecture plafonnée à 91 s de vidéo, arrêt
-// net au délai. Limite connue : seule la première adresse est vérifiée
-// (urls.js) ; ffmpeg suit les redirections HTTP sans contrôle, y compris
-// vers http (« tcp » est dans la liste) ou vers un autre hôte.
-import { existsSync } from "node:fs";
+// ffmpeg ne parle jamais à TikTok ni à Instagram : leurs serveurs de
+// fichiers lui refusent la vidéo (« 403 », constaté le 16 novembre 2026).
+// Sécurité : liste blanche de protocoles imposée par l'appelant (« http,tcp »
+// pour la boucle locale ; « pipe » dans les tests), -f mp4 (démultiplexeur
+// imposé), lecture plafonnée à 91 s de vidéo, arrêt net au délai.
 import { LIMITS, WorkerError } from "./contract.js";
 import { splitJpegStream } from "./jpeg.js";
 import { runProgram } from "./run.js";
 import { SCORING_BYTES, SCORING_EDGE, scoreFrame } from "./selection.js";
-
-/** Certificats des autorités (paquet ca-certificates de l'image Docker) :
- * ffmpeg vérifie le certificat du serveur du fichier (-tls_verify 1). */
-export const CA_FILE = "/etc/ssl/certs/ca-certificates.crt";
-const HAS_CA_FILE = existsSync(CA_FILE);
 
 /**
  * @typedef {"full" | "keyframes"} DecodeMode
@@ -33,16 +27,9 @@ const HAS_CA_FILE = existsSync(CA_FILE);
 
 /**
  * @typedef {object} FfmpegInput
- * @property {string} url Adresse https du fichier (déjà vérifiée).
- * @property {Record<string, string>} headers
- * @property {{ name: string, value: string, domain: string | null, path: string | null }[]} cookies
- */
-
-/**
- * @typedef {object} InputOverride Tests seulement : vidéo envoyée sur l'entrée standard.
- * @property {string} url Ex. « pipe:0 ».
- * @property {string} protocolWhitelist Ex. « pipe ».
- * @property {Buffer} stdin
+ * @property {string} url Adresse lue par ffmpeg (boucle locale, ou « pipe:0 » dans les tests).
+ * @property {string} protocolWhitelist Ex. « http,tcp » ; « pipe » dans les tests.
+ * @property {Buffer} [stdin] Tests seulement : vidéo envoyée sur l'entrée standard.
  */
 
 /**
@@ -61,32 +48,17 @@ export function decodePlan(durationSeconds, fps) {
 
 /**
  * Arguments de ffmpeg. Aucune sortie n'est un fichier : pipe:1 et pipe:3.
- * @param {{ input: FfmpegInput, mode: DecodeMode, stepSeconds: number, override?: InputOverride }} plan
+ * @param {{ input: FfmpegInput, mode: DecodeMode, stepSeconds: number }} plan
  * @returns {string[]}
  */
-export function ffmpegArgs({ input, mode, stepSeconds, override }) {
+export function ffmpegArgs({ input, mode, stepSeconds }) {
   const maxFrames = String(LIMITS.maxCandidates + 2);
   const edge = LIMITS.maxFrameEdge;
   const args = ["-hide_banner", "-nostdin", "-nostats", "-loglevel", "info", "-filter_complex_threads", "1"];
-  if (override) {
-    args.push("-protocol_whitelist", override.protocolWhitelist);
-  } else {
-    args.push("-protocol_whitelist", "https,tls,tcp", "-rw_timeout", String(LIMITS.networkTimeoutSeconds * 1_000_000), "-tls_verify", "1");
-    if (HAS_CA_FILE) args.push("-ca_file", CA_FILE);
-    const headers = { ...input.headers };
-    const userAgent = takeHeader(headers, "user-agent");
-    const referer = takeHeader(headers, "referer");
-    if (userAgent) args.push("-user_agent", userAgent);
-    if (referer) args.push("-referer", referer);
-    const extra = Object.entries(headers).map(([name, value]) => `${name}: ${value}\r\n`);
-    if (extra.length > 0) args.push("-headers", extra.join(""));
-    if (input.cookies.length > 0) {
-      const host = new URL(input.url).hostname;
-      args.push("-cookies", input.cookies.map((cookie) => `${cookie.name}=${cookie.value}; path=${cookie.path ?? "/"}; domain=${cookie.domain ?? host};`).join("\n"));
-    }
-  }
+  args.push("-protocol_whitelist", input.protocolWhitelist);
+  if (input.url.startsWith("http://")) args.push("-rw_timeout", String(LIMITS.networkTimeoutSeconds * 1_000_000));
   if (mode === "keyframes") args.push("-skip_frame", "nokey");
-  args.push("-threads", "1", "-t", String(LIMITS.maxVideoSeconds + 1), "-f", "mp4", "-i", override ? override.url : input.url);
+  args.push("-threads", "1", "-t", String(LIMITS.maxVideoSeconds + 1), "-f", "mp4", "-i", input.url);
   const graph = [
     `[0:v:0]select='isnan(prev_selected_t)+gte(t-prev_selected_t,${stepSeconds})',showinfo,split=2[big][small]`,
     `[big]scale=w='min(${edge},iw)':h='min(${edge},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2[bigout]`,
@@ -96,18 +68,6 @@ export function ffmpegArgs({ input, mode, stepSeconds, override }) {
   args.push("-map", "[bigout]", "-an", "-sn", "-dn", "-fps_mode", "passthrough", "-frames:v", maxFrames, "-c:v", "mjpeg", "-q:v", String(LIMITS.jpegQscale), "-f", "image2pipe", "pipe:1");
   args.push("-map", "[smallout]", "-an", "-sn", "-dn", "-fps_mode", "passthrough", "-frames:v", maxFrames, "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:3");
   return args;
-}
-
-/** @param {Record<string, string>} headers @param {string} wanted */
-function takeHeader(headers, wanted) {
-  for (const name of Object.keys(headers)) {
-    if (name.toLowerCase() === wanted) {
-      const value = headers[name];
-      delete headers[name];
-      return value;
-    }
-  }
-  return null;
 }
 
 const SHOWINFO = /\bn:\s*\d+\s+pts:\s*-?\d+\s+pts_time:\s*(-?[0-9.]+(?:e[-+]?\d+)?)/;
@@ -154,7 +114,7 @@ export function classifyFfmpegError(stderr) {
 /**
  * Lance ffmpeg et rend les images candidates. `release()` efface toutes les
  * images (à appeler dès qu'elles ne servent plus).
- * @param {{ input: FfmpegInput, mode: DecodeMode, stepSeconds: number, override?: InputOverride }} plan
+ * @param {{ input: FfmpegInput, mode: DecodeMode, stepSeconds: number }} plan
  * @param {{ env: Record<string, string>, signal: AbortSignal, timeoutMs: number, command?: string }} options
  * @returns {Promise<{ candidates: Candidate[], durationSeconds: number | null, release: () => void }>}
  */
@@ -171,7 +131,7 @@ export async function extractCandidates(plan, { env, signal, timeoutMs, command 
     extraOutputFd: 3,
     maxExtraBytes: (LIMITS.maxCandidates + 2) * SCORING_BYTES,
     maxStderrBytes: 32 * 1024,
-    stdin: plan.override?.stdin,
+    stdin: plan.input.stdin,
     onStderrLine(line) {
       const time = parseShowinfoLine(line);
       if (time !== null) {

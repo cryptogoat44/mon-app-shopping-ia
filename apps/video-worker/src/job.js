@@ -1,12 +1,14 @@
 // Une demande d'images, de bout en bout : yt-dlp (informations), contrôles
-// (direct, durée, format, adresse du fichier), ffmpeg (images candidates),
-// choix des images rendues. Rien n'est écrit sur le disque ; les images
-// restent en mémoire et sont effacées par `release()` après la réponse.
+// (direct, durée, format, adresse du fichier), yt-dlp (le fichier, en
+// mémoire), ffmpeg (images candidates, lues sur la boucle locale), choix des
+// images rendues. Rien n'est écrit sur le disque ; le fichier est effacé dès
+// l'extraction finie, les images par `release()` après la réponse.
 import { LIMITS, WorkerError } from "./contract.js";
 import { decodePlan, extractCandidates } from "./ffmpeg.js";
+import { serveInMemory } from "./memserve.js";
 import { selectFrames } from "./selection.js";
 import { isAcceptableMediaUrl } from "./urls.js";
-import { chooseFormat, probeVideo } from "./ytdlp.js";
+import { chooseFormat, downloadMedia, probeVideo } from "./ytdlp.js";
 
 /** Erreurs de yt-dlp qui méritent un second essai (défi anti-robot, réponse
  * passagère) : une seule fois, après une courte pause. */
@@ -14,14 +16,19 @@ const RETRYABLE = new Set(["extractor_failed", "unknown_error", "ytdlp_bad_json"
 const RETRY_PAUSE_MS = 800;
 /** Second essai seulement s'il reste au moins ce temps. */
 const RETRY_MIN_REMAINING_MS = 14_000;
-/** Temps laissé à ffmpeg et à la réponse : yt-dlp ne peut pas tout prendre. */
-const RESERVED_AFTER_YTDLP_MS = 4_000;
+/** Temps laissé au téléchargement, à ffmpeg et à la réponse : la lecture
+ * des informations ne peut pas tout prendre. */
+const RESERVED_AFTER_YTDLP_MS = 10_000;
+/** Temps laissé à ffmpeg et à la réponse après le téléchargement. */
+const RESERVED_AFTER_DOWNLOAD_MS = 5_000;
 const RESPONSE_MARGIN_MS = 300;
 
 /**
  * @typedef {object} JobStats
  * @property {number} attempts
  * @property {number} ytDlpMs
+ * @property {number} downloadMs
+ * @property {number | undefined} mediaKb Taille du fichier téléchargé, en Ko.
  * @property {number} ffmpegMs
  * @property {string | undefined} mode
  * @property {string | undefined} codec
@@ -71,15 +78,41 @@ export async function extractFrames({ url }, { env, signal, deadlineAt, tools, s
   if (!isAcceptableMediaUrl(format.url)) throw new WorkerError("unavailable", "media_url_refused");
   stats.codec = format.codec;
 
-  // 3. Images candidates (ffmpeg).
+  // 3. Le fichier, téléchargé par yt-dlp en mémoire.
+  const downloadStartedAt = Date.now();
+  let media;
+  try {
+    media = await downloadMedia(url, format.formatId, {
+      env,
+      signal,
+      timeoutMs: Math.max(Math.min(remaining(), 1000), remaining() - RESERVED_AFTER_DOWNLOAD_MS),
+      command: tools.ytDlp,
+    });
+  } finally {
+    stats.downloadMs = Date.now() - downloadStartedAt;
+  }
+  stats.mediaKb = Math.round(media.length / 1024);
+
+  // 4. Images candidates (ffmpeg lit le fichier sur la boucle locale).
   const plan = decodePlan(info.durationSeconds, format.fps);
   stats.mode = plan.mode;
-  const startedAt = Date.now();
-  const extracted = await extractCandidates(
-    { input: { url: format.url, headers: format.headers, cookies: format.cookies }, mode: plan.mode, stepSeconds: plan.stepSeconds },
-    { env, signal, timeoutMs: Math.max(1, remaining() - RESPONSE_MARGIN_MS), command: tools.ffmpeg }
-  );
-  stats.ffmpegMs = Date.now() - startedAt;
+  let extracted;
+  try {
+    const served = await serveInMemory(media);
+    try {
+      const startedAt = Date.now();
+      extracted = await extractCandidates(
+        { input: { url: served.url, protocolWhitelist: "http,tcp" }, mode: plan.mode, stepSeconds: plan.stepSeconds },
+        { env, signal, timeoutMs: Math.max(1, remaining() - RESPONSE_MARGIN_MS), command: tools.ffmpeg }
+      );
+      stats.ffmpegMs = Date.now() - startedAt;
+    } finally {
+      await served.close();
+    }
+  } finally {
+    media.fill(0);
+    media = Buffer.alloc(0);
+  }
   try {
     return { body: buildBody(info.durationSeconds, extracted, stats), release: extracted.release };
   } catch (error) {

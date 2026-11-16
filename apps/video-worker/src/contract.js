@@ -82,6 +82,9 @@ export const LIMITS = Object.freeze({
   fullDecodeMaxFrames: 1400,
   /** Réponse JSON de yt-dlp lue au plus. */
   maxMetadataBytes: 8 * 1024 * 1024,
+  /** Fichier vidéo téléchargé par yt-dlp, gardé en mémoire le temps de
+   * l'extraction : 64 Mo au plus (90 s en 720p pèsent ≈ 10 à 30 Mo). */
+  maxMediaBytes: 64 * 1024 * 1024,
   /** Images produites par ffmpeg lues au plus (toutes candidates confondues). */
   maxFfmpegOutputBytes: 48 * 1024 * 1024,
   /** Silence réseau toléré par yt-dlp et ffmpeg. */

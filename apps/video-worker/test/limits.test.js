@@ -60,6 +60,21 @@ describe("délai global", () => {
     }
   });
 
+  it("téléchargement trop lent : 504 timeout, yt-dlp tué, ffmpeg jamais lancé", async () => {
+    const service = await startWorker({ limits: { requestDeadlineMs: 1_500 } });
+    try {
+      const result = await service.frames(tiktok("dlslow"));
+      assert.equal(result.status, 504);
+      assert.deepEqual(result.body, { error: "timeout" });
+      await sleep(200);
+      const download = service.records("yt-dlp").filter((entry) => entry.args.includes("--output")).at(-1);
+      assert.equal(isAlive(download.pid), false, "yt-dlp tué");
+      assert.equal(service.records("ffmpeg").length, 0);
+    } finally {
+      await service.stop();
+    }
+  });
+
   it("ffmpeg trop lent : 504 timeout, programme tué", async () => {
     const service = await startWorker({ limits: { requestDeadlineMs: 1_500 } });
     try {

@@ -1,5 +1,7 @@
 // Faux yt-dlp : rend un JSON ou une erreur selon le scénario lu dans
-// l'adresse (pseudo TikTok « @scenario » ou code Instagram). Jamais de réseau.
+// l'adresse (pseudo TikTok « @scenario » ou code Instagram). Avec
+// « --output - » (téléchargement), il écrit à la place un faux fichier
+// « fake-media:?s=…&d=… » que le faux ffmpeg relit. Jamais de réseau.
 "use strict";
 const { record, previousCalls, hang } = require("./common.cjs");
 
@@ -14,6 +16,7 @@ const scenario = /\/@([a-z0-9._]+)\//.exec(url)?.[1] ?? /\/(?:reel|p|tv)\/([A-Za
 const calls = previousCalls("yt-dlp", scenario);
 record("yt-dlp", args, { scenario });
 
+const download = args.includes("--output");
 const CDN = "https://media.example-cdn.test";
 
 /** Formats d'une vidéo, comme yt-dlp les décrit (simplifiés). */
@@ -46,7 +49,28 @@ function video(duration, media, extra = {}) {
 }
 
 function out(json) {
+  if (download) {
+    sendMedia(json);
+    return;
+  }
   process.stdout.write(JSON.stringify(json));
+  process.exit(0);
+}
+
+/** Téléchargement : le format demandé (« --format id/… »), sinon le premier format vidéo. */
+function sendMedia(json) {
+  const info = json._type === "playlist" ? json.entries.find((entry) => Array.isArray(entry.formats) && entry.formats.length > 0) : json;
+  const list = info.formats ?? [];
+  const wanted = (args[args.indexOf("--format") + 1] ?? "").split("/")[0];
+  const format = list.find((item) => item.format_id === wanted) ?? list.find((item) => item.vcodec && item.vcodec !== "none");
+  const media = new URL(format.url).search;
+  if (/[?&]s=403\b/.test(media)) fail("unable to download video data: HTTP Error 403: Forbidden");
+  if (/[?&]s=dlslow\b/.test(media)) {
+    hang(60_000);
+    return;
+  }
+  if (/[?&]s=dlempty\b/.test(media)) process.exit(0);
+  process.stdout.write(`fake-media:${media}`);
   process.exit(0);
 }
 
@@ -79,6 +103,12 @@ switch (scenario) {
     break;
   case "media403":
     out(video(10, "403&d=10"));
+    break;
+  case "dlslow":
+    out(video(10, "dlslow&d=10"));
+    break;
+  case "dlempty":
+    out(video(10, "dlempty&d=10"));
     break;
   case "ffslow":
     out(video(10, "slow&d=10"));
@@ -137,10 +167,12 @@ switch (scenario) {
     process.exit(0);
     break;
   case "hold":
-    setTimeout(() => out(video(8, "varied&d=8")), 1500);
+    if (download) out(video(8, "varied&d=8"));
+    else setTimeout(() => out(video(8, "varied&d=8")), 1500);
     break;
   case "heavyhold":
-    setTimeout(() => out(video(8, "heavy&d=8")), 1500);
+    if (download) out(video(8, "heavy&d=8"));
+    else setTimeout(() => out(video(8, "heavy&d=8")), 1500);
     break;
   case "slow":
     hang(60_000);

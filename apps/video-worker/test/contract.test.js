@@ -148,32 +148,43 @@ describe("POST /frames : réponse", () => {
 describe("programmes lancés : rien sur le disque, adresse du fichier en https, en-têtes repris", () => {
   it("yt-dlp : -J, sans cache ni fichier partiel, l'adresse canonique après « -- », environnement sans le secret", async () => {
     await service.frames(tiktok("ok8"));
-    const ytDlp = service.records("yt-dlp").at(-1);
+    const ytDlp = service.records("yt-dlp").filter((entry) => entry.args.includes("--dump-single-json")).at(-1);
     assert.deepEqual(ytDlp.args.slice(-2), ["--", tiktok("ok8").url]);
     for (const flag of ["--dump-single-json", "--no-cache-dir", "--no-part", "--ignore-config"]) assert.ok(ytDlp.args.includes(flag), flag);
     assert.ok(!JSON.stringify(ytDlp).includes(SECRET));
   });
 
-  it("ffmpeg : lit l'adresse https du format H.264 720p, avec User-Agent, Referer et cookies, sortie dans deux tuyaux", async () => {
+  it("yt-dlp télécharge le format H.264 720p en mémoire ; ffmpeg le lit sur la boucle locale, sortie dans deux tuyaux", async () => {
     await service.frames(tiktok("ok30"));
+    const download = service.records("yt-dlp").filter((entry) => entry.args.includes("--output")).at(-1);
+    const dl = (/** @type {string} */ flag) => download.args[download.args.indexOf(flag) + 1];
+    assert.ok(dl("--format").startsWith("h264_720p/"));
+    assert.equal(dl("--output"), "-");
+    assert.deepEqual(download.args.slice(-2), ["--", tiktok("ok30").url]);
     const { args } = service.records("ffmpeg").at(-1);
     const at = (/** @type {string} */ flag) => args[args.indexOf(flag) + 1];
-    assert.equal(at("-i"), "https://media.example-cdn.test/v720.mp4?s=varied&d=30");
-    assert.equal(at("-protocol_whitelist"), "https,tls,tcp");
+    assert.match(at("-i"), /^http:\/\/127\.0\.0\.1:\d+\/[0-9a-f]{32}\.mp4$/);
+    assert.equal(at("-protocol_whitelist"), "http,tcp");
     assert.equal(at("-f"), "mp4");
-    assert.equal(at("-user_agent"), "Mozilla/5.0 (essai)");
-    assert.equal(at("-referer"), "https://www.tiktok.com/");
-    assert.equal(at("-headers"), "Accept: */*\r\n");
-    assert.equal(at("-cookies"), "tt_chain_token=abc123; path=/; domain=.example-cdn.test;\nsid=xyz; path=/; domain=media.example-cdn.test;");
-    assert.ok(!args.join(" ").includes("jamais=repris"), "l'en-tête Cookie de yt-dlp n'est jamais repris tel quel");
+    for (const flag of ["-user_agent", "-referer", "-headers", "-cookies"]) assert.ok(!args.includes(flag), flag);
+    assert.ok(!args.join(" ").includes("example-cdn"), "ffmpeg ne reçoit jamais l'adresse du fichier chez la plateforme");
     assert.deepEqual(
       args.filter((/** @type {string} */ arg) => arg.startsWith("pipe:")),
       ["pipe:1", "pipe:3"]
     );
+    assert.ok(service.logs.some((entry) => entry.event === "frames" && entry.result === "ok" && typeof entry.downloadMs === "number" && typeof entry.mediaKb === "number"));
   });
 
-  it("adresse du fichier refusée (IP, nom interne, port) : ffmpeg n'est jamais lancé", async () => {
+  it("après l'extraction, le fichier n'est plus servi sur la boucle locale", async () => {
+    await service.frames(tiktok("ok8"));
+    const { args } = service.records("ffmpeg").at(-1);
+    const url = args[args.indexOf("-i") + 1];
+    await assert.rejects(fetch(url));
+  });
+
+  it("adresse du fichier refusée (IP, nom interne, port) : ni téléchargement ni ffmpeg", async () => {
     const before = service.records("ffmpeg").length;
+    const downloadsBefore = service.records("yt-dlp").filter((entry) => entry.args.includes("--output")).length;
     for (const scenario of ["mediaip", "mediainternal"]) {
       const result = await service.frames(tiktok(scenario));
       assert.equal(result.status, 502, scenario);
@@ -182,6 +193,7 @@ describe("programmes lancés : rien sur le disque, adresse du fichier en https, 
     const http = await service.frames(tiktok("mediahttp"));
     assert.equal(http.status, 422);
     assert.equal(service.records("ffmpeg").length, before);
+    assert.equal(service.records("yt-dlp").filter((entry) => entry.args.includes("--output")).length, downloadsBefore, "aucun téléchargement non plus");
   });
 
   it("journal : des compteurs et des codes, jamais l'adresse, l'identifiant ni une image", async () => {

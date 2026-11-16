@@ -27,7 +27,8 @@ describe("erreurs → codes du contrat", () => {
     { name: "direct", body: tiktok("live"), status: 422, error: "unsupported" },
     { name: "JSON illisible", body: tiktok("badjson"), status: 502, error: "unavailable" },
     { name: "vidéo de plus de 90 s (durée de yt-dlp)", body: tiktok("toolong"), status: 413, error: "too_long" },
-    { name: "fichier refusé par son serveur (403)", body: tiktok("media403"), status: 451, error: "blocked" },
+    { name: "fichier refusé à yt-dlp par son serveur (403)", body: tiktok("media403"), status: 451, error: "blocked" },
+    { name: "fichier vide (plus gros que la limite, arrêté par yt-dlp)", body: tiktok("dlempty"), status: 502, error: "unavailable" },
     { name: "ffmpeg ne rend aucune image", body: tiktok("ffgarbage"), status: 502, error: "unavailable" },
   ];
   for (const { name, body, status, error } of cases) {
@@ -82,6 +83,8 @@ describe("journal des erreurs", () => {
     assert.ok(failures.some((entry) => entry.result === "blocked" && entry.detail === "ip_blocked"));
     assert.ok(failures.some((entry) => entry.result === "blocked" && entry.detail === "geo_restricted"));
     assert.ok(failures.some((entry) => entry.result === "too_long" && entry.detail === "too_long_metadata"));
+    assert.ok(failures.some((entry) => entry.result === "blocked" && entry.detail === "media_forbidden"));
+    assert.ok(failures.some((entry) => entry.result === "unavailable" && entry.detail === "media_empty"));
     const text = JSON.stringify(service.logs);
     for (const forbidden of ["ERROR", "Your IP address", "status code", "7000000000000000001"]) assert.ok(!text.includes(forbidden), forbidden);
   });
