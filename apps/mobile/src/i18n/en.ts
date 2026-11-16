@@ -378,7 +378,7 @@ export const en: Catalog = {
       lead: (count: number) => (count > 1 ? "The most likely one is selected. Tap another moment to choose it." : "Check that the frame surrounds the piece."),
       shown: (time: string) => `Chosen moment, at ${time}, with the frame around the piece`,
       choose: (rank: number, time: string) => `Moment ${rank}, at ${time}`,
-      search: "Search for this piece",
+      search: "Use this moment",
       editQuery: "Edit the description",
     },
     failedTitle: "The video couldn't be analyzed",
@@ -422,6 +422,7 @@ export const en: Catalog = {
   targeting: {
     title: "Circle the piece",
     caption: "Only the circled area will be analyzed. To correct it, circle the piece again.",
+    aiCaption: "The AI has circled the piece. Start the search, or circle it yourself to correct it.",
     instruction: {
       finger: "Circle the piece with your finger",
       mouse: "Circle the piece with your mouse or finger",

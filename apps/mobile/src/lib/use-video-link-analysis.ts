@@ -157,11 +157,13 @@ export function useVideoLinkAnalysis({ active, url, platform, origin, onDeclined
     setPhase((current) => (current.kind === "moments" && current.analysis.moments[rank] ? { ...current, selected: rank } : current));
   }
 
-  /** « Rechercher cette pièce » : la suite du parcours habituel (attente, résultats). */
+  /** « Choisir ce moment » : l'écran « Entourez la pièce », avec le cadre de
+   * l'IA déjà tracé (la personne lance tel quel ou entoure à nouveau la
+   * pièce), puis la suite habituelle (attente, résultats). */
   function search() {
     if (phase.kind !== "moments") return;
     if (!startMomentSearch(phase.analysis, phase.selected, origin)) return;
-    router.push({ pathname: "/spot/lancer", params: { source: "photo", auto: "1" } });
+    router.push({ pathname: "/spot/lancer", params: { source: "photo" } });
   }
 
   return {

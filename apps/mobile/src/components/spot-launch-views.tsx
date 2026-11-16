@@ -75,6 +75,7 @@ export function PhotoFrame({
   onDragChange,
   onImageSize,
   height,
+  caption = t.targeting.caption,
 }: {
   uri: string;
   zone: PieceZone | null;
@@ -82,13 +83,15 @@ export function PhotoFrame({
   onDragChange: (dragging: boolean) => void;
   onImageSize?: (size: Size) => void;
   height: number;
+  /** Texte sous le titre (par défaut : la consigne habituelle). */
+  caption?: string;
 }) {
   return (
     <>
       <Text style={styles.frameTitle} accessibilityRole="header">
         {t.targeting.title}
       </Text>
-      <Text style={styles.caption}>{t.targeting.caption}</Text>
+      <Text style={styles.caption}>{caption}</Text>
       <View style={styles.cropArea}>
         <PieceTracer uri={uri} zone={zone} onChange={onChange} onDragChange={onDragChange} onImageSize={onImageSize} height={height} />
       </View>

@@ -147,8 +147,18 @@ describe("écran « vidéo partagée » : l'analyse d'abord, quand le serveur l'
     expect(hook).toContain("fetchConsentStatus().then(videoLinkAiChoice)");
   });
 
-  it("« Rechercher cette pièce » : la suite habituelle, lancée seule (Entourez la pièce, attente, résultats)", () => {
-    expect(code("src/lib/use-video-link-analysis.ts")).toContain('router.push({ pathname: "/spot/lancer", params: { source: "photo", auto: "1" } })');
+  it("« Choisir ce moment » : « Entourez la pièce » avec le cadre de l'IA déjà tracé, sans lancement automatique", () => {
+    const hook = code("src/lib/use-video-link-analysis.ts");
+    expect(hook).toContain('router.push({ pathname: "/spot/lancer", params: { source: "photo" } })');
+    expect(hook).not.toContain('auto: "1"');
+    const launch = code("src/app/(app)/spot/lancer.tsx");
+    // Le cadre de l'IA devient la zone de départ, modifiable.
+    expect(launch).toContain("return draft?.zoneByAi && draft.crop ? zoneFromCrop(draft.crop) : null;");
+    expect(launch).toContain("useState<PieceZone | null>(() => initialZone(media))");
+    // Entourée à nouveau par la personne : la zone est la sienne, plus celle de l'IA.
+    expect(launch).toContain("updateDraft({ zoneByAi: false });");
+    expect(launch).toContain("onChange={changeZone}");
+    expect(launch).toContain("caption={zoneFromAi ? t.targeting.aiCaption : t.targeting.caption}");
   });
 
   it("lancement automatique une seule fois : « auto » retiré de l'adresse juste après (site : « Précédent » puis « Suivant » ne relance rien)", () => {
