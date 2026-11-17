@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // Réglages. La logique sans rendu (lib/read-receipts.ts) : proposé ou non,
 // valeur montrée tout de suite puis enregistrée, retour à l'ancienne valeur
 // si le serveur refuse ; l'appel au serveur (`fetch` simulé) ; puis le
-// composant et l'écran lus comme du texte, et les textes FR / EN.
+// composant et l'écran lus comme du texte, les textes FR / EN, et ce qu'en
+// dit la politique de confidentialité.
 vi.hoisted(() => {
   process.env.EXPO_PUBLIC_API_URL = "https://api.exemple.test";
 });
@@ -14,11 +15,14 @@ vi.mock("../src/lib/supabase", () => ({ supabase: { auth: { getSession: async ()
 vi.mock("../src/lib/analytics", () => ({ track: vi.fn(), setAnalyticsConsent: vi.fn() }));
 vi.mock("../src/lib/image-file", () => ({ imageFileFromUri: vi.fn() }));
 
+import { LEGAL_DOCUMENT_VERSIONS } from "@monapp/shared-types";
 import { updateReadReceipts } from "../src/lib/api";
 import { ApiError } from "../src/lib/api-error";
 import { changeReadReceipts, readReceiptsOffered, type ReadReceiptsSteps } from "../src/lib/read-receipts";
 import { fr } from "../src/i18n/fr";
 import { en } from "../src/i18n/en";
+import { privacyPolicy } from "../src/legal/confidentialite";
+import { privacyPolicyEn } from "../src/legal/confidentialite.en";
 
 const read = (path: string) => readFileSync(join(__dirname, "../src", path), "utf8");
 
@@ -197,5 +201,72 @@ describe("textes FR / EN", () => {
     for (const text of [fr.settings.readReceiptsTitle, fr.settings.readReceiptsSwitchLabel, fr.settings.readReceiptsHint, fr.settings.readReceiptsError]) {
       expect(text).not.toMatch(/\b(tu|toi|ton|ta|tes|t')\b/i);
     }
+  });
+});
+
+describe("politique de confidentialité", () => {
+  const section = (doc: typeof privacyPolicy, title: string) => {
+    const found = doc.sections.find((s) => s.title === title);
+    expect(found, title).toBeDefined();
+    return found!.blocks.flat().join("\n");
+  };
+
+  it("les données : la date de la dernière lecture est gardée ; l'autre membre voit « Vu », sauf réglage éteint chez l'un des deux, jamais pour une invitation non acceptée", () => {
+    const data = section(privacyPolicy, "Les données que nous utilisons");
+    for (const sentence of [
+      "La date de votre dernière lecture de chaque conversation est conservée avec la conversation.",
+      "Quand vous ouvrez une conversation, l'autre membre peut ainsi voir que vous avez vu son dernier message (mention « Vu » ; son app reçoit cette date), sauf si l'un de vous deux a désactivé « Confirmations de lecture » dans les Réglages.",
+      "Tant que vous n'avez pas accepté une invitation, la personne qui vous invite ne voit rien de tel.",
+    ]) {
+      expect(data).toContain(sentence);
+    }
+    // Ce qui était déjà dit des messages reste dit.
+    expect(data).toContain("l'état de vos conversations (invitation envoyée, acceptée ou refusée, messages lus)");
+    expect(data).toContain("Seuls vous et la personne avec qui vous échangez les voyez.");
+    expect(data).toContain("L'équipe de modération ne lit que les messages signalés, avec quelques messages autour pour comprendre le contexte.");
+    expect(data).toContain("la conversation disparaît alors pour vous deux.");
+    // Le point reste à relire par l'avocat, avec la mention activée par défaut.
+    expect(data).toContain("[À vérifier : base légale retenue (exécution du contrat), durée de conservation, information de la personne qui reçoit une invitation, et mention « Vu » activée par défaut.]");
+  });
+
+  it("les mêmes faits en anglais", () => {
+    const data = section(privacyPolicyEn, "The data we use");
+    for (const sentence of [
+      "The date you last read each conversation is kept with the conversation.",
+      "When you open a conversation, the other member can therefore see that you have seen their last message (“Seen”; their app receives that date), unless one of you has turned off “Read receipts” in Settings.",
+      "As long as you have not accepted an invitation, the person inviting you sees nothing of the kind.",
+    ]) {
+      expect(data).toContain(sentence);
+    }
+    expect(data).toContain("Only you and the person you are talking with can see them.");
+    expect(data).toContain("[To be verified: legal basis retained (performance of the contract), retention period, information given to the person who receives an invitation, and the “Seen” mention being on by default.]");
+  });
+
+  it("« Qui peut voir quoi » et « Vos droits » : qui voit « Vu », et où le couper", () => {
+    expect(section(privacyPolicy, "Qui peut voir quoi dans Spotto")).toContain(
+      "Vos messages privés : vous et la personne avec qui vous échangez. Elle peut aussi voir que vous avez vu son dernier message (mention « Vu »), sauf si l'un de vous deux a désactivé « Confirmations de lecture »."
+    );
+    expect(section(privacyPolicyEn, "Who can see what in Spotto")).toContain(
+      "Your private messages: you and the person you are talking with. They can also see that you have seen their last message (“Seen”), unless one of you has turned off “Read receipts”."
+    );
+    expect(section(privacyPolicy, "Vos droits")).toContain(
+      "Ne plus montrer la mention « Vu » à la personne avec qui vous échangez (vous ne verrez plus la sienne non plus) : Réglages → Confirmations de lecture."
+    );
+    expect(section(privacyPolicyEn, "Your rights")).toContain("Stop showing “Seen” to the person you are talking with (you will no longer see theirs either): Settings → Read receipts.");
+  });
+
+  it("la politique emploie les mots de l'app : le nom du réglage et la mention affichée", () => {
+    const frText = JSON.stringify(privacyPolicy);
+    const enText = JSON.stringify(privacyPolicyEn);
+    expect(frText).toContain(`« ${fr.settings.readReceiptsTitle} »`);
+    expect(frText).toContain(`Réglages → ${fr.settings.readReceiptsTitle}`);
+    expect(frText).toContain(`mention « ${fr.messages.receiptSeen} »`);
+    expect(enText).toContain(`“${en.settings.readReceiptsTitle}”`);
+    expect(enText).toContain(`Settings → ${en.settings.readReceiptsTitle}`);
+    expect(enText).toContain(`“${en.messages.receiptSeen}”`);
+  });
+
+  it("la version de la politique n'a pas changé (ni une nouvelle acceptation, ni un message : à dater par le fondateur)", () => {
+    expect(LEGAL_DOCUMENT_VERSIONS.privacy_policy).toBe("projet-2026-11-05");
   });
 });
