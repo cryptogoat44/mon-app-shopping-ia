@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { imageAfterErrors, imageSources } from "../src/lib/piece-image";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { imageAfterErrors, imageSources, twoStepSources } from "../src/lib/piece-image";
 
 // Lot résultats lisibles : la vignette légère de Google d'abord dans une
 // petite case, l'image d'origine du marchand d'abord sur la grande carte ;
@@ -27,6 +29,31 @@ describe("image d'une proposition selon la taille de sa case", () => {
   it("même adresse pour les deux (Google sans vignette) : jamais demandée deux fois", () => {
     expect(imageSources("small", HD, HD)).toEqual([HD]);
     expect(imageSources("large", HD, HD)).toEqual([HD]);
+  });
+});
+
+describe("carte des résultats : chargement en deux temps", () => {
+  it("la vignette d'abord, l'originale ensuite, quand les deux existent et diffèrent", () => {
+    expect(twoStepSources("card", HD, THUMB)).toEqual({ thumb: THUMB, hd: HD });
+    // Une seule image, ou la même adresse : chargée comme dans une petite case.
+    expect(twoStepSources("card", null, THUMB)).toBeNull();
+    expect(twoStepSources("card", HD, "")).toBeNull();
+    expect(twoStepSources("card", HD, HD)).toBeNull();
+    expect(imageSources("card", null, THUMB)).toEqual([THUMB]);
+    // Les autres cases ne changent pas.
+    expect(twoStepSources("small", HD, THUMB)).toBeNull();
+    expect(twoStepSources("large", HD, THUMB)).toBeNull();
+  });
+
+  it("les cartes « Autres propositions » (et les compléments, mêmes cartes) passent en deux temps", () => {
+    const card = readFileSync(join(__dirname, "../src/components/proposal-card.tsx"), "utf8");
+    expect(card.match(/size="card"/g)).toHaveLength(2);
+    expect(card).not.toContain('size="small"');
+    const image = readFileSync(join(__dirname, "../src/components/spot-image.tsx"), "utf8");
+    // L'originale arrivée remplace la vignette ; bloquée par le marchand, la vignette reste.
+    expect(image).toContain('onLoad={() => update({ hd: "loaded" })}');
+    expect(image).toContain('onError={() => update({ hd: "failed" })}');
+    expect(image).toContain('current.hd !== "loaded" && !current.thumbFailed');
   });
 });
 
