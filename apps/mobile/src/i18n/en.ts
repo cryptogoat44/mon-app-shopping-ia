@@ -2,7 +2,7 @@
 // reference: TypeScript refuses a missing or extra key. Written in natural,
 // restrained English — quiet and editorial — rather than word for word.
 
-import { MINIMUM_AGE } from "@monapp/shared-types";
+import { MINIMUM_AGE, SEARCH_QUERY_MAX_LENGTH } from "@monapp/shared-types";
 import { APP_FILE_SLUG, APP_NAME_DISPLAY as BRAND } from "../constants/brand";
 import type { Catalog } from "./types";
 
@@ -161,9 +161,14 @@ export const en: Catalog = {
     privacyNote: `The video stays on your device. With your consent, a few reduced frames are analyzed by an AI, without being kept by ${BRAND}.`,
     checkFailed: "Automatic analysis couldn't be set up. Check your connection, then try again.",
     consentTitle: "Automatic video analysis",
+    // Shared text of both consent screens (phone video, TikTok or Instagram
+    // link), version "analyse-video-ia-2026-11-15": change it together with
+    // CONSENT_VERSIONS.analyse_video_ia (shared-types), never alone.
     consentBody: [
-      `To find the piece for you, ${BRAND} sends a few reduced frames from this video (12 at most) and your description to an artificial intelligence provider, Anthropic, based in the United States.`,
-      `They are used only to find the piece. ${BRAND} does not keep them; Anthropic may not use them to train its models and deletes them automatically, within 30 days at most (exceptions described in the privacy policy). The full video never leaves your device.`,
+      `To find the piece for you, ${BRAND} sends a few reduced frames from the video and your description to an artificial intelligence provider, Anthropic, based in the United States.`,
+      "Video from your phone: 12 frames at most, extracted on your device. The full video never leaves your device.",
+      `TikTok or Instagram link: ${BRAND}'s video service fetches the public video behind this link for the analysis only, without keeping it, and takes 16 frames at most from it.`,
+      `These frames are used only to find the piece. ${BRAND} does not keep them; Anthropic may not use them to train its models and deletes them automatically, within 30 days at most (exceptions described in the privacy policy).`,
       "You can withdraw your consent at any time in Settings.",
     ],
     consentPolicy: "Read the privacy policy",
@@ -197,6 +202,9 @@ export const en: Catalog = {
     photoPlaceholder: "e.g. the black leather jacket",
     photoWordsNote:
       "Your words are only used to sort the suggestions: they aren't sent with the image to the search. They only go to a search engine if you start a search with your words yourself.",
+    // Moment of an analyzed video link: the description (founder's decision of 2026-11-17, automatic search when nothing has a price).
+    linkWordsNote:
+      "Your description sorts the suggestions: it isn't sent with the image to the search. If no suggestion shows a price, it is sent to Google Shopping through our provider SerpApi to find shops, without your name or email address.",
     // Shown until the piece is circled (nothing drawn, or the whole image), with or without words.
     frameHint: `Circle the piece alone, with no faces or text around it: ${BRAND} will find it more easily.`,
     videoPreview: (duration: string) => `Preview of your video, ${duration}`,
@@ -344,6 +352,56 @@ export const en: Catalog = {
     dropHint: "On a computer, you can also drag and drop an image onto this page, or paste it (Ctrl+V or ⌘V).",
     notAnImage: "This file isn't an image. Drop or paste a screenshot.",
   },
+  videoLinkAuto: {
+    title: "What are you looking for in this video?",
+    placeholder: "e.g. the beige leather jacket on the girl on the left",
+    help: "Describe the piece and, if needed, where it appears: the AI uses your words to find it in the video.",
+    find: "Find the piece",
+    // Video link without a price (2026-11-17): the description may also go to Google Shopping.
+    privacy: `${BRAND} fetches the public video for the analysis only, without keeping it. With your consent, a few frames and your description are analyzed by an AI. If the results show no price, your description is also sent to Google Shopping through our provider SerpApi to find shops.`,
+    query: {
+      too_short: "Describe the piece in a few words.",
+      too_long: `Your description is too long: ${SEARCH_QUERY_MAX_LENGTH} characters at most.`,
+      link: "Describe the piece in words, without a link.",
+    },
+    player: (platform: string) => `Watch the video in the ${platform} player`,
+    capture: "Take a screenshot instead",
+    captureLead: "Three steps are enough:",
+    backToAuto: "Find the piece automatically",
+    // "analyse_video_ia" consent: the shared text (videoAuto.consentBody); here, only the decline.
+    consentDecline: "No thanks, take a screenshot",
+    waiting: {
+      title: "Analyzing the video",
+      steps: ["Fetching the video…", "The AI is looking for the piece…"],
+      usual: "This usually takes 10 to 25 seconds.",
+      slow: "This is taking longer than usual. Wait a little longer, or cancel to take a screenshot.",
+      stepLabel: (step: string, current: boolean) => (current ? `${step} (in progress)` : step),
+    },
+    moments: {
+      title: (count: number) => (count > 1 ? `${count} moments found` : "Moment found"),
+      lead: (count: number) => (count > 1 ? "The most likely one is selected. Tap another moment to choose it." : "Check that the frame surrounds the piece."),
+      choose: (rank: number, time: string) => `Moment ${rank}, at ${time}`,
+      search: "Start the search",
+      editQuery: "Edit the description",
+    },
+    failedTitle: "The video couldn't be analyzed",
+    notFoundTitle: "Piece not spotted",
+    failure: {
+      disabled: "Automatic link analysis isn't available right now. Take a screenshot instead.",
+      invalid_link: `This link doesn't lead to a video ${BRAND} can analyze. Take a screenshot instead.`,
+      invalid_query: `Describe the piece in a few words, without a link (${SEARCH_QUERY_MAX_LENGTH} characters at most).`,
+      unavailable: "This video couldn't be fetched right now. Try again, or take a screenshot instead.",
+      private: `This video is private or restricted to certain accounts: ${BRAND} can't fetch it. Take a screenshot instead.`,
+      too_long: "This video is too long for automatic analysis. Take a screenshot instead.",
+      timeout: "The video took too long to arrive. Try again, or take a screenshot instead.",
+      busy: "Automatic analysis is in high demand right now. Try again in a moment, or take a screenshot instead.",
+      no_moment: "The piece wasn't spotted in the video. Refine your description, or take a screenshot instead.",
+      user_limit: "You've reached the daily limit for automatic analyses. Take a screenshot instead, or try again tomorrow.",
+      global_limit: "Automatic analysis is in high demand today and temporarily unavailable. Take a screenshot instead.",
+      rate_limited: "Too many requests at once. Try again in a few minutes, or take a screenshot instead.",
+      network: "Unable to connect. Check your connection, then try again.",
+    },
+  },
   visualSearchTip: {
     title: "Tip",
     body: `In any app, take a screenshot, tap Image Search, then ${BRAND} (compatible iPhones).`,
@@ -367,6 +425,7 @@ export const en: Catalog = {
   targeting: {
     title: "Circle the piece",
     caption: "Only the circled area will be analyzed. To correct it, circle the piece again.",
+    aiCaption: "The AI has circled the piece. Start the search, or circle it yourself to correct it.",
     instruction: {
       finger: "Circle the piece with your finger",
       mouse: "Circle the piece with your mouse or finger",
@@ -1036,7 +1095,7 @@ export const en: Catalog = {
     videoAiTitle: "Automatic video analysis",
     videoAiSwitchLabel: "Automatic video analysis by an AI",
     videoAiOn:
-      `On: when you start it, a few reduced frames from the video and your description are sent to Anthropic (United States) to find the piece, without being kept by ${BRAND}.`,
+      `On: when you start it, a few reduced frames from the video (from your phone, or from a TikTok or Instagram link fetched for the analysis only) and your description are sent to Anthropic (United States) to find the piece, without being kept by ${BRAND}.`,
     videoAiOff: "Off: no frame from your videos is sent; you choose the frame yourself.",
     videoAiFailed: "Your choice couldn't be saved. Please try again.",
     latestVideoTitle: "Suggest my latest video",

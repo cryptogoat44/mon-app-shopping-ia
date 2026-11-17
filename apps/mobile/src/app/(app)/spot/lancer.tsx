@@ -2,14 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Keyboard, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { VIDEO_AI } from "@monapp/shared-types";
+import { VIDEO_AI, type CropRect } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { containsLink } from "@/lib/link-detection";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { isAdjustedCrop } from "@/lib/crop-geometry";
-import { zoneReady, type PieceZone } from "@/lib/piece-trace";
-import { draftImageUri, getDraft, leaveLaunchScreen, type SpotDraft } from "@/lib/spot-draft";
+import { WHOLE_IMAGE_ZONE, zoneFromCrop, zoneReady, type PieceZone } from "@/lib/piece-trace";
+import { draftImageUri, getDraft, leaveLaunchScreen, updateDraft, type SpotDraft } from "@/lib/spot-draft";
 import { getSpotVideo, holdSpotVideo, importSpotVideo, letGoSpotVideo, videoImportMessage } from "@/lib/spot-video";
 import { blocksLaunch } from "@/lib/search-limits";
 import { useSearchLimits } from "@/lib/use-search-limits";
@@ -34,6 +34,27 @@ interface Media {
 
 function initialMedia(source: string | undefined): Media {
   return source === "photo" ? { source: "photo", video: null, draft: getDraft() } : { source: "video", video: getSpotVideo(), draft: null };
+}
+
+/** Photo dont la zone est déjà connue (moment d'une vidéo, entouré sur
+ * l'écran des moments ; retour sur cet écran après une recherche annulée) :
+ * elle est retracée, modifiable. Sinon, rien tant que la personne n'a pas
+ * entouré la pièce. */
+function initialZone(media: Media): PieceZone | null {
+  const crop = media.source === "photo" ? (media.draft?.crop ?? null) : null;
+  if (!crop) return null;
+  return isWholeImage(crop) ? { ...WHOLE_IMAGE_ZONE } : zoneFromCrop(crop);
+}
+
+const isWholeImage = (crop: CropRect) => crop.x === 0 && crop.y === 0 && crop.width === 1 && crop.height === 1;
+
+/** Mots de départ : ceux de l'adresse (mots tapés sur l'accueil), sinon,
+ * pour une photo, ceux du brouillon — la description d'un lien vidéo
+ * analysé (video-link-run.ts), gardée hors de l'adresse. Sans eux, le
+ * lancement automatique les effacerait du brouillon (launchPhoto). */
+function initialQuery(param: string | string[] | undefined, media: Media): string {
+  if (typeof param === "string") return param;
+  return media.source === "photo" ? (media.draft?.words ?? "") : "";
 }
 
 /** Aperçu : une image du milieu de la vidéo, ou la photo elle-même. */
@@ -143,6 +164,8 @@ function useAsk(
   return {
     withQuery,
     photoWords,
+    // Moment d'un lien vidéo : la description, envoyée à Google Shopping si rien n'a de prix (lien vidéo sans prix).
+    linkWords: photoWords && media.draft?.textSearchIfNoPrice === true,
     // Tant que la pièce n'est pas entourée, avec ou sans mots (lots « premier essai » et « entourer la pièce »).
     frameHint: photoWords && !isAdjustedCrop(zone?.crop ?? null),
     autoFocus: isVideo,
@@ -173,18 +196,37 @@ export default function LaunchScreen() {
   const params = useLocalSearchParams<{ source?: string; query?: string; auto?: string }>();
   const { height: windowHeight } = useWindowDimensions();
   const [media, setMedia] = useState(() => initialMedia(params.source));
-  const [query, setQuery] = useState(typeof params.query === "string" ? params.query : "");
+  const [query, setQuery] = useState(() => initialQuery(params.query, media));
   // Photo : la zone entourée (rien tant que la pièce n'est pas entourée) ; le
   // défilement s'arrête pendant le tracé.
-  const [zone, setZone] = useState<PieceZone | null>(null);
+  const [zone, setZone] = useState<PieceZone | null>(() => initialZone(media));
+  // Le cadre affiché est encore celui de l'IA (jamais retouché par la personne).
+  const [zoneFromAi, setZoneFromAi] = useState(() => media.draft?.zoneByAi === true && initialZone(media) !== null);
   const [dragging, setDragging] = useState(false);
   const preview = useLaunchPreview(media);
+  /** La personne entoure la pièce (ou choisit l'image entière) : la zone est la sienne, plus celle de l'IA. */
+  const changeZone = (next: PieceZone) => {
+    setZone(next);
+    if (zoneFromAi) {
+      setZoneFromAi(false);
+      updateDraft({ zoneByAi: false });
+    }
+  };
   // Lot limites annoncées : Spotter en pause ou part du jour épuisée — le
   // serveur refuserait : « Lancer » est désactivé et l'écran dit pourquoi
   // (jamais de lancement automatique non plus). Compteur inconnu : rien ne change.
   const limits = useSearchLimits();
   const blocked = blocksLaunch(limits.notice);
   const flow = useSpotLaunch({ ...media, preview: preview.source, query, crop: media.source === "photo" ? (zone?.crop ?? null) : null, auto: params.auto === "1" && !blocked });
+  // Lancement automatique : une seule fois (il est déjà parti, effet de
+  // useSpotLaunch). « auto » est aussitôt retiré de l'adresse : sur le site,
+  // revenir sur cet écran par « Précédent » puis « Suivant » du navigateur
+  // rouvre la question, sans relancer une recherche (payante) sans un geste.
+  useEffect(() => {
+    if (params.auto !== undefined) router.setParams({ auto: undefined });
+    // Une seule fois, à l'ouverture.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const ask = useAsk(media, setMedia, query, setQuery, flow, zone);
   // Photo : l'image occupe le haut de l'écran ; quand le clavier s'ouvre, on
   // descend jusqu'à « Lancer », sinon caché dessous (constaté sur iPhone).
@@ -247,7 +289,14 @@ export default function LaunchScreen() {
         {/* Mission « liens vidéo » : recherche associée à une vidéo (lecteur, ou lien en attente), avec sa croix. */}
         {flow.phase.kind === "ask" && photoUri ? <VideoContextLabel /> : null}
         {flow.phase.kind === "ask" && photoUri ? (
-          <PhotoFrame uri={photoUri} zone={zone} onChange={setZone} onDragChange={setDragging} height={Math.min(Math.max(windowHeight * 0.42, 220), 400)} />
+          <PhotoFrame
+            uri={photoUri}
+            zone={zone}
+            onChange={changeZone}
+            onDragChange={setDragging}
+            height={Math.min(Math.max(windowHeight * 0.42, 220), 400)}
+            caption={zoneFromAi ? t.targeting.aiCaption : t.targeting.caption}
+          />
         ) : flow.phase.kind === "ask" ? (
           <LaunchPreview
             source={preview.source}

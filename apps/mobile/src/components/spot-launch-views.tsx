@@ -75,6 +75,7 @@ export function PhotoFrame({
   onDragChange,
   onImageSize,
   height,
+  caption = t.targeting.caption,
 }: {
   uri: string;
   zone: PieceZone | null;
@@ -82,13 +83,15 @@ export function PhotoFrame({
   onDragChange: (dragging: boolean) => void;
   onImageSize?: (size: Size) => void;
   height: number;
+  /** Texte sous le titre (par défaut : la consigne habituelle). */
+  caption?: string;
 }) {
   return (
     <>
       <Text style={styles.frameTitle} accessibilityRole="header">
         {t.targeting.title}
       </Text>
-      <Text style={styles.caption}>{t.targeting.caption}</Text>
+      <Text style={styles.caption}>{caption}</Text>
       <View style={styles.cropArea}>
         <PieceTracer uri={uri} zone={zone} onChange={onChange} onDragChange={onDragChange} onImageSize={onImageSize} height={height} />
       </View>
@@ -150,6 +153,10 @@ export interface AskProps {
   /** Photo : le champ « Quelle pièce ? (facultatif) », dont les mots trient
    * les propositions (petit lot 2, décision du fondateur du 2026-10-27). */
   photoWords: boolean;
+  /** Moment d'un lien vidéo analysé : le champ porte la description, qui
+   * part aussi vers Google Shopping si rien n'a de prix (décision du
+   * fondateur du 17 novembre 2026) ; la phrase sous le champ le dit. */
+  linkWords?: boolean;
   /** Photo : la pièce pas encore entourée (rien de tracé, ou toute l'image), avec ou sans mots : conseil de l'entourer seule. */
   frameHint: boolean;
   /** Vidéo : champ prêt à la saisie dès l'ouverture. */
@@ -186,7 +193,7 @@ export function AskView(p: AskProps) {
             placeholder={t.launch.photoPlaceholder}
             label={t.launch.photoLabel}
           />
-          <Text style={styles.note}>{t.launch.photoWordsNote}</Text>
+          <Text style={styles.note}>{p.linkWords ? t.launch.linkWordsNote : t.launch.photoWordsNote}</Text>
           {p.frameHint ? (
             <Text style={styles.body} accessibilityLiveRegion="polite">
               {t.launch.frameHint}
@@ -233,19 +240,23 @@ export function AskView(p: AskProps) {
 
 /** Accord au premier usage : « Accepter » en bouton principal ; le refus
  * reste libre et ne bloque rien — un lien discret ouvre le curseur, sans IA
- * et sans envoi d'image. */
+ * et sans envoi d'image. Lien TikTok ou Instagram (lot « vidéo auto ») : même
+ * accord et même texte (commun aux deux écrans : une seule version
+ * enregistrée), et, au refus, la capture d'écran (`declineLabel`). */
 export function ConsentView({
   saving,
   error,
   onAccept,
   onChooseMyself,
   onPolicy,
+  declineLabel = t.videoAuto.chooseMyself,
 }: {
   saving: boolean;
   error: string | null;
   onAccept: () => void;
   onChooseMyself: () => void;
   onPolicy: () => void;
+  declineLabel?: string;
 }) {
   return (
     <>
@@ -263,7 +274,7 @@ export function ConsentView({
       {error ? <ErrorMessage style={styles.message}>{error}</ErrorMessage> : null}
       <ActionButtons primary={{ label: t.videoAuto.accept, onPress: onAccept, busy: saving }} />
       <Pressable onPress={onChooseMyself} disabled={saving} style={styles.discreet} accessibilityRole="button">
-        <Text style={styles.discreetLabel}>{t.videoAuto.chooseMyself}</Text>
+        <Text style={styles.discreetLabel}>{declineLabel}</Text>
       </Pressable>
     </>
   );

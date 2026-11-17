@@ -72,6 +72,7 @@ import type {
   WishAlertsStatus,
   InstagramEmbedResponse,
   VideoConfirmRequest,
+  VideoLinkAnalysisRequest,
   VideoLookupResponse,
   VideoSpotRequest,
 } from "@monapp/shared-types";
@@ -91,6 +92,8 @@ import { readMessagesStatus, setMessagesStatus } from "./conversations";
 import { readCollectionsStatus, setCollectionsStatus } from "./collections";
 import { ALERTS_UNAVAILABLE, isAlertsUnavailable, readWishAlertState, readWishAlertStates, readWishAlertsStatus, setWishAlertsStatus } from "./wish-alerts";
 import { createStatusLoader } from "./status-loading";
+import { isDataUri } from "./data-uri";
+import { linkAnalysisEnabled, parseLinkAnalysis, type LinkAnalysis } from "./video-link-analysis";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -298,7 +301,8 @@ export async function runTextSearch(searchId: string, words: string, signal?: Ab
  * Sans extension reconnue, le nom suit le type réel du fichier. */
 async function appendImageFile(formData: FormData, fieldName: string, imageUri: string): Promise<void> {
   const file = await imageFileFromUri(imageUri);
-  const filename = imageUri.split("/").pop()?.split("?")[0] ?? "";
+  // Image gardée en mémoire (« data: », moment d'une vidéo trouvé à partir de son lien) : aucun nom de fichier à reprendre.
+  const filename = isDataUri(imageUri) ? "" : (imageUri.split("/").pop()?.split("?")[0] ?? "");
   formData.append(fieldName, file, /\.\w+$/.test(filename) ? filename : `photo.${file.type === "image/png" ? "png" : "jpg"}`);
 }
 
@@ -1036,6 +1040,28 @@ export async function findVideoMoments(frameUris: readonly string[], query: stri
   const moments = parseVideoMomentsResponse(await response.json(), frameUris.length);
   if (!moments) throw new ApiError(502, { error: "video_ai_unavailable", message: t.common.unknownServerError });
   return moments;
+}
+
+// ---- Analyse d'une vidéo à partir de son lien (lot « vidéo auto ») ----
+// Le serveur fait récupérer la vidéo publique par le service vidéo (sans la
+// garder), en donne quelques images à l'IA, et renvoie les moments trouvés :
+// l'image de chacun (« data: », gardée en mémoire, jamais écrite sur
+// l'appareil) et le cadre de la pièce. L'app ne télécharge rien elle-même.
+
+/** L'analyse d'un lien est-elle allumée sur le serveur ? Seule la valeur exacte `true` compte. */
+export async function fetchVideoLinkAnalysisStatus(signal?: AbortSignal): Promise<boolean> {
+  const response = await authorizedFetch("/api/video-links/analyze/status", signal ? { signal } : undefined);
+  return linkAnalysisEnabled(await response.json().catch(() => null));
+}
+
+/** Le lien et les mots de la personne → la vidéo reconnue et ses moments,
+ * vérifiés ici (jamais de confiance aveugle dans le réseau). Erreur du
+ * serveur ({ error, message }) : ApiError ; réponse illisible : panne. */
+export async function analyzeVideoLink(request: VideoLinkAnalysisRequest, signal?: AbortSignal): Promise<LinkAnalysis> {
+  const response = await authorizedFetch("/api/video-links/analyze", { method: "POST", body: JSON.stringify(request), signal });
+  const analysis = parseLinkAnalysis(await response.json().catch(() => null));
+  if (!analysis) throw new ApiError(502, { error: "video_unavailable", message: t.common.unknownServerError });
+  return analysis;
 }
 
 /** Export des données (lot 5) : « html », le fichier lisible rendu par le

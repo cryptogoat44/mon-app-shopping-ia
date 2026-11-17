@@ -78,6 +78,26 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => value !== "false"),
+  // Analyse automatique d'un lien TikTok ou Instagram (lot « vidéo auto »,
+  // décision du fondateur des 14 et 15 novembre 2026), COUPÉE par défaut.
+  // Même règle que la voie C : seule la valeur exacte "true" l'allume.
+  // Elle demande aussi les deux variables suivantes (adresse et secret du
+  // service vidéo séparé, apps/video-worker) et ANTHROPIC_API_KEY. Les trois
+  // ne sont lues que par lib/videoWorker.ts, qui les vérifie au démarrage :
+  // un réglage invalide laisse l'analyse coupée, avec un avertissement dans
+  // le journal (jamais l'adresse ni le secret), sans arrêter le serveur. Une
+  // valeur vide du secret vaut « absent ». Hors de la liste des variables
+  // modifiables par les outils (render-guard) : le fondateur seul les règle,
+  // à la main, dans Render.
+  VIDEO_LINK_ANALYSIS_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "true"),
+  VIDEO_WORKER_URL: z.string().optional(),
+  VIDEO_WORKER_SECRET: z
+    .string()
+    .optional()
+    .transform((value) => value?.trim() || undefined),
   // Facultatif : jeton d'accès d'Expo, seulement si la « sécurité renforcée
   // des notifications » est activée dans le compte Expo. Absent : les
   // notifications partent sans jeton (le service d'Expo est gratuit). Une

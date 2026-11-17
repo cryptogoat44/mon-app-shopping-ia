@@ -5,6 +5,7 @@ import {
   ACCEPTED_CONSENT_VERSIONS,
   CONSENT_TYPES,
   CONSENT_VERSIONS,
+  LEGACY_RECORDABLE_CONSENT_VERSIONS,
   OPTIONAL_CONSENTS,
   isAccountDeletionWord,
   type ConsentStatus,
@@ -53,6 +54,16 @@ const recordConsentsSchema = z.object({
 
 function isVersioned(type: ConsentType): type is VersionedConsentType {
   return type in CONSENT_VERSIONS;
+}
+
+/** Version à enregistrer pour ce choix : celle en vigueur, ou l'ancienne
+ * version qu'envoie une app déjà installée (LEGACY_RECORDABLE_CONSENT_VERSIONS),
+ * gardée telle quelle : l'historique montre le texte réellement lu. null :
+ * version refusée. */
+function versionToRecord(type: VersionedConsentType, sent: string | undefined): string | null {
+  if (sent === CONSENT_VERSIONS[type]) return sent;
+  if (sent !== undefined && LEGACY_RECORDABLE_CONSENT_VERSIONS[type]?.includes(sent)) return sent;
+  return null;
 }
 
 // Export : format choisi par la personne à chaque export. « json » (par
@@ -122,9 +133,10 @@ export default async function accountRoutes(fastify: FastifyInstance) {
 
     // Un texte (document juridique, déclaration d'âge) n'est accepté que
     // dans sa version en vigueur : l'historique doit montrer précisément
-    // quel texte a été accepté.
+    // quel texte a été accepté. Exception : l'ancien texte de l'analyse des
+    // vidéos, qu'affichent encore les apps installées (enregistré tel quel).
     const outdated = parsed.data.consents.find(
-      (consent) => isVersioned(consent.type) && consent.version !== CONSENT_VERSIONS[consent.type]
+      (consent) => isVersioned(consent.type) && versionToRecord(consent.type, consent.version) === null
     );
     if (outdated) {
       return reply.code(409).send({
@@ -151,7 +163,7 @@ export default async function accountRoutes(fastify: FastifyInstance) {
           type: consent.type,
           granted_at: granted ? now : null,
           revoked_at: granted ? null : now,
-          document_version: isVersioned(consent.type) ? CONSENT_VERSIONS[consent.type] : null,
+          document_version: isVersioned(consent.type) ? versionToRecord(consent.type, consent.version) : null,
         };
       })
     );

@@ -1,0 +1,6 @@
+# Seuls package.json, requirements.txt et src/ entrent dans l'image.
+*
+!package.json
+!requirements.txt
+!src/
+!src/**

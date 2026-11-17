@@ -40,6 +40,7 @@ import { isPriceSort, resultLayout, type ResultView } from "@/lib/result-sort";
 import { usePreferences } from "@/lib/preferences-context";
 import { searchCountryFrom } from "@/lib/foreign-shop";
 import { getDraft } from "@/lib/spot-draft";
+import { autoTextSearchDue, autoTextSearchWords, claimAutoTextSearch } from "@/lib/auto-text-search";
 import { failureCorrections, successCorrections, successSheetActions, type Correction } from "@/lib/spot-corrections";
 import { withIds } from "@/lib/owned-marks";
 import { capacityMessages } from "@/lib/use-search-limits";
@@ -142,6 +143,14 @@ export default function ResultScreen() {
   // fois (un autre essai préparé ensuite depuis cet écran ne la change pas).
   // Rien pour un résultat rouvert : son image n'est gardée nulle part.
   const [yourPiece] = useState(() => yourPieceImage(fromLaunch.current, getDraft()));
+  // Lien vidéo sans prix (lib/auto-text-search.ts, décision du fondateur du
+  // 17 novembre 2026) : la description du brouillon, lue une fois ; null pour
+  // une photo, une vidéo du téléphone ou un résultat rouvert. « running » :
+  // la recherche avec ces mots est partie d'elle-même, l'invitation montre
+  // son attente ; « done » : terminée, refusée ou déjà lancée — plus rien ne
+  // part de soi-même pour ce résultat.
+  const [autoWords] = useState(() => autoTextSearchWords(fromLaunch.current, getDraft()));
+  const [autoText, setAutoText] = useState<"idle" | "running" | "done">("idle");
   // Tri et filtre (lib/result-sort.ts) : gardés sur l'appareil, les mêmes à
   // chaque nouvelle recherche. Tri par prix : pas de grande carte, sauf une
   // carte de la liste triée que la personne vient de toucher.
@@ -240,6 +249,18 @@ export default function ResultScreen() {
   useEffect(() => {
     if (result && lateQuery) rememberLaunchExtras(result);
   }, [lateQuery]);
+
+  // Lien vidéo sans prix : une fois la recherche visuelle et les boutiques
+  // connues, aucune proposition avec un prix — la recherche avec la
+  // description part d'elle-même (la même que « Chercher »), une seule fois
+  // par recherche (claimAutoTextSearch : nouveau rendu, écran rouvert ou
+  // second écran ne la relancent pas). Un prix quelque part : rien ne part.
+  const autoTextDue = autoWords !== null && autoText === "idle" && autoTextSearchDue(result);
+  const autoTextSearchId = autoTextDue ? (result?.searchId ?? null) : null;
+  useEffect(() => {
+    if (!autoTextSearchId) return;
+    setAutoText(claimAutoTextSearch(autoTextSearchId) ? "running" : "done");
+  }, [autoTextSearchId]);
 
   useScrollToEndOnKeyboard(scrollRef, result?.complement?.suggestText === true);
 
@@ -398,6 +419,13 @@ export default function ResultScreen() {
     setState({ kind: "ready", result: next });
   }
 
+  /** Lien vidéo sans prix : la recherche partie d'elle-même a son issue
+   * (réponse, refus, « déjà lancée ») — l'invitation n'est plus montrée pour
+   * elle (le serveur dit seul s'il la propose encore, suggestText). */
+  function endAutoTextSearch() {
+    setAutoText((current) => (current === "running" ? "done" : current));
+  }
+
   /** La recherche par les mots a répondu, ou elle est relue avec son issue
    * (après « Annuler », un 409 ou une panne). Appelée depuis le rendu où
    * « Chercher » a été touché : le geste de la personne est lu dans la ref.
@@ -406,6 +434,7 @@ export default function ResultScreen() {
    * « Résultats pour vos mots » en haut s'ils sont arrivés au-dessus de la
    * partie visible, une fois la section placée (relecture E2, onWordsLayout). */
   function handleTextSearchDone(search: ProductSearch) {
+    endAutoTextSearch();
     if (!result) return;
     const next = withTextSearch(result, search);
     // Tri par prix : ni section ni grande carte d'office à montrer, les propositions des mots prennent leur place dans la liste triée.
@@ -418,6 +447,7 @@ export default function ResultScreen() {
   /** Le serveur ne la propose plus (déjà lancée, coupée, non admissible) :
    * l'invitation disparaît, ici comme au retour sur cet écran. */
   function handleTextSearchClosed(alreadyUsed: boolean) {
+    endAutoTextSearch();
     if (!result) return;
     replaceResult(withoutTextPrompt(result));
     setTextSearchUsed(alreadyUsed);
@@ -534,15 +564,19 @@ export default function ResultScreen() {
   // Voie B (lot c) : « Que cherchez-vous ? » quand le serveur le propose —
   // pré-rempli avec les mots tapés sous la photo, si ce résultat vient d'être
   // calculé (le brouillon en mémoire est alors le sien) ; « déjà lancée » à
-  // sa place après un refus du serveur.
+  // sa place après un refus du serveur. Lien vidéo sans prix : la même
+  // invitation, partie d'elle-même avec la description (son attente, puis
+  // « Résultats pour vos mots » ; un refus garde le message habituel).
+  const autoTextRunning = autoText === "running";
   const textSearch = (withIntro: boolean) =>
-    result?.searchId && result.complement?.suggestText ? (
+    result?.searchId && (result.complement?.suggestText || autoTextRunning) ? (
       <TextSearchPrompt
         searchId={result.searchId}
-        initialWords={fromLaunch.current ? getDraft()?.words : null}
+        initialWords={autoTextRunning ? autoWords : fromLaunch.current ? getDraft()?.words : null}
         onDone={handleTextSearchDone}
         onClosed={handleTextSearchClosed}
         withIntro={withIntro}
+        autoStart={autoTextRunning}
       />
     ) : textSearchUsed ? (
       <TextSearchAlreadyUsed />
