@@ -216,6 +216,24 @@ describe("yt-dlp : arguments, format choisi, erreurs", () => {
     assert.ok(!args.includes("--playlist-items"));
   });
 
+  it("second essai après un refus : un autre fichier H.264 d'abord, le format refusé en dernier", () => {
+    const url = "https://www.tiktok.com/@a/video/1234567";
+    const args = ytDlpDownloadArgs(url, "h264_540p_829-0", null, { avoidFormat: true });
+    const selector = args[args.indexOf("--format") + 1].split("/");
+    assert.deepEqual(selector, [
+      "best[ext=mp4][vcodec^=h264][protocol=https][format_id!=h264_540p_829-0][height<=1280]",
+      "best[ext=mp4][vcodec^=avc][protocol=https][format_id!=h264_540p_829-0][height<=1280]",
+      "best[ext=mp4][vcodec^=h264][protocol=https][format_id!=h264_540p_829-0]",
+      "best[ext=mp4][vcodec^=avc][protocol=https][format_id!=h264_540p_829-0]",
+      "h264_540p_829-0",
+    ]);
+    // Identifiant absent ou douteux : formats de secours seulement, comme au premier essai.
+    const none = ytDlpDownloadArgs(url, null, null, { avoidFormat: true });
+    assert.equal(none[none.indexOf("--format") + 1], DOWNLOAD_FALLBACK_FORMATS);
+    const odd = ytDlpDownloadArgs(url, "a]b[c", null, { avoidFormat: true });
+    assert.equal(odd[odd.indexOf("--format") + 1], DOWNLOAD_FALLBACK_FORMATS);
+  });
+
   it("carrousel : seule l'entrée choisie est téléchargée (« --playlist-items »)", () => {
     const url = "https://www.instagram.com/p/ABCDE12345/";
     const args = ytDlpDownloadArgs(url, "1080v", 3);

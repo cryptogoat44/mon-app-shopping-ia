@@ -68,10 +68,17 @@ function sendMedia(json) {
     if (!info || !Array.isArray(info.formats) || info.formats.length === 0) fail("[fake] --playlist-items désigne une entrée sans vidéo");
   }
   const list = info.formats ?? [];
-  const wanted = (args[args.indexOf("--format") + 1] ?? "").split("/")[0];
-  const format = list.find((item) => item.format_id === wanted) ?? list.find((item) => item.vcodec && item.vcodec !== "none");
+  const selector = args[args.indexOf("--format") + 1] ?? "";
+  const wanted = selector.split("/")[0];
+  // Second essai (« best[…][format_id!=X] ») : un autre fichier MP4 H.264 que X, comme le vrai.
+  const avoided = /\[format_id!=([A-Za-z0-9._-]+)\]/.exec(wanted)?.[1];
+  const format = avoided
+    ? (list.find((item) => item.ext === "mp4" && item.protocol === "https" && /^h264|^avc/.test(item.vcodec ?? "") && item.format_id !== avoided) ?? list.find((item) => item.format_id === avoided))
+    : (list.find((item) => item.format_id === wanted) ?? list.find((item) => item.vcodec && item.vcodec !== "none"));
   const media = new URL(format.url).search;
   if (/[?&]s=403\b/.test(media)) fail("unable to download video data: HTTP Error 403: Forbidden");
+  // Refusé tant que le format d'origine est demandé en premier ; un autre fichier passe.
+  if (/[?&]s=403once\b/.test(media) && !(args[args.indexOf("--format") + 1] ?? "").startsWith("best[")) fail("unable to download video data: HTTP Error 403: Forbidden");
   if (/[?&]s=dlslow\b/.test(media)) {
     hang(60_000);
     return;
@@ -113,6 +120,9 @@ switch (scenario) {
     break;
   case "media403":
     out(video(10, "403&d=10"));
+    break;
+  case "media403once":
+    out(video(8, "403once&d=8"));
     break;
   case "dlslow":
     out(video(10, "dlslow&d=10"));

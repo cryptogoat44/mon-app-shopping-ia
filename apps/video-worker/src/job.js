@@ -18,8 +18,10 @@ const RETRY_PAUSE_MS = 800;
  * passage, téléchargement et ffmpeg doivent encore tenir). */
 const RETRY_MIN_REMAINING_MS = 18_000;
 /** Téléchargement : erreurs passagères qui méritent un second essai, s'il
- * reste au moins ce temps. */
-const DOWNLOAD_RETRYABLE = new Set(["download_extractor_failed", "download_unknown_error"]);
+ * reste au moins ce temps. « media_forbidden » (403 du serveur de fichiers,
+ * constaté une fois sur trois le 17 novembre 2026) : le second essai demande
+ * un autre fichier de la même vidéo. */
+const DOWNLOAD_RETRYABLE = new Set(["download_extractor_failed", "download_unknown_error", "media_forbidden"]);
 const DOWNLOAD_RETRY_MIN_REMAINING_MS = 10_000;
 /** Temps laissé au téléchargement, à ffmpeg et à la réponse : la lecture
  * des informations ne peut pas tout prendre. */
@@ -87,7 +89,7 @@ export async function extractFrames({ url }, { env, signal, deadlineAt, tools, s
   // 3. Le fichier, téléchargé par yt-dlp en mémoire (seulement l'entrée
   //    choisie d'un carrousel), un second essai sur une erreur passagère.
   const downloadStartedAt = Date.now();
-  const choice = { formatId: format.formatId, playlistIndex: info.playlistIndex };
+  const choice = { formatId: format.formatId, playlistIndex: info.playlistIndex, avoidFormat: false };
   let media;
   try {
     for (let attempt = 1; ; attempt += 1) {
@@ -102,6 +104,8 @@ export async function extractFrames({ url }, { env, signal, deadlineAt, tools, s
         break;
       } catch (error) {
         if (attempt === 1 && error instanceof WorkerError && DOWNLOAD_RETRYABLE.has(error.detail) && remaining() > DOWNLOAD_RETRY_MIN_REMAINING_MS) {
+          // Fichier refusé : le second essai en demande un autre.
+          choice.avoidFormat = error.detail === "media_forbidden";
           await pause(RETRY_PAUSE_MS, signal);
           continue;
         }
