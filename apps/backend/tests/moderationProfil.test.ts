@@ -456,13 +456,14 @@ describe("le fichier de la migration 0037, son contrôle et le registre", () => 
     expect(statements).not.toMatch(/create policy|enable row level security|create table/);
   });
 
-  it("le contrôle est en lecture seule, et le registre annonce 0037 « à appliquer »", () => {
+  it("le contrôle est en lecture seule, et le registre note 0037 appliquée en production", () => {
     // Une seule instruction, un « select » (les mots « update » ou « insert » n'y sont que des textes cherchés).
     const query = VERIFICATION.split("\n").filter((line) => !line.trimStart().startsWith("--")).join("\n").trim();
     expect(query.startsWith("select")).toBe(true);
     expect(query.indexOf(";")).toBe(query.length - 1);
     for (const column of ["decisions_profil", "retrait_profil", "reservee_au_serveur"]) expect(VERIFICATION).toContain(`as ${column}`);
-    expect(REGISTRE).toMatch(/\| 0037 \| Modération des profils[^|]*\| \*\*à appliquer\*\*/);
+    // Appliquée le 15 novembre 2026 (fichier groupé prod-1, après une copie de secours).
+    expect(REGISTRE).toMatch(/\| 0037 \| Modération des profils[^|]*\| appliquée en production \([^|]*\) \| 15 nov\. 2026 \|/);
     expect(REGISTRE).toContain("`supabase/verifications/0037-verification.sql`");
   });
 });
