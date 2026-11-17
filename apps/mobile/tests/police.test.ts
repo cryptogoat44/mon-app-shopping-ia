@@ -1,4 +1,6 @@
+import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { font, serifDisplayLetterSpacing, serifFont, serifLineHeight } from "../src/theme/tokens";
@@ -53,6 +55,12 @@ describe("police éditoriale : Bodoni Moda Medium", () => {
     const layout = read("src/app/_layout.tsx");
     expect(layout).toContain("const [fontsLoaded, fontError] = useAppFonts();");
     expect(layout).toContain("const fontsReady = fontsLoaded || fontError !== null;");
+  });
+
+  it("le logo est dessiné avec le fichier de police que l'app charge (copie exacte, côté serveur)", () => {
+    const sha256 = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
+    const loaded = createRequire(import.meta.url).resolve("@expo-google-fonts/bodoni-moda/500Medium/BodoniModa_500Medium.ttf");
+    expect(sha256(join(MOBILE, "../backend/assets/fonts/BodoniModa_500Medium.ttf"))).toBe(sha256(loaded));
   });
 });
 
