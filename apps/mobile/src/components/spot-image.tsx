@@ -1,7 +1,7 @@
 import { useState } from "react";
-import type { StyleProp, ImageStyle } from "react-native";
+import { StyleSheet, View, type ImageStyle, type StyleProp, type ViewStyle } from "react-native";
 import { Image } from "expo-image";
-import { imageAfterErrors, imageSources, type PieceImageSize } from "@/lib/piece-image";
+import { imageAfterErrors, imageSources, twoStepSources, type PieceImageSize } from "@/lib/piece-image";
 
 // Image d'une proposition. Grande carte et fiches (« large », par défaut) :
 // l'originale du marchand (haute définition) en priorité, et la petite
@@ -12,7 +12,8 @@ import { imageAfterErrors, imageSources, type PieceImageSize } from "@/lib/piece
 // défaut (jamais rognée ni déformée) ; « cover » pour les grilles carrées
 // (Vault, Envies, récentes). Pendant le chargement, le fond du cadre
 // (plinthe) suffit : une vignette d'attente restait superposée à l'image
-// finale sur le web.
+// finale sur le web. Carte des résultats (« card ») : deux temps, voir
+// TwoStepImage.
 export function SpotImage({
   hdUri,
   fallbackUri,
@@ -33,6 +34,84 @@ export function SpotImage({
    * ligne quand la liste réutilise ses éléments. */
   recyclingKey?: string;
   size?: PieceImageSize;
+}) {
+  const twoStep = twoStepSources(size, hdUri, fallbackUri);
+  if (twoStep) return <TwoStepImage {...twoStep} style={style} fit={fit} accessibilityLabel={accessibilityLabel} recyclingKey={recyclingKey} />;
+  return <OneImage hdUri={hdUri} fallbackUri={fallbackUri} style={style} fit={fit} accessibilityLabel={accessibilityLabel} recyclingKey={recyclingKey} size={size} />;
+}
+
+type HdState = "loading" | "loaded" | "failed";
+
+/** Deux temps : la vignette tout de suite, l'originale par-dessus, en fondu,
+ * dès qu'elle est arrivée (la vignette est alors retirée) ; originale bloquée
+ * par le marchand : la vignette reste. Deux images empilées plutôt que la
+ * « placeholder » d'expo-image, restée superposée à l'image finale sur le web. */
+function TwoStepImage({
+  thumb,
+  hd,
+  style,
+  fit,
+  accessibilityLabel,
+  recyclingKey,
+}: {
+  thumb: string;
+  hd: string;
+  style?: StyleProp<ImageStyle>;
+  fit: "contain" | "cover";
+  accessibilityLabel?: string;
+  recyclingKey?: string;
+}) {
+  const key = `${thumb}\n${hd}`;
+  const fresh = { key, hd: "loading" as HdState, thumbFailed: false };
+  const [state, setState] = useState(fresh);
+  // Une autre carte (liste qui réutilise ses éléments) repart de zéro.
+  const current = state.key === key ? state : fresh;
+  const update = (patch: Partial<typeof fresh>) => setState((previous) => ({ ...(previous.key === key ? previous : fresh), ...patch }));
+  return (
+    <View style={style as StyleProp<ViewStyle>} accessible={Boolean(accessibilityLabel)} accessibilityRole={accessibilityLabel ? "image" : undefined} accessibilityLabel={accessibilityLabel}>
+      {current.hd !== "loaded" && !current.thumbFailed ? (
+        <Image
+          source={{ uri: thumb }}
+          style={StyleSheet.absoluteFill}
+          contentFit={fit}
+          cachePolicy="memory-disk"
+          recyclingKey={recyclingKey}
+          onError={() => update({ thumbFailed: true })}
+        />
+      ) : null}
+      {current.hd !== "failed" ? (
+        <Image
+          source={{ uri: hd }}
+          style={StyleSheet.absoluteFill}
+          contentFit={fit}
+          cachePolicy="memory-disk"
+          recyclingKey={recyclingKey}
+          transition={180}
+          onLoad={() => update({ hd: "loaded" })}
+          onError={() => update({ hd: "failed" })}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+/** Une seule image à la fois : la première adresse, la suivante en cas d'erreur. */
+function OneImage({
+  hdUri,
+  fallbackUri,
+  style,
+  accessibilityLabel,
+  fit,
+  recyclingKey,
+  size,
+}: {
+  hdUri?: string | null;
+  fallbackUri: string;
+  style?: StyleProp<ImageStyle>;
+  accessibilityLabel?: string;
+  fit: "contain" | "cover";
+  recyclingKey?: string;
+  size: PieceImageSize;
 }) {
   const sources = imageSources(size, hdUri, fallbackUri);
   const key = sources.join("\n");
