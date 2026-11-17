@@ -119,7 +119,9 @@ const runSearchSchema = z.object({
   // Les mots tapés sous la photo : jamais envoyés à Google Lens (petit lot,
   // 2026-10-25 : avec l'image, ils faisaient baisser les résultats), jamais
   // enregistrés ; ils servent seulement à trier les propositions (petit lot 2,
-  // décision du fondateur du 2026-10-27, lib/wordSort.ts).
+  // décision du fondateur du 2026-10-27, lib/wordSort.ts). Depuis le
+  // 17 novembre 2026, l'app y met aussi la description écrite pour l'analyse
+  // d'un lien vidéo : mêmes règles (rien d'autre n'en est fait ici).
   query: z.string().max(SEARCH_QUERY_MAX_LENGTH).optional(),
   // Boutiques ensuite (2026-11-08) : envoyé par la nouvelle app seulement.
   // Voie C en service : la réponse arrive dès Lens, et « Cette pièce dans
