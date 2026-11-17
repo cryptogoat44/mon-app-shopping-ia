@@ -5,7 +5,7 @@
 // ce qu'il montre (`readReceipts`, renvoyé à chaque lecture, relecture et
 // envoi) ; null : rien à afficher (invitation, réglage « Confirmations de
 // lecture » éteint chez l'un des deux, serveur qui ne les connaît pas).
-import type { ChatMessage, ConversationReadReceipts, ConversationThread, SendMessageResponse } from "@monapp/shared-types";
+import type { ChatMessage, ConversationReadReceipts, ConversationThread, Profile, SendMessageResponse } from "@monapp/shared-types";
 import { t } from "../i18n";
 
 /** Une date du serveur en millisecondes (NaN : illisible). La base écrit
@@ -92,4 +92,41 @@ export function threadAfterPoll(current: ConversationThread | null, polled: Conv
  * les renvoie avec le message. */
 export function threadAfterSend(current: ConversationThread, sent: SendMessageResponse): ConversationThread {
   return { ...current, id: sent.conversationId, state: sent.state, sendMode: sent.sendMode, readReceipts: readReadReceipts(sent.readReceipts) };
+}
+
+// ---- Réglage « Confirmations de lecture » (Réglages) ----
+
+/** Le réglage est-il proposé ? Seulement avec la messagerie, et si le serveur
+ * renvoie le réglage dans le profil (absent : serveur sans les confirmations
+ * de lecture, ou plus ancien). */
+export function readReceiptsOffered(messagesEnabled: boolean, profile: Pick<Profile, "readReceipts"> | null): boolean {
+  return messagesEnabled && typeof profile?.readReceipts === "boolean";
+}
+
+/** Ce que l'interrupteur des Réglages fait à l'écran et sur le serveur. */
+export interface ReadReceiptsSteps {
+  /** La valeur montrée par l'interrupteur. */
+  show: (value: boolean) => void;
+  /** Le message « n'a pas pu être enregistré », affiché ou retiré. */
+  failed: (value: boolean) => void;
+  /** L'enregistrement sur le serveur, puis la relecture du profil. */
+  save: (value: boolean) => Promise<void>;
+  refresh: () => Promise<void>;
+}
+
+/** Change le réglage : la nouvelle valeur est montrée tout de suite, puis
+ * enregistrée. Si le serveur refuse ou ne répond pas, l'ancienne valeur
+ * revient, avec un message. Répond vrai si le réglage est enregistré. */
+export async function changeReadReceipts(next: boolean, previous: boolean, steps: ReadReceiptsSteps): Promise<boolean> {
+  steps.show(next);
+  steps.failed(false);
+  try {
+    await steps.save(next);
+    await steps.refresh();
+    return true;
+  } catch {
+    steps.show(previous);
+    steps.failed(true);
+    return false;
+  }
 }

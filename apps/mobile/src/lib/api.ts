@@ -42,6 +42,7 @@ import type {
   WishlistPage,
   PieceSendsFrom,
   MessagesFrom,
+  UpdateReadReceiptsRequest,
   MessagesStatus,
   PushPlatform,
   RegisterPushTokenRequest,
@@ -614,6 +615,12 @@ export async function declineInvitation(id: string): Promise<void> {
 /** Réglage « Qui peut m'écrire ». */
 export async function updateMessagesFrom(messagesFrom: MessagesFrom): Promise<void> {
   await authorizedFetch("/api/me/messages-from", { method: "PUT", body: JSON.stringify({ messagesFrom }) });
+}
+
+/** Réglage « Confirmations de lecture » (lot « messages vus »). */
+export async function updateReadReceipts(readReceipts: boolean): Promise<void> {
+  const payload: UpdateReadReceiptsRequest = { readReceipts };
+  await authorizedFetch("/api/me/read-receipts", { method: "PUT", body: JSON.stringify(payload) });
 }
 
 // ---- Notifications des nouveaux messages sur le téléphone (lot notifications) ----
