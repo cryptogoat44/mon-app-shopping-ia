@@ -440,3 +440,98 @@ describe("politique de confidentialité : vidéos, lien analysé, fonctions du s
     }
   });
 });
+
+// Lot prix vidéo (2026-11-17, branche lot-prix-video ; décision du fondateur
+// « Automatique (Recommandé) ») : pour une recherche lancée depuis le lien
+// d'une vidéo, quand aucun résultat n'affiche de prix, la description écrite
+// pour l'analyse part automatiquement à SerpApi puis Google Shopping. Chaque
+// section concernée le dit, en français comme en anglais, avec les mêmes faits ;
+// la version de la politique et les acceptations ne changent pas.
+describe("politique de confidentialité : description d'un lien vidéo envoyée sans prix (lot du 2026-11-17)", () => {
+  const section = (doc: LegalDocument, title: string) => {
+    const found = doc.sections.find((s) => s.title === title);
+    expect(found, title).toBeDefined();
+    return found!.blocks.flat().join("\n");
+  };
+  const VIDEOS = "Vidéos de votre téléphone, de TikTok et d'Instagram";
+  const VIDEOS_EN = "Videos from your phone, TikTok and Instagram";
+
+  it("ni nouvelle version ni nouvelle acceptation", () => {
+    expect(LEGAL_DOCUMENT_VERSIONS.privacy_policy).toBe("projet-2026-11-05");
+    expect(ACCEPTED_CONSENT_VERSIONS.privacy_policy.at(-1)).toBe("projet-2026-11-05");
+  });
+
+  it("chaque section concernée le dit, en français et en anglais", () => {
+    const expected: [string, string, string, string][] = [
+      [
+        "En bref",
+        "In short",
+        "Si les résultats de la recherche qui suit n'affichent aucun prix, ce que vous avez écrit est aussi envoyé automatiquement à notre prestataire SerpApi, qui interroge Google Shopping, pour trouver des boutiques, sans votre nom ni votre e-mail.",
+        "If the results of the search that follows show no price, what you wrote is also sent automatically to our provider SerpApi, which queries Google Shopping, to find shops, without your name or email address.",
+      ],
+      [
+        "En bref",
+        "In short",
+        "Pour une recherche lancée depuis le lien d'une vidéo, quand aucun résultat n'affiche de prix, la description que vous avez écrite est envoyée automatiquement à ce moteur de recherche, de la même façon.",
+        "For a search started from a video link, when no result shows a price, the description you wrote is sent automatically to that search engine, in the same way.",
+      ],
+      [
+        "Les données que nous utilisons",
+        "The data we use",
+        "${BRAND} lance cette recherche de lui-même, une seule fois, avec la description que vous avez écrite pour l'analyse de la vidéo : elle est envoyée de la même façon, sans votre nom ni votre e-mail",
+        "${BRAND} starts this search by itself, once, with the description you wrote for the analysis of the video: it is sent in the same way, without your name or email address",
+      ],
+      [
+        "Pourquoi, et sur quelle base",
+        "Why, and on what basis",
+        "Chercher avec la description écrite pour le lien d'une vidéo, lancée automatiquement quand aucun résultat n'affiche de prix : exécution du contrat qui nous lie (la recherche de la pièce que vous avez demandée). [À vérifier : base retenue.]",
+        "Searching with the description written for a video link, started automatically when no result shows a price: performance of the contract between us (the search for the piece that you asked for). [To be verified: basis retained.]",
+      ],
+      [
+        VIDEOS,
+        VIDEOS_EN,
+        "si aucune proposition n'affiche de prix, ni dans la recherche visuelle ni dans les autres boutiques, notre serveur l'envoie automatiquement, une seule fois, à SerpApi, qui interroge Google Shopping pour trouver des boutiques qui vendent la pièce",
+        "if no suggestion shows a price, neither in the visual search nor at other retailers, our server sends it automatically, once, to SerpApi, which queries Google Shopping to find shops that sell the piece",
+      ],
+      [
+        "Nos prestataires et les services tiers",
+        "Our providers and third-party services",
+        "(pour une recherche lancée depuis le lien d'une vidéo dont aucun résultat n'affiche de prix, automatiquement, avec la description que vous avez écrite), vos mots ; il les transmet à Google Shopping",
+        "(for a search started from a video link where no result shows a price, automatically, with the description you wrote), your words; it passes them to Google Shopping",
+      ],
+      [
+        "Transferts hors de l'Union européenne",
+        "Transfers outside the European Union",
+        "vos mots (ou, pour une recherche lancée depuis le lien d'une vidéo dont aucun résultat n'affiche de prix, automatiquement, la description que vous avez écrite), avec le pays et la langue de la recherche : envoyés à SerpApi puis à Google (Google Shopping)",
+        "your words (or, for a search started from a video link where no result shows a price, automatically, the description you wrote), with the country and language of the search: sent to SerpApi and then to Google (Google Shopping)",
+      ],
+      [
+        "Combien de temps",
+        "How long",
+        "Les mots de « Que cherchez-vous ? », y compris la description d'un lien vidéo envoyée automatiquement quand aucun résultat n'affiche de prix : jamais enregistrés par ${BRAND}",
+        "The words of “What are you looking for?”, including the description of a video link sent automatically when no result shows a price: never saved by ${BRAND}",
+      ],
+    ];
+    for (const [titleFr, titleEn, sentenceFr, sentenceEn] of expected) {
+      expect(section(privacyPolicy, titleFr)).toContain(sentenceFr.replace("${BRAND}", "Spotto"));
+      expect(section(privacyPolicyEn, titleEn)).toContain(sentenceEn.replace("${BRAND}", "Spotto"));
+    }
+  });
+
+  it("les promesses qui restent vraies sont gardées : la description jamais conservée, jamais avec l'image vers la recherche visuelle ; les mots d'une photo trient seulement", () => {
+    const fr = section(privacyPolicy, VIDEOS);
+    const en = section(privacyPolicyEn, VIDEOS_EN);
+    expect(fr).toContain("Ni la vidéo, ni ces images, ni ce que vous avez écrit ne sont conservés par Spotto");
+    expect(en).toContain("Neither the video, nor these frames, nor what you wrote are kept by Spotto");
+    expect(fr).toContain("Ce que vous avez écrit sert aussi à la recherche qui suit, sans jamais partir avec l'image vers la recherche visuelle");
+    expect(en).toContain("What you wrote is also used for the search that follows, never sent with the image to the visual search");
+    expect(fr).toContain("Là non plus, Spotto ne l'enregistre pas.");
+    expect(en).toContain("There too, Spotto does not save it.");
+    expect(section(privacyPolicy, "Les données que nous utilisons")).toContain(
+      "Sous une photo, les mots que vous tapez servent seulement à trier les propositions : notre serveur ne les envoie pas avec l'image à la recherche visuelle, et ne les enregistre pas."
+    );
+    expect(section(privacyPolicyEn, "The data we use")).toContain(
+      "Under a photo, the words you type are only used to sort the suggestions: our server does not send them with the image to the visual search, and does not save them."
+    );
+  });
+});
