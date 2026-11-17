@@ -5,7 +5,7 @@ import { Image } from "expo-image";
 import { StatusBar } from "expo-status-bar";
 import { useFocusEffect } from "expo-router";
 import type { CropRect } from "@monapp/shared-types";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { croppedView } from "@/lib/crop-geometry";
 import type { ImageSize } from "@/lib/spot-draft";
@@ -152,7 +152,7 @@ const styles = themedStyles(() => ({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 0 },
   },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.surNuit, marginTop: space.lg, lineHeight: 29 },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.surNuit, marginTop: space.lg, lineHeight: serifLineHeight.title },
   query: { fontSize: font.secondary, color: color.brume, marginTop: 4 },
   note: { fontSize: font.caption, color: color.brume, marginTop: space.md, lineHeight: 18 },
   footer: { paddingHorizontal: space.lg, paddingBottom: space.lg, maxWidth: 480, alignSelf: "center", width: "100%" },

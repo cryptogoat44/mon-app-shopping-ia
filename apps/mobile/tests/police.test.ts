@@ -64,27 +64,29 @@ describe("police éditoriale : Bodoni Moda Medium", () => {
   });
 });
 
-describe("hauteur de ligne : Bodoni Moda réserve 1,5 fois la taille du texte si on ne la fixe pas", () => {
+describe("hauteur de ligne : ni les 1,5 fois la taille du texte que Bodoni Moda réserve d'elle-même, ni une ligne qui coupe les accents", () => {
   const SIZES = ["display", "title", "body"] as const;
+  // Lu dans le fichier de police, en part de la taille du texte : la place réservée sous la ligne
+  // d'écriture (« descender » : 800 sur 2000) et le haut d'une capitale accentuée (« É » : 1969 sur 2000).
+  const BELOW_BASELINE = 0.4;
+  const ACCENTED_CAPITAL = 0.9845;
 
-  it("une hauteur par taille : la place d'une capitale accentuée et d'un jambage (au moins 1,23 fois la taille), sans plus", () => {
+  it("une hauteur par taille : assez pour que l'iPhone, qui cale le texte en bas de la ligne, ne coupe pas l'accent d'une capitale", () => {
     for (const size of SIZES) {
-      expect(serifLineHeight[size] / font[size], size).toBeGreaterThanOrEqual(1.23);
-      expect(serifLineHeight[size] / font[size], size).toBeLessThanOrEqual(1.3);
+      expect(serifLineHeight[size], size).toBeGreaterThanOrEqual(font[size] * (BELOW_BASELINE + ACCENTED_CAPITAL));
+      // … sans dépasser ce que la police réserve d'elle-même.
+      expect(serifLineHeight[size], size).toBeLessThan(font[size] * 1.525);
     }
   });
 
-  it("chaque texte en police éditoriale fixe sa hauteur de ligne, à la taille qu'il utilise", () => {
+  it("chaque texte en police éditoriale prend la hauteur de ligne prévue pour sa taille, jamais un nombre à lui", () => {
     const styles = serifStyles();
     expect(styles.length).toBeGreaterThan(40);
     const faulty = styles.filter(({ file, style }) => {
       // Le mot-symbole calcule la sienne avec sa taille (lib/wordmark.ts, tests/wordmark.test.ts).
       if (file === "components/wordmark.tsx") return false;
-      const size = /fontSize: font\.(display|title|body)\b/.exec(style)?.[1] as (typeof SIZES)[number] | undefined;
-      const lineHeight = /lineHeight: (?:serifLineHeight\.(\w+)|(\d+))/.exec(style);
-      if (!size || !lineHeight) return true;
-      // Soit la hauteur prévue pour cette taille, soit un nombre qui laisse au moins autant de place (à 1 point près).
-      return lineHeight[1] ? lineHeight[1] !== size : Number(lineHeight[2]) < serifLineHeight[size] - 1;
+      const size = /fontSize: font\.(display|title|body)\b/.exec(style)?.[1];
+      return !size || !style.includes(`lineHeight: serifLineHeight.${size}`) || (style.match(/lineHeight:/g) ?? []).length !== 1;
     });
     expect(faulty.map(({ file, style }) => `${file} : ${style.trim()}`)).toEqual([]);
   });

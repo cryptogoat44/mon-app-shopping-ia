@@ -66,7 +66,7 @@ const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   language: { alignItems: "center", paddingTop: space.md, paddingHorizontal: space.xl },
   center: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl },
-  baseline: { fontSize: font.secondary, color: color.acier, marginTop: space.md, textAlign: "center", lineHeight: 22, maxWidth: 260 },
+  baseline: { fontSize: font.secondary, color: color.acier, marginTop: 12, textAlign: "center", lineHeight: 22, maxWidth: 260 },
   explain: { fontSize: font.caption, color: color.acier, marginTop: 22, textAlign: "center", lineHeight: 19, maxWidth: 270 },
   footer: { paddingHorizontal: space.xl, paddingBottom: space.lg, alignItems: "center" },
   cta: { alignSelf: "stretch", backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center" },

@@ -43,11 +43,11 @@ describe("réglages du mot-symbole (taille, espacement)", () => {
 
   it("grand (écran Bienvenue) : la taille du nom de l'app, capitales espacées de 0,32 fois cette taille", () => {
     expect(WORDMARK_TRACKING).toBe(0.32);
-    expect(wordmarkMetrics("large", letters)).toEqual({ fontSize: font.display, lineHeight: 43, letterSpacing: 10.88, paddingLeft: 10.88 });
+    expect(wordmarkMetrics("large", letters)).toEqual({ fontSize: font.display, lineHeight: 48, letterSpacing: 10.88, paddingLeft: 10.88 });
   });
 
   it("petit (en-tête d'un écran) : la taille du texte secondaire, même proportion", () => {
-    expect(wordmarkMetrics("small", letters)).toEqual({ fontSize: font.secondary, lineHeight: 19, letterSpacing: 4.8, paddingLeft: 4.8 });
+    expect(wordmarkMetrics("small", letters)).toEqual({ fontSize: font.secondary, lineHeight: 21, letterSpacing: 4.8, paddingLeft: 4.8 });
   });
 
   it("centré à l'œil : le même espace avant le mot qu'après sa dernière capitale", () => {
@@ -56,8 +56,8 @@ describe("réglages du mot-symbole (taille, espacement)", () => {
         const metrics = wordmarkMetrics(size, count);
         expect(metrics.paddingLeft).toBe(metrics.letterSpacing);
         expect(metrics.letterSpacing).toBeCloseTo(metrics.fontSize * WORDMARK_TRACKING, 2);
-        // La place d'une capitale accentuée, sans rien rogner.
-        expect(metrics.lineHeight).toBeGreaterThanOrEqual(metrics.fontSize * 1.23);
+        // La place d'une capitale accentuée, même sur l'iPhone (voir tests/police.test.ts).
+        expect(metrics.lineHeight).toBeGreaterThanOrEqual(metrics.fontSize * 1.385);
       }
     }
   });

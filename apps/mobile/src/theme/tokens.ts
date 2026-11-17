@@ -155,14 +155,17 @@ export const size = {
 export const serifFont = "BodoniModa_500Medium";
 
 // Hauteur de ligne de la police éditoriale, pour chaque taille où elle sert.
-// À donner à CHAQUE texte écrit avec elle (tests/police.test.ts le vérifie) :
-// sans réglage, Bodoni Moda réserve 1,525 fois la taille du texte (Newsreader :
-// 1 fois) et chaque titre repousserait ce qui le suit. Environ 1,25 fois la
-// taille : la place d'une capitale accentuée et d'un jambage, sans rien rogner.
+// À donner à CHAQUE texte écrit avec elle (tests/police.test.ts le vérifie).
+// Sans réglage, Bodoni Moda réserve 1,525 fois la taille du texte (Newsreader :
+// 1 fois) et chaque titre repousserait ce qui le suit. Mais jamais moins de
+// 1,385 fois la taille : sur une ligne plus serrée, l'iPhone cale le texte en
+// bas et coupe ce qui dépasse en haut — l'accent d'une capitale (« Écharpe »,
+// « Élodie »). La police réserve 0,4 fois la taille sous la ligne d'écriture ;
+// une capitale accentuée monte à 0,985 fois la taille au-dessus.
 export const serifLineHeight = {
-  display: 42,
-  title: 29,
-  body: 22,
+  display: 48,
+  title: 32,
+  body: 24,
 } as const;
 
 // Grands titres (taille « display ») : resserrés d'un demi-point. Bodoni Moda

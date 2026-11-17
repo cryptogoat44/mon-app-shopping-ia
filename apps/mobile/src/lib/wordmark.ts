@@ -11,9 +11,10 @@ export type WordmarkSize = "large" | "small";
  * (« 0,32 em » sur le logo validé). */
 export const WORDMARK_TRACKING = 0.32;
 
-/** Hauteur de ligne, en part de la taille du texte : la place d'une capitale
- * accentuée, sans rien rogner (voir serifLineHeight, theme/tokens.ts). */
-const LINE_HEIGHT = 1.25;
+/** Hauteur de ligne, en part de la taille du texte : assez pour que l'iPhone
+ * ne coupe pas l'accent d'une capitale, si le nom en porte un jour (voir
+ * serifLineHeight, theme/tokens.ts). */
+const LINE_HEIGHT = 1.4;
 
 /** Place prise par une capitale, en part de la taille du texte : sa largeur
  * (0,69 en moyenne dans Bodoni Moda Medium), puis l'espace qui la suit. */
@@ -45,5 +46,5 @@ export function wordmarkMetrics(size: WordmarkSize, letters: number): WordmarkMe
   const fitting = Math.floor(maxWidth / (Math.max(1, letters) * LETTER_WIDTH));
   const fontSize = Math.max(minFontSize, Math.min(wanted, fitting));
   const letterSpacing = Math.round(fontSize * WORDMARK_TRACKING * 100) / 100;
-  return { fontSize, lineHeight: Math.round(fontSize * LINE_HEIGHT), letterSpacing, paddingLeft: letterSpacing };
+  return { fontSize, lineHeight: Math.ceil(fontSize * LINE_HEIGHT), letterSpacing, paddingLeft: letterSpacing };
 }
