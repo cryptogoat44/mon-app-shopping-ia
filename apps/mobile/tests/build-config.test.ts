@@ -71,7 +71,7 @@ describe("eas.json", () => {
 
 describe("app.json : mises à jour à distance et plantages lisibles", () => {
   it("expo-updates : version figée de SDK 57, version d'exécution liée à la version de l'app", () => {
-    expect(mobile.dependencies["expo-updates"]).toBe("57.0.24");
+    expect(mobile.dependencies["expo-updates"]).toBe("57.0.28");
     expect(expo.runtimeVersion).toEqual({ policy: "appVersion" });
     expect(expo.updates).toMatchObject({ checkAutomatically: "ON_LOAD", fallbackToCacheTimeout: 0 });
   });
