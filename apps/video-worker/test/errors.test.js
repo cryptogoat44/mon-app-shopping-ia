@@ -82,6 +82,29 @@ describe("second essai", () => {
     assert.ok(service.logs.some((entry) => entry.event === "frames" && entry.result === "ok" && entry.downloadAttempts === 2));
   });
 
+  it("fichier refusé (403) puis accepté : le second essai demande un autre fichier de la même vidéo", async () => {
+    const downloads = () => service.records("yt-dlp").filter((entry) => entry.scenario === "media403once" && entry.args.includes("--output"));
+    const result = await service.frames(tiktok("media403once"));
+    assert.equal(result.status, 200);
+    assert.ok(result.body.frames.length >= 6);
+    const formats = downloads().map((entry) => entry.args[entry.args.indexOf("--format") + 1]);
+    assert.equal(formats.length, 2);
+    assert.ok(formats[0].startsWith("h264_720p/"), formats[0]);
+    // Un autre fichier d'abord (petit de préférence), le format refusé seulement en dernier.
+    assert.ok(formats[1].startsWith("best[ext=mp4][vcodec^=h264][protocol=https][format_id!=h264_720p][height<=1280]/"), formats[1]);
+    assert.ok(formats[1].endsWith("/h264_720p"), formats[1]);
+    assert.ok(service.logs.some((entry) => entry.event === "frames" && entry.result === "ok" && entry.downloadAttempts === 2));
+  });
+
+  it("fichier toujours refusé (403) : un seul nouvel essai, puis blocked", async () => {
+    const downloads = () => service.records("yt-dlp").filter((entry) => entry.scenario === "media403" && entry.args.includes("--output")).length;
+    const before = downloads();
+    const result = await service.frames(tiktok("media403"));
+    assert.equal(result.status, 451);
+    assert.deepEqual(result.body, { error: "blocked" });
+    assert.equal(downloads() - before, 2);
+  });
+
   it("erreur définitive (vidéo privée) : aucun nouvel essai", async () => {
     const before = service.records("yt-dlp").filter((entry) => entry.scenario === "private").length;
     await service.frames(tiktok("private"));

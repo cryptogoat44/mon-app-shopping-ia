@@ -235,12 +235,18 @@ export const DOWNLOAD_FALLBACK_FORMATS = "best[ext=mp4][vcodec^=avc][protocol=ht
  * secours), écrit sur la sortie standard, plafonné en taille.
  * Carrousel (Instagram) : seule l'entrée choisie au premier passage
  * (« --playlist-items ») ; sinon yt-dlp écrirait toutes les vidéos à la suite.
+ * `avoidFormat` (second essai après un refus « 403 » du serveur de fichiers) :
+ * un AUTRE fichier H.264 d'abord (TikTok donne plusieurs adresses pour une
+ * même vidéo, sur des serveurs différents), de 1 280 px de haut au plus si
+ * possible ; le format refusé seulement en dernier recours.
  * @param {string} url Adresse acceptée (urls.js).
  * @param {string | null} formatId
  * @param {number | null} [playlistIndex]
+ * @param {{ avoidFormat?: boolean }} [options]
  */
-export function ytDlpDownloadArgs(url, formatId, playlistIndex = null) {
-  const selector = formatId && FORMAT_ID.test(formatId) ? `${formatId}/${DOWNLOAD_FALLBACK_FORMATS}` : DOWNLOAD_FALLBACK_FORMATS;
+export function ytDlpDownloadArgs(url, formatId, playlistIndex = null, { avoidFormat = false } = {}) {
+  const known = formatId && FORMAT_ID.test(formatId) ? formatId : null;
+  const selector = !known ? DOWNLOAD_FALLBACK_FORMATS : avoidFormat ? alternativeFormats(known) : `${known}/${DOWNLOAD_FALLBACK_FORMATS}`;
   const items = Number.isInteger(playlistIndex) && /** @type {number} */ (playlistIndex) >= 1 ? ["--playlist-items", String(playlistIndex)] : [];
   return [
     "--ignore-config",
@@ -267,16 +273,24 @@ export function ytDlpDownloadArgs(url, formatId, playlistIndex = null) {
   ];
 }
 
+/** Sélecteur du second essai : un autre fichier H.264 que `formatId` (vérifié
+ * hors ligne avec yt-dlp 2026.10.26 : « format_id!= » est accepté), petit
+ * d'abord, puis n'importe lequel, puis le format refusé lui-même. */
+function alternativeFormats(/** @type {string} */ formatId) {
+  const other = (/** @type {string} */ codec, /** @type {string} */ extra) => `best[ext=mp4][vcodec^=${codec}][protocol=https][format_id!=${formatId}]${extra}`;
+  return [other("h264", "[height<=1280]"), other("avc", "[height<=1280]"), other("h264", ""), other("avc", ""), formatId].join("/");
+}
+
 /**
  * Télécharge le fichier vidéo en mémoire (jamais sur le disque). Le tampon
  * rendu appartient à l'appelant, qui l'efface (fill(0)) après usage.
  * @param {string} url
- * @param {{ formatId: string | null, playlistIndex: number | null }} choice
+ * @param {{ formatId: string | null, playlistIndex: number | null, avoidFormat?: boolean }} choice
  * @param {{ env: Record<string, string>, signal: AbortSignal, timeoutMs: number, command?: string }} options
  * @returns {Promise<Buffer>}
  */
-export async function downloadMedia(url, { formatId, playlistIndex }, { env, signal, timeoutMs, command = "yt-dlp" }) {
-  const result = await runProgram(command, ytDlpDownloadArgs(url, formatId, playlistIndex), { env, signal, timeoutMs, maxStdoutBytes: LIMITS.maxMediaBytes });
+export async function downloadMedia(url, { formatId, playlistIndex, avoidFormat = false }, { env, signal, timeoutMs, command = "yt-dlp" }) {
+  const result = await runProgram(command, ytDlpDownloadArgs(url, formatId, playlistIndex, { avoidFormat }), { env, signal, timeoutMs, maxStdoutBytes: LIMITS.maxMediaBytes });
   let kept = false;
   try {
     if (result.stopReason === "aborted") throw new WorkerError("timeout", "deadline");
