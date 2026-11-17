@@ -153,6 +153,10 @@ export interface AskProps {
   /** Photo : le champ « Quelle pièce ? (facultatif) », dont les mots trient
    * les propositions (petit lot 2, décision du fondateur du 2026-10-27). */
   photoWords: boolean;
+  /** Moment d'un lien vidéo analysé : le champ porte la description, qui
+   * part aussi vers Google Shopping si rien n'a de prix (décision du
+   * fondateur du 17 novembre 2026) ; la phrase sous le champ le dit. */
+  linkWords?: boolean;
   /** Photo : la pièce pas encore entourée (rien de tracé, ou toute l'image), avec ou sans mots : conseil de l'entourer seule. */
   frameHint: boolean;
   /** Vidéo : champ prêt à la saisie dès l'ouverture. */
@@ -189,7 +193,7 @@ export function AskView(p: AskProps) {
             placeholder={t.launch.photoPlaceholder}
             label={t.launch.photoLabel}
           />
-          <Text style={styles.note}>{t.launch.photoWordsNote}</Text>
+          <Text style={styles.note}>{p.linkWords ? t.launch.linkWordsNote : t.launch.photoWordsNote}</Text>
           {p.frameHint ? (
             <Text style={styles.body} accessibilityLiveRegion="polite">
               {t.launch.frameHint}

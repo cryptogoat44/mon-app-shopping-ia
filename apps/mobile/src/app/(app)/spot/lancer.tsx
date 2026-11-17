@@ -164,6 +164,8 @@ function useAsk(
   return {
     withQuery,
     photoWords,
+    // Moment d'un lien vidéo : la description, envoyée à Google Shopping si rien n'a de prix (lien vidéo sans prix).
+    linkWords: photoWords && media.draft?.textSearchIfNoPrice === true,
     // Tant que la pièce n'est pas entourée, avec ou sans mots (lots « premier essai » et « entourer la pièce »).
     frameHint: photoWords && !isAdjustedCrop(zone?.crop ?? null),
     autoFocus: isVideo,
