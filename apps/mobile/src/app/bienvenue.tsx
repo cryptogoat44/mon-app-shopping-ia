@@ -8,7 +8,7 @@ import { ContactEntry } from "@/components/contact-entry";
 import { CONTACT_EMAIL } from "@/lib/contact";
 import { usePreferences } from "@/lib/preferences-context";
 import { LOCALES } from "@/lib/preferences";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifDisplayLetterSpacing, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { themedStyles } from "@/theme/themed-styles";
 
 export default function BienvenueScreen() {
@@ -76,7 +76,7 @@ const styles = themedStyles(() => ({
     borderWidth: 1,
     borderColor: color.filet,
   },
-  mark: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, letterSpacing: -0.5, color: color.encre },
+  mark: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, lineHeight: serifLineHeight.display, letterSpacing: serifDisplayLetterSpacing, color: color.encre },
   baseline: { fontSize: font.secondary, color: color.acier, marginTop: 10, textAlign: "center", lineHeight: 22, maxWidth: 260 },
   explain: { fontSize: font.caption, color: color.acier, marginTop: 22, textAlign: "center", lineHeight: 19, maxWidth: 270 },
   footer: { paddingHorizontal: space.xl, paddingBottom: space.lg, alignItems: "center" },

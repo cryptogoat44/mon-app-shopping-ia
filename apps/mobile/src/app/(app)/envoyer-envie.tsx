@@ -7,7 +7,7 @@ import type { PublicProfile } from "@monapp/shared-types";
 import { ApiError, searchUsers, sendPiece } from "@/lib/api";
 import { loadErrorMessage } from "@/lib/load-error";
 import { useToast } from "@/lib/toast-context";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { SearchIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
@@ -143,7 +143,7 @@ const styles = themedStyles(() => ({
   navBack: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
   backLabel: { color: color.encre, fontSize: font.secondary },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, marginBottom: space.xs },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, marginBottom: space.xs },
   hint: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginBottom: space.md },
   searchBar: {
     flexDirection: "row",

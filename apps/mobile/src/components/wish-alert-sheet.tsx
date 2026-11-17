@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, Switch, Text, TextInput, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { WishAlertState } from "@monapp/shared-types";
-import { color, font, radius, serifFont, size, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, size, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { updateWishAlert } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -352,7 +352,7 @@ const styles = themedStyles(() => ({
     alignSelf: "center",
   },
   grab: { width: size.sheetHandle.width, height: size.sheetHandle.height, borderRadius: radius.full, backgroundColor: color.filet, alignSelf: "center", marginBottom: space.xs },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre },
   pieceTitle: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   intro: { fontSize: font.secondary, color: color.acier, lineHeight: 20 },
   option: { minHeight: size.touchTarget, flexDirection: "row", alignItems: "center", gap: space.sm, paddingVertical: space.xs },

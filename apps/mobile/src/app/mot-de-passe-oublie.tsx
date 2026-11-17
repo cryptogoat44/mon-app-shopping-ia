@@ -8,7 +8,7 @@ import { translateAuthError } from "@/lib/auth-errors";
 import { RECOVERY_PATH } from "@/lib/password-recovery";
 import { rememberedEmail } from "@/lib/remembered-email";
 import { t } from "@/i18n";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifDisplayLetterSpacing, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
 import { useRobotCheck } from "@/components/robot-check";
 import { withCaptcha } from "@/lib/robot-check";
@@ -118,7 +118,7 @@ const styles = themedStyles(() => ({
   nav: { height: 47, justifyContent: "center", paddingHorizontal: 12 },
   back: { fontSize: 26, color: color.encre },
   content: { flex: 1, justifyContent: "center", paddingHorizontal: space.xl, maxWidth: 480, alignSelf: "center", width: "100%" },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, color: color.encre },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, lineHeight: serifLineHeight.display, letterSpacing: serifDisplayLetterSpacing, color: color.encre },
   subtitle: { fontSize: font.secondary, color: color.acier, marginTop: space.xs, marginBottom: space.xl, lineHeight: 20 },
   error: { fontSize: font.caption, marginBottom: space.md },
   field: { marginBottom: space.md },

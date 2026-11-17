@@ -115,8 +115,8 @@ export const color: Readonly<Palette> = new Proxy({} as Palette, {
 
 // Cinq tailles maximum, comme validé dans les maquettes.
 export const font = {
-  display: 34, // logotype, écran Bienvenue
-  title: 23, // titres de sous-écrans (Newsreader)
+  display: 34, // nom de l'app (écran Bienvenue), grands titres
+  title: 23, // titres de sous-écrans (police éditoriale)
   body: 17, // texte courant (police système)
   secondary: 15, // texte secondaire (police système, Acier)
   caption: 13, // légendes, prix (police système, Acier)
@@ -148,6 +148,24 @@ export const size = {
   contentMaxWidth: 480,
 } as const;
 
-// Police éditoriale serif (logotype, titres, noms de pièces). Chargée via
-// expo-font — voir src/theme/fonts.ts. SIL Open Font License.
-export const serifFont = "Newsreader_500Medium";
+// Police éditoriale serif (nom de l'app, titres, noms de pièces) : Bodoni Moda
+// Medium, choisie par le fondateur le 2026-11-17 à la place de Newsreader.
+// Chargée via expo-font — voir src/theme/fonts.ts. SIL Open Font License.
+// Petits textes, prix et boutons restent dans la police du téléphone.
+export const serifFont = "BodoniModa_500Medium";
+
+// Hauteur de ligne de la police éditoriale, pour chaque taille où elle sert.
+// À donner à CHAQUE texte écrit avec elle (tests/police.test.ts le vérifie) :
+// sans réglage, Bodoni Moda réserve 1,525 fois la taille du texte (Newsreader :
+// 1 fois) et chaque titre repousserait ce qui le suit. Environ 1,25 fois la
+// taille : la place d'une capitale accentuée et d'un jambage, sans rien rogner.
+export const serifLineHeight = {
+  display: 42,
+  title: 29,
+  body: 22,
+} as const;
+
+// Grands titres (taille « display ») : resserrés d'un demi-point. Bodoni Moda
+// est un peu plus large que Newsreader ; ainsi « Mot de passe oublié » tient
+// encore sur une ligne d'un iPhone de 375 points de large, comme avant.
+export const serifDisplayLetterSpacing = -0.5;

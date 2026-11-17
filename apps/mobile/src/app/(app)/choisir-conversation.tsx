@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import type { ConversationSummary, PublicProfile } from "@monapp/shared-types";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { fetchConversations, searchUsers } from "@/lib/api";
 import { loadErrorMessage } from "@/lib/load-error";
@@ -165,7 +165,7 @@ const styles = themedStyles(() => ({
   navBack: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
   backLabel: { color: color.encre, fontSize: font.secondary },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, marginBottom: space.xs },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, marginBottom: space.xs },
   hint: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginBottom: space.md },
   error: { fontSize: font.secondary, marginBottom: space.md },
   loader: { marginTop: space.md },

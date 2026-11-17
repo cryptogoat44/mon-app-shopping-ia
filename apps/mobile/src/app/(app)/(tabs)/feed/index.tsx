@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import type { Post } from "@monapp/shared-types";
 import { ApiError, fetchFeed } from "@/lib/api";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifDisplayLetterSpacing, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { Skeleton } from "@/components/skeleton";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { ErrorMessage } from "@/components/error-message";
@@ -189,13 +189,13 @@ const styles = themedStyles(() => ({
     paddingTop: space.md,
     paddingBottom: space.sm,
   },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, color: color.encre },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, lineHeight: serifLineHeight.display, letterSpacing: serifDisplayLetterSpacing, color: color.encre },
   headerActions: { flexDirection: "row", alignItems: "center", gap: space.md },
   headerLink: { fontSize: font.secondary, color: color.acier, fontWeight: "600" },
   content: { paddingTop: space.sm, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   errorText: { color: color.acier, fontSize: font.secondary, paddingHorizontal: space.lg, marginBottom: space.md },
   empty: { alignItems: "center", marginTop: space.xl, paddingHorizontal: space.lg },
-  emptyTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, textAlign: "center", marginBottom: space.sm },
+  emptyTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, textAlign: "center", marginBottom: space.sm },
   emptyText: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginBottom: space.lg, lineHeight: 20 },
   emptyPrimary: { alignSelf: "stretch", minHeight: 50, borderRadius: radius.md, backgroundColor: color.vert, alignItems: "center", justifyContent: "center" },
   emptyPrimaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },

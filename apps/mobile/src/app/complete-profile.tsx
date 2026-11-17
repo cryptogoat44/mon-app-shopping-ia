@@ -7,7 +7,7 @@ import { ApiError, acceptConsents, recordAnalyticsChoice, updateMyProfile } from
 import { forgetSignupConsents, hasSignupConsents, signupAnalyticsChoice } from "@/lib/signup-consents";
 import { setAnalyticsUser, track } from "@/lib/analytics";
 import { getActiveLocale, t } from "@/i18n";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifDisplayLetterSpacing, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
 import { CHECKBOX_SIZE, CheckboxRow } from "@/components/checkbox-row";
 import { themedStyles } from "@/theme/themed-styles";
@@ -163,7 +163,7 @@ const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   flex: { flex: 1 },
   content: { flexGrow: 1, justifyContent: "center", paddingVertical: space.lg, paddingHorizontal: space.xl, maxWidth: 480, alignSelf: "center", width: "100%" },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, color: color.encre },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, lineHeight: serifLineHeight.display, letterSpacing: serifDisplayLetterSpacing, color: color.encre },
   subtitle: { fontSize: font.secondary, color: color.acier, marginTop: space.xs, marginBottom: space.xl, lineHeight: 20 },
   error: { fontSize: font.caption, color: color.acier, marginBottom: space.md },
   field: { marginBottom: space.md },

@@ -12,7 +12,7 @@ import { consentFor, parseLegalVersion, pendingConsents, splitPlaceholders } fro
 import type { LegalDocument } from "@/legal/types";
 import { APP_NAME_DISPLAY } from "@/constants/brand";
 import { getActiveLocale, t } from "@/i18n";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
 import { CheckboxRow } from "@/components/checkbox-row";
 import { themedStyles } from "@/theme/themed-styles";
@@ -179,12 +179,12 @@ const styles = themedStyles(() => ({
   nav: { height: 47, justifyContent: "center", paddingHorizontal: 12 },
   back: { fontSize: 26, color: color.encre },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 640, alignSelf: "center", width: "100%" },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre },
   meta: { fontSize: font.caption, color: color.acier, marginTop: space.xs },
   banner: { borderWidth: 1, borderColor: color.encre, borderRadius: radius.sm, padding: space.sm, marginTop: space.md },
   bannerText: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   section: { marginTop: space.lg },
-  sectionTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, color: color.encre, marginBottom: space.sm },
+  sectionTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, lineHeight: serifLineHeight.body, color: color.encre, marginBottom: space.sm },
   body: { fontSize: font.secondary, color: color.encre, lineHeight: 22, marginBottom: space.sm },
   placeholder: { fontWeight: "700", textDecorationLine: "underline" },
   list: { marginBottom: space.sm },
