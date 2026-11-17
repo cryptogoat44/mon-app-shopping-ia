@@ -376,9 +376,8 @@ export const en: Catalog = {
     moments: {
       title: (count: number) => (count > 1 ? `${count} moments found` : "Moment found"),
       lead: (count: number) => (count > 1 ? "The most likely one is selected. Tap another moment to choose it." : "Check that the frame surrounds the piece."),
-      shown: (time: string) => `Chosen moment, at ${time}, with the frame around the piece`,
       choose: (rank: number, time: string) => `Moment ${rank}, at ${time}`,
-      search: "Use this moment",
+      search: "Start the search",
       editQuery: "Edit the description",
     },
     failedTitle: "The video couldn't be analyzed",

@@ -397,9 +397,8 @@ export const fr = {
     moments: {
       title: (count: number) => (count > 1 ? `${count} moments trouvés` : "Moment trouvé"),
       lead: (count: number) => (count > 1 ? "Le plus probable est sélectionné. Touchez un autre moment pour le choisir." : "Vérifiez que le cadre entoure bien la pièce."),
-      shown: (time: string) => `Moment choisi, à ${time}, avec le cadre de la pièce`,
       choose: (rank: number, time: string) => `Moment ${rank}, à ${time}`,
-      search: "Choisir ce moment",
+      search: "Lancer la recherche",
       editQuery: "Modifier la description",
     },
     failedTitle: "La vidéo n'a pas pu être analysée",

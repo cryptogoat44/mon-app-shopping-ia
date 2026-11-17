@@ -146,6 +146,15 @@ describe("« Choisir ce moment » : comme un moment d'une vidéo du téléphone"
     expect(tracked()).not.toContain("data:");
   });
 
+  it("pièce entourée sur l'écran des moments : c'est sa zone qui part, plus le cadre de l'IA", () => {
+    const mine = { x: 0.3, y: 0.35, width: 0.2, height: 0.25 };
+    const draft = startMomentSearch(analysis(), 0, "web", { crop: mine, byAi: false })!;
+    expect(draft.crop).toEqual(mine);
+    expect(draft.zoneByAi).toBe(false);
+    // Cadre de l'IA gardé tel quel : marqué comme celui de l'IA.
+    expect(startMomentSearch(analysis(), 0, "web", { crop: BEST, byAi: true })).toMatchObject({ crop: BEST, zoneByAi: true });
+  });
+
   it("app iPhone : source « app » ; moment absent : rien ne part", () => {
     expect(momentVideoContext(analysis(), analysis().moments[0]!, "app")).toMatchObject({ source: "app", momentSeconds: 4 });
     expect(startMomentSearch(analysis(), 5, "app")).toBeNull();

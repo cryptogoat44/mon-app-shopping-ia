@@ -13,6 +13,7 @@ import { t } from "../i18n";
 import { fetchConsentStatus, recordVideoAiChoice } from "./api";
 import { track } from "./analytics";
 import { videoLinkAiChoice, type VideoAiChoice } from "./spot-launch";
+import { zoneFromCrop, type PieceZone } from "./piece-trace";
 import { linkAnalysisRequest, type LinkAnalysis, type LinkFailureInfo, type QueryProblem } from "./video-link-analysis";
 import { runLinkAnalysis, startMomentSearch, type LinkSpotOrigin } from "./video-link-run";
 
@@ -21,8 +22,10 @@ export type LinkAiPhase =
   | { kind: "ask"; problem: QueryProblem | null }
   | { kind: "consent" }
   | { kind: "working"; startedAt: number }
-  /** Moments trouvés ; `selected` : celui qui partira (0 = le meilleur, présélectionné). */
-  | { kind: "moments"; analysis: LinkAnalysis; selected: number }
+  /** Moments trouvés ; `selected` : celui qui partira (0 = le meilleur,
+   * présélectionné) ; `zone` : la pièce entourée sur son image (au départ le
+   * cadre de l'IA, `zoneFromAi`). */
+  | { kind: "moments"; analysis: LinkAnalysis; selected: number; zone: PieceZone; zoneFromAi: boolean }
   | { kind: "failed"; info: LinkFailureInfo };
 
 export interface LinkAiInput {
@@ -34,6 +37,12 @@ export interface LinkAiInput {
   origin: LinkSpotOrigin;
   /** Refus de l'accord : la capture d'écran prend le relais. */
   onDeclined: () => void;
+}
+
+/** Les moments, celui de rang `rank` choisi, avec le cadre de l'IA déjà tracé. */
+export function momentsPhase(analysis: LinkAnalysis, rank: number): Extract<LinkAiPhase, { kind: "moments" }> | null {
+  const moment = analysis.moments[rank];
+  return moment ? { kind: "moments", analysis, selected: rank, zone: zoneFromCrop(moment.box), zoneFromAi: true } : null;
 }
 
 export function useVideoLinkAnalysis({ active, url, platform, origin, onDeclined }: LinkAiInput) {
@@ -83,7 +92,10 @@ export function useVideoLinkAnalysis({ active, url, platform, origin, onDeclined
     const outcome = await runLinkAnalysis(built.request, platform, controller.signal);
     if (!alive.current || run.current.id !== id || outcome.kind === "cancelled") return;
     run.current.controller = null;
-    if (outcome.kind === "found") return setPhase({ kind: "moments", analysis: outcome.analysis, selected: 0 });
+    if (outcome.kind === "found") {
+      const found = momentsPhase(outcome.analysis, 0);
+      return setPhase(found ?? { kind: "failed", info: { failure: "no_moment", capacity: null } });
+    }
     // Accord retiré entre-temps (sur un autre appareil, par exemple), ou
     // donné sur un texte que le serveur n'accepte pas pour un lien : redemandé.
     if (outcome.info.failure === "consent") {
@@ -153,17 +165,24 @@ export function useVideoLinkAnalysis({ active, url, platform, origin, onDeclined
     setPhase({ kind: "ask", problem: null });
   }
 
+  /** Un autre moment : son image, avec le cadre de l'IA déjà tracé (le
+   * moment déjà choisi, touché de nouveau, garde la pièce entourée). */
   function select(rank: number) {
-    setPhase((current) => (current.kind === "moments" && current.analysis.moments[rank] ? { ...current, selected: rank } : current));
+    setPhase((current) => (current.kind === "moments" && rank !== current.selected ? (momentsPhase(current.analysis, rank) ?? current) : current));
   }
 
-  /** « Choisir ce moment » : l'écran « Entourez la pièce », avec le cadre de
-   * l'IA déjà tracé (la personne lance tel quel ou entoure à nouveau la
-   * pièce), puis la suite habituelle (attente, résultats). */
+  /** La pièce entourée par la personne (ou l'image entière) : elle remplace le cadre de l'IA. */
+  function changeZone(zone: PieceZone) {
+    setPhase((current) => (current.kind === "moments" ? { ...current, zone, zoneFromAi: false } : current));
+  }
+
+  /** « Lancer la recherche » : directement l'attente puis les résultats,
+   * avec la zone de l'écran des moments (demande du fondateur, 17 novembre
+   * 2026 : le moins d'étapes possible, on entoure sur l'écran des moments). */
   function search() {
     if (phase.kind !== "moments") return;
-    if (!startMomentSearch(phase.analysis, phase.selected, origin)) return;
-    router.push({ pathname: "/spot/lancer", params: { source: "photo" } });
+    if (!startMomentSearch(phase.analysis, phase.selected, origin, { crop: phase.zone.crop, byAi: phase.zoneFromAi })) return;
+    router.push({ pathname: "/spot/lancer", params: { source: "photo", auto: "1" } });
   }
 
   return {
@@ -181,6 +200,7 @@ export function useVideoLinkAnalysis({ active, url, platform, origin, onDeclined
     decline: () => void decline(),
     cancel,
     select,
+    changeZone,
     search,
     editQuery: () => setPhase({ kind: "ask", problem: null }),
     retry: () => void find(),

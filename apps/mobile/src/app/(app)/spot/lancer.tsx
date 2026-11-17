@@ -2,13 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Keyboard, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { VIDEO_AI } from "@monapp/shared-types";
+import { VIDEO_AI, type CropRect } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { containsLink } from "@/lib/link-detection";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { isAdjustedCrop } from "@/lib/crop-geometry";
-import { zoneFromCrop, zoneReady, type PieceZone } from "@/lib/piece-trace";
+import { WHOLE_IMAGE_ZONE, zoneFromCrop, zoneReady, type PieceZone } from "@/lib/piece-trace";
 import { draftImageUri, getDraft, leaveLaunchScreen, updateDraft, type SpotDraft } from "@/lib/spot-draft";
 import { getSpotVideo, holdSpotVideo, importSpotVideo, letGoSpotVideo, videoImportMessage } from "@/lib/spot-video";
 import { blocksLaunch } from "@/lib/search-limits";
@@ -36,14 +36,17 @@ function initialMedia(source: string | undefined): Media {
   return source === "photo" ? { source: "photo", video: null, draft: getDraft() } : { source: "video", video: getSpotVideo(), draft: null };
 }
 
-/** Photo venue du moment d'une vidéo (lien analysé) : le cadre de l'IA, déjà
- * tracé ; la personne lance tel quel ou entoure à nouveau la pièce
- * (demande du fondateur, 16 novembre 2026). Sinon, rien tant qu'elle n'a pas
+/** Photo dont la zone est déjà connue (moment d'une vidéo, entouré sur
+ * l'écran des moments ; retour sur cet écran après une recherche annulée) :
+ * elle est retracée, modifiable. Sinon, rien tant que la personne n'a pas
  * entouré la pièce. */
 function initialZone(media: Media): PieceZone | null {
-  const draft = media.source === "photo" ? media.draft : null;
-  return draft?.zoneByAi && draft.crop ? zoneFromCrop(draft.crop) : null;
+  const crop = media.source === "photo" ? (media.draft?.crop ?? null) : null;
+  if (!crop) return null;
+  return isWholeImage(crop) ? { ...WHOLE_IMAGE_ZONE } : zoneFromCrop(crop);
 }
+
+const isWholeImage = (crop: CropRect) => crop.x === 0 && crop.y === 0 && crop.width === 1 && crop.height === 1;
 
 /** Aperçu : une image du milieu de la vidéo, ou la photo elle-même. */
 function useLaunchPreview({ video, draft }: Media) {
@@ -187,7 +190,7 @@ export default function LaunchScreen() {
   // défilement s'arrête pendant le tracé.
   const [zone, setZone] = useState<PieceZone | null>(() => initialZone(media));
   // Le cadre affiché est encore celui de l'IA (jamais retouché par la personne).
-  const [zoneFromAi, setZoneFromAi] = useState(() => initialZone(media) !== null);
+  const [zoneFromAi, setZoneFromAi] = useState(() => media.draft?.zoneByAi === true && initialZone(media) !== null);
   const [dragging, setDragging] = useState(false);
   const preview = useLaunchPreview(media);
   /** La personne entoure la pièce (ou choisit l'image entière) : la zone est la sienne, plus celle de l'IA. */

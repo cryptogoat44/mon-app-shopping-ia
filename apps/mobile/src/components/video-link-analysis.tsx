@@ -10,8 +10,9 @@ import { VIDEO_AI } from "@monapp/shared-types";
 import { color, font, radius, serifFont, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { ErrorMessage } from "@/components/error-message";
-import { ActionButtons, QueryInput, type Action } from "@/components/spot-launch-views";
+import { ActionButtons, PhotoFrame, QueryInput, type Action } from "@/components/spot-launch-views";
 import { containBox, cropToBox } from "@/lib/crop-geometry";
+import type { PieceZone } from "@/lib/piece-trace";
 import {
   LINK_SLOW_MS,
   cleanQuery,
@@ -139,36 +140,42 @@ function MomentImage({ moment, maxWidth, maxHeight, label }: { moment: LinkMomen
 
 const THUMB = { width: 88, height: 112 };
 
-/** Les moments trouvés : le meilleur présélectionné, les autres au choix ;
- * « Rechercher cette pièce » continue comme pour une vidéo du téléphone. */
+/** Les moments trouvés, sur un seul écran (demande du fondateur, 17 novembre
+ * 2026 : le moins d'étapes possible) : les vignettes pour choisir le moment
+ * (le meilleur présélectionné), puis « Entourez la pièce » directement sur son
+ * image, le cadre de l'IA déjà tracé ; « Lancer la recherche » part aussitôt. */
 export function LinkMomentsView({
   analysis,
   selected,
+  zone,
+  zoneFromAi,
   onSelect,
+  onZone,
+  onDragChange,
   onSearch,
   onEditQuery,
 }: {
   analysis: LinkAnalysis;
   selected: number;
+  zone: PieceZone;
+  zoneFromAi: boolean;
   onSelect: (rank: number) => void;
+  onZone: (zone: PieceZone) => void;
+  onDragChange: (dragging: boolean) => void;
   onSearch: () => void;
   onEditQuery: () => void;
 }) {
-  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight } = useWindowDimensions();
   const moment = analysis.moments[selected] ?? analysis.moments[0];
   if (!moment) return null;
   const count = analysis.moments.length;
-  const maxWidth = Math.min(windowWidth - space.lg * 2, 432);
-  const maxHeight = Math.min(Math.max(windowHeight * 0.45, 240), 440);
+  const frameHeight = Math.min(Math.max(windowHeight * 0.45, 240), 440);
   return (
     <>
       <Text style={styles.title} accessibilityRole="header">
         {t.videoLinkAuto.moments.title(count)}
       </Text>
-      <Text style={styles.help}>{t.videoLinkAuto.moments.lead(count)}</Text>
-      <View style={styles.preview}>
-        <MomentImage moment={moment} maxWidth={maxWidth} maxHeight={maxHeight} label={t.videoLinkAuto.moments.shown(momentClock(moment.timeSeconds))} />
-      </View>
+      {count > 1 ? <Text style={styles.help}>{t.videoLinkAuto.moments.lead(count)}</Text> : null}
       {count > 1 ? (
         <View style={styles.thumbs}>
           {analysis.moments.map((item, rank) => {
@@ -189,6 +196,16 @@ export function LinkMomentsView({
           })}
         </View>
       ) : null}
+      {/* Une image par moment : le tracé repart du cadre de l'IA à chaque changement de moment. */}
+      <PhotoFrame
+        key={`${selected}-${moment.timeSeconds}`}
+        uri={moment.image}
+        zone={zone}
+        onChange={onZone}
+        onDragChange={onDragChange}
+        height={frameHeight}
+        caption={zoneFromAi ? t.targeting.aiCaption : t.targeting.caption}
+      />
       <ActionButtons primary={{ label: t.videoLinkAuto.moments.search, onPress: onSearch }} secondary={[{ label: t.videoLinkAuto.moments.editQuery, onPress: onEditQuery }]} />
     </>
   );
