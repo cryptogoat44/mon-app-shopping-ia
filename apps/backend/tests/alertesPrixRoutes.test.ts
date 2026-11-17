@@ -407,7 +407,7 @@ describe("« Je l'ai achetée » : toutes les envies de la même pièce (alertes
 // Les huit combinaisons, vues par l'app : l'état des alertes (ce qui montre
 // ou cache la cloche, l'interrupteur et « Plus disponible »), l'appareil des
 // notifications, le suivi d'une envie et sa cloche. La première est celle
-// de la production tant que 0035 et 0036 sont « à appliquer » et que
+// de la production tant que
 // l'interrupteur est coupé. 0036 refuse de s'appliquer sans 0035
 // (alertesPrixMigration.test.ts) : les deux dernières ne peuvent pas
 // exister ; le serveur tient quand même. Les messages, l'export et la

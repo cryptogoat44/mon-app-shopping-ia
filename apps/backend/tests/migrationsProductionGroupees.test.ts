@@ -165,14 +165,16 @@ describe("fichiers de vérification : lecture seule, à coller tels quels", () =
 });
 
 describe("registre des migrations", () => {
-  it("nomme les trois fichiers groupés et leurs vérifications, sans rien marquer comme appliqué", () => {
+  it("nomme les trois fichiers groupés et leurs vérifications, et note ces migrations appliquées en production le 15 novembre 2026", () => {
     const registry = read("REGISTRE-MIGRATIONS.md");
     for (const group of GROUPED) {
       expect(registry).toContain(`supabase/mise-en-ligne/${group.file}`);
       expect(registry).toContain(`supabase/mise-en-ligne/${group.verification}`);
     }
     for (const number of ["0029", "0035", "0036", "0037", "0038", "0039", "0040", "0041"]) {
-      expect(registry).toMatch(new RegExp(`^\\| ${number} \\| [^|]+ \\| \\*\\*à appliquer\\*\\*`, "m"));
+      // Appliquées par le fondateur le 15 novembre 2026, après une copie de secours complète.
+      expect(registry).toMatch(new RegExp(`^\\| ${number} \\| [^|]+ \\| appliquée en production \\([^|]*copie de secours[^|]*\\) \\| 15 nov\\. 2026 \\|`, "m"));
+      expect(registry).not.toMatch(new RegExp(`^\\| ${number} \\| [^|]+ \\| \\*\\*à appliquer\\*\\*`, "m"));
     }
   });
 });
