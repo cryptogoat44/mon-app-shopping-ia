@@ -48,6 +48,15 @@ function initialZone(media: Media): PieceZone | null {
 
 const isWholeImage = (crop: CropRect) => crop.x === 0 && crop.y === 0 && crop.width === 1 && crop.height === 1;
 
+/** Mots de départ : ceux de l'adresse (mots tapés sur l'accueil), sinon,
+ * pour une photo, ceux du brouillon — la description d'un lien vidéo
+ * analysé (video-link-run.ts), gardée hors de l'adresse. Sans eux, le
+ * lancement automatique les effacerait du brouillon (launchPhoto). */
+function initialQuery(param: string | string[] | undefined, media: Media): string {
+  if (typeof param === "string") return param;
+  return media.source === "photo" ? (media.draft?.words ?? "") : "";
+}
+
 /** Aperçu : une image du milieu de la vidéo, ou la photo elle-même. */
 function useLaunchPreview({ video, draft }: Media) {
   const [state, setState] = useState<{ source: FramePreview | null; failed: boolean }>({ source: null, failed: false });
@@ -155,6 +164,8 @@ function useAsk(
   return {
     withQuery,
     photoWords,
+    // Moment d'un lien vidéo : la description, envoyée à Google Shopping si rien n'a de prix (lien vidéo sans prix).
+    linkWords: photoWords && media.draft?.textSearchIfNoPrice === true,
     // Tant que la pièce n'est pas entourée, avec ou sans mots (lots « premier essai » et « entourer la pièce »).
     frameHint: photoWords && !isAdjustedCrop(zone?.crop ?? null),
     autoFocus: isVideo,
@@ -185,7 +196,7 @@ export default function LaunchScreen() {
   const params = useLocalSearchParams<{ source?: string; query?: string; auto?: string }>();
   const { height: windowHeight } = useWindowDimensions();
   const [media, setMedia] = useState(() => initialMedia(params.source));
-  const [query, setQuery] = useState(typeof params.query === "string" ? params.query : "");
+  const [query, setQuery] = useState(() => initialQuery(params.query, media));
   // Photo : la zone entourée (rien tant que la pièce n'est pas entourée) ; le
   // défilement s'arrête pendant le tracé.
   const [zone, setZone] = useState<PieceZone | null>(() => initialZone(media));

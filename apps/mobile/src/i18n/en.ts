@@ -202,6 +202,9 @@ export const en: Catalog = {
     photoPlaceholder: "e.g. the black leather jacket",
     photoWordsNote:
       "Your words are only used to sort the suggestions: they aren't sent with the image to the search. They only go to a search engine if you start a search with your words yourself.",
+    // Moment of an analyzed video link: the description (founder's decision of 2026-11-17, automatic search when nothing has a price).
+    linkWordsNote:
+      "Your description sorts the suggestions: it isn't sent with the image to the search. If no suggestion shows a price, it is sent to Google Shopping through our provider SerpApi to find shops, without your name or email address.",
     // Shown until the piece is circled (nothing drawn, or the whole image), with or without words.
     frameHint: `Circle the piece alone, with no faces or text around it: ${BRAND} will find it more easily.`,
     videoPreview: (duration: string) => `Preview of your video, ${duration}`,
@@ -354,7 +357,8 @@ export const en: Catalog = {
     placeholder: "e.g. the beige leather jacket on the girl on the left",
     help: "Describe the piece and, if needed, where it appears: the AI uses your words to find it in the video.",
     find: "Find the piece",
-    privacy: `${BRAND} fetches the public video for the analysis only, without keeping it. With your consent, a few frames and your description are analyzed by an AI.`,
+    // Video link without a price (2026-11-17): the description may also go to Google Shopping.
+    privacy: `${BRAND} fetches the public video for the analysis only, without keeping it. With your consent, a few frames and your description are analyzed by an AI. If the results show no price, your description is also sent to Google Shopping through our provider SerpApi to find shops.`,
     query: {
       too_short: "Describe the piece in a few words.",
       too_long: `Your description is too long: ${SEARCH_QUERY_MAX_LENGTH} characters at most.`,

@@ -41,6 +41,7 @@ vi.mock("../src/lib/image-import", () => ({ SPOTTER_IMAGE_MAX_EDGE: 1600 }));
 import { ApiError } from "../src/lib/api-error";
 import { clearDraft, getDraft, leaveLaunchScreen } from "../src/lib/spot-draft";
 import { launchPhoto, photoCrop } from "../src/lib/spot-launch";
+import { beginFromPhoto } from "../src/lib/spot-flow";
 import "../src/lib/video-context";
 import { parseLinkAnalysis, type LinkAnalysis } from "../src/lib/video-link-analysis";
 import { momentVideoContext, runLinkAnalysis, startMomentSearch } from "../src/lib/video-link-run";
@@ -153,6 +154,40 @@ describe("« Choisir ce moment » : comme un moment d'une vidéo du téléphone"
     expect(draft.zoneByAi).toBe(false);
     // Cadre de l'IA gardé tel quel : marqué comme celui de l'IA.
     expect(startMomentSearch(analysis(), 0, "web", { crop: BEST, byAi: true })).toMatchObject({ crop: BEST, zoneByAi: true });
+  });
+
+  it("lien vidéo sans prix (17 novembre 2026) : la description reste dans le brouillon (espaces retirés), marqué pour la recherche automatique", () => {
+    const draft = startMomentSearch(analysis(), 0, "web", { crop: BEST, byAi: true }, `  ${QUERY.replace(" en ", "   en ")}  `)!;
+    expect(draft.words).toBe(QUERY);
+    expect(draft.textSearchIfNoPrice).toBe(true);
+    // Rien ne part dans les statistiques.
+    expect(tracked()).not.toContain("veste");
+    // Description vide (espaces seulement) : aucun mot ; trop longue (jamais après une analyse) : bornée.
+    expect(startMomentSearch(analysis(), 0, "web", undefined, "   ")!.words).toBeNull();
+    expect(startMomentSearch(analysis(), 0, "web", undefined, "x".repeat(80))!.words).toBe("x".repeat(60));
+    // Sans description : aucun mot, toujours un moment de lien.
+    expect(startMomentSearch(analysis(), 1, "app")).toMatchObject({ words: null, textSearchIfNoPrice: true });
+  });
+
+  it("la marque ne vaut que pour ce brouillon : une photo ensuite (beginFromPhoto) ou l'abandon du parcours l'efface", () => {
+    startMomentSearch(analysis(), 0, "web", undefined, QUERY);
+    const photo = beginFromPhoto("file:///photo.jpg", { width: 800, height: 600 });
+    expect(photo.textSearchIfNoPrice).toBeUndefined();
+    expect(photo.words).toBeNull();
+    startMomentSearch(analysis(), 0, "web", undefined, QUERY);
+    clearDraft();
+    expect(getDraft()).toBeNull();
+  });
+
+  it("lancée avec la description reprise par l'écran de lancement : elle part à part, pour trier, jamais avec l'image vers la recherche visuelle", async () => {
+    startMomentSearch(analysis(), 0, "app", undefined, QUERY);
+    prepareSearch.mockResolvedValueOnce({ id: "s-43" });
+    runSearch.mockResolvedValueOnce(search("s-43"));
+    const draft = getDraft()!;
+    expect(await launchPhoto(draft, new AbortController().signal, photoCrop(draft), draft.words ?? "")).toEqual({ kind: "result", searchId: "s-43" });
+    expect(runSearch).toHaveBeenCalledWith("s-43", { crop: BEST, imageUri: IMAGE_BEST, words: QUERY, zoneByAi: true }, expect.any(AbortSignal));
+    // Toujours dans le brouillon après le lancement, marque comprise (écran Résultat).
+    expect(getDraft()).toMatchObject({ words: QUERY, textSearchIfNoPrice: true });
   });
 
   it("app iPhone : source « app » ; moment absent : rien ne part", () => {

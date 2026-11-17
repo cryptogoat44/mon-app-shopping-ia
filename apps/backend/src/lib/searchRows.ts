@@ -125,6 +125,39 @@ export function textSearchCountable(row: Pick<SearchRow, "served_from_cache" | "
   return Number.isFinite(createdAt) && createdAt >= parisDayStart(now).getTime();
 }
 
+/** Lien vidéo sans prix (décision du fondateur du 17 novembre 2026) : pour
+ * une recherche partie d'un moment d'une vidéo TikTok ou Instagram, l'app
+ * lance d'elle-même « Que cherchez-vous ? » avec la description tapée par la
+ * personne quand aucune proposition n'a de prix, même si l'invitation n'a pas
+ * été proposée (IA des boutiques coupée, en panne, à court de temps, ou
+ * boutiques fiables mais sans prix). La route l'admet alors (en plus de
+ * text_suggested), et seulement si :
+ * - le complément a une issue enregistrée : la voie C a tourné sur cette
+ *   recherche, et ses boutiques ne sont plus attendues (jamais pendant
+ *   « pending » ou « running », où les deux étapes se marcheraient dessus) ;
+ * - cette issue n'est pas « no_capacity » : plafond ou limite atteints,
+ *   rien de plus n'est dépensé ;
+ * - aucune proposition enregistrée, de n'importe quelle origine (Lens,
+ *   boutiques), n'a de prix ;
+ * - la recherche date du jour (heure de Paris) : jamais une ancienne
+ *   recherche de l'historique.
+ * Toutes les autres règles (terminée ou « rien trouvé », une seule fois,
+ * budget de la photo, part du jour, plafond à la réservation) restent celles
+ * de la route. L'app ne lance la recherche d'elle-même que pour un lien
+ * vidéo ; une photo ou une vidéo du téléphone garde l'invitation d'avant. */
+export function noPriceTextSearchAllowed(
+  row: Pick<SearchRow, "complement_status" | "complement_deferred" | "complement_deferred_at" | "created_at">,
+  matches: readonly Pick<MatchRow, "price_min">[],
+  now: Date = new Date()
+): boolean {
+  const status = row.complement_status ?? null;
+  if (status === null || status === "no_capacity") return false;
+  if (deferredPending(deferredStateOf(row, now.getTime()))) return false;
+  const createdAt = Date.parse(row.created_at);
+  if (!Number.isFinite(createdAt) || createdAt < parisDayStart(now).getTime()) return false;
+  return matches.every((match) => priceOf(match.price_min) === null);
+}
+
 /** Complément de la voie C, lu dans la ligne : absent quand aucune de ses
  * colonnes n'est remplie (voie C coupée, recherche plus ancienne, base sans
  * 0028). L'invitation « Que cherchez-vous ? » n'est plus proposée une fois la

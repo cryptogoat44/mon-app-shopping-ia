@@ -207,6 +207,10 @@ export const fr = {
     // Texte du document pour l'avocat (2026-11-05, point 4.1), vrai interrupteurs coupés comme allumés.
     photoWordsNote:
       "Vos mots servent seulement à trier les propositions : ils ne partent pas avec l'image vers la recherche. Ils ne sont envoyés à un moteur de recherche que si vous lancez vous-même une recherche avec vos mots.",
+    // Moment d'un lien vidéo analysé : la description (décision du fondateur
+    // du 17 novembre 2026, recherche automatique quand rien n'a de prix).
+    linkWordsNote:
+      "Votre description trie les propositions : elle ne part pas avec l'image vers la recherche. Si aucune proposition n'affiche de prix, elle est envoyée à Google Shopping par notre prestataire SerpApi pour trouver des boutiques, sans votre nom ni votre e-mail.",
     // Montré tant que la pièce n'est pas entourée (rien de tracé, ou toute
     // l'image), avec ou sans mots (lots « premier essai » et « entourer la pièce »).
     frameHint: `Entourez la pièce seule, sans visage ni texte autour : ${BRAND} la retrouvera plus facilement.`,
@@ -375,7 +379,8 @@ export const fr = {
     placeholder: "ex. la veste en cuir beige de la fille à gauche",
     help: "Décrivez la pièce et, si besoin, où elle se trouve : l'IA s'en sert pour la retrouver dans la vidéo.",
     find: "Trouver la pièce",
-    privacy: `${BRAND} récupère la vidéo publique le temps de l'analyse, sans la conserver. Avec votre accord, quelques images et votre description sont analysées par une IA.`,
+    // Lien vidéo sans prix (17 novembre 2026) : la description peut aussi partir vers Google Shopping.
+    privacy: `${BRAND} récupère la vidéo publique le temps de l'analyse, sans la conserver. Avec votre accord, quelques images et votre description sont analysées par une IA. Si les résultats n'affichent aucun prix, votre description est aussi envoyée à Google Shopping par notre prestataire SerpApi pour trouver des boutiques.`,
     query: {
       too_short: "Décrivez la pièce en quelques mots.",
       too_long: `Votre description est trop longue : ${SEARCH_QUERY_MAX_LENGTH} caractères au plus.`,
