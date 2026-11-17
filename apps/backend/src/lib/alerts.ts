@@ -59,7 +59,7 @@ export function raiseAlert(log: AlertLog, alert: Alert, now = Date.now(), send: 
 }
 
 /** Fournisseurs suivis pour les échecs répétés (Lens a son disjoncteur). */
-export type FailureSource = "ia_video" | "ia_voie_c" | "google_shopping";
+export type FailureSource = "ia_video" | "ia_voie_c" | "google_shopping" | "service_video";
 
 export const REPEATED_FAILURES = {
   /** 5 échecs… */
@@ -97,6 +97,9 @@ const FAILURE_LABELS: Record<FailureSource, string> = {
   ia_video: "analyse automatique des vidéos (IA d'Anthropic)",
   ia_voie_c: "requête des boutiques écrite par l'IA (voie C)",
   google_shopping: "Google Shopping (voie C)",
+  // Lot « vidéo auto » : le service vidéo séparé (apps/video-worker) en panne,
+  // bloqué par une plateforme ou mal réglé (secret différent des deux côtés).
+  service_video: "service vidéo (récupération des vidéos TikTok et Instagram)",
 };
 
 /** Tests seulement : oublie les alertes déjà envoyées et les échecs notés. */

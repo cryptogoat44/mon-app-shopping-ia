@@ -50,6 +50,8 @@ Le plus simple, pour travailler sur spotto-dev-2 : `pnpm --filter backend config
 | `SERPAPI_DAILY_CAP`, `SERPAPI_MONTHLY_CAP`, `SERPAPI_RENEWAL_DAY`, `SERPAPI_USER_DAILY_CAP` | non | Plafonds des recherches (25 par jour, 225 par cycle, renouvellement le 3, 8 par personne et par jour) |
 | `ANTHROPIC_API_KEY` | non | IA (analyse des vidéos, voie C) ; absente, ces fonctions se coupent |
 | `VOIE_C_ENABLED`, `VOIE_C_AI_ENABLED`, `ANTHROPIC_PHOTO_ENABLED` | non | Interrupteurs de la voie C, coupés sauf valeur exacte `true` |
+| `VIDEO_LINK_ANALYSIS_ENABLED` | non (`false`) | Analyse automatique d'un lien TikTok ou Instagram, COUPÉE : seule la valeur exacte `true` l'allume. Il faut aussi les deux variables suivantes et `ANTHROPIC_API_KEY`. Un réglage invalide la laisse coupée, avec un avertissement dans le journal. |
+| `VIDEO_WORKER_URL`, `VIDEO_WORKER_SECRET` | avec l'analyse des liens | Adresse du service vidéo séparé (`apps/video-worker`, service privé de Render, par exemple `http://spotto-video:10000` ; http seulement sur le réseau privé, https ailleurs) et secret **partagé** avec lui (la même valeur des deux côtés, 32 caractères au moins ; serveur seulement, jamais dans l'app) |
 | `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | non | Suivi des erreurs et alertes (`production` sur Render) |
 | `APP_MIN_IOS_BUILD`, `APP_STORE_URL` | non | Mise à jour obligatoire de l'app iPhone |
 | ~~`LINK_PREVIEW_ENABLED`~~, ~~`META_OEMBED_ACCESS_TOKEN`~~ | plus lues | La voie « couverture » (image d'un lien demandée à TikTok ou à Meta) a été retirée du code le 12 novembre 2026 (archivée sur la branche `archive/couverture-oembed`). Ces deux variables ne servent plus à rien : si elles existent encore chez Render, elles peuvent être supprimées. |

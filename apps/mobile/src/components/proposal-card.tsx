@@ -61,7 +61,7 @@ export function ProposalCard({
       <View style={styles.row} testID="price-row">
         <Pressable onPress={onSelect} style={styles.rowMain} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={t.result.showLargeHint}>
           <View style={styles.rowImage}>
-            <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} size="small" />
+            <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} size="card" />
           </View>
           <View style={styles.rowText}>
             <Text style={styles.cardName} numberOfLines={2}>
@@ -92,7 +92,7 @@ export function ProposalCard({
     <View style={styles.card}>
       <Pressable onPress={onSelect} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={t.result.showLargeHint}>
         <View style={styles.cardImage}>
-          <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} size="small" />
+          <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} size="card" />
         </View>
         <Text style={styles.cardName} numberOfLines={2}>
           {piece.name}

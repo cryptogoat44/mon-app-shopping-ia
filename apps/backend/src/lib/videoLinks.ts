@@ -15,7 +15,12 @@
 //   s'arrête ;
 // - le résultat est gardé en mémoire (24 h pour une vidéo trouvée, 1 h pour
 //   un lien qui ne mène à aucune vidéo), pour ne pas redemander le même lien.
-// Aucune vidéo, aucune image, aucune miniature n'est jamais téléchargée.
+// Ce module ne télécharge jamais une vidéo, une image ni une miniature, et le
+// serveur principal non plus. Depuis la décision du fondateur des 14 et 15
+// novembre 2026, seul le service vidéo séparé (apps/video-worker) récupère la
+// vidéo publique d'un lien, sans la garder, pour l'analyse automatique
+// (routes/videoLinkAnalysis.ts) : il reçoit l'adresse canonique reconnue ici,
+// jamais le texte partagé.
 import { TIKTOK_SHORT_HOSTS, parseVideoLink, type VideoLink } from "@monapp/shared-types";
 
 /** Les seuls hôtes que le serveur interroge pour résoudre un lien court. */

@@ -1,0 +1,17 @@
+# yt-dlp et l'imitation de navigateur (curl_cffi, exigée par Instagram sans
+# compte), versions FIXÉES. Chaque fichier est vérifié par pip à l'aide de son
+# empreinte SHA-256 publiée par PyPI (--require-hashes dans le Dockerfile).
+# Versions de dépendances : celles que yt-dlp lui-même fixe (extra
+# « pin-curl-cffi » de yt-dlp 2026.10.26). Paquets pour Python 3.13 (Debian 13),
+# Linux x86_64.
+# Mise à jour : README.md, « Mettre yt-dlp à jour ».
+yt-dlp==2026.10.26 \
+    --hash=sha256:a05c5b5d8562f7e8a62f5334348b406af4930d56d3a65f8021d14af0e22339ae
+curl-cffi==0.17.0 \
+    --hash=sha256:af0782d5e340b65fd76701630f0284a8f8243d77df5f2637efd09a4b009f4e24
+cffi==2.1.1 \
+    --hash=sha256:a931079504ecc49efed7744c476a5c343a92fabf66dec2db95edb1b2fdc770e2
+pycparser==3.11 \
+    --hash=sha256:51d5a8ba2be0bbe440b99d2112604c95bbbc3c2748a64260186c541e1729cd80
+certifi==2026.10.23 \
+    --hash=sha256:e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1

@@ -230,6 +230,31 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Cette pièce est dans votre Vault : aucune alerte ne partira pour elle.": "This piece is in your Vault: no alert will be sent for it.",
   // Mise à jour obligatoire de l'app iPhone (lot « app iPhone prête », lib/appVersion.ts).
   [UPDATE_REQUIRED_MESSAGE]: `This version of ${BRAND} is no longer supported. Please update the app from the App Store.`,
+  // Analyse automatique d'un lien TikTok ou Instagram (lot « vidéo auto »,
+  // routes/videoLinkAnalysis.ts, lib/rateLimits.ts). « Lien invalide » et
+  // « Décrivez la pièce… » sont plus haut.
+  "L'analyse automatique des liens n'est pas disponible. Faites une capture de la vidéo.":
+    "Automatic link analysis isn't available. Take a screenshot of the video instead.",
+  "Acceptez d'abord l'analyse automatique, ou faites une capture de la vidéo.":
+    "Please accept automatic analysis first, or take a screenshot of the video.",
+  "Cette vidéo n'a pas pu être analysée. Faites une capture de la vidéo au bon moment.":
+    "This video couldn't be analyzed. Take a screenshot of the video at the right moment instead.",
+  "Cette vidéo est privée ou réservée à certains comptes. Faites une capture de la vidéo.":
+    "This video is private or restricted to certain accounts. Take a screenshot of the video instead.",
+  "Cette vidéo est trop longue pour l'analyse automatique (90 secondes au plus). Faites une capture de la vidéo.":
+    "This video is too long for automatic analysis (90 seconds maximum). Take a screenshot of the video instead.",
+  "La pièce décrite n'a pas été repérée dans cette vidéo. Précisez votre description, ou faites une capture de la vidéo.":
+    "The piece you described wasn't found in this video. Refine your description, or take a screenshot of the video.",
+  "L'analyse des vidéos est très demandée en ce moment. Réessayez dans un instant, ou faites une capture de la vidéo.":
+    "Video analysis is in high demand right now. Try again in a moment, or take a screenshot of the video.",
+  "L'analyse de la vidéo a pris trop de temps. Réessayez, ou faites une capture de la vidéo.":
+    "Analyzing the video took too long. Try again, or take a screenshot of the video.",
+  "Vous avez atteint la limite quotidienne d'analyses automatiques. Faites une capture de la vidéo, ou réessayez demain.":
+    "You've reached the daily limit for automatic analyses. Take a screenshot of the video, or try again tomorrow.",
+  "L'analyse automatique est très demandée aujourd'hui et momentanément indisponible. Faites une capture de la vidéo.":
+    "Automatic analysis is in high demand today and temporarily unavailable. Take a screenshot of the video instead.",
+  "Vous avez demandé beaucoup d'analyses de liens en peu de temps. Réessayez dans un moment.":
+    "You've requested a lot of link analyses in a short time. Please try again in a moment.",
   // Essayage virtuel photo (lot « essayage virtuel », routes/tryon.ts, lib/rateLimits.ts).
   "L'essayage virtuel n'est pas disponible.": "Virtual try-on isn't available.",
   "Cette date de naissance n'est pas valide.": "This date of birth isn't valid.",

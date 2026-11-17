@@ -66,7 +66,8 @@ describe("information de mise à jour (sans nouvelle acceptation)", () => {
     expect(JSON.stringify(privacyPolicyEn)).toContain("Anthropic (Anthropic, PBC, United States)");
     expect(JSON.stringify(privacyPolicy)).toContain("Accepter ou retirer l'analyse automatique des vidéos");
     expect(ACCEPTED_CONSENT_VERSIONS.privacy_policy).toContain("projet-2026-10-05-b");
-    expect(ACCEPTED_CONSENT_VERSIONS.analyse_video_ia).toEqual([CONSENT_VERSIONS.analyse_video_ia]);
+    // Lot « vidéo auto » : texte commun (téléphone et liens) ; l'ancien texte reste valable pour le téléphone.
+    expect(ACCEPTED_CONSENT_VERSIONS.analyse_video_ia).toEqual(["analyse-video-ia-2026-10-06", CONSENT_VERSIONS.analyse_video_ia]);
   });
 
   it("petit lot (mots retirés de la recherche par image) : simple information, sans nouvelle acceptation", () => {

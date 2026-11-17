@@ -38,9 +38,18 @@ export interface SpotDraft {
    * statistique, même quand elle couvre toute l'image. Retombe à faux quand
    * la personne entoure la pièce elle-même (« Recadrer »). */
   zoneByAi?: boolean;
-  /** Mots tapés sous une photo : ils trient les propositions, sans partir avec
-   * l'image ; repris par « Recadrer » (petit lot 2). Jamais enregistrés. */
+  /** Mots tapés sous une photo (ou description écrite pour l'analyse d'un
+   * lien vidéo) : ils trient les propositions, sans partir avec l'image ;
+   * repris par « Recadrer » (petit lot 2). Jamais enregistrés. */
   words: string | null;
+  /** Lien vidéo sans prix (décision du fondateur du 17 novembre 2026) :
+   * recherche partie d'un moment d'une vidéo TikTok ou Instagram analysée
+   * (video-link-run.ts). Si aucune proposition n'a de prix, l'écran Résultat
+   * lance de lui-même la recherche avec `words` (« Que cherchez-vous ? »,
+   * 1 crédit de plus, lib/auto-text-search.ts). Jamais pour une photo ni une
+   * vidéo du téléphone : un nouveau brouillon (beginFromPhoto, startDraft)
+   * ou clearDraft l'efface. */
+  textSearchIfNoPrice?: boolean;
   /** Dernier lancement dont l'issue n'a pas encore été montrée (annulé,
    * écran quitté, réponse perdue) : relancé à l'identique, il est relu au
    * lieu d'être repayé (lib/spot-recovery.ts). */

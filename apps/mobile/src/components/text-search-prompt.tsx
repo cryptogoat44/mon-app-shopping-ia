@@ -16,6 +16,10 @@ import { themedStyles } from "@/theme/themed-styles";
 // avec les mots de la personne, une seule fois par recherche : elle marche
 // aussi depuis l'historique, sans l'image. Les mots ne sont pas gardés par
 // le serveur et ne vont jamais dans les statistiques.
+// Lien vidéo sans prix (décision du fondateur du 17 novembre 2026) : avec
+// `autoStart`, la même recherche part d'elle-même, une fois, avec la
+// description déjà dans le champ (lib/auto-text-search.ts) ; l'attente, les
+// refus et les relectures sont exactement ceux du bouton « Chercher ».
 
 type PromptState =
   | { kind: "idle"; failure: TextSearchFailure | null }
@@ -55,6 +59,7 @@ export function TextSearchPrompt({
   onDone,
   onClosed,
   withIntro = true,
+  autoStart = false,
 }: {
   searchId: string;
   /** Mots tapés sous la photo au lancement, quand le brouillon est encore en mémoire. */
@@ -68,6 +73,10 @@ export function TextSearchPrompt({
   /** « Pas tout à fait ça ? » sous des propositions ; après « rien trouvé »,
    * la question « Que cherchez-vous ? » sert seule de titre. */
   withIntro?: boolean;
+  /** Lien vidéo sans prix : lancer la recherche sans attendre « Chercher »,
+   * une seule fois pour cette invitation (l'écran s'assure, lui, qu'elle ne
+   * part qu'une fois par recherche). */
+  autoStart?: boolean;
 }) {
   const [words, setWords] = useState(initialWords ?? "");
   const [state, setState] = useState<PromptState>({ kind: "idle", failure: null });
@@ -76,6 +85,18 @@ export function TextSearchPrompt({
 
   // Écran quitté pendant la recherche : la requête est abandonnée.
   useEffect(() => () => controller.current?.abort(), []);
+
+  // Lien vidéo sans prix : la recherche part d'elle-même, une seule fois,
+  // dès que l'écran le demande (jamais relancée après un refus ou une panne :
+  // la personne garde le bouton « Chercher »).
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!autoStart || autoStarted.current) return;
+    autoStarted.current = true;
+    void search();
+    // Une fois, quand l'écran le demande.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart]);
 
   const canSearch = words.trim().length > 0 && state.kind === "idle";
 

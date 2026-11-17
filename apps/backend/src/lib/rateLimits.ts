@@ -226,6 +226,21 @@ export const RATE_LIMITS = {
     error: "video_ai_global_limit",
     message: "L'analyse automatique est très demandée aujourd'hui et momentanément indisponible. Choisissez l'image avec le curseur.",
   },
+  // Analyse automatique d'un lien TikTok ou Instagram (lot « vidéo auto »,
+  // routes/videoLinkAnalysis.ts) : chaque demande peut faire récupérer une
+  // vidéo par le service vidéo séparé, puis appeler l'IA (comptée en plus
+  // dans videoAiUser et videoAiGlobal, comme l'analyse d'une vidéo du téléphone).
+  // - chaque demande d'un membre, refus compris : bloque un script ;
+  videoLinkAnalysis: {
+    max: 20,
+    windowMs: HOUR,
+    message: "Vous avez demandé beaucoup d'analyses de liens en peu de temps. Réessayez dans un moment.",
+  },
+  // - plafond commun des vidéos demandées au service vidéo, compté juste
+  //   avant chaque demande (au-delà : 503 « video_busy », l'app propose la
+  //   capture d'écran). Ménage les adresses de Render auprès de TikTok et
+  //   d'Instagram, en plus du plafond quotidien de l'IA.
+  videoLinkFetchGlobal: { max: 200, windowMs: HOUR, scope: "global" },
   // Requête des boutiques écrite par l'IA (voie C, titres Lens seulement,
   // ≈ 0,25 centime l'appel) : plafond commun à tout le service, compté juste
   // avant l'appel (lib/aiQuota.ts, dans la base depuis le lot garde-fous ;

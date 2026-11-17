@@ -11,11 +11,14 @@ import { CameraIcon, VideoIcon } from "@/components/icons";
 import { themedStyles } from "@/theme/themed-styles";
 
 export function VideoFallback({
+  title = t.videoLink.fallbackTitle,
   lead,
   onOpenVideo,
   onAddScreenshot,
   busy,
 }: {
+  /** Lot « vidéo auto » : « Faire une capture à la place », sous un échec de l'analyse d'un lien. */
+  title?: string;
   lead: string;
   /** null : aucune adresse sûre à ouvrir (bouton masqué). */
   onOpenVideo: (() => void) | null;
@@ -25,7 +28,7 @@ export function VideoFallback({
   return (
     <View style={styles.box} accessibilityLiveRegion="polite">
       <Text style={styles.title} accessibilityRole="header">
-        {t.videoLink.fallbackTitle}
+        {title}
       </Text>
       <Text style={styles.body}>{lead}</Text>
       {onOpenVideo ? (

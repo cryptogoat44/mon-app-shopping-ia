@@ -7,7 +7,7 @@
 // Lens (petit lot, 2026-10-25) ; ceux d'une photo trient seulement les
 // propositions (petit lot 2, 2026-10-27). Le curseur et le choix manuel ne
 // servent qu'en repli.
-import type { ConsentStatus, CropRect } from "@monapp/shared-types";
+import { VIDEO_LINK_CONSENT_VERSIONS, type ConsentStatus, type CropRect } from "@monapp/shared-types";
 import { setLastSpotResult } from "../api/spotSession";
 import { fetchConsentStatus, fetchVideoAiEnabled } from "./api";
 import { DEFAULT_CROP } from "./crop-geometry";
@@ -27,6 +27,19 @@ export function videoAiChoice(statuses: readonly ConsentStatus[]): VideoAiChoice
   if (hasCurrentConsent(statuses, "analyse_video_ia")) return "granted";
   const status = statuses.find((item) => item.type === "analyse_video_ia");
   return status?.decidedAt && !status.grantedAt ? "declined" : "ask";
+}
+
+/** Même accord, pour un lien TikTok ou Instagram (lot « vidéo auto ») : il
+ * ne compte que donné sur un texte qui parle des liens
+ * (VIDEO_LINK_CONSENT_VERSIONS, lu dans `version` de GET /api/consents).
+ * Un accord donné sur l'ancien texte (vidéo du téléphone seulement) reste
+ * valable pour le téléphone, mais ici l'accord est redemandé avec le texte
+ * commun. Le serveur fait la même vérification. */
+export function videoLinkAiChoice(statuses: readonly ConsentStatus[]): VideoAiChoice {
+  const choice = videoAiChoice(statuses);
+  if (choice !== "granted") return choice;
+  const version = statuses.find((item) => item.type === "analyse_video_ia")?.version ?? null;
+  return version !== null && VIDEO_LINK_CONSENT_VERSIONS.includes(version) ? "granted" : "ask";
 }
 
 export interface VideoAiReadiness {

@@ -677,3 +677,133 @@ describe("« Que cherchez-vous ? » : proposé au même moment qu'avant, après 
     expect(searchRow(id)).toMatchObject({ served_from_cache: false, shopping_calls: 1 });
   });
 });
+
+// Lien vidéo sans prix (décision du fondateur du 17 novembre 2026) : pour une
+// recherche partie d'un moment d'une vidéo TikTok ou Instagram, l'app lance
+// d'elle-même « Que cherchez-vous ? » avec la description tapée quand aucune
+// proposition n'a de prix. La route l'admet sans invitation, une fois l'issue
+// des boutiques connue, avec toutes ses autres gardes (une seule fois,
+// plafond, recherche de la personne) ; jamais quand un prix existe.
+describe("lien vidéo sans prix : la recherche avec la description, sans invitation", () => {
+  const DESCRIPTION = "veste en cuir beige";
+  const withoutPrice = () => LENS.map((match) => ({ ...match, priceValue: null, currency: null }));
+  const lensWithoutPrice = () => lensMock.mockResolvedValue({ matches: withoutPrice(), measure: { ...LENS_MEASURE, keptWithPrice: 0 }, addedRanks: [], statusCode: 200 });
+
+  function words(target: FastifyInstance, id: string, account = USER) {
+    return target.inject({ method: "POST", url: `/api/searches/${id}/text`, headers: { "x-compte": account, "accept-language": "fr-FR" }, payload: { words: DESCRIPTION } });
+  }
+
+  it("IA des boutiques coupée, aucun prix : l'invitation n'est pas proposée, mais la recherche avec la description passe, une seule fois, sans garder les mots", async () => {
+    env.VOIE_C_AI_ENABLED = false;
+    lensWithoutPrice();
+    const target = await buildApp();
+    const id = preparedSearch();
+    const launched = await launch(target, id, { complement: "deferred", query: DESCRIPTION });
+    expect(launched.json().complement).toEqual({ status: "skipped", suggestText: false, textStatus: null });
+
+    const res = await words(target, id);
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.complement).toEqual({ status: "skipped", suggestText: false, textStatus: "shown" });
+    const found = body.matches.filter((match: { origin?: string }) => match.origin === "words");
+    expect(found.length).toBeGreaterThan(0);
+    expect(found.every((match: { priceMin: number | null }) => match.priceMin !== null)).toBe(true);
+    // Google Shopping reçoit la description, une place « shopping » est réservée : un crédit, dans le plafond.
+    expect(shoppingMock).toHaveBeenCalledTimes(1);
+    expect(shoppingMock.mock.calls[0]![0]).toBe(DESCRIPTION);
+    expect(paidCalls()).toEqual({ ai: 0, shopping: 1, shoppingReservations: 1 });
+    expect(searchRow(id)).toMatchObject({ text_status: "shown", text_suggested: false, shopping_calls: 1 });
+    expect(searchRow(id).text_requested_at).not.toBeNull();
+    // La description n'est ni enregistrée ni journalisée.
+    expect(JSON.stringify(db.rows("product_searches"))).not.toContain(DESCRIPTION);
+    expect(logs.join("\n")).not.toContain("cuir");
+
+    // Une seule fois : la seconde demande dit « déjà lancée », sans rien payer.
+    const again = await words(target, id);
+    expect(again.statusCode).toBe(409);
+    expect(again.json().error).toBe("text_search_already_used");
+    expect(paidCalls()).toEqual({ ai: 0, shopping: 1, shoppingReservations: 1 });
+  });
+
+  it("un seul prix dans la recherche visuelle : refusée (409), rien n'est verrouillé, réservé ni payé", async () => {
+    env.VOIE_C_AI_ENABLED = false;
+    lensMock.mockResolvedValue({ matches: [...withoutPrice().slice(0, 2), LENS[2]!], measure: { ...LENS_MEASURE, keptWithPrice: 1 }, addedRanks: [], statusCode: 200 });
+    const target = await buildApp();
+    const id = preparedSearch();
+    await launch(target, id, { complement: "deferred" });
+    const res = await words(target, id);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe("text_search_not_allowed");
+    expect(searchRow(id).text_requested_at ?? null).toBeNull();
+    expect(paidCalls()).toEqual({ ai: 0, shopping: 0, shoppingReservations: 0 });
+  });
+
+  it("boutiques ensuite : refusée tant qu'elles sont attendues ; l'IA en panne et toujours aucun prix, elle passe", async () => {
+    lensWithoutPrice();
+    // Délai de l'IA dépassé : « ai_failed » (aucune invitation proposée).
+    aiMock.mockRejectedValue(Object.assign(new Error("délai simulé"), { name: "TimeoutError" }));
+    const target = await buildApp();
+    const id = await deferredLaunch(target);
+    const waiting = await words(target, id);
+    expect(waiting.statusCode).toBe(409);
+    expect(searchRow(id).text_requested_at ?? null).toBeNull();
+    expect(paidCalls()).toEqual({ ai: 0, shopping: 0, shoppingReservations: 0 });
+
+    const shops = await complement(target, id);
+    expect(shops.json().complement).toMatchObject({ status: "ai_failed", suggestText: false });
+    const res = await words(target, id);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().complement).toMatchObject({ status: "ai_failed", textStatus: "shown" });
+    expect(paidCalls()).toEqual({ ai: 1, shopping: 1, shoppingReservations: 1 });
+  });
+
+  it("boutiques trouvées avec un prix (recherche visuelle sans prix) : refusée, aucun crédit de plus", async () => {
+    lensWithoutPrice();
+    const target = await buildApp();
+    const id = await deferredLaunch(target);
+    const shops = await complement(target, id);
+    expect(shops.json().complement).toMatchObject({ status: "shown", suggestText: false });
+    const res = await words(target, id);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe("text_search_not_allowed");
+    expect(paidCalls()).toEqual({ ai: 1, shopping: 1, shoppingReservations: 1 });
+  });
+
+  it("limite de l'IA atteinte au complément (« no_capacity ») : refusée, même sans aucun prix", async () => {
+    lensWithoutPrice();
+    aiQuotaMock.mockResolvedValue({ allowed: false, refusedBy: "global" });
+    const target = await buildApp();
+    const id = await deferredLaunch(target);
+    expect((await complement(target, id)).json().complement).toMatchObject({ status: "no_capacity", suggestText: false });
+    const res = await words(target, id);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe("text_search_not_allowed");
+    expect(paidCalls()).toEqual({ ai: 0, shopping: 0, shoppingReservations: 0 });
+  });
+
+  it("plafond atteint à la réservation : 429 du plafond, le verrou est remis, rien n'est envoyé à Google Shopping", async () => {
+    env.VOIE_C_AI_ENABLED = false;
+    lensWithoutPrice();
+    const target = await buildApp();
+    const id = preparedSearch();
+    await launch(target, id, { complement: "deferred" });
+    reserveMock.mockResolvedValueOnce({ allowed: false, limit: "user", resumesOn: null });
+    const res = await words(target, id);
+    expect(res.statusCode).toBe(429);
+    expect(res.json().error).toBe("search_capacity_user");
+    expect(searchRow(id).text_requested_at ?? null).toBeNull();
+    expect(shoppingMock).not.toHaveBeenCalled();
+  });
+
+  it("la recherche d'une autre personne : 404, sans rien verrouiller ni payer", async () => {
+    env.VOIE_C_AI_ENABLED = false;
+    lensWithoutPrice();
+    const target = await buildApp();
+    const id = preparedSearch();
+    await launch(target, id, { complement: "deferred" });
+    const res = await words(target, id, STRANGER);
+    expect(res.statusCode).toBe(404);
+    expect(searchRow(id).text_requested_at ?? null).toBeNull();
+    expect(paidCalls()).toEqual({ ai: 0, shopping: 0, shoppingReservations: 0 });
+  });
+});

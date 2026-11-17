@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ConsentStatus, ProductMatch, ProductSearch } from "@monapp/shared-types";
+import { CONSENT_VERSIONS, type ConsentStatus, type ProductMatch, type ProductSearch } from "@monapp/shared-types";
 
 // Lot 4 ter : parcours unique — une vidéo ou une photo, quelques mots,
 // « Lancer », puis tout s'enchaîne. IA et SerpApi SIMULÉS (aucun appel réel).
@@ -34,7 +34,7 @@ import { DEFAULT_CROP } from "../src/lib/crop-geometry";
 import { getDraft, updateDraft } from "../src/lib/spot-draft";
 import { beginFromPhoto } from "../src/lib/spot-flow";
 import { identifyDraft } from "../src/lib/spot-identify";
-import { checkVideoAi, identifyNextMoment, launchPhoto, launchVideo, videoAiChoice } from "../src/lib/spot-launch";
+import { checkVideoAi, identifyNextMoment, launchPhoto, launchVideo, videoAiChoice, videoLinkAiChoice } from "../src/lib/spot-launch";
 import { remainingMoments } from "../src/lib/video-auto";
 import { fakeVideo } from "./fake-video";
 
@@ -95,6 +95,20 @@ describe("accord pour l'analyse par IA : demandé une fois, puis plus jamais", (
 
   it("les autres accords ne comptent pas", () => {
     expect(videoAiChoice([consent({ type: "analytics", grantedAt: "x", decidedAt: "x", isCurrent: true })])).toBe("ask");
+  });
+
+  it("lien TikTok ou Instagram : seul l'accord donné sur le texte commun compte ; l'ancien texte (téléphone seulement) le fait redemander", () => {
+    const granted = { grantedAt: "2026-11-15T00:00:00Z", decidedAt: "2026-11-15T00:00:00Z", isCurrent: true };
+    const phoneOnly = consent({ ...granted, version: "analyse-video-ia-2026-10-06" });
+    expect(CONSENT_VERSIONS.analyse_video_ia).toBe("analyse-video-ia-2026-11-15");
+    // Toujours valable pour une vidéo du téléphone (le serveur le dit « en vigueur »)…
+    expect(videoAiChoice([phoneOnly])).toBe("granted");
+    // … mais pas pour un lien : l'écran d'accord s'affiche, avec le texte commun.
+    expect(videoLinkAiChoice([phoneOnly])).toBe("ask");
+    expect(videoLinkAiChoice([consent({ ...granted, version: null })])).toBe("ask");
+    expect(videoLinkAiChoice([consent({ ...granted, version: CONSENT_VERSIONS.analyse_video_ia })])).toBe("granted");
+    expect(videoLinkAiChoice([consent({ decidedAt: "2026-11-15T00:00:00Z", version: CONSENT_VERSIONS.analyse_video_ia })])).toBe("declined");
+    expect(videoLinkAiChoice([])).toBe("ask");
   });
 
   it("disponibilité de l'IA et accord lus ensemble, en arrière-plan", async () => {

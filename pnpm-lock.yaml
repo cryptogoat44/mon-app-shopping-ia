@@ -223,6 +223,8 @@ importers:
         specifier: ^2.1.4
         version: 2.1.9(@types/node@22.20.1)(lightningcss@1.33.0)(supports-color@8.1.1)(terser@5.51.2)
 
+  apps/video-worker: {}
+
   packages/shared-types: {}
 
 packages:
