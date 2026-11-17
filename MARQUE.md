@@ -23,7 +23,7 @@ La ligne `_aLire` est un simple rappel : elle ne sert à rien d'autre.
 
 Trois choses se déduisent du nom, sans ligne à part :
 
-- le nom en minuscules, affiché en grand sur l'écran d'accueil (`spotto`) ;
+- le nom en capitales très espacées, affiché en grand sur l'écran d'accueil (`SPOTTO`) : c'est le logo, écrit dans la police des titres (Bodoni Moda) ;
 - le début du nom du fichier « Mes données » (`spotto-mes-donnees-…`), sans accent ni espace ;
 - le nom annoncé aux boutiques par le serveur (`Spotto/1.0`), sans accent ni espace.
 

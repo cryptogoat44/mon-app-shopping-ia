@@ -70,6 +70,8 @@ describe("hauteur de ligne : Bodoni Moda réserve 1,5 fois la taille du texte si
     const styles = serifStyles();
     expect(styles.length).toBeGreaterThan(40);
     const faulty = styles.filter(({ file, style }) => {
+      // Le mot-symbole calcule la sienne avec sa taille (lib/wordmark.ts, tests/wordmark.test.ts).
+      if (file === "components/wordmark.tsx") return false;
       const size = /fontSize: font\.(display|title|body)\b/.exec(style)?.[1] as (typeof SIZES)[number] | undefined;
       const lineHeight = /lineHeight: (?:serifLineHeight\.(\w+)|(\d+))/.exec(style);
       if (!size || !lineHeight) return true;
