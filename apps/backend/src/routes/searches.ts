@@ -19,7 +19,7 @@ import { ProviderFailure, type TextSearchProvider } from "../services/searchProv
 import { serpApiTextProvider } from "../services/serpapi.js";
 import { aiInputKey, askShoppingQuery } from "../services/shoppingQueryAi.js";
 import type { ShoppingMatch } from "../services/textSearch.js";
-import { isInterrupted, parseMatchRows, parseSearchRow, parseSearchRows, textSearchCountable, toProductSearch, type MatchRow, type SearchRow } from "../lib/searchRows.js";
+import { isInterrupted, noPriceTextSearchAllowed, parseMatchRows, parseSearchRow, parseSearchRows, textSearchCountable, toProductSearch, type MatchRow, type SearchRow } from "../lib/searchRows.js";
 import {
   COMPLEMENT_LOG_MESSAGE,
   complementLogLine,
@@ -830,16 +830,19 @@ function sendTextRefusal(reply: FastifyReply, refusal: keyof typeof TEXT_SEARCH_
 /** Admissible : terminée, ou « rien trouvé » (jamais une panne, ni une
  * recherche pas encore lancée), l'invitation « Que cherchez-vous ? » a été
  * proposée (text_suggested : seul cas où l'app l'offre ; jamais sur une
- * ancienne recherche de l'historique), la recherche peut encore être comptée
- * dans une part de 8 (servie par le cache un jour précédent : jamais comptée
- * dans une part de 8, celle de son jour est close ; la voie B n'y est plus
- * possible, voir textSearchCountable), et le budget de la photo permet encore
- * une recherche réelle (3 au plus : Lens s'il a été appelé, plus les
- * recherches Google Shopping déjà comptées). Garanti par la ligne, jamais
- * par le cache. */
-function textSearchAllowed(row: SearchRow, now: Date = new Date()): boolean {
+ * ancienne recherche de l'historique) — ou, lien vidéo sans prix (décision du
+ * fondateur du 17 novembre 2026), aucune proposition n'a de prix
+ * (noPriceTextSearchAllowed : l'app la lance alors d'elle-même avec la
+ * description tapée) —, la recherche peut encore être comptée dans une part
+ * de 8 (servie par le cache un jour précédent : jamais comptée dans une part
+ * de 8, celle de son jour est close ; la voie B n'y est plus possible, voir
+ * textSearchCountable), et le budget de la photo permet encore une recherche
+ * réelle (3 au plus : Lens s'il a été appelé, plus les recherches Google
+ * Shopping déjà comptées). Garanti par la ligne, jamais par le cache. */
+function textSearchAllowed(row: SearchRow, matches: readonly MatchRow[], now: Date = new Date()): boolean {
   const finished = row.status === "completed" || (row.status === "failed" && row.error_message === NO_MATCH_MESSAGE);
-  return finished && textSearchCountable(row, now) && row.text_suggested === true && photoCallsLeft(row.lens_from_cache !== true, row.shopping_calls ?? 0) >= 1;
+  const offered = row.text_suggested === true || noPriceTextSearchAllowed(row, matches, now);
+  return finished && textSearchCountable(row, now) && offered && photoCallsLeft(row.lens_from_cache !== true, row.shopping_calls ?? 0) >= 1;
 }
 
 /** Verrou de la voie B : une seule recherche avec vos mots par recherche
@@ -1411,6 +1414,9 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
   // une recherche « rien trouvé » qui en reçoit devient terminée (elle apparaît
   // alors dans « Récemment spottées »). Vos mots ne sont ni enregistrés, ni
   // journalisés, ni mis en cache. Voie C coupée : la route n'existe pas (404).
+  // Lien vidéo sans prix (décision du fondateur du 17 novembre 2026) : l'app
+  // l'appelle aussi d'elle-même, avec la description tapée pour le lien,
+  // quand aucune proposition n'a de prix (textSearchAllowed) ; mêmes gardes.
   fastify.post(
     "/api/searches/:id/text",
     {
@@ -1444,7 +1450,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       // Déjà demandée d'abord : la seconde demande dit « déjà lancée », même si
       // le budget de la photo est maintenant épuisé.
       if (row.text_requested_at) return sendTextRefusal(reply, "alreadyUsed");
-      if (!textSearchAllowed(row)) return sendTextRefusal(reply, "notAllowed");
+      if (!textSearchAllowed(row, existing)) return sendTextRefusal(reply, "notAllowed");
       if (!(await lockTextSearch(fastify, id))) return sendTextRefusal(reply, "alreadyUsed");
 
       // « Annuler » avant l'appel : rien n'est consommé, le verrou est remis.

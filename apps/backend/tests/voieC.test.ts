@@ -1136,6 +1136,39 @@ describe("recherches relues : origine et complément (lib/searchRows.ts)", () =>
     expect(textSearchCountable(parseSearchRow(BASE_ROW)!, new Date("2027-01-01T10:00:00Z"))).toBe(true);
   });
 
+  it("lien vidéo sans prix (17 novembre 2026) : la recherche avec la description est admise sans invitation seulement après l'issue des boutiques, hors plafond, sans aucun prix, le jour même", async () => {
+    const { noPriceTextSearchAllowed, parseMatchRows, parseSearchRow } = await import("../src/lib/searchRows.js");
+    // Créée le 2 novembre à 11 h (Paris) ; relue le même jour à 11 h 05.
+    const now = new Date("2026-11-02T10:05:00Z");
+    const columns = { shopping_calls: 0, lens_from_cache: false, served_from_cache: false, text_suggested: false, text_requested_at: null, text_status: null, total_seconds: 3 };
+    const row = (extra: Record<string, unknown>) => parseSearchRow({ ...BASE_ROW, ...columns, ...extra })!;
+    const withoutPrice = parseMatchRows([
+      { ...MATCH, price_min: null, price_max: null, origin: "lens" },
+      { ...MATCH, id: "00000000-0000-4000-8000-000000000021", rank: 2, price_min: null, price_max: null, origin: "lens" },
+    ])!;
+    // IA des boutiques coupée, en panne, à court de temps, boutiques sans prix, Lens vide : admise.
+    for (const status of ["skipped", "ai_failed", "no_time", "shopping_failed", "error", "shown", "empty", "no_query"]) {
+      expect(noPriceTextSearchAllowed(row({ complement_status: status }), withoutPrice, now), status).toBe(true);
+    }
+    expect(noPriceTextSearchAllowed(row({ complement_status: "no_query" }), [], now)).toBe(true);
+    // Boutiques ensuite terminées : admise ; encore attendues (ou en cours) : jamais.
+    expect(noPriceTextSearchAllowed(row({ complement_status: "ai_failed", complement_deferred: "done", complement_deferred_at: "2026-11-02T10:00:10Z" }), withoutPrice, now)).toBe(true);
+    expect(noPriceTextSearchAllowed(row({ complement_status: null, complement_deferred: "pending", complement_deferred_at: "2026-11-02T10:04:00Z" }), withoutPrice, now)).toBe(false);
+    expect(noPriceTextSearchAllowed(row({ complement_status: "skipped", complement_deferred: "running", complement_deferred_at: "2026-11-02T10:04:50Z" }), withoutPrice, now)).toBe(false);
+    // Plafond ou limite atteints au complément : rien de plus n'est dépensé.
+    expect(noPriceTextSearchAllowed(row({ complement_status: "no_capacity" }), withoutPrice, now)).toBe(false);
+    // Voie C jamais lancée sur cette recherche (aucune issue) : jamais.
+    expect(noPriceTextSearchAllowed(parseSearchRow(BASE_ROW)!, withoutPrice, now)).toBe(false);
+    // Un seul prix, Lens ou boutique (même à 0) : jamais.
+    const oneLensPrice = parseMatchRows([...withoutPrice, { ...MATCH, id: "00000000-0000-4000-8000-000000000022", rank: 3, origin: "lens" }])!;
+    const oneShopPrice = parseMatchRows([...withoutPrice, { ...MATCH, id: "00000000-0000-4000-8000-000000000023", rank: 3, origin: "shopping", price_min: "0" }])!;
+    expect(noPriceTextSearchAllowed(row({ complement_status: "skipped" }), oneLensPrice, now)).toBe(false);
+    expect(noPriceTextSearchAllowed(row({ complement_status: "shown" }), oneShopPrice, now)).toBe(false);
+    // Le lendemain (jour de Paris) : une ancienne recherche de l'historique, jamais.
+    expect(noPriceTextSearchAllowed(row({ complement_status: "skipped" }), withoutPrice, new Date("2026-11-02T22:59:00Z"))).toBe(true);
+    expect(noPriceTextSearchAllowed(row({ complement_status: "skipped" }), withoutPrice, new Date("2026-11-02T23:00:00Z"))).toBe(false);
+  });
+
   it("valeur inconnue (origine, issue) : ligne illisible, comme toute valeur hors liste", async () => {
     const { parseMatchRows, parseSearchRow } = await import("../src/lib/searchRows.js");
     expect(parseMatchRows([{ ...MATCH, origin: "juge" }])).toBeNull();

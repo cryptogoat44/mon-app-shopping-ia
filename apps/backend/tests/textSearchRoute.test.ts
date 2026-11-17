@@ -95,11 +95,12 @@ describe("« Que cherchez-vous ? » : une recherche avec vos mots, sur la même 
     return z.object({ id: z.string() }).parse(data).id;
   }
 
-  /** Une proposition Lens rangée (avec son lien, comme saveMatches). */
-  async function lensRow(searchId: string, rank: number): Promise<void> {
+  /** Une proposition Lens rangée (avec son lien, comme saveMatches) ; sans prix, sauf `price`. */
+  async function lensRow(searchId: string, rank: number, price: number | null = null): Promise<void> {
+    const priced = price === null ? {} : { price_min: price, price_max: price, currency: "EUR" };
     const { data, error } = await app.supabaseAdmin
       .from("product_matches")
-      .insert({ search_id: searchId, rank, product_name: `Pièce Lens ${rank}`, image_url: `https://images.lens.example/${rank}.jpg`, merchant_url: `https://marchand.example/lens-${rank}` })
+      .insert({ search_id: searchId, rank, product_name: `Pièce Lens ${rank}`, image_url: `https://images.lens.example/${rank}.jpg`, merchant_url: `https://marchand.example/lens-${rank}`, ...priced })
       .select("id, merchant_url")
       .single();
     expect(error).toBeNull();
@@ -236,8 +237,9 @@ describe("« Que cherchez-vous ? » : une recherche avec vos mots, sur la même 
   });
 
   it("invitation jamais proposée (résultat fiable, ancienne recherche de l'historique) : 409 text_search_not_allowed, rien n'est verrouillé ni réservé", async () => {
+    // Résultat fiable, avec un prix (sans aucun prix, voir le test « lien vidéo sans prix » ci-dessous).
     const reliable = await searchRow({ status: "completed", outcome: "found", complement_status: "shown", text_suggested: false, shopping_calls: 1 });
-    await lensRow(reliable, 1);
+    await lensRow(reliable, 1, 59);
     const old = await searchRow({ status: "completed", outcome: "found" });
     await lensRow(old, 1);
     for (const id of [reliable, old]) {
@@ -248,6 +250,38 @@ describe("« Que cherchez-vous ? » : une recherche avec vos mots, sur la même 
     }
     expect(reserveMock).not.toHaveBeenCalled();
     expect(textMock).not.toHaveBeenCalled();
+  });
+
+  it("lien vidéo sans prix (17 novembre 2026) : sans invitation, admise quand aucune proposition n'a de prix ; jamais avec un prix, au plafond du complément, boutiques attendues ou recherche d'hier", async () => {
+    // IA des boutiques coupée : aucune invitation, aucun prix. La description passe.
+    const skipped = await searchRow({ status: "completed", outcome: "found", complement_status: "skipped", text_suggested: false });
+    await lensRow(skipped, 1);
+    await lensRow(skipped, 2);
+    const res = await text(skipped);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().complement).toMatchObject({ status: "skipped", suggestText: false, textStatus: "shown" });
+    expect(await columnsOf(skipped)).toMatchObject({ text_status: "shown", text_suggested: false, shopping_calls: 1, query: null });
+    expect((await text(skipped)).json().error).toBe("text_search_already_used");
+    expect(textMock).toHaveBeenCalledOnce();
+
+    const yesterday = new Date(parisDayStart().getTime() - 3_600_000).toISOString();
+    const priced = await searchRow({ status: "completed", outcome: "found", complement_status: "skipped", text_suggested: false });
+    await lensRow(priced, 1);
+    await lensRow(priced, 2, 49);
+    const capped = await searchRow({ status: "completed", outcome: "found", complement_status: "no_capacity", text_suggested: false });
+    await lensRow(capped, 1);
+    const waiting = await searchRow({ status: "completed", outcome: "found", complement_status: null, complement_deferred: "pending", complement_deferred_at: new Date().toISOString(), text_suggested: false });
+    await lensRow(waiting, 1);
+    const old = await searchRow({ status: "completed", outcome: "found", complement_status: "skipped", text_suggested: false, created_at: yesterday });
+    await lensRow(old, 1);
+    for (const id of [priced, capped, waiting, old]) {
+      const refused = await text(id);
+      expect(refused.statusCode).toBe(409);
+      expect(refused.json().error).toBe("text_search_not_allowed");
+      expect(await columnsOf(id)).toMatchObject({ text_requested_at: null });
+    }
+    expect(reserveMock).toHaveBeenCalledOnce();
+    expect(textMock).toHaveBeenCalledOnce();
   });
 
   it("recherche servie entièrement par le cache : après vos mots (un appel réel), elle compte dans la part de 8 par personne ; refusée par le plafond, elle reste hors de la part", async () => {
