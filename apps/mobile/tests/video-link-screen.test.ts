@@ -147,18 +147,28 @@ describe("écran « vidéo partagée » : l'analyse d'abord, quand le serveur l'
     expect(hook).toContain("fetchConsentStatus().then(videoLinkAiChoice)");
   });
 
-  it("« Choisir ce moment » : « Entourez la pièce » avec le cadre de l'IA déjà tracé, sans lancement automatique", () => {
+  it("un seul écran : on entoure la pièce sur l'image du moment choisi (cadre de l'IA déjà tracé), puis la recherche part aussitôt", () => {
     const hook = code("src/lib/use-video-link-analysis.ts");
-    expect(hook).toContain('router.push({ pathname: "/spot/lancer", params: { source: "photo" } })');
-    expect(hook).not.toContain('auto: "1"');
+    // Chaque moment arrive avec le cadre de l'IA tracé ; changer de moment repart de son cadre.
+    expect(hook).toContain('return moment ? { kind: "moments", analysis, selected: rank, zone: zoneFromCrop(moment.box), zoneFromAi: true } : null;');
+    expect(hook).toContain('current.kind === "moments" && rank !== current.selected ? (momentsPhase(current.analysis, rank) ?? current) : current');
+    // Entourée par la personne : sa zone remplace le cadre de l'IA.
+    expect(hook).toContain('setPhase((current) => (current.kind === "moments" ? { ...current, zone, zoneFromAi: false } : current));');
+    // « Lancer la recherche » : la zone de l'écran, puis l'attente et les résultats sans autre écran.
+    expect(hook).toContain("startMomentSearch(phase.analysis, phase.selected, origin, { crop: phase.zone.crop, byAi: phase.zoneFromAi })");
+    expect(hook).toContain('router.push({ pathname: "/spot/lancer", params: { source: "photo", auto: "1" } })');
+    const view = code("src/components/video-link-analysis.tsx");
+    expect(view).toContain("<PhotoFrame");
+    expect(view).toContain("onChange={onZone}");
+    expect(view).toContain("caption={zoneFromAi ? t.targeting.aiCaption : t.targeting.caption}");
+    // Pendant le tracé, l'écran ne défile pas.
+    const screenCode = code("src/app/(app)/spot/lecteur.tsx");
+    expect(screenCode).toContain("onDragChange={setDragging}");
+    expect(screenCode).toContain("scrollEnabled={!dragging}");
+    // Retour sur « Entourez la pièce » (recherche annulée) : la zone déjà choisie est retracée.
     const launch = code("src/app/(app)/spot/lancer.tsx");
-    // Le cadre de l'IA devient la zone de départ, modifiable.
-    expect(launch).toContain("return draft?.zoneByAi && draft.crop ? zoneFromCrop(draft.crop) : null;");
     expect(launch).toContain("useState<PieceZone | null>(() => initialZone(media))");
-    // Entourée à nouveau par la personne : la zone est la sienne, plus celle de l'IA.
-    expect(launch).toContain("updateDraft({ zoneByAi: false });");
-    expect(launch).toContain("onChange={changeZone}");
-    expect(launch).toContain("caption={zoneFromAi ? t.targeting.aiCaption : t.targeting.caption}");
+    expect(launch).toContain("return isWholeImage(crop) ? { ...WHOLE_IMAGE_ZONE } : zoneFromCrop(crop);");
   });
 
   it("lancement automatique une seule fois : « auto » retiré de l'adresse juste après (site : « Précédent » puis « Suivant » ne relance rien)", () => {

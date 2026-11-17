@@ -119,6 +119,8 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   const [lookup, setLookup] = useState<VideoLookupResponse | null>(null);
   const [handle, setHandle] = useState<string | null>(null);
   const [generation, setGeneration] = useState(0);
+  // Pièce entourée sur l'écran des moments : le défilement s'arrête pendant le tracé.
+  const [dragging, setDragging] = useState(false);
   const [ready, setReady] = useState(false);
   const [embedSize, setEmbedSize] = useState<number | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -498,7 +500,17 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     } else if (phase.kind === "moments") {
       autoBody = (
         <>
-          <LinkMomentsView analysis={phase.analysis} selected={phase.selected} onSelect={auto.select} onSearch={auto.search} onEditQuery={auto.editQuery} />
+          <LinkMomentsView
+            analysis={phase.analysis}
+            selected={phase.selected}
+            zone={phase.zone}
+            zoneFromAi={phase.zoneFromAi}
+            onSelect={auto.select}
+            onZone={auto.changeZone}
+            onDragChange={setDragging}
+            onSearch={auto.search}
+            onEditQuery={auto.editQuery}
+          />
           {captureLink}
         </>
       );
@@ -628,7 +640,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     <SafeAreaView style={styles.screen}>
       <TopBar onBack={back} onClose={close} />
       {/* Clavier ouvert sur « Que cherchez-vous dans cette vidéo ? » : la vue remonte jusqu'au bouton (iPhone). */}
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+      <ScrollView contentContainerStyle={styles.scroll} scrollEnabled={!dragging} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         {body}
       </ScrollView>
     </SafeAreaView>

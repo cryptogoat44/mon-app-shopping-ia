@@ -5,7 +5,7 @@
 // reste associée pour que la mémoire collective note le spot. L'image reste
 // en mémoire (« data: ») : rien n'est écrit sur l'appareil ni dans le
 // navigateur. Logique sans écran, testée (serveur simulé).
-import type { VideoLinkAnalysisRequest, VideoPlatform, VideoSpotSource } from "@monapp/shared-types";
+import type { CropRect, VideoLinkAnalysisRequest, VideoPlatform, VideoSpotSource } from "@monapp/shared-types";
 import { analyzeVideoLink } from "./api";
 import { track } from "./analytics";
 import { momentSeconds } from "./player-state";
@@ -65,14 +65,20 @@ export function momentVideoContext(analysis: LinkAnalysis, moment: LinkMoment, o
   return { url: video.canonicalUrl, platform: video.platform, creatorHandle: video.creatorHandle, source: origin, momentSeconds: momentSeconds(moment.timeSeconds) };
 }
 
-/** « Rechercher cette pièce » : l'image du moment et le cadre de l'IA
- * deviennent le brouillon de la recherche habituelle (1 crédit au
+/** « Lancer la recherche » : l'image du moment et la zone choisie sur
+ * l'écran des moments (le cadre de l'IA, ou la pièce entourée par la
+ * personne) deviennent le brouillon de la recherche habituelle (1 crédit au
  * lancement, comme une photo). Les mots ont servi à l'IA seulement : ils ne
  * partent pas avec l'image. null : moment absent. */
-export function startMomentSearch(analysis: LinkAnalysis, rank: number, origin: LinkSpotOrigin): SpotDraft | null {
+export function startMomentSearch(
+  analysis: LinkAnalysis,
+  rank: number,
+  origin: LinkSpotOrigin,
+  zone?: { crop: CropRect; byAi: boolean }
+): SpotDraft | null {
   const moment = analysis.moments[rank];
   if (!moment) return null;
   const started = beginFromPhoto(moment.image, moment.size, { video: momentVideoContext(analysis, moment, origin) });
   track("video_link_ai_moment_chosen", { platform: analysis.video.platform, rank: rank + 1, moments_count: analysis.moments.length });
-  return updateDraft({ crop: moment.box, zoneByAi: true }) ?? started;
+  return updateDraft({ crop: zone ? { ...zone.crop } : moment.box, zoneByAi: zone ? zone.byAi : true }) ?? started;
 }
