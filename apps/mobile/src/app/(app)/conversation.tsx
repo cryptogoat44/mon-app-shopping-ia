@@ -19,6 +19,7 @@ import {
   sendMessage,
 } from "@/lib/api";
 import { attachedLabels, attachmentFor, canSend, canWrite, composerNotice, hasNewFromOther, mergeMessages, newestCreatedAt } from "@/lib/conversations";
+import { readReadReceipts, receiptMention, sameReceipts, threadAfterPoll, threadAfterSend, withReadReceipts } from "@/lib/read-receipts";
 import { track } from "@/lib/analytics";
 import { forgetPieceToSend, pieceToSend } from "@/lib/send-to-friend";
 import { timeAgo } from "@/lib/format";
@@ -82,6 +83,10 @@ function Bubble({ message, onOptions }: { message: ChatMessage; onOptions: () =>
 // Lot notifications (app iPhone) : après un message envoyé, ou un message
 // reçu affiché, la feuille « Être prévenu de vos nouveaux messages ? » est
 // proposée une fois ; une notification touchée ouvre cet écran avec `id`.
+// Lot « messages vus » : sous votre dernier message, « Vu » quand l'autre
+// membre a ouvert la conversation depuis, « Envoyé » sinon ; rien quand le
+// serveur ne renvoie pas de confirmations (invitation, réglage éteint chez
+// l'un des deux). Tenu à jour à chaque relecture (lib/read-receipts.ts).
 export default function ConversationScreen() {
   const { id, userId, wishId, collectionItemId, matchId } = useLocalSearchParams<{
     id?: string;
@@ -129,7 +134,7 @@ export default function ConversationScreen() {
         return;
       }
       stickToEnd.current = true;
-      setThread(data);
+      setThread(withReadReceipts(data));
       setMessages(data.messages);
       setState("ready");
       if (data.id) markRead(data.id);
@@ -183,18 +188,20 @@ export default function ConversationScreen() {
     const before = messagesRef.current;
     const merged = mergeMessages(before, data.messages);
     const fresh = hasNewFromOther(before, merged);
-    const changed = merged.length !== before.length || data.sendMode !== thread?.sendMode || data.state !== thread?.state;
+    // « Vu » qui apparaît compte comme du nouveau : la relecture reste rapide.
+    const receiptsChanged = !sameReceipts(thread?.readReceipts, readReadReceipts(data.readReceipts));
+    const changed = merged.length !== before.length || data.sendMode !== thread?.sendMode || data.state !== thread?.state || receiptsChanged;
     if (merged.length !== before.length) {
       stickToEnd.current = true;
       setMessages(merged);
     }
-    setThread((current) => (current ? { ...current, other: data.other, state: data.state, sendMode: data.sendMode } : data));
+    setThread((current) => threadAfterPoll(current, data));
     if (fresh) {
       markRead(conversationId);
       offerPush();
     }
     return changed ? "new" : "same";
-  }, [thread?.id, thread?.sendMode, thread?.state, markRead, offerPush]);
+  }, [thread?.id, thread?.sendMode, thread?.state, thread?.readReceipts, markRead, offerPush]);
   const { kick } = usePolling(poll);
 
   // Pas de bannière pour la conversation à l'écran (elle se relit déjà).
@@ -231,7 +238,7 @@ export default function ConversationScreen() {
       }
       stickToEnd.current = true;
       setMessages((current) => mergeMessages(current, [sent.message]));
-      setThread((current) => (current ? { ...current, id: sent.conversationId, state: sent.state, sendMode: sent.sendMode } : current));
+      setThread((current) => (current ? threadAfterSend(current, sent) : current));
       setDraft("");
       setWish(null);
       kick();
@@ -350,6 +357,8 @@ export default function ConversationScreen() {
 
   const notice = composerNotice(thread.sendMode, other.displayName);
   const sendable = canSend(draft, wish?.id ?? null, MESSAGE_MAX_LENGTH) && !sending;
+  // « Vu » ou « Envoyé », sous votre dernier message seulement (ou rien).
+  const receipt = receiptMention(messages, thread.readReceipts, other.displayName);
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "left", "right", "bottom"]}>
@@ -371,7 +380,15 @@ export default function ConversationScreen() {
           ) : null}
           {messages.length === 0 ? <Text style={styles.empty}>{t.messages.emptyThread}</Text> : null}
           {messages.map((message) => (
-            <Bubble key={message.id} message={message} onOptions={() => setMenuFor(message)} />
+            <View key={message.id}>
+              <Bubble message={message} onOptions={() => setMenuFor(message)} />
+              {/* Une ligne de hauteur fixe : « Envoyé » devient « Vu » sans rien déplacer. */}
+              {receipt?.messageId === message.id ? (
+                <Text style={styles.receipt} numberOfLines={1} accessibilityLabel={receipt.label} accessibilityLiveRegion="polite" testID="confirmation-lecture">
+                  {receipt.text}
+                </Text>
+              ) : null}
+            </View>
           ))}
         </ScrollView>
 
@@ -522,6 +539,7 @@ const styles = themedStyles(() => ({
   bubbleTime: { fontSize: 11, color: color.acier, alignSelf: "flex-end" },
   bubbleTimeMine: { color: color.blanc, opacity: 0.8 },
   bubbleMore: { minWidth: 28, minHeight: 28, alignItems: "center", justifyContent: "center" },
+  receipt: { alignSelf: "flex-end", marginTop: 2, lineHeight: 18, fontSize: font.caption, color: color.acier },
   footer: { borderTopWidth: 1, borderTopColor: color.filet, paddingHorizontal: space.md, paddingVertical: space.sm, gap: space.xs },
   notice: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
   composer: { flexDirection: "row", alignItems: "flex-end", gap: space.xs },

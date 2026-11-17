@@ -745,6 +745,13 @@ export const fr = {
     notFound: "Cette conversation n'est pas disponible.",
     loadOlder: "Afficher les messages précédents",
     emptyThread: "Aucun message pour l'instant.",
+    // Lot « messages vus » : sous votre dernier message d'une conversation
+    // ouverte. « Vu » : l'autre membre a ouvert la conversation depuis.
+    receiptSeen: "Vu",
+    receiptSent: "Envoyé",
+    // Lus par VoiceOver à la place de « Vu » et « Envoyé ».
+    receiptSeenLabel: (name: string) => `Votre dernier message a été vu par ${name}`,
+    receiptSentLabel: "Votre dernier message est envoyé",
     messageOptions: "Options pour ce message",
     // Lu par VoiceOver après le nom du bouton « ••• » d'un message reçu.
     messageOptionsHint: "Signaler ce message ou bloquer cette personne",
