@@ -26,6 +26,12 @@ export interface Profile {
    * membres qui ne sont pas vos amis. « everyone » tant que la migration
    * n'est pas appliquée. */
   messagesFrom: MessagesFrom;
+  /** Réglage « Confirmations de lecture » (lot « messages vus », migration
+   * 0043), allumé par défaut. Éteint : l'autre membre ne voit plus « Vu »
+   * pour vos lectures, et vous ne voyez plus les siennes. Absent : le serveur
+   * ne propose pas les confirmations de lecture (migration 0043 absente, ou
+   * serveur plus ancien) ; l'app ne montre alors pas le réglage. */
+  readReceipts?: boolean;
 }
 
 /** Réglage « Qui peut m'envoyer des pièces » : les comptes que je suis (par
@@ -50,6 +56,11 @@ export const DEFAULT_MESSAGES_FROM: MessagesFrom = "everyone";
 
 export interface UpdateMessagesFromRequest {
   messagesFrom: MessagesFrom;
+}
+
+/** PUT /api/me/read-receipts : réglage « Confirmations de lecture ». */
+export interface UpdateReadReceiptsRequest {
+  readReceipts: boolean;
 }
 
 /** True once the user has picked a username — the app shows the
@@ -1410,6 +1421,16 @@ export interface ConversationsPage {
   nextCursor: string | null;
 }
 
+/** Confirmations de lecture d'une conversation (lot « messages vus »,
+ * migration 0043), pour la personne qui la lit. Sous son dernier message,
+ * l'app affiche « Vu » si `seenAt` n'est pas antérieur à ce message,
+ * « Envoyé » sinon.
+ * `seenAt` : la dernière fois que l'autre membre a ouvert la conversation ;
+ * null : pas encore, depuis qu'elle est ouverte aux deux. */
+export interface ConversationReadReceipts {
+  seenAt: string | null;
+}
+
 /** Une conversation et ses messages (du plus ancien au plus récent). `id`
  * null : pas encore de conversation avec cette personne. */
 export interface ConversationThread {
@@ -1420,6 +1441,13 @@ export interface ConversationThread {
   messages: ChatMessage[];
   /** Des messages plus anciens restent à charger. */
   hasOlder: boolean;
+  /** Confirmations de lecture, à chaque lecture et relecture. null : rien à
+   * montrer — migration 0043 absente, réglage éteint chez l'un des deux
+   * membres, compte de l'autre membre suspendu, ou conversation qui n'est pas
+   * ouverte aux deux (jamais pour une invitation : la personne qui invite
+   * n'apprend pas si elle a été regardée). Absent chez un serveur plus ancien
+   * (lu comme null). */
+  readReceipts?: ConversationReadReceipts | null;
 }
 
 /** POST /api/messages : à une personne (la conversation est trouvée ou
@@ -1443,6 +1471,9 @@ export interface SendMessageResponse {
   message: ChatMessage;
   state: ConversationState;
   sendMode: ConversationSendMode;
+  /** Confirmations de lecture juste après l'envoi (mêmes règles que pour
+   * ConversationThread) ; absent chez un serveur plus ancien. */
+  readReceipts?: ConversationReadReceipts | null;
 }
 
 // ---- Collections d'envies (lot collections, migration 0033) ----

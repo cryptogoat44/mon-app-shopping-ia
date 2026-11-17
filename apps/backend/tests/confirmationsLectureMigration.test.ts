@@ -86,6 +86,25 @@ describe("ce que 0043 exécute", () => {
   });
 });
 
+describe("le serveur et la migration parlent de la même colonne", () => {
+  const source = (path: string) => readFileSync(join(__dirname, "../src", path), "utf8");
+
+  it("la sonde, la lecture et l'écriture du réglage nomment profiles.read_receipts, la colonne créée par 0043", () => {
+    const lib = source("lib/readReceipts.ts");
+    expect(lib).toContain('fastify.supabaseAdmin.from("profiles").select("read_receipts").limit(0)');
+    expect(lib).toContain('.select("id, read_receipts")');
+    expect(lib).toContain("Confirmations de lecture coupées : migration 0043 absente");
+    expect(source("routes/me.ts")).toContain(".update({ read_receipts: body.readReceipts, updated_at: new Date().toISOString() })");
+  });
+
+  it("les messages eux-mêmes ne demandent jamais cette colonne : leur sonde (0032) ne la lit pas", () => {
+    const messaging = source("lib/messaging.ts");
+    expect(messaging).not.toContain("read_receipts");
+    // Les profils des conversations sont lus sans elle (une base sans 0043 répondrait par une erreur).
+    expect(source("routes/conversations.ts")).not.toContain("read_receipts");
+  });
+});
+
 describe("contrôle de 0043 et registre des migrations", () => {
   it("le contrôle est en lecture seule : une seule requête « select », quatre réponses", () => {
     const query = statements(VERIFICATION).trim();

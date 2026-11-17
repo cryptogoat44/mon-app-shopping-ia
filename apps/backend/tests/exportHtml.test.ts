@@ -611,6 +611,22 @@ describe("messages privés (lot messages, migration 0032)", () => {
     expect(account).toContain("Qui peut vous écrire");
     expect(account).toContain("Tout le monde (sous forme d'invitation)");
   });
+
+  // Lot « messages vus » (migration 0043) : le réglage, et la date de la
+  // dernière lecture de chaque conversation (gardée depuis 0032).
+  it("le réglage « Confirmations de lecture » est dans le profil, en français et en anglais ; absent tant que la colonne n'existe pas", () => {
+    const base = fixture();
+    expect(spaces(visibleText(sectionHtml(render(), "account")))).not.toContain("Confirmations de lecture");
+    const withSetting = (value: boolean) => ({ ...base, profile: { ...base.profile!, read_receipts: value } });
+    expect(spaces(visibleText(sectionHtml(render({}, withSetting(true)), "account")))).toContain("Confirmations de lecture Oui");
+    expect(spaces(visibleText(sectionHtml(render({}, withSetting(false)), "account")))).toContain("Confirmations de lecture Non");
+    const en = spaces(visibleText(sectionHtml(renderExportHtml(withSetting(false), lookups(), options({ locale: "en", timeZone: "UTC" })), "account")));
+    expect(en).toContain("Read receipts No");
+    expect(EXPORT_COLUMNS.profile.read_receipts.label).toEqual({ fr: "Confirmations de lecture", en: "Read receipts" });
+    // La date de votre dernière lecture de chaque conversation y figure aussi.
+    expect(spaces(visibleText(sectionHtml(render(), "messages")))).toContain("Lue pour la dernière fois le 20 octobre 2026");
+    expect(EXPORT_COLUMNS.conversations.last_read_at.label).toEqual({ fr: "Lue pour la dernière fois le", en: "Last read on" });
+  });
 });
 
 describe("collections d'envies (lot collections, migration 0033)", () => {

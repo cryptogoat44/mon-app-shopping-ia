@@ -119,6 +119,8 @@ export const EXPORT_COLUMNS = {
     piece_sends_from: shown("Qui peut vous envoyer des pièces", "Who can send you pieces"),
     // Lot messages (migration 0032).
     messages_from: shown("Qui peut vous écrire", "Who can write to you"),
+    // Lot « messages vus » (migration 0043).
+    read_receipts: shown("Confirmations de lecture", "Read receipts"),
     // Lot alertes prix et stock (migration 0036).
     price_alerts_enabled: shown("Alertes prix et stock", "Price and stock alerts"),
     // Nouvelle version des alertes (migration 0041).
