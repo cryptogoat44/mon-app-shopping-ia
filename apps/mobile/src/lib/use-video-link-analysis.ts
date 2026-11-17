@@ -178,10 +178,13 @@ export function useVideoLinkAnalysis({ active, url, platform, origin, onDeclined
 
   /** « Lancer la recherche » : directement l'attente puis les résultats,
    * avec la zone de l'écran des moments (demande du fondateur, 17 novembre
-   * 2026 : le moins d'étapes possible, on entoure sur l'écran des moments). */
+   * 2026 : le moins d'étapes possible, on entoure sur l'écran des moments).
+   * La description part avec le brouillon (jamais dans l'adresse) : elle trie
+   * les propositions, et sert à la recherche dans les boutiques si aucune
+   * n'a de prix (lien vidéo sans prix, même jour). */
   function search() {
     if (phase.kind !== "moments") return;
-    if (!startMomentSearch(phase.analysis, phase.selected, origin, { crop: phase.zone.crop, byAi: phase.zoneFromAi })) return;
+    if (!startMomentSearch(phase.analysis, phase.selected, origin, { crop: phase.zone.crop, byAi: phase.zoneFromAi }, query)) return;
     router.push({ pathname: "/spot/lancer", params: { source: "photo", auto: "1" } });
   }
 

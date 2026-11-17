@@ -155,7 +155,8 @@ describe("écran « vidéo partagée » : l'analyse d'abord, quand le serveur l'
     // Entourée par la personne : sa zone remplace le cadre de l'IA.
     expect(hook).toContain('setPhase((current) => (current.kind === "moments" ? { ...current, zone, zoneFromAi: false } : current));');
     // « Lancer la recherche » : la zone de l'écran, puis l'attente et les résultats sans autre écran.
-    expect(hook).toContain("startMomentSearch(phase.analysis, phase.selected, origin, { crop: phase.zone.crop, byAi: phase.zoneFromAi })");
+    // La description part avec le brouillon (lien vidéo sans prix, 17 novembre 2026), jamais dans l'adresse.
+    expect(hook).toContain("startMomentSearch(phase.analysis, phase.selected, origin, { crop: phase.zone.crop, byAi: phase.zoneFromAi }, query)");
     expect(hook).toContain('router.push({ pathname: "/spot/lancer", params: { source: "photo", auto: "1" } })');
     const view = code("src/components/video-link-analysis.tsx");
     expect(view).toContain("<PhotoFrame");
@@ -169,6 +170,20 @@ describe("écran « vidéo partagée » : l'analyse d'abord, quand le serveur l'
     const launch = code("src/app/(app)/spot/lancer.tsx");
     expect(launch).toContain("useState<PieceZone | null>(() => initialZone(media))");
     expect(launch).toContain("return isWholeImage(crop) ? { ...WHOLE_IMAGE_ZONE } : zoneFromCrop(crop);");
+  });
+
+  it("lancement automatique d'un lien : les mots partent de la description gardée dans le brouillon, pas de l'adresse (le lancement ne les efface pas)", () => {
+    const launch = code("src/app/(app)/spot/lancer.tsx");
+    expect(launch).toContain("const [query, setQuery] = useState(() => initialQuery(params.query, media));");
+    expect(launch).toContain('if (typeof param === "string") return param;');
+    expect(launch).toContain('return media.source === "photo" ? (media.draft?.words ?? "") : "";');
+    // Les mots du champ sont ceux du lancement automatique (useSpotLaunch → launchPhoto).
+    expect(launch).toContain("const flow = useSpotLaunch({ ...media, preview: preview.source, query,");
+    expect(code("src/lib/use-spot-launch.ts")).toContain("await launchPhoto(draft, signal, zone, query)");
+    // Jamais de mots dans l'adresse de l'écran ouvert par « Lancer la recherche ».
+    const hook = code("src/lib/use-video-link-analysis.ts");
+    const push = hook.slice(hook.indexOf('router.push({ pathname: "/spot/lancer"'), hook.indexOf("});", hook.indexOf('router.push({ pathname: "/spot/lancer"')));
+    expect(push).not.toContain("query");
   });
 
   it("lancement automatique une seule fois : « auto » retiré de l'adresse juste après (site : « Précédent » puis « Suivant » ne relance rien)", () => {
