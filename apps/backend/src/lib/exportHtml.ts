@@ -580,8 +580,18 @@ function postMedia(ctx: Ctx, row: ExportRow): Part {
   return [link(ctx, row.media_thumb_url, openMedia), link(ctx, row.media_url, openMedia)];
 }
 
+/** Photos 2 à 5 d'une publication (migration 0047) : les miniatures, dans l'ordre. */
+function morePhotos(ctx: Ctx, rows: readonly ExportRow[]): Part {
+  if (rows.length === 0) return null;
+  const openMedia = (site: string) => tr(ctx, EXPORT_TEXT.openMedia, { site });
+  return [...rows]
+    .sort((a, b) => (toAmount(a.position) ?? 0) - (toAmount(b.position) ?? 0))
+    .map((row) => imageOrLink(ctx, row.media_thumb_url ?? row.media_url, openMedia));
+}
+
 function postsSection(ctx: Ctx): Html {
   const taggedByPost = groupBy(ctx.data.postTaggedPieces, "post_id");
+  const photosByPost = groupBy(ctx.data.postMedia, "post_id");
   const postIds = new Set(ctx.data.posts.map((row) => String(row.id)));
   const cards = newestFirst(ctx.data.posts, "created_at").map((row) => {
     const type = enumLabel(ctx, POST_TYPE_LABELS, row.type) ?? "";
@@ -590,6 +600,7 @@ function postsSection(ctx: Ctx): Html {
     return new Card(ctx, "posts", row)
       .use("type", "created_at")
       .line(tr(ctx, EXPORT_COLUMNS.posts.media_url.label), postMedia(ctx, row), ["media_url", "media_thumb_url", "media_removed_at"])
+      .line(tr(ctx, EXPORT_TEXT.morePhotos), morePhotos(ctx, photosByPost.get(String(row.id)) ?? []))
       .field("caption", multiline(row.caption))
       .field("privacy", enumLabel(ctx, PRIVACY_LABELS, row.privacy))
       .field("media_kind", enumLabel(ctx, MEDIA_KIND_LABELS, row.media_kind))
@@ -658,6 +669,31 @@ function mentionsSection(ctx: Ctx): Html {
   return section(
     ctx,
     "mentions",
+    parts.filter(([, cards]) => cards.length > 0).map(([title, cards]) => subsection(ctx, tr(ctx, title, { count: String(cards.length) }), null, cards))
+  );
+}
+
+/** Personnes identifiées (migration 0047) : celles que vous avez identifiées,
+ * et les publications où vous l'êtes — « une publication indisponible » quand
+ * vous ne pouvez plus la voir. */
+function peopleTagsSection(ctx: Ctx): Html {
+  const made = newestFirst(ctx.data.peopleTagsMade, "created_at").map((row) =>
+    new Card(ctx, "peopleTagsMade", row).use("user_id").field("post_id", onPost(ctx, row.post_id)).field("created_at").render(person(ctx, row.user_id))
+  );
+  const received = newestFirst(ctx.data.peopleTagsReceived, "created_at").map((row) =>
+    new Card(ctx, "peopleTagsReceived", row)
+      .use("author_id", "post_available")
+      .field("post_id", row.post_available === true ? tr(ctx, EXPORT_TEXT.postBy, { person: person(ctx, row.author_id) }) : tr(ctx, EXPORT_TEXT.postUnavailable))
+      .field("created_at")
+      .render(person(ctx, row.author_id))
+  );
+  const parts: [Bilingual, Html[]][] = [
+    [EXPORT_TEXT.peopleTagsMadeTitle, made],
+    [EXPORT_TEXT.peopleTagsReceivedTitle, received],
+  ];
+  return section(
+    ctx,
+    "peopleTags",
     parts.filter(([, cards]) => cards.length > 0).map(([title, cards]) => subsection(ctx, tr(ctx, title, { count: String(cards.length) }), null, cards))
   );
 }
@@ -1179,6 +1215,7 @@ function sectionCount(data: ExportData, id: ExportSectionId): number | null {
     comments: data.comments.length,
     likes: data.reactionsGiven.length + data.commentReactionsGiven.length,
     mentions: data.mentionsReceived.length + data.mentionsMade.length,
+    peopleTags: data.peopleTagsMade.length + data.peopleTagsReceived.length,
     following: data.following.length,
     followers: data.followers.length,
     followRequests: data.followRequestsSent.length + data.followRequestsReceived.length,
@@ -1210,6 +1247,7 @@ const SECTION_RENDERERS: Record<ExportSectionId, (ctx: Ctx) => Html> = {
   comments: commentsSection,
   likes: likesSection,
   mentions: mentionsSection,
+  peopleTags: peopleTagsSection,
   following: followingSection,
   followers: followersSection,
   followRequests: followRequestsSection,

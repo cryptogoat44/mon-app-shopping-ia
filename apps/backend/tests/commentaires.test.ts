@@ -1278,7 +1278,9 @@ describe("export des données", () => {
     expect(body.mentionsMade).toEqual([{ comment_id: mine, user_id: DORA, handle: "dora", created_at: at(40) }]);
     expect(body.comments.map((row: Row) => [row.id, row.parent_id])).toEqual([[mine, C1]]);
     // Clés ajoutées à la fin : les anciennes gardent leur ordre.
-    expect(Object.keys(body).slice(-5)).toEqual(["followRequestsSent", "followRequestsReceived", "commentReactionsGiven", "mentionsReceived", "mentionsMade"]);
+    // (Après elles : les trois clés de la migration 0047, photosIdentifications.test.ts.)
+    const keys = Object.keys(body);
+    expect(keys.slice(keys.indexOf("followRequestsSent"), keys.indexOf("followRequestsSent") + 5)).toEqual(["followRequestsSent", "followRequestsReceived", "commentReactionsGiven", "mentionsReceived", "mentionsMade"]);
     const added = JSON.stringify([body.commentReactionsGiven, body.mentionsReceived, body.mentionsMade]);
     expect(added).not.toContain(EVE);
     expect(added).not.toContain(FRED);

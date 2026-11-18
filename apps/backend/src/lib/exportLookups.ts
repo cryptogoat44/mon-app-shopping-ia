@@ -92,6 +92,9 @@ export async function collectLookups(fastify: FastifyInstance, userId: string, d
     // Mentions (0046) : l'auteur d'une mention reçue, le membre d'une mention écrite.
     ...ids(data.mentionsReceived, "author_id"),
     ...ids(data.mentionsMade, "user_id"),
+    // Identifications (0047) : le membre identifié par la personne, l'auteur d'une publication où elle l'est.
+    ...ids(data.peopleTagsMade, "user_id"),
+    ...ids(data.peopleTagsReceived, "author_id"),
     ...ids(data.reportsSubmitted.filter((report) => report.target_type === "user"), "target_id"),
   ].filter((id) => id !== userId && !blockedMe.has(id) && !blockedIds.has(id));
 

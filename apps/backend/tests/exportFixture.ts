@@ -442,6 +442,18 @@ export function fixture(): ExportData {
     commentReactionsGiven: [{ comment_id: "c0000000-0000-4000-8000-000000000002", created_at: "2026-10-13T09:00:00+00:00" }],
     mentionsReceived: [{ comment_id: "c0000000-0000-4000-8000-000000000002", author_id: FRIEND, handle: "camille", created_at: "2026-10-13T10:00:00+00:00" }],
     mentionsMade: [{ comment_id: "c0000000-0000-4000-8000-000000000001", user_id: FRIEND, handle: "alexis", created_at: "2026-10-13T11:00:00+00:00" }],
+    // Plusieurs photos, identifications (migration 0047) : deux photos de plus,
+    // une personne identifiée, deux identifications reçues (dont une sur une
+    // publication que la personne ne peut plus voir).
+    postMedia: [
+      { id: "0d000000-0000-4000-8000-000000000002", post_id: OWN_POST, position: 2, media_url: own("post-media", "photo-3.jpg"), media_thumb_url: own("post-media", "photo-3-mini.jpg"), created_at: "2026-09-14T10:01:00+00:00" },
+      { id: "0d000000-0000-4000-8000-000000000001", post_id: OWN_POST, position: 1, media_url: own("post-media", "photo-2.jpg"), media_thumb_url: own("post-media", "photo-2-mini.jpg"), created_at: "2026-09-14T10:00:30+00:00" },
+    ],
+    peopleTagsMade: [{ post_id: OWN_POST, user_id: FRIEND, created_at: "2026-10-14T09:00:00+00:00" }],
+    peopleTagsReceived: [
+      { post_id: FRIEND_POST, author_id: FRIEND, created_at: "2026-10-14T10:00:00+00:00", post_available: true },
+      { post_id: "0e000000-0000-4000-8000-000000000001", author_id: FRIEND, created_at: "2026-10-14T11:00:00+00:00", post_available: false },
+    ],
   };
 }
 

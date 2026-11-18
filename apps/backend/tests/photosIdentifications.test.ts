@@ -26,6 +26,7 @@ import followsRoutes from "../src/routes/follows.js";
 import blocksRoutes from "../src/routes/blocks.js";
 import meRoutes from "../src/routes/me.js";
 import notificationsRoutes from "../src/routes/notifications.js";
+import accountRoutes from "../src/routes/account.js";
 import { resetPrivateAccountsProbe } from "../src/lib/audience.js";
 import { resetCommentThreadsProbe } from "../src/lib/comments.js";
 import { postExtrasReady, resetPostExtrasProbe } from "../src/lib/postExtras.js";
@@ -238,6 +239,7 @@ async function photosApp(db: unknown): Promise<FastifyInstance> {
   await app.register(blocksRoutes);
   await app.register(meRoutes);
   await app.register(notificationsRoutes);
+  await app.register(accountRoutes);
   await app.ready();
   return app;
 }
@@ -905,3 +907,60 @@ describe("modération : une publication signalée montre toutes ses photos", () 
     expect(items[0]!.preview.kind === "post" && items[0]!.preview.imageUrl).toBe(stored(ANNA, `${ANNA_PUBLIC}-mini.jpg`));
   });
 });
+
+describe("export des données", () => {
+  it("ses photos 2 à 5, les personnes qu'elle a identifiées, les publications où elle l'est (encore visibles ou non) ; jamais un compte en blocage", async () => {
+    // Anna : deux photos de plus ; elle a identifié Bruno et Eve (qui l'a bloquée depuis : effacé normalement).
+    // Elle est identifiée par Bruno (visible), Paula (compte privé qu'elle ne suit pas) et sur une publication masquée.
+    const BRUNO_HIDDEN = "b1000000-0000-4000-8000-000000000002";
+    const fake = seeded({ media: [[ANNA_PUBLIC, 2], [BRUNO_PUBLIC, 1]], tags: [[ANNA_PUBLIC, BRUNO], [ANNA_PUBLIC, EVE], [BRUNO_PUBLIC, ANNA], [PAULA_PUBLIC, ANNA]] });
+    fake.table("posts").push(post(BRUNO_HIDDEN, BRUNO, "public", { hidden: true }));
+    fake.table("post_people_tags").push({ post_id: BRUNO_HIDDEN, user_id: ANNA, author_id: BRUNO, created_at: "2026-11-18T09:30:00+00:00" });
+    fake.table("blocks").push({ blocker_id: EVE, blocked_id: ANNA, created_at: "2026-11-18T10:00:00+00:00" });
+    const target = await photosApp(fake.db);
+
+    const body = (await as(target, ANNA).get("/api/me/export")).json();
+    expect(body.postMedia.map((row: Row) => [row.post_id, row.position])).toEqual([
+      [ANNA_PUBLIC, 1],
+      [ANNA_PUBLIC, 2],
+    ]);
+    expect(Object.keys(body.postMedia[0]).sort()).toEqual(["created_at", "id", "media_thumb_url", "media_url", "position", "post_id"]);
+    expect(body.peopleTagsMade).toEqual([{ post_id: ANNA_PUBLIC, user_id: BRUNO, created_at: "2026-11-18T09:00:00+00:00" }]);
+    // Par date, puis par publication.
+    expect(body.peopleTagsReceived.map((row: Row) => [row.post_id, row.author_id, row.post_available])).toEqual([
+      [PAULA_PUBLIC, PAULA, false],
+      [BRUNO_PUBLIC, BRUNO, true],
+      [BRUNO_HIDDEN, BRUNO, false],
+    ]);
+    // Clés ajoutées à la fin : les anciennes gardent leur ordre.
+    expect(Object.keys(body).slice(-3)).toEqual(["postMedia", "peopleTagsMade", "peopleTagsReceived"]);
+    expect(JSON.stringify([body.postMedia, body.peopleTagsMade, body.peopleTagsReceived])).not.toContain(EVE);
+
+    // Fichier lisible : le nom des comptes, « une publication indisponible », jamais le compte en blocage.
+    const page = (await as(target, ANNA).get("/api/me/export?format=html")).body;
+    expect(page).toContain("Personnes que vous avez identifiées (1)");
+    expect(page).toContain("Publications où l&#39;on vous a identifié(e) (3)");
+    expect(page).toContain("@bruno (Bruno)");
+    expect(page).toContain("une publication indisponible");
+    expect(page).toContain("Autres photos");
+    expect(page).not.toContain("(Eve)");
+
+    // L'autre côté : Bruno voit l'identification reçue d'Anna, et celles qu'il a faites.
+    const bruno = (await as(target, BRUNO).get("/api/me/export")).json();
+    expect(bruno.peopleTagsReceived.map((row: Row) => [row.post_id, row.author_id, row.post_available])).toEqual([[ANNA_PUBLIC, ANNA, true]]);
+    expect(bruno.peopleTagsMade.map((row: Row) => [row.post_id, row.user_id])).toEqual([
+      [BRUNO_PUBLIC, ANNA],
+      [BRUNO_HIDDEN, ANNA],
+    ]);
+    expect(bruno.postMedia.map((row: Row) => row.post_id)).toEqual([BRUNO_PUBLIC]);
+  });
+
+  it("sans la migration 0047 : trois sections vides, et l'export réussit", async () => {
+    const target = await photosApp(seeded({}, WITHOUT_0047).db);
+    const response = await as(target, ANNA).get("/api/me/export");
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect([body.postMedia, body.peopleTagsMade, body.peopleTagsReceived]).toEqual([[], [], []]);
+  });
+});
+

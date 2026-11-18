@@ -93,6 +93,12 @@ const FOLLOW_REQUEST_SECTIONS = followRequestsProbe.error ? [] : (["followReques
 const commentThreadsProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("comment_mentions").select("comment_id, author_id").limit(0);
 const COMMENT_THREAD_SECTIONS = commentThreadsProbe.error ? [] : (["commentReactionsGiven", "mentionsReceived", "mentionsMade"] as const);
 
+// Plusieurs photos, identifications (lot « vie sociale ») : une photo de plus,
+// une identification faite et une reçue, seulement une fois la migration 0047
+// appliquée sur la base des tests (sans elle, sections vides).
+const postExtrasProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("post_people_tags").select("post_id, author_id").limit(0);
+const POST_EXTRA_SECTIONS = postExtrasProbe.error ? [] : (["postMedia", "peopleTagsMade", "peopleTagsReceived"] as const);
+
 // Sections qui sont un objet (ou null), pas une liste.
 const OBJECT_SECTIONS = ["account", "profile", "adminRole", "suspension", ...(TRYON_MIGRATED ? (["tryonProfile"] as const) : [])] as const;
 
@@ -154,6 +160,10 @@ const JSON_KEYS = [
   "commentReactionsGiven",
   "mentionsReceived",
   "mentionsMade",
+  // Plusieurs photos, identifications (migration 0047), de même.
+  "postMedia",
+  "peopleTagsMade",
+  "peopleTagsReceived",
 ];
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
@@ -289,6 +299,21 @@ describe("export RGPD complet", () => {
       if (liked.statusCode !== 200) throw new Error(`« J'aime » de test refusé (${liked.statusCode}).`);
     }
 
+    // Plusieurs photos, identifications (migration 0047) : une photo de plus sur
+    // sa publication, l'ami identifié dessus, et elle identifiée sur celle de
+    // l'ami. Lignes écrites directement : le réglage de départ (« les comptes
+    // que je suis ») écarterait ces identifications entre deux comptes qui ne se suivent pas.
+    if (POST_EXTRA_SECTIONS.length > 0) {
+      const extras = await Promise.all([
+        app.supabaseAdmin.from("post_media").insert({ user_id: user.id, post_id: postId, position: 1, media_url: "https://example.com/p2.jpg", media_thumb_url: "https://example.com/p2-mini.jpg" }),
+        app.supabaseAdmin.from("post_people_tags").insert([
+          { post_id: postId, user_id: friend.id, author_id: user.id },
+          { post_id: friendPostId, user_id: user.id, author_id: friend.id },
+        ]),
+      ]);
+      for (const written of extras) if (written.error) throw written.error;
+    }
+
     // Vault, Envie, blocage, signalement, consentement.
     await app.supabaseAdmin.from("vault_items").insert({ user_id: user.id, title: "Montre", image_url: "https://example.com/m.jpg", category: "watches" });
     await app.inject({ method: "POST", url: "/api/wishlist", headers: authHeaders(user.token), payload: { title: "Envie", imageUrl: "https://example.com/e.jpg" } });
@@ -420,7 +445,7 @@ describe("export RGPD complet", () => {
     const body = res.json();
 
     expect(body.profile.id).toBe(user.id);
-    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...COLLECTION_SECTIONS, ...PUSH_SECTIONS, ...ALERT_SECTIONS, ...TRYON_SECTIONS, ...VIDEO_SECTIONS, ...FOLLOW_REQUEST_SECTIONS, ...COMMENT_THREAD_SECTIONS]) {
+    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...COLLECTION_SECTIONS, ...PUSH_SECTIONS, ...ALERT_SECTIONS, ...TRYON_SECTIONS, ...VIDEO_SECTIONS, ...FOLLOW_REQUEST_SECTIONS, ...COMMENT_THREAD_SECTIONS, ...POST_EXTRA_SECTIONS]) {
       expect(Array.isArray(body[section]), section).toBe(true);
       expect(body[section].length, section).toBeGreaterThan(0);
     }
@@ -437,6 +462,12 @@ describe("export RGPD complet", () => {
       expect(body.mentionsReceived.map((row: { author_id: string; handle: string }) => [row.author_id, row.handle])).toEqual([[friend.id, user.username]]);
       expect(body.mentionsMade.map((row: { user_id: string; handle: string }) => [row.user_id, row.handle])).toEqual([[friend.id, friend.username]]);
       expect(body.profile.mentions_from).toBe("following");
+    }
+    // Plusieurs photos, identifications : la photo de plus, l'ami identifié, la publication de l'ami où elle l'est (visible).
+    if (POST_EXTRA_SECTIONS.length > 0) {
+      expect(Object.keys(body.postMedia[0]).sort()).toEqual(["created_at", "id", "media_thumb_url", "media_url", "position", "post_id"]);
+      expect(body.peopleTagsMade.map((row: { post_id: string; user_id: string }) => [row.post_id, row.user_id])).toEqual([[postId, friend.id]]);
+      expect(body.peopleTagsReceived.map((row: { author_id: string; post_available: boolean }) => [row.author_id, row.post_available])).toEqual([[friend.id, true]]);
     }
     expect(body.suspension).toMatchObject({ moderation_action_id: expect.any(String) });
     // Un appareil : son système et ses dates (avec 0036 : s'il reçoit les messages, les alertes), jamais son jeton.

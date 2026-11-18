@@ -9,6 +9,8 @@ import { tryonSchemaReady } from "./tryon/schema.js";
 import { videoMemoryStored } from "./videoMemory.js";
 import { privateAccountsReady } from "./audience.js";
 import { commentThreadsReady } from "./comments.js";
+import { postExtrasReady } from "./postExtras.js";
+import { postVisibleTo, readAudience, type Audience } from "./audience.js";
 
 // Export RGPD (droit d'accès et de portabilité) : lecture de TOUTES les
 // données personnelles d'un compte. Toute nouvelle table contenant des
@@ -111,6 +113,17 @@ export interface ExportData {
   /** … et celles que vous avez écrites. Jamais une mention liée à un compte
    * en blocage avec vous (un blocage les efface). */
   mentionsMade: ExportRow[];
+  /** Plusieurs photos, identifier des personnes (lot « vie sociale »,
+   * migration 0047) : les photos 2 à 5 de vos publications (adresses de la
+   * photo et de sa miniature, place, date)… */
+  postMedia: ExportRow[];
+  /** … les membres que vous avez identifiés sur vos publications (qui, sur
+   * laquelle, quand)… */
+  peopleTagsMade: ExportRow[];
+  /** … et les publications des autres où vous êtes identifié(e) (par qui,
+   * quand, et si vous pouvez encore la voir). Jamais une identification liée
+   * à un compte en blocage avec vous (un blocage les efface). */
+  peopleTagsReceived: ExportRow[];
 }
 
 /** Sections de l'export (toutes les clés sauf la date de l'export). */
@@ -342,6 +355,53 @@ async function listMentions(db: Db, userId: string, mine: "user_id" | "author_id
   return rows.filter((row) => !blocked.has(String(row[other])));
 }
 
+/** Comptes en blocage avec la personne, dans un sens ou dans l'autre. */
+async function blockedEitherWay(db: Db, userId: string): Promise<Set<string>> {
+  const [blockedByMe, blockingMe] = await Promise.all([
+    listWhere(db, "blocks", "blocked_id", "blocker_id", userId, ["blocked_id"]),
+    listWhere(db, "blocks", "blocker_id", "blocked_id", userId, ["blocker_id"]),
+  ]);
+  return new Set([...blockedByMe.map((row) => String(row.blocked_id)), ...blockingMe.map((row) => String(row.blocker_id))]);
+}
+
+/** Les membres identifiés sur ses publications (migration 0047). Jamais un
+ * compte en relation de blocage avec la personne (un blocage les efface ;
+ * filtré quand même, règle 8). */
+async function listPeopleTagsMade(db: Db, userId: string): Promise<ExportRow[]> {
+  const rows = await listWhere(db, "post_people_tags", "post_id, user_id, created_at", "author_id", userId, ["created_at", "post_id", "user_id"]);
+  if (rows.length === 0) return rows;
+  const blocked = await blockedEitherWay(db, userId);
+  return rows.filter((row) => !blocked.has(String(row.user_id)));
+}
+
+/** Les publications des autres où elle est identifiée (migration 0047), avec
+ * l'auteur et `post_available` : peut-elle encore la voir (ni masquée, ni
+ * hors de sa visibilité, ni d'un compte privé qu'elle ne suit pas) ? Le
+ * fichier lisible écrit sinon « publication indisponible ». Jamais un compte
+ * en relation de blocage avec elle (règle 8). */
+async function listPeopleTagsReceived(fastify: FastifyInstance, userId: string): Promise<ExportRow[]> {
+  const db = fastify.supabaseAdmin;
+  const rows = await listWhere(db, "post_people_tags", "post_id, author_id, created_at", "user_id", userId, ["created_at", "post_id", "author_id"]);
+  if (rows.length === 0) return rows;
+  const blocked = await blockedEitherWay(db, userId);
+  const kept = rows.filter((row) => !blocked.has(String(row.author_id)));
+  const posts = new Map(
+    (await listIn(db, "posts", "id, user_id, privacy, hidden_at", "id", kept.map((row) => String(row.post_id)), ["id"])).map((row) => [String(row.id), row])
+  );
+  const audiences = new Map<string, Audience>();
+  for (const part of chunks([...new Set(kept.map((row) => String(row.author_id)))])) {
+    for (const [id, audience] of await readAudience(fastify, userId, part, { suspended: false, requested: false })) audiences.set(id, audience);
+  }
+  return kept.map((row) => {
+    const post = posts.get(String(row.post_id));
+    const audience = audiences.get(String(row.author_id));
+    const privacy = post?.privacy;
+    const available =
+      post !== undefined && post.hidden_at == null && audience !== undefined && (privacy === "public" || privacy === "followers" || privacy === "private") && postVisibleTo(audience, privacy);
+    return { ...row, post_available: available };
+  });
+}
+
 export async function collectExport(
   fastify: FastifyInstance,
   userId: string,
@@ -549,6 +609,18 @@ export async function collectExport(
     section("mentionsMade", () => (withThreads ? listMentions(db, userId, "author_id", "user_id") : Promise.resolve(none)), none),
   ]);
 
+  // Plusieurs photos, identifications : sans la migration 0047, sections vides.
+  const withPostExtras = await postExtrasReady(fastify);
+  const [postMedia, peopleTagsMade, peopleTagsReceived] = await Promise.all([
+    section(
+      "postMedia",
+      () => (withPostExtras ? listWhere(db, "post_media", "id, post_id, position, media_url, media_thumb_url, created_at", "user_id", userId, BY_DATE) : Promise.resolve(none)),
+      none
+    ),
+    section("peopleTagsMade", () => (withPostExtras ? listPeopleTagsMade(db, userId) : Promise.resolve(none)), none),
+    section("peopleTagsReceived", () => (withPostExtras ? listPeopleTagsReceived(fastify, userId) : Promise.resolve(none)), none),
+  ]);
+
   const data: ExportData = {
     exportedAt: new Date().toISOString(),
     account: { email },
@@ -597,6 +669,9 @@ export async function collectExport(
     commentReactionsGiven,
     mentionsReceived,
     mentionsMade,
+    postMedia,
+    peopleTagsMade,
+    peopleTagsReceived,
   };
   return { data, failures };
 }

@@ -571,6 +571,26 @@ export const EXPORT_COLUMNS = {
     handle: shown("Pseudo écrit", "Username as written"),
     created_at: shown("Écrite le", "Written on"),
   },
+  // Plusieurs photos, identifier des personnes (lot « vie sociale », migration 0047).
+  postMedia: {
+    id: ID,
+    post_id: technical("Publication", "Post"),
+    position: shown("Place après la première photo", "Place after the first photo"),
+    media_url: shown("Photo", "Photo"),
+    media_thumb_url: shown("Miniature", "Thumbnail"),
+    created_at: shown("Ajoutée le", "Added on"),
+  },
+  peopleTagsMade: {
+    post_id: shown("Sur", "On"),
+    user_id: shown("Compte identifié", "Account tagged"),
+    created_at: shown("Identifié(e) le", "Tagged on"),
+  },
+  peopleTagsReceived: {
+    post_id: shown("Sur", "On"),
+    author_id: shown("Par", "By"),
+    created_at: shown("Identifié(e) le", "Tagged on"),
+    post_available: shown("Vous pouvez encore voir la publication", "You can still see the post"),
+  },
 } as const satisfies Record<ExportDataKey, Record<string, ExportColumn>>;
 
 export type ExportColumnName<K extends ExportDataKey> = keyof (typeof EXPORT_COLUMNS)[K] & string;
@@ -648,7 +668,7 @@ export const EXPORT_SECTIONS = {
       fr: "Ce que vous avez publié sur votre profil, et qui peut le voir.",
       en: "What you posted on your profile, and who can see it.",
     },
-    keys: ["posts", "postTaggedPieces"],
+    keys: ["posts", "postTaggedPieces", "postMedia"],
   },
   comments: {
     title: { fr: "Vos commentaires", en: "Your comments" },
@@ -667,6 +687,14 @@ export const EXPORT_SECTIONS = {
       en: "The “@username” mentions in comments: the ones where other members mention you, and the ones you wrote. A mention removed by the mentioned member, or erased by a block, is no longer kept.",
     },
     keys: ["mentionsReceived", "mentionsMade"],
+  },
+  peopleTags: {
+    title: { fr: "Personnes identifiées", en: "Tagged people" },
+    intro: {
+      fr: "Les membres que vous avez identifiés sur vos publications, et les publications des autres où l'on vous a identifié(e). Une identification retirée, ou perdue avec l'accès à la publication (ou par un blocage), n'est plus conservée.",
+      en: "The members you tagged in your posts, and other members' posts you are tagged in. A tag that was removed, or lost along with access to the post (or through a block), is no longer kept.",
+    },
+    keys: ["peopleTagsMade", "peopleTagsReceived"],
   },
   following: {
     title: { fr: "Comptes que vous suivez", en: "Accounts you follow" },
@@ -1214,6 +1242,11 @@ export const EXPORT_TEXT = {
   likedComment: { fr: "Un commentaire", en: "A comment" },
   mentionsReceivedTitle: { fr: "Mentions de vous ({count})", en: "Mentions of you ({count})" },
   mentionsMadeTitle: { fr: "Mentions que vous avez écrites ({count})", en: "Mentions you wrote ({count})" },
+  // Plusieurs photos, identifier des personnes (migration 0047).
+  morePhotos: { fr: "Autres photos", en: "Other photos" },
+  peopleTagsMadeTitle: { fr: "Personnes que vous avez identifiées ({count})", en: "People you tagged ({count})" },
+  peopleTagsReceivedTitle: { fr: "Publications où l'on vous a identifié(e) ({count})", en: "Posts you are tagged in ({count})" },
+  postUnavailable: { fr: "une publication indisponible", en: "an unavailable post" },
   videoTiktok: { fr: "Vidéo TikTok", en: "TikTok video" },
   videoInstagram: { fr: "Vidéo Instagram", en: "Instagram video" },
   videoMoment: { fr: "à {minutes} min {seconds} s", en: "at {minutes} min {seconds} s" },
