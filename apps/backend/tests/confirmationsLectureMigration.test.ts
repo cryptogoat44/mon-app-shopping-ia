@@ -144,15 +144,30 @@ describe("ce que 0043 exécute", () => {
   });
 });
 
-describe("le serveur et la migration parlent de la même colonne", () => {
+describe("le serveur et la migration parlent des mêmes colonnes", () => {
   const source = (path: string) => readFileSync(join(__dirname, "../src", path), "utf8");
 
-  it("la sonde, la lecture et l'écriture du réglage nomment profiles.read_receipts, la colonne créée par 0043", () => {
+  it("la sonde, la lecture et l'écriture nomment profiles.read_receipts et profiles.read_receipts_since, les colonnes créées par 0043", () => {
     const lib = source("lib/readReceipts.ts");
-    expect(lib).toContain('fastify.supabaseAdmin.from("profiles").select("read_receipts").limit(0)');
-    expect(lib).toContain('.select("id, read_receipts")');
+    // La sonde demande les DEUX colonnes : sans la date « depuis », rien n'est montré ni proposé.
+    expect(lib).toContain('fastify.supabaseAdmin.from("profiles").select("read_receipts, read_receipts_since").limit(0)');
+    expect(lib).toContain('.select("id, read_receipts, read_receipts_since")');
     expect(lib).toContain("Confirmations de lecture coupées : migration 0043 absente");
-    expect(source("routes/me.ts")).toContain(".update({ read_receipts: body.readReceipts, updated_at: new Date().toISOString() })");
+    // Rallumer : le réglage et la date dans la même écriture, à la condition que le réglage soit éteint.
+    expect(lib).toContain(".update({ read_receipts: true, read_receipts_since: sinceStamp(rows.data[0]?.last_read_at ?? null, at), updated_at: new Date(at).toISOString() })\n    .eq(\"id\", userId)\n    .eq(\"read_receipts\", false);");
+    // Éteindre n'écrit jamais la date ; elle n'est écrite nulle part ailleurs dans le serveur.
+    expect(lib).toContain('.update({ read_receipts: false, updated_at: new Date(now()).toISOString() }).eq("id", userId)');
+    expect(lib.match(/read_receipts_since:/g)).toHaveLength(2);
+    const routes = source("routes/me.ts");
+    expect(routes).toContain("const error = await saveReadReceipts(fastify, request.user!.id, body.readReceipts);");
+    expect(routes).not.toContain("read_receipts_since");
+    expect(routes).not.toMatch(/\.update\(\{ read_receipts/);
+  });
+
+  it("la date de la lecture reste écrite comme avant : le serveur ne la conditionne à aucun réglage", () => {
+    const routes = source("routes/conversations.ts");
+    expect(routes).toContain(".update({ unread: false, last_read_at: readStamp(side, Date.now()) })");
+    expect(routes).toContain('.update({ invitation: "none", invitation_at: now, unread: false, last_read_at: now })');
   });
 
   it("les messages eux-mêmes ne demandent jamais cette colonne : leur sonde (0032) ne la lit pas", () => {

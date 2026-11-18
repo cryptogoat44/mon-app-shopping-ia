@@ -20,7 +20,7 @@ import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { isAdmin } from "../lib/moderation.js";
 import { CONTENT_NOT_ALLOWED, firstBannedText } from "../lib/contentFilter.js";
 import { MESSAGES_UNAVAILABLE, messagesReady } from "../lib/messaging.js";
-import { READ_RECEIPTS_UNAVAILABLE, readReceiptsReady } from "../lib/readReceipts.js";
+import { READ_RECEIPTS_UNAVAILABLE, readReceiptsReady, saveReadReceipts } from "../lib/readReceipts.js";
 import { emptyUserFolder, extractOwnedStoragePath, removeOwnedFiles } from "../lib/storage.js";
 import { AVATAR_BUCKET } from "../lib/profileModeration.js";
 
@@ -379,17 +379,16 @@ export default async function meRoutes(fastify: FastifyInstance) {
 
   // « Confirmations de lecture » (lot « messages vus », migration 0043) :
   // allumé par défaut. Éteint : l'autre membre ne voit plus « Vu » pour vos
-  // lectures, et vous ne voyez plus les siennes (lib/readReceipts.ts). Un
-  // réglage de confidentialité : modifiable même par un compte suspendu.
+  // lectures, et vous ne voyez plus les siennes (lib/readReceipts.ts). Rallumé :
+  // seules vos lectures faites à partir de ce moment sont montrées, jamais
+  // celles faites pendant qu'il était éteint (saveReadReceipts). Un réglage
+  // de confidentialité : modifiable même par un compte suspendu.
   // Sans les messages (0032) ou sans 0043 : indisponible, rien n'est écrit.
   fastify.put("/api/me/read-receipts", { preHandler: fastify.requireAuth }, async (request, reply) => {
     if (!(await messagesReady(fastify)) || !(await readReceiptsReady(fastify))) return reply.code(404).send(READ_RECEIPTS_UNAVAILABLE);
     const body = parseInput(updateReadReceiptsSchema, request.body, reply, { error: "invalid_body", message: "Réglage invalide." });
     if (!body) return;
-    const { error } = await fastify.supabaseAdmin
-      .from("profiles")
-      .update({ read_receipts: body.readReceipts, updated_at: new Date().toISOString() })
-      .eq("id", request.user!.id);
+    const error = await saveReadReceipts(fastify, request.user!.id, body.readReceipts);
     if (error) {
       request.log.error({ error }, "Échec de mise à jour du réglage des confirmations de lecture");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });

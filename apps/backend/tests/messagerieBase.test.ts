@@ -23,8 +23,9 @@ const downloadMock = vi.mocked(downloadPublicImage);
 const probeClient = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const probe = await probeClient.from("messages").select("id").limit(0);
 const migrated = !probe.error;
-// Lot « messages vus » : le réglage « Confirmations de lecture » (migration 0043).
-const receiptsMigrated = migrated && !(await probeClient.from("profiles").select("read_receipts").limit(0)).error;
+// Lot « messages vus » : le réglage « Confirmations de lecture » et la date
+// depuis laquelle les lectures peuvent être montrées (migration 0043, deux colonnes).
+const receiptsMigrated = migrated && !(await probeClient.from("profiles").select("read_receipts, read_receipts_since").limit(0)).error;
 const OUR_STORAGE = `${env.SUPABASE_URL}/storage/v1/object/public/post-media/`;
 
 describe.skipIf(!migrated)("messages privés, sur la base de développement (0032)", () => {
@@ -187,9 +188,10 @@ describe.skipIf(!migrated)("messages privés, sur la base de développement (003
 });
 
 // Confirmations de lecture (lot « messages vus », migration 0043), sur la
-// vraie base de développement : la colonne du réglage, les vraies dates
-// (messages datés par la base, lectures par le serveur), le parcours d'une
-// invitation. Sauté tant que 0032 n'est pas appliquée ; chaque essai dit
+// vraie base de développement : les colonnes de 0043, les vraies dates
+// (messages et profils datés par la base, lectures par le serveur), le
+// parcours d'une invitation, et jamais une lecture faite réglage éteint.
+// Sauté tant que 0032 n'est pas appliquée ; chaque essai dit
 // s'il demande 0043 ou son absence. Les règles elles-mêmes, cas par cas :
 // confirmationsLecture.test.ts (sans base).
 describe.skipIf(!migrated)("confirmations de lecture, sur la base de développement (0043)", () => {
@@ -208,6 +210,11 @@ describe.skipIf(!migrated)("confirmations de lecture, sur la base de développem
   const thread = async (user: TestUser, id: string, after?: string): Promise<ConversationThread> =>
     (await request(user, "GET", `/api/conversations/${id}${after ? `?after=${encodeURIComponent(after)}` : ""}`)).json();
   const open = async (user: TestUser, id: string) => expect((await request(user, "POST", `/api/conversations/${id}/read`)).statusCode).toBe(204);
+  const since = async (user: TestUser): Promise<string> => {
+    const { data, error } = await app.supabaseAdmin.from("profiles").select("read_receipts_since").eq("id", user.id).single();
+    expect(error).toBeNull();
+    return (data as { read_receipts_since: string }).read_receipts_since;
+  };
   const lastReadAt = async (user: TestUser, id: string): Promise<string | null> => {
     const { data, error } = await app.supabaseAdmin.from("conversation_participants").select("last_read_at").eq("conversation_id", id).eq("user_id", user.id).single();
     expect(error).toBeNull();
@@ -262,44 +269,80 @@ describe.skipIf(!migrated)("confirmations de lecture, sur la base de développem
     expect((await thread(bruno, id)).readReceipts).toEqual({ seenAt: null });
   });
 
-  it.skipIf(!receiptsMigrated)("réciproque : éteint chez l'un des deux, aucun des deux ne reçoit rien ; rallumé, tout revient", async () => {
+  it.skipIf(!receiptsMigrated)("réciproque : éteint chez l'un des deux, aucun des deux ne reçoit rien ; rallumé, ses lectures d'avant ne reviennent pas, celles d'après sont montrées", async () => {
     const id = (await send(alice, bruno, "Encore un mot")).conversationId;
     await open(bruno, id);
     await open(alice, id);
+    const sinceBefore = await since(bruno);
     expect((await request(bruno, "PUT", "/api/me/read-receipts", { readReceipts: false })).statusCode).toBe(204);
     expect((await request(bruno, "GET", "/api/me")).json().readReceipts).toBe(false);
+    // Éteindre ne déplace pas la date.
+    expect(await since(bruno)).toBe(sinceBefore);
     for (const user of [alice, bruno]) expect((await thread(user, id)).readReceipts).toBeNull();
     expect((await send(alice, bruno, "Vous êtes là ?")).readReceipts).toBeNull();
+    // Bruno lit, réglage éteint : la lecture est datée comme avant (non-lus), jamais montrée ensuite.
+    await open(bruno, id);
+    const whileOff = (await lastReadAt(bruno, id))!;
     expect((await request(bruno, "PUT", "/api/me/read-receipts", { readReceipts: "non" })).statusCode).toBe(400);
     expect((await request(bruno, "PUT", "/api/me/read-receipts", { readReceipts: true })).statusCode).toBe(204);
-    for (const user of [alice, bruno]) expect(typeof (await thread(user, id)).readReceipts?.seenAt).toBe("string");
-    // Le réglage figure dans l'export des données.
-    expect((await request(bruno, "GET", "/api/me/export")).json().profile.read_receipts).toBe(true);
+    // Rallumé : « depuis » est passé APRÈS tout ce que Bruno a lu jusque-là.
+    const sinceAfter = await since(bruno);
+    expect(Date.parse(sinceAfter)).toBeGreaterThan(Date.parse(whileOff));
+    expect(Date.parse(sinceAfter)).toBeGreaterThan(Date.parse(sinceBefore));
+    // Alice ne voit aucune des lectures d'avant de Bruno (« Envoyé ») ; Bruno voit toujours celle d'Alice, qui n'a rien éteint.
+    const forAlice = await thread(alice, id);
+    expect(forAlice.readReceipts).toEqual({ seenAt: null });
+    expect(typeof (await thread(bruno, id)).readReceipts?.seenAt).toBe("string");
+    // Rallumer une seconde fois ne déplace pas la date.
+    expect((await request(bruno, "PUT", "/api/me/read-receipts", { readReceipts: true })).statusCode).toBe(204);
+    expect(await since(bruno)).toBe(sinceAfter);
+    // Un nouveau message, lu réglage allumé : « Vu ».
+    const next = await send(alice, bruno, "Et maintenant ?");
+    expect(next.readReceipts).toEqual({ seenAt: null });
+    await open(bruno, id);
+    const seenAt = (await thread(alice, id)).readReceipts?.seenAt;
+    expect(typeof seenAt).toBe("string");
+    expect(Date.parse(seenAt!)).toBeGreaterThanOrEqual(Date.parse(next.message.createdAt));
+    expect(Date.parse(seenAt!)).toBeGreaterThanOrEqual(Date.parse(sinceAfter));
+    // Le réglage et sa date figurent dans l'export des données.
+    const exported = (await request(bruno, "GET", "/api/me/export")).json().profile;
+    expect(exported.read_receipts).toBe(true);
+    expect(Date.parse(exported.read_receipts_since)).toBe(Date.parse(sinceAfter));
   });
 
+  // Chloé, la personne invitée, n'a jamais touché au réglage : ses lectures
+  // comptent depuis la création de son profil.
   it.skipIf(!receiptsMigrated)("invitation : rien pour la personne qui invite, même une fois l'invitation regardée ; acceptée, jamais la date d'avant", async () => {
-    const sent = await send(chloe, bruno, "Bonjour, j'aime vos envies");
+    const sent = await send(bruno, chloe, "Bonjour, j'aime vos envies");
     const id = sent.conversationId;
     expect(sent).toMatchObject({ state: "invitation_sent", readReceipts: null });
-    const before = await thread(chloe, id);
+    const before = await thread(bruno, id);
     expect(before.readReceipts).toBeNull();
-    // Bruno regarde l'invitation : son app la marque comme lue.
-    await open(bruno, id);
-    const looked = await lastReadAt(bruno, id);
+    // Chloé regarde l'invitation : son app la marque comme lue.
+    await open(chloe, id);
+    const looked = await lastReadAt(chloe, id);
     expect(looked).not.toBeNull();
-    expect(await thread(chloe, id)).toEqual(before);
-    expect((await thread(bruno, id)).readReceipts).toBeNull();
+    expect(await thread(bruno, id)).toEqual(before);
+    expect((await thread(chloe, id)).readReceipts).toBeNull();
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect((await request(bruno, "POST", `/api/conversations/${id}/accept`)).statusCode).toBe(204);
-    const accepted = await thread(chloe, id);
+    expect((await request(chloe, "POST", `/api/conversations/${id}/accept`)).statusCode).toBe(204);
+    const accepted = await thread(bruno, id);
     expect(accepted.state).toBe("open");
     expect(Date.parse(accepted.readReceipts!.seenAt!)).toBeGreaterThan(Date.parse(looked!));
-    expect(Date.parse(accepted.readReceipts!.seenAt!)).toBe(Date.parse((await lastReadAt(bruno, id))!));
+    expect(Date.parse(accepted.readReceipts!.seenAt!)).toBe(Date.parse((await lastReadAt(chloe, id))!));
   });
 
-  it.skipIf(!receiptsMigrated)("la colonne du réglage reste fermée au public (aucune règle d'accès)", async () => {
+  it.skipIf(!receiptsMigrated)("un nouveau profil : réglage allumé, et « depuis » = sa création (jamais vide)", async () => {
+    const { data, error } = await app.supabaseAdmin.from("profiles").select("read_receipts, read_receipts_since, created_at").eq("id", chloe.id).single();
+    expect(error).toBeNull();
+    const row = data as { read_receipts: boolean; read_receipts_since: string; created_at: string };
+    expect(row.read_receipts).toBe(true);
+    expect(Date.parse(row.read_receipts_since)).toBe(Date.parse(row.created_at));
+  });
+
+  it.skipIf(!receiptsMigrated)("les colonnes de 0043 restent fermées au public (aucune règle d'accès)", async () => {
     const anon = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY!, { auth: { persistSession: false } });
-    const { data } = await anon.from("profiles").select("id, read_receipts").limit(1);
+    const { data } = await anon.from("profiles").select("id, read_receipts, read_receipts_since").limit(1);
     expect(data ?? []).toEqual([]);
   });
 });

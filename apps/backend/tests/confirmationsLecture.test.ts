@@ -7,7 +7,7 @@ import conversationsRoutes from "../src/routes/conversations.js";
 import accountRoutes from "../src/routes/account.js";
 import meRoutes from "../src/routes/me.js";
 import { resetMessagesProbe } from "../src/lib/messaging.js";
-import { openBothWays, readReceiptsReady, readStamp, resetReadReceiptsProbe, shownReadAt } from "../src/lib/readReceipts.js";
+import { openBothWays, readReceiptsReady, readStamp, resetReadReceiptsProbe, saveReadReceipts, shownReadAt, sinceStamp } from "../src/lib/readReceipts.js";
 import { EN_MESSAGES } from "../src/lib/messages.js";
 import { requestLogFields, scrubLogLine, withoutErrorDetails } from "../src/lib/logPrivacy.js";
 import { fakeSupabase, type FakeDbOptions, type Row } from "./fakeSupabase.js";
@@ -17,7 +17,9 @@ import { fakeSupabase, type FakeDbOptions, type Row } from "./fakeSupabase.js";
 // (tests/fakeSupabase.ts). « Vu » ou « Envoyé » sous son dernier message :
 // ce que le serveur renvoie (`readReceipts`) à chaque lecture, relecture et
 // envoi ; réciproque ; jamais pour une invitation, ni pour une lecture faite
-// avant qu'elle soit acceptée ; rien pour un blocage ou un compte suspendu ;
+// avant qu'elle soit acceptée ; jamais une lecture du passé (faite avant que
+// « Vu » existe pour ce membre, ou pendant que son réglage était éteint) ;
+// rien pour un blocage ou un compte suspendu ;
 // rien sans la migration. Le même parcours sur la vraie base de
 // développement : messagerieBase.test.ts (sur le Mac, une fois 0043
 // appliquée sur spotto-dev-2).
@@ -29,8 +31,12 @@ const UNKNOWN = "99999999-9999-4999-8999-999999999999";
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 
+/** Depuis quand les lectures des profils de ces tests peuvent être montrées :
+ * la création de leur profil, comme pour tout nouveau membre (migration 0043). */
+const SINCE = "2026-10-01T00:00:00+00:00";
+
 /** Un profil complet (GET /api/me le relit en entier). `receipts` : la valeur
- * du réglage ; null : colonne absente (base sans 0043). */
+ * du réglage ; null : colonnes absentes (base sans 0043). */
 function profile(id: string, username: string, receipts: boolean | null = true): Row {
   return {
     id,
@@ -42,7 +48,7 @@ function profile(id: string, username: string, receipts: boolean | null = true):
     default_privacy: "followers",
     messages_from: "everyone",
     piece_sends_from: "following",
-    ...(receipts === null ? {} : { read_receipts: receipts }),
+    ...(receipts === null ? {} : { read_receipts: receipts, read_receipts_since: SINCE }),
     created_at: "2026-10-01T00:00:00+00:00",
     updated_at: "2026-10-01T00:00:00+00:00",
   };
@@ -52,11 +58,11 @@ const friends = (a: string, b: string): [string, string][] => [
   [a, b],
   [b, a],
 ];
-const WITHOUT_0043: FakeDbOptions = { missingColumns: { profiles: ["read_receipts"] } };
+const WITHOUT_0043: FakeDbOptions = { missingColumns: { profiles: ["read_receipts", "read_receipts_since"] } };
 
 interface Seed {
   follows?: [string, string][];
-  /** Base sans la migration 0043 : colonne absente, profils sans réglage. */
+  /** Base sans la migration 0043 : colonnes absentes, profils sans réglage. */
   without0043?: boolean;
 }
 
@@ -133,6 +139,7 @@ async function setReceipts(target: FastifyInstance, user: string, value: boolean
 }
 
 const side = (fake: Fake, user: string): Row => fake.table("conversation_participants").find((row) => row.user_id === user)!;
+const profileRow = (fake: Fake, user: string): Row => fake.table("profiles").find((row) => row.id === user)!;
 
 // L'horloge du serveur avance à la demande (une heure entre deux gestes) :
 // une lecture, une acceptation et un message ont chacun leur date. Jamais en
@@ -170,28 +177,87 @@ describe("règles (sans réseau)", () => {
     const opened = "2026-11-10T10:00:00.000+00:00";
     const base = { invitation: "none" as const, invitation_at: opened };
     // Pas encore lue.
-    expect(shownReadAt({ ...base, last_read_at: null })).toBeNull();
+    expect(shownReadAt({ ...base, last_read_at: null }, SINCE)).toBeNull();
     // Lue avant l'acceptation (la personne invitée regardait l'invitation) : jamais montrée.
-    expect(shownReadAt({ ...base, last_read_at: "2026-11-09T18:30:00.000+00:00" })).toBeNull();
-    expect(shownReadAt({ ...base, last_read_at: "2026-11-10T09:59:59.999+00:00" })).toBeNull();
+    expect(shownReadAt({ ...base, last_read_at: "2026-11-09T18:30:00.000+00:00" }, SINCE)).toBeNull();
+    expect(shownReadAt({ ...base, last_read_at: "2026-11-10T09:59:59.999+00:00" }, SINCE)).toBeNull();
     // À l'acceptation (« Accepter » date la lecture du même instant) ou après : montrée telle quelle.
-    expect(shownReadAt({ ...base, last_read_at: opened })).toBe(opened);
-    expect(shownReadAt({ ...base, last_read_at: "2026-11-10T10:00:00.001+00:00" })).toBe("2026-11-10T10:00:00.001+00:00");
+    expect(shownReadAt({ ...base, last_read_at: opened }, SINCE)).toBe(opened);
+    expect(shownReadAt({ ...base, last_read_at: "2026-11-10T10:00:00.001+00:00" }, SINCE)).toBe("2026-11-10T10:00:00.001+00:00");
     // Même instant, écrit autrement (serveur, puis base).
-    expect(shownReadAt({ ...base, last_read_at: "2026-11-10T10:00:00.000Z" })).toBe("2026-11-10T10:00:00.000Z");
-    // Conversation ouverte dès le premier message (entre amis) : aucune invitation, toute lecture compte.
-    expect(shownReadAt({ invitation: "none", invitation_at: null, last_read_at: "2026-11-09T18:30:00+00:00" })).toBe("2026-11-09T18:30:00+00:00");
+    expect(shownReadAt({ ...base, last_read_at: "2026-11-10T10:00:00.000Z" }, SINCE)).toBe("2026-11-10T10:00:00.000Z");
+    // Conversation ouverte dès le premier message (entre amis) : aucune invitation, toute lecture d'après « depuis » compte.
+    expect(shownReadAt({ invitation: "none", invitation_at: null, last_read_at: "2026-11-09T18:30:00+00:00" }, SINCE)).toBe("2026-11-09T18:30:00+00:00");
   });
 
-  it("un côté qui n'est pas ouvert, ou une date illisible : rien", () => {
+  it("jamais une lecture d'avant « depuis » (read_receipts_since) : avant que « Vu » existe pour ce membre, ou pendant que son réglage était éteint", () => {
+    const since = "2026-11-18T09:00:00.000Z";
+    const friends = { invitation: "none" as const, invitation_at: null };
+    // La veille, une heure avant, une milliseconde avant : jamais.
+    for (const read of ["2026-11-17T21:00:00.000Z", "2026-11-18T08:00:00+00:00", "2026-11-18T08:59:59.999Z", "2026-11-18T08:59:59.999999+00:00"]) {
+      expect(shownReadAt({ ...friends, last_read_at: read }, since), read).toBeNull();
+    }
+    // Au même instant, ou après : montrée telle quelle (une lecture faite juste après avoir rallumé n'est pas perdue).
+    for (const read of ["2026-11-18T09:00:00.000Z", "2026-11-18T09:00:00+00:00", "2026-11-18T09:00:00.001Z", "2026-11-19T07:00:00.123456+00:00"]) {
+      expect(shownReadAt({ ...friends, last_read_at: read }, since), read).toBe(read);
+    }
+    // La date « depuis » écrite par la base (microsecondes) : la même règle.
+    expect(shownReadAt({ ...friends, last_read_at: "2026-11-18T08:59:59.999Z" }, "2026-11-18T09:00:00.000431+00:00")).toBeNull();
+    expect(shownReadAt({ ...friends, last_read_at: "2026-11-18T09:00:00.001Z" }, "2026-11-18T09:00:00.000431+00:00")).toBe("2026-11-18T09:00:00.001Z");
+  });
+
+  it("les deux bornes ensemble : ni avant « depuis », ni avant l'ouverture de la conversation, dans un ordre comme dans l'autre", () => {
+    const early = "2026-11-10T10:00:00.000Z";
+    const late = "2026-11-12T10:00:00.000Z";
+    const between = "2026-11-11T10:00:00.000Z";
+    const after = "2026-11-13T10:00:00.000Z";
+    for (const [opened, since] of [
+      [early, late],
+      [late, early],
+    ] as const) {
+      const sideAt = (read: string) => ({ invitation: "none" as const, invitation_at: opened, last_read_at: read });
+      expect(shownReadAt(sideAt("2026-11-09T10:00:00.000Z"), since)).toBeNull();
+      expect(shownReadAt(sideAt(between), since)).toBeNull();
+      expect(shownReadAt(sideAt(late), since)).toBe(late);
+      expect(shownReadAt(sideAt(after), since)).toBe(after);
+    }
+  });
+
+  it("un côté qui n'est pas ouvert, une date illisible, ou pas de date « depuis » : rien", () => {
     const read = "2026-11-10T12:00:00+00:00";
     for (const invitation of ["sent", "received", "declined"] as const) {
-      expect(shownReadAt({ invitation, invitation_at: "2026-11-10T10:00:00+00:00", last_read_at: read })).toBeNull();
-      expect(shownReadAt({ invitation, invitation_at: null, last_read_at: read })).toBeNull();
+      expect(shownReadAt({ invitation, invitation_at: "2026-11-10T10:00:00+00:00", last_read_at: read }, SINCE)).toBeNull();
+      expect(shownReadAt({ invitation, invitation_at: null, last_read_at: read }, SINCE)).toBeNull();
     }
-    expect(shownReadAt({ invitation: "none", invitation_at: "illisible", last_read_at: read })).toBeNull();
-    expect(shownReadAt({ invitation: "none", invitation_at: "2026-11-10T10:00:00+00:00", last_read_at: "illisible" })).toBeNull();
-    expect(shownReadAt({ invitation: "none", invitation_at: null, last_read_at: "illisible" })).toBeNull();
+    expect(shownReadAt({ invitation: "none", invitation_at: "illisible", last_read_at: read }, SINCE)).toBeNull();
+    expect(shownReadAt({ invitation: "none", invitation_at: "2026-11-10T10:00:00+00:00", last_read_at: "illisible" }, SINCE)).toBeNull();
+    expect(shownReadAt({ invitation: "none", invitation_at: null, last_read_at: "illisible" }, SINCE)).toBeNull();
+    // Sans date « depuis » lisible, aucune lecture n'est montrée : jamais « toutes » par défaut.
+    for (const since of [null, undefined, "", "illisible"]) {
+      expect(shownReadAt({ invitation: "none", invitation_at: null, last_read_at: read }, since), String(since)).toBeNull();
+      expect(shownReadAt({ invitation: "none", invitation_at: "2026-11-10T10:00:00+00:00", last_read_at: read }, since), String(since)).toBeNull();
+    }
+  });
+
+  it("date « depuis » écrite quand le réglage est rallumé : maintenant, et toujours après la lecture la plus récente déjà enregistrée", () => {
+    const now = Date.parse("2026-11-18T09:00:00.000Z");
+    // Aucune lecture, ou des lectures plus anciennes : l'heure du serveur.
+    expect(sinceStamp(null, now)).toBe("2026-11-18T09:00:00.000Z");
+    expect(sinceStamp("2026-11-17T21:00:00.000Z", now)).toBe("2026-11-18T09:00:00.000Z");
+    expect(sinceStamp("2026-11-18T08:59:59.999Z", now)).toBe("2026-11-18T09:00:00.000Z");
+    expect(sinceStamp("2026-11-18T08:59:59.999999+00:00", now)).toBe("2026-11-18T09:00:00.000Z");
+    // Une lecture datée de maintenant ou « du futur » (dernier message daté par la base, en avance) : une milliseconde après elle.
+    expect(sinceStamp("2026-11-18T09:00:00.000Z", now)).toBe("2026-11-18T09:00:00.001Z");
+    expect(sinceStamp("2026-11-18T09:00:00.250123+00:00", now)).toBe("2026-11-18T09:00:00.251Z");
+    expect(sinceStamp("2026-11-18T09:00:02.999999+00:00", now)).toBe("2026-11-18T09:00:03.000Z");
+    expect(sinceStamp("illisible", now)).toBe("2026-11-18T09:00:00.000Z");
+    // Dans tous les cas, la lecture déjà faite n'est plus montrée, et une lecture datée de « depuis » ou d'après l'est.
+    for (const latest of ["2026-11-17T21:00:00.000Z", "2026-11-18T08:59:59.999999+00:00", "2026-11-18T09:00:00.000Z", "2026-11-18T09:00:00.250123+00:00", "2026-11-18T09:00:02.999999+00:00"]) {
+      const since = sinceStamp(latest, now);
+      expect(shownReadAt({ invitation: "none", invitation_at: null, last_read_at: latest }, since), latest).toBeNull();
+      expect(shownReadAt({ invitation: "none", invitation_at: null, last_read_at: since }, since), latest).toBe(since);
+      expect(Date.parse(since)).toBeGreaterThanOrEqual(now);
+    }
   });
 
   it("date d'une lecture : maintenant ; dans une conversation ouverte, jamais avant le dernier message lu (horloge de la base en avance)", () => {
@@ -288,7 +354,7 @@ describe("conversation ouverte entre amis", () => {
 });
 
 describe("réglage « Confirmations de lecture » : allumé par défaut, réciproque", () => {
-  it("dès que l'un des deux l'éteint, aucun des deux ne reçoit rien ; rallumé, tout revient", async () => {
+  it("dès que l'un des deux l'éteint, aucun des deux ne reçoit rien ; rallumé, seules les lectures de qui ne l'avait pas éteint reviennent", async () => {
     const fake = seeded({ follows: friends(ALICE, BOB) });
     const target = await messagesApp(fake.db);
     const first = await send(target, ALICE, BOB, "Bonjour");
@@ -297,23 +363,47 @@ describe("réglage « Confirmations de lecture » : allumé par défaut, récipr
     await open(target, BOB, id);
     const aliceRead = later();
     await open(target, ALICE, id);
-
-    for (const off of [ALICE, BOB]) {
-      await setReceipts(target, off, false);
+    const other = (user: string) => (user === ALICE ? BOB : ALICE);
+    const nothingForAnyone = async (off: string) => {
       for (const viewer of [ALICE, BOB]) {
         expect((await thread(target, viewer, id)).readReceipts, `${off} éteint, vu par ${viewer}`).toBeNull();
         expect((await thread(target, viewer, id, first.message.createdAt)).readReceipts).toBeNull();
-        expect((await as(target, viewer).get(`/api/conversations/with/${viewer === ALICE ? BOB : ALICE}`)).json().readReceipts).toBeNull();
+        expect((await as(target, viewer).get(`/api/conversations/with/${other(viewer)}`)).json().readReceipts).toBeNull();
       }
       later();
       expect((await send(target, ALICE, BOB, "Encore un mot")).readReceipts).toBeNull();
       expect((await send(target, BOB, ALICE, "Réponse")).readReceipts).toBeNull();
       // Rien d'autre ne change : la conversation, ses messages, l'envoi.
       expect(await thread(target, ALICE, id)).toMatchObject({ state: "open", sendMode: "direct" });
-      await setReceipts(target, off, true);
-    }
+    };
+
+    // Alice éteint, puis rallume : la lecture de Bob (qui n'a rien éteint) revient ;
+    // celles d'Alice d'avant ne sont plus montrées à Bob (« Envoyé »).
+    await setReceipts(target, ALICE, false);
+    await nothingForAnyone(ALICE);
+    later();
+    await setReceipts(target, ALICE, true);
     expect((await thread(target, ALICE, id)).readReceipts).toEqual({ seenAt: bobRead });
-    expect((await thread(target, BOB, id)).readReceipts).toEqual({ seenAt: aliceRead });
+    expect((await thread(target, BOB, id)).readReceipts).toEqual({ seenAt: null });
+    expect(JSON.stringify(await thread(target, BOB, id))).not.toContain(aliceRead);
+
+    // Bob éteint à son tour, puis rallume : ses lectures d'avant ne sont plus montrées non plus.
+    await setReceipts(target, BOB, false);
+    await nothingForAnyone(BOB);
+    later();
+    await setReceipts(target, BOB, true);
+    for (const viewer of [ALICE, BOB]) {
+      const read = await thread(target, viewer, id);
+      expect(read.readReceipts, viewer).toEqual({ seenAt: null });
+      for (const past of [bobRead, aliceRead]) expect(JSON.stringify(read)).not.toContain(past);
+    }
+    // Chacun rouvre la conversation, réglage allumé : ces lectures-là sont montrées.
+    const bobAgain = later();
+    await open(target, BOB, id);
+    const aliceAgain = later();
+    await open(target, ALICE, id);
+    expect((await thread(target, ALICE, id)).readReceipts).toEqual({ seenAt: bobAgain });
+    expect((await thread(target, BOB, id)).readReceipts).toEqual({ seenAt: aliceAgain });
   });
 
   it("le réglage s'enregistre (même pour un compte suspendu), se relit dans le profil, et n'accepte qu'un vrai oui ou non", async () => {
@@ -347,14 +437,296 @@ describe("réglage « Confirmations de lecture » : allumé par défaut, récipr
     expect(fake.table("profiles").find((row) => row.id === ALICE)!.read_receipts).toBe(true);
   });
 
-  it("l'export des données contient le réglage", async () => {
+  it("l'export des données contient le réglage, et la date depuis laquelle vos lectures peuvent être montrées", async () => {
     const fake = seeded();
     const target = await messagesApp(fake.db);
     await setReceipts(target, ALICE, false);
+    const turnedOn = later();
+    await setReceipts(target, ALICE, true);
     const exported = (await as(target, ALICE).get("/api/me/export")).json();
-    expect(exported.profile.read_receipts).toBe(false);
-    const page = (await as(target, ALICE).get("/api/me/export?format=html")).body.replace(/<[^>]*>/g, " ");
-    expect(page).toContain("Confirmations de lecture");
+    expect(exported.profile.read_receipts).toBe(true);
+    expect(exported.profile.read_receipts_since).toBe(turnedOn);
+    const page = (await as(target, ALICE).get("/api/me/export?format=html")).body.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
+    expect(page).toContain("Confirmations de lecture Oui");
+    // La date, sous son libellé (jamais sous le nom de la colonne, dans « Autres informations »).
+    expect(page).toMatch(/Confirmations de lecture activées pour la dernière fois le \d{1,2}(er)? [a-zéû]+ 2031 à \d{2}:\d{2} /);
+    expect(page).not.toContain("Autres informations read_receipts_since");
+  });
+});
+
+describe("jamais une lecture du passé", () => {
+  it("une lecture faite AVANT que « Vu » existe (avant la migration 0043) n'est jamais montrée, même réglage allumé par défaut", async () => {
+    // La base n'a pas encore 0043 : Bob lit, sa lecture est datée comme depuis toujours.
+    const options: FakeDbOptions = { missingColumns: { profiles: ["read_receipts", "read_receipts_since"] } };
+    const fake = seeded({ follows: friends(ALICE, BOB), without0043: true }, options);
+    const target = await messagesApp(fake.db);
+    const first = await send(target, ALICE, BOB, "Tu as vu ce sac ?");
+    const id = first.conversationId;
+    const before = later();
+    await open(target, BOB, id);
+    expect(side(fake, BOB)).toMatchObject({ unread: false, last_read_at: before });
+    expect((await thread(target, ALICE, id)).readReceipts).toBeNull();
+
+    // La migration passe : réglage allumé pour tous, « depuis » = ce moment-là.
+    const migrated = later();
+    options.missingColumns!.profiles = [];
+    for (const row of fake.table("profiles")) Object.assign(row, { read_receipts: true, read_receipts_since: migrated });
+    // La sonde du schéma est refaite au bout de 5 minutes.
+    later(6 * MINUTE);
+    expect((await as(target, BOB).get("/api/me")).json().readReceipts).toBe(true);
+    for (const read of [await thread(target, ALICE, id), await thread(target, ALICE, id, first.message.createdAt), (await as(target, ALICE).get(`/api/conversations/with/${BOB}`)).json()]) {
+      // « Envoyé » : la lecture de la veille n'est pas montrée, ni sa date.
+      expect(read.readReceipts).toEqual({ seenAt: null });
+      expect(JSON.stringify(read)).not.toContain(before);
+    }
+    expect((await send(target, ALICE, BOB, "Alors ?")).readReceipts).toEqual({ seenAt: null });
+    // La lecture d'avant est restée telle quelle dans la base (non-lus, export).
+    expect(side(fake, BOB).last_read_at).toBe(before);
+    // Bob rouvre la conversation, « Vu » existe désormais pour lui : montrée.
+    const after = later();
+    await open(target, BOB, id);
+    expect((await thread(target, ALICE, id)).readReceipts).toEqual({ seenAt: after });
+  });
+
+  it("une lecture faite réglage ÉTEINT n'est jamais montrée, même une fois le réglage rallumé ; les non-lus, eux, ne changent pas", async () => {
+    const fake = seeded({ follows: friends(ALICE, BOB) });
+    const target = await messagesApp(fake.db);
+    const first = await send(target, ALICE, BOB, "Tu as vu ce sac ?");
+    const id = first.conversationId;
+    await setReceipts(target, BOB, false);
+    expect((await as(target, BOB).get("/api/messages/status")).json()).toMatchObject({ enabled: true, unreadCount: 1 });
+    // Bob lit, réglage éteint : la lecture est datée comme avant, le « non lu » disparaît.
+    const whileOff = later();
+    await open(target, BOB, id);
+    expect(side(fake, BOB)).toMatchObject({ unread: false, last_read_at: whileOff });
+    expect((await as(target, BOB).get("/api/messages/status")).json()).toMatchObject({ enabled: true, unreadCount: 0 });
+    expect(profileRow(fake, BOB).read_receipts_since).toBe(SINCE);
+
+    // Il rallume : « depuis » = ce moment-là.
+    const turnedOn = later();
+    await setReceipts(target, BOB, true);
+    expect(profileRow(fake, BOB)).toMatchObject({ read_receipts: true, read_receipts_since: turnedOn, updated_at: turnedOn });
+    for (const read of [await thread(target, ALICE, id), await thread(target, ALICE, id, first.message.createdAt), (await as(target, ALICE).get(`/api/conversations/with/${BOB}`)).json()]) {
+      expect(read.readReceipts).toEqual({ seenAt: null });
+      expect(JSON.stringify(read)).not.toContain(whileOff);
+    }
+    expect((await send(target, ALICE, BOB, "Alors ?")).readReceipts).toEqual({ seenAt: null });
+    expect(side(fake, BOB).last_read_at).toBe(whileOff);
+    // Plus tard, toujours rien : le temps qui passe ne la fait pas apparaître.
+    later(48 * HOUR);
+    expect((await thread(target, ALICE, id)).readReceipts).toEqual({ seenAt: null });
+    // Une lecture faite réglage allumé, elle, est montrée.
+    const whileOn = later();
+    await open(target, BOB, id);
+    expect((await thread(target, ALICE, id)).readReceipts).toEqual({ seenAt: whileOn });
+  });
+
+  it("éteint, lu, rallumé aussitôt, horloge de la base en avance : la lecture datée « du futur » n'est pas montrée ; la lecture suivante l'est", async () => {
+    const fake = seeded({ follows: friends(ALICE, BOB) });
+    const target = await messagesApp(fake.db);
+    const first = await send(target, ALICE, BOB, "Bonjour");
+    const id = first.conversationId;
+    await setReceipts(target, BOB, false);
+    // La fausse base date ses messages au moins une seconde après l'heure du
+    // serveur : la lecture de Bob est datée de ce message (readStamp), donc d'après « maintenant ».
+    await open(target, BOB, id);
+    const whileOff = String(side(fake, BOB).last_read_at);
+    expect(Date.parse(whileOff)).toBeGreaterThan(Date.now());
+    // Rallumé dans le même instant : « depuis » passe juste après cette lecture, jamais avant.
+    await setReceipts(target, BOB, true);
+    const since = String(profileRow(fake, BOB).read_receipts_since);
+    expect(Date.parse(since)).toBe(Date.parse(whileOff) + 1);
+    // (Cette lecture porte la date du message lui-même : seul `readReceipts` dit si elle est montrée.)
+    expect(whileOff).toBe(first.message.createdAt);
+    expect((await thread(target, ALICE, id)).readReceipts).toEqual({ seenAt: null });
+    expect((await thread(target, ALICE, id, first.message.createdAt)).readReceipts).toEqual({ seenAt: null });
+    // Un nouveau message, lu réglage allumé, toujours dans le même instant : « Vu ».
+    const second = await send(target, ALICE, BOB, "Encore moi");
+    await open(target, BOB, id);
+    const seenAt = (await thread(target, ALICE, id)).readReceipts!.seenAt!;
+    expect(Date.parse(seenAt)).toBeGreaterThanOrEqual(Date.parse(second.message.createdAt));
+    expect(Date.parse(seenAt)).toBeGreaterThanOrEqual(Date.parse(since));
+  });
+
+  it("une lecture faite juste après avoir rallumé (même milliseconde, horloges d'accord) est montrée ; celle de juste avant ne l'est pas", async () => {
+    const fake = seeded({ follows: friends(ALICE, BOB) });
+    const target = await messagesApp(fake.db);
+    const id = (await send(target, ALICE, BOB, "Bonjour")).conversationId;
+    await setReceipts(target, BOB, false);
+    const justBefore = later();
+    await open(target, BOB, id);
+    const turnedOn = later(1);
+    await setReceipts(target, BOB, true);
+    expect(profileRow(fake, BOB).read_receipts_since).toBe(turnedOn);
+    expect(Date.parse(turnedOn) - Date.parse(justBefore)).toBe(1);
+    expect((await thread(target, ALICE, id)).readReceipts).toEqual({ seenAt: null });
+    // Même milliseconde que « depuis » : montrée.
+    await open(target, BOB, id);
+    expect(side(fake, BOB).last_read_at).toBe(turnedOn);
+    expect((await thread(target, ALICE, id)).readReceipts).toEqual({ seenAt: turnedOn });
+  });
+
+  it("allumer un réglage déjà allumé ne déplace rien : ni « depuis », ni ce qui est montré", async () => {
+    const fake = seeded({ follows: friends(ALICE, BOB) });
+    const target = await messagesApp(fake.db);
+    const id = (await send(target, ALICE, BOB, "Bonjour")).conversationId;
+    const readAt = later();
+    await open(target, BOB, id);
+    const before = { ...profileRow(fake, BOB) };
+    for (let again = 0; again < 2; again += 1) {
+      later();
+      await setReceipts(target, BOB, true);
+      expect(profileRow(fake, BOB)).toEqual(before);
+      expect((await thread(target, ALICE, id)).readReceipts).toEqual({ seenAt: readAt });
+    }
+    // Éteindre ne déplace pas « depuis » non plus : seul le passage d'éteint à allumé l'écrit.
+    later();
+    await setReceipts(target, BOB, false);
+    expect(profileRow(fake, BOB)).toMatchObject({ read_receipts: false, read_receipts_since: SINCE });
+    later();
+    await setReceipts(target, BOB, false);
+    expect(profileRow(fake, BOB)).toMatchObject({ read_receipts: false, read_receipts_since: SINCE });
+  });
+
+  it("deux demandes « allumer » en même temps : une seule écrit la date (écriture conditionnelle, jamais lu puis écrit)", async () => {
+    const fake = seeded({ follows: friends(ALICE, BOB) });
+    const target = await messagesApp(fake.db);
+    const id = (await send(target, ALICE, BOB, "Bonjour")).conversationId;
+    await setReceipts(target, BOB, false);
+    later();
+    await open(target, BOB, id);
+    // Une autre demande de Bob passe juste avant l'écriture de celle-ci : le réglage est déjà rallumé, avec sa date.
+    const winner = later();
+    const original = fake.db.from;
+    let raced = 0;
+    const conditions: [string, unknown][] = [];
+    fake.db.from = ((name: string) => {
+      const chain = original(name);
+      if (name !== "profiles") return chain;
+      const update = chain.update;
+      const eq = chain.eq;
+      chain.update = (values: Row) => {
+        if (values.read_receipts === true) {
+          raced += 1;
+          Object.assign(profileRow(fake, BOB), { read_receipts: true, read_receipts_since: winner, updated_at: winner });
+          chain.eq = (column: string, value: unknown) => {
+            conditions.push([column, value]);
+            return eq(column, value);
+          };
+        }
+        return update(values);
+      };
+      return chain;
+    }) as typeof original;
+    later();
+    await setReceipts(target, BOB, true);
+    fake.db.from = original;
+    expect(raced).toBe(1);
+    // La seconde écriture n'a rien trouvé à écrire : la date de la première reste.
+    expect(profileRow(fake, BOB)).toMatchObject({ read_receipts: true, read_receipts_since: winner, updated_at: winner });
+    // La condition « était éteint » fait partie de l'écriture elle-même.
+    expect(conditions).toEqual([
+      ["id", BOB],
+      ["read_receipts", false],
+    ]);
+  });
+
+  it("« depuis » est celui de la personne qui LIT, jamais celui de la personne qui regarde", async () => {
+    const fake = seeded({ follows: friends(ALICE, BOB) });
+    const target = await messagesApp(fake.db);
+    const id = (await send(target, ALICE, BOB, "Bonjour")).conversationId;
+    // Alice éteint ; Bob, réglage allumé, lit pendant ce temps ; Alice rallume.
+    await setReceipts(target, ALICE, false);
+    const bobRead = later();
+    await open(target, BOB, id);
+    later();
+    await setReceipts(target, ALICE, true);
+    expect(Date.parse(String(profileRow(fake, ALICE).read_receipts_since))).toBeGreaterThan(Date.parse(bobRead));
+    // La lecture de Bob a été faite réglage (de Bob) allumé : Alice la voit.
+    expect((await thread(target, ALICE, id)).readReceipts).toEqual({ seenAt: bobRead });
+    // « Depuis » de Bob dans le futur (profil illisible ou horloge) : rien de lui n'est montré.
+    profileRow(fake, BOB).read_receipts_since = new Date(Date.now() + HOUR).toISOString();
+    expect((await thread(target, ALICE, id)).readReceipts).toEqual({ seenAt: null });
+    // Sans date du tout (ligne abîmée) : rien non plus, jamais « tout ».
+    profileRow(fake, BOB).read_receipts_since = null;
+    expect((await thread(target, ALICE, id)).readReceipts).toEqual({ seenAt: null });
+    delete profileRow(fake, BOB).read_receipts_since;
+    expect((await thread(target, ALICE, id)).readReceipts).toEqual({ seenAt: null });
+  });
+
+  it("invitation acceptée réglage éteint, puis réglage rallumé : ni la lecture de l'invitation, ni celle de l'acceptation ne sont montrées", async () => {
+    const fake = seeded();
+    const target = await messagesApp(fake.db);
+    const id = (await send(target, ALICE, BOB, "Bonjour")).conversationId;
+    await setReceipts(target, BOB, false);
+    const looked = later();
+    await open(target, BOB, id);
+    const accepted = later();
+    expect((await as(target, BOB).post(`/api/conversations/${id}/accept`)).statusCode).toBe(204);
+    expect(side(fake, BOB)).toMatchObject({ invitation: "none", last_read_at: accepted });
+    later();
+    await setReceipts(target, BOB, true);
+    const read = await thread(target, ALICE, id);
+    expect(read).toMatchObject({ state: "open", readReceipts: { seenAt: null } });
+    for (const past of [looked, accepted]) expect(JSON.stringify(read)).not.toContain(past);
+    const reread = later();
+    await open(target, BOB, id);
+    expect((await thread(target, ALICE, id)).readReceipts).toEqual({ seenAt: reread });
+  });
+
+  it("rallumer : la lecture la plus récente du membre, toutes conversations confondues, borne la date ; illisible ou en panne, rien n'est écrit", async () => {
+    const fake = seeded({ follows: [...friends(ALICE, BOB), ...friends(BOB, CHLOE)] });
+    const target = await messagesApp(fake.db);
+    const withAlice = (await send(target, ALICE, BOB, "Bonjour")).conversationId;
+    const withChloe = (await send(target, CHLOE, BOB, "Coucou")).conversationId;
+    await setReceipts(target, BOB, false);
+    later();
+    await open(target, BOB, withAlice);
+    // La conversation avec Chloé, lue réglage éteint, est datée « du futur » (base en avance).
+    later();
+    await send(target, CHLOE, BOB, "Tu es là ?");
+    await open(target, BOB, withChloe);
+    const latest = String(fake.table("conversation_participants").find((row) => row.user_id === BOB && row.conversation_id === withChloe)!.last_read_at);
+    expect(Date.parse(latest)).toBeGreaterThan(Date.now());
+
+    // La lecture de la base échoue : 500, le réglage reste éteint, la date ne bouge pas.
+    const original = fake.db.from;
+    fake.db.from = ((name: string) => (name === "conversation_participants" ? fakeSupabase({ missing: ["conversation_participants"] }).db.from(name) : original(name))) as typeof original;
+    // (La sonde des messages est déjà mémorisée : seule la lecture des dates échoue.)
+    const failed = await as(target, BOB).put("/api/me/read-receipts", { readReceipts: true });
+    expect(failed.statusCode).toBe(500);
+    expect(failed.json()).toEqual({ error: "internal_error", message: "Une erreur est survenue." });
+    expect(profileRow(fake, BOB)).toMatchObject({ read_receipts: false, read_receipts_since: SINCE });
+    fake.db.from = original;
+
+    await setReceipts(target, BOB, true);
+    expect(Date.parse(String(profileRow(fake, BOB).read_receipts_since))).toBe(Date.parse(latest) + 1);
+    for (const [viewer, conversation] of [
+      [ALICE, withAlice],
+      [CHLOE, withChloe],
+    ] as const) {
+      expect((await thread(target, viewer, conversation)).readReceipts, viewer).toEqual({ seenAt: null });
+    }
+    // Le réglage d'un autre membre et sa date n'ont pas bougé.
+    expect(profileRow(fake, ALICE)).toMatchObject({ read_receipts: true, read_receipts_since: SINCE });
+  });
+
+  it("saveReadReceipts : ce qui est écrit, et à quelle condition", async () => {
+    const fake = seeded();
+    const now = () => Date.parse("2031-06-01T12:00:00.000Z");
+    const server = { supabaseAdmin: fake.db } as unknown as FastifyInstance;
+    // Déjà allumé : rien n'est écrit.
+    expect(await saveReadReceipts(server, ALICE, true, now)).toBeNull();
+    expect(profileRow(fake, ALICE)).toEqual(profile(ALICE, "alice"));
+    // Éteindre : le réglage et la date de modification du profil, jamais « depuis ».
+    expect(await saveReadReceipts(server, ALICE, false, now)).toBeNull();
+    expect(profileRow(fake, ALICE)).toEqual({ ...profile(ALICE, "alice", false), updated_at: "2031-06-01T12:00:00.000Z" });
+    // Rallumer : le réglage et « depuis », ensemble.
+    const later2 = () => Date.parse("2031-06-02T12:00:00.000Z");
+    expect(await saveReadReceipts(server, ALICE, true, later2)).toBeNull();
+    expect(profileRow(fake, ALICE)).toEqual({ ...profile(ALICE, "alice"), read_receipts_since: "2031-06-02T12:00:00.000Z", updated_at: "2031-06-02T12:00:00.000Z" });
+    // Les autres profils n'ont pas bougé.
+    expect(profileRow(fake, BOB)).toEqual(profile(BOB, "bob"));
   });
 });
 
@@ -619,9 +991,24 @@ describe("sans la migration 0043", () => {
       expect(res.json()).toEqual({ error: "read_receipts_unavailable", message: "Les confirmations de lecture ne sont pas encore disponibles." });
     }
     expect(fake.table("profiles").find((row) => row.id === ALICE)).not.toHaveProperty("read_receipts");
+    expect(fake.table("profiles").find((row) => row.id === ALICE)).not.toHaveProperty("read_receipts_since");
     expect(EN_MESSAGES["Les confirmations de lecture ne sont pas encore disponibles."]).toBe("Read receipts aren't available yet.");
     // Les autres réglages restent là.
     expect((await as(target, ALICE).put("/api/me/messages-from", { messagesFrom: "nobody" })).statusCode).toBe(204);
+  });
+
+  it("base qui n'aurait que le réglage, sans la date « depuis » : comme sans 0043, rien n'est montré ni proposé, rien n'est écrit", async () => {
+    const fake = seeded({ follows: friends(ALICE, BOB) }, { missingColumns: { profiles: ["read_receipts_since"] } });
+    for (const row of fake.table("profiles")) delete row.read_receipts_since;
+    const target = await messagesApp(fake.db);
+    const first = await send(target, ALICE, BOB, "Bonjour");
+    expect(first).toMatchObject({ state: "open", readReceipts: null });
+    later(MINUTE);
+    await open(target, BOB, first.conversationId);
+    expect((await thread(target, ALICE, first.conversationId)).readReceipts).toBeNull();
+    expect((await as(target, ALICE).get("/api/me")).json()).not.toHaveProperty("readReceipts");
+    for (const value of [false, true]) expect((await as(target, ALICE).put("/api/me/read-receipts", { readReceipts: value })).statusCode).toBe(404);
+    expect(profileRow(fake, ALICE).read_receipts).toBe(true);
   });
 
   it("sans les messages privés (0032) non plus : « indisponible »", async () => {
@@ -654,8 +1041,8 @@ describe("sans la migration 0043", () => {
     const clockNow = () => now;
     expect(await readReceiptsReady(missing, clockNow)).toBe(false);
     expect(calls).toBe(1);
-    // La colonne de la migration 0043, et rien d'autre.
-    expect(asked).toEqual(["profiles.read_receipts"]);
+    // Les deux colonnes de la migration 0043, et rien d'autre.
+    expect(asked).toEqual(["profiles.read_receipts, read_receipts_since"]);
     expect(warnings).toEqual([{ code: "42703" }]);
     now = 4 * MINUTE;
     expect(await readReceiptsReady(missing, clockNow)).toBe(false);
@@ -677,11 +1064,14 @@ describe("sans la migration 0043", () => {
     const readAt = later();
     await open(target, BOB, id);
     expect((await thread(target, ALICE, id)).readReceipts).toEqual({ seenAt: readAt });
-    // La colonne disparaît : la même base, lue comme une base sans 0043.
+    // Les colonnes disparaissent : la même base, lue comme une base sans 0043.
     const original = present.db.from;
     const gone = fakeSupabase(WITHOUT_0043);
     for (const [name, rows] of present.tables) gone.tables.set(name, rows);
-    for (const row of present.table("profiles")) delete row.read_receipts;
+    for (const row of present.table("profiles")) {
+      delete row.read_receipts;
+      delete row.read_receipts_since;
+    }
     present.db.from = gone.db.from as typeof original;
     const read = await thread(target, ALICE, id);
     expect(read.readReceipts).toBeNull();

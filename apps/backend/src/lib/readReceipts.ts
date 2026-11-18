@@ -8,6 +8,14 @@
 //   ouverte des DEUX côtés (la personne qui invite n'apprend pas si son
 //   invitation a été regardée, lib/messaging.ts), et une lecture faite AVANT
 //   l'ouverture n'est jamais montrée ensuite (shownReadAt) ;
+// - jamais une lecture du passé : une lecture n'est montrée que si elle a
+//   été faite pendant que le réglage de la personne qui lit était allumé, et
+//   après que « Vu » a existé pour elle. profiles.read_receipts_since garde
+//   ce moment (la migration pour les membres déjà inscrits, la création du
+//   profil pour les nouveaux, puis chaque fois que le réglage est rallumé) :
+//   une lecture d'avant n'est jamais montrée, même plus tard (shownReadAt,
+//   sinceStamp). La date de la lecture elle-même reste écrite comme avant
+//   (compteurs de non-lus, export) ;
 // - jamais pour un compte suspendu : ce qu'il lit n'est plus montré à
 //   l'autre membre. Un blocage, lui, cache déjà toute la conversation
 //   (routes/conversations.ts) : cette lecture n'est alors jamais faite ;
@@ -15,7 +23,8 @@
 //   Jamais « allumé » par défaut : personne n'est exposé avant de pouvoir
 //   refuser.
 // Ce que l'app reçoit : null (rien à montrer), ou { seenAt }, la dernière
-// ouverture de la conversation par l'autre membre (null : pas encore).
+// ouverture de la conversation par l'autre membre (null : pas encore, ou pas
+// depuis que ses lectures peuvent être montrées : « Envoyé »).
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { ConversationReadReceipts } from "@monapp/shared-types";
@@ -37,19 +46,26 @@ export function openBothWays(mine: Pick<Side, "invitation"> | null, theirs: Pick
 }
 
 /** La dernière lecture de ce membre que l'autre peut connaître, ou null.
- * `invitation_at` date la dernière réponse à une invitation : pour un côté
- * ouvert, le moment où la conversation s'est ouverte (null : ouverte dès le
- * premier message, entre amis). Une lecture d'AVANT ce moment — la personne
- * invitée qui regarde l'invitation — n'est jamais montrée, même une fois la
- * conversation ouverte : tout ce qui sort d'ici date de l'ouverture ou
- * d'après. Les deux dates viennent de l'horloge du serveur. Date illisible :
- * rien. */
-export function shownReadAt(side: Pick<Side, "invitation" | "invitation_at" | "last_read_at">): string | null {
-  if (side.invitation !== "none" || side.last_read_at === null) return null;
-  if (side.invitation_at === null) return Number.isFinite(Date.parse(side.last_read_at)) ? side.last_read_at : null;
+ * Deux moments la bornent ; une lecture d'avant l'un ou l'autre n'est jamais
+ * montrée, même plus tard :
+ * - `since` (profiles.read_receipts_since de ce membre) : depuis quand ses
+ *   lectures peuvent être montrées. Avant : « Vu » n'existait pas encore pour
+ *   lui, ou son réglage était éteint. Absent ou illisible : rien ;
+ * - `invitation_at`, la dernière réponse à une invitation : pour un côté
+ *   ouvert, le moment où la conversation s'est ouverte (null : ouverte dès
+ *   le premier message, entre amis). Avant : la personne invitée regardait
+ *   l'invitation.
+ * Les dates sont comparées à la milliseconde ; sinceStamp et la migration
+ * 0043 placent `since` au moins une milliseconde après toute lecture déjà
+ * faite. Date illisible : rien. */
+export function shownReadAt(side: Pick<Side, "invitation" | "invitation_at" | "last_read_at">, since: string | null | undefined): string | null {
+  if (side.invitation !== "none" || side.last_read_at === null || typeof since !== "string") return null;
   const readAt = Date.parse(side.last_read_at);
+  const sinceAt = Date.parse(since);
+  if (!Number.isFinite(readAt) || !Number.isFinite(sinceAt) || readAt < sinceAt) return null;
+  if (side.invitation_at === null) return side.last_read_at;
   const openedAt = Date.parse(side.invitation_at);
-  return Number.isFinite(readAt) && Number.isFinite(openedAt) && readAt >= openedAt ? side.last_read_at : null;
+  return Number.isFinite(openedAt) && readAt >= openedAt ? side.last_read_at : null;
 }
 
 /** La date à écrire quand ce membre marque sa conversation comme lue :
@@ -64,6 +80,22 @@ export function readStamp(side: Pick<Side, "invitation" | "last_message_at">, no
   return side.invitation === "none" && Number.isFinite(lastMessageAt) && lastMessageAt > now ? side.last_message_at : new Date(now).toISOString();
 }
 
+/** La date à écrire dans profiles.read_receipts_since quand ce membre
+ * rallume « Confirmations de lecture » : maintenant (horloge du serveur, la
+ * même que celle des lectures : une lecture faite juste après est montrée),
+ * et dans tous les cas APRÈS sa lecture la plus récente déjà enregistrée
+ * (`latestReadAt`, toutes conversations confondues ; null : aucune). readStamp
+ * peut dater une lecture de quelques instants « dans le futur » (dernier
+ * message daté par la base, en avance) : sans cela, une lecture faite réglage
+ * éteint, puis le réglage rallumé aussitôt, serait montrée. Une milliseconde
+ * après elle : shownReadAt compare à la milliseconde. Cas limite assumé : si
+ * la base avance sur le serveur, rouvrir la même conversation dans ces
+ * quelques instants laisse « Envoyé » jusqu'à la lecture suivante. */
+export function sinceStamp(latestReadAt: string | null, now: number): string {
+  const latest = latestReadAt === null ? Number.NaN : Date.parse(latestReadAt);
+  return new Date(Number.isFinite(latest) && latest >= now ? Math.floor(latest) + 1 : now).toISOString();
+}
+
 // ---- Schéma de la base (migration 0043) ----
 
 /** Sonde refaite au plus toutes les 5 minutes tant que 0043 manque. */
@@ -75,7 +107,8 @@ let schemaProbe: Promise<boolean> | null = null;
 
 async function probeSchema(fastify: Pick<FastifyInstance, "supabaseAdmin" | "log">): Promise<boolean> {
   try {
-    const { error } = await fastify.supabaseAdmin.from("profiles").select("read_receipts").limit(0);
+    // Les DEUX colonnes de 0043 : sans la date « depuis », rien n'est montré non plus.
+    const { error } = await fastify.supabaseAdmin.from("profiles").select("read_receipts, read_receipts_since").limit(0);
     if (!error) return true;
     fastify.log.warn({ code: error.code ?? null }, "Confirmations de lecture coupées : migration 0043 absente");
   } catch {
@@ -112,8 +145,9 @@ export function resetReadReceiptsProbe(): void {
 
 // ---- Lecture ----
 
-// Une ligne sans réponse nette (colonne vide) vaut « éteint ».
-const SETTING_ROWS = z.array(z.object({ id: z.guid(), read_receipts: z.boolean().nullable().optional() }));
+// Une ligne sans réponse nette (colonne vide) vaut « éteint » ; sans date
+// « depuis », aucune lecture de ce membre n'est montrée.
+const SETTING_ROWS = z.array(z.object({ id: z.guid(), read_receipts: z.boolean().nullable().optional(), read_receipts_since: z.string().nullable().optional() }));
 
 /** Ce que `mine.user_id` peut savoir des lectures de l'autre membre (règles
  * en tête de fichier). `mine` et `theirs` : les deux côtés de la
@@ -128,7 +162,7 @@ export async function readReceiptsFor(fastify: FastifyInstance, log: FastifyBase
     const [settings, suspended] = await Promise.all([
       fastify.supabaseAdmin
         .from("profiles")
-        .select("id, read_receipts")
+        .select("id, read_receipts, read_receipts_since")
         .in("id", members)
         .then((result) => parseDbRows(SETTING_ROWS, result, "Réglage « Confirmations de lecture »")),
       suspendedAmong(fastify, [theirs.user_id]),
@@ -136,7 +170,8 @@ export async function readReceiptsFor(fastify: FastifyInstance, log: FastifyBase
     // Les deux réglages, allumés tous les deux (un profil introuvable : rien).
     if (!members.every((id) => settings.some((row) => row.id === id && row.read_receipts === true))) return null;
     if (suspended.has(theirs.user_id)) return null;
-    return { seenAt: shownReadAt(theirs) };
+    // Sa lecture, seulement si elle date d'après SON « depuis » (jamais celui de la personne qui regarde).
+    return { seenAt: shownReadAt(theirs, settings.find((row) => row.id === theirs.user_id)?.read_receipts_since) };
   } catch {
     // Colonne disparue (retour en arrière de 0043) ou panne : la sonde est
     // refaite. Ni identifiant ni détail au journal.
@@ -166,4 +201,41 @@ export async function readReceiptsAfterSend(fastify: FastifyInstance, log: Fasti
     log.warn("Confirmations de lecture : lecture impossible, rien n'est montré");
     return null;
   }
+}
+
+// ---- Écriture du réglage ----
+
+const LATEST_READ_ROWS = z.array(z.object({ last_read_at: z.string().nullable() }));
+
+/** Enregistre le réglage « Confirmations de lecture » de ce membre.
+ * Éteindre : le réglage seul. Allumer : le réglage ET la date « depuis »
+ * (sinceStamp), en UNE écriture qui ne touche la ligne que si le réglage
+ * était éteint (`read_receipts = false` dans la condition, jamais lu puis
+ * écrit) : rallumer un réglage déjà allumé ne déplace pas la date, deux
+ * demandes en même temps non plus (une seule trouve la ligne éteinte).
+ * Rend l'erreur de la base, ou null. */
+export async function saveReadReceipts(fastify: Pick<FastifyInstance, "supabaseAdmin">, userId: string, on: boolean, now: () => number = Date.now): Promise<unknown> {
+  if (!on) {
+    const { error } = await fastify.supabaseAdmin.from("profiles").update({ read_receipts: false, updated_at: new Date(now()).toISOString() }).eq("id", userId);
+    return error ?? null;
+  }
+  // Sa lecture la plus récente, toutes conversations confondues (invitations comprises).
+  const latest = await fastify.supabaseAdmin
+    .from("conversation_participants")
+    .select("last_read_at")
+    .eq("user_id", userId)
+    .not("last_read_at", "is", null)
+    .order("last_read_at", { ascending: false })
+    .limit(1);
+  if (latest.error) return latest.error;
+  const rows = LATEST_READ_ROWS.safeParse(latest.data ?? []);
+  if (!rows.success) return new Error("Dernière lecture illisible");
+  // L'heure est prise APRÈS cette lecture de la base, au plus près de l'écriture.
+  const at = now();
+  const { error } = await fastify.supabaseAdmin
+    .from("profiles")
+    .update({ read_receipts: true, read_receipts_since: sinceStamp(rows.data[0]?.last_read_at ?? null, at), updated_at: new Date(at).toISOString() })
+    .eq("id", userId)
+    .eq("read_receipts", false);
+  return error ?? null;
 }
