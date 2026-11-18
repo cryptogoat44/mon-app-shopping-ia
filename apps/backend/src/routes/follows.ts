@@ -137,6 +137,24 @@ export default async function followsRoutes(fastify: FastifyInstance) {
     return reply.code(204).send();
   });
 
+  // Retirer un de SES abonnés (lot « vie sociale », listes des abonnés) : la
+  // ligne « :userId me suit » disparaît, rien d'autre. Seul le compte suivi
+  // peut le faire : le filtre porte toujours sur l'appelant, jamais sur un
+  // autre compte. Même réponse que la personne ait été abonnée ou non. Elle
+  // n'est JAMAIS prévenue : aucune notification. Permis à un compte suspendu
+  // (on ne fait que réduire son audience). Compte privé : elle perd l'accès
+  // dès la requête suivante (la règle se lit dans `follows`).
+  fastify.delete("/api/followers/:userId", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    const params = parseInput(userIdParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const { error } = await db().from("follows").delete().eq("follower_id", params.userId).eq("followee_id", request.user!.id);
+    if (error) {
+      request.log.error({ error }, "Échec du retrait d'un abonné");
+      return reply.code(500).send(INTERNAL_ERROR);
+    }
+    return reply.code(204).send();
+  });
+
   // Demandes reçues, les plus récentes d'abord. Jamais un compte en blocage,
   // suspendu ou sans nom d'utilisateur (lib/memberRows.ts) : une page peut
   // donc être plus courte que prévu, seul `nextCursor` dit s'il y a une suite.

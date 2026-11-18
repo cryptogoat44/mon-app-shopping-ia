@@ -2300,3 +2300,14 @@ export interface MemberPage {
 export const PRIVATE_ACCOUNTS_UNAVAILABLE_ERROR = "private_accounts_unavailable";
 export const PRIVATE_ACCOUNT_UPDATE_REQUIRED_ERROR = "private_account_update_required";
 export const FOLLOW_REQUEST_LIMIT_ERROR = "follow_request_limit";
+
+// ---- Listes des abonnés et des abonnements (lot « vie sociale », sans migration) ----
+
+/** Lignes LUES par page d'une liste de membres (GET /api/users/:id/followers
+ * et /following). Une page en montre parfois moins : voir MemberPage. */
+export const MEMBER_LIST_PAGE_SIZE = 30;
+
+/** 403 : les listes d'un compte privé ne s'ouvrent qu'à ses abonnés acceptés. */
+export const PRIVATE_ACCOUNT_ERROR = "private_account";
+/** 429 : trop de listes ouvertes en une heure. */
+export const MEMBER_LIST_LIMIT_ERROR = "member_list_limit";

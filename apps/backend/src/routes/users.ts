@@ -1,10 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import type { Post, PublicProfile, UserProfile } from "@monapp/shared-types";
+import { MEMBER_LIST_PAGE_SIZE, PRIVATE_ACCOUNT_ERROR, type MemberPage, type Post, type PublicProfile, type UserProfile } from "@monapp/shared-types";
 import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, parseDbRows, parseInput, userIdParamsSchema } from "../lib/validation.js";
 import { shownPosts, visiblePrivacies } from "../lib/visibility.js";
 import { canSeeAuthorContent, readAudience, readAudienceOf } from "../lib/audience.js";
-import { followStateOf } from "../lib/memberRows.js";
+import { followStateOf, toMemberRows } from "../lib/memberRows.js";
 import { withoutSuspendedFaces } from "../lib/profileModeration.js";
 import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
 import { POST_ROWS, hydratePosts } from "./posts.js";
@@ -14,6 +14,9 @@ const USER_POSTS_PAGE_SIZE = 18;
 const searchQuerySchema = z.object({
   q: z.string().trim().min(1).max(40),
 });
+
+/** Une ligne de `follows`, lue du côté qui intéresse la liste. */
+const FOLLOW_ROWS = z.array(z.object({ follower_id: z.guid(), followee_id: z.guid(), created_at: z.string() }));
 
 interface ProfileRow {
   id: string;
@@ -200,4 +203,74 @@ export default async function usersRoutes(fastify: FastifyInstance) {
     const posts: Post[] = await hydratePosts(fastify, pageRows, viewerId);
     return reply.send({ posts, nextCursor: hasMore ? (pageRows.at(-1)?.created_at ?? null) : null });
   });
+
+  // Listes des abonnés et des abonnements d'un membre (lot « vie sociale »,
+  // sans migration), les plus récents d'abord, 30 lignes lues par page.
+  //   - Le membre lit ses deux listes ; un autre ne les lit que s'il peut voir
+  //     son contenu (canSeeAuthorContent) : jamais à travers un blocage (404,
+  //     comme un profil inconnu), jamais un compte privé sans en être un
+  //     abonné accepté (403).
+  //   - Chaque ligne passe par LA règle des listes (lib/memberRows.ts) : pas
+  //     de compte bloqué avec le lecteur, suspendu, sans nom d'utilisateur, ni
+  //     de compte privé montré à un inconnu. Le tri se fait APRÈS la lecture :
+  //     une page peut être plus courte que prévu, ou vide, alors qu'il en
+  //     reste ; le curseur est la date de la dernière ligne LUE, et la réponse
+  //     ne dit jamais combien de lignes ont été laissées de côté.
+  //   - Jamais la date d'un abonnement dans une ligne.
+  // Sans la migration 0045, tous les comptes sont publics : les listes marchent.
+  const memberListOptions = {
+    preHandler: [fastify.requireAuth, fastify.rateLimit("memberList")],
+    config: { rateLimitName: "memberList" as const },
+  };
+  for (const kind of ["followers", "following"] as const) {
+    // Abonnés : les lignes où le membre est suivi. Abonnements : celles où il suit.
+    const ownerColumn = kind === "followers" ? "followee_id" : "follower_id";
+    const memberColumn = kind === "followers" ? "follower_id" : "followee_id";
+
+    fastify.get(`/api/users/:userId/${kind}`, memberListOptions, async (request, reply) => {
+      reply.header("Cache-Control", "no-store");
+      const params = parseInput(userIdParamsSchema, request.params, reply, INVALID_ID);
+      if (!params) return;
+      const pageQuery = parseInput(cursorQuerySchema, request.query, reply, INVALID_CURSOR);
+      if (!pageQuery) return;
+      const viewerId = request.user!.id;
+      const targetId = params.userId;
+
+      const stored = await fastify.supabaseAdmin.from("profiles").select("id, username").eq("id", targetId).maybeSingle();
+      if (stored.error) {
+        request.log.error({ error: stored.error }, "Échec de lecture du profil d'une liste de membres");
+        return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+      }
+      // Inconnu, profil pas encore complété, ou blocage dans un sens ou dans l'autre : la même réponse.
+      const notFound = () => reply.code(404).send({ error: "user_not_found", message: "Profil introuvable." });
+      if (!stored.data || !stored.data.username) return notFound();
+      const audience = await readAudienceOf(fastify, viewerId, targetId, { suspended: false, requested: false });
+      if (audience.blocked) return notFound();
+      if (!canSeeAuthorContent(audience)) {
+        return reply.code(403).send({ error: PRIVATE_ACCOUNT_ERROR, message: "Ce compte est privé." });
+      }
+
+      let query = fastify.supabaseAdmin
+        .from("follows")
+        .select("follower_id, followee_id, created_at")
+        .eq(ownerColumn, targetId)
+        .order("created_at", { ascending: false })
+        .limit(MEMBER_LIST_PAGE_SIZE + 1);
+      if (pageQuery.cursor) query = query.lt("created_at", pageQuery.cursor);
+      const rows = parseDbRows(FOLLOW_ROWS, await query, kind === "followers" ? "Abonnés d'un membre" : "Abonnements d'un membre");
+      const hasMore = rows.length > MEMBER_LIST_PAGE_SIZE;
+      const pageRows = hasMore ? rows.slice(0, MEMBER_LIST_PAGE_SIZE) : rows;
+
+      const page: MemberPage = {
+        members: await toMemberRows(
+          fastify,
+          viewerId,
+          pageRows.map((row) => row[memberColumn]),
+          { contextOwnerId: targetId }
+        ),
+        nextCursor: hasMore ? (pageRows.at(-1)?.created_at ?? null) : null,
+      };
+      return reply.send(page);
+    });
+  }
 }

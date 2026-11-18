@@ -292,6 +292,9 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Ce compte est privé. Mettez à jour l'app pour demander à le suivre.": "This account is private. Update the app to ask to follow it.",
   "Vous avez déjà demandé à suivre ce compte récemment. Réessayez plus tard.": "You've already asked to follow this account recently. Please try again later.",
   "Demande introuvable.": "Request not found.",
+  // Listes des abonnés et des abonnements (lot « vie sociale »).
+  "Ce compte est privé.": "This account is private.",
+  "Trop de listes ouvertes. Réessayez dans un moment.": "Too many lists opened. Please try again in a moment.",
 };
 
 /** Message dans la langue voulue. Un message inconnu (par exemple un texte

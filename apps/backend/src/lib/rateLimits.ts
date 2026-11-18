@@ -318,6 +318,16 @@ export const RATE_LIMITS = {
     error: "follow_request_limit",
     message: "Vous avez déjà demandé à suivre ce compte récemment. Réessayez plus tard.",
   },
+
+  // Listes des abonnés et des abonnements (lot « vie sociale ») : large pour
+  // un membre qui fait défiler de longues listes (30 lignes par page), juste
+  // assez pour gêner un script qui recopierait les listes de tous les comptes.
+  memberList: {
+    max: 600,
+    windowMs: HOUR,
+    error: "member_list_limit",
+    message: "Trop de listes ouvertes. Réessayez dans un moment.",
+  },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;
