@@ -72,7 +72,7 @@ describe("quand proposer les notifications", () => {
     expect(readMessagesStatus({ enabled: true, unreadCount: 2 }).push).toBe(false);
     expect(readMessagesStatus({ enabled: true, unreadCount: 2, push: "true" }).push).toBe(false);
     expect(readMessagesStatus({ enabled: false, unreadCount: 0, push: true }).push).toBe(false);
-    expect(readMessagesStatus({ enabled: true, unreadCount: 2, push: true })).toEqual({ enabled: true, unreadCount: 2, push: true });
+    expect(readMessagesStatus({ enabled: true, unreadCount: 2, push: true })).toEqual({ enabled: true, unreadCount: 2, push: true, actions: false });
   });
 
   it("la feuille d'explication : une seule fois (aucune réponse encore), et pas si iOS les a déjà refusées", () => {

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { chunks, readAll } from "./pagedReads.js";
-import { messagesReady } from "./messaging.js";
+import { messageActionsReady, messagesReady } from "./messaging.js";
 import { collectionsReady } from "./collections.js";
 import { collectionModerationReady } from "./collectionModeration.js";
 import { pushReady } from "./push.js";
@@ -94,6 +94,10 @@ export interface ExportData {
   /** … et vos « C'est bien cette pièce » : la vidéo, la pièce (son nom, sinon
    * sa clé « même page ») et la date. */
   videoConfirmations: ExportRow[];
+  /** Messages, plus de confort (migration 0044) : vos « j'aime » sur des
+   * messages — la date, la conversation et l'autre membre (son identifiant ;
+   * le fichier lisible ne nomme jamais un compte en relation de blocage). */
+  messageReactions: ExportRow[];
 }
 
 /** Sections de l'export (toutes les clés sauf la date de l'export). */
@@ -295,6 +299,53 @@ async function listConversations(db: Db, userId: string): Promise<ExportRow[]> {
   });
 }
 
+/** Colonnes qui portent le contenu d'un message (texte et envie jointe). */
+const MESSAGE_CONTENT_COLUMNS = [
+  "body",
+  "wish_title",
+  "wish_image_url",
+  "wish_image_thumb_url",
+  "wish_merchant_name",
+  "wish_merchant_url",
+  "wish_product_match_id",
+  "wish_price_min",
+  "wish_currency",
+  "reply_to_id",
+] as const;
+
+/** Les messages tels que `userId` a le droit de les recevoir dans son export
+ * (lot « messages, plus de confort », migration 0044) :
+ * - un message supprimé par l'AUTRE membre n'y garde jamais son contenu,
+ *   même quand la base l'a conservé pour la modération (il avait été signalé
+ *   avant) : conservé pour elle, pas pour la personne qui l'a reçu. La
+ *   personne qui l'a écrit, elle, le retrouve dans son propre export ;
+ * - une publication reçue n'y est jamais désignée (identifiant vidé) : elle
+ *   n'est montrée qu'à qui a le droit de la voir, au moment où il regarde.
+ * Une base sans 0044 n'a pas ces colonnes : rien ne change. */
+export function messagesForExport(rows: ExportRow[], userId: string): ExportRow[] {
+  return rows.map((row) => {
+    if (row.sender_id === userId) return row;
+    const received: ExportRow = typeof row.post_id === "string" ? { ...row, post_id: null } : row;
+    if (typeof received.deleted_at !== "string") return received;
+    const blanked: ExportRow = { ...received };
+    for (const column of MESSAGE_CONTENT_COLUMNS) if (column in blanked) blanked[column] = null;
+    if ("shared_post" in blanked) blanked.shared_post = false;
+    return blanked;
+  });
+}
+
+/** Vos « j'aime » sur des messages, avec la conversation et l'autre membre
+ * (retrouvés dans ce que l'export contient déjà : aucune lecture de plus). */
+async function listMessageReactions(db: Db, userId: string, messages: ExportRow[], conversations: ExportRow[]): Promise<ExportRow[]> {
+  const rows = await listWhere(db, "message_reactions", "message_id, created_at", "user_id", userId, ["created_at", "message_id"]);
+  const conversationOf = new Map(messages.map((row) => [String(row.id), String(row.conversation_id)]));
+  const otherOf = new Map(conversations.map((row) => [String(row.conversation_id), row.other_user_id]));
+  return rows.map((row) => {
+    const conversationId = conversationOf.get(String(row.message_id)) ?? null;
+    return { message_id: row.message_id, conversation_id: conversationId, other_user_id: (conversationId ? otherOf.get(conversationId) : null) ?? null, created_at: row.created_at };
+  });
+}
+
 export async function collectExport(
   fastify: FastifyInstance,
   userId: string,
@@ -412,8 +463,9 @@ export async function collectExport(
     section("moderationDecisionsAboutMe", () => listWhere(db, "moderation_actions", MODERATION_EXPORT_COLUMNS, "target_user_id", userId, BY_DATE), none),
     section("moderationDecisionsTaken", () => listWhere(db, "moderation_actions", MODERATION_EXPORT_COLUMNS, "admin_id", userId, BY_DATE), none),
     section("resultFeedback", () => listWhere(db, "match_feedback", "*", "user_id", userId, BY_DATE), none),
-    // Messages envoyés et reçus, masqués compris (comme les pièces).
-    section("messages", () => listIn(db, "messages", "*", "conversation_id", conversationIds, BY_DATE), none),
+    // Messages envoyés et reçus, masqués compris (comme les pièces). Jamais
+    // le contenu d'un message supprimé par l'autre membre (messagesForExport).
+    section("messages", async () => messagesForExport(await listIn(db, "messages", "*", "conversation_id", conversationIds, BY_DATE), userId), none),
     section(
       "collections",
       () =>
@@ -483,6 +535,10 @@ export async function collectExport(
     section("videoConfirmations", () => (withVideoMemory ? listVideoConfirmations(db, userId) : Promise.resolve(none)), none),
   ]);
 
+  // Messages, plus de confort : sans la migration 0044, section vide.
+  const withMessageActions = withMessages && (await messageActionsReady(fastify));
+  const messageReactions = await section("messageReactions", () => (withMessageActions ? listMessageReactions(db, userId, messages, conversations) : Promise.resolve(none)), none);
+
   const data: ExportData = {
     exportedAt: new Date().toISOString(),
     account: { email },
@@ -526,6 +582,7 @@ export async function collectExport(
     tryonReports,
     videoSpots,
     videoConfirmations,
+    messageReactions,
   };
   return { data, failures };
 }

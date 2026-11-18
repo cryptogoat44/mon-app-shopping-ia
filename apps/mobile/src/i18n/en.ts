@@ -1544,4 +1544,40 @@ export const en: Catalog = {
     rejected: "The anti-robot check failed: please try again.",
     frameTitle: "Anti-robot check",
   },
+  // “Messages, more comfort” batch (migration 0044): like a message, reply
+  // to it, delete it, send a post in a conversation.
+  messageActions: {
+    like: "Like",
+    unlike: "Unlike",
+    reply: "Reply",
+    delete: "Delete",
+    report: "Report",
+    block: "Block",
+    deleteConfirm: "Delete this message for both of you?",
+    deleted: "Message deleted",
+    replyingTo: (name: string) => `Replying to ${name}`,
+    replyingToSelf: "Replying to your message",
+    cancelReply: "Cancel reply",
+    quoteUnavailable: "Message unavailable",
+    postUnavailable: "Post unavailable",
+    sendPost: "Send in a message",
+    previewPost: "Shared post",
+    // What VoiceOver reads, and the rest of the screen.
+    optionsHint: "Like this message, reply to it, delete it or report it",
+    quoteFromYou: "You",
+    likedByYou: "Liked by you",
+    likedBy: (name: string) => `Liked by ${name}`,
+    likedByBoth: (name: string) => `Liked by you and ${name}`,
+    likeError: "Your like couldn't be saved. Please try again.",
+    deleteError: "This message couldn't be deleted. Please try again.",
+    attachedPost: "Post attached",
+    attachedPostBy: (name: string) => `Post by ${name}`,
+    removePost: "Remove the post",
+    openPost: (name: string) => `View ${name}'s post`,
+    chooseHintPost: "The post will be attached to your message, and you can add a note. The person will only see it if they are allowed to.",
+    // Moderation queue: a message deleted by its author.
+    deletedByAuthorOn: (date: string) => `Deleted by its author on ${date}`,
+    // Actions sheet: open the post received (VoiceOver).
+    viewPost: "View post",
+  },
 };

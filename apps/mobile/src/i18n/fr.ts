@@ -1666,4 +1666,40 @@ export const fr = {
     rejected: "La vérification anti-robots a échoué : réessayez.",
     frameTitle: "Vérification anti-robots",
   },
+  // Lot « messages, plus de confort » (migration 0044) : aimer un message, y
+  // répondre, le supprimer, envoyer une publication dans une conversation.
+  messageActions: {
+    like: "Aimer",
+    unlike: "Ne plus aimer",
+    reply: "Répondre",
+    delete: "Supprimer",
+    report: "Signaler",
+    block: "Bloquer",
+    deleteConfirm: "Supprimer ce message pour vous deux ?",
+    deleted: "Message supprimé",
+    replyingTo: (name: string) => `Réponse à ${name}`,
+    replyingToSelf: "Réponse à votre message",
+    cancelReply: "Annuler la réponse",
+    quoteUnavailable: "Message indisponible",
+    postUnavailable: "Publication indisponible",
+    sendPost: "Envoyer dans un message",
+    previewPost: "Publication partagée",
+    // Ce que VoiceOver lit, et le reste de l'écran.
+    optionsHint: "Aimer ce message, y répondre, le supprimer ou le signaler",
+    quoteFromYou: "Vous",
+    likedByYou: "Aimé par vous",
+    likedBy: (name: string) => `Aimé par ${name}`,
+    likedByBoth: (name: string) => `Aimé par vous et ${name}`,
+    likeError: "Votre « j'aime » n'a pas pu être enregistré. Réessayez.",
+    deleteError: "Ce message n'a pas pu être supprimé. Réessayez.",
+    attachedPost: "Publication jointe",
+    attachedPostBy: (name: string) => `Publication de ${name}`,
+    removePost: "Retirer la publication",
+    openPost: (name: string) => `Voir la publication de ${name}`,
+    chooseHintPost: "La publication sera jointe à votre message, vous pourrez ajouter un mot. La personne ne la verra que si elle a le droit de la voir.",
+    // File de modération : un message supprimé par son auteur.
+    deletedByAuthorOn: (date: string) => `Supprimé par son auteur le ${date}`,
+    // Feuille des actions : ouvrir la publication reçue (VoiceOver).
+    viewPost: "Voir la publication",
+  },
 } as const;

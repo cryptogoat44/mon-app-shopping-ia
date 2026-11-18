@@ -54,7 +54,7 @@ describe("entrée « Messages » de l'Activité", () => {
   it("cachée quand la messagerie n'est pas disponible (serveur sans 0032, ancien serveur, réponse illisible)", () => {
     for (const body of [{ enabled: false, unreadCount: 3 }, null, "Not Found", { error: "messages_unavailable" }, { enabled: "oui", unreadCount: 2 }]) {
       const status = readMessagesStatus(body);
-      expect(status).toEqual({ enabled: false, unreadCount: 0, push: false });
+      expect(status).toEqual({ enabled: false, unreadCount: 0, push: false, actions: false });
       expect(messagesEntry(status)).toBeNull();
     }
   });
@@ -64,7 +64,7 @@ describe("entrée « Messages » de l'Activité", () => {
     expect(messagesEntry(readMessagesStatus({ enabled: true, unreadCount: 3 }))).toEqual({ label: "Messages, 3 conversations non lues", badge: "3" });
     expect(messagesEntry(readMessagesStatus({ enabled: true, unreadCount: 1 }))?.label).toBe("Messages, 1 conversation non lue");
     expect(unreadBadge(120)).toBe("99+");
-    expect(readMessagesStatus({ enabled: true, unreadCount: -2 })).toEqual({ enabled: true, unreadCount: 0, push: false });
+    expect(readMessagesStatus({ enabled: true, unreadCount: -2 })).toEqual({ enabled: true, unreadCount: 0, push: false, actions: false });
   });
 
   it("la pastille de l'onglet Activité compte aussi les messages non lus, seulement quand la messagerie est là", () => {
@@ -145,9 +145,11 @@ describe("invitations : accepter, refuser, bloquer", () => {
   });
 
   // Règle 1.2 d'Apple : le signalement ne doit pas dépendre d'un geste caché.
-  it("un message reçu a un bouton « ••• » toujours visible, en plus de l'appui long ; jamais sur ses propres messages", () => {
+  it("un message reçu a un bouton « ••• » toujours visible, en plus de l'appui long ; sur ses propres messages, seulement s'il y a une action à proposer", () => {
     const screen = readFileSync(join(__dirname, "../src/app/(app)/conversation.tsx"), "utf8");
     const bubble = screen.slice(screen.indexOf("function Bubble("), screen.indexOf("// Une conversation (lot messages)"));
+    // Lot « messages, plus de confort » : ses propres messages ont le même bouton, quand il y a quelque chose à faire (aimer, répondre, supprimer).
+    expect(bubble).toMatch(/\{message\.mine && ownActions \? \(\s*<Pressable[^>]*onPress=\{onOptions\}[^>]*>\s*<MoreIcon size=\{16\} tint=\{color\.acier\} \/>\s*<\/Pressable>\s*\) : null\}/);
     // Le bouton : rendu sans condition de plateforme, seulement pour un message reçu.
     const button = /\{message\.mine \? null : \(\s*<Pressable([^>]*)>\s*<MoreIcon size=\{16\} tint=\{color\.acier\} \/>\s*<\/Pressable>\s*\)\}/.exec(bubble);
     expect(button).not.toBeNull();
@@ -161,12 +163,21 @@ describe("invitations : accepter, refuser, bloquer", () => {
     expect(screen).toContain("bubbleMore: { minWidth: 28, minHeight: 28,");
     expect(bubble).not.toContain("Platform.OS");
     // Le même menu que l'appui long, pour CE message ; le message signalé quitte l'écran.
-    expect(bubble).toContain("onLongPress={message.mine ? undefined : onOptions}");
+    expect(bubble).toContain("onLongPress={message.mine && !ownActions ? undefined : onOptions}");
     // (Lot « messages vus » : chaque message est dans un bloc qui porte sa clé, avec sa mention « Vu » ou « Envoyé ».)
-    expect(screen).toMatch(/<View key=\{message\.id\}>\s*<Bubble message=\{message\} onOptions=\{\(\) => setMenuFor\(message\)\} \/>/);
-    expect(screen.match(/<Bubble /g)).toHaveLength(1);
+    expect(screen).toMatch(/<View key=\{message\.id\}>\s*<Bubble\s+message=\{message\}/);
+    expect(screen).toContain("onOptions={() => openOptions(message)}");
+    expect(screen.match(/<Bubble\s/g)).toHaveLength(1);
+    // Un message reçu a toujours « Signaler » et « Bloquer » (lib/conversations.ts, messageActionsFor) :
+    // seuls, le menu existant s'ouvre directement, comme avant ; sinon la feuille des actions lui passe la main.
+    const open = screen.slice(screen.indexOf("function openOptions("), screen.indexOf("async function toggleLike("));
+    expect(open).toContain('if (list.every((action) => action === "report" || action === "block")) {');
+    expect(open).toContain("setMenuFor(message);");
+    expect(screen).toContain('setMenuStep(action === "report" ? "report" : "confirmBlock");');
     expect(screen).toContain("messageId={menuFor?.id}");
-    expect(screen).toContain("setMessages((current) => current.filter((message) => message.id !== reportedId));");
+    expect(screen).toContain("initialStep={menuStep}");
+    // Le message signalé quitte l'écran (et une réponse qui le citait ne le montre plus).
+    expect(screen).toContain("setMessages((current) => withoutContent(current, reportedId, true));");
   });
 
   it("le bouton dit à quoi il sert, en français et en anglais", () => {

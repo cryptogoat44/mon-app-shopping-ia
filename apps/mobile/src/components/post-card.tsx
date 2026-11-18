@@ -1,12 +1,15 @@
 import { useRef, useState } from "react";
 import { Animated, Pressable, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
 import type { Post } from "@monapp/shared-types";
 import { reactToPost } from "@/lib/api";
 import { openMerchantLink } from "@/lib/merchant-links";
 import { color, font, radius, space } from "@/theme/tokens";
-import { CommentIcon, HeartIcon, MoreIcon, ShareIcon, VerifiedIcon } from "@/components/icons";
+import { CommentIcon, HeartIcon, MoreIcon, SendIcon, ShareIcon, VerifiedIcon } from "@/components/icons";
 import { sharePost } from "@/lib/share-post";
+import { sendPostHref } from "@/lib/send-post";
+import { useMessagesStatus } from "@/lib/use-messages-status";
 import { SpotImage } from "@/components/spot-image";
 import { ProductFrame } from "@/components/product-frame";
 import { ImageUnavailable } from "@/components/image-unavailable";
@@ -55,6 +58,10 @@ export function PostCard({
   commentCount?: number;
 }) {
   const { showToast } = useToast();
+  const router = useRouter();
+  // Lot « messages, plus de confort » : « Envoyer dans un message », seulement
+  // si le serveur sait envoyer une publication (migration 0044).
+  const canSendInMessage = useMessagesStatus().actions === true;
   const [reactionCount, setReactionCount] = useState(post.reactionCount);
   const [reacted, setReacted] = useState(post.viewerHasReacted);
   const [busy, setBusy] = useState(false);
@@ -247,6 +254,22 @@ export function PostCard({
         >
           <ShareIcon size={19} />
         </Pressable>
+        {/* Envoyer cette publication dans un message : le choix de la conversation,
+            puis la conversation avec la publication jointe. La personne qui la
+            reçoit ne la voit que si elle a le droit de la voir (jamais proposé
+            pour une publication que vous seul pouvez voir). */}
+        {canSendInMessage && post.privacy !== "private" ? (
+          <Pressable
+            onPress={() => router.push(sendPostHref(post.id))}
+            style={styles.reactRow}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel={t.messageActions.sendPost}
+            testID="envoyer-publication"
+          >
+            <SendIcon size={19} />
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );

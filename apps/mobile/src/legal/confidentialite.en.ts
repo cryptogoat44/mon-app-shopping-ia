@@ -120,6 +120,7 @@ export function buildPrivacyPolicyEn(extra: PrivacyExtra): LegalDocument {
             `Your alerts, your price thresholds and your “No longer available” reports: you alone (see “${ALERTS}”).`,
           ],
           "Photos are stored at a long, random web address that cannot be guessed. However, someone who was able to see a photo and kept its address can continue to open it, even if you later change the visibility of the post.",
+          "In a conversation you can like a message, reply to it, send a post and delete your own messages. A deleted message is erased for both of you; only the line “Message deleted” remains. The other member may have read it before. If it had been reported before being deleted, its content is kept for moderation: the other member can no longer read it, and you will find it in your data export. A post you send is shown to the other member only if they are allowed to see it, at the time they look.",
         ],
       },
       {

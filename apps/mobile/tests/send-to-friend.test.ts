@@ -150,10 +150,11 @@ describe("l'action envoie la bonne pièce", () => {
   });
 
   it("le choix d'une conversation (ou d'une autre personne) garde la proposition jusqu'à la conversation", () => {
-    expect(choose).toContain("const attached = wishId ? { wishId } : matchId ? { matchId } : {};");
+    // (Lot « messages, plus de confort » : une publication du fil suit le même chemin.)
+    expect(choose).toContain("const attached = wishId ? { wishId } : matchId ? { matchId } : postId ? { postId } : {};");
     expect(choose).toContain('router.replace({ pathname: "/conversation", params: { id: summary.id, ...attached } })');
     expect(choose).toContain('router.replace({ pathname: "/conversation", params: { userId: person.id, ...attached } })');
-    expect(choose).toContain("{matchId ? t.messages.chooseHintPiece : t.messages.chooseHint}");
+    expect(choose).toContain("{postId ? t.messageActions.chooseHintPost : matchId ? t.messages.chooseHintPiece : t.messages.chooseHint}");
   });
 });
 

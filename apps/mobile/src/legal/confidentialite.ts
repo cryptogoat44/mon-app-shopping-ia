@@ -133,6 +133,7 @@ export function buildPrivacyPolicy(extra: PrivacyExtra): LegalDocument {
             `Vos alertes, vos seuils de prix et vos signalements « Plus disponible » : vous seul (voir « ${ALERTS} »).`,
           ],
           "Les photos sont stockées à une adresse web longue et aléatoire, impossible à deviner. Mais une personne qui a pu voir une photo et en a conservé l'adresse peut continuer à l'ouvrir, même si vous changez ensuite la visibilité de la publication.",
+          "Dans une conversation, vous pouvez aimer un message, y répondre, envoyer une publication et supprimer vos propres messages. Un message supprimé est effacé pour vous deux ; seule la mention « Message supprimé » reste. L'autre membre a pu le lire avant. S'il avait été signalé avant d'être supprimé, son contenu est conservé pour la modération : l'autre membre ne peut plus le lire, et vous le retrouvez dans l'export de vos données. Une publication envoyée n'est montrée à l'autre membre que s'il a le droit de la voir, au moment où il regarde.",
         ],
       },
       {

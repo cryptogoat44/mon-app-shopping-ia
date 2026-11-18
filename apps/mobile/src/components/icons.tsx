@@ -266,3 +266,13 @@ export function ShareIcon({ size = 19, tint = color.acier, strokeWidth = 1.4 }: 
     </Svg>
   );
 }
+
+/** Envoyer dans un message (lot « messages, plus de confort ») : un avion en papier. */
+export function SendIcon({ size = 19, tint = color.acier, strokeWidth = 1.4 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M20.5 3.5L3.5 10.5l6.5 3 3 6.5 7.5-16.5z" stroke={tint} strokeWidth={strokeWidth} strokeLinejoin="round" />
+      <Path d="M10 13.5l10.5-10" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}

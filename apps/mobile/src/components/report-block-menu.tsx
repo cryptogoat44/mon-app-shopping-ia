@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { REPORT_REASONS, type ReportReason } from "@monapp/shared-types";
@@ -30,10 +30,17 @@ interface ReportBlockMenuProps {
    * commentaire, pièce reçue) disparaît aussitôt de ce que voit la personne
    * qui l'a signalé ; le serveur ne le lui renvoie plus. */
   onReported?: () => void;
+  /** Lot « messages, plus de confort » : la feuille des actions d'un message
+   * a déjà fait choisir « Signaler » ou « Bloquer » ; le menu s'ouvre alors
+   * sur la liste des motifs, ou sur la confirmation du blocage. */
+  initialStep?: Step;
 }
 
-export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, pieceId, messageId, collectionId, onBlocked, onReported }: ReportBlockMenuProps) {
+export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, pieceId, messageId, collectionId, onBlocked, onReported, initialStep }: ReportBlockMenuProps) {
   const [step, setStep] = useState<Step>("root");
+  useEffect(() => {
+    if (visible && initialStep) setStep(initialStep);
+  }, [visible, initialStep]);
   const { showToast } = useToast();
   const target = { userId, postId, commentId, pieceId, messageId, collectionId };
   const reportLabel = reportMenuLabel(target);
