@@ -11,6 +11,8 @@ import { randomUUID } from "node:crypto";
 // même une colonne absente (`missingColumns`, lot modération des
 // collections : base sans 0034). Les fonctions de la base (`rpc`) sont
 // fournies par le test qui en a besoin ; sinon, elles sont « absentes ».
+// Lot « vie sociale » : filtres `or` (fil, notifications) et `ilike`
+// (recherche de comptes), une demande d'abonnement par paire de comptes.
 
 export type Row = Record<string, unknown>;
 type Filter = (row: Row) => boolean;
@@ -73,6 +75,12 @@ const DEFAULTS: Record<string, () => Row> = {
   wish_watches: () => ({ notify_price_drop: false, notify_restock: false, notify_sold_out: false, created_at: nextTimestamp(), updated_at: nextTimestamp() }),
   // Historique des consentements (lot « vidéo auto ») : la date de chaque choix.
   consents: () => ({ created_at: nextTimestamp() }),
+  // Lot « vie sociale » (migration 0045) : demandes d'abonnement, et les
+  // valeurs par défaut des tables sociales écrites par les routes.
+  follow_requests: () => ({ created_at: nextTimestamp() }),
+  follows: () => ({ created_at: nextTimestamp() }),
+  comments: () => ({ id: randomUUID(), hidden_at: null, created_at: nextTimestamp() }),
+  post_reactions: () => ({ created_at: nextTimestamp() }),
 };
 
 /** Clés uniques imitées (doublon : erreur 23505, comme Postgres). */
@@ -83,6 +91,8 @@ const UNIQUE: Record<string, string[][]> = {
   // Lot alertes prix et stock (0036) : un suivi et une cloche par envie.
   wish_tracking: [["wishlist_item_id"]],
   wish_watches: [["wishlist_item_id"]],
+  // Lot « vie sociale » (0045) : une demande par paire de comptes.
+  follow_requests: [["requester_id", "target_id"]],
 };
 
 /** Suppressions en cascade imitées : en supprimant une ligne de la table,
@@ -128,6 +138,47 @@ function compare(a: unknown, b: unknown): number {
 
 function listOf(value: string): string[] {
   return value.replace(/^\(|\)$/g, "").split(",").filter(Boolean);
+}
+
+/** Découpe « a,b(c,d),e » aux virgules du premier niveau seulement. */
+function topLevelParts(text: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let current = "";
+  for (const char of text) {
+    if (char === "(") depth += 1;
+    if (char === ")") depth -= 1;
+    if (char === "," && depth === 0) {
+      parts.push(current);
+      current = "";
+    } else current += char;
+  }
+  if (current) parts.push(current);
+  return parts;
+}
+
+/** Un terme d'un filtre `or` de PostgREST : « col.eq.v », « col.is.null »,
+ * « col.in.(a,b) », « col.not.in.(a,b) » ou « and(terme,terme) ». Tout autre
+ * terme relève une erreur : jamais un filtre ignoré en silence. */
+function orTerm(term: string): Filter {
+  if (term.startsWith("and(") && term.endsWith(")")) {
+    const inner = topLevelParts(term.slice(4, -1)).map(orTerm);
+    return (row) => inner.every((filter) => filter(row));
+  }
+  const [column, ...rest] = term.split(".");
+  const expression = rest.join(".");
+  if (!column) throw new Error(`fakeSupabase : filtre « or » illisible (${term})`);
+  if (expression.startsWith("eq.")) return (row) => String(row[column]) === expression.slice(3);
+  if (expression === "is.null") return (row) => (row[column] ?? null) === null;
+  if (expression.startsWith("not.in.")) {
+    const excluded = listOf(expression.slice(7));
+    return (row) => (row[column] ?? null) !== null && !excluded.includes(String(row[column]));
+  }
+  if (expression.startsWith("in.")) {
+    const wanted = listOf(expression.slice(3));
+    return (row) => wanted.includes(String(row[column]));
+  }
+  throw new Error(`fakeSupabase : filtre « or » inconnu (${term})`);
 }
 
 export function fakeSupabase(options: FakeDbOptions = {}) {
@@ -308,6 +359,20 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
         } else {
           filters.push((row) => (row[column] ?? null) !== value);
         }
+        return chain;
+      },
+      // Au moins un des termes (syntaxe de PostgREST, voir orTerm).
+      or(expression: string) {
+        const terms = topLevelParts(expression).map(orTerm);
+        filters.push((row) => terms.some((filter) => filter(row)));
+        return chain;
+      },
+      // Comme Postgres : « % » vaut n'importe quel texte, sans tenir compte de la casse.
+      ilike(column: string, pattern: string) {
+        named.push(column);
+        const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*").replace(/_/g, ".");
+        const regex = new RegExp(`^${escaped}$`, "i");
+        filters.push((row) => typeof row[column] === "string" && regex.test(row[column] as string));
         return chain;
       },
       gt(column: string, value: string) {
