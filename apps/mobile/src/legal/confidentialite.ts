@@ -132,6 +132,7 @@ export function buildPrivacyPolicy(extra: PrivacyExtra): LegalDocument {
             `Vos alertes, vos seuils de prix et vos signalements « Plus disponible » : vous seul (voir « ${ALERTS} »).`,
           ],
           "Les photos sont stockées à une adresse web longue et aléatoire, impossible à deviner. Mais une personne qui a pu voir une photo et en a conservé l'adresse peut continuer à l'ouvrir, même si vous changez ensuite la visibilité de la publication.",
+          "Vous pouvez rendre votre compte privé. Vos publications, vos listes d'abonnés et d'abonnements et vos j'aime ne sont alors visibles que par les abonnés que vous avez acceptés. Les autres membres voient seulement votre nom, votre photo, votre bio et le nombre de vos abonnés et de vos abonnements ; vous n'apparaissez plus dans les listes des autres comptes pour eux. Une demande d'abonnement est conservée jusqu'à votre réponse ou son annulation, puis effacée ; la personne dont vous refusez la demande n'est pas prévenue, mais elle voit qu'elle peut de nouveau demander. Si vous repassez en compte public, les demandes en attente sont effacées.",
         ],
       },
       {
