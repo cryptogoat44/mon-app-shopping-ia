@@ -5,6 +5,7 @@ import { fetchBlockedUserIds } from "../lib/blocks.js";
 import { CONTENT_NOT_ALLOWED, containsBannedWords } from "../lib/contentFilter.js";
 import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
 import { findViewablePost } from "../lib/visibility.js";
+import { notify } from "../lib/notify.js";
 import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseInput } from "../lib/validation.js";
 import { withoutSuspendedFaces } from "../lib/profileModeration.js";
 
@@ -138,16 +139,8 @@ export default async function commentsRoutes(fastify: FastifyInstance) {
       }
 
       // Notification in-app à l'auteur de la publication — jamais pour ses
-      // propres commentaires.
-      if (post.user_id !== viewerId) {
-        await fastify.supabaseAdmin.from("notifications").insert({
-          user_id: post.user_id,
-          actor_id: viewerId,
-          type: "comment",
-          post_id: post.id,
-          comment_id: (inserted as CommentRow).id,
-        });
-      }
+      // propres commentaires, ni s'il ne voit plus la publication (lib/notify.ts).
+      await notify(fastify, request.log, { recipientId: post.user_id, actorId: viewerId, type: "comment", postId: post.id, commentId: (inserted as CommentRow).id });
 
       const [comment] = await toComments(fastify, [inserted as CommentRow], viewerId, post.user_id);
       return reply.send(comment);

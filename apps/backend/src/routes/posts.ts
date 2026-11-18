@@ -12,6 +12,7 @@ import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.
 import { CONTENT_NOT_ALLOWED, containsBannedWords } from "../lib/contentFilter.js";
 import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
 import { withoutSuspendedFaces } from "../lib/profileModeration.js";
+import { notify } from "../lib/notify.js";
 
 // Une publication ne peut pas devenir une liste sans fin de tags — reste
 // large pour un usage légitime (plusieurs pièces sur une même tenue) sans
@@ -768,21 +769,8 @@ export default async function postsRoutes(fastify: FastifyInstance) {
         .eq("actor_id", userId);
     } else {
       await fastify.supabaseAdmin.from("post_reactions").insert({ post_id: id, user_id: userId });
-      // Jamais de notification pour un like sur sa propre publication.
-      if (post.user_id !== userId) {
-        const { data: alreadyNotified } = await fastify.supabaseAdmin
-          .from("notifications")
-          .select("id")
-          .eq("type", "like")
-          .eq("post_id", id)
-          .eq("actor_id", userId)
-          .limit(1);
-        if (!alreadyNotified || alreadyNotified.length === 0) {
-          await fastify.supabaseAdmin
-            .from("notifications")
-            .insert({ user_id: post.user_id, actor_id: userId, type: "like", post_id: id });
-        }
-      }
+      // Jamais pour un like sur sa propre publication, jamais deux fois (lib/notify.ts).
+      await notify(fastify, request.log, { recipientId: post.user_id, actorId: userId, type: "like", postId: id, oncePerPost: true });
     }
 
     const { count } = await fastify.supabaseAdmin

@@ -287,6 +287,11 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Vous avez lancé beaucoup d'essais aujourd'hui. Réessayez demain.": "You've started a lot of try-ons today. Please try again tomorrow.",
   "Les essais sont très demandés en ce moment. Réessayez dans un moment.": "Try-ons are in high demand right now. Please try again shortly.",
   "Vous avez envoyé beaucoup de signalements en peu de temps. Réessayez dans une heure.": "You've sent a lot of reports in a short time. Please try again in an hour.",
+  // Compte privé et demandes d'abonnement (lot « vie sociale », migration 0045).
+  "Le compte privé n'est pas encore disponible.": "Private accounts aren't available yet.",
+  "Ce compte est privé. Mettez à jour l'app pour demander à le suivre.": "This account is private. Update the app to ask to follow it.",
+  "Vous avez déjà demandé à suivre ce compte récemment. Réessayez plus tard.": "You've already asked to follow this account recently. Please try again later.",
+  "Demande introuvable.": "Request not found.",
 };
 
 /** Message dans la langue voulue. Un message inconnu (par exemple un texte

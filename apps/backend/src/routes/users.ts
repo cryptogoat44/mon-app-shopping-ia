@@ -2,8 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Post, PublicProfile, UserProfile } from "@monapp/shared-types";
 import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, parseDbRows, parseInput, userIdParamsSchema } from "../lib/validation.js";
-import { isBlockedEitherWay, isFollowing, shownPosts, visiblePrivacies } from "../lib/visibility.js";
-import { suspendedAmong } from "../lib/moderation.js";
+import { shownPosts, visiblePrivacies } from "../lib/visibility.js";
+import { canSeeAuthorContent, readAudience, readAudienceOf } from "../lib/audience.js";
+import { followStateOf } from "../lib/memberRows.js";
 import { withoutSuspendedFaces } from "../lib/profileModeration.js";
 import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
 import { POST_ROWS, hydratePosts } from "./posts.js";
@@ -68,44 +69,31 @@ export default async function usersRoutes(fastify: FastifyInstance) {
       if (candidateRows.length >= 20) break;
     }
 
-    const candidateIds = candidateRows.map((p) => p.id);
-
-    // Invisibilité mutuelle : un profil bloqué par moi, ou qui m'a bloqué,
-    // ne doit apparaître dans aucune recherche.
-    let blockedIds = new Set<string>();
-    if (candidateIds.length > 0) {
-      const [{ data: blockedByMe }, { data: blockingMe }] = await Promise.all([
-        fastify.supabaseAdmin.from("blocks").select("blocked_id").eq("blocker_id", userId).in("blocked_id", candidateIds),
-        fastify.supabaseAdmin.from("blocks").select("blocker_id").eq("blocked_id", userId).in("blocker_id", candidateIds),
-      ]);
-      blockedIds = new Set([
-        ...(blockedByMe ?? []).map((b) => b.blocked_id as string),
-        ...(blockingMe ?? []).map((b) => b.blocker_id as string),
-      ]);
-    }
-
-    // Un compte suspendu par la modération n'apparaît plus en recherche (lot 5).
-    const suspendedIds = await suspendedAmong(fastify, candidateIds);
-    const rows = candidateRows.filter((row) => !blockedIds.has(row.id) && !suspendedIds.has(row.id));
-    const profileIds = rows.map((p) => p.id);
-
-    let followingIds = new Set<string>();
-    if (profileIds.length > 0) {
-      const { data: follows } = await fastify.supabaseAdmin
-        .from("follows")
-        .select("followee_id")
-        .eq("follower_id", userId)
-        .in("followee_id", profileIds);
-      followingIds = new Set((follows ?? []).map((f) => f.followee_id as string));
-    }
-
-    const results: PublicProfile[] = rows.map((row) => ({
-      id: row.id,
-      username: row.username!,
-      displayName: row.display_name,
-      avatarUrl: row.avatar_url,
-      isFollowing: followingIds.has(row.id),
-    }));
+    // Une seule lecture groupée (lib/audience.ts). Invisibilité mutuelle : un
+    // profil bloqué par moi, ou qui m'a bloqué, n'apparaît dans aucune
+    // recherche ; un compte suspendu par la modération non plus (lot 5). Un
+    // compte privé apparaît, avec son nom et sa photo seulement (comme sur
+    // son profil), et l'app y propose « Suivre » ou « Demandé ».
+    const audiences = await readAudience(
+      fastify,
+      userId,
+      candidateRows.map((p) => p.id)
+    );
+    const results: PublicProfile[] = candidateRows.flatMap((row) => {
+      const audience = audiences.get(row.id);
+      if (!audience || audience.blocked || audience.suspended) return [];
+      return [
+        {
+          id: row.id,
+          username: row.username!,
+          displayName: row.display_name,
+          avatarUrl: row.avatar_url,
+          isFollowing: audience.follows,
+          isPrivate: audience.isPrivate,
+          followState: followStateOf(audience),
+        },
+      ];
+    });
 
     return reply.send(results);
   });
@@ -130,7 +118,8 @@ export default async function usersRoutes(fastify: FastifyInstance) {
     // Profil pas encore complété (sans nom d'utilisateur) : pas de page publique.
     if (!stored || !stored.username) return notFound();
     const isMe = targetId === viewerId;
-    if (!isMe && (await isBlockedEitherWay(fastify, viewerId, targetId))) return notFound();
+    const audience = await readAudienceOf(fastify, viewerId, targetId, { suspended: false });
+    if (audience.blocked) return notFound();
     const [row] = await withoutSuspendedFaces(
       fastify,
       [{ ...stored, id: stored.id as string, avatar_url: (stored.avatar_url as string | null) ?? null, bio: (stored.bio as string | null) ?? null }],
@@ -138,15 +127,18 @@ export default async function usersRoutes(fastify: FastifyInstance) {
     );
     if (!row) return notFound();
 
-    const viewerFollows = isMe ? false : await isFollowing(fastify, viewerId, targetId);
+    // Compte privé (migration 0045) : qui n'est pas un abonné accepté ne voit
+    // que nom, photo, bio et compteurs d'abonnés et d'abonnements ; jamais le
+    // nombre de publications (0), ni rien d'autre.
+    const privacies = canSeeAuthorContent(audience) ? visiblePrivacies(isMe, audience.follows, audience.isPrivate) : [];
     const [followers, following, posts] = await Promise.all([
       fastify.supabaseAdmin.from("follows").select("*", { count: "exact", head: true }).eq("followee_id", targetId),
       fastify.supabaseAdmin.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", targetId),
       // Nombre de publications que CE visiteur peut voir (le même que la
       // grille) : ne révèle jamais l'existence de publications privées ni masquées.
-      shownPosts(fastify, "id", { count: "exact", head: true })
-        .eq("user_id", targetId)
-        .in("privacy", visiblePrivacies(isMe, viewerFollows)),
+      privacies.length > 0
+        ? shownPosts(fastify, "id", { count: "exact", head: true }).eq("user_id", targetId).in("privacy", privacies)
+        : Promise.resolve({ count: 0 }),
     ]);
 
     const profile: UserProfile = {
@@ -158,14 +150,17 @@ export default async function usersRoutes(fastify: FastifyInstance) {
       followersCount: followers.count ?? 0,
       followingCount: following.count ?? 0,
       postsCount: posts.count ?? 0,
-      isFollowing: viewerFollows,
+      isFollowing: audience.follows,
       isMe,
+      isPrivate: audience.isPrivate,
+      followState: followStateOf(audience),
     };
     return reply.send(profile);
   });
 
   // Ses publications, chacune selon SA confidentialité : publique pour
   // tous, « abonnés » pour ses abonnés, privée pour personne d'autre.
+  // Compte privé : seulement pour ses abonnés acceptés.
   fastify.get("/api/users/:userId/posts", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const params = parseInput(userIdParamsSchema, request.params, reply, INVALID_ID);
     if (!params) return;
@@ -175,14 +170,18 @@ export default async function usersRoutes(fastify: FastifyInstance) {
     const targetId = params.userId;
     const isMe = targetId === viewerId;
 
-    if (!isMe && (await isBlockedEitherWay(fastify, viewerId, targetId))) {
+    const audience = await readAudienceOf(fastify, viewerId, targetId, { suspended: false, requested: false });
+    if (audience.blocked) {
       return reply.code(404).send({ error: "user_not_found", message: "Profil introuvable." });
     }
-    const follows = isMe ? false : await isFollowing(fastify, viewerId, targetId);
+    // Compte privé : rien pour qui n'est pas un abonné accepté, quelle que
+    // soit la visibilité de chaque publication — et aucune lecture des publications.
+    const privacies = canSeeAuthorContent(audience) ? visiblePrivacies(isMe, audience.follows, audience.isPrivate) : [];
+    if (privacies.length === 0) return reply.send({ posts: [], nextCursor: null });
 
     let query = shownPosts(fastify, "*")
       .eq("user_id", targetId)
-      .in("privacy", visiblePrivacies(isMe, follows))
+      .in("privacy", privacies)
       .order("created_at", { ascending: false })
       .limit(USER_POSTS_PAGE_SIZE + 1);
     if (pageQuery.cursor) query = query.lt("created_at", pageQuery.cursor);
