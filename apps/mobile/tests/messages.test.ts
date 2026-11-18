@@ -162,7 +162,9 @@ describe("invitations : accepter, refuser, bloquer", () => {
     expect(bubble).not.toContain("Platform.OS");
     // Le même menu que l'appui long, pour CE message ; le message signalé quitte l'écran.
     expect(bubble).toContain("onLongPress={message.mine ? undefined : onOptions}");
-    expect(screen).toMatch(/<Bubble key=\{message\.id\} message=\{message\} onOptions=\{\(\) => setMenuFor\(message\)\} \/>/);
+    // (Lot « messages vus » : chaque message est dans un bloc qui porte sa clé, avec sa mention « Vu » ou « Envoyé ».)
+    expect(screen).toMatch(/<View key=\{message\.id\}>\s*<Bubble message=\{message\} onOptions=\{\(\) => setMenuFor\(message\)\} \/>/);
+    expect(screen.match(/<Bubble /g)).toHaveLength(1);
     expect(screen).toContain("messageId={menuFor?.id}");
     expect(screen).toContain("setMessages((current) => current.filter((message) => message.id !== reportedId));");
   });

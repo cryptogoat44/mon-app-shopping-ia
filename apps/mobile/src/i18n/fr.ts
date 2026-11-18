@@ -745,6 +745,13 @@ export const fr = {
     notFound: "Cette conversation n'est pas disponible.",
     loadOlder: "Afficher les messages précédents",
     emptyThread: "Aucun message pour l'instant.",
+    // Lot « messages vus » : sous votre dernier message d'une conversation
+    // ouverte. « Vu » : l'autre membre a ouvert la conversation depuis.
+    receiptSeen: "Vu",
+    receiptSent: "Envoyé",
+    // Lus par VoiceOver à la place de « Vu » et « Envoyé ».
+    receiptSeenLabel: (name: string) => `Votre dernier message a été vu par ${name}`,
+    receiptSentLabel: "Votre dernier message est envoyé",
     messageOptions: "Options pour ce message",
     // Lu par VoiceOver après le nom du bouton « ••• » d'un message reçu.
     messageOptionsHint: "Signaler ce message ou bloquer cette personne",
@@ -1219,6 +1226,12 @@ export const fr = {
     messagesFromHint:
       "Vos amis (vous vous suivez l'un l'autre) peuvent toujours vous écrire. Les autres vous envoient une seule invitation, que vous acceptez ou refusez. Un compte bloqué ne peut jamais vous écrire.",
     messagesFromError: "Ce réglage n'a pas pu être enregistré. Réessayez.",
+    // Lot « messages vus » : « Confirmations de lecture » (réciproque).
+    readReceiptsTitle: "Confirmations de lecture",
+    readReceiptsSwitchLabel: "Montrer quand j'ai lu un message, et voir quand les miens sont lus",
+    readReceiptsHint:
+      "Dans une conversation, « Vu » s'affiche sous le dernier message envoyé quand l'autre membre l'a lu. Si vous désactivez ce réglage, l'autre membre ne voit plus « Vu » pour vos lectures, et vous ne voyez plus les siennes. Ce que vous lisez pendant qu'il est désactivé n'est jamais montré ensuite, même si vous le réactivez.",
+    readReceiptsError: "Ce réglage n'a pas pu être enregistré. Réessayez.",
     exporting: "Préparation de l'export…",
     exportError: "L'export a échoué, réessayez.",
     // Lot 5 : le format se choisit à chaque export (fichier lisible ou JSON).

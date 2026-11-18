@@ -6,6 +6,9 @@
 // les 5 s environ pendant qu'un écran des messages est ouvert ; la personne
 // qui reçoit un message peut aussi être prévenue sur son téléphone
 // (lot notifications, lib/push.ts, coupé par défaut).
+// Lot « messages vus » (migration 0043) : une conversation ouverte dit aussi
+// à la personne qui a écrit si l'autre membre l'a ouverte depuis (« Vu » ou
+// « Envoyé » sous son dernier message). Règles : lib/readReceipts.ts.
 // Confidentialité : le texte d'un message n'est jamais écrit au journal.
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -64,6 +67,7 @@ import { isBlockedEitherWay } from "../lib/visibility.js";
 import { WishImageError, copyWishImage, deleteWishCopy, findOwnWish } from "../lib/wishShare.js";
 import { sharedWishForMessage } from "../lib/collections.js";
 import { notifyNewMessage, pushAvailable } from "../lib/push.js";
+import { readReceiptsAfterSend, readReceiptsFor, readStamp } from "../lib/readReceipts.js";
 import { withoutSuspendedFaces } from "../lib/profileModeration.js";
 
 /** Messages par page d'une conversation. */
@@ -199,6 +203,8 @@ async function buildThread(
     sendMode: sendModeFor(side, theirs, relation, Date.now()),
     messages: await toChatMessages(fastify, rows, side.user_id),
     hasOlder,
+    // Lot « messages vus » : null hors d'une conversation ouverte aux deux.
+    readReceipts: await readReceiptsFor(fastify, request.log, side, theirs),
   };
 }
 
@@ -343,6 +349,7 @@ export default async function conversationsRoutes(fastify: FastifyInstance) {
       sendMode: sendModeFor(null, null, relation, Date.now()),
       messages: [],
       hasOlder: false,
+      readReceipts: null,
     };
     return reply.send(thread);
   });
@@ -362,16 +369,21 @@ export default async function conversationsRoutes(fastify: FastifyInstance) {
     return reply.send(await buildThread(fastify, request, side, profiles.get(side.other_user_id), query));
   });
 
-  // Marquer comme lue (à l'ouverture, et à chaque nouveau message vu).
+  // Marquer comme lue (à l'ouverture, et à chaque nouveau message vu). La
+  // date de cette lecture ne sort jamais du serveur : l'autre membre apprend
+  // seulement, dans une conversation ouverte, que son dernier message a été
+  // vu, et jamais par une lecture qui précède son ouverture : celle d'une
+  // invitation reçue reste donc privée (lib/readReceipts.ts).
   fastify.post("/api/conversations/:id/read", auth, async (request, reply) => {
     if (!(await ensureReady(fastify, reply))) return;
     const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
     if (!params) return;
     const userId = request.user!.id;
-    if (!(await visibleSide(fastify, reply, params.id, userId))) return;
+    const side = await visibleSide(fastify, reply, params.id, userId);
+    if (!side) return;
     const { error } = await fastify.supabaseAdmin
       .from("conversation_participants")
-      .update({ unread: false, last_read_at: new Date().toISOString() })
+      .update({ unread: false, last_read_at: readStamp(side, Date.now()) })
       .eq("conversation_id", params.id)
       .eq("user_id", userId);
     if (error) {
@@ -537,6 +549,8 @@ export default async function conversationsRoutes(fastify: FastifyInstance) {
         message: message!,
         state: viewerState({ invitation: written.mine }),
         sendMode: written.mine === "sent" ? "waiting" : "direct",
+        // Lot « messages vus » : rien pour une invitation envoyée.
+        readReceipts: written.mine === "none" ? await readReceiptsAfterSend(fastify, request.log, written.conversationId, userId) : null,
       };
       return reply.code(201).send(response);
     }
@@ -601,7 +615,15 @@ async function writeConversation(
   // États qui changent, chacun à condition de ne pas avoir changé depuis la lecture.
   const updates: { userId: string; from: Side["invitation"]; values: Record<string, unknown> }[] = [];
   if (mine && (mine.invitation !== plan.mine || plan.clearMine)) {
-    updates.push({ userId: senderId, from: mine.invitation, values: { invitation: plan.mine, invitation_at: now, ...(plan.clearMine ? { cleared_at: null } : {}) } });
+    // Lot « messages vus » : répondre à une invitation reçue (ou écrire après
+    // l'avoir refusée) vaut lecture, comme « Accepter » : la lecture est datée
+    // du moment où la conversation s'ouvre, jamais d'avant.
+    const answers = plan.mine === "none" && (mine.invitation === "received" || mine.invitation === "declined");
+    updates.push({
+      userId: senderId,
+      from: mine.invitation,
+      values: { invitation: plan.mine, invitation_at: now, ...(plan.clearMine ? { cleared_at: null } : {}), ...(answers ? { last_read_at: now } : {}) },
+    });
   }
   if (theirs && theirs.invitation !== plan.theirs) {
     updates.push({ userId: recipientId, from: theirs.invitation, values: { invitation: plan.theirs, invitation_at: now } });

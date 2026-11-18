@@ -676,6 +676,10 @@ export const en: Catalog = {
     notFound: "This conversation isn't available.",
     loadOlder: "Show earlier messages",
     emptyThread: "No messages yet.",
+    receiptSeen: "Seen",
+    receiptSent: "Sent",
+    receiptSeenLabel: (name: string) => `${name} has seen your last message`,
+    receiptSentLabel: "Your last message has been sent",
     messageOptions: "Options for this message",
     messageOptionsHint: "Report this message or block this person",
     reportMessage: "Report this message",
@@ -1128,6 +1132,11 @@ export const en: Catalog = {
     messagesFromHint:
       "Your friends (you follow each other) can always write to you. Others send you a single invitation, which you accept or decline. A blocked account can never write to you.",
     messagesFromError: "This setting couldn't be saved. Please try again.",
+    readReceiptsTitle: "Read receipts",
+    readReceiptsSwitchLabel: "Show when I've read a message, and see when mine are read",
+    readReceiptsHint:
+      "In a conversation, “Seen” appears under the last message sent once the other member has read it. If you turn this off, the other member no longer sees “Seen” for your reads, and you no longer see theirs. What you read while it is off is never shown later, even if you turn it back on.",
+    readReceiptsError: "This setting couldn't be saved. Please try again.",
     exporting: "Preparing the export…",
     exportError: "The export didn't go through. Please try again.",
     exportChoiceIntro: "A copy of all your account data, in the format of your choice. This file is personal: keep it somewhere safe.",

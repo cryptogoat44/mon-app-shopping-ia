@@ -165,6 +165,8 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
     "You've sent a lot of messages in a short time. Please try again in a moment.",
   "Vous avez envoyé beaucoup d'invitations en peu de temps. Réessayez dans une heure.":
     "You've sent a lot of invitations in a short time. Please try again in an hour.",
+  // Confirmations de lecture (lot « messages vus », migration 0043).
+  "Les confirmations de lecture ne sont pas encore disponibles.": "Read receipts aren't available yet.",
   // Collections d'envies (lot collections, migration 0033).
   "Les collections ne sont pas encore disponibles.": "Collections aren't available yet.",
   "Collection introuvable.": "Collection not found.",
