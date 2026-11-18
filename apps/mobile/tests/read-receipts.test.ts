@@ -228,7 +228,8 @@ describe("l'écran de la conversation (lu comme du texte)", () => {
     // Sur le site, le passage à « Vu » est annoncé sans interrompre.
     expect(props).toContain('accessibilityLiveRegion="polite"');
     // Sous la bulle, dans le bloc du message (jamais dans la bulle, qui ne change pas).
-    expect(screen).toMatch(/<View key=\{message\.id\}>\s*<Bubble message=\{message\} onOptions=\{\(\) => setMenuFor\(message\)\} \/>\s*\{\/\*[^*]*\*\/\}\s*\{receipt\?\.messageId === message\.id \? \(/);
+    // (Lot « messages, plus de confort » : la bulle reçoit aussi les actions du message ; la mention reste juste dessous.)
+    expect(screen).toMatch(/<View key=\{message\.id\}>\s*<Bubble\s+message=\{message\}[^<]*\/>\s*\{\/\*[^*]*\*\/\}\s*\{receipt\?\.messageId === message\.id \? \(/);
     // « Envoyé » et « Vu » occupent la même ligne : rien ne bouge quand l'un remplace l'autre.
     expect(screen).toContain('receipt: { alignSelf: "flex-end", marginTop: 2, lineHeight: 18, fontSize: font.caption, color: color.acier },');
     // Aucun texte en dur : les deux mentions viennent des catalogues.

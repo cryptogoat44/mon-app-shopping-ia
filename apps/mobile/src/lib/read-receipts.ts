@@ -40,11 +40,14 @@ export function receiptStatus(receipts: ConversationReadReceipts | null | undefi
   return seenAt >= sentAt ? "seen" : "sent";
 }
 
-/** Votre dernier message de la conversation (le plus récent affiché), ou null. */
+/** Votre dernier message de la conversation (le plus récent affiché), ou
+ * null. Lot « messages, plus de confort » : jamais un message supprimé —
+ * « Vu » ne s'affiche pas sous « Message supprimé » (le serveur, de son côté,
+ * renvoie la date d'un message encore montré). */
 export function lastOwnMessage(messages: readonly ChatMessage[]): ChatMessage | null {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index]!;
-    if (message.mine) return message;
+    if (message.mine && message.deleted !== true) return message;
   }
   return null;
 }

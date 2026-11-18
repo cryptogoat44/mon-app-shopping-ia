@@ -10,15 +10,38 @@ import {
   ApiError,
   acceptInvitation,
   declineInvitation,
+  deleteMessage,
   fetchConversation,
   fetchCollectionItem,
   fetchConversationWith,
   fetchMessagesStatus,
+  fetchPost,
   fetchWishlistItem,
   markConversationRead,
   sendMessage,
+  setMessageReaction,
 } from "@/lib/api";
-import { attachedLabels, attachmentFor, canSend, canWrite, composerNotice, hasNewFromOther, mergeMessages, newestCreatedAt } from "@/lib/conversations";
+import {
+  applyChanges,
+  attachedLabels,
+  attachmentFor,
+  canSend,
+  canWrite,
+  composerNotice,
+  hasNewFromOther,
+  likeLabel,
+  mergeMessages,
+  messageActionsFor,
+  newestCreatedAt,
+  nextSyncedAt,
+  quoteText,
+  replyTargetOf,
+  withLike,
+  withoutContent,
+  type MessageAction,
+  type ReplyTarget,
+} from "@/lib/conversations";
+import { useMessagesStatus } from "@/lib/use-messages-status";
 import { readReadReceipts, receiptMention, sameReceipts, threadAfterPoll, threadAfterSend, withReadReceipts } from "@/lib/read-receipts";
 import { track } from "@/lib/analytics";
 import { forgetPieceToSend, pieceToSend } from "@/lib/send-to-friend";
@@ -26,9 +49,11 @@ import { timeAgo } from "@/lib/format";
 import { loadErrorMessage } from "@/lib/load-error";
 import { useToast } from "@/lib/toast-context";
 import { usePolling } from "@/lib/use-polling";
-import { MoreIcon, PlusIcon } from "@/components/icons";
+import { HeartIcon, MoreIcon, PlusIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
 import { ImageUnavailable } from "@/components/image-unavailable";
+import { MessageActionsSheet } from "@/components/message-actions-sheet";
+import { MessagePostCard } from "@/components/message-post-card";
 import { MessageWishCard } from "@/components/message-wish-card";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { SpotImage } from "@/components/spot-image";
@@ -38,35 +63,113 @@ import { setOpenConversation } from "@/lib/push-state";
 import { themedStyles } from "@/theme/themed-styles";
 import { Avatar } from "@/components/avatar";
 
-function Bubble({ message, onOptions }: { message: ChatMessage; onOptions: () => void }) {
+/** Deux appuis en moins de ce délai : « j'aime » (comme sur une publication). */
+const DOUBLE_TAP_DELAY_MS = 300;
+
+// Un message. Lot « messages, plus de confort » : le message cité, la
+// publication envoyée, un cœur sous la bulle quand il est aimé, la ligne
+// « Message supprimé ». Deux appuis : « j'aime ». « ••• » et l'appui long
+// ouvrent les actions du message (`onOptions`) : toujours pour un message
+// reçu (signaler, bloquer), et pour un des vôtres quand il y a quelque chose
+// à faire (`ownActions` : aimer, répondre, supprimer).
+function Bubble({
+  message,
+  otherName,
+  ownActions,
+  onOptions,
+  onLike,
+  onOpenPost,
+}: {
+  message: ChatMessage;
+  otherName: string;
+  ownActions: boolean;
+  onOptions: () => void;
+  /** Absent : ce message ne peut pas être aimé (déjà aimé, supprimé, invitation, serveur plus ancien). */
+  onLike?: () => void;
+  onOpenPost: (postId: string) => void;
+}) {
+  const lastTap = useRef(0);
+  const liked = likeLabel(message, otherName);
+  const quote = message.replyTo ?? null;
+
+  function handlePress() {
+    const now = Date.now();
+    if (onLike && now - lastTap.current < DOUBLE_TAP_DELAY_MS) onLike();
+    lastTap.current = now;
+  }
+
   return (
-    <View style={[styles.bubbleRow, message.mine ? styles.rowMine : styles.rowTheirs]} testID={`message-${message.id}`}>
-      <Pressable
-        onLongPress={message.mine ? undefined : onOptions}
-        style={[styles.bubble, message.mine ? styles.bubbleMine : styles.bubbleTheirs]}
-        accessible
-      >
-        {message.wish ? <MessageWishCard card={message.wish} mine={message.mine} /> : null}
-        {message.text ? <Text style={[styles.bubbleText, message.mine ? styles.bubbleTextMine : null]}>{message.text}</Text> : null}
-        <Text style={[styles.bubbleTime, message.mine ? styles.bubbleTimeMine : null]}>{timeAgo(message.createdAt, getActiveLocale())}</Text>
-      </Pressable>
-      {/* Signaler un message reçu : un bouton « ••• » toujours visible à côté
-          du message (règle 1.2 d'Apple ; le site n'a pas d'appui long), en plus
-          de l'appui long. Il ouvre le menu « Signaler ce message / Bloquer ».
-          Jamais sur ses propres messages. */}
-      {message.mine ? null : (
+    <View>
+      <View style={[styles.bubbleRow, message.mine ? styles.rowMine : styles.rowTheirs]} testID={`message-${message.id}`}>
+        {/* Ses propres messages : le même bouton, quand il y a une action à proposer. */}
+        {message.mine && ownActions ? (
+          <Pressable
+            onPress={onOptions}
+            hitSlop={10}
+            style={styles.bubbleMore}
+            testID={`message-options-${message.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={t.messages.messageOptions}
+            accessibilityHint={t.messageActions.optionsHint}
+          >
+            <MoreIcon size={16} tint={color.acier} />
+          </Pressable>
+        ) : null}
         <Pressable
-          onPress={onOptions}
-          hitSlop={10}
-          style={styles.bubbleMore}
-          testID={`message-options-${message.id}`}
-          accessibilityRole="button"
-          accessibilityLabel={t.messages.messageOptions}
-          accessibilityHint={t.messages.messageOptionsHint}
+          onPress={handlePress}
+          onLongPress={message.mine && !ownActions ? undefined : onOptions}
+          style={[styles.bubble, message.mine ? styles.bubbleMine : styles.bubbleTheirs]}
+          accessible
         >
-          <MoreIcon size={16} tint={color.acier} />
+          {message.deleted ? (
+            <Text style={[styles.bubbleDeleted, message.mine ? styles.bubbleTextMine : null]}>{t.messageActions.deleted}</Text>
+          ) : (
+            <>
+              {quote ? (
+                <View style={[styles.quote, message.mine ? styles.quoteMine : null]} testID="message-cite">
+                  {quote.kind === "unavailable" ? null : (
+                    <Text style={[styles.quoteWho, message.mine ? styles.bubbleTextMine : null]} numberOfLines={1}>
+                      {quote.mine ? t.messageActions.quoteFromYou : otherName}
+                    </Text>
+                  )}
+                  <Text style={[styles.quoteText, message.mine ? styles.bubbleTextMine : null]} numberOfLines={2}>
+                    {quoteText(quote)}
+                  </Text>
+                </View>
+              ) : null}
+              {message.post ? <MessagePostCard card={message.post} onOpen={onOpenPost} /> : null}
+              {message.wish ? <MessageWishCard card={message.wish} mine={message.mine} /> : null}
+              {message.text ? <Text style={[styles.bubbleText, message.mine ? styles.bubbleTextMine : null]}>{message.text}</Text> : null}
+            </>
+          )}
+          <Text style={[styles.bubbleTime, message.mine ? styles.bubbleTimeMine : null]}>{timeAgo(message.createdAt, getActiveLocale())}</Text>
         </Pressable>
-      )}
+        {/* Signaler un message reçu : un bouton « ••• » toujours visible à côté
+            du message (règle 1.2 d'Apple ; le site n'a pas d'appui long), en plus
+            de l'appui long. Il ouvre les actions du message, dont « Signaler »
+            et « Bloquer » ; sans autre action possible, le menu « Signaler ce
+            message / Bloquer » directement. */}
+        {message.mine ? null : (
+          <Pressable
+            onPress={onOptions}
+            hitSlop={10}
+            style={styles.bubbleMore}
+            testID={`message-options-${message.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={t.messages.messageOptions}
+            accessibilityHint={t.messages.messageOptionsHint}
+          >
+            <MoreIcon size={16} tint={color.acier} />
+          </Pressable>
+        )}
+      </View>
+      {/* Aimé par vous, par l'autre membre, ou par les deux : un cœur sous la bulle, lu par VoiceOver. */}
+      {liked ? (
+        <View style={[styles.liked, message.mine ? styles.likedMine : styles.likedTheirs]} accessible accessibilityLabel={liked} testID={`message-aime-${message.id}`}>
+          <HeartIcon size={13} tint={color.encre} filled />
+          {message.liked?.mine && message.liked.theirs ? <HeartIcon size={13} tint={color.encre} filled /> : null}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -87,6 +190,12 @@ function Bubble({ message, onOptions }: { message: ChatMessage; onOptions: () =>
 // membre a ouvert la conversation depuis, « Envoyé » sinon ; rien quand le
 // serveur ne renvoie pas de confirmations (invitation, réglage éteint chez
 // l'un des deux). Tenu à jour à chaque relecture (lib/read-receipts.ts).
+// Lot « messages, plus de confort » : aimer un message (deux appuis, ou la
+// feuille des actions), y répondre (barre « Réponse à … » au-dessus du
+// champ), supprimer un des siens (confirmé), envoyer une publication
+// (`postId`, jointe d'avance depuis le fil). Ces actions ne sont proposées
+// que si le serveur les a (`actions` de l'état de la messagerie) ; chaque
+// relecture rapporte aussi ce que l'autre membre a aimé ou supprimé.
 export default function ConversationScreen() {
   const { id, userId, wishId, collectionItemId, matchId } = useLocalSearchParams<{
     id?: string;
@@ -95,6 +204,8 @@ export default function ConversationScreen() {
     collectionItemId?: string;
     matchId?: string;
   }>();
+  // Lot « messages, plus de confort » : une publication du fil, jointe d'avance.
+  const { postId } = useLocalSearchParams<{ postId?: string }>();
   const router = useRouter();
   const { showToast } = useToast();
   const [thread, setThread] = useState<ConversationThread | null>(null);
@@ -106,6 +217,15 @@ export default function ConversationScreen() {
   const [sendError, setSendError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [menuFor, setMenuFor] = useState<ChatMessage | null>(null);
+  // Lot « messages, plus de confort » : la feuille des actions d'un message,
+  // l'étape du menu « Signaler / Bloquer » quand elle lui passe la main, et
+  // le message auquel on répond.
+  const [sheetFor, setSheetFor] = useState<ChatMessage | null>(null);
+  const [menuStep, setMenuStep] = useState<"root" | "report" | "confirmBlock">("root");
+  const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
+  const actionsEnabled = useMessagesStatus().actions === true;
+  // Date de la dernière réponse du serveur : il renvoie ce qui a changé depuis.
+  const syncedAt = useRef<string | null>(null);
   const [profileMenu, setProfileMenu] = useState(false);
   const [confirmDecline, setConfirmDecline] = useState(false);
   const [answering, setAnswering] = useState(false);
@@ -136,6 +256,7 @@ export default function ConversationScreen() {
       stickToEnd.current = true;
       setThread(withReadReceipts(data));
       setMessages(data.messages);
+      syncedAt.current = nextSyncedAt(null, data);
       setState("ready");
       if (data.id) markRead(data.id);
       if (data.messages.some((message) => !message.mine)) offerPush();
@@ -174,12 +295,26 @@ export default function ConversationScreen() {
     setWish({ id: matchId, title: piece?.title ?? t.messages.attachedPieceFallback, imageUrl: piece?.imageUrl ?? null, kind: "match" });
   }, [matchId]);
 
+  // Publication jointe d'avance (« Envoyer dans un message », depuis le fil) :
+  // sa miniature et son auteur, si vous pouvez la voir ; sinon un simple libellé.
+  useEffect(() => {
+    if (!postId) return;
+    setWish({ id: postId, title: t.messageActions.attachedPost, imageUrl: null, kind: "post" });
+    fetchPost(postId)
+      .then((post) =>
+        setWish((current) =>
+          current?.id === postId ? { id: postId, title: t.messageActions.attachedPostBy(post.author.displayName), imageUrl: post.mediaThumbUrl ?? post.mediaUrl, kind: "post" } : current
+        )
+      )
+      .catch(() => {});
+  }, [postId]);
+
   const poll = useCallback(async (): Promise<"new" | "same"> => {
     const conversationId = thread?.id;
     if (!conversationId) return "same";
     let data: ConversationThread;
     try {
-      data = await fetchConversation(conversationId, { after: newestCreatedAt(messagesRef.current) });
+      data = await fetchConversation(conversationId, { after: newestCreatedAt(messagesRef.current), changedSince: syncedAt.current });
     } catch (e) {
       // Conversation devenue introuvable (blocage, refus sur un autre appareil).
       if (e instanceof ApiError && e.status === 404) setState("not_found");
@@ -187,14 +322,16 @@ export default function ConversationScreen() {
     }
     const before = messagesRef.current;
     const merged = mergeMessages(before, data.messages);
+    // Ce que l'autre membre a aimé ou supprimé depuis la dernière relecture.
+    const next = applyChanges(merged, data.changed);
+    const touched = next !== merged;
+    syncedAt.current = nextSyncedAt(syncedAt.current, data);
     const fresh = hasNewFromOther(before, merged);
     // « Vu » qui apparaît compte comme du nouveau : la relecture reste rapide.
     const receiptsChanged = !sameReceipts(thread?.readReceipts, readReadReceipts(data.readReceipts));
-    const changed = merged.length !== before.length || data.sendMode !== thread?.sendMode || data.state !== thread?.state || receiptsChanged;
-    if (merged.length !== before.length) {
-      stickToEnd.current = true;
-      setMessages(merged);
-    }
+    const changed = merged.length !== before.length || touched || data.sendMode !== thread?.sendMode || data.state !== thread?.state || receiptsChanged;
+    if (merged.length !== before.length) stickToEnd.current = true;
+    if (merged.length !== before.length || touched) setMessages(next);
     setThread((current) => threadAfterPoll(current, data));
     if (fresh) {
       markRead(conversationId);
@@ -223,7 +360,7 @@ export default function ConversationScreen() {
     setSendError(null);
     try {
       const text = draft.trim();
-      const sent = await sendMessage({ recipientId: thread.other.id, ...(text ? { text } : {}), ...attachmentFor(wish) });
+      const sent = await sendMessage({ recipientId: thread.other.id, ...(text ? { text } : {}), ...(replyTo ? { replyToId: replyTo.id } : {}), ...attachmentFor(wish) });
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       if (wish?.kind === "match") {
         // Statistiques : d'où la pièce est partie, rien d'autre (liste fermée, consentement).
@@ -241,6 +378,7 @@ export default function ConversationScreen() {
       setThread((current) => (current ? threadAfterSend(current, sent) : current));
       setDraft("");
       setWish(null);
+      setReplyTo(null);
       kick();
       offerPush();
     } catch (e) {
@@ -249,6 +387,62 @@ export default function ConversationScreen() {
       if (e instanceof ApiError && (e.status === 403 || e.status === 409)) void load();
     } finally {
       setSending(false);
+    }
+  }
+
+  // ---- Lot « messages, plus de confort » ----
+
+  /** Ce que la personne peut faire de ce message (lib/conversations.ts). */
+  function actionsFor(message: ChatMessage): MessageAction[] {
+    return messageActionsFor(message, { actions: actionsEnabled, open: thread?.state === "open", canWrite: thread ? canWrite(thread.sendMode) : false });
+  }
+
+  /** « ••• » ou appui long : la feuille des actions ; s'il n'y a que
+   * « Signaler » et « Bloquer » (serveur plus ancien, message supprimé,
+   * invitation reçue), le menu existant directement, comme avant. */
+  function openOptions(message: ChatMessage) {
+    const list = actionsFor(message);
+    if (list.length === 0) return;
+    if (list.every((action) => action === "report" || action === "block")) {
+      setMenuStep("root");
+      setMenuFor(message);
+    } else {
+      setSheetFor(message);
+    }
+  }
+
+  /** Le « j'aime » est montré tout de suite ; si le serveur refuse, il revient en arrière, avec un message. */
+  async function toggleLike(message: ChatMessage, liked: boolean) {
+    if (liked) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setMessages((current) => current.map((entry) => (entry.id === message.id ? withLike(entry, liked) : entry)));
+    try {
+      const saved = await setMessageReaction(message.id, liked);
+      setMessages((current) => applyChanges(current, [saved]));
+    } catch (e) {
+      setMessages((current) => current.map((entry) => (entry.id === message.id ? withLike(entry, !liked) : entry)));
+      showToast(e instanceof ApiError ? e.message : t.messageActions.likeError);
+    }
+  }
+
+  /** Supprimer un de ses messages, pour les deux membres (déjà confirmé dans la feuille). */
+  async function handleDelete(message: ChatMessage) {
+    try {
+      await deleteMessage(message.id);
+      setMessages((current) => withoutContent(current, message.id, false));
+      setReplyTo((current) => (current?.id === message.id ? null : current));
+    } catch (e) {
+      showToast(e instanceof ApiError ? e.message : t.messageActions.deleteError);
+    }
+  }
+
+  function handleAction(message: ChatMessage, action: MessageAction) {
+    if (action === "like" || action === "unlike") void toggleLike(message, action === "like");
+    else if (action === "reply") setReplyTo(replyTargetOf(message, thread?.other.displayName ?? ""));
+    else if (action === "delete") void handleDelete(message);
+    else {
+      // « Signaler » ou « Bloquer » : le menu existant, à l'étape choisie.
+      setMenuStep(action === "report" ? "report" : "confirmBlock");
+      setMenuFor(message);
     }
   }
 
@@ -381,7 +575,14 @@ export default function ConversationScreen() {
           {messages.length === 0 ? <Text style={styles.empty}>{t.messages.emptyThread}</Text> : null}
           {messages.map((message) => (
             <View key={message.id}>
-              <Bubble message={message} onOptions={() => setMenuFor(message)} />
+              <Bubble
+                message={message}
+                otherName={other.displayName}
+                ownActions={message.mine && actionsFor(message).length > 0}
+                onOptions={() => openOptions(message)}
+                onLike={actionsFor(message).includes("like") ? () => void toggleLike(message, true) : undefined}
+                onOpenPost={(openedId) => router.push({ pathname: "/publication", params: { id: openedId } })}
+              />
               {/* Une ligne de hauteur fixe : « Envoyé » devient « Vu » sans rien déplacer. */}
               {receipt?.messageId === message.id ? (
                 <Text style={styles.receipt} numberOfLines={1} accessibilityLabel={receipt.label} accessibilityLiveRegion="polite" testID="confirmation-lecture">
@@ -430,6 +631,24 @@ export default function ConversationScreen() {
             )
           ) : canWrite(thread.sendMode) ? (
             <>
+              {/* Réponse à un message précis : rappelé au-dessus du champ, avec un bouton pour l'annuler. */}
+              {replyTo ? (
+                <View style={styles.attached} testID="reponse-a">
+                  <View style={styles.replyText}>
+                    <Text style={styles.replyTitle} numberOfLines={1}>
+                      {replyTo.title}
+                    </Text>
+                    {replyTo.excerpt ? (
+                      <Text style={styles.replyExcerpt} numberOfLines={1}>
+                        {replyTo.excerpt}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Pressable onPress={() => setReplyTo(null)} hitSlop={10} accessibilityRole="button" accessibilityLabel={t.messageActions.cancelReply}>
+                    <Text style={styles.attachedRemove}>×</Text>
+                  </Pressable>
+                </View>
+              ) : null}
               {wish ? (
                 <View style={styles.attached}>
                   <View style={styles.attachedThumb}>
@@ -497,10 +716,22 @@ export default function ConversationScreen() {
         onClose={() => setMenuFor(null)}
         userId={other.id}
         messageId={menuFor?.id}
+        initialStep={menuStep}
         onBlocked={() => goBack()}
         onReported={() => {
           const reportedId = menuFor?.id;
-          setMessages((current) => current.filter((message) => message.id !== reportedId));
+          if (!reportedId) return;
+          // Le message signalé quitte l'écran ; une réponse qui le citait montre « Message indisponible ».
+          setMessages((current) => withoutContent(current, reportedId, true));
+          setReplyTo((current) => (current?.id === reportedId ? null : current));
+        }}
+      />
+      <MessageActionsSheet
+        visible={sheetFor !== null}
+        actions={sheetFor ? actionsFor(sheetFor) : []}
+        onClose={() => setSheetFor(null)}
+        onAction={(action) => {
+          if (sheetFor) handleAction(sheetFor, action);
         }}
       />
       <ReportBlockMenu visible={profileMenu} onClose={() => setProfileMenu(false)} userId={other.id} onBlocked={() => goBack()} />
@@ -539,6 +770,17 @@ const styles = themedStyles(() => ({
   bubbleTime: { fontSize: 11, color: color.acier, alignSelf: "flex-end" },
   bubbleTimeMine: { color: color.blanc, opacity: 0.8 },
   bubbleMore: { minWidth: 28, minHeight: 28, alignItems: "center", justifyContent: "center" },
+  bubbleDeleted: { fontSize: font.secondary, fontStyle: "italic", color: color.acier, lineHeight: 21 },
+  quote: { borderLeftWidth: 2, borderLeftColor: color.acier, paddingLeft: space.xs, gap: 1 },
+  quoteMine: { borderLeftColor: color.blanc },
+  quoteWho: { fontSize: font.caption, fontWeight: "600", color: color.encre },
+  quoteText: { fontSize: font.caption, color: color.encre, lineHeight: 17, opacity: 0.85 },
+  liked: { flexDirection: "row", gap: 2, marginTop: 2, minHeight: 16 },
+  likedMine: { justifyContent: "flex-end", paddingRight: space.xs },
+  likedTheirs: { justifyContent: "flex-start", paddingLeft: space.xs },
+  replyText: { flex: 1, minWidth: 0 },
+  replyTitle: { fontSize: font.caption, fontWeight: "600", color: color.encre },
+  replyExcerpt: { fontSize: font.caption, color: color.acier },
   receipt: { alignSelf: "flex-end", marginTop: 2, lineHeight: 18, fontSize: font.caption, color: color.acier },
   footer: { borderTopWidth: 1, borderTopColor: color.filet, paddingHorizontal: space.md, paddingVertical: space.sm, gap: space.xs },
   notice: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
