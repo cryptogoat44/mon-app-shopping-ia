@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { COMMENT_MAX_LENGTH, type CommentMention, type CommentsPage, type LikeCommentResponse, type PostAuthor, type PostComment } from "@monapp/shared-types";
+import { readViewersAudience, type Audience } from "../lib/audience.js";
 import { fetchBlockedUserIds } from "../lib/blocks.js";
 import { speaksV2 } from "../lib/clientLevel.js";
 import { COMMENT_NOT_FOUND, COMMENT_THREADS_UNAVAILABLE, commentThreadsReady, findShownComment, type ShownComment } from "../lib/comments.js";
@@ -30,6 +31,8 @@ import { consumeRateLimit } from "../plugins/rateLimit.js";
 //     publication reçoit 404 pour les commentaires, les réponses et les « j'aime » ;
 //  2. une réponse n'est montrée que si son commentaire d'origine l'est (ni
 //     masqué, ni signalé par le lecteur, ni d'un auteur en blocage avec lui) ;
+//     et une réponse ne mentionne ni ne prévient un membre en blocage avec
+//     l'auteur du commentaire d'origine (il ne voit pas le fil) ;
 //  3. les commentaires et réponses des comptes en blocage avec le lecteur sont
 //     absents, et leurs « j'aime » ne sont pas comptés ;
 //  4. une mention n'est renvoyée que si le compte mentionné porte toujours ce
@@ -313,13 +316,33 @@ export default async function commentsRoutes(fastify: FastifyInstance) {
         if (!parent || parent.post.id !== post.id) return reply.code(404).send(COMMENT_NOT_FOUND);
       }
 
+      // Règle 2 vaut aussi pour ceux qu'une réponse touche : un membre en
+      // blocage avec l'auteur du commentaire d'origine ne voit pas le fil. Il
+      // n'y est ni mentionné, ni prévenu (« comment » comme « reply »).
+      // Lecture impossible : ni mention, ni notification pour cette réponse.
+      let threadLinks: Map<string, Audience> | null = null;
+      if (parent) {
+        try {
+          threadLinks = await readViewersAudience(fastify, [post.user_id, parent.comment.user_id], parent.rootAuthorId);
+        } catch {
+          request.log.warn("Réponse sans mention ni notification : fil illisible");
+        }
+      }
+      const seesThread = (userId: string) => parent === null || threadLinks?.get(userId)?.blocked === false;
+
       // Mentions retenues, AVANT d'écrire : une lecture impossible ne laisse
       // pas un commentaire enregistré derrière une réponse d'erreur. Elle
       // publie le commentaire sans aucune mention (simple texte).
       let mentions: CommentMention[] = [];
-      if (threads) {
+      if (threads && (parent === null || threadLinks !== null)) {
         try {
-          mentions = await resolveMentions(fastify, { authorId: viewerId, text: body, post, consume: () => consumeRateLimit(request, "mentionNotify") });
+          mentions = await resolveMentions(fastify, {
+            authorId: viewerId,
+            text: body,
+            post,
+            ...(parent ? { threadAuthorId: parent.rootAuthorId } : {}),
+            consume: () => consumeRateLimit(request, "mentionNotify"),
+          });
         } catch {
           request.log.warn("Mentions non retenues : règles illisibles");
         }
@@ -353,10 +376,13 @@ export default async function commentsRoutes(fastify: FastifyInstance) {
       // Une seule par destinataire et par commentaire : l'auteur de la
       // publication (« comment »), puis l'auteur du commentaire auquel on
       // répond (« reply »), puis chaque membre mentionné (« mention », une
-      // seule par auteur, destinataire et publication).
+      // seule par auteur, destinataire et publication). Pour une réponse,
+      // seulement ceux qui voient le fil (seesThread).
       const notified = new Set<string>([post.user_id]);
-      await notify(fastify, request.log, { recipientId: post.user_id, actorId: viewerId, type: "comment", postId: post.id, commentId: row.id });
-      if (parent && !notified.has(parent.comment.user_id)) {
+      if (seesThread(post.user_id)) {
+        await notify(fastify, request.log, { recipientId: post.user_id, actorId: viewerId, type: "comment", postId: post.id, commentId: row.id });
+      }
+      if (parent && !notified.has(parent.comment.user_id) && seesThread(parent.comment.user_id)) {
         notified.add(parent.comment.user_id);
         await notify(fastify, request.log, { recipientId: parent.comment.user_id, actorId: viewerId, type: "reply", postId: post.id, commentId: row.id });
       }

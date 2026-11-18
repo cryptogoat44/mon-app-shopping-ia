@@ -571,6 +571,96 @@ describe("règle 2 : une réponse n'est montrée que si son commentaire d'origin
   });
 });
 
+describe("règle 2, pour ceux qu'une réponse touche : ni mention ni notification à qui ne voit pas le fil", () => {
+  it("refusé (mention) : un membre en blocage avec l'auteur du commentaire d'origine n'est pas mentionné — ni ligne, ni notification, ni budget consommé", async () => {
+    // Gina a bloqué Carl (auteur de C1), Carl a bloqué Fred : aucun des deux ne voit le fil de C1.
+    const fake = seeded({ blocks: [[GINA, CARL], [CARL, FRED]] });
+    const target = await commentsApp(fake.db);
+    expect(idsOf(await thread(target, GINA))).toEqual([C2]);
+    // Anna répond à C1, puis à la réponse de Dora (R1) : c'est toujours le fil de Carl.
+    for (const parentId of [C1, R1]) {
+      const response = await comments(target, ANNA, "Regardez @gina et @fred", { parentId });
+      expect(response.statusCode, parentId).toBe(200);
+      expect((response.json() as PostComment).mentions, parentId).toEqual([]);
+    }
+    expect(mentionRows(fake)).toEqual([]);
+    expect(noticesOf(fake, "mention")).toEqual([]);
+    // Aucun lien vers elles sous le fil de Carl, pour aucun lecteur.
+    expect((await replies(target, DORA, C1)).flatMap((item) => item.mentions ?? [])).toEqual([]);
+    // Écartées AVANT le budget de l'heure.
+    let consumed = 0;
+    const post = { user_id: BRUNO, privacy: "public" as const };
+    expect(await resolveMentions(target, { authorId: ANNA, text: "@gina @fred", post, threadAuthorId: CARL, consume: () => (consumed++, true) })).toEqual([]);
+    expect(consumed).toBe(0);
+  });
+
+  it("permis (mention) : sans blocage avec l'auteur du commentaire d'origine — même en blocage avec l'auteur de la réponse visée ; un commentaire d'origine n'a pas de fil", async () => {
+    // Gina a bloqué Dora (auteure de R1), pas Carl : la réponse d'Anna est rattachée à C1, que Gina voit.
+    // Fred a bloqué Carl : un commentaire d'origine le mentionne quand même.
+    const fake = seeded({ blocks: [[GINA, DORA], [FRED, CARL]] });
+    const target = await commentsApp(fake.db);
+    const reply: PostComment = (await comments(target, ANNA, "Regardez @gina et @carl", { parentId: R1 })).json();
+    expect(reply.mentions).toEqual([
+      { handle: "gina", userId: GINA },
+      { handle: "carl", userId: CARL },
+    ]);
+    const top: PostComment = (await comments(target, ANNA, "Regarde @fred")).json();
+    expect(top.mentions).toEqual([{ handle: "fred", userId: FRED }]);
+    expect(noticePairs(fake, "mention").sort()).toEqual([`${ANNA}>${CARL}`, `${ANNA}>${FRED}`, `${ANNA}>${GINA}`].sort());
+    expect(idsOf(await replies(target, GINA, C1))).toContain(reply.id);
+    expect(byId(await replies(target, EVE, C1), reply.id).mentions).toHaveLength(2);
+    let consumed = 0;
+    const post = { user_id: BRUNO, privacy: "public" as const };
+    expect(await resolveMentions(target, { authorId: ANNA, text: "@gina", post, threadAuthorId: CARL, consume: () => (consumed++, true) })).toEqual([{ handle: "gina", userId: GINA }]);
+    expect(consumed).toBe(1);
+  });
+
+  it("refusé (notification) : ni « reply » ni « comment » à un membre en blocage avec l'auteur du commentaire d'origine", async () => {
+    // Dora a répondu à Carl (R1), puis Carl l'a bloquée ; Eve (auteure de R2) a bloqué Carl ; Bruno aussi.
+    const fake = seeded({ blocks: [[CARL, DORA], [EVE, CARL], [BRUNO, CARL]] });
+    const target = await commentsApp(fake.db);
+    expect(idsOf(await thread(target, DORA))).toEqual([C2]);
+    expect((await comments(target, ANNA, "Je réponds à Dora", { parentId: R1 })).statusCode).toBe(200);
+    expect((await comments(target, ANNA, "Je réponds à Eve", { parentId: R2 })).statusCode).toBe(200);
+    expect(noticesOf(fake, "reply")).toEqual([]);
+    expect(noticesOf(fake, "comment")).toEqual([]);
+    // Un commentaire d'origine, lui, prévient Bruno comme avant.
+    await comments(target, ANNA, "Un commentaire à part");
+    expect(noticePairs(fake, "comment")).toEqual([`${ANNA}>${BRUNO}`]);
+  });
+
+  it("permis (notification) : sans blocage avec l'auteur du commentaire d'origine, l'auteur de la réponse visée et celui de la publication sont prévenus", async () => {
+    // Dora a bloqué Gina, Bruno a bloqué Fred : aucun lien avec Carl.
+    const fake = seeded({ blocks: [[DORA, GINA], [BRUNO, FRED]] });
+    const target = await commentsApp(fake.db);
+    await comments(target, ANNA, "Je réponds à Dora", { parentId: R1 });
+    await comments(target, ANNA, "Je réponds à Carl", { parentId: C1 });
+    expect(noticePairs(fake, "reply")).toEqual([`${ANNA}>${DORA}`, `${ANNA}>${CARL}`]);
+    expect(noticePairs(fake, "comment")).toEqual([`${ANNA}>${BRUNO}`, `${ANNA}>${BRUNO}`]);
+  });
+
+  it("panne de la lecture des blocages de l'auteur du commentaire d'origine : la réponse est publiée, sans mention ni notification", async () => {
+    const fake = seeded();
+    const real = fake.db as { from: (name: string) => { select: (columns: string) => { eq: (column: string, value: string) => unknown } } };
+    const broken = Promise.resolve({ data: null, error: { message: "panne" } });
+    const db = {
+      ...real,
+      from: (name: string) => {
+        const query = real.from(name);
+        if (name !== "blocks") return query;
+        return { select: (columns: string) => ({ eq: (column: string, value: string) => (value === CARL ? Object.assign(broken, { in: () => broken }) : query.select(columns).eq(column, value)) }) };
+      },
+    };
+    const target = await commentsApp(db);
+    const response = await comments(target, ANNA, "Regardez @gina", { parentId: C1 });
+    expect(response.statusCode).toBe(200);
+    expect((response.json() as PostComment).mentions).toEqual([]);
+    expect(fake.table("comments").some((row) => row.id === (response.json() as PostComment).id)).toBe(true);
+    expect(mentionRows(fake)).toEqual([]);
+    expect(fake.table("notifications")).toEqual([]);
+  });
+});
+
 describe("règle 3 : les comptes en blocage avec le lecteur sont absents, leurs « j'aime » ne comptent pas", () => {
   it("refusé : ni leurs commentaires, ni leurs réponses, ni leurs « j'aime », dans un sens comme dans l'autre", async () => {
     // Anna a bloqué Eve (auteure de R2) ; Dora (auteure de R1 et C2) a bloqué Gina.

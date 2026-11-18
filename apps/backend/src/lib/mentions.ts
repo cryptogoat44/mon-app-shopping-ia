@@ -14,6 +14,9 @@ import { parseDbRows } from "./validation.js";
 //   - son réglage « Qui peut me mentionner » le permet (mayMention) ;
 //   - il peut VOIR la publication (lib/audience.ts) : sinon la mention lui
 //     apprendrait qu'elle existe ;
+//   - pour une réponse, il peut VOIR le fil : aucun blocage entre lui et
+//     l'auteur du commentaire d'origine (`threadAuthorId`), dans un sens ou
+//     dans l'autre ;
 //   - l'auteur n'a pas épuisé son budget de mentions de l'heure (`consume`).
 // Une mention écartée ne produit rien : ni ligne, ni notification, ni erreur,
 // ni message. Le « @pseudo » reste un simple texte, et l'auteur ne peut pas
@@ -42,6 +45,8 @@ export interface ResolveMentionsInput {
   text: string;
   /** La publication sous laquelle le texte est écrit. */
   post: { user_id: string; privacy: PrivacyLevel };
+  /** Pour une réponse : l'auteur du commentaire d'origine (lib/comments.ts, rootAuthorId). */
+  threadAuthorId?: string;
   /** Compte une mention retenue dans le budget de l'auteur ; false : budget épuisé. */
   consume: () => boolean;
 }
@@ -70,12 +75,16 @@ export async function resolveMentions(fastify: FastifyInstance, input: ResolveMe
   const ids = candidates.map((candidate) => candidate.userId);
   const [toAuthor, suspended] = await Promise.all([readViewersAudience(fastify, ids, input.authorId), suspendedAmong(fastify, ids)]);
   const toPostAuthor = input.post.user_id === input.authorId ? toAuthor : await readViewersAudience(fastify, ids, input.post.user_id);
+  const threadAuthorId = input.threadAuthorId ?? input.authorId;
+  const toThreadAuthor =
+    threadAuthorId === input.authorId ? toAuthor : threadAuthorId === input.post.user_id ? toPostAuthor : await readViewersAudience(fastify, ids, threadAuthorId);
 
   const accepted: CommentMention[] = [];
   for (const candidate of candidates) {
     const author = toAuthor.get(candidate.userId);
     const post = toPostAuthor.get(candidate.userId);
-    if (!author || !post || author.blocked || suspended.has(candidate.userId)) continue;
+    const thread = toThreadAuthor.get(candidate.userId);
+    if (!author || !post || !thread || author.blocked || thread.blocked || suspended.has(candidate.userId)) continue;
     if (!mayMention(candidate.setting, author.follows)) continue;
     if (!postVisibleTo(post, input.post.privacy)) continue;
     // Budget épuisé : cette mention et les suivantes restent un simple texte.

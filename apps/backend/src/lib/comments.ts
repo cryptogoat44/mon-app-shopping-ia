@@ -117,6 +117,8 @@ export interface ShownComment {
   comment: ThreadComment;
   /** Le commentaire d'origine : `comment` lui-même, ou celui auquel il répond. */
   rootId: string;
+  /** L'auteur du commentaire d'origine. Qui est en blocage avec lui ne voit pas le fil. */
+  rootAuthorId: string;
   post: PostRef;
   /** Comptes en blocage avec le lecteur, dans un sens ou dans l'autre. */
   blocked: Set<string>;
@@ -136,9 +138,11 @@ export async function findShownComment(fastify: FastifyInstance, log: FastifyBas
   const reported = new Set(reportedIds);
   const shown = (row: ThreadComment) => row.hidden_at === null && !blocked.has(row.user_id) && !reported.has(row.id);
   if (!shown(comment)) return null;
+  let root = comment;
   if (comment.parent_id !== null) {
     const parent = await readThreadComment(fastify, comment.parent_id);
     if (parent === null || parent.post_id !== comment.post_id || !shown(parent)) return null;
+    root = parent;
   }
-  return { comment, rootId: comment.parent_id ?? comment.id, post, blocked, reported };
+  return { comment, rootId: root.id, rootAuthorId: root.user_id, post, blocked, reported };
 }
