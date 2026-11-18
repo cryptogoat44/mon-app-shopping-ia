@@ -22,3 +22,16 @@ export function stepIndex(index: number, delta: 1 | -1, count: number): number {
 export function counterText(index: number, count: number): string {
   return `${clampIndex(index, count) + 1}/${count}`;
 }
+
+/** Le cadre du carrousel pour les lecteurs d'écran (`position` : « Photo 2
+ * sur 5 »). iPhone : un seul élément « réglable » (VoiceOver : balayer vers
+ * le haut ou le bas change de photo), la position en valeur. Site : un
+ * simple groupe, la position dans son libellé. Jamais « réglable » sur le
+ * site : react-native-web en fait un « slider », dont le contenu est caché
+ * aux lecteurs d'écran (les boutons « Photo précédente » et « Photo
+ * suivante » disparaîtraient) et qui ne réagit à aucune touche. */
+export function carouselFrameAccessibility(web: boolean, label: string, position: string) {
+  return web
+    ? { accessible: false, role: "group" as const, accessibilityLabel: `${label}, ${position}` }
+    : { accessible: true, accessibilityRole: "adjustable" as const, accessibilityLabel: label };
+}

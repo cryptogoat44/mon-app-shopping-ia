@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NOTIFICATION_TYPES, PEOPLE_TAGS_MAX, POST_PHOTOS_MAX, type AppNotification, type Post } from "@monapp/shared-types";
@@ -21,7 +22,7 @@ import { en } from "../src/i18n/en";
 import { privacyPolicy } from "../src/legal/confidentialite";
 import { privacyPolicyEn } from "../src/legal/confidentialite.en";
 import { ApiError } from "../src/lib/api-error";
-import { clampIndex, counterText, indexFromOffset, stepIndex } from "../src/lib/carousel";
+import { carouselFrameAccessibility, clampIndex, counterText, indexFromOffset, stepIndex } from "../src/lib/carousel";
 import { notificationActionText, notificationTarget } from "../src/lib/follow-state";
 import { hasSeveralPhotos, peopleOf, peopleShown, photosOf, postExtrasStatus, readPostExtrasStatus, setPostExtrasStatus, withoutPerson } from "../src/lib/post-extras";
 import {
@@ -163,8 +164,9 @@ describe("le carrousel : une photo à la fois, sans jamais sortir de la liste", 
     expect(en.carousel.position(2, 5)).toBe("Photo 2 of 5");
     const carousel = read("components/post-carousel.tsx");
     expect(carousel).toContain("accessibilityLabel={t.carousel.position(position + 1, count)}");
-    // Utilisable sans glisser : réglable avec VoiceOver, boutons sur le site.
-    expect(carousel).toContain('accessibilityRole="adjustable"');
+    // Utilisable sans glisser : réglable avec VoiceOver (iPhone), boutons sur le site.
+    expect(carousel).toContain('{...carouselFrameAccessibility(Platform.OS === "web", label, t.carousel.position(current + 1, count))}');
+    expect(carousel).not.toContain('accessibilityRole="adjustable"');
     expect(carousel).toContain('{ name: "increment" }, { name: "decrement" }');
     expect(carousel).toContain('Platform.OS === "web" && current > 0');
     expect(carousel).toContain("accessibilityLabel={t.carousel.previous}");
@@ -172,6 +174,34 @@ describe("le carrousel : une photo à la fois, sans jamais sortir de la liste", 
     // Le double toucher passe toujours au « j'aime » de la carte.
     expect(carousel).toContain("<Pressable onPress={onPress}");
     expect(read("components/post-card.tsx")).toContain("<PostCarousel photos={photos} label={mediaLabel(post)} recyclingKey={post.id} onPress={handleMediaPress} />");
+  });
+
+  it("site : le cadre est un simple groupe, les boutons « Photo précédente » et « Photo suivante » restent aux lecteurs d'écran ; iPhone : réglable", () => {
+    // iPhone : un seul élément réglable (balayer vers le haut ou le bas), la position en valeur.
+    expect(carouselFrameAccessibility(false, "Photo de A", "Photo 1 sur 5")).toEqual({ accessible: true, accessibilityRole: "adjustable", accessibilityLabel: "Photo de A" });
+    const web = carouselFrameAccessibility(true, "Photo de A", "Photo 1 sur 5");
+    expect(web).toEqual({ accessible: false, role: "group", accessibilityLabel: "Photo de A, Photo 1 sur 5" });
+    expect(web).not.toHaveProperty("accessibilityRole");
+    // Rendu par react-native-web, comme sur le site : un groupe, jamais un « slider » (son contenu,
+    // les deux boutons, serait caché aux lecteurs d'écran), et le bouton reste un vrai bouton, atteignable au clavier.
+    const require = createRequire(__filename);
+    const React = require("react");
+    const { renderToStaticMarkup } = require("react-dom/server");
+    const { View, Pressable, Text } = require("react-native-web");
+    const frame = (props: object) =>
+      renderToStaticMarkup(
+        React.createElement(
+          View,
+          { ...props, accessibilityValue: { text: "Photo 1 sur 5" }, accessibilityActions: [{ name: "increment" }], onAccessibilityAction: () => {} },
+          React.createElement(Pressable, { accessibilityRole: "button", accessibilityLabel: "Photo suivante", onPress: () => {} }, React.createElement(Text, null, "›"))
+        )
+      ) as string;
+    const html = frame(web);
+    expect(html).toMatch(/^<div aria-label="Photo de A, Photo 1 sur 5" role="group"/);
+    expect(html).not.toContain('role="slider"');
+    expect(html).toMatch(/<button aria-label="Photo suivante" role="button" tabindex="0"/);
+    // Ce que faisait l'ancien cadre sur le site : un « slider », qui cachait les boutons.
+    expect(frame(carouselFrameAccessibility(false, "Photo de A", "Photo 1 sur 5"))).toContain('role="slider"');
   });
 });
 

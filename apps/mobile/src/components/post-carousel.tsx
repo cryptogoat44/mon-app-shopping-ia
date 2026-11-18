@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { FlatList, Platform, Pressable, Text, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import type { PostPhoto } from "@monapp/shared-types";
 import { SpotImage } from "@/components/spot-image";
-import { clampIndex, counterText, indexFromOffset, stepIndex } from "@/lib/carousel";
+import { carouselFrameAccessibility, clampIndex, counterText, indexFromOffset, stepIndex } from "@/lib/carousel";
 import { t } from "@/i18n";
 import { color, font, radius, space } from "@/theme/tokens";
 import { themedStyles } from "@/theme/themed-styles";
@@ -10,10 +10,12 @@ import { themedStyles } from "@/theme/themed-styles";
 // Plusieurs photos d'une publication (lot « vie sociale », migration 0047) :
 // une liste horizontale, page par page, des points et un compteur « 2/5 ».
 // Sur le site, « Photo précédente » et « Photo suivante » en boutons (pas de
-// glissement à la souris). Sans glisser non plus avec VoiceOver : le
-// carrousel est « réglable » (balayer vers le haut ou le bas change de
-// photo), et chaque photo a son libellé « Photo 2 sur 5 ». Le toucher passe
-// à `onPress` (double toucher : « j'aime », comme pour une seule photo).
+// glissement à la souris). Sans glisser non plus avec VoiceOver : sur
+// l'iPhone, le carrousel est « réglable » (balayer vers le haut ou le bas
+// change de photo), et chaque photo a son libellé « Photo 2 sur 5 ». Sur le
+// site, un simple groupe qui laisse les deux boutons aux lecteurs d'écran
+// (lib/carousel.ts, carouselFrameAccessibility). Le toucher passe à
+// `onPress` (double toucher : « j'aime », comme pour une seule photo).
 // Logique de position : lib/carousel.ts.
 
 export function PostCarousel({ photos, label, recyclingKey, onPress }: { photos: PostPhoto[]; label: string; recyclingKey: string; onPress: () => void }) {
@@ -38,9 +40,7 @@ export function PostCarousel({ photos, label, recyclingKey, onPress }: { photos:
     <View
       style={styles.frame}
       onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
-      accessible
-      accessibilityRole="adjustable"
-      accessibilityLabel={label}
+      {...carouselFrameAccessibility(Platform.OS === "web", label, t.carousel.position(current + 1, count))}
       accessibilityValue={{ text: t.carousel.position(current + 1, count) }}
       accessibilityActions={[{ name: "increment" }, { name: "decrement" }, { name: "activate" }]}
       onAccessibilityAction={(event) => {
