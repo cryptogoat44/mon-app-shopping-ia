@@ -129,20 +129,23 @@ export function replyTargetOf(message: ChatMessage, otherName: string): ReplyTar
 }
 
 /** Ce que la personne peut faire d'un message, dans l'ordre de la feuille :
+ * - voir la publication envoyée, si elle est disponible (VoiceOver lit la
+ *   bulle comme un seul élément : la carte ne peut pas y être touchée) ;
  * - aimer et répondre : seulement si le serveur a ces actions, pour un
  *   message qui n'est pas supprimé ; aimer demande une conversation ouverte,
  *   répondre de pouvoir écrire ;
  * - supprimer : ses propres messages ;
  * - signaler et bloquer : les messages reçus, toujours (règle 1.2 d'Apple),
  *   même supprimés, même sur un serveur plus ancien. */
-export type MessageAction = "like" | "unlike" | "reply" | "delete" | "report" | "block";
+export type MessageAction = "openPost" | "like" | "unlike" | "reply" | "delete" | "report" | "block";
 
 export function messageActionsFor(
-  message: Pick<ChatMessage, "mine" | "deleted" | "liked">,
+  message: Pick<ChatMessage, "mine" | "deleted" | "liked" | "post">,
   context: { actions: boolean; open: boolean; canWrite: boolean }
 ): MessageAction[] {
   const list: MessageAction[] = [];
   const live = context.actions && message.deleted !== true;
+  if (message.deleted !== true && message.post?.available === true) list.push("openPost");
   if (live && context.open) list.push(message.liked?.mine === true ? "unlike" : "like");
   if (live && context.canWrite) list.push("reply");
   if (live && message.mine) list.push("delete");

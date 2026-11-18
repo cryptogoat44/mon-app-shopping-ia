@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { CLIENT_LEVEL, type ChatMessage, type ConversationSummary } from "@monapp/shared-types";
 import { setActiveLocale } from "../src/i18n";
 import { fr } from "../src/i18n/fr";
@@ -21,6 +21,7 @@ import {
   withLike,
   withoutContent,
 } from "../src/lib/conversations";
+import { SHEET_CLOSE_FALLBACK_MS, afterSheetClose } from "../src/lib/after-sheet-close";
 import { lastOwnMessage, receiptMention } from "../src/lib/read-receipts";
 import { sendPostHref } from "../src/lib/send-post";
 import { privacyPolicy } from "../src/legal/confidentialite";
@@ -187,6 +188,79 @@ describe("ce qu'on peut faire d'un message (messageActionsFor)", () => {
     expect(messageActionsFor(DELETED(A), all)).toEqual([]);
     expect(messageActionsFor(DELETED(B), all)).toEqual(["report", "block"]);
   });
+
+  it("publication reçue ou envoyée : « Voir la publication » en premier, seulement si elle est disponible (VoiceOver ne peut pas toucher la carte)", () => {
+    const card = { available: true as const, id: "post-1", author: { id: "u", username: "lou", displayName: "Lou", avatarUrl: null }, thumbUrl: null, caption: null };
+    expect(messageActionsFor({ ...B, post: card }, all)).toEqual(["openPost", "like", "reply", "report", "block"]);
+    expect(messageActionsFor({ ...A, post: card }, all)).toEqual(["openPost", "like", "reply", "delete"]);
+    // Indisponible, ou message supprimé : rien à ouvrir.
+    expect(messageActionsFor({ ...B, post: { available: false } }, all)).toEqual(["like", "reply", "report", "block"]);
+    expect(messageActionsFor({ ...DELETED(B), post: card }, all)).toEqual(["report", "block"]);
+    // Invitation reçue : la feuille s'ouvre (trois actions), « Signaler » et « Bloquer » y restent.
+    expect(messageActionsFor({ ...B, post: card }, { actions: true, open: false, canWrite: false })).toEqual(["openPost", "report", "block"]);
+  });
+});
+
+describe("ouvrir le menu « Signaler / Bloquer » après la feuille des actions (lib/after-sheet-close.ts)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("iPhone : rien ne s'ouvre tant que la feuille n'a pas fini de se fermer, puis une seule fois", () => {
+    vi.useFakeTimers();
+    const run = vi.fn();
+    const after = afterSheetClose(false);
+    after.schedule(run);
+    expect(run).not.toHaveBeenCalled();
+    after.flush();
+    expect(run).toHaveBeenCalledTimes(1);
+    // Le secours et un second signal ne relancent rien.
+    vi.advanceTimersByTime(SHEET_CLOSE_FALLBACK_MS * 2);
+    after.flush();
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("secours : sans signal de fermeture, le menu s'ouvre quand même après le délai", () => {
+    vi.useFakeTimers();
+    const run = vi.fn();
+    const after = afterSheetClose(false);
+    after.schedule(run);
+    vi.advanceTimersByTime(SHEET_CLOSE_FALLBACK_MS - 1);
+    expect(run).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("site : tout de suite ; écran quitté : rien ne part ; une feuille fermée sans choix n'ouvre rien", () => {
+    vi.useFakeTimers();
+    const run = vi.fn();
+    afterSheetClose(true).schedule(run);
+    expect(run).toHaveBeenCalledTimes(1);
+    const after = afterSheetClose(false);
+    const late = vi.fn();
+    after.schedule(late);
+    after.cancel();
+    after.flush();
+    vi.advanceTimersByTime(SHEET_CLOSE_FALLBACK_MS * 2);
+    expect(late).not.toHaveBeenCalled();
+    expect(() => afterSheetClose(false).flush()).not.toThrow();
+  });
+
+  it("l'écran n'ouvre plus le menu dans le même geste : il attend la fermeture de la feuille", () => {
+    const screen = read("app/(app)/conversation.tsx");
+    const sheet = read("components/message-actions-sheet.tsx");
+    expect(screen).toContain('const afterSheet = useMemo(() => afterSheetClose(Platform.OS === "web"), []);');
+    expect(screen).toContain("useEffect(() => () => afterSheet.cancel(), [afterSheet]);");
+    expect(screen).toContain("onDismissed={afterSheet.flush}");
+    const handle = screen.slice(screen.indexOf("function handleAction("), screen.indexOf("async function handleAccept("));
+    expect(handle).toContain("afterSheet.schedule(() => {");
+    // Aucune ouverture directe du menu hors de cette attente.
+    expect(handle.slice(0, handle.indexOf("afterSheet.schedule("))).not.toContain("setMenuFor(");
+    expect(sheet).toContain("onRequestClose={onClose} onDismiss={onDismissed}>");
+    // « Voir la publication » ouvre la même page que la carte.
+    expect(handle).toContain("if (message.post?.available) openPost(message.post.id);");
+    expect(screen).toContain("onOpenPost={openPost}");
+  });
 });
 
 describe("répondre", () => {
@@ -303,6 +377,8 @@ describe("les écrans, lus comme du texte", () => {
 
   it("toutes les actions sont dans la feuille (le site n'a pas d'appui long) ; « Supprimer » est confirmé avant de partir", () => {
     for (const action of ["like", "unlike", "reply", "delete", "report", "block"]) expect(sheet).toContain(`${action}: t.messageActions.${action},`);
+    expect(sheet).toContain("openPost: t.messageActions.viewPost,");
+    expect(fr.messageActions.viewPost).toBe("Voir la publication");
     expect(sheet).toContain('if (action === "delete" && !confirmDelete) {');
     expect(sheet).toContain("{t.messageActions.deleteConfirm}");
     expect(sheet).not.toContain("Platform.OS");

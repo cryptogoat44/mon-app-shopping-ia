@@ -1577,5 +1577,7 @@ export const en: Catalog = {
     chooseHintPost: "The post will be attached to your message, and you can add a note. The person will only see it if they are allowed to.",
     // Moderation queue: a message deleted by its author.
     deletedByAuthorOn: (date: string) => `Deleted by its author on ${date}`,
+    // Actions sheet: open the post received (VoiceOver).
+    viewPost: "View post",
   },
 };

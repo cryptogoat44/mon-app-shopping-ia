@@ -1699,5 +1699,7 @@ export const fr = {
     chooseHintPost: "La publication sera jointe à votre message, vous pourrez ajouter un mot. La personne ne la verra que si elle a le droit de la voir.",
     // File de modération : un message supprimé par son auteur.
     deletedByAuthorOn: (date: string) => `Supprimé par son auteur le ${date}`,
+    // Feuille des actions : ouvrir la publication reçue (VoiceOver).
+    viewPost: "Voir la publication",
   },
 } as const;

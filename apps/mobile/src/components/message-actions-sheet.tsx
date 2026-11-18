@@ -10,11 +10,14 @@ import { themedStyles } from "@/theme/themed-styles";
 // personne. Ouverte par « ••• » comme par l'appui long : toutes les actions
 // y sont, le site n'ayant pas d'appui long. « Signaler » et « Bloquer »
 // passent la main au menu existant (règle 1.2 d'Apple : son chemin ne change
-// pas). La liste des actions vient de lib/conversations.ts (messageActionsFor).
+// pas ; ce menu ne s'ouvre qu'une fois cette feuille fermée, `onDismissed`).
+// « Voir la publication » : pour VoiceOver, qui ne peut pas toucher la carte
+// dans la bulle. La liste des actions vient de lib/conversations.ts (messageActionsFor).
 
 /** Libellés lus à l'affichage (la langue peut changer pendant que l'app est ouverte). */
 function actionLabel(action: MessageAction): string {
   const labels: Record<MessageAction, string> = {
+    openPost: t.messageActions.viewPost,
     like: t.messageActions.like,
     unlike: t.messageActions.unlike,
     reply: t.messageActions.reply,
@@ -31,11 +34,14 @@ export function MessageActionsSheet({
   visible,
   actions,
   onClose,
+  onDismissed,
   onAction,
 }: {
   visible: boolean;
   actions: readonly MessageAction[];
   onClose: () => void;
+  /** La feuille a fini de se fermer (iPhone) : une autre fenêtre peut alors s'ouvrir. */
+  onDismissed?: () => void;
   /** L'action choisie ; « Supprimer » n'arrive ici qu'une fois confirmé. */
   onAction: (action: MessageAction) => void;
 }) {
@@ -54,7 +60,7 @@ export function MessageActionsSheet({
   }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose} onDismiss={onDismissed}>
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel={t.moderation.cancel} />
       <View style={styles.sheet} testID="actions-message">
         <View style={styles.handle} />

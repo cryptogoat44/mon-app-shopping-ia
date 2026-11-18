@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
@@ -43,6 +43,7 @@ import {
 } from "@/lib/conversations";
 import { useMessagesStatus } from "@/lib/use-messages-status";
 import { readReadReceipts, receiptMention, sameReceipts, threadAfterPoll, threadAfterSend, withReadReceipts } from "@/lib/read-receipts";
+import { afterSheetClose } from "@/lib/after-sheet-close";
 import { track } from "@/lib/analytics";
 import { forgetPieceToSend, pieceToSend } from "@/lib/send-to-friend";
 import { timeAgo } from "@/lib/format";
@@ -392,6 +393,12 @@ export default function ConversationScreen() {
 
   // ---- Lot « messages, plus de confort » ----
 
+  // « Signaler » ou « Bloquer » choisi dans la feuille des actions : le menu
+  // ne s'ouvre qu'une fois la feuille fermée. Sur iPhone, une fenêtre demandée
+  // pendant qu'une autre se referme n'est jamais montrée (lib/after-sheet-close.ts).
+  const afterSheet = useMemo(() => afterSheetClose(Platform.OS === "web"), []);
+  useEffect(() => () => afterSheet.cancel(), [afterSheet]);
+
   /** Ce que la personne peut faire de ce message (lib/conversations.ts). */
   function actionsFor(message: ChatMessage): MessageAction[] {
     return messageActionsFor(message, { actions: actionsEnabled, open: thread?.state === "open", canWrite: thread ? canWrite(thread.sendMode) : false });
@@ -435,14 +442,23 @@ export default function ConversationScreen() {
     }
   }
 
+  function openPost(openedId: string) {
+    router.push({ pathname: "/publication", params: { id: openedId } });
+  }
+
   function handleAction(message: ChatMessage, action: MessageAction) {
     if (action === "like" || action === "unlike") void toggleLike(message, action === "like");
     else if (action === "reply") setReplyTo(replyTargetOf(message, thread?.other.displayName ?? ""));
     else if (action === "delete") void handleDelete(message);
-    else {
-      // « Signaler » ou « Bloquer » : le menu existant, à l'étape choisie.
-      setMenuStep(action === "report" ? "report" : "confirmBlock");
-      setMenuFor(message);
+    else if (action === "openPost") {
+      // Même chemin que la carte dans la bulle (VoiceOver ne peut pas la toucher).
+      if (message.post?.available) openPost(message.post.id);
+    } else {
+      // « Signaler » ou « Bloquer » : le menu existant, à l'étape choisie, une fois la feuille fermée.
+      afterSheet.schedule(() => {
+        setMenuStep(action === "report" ? "report" : "confirmBlock");
+        setMenuFor(message);
+      });
     }
   }
 
@@ -581,7 +597,7 @@ export default function ConversationScreen() {
                 ownActions={message.mine && actionsFor(message).length > 0}
                 onOptions={() => openOptions(message)}
                 onLike={actionsFor(message).includes("like") ? () => void toggleLike(message, true) : undefined}
-                onOpenPost={(openedId) => router.push({ pathname: "/publication", params: { id: openedId } })}
+                onOpenPost={openPost}
               />
               {/* Une ligne de hauteur fixe : « Envoyé » devient « Vu » sans rien déplacer. */}
               {receipt?.messageId === message.id ? (
@@ -730,6 +746,7 @@ export default function ConversationScreen() {
         visible={sheetFor !== null}
         actions={sheetFor ? actionsFor(sheetFor) : []}
         onClose={() => setSheetFor(null)}
+        onDismissed={afterSheet.flush}
         onAction={(action) => {
           if (sheetFor) handleAction(sheetFor, action);
         }}
