@@ -224,17 +224,19 @@ export function PostCard({
 
       <View style={styles.actions}>
         {/* Le cœur aime ou n'aime plus ; le nombre, à côté, ouvre la liste
-            « Aimé par » (lot « vie sociale »). À zéro : un simple texte. */}
+            « Aimé par » (lot « vie sociale »). À zéro : un simple texte, dans
+            le bouton du cœur — le toucher aime, comme avant. */}
         <View style={styles.likeGroup}>
           <Pressable
             onPress={handleReactButton}
             disabled={busy}
-            style={styles.reactRow}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 0 }}
+            style={[styles.likeButton, likeCountOpensList(reactionCount) ? styles.likeButtonBeforeCount : styles.likeButtonAlone]}
             accessibilityRole="button"
             accessibilityLabel={reacted ? t.post.unlike : t.post.like}
+            testID="bouton-jaime"
           >
             <HeartIcon size={19} tint={reacted ? color.encre : color.acier} filled={reacted} />
+            {likeCountOpensList(reactionCount) ? null : <Text style={styles.reactCount}>{reactionCount}</Text>}
           </Pressable>
           {likeCountOpensList(reactionCount) ? (
             <Pressable
@@ -246,11 +248,7 @@ export function PostCard({
             >
               <Text style={styles.reactCount}>{reactionCount}</Text>
             </Pressable>
-          ) : (
-            <View style={styles.likeCountPlain}>
-              <Text style={styles.reactCount}>{reactionCount}</Text>
-            </View>
-          )}
+          ) : null}
         </View>
         <Pressable
           onPress={onOpenComments}
@@ -299,10 +297,17 @@ const styles = themedStyles(() => ({
   actions: { flexDirection: "row", alignItems: "center", gap: space.lg, marginTop: 12 },
   reactRow: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 32 },
   likeGroup: { flexDirection: "row", alignItems: "center" },
-  // Cible de 44 points de haut par le remplissage, sans grossir le texte ; les
-  // marges négatives gardent la rangée à sa hauteur (32) et à ses écarts.
-  likeCount: { minHeight: 44, paddingLeft: 6, paddingRight: 12, marginVertical: -6, marginRight: -12, justifyContent: "center" },
-  likeCountPlain: { paddingLeft: 6 },
+  // Le cœur : une cible de 44 points au moins, par le remplissage (pas par
+  // « hitSlop », que le site ignore). Elle s'étend vers la gauche, dans la
+  // marge de la publication (24), et couvre les 6 points jusqu'au nombre :
+  // 19 + 19 (l'icône) + 6 = 44. Les marges négatives gardent l'icône, la
+  // rangée (32 de haut) et les écarts à leur place.
+  likeButton: { flexDirection: "row", alignItems: "center", minHeight: 44, minWidth: 44, paddingLeft: 19, marginLeft: -19, marginVertical: -6 },
+  likeButtonBeforeCount: { paddingRight: 6 },
+  // À zéro, le nombre est dans le bouton : le toucher aime.
+  likeButtonAlone: { gap: 6, paddingRight: 12, marginRight: -12 },
+  // Cible de 44 points de haut par le remplissage, sans grossir le texte.
+  likeCount: { minHeight: 44, paddingRight: 12, marginVertical: -6, marginRight: -12, justifyContent: "center" },
   shareButton: { marginLeft: "auto" },
   reactCount: { fontSize: font.secondary, color: color.acier },
   authorLink: { flexDirection: "row", alignItems: "center", gap: 10, flexShrink: 1 },

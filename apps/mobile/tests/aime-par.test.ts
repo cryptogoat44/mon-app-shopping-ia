@@ -30,27 +30,70 @@ describe("le nombre de « j'aime » sous une publication", () => {
     expect(card).toContain("{likeCountOpensList(reactionCount) ? (");
     expect(card.match(/likesListRoute\(/g)).toHaveLength(1);
     expect(card).toContain("onPress={() => router.push(likesListRoute(post.id, reactionCount))}");
-    // À zéro : le nombre reste affiché, dans une simple vue.
-    expect(card).toContain("<View style={styles.likeCountPlain}>");
+    // À zéro : le nombre reste affiché, en simple texte, et rien d'autre à sa place.
+    expect(card).toContain("{likeCountOpensList(reactionCount) ? null : <Text style={styles.reactCount}>{reactionCount}</Text>}");
+    expect(card.slice(card.indexOf('testID="nombre-jaime"'), card.indexOf("onPress={onOpenComments}"))).toContain(") : null}");
   });
 
   it("il mène à « /membres » avec la publication et le nombre affiché", () => {
     expect(likesListRoute(POST, 12)).toEqual({ pathname: "/membres", params: { kind: "likes", id: POST, count: "12" } });
   });
 
-  it("le cœur garde son rôle (aimer, ne plus aimer) : le nombre n'est plus dans son bouton", () => {
+  it("le cœur garde son rôle (aimer, ne plus aimer) : le nombre qui ouvre la liste n'est pas dans son bouton", () => {
     const card = read("components/post-card.tsx");
     const heart = card.slice(card.indexOf("onPress={handleReactButton}"), card.indexOf("{likeCountOpensList(reactionCount) ? ("));
     expect(heart).toContain("accessibilityLabel={reacted ? t.post.unlike : t.post.like}");
     expect(heart).toContain("<HeartIcon");
-    expect(heart).not.toContain("{reactionCount}");
+    expect(heart).not.toContain("likesListRoute");
     // Toucher deux fois l'image aime toujours.
     expect(card).toContain("onPress={handleMediaPress}");
   });
 
+  it("à zéro, toucher le « 0 » aime comme avant : le nombre est DANS le bouton du cœur, et seulement à zéro", () => {
+    const card = read("components/post-card.tsx");
+    const heart = card.slice(card.indexOf("onPress={handleReactButton}"), card.indexOf("{likeCountOpensList(reactionCount) ? ("));
+    expect(heart.match(/\{reactionCount\}/g)).toHaveLength(1);
+    expect(heart).toContain("{likeCountOpensList(reactionCount) ? null : <Text style={styles.reactCount}>{reactionCount}</Text>}");
+    expect(heart.trimEnd().endsWith("</Pressable>")).toBe(true);
+    // Plus de vue sans geste à côté du cœur.
+    expect(card).not.toContain("likeCountPlain");
+  });
+
+  it("le cœur : une cible d'au moins 44 points par le remplissage (le site ignore « hitSlop »), sans déplacer l'icône ni le nombre", () => {
+    const card = read("components/post-card.tsx");
+    const heart = card.slice(card.indexOf("onPress={handleReactButton}"), card.indexOf("{likeCountOpensList(reactionCount) ? ("));
+    expect(heart).not.toContain("hitSlop");
+    expect(heart).toContain("style={[styles.likeButton, likeCountOpensList(reactionCount) ? styles.likeButtonBeforeCount : styles.likeButtonAlone]}");
+
+    const style = (name: string): Record<string, number | string> => {
+      const body = card.match(new RegExp(`\\n  ${name}: \\{([^}]*)\\}`))![1]!;
+      return Object.fromEntries(body.split(",").map((pair) => pair.split(":").map((part) => part.trim())).map(([key, value]) => [key!, Number.isNaN(Number(value)) ? value!.replace(/"/g, "") : Number(value)]));
+    };
+    const ICON = 19;
+    const button = style("likeButton");
+    const beforeCount = style("likeButtonBeforeCount");
+    const alone = style("likeButtonAlone");
+    const count = style("likeCount");
+    expect(heart).toContain(`<HeartIcon size={${ICON}}`);
+    expect(button).toMatchObject({ minHeight: 44, minWidth: 44, flexDirection: "row", alignItems: "center" });
+    // Suivi du nombre cliquable : 44 de large, tout en remplissage réel.
+    expect(Number(button.paddingLeft) + ICON + Number(beforeCount.paddingRight)).toBeGreaterThanOrEqual(44);
+    // L'icône ne bouge pas, et la zone reste dans la marge de la publication.
+    expect(button.marginLeft).toBe(-Number(button.paddingLeft));
+    expect(card).toContain("post: { paddingHorizontal: space.lg,");
+    expect(Number(button.paddingLeft)).toBeLessThanOrEqual(24);
+    // Le nombre reste à 6 points de l'icône, dans les deux cas : aucun point mort entre les deux.
+    expect(Number(beforeCount.paddingRight) + Number(count.paddingLeft ?? 0)).toBe(6);
+    expect(alone.gap).toBe(6);
+    // À zéro : la zone déborde à droite du « 0 » sans déplacer le bouton des commentaires.
+    expect(alone.marginRight).toBe(-Number(alone.paddingRight));
+    // La rangée garde sa hauteur (44 - 2 × 6 = 32).
+    expect(button.marginVertical).toBe(-6);
+  });
+
   it("accessibilité : un lien, annoncé avec le nombre, d'au moins 44 points de haut par le remplissage (pas un texte plus gros)", () => {
     const card = read("components/post-card.tsx");
-    const link = card.slice(card.indexOf("router.push(likesListRoute"), card.indexOf("<View style={styles.likeCountPlain}>"));
+    const link = card.slice(card.indexOf("router.push(likesListRoute"), card.indexOf("onPress={onOpenComments}"));
     expect(link).toContain('accessibilityRole="link"');
     expect(link).toContain("accessibilityLabel={t.memberLists.openLikes(reactionCount)}");
     expect(link).toContain("style={styles.likeCount}");
