@@ -23,7 +23,6 @@ describe("publications enregistrées, sur la base de développement", () => {
   let other: TestUser; // a sa propre collection
   let gone: TestUser; // compte supprimé pendant les tests
   let migrated = false;
-  let compositeKey = false;
 
   const request = (user: TestUser, method: InjectOptions["method"], url: string, payload?: object) =>
     app.inject({ method, url, headers: authHeaders(user.token), ...(payload ? { payload } : {}) });
@@ -86,9 +85,10 @@ describe("publications enregistrées, sur la base de développement", () => {
     const foreign = await createCollection(other, "Perso");
     expect((await request(saver, "PUT", `/api/posts/${created.id}/save`, { collectionId: foreign.id })).json().error).toBe("collection_not_found");
     const direct = await app.supabaseAdmin.from("saved_posts").insert({ user_id: saver.id, post_id: created.id, collection_id: foreign.id });
-    // Clé composée : refusée par la base (23503). Base plus ancienne : acceptée par la base, refusée par le serveur seul.
-    compositeKey = direct.error?.code === "23503";
-    if (compositeKey) expect(direct.error?.code).toBe("23503");
+    // Clé composée (PostgreSQL 15 et plus) : refusée par la base (23503). Base
+    // plus ancienne : acceptée par la base (la vérification de 0048 le dit),
+    // refusée par le serveur seul ; la ligne écrite ici est retirée.
+    if (direct.error) expect(direct.error.code).toBe("23503");
     else await app.supabaseAdmin.from("saved_posts").delete().eq("user_id", saver.id).eq("post_id", created.id);
     // Une ligne par membre et par publication.
     await app.supabaseAdmin.from("saved_posts").insert({ user_id: saver.id, post_id: created.id });
