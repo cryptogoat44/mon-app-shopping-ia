@@ -5,13 +5,15 @@ commandes `eas …` se tapent sur le Mac, dans le dossier `apps/mobile`.
 
 ## 1. Une seule fois : relier le projet à Expo (EAS)
 
-1. `eas login`, puis `eas init` : écrit l'identifiant du projet dans `app.json`.
-2. `eas update:configure` : ajoute dans `app.json` l'adresse des mises à jour
-   à distance (`updates.url`). Les canaux sont déjà dans `eas.json`.
-3. Donner ces deux changements de `app.json` à Claude, qui les enregistre.
+**Fait le 17 novembre 2026.** Le projet a été créé sur expo.dev par le
+fondateur (nom du projet `spotto`, compte propriétaire `spotto-dev`). Son
+identifiant, le compte propriétaire et l'adresse des mises à jour à distance
+(`updates.url`) sont écrits dans `app.json` ; les canaux sont dans `eas.json`.
+Ce ne sont pas des secrets. Il n'y a donc plus besoin de `eas init` ni de
+`eas update:configure`.
 
-Tant que l'étape 2 n'est pas faite, l'app fonctionne normalement, sans mise à
-jour à distance.
+Sur le Mac, il reste à installer l'outil et à se connecter, une fois :
+`npm install -g eas-cli`, puis `eas login` (compte `spotto-dev`).
 
 ## 2. Les réglages à saisir chez Expo
 

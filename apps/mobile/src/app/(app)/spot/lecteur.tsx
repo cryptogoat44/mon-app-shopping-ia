@@ -29,7 +29,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import type { WebView } from "react-native-webview";
 import type { VideoLink, VideoLookupResponse } from "@monapp/shared-types";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { PUBLIC_WEB_URL } from "@/constants/brand";
 import { EmbeddedPlayer } from "@/components/embedded-player";
@@ -661,7 +661,7 @@ const styles = themedStyles(() => ({
   close: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   body: { fontSize: font.secondary, color: color.acier, lineHeight: 21 },
   box: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, gap: space.sm, alignSelf: "stretch", marginTop: space.md },
-  boxTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, color: color.encre },
+  boxTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, lineHeight: serifLineHeight.body, color: color.encre },
   fallbackBlock: { marginTop: space.lg, gap: space.sm },
   discreet: { minHeight: 44, alignItems: "center", justifyContent: "center", alignSelf: "stretch" },
   discreetLabel: { fontSize: font.secondary, color: color.acier, textDecorationLine: "underline", textAlign: "center" },

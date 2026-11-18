@@ -23,7 +23,7 @@ La ligne `_aLire` est un simple rappel : elle ne sert à rien d'autre.
 
 Trois choses se déduisent du nom, sans ligne à part :
 
-- le nom en minuscules, affiché en grand sur l'écran d'accueil (`spotto`) ;
+- le nom en capitales très espacées, affiché en grand sur l'écran d'accueil (`SPOTTO`) : c'est le logo, écrit dans la police des titres (Bodoni Moda) ;
 - le début du nom du fichier « Mes données » (`spotto-mes-donnees-…`), sans accent ni espace ;
 - le nom annoncé aux boutiques par le serveur (`Spotto/1.0`), sans accent ni espace.
 
@@ -49,7 +49,7 @@ Ces endroits ne sont pas dans le code de l'app : le fichier unique ne peut pas l
 | Où | Quoi |
 | --- | --- |
 | **Supabase** (projets spotto-prod et spotto-dev-2) | Les trois modèles d'e-mails (`apps/backend/supabase/emails/*.html`, à recoller dans Supabase) et leurs sujets, le nom de l'expéditeur (« Sender name »), l'adresse du site (« Site URL ») et les adresses de retour (« Redirect URLs », dont `spotto://nouveau-mot-de-passe`, qui suit `schemaLiens`). Marche à suivre : `apps/backend/supabase/emails/REGLAGES-SUPABASE.md`. Le nom des projets Supabase eux-mêmes peut rester : personne ne le voit. |
-| **Logo et écran de démarrage** | Les images de `apps/mobile/assets/marque` (icône, « S » de l'écran de démarrage) et de `apps/mobile/assets/images`. Si le logo change, Claude les régénère (`pnpm --filter backend images-marque`). |
+| **Logo et écran de démarrage** | Les images de `apps/mobile/assets/marque` (icône, « S » de l'écran de démarrage) et de `apps/mobile/assets/images`. Le « S » est la première lettre du nom actuel, dessinée dans la police des titres : avec un autre nom, Claude change la lettre dans le script et régénère les images (`pnpm --filter backend images-marque`). Le nom en capitales de l'écran d'accueil, lui, suit tout seul. |
 | **Fiche App Store** | Les brouillons de `apps/mobile/app-store` (nom, sous-titre, description, notes pour la validation, captures d'écran) : à réécrire avec le nouveau nom, puis à saisir dans App Store Connect. |
 | **Render** | Le nom des deux services et leurs adresses (`spotto-api.onrender.com` pour le serveur, `mon-app-shopping-ia-web.onrender.com` pour le site). Si l'adresse du serveur change : la ligne `adresseServeur` du fichier unique, puis la variable `EXPO_PUBLIC_API_URL` (sur Render pour le site, chez Expo pour l'app) ; recopiez aussi la nouvelle adresse dans `apps/mobile/EN-TETES-SITE.md` (les en-têtes à coller chez Render), avec Claude. Si l'adresse du site change : la ligne `adresseSite` du fichier unique, la variable `EXPO_PUBLIC_WEB_URL` si elle est réglée, et les réglages Supabase ci-dessus. |
 | **Nom de domaine** | À acheter et à brancher sur le site (Render), puis reporter l'adresse dans `adresseSite`. L'adresse d'expédition des e-mails devrait être sur ce domaine. |
@@ -64,7 +64,7 @@ Ce qui garde l'ancien nom de travail, exprès, parce que personne ne le voit : l
 
 ## 3. À choisir AVANT
 
-Aujourd'hui, rien n'est enregistré chez Apple ni chez Expo. Tant que c'est le cas, changer une ligne du fichier unique suffit. Trois étapes rendent certaines lignes difficiles à changer : **décidez le nom définitif avant de les faire.**
+**État au 17 novembre 2026.** Le projet est créé chez Expo (étape 1 ci-dessous : nom du projet `spotto`, compte propriétaire `spotto-dev`, identifiant écrit dans `apps/mobile/app.json`). Le compte Apple Developer est en cours d'activation ; rien n'est encore enregistré chez Apple (étapes 2 et 3). Trois étapes rendent certaines lignes difficiles à changer : **décidez le nom définitif avant de faire celles qui restent.**
 
 1. **Avant le premier `eas init`** (création du projet chez Expo) : `slugExpo`, et le compte Expo propriétaire du projet (« owner »). `eas init` écrit dans `apps/mobile/app.json` l'identifiant du projet, lié à ce nom et à ce compte. Changer ensuite, c'est créer un autre projet chez Expo (les mises à jour à distance et l'historique des builds ne suivent pas).
 2. **Avant l'inscription au programme Apple et la création de l'app chez Apple** : `identifiantApple`, `groupeApple` et `identifiantExtensionPartage`. Une fois l'app créée dans App Store Connect, son identifiant ne peut plus être modifié : il faudrait créer une autre app, avec une nouvelle fiche et une nouvelle validation. Le nom affiché (`nom`), lui, peut encore changer d'une version à l'autre, mais il doit être libre sur l'App Store : vérifiez-le avant.

@@ -1,7 +1,7 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { color, font, serifFont, space } from "@/theme/tokens";
+import { color, font, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { ReceivedPieces } from "@/components/received-pieces";
 import { themedStyles } from "@/theme/themed-styles";
@@ -38,5 +38,5 @@ const styles = themedStyles(() => ({
   nav: { height: 47, justifyContent: "center", paddingHorizontal: space.lg },
   navBack: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
   backLabel: { color: color.encre, fontSize: font.secondary },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, paddingHorizontal: space.lg, maxWidth: 640, alignSelf: "center", width: "100%" },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, paddingHorizontal: space.lg, maxWidth: 640, alignSelf: "center", width: "100%" },
 }));

@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 import { Text, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { TagIcon, VideoIcon } from "@/components/icons";
 import { isPlayerAvailable } from "@/lib/player-access";
@@ -45,7 +45,7 @@ export function HowItWorksCard() {
 
 const styles = themedStyles(() => ({
   card: { marginTop: space.xxl - space.xs, borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, gap: space.md },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, color: color.encre },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, lineHeight: serifLineHeight.body, color: color.encre },
   step: { flexDirection: "row", alignItems: "center", gap: space.md },
   icon: { width: 36, height: 36, borderRadius: radius.full, borderWidth: 1, borderColor: color.filet, alignItems: "center", justifyContent: "center" },
   text: { flex: 1, fontSize: font.secondary, color: color.encre, lineHeight: 21 },

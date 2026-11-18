@@ -5,7 +5,7 @@
 // gestes. Le lien reste en attente 10 minutes : la prochaine recherche lui
 // est associée (lib/pending-video-link.ts).
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { CameraIcon, VideoIcon } from "@/components/icons";
 import { themedStyles } from "@/theme/themed-styles";
@@ -56,7 +56,7 @@ export function VideoFallback({
 
 const styles = themedStyles(() => ({
   box: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, alignSelf: "stretch" },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, color: color.encre },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, lineHeight: serifLineHeight.body, color: color.encre },
   body: { fontSize: font.secondary, color: color.acier, lineHeight: 21, marginTop: space.xs },
   primary: { backgroundColor: color.vert, borderRadius: radius.md, minHeight: 48, flexDirection: "row", gap: space.sm, alignItems: "center", justifyContent: "center", marginTop: space.md },
   primaryLabel: { color: color.blanc, fontSize: font.body, fontWeight: "600" },

@@ -5,7 +5,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import type { Post, UserProfile } from "@monapp/shared-types";
 import { ApiError, fetchUserPosts, fetchUserProfile, followUser, unfollowUser } from "@/lib/api";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { MoreIcon } from "@/components/icons";
 import { ReportBlockMenu } from "@/components/report-block-menu";
@@ -241,7 +241,7 @@ const styles = themedStyles(() => ({
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 640, alignSelf: "center", width: "100%" },
   header: { alignItems: "center", paddingBottom: space.md },
   fill: { width: "100%", height: "100%" },
-  name: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, marginTop: space.md },
+  name: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, marginTop: space.md },
   handle: { fontSize: font.secondary, color: color.acier, marginTop: 2 },
   bio: { fontSize: font.secondary, color: color.encre, textAlign: "center", marginTop: space.sm, lineHeight: 20 },
   counts: { fontSize: font.caption, color: color.acier, marginTop: space.sm },

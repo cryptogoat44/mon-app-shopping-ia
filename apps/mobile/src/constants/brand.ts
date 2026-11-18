@@ -10,8 +10,9 @@ import marque from "@monapp/shared-types/marque.json";
 
 /** Nom du produit, tel qu'il est montré aux personnes (« Spotto »). */
 export const APP_NAME_DISPLAY: string = marque.nom;
-/** Le même en minuscules : le mot-symbole de l'écran d'accueil (« spotto »). */
-export const APP_NAME: string = marque.nom.toLowerCase();
+/** Le même en capitales : le texte du mot-symbole (« SPOTTO »), affiché par
+ * components/wordmark.tsx — jamais écrit en dur. */
+export const APP_WORDMARK: string = marque.nom.toUpperCase();
 /** Début des noms des fichiers remis à la personne (« spotto-mes-donnees-… »). */
 export const APP_FILE_SLUG: string = brandFileSlug(marque.nom);
 /** Schéma des liens qui ouvrent l'app (« spotto:// »). */

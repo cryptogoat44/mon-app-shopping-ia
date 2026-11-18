@@ -1,7 +1,7 @@
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { VaultCategory } from "@monapp/shared-types";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { VAULT_CATEGORIES } from "@/lib/vault-labels";
 import { themedStyles } from "@/theme/themed-styles";
@@ -41,7 +41,7 @@ const styles = themedStyles(() => ({
   backdrop: { flex: 1, backgroundColor: color.voile },
   sheet: { backgroundColor: color.porcelaine, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingHorizontal: space.lg, paddingTop: 10 },
   grab: { width: 36, height: 5, borderRadius: 3, backgroundColor: color.filet, alignSelf: "center", marginBottom: space.md },
-  sheetTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, marginBottom: space.sm },
+  sheetTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, marginBottom: space.sm },
   sheetRow: { minHeight: 48, justifyContent: "center", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.filet },
   sheetRowLabel: { fontSize: font.body, color: color.encre },
 }));

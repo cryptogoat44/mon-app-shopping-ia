@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Modal, Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import type { SpotResult } from "@/api/types";
 import { ActionButtons, type Action } from "@/components/spot-launch-views";
@@ -126,7 +126,7 @@ const styles = themedStyles(() => ({
   backdrop: { flex: 1, backgroundColor: color.voile },
   sheet: { backgroundColor: color.porcelaine, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingHorizontal: space.lg, paddingTop: 10 },
   grab: { width: 36, height: 5, borderRadius: 3, backgroundColor: color.filet, alignSelf: "center", marginBottom: space.md },
-  sheetTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre },
+  sheetTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre },
   sheetLead: { fontSize: font.secondary, color: color.acier, marginTop: space.xs, lineHeight: 21 },
   leadAfter: { marginTop: space.lg },
 }));

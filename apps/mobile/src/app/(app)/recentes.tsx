@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
-import { color, font, serifFont, space } from "@/theme/tokens";
+import { color, font, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { getRecentSearches } from "@/api/client";
 import { clearLastSpotResult } from "@/api/spotSession";
@@ -94,7 +94,7 @@ const styles = themedStyles(() => ({
   navBack: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
   backLabel: { color: color.encre, fontSize: font.secondary },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, marginTop: space.sm },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, marginTop: space.sm },
   lead: { fontSize: font.secondary, color: color.acier, marginTop: space.xs, lineHeight: 21 },
   loading: { marginTop: space.xl },
   centered: { alignItems: "center", marginTop: space.xl },

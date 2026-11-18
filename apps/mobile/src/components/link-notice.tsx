@@ -1,5 +1,5 @@
 import { ActivityIndicator, Platform, Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { VideoIcon } from "@/components/icons";
 import { linkStep } from "@/lib/link-step";
@@ -50,7 +50,7 @@ export function LinkNotice({ onAddVideo, busy = false, style, link }: { onAddVid
 
 const styles = themedStyles(() => ({
   box: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, color: color.encre },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, lineHeight: serifLineHeight.body, color: color.encre },
   body: { fontSize: font.secondary, color: color.acier, lineHeight: 21, marginTop: space.xs },
   button: {
     borderWidth: 1,

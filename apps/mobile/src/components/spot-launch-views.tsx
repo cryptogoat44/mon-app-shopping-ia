@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View, type StyleProp, type TextStyle } from "react-native";
 import { Image } from "expo-image";
 import { SEARCH_QUERY_MAX_LENGTH } from "@monapp/shared-types";
-import { color, font, radius, serifFont, size, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, size, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { ErrorMessage } from "@/components/error-message";
 import { VideoIcon } from "@/components/icons";
@@ -313,9 +313,9 @@ const styles = themedStyles(() => ({
     height: 26,
   },
   badgeLabel: { color: color.surImage, fontSize: font.caption, fontWeight: "600", fontVariant: ["tabular-nums"] },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 29, marginTop: space.lg },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: serifLineHeight.title, marginTop: space.lg },
   fieldLabel: { fontSize: font.secondary, color: color.encre, fontWeight: "600", marginTop: space.lg },
-  frameTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 29 },
+  frameTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: serifLineHeight.title },
   caption: { fontSize: font.caption, color: color.acier, marginTop: 6, lineHeight: 18 },
   cropArea: { marginTop: space.md },
   wholeImage: { alignSelf: "flex-end", minHeight: size.touchTarget, justifyContent: "center" },
