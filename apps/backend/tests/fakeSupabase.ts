@@ -13,6 +13,8 @@ import { randomUUID } from "node:crypto";
 // fournies par le test qui en a besoin ; sinon, elles sont « absentes ».
 // Lot « vie sociale » : filtres `or` (fil, notifications) et `ilike`
 // (recherche de comptes), une demande d'abonnement par paire de comptes.
+// Migration 0046 : réponses, « j'aime » et mentions des commentaires (clés
+// uniques, cascades en chaîne à la suppression d'un commentaire).
 
 export type Row = Record<string, unknown>;
 type Filter = (row: Row) => boolean;
@@ -79,7 +81,10 @@ const DEFAULTS: Record<string, () => Row> = {
   // valeurs par défaut des tables sociales écrites par les routes.
   follow_requests: () => ({ created_at: nextTimestamp() }),
   follows: () => ({ created_at: nextTimestamp() }),
-  comments: () => ({ id: randomUUID(), hidden_at: null, created_at: nextTimestamp() }),
+  comments: () => ({ id: randomUUID(), parent_id: null, hidden_at: null, created_at: nextTimestamp() }),
+  // Migration 0046 : « j'aime » et mentions des commentaires.
+  comment_reactions: () => ({ created_at: nextTimestamp() }),
+  comment_mentions: () => ({ created_at: nextTimestamp() }),
   post_reactions: () => ({ created_at: nextTimestamp() }),
   // Colonnes que la base remplit seule à la création d'une publication.
   posts: () => ({ id: randomUUID(), wishlist_item_id: null, media_thumb_url: null, media_removed_at: null, hidden_at: null, created_at: nextTimestamp() }),
@@ -95,6 +100,9 @@ const UNIQUE: Record<string, string[][]> = {
   wish_watches: [["wishlist_item_id"]],
   // Lot « vie sociale » (0045) : une demande par paire de comptes.
   follow_requests: [["requester_id", "target_id"]],
+  // Migration 0046 : un « j'aime » et une mention par membre et par commentaire.
+  comment_reactions: [["comment_id", "user_id"]],
+  comment_mentions: [["comment_id", "user_id"]],
 };
 
 /** Suppressions en cascade imitées : en supprimant une ligne de la table,
@@ -111,6 +119,14 @@ const CASCADES: Record<string, { table: string; column: string }[]> = {
     { table: "wish_tracking", column: "wishlist_item_id" },
     { table: "wish_watches", column: "wishlist_item_id" },
     { table: "wish_alert_events", column: "wishlist_item_id" },
+  ],
+  // Migration 0046 : un commentaire emporte ses réponses, ses « j'aime », ses
+  // mentions et les notifications qui le citent (0017).
+  comments: [
+    { table: "comments", column: "parent_id" },
+    { table: "comment_reactions", column: "comment_id" },
+    { table: "comment_mentions", column: "comment_id" },
+    { table: "notifications", column: "comment_id" },
   ],
 };
 
@@ -207,6 +223,18 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
     }
   }
 
+  /** Suppressions en cascade, en chaîne (une réponse emporte ses « j'aime »). */
+  function cascade(name: string, deleted: Row[]) {
+    const ids = new Set<unknown>(deleted.map((row) => row.id).filter((id) => id !== undefined && id !== null));
+    if (ids.size === 0) return;
+    for (const child of CASCADES[name] ?? []) {
+      const gone = table(child.table).filter((row) => ids.has(row[child.column]));
+      if (gone.length === 0) continue;
+      tables.set(child.table, table(child.table).filter((row) => !gone.includes(row)));
+      cascade(child.table, gone);
+    }
+  }
+
   function from(name: string) {
     const filters: Filter[] = [];
     const orders: { column: string; ascending: boolean }[] = [];
@@ -288,10 +316,7 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
           name,
           rows.filter((row) => !matching.includes(row))
         );
-        const ids = new Set(matching.map((row) => row.id));
-        for (const child of CASCADES[name] ?? []) {
-          tables.set(child.table, table(child.table).filter((row) => !ids.has(row[child.column])));
-        }
+        cascade(name, matching);
         return returned(matching);
       }
       let result = [...matching];
