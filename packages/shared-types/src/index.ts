@@ -1110,6 +1110,10 @@ export type ModerationPreview =
       hidden: boolean;
       /** Le message signalé et quelques messages autour (jamais toute la conversation). */
       context: ModerationMessageContext[];
+      /** Lot « messages, plus de confort » : supprimé par son auteur à cette date (son contenu n'est conservé que s'il avait été signalé avant). */
+      deletedAt?: string | null;
+      /** Ce message portait une publication. */
+      sharedPost?: boolean;
     }
   | {
       kind: "collection";
@@ -1151,6 +1155,10 @@ export interface ModerationMessageContext {
   /** Le message signalé lui-même. */
   reported: boolean;
   hidden: boolean;
+  /** Lot « messages, plus de confort » : supprimé par son auteur (jamais son contenu, sauf pour le message signalé lui-même). */
+  deleted?: boolean;
+  /** Ce message portait une publication. */
+  sharedPost?: boolean;
 }
 
 /** Messages lus avant et après un message signalé (vue de la modération). */
@@ -1310,6 +1318,8 @@ export interface MessagesStatus {
   enabled: boolean;
   unreadCount: number;
   push?: boolean;
+  /** Lot « messages, plus de confort » (migration 0044) : aimer, répondre, supprimer, envoyer une publication. Absent chez un serveur plus ancien (lu comme faux). */
+  actions?: boolean;
 }
 
 // ---- Notifications des nouveaux messages sur le téléphone (migration 0035) ----
@@ -1380,6 +1390,14 @@ export interface ChatMessage {
   text: string | null;
   wish: MessageWishCard | null;
   createdAt: string;
+  /** Lot « messages, plus de confort » : supprimé par la personne qui l'a écrit (ni texte ni carte). */
+  deleted?: boolean;
+  /** « J'aime » de chacun des deux membres. */
+  liked?: MessageLikes;
+  /** Le message auquel celui-ci répond ; null : aucun. */
+  replyTo?: MessageQuote | null;
+  /** La publication envoyée dans ce message ; null : aucune. */
+  post?: MessagePostCard | null;
 }
 
 /** État d'une conversation, vu par la personne qui la lit :
@@ -1404,6 +1422,10 @@ export interface ConversationLastMessage {
   /** Masqué par la modération, ou signalé par vous : son texte n'est pas montré. */
   hidden: boolean;
   createdAt: string;
+  /** Lot « messages, plus de confort » : supprimé par la personne qui l'a écrit. */
+  deleted?: boolean;
+  /** Ce message porte une publication (jamais rien d'elle dans l'aperçu). */
+  hasPost?: boolean;
 }
 
 export interface ConversationSummary {
@@ -1454,6 +1476,10 @@ export interface ConversationThread {
    * n'apprend pas si elle a été regardée). Absent chez un serveur plus ancien
    * (lu comme null). */
   readReceipts?: ConversationReadReceipts | null;
+  /** Lot « messages, plus de confort » : les messages aimés ou supprimés depuis `changedSince` (relecture). */
+  changed?: ChatMessage[];
+  /** À renvoyer dans `changedSince` à la relecture suivante. */
+  syncedAt?: string;
 }
 
 /** POST /api/messages : à une personne (la conversation est trouvée ou
@@ -1470,6 +1496,10 @@ export interface SendMessageRequest {
   /** « Envoyer à un ami » depuis l'écran Résultat : une proposition d'une de
    * vos recherches (product_matches), sans la garder dans vos Envies. */
   matchId?: string;
+  /** Lot « messages, plus de confort » : une publication que vous pouvez voir, à la place d'une autre carte. */
+  postId?: string;
+  /** Le message de cette conversation auquel vous répondez. */
+  replyToId?: string;
 }
 
 export interface SendMessageResponse {
@@ -2256,3 +2286,62 @@ export type VideoLinkAnalysisErrorCode =
   | "video_timeout"
   | "video_ai_user_limit"
   | "video_ai_global_limit";
+
+// ---- Messages, plus de confort (lot messages confort, migration 0044) ----
+// Dans une conversation : aimer un message (❤️), répondre à un message
+// précis, supprimer un de ses messages, envoyer une publication du fil.
+// Ces champs ne sont envoyés qu'à une app qui dit les comprendre
+// (paramètre `v=2` des lectures et de l'envoi).
+
+/** Niveau de vocabulaire que l'app annonce au serveur (paramètre `v`). */
+export const CLIENT_LEVEL = "2";
+
+/** Longueur maximale de l'extrait d'un message cité. */
+export const MESSAGE_QUOTE_MAX_LENGTH = 80;
+
+/** « J'aime » d'un message : le vôtre, et celui de l'autre membre. */
+export interface MessageLikes {
+  mine: boolean;
+  theirs: boolean;
+}
+
+/** Le message auquel un message répond, tel que la personne qui lit peut le
+ * voir. `unavailable` : masqué, supprimé, signalé par elle, ou d'avant ce
+ * qu'elle a effacé de sa vue (jamais d'extrait). `post` : une publication
+ * envoyée (jamais rien d'elle ici). */
+export interface MessageQuote {
+  id: string;
+  /** Écrit par la personne qui lit. */
+  mine: boolean;
+  kind: "text" | "wish" | "post" | "unavailable";
+  /** MESSAGE_QUOTE_MAX_LENGTH caractères au plus : le début du texte, ou le titre de l'envie jointe. */
+  excerpt: string | null;
+}
+
+/** Une publication envoyée dans un message, relue pour la personne qui
+ * regarde à chaque affichage. `available: false` : supprimée, masquée,
+ * signalée par elle, ou qu'elle n'a pas le droit de voir (rien d'autre n'est
+ * transmis : ni auteur, ni légende, ni image). */
+export type MessagePostCard =
+  | { available: true; id: string; author: PostAuthor; thumbUrl: string | null; caption: string | null }
+  | { available: false };
+
+/** PUT /api/messages/:id/reaction : aimer un message, ou ne plus l'aimer. */
+export interface MessageReactionRequest {
+  liked: boolean;
+}
+
+/** Réponse : le message, tel que la personne qui lit le voit maintenant. */
+export interface MessageReactionResponse {
+  message: ChatMessage;
+}
+
+/** Codes d'erreur propres à ces actions. */
+export const MESSAGE_ACTIONS_ERRORS = {
+  /** Migration 0044 absente (404) : l'app cache ces actions. */
+  unavailable: "message_actions_unavailable",
+  /** Message inexistant, d'une autre conversation, ou qui n'est pas montré à la personne (404). */
+  messageNotFound: "message_not_found",
+  /** La conversation n'est pas ouverte aux deux membres (409). */
+  notOpen: "conversation_not_open",
+} as const;
