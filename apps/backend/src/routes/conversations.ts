@@ -370,9 +370,10 @@ export default async function conversationsRoutes(fastify: FastifyInstance) {
   });
 
   // Marquer comme lue (à l'ouverture, et à chaque nouveau message vu). La
-  // date de cette lecture n'est montrée à l'autre membre que dans une
-  // conversation ouverte, et jamais si elle précède son ouverture : celle
-  // d'une invitation reçue reste donc privée (lib/readReceipts.ts).
+  // date de cette lecture ne sort jamais du serveur : l'autre membre apprend
+  // seulement, dans une conversation ouverte, que son dernier message a été
+  // vu, et jamais par une lecture qui précède son ouverture : celle d'une
+  // invitation reçue reste donc privée (lib/readReceipts.ts).
   fastify.post("/api/conversations/:id/read", auth, async (request, reply) => {
     if (!(await ensureReady(fastify, reply))) return;
     const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);

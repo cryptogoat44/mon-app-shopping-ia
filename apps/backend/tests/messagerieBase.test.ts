@@ -255,24 +255,35 @@ describe.skipIf(!migrated)("confirmations de lecture, sur la base de développem
     await open(bruno, id);
     const seenAt = (await thread(alice, id)).readReceipts?.seenAt;
     expect(typeof seenAt).toBe("string");
-    // La lecture couvre le message, même si l'horloge de ce Mac retarde sur celle de la base.
-    expect(Date.parse(seenAt!)).toBeGreaterThanOrEqual(Date.parse(sent.message.createdAt));
-    expect(Date.parse(seenAt!)).toBe(Date.parse((await lastReadAt(bruno, id))!));
+    // La lecture couvre le message, même si l'horloge de ce Mac retarde sur celle de la base…
+    const firstRead = (await lastReadAt(bruno, id))!;
+    expect(Date.parse(firstRead)).toBeGreaterThanOrEqual(Date.parse(sent.message.createdAt));
+    // … et Alice reçoit la date de SON message, jamais l'heure de la lecture de Bruno.
+    expect(Date.parse(seenAt!)).toBe(Date.parse(sent.message.createdAt));
     // La relecture de l'app (aucun nouveau message) la renvoie aussi.
     const poll = await thread(alice, id, sent.message.createdAt);
     expect(poll.messages).toEqual([]);
     expect(poll.readReceipts).toEqual({ seenAt });
+    // Bruno rouvre la conversation plus tard : sa lecture est datée dans la base, la réponse faite à Alice ne bouge pas.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await open(bruno, id);
+    expect(Date.parse((await lastReadAt(bruno, id))!)).toBeGreaterThanOrEqual(Date.parse(firstRead));
+    expect((await thread(alice, id)).readReceipts).toEqual({ seenAt });
+    expect((await thread(alice, id, sent.message.createdAt)).readReceipts).toEqual({ seenAt });
     // Un nouveau message : « Envoyé » tant que Bruno n'a pas rouvert la conversation.
     const second = await send(alice, bruno, "Il te plaît ?");
-    expect(Date.parse(second.readReceipts!.seenAt!)).toBeLessThan(Date.parse(second.message.createdAt));
+    expect(second.readReceipts).toEqual({ seenAt: null });
     // Bruno, lui, ne reçoit que la lecture d'Alice (jamais marquée) : rien encore.
     expect((await thread(bruno, id)).readReceipts).toEqual({ seenAt: null });
   });
 
-  it.skipIf(!receiptsMigrated)("réciproque : éteint chez l'un des deux, aucun des deux ne reçoit rien ; rallumé, ses lectures d'avant ne reviennent pas, celles d'après sont montrées", async () => {
+  it.skipIf(!receiptsMigrated)("réciproque : éteint chez l'un des deux, aucun des deux ne reçoit rien ; rallumé, aucune lecture d'avant ne revient (ni les siennes, ni celles de l'autre), celles d'après sont montrées", async () => {
     const id = (await send(alice, bruno, "Encore un mot")).conversationId;
     await open(bruno, id);
+    // Bruno écrit, Alice lit : « Vu » sous le message de Bruno, tant que les deux réglages sont allumés.
+    const reply = await send(bruno, alice, "Je suis là");
     await open(alice, id);
+    expect(Date.parse((await thread(bruno, id)).readReceipts!.seenAt!)).toBe(Date.parse(reply.message.createdAt));
     const sinceBefore = await since(bruno);
     expect((await request(bruno, "PUT", "/api/me/read-receipts", { readReceipts: false })).statusCode).toBe(204);
     expect((await request(bruno, "GET", "/api/me")).json().readReceipts).toBe(false);
@@ -289,10 +300,16 @@ describe.skipIf(!migrated)("confirmations de lecture, sur la base de développem
     const sinceAfter = await since(bruno);
     expect(Date.parse(sinceAfter)).toBeGreaterThan(Date.parse(whileOff));
     expect(Date.parse(sinceAfter)).toBeGreaterThan(Date.parse(sinceBefore));
-    // Alice ne voit aucune des lectures d'avant de Bruno (« Envoyé ») ; Bruno voit toujours celle d'Alice, qui n'a rien éteint.
+    // Alice ne voit aucune des lectures d'avant de Bruno (« Envoyé »). Réciproque : Bruno ne voit plus
+    // la lecture qu'Alice a faite avant qu'il rallume.
     const forAlice = await thread(alice, id);
     expect(forAlice.readReceipts).toEqual({ seenAt: null });
-    expect(typeof (await thread(bruno, id)).readReceipts?.seenAt).toBe("string");
+    expect((await thread(bruno, id)).readReceipts).toEqual({ seenAt: null });
+    // Un message de Bruno, lu par Alice pendant que les deux réglages sont allumés : « Vu ».
+    const again = await send(bruno, alice, "Toujours là");
+    expect(again.readReceipts).toEqual({ seenAt: null });
+    await open(alice, id);
+    expect(Date.parse((await thread(bruno, id)).readReceipts!.seenAt!)).toBe(Date.parse(again.message.createdAt));
     // Rallumer une seconde fois ne déplace pas la date.
     expect((await request(bruno, "PUT", "/api/me/read-receipts", { readReceipts: true })).statusCode).toBe(204);
     expect(await since(bruno)).toBe(sinceAfter);
@@ -302,8 +319,8 @@ describe.skipIf(!migrated)("confirmations de lecture, sur la base de développem
     await open(bruno, id);
     const seenAt = (await thread(alice, id)).readReceipts?.seenAt;
     expect(typeof seenAt).toBe("string");
-    expect(Date.parse(seenAt!)).toBeGreaterThanOrEqual(Date.parse(next.message.createdAt));
-    expect(Date.parse(seenAt!)).toBeGreaterThanOrEqual(Date.parse(sinceAfter));
+    expect(Date.parse(seenAt!)).toBe(Date.parse(next.message.createdAt));
+    expect(Date.parse((await lastReadAt(bruno, id))!)).toBeGreaterThanOrEqual(Date.parse(sinceAfter));
     // Le réglage et sa date figurent dans l'export des données.
     const exported = (await request(bruno, "GET", "/api/me/export")).json().profile;
     expect(exported.read_receipts).toBe(true);
@@ -328,8 +345,9 @@ describe.skipIf(!migrated)("confirmations de lecture, sur la base de développem
     expect((await request(chloe, "POST", `/api/conversations/${id}/accept`)).statusCode).toBe(204);
     const accepted = await thread(bruno, id);
     expect(accepted.state).toBe("open");
-    expect(Date.parse(accepted.readReceipts!.seenAt!)).toBeGreaterThan(Date.parse(looked!));
-    expect(Date.parse(accepted.readReceipts!.seenAt!)).toBe(Date.parse((await lastReadAt(chloe, id))!));
+    // « Vu » par la lecture datée de l'acceptation (jamais celle d'avant) ; Bruno reçoit la date de son propre message.
+    expect(Date.parse((await lastReadAt(chloe, id))!)).toBeGreaterThan(Date.parse(looked!));
+    expect(Date.parse(accepted.readReceipts!.seenAt!)).toBe(Date.parse(sent.message.createdAt));
   });
 
   it.skipIf(!receiptsMigrated)("un nouveau profil : réglage allumé, et « depuis » = sa création (jamais vide)", async () => {

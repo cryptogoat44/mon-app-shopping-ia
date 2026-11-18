@@ -27,9 +27,10 @@ export function readReadReceipts(value: unknown): ConversationReadReceipts | nul
 
 export type ReceiptStatus = "seen" | "sent";
 
-/** Ce message est-il vu ? « seen » : l'autre membre a ouvert la conversation
- * au moment de ce message ou après ; « sent » : pas encore ; null : rien à
- * afficher (pas de confirmations, ou date illisible). */
+/** Ce message est-il vu ? `seenAt` est la date du dernier de VOS messages que
+ * l'autre membre a vu (jamais l'heure de sa lecture, que le serveur garde
+ * pour lui). « seen » : ce message, ou un message d'après ; « sent » : pas
+ * encore ; null : rien à afficher (pas de confirmations, ou date illisible). */
 export function receiptStatus(receipts: ConversationReadReceipts | null | undefined, messageCreatedAt: string): ReceiptStatus | null {
   if (!receipts) return null;
   if (receipts.seenAt === null) return "sent";

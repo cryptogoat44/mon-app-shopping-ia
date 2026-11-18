@@ -86,6 +86,14 @@ describe("sous quel message", () => {
     expect(receiptMention([MINE_1, THEIRS], seen("2026-11-17T10:04:00Z"), "Alexis")).toMatchObject({ messageId: "m1", text: "Vu" });
   });
 
+  it("le serveur renvoie la date du dernier de VOS messages qui a été vu (jamais l'heure de la lecture) : « Vu » sous ce message, « Envoyé » sous un message d'après", () => {
+    // Votre dernier message a été vu : sa propre date, telle que la base l'écrit.
+    expect(receiptMention([MINE_1, THEIRS, MINE_2], seen(MINE_2.createdAt), "Alexis")).toMatchObject({ messageId: "m2", status: "seen", text: "Vu" });
+    expect(receiptMention([MINE_1], seen(MINE_1.createdAt), "Alexis")).toMatchObject({ messageId: "m1", status: "seen" });
+    // Seul le précédent a été vu (réponse arrivée juste avant votre nouvel envoi) : « Envoyé ».
+    expect(receiptMention([MINE_1, THEIRS, MINE_2], seen(MINE_1.createdAt), "Alexis")).toMatchObject({ messageId: "m2", status: "sent", text: "Envoyé" });
+  });
+
   it("rien quand le serveur ne renvoie pas de confirmations (invitation, réglage éteint, ancien serveur), ni sans message de vous", () => {
     const messages = [MINE_1, THEIRS, MINE_2];
     expect(receiptMention(messages, null, "Alexis")).toBeNull();

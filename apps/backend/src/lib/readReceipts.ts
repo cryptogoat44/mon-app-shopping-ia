@@ -22,9 +22,20 @@
 // - sans la migration 0043, ou si une lecture de la base échoue : rien.
 //   Jamais « allumé » par défaut : personne n'est exposé avant de pouvoir
 //   refuser.
-// Ce que l'app reçoit : null (rien à montrer), ou { seenAt }, la dernière
-// ouverture de la conversation par l'autre membre (null : pas encore, ou pas
-// depuis que ses lectures peuvent être montrées : « Envoyé »).
+// - réciproque dans le temps aussi : une lecture n'est montrée que si elle a
+//   été faite pendant que les DEUX réglages étaient allumés. La borne est la
+//   plus tardive des deux dates « depuis » (laterSince) : rallumer son
+//   réglage un instant ne fait pas apparaître ce que l'autre a lu pendant
+//   qu'il était éteint ;
+// - jamais l'heure d'une lecture : l'app ne reçoit pas la date à laquelle
+//   l'autre membre a ouvert la conversation (elle bougerait à chaque
+//   ouverture, et dirait quand il regarde). Elle reçoit la date du dernier
+//   message de la personne qui regarde, quand la lecture le couvre
+//   (seenStamp) : un oui ou un non, rien de plus.
+// Ce que l'app reçoit : null (rien à montrer), ou { seenAt } : la date de
+// VOTRE dernier message si l'autre membre a ouvert la conversation après lui
+// (« Vu ») ; null sinon (« Envoyé » : pas encore lu, ou pas par une lecture
+// qui peut être montrée).
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { ConversationReadReceipts } from "@monapp/shared-types";
@@ -66,6 +77,30 @@ export function shownReadAt(side: Pick<Side, "invitation" | "invitation_at" | "l
   if (side.invitation_at === null) return side.last_read_at;
   const openedAt = Date.parse(side.invitation_at);
   return Number.isFinite(openedAt) && readAt >= openedAt ? side.last_read_at : null;
+}
+
+/** La plus tardive de deux dates « depuis » : le moment à partir duquel les
+ * réglages des DEUX membres sont allumés ensemble. Une lecture d'avant n'est
+ * montrée à aucun des deux (réciprocité). L'une des deux absente ou
+ * illisible : null, rien n'est montré. */
+export function laterSince(a: string | null | undefined, b: string | null | undefined): string | null {
+  if (typeof a !== "string" || typeof b !== "string") return null;
+  const aAt = Date.parse(a);
+  const bAt = Date.parse(b);
+  if (!Number.isFinite(aAt) || !Number.isFinite(bAt)) return null;
+  return bAt > aAt ? b : a;
+}
+
+/** Ce que l'app reçoit à la place de l'heure de la lecture : la date du
+ * dernier message de la personne qui regarde (`ownLastMessageAt`, tel que sa
+ * conversation le montre) si la lecture `readAt` le couvre, null sinon
+ * (aucune lecture à montrer, aucun message d'elle, date illisible). L'heure
+ * de la lecture elle-même ne sort jamais du serveur. */
+export function seenStamp(readAt: string | null, ownLastMessageAt: string | null | undefined): string | null {
+  if (readAt === null || typeof ownLastMessageAt !== "string") return null;
+  const read = Date.parse(readAt);
+  const sent = Date.parse(ownLastMessageAt);
+  return Number.isFinite(read) && Number.isFinite(sent) && read >= sent ? ownLastMessageAt : null;
 }
 
 /** La date à écrire quand ce membre marque sa conversation comme lue :
@@ -149,6 +184,19 @@ export function resetReadReceiptsProbe(): void {
 // « depuis », aucune lecture de ce membre n'est montrée.
 const SETTING_ROWS = z.array(z.object({ id: z.guid(), read_receipts: z.boolean().nullable().optional(), read_receipts_since: z.string().nullable().optional() }));
 
+const OWN_MESSAGE_ROWS = z.array(z.object({ created_at: z.string() }));
+
+/** La date du dernier message de ce membre, tel que sa conversation le
+ * montre (routes/conversations.ts, readThreadMessages) : jamais un message
+ * masqué par la modération, ni d'avant ce qu'il a effacé de son côté. null :
+ * aucun. */
+async function ownLastMessageAt(fastify: FastifyInstance, mine: Side): Promise<string | null> {
+  let builder = fastify.supabaseAdmin.from("messages").select("created_at").eq("conversation_id", mine.conversation_id).eq("sender_id", mine.user_id).is("hidden_at", null);
+  if (mine.cleared_at) builder = builder.gt("created_at", mine.cleared_at);
+  const rows = parseDbRows(OWN_MESSAGE_ROWS, await builder.order("created_at", { ascending: false }).limit(1), "Dernier message de la personne qui regarde");
+  return rows[0]?.created_at ?? null;
+}
+
 /** Ce que `mine.user_id` peut savoir des lectures de l'autre membre (règles
  * en tête de fichier). `mine` et `theirs` : les deux côtés de la
  * conversation, tels qu'ils viennent d'être lus. Ne relève jamais d'erreur :
@@ -170,8 +218,12 @@ export async function readReceiptsFor(fastify: FastifyInstance, log: FastifyBase
     // Les deux réglages, allumés tous les deux (un profil introuvable : rien).
     if (!members.every((id) => settings.some((row) => row.id === id && row.read_receipts === true))) return null;
     if (suspended.has(theirs.user_id)) return null;
-    // Sa lecture, seulement si elle date d'après SON « depuis » (jamais celui de la personne qui regarde).
-    return { seenAt: shownReadAt(theirs, settings.find((row) => row.id === theirs.user_id)?.read_receipts_since) };
+    // Sa lecture, seulement si elle a été faite pendant que les DEUX réglages étaient allumés.
+    const since = (id: string) => settings.find((row) => row.id === id)?.read_receipts_since;
+    const readAt = shownReadAt(theirs, laterSince(since(mine.user_id), since(theirs.user_id)));
+    if (readAt === null) return { seenAt: null };
+    // Jamais l'heure de cette lecture : la date de MON dernier message, si elle le couvre.
+    return { seenAt: seenStamp(readAt, await ownLastMessageAt(fastify, mine)) };
   } catch {
     // Colonne disparue (retour en arrière de 0043) ou panne : la sonde est
     // refaite. Ni identifiant ni détail au journal.

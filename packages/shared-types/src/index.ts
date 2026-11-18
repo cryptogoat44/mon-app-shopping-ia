@@ -1427,10 +1427,12 @@ export interface ConversationsPage {
  * migration 0043), pour la personne qui la lit. Sous son dernier message,
  * l'app affiche « Vu » si `seenAt` n'est pas antérieur à ce message,
  * « Envoyé » sinon.
- * `seenAt` : la dernière fois que l'autre membre a ouvert la conversation ;
- * null : pas encore, depuis qu'elle est ouverte aux deux et depuis que ses
- * lectures peuvent être montrées (une lecture faite avant que « Vu » existe
- * pour lui, ou pendant que son réglage était éteint, n'est jamais renvoyée). */
+ * `seenAt` : la date de VOTRE dernier message, quand l'autre membre a ouvert
+ * la conversation après lui (« Vu ») ; jamais l'heure de sa lecture, qui ne
+ * sort pas du serveur. null (« Envoyé ») : pas encore lu, ou seulement par
+ * une lecture qui n'est pas montrée (faite avant que la conversation soit
+ * ouverte aux deux, avant que « Vu » existe pour lui, ou pendant que l'un
+ * des deux réglages était éteint). */
 export interface ConversationReadReceipts {
   seenAt: string | null;
 }
