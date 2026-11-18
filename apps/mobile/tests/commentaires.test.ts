@@ -450,8 +450,12 @@ describe("textes", () => {
   });
 
   it("la nouvelle section est ajoutée à la fin des deux catalogues", () => {
-    expect(Object.keys(fr).at(-1)).toBe("commentThreads");
-    expect(Object.keys(en).at(-1)).toBe("commentThreads");
+    // Après elle : la section de la migration 0047 (photos-identifications.test.ts).
+    for (const catalog of [fr, en]) {
+      const keys = Object.keys(catalog);
+      expect(keys.indexOf("commentThreads")).toBe(keys.indexOf("memberLists") + 1);
+      expect(keys.slice(keys.indexOf("commentThreads") + 1)).toEqual(["carousel"]);
+    }
   });
 
   it(`au plus ${MENTION_MAX_PER_TEXT} mentions par commentaire, la même règle que le serveur (code partagé)`, () => {

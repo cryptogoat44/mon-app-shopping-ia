@@ -1,4 +1,6 @@
 import type {
+  AddPostMediaResponse,
+  PostExtrasStatus,
   ApiErrorBody,
   AppNotification,
   BlockedUser,
@@ -101,6 +103,7 @@ import { readMessagesStatus, setMessagesStatus } from "./conversations";
 import { readCollectionsStatus, setCollectionsStatus } from "./collections";
 import { ALERTS_UNAVAILABLE, isAlertsUnavailable, readWishAlertState, readWishAlertStates, readWishAlertsStatus, setWishAlertsStatus } from "./wish-alerts";
 import { createStatusLoader } from "./status-loading";
+import { POST_EXTRAS_UNAVAILABLE, readPostExtrasStatus, setPostExtrasStatus } from "./post-extras";
 import { isDataUri } from "./data-uri";
 import { linkAnalysisEnabled, parseLinkAnalysis, type LinkAnalysis } from "./video-link-analysis";
 
@@ -622,10 +625,11 @@ export async function updatePieceSendsFrom(pieceSendsFrom: PieceSendsFrom): Prom
 // `ensureStatuses` sait ainsi ce qui a déjà une réponse ou une demande en cours.
 // Changement de compte ou déconnexion : ce qui est gardé en mémoire redevient
 // « indisponible », rien du compte précédent n'est montré au suivant.
-const statuses = createStatusLoader({ messages: loadMessagesStatus, collections: loadCollectionsStatus, alerts: loadWishAlertsStatus }, () => {
+const statuses = createStatusLoader({ messages: loadMessagesStatus, collections: loadCollectionsStatus, alerts: loadWishAlertsStatus, posts: loadPostExtrasStatus }, () => {
   setMessagesStatus({ enabled: false, unreadCount: 0, push: false });
   setCollectionsStatus({ enabled: false, reportable: false });
   setWishAlertsStatus(ALERTS_UNAVAILABLE);
+  setPostExtrasStatus(POST_EXTRAS_UNAVAILABLE);
 });
 
 /** S'assure que les disponibilités ont été demandées pour ce compte, quel que
@@ -635,6 +639,30 @@ const statuses = createStatusLoader({ messages: loadMessagesStatus, collections:
  * écrans connectés (lib/use-statuses-loaded.ts). */
 export function ensureStatuses(userId: string | null | undefined): Promise<void> {
   return statuses.ensure(userId);
+}
+
+// ---- Plusieurs photos, identifier des personnes (migration 0047) ----
+
+/** La base sait-elle garder plusieurs photos et des identifications ? Un
+ * serveur sans elles (ou en erreur) vaut « non » : l'app garde une seule
+ * photo et cache « Identifier des personnes ». L'état est partagé avec les
+ * écrans abonnés (lib/post-extras.ts). */
+export function fetchPostExtrasStatus(): Promise<PostExtrasStatus> {
+  return statuses.request("posts");
+}
+
+async function loadPostExtrasStatus(): Promise<PostExtrasStatus> {
+  let status: PostExtrasStatus;
+  try {
+    const response = await authorizedFetch("/api/posts/status");
+    status = readPostExtrasStatus(await response.json().catch(() => null));
+  } catch (e) {
+    // Hors ligne : l'état connu reste affiché.
+    if (e instanceof TypeError) throw e;
+    status = readPostExtrasStatus(null);
+  }
+  setPostExtrasStatus(status);
+  return status;
 }
 
 // ---- Messages privés (lot messages) ----
@@ -1007,6 +1035,8 @@ export async function createLifestylePost(params: {
   imageUri: string;
   privacy?: string;
   taggedPieces?: TaggedPieceInput[];
+  /** Membres à identifier (migration 0047) : le serveur ne garde que ceux qui l'acceptent et voient la publication. */
+  peopleTags?: string[];
 }): Promise<Post> {
   const formData = new FormData();
   formData.append("type", "lifestyle");
@@ -1015,12 +1045,29 @@ export async function createLifestylePost(params: {
   if (params.taggedPieces && params.taggedPieces.length > 0) {
     formData.append("taggedPieces", JSON.stringify(params.taggedPieces));
   }
+  if (params.peopleTags && params.peopleTags.length > 0) {
+    formData.append("peopleTags", JSON.stringify(params.peopleTags));
+  }
   await appendImageFile(formData, "file", params.imageUri);
 
   const response = await authorizedFetch("/api/posts", { method: "POST", body: formData });
   const post: Post = await response.json();
   track("post_published", { type: "lifestyle", visibility: post.privacy, tagged_count: params.taggedPieces?.length ?? 0 });
   return post;
+}
+
+/** Ajoute une photo (2 à 5) à sa publication, dans les 10 minutes qui suivent
+ * (migration 0047). Rend toutes les photos de la publication. */
+export async function addPostPhoto(postId: string, imageUri: string): Promise<AddPostMediaResponse> {
+  const formData = new FormData();
+  await appendImageFile(formData, "file", imageUri);
+  const response = await authorizedFetch(`/api/posts/${postId}/media`, { method: "POST", body: formData });
+  return response.json();
+}
+
+/** Retire une identification : la sienne, ou une sur sa propre publication (migration 0047). */
+export async function removePeopleTag(postId: string, userId: string): Promise<void> {
+  await authorizedFetch(`/api/posts/${postId}/people-tags/${userId}`, { method: "DELETE" });
 }
 
 export async function sharePurchasePost(vaultItemId: string, privacy: PrivacyLevel, caption?: string): Promise<Post> {

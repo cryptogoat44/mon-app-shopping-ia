@@ -95,6 +95,8 @@ export function notificationActionText(type: NotificationType): string {
       return t.commentThreads.notifReply;
     case "mention":
       return t.commentThreads.notifMention;
+    case "tag":
+      return t.carousel.notifTag;
     default:
       return t.notifications.like;
   }
