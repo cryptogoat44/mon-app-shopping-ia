@@ -623,6 +623,17 @@ describe("messages privés (lot messages, migration 0032)", () => {
     const en = spaces(visibleText(sectionHtml(renderExportHtml(withSetting(false), lookups(), options({ locale: "en", timeZone: "UTC" })), "account")));
     expect(en).toContain("Read receipts No");
     expect(EXPORT_COLUMNS.profile.read_receipts.label).toEqual({ fr: "Confirmations de lecture", en: "Read receipts" });
+    // Depuis quand vos lectures peuvent être montrées : une date du membre, comme les autres dates de son profil.
+    const withSince = (value: boolean) => ({ ...base, profile: { ...base.profile!, read_receipts: value, read_receipts_since: "2026-11-18T09:30:00.000+00:00" } });
+    expect(spaces(visibleText(sectionHtml(render(), "account")))).not.toContain("activées pour la dernière fois");
+    for (const value of [true, false]) {
+      const account = spaces(visibleText(sectionHtml(render({}, withSince(value)), "account")));
+      expect(account).toContain("Confirmations de lecture activées pour la dernière fois le 18 novembre 2026");
+      // Sous son libellé, jamais sous le nom de la colonne.
+      expect(account).not.toContain("read_receipts_since");
+    }
+    expect(spaces(visibleText(sectionHtml(renderExportHtml(withSince(true), lookups(), options({ locale: "en", timeZone: "UTC" })), "account")))).toContain("Read receipts last turned on");
+    expect(EXPORT_COLUMNS.profile.read_receipts_since.label).toEqual({ fr: "Confirmations de lecture activées pour la dernière fois le", en: "Read receipts last turned on" });
     // La date de votre dernière lecture de chaque conversation y figure aussi.
     expect(spaces(visibleText(sectionHtml(render(), "messages")))).toContain("Lue pour la dernière fois le 20 octobre 2026");
     expect(EXPORT_COLUMNS.conversations.last_read_at.label).toEqual({ fr: "Lue pour la dernière fois le", en: "Last read on" });

@@ -390,6 +390,7 @@ function accountSection(ctx: Ctx): Html {
     .field("piece_sends_from", enumLabel(ctx, PIECE_SENDS_FROM_LABELS, row.piece_sends_from))
     .field("messages_from", enumLabel(ctx, MESSAGES_FROM_LABELS, row.messages_from))
     .field("read_receipts")
+    .field("read_receipts_since")
     .field("price_alerts_enabled")
     .field("help_others")
     .field("created_at")
