@@ -75,8 +75,12 @@ import type {
   VideoLinkAnalysisRequest,
   VideoLookupResponse,
   VideoSpotRequest,
+  FollowResponse,
+  MemberPage,
+  UpdatePrivateAccountRequest,
 } from "@monapp/shared-types";
 import { COMPLEMENT_DEFERRED, CONSENT_VERSIONS, parseSearchCapacityStatus, parseVideoMomentsResponse, type SearchCapacityStatus } from "@monapp/shared-types";
+import { CLIENT_LEVEL_QUERY, parseFollowResponse } from "./follow-state";
 import { supabase } from "./supabase";
 import { setAnalyticsConsent, track } from "./analytics";
 import { acceptLanguage, t } from "../i18n";
@@ -430,9 +434,36 @@ export async function searchUsers(query: string): Promise<PublicProfile[]> {
   return response.json();
 }
 
-export async function followUser(userId: string, context: "search" | "profile"): Promise<void> {
-  await authorizedFetch(`/api/follows/${userId}`, { method: "POST" });
-  track("follow_added", { context });
+/** S'abonner. Compte public : abonné(e) tout de suite. Compte privé (lot
+ * « vie sociale ») : une demande est envoyée (« requested »), et rien n'est
+ * compté comme un abonnement. Un serveur d'avant ce lot répond sans corps :
+ * abonné(e). */
+export async function followUser(userId: string, context: "search" | "profile"): Promise<FollowResponse["state"]> {
+  const response = await authorizedFetch(`/api/follows/${userId}?${CLIENT_LEVEL_QUERY}`, { method: "POST" });
+  const state = response.status === 204 ? "following" : parseFollowResponse(await response.json().catch(() => null));
+  if (state === "following") track("follow_added", { context });
+  return state;
+}
+
+/** PUT /api/me/private-account : compte privé ou public. */
+export async function updatePrivateAccount(isPrivate: boolean): Promise<void> {
+  const payload: UpdatePrivateAccountRequest = { isPrivate };
+  await authorizedFetch("/api/me/private-account", { method: "PUT", body: JSON.stringify(payload) });
+}
+
+/** Demandes d'abonnement reçues, les plus récentes d'abord. */
+export async function fetchFollowRequests(cursor?: string): Promise<MemberPage> {
+  const response = await authorizedFetch(`/api/follow-requests${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+  return response.json();
+}
+
+export async function acceptFollowRequest(userId: string): Promise<void> {
+  await authorizedFetch(`/api/follow-requests/${userId}/accept`, { method: "POST" });
+}
+
+/** Refuser : la personne n'est pas prévenue. */
+export async function declineFollowRequest(userId: string): Promise<void> {
+  await authorizedFetch(`/api/follow-requests/${userId}`, { method: "DELETE" });
 }
 
 export async function unfollowUser(userId: string): Promise<void> {
@@ -836,19 +867,22 @@ export async function deleteWishlistItem(id: string): Promise<void> {
  * `cursor` = date de la dernière reçue, pour la page suivante. */
 export const NOTIFICATIONS_PAGE_SIZE = 50;
 
+// « v=2 » (lot « vie sociale ») : cette app comprend les nouveaux types de
+// notification (demande d'abonnement, demande acceptée). Sans ce paramètre,
+// le serveur ne les envoie ni ne les compte.
 export async function fetchNotifications(cursor?: string): Promise<AppNotification[]> {
-  const response = await authorizedFetch(`/api/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+  const response = await authorizedFetch(`/api/notifications?${CLIENT_LEVEL_QUERY}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
   return response.json();
 }
 
 export async function fetchUnreadNotificationCount(): Promise<number> {
-  const response = await authorizedFetch("/api/notifications/unread-count");
+  const response = await authorizedFetch(`/api/notifications/unread-count?${CLIENT_LEVEL_QUERY}`);
   const data = (await response.json()) as { count: number };
   return data.count;
 }
 
 export async function markNotificationsRead(): Promise<void> {
-  await authorizedFetch("/api/notifications/read-all", { method: "POST" });
+  await authorizedFetch(`/api/notifications/read-all?${CLIENT_LEVEL_QUERY}`, { method: "POST" });
 }
 
 export async function blockUser(userId: string): Promise<void> {

@@ -266,3 +266,13 @@ export function ShareIcon({ size = 19, tint = color.acier, strokeWidth = 1.4 }: 
     </Svg>
   );
 }
+
+/** Cadenas : compte privé (lot « vie sociale »). */
+export function LockIcon({ size = 24, tint = color.acier, strokeWidth = 1.4 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x={5} y={10.5} width={14} height={9.5} rx={2} stroke={tint} strokeWidth={strokeWidth} />
+      <Path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}
