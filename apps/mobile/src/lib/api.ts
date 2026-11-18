@@ -438,7 +438,7 @@ export async function searchUsers(query: string): Promise<PublicProfile[]> {
  * « vie sociale ») : une demande est envoyée (« requested »), et rien n'est
  * compté comme un abonnement. Un serveur d'avant ce lot répond sans corps :
  * abonné(e). */
-export async function followUser(userId: string, context: "search" | "profile"): Promise<FollowResponse["state"]> {
+export async function followUser(userId: string, context: "search" | "profile" | "list"): Promise<FollowResponse["state"]> {
   const response = await authorizedFetch(`/api/follows/${userId}?${CLIENT_LEVEL_QUERY}`, { method: "POST" });
   const state = response.status === 204 ? "following" : parseFollowResponse(await response.json().catch(() => null));
   if (state === "following") track("follow_added", { context });
@@ -468,6 +468,25 @@ export async function declineFollowRequest(userId: string): Promise<void> {
 
 export async function unfollowUser(userId: string): Promise<void> {
   await authorizedFetch(`/api/follows/${userId}`, { method: "DELETE" });
+}
+
+/** Les abonnés d'un membre, les plus récents d'abord (lot « vie sociale »).
+ * Le serveur décide seul de qui y figure : une page peut être vide alors
+ * qu'il en reste. 403 « private_account » : compte privé, pas abonné(e). */
+export async function fetchFollowers(userId: string, cursor?: string): Promise<MemberPage> {
+  const response = await authorizedFetch(`/api/users/${userId}/followers${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+  return response.json();
+}
+
+/** Les comptes qu'un membre suit, les plus récents d'abord. */
+export async function fetchFollowing(userId: string, cursor?: string): Promise<MemberPage> {
+  const response = await authorizedFetch(`/api/users/${userId}/following${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+  return response.json();
+}
+
+/** Retirer un de ses abonnés : la personne n'est pas prévenue. */
+export async function removeFollower(userId: string): Promise<void> {
+  await authorizedFetch(`/api/followers/${userId}`, { method: "DELETE" });
 }
 
 export async function fetchFeed(cursor?: string): Promise<FeedPage> {

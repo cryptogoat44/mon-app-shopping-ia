@@ -91,7 +91,7 @@ export const ANALYTICS_EVENTS = {
   post_shared: { method: oneOf(["native", "copy"]) },
   comment_posted: {},
   like_added: {},
-  follow_added: { context: oneOf(["search", "profile"]) },
+  follow_added: { context: oneOf(["search", "profile", "list"]) },
   report_submitted: { target_type: oneOf(REPORT_TARGET_TYPES) },
   // Lot 5 : décisions de la modération (administrateurs) — la décision et le type de contenu, jamais lequel.
   // Partie B : « remove_image », retrait d'une image copiée. Lot « conformité
