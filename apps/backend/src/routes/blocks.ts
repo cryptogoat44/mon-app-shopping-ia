@@ -3,6 +3,7 @@ import type { BlockedUser } from "@monapp/shared-types";
 import { INVALID_ID, parseInput, userIdParamsSchema } from "../lib/validation.js";
 import { withoutSuspendedFaces } from "../lib/profileModeration.js";
 import { privateAccountsReady } from "../lib/audience.js";
+import { commentThreadsReady } from "../lib/comments.js";
 
 interface ProfileRow {
   id: string;
@@ -49,6 +50,18 @@ export default async function blocksRoutes(fastify: FastifyInstance) {
     if (await privateAccountsReady(fastify)) {
       await fastify.supabaseAdmin.from("follow_requests").delete().eq("requester_id", blockerId).eq("target_id", blockedId);
       await fastify.supabaseAdmin.from("follow_requests").delete().eq("requester_id", blockedId).eq("target_id", blockerId);
+    }
+
+    // Mentions (migration 0046) : les liens « @pseudo » entre les deux comptes
+    // disparaissent aussi, dans les deux sens (commentaires de l'un qui
+    // mentionnent l'autre). Le texte reste, sans lien : la personne qui bloque
+    // ne mène plus à son profil sous les commentaires de l'autre, pour aucun
+    // lecteur. Leurs notifications partent avec celles effacées ci-dessous.
+    // Sonde illisible : rien à retirer ici, et la lecture des commentaires ne
+    // renvoie de toute façon jamais la mention d'un compte en blocage.
+    if (await commentThreadsReady(fastify).catch(() => false)) {
+      await fastify.supabaseAdmin.from("comment_mentions").delete().eq("author_id", blockerId).eq("user_id", blockedId);
+      await fastify.supabaseAdmin.from("comment_mentions").delete().eq("author_id", blockedId).eq("user_id", blockerId);
     }
 
     // Et efface les notifications échangées entre les deux comptes : un

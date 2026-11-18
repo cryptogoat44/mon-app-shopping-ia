@@ -5,7 +5,9 @@ import { z } from "zod";
 import {
   APP_LOCALES,
   AVATAR_MAX_BYTES,
+  DEFAULT_MENTIONS_FROM,
   DEFAULT_MESSAGES_FROM,
+  MENTIONS_FROM,
   MESSAGES_FROM,
   PIECE_SENDS_FROM,
   PRIVACY_LEVELS,
@@ -17,6 +19,7 @@ import {
 import { DatabaseReadError, parseDbRows, parseInput } from "../lib/validation.js";
 import { PRIVATE_ACCOUNTS_UNAVAILABLE, privateAccountsReady } from "../lib/audience.js";
 import { toMemberRows } from "../lib/memberRows.js";
+import { COMMENT_THREADS_UNAVAILABLE, commentThreadsReady } from "../lib/comments.js";
 import { isFileTooLargeError, isTooManyPartsError } from "../lib/multipartErrors.js";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { isAdmin } from "../lib/moderation.js";
@@ -56,6 +59,7 @@ const updateLocaleSchema = z.object({ locale: z.enum(APP_LOCALES) });
 const updatePieceSendsFromSchema = z.object({ pieceSendsFrom: z.enum(PIECE_SENDS_FROM) });
 const updateMessagesFromSchema = z.object({ messagesFrom: z.enum(MESSAGES_FROM) });
 const updatePrivateAccountSchema = z.object({ isPrivate: z.boolean() });
+const updateMentionsFromSchema = z.object({ mentionsFrom: z.enum(MENTIONS_FROM) });
 
 // Ligne brute de la table `profiles` (colonnes en snake_case, cf. schema.sql), relue sans lui faire confiance.
 const profileRowSchema = z.object({
@@ -72,6 +76,8 @@ const profileRowSchema = z.object({
   messages_from: z.enum(MESSAGES_FROM).default(DEFAULT_MESSAGES_FROM),
   // Compte privé (migration 0045) ; public tant que la colonne n'existe pas.
   is_private: z.boolean().default(false),
+  // Mentions (migration 0046) ; valeur de départ tant que la colonne n'existe pas.
+  mentions_from: z.enum(MENTIONS_FROM).default(DEFAULT_MENTIONS_FROM),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -128,8 +134,18 @@ async function countFollowRequests(fastify: FastifyInstance, userId: string): Pr
   return shown.length;
 }
 
+/** Réglage « Qui peut me mentionner » : proposé seulement avec la migration
+ * 0046. Schéma illisible : le profil reste lisible, sans le réglage. */
+async function mentionsSettingShown(fastify: FastifyInstance): Promise<boolean> {
+  try {
+    return await commentThreadsReady(fastify);
+  } catch {
+    return false;
+  }
+}
+
 /** Profil renvoyé à l'app ; null si la ligne lue n'a pas la forme attendue. */
-function toProfile(row: unknown, counts: ProfileCounts, admin: boolean, privateAccount: PrivateAccountInfo | null): Profile | null {
+function toProfile(row: unknown, counts: ProfileCounts, admin: boolean, privateAccount: PrivateAccountInfo | null, withMentions: boolean): Profile | null {
   const parsed = profileRowSchema.safeParse(row);
   if (!parsed.success) return null;
   const profile = parsed.data;
@@ -148,6 +164,7 @@ function toProfile(row: unknown, counts: ProfileCounts, admin: boolean, privateA
     pieceSendsFrom: profile.piece_sends_from,
     messagesFrom: profile.messages_from,
     ...(privateAccount ? { isPrivate: profile.is_private, followRequestsCount: privateAccount.followRequestsCount } : {}),
+    ...(withMentions ? { mentionsFrom: profile.mentions_from } : {}),
   };
 }
 
@@ -189,7 +206,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "profile_not_found", message: "Profil introuvable." });
     }
 
-    const profile = toProfile(data, counts, admin, privateAccount);
+    const profile = toProfile(data, counts, admin, privateAccount, await mentionsSettingShown(fastify));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -292,7 +309,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       if (cleanup.failed > 0) request.log.warn({ bucket: AVATAR_BUCKET, failed: cleanup.failed }, "Ancienne photo de profil restée dans le stockage");
     }
 
-    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readPrivateAccountInfo(fastify, userId));
+    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -327,7 +344,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readPrivateAccountInfo(fastify, userId));
+    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -379,7 +396,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
     // Un profil qu'on vient de compléter n'a par construction encore
     // aucun abonné, abonnement ni publication — pas besoin de requêter les
     // compteurs ici.
-    const profile = toProfile(data, { followersCount: 0, followingCount: 0, postsCount: 0 }, admin, await readPrivateAccountInfo(fastify, userId));
+    const profile = toProfile(data, { followersCount: 0, followingCount: 0, postsCount: 0 }, admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -417,6 +434,27 @@ export default async function meRoutes(fastify: FastifyInstance) {
       .eq("id", request.user!.id);
     if (error) {
       request.log.error({ error }, "Échec de mise à jour du réglage des messages");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+    return reply.code(204).send();
+  });
+
+  // « Qui peut me mentionner » (lot « vie sociale », migration 0046) : tout le
+  // monde, les comptes que je suis (valeur de départ) ou personne. Un réglage
+  // de confidentialité : modifiable même par un compte suspendu. Il vaut pour
+  // les mentions à venir : celles déjà faites restent, tant que le membre ne
+  // les retire pas (DELETE /api/comments/:id/mentions/me). Sans la migration :
+  // indisponible.
+  fastify.put("/api/me/mentions-from", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    if (!(await commentThreadsReady(fastify))) return reply.code(404).send(COMMENT_THREADS_UNAVAILABLE);
+    const body = parseInput(updateMentionsFromSchema, request.body, reply, { error: "invalid_body", message: "Réglage invalide." });
+    if (!body) return;
+    const { error } = await fastify.supabaseAdmin
+      .from("profiles")
+      .update({ mentions_from: body.mentionsFrom, updated_at: new Date().toISOString() })
+      .eq("id", request.user!.id);
+    if (error) {
+      request.log.error({ error }, "Échec de mise à jour du réglage des mentions");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
     return reply.code(204).send();

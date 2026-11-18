@@ -297,6 +297,8 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Trop de listes ouvertes. Réessayez dans un moment.": "Too many lists opened. Please try again in a moment.",
   // « Aimé par » (lot « vie sociale ») : limite des « j'aime ».
   "Trop de j'aime en peu de temps. Réessayez dans un moment.": "Too many likes in a short time. Please try again in a moment.",
+  // Commentaires : réponses, « j'aime », mentions (lot « vie sociale », migration 0046).
+  "Les réponses et les mentions ne sont pas encore disponibles.": "Replies and mentions aren't available yet.",
 };
 
 /** Message dans la langue voulue. Un message inconnu (par exemple un texte

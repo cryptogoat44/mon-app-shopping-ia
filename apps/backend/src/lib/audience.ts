@@ -202,3 +202,43 @@ export async function readAudienceOf(fastify: FastifyInstance, viewerId: string,
   if (!audience) throw new DatabaseReadError("Lien entre deux comptes illisible");
   return audience;
 }
+
+const BLOCK_PAIR_ROWS = z.array(z.object({ blocker_id: ID, blocked_id: ID }));
+const FOLLOWER_ROWS = z.array(z.object({ follower_id: ID }));
+
+/** Le sens inverse de readAudience : le lien de PLUSIEURS lecteurs avec UN
+ * auteur (mentions, lot « vie sociale » : « chacun de ces membres peut-il
+ * voir cette publication, et suit-il cet auteur ? »). Même règle, même
+ * nombre fixe de lectures groupées, quel que soit le nombre de lecteurs.
+ * `suspended` parle de l'auteur ; `requested` n'est pas lu (toujours faux).
+ * Une lecture impossible relève DatabaseReadError. */
+export async function readViewersAudience(fastify: FastifyInstance, viewerIds: readonly string[], authorId: string): Promise<Map<string, Audience>> {
+  const ids = [...new Set(viewerIds)];
+  const result = new Map<string, Audience>();
+  if (ids.length === 0) return result;
+  const others = ids.filter((id) => id !== authorId);
+
+  const db = fastify.supabaseAdmin;
+  const withPrivate = await privateAccountsReady(fastify);
+  const [blockedByAuthor, blockingAuthor, follows, privates, suspensions] = await Promise.all([
+    others.length > 0 ? db.from("blocks").select("blocker_id, blocked_id").eq("blocker_id", authorId).in("blocked_id", others) : nothing,
+    others.length > 0 ? db.from("blocks").select("blocker_id, blocked_id").eq("blocked_id", authorId).in("blocker_id", others) : nothing,
+    others.length > 0 ? db.from("follows").select("follower_id").eq("followee_id", authorId).in("follower_id", others) : nothing,
+    withPrivate ? db.from("profiles").select("id, is_private").in("id", [authorId]) : nothing,
+    db.from("suspensions").select("user_id").in("user_id", [authorId]),
+  ]);
+
+  const blocked = new Set([
+    ...parseDbRows(BLOCK_PAIR_ROWS, blockedByAuthor, "Blocages").map((row) => row.blocked_id),
+    ...parseDbRows(BLOCK_PAIR_ROWS, blockingAuthor, "Blocages").map((row) => row.blocker_id),
+  ]);
+  const followers = new Set(parseDbRows(FOLLOWER_ROWS, follows, "Abonnements").map((row) => row.follower_id));
+  const isPrivate = parseDbRows(PRIVATE_ROWS, privates, "Comptes privés").some((row) => row.is_private === true);
+  const suspended = parseDbRows(SUSPENDED_ROWS, suspensions, "Suspensions").length > 0;
+
+  for (const id of ids) {
+    const self = id === authorId;
+    result.set(id, { self, blocked: !self && blocked.has(id), suspended, isPrivate, follows: !self && followers.has(id), requested: false });
+  }
+  return result;
+}

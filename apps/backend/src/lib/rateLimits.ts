@@ -338,6 +338,23 @@ export const RATE_LIMITS = {
     error: "post_react_limit",
     message: "Trop de j'aime en peu de temps. Réessayez dans un moment.",
   },
+
+  // Aimer / ne plus aimer un commentaire (lot « vie sociale », migration 0046) :
+  // la même largeur que pour une publication.
+  commentLike: {
+    max: 300,
+    windowMs: HOUR,
+    error: "comment_like_limit",
+    message: "Trop de j'aime en peu de temps. Réessayez dans un moment.",
+  },
+
+  // Mentions « @pseudo » ACCEPTÉES par heure et par auteur (lot « vie
+  // sociale ») : chacune prévient un membre. Comptée seulement quand une
+  // mention est vraiment retenue (consumeRateLimit, lib/mentions.ts) ; au-delà,
+  // le commentaire est publié quand même et le « @pseudo » reste un simple
+  // texte, sans erreur. Les identifications sur une photo (migration 0047)
+  // puiseront dans le même budget.
+  mentionNotify: { max: 20, windowMs: HOUR },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

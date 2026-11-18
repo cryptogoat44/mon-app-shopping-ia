@@ -15,6 +15,7 @@ import { withoutSuspendedFaces } from "../lib/profileModeration.js";
 import { notify } from "../lib/notify.js";
 import { fetchBlockedUserIds } from "../lib/blocks.js";
 import { toMemberRows } from "../lib/memberRows.js";
+import { commentThreadsReady } from "../lib/comments.js";
 
 // Une publication ne peut pas devenir une liste sans fin de tags — reste
 // large pour un usage légitime (plusieurs pièces sur une même tenue) sans
@@ -239,6 +240,10 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
   // plus comptés — les listes les excluaient déjà, le nombre affiché suit.
   // Une lecture des blocages par page, jamais une par publication ; lecture
   // impossible : une erreur, jamais un compte fait comme si personne n'était bloqué.
+  // Réponses (migration 0046) : une réponse dont le commentaire d'origine
+  // n'est pas montré n'est pas comptée (voir plus bas). Une publication toute
+  // neuve n'a aucun commentaire : la sonde n'est pas interrogée.
+  const threads = knownBlocked === undefined && (await commentThreadsReady(fastify));
   const [{ data: storedProfiles }, { data: vaultItems }, { data: reactions }, { data: tagRows }, { data: commentRows }, blocked] = await Promise.all([
     fastify.supabaseAdmin.from("profiles").select("id, username, display_name, avatar_url").in("id", authorIds),
     vaultItemIds.length > 0
@@ -250,13 +255,23 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
       .select("id, post_id, vault_item_id, product_match_id, position")
       .in("post_id", postIds)
       .order("position", { ascending: true }),
-    fastify.supabaseAdmin.from("comments").select("post_id, user_id").in("post_id", postIds).is("hidden_at", null),
+    fastify.supabaseAdmin
+      .from("comments")
+      .select(threads ? "id, post_id, user_id, parent_id" : "post_id, user_id")
+      .in("post_id", postIds)
+      .is("hidden_at", null),
     knownBlocked ?? fetchBlockedUserIds(fastify, viewerId),
   ]);
 
+  // Le nombre affiché suit ce que la liste montre : ni les commentaires des
+  // comptes en blocage avec le lecteur, ni les réponses à un commentaire
+  // masqué par la modération ou écrit par un tel compte (filtre sur les
+  // lignes déjà lues : les commentaires masqués n'en font pas partie).
+  const countedComments = ((commentRows as unknown as { id?: string; post_id: string; user_id: string; parent_id?: string | null }[]) ?? []).filter((c) => !blocked.has(c.user_id));
+  const shownRootIds = new Set(countedComments.filter((c) => (c.parent_id ?? null) === null && c.id !== undefined).map((c) => c.id!));
   const commentCountByPost = new Map<string, number>();
-  for (const c of (commentRows as { post_id: string; user_id: string }[]) ?? []) {
-    if (blocked.has(c.user_id)) continue;
+  for (const c of countedComments) {
+    if (typeof c.parent_id === "string" && !shownRootIds.has(c.parent_id)) continue;
     commentCountByPost.set(c.post_id, (commentCountByPost.get(c.post_id) ?? 0) + 1);
   }
 
