@@ -215,15 +215,18 @@ describe("politique de confidentialité", () => {
     const data = section(privacyPolicy, "Les données que nous utilisons");
     for (const sentence of [
       "La date de votre dernière lecture de chaque conversation est conservée avec la conversation.",
-      "Quand vous ouvrez une conversation, l'autre membre peut ainsi voir que vous avez vu son dernier message (mention « Vu » ; son app reçoit cette date), sauf si l'un de vous deux a désactivé « Confirmations de lecture » dans les Réglages.",
+      "Quand vous ouvrez une conversation, l'autre membre peut ainsi voir que vous avez vu son dernier message (mention « Vu » ; son app ne reçoit pas l'heure de votre lecture, seulement le fait que ce message a été vu), sauf si l'un de vous deux a désactivé « Confirmations de lecture » dans les Réglages.",
       "Tant que vous n'avez pas accepté une invitation, la personne qui vous invite ne voit rien de tel.",
     ]) {
       expect(data).toContain(sentence);
     }
     // Jamais une lecture du passé : dit simplement, dans l'ordre, juste après la phrase du réglage.
     expect(data).toContain(
-      "dans les Réglages. Seules vos lectures faites pendant que ce réglage est activé sont montrées. Si vous le désactivez, la mention « Vu » n'est plus affichée ; ce que vous lisez pendant qu'il est désactivé n'est jamais montré ensuite, même si vous le réactivez : seules vos lectures faites à partir de ce moment le sont. Ce que vous avez lu avant l'arrivée de cette mention dans Spotto n'est pas montré non plus. Pour appliquer cette règle, Spotto conserve la date à laquelle ce réglage a été activé pour la dernière fois. Tant que vous n'avez pas accepté une invitation,"
+      "dans les Réglages. Seules vos lectures faites pendant que ce réglage est activé sont montrées. Si vous le désactivez, la mention « Vu » n'est plus affichée ; ce que vous lisez pendant qu'il est désactivé n'est jamais montré ensuite, même si vous le réactivez : seules vos lectures faites à partir de ce moment le sont. Il en va de même pour le réglage de l'autre membre : ce que vous lisez pendant que le sien est désactivé n'est pas montré non plus, même s'il le réactive. Ce que vous avez lu avant l'arrivée de cette mention dans Spotto n'est pas montré non plus. Pour appliquer cette règle, Spotto conserve la date à laquelle ce réglage a été activé pour la dernière fois. Tant que vous n'avez pas accepté une invitation,"
     );
+    // Plus aucune phrase ne dit que l'app de l'autre membre reçoit la date de la lecture.
+    expect(JSON.stringify(privacyPolicy)).not.toContain("reçoit cette date");
+    expect(JSON.stringify(privacyPolicyEn)).not.toContain("receives that date");
     // Ce qui était déjà dit des messages reste dit.
     expect(data).toContain("l'état de vos conversations (invitation envoyée, acceptée ou refusée, messages lus)");
     expect(data).toContain("Seuls vous et la personne avec qui vous échangez les voyez.");
@@ -237,13 +240,13 @@ describe("politique de confidentialité", () => {
     const data = section(privacyPolicyEn, "The data we use");
     for (const sentence of [
       "The date you last read each conversation is kept with the conversation.",
-      "When you open a conversation, the other member can therefore see that you have seen their last message (“Seen”; their app receives that date), unless one of you has turned off “Read receipts” in Settings.",
+      "When you open a conversation, the other member can therefore see that you have seen their last message (“Seen”; their app does not receive the time you read it, only the fact that this message has been seen), unless one of you has turned off “Read receipts” in Settings.",
       "As long as you have not accepted an invitation, the person inviting you sees nothing of the kind.",
     ]) {
       expect(data).toContain(sentence);
     }
     expect(data).toContain(
-      "in Settings. Only what you read while this setting is on is shown. If you turn it off, “Seen” is no longer displayed; what you read while it is off is never shown later, even if you turn it back on: only what you read from that moment on is. What you read before “Seen” arrived in Spotto is not shown either. To apply this rule, Spotto keeps the date this setting was last turned on. As long as you have not accepted an invitation,"
+      "in Settings. Only what you read while this setting is on is shown. If you turn it off, “Seen” is no longer displayed; what you read while it is off is never shown later, even if you turn it back on: only what you read from that moment on is. The same goes for the other member's setting: what you read while theirs is off is not shown either, even if they turn it back on. What you read before “Seen” arrived in Spotto is not shown either. To apply this rule, Spotto keeps the date this setting was last turned on. As long as you have not accepted an invitation,"
     );
     expect(data).toContain("Only you and the person you are talking with can see them.");
     expect(data).toContain("[To be verified: legal basis retained (performance of the contract), retention period, information given to the person who receives an invitation, and the “Seen” mention being on by default.]");
@@ -275,6 +278,10 @@ describe("politique de confidentialité", () => {
       ["pendant que ce réglage est activé", "while this setting is on"],
       ["n'est plus affichée", "is no longer displayed"],
       ["n'est jamais montré ensuite, même si vous le réactivez", "is never shown later, even if you turn it back on"],
+      // Réciproque dans le temps : une lecture faite pendant que le réglage de l'AUTRE est désactivé n'est pas montrée non plus.
+      ["ce que vous lisez pendant que le sien est désactivé n'est pas montré non plus, même s'il le réactive", "what you read while theirs is off is not shown either, even if they turn it back on"],
+      // L'heure de la lecture ne sort pas du serveur.
+      ["son app ne reçoit pas l'heure de votre lecture, seulement le fait que ce message a été vu", "their app does not receive the time you read it, only the fact that this message has been seen"],
     ] as const) {
       expect(frData).toContain(frWords);
       expect(enData).toContain(enWords);
