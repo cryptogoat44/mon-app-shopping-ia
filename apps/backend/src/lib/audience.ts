@@ -30,25 +30,41 @@ let schemaProbe: Promise<boolean> | null = null;
 
 type Db = Pick<FastifyInstance, "supabaseAdmin" | "log">;
 
-/** La colonne et la table de 0045 répondent-elles ? Deux lectures sans ligne. */
+/** Réponses de la base qui veulent dire « la colonne ou la table n'existe
+ * pas » (Postgres : 42703, 42P01 ; PostgREST : PGRST204, PGRST205). */
+const ABSENT_CODES = new Set(["42703", "42P01", "PGRST204", "PGRST205"]);
+
+/** La colonne et la table de 0045 répondent-elles ? Deux lectures sans
+ * ligne. Vrai : elles sont là. Faux : la base dit qu'elles n'existent pas.
+ * Toute autre réponse (base injoignable, délai dépassé…) relève
+ * DatabaseReadError : on ne sait pas, et « public par défaut » montrerait
+ * les comptes privés à tout le monde. */
 async function probeSchema(fastify: Db): Promise<boolean> {
+  let failed: { code?: string } | null;
   try {
     const [column, table] = await Promise.all([
       fastify.supabaseAdmin.from("profiles").select("is_private").limit(0),
       fastify.supabaseAdmin.from("follow_requests").select("requester_id").limit(0),
     ]);
     if (!column.error && !table.error) return true;
-    const code = ((column.error ?? table.error) as { code?: string } | null)?.code ?? null;
-    fastify.log.warn({ code }, "Compte privé coupé : migration 0045 absente");
+    failed = (column.error ?? table.error) as { code?: string } | null;
   } catch {
-    fastify.log.warn({ code: null }, "Compte privé coupé : base illisible");
+    failed = null;
   }
-  return false;
+  const code = failed?.code ?? null;
+  if (code !== null && ABSENT_CODES.has(code)) {
+    fastify.log.warn({ code }, "Compte privé coupé : migration 0045 absente");
+    return false;
+  }
+  fastify.log.warn({ code }, "Compte privé : schéma illisible, aucune réponse par défaut");
+  throw new DatabaseReadError("Schéma du compte privé illisible");
 }
 
 /** La base a-t-elle la migration 0045 ? Mémorisé une fois vu ; absente, un
  * avertissement, puis la sonde n'est refaite qu'au bout de 5 minutes (comme
- * profileModerationReady). */
+ * profileModerationReady). Base illisible : DatabaseReadError, rien n'est
+ * mémorisé, et la sonde est refaite à la requête suivante — jamais « tous
+ * les comptes sont publics » sur une simple panne. */
 export async function privateAccountsReady(fastify: Db, now: () => number = Date.now): Promise<boolean> {
   if (schemaReadyAt !== null) return true;
   if (schemaMissingAt !== null && now() - schemaMissingAt < SCHEMA_RETRY_MS) return false;

@@ -97,7 +97,12 @@ const REQUESTER_ROWS = z.array(z.object({ requester_id: z.guid() }));
  * lib/memberRows.ts) ; null sans la migration 0045. Une seule lecture quand
  * il n'y en a aucune. */
 async function readPrivateAccountInfo(fastify: FastifyInstance, userId: string): Promise<PrivateAccountInfo | null> {
-  if (!(await privateAccountsReady(fastify))) return null;
+  try {
+    if (!(await privateAccountsReady(fastify))) return null;
+  } catch {
+    // Schéma illisible : le profil reste lisible, sans le réglage (l'app le cache).
+    return null;
+  }
   try {
     return { followRequestsCount: await countFollowRequests(fastify, userId) };
   } catch {

@@ -813,6 +813,35 @@ describe("sans la migration 0045 : tout le monde est public, rien de nouveau n'e
     expect(warnings).toHaveLength(1);
   });
 
+  it("base illisible (ni « présente » ni « absente ») : une erreur, rien de mémorisé — jamais « tous les comptes sont publics » sur une panne", async () => {
+    const warnings: unknown[] = [];
+    const log = { warn: (fields: unknown) => warnings.push(fields) };
+    const failing = (code: string | undefined) => ({ from: () => ({ select: () => ({ limit: async () => ({ data: null, error: { code, message: "panne" } }) }) }) });
+    const thrown = {
+      from: () => {
+        throw new Error("réseau coupé");
+      },
+    };
+    for (const db of [failing("57014"), failing(undefined), failing("PGRST301"), thrown]) {
+      await expect(privateAccountsReady({ supabaseAdmin: db, log } as unknown as FastifyInstance)).rejects.toThrow("Schéma du compte privé illisible");
+    }
+    expect(warnings).toEqual([{ code: "57014" }, { code: null }, { code: "PGRST301" }, { code: null }]);
+    // Rien n'a été mémorisé : la base revenue, la sonde répond tout de suite.
+    expect(await privateAccountsReady({ supabaseAdmin: seeded().db, log } as unknown as FastifyInstance)).toBe(true);
+
+    // Pendant la panne, une publication n'est jamais montrée « par défaut » : 500.
+    resetPrivateAccountsProbe();
+    const fake = seeded();
+    const broken = { ...fake.db, from: (name: string) => (name === "follow_requests" ? failing("57014").from() : fake.db.from(name)) };
+    const target = await socialApp(broken);
+    expect((await as(target, CHLOE).get(`/api/posts/${ALICE_PUBLIC}`)).statusCode).toBe(500);
+    expect((await as(target, CHLOE).get(`/api/users/${ALICE}/posts`)).statusCode).toBe(500);
+    // Le profil de la personne reste lisible, sans le réglage.
+    const me = await as(target, ALICE).get("/api/me");
+    expect(me.statusCode).toBe(200);
+    expect(me.json()).not.toHaveProperty("isPrivate");
+  });
+
   it("la colonne seule, ou la table seule, ne suffit pas", async () => {
     const log = { warn: () => {} };
     resetPrivateAccountsProbe();
