@@ -120,6 +120,7 @@ export function buildPrivacyPolicyEn(extra: PrivacyExtra): LegalDocument {
           ],
           "Photos are stored at a long, random web address that cannot be guessed. However, someone who was able to see a photo and kept its address can continue to open it, even if you later change the visibility of the post.",
           "You can make your account private. Your posts, your follower and following lists and your likes are then visible only to followers you have approved. Other members see only your name, photo, bio and your follower and following counts; you no longer appear to them in other accounts' lists. What you write or like under another member's post remains visible according to that post's visibility, and its author is told. A follow request is kept until you answer it or it is cancelled, then erased; a person whose request you decline is not notified, but can see that they may ask again. If you switch back to a public account, pending requests are erased.",
+          "Your follower list and your following list are visible to members who can see your profile (only your approved followers if your account is private). You can remove a follower; they are not notified.",
         ],
       },
       {
