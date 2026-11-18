@@ -26,6 +26,11 @@ export interface Profile {
    * membres qui ne sont pas vos amis. « everyone » tant que la migration
    * n'est pas appliquée. */
   messagesFrom: MessagesFrom;
+  /** Compte privé (migration 0045) ; absent tant que la migration manque :
+   * l'app cache alors le réglage. */
+  isPrivate?: boolean;
+  /** Demandes d'abonnement reçues, en attente (migration 0045). */
+  followRequestsCount?: number;
 }
 
 /** Réglage « Qui peut m'envoyer des pièces » : les comptes que je suis (par
@@ -711,6 +716,10 @@ export interface PublicProfile {
   displayName: string;
   avatarUrl: string | null;
   isFollowing: boolean;
+  /** Compte privé (migration 0045) ; absent d'un serveur plus ancien. */
+  isPrivate?: boolean;
+  /** Suivre / Demandé / Abonné(e) (migration 0045) ; absent d'un serveur plus ancien. */
+  followState?: FollowState;
 }
 
 /** Profil d'un autre utilisateur (Lot Q, décision 6). Jamais son Vault,
@@ -728,6 +737,11 @@ export interface UserProfile {
   isFollowing: boolean;
   /** true quand c'est le profil de la personne connectée elle-même. */
   isMe: boolean;
+  /** Compte privé (migration 0045). Pour un visiteur qui n'est pas un abonné
+   * accepté, le profil ne montre alors que nom, photo, bio et compteurs. */
+  isPrivate?: boolean;
+  /** Suivre / Demandé / Abonné(e) (migration 0045). */
+  followState?: FollowState;
 }
 
 /** « wish » (lot 5) : une envie republiée sur son profil — jamais un achat,
@@ -1000,9 +1014,28 @@ export interface RecordConsentsRequest {
   consents: ConsentInput[];
 }
 
-/** « piece_received » (lot 5) : une personne vous a envoyé une pièce (in-app, jamais push). */
-export type NotificationType = "follow" | "like" | "comment" | "moderation" | "report_handled" | "piece_received";
-export const NOTIFICATION_TYPES = ["follow", "like", "comment", "moderation", "report_handled", "piece_received"] as const satisfies readonly NotificationType[];
+/** « piece_received » (lot 5) : une personne vous a envoyé une pièce (in-app, jamais push).
+ * « follow_request » et « follow_accepted » (compte privé, migration 0045) :
+ * envoyés seulement à une app qui les demande (LEGACY_NOTIFICATION_TYPES, en fin de fichier). */
+export type NotificationType =
+  | "follow"
+  | "like"
+  | "comment"
+  | "moderation"
+  | "report_handled"
+  | "piece_received"
+  | "follow_request"
+  | "follow_accepted";
+export const NOTIFICATION_TYPES = [
+  "follow",
+  "like",
+  "comment",
+  "moderation",
+  "report_handled",
+  "piece_received",
+  "follow_request",
+  "follow_accepted",
+] as const satisfies readonly NotificationType[];
 
 export interface AppNotification {
   id: string;
@@ -2219,3 +2252,51 @@ export type VideoLinkAnalysisErrorCode =
   | "video_timeout"
   | "video_ai_user_limit"
   | "video_ai_global_limit";
+
+// ---- Compte privé et demandes d'abonnement (lot « vie sociale », migration 0045) ----
+
+/** Ce que le bouton d'abonnement montre : « Suivre », « Demandé » (demande en
+ * attente auprès d'un compte privé) ou « Abonné(e) ». */
+export type FollowState = "none" | "following" | "requested";
+export const FOLLOW_STATES = ["none", "following", "requested"] as const satisfies readonly FollowState[];
+
+/** Types de notification compris par les apps d'avant le lot « vie sociale ».
+ * Une app qui n'envoie pas « v=2 » ne reçoit que ceux-là : elle afficherait
+ * tout autre type comme un « j'aime ». */
+export const LEGACY_NOTIFICATION_TYPES = ["follow", "like", "comment", "moderation", "report_handled", "piece_received"] as const satisfies readonly NotificationType[];
+
+/** Paramètre d'adresse par lequel l'app dit qu'elle comprend le nouveau
+ * vocabulaire (nouveaux types de notification, réponse de l'abonnement). */
+export const CLIENT_LEVEL_PARAM = "v";
+export const CLIENT_LEVEL = "2";
+
+/** PUT /api/me/private-account. */
+export interface UpdatePrivateAccountRequest {
+  isPrivate: boolean;
+}
+
+/** POST /api/follows/:userId?v=2 : abonné(e) tout de suite (compte public),
+ * ou demande envoyée (compte privé). */
+export interface FollowResponse {
+  state: Exclude<FollowState, "none">;
+}
+
+/** Une ligne d'une liste de membres (demandes reçues ; plus tard abonnés,
+ * abonnements, « Aimé par »…). Jamais de date : la liste ne dit pas quand. */
+export interface MemberRow extends PublicProfile {
+  isPrivate: boolean;
+  followState: FollowState;
+  isMe: boolean;
+}
+
+/** Une page d'une liste de membres. Une page peut être plus courte que
+ * prévu, ou vide, alors qu'il en reste : seul `nextCursor` dit s'il y a une suite. */
+export interface MemberPage {
+  members: MemberRow[];
+  nextCursor: string | null;
+}
+
+/** Codes d'erreur du compte privé (champ « error »). */
+export const PRIVATE_ACCOUNTS_UNAVAILABLE_ERROR = "private_accounts_unavailable";
+export const PRIVATE_ACCOUNT_UPDATE_REQUIRED_ERROR = "private_account_update_required";
+export const FOLLOW_REQUEST_LIMIT_ERROR = "follow_request_limit";

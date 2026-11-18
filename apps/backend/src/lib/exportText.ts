@@ -945,6 +945,9 @@ export const NOTIFICATION_LABELS: Record<NotificationType, Bilingual> = {
   moderation: { fr: "a pris une décision qui vous concerne.", en: "made a decision about you." },
   report_handled: { fr: "a traité votre signalement.", en: "handled your report." },
   piece_received: { fr: "vous a envoyé une pièce.", en: "sent you a piece." },
+  // Compte privé (migration 0045).
+  follow_request: { fr: "demande à vous suivre.", en: "asked to follow you." },
+  follow_accepted: { fr: "a accepté votre demande d'abonnement.", en: "accepted your follow request." },
 };
 
 export const REPORT_TARGET_LABELS: Record<ReportTargetType, Bilingual> = {
