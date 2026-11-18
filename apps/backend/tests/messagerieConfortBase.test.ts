@@ -122,7 +122,7 @@ describe.skipIf(!migrated)("messages, plus de confort, sur la base de développe
       expect(res.body).not.toContain("À effacer");
     }
     // L'export de Bruno (qui l'a reçu) n'a pas le contenu conservé ; celui d'Alice (qui l'a écrit) l'a.
-    const exportOf = async (user: TestUser) => (await request(user, "GET", "/api/account/export")).body;
+    const exportOf = async (user: TestUser) => (await request(user, "GET", "/api/me/export")).body;
     expect(await exportOf(bruno)).not.toContain("Signalé avant d'être supprimé");
     expect(await exportOf(alice)).toContain("Signalé avant d'être supprimé");
     // Un message supprimé peut encore être signalé.
