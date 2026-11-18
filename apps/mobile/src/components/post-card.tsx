@@ -7,7 +7,7 @@ import { ApiError, reactToPost } from "@/lib/api";
 import { likeCountOpensList, likesListRoute } from "@/lib/member-lists";
 import { openMerchantLink } from "@/lib/merchant-links";
 import { color, font, radius, space } from "@/theme/tokens";
-import { CommentIcon, HeartIcon, MoreIcon, ShareIcon, VerifiedIcon } from "@/components/icons";
+import { CommentIcon, HeartIcon, MoreIcon, ShareIcon, TaggedPeopleIcon, VerifiedIcon } from "@/components/icons";
 import { sharePost } from "@/lib/share-post";
 import { SpotImage } from "@/components/spot-image";
 import { ProductFrame } from "@/components/product-frame";
@@ -20,6 +20,10 @@ import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { AffiliateMention } from "@/components/affiliate-mention";
 import { themedStyles } from "@/theme/themed-styles";
 import { Avatar } from "@/components/avatar";
+import { PostCarousel } from "@/components/post-carousel";
+import { TaggedPeopleSheet } from "@/components/tagged-people-sheet";
+import { peopleOf, photosOf } from "@/lib/post-extras";
+import { useAuth } from "@/lib/auth-context";
 
 const DOUBLE_TAP_DELAY_MS = 300;
 
@@ -63,6 +67,11 @@ export function PostCard({
   const [busy, setBusy] = useState(false);
   const lastTapRef = useRef(0);
   const heartPop = useRef(new Animated.Value(0)).current;
+  // Plusieurs photos, personnes identifiées (migration 0047) : absents d'un serveur sans elles.
+  const { session } = useAuth();
+  const photos = photosOf(post);
+  const [people, setPeople] = useState(() => peopleOf(post));
+  const [peopleOpen, setPeopleOpen] = useState(false);
 
   /** Trop de « j'aime » en peu de temps (429) : le serveur le dit, l'app le répète. */
   function tooManyLikes(e: unknown) {
@@ -139,12 +148,18 @@ export function PostCard({
         ) : null}
       </View>
 
+      <View>
+      {photos.length > 1 ? (
+        <PostCarousel photos={photos} label={mediaLabel(post)} recyclingKey={post.id} onPress={handleMediaPress} />
+      ) : (
       <Pressable
         onPress={handleMediaPress}
         accessibilityRole="image"
         accessibilityLabel={mediaLabel(post)}
       >
         <PostMedia post={post} />
+      </Pressable>
+      )}
         <Animated.View
           pointerEvents="none"
           style={[
@@ -157,7 +172,21 @@ export function PostCard({
         >
           <HeartIcon size={64} tint={color.surImage} filled />
         </Animated.View>
-      </Pressable>
+        {/* Personnes identifiées : une icône posée sur la photo, qui ouvre la liste (la rangée des actions ne change pas). */}
+        {people.length > 0 ? (
+          <Pressable
+            onPress={() => setPeopleOpen(true)}
+            style={styles.peopleButton}
+            accessibilityRole="button"
+            accessibilityLabel={t.carousel.showPeople(people.length)}
+            testID="personnes-identifiees"
+          >
+            <View style={styles.peopleBadge}>
+              <TaggedPeopleIcon size={15} />
+            </View>
+          </Pressable>
+        ) : null}
+      </View>
 
       {post.caption ? <Text style={styles.caption}>{post.caption}</Text> : null}
 
@@ -274,6 +303,16 @@ export function PostCard({
           <ShareIcon size={19} />
         </Pressable>
       </View>
+      {people.length > 0 ? (
+        <TaggedPeopleSheet
+          postId={post.id}
+          people={people}
+          visible={peopleOpen}
+          viewerId={session?.user.id ?? null}
+          onClose={() => setPeopleOpen(false)}
+          onRemoved={(userId) => setPeople((current) => current.filter((person) => person.id !== userId))}
+        />
+      ) : null}
     </View>
   );
 }
@@ -286,6 +325,9 @@ const styles = themedStyles(() => ({
   moreButton: { marginLeft: space.xs, padding: 2 },
   media: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe, borderRadius: radius.sm },
   heartOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
+  // Cible de 44 points, l'icône de 28 dans le coin bas gauche de la photo.
+  peopleButton: { position: "absolute", left: 0, bottom: 0, width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  peopleBadge: { width: 28, height: 28, borderRadius: radius.full, backgroundColor: color.voileImage, alignItems: "center", justifyContent: "center" },
   caption: { fontSize: 14.5, color: color.encre, marginTop: 12, lineHeight: 20 },
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
   wishBox: { marginTop: 12, gap: 2 },

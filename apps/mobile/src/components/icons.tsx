@@ -276,3 +276,24 @@ export function LockIcon({ size = 24, tint = color.acier, strokeWidth = 1.4 }: I
     </Svg>
   );
 }
+
+/** Deux cadres superposés : une publication de plusieurs photos (migration 0047). */
+export function PhotosIcon({ size = 16, tint = color.surImage, strokeWidth = 1.6 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x={7.5} y={3.5} width={13} height={13} rx={2} stroke={tint} strokeWidth={strokeWidth} />
+      <Path d="M16.5 20.5h-11a2 2 0 0 1-2-2v-11" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** Deux silhouettes : les personnes identifiées sur une publication (migration 0047). Jamais à la place d'une photo de profil. */
+export function TaggedPeopleIcon({ size = 16, tint = color.surImage, strokeWidth = 1.6 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={9} cy={8.5} r={3} stroke={tint} strokeWidth={strokeWidth} />
+      <Path d="M3.5 19c1-3.2 3.1-4.7 5.5-4.7s4.5 1.5 5.5 4.7" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" />
+      <Path d="M15.5 5.8a3 3 0 0 1 0 5.4M17.5 14.6c1.4.6 2.4 2 3 4.4" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}

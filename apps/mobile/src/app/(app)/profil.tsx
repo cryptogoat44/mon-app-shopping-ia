@@ -7,7 +7,8 @@ import type { Post, UserProfile } from "@monapp/shared-types";
 import { ApiError, fetchUserPosts, fetchUserProfile, followUser, unfollowUser } from "@/lib/api";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
-import { LockIcon, MoreIcon } from "@/components/icons";
+import { LockIcon, MoreIcon, PhotosIcon } from "@/components/icons";
+import { hasSeveralPhotos } from "@/lib/post-extras";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { SpotImage } from "@/components/spot-image";
 import { ImageUnavailable } from "@/components/image-unavailable";
@@ -265,6 +266,12 @@ export default function UserProfileScreen() {
                     recyclingKey={post.id}
                   />
                 )}
+                {/* Plusieurs photos (migration 0047) : une petite marque dans le coin. */}
+                {hasSeveralPhotos(post) ? (
+                  <View style={styles.photosMark} accessible accessibilityLabel={t.carousel.morePhotos}>
+                    <PhotosIcon size={14} />
+                  </View>
+                ) : null}
               </Pressable>
             ))}
           </View>
@@ -314,6 +321,7 @@ const styles = themedStyles(() => ({
   shellText: { fontSize: font.secondary, color: color.acier, textAlign: "center", lineHeight: 20 },
   gridRow: { flexDirection: "row", gap: space.sm, marginBottom: space.sm },
   cell: { width: "32%", aspectRatio: 1, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
+  photosMark: { position: "absolute", top: 6, right: 6, width: 22, height: 22, borderRadius: radius.full, backgroundColor: color.voileImage, alignItems: "center", justifyContent: "center" },
   empty: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginTop: space.md },
   footer: { paddingVertical: space.lg },
 }));

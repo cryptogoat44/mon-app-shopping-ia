@@ -10,7 +10,8 @@ import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, fetchMyLifestylePosts, fetchVault } from "@/lib/api";
 import type { Post, VaultItem } from "@monapp/shared-types";
-import { CameraIcon, ClockIcon, PlusIcon, SettingsIcon, TagIcon, VerifiedIcon } from "@/components/icons";
+import { CameraIcon, ClockIcon, PhotosIcon, PlusIcon, SettingsIcon, TagIcon, VerifiedIcon } from "@/components/icons";
+import { hasSeveralPhotos } from "@/lib/post-extras";
 import { Avatar } from "@/components/avatar";
 import { AvatarPhotoFlow } from "@/components/avatar-photo-flow";
 import { onVaultChanged } from "@/lib/vault-changes";
@@ -339,6 +340,12 @@ export default function ProfileScreen() {
                     <TagIcon size={12} tint={color.surImage} />
                   </View>
                 ) : null}
+                {/* Plusieurs photos (migration 0047) : une petite marque dans le coin. */}
+                {hasSeveralPhotos(post) ? (
+                  <View style={styles.photosMark} accessible accessibilityLabel={t.carousel.morePhotos}>
+                    <PhotosIcon size={12} />
+                  </View>
+                ) : null}
               </Pressable>
             ))
           )}
@@ -451,6 +458,17 @@ const styles = themedStyles(() => ({
     height: 18,
     borderRadius: radius.full,
     backgroundColor: color.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  photosMark: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    borderRadius: radius.full,
+    backgroundColor: color.voileImage,
     alignItems: "center",
     justifyContent: "center",
   },
