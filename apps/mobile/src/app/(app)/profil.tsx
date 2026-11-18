@@ -16,8 +16,12 @@ import { FriendCollections } from "@/components/friend-collections";
 import { useToast } from "@/lib/toast-context";
 import { useMessagesStatus } from "@/lib/use-messages-status";
 import { followActionFor, followButton, followStateOf, showsPrivateShell } from "@/lib/follow-state";
+import { memberListRoute } from "@/lib/member-lists";
 import { themedStyles } from "@/theme/themed-styles";
 import { Avatar } from "@/components/avatar";
+
+/** Entre deux compteurs du profil. */
+const COUNT_SEPARATOR = " · ";
 
 function chunk<T>(items: T[], size: number): T[][] {
   const rows: T[][] = [];
@@ -155,11 +159,39 @@ export default function UserProfileScreen() {
       <Text style={styles.name} accessibilityRole="header">{profile.displayName}</Text>
       <Text style={styles.handle}>@{profile.username}</Text>
       {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
-      {/* Compte privé vu par un inconnu : jamais le nombre de publications. */}
-      <Text style={styles.counts}>
-        {isShell ? "" : `${t.userProfile.posts_count(profile.postsCount)} · `}
-        {t.userProfile.followers(profile.followersCount)} · {t.userProfile.following(profile.followingCount)}
-      </Text>
+      {/* Compte privé vu par un inconnu : jamais le nombre de publications, et
+          les deux compteurs restent du texte (ses listes ne s'ouvrent qu'à ses
+          abonnés acceptés). Sinon, chacun ouvre sa liste. */}
+      <View style={styles.counts}>
+        {isShell ? null : <Text style={styles.count}>{`${t.userProfile.posts_count(profile.postsCount)}${COUNT_SEPARATOR}`}</Text>}
+        {isShell ? (
+          <Text style={styles.count}>{t.userProfile.followers(profile.followersCount)}</Text>
+        ) : (
+          <Pressable
+            style={styles.countLink}
+            onPress={() => router.push(memberListRoute("followers", profile.id))}
+            accessibilityRole="link"
+            accessibilityLabel={t.memberLists.openFollowers(profile.followersCount)}
+            testID="ouvrir-abonnes"
+          >
+            <Text style={styles.count}>{t.userProfile.followers(profile.followersCount)}</Text>
+          </Pressable>
+        )}
+        <Text style={styles.count}>{COUNT_SEPARATOR}</Text>
+        {isShell ? (
+          <Text style={styles.count}>{t.userProfile.following(profile.followingCount)}</Text>
+        ) : (
+          <Pressable
+            style={styles.countLink}
+            onPress={() => router.push(memberListRoute("following", profile.id))}
+            accessibilityRole="link"
+            accessibilityLabel={t.memberLists.openFollowing(profile.followingCount)}
+            testID="ouvrir-abonnements"
+          >
+            <Text style={styles.count}>{t.userProfile.following(profile.followingCount)}</Text>
+          </Pressable>
+        )}
+      </View>
       <View style={styles.actions}>
         <Pressable
           style={[styles.follow, follow.primary ? null : styles.following, followBusy ? styles.busy : null]}
@@ -268,7 +300,9 @@ const styles = themedStyles(() => ({
   name: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, marginTop: space.md },
   handle: { fontSize: font.secondary, color: color.acier, marginTop: 2 },
   bio: { fontSize: font.secondary, color: color.encre, textAlign: "center", marginTop: space.sm, lineHeight: 20 },
-  counts: { fontSize: font.caption, color: color.acier, marginTop: space.sm },
+  counts: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "center", minHeight: 44 },
+  count: { fontSize: font.caption, color: color.acier },
+  countLink: { minHeight: 44, justifyContent: "center" },
   actions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: space.sm, marginTop: space.md },
   follow: { minHeight: 44, minWidth: 130, paddingHorizontal: space.lg, borderRadius: radius.md, backgroundColor: color.vert, alignItems: "center", justifyContent: "center" },
   following: { backgroundColor: "transparent", borderWidth: 1, borderColor: color.filet },

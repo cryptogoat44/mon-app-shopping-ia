@@ -99,7 +99,7 @@ describe("profil d'un compte privé", () => {
     expect(profil).toContain("const isShell = showsPrivateShell(profile);");
     expect(profil).toContain("data={isShell ? [] : chunk(posts ?? [], 3)}");
     expect(profil).toContain("onEndReached={isShell ? undefined : handleLoadMore}");
-    expect(profil).toContain('{isShell ? "" : `${t.userProfile.posts_count(profile.postsCount)} · `}');
+    expect(profil).toContain("{isShell ? null : <Text style={styles.count}>{`${t.userProfile.posts_count(profile.postsCount)}${COUNT_SEPARATOR}`}</Text>}");
     expect(profil).toContain("<Text style={styles.shellText}>{t.privateAccount.shellNotice}</Text>");
     const shell = profil.slice(profil.indexOf("{isShell ? ("), profil.indexOf("<Text style={styles.sectionTitle}>"));
     expect(shell.indexOf("<LockIcon")).toBeGreaterThan(-1);
@@ -168,12 +168,13 @@ describe("onglet Activité", () => {
 });
 
 describe("écran des demandes", () => {
-  it("seule la liste « requests » existe pour l'instant ; toute autre valeur ramène à l'onglet Activité", () => {
+  it("« requests » est une des listes de l'écran ; toute valeur inconnue ramène à l'onglet Activité", () => {
     expect(parseMemberListKind("requests")).toBe("requests");
     for (const kind of ["followers", "following", "likes", "viewers"]) expect(parseMemberListKind(kind)).toBe(kind);
     for (const kind of ["", "autre", undefined, null, ["requests"], 3]) expect(parseMemberListKind(kind)).toBeNull();
     const screen = read("app/(app)/membres.tsx");
-    expect(screen).toContain('if (parseMemberListKind(kind) !== "requests") return <Redirect href="/activite" />;');
+    expect(screen).toContain('if (!target) return <Redirect href="/activite" />;');
+    expect(screen).toContain('{target.kind === "requests" ? <RequestsList /> : ');
   });
 
   it("Accepter et Refuser sur chaque ligne, états vide et erreur, suite tant que le serveur en annonce une", () => {
@@ -186,8 +187,10 @@ describe("écran des demandes", () => {
     // Une page vide alors qu'il en reste : la suite se décide sur le curseur seul.
     expect(screen).toContain("hasMore: cursor !== null");
     const list = read("components/member-list.tsx");
-    expect(list).toContain("if (error) return <LoadFailure message={error} onRetry={onRetry} />;");
-    expect(list).toContain("{members.length === 0 && !hasMore ? <Text style={styles.empty}>{emptyText}</Text> : null}");
+    expect(list).toContain("<LoadFailure message={error} onRetry={onRetry} />");
+    // La phrase « personne » n'apparaît que s'il ne reste rien à charger.
+    expect(list).toMatch(/ListEmptyComponent=\{\s*hasMore \? null : \(/);
+    expect(list).toContain("<Text style={styles.empty}>{emptyText}</Text>");
     // Jamais de date dans une ligne.
     expect(list).not.toMatch(/createdAt|timeAgo|formatLongDate/);
     const api = read("lib/api.ts");

@@ -15,6 +15,7 @@ import { Avatar } from "@/components/avatar";
 import { AvatarPhotoFlow } from "@/components/avatar-photo-flow";
 import { onVaultChanged } from "@/lib/vault-changes";
 import { requestedProfileSegment, type ProfileSegment } from "@/lib/wishlist-link";
+import { memberListRoute } from "@/lib/member-lists";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
@@ -167,14 +168,29 @@ export default function ProfileScreen() {
           <Text style={styles.statNumber}>{profile?.postsCount ?? 0}</Text>
           <Text style={styles.statLabel}>{t.profile.posts}</Text>
         </View>
-        <View style={styles.statItem}>
+        {/* Lot « vie sociale » : les deux compteurs ouvrent la liste des abonnés et celle des abonnements. */}
+        <Pressable
+          style={styles.statItem}
+          onPress={() => (profile ? router.push(memberListRoute("followers", profile.id)) : undefined)}
+          disabled={!profile}
+          accessibilityRole="link"
+          accessibilityLabel={t.memberLists.openFollowers(profile?.followersCount ?? 0)}
+          testID="ouvrir-abonnes"
+        >
           <Text style={styles.statNumber}>{profile?.followersCount ?? 0}</Text>
           <Text style={styles.statLabel}>{t.profile.followers}</Text>
-        </View>
-        <View style={styles.statItem}>
+        </Pressable>
+        <Pressable
+          style={styles.statItem}
+          onPress={() => (profile ? router.push(memberListRoute("following", profile.id)) : undefined)}
+          disabled={!profile}
+          accessibilityRole="link"
+          accessibilityLabel={t.memberLists.openFollowing(profile?.followingCount ?? 0)}
+          testID="ouvrir-abonnements"
+        >
           <Text style={styles.statNumber}>{profile?.followingCount ?? 0}</Text>
           <Text style={styles.statLabel}>{t.profile.followingCount}</Text>
-        </View>
+        </Pressable>
       </View>
 
       <View style={styles.seg}>
@@ -356,7 +372,7 @@ const styles = themedStyles(() => ({
   // Compteurs sur toute la largeur, sous la photo et le nom : quatre
   // colonnes égales (les libellés se chevauchaient à côté de la photo).
   stats: { flexDirection: "row", paddingHorizontal: space.lg, paddingTop: space.md },
-  statItem: { flex: 1, alignItems: "center" },
+  statItem: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 44 },
   statNumber: { fontSize: font.body, fontWeight: "600", color: color.encre },
   statLabel: { fontSize: font.caption, color: color.acier, marginTop: 2 },
   who: { flex: 1 },
