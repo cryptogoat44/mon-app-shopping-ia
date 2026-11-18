@@ -220,6 +220,10 @@ describe("politique de confidentialité", () => {
     ]) {
       expect(data).toContain(sentence);
     }
+    // Jamais une lecture du passé : dit simplement, dans l'ordre, juste après la phrase du réglage.
+    expect(data).toContain(
+      "dans les Réglages. Seules vos lectures faites pendant que ce réglage est activé sont montrées. Si vous le désactivez, la mention « Vu » n'est plus affichée ; ce que vous lisez pendant qu'il est désactivé n'est jamais montré ensuite, même si vous le réactivez : seules vos lectures faites à partir de ce moment le sont. Ce que vous avez lu avant l'arrivée de cette mention dans Spotto n'est pas montré non plus. Pour appliquer cette règle, Spotto conserve la date à laquelle ce réglage a été activé pour la dernière fois. Tant que vous n'avez pas accepté une invitation,"
+    );
     // Ce qui était déjà dit des messages reste dit.
     expect(data).toContain("l'état de vos conversations (invitation envoyée, acceptée ou refusée, messages lus)");
     expect(data).toContain("Seuls vous et la personne avec qui vous échangez les voyez.");
@@ -238,21 +242,43 @@ describe("politique de confidentialité", () => {
     ]) {
       expect(data).toContain(sentence);
     }
+    expect(data).toContain(
+      "in Settings. Only what you read while this setting is on is shown. If you turn it off, “Seen” is no longer displayed; what you read while it is off is never shown later, even if you turn it back on: only what you read from that moment on is. What you read before “Seen” arrived in Spotto is not shown either. To apply this rule, Spotto keeps the date this setting was last turned on. As long as you have not accepted an invitation,"
+    );
     expect(data).toContain("Only you and the person you are talking with can see them.");
     expect(data).toContain("[To be verified: legal basis retained (performance of the contract), retention period, information given to the person who receives an invitation, and the “Seen” mention being on by default.]");
   });
 
-  it("« Qui peut voir quoi » et « Vos droits » : qui voit « Vu », et où le couper", () => {
+  it("« Qui peut voir quoi » et « Vos droits » : qui voit « Vu », où le couper, et jamais une lecture faite réglage désactivé", () => {
     expect(section(privacyPolicy, "Qui peut voir quoi dans Spotto")).toContain(
-      "Vos messages privés : vous et la personne avec qui vous échangez. Elle peut aussi voir que vous avez vu son dernier message (mention « Vu »), sauf si l'un de vous deux a désactivé « Confirmations de lecture »."
+      "Vos messages privés : vous et la personne avec qui vous échangez. Elle peut aussi voir que vous avez vu son dernier message (mention « Vu »), sauf si l'un de vous deux a désactivé « Confirmations de lecture ». Seules vos lectures faites pendant que ce réglage est activé sont montrées."
     );
     expect(section(privacyPolicyEn, "Who can see what in Spotto")).toContain(
-      "Your private messages: you and the person you are talking with. They can also see that you have seen their last message (“Seen”), unless one of you has turned off “Read receipts”."
+      "Your private messages: you and the person you are talking with. They can also see that you have seen their last message (“Seen”), unless one of you has turned off “Read receipts”. Only what you read while this setting is on is shown."
     );
     expect(section(privacyPolicy, "Vos droits")).toContain(
-      "Ne plus montrer la mention « Vu » à la personne avec qui vous échangez (vous ne verrez plus la sienne non plus) : Réglages → Confirmations de lecture."
+      "Ne plus montrer la mention « Vu » à la personne avec qui vous échangez (vous ne verrez plus la sienne non plus) : Réglages → Confirmations de lecture. Ce que vous lisez pendant que ce réglage est désactivé n'est jamais montré ensuite."
     );
-    expect(section(privacyPolicyEn, "Your rights")).toContain("Stop showing “Seen” to the person you are talking with (you will no longer see theirs either): Settings → Read receipts.");
+    expect(section(privacyPolicyEn, "Your rights")).toContain(
+      "Stop showing “Seen” to the person you are talking with (you will no longer see theirs either): Settings → Read receipts. What you read while this setting is off is never shown later."
+    );
+  });
+
+  it("vouvoiement en français pour ces phrases, et les mêmes trois faits dans les deux langues", () => {
+    const frData = section(privacyPolicy, "Les données que nous utilisons");
+    const start = frData.indexOf("Seules vos lectures faites pendant");
+    const added = frData.slice(start, frData.indexOf("Tant que vous n'avez pas accepté une invitation", start));
+    expect(added.length).toBeGreaterThan(100);
+    expect(added).not.toMatch(/\b(tu|toi|ton|ta|tes|t')\b/i);
+    const enData = section(privacyPolicyEn, "The data we use");
+    for (const [frWords, enWords] of [
+      ["pendant que ce réglage est activé", "while this setting is on"],
+      ["n'est plus affichée", "is no longer displayed"],
+      ["n'est jamais montré ensuite, même si vous le réactivez", "is never shown later, even if you turn it back on"],
+    ] as const) {
+      expect(frData).toContain(frWords);
+      expect(enData).toContain(enWords);
+    }
   });
 
   it("la politique emploie les mots de l'app : le nom du réglage et la mention affichée", () => {
