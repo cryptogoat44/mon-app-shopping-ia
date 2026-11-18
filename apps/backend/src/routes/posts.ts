@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { POST_TYPES, PRIVACY_LEVELS, type Post, type PostTaggedPiece, type PostWish, type PrivacyLevel, type TaggedPieceInput } from "@monapp/shared-types";
+import { MEMBER_LIST_PAGE_SIZE, POST_TYPES, PRIVACY_LEVELS, type MemberPage, type Post, type PostTaggedPiece, type PostWish, type PrivacyLevel, type TaggedPieceInput } from "@monapp/shared-types";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { fetchAffiliateUrls, isAffiliateLink } from "../lib/affiliateLinks.js";
 import { DatabaseReadError, INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseDbRows, parseInput, webUrlOrNull } from "../lib/validation.js";
@@ -13,6 +13,8 @@ import { CONTENT_NOT_ALLOWED, containsBannedWords } from "../lib/contentFilter.j
 import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
 import { withoutSuspendedFaces } from "../lib/profileModeration.js";
 import { notify } from "../lib/notify.js";
+import { fetchBlockedUserIds } from "../lib/blocks.js";
+import { toMemberRows } from "../lib/memberRows.js";
 
 // Une publication ne peut pas devenir une liste sans fin de tags — reste
 // large pour un usage légitime (plusieurs pièces sur une même tenue) sans
@@ -61,6 +63,10 @@ function parsePostRow(data: unknown): PostRow {
   if (!parsed.success) throw new DatabaseReadError("Publication illisible");
   return parsed.data;
 }
+
+// « Aimé par » (lot « vie sociale ») : qui a aimé, et quand (la date ne sert
+// qu'au tri et au curseur, jamais renvoyée ligne par ligne).
+const REACTION_ROWS = z.array(z.object({ user_id: z.guid(), created_at: z.string() }));
 
 const ALREADY_SHARED_ROWS = z.array(z.object({ id: z.guid(), hidden_at: z.string().nullable() }));
 
@@ -223,7 +229,12 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
   const vaultItemIds = [...new Set(rows.map((r) => r.vault_item_id).filter((id): id is string => !!id))];
   const postIds = rows.map((r) => r.id);
 
-  const [{ data: storedProfiles }, { data: vaultItems }, { data: reactions }, { data: tagRows }, { data: commentRows }] = await Promise.all([
+  // « Aimé par » (lot « vie sociale ») : les « j'aime » et les commentaires des
+  // comptes en blocage avec le lecteur, dans un sens ou dans l'autre, ne sont
+  // plus comptés — les listes les excluaient déjà, le nombre affiché suit.
+  // Une lecture des blocages par page, jamais une par publication ; lecture
+  // impossible : une erreur, jamais un compte fait comme si personne n'était bloqué.
+  const [{ data: storedProfiles }, { data: vaultItems }, { data: reactions }, { data: tagRows }, { data: commentRows }, blocked] = await Promise.all([
     fastify.supabaseAdmin.from("profiles").select("id, username, display_name, avatar_url").in("id", authorIds),
     vaultItemIds.length > 0
       ? fastify.supabaseAdmin.from("vault_items").select("id, title, verified, image_url, product_match_id").in("id", vaultItemIds)
@@ -234,11 +245,13 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
       .select("id, post_id, vault_item_id, product_match_id, position")
       .in("post_id", postIds)
       .order("position", { ascending: true }),
-    fastify.supabaseAdmin.from("comments").select("post_id").in("post_id", postIds).is("hidden_at", null),
+    fastify.supabaseAdmin.from("comments").select("post_id, user_id").in("post_id", postIds).is("hidden_at", null),
+    fetchBlockedUserIds(fastify, viewerId),
   ]);
 
   const commentCountByPost = new Map<string, number>();
-  for (const c of (commentRows as { post_id: string }[]) ?? []) {
+  for (const c of (commentRows as { post_id: string; user_id: string }[]) ?? []) {
+    if (blocked.has(c.user_id)) continue;
     commentCountByPost.set(c.post_id, (commentCountByPost.get(c.post_id) ?? 0) + 1);
   }
 
@@ -250,6 +263,7 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
   const reactionCountByPost = new Map<string, number>();
   const viewerReactedPosts = new Set<string>();
   for (const r of (reactions as { post_id: string; user_id: string }[]) ?? []) {
+    if (blocked.has(r.user_id)) continue;
     reactionCountByPost.set(r.post_id, (reactionCountByPost.get(r.post_id) ?? 0) + 1);
     if (r.user_id === viewerId) viewerReactedPosts.add(r.post_id);
   }
@@ -736,7 +750,69 @@ export default async function postsRoutes(fastify: FastifyInstance) {
     return reply.code(204).send();
   });
 
-  fastify.post("/api/posts/:id/react", { preHandler: [fastify.requireAuth, fastify.requireActiveAccount] }, async (request, reply) => {
+  // « Aimé par » (lot « vie sociale », sans migration) : les membres qui ont
+  // aimé une publication, les plus récents d'abord, 30 lignes lues par page.
+  //   - La liste n'existe que pour qui peut voir la publication : masquée,
+  //     blocage avec l'auteur, confidentialité, compte privé → 404, la même
+  //     réponse que pour une publication inconnue.
+  //   - Chaque ligne passe par LA règle des listes (lib/memberRows.ts) : ni
+  //     compte en blocage avec le lecteur, ni suspendu, ni sans nom
+  //     d'utilisateur ; un compte privé n'est montré qu'à lui-même, à ses
+  //     abonnés acceptés et à l'auteur de la publication.
+  //   - Le tri se fait APRÈS la lecture : une page peut être plus courte que
+  //     prévu, ou vide, alors qu'il en reste ; la réponse ne dit jamais
+  //     combien de lignes ont été laissées de côté, et le nombre de « j'aime »
+  //     de la publication peut dépasser le nombre de lignes montrées.
+  //   - Jamais la date d'un « j'aime » dans une ligne : le curseur est la date
+  //     de la dernière ligne LUE.
+  // Une lecture, pas une écriture : permise à un compte suspendu, comme le fil.
+  fastify.get(
+    "/api/posts/:id/likes",
+    { preHandler: [fastify.requireAuth, fastify.rateLimit("memberList")], config: { rateLimitName: "memberList" as const } },
+    async (request, reply) => {
+      reply.header("Cache-Control", "no-store");
+      const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
+      if (!params) return;
+      const pageQuery = parseInput(cursorQuerySchema, request.query, reply, INVALID_CURSOR);
+      if (!pageQuery) return;
+      const viewerId = request.user!.id;
+
+      const post = await findViewablePost(fastify, viewerId, params.id);
+      if (!post) {
+        return reply.code(404).send({ error: "post_not_found", message: "Publication introuvable." });
+      }
+
+      let query = fastify.supabaseAdmin
+        .from("post_reactions")
+        .select("user_id, created_at")
+        .eq("post_id", post.id)
+        .order("created_at", { ascending: false })
+        .limit(MEMBER_LIST_PAGE_SIZE + 1);
+      if (pageQuery.cursor) query = query.lt("created_at", pageQuery.cursor);
+      const rows = parseDbRows(REACTION_ROWS, await query, "« J'aime » d'une publication");
+      const hasMore = rows.length > MEMBER_LIST_PAGE_SIZE;
+      const pageRows = hasMore ? rows.slice(0, MEMBER_LIST_PAGE_SIZE) : rows;
+
+      const page: MemberPage = {
+        members: await toMemberRows(
+          fastify,
+          viewerId,
+          pageRows.map((row) => row.user_id),
+          { contextOwnerId: post.user_id }
+        ),
+        nextCursor: hasMore ? (pageRows.at(-1)?.created_at ?? null) : null,
+      };
+      return reply.send(page);
+    }
+  );
+
+  // Aimer / ne plus aimer. Limite « postReact » (lot « vie sociale ») : large
+  // pour un membre, assez pour arrêter un script qui aimerait en boucle.
+  const reactOptions = {
+    preHandler: [fastify.requireAuth, fastify.requireActiveAccount, fastify.rateLimit("postReact")],
+    config: { rateLimitName: "postReact" as const },
+  };
+  fastify.post("/api/posts/:id/react", reactOptions, async (request, reply) => {
     const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
     if (!params) return;
     const { id } = params;
@@ -747,6 +823,9 @@ export default async function postsRoutes(fastify: FastifyInstance) {
     if (!post) {
       return reply.code(404).send({ error: "post_not_found", message: "Publication introuvable." });
     }
+    // Lus AVANT d'écrire : une panne de cette lecture ne laisse pas un « j'aime »
+    // enregistré derrière une réponse d'erreur.
+    const blocked = await fetchBlockedUserIds(fastify, userId);
 
     const { data: existing } = await fastify.supabaseAdmin
       .from("post_reactions")
@@ -773,10 +852,11 @@ export default async function postsRoutes(fastify: FastifyInstance) {
       await notify(fastify, request.log, { recipientId: post.user_id, actorId: userId, type: "like", postId: id, oncePerPost: true });
     }
 
-    const { count } = await fastify.supabaseAdmin
-      .from("post_reactions")
-      .select("post_id", { count: "exact", head: true })
-      .eq("post_id", id);
+    // Le même compte que dans le fil (hydratePosts) : sans les comptes en
+    // blocage avec le lecteur.
+    let countQuery = fastify.supabaseAdmin.from("post_reactions").select("post_id", { count: "exact", head: true }).eq("post_id", id);
+    if (blocked.size > 0) countQuery = countQuery.not("user_id", "in", `(${[...blocked].join(",")})`);
+    const { count } = await countQuery;
 
     return reply.send({ reactionCount: count ?? 0, viewerHasReacted: !existing });
   });

@@ -328,6 +328,16 @@ export const RATE_LIMITS = {
     error: "member_list_limit",
     message: "Trop de listes ouvertes. Réessayez dans un moment.",
   },
+
+  // Aimer / ne plus aimer une publication (lot « vie sociale », « Aimé par ») :
+  // sans limite jusque-là. 300 par heure ne gêne personne qui fait défiler son
+  // fil, et arrête un script qui aimerait en boucle.
+  postReact: {
+    max: 300,
+    windowMs: HOUR,
+    error: "post_react_limit",
+    message: "Trop de j'aime en peu de temps. Réessayez dans un moment.",
+  },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

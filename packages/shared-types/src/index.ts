@@ -2311,3 +2311,8 @@ export const MEMBER_LIST_PAGE_SIZE = 30;
 export const PRIVATE_ACCOUNT_ERROR = "private_account";
 /** 429 : trop de listes ouvertes en une heure. */
 export const MEMBER_LIST_LIMIT_ERROR = "member_list_limit";
+
+// ---- Liste « Aimé par » (lot « vie sociale », sans migration) ----
+
+/** 429 : trop de « j'aime » posés ou retirés en une heure (POST /api/posts/:id/react). */
+export const POST_REACT_LIMIT_ERROR = "post_react_limit";

@@ -295,6 +295,8 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   // Listes des abonnés et des abonnements (lot « vie sociale »).
   "Ce compte est privé.": "This account is private.",
   "Trop de listes ouvertes. Réessayez dans un moment.": "Too many lists opened. Please try again in a moment.",
+  // « Aimé par » (lot « vie sociale ») : limite des « j'aime ».
+  "Trop de j'aime en peu de temps. Réessayez dans un moment.": "Too many likes in a short time. Please try again in a moment.",
 };
 
 /** Message dans la langue voulue. Un message inconnu (par exemple un texte
