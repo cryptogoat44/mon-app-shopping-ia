@@ -3,7 +3,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import type { ModerationPage, ModerationStatus } from "@monapp/shared-types";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { fetchModerationQueue } from "@/lib/api";
 import { loadErrorMessage } from "@/lib/load-error";
@@ -154,7 +154,7 @@ const styles = themedStyles(() => ({
   nav: { height: 47, justifyContent: "center", paddingHorizontal: 12 },
   back: { fontSize: 26, color: color.encre },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 560, alignSelf: "center", width: "100%" },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, marginBottom: space.md },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, marginBottom: space.md },
   tabs: { marginBottom: space.lg },
   skeletonCard: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, marginBottom: space.md },
   empty: { alignItems: "center", paddingVertical: space.xl, gap: space.md },

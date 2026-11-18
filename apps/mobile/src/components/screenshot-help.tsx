@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { CameraIcon, VideoIcon } from "@/components/icons";
 import { currentDevice } from "@/components/link-notice";
@@ -42,7 +42,7 @@ export function ScreenshotHelp({ onAddScreenshot, onAddVideo, busy }: { onAddScr
 
 const styles = themedStyles(() => ({
   box: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, color: color.encre },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, lineHeight: serifLineHeight.body, color: color.encre },
   body: { fontSize: font.secondary, color: color.acier, lineHeight: 21, marginTop: space.xs },
   spaced: { marginTop: space.lg },
   steps: { marginTop: space.sm, gap: space.sm },

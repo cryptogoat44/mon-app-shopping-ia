@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View, useWindowDimensio
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { prepareErrorMessage } from "@/lib/spot-flow";
@@ -245,7 +245,7 @@ const styles = themedStyles(() => ({
   close: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   back: { fontSize: 26, color: color.encre },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 29 },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: serifLineHeight.title },
   caption: { fontSize: font.caption, color: color.acier, marginTop: 6, lineHeight: 18 },
   lead: { fontSize: font.secondary, color: color.acier, lineHeight: 21 },
   previewBox: { marginTop: space.md, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },

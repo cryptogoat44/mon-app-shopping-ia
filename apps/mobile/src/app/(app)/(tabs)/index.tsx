@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { AccessibilityInfo, Platform, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifDisplayLetterSpacing, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { getRecentSearches } from "@/api/client";
 import { clearLastSpotResult } from "@/api/spotSession";
@@ -338,7 +338,7 @@ export default function SpotterScreen() {
 const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   content: { paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, color: color.encre },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, lineHeight: serifLineHeight.display, letterSpacing: serifDisplayLetterSpacing, color: color.encre },
   lead: { fontSize: font.secondary, color: color.acier, marginTop: space.xs, lineHeight: 21 },
   feedback: { fontSize: font.caption, marginTop: space.sm, lineHeight: 18 },
   sharedHelp: { marginTop: space.lg },

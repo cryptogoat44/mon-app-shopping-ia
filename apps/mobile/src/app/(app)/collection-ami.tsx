@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import type { PostAuthor, SharedCollectionItem, SharedCollectionPage } from "@monapp/shared-types";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { ApiError, fetchSharedCollection, keepSharedItem } from "@/lib/api";
 import { canReportCollection, sharedItemImage, sharedItemPrice } from "@/lib/collections";
@@ -236,7 +236,7 @@ const styles = themedStyles(() => ({
   retry: { marginTop: space.md, minHeight: 44, justifyContent: "center" },
   retryLabel: { fontSize: font.body, color: color.vert, fontWeight: "600" },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 640, alignSelf: "center", width: "100%" },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre },
   ownerLine: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: 4, marginBottom: space.md },
   owner: { flexShrink: 1, fontSize: font.secondary, color: color.acier },
   empty: { fontSize: font.secondary, color: color.acier, lineHeight: 20 },

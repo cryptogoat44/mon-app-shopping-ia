@@ -5,7 +5,7 @@ import { useRouter } from "expo-router";
 import { BIO_MAX_LENGTH, BIO_MAX_LINES, normalizeBio } from "@monapp/shared-types";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, updateMyProfile } from "@/lib/api";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { useToast } from "@/lib/toast-context";
 import { ErrorMessage } from "@/components/error-message";
@@ -167,7 +167,7 @@ const styles = themedStyles(() => ({
   nav: { height: 47, justifyContent: "center", paddingHorizontal: 12 },
   back: { fontSize: 26, color: color.encre },
   content: { paddingHorizontal: space.xl, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, marginBottom: space.lg },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, marginBottom: space.lg },
   error: { fontSize: font.caption, color: color.danger, marginBottom: space.md },
   field: { marginBottom: space.md },
   label: { fontSize: font.caption, color: color.acier, marginBottom: space.xs },

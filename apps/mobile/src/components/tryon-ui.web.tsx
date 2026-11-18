@@ -3,7 +3,7 @@
 // de l'app (fiches, feuilles). Fichier .web : jamais dans l'app iPhone.
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { color, font, radius, serifFont, size, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, size, space } from "@/theme/tokens";
 import { themedStyles } from "@/theme/themed-styles";
 
 export function StepTitle({ children }: { children: string }) {
@@ -107,7 +107,7 @@ export function TextButton({ label, onPress, expanded, disabled = false }: { lab
 }
 
 const styles = themedStyles(() => ({
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, marginBottom: space.sm },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, marginBottom: space.sm },
   subtitle: { fontSize: font.secondary, fontWeight: "600", color: color.encre, marginTop: space.md, marginBottom: space.xs },
   paragraph: { fontSize: font.secondary, color: color.acier, lineHeight: 21, marginBottom: space.sm },
   strong: { fontSize: font.body, color: color.encre, lineHeight: 24 },

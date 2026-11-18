@@ -3,7 +3,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import type { BlockedUser } from "@monapp/shared-types";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { ApiError, fetchBlockedUsers, unblockUser } from "@/lib/api";
 import { Skeleton } from "@/components/skeleton";
@@ -106,7 +106,7 @@ const styles = themedStyles(() => ({
   nav: { height: 47, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.lg },
   back: { fontSize: 26, color: color.encre },
   navSpacer: { width: 26 },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre },
   content: { paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   error: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginTop: space.lg },
   empty: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginTop: space.lg },
