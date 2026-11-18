@@ -3,7 +3,7 @@ import { Platform, Pressable, ScrollView, Switch, Text, View } from "react-nativ
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { LEGAL_DOCUMENT_VERSIONS, type ConsentStatus } from "@monapp/shared-types";
-import { color, font, serifFont, space } from "@/theme/tokens";
+import { color, font, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { SegmentedChoice } from "@/components/segmented-choice";
 import { usePreferences } from "@/lib/preferences-context";
@@ -283,7 +283,7 @@ const styles = themedStyles(() => ({
   nav: { height: 47, justifyContent: "center", paddingHorizontal: 12 },
   back: { fontSize: 26, color: color.encre },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, marginBottom: space.lg },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, marginBottom: space.lg },
   section: { marginBottom: space.lg },
   sectionLabel: { fontSize: font.caption, fontWeight: "600", color: color.acier, marginBottom: space.sm },
   analyticsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44 },

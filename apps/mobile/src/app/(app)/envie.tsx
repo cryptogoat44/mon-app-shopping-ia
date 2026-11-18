@@ -14,7 +14,7 @@ import { useWishAlertsStatus } from "@/lib/use-wish-alerts-status";
 import { alertDetails, bellVisible, canReportWish, type StockReportTarget } from "@/lib/wish-alerts";
 import { FROM_ALERT } from "@/lib/push-state";
 import { shareWishOutside } from "@/lib/share-wish";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { ProductFrame } from "@/components/product-frame";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
@@ -349,7 +349,7 @@ const styles = themedStyles(() => ({
   retry: { marginTop: space.md, minHeight: 44, justifyContent: "center" },
   retryLabel: { fontSize: font.body, color: color.vert, fontWeight: "600" },
   content: { padding: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, marginTop: space.md },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, marginTop: space.md },
   meta: { fontSize: font.secondary, color: color.acier, marginTop: 4, marginBottom: space.lg },
   alertDetails: { marginTop: -space.md, marginBottom: space.lg, gap: 2 },
   alertDetail: { fontSize: font.secondary, color: color.encre },

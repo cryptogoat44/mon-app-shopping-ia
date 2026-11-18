@@ -3,7 +3,7 @@ import { ActivityIndicator, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { t } from "@/i18n";
 import { WAKING_NOTICE_AFTER_MS } from "@/lib/root-route";
-import { color, font, serifFont, size, space } from "@/theme/tokens";
+import { color, font, serifFont, serifLineHeight, size, space } from "@/theme/tokens";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Attente d'une réponse du serveur : démarrage du site, relances du
@@ -53,6 +53,6 @@ const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   content: { flex: 1, justifyContent: "center", paddingHorizontal: space.xl, maxWidth: size.contentMaxWidth, alignSelf: "center", width: "100%" },
   spinner: { alignSelf: "flex-start", marginBottom: space.lg },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 30 },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: serifLineHeight.title },
   body: { fontSize: font.secondary, color: color.acier, marginTop: space.sm, lineHeight: 21 },
 }));

@@ -1,14 +1,14 @@
 import { Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { APP_NAME } from "@/constants/brand";
 import { t } from "@/i18n";
 import { SegmentedChoice } from "@/components/segmented-choice";
 import { ContactEntry } from "@/components/contact-entry";
+import { Wordmark } from "@/components/wordmark";
 import { CONTACT_EMAIL } from "@/lib/contact";
 import { usePreferences } from "@/lib/preferences-context";
 import { LOCALES } from "@/lib/preferences";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, space } from "@/theme/tokens";
 import { themedStyles } from "@/theme/themed-styles";
 
 export default function BienvenueScreen() {
@@ -26,8 +26,8 @@ export default function BienvenueScreen() {
         />
       </View>
       <View style={styles.center}>
-        <View style={styles.ring} />
-        <Text style={styles.mark} accessibilityRole="header">{APP_NAME}</Text>
+        {/* Logo « Maison » (2026-11-17) : le nom en capitales espacées, seul — plus de cercle fin autour. */}
+        <Wordmark size="large" heading />
         <Text style={styles.baseline}>{t.welcome.baseline}</Text>
         <Text style={styles.explain}>{t.welcome.explain}</Text>
       </View>
@@ -62,22 +62,11 @@ export default function BienvenueScreen() {
   );
 }
 
-const RING_SIZE = 280;
-
 const styles = themedStyles(() => ({
   screen: { flex: 1, backgroundColor: color.porcelaine },
   language: { alignItems: "center", paddingTop: space.md, paddingHorizontal: space.xl },
   center: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl },
-  ring: {
-    position: "absolute",
-    width: RING_SIZE,
-    height: RING_SIZE,
-    borderRadius: RING_SIZE / 2,
-    borderWidth: 1,
-    borderColor: color.filet,
-  },
-  mark: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, letterSpacing: -0.5, color: color.encre },
-  baseline: { fontSize: font.secondary, color: color.acier, marginTop: 10, textAlign: "center", lineHeight: 22, maxWidth: 260 },
+  baseline: { fontSize: font.secondary, color: color.acier, marginTop: 12, textAlign: "center", lineHeight: 22, maxWidth: 260 },
   explain: { fontSize: font.caption, color: color.acier, marginTop: 22, textAlign: "center", lineHeight: 19, maxWidth: 270 },
   footer: { paddingHorizontal: space.xl, paddingBottom: space.lg, alignItems: "center" },
   cta: { alignSelf: "stretch", backgroundColor: color.vert, borderRadius: radius.md, paddingVertical: 16, alignItems: "center" },

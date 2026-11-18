@@ -7,7 +7,7 @@
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { VideoProduct } from "@monapp/shared-types";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { confirmVideoProduct } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
@@ -77,7 +77,7 @@ export function VideoProducts({ products, videoUrl, showEmpty }: { products: rea
 
 const styles = themedStyles(() => ({
   section: { gap: space.md, alignSelf: "stretch", marginTop: space.lg },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, color: color.encre },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, lineHeight: serifLineHeight.body, color: color.encre },
   card: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, gap: space.sm },
   row: { flexDirection: "row", gap: space.md, alignItems: "center" },
   thumb: { width: 72, height: 72, borderRadius: radius.sm, backgroundColor: color.plinthe, overflow: "hidden" },

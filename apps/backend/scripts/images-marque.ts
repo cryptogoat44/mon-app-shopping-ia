@@ -1,16 +1,19 @@
 // Images de la marque (lot 3bis) : icône de l'app, écrans de démarrage,
 // icônes Android et icône du site. Toutes sont calculées à partir d'un TRACÉ
-// vectoriel — le « S » de Newsreader Medium (la police du logo), converti en
-// contours — et rendues DIRECTEMENT à leur taille finale : aucune image n'est
-// jamais agrandie ; aucun flou, ombre, lueur ni dégradé (décision du
-// fondateur, 2026-10-04).
+// vectoriel — le « S » de Bodoni Moda Medium (la police du logo, choisie par
+// le fondateur le 2026-11-17), lu dans le fichier de police du dépôt et
+// converti en contours — et rendues DIRECTEMENT à leur taille finale : aucune
+// image n'est jamais agrandie ; aucun flou, ombre, lueur ni dégradé (décision
+// du fondateur, 2026-10-04).
 //
 //   pnpm --filter backend images-marque
 //
-// Police Newsreader : SIL Open Font License 1.1 (usage dans un logo permis).
+// Police Bodoni Moda : SIL Open Font License 1.1 (usage dans un logo permis) ;
+// fichier et licence dans assets/fonts/ (voir LISEZ-MOI.md, au même endroit).
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import sharp from "sharp";
+import { contourLettre } from "./lib/contour-police.js";
 
 const MOBILE = join(import.meta.dirname, "../../mobile");
 const IMAGES = join(MOBILE, "assets/images");
@@ -19,29 +22,23 @@ const MARQUE_DIR = join(MOBILE, "assets/marque");
  * telles quelles par apps/mobile/plugins/demarrage-exact.js. */
 const DEMARRAGE_DIR = join(MARQUE_DIR, "demarrage");
 
+/** Fichier de la police du logo : Bodoni Moda Medium, droite. */
+export const POLICE_DU_LOGO = join(import.meta.dirname, "../assets/fonts/BodoniModa_500Medium.ttf");
+
 /** Couleurs de la marque : vert anglais (« British racing green ») et or pâle. */
 export const MARQUE = { vertAnglais: "#004225", orPale: "#D9C48F", blanc: "#FFFFFF" } as const;
 
-/** Part de la hauteur de l'icône occupée par le « S » (choisie sur essai : 56 %). */
-const S_DANS_ICONE = 0.56;
+/** Part de la hauteur de l'icône occupée par le « S » : 60 %, comme sur
+ * l'aperçu du logo « Maison » validé par le fondateur (2026-11-17). */
+export const S_DANS_ICONE = 0.6;
 /** Écran de démarrage : image CARRÉE de 111 points de côté (Expo n'accepte
  * que des images carrées : une autre forme serait réduite, donc adoucie),
  * fournie en @3x exact (333 × 333 px). */
 export const DEMARRAGE = { cotePoints: 111 } as const;
 
-// « S » de Newsreader Medium (unités de la police : 2000 par cadratin, axe
-// vertical vers le haut) et ses bornes exactes, débordements compris.
-const S_TRACE =
-  "M933 1292 783 1324 902 1417 H942 L998 958 L929 950 L760 1258 L810 1198 Q756 1236 698.5 1252.5 Q641 " +
-  "1269 575 1269 Q445 1269 376.0 1215.0 Q307 1161 307 1064 Q307 1001 335.0 958.5 Q363 916 412.0 886.5 " +
-  "Q461 857 523.5 835.5 Q586 814 654 792 Q723 770 791.5 742.0 Q860 714 917.0 671.0 Q974 628 1008.5 " +
-  "561.0 Q1043 494 1043 395 Q1043 257 977.0 164.5 Q911 72 794.5 25.0 Q678 -22 524 -22 Q420 -22 338.0 " +
-  "-9.5 Q256 3 169 37 L87 404 H163 L407 39 L213 168 Q294 126 358.5 107.5 Q423 89 501 89 Q614 89 691.0 " +
-  "115.0 Q768 141 807.5 195.0 Q847 249 847 331 Q847 404 812.5 451.5 Q778 499 720.5 529.5 Q663 560 594.5 " +
-  "582.0 Q526 604 459 627 Q391 650 330.5 679.0 Q270 708 223.5 749.5 Q177 791 150.5 852.0 Q124 913 124 " +
-  "1000 Q124 1116 180.5 1200.0 Q237 1284 343.0 1329.0 Q449 1374 594 1374 Q688 1374 768.5 1354.5 Q849 " +
-  "1335 933 1292 Z ";
-const S_BORNES = { x0: 87, y0: -22, x1: 1043, y1: 1417 } as const;
+// « S » de Bodoni Moda Medium (unités de la police, axe vertical vers le
+// haut) et ses bornes exactes, débordements compris.
+const { trace: S_TRACE, bornes: S_BORNES } = contourLettre(readFileSync(POLICE_DU_LOGO), "S");
 
 /** Le « S » posé au centre (cx, cy), haut de `hauteur` unités du dessin. */
 export function lettre(couleur: string, cx: number, cy: number, hauteur: number): string {

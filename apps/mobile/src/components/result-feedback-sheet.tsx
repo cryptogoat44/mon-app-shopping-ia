@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { MatchFeedbackReason } from "@monapp/shared-types";
-import { color, font, radius, serifFont, size, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, size, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { reportInconsistentResult, withdrawInconsistentReport } from "@/lib/api";
 import { feedbackErrorMessage, feedbackReasonChoices, feedbackReasonLabel } from "@/lib/result-feedback";
@@ -171,7 +171,7 @@ const styles = themedStyles(() => ({
     alignSelf: "center",
     marginBottom: space.md,
   },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre },
   question: { fontSize: font.secondary, color: color.acier, marginTop: space.xs, marginBottom: space.sm },
   option: { minHeight: size.touchTarget, flexDirection: "row", alignItems: "center", gap: space.sm, paddingVertical: space.xs },
   radio: {

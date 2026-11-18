@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { AccessibilityInfo, ActivityIndicator, Pressable, Text, View, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 import { VIDEO_AI } from "@monapp/shared-types";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { ErrorMessage } from "@/components/error-message";
 import { ActionButtons, PhotoFrame, QueryInput, type Action } from "@/components/spot-launch-views";
@@ -231,7 +231,7 @@ export function LinkFailureView({ info, onRetry, onEditQuery }: { info: LinkFail
 }
 
 const styles = themedStyles(() => ({
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: 29, marginTop: space.md },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, lineHeight: serifLineHeight.title, marginTop: space.md },
   help: { fontSize: font.caption, color: color.acier, marginTop: space.sm, lineHeight: 18 },
   body: { fontSize: font.secondary, color: color.encre, marginTop: space.md, lineHeight: 21 },
   message: { fontSize: font.secondary, marginTop: space.md, lineHeight: 21 },

@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import type { PrivacyLevel, VaultCategory, VaultItemDetail } from "@monapp/shared-types";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { ApiError, changeVaultItemPhoto, deleteVaultItem, fetchVaultItem, sharePurchasePost, updateVaultItem } from "@/lib/api";
 import { importPhotoForSpotter } from "@/lib/image-import";
@@ -427,7 +427,7 @@ const styles = themedStyles(() => ({
   changePhoto: { alignSelf: "center", minHeight: 40, justifyContent: "center", marginBottom: space.sm },
   changePhotoLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600" },
   titleRow: { flexDirection: "row", alignItems: "center", gap: space.sm, marginBottom: space.xs },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, flexShrink: 1 },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, flexShrink: 1 },
   metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, marginBottom: space.lg },
   subtitle: { fontSize: font.secondary, color: color.acier, flexShrink: 1 },
   editLinkLabel: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },

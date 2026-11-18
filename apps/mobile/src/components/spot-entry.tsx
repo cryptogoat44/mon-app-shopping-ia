@@ -2,7 +2,7 @@ import { useEffect, type ReactNode } from "react";
 import { AccessibilityInfo, ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { VIDEO_AI } from "@monapp/shared-types";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { CameraIcon, TakePhotoIcon, VideoIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
@@ -168,7 +168,7 @@ const styles = themedStyles(() => ({
   cardHead: { flexDirection: "row", alignItems: "center", gap: space.md },
   thumb: { width: 72, height: 96, borderRadius: radius.sm, backgroundColor: color.plinthe },
   cardText: { flex: 1 },
-  cardTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, color: color.encre },
+  cardTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, lineHeight: serifLineHeight.body, color: color.encre },
   cardMeta: { fontSize: font.caption, color: color.acier, marginTop: 4, fontVariant: ["tabular-nums"] },
   cardNote: { fontSize: font.secondary, color: color.acier, marginTop: space.md, lineHeight: 21 },
   input: { marginTop: space.md },

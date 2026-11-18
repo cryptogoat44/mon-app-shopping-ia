@@ -43,7 +43,7 @@ function navigationTheme(): Theme {
 function RootNavigator() {
   const { session, profile, profileStatus } = useAuth();
   const pathname = usePathname();
-  // La police éditoriale (Newsreader) n'était jamais chargée : tous les
+  // La police éditoriale (theme/fonts.ts) n'était jamais chargée : tous les
   // titres tombaient dans une police par défaut (audit Lot Q, UX-01). On
   // garde l'écran de démarrage tant qu'elle n'est pas prête — sauf en cas
   // d'échec de chargement, où l'app démarre quand même avec la police de

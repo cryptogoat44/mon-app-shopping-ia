@@ -4,7 +4,7 @@ import ts from "typescript";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import marque from "@monapp/shared-types/marque.json";
 import { brandFileSlug } from "@monapp/shared-types";
-import { APP_FILE_SLUG, APP_GROUP, APP_NAME, APP_NAME_DISPLAY, APP_SCHEME, PUBLIC_WEB_URL } from "../src/constants/brand";
+import { APP_FILE_SLUG, APP_GROUP, APP_NAME_DISPLAY, APP_SCHEME, APP_WORDMARK, PUBLIC_WEB_URL } from "../src/constants/brand";
 import { configExpo, lireFichier } from "./expo-config";
 import { PRODUCTION_SERVICES } from "../web-headers";
 
@@ -123,7 +123,7 @@ describe("fichier unique de la marque (packages/shared-types/marque.json)", () =
 
   it("l'app lit ce fichier, et rien d'autre", () => {
     expect(APP_NAME_DISPLAY).toBe(marque.nom);
-    expect(APP_NAME).toBe(marque.nom.toLowerCase());
+    expect(APP_WORDMARK).toBe(marque.nom.toUpperCase());
     expect(APP_FILE_SLUG).toBe(brandFileSlug(marque.nom));
     expect(APP_SCHEME).toBe(marque.schemaLiens);
     expect(APP_GROUP).toBe(marque.groupeApple);
@@ -194,7 +194,7 @@ describe("textes de l'app avec un autre nom", () => {
       import("../src/constants/brand"),
     ]);
     expect(brand.APP_NAME_DISPLAY).toBe("Zorglub");
-    expect(brand.APP_NAME).toBe("zorglub");
+    expect(brand.APP_WORDMARK).toBe("ZORGLUB");
     expect(brand.APP_SCHEME).toBe("zorglub");
     expect(brand.APP_GROUP).toBe("group.fr.exemple.zorglub");
     const ensembles = {

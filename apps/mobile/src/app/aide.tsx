@@ -8,7 +8,7 @@ import { CONTACT_EMAIL } from "@/lib/contact";
 import { helpContactText } from "@/lib/help";
 import { splitPlaceholders } from "@/lib/legal";
 import { getActiveLocale, t } from "@/i18n";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { themedStyles } from "@/theme/themed-styles";
 
 // « Aide et contact » (chantier 3, point 6 de la feuille de route V1) :
@@ -97,10 +97,10 @@ const styles = themedStyles(() => ({
   nav: { height: 47, justifyContent: "center", paddingHorizontal: 12 },
   back: { fontSize: 26, color: color.encre },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 640, alignSelf: "center", width: "100%" },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre },
   intro: { fontSize: font.secondary, color: color.acier, marginTop: space.xs, lineHeight: 20 },
   card: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, marginTop: space.lg },
-  sectionTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, color: color.encre, marginBottom: space.sm },
+  sectionTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, lineHeight: serifLineHeight.body, color: color.encre, marginBottom: space.sm },
   spaced: { marginTop: space.xl },
   question: { marginBottom: space.md },
   questionTitle: { fontSize: font.secondary, fontWeight: "600", color: color.encre, marginBottom: space.xs },

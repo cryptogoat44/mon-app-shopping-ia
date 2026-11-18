@@ -3,7 +3,7 @@ import { ActivityIndicator, PanResponder, Platform, Pressable, Text, View, useWi
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import Svg, { Circle, Path } from "react-native-svg";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { themedStyles } from "@/theme/themed-styles";
 import { MinusIcon, PlusIcon } from "@/components/icons";
@@ -169,7 +169,7 @@ const styles = themedStyles(() => ({
   navLabel: { fontSize: font.body, color: color.encre },
   disabledLabel: { color: color.acier },
   content: { flex: 1, alignItems: "center", paddingHorizontal: space.lg, maxWidth: 480, alignSelf: "center", width: "100%" },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, color: color.encre, alignSelf: "flex-start" },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, alignSelf: "flex-start" },
   hint: { fontSize: font.secondary, color: color.acier, lineHeight: 20, marginTop: space.xs, marginBottom: space.md, alignSelf: "flex-start" },
   viewport: { overflow: "hidden", backgroundColor: color.nuit, borderRadius: radius.sm },
   absolute: { position: "absolute", left: 0, top: 0 },

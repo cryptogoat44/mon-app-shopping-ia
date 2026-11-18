@@ -9,7 +9,7 @@ import { INITIAL_WEB_URL } from "@/lib/initial-url";
 import { isTestBackend, newPasswordProblem, parseRecoveryUrl, recoveryExchangeProblem } from "@/lib/password-recovery";
 import { useToast } from "@/lib/toast-context";
 import { t } from "@/i18n";
-import { color, font, radius, serifFont, space } from "@/theme/tokens";
+import { color, font, radius, serifDisplayLetterSpacing, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -188,7 +188,7 @@ const styles = themedStyles(() => ({
   scroll: { flexGrow: 1 },
   content: { flex: 1, justifyContent: "center", paddingHorizontal: space.xl, maxWidth: 480, alignSelf: "center", width: "100%" },
   centered: { alignItems: "center" },
-  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, color: color.encre },
+  title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, lineHeight: serifLineHeight.display, letterSpacing: serifDisplayLetterSpacing, color: color.encre },
   subtitle: { fontSize: font.secondary, color: color.acier, marginTop: space.xs, marginBottom: space.xl, lineHeight: 20 },
   error: { fontSize: font.caption, marginBottom: space.md },
   field: { marginBottom: space.md },
