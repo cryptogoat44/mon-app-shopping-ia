@@ -307,6 +307,17 @@ export const RATE_LIMITS = {
   // bloquer un vrai utilisateur. Voir le plugin rateLimit.ts : appliquée
   // d'office à toute route qui ne déclare pas sa propre limite nommée.
   default: { max: 300, windowMs: MINUTE },
+
+  // Compte privé (lot « vie sociale ») : demandes d'abonnement d'un membre au
+  // MÊME compte privé, comptées par paire de comptes, seulement quand une
+  // demande est vraiment créée (consumeRateLimitFor). Annuler puis redemander
+  // en boucle ne peut pas harceler ; le remède définitif reste le blocage.
+  followRequestPair: {
+    max: 2,
+    windowMs: DAY,
+    error: "follow_request_limit",
+    message: "Vous avez déjà demandé à suivre ce compte récemment. Réessayez plus tard.",
+  },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

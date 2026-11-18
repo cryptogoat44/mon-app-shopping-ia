@@ -14,7 +14,9 @@ import {
   singleLine,
   type Profile,
 } from "@monapp/shared-types";
-import { DatabaseReadError, parseInput } from "../lib/validation.js";
+import { DatabaseReadError, parseDbRows, parseInput } from "../lib/validation.js";
+import { PRIVATE_ACCOUNTS_UNAVAILABLE, privateAccountsReady } from "../lib/audience.js";
+import { toMemberRows } from "../lib/memberRows.js";
 import { isFileTooLargeError, isTooManyPartsError } from "../lib/multipartErrors.js";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { isAdmin } from "../lib/moderation.js";
@@ -53,6 +55,7 @@ const updateMeSchema = z.object({
 const updateLocaleSchema = z.object({ locale: z.enum(APP_LOCALES) });
 const updatePieceSendsFromSchema = z.object({ pieceSendsFrom: z.enum(PIECE_SENDS_FROM) });
 const updateMessagesFromSchema = z.object({ messagesFrom: z.enum(MESSAGES_FROM) });
+const updatePrivateAccountSchema = z.object({ isPrivate: z.boolean() });
 
 // Ligne brute de la table `profiles` (colonnes en snake_case, cf. schema.sql), relue sans lui faire confiance.
 const profileRowSchema = z.object({
@@ -67,6 +70,8 @@ const profileRowSchema = z.object({
   piece_sends_from: z.enum(PIECE_SENDS_FROM).default("following"),
   // Lot messages (migration 0032) ; valeur par défaut tant que la colonne n'existe pas.
   messages_from: z.enum(MESSAGES_FROM).default(DEFAULT_MESSAGES_FROM),
+  // Compte privé (migration 0045) ; public tant que la colonne n'existe pas.
+  is_private: z.boolean().default(false),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -77,8 +82,49 @@ interface ProfileCounts {
   postsCount: number;
 }
 
+/** Compte privé (migration 0045) : ce que le profil en dit ; null tant que la
+ * migration manque (l'app cache alors le réglage). */
+interface PrivateAccountInfo {
+  followRequestsCount: number;
+}
+
+/** Au-delà, le nombre de demandes en attente n'est plus compté (l'app affiche ce plafond). */
+const FOLLOW_REQUESTS_COUNT_MAX = 100;
+const REQUESTER_ROWS = z.array(z.object({ requester_id: z.guid() }));
+
+/** Nombre de demandes d'abonnement en attente, telles que la liste les
+ * montre (jamais un compte en blocage, suspendu ou sans nom d'utilisateur :
+ * lib/memberRows.ts) ; null sans la migration 0045. Une seule lecture quand
+ * il n'y en a aucune. */
+async function readPrivateAccountInfo(fastify: FastifyInstance, userId: string): Promise<PrivateAccountInfo | null> {
+  if (!(await privateAccountsReady(fastify))) return null;
+  try {
+    return { followRequestsCount: await countFollowRequests(fastify, userId) };
+  } catch {
+    // Le profil reste lisible : seul le compteur des demandes manque.
+    fastify.log.warn("Demandes d'abonnement en attente : compteur illisible");
+    return { followRequestsCount: 0 };
+  }
+}
+
+async function countFollowRequests(fastify: FastifyInstance, userId: string): Promise<number> {
+  const pending = parseDbRows(
+    REQUESTER_ROWS,
+    await fastify.supabaseAdmin.from("follow_requests").select("requester_id").eq("target_id", userId).limit(FOLLOW_REQUESTS_COUNT_MAX),
+    "Demandes d'abonnement en attente"
+  );
+  if (pending.length === 0) return 0;
+  const shown = await toMemberRows(
+    fastify,
+    userId,
+    pending.map((row) => row.requester_id),
+    { contextOwnerId: userId }
+  );
+  return shown.length;
+}
+
 /** Profil renvoyé à l'app ; null si la ligne lue n'a pas la forme attendue. */
-function toProfile(row: unknown, counts: ProfileCounts, admin: boolean): Profile | null {
+function toProfile(row: unknown, counts: ProfileCounts, admin: boolean, privateAccount: PrivateAccountInfo | null): Profile | null {
   const parsed = profileRowSchema.safeParse(row);
   if (!parsed.success) return null;
   const profile = parsed.data;
@@ -96,6 +142,7 @@ function toProfile(row: unknown, counts: ProfileCounts, admin: boolean): Profile
     isAdmin: admin,
     pieceSendsFrom: profile.piece_sends_from,
     messagesFrom: profile.messages_from,
+    ...(privateAccount ? { isPrivate: profile.is_private, followRequestsCount: privateAccount.followRequestsCount } : {}),
   };
 }
 
@@ -125,10 +172,11 @@ export default async function meRoutes(fastify: FastifyInstance) {
     const userId = request.user!.id;
 
     // Rôle administrateur illisible : la requête échoue (500), jamais « non administrateur » par défaut.
-    const [{ data, error }, counts, admin] = await Promise.all([
+    const [{ data, error }, counts, admin, privateAccount] = await Promise.all([
       fastify.supabaseAdmin.from("profiles").select("*").eq("id", userId).single(),
       fetchFollowCounts(fastify, userId),
       isAdmin(fastify, userId),
+      readPrivateAccountInfo(fastify, userId),
     ]);
 
     if (error || !data) {
@@ -136,7 +184,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "profile_not_found", message: "Profil introuvable." });
     }
 
-    const profile = toProfile(data, counts, admin);
+    const profile = toProfile(data, counts, admin, privateAccount);
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -239,7 +287,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       if (cleanup.failed > 0) request.log.warn({ bucket: AVATAR_BUCKET, failed: cleanup.failed }, "Ancienne photo de profil restée dans le stockage");
     }
 
-    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin);
+    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readPrivateAccountInfo(fastify, userId));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -274,7 +322,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin);
+    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readPrivateAccountInfo(fastify, userId));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -326,7 +374,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
     // Un profil qu'on vient de compléter n'a par construction encore
     // aucun abonné, abonnement ni publication — pas besoin de requêter les
     // compteurs ici.
-    const profile = toProfile(data, { followersCount: 0, followingCount: 0, postsCount: 0 }, admin);
+    const profile = toProfile(data, { followersCount: 0, followingCount: 0, postsCount: 0 }, admin, await readPrivateAccountInfo(fastify, userId));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -365,6 +413,40 @@ export default async function meRoutes(fastify: FastifyInstance) {
     if (error) {
       request.log.error({ error }, "Échec de mise à jour du réglage des messages");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+    return reply.code(204).send();
+  });
+
+  // « Compte privé » (lot « vie sociale », migration 0045). Un réglage de
+  // confidentialité : modifiable même par un compte suspendu. Passer en privé
+  // ne change aucune ligne d'autre : les abonnés actuels restent abonnés, et
+  // la visibilité enregistrée de chaque publication ne bouge pas. Repasser en
+  // public efface D'ABORD les demandes en attente et leurs notifications :
+  // personne ne devient abonné sans une décision du propriétaire (les
+  // personnes concernées revoient « Suivre »). Sans la migration : indisponible.
+  fastify.put("/api/me/private-account", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    if (!(await privateAccountsReady(fastify))) return reply.code(404).send(PRIVATE_ACCOUNTS_UNAVAILABLE);
+    const body = parseInput(updatePrivateAccountSchema, request.body, reply, { error: "invalid_body", message: "Réglage invalide." });
+    if (!body) return;
+    const userId = request.user!.id;
+    const failed = () => reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+
+    if (!body.isPrivate) {
+      const requests = await fastify.supabaseAdmin.from("follow_requests").delete().eq("target_id", userId);
+      const notices = await fastify.supabaseAdmin.from("notifications").delete().eq("user_id", userId).eq("type", "follow_request");
+      if (requests.error || notices.error) {
+        // Rien n'est changé : le compte reste privé tant que ses demandes ne sont pas effacées.
+        request.log.error({ error: requests.error ?? notices.error }, "Échec de l'effacement des demandes d'abonnement");
+        return failed();
+      }
+    }
+    const { error } = await fastify.supabaseAdmin
+      .from("profiles")
+      .update({ is_private: body.isPrivate, updated_at: new Date().toISOString() })
+      .eq("id", userId);
+    if (error) {
+      request.log.error({ error }, "Échec de mise à jour du réglage « compte privé »");
+      return failed();
     }
     return reply.code(204).send();
   });

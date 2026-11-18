@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { BlockedUser } from "@monapp/shared-types";
 import { INVALID_ID, parseInput, userIdParamsSchema } from "../lib/validation.js";
 import { withoutSuspendedFaces } from "../lib/profileModeration.js";
+import { privateAccountsReady } from "../lib/audience.js";
 
 interface ProfileRow {
   id: string;
@@ -41,6 +42,14 @@ export default async function blocksRoutes(fastify: FastifyInstance) {
     // backend, même si ici les deux ids viennent du serveur, pas de l'utilisateur).
     await fastify.supabaseAdmin.from("follows").delete().eq("follower_id", blockerId).eq("followee_id", blockedId);
     await fastify.supabaseAdmin.from("follows").delete().eq("follower_id", blockedId).eq("followee_id", blockerId);
+
+    // Compte privé (migration 0045) : les demandes d'abonnement en attente
+    // entre les deux comptes disparaissent aussi, dans les deux sens (leurs
+    // notifications partent avec celles effacées ci-dessous).
+    if (await privateAccountsReady(fastify)) {
+      await fastify.supabaseAdmin.from("follow_requests").delete().eq("requester_id", blockerId).eq("target_id", blockedId);
+      await fastify.supabaseAdmin.from("follow_requests").delete().eq("requester_id", blockedId).eq("target_id", blockerId);
+    }
 
     // Et efface les notifications échangées entre les deux comptes : un
     // compte bloqué ne doit plus apparaître nulle part (audit Lot Q, SEC-04 —
