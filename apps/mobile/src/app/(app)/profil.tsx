@@ -7,7 +7,7 @@ import type { Post, UserProfile } from "@monapp/shared-types";
 import { ApiError, fetchUserPosts, fetchUserProfile, followUser, unfollowUser } from "@/lib/api";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
-import { MoreIcon } from "@/components/icons";
+import { LockIcon, MoreIcon } from "@/components/icons";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { SpotImage } from "@/components/spot-image";
 import { ImageUnavailable } from "@/components/image-unavailable";
@@ -15,6 +15,7 @@ import { ErrorMessage } from "@/components/error-message";
 import { FriendCollections } from "@/components/friend-collections";
 import { useToast } from "@/lib/toast-context";
 import { useMessagesStatus } from "@/lib/use-messages-status";
+import { followActionFor, followButton, followStateOf, showsPrivateShell } from "@/lib/follow-state";
 import { themedStyles } from "@/theme/themed-styles";
 import { Avatar } from "@/components/avatar";
 
@@ -28,6 +29,9 @@ function chunk<T>(items: T[], size: number): T[][] {
 // compteurs, suivre / ne plus suivre, signaler / bloquer, et ses
 // publications — chacune selon sa propre confidentialité (filtrée par le
 // serveur). JAMAIS son Vault, ni même le nombre de pièces qu'il contient.
+// Compte privé (lot « vie sociale ») : qui n'est pas un abonné accepté ne voit
+// que nom, photo, bio et compteurs, un cadenas et une phrase ; le bouton dit
+// « Suivre », puis « Demandé » (le toucher annule la demande).
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -81,12 +85,14 @@ export default function UserProfileScreen() {
 
   async function handleFollow() {
     if (!profile) return;
-    const wasFollowing = profile.isFollowing;
+    // Abonné(e) : ne plus suivre. Demande en attente : l'annuler. Sinon : suivre
+    // (compte privé : le serveur enregistre une demande).
+    const action = followActionFor(followStateOf(profile));
     setFollowBusy(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
-      if (wasFollowing) await unfollowUser(profile.id);
-      else await followUser(profile.id, "profile");
+      if (action === "follow") await followUser(profile.id, "profile");
+      else await unfollowUser(profile.id);
       // Les publications « abonnés » apparaissent ou disparaissent : on relit.
       const [loadedProfile, page] = await Promise.all([fetchUserProfile(profile.id), fetchUserPosts(profile.id)]);
       setProfile(loadedProfile);
@@ -139,25 +145,32 @@ export default function UserProfileScreen() {
     );
   }
 
+  const isShell = showsPrivateShell(profile);
+  const followState = followStateOf(profile);
+  const follow = followButton(followState, t.userProfile.unfollow);
+
   const header = (
     <View style={styles.header}>
       <Avatar uri={profile.avatarUrl} userId={profile.id} displayName={profile.displayName} username={profile.username} size={88} accessibilityLabel={profile.displayName} />
       <Text style={styles.name} accessibilityRole="header">{profile.displayName}</Text>
       <Text style={styles.handle}>@{profile.username}</Text>
       {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
+      {/* Compte privé vu par un inconnu : jamais le nombre de publications. */}
       <Text style={styles.counts}>
-        {t.userProfile.posts_count(profile.postsCount)} · {t.userProfile.followers(profile.followersCount)} · {t.userProfile.following(profile.followingCount)}
+        {isShell ? "" : `${t.userProfile.posts_count(profile.postsCount)} · `}
+        {t.userProfile.followers(profile.followersCount)} · {t.userProfile.following(profile.followingCount)}
       </Text>
       <View style={styles.actions}>
         <Pressable
-          style={[styles.follow, profile.isFollowing ? styles.following : null, followBusy ? styles.busy : null]}
+          style={[styles.follow, follow.primary ? null : styles.following, followBusy ? styles.busy : null]}
           onPress={handleFollow}
           disabled={followBusy}
           accessibilityRole="button"
+          accessibilityLabel={follow.label}
+          accessibilityHint={follow.hint}
+          testID="bouton-suivre"
         >
-          <Text style={[styles.followLabel, profile.isFollowing ? styles.followingLabel : null]}>
-            {profile.isFollowing ? t.userProfile.unfollow : t.userProfile.follow}
-          </Text>
+          <Text style={[styles.followLabel, follow.primary ? null : styles.followingLabel]}>{follow.label}</Text>
         </Pressable>
         {messages.enabled ? (
           <Pressable
@@ -171,9 +184,20 @@ export default function UserProfileScreen() {
           </Pressable>
         ) : null}
       </View>
-      {/* Lot collections : ses collections montrées aux amis (rien pour les autres). */}
-      <FriendCollections userId={profile.id} displayName={profile.displayName} refreshKey={String(profile.isFollowing)} />
-      <Text style={styles.sectionTitle}>{t.userProfile.posts}</Text>
+      {isShell ? (
+        <View style={styles.shell} testID="profil-prive">
+          <View accessible accessibilityLabel={t.privateAccount.lockLabel}>
+            <LockIcon size={28} tint={color.acier} />
+          </View>
+          <Text style={styles.shellText}>{t.privateAccount.shellNotice}</Text>
+        </View>
+      ) : (
+        <>
+          {/* Lot collections : ses collections montrées aux amis (rien pour les autres). */}
+          <FriendCollections userId={profile.id} displayName={profile.displayName} refreshKey={String(profile.isFollowing)} />
+          <Text style={styles.sectionTitle}>{t.userProfile.posts}</Text>
+        </>
+      )}
     </View>
   );
 
@@ -181,7 +205,7 @@ export default function UserProfileScreen() {
     <SafeAreaView style={styles.screen}>
       {nav}
       <FlatList
-        data={chunk(posts ?? [], 3)}
+        data={isShell ? [] : chunk(posts ?? [], 3)}
         keyExtractor={(row) => row.map((post) => post.id).join("-")}
         contentContainerStyle={styles.content}
         ListHeaderComponent={header}
@@ -213,8 +237,8 @@ export default function UserProfileScreen() {
             ))}
           </View>
         )}
-        ListEmptyComponent={<Text style={styles.empty}>{t.userProfile.noPosts}</Text>}
-        onEndReached={handleLoadMore}
+        ListEmptyComponent={isShell ? null : <Text style={styles.empty}>{t.userProfile.noPosts}</Text>}
+        onEndReached={isShell ? undefined : handleLoadMore}
         onEndReachedThreshold={0.4}
         ListFooterComponent={loadingMore ? <ActivityIndicator color={color.encre} style={styles.footer} /> : null}
       />
@@ -252,6 +276,8 @@ const styles = themedStyles(() => ({
   followLabel: { color: color.blanc, fontSize: font.secondary, fontWeight: "600" },
   followingLabel: { color: color.encre },
   sectionTitle: { alignSelf: "flex-start", fontSize: font.body, fontWeight: "600", color: color.encre, marginTop: space.xl },
+  shell: { alignItems: "center", gap: space.sm, marginTop: space.xl, paddingHorizontal: space.lg },
+  shellText: { fontSize: font.secondary, color: color.acier, textAlign: "center", lineHeight: 20 },
   gridRow: { flexDirection: "row", gap: space.sm, marginBottom: space.sm },
   cell: { width: "32%", aspectRatio: 1, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
   empty: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginTop: space.md },

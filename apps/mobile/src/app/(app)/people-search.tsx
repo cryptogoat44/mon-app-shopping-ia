@@ -3,12 +3,13 @@ import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import type { PublicProfile } from "@monapp/shared-types";
+import type { FollowState, PublicProfile } from "@monapp/shared-types";
 import { ApiError, followUser, searchUsers, unfollowUser } from "@/lib/api";
 import { color, font, radius, space } from "@/theme/tokens";
 import { MoreIcon, SearchIcon } from "@/components/icons";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { useToast } from "@/lib/toast-context";
+import { followActionFor, followButton, followStateOf } from "@/lib/follow-state";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
 import { t } from "@/i18n";
@@ -25,7 +26,8 @@ function PersonRow({
   onOpenMenu: () => void;
   onOpenProfile: () => void;
 }) {
-  const [following, setFollowing] = useState(person.isFollowing);
+  // Suivre, Demandé (compte privé : demande en attente) ou Suivi(e).
+  const [state, setState] = useState<FollowState>(followStateOf(person));
   const [busy, setBusy] = useState(false);
   const { showToast } = useToast();
 
@@ -33,12 +35,14 @@ function PersonRow({
     setBusy(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
-      if (following) {
-        await unfollowUser(person.id);
+      if (followActionFor(state) === "follow") {
+        // Compte privé : le serveur répond « demandé ».
+        setState(await followUser(person.id, "search"));
       } else {
-        await followUser(person.id, "search");
+        // Ne plus suivre, ou annuler la demande.
+        await unfollowUser(person.id);
+        setState("none");
       }
-      setFollowing((f) => !f);
       onToggle(person.id);
     } catch (e) {
       // Silencieux pour la plupart des erreurs (l'état local ne change pas,
@@ -52,6 +56,8 @@ function PersonRow({
       setBusy(false);
     }
   }
+
+  const button = followButton(state, t.peopleSearch.following);
 
   return (
     <View style={styles.row}>
@@ -67,10 +73,15 @@ function PersonRow({
           <Text style={styles.username}>@{person.username}</Text>
         </View>
       </Pressable>
-      <Pressable accessibilityRole="button" onPress={handleToggle} disabled={busy} style={[styles.followButton, following ? styles.followingButton : null]}>
-        <Text style={[styles.followButtonLabel, following ? styles.followingButtonLabel : null]}>
-          {following ? t.peopleSearch.following : t.userProfile.follow}
-        </Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={button.label}
+        accessibilityHint={button.hint}
+        onPress={handleToggle}
+        disabled={busy}
+        style={[styles.followButton, state === "following" ? styles.followingButton : null]}
+      >
+        <Text style={[styles.followButtonLabel, state === "following" ? styles.followingButtonLabel : null]}>{button.label}</Text>
       </Pressable>
       <Pressable onPress={onOpenMenu} hitSlop={11} style={styles.moreButton} accessibilityRole="button" accessibilityLabel={t.common.moreOptions}>
         <MoreIcon size={18} tint={color.acier} />

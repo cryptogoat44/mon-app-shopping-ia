@@ -6,6 +6,7 @@ import * as Haptics from "expo-haptics";
 import type { PrivacyLevel, VaultItem } from "@monapp/shared-types";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, createLifestylePost, fetchVault, sharePurchasePost } from "@/lib/api";
+import { PrivateAccountNote } from "@/components/private-account-note";
 import { SpotImage } from "@/components/spot-image";
 import { PRIVACY_LEVELS } from "@/lib/vault-labels";
 import { color, font, radius, space } from "@/theme/tokens";
@@ -258,6 +259,8 @@ export default function NewPostScreen() {
             </Pressable>
           ))}
         </View>
+        {/* Compte privé : « Public » ne veut alors dire que « mes abonnés ». */}
+        <PrivateAccountNote style={styles.privateAccountNote} />
       </ScrollView>
 
       <Modal visible={pickerOpen} animationType="slide" transparent onRequestClose={() => setPickerOpen(false)}>
@@ -329,6 +332,7 @@ const styles = themedStyles(() => ({
   tagRemove: { fontSize: font.caption, color: color.acier, marginLeft: 2 },
   addTag: { borderWidth: 1, borderColor: color.filet, borderStyle: "dashed", borderRadius: radius.full, paddingVertical: 6, paddingHorizontal: 12 },
   addTagLabel: { fontSize: font.caption, color: color.acier },
+  privateAccountNote: { marginTop: space.sm },
   privacyPill: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.full, paddingVertical: 6, paddingHorizontal: 12 },
   privacyPillActive: { backgroundColor: color.vert, borderColor: color.vert },
   privacyLabel: { fontSize: font.caption, color: color.acier },

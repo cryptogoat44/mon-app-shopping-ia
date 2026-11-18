@@ -16,6 +16,7 @@ import { FROM_ALERT } from "@/lib/push-state";
 import { shareWishOutside } from "@/lib/share-wish";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
+import { PrivateAccountNote } from "@/components/private-account-note";
 import { ProductFrame } from "@/components/product-frame";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { ErrorMessage } from "@/components/error-message";
@@ -268,6 +269,8 @@ export default function WishlistItemScreen() {
                     </Pressable>
                   ))}
                 </View>
+                {/* Compte privé : « Public » ne veut alors dire que « mes abonnés ». */}
+                <PrivateAccountNote />
                 <Pressable
                   accessibilityRole="button"
                   style={[styles.secondaryButton, styles.republishButton]}
