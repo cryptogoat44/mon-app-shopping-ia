@@ -191,13 +191,14 @@ describe("export RGPD complet", () => {
       .select("id")
       .single();
     await app.supabaseAdmin.from("affiliate_links").insert({ product_match_id: match!.id, network: "direct", affiliate_url: "https://example.com/p" });
-    // Compte privé : une demande reçue (de l'administrateur de test) et une
-    // demande envoyée (à lui), écrites directement — ni abonnement ni blocage
-    // entre ces deux comptes.
+    // Compte privé : une demande reçue (de l'ami) et une demande envoyée (à
+    // lui), écrites directement. Jamais l'administratrice de test : elle ne
+    // doit être nommée nulle part dans l'export. Jamais l'inconnu non plus :
+    // il est bloqué plus bas, ses demandes seraient donc écartées.
     if (FOLLOW_REQUEST_SECTIONS.length > 0) {
       const requests = await app.supabaseAdmin.from("follow_requests").insert([
-        { requester_id: admin.id, target_id: user.id },
-        { requester_id: user.id, target_id: admin.id },
+        { requester_id: friend.id, target_id: user.id },
+        { requester_id: user.id, target_id: friend.id },
       ]);
       if (requests.error) throw requests.error;
     }
@@ -393,6 +394,12 @@ describe("export RGPD complet", () => {
       expect(body[section].length, section).toBeGreaterThan(0);
     }
     expect(body.adminRole).toEqual({ created_at: expect.any(String) });
+    // Les demandes d'abonnement nomment l'ami, jamais l'administratrice de test.
+    if (FOLLOW_REQUEST_SECTIONS.length > 0) {
+      expect(body.followRequestsSent.map((row: { target_id: string }) => row.target_id)).toEqual([friend.id]);
+      expect(body.followRequestsReceived.map((row: { requester_id: string }) => row.requester_id)).toEqual([friend.id]);
+      expect(JSON.stringify(body)).not.toContain(admin.id);
+    }
     expect(body.suspension).toMatchObject({ moderation_action_id: expect.any(String) });
     // Un appareil : son système et ses dates (avec 0036 : s'il reçoit les messages, les alertes), jamais son jeton.
     const deviceColumns = ALERT_SECTIONS.length > 0 ? ["created_at", "notify_alerts", "notify_messages", "platform", "updated_at"] : ["created_at", "platform", "updated_at"];
