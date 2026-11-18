@@ -474,10 +474,11 @@ describe("textes", () => {
     );
     // Les mentions figurent dans ce qui est conservé, et dans ce qui est effacé avec le compte
     // (suivies des personnes identifiées, migration 0047).
-    expect(french).toContain("commentaires, mentions, personnes identifiées, « j'aime », notifications");
-    expect(french).toContain("publications, commentaires, mentions, personnes identifiées, « j'aime », abonnements");
-    expect(english).toContain("comments, mentions, tagged people, likes, notifications");
-    expect(english).toContain("posts, comments, mentions, tagged people, likes, follows");
+    // (« publications enregistrées » : migration 0048, publications-enregistrees.test.ts.)
+    expect(french).toContain("commentaires, mentions, personnes identifiées, « j'aime », publications enregistrées, notifications");
+    expect(french).toContain("publications, commentaires, mentions, personnes identifiées, « j'aime », publications enregistrées, abonnements");
+    expect(english).toContain("comments, mentions, tagged people, likes, saved posts, notifications");
+    expect(english).toContain("posts, comments, mentions, tagged people, likes, saved posts, follows");
     // Le nom du réglage est celui de l'app.
     expect(french).toContain(`« ${fr.commentThreads.settingTitle} »`);
     expect(english).toContain(`“${en.commentThreads.settingTitle}”`);
