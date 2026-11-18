@@ -268,11 +268,14 @@ describe("textes", () => {
     expect(french).toContain("vous n'apparaissez plus dans les listes des autres comptes pour eux");
     expect(french).toContain("la personne dont vous refusez la demande n'est pas prévenue");
     expect(french).toContain("Si vous repassez en compte public, les demandes en attente sont effacées.");
+    // Ce qu'un compte privé écrit ou aime chez un autre membre suit la visibilité de cette publication.
+    expect(french).toContain("Ce que vous écrivez ou aimez sous la publication d'un autre membre reste visible selon la visibilité de cette publication, et son auteur en est informé.");
     // La limite connue reste dite : une image dont on a gardé l'adresse reste lisible.
     expect(french).toContain("peut continuer à l'ouvrir");
     const english = section(privacyPolicyEn, "Who can see what");
     expect(english).toContain("You can make your account private.");
     expect(english).toContain("visible only to followers you have approved");
+    expect(english).toContain("What you write or like under another member's post remains visible according to that post's visibility, and its author is told.");
     expect(english).toContain("a person whose request you decline is not notified");
     expect(english).toContain("If you switch back to a public account, pending requests are erased.");
   });
