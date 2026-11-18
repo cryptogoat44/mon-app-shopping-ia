@@ -20,6 +20,8 @@ import { DatabaseReadError, parseDbRows, parseInput } from "../lib/validation.js
 import { PRIVATE_ACCOUNTS_UNAVAILABLE, privateAccountsReady } from "../lib/audience.js";
 import { toMemberRows } from "../lib/memberRows.js";
 import { COMMENT_THREADS_UNAVAILABLE, commentThreadsReady } from "../lib/comments.js";
+import { postExtrasReady } from "../lib/postExtras.js";
+import { dropUnseeableTags } from "../lib/peopleTags.js";
 import { isFileTooLargeError, isTooManyPartsError } from "../lib/multipartErrors.js";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { isAdmin } from "../lib/moderation.js";
@@ -490,6 +492,12 @@ export default async function meRoutes(fastify: FastifyInstance) {
     if (error) {
       request.log.error({ error }, "Échec de mise à jour du réglage « compte privé »");
       return failed();
+    }
+    // Identifications (migration 0047) : en passant en privé, un membre qui
+    // n'est pas un abonné accepté ne voit plus aucune publication du compte ;
+    // il y perd ses identifications. Échec : journalisé, le compte est déjà privé.
+    if (body.isPrivate && (await postExtrasReady(fastify).catch(() => false))) {
+      await dropUnseeableTags(fastify, { authorId: userId }).catch(() => request.log.warn("Compte passé en privé : identifications non relues"));
     }
     return reply.code(204).send();
   });

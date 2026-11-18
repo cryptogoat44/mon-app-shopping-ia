@@ -1,7 +1,24 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { MEMBER_LIST_PAGE_SIZE, POST_TYPES, PRIVACY_LEVELS, type MemberPage, type Post, type PostTaggedPiece, type PostWish, type PrivacyLevel, type TaggedPieceInput } from "@monapp/shared-types";
+import {
+  MEMBER_LIST_PAGE_SIZE,
+  PEOPLE_TAGS_MAX,
+  POST_MEDIA_WINDOW_MIN,
+  POST_PHOTOS_MAX,
+  POST_TYPES,
+  PRIVACY_LEVELS,
+  type AddPostMediaResponse,
+  type MemberPage,
+  type Post,
+  type PostAuthor,
+  type PostExtrasStatus,
+  type PostPhoto,
+  type PostTaggedPiece,
+  type PostWish,
+  type PrivacyLevel,
+  type TaggedPieceInput,
+} from "@monapp/shared-types";
 import { isFileTooLargeError } from "../lib/multipartErrors.js";
 import { fetchAffiliateUrls, isAffiliateLink } from "../lib/affiliateLinks.js";
 import { DatabaseReadError, INVALID_CURSOR, INVALID_ID, cursorQuerySchema, idParamsSchema, parseDbRows, parseInput, webUrlOrNull } from "../lib/validation.js";
@@ -16,6 +33,10 @@ import { notify } from "../lib/notify.js";
 import { fetchBlockedUserIds } from "../lib/blocks.js";
 import { toMemberRows } from "../lib/memberRows.js";
 import { commentThreadsReady } from "../lib/comments.js";
+import { POST_EXTRAS_UNAVAILABLE, postExtrasReady } from "../lib/postExtras.js";
+import { PEOPLE_TAG_NOT_FOUND, dropUnseeableTags, resolvePeopleTags } from "../lib/peopleTags.js";
+import { ImageQueueFullError } from "../lib/imageSafety.js";
+import { consumeRateLimit } from "../plugins/rateLimit.js";
 
 // Une publication ne peut pas devenir une liste sans fin de tags — reste
 // large pour un usage légitime (plusieurs pièces sur une même tenue) sans
@@ -40,6 +61,21 @@ const CREATABLE_POST_TYPES = ["lifestyle", "purchase"] as const;
 const updatePostSchema = z.object({
   privacy: z.enum(PRIVACY_LEVELS),
 });
+
+// Personnes identifiées (migration 0047) : PEOPLE_TAGS_MAX comptes distincts au plus.
+const peopleTagsInputSchema = z
+  .array(z.guid())
+  .max(PEOPLE_TAGS_MAX)
+  .refine((ids) => new Set(ids).size === ids.length);
+const INVALID_PEOPLE_TAGS = { error: "invalid_body", message: "Identifications invalides." } as const;
+const POST_NOT_FOUND = { error: "post_not_found", message: "Publication introuvable." } as const;
+const POST_MEDIA_CLOSED = { error: "post_media_closed", message: "Cette publication ne peut plus recevoir de photo." } as const;
+const POST_MEDIA_FULL = { error: "post_media_full", message: "Cette publication a déjà ses 5 photos." } as const;
+const POST_MEDIA_CONFLICT = { error: "post_media_conflict", message: "Une autre photo de cette publication arrivait au même moment. Réessayez." } as const;
+const postTagParamsSchema = z.object({ id: z.guid(), userId: z.guid() });
+/** Photos 2 à 5 (migration 0047), dans l'ordre. */
+const POST_MEDIA_ROWS = z.array(z.object({ post_id: z.guid(), position: z.number().int(), media_url: z.string(), media_thumb_url: z.string() }));
+const PEOPLE_TAG_ROWS = z.array(z.object({ post_id: z.guid(), user_id: z.guid() }));
 
 // Ligne de la table `posts` lue avec select("*"), relue sans lui faire confiance.
 const postRowSchema = z.object({
@@ -223,6 +259,69 @@ async function resolveTaggedPieces(
   return resolved;
 }
 
+interface PostExtras {
+  media: Map<string, PostPhoto[]>;
+  people: Map<string, PostAuthor[]>;
+}
+
+/** Photos 2 à 5 et personnes identifiées d'une page de publications
+ * (migration 0047) : deux lectures sur les identifiants de la page, puis LA
+ * règle des listes de membres (lib/memberRows.ts : ni compte en blocage avec
+ * le lecteur, ni suspendu, ni sans nom ; un compte privé seulement pour
+ * lui-même, ses abonnés acceptés et l'auteur de la publication). Seules les
+ * publications « Une photo » en ont. Relève une erreur si une lecture échoue. */
+async function readPostExtras(fastify: FastifyInstance, rows: PostRow[], viewerId: string): Promise<PostExtras> {
+  const extras: PostExtras = { media: new Map(), people: new Map() };
+  const photoPosts = rows.filter((row) => row.type === "lifestyle");
+  if (photoPosts.length === 0 || !(await postExtrasReady(fastify))) return extras;
+  const postIds = photoPosts.map((row) => row.id);
+  const db = fastify.supabaseAdmin;
+  const [mediaRows, tagRows] = await Promise.all([
+    db.from("post_media").select("post_id, position, media_url, media_thumb_url").in("post_id", postIds).order("position", { ascending: true }),
+    db.from("post_people_tags").select("post_id, user_id").in("post_id", postIds).order("created_at", { ascending: true }),
+  ]);
+  const media = parseDbRows(POST_MEDIA_ROWS, mediaRows, "Photos des publications");
+  const tags = parseDbRows(PEOPLE_TAG_ROWS, tagRows, "Personnes identifiées");
+
+  for (const row of photoPosts) {
+    const more = media.filter((photo) => photo.post_id === row.id).sort((a, b) => a.position - b.position);
+    if (more.length === 0 || row.media_url === null) continue;
+    extras.media.set(row.id, [{ url: row.media_url, thumbUrl: row.media_thumb_url ?? row.media_url }, ...more.map((photo) => ({ url: photo.media_url, thumbUrl: photo.media_thumb_url }))]);
+  }
+
+  if (tags.length > 0) {
+    // L'auteur voit toutes les personnes qu'il a identifiées ; les autres
+    // lecteurs, selon la règle commune. Deux appels au plus par page.
+    const authorOf = new Map(photoPosts.map((row) => [row.id, row.user_id]));
+    const onOwnPosts = tags.filter((tag) => authorOf.get(tag.post_id) === viewerId);
+    const onOthers = tags.filter((tag) => authorOf.get(tag.post_id) !== viewerId);
+    const [ownRows, otherRows] = await Promise.all([
+      toMemberRows(
+        fastify,
+        viewerId,
+        onOwnPosts.map((tag) => tag.user_id),
+        { contextOwnerId: viewerId }
+      ),
+      toMemberRows(
+        fastify,
+        viewerId,
+        onOthers.map((tag) => tag.user_id),
+        { contextOwnerId: null }
+      ),
+    ]);
+    const shownOwn = new Map(ownRows.map((member) => [member.id, member]));
+    const shownOther = new Map(otherRows.map((member) => [member.id, member]));
+    for (const tag of tags) {
+      const member = (authorOf.get(tag.post_id) === viewerId ? shownOwn : shownOther).get(tag.user_id);
+      if (!member) continue;
+      const list = extras.people.get(tag.post_id) ?? [];
+      list.push({ id: member.id, username: member.username, displayName: member.displayName, avatarUrl: member.avatarUrl });
+      extras.people.set(tag.post_id, list);
+    }
+  }
+  return extras;
+}
+
 /** `knownBlocked` : les comptes en blocage avec le lecteur, quand l'appelant
  * les connaît déjà. Les deux créations (publication, republication d'une
  * envie) passent un ensemble vide : une publication toute neuve n'a ni
@@ -361,7 +460,19 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
   // l'image du résultat d'origine. Avant : la miniature de Google, floue.
   const purchaseVaultItems = [...vaultItemById.values()];
   const hdByVaultItem = new Map<string, string | null>();
-  const [hdUrls, wishByItem] = await Promise.all([fetchHdImageUrls(fastify, purchaseVaultItems), fetchPostWishes(fastify, rows)]);
+  // Photos 2 à 5 et personnes identifiées (migration 0047). Lecture
+  // impossible : la publication part avec sa seule première photo et sans
+  // personne identifiée — jamais une liste non filtrée, jamais une erreur
+  // pour une publication déjà enregistrée.
+  const noExtras: PostExtras = { media: new Map(), people: new Map() };
+  const [hdUrls, wishByItem, extras] = await Promise.all([
+    fetchHdImageUrls(fastify, purchaseVaultItems),
+    fetchPostWishes(fastify, rows),
+    readPostExtras(fastify, rows, viewerId).catch(() => {
+      fastify.log.warn("Publications sans leurs photos 2 à 5 ni personnes identifiées : lecture impossible");
+      return noExtras;
+    }),
+  ]);
   purchaseVaultItems.forEach((item, index) => hdByVaultItem.set(item.id, hdUrls[index] ?? null));
 
   return rows.map((row) => {
@@ -369,6 +480,8 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
     const vaultItem = row.vault_item_id ? vaultItemById.get(row.vault_item_id) : undefined;
     const mediaHdUrl =
       vaultItem && row.media_url === vaultItem.image_url ? (hdByVaultItem.get(vaultItem.id) ?? null) : null;
+    const media = extras.media.get(row.id);
+    const people = extras.people.get(row.id);
     return {
       id: row.id,
       type: row.type,
@@ -391,6 +504,8 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
       reactionCount: reactionCountByPost.get(row.id) ?? 0,
       viewerHasReacted: viewerReactedPosts.has(row.id),
       commentCount: commentCountByPost.get(row.id) ?? 0,
+      ...(media ? { media } : {}),
+      ...(people && people.length > 0 ? { people } : {}),
     };
   });
 }
@@ -453,6 +568,15 @@ export default async function postsRoutes(fastify: FastifyInstance) {
 
     const hydrated = await hydratePosts(fastify, pageRows, userId);
     return reply.send({ posts: hydrated, nextCursor });
+  });
+
+  // Plusieurs photos et identifications (migration 0047) : la base sait-elle
+  // les garder ? Sans elles, l'app garde le choix d'une seule photo et cache
+  // « Identifier des personnes ». Base illisible : « non », sans erreur.
+  fastify.get("/api/posts/status", { preHandler: fastify.requireAuth }, async (_request, reply) => {
+    const ready = await postExtrasReady(fastify).catch(() => false);
+    const status: PostExtrasStatus = { carousel: ready, peopleTags: ready };
+    return reply.send(status);
   });
 
   // Alimente le segment "Lifestyle" du profil : uniquement les publications
@@ -540,6 +664,28 @@ export default async function postsRoutes(fastify: FastifyInstance) {
           return reply.code(400).send({ error: "invalid_body", message: "Pièces taguées invalides." });
         }
         taggedPiecesInput = parsed.data;
+      }
+
+      // Personnes identifiées (migration 0047) : une publication « Une photo »
+      // seulement. Sans la migration, la publication est refusée AVANT toute
+      // écriture : jamais publiée sans les identifications demandées.
+      let peopleTagIds: string[] = [];
+      if (fields.peopleTags) {
+        let raw: unknown;
+        try {
+          raw = JSON.parse(fields.peopleTags);
+        } catch {
+          return reply.code(400).send(INVALID_PEOPLE_TAGS);
+        }
+        const parsed = peopleTagsInputSchema.safeParse(raw);
+        if (!parsed.success) return reply.code(400).send(INVALID_PEOPLE_TAGS);
+        peopleTagIds = parsed.data;
+      }
+      if (peopleTagIds.length > 0) {
+        if (type !== "lifestyle") {
+          return reply.code(400).send({ error: "invalid_body", message: "Seule une publication « Une photo » peut identifier des personnes." });
+        }
+        if (!(await postExtrasReady(fastify))) return reply.code(404).send(POST_EXTRAS_UNAVAILABLE);
       }
 
       let resolvedTaggedPieces: ResolvedTaggedPiece[] = [];
@@ -685,6 +831,30 @@ export default async function postsRoutes(fastify: FastifyInstance) {
         }
       }
 
+      // Personnes identifiées : seulement celles que la règle laisse passer
+      // (lib/peopleTags.ts), chacune sur le budget de mentions de l'heure. Une
+      // lecture ou une écriture impossible publie sans identification, jamais
+      // une erreur pour une publication déjà enregistrée.
+      let people: string[] = [];
+      if (peopleTagIds.length > 0) {
+        try {
+          people = await resolvePeopleTags(fastify, { authorId: userId, privacy, userIds: peopleTagIds, consume: () => consumeRateLimit(request, "mentionNotify") });
+        } catch {
+          request.log.warn("Identifications non retenues : règles illisibles");
+        }
+      }
+      if (people.length > 0) {
+        const written = await fastify.supabaseAdmin.from("post_people_tags").insert(people.map((personId) => ({ post_id: inserted.id, user_id: personId, author_id: userId })));
+        if (written.error) {
+          request.log.warn({ code: (written.error as { code?: string }).code ?? null }, "Identifications non enregistrées");
+          people = [];
+        }
+      }
+      // Chaque membre identifié est prévenu (lib/notify.ts : jamais à qui ne voit pas la publication).
+      for (const personId of people) {
+        await notify(fastify, request.log, { recipientId: personId, actorId: userId, type: "tag", postId: inserted.id, oncePerPost: true });
+      }
+
       // Publication toute neuve : aucun « j'aime », aucun commentaire, donc
       // aucun blocage à lire — et rien qui puisse la faire échouer après coup.
       const [hydrated] = await hydratePosts(fastify, [parsePostRow(inserted)], userId, new Set());
@@ -733,6 +903,13 @@ export default async function postsRoutes(fastify: FastifyInstance) {
     if (!updated) {
       return reply.code(404).send({ error: "post_not_found", message: "Publication introuvable." });
     }
+    // Une identification suit l'accès (migration 0047) : qui ne voit plus la
+    // publication perd la sienne. Échec : journalisé, la visibilité est déjà changée.
+    if (await postExtrasReady(fastify).catch(() => false)) {
+      await dropUnseeableTags(fastify, { authorId: userId, postId: params.id }).catch(() => {
+        request.log.warn("Visibilité réduite : identifications non relues");
+      });
+    }
     const [hydrated] = await hydratePosts(fastify, [parsePostRow(updated)], userId);
     return reply.send(hydrated);
   });
@@ -756,6 +933,19 @@ export default async function postsRoutes(fastify: FastifyInstance) {
     if (!post) {
       return reply.code(404).send({ error: "post_not_found", message: "Publication introuvable." });
     }
+    // Photos 2 à 5 (migration 0047) : lues AVANT la suppression (la base les
+    // efface en cascade), pour effacer aussi leurs fichiers. Lecture
+    // impossible : rien n'est supprimé, à réessayer — jamais une photo laissée
+    // en ligne derrière une publication supprimée.
+    const extraFiles: string[] = [];
+    if (await postExtrasReady(fastify)) {
+      const extras = parseDbRows(
+        POST_MEDIA_ROWS,
+        await fastify.supabaseAdmin.from("post_media").select("post_id, position, media_url, media_thumb_url").eq("post_id", params.id).eq("user_id", userId),
+        "Photos d'une publication à supprimer"
+      );
+      for (const photo of extras) extraFiles.push(photo.media_url, photo.media_thumb_url);
+    }
 
     const { error } = await fastify.supabaseAdmin.from("posts").delete().eq("id", params.id).eq("user_id", userId);
     if (error) {
@@ -764,11 +954,152 @@ export default async function postsRoutes(fastify: FastifyInstance) {
     }
 
     const mediaUrl = post.media_url as string | null;
-    for (const url of [mediaUrl, post.media_thumb_url as string | null]) {
+    for (const url of [mediaUrl, post.media_thumb_url as string | null, ...extraFiles]) {
       if (url && extractOwnedStoragePath(url, "post-media", userId)) {
         await deleteOwnedStorageFile(fastify, "post-media", userId, url);
       }
     }
+    return reply.code(204).send();
+  });
+
+  // Ajouter une photo (2 à 5) à SA publication « Une photo » (migration
+  // 0047), une par requête : les limites de l'envoi (un fichier par requête)
+  // et la mémoire du serveur restent celles d'une publication. Seulement dans
+  // les 10 minutes qui suivent la publication : ensuite, elle a pu être vue,
+  // et vérifiée par la modération ; elle ne change plus. Même traitement
+  // qu'une photo publiée (lib/photos.ts) ; les fichiers vont dans le dossier
+  // de l'auteur, comme la photo 1. Rien n'est jamais rangé sans être rattaché
+  // à la publication : un enregistrement manqué efface les deux fichiers.
+  fastify.post(
+    "/api/posts/:id/media",
+    { preHandler: [fastify.requireAuth, fastify.requireActiveAccount, fastify.rateLimit("postMedia")], config: { rateLimitName: "postMedia" } },
+    async (request, reply) => {
+      const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
+      if (!params) return;
+      const userId = request.user!.id;
+      if (!(await postExtrasReady(fastify))) return reply.code(404).send(POST_EXTRAS_UNAVAILABLE);
+
+      // Sa publication, « Une photo », pas masquée : sinon 404, sans dire pourquoi.
+      const { data, error } = await shownPosts(fastify, "*").eq("id", params.id).eq("user_id", userId).maybeSingle();
+      if (error) throw new DatabaseReadError("Lecture d'une publication impossible");
+      const post = data === null ? null : parsePostRow(data);
+      if (!post || post.type !== "lifestyle" || post.media_url === null) return reply.code(404).send(POST_NOT_FOUND);
+      if (Date.now() - Date.parse(post.created_at) >= POST_MEDIA_WINDOW_MIN * 60_000) return reply.code(409).send(POST_MEDIA_CLOSED);
+
+      const db = fastify.supabaseAdmin;
+      const countExtras = async (): Promise<number> => {
+        const { count, error: countError } = await db.from("post_media").select("post_id", { count: "exact", head: true }).eq("post_id", post.id);
+        if (countError || typeof count !== "number") throw new DatabaseReadError("Photos d'une publication : nombre illisible");
+        return count;
+      };
+      if ((await countExtras()) >= POST_PHOTOS_MAX - 1) return reply.code(409).send(POST_MEDIA_FULL);
+
+      let fileBuffer: Buffer;
+      try {
+        const file = await request.file();
+        if (!file || !file.mimetype.startsWith("image/")) {
+          return reply.code(400).send({ error: "invalid_file", message: "Une photo est obligatoire." });
+        }
+        fileBuffer = await file.toBuffer();
+      } catch (fileError) {
+        if (isFileTooLargeError(fileError)) {
+          return reply.code(413).send({ error: "file_too_large", message: "Le fichier est trop volumineux (10 Mo maximum)." });
+        }
+        throw fileError;
+      }
+
+      let display: Buffer;
+      let thumb: Buffer;
+      try {
+        [display, thumb] = await Promise.all([optimizePhoto(fileBuffer, PHOTO_SIZES.display), optimizePhoto(fileBuffer, PHOTO_SIZES.thumb, 78)]);
+      } catch (photoError) {
+        // File des traitements pleine : « réessayez » (app.ts), pas « photo illisible ».
+        if (photoError instanceof ImageQueueFullError) throw photoError;
+        return reply.code(400).send({ error: "invalid_file", message: "Cette photo n'a pas pu être lue." });
+      }
+      const base = `${userId}/${randomUUID()}`;
+      const paths = [`${base}.jpg`, `${base}-mini.jpg`];
+      const bucket = db.storage.from("post-media");
+      const [displayUpload, thumbUpload] = await Promise.all([
+        bucket.upload(paths[0]!, display, { contentType: "image/jpeg", upsert: false }),
+        bucket.upload(paths[1]!, thumb, { contentType: "image/jpeg", upsert: false }),
+      ]);
+      const removeFiles = async () => {
+        const removed = await bucket.remove(paths);
+        if (removed.error) request.log.warn("Photo d'une publication : fichiers non effacés après un échec");
+      };
+      if (displayUpload.error || thumbUpload.error) {
+        request.log.error({ uploadError: displayUpload.error ?? thumbUpload.error }, "Échec d'upload d'une photo de publication");
+        await removeFiles();
+        return reply.code(500).send({ error: "upload_failed", message: "L'envoi de la photo a échoué." });
+      }
+      const photo: PostPhoto = { url: bucket.getPublicUrl(paths[0]!).data.publicUrl, thumbUrl: bucket.getPublicUrl(paths[1]!).data.publicUrl };
+
+      // Position : le nombre de photos déjà là, plus un. Deux envois en même
+      // temps visent la même place : la clé unique en refuse un, essayé une
+      // seconde fois à la place suivante, puis 409.
+      let failure: { code?: string } | null = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        let position: number;
+        try {
+          position = (await countExtras()) + 1;
+        } catch (countError) {
+          await removeFiles();
+          throw countError;
+        }
+        if (position > POST_PHOTOS_MAX - 1) {
+          await removeFiles();
+          return reply.code(409).send(POST_MEDIA_FULL);
+        }
+        const written = await db.from("post_media").insert({ user_id: userId, post_id: post.id, position, media_url: photo.url, media_thumb_url: photo.thumbUrl });
+        failure = written.error ? (written.error as { code?: string }) : null;
+        if (failure?.code !== "23505") break;
+      }
+      if (failure) {
+        await removeFiles();
+        if (failure.code === "23505") return reply.code(409).send(POST_MEDIA_CONFLICT);
+        // 23503 : la publication vient d'être supprimée.
+        if (failure.code === "23503") return reply.code(404).send(POST_NOT_FOUND);
+        request.log.error({ code: failure.code ?? null }, "Échec d'enregistrement d'une photo de publication");
+        return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+      }
+
+      // Toutes les photos, la première comprise. Relecture impossible : la
+      // photo est enregistrée, la réponse le dit quand même (l'app ne la
+      // renvoie pas une seconde fois).
+      const first: PostPhoto = { url: post.media_url, thumbUrl: post.media_thumb_url ?? post.media_url };
+      const stored = await db.from("post_media").select("post_id, position, media_url, media_thumb_url").eq("post_id", post.id).order("position", { ascending: true });
+      const parsed = POST_MEDIA_ROWS.safeParse(stored.data);
+      const more = !stored.error && parsed.success ? parsed.data.map((row) => ({ url: row.media_url, thumbUrl: row.media_thumb_url })) : [photo];
+      const body: AddPostMediaResponse = { media: [first, ...more] };
+      return reply.code(201).send(body);
+    }
+  );
+
+  // Retirer une identification (migration 0047) : le membre identifié (le
+  // sien, même sur une publication qu'il ne voit plus) ou l'auteur de la
+  // publication. Sa notification part avec. Tout autre compte : 404, comme
+  // pour une identification qui n'existe pas. Permis à un compte suspendu :
+  // on ne fait que retirer quelque chose.
+  fastify.delete("/api/posts/:id/people-tags/:userId", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    const params = parseInput(postTagParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const viewerId = request.user!.id;
+    if (!(await postExtrasReady(fastify))) return reply.code(404).send(POST_EXTRAS_UNAVAILABLE);
+
+    const db = fastify.supabaseAdmin;
+    const { data, error } = await db.from("post_people_tags").select("post_id, user_id, author_id").eq("post_id", params.id).eq("user_id", params.userId).maybeSingle();
+    if (error) throw new DatabaseReadError("Lecture d'une identification impossible");
+    const tag = data as { user_id?: unknown; author_id?: unknown } | null;
+    if (!tag || (viewerId !== tag.user_id && viewerId !== tag.author_id)) return reply.code(404).send(PEOPLE_TAG_NOT_FOUND);
+
+    const removed = await db.from("post_people_tags").delete().eq("post_id", params.id).eq("user_id", params.userId);
+    if (removed.error) {
+      request.log.error({ code: (removed.error as { code?: string }).code ?? null }, "Échec du retrait d'une identification");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+    const notice = await db.from("notifications").delete().eq("user_id", params.userId).eq("type", "tag").eq("post_id", params.id);
+    if (notice.error) request.log.warn("Identification retirée, notification restée");
     return reply.code(204).send();
   });
 

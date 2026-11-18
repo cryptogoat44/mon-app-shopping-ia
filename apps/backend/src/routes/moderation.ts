@@ -27,6 +27,7 @@ import { buildModerationItems, QUEUE_ROWS } from "../lib/moderationQueue.js";
 import { eraseCollectionCopy, eraseCopiedImage, type ImageErasureRefusal } from "../lib/imageRemoval.js";
 import { collectionModerationReady } from "../lib/collectionModeration.js";
 import { AVATAR_BUCKET, moveSuspendedAvatar, profileModerationReady } from "../lib/profileModeration.js";
+import { postExtrasReady } from "../lib/postExtras.js";
 import { emptyUserFolder } from "../lib/storage.js";
 
 const PAGE_SIZE = 20;
@@ -125,7 +126,8 @@ export default async function moderationRoutes(fastify: FastifyInstance) {
     const pageRows = rows.data.slice(0, PAGE_SIZE);
     let items: ModerationItem[];
     try {
-      items = await buildModerationItems(fastify, pageRows, { profileModeration: await profileModerationReady(fastify) });
+      // Photos 2 à 5 (migration 0047) : sonde illisible, une erreur — jamais une publication signalée montrée sans toutes ses photos.
+      items = await buildModerationItems(fastify, pageRows, { profileModeration: await profileModerationReady(fastify), postExtras: await postExtrasReady(fastify) });
     } catch (buildError) {
       request.log.error({ buildError }, "Aperçus de modération illisibles");
       return reply.code(500).send({ error: "internal_error", message: GENERIC_SERVER_ERROR });

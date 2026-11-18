@@ -4,6 +4,8 @@ import { INVALID_ID, parseInput, userIdParamsSchema } from "../lib/validation.js
 import { withoutSuspendedFaces } from "../lib/profileModeration.js";
 import { privateAccountsReady } from "../lib/audience.js";
 import { commentThreadsReady } from "../lib/comments.js";
+import { postExtrasReady } from "../lib/postExtras.js";
+import { dropTagsBetween } from "../lib/peopleTags.js";
 
 interface ProfileRow {
   id: string;
@@ -62,6 +64,15 @@ export default async function blocksRoutes(fastify: FastifyInstance) {
     if (await commentThreadsReady(fastify).catch(() => false)) {
       await fastify.supabaseAdmin.from("comment_mentions").delete().eq("author_id", blockerId).eq("user_id", blockedId);
       await fastify.supabaseAdmin.from("comment_mentions").delete().eq("author_id", blockedId).eq("user_id", blockerId);
+    }
+
+    // Identifications (migration 0047) : celles de l'un sur les publications
+    // de l'autre disparaissent, dans les deux sens (leurs notifications partent
+    // avec celles effacées ci-dessous). Échec ou sonde illisible : journalisé ;
+    // la lecture des publications ne montre de toute façon jamais un compte en
+    // blocage avec le lecteur.
+    if (await postExtrasReady(fastify).catch(() => false)) {
+      await dropTagsBetween(fastify, blockerId, blockedId).catch(() => request.log.warn("Blocage : identifications non retirées"));
     }
 
     // Et efface les notifications échangées entre les deux comptes : un

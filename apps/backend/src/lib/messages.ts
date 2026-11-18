@@ -299,6 +299,15 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Trop de j'aime en peu de temps. Réessayez dans un moment.": "Too many likes in a short time. Please try again in a moment.",
   // Commentaires : réponses, « j'aime », mentions (lot « vie sociale », migration 0046).
   "Les réponses et les mentions ne sont pas encore disponibles.": "Replies and mentions aren't available yet.",
+  // Plusieurs photos, identifier des personnes (lot « vie sociale », migration 0047).
+  "Les photos multiples et les identifications ne sont pas encore disponibles.": "Multiple photos and tags aren't available yet.",
+  "Cette publication ne peut plus recevoir de photo.": "This post can no longer receive photos.",
+  "Cette publication a déjà ses 5 photos.": "This post already has its 5 photos.",
+  "Une autre photo de cette publication arrivait au même moment. Réessayez.": "Another photo of this post was arriving at the same time. Please try again.",
+  "Vous avez ajouté beaucoup de photos en peu de temps. Réessayez dans un moment.": "You've added a lot of photos in a short time. Please try again in a moment.",
+  "Identifications invalides.": "Invalid tags.",
+  "Seule une publication « Une photo » peut identifier des personnes.": "Only a photo post can tag people.",
+  "Identification introuvable.": "Tag not found.",
 };
 
 /** Message dans la langue voulue. Un message inconnu (par exemple un texte

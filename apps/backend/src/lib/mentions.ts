@@ -6,8 +6,9 @@ import { suspendedAmong } from "./moderation.js";
 import { parseDbRows } from "./validation.js";
 
 // Mentions « @pseudo » (lot « vie sociale », migration 0046 ; les
-// identifications sur une photo, migration 0047, s'appuieront sur les mêmes
-// fonctions). Une mention n'est retenue que si TOUT est vrai :
+// identifications sur une publication, migration 0047, passent par la même
+// règle : acceptMentionTargets, lib/peopleTags.ts). Une mention n'est
+// retenue que si TOUT est vrai :
 //   - le pseudo est celui d'un compte, qui n'est pas l'auteur du texte ;
 //   - aucun blocage entre ce compte et l'auteur, dans un sens ou dans l'autre ;
 //   - ce compte n'est pas suspendu ;
@@ -39,16 +40,53 @@ const PROFILE_ROWS = z.array(
   })
 );
 
-export interface ResolveMentionsInput {
-  /** Qui écrit le texte. */
+export interface MentionTargetsInput {
+  /** Qui écrit le texte (ou identifie). */
   authorId: string;
-  text: string;
-  /** La publication sous laquelle le texte est écrit. */
+  /** La publication sous laquelle le texte est écrit (ou sur laquelle on identifie). */
   post: { user_id: string; privacy: PrivacyLevel };
   /** Pour une réponse : l'auteur du commentaire d'origine (lib/comments.ts, rootAuthorId). */
   threadAuthorId?: string;
   /** Compte une mention retenue dans le budget de l'auteur ; false : budget épuisé. */
   consume: () => boolean;
+}
+
+export interface ResolveMentionsInput extends MentionTargetsInput {
+  text: string;
+}
+
+/** Un compte à mentionner (ou à identifier) et son réglage « Qui peut me mentionner ». */
+export interface MentionTarget {
+  userId: string;
+  setting: MentionsFrom;
+}
+
+/** Les comptes retenus parmi `candidates` (déjà sans l'auteur lui-même), dans
+ * leur ordre, selon la règle en tête de ce fichier ; chacun retenu consomme
+ * le budget de l'auteur, et le budget épuisé arrête tout. Une lecture
+ * impossible relève une erreur : l'appelant ne retient alors personne. */
+export async function acceptMentionTargets<T extends MentionTarget>(fastify: FastifyInstance, input: MentionTargetsInput, candidates: readonly T[]): Promise<T[]> {
+  if (candidates.length === 0) return [];
+  const ids = candidates.map((candidate) => candidate.userId);
+  const [toAuthor, suspended] = await Promise.all([readViewersAudience(fastify, ids, input.authorId), suspendedAmong(fastify, ids)]);
+  const toPostAuthor = input.post.user_id === input.authorId ? toAuthor : await readViewersAudience(fastify, ids, input.post.user_id);
+  const threadAuthorId = input.threadAuthorId ?? input.authorId;
+  const toThreadAuthor =
+    threadAuthorId === input.authorId ? toAuthor : threadAuthorId === input.post.user_id ? toPostAuthor : await readViewersAudience(fastify, ids, threadAuthorId);
+
+  const accepted: T[] = [];
+  for (const candidate of candidates) {
+    const author = toAuthor.get(candidate.userId);
+    const post = toPostAuthor.get(candidate.userId);
+    const thread = toThreadAuthor.get(candidate.userId);
+    if (!author || !post || !thread || author.self || author.blocked || thread.blocked || suspended.has(candidate.userId)) continue;
+    if (!mayMention(candidate.setting, author.follows)) continue;
+    if (!postVisibleTo(post, input.post.privacy)) continue;
+    // Budget épuisé : cette mention et les suivantes restent un simple texte.
+    if (!input.consume()) break;
+    accepted.push(candidate);
+  }
+  return accepted;
 }
 
 /** Les mentions retenues d'un texte, dans l'ordre où elles sont écrites.
@@ -70,26 +108,6 @@ export async function resolveMentions(fastify: FastifyInstance, input: ResolveMe
     const row = byHandle.get(handle);
     return row ? [{ handle, userId: row.id, setting: row.mentions_from ?? DEFAULT_MENTIONS_FROM }] : [];
   });
-  if (candidates.length === 0) return [];
-
-  const ids = candidates.map((candidate) => candidate.userId);
-  const [toAuthor, suspended] = await Promise.all([readViewersAudience(fastify, ids, input.authorId), suspendedAmong(fastify, ids)]);
-  const toPostAuthor = input.post.user_id === input.authorId ? toAuthor : await readViewersAudience(fastify, ids, input.post.user_id);
-  const threadAuthorId = input.threadAuthorId ?? input.authorId;
-  const toThreadAuthor =
-    threadAuthorId === input.authorId ? toAuthor : threadAuthorId === input.post.user_id ? toPostAuthor : await readViewersAudience(fastify, ids, threadAuthorId);
-
-  const accepted: CommentMention[] = [];
-  for (const candidate of candidates) {
-    const author = toAuthor.get(candidate.userId);
-    const post = toPostAuthor.get(candidate.userId);
-    const thread = toThreadAuthor.get(candidate.userId);
-    if (!author || !post || !thread || author.blocked || thread.blocked || suspended.has(candidate.userId)) continue;
-    if (!mayMention(candidate.setting, author.follows)) continue;
-    if (!postVisibleTo(post, input.post.privacy)) continue;
-    // Budget épuisé : cette mention et les suivantes restent un simple texte.
-    if (!input.consume()) break;
-    accepted.push({ handle: candidate.handle, userId: candidate.userId });
-  }
-  return accepted;
+  const accepted = await acceptMentionTargets(fastify, input, candidates);
+  return accepted.map((candidate): CommentMention => ({ handle: candidate.handle, userId: candidate.userId }));
 }

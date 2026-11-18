@@ -15,6 +15,9 @@
 // Lot « conformité Apple » (migration 0037) : pour un profil signalé,
 // « Retirer la bio » et « Retirer la photo de profil » sont proposés s'il en
 // a une et si la base a la migration (sinon : jamais).
+// Lot « vie sociale » (migration 0047) : une publication signalée montre
+// TOUTES ses photos (la photo en cause peut être la troisième). La masquer
+// les cache toutes, comme la première.
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
@@ -108,6 +111,8 @@ const PROFILE_ROWS = z.array(
   z.object({ id: ID, username: z.string().nullable(), display_name: z.string(), avatar_url: z.string().nullable(), bio: z.string().nullable() })
 );
 const SUSPENSION_ROWS = z.array(z.object({ user_id: ID, moderation_action_id: ID }));
+/** Photos 2 à 5 d'une publication (migration 0047), miniatures. */
+const POST_MEDIA_ROWS = z.array(z.object({ post_id: ID, position: z.number().int(), media_thumb_url: z.string() }));
 const ACTION_ROWS = z.array(
   z.object({
     id: ID,
@@ -128,6 +133,8 @@ type ActionRow = z.infer<typeof ACTION_ROWS>[number];
 
 interface Loaded {
   posts: Map<string, z.infer<typeof POST_ROWS>[number]>;
+  /** Publication → miniatures de ses photos 2 à 5, dans l'ordre (migration 0047). */
+  postMedia: Map<string, string[]>;
   comments: Map<string, z.infer<typeof COMMENT_ROWS>[number]>;
   /** Pièces envoyées signalées (lot 5, 5.C). */
   pieces: Map<string, z.infer<typeof PIECE_ROWS>[number]>;
@@ -152,14 +159,14 @@ function idsOf(rows: QueueRow[], type: QueueRow["target_type"]): string[] {
 }
 
 /** Publications, commentaires, pièces envoyées et messages signalés, et les décisions déjà prises sur ces contenus. */
-async function loadTargets(fastify: FastifyInstance, rows: QueueRow[]) {
+async function loadTargets(fastify: FastifyInstance, rows: QueueRow[], options: QueueOptions) {
   const db = fastify.supabaseAdmin;
   const postIds = idsOf(rows, "post");
   const commentIds = idsOf(rows, "comment");
   const pieceIds = idsOf(rows, "piece");
   const messageIds = idsOf(rows, "message");
   const collectionIds = idsOf(rows, "collection");
-  const [posts, comments, pieces, messages, collections, actions] = await Promise.all([
+  const [posts, comments, pieces, messages, collections, actions, postMedia] = await Promise.all([
     postIds.length > 0
       ? db
           .from("posts")
@@ -181,9 +188,13 @@ async function loadTargets(fastify: FastifyInstance, rows: QueueRow[]) {
       .in("target_id", [...new Set(rows.map((row) => row.target_id))])
       .order("created_at", { ascending: false })
       .limit(ACTIONS_READ_LIMIT),
+    options.postExtras && postIds.length > 0
+      ? db.from("post_media").select("post_id, position, media_thumb_url").in("post_id", postIds).order("position", { ascending: true })
+      : NO_ROWS,
   ]);
   return {
     posts: parseDbRows(POST_ROWS, posts, "Publications signalées"),
+    postMedia: parseDbRows(POST_MEDIA_ROWS, postMedia, "Photos des publications signalées"),
     comments: parseDbRows(COMMENT_ROWS, comments, "Commentaires signalés"),
     pieces: parseDbRows(PIECE_ROWS, pieces, "Pièces envoyées signalées"),
     messages: parseDbRows(MESSAGE_ROWS, messages, "Messages signalés"),
@@ -274,8 +285,8 @@ async function loadPeople(fastify: FastifyInstance, userIds: string[]) {
   };
 }
 
-async function loadAll(fastify: FastifyInstance, rows: QueueRow[]): Promise<Loaded> {
-  const targets = await loadTargets(fastify, rows);
+async function loadAll(fastify: FastifyInstance, rows: QueueRow[], options: QueueOptions): Promise<Loaded> {
+  const targets = await loadTargets(fastify, rows, options);
   const userIds = new Set<string>(idsOf(rows, "user"));
   for (const post of targets.posts) userIds.add(post.user_id);
   for (const comment of targets.comments) userIds.add(comment.user_id);
@@ -288,8 +299,13 @@ async function loadAll(fastify: FastifyInstance, rows: QueueRow[]): Promise<Load
   for (const extract of messageContext.values()) for (const message of extract) userIds.add(message.sender_id);
   for (const action of targets.actions) if (action.admin_id) userIds.add(action.admin_id);
   const people = await loadPeople(fastify, [...userIds]);
+  const postMedia = new Map<string, string[]>();
+  for (const photo of [...targets.postMedia].sort((a, b) => a.position - b.position)) {
+    postMedia.set(photo.post_id, [...(postMedia.get(photo.post_id) ?? []), photo.media_thumb_url]);
+  }
   return {
     posts: new Map(targets.posts.map((post) => [post.id, post])),
+    postMedia,
     comments: new Map(targets.comments.map((comment) => [comment.id, comment])),
     pieces: new Map(targets.pieces.map((piece) => [piece.id, piece])),
     messages: new Map(targets.messages.map((message) => [message.id, message])),
@@ -320,15 +336,19 @@ function previewOf(row: QueueRow, data: Loaded): ModerationPreview {
     const post = data.posts.get(row.target_id);
     const author = post ? authorOf(post.user_id, data) : null;
     if (!post || !author) return MISSING;
+    const first = post.media_thumb_url ?? post.media_url;
+    const more = data.postMedia.get(post.id) ?? [];
     return {
       kind: "post",
       author,
       caption: post.caption,
-      imageUrl: post.media_thumb_url ?? post.media_url,
+      imageUrl: first,
       imageRemoved: post.media_removed_at !== null,
       privacy: post.privacy,
       createdAt: post.created_at,
       hidden: post.hidden_at !== null,
+      // Toutes les photos, quand il y en a plusieurs.
+      ...(more.length > 0 ? { images: [...(first !== null ? [first] : []), ...more] } : {}),
     };
   }
   if (row.target_type === "comment") {
@@ -424,6 +444,8 @@ function toLogEntry(action: ActionRow, data: Loaded): ModerationLogEntry {
 export interface QueueOptions {
   /** Migration 0037 : retirer la bio ou la photo d'un profil. */
   profileModeration: boolean;
+  /** Migration 0047 : les photos 2 à 5 des publications signalées. */
+  postExtras?: boolean;
 }
 
 function toItem(row: QueueRow, data: Loaded, options: QueueOptions): ModerationItem {
@@ -459,6 +481,6 @@ export async function buildModerationItems(
   options: QueueOptions = { profileModeration: false }
 ): Promise<ModerationItem[]> {
   if (rows.length === 0) return [];
-  const data = await loadAll(fastify, rows);
+  const data = await loadAll(fastify, rows, options);
   return rows.map((row) => toItem(row, data, options));
 }

@@ -9,6 +9,8 @@ import { notify } from "../lib/notify.js";
 import { RATE_LIMITS } from "../lib/rateLimits.js";
 import { consumeRateLimitFor } from "../plugins/rateLimit.js";
 import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, parseDbRows, parseInput, userIdParamsSchema } from "../lib/validation.js";
+import { postExtrasReady } from "../lib/postExtras.js";
+import { dropUnseeableTags, type TagScope } from "../lib/peopleTags.js";
 
 // Abonnements, et demandes d'abonnement aux comptes privés (lot « vie
 // sociale », migration 0045). Compte public : on s'abonne tout de suite,
@@ -36,6 +38,14 @@ export default async function followsRoutes(fastify: FastifyInstance) {
     const erased = await db().from("follow_requests").delete().eq("requester_id", requesterId).eq("target_id", targetId);
     const notified = await db().from("notifications").delete().eq("type", "follow_request").eq("user_id", targetId).eq("actor_id", requesterId);
     return !erased.error && !notified.error;
+  }
+
+  /** Identifications (migration 0047) : un abonnement retiré peut faire
+   * perdre l'accès à des publications (« Abonnés », compte privé) ; le membre
+   * y perd alors son identification. Échec : journalisé, l'abonnement est déjà retiré. */
+  async function dropLostTags(scope: TagScope, log: { warn: (message: string) => void }): Promise<void> {
+    if (!(await postExtrasReady(fastify).catch(() => false))) return;
+    await dropUnseeableTags(fastify, scope).catch(() => log.warn("Abonnement retiré : identifications non relues"));
   }
 
   /** Réponse d'un abonnement : l'état pour une app récente, rien (204) pour les autres, comme avant. */
@@ -133,6 +143,7 @@ export default async function followsRoutes(fastify: FastifyInstance) {
       request.log.error({ error }, "Échec du désabonnement");
       return reply.code(500).send(INTERNAL_ERROR);
     }
+    await dropLostTags({ authorId: followeeId, userId: followerId }, request.log);
 
     return reply.code(204).send();
   });
@@ -152,6 +163,7 @@ export default async function followsRoutes(fastify: FastifyInstance) {
       request.log.error({ error }, "Échec du retrait d'un abonné");
       return reply.code(500).send(INTERNAL_ERROR);
     }
+    await dropLostTags({ authorId: request.user!.id, userId: params.userId }, request.log);
     return reply.code(204).send();
   });
 

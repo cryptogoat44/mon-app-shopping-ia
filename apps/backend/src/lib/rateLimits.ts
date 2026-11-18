@@ -355,6 +355,17 @@ export const RATE_LIMITS = {
   // texte, sans erreur. Les identifications sur une photo (migration 0047)
   // puiseront dans le même budget.
   mentionNotify: { max: 20, windowMs: HOUR },
+
+  // Photos 2 à 5 d'une publication (lot « vie sociale », migration 0047) :
+  // une requête par photo, 4 au plus par publication. 60 par heure laisse
+  // 15 publications complètes ; chaque photo est traitée par sharp et rangée
+  // dans le stockage. Les identifications puisent dans mentionNotify.
+  postMedia: {
+    max: 60,
+    windowMs: HOUR,
+    error: "post_media_limit",
+    message: "Vous avez ajouté beaucoup de photos en peu de temps. Réessayez dans un moment.",
+  },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;
