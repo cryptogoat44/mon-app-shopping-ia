@@ -17,6 +17,9 @@ import { randomUUID } from "node:crypto";
 // uniques, cascades en chaîne à la suppression d'un commentaire).
 // Migration 0047 : photos 2 à 5 et personnes identifiées (une position et
 // une identification par publication, effacées avec la publication).
+// Migration 0048 : publications enregistrées (une par membre et par
+// publication, effacées avec la publication ; « sans collection » quand la
+// collection est supprimée, comme « on delete set null »).
 
 export type Row = Record<string, unknown>;
 type Filter = (row: Row) => boolean;
@@ -91,6 +94,8 @@ const DEFAULTS: Record<string, () => Row> = {
   // Migration 0047 : photos 2 à 5 et personnes identifiées.
   post_media: () => ({ id: randomUUID(), created_at: nextTimestamp() }),
   post_people_tags: () => ({ created_at: nextTimestamp() }),
+  // Migration 0048 : publications enregistrées.
+  saved_posts: () => ({ collection_id: null, created_at: nextTimestamp() }),
   // Colonnes que la base remplit seule à la création d'une publication.
   posts: () => ({ id: randomUUID(), wishlist_item_id: null, media_thumb_url: null, media_removed_at: null, hidden_at: null, created_at: nextTimestamp() }),
 };
@@ -111,6 +116,8 @@ const UNIQUE: Record<string, string[][]> = {
   // Migration 0047 : une photo par position, une identification par membre, par publication.
   post_media: [["post_id", "position"]],
   post_people_tags: [["post_id", "user_id"]],
+  // Migration 0048 : une publication enregistrée par membre.
+  saved_posts: [["user_id", "post_id"]],
 };
 
 /** Suppressions en cascade imitées : en supprimant une ligne de la table,
@@ -140,7 +147,16 @@ const CASCADES: Record<string, { table: string; column: string }[]> = {
   posts: [
     { table: "post_media", column: "post_id" },
     { table: "post_people_tags", column: "post_id" },
+    // Migration 0048 : et les lignes qui l'enregistrent, chez tous les membres.
+    { table: "saved_posts", column: "post_id" },
   ],
+};
+
+/** « on delete set null » imités : en supprimant une ligne de la table, la
+ * colonne des lignes filles qui la désignent redevient vide. */
+const SET_NULL: Record<string, { table: string; column: string }[]> = {
+  // Migration 0048 : une collection supprimée garde ses publications enregistrées, sans collection.
+  collections: [{ table: "saved_posts", column: "collection_id" }],
 };
 
 // Dates strictement croissantes, jamais avant l'heure réelle (les routes
@@ -245,6 +261,9 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
       if (gone.length === 0) continue;
       tables.set(child.table, table(child.table).filter((row) => !gone.includes(row)));
       cascade(child.table, gone);
+    }
+    for (const child of SET_NULL[name] ?? []) {
+      for (const row of table(child.table)) if (ids.has(row[child.column])) row[child.column] = null;
     }
   }
 
