@@ -12,6 +12,7 @@ import notificationsRoutes from "../src/routes/notifications.js";
 import blocksRoutes from "../src/routes/blocks.js";
 import meRoutes from "../src/routes/me.js";
 import productMatchesRoutes from "../src/routes/productMatches.js";
+import accountRoutes from "../src/routes/account.js";
 import { canSeeAuthorContent, postVisibleTo, privateAccountsReady, readAudience, resetPrivateAccountsProbe, type Audience } from "../src/lib/audience.js";
 import { speaksV2 } from "../src/lib/clientLevel.js";
 import { canSeeFriendCollections } from "../src/lib/collections.js";
@@ -126,6 +127,7 @@ async function socialApp(db: unknown): Promise<FastifyInstance> {
   await app.register(blocksRoutes);
   await app.register(meRoutes);
   await app.register(productMatchesRoutes);
+  await app.register(accountRoutes);
   await app.ready();
   return app;
 }
@@ -971,5 +973,61 @@ describe("notify : un seul endroit pour les règles des notifications", () => {
     const target = await socialApp(fake.db);
     expect(await notify(target, target.log, { recipientId: ALICE, actorId: BOB, type: "follow" })).toBe(false);
     expect(fake.table("notifications")).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe("export des données", () => {
+  it("le réglage du compte, les demandes envoyées et les demandes reçues ; jamais celles des autres, jamais un compte en blocage", async () => {
+    // Alice (privée) a reçu les demandes de Chloé et de Dan, et en a envoyé une à Eve (privée).
+    const fake = seeded({ requests: [[CHLOE, ALICE], [DAN, ALICE], [ALICE, EVE], [BOB, EVE]] });
+    fake.table("profiles").find((row) => row.id === EVE)!.is_private = true;
+    // Un blocage efface les demandes ; s'il en restait une, elle ne serait pas exportée.
+    fake.table("blocks").push({ blocker_id: DAN, blocked_id: ALICE, created_at: "2026-11-11T00:00:00+00:00" });
+    const target = await socialApp(fake.db);
+
+    const body = (await as(target, ALICE).get("/api/me/export")).json();
+    expect(body.profile.is_private).toBe(true);
+    expect(body.followRequestsSent).toEqual([{ target_id: EVE, created_at: "2026-11-10T00:00:00+00:00" }]);
+    expect(body.followRequestsReceived).toEqual([{ requester_id: CHLOE, created_at: "2026-11-10T00:00:00+00:00" }]);
+    // Clés ajoutées à la fin : les anciennes gardent leur ordre.
+    expect(Object.keys(body).slice(-2)).toEqual(["followRequestsSent", "followRequestsReceived"]);
+    expect(JSON.stringify([body.followRequestsSent, body.followRequestsReceived])).not.toContain(BOB);
+    expect(JSON.stringify([body.followRequestsSent, body.followRequestsReceived])).not.toContain(DAN);
+
+    // Fichier lisible : le nom des comptes, jamais celui du compte en blocage.
+    const page = (await as(target, ALICE).get("/api/me/export?format=html")).body;
+    expect(page).toContain("Demandes d&#39;abonnement");
+    expect(page).toContain("Demandes envoyées (1)");
+    expect(page).toContain("@eve");
+    expect(page).toContain("@chloe");
+    expect(page).not.toContain("@dan");
+
+    // L'autre côté : Chloé voit sa demande envoyée, rien de reçu.
+    const chloe = (await as(target, CHLOE).get("/api/me/export")).json();
+    expect(chloe.followRequestsSent).toEqual([{ target_id: ALICE, created_at: "2026-11-10T00:00:00+00:00" }]);
+    expect(chloe.followRequestsReceived).toEqual([]);
+    expect(chloe.profile.is_private).toBe(false);
+  });
+
+  it("une demande refusée ou annulée ne figure dans aucun export : il n'en reste rien", async () => {
+    const fake = seeded();
+    const target = await socialApp(fake.db);
+    await as(target, CHLOE).post(`/api/follows/${ALICE}?v=2`);
+    await as(target, ALICE).del(`/api/follow-requests/${CHLOE}`);
+    for (const user of [ALICE, CHLOE]) {
+      const body = (await as(target, user).get("/api/me/export")).json();
+      expect([body.followRequestsSent, body.followRequestsReceived, body.notifications]).toEqual([[], [], []]);
+    }
+  });
+
+  it("sans la migration 0045 : sections vides, l'export réussit", async () => {
+    const fake = seeded({}, { missing: ["follow_requests"], missingColumns: { profiles: ["is_private"] } });
+    const target = await socialApp(fake.db);
+    const res = await as(target, ALICE).get("/api/me/export");
+    expect(res.statusCode).toBe(200);
+    expect([res.json().followRequestsSent, res.json().followRequestsReceived]).toEqual([[], []]);
+    expect(res.json().profile).not.toHaveProperty("is_private");
   });
 });

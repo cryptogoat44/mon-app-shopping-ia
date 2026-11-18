@@ -123,6 +123,8 @@ export const EXPORT_COLUMNS = {
     price_alerts_enabled: shown("Alertes prix et stock", "Price and stock alerts"),
     // Nouvelle version des alertes (migration 0041).
     help_others: shown("Aider les autres membres", "Help other members"),
+    // Compte privé (migration 0045).
+    is_private: shown("Compte privé", "Private account"),
     created_at: shown("Compte créé le", "Account created on"),
     updated_at: shown("Profil modifié le", "Profile updated on"),
   },
@@ -538,6 +540,15 @@ export const EXPORT_COLUMNS = {
     product: shown("Pièce", "Piece"),
     created_at: shown("Confirmée le", "Confirmed on"),
   },
+  // Compte privé (lot « vie sociale », migration 0045).
+  followRequestsSent: {
+    target_id: shown("Compte", "Account"),
+    created_at: shown("Demandé le", "Requested on"),
+  },
+  followRequestsReceived: {
+    requester_id: shown("Compte", "Account"),
+    created_at: shown("Reçue le", "Received on"),
+  },
 } as const satisfies Record<ExportDataKey, Record<string, ExportColumn>>;
 
 export type ExportColumnName<K extends ExportDataKey> = keyof (typeof EXPORT_COLUMNS)[K] & string;
@@ -636,6 +647,14 @@ export const EXPORT_SECTIONS = {
     title: { fr: "Vos abonnés", en: "Your followers" },
     intro: { fr: "Les comptes qui suivent vos publications.", en: "The accounts that follow your posts." },
     keys: ["followers"],
+  },
+  followRequests: {
+    title: { fr: "Demandes d'abonnement", en: "Follow requests" },
+    intro: {
+      fr: "Les demandes d'abonnement encore en attente : celles que vous avez envoyées à un compte privé, et celles que vous avez reçues. Une demande acceptée, refusée ou annulée n'est plus conservée.",
+      en: "The follow requests still pending: the ones you sent to a private account, and the ones you received. A request that was accepted, declined or cancelled is no longer kept.",
+    },
+    keys: ["followRequestsSent", "followRequestsReceived"],
   },
   blocked: {
     title: { fr: "Comptes bloqués", en: "Blocked accounts" },
@@ -1144,6 +1163,9 @@ export const EXPORT_TEXT = {
   // Mémoire des vidéos (migrations 0038 et 0039).
   videoSpotsTitle: { fr: "Vidéos spottées ({count})", en: "Spotted videos ({count})" },
   videoConfirmationsTitle: { fr: "Pièces confirmées ({count})", en: "Confirmed pieces ({count})" },
+  // Compte privé (migration 0045).
+  followRequestsSentTitle: { fr: "Demandes envoyées ({count})", en: "Requests sent ({count})" },
+  followRequestsReceivedTitle: { fr: "Demandes reçues ({count})", en: "Requests received ({count})" },
   videoTiktok: { fr: "Vidéo TikTok", en: "TikTok video" },
   videoInstagram: { fr: "Vidéo Instagram", en: "Instagram video" },
   videoMoment: { fr: "à {minutes} min {seconds} s", en: "at {minutes} min {seconds} s" },

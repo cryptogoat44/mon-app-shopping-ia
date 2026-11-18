@@ -391,6 +391,7 @@ function accountSection(ctx: Ctx): Html {
     .field("messages_from", enumLabel(ctx, MESSAGES_FROM_LABELS, row.messages_from))
     .field("price_alerts_enabled")
     .field("help_others")
+    .field("is_private")
     .field("created_at")
     .field("updated_at");
   return section(ctx, "account", article(null, account.rows(), profile.rows()));
@@ -635,6 +636,25 @@ function followersSection(ctx: Ctx): Html {
     new Card(ctx, "followers", row).use("follower_id").field("created_at").render(person(ctx, row.follower_id))
   );
   return section(ctx, "followers", cards);
+}
+
+/** Compte privé (migration 0045) : demandes d'abonnement en attente, envoyées et reçues. */
+function followRequestsSection(ctx: Ctx): Html {
+  const sent = newestFirst(ctx.data.followRequestsSent, "created_at").map((row) =>
+    new Card(ctx, "followRequestsSent", row).use("target_id").field("created_at").render(person(ctx, row.target_id))
+  );
+  const received = newestFirst(ctx.data.followRequestsReceived, "created_at").map((row) =>
+    new Card(ctx, "followRequestsReceived", row).use("requester_id").field("created_at").render(person(ctx, row.requester_id))
+  );
+  const parts: [Bilingual, Html[]][] = [
+    [EXPORT_TEXT.followRequestsSentTitle, sent],
+    [EXPORT_TEXT.followRequestsReceivedTitle, received],
+  ];
+  return section(
+    ctx,
+    "followRequests",
+    parts.filter(([, cards]) => cards.length > 0).map(([title, cards]) => subsection(ctx, tr(ctx, title, { count: String(cards.length) }), null, cards))
+  );
 }
 
 function blockedSection(ctx: Ctx): Html {
@@ -1122,6 +1142,7 @@ function sectionCount(data: ExportData, id: ExportSectionId): number | null {
     likes: data.reactionsGiven.length,
     following: data.following.length,
     followers: data.followers.length,
+    followRequests: data.followRequestsSent.length + data.followRequestsReceived.length,
     blocked: data.blockedAccounts.length,
     piecesSent: data.piecesSent.length,
     piecesReceived: data.piecesReceived.length,
@@ -1151,6 +1172,7 @@ const SECTION_RENDERERS: Record<ExportSectionId, (ctx: Ctx) => Html> = {
   likes: likesSection,
   following: followingSection,
   followers: followersSection,
+  followRequests: followRequestsSection,
   blocked: blockedSection,
   piecesSent: piecesSentSection,
   piecesReceived: piecesReceivedSection,

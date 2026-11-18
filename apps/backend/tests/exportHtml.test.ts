@@ -805,3 +805,42 @@ describe("export lisible : essayage virtuel (migration 0042)", () => {
     expect(visibleText(sectionHtml(render({}, data), "tryon"))).toContain(EXPORT_TEXT.noData.fr);
   });
 });
+
+// Compte privé (lot « vie sociale », migration 0045).
+describe("export lisible : compte privé et demandes d'abonnement", () => {
+  const spaces = (text: string) => text.replace(/\s+/g, " ");
+
+  it("le profil dit « Compte privé : Oui / Non » ; rien tant que la colonne n'existe pas", () => {
+    const base = fixture();
+    const account = (isPrivate?: boolean, locale: "fr" | "en" = "fr") =>
+      spaces(visibleText(sectionHtml(render({ locale }, { ...base, profile: { ...base.profile!, ...(isPrivate === undefined ? {} : { is_private: isPrivate }) } }), "account")));
+    expect(account(true)).toContain("Compte privé Oui");
+    expect(account(false)).toContain("Compte privé Non");
+    expect(account(true, "en")).toContain("Private account Yes");
+    expect(account()).not.toContain("Compte privé");
+  });
+
+  it("les demandes en attente, envoyées et reçues, avec le nom du compte et la date ; comptées au sommaire", () => {
+    const page = render({ timeZone: "UTC" });
+    const section = spaces(visibleText(sectionHtml(page, "followRequests")));
+    expect(section).toContain(EXPORT_SECTIONS.followRequests.title.fr);
+    expect(section).toContain("Demandes envoyées (1)");
+    expect(section).toContain("@alexis");
+    expect(section).toContain("Demandes reçues (1)");
+    expect(section).toContain("Demandé le 11 octobre 2026");
+    expect(section).toContain("Reçue le 12 octobre 2026");
+    expect(spaces(visibleText(page))).toContain(`${EXPORT_SECTIONS.followRequests.title.fr} (2)`);
+    const english = spaces(visibleText(sectionHtml(render({ locale: "en", timeZone: "UTC" }), "followRequests")));
+    expect(english).toContain("Requests sent (1)");
+    expect(english).toContain("Requests received (1)");
+  });
+
+  it("un compte qui n'est pas connu de l'export (blocage) n'est jamais nommé ; sans demande : « Aucune donnée »", () => {
+    const blocked = { ...fixture(), followRequestsSent: [{ target_id: BLOCKED, created_at: "2026-10-11T09:00:00+00:00" }], followRequestsReceived: [] };
+    const section = visibleText(sectionHtml(render({}, blocked), "followRequests"));
+    expect(section.toLowerCase()).not.toContain("importun");
+    expect(section).toContain(EXPORT_TEXT.someone.fr);
+    const none = { ...fixture(), followRequestsSent: [], followRequestsReceived: [] };
+    expect(visibleText(sectionHtml(render({}, none), "followRequests"))).toContain(EXPORT_TEXT.noData.fr);
+  });
+});

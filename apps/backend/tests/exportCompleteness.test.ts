@@ -81,6 +81,12 @@ const videoProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROL
 const VIDEO_SECTIONS = videoProbe.error || typeof videoProbe.data !== "number" || videoProbe.data < 1 ? [] : (["videoSpots", "videoConfirmations"] as const);
 const VIDEO_KEY = `74${Date.now()}`.padEnd(19, "1").slice(0, 19);
 
+// Compte privé (lot « vie sociale ») : une demande d'abonnement envoyée et
+// une reçue, seulement une fois la migration 0045 appliquée sur la base des
+// tests (sans elle, sections vides).
+const followRequestsProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("follow_requests").select("requester_id").limit(0);
+const FOLLOW_REQUEST_SECTIONS = followRequestsProbe.error ? [] : (["followRequestsSent", "followRequestsReceived"] as const);
+
 // Sections qui sont un objet (ou null), pas une liste.
 const OBJECT_SECTIONS = ["account", "profile", "adminRole", "suspension", ...(TRYON_MIGRATED ? (["tryonProfile"] as const) : [])] as const;
 
@@ -135,6 +141,9 @@ const JSON_KEYS = [
   // Mémoire des vidéos, de même.
   "videoSpots",
   "videoConfirmations",
+  // Compte privé (migration 0045), de même.
+  "followRequestsSent",
+  "followRequestsReceived",
 ];
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
@@ -182,6 +191,16 @@ describe("export RGPD complet", () => {
       .select("id")
       .single();
     await app.supabaseAdmin.from("affiliate_links").insert({ product_match_id: match!.id, network: "direct", affiliate_url: "https://example.com/p" });
+    // Compte privé : une demande reçue (de l'administrateur de test) et une
+    // demande envoyée (à lui), écrites directement — ni abonnement ni blocage
+    // entre ces deux comptes.
+    if (FOLLOW_REQUEST_SECTIONS.length > 0) {
+      const requests = await app.supabaseAdmin.from("follow_requests").insert([
+        { requester_id: admin.id, target_id: user.id },
+        { requester_id: user.id, target_id: admin.id },
+      ]);
+      if (requests.error) throw requests.error;
+    }
     // Mémoire des vidéos : un spot de cette recherche et une confirmation, insérés directement.
     if (VIDEO_SECTIONS.length > 0) {
       const { data: video, error: videoError } = await app.supabaseAdmin
@@ -369,7 +388,7 @@ describe("export RGPD complet", () => {
     const body = res.json();
 
     expect(body.profile.id).toBe(user.id);
-    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...COLLECTION_SECTIONS, ...PUSH_SECTIONS, ...ALERT_SECTIONS, ...TRYON_SECTIONS, ...VIDEO_SECTIONS]) {
+    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...COLLECTION_SECTIONS, ...PUSH_SECTIONS, ...ALERT_SECTIONS, ...TRYON_SECTIONS, ...VIDEO_SECTIONS, ...FOLLOW_REQUEST_SECTIONS]) {
       expect(Array.isArray(body[section]), section).toBe(true);
       expect(body[section].length, section).toBeGreaterThan(0);
     }

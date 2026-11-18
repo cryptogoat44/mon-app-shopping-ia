@@ -86,6 +86,9 @@ export async function collectLookups(fastify: FastifyInstance, userId: string, d
     // Lot messages : l'autre membre de chaque conversation.
     ...ids(data.conversations, "other_user_id"),
     ...postAuthors.values(),
+    // Compte privé (0045) : l'autre compte de chaque demande d'abonnement en attente.
+    ...ids(data.followRequestsSent, "target_id"),
+    ...ids(data.followRequestsReceived, "requester_id"),
     ...ids(data.reportsSubmitted.filter((report) => report.target_type === "user"), "target_id"),
   ].filter((id) => id !== userId && !blockedMe.has(id) && !blockedIds.has(id));
 

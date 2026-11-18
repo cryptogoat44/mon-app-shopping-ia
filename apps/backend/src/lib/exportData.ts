@@ -7,6 +7,7 @@ import { pushReady } from "./push.js";
 import { wishAlertsSchemaState, wishAlertsSchemaVersion } from "./wishAlertsSchema.js";
 import { tryonSchemaReady } from "./tryon/schema.js";
 import { videoMemoryStored } from "./videoMemory.js";
+import { privateAccountsReady } from "./audience.js";
 
 // Export RGPD (droit d'accès et de portabilité) : lecture de TOUTES les
 // données personnelles d'un compte. Toute nouvelle table contenant des
@@ -94,6 +95,12 @@ export interface ExportData {
   /** … et vos « C'est bien cette pièce » : la vidéo, la pièce (son nom, sinon
    * sa clé « même page ») et la date. */
   videoConfirmations: ExportRow[];
+  /** Compte privé (lot « vie sociale », migration 0045) : vos demandes
+   * d'abonnement en attente (à qui, depuis quand)… */
+  followRequestsSent: ExportRow[];
+  /** … et celles que vous avez reçues et pas encore traitées. Jamais une
+   * demande d'un compte en blocage avec vous. Un refus ne laisse rien. */
+  followRequestsReceived: ExportRow[];
 }
 
 /** Sections de l'export (toutes les clés sauf la date de l'export). */
@@ -295,6 +302,21 @@ async function listConversations(db: Db, userId: string): Promise<ExportRow[]> {
   });
 }
 
+/** Demandes d'abonnement en attente de la personne : envoyées (`mine` =
+ * requester_id) ou reçues (`mine` = target_id), avec l'autre compte et la
+ * date. Jamais celle d'un compte en relation de blocage avec elle (un
+ * blocage efface les demandes ; filtré quand même, règle 8). */
+async function listFollowRequests(db: Db, userId: string, mine: "requester_id" | "target_id", other: "requester_id" | "target_id"): Promise<ExportRow[]> {
+  const rows = await listWhere(db, "follow_requests", `${other}, created_at`, mine, userId, ["created_at", other]);
+  if (rows.length === 0) return rows;
+  const [blockedByMe, blockingMe] = await Promise.all([
+    listWhere(db, "blocks", "blocked_id", "blocker_id", userId, ["blocked_id"]),
+    listWhere(db, "blocks", "blocker_id", "blocked_id", userId, ["blocker_id"]),
+  ]);
+  const blocked = new Set([...blockedByMe.map((row) => String(row.blocked_id)), ...blockingMe.map((row) => String(row.blocker_id))]);
+  return rows.filter((row) => !blocked.has(String(row[other])));
+}
+
 export async function collectExport(
   fastify: FastifyInstance,
   userId: string,
@@ -483,6 +505,13 @@ export async function collectExport(
     section("videoConfirmations", () => (withVideoMemory ? listVideoConfirmations(db, userId) : Promise.resolve(none)), none),
   ]);
 
+  // Compte privé : sans la migration 0045, aucune demande (sections vides).
+  const withFollowRequests = await privateAccountsReady(fastify);
+  const [followRequestsSent, followRequestsReceived] = await Promise.all([
+    section("followRequestsSent", () => (withFollowRequests ? listFollowRequests(db, userId, "requester_id", "target_id") : Promise.resolve(none)), none),
+    section("followRequestsReceived", () => (withFollowRequests ? listFollowRequests(db, userId, "target_id", "requester_id") : Promise.resolve(none)), none),
+  ]);
+
   const data: ExportData = {
     exportedAt: new Date().toISOString(),
     account: { email },
@@ -526,6 +555,8 @@ export async function collectExport(
     tryonReports,
     videoSpots,
     videoConfirmations,
+    followRequestsSent,
+    followRequestsReceived,
   };
   return { data, failures };
 }

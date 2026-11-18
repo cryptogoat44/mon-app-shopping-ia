@@ -435,6 +435,9 @@ export function fixture(): ExportData {
       },
     ],
     videoConfirmations: [{ canonical_url: "https://www.tiktok.com/@/video/7412345678901234567", product: "Veste <b>reperee</b>", created_at: "2026-10-10T09:00:00+00:00" }],
+    // Compte privé (migration 0045) : une demande envoyée, une reçue.
+    followRequestsSent: [{ target_id: FRIEND, created_at: "2026-10-11T09:00:00+00:00" }],
+    followRequestsReceived: [{ requester_id: FRIEND, created_at: "2026-10-12T09:00:00+00:00" }],
   };
 }
 
