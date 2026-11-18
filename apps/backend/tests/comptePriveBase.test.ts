@@ -45,8 +45,13 @@ describe.skipIf(!migrated)("compte privé, sur la base de développement (0045)"
     app = await buildTestApp();
     const users = await Promise.all(["cpa", "cpb", "cpc", "cpd", "cpe"].map((label) => createTestUser(app, label)));
     [alice, bruno, chloe, dan, eve] = users as [TestUser, TestUser, TestUser, TestUser, TestUser];
-    // Une publication « Public » d'Alice, écrite directement (aucune image).
-    const { data, error } = await app.supabaseAdmin.from("posts").insert({ user_id: alice.id, type: "lifestyle", caption: "Compte privé", privacy: "public" }).select("id").single();
+    // Une publication « Public » d'Alice, écrite directement (aucune image
+    // envoyée ; media_kind est obligatoire dans la table, sans valeur par défaut).
+    const { data, error } = await app.supabaseAdmin
+      .from("posts")
+      .insert({ user_id: alice.id, type: "lifestyle", media_kind: "photo", media_url: "https://example.com/p.jpg", caption: "Compte privé", privacy: "public" })
+      .select("id")
+      .single();
     if (error || !data) throw error ?? new Error("Publication de test non créée.");
     postId = data.id as string;
     expect((await request(bruno, "POST", `/api/follows/${alice.id}?v=2`)).json()).toEqual({ state: "following" });
