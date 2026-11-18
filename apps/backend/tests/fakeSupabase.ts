@@ -15,6 +15,8 @@ import { randomUUID } from "node:crypto";
 // (recherche de comptes), une demande d'abonnement par paire de comptes.
 // Migration 0046 : réponses, « j'aime » et mentions des commentaires (clés
 // uniques, cascades en chaîne à la suppression d'un commentaire).
+// Migration 0047 : photos 2 à 5 et personnes identifiées (une position et
+// une identification par publication, effacées avec la publication).
 
 export type Row = Record<string, unknown>;
 type Filter = (row: Row) => boolean;
@@ -86,6 +88,9 @@ const DEFAULTS: Record<string, () => Row> = {
   comment_reactions: () => ({ created_at: nextTimestamp() }),
   comment_mentions: () => ({ created_at: nextTimestamp() }),
   post_reactions: () => ({ created_at: nextTimestamp() }),
+  // Migration 0047 : photos 2 à 5 et personnes identifiées.
+  post_media: () => ({ id: randomUUID(), created_at: nextTimestamp() }),
+  post_people_tags: () => ({ created_at: nextTimestamp() }),
   // Colonnes que la base remplit seule à la création d'une publication.
   posts: () => ({ id: randomUUID(), wishlist_item_id: null, media_thumb_url: null, media_removed_at: null, hidden_at: null, created_at: nextTimestamp() }),
 };
@@ -103,6 +108,9 @@ const UNIQUE: Record<string, string[][]> = {
   // Migration 0046 : un « j'aime » et une mention par membre et par commentaire.
   comment_reactions: [["comment_id", "user_id"]],
   comment_mentions: [["comment_id", "user_id"]],
+  // Migration 0047 : une photo par position, une identification par membre, par publication.
+  post_media: [["post_id", "position"]],
+  post_people_tags: [["post_id", "user_id"]],
 };
 
 /** Suppressions en cascade imitées : en supprimant une ligne de la table,
@@ -127,6 +135,11 @@ const CASCADES: Record<string, { table: string; column: string }[]> = {
     { table: "comment_reactions", column: "comment_id" },
     { table: "comment_mentions", column: "comment_id" },
     { table: "notifications", column: "comment_id" },
+  ],
+  // Migration 0047 : une publication emporte ses photos 2 à 5 et ses identifications.
+  posts: [
+    { table: "post_media", column: "post_id" },
+    { table: "post_people_tags", column: "post_id" },
   ],
 };
 
