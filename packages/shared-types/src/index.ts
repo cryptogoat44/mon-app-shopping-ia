@@ -824,6 +824,10 @@ export interface Post {
   viewerHasReacted: boolean;
   /** Commentaires visibles (Lot F). */
   commentCount: number;
+  /** Toutes les photos, la première comprise, quand il y en a au moins deux (migration 0047). */
+  media?: PostPhoto[];
+  /** Membres identifiés que ce lecteur peut voir (migration 0047) ; absent quand il n'y en a aucun. */
+  people?: PostAuthor[];
 }
 
 // Commentaires (Lot F, section 5.A du programme) : à plat, 1 000 caractères
@@ -1027,7 +1031,8 @@ export interface RecordConsentsRequest {
 
 /** « piece_received » (lot 5) : une personne vous a envoyé une pièce (in-app, jamais push).
  * « follow_request » et « follow_accepted » (compte privé, migration 0045),
- * « reply » et « mention » (commentaires, migration 0046) :
+ * « reply » et « mention » (commentaires, migration 0046), « tag » (identification
+ * sur une publication, migration 0047) :
  * envoyés seulement à une app qui les demande (LEGACY_NOTIFICATION_TYPES, en fin de fichier). */
 export type NotificationType =
   | "follow"
@@ -1039,7 +1044,8 @@ export type NotificationType =
   | "follow_request"
   | "follow_accepted"
   | "reply"
-  | "mention";
+  | "mention"
+  | "tag";
 export const NOTIFICATION_TYPES = [
   "follow",
   "like",
@@ -1051,6 +1057,7 @@ export const NOTIFICATION_TYPES = [
   "follow_accepted",
   "reply",
   "mention",
+  "tag",
 ] as const satisfies readonly NotificationType[];
 
 export interface AppNotification {
@@ -1132,6 +1139,8 @@ export type ModerationPreview =
       privacy: PrivacyLevel;
       createdAt: string;
       hidden: boolean;
+      /** Toutes les photos (miniatures), la première comprise, quand il y en a au moins deux (migration 0047). */
+      images?: string[];
     }
   | { kind: "comment"; author: ModerationAuthor; body: string; postId: string; createdAt: string; hidden: boolean }
   | { kind: "user"; author: ModerationAuthor; bio: string | null }
@@ -2412,3 +2421,42 @@ export interface UpdateMentionsFromRequest {
 export const COMMENT_THREADS_UNAVAILABLE_ERROR = "comment_threads_unavailable";
 /** 429 : trop de « j'aime » posés ou retirés sur des commentaires en une heure. */
 export const COMMENT_LIKE_LIMIT_ERROR = "comment_like_limit";
+
+// ---- Plusieurs photos, identifier des personnes (lot « vie sociale », migration 0047) ----
+
+/** Photos d'une publication « Une photo », la première comprise. */
+export const POST_PHOTOS_MAX = 5;
+/** Membres identifiés sur une publication, au plus. */
+export const PEOPLE_TAGS_MAX = 5;
+/** Les photos 2 à 5 s'ajoutent dans les minutes qui suivent la publication, plus après. */
+export const POST_MEDIA_WINDOW_MIN = 10;
+
+/** Une photo d'une publication : la version d'affichage et sa miniature. */
+export interface PostPhoto {
+  url: string;
+  thumbUrl: string;
+}
+
+/** GET /api/posts/status : la base sait-elle garder plusieurs photos et des identifications ? */
+export interface PostExtrasStatus {
+  carousel: boolean;
+  peopleTags: boolean;
+}
+
+/** POST /api/posts/:id/media (201) : toutes les photos de la publication, la première comprise. */
+export interface AddPostMediaResponse {
+  media: PostPhoto[];
+}
+
+/** 404 : plusieurs photos et identifications pas encore disponibles (migration 0047 absente). */
+export const POST_EXTRAS_UNAVAILABLE_ERROR = "post_extras_unavailable";
+/** 409 : plus de 10 minutes après la publication, elle ne reçoit plus de photo. */
+export const POST_MEDIA_CLOSED_ERROR = "post_media_closed";
+/** 409 : la publication a déjà ses 5 photos. */
+export const POST_MEDIA_FULL_ERROR = "post_media_full";
+/** 409 : une autre photo de la même publication arrivait au même moment. */
+export const POST_MEDIA_CONFLICT_ERROR = "post_media_conflict";
+/** 429 : trop de photos ajoutées en une heure. */
+export const POST_MEDIA_LIMIT_ERROR = "post_media_limit";
+/** 404 : identification introuvable (ou pas la vôtre). */
+export const PEOPLE_TAG_NOT_FOUND_ERROR = "people_tag_not_found";

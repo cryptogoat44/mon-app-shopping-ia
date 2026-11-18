@@ -1007,6 +1007,8 @@ export const NOTIFICATION_LABELS: Record<NotificationType, Bilingual> = {
   // Commentaires : réponses et mentions (migration 0046).
   reply: { fr: "a répondu à votre commentaire.", en: "replied to your comment." },
   mention: { fr: "vous a mentionné(e) dans un commentaire.", en: "mentioned you in a comment." },
+  // Identifications sur une publication (migration 0047).
+  tag: { fr: "vous a identifié(e) dans une publication.", en: "tagged you in a post." },
 };
 
 export const REPORT_TARGET_LABELS: Record<ReportTargetType, Bilingual> = {
