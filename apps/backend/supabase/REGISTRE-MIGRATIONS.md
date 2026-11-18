@@ -1,6 +1,6 @@
 # Registre des migrations
 
-*Lot « filets de sécurité », point 31 de la feuille de route V1. État au 17 novembre 2026.*
+*Lot « filets de sécurité », point 31 de la feuille de route V1. État au 18 novembre 2026.*
 
 Une **migration** est un fichier SQL qui fait évoluer la structure de la base de données. Les fichiers sont dans `apps/backend/supabase/migrations/`, numérotés dans l'ordre où il faut les appliquer.
 
@@ -54,7 +54,7 @@ Les dates de 0001 à 0028 ne sont pas notées dans le dépôt : celles du tablea
 | 0040 | Garde-fous des alertes prix et stock (revue de sécurité) : « Plus disponible » d'un seul membre ne touche que ses envies, pas de « De retour en stock » après des signalements, une envie par membre et par pièce, pays du membre, achat reconnu par pièce | appliquée en production (fichier groupé `prod-3-…-production.sql`, après une copie de secours complète ; vérification juste) | 15 nov. 2026 |
 | 0041 | Alertes, nouvelle version : seuil de prix choisi par le membre, stock et rupture comparés pays par pays (Google, ou 3 membres d'affilée du même pays ; pays de la recherche gardé avec chaque signalement), « Aider les autres membres », un achat ne sert plus aux alertes des autres, jours seulement (aucune heure gardée hors envoi, réservations échues effacées à chaque passage), notification générique | appliquée en production (fichier groupé `prod-3-…-production.sql`, après une copie de secours complète ; vérification juste) | 15 nov. 2026 |
 | 0042 | Essayage virtuel photo, ÉTEINT : drapeau des fonctions, statut d'âge et consentement, essais (sans aucune image), essais offerts, signalements, alertes et compteurs du budget | appliquée en production (le fichier de la migration, après une copie de secours complète ; vérification juste ; drapeau `tryon` allumé à la demande du fondateur) | 15 nov. 2026 |
-| 0043 | Confirmations de lecture des messages privés : le réglage « Confirmations de lecture » de chaque membre, allumé par défaut (« Vu » ou « Envoyé » sous son dernier message, dans une conversation ouverte) | **à appliquer** (sur spotto-dev-2 d'abord ; demande 0032, déjà en production) | — |
+| 0043 | Confirmations de lecture des messages privés : le réglage « Confirmations de lecture » de chaque membre, allumé par défaut (« Vu » ou « Envoyé » sous son dernier message, dans une conversation ouverte), et le moment à partir duquel ses lectures peuvent être montrées (jamais une lecture d'avant la migration, ni une lecture faite pendant que le réglage était éteint) | **à appliquer** (sur spotto-dev-2 d'abord ; demande 0032, déjà en production) | — |
 
 ## Fichiers utiles par migration
 
@@ -78,7 +78,7 @@ Les dates de 0001 à 0028 ne sont pas notées dans le dépôt : celles du tablea
 | 0040 | le fichier de la migration lui-même (**après 0036**) | `supabase/verifications/0040-verification.sql` (une ligne, cinq `true`) | en tête du fichier de la migration |
 | 0041 | le fichier de la migration lui-même (**après 0040**) ; puis, une fois, le script `pnpm --filter backend rattraper-suivi-envies-dev` (il recalcule les empreintes des envies, version 2) | `supabase/verifications/0041-verification.sql` (une ligne, six `true`) | en tête du fichier de la migration |
 | 0042 | le fichier de la migration lui-même | `supabase/verifications/0042-verification.sql` (une ligne, huit `true`) | en tête du fichier de la migration |
-| 0043 | le fichier de la migration lui-même (**après 0032**) | `supabase/verifications/0043-verification.sql` (une ligne, quatre `true`) | en tête du fichier de la migration |
+| 0043 | le fichier de la migration lui-même (**après 0032**) | `supabase/verifications/0043-verification.sql` (une ligne, six `true`) | en tête du fichier de la migration |
 | 0029, 0035 et 0037 ensemble | `supabase/mise-en-ligne/prod-1-technique-production.sql` (un seul copier-coller, rejouable en entier ; rien de visible pour les membres ; **avant** prod-3) | `supabase/mise-en-ligne/prod-1-technique-verification.sql` (3 lignes, toutes `true`) | en tête de chaque migration, dans l'ordre inverse |
 | 0038 et 0039 ensemble | `supabase/mise-en-ligne/prod-2-memoire-videos-production.sql` (un seul copier-coller, rejouable en entier ; « Pièces déjà repérées dans cette vidéo ») | `supabase/mise-en-ligne/prod-2-memoire-videos-verification.sql` (une ligne, tout `true`) | en tête de chaque migration, dans l'ordre inverse |
 | 0036, 0040 et 0041 ensemble | `supabase/mise-en-ligne/prod-3-alertes-production.sql` (un seul copier-coller, **après prod-1** : refusé sans 0035 ; alertes prix et stock ; une fois passé, une seconde exécution est arrêtée par sa garde, sans rien changer ; le script de rattrapage, qui ne vise que spotto-dev-2, n'y est pas nécessaire : voir l'en-tête) | `supabase/mise-en-ligne/prod-3-alertes-verification.sql` (3 lignes, toutes `true`) | en tête de chaque migration, dans l'ordre inverse |
