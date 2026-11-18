@@ -143,7 +143,7 @@ describe("onglet Activité", () => {
   });
 
   it("un type que cette version ne connaît pas n'est jamais affiché sous le texte d'un autre", () => {
-    const list = [notification("follow_request"), { ...notification("like"), type: "mention" as NotificationType }, notification("like")];
+    const list = [notification("follow_request"), { ...notification("like"), type: "type_d_une_version_future" as NotificationType }, notification("like")];
     expect(knownNotifications(list).map((n) => n.type)).toEqual(["follow_request", "like"]);
     for (const type of NOTIFICATION_TYPES) expect(knownNotifications([notification(type)])).toHaveLength(1);
     const screen = read("app/(app)/(tabs)/activite.tsx");
@@ -208,7 +208,9 @@ describe("réglage « Compte privé »", () => {
     const pieces = settings.indexOf("<PieceSendsSetting />");
     expect(account).toBeGreaterThan(-1);
     expect(pieces).toBeGreaterThan(account);
-    expect(settings.slice(account + "<PrivateAccountSetting />".length, pieces).trim()).toBe("");
+    // Entre les deux : seulement « Qui peut me mentionner » (migration 0046), du même bloc.
+    const between = settings.slice(account + "<PrivateAccountSetting />".length, pieces).replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+    expect(between.trim()).toBe("<MentionsFromSetting />");
     expect(setting).toContain("<Text style={styles.label}>{t.privateAccount.sectionTitle}</Text>");
   });
 
