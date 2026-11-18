@@ -1,3 +1,4 @@
+import type { FollowState } from "@monapp/shared-types";
 import { t } from "../i18n";
 import { parseMemberListKind } from "./follow-state";
 
@@ -73,4 +74,23 @@ export function loadsWithoutTap(emptyPagesInARow: number): boolean {
 /** Les deux actions du compteur d'un profil : où mène chacune. */
 export function memberListRoute(kind: FollowListKind, userId: string): { pathname: "/membres"; params: { kind: FollowListKind; id: string } } {
   return { pathname: "/membres", params: { kind, id: userId } };
+}
+
+/** Après « Suivre », « Ne plus suivre » ou une demande annulée : la ligne du
+ * membre porte le nouvel état. Le bouton se dessine toujours d'après la
+ * liste : il reste juste après un rafraîchissement ou un long défilement.
+ * Les autres lignes ne sont pas recopiées. */
+export function withFollowState<Row extends { id: string; isFollowing: boolean; followState?: FollowState }>(members: readonly Row[], id: string, followState: FollowState): Row[] {
+  return members.map((member) => (member.id === id ? { ...member, followState, isFollowing: followState === "following" } : member));
+}
+
+/** Largeur gardée au nom dans une ligne de membre. Quand les boutons ne
+ * tiennent plus à côté (écran étroit, texte agrandi), ils passent dessous. */
+export const MEMBER_NAME_MIN_WIDTH = 140;
+/** L'écart entre le nom et les boutons (space.sm). */
+export const MEMBER_ROW_GAP = 8;
+
+/** Les boutons d'une ligne passent-ils sous le nom ? */
+export function actionsWrapUnderName(rowWidth: number, actionsWidth: number): boolean {
+  return MEMBER_NAME_MIN_WIDTH + MEMBER_ROW_GAP + actionsWidth > rowWidth;
 }

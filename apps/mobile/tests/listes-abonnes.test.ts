@@ -9,6 +9,8 @@ import { privacyPolicyEn } from "../src/legal/confidentialite.en";
 import { showsPrivateShell } from "../src/lib/follow-state";
 import {
   MAX_EMPTY_PAGES_IN_A_ROW,
+  MEMBER_NAME_MIN_WIDTH,
+  actionsWrapUnderName,
   isOwnMemberList,
   loadsWithoutTap,
   memberListEmptyText,
@@ -18,6 +20,7 @@ import {
   parseMemberListParams,
   showsFindPeople,
   showsRemoveFollower,
+  withFollowState,
 } from "../src/lib/member-lists";
 
 // Listes des abonnés et des abonnements (lot « vie sociale », sans
@@ -219,7 +222,7 @@ describe("chargement de la suite", () => {
   it("chaque ligne : le bouton d'abonnement à trois états, sauf sur sa propre ligne ; les boutons font 44 points de haut", () => {
     const screen = read("app/(app)/membres.tsx");
     expect(screen).toContain("member.isMe ? null : (");
-    expect(screen).toContain('setState(await followUser(member.id, "list"));');
+    expect(screen).toContain('onState(member.id, await followUser(member.id, "list"));');
     expect(screen).toContain("const button = followButton(state, t.peopleSearch.following);");
     expect(screen).toContain("accessibilityHint={button.hint}");
     expect(screen).toMatch(/action: \{ minHeight: 44,/);
@@ -273,5 +276,57 @@ describe("textes", () => {
     expect(section(privacyPolicyEn, "Who can see what")).toContain(
       "Your follower list and your following list are visible to members who can see your profile (only your approved followers if your account is private). You can remove a follower; they are not notified."
     );
+  });
+});
+
+describe("bouton d'abonnement d'une ligne : l'état vit dans la liste", () => {
+  const row = (id: string, followState: "none" | "requested" | "following") => ({ id, displayName: id, isFollowing: followState === "following", followState });
+
+  it("la ligne touchée porte le nouvel état, les autres ne bougent pas", () => {
+    const members = [row(ME, "none"), row(OTHER, "none")];
+    const requested = withFollowState(members, OTHER, "requested");
+    expect(requested[1]).toEqual({ id: OTHER, displayName: OTHER, isFollowing: false, followState: "requested" });
+    expect(requested[0]).toBe(members[0]);
+    // La liste d'origine n'est pas modifiée.
+    expect(members[1].followState).toBe("none");
+
+    const following = withFollowState(requested, OTHER, "following");
+    expect(following[1]).toMatchObject({ isFollowing: true, followState: "following" });
+    expect(withFollowState(following, OTHER, "none")[1]).toMatchObject({ isFollowing: false, followState: "none" });
+  });
+
+  it("un identifiant absent de la liste ne change rien", () => {
+    const members = [row(ME, "following")];
+    expect(withFollowState(members, OTHER, "none")).toEqual(members);
+  });
+
+  it("l'écran : le bouton lit la ligne (aucun état à lui) et y écrit le résultat", () => {
+    const screen = read("app/(app)/membres.tsx");
+    const button = screen.slice(screen.indexOf("function RowFollowButton"), screen.indexOf("function FollowList"));
+    expect(button).toContain("const state = followStateOf(member);");
+    expect(button).not.toMatch(/useState<FollowState>|setState\(/);
+    expect(button).toContain('onState(member.id, await followUser(member.id, "list"));');
+    expect(button).toContain('onState(member.id, "none");');
+    expect(screen).toContain("<RowFollowButton member={member} onState={pages.setFollowState} onChanged={countsChanged} />");
+    expect(screen).toContain("withFollowState(previous, id, followState)");
+  });
+});
+
+describe("ligne de membre étroite : les boutons passent sous le nom", () => {
+  it("375 pt et plus, texte normal : tout tient sur une ligne ; 320 pt ou texte agrandi : dessous", () => {
+    // Largeur de la ligne : l'écran moins deux marges de 24. « Suivi(e) » + « Retirer » : environ 170.
+    expect(actionsWrapUnderName(375 - 48, 170)).toBe(false);
+    expect(actionsWrapUnderName(320 - 48, 170)).toBe(true);
+    // Texte agrandi (x1,3) sur 375 pt.
+    expect(actionsWrapUnderName(375 - 48, 215)).toBe(true);
+    expect(MEMBER_NAME_MIN_WIDTH).toBeGreaterThanOrEqual(120);
+  });
+
+  it("la ligne : retour à la ligne permis, largeur gardée au nom, boutons à droite", () => {
+    const list = read("components/member-list.tsx");
+    const style = (name: string) => list.split("\n").find((line) => line.trimStart().startsWith(`${name}: {`)) ?? "";
+    expect(style("row")).toContain('flexWrap: "wrap"');
+    expect(style("person")).toContain("flex: 1, minWidth: MEMBER_NAME_MIN_WIDTH");
+    expect(style("actions")).toContain('marginLeft: "auto"');
   });
 });

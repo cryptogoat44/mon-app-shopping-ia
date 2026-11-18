@@ -19,6 +19,7 @@ import {
   parseMemberListParams,
   showsFindPeople,
   showsRemoveFollower,
+  withFollowState,
   type FollowListKind,
 } from "@/lib/member-lists";
 import { useToast } from "@/lib/toast-context";
@@ -107,6 +108,8 @@ function useMemberPages(fetchPage: (cursor?: string) => Promise<MemberPage>, loa
 
   const remove = useCallback((id: string) => setMembers((previous) => (previous ? previous.filter((member) => member.id !== id) : previous)), []);
 
+  const setFollowState = useCallback((id: string, followState: FollowState) => setMembers((previous) => (previous ? withFollowState(previous, id, followState) : previous)), []);
+
   // La suite peut-elle partir sans qu'on la demande ? Jamais après une erreur.
   const autoLoad = cursor !== null && moreError === null && loadsWithoutTap(emptyStreak);
   // Une page vide alors qu'il en reste : la suivante part d'elle-même.
@@ -114,7 +117,7 @@ function useMemberPages(fetchPage: (cursor?: string) => Promise<MemberPage>, loa
     if (emptyStreak > 0 && autoLoad && !loadingMore) void loadMore(false);
   }, [autoLoad, emptyStreak, loadMore, loadingMore]);
 
-  return { members, error, moreError, loadingMore, refreshing, hasMore: cursor !== null, autoLoad, load, loadMore, refresh, remove };
+  return { members, error, moreError, loadingMore, refreshing, hasMore: cursor !== null, autoLoad, load, loadMore, refresh, remove, setFollowState };
 }
 
 function RequestActions({ member, onDone }: { member: MemberRow; onDone: (id: string) => void }) {
@@ -201,10 +204,14 @@ function RequestsList() {
   );
 }
 
-/** Le bouton d'abonnement d'une ligne : Suivre, Demandé (compte privé) ou Suivi(e). */
-function RowFollowButton({ member, onChanged }: { member: MemberRow; onChanged: () => void }) {
+/** Le bouton d'abonnement d'une ligne : Suivre, Demandé (compte privé) ou Suivi(e).
+ * Il n'a pas d'état à lui : il se dessine d'après la ligne de la liste, et y
+ * écrit le nouvel état (`onState`). Sinon, après un rafraîchissement ou un
+ * long défilement, il montrerait un état périmé — et « annuler la demande »
+ * supprimerait un abonnement accepté entre-temps. */
+function RowFollowButton({ member, onState, onChanged }: { member: MemberRow; onState: (id: string, followState: FollowState) => void; onChanged: () => void }) {
   const { showToast } = useToast();
-  const [state, setState] = useState<FollowState>(followStateOf(member));
+  const state = followStateOf(member);
   const [busy, setBusy] = useState(false);
 
   async function toggle() {
@@ -214,11 +221,11 @@ function RowFollowButton({ member, onChanged }: { member: MemberRow; onChanged: 
     try {
       if (followActionFor(state) === "follow") {
         // Compte privé : le serveur répond « demandé ».
-        setState(await followUser(member.id, "list"));
+        onState(member.id, await followUser(member.id, "list"));
       } else {
         // Ne plus suivre, ou annuler la demande.
         await unfollowUser(member.id);
-        setState("none");
+        onState(member.id, "none");
       }
       onChanged();
     } catch (e) {
@@ -296,7 +303,7 @@ function FollowList({ kind, ownerId, own }: { kind: FollowListKind; ownerId: str
         renderActions={(member) =>
           member.isMe ? null : (
             <>
-              <RowFollowButton member={member} onChanged={countsChanged} />
+              <RowFollowButton member={member} onState={pages.setFollowState} onChanged={countsChanged} />
               {showsRemoveFollower(kind, own, member) ? (
                 <Pressable style={styles.action} onPress={() => setRemoving(member)} accessibilityRole="button" accessibilityLabel={t.memberLists.removeLabel(member.displayName)}>
                   <Text style={styles.actionLabel}>{t.memberLists.remove}</Text>

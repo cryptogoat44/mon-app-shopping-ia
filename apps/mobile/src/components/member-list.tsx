@@ -7,6 +7,7 @@ import { Avatar } from "@/components/avatar";
 import { ErrorMessage } from "@/components/error-message";
 import { LoadFailure } from "@/components/load-failure";
 import { LockIcon } from "@/components/icons";
+import { MEMBER_NAME_MIN_WIDTH, MEMBER_ROW_GAP } from "@/lib/member-lists";
 import { Skeleton } from "@/components/skeleton";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -139,14 +140,16 @@ export function MemberList({
 
 const styles = themedStyles(() => ({
   content: { paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
-  row: { flexDirection: "row", alignItems: "center", gap: space.sm, paddingVertical: space.sm, borderBottomWidth: 1, borderBottomColor: color.filet },
-  person: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.sm, minHeight: 44 },
+  // Écran étroit ou texte agrandi : les boutons passent sous le nom, alignés à
+  // droite, plutôt que de l'écraser (lib/member-lists.ts).
+  row: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: MEMBER_ROW_GAP, paddingVertical: space.sm, borderBottomWidth: 1, borderBottomColor: color.filet },
+  person: { flex: 1, minWidth: MEMBER_NAME_MIN_WIDTH, flexDirection: "row", alignItems: "center", gap: space.sm, minHeight: 44 },
   avatarPlaceholder: { width: 40, height: 40, borderRadius: radius.full },
   rowText: { flex: 1 },
   nameLine: { flexDirection: "row", alignItems: "center", gap: 6 },
   displayName: { flexShrink: 1, fontSize: font.secondary, fontWeight: "600", color: color.encre },
   username: { fontSize: font.caption, color: color.acier },
-  actions: { flexDirection: "row", alignItems: "center", gap: space.xs },
+  actions: { flexDirection: "row", alignItems: "center", gap: space.xs, marginLeft: "auto" },
   empty: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginTop: space.lg, lineHeight: 20 },
   moreError: { fontSize: font.secondary, marginTop: space.md },
   loader: { marginTop: space.md },
