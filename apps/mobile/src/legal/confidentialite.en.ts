@@ -123,7 +123,7 @@ export function buildPrivacyPolicyEn(extra: PrivacyExtra): LegalDocument {
           "Your follower list and your following list are visible to members who can see your profile (only your approved followers if your account is private). You can remove a follower; they are not notified.",
           "When you like a post, members who can see that post can see that you liked it. If your account is private, only your followers and the post's author can see it.",
           "You can reply to a comment, like it and mention a member with @. The setting “Who can mention me” lets you choose who can mention or tag you: everyone, accounts you follow (the starting value), or no one. You are notified when you are mentioned and you can remove the mention. If you block a member, their mentions of you disappear.",
-          "A post can contain up to 5 photos. You can tag members in it; only those who allow it (setting “Who can mention me”, which starts at: accounts you follow) and who can see the post are tagged. A tagged person is notified and can remove the tag at any time; the tag is removed if they can no longer see the post.",
+          "A post can contain up to 5 photos. You can tag members in it; only those who allow it (setting “Who can mention me”, which starts at: only accounts they follow themselves) and who can see the post are tagged. A tagged person is notified and can remove the tag at any time; the tag is removed if they can no longer see the post, except when the post is hidden by moderation: the tag is then hidden with it and returns if the post is restored.",
         ],
       },
       {

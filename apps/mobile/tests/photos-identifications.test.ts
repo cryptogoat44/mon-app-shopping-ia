@@ -383,11 +383,17 @@ describe("textes", () => {
     const frText = JSON.stringify(privacyPolicy);
     const enText = JSON.stringify(privacyPolicyEn);
     expect(frText).toContain("Une publication peut contenir jusqu'à 5 photos.");
-    expect(frText).toContain("seuls ceux qui l'acceptent (réglage « Qui peut me mentionner », au départ : les comptes que vous suivez) et qui peuvent voir la publication sont identifiés");
-    expect(frText).toContain("elle la perd si elle ne peut plus voir la publication.");
+    // Le réglage de départ est celui de la personne identifiée : seulement les comptes qu'ELLE suit
+    // (mentions.ts : la personne identifiée suit l'auteur), pas ceux que l'auteur suit.
+    expect(frText).toContain("seuls ceux qui l'acceptent (réglage « Qui peut me mentionner » ; au départ, seulement les comptes qu'ils suivent eux-mêmes) et qui peuvent voir la publication sont identifiés");
+    expect(frText).not.toContain("au départ : les comptes que vous suivez");
+    // Une publication masquée par la modération garde ses identifications (peopleTags.ts) : la politique le dit.
+    expect(frText).toContain("elle la perd si elle ne peut plus voir la publication, sauf si la publication est masquée par la modération : l'identification est alors cachée avec elle et revient si la publication est rétablie.");
     expect(frText).toContain("commentaires, mentions, personnes identifiées, « j'aime »");
     expect(enText).toContain("A post can contain up to 5 photos.");
-    expect(enText).toContain("the tag is removed if they can no longer see the post.");
+    expect(enText).toContain("(setting “Who can mention me”, which starts at: only accounts they follow themselves)");
+    expect(enText).not.toContain("which starts at: accounts you follow");
+    expect(enText).toContain("the tag is removed if they can no longer see the post, except when the post is hidden by moderation: the tag is then hidden with it and returns if the post is restored.");
     expect(enText).toContain("comments, mentions, tagged people, likes");
   });
 });
