@@ -828,6 +828,10 @@ export interface Post {
   media?: PostPhoto[];
   /** Membres identifiés que ce lecteur peut voir (migration 0047) ; absent quand il n'y en a aucun. */
   people?: PostAuthor[];
+  /** Le lecteur a enregistré cette publication (migration 0048) ; absent sans 0048 : l'app cache le signet. */
+  viewerHasSaved?: boolean;
+  /** Sa collection où elle est rangée, ou null (migration 0048) : vu de lui seul. */
+  viewerSavedCollectionId?: string | null;
 }
 
 // Commentaires (Lot F, section 5.A du programme) : à plat, 1 000 caractères
@@ -1536,6 +1540,9 @@ export interface CollectionsStatus {
    * ami peut être signalée. Faux (ou absent : ancien serveur) : l'app cache
    * « Signaler ». Le serveur l'envoie toujours. */
   reportable?: boolean;
+  /** Publications enregistrées (migration 0048) : signet et liste « Publications
+   * enregistrées ». Faux ou absent (ancien serveur) : l'app les cache. */
+  savedPosts?: boolean;
 }
 
 /** Codes d'erreur propres aux collections. */
@@ -2460,3 +2467,35 @@ export const POST_MEDIA_CONFLICT_ERROR = "post_media_conflict";
 export const POST_MEDIA_LIMIT_ERROR = "post_media_limit";
 /** 404 : identification introuvable (ou pas la vôtre). */
 export const PEOPLE_TAG_NOT_FOUND_ERROR = "people_tag_not_found";
+
+// ---- Publications enregistrées (lot « vie sociale », migration 0048) ----
+
+/** Publications enregistrées par membre, au plus. */
+export const SAVED_POSTS_MAX = 1000;
+/** Lignes LUES par page de GET /api/saved-posts. Une page en montre parfois
+ * moins, ou aucune, alors qu'il en reste : seul `nextCursor` dit s'il y a une suite. */
+export const SAVED_POSTS_PAGE_SIZE = 18;
+
+/** PUT /api/posts/:id/save : enregistrer, ou ranger ailleurs. `collectionId` :
+ * une de vos collections ; null ou absent : sans collection. */
+export interface SavePostRequest {
+  collectionId?: string | null;
+}
+export interface SavePostResponse {
+  saved: true;
+  collectionId: string | null;
+}
+
+/** GET /api/saved-posts?cursor=&collectionId= : vos publications enregistrées
+ * que vous pouvez encore voir, les plus récemment enregistrées d'abord. */
+export interface SavedPostsPage {
+  posts: Post[];
+  nextCursor: string | null;
+}
+
+/** 404 : publications enregistrées pas encore disponibles (migration 0048 absente). */
+export const SAVED_POSTS_UNAVAILABLE_ERROR = "saved_posts_unavailable";
+/** 409 : SAVED_POSTS_MAX publications enregistrées déjà. */
+export const SAVED_POSTS_FULL_ERROR = "saved_posts_full";
+/** 429 : trop de publications enregistrées en une heure. */
+export const SAVE_POST_LIMIT_ERROR = "save_post_limit";
