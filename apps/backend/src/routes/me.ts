@@ -88,7 +88,7 @@ interface PrivateAccountInfo {
   followRequestsCount: number;
 }
 
-/** Au-delà, le nombre de demandes en attente n'est plus compté (l'app affiche ce plafond). */
+/** Au-delà, les demandes en attente ne sont plus comptées : le nombre annoncé plafonne à 100. */
 const FOLLOW_REQUESTS_COUNT_MAX = 100;
 const REQUESTER_ROWS = z.array(z.object({ requester_id: z.guid() }));
 
