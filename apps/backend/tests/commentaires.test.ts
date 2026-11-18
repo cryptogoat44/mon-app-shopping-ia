@@ -27,6 +27,7 @@ import commentsRoutes from "../src/routes/comments.js";
 import notificationsRoutes from "../src/routes/notifications.js";
 import blocksRoutes from "../src/routes/blocks.js";
 import meRoutes from "../src/routes/me.js";
+import accountRoutes from "../src/routes/account.js";
 import { readViewersAudience, resetPrivateAccountsProbe } from "../src/lib/audience.js";
 import { commentThreadsReady, resetCommentThreadsProbe } from "../src/lib/comments.js";
 import { mayMention, resolveMentions } from "../src/lib/mentions.js";
@@ -205,6 +206,7 @@ async function commentsApp(db: unknown): Promise<FastifyInstance> {
   await app.register(notificationsRoutes);
   await app.register(blocksRoutes);
   await app.register(meRoutes);
+  await app.register(accountRoutes);
   await app.ready();
   return app;
 }
@@ -1161,5 +1163,61 @@ describe("base sans la migration 0046 : tout fonctionne comme avant", () => {
     const fake = seeded({ mentionsFrom: { [ANNA]: "following" } });
     const target = await commentsApp(fake.db);
     expect(((await as(target, ANNA).get("/api/me")).json() as Profile).mentionsFrom).toBe("following");
+  });
+});
+
+describe("export des données", () => {
+  it("les commentaires aimés, les mentions reçues et écrites, le réglage ; jamais celles des autres, jamais un compte en blocage", async () => {
+    // Anna a aimé C1 ; Carl et Eve la mentionnent ; elle mentionne Dora et Eve. Eve l'a bloquée depuis.
+    const fake = seeded({
+      likes: [[ANNA, C1], [FRED, C1]],
+      mentions: [[C1, CARL, ANNA, "anna"], [R2, EVE, ANNA, "anna"], [C2, DORA, FRED, "fred"]],
+      mentionsFrom: { [ANNA]: "nobody" },
+    });
+    const mine = randomUUID();
+    fake.table("comments").push(comment(mine, BRUNO_PUBLIC, ANNA, "Bravo @dora et @eve", 9, { parent: C1 }));
+    fake.table("comment_mentions").push({ comment_id: mine, author_id: ANNA, user_id: DORA, handle: "dora", created_at: at(40) }, { comment_id: mine, author_id: ANNA, user_id: EVE, handle: "eve", created_at: at(41) });
+    // Un blocage efface les mentions ; s'il en restait une, elle ne serait pas exportée.
+    fake.table("blocks").push({ blocker_id: EVE, blocked_id: ANNA, created_at: "2026-11-11T00:00:00+00:00" });
+    const target = await commentsApp(fake.db);
+
+    const body = (await as(target, ANNA).get("/api/me/export")).json();
+    expect(body.profile.mentions_from).toBe("nobody");
+    expect(body.commentReactionsGiven).toEqual([{ comment_id: C1, created_at: at(30) }]);
+    expect(body.mentionsReceived).toEqual([{ comment_id: C1, author_id: CARL, handle: "anna", created_at: at(31) }]);
+    expect(body.mentionsMade).toEqual([{ comment_id: mine, user_id: DORA, handle: "dora", created_at: at(40) }]);
+    expect(body.comments.map((row: Row) => [row.id, row.parent_id])).toEqual([[mine, C1]]);
+    // Clés ajoutées à la fin : les anciennes gardent leur ordre.
+    expect(Object.keys(body).slice(-5)).toEqual(["followRequestsSent", "followRequestsReceived", "commentReactionsGiven", "mentionsReceived", "mentionsMade"]);
+    const added = JSON.stringify([body.commentReactionsGiven, body.mentionsReceived, body.mentionsMade]);
+    expect(added).not.toContain(EVE);
+    expect(added).not.toContain(FRED);
+
+    // Fichier lisible : le nom des comptes, jamais celui du compte en blocage.
+    const page = (await as(target, ANNA).get("/api/me/export?format=html")).body;
+    expect(page).toContain("Mentions de vous (1)");
+    expect(page).toContain("Mentions que vous avez écrites (1)");
+    expect(page).toContain("Commentaires aimés (1)");
+    expect(page).toContain("@carl (Carl)");
+    expect(page).toContain("@dora (Dora)");
+    // Son propre commentaire garde son texte (« @eve » compris) ; Eve, elle, n'est nommée nulle part.
+    expect(page).not.toContain("(Eve)");
+    expect(page).toContain("Qui peut vous mentionner");
+
+    // L'autre côté : Dora voit la mention reçue d'Anna et celle qu'elle a écrite pour Fred.
+    const dora = (await as(target, DORA).get("/api/me/export")).json();
+    expect(dora.mentionsReceived).toEqual([{ comment_id: mine, author_id: ANNA, handle: "dora", created_at: at(40) }]);
+    expect(dora.mentionsMade).toEqual([{ comment_id: C2, user_id: FRED, handle: "fred", created_at: at(31) }]);
+    expect(dora.commentReactionsGiven).toEqual([]);
+  });
+
+  it("sans la migration 0046 : trois sections vides, et l'export réussit", async () => {
+    const fake = seeded({}, WITHOUT_0046);
+    const target = await commentsApp(fake.db);
+    const response = await as(target, ANNA).get("/api/me/export");
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect([body.commentReactionsGiven, body.mentionsReceived, body.mentionsMade]).toEqual([[], [], []]);
+    expect(body.profile).not.toHaveProperty("mentions_from");
   });
 });
