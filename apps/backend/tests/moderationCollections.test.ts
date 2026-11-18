@@ -358,7 +358,7 @@ afterEach(async () => {
 describe("sans la migration 0034", () => {
   it("« Signaler » est annoncé indisponible, un signalement reçoit « indisponible » et rien n'est écrit", async () => {
     const { fake, app } = await world({ missingColumns: WITHOUT_0034 });
-    expect((await as(app, BOB).get("/api/collections/status")).json()).toEqual({ enabled: true, reportable: false });
+    expect((await as(app, BOB).get("/api/collections/status")).json()).toEqual({ enabled: true, reportable: false, savedPosts: true });
     const gifts = await sharedCollection(app);
     const res = await report(app, BOB, gifts.id);
     expect(res.statusCode).toBe(404);
@@ -388,7 +388,7 @@ describe("sans la migration 0034", () => {
 
   it("sans 0033 non plus : rien n'est annoncé ; la sonde de 0034 attend celle de 0033", async () => {
     const { app } = await world({ missing: ["collections", "collection_items", "collection_image_copies"] });
-    expect((await as(app, BOB).get("/api/collections/status")).json()).toEqual({ enabled: false, reportable: false });
+    expect((await as(app, BOB).get("/api/collections/status")).json()).toEqual({ enabled: false, reportable: false, savedPosts: false });
     expect((await report(app, BOB, UNKNOWN)).json().error).toBe("collection_moderation_unavailable");
     expect(await collectionModerationReady(app)).toBe(false);
   });
@@ -397,7 +397,7 @@ describe("sans la migration 0034", () => {
 describe("signaler une collection : seulement celle qu'on voit vraiment", () => {
   it("un ami peut la signaler (motif et précision) ; « Signaler » est annoncé", async () => {
     const { fake, app } = await world();
-    expect((await as(app, BOB).get("/api/collections/status")).json()).toEqual({ enabled: true, reportable: true });
+    expect((await as(app, BOB).get("/api/collections/status")).json()).toEqual({ enabled: true, reportable: true, savedPosts: true });
     const gifts = await sharedCollection(app);
     const res = await report(app, BOB, gifts.id, { reason: "harassment", note: "  Nom blessant  " });
     expect(res.statusCode).toBe(204);

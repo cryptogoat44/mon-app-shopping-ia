@@ -366,6 +366,17 @@ export const RATE_LIMITS = {
     error: "post_media_limit",
     message: "Vous avez ajouté beaucoup de photos en peu de temps. Réessayez dans un moment.",
   },
+
+  // Enregistrer une publication, ou la ranger dans une autre collection (lot
+  // « vie sociale », migration 0048) : 300 par heure ne gêne personne qui fait
+  // défiler son fil, et arrête un script qui remplirait la table. Retirer une
+  // publication de ses enregistrées n'est jamais limité au-delà du filet commun.
+  savePost: {
+    max: 300,
+    windowMs: HOUR,
+    error: "save_post_limit",
+    message: "Vous avez enregistré beaucoup de publications en peu de temps. Réessayez dans un moment.",
+  },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

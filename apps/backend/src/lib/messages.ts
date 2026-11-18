@@ -308,6 +308,11 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Identifications invalides.": "Invalid tags.",
   "Seule une publication « Une photo » peut identifier des personnes.": "Only a photo post can tag people.",
   "Identification introuvable.": "Tag not found.",
+  // Publications enregistrées (lot « vie sociale », migration 0048).
+  "Les publications enregistrées ne sont pas encore disponibles.": "Saved posts aren't available yet.",
+  "Vous avez atteint la limite de publications enregistrées.": "You've reached the limit of saved posts.",
+  "Vous avez enregistré beaucoup de publications en peu de temps. Réessayez dans un moment.": "You've saved a lot of posts in a short time. Please try again in a moment.",
+  "Enregistrement invalide.": "Invalid save request.",
 };
 
 /** Message dans la langue voulue. Un message inconnu (par exemple un texte

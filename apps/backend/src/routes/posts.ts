@@ -35,6 +35,7 @@ import { toMemberRows } from "../lib/memberRows.js";
 import { commentThreadsReady } from "../lib/comments.js";
 import { POST_EXTRAS_UNAVAILABLE, postExtrasReady } from "../lib/postExtras.js";
 import { PEOPLE_TAG_NOT_FOUND, dropUnseeableTags, resolvePeopleTags } from "../lib/peopleTags.js";
+import { readSavedState, savedPostsReady } from "../lib/savedPosts.js";
 import { ImageQueueFullError } from "../lib/imageSafety.js";
 import { consumeRateLimit } from "../plugins/rateLimit.js";
 
@@ -465,13 +466,14 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
   // personne identifiée — jamais une liste non filtrée, jamais une erreur
   // pour une publication déjà enregistrée.
   const noExtras: PostExtras = { media: new Map(), people: new Map() };
-  const [hdUrls, wishByItem, extras] = await Promise.all([
+  const [hdUrls, wishByItem, extras, saved] = await Promise.all([
     fetchHdImageUrls(fastify, purchaseVaultItems),
     fetchPostWishes(fastify, rows),
     readPostExtras(fastify, rows, viewerId).catch(() => {
       fastify.log.warn("Publications sans leurs photos 2 à 5 ni personnes identifiées : lecture impossible");
       return noExtras;
     }),
+    readViewerSaved(fastify, rows, viewerId, knownBlocked !== undefined),
   ]);
   purchaseVaultItems.forEach((item, index) => hdByVaultItem.set(item.id, hdUrls[index] ?? null));
 
@@ -506,8 +508,29 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
       commentCount: commentCountByPost.get(row.id) ?? 0,
       ...(media ? { media } : {}),
       ...(people && people.length > 0 ? { people } : {}),
+      ...(saved ? { viewerHasSaved: saved.has(row.id), viewerSavedCollectionId: saved.get(row.id) ?? null } : {}),
     };
   });
+}
+
+/** Publications enregistrées (migration 0048) : pour chaque publication de
+ * la page que le lecteur a enregistrée, sa collection (ou null). Une lecture
+ * sur les identifiants de la page. null : pas de signet (base sans 0048, ou
+ * lecture impossible — jamais une erreur pour la page). Une publication toute
+ * neuve (`fresh`) n'est enregistrée par personne : rien n'est lu. */
+async function readViewerSaved(fastify: FastifyInstance, rows: PostRow[], viewerId: string, fresh: boolean): Promise<Map<string, string | null> | null> {
+  try {
+    if (!(await savedPostsReady(fastify))) return null;
+    if (fresh) return new Map();
+    return await readSavedState(
+      fastify,
+      viewerId,
+      rows.map((row) => row.id)
+    );
+  } catch {
+    fastify.log.warn("Publications sans leur signet : lecture des publications enregistrées impossible");
+    return null;
+  }
 }
 
 const FEED_PAGE_SIZE = 15;

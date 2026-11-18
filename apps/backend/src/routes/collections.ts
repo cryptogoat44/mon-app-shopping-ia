@@ -52,6 +52,7 @@ import {
   type ItemRow,
 } from "../lib/collections.js";
 import { collectionModerationReady } from "../lib/collectionModeration.js";
+import { savedPostsReady } from "../lib/savedPosts.js";
 import { CONTENT_NOT_ALLOWED, containsBannedWords } from "../lib/contentFilter.js";
 import { ACCOUNT_SUSPENDED, isSuspended } from "../lib/moderation.js";
 import { readAll, chunks } from "../lib/pagedReads.js";
@@ -155,11 +156,14 @@ export default async function collectionsRoutes(fastify: FastifyInstance) {
   };
 
   // Disponibilité : l'app cache toutes les collections sans 0033, et
-  // « Signaler » une collection sans 0034.
+  // « Signaler » une collection sans 0034. Publications enregistrées
+  // (migration 0048) : le signet et leur liste, sans requête de plus ; base
+  // illisible : « non », sans erreur.
   fastify.get("/api/collections/status", auth, async (_request, reply) => {
     reply.header("Cache-Control", "no-store");
     const enabled = await collectionsReady(fastify);
-    return reply.send({ enabled, reportable: enabled && (await collectionModerationReady(fastify)) } satisfies CollectionsStatus);
+    const [reportable, savedPosts] = enabled ? await Promise.all([collectionModerationReady(fastify), savedPostsReady(fastify).catch(() => false)]) : [false, false];
+    return reply.send({ enabled, reportable, savedPosts } satisfies CollectionsStatus);
   });
 
   // Ses collections, dans l'ordre de création, avec leur nombre d'envies.
