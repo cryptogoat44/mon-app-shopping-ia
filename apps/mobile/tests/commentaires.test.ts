@@ -450,11 +450,11 @@ describe("textes", () => {
   });
 
   it("la nouvelle section est ajoutée à la fin des deux catalogues", () => {
-    // Après elle : la section de la migration 0047 (photos-identifications.test.ts).
+    // Après elle : les sections des migrations 0047 (photos-identifications.test.ts) et 0048 (publications-enregistrees.test.ts).
     for (const catalog of [fr, en]) {
       const keys = Object.keys(catalog);
       expect(keys.indexOf("commentThreads")).toBe(keys.indexOf("memberLists") + 1);
-      expect(keys.slice(keys.indexOf("commentThreads") + 1)).toEqual(["carousel"]);
+      expect(keys.slice(keys.indexOf("commentThreads") + 1)).toEqual(["carousel", "savedPosts"]);
     }
   });
 

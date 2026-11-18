@@ -393,8 +393,11 @@ describe("onglet Activité : « vous a identifié(e) dans une publication »", (
 
 describe("textes", () => {
   it("la section « carousel » est ajoutée à la fin des deux catalogues, avec les textes de la fiche", () => {
-    expect(Object.keys(fr).at(-1)).toBe("carousel");
-    expect(Object.keys(en).at(-1)).toBe("carousel");
+    // (Après elle : la section de la migration 0048, publications-enregistrees.test.ts.)
+    for (const catalog of [fr, en]) {
+      const sections = Object.keys(catalog);
+      expect(sections.indexOf("carousel")).toBe(sections.indexOf("commentThreads") + 1);
+    }
     expect(fr.carousel.addPhotos).toBe("Ajouter jusqu'à 5 photos");
     expect(en.carousel.addPhotos).toBe("Add up to 5 photos");
     expect(fr.carousel.uploading(2, 5)).toBe("Envoi de la photo 2 sur 5…");

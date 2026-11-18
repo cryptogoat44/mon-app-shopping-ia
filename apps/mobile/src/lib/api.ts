@@ -85,6 +85,9 @@ import type {
   FollowResponse,
   MemberPage,
   UpdatePrivateAccountRequest,
+  SavePostRequest,
+  SavePostResponse,
+  SavedPostsPage,
 } from "@monapp/shared-types";
 import { COMPLEMENT_DEFERRED, CONSENT_VERSIONS, parseSearchCapacityStatus, parseVideoMomentsResponse, type SearchCapacityStatus } from "@monapp/shared-types";
 import { CLIENT_LEVEL_QUERY, parseFollowResponse } from "./follow-state";
@@ -1088,6 +1091,35 @@ export async function reactToPost(postId: string): Promise<ReactToPostResponse> 
   const result: ReactToPostResponse = await response.json();
   if (result.viewerHasReacted) track("like_added");
   return result;
+}
+
+// ---- Publications enregistrées (migration 0048) ----
+
+/** Enregistrer une publication, ou la ranger ailleurs : `collectionId`, une de
+ * ses collections ; null : sans collection. Visible de vous seul. */
+export async function savePost(postId: string, collectionId: string | null = null, options: { firstSave?: boolean } = {}): Promise<SavePostResponse> {
+  const body: SavePostRequest = { collectionId };
+  const response = await authorizedFetch(`/api/posts/${encodeURIComponent(postId)}/save`, { method: "PUT", body: JSON.stringify(body) });
+  const result: SavePostResponse = await response.json();
+  if (options.firstSave) track("post_saved");
+  return result;
+}
+
+/** Retirer une publication de ses enregistrées (toujours permis, même quand on ne la voit plus). */
+export async function unsavePost(postId: string): Promise<void> {
+  await authorizedFetch(`/api/posts/${encodeURIComponent(postId)}/save`, { method: "DELETE" });
+}
+
+/** Ses publications enregistrées encore visibles, les plus récemment
+ * enregistrées d'abord ; `collectionId` : seulement celles d'une de ses
+ * collections. Une page peut être vide alors qu'il en reste (`nextCursor`). */
+export async function fetchSavedPosts(cursor?: string | null, collectionId?: string | null): Promise<SavedPostsPage> {
+  const query = new URLSearchParams();
+  if (cursor) query.set("cursor", cursor);
+  if (collectionId) query.set("collectionId", collectionId);
+  const text = query.toString();
+  const response = await authorizedFetch(`/api/saved-posts${text ? `?${text}` : ""}`);
+  return response.json();
 }
 
 /** « Aimé par » : les membres qui ont aimé une publication, les plus récents

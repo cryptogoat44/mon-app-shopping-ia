@@ -19,12 +19,14 @@ import { formatPrice } from "./format";
 import type { Locale } from "./preferences";
 
 /** Réponse de GET /api/collections/status : seul `enabled: true` les montre ;
- * seul `reportable: true` montre « Signaler » (absent : ancien serveur). */
+ * seul `reportable: true` montre « Signaler » (absent : ancien serveur).
+ * Publications enregistrées (migration 0048) : `savedPosts` n'est gardé que
+ * vrai, avec les collections ; absent, l'app cache leur liste. */
 export function readCollectionsStatus(body: unknown): CollectionsStatus {
   if (typeof body !== "object" || body === null) return { enabled: false, reportable: false };
   const fields = body as Record<string, unknown>;
   const enabled = fields.enabled === true;
-  return { enabled, reportable: enabled && fields.reportable === true };
+  return { enabled, reportable: enabled && fields.reportable === true, ...(enabled && fields.savedPosts === true ? { savedPosts: true } : {}) };
 }
 
 /** Nom tel que le serveur le gardera : espaces de début et de fin retirés,
