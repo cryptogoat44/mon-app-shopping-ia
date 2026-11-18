@@ -222,7 +222,12 @@ async function resolveTaggedPieces(
   return resolved;
 }
 
-export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], viewerId: string): Promise<Post[]> {
+/** `knownBlocked` : les comptes en blocage avec le lecteur, quand l'appelant
+ * les connaît déjà. Les deux créations (publication, republication d'une
+ * envie) passent un ensemble vide : une publication toute neuve n'a ni
+ * « j'aime » ni commentaire, et une panne de lecture des blocages ne doit pas
+ * répondre « erreur » pour une publication déjà enregistrée. */
+export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], viewerId: string, knownBlocked?: ReadonlySet<string>): Promise<Post[]> {
   if (rows.length === 0) return [];
 
   const authorIds = [...new Set(rows.map((r) => r.user_id))];
@@ -246,7 +251,7 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
       .in("post_id", postIds)
       .order("position", { ascending: true }),
     fastify.supabaseAdmin.from("comments").select("post_id, user_id").in("post_id", postIds).is("hidden_at", null),
-    fetchBlockedUserIds(fastify, viewerId),
+    knownBlocked ?? fetchBlockedUserIds(fastify, viewerId),
   ]);
 
   const commentCountByPost = new Map<string, number>();
@@ -665,7 +670,9 @@ export default async function postsRoutes(fastify: FastifyInstance) {
         }
       }
 
-      const [hydrated] = await hydratePosts(fastify, [parsePostRow(inserted)], userId);
+      // Publication toute neuve : aucun « j'aime », aucun commentaire, donc
+      // aucun blocage à lire — et rien qui puisse la faire échouer après coup.
+      const [hydrated] = await hydratePosts(fastify, [parsePostRow(inserted)], userId, new Set());
       return reply.send(hydrated);
     }
   );

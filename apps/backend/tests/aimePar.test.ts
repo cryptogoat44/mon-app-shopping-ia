@@ -1,4 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import multipart from "@fastify/multipart";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MEMBER_LIST_PAGE_SIZE, POST_REACT_LIMIT_ERROR, type FeedPage, type MemberPage, type Post, type PrivacyLevel, type ReactToPostResponse } from "@monapp/shared-types";
@@ -112,6 +115,7 @@ async function likesApp(db: unknown): Promise<FastifyInstance> {
     if (typeof id !== "string") return reply.code(401).send({ error: "unauthorized", message: "Jeton d'authentification manquant." });
     request.user = { id, email: `${id.slice(0, 4)}@example.com` };
   });
+  await app.register(multipart);
   await app.register(rateLimitPlugin);
   await app.register(moderationPlugin);
   app.addHook("onRoute", (route) => {
@@ -472,6 +476,64 @@ describe("nombres affichés sous une publication : sans les comptes en blocage a
     expect((await as(target, FRED).post(`/api/posts/${BRUNO_PUBLIC}/react`)).statusCode).toBe(500);
     expect(likesOf(fake, BRUNO_PUBLIC)).toEqual([FRED]);
     expect(fake.table("notifications")).toHaveLength(0);
+  });
+});
+
+describe("créer une publication : la lecture des blocages ne peut pas la faire échouer après coup", () => {
+  const VAULT_ITEM = "a2000000-0000-4000-8000-000000000001";
+  /** Formulaire de publication d'une pièce du Vault (sans photo à envoyer). */
+  function purchaseForm() {
+    const boundary = "----spotto-test";
+    const field = (name: string, value: string) => `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`;
+    return {
+      payload: `${field("type", "purchase")}${field("vaultItemId", VAULT_ITEM)}${field("privacy", "public")}--${boundary}--\r\n`,
+      headers: { "x-test-user": ANNA, "content-type": `multipart/form-data; boundary=${boundary}` },
+    };
+  }
+  function withVaultItem() {
+    const fake = seeded();
+    fake.table("vault_items").push({ id: VAULT_ITEM, user_id: ANNA, title: "Sac noir", verified: false, image_url: "https://images.example.test/sac.jpg", product_match_id: null });
+    return fake;
+  }
+  const postsOfAnna = (fake: Fake) => fake.table("posts").filter((row) => row.user_id === ANNA);
+
+  it("blocages illisibles au moment de publier : 200 avec la publication, enregistrée une seule fois (jamais un 500 qui pousse à publier deux fois)", async () => {
+    const fake = withVaultItem();
+    const target = await likesApp(fake.db);
+    target.supabaseAdmin = withBrokenBlocks(fake);
+
+    const response = await target.inject({ method: "POST", url: "/api/posts", ...purchaseForm() });
+    expect(response.statusCode).toBe(200);
+    const created: Post = response.json();
+    expect(created).toMatchObject({ type: "purchase", privacy: "public", reactionCount: 0, commentCount: 0, viewerHasReacted: false });
+    expect(postsOfAnna(fake).map((row) => row.id)).toEqual([created.id]);
+
+    // La lecture, elle, reste fermée tant que les blocages sont illisibles.
+    expect((await as(target, ANNA).get(`/api/posts/${created.id}`)).statusCode).toBe(500);
+    expect((await as(target, ANNA).get("/api/feed")).statusCode).toBe(500);
+  });
+
+  it("blocages lisibles : la même réponse", async () => {
+    const fake = withVaultItem();
+    const target = await likesApp(fake.db);
+    const response = await target.inject({ method: "POST", url: "/api/posts", ...purchaseForm() });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ type: "purchase", reactionCount: 0, commentCount: 0 });
+    expect(postsOfAnna(fake)).toHaveLength(1);
+  });
+
+  it("seules les deux créations se passent de la lecture des blocages ; fil, profil, détail et modification la gardent", () => {
+    const source = (file: string) => readFileSync(join(__dirname, "../src/routes", file), "utf8");
+    const calls = (text: string) => text.match(/await hydratePosts\([^\n]*/g) ?? [];
+    const posts = calls(source("posts.ts"));
+    expect(posts).toHaveLength(5);
+    expect(posts.filter((call) => call.includes("new Set()"))).toEqual(["await hydratePosts(fastify, [parsePostRow(inserted)], userId, new Set());"]);
+    // Republication d'une envie : la seule lecture de pieces.ts, sur la ligne tout juste créée.
+    const pieces = calls(source("pieces.ts"));
+    expect(pieces).toHaveLength(1);
+    expect(pieces[0]).toContain("{ data: [inserted], error: null }");
+    expect(pieces[0]).toContain("userId, new Set());");
+    expect(calls(source("users.ts")).some((call) => call.includes("new Set()"))).toBe(false);
   });
 });
 

@@ -187,7 +187,8 @@ export default async function piecesRoutes(fastify: FastifyInstance) {
         request.log.error({ error }, "Échec de la republication d'une envie");
         return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
       }
-      const [post] = await hydratePosts(fastify, parseDbRows(POST_ROWS, { data: [inserted], error: null }, "Publication « envie »"), userId);
+      // Publication toute neuve : aucun blocage à lire (voir hydratePosts).
+      const [post] = await hydratePosts(fastify, parseDbRows(POST_ROWS, { data: [inserted], error: null }, "Publication « envie »"), userId, new Set());
       return reply.send(post);
     }
   );

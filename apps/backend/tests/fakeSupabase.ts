@@ -81,6 +81,8 @@ const DEFAULTS: Record<string, () => Row> = {
   follows: () => ({ created_at: nextTimestamp() }),
   comments: () => ({ id: randomUUID(), hidden_at: null, created_at: nextTimestamp() }),
   post_reactions: () => ({ created_at: nextTimestamp() }),
+  // Colonnes que la base remplit seule à la création d'une publication.
+  posts: () => ({ id: randomUUID(), wishlist_item_id: null, media_thumb_url: null, media_removed_at: null, hidden_at: null, created_at: nextTimestamp() }),
 };
 
 /** Clés uniques imitées (doublon : erreur 23505, comme Postgres). */
