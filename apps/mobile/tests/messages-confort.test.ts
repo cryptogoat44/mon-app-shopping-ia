@@ -470,12 +470,12 @@ describe("politique de confidentialité", () => {
     const french = text(privacyPolicy, /^Qui peut voir quoi/);
     expect(french).toContain("Dans une conversation, vous pouvez aimer un message, y répondre, envoyer une publication et supprimer vos propres messages.");
     expect(french).toContain("Un message supprimé est effacé pour vous deux ; seule la mention « Message supprimé » reste. L'autre membre a pu le lire avant.");
-    expect(french).toContain("S'il avait été signalé avant d'être supprimé, son contenu est conservé pour la modération, et elle seule peut le lire.");
+    expect(french).toContain("S'il avait été signalé avant d'être supprimé, son contenu est conservé pour la modération : l'autre membre ne peut plus le lire, et vous le retrouvez dans l'export de vos données.");
     expect(french).toContain("Une publication envoyée n'est montrée à l'autre membre que s'il a le droit de la voir, au moment où il regarde.");
     const english = text(privacyPolicyEn, /^Who can see what/);
     expect(english).toContain("In a conversation you can like a message, reply to it, send a post and delete your own messages.");
     expect(english).toContain("A deleted message is erased for both of you; only the line “Message deleted” remains. The other member may have read it before.");
-    expect(english).toContain("If it had been reported before being deleted, its content is kept for moderation, and only moderation can read it.");
+    expect(english).toContain("If it had been reported before being deleted, its content is kept for moderation: the other member can no longer read it, and you will find it in your data export.");
     expect(english).toContain("A post you send is shown to the other member only if they are allowed to see it, at the time they look.");
   });
 
