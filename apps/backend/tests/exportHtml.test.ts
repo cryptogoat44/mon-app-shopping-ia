@@ -5,7 +5,7 @@ import { formatPrice, localDay, resolveTimeZone, summarizeUserAgent } from "../s
 import { EXPORT_APPENDIX_ID, escapeHtml, renderExportHtml, type ExportHtmlOptions } from "../src/lib/exportHtml.js";
 import { EXPORT_COLUMNS, EXPORT_SECTIONS, EXPORT_TEXT, MODERATION_ACTION_LABELS, REPORT_HANDLED_LABELS, type Bilingual } from "../src/lib/exportText.js";
 import { chunks, readAll, type PagedQuery, type PageResult } from "../src/lib/pagedReads.js";
-import { BLOCKED, FRIEND, GOOGLE_THUMB, SELF, STORAGE, decodeHtml, fixture, lookups, own, sectionHtml, visibleText } from "./exportFixture.js";
+import { BLOCKED, BLOCKER, FRIEND, GOOGLE_THUMB, SELF, STORAGE, decodeHtml, fixture, lookups, own, sectionHtml, visibleText } from "./exportFixture.js";
 
 // Fichier lisible de l'export RGPD, sur des données en mémoire (aucune base,
 // aucun réseau) : dates dans le fuseau de la personne, prix tels que la base
@@ -842,5 +842,79 @@ describe("export lisible : compte privé et demandes d'abonnement", () => {
     expect(section).toContain(EXPORT_TEXT.someone.fr);
     const none = { ...fixture(), followRequestsSent: [], followRequestsReceived: [] };
     expect(visibleText(sectionHtml(render({}, none), "followRequests"))).toContain(EXPORT_TEXT.noData.fr);
+  });
+});
+
+// Commentaires : réponses, « j'aime », mentions (lot « vie sociale », migration 0046).
+describe("export lisible : réponses, commentaires aimés, mentions", () => {
+  const spaces = (text: string) => text.replace(/\s+/g, " ");
+
+  it("le profil dit qui peut vous mentionner, en clair ; rien tant que la colonne n'existe pas", () => {
+    const base = fixture();
+    const account = (mentionsFrom?: string, locale: "fr" | "en" = "fr") =>
+      spaces(visibleText(sectionHtml(render({ locale }, { ...base, profile: { ...base.profile!, ...(mentionsFrom === undefined ? {} : { mentions_from: mentionsFrom }) } }), "account")));
+    expect(account("following")).toContain("Qui peut vous mentionner Les comptes que vous suivez");
+    expect(account("everyone")).toContain("Qui peut vous mentionner Tout le monde");
+    expect(account("nobody")).toContain("Qui peut vous mentionner Personne");
+    expect(account("nobody", "en")).toContain("Who can mention you No one");
+    expect(account()).not.toContain("Qui peut vous mentionner");
+  });
+
+  it("un commentaire qui est une réponse le dit, sans montrer d'identifiant ; un commentaire ordinaire ne dit rien", () => {
+    const base = fixture();
+    const reply = { ...base, comments: [{ ...base.comments[0]!, parent_id: "c0000000-0000-4000-8000-000000000009" }] };
+    const section = spaces(visibleText(sectionHtml(render({}, reply), "comments")));
+    expect(section).toContain("Réponse à un autre commentaire Oui");
+    expect(section).not.toContain("c0000000-0000-4000-8000-000000000009");
+    const plain = { ...base, comments: [{ ...base.comments[0]!, parent_id: null }] };
+    expect(spaces(visibleText(sectionHtml(render({}, plain), "comments")))).not.toContain("Réponse à un autre commentaire");
+  });
+
+  it("les commentaires aimés : la date, jamais le texte d'un autre ; comptés avec les « j'aime » au sommaire", () => {
+    const page = render({ timeZone: "UTC" });
+    const section = spaces(visibleText(sectionHtml(page, "likes")));
+    expect(section).toContain(`Publications aimées (${fixture().reactionsGiven.length})`);
+    expect(section).toContain("Commentaires aimés (1)");
+    expect(section).toContain("Un commentaire");
+    expect(section).toContain("Aimé le 13 octobre 2026");
+    expect(spaces(visibleText(page))).toContain(`${EXPORT_SECTIONS.likes.title.fr} (${fixture().reactionsGiven.length + 1})`);
+    // Sans commentaire aimé : la section d'avant, sans sous-titres.
+    const none = spaces(visibleText(sectionHtml(render({}, { ...fixture(), commentReactionsGiven: [] }), "likes")));
+    expect(none).not.toContain("Commentaires aimés");
+    expect(none).not.toContain("Publications aimées");
+    expect(spaces(visibleText(sectionHtml(render({ locale: "en" }), "likes")))).toContain("Liked comments (1)");
+  });
+
+  it("les mentions reçues et écrites, avec le compte, le pseudo écrit et la date ; comptées au sommaire", () => {
+    const page = render({ timeZone: "UTC" });
+    const section = spaces(visibleText(sectionHtml(page, "mentions")));
+    expect(section).toContain(EXPORT_SECTIONS.mentions.title.fr);
+    expect(section).toContain("Mentions de vous (1)");
+    expect(section).toContain("Mentions que vous avez écrites (1)");
+    expect(section).toContain("@alexis (Alexis Martin)");
+    expect(section).toContain("Pseudo écrit @camille");
+    expect(section).toContain("Pseudo écrit @alexis");
+    expect(section).toContain("Mentionné(e) le 13 octobre 2026");
+    expect(section).toContain("Écrite le 13 octobre 2026");
+    expect(spaces(visibleText(page))).toContain(`${EXPORT_SECTIONS.mentions.title.fr} (2)`);
+    const english = spaces(visibleText(sectionHtml(render({ locale: "en", timeZone: "UTC" }), "mentions")));
+    expect(english).toContain("Mentions of you (1)");
+    expect(english).toContain("Mentions you wrote (1)");
+  });
+
+  it("un compte qui n'est pas connu de l'export (blocage) n'est jamais nommé ; sans mention : « Aucune donnée »", () => {
+    const blocked = {
+      ...fixture(),
+      mentionsReceived: [{ comment_id: "c0000000-0000-4000-8000-000000000002", author_id: BLOCKER, handle: "camille", created_at: "2026-10-13T10:00:00+00:00" }],
+      mentionsMade: [{ comment_id: "c0000000-0000-4000-8000-000000000001", user_id: BLOCKED, handle: "importun", created_at: "2026-10-13T11:00:00+00:00" }],
+    };
+    const section = visibleText(sectionHtml(render({}, blocked), "mentions"));
+    expect(section.toLowerCase()).not.toContain("bloqueur");
+    expect(section).not.toContain("Nom Secret");
+    // Le compte bloqué par la personne n'est nommé que dans « Comptes bloqués ».
+    expect(section).not.toContain("Importun");
+    expect(section).toContain(EXPORT_TEXT.someone.fr);
+    const none = { ...fixture(), mentionsReceived: [], mentionsMade: [] };
+    expect(visibleText(sectionHtml(render({}, none), "mentions"))).toContain(EXPORT_TEXT.noData.fr);
   });
 });

@@ -5,6 +5,7 @@ import {
   type ConsentType,
   type MatchFeedbackReason,
   type MatchOrigin,
+  type MentionsFrom,
   type MerchantLinkContext,
   type MessagesFrom,
   type ModerationActionType,
@@ -125,6 +126,8 @@ export const EXPORT_COLUMNS = {
     help_others: shown("Aider les autres membres", "Help other members"),
     // Compte privé (migration 0045).
     is_private: shown("Compte privé", "Private account"),
+    // Mentions (migration 0046).
+    mentions_from: shown("Qui peut vous mentionner", "Who can mention you"),
     created_at: shown("Compte créé le", "Account created on"),
     updated_at: shown("Profil modifié le", "Profile updated on"),
   },
@@ -296,6 +299,8 @@ export const EXPORT_COLUMNS = {
     user_id: USER_ID,
     post_id: shown("Sur", "On"),
     body: shown("Commentaire", "Comment"),
+    // Réponses (migration 0046) : le commentaire auquel celui-ci répond.
+    parent_id: shown("Réponse à un autre commentaire", "Reply to another comment"),
     hidden_at: shown("Masqué par la modération le", "Hidden by moderation on"),
     created_at: shown("Écrit le", "Written on"),
   },
@@ -549,6 +554,23 @@ export const EXPORT_COLUMNS = {
     requester_id: shown("Compte", "Account"),
     created_at: shown("Reçue le", "Received on"),
   },
+  // Commentaires, suite (lot « vie sociale », migration 0046).
+  commentReactionsGiven: {
+    comment_id: technical("Commentaire", "Comment"),
+    created_at: shown("Aimé le", "Liked on"),
+  },
+  mentionsReceived: {
+    comment_id: technical("Commentaire", "Comment"),
+    author_id: shown("Par", "By"),
+    handle: shown("Pseudo écrit", "Username as written"),
+    created_at: shown("Mentionné(e) le", "Mentioned on"),
+  },
+  mentionsMade: {
+    comment_id: technical("Commentaire", "Comment"),
+    user_id: shown("Compte mentionné", "Account mentioned"),
+    handle: shown("Pseudo écrit", "Username as written"),
+    created_at: shown("Écrite le", "Written on"),
+  },
 } as const satisfies Record<ExportDataKey, Record<string, ExportColumn>>;
 
 export type ExportColumnName<K extends ExportDataKey> = keyof (typeof EXPORT_COLUMNS)[K] & string;
@@ -635,8 +657,16 @@ export const EXPORT_SECTIONS = {
   },
   likes: {
     title: { fr: "Vos « j'aime »", en: "Your likes" },
-    intro: { fr: "Les publications que vous avez aimées.", en: "The posts you liked." },
-    keys: ["reactionsGiven"],
+    intro: { fr: "Les publications et les commentaires que vous avez aimés.", en: "The posts and comments you liked." },
+    keys: ["reactionsGiven", "commentReactionsGiven"],
+  },
+  mentions: {
+    title: { fr: "Mentions", en: "Mentions" },
+    intro: {
+      fr: "Les mentions « @pseudo » dans les commentaires : celles où d'autres membres vous mentionnent, et celles que vous avez écrites. Une mention retirée par le membre mentionné, ou effacée par un blocage, n'est plus conservée.",
+      en: "The “@username” mentions in comments: the ones where other members mention you, and the ones you wrote. A mention removed by the mentioned member, or erased by a block, is no longer kept.",
+    },
+    keys: ["mentionsReceived", "mentionsMade"],
   },
   following: {
     title: { fr: "Comptes que vous suivez", en: "Accounts you follow" },
@@ -751,6 +781,13 @@ export const PIECE_SENDS_FROM_LABELS: Record<PieceSendsFrom, Bilingual> = {
   following: { fr: "Les comptes que vous suivez", en: "Accounts you follow" },
   everyone: { fr: "Tout le monde", en: "Everyone" },
   nobody: { fr: "Personne", en: "Nobody" },
+};
+
+/** « Qui peut me mentionner » (migration 0046). */
+export const MENTIONS_FROM_LABELS: Record<MentionsFrom, Bilingual> = {
+  everyone: { fr: "Tout le monde", en: "Everyone" },
+  following: { fr: "Les comptes que vous suivez", en: "Accounts you follow" },
+  nobody: { fr: "Personne", en: "No one" },
 };
 
 /** « Qui peut m'écrire » (lot messages) : vos amis peuvent toujours vous écrire. */
@@ -1169,6 +1206,12 @@ export const EXPORT_TEXT = {
   // Compte privé (migration 0045).
   followRequestsSentTitle: { fr: "Demandes envoyées ({count})", en: "Requests sent ({count})" },
   followRequestsReceivedTitle: { fr: "Demandes reçues ({count})", en: "Requests received ({count})" },
+  // Commentaires, suite (migration 0046).
+  likedPostsTitle: { fr: "Publications aimées ({count})", en: "Liked posts ({count})" },
+  likedCommentsTitle: { fr: "Commentaires aimés ({count})", en: "Liked comments ({count})" },
+  likedComment: { fr: "Un commentaire", en: "A comment" },
+  mentionsReceivedTitle: { fr: "Mentions de vous ({count})", en: "Mentions of you ({count})" },
+  mentionsMadeTitle: { fr: "Mentions que vous avez écrites ({count})", en: "Mentions you wrote ({count})" },
   videoTiktok: { fr: "Vidéo TikTok", en: "TikTok video" },
   videoInstagram: { fr: "Vidéo Instagram", en: "Instagram video" },
   videoMoment: { fr: "à {minutes} min {seconds} s", en: "at {minutes} min {seconds} s" },

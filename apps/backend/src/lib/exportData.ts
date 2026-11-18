@@ -8,6 +8,7 @@ import { wishAlertsSchemaState, wishAlertsSchemaVersion } from "./wishAlertsSche
 import { tryonSchemaReady } from "./tryon/schema.js";
 import { videoMemoryStored } from "./videoMemory.js";
 import { privateAccountsReady } from "./audience.js";
+import { commentThreadsReady } from "./comments.js";
 
 // Export RGPD (droit d'accès et de portabilité) : lecture de TOUTES les
 // données personnelles d'un compte. Toute nouvelle table contenant des
@@ -101,6 +102,15 @@ export interface ExportData {
   /** … et celles que vous avez reçues et pas encore traitées. Jamais une
    * demande d'un compte en blocage avec vous. Un refus ne laisse rien. */
   followRequestsReceived: ExportRow[];
+  /** Commentaires, suite (lot « vie sociale », migration 0046) : les
+   * commentaires que vous avez aimés (lequel, quand)… */
+  commentReactionsGiven: ExportRow[];
+  /** … les mentions « @pseudo » de vous dans les commentaires des autres
+   * (par qui, dans quel commentaire, quand)… */
+  mentionsReceived: ExportRow[];
+  /** … et celles que vous avez écrites. Jamais une mention liée à un compte
+   * en blocage avec vous (un blocage les efface). */
+  mentionsMade: ExportRow[];
 }
 
 /** Sections de l'export (toutes les clés sauf la date de l'export). */
@@ -317,6 +327,21 @@ async function listFollowRequests(db: Db, userId: string, mine: "requester_id" |
   return rows.filter((row) => !blocked.has(String(row[other])));
 }
 
+/** Mentions « @pseudo » de la personne : reçues (`mine` = user_id, l'autre
+ * compte est l'auteur du commentaire) ou écrites (`mine` = author_id, l'autre
+ * compte est le membre mentionné). Jamais celle d'un compte en relation de
+ * blocage avec elle (un blocage efface les mentions ; filtré quand même, règle 8). */
+async function listMentions(db: Db, userId: string, mine: "user_id" | "author_id", other: "user_id" | "author_id"): Promise<ExportRow[]> {
+  const rows = await listWhere(db, "comment_mentions", `comment_id, ${other}, handle, created_at`, mine, userId, ["created_at", "comment_id", other]);
+  if (rows.length === 0) return rows;
+  const [blockedByMe, blockingMe] = await Promise.all([
+    listWhere(db, "blocks", "blocked_id", "blocker_id", userId, ["blocked_id"]),
+    listWhere(db, "blocks", "blocker_id", "blocked_id", userId, ["blocker_id"]),
+  ]);
+  const blocked = new Set([...blockedByMe.map((row) => String(row.blocked_id)), ...blockingMe.map((row) => String(row.blocker_id))]);
+  return rows.filter((row) => !blocked.has(String(row[other])));
+}
+
 export async function collectExport(
   fastify: FastifyInstance,
   userId: string,
@@ -512,6 +537,18 @@ export async function collectExport(
     section("followRequestsReceived", () => (withFollowRequests ? listFollowRequests(db, userId, "target_id", "requester_id") : Promise.resolve(none)), none),
   ]);
 
+  // Commentaires, suite : sans la migration 0046, sections vides.
+  const withThreads = await commentThreadsReady(fastify);
+  const [commentReactionsGiven, mentionsReceived, mentionsMade] = await Promise.all([
+    section(
+      "commentReactionsGiven",
+      () => (withThreads ? listWhere(db, "comment_reactions", "comment_id, created_at", "user_id", userId, ["created_at", "comment_id"]) : Promise.resolve(none)),
+      none
+    ),
+    section("mentionsReceived", () => (withThreads ? listMentions(db, userId, "user_id", "author_id") : Promise.resolve(none)), none),
+    section("mentionsMade", () => (withThreads ? listMentions(db, userId, "author_id", "user_id") : Promise.resolve(none)), none),
+  ]);
+
   const data: ExportData = {
     exportedAt: new Date().toISOString(),
     account: { email },
@@ -557,6 +594,9 @@ export async function collectExport(
     videoConfirmations,
     followRequestsSent,
     followRequestsReceived,
+    commentReactionsGiven,
+    mentionsReceived,
+    mentionsMade,
   };
   return { data, failures };
 }

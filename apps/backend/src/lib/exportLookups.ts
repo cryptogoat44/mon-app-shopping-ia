@@ -89,6 +89,9 @@ export async function collectLookups(fastify: FastifyInstance, userId: string, d
     // Compte privé (0045) : l'autre compte de chaque demande d'abonnement en attente.
     ...ids(data.followRequestsSent, "target_id"),
     ...ids(data.followRequestsReceived, "requester_id"),
+    // Mentions (0046) : l'auteur d'une mention reçue, le membre d'une mention écrite.
+    ...ids(data.mentionsReceived, "author_id"),
+    ...ids(data.mentionsMade, "user_id"),
     ...ids(data.reportsSubmitted.filter((report) => report.target_type === "user"), "target_id"),
   ].filter((id) => id !== userId && !blockedMe.has(id) && !blockedIds.has(id));
 

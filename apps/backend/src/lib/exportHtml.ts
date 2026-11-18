@@ -40,6 +40,7 @@ import {
   COLLECTION_VISIBILITY_LABELS,
   INVITATION_LABELS,
   MATCH_ORIGIN_LABELS,
+  MENTIONS_FROM_LABELS,
   MESSAGES_FROM_LABELS,
   REPORT_TARGET_LABELS,
   SEARCH_FAILURE_LABELS,
@@ -392,6 +393,7 @@ function accountSection(ctx: Ctx): Html {
     .field("price_alerts_enabled")
     .field("help_others")
     .field("is_private")
+    .field("mentions_from", enumLabel(ctx, MENTIONS_FROM_LABELS, row.mentions_from))
     .field("created_at")
     .field("updated_at");
   return section(ctx, "account", article(null, account.rows(), profile.rows()));
@@ -610,6 +612,8 @@ function commentsSection(ctx: Ctx): Html {
     new Card(ctx, "comments", row)
       .field("body", multiline(row.body))
       .field("post_id", onPost(ctx, row.post_id))
+      // Une réponse : « Oui » (l'identifiant du commentaire d'origine reste dans la version technique).
+      .field("parent_id", str(row.parent_id) ? tr(ctx, EXPORT_TEXT.yes) : null)
       .field("hidden_at")
       .field("created_at")
       .render()
@@ -618,10 +622,44 @@ function commentsSection(ctx: Ctx): Html {
 }
 
 function likesSection(ctx: Ctx): Html {
-  const cards = newestFirst(ctx.data.reactionsGiven, "created_at").map((row) =>
+  const posts = newestFirst(ctx.data.reactionsGiven, "created_at").map((row) =>
     new Card(ctx, "reactionsGiven", row).field("post_id", onPost(ctx, row.post_id)).field("created_at").render()
   );
-  return section(ctx, "likes", cards);
+  // Commentaires aimés (migration 0046) : la date seulement ; le texte d'un
+  // autre membre ne figure jamais dans vos données.
+  const comments = newestFirst(ctx.data.commentReactionsGiven, "created_at").map((row) =>
+    new Card(ctx, "commentReactionsGiven", row).field("created_at").render(tr(ctx, EXPORT_TEXT.likedComment))
+  );
+  if (comments.length === 0) return section(ctx, "likes", posts);
+  const parts: [Bilingual, Html[]][] = [
+    [EXPORT_TEXT.likedPostsTitle, posts],
+    [EXPORT_TEXT.likedCommentsTitle, comments],
+  ];
+  return section(
+    ctx,
+    "likes",
+    parts.filter(([, cards]) => cards.length > 0).map(([title, cards]) => subsection(ctx, tr(ctx, title, { count: String(cards.length) }), null, cards))
+  );
+}
+
+/** Mentions « @pseudo » (migration 0046) : reçues et écrites. */
+function mentionsSection(ctx: Ctx): Html {
+  const handle = (row: ExportRow) => (str(row.handle) ? `@${row.handle as string}` : null);
+  const received = newestFirst(ctx.data.mentionsReceived, "created_at").map((row) =>
+    new Card(ctx, "mentionsReceived", row).use("author_id").field("handle", handle(row)).field("created_at").render(person(ctx, row.author_id))
+  );
+  const made = newestFirst(ctx.data.mentionsMade, "created_at").map((row) =>
+    new Card(ctx, "mentionsMade", row).use("user_id").field("handle", handle(row)).field("created_at").render(person(ctx, row.user_id))
+  );
+  const parts: [Bilingual, Html[]][] = [
+    [EXPORT_TEXT.mentionsReceivedTitle, received],
+    [EXPORT_TEXT.mentionsMadeTitle, made],
+  ];
+  return section(
+    ctx,
+    "mentions",
+    parts.filter(([, cards]) => cards.length > 0).map(([title, cards]) => subsection(ctx, tr(ctx, title, { count: String(cards.length) }), null, cards))
+  );
 }
 
 function followingSection(ctx: Ctx): Html {
@@ -1139,7 +1177,8 @@ function sectionCount(data: ExportData, id: ExportSectionId): number | null {
     tryon: data.tryonEvents.length,
     posts: data.posts.length,
     comments: data.comments.length,
-    likes: data.reactionsGiven.length,
+    likes: data.reactionsGiven.length + data.commentReactionsGiven.length,
+    mentions: data.mentionsReceived.length + data.mentionsMade.length,
     following: data.following.length,
     followers: data.followers.length,
     followRequests: data.followRequestsSent.length + data.followRequestsReceived.length,
@@ -1170,6 +1209,7 @@ const SECTION_RENDERERS: Record<ExportSectionId, (ctx: Ctx) => Html> = {
   posts: postsSection,
   comments: commentsSection,
   likes: likesSection,
+  mentions: mentionsSection,
   following: followingSection,
   followers: followersSection,
   followRequests: followRequestsSection,

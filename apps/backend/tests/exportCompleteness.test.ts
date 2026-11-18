@@ -87,6 +87,12 @@ const VIDEO_KEY = `74${Date.now()}`.padEnd(19, "1").slice(0, 19);
 const followRequestsProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("follow_requests").select("requester_id").limit(0);
 const FOLLOW_REQUEST_SECTIONS = followRequestsProbe.error ? [] : (["followRequestsSent", "followRequestsReceived"] as const);
 
+// Commentaires, suite (lot « vie sociale ») : un commentaire aimé, une mention
+// reçue et une écrite, seulement une fois la migration 0046 appliquée sur la
+// base des tests (sans elle, sections vides).
+const commentThreadsProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("comment_mentions").select("comment_id, author_id").limit(0);
+const COMMENT_THREAD_SECTIONS = commentThreadsProbe.error ? [] : (["commentReactionsGiven", "mentionsReceived", "mentionsMade"] as const);
+
 // Sections qui sont un objet (ou null), pas une liste.
 const OBJECT_SECTIONS = ["account", "profile", "adminRole", "suspension", ...(TRYON_MIGRATED ? (["tryonProfile"] as const) : [])] as const;
 
@@ -144,6 +150,10 @@ const JSON_KEYS = [
   // Compte privé (migration 0045), de même.
   "followRequestsSent",
   "followRequestsReceived",
+  // Commentaires, suite (migration 0046), de même.
+  "commentReactionsGiven",
+  "mentionsReceived",
+  "mentionsMade",
 ];
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
@@ -257,6 +267,27 @@ describe("export RGPD complet", () => {
     await app.inject({ method: "POST", url: `/api/posts/${friendPostId}/react`, headers: authHeaders(user.token) });
     // Commentaire sur la publication de l'ami (Lot F).
     await app.inject({ method: "POST", url: `/api/posts/${friendPostId}/comments`, headers: authHeaders(user.token), payload: { body: "Superbe" } });
+    // Commentaires, suite (migration 0046) : l'ami répond en mentionnant la
+    // personne, elle aime cette réponse, et son propre commentaire mentionne
+    // l'ami. Lignes écrites directement : le réglage de départ (« les comptes
+    // que je suis ») écarterait ces mentions entre deux comptes qui ne se suivent pas.
+    if (COMMENT_THREAD_SECTIONS.length > 0) {
+      const mine = await app.supabaseAdmin.from("comments").select("id").eq("user_id", user.id).eq("post_id", friendPostId).single();
+      if (mine.error || !mine.data) throw mine.error ?? new Error("Commentaire de test introuvable.");
+      const theirs = await app.supabaseAdmin
+        .from("comments")
+        .insert({ post_id: friendPostId, user_id: friend.id, body: `Merci @${user.username}`, parent_id: mine.data.id })
+        .select("id")
+        .single();
+      if (theirs.error || !theirs.data) throw theirs.error ?? new Error("Réponse de test non créée.");
+      const mentions = await app.supabaseAdmin.from("comment_mentions").insert([
+        { comment_id: theirs.data.id, user_id: user.id, author_id: friend.id, handle: user.username },
+        { comment_id: mine.data.id, user_id: friend.id, author_id: user.id, handle: friend.username },
+      ]);
+      if (mentions.error) throw mentions.error;
+      const liked = await app.inject({ method: "PUT", url: `/api/comments/${theirs.data.id}/like`, headers: authHeaders(user.token), payload: { liked: true } });
+      if (liked.statusCode !== 200) throw new Error(`« J'aime » de test refusé (${liked.statusCode}).`);
+    }
 
     // Vault, Envie, blocage, signalement, consentement.
     await app.supabaseAdmin.from("vault_items").insert({ user_id: user.id, title: "Montre", image_url: "https://example.com/m.jpg", category: "watches" });
@@ -389,7 +420,7 @@ describe("export RGPD complet", () => {
     const body = res.json();
 
     expect(body.profile.id).toBe(user.id);
-    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...COLLECTION_SECTIONS, ...PUSH_SECTIONS, ...ALERT_SECTIONS, ...TRYON_SECTIONS, ...VIDEO_SECTIONS, ...FOLLOW_REQUEST_SECTIONS]) {
+    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...COLLECTION_SECTIONS, ...PUSH_SECTIONS, ...ALERT_SECTIONS, ...TRYON_SECTIONS, ...VIDEO_SECTIONS, ...FOLLOW_REQUEST_SECTIONS, ...COMMENT_THREAD_SECTIONS]) {
       expect(Array.isArray(body[section]), section).toBe(true);
       expect(body[section].length, section).toBeGreaterThan(0);
     }
@@ -399,6 +430,13 @@ describe("export RGPD complet", () => {
       expect(body.followRequestsSent.map((row: { target_id: string }) => row.target_id)).toEqual([friend.id]);
       expect(body.followRequestsReceived.map((row: { requester_id: string }) => row.requester_id)).toEqual([friend.id]);
       expect(JSON.stringify(body)).not.toContain(admin.id);
+    }
+    // Commentaires, suite : le commentaire aimé, la mention reçue de l'ami et celle écrite pour lui.
+    if (COMMENT_THREAD_SECTIONS.length > 0) {
+      expect(Object.keys(body.commentReactionsGiven[0]).sort()).toEqual(["comment_id", "created_at"]);
+      expect(body.mentionsReceived.map((row: { author_id: string; handle: string }) => [row.author_id, row.handle])).toEqual([[friend.id, user.username]]);
+      expect(body.mentionsMade.map((row: { user_id: string; handle: string }) => [row.user_id, row.handle])).toEqual([[friend.id, friend.username]]);
+      expect(body.profile.mentions_from).toBe("following");
     }
     expect(body.suspension).toMatchObject({ moderation_action_id: expect.any(String) });
     // Un appareil : son système et ses dates (avec 0036 : s'il reçoit les messages, les alertes), jamais son jeton.

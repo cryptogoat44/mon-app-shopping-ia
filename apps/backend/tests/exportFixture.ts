@@ -438,6 +438,10 @@ export function fixture(): ExportData {
     // Compte privé (migration 0045) : une demande envoyée, une reçue.
     followRequestsSent: [{ target_id: FRIEND, created_at: "2026-10-11T09:00:00+00:00" }],
     followRequestsReceived: [{ requester_id: FRIEND, created_at: "2026-10-12T09:00:00+00:00" }],
+    // Commentaires, suite (migration 0046) : un commentaire aimé, une mention reçue, une écrite.
+    commentReactionsGiven: [{ comment_id: "c0000000-0000-4000-8000-000000000002", created_at: "2026-10-13T09:00:00+00:00" }],
+    mentionsReceived: [{ comment_id: "c0000000-0000-4000-8000-000000000002", author_id: FRIEND, handle: "camille", created_at: "2026-10-13T10:00:00+00:00" }],
+    mentionsMade: [{ comment_id: "c0000000-0000-4000-8000-000000000001", user_id: FRIEND, handle: "alexis", created_at: "2026-10-13T11:00:00+00:00" }],
   };
 }
 
