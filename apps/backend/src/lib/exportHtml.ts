@@ -698,6 +698,26 @@ function peopleTagsSection(ctx: Ctx): Html {
   );
 }
 
+/** Publications enregistrées (migration 0048) : la publication (son auteur,
+ * seulement si vous pouvez encore la voir), la collection, la date. */
+function savedPostsSection(ctx: Ctx): Html {
+  const cards = newestFirst(ctx.data.savedPosts, "created_at").map((row) => {
+    const own = typeof row.post_id === "string" && ctx.data.posts.some((post) => post.id === row.post_id);
+    const title =
+      row.post_available !== true
+        ? tr(ctx, EXPORT_TEXT.postUnavailable)
+        : own
+          ? tr(ctx, EXPORT_TEXT.yourPost)
+          : tr(ctx, EXPORT_TEXT.postBy, { person: person(ctx, row.author_id) });
+    return new Card(ctx, "savedPosts", row)
+      .use("post_id", "collection_id", "author_id", "post_available")
+      .field("collection_name", str(row.collection_name) ?? tr(ctx, EXPORT_TEXT.savedNoCollection))
+      .field("created_at")
+      .render(title);
+  });
+  return section(ctx, "savedPosts", cards);
+}
+
 function followingSection(ctx: Ctx): Html {
   const cards = newestFirst(ctx.data.following, "created_at").map((row) =>
     new Card(ctx, "following", row).use("followee_id").field("created_at").render(person(ctx, row.followee_id))
@@ -1216,6 +1236,7 @@ function sectionCount(data: ExportData, id: ExportSectionId): number | null {
     likes: data.reactionsGiven.length + data.commentReactionsGiven.length,
     mentions: data.mentionsReceived.length + data.mentionsMade.length,
     peopleTags: data.peopleTagsMade.length + data.peopleTagsReceived.length,
+    savedPosts: data.savedPosts.length,
     following: data.following.length,
     followers: data.followers.length,
     followRequests: data.followRequestsSent.length + data.followRequestsReceived.length,
@@ -1248,6 +1269,7 @@ const SECTION_RENDERERS: Record<ExportSectionId, (ctx: Ctx) => Html> = {
   likes: likesSection,
   mentions: mentionsSection,
   peopleTags: peopleTagsSection,
+  savedPosts: savedPostsSection,
   following: followingSection,
   followers: followersSection,
   followRequests: followRequestsSection,

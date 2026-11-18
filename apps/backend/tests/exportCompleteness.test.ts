@@ -99,6 +99,12 @@ const COMMENT_THREAD_SECTIONS = commentThreadsProbe.error ? [] : (["commentReact
 const postExtrasProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("post_people_tags").select("post_id, author_id").limit(0);
 const POST_EXTRA_SECTIONS = postExtrasProbe.error ? [] : (["postMedia", "peopleTagsMade", "peopleTagsReceived"] as const);
 
+// Publications enregistrées (lot « vie sociale ») : la publication de l'ami
+// enregistrée, seulement une fois la migration 0048 appliquée sur la base des
+// tests (sans elle, section vide).
+const savedPostsProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("saved_posts").select("user_id, post_id").limit(0);
+const SAVED_POST_SECTIONS = savedPostsProbe.error ? [] : (["savedPosts"] as const);
+
 // Sections qui sont un objet (ou null), pas une liste.
 const OBJECT_SECTIONS = ["account", "profile", "adminRole", "suspension", ...(TRYON_MIGRATED ? (["tryonProfile"] as const) : [])] as const;
 
@@ -164,6 +170,8 @@ const JSON_KEYS = [
   "postMedia",
   "peopleTagsMade",
   "peopleTagsReceived",
+  // Publications enregistrées (migration 0048), de même.
+  "savedPosts",
 ];
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
@@ -314,6 +322,12 @@ describe("export RGPD complet", () => {
       for (const written of extras) if (written.error) throw written.error;
     }
 
+    // Publications enregistrées (migration 0048) : la publication de l'ami, sans collection.
+    if (SAVED_POST_SECTIONS.length > 0) {
+      const saved = await app.inject({ method: "PUT", url: `/api/posts/${friendPostId}/save`, headers: authHeaders(user.token), payload: {} });
+      if (saved.statusCode !== 200) throw new Error(`Publication enregistrée de test refusée (${saved.statusCode}).`);
+    }
+
     // Vault, Envie, blocage, signalement, consentement.
     await app.supabaseAdmin.from("vault_items").insert({ user_id: user.id, title: "Montre", image_url: "https://example.com/m.jpg", category: "watches" });
     await app.inject({ method: "POST", url: "/api/wishlist", headers: authHeaders(user.token), payload: { title: "Envie", imageUrl: "https://example.com/e.jpg" } });
@@ -445,7 +459,7 @@ describe("export RGPD complet", () => {
     const body = res.json();
 
     expect(body.profile.id).toBe(user.id);
-    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...COLLECTION_SECTIONS, ...PUSH_SECTIONS, ...ALERT_SECTIONS, ...TRYON_SECTIONS, ...VIDEO_SECTIONS, ...FOLLOW_REQUEST_SECTIONS, ...COMMENT_THREAD_SECTIONS, ...POST_EXTRA_SECTIONS]) {
+    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...COLLECTION_SECTIONS, ...PUSH_SECTIONS, ...ALERT_SECTIONS, ...TRYON_SECTIONS, ...VIDEO_SECTIONS, ...FOLLOW_REQUEST_SECTIONS, ...COMMENT_THREAD_SECTIONS, ...POST_EXTRA_SECTIONS, ...SAVED_POST_SECTIONS]) {
       expect(Array.isArray(body[section]), section).toBe(true);
       expect(body[section].length, section).toBeGreaterThan(0);
     }
@@ -468,6 +482,11 @@ describe("export RGPD complet", () => {
       expect(Object.keys(body.postMedia[0]).sort()).toEqual(["created_at", "id", "media_thumb_url", "media_url", "position", "post_id"]);
       expect(body.peopleTagsMade.map((row: { post_id: string; user_id: string }) => [row.post_id, row.user_id])).toEqual([[postId, friend.id]]);
       expect(body.peopleTagsReceived.map((row: { author_id: string; post_available: boolean }) => [row.author_id, row.post_available])).toEqual([[friend.id, true]]);
+    }
+    // Publications enregistrées : celle de l'ami, encore visible, avec son auteur ; rien de la publication elle-même.
+    if (SAVED_POST_SECTIONS.length > 0) {
+      expect(Object.keys(body.savedPosts[0]).sort()).toEqual(["author_id", "collection_id", "collection_name", "created_at", "post_available", "post_id"]);
+      expect(body.savedPosts.map((row: { author_id: string; post_available: boolean; collection_id: string | null }) => [row.author_id, row.post_available, row.collection_id])).toEqual([[friend.id, true, null]]);
     }
     expect(body.suspension).toMatchObject({ moderation_action_id: expect.any(String) });
     // Un appareil : son système et ses dates (avec 0036 : s'il reçoit les messages, les alertes), jamais son jeton.

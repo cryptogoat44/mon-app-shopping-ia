@@ -933,7 +933,9 @@ describe("export des données", () => {
       [BRUNO_HIDDEN, BRUNO, false],
     ]);
     // Clés ajoutées à la fin : les anciennes gardent leur ordre.
-    expect(Object.keys(body).slice(-3)).toEqual(["postMedia", "peopleTagsMade", "peopleTagsReceived"]);
+    // (Après elles : la clé de la migration 0048, publicationsEnregistrees.test.ts.)
+    const keys = Object.keys(body);
+    expect(keys.slice(keys.indexOf("postMedia"), keys.indexOf("postMedia") + 3)).toEqual(["postMedia", "peopleTagsMade", "peopleTagsReceived"]);
     expect(JSON.stringify([body.postMedia, body.peopleTagsMade, body.peopleTagsReceived])).not.toContain(EVE);
 
     // Fichier lisible : le nom des comptes, « une publication indisponible », jamais le compte en blocage.

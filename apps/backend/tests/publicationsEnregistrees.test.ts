@@ -33,6 +33,7 @@ import { localizeMessage } from "../src/lib/messages.js";
 import { RATE_LIMITS } from "../src/lib/rateLimits.js";
 import { DatabaseReadError } from "../src/lib/validation.js";
 import { STORAGE_ORIGIN, fakeSupabase, type FakeDbOptions, type Row } from "./fakeSupabase.js";
+import { sectionHtml, visibleText } from "./exportFixture.js";
 
 // Publications enregistrées (lot « vie sociale », migration 0048), SANS base
 // ni réseau : les vraies routes sur une fausse base en mémoire
@@ -744,5 +745,70 @@ describe("plafond, retrait, limite", () => {
   it("la liste n'est jamais gardée en cache", async () => {
     const target = await savedApp(seeded().db);
     expect((await as(target, BRUNO).get("/api/saved-posts")).headers["cache-control"]).toBe("no-store");
+  });
+});
+
+describe("export des données", () => {
+  it("la date, la collection, l'auteur seulement si la publication est encore visible ; jamais un compte en blocage ; la clé ajoutée à la fin", async () => {
+    // Bruno a enregistré : une publication d'Anna (rangée dans « Été »), la
+    // sienne, une d'Eve (qui l'a bloqué depuis), une de Paula masquée depuis
+    // par la modération, et une d'Anna passée en « privée ».
+    const PAULA_HIDDEN = "71000000-0000-4000-8000-000000000002";
+    const fake = seeded({
+      blocks: [[EVE, BRUNO]],
+      saved: [
+        [BRUNO, ANNA_PUBLIC, BRUNO_SUMMER],
+        [BRUNO, BRUNO_OWN, null],
+        [BRUNO, EVE_PUBLIC, BRUNO_WINTER],
+        [BRUNO, PAULA_HIDDEN, null],
+        [BRUNO, ANNA_PRIVATE, null],
+        [CARL, ANNA_OTHER, null],
+      ],
+    });
+    fake.table("posts").push(post(PAULA_HIDDEN, PAULA, "public", { hidden: true }));
+    const target = await savedApp(fake.db);
+
+    const body = (await as(target, BRUNO).get("/api/me/export")).json();
+    expect(Object.keys(body).at(-1)).toBe("savedPosts");
+    expect(body.savedPosts.map((row: Row) => [row.post_id, row.collection_name, row.author_id, row.post_available])).toEqual([
+      [ANNA_PUBLIC, "Été", ANNA, true],
+      [BRUNO_OWN, null, BRUNO, true],
+      [EVE_PUBLIC, "Hiver", null, false],
+      [PAULA_HIDDEN, null, null, false],
+      [ANNA_PRIVATE, null, null, false],
+    ]);
+    expect(Object.keys(body.savedPosts[0]).sort()).toEqual(["author_id", "collection_id", "collection_name", "created_at", "post_available", "post_id"]);
+    // Rien de la publication elle-même, jamais le compte qui l'a bloqué, rien des enregistrées de Carl.
+    const section = JSON.stringify(body.savedPosts);
+    for (const absent of [EVE, PAULA, "Légende", ANNA_OTHER, "media"]) expect(section).not.toContain(absent);
+
+    // Fichier lisible : l'auteur visible, « une publication indisponible », jamais Eve.
+    const page = (await as(target, BRUNO).get("/api/me/export?format=html")).body;
+    expect(visibleText(page).replace(/\s+/g, " ")).toContain("Publications enregistrées (5)");
+    const savedSection = visibleText(sectionHtml(page, "savedPosts")).replace(/\s+/g, " ");
+    expect(savedSection).toContain("une publication de @anna (Anna)");
+    expect(savedSection).toContain("votre publication");
+    expect(savedSection.match(/une publication indisponible/g)?.length).toBe(4);
+    expect(savedSection).toContain("Rangée dans Été");
+    expect(savedSection).toContain("Rangée dans Hiver");
+    expect(savedSection.toLowerCase()).not.toContain("eve");
+    expect(savedSection.toLowerCase()).not.toContain("paula");
+  });
+
+  it("sans la migration 0048 : section vide, l'export réussit", async () => {
+    const target = await savedApp(seeded({}, WITHOUT_0048).db);
+    const response = await as(target, BRUNO).get("/api/me/export");
+    expect(response.statusCode).toBe(200);
+    expect(response.json().savedPosts).toEqual([]);
+  });
+
+  it("supprimer son compte : rien à effacer à part (aucun fichier ; la base efface les lignes avec le compte)", async () => {
+    const fake = seeded({ saved: [[BRUNO, ANNA_PUBLIC, BRUNO_SUMMER]] });
+    const { db, counts } = counting(fake.db);
+    const target = await savedApp(db);
+    const response = await target.inject({ method: "DELETE", url: "/api/me", headers: { "x-test-user": BRUNO }, payload: { confirmation: "SUPPRIMER" } });
+    expect(response.statusCode).toBe(204);
+    expect(fake.deletedUsers).toEqual([BRUNO]);
+    expect(counts.get("saved_posts") ?? 0).toBe(0);
   });
 });

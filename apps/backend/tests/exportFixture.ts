@@ -454,6 +454,14 @@ export function fixture(): ExportData {
       { post_id: FRIEND_POST, author_id: FRIEND, created_at: "2026-10-14T10:00:00+00:00", post_available: true },
       { post_id: "0e000000-0000-4000-8000-000000000001", author_id: FRIEND, created_at: "2026-10-14T11:00:00+00:00", post_available: false },
     ],
+    // Publications enregistrées (migration 0048) : une de l'ami rangée dans une
+    // collection, une que la personne ne peut plus voir (sans auteur), et une
+    // du compte qui l'a bloquée (jamais nommé : indisponible, sans auteur).
+    savedPosts: [
+      { post_id: FRIEND_POST, collection_id: COLLECTION_FRIENDS, collection_name: "Cadeaux pour Noel", author_id: FRIEND, post_available: true, created_at: "2026-10-15T09:00:00+00:00" },
+      { post_id: "0e000000-0000-4000-8000-000000000002", collection_id: null, collection_name: null, author_id: null, post_available: false, created_at: "2026-10-15T10:00:00+00:00" },
+      { post_id: BLOCKER_POST, collection_id: null, collection_name: null, author_id: null, post_available: false, created_at: "2026-10-15T11:00:00+00:00" },
+    ],
   };
 }
 

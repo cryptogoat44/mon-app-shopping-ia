@@ -968,3 +968,51 @@ describe("export lisible : plusieurs photos, personnes identifiées (migration 0
   });
 });
 
+describe("export lisible : publications enregistrées (migration 0048)", () => {
+  it("chaque publication enregistrée : son auteur quand vous la voyez encore, la collection, la date ; comptées au sommaire", () => {
+    const page = render({ timeZone: "UTC" });
+    const section = spaces(visibleText(sectionHtml(page, "savedPosts")));
+    expect(section).toContain(EXPORT_SECTIONS.savedPosts.title.fr);
+    expect(section).toContain("une publication de @alexis (Alexis Martin)");
+    expect(section).toContain("Rangée dans Cadeaux pour Noel");
+    expect(section).toContain("Enregistrée le 15 octobre 2026");
+    expect(section).toContain("Rangée dans Sans collection");
+    expect(spaces(visibleText(page))).toContain(`${EXPORT_SECTIONS.savedPosts.title.fr} (3)`);
+    // Les colonnes techniques ne sont jamais écrites telles quelles.
+    expect(section).not.toContain("Vous pouvez encore voir la publication");
+    expect(section).not.toContain("90000000-0000-4000-8000-000000000002");
+    const english = spaces(visibleText(sectionHtml(render({ locale: "en", timeZone: "UTC" }), "savedPosts")));
+    expect(english).toContain("Saved posts");
+    expect(english).toContain("a post by @alexis (Alexis Martin)");
+    expect(english).toContain("an unavailable post");
+    expect(english).toContain("No collection");
+  });
+
+  it("refusé : une publication que vous ne voyez plus n'a ni auteur ni lien, et le compte qui vous a bloqué n'est jamais nommé", () => {
+    const section = sectionHtml(render({ timeZone: "UTC" }), "savedPosts");
+    const text = visibleText(section);
+    // La phrase d'introduction, puis les deux cartes.
+    expect(text.match(/une publication indisponible/g)).toHaveLength(3);
+    expect(text.toLowerCase()).not.toContain("bloqueur");
+    expect(text).not.toContain("Nom Secret");
+    expect(section).not.toContain("<a ");
+    // Même si une ligne citait par erreur un compte en blocage comme auteur d'une publication « disponible ».
+    const wrong = {
+      ...fixture(),
+      savedPosts: [{ post_id: "90000000-0000-4000-8000-000000000003", collection_id: null, collection_name: null, author_id: BLOCKER, post_available: true, created_at: "2026-10-15T11:00:00+00:00" }],
+    };
+    const shown = visibleText(sectionHtml(render({}, wrong), "savedPosts"));
+    expect(shown.toLowerCase()).not.toContain("bloqueur");
+    expect(shown).toContain(EXPORT_TEXT.someone.fr);
+  });
+
+  it("votre propre publication enregistrée ; sans publication enregistrée : « Aucune donnée »", () => {
+    const mine = {
+      ...fixture(),
+      savedPosts: [{ post_id: "90000000-0000-4000-8000-000000000001", collection_id: null, collection_name: null, author_id: SELF, post_available: true, created_at: "2026-10-15T11:00:00+00:00" }],
+    };
+    expect(spaces(visibleText(sectionHtml(render({}, mine), "savedPosts")))).toContain("votre publication");
+    const none = { ...fixture(), savedPosts: [] };
+    expect(visibleText(sectionHtml(render({}, none), "savedPosts"))).toContain(EXPORT_TEXT.noData.fr);
+  });
+});

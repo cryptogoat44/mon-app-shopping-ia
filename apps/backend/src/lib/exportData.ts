@@ -10,6 +10,7 @@ import { videoMemoryStored } from "./videoMemory.js";
 import { privateAccountsReady } from "./audience.js";
 import { commentThreadsReady } from "./comments.js";
 import { postExtrasReady } from "./postExtras.js";
+import { savedPostsReady } from "./savedPosts.js";
 import { postVisibleTo, readAudience, type Audience } from "./audience.js";
 
 // Export RGPD (droit d'accès et de portabilité) : lecture de TOUTES les
@@ -124,6 +125,12 @@ export interface ExportData {
    * quand, et si vous pouvez encore la voir). Jamais une identification liée
    * à un compte en blocage avec vous (un blocage les efface). */
   peopleTagsReceived: ExportRow[];
+  /** Publications enregistrées (lot « vie sociale », migration 0048) : la
+   * date, la collection où vous l'avez rangée (son nom), et l'auteur
+   * seulement si vous pouvez encore voir la publication (`post_available`) ;
+   * sinon ni auteur ni lien (« publication indisponible »), jamais le nom
+   * d'un compte en blocage avec vous. Rien de la publication elle-même. */
+  savedPosts: ExportRow[];
 }
 
 /** Sections de l'export (toutes les clés sauf la date de l'export). */
@@ -402,6 +409,46 @@ async function listPeopleTagsReceived(fastify: FastifyInstance, userId: string):
   });
 }
 
+/** Ses publications enregistrées (migration 0048), avec le nom de la
+ * collection (la sienne) et `post_available` : peut-il encore voir la
+ * publication (ni masquée, ni hors de sa visibilité, ni d'un compte privé
+ * qu'il ne suit pas, ni d'un compte en blocage avec lui) ? L'auteur n'est
+ * donné que dans ce cas ; sinon `author_id` est vide (le fichier lisible
+ * écrit « une publication indisponible »). */
+async function listSavedPosts(fastify: FastifyInstance, userId: string): Promise<ExportRow[]> {
+  const db = fastify.supabaseAdmin;
+  const rows = await listWhere(db, "saved_posts", "post_id, collection_id, created_at", "user_id", userId, ["created_at", "post_id"]);
+  if (rows.length === 0) return rows;
+  const collectionIds = [...new Set(rows.map((row) => row.collection_id).filter((id): id is string => typeof id === "string"))];
+  const [posts, collections] = await Promise.all([
+    listIn(db, "posts", "id, user_id, privacy, hidden_at", "id", rows.map((row) => String(row.post_id)), ["id"]),
+    collectionIds.length > 0 ? listIn(db, "collections", "id, user_id, name", "id", collectionIds, ["id"]) : Promise.resolve([] as ExportRow[]),
+  ]);
+  const postById = new Map(posts.map((row) => [String(row.id), row]));
+  // Seulement ses collections (la base le garantit ; relu quand même).
+  const collectionName = new Map(collections.filter((row) => row.user_id === userId).map((row) => [String(row.id), row.name]));
+  const audiences = new Map<string, Audience>();
+  for (const part of chunks([...new Set(posts.map((row) => String(row.user_id)))])) {
+    for (const [id, audience] of await readAudience(fastify, userId, part, { suspended: false, requested: false })) audiences.set(id, audience);
+  }
+  return rows.map((row) => {
+    const post = postById.get(String(row.post_id));
+    const audience = post ? audiences.get(String(post.user_id)) : undefined;
+    const privacy = post?.privacy;
+    const available =
+      post !== undefined && post.hidden_at == null && audience !== undefined && (privacy === "public" || privacy === "followers" || privacy === "private") && postVisibleTo(audience, privacy);
+    const collectionId = typeof row.collection_id === "string" ? row.collection_id : null;
+    return {
+      post_id: row.post_id,
+      collection_id: collectionId,
+      collection_name: collectionId !== null ? (collectionName.get(collectionId) ?? null) : null,
+      author_id: available ? post.user_id : null,
+      post_available: available,
+      created_at: row.created_at,
+    };
+  });
+}
+
 export async function collectExport(
   fastify: FastifyInstance,
   userId: string,
@@ -621,6 +668,10 @@ export async function collectExport(
     section("peopleTagsReceived", () => (withPostExtras ? listPeopleTagsReceived(fastify, userId) : Promise.resolve(none)), none),
   ]);
 
+  // Publications enregistrées : sans la migration 0048, section vide.
+  const withSavedPosts = await savedPostsReady(fastify);
+  const savedPosts = await section("savedPosts", () => (withSavedPosts ? listSavedPosts(fastify, userId) : Promise.resolve(none)), none);
+
   const data: ExportData = {
     exportedAt: new Date().toISOString(),
     account: { email },
@@ -672,6 +723,7 @@ export async function collectExport(
     postMedia,
     peopleTagsMade,
     peopleTagsReceived,
+    savedPosts,
   };
   return { data, failures };
 }

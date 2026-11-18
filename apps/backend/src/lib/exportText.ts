@@ -591,6 +591,15 @@ export const EXPORT_COLUMNS = {
     created_at: shown("Identifié(e) le", "Tagged on"),
     post_available: shown("Vous pouvez encore voir la publication", "You can still see the post"),
   },
+  // Publications enregistrées (lot « vie sociale », migration 0048).
+  savedPosts: {
+    post_id: technical("Publication", "Post"),
+    collection_id: technical("Collection", "Collection"),
+    collection_name: shown("Rangée dans", "In"),
+    author_id: shown("Publication de", "Post by"),
+    post_available: shown("Vous pouvez encore voir la publication", "You can still see the post"),
+    created_at: shown("Enregistrée le", "Saved on"),
+  },
 } as const satisfies Record<ExportDataKey, Record<string, ExportColumn>>;
 
 export type ExportColumnName<K extends ExportDataKey> = keyof (typeof EXPORT_COLUMNS)[K] & string;
@@ -695,6 +704,14 @@ export const EXPORT_SECTIONS = {
       en: "The members you tagged in your posts, and other members' posts you are tagged in. A tag that was removed, or lost along with access to the post (or through a block), is no longer kept.",
     },
     keys: ["peopleTagsMade", "peopleTagsReceived"],
+  },
+  savedPosts: {
+    title: { fr: "Publications enregistrées", en: "Saved posts" },
+    intro: {
+      fr: "Les publications que vous avez enregistrées pour les retrouver, et la collection où vous les avez rangées. Elles ne sont visibles que par vous : ni leur auteur ni vos amis ne les voient. Une publication que vous ne pouvez plus voir est indiquée « une publication indisponible », sans son auteur.",
+      en: "The posts you saved to find them again, and the collection you added them to. Only you can see them: neither their author nor your friends can. A post you can no longer see is shown as “an unavailable post”, without its author.",
+    },
+    keys: ["savedPosts"],
   },
   following: {
     title: { fr: "Comptes que vous suivez", en: "Accounts you follow" },
@@ -1247,6 +1264,8 @@ export const EXPORT_TEXT = {
   peopleTagsMadeTitle: { fr: "Personnes que vous avez identifiées ({count})", en: "People you tagged ({count})" },
   peopleTagsReceivedTitle: { fr: "Publications où l'on vous a identifié(e) ({count})", en: "Posts you are tagged in ({count})" },
   postUnavailable: { fr: "une publication indisponible", en: "an unavailable post" },
+  // Publications enregistrées (migration 0048).
+  savedNoCollection: { fr: "Sans collection", en: "No collection" },
   videoTiktok: { fr: "Vidéo TikTok", en: "TikTok video" },
   videoInstagram: { fr: "Vidéo Instagram", en: "Instagram video" },
   videoMoment: { fr: "à {minutes} min {seconds} s", en: "at {minutes} min {seconds} s" },

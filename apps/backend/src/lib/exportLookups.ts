@@ -95,6 +95,8 @@ export async function collectLookups(fastify: FastifyInstance, userId: string, d
     // Identifications (0047) : le membre identifié par la personne, l'auteur d'une publication où elle l'est.
     ...ids(data.peopleTagsMade, "user_id"),
     ...ids(data.peopleTagsReceived, "author_id"),
+    // Publications enregistrées (0048) : l'auteur, seulement quand la publication est encore visible (sinon vide).
+    ...ids(data.savedPosts.filter((row) => row.post_available === true), "author_id"),
     ...ids(data.reportsSubmitted.filter((report) => report.target_type === "user"), "target_id"),
   ].filter((id) => id !== userId && !blockedMe.has(id) && !blockedIds.has(id));
 
