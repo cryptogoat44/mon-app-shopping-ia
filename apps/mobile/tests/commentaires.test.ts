@@ -472,11 +472,12 @@ describe("textes", () => {
     expect(english).toContain(
       "You can reply to a comment, like it and mention a member with @. The setting “Who can mention me” lets you choose who can mention or tag you: everyone, accounts you follow (the starting value), or no one. You are notified when you are mentioned and you can remove the mention. If you block a member, their mentions of you disappear."
     );
-    // Les mentions figurent dans ce qui est conservé, et dans ce qui est effacé avec le compte.
-    expect(french).toContain("commentaires, mentions, « j'aime », notifications");
-    expect(french).toContain("publications, commentaires, mentions, « j'aime », abonnements");
-    expect(english).toContain("comments, mentions, likes, notifications");
-    expect(english).toContain("posts, comments, mentions, likes, follows");
+    // Les mentions figurent dans ce qui est conservé, et dans ce qui est effacé avec le compte
+    // (suivies des personnes identifiées, migration 0047).
+    expect(french).toContain("commentaires, mentions, personnes identifiées, « j'aime », notifications");
+    expect(french).toContain("publications, commentaires, mentions, personnes identifiées, « j'aime », abonnements");
+    expect(english).toContain("comments, mentions, tagged people, likes, notifications");
+    expect(english).toContain("posts, comments, mentions, tagged people, likes, follows");
     // Le nom du réglage est celui de l'app.
     expect(french).toContain(`« ${fr.commentThreads.settingTitle} »`);
     expect(english).toContain(`“${en.commentThreads.settingTitle}”`);

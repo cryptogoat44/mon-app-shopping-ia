@@ -243,6 +243,8 @@ describe("écran ouvert directement par son adresse, ou rechargé (appels du ser
     { ecran: "app/(app)/collection-ami.tsx", lit: ["const messages = useMessagesStatus();", "const collections = useCollectionsStatus();", "canTalk={messages.enabled}"], cachait: "« En parler » et « Signaler cette collection »" },
     { ecran: "app/(app)/envie.tsx", lit: ["const messages = useMessagesStatus();", "const collections = useCollectionsStatus();", "{collections.enabled ? (", "{messages.enabled ? ("], cachait: "« Ajouter à une collection » et l'envoi dans une conversation" },
     { ecran: "app/(app)/settings.tsx", lit: ["<MessagesFromSetting />", "<MessagePushSetting />"], cachait: "« Qui peut m'écrire »" },
+    // Migration 0047 : la nouvelle publication ne demande rien elle-même non plus.
+    { ecran: "app/(app)/post-item/new.tsx", lit: ["const extras = usePostExtrasStatus();", "{extras.peopleTags ? ("], cachait: "le choix de plusieurs photos et « Identifier des personnes »" },
   ];
 
   beforeEach(() => {
@@ -256,7 +258,7 @@ describe("écran ouvert directement par son adresse, ou rechargé (appels du ser
     // L'écran ne lit que l'état en mémoire, et ne demande rien lui-même…
     const texte = source(ecran);
     for (const lecture of lit) expect(texte).toContain(lecture);
-    expect(texte).not.toMatch(/fetch(Messages|Collections)Status/);
+    expect(texte).not.toMatch(/fetch(Messages|Collections|PostExtras)Status/);
     // … c'est la mise en page au-dessus de lui (et de la barre d'onglets) qui s'en assure.
     const { demandees } = serveur(DISPONIBLE);
     const { miseEnPage, messagesStatus, collectionsStatus, wishAlertsStatus, postExtrasStatus, friendSectionVisible } = await app();
@@ -392,9 +394,9 @@ describe("branchement dans l'app", () => {
 
   it("tout écran qui lit une disponibilité est sous cette mise en page", () => {
     const lecteurs = files(join(SRC, "app"))
-      .filter((path) => /use(Messages|Collections|WishAlerts)Status\(\)/.test(readFileSync(path, "utf8")))
+      .filter((path) => /use(Messages|Collections|WishAlerts|PostExtras)Status\(\)/.test(readFileSync(path, "utf8")))
       .map((path) => relative(SRC, path).split("\\").join("/"));
-    expect(lecteurs).toEqual(expect.arrayContaining(["app/(app)/profil.tsx", "app/(app)/collection-ami.tsx", "app/(app)/envie.tsx", "app/(app)/spot/result.tsx"]));
+    expect(lecteurs).toEqual(expect.arrayContaining(["app/(app)/profil.tsx", "app/(app)/collection-ami.tsx", "app/(app)/envie.tsx", "app/(app)/spot/result.tsx", "app/(app)/post-item/new.tsx"]));
     for (const ecran of lecteurs) expect(ecran.startsWith("app/(app)/")).toBe(true);
   });
 
