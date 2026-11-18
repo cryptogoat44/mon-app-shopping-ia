@@ -967,6 +967,9 @@ export const NOTIFICATION_LABELS: Record<NotificationType, Bilingual> = {
   // Compte privé (migration 0045).
   follow_request: { fr: "demande à vous suivre.", en: "asked to follow you." },
   follow_accepted: { fr: "a accepté votre demande d'abonnement.", en: "accepted your follow request." },
+  // Commentaires : réponses et mentions (migration 0046).
+  reply: { fr: "a répondu à votre commentaire.", en: "replied to your comment." },
+  mention: { fr: "vous a mentionné(e) dans un commentaire.", en: "mentioned you in a comment." },
 };
 
 export const REPORT_TARGET_LABELS: Record<ReportTargetType, Bilingual> = {

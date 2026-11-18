@@ -31,6 +31,8 @@ export interface Profile {
   isPrivate?: boolean;
   /** Demandes d'abonnement reçues, en attente (migration 0045). */
   followRequestsCount?: number;
+  /** Qui peut vous mentionner (migration 0046) ; absent tant que la migration manque : l'app cache alors le réglage. */
+  mentionsFrom?: MentionsFrom;
 }
 
 /** Réglage « Qui peut m'envoyer des pièces » : les comptes que je suis (par
@@ -836,6 +838,15 @@ export interface PostComment {
   author: PostAuthor;
   /** Son propre commentaire, ou un commentaire sous sa propre publication. */
   canDelete: boolean;
+  /** Réponse : le commentaire d'origine (migration 0046). Absent ou null : commentaire ordinaire. */
+  parentId?: string | null;
+  /** « J'aime » du commentaire, sans les comptes en blocage avec le lecteur (migration 0046, « v=2 »). */
+  likeCount?: number;
+  viewerHasLiked?: boolean;
+  /** Mentions à transformer en liens ; tout autre « @pseudo » reste un simple texte. */
+  mentions?: CommentMention[];
+  /** Réponses montrées à ce lecteur (commentaire d'origine seulement). */
+  replyCount?: number;
 }
 
 export interface CommentsPage {
@@ -1015,7 +1026,8 @@ export interface RecordConsentsRequest {
 }
 
 /** « piece_received » (lot 5) : une personne vous a envoyé une pièce (in-app, jamais push).
- * « follow_request » et « follow_accepted » (compte privé, migration 0045) :
+ * « follow_request » et « follow_accepted » (compte privé, migration 0045),
+ * « reply » et « mention » (commentaires, migration 0046) :
  * envoyés seulement à une app qui les demande (LEGACY_NOTIFICATION_TYPES, en fin de fichier). */
 export type NotificationType =
   | "follow"
@@ -1025,7 +1037,9 @@ export type NotificationType =
   | "report_handled"
   | "piece_received"
   | "follow_request"
-  | "follow_accepted";
+  | "follow_accepted"
+  | "reply"
+  | "mention";
 export const NOTIFICATION_TYPES = [
   "follow",
   "like",
@@ -1035,6 +1049,8 @@ export const NOTIFICATION_TYPES = [
   "piece_received",
   "follow_request",
   "follow_accepted",
+  "reply",
+  "mention",
 ] as const satisfies readonly NotificationType[];
 
 export interface AppNotification {
@@ -2316,3 +2332,83 @@ export const MEMBER_LIST_LIMIT_ERROR = "member_list_limit";
 
 /** 429 : trop de « j'aime » posés ou retirés en une heure (POST /api/posts/:id/react). */
 export const POST_REACT_LIMIT_ERROR = "post_react_limit";
+
+// ---- Commentaires : réponses, « j'aime », mentions (lot « vie sociale », migration 0046) ----
+
+/** Réglage « Qui peut me mentionner » (dans un commentaire, plus tard sur une
+ * photo) : tout le monde, les comptes que je suis, ou personne. */
+export type MentionsFrom = "everyone" | "following" | "nobody";
+export const MENTIONS_FROM = ["everyone", "following", "nobody"] as const satisfies readonly MentionsFrom[];
+/** Valeur de départ (migration 0046) : seuls les comptes que vous suivez. */
+export const DEFAULT_MENTIONS_FROM: MentionsFrom = "following";
+
+/** Mentions prises en compte dans un même texte ; les suivantes restent un simple texte. */
+export const MENTION_MAX_PER_TEXT = 5;
+
+/** Un « @pseudo » trouvé dans un texte : le pseudo en minuscules, et sa place
+ * (de l'arobase à la fin du pseudo). */
+export interface MentionSpan {
+  handle: string;
+  start: number;
+  end: number;
+}
+
+// Un « @ » compte seulement en début de texte ou après un caractère qui n'est
+// ni une lettre, ni un chiffre, ni « _ », « . » ou « @ » : une adresse e-mail
+// n'est jamais une mention. Le pseudo fait 3 à 20 caractères (comme à
+// l'inscription) et s'arrête là : un mot plus long n'est pas une mention.
+const MENTION_PATTERN = /(^|[^a-z0-9_.@])@([a-z0-9_]{3,20})(?![a-z0-9_])/gi;
+
+/** Tous les « @pseudo » d'un texte, dans l'ordre, doublons compris. */
+export function findMentions(text: string): MentionSpan[] {
+  const spans: MentionSpan[] = [];
+  for (const match of text.matchAll(MENTION_PATTERN)) {
+    const start = (match.index ?? 0) + (match[1] ?? "").length;
+    const handle = (match[2] ?? "").toLowerCase();
+    spans.push({ handle, start, end: start + 1 + handle.length });
+  }
+  return spans;
+}
+
+/** Les pseudos mentionnés dans un texte : en minuscules, sans doublon, les
+ * MENTION_MAX_PER_TEXT premiers seulement. */
+export function extractMentions(text: string): string[] {
+  const handles: string[] = [];
+  for (const span of findMentions(text)) {
+    if (handles.includes(span.handle)) continue;
+    handles.push(span.handle);
+    if (handles.length >= MENTION_MAX_PER_TEXT) break;
+  }
+  return handles;
+}
+
+/** Une mention acceptée : le pseudo tel qu'il est écrit, et le compte. */
+export interface CommentMention {
+  handle: string;
+  userId: string;
+}
+
+/** POST /api/posts/:id/comments. `parentId` : le commentaire auquel on répond. */
+export interface CreateCommentRequest {
+  body: string;
+  parentId?: string;
+}
+
+/** PUT /api/comments/:id/like. */
+export interface LikeCommentRequest {
+  liked: boolean;
+}
+export interface LikeCommentResponse {
+  likeCount: number;
+  viewerHasLiked: boolean;
+}
+
+/** PUT /api/me/mentions-from. */
+export interface UpdateMentionsFromRequest {
+  mentionsFrom: MentionsFrom;
+}
+
+/** 404 : réponses, « j'aime » des commentaires et réglage des mentions pas encore disponibles (migration 0046 absente). */
+export const COMMENT_THREADS_UNAVAILABLE_ERROR = "comment_threads_unavailable";
+/** 429 : trop de « j'aime » posés ou retirés sur des commentaires en une heure. */
+export const COMMENT_LIKE_LIMIT_ERROR = "comment_like_limit";
