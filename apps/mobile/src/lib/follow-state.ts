@@ -91,6 +91,10 @@ export function notificationActionText(type: NotificationType): string {
       return t.privateAccount.notifRequest;
     case "follow_accepted":
       return t.privateAccount.notifAccepted;
+    case "reply":
+      return t.commentThreads.notifReply;
+    case "mention":
+      return t.commentThreads.notifMention;
     default:
       return t.notifications.like;
   }

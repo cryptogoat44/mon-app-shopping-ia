@@ -63,7 +63,12 @@ import type {
   WishCollections,
   UserProfile,
   CommentsPage,
+  CreateCommentRequest,
+  LikeCommentRequest,
+  LikeCommentResponse,
+  MentionsFrom,
   PostComment,
+  UpdateMentionsFromRequest,
   VideoMoment,
   StockReportRequest,
   UpdateWishAlertRequest,
@@ -516,14 +521,26 @@ export async function deletePost(id: string): Promise<void> {
   await authorizedFetch(`/api/posts/${id}`, { method: "DELETE" });
 }
 
+// « v=2 » (lot « vie sociale ») : cette app sait afficher un fil — les
+// commentaires d'origine, puis leurs réponses chargées à part. Sans ce
+// paramètre (ou sans la migration 0046), le serveur rend la liste à plat.
 export async function fetchComments(postId: string, cursor?: string): Promise<CommentsPage> {
-  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
-  const response = await authorizedFetch(`/api/posts/${postId}/comments${query}`);
+  const query = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
+  const response = await authorizedFetch(`/api/posts/${postId}/comments?${CLIENT_LEVEL_QUERY}${query}`);
   return response.json();
 }
 
-export async function createComment(postId: string, body: string): Promise<PostComment> {
-  const response = await authorizedFetch(`/api/posts/${postId}/comments`, { method: "POST", body: JSON.stringify({ body }) });
+/** Réponses d'un commentaire, les plus anciennes d'abord. */
+export async function fetchReplies(commentId: string, cursor?: string): Promise<CommentsPage> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  const response = await authorizedFetch(`/api/comments/${commentId}/replies${query}`);
+  return response.json();
+}
+
+/** `parentId` : le commentaire auquel on répond. */
+export async function createComment(postId: string, body: string, parentId?: string): Promise<PostComment> {
+  const payload: CreateCommentRequest = parentId ? { body, parentId } : { body };
+  const response = await authorizedFetch(`/api/posts/${postId}/comments`, { method: "POST", body: JSON.stringify(payload) });
   const comment: PostComment = await response.json();
   track("comment_posted");
   return comment;
@@ -531,6 +548,24 @@ export async function createComment(postId: string, body: string): Promise<PostC
 
 export async function deleteComment(commentId: string): Promise<void> {
   await authorizedFetch(`/api/comments/${commentId}`, { method: "DELETE" });
+}
+
+/** Aimer (ou ne plus aimer) un commentaire : l'app dit l'état voulu. */
+export async function likeComment(commentId: string, liked: boolean): Promise<LikeCommentResponse> {
+  const payload: LikeCommentRequest = { liked };
+  const response = await authorizedFetch(`/api/comments/${commentId}/like`, { method: "PUT", body: JSON.stringify(payload) });
+  return response.json();
+}
+
+/** Retirer sa propre mention d'un commentaire (le texte reste, sans lien). */
+export async function removeMyMention(commentId: string): Promise<void> {
+  await authorizedFetch(`/api/comments/${commentId}/mentions/me`, { method: "DELETE" });
+}
+
+/** Réglage « Qui peut me mentionner ». */
+export async function updateMentionsFrom(mentionsFrom: MentionsFrom): Promise<void> {
+  const payload: UpdateMentionsFromRequest = { mentionsFrom };
+  await authorizedFetch("/api/me/mentions-from", { method: "PUT", body: JSON.stringify(payload) });
 }
 
 export async function fetchUserProfile(userId: string): Promise<UserProfile> {
