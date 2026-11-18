@@ -25,7 +25,8 @@ export function FeedIcon({ size = 24, tint = color.encre, strokeWidth = 1.4 }: I
   );
 }
 
-export function BookmarkIcon({ size = 24, tint = color.encre, strokeWidth = 1.4 }: IconProps) {
+/** `filled` : signet plein (publication enregistrée, migration 0048). */
+export function BookmarkIcon({ size = 24, tint = color.encre, strokeWidth = 1.4, filled = false }: IconProps & { filled?: boolean }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
@@ -33,6 +34,7 @@ export function BookmarkIcon({ size = 24, tint = color.encre, strokeWidth = 1.4 
         stroke={tint}
         strokeWidth={strokeWidth}
         strokeLinejoin="round"
+        fill={filled ? tint : "none"}
       />
     </Svg>
   );

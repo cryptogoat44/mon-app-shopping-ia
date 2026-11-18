@@ -1,13 +1,13 @@
-import { useRef, useState } from "react";
+import { useReducer, useRef, useState } from "react";
 import { Animated, Pressable, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import type { Post } from "@monapp/shared-types";
-import { ApiError, reactToPost } from "@/lib/api";
+import type { CollectionSummary, Post } from "@monapp/shared-types";
+import { ApiError, reactToPost, savePost, unsavePost } from "@/lib/api";
 import { likeCountOpensList, likesListRoute } from "@/lib/member-lists";
 import { openMerchantLink } from "@/lib/merchant-links";
 import { color, font, radius, space } from "@/theme/tokens";
-import { CommentIcon, HeartIcon, MoreIcon, ShareIcon, TaggedPeopleIcon, VerifiedIcon } from "@/components/icons";
+import { BookmarkIcon, CommentIcon, HeartIcon, MoreIcon, ShareIcon, TaggedPeopleIcon, VerifiedIcon } from "@/components/icons";
 import { sharePost } from "@/lib/share-post";
 import { SpotImage } from "@/components/spot-image";
 import { ProductFrame } from "@/components/product-frame";
@@ -24,6 +24,8 @@ import { PostCarousel } from "@/components/post-carousel";
 import { TaggedPeopleSheet } from "@/components/tagged-people-sheet";
 import { peopleShown, photosOf } from "@/lib/post-extras";
 import { useAuth } from "@/lib/auth-context";
+import { SavePostSheet } from "@/components/save-post-sheet";
+import { bookmarkA11y, bookmarkShown, bookmarkTapAction, filedMessage, saveReducer, saveStateOf, type SaveState } from "@/lib/saved-posts";
 
 const DOUBLE_TAP_DELAY_MS = 300;
 
@@ -77,6 +79,11 @@ export function PostCard({
   const [removedIds, setRemovedIds] = useState<string[]>([]);
   const people = peopleShown(post, removedIds);
   const [peopleOpen, setPeopleOpen] = useState(false);
+  // Publications enregistrées (migration 0048) : le signet, absent d'un serveur sans elles.
+  const withBookmark = bookmarkShown(post);
+  const [saveState, dispatchSave] = useReducer(saveReducer, post, saveStateOf);
+  const [saveSheetOpen, setSaveSheetOpen] = useState(false);
+  const [saveBusy, setSaveBusy] = useState(false);
 
   /** Trop de « j'aime » en peu de temps (429) : le serveur le dit, l'app le répète. */
   function tooManyLikes(e: unknown) {
@@ -115,6 +122,40 @@ export function PostCard({
     } finally {
       setBusy(false);
     }
+  }
+
+  /** Un geste sur le signet : affiché tout de suite, confirmé par le serveur,
+   * annulé (avec la phrase du serveur) s'il refuse. */
+  async function changeSave(action: "save" | "unsave" | { collectionId: string | null }, collections: readonly CollectionSummary[] | null = null) {
+    if (saveBusy) return;
+    const before: SaveState = saveState;
+    setSaveBusy(true);
+    if (action === "save") dispatchSave({ type: "save" });
+    else if (action === "unsave") dispatchSave({ type: "unsave" });
+    else dispatchSave({ type: "file", collectionId: action.collectionId });
+    if (action !== "unsave") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    try {
+      if (action === "unsave") {
+        await unsavePost(post.id);
+        showToast(t.savedPosts.removed);
+      } else {
+        const collectionId = action === "save" ? (before.saved ? before.collectionId : null) : action.collectionId;
+        const result = await savePost(post.id, collectionId, { firstSave: !before.saved });
+        dispatchSave({ type: "confirmed", state: { saved: true, collectionId: result.collectionId } });
+        showToast(action === "save" ? t.savedPosts.saved : filedMessage(result.collectionId, collections));
+      }
+      setSaveSheetOpen(false);
+    } catch (e) {
+      dispatchSave({ type: "rollback", state: before });
+      showToast(e instanceof ApiError ? e.message : action === "unsave" ? t.savedPosts.unsaveError : t.savedPosts.saveError);
+    } finally {
+      setSaveBusy(false);
+    }
+  }
+
+  function handleBookmarkPress() {
+    if (bookmarkTapAction(saveState) === "openSheet") setSaveSheetOpen(true);
+    else void changeSave("save");
   }
 
   function handleMediaPress() {
@@ -307,7 +348,35 @@ export function PostCard({
         >
           <ShareIcon size={19} />
         </Pressable>
+        {/* Publications enregistrées (migration 0048) : le signet, au bout de la
+            rangée. Pas enregistrée : le toucher l'enregistre ; enregistrée : il
+            ouvre les choix (ranger, retirer). L'appui long les ouvre aussi (iPhone). */}
+        {withBookmark ? (
+          <Pressable
+            onPress={handleBookmarkPress}
+            onLongPress={() => setSaveSheetOpen(true)}
+            disabled={saveBusy}
+            style={styles.bookmarkButton}
+            accessibilityRole="button"
+            accessibilityLabel={bookmarkA11y(saveState).label}
+            accessibilityHint={bookmarkA11y(saveState).hint}
+            accessibilityState={{ selected: saveState.saved, disabled: saveBusy }}
+            testID="bouton-enregistrer"
+          >
+            <BookmarkIcon size={19} tint={saveState.saved ? color.encre : color.acier} filled={saveState.saved} />
+          </Pressable>
+        ) : null}
       </View>
+      {withBookmark ? (
+        <SavePostSheet
+          visible={saveSheetOpen}
+          state={saveState}
+          busy={saveBusy}
+          onClose={() => setSaveSheetOpen(false)}
+          onChoose={(collectionId, collections) => void changeSave({ collectionId }, collections)}
+          onRemove={() => void changeSave("unsave")}
+        />
+      ) : null}
       {people.length > 0 ? (
         <TaggedPeopleSheet
           postId={post.id}
@@ -356,6 +425,10 @@ const styles = themedStyles(() => ({
   // Cible de 44 points de haut par le remplissage, sans grossir le texte.
   likeCount: { minHeight: 44, paddingRight: 12, marginVertical: -6, marginRight: -12, justifyContent: "center" },
   shareButton: { marginLeft: "auto" },
+  // Le signet : une cible de 44 points par le remplissage (le site ignore
+  // « hitSlop »), qui déborde dans la marge de droite de la publication ; les
+  // marges négatives gardent l'icône et la rangée à leur place.
+  bookmarkButton: { minHeight: 44, minWidth: 44, alignItems: "flex-end", justifyContent: "center", paddingRight: 12, marginRight: -12, marginVertical: -6, marginLeft: -space.sm },
   reactCount: { fontSize: font.secondary, color: color.acier },
   authorLink: { flexDirection: "row", alignItems: "center", gap: 10, flexShrink: 1 },
 }));
