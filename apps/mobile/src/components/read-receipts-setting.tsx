@@ -13,6 +13,8 @@ import { themedStyles } from "@/theme/themed-styles";
 // m'écrire » : allumé par défaut. Éteint, l'autre membre ne voit plus « Vu »
 // pour vos lectures, et vous ne voyez plus les siennes (réciproque). Effet
 // immédiat : le serveur l'applique à chaque lecture d'une conversation.
+// Rallumé : le serveur ne montre que vos lectures faites à partir de ce
+// moment, jamais celles faites pendant qu'il était éteint.
 // Caché tant que la messagerie n'est pas disponible, ou que le serveur ne
 // propose pas ce réglage (profil sans `readReceipts`).
 export function ReadReceiptsSetting() {

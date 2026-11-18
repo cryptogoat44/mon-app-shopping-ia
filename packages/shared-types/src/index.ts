@@ -28,9 +28,11 @@ export interface Profile {
   messagesFrom: MessagesFrom;
   /** Réglage « Confirmations de lecture » (lot « messages vus », migration
    * 0043), allumé par défaut. Éteint : l'autre membre ne voit plus « Vu »
-   * pour vos lectures, et vous ne voyez plus les siennes. Absent : le serveur
-   * ne propose pas les confirmations de lecture (migration 0043 absente, ou
-   * serveur plus ancien) ; l'app ne montre alors pas le réglage. */
+   * pour vos lectures, et vous ne voyez plus les siennes. Rallumé : seules vos
+   * lectures faites à partir de ce moment sont montrées, jamais celles faites
+   * pendant qu'il était éteint. Absent : le serveur ne propose pas les
+   * confirmations de lecture (migration 0043 absente, ou serveur plus ancien) ;
+   * l'app ne montre alors pas le réglage. */
   readReceipts?: boolean;
 }
 
@@ -1426,7 +1428,9 @@ export interface ConversationsPage {
  * l'app affiche « Vu » si `seenAt` n'est pas antérieur à ce message,
  * « Envoyé » sinon.
  * `seenAt` : la dernière fois que l'autre membre a ouvert la conversation ;
- * null : pas encore, depuis qu'elle est ouverte aux deux. */
+ * null : pas encore, depuis qu'elle est ouverte aux deux et depuis que ses
+ * lectures peuvent être montrées (une lecture faite avant que « Vu » existe
+ * pour lui, ou pendant que son réglage était éteint, n'est jamais renvoyée). */
 export interface ConversationReadReceipts {
   seenAt: string | null;
 }
