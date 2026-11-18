@@ -22,7 +22,7 @@ import { themedStyles } from "@/theme/themed-styles";
 import { Avatar } from "@/components/avatar";
 import { PostCarousel } from "@/components/post-carousel";
 import { TaggedPeopleSheet } from "@/components/tagged-people-sheet";
-import { peopleOf, photosOf } from "@/lib/post-extras";
+import { peopleShown, photosOf } from "@/lib/post-extras";
 import { useAuth } from "@/lib/auth-context";
 
 const DOUBLE_TAP_DELAY_MS = 300;
@@ -70,7 +70,12 @@ export function PostCard({
   // Plusieurs photos, personnes identifiées (migration 0047) : absents d'un serveur sans elles.
   const { session } = useAuth();
   const photos = photosOf(post);
-  const [people, setPeople] = useState(() => peopleOf(post));
+  // Les personnes se relisent dans la publication à chaque affichage (fil
+  // relu, visibilité changée : le serveur a pu en retirer) ; seuls les
+  // retraits faits ici restent en mémoire. Une identification retirée ne
+  // revient jamais du serveur.
+  const [removedIds, setRemovedIds] = useState<string[]>([]);
+  const people = peopleShown(post, removedIds);
   const [peopleOpen, setPeopleOpen] = useState(false);
 
   /** Trop de « j'aime » en peu de temps (429) : le serveur le dit, l'app le répète. */
@@ -310,7 +315,7 @@ export function PostCard({
           visible={peopleOpen}
           viewerId={session?.user.id ?? null}
           onClose={() => setPeopleOpen(false)}
-          onRemoved={(userId) => setPeople((current) => current.filter((person) => person.id !== userId))}
+          onRemoved={(userId) => setRemovedIds((ids) => [...ids, userId])}
         />
       ) : null}
     </View>

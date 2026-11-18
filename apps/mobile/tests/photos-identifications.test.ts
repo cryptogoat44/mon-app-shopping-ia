@@ -23,7 +23,7 @@ import { privacyPolicyEn } from "../src/legal/confidentialite.en";
 import { ApiError } from "../src/lib/api-error";
 import { clampIndex, counterText, indexFromOffset, stepIndex } from "../src/lib/carousel";
 import { notificationActionText, notificationTarget } from "../src/lib/follow-state";
-import { hasSeveralPhotos, peopleOf, photosOf, postExtrasStatus, readPostExtrasStatus, setPostExtrasStatus, withoutPerson } from "../src/lib/post-extras";
+import { hasSeveralPhotos, peopleOf, peopleShown, photosOf, postExtrasStatus, readPostExtrasStatus, setPostExtrasStatus, withoutPerson } from "../src/lib/post-extras";
 import {
   UPLOAD_IDLE,
   isRetryableUploadError,
@@ -204,6 +204,21 @@ describe("ce que l'app fait de `media` et `people`", () => {
     expect(peopleOf({ people: undefined })).toEqual([]);
     expect(withoutPerson(tagged, ME).people?.map((item) => item.id)).toEqual([DORA]);
     expect(withoutPerson({ people: [person(ME, "moi")] }, ME)).not.toHaveProperty("people");
+  });
+
+  it("la carte suit la publication reçue : une personne que le serveur ne renvoie plus disparaît ; un retrait fait sur la carte tient", () => {
+    const before = { people: [person(ME, "moi"), person(DORA, "dora")] };
+    expect(peopleShown(before, []).map((item) => item.id)).toEqual([ME, DORA]);
+    // Fil relu après un blocage, visibilité passée à « Moi seul » : le serveur ne renvoie plus DORA, ou plus personne.
+    expect(peopleShown({ people: [person(ME, "moi")] }, []).map((item) => item.id)).toEqual([ME]);
+    expect(peopleShown({ people: undefined }, [])).toEqual([]);
+    // « Retirer mon identification » sur cette carte : la ligne part tout de suite, même si la publication en main est l'ancienne.
+    expect(peopleShown(before, [ME]).map((item) => item.id)).toEqual([DORA]);
+    const card = read("components/post-card.tsx");
+    // Relue à chaque affichage, pas copiée une fois au premier.
+    expect(card).not.toContain("useState(() => peopleOf(post))");
+    expect(card).toContain("const people = peopleShown(post, removedIds);");
+    expect(card).toContain("onRemoved={(userId) => setRemovedIds((ids) => [...ids, userId])}");
   });
 
   it("la carte : l'icône des personnes n'apparaît qu'avec au moins une personne ; seule SA ligne propose de se retirer", () => {

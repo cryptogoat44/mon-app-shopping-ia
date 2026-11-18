@@ -34,6 +34,14 @@ export function peopleOf(post: Pick<Post, "people">): PostAuthor[] {
   return Array.isArray(post.people) ? post.people.filter((person) => typeof person?.id === "string") : [];
 }
 
+/** Ce que la carte montre : les personnes de la publication telle que le
+ * serveur vient de la donner (relue à chaque affichage : un blocage, une
+ * visibilité réduite en retirent), moins celles retirées à l'instant sur
+ * cette carte (« Retirer mon identification »). */
+export function peopleShown(post: Pick<Post, "people">, removedIds: readonly string[]): PostAuthor[] {
+  return peopleOf(post).filter((person) => !removedIds.includes(person.id));
+}
+
 /** La publication sans cette personne (après « Retirer mon identification »). */
 export function withoutPerson<T extends Pick<Post, "people">>(post: T, userId: string): T {
   const people = peopleOf(post).filter((person) => person.id !== userId);
