@@ -67,9 +67,10 @@ describe("police éditoriale : Bodoni Moda Medium", () => {
 describe("hauteur de ligne : ni les 1,5 fois la taille du texte que Bodoni Moda réserve d'elle-même, ni une ligne qui coupe les accents", () => {
   const SIZES = ["display", "title", "body"] as const;
   // Lu dans le fichier de police, en part de la taille du texte : la place réservée sous la ligne
-  // d'écriture (« descender » : 800 sur 2000) et le haut d'une capitale accentuée (« É » : 1969 sur 2000).
+  // d'écriture (« descender » : 800 sur 2000) et le haut de la plus haute capitale accentuée (« İ » :
+  // 2096 sur 2000, le plus haut dessin de toute la police ; « É » : 1969, « Å » : 2040).
   const BELOW_BASELINE = 0.4;
-  const ACCENTED_CAPITAL = 0.9845;
+  const ACCENTED_CAPITAL = 1.048;
 
   it("une hauteur par taille : assez pour que l'iPhone, qui cale le texte en bas de la ligne, ne coupe pas l'accent d'une capitale", () => {
     for (const size of SIZES) {

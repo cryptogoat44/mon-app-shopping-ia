@@ -12,9 +12,9 @@ export type WordmarkSize = "large" | "small";
 export const WORDMARK_TRACKING = 0.32;
 
 /** Hauteur de ligne, en part de la taille du texte : assez pour que l'iPhone
- * ne coupe pas l'accent d'une capitale, si le nom en porte un jour (voir
- * serifLineHeight, theme/tokens.ts). */
-const LINE_HEIGHT = 1.4;
+ * ne coupe pas l'accent d'une capitale, si le nom en porte un jour, même le
+ * plus haut de la police (voir serifLineHeight, theme/tokens.ts). */
+const LINE_HEIGHT = 1.45;
 
 /** Place prise par une capitale, en part de la taille du texte : sa largeur
  * (0,69 en moyenne dans Bodoni Moda Medium), puis l'espace qui la suit. */

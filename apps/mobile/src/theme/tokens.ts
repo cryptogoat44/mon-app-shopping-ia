@@ -158,14 +158,16 @@ export const serifFont = "BodoniModa_500Medium";
 // À donner à CHAQUE texte écrit avec elle (tests/police.test.ts le vérifie).
 // Sans réglage, Bodoni Moda réserve 1,525 fois la taille du texte (Newsreader :
 // 1 fois) et chaque titre repousserait ce qui le suit. Mais jamais moins de
-// 1,385 fois la taille : sur une ligne plus serrée, l'iPhone cale le texte en
+// 1,448 fois la taille : sur une ligne plus serrée, l'iPhone cale le texte en
 // bas et coupe ce qui dépasse en haut — l'accent d'une capitale (« Écharpe »,
 // « Élodie »). La police réserve 0,4 fois la taille sous la ligne d'écriture ;
-// une capitale accentuée monte à 0,985 fois la taille au-dessus.
+// sa plus haute capitale monte à 1,048 fois la taille au-dessus : « İ » (un
+// prénom ou une marque turcs), plus haut que « É » (0,985) et « Å » (1,02).
+// Noms de membres, de collections et de pièces s'écrivent avec cette police.
 export const serifLineHeight = {
-  display: 48,
-  title: 32,
-  body: 24,
+  display: 50,
+  title: 34,
+  body: 25,
 } as const;
 
 // Grands titres (taille « display ») : resserrés d'un demi-point. Bodoni Moda
