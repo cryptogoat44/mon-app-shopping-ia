@@ -45,7 +45,7 @@ describe("en-tête de 0043", () => {
     const words = prose(HEADER);
     expect(words).toContain("profiles.read_receipts_since : le moment à partir duquel les lectures de ce membre peuvent être montrées");
     expect(words).toContain("Une lecture d'avant ce moment n'est jamais montrée, même plus tard");
-    expect(words).toContain("membres déjà inscrits : le moment où cette migration est appliquée (rien de ce qu'ils ont lu avant que « Vu » existe n'est montré)");
+    expect(words).toContain("membres déjà inscrits : le moment où cette migration est appliquée (rien de ce qu'ils ont lu avant que « Vu » existe n'est montré, à condition de l'appliquer APRÈS la mise en ligne : voir « ORDRE DE MISE EN LIGNE » plus bas)");
     expect(words).toContain("nouveaux membres : la création de leur profil");
     expect(words).toContain("à chaque fois qu'un membre rallume le réglage, le serveur y écrit le moment où il le rallume (ce qu'il a lu pendant que le réglage était éteint n'est jamais montré ensuite)");
     // La date de la lecture elle-même reste écrite comme avant (compteurs de non-lus, export).
@@ -61,6 +61,24 @@ describe("en-tête de 0043", () => {
     // Sans elle, personne n'est exposé : rien n'est montré, et le réglage n'est pas proposé.
     expect(words).toContain("sans elle, personne ne voit « Vu » ni « Envoyé », et l'app ne propose pas le réglage");
     expect(words).toContain("personne n'est exposé avant de pouvoir refuser");
+  });
+
+  it("dit l'ordre de mise en ligne : sur spotto-prod, APRÈS le serveur, l'app et la politique, jamais avant ; et quoi faire si elle a été appliquée avant", () => {
+    const words = prose(HEADER);
+    expect(words).toContain("ORDRE DE MISE EN LIGNE, sur spotto-prod : à appliquer APRÈS la mise en ligne du serveur, de l'app (site) et de la politique de confidentialité qui portent « Vu » et le réglage, jamais avant.");
+    expect(words).toContain("Le serveur fonctionne sans elle, et « Vu » apparaît dans les 5 minutes qui suivent son application.");
+    // Pourquoi : « depuis » est le moment de la migration, pas celui de la mise en ligne.
+    expect(words).toContain("Appliquée avant, ce qu'ils liraient entre ce moment et la mise en ligne serait montré ensuite (« Vu »)");
+    // Appliquée trop tôt : la date seule est retirée avant la mise en ligne (jamais le réglage), puis le fichier est rejoué après.
+    const order = HEADER.slice(HEADER.indexOf("-- ORDRE DE MISE EN LIGNE"));
+    expect(order.split("\n").filter((line) => line.startsWith("--   "))).toEqual(["--   alter table profiles drop column if exists read_receipts_since;"]);
+    expect(prose(order)).toContain("AVANT de mettre le serveur en ligne, retirer la date « depuis » (le serveur se comporte alors comme sans 0043 ; le réglage de chaque membre n'est pas touché)");
+    expect(prose(order)).toContain("une fois le serveur, l'app et la politique en ligne, rejouer ce fichier en entier : la date « depuis » de tous repart de ce moment-là.");
+    // Ce rattrapage repose sur deux faits vérifiés ailleurs : la sonde demande les DEUX colonnes, et la date n'est calculée que si sa colonne manque.
+    expect(readFileSync(join(__dirname, "../src/lib/readReceipts.ts"), "utf8")).toContain('.select("read_receipts, read_receipts_since").limit(0)');
+    expect(AFTER_GUARD).toContain("add column if not exists read_receipts boolean not null default true;");
+    // L'ordre vient après le retour en arrière et ce qu'elle ajoute, avant la première instruction.
+    expect(SQL.indexOf("-- ORDRE DE MISE EN LIGNE")).toBeGreaterThan(SQL.indexOf("-- Ce qu'elle ajoute :"));
   });
 
   it("le retour en arrière est en tête, et ne retire que les deux colonnes de 0043", () => {
@@ -202,8 +220,11 @@ describe("contrôle de 0043 et registre des migrations", () => {
   });
 
   it("le registre cite 0043 « à appliquer », son fichier de vérification, et ce qui se passe sans elle", () => {
-    expect(REGISTRY).toMatch(/^\| 0043 \| Confirmations de lecture des messages privés[^|]*\| \*\*à appliquer\*\* \(sur spotto-dev-2 d'abord ; demande 0032, déjà en production\) \| — \|$/m);
-    expect(REGISTRY).toContain("| 0043 | le fichier de la migration lui-même (**après 0032**) | `supabase/verifications/0043-verification.sql` (une ligne, six `true`) | en tête du fichier de la migration |");
+    expect(REGISTRY).toMatch(/^\| 0043 \| Confirmations de lecture des messages privés[^|]*\| \*\*à appliquer\*\* \(sur spotto-dev-2 d'abord ; demande 0032, déjà en production ; sur spotto-prod, seulement APRÈS la mise en ligne du serveur, de l'app \(site\) et de la politique, jamais avant : voir l'en-tête du fichier\) \| — \|$/m);
+    expect(REGISTRY).toContain("| 0043 | le fichier de la migration lui-même (**après 0032** ; sur spotto-prod, **après la mise en ligne** du serveur, de l'app et de la politique) | `supabase/verifications/0043-verification.sql` (une ligne, six `true`) | en tête du fichier de la migration |");
+    // L'ordre de mise en ligne, dit aussi là où le registre explique qu'un serveur plus ancien tourne sur une base à jour.
+    expect(REGISTRY).toContain("**Exception, 0043 : jamais sur spotto-prod avant le serveur, l'app (site) et la politique qui portent « Vu ».**");
+    expect(REGISTRY).toContain("appliquée avant, ce qui serait lu entre-temps (serveur plus ancien) serait montré ensuite");
     // Ce que la date « depuis » garantit, dit dans le registre aussi.
     expect(REGISTRY).toContain("le moment à partir duquel ses lectures peuvent être montrées (jamais une lecture d'avant la migration, ni une lecture faite pendant que le réglage était éteint)");
     expect(REGISTRY).toContain("Sans 0043, personne ne voit « Vu » ni « Envoyé » sous ses messages, et l'app ne propose pas le réglage « Confirmations de lecture »");

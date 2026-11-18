@@ -20,7 +20,9 @@
 --    de ce membre peuvent être montrées. Une lecture d'avant ce moment n'est
 --    jamais montrée, même plus tard :
 --    - membres déjà inscrits : le moment où cette migration est appliquée
---      (rien de ce qu'ils ont lu avant que « Vu » existe n'est montré) ;
+--      (rien de ce qu'ils ont lu avant que « Vu » existe n'est montré, à
+--      condition de l'appliquer APRÈS la mise en ligne : voir « ORDRE DE
+--      MISE EN LIGNE » plus bas) ;
 --    - nouveaux membres : la création de leur profil ;
 --    - à chaque fois qu'un membre rallume le réglage, le serveur y écrit le
 --      moment où il le rallume (ce qu'il a lu pendant que le réglage était
@@ -43,6 +45,21 @@
 -- Aucune règle d'accès ne change : profiles reste fermée au public (RLS
 -- active, aucune politique) ; seul le serveur, avec sa clé secrète, lit et
 -- écrit ce réglage et cette date.
+--
+-- ORDRE DE MISE EN LIGNE, sur spotto-prod : à appliquer APRÈS la mise en
+-- ligne du serveur, de l'app (site) et de la politique de confidentialité
+-- qui portent « Vu » et le réglage, jamais avant. Le serveur fonctionne sans
+-- elle, et « Vu » apparaît dans les 5 minutes qui suivent son application.
+-- Pourquoi : pour les membres déjà inscrits, la date « depuis » est le moment
+-- où la migration est appliquée. Appliquée avant, ce qu'ils liraient entre
+-- ce moment et la mise en ligne serait montré ensuite (« Vu »), alors que
+-- ni la mention, ni le réglage, ni la politique n'existaient pour eux.
+-- Si elle a quand même été appliquée avant : AVANT de mettre le serveur en
+-- ligne, retirer la date « depuis » (le serveur se comporte alors comme
+-- sans 0043 ; le réglage de chaque membre n'est pas touché) :
+--   alter table profiles drop column if exists read_receipts_since;
+-- puis, une fois le serveur, l'app et la politique en ligne, rejouer ce
+-- fichier en entier : la date « depuis » de tous repart de ce moment-là.
 
 do $$
 begin
