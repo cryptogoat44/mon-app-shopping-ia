@@ -92,6 +92,16 @@ describe("affichage du mot-symbole (components/wordmark.tsx)", () => {
     expect(component.match(/<Text\b/g)).toHaveLength(1);
   });
 
+  it("grandes tailles de texte de l'iPhone : le mot grossit au plus de 1,25 fois, pour rester sur une ligne", () => {
+    expect(component).toContain("const MAX_FONT_SIZE_MULTIPLIER = 1.25;");
+    expect(component).toContain("maxFontSizeMultiplier={MAX_FONT_SIZE_MULTIPLIER}");
+    // Sur l'iPhone, la taille du texte grossit mais pas l'espace entre les capitales (ni celui
+    // qui précède le mot) : la largeur du mot, sur le plus étroit des écrans (256 points utiles).
+    const { fontSize, letterSpacing, paddingLeft } = wordmarkMetrics("large", APP_WORDMARK.length);
+    const width = APP_WORDMARK.length * (fontSize * 1.25 * 0.69 + letterSpacing) + paddingLeft;
+    expect(width).toBeLessThanOrEqual(256);
+  });
+
   it("titre de l'écran sur demande ; sinon annoncé comme une image qui porte ce nom", () => {
     expect(component).toContain('accessibilityRole={heading ? "header" : "image"}');
     expect(component).toContain("heading = false");

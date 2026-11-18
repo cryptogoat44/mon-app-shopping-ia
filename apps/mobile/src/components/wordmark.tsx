@@ -12,15 +12,27 @@ import { themedStyles } from "@/theme/themed-styles";
 // VoiceOver épellerait les capitales une à une. `heading` : le mot est le
 // titre de l'écran (écran Bienvenue) ; sinon il est annoncé comme une image
 // qui porte ce nom, la façon d'annoncer un logo sur l'iPhone comme sur le site.
+//
+// `maxFontSizeMultiplier` : avec les grandes tailles de texte de l'iPhone
+// (réglage Accessibilité), les capitales grossissent mais pas l'espace entre
+// elles ; au-delà de 1,25 fois, le mot ne tient plus sur une ligne d'un écran
+// de 320 points et l'iPhone le couperait en deux (« SPOTT » / « O »).
 
 const METRICS = {
   large: wordmarkMetrics("large", APP_WORDMARK.length),
   small: wordmarkMetrics("small", APP_WORDMARK.length),
 } as const;
 
+const MAX_FONT_SIZE_MULTIPLIER = 1.25;
+
 export function Wordmark({ size = "large", heading = false }: { size?: WordmarkSize; heading?: boolean }) {
   return (
-    <Text style={[styles.mark, METRICS[size]]} accessibilityRole={heading ? "header" : "image"} accessibilityLabel={APP_NAME_DISPLAY}>
+    <Text
+      style={[styles.mark, METRICS[size]]}
+      maxFontSizeMultiplier={MAX_FONT_SIZE_MULTIPLIER}
+      accessibilityRole={heading ? "header" : "image"}
+      accessibilityLabel={APP_NAME_DISPLAY}
+    >
       {APP_WORDMARK}
     </Text>
   );
