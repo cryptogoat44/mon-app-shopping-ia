@@ -39,7 +39,7 @@
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { ConversationReadReceipts } from "@monapp/shared-types";
-import { SIDE_COLUMNS, SIDE_ROWS, type Side } from "./messaging.js";
+import { SIDE_COLUMNS, SIDE_ROWS, messageActionsReady, type Side } from "./messaging.js";
 import { suspendedAmong } from "./moderation.js";
 import { parseDbRows } from "./validation.js";
 
@@ -189,9 +189,14 @@ const OWN_MESSAGE_ROWS = z.array(z.object({ created_at: z.string() }));
 /** La date du dernier message de ce membre, tel que sa conversation le
  * montre (routes/conversations.ts, readThreadMessages) : jamais un message
  * masqué par la modération, ni d'avant ce qu'il a effacé de son côté. null :
- * aucun. */
+ * aucun. Lot « messages, plus de confort » : jamais non plus un message
+ * qu'il a supprimé (« Vu » ne s'affiche pas sous « Message supprimé » : la
+ * date renvoyée est celle d'un message encore montré). La colonne n'est
+ * nommée que si la base a la migration 0044, sondée à part : 0043 fonctionne
+ * sans 0044, et l'inverse. */
 async function ownLastMessageAt(fastify: FastifyInstance, mine: Side): Promise<string | null> {
   let builder = fastify.supabaseAdmin.from("messages").select("created_at").eq("conversation_id", mine.conversation_id).eq("sender_id", mine.user_id).is("hidden_at", null);
+  if (await messageActionsReady(fastify)) builder = builder.is("deleted_at", null);
   if (mine.cleared_at) builder = builder.gt("created_at", mine.cleared_at);
   const rows = parseDbRows(OWN_MESSAGE_ROWS, await builder.order("created_at", { ascending: false }).limit(1), "Dernier message de la personne qui regarde");
   return rows[0]?.created_at ?? null;
