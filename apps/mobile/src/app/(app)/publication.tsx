@@ -48,6 +48,19 @@ export default function PostDetailScreen() {
     load();
   }, [load]);
 
+  // Le nombre de commentaires vient du serveur (réponses comprises, sans les
+  // comptes bloqués), jamais de la longueur de la liste affichée : le fil ne
+  // charge que les commentaires d'origine. Relu après chaque ajout ou retrait ;
+  // en cas d'échec, le dernier nombre connu reste affiché.
+  const refreshCommentCount = useCallback(async () => {
+    if (!id) return;
+    try {
+      setCommentCount((await fetchPost(id)).commentCount);
+    } catch {
+      // Rien : le nombre déjà affiché reste.
+    }
+  }, [id]);
+
   function goBack() {
     if (router.canGoBack()) router.back();
     else router.replace("/profile");
@@ -170,7 +183,7 @@ export default function PostDetailScreen() {
           <CommentsSection
             postId={post.id}
             viewerId={session?.user.id}
-            onCountChange={setCommentCount}
+            onChanged={refreshCommentCount}
             onOpenProfile={(userId) => router.push({ pathname: "/profil", params: { id: userId } })}
           />
         </ScrollView>

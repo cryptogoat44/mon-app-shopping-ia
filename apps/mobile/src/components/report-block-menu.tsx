@@ -30,9 +30,13 @@ interface ReportBlockMenuProps {
    * commentaire, pièce reçue) disparaît aussitôt de ce que voit la personne
    * qui l'a signalé ; le serveur ne le lui renvoie plus. */
   onReported?: () => void;
+  /** Une action de plus, en tête du menu (migration 0046 : « Retirer ma
+   * mention » sur un commentaire qui mentionne le lecteur). Le menu se ferme
+   * avant de l'exécuter. */
+  extraAction?: { label: string; onPress: () => void };
 }
 
-export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, pieceId, messageId, collectionId, onBlocked, onReported }: ReportBlockMenuProps) {
+export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, pieceId, messageId, collectionId, onBlocked, onReported, extraAction }: ReportBlockMenuProps) {
   const [step, setStep] = useState<Step>("root");
   const { showToast } = useToast();
   const target = { userId, postId, commentId, pieceId, messageId, collectionId };
@@ -75,6 +79,20 @@ export function ReportBlockMenu({ visible, onClose, userId, postId, commentId, p
         <View style={styles.handle} />
         {step === "root" ? (
           <>
+            {extraAction ? (
+              <Pressable
+                style={[styles.item, styles.itemBorder]}
+                onPress={() => {
+                  close();
+                  extraAction.onPress();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={extraAction.label}
+                testID="menu-action-en-plus"
+              >
+                <Text style={styles.itemLabel}>{extraAction.label}</Text>
+              </Pressable>
+            ) : null}
             <Pressable
               style={[styles.item, styles.itemBorder]}
               onPress={() => setStep("report")}

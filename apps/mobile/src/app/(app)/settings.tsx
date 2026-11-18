@@ -20,6 +20,7 @@ import { ExtraDataSettings } from "@/components/extra-data-settings";
 import { VideoAiSetting } from "@/components/video-ai-setting";
 import { PieceSendsSetting } from "@/components/piece-sends-setting";
 import { PrivateAccountSetting } from "@/components/private-account-setting";
+import { MentionsFromSetting } from "@/components/mentions-from-setting";
 import { MessagesFromSetting } from "@/components/messages-from-setting";
 import { MessagePushSetting } from "@/components/message-push-setting";
 import { WishAlertsSetting } from "@/components/wish-alerts-setting";
@@ -201,6 +202,8 @@ export default function SettingsScreen() {
 
         {/* Lot « vie sociale » : bloc « Confidentialité du compte », caché tant que le serveur n'a pas le compte privé. */}
         <PrivateAccountSetting />
+        {/* Migration 0046 : « Qui peut me mentionner », caché tant que le serveur n'a pas les mentions. */}
+        <MentionsFromSetting />
         <PieceSendsSetting />
         <MessagesFromSetting />
         {/* Lot notifications : caché sur le site et tant que le serveur ne les propose pas. */}
