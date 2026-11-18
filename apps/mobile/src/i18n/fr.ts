@@ -1701,5 +1701,10 @@ export const fr = {
     openFollowers: (n: number) => `${n} abonné${n > 1 ? "s" : ""}, ouvrir la liste`,
     openFollowing: (n: number) => `${n} abonnement${n > 1 ? "s" : ""}, ouvrir la liste`,
     loadMore: "Voir la suite",
+    // Liste « Aimé par » (lot « vie sociale »).
+    likesTitle: "Aimé par",
+    likesEmpty: "Personne n'a encore aimé cette publication.",
+    openLikes: (n: number) => `${n} j'aime, voir qui a aimé`,
+    likesPartial: "Certains comptes n'apparaissent pas dans cette liste.",
   },
 } as const;

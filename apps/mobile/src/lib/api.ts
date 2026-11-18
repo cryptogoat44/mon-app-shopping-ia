@@ -1008,6 +1008,14 @@ export async function reactToPost(postId: string): Promise<ReactToPostResponse> 
   return result;
 }
 
+/** « Aimé par » : les membres qui ont aimé une publication, les plus récents
+ * d'abord. Le serveur décide seul de qui y figure : une page peut être vide
+ * alors qu'il en reste. 404 « post_not_found » : publication indisponible. */
+export async function fetchPostLikes(postId: string, cursor?: string): Promise<MemberPage> {
+  const response = await authorizedFetch(`/api/posts/${postId}/likes${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+  return response.json();
+}
+
 export async function fetchConsentStatus(): Promise<ConsentStatus[]> {
   const response = await authorizedFetch("/api/consents");
   return response.json();

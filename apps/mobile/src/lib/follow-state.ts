@@ -109,9 +109,9 @@ export function notificationTarget(notification: Pick<AppNotification, "type" | 
 
 // ---- Listes de membres ----
 
-/** Les listes de l'écran « membres ». « requests », « followers » et
- * « following » existent (voir lib/member-lists.ts) ; « likes » et « viewers »
- * arrivent avec « Aimé par » et les stories. */
+/** Les listes de l'écran « membres ». « requests », « followers »,
+ * « following » et « likes » (« Aimé par ») existent (voir
+ * lib/member-lists.ts) ; « viewers » arrive avec les stories. */
 export const MEMBER_LIST_KINDS = ["followers", "following", "likes", "requests", "viewers"] as const;
 export type MemberListKind = (typeof MEMBER_LIST_KINDS)[number];
 

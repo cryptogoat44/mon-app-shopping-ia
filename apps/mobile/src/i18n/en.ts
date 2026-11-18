@@ -1581,5 +1581,10 @@ export const en: Catalog = {
     openFollowers: (n: number) => `${n} follower${n === 1 ? "" : "s"}, open the list`,
     openFollowing: (n: number) => `${n} following, open the list`,
     loadMore: "Show more",
+    // “Liked by” list (lot « vie sociale »).
+    likesTitle: "Liked by",
+    likesEmpty: "No one has liked this post yet.",
+    openLikes: (n: number) => `${n} like${n === 1 ? "" : "s"}, see who liked`,
+    likesPartial: "Some accounts do not appear in this list.",
   },
 };

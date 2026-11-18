@@ -45,7 +45,7 @@ describe("adresse de l'écran « membres »", () => {
 
   it("refusé : un identifiant qui n'en est pas un, une liste inconnue ou pas encore construite — rien n'est demandé au serveur", () => {
     for (const id of ["moi", "../me", `${OTHER}/posts`, `${OTHER}?x=1`, ["a"], 3, {}]) expect(parseMemberListParams({ kind: "followers", id }), String(id)).toBeNull();
-    for (const kind of ["likes", "viewers", "autre", "", undefined, null, ["followers"]]) expect(parseMemberListParams({ kind, id: OTHER }), String(kind)).toBeNull();
+    for (const kind of ["viewers", "autre", "", undefined, null, ["followers"]]) expect(parseMemberListParams({ kind, id: OTHER }), String(kind)).toBeNull();
     const screen = read("app/(app)/membres.tsx");
     expect(screen).toContain("const target = parseMemberListParams(params);");
     expect(screen).toContain('if (!target) return <Redirect href="/activite" />;');
