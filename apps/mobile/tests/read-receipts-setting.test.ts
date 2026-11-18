@@ -180,14 +180,17 @@ describe("textes FR / EN", () => {
     expect(fr.settings.readReceiptsTitle).toBe("Confirmations de lecture");
     expect(en.settings.readReceiptsTitle).toBe("Read receipts");
     expect(fr.settings.readReceiptsHint).toBe(
-      "Dans une conversation, « Vu » s'affiche sous le dernier message envoyé quand l'autre membre l'a lu. Si vous désactivez ce réglage, l'autre membre ne voit plus « Vu » pour vos lectures, et vous ne voyez plus les siennes."
+      "Dans une conversation, « Vu » s'affiche sous le dernier message envoyé quand l'autre membre l'a lu. Si vous désactivez ce réglage, l'autre membre ne voit plus « Vu » pour vos lectures, et vous ne voyez plus les siennes. Ce que vous lisez pendant qu'il est désactivé n'est jamais montré ensuite, même si vous le réactivez."
     );
     expect(en.settings.readReceiptsHint).toBe(
-      "In a conversation, “Seen” appears under the last message sent once the other member has read it. If you turn this off, the other member no longer sees “Seen” for your reads, and you no longer see theirs."
+      "In a conversation, “Seen” appears under the last message sent once the other member has read it. If you turn this off, the other member no longer sees “Seen” for your reads, and you no longer see theirs. What you read while it is off is never shown later, even if you turn it back on."
     );
     // Le mot de l'explication est celui affiché dans la conversation.
     expect(fr.settings.readReceiptsHint).toContain(`« ${fr.messages.receiptSeen} »`);
     expect(en.settings.readReceiptsHint).toContain(`“${en.messages.receiptSeen}”`);
+    // Ce qui est lu réglage éteint n'est jamais montré ensuite : dit sous l'interrupteur, avec « vous ».
+    expect(fr.settings.readReceiptsHint).toContain("Ce que vous lisez pendant qu'il est désactivé n'est jamais montré ensuite, même si vous le réactivez.");
+    expect(en.settings.readReceiptsHint).toContain("What you read while it is off is never shown later, even if you turn it back on.");
   });
 
   it("ce que lit VoiceOver sur l'interrupteur, et le message d'échec", () => {

@@ -1230,7 +1230,7 @@ export const fr = {
     readReceiptsTitle: "Confirmations de lecture",
     readReceiptsSwitchLabel: "Montrer quand j'ai lu un message, et voir quand les miens sont lus",
     readReceiptsHint:
-      "Dans une conversation, « Vu » s'affiche sous le dernier message envoyé quand l'autre membre l'a lu. Si vous désactivez ce réglage, l'autre membre ne voit plus « Vu » pour vos lectures, et vous ne voyez plus les siennes.",
+      "Dans une conversation, « Vu » s'affiche sous le dernier message envoyé quand l'autre membre l'a lu. Si vous désactivez ce réglage, l'autre membre ne voit plus « Vu » pour vos lectures, et vous ne voyez plus les siennes. Ce que vous lisez pendant qu'il est désactivé n'est jamais montré ensuite, même si vous le réactivez.",
     readReceiptsError: "Ce réglage n'a pas pu être enregistré. Réessayez.",
     exporting: "Préparation de l'export…",
     exportError: "L'export a échoué, réessayez.",

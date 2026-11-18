@@ -1135,7 +1135,7 @@ export const en: Catalog = {
     readReceiptsTitle: "Read receipts",
     readReceiptsSwitchLabel: "Show when I've read a message, and see when mine are read",
     readReceiptsHint:
-      "In a conversation, “Seen” appears under the last message sent once the other member has read it. If you turn this off, the other member no longer sees “Seen” for your reads, and you no longer see theirs.",
+      "In a conversation, “Seen” appears under the last message sent once the other member has read it. If you turn this off, the other member no longer sees “Seen” for your reads, and you no longer see theirs. What you read while it is off is never shown later, even if you turn it back on.",
     readReceiptsError: "This setting couldn't be saved. Please try again.",
     exporting: "Preparing the export…",
     exportError: "The export didn't go through. Please try again.",
