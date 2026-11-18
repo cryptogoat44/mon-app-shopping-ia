@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import marque from "@monapp/shared-types/marque.json";
+import { readProjectId } from "../src/lib/push-state";
 
 // Lot « app iPhone prête » (chantier 4, points 2 et 11) : réglages des builds
 // iPhone. Les adresses et la clé publique ne sont plus écrites dans eas.json :
@@ -74,6 +75,20 @@ describe("app.json : mises à jour à distance et plantages lisibles", () => {
     expect(mobile.dependencies["expo-updates"]).toBe("57.0.28");
     expect(expo.runtimeVersion).toEqual({ policy: "appVersion" });
     expect(expo.updates).toMatchObject({ checkAutomatically: "ON_LOAD", fallbackToCacheTimeout: 0 });
+  });
+
+  it("projet relié à Expo (17 novembre 2026) : compte propriétaire, identifiant du projet, adresse des mises à jour à distance", () => {
+    // Créé par le fondateur sur expo.dev : ni secret ni clé, ces trois valeurs figurent dans toute app Expo.
+    const PROJET = "ec70c638-71e9-4aa3-a5bb-72911fd95e7f";
+    expect(expo.owner).toBe("spotto-dev");
+    expect(expo.extra).toEqual({ eas: { projectId: PROJET } });
+    // Sans cet identifiant, l'app ne propose pas les notifications (src/lib/push-state.ts).
+    expect(readProjectId({ expoConfig: expo })).toBe(PROJET);
+    // Même projet pour les mises à jour à distance (expo-updates), jamais une autre adresse.
+    expect(expo.updates.url).toBe(`https://u.expo.dev/${PROJET}`);
+    // Le nom du projet chez Expo reste celui du fichier unique de la marque.
+    expect(expo.slug).toBe("{slugExpo}");
+    expect(marque.slugExpo).toBe("spotto");
   });
 
   it("Sentry : module Expo réglé pour la région UE et le projet de l'app (le jeton reste chez Expo)", () => {

@@ -64,7 +64,7 @@ Ce qui garde l'ancien nom de travail, exprès, parce que personne ne le voit : l
 
 ## 3. À choisir AVANT
 
-Aujourd'hui, rien n'est enregistré chez Apple ni chez Expo. Tant que c'est le cas, changer une ligne du fichier unique suffit. Trois étapes rendent certaines lignes difficiles à changer : **décidez le nom définitif avant de les faire.**
+**État au 17 novembre 2026.** Le projet est créé chez Expo (étape 1 ci-dessous : nom du projet `spotto`, compte propriétaire `spotto-dev`, identifiant écrit dans `apps/mobile/app.json`). Le compte Apple Developer est en cours d'activation ; rien n'est encore enregistré chez Apple (étapes 2 et 3). Trois étapes rendent certaines lignes difficiles à changer : **décidez le nom définitif avant de faire celles qui restent.**
 
 1. **Avant le premier `eas init`** (création du projet chez Expo) : `slugExpo`, et le compte Expo propriétaire du projet (« owner »). `eas init` écrit dans `apps/mobile/app.json` l'identifiant du projet, lié à ce nom et à ce compte. Changer ensuite, c'est créer un autre projet chez Expo (les mises à jour à distance et l'historique des builds ne suivent pas).
 2. **Avant l'inscription au programme Apple et la création de l'app chez Apple** : `identifiantApple`, `groupeApple` et `identifiantExtensionPartage`. Une fois l'app créée dans App Store Connect, son identifiant ne peut plus être modifié : il faudrait créer une autre app, avec une nouvelle fiche et une nouvelle validation. Le nom affiché (`nom`), lui, peut encore changer d'une version à l'autre, mais il doit être libre sur l'App Store : vérifiez-le avant.
