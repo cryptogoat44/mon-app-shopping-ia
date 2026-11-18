@@ -51,8 +51,10 @@ describe("profil d'un autre utilisateur", () => {
     const profile = res.json();
     expect(profile).toMatchObject({ id: author.id, followersCount: 1, followingCount: 0, isFollowing: true, isMe: false });
     expect(Object.keys(profile).sort()).toEqual(
-      ["avatarUrl", "bio", "displayName", "followersCount", "followingCount", "id", "isFollowing", "isMe", "postsCount", "username"].sort()
+      // « isPrivate » et « followState » : compte privé (lot « vie sociale »), toujours présents.
+      ["avatarUrl", "bio", "displayName", "followState", "followersCount", "followingCount", "id", "isFollowing", "isMe", "isPrivate", "postsCount", "username"].sort()
     );
+    expect(profile).toMatchObject({ isPrivate: false, followState: "following" });
     expect(JSON.stringify(profile)).not.toMatch(/vault|Montre secrète/i);
   });
 
