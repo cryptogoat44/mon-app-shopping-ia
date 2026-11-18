@@ -1640,5 +1640,6 @@ export const en: Catalog = {
     tagRemoveError: "The tag couldn't be removed. Please try again.",
     peopleNote: "A person only appears if they allow being tagged. 5 people at most.",
     notifTag: "tagged you in a post.",
+    uploadStopped: "Your post is published, but some photos couldn't be uploaded.",
   },
 };

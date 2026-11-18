@@ -272,6 +272,26 @@ describe("l'écran « Nouvelle publication »", () => {
     expect(screen).toContain('pointerEvents={busy ? "none" : "auto"}');
   });
 
+  it("pendant l'envoi, la feuille ne se ferme pas d'un glissement ; quittée quand même (site), pas de retour en arrière à la fin, un message flottant", () => {
+    // iPhone : glisser vers le bas est coupé tant que l'envoi occupe l'écran (comme vault-item/new.tsx).
+    expect(screen).toContain("const SHEET_OPEN = { gestureEnabled: true };");
+    expect(screen).toContain("const SHEET_LOCKED = { gestureEnabled: false };");
+    expect(screen).toContain("<Stack.Screen options={busy ? SHEET_LOCKED : SHEET_OPEN} />");
+    expect(screen).toContain("const busy = submitting || uploadBusy(upload);");
+    // L'état « photo manquée » occupe aussi l'écran : la feuille reste là pour « Réessayer ».
+    expect(uploadBusy(photoFailed(postCreated(startUpload(3), POST), true))).toBe(true);
+    // Écran fermé (retour du navigateur) : jamais `safeBack()` à la fin, qui retirerait l'écran ouvert entre-temps.
+    expect(screen).toContain("const mountedRef = useRef(true);");
+    expect(screen).toContain("mountedRef.current = false;");
+    expect(screen.match(/if \(mountedRef\.current\) safeBack\(\);/g)).toHaveLength(2);
+    expect(screen.match(/^\s*safeBack\(\);$/gm)).toBeNull();
+    // Une photo manquée sans écran : la suite ne part pas, et un message le dit.
+    expect(screen).toContain('else if (state.step === "failed" && !mountedRef.current) showToast(t.carousel.uploadStopped);');
+    expect(screen).toContain("if (!mountedRef.current) return showToast(message);");
+    expect(fr.carousel.uploadStopped).toBe("Votre publication est publiée, mais certaines photos n'ont pas pu être envoyées.");
+    expect(en.carousel.uploadStopped).toBe("Your post is published, but some photos couldn't be uploaded.");
+  });
+
   it("« Identifier des personnes » seulement si le serveur sait les garder ; 5 au plus ; ni soi-même ; la note le dit", () => {
     expect(PEOPLE_TAGS_MAX).toBe(5);
     expect(screen).toContain("{extras.peopleTags ? (");

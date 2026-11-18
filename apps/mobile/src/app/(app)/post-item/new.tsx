@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { PEOPLE_TAGS_MAX, POST_PHOTOS_MAX, type PrivacyLevel, type PublicProfile, type VaultItem } from "@monapp/shared-types";
 import { useAuth } from "@/lib/auth-context";
@@ -36,10 +36,28 @@ import { useToast } from "@/lib/toast-context";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
 
+// iPhone : pendant l'envoi (la publication, puis les photos 2 à 5), la
+// feuille ne se ferme pas non plus en la glissant vers le bas, comme
+// « Annuler » (vault-item/new.tsx fait de même). Deux objets fixes : les
+// options de l'écran ne changent qu'au début et à la fin d'un envoi.
+const SHEET_OPEN = { gestureEnabled: true };
+const SHEET_LOCKED = { gestureEnabled: false };
+
 export default function NewPostScreen() {
   const router = useRouter();
   const { profile } = useAuth();
   const { showToast } = useToast();
+  // Feuille quittée pendant l'envoi (retour du navigateur, sur le site) :
+  // l'envoi va au bout sans elle. À la fin, un message flottant, sans
+  // naviguer (on retirerait l'écran ouvert entre-temps) ; une photo manquée
+  // arrête la suite, et le message le dit.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   function safeBack() {
     if (router.canGoBack()) router.back();
@@ -142,7 +160,7 @@ export default function NewPostScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     showToast(t.publish.published);
     setUpload(UPLOAD_IDLE);
-    safeBack();
+    if (mountedRef.current) safeBack();
   }
 
   /** Les photos 2 à 5, l'une après l'autre ; s'arrête sur une photo manquée (l'écran propose alors la suite). */
@@ -158,6 +176,8 @@ export default function NewPostScreen() {
       setUpload(state);
     }
     if (state.step === "done") finishPublishing();
+    // Plus d'écran pour proposer « Réessayer » : la publication reste avec les photos déjà envoyées.
+    else if (state.step === "failed" && !mountedRef.current) showToast(t.carousel.uploadStopped);
   }
 
   function openPicker() {
@@ -190,9 +210,11 @@ export default function NewPostScreen() {
         await sharePurchasePost(vaultItemId, privacy, caption.trim() || undefined);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         showToast(t.publish.published);
-        safeBack();
+        if (mountedRef.current) safeBack();
       } catch (e) {
-        setError(e instanceof ApiError ? e.message : t.publish.error);
+        const message = e instanceof ApiError ? e.message : t.publish.error;
+        if (!mountedRef.current) showToast(message);
+        else setError(message);
       } finally {
         setSubmitting(false);
       }
@@ -218,8 +240,10 @@ export default function NewPostScreen() {
       const peopleTags = extras.peopleTags ? people.map((person) => person.id) : [];
       postId = (await createLifestylePost({ caption: caption.trim(), imageUri, privacy, taggedPieces, peopleTags })).id;
     } catch (e) {
+      const message = e instanceof ApiError ? e.message : t.publish.error;
+      if (!mountedRef.current) return showToast(message);
       setUpload(UPLOAD_IDLE);
-      setError(e instanceof ApiError ? e.message : t.publish.error);
+      setError(message);
       return;
     }
     const next = postCreated(creating, postId);
@@ -247,6 +271,7 @@ export default function NewPostScreen() {
 
   return (
     <View style={styles.sheet}>
+      <Stack.Screen options={busy ? SHEET_LOCKED : SHEET_OPEN} />
       <View style={styles.handle} />
       <View style={styles.nav}>
         <Pressable accessibilityRole="button" onPress={safeBack} disabled={busy} hitSlop={12} style={styles.navSide} accessibilityState={{ disabled: busy }}>

@@ -1760,5 +1760,6 @@ export const fr = {
     tagRemoveError: "L'identification n'a pas pu être retirée. Réessayez.",
     peopleNote: "Une personne n'apparaît que si elle accepte d'être identifiée. 5 personnes au plus.",
     notifTag: "vous a identifié(e) dans une publication.",
+    uploadStopped: "Votre publication est publiée, mais certaines photos n'ont pas pu être envoyées.",
   },
 } as const;
