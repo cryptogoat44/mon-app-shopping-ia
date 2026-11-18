@@ -361,6 +361,11 @@ export function PostCard({
             accessibilityLabel={bookmarkA11y(saveState).label}
             accessibilityHint={bookmarkA11y(saveState).hint}
             accessibilityState={{ selected: saveState.saved, disabled: saveBusy }}
+            // VoiceOver : « Ranger » ouvre les choix, comme l'appui long, même avant d'enregistrer.
+            accessibilityActions={[{ name: "file", label: t.savedPosts.file }]}
+            onAccessibilityAction={(event) => {
+              if (event.nativeEvent.actionName === "file") setSaveSheetOpen(true);
+            }}
             testID="bouton-enregistrer"
           >
             <BookmarkIcon size={19} tint={saveState.saved ? color.encre : color.acier} filled={saveState.saved} />

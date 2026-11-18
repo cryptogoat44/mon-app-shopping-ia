@@ -163,6 +163,8 @@ describe("la carte d'une publication", () => {
     expect(card).toContain('dispatchSave({ type: "rollback", state: before });');
     expect(card).toContain("e instanceof ApiError ? e.message");
     expect(card).toContain("onLongPress={() => setSaveSheetOpen(true)}");
+    // Avec VoiceOver, l'action « Ranger » fait la même chose que l'appui long.
+    expect(card).toContain('accessibilityActions={[{ name: "file", label: t.savedPosts.file }]}');
     expect(card).toContain("accessibilityLabel={bookmarkA11y(saveState).label}");
     // L'auteur n'apprend rien : aucun compteur d'enregistrements n'est affiché.
     expect(card).not.toMatch(/saveCount|savedCount/);
