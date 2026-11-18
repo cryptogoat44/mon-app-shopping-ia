@@ -6,16 +6,19 @@ import * as Haptics from "expo-haptics";
 import type { FollowState, MemberPage, MemberRow } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
-import { ApiError, acceptFollowRequest, declineFollowRequest, fetchFollowRequests, fetchFollowers, fetchFollowing, followUser, unfollowUser } from "@/lib/api";
+import { ApiError, acceptFollowRequest, declineFollowRequest, fetchFollowRequests, fetchFollowers, fetchFollowing, fetchPostLikes, followUser, unfollowUser } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { followActionFor, followButton, followStateOf } from "@/lib/follow-state";
 import { loadErrorMessage } from "@/lib/load-error";
 import {
   isOwnMemberList,
+  isPostGone,
+  likesListTexts,
   loadsWithoutTap,
   memberListEmptyText,
   memberListTitle,
   nextEmptyStreak,
+  parseLikeCount,
   parseMemberListParams,
   showsFindPeople,
   showsRemoveFollower,
@@ -23,6 +26,7 @@ import {
   type FollowListKind,
 } from "@/lib/member-lists";
 import { useToast } from "@/lib/toast-context";
+import { ErrorMessage } from "@/components/error-message";
 import { MemberList } from "@/components/member-list";
 import { RemoveFollowerSheet } from "@/components/remove-follower-sheet";
 import { themedStyles } from "@/theme/themed-styles";
@@ -34,8 +38,9 @@ import { themedStyles } from "@/theme/themed-styles";
 //   - `kind=followers` / `kind=following` (+ `id`, absent : soi-même) : les
 //     abonnés et les abonnements d'un membre, avec le bouton d'abonnement sur
 //     chaque ligne et, sur SES abonnés, « Retirer ».
-// Les autres listes (« Aimé par »…) s'y ajouteront ; d'ici là, toute autre
-// valeur ramène à l'onglet Activité.
+//   - `kind=likes` + `id` (la publication) : « Aimé par », les membres qui
+//     ont aimé une publication, avec le bouton d'abonnement sur chaque ligne.
+// Toute autre valeur ramène à l'onglet Activité.
 
 /** Les pages d'une liste : première page, suite, erreurs. Le serveur filtre
  * après avoir lu une page : elle peut arriver vide alors qu'il en reste.
@@ -319,18 +324,82 @@ function FollowList({ kind, ownerId, own }: { kind: FollowListKind; ownerId: str
   );
 }
 
+/** « Aimé par » : les membres qui ont aimé la publication `postId`.
+ * `reactionCount` : le nombre affiché sous la publication quand la liste a
+ * été ouverte (null : inconnu). Le serveur laisse de côté, sans dire combien,
+ * les comptes que le lecteur ne peut pas voir : une fois la liste chargée en
+ * entier, une phrase le dit si elle est plus courte que ce nombre. */
+function LikesList({ postId, reactionCount }: { postId: string; reactionCount: number | null }) {
+  const router = useRouter();
+  const { refreshProfile } = useAuth();
+  // Publication supprimée, masquée ou plus visible : l'état « indisponible », sans « Réessayer ».
+  const [gone, setGone] = useState(false);
+  const fetchPage = useCallback(
+    async (cursor?: string) => {
+      try {
+        return await fetchPostLikes(postId, cursor);
+      } catch (e) {
+        if (e instanceof ApiError && isPostGone(e.status, e.body.error)) setGone(true);
+        throw e;
+      }
+    },
+    [postId]
+  );
+  const pages = useMemberPages(fetchPage, t.memberLists.loadError);
+  const { load } = pages;
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  // Le compteur d'abonnements de son propre profil suit.
+  const countsChanged = useCallback(() => void refreshProfile().catch(() => {}), [refreshProfile]);
+
+  if (gone) {
+    return (
+      <View style={styles.gone}>
+        <ErrorMessage style={styles.goneMessage}>{t.postDetail.notFound}</ErrorMessage>
+      </View>
+    );
+  }
+
+  const texts = likesListTexts(pages.members?.length ?? 0, pages.hasMore, reactionCount);
+  return (
+    <MemberList
+      members={pages.members}
+      error={pages.error}
+      onRetry={() => void load()}
+      emptyText={texts.emptyText}
+      footerNote={pages.members === null ? null : texts.note}
+      hasMore={pages.hasMore}
+      loadingMore={pages.loadingMore}
+      moreError={pages.moreError}
+      onLoadMore={() => void pages.loadMore(true)}
+      loadMoreLabel={t.memberLists.loadMore}
+      onEndReached={() => {
+        if (pages.autoLoad) void pages.loadMore(false);
+      }}
+      refreshing={pages.refreshing}
+      onRefresh={() => void pages.refresh()}
+      onOpenProfile={(member) => router.push({ pathname: "/profil", params: { id: member.id } })}
+      renderActions={(member) => (member.isMe ? null : <RowFollowButton member={member} onState={pages.setFollowState} onChanged={countsChanged} />)}
+    />
+  );
+}
+
 export default function MembersScreen() {
   const router = useRouter();
   const { profile } = useAuth();
-  const params = useLocalSearchParams<{ kind?: string; id?: string }>();
+  const params = useLocalSearchParams<{ kind?: string; id?: string; count?: string }>();
   const target = parseMemberListParams(params);
   if (!target) return <Redirect href="/activite" />;
   const own = isOwnMemberList(target, profile?.id);
-  const ownerId = target.kind === "requests" ? null : (target.userId ?? profile?.id ?? null);
+  const ownerId = target.kind === "requests" || target.kind === "likes" ? null : (target.userId ?? profile?.id ?? null);
 
   function goBack() {
     if (router.canGoBack()) router.back();
     else if (target?.kind === "requests") router.replace("/activite");
+    else if (target?.kind === "likes") router.replace({ pathname: "/publication", params: { id: target.postId } });
     else if (own || !ownerId) router.replace("/profile");
     else router.replace({ pathname: "/profil", params: { id: ownerId } });
   }
@@ -347,7 +416,7 @@ export default function MembersScreen() {
         <View style={styles.navSpacer} />
       </View>
       <View style={styles.body}>
-        {target.kind === "requests" ? <RequestsList /> : ownerId ? <FollowList key={`${target.kind}-${ownerId}`} kind={target.kind} ownerId={ownerId} own={own} /> : null}
+        {target.kind === "requests" ? <RequestsList /> : target.kind === "likes" ? <LikesList key={target.postId} postId={target.postId} reactionCount={parseLikeCount(params.count)} /> : ownerId ? <FollowList key={`${target.kind}-${ownerId}`} kind={target.kind} ownerId={ownerId} own={own} /> : null}
       </View>
     </SafeAreaView>
   );
@@ -367,4 +436,6 @@ const styles = themedStyles(() => ({
   busy: { opacity: 0.6 },
   findPeople: { alignSelf: "center", minHeight: 44, marginTop: space.sm, paddingHorizontal: space.lg, justifyContent: "center" },
   findPeopleLabel: { fontSize: font.secondary, fontWeight: "600", color: color.vert },
+  gone: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.lg },
+  goneMessage: { fontSize: font.secondary, textAlign: "center" },
 }));

@@ -1,8 +1,10 @@
 import { useRef, useState } from "react";
 import { Animated, Pressable, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
 import type { Post } from "@monapp/shared-types";
-import { reactToPost } from "@/lib/api";
+import { ApiError, reactToPost } from "@/lib/api";
+import { likeCountOpensList, likesListRoute } from "@/lib/member-lists";
 import { openMerchantLink } from "@/lib/merchant-links";
 import { color, font, radius, space } from "@/theme/tokens";
 import { CommentIcon, HeartIcon, MoreIcon, ShareIcon, VerifiedIcon } from "@/components/icons";
@@ -55,11 +57,17 @@ export function PostCard({
   commentCount?: number;
 }) {
   const { showToast } = useToast();
+  const router = useRouter();
   const [reactionCount, setReactionCount] = useState(post.reactionCount);
   const [reacted, setReacted] = useState(post.viewerHasReacted);
   const [busy, setBusy] = useState(false);
   const lastTapRef = useRef(0);
   const heartPop = useRef(new Animated.Value(0)).current;
+
+  /** Trop de « j'aime » en peu de temps (429) : le serveur le dit, l'app le répète. */
+  function tooManyLikes(e: unknown) {
+    if (e instanceof ApiError && e.status === 429) showToast(e.message);
+  }
 
   async function like() {
     if (reacted) return;
@@ -70,9 +78,10 @@ export function PostCard({
       const result = await reactToPost(post.id);
       setReacted(result.viewerHasReacted);
       setReactionCount(result.reactionCount);
-    } catch {
+    } catch (e) {
       setReacted(false);
       setReactionCount((c) => c - 1);
+      tooManyLikes(e);
     }
   }
 
@@ -85,9 +94,10 @@ export function PostCard({
       const result = await reactToPost(post.id);
       setReacted(result.viewerHasReacted);
       setReactionCount(result.reactionCount);
-    } catch {
+    } catch (e) {
       setReacted(post.viewerHasReacted);
       setReactionCount(post.reactionCount);
+      tooManyLikes(e);
     } finally {
       setBusy(false);
     }
@@ -213,17 +223,35 @@ export function PostCard({
       ) : null}
 
       <View style={styles.actions}>
-        <Pressable
-          onPress={handleReactButton}
-          disabled={busy}
-          style={styles.reactRow}
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel={reacted ? t.post.unlike : t.post.like}
-        >
-          <HeartIcon size={19} tint={reacted ? color.encre : color.acier} filled={reacted} />
-          <Text style={styles.reactCount}>{reactionCount}</Text>
-        </Pressable>
+        {/* Le cœur aime ou n'aime plus ; le nombre, à côté, ouvre la liste
+            « Aimé par » (lot « vie sociale »). À zéro : un simple texte. */}
+        <View style={styles.likeGroup}>
+          <Pressable
+            onPress={handleReactButton}
+            disabled={busy}
+            style={styles.reactRow}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 0 }}
+            accessibilityRole="button"
+            accessibilityLabel={reacted ? t.post.unlike : t.post.like}
+          >
+            <HeartIcon size={19} tint={reacted ? color.encre : color.acier} filled={reacted} />
+          </Pressable>
+          {likeCountOpensList(reactionCount) ? (
+            <Pressable
+              onPress={() => router.push(likesListRoute(post.id, reactionCount))}
+              style={styles.likeCount}
+              accessibilityRole="link"
+              accessibilityLabel={t.memberLists.openLikes(reactionCount)}
+              testID="nombre-jaime"
+            >
+              <Text style={styles.reactCount}>{reactionCount}</Text>
+            </Pressable>
+          ) : (
+            <View style={styles.likeCountPlain}>
+              <Text style={styles.reactCount}>{reactionCount}</Text>
+            </View>
+          )}
+        </View>
         <Pressable
           onPress={onOpenComments}
           disabled={!onOpenComments}
@@ -270,6 +298,11 @@ const styles = themedStyles(() => ({
   tagChipLabel: { fontSize: font.caption, color: color.encre },
   actions: { flexDirection: "row", alignItems: "center", gap: space.lg, marginTop: 12 },
   reactRow: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 32 },
+  likeGroup: { flexDirection: "row", alignItems: "center" },
+  // Cible de 44 points de haut par le remplissage, sans grossir le texte ; les
+  // marges négatives gardent la rangée à sa hauteur (32) et à ses écarts.
+  likeCount: { minHeight: 44, paddingLeft: 6, paddingRight: 12, marginVertical: -6, marginRight: -12, justifyContent: "center" },
+  likeCountPlain: { paddingLeft: 6 },
   shareButton: { marginLeft: "auto" },
   reactCount: { fontSize: font.secondary, color: color.acier },
   authorLink: { flexDirection: "row", alignItems: "center", gap: 10, flexShrink: 1 },

@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/skeleton";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Une liste de membres (lot « vie sociale ») : demandes d'abonnement reçues,
-// abonnés, abonnements ; « Aimé par »… ensuite. Le serveur décide seul de qui
+// abonnés, abonnements, « Aimé par ». Le serveur décide seul de qui
 // y figure (lib/memberRows.ts) : une page peut être plus courte que prévu, ou
 // vide, alors qu'il en reste — seul `hasMore` dit s'il y a une suite. Jamais
 // de date dans une ligne. La liste occupe l'écran et défile elle-même.
@@ -41,6 +41,8 @@ export interface MemberListProps {
   /** Tirer pour rafraîchir. */
   refreshing?: boolean;
   onRefresh?: () => void;
+  /** Une phrase sous la liste (« Aimé par » : certains comptes n'apparaissent pas). */
+  footerNote?: string | null;
 }
 
 export function MemberList({
@@ -59,6 +61,7 @@ export function MemberList({
   onEndReached,
   refreshing,
   onRefresh,
+  footerNote,
 }: MemberListProps) {
   if (members === null) {
     if (error) {
@@ -129,6 +132,7 @@ export function MemberList({
               <Text style={styles.moreLabel}>{loadMoreLabel}</Text>
             </Pressable>
           ) : null}
+          {footerNote ? <Text style={styles.footerNote}>{footerNote}</Text> : null}
         </View>
       }
       onEndReached={onEndReached}
@@ -155,4 +159,5 @@ const styles = themedStyles(() => ({
   loader: { marginTop: space.md },
   more: { alignSelf: "center", marginTop: space.md, minHeight: 44, paddingHorizontal: space.lg, borderRadius: radius.md, borderWidth: 1, borderColor: color.filet, alignItems: "center", justifyContent: "center" },
   moreLabel: { fontSize: font.secondary, fontWeight: "600", color: color.vert },
+  footerNote: { fontSize: font.caption, color: color.acier, textAlign: "center", marginTop: space.lg, lineHeight: 18 },
 }));
