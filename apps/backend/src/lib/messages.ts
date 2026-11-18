@@ -289,6 +289,13 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Vous avez lancé beaucoup d'essais aujourd'hui. Réessayez demain.": "You've started a lot of try-ons today. Please try again tomorrow.",
   "Les essais sont très demandés en ce moment. Réessayez dans un moment.": "Try-ons are in high demand right now. Please try again shortly.",
   "Vous avez envoyé beaucoup de signalements en peu de temps. Réessayez dans une heure.": "You've sent a lot of reports in a short time. Please try again in an hour.",
+  // Lot « messages, plus de confort » (migration 0044).
+  "Cette action sur les messages n'est pas encore disponible.": "This action on messages isn't available yet.",
+  "Message introuvable.": "Message not found.",
+  "Cette conversation n'est pas encore ouverte : vous pourrez aimer un message quand elle le sera.":
+    "This conversation isn't open yet: you'll be able to like a message once it is.",
+  "Vous avez aimé beaucoup de messages en peu de temps. Réessayez dans un moment.": "You've liked a lot of messages in a short time. Please try again in a moment.",
+  "Réaction invalide.": "Invalid reaction.",
 };
 
 /** Message dans la langue voulue. Un message inconnu (par exemple un texte
