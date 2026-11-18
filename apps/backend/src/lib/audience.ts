@@ -202,11 +202,3 @@ export async function readAudienceOf(fastify: FastifyInstance, viewerId: string,
   if (!audience) throw new DatabaseReadError("Lien entre deux comptes illisible");
   return audience;
 }
-
-/** Ce compte est-il privé ? Toujours faux sans la migration 0045. Lecture
- * impossible : DatabaseReadError. */
-export async function isPrivateAccount(fastify: FastifyInstance, userId: string): Promise<boolean> {
-  if (!(await privateAccountsReady(fastify))) return false;
-  const rows = parseDbRows(PRIVATE_ROWS, await fastify.supabaseAdmin.from("profiles").select("id, is_private").eq("id", userId), "Compte privé");
-  return rows[0]?.is_private === true;
-}
