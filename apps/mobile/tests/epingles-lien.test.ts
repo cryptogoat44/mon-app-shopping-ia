@@ -394,8 +394,11 @@ describe("appels au serveur", () => {
 
 describe("textes", () => {
   it("la section « profilePins » est ajoutée à la fin des deux catalogues, mêmes clés, avec les textes de la fiche", () => {
-    expect(Object.keys(fr).at(-1)).toBe("profilePins");
-    expect(Object.keys(en).at(-1)).toBe("profilePins");
+    // Puis seulement les sections des fiches suivantes (« Pour vous », migration 0050).
+    for (const catalog of [fr, en]) {
+      const keys = Object.keys(catalog);
+      expect(keys.slice(keys.indexOf("profilePins") + 1)).toEqual(["forYou"]);
+    }
     expect(Object.keys(en.profilePins)).toEqual(Object.keys(fr.profilePins));
     const expected: [keyof typeof fr.profilePins, string, string][] = [
       ["pin", "Épingler sur mon profil", "Pin to my profile"],

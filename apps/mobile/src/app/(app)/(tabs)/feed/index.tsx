@@ -1,9 +1,14 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Platform, Pressable, RefreshControl, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import type { Post } from "@monapp/shared-types";
-import { ApiError, fetchFeed } from "@/lib/api";
+import { ApiError, fetchFeed, fetchForYou } from "@/lib/api";
+import { track } from "@/lib/analytics";
+import { appendUnique, fetchUntilShown, forYouShown, noteForYouFailure, rememberSegment, rememberedSegment, type FeedSegment } from "@/lib/for-you";
+import { SegmentedChoice } from "@/components/segmented-choice";
+import { LoadFailure } from "@/components/load-failure";
+import { AccountSuggestions } from "@/components/account-suggestions";
 import { color, font, radius, serifDisplayLetterSpacing, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { Skeleton } from "@/components/skeleton";
 import { ReportBlockMenu } from "@/components/report-block-menu";
@@ -36,14 +41,90 @@ export default function FeedScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [menuTarget, setMenuTarget] = useState<{ userId: string; postId: string } | null>(null);
+  // Lot « découverte » : « Abonnements | Pour vous ». Chaque fil garde sa
+  // liste, sa suite et sa position (les deux listes restent montées) ; le
+  // choix est gardé pour la session. Serveur d'avant ce lot : pas de choix.
+  const [segment, setSegment] = useState<FeedSegment>(rememberedSegment);
+  const [withForYou, setWithForYou] = useState(forYouShown);
+  const [forYouPosts, setForYouPosts] = useState<Post[] | null>(null);
+  const [forYouNext, setForYouNext] = useState<number | null>(null);
+  const [forYouError, setForYouError] = useState<string | null>(null);
+  const [forYouRefreshing, setForYouRefreshing] = useState(false);
+  const [forYouLoadingMore, setForYouLoadingMore] = useState(false);
+  // Comptes bloqués depuis cet écran : retirés aussi des suggestions.
+  const [blockedIds, setBlockedIds] = useState<string[]>([]);
 
   function handleBlocked(userId: string) {
     setPosts((prev) => (prev ? prev.filter((p) => p.author.id !== userId) : prev));
+    setForYouPosts((prev) => (prev ? prev.filter((p) => p.author.id !== userId) : prev));
+    setBlockedIds((prev) => [...prev, userId]);
   }
 
-  // Chantier 3 : une publication signalée quitte aussitôt le fil.
+  // Chantier 3 : une publication signalée quitte aussitôt le fil (les deux fils).
   function handleReported(postId: string) {
     setPosts((prev) => (prev ? prev.filter((p) => p.id !== postId) : prev));
+    setForYouPosts((prev) => (prev ? prev.filter((p) => p.id !== postId) : prev));
+  }
+
+  /** Échec de « Pour vous » : un serveur d'avant ce lot (404) cache le choix
+   * et revient aux abonnements ; sinon, « Réessayer » dans ce fil seulement. */
+  function forYouFailed(e: unknown) {
+    if (noteForYouFailure(e)) {
+      setWithForYou(false);
+      setSegment("following");
+      return;
+    }
+    setForYouError(e instanceof ApiError ? e.message : t.forYou.loadError);
+  }
+
+  const loadForYou = useCallback(async () => {
+    try {
+      const page = await fetchUntilShown(fetchForYou);
+      setForYouPosts(page.posts);
+      setForYouNext(page.nextOffset);
+      setForYouError(null);
+    } catch (e) {
+      forYouFailed(e);
+    }
+  }, []);
+
+  // « Pour vous » se charge la première fois qu'il est montré, puis garde sa
+  // liste et sa position ; tirer vers le bas le relit.
+  useEffect(() => {
+    if (segment === "forYou" && forYouPosts === null && forYouError === null) void loadForYou();
+  }, [segment, forYouPosts, forYouError, loadForYou]);
+
+  function chooseSegment(next: FeedSegment) {
+    rememberSegment(next);
+    setSegment(next);
+    // Statistiques : l'ouverture de « Pour vous », rien de ce qui y est vu.
+    if (next === "forYou") track("for_you_opened");
+  }
+
+  async function handleForYouRefresh() {
+    setForYouRefreshing(true);
+    await loadForYou();
+    setForYouRefreshing(false);
+  }
+
+  async function handleForYouMore() {
+    if (forYouNext === null || forYouLoadingMore || forYouRefreshing) return;
+    setForYouLoadingMore(true);
+    try {
+      const page = await fetchUntilShown(fetchForYou, forYouNext);
+      // Le classement a pu être refait entre deux pages : sans doublon.
+      setForYouPosts((prev) => appendUnique(prev ?? [], page.posts));
+      setForYouNext(page.nextOffset);
+    } catch {
+      // silencieux : re-scroller vers le bas redéclenche onEndReached
+    } finally {
+      setForYouLoadingMore(false);
+    }
+  }
+
+  function retryForYou() {
+    setForYouError(null);
+    setForYouPosts(null);
   }
 
   const load = useCallback(async () => {
@@ -107,63 +188,139 @@ export default function FeedScreen() {
           </Pressable>
         </View>
       </View>
-
-      {posts === null && !error ? (
-        <View style={styles.content}>
-          <FeedSkeletonRow />
-          <View style={styles.divider} />
-          <FeedSkeletonRow />
+      {withForYou ? (
+        <View style={styles.segments}>
+          <SegmentedChoice
+            label={t.forYou.tabsLabel}
+            options={[
+              { value: "following", label: t.forYou.tabFollowing },
+              { value: "forYou", label: t.forYou.tabForYou },
+            ]}
+            value={segment}
+            onChange={chooseSegment}
+          />
+          {/* Comment le fil est classé : toujours affiché, jamais derrière un geste. */}
+          {segment === "forYou" ? <Text style={styles.how}>{t.forYou.how}</Text> : null}
         </View>
-      ) : (
-        <FlatList
-          data={posts ?? []}
-          keyExtractor={(post) => post.id}
-          // Fluidité (lot « images et fluidité ») : peu de publications
-          // préparées à la fois, les autres au fil du défilement ; celles
-          // sorties de l'écran sont libérées sur téléphone.
-          initialNumToRender={3}
-          maxToRenderPerBatch={3}
-          windowSize={5}
-          removeClippedSubviews={Platform.OS !== "web"}
-          contentContainerStyle={styles.content}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
-          renderItem={({ item: post }) => (
-            <PostCard
-              post={post}
-              // Ses propres publications (Lot F) : pas de « signaler / bloquer ».
-              onOpenMenu={post.author.id === myId ? undefined : () => setMenuTarget({ userId: post.author.id, postId: post.id })}
-              onPressAuthor={() =>
-                post.author.id === myId ? router.push("/profile") : router.push({ pathname: "/profil", params: { id: post.author.id } })
+      ) : null}
+
+      {/* « Pour vous » : monté dès qu'il a été ouvert, caché sans être démonté quand on revient aux abonnements. */}
+      {withForYou && (segment === "forYou" || forYouPosts !== null) ? (
+        <View style={[styles.segmentBody, segment === "forYou" ? null : styles.hiddenSegment]}>
+          {forYouPosts === null && forYouError ? (
+            <View style={styles.content}>
+              <LoadFailure message={forYouError} onRetry={retryForYou} />
+            </View>
+          ) : forYouPosts === null ? (
+            <View style={styles.content}>
+              <FeedSkeletonRow />
+              <View style={styles.divider} />
+              <FeedSkeletonRow />
+            </View>
+          ) : (
+            <FlatList
+              data={forYouPosts}
+              keyExtractor={(post) => post.id}
+              initialNumToRender={3}
+              maxToRenderPerBatch={3}
+              windowSize={5}
+              removeClippedSubviews={Platform.OS !== "web"}
+              contentContainerStyle={styles.content}
+              refreshControl={<RefreshControl refreshing={forYouRefreshing} onRefresh={handleForYouRefresh} tintColor={color.encre} />}
+              renderItem={({ item: post }) => (
+                <PostCard
+                  post={post}
+                  // Publications de membres que l'on ne suit pas : toujours « signaler / bloquer » (règle 1.2 d'Apple).
+                  onOpenMenu={post.author.id === myId ? undefined : () => setMenuTarget({ userId: post.author.id, postId: post.id })}
+                  onPressAuthor={() =>
+                    post.author.id === myId ? router.push("/profile") : router.push({ pathname: "/profil", params: { id: post.author.id } })
+                  }
+                  onOpenComments={() => router.push({ pathname: "/publication", params: { id: post.id } })}
+                />
+              )}
+              ItemSeparatorComponent={() => <View style={styles.divider} />}
+              ListHeaderComponent={
+                <View>
+                  {forYouError ? <ErrorMessage style={styles.errorText}>{forYouError}</ErrorMessage> : null}
+                  <AccountSuggestions hiddenIds={blockedIds} />
+                </View>
               }
-              onOpenComments={() => router.push({ pathname: "/publication", params: { id: post.id } })}
+              ListEmptyComponent={forYouNext === null ? <Text style={styles.forYouNote}>{t.forYou.empty}</Text> : null}
+              onEndReached={handleForYouMore}
+              onEndReachedThreshold={0.4}
+              ListFooterComponent={
+                forYouLoadingMore ? (
+                  <ActivityIndicator color={color.encre} style={styles.footerLoader} />
+                ) : forYouNext === null && forYouPosts.length > 0 ? (
+                  <Text style={styles.forYouNote}>{t.forYou.end}</Text>
+                ) : null
+              }
             />
           )}
-          ItemSeparatorComponent={() => <View style={styles.divider} />}
-          ListHeaderComponent={error ? <ErrorMessage style={styles.errorText}>{error}</ErrorMessage> : null}
-          ListEmptyComponent={
-            posts !== null && !error ? (
-              // Fil vide (Lot F) : expliquer quoi faire, avec des boutons. Les
-              // vraies suggestions de comptes viendront au lot 7.
-              <View style={styles.empty}>
-                <Text style={styles.emptyTitle} accessibilityRole="header">{t.feed.emptyTitle}</Text>
-                <Text style={styles.emptyText}>{t.feed.emptyBody}</Text>
-                <Pressable style={styles.emptyPrimary} onPress={() => router.push("/")} accessibilityRole="button">
-                  <Text style={styles.emptyPrimaryLabel}>{t.feed.emptySpot}</Text>
-                </Pressable>
-                <Pressable style={styles.emptySecondary} onPress={() => router.push("/post-item/new")} accessibilityRole="button">
-                  <Text style={styles.emptySecondaryLabel}>{t.feed.emptyPublish}</Text>
-                </Pressable>
-                <Pressable style={styles.emptySecondary} onPress={() => router.push("/people-search")} accessibilityRole="button">
-                  <Text style={styles.emptySecondaryLabel}>{t.feed.emptyFind}</Text>
-                </Pressable>
-              </View>
-            ) : null
-          }
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.4}
-          ListFooterComponent={loadingMore ? <ActivityIndicator color={color.encre} style={styles.footerLoader} /> : null}
-        />
-      )}
+        </View>
+      ) : null}
+
+      <View style={[styles.segmentBody, withForYou && segment === "forYou" ? styles.hiddenSegment : null]}>
+        {posts === null && !error ? (
+          <View style={styles.content}>
+            <FeedSkeletonRow />
+            <View style={styles.divider} />
+            <FeedSkeletonRow />
+          </View>
+        ) : (
+          <FlatList
+            data={posts ?? []}
+            keyExtractor={(post) => post.id}
+            // Fluidité (lot « images et fluidité ») : peu de publications
+            // préparées à la fois, les autres au fil du défilement ; celles
+            // sorties de l'écran sont libérées sur téléphone.
+            initialNumToRender={3}
+            maxToRenderPerBatch={3}
+            windowSize={5}
+            removeClippedSubviews={Platform.OS !== "web"}
+            contentContainerStyle={styles.content}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={color.encre} />}
+            renderItem={({ item: post }) => (
+              <PostCard
+                post={post}
+                // Ses propres publications (Lot F) : pas de « signaler / bloquer ».
+                onOpenMenu={post.author.id === myId ? undefined : () => setMenuTarget({ userId: post.author.id, postId: post.id })}
+                onPressAuthor={() =>
+                  post.author.id === myId ? router.push("/profile") : router.push({ pathname: "/profil", params: { id: post.author.id } })
+                }
+                onOpenComments={() => router.push({ pathname: "/publication", params: { id: post.id } })}
+              />
+            )}
+            ItemSeparatorComponent={() => <View style={styles.divider} />}
+            ListHeaderComponent={error ? <ErrorMessage style={styles.errorText}>{error}</ErrorMessage> : null}
+            ListEmptyComponent={
+              posts !== null && !error ? (
+                // Fil vide (Lot F) : expliquer quoi faire, avec des boutons ; et,
+                // lot « découverte », des comptes à découvrir.
+                <View>
+                  <AccountSuggestions hiddenIds={blockedIds} />
+                  <View style={styles.empty}>
+                    <Text style={styles.emptyTitle} accessibilityRole="header">{t.feed.emptyTitle}</Text>
+                    <Text style={styles.emptyText}>{t.feed.emptyBody}</Text>
+                    <Pressable style={styles.emptyPrimary} onPress={() => router.push("/")} accessibilityRole="button">
+                      <Text style={styles.emptyPrimaryLabel}>{t.feed.emptySpot}</Text>
+                    </Pressable>
+                    <Pressable style={styles.emptySecondary} onPress={() => router.push("/post-item/new")} accessibilityRole="button">
+                      <Text style={styles.emptySecondaryLabel}>{t.feed.emptyPublish}</Text>
+                    </Pressable>
+                    <Pressable style={styles.emptySecondary} onPress={() => router.push("/people-search")} accessibilityRole="button">
+                      <Text style={styles.emptySecondaryLabel}>{t.feed.emptyFind}</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : null
+            }
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.4}
+            ListFooterComponent={loadingMore ? <ActivityIndicator color={color.encre} style={styles.footerLoader} /> : null}
+          />
+        )}
+      </View>
 
       <ReportBlockMenu
         visible={menuTarget !== null}
@@ -192,6 +349,12 @@ const styles = themedStyles(() => ({
   title: { fontFamily: serifFont, fontWeight: "500", fontSize: font.display, lineHeight: serifLineHeight.display, letterSpacing: serifDisplayLetterSpacing, color: color.encre },
   headerActions: { flexDirection: "row", alignItems: "center", gap: space.md },
   headerLink: { fontSize: font.secondary, color: color.acier, fontWeight: "600" },
+  // « Abonnements | Pour vous », puis la phrase qui explique le classement.
+  segments: { paddingHorizontal: space.lg, paddingBottom: space.sm, gap: space.sm, maxWidth: 480, alignSelf: "center", width: "100%" },
+  how: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
+  segmentBody: { flex: 1 },
+  hiddenSegment: { display: "none" },
+  forYouNote: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginTop: space.lg, paddingHorizontal: space.lg, lineHeight: 20 },
   content: { paddingTop: space.sm, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   errorText: { color: color.acier, fontSize: font.secondary, paddingHorizontal: space.lg, marginBottom: space.md },
   empty: { alignItems: "center", marginTop: space.xl, paddingHorizontal: space.lg },

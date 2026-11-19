@@ -368,7 +368,8 @@ describe("réglage « Qui peut me mentionner »", () => {
     expect(account).toBeGreaterThan(-1);
     expect(mentions).toBeGreaterThan(account);
     expect(pieces).toBeGreaterThan(mentions);
-    expect(settings.slice(mentions + "<MentionsFromSetting />".length, pieces).trim()).toBe("");
+    // Lot « découverte » (migration 0050) : « Proposer mon compte aux autres membres » entre les deux, du même bloc.
+    expect(settings.slice(mentions + "<MentionsFromSetting />".length, pieces).replace(/\{\/\*[\s\S]*?\*\/\}/g, "").trim()).toBe("<DiscoverableSetting />");
   });
 
   it("caché tant que le serveur n'a pas les mentions ; trois choix ; valeur de départ protectrice", () => {
@@ -454,7 +455,7 @@ describe("textes", () => {
     for (const catalog of [fr, en]) {
       const keys = Object.keys(catalog);
       expect(keys.indexOf("commentThreads")).toBe(keys.indexOf("memberLists") + 1);
-      expect(keys.slice(keys.indexOf("commentThreads") + 1)).toEqual(["carousel", "savedPosts", "profilePins"]);
+      expect(keys.slice(keys.indexOf("commentThreads") + 1)).toEqual(["carousel", "savedPosts", "profilePins", "forYou"]);
     }
   });
 

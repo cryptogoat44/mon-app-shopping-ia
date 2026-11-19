@@ -21,6 +21,7 @@ import { VideoAiSetting } from "@/components/video-ai-setting";
 import { PieceSendsSetting } from "@/components/piece-sends-setting";
 import { PrivateAccountSetting } from "@/components/private-account-setting";
 import { MentionsFromSetting } from "@/components/mentions-from-setting";
+import { DiscoverableSetting } from "@/components/discoverable-setting";
 import { MessagesFromSetting } from "@/components/messages-from-setting";
 import { MessagePushSetting } from "@/components/message-push-setting";
 import { WishAlertsSetting } from "@/components/wish-alerts-setting";
@@ -204,6 +205,8 @@ export default function SettingsScreen() {
         <PrivateAccountSetting />
         {/* Migration 0046 : « Qui peut me mentionner », caché tant que le serveur n'a pas les mentions. */}
         <MentionsFromSetting />
+        {/* Migration 0050 : « Proposer mon compte aux autres membres », caché tant que le serveur n'a pas le réglage. */}
+        <DiscoverableSetting />
         <PieceSendsSetting />
         <MessagesFromSetting />
         {/* Lot notifications : caché sur le site et tant que le serveur ne les propose pas. */}
