@@ -49,6 +49,7 @@ export const privacyExtraFr: PrivacyExtra = {
           "Vos signalements, sans aucune image : la pièce concernée, le motif choisi (« Image choquante ou inappropriée », « Ce n'est pas la bonne pièce », « Résultat de mauvaise qualité » ou « Autre chose »), un commentaire facultatif de 500 caractères au plus et la date. Vous ne pouvez signaler qu'une pièce que vous avez essayée.",
           "Les essais offerts qui vous ont été attribués : pour chaque attribution, la référence de la commande, le nombre d'essais offerts (5), le nombre restant, la date d'attribution et la date d'expiration (365 jours plus tard). Aujourd'hui, seule notre équipe peut en attribuer.",
         ],
+        "Combien d'essais : un compte gratuit a 5 essais par mois civil, remis à zéro le 1er de chaque mois à 0 h (heure de Paris), puis ses essais offerts, ceux qui expirent le plus tôt d'abord. Un essai n'est décompté que s'il réussit : un essai refusé ou échoué ne vous coûte rien. Le décompte se fait à partir des informations d'usage ci-dessus, sans aucune donnée de plus.",
         `Comme pour le reste de ${BRAND}, notre serveur reçoit les données techniques habituelles d'une requête (adresse IP, informations techniques), qui figurent dans ses journaux. Votre photo et l'image produite n'y figurent jamais, ni dans les rapports d'erreur. Aucune donnée de l'essayage n'est envoyée aux statistiques d'usage.`,
         "Qui les reçoit :",
         [
@@ -112,6 +113,7 @@ export const privacyExtraEn: PrivacyExtra = {
           "Your reports, without any image: the piece concerned, the reason chosen (“Offensive or inappropriate image”, “Not the right piece”, “Poor-quality result” or “Something else”), an optional comment of at most 500 characters and the date. You can only report a piece you have tried on.",
           "Bonus try-ons granted to you: for each grant, the order reference, the number of bonus try-ons (5), the number remaining, the grant date and the expiry date (365 days later). Today, only our team can grant them.",
         ],
+        "How many try-ons: a free account has 5 try-ons per calendar month, reset on the 1st of each month at 12 am (Paris time), then its bonus try-ons, those expiring soonest first. A try-on is only counted if it succeeds: a refused or failed try-on costs you nothing. The count uses the usage information above, with no additional data.",
         `As for the rest of ${BRAND}, our server receives the usual technical data of a request (IP address, technical information), which appear in its logs. Your photo and the resulting image never appear in them, nor in error reports. No try-on data is sent to usage statistics.`,
         "Who receives them:",
         [

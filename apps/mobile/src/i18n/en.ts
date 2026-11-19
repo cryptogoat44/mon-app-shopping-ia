@@ -1580,6 +1580,13 @@ export const en: Catalog = {
     // Actions sheet: open the post received (VoiceOver).
     viewPost: "View post",
   },
+  monthlyQuota: {
+    remaining: (n: number) => (n === 1 ? "You have 1 search left this month." : `You have ${n} searches left this month.`),
+    usedUp: (limit: number, month: string) => (limit === 1 ? `You've used your search for ${month}.` : `You've used your ${limit} searches for ${month}.`),
+    usedUpUnknown: "You've used all your searches for this month.",
+    backOn: (day: string) => `They'll be back on ${day}.`,
+    backSoon: "They'll be back at the start of next month.",
+  },
   // Private account and follow requests (“social life” batch, migration 0045).
   privateAccount: {
     sectionTitle: "Account privacy",

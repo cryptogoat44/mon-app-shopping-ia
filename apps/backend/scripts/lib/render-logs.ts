@@ -189,7 +189,8 @@ const PLAFOND = z.object({
   msg: z.enum(["Plafond SerpApi", "Plafond recherches"]),
   step: z.enum(["search", "video_ai", "complement_ai", "shopping"]),
   outcome: z.enum(["reserved", "refused"]),
-  limit: z.enum(["day", "month", "user"]).nullable(),
+  // « user_month » : la part du mois de la personne (lot quotas, 0053).
+  limit: z.enum(["day", "month", "user", "user_month"]).nullable(),
   day: z.number(),
   month: z.number(),
   user: z.number(),
@@ -212,7 +213,7 @@ function etatPlafond(ligne: LignePlafond): string {
   return `aujourd'hui ${ligne.day}/${ligne.dayCap}, depuis le ${ligne.renewalDay} ${ligne.month}/${ligne.monthCap}, personne ${ligne.user}/${ligne.userCap}`;
 }
 
-const PLAFONDS = { day: "plafond du jour", month: "plafond du mois", user: "part de la personne pour la journée" } as const;
+const PLAFONDS = { day: "plafond du jour", month: "plafond du mois", user: "part de la personne pour la journée", user_month: "part de la personne pour le mois" } as const;
 const MOMENTS = {
   search: "au lancement d'une recherche",
   video_ai: "avant l'analyse par l'IA",

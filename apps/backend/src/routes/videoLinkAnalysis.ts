@@ -48,6 +48,7 @@ import { ImageQueueFullError } from "../lib/imageSafety.js";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { optimizePhotoWithSize } from "../lib/photos.js";
 import { searchCapacityForVideoAi, sendCapacityReached } from "../lib/searchCapacity.js";
+import { speaksV2 } from "../lib/clientLevel.js";
 import { nextParisMidnight } from "../lib/searchCapacityStatus.js";
 import { resolveVideoLink } from "../lib/videoLinks.js";
 import {
@@ -298,7 +299,7 @@ export default async function videoLinkAnalysisRoutes(fastify: FastifyInstance, 
       if (!early.allowed) return sendAiLimitReached(reply, early);
       const capacity = await searchCapacityForVideoAi(fastify, log, userId).catch(() => null);
       if (!capacity) return reply.code(503).send(UNAVAILABLE);
-      if (!capacity.allowed) return sendCapacityReached(reply, capacity);
+      if (!capacity.allowed) return sendCapacityReached(reply, capacity, speaksV2(request));
 
       // Un lien court TikTok fait partir un appel (redirection seulement),
       // compté comme sur les autres routes des liens vidéo.

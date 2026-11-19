@@ -1702,6 +1702,19 @@ export const fr = {
     // Feuille des actions : ouvrir la publication reçue (VoiceOver).
     viewPost: "Voir la publication",
   },
+  // Lot quotas (migration 0053) : la part du mois d'un compte gratuit,
+  // annoncée quand il en reste 20 ou moins, et à 0 avec la date du retour.
+  monthlyQuota: {
+    remaining: (n: number) => (n === 1 ? "Il vous reste 1 recherche ce mois-ci." : `Il vous reste ${n} recherches ce mois-ci.`),
+    // « de novembre », « d'avril », « d'août », « d'octobre ».
+    usedUp: (limit: number, month: string) => {
+      const ofMonth = `${/^[aeiouâéè]/i.test(month) ? "d'" : "de "}${month}`;
+      return limit === 1 ? `Vous avez utilisé votre recherche ${ofMonth}.` : `Vous avez utilisé vos ${limit} recherches ${ofMonth}.`;
+    },
+    usedUpUnknown: "Vous avez utilisé toutes vos recherches de ce mois-ci.",
+    backOn: (day: string) => `Elles reviennent le ${day}.`,
+    backSoon: "Elles reviennent au début du mois prochain.",
+  },
   // Compte privé et demandes d'abonnement (lot « vie sociale », migration 0045).
   privateAccount: {
     sectionTitle: "Confidentialité du compte",

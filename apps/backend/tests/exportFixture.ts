@@ -468,6 +468,9 @@ export function fixture(): ExportData {
       { post_id: "0e000000-0000-4000-8000-000000000002", collection_id: null, collection_name: null, author_id: null, post_available: false, created_at: "2026-10-15T10:00:00+00:00" },
       { post_id: BLOCKER_POST, collection_id: null, collection_name: null, author_id: null, post_available: false, created_at: "2026-10-15T11:00:00+00:00" },
     ],
+    // Quotas par membre (migration 0053) : un abonnement et les compteurs du mois.
+    memberEntitlements: [{ entitlement: "miroir", expires_at: "2026-12-06T18:00:00+00:00", source: "revenuecat", updated_at: "2026-11-06T18:00:00+00:00" }],
+    monthlyQuota: { month: "2026-11", searches_counted: 37, tryon_free_used: 2, tryon_bonus_remaining: 4 },
   };
 }
 

@@ -6,7 +6,7 @@ import { CONSENT_VERSIONS, SEARCH_FAILURE_MESSAGES, type MatchOrigin, type Searc
 import type { Parcours, TestAccount } from "../boite-a-outils.js";
 import { rgb, SEGMENTS } from "../../lib/videos-essai.js";
 import type { Combo, Locale } from "./lot-3.js";
-import { attendreBoutonActif, check, choisirFichier, controlerAffichage, visible } from "./spotter-outils.js";
+import { attendreBoutonActif, check, choisirFichier, controlerAffichage, ROUTE_LANCEMENT, visible } from "./spotter-outils.js";
 
 const FR = {
   ajouterVideo: "Ajouter une vidéo",
@@ -210,7 +210,7 @@ export interface OptionsSimulation {
 export async function simulerResultats(page: Page, _description: string, options: OptionsSimulation = {}): Promise<void> {
   const images = await Promise.all(PIECES.map((piece) => imagePiece(piece.fond)));
   let vides = options.videsAuDebut ?? 0;
-  await page.route("**/api/searches/*/run", async (route) => {
+  await page.route(ROUTE_LANCEMENT, async (route) => {
     const id = /\/api\/searches\/([^/]+)\/run/.exec(route.request().url())?.[1] ?? "recherche";
     await new Promise((resolve) => setTimeout(resolve, 1500));
     const rien = vides > 0;

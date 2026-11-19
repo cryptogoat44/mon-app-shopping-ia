@@ -226,6 +226,38 @@ export async function recordAlertOnce(db: Db, kind: TryonAlertKind, period: stri
   return data;
 }
 
+const GRANT_ROWS = z.array(z.object({ granted: z.boolean(), expires_at: z.string().nullable() })).length(1);
+/** Référence d'une commande : 1 à 200 caractères, sans espace au bord (comme la base). */
+const ORDER_REF = z.string().min(1).max(200).refine((value) => value === value.trim());
+const GRANT_QUANTITY = z.number().int().min(1).max(100);
+const GRANT_VALIDITY_DAYS = z.number().int().min(1).max(3650);
+
+/** Ajout d'essais offerts : accordés à l'instant, ou déjà accordés pour
+ * cette commande (`expiresAt` : leur expiration si c'était à ce membre,
+ * null si la référence appartient à un autre membre ; rien n'est alors
+ * accordé). */
+export type BonusGrantResult = { granted: true; expiresAt: string } | { granted: false; expiresAt: string | null };
+
+/** Ajoute `quantity` essais offerts au solde d'un membre (lot quotas) : ils
+ * s'ajoutent aux essais gratuits du mois et se consomment après eux, ceux
+ * qui expirent le plus tôt d'abord (tryon_complete, 0042). Une commande
+ * n'accorde qu'une fois (`orderRef` unique) : rejouer le même achat ne
+ * double jamais le solde. Aucune route ne l'appelle : le déclencheur (un
+ * achat confirmé) n'est pas encore décidé ; aujourd'hui, seul le script
+ * tryon:grant-bonus en accorde, à la main. */
+export async function grantTryonBonus(db: Db, userId: string, quantity: number, orderRef: string, validityDays = 365): Promise<BonusGrantResult> {
+  if (!z.guid().safeParse(userId).success || !GRANT_QUANTITY.safeParse(quantity).success || !ORDER_REF.safeParse(orderRef).success || !GRANT_VALIDITY_DAYS.safeParse(validityDays).success) {
+    throw new TryonStoreError("ajout d'essais offerts (paramètres invalides)");
+  }
+  const { data, error } = await db.rpc("tryon_grant_bonus", { p_user_id: userId, p_order_ref: orderRef, p_quantity: quantity, p_validity_days: validityDays });
+  const parsed = GRANT_ROWS.safeParse(data);
+  if (error || !parsed.success) throw new TryonStoreError("ajout d'essais offerts", error?.code);
+  const row = parsed.data[0]!;
+  if (row.granted && row.expires_at) return { granted: true, expiresAt: row.expires_at };
+  if (row.granted) throw new TryonStoreError("ajout d'essais offerts");
+  return { granted: false, expiresAt: row.expires_at };
+}
+
 const ID_ROWS = z.array(z.object({ id: z.guid() }));
 
 /** Le membre a-t-il essayé cette pièce ? (un signalement porte sur un essai). */

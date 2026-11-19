@@ -936,6 +936,8 @@ function FailureView({
     capacity_day: capacityMessages("capacity_day", resumesOn),
     capacity_month: capacityMessages("capacity_month", resumesOn),
     capacity_user: capacityMessages("capacity_user", resumesOn),
+    // Part du mois épuisée (lot quotas) : le mois et la date du retour.
+    capacity_user_month: capacityMessages("capacity_user_month", resumesOn),
     // Recherche relue encore en cours (lot recherche coupée) : jamais « rien trouvé ».
     running: [t.searchRecovery.runningTitle, t.searchRecovery.runningTip],
     // Fournisseur en panne (disjoncteur, lot garde-fous) : rien n'a été compté.

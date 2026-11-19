@@ -31,6 +31,7 @@ import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.
 import { CONTENT_NOT_ALLOWED, containsBannedWords } from "../lib/contentFilter.js";
 import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
 import { withoutSuspendedFaces } from "../lib/profileModeration.js";
+import { fetchPostCounts } from "../lib/postCounts.js";
 import { notify } from "../lib/notify.js";
 import { fetchBlockedUserIds } from "../lib/blocks.js";
 import { toMemberRows } from "../lib/memberRows.js";
@@ -347,58 +348,37 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
   const vaultItemIds = [...new Set(rows.map((r) => r.vault_item_id).filter((id): id is string => !!id))];
   const postIds = rows.map((r) => r.id);
 
+  // Compteurs (« j'aime », commentaires, « vous avez aimé ») : lib/postCounts.ts,
+  // justes au-delà de 1 000 lignes (lot « corrections en ligne »).
   // « Aimé par » (lot « vie sociale ») : les « j'aime » et les commentaires des
   // comptes en blocage avec le lecteur, dans un sens ou dans l'autre, ne sont
   // plus comptés — les listes les excluaient déjà, le nombre affiché suit.
   // Une lecture des blocages par page, jamais une par publication ; lecture
   // impossible : une erreur, jamais un compte fait comme si personne n'était bloqué.
   // Réponses (migration 0046) : une réponse dont le commentaire d'origine
-  // n'est pas montré n'est pas comptée (voir plus bas). Une publication toute
-  // neuve n'a aucun commentaire : la sonde n'est pas interrogée.
+  // n'est pas montré (masqué par la modération, ou écrit par un tel compte)
+  // n'est pas comptée. Les deux règles sont appliquées par la base, dans le
+  // comptage exact (lib/postCounts.ts). Une publication toute neuve n'a aucun
+  // commentaire : la sonde n'est pas interrogée.
   const threads = knownBlocked === undefined && (await commentThreadsReady(fastify));
-  const [{ data: storedProfiles }, { data: vaultItems }, { data: reactions }, { data: tagRows }, { data: commentRows }, blocked] = await Promise.all([
+  const blockedRead = knownBlocked !== undefined ? Promise.resolve(knownBlocked) : fetchBlockedUserIds(fastify, viewerId);
+  const [{ data: storedProfiles }, { data: vaultItems }, counts, { data: tagRows }] = await Promise.all([
     fastify.supabaseAdmin.from("profiles").select("id, username, display_name, avatar_url").in("id", authorIds),
     vaultItemIds.length > 0
       ? fastify.supabaseAdmin.from("vault_items").select("id, title, verified, image_url, product_match_id").in("id", vaultItemIds)
       : Promise.resolve({ data: [] as VaultItemRow[] }),
-    fastify.supabaseAdmin.from("post_reactions").select("post_id, user_id").in("post_id", postIds),
+    blockedRead.then((blocked) => fetchPostCounts(fastify, postIds, viewerId, { blocked, threads })),
     fastify.supabaseAdmin
       .from("post_tagged_pieces")
       .select("id, post_id, vault_item_id, product_match_id, position")
       .in("post_id", postIds)
       .order("position", { ascending: true }),
-    fastify.supabaseAdmin
-      .from("comments")
-      .select(threads ? "id, post_id, user_id, parent_id" : "post_id, user_id")
-      .in("post_id", postIds)
-      .is("hidden_at", null),
-    knownBlocked ?? fetchBlockedUserIds(fastify, viewerId),
   ]);
-
-  // Le nombre affiché suit ce que la liste montre : ni les commentaires des
-  // comptes en blocage avec le lecteur, ni les réponses à un commentaire
-  // masqué par la modération ou écrit par un tel compte (filtre sur les
-  // lignes déjà lues : les commentaires masqués n'en font pas partie).
-  const countedComments = ((commentRows as unknown as { id?: string; post_id: string; user_id: string; parent_id?: string | null }[]) ?? []).filter((c) => !blocked.has(c.user_id));
-  const shownRootIds = new Set(countedComments.filter((c) => (c.parent_id ?? null) === null && c.id !== undefined).map((c) => c.id!));
-  const commentCountByPost = new Map<string, number>();
-  for (const c of countedComments) {
-    if (typeof c.parent_id === "string" && !shownRootIds.has(c.parent_id)) continue;
-    commentCountByPost.set(c.post_id, (commentCountByPost.get(c.post_id) ?? 0) + 1);
-  }
 
   // Lot « conformité Apple » : la photo d'un auteur suspendu n'est plus montrée aux autres.
   const profiles = await withoutSuspendedFaces(fastify, (storedProfiles as ProfileRow[]) ?? [], viewerId);
   const profileById = new Map(profiles.map((p) => [p.id, p]));
   const vaultItemById = new Map(((vaultItems as VaultItemRow[]) ?? []).map((v) => [v.id, v]));
-
-  const reactionCountByPost = new Map<string, number>();
-  const viewerReactedPosts = new Set<string>();
-  for (const r of (reactions as { post_id: string; user_id: string }[]) ?? []) {
-    if (blocked.has(r.user_id)) continue;
-    reactionCountByPost.set(r.post_id, (reactionCountByPost.get(r.post_id) ?? 0) + 1);
-    if (r.user_id === viewerId) viewerReactedPosts.add(r.post_id);
-  }
 
   const tags = (tagRows as PostTaggedPieceRow[]) ?? [];
   const taggedVaultItemIds = [...new Set(tags.map((t) => t.vault_item_id).filter((id): id is string => !!id))];
@@ -515,9 +495,9 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
       vaultItem: vaultItem ? { id: vaultItem.id, title: vaultItem.title, verified: vaultItem.verified } : null,
       wish: row.type === "wish" && row.wishlist_item_id ? (wishByItem.get(row.wishlist_item_id) ?? null) : null,
       taggedPieces: taggedPiecesByPost.get(row.id) ?? [],
-      reactionCount: reactionCountByPost.get(row.id) ?? 0,
-      viewerHasReacted: viewerReactedPosts.has(row.id),
-      commentCount: commentCountByPost.get(row.id) ?? 0,
+      reactionCount: counts.reactionCount.get(row.id) ?? 0,
+      viewerHasReacted: counts.viewerReacted.has(row.id),
+      commentCount: counts.commentCount.get(row.id) ?? 0,
       ...(media ? { media } : {}),
       ...(people && people.length > 0 ? { people } : {}),
       ...(saved ? { viewerHasSaved: saved.has(row.id), viewerSavedCollectionId: saved.get(row.id) ?? null } : {}),

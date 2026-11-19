@@ -184,7 +184,10 @@ describe("modération : file, décisions et annulations (administrateurs seuleme
 
   it("contenu supprimé depuis : aperçu « supprimé », seulement classé sans suite", async () => {
     const ghost = randomUUID();
-    await report(reporter, "post", ghost, "spam");
+    // Écrit directement : depuis le lot « corrections en ligne », la route
+    // refuse de signaler une publication qui n'existe pas (ou plus).
+    const { error } = await app.supabaseAdmin.from("reports").insert({ reporter_id: reporter.id, target_type: "post", target_id: ghost, reason: "spam" });
+    if (error) throw error;
     expect((await itemFor("open", ghost))?.preview).toEqual({ kind: "missing" });
     expect((await decide({ targetType: "post", targetId: ghost, action: "hide", reason: "spam" })).statusCode).toBe(404);
     expect((await decide({ targetType: "post", targetId: ghost, action: "dismiss" })).statusCode).toBe(200);

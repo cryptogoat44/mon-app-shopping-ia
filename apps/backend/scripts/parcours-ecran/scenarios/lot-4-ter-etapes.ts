@@ -11,7 +11,7 @@ import { CONSENT_VERSIONS } from "@monapp/shared-types";
 import type { Parcours, TestAccount } from "../boite-a-outils.js";
 import { couleurProche } from "../../lib/videos-essai.js";
 import { COMBOS, type Combo } from "./lot-3.js";
-import { attendreBoutonActif, attendreEnvoi, champContient, check, choisirFichier, couleurImageLocale, ouvrirSpotter, suivreRequetes, visible, type Envoi } from "./spotter-outils.js";
+import { attendreBoutonActif, attendreEnvoi, champContient, check, choisirFichier, couleurImageLocale, ouvrirSpotter, ROUTE_LANCEMENT, suivreRequetes, visible, type Envoi } from "./spotter-outils.js";
 import {
   aucunChamp,
   CHAUSSURES,
@@ -192,7 +192,7 @@ export async function photo(p: Parcours, page: Page, fichier: string, problemes:
   await page.waitForFunction(`document.querySelector('[role="img"][aria-label^=${JSON.stringify(FR.zone)}]')?.getAttribute("aria-label")?.includes("%")`, undefined, { timeout: 5_000 });
   check((await visible(page, FR.traceRefuse).count()) === 0, "photo : le tour est retenu, le message disparaît");
   await capture("20b-photo-cadre-ajuste");
-  await ralentir(page, "**/api/searches/*/run");
+  await ralentir(page, ROUTE_LANCEMENT);
   await lancer.click();
   await visible(page, FR.attenteBoutiques).waitFor({ timeout: 15_000 });
   await capture("21-photo-attente", "nuit");
@@ -200,7 +200,7 @@ export async function photo(p: Parcours, page: Page, fichier: string, problemes:
   await page.getByRole("button", { name: FR.reessayer, exact: true }).filter({ visible: true }).waitFor();
   await page.getByRole("button", { name: FR.recadrer, exact: true }).filter({ visible: true }).waitFor();
   await capture("22-photo-echec");
-  await page.unroute("**/api/searches/*/run");
+  await page.unroute(ROUTE_LANCEMENT);
   check(suivi.analyses === 0, "photo : aucune analyse par l'IA");
   const lancement = suivi.lancements.at(-1) ?? "";
   const zone = zoneEnvoyee(lancement);
@@ -224,7 +224,7 @@ export async function sansResultat(p: Parcours, page: Page, fichier: string, pro
   await page.waitForTimeout(2500);
   check(lancements() === 1, `aucun réessai automatique (${lancements()} lancement(s))`);
   await capture("23-rien-trouve");
-  await page.unroute("**/api/searches/*/run");
+  await page.unroute(ROUTE_LANCEMENT);
 }
 
 /** Site : un onglet resté ouvert apprend qu'une nouvelle version est en ligne (page en ligne simulée). */

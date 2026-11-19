@@ -41,6 +41,10 @@ export interface FakeDbOptions {
   failStorageRemove?: () => boolean;
   /** Les fonctions de la base (moderation_apply…), imitées par le test. */
   rpc?: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: DbError | null }>;
+  /** « Max rows » de Supabase (lot « corrections en ligne ») : une lecture
+   * rend au plus ce nombre de lignes, sans erreur ; le compte exact, lui,
+   * reste le vrai total. */
+  maxRows?: number;
 }
 
 const DEFAULTS: Record<string, () => Row> = {
@@ -369,6 +373,7 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
       const count = result.length;
       if (range) result = result.slice(range[0], range[1] + 1);
       if (limit !== null) result = result.slice(0, limit);
+      if (options.maxRows !== undefined) result = result.slice(0, options.maxRows);
       const data = result.map((row) => pick(row, columns));
       if (head) return { data: null, error: null, count };
       if (mode === "single") return data.length === 1 ? { data: data[0], error: null } : { data: null, error: { code: "PGRST116", message: "no rows" } };

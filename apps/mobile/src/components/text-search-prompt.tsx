@@ -34,6 +34,7 @@ function limitCopy(failure: Extract<TextSearchFailure, { kind: "limit" }>): [str
     case "capacity_day":
     case "capacity_month":
     case "capacity_user":
+    case "capacity_user_month":
       return capacityMessages(failure.reason, failure.resumesOn);
     case "rate_limited":
       return [t.result.rateLimitedTitle, t.result.rateLimitedTip];

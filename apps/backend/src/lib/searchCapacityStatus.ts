@@ -2,8 +2,12 @@
 // Spotter en pause (jusqu'à quand), ou les dernières recherches du jour —,
 // tiré d'une simple lecture de serpapi_quota (rien n'est réservé). Fonctions
 // pures, horloge passée en paramètre : testées sans base.
-import type { SearchCapacityStatus } from "@monapp/shared-types";
+// Quotas par membre (lot quotas, 0053) : la part du mois de la personne
+// (monthlyQuota) et, pour un compte gratuit, les plafonds globaux réduits de
+// la réserve des abonnés, comme serpapi_quota_v2 les applique.
+import type { SearchCapacityStatus, SearchMonthlyQuota } from "@monapp/shared-types";
 import { MAX_CALLS_PER_PHOTO } from "./deadline.js";
+import { reducedCap, type SearchTier } from "./memberQuotas.js";
 import type { QuotaRow, SearchCaps } from "./searchCapacity.js";
 
 const HOUR_MS = 3_600_000;
@@ -41,6 +45,22 @@ export function nextParisMidnight(now: Date): Date {
   return parisMidnight(tomorrow);
 }
 
+/** Le 1er du mois qui suit `now`, à Paris (« AAAA-MM-JJ ») : la part du mois
+ * de chaque personne repart de zéro à son minuit (heure de Paris), quel que
+ * soit le jour de renouvellement de SerpApi. */
+export function nextParisMonthStart(now: Date): string {
+  const [year, month] = PARIS_DATE_TIME.format(now).slice(0, 7).split("-").map(Number) as [number, number];
+  return month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`;
+}
+
+/** La part du mois telle que l'app la lit ; null : aucune part du mois (abonné sans garde-fou). */
+export function monthlyQuotaOf(row: QuotaRow, tier: SearchTier, now: Date): SearchMonthlyQuota | null {
+  if (tier.monthlyCap === null) return null;
+  const used = row.user_month_count ?? 0;
+  const resetsOn = row.month_resets_on ?? nextParisMonthStart(now);
+  return { limit: tier.monthlyCap, used, remaining: Math.max(0, tier.monthlyCap - used), resetsOn, resetsAt: parisMidnight(resetsOn).toISOString() };
+}
+
 /** Recherches réelles qu'une photo peut coûter au plus : 1 sans la voie C ;
  * avec elle, Lens + les boutiques + vos mots (MAX_CALLS_PER_PHOTO). Pris au
  * plus haut dès que la voie C est allumée, même sans son étape IA : prudent. */
@@ -50,12 +70,16 @@ export function callsPerPhoto(voieCOn: boolean): number {
 
 /** État lu par l'app : la part de la personne, le service, et ce qu'il reste
  * vraiment à la personne aujourd'hui. Les mêmes comparaisons que serpapi_quota
- * (0022, 0027, 0028), le mois d'abord : sa pause dure jusqu'au renouvellement. */
-export function capacityStatus(row: QuotaRow, caps: SearchCaps, perPhoto: number, now: Date): SearchCapacityStatus {
+ * (0022, 0027, 0028), le mois d'abord : sa pause dure jusqu'au renouvellement.
+ * `tier` (0053) : les plafonds du service vus par cette personne (réduits de
+ * la réserve des abonnés pour un compte gratuit), et sa part du mois ; sans
+ * lui (base sans 0053), la réponse d'avant, sans monthlyQuota. */
+export function capacityStatus(row: QuotaRow, caps: SearchCaps, perPhoto: number, now: Date, tier: SearchTier | null = null): SearchCapacityStatus {
   const resetsAt = nextParisMidnight(now).toISOString();
   const userRemaining = Math.max(0, caps.userDaily - row.user_day_count);
-  const monthLeft = caps.monthly - row.month_count;
-  const dayLeft = caps.daily - row.day_count;
+  const reserve = tier?.reservePercent ?? 0;
+  const monthLeft = reducedCap(caps.monthly, reserve) - row.month_count;
+  const dayLeft = reducedCap(caps.daily, reserve) - row.day_count;
   const service: SearchCapacityStatus["service"] =
     monthLeft <= 0
       ? { status: "paused", reason: "month", reopensAt: parisMidnight(row.next_renewal).toISOString() }
@@ -70,9 +94,23 @@ export function capacityStatus(row: QuotaRow, caps: SearchCaps, perPhoto: number
   // personnes les prennent avant) : jamais plus que ce qui peut passer.
   const callsLeft = Math.max(0, Math.min(monthLeft, dayLeft));
   const photosLeft = Math.ceil(callsLeft / Math.max(1, perPhoto));
-  return {
-    user: { used: row.user_day_count, limit: caps.userDaily, remaining: userRemaining, resetsAt },
-    service,
-    remainingToday: Math.min(userRemaining, photosLeft),
-  };
+  const user = { used: row.user_day_count, limit: caps.userDaily, remaining: userRemaining, resetsAt };
+  if (!tier) return { user, service, remainingToday: Math.min(userRemaining, photosLeft) };
+  // La part du mois borne aussi ce qui reste aujourd'hui.
+  const monthlyQuota = monthlyQuotaOf(row, tier, now);
+  return { user, service, remainingToday: Math.min(userRemaining, photosLeft, monthlyQuota?.remaining ?? Number.POSITIVE_INFINITY), monthlyQuota };
+}
+
+/** Le compteur pour une app d'avant le lot quotas (sans `v=2`) : elle ignore
+ * monthlyQuota. Part du mois épuisée : elle lui est annoncée comme le
+ * plafond du mois du service, jusqu'au 1er du mois suivant (ou plus tard si
+ * le service reste fermé plus longtemps) — le même jour que son refus
+ * (capacityReachedBody). L'app montre alors l'annonce et désactive
+ * « Lancer » : aucune photo envoyée pour rien. */
+export function capacityForOlderApp(status: SearchCapacityStatus): SearchCapacityStatus {
+  const quota = status.monthlyQuota;
+  if (!quota || quota.remaining > 0) return status;
+  const { service } = status;
+  const reopensAt = service.status === "paused" && Date.parse(service.reopensAt) > Date.parse(quota.resetsAt) ? service.reopensAt : quota.resetsAt;
+  return { ...status, service: { status: "paused", reason: "month", reopensAt }, remainingToday: 0 };
 }
