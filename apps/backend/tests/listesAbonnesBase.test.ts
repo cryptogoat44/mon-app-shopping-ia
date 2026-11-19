@@ -45,13 +45,15 @@ describe("listes des abonnés et des abonnements, sur la base de développement"
     app = await buildTestApp();
     [owner, reader, paula] = (await Promise.all(["lao", "lar", "lap"].map((label) => createTestUser(app, label)))) as [TestUser, TestUser, TestUser];
     // Par petits groupes, SANS connexion : le service de connexion de Supabase limite le nombre de connexions par quelques
-    // minutes. Seuls les deux premiers abonnés appellent l'API (« isMe », compte privé) : on les connecte.
+    // minutes. Seuls trois abonnés appellent l'API : le 1er (« isMe »), le 2e (compte privé) et le dernier
+    // (il se réabonne après avoir été retiré). On ne connecte qu'eux.
     for (let start = 0; start < FOLLOWERS; start += 5) {
       const group = await Promise.all(Array.from({ length: Math.min(5, FOLLOWERS - start) }, (_, index) => createTestUserWithoutSession(app, `la${start + index}`)));
       followers.push(...group);
     }
     followers[0] = await signInTestUser(followers[0]!);
     followers[1] = await signInTestUser(followers[1]!);
+    followers[34] = await signInTestUser(followers[34]!);
     // Des dates espacées d'une minute : l'ordre de la liste est connu (le dernier du tableau est le plus récent).
     const base = Date.now() - 60 * 60_000;
     const { error } = await app.supabaseAdmin.from("follows").insert(
