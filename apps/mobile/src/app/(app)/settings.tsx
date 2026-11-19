@@ -26,6 +26,7 @@ import { MessagesFromSetting } from "@/components/messages-from-setting";
 import { ReadReceiptsSetting } from "@/components/read-receipts-setting";
 import { MessagePushSetting } from "@/components/message-push-setting";
 import { WishAlertsSetting } from "@/components/wish-alerts-setting";
+import { ActivityPushSetting } from "@/components/activity-push-setting";
 import { DeleteAccountSection } from "@/components/delete-account-section";
 import { ContactEntry } from "@/components/contact-entry";
 import { CONTACT_EMAIL } from "@/lib/contact";
@@ -216,6 +217,8 @@ export default function SettingsScreen() {
         <MessagePushSetting />
         {/* Lot 2 : « Alertes prix et stock », caché tant que le serveur n'a pas les alertes (site compris). */}
         <WishAlertsSetting />
+        {/* Migration 0051 : « Notifications d'activité », sur l'iPhone seulement, caché tant que le serveur ne les propose pas. */}
+        <ActivityPushSetting />
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>{t.settings.dataSection}</Text>

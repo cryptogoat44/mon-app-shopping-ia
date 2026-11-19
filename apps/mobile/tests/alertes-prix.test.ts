@@ -329,10 +329,18 @@ describe("la première cloche allume l'interrupteur, après l'explication des no
   });
 
   it("la même explication que pour les messages, avec ses textes à elle ; seul « Activer » demande à iOS", () => {
-    expect(offer).toContain('{kind === "alerts" ? t.wishAlerts.pushOfferTitle : t.push.offerTitle}');
-    expect(offer).toContain("{kind === \"alerts\" ? t.wishAlerts.pushOfferBody : t.push.offerBody}");
-    // enablePush n'est appelée que par la feuille (et l'interrupteur des messages), jamais par la cloche ni les Réglages des alertes.
-    expect(using(/\benablePush\(/)).toEqual(["components/message-push-setting.tsx", "components/push-offer-sheet.tsx", "lib/push.ts", "lib/push.web.ts"]);
+    expect(offer).toContain('const title = kind === "alerts" ? t.wishAlerts.pushOfferTitle : t.push.offerTitle;');
+    expect(offer).toContain('const body = kind === "alerts" ? t.wishAlerts.pushOfferBody : t.push.offerBody;');
+    expect(offer).toContain("{texts.title}");
+    expect(offer).toContain("<Text style={styles.body}>{texts.body}</Text>");
+    // enablePush n'est appelée que par la feuille (et les interrupteurs des messages et de l'activité), jamais par la cloche ni les Réglages des alertes.
+    expect(using(/\benablePush\(/)).toEqual([
+      "components/activity-push-setting.tsx",
+      "components/message-push-setting.tsx",
+      "components/push-offer-sheet.tsx",
+      "lib/push.ts",
+      "lib/push.web.ts",
+    ]);
     expect(sheet).not.toContain("requestPermissionsAsync");
     expect(setting).not.toContain("requestPermissionsAsync");
   });

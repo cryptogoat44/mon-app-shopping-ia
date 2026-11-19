@@ -123,8 +123,15 @@ describe("jamais d'autorisation demandée au lancement", () => {
   });
 
   it("enablePush n'est appelée que par un geste de la personne : « Activer » (feuille) ou l'interrupteur des Réglages", () => {
-    // lib/push.ts et lib/push.web.ts la définissent ; seuls deux composants l'appellent.
-    expect(using(/\benablePush\(/)).toEqual(["components/message-push-setting.tsx", "components/push-offer-sheet.tsx", "lib/push.ts", "lib/push.web.ts"]);
+    // lib/push.ts et lib/push.web.ts la définissent ; seuls trois composants l'appellent (la feuille, et
+    // les interrupteurs des messages et de l'activité, lot « découverte »).
+    expect(using(/\benablePush\(/)).toEqual([
+      "components/activity-push-setting.tsx",
+      "components/message-push-setting.tsx",
+      "components/push-offer-sheet.tsx",
+      "lib/push.ts",
+      "lib/push.web.ts",
+    ]);
     const sheet = read("components/push-offer-sheet.tsx");
     const accept = sheet.slice(sheet.indexOf("async function accept()"), sheet.indexOf("function later()"));
     // Lot alertes prix : la sorte acceptée (messages ou alertes) part avec la demande.
@@ -151,7 +158,8 @@ describe("jamais d'autorisation demandée au lancement", () => {
   });
 
   it("la feuille est proposée après un message envoyé ou reçu, dans l'écran d'une conversation", () => {
-    expect(using(/usePushOffer\(/)).toEqual(["app/(app)/conversation.tsx", "components/push-offer-sheet.tsx"]);
+    // Lot « découverte » : celle de l'activité, dans l'onglet Activité (voir « notifications d'activité », plus bas).
+    expect(using(/usePushOffer\(/)).toEqual(["app/(app)/(tabs)/activite.tsx", "app/(app)/conversation.tsx", "components/push-offer-sheet.tsx"]);
     const screen = read("app/(app)/conversation.tsx");
     expect(screen).toContain("if (data.messages.some((message) => !message.mine)) offerPush();");
     expect(screen.match(/offerPush\(\);/g)?.length).toBe(3);
