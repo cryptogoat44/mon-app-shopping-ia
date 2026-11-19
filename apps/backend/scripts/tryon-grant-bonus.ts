@@ -13,10 +13,10 @@
 import "dotenv/config";
 import { z } from "zod";
 import { readTryonSettings, type TryonEnvSource } from "../src/lib/tryon/config.js";
+import { grantTryonBonus } from "../src/lib/tryon/store.js";
 import { describeTarget, optionValue, serviceClient } from "./lib/tryon-admin.js";
 
 const OPTIONS = z.object({ user: z.guid(), order: z.string().trim().min(1).max(200) });
-const RESULT = z.array(z.object({ granted: z.boolean(), expires_at: z.string().nullable() })).length(1);
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -31,18 +31,14 @@ async function main(): Promise<void> {
   if (problems.length > 0) throw new Error(`Réglages de l'essayage invalides : ${problems.join(" ; ")}`);
   const { client, project } = serviceClient(process.env);
   console.log(describeTarget(project));
-  const { data, error } = await client.rpc("tryon_grant_bonus", {
-    p_user_id: options.data.user,
-    p_order_ref: options.data.order,
-    p_quantity: settings.bonusPerPurchase,
-    p_validity_days: settings.bonusValidityDays,
+  // La même fonction que le serveur (lib/tryon/store.ts) : une commande n'accorde qu'une fois.
+  const result = await grantTryonBonus(client, options.data.user, settings.bonusPerPurchase, options.data.order, settings.bonusValidityDays).catch(() => {
+    throw new Error("Accord des essais offerts impossible (membre introuvable, ou migration 0042 absente ?).");
   });
-  if (error) throw new Error(error.message.includes("membre introuvable") ? "Ce membre est introuvable." : "Accord des essais offerts impossible (la migration 0042 est-elle appliquée ?).");
-  const [result] = RESULT.parse(data);
-  if (result!.granted) {
-    console.log(`${settings.bonusPerPurchase} essais offerts accordés, valables jusqu'au ${result!.expires_at!.slice(0, 10)}.`);
-  } else if (result!.expires_at) {
-    console.log(`Cette commande a déjà été accordée à ce membre (valable jusqu'au ${result!.expires_at.slice(0, 10)}) : rien de plus.`);
+  if (result.granted) {
+    console.log(`${settings.bonusPerPurchase} essais offerts accordés, valables jusqu'au ${result.expiresAt.slice(0, 10)}.`);
+  } else if (result.expiresAt) {
+    console.log(`Cette commande a déjà été accordée à ce membre (valable jusqu'au ${result.expiresAt.slice(0, 10)}) : rien de plus.`);
   } else {
     console.log("Cette référence de commande est déjà rattachée à un autre membre : rien n'a été accordé.");
     process.exitCode = 1;
