@@ -313,6 +313,15 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Vous avez atteint la limite de publications enregistrées.": "You've reached the limit of saved posts.",
   "Vous avez enregistré beaucoup de publications en peu de temps. Réessayez dans un moment.": "You've saved a lot of posts in a short time. Please try again in a moment.",
   "Enregistrement invalide.": "Invalid save request.",
+  // Épingles et lien en bio (lot « vie sociale », migration 0049).
+  "Les publications épinglées ne sont pas encore disponibles.": "Pinned posts aren't available yet.",
+  "Le lien du profil n'est pas encore disponible.": "Profile links aren't available yet.",
+  "Seules vos photos peuvent être épinglées.": "Only your photos can be pinned.",
+  "Vous pouvez épingler 3 publications au plus. Retirez-en une d'abord.": "You can pin up to 3 posts. Unpin one first.",
+  "Le lien doit commencer par https:// et mener à un site web.": "The link must start with https:// and lead to a website.",
+  "Le lien est trop long (200 caractères maximum).": "The link is too long (200 characters maximum).",
+  "Vous avez changé de lien trop souvent. Réessayez demain.": "You've changed your link too often. Please try again tomorrow.",
+  "Épinglage invalide.": "Invalid pin request.",
 };
 
 /** Message dans la langue voulue. Un message inconnu (par exemple un texte

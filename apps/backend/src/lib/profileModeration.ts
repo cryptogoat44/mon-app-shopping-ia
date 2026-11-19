@@ -7,8 +7,8 @@
 //    proposées (lib/moderationQueue.ts) et la route répond « indisponible ».
 // 2. La bio et la photo d'un compte SUSPENDU ne sont plus montrées aux autres
 //    membres (profil, publications, commentaires, messages, notifications,
-//    pièces reçues, comptes bloqués). Rien n'est effacé : lever la suspension
-//    les remontre. Aucune migration pour cela (table « suspensions », 0023).
+//    pièces reçues, comptes bloqués), ni son lien en bio (migration 0049).
+//    Rien n'est effacé : lever la suspension les remontre. Aucune migration pour cela (table « suspensions », 0023).
 //    La personne suspendue voit toujours son propre profil, et
 //    l'administrateur voit tout dans la file de modération.
 import { randomUUID } from "node:crypto";
@@ -82,21 +82,25 @@ interface PublicFace {
   id: string;
   avatar_url: string | null;
   bio?: string | null;
+  /** Lien en bio (migration 0049), s'il est lu. */
+  link_url?: string | null;
 }
 
-/** Les profils tels que `viewerId` peut les voir : la photo (et la bio, si
- * elle est lue) d'un compte suspendu sont retirées de la réponse, sauf pour
- * ce compte lui-même. Les suspensions ne sont lues que si un de ces profils
- * a quelque chose à cacher. Lecture impossible : DatabaseReadError (jamais
- * « non suspendu » par défaut). */
+/** Les profils tels que `viewerId` peut les voir : la photo (et la bio et le
+ * lien, s'ils sont lus) d'un compte suspendu sont retirés de la réponse, sauf
+ * pour ce compte lui-même. Les suspensions ne sont lues que si un de ces
+ * profils a quelque chose à cacher. Lecture impossible : DatabaseReadError
+ * (jamais « non suspendu » par défaut). */
 export async function withoutSuspendedFaces<T extends PublicFace>(fastify: FastifyInstance, profiles: T[], viewerId: string): Promise<T[]> {
-  const exposed = profiles.filter((profile) => profile.id !== viewerId && (profile.avatar_url !== null || (profile.bio ?? null) !== null));
+  const exposed = profiles.filter(
+    (profile) => profile.id !== viewerId && (profile.avatar_url !== null || (profile.bio ?? null) !== null || (profile.link_url ?? null) !== null)
+  );
   if (exposed.length === 0) return profiles;
   const suspended = await suspendedAmong(fastify, [...new Set(exposed.map((profile) => profile.id))]);
   if (suspended.size === 0) return profiles;
   return profiles.map((profile) => {
     if (profile.id === viewerId || !suspended.has(profile.id)) return profile;
-    return { ...profile, avatar_url: null, ...("bio" in profile ? { bio: null } : {}) };
+    return { ...profile, avatar_url: null, ...("bio" in profile ? { bio: null } : {}), ...("link_url" in profile ? { link_url: null } : {}) };
   });
 }
 

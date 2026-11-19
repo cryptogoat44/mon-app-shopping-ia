@@ -16,7 +16,7 @@ import {
   singleLine,
   type Profile,
 } from "@monapp/shared-types";
-import { DatabaseReadError, parseDbRows, parseInput } from "../lib/validation.js";
+import { DatabaseReadError, WEB_URL_MAX_LENGTH, parseDbRows, parseInput } from "../lib/validation.js";
 import { PRIVATE_ACCOUNTS_UNAVAILABLE, privateAccountsReady } from "../lib/audience.js";
 import { toMemberRows } from "../lib/memberRows.js";
 import { COMMENT_THREADS_UNAVAILABLE, commentThreadsReady } from "../lib/comments.js";
@@ -29,6 +29,10 @@ import { CONTENT_NOT_ALLOWED, firstBannedText } from "../lib/contentFilter.js";
 import { MESSAGES_UNAVAILABLE, messagesReady } from "../lib/messaging.js";
 import { emptyUserFolder, extractOwnedStoragePath, removeOwnedFiles } from "../lib/storage.js";
 import { AVATAR_BUCKET } from "../lib/profileModeration.js";
+import { PROFILE_LINK_UNAVAILABLE, profileExtrasReady, profileExtrasShown } from "../lib/profileExtras.js";
+import { LINK_INVALID, LINK_TOO_LONG, bioLinkProblem, bioLinkTexts } from "../lib/bioLink.js";
+import { RATE_LIMITS } from "../lib/rateLimits.js";
+import { consumeRateLimit } from "../plugins/rateLimit.js";
 
 /** Comptes dont une photo de profil est en cours d'envoi (un seul envoi à la fois par compte). */
 const avatarUploads = new Set<string>();
@@ -55,6 +59,9 @@ const updateMeSchema = z.object({
   // Bio : normalisée puis contrôlée dans la route (160 caractères, 3 lignes :
   // normalizeBio, bioProblem). Ici, seul un texte démesuré est écarté d'emblée.
   bio: z.string().max(BIO_RAW_MAX_LENGTH).nullable().optional(),
+  // Lien en bio (migration 0049) : absent = inchangé ; null ou "" = retiré.
+  // Contrôlé dans la route (lib/bioLink.ts) ; ici, seul un texte démesuré est écarté.
+  linkUrl: z.string().max(WEB_URL_MAX_LENGTH).nullable().optional(),
 });
 
 const updateLocaleSchema = z.object({ locale: z.enum(APP_LOCALES) });
@@ -80,6 +87,8 @@ const profileRowSchema = z.object({
   is_private: z.boolean().default(false),
   // Mentions (migration 0046) ; valeur de départ tant que la colonne n'existe pas.
   mentions_from: z.enum(MENTIONS_FROM).default(DEFAULT_MENTIONS_FROM),
+  // Lien en bio (migration 0049) ; absent tant que la colonne n'existe pas.
+  link_url: z.string().nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -146,8 +155,9 @@ async function mentionsSettingShown(fastify: FastifyInstance): Promise<boolean> 
   }
 }
 
-/** Profil renvoyé à l'app ; null si la ligne lue n'a pas la forme attendue. */
-function toProfile(row: unknown, counts: ProfileCounts, admin: boolean, privateAccount: PrivateAccountInfo | null, withMentions: boolean): Profile | null {
+/** Profil renvoyé à l'app ; null si la ligne lue n'a pas la forme attendue.
+ * `withLink` : la base a la migration 0049 (sinon, pas de `linkUrl` : l'app cache le champ). */
+function toProfile(row: unknown, counts: ProfileCounts, admin: boolean, privateAccount: PrivateAccountInfo | null, withMentions: boolean, withLink: boolean): Profile | null {
   const parsed = profileRowSchema.safeParse(row);
   if (!parsed.success) return null;
   const profile = parsed.data;
@@ -167,6 +177,7 @@ function toProfile(row: unknown, counts: ProfileCounts, admin: boolean, privateA
     messagesFrom: profile.messages_from,
     ...(privateAccount ? { isPrivate: profile.is_private, followRequestsCount: privateAccount.followRequestsCount } : {}),
     ...(withMentions ? { mentionsFrom: profile.mentions_from } : {}),
+    ...(withLink ? { linkUrl: profile.link_url ?? null } : {}),
   };
 }
 
@@ -189,6 +200,15 @@ async function readAvatarUrl(fastify: FastifyInstance, userId: string): Promise<
   return row.success ? (row.data?.avatar_url ?? null) : null;
 }
 
+/** Lien en bio actuel (migration 0049 ; null : aucun). Lecture impossible : DatabaseReadError. */
+async function readLinkUrl(fastify: FastifyInstance, userId: string): Promise<string | null> {
+  const { data, error } = await fastify.supabaseAdmin.from("profiles").select("link_url").eq("id", userId).maybeSingle();
+  if (error) throw new DatabaseReadError("Lecture du lien du profil impossible");
+  const row = z.object({ link_url: z.string().nullable() }).nullable().safeParse(data);
+  if (!row.success) throw new DatabaseReadError("Lien du profil illisible");
+  return row.data?.link_url ?? null;
+}
+
 const PROFILE_UNREADABLE = { error: "internal_error", message: GENERIC_SERVER_ERROR } as const;
 
 export default async function meRoutes(fastify: FastifyInstance) {
@@ -208,7 +228,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "profile_not_found", message: "Profil introuvable." });
     }
 
-    const profile = toProfile(data, counts, admin, privateAccount, await mentionsSettingShown(fastify));
+    const profile = toProfile(data, counts, admin, privateAccount, await mentionsSettingShown(fastify), await profileExtrasShown(fastify));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -311,7 +331,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       if (cleanup.failed > 0) request.log.warn({ bucket: AVATAR_BUCKET, failed: cleanup.failed }, "Ancienne photo de profil restée dans le stockage");
     }
 
-    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify));
+    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify), await profileExtrasShown(fastify));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -346,7 +366,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify));
+    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify), await profileExtrasShown(fastify));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -358,7 +378,9 @@ export default async function meRoutes(fastify: FastifyInstance) {
     const parsed = updateMeSchema.safeParse(request.body);
 
     if (!parsed.success) {
-      const field = parsed.error.issues[0]?.path[0];
+      const issue = parsed.error.issues[0];
+      const field = issue?.path[0];
+      if (field === "linkUrl") return reply.code(400).send(issue?.code === "too_big" ? LINK_TOO_LONG : LINK_INVALID);
       return reply.code(400).send({
         error: "invalid_body",
         message: (typeof field === "string" ? UPDATE_ME_MESSAGES[field] : undefined) ?? "Requête invalide.",
@@ -367,6 +389,18 @@ export default async function meRoutes(fastify: FastifyInstance) {
 
     const userId = request.user!.id;
     const { username, displayName } = parsed.data;
+    // Lien en bio (lot « vie sociale », migration 0049). Absent : inchangé
+    // (une ancienne app qui enregistre le profil ne l'efface jamais). Sans la
+    // migration, rien du profil n'est enregistré : l'app ne croit jamais le
+    // lien gardé. Le lien n'est jamais journalisé.
+    const linkAsked = parsed.data.linkUrl !== undefined;
+    let linkUrl: string | null = null;
+    if (linkAsked) {
+      if (!(await profileExtrasReady(fastify))) return reply.code(404).send(PROFILE_LINK_UNAVAILABLE);
+      const link = bioLinkProblem(parsed.data.linkUrl ?? null);
+      if (!link.ok) return reply.code(400).send(link.refusal);
+      linkUrl = link.url;
+    }
     // Bio (lot « profil et icône des réglages ») : lignes vides en trop et
     // espaces retirés, puis 160 caractères et 3 lignes au plus. Le texte de
     // la bio n'est jamais journalisé.
@@ -374,14 +408,21 @@ export default async function meRoutes(fastify: FastifyInstance) {
     const problem = bioProblem(bio);
     if (problem === "too_long") return reply.code(400).send({ error: "bio_too_long", message: "La bio est trop longue (160 caractères maximum)." });
     if (problem === "too_many_lines") return reply.code(400).send({ error: "bio_too_many_lines", message: "La bio ne peut pas dépasser 3 lignes." });
-    // Filtre des mots interdits (chantier 3, règle 1.2 d'Apple) : noms et bio sont vus des autres.
-    if (firstBannedText(username, displayName, bio) !== null) return reply.code(400).send(CONTENT_NOT_ALLOWED);
+    // Filtre des mots interdits (chantier 3, règle 1.2 d'Apple) : noms, bio et lien sont vus des autres.
+    const linkTexts = linkAsked ? bioLinkTexts(parsed.data.linkUrl ?? null, linkUrl) : [];
+    if (firstBannedText(username, displayName, bio, ...linkTexts) !== null) return reply.code(400).send(CONTENT_NOT_ALLOWED);
     // Lu avant toute écriture : une lecture impossible n'enregistre rien.
     const admin = await isAdmin(fastify, userId);
+    // Changer le lien (pas le retirer, ni le renvoyer tel quel) : 10 fois par
+    // 24 heures. Le lien actuel est lu avant toute écriture.
+    if (linkAsked && linkUrl !== null && (await readLinkUrl(fastify, userId)) !== linkUrl && !consumeRateLimit(request, "profileLink")) {
+      const rule = RATE_LIMITS.profileLink;
+      return reply.code(429).send({ error: rule.error, message: rule.message });
+    }
 
     const { data, error } = await fastify.supabaseAdmin
       .from("profiles")
-      .update({ username, display_name: displayName, bio: bio === "" ? null : bio, updated_at: new Date().toISOString() })
+      .update({ username, display_name: displayName, bio: bio === "" ? null : bio, ...(linkAsked ? { link_url: linkUrl } : {}), updated_at: new Date().toISOString() })
       .eq("id", userId)
       .select("*")
       .single();
@@ -391,6 +432,8 @@ export default async function meRoutes(fastify: FastifyInstance) {
       if (error.code === "23505") {
         return reply.code(409).send({ error: "username_taken", message: "Ce nom d'utilisateur est déjà pris." });
       }
+      // Contrainte du lien (migration 0049) : la base a refusé ce que le serveur avait accepté.
+      if (error.code === "23514" && linkAsked) return reply.code(400).send(LINK_INVALID);
       request.log.error({ error }, "Échec de mise à jour du profil");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
@@ -398,7 +441,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
     // Un profil qu'on vient de compléter n'a par construction encore
     // aucun abonné, abonnement ni publication — pas besoin de requêter les
     // compteurs ici.
-    const profile = toProfile(data, { followersCount: 0, followingCount: 0, postsCount: 0 }, admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify));
+    const profile = toProfile(data, { followersCount: 0, followingCount: 0, postsCount: 0 }, admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify), await profileExtrasShown(fastify));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);

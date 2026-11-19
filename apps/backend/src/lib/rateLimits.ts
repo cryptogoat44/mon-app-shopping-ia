@@ -377,6 +377,17 @@ export const RATE_LIMITS = {
     error: "save_post_limit",
     message: "Vous avez enregistré beaucoup de publications en peu de temps. Réessayez dans un moment.",
   },
+
+  // Changer le lien en bio (lot « vie sociale », migration 0049) : comptée
+  // seulement quand le lien change vraiment (consumeRateLimit, routes/me.ts),
+  // jamais pour le retirer. Un lien ne peut pas être échangé en boucle autour
+  // d'une vérification de la modération.
+  profileLink: {
+    max: 10,
+    windowMs: DAY,
+    error: "profile_link_limit",
+    message: "Vous avez changé de lien trop souvent. Réessayez demain.",
+  },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

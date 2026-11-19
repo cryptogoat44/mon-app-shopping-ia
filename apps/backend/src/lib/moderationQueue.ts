@@ -18,6 +18,9 @@
 // Lot « vie sociale » (migration 0047) : une publication signalée montre
 // TOUTES ses photos (la photo en cause peut être la troisième). La masquer
 // les cache toutes, comme la première.
+// Lot « vie sociale » (migration 0049) : un profil signalé montre aussi son
+// lien en bio, en texte (jamais un lien qui s'ouvre) : « Retirer la bio » le
+// retire avec elle.
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
@@ -108,7 +111,15 @@ type MessageRow = z.infer<typeof MESSAGE_ROWS>[number];
 const WISH_TITLE_ROWS = z.array(z.object({ id: ID, title: z.string() }));
 const MESSAGE_COLUMNS = "id, conversation_id, sender_id, body, wish_title, created_at, hidden_at";
 const PROFILE_ROWS = z.array(
-  z.object({ id: ID, username: z.string().nullable(), display_name: z.string(), avatar_url: z.string().nullable(), bio: z.string().nullable() })
+  z.object({
+    id: ID,
+    username: z.string().nullable(),
+    display_name: z.string(),
+    avatar_url: z.string().nullable(),
+    bio: z.string().nullable(),
+    // Lien en bio (migration 0049) : lu seulement quand la base l'a.
+    link_url: z.string().nullable().optional(),
+  })
 );
 const SUSPENSION_ROWS = z.array(z.object({ user_id: ID, moderation_action_id: ID }));
 /** Photos 2 à 5 d'une publication (migration 0047), miniatures. */
@@ -272,11 +283,11 @@ async function loadCollectionPreviews(fastify: FastifyInstance, collections: Col
 }
 
 /** Profils (comptes signalés, auteurs des contenus, administrateurs du journal) et suspensions en vigueur. */
-async function loadPeople(fastify: FastifyInstance, userIds: string[]) {
+async function loadPeople(fastify: FastifyInstance, userIds: string[], withLink: boolean) {
   if (userIds.length === 0) return { profiles: [], suspensions: [] };
   const db = fastify.supabaseAdmin;
   const [profiles, suspensions] = await Promise.all([
-    db.from("profiles").select("id, username, display_name, avatar_url, bio").in("id", userIds),
+    db.from("profiles").select(withLink ? "id, username, display_name, avatar_url, bio, link_url" : "id, username, display_name, avatar_url, bio").in("id", userIds),
     db.from("suspensions").select("user_id, moderation_action_id").in("user_id", userIds),
   ]);
   return {
@@ -298,7 +309,7 @@ async function loadAll(fastify: FastifyInstance, rows: QueueRow[], options: Queu
   ]);
   for (const extract of messageContext.values()) for (const message of extract) userIds.add(message.sender_id);
   for (const action of targets.actions) if (action.admin_id) userIds.add(action.admin_id);
-  const people = await loadPeople(fastify, [...userIds]);
+  const people = await loadPeople(fastify, [...userIds], options.profileExtras === true);
   const postMedia = new Map<string, string[]>();
   for (const photo of [...targets.postMedia].sort((a, b) => a.position - b.position)) {
     postMedia.set(photo.post_id, [...(postMedia.get(photo.post_id) ?? []), photo.media_thumb_url]);
@@ -410,7 +421,9 @@ function previewOf(row: QueueRow, data: Loaded): ModerationPreview {
     };
   }
   const author = authorOf(row.target_id, data);
-  return author ? { kind: "user", author, bio: data.profiles.get(row.target_id)?.bio ?? null } : MISSING;
+  const profile = data.profiles.get(row.target_id);
+  if (!author) return MISSING;
+  return { kind: "user", author, bio: profile?.bio ?? null, ...(profile?.link_url ? { linkUrl: profile.link_url } : {}) };
 }
 
 /** L'image est une copie faite par Spotto (publication « envie », pièce
@@ -446,6 +459,8 @@ export interface QueueOptions {
   profileModeration: boolean;
   /** Migration 0047 : les photos 2 à 5 des publications signalées. */
   postExtras?: boolean;
+  /** Migration 0049 : le lien en bio d'un profil signalé. */
+  profileExtras?: boolean;
 }
 
 function toItem(row: QueueRow, data: Loaded, options: QueueOptions): ModerationItem {

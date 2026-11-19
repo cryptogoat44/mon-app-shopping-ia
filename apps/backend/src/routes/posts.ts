@@ -6,6 +6,7 @@ import {
   PEOPLE_TAGS_MAX,
   POST_MEDIA_WINDOW_MIN,
   POST_PHOTOS_MAX,
+  PINNED_POSTS_MAX,
   POST_TYPES,
   PRIVACY_LEVELS,
   type AddPostMediaResponse,
@@ -16,6 +17,7 @@ import {
   type PostPhoto,
   type PostTaggedPiece,
   type PostWish,
+  type PinPostResponse,
   type PrivacyLevel,
   type TaggedPieceInput,
 } from "@monapp/shared-types";
@@ -37,6 +39,8 @@ import { POST_EXTRAS_UNAVAILABLE, postExtrasReady } from "../lib/postExtras.js";
 import { PEOPLE_TAG_NOT_FOUND, dropUnseeableTags, resolvePeopleTags } from "../lib/peopleTags.js";
 import { readSavedState, savedPostsReady } from "../lib/savedPosts.js";
 import { ImageQueueFullError } from "../lib/imageSafety.js";
+import { PINS_UNAVAILABLE, profileExtrasReady } from "../lib/profileExtras.js";
+import { ACCOUNT_SUSPENDED, isSuspended } from "../lib/moderation.js";
 import { consumeRateLimit } from "../plugins/rateLimit.js";
 
 // Une publication ne peut pas devenir une liste sans fin de tags — reste
@@ -73,6 +77,12 @@ const POST_NOT_FOUND = { error: "post_not_found", message: "Publication introuva
 const POST_MEDIA_CLOSED = { error: "post_media_closed", message: "Cette publication ne peut plus recevoir de photo." } as const;
 const POST_MEDIA_FULL = { error: "post_media_full", message: "Cette publication a déjà ses 5 photos." } as const;
 const POST_MEDIA_CONFLICT = { error: "post_media_conflict", message: "Une autre photo de cette publication arrivait au même moment. Réessayez." } as const;
+// Épingles (migration 0049).
+const pinPostSchema = z.object({ pinned: z.boolean() }).strict();
+const INVALID_PIN = { error: "invalid_body", message: "Épinglage invalide." } as const;
+const PIN_NOT_ALLOWED = { error: "pin_not_allowed", message: "Seules vos photos peuvent être épinglées." } as const;
+const PIN_LIMIT = { error: "pin_limit", message: "Vous pouvez épingler 3 publications au plus. Retirez-en une d'abord." } as const;
+const PIN_ROW = z.object({ id: z.guid(), user_id: z.guid(), type: z.enum(POST_TYPES), pinned_at: z.string().nullable() }).nullable();
 const postTagParamsSchema = z.object({ id: z.guid(), userId: z.guid() });
 /** Photos 2 à 5 (migration 0047), dans l'ordre. */
 const POST_MEDIA_ROWS = z.array(z.object({ post_id: z.guid(), position: z.number().int(), media_url: z.string(), media_thumb_url: z.string() }));
@@ -92,6 +102,8 @@ const postRowSchema = z.object({
   media_removed_at: z.string().nullable(),
   privacy: z.enum(PRIVACY_LEVELS),
   created_at: z.string(),
+  /** Épinglée depuis (migration 0049) ; absente tant que la colonne n'existe pas. */
+  pinned_at: z.string().nullable().optional(),
 });
 export type PostRow = z.infer<typeof postRowSchema>;
 export const POST_ROWS = z.array(postRowSchema);
@@ -509,6 +521,10 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
       ...(media ? { media } : {}),
       ...(people && people.length > 0 ? { people } : {}),
       ...(saved ? { viewerHasSaved: saved.has(row.id), viewerSavedCollectionId: saved.get(row.id) ?? null } : {}),
+      // Épingle (migration 0049) : sur ses propres publications seulement. Les
+      // autres lecteurs reçoivent les épinglées à part (`pinned`, première page
+      // d'un profil), jamais la date de l'épingle.
+      ...(row.pinned_at !== undefined && row.user_id === viewerId ? { pinnedAt: row.pinned_at } : {}),
     };
   });
 }
@@ -1181,6 +1197,63 @@ export default async function postsRoutes(fastify: FastifyInstance) {
       return reply.send(page);
     }
   );
+
+  // Épingler SA publication en haut de son profil, ou retirer l'épingle (lot
+  // « vie sociale », migration 0049). Seulement une publication « Une photo »
+  // (la grille de son profil ne montre qu'elles), 3 au plus : le serveur
+  // compte, puis épingle (deux épingles au même instant peuvent en laisser 4 ;
+  // la lecture ne garde que les 3 plus récentes). Épingler met un contenu en
+  // avant : refusé à un compte suspendu ; retirer une épingle reste toujours
+  // permis. Une publication d'un autre, inconnue ou masquée par la
+  // modération : 404, sans dire pourquoi. Une publication masquée ne compte pas
+  // dans les 3 (son auteur ne la voit plus et ne peut pas la désépingler).
+  fastify.put("/api/posts/:id/pin", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    const params = parseInput(idParamsSchema, request.params, reply, INVALID_ID);
+    if (!params) return;
+    const body = parseInput(pinPostSchema, request.body, reply, INVALID_PIN);
+    if (!body) return;
+    const userId = request.user!.id;
+    if (!(await profileExtrasReady(fastify))) return reply.code(404).send(PINS_UNAVAILABLE);
+    if (body.pinned && (await isSuspended(fastify, userId))) return reply.code(403).send(ACCOUNT_SUSPENDED);
+
+    const db = fastify.supabaseAdmin;
+    const { data, error } = await shownPosts(fastify, "id, user_id, type, pinned_at").eq("id", params.id).eq("user_id", userId).maybeSingle();
+    if (error) throw new DatabaseReadError("Lecture d'une publication impossible");
+    const parsed = PIN_ROW.safeParse(data);
+    if (!parsed.success) throw new DatabaseReadError("Publication illisible");
+    const post = parsed.data;
+    if (!post || post.user_id !== userId) return reply.code(404).send(POST_NOT_FOUND);
+
+    if (body.pinned) {
+      if (post.type !== "lifestyle") return reply.code(400).send(PIN_NOT_ALLOWED);
+      // Déjà épinglée : rien ne change (ni la date, ni le compte).
+      if (post.pinned_at !== null) {
+        const unchanged: PinPostResponse = { pinnedAt: post.pinned_at };
+        return reply.send(unchanged);
+      }
+      const { count, error: countError } = await shownPosts(fastify, "id", { count: "exact", head: true }).eq("user_id", userId).not("pinned_at", "is", null);
+      if (countError || typeof count !== "number") throw new DatabaseReadError("Publications épinglées : nombre illisible");
+      if (count >= PINNED_POSTS_MAX) return reply.code(409).send(PIN_LIMIT);
+    }
+
+    const written = await db
+      .from("posts")
+      .update({ pinned_at: body.pinned ? new Date().toISOString() : null })
+      .eq("id", post.id)
+      .eq("user_id", userId)
+      .is("hidden_at", null)
+      .select("pinned_at")
+      .maybeSingle();
+    if (written.error) {
+      request.log.error({ code: (written.error as { code?: string }).code ?? null }, "Échec de l'épinglage d'une publication");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+    const stored = z.object({ pinned_at: z.string().nullable() }).nullable().safeParse(written.data);
+    // Supprimée ou masquée entre-temps : introuvable.
+    if (!stored.success || stored.data === null) return reply.code(404).send(POST_NOT_FOUND);
+    const response: PinPostResponse = { pinnedAt: stored.data.pinned_at };
+    return reply.send(response);
+  });
 
   // Aimer / ne plus aimer. Limite « postReact » (lot « vie sociale ») : large
   // pour un membre, assez pour arrêter un script qui aimerait en boucle.

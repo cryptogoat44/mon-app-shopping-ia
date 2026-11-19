@@ -33,6 +33,8 @@ export interface Profile {
   followRequestsCount?: number;
   /** Qui peut vous mentionner (migration 0046) ; absent tant que la migration manque : l'app cache alors le réglage. */
   mentionsFrom?: MentionsFrom;
+  /** Le lien affiché sous votre bio, ou null (migration 0049) ; absent tant que la migration manque : l'app cache alors le champ. */
+  linkUrl?: string | null;
 }
 
 /** Réglage « Qui peut m'envoyer des pièces » : les comptes que je suis (par
@@ -94,6 +96,8 @@ export interface UpdateMeRequest {
   username: string;
   displayName: string;
   bio?: string;
+  /** Lien en bio (migration 0049) : absent, le lien ne change pas ; null ou "" le retire. */
+  linkUrl?: string | null;
 }
 
 // Bio du profil (lot « profil et icône des réglages ») : 160 caractères et
@@ -744,6 +748,10 @@ export interface UserProfile {
   isPrivate?: boolean;
   /** Suivre / Demandé / Abonné(e) (migration 0045). */
   followState?: FollowState;
+  /** Son lien en bio (migration 0049) : null s'il n'en a pas ou s'il est
+   * suspendu ; absent sans 0049, et pour qui n'est pas un abonné accepté de
+   * son compte privé (qui ne reçoit que nom, photo, bio et compteurs). */
+  linkUrl?: string | null;
 }
 
 /** « wish » (lot 5) : une envie republiée sur son profil — jamais un achat,
@@ -832,6 +840,9 @@ export interface Post {
   viewerHasSaved?: boolean;
   /** Sa collection où elle est rangée, ou null (migration 0048) : vu de lui seul. */
   viewerSavedCollectionId?: string | null;
+  /** Épinglée sur le profil depuis cette date, ou null (migration 0049) : sur
+   * ses propres publications seulement ; absent sans 0049 (l'app cache l'entrée). */
+  pinnedAt?: string | null;
 }
 
 // Commentaires (Lot F, section 5.A du programme) : à plat, 1 000 caractères
@@ -1147,7 +1158,13 @@ export type ModerationPreview =
       images?: string[];
     }
   | { kind: "comment"; author: ModerationAuthor; body: string; postId: string; createdAt: string; hidden: boolean }
-  | { kind: "user"; author: ModerationAuthor; bio: string | null }
+  | {
+      kind: "user";
+      author: ModerationAuthor;
+      bio: string | null;
+      /** Lien en bio (migration 0049), en texte : « Retirer la bio » le retire aussi. Absent sans lien ou sans 0049. */
+      linkUrl?: string;
+    }
   | { kind: "piece"; author: ModerationAuthor; title: string; imageUrl: string | null; imageRemoved: boolean; createdAt: string; hidden: boolean }
   | {
       kind: "message";
@@ -2500,3 +2517,90 @@ export const SAVED_POSTS_UNAVAILABLE_ERROR = "saved_posts_unavailable";
 export const SAVED_POSTS_FULL_ERROR = "saved_posts_full";
 /** 429 : trop de publications enregistrées en une heure. */
 export const SAVE_POST_LIMIT_ERROR = "save_post_limit";
+
+// ---- Épingles et lien en bio (lot « vie sociale », migration 0049) ----
+
+/** Publications épinglées en haut d'un profil, au plus (des photos seulement). */
+export const PINNED_POSTS_MAX = 3;
+/** Longueur maximale d'un lien en bio, une fois mis en forme (la base la vérifie aussi). */
+export const BIO_LINK_MAX_LENGTH = 200;
+
+/** PUT /api/posts/:id/pin : épingler (true) ou retirer l'épingle (false). */
+export interface PinPostRequest {
+  pinned: boolean;
+}
+export interface PinPostResponse {
+  pinnedAt: string | null;
+}
+
+/** GET /api/users/:userId/posts : la première page porte aussi `pinned` (au
+ * plus PINNED_POSTS_MAX, les plus récemment épinglées d'abord, filtrées comme
+ * la page) ; ces publications restent aussi à leur place dans `posts`. Absent
+ * sans 0049, sur les pages suivantes, et pour qui n'est pas un abonné accepté
+ * d'un compte privé (la page entière est alors vide). */
+export interface UserPostsPage extends FeedPage {
+  pinned?: Post[];
+}
+
+/** 404 : épingles pas encore disponibles (migration 0049 absente). */
+export const PINS_UNAVAILABLE_ERROR = "pins_unavailable";
+/** 400 : seule une publication « Une photo » s'épingle. */
+export const PIN_NOT_ALLOWED_ERROR = "pin_not_allowed";
+/** 409 : déjà PINNED_POSTS_MAX publications épinglées. */
+export const PIN_LIMIT_ERROR = "pin_limit";
+/** 404 : lien en bio pas encore disponible (migration 0049 absente) ; rien du profil n'est enregistré. */
+export const PROFILE_LINK_UNAVAILABLE_ERROR = "profile_link_unavailable";
+/** 400 : lien refusé (voir checkBioLink). */
+export const LINK_INVALID_ERROR = "link_invalid";
+/** 400 : lien de plus de BIO_LINK_MAX_LENGTH caractères. */
+export const LINK_TOO_LONG_ERROR = "link_too_long";
+/** 429 : trop de changements de lien en 24 heures. */
+export const PROFILE_LINK_LIMIT_ERROR = "profile_link_limit";
+
+export type BioLinkProblem = "too_long" | "invalid";
+/** `url` : l'adresse à enregistrer, mise en forme (null : pas de lien). */
+export type BioLinkCheck = { ok: true; url: string | null } | { ok: false; problem: BioLinkProblem };
+
+// Espaces (y compris insécables) et caractères de contrôle, n'importe où :
+// refusés, jamais nettoyés (un navigateur les retire en silence).
+const BIO_LINK_FORBIDDEN = /[\s\u0000-\u001f\u007f-\u009f]/u;
+const BIO_LINK_LABEL = /^[a-z0-9-]+$/;
+
+/** Le lien en bio : LA règle, la même au serveur (seul juge) et dans l'app
+ * (pour prévenir tout de suite). Après avoir retiré les espaces autour : vide
+ * = pas de lien ; sinon une adresse qui commence par « https:// » suivi du nom
+ * d'un site, 200 caractères au plus, sans espace ni caractère de contrôle,
+ * sans nom ni mot de passe (« nom@site »), sans autre port que 443. Le nom du
+ * site : des lettres sans accent, des chiffres, des points et des tirets
+ * seulement, au moins un point, ni adresse IP, ni « localhost » (ni « .local ») ;
+ * un nom de site internationalisé est refusé sous ses deux formes (caractères
+ * non ASCII, ou partie « xn-- » une fois lu), car un sosie d'une marque connue
+ * ne se distingue pas sur un écran de téléphone. Rendu tel que le lit le
+ * parseur d'URL standard (WHATWG). */
+export function checkBioLink(input: string): BioLinkCheck {
+  const invalid: BioLinkCheck = { ok: false, problem: "invalid" };
+  const value = input.trim();
+  if (value === "") return { ok: true, url: null };
+  if (value.length > BIO_LINK_MAX_LENGTH) return { ok: false, problem: "too_long" };
+  if (BIO_LINK_FORBIDDEN.test(value) || !/^https:\/\/[^/\\]/i.test(value)) return invalid;
+  // Le nom du site tel qu'il est écrit, avant toute conversion : ASCII visible, sans « @ ».
+  const authority = value.slice("https://".length).split(/[/\\?#]/, 1)[0] ?? "";
+  if (!/^[\x21-\x7e]+$/.test(authority) || authority.includes("@")) return invalid;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return invalid;
+  }
+  if (url.protocol !== "https:" || url.username !== "" || url.password !== "" || url.port !== "") return invalid;
+  const host = url.hostname;
+  const labels = host.split(".");
+  if (labels.length < 2 || labels.some((label) => !BIO_LINK_LABEL.test(label) || label.startsWith("xn--"))) return invalid;
+  // Une extension en lettres : ni adresse IP (127.0.0.1, 0x7f.1…), ni extension en chiffres.
+  if (!/^[a-z]{2,63}$/.test(labels[labels.length - 1] ?? "")) return invalid;
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) return invalid;
+  const stored = url.href;
+  if (stored.length > BIO_LINK_MAX_LENGTH) return { ok: false, problem: "too_long" };
+  if (!stored.startsWith("https://") || BIO_LINK_FORBIDDEN.test(stored)) return invalid;
+  return { ok: true, url: stored };
+}
