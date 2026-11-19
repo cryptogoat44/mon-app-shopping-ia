@@ -653,4 +653,21 @@ describe("notifications d'activité : textes en français et en anglais", () => 
     expect(enPolicy).toContain("The notification goes through Expo's service and then Apple; it contains the member's username and a fixed sentence, never the text of a comment or an image.");
     expect(enPolicy).toContain("An activity notification only contains “${BRAND}”, the member's username and a fixed sentence");
   });
+
+  it("les notes pour Apple : la version française dit, comme l'anglaise, quand iOS demande l'autorisation (feuille ou interrupteur des Réglages)", () => {
+    const notes = readFileSync(join(__dirname, "../app-store/NOTES-VALIDATION.md"), "utf8");
+    const part = (title: string) => {
+      const start = notes.indexOf("```text", notes.indexOf(title));
+      return notes.slice(start, notes.indexOf("\n```\n", start));
+    };
+    expect(part("## 3. Version anglaise")).toContain('iOS permission is asked only after "Enable notifications" on an explanation sheet, or when the person turns on a switch in Settings, never at launch.');
+    expect(part("## 2. Version française")).toContain(
+      "Autorisation d'iOS demandée seulement après « Activer » sur une feuille d'explication, ou quand la personne allume un interrupteur dans les Réglages, jamais au lancement."
+    );
+    expect(notes).not.toContain("seulement après « Activer les notifications »");
+    // Ce que fait l'app : « Activer » sur les feuilles, et un interrupteur d'activité qui demande lui-même à iOS.
+    expect(fr.activityPush.enable).toBe("Activer");
+    expect(fr.push.offerAccept).toMatch(/^Activer /);
+    expect(read("components/activity-push-setting.tsx")).toContain("await enablePush(userId, kind)");
+  });
 });
