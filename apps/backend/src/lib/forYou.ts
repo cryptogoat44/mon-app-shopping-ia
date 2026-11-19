@@ -40,10 +40,11 @@ import { DatabaseReadError, parseDbRows } from "./validation.js";
 // 4. Le classement n'est jamais le dernier contrôle : la page est relue juste
 //    avant d'être envoyée (routes/forYou.ts).
 //
-// Sans la migration 0050 (sonde ci-dessous), tous les comptes publics sont
-// proposés, le réglage est caché dans l'app et sa route répond
-// « indisponible » ; le fil fonctionne. Sans 0045, tous les comptes sont
-// publics (lib/audience.ts) ; le fil fonctionne.
+// Sans la migration 0050 (sonde ci-dessous), « Pour vous » et les suggestions
+// sont cachés : leurs routes, comme celle du réglage, répondent
+// « indisponible » (404), et l'app cache le fil, la rangée de suggestions et
+// le réglage. Personne n'est proposé sans pouvoir refuser. Sans 0045, tous
+// les comptes sont publics (lib/audience.ts) ; le fil fonctionne.
 
 export const DISCOVERY_SETTING_UNAVAILABLE = {
   error: "discovery_setting_unavailable",
@@ -186,7 +187,9 @@ export interface AuthorFacts {
 }
 
 /** Les profils de ces auteurs : nom d'utilisateur, date d'inscription, compte
- * privé (faux sans 0045), réglage « Proposer mon compte » (vrai sans 0050). */
+ * privé (faux sans 0045), réglage « Proposer mon compte » (faux sans 0050 :
+ * personne n'est proposé sans avoir pu refuser ; les routes répondent déjà
+ * 404 dans ce cas). */
 export async function readAuthorFacts(fastify: FastifyInstance, ids: readonly string[]): Promise<Map<string, AuthorFacts>> {
   const [withPrivate, withDiscovery] = await Promise.all([privateAccountsReady(fastify), discoveryReady(fastify)]);
   const columns = ["id", "username", "created_at", ...(withPrivate ? ["is_private"] : []), ...(withDiscovery ? ["discoverable"] : [])].join(", ");
@@ -194,7 +197,7 @@ export async function readAuthorFacts(fastify: FastifyInstance, ids: readonly st
   return new Map(
     rows.map((row) => [
       row.id,
-      { username: row.username, createdAt: row.created_at, isPrivate: row.is_private === true, discoverable: row.discoverable !== false },
+      { username: row.username, createdAt: row.created_at, isPrivate: row.is_private === true, discoverable: withDiscovery && row.discoverable !== false },
     ])
   );
 }

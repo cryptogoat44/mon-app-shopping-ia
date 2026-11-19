@@ -24,7 +24,9 @@ export function rememberSegment(segment: FeedSegment): void {
   chosen = segment;
 }
 
-/** « Pour vous » est-il proposé ? Non, une fois qu'un serveur d'avant ce lot a répondu 404. */
+/** « Pour vous » est-il proposé ? Non, une fois que le serveur a répondu 404
+ * (serveur d'avant ce lot, ou sans la migration 0050 : sans le réglage
+ * « Proposer mon compte aux autres membres », personne n'y est proposé). */
 export function forYouShown(): boolean {
   return available;
 }
@@ -34,7 +36,7 @@ export function isMissingRoute(error: unknown): boolean {
   return error instanceof ApiError && error.status === 404;
 }
 
-/** Après un échec de « Pour vous » : vrai si le serveur ne le connaît pas
+/** Après un échec de « Pour vous » : vrai si le serveur ne le propose pas
  * (404), et « Pour vous » est alors caché pour la session ; faux pour toute
  * autre erreur (l'écran montre « Réessayer »). */
 export function noteForYouFailure(error: unknown): boolean {

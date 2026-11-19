@@ -2,7 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { FOR_YOU_OFFSETS, SUGGESTIONS_MAX, type ForYouPage, type SuggestionsResponse } from "@monapp/shared-types";
 import {
+  DISCOVERY_SETTING_UNAVAILABLE,
   authorProposable,
+  discoveryReady,
   forYouSet,
   openlyReported,
   pageAt,
@@ -19,8 +21,12 @@ import { parseDbRows, parseInput } from "../lib/validation.js";
 import { POST_ROWS, hydratePosts } from "./posts.js";
 
 // Fil « Pour vous » et suggestions de comptes (lot « découverte », migration
-// 0050 facultative). Le classement et ses règles : lib/forYou.ts.
+// 0050). Le classement et ses règles : lib/forYou.ts.
 // GET /api/feed (« Abonnements ») ne change pas.
+// Sans 0050, les deux routes répondent 404 (« indisponible ») : sans le
+// réglage « Proposer mon compte aux autres membres », personne ne pourrait
+// refuser d'y figurer. L'app cache alors « Pour vous » et la rangée de
+// suggestions. Sonde illisible : 500, jamais « tout le monde est proposé ».
 
 // `offset` : une position dans la liste du membre (FOR_YOU_MAX publications
 // au plus), pas le curseur par date des autres fils : cette liste n'est pas
@@ -40,6 +46,7 @@ export default async function forYouRoutes(fastify: FastifyInstance) {
       if (!query) return;
       const offset = Number(query.offset ?? "0");
       const viewerId = request.user!.id;
+      if (!(await discoveryReady(fastify))) return reply.code(404).send(DISCOVERY_SETTING_UNAVAILABLE);
 
       const set = (await forYouSet(fastify)).posts;
       const [audiences, reported] = await Promise.all([
@@ -99,6 +106,7 @@ export default async function forYouRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       reply.header("Cache-Control", "no-store");
       const viewerId = request.user!.id;
+      if (!(await discoveryReady(fastify))) return reply.code(404).send(DISCOVERY_SETTING_UNAVAILABLE);
       const set = (await forYouSet(fastify)).posts;
       const pool = await suggestionCandidates(fastify, viewerId, set);
       if (pool.length === 0) return reply.send({ members: [] } satisfies SuggestionsResponse);

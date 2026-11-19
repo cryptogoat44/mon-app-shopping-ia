@@ -469,15 +469,10 @@ describe("GET /api/feed/for-you : les règles de visibilité", () => {
     expect(ids(await forYou(target, VERA))).toContain(P1);
   });
 
-  it("règle 2 : aucun compte privé, avec 0045 et 0050, avec 0045 sans 0050 ; sans 0045, tout le monde est public et le fil marche", async () => {
-    for (const seed of [{}, { without0050: true }] as Seed[]) {
-      resetDiscoveryProbe();
-      resetForYouCache();
-      resetPrivateAccountsProbe();
-      const target = await forYouApp(seeded(seed).db);
-      expect(ids(await forYou(target, UGO)), JSON.stringify(seed)).not.toContain(P1);
-      await closeApp();
-    }
+  it("règle 2 : aucun compte privé avec 0045 et 0050 (sans 0050, le fil est caché : 404) ; sans 0045, tout le monde est public et le fil marche", async () => {
+    const withBoth = await forYouApp(seeded().db);
+    expect(ids(await forYou(withBoth, UGO))).not.toContain(P1);
+    await closeApp();
     resetDiscoveryProbe();
     resetForYouCache();
     resetPrivateAccountsProbe();
@@ -711,12 +706,21 @@ describe("le réglage « Proposer mon compte aux autres membres »", () => {
     }
   });
 
-  it("sans 0050 : tous les comptes publics sont proposés, le fil marche, le profil n'a pas le réglage et sa route répond 404", async () => {
+  it("sans 0050 : « Pour vous » et les suggestions répondent 404 sans rien lire des publications (personne n'est proposé sans pouvoir refuser), le profil n'a pas le réglage et sa route répond 404", async () => {
     const fake = seeded({ without0050: true });
-    const target = await forYouApp(fake.db);
+    const { db, selects } = likeSupabase(fake.db);
+    const target = await forYouApp(db);
     expect(await discoveryReady(target)).toBe(false);
-    expect(ids(await forYou(target, UGO))).toContain(D1);
-    expect(await suggestions(target, UGO)).toContain(DORA);
+    const unavailable = { error: DISCOVERY_SETTING_UNAVAILABLE_ERROR, message: "Le réglage « Proposer mon compte aux autres membres » n'est pas encore disponible." };
+    for (const url of ["/api/feed/for-you", "/api/users/suggestions"]) {
+      const hidden = await as(target, UGO).get(url);
+      expect(hidden.statusCode, url).toBe(404);
+      expect(hidden.headers["cache-control"], url).toBe("no-store");
+      expect(hidden.json(), url).toEqual(unavailable);
+    }
+    expect(selects.filter((call) => call.table === "posts" || call.table === "follows")).toEqual([]);
+    // Par précaution, le classement lui-même ne propose personne sans 0050 (réglage lu « éteint »).
+    expect((await forYouSet(target)).posts).toEqual([]);
     expect("discoverable" in (await me(target, VERA))).toBe(false);
     const response = await as(target, VERA).put("/api/me/discoverable", { discoverable: false });
     expect(response.statusCode).toBe(404);

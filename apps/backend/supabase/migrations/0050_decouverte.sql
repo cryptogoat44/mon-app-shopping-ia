@@ -20,10 +20,10 @@
 -- même pour tous, à partir des publications, « j'aime », commentaires,
 -- abonnements, comptes, suspensions, blocages et signalements déjà là.
 --
--- Facultative pour le serveur : sans elle, tous les comptes publics sont
--- proposés, le réglage est caché dans l'app et sa route répond
--- « indisponible » (sonde du schéma, lib/forYou.ts) ; le fil « Pour vous »
--- fonctionne. Aucune exigence au-delà de ce qui est déjà en production : la
+-- Facultative pour le serveur : sans elle, le fil « Pour vous », les
+-- suggestions de comptes et le réglage répondent « indisponible » (404, sonde
+-- du schéma, lib/forYou.ts) et l'app les cache : personne n'est proposé sans
+-- pouvoir refuser. Aucune exigence au-delà de ce qui est déjà en production : la
 -- table des profils (0001), vérifiée ci-dessous avant tout changement. D'abord
 -- sur spotto-dev-2 (migrer-dev), puis sur spotto-prod. Indépendante de 0045 à
 -- 0049. Rejouable sans effet (if not exists) ; ne supprime ni ne modifie

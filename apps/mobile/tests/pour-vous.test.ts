@@ -71,6 +71,14 @@ describe("le choix « Abonnements | Pour vous », gardé pour la session", () =>
     expect(rememberedSegment()).toBe("following");
   });
 
+  it("serveur sans la migration 0050 (404 « réglage indisponible ») : « Pour vous » est caché aussi, retour aux abonnements", () => {
+    rememberSegment("forYou");
+    const withoutSetting = new ApiError(404, { error: "discovery_setting_unavailable", message: "Le réglage « Proposer mon compte aux autres membres » n'est pas encore disponible." });
+    expect(noteForYouFailure(withoutSetting)).toBe(true);
+    expect(forYouShown()).toBe(false);
+    expect(rememberedSegment()).toBe("following");
+  });
+
   it("rien n'est écrit sur le téléphone : ni le choix, ni ce qui a été vu", () => {
     const source = read("lib/for-you.ts");
     expect(source).not.toMatch(/AsyncStorage|SecureStore|localStorage|preferences/);

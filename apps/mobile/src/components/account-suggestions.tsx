@@ -17,8 +17,9 @@ import { themedStyles } from "@/theme/themed-styles";
 // y figure (10 comptes au plus : d'abord ceux que suivent vos abonnements, puis
 // les comptes publics les plus actifs ; jamais un compte privé, bloqué,
 // suspendu, déjà suivi ou qui a refusé d'être proposé). Une phrase dit d'où
-// viennent les suggestions. Serveur d'avant ce lot (404) ou lecture
-// impossible : la rangée ne s'affiche pas, l'écran reste utilisable.
+// viennent les suggestions. Serveur d'avant ce lot ou sans la migration 0050
+// (404), ou lecture impossible : la rangée ne s'affiche pas, l'écran reste
+// utilisable.
 
 function SuggestionCard({ member, onOpenProfile }: { member: MemberRow; onOpenProfile: () => void }) {
   // Suivre, Demandé (compte privé) ou Suivi(e) : les trois états du compte privé.
