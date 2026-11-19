@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance, InjectOptions } from "fastify";
 import type { MemberPage, Post } from "@monapp/shared-types";
-import { authHeaders, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
+import { authHeaders, buildTestApp, createTestUser, createTestUserWithoutSession, deleteTestUser, signInTestUser, type TestUser } from "./helpers.js";
 
 // Liste « Aimé par » (lot « vie sociale », sans migration), sur la vraie base
 // de développement (spotto-dev-2, sur le Mac du fondateur) : la pagination
@@ -44,11 +44,13 @@ describe("liste « Aimé par », sur la base de développement", () => {
   beforeAll(async () => {
     app = await buildTestApp();
     [author, reader, paula, fan] = (await Promise.all(["apa", "apr", "app", "apf"].map((label) => createTestUser(app, label)))) as [TestUser, TestUser, TestUser, TestUser];
-    // Par petits groupes : 35 comptes jetables sans bousculer le service d'authentification.
+    // Par petits groupes, SANS connexion : le service de connexion de Supabase limite le nombre
+    // de connexions par quelques minutes. Seul le 21e (bloqué par le lecteur) appelle l'API : on le connecte.
     for (let start = 0; start < LIKERS; start += 5) {
-      const group = await Promise.all(Array.from({ length: Math.min(5, LIKERS - start) }, (_, index) => createTestUser(app, `ap${start + index}`)));
+      const group = await Promise.all(Array.from({ length: Math.min(5, LIKERS - start) }, (_, index) => createTestUserWithoutSession(app, `ap${start + index}`)));
       likers.push(...group);
     }
+    likers[20] = await signInTestUser(likers[20]!);
     const created = await app.supabaseAdmin
       .from("posts")
       .insert({ user_id: author.id, type: "lifestyle", media_kind: "photo", media_url: "https://example.com/p.jpg", caption: "Aimé par", privacy: "public" })

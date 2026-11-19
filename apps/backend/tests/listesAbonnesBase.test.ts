@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance, InjectOptions } from "fastify";
 import type { FeedPage, MemberPage, UserProfile } from "@monapp/shared-types";
-import { authHeaders, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
+import { authHeaders, buildTestApp, createTestUser, createTestUserWithoutSession, signInTestUser, deleteTestUser, type TestUser } from "./helpers.js";
 
 // Listes des abonnés et des abonnements, et retrait d'un abonné (lot « vie
 // sociale », sans migration), sur la vraie base de développement
@@ -44,11 +44,14 @@ describe("listes des abonnés et des abonnements, sur la base de développement"
   beforeAll(async () => {
     app = await buildTestApp();
     [owner, reader, paula] = (await Promise.all(["lao", "lar", "lap"].map((label) => createTestUser(app, label)))) as [TestUser, TestUser, TestUser];
-    // Par petits groupes : 35 comptes jetables sans bousculer le service d'authentification.
+    // Par petits groupes, SANS connexion : le service de connexion de Supabase limite le nombre de connexions par quelques
+    // minutes. Seuls les deux premiers abonnés appellent l'API (« isMe », compte privé) : on les connecte.
     for (let start = 0; start < FOLLOWERS; start += 5) {
-      const group = await Promise.all(Array.from({ length: Math.min(5, FOLLOWERS - start) }, (_, index) => createTestUser(app, `la${start + index}`)));
+      const group = await Promise.all(Array.from({ length: Math.min(5, FOLLOWERS - start) }, (_, index) => createTestUserWithoutSession(app, `la${start + index}`)));
       followers.push(...group);
     }
+    followers[0] = await signInTestUser(followers[0]!);
+    followers[1] = await signInTestUser(followers[1]!);
     // Des dates espacées d'une minute : l'ordre de la liste est connu (le dernier du tableau est le plus récent).
     const base = Date.now() - 60 * 60_000;
     const { error } = await app.supabaseAdmin.from("follows").insert(

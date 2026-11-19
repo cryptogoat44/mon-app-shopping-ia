@@ -43,6 +43,17 @@ export async function buildTestApp(): Promise<FastifyInstance> {
 // motif que les scripts de QA manuels utilisés tout au long de cette
 // session, formalisé ici pour être rejouable via `pnpm test`.
 export async function createTestUser(app: FastifyInstance, label: string): Promise<TestUser> {
+  return signInTestUser(await createTestUserWithoutSession(app, label));
+}
+
+/**
+ * Un compte de test SANS connexion (jeton vide) : pour les tests qui créent
+ * beaucoup de comptes d'un coup (listes de 35 membres), car le service de
+ * connexion de Supabase limite le nombre de connexions par quelques minutes.
+ * Les rares comptes qui doivent appeler l'API passent ensuite par
+ * signInTestUser.
+ */
+export async function createTestUserWithoutSession(app: FastifyInstance, label: string): Promise<TestUser> {
   const suffix = uniqueSuffix();
   const email = `test-${label}-${suffix}@example.com`;
   const username = `t${label}${suffix}`.replace(/[^a-z0-9]/gi, "").toLowerCase().slice(0, 20);
@@ -60,13 +71,17 @@ export async function createTestUser(app: FastifyInstance, label: string): Promi
     .eq("id", data.user.id);
   if (profileError) throw profileError;
 
+  return { id: data.user.id, token: "", email, username };
+}
+
+/** Connecte un compte de test (créé avec ou sans session) et renvoie son jeton. */
+export async function signInTestUser(user: TestUser): Promise<TestUser> {
   const { data: session, error: signInError } = await anonClient.auth.signInWithPassword({
-    email,
+    email: user.email,
     password: TEST_PASSWORD,
   });
   if (signInError || !session.session) throw signInError ?? new Error("Échec de connexion de l'utilisateur de test.");
-
-  return { id: data.user.id, token: session.session.access_token, email, username };
+  return { ...user, token: session.session.access_token };
 }
 
 export async function deleteTestUser(app: FastifyInstance, userId: string): Promise<void> {
