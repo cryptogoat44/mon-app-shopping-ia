@@ -219,8 +219,8 @@ describe("contrôle de 0043 et registre des migrations", () => {
     expect(VERIFICATION).toContain("not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'profiles')");
   });
 
-  it("le registre cite 0043 « à appliquer », son fichier de vérification, et ce qui se passe sans elle", () => {
-    expect(REGISTRY).toMatch(/^\| 0043 \| Confirmations de lecture des messages privés[^|]*\| \*\*à appliquer\*\* \(sur spotto-dev-2 d'abord ; demande 0032, déjà en production ; sur spotto-prod, seulement APRÈS la mise en ligne du serveur, de l'app \(site\) et de la politique, jamais avant : voir l'en-tête du fichier\) \| — \|$/m);
+  it("le registre cite 0043 appliquée en production le 19 novembre 2026, son fichier de vérification, et ce qui se passe sans elle", () => {
+    expect(REGISTRY).toMatch(/^\| 0043 \| Confirmations de lecture des messages privés[^|]*\| appliquée en production \(le fichier de la migration, après une copie de secours complète et après la mise en ligne du serveur, du site et de la politique qui portent « Vu » ; vérification juste, six `true`\) \| 19 nov\. 2026 \|$/m);
     expect(REGISTRY).toContain("| 0043 | le fichier de la migration lui-même (**après 0032** ; sur spotto-prod, **après la mise en ligne** du serveur, de l'app et de la politique) | `supabase/verifications/0043-verification.sql` (une ligne, six `true`) | en tête du fichier de la migration |");
     // L'ordre de mise en ligne, dit aussi là où le registre explique qu'un serveur plus ancien tourne sur une base à jour.
     expect(REGISTRY).toContain("**Exception, 0043 : jamais sur spotto-prod avant le serveur, l'app (site) et la politique qui portent « Vu ».**");
