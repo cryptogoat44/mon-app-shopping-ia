@@ -1788,4 +1788,27 @@ export const fr = {
     saveError: "La publication n'a pas pu être enregistrée. Réessayez.",
     unsaveError: "La publication n'a pas pu être retirée. Réessayez.",
   },
+  // Épingles et lien en bio (lot « vie sociale », migration 0049).
+  profilePins: {
+    pin: "Épingler sur mon profil",
+    unpin: "Retirer l'épingle",
+    pinned: "Publication épinglée.",
+    unpinned: "Épingle retirée.",
+    pinError: "L'épingle n'a pas pu être changée. Réessayez.",
+    pinHint: "Les publications épinglées (3 au plus) s'affichent en premier sur votre profil.",
+    pinnedMark: "Épinglée",
+    linkLabel: "Lien",
+    linkHelp: "Une adresse qui commence par https://. Elle est visible sur votre profil.",
+    linkInvalid: "Ce lien n'est pas valide. Il doit commencer par https://.",
+    linkTooLong: "Ce lien est trop long (200 caractères au plus).",
+    leaveTitle: `Vous allez quitter ${BRAND}`,
+    leaveBody:
+      `Ce lien a été ajouté par un membre. ${BRAND} ne contrôle pas ce site et ne peut pas vérifier où il mène. Ne saisissez jamais votre mot de passe ${BRAND} ailleurs que dans l'app.`,
+    leaveAddress: "Adresse complète",
+    open: "Ouvrir le lien",
+    cancel: "Annuler",
+    linkA11y: (host: string) => `Lien vers ${host}, s'ouvre hors de ${BRAND}`,
+    moderationLink: "Lien du profil",
+    removeBioAlsoLink: "Le lien du profil sera retiré avec elle.",
+  },
 } as const;

@@ -88,6 +88,9 @@ import type {
   SavePostRequest,
   SavePostResponse,
   SavedPostsPage,
+  PinPostRequest,
+  PinPostResponse,
+  UserPostsPage,
 } from "@monapp/shared-types";
 import { COMPLEMENT_DEFERRED, CONSENT_VERSIONS, parseSearchCapacityStatus, parseVideoMomentsResponse, type SearchCapacityStatus } from "@monapp/shared-types";
 import { CLIENT_LEVEL_QUERY, parseFollowResponse } from "./follow-state";
@@ -523,6 +526,15 @@ export async function updatePostPrivacy(id: string, privacy: PrivacyLevel): Prom
   return post;
 }
 
+/** Épingler sa photo en haut de son profil, ou retirer l'épingle (migration
+ * 0049). Un refus arrive en ApiError avec la phrase du serveur (3 au plus,
+ * photos seulement). */
+export async function updatePostPin(id: string, pinned: boolean): Promise<PinPostResponse> {
+  const body: PinPostRequest = { pinned };
+  const response = await authorizedFetch(`/api/posts/${encodeURIComponent(id)}/pin`, { method: "PUT", body: JSON.stringify(body) });
+  return response.json();
+}
+
 export async function deletePost(id: string): Promise<void> {
   await authorizedFetch(`/api/posts/${id}`, { method: "DELETE" });
 }
@@ -579,7 +591,8 @@ export async function fetchUserProfile(userId: string): Promise<UserProfile> {
   return response.json();
 }
 
-export async function fetchUserPosts(userId: string, cursor?: string): Promise<FeedPage> {
+/** La première page porte aussi ses épinglées (`pinned`, migration 0049). */
+export async function fetchUserPosts(userId: string, cursor?: string): Promise<UserPostsPage> {
   const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
   const response = await authorizedFetch(`/api/users/${userId}/posts${query}`);
   return response.json();

@@ -95,8 +95,10 @@ export function profileRemovalActions(item: Pick<ModerationItem, "preview"> & Pa
 }[] {
   if (item.preview.kind !== "user") return [];
   const q = t.moderationQueue;
+  // Lien en bio (migration 0049) : retirer la bio le retire aussi, et l'avertissement le dit.
+  const bioWarning = item.preview.linkUrl ? `${q.removeBioWarning} ${t.profilePins.removeBioAlsoLink}` : q.removeBioWarning;
   return [
-    ...(item.canRemoveBio === true ? [{ part: "bio" as const, label: q.removeBio, warning: q.removeBioWarning, saved: q.bioRemovedSaved }] : []),
+    ...(item.canRemoveBio === true ? [{ part: "bio" as const, label: q.removeBio, warning: bioWarning, saved: q.bioRemovedSaved }] : []),
     ...(item.canRemoveAvatar === true ? [{ part: "avatar" as const, label: q.removeAvatar, warning: q.removeAvatarWarning, saved: q.avatarRemovedSaved }] : []),
   ];
 }

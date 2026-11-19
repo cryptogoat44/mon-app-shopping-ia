@@ -1668,4 +1668,27 @@ export const en: Catalog = {
     saveError: "The post couldn't be saved. Please try again.",
     unsaveError: "The post couldn't be removed. Please try again.",
   },
+  // Pins and bio link (migration 0049).
+  profilePins: {
+    pin: "Pin to my profile",
+    unpin: "Unpin",
+    pinned: "Post pinned.",
+    unpinned: "Post unpinned.",
+    pinError: "The pin couldn't be changed. Please try again.",
+    pinHint: "Pinned posts (up to 3) appear first on your profile.",
+    pinnedMark: "Pinned",
+    linkLabel: "Link",
+    linkHelp: "An address starting with https://. It is visible on your profile.",
+    linkInvalid: "This link is not valid. It must start with https://.",
+    linkTooLong: "This link is too long (200 characters maximum).",
+    leaveTitle: `You are about to leave ${BRAND}`,
+    leaveBody:
+      `This link was added by a member. ${BRAND} does not control this site and cannot check where it leads. Never enter your ${BRAND} password anywhere but in the app.`,
+    leaveAddress: "Full address",
+    open: "Open link",
+    cancel: "Cancel",
+    linkA11y: (host: string) => `Link to ${host}, opens outside ${BRAND}`,
+    moderationLink: "Profile link",
+    removeBioAlsoLink: "The profile link will be removed with it.",
+  },
 };
