@@ -100,3 +100,17 @@ export function capacityStatus(row: QuotaRow, caps: SearchCaps, perPhoto: number
   const monthlyQuota = monthlyQuotaOf(row, tier, now);
   return { user, service, remainingToday: Math.min(userRemaining, photosLeft, monthlyQuota?.remaining ?? Number.POSITIVE_INFINITY), monthlyQuota };
 }
+
+/** Le compteur pour une app d'avant le lot quotas (sans `v=2`) : elle ignore
+ * monthlyQuota. Part du mois épuisée : elle lui est annoncée comme le
+ * plafond du mois du service, jusqu'au 1er du mois suivant (ou plus tard si
+ * le service reste fermé plus longtemps) — le même jour que son refus
+ * (capacityReachedBody). L'app montre alors l'annonce et désactive
+ * « Lancer » : aucune photo envoyée pour rien. */
+export function capacityForOlderApp(status: SearchCapacityStatus): SearchCapacityStatus {
+  const quota = status.monthlyQuota;
+  if (!quota || quota.remaining > 0) return status;
+  const { service } = status;
+  const reopensAt = service.status === "paused" && Date.parse(service.reopensAt) > Date.parse(quota.resetsAt) ? service.reopensAt : quota.resetsAt;
+  return { ...status, service: { status: "paused", reason: "month", reopensAt }, remainingToday: 0 };
+}

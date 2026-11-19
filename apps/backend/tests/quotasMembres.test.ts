@@ -3,7 +3,7 @@ import { join, relative } from "node:path";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { parseSearchCapacity, parseSearchMonthlyQuotaError, SEARCH_CAPACITY_ERRORS, SEARCH_MONTHLY_QUOTA_ERROR } from "@monapp/shared-types";
+import { parseSearchCapacity, parseSearchCapacityError, parseSearchMonthlyQuotaError, SEARCH_CAPACITY_ERRORS, SEARCH_MONTHLY_QUOTA_ERROR, type SearchCapacityStatus } from "@monapp/shared-types";
 import { env } from "../src/env.js";
 import { resetAlertsForTests } from "../src/lib/alerts.js";
 import {
@@ -22,9 +22,10 @@ import {
 import { monthlyQuotaForExport } from "../src/lib/exportData.js";
 import { renderExportHtml } from "../src/lib/exportHtml.js";
 import { localizeMessage } from "../src/lib/messages.js";
-import { readSearchCounts, reserveSearch, SEARCH_CAPACITY_MESSAGES, searchCapacityForVideoAi, sendCapacityReached } from "../src/lib/searchCapacity.js";
-import { capacityStatus, nextParisMonthStart, parisMidnight } from "../src/lib/searchCapacityStatus.js";
+import { capacityReachedBody, readSearchCounts, reserveSearch, SEARCH_CAPACITY_MESSAGES, searchCapacityForVideoAi, sendCapacityReached } from "../src/lib/searchCapacity.js";
+import { capacityForOlderApp, capacityStatus, nextParisMonthStart, parisMidnight } from "../src/lib/searchCapacityStatus.js";
 import searchCapacityRoutes from "../src/routes/searchCapacity.js";
+import videoMomentsRoutes from "../src/routes/videoMoments.js";
 import { fixture, lookups, sectionHtml, STORAGE, visibleText } from "./exportFixture.js";
 import { fakeSupabase, type Row } from "./fakeSupabase.js";
 
@@ -40,7 +41,7 @@ const ALICE = "a0000000-0000-4000-8000-000000000001";
 const BRUNO = "b0000000-0000-4000-8000-000000000002";
 const PROBE = "member_quotas_version";
 const CAPS = { SERPAPI_DAILY_CAP: 25, SERPAPI_MONTHLY_CAP: 225, SERPAPI_USER_DAILY_CAP: 8, SERPAPI_RENEWAL_DAY: 1 };
-const SETTINGS_KEYS = ["SUBSCRIPTIONS_ENABLED", "SUBSCRIBER_MONTHLY_SEARCH_CAP", "SUBSCRIBER_RESERVE_PERCENT", ...Object.keys(CAPS)] as const;
+const SETTINGS_KEYS = ["SUBSCRIPTIONS_ENABLED", "SUBSCRIBER_MONTHLY_SEARCH_CAP", "SUBSCRIBER_RESERVE_PERCENT", "ANTHROPIC_API_KEY", ...Object.keys(CAPS)] as const;
 const saved = Object.fromEntries(SETTINGS_KEYS.map((key) => [key, env[key as keyof typeof env]]));
 
 /** 19 novembre 2026, 13 h à Paris. */
@@ -310,7 +311,7 @@ describe("recherches : part du mois, part du jour, réserve des abonnés (serpap
 
   it("le refus de la part du mois : 429, son propre code, la date du retour ; traduit en anglais", async () => {
     const app = Fastify({ logger: false });
-    app.get("/refus", async (_request, reply) => sendCapacityReached(reply, { limit: "user_month", resumesOn: "2026-12-01" }));
+    app.get("/refus", async (_request, reply) => sendCapacityReached(reply, { limit: "user_month", resumesOn: "2026-12-01" }, true));
     const response = await app.inject({ method: "GET", url: "/refus" });
     expect(response.statusCode).toBe(429);
     expect(response.json()).toEqual({ error: SEARCH_MONTHLY_QUOTA_ERROR, message: SEARCH_CAPACITY_MESSAGES.user_month, resumesOn: "2026-12-01" });
@@ -661,5 +662,105 @@ describe("export des données : le droit d'abonnement, les compteurs du mois, le
   it("le fichier lisible ne montre ni le compte ni d'où vient le droit (information technique)", () => {
     const fr = account("fr");
     expect(fr).not.toContain("revenuecat");
+  });
+});
+
+// Les iPhone d'avant ce lot restent longtemps en circulation (lib/clientLevel.ts)
+// et ne connaissent pas le code de la part du mois : ils l'expliqueraient par
+// « 10 identifications par heure… un peu plus tard ». Seule l'app qui le dit
+// (`v=2`) le reçoit ; les autres reçoivent le plafond du mois, qu'elles
+// connaissent, avec le 1er du mois suivant, et le compteur le leur annonce
+// avant « Lancer ».
+describe("une app d'avant ce lot (sans v=2) : un refus et un compteur qu'elle comprend", () => {
+  it("le refus : sans v=2, le code du plafond du mois et le 1er du mois suivant ; avec v=2, la part du mois ; les autres refus inchangés", () => {
+    const older = capacityReachedBody({ limit: "user_month", resumesOn: "2026-12-01" }, false);
+    expect(older).toEqual({ error: SEARCH_CAPACITY_ERRORS.month, message: SEARCH_CAPACITY_MESSAGES.user_month, resumesOn: "2026-12-01" });
+    // Ce que l'ancienne app en lit : le plafond du mois et sa date, jamais « trop de recherches d'un coup ».
+    expect(parseSearchCapacityError(older)).toEqual({ limit: "month", resumesOn: "2026-12-01" });
+    expect(parseSearchMonthlyQuotaError(older)).toBeNull();
+    const newer = capacityReachedBody({ limit: "user_month", resumesOn: "2026-12-01" }, true);
+    expect(newer).toEqual({ error: SEARCH_MONTHLY_QUOTA_ERROR, message: SEARCH_CAPACITY_MESSAGES.user_month, resumesOn: "2026-12-01" });
+    // Date inconnue : le 1er du mois suivant, vu de Paris (le 31 décembre à 23 h 30 UTC, c'est déjà janvier).
+    expect(capacityReachedBody({ limit: "user_month", resumesOn: null }, false, new Date("2026-12-31T23:30:00Z")).resumesOn).toBe("2027-02-01");
+    for (const capacity of [
+      { limit: "day", resumesOn: null },
+      { limit: "month", resumesOn: "2026-12-03" },
+      { limit: "user", resumesOn: null },
+    ] as const) {
+      expect(capacityReachedBody(capacity, false), capacity.limit).toEqual(capacityReachedBody(capacity, true));
+      expect(capacityReachedBody(capacity, false).error, capacity.limit).toBe(SEARCH_CAPACITY_ERRORS[capacity.limit]);
+    }
+  });
+
+  it("POST /api/video-moments, 101e recherche du mois : sans v=2, « search_capacity_month » et le 1er décembre ; avec v=2, la part du mois ; rien n'est lu", async () => {
+    settings({ ANTHROPIC_API_KEY: "cle-factice-des-tests" });
+    const base = quotaDatabase();
+    base.addEarlierInMonth(ALICE, 100);
+    const app = Fastify({ logger: false });
+    app.decorateRequest("user", null);
+    app.decorate("supabaseAdmin", base.fastify.supabaseAdmin);
+    app.decorate("requireAuth", async (request: FastifyRequest, _reply: FastifyReply) => {
+      request.user = { id: ALICE, email: null };
+    });
+    await app.register(videoMomentsRoutes);
+    const older = await app.inject({ method: "POST", url: "/api/video-moments", payload: {} });
+    expect(older.statusCode).toBe(429);
+    expect(older.json()).toEqual({ error: SEARCH_CAPACITY_ERRORS.month, message: SEARCH_CAPACITY_MESSAGES.user_month, resumesOn: "2026-12-01" });
+    const newer = await app.inject({ method: "POST", url: "/api/video-moments?v=2", payload: {} });
+    expect(newer.statusCode).toBe(429);
+    expect(newer.json()).toEqual({ error: SEARCH_MONTHLY_QUOTA_ERROR, message: SEARCH_CAPACITY_MESSAGES.user_month, resumesOn: "2026-12-01" });
+    // Lecture seule : aucune place réservée.
+    expect(base.calls).toHaveLength(0);
+    await app.close();
+  });
+
+  async function capacityRoute(base: ReturnType<typeof quotaDatabase>) {
+    const app = Fastify({ logger: false });
+    app.decorateRequest("user", null);
+    app.decorate("supabaseAdmin", base.fastify.supabaseAdmin);
+    app.decorate("requireAuth", async (request: FastifyRequest, _reply: FastifyReply) => {
+      request.user = { id: ALICE, email: null };
+    });
+    app.decorate("rateLimit", () => async () => undefined);
+    await app.register(searchCapacityRoutes);
+    return app;
+  }
+
+  it("le compteur, part du mois épuisée : sans v=2, Spotter annoncé en pause jusqu'au 1er décembre (« Lancer » désactivé) ; avec v=2, la part du mois", async () => {
+    const base = quotaDatabase();
+    base.addEarlierInMonth(ALICE, 100);
+    const app = await capacityRoute(base);
+    const older = (await app.inject({ method: "GET", url: "/api/searches/capacity" })).json();
+    expect(older.service).toEqual({ status: "paused", reason: "month", reopensAt: "2026-11-30T23:00:00.000Z" });
+    expect(older.remainingToday).toBe(0);
+    // La part du jour, elle, n'est pas prise : seule la pause du mois explique le refus.
+    expect(older.user.remaining).toBe(8);
+    const newer = (await app.inject({ method: "GET", url: "/api/searches/capacity?v=2" })).json();
+    expect(newer.service).toEqual({ status: "open" });
+    expect(newer.monthlyQuota).toMatchObject({ limit: 100, used: 100, remaining: 0, resetsOn: "2026-12-01" });
+    expect(newer.remainingToday).toBe(0);
+    await app.close();
+  });
+
+  it("le compteur, part du mois pas épuisée, abonné, ou base sans 0053 : la même réponse pour les deux apps", async () => {
+    const base = quotaDatabase();
+    base.addEarlierInMonth(ALICE, 97);
+    const app = await capacityRoute(base);
+    const older = (await app.inject({ method: "GET", url: "/api/searches/capacity" })).json();
+    expect(older).toEqual((await app.inject({ method: "GET", url: "/api/searches/capacity?v=2" })).json());
+    expect(older.service).toEqual({ status: "open" });
+    await app.close();
+    const open: SearchCapacityStatus = { user: { used: 2, limit: 8, remaining: 6, resetsAt: "2026-11-19T23:00:00.000Z" }, service: { status: "open" }, remainingToday: 6 };
+    expect(capacityForOlderApp(open)).toBe(open);
+    expect(capacityForOlderApp({ ...open, monthlyQuota: null })).toEqual({ ...open, monthlyQuota: null });
+  });
+
+  it("service déjà fermé plus longtemps que la part du mois : la date la plus lointaine est gardée", () => {
+    const quota = { limit: 100, used: 100, remaining: 0, resetsOn: "2026-12-01", resetsAt: "2026-11-30T23:00:00.000Z" };
+    const user = { used: 0, limit: 8, remaining: 8, resetsAt: "2026-11-19T23:00:00.000Z" };
+    const later: SearchCapacityStatus = { user, service: { status: "paused", reason: "month", reopensAt: "2026-12-02T23:00:00.000Z" }, remainingToday: 0, monthlyQuota: quota };
+    expect(capacityForOlderApp(later).service).toEqual({ status: "paused", reason: "month", reopensAt: "2026-12-02T23:00:00.000Z" });
+    const tonight: SearchCapacityStatus = { ...later, service: { status: "paused", reason: "day", reopensAt: "2026-11-19T23:00:00.000Z" } };
+    expect(capacityForOlderApp(tonight).service).toEqual({ status: "paused", reason: "month", reopensAt: "2026-11-30T23:00:00.000Z" });
   });
 });

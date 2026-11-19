@@ -28,6 +28,7 @@ import { env } from "../env.js";
 import { raiseAlert } from "./alerts.js";
 import { parisDayStart } from "./matchFeedback.js";
 import { reducedCap, searchTierFor, type SearchTier } from "./memberQuotas.js";
+import { nextParisMonthStart } from "./searchCapacityStatus.js";
 
 /** Motifs d'un refus : ceux que toutes les apps connaissent, plus la part du
  * mois de la personne (« user_month », 0053). */
@@ -300,11 +301,26 @@ export async function releaseReservation(
   return ok;
 }
 
-/** Réponse 429 « plafond atteint » : le plafond en cause, son message, et pour
- * le mois le jour du prochain renouvellement (l'app en fait « Réessayez à
- * partir du … ») ; pour la part du mois de la personne, le 1er du mois suivant. */
-export function sendCapacityReached(reply: FastifyReply, capacity: CapacityRefusal): FastifyReply {
+/** Corps du refus 429 : le plafond en cause, son message, et pour le mois le
+ * jour de la reprise. `speaksNew` : l'app a dit comprendre le motif « part du
+ * mois » (`v=2`, lib/clientLevel.ts). Une app plus ancienne ne le connaît
+ * pas et l'expliquerait par « 10 identifications par heure… un peu plus
+ * tard » : elle reçoit le code du plafond du mois, qu'elle connaît, avec le
+ * 1er du mois suivant (« … limite mensuelle. Réessayez à partir du 1er
+ * décembre. ») ; le message reste celui de la part du mois. */
+export function capacityReachedBody(capacity: CapacityRefusal, speaksNew: boolean, now = new Date()): SearchCapacityErrorBody {
+  if (capacity.limit === "user_month" && !speaksNew) {
+    return { error: SEARCH_CAPACITY_ERRORS.month, message: SEARCH_CAPACITY_MESSAGES.user_month, resumesOn: capacity.resumesOn ?? nextParisMonthStart(now) };
+  }
   const body: SearchCapacityErrorBody = { error: CAPACITY_ERROR_CODES[capacity.limit], message: SEARCH_CAPACITY_MESSAGES[capacity.limit] };
   if (capacity.resumesOn) body.resumesOn = capacity.resumesOn;
-  return reply.code(429).send(body);
+  return body;
+}
+
+/** Réponse 429 « plafond atteint » : le plafond en cause, son message, et pour
+ * le mois le jour du prochain renouvellement (l'app en fait « Réessayez à
+ * partir du … ») ; pour la part du mois de la personne, le 1er du mois
+ * suivant. `speaksNew` : speaksV2(request), voir capacityReachedBody. */
+export function sendCapacityReached(reply: FastifyReply, capacity: CapacityRefusal, speaksNew: boolean): FastifyReply {
+  return reply.code(429).send(capacityReachedBody(capacity, speaksNew));
 }
