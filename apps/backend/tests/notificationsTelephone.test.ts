@@ -176,7 +176,7 @@ describe("interrupteur coupé (par défaut)", () => {
   it("rien n'est enregistré ni envoyé, et l'app est prévenue (push: false)", async () => {
     const fake = seeded({ follows: friends(ALICE, BOB), tokens: [{ token: BOB_PHONE, user_id: BOB }] });
     const target = await pushApp(fake.db);
-    expect((await as(target, ALICE).get("/api/messages/status")).json()).toEqual({ enabled: true, unreadCount: 0, push: false, actions: true });
+    expect((await as(target, ALICE).get("/api/messages/status")).json()).toEqual({ enabled: true, unreadCount: 0, push: false, actions: true, activityPush: false });
 
     const refused = await as(target, ALICE).put("/api/me/push-token", { token: ALICE_PHONE, platform: "ios" });
     expect(refused.statusCode).toBe(404);
@@ -206,7 +206,7 @@ describe("interrupteur coupé (par défaut)", () => {
     const with0035 = !options.missing?.includes("push_tokens");
     const fake = seeded({ follows: friends(ALICE, BOB), tokens: with0035 ? [{ token: BOB_PHONE, user_id: BOB }] : [] }, options);
     const target = await pushApp(fake.db);
-    expect((await as(target, ALICE).get("/api/messages/status")).json()).toEqual({ enabled: true, unreadCount: 0, push: false, actions: true });
+    expect((await as(target, ALICE).get("/api/messages/status")).json()).toEqual({ enabled: true, unreadCount: 0, push: false, actions: true, activityPush: false });
     expect((await as(target, ALICE).put("/api/me/push-token", { token: ALICE_PHONE, platform: "ios", messages: true, alerts: true })).statusCode).toBe(404);
     expect(tokensOf(fake, ALICE)).toEqual([]);
     expect((await as(target, ALICE).del("/api/me/push-token", { token: ALICE_PHONE })).statusCode).toBe(204);
@@ -289,7 +289,7 @@ describe("sans la migration 0035", () => {
     env.PUSH_ENABLED = true;
     const fake = seeded({}, { missing: ["push_tokens", "conversations", "conversation_participants", "messages"] });
     const target = await pushApp(fake.db);
-    expect((await as(target, ALICE).get("/api/messages/status")).json()).toEqual({ enabled: false, unreadCount: 0, push: false, actions: false });
+    expect((await as(target, ALICE).get("/api/messages/status")).json()).toEqual({ enabled: false, unreadCount: 0, push: false, actions: false, activityPush: false });
   });
 });
 
@@ -300,7 +300,7 @@ describe("enregistrer et oublier un appareil", () => {
 
   it("interrupteur et 0035 présents : push true", async () => {
     const target = await pushApp(seeded().db);
-    expect((await as(target, ALICE).get("/api/messages/status")).json()).toEqual({ enabled: true, unreadCount: 0, push: true, actions: true });
+    expect((await as(target, ALICE).get("/api/messages/status")).json()).toEqual({ enabled: true, unreadCount: 0, push: true, actions: true, activityPush: false });
   });
 
   it("refuse tout ce qui n'est pas un jeton d'Expo, ou un système inconnu ; rien n'est enregistré", async () => {

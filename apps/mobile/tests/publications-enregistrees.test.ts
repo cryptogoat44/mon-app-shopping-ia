@@ -310,10 +310,10 @@ describe("appels au serveur", () => {
 
 describe("textes", () => {
   it("la section « savedPosts » est ajoutée à la fin des deux catalogues, avec les textes de la fiche", () => {
-    // Puis seulement les sections des fiches suivantes (épingles, migration 0049).
+    // Puis seulement les sections des fiches suivantes (épingles, migration 0049 ; « Pour vous », 0050).
     for (const catalog of [fr, en]) {
       const keys = Object.keys(catalog);
-      expect(keys.slice(keys.indexOf("savedPosts") + 1)).toEqual(["profilePins"]);
+      expect(keys.slice(keys.indexOf("savedPosts") + 1)).toEqual(["profilePins", "forYou", "activityPush"]);
     }
     const expected: [keyof typeof fr.savedPosts, string, string][] = [
       ["save", "Enregistrer", "Save"],

@@ -71,6 +71,11 @@ const alertsProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_RO
 const ALERT_SECTIONS = alertsProbe.error || typeof alertsProbe.data !== "number" || alertsProbe.data < 1 ? [] : (["wishWatches", "wishTracking", "wishAlertEvents", "stockReports"] as const);
 const ALERTS_V2 = !alertsProbe.error && typeof alertsProbe.data === "number" && alertsProbe.data >= 3;
 
+// Notifications d'activité (lot « découverte ») : les quatre réponses de
+// chaque appareil, seulement une fois la migration 0051 appliquée (elle demande 0036).
+const activityPushProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("push_tokens").select("notify_likes").limit(0);
+const ACTIVITY_PUSH_MIGRATED = ALERT_SECTIONS.length > 0 && !activityPushProbe.error;
+
 // Essayage virtuel : profil d'essayage, essais, essais offerts et
 // signalements, seulement une fois la migration 0042 appliquée sur la base des
 // tests (sans elle, sections vides). Rien n'allume l'essayage : les lignes
@@ -115,6 +120,11 @@ const SAVED_POST_SECTIONS = savedPostsProbe.error ? [] : (["savedPosts"] as cons
 // base des tests (sans elle, ni l'une ni l'autre colonne n'existe).
 const profileExtrasProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("profiles").select("link_url").limit(0);
 const PROFILE_EXTRAS_MIGRATED = !profileExtrasProbe.error;
+
+// Fil « Pour vous » (lot « découverte ») : le réglage « Proposer mon compte aux
+// autres membres », seulement une fois la migration 0050 appliquée.
+const discoveryProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("profiles").select("discoverable").limit(0);
+const DISCOVERY_MIGRATED = !discoveryProbe.error;
 
 // Quotas par membre : un droit d'abonnement et les compteurs du mois,
 // seulement une fois la migration 0053 appliquée sur la base des tests (sans
@@ -315,6 +325,12 @@ describe("export RGPD complet", () => {
       if (pinned.statusCode !== 200) throw new Error(`Épingle de test refusée (${pinned.statusCode}).`);
       const linked = await app.supabaseAdmin.from("profiles").update({ link_url: "https://exemple.com/lookbook" }).eq("id", user.id);
       if (linked.error) throw linked.error;
+    }
+
+    // Fil « Pour vous » (migration 0050) : le réglage éteint, par sa route (avant la suspension, plus bas).
+    if (DISCOVERY_MIGRATED) {
+      const off = await app.inject({ method: "PUT", url: "/api/me/discoverable", headers: authHeaders(user.token), payload: { discoverable: false } });
+      if (off.statusCode !== 204) throw new Error(`Réglage « Proposer mon compte » refusé (${off.statusCode}).`);
     }
 
     // J'aime donné sur la publication d'un ami.
@@ -564,9 +580,17 @@ describe("export RGPD complet", () => {
       expect(body.profile.link_url).toBe("https://exemple.com/lookbook");
       expect(body.posts.find((row: { id: string }) => row.id === postId)?.pinned_at).toEqual(expect.any(String));
     }
+    // Fil « Pour vous » (migration 0050) : le réglage, tel que la personne l'a laissé.
+    if (DISCOVERY_MIGRATED) expect(body.profile.discoverable).toBe(false);
+    else expect("discoverable" in body.profile).toBe(false);
     expect(body.suspension).toMatchObject({ moderation_action_id: expect.any(String) });
-    // Un appareil : son système et ses dates (avec 0036 : s'il reçoit les messages, les alertes), jamais son jeton.
-    const deviceColumns = ALERT_SECTIONS.length > 0 ? ["created_at", "notify_alerts", "notify_messages", "platform", "updated_at"] : ["created_at", "platform", "updated_at"];
+    // Un appareil : son système et ses dates (avec 0036 : s'il reçoit les messages, les alertes ; avec 0051 :
+    // chaque sorte d'activité), jamais son jeton.
+    const deviceColumns = ACTIVITY_PUSH_MIGRATED
+      ? ["created_at", "notify_alerts", "notify_comments", "notify_follows", "notify_likes", "notify_mentions", "notify_messages", "platform", "updated_at"]
+      : ALERT_SECTIONS.length > 0
+        ? ["created_at", "notify_alerts", "notify_messages", "platform", "updated_at"]
+        : ["created_at", "platform", "updated_at"];
     for (const device of body.pushDevices) expect(Object.keys(device).sort()).toEqual(deviceColumns);
     expect(JSON.stringify(body)).not.toContain("ExponentPushToken[");
     // Alertes, nouvelle version (0041) : un signalement « Plus disponible » garde son auteur (sa table, son export),

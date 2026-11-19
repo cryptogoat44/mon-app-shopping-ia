@@ -45,6 +45,7 @@ export const termsOfUseEn: LegalDocument = {
         `${BRAND} sells nothing. If you buy a piece, you do so directly from the retailer, under its own terms; ${BRAND} is not a party to that purchase.`,
         "The number of identifications may be limited over time, to keep the service available to everyone.",
         "Search limits: a free account can run 100 searches per calendar month, from 12 am (Paris time) on the 1st to the 1st of the following month, and every account 8 searches per day. A search is a photo, a video frame or a link you send, however many retailers are queried afterwards; a search served from our memory of recent searches, or one that fails for a technical reason, is not counted. When the whole service is under heavy demand, searches may also be paused for a while. When you have only a few left, the app tells you before you search.",
+        "The “For you” feed shows public posts from the last 14 days from accounts you do not follow, ranked by date and by number of likes and comments. The ranking is the same for all members and uses no profile of your interests. Accounts to discover are first accounts followed by the people you follow, then the most active public accounts. The “Following” feed stays sorted by date. You can refuse to have your account and your posts suggested (setting “Suggest my account to other members”). [To be verified: transparency of recommender systems, EU Digital Services Act, article 27; exemption of micro and small enterprises (article 19) to be confirmed.]",
       ],
     },
     {

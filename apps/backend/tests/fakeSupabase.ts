@@ -20,6 +20,9 @@ import { randomUUID } from "node:crypto";
 // Migration 0048 : publications enregistrées (une par membre et par
 // publication, effacées avec la publication ; « sans collection » quand la
 // collection est supprimée, comme « on delete set null »).
+// Migration 0051 : un nouvel appareil ne reçoit aucune sorte d'activité
+// (valeurs par défaut de la base ; celles de 0036 ne sont pas imitées : un
+// appareil enregistré sans elles les laisse absentes, comme avant).
 
 export type Row = Record<string, unknown>;
 type Filter = (row: Row) => boolean;
@@ -110,6 +113,8 @@ const DEFAULTS: Record<string, () => Row> = {
   saved_posts: () => ({ collection_id: null, created_at: nextTimestamp() }),
   // Colonnes que la base remplit seule à la création d'une publication.
   posts: () => ({ id: randomUUID(), wishlist_item_id: null, media_thumb_url: null, media_removed_at: null, hidden_at: null, created_at: nextTimestamp() }),
+  // Migration 0051 : aucune sorte d'activité pour un nouvel appareil.
+  push_tokens: () => ({ notify_likes: false, notify_comments: false, notify_follows: false, notify_mentions: false }),
 };
 
 /** Clés uniques imitées (doublon : erreur 23505, comme Postgres). */

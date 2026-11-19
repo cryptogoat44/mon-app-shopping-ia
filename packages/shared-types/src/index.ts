@@ -43,6 +43,8 @@ export interface Profile {
   mentionsFrom?: MentionsFrom;
   /** Le lien affiché sous votre bio, ou null (migration 0049) ; absent tant que la migration manque : l'app cache alors le champ. */
   linkUrl?: string | null;
+  /** « Proposer mon compte aux autres membres » (migration 0050) ; absent tant que la migration manque : l'app cache alors le réglage. */
+  discoverable?: boolean;
 }
 
 /** Réglage « Qui peut m'envoyer des pièces » : les comptes que je suis (par
@@ -1402,6 +1404,8 @@ export interface MessagesStatus {
   push?: boolean;
   /** Lot « messages, plus de confort » (migration 0044) : aimer, répondre, supprimer, envoyer une publication. Absent chez un serveur plus ancien (lu comme faux). */
   actions?: boolean;
+  /** Lot « découverte » (migration 0051) : les notifications d'activité sur le téléphone sont possibles (PUSH_ENABLED et 0051), même sans la messagerie. Absent chez un serveur plus ancien (lu comme faux) : l'app cache leurs quatre interrupteurs. */
+  activityPush?: boolean;
 }
 
 // ---- Notifications des nouveaux messages sur le téléphone (migration 0035) ----
@@ -1427,12 +1431,20 @@ export function isExpoPushToken(value: unknown): value is string {
  *   Absent : inchangé pour un appareil déjà enregistré, non pour un nouveau
  *   (jamais d'alerte sans la réponse « Activer » donnée pour elles).
  * Les deux à false : l'appareil est oublié. Un serveur sans 0036 ne sait pas
- * garder un appareil pour les seules alertes : `messages: false` l'oublie. */
+ * garder un appareil pour les seules alertes : `messages: false` l'oublie.
+ * Lot « découverte » (migration 0051) : `likes`, `comments`, `follows` et
+ * `mentions` (ACTIVITY_PUSH_KINDS), une réponse par sorte d'activité. Absent :
+ * inchangé ; non pour un nouvel appareil. Un serveur sans 0051 les ignore.
+ * Avec 0051, l'appareil n'est oublié que quand ses six réponses sont à false. */
 export interface RegisterPushTokenRequest {
   token: string;
   platform: PushPlatform;
   messages?: boolean;
   alerts?: boolean;
+  likes?: boolean;
+  comments?: boolean;
+  follows?: boolean;
+  mentions?: boolean;
 }
 
 /** DELETE /api/me/push-token : oublier cet appareil (déconnexion, notifications coupées). */
@@ -2777,4 +2789,82 @@ export function checkBioLink(input: string): BioLinkCheck {
   if (stored.length > BIO_LINK_MAX_LENGTH) return { ok: false, problem: "too_long" };
   if (!stored.startsWith("https://") || BIO_LINK_FORBIDDEN.test(stored)) return invalid;
   return { ok: true, url: stored };
+}
+
+// ---- Fil « Pour vous » et suggestions de comptes (lot « découverte », migration 0050) ----
+
+/** « Pour vous » : les publications publiques des FOR_YOU_DAYS derniers jours. */
+export const FOR_YOU_DAYS = 14;
+/** Publications lues, les plus récentes d'abord, avant le classement (le même pour tous). */
+export const FOR_YOU_CANDIDATES = 200;
+/** Le classement est gardé en mémoire par le serveur, puis refait. */
+export const FOR_YOU_CACHE_MS = 5 * 60_000;
+/** Publications proposées à un membre, au plus (après ses propres exclusions). */
+export const FOR_YOU_MAX = 60;
+/** Publications d'un même auteur dans la liste d'un membre, au plus. */
+export const FOR_YOU_PER_AUTHOR = 2;
+/** Publications par page de GET /api/feed/for-you. */
+export const FOR_YOU_PAGE_SIZE = 15;
+/** Les seules positions acceptées (paramètre `offset`) : une page de la liste de FOR_YOU_MAX. */
+export const FOR_YOU_OFFSETS = [0, 15, 30, 45] as const;
+/** Un compte plus jeune que cela n'est proposé à personne qui ne le suit pas. */
+export const FOR_YOU_MIN_ACCOUNT_AGE_HOURS = 24;
+/** Comptes suggérés par GET /api/users/suggestions, au plus. */
+export const SUGGESTIONS_MAX = 10;
+
+/** GET /api/feed/for-you?offset= : une page de la liste du membre. Une page
+ * peut être plus courte que FOR_YOU_PAGE_SIZE, ou vide, alors qu'il en reste
+ * (une publication devenue invisible depuis le classement est retirée) : seul
+ * `nextOffset` dit s'il y a une suite. Une publication peut revenir d'une page
+ * à l'autre si le classement a été refait entre-temps : l'app retire les doublons. */
+export interface ForYouPage {
+  posts: Post[];
+  nextOffset: number | null;
+}
+
+/** GET /api/users/suggestions : les comptes à découvrir (SUGGESTIONS_MAX au plus). */
+export interface SuggestionsResponse {
+  members: MemberRow[];
+}
+
+/** PUT /api/me/discoverable. */
+export interface UpdateDiscoverableRequest {
+  discoverable: boolean;
+}
+
+/** 404 : le réglage « Proposer mon compte aux autres membres » n'est pas encore disponible (migration 0050 absente). */
+export const DISCOVERY_SETTING_UNAVAILABLE_ERROR = "discovery_setting_unavailable";
+/** 429 : trop de pages de « Pour vous » lues en une heure. */
+export const FOR_YOU_LIMIT_ERROR = "for_you_limit";
+
+// ---- Notifications d'activité sur le téléphone (lot « découverte », migration 0051) ----
+// Un « j'aime », un commentaire, un abonné, une mention : une notification sur
+// l'iPhone, seulement pour les sortes que la personne a allumées sur cet
+// appareil (toutes éteintes au départ). Elle dit qui a fait quoi, jamais le
+// texte d'un commentaire, une légende ni une image.
+
+/** Les quatre sortes d'activité, une réponse (un interrupteur) chacune sur
+ * l'appareil : « j'aime » ; commentaires et réponses ; abonnés, demandes
+ * d'abonnement et demandes acceptées ; mentions et identifications. */
+export const ACTIVITY_PUSH_KINDS = ["likes", "comments", "follows", "mentions"] as const;
+export type ActivityPushKind = (typeof ACTIVITY_PUSH_KINDS)[number];
+
+/** Ce que porte une notification d'activité, et rien d'autre : la publication
+ * (« j'aime », commentaire, réponse, mention, identification), le membre
+ * (nouvel abonné, demande acceptée) ou la liste des demandes reçues. */
+export type ActivityPushData = { postId: string } | { userId: string } | { screen: "requests" };
+
+/** Les données d'une notification d'activité, ou null si ce n'en est pas une
+ * ou si elles sont illisibles : une seule clé, un identifiant de la forme
+ * d'un UUID, ou l'écran « requests » ; tout le reste n'ouvre rien. */
+export function parseActivityPushData(data: unknown): ActivityPushData | null {
+  if (typeof data !== "object" || data === null || Array.isArray(data)) return null;
+  const entries = Object.entries(data);
+  if (entries.length !== 1) return null;
+  const [key, value] = entries[0]!;
+  if (key === "screen") return value === "requests" ? { screen: "requests" } : null;
+  if (typeof value !== "string" || !PUSH_DATA_UUID.test(value)) return null;
+  if (key === "postId") return { postId: value };
+  if (key === "userId") return { userId: value };
+  return null;
 }

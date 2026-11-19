@@ -418,6 +418,8 @@ function accountSection(ctx: Ctx): Html {
     .field("help_others")
     .field("is_private")
     .field("mentions_from", enumLabel(ctx, MENTIONS_FROM_LABELS, row.mentions_from))
+    // Fil « Pour vous » (migration 0050) : oui / non ; rien sans la colonne.
+    .field("discoverable")
     .field("created_at")
     .field("updated_at");
   return section(ctx, "account", [article(null, account.rows(), profile.rows()), ...quotaParts(ctx)]);
@@ -1091,13 +1093,18 @@ function moderationSection(ctx: Ctx): Html {
   ]);
 }
 
-/** Lot notifications : chaque appareil prévenu des nouveaux messages, sans son jeton. */
+/** Lot notifications : chaque appareil prévenu des nouveaux messages, sans son
+ * jeton ; avec 0036, ce qu'il reçoit ; avec 0051, chaque sorte d'activité. */
 function devicesSection(ctx: Ctx): Html {
   const cards = newestFirst(ctx.data.pushDevices, "created_at").map((row) =>
     new Card(ctx, "pushDevices", row)
       .use("platform")
       .field("notify_messages")
       .field("notify_alerts")
+      .field("notify_likes")
+      .field("notify_comments")
+      .field("notify_follows")
+      .field("notify_mentions")
       .field("created_at")
       .field("updated_at")
       .render(enumLabel(ctx, PUSH_PLATFORM_LABELS, row.platform))

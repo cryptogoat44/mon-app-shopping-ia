@@ -208,7 +208,7 @@ describe("sans la migration 0044", () => {
     const fake = seeded({ posts: [post(POST, ALICE)] }, WITHOUT_0044);
     const target = await messagesApp(fake.db);
     expect(await messageActionsReady(target)).toBe(false);
-    expect((await as(target, ALICE).get("/api/messages/status")).json()).toEqual({ enabled: true, unreadCount: 0, push: false, actions: false } satisfies MessagesStatus);
+    expect((await as(target, ALICE).get("/api/messages/status")).json()).toEqual({ enabled: true, unreadCount: 0, push: false, actions: false, activityPush: false } satisfies MessagesStatus);
     // Un message ordinaire part et se lit, avec ou sans « v=2 » : aucune colonne de 0044 n'est demandée.
     const sent = await send(target, ALICE, BOB, { text: "Bonjour" });
     expect(sent.message).toEqual({ id: sent.message.id, mine: true, text: "Bonjour", wish: null, createdAt: sent.message.createdAt });

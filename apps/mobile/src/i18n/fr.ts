@@ -1878,4 +1878,35 @@ export const fr = {
       "Retirer le lien de ce profil ? Il sera effacé : cette décision ne s'annule pas. La personne sera prévenue, avec le motif choisi. Elle pourra en mettre un autre, sauf si son compte est suspendu.",
     linkRemovedSaved: "Lien retiré.",
   },
+  // Fil « Pour vous » et suggestions de comptes (lot « découverte », migration 0050).
+  forYou: {
+    tabFollowing: "Abonnements",
+    tabForYou: "Pour vous",
+    tabsLabel: "Fil à afficher",
+    how: "Des publications publiques récentes de comptes que vous ne suivez pas, classées selon leur date et leur nombre de j'aime et de commentaires. Le classement est le même pour tous les membres.",
+    empty: "Rien de nouveau pour l'instant. Revenez un peu plus tard.",
+    end: "Vous avez tout vu.",
+    loadError: "« Pour vous » n'a pas pu être chargé.",
+    suggestionsTitle: "Comptes à découvrir",
+    suggestionsHow: "Des comptes suivis par vos abonnements, puis les comptes publics les plus actifs.",
+    suggestionsEmpty: "Pas de suggestion pour l'instant.",
+    settingTitle: "Proposer mon compte aux autres membres",
+    settingHelp:
+      "Vos publications publiques peuvent apparaître dans « Pour vous » et votre compte dans les suggestions. Éteint : seuls vos abonnés et les visiteurs de votre profil les voient.",
+    settingError: "Le réglage n'a pas pu être enregistré. Réessayez.",
+  },
+  // Notifications d'activité sur le téléphone (lot « découverte », migration 0051).
+  activityPush: {
+    title: "Notifications d'activité",
+    help: "Sur cet iPhone. Elles disent seulement qui a fait quoi, jamais le contenu.",
+    likes: "J'aime",
+    comments: "Commentaires et réponses",
+    follows: "Abonnés et demandes d'abonnement",
+    mentions: "Mentions et identifications",
+    offerTitle: "Être prévenu(e) sur votre iPhone ?",
+    offerBody: "Recevez une notification quand quelqu'un aime, commente, s'abonne ou vous mentionne. Vous pourrez choisir dans les Réglages.",
+    enable: "Activer",
+    later: "Plus tard",
+    denied: `Les notifications sont refusées pour ${BRAND} dans les Réglages de l'iPhone.`,
+  },
 } as const;

@@ -226,7 +226,8 @@ describe("chargement de la suite", () => {
     expect(screen).toContain("const button = followButton(state, t.peopleSearch.following);");
     expect(screen).toContain("accessibilityHint={button.hint}");
     expect(screen).toMatch(/action: \{ minHeight: 44,/);
-    expect(read("lib/analytics-events.ts")).toContain('follow_added: { context: oneOf(["search", "profile", "list"]) }');
+    // Lot « découverte » : « suggestion » en plus (comptes à découvrir).
+    expect(read("lib/analytics-events.ts")).toContain('follow_added: { context: oneOf(["search", "profile", "list", "suggestion"]) }');
   });
 
   it("appels au serveur : les deux listes avec leur curseur, et le retrait", () => {

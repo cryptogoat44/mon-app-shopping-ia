@@ -456,11 +456,12 @@ describe("textes FR / EN (fiche)", () => {
     const frKeys = Object.keys(fr);
     expect(Object.keys(en)).toEqual(frKeys);
     expect(frKeys.indexOf("messageActions")).toBeGreaterThan(frKeys.indexOf("robotCheck"));
-    // Puis seulement la section du lot « quotas » (migration 0053, fusionné le premier sur main)
-    // et celles du lot « vie sociale » (migrations 0045 à 0049), fusionné après.
+    // Puis seulement la section du lot « quotas » (migration 0053, fusionné le premier sur main),
+    // celles du lot « vie sociale » (migrations 0045 à 0049), fusionné après,
+    // et celles du lot « découverte » (« Pour vous », 0050 ; notifications d'activité, 0051).
     for (const catalog of [fr, en]) {
       const keys = Object.keys(catalog);
-      expect(keys.slice(keys.indexOf("messageActions") + 1)).toEqual(["monthlyQuota", "privateAccount", "memberLists", "commentThreads", "carousel", "savedPosts", "profilePins"]);
+      expect(keys.slice(keys.indexOf("messageActions") + 1)).toEqual(["monthlyQuota", "privateAccount", "memberLists", "commentThreads", "carousel", "savedPosts", "profilePins", "forYou", "activityPush"]);
     }
     expect(Object.keys(en.messageActions).sort()).toEqual(Object.keys(fr.messageActions).sort());
     for (const value of Object.values(fr.messageActions)) {

@@ -208,9 +208,10 @@ describe("réglage « Compte privé »", () => {
     const pieces = settings.indexOf("<PieceSendsSetting />");
     expect(account).toBeGreaterThan(-1);
     expect(pieces).toBeGreaterThan(account);
-    // Entre les deux : seulement « Qui peut me mentionner » (migration 0046), du même bloc.
+    // Entre les deux : seulement « Qui peut me mentionner » (migration 0046) et
+    // « Proposer mon compte aux autres membres » (migration 0050), du même bloc.
     const between = settings.slice(account + "<PrivateAccountSetting />".length, pieces).replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
-    expect(between.trim()).toBe("<MentionsFromSetting />");
+    expect(between.replace(/\s+/g, " ").trim()).toBe("<MentionsFromSetting /> <DiscoverableSetting />");
     expect(setting).toContain("<Text style={styles.label}>{t.privateAccount.sectionTitle}</Text>");
   });
 

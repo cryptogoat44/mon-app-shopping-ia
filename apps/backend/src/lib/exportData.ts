@@ -3,7 +3,7 @@ import { chunks, readAll } from "./pagedReads.js";
 import { messageActionsReady, messagesReady } from "./messaging.js";
 import { collectionsReady } from "./collections.js";
 import { collectionModerationReady } from "./collectionModeration.js";
-import { pushReady } from "./push.js";
+import { activityPushReady, pushReady } from "./push.js";
 import { wishAlertsSchemaState, wishAlertsSchemaVersion } from "./wishAlertsSchema.js";
 import { tryonSchemaReady } from "./tryon/schema.js";
 import { videoMemoryStored } from "./videoMemory.js";
@@ -216,9 +216,12 @@ async function listCollectionItems(db: Db, userId: string, wishlistItems: readon
 
 /** Colonnes d'un appareil des notifications : jamais `token` (l'adresse
  * technique de l'appareil chez Apple et Expo), ni `last_error`. Avec la
- * migration 0036, s'il reçoit aussi les notifications des messages. */
+ * migration 0036, s'il reçoit aussi les notifications des messages ; avec la
+ * migration 0051, chacune des quatre sortes d'activité. */
 export const PUSH_DEVICE_EXPORT_COLUMNS = "platform, created_at, updated_at";
 export const PUSH_DEVICE_EXPORT_COLUMNS_ALERTS = "platform, notify_messages, notify_alerts, created_at, updated_at";
+export const PUSH_DEVICE_EXPORT_COLUMNS_ACTIVITY =
+  "platform, notify_messages, notify_alerts, notify_likes, notify_comments, notify_follows, notify_mentions, created_at, updated_at";
 
 // Alertes prix et stock (lot 2, migration 0036). Jamais : la clé de la pièce
 // (empreinte), le pays d'une observation, ni une heure précise venue d'une
@@ -675,14 +678,18 @@ export async function collectExport(
   // Lot alertes prix : sans la migration 0036, sections vides. Avec 0036 sans
   // ses garde-fous (0040), les alertes sont coupées mais leurs données sont
   // là : elles sont exportées quand même.
+  // Lot « découverte » : avec la migration 0051 (qui demande 0036), les quatre
+  // réponses de l'activité de chaque appareil ; sonde illisible : la section
+  // échoue (export incomplet, à refaire) plutôt que de les taire.
   const withAlerts = (await wishAlertsSchemaState(fastify)) === "ready";
   const alertColumns = alertExportColumns(withAlerts ? await wishAlertsSchemaVersion(fastify) : 1);
   const pushDevices = await section(
     "pushDevices",
-    async () =>
-      (await pushReady(fastify))
-        ? listWhere(db, "push_tokens", withAlerts ? PUSH_DEVICE_EXPORT_COLUMNS_ALERTS : PUSH_DEVICE_EXPORT_COLUMNS, "user_id", userId, ["created_at", "token"])
-        : none,
+    async () => {
+      if (!(await pushReady(fastify))) return none;
+      const columns = !withAlerts ? PUSH_DEVICE_EXPORT_COLUMNS : (await activityPushReady(fastify)) ? PUSH_DEVICE_EXPORT_COLUMNS_ACTIVITY : PUSH_DEVICE_EXPORT_COLUMNS_ALERTS;
+      return listWhere(db, "push_tokens", columns, "user_id", userId, ["created_at", "token"]);
+    },
     none
   );
   const [wishWatches, wishTracking, wishAlertEvents, stockReports] = await Promise.all([

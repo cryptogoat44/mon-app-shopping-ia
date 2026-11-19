@@ -1126,3 +1126,60 @@ describe("export lisible : épingles et lien en bio (migration 0049)", () => {
     expect(onUnknownColumn).not.toHaveBeenCalled();
   });
 });
+
+describe("export lisible : réglage « Proposer mon compte aux autres membres » (migration 0050)", () => {
+  const ws = (text: string) => spaces(text).replace(/\s+/g, " ");
+
+  it("le profil dit oui ou non, en français et en anglais ; rien sans la colonne", () => {
+    const base = fixture();
+    expect(ws(visibleText(sectionHtml(render({ timeZone: "UTC" }), "account")))).toContain("Compte proposé aux autres membres Non");
+    expect(ws(visibleText(sectionHtml(render({ locale: "en" }), "account")))).toContain("Account suggested to other members No");
+    expect(ws(visibleText(sectionHtml(render({}, { ...base, profile: { ...base.profile!, discoverable: true } }), "account")))).toContain("Compte proposé aux autres membres Oui");
+    const { discoverable: _ignored, ...withoutColumn } = base.profile!;
+    expect(visibleText(sectionHtml(render({}, { ...base, profile: withoutColumn }), "account"))).not.toContain("Compte proposé aux autres membres");
+  });
+
+  it("la colonne a son libellé : aucune « colonne inconnue »", () => {
+    expect(EXPORT_COLUMNS.profile.discoverable.label).toEqual({ fr: "Compte proposé aux autres membres", en: "Account suggested to other members" });
+    const onUnknownColumn = vi.fn();
+    render({ onUnknownColumn });
+    expect(onUnknownColumn).not.toHaveBeenCalled();
+  });
+});
+
+describe("export lisible : notifications d'activité de chaque appareil (migration 0051)", () => {
+  const ws = (text: string) => spaces(text).replace(/\s+/g, " ");
+
+  it("chaque sorte dit oui ou non, en français et en anglais ; rien sans les colonnes ; jamais le jeton", () => {
+    const fr = ws(visibleText(sectionHtml(render(), "devices")));
+    for (const line of [
+      "Prévenu des nouveaux messages Oui",
+      "Prévenu des alertes prix et stock Non",
+      "Prévenu des « j'aime » Oui",
+      "Prévenu des commentaires et réponses Non",
+      "Prévenu des abonnés et demandes d'abonnement Non",
+      "Prévenu des mentions et identifications Oui",
+    ]) {
+      expect(fr, line).toContain(line);
+    }
+    expect(fr).toContain("d'une alerte ou d'une activité");
+    const en = ws(visibleText(sectionHtml(render({ locale: "en" }), "devices")));
+    for (const line of ["Notified of likes Yes", "Notified of comments and replies No", "Notified of followers and follow requests No", "Notified of mentions and tags Yes"]) {
+      expect(en, line).toContain(line);
+    }
+    const base = fixture();
+    const before0051 = base.pushDevices.map(({ notify_likes: _l, notify_comments: _c, notify_follows: _f, notify_mentions: _m, ...rest }) => rest);
+    const page = ws(visibleText(sectionHtml(render({}, { ...base, pushDevices: before0051 }), "devices")));
+    expect(page).toContain("Prévenu des nouveaux messages Oui");
+    expect(page).not.toMatch(/Prévenu des « j'aime »|Prévenu des commentaires|Prévenu des abonnés|Prévenu des mentions/);
+    expect(render()).not.toContain("PushToken");
+  });
+
+  it("les quatre colonnes ont leur libellé : aucune « colonne inconnue »", () => {
+    expect(EXPORT_COLUMNS.pushDevices.notify_likes.label).toEqual({ fr: "Prévenu des « j'aime »", en: "Notified of likes" });
+    expect(EXPORT_COLUMNS.pushDevices.notify_mentions.label).toEqual({ fr: "Prévenu des mentions et identifications", en: "Notified of mentions and tags" });
+    const onUnknownColumn = vi.fn();
+    render({ onUnknownColumn });
+    expect(onUnknownColumn).not.toHaveBeenCalled();
+  });
+});

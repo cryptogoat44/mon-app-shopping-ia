@@ -243,6 +243,26 @@ Avant d'allumer : faire relire le paragraphe « Expo » de la politique de
 confidentialité (« [À vérifier] ») et revoir les réponses « App Privacy »
 d'Apple (`app-store/CONFIDENTIALITE-APPLE.md`).
 
+**Notifications d'activité** (lot « découverte », migration 0051 : un
+« j'aime », un commentaire, un abonné, une mention). Les mêmes étapes 1, 2, 3
+et 5 servent : le même build, la même clé d'Apple, le même `PUSH_ENABLED`. En
+plus, la migration 0051 : d'abord sur spotto-dev-2 (`pnpm --filter backend
+migrer-dev supabase/migrations/0051_notifications_activite.sql --verifier
+supabase/verifications/0051-verification.sql`), puis sur spotto-prod ;
+vérifier avec `supabase/verifications/0051-verification.sql` (une ligne,
+tout à `true`), puis noter la date dans le registre. Sans 0051, rien ne
+change : les quatre interrupteurs restent cachés et rien ne part. Le module
+`expo-notifications` est déjà dans `package.json` : Expo applique son réglage
+iOS de lui-même à la construction, rien à ajouter dans `app.json` (à
+vérifier sur le premier build : la question des notifications d'EAS, étape 2).
+Ensuite, sur un iPhone avec le nouveau build : Réglages → « Notifications
+d'activité » montre quatre interrupteurs éteints ; en allumer un (la fenêtre
+d'iOS s'ouvre si elle n'a encore jamais été montrée), puis, depuis un autre
+compte, aimer une publication, la commenter, s'abonner ou mentionner : la
+notification arrive (« @pseudo a aimé votre publication ») ; la toucher ouvre
+la publication, le profil ou la liste des demandes. L'onglet Activité
+propose aussi, une seule fois, de les activer toutes.
+
 ## 9. Lecteur intégré TikTok / Instagram : de retour, avec quatre interrupteurs
 
 Mission « liens vidéo » (novembre 2026) : un lien TikTok ou Instagram, partagé

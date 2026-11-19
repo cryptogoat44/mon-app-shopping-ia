@@ -17,8 +17,23 @@
 // Avoir accepté les messages ne vaut JAMAIS accord pour les alertes : la
 // première cloche montre leur explication, même quand iOS les permet déjà.
 // Toucher une alerte ouvre l'envie (ou vos Envies pour une alerte groupée).
+// Lot « découverte » (migration 0051) : quatre sortes d'activité (« j'aime »,
+// commentaires, abonnés, mentions), une réponse chacune sur cet appareil,
+// toutes éteintes au départ. Proposées une seule fois, la première fois que
+// l'onglet Activité montre une activité, quand le serveur les a allumées
+// (`activityPush` de GET /api/messages/status, avec ou sans la messagerie) ;
+// réglées une à une dans les Réglages. Toucher une notification d'activité
+// ouvre la publication, le profil, ou la liste des demandes d'abonnement.
 // Module natif et appels au serveur : push.ts (site : push.web.ts).
-import { parseWishAlertPushData, type MessagesStatus, type WishAlertsStatus } from "@monapp/shared-types";
+import {
+  ACTIVITY_PUSH_KINDS,
+  parseActivityPushData,
+  parseWishAlertPushData,
+  type ActivityPushKind,
+  type MessagesStatus,
+  type NotificationType,
+  type WishAlertsStatus,
+} from "@monapp/shared-types";
 import { WISHLIST_SEGMENT } from "./wishlist-link";
 
 /** Réponse de la personne, gardée sur l'appareil, par compte. */
@@ -26,13 +41,24 @@ export type PushDecision = "on" | "off";
 /** Autorisation d'iOS. */
 export type PushPermission = "granted" | "denied" | "undetermined";
 
-/** Les deux sortes de notifications (lot alertes prix). */
-export type PushKind = "messages" | "alerts";
+/** Les sortes de notifications : messages, alertes (lot alertes prix), et
+ * les quatre de l'activité (lot « découverte »). */
+export type PushKind = "messages" | "alerts" | ActivityPushKind;
+
+/** Ce que règle un geste de la personne : une sorte, ou les quatre de
+ * l'activité ensemble (« Activer » ou « Plus tard » de leur feuille). */
+export type PushSelection = PushKind | "activity";
+
+/** Les sortes d'une sélection. */
+export function selectionKinds(selection: PushSelection): readonly PushKind[] {
+  return selection === "activity" ? ACTIVITY_PUSH_KINDS : [selection];
+}
 
 /** Réponse gardée par compte et par sorte. Les messages gardent la clé
  * d'avant le lot alertes (rien ne change pour un appareil déjà réglé). */
 export function pushDecisionKey(userId: string, kind: PushKind = "messages"): string {
-  return kind === "alerts" ? `spotto.alerts-push-decision.${userId}` : `spotto.push-decision.${userId}`;
+  if (kind === "messages") return `spotto.push-decision.${userId}`;
+  return kind === "alerts" ? `spotto.alerts-push-decision.${userId}` : `spotto.activity-push-decision.${kind}.${userId}`;
 }
 
 /** Dernier jeton enregistré par cet appareil (à oublier à la déconnexion). */
@@ -133,6 +159,63 @@ export function deviceRegistration(decisions: PushDecisions, alertsActive: boole
   return { keep: messages || (alerts && alertsActive), messages, alerts };
 }
 
+// ---- Notifications d'activité (lot « découverte », migration 0051) ----
+
+/** Ce dont dépendent les notifications d'activité sur cet appareil. */
+export interface ActivityPushContext {
+  /** Platform.OS */
+  platform: string;
+  status: Pick<MessagesStatus, "activityPush">;
+  /** Ce build a le module natif et l'identifiant du projet chez Expo. */
+  supported: boolean;
+}
+
+/** Possibles : iPhone, build prêt, et le serveur les propose (PUSH_ENABLED
+ * et 0051) ; jamais sur le site. La messagerie n'y est pour rien. Sinon, les
+ * quatre interrupteurs sont cachés et rien n'est proposé. */
+export function activityPushPossible({ platform, status, supported }: ActivityPushContext): boolean {
+  return platform === "ios" && supported && status.activityPush === true;
+}
+
+/** Les réponses de cet appareil pour les quatre sortes d'activité. */
+export type ActivityDecisions = Record<ActivityPushKind, PushDecision | null>;
+
+/** La feuille d'explication de l'activité : jamais encore répondu pour
+ * AUCUNE des quatre sortes (« Plus tard » est gardé), et iOS ne les a pas
+ * refusées (la feuille ne servirait à rien). */
+export function shouldOfferActivityPush(context: ActivityPushContext, decisions: ActivityDecisions, permission: PushPermission): boolean {
+  return activityPushPossible(context) && ACTIVITY_PUSH_KINDS.every((kind) => decisions[kind] === null) && permission !== "denied";
+}
+
+/** Les notifications de l'onglet Activité qui ouvrent la proposition : un
+ * « j'aime », un commentaire ou une réponse, un abonné, une demande ou une
+ * demande acceptée, une mention ou une identification (jamais une décision
+ * de la modération ni une pièce reçue). */
+export const ACTIVITY_NOTIFICATION_TYPES: readonly NotificationType[] = ["like", "comment", "reply", "follow", "follow_request", "follow_accepted", "mention", "tag"];
+
+/** L'onglet Activité montre-t-il au moins une activité ? */
+export function showsActivity(notifications: readonly { type: NotificationType }[]): boolean {
+  return notifications.some((notification) => ACTIVITY_NOTIFICATION_TYPES.includes(notification.type));
+}
+
+/** Ce que le serveur garde de l'appareil pour l'activité : chaque réponse
+ * telle quelle (un serveur sans 0051 les ignore) ; l'appareil gardé pour elle
+ * seulement si l'une est allumée ET que le serveur la propose (`activityActive`). */
+export function activityRegistration(decisions: ActivityDecisions, activityActive: boolean): { keep: boolean; kinds: Record<ActivityPushKind, boolean> } {
+  const kinds = { likes: decisions.likes === "on", comments: decisions.comments === "on", follows: decisions.follows === "on", mentions: decisions.mentions === "on" };
+  return { keep: activityActive && ACTIVITY_PUSH_KINDS.some((kind) => kinds[kind]), kinds };
+}
+
+/** Un interrupteur d'activité dont l'enregistrement a échoué, relu sur
+ * l'iPhone : revient-il en arrière ? Alors seulement le message « n'a pas pu
+ * être enregistré ». Couper hors réseau garde « off » sur l'iPhone, et
+ * l'oubli de l'appareil, noté, attend le retour du réseau (push-forget.ts) :
+ * l'interrupteur reste coupé, sans message. Rien de relu : le message, par
+ * prudence. */
+export function switchRolledBack(wanted: boolean, saved: { decision: PushDecision | null; permission: PushPermission } | null): boolean {
+  return saved === null || pushSwitchValue(saved.decision, saved.permission) !== wanted;
+}
+
 /** Réponse d'iOS → autorisation. « Provisoire » (3) et « éphémère » (4)
  * permettent de recevoir : comptées comme accordées. */
 export function permissionFrom(response: { granted: boolean; status: string; ios?: { status?: number } | null }): PushPermission {
@@ -172,13 +255,28 @@ export function conversationHref(id: string) {
  * sa fiche charge tout depuis le serveur), ou vos Envies (alerte groupée,
  * sans aucune donnée) ; null si les données sont illisibles (rien ne
  * s'ouvre). Une notification de message porte toujours `conversationId` :
- * elle est lue en premier, jamais prise pour une alerte. */
-export type NotificationTarget = { kind: "conversation"; id: string } | { kind: "wish"; id: string } | { kind: "wishes" };
+ * elle est lue en premier, jamais prise pour une alerte.
+ * Lot « découverte » : une notification d'activité porte une seule clé, la
+ * publication (`{ postId }`), le membre (`{ userId }`) ou la liste des
+ * demandes (`{ screen: "requests" }`), chaque identifiant vérifié. */
+export type NotificationTarget =
+  | { kind: "conversation"; id: string }
+  | { kind: "wish"; id: string }
+  | { kind: "wishes" }
+  | { kind: "post"; id: string }
+  | { kind: "profile"; id: string }
+  | { kind: "requests" };
 
 export function notificationTarget(data: unknown): NotificationTarget | null {
   if (typeof data === "object" && data !== null && "conversationId" in data) {
     const conversation = conversationIdFromNotification(data);
     return conversation ? { kind: "conversation", id: conversation } : null;
+  }
+  const activity = parseActivityPushData(data);
+  if (activity) {
+    if ("postId" in activity) return { kind: "post", id: activity.postId };
+    if ("userId" in activity) return { kind: "profile", id: activity.userId };
+    return { kind: "requests" };
   }
   const alert = parseWishAlertPushData(data);
   if (!alert) return null;
@@ -190,7 +288,8 @@ export function notificationTarget(data: unknown): NotificationTarget | null {
 export const FROM_ALERT = "alerte";
 
 /** L'écran à ouvrir pour une notification touchée. Vos Envies : l'onglet
- * Envies du Profil (lib/wishlist-link.ts, `segment`). */
+ * Envies du Profil (lib/wishlist-link.ts, `segment`). L'activité : les mêmes
+ * écrans que depuis l'onglet Activité (publication, profil, demandes). */
 export function notificationHref(target: NotificationTarget) {
   switch (target.kind) {
     case "conversation":
@@ -199,6 +298,12 @@ export function notificationHref(target: NotificationTarget) {
       return { pathname: "/envie" as const, params: { id: target.id, from: FROM_ALERT } };
     case "wishes":
       return { pathname: "/profile" as const, params: { segment: WISHLIST_SEGMENT } };
+    case "post":
+      return { pathname: "/publication" as const, params: { id: target.id } };
+    case "profile":
+      return { pathname: "/profil" as const, params: { id: target.id } };
+    case "requests":
+      return { pathname: "/membres" as const, params: { kind: "requests" } };
   }
 }
 

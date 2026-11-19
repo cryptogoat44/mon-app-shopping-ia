@@ -14,6 +14,7 @@ import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
 import { t } from "@/i18n";
 import { Avatar } from "@/components/avatar";
+import { AccountSuggestions } from "@/components/account-suggestions";
 
 function PersonRow({
   person,
@@ -99,9 +100,12 @@ export default function PeopleSearchScreen() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
   const [menuUserId, setMenuUserId] = useState<string | null>(null);
+  // Comptes bloqués depuis cet écran : retirés aussi des comptes à découvrir.
+  const [blockedIds, setBlockedIds] = useState<string[]>([]);
 
   function handleBlocked(blockedId: string) {
     setResults((prev) => (prev ? prev.filter((p) => p.id !== blockedId) : prev));
+    setBlockedIds((prev) => [...prev, blockedId]);
   }
 
   useEffect(() => {
@@ -169,6 +173,13 @@ export default function PeopleSearchScreen() {
           />
         </View>
 
+        {/* Lot « découverte » : tant que le champ est vide, des comptes à découvrir. */}
+        {query.trim() === "" ? (
+          <View style={styles.suggestions}>
+            <AccountSuggestions hiddenIds={blockedIds} />
+          </View>
+        ) : null}
+
         {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
         {loading ? <ActivityIndicator color={color.encre} style={styles.loader} /> : null}
@@ -212,6 +223,8 @@ const styles = themedStyles(() => ({
     marginBottom: space.lg,
   },
   searchInput: { flex: 1, fontSize: font.body, color: color.encre, padding: 0 },
+  // La rangée défile jusqu'aux bords de l'écran (elle a ses propres marges).
+  suggestions: { marginHorizontal: -space.lg },
   error: { fontSize: font.caption, color: color.acier, marginBottom: space.md },
   loader: { marginTop: space.md },
   empty: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginTop: space.lg },

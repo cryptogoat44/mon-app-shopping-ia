@@ -48,7 +48,7 @@ import { z } from "zod";
 import { alertCurrency, COUNTRY_CURRENCIES, SEARCH_COUNTRIES, WISH_ALERT_RULES, STOCK_STATES, type WishAlertState, type WishAlertsStatus } from "@monapp/shared-types";
 import { ALERT_KEY_VERSION, trackingKeyOf, type TrackingKey } from "./alertKeys.js";
 import { keptMatchIds } from "./keptPieces.js";
-import { pushAvailable } from "./push.js";
+import { forgetAlertsOnlyDevices, pushAvailable } from "./push.js";
 import { chunks, readAll } from "./pagedReads.js";
 import { DatabaseReadError, parseDbRows } from "./validation.js";
 import { wishAlertsReady } from "./wishAlertsSchema.js";
@@ -94,9 +94,10 @@ export interface AlertSettingsChoice {
 }
 
 /** Enregistre les réglages. « Alertes prix et stock » coupé : les appareils
- * gardés pour les seules alertes (notifications des messages coupées) sont
- * oubliés — un appareil ne reste enregistré que tant que les messages OU les
- * alertes sont allumés. « Aider les autres membres » ne touche qu'à ce que
+ * gardés pour les seules alertes (notifications des messages coupées, et
+ * aucune sorte d'activité allumée, migration 0051) sont oubliés — un appareil
+ * ne reste enregistré que tant que les messages, les alertes OU une sorte
+ * d'activité sont allumés. « Aider les autres membres » ne touche qu'à ce que
  * ses recherches et ses signalements font pour les autres (la base le lit). */
 export async function saveWishAlertSettings(fastify: Db, userId: string, choice: AlertSettingsChoice): Promise<void> {
   const values = {
@@ -110,8 +111,11 @@ export async function saveWishAlertSettings(fastify: Db, userId: string, choice:
     .eq("id", userId);
   if (error) throw new WishAlertsStoreError("Réglages des alertes non enregistrés");
   if (choice.enabled !== false) return;
-  const { error: tokensError } = await fastify.supabaseAdmin.from("push_tokens").delete().eq("user_id", userId).eq("notify_messages", false);
-  if (tokensError) throw new WishAlertsStoreError("Appareils des seules alertes non oubliés");
+  try {
+    await forgetAlertsOnlyDevices(fastify, userId);
+  } catch {
+    throw new WishAlertsStoreError("Appareils des seules alertes non oubliés");
+  }
 }
 
 /** Allume ou coupe l'interrupteur « Alertes prix et stock ». */

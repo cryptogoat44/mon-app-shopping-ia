@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -13,11 +13,13 @@ import { useAuth } from "@/lib/auth-context";
 import { knownNotifications, notificationActionText, notificationTarget, pendingRequestsCount } from "@/lib/follow-state";
 import { loadErrorMessage } from "@/lib/load-error";
 import { systemNotificationLines } from "@/lib/moderation-labels";
+import { showsActivity } from "@/lib/push-state";
 import { timeAgo } from "@/lib/format";
 import { BellIcon, CommentIcon, LockIcon } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { LoadFailure } from "@/components/load-failure";
+import { usePushOffer } from "@/components/push-offer-sheet";
 import { themedStyles } from "@/theme/themed-styles";
 import { Avatar } from "@/components/avatar";
 
@@ -161,6 +163,16 @@ export default function NotificationsScreen() {
   // Compte privé : nombre de demandes d'abonnement en attente, relu à chaque retour sur l'onglet.
   const { profile, refreshProfile } = useAuth();
   const requestsCount = pendingRequestsCount(profile);
+  // Lot « découverte » (migration 0051) : la première fois que l'onglet montre
+  // une activité, la feuille des notifications d'activité est proposée une fois
+  // (iPhone seulement, si le serveur les propose et que rien n'a été répondu).
+  // Relancé aussi quand l'état du serveur arrive après les notifications.
+  const activityPushOffer = usePushOffer("activity");
+  const offerActivityPush = activityPushOffer.offer;
+  const activityPushOn = useMessagesStatus().activityPush === true;
+  useEffect(() => {
+    if (activityPushOn && notifications && showsActivity(notifications)) offerActivityPush();
+  }, [activityPushOn, notifications, offerActivityPush]);
 
   useFocusEffect(
     useCallback(() => {
@@ -253,6 +265,7 @@ export default function NotificationsScreen() {
           ) : null}
         </ScrollView>
       )}
+      {activityPushOffer.sheet}
     </SafeAreaView>
   );
 }

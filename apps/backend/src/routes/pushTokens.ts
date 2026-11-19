@@ -6,6 +6,9 @@
 // Lot alertes prix (0036) : `messages` et `alerts` disent ce que reçoit cet
 // appareil ; `messages: false` le garde pour les seules alertes (aucune
 // notification de message ne lui est envoyée), les deux à false l'oublient.
+// Lot « découverte » (0051) : `likes`, `comments`, `follows` et `mentions`,
+// une réponse par sorte d'activité ; absentes, inchangées ; sans 0051,
+// ignorées. Avec 0051, l'appareil n'est oublié que quand les six sont à false.
 // Lot « durcissement des alertes » (revue de sécurité) : POST
 // /api/push-token/forget oublie un appareil par son seul jeton, SANS session
 // (avoir le jeton, c'est être cet appareil) : l'app l'appelle quand la
@@ -45,7 +48,8 @@ export default async function pushTokensRoutes(fastify: FastifyInstance) {
     const body = parseInput(registerPushTokenSchema, request.body, reply, INVALID_PUSH_TOKEN);
     if (!body) return;
     try {
-      await savePushToken(fastify, request.user!.id, body.token, body.platform, { messages: body.messages, alerts: body.alerts });
+      const { messages, alerts, likes, comments, follows, mentions } = body;
+      await savePushToken(fastify, request.user!.id, body.token, body.platform, { messages, alerts, likes, comments, follows, mentions });
     } catch (error) {
       request.log.error({ error }, "Appareil non enregistré pour les notifications");
       return reply.code(500).send(SERVER_ERROR);

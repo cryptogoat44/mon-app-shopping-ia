@@ -329,10 +329,18 @@ describe("la première cloche allume l'interrupteur, après l'explication des no
   });
 
   it("la même explication que pour les messages, avec ses textes à elle ; seul « Activer » demande à iOS", () => {
-    expect(offer).toContain('{kind === "alerts" ? t.wishAlerts.pushOfferTitle : t.push.offerTitle}');
-    expect(offer).toContain("{kind === \"alerts\" ? t.wishAlerts.pushOfferBody : t.push.offerBody}");
-    // enablePush n'est appelée que par la feuille (et l'interrupteur des messages), jamais par la cloche ni les Réglages des alertes.
-    expect(using(/\benablePush\(/)).toEqual(["components/message-push-setting.tsx", "components/push-offer-sheet.tsx", "lib/push.ts", "lib/push.web.ts"]);
+    expect(offer).toContain('const title = kind === "alerts" ? t.wishAlerts.pushOfferTitle : t.push.offerTitle;');
+    expect(offer).toContain('const body = kind === "alerts" ? t.wishAlerts.pushOfferBody : t.push.offerBody;');
+    expect(offer).toContain("{texts.title}");
+    expect(offer).toContain("<Text style={styles.body}>{texts.body}</Text>");
+    // enablePush n'est appelée que par la feuille (et les interrupteurs des messages et de l'activité), jamais par la cloche ni les Réglages des alertes.
+    expect(using(/\benablePush\(/)).toEqual([
+      "components/activity-push-setting.tsx",
+      "components/message-push-setting.tsx",
+      "components/push-offer-sheet.tsx",
+      "lib/push.ts",
+      "lib/push.web.ts",
+    ]);
     expect(sheet).not.toContain("requestPermissionsAsync");
     expect(setting).not.toContain("requestPermissionsAsync");
   });
@@ -527,9 +535,10 @@ describe("l'appareil reste enregistré tant que les messages OU les alertes sont
     expect(disable).toContain("if (!registration.keep) return forgetPushToken();");
     expect(disable).toContain("await registerAgain(registration);");
     expect(disable).toContain("} catch {\n    await forgetPushToken();");
-    // Le jeton part toujours avec `messages` ET `alerts` (contrat du serveur, migration 0036).
-    expect(push).toContain('await registerPushToken(data, "ios", kinds.messages, kinds.alerts);');
-    expect(api).toContain("const payload: RegisterPushTokenRequest = { token, platform, messages, alerts };");
+    // Le jeton part toujours avec `messages` ET `alerts` (contrat du serveur, migration 0036), et
+    // (lot « découverte », migration 0051) les quatre réponses de l'activité.
+    expect(push).toContain('await registerPushToken(data, "ios", kinds.messages, kinds.alerts, activity);');
+    expect(api).toContain("const payload: RegisterPushTokenRequest = { token, platform, messages, alerts, ...activity };");
     // Accepter une sorte ne rallume jamais l'autre si elle est coupée.
     const enable = body(push, "export async function enablePush(", "/** « Plus tard »");
     expect(enable).toContain('messages: kind === "messages" || messagesDecision === "on",');
@@ -544,7 +553,7 @@ describe("l'appareil reste enregistré tant que les messages OU les alertes sont
     // À l'ouverture : rafraîchi pour les messages OU les alertes.
     const hook = read("lib/use-push-notifications.ts");
     expect(hook).toContain("const alertsPush = alerts.available && alerts.enabled && alerts.push;");
-    expect(hook).toContain("(!messagesPush && !alertsPush)) return;");
+    expect(hook).toContain("(!messagesPush && !alertsPush && !activityOn)) return;");
     // La déconnexion oublie toujours l'appareil (inchangé).
     expect(read("lib/auth-context.tsx")).toContain("await forgetPushToken().catch(() => {});");
   });
@@ -843,7 +852,7 @@ describe("politique de confidentialité et App Privacy (brouillons « à vérifi
     expect(section(privacyPolicyEn, "Why, and on what basis")).toContain("(“Help other members” setting, on by default, which you can turn off): our legitimate interest");
   });
 
-  it("Expo et Apple (sous-traitants) : les notifications des messages ET des alertes, une notification d'alerte générique, et l'adresse de l'appareil gardée tant que l'une des deux est activée", () => {
+  it("Expo et Apple (sous-traitants) : les notifications des messages ET des alertes (et de l'activité, lot « découverte »), une notification d'alerte générique, et l'adresse de l'appareil gardée tant que l'une est activée", () => {
     const frExpo = all(privacyPolicy).split("\n").find((line) => line.startsWith("Expo (650 Industries, Inc., États-Unis) :"))!;
     for (const sentence of [
       "les notifications de messages ou celles des alertes prix et stock",
@@ -852,8 +861,8 @@ describe("politique de confidentialité et App Privacy (brouillons « à vérifi
       "Une notification d'alerte est générique (« Baisse de prix sur l'une de vos Envies »",
       "elle ne contient ni le titre de la pièce, ni la boutique, ni le prix, seulement un identifiant de l'Envie (aucun pour une notification groupée)",
       "jamais qui a cherché ou signalé la pièce",
-      "tant que les notifications de messages ou celles des alertes y sont activées",
-      "elle est effacée quand vous coupez les deux",
+      "tant que l'une de ces notifications y est activée",
+      "elle est effacée quand vous les coupez toutes",
       "[À vérifier :",
     ]) {
       expect(frExpo).toContain(sentence);
@@ -864,7 +873,7 @@ describe("politique de confidentialité et App Privacy (brouillons « à vérifi
       "message notifications or price and stock alert notifications",
       "An alert notification is generic (“Price drop on one of your Wishes”",
       "it contains neither the title of the piece, nor the shop, nor the price, only an identifier of the wish (none for a grouped notification)",
-      "it is deleted when you turn both off",
+      "it is deleted when you turn them all off",
       "[To be verified:",
     ]) {
       expect(enExpo).toContain(sentence);

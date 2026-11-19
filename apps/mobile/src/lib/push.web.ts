@@ -2,8 +2,10 @@
 // appel au serveur, rien n'est proposé et l'interrupteur des Réglages est
 // caché. Les alertes prix et stock s'y règlent quand même (cloches,
 // interrupteur) : leurs notifications n'arrivent que sur l'app iPhone.
+// Lot « découverte » : les notifications d'activité non plus (leurs
+// interrupteurs sont cachés sur le site).
 // Version app iPhone : push.ts.
-import type { PushDecision, PushPermission } from "./push-state";
+import type { ActivityDecisions, PushDecision, PushPermission } from "./push-state";
 
 export async function pushSupported(): Promise<boolean> {
   return false;
@@ -18,6 +20,10 @@ export async function loadPushDecision(): Promise<PushDecision | null> {
 }
 
 export async function savePushDecision(): Promise<void> {}
+
+export async function loadActivityDecisions(): Promise<ActivityDecisions> {
+  return { likes: null, comments: null, follows: null, mentions: null };
+}
 
 export function enablePush(): Promise<PushPermission> {
   return Promise.reject(new Error("push_unavailable"));

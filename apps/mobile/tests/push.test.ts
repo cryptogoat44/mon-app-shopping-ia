@@ -1,14 +1,18 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { MessagesStatus } from "@monapp/shared-types";
+import { NOTIFICATION_TYPES, type MessagesStatus, type NotificationType } from "@monapp/shared-types";
 import { fr } from "../src/i18n/fr";
 import { en } from "../src/i18n/en";
 import { readMessagesStatus } from "../src/lib/conversations";
 import {
+  ACTIVITY_NOTIFICATION_TYPES,
+  activityPushPossible,
+  activityRegistration,
   conversationHref,
   conversationIdFromNotification,
   notificationHref,
+  notificationTarget,
   firstTimeHandled,
   parsePushDecision,
   permissionFrom,
@@ -17,10 +21,16 @@ import {
   pushSwitchValue,
   pushSwitchVisible,
   readProjectId,
+  selectionKinds,
   setOpenConversation,
+  shouldOfferActivityPush,
   shouldOfferPush,
   shouldRefreshToken,
   shouldShowBanner,
+  showsActivity,
+  switchRolledBack,
+  type ActivityDecisions,
+  type ActivityPushContext,
   type PushContext,
 } from "../src/lib/push-state";
 import { PENDING_FORGET_KEY, clearForget, createSerialQueue, flushForget, pendingForget, rememberForget } from "../src/lib/push-forget";
@@ -72,7 +82,7 @@ describe("quand proposer les notifications", () => {
     expect(readMessagesStatus({ enabled: true, unreadCount: 2 }).push).toBe(false);
     expect(readMessagesStatus({ enabled: true, unreadCount: 2, push: "true" }).push).toBe(false);
     expect(readMessagesStatus({ enabled: false, unreadCount: 0, push: true }).push).toBe(false);
-    expect(readMessagesStatus({ enabled: true, unreadCount: 2, push: true })).toEqual({ enabled: true, unreadCount: 2, push: true, actions: false });
+    expect(readMessagesStatus({ enabled: true, unreadCount: 2, push: true })).toEqual({ enabled: true, unreadCount: 2, push: true, actions: false, activityPush: false });
   });
 
   it("la feuille d'explication : une seule fois (aucune réponse encore), et pas si iOS les a déjà refusées", () => {
@@ -123,8 +133,15 @@ describe("jamais d'autorisation demandée au lancement", () => {
   });
 
   it("enablePush n'est appelée que par un geste de la personne : « Activer » (feuille) ou l'interrupteur des Réglages", () => {
-    // lib/push.ts et lib/push.web.ts la définissent ; seuls deux composants l'appellent.
-    expect(using(/\benablePush\(/)).toEqual(["components/message-push-setting.tsx", "components/push-offer-sheet.tsx", "lib/push.ts", "lib/push.web.ts"]);
+    // lib/push.ts et lib/push.web.ts la définissent ; seuls trois composants l'appellent (la feuille, et
+    // les interrupteurs des messages et de l'activité, lot « découverte »).
+    expect(using(/\benablePush\(/)).toEqual([
+      "components/activity-push-setting.tsx",
+      "components/message-push-setting.tsx",
+      "components/push-offer-sheet.tsx",
+      "lib/push.ts",
+      "lib/push.web.ts",
+    ]);
     const sheet = read("components/push-offer-sheet.tsx");
     const accept = sheet.slice(sheet.indexOf("async function accept()"), sheet.indexOf("function later()"));
     // Lot alertes prix : la sorte acceptée (messages ou alertes) part avec la demande.
@@ -151,7 +168,8 @@ describe("jamais d'autorisation demandée au lancement", () => {
   });
 
   it("la feuille est proposée après un message envoyé ou reçu, dans l'écran d'une conversation", () => {
-    expect(using(/usePushOffer\(/)).toEqual(["app/(app)/conversation.tsx", "components/push-offer-sheet.tsx"]);
+    // Lot « découverte » : celle de l'activité, dans l'onglet Activité (voir « notifications d'activité », plus bas).
+    expect(using(/usePushOffer\(/)).toEqual(["app/(app)/(tabs)/activite.tsx", "app/(app)/conversation.tsx", "components/push-offer-sheet.tsx"]);
     const screen = read("app/(app)/conversation.tsx");
     expect(screen).toContain("if (data.messages.some((message) => !message.mine)) offerPush();");
     expect(screen.match(/offerPush\(\);/g)?.length).toBe(3);
@@ -397,5 +415,292 @@ describe("textes en français et en anglais", () => {
     expect(policy("legal/confidentialite.ts")).toContain("[À vérifier : rôle d'Expo (sous-traitant)");
     expect(policy("legal/confidentialite.en.ts")).toContain("Expo (650 Industries, Inc., United States)");
     expect(policy("legal/confidentialite.en.ts")).toContain("never the text of the message or the attached wish");
+  });
+});
+
+// ---- Lot « découverte » (migration 0051) : notifications d'activité ----
+
+describe("notifications d'activité : quand les proposer", () => {
+  const none: ActivityDecisions = { likes: null, comments: null, follows: null, mentions: null };
+  const activity = (overrides: Partial<ActivityPushContext> = {}): ActivityPushContext => ({ platform: "ios", status: { activityPush: true }, supported: true, ...overrides });
+
+  it("seulement sur l'iPhone, build prêt, quand le serveur les propose (activityPush) ; la messagerie n'y est pour rien", () => {
+    expect(activityPushPossible(activity())).toBe(true);
+    expect(activityPushPossible(activity({ platform: "web" }))).toBe(false);
+    expect(activityPushPossible(activity({ platform: "android" }))).toBe(false);
+    expect(activityPushPossible(activity({ supported: false }))).toBe(false);
+    expect(activityPushPossible(activity({ status: { activityPush: false } }))).toBe(false);
+    expect(activityPushPossible(activity({ status: {} }))).toBe(false);
+    // Un serveur plus ancien (sans « activityPush ») ou une réponse illisible : jamais proposé ;
+    // la messagerie absente ne cache pas l'activité.
+    expect(readMessagesStatus({ enabled: true, unreadCount: 0, push: true }).activityPush).toBe(false);
+    expect(readMessagesStatus({ enabled: true, unreadCount: 0, activityPush: "true" }).activityPush).toBe(false);
+    expect(readMessagesStatus({ enabled: false, unreadCount: 0, activityPush: true })).toEqual({ enabled: false, unreadCount: 0, push: false, actions: false, activityPush: true });
+    expect(readMessagesStatus(null).activityPush).toBe(false);
+  });
+
+  it("la feuille : une seule fois (aucune réponse pour aucune des quatre sortes), jamais si iOS les a refusées", () => {
+    expect(shouldOfferActivityPush(activity(), none, "undetermined")).toBe(true);
+    expect(shouldOfferActivityPush(activity(), none, "granted")).toBe(true);
+    // « Plus tard » est gardé pour les quatre : plus jamais proposée.
+    expect(shouldOfferActivityPush(activity(), { likes: "off", comments: "off", follows: "off", mentions: "off" }, "undetermined")).toBe(false);
+    // Une seule sorte réglée dans les Réglages suffit : la personne a déjà choisi.
+    expect(shouldOfferActivityPush(activity(), { ...none, mentions: "on" }, "granted")).toBe(false);
+    expect(shouldOfferActivityPush(activity(), none, "denied")).toBe(false);
+    expect(shouldOfferActivityPush(activity({ platform: "web" }), none, "undetermined")).toBe(false);
+    expect(shouldOfferActivityPush(activity({ status: { activityPush: false } }), none, "undetermined")).toBe(false);
+  });
+
+  it("ouverte la première fois que l'onglet Activité montre un « j'aime », un commentaire, un abonné ou une mention ; jamais pour la modération ni une pièce reçue", () => {
+    expect([...ACTIVITY_NOTIFICATION_TYPES].sort()).toEqual(["comment", "follow", "follow_accepted", "follow_request", "like", "mention", "reply", "tag"]);
+    for (const type of ACTIVITY_NOTIFICATION_TYPES) expect(showsActivity([{ type }]), type).toBe(true);
+    const others = NOTIFICATION_TYPES.filter((type) => !ACTIVITY_NOTIFICATION_TYPES.includes(type));
+    expect(others.sort()).toEqual(["moderation", "piece_received", "report_handled"]);
+    expect(showsActivity(others.map((type: NotificationType) => ({ type })))).toBe(false);
+    expect(showsActivity([])).toBe(false);
+    const screen = read("app/(app)/(tabs)/activite.tsx");
+    expect(screen).toContain('const activityPushOffer = usePushOffer("activity");');
+    expect(screen).toContain("const activityPushOn = useMessagesStatus().activityPush === true;");
+    expect(screen).toContain("if (activityPushOn && notifications && showsActivity(notifications)) offerActivityPush();");
+    expect(screen).toContain("}, [activityPushOn, notifications, offerActivityPush]);");
+    expect(screen).toContain("{activityPushOffer.sheet}");
+    const sheet = read("components/push-offer-sheet.tsx");
+    const offer = sheet.slice(sheet.indexOf("export function usePushOffer("));
+    expect(offer).toContain("if (offered.current || !userId || Platform.OS !== \"ios\") return;");
+    expect(offer).toContain("if (current.activityPush !== true) return;");
+    expect(offer).toContain("shouldOfferActivityPush({ platform: Platform.OS, status: statusRef.current, supported }, decisions, permission)");
+  });
+
+  it("« Activer » allume les quatre sortes ; « Plus tard » est gardé pour les quatre ; aucune autre sorte n'est rallumée", () => {
+    expect(selectionKinds("activity")).toEqual(["likes", "comments", "follows", "mentions"]);
+    expect(selectionKinds("likes")).toEqual(["likes"]);
+    expect(selectionKinds("messages")).toEqual(["messages"]);
+    const push = read("lib/push.ts");
+    const save = push.slice(push.indexOf("export async function savePushDecision"), push.indexOf("/** Les réponses de cet appareil pour les quatre"));
+    expect(save).toContain("selectionKinds(kind).map((one) => AsyncStorage.setItem(pushDecisionKey(userId, one), decision))");
+    const enable = push.slice(push.indexOf("export async function enablePush"), push.indexOf("export async function disablePush"));
+    expect(enable).toContain("const accepted = selectionKinds(kind);");
+    expect(enable).toContain('const activityOn = (one: ActivityPushKind) => accepted.includes(one) || activity[one] === "on";');
+    for (const kind of ["likes", "comments", "follows", "mentions"]) expect(enable).toContain(`${kind}: activityOn("${kind}"),`);
+    expect(enable).toContain('messages: kind === "messages" || messagesDecision === "on",');
+    // La feuille passe sa sorte telle quelle : « activity » pour l'activité.
+    const sheet = read("components/push-offer-sheet.tsx");
+    expect(sheet).toContain('if (kind === "activity") return { title: t.activityPush.offerTitle, body: t.activityPush.offerBody, hint: null, accept: t.activityPush.enable, later: t.activityPush.later };');
+    expect(sheet).toContain("{texts.later}");
+    expect(sheet).toContain("{busy ? t.push.enabling : texts.accept}");
+  });
+
+  it("une réponse par sorte et par compte ; celles des messages et des alertes gardent leurs clés", () => {
+    expect(pushDecisionKey("u1")).toBe("spotto.push-decision.u1");
+    expect(pushDecisionKey("u1", "alerts")).toBe("spotto.alerts-push-decision.u1");
+    const keys = (["likes", "comments", "follows", "mentions"] as const).map((kind) => pushDecisionKey("u1", kind));
+    expect(keys).toEqual([
+      "spotto.activity-push-decision.likes.u1",
+      "spotto.activity-push-decision.comments.u1",
+      "spotto.activity-push-decision.follows.u1",
+      "spotto.activity-push-decision.mentions.u1",
+    ]);
+    expect(pushDecisionKey("u2", "likes")).not.toBe(keys[0]);
+  });
+
+  it("l'appareil reste enregistré pour l'activité tant qu'une sorte est allumée ET que le serveur la propose ; chaque réponse part au serveur", () => {
+    expect(activityRegistration({ likes: "on", comments: null, follows: "off", mentions: null }, true)).toEqual({
+      keep: true,
+      kinds: { likes: true, comments: false, follows: false, mentions: false },
+    });
+    expect(activityRegistration({ likes: "on", comments: null, follows: null, mentions: null }, false).keep).toBe(false);
+    expect(activityRegistration({ likes: "off", comments: "off", follows: "off", mentions: "off" }, true).keep).toBe(false);
+    const push = read("lib/push.ts");
+    const current = push.slice(push.indexOf("async function currentRegistration"), push.indexOf("/** Ce que reçoit cet appareil"));
+    expect(current).toContain("const extra = activityRegistration(activity, messagesStatus().activityPush === true);");
+    expect(current).toContain("keep: base.keep || extra.keep");
+    const register = push.slice(push.indexOf("async function registerThisDevice"), push.indexOf("export async function enablePush"));
+    expect(register).toContain("const activity = { likes: kinds.likes, comments: kinds.comments, follows: kinds.follows, mentions: kinds.mentions };");
+    // À l'ouverture : le jeton est aussi rafraîchi pour l'activité.
+    const hook = read("lib/use-push-notifications.ts");
+    expect(hook).toContain("const activityOn = activityPush === true;");
+    expect(hook).toContain("}, [userId, messagesPush, alertsPush, activityOn]);");
+    // Le site : aucune réponse, aucun appel.
+    expect(read("lib/push.web.ts")).toContain("return { likes: null, comments: null, follows: null, mentions: null };");
+  });
+});
+
+describe("notifications d'activité : une notification touchée", () => {
+  const POST = "b1000000-0000-4000-8000-000000000001";
+  const MEMBER = "a0000000-0000-4000-8000-000000000001";
+
+  it("ouvre la publication, le profil ou la liste des demandes, comme depuis l'onglet Activité", () => {
+    expect(notificationTarget({ postId: POST })).toEqual({ kind: "post", id: POST });
+    expect(notificationTarget({ userId: MEMBER })).toEqual({ kind: "profile", id: MEMBER });
+    expect(notificationTarget({ screen: "requests" })).toEqual({ kind: "requests" });
+    expect(notificationHref({ kind: "post", id: POST })).toEqual({ pathname: "/publication", params: { id: POST } });
+    expect(notificationHref({ kind: "profile", id: MEMBER })).toEqual({ pathname: "/profil", params: { id: MEMBER } });
+    expect(notificationHref({ kind: "requests" })).toEqual({ pathname: "/membres", params: { kind: "requests" } });
+    // Les écrans lisent bien ces paramètres.
+    expect(read("app/(app)/publication.tsx")).toContain("const { id } = useLocalSearchParams<{ id: string }>();");
+    expect(read("app/(app)/profil.tsx")).toContain("const { id } = useLocalSearchParams<{ id: string }>();");
+    expect(read("app/(app)/membres.tsx")).toContain("const params = useLocalSearchParams<{ kind?: string; id?: string; count?: string }>();");
+    // Une notification de message reste une notification de message.
+    expect(notificationTarget({ conversationId: CONVERSATION })).toEqual({ kind: "conversation", id: CONVERSATION });
+  });
+
+  it("des données illisibles n'ouvrent rien : jamais une adresse, un identifiant mal formé, deux clés ou un autre écran", () => {
+    for (const data of [
+      { postId: "../reglages" },
+      { postId: `${POST}?x=1` },
+      { postId: 12 },
+      { userId: "pas-un-identifiant" },
+      { screen: "settings" },
+      { screen: "requests", postId: POST },
+      { postId: POST, userId: MEMBER },
+      { postId: POST, extra: "1" },
+      { href: "https://ailleurs.example" },
+      ["postId", POST],
+      "texte",
+      12,
+    ]) {
+      expect(notificationTarget(data), JSON.stringify(data)).toBeNull();
+    }
+  });
+
+  it("app ouverte : la bannière d'une activité s'affiche (aucune conversation n'est concernée)", () => {
+    setOpenConversation(CONVERSATION);
+    expect(shouldShowBanner({ postId: POST })).toBe(true);
+    expect(shouldShowBanner({ screen: "requests" })).toBe(true);
+  });
+});
+
+describe("notifications d'activité : le réglage", () => {
+  const settings = read("app/(app)/settings.tsx");
+  const setting = read("components/activity-push-setting.tsx");
+
+  it("dans les Réglages, juste après « Alertes prix et stock », sans rien entre les deux ; une seule fois", () => {
+    const alerts = settings.indexOf("<WishAlertsSetting />");
+    const activity = settings.indexOf("<ActivityPushSetting />");
+    expect(alerts).toBeGreaterThan(-1);
+    expect(activity).toBeGreaterThan(alerts);
+    expect(settings.slice(alerts + "<WishAlertsSetting />".length, activity).replace(/\{\/\*[\s\S]*?\*\/\}/g, "").trim()).toBe("");
+    expect(settings.match(/<ActivityPushSetting \/>/g)).toHaveLength(1);
+    // Les réglages des messages se suivent toujours, avant (tests « l'explication d'abord » ci-dessus).
+    expect(activity).toBeGreaterThan(settings.indexOf("<MessagePushSetting />"));
+  });
+
+  it("caché sur le site, sans le module natif, et tant que le serveur ne les propose pas", () => {
+    expect(setting).toContain("if (!activityPushPossible({ platform: Platform.OS, status, supported: device?.supported ?? false })) return null;");
+    expect(setting).toContain('if (Platform.OS !== "ios" || !userId) return null;');
+  });
+
+  it("un titre, une ligne d'explication, quatre interrupteurs nommés (VoiceOver), éteints tant que rien n'est accepté", () => {
+    expect(setting).toContain("{t.activityPush.title}");
+    expect(setting).toContain("<Text style={styles.body}>{t.activityPush.help}</Text>");
+    expect(setting).toContain("{ACTIVITY_PUSH_KINDS.map((kind) => {");
+    expect(setting).toContain("accessibilityLabel={t.activityPush[kind]}");
+    expect(setting).toContain("<Switch");
+    expect(setting).toContain("pushSwitchValue(device.decisions[kind], device.permission)");
+    expect(pushSwitchValue(null, "granted")).toBe(false);
+    expect(pushSwitchValue("on", "denied")).toBe(false);
+  });
+
+  it("allumer demande à iOS seulement à ce geste ; couper fait oublier la sorte ; un échec qui revient en arrière le dit, avec un message", () => {
+    const toggle = setting.slice(setting.indexOf("async function toggle("), setting.indexOf("if (!activityPushPossible("));
+    expect(toggle).toContain("if (!on) await disablePush(userId, kind);");
+    expect(toggle).toContain('else if ((await enablePush(userId, kind)) !== "granted") showToast(t.activityPush.denied);');
+    expect(toggle).toContain("} catch {\n      failed = true;\n    }");
+    expect(toggle).toContain("setPending(null);");
+    expect(toggle).toContain("const saved = await reload();");
+    // Le message, une seule fois : seulement si l'interrupteur relu revient en arrière.
+    expect(toggle).toContain("if (failed && switchRolledBack(on, saved && { decision: saved.decisions[kind], permission: saved.permission })) showToast(t.push.settingFailed);");
+    expect(toggle.match(/showToast\(t\.push\.settingFailed\)/g)).toHaveLength(1);
+    // iOS les refuse : on dit où les autoriser.
+    expect(setting).toContain("{t.activityPush.denied}");
+    expect(setting).toContain("Linking.openSettings()");
+  });
+
+  it("couper hors réseau : l'interrupteur reste coupé, sans message ; rien d'enregistré : il revient en arrière, avec un message", () => {
+    // Couper hors réseau : « off » est gardé sur l'iPhone, l'oubli attend le réseau (tests/push-hors-ligne.test.ts).
+    expect(switchRolledBack(false, { decision: "off", permission: "granted" })).toBe(false);
+    // Couper sans rien pouvoir garder sur l'iPhone : l'interrupteur se rallume, le message le dit.
+    expect(switchRolledBack(false, { decision: "on", permission: "granted" })).toBe(true);
+    // Allumer qui échoue (réseau, serveur) : rien n'est gardé, l'interrupteur se recoupe, avec le message.
+    expect(switchRolledBack(true, { decision: null, permission: "granted" })).toBe(true);
+    expect(switchRolledBack(true, { decision: "off", permission: "granted" })).toBe(true);
+    expect(switchRolledBack(true, { decision: "on", permission: "granted" })).toBe(false);
+    // Rien de relu sur l'iPhone : le message, par prudence.
+    expect(switchRolledBack(false, null)).toBe(true);
+    expect(switchRolledBack(true, null)).toBe(true);
+  });
+});
+
+describe("notifications d'activité : textes en français et en anglais", () => {
+  it("les mots de la fiche, en vouvoyant", () => {
+    const expected: [keyof typeof fr.activityPush, string, string][] = [
+      ["title", "Notifications d'activité", "Activity notifications"],
+      ["help", "Sur cet iPhone. Elles disent seulement qui a fait quoi, jamais le contenu.", "On this iPhone. They only say who did what, never the content."],
+      ["likes", "J'aime", "Likes"],
+      ["comments", "Commentaires et réponses", "Comments and replies"],
+      ["follows", "Abonnés et demandes d'abonnement", "Followers and follow requests"],
+      ["mentions", "Mentions et identifications", "Mentions and tags"],
+      ["offerTitle", "Être prévenu(e) sur votre iPhone ?", "Get notified on your iPhone?"],
+      [
+        "offerBody",
+        "Recevez une notification quand quelqu'un aime, commente, s'abonne ou vous mentionne. Vous pourrez choisir dans les Réglages.",
+        "Get a notification when someone likes, comments, follows or mentions you. You can choose in Settings.",
+      ],
+      ["enable", "Activer", "Turn on"],
+      ["later", "Plus tard", "Later"],
+      ["denied", "Les notifications sont refusées pour Spotto dans les Réglages de l'iPhone.", "Notifications are turned off for Spotto in iPhone Settings."],
+    ];
+    expect(Object.keys(en.activityPush)).toEqual(Object.keys(fr.activityPush));
+    expect(expected.map(([key]) => key)).toEqual(Object.keys(fr.activityPush));
+    for (const [key, french, english] of expected) {
+      expect(fr.activityPush[key], key).toBe(french);
+      expect(en.activityPush[key], key).toBe(english);
+    }
+    const french = Object.values(fr.activityPush).join("\n");
+    expect(french).not.toMatch(/(?<!\p{L})(tu|ton|ta|tes|toi|te)(?!\p{L})/iu);
+  });
+
+  it("la politique de confidentialité le dit, en français et en anglais : qui a fait quoi, jamais un commentaire ni une image", () => {
+    const frPolicy = read("legal/confidentialite.ts");
+    expect(frPolicy).toContain("Notifications d'activité : si vous les activez, ${BRAND} envoie sur votre iPhone une notification quand un membre aime ou commente votre publication");
+    expect(frPolicy).toContain("Chaque type a son interrupteur dans les Réglages, éteint au départ");
+    expect(frPolicy).toContain("La notification passe par le service d'Expo puis par Apple ; elle contient le nom d'utilisateur du membre et une phrase fixe, jamais le texte d'un commentaire ni une image.");
+    expect(frPolicy).toContain("Une notification d'activité contient seulement « ${BRAND} », le nom d'utilisateur du membre et une phrase fixe");
+    const enPolicy = read("legal/confidentialite.en.ts");
+    expect(enPolicy).toContain("Activity notifications: if you turn them on, ${BRAND} sends a notification to your iPhone when a member likes or comments on your post");
+    expect(enPolicy).toContain("The notification goes through Expo's service and then Apple; it contains the member's username and a fixed sentence, never the text of a comment or an image.");
+    expect(enPolicy).toContain("An activity notification only contains “${BRAND}”, the member's username and a fixed sentence");
+  });
+
+  it("l'identifiant de la publication ou du membre, aucun pour une demande d'abonnement : la politique et la fiche Apple le disent", () => {
+    // Le serveur : une demande d'abonnement n'ouvre que la liste des demandes, sans identifiant.
+    expect(readFileSync(join(__dirname, "../../backend/src/lib/push.ts"), "utf8")).toContain('if (type === "follow_request") return { screen: "requests" };');
+    const frPolicy = read("legal/confidentialite.ts");
+    expect(frPolicy).toContain("avec l'identifiant de la publication ou du membre concerné (aucun pour une demande d'abonnement, qui ouvre la liste des demandes) : jamais le texte d'un commentaire");
+    expect(frPolicy).not.toMatch(/l'identifiant de la publication ou du membre concerné(?! \(aucun)/);
+    const enPolicy = read("legal/confidentialite.en.ts");
+    expect(enPolicy).toContain("with an identifier of the post or member concerned (none for a follow request, which opens the list of requests): never the text of a comment");
+    expect(enPolicy).not.toMatch(/identifier of the post or member concerned(?! \(none)/);
+    const apple = readFileSync(join(__dirname, "../app-store/CONFIDENTIALITE-APPLE.md"), "utf8");
+    expect(apple).toContain("et l'identifiant de la publication ou du membre (aucun pour une demande d'abonnement, qui ouvre la liste des demandes) ; **jamais**");
+    expect(apple).toContain("une phrase fixe et l'identifiant de la publication ou du membre (aucun pour une demande d'abonnement).");
+    expect(apple).not.toMatch(/l'identifiant de la publication ou du membre(?! \(aucun)/);
+  });
+
+  it("les notes pour Apple : la version française dit, comme l'anglaise, quand iOS demande l'autorisation (feuille ou interrupteur des Réglages)", () => {
+    const notes = readFileSync(join(__dirname, "../app-store/NOTES-VALIDATION.md"), "utf8");
+    const part = (title: string) => {
+      const start = notes.indexOf("```text", notes.indexOf(title));
+      return notes.slice(start, notes.indexOf("\n```\n", start));
+    };
+    expect(part("## 3. Version anglaise")).toContain('iOS permission is asked only after "Enable notifications" on an explanation sheet, or when the person turns on a switch in Settings, never at launch.');
+    expect(part("## 2. Version française")).toContain(
+      "Autorisation d'iOS demandée seulement après « Activer » sur une feuille d'explication, ou quand la personne allume un interrupteur dans les Réglages, jamais au lancement."
+    );
+    expect(notes).not.toContain("seulement après « Activer les notifications »");
+    // Ce que fait l'app : « Activer » sur les feuilles, et un interrupteur d'activité qui demande lui-même à iOS.
+    expect(fr.activityPush.enable).toBe("Activer");
+    expect(fr.push.offerAccept).toMatch(/^Activer /);
+    expect(read("components/activity-push-setting.tsx")).toContain("await enablePush(userId, kind)");
   });
 });

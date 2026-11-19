@@ -14,13 +14,16 @@ import { useWishAlertsStatus } from "./use-wish-alerts-status";
  * Lot alertes prix : une alerte touchée ouvre la fiche de l'envie (ou vos
  * Envies pour une alerte groupée) ; le jeton est aussi rafraîchi pour les
  * alertes (interrupteur des Réglages allumé, notifications acceptées).
+ * Lot « découverte » : une notification d'activité touchée ouvre la
+ * publication, le profil ou les demandes ; le jeton est aussi rafraîchi,
+ * avec les quatre réponses de l'activité, quand le serveur la propose.
  * Ne demande JAMAIS l'autorisation d'iOS : seul « Activer » la demande
  * (components/push-offer-sheet.tsx). */
 export function usePushNotifications(): void {
   const router = useRouter();
   const { session } = useAuth();
   const userId = session?.user.id ?? null;
-  const { enabled, push } = useMessagesStatus();
+  const { enabled, push, activityPush } = useMessagesStatus();
   const alerts = useWishAlertsStatus();
 
   useEffect(() => {
@@ -46,8 +49,9 @@ export function usePushNotifications(): void {
 
   const messagesPush = enabled && push === true;
   const alertsPush = alerts.available && alerts.enabled && alerts.push;
+  const activityOn = activityPush === true;
   useEffect(() => {
-    if (Platform.OS !== "ios" || !userId || (!messagesPush && !alertsPush)) return;
+    if (Platform.OS !== "ios" || !userId || (!messagesPush && !alertsPush && !activityOn)) return;
     refreshPushToken(userId).catch(() => {});
-  }, [userId, messagesPush, alertsPush]);
+  }, [userId, messagesPush, alertsPush, activityOn]);
 }
