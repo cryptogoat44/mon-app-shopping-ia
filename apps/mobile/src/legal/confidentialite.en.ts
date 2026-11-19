@@ -103,6 +103,7 @@ export function buildPrivacyPolicyEn(extra: PrivacyExtra): LegalDocument {
             "Searching with your words, when you start “What are you looking for?”: performance of the contract between us, at your request. [To be verified: basis retained.]",
             "Searching with the description written for a video link, started automatically when no result shows a price: performance of the contract between us (the search for the piece that you asked for). [To be verified: basis retained.]",
             "Keeping for 24 hours, with no link to your account, the answers already obtained, so as not to run the same searches again and to answer faster: our legitimate interest. [To be verified: basis retained.]",
+            "Showing your public posts and your account to members who do not follow you (“For you” feed, account suggestions): our legitimate interest in helping members discover each other. You can object at any time, without making your account private (setting “Suggest my account to other members”). [To be verified: basis retained.]",
             ...extra.bases,
           ],
           "[To be verified: legal bases retained, to be reviewed by a legal professional — in particular the legitimate interest relied on for error reports, and the basis relied on for sending the titles of the results to Anthropic without consent.]",
@@ -126,6 +127,7 @@ export function buildPrivacyPolicyEn(extra: PrivacyExtra): LegalDocument {
           "A post can contain up to 5 photos. You can tag members in it; only those who allow it (setting “Who can mention me”, which starts at: only accounts they follow themselves) and who can see the post are tagged. A tagged person is notified and can remove the tag at any time; the tag is removed if they can no longer see the post, except when the post is hidden by moderation: the tag is then hidden with it and returns if the post is restored.",
           "You can save a post to find it again, and add it to one of your collections. Your saved posts are visible only to you: neither their author nor your friends can see them. A saved post disappears from your list if you are no longer allowed to see it.",
           `You can pin up to 3 posts at the top of your profile and display a link to a website. This link is visible to members who can see your profile (only your approved followers, if your account is private). Sites that members link to are outside ${BRAND}'s control; a screen warns you before you leave the app.`,
+          "Your public posts may be shown in the “For you” feed to members who do not follow you, and your account may be suggested to them, unless your account is private or you turn off the setting “Suggest my account to other members”. This feed ranks public posts from the last 14 days by date and by number of likes and comments; the ranking is the same for everyone and uses no profile of your interests. Account suggestions rely on the accounts followed by the people you follow.",
         ],
       },
       {

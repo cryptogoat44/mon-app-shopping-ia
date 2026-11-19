@@ -44,6 +44,7 @@ export const termsOfUseEn: LegalDocument = {
         "Prices, availability and details shown come from retailers and may have changed: only the information on the retailer's website is authoritative.",
         `${BRAND} sells nothing. If you buy a piece, you do so directly from the retailer, under its own terms; ${BRAND} is not a party to that purchase.`,
         "The number of identifications may be limited over time, to keep the service available to everyone.",
+        "The “For you” feed shows public posts from the last 14 days from accounts you do not follow, ranked by date and by number of likes and comments. The ranking is the same for all members and uses no profile of your interests. Accounts to discover are first accounts followed by the people you follow, then the most active public accounts. The “Following” feed stays sorted by date. You can refuse to have your account and your posts suggested (setting “Suggest my account to other members”). [To be verified: transparency of recommender systems, EU Digital Services Act, article 27; exemption of micro and small enterprises (article 19) to be confirmed.]",
       ],
     },
     {

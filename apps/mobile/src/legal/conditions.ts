@@ -46,6 +46,7 @@ export const termsOfUse: LegalDocument = {
         "Les prix, la disponibilité et les caractéristiques affichés viennent des marchands et peuvent avoir changé : seules font foi les informations du site du marchand.",
         `${BRAND} ne vend rien. Si vous achetez une pièce, vous le faites directement auprès du marchand, selon ses propres conditions ; ${BRAND} n'est pas partie à cet achat.`,
         "Le nombre d'identifications peut être limité dans le temps, pour garantir le service à tous.",
+        "Le fil « Pour vous » propose des publications publiques des 14 derniers jours de comptes que vous ne suivez pas, classées selon leur date et leur nombre de j'aime et de commentaires. Le classement est le même pour tous les membres et ne repose sur aucun profil de vos centres d'intérêt. Les comptes à découvrir sont d'abord des comptes suivis par vos abonnements, puis les comptes publics les plus actifs. Le fil « Abonnements » reste rangé par date. Vous pouvez refuser que votre compte et vos publications soient proposés (réglage « Proposer mon compte aux autres membres »). [À vérifier : transparence des systèmes de recommandation, règlement européen sur les services numériques, article 27 ; dispense des micro et petites entreprises (article 19) à confirmer.]",
       ],
     },
     {
