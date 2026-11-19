@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ForYouPage, Post } from "@monapp/shared-types";
+import { FOR_YOU_DAYS, type ForYouPage, type Post } from "@monapp/shared-types";
 
 // Fil « Pour vous » et suggestions de comptes (lot « découverte », migration
 // 0050), côté app : le choix « Abonnements | Pour vous » gardé pour la
@@ -323,5 +323,12 @@ describe("politique de confidentialité et conditions", () => {
     expect(text(termsOfUse)).toContain("Le classement est le même pour tous les membres et ne repose sur aucun profil de vos centres d'intérêt.");
     expect(text(termsOfUse)).toContain("article 27");
     expect(text(termsOfUseEn)).toContain("The ranking is the same for all members and uses no profile of your interests.");
+  });
+
+  it(`les ${FOR_YOU_DAYS} jours des textes sont ceux du serveur (constante partagée) : l'explication et le code ne divergent pas`, () => {
+    expect(text(privacyPolicy)).toContain(`des ${FOR_YOU_DAYS} derniers jours`);
+    expect(text(termsOfUse)).toContain(`des ${FOR_YOU_DAYS} derniers jours`);
+    expect(text(privacyPolicyEn)).toContain(`from the last ${FOR_YOU_DAYS} days`);
+    expect(text(termsOfUseEn)).toContain(`from the last ${FOR_YOU_DAYS} days`);
   });
 });
