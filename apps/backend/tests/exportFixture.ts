@@ -347,8 +347,21 @@ export function fixture(): ExportData {
         friends_image_thumb_url: own("post-media", "collection-mini.jpg"),
       },
     ],
-    // Lot notifications : un iPhone prévenu des nouveaux messages (jamais son jeton).
-    pushDevices: [{ platform: "ios", created_at: "2026-10-03T09:00:00+00:00", updated_at: "2026-10-06T09:00:00+00:00" }],
+    // Lot notifications : un iPhone prévenu des nouveaux messages (jamais son jeton) ;
+    // ce qu'il reçoit (0036), et les quatre sortes d'activité (0051).
+    pushDevices: [
+      {
+        platform: "ios",
+        notify_messages: true,
+        notify_alerts: false,
+        notify_likes: true,
+        notify_comments: false,
+        notify_follows: false,
+        notify_mentions: true,
+        created_at: "2026-10-03T09:00:00+00:00",
+        updated_at: "2026-10-06T09:00:00+00:00",
+      },
+    ],
     // Lot alertes prix et stock : une cloche, le suivi de l'envie (au jour
     // près), une alerte envoyée, un signalement « Plus disponible ».
     wishWatches: [

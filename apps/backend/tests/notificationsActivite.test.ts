@@ -799,3 +799,53 @@ describe("une seule porte, lancée puis oubliée", () => {
     for (const forbidden of ["PushToken", "brunoBruno", SECRET_COMMENT, CAPTION, "@anna", "anna", "@carl", "carl"]) expect(journal, forbidden).not.toContain(forbidden);
   });
 });
+
+describe("export et suppression du compte", () => {
+  it("l'export dit, pour chaque appareil, ses six réponses ; jamais son jeton (JSON et fichier lisible)", async () => {
+    const fake = seeded({ devices: [device(BRUNO_PHONE, BRUNO, { messages: true, likes: true, mentions: true }), device(ANNA_PHONE, ANNA, ALL_ACTIVITY)] });
+    const target = await activityApp(fake.db);
+    const json = await as(target, BRUNO).get("/api/me/export");
+    expect(json.statusCode).toBe(200);
+    expect(json.json().pushDevices).toEqual([
+      {
+        platform: "ios",
+        notify_messages: true,
+        notify_alerts: false,
+        notify_likes: true,
+        notify_comments: false,
+        notify_follows: false,
+        notify_mentions: true,
+        created_at: "2026-11-01T10:00:00.000Z",
+        updated_at: "2026-11-01T10:00:00.000Z",
+      },
+    ]);
+    expect(json.body).not.toContain("PushToken");
+    const page = await target.inject({ method: "GET", url: "/api/me/export?format=html", headers: { "x-test-user": BRUNO, "accept-language": "fr" } });
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain("Prévenu des mentions et identifications");
+    expect(page.body).not.toContain("PushToken");
+  });
+
+  it("sans 0051 : celles de 0036 seulement ; sonde de 0051 illisible : l'export échoue (à refaire) plutôt que de les taire", async () => {
+    const before = seeded({ devices: [device(BRUNO_PHONE, BRUNO, { messages: true })] }, WITHOUT_0051);
+    const target = await activityApp(before.db);
+    expect((await as(target, BRUNO).get("/api/me/export")).json().pushDevices).toEqual([
+      { platform: "ios", notify_messages: true, notify_alerts: false, created_at: "2026-11-01T10:00:00.000Z", updated_at: "2026-11-01T10:00:00.000Z" },
+    ]);
+    resetPushProbe();
+    const unreadable = seeded({ devices: [device(BRUNO_PHONE, BRUNO, { messages: true })] });
+    const other = await activityApp(unreadableActivityProbe(unreadable.db, 1));
+    const failed = await as(other, BRUNO).get("/api/me/export");
+    expect(failed.statusCode).toBe(500);
+    expect(failed.json()).toEqual({ error: "export_failed", message: "L'export a échoué, réessayez." });
+    expect((await as(other, BRUNO).get("/api/me/export")).statusCode).toBe(200);
+  });
+
+  it("la suppression du compte efface ses appareils, quelles que soient leurs réponses", async () => {
+    const fake = seeded({ devices: [device(BRUNO_PHONE, BRUNO, { likes: true }), device(BRUNO_TABLET, BRUNO, { mentions: true }), device(ANNA_PHONE, ANNA, ALL_ACTIVITY)] });
+    const target = await activityApp(fake.db);
+    expect((await as(target, BRUNO).del("/api/me", { confirmation: "SUPPRIMER" })).statusCode).toBe(204);
+    expect(fake.deletedUsers).toEqual([BRUNO]);
+    expect(fake.table("push_tokens").map((row) => row.token)).toEqual([ANNA_PHONE]);
+  });
+});

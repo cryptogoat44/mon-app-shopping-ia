@@ -23,6 +23,9 @@ const migrated = !pushProbe.error && !messagesProbe.error;
 const alertsProbe = await admin.rpc("wish_alerts_version");
 // 1 : 0036 seule ; 2 : avec ses garde-fous (0040). Les colonnes des appareils sont celles de 0036.
 const alertsMigrated = !alertsProbe.error && typeof alertsProbe.data === "number" && alertsProbe.data >= 1;
+// Lot « découverte » (0051) : l'export dit aussi chaque sorte d'activité (éteintes pour un nouvel appareil).
+const activityProbe = await admin.from("push_tokens").select("notify_likes").limit(0);
+const activityMigrated = alertsMigrated && !activityProbe.error;
 
 const token = (label: string) => `ExponentPushToken[base${label}${Date.now().toString(36)}]`;
 
@@ -107,7 +110,13 @@ describe.skipIf(!migrated)("notifications sur le téléphone, sur la base de dé
     expect((await request(alice, "PUT", "/api/me/push-token", { token: phone, platform: "ios" })).statusCode).toBe(204);
     const exported = await request(alice, "GET", "/api/me/export");
     expect(exported.json().pushDevices).toEqual([
-      { platform: "ios", created_at: expect.any(String), updated_at: expect.any(String), ...(alertsMigrated ? { notify_messages: true, notify_alerts: false } : {}) },
+      {
+        platform: "ios",
+        created_at: expect.any(String),
+        updated_at: expect.any(String),
+        ...(alertsMigrated ? { notify_messages: true, notify_alerts: false } : {}),
+        ...(activityMigrated ? { notify_likes: false, notify_comments: false, notify_follows: false, notify_mentions: false } : {}),
+      },
     ]);
     expect(exported.body).not.toContain(phone);
     expect((await request(alice, "DELETE", "/api/me/push-token", { token: phone })).statusCode).toBe(204);

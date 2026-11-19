@@ -71,6 +71,11 @@ const alertsProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_RO
 const ALERT_SECTIONS = alertsProbe.error || typeof alertsProbe.data !== "number" || alertsProbe.data < 1 ? [] : (["wishWatches", "wishTracking", "wishAlertEvents", "stockReports"] as const);
 const ALERTS_V2 = !alertsProbe.error && typeof alertsProbe.data === "number" && alertsProbe.data >= 3;
 
+// Notifications d'activité (lot « découverte ») : les quatre réponses de
+// chaque appareil, seulement une fois la migration 0051 appliquée (elle demande 0036).
+const activityPushProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("push_tokens").select("notify_likes").limit(0);
+const ACTIVITY_PUSH_MIGRATED = ALERT_SECTIONS.length > 0 && !activityPushProbe.error;
+
 // Essayage virtuel : profil d'essayage, essais, essais offerts et
 // signalements, seulement une fois la migration 0042 appliquée sur la base des
 // tests (sans elle, sections vides). Rien n'allume l'essayage : les lignes
@@ -552,8 +557,13 @@ describe("export RGPD complet", () => {
     if (DISCOVERY_MIGRATED) expect(body.profile.discoverable).toBe(false);
     else expect("discoverable" in body.profile).toBe(false);
     expect(body.suspension).toMatchObject({ moderation_action_id: expect.any(String) });
-    // Un appareil : son système et ses dates (avec 0036 : s'il reçoit les messages, les alertes), jamais son jeton.
-    const deviceColumns = ALERT_SECTIONS.length > 0 ? ["created_at", "notify_alerts", "notify_messages", "platform", "updated_at"] : ["created_at", "platform", "updated_at"];
+    // Un appareil : son système et ses dates (avec 0036 : s'il reçoit les messages, les alertes ; avec 0051 :
+    // chaque sorte d'activité), jamais son jeton.
+    const deviceColumns = ACTIVITY_PUSH_MIGRATED
+      ? ["created_at", "notify_alerts", "notify_comments", "notify_follows", "notify_likes", "notify_mentions", "notify_messages", "platform", "updated_at"]
+      : ALERT_SECTIONS.length > 0
+        ? ["created_at", "notify_alerts", "notify_messages", "platform", "updated_at"]
+        : ["created_at", "platform", "updated_at"];
     for (const device of body.pushDevices) expect(Object.keys(device).sort()).toEqual(deviceColumns);
     expect(JSON.stringify(body)).not.toContain("ExponentPushToken[");
     // Alertes, nouvelle version (0041) : un signalement « Plus disponible » garde son auteur (sa table, son export),

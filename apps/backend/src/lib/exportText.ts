@@ -458,6 +458,11 @@ export const EXPORT_COLUMNS = {
     // Lot alertes prix et stock (migration 0036).
     notify_messages: shown("Prévenu des nouveaux messages", "Notified of new messages"),
     notify_alerts: shown("Prévenu des alertes prix et stock", "Notified of price and stock alerts"),
+    // Lot « découverte » (migration 0051) : les quatre sortes d'activité.
+    notify_likes: shown("Prévenu des « j'aime »", "Notified of likes"),
+    notify_comments: shown("Prévenu des commentaires et réponses", "Notified of comments and replies"),
+    notify_follows: shown("Prévenu des abonnés et demandes d'abonnement", "Notified of followers and follow requests"),
+    notify_mentions: shown("Prévenu des mentions et identifications", "Notified of mentions and tags"),
     created_at: shown("Notifications activées le", "Notifications turned on on"),
     updated_at: shown("Dernière mise à jour le", "Last updated on"),
   },
@@ -787,8 +792,8 @@ export const EXPORT_SECTIONS = {
   devices: {
     title: { fr: "Vos appareils pour les notifications", en: "Your devices for notifications" },
     intro: {
-      fr: `Les téléphones sur lesquels une notification vous prévient d'un nouveau message. Pour chacun, ${BRAND} garde une adresse technique, donnée par Apple et Expo pour vous envoyer ces notifications ; elle n'est pas recopiée ici.`,
-      en: `The phones on which a notification tells you about a new message. For each one, ${BRAND} keeps a technical address, given by Apple and Expo to send you these notifications; it isn't copied here.`,
+      fr: `Les téléphones sur lesquels une notification vous prévient d'un nouveau message, d'une alerte ou d'une activité (« j'aime », commentaire, abonné, mention), selon ce que vous avez allumé sur chacun. Pour chacun, ${BRAND} garde une adresse technique, donnée par Apple et Expo pour vous envoyer ces notifications ; elle n'est pas recopiée ici.`,
+      en: `The phones on which a notification tells you about a new message, an alert or some activity (like, comment, follower, mention), depending on what you turned on for each one. For each one, ${BRAND} keeps a technical address, given by Apple and Expo to send you these notifications; it isn't copied here.`,
     },
     keys: ["pushDevices"],
   },
