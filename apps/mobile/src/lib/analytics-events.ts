@@ -94,7 +94,11 @@ export const ANALYTICS_EVENTS = {
   // Publications enregistrées (migration 0048) : une publication enregistrée —
   // rien d'autre, jamais laquelle ni dans quelle collection.
   post_saved: {},
-  follow_added: { context: oneOf(["search", "profile", "list"]) },
+  // Lot « découverte » : « suggestion », un compte suivi depuis « Comptes à découvrir ».
+  follow_added: { context: oneOf(["search", "profile", "list", "suggestion"]) },
+  // Fil « Pour vous » (lot « découverte ») : la première page ouverte — rien
+  // d'autre, ni les publications vues, ni le temps passé.
+  for_you_opened: {},
   report_submitted: { target_type: oneOf(REPORT_TARGET_TYPES) },
   // Lot 5 : décisions de la modération (administrateurs) — la décision et le type de contenu, jamais lequel.
   // Partie B : « remove_image », retrait d'une image copiée. Lot « conformité

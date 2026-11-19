@@ -91,6 +91,9 @@ import type {
   PinPostRequest,
   PinPostResponse,
   UserPostsPage,
+  ForYouPage,
+  SuggestionsResponse,
+  UpdateDiscoverableRequest,
 } from "@monapp/shared-types";
 import { COMPLEMENT_DEFERRED, CONSENT_VERSIONS, parseSearchCapacityStatus, parseVideoMomentsResponse, type SearchCapacityStatus } from "@monapp/shared-types";
 import { CLIENT_LEVEL_QUERY, parseFollowResponse } from "./follow-state";
@@ -452,7 +455,7 @@ export async function searchUsers(query: string): Promise<PublicProfile[]> {
  * « vie sociale ») : une demande est envoyée (« requested »), et rien n'est
  * compté comme un abonnement. Un serveur d'avant ce lot répond sans corps :
  * abonné(e). */
-export async function followUser(userId: string, context: "search" | "profile" | "list"): Promise<FollowResponse["state"]> {
+export async function followUser(userId: string, context: "search" | "profile" | "list" | "suggestion"): Promise<FollowResponse["state"]> {
   const response = await authorizedFetch(`/api/follows/${userId}?${CLIENT_LEVEL_QUERY}`, { method: "POST" });
   const state = response.status === 204 ? "following" : parseFollowResponse(await response.json().catch(() => null));
   if (state === "following") track("follow_added", { context });
@@ -506,6 +509,21 @@ export async function removeFollower(userId: string): Promise<void> {
 export async function fetchFeed(cursor?: string): Promise<FeedPage> {
   const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
   const response = await authorizedFetch(`/api/feed${query}`);
+  return response.json();
+}
+
+/** Fil « Pour vous » (lot « découverte ») : la page à cette position (0, 15,
+ * 30 ou 45). Une page peut être plus courte, ou vide, alors qu'il en reste :
+ * seul `nextOffset` dit s'il y a une suite. 404 : serveur d'avant ce lot
+ * (l'app cache alors « Pour vous »). */
+export async function fetchForYou(offset = 0): Promise<ForYouPage> {
+  const response = await authorizedFetch(`/api/feed/for-you${offset > 0 ? `?offset=${offset}` : ""}`);
+  return response.json();
+}
+
+/** Comptes à découvrir (10 au plus). 404 : serveur d'avant ce lot. */
+export async function fetchSuggestions(): Promise<SuggestionsResponse> {
+  const response = await authorizedFetch("/api/users/suggestions");
   return response.json();
 }
 
@@ -578,6 +596,12 @@ export async function likeComment(commentId: string, liked: boolean): Promise<Li
 /** Retirer sa propre mention d'un commentaire (le texte reste, sans lien). */
 export async function removeMyMention(commentId: string): Promise<void> {
   await authorizedFetch(`/api/comments/${commentId}/mentions/me`, { method: "DELETE" });
+}
+
+/** Réglage « Proposer mon compte aux autres membres » (migration 0050). */
+export async function updateDiscoverable(discoverable: boolean): Promise<void> {
+  const payload: UpdateDiscoverableRequest = { discoverable };
+  await authorizedFetch("/api/me/discoverable", { method: "PUT", body: JSON.stringify(payload) });
 }
 
 /** Réglage « Qui peut me mentionner ». */

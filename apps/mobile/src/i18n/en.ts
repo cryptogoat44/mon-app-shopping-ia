@@ -1695,4 +1695,20 @@ export const en: Catalog = {
       "Remove this profile's link? It will be erased: this decision cannot be undone. The person will be notified, with the reason you choose. They can add another one, unless their account is suspended.",
     linkRemovedSaved: "Link removed.",
   },
+  forYou: {
+    tabFollowing: "Following",
+    tabForYou: "For you",
+    tabsLabel: "Feed to show",
+    how: "Recent public posts from accounts you do not follow, ranked by date and by number of likes and comments. The ranking is the same for all members.",
+    empty: "Nothing new for now. Check back a little later.",
+    end: "You are all caught up.",
+    loadError: "“For you” could not be loaded.",
+    suggestionsTitle: "Accounts to discover",
+    suggestionsHow: "Accounts followed by people you follow, then the most active public accounts.",
+    suggestionsEmpty: "No suggestions for now.",
+    settingTitle: "Suggest my account to other members",
+    settingHelp:
+      "Your public posts may appear in “For you” and your account in suggestions. Off: only your followers and visitors of your profile see them.",
+    settingError: "The setting could not be saved. Please try again.",
+  },
 };

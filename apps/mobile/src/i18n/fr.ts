@@ -1816,4 +1816,21 @@ export const fr = {
       "Retirer le lien de ce profil ? Il sera effacé : cette décision ne s'annule pas. La personne sera prévenue, avec le motif choisi. Elle pourra en mettre un autre, sauf si son compte est suspendu.",
     linkRemovedSaved: "Lien retiré.",
   },
+  // Fil « Pour vous » et suggestions de comptes (lot « découverte », migration 0050).
+  forYou: {
+    tabFollowing: "Abonnements",
+    tabForYou: "Pour vous",
+    tabsLabel: "Fil à afficher",
+    how: "Des publications publiques récentes de comptes que vous ne suivez pas, classées selon leur date et leur nombre de j'aime et de commentaires. Le classement est le même pour tous les membres.",
+    empty: "Rien de nouveau pour l'instant. Revenez un peu plus tard.",
+    end: "Vous avez tout vu.",
+    loadError: "« Pour vous » n'a pas pu être chargé.",
+    suggestionsTitle: "Comptes à découvrir",
+    suggestionsHow: "Des comptes suivis par vos abonnements, puis les comptes publics les plus actifs.",
+    suggestionsEmpty: "Pas de suggestion pour l'instant.",
+    settingTitle: "Proposer mon compte aux autres membres",
+    settingHelp:
+      "Vos publications publiques peuvent apparaître dans « Pour vous » et votre compte dans les suggestions. Éteint : seuls vos abonnés et les visiteurs de votre profil les voient.",
+    settingError: "Le réglage n'a pas pu être enregistré. Réessayez.",
+  },
 } as const;
