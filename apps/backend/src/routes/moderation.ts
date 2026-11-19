@@ -242,8 +242,11 @@ export default async function moderationRoutes(fastify: FastifyInstance) {
     // la décision enregistrée (la fonction de 0037 n'est pas recréée). Journal
     // sans l'adresse. Échec (deux essais) : la décision est enregistrée, mais
     // l'administrateur l'apprend (500) ; suspendre le compte cache le lien.
+    // Seule une base qui dit « pas de 0049 » dispense d'effacer : une sonde
+    // illisible n'est jamais lue comme « pas de lien », on essaie quand même.
     const removed = OUTCOME.safeParse(data);
-    if (body.part === "bio" && !error && removed.success && removed.data[0]!.outcome === "ok" && (await profileExtrasReady(fastify).catch(() => false))) {
+    const bioRemoved = body.part === "bio" && !error && removed.success && removed.data[0]!.outcome === "ok";
+    if (bioRemoved && (await profileExtrasReady(fastify).catch(() => null)) !== false) {
       if (!(await clearProfileLink(body.userId))) {
         request.log.error("Retrait d'une bio : le lien du profil n'a pas pu être retiré");
         return reply.code(500).send({ error: "internal_error", message: GENERIC_SERVER_ERROR });

@@ -867,6 +867,17 @@ describe("modération", () => {
     expect((await userProfile(target, BRUNO, ANNA)).linkUrl).toBeNull();
   });
 
+  it("règle 7, sonde illisible au moment du retrait : le lien est quand même effacé (jamais « pas de lien » par défaut)", async () => {
+    const fake = seeded();
+    reportUser(fake, ANNA);
+    const probeColumns = (_table: string, method: string, args: unknown[]) => method === "select" && (args[0] === "id, pinned_at" || args[0] === "id, link_url");
+    const target = await pinsApp(failing(fake.db, probeColumns));
+    const response = await as(target, ADMIN).post("/api/admin/moderation/remove-profile-part", { userId: ANNA, part: "bio", reason: "inappropriate" });
+    expect(response.statusCode).toBe(200);
+    expect(row(fake, "profiles", ANNA)).toMatchObject({ bio: null, link_url: null });
+    expect(lines.join("\n")).not.toContain("anna-boutique");
+  });
+
   it("retirer la photo ne touche pas au lien ; une bio déjà vide (« rien à retirer ») non plus", async () => {
     const fake = seeded();
     row(fake, "profiles", ANNA).avatar_url = `${STORAGE_ORIGIN}/storage/v1/object/public/avatars/${ANNA}/avatar-1.jpg`;
