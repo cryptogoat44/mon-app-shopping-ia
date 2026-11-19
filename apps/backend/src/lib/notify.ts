@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import type { NotificationType } from "@monapp/shared-types";
 import { readAudienceOf } from "./audience.js";
+import { notifyActivity } from "./push.js";
 import { findViewablePost } from "./visibility.js";
 
 // Notifications de l'onglet Activité écrites par les membres (abonnement,
@@ -16,6 +17,12 @@ import { findViewablePost } from "./visibility.js";
 // Une notification n'empêche jamais l'action qui la provoque : une règle non
 // lisible ou une écriture refusée (par exemple un type que la base ne connaît
 // pas encore) est journalisée, sans identifiant, et la fonction rend false.
+// Lot « découverte » (migration 0051) : une fois la ligne écrite, et
+// seulement alors, la même nouvelle part sur le téléphone de la personne si
+// elle a allumé cette sorte (lib/push.ts, notifyActivity : lancée puis
+// oubliée, rien d'un compte suspendu ni vers lui, regroupée, 30 par jour au
+// plus). C'est son SEUL appel : jamais de notification sur le téléphone sans
+// la notification de l'onglet Activité, donc sans toutes ces règles.
 
 /** Types écrits par cette fonction (ceux de la modération ont leurs propres chemins). */
 export type MemberNotificationType = Exclude<NotificationType, "moderation" | "report_handled" | "piece_received">;
@@ -59,6 +66,7 @@ export async function notify(fastify: FastifyInstance, log: FastifyBaseLogger, i
       log.warn({ type, code: (error as { code?: string }).code ?? null }, "Notification non créée : écriture refusée");
       return false;
     }
+    notifyActivity(fastify, log, { recipientId, actorId, type, ...(postId !== undefined ? { postId } : {}) });
     return true;
   } catch {
     log.warn({ type }, "Notification non créée : règles illisibles");

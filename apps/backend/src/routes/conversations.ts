@@ -75,7 +75,7 @@ import { INVALID_ID, idParamsSchema, parseDbRows, parseInput, userIdParamsSchema
 import { findViewablePost, isBlockedEitherWay } from "../lib/visibility.js";
 import { WishImageError, copyWishImage, deleteWishCopy, findOwnWish } from "../lib/wishShare.js";
 import { sharedWishForMessage } from "../lib/collections.js";
-import { notifyNewMessage, pushAvailable } from "../lib/push.js";
+import { activityPushAvailable, notifyNewMessage, pushAvailable } from "../lib/push.js";
 import { openBothWays, readReceiptsAfterSend, readReceiptsFor, readStamp } from "../lib/readReceipts.js";
 import { withoutSuspendedFaces } from "../lib/profileModeration.js";
 import { speaksV2 } from "../lib/clientLevel.js";
@@ -339,9 +339,14 @@ export default async function conversationsRoutes(fastify: FastifyInstance) {
   // relu avec les notifications. `push` (lot notifications) : les
   // notifications sur le téléphone sont allumées (PUSH_ENABLED et 0035) ;
   // sinon, l'app ne les propose jamais et ne demande aucune autorisation.
+  // `activityPush` (lot « découverte ») : celles de l'activité aussi
+  // (PUSH_ENABLED et 0051), avec ou sans la messagerie ; sinon, l'app cache
+  // leurs quatre interrupteurs et ne les propose pas.
   fastify.get("/api/messages/status", auth, async (request, reply) => {
     reply.header("Cache-Control", "no-store");
-    if (!(await messagesReady(fastify))) return reply.send({ enabled: false, unreadCount: 0, push: false, actions: false } satisfies MessagesStatus);
+    if (!(await messagesReady(fastify))) {
+      return reply.send({ enabled: false, unreadCount: 0, push: false, actions: false, activityPush: await activityPushAvailable(fastify) } satisfies MessagesStatus);
+    }
     const userId = request.user!.id;
     const blocked = blockedFilter(await fetchBlockedUserIds(fastify, userId));
     let query = fastify.supabaseAdmin
@@ -364,6 +369,7 @@ export default async function conversationsRoutes(fastify: FastifyInstance) {
       unreadCount: count ?? 0,
       push: await pushAvailable(fastify),
       actions: await messageActionsReady(fastify),
+      activityPush: await activityPushAvailable(fastify),
     } satisfies MessagesStatus);
   });
 
