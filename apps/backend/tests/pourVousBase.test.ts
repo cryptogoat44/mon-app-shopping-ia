@@ -13,8 +13,10 @@ import { authHeaders, buildMultipart, buildTestApp, createTestUser, deleteTestUs
 // doublon. Les comptes de test sont vieillis de deux jours (un compte de moins
 // de 24 heures n'est proposé à personne). Le classement est gardé 5 minutes en
 // mémoire : chaque test l'oublie avant de lire.
-// Sans la migration 0050, les tests du réglage sont passés (« skip ») ; sans
-// 0045, celui du compte privé aussi.
+// Sans la migration 0050, « Pour vous » et les suggestions répondent 404
+// (personne ne pourrait refuser d'y figurer) : seul le test « sans 0050 »
+// tourne, les autres sont passés (« skip ») ; sans 0045, le cas du compte
+// privé est passé aussi.
 // Les règles, cas par cas : pourVous.test.ts (hors base).
 
 const PHOTO = await sharp({ create: { width: 64, height: 48, channels: 3, background: "#5A4632" } }).jpeg().toBuffer();
@@ -95,7 +97,8 @@ describe("« Pour vous » et suggestions, sur la base de développement", () => 
     await app?.close();
   }, 180_000);
 
-  it("les vraies exclusions : soi-même, suivi, bloqué, privé, suspendu, tout neuf, « abonnés » ; l'auteur public, oui", async () => {
+  it("les vraies exclusions : soi-même, suivi, bloqué, privé, suspendu, tout neuf, « abonnés » ; l'auteur public, oui", async (context) => {
+    if (!migrated) return context.skip();
     const seen = await forYouIds(viewer);
     const [publicOne, publicTwo, followersOnly] = idsOf(author);
     expect(seen).toEqual(expect.arrayContaining([publicOne, publicTwo]));
@@ -115,7 +118,8 @@ describe("« Pour vous » et suggestions, sur la base de développement", () => 
     for (const id of [...idsOf(followed), ...idsOf(blocked), ...idsOf(viewer)]) expect(forOther).toContain(id);
   });
 
-  it("deux pages sans doublon, et les nombres de la carte sont ceux du membre", async () => {
+  it("deux pages sans doublon, et les nombres de la carte sont ceux du membre", async (context) => {
+    if (!migrated) return context.skip();
     resetForYouCache();
     const first = (await request(other, "GET", "/api/feed/for-you")).json() as ForYouPage;
     if (first.nextOffset !== null) {
@@ -136,6 +140,16 @@ describe("« Pour vous » et suggestions, sur la base de développement", () => 
     if (forViewer !== undefined && forOther !== undefined) expect(forOther).toBe(forViewer + 1);
   });
 
+  it("sans 0050 : « Pour vous » et les suggestions répondent 404, comme le réglage (l'app les cache)", async (context) => {
+    if (migrated) return context.skip();
+    for (const url of ["/api/feed/for-you", "/api/users/suggestions"]) {
+      const response = await request(viewer, "GET", url);
+      expect(response.statusCode, url).toBe(404);
+      expect(response.json().error, url).toBe("discovery_setting_unavailable");
+    }
+    expect((await request(author, "PUT", "/api/me/discoverable", { discoverable: false })).statusCode).toBe(404);
+  });
+
   it("le réglage éteint par sa route : ni dans « Pour vous » ni dans les suggestions ; toujours sur son profil ; rallumé, il revient", async (context) => {
     if (!migrated) return context.skip();
     expect((await request(author, "GET", "/api/me")).json() as Profile).toMatchObject({ discoverable: true });
@@ -151,7 +165,8 @@ describe("« Pour vous » et suggestions, sur la base de développement", () => 
     expect(await forYouIds(other)).toContain(idsOf(author)[0]);
   });
 
-  it("suggestions : le compte suivi par un de vos abonnements d'abord ; jamais un compte suivi, bloqué, privé ou suspendu", async () => {
+  it("suggestions : le compte suivi par un de vos abonnements d'abord ; jamais un compte suivi, bloqué, privé ou suspendu", async (context) => {
+    if (!migrated) return context.skip();
     // viewer suit followed ; followed suit author : author est suggéré à viewer, en tête des comptes « amis d'amis ».
     expect((await request(followed, "POST", `/api/follows/${author.id}`)).statusCode).toBeLessThan(300);
     resetForYouCache();
