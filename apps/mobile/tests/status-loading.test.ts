@@ -265,7 +265,7 @@ describe("écran ouvert directement par son adresse, ou rechargé (appels du ser
     await miseEnPage(LOUISE);
     expect(demandees()).toEqual(TOUTES_UNE_FOIS);
     expect(postExtrasStatus()).toEqual({ carousel: true, peopleTags: true });
-    expect(messagesStatus()).toEqual({ enabled: true, unreadCount: 2, push: false });
+    expect(messagesStatus()).toEqual({ enabled: true, unreadCount: 2, push: false, actions: false });
     expect(collectionsStatus()).toEqual({ enabled: true, reportable: true });
     expect(wishAlertsStatus().available).toBe(true);
     expect(friendSectionVisible(collectionsStatus(), UNE_COLLECTION)).toBe(true);

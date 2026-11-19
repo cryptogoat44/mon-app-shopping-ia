@@ -27,6 +27,7 @@ import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { isAdmin } from "../lib/moderation.js";
 import { CONTENT_NOT_ALLOWED, firstBannedText } from "../lib/contentFilter.js";
 import { MESSAGES_UNAVAILABLE, messagesReady } from "../lib/messaging.js";
+import { READ_RECEIPTS_UNAVAILABLE, readReceiptsReady, saveReadReceipts } from "../lib/readReceipts.js";
 import { emptyUserFolder, extractOwnedStoragePath, removeOwnedFiles } from "../lib/storage.js";
 import { AVATAR_BUCKET } from "../lib/profileModeration.js";
 import { PROFILE_LINK_UNAVAILABLE, profileExtrasReady, profileExtrasShown } from "../lib/profileExtras.js";
@@ -67,6 +68,8 @@ const updateMeSchema = z.object({
 const updateLocaleSchema = z.object({ locale: z.enum(APP_LOCALES) });
 const updatePieceSendsFromSchema = z.object({ pieceSendsFrom: z.enum(PIECE_SENDS_FROM) });
 const updateMessagesFromSchema = z.object({ messagesFrom: z.enum(MESSAGES_FROM) });
+// Un vrai oui ou non : ni « true » en texte, ni 1.
+const updateReadReceiptsSchema = z.object({ readReceipts: z.boolean() });
 const updatePrivateAccountSchema = z.object({ isPrivate: z.boolean() });
 const updateMentionsFromSchema = z.object({ mentionsFrom: z.enum(MENTIONS_FROM) });
 
@@ -83,6 +86,8 @@ const profileRowSchema = z.object({
   piece_sends_from: z.enum(PIECE_SENDS_FROM).default("following"),
   // Lot messages (migration 0032) ; valeur par défaut tant que la colonne n'existe pas.
   messages_from: z.enum(MESSAGES_FROM).default(DEFAULT_MESSAGES_FROM),
+  // Lot « messages vus » (migration 0043) ; absente tant que la colonne n'existe pas.
+  read_receipts: z.boolean().nullable().optional(),
   // Compte privé (migration 0045) ; public tant que la colonne n'existe pas.
   is_private: z.boolean().default(false),
   // Mentions (migration 0046) ; valeur de départ tant que la colonne n'existe pas.
@@ -156,8 +161,18 @@ async function mentionsSettingShown(fastify: FastifyInstance): Promise<boolean> 
 }
 
 /** Profil renvoyé à l'app ; null si la ligne lue n'a pas la forme attendue.
- * `withLink` : la base a la migration 0049 (sinon, pas de `linkUrl` : l'app cache le champ). */
-function toProfile(row: unknown, counts: ProfileCounts, admin: boolean, privateAccount: PrivateAccountInfo | null, withMentions: boolean, withLink: boolean): Profile | null {
+ * `withLink` : la base a la migration 0049 (sinon, pas de `linkUrl` : l'app cache le champ).
+ * `receipts` : la base a la migration 0043 ; sans elle, le réglage
+ * « Confirmations de lecture » n'est pas renvoyé (l'app ne le propose pas). */
+function toProfile(
+  row: unknown,
+  counts: ProfileCounts,
+  admin: boolean,
+  privateAccount: PrivateAccountInfo | null,
+  withMentions: boolean,
+  withLink: boolean,
+  receipts: boolean
+): Profile | null {
   const parsed = profileRowSchema.safeParse(row);
   if (!parsed.success) return null;
   const profile = parsed.data;
@@ -175,6 +190,7 @@ function toProfile(row: unknown, counts: ProfileCounts, admin: boolean, privateA
     isAdmin: admin,
     pieceSendsFrom: profile.piece_sends_from,
     messagesFrom: profile.messages_from,
+    ...(receipts && typeof profile.read_receipts === "boolean" ? { readReceipts: profile.read_receipts } : {}),
     ...(privateAccount ? { isPrivate: profile.is_private, followRequestsCount: privateAccount.followRequestsCount } : {}),
     ...(withMentions ? { mentionsFrom: profile.mentions_from } : {}),
     ...(withLink ? { linkUrl: profile.link_url ?? null } : {}),
@@ -228,7 +244,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "profile_not_found", message: "Profil introuvable." });
     }
 
-    const profile = toProfile(data, counts, admin, privateAccount, await mentionsSettingShown(fastify), await profileExtrasShown(fastify));
+    const profile = toProfile(data, counts, admin, privateAccount, await mentionsSettingShown(fastify), await profileExtrasShown(fastify), await readReceiptsReady(fastify));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -331,7 +347,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       if (cleanup.failed > 0) request.log.warn({ bucket: AVATAR_BUCKET, failed: cleanup.failed }, "Ancienne photo de profil restée dans le stockage");
     }
 
-    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify), await profileExtrasShown(fastify));
+    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify), await profileExtrasShown(fastify), await readReceiptsReady(fastify));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -366,7 +382,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify), await profileExtrasShown(fastify));
+    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify), await profileExtrasShown(fastify), await readReceiptsReady(fastify));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -441,7 +457,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
     // Un profil qu'on vient de compléter n'a par construction encore
     // aucun abonné, abonnement ni publication — pas besoin de requêter les
     // compteurs ici.
-    const profile = toProfile(data, { followersCount: 0, followingCount: 0, postsCount: 0 }, admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify), await profileExtrasShown(fastify));
+    const profile = toProfile(data, { followersCount: 0, followingCount: 0, postsCount: 0 }, admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify), await profileExtrasShown(fastify), await readReceiptsReady(fastify));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -479,6 +495,25 @@ export default async function meRoutes(fastify: FastifyInstance) {
       .eq("id", request.user!.id);
     if (error) {
       request.log.error({ error }, "Échec de mise à jour du réglage des messages");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+    return reply.code(204).send();
+  });
+
+  // « Confirmations de lecture » (lot « messages vus », migration 0043) :
+  // allumé par défaut. Éteint : l'autre membre ne voit plus « Vu » pour vos
+  // lectures, et vous ne voyez plus les siennes (lib/readReceipts.ts). Rallumé :
+  // seules vos lectures faites à partir de ce moment sont montrées, jamais
+  // celles faites pendant qu'il était éteint (saveReadReceipts). Un réglage
+  // de confidentialité : modifiable même par un compte suspendu.
+  // Sans les messages (0032) ou sans 0043 : indisponible, rien n'est écrit.
+  fastify.put("/api/me/read-receipts", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    if (!(await messagesReady(fastify)) || !(await readReceiptsReady(fastify))) return reply.code(404).send(READ_RECEIPTS_UNAVAILABLE);
+    const body = parseInput(updateReadReceiptsSchema, request.body, reply, { error: "invalid_body", message: "Réglage invalide." });
+    if (!body) return;
+    const error = await saveReadReceipts(fastify, request.user!.id, body.readReceipts);
+    if (error) {
+      request.log.error({ error }, "Échec de mise à jour du réglage des confirmations de lecture");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
     return reply.code(204).send();

@@ -19,14 +19,16 @@ import { Avatar } from "@/components/avatar";
 // ou d'une autre personne (recherche par nom) pour une nouvelle conversation.
 // La carte y est jointe, la personne peut ajouter un mot avant d'envoyer
 // (écran de la conversation, qui applique les règles d'invitation).
+// Lot « messages, plus de confort » : ou une publication du fil (`postId`),
+// que la personne choisie ne verra que si elle a le droit de la voir.
 export default function ChooseConversationScreen() {
-  const { wishId, matchId } = useLocalSearchParams<{ wishId?: string; matchId?: string }>();
+  const { wishId, matchId, postId } = useLocalSearchParams<{ wishId?: string; matchId?: string; postId?: string }>();
   const router = useRouter();
   const [conversations, setConversations] = useState<ConversationSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const people = usePeopleSearch();
   // La carte suit la personne choisie jusqu'à l'écran de la conversation (une seule à la fois).
-  const attached = wishId ? { wishId } : matchId ? { matchId } : {};
+  const attached = wishId ? { wishId } : matchId ? { matchId } : postId ? { postId } : {};
 
   useFocusEffect(
     useCallback(() => {
@@ -56,7 +58,7 @@ export default function ChooseConversationScreen() {
         <Text style={styles.title} accessibilityRole="header">
           {t.messages.chooseTitle}
         </Text>
-        <Text style={styles.hint}>{matchId ? t.messages.chooseHintPiece : t.messages.chooseHint}</Text>
+        <Text style={styles.hint}>{postId ? t.messageActions.chooseHintPost : matchId ? t.messages.chooseHintPiece : t.messages.chooseHint}</Text>
         {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
         {conversations === null && !error ? <ActivityIndicator color={color.encre} style={styles.loader} /> : null}
         {conversations?.length === 0 ? <Text style={styles.empty}>{t.messages.chooseEmpty}</Text> : null}

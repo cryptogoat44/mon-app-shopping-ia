@@ -606,10 +606,81 @@ describe("messages privés (lot messages, migration 0032)", () => {
     expect(messages).toContain("None: open conversation");
   });
 
+  // Messages, plus de confort (migration 0044).
+  it("un message supprimé : celui de l'autre membre arrive sans contenu ; le vôtre, conservé pour la modération, le dit ; une publication envoyée n'est jamais décrite", () => {
+    const data = fixture();
+    const [own, received] = data.messages as Record<string, unknown>[];
+    Object.assign(own!, { deleted_at: "2026-10-23T10:00:00+00:00", updated_at: "2026-10-23T10:00:00+00:00", shared_post: false, post_id: null, reply_to_id: null });
+    Object.assign(received!, { body: null, deleted_at: "2026-10-24T11:00:00+00:00", updated_at: "2026-10-24T11:00:00+00:00", shared_post: false, post_id: null, reply_to_id: null });
+    data.messages.push({ ...own, id: "d0400000-0000-4000-8000-000000000001", body: null, wish_title: null, wish_image_url: null, wish_image_thumb_url: null, deleted_at: null, shared_post: true, post_id: "p9000000-0000-4000-8000-000000000009", reply_to_id: "d0200000-0000-4000-8000-000000000001", created_at: "2026-10-25T08:00:00+00:00" });
+    const page = renderExportHtml(data, lookups(), options());
+    const messages = spaces(visibleText(sectionHtml(page, "messages")));
+    // Le vôtre : son contenu est resté (signalé avant d'être supprimé), la mention le dit.
+    expect(messages).toContain("Regarde ce sac");
+    expect(messages).toContain("Supprimé le 23 octobre 2026");
+    expect(messages).toContain("Supprimé par vous, conservé pour la modération");
+    // Celui de l'autre membre : la date, « Message supprimé », rien d'autre.
+    expect(messages).toContain("Supprimé le 24 octobre 2026");
+    expect(messages).toContain("Message supprimé");
+    expect(messages).not.toContain("Reponse masquee");
+    // Publication envoyée et réponse : dites, jamais décrites (aucun identifiant dans la partie lisible).
+    expect(messages).toContain("Publication envoyée dans ce message Oui");
+    expect(messages).toContain("En réponse à un autre message Oui");
+    expect(visibleText(sectionHtml(page, "messages"))).not.toContain("p9000000");
+    expect(EXPORT_COLUMNS.messages.post_id).toMatchObject({ technical: true });
+    expect(EXPORT_COLUMNS.messages.updated_at).toMatchObject({ technical: true });
+    expect(page).not.toContain("Autres informations");
+  });
+
+  it("vos « j'aime » sur des messages : la conversation et la date ; un compte en blocage n'est jamais nommé", () => {
+    const data = fixture();
+    data.messageReactions.push({ message_id: "d0300000-0000-4000-8000-000000000001", conversation_id: data.conversations[1]!.conversation_id, other_user_id: data.conversations[1]!.other_user_id, created_at: "2026-10-21T09:30:00+00:00" });
+    const messages = spaces(visibleText(sectionHtml(renderExportHtml(data, lookups(), options()), "messages")));
+    expect(messages).toContain("Messages que vous avez aimés (2)");
+    expect(messages).toContain("Dans votre conversation avec @alexis (Alexis Martin)");
+    expect(messages).toContain("Aimé le 20 octobre 2026");
+    expect(messages).toContain("Dans votre conversation avec Un compte Spotto");
+    expect(messages).not.toContain("bloqueur");
+    const english = spaces(visibleText(sectionHtml(renderExportHtml(fixture(), lookups(), options({ locale: "en", timeZone: "UTC" })), "messages")));
+    expect(english).toContain("Messages you liked (1)");
+    expect(english).toContain("In your conversation with @alexis (Alexis Martin)");
+    // Aucun « j'aime » : pas de sous-titre.
+    const none = fixture();
+    none.messageReactions = [];
+    expect(spaces(decode(sectionHtml(renderExportHtml(none, lookups(), options()), "messages")))).not.toContain("Messages que vous avez aimés");
+  });
+
   it("le réglage « Qui peut vous écrire » est dans le profil", () => {
     const account = spaces(decode(sectionHtml(render(), "account")));
     expect(account).toContain("Qui peut vous écrire");
     expect(account).toContain("Tout le monde (sous forme d'invitation)");
+  });
+
+  // Lot « messages vus » (migration 0043) : le réglage, et la date de la
+  // dernière lecture de chaque conversation (gardée depuis 0032).
+  it("le réglage « Confirmations de lecture » est dans le profil, en français et en anglais ; absent tant que la colonne n'existe pas", () => {
+    const base = fixture();
+    expect(spaces(visibleText(sectionHtml(render(), "account")))).not.toContain("Confirmations de lecture");
+    const withSetting = (value: boolean) => ({ ...base, profile: { ...base.profile!, read_receipts: value } });
+    expect(spaces(visibleText(sectionHtml(render({}, withSetting(true)), "account")))).toContain("Confirmations de lecture Oui");
+    expect(spaces(visibleText(sectionHtml(render({}, withSetting(false)), "account")))).toContain("Confirmations de lecture Non");
+    const en = spaces(visibleText(sectionHtml(renderExportHtml(withSetting(false), lookups(), options({ locale: "en", timeZone: "UTC" })), "account")));
+    expect(en).toContain("Read receipts No");
+    expect(EXPORT_COLUMNS.profile.read_receipts.label).toEqual({ fr: "Confirmations de lecture", en: "Read receipts" });
+    // Depuis quand vos lectures peuvent être montrées : une date du membre, comme les autres dates de son profil.
+    const withSince = (value: boolean) => ({ ...base, profile: { ...base.profile!, read_receipts: value, read_receipts_since: "2026-11-18T09:30:00.000+00:00" } });
+    expect(spaces(visibleText(sectionHtml(render(), "account")))).not.toContain("activées pour la dernière fois");
+    for (const value of [true, false]) {
+      const account = spaces(visibleText(sectionHtml(render({}, withSince(value)), "account")));
+      expect(account).toContain("Confirmations de lecture activées pour la dernière fois le 18 novembre 2026");
+      // Sous son libellé, jamais sous le nom de la colonne.
+      expect(account).not.toContain("read_receipts_since");
+    }
+    expect(spaces(visibleText(sectionHtml(renderExportHtml(withSince(true), lookups(), options({ locale: "en", timeZone: "UTC" })), "account")))).toContain("Read receipts last turned on");
+    expect(EXPORT_COLUMNS.profile.read_receipts_since.label).toEqual({ fr: "Confirmations de lecture activées pour la dernière fois le", en: "Read receipts last turned on" });
+    // La date de votre dernière lecture de chaque conversation y figure aussi.
+    expect(spaces(visibleText(sectionHtml(render(), "messages")))).toContain("Lue pour la dernière fois le 20 octobre 2026");
+    expect(EXPORT_COLUMNS.conversations.last_read_at.label).toEqual({ fr: "Lue pour la dernière fois le", en: "Last read on" });
   });
 });
 

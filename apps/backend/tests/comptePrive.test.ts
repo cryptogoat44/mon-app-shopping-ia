@@ -227,9 +227,9 @@ describe("la règle, sans base : qui voit le contenu de qui", () => {
     expect(followStateOf({ follows: false, requested: false })).toBe("none");
   });
 
-  it("speaksV2 : seulement le paramètre d'adresse « v=2 »", () => {
-    expect(speaksV2({ query: { v: "2" } })).toBe(true);
-    for (const query of [{}, { v: "1" }, { v: "3" }, { v: 2 }, { v: ["2", "2"] }, { V: "2" }, null, undefined, "v=2"]) expect(speaksV2({ query }), JSON.stringify(query)).toBe(false);
+  it("speaksV2 : seulement le paramètre d'adresse « v=2 » (ou un niveau plus élevé)", () => {
+    for (const v of ["2", "3"]) expect(speaksV2({ query: { v } }), v).toBe(true);
+    for (const query of [{}, { v: "1" }, { v: 2 }, { v: ["2", "2"] }, { V: "2" }, null, undefined, "v=2"]) expect(speaksV2({ query }), JSON.stringify(query)).toBe(false);
   });
 
   it("les anciens types de notification sont exactement les six d'avant, et font tous partie des types connus", () => {
@@ -1020,11 +1020,12 @@ describe("export des données", () => {
     expect(body.profile.is_private).toBe(true);
     expect(body.followRequestsSent).toEqual([{ target_id: EVE, created_at: "2026-11-10T00:00:00+00:00" }]);
     expect(body.followRequestsReceived).toEqual([{ requester_id: CHLOE, created_at: "2026-11-10T00:00:00+00:00" }]);
-    // Clés ajoutées à la fin : les anciennes gardent leur ordre.
+    // Clés ajoutées à la fin : les anciennes gardent leur ordre (dont celle du
+    // lot « messages, plus de confort », migration 0044, fusionné avant).
     // (Après elles : les trois clés de la migration 0046, commentaires.test.ts.)
     const keys = Object.keys(body);
     expect(keys.slice(keys.indexOf("followRequestsSent"), keys.indexOf("followRequestsSent") + 2)).toEqual(["followRequestsSent", "followRequestsReceived"]);
-    expect(keys.indexOf("followRequestsSent")).toBe(keys.indexOf("videoConfirmations") + 1);
+    expect(keys.indexOf("followRequestsSent")).toBe(keys.indexOf("messageReactions") + 1);
     expect(JSON.stringify([body.followRequestsSent, body.followRequestsReceived])).not.toContain(BOB);
     expect(JSON.stringify([body.followRequestsSent, body.followRequestsReceived])).not.toContain(DAN);
 
