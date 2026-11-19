@@ -46,6 +46,7 @@ export const termsOfUse: LegalDocument = {
         "Les prix, la disponibilité et les caractéristiques affichés viennent des marchands et peuvent avoir changé : seules font foi les informations du site du marchand.",
         `${BRAND} ne vend rien. Si vous achetez une pièce, vous le faites directement auprès du marchand, selon ses propres conditions ; ${BRAND} n'est pas partie à cet achat.`,
         "Le nombre d'identifications peut être limité dans le temps, pour garantir le service à tous.",
+        "Limites de recherche : un compte gratuit peut lancer 100 recherches par mois civil, du 1er à 0 h (heure de Paris) au 1er du mois suivant, et chaque compte 8 recherches par jour. Une recherche, c'est une photo, une capture de vidéo ou un lien que vous envoyez, quel que soit le nombre de boutiques interrogées ensuite ; une recherche servie par notre mémoire des recherches récentes, ou qui échoue pour une raison technique, n'est pas comptée. Quand le service entier est très sollicité, les recherches peuvent aussi être suspendues pour un temps. Quand il vous en reste peu, l'app vous le dit avant de chercher.",
       ],
     },
     {

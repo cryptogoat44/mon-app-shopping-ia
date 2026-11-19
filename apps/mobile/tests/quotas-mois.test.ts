@@ -6,6 +6,11 @@ import { setActiveLocale } from "../src/i18n";
 import { blocksLaunch, capacityCopy, isQuietNotice, limitsNotice, nextBoundary, noticeText, type LocalClock } from "../src/lib/search-limits";
 import { capacityFailure, monthlyQuotaCopy } from "../src/lib/spot-capacity";
 import { failureCorrections } from "../src/lib/spot-corrections";
+import { termsOfUse } from "../src/legal/conditions";
+import { termsOfUseEn } from "../src/legal/conditions.en";
+import { privacyPolicy } from "../src/legal/confidentialite";
+import { privacyPolicyEn } from "../src/legal/confidentialite.en";
+import * as siteExtra from "../src/legal-extra/confidentialite-extra.web";
 
 // Lot quotas (migration 0053) : la part du mois d'un compte gratuit, dite
 // AVANT l'effort (« Il vous reste 12 recherches ce mois-ci » à 20 ou moins,
@@ -151,5 +156,32 @@ describe("textes FR et EN", () => {
   it("aucun prix, aucune mention d'abonnement dans ce lot", () => {
     const all = JSON.stringify([fr.monthlyQuota, en.monthlyQuota, fr.monthlyQuota.usedUp(100, "mai"), en.monthlyQuota.usedUp(100, "May")]);
     expect(all).not.toMatch(/abonn|subscri|€|\$|prix|price|premium|Vidéo|Miroir/i);
+  });
+});
+
+describe("textes juridiques (sans nouvelle version)", () => {
+  const text = (document: { sections: readonly { blocks: readonly unknown[] }[] }) => JSON.stringify(document.sections);
+
+  it("conditions d'utilisation : 100 recherches par mois pour un compte gratuit, 8 par jour pour tous, en français et en anglais", () => {
+    expect(text(termsOfUse)).toContain("un compte gratuit peut lancer 100 recherches par mois civil, du 1er à 0 h (heure de Paris) au 1er du mois suivant, et chaque compte 8 recherches par jour");
+    expect(text(termsOfUseEn)).toContain("a free account can run 100 searches per calendar month, from 12 am (Paris time) on the 1st to the 1st of the following month, and every account 8 searches per day");
+    // Le cache ne compte pas, une panne non plus.
+    expect(text(termsOfUse)).toContain("une recherche servie par notre mémoire des recherches récentes, ou qui échoue pour une raison technique, n'est pas comptée");
+  });
+
+  it("politique : le compteur du mois, le statut d'abonnement conservé (sans nommer de prestataire), l'export et la suppression", () => {
+    for (const policy of [text(privacyPolicy), text(privacyPolicyEn)]) {
+      expect(policy).not.toMatch(/revenuecat|revenue cat/i);
+    }
+    expect(text(privacyPolicy)).toContain("compte vos recherches du jour et du mois civil à partir de l'historique de vos recherches ; aucun compteur de plus n'est enregistré");
+    expect(text(privacyPolicy)).toContain("Si vous avez un abonnement, Spotto conserve son type, sa date de fin, d'où vient l'information et la date de sa dernière mise à jour");
+    expect(text(privacyPolicy)).toContain("Votre statut d'abonnement : gardé tant que votre compte existe, mis à jour à chaque changement, et effacé avec votre compte.");
+    expect(text(privacyPolicyEn)).toContain("If you have a subscription, Spotto keeps its type, its end date, where the information came from and the date it was last updated");
+  });
+
+  it("site seulement : 5 essais par mois pour un compte gratuit (jamais dans les textes de l'app iPhone)", () => {
+    expect(JSON.stringify(siteExtra.privacyExtraFr.sections)).toContain("un compte gratuit a 5 essais par mois civil, remis à zéro le 1er de chaque mois à 0 h (heure de Paris)");
+    expect(JSON.stringify(siteExtra.privacyExtraEn.sections)).toContain("a free account has 5 try-ons per calendar month, reset on the 1st of each month at 12 am (Paris time)");
+    for (const document of [termsOfUse, termsOfUseEn, privacyPolicy, privacyPolicyEn]) expect(text(document)).not.toMatch(/essayage|5 essais|try-on/i);
   });
 });
