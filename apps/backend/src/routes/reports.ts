@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { REPORT_REASONS, REPORT_TARGET_TYPES } from "@monapp/shared-types";
-import { parseInput } from "../lib/validation.js";
+import { DatabaseReadError, parseInput } from "../lib/validation.js";
+import { findViewablePost, isBlockedEitherWay } from "../lib/visibility.js";
 import { autoHideIfReported } from "../lib/autoHide.js";
 import { captureModerationEvent } from "../lib/sentry.js";
 import { MESSAGES_UNAVAILABLE, messagesReady } from "../lib/messaging.js";
@@ -62,6 +63,22 @@ export default async function reportsRoutes(fastify: FastifyInstance) {
         if (!(await canReportCollection(fastify, reporterId, body.targetId))) return reply.code(404).send(TARGET_NOT_FOUND);
       }
 
+      // Lot « corrections en ligne » : une publication, un commentaire ou un
+      // compte ne se signale que si on le voit vraiment ; sinon la même
+      // réponse qu'un contenu inexistant. Avant, n'importe quel identifiant
+      // était accepté : quelques comptes connaissant l'identifiant d'une
+      // publication « Moi seul » ou « Abonnés » pouvaient la faire masquer
+      // (lib/autoHide.ts) sans jamais la voir.
+      if (body.targetType === "post" && !(await canReportPost(fastify, reporterId, body.targetId))) {
+        return reply.code(404).send(TARGET_NOT_FOUND);
+      }
+      if (body.targetType === "comment" && !(await canReportComment(fastify, reporterId, body.targetId))) {
+        return reply.code(404).send(TARGET_NOT_FOUND);
+      }
+      if (body.targetType === "user" && !(await canReportUser(fastify, body.targetId))) {
+        return reply.code(404).send(TARGET_NOT_FOUND);
+      }
+
       const note = body.note?.trim().slice(0, 500) || null;
 
       const { error } = await fastify.supabaseAdmin.from("reports").insert({
@@ -108,4 +125,37 @@ async function canReportMessage(fastify: FastifyInstance, reporterId: string, me
     .eq("user_id", reporterId)
     .maybeSingle();
   return !sideError && side !== null;
+}
+
+/** La publication est visible par `reporterId` (masquage, blocages,
+ * confidentialité : lib/visibility.ts) et n'est pas la sienne (l'app ne
+ * propose pas de signaler sa propre publication). */
+async function canReportPost(fastify: FastifyInstance, reporterId: string, postId: string): Promise<boolean> {
+  const post = await findViewablePost(fastify, reporterId, postId);
+  return post !== null && post.user_id !== reporterId;
+}
+
+/** Le commentaire est dans ce que `reporterId` lit sous la publication
+ * (routes/comments.ts) : pas masqué, sur une publication qu'il voit, d'un
+ * compte sans blocage avec lui (dans un sens ou dans l'autre) ; et ce n'est
+ * pas le sien (l'app ne le propose pas). */
+async function canReportComment(fastify: FastifyInstance, reporterId: string, commentId: string): Promise<boolean> {
+  const { data, error } = await fastify.supabaseAdmin.from("comments").select("post_id, user_id").eq("id", commentId).is("hidden_at", null).maybeSingle();
+  if (error) throw new DatabaseReadError("Lecture d'un commentaire impossible");
+  if (!data) return false;
+  const comment = data as { post_id: string; user_id: string };
+  if (comment.user_id === reporterId) return false;
+  if (!(await findViewablePost(fastify, reporterId, comment.post_id))) return false;
+  return !(await isBlockedEitherWay(fastify, reporterId, comment.user_id));
+}
+
+/** Le compte a une page de profil (nom d'utilisateur choisi : la règle de
+ * GET /api/users/:userId). Un blocage, dans un sens ou dans l'autre,
+ * n'empêche PAS de le signaler : l'app permet de bloquer puis de signaler, et
+ * une personne bloquée par celui qui la harcèle doit pouvoir le signaler. Un
+ * profil ne se masque jamais automatiquement (lib/autoHide.ts). */
+async function canReportUser(fastify: FastifyInstance, userId: string): Promise<boolean> {
+  const { data, error } = await fastify.supabaseAdmin.from("profiles").select("username").eq("id", userId).maybeSingle();
+  if (error) throw new DatabaseReadError("Lecture d'un profil impossible");
+  return Boolean((data as { username: string | null } | null)?.username);
 }
