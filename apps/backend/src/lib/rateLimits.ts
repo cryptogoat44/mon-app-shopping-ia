@@ -315,6 +315,87 @@ export const RATE_LIMITS = {
   // bloquer un vrai utilisateur. Voir le plugin rateLimit.ts : appliquée
   // d'office à toute route qui ne déclare pas sa propre limite nommée.
   default: { max: 300, windowMs: MINUTE },
+
+  // Compte privé (lot « vie sociale ») : demandes d'abonnement d'un membre au
+  // MÊME compte privé, comptées par paire de comptes, seulement quand une
+  // demande est vraiment créée (consumeRateLimitFor). Annuler puis redemander
+  // en boucle ne peut pas harceler ; le remède définitif reste le blocage.
+  followRequestPair: {
+    max: 2,
+    windowMs: DAY,
+    error: "follow_request_limit",
+    message: "Vous avez déjà demandé à suivre ce compte récemment. Réessayez plus tard.",
+  },
+
+  // Listes des abonnés et des abonnements (lot « vie sociale ») : large pour
+  // un membre qui fait défiler de longues listes (30 lignes par page), juste
+  // assez pour gêner un script qui recopierait les listes de tous les comptes.
+  memberList: {
+    max: 600,
+    windowMs: HOUR,
+    error: "member_list_limit",
+    message: "Trop de listes ouvertes. Réessayez dans un moment.",
+  },
+
+  // Aimer / ne plus aimer une publication (lot « vie sociale », « Aimé par ») :
+  // sans limite jusque-là. 300 par heure ne gêne personne qui fait défiler son
+  // fil, et arrête un script qui aimerait en boucle.
+  postReact: {
+    max: 300,
+    windowMs: HOUR,
+    error: "post_react_limit",
+    message: "Trop de j'aime en peu de temps. Réessayez dans un moment.",
+  },
+
+  // Aimer / ne plus aimer un commentaire (lot « vie sociale », migration 0046) :
+  // la même largeur que pour une publication.
+  commentLike: {
+    max: 300,
+    windowMs: HOUR,
+    error: "comment_like_limit",
+    message: "Trop de j'aime en peu de temps. Réessayez dans un moment.",
+  },
+
+  // Mentions « @pseudo » ACCEPTÉES par heure et par auteur (lot « vie
+  // sociale ») : chacune prévient un membre. Comptée seulement quand une
+  // mention est vraiment retenue (consumeRateLimit, lib/mentions.ts) ; au-delà,
+  // le commentaire est publié quand même et le « @pseudo » reste un simple
+  // texte, sans erreur. Les identifications sur une photo (migration 0047)
+  // puiseront dans le même budget.
+  mentionNotify: { max: 20, windowMs: HOUR },
+
+  // Photos 2 à 5 d'une publication (lot « vie sociale », migration 0047) :
+  // une requête par photo, 4 au plus par publication. 60 par heure laisse
+  // 15 publications complètes ; chaque photo est traitée par sharp et rangée
+  // dans le stockage. Les identifications puisent dans mentionNotify.
+  postMedia: {
+    max: 60,
+    windowMs: HOUR,
+    error: "post_media_limit",
+    message: "Vous avez ajouté beaucoup de photos en peu de temps. Réessayez dans un moment.",
+  },
+
+  // Enregistrer une publication, ou la ranger dans une autre collection (lot
+  // « vie sociale », migration 0048) : 300 par heure ne gêne personne qui fait
+  // défiler son fil, et arrête un script qui remplirait la table. Retirer une
+  // publication de ses enregistrées n'est jamais limité au-delà du filet commun.
+  savePost: {
+    max: 300,
+    windowMs: HOUR,
+    error: "save_post_limit",
+    message: "Vous avez enregistré beaucoup de publications en peu de temps. Réessayez dans un moment.",
+  },
+
+  // Changer le lien en bio (lot « vie sociale », migration 0049) : comptée
+  // seulement quand le lien change vraiment (consumeRateLimit, routes/me.ts),
+  // jamais pour le retirer. Un lien ne peut pas être échangé en boucle autour
+  // d'une vérification de la modération.
+  profileLink: {
+    max: 10,
+    windowMs: DAY,
+    error: "profile_link_limit",
+    message: "Vous avez changé de lien trop souvent. Réessayez demain.",
+  },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

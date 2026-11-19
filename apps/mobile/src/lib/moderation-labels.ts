@@ -95,8 +95,15 @@ export function profileRemovalActions(item: Pick<ModerationItem, "preview"> & Pa
 }[] {
   if (item.preview.kind !== "user") return [];
   const q = t.moderationQueue;
+  // Lien en bio (migration 0049) : retirer la bio le retire aussi, et l'avertissement le dit.
+  // Sans bio, avec un lien : le même retrait (partie « bio »), nommé « Retirer le lien ».
+  const linkOnly = (item.preview.bio ?? "").trim() === "" && !!item.preview.linkUrl;
+  const bioWarning = item.preview.linkUrl ? `${q.removeBioWarning} ${t.profilePins.removeBioAlsoLink}` : q.removeBioWarning;
+  const bio = linkOnly
+    ? { part: "bio" as const, label: t.profilePins.removeLinkOnly, warning: t.profilePins.removeLinkOnlyWarning, saved: t.profilePins.linkRemovedSaved }
+    : { part: "bio" as const, label: q.removeBio, warning: bioWarning, saved: q.bioRemovedSaved };
   return [
-    ...(item.canRemoveBio === true ? [{ part: "bio" as const, label: q.removeBio, warning: q.removeBioWarning, saved: q.bioRemovedSaved }] : []),
+    ...(item.canRemoveBio === true ? [bio] : []),
     ...(item.canRemoveAvatar === true ? [{ part: "avatar" as const, label: q.removeAvatar, warning: q.removeAvatarWarning, saved: q.avatarRemovedSaved }] : []),
   ];
 }

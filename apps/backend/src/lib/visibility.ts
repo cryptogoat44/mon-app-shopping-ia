@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { PRIVACY_LEVELS, type PrivacyLevel } from "@monapp/shared-types";
+import { postVisibleTo, readAudienceOf } from "./audience.js";
 import { DatabaseReadError } from "./validation.js";
 
 // Règles de visibilité entre deux comptes (Lot Q, décision 6) — une seule
@@ -29,10 +30,13 @@ export async function isFollowing(fastify: FastifyInstance, followerId: string, 
 
 /** Confidentialités qu'un visiteur peut voir chez un auteur (hors blocage,
  * à vérifier à part) : publique pour tous, « abonnés » pour ses abonnés,
- * privée pour personne d'autre que l'auteur. */
-export function visiblePrivacies(isOwner: boolean, follows: boolean): PrivacyLevel[] {
+ * privée pour personne d'autre que l'auteur. Compte privé (migration 0045) :
+ * rien du tout pour qui n'est pas un abonné accepté — liste vide, et
+ * l'appelant ne lit alors aucune publication. */
+export function visiblePrivacies(isOwner: boolean, follows: boolean, isPrivate = false): PrivacyLevel[] {
   if (isOwner) return ["public", "followers", "private"];
-  return follows ? ["public", "followers"] : ["public"];
+  if (follows) return ["public", "followers"];
+  return isPrivate ? [] : ["public"];
 }
 
 /** Publications montrables (lot 5, modération) : une publication masquée
@@ -44,17 +48,17 @@ export function shownPosts<Columns extends string>(fastify: FastifyInstance, col
 }
 
 /** Une publication précise est-elle visible par ce visiteur ? À appeler sur
- * une publication lue avec `shownPosts` (jamais une publication masquée). */
+ * une publication lue avec `shownPosts` (jamais une publication masquée).
+ * La règle est celle de lib/audience.ts (blocage, compte privé, abonnement) ;
+ * une lecture impossible relève DatabaseReadError, jamais « visible ». */
 export async function canViewPost(
   fastify: FastifyInstance,
   viewerId: string,
   post: { user_id: string; privacy: PrivacyLevel }
 ): Promise<boolean> {
   if (post.user_id === viewerId) return true;
-  if (await isBlockedEitherWay(fastify, viewerId, post.user_id)) return false;
-  if (post.privacy === "public") return true;
-  if (post.privacy === "private") return false;
-  return isFollowing(fastify, viewerId, post.user_id);
+  // Ni les suspensions ni les demandes en attente ne changent la réponse : non lues.
+  return postVisibleTo(await readAudienceOf(fastify, viewerId, post.user_id, { suspended: false, requested: false }), post.privacy);
 }
 
 const postRefSchema = z.object({ id: z.guid(), user_id: z.guid(), privacy: z.enum(PRIVACY_LEVELS) });

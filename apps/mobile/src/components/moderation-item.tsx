@@ -157,13 +157,23 @@ function ItemPreview({
     <View style={styles.preview}>
       <AuthorLine author={preview.author} />
       {preview.kind === "post" ? (
-        <View style={styles.postRow}>
-          <PreviewImage uri={preview.imageUrl} removed={preview.imageRemoved} label={t.post.photoBy(preview.author.displayName)} />
-          <View style={styles.postText}>
-            {preview.caption ? <Text style={styles.body}>{preview.caption}</Text> : null}
-            <Text style={styles.meta}>{t.vaultLabels.privacy[preview.privacy]}</Text>
+        <>
+          <View style={styles.postRow}>
+            <PreviewImage uri={preview.imageUrl} removed={preview.imageRemoved} label={t.post.photoBy(preview.author.displayName)} />
+            <View style={styles.postText}>
+              {preview.caption ? <Text style={styles.body}>{preview.caption}</Text> : null}
+              <Text style={styles.meta}>{t.vaultLabels.privacy[preview.privacy]}</Text>
+            </View>
           </View>
-        </View>
+          {/* Plusieurs photos (migration 0047) : toutes, la photo en cause peut être la troisième. */}
+          {preview.images && preview.images.length > 1 ? (
+            <View style={styles.morePhotos}>
+              {preview.images.map((uri, index) => (
+                <Image key={`${index}-${uri}`} source={{ uri }} style={styles.postImage} contentFit="cover" accessible accessibilityLabel={t.carousel.position(index + 1, preview.images!.length)} />
+              ))}
+            </View>
+          ) : null}
+        </>
       ) : preview.kind === "piece" ? (
         <View style={styles.postRow}>
           <PreviewImage uri={preview.imageUrl} removed={preview.imageRemoved} label={preview.title} />
@@ -178,8 +188,20 @@ function ItemPreview({
         <MessageExtract preview={preview} />
       ) : preview.kind === "collection" ? (
         <CollectionExtract preview={preview} busy={busy} onRemoveImage={onRemoveItemImage} />
-      ) : preview.bio ? (
-        <Text style={styles.body}>{preview.bio}</Text>
+      ) : preview.bio || preview.linkUrl ? (
+        <>
+          {preview.bio ? <Text style={styles.body}>{preview.bio}</Text> : null}
+          {/* Lien en bio (migration 0049) : en texte, jamais un lien qui s'ouvre. « Retirer la bio » le
+              retire aussi ; sans bio, le bouton s'appelle « Retirer le lien » (profileRemovalActions). */}
+          {preview.linkUrl ? (
+            <View style={styles.profileLink} testID="lien-du-profil-signale">
+              <Text style={styles.meta}>{t.profilePins.moderationLink}</Text>
+              <Text style={styles.body} selectable>
+                {preview.linkUrl}
+              </Text>
+            </View>
+          ) : null}
+        </>
       ) : null}
       <Badges
         hidden={preview.kind !== "user" && preview.hidden}
@@ -452,9 +474,11 @@ const styles = themedStyles(() => ({
   authorRow: { flexDirection: "row", alignItems: "center", gap: space.sm, flexWrap: "wrap" },
   authorName: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
   postRow: { flexDirection: "row", gap: space.sm },
+  morePhotos: { flexDirection: "row", flexWrap: "wrap", gap: space.xs },
   postImage: { width: 72, height: 72, borderRadius: radius.sm, backgroundColor: color.plinthe },
   postText: { flex: 1, gap: space.xs },
   body: { fontSize: font.secondary, color: color.encre, lineHeight: 20 },
+  profileLink: { marginTop: 6 },
   badge: { fontSize: font.caption, fontWeight: "600", color: color.danger },
   missing: { fontSize: font.secondary, color: color.acier, marginTop: space.md },
   section: { marginTop: space.md },

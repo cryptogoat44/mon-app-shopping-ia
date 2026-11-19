@@ -3,7 +3,9 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { Post, PrivacyLevel } from "@monapp/shared-types";
-import { ApiError, deletePost, fetchPost, updatePostPrivacy } from "@/lib/api";
+import { ApiError, deletePost, fetchPost, updatePostPin, updatePostPrivacy } from "@/lib/api";
+import { pinActionOf, pinEntryShown } from "@/lib/profile-pins";
+import { PinIcon } from "@/components/icons";
 import { PRIVACY_LEVELS } from "@/lib/vault-labels";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
@@ -32,6 +34,7 @@ export default function PostDetailScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [commentCount, setCommentCount] = useState<number | null>(null);
   const [changingPrivacy, setChangingPrivacy] = useState(false);
+  const [pinning, setPinning] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -48,13 +51,32 @@ export default function PostDetailScreen() {
     load();
   }, [load]);
 
+  // Le nombre de commentaires vient du serveur (réponses comprises, sans les
+  // comptes bloqués), jamais de la longueur de la liste affichée : le fil ne
+  // charge que les commentaires d'origine. Relu après chaque ajout ou retrait ;
+  // en cas d'échec, le dernier nombre connu reste affiché.
+  const refreshCommentCount = useCallback(async () => {
+    if (!id) return;
+    try {
+      setCommentCount((await fetchPost(id)).commentCount);
+    } catch {
+      // Rien : le nombre déjà affiché reste.
+    }
+  }, [id]);
+
   function goBack() {
     if (router.canGoBack()) router.back();
     else router.replace("/profile");
   }
 
+  // Visibilité et épingle : une seule demande à la fois. Chaque réponse rend
+  // la publication entière ou une partie ; deux demandes croisées pouvaient
+  // remettre à l'écran l'ancienne visibilité (ou l'ancienne épingle) alors que
+  // le serveur gardait la nouvelle.
+  const ownerBusy = changingPrivacy || pinning;
+
   async function handlePrivacy(privacy: PrivacyLevel) {
-    if (!post || post.privacy === privacy) return;
+    if (!post || post.privacy === privacy || ownerBusy) return;
     setChangingPrivacy(true);
     setError(null);
     try {
@@ -65,6 +87,25 @@ export default function PostDetailScreen() {
       setError(e instanceof ApiError ? e.message : t.postDetail.visibilityError);
     } finally {
       setChangingPrivacy(false);
+    }
+  }
+
+  // Épingler sur son profil (migration 0049) : la réponse du serveur fait
+  // foi ; un refus (3 au plus) montre sa phrase. Seule la date de l'épingle
+  // change, sur la publication telle qu'elle est À LA RÉPONSE.
+  async function handlePin() {
+    if (!post || ownerBusy) return;
+    const action = pinActionOf(post);
+    setPinning(true);
+    setError(null);
+    try {
+      const { pinnedAt } = await updatePostPin(post.id, action === "pin");
+      setPost((current) => (current ? { ...current, pinnedAt } : current));
+      showToast(pinnedAt === null ? t.profilePins.unpinned : t.profilePins.pinned);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : t.profilePins.pinError);
+    } finally {
+      setPinning(false);
     }
   }
 
@@ -132,14 +173,30 @@ export default function PostDetailScreen() {
                     hitSlop={{ top: 8, bottom: 8, left: 2, right: 2 }}
                     style={[styles.pill, post.privacy === level ? styles.pillActive : null]}
                     onPress={() => handlePrivacy(level)}
-                    disabled={changingPrivacy}
+                    disabled={ownerBusy}
                     accessibilityRole="radio"
-                    accessibilityState={{ selected: post.privacy === level }}
+                    accessibilityState={{ selected: post.privacy === level, disabled: ownerBusy }}
                   >
                     <Text style={[styles.pillLabel, post.privacy === level ? styles.pillLabelActive : null]}>{t.vaultLabels.privacy[level]}</Text>
                   </Pressable>
                 ))}
               </View>
+              {/* Épingler sur mon profil (migration 0049) : ses photos seulement ; caché sans 0049. */}
+              {pinEntryShown(post, isMine) ? (
+                <Pressable
+                  onPress={handlePin}
+                  disabled={ownerBusy}
+                  hitSlop={8}
+                  style={[styles.pinRow, ownerBusy ? styles.busy : null]}
+                  accessibilityRole="button"
+                  accessibilityHint={t.profilePins.pinHint}
+                  accessibilityState={{ disabled: ownerBusy }}
+                  testID="epingler"
+                >
+                  <PinIcon size={16} tint={color.encre} />
+                  <Text style={styles.pinLabel}>{pinActionOf(post) === "pin" ? t.profilePins.pin : t.profilePins.unpin}</Text>
+                </Pressable>
+              ) : null}
               {error ? <ErrorMessage style={styles.message}>{error}</ErrorMessage> : null}
               {!confirming ? (
                 <Pressable onPress={() => setConfirming(true)} hitSlop={12} style={styles.deleteRow} accessibilityRole="button">
@@ -170,7 +227,7 @@ export default function PostDetailScreen() {
           <CommentsSection
             postId={post.id}
             viewerId={session?.user.id}
-            onCountChange={setCommentCount}
+            onChanged={refreshCommentCount}
             onOpenProfile={(userId) => router.push({ pathname: "/profil", params: { id: userId } })}
           />
         </ScrollView>
@@ -203,6 +260,9 @@ const styles = themedStyles(() => ({
   pillActive: { backgroundColor: color.vert, borderColor: color.vert },
   pillLabel: { fontSize: font.caption, color: color.acier },
   pillLabelActive: { color: color.blanc, fontWeight: "600" },
+  pinRow: { flexDirection: "row", alignItems: "center", gap: space.xs, minHeight: 44, marginBottom: space.sm },
+  pinLabel: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
+  busy: { opacity: 0.6 },
   deleteRow: { alignItems: "center", minHeight: 44, justifyContent: "center" },
   deleteLabel: { color: color.danger, fontSize: font.secondary, fontWeight: "600" },
   confirm: { backgroundColor: color.plinthe, borderRadius: radius.md, padding: space.md },

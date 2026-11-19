@@ -5,7 +5,7 @@ import { formatPrice, localDay, resolveTimeZone, summarizeUserAgent } from "../s
 import { EXPORT_APPENDIX_ID, escapeHtml, renderExportHtml, type ExportHtmlOptions } from "../src/lib/exportHtml.js";
 import { EXPORT_COLUMNS, EXPORT_SECTIONS, EXPORT_TEXT, MODERATION_ACTION_LABELS, REPORT_HANDLED_LABELS, type Bilingual } from "../src/lib/exportText.js";
 import { chunks, readAll, type PagedQuery, type PageResult } from "../src/lib/pagedReads.js";
-import { BLOCKED, FRIEND, GOOGLE_THUMB, SELF, STORAGE, decodeHtml, fixture, lookups, own, sectionHtml, visibleText } from "./exportFixture.js";
+import { BLOCKED, BLOCKER, FRIEND, GOOGLE_THUMB, SELF, STORAGE, decodeHtml, fixture, lookups, own, sectionHtml, visibleText } from "./exportFixture.js";
 
 // Fichier lisible de l'export RGPD, sur des données en mémoire (aucune base,
 // aucun réseau) : dates dans le fuseau de la personne, prix tels que la base
@@ -874,5 +874,255 @@ describe("export lisible : essayage virtuel (migration 0042)", () => {
   it("sans essayage : la section dit « Aucune donnée »", () => {
     const data = { ...fixture(), tryonProfile: null, tryonEvents: [], tryonBonusGrants: [], tryonReports: [] };
     expect(visibleText(sectionHtml(render({}, data), "tryon"))).toContain(EXPORT_TEXT.noData.fr);
+  });
+});
+
+// Compte privé (lot « vie sociale », migration 0045).
+describe("export lisible : compte privé et demandes d'abonnement", () => {
+  const spaces = (text: string) => text.replace(/\s+/g, " ");
+
+  it("le profil dit « Compte privé : Oui / Non » ; rien tant que la colonne n'existe pas", () => {
+    const base = fixture();
+    const account = (isPrivate?: boolean, locale: "fr" | "en" = "fr") =>
+      spaces(visibleText(sectionHtml(render({ locale }, { ...base, profile: { ...base.profile!, ...(isPrivate === undefined ? {} : { is_private: isPrivate }) } }), "account")));
+    expect(account(true)).toContain("Compte privé Oui");
+    expect(account(false)).toContain("Compte privé Non");
+    expect(account(true, "en")).toContain("Private account Yes");
+    expect(account()).not.toContain("Compte privé");
+  });
+
+  it("les demandes en attente, envoyées et reçues, avec le nom du compte et la date ; comptées au sommaire", () => {
+    const page = render({ timeZone: "UTC" });
+    const section = spaces(visibleText(sectionHtml(page, "followRequests")));
+    expect(section).toContain(EXPORT_SECTIONS.followRequests.title.fr);
+    expect(section).toContain("Demandes envoyées (1)");
+    expect(section).toContain("@alexis");
+    expect(section).toContain("Demandes reçues (1)");
+    expect(section).toContain("Demandé le 11 octobre 2026");
+    expect(section).toContain("Reçue le 12 octobre 2026");
+    expect(spaces(visibleText(page))).toContain(`${EXPORT_SECTIONS.followRequests.title.fr} (2)`);
+    const english = spaces(visibleText(sectionHtml(render({ locale: "en", timeZone: "UTC" }), "followRequests")));
+    expect(english).toContain("Requests sent (1)");
+    expect(english).toContain("Requests received (1)");
+  });
+
+  it("un compte qui n'est pas connu de l'export (blocage) n'est jamais nommé ; sans demande : « Aucune donnée »", () => {
+    const blocked = { ...fixture(), followRequestsSent: [{ target_id: BLOCKED, created_at: "2026-10-11T09:00:00+00:00" }], followRequestsReceived: [] };
+    const section = visibleText(sectionHtml(render({}, blocked), "followRequests"));
+    expect(section.toLowerCase()).not.toContain("importun");
+    expect(section).toContain(EXPORT_TEXT.someone.fr);
+    const none = { ...fixture(), followRequestsSent: [], followRequestsReceived: [] };
+    expect(visibleText(sectionHtml(render({}, none), "followRequests"))).toContain(EXPORT_TEXT.noData.fr);
+  });
+});
+
+// Commentaires : réponses, « j'aime », mentions (lot « vie sociale », migration 0046).
+describe("export lisible : réponses, commentaires aimés, mentions", () => {
+  const spaces = (text: string) => text.replace(/\s+/g, " ");
+
+  it("le profil dit qui peut vous mentionner, en clair ; rien tant que la colonne n'existe pas", () => {
+    const base = fixture();
+    const account = (mentionsFrom?: string, locale: "fr" | "en" = "fr") =>
+      spaces(visibleText(sectionHtml(render({ locale }, { ...base, profile: { ...base.profile!, ...(mentionsFrom === undefined ? {} : { mentions_from: mentionsFrom }) } }), "account")));
+    expect(account("following")).toContain("Qui peut vous mentionner Les comptes que vous suivez");
+    expect(account("everyone")).toContain("Qui peut vous mentionner Tout le monde");
+    expect(account("nobody")).toContain("Qui peut vous mentionner Personne");
+    expect(account("nobody", "en")).toContain("Who can mention you No one");
+    expect(account()).not.toContain("Qui peut vous mentionner");
+  });
+
+  it("un commentaire qui est une réponse le dit, sans montrer d'identifiant ; un commentaire ordinaire ne dit rien", () => {
+    const base = fixture();
+    const reply = { ...base, comments: [{ ...base.comments[0]!, parent_id: "c0000000-0000-4000-8000-000000000009" }] };
+    const section = spaces(visibleText(sectionHtml(render({}, reply), "comments")));
+    expect(section).toContain("Réponse à un autre commentaire Oui");
+    expect(section).not.toContain("c0000000-0000-4000-8000-000000000009");
+    const plain = { ...base, comments: [{ ...base.comments[0]!, parent_id: null }] };
+    expect(spaces(visibleText(sectionHtml(render({}, plain), "comments")))).not.toContain("Réponse à un autre commentaire");
+  });
+
+  it("les commentaires aimés : la date, jamais le texte d'un autre ; comptés avec les « j'aime » au sommaire", () => {
+    const page = render({ timeZone: "UTC" });
+    const section = spaces(visibleText(sectionHtml(page, "likes")));
+    expect(section).toContain(`Publications aimées (${fixture().reactionsGiven.length})`);
+    expect(section).toContain("Commentaires aimés (1)");
+    expect(section).toContain("Un commentaire");
+    expect(section).toContain("Aimé le 13 octobre 2026");
+    expect(spaces(visibleText(page))).toContain(`${EXPORT_SECTIONS.likes.title.fr} (${fixture().reactionsGiven.length + 1})`);
+    // Sans commentaire aimé : la section d'avant, sans sous-titres.
+    const none = spaces(visibleText(sectionHtml(render({}, { ...fixture(), commentReactionsGiven: [] }), "likes")));
+    expect(none).not.toContain("Commentaires aimés");
+    expect(none).not.toContain("Publications aimées");
+    expect(spaces(visibleText(sectionHtml(render({ locale: "en" }), "likes")))).toContain("Liked comments (1)");
+  });
+
+  it("les mentions reçues et écrites, avec le compte, le pseudo écrit et la date ; comptées au sommaire", () => {
+    const page = render({ timeZone: "UTC" });
+    const section = spaces(visibleText(sectionHtml(page, "mentions")));
+    expect(section).toContain(EXPORT_SECTIONS.mentions.title.fr);
+    expect(section).toContain("Mentions de vous (1)");
+    expect(section).toContain("Mentions que vous avez écrites (1)");
+    expect(section).toContain("@alexis (Alexis Martin)");
+    expect(section).toContain("Pseudo écrit @camille");
+    expect(section).toContain("Pseudo écrit @alexis");
+    expect(section).toContain("Mentionné(e) le 13 octobre 2026");
+    expect(section).toContain("Écrite le 13 octobre 2026");
+    expect(spaces(visibleText(page))).toContain(`${EXPORT_SECTIONS.mentions.title.fr} (2)`);
+    const english = spaces(visibleText(sectionHtml(render({ locale: "en", timeZone: "UTC" }), "mentions")));
+    expect(english).toContain("Mentions of you (1)");
+    expect(english).toContain("Mentions you wrote (1)");
+  });
+
+  it("un compte qui n'est pas connu de l'export (blocage) n'est jamais nommé ; sans mention : « Aucune donnée »", () => {
+    const blocked = {
+      ...fixture(),
+      mentionsReceived: [{ comment_id: "c0000000-0000-4000-8000-000000000002", author_id: BLOCKER, handle: "camille", created_at: "2026-10-13T10:00:00+00:00" }],
+      mentionsMade: [{ comment_id: "c0000000-0000-4000-8000-000000000001", user_id: BLOCKED, handle: "importun", created_at: "2026-10-13T11:00:00+00:00" }],
+    };
+    const section = visibleText(sectionHtml(render({}, blocked), "mentions"));
+    expect(section.toLowerCase()).not.toContain("bloqueur");
+    expect(section).not.toContain("Nom Secret");
+    // Le compte bloqué par la personne n'est nommé que dans « Comptes bloqués ».
+    expect(section).not.toContain("Importun");
+    expect(section).toContain(EXPORT_TEXT.someone.fr);
+    const none = { ...fixture(), mentionsReceived: [], mentionsMade: [] };
+    expect(visibleText(sectionHtml(render({}, none), "mentions"))).toContain(EXPORT_TEXT.noData.fr);
+  });
+});
+
+describe("export lisible : plusieurs photos, personnes identifiées (migration 0047)", () => {
+  it("une publication montre ses autres photos, dans l'ordre, après la première ; sans identifiant visible", () => {
+    const section = sectionHtml(render(), "posts");
+    const second = section.indexOf(own("post-media", "photo-2-mini.jpg"));
+    const third = section.indexOf(own("post-media", "photo-3-mini.jpg"));
+    expect(second).toBeGreaterThan(section.indexOf(own("post-media", "photo-mini.jpg")));
+    expect(third).toBeGreaterThan(second);
+    expect(spaces(visibleText(section))).toContain("Autres photos");
+    expect(spaces(visibleText(sectionHtml(render({ locale: "en" }), "posts")))).toContain("Other photos");
+    // Une publication d'une seule photo ne dit rien de plus.
+    expect(visibleText(sectionHtml(render({}, { ...fixture(), postMedia: [] }), "posts"))).not.toContain("Autres photos");
+  });
+
+  it("les personnes identifiées et les publications où vous l'êtes, avec le compte et la date ; « une publication indisponible » quand vous ne la voyez plus ; comptées au sommaire", () => {
+    const page = render({ timeZone: "UTC" });
+    const section = spaces(visibleText(sectionHtml(page, "peopleTags")));
+    expect(section).toContain(EXPORT_SECTIONS.peopleTags.title.fr);
+    expect(section).toContain("Personnes que vous avez identifiées (1)");
+    expect(section).toContain("Publications où l'on vous a identifié(e) (2)");
+    expect(section).toContain("@alexis (Alexis Martin)");
+    expect(section).toContain("Sur votre publication");
+    expect(section).toContain("Sur une publication de @alexis (Alexis Martin)");
+    expect(section).toContain("Sur une publication indisponible");
+    expect(section).toContain("Identifié(e) le 14 octobre 2026");
+    // La colonne technique n'est jamais écrite telle quelle.
+    expect(section).not.toContain("Vous pouvez encore voir la publication");
+    expect(spaces(visibleText(page))).toContain(`${EXPORT_SECTIONS.peopleTags.title.fr} (3)`);
+    const english = spaces(visibleText(sectionHtml(render({ locale: "en", timeZone: "UTC" }), "peopleTags")));
+    expect(english).toContain("People you tagged (1)");
+    expect(english).toContain("Posts you are tagged in (2)");
+    expect(english).toContain("On an unavailable post");
+  });
+
+  it("un compte qui n'est pas connu de l'export (blocage) n'est jamais nommé ; sans identification : « Aucune donnée »", () => {
+    const blocked = {
+      ...fixture(),
+      peopleTagsMade: [{ post_id: "90000000-0000-4000-8000-000000000001", user_id: BLOCKED, created_at: "2026-10-14T09:00:00+00:00" }],
+      peopleTagsReceived: [{ post_id: "90000000-0000-4000-8000-000000000003", author_id: BLOCKER, created_at: "2026-10-14T10:00:00+00:00", post_available: true }],
+    };
+    const section = visibleText(sectionHtml(render({}, blocked), "peopleTags"));
+    expect(section.toLowerCase()).not.toContain("bloqueur");
+    expect(section).not.toContain("Nom Secret");
+    expect(section).not.toContain("Importun");
+    expect(section).toContain(EXPORT_TEXT.someone.fr);
+    const none = { ...fixture(), peopleTagsMade: [], peopleTagsReceived: [] };
+    expect(visibleText(sectionHtml(render({}, none), "peopleTags"))).toContain(EXPORT_TEXT.noData.fr);
+  });
+});
+
+describe("export lisible : publications enregistrées (migration 0048)", () => {
+  it("chaque publication enregistrée : son auteur quand vous la voyez encore, la collection, la date ; comptées au sommaire", () => {
+    const page = render({ timeZone: "UTC" });
+    const section = spaces(visibleText(sectionHtml(page, "savedPosts")));
+    expect(section).toContain(EXPORT_SECTIONS.savedPosts.title.fr);
+    expect(section).toContain("une publication de @alexis (Alexis Martin)");
+    expect(section).toContain("Rangée dans Cadeaux pour Noel");
+    expect(section).toContain("Enregistrée le 15 octobre 2026");
+    expect(section).toContain("Rangée dans Sans collection");
+    expect(spaces(visibleText(page))).toContain(`${EXPORT_SECTIONS.savedPosts.title.fr} (3)`);
+    // Les colonnes techniques ne sont jamais écrites telles quelles.
+    expect(section).not.toContain("Vous pouvez encore voir la publication");
+    expect(section).not.toContain("90000000-0000-4000-8000-000000000002");
+    const english = spaces(visibleText(sectionHtml(render({ locale: "en", timeZone: "UTC" }), "savedPosts")));
+    expect(english).toContain("Saved posts");
+    expect(english).toContain("a post by @alexis (Alexis Martin)");
+    expect(english).toContain("an unavailable post");
+    expect(english).toContain("No collection");
+  });
+
+  it("refusé : une publication que vous ne voyez plus n'a ni auteur ni lien, et le compte qui vous a bloqué n'est jamais nommé", () => {
+    const section = sectionHtml(render({ timeZone: "UTC" }), "savedPosts");
+    const text = visibleText(section);
+    // La phrase d'introduction, puis les deux cartes.
+    expect(text.match(/une publication indisponible/g)).toHaveLength(3);
+    expect(text.toLowerCase()).not.toContain("bloqueur");
+    expect(text).not.toContain("Nom Secret");
+    expect(section).not.toContain("<a ");
+    // Même si une ligne citait par erreur un compte en blocage comme auteur d'une publication « disponible ».
+    const wrong = {
+      ...fixture(),
+      savedPosts: [{ post_id: "90000000-0000-4000-8000-000000000003", collection_id: null, collection_name: null, author_id: BLOCKER, post_available: true, created_at: "2026-10-15T11:00:00+00:00" }],
+    };
+    const shown = visibleText(sectionHtml(render({}, wrong), "savedPosts"));
+    expect(shown.toLowerCase()).not.toContain("bloqueur");
+    expect(shown).toContain(EXPORT_TEXT.someone.fr);
+  });
+
+  it("votre propre publication enregistrée ; sans publication enregistrée : « Aucune donnée »", () => {
+    const mine = {
+      ...fixture(),
+      savedPosts: [{ post_id: "90000000-0000-4000-8000-000000000001", collection_id: null, collection_name: null, author_id: SELF, post_available: true, created_at: "2026-10-15T11:00:00+00:00" }],
+    };
+    expect(spaces(visibleText(sectionHtml(render({}, mine), "savedPosts")))).toContain("votre publication");
+    const none = { ...fixture(), savedPosts: [] };
+    expect(visibleText(sectionHtml(render({}, none), "savedPosts"))).toContain(EXPORT_TEXT.noData.fr);
+  });
+});
+
+describe("export lisible : épingles et lien en bio (migration 0049)", () => {
+  const ws = (text: string) => spaces(text).replace(/\s+/g, " ");
+
+  it("le profil montre le lien affiché, en texte (jamais un lien qui s'ouvre depuis le fichier) ; rien sans lien ou sans la colonne", () => {
+    const base = fixture();
+    const section = sectionHtml(render({ timeZone: "UTC" }), "account");
+    expect(ws(visibleText(section))).toContain("Lien affiché sur votre profil https://camille.example.com/lookbook?saison=hiver");
+    expect(section).not.toContain('href="https://camille.example.com');
+    expect(ws(visibleText(sectionHtml(render({ locale: "en" }), "account")))).toContain("Link shown on your profile https://camille.example.com/lookbook?saison=hiver");
+    const { link_url: _ignored, ...withoutColumn } = base.profile!;
+    for (const profile of [{ ...base.profile!, link_url: null }, withoutColumn]) {
+      expect(visibleText(sectionHtml(render({}, { ...base, profile }), "account"))).not.toContain("Lien affiché sur votre profil");
+    }
+  });
+
+  it("une adresse piégée reste du texte échappé", () => {
+    const base = fixture();
+    const section = sectionHtml(render({}, { ...base, profile: { ...base.profile!, link_url: 'https://exemple.com/"><script>alert(1)</script>' } }), "account");
+    expect(section).not.toContain("<script>alert(1)");
+    expect(section).toContain("&lt;script&gt;");
+  });
+
+  it("une publication épinglée le dit, avec la date ; une publication qui ne l'est pas ne dit rien", () => {
+    const page = render({ timeZone: "UTC" });
+    const section = ws(visibleText(sectionHtml(page, "posts")));
+    expect(section).toContain("Épinglée le 5 octobre 2026");
+    expect(section.match(/Épinglée le/g)).toHaveLength(1);
+    expect(ws(visibleText(sectionHtml(render({ locale: "en", timeZone: "UTC" }), "posts")))).toContain("Pinned on");
+  });
+
+  it("les deux colonnes ont leur libellé : aucune « colonne inconnue »", () => {
+    expect(EXPORT_COLUMNS.profile.link_url.label).toEqual({ fr: "Lien affiché sur votre profil", en: "Link shown on your profile" });
+    expect(EXPORT_COLUMNS.posts.pinned_at.label).toEqual({ fr: "Épinglée le", en: "Pinned on" });
+    const onUnknownColumn = vi.fn();
+    render({ onUnknownColumn });
+    expect(onUnknownColumn).not.toHaveBeenCalled();
   });
 });

@@ -1,18 +1,29 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import type { Post, PublicProfile, UserProfile } from "@monapp/shared-types";
-import { INVALID_CURSOR, INVALID_ID, cursorQuerySchema, parseDbRows, parseInput, userIdParamsSchema } from "../lib/validation.js";
-import { isBlockedEitherWay, isFollowing, shownPosts, visiblePrivacies } from "../lib/visibility.js";
-import { suspendedAmong } from "../lib/moderation.js";
+import { MEMBER_LIST_PAGE_SIZE, PINNED_POSTS_MAX, PRIVATE_ACCOUNT_ERROR, type MemberPage, type PublicProfile, type UserPostsPage, type UserProfile } from "@monapp/shared-types";
+import { DatabaseReadError, INVALID_CURSOR, INVALID_ID, cursorQuerySchema, parseDbRows, parseInput, userIdParamsSchema } from "../lib/validation.js";
+import { shownPosts, visiblePrivacies } from "../lib/visibility.js";
+import { canSeeAuthorContent, readAudience, readAudienceOf } from "../lib/audience.js";
+import { followStateOf, toMemberRows } from "../lib/memberRows.js";
 import { withoutSuspendedFaces } from "../lib/profileModeration.js";
 import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
-import { POST_ROWS, hydratePosts } from "./posts.js";
+import { profileExtrasShown } from "../lib/profileExtras.js";
+import { POST_ROWS, hydratePosts, type PostRow } from "./posts.js";
 
 const USER_POSTS_PAGE_SIZE = 18;
 
 const searchQuerySchema = z.object({
   q: z.string().trim().min(1).max(40),
 });
+
+/** Ce que le profil d'un membre montre aux autres (lien en bio : migration 0049). */
+const PROFILE_COLUMNS = "id, username, display_name, avatar_url, bio";
+const STORED_PROFILE = z
+  .object({ id: z.guid(), username: z.string().nullable(), display_name: z.string(), avatar_url: z.string().nullable(), bio: z.string().nullable(), link_url: z.string().nullable().optional() })
+  .nullable();
+
+/** Une ligne de `follows`, lue du côté qui intéresse la liste. */
+const FOLLOW_ROWS = z.array(z.object({ follower_id: z.guid(), followee_id: z.guid(), created_at: z.string() }));
 
 interface ProfileRow {
   id: string;
@@ -68,44 +79,31 @@ export default async function usersRoutes(fastify: FastifyInstance) {
       if (candidateRows.length >= 20) break;
     }
 
-    const candidateIds = candidateRows.map((p) => p.id);
-
-    // Invisibilité mutuelle : un profil bloqué par moi, ou qui m'a bloqué,
-    // ne doit apparaître dans aucune recherche.
-    let blockedIds = new Set<string>();
-    if (candidateIds.length > 0) {
-      const [{ data: blockedByMe }, { data: blockingMe }] = await Promise.all([
-        fastify.supabaseAdmin.from("blocks").select("blocked_id").eq("blocker_id", userId).in("blocked_id", candidateIds),
-        fastify.supabaseAdmin.from("blocks").select("blocker_id").eq("blocked_id", userId).in("blocker_id", candidateIds),
-      ]);
-      blockedIds = new Set([
-        ...(blockedByMe ?? []).map((b) => b.blocked_id as string),
-        ...(blockingMe ?? []).map((b) => b.blocker_id as string),
-      ]);
-    }
-
-    // Un compte suspendu par la modération n'apparaît plus en recherche (lot 5).
-    const suspendedIds = await suspendedAmong(fastify, candidateIds);
-    const rows = candidateRows.filter((row) => !blockedIds.has(row.id) && !suspendedIds.has(row.id));
-    const profileIds = rows.map((p) => p.id);
-
-    let followingIds = new Set<string>();
-    if (profileIds.length > 0) {
-      const { data: follows } = await fastify.supabaseAdmin
-        .from("follows")
-        .select("followee_id")
-        .eq("follower_id", userId)
-        .in("followee_id", profileIds);
-      followingIds = new Set((follows ?? []).map((f) => f.followee_id as string));
-    }
-
-    const results: PublicProfile[] = rows.map((row) => ({
-      id: row.id,
-      username: row.username!,
-      displayName: row.display_name,
-      avatarUrl: row.avatar_url,
-      isFollowing: followingIds.has(row.id),
-    }));
+    // Une seule lecture groupée (lib/audience.ts). Invisibilité mutuelle : un
+    // profil bloqué par moi, ou qui m'a bloqué, n'apparaît dans aucune
+    // recherche ; un compte suspendu par la modération non plus (lot 5). Un
+    // compte privé apparaît, avec son nom et sa photo seulement (comme sur
+    // son profil), et l'app y propose « Suivre » ou « Demandé ».
+    const audiences = await readAudience(
+      fastify,
+      userId,
+      candidateRows.map((p) => p.id)
+    );
+    const results: PublicProfile[] = candidateRows.flatMap((row) => {
+      const audience = audiences.get(row.id);
+      if (!audience || audience.blocked || audience.suspended) return [];
+      return [
+        {
+          id: row.id,
+          username: row.username!,
+          displayName: row.display_name,
+          avatarUrl: row.avatar_url,
+          isFollowing: audience.follows,
+          isPrivate: audience.isPrivate,
+          followState: followStateOf(audience),
+        },
+      ];
+    });
 
     return reply.send(results);
   });
@@ -115,6 +113,9 @@ export default async function usersRoutes(fastify: FastifyInstance) {
   // pièces. Un blocage, dans un sens ou dans l'autre, rend le profil
   // introuvable (404, sans dire pourquoi). Lot « conformité Apple » : la bio
   // et la photo d'un compte suspendu ne sont montrées qu'à lui-même.
+  // Lien en bio (migration 0049) : comme la bio, jamais celui d'un compte
+  // suspendu ; et, comme les publications, seulement pour qui voit le contenu
+  // du compte (jamais pour qui n'est pas un abonné accepté d'un compte privé).
   fastify.get("/api/users/:userId", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const params = parseInput(userIdParamsSchema, request.params, reply, INVALID_ID);
     if (!params) return;
@@ -122,50 +123,68 @@ export default async function usersRoutes(fastify: FastifyInstance) {
     const targetId = params.userId;
     const notFound = () => reply.code(404).send({ error: "user_not_found", message: "Profil introuvable." });
 
-    const { data: stored } = await fastify.supabaseAdmin
+    const withLink = await profileExtrasShown(fastify);
+    const answer = await fastify.supabaseAdmin
       .from("profiles")
-      .select("id, username, display_name, avatar_url, bio")
+      .select(withLink ? `${PROFILE_COLUMNS}, link_url` : PROFILE_COLUMNS)
       .eq("id", targetId)
       .maybeSingle();
+    const read = STORED_PROFILE.safeParse(answer.data);
+    if (answer.error || !read.success) throw new DatabaseReadError("Lecture d'un profil impossible");
+    const stored = read.data;
     // Profil pas encore complété (sans nom d'utilisateur) : pas de page publique.
     if (!stored || !stored.username) return notFound();
     const isMe = targetId === viewerId;
-    if (!isMe && (await isBlockedEitherWay(fastify, viewerId, targetId))) return notFound();
+    const audience = await readAudienceOf(fastify, viewerId, targetId, { suspended: false });
+    if (audience.blocked) return notFound();
     const [row] = await withoutSuspendedFaces(
       fastify,
-      [{ ...stored, id: stored.id as string, avatar_url: (stored.avatar_url as string | null) ?? null, bio: (stored.bio as string | null) ?? null }],
+      [{ id: stored.id, username: stored.username, display_name: stored.display_name, avatar_url: stored.avatar_url, bio: stored.bio, ...(withLink ? { link_url: stored.link_url ?? null } : {}) }],
       viewerId
     );
     if (!row) return notFound();
 
-    const viewerFollows = isMe ? false : await isFollowing(fastify, viewerId, targetId);
+    // Compte privé (migration 0045) : qui n'est pas un abonné accepté ne voit
+    // que nom, photo, bio et compteurs d'abonnés et d'abonnements ; jamais le
+    // nombre de publications (0), ni rien d'autre.
+    const privacies = canSeeAuthorContent(audience) ? visiblePrivacies(isMe, audience.follows, audience.isPrivate) : [];
     const [followers, following, posts] = await Promise.all([
       fastify.supabaseAdmin.from("follows").select("*", { count: "exact", head: true }).eq("followee_id", targetId),
       fastify.supabaseAdmin.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", targetId),
       // Nombre de publications que CE visiteur peut voir (le même que la
       // grille) : ne révèle jamais l'existence de publications privées ni masquées.
-      shownPosts(fastify, "id", { count: "exact", head: true })
-        .eq("user_id", targetId)
-        .in("privacy", visiblePrivacies(isMe, viewerFollows)),
+      privacies.length > 0
+        ? shownPosts(fastify, "id", { count: "exact", head: true }).eq("user_id", targetId).in("privacy", privacies)
+        : Promise.resolve({ count: 0 }),
     ]);
 
     const profile: UserProfile = {
-      id: row.id as string,
-      username: row.username as string,
-      displayName: row.display_name as string,
+      id: row.id,
+      username: row.username,
+      displayName: row.display_name,
       avatarUrl: row.avatar_url,
       bio: row.bio,
       followersCount: followers.count ?? 0,
       followingCount: following.count ?? 0,
       postsCount: posts.count ?? 0,
-      isFollowing: viewerFollows,
+      isFollowing: audience.follows,
       isMe,
+      isPrivate: audience.isPrivate,
+      followState: followStateOf(audience),
+      // Rien de plus pour qui n'est pas un abonné accepté d'un compte privé (ni même un champ vide).
+      ...(withLink && canSeeAuthorContent(audience) ? { linkUrl: row.link_url ?? null } : {}),
     };
     return reply.send(profile);
   });
 
   // Ses publications, chacune selon SA confidentialité : publique pour
   // tous, « abonnés » pour ses abonnés, privée pour personne d'autre.
+  // Compte privé : seulement pour ses abonnés acceptés.
+  // Épingles (migration 0049) : la PREMIÈRE page porte aussi `pinned`, ses
+  // publications épinglées (3 au plus, les plus récemment épinglées d'abord),
+  // filtrées exactement comme la page (masquées, confidentialité, compte
+  // privé, signalées par le visiteur). Elles restent aussi à leur place dans
+  // `posts` : une ancienne app les y montre comme avant.
   fastify.get("/api/users/:userId/posts", { preHandler: fastify.requireAuth }, async (request, reply) => {
     const params = parseInput(userIdParamsSchema, request.params, reply, INVALID_ID);
     if (!params) return;
@@ -175,14 +194,20 @@ export default async function usersRoutes(fastify: FastifyInstance) {
     const targetId = params.userId;
     const isMe = targetId === viewerId;
 
-    if (!isMe && (await isBlockedEitherWay(fastify, viewerId, targetId))) {
+    const audience = await readAudienceOf(fastify, viewerId, targetId, { suspended: false, requested: false });
+    if (audience.blocked) {
       return reply.code(404).send({ error: "user_not_found", message: "Profil introuvable." });
     }
-    const follows = isMe ? false : await isFollowing(fastify, viewerId, targetId);
+    // Compte privé : rien pour qui n'est pas un abonné accepté, quelle que
+    // soit la visibilité de chaque publication — et aucune lecture des publications.
+    const privacies = canSeeAuthorContent(audience) ? visiblePrivacies(isMe, audience.follows, audience.isPrivate) : [];
+    // Compte privé, pour qui n'est pas un abonné accepté : rien, pas même une liste d'épingles vide.
+    if (privacies.length === 0) return reply.send({ posts: [], nextCursor: null });
+    const withPins = !pageQuery.cursor && (await profileExtrasShown(fastify));
 
     let query = shownPosts(fastify, "*")
       .eq("user_id", targetId)
-      .in("privacy", visiblePrivacies(isMe, follows))
+      .in("privacy", privacies)
       .order("created_at", { ascending: false })
       .limit(USER_POSTS_PAGE_SIZE + 1);
     if (pageQuery.cursor) query = query.lt("created_at", pageQuery.cursor);
@@ -190,7 +215,7 @@ export default async function usersRoutes(fastify: FastifyInstance) {
     const reported = isMe ? null : notInFilter(await reportedIdsFor(fastify, request.log, viewerId, "post"));
     if (reported) query = query.not("id", "in", reported);
 
-    const { data, error } = await query;
+    const [{ data, error }, pinnedRows] = await Promise.all([query, withPins ? readPinnedRows(targetId, privacies, reported) : Promise.resolve(null)]);
     if (error) {
       request.log.error({ error }, "Échec de lecture des publications d'un profil");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
@@ -198,7 +223,109 @@ export default async function usersRoutes(fastify: FastifyInstance) {
     const rows = parseDbRows(POST_ROWS, { data, error: null }, "Publications d'un profil");
     const hasMore = rows.length > USER_POSTS_PAGE_SIZE;
     const pageRows = hasMore ? rows.slice(0, USER_POSTS_PAGE_SIZE) : rows;
-    const posts: Post[] = await hydratePosts(fastify, pageRows, viewerId);
-    return reply.send({ posts, nextCursor: hasMore ? (pageRows.at(-1)?.created_at ?? null) : null });
+    // Une seule préparation pour la page et les épingles (sans doublon).
+    const pageIds = new Set(pageRows.map((row) => row.id));
+    const hydrated = await hydratePosts(fastify, [...pageRows, ...(pinnedRows ?? []).filter((row) => !pageIds.has(row.id))], viewerId);
+    const byId = new Map(hydrated.map((post) => [post.id, post]));
+    const page: UserPostsPage = {
+      posts: pageRows.flatMap((row) => byId.get(row.id) ?? []),
+      nextCursor: hasMore ? (pageRows.at(-1)?.created_at ?? null) : null,
+      ...(pinnedRows ? { pinned: pinnedRows.flatMap((row) => byId.get(row.id) ?? []) } : {}),
+    };
+    return reply.send(page);
   });
+
+  /** Les publications épinglées d'un membre (migration 0049), filtrées comme
+   * la page : jamais une masquée, jamais hors des confidentialités permises,
+   * jamais une signalée par le visiteur. Des photos seulement ; les 3 plus
+   * récemment épinglées (deux épingles au même instant peuvent en laisser 4
+   * dans la base). Lecture impossible : null (la page part sans `pinned`,
+   * jamais une liste non filtrée). */
+  async function readPinnedRows(targetId: string, privacies: string[], reported: string | null): Promise<PostRow[] | null> {
+    let query = shownPosts(fastify, "*")
+      .eq("user_id", targetId)
+      .eq("type", "lifestyle")
+      .in("privacy", privacies)
+      .not("pinned_at", "is", null)
+      .order("pinned_at", { ascending: false })
+      .limit(PINNED_POSTS_MAX);
+    if (reported) query = query.not("id", "in", reported);
+    const { data, error } = await query;
+    const parsed = POST_ROWS.safeParse(data ?? []);
+    if (error || !parsed.success) {
+      fastify.log.warn("Publications épinglées d'un profil : lecture impossible");
+      return null;
+    }
+    return parsed.data;
+  }
+
+  // Listes des abonnés et des abonnements d'un membre (lot « vie sociale »,
+  // sans migration), les plus récents d'abord, 30 lignes lues par page.
+  //   - Le membre lit ses deux listes ; un autre ne les lit que s'il peut voir
+  //     son contenu (canSeeAuthorContent) : jamais à travers un blocage (404,
+  //     comme un profil inconnu), jamais un compte privé sans en être un
+  //     abonné accepté (403).
+  //   - Chaque ligne passe par LA règle des listes (lib/memberRows.ts) : pas
+  //     de compte bloqué avec le lecteur, suspendu, sans nom d'utilisateur, ni
+  //     de compte privé montré à un inconnu. Le tri se fait APRÈS la lecture :
+  //     une page peut être plus courte que prévu, ou vide, alors qu'il en
+  //     reste ; le curseur est la date de la dernière ligne LUE, et la réponse
+  //     ne dit jamais combien de lignes ont été laissées de côté.
+  //   - Jamais la date d'un abonnement dans une ligne.
+  // Sans la migration 0045, tous les comptes sont publics : les listes marchent.
+  const memberListOptions = {
+    preHandler: [fastify.requireAuth, fastify.rateLimit("memberList")],
+    config: { rateLimitName: "memberList" as const },
+  };
+  for (const kind of ["followers", "following"] as const) {
+    // Abonnés : les lignes où le membre est suivi. Abonnements : celles où il suit.
+    const ownerColumn = kind === "followers" ? "followee_id" : "follower_id";
+    const memberColumn = kind === "followers" ? "follower_id" : "followee_id";
+
+    fastify.get(`/api/users/:userId/${kind}`, memberListOptions, async (request, reply) => {
+      reply.header("Cache-Control", "no-store");
+      const params = parseInput(userIdParamsSchema, request.params, reply, INVALID_ID);
+      if (!params) return;
+      const pageQuery = parseInput(cursorQuerySchema, request.query, reply, INVALID_CURSOR);
+      if (!pageQuery) return;
+      const viewerId = request.user!.id;
+      const targetId = params.userId;
+
+      const stored = await fastify.supabaseAdmin.from("profiles").select("id, username").eq("id", targetId).maybeSingle();
+      if (stored.error) {
+        request.log.error({ error: stored.error }, "Échec de lecture du profil d'une liste de membres");
+        return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+      }
+      // Inconnu, profil pas encore complété, ou blocage dans un sens ou dans l'autre : la même réponse.
+      const notFound = () => reply.code(404).send({ error: "user_not_found", message: "Profil introuvable." });
+      if (!stored.data || !stored.data.username) return notFound();
+      const audience = await readAudienceOf(fastify, viewerId, targetId, { suspended: false, requested: false });
+      if (audience.blocked) return notFound();
+      if (!canSeeAuthorContent(audience)) {
+        return reply.code(403).send({ error: PRIVATE_ACCOUNT_ERROR, message: "Ce compte est privé." });
+      }
+
+      let query = fastify.supabaseAdmin
+        .from("follows")
+        .select("follower_id, followee_id, created_at")
+        .eq(ownerColumn, targetId)
+        .order("created_at", { ascending: false })
+        .limit(MEMBER_LIST_PAGE_SIZE + 1);
+      if (pageQuery.cursor) query = query.lt("created_at", pageQuery.cursor);
+      const rows = parseDbRows(FOLLOW_ROWS, await query, kind === "followers" ? "Abonnés d'un membre" : "Abonnements d'un membre");
+      const hasMore = rows.length > MEMBER_LIST_PAGE_SIZE;
+      const pageRows = hasMore ? rows.slice(0, MEMBER_LIST_PAGE_SIZE) : rows;
+
+      const page: MemberPage = {
+        members: await toMemberRows(
+          fastify,
+          viewerId,
+          pageRows.map((row) => row[memberColumn]),
+          { contextOwnerId: targetId }
+        ),
+        nextCursor: hasMore ? (pageRows.at(-1)?.created_at ?? null) : null,
+      };
+      return reply.send(page);
+    });
+  }
 }

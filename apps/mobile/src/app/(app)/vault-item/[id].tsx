@@ -8,6 +8,7 @@ import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/
 import { t } from "@/i18n";
 import { ApiError, changeVaultItemPhoto, deleteVaultItem, fetchVaultItem, sharePurchasePost, updateVaultItem } from "@/lib/api";
 import { importPhotoForSpotter } from "@/lib/image-import";
+import { PrivateAccountNote } from "@/components/private-account-note";
 import { SpotImage } from "@/components/spot-image";
 import { PRIVACY_LEVELS } from "@/lib/vault-labels";
 import { VerifiedIcon } from "@/components/icons";
@@ -372,6 +373,8 @@ export default function VaultItemDetailScreen() {
                 </Pressable>
               ))}
             </View>
+            {/* Compte privé : « Public » ne veut alors dire que « mes abonnés ». */}
+            <PrivateAccountNote style={styles.privateAccountNote} />
             <Pressable
               accessibilityRole="button"
               style={[styles.shareButton, sharing ? styles.shareButtonDisabled : null]}
@@ -458,6 +461,7 @@ const styles = themedStyles(() => ({
   sharedHint: { fontSize: font.caption, color: color.acier, lineHeight: 18 },
   privateNote: { fontSize: font.caption, color: color.acier, lineHeight: 18, marginBottom: space.md },
   pillRow: { flexDirection: "row", flexWrap: "wrap", gap: space.xs, marginBottom: space.lg },
+  privateAccountNote: { marginTop: -space.md, marginBottom: space.lg },
   privacyPill: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.full, paddingVertical: 6, paddingHorizontal: 12 },
   privacyPillActive: { backgroundColor: color.vert, borderColor: color.vert },
   privacyLabel: { fontSize: font.caption, color: color.acier },

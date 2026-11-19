@@ -11,6 +11,15 @@ import { randomUUID } from "node:crypto";
 // même une colonne absente (`missingColumns`, lot modération des
 // collections : base sans 0034). Les fonctions de la base (`rpc`) sont
 // fournies par le test qui en a besoin ; sinon, elles sont « absentes ».
+// Lot « vie sociale » : filtres `or` (fil, notifications) et `ilike`
+// (recherche de comptes), une demande d'abonnement par paire de comptes.
+// Migration 0046 : réponses, « j'aime » et mentions des commentaires (clés
+// uniques, cascades en chaîne à la suppression d'un commentaire).
+// Migration 0047 : photos 2 à 5 et personnes identifiées (une position et
+// une identification par publication, effacées avec la publication).
+// Migration 0048 : publications enregistrées (une par membre et par
+// publication, effacées avec la publication ; « sans collection » quand la
+// collection est supprimée, comme « on delete set null »).
 
 export type Row = Record<string, unknown>;
 type Filter = (row: Row) => boolean;
@@ -85,6 +94,22 @@ const DEFAULTS: Record<string, () => Row> = {
   wish_watches: () => ({ notify_price_drop: false, notify_restock: false, notify_sold_out: false, created_at: nextTimestamp(), updated_at: nextTimestamp() }),
   // Historique des consentements (lot « vidéo auto ») : la date de chaque choix.
   consents: () => ({ created_at: nextTimestamp() }),
+  // Lot « vie sociale » (migration 0045) : demandes d'abonnement, et les
+  // valeurs par défaut des tables sociales écrites par les routes.
+  follow_requests: () => ({ created_at: nextTimestamp() }),
+  follows: () => ({ created_at: nextTimestamp() }),
+  comments: () => ({ id: randomUUID(), parent_id: null, hidden_at: null, created_at: nextTimestamp() }),
+  // Migration 0046 : « j'aime » et mentions des commentaires.
+  comment_reactions: () => ({ created_at: nextTimestamp() }),
+  comment_mentions: () => ({ created_at: nextTimestamp() }),
+  post_reactions: () => ({ created_at: nextTimestamp() }),
+  // Migration 0047 : photos 2 à 5 et personnes identifiées.
+  post_media: () => ({ id: randomUUID(), created_at: nextTimestamp() }),
+  post_people_tags: () => ({ created_at: nextTimestamp() }),
+  // Migration 0048 : publications enregistrées.
+  saved_posts: () => ({ collection_id: null, created_at: nextTimestamp() }),
+  // Colonnes que la base remplit seule à la création d'une publication.
+  posts: () => ({ id: randomUUID(), wishlist_item_id: null, media_thumb_url: null, media_removed_at: null, hidden_at: null, created_at: nextTimestamp() }),
 };
 
 /** Clés uniques imitées (doublon : erreur 23505, comme Postgres). */
@@ -96,6 +121,16 @@ const UNIQUE: Record<string, string[][]> = {
   // Lot alertes prix et stock (0036) : un suivi et une cloche par envie.
   wish_tracking: [["wishlist_item_id"]],
   wish_watches: [["wishlist_item_id"]],
+  // Lot « vie sociale » (0045) : une demande par paire de comptes.
+  follow_requests: [["requester_id", "target_id"]],
+  // Migration 0046 : un « j'aime » et une mention par membre et par commentaire.
+  comment_reactions: [["comment_id", "user_id"]],
+  comment_mentions: [["comment_id", "user_id"]],
+  // Migration 0047 : une photo par position, une identification par membre, par publication.
+  post_media: [["post_id", "position"]],
+  post_people_tags: [["post_id", "user_id"]],
+  // Migration 0048 : une publication enregistrée par membre.
+  saved_posts: [["user_id", "post_id"]],
 };
 
 /** Suppressions en cascade imitées : en supprimant une ligne de la table,
@@ -115,6 +150,28 @@ const CASCADES: Record<string, { table: string; column: string }[]> = {
     { table: "wish_watches", column: "wishlist_item_id" },
     { table: "wish_alert_events", column: "wishlist_item_id" },
   ],
+  // Migration 0046 : un commentaire emporte ses réponses, ses « j'aime », ses
+  // mentions et les notifications qui le citent (0017).
+  comments: [
+    { table: "comments", column: "parent_id" },
+    { table: "comment_reactions", column: "comment_id" },
+    { table: "comment_mentions", column: "comment_id" },
+    { table: "notifications", column: "comment_id" },
+  ],
+  // Migration 0047 : une publication emporte ses photos 2 à 5 et ses identifications.
+  posts: [
+    { table: "post_media", column: "post_id" },
+    { table: "post_people_tags", column: "post_id" },
+    // Migration 0048 : et les lignes qui l'enregistrent, chez tous les membres.
+    { table: "saved_posts", column: "post_id" },
+  ],
+};
+
+/** « on delete set null » imités : en supprimant une ligne de la table, la
+ * colonne des lignes filles qui la désignent redevient vide. */
+const SET_NULL: Record<string, { table: string; column: string }[]> = {
+  // Migration 0048 : une collection supprimée garde ses publications enregistrées, sans collection.
+  collections: [{ table: "saved_posts", column: "collection_id" }],
 };
 
 // Dates strictement croissantes, jamais avant l'heure réelle (les routes
@@ -145,6 +202,47 @@ function listOf(value: string): string[] {
   return value.replace(/^\(|\)$/g, "").split(",").filter(Boolean);
 }
 
+/** Découpe « a,b(c,d),e » aux virgules du premier niveau seulement. */
+function topLevelParts(text: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let current = "";
+  for (const char of text) {
+    if (char === "(") depth += 1;
+    if (char === ")") depth -= 1;
+    if (char === "," && depth === 0) {
+      parts.push(current);
+      current = "";
+    } else current += char;
+  }
+  if (current) parts.push(current);
+  return parts;
+}
+
+/** Un terme d'un filtre `or` de PostgREST : « col.eq.v », « col.is.null »,
+ * « col.in.(a,b) », « col.not.in.(a,b) » ou « and(terme,terme) ». Tout autre
+ * terme relève une erreur : jamais un filtre ignoré en silence. */
+function orTerm(term: string): Filter {
+  if (term.startsWith("and(") && term.endsWith(")")) {
+    const inner = topLevelParts(term.slice(4, -1)).map(orTerm);
+    return (row) => inner.every((filter) => filter(row));
+  }
+  const [column, ...rest] = term.split(".");
+  const expression = rest.join(".");
+  if (!column) throw new Error(`fakeSupabase : filtre « or » illisible (${term})`);
+  if (expression.startsWith("eq.")) return (row) => String(row[column]) === expression.slice(3);
+  if (expression === "is.null") return (row) => (row[column] ?? null) === null;
+  if (expression.startsWith("not.in.")) {
+    const excluded = listOf(expression.slice(7));
+    return (row) => (row[column] ?? null) !== null && !excluded.includes(String(row[column]));
+  }
+  if (expression.startsWith("in.")) {
+    const wanted = listOf(expression.slice(3));
+    return (row) => wanted.includes(String(row[column]));
+  }
+  throw new Error(`fakeSupabase : filtre « or » inconnu (${term})`);
+}
+
 export function fakeSupabase(options: FakeDbOptions = {}) {
   const tables = new Map<string, Row[]>();
   const uploads: string[] = [];
@@ -166,6 +264,21 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
       if (side.conversation_id !== message.conversation_id) continue;
       side.last_message_at = message.created_at;
       if (side.user_id !== message.sender_id) side.unread = true;
+    }
+  }
+
+  /** Suppressions en cascade, en chaîne (une réponse emporte ses « j'aime »). */
+  function cascade(name: string, deleted: Row[]) {
+    const ids = new Set<unknown>(deleted.map((row) => row.id).filter((id) => id !== undefined && id !== null));
+    if (ids.size === 0) return;
+    for (const child of CASCADES[name] ?? []) {
+      const gone = table(child.table).filter((row) => ids.has(row[child.column]));
+      if (gone.length === 0) continue;
+      tables.set(child.table, table(child.table).filter((row) => !gone.includes(row)));
+      cascade(child.table, gone);
+    }
+    for (const child of SET_NULL[name] ?? []) {
+      for (const row of table(child.table)) if (ids.has(row[child.column])) row[child.column] = null;
     }
   }
 
@@ -250,10 +363,7 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
           name,
           rows.filter((row) => !matching.includes(row))
         );
-        const ids = new Set(matching.map((row) => row.id));
-        for (const child of CASCADES[name] ?? []) {
-          tables.set(child.table, table(child.table).filter((row) => !ids.has(row[child.column])));
-        }
+        cascade(name, matching);
         return returned(matching);
       }
       let result = [...matching];
@@ -324,6 +434,20 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
         } else {
           filters.push((row) => (row[column] ?? null) !== value);
         }
+        return chain;
+      },
+      // Au moins un des termes (syntaxe de PostgREST, voir orTerm).
+      or(expression: string) {
+        const terms = topLevelParts(expression).map(orTerm);
+        filters.push((row) => terms.some((filter) => filter(row)));
+        return chain;
+      },
+      // Comme Postgres : « % » vaut n'importe quel texte, sans tenir compte de la casse.
+      ilike(column: string, pattern: string) {
+        named.push(column);
+        const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*").replace(/_/g, ".");
+        const regex = new RegExp(`^${escaped}$`, "i");
+        filters.push((row) => typeof row[column] === "string" && regex.test(row[column] as string));
         return chain;
       },
       // Comme Postgres : une valeur vide n'est ni plus grande ni plus petite qu'une autre.

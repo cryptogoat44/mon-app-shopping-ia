@@ -1,14 +1,18 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
+  LEGACY_NOTIFICATION_TYPES,
   MODERATION_ACTION_TYPES,
   MODERATION_REASONS,
   NOTIFICATION_TYPES,
   REPORT_TARGET_TYPES,
   type AppNotification,
   type ModerationNotice,
+  type NotificationType,
   type PostAuthor,
 } from "@monapp/shared-types";
+import type { FastifyRequest } from "fastify";
+import { speaksV2 } from "../lib/clientLevel.js";
 import { fetchBlockedUserIds } from "../lib/blocks.js";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { INVALID_CURSOR, cursorQuerySchema, parseDbRows, parseInput } from "../lib/validation.js";
@@ -20,10 +24,13 @@ import { withoutSuspendedFaces } from "../lib/profileModeration.js";
 const PAGE_SIZE = 50;
 
 const ID = z.guid();
+// Le type est lu comme un simple texte : une ligne d'un type que ce serveur
+// ne connaît pas (écrite par un serveur plus récent, puis retour en arrière)
+// est laissée de côté — avant, elle faisait échouer tout l'écran Activité (500).
 const NOTIFICATION_ROWS = z.array(
   z.object({
     id: ID,
-    type: z.enum(NOTIFICATION_TYPES),
+    type: z.string(),
     actor_id: ID.nullable(),
     post_id: ID.nullable(),
     moderation_action_id: ID.nullable(),
@@ -31,7 +38,15 @@ const NOTIFICATION_ROWS = z.array(
     read_at: z.string().nullable(),
   })
 );
-type NotificationRow = z.infer<typeof NOTIFICATION_ROWS>[number];
+type NotificationRow = Omit<z.infer<typeof NOTIFICATION_ROWS>[number], "type"> & { type: NotificationType };
+
+/** Types envoyés à cette app. Une app d'avant le lot « vie sociale » (sans
+ * « v=2 ») ne reçoit que les six anciens : elle afficherait tout autre type
+ * comme « a aimé votre publication ». Le compteur « non lu » suit la même
+ * liste, pour ne jamais annoncer une notification que l'app ne montre pas. */
+function notificationTypesFor(request: FastifyRequest): readonly NotificationType[] {
+  return speaksV2(request) ? NOTIFICATION_TYPES : LEGACY_NOTIFICATION_TYPES;
+}
 
 const ACTOR_ROWS = z.array(
   z.object({ id: ID, username: z.string().nullable(), display_name: z.string(), avatar_url: z.string().nullable() })
@@ -101,10 +116,12 @@ export default async function notificationsRoutes(fastify: FastifyInstance) {
     // reçues avant le blocage (audit Lot Q, SEC-04). Une notification qui
     // parle d'un contenu masqué par la modération disparaît avec lui (lot 5).
     const actorsFilter = visibleActorsFilter(await fetchBlockedUserIds(fastify, userId));
+    const types = notificationTypesFor(request);
     let query = fastify.supabaseAdmin
       .from("notifications")
       .select("id, type, actor_id, post_id, moderation_action_id, created_at, read_at")
       .eq("user_id", userId)
+      .in("type", [...types])
       .is("hidden_at", null)
       .order("created_at", { ascending: false })
       .limit(PAGE_SIZE);
@@ -116,7 +133,8 @@ export default async function notificationsRoutes(fastify: FastifyInstance) {
       request.log.error({ error: result.error }, "Échec de lecture des notifications");
       return reply.code(500).send({ error: "internal_error", message: GENERIC_SERVER_ERROR });
     }
-    const rows = parseDbRows(NOTIFICATION_ROWS, result, "Notifications");
+    const known = new Set<string>(types);
+    const rows = parseDbRows(NOTIFICATION_ROWS, result, "Notifications").filter((row): row is NotificationRow => known.has(row.type));
     const [actors, notices] = await Promise.all([fetchActors(fastify, rows, request.user!.id), fetchNotices(fastify, rows)]);
     return reply.send(rows.map((row) => toNotification(row, actors, notices)));
   });
@@ -129,6 +147,7 @@ export default async function notificationsRoutes(fastify: FastifyInstance) {
       .from("notifications")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
+      .in("type", [...notificationTypesFor(request)])
       .is("read_at", null)
       .is("hidden_at", null);
     if (actorsFilter) query = query.or(actorsFilter);
@@ -150,6 +169,9 @@ export default async function notificationsRoutes(fastify: FastifyInstance) {
       .from("notifications")
       .update({ read_at: new Date().toISOString() })
       .eq("user_id", userId)
+      // Seulement ce que cette app affiche : une notification d'un type
+      // nouveau reste « non lue » jusqu'à ce qu'une app récente la montre.
+      .in("type", [...notificationTypesFor(request)])
       .is("read_at", null);
 
     if (error) {

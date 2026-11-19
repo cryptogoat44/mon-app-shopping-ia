@@ -19,6 +19,8 @@ import { PlayerConsentSetting } from "@/components/player-consent-setting";
 import { ExtraDataSettings } from "@/components/extra-data-settings";
 import { VideoAiSetting } from "@/components/video-ai-setting";
 import { PieceSendsSetting } from "@/components/piece-sends-setting";
+import { PrivateAccountSetting } from "@/components/private-account-setting";
+import { MentionsFromSetting } from "@/components/mentions-from-setting";
 import { MessagesFromSetting } from "@/components/messages-from-setting";
 import { ReadReceiptsSetting } from "@/components/read-receipts-setting";
 import { MessagePushSetting } from "@/components/message-push-setting";
@@ -199,6 +201,10 @@ export default function SettingsScreen() {
           {CONTACT_EMAIL ? <ContactEntry email={CONTACT_EMAIL} style={styles.secondLink} linkStyle={styles.link} textStyle={styles.sectionBody} /> : null}
         </View>
 
+        {/* Lot « vie sociale » : bloc « Confidentialité du compte », caché tant que le serveur n'a pas le compte privé. */}
+        <PrivateAccountSetting />
+        {/* Migration 0046 : « Qui peut me mentionner », caché tant que le serveur n'a pas les mentions. */}
+        <MentionsFromSetting />
         <PieceSendsSetting />
         <MessagesFromSetting />
         {/* Lot « messages vus » : « Confirmations de lecture », caché tant que le serveur ne le propose pas. */}

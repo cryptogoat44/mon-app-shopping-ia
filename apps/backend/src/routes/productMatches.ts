@@ -4,6 +4,7 @@ import { MERCHANT_LINK_CONTEXTS, PRIVACY_LEVELS } from "@monapp/shared-types";
 import { fetchBlockedUserIds } from "../lib/blocks.js";
 import { INVALID_ID, idParamsSchema, parseDbRows, parseInput } from "../lib/validation.js";
 import { shownPosts } from "../lib/visibility.js";
+import { postVisibleTo, readAudience } from "../lib/audience.js";
 
 const TAGGING_POST_ROWS = z.array(z.object({ user_id: z.guid(), privacy: z.enum(PRIVACY_LEVELS) }));
 
@@ -56,9 +57,10 @@ async function isInReceivedPiece(fastify: FastifyInstance, matchId: string, view
 }
 
 /** Vrai si le produit est montré dans au moins une publication visible par
- * `viewerId`, selon les mêmes règles que le fil : la sienne, ou une
- * publication publique, ou "abonnés" d'un compte qu'il suit — jamais une
- * publication privée d'un autre, jamais en cas de blocage. */
+ * `viewerId`, selon les mêmes règles que le fil (lib/audience.ts) : la
+ * sienne, ou une publication publique, ou "abonnés" d'un compte qu'il suit —
+ * jamais une publication privée d'un autre, jamais en cas de blocage, jamais
+ * celle d'un compte privé dont il n'est pas un abonné accepté. */
 async function isTaggedInVisiblePost(fastify: FastifyInstance, matchId: string, viewerId: string): Promise<boolean> {
   const postIds = await postsShowingMatch(fastify, matchId);
   if (postIds.length === 0) return false;
@@ -70,19 +72,18 @@ async function isTaggedInVisiblePost(fastify: FastifyInstance, matchId: string, 
     "Publications d'une pièce taguée"
   );
   if (candidates.some((p) => p.user_id === viewerId)) return true;
+  if (candidates.length === 0) return false;
 
-  const blocked = await fetchBlockedUserIds(fastify, viewerId);
-  const visibleCandidates = candidates.filter((p) => !blocked.has(p.user_id) && p.privacy !== "private");
-  if (visibleCandidates.some((p) => p.privacy === "public")) return true;
-
-  const followersOnlyAuthors = visibleCandidates.filter((p) => p.privacy === "followers").map((p) => p.user_id);
-  if (followersOnlyAuthors.length === 0) return false;
-  const { data: follows } = await fastify.supabaseAdmin
-    .from("follows")
-    .select("followee_id")
-    .eq("follower_id", viewerId)
-    .in("followee_id", followersOnlyAuthors);
-  return (follows ?? []).length > 0;
+  const audiences = await readAudience(
+    fastify,
+    viewerId,
+    candidates.map((p) => p.user_id),
+    { suspended: false, requested: false }
+  );
+  return candidates.some((p) => {
+    const audience = audiences.get(p.user_id);
+    return audience !== undefined && postVisibleTo(audience, p.privacy);
+  });
 }
 
 export default async function productMatchesRoutes(fastify: FastifyInstance) {

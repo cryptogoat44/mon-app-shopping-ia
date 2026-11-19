@@ -10,11 +10,15 @@ import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, fetchMyLifestylePosts, fetchVault } from "@/lib/api";
 import type { Post, VaultItem } from "@monapp/shared-types";
-import { CameraIcon, ClockIcon, PlusIcon, SettingsIcon, TagIcon, VerifiedIcon } from "@/components/icons";
+import { CameraIcon, ClockIcon, PhotosIcon, PinIcon, PlusIcon, SettingsIcon, TagIcon, VerifiedIcon } from "@/components/icons";
+import { hasSeveralPhotos } from "@/lib/post-extras";
+import { gridCellLabel, pinnedFirst } from "@/lib/profile-pins";
+import { ProfileLink } from "@/components/profile-link";
 import { Avatar } from "@/components/avatar";
 import { AvatarPhotoFlow } from "@/components/avatar-photo-flow";
 import { onVaultChanged } from "@/lib/vault-changes";
 import { requestedProfileSegment, type ProfileSegment } from "@/lib/wishlist-link";
+import { memberListRoute } from "@/lib/member-lists";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
@@ -117,6 +121,8 @@ export default function ProfileScreen() {
     }
   }
 
+  // Épingles (migration 0049) : ses photos épinglées en tête, avec une marque.
+  const lifestyleGrid = pinnedFirst(lifestylePosts);
   const isEmptyVault = segment === "vault" && !vaultError && items.length === 0;
   const isEmptyLifestyle = segment === "lifestyle" && !lifestyleError && lifestylePosts.length === 0;
 
@@ -145,6 +151,8 @@ export default function ProfileScreen() {
         <View style={styles.who}>
           <Text style={styles.name} accessibilityRole="header">{profile?.displayName}</Text>
           {profile?.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
+          {/* Lien en bio (migration 0049) : le même écran d'avertissement que pour les autres. */}
+          <ProfileLink url={profile?.linkUrl} align="start" />
           <Pressable
             onPress={() => router.push("/edit-profile")}
             hitSlop={{ top: 4, bottom: 4 }}
@@ -167,14 +175,29 @@ export default function ProfileScreen() {
           <Text style={styles.statNumber}>{profile?.postsCount ?? 0}</Text>
           <Text style={styles.statLabel}>{t.profile.posts}</Text>
         </View>
-        <View style={styles.statItem}>
+        {/* Lot « vie sociale » : les deux compteurs ouvrent la liste des abonnés et celle des abonnements. */}
+        <Pressable
+          style={styles.statItem}
+          onPress={() => (profile ? router.push(memberListRoute("followers", profile.id)) : undefined)}
+          disabled={!profile}
+          accessibilityRole="link"
+          accessibilityLabel={t.memberLists.openFollowers(profile?.followersCount ?? 0)}
+          testID="ouvrir-abonnes"
+        >
           <Text style={styles.statNumber}>{profile?.followersCount ?? 0}</Text>
           <Text style={styles.statLabel}>{t.profile.followers}</Text>
-        </View>
-        <View style={styles.statItem}>
+        </Pressable>
+        <Pressable
+          style={styles.statItem}
+          onPress={() => (profile ? router.push(memberListRoute("following", profile.id)) : undefined)}
+          disabled={!profile}
+          accessibilityRole="link"
+          accessibilityLabel={t.memberLists.openFollowing(profile?.followingCount ?? 0)}
+          testID="ouvrir-abonnements"
+        >
           <Text style={styles.statNumber}>{profile?.followingCount ?? 0}</Text>
           <Text style={styles.statLabel}>{t.profile.followingCount}</Text>
-        </View>
+        </Pressable>
       </View>
 
       <View style={styles.seg}>
@@ -296,13 +319,13 @@ export default function ProfileScreen() {
               </Pressable>
             </View>
           ) : (
-            lifestylePosts.map((post) => (
+            lifestyleGrid.posts.map((post) => (
               <Pressable
                 key={post.id}
                 style={styles.piece}
                 onPress={() => router.push({ pathname: "/publication", params: { id: post.id } })}
                 accessibilityRole="button"
-                accessibilityLabel={post.caption ?? t.profile.lifestylePhoto}
+                accessibilityLabel={gridCellLabel(post.caption ?? t.profile.lifestylePhoto, lifestyleGrid.pinnedIds.has(post.id))}
               >
                 <View style={styles.thumb}>
                   {post.mediaUrl === null ? (
@@ -321,6 +344,19 @@ export default function ProfileScreen() {
                 {post.taggedPieces.length > 0 ? (
                   <View style={styles.tagBadge}>
                     <TagIcon size={12} tint={color.surImage} />
+                  </View>
+                ) : null}
+                {/* Plusieurs photos (migration 0047) : une petite marque dans le coin. */}
+                {hasSeveralPhotos(post) ? (
+                  <View style={styles.photosMark} accessible accessibilityLabel={t.carousel.morePhotos}>
+                    <PhotosIcon size={12} />
+                  </View>
+                ) : null}
+                {/* Épinglée (migration 0049) : une punaise dans le coin opposé ;
+                    VoiceOver lit « Épinglée » dans le libellé de la case. */}
+                {lifestyleGrid.pinnedIds.has(post.id) ? (
+                  <View style={styles.pinMark} testID="marque-epinglee">
+                    <PinIcon size={12} />
                   </View>
                 ) : null}
               </Pressable>
@@ -356,7 +392,7 @@ const styles = themedStyles(() => ({
   // Compteurs sur toute la largeur, sous la photo et le nom : quatre
   // colonnes égales (les libellés se chevauchaient à côté de la photo).
   stats: { flexDirection: "row", paddingHorizontal: space.lg, paddingTop: space.md },
-  statItem: { flex: 1, alignItems: "center" },
+  statItem: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 44 },
   statNumber: { fontSize: font.body, fontWeight: "600", color: color.encre },
   statLabel: { fontSize: font.caption, color: color.acier, marginTop: 2 },
   who: { flex: 1 },
@@ -435,6 +471,28 @@ const styles = themedStyles(() => ({
     height: 18,
     borderRadius: radius.full,
     backgroundColor: color.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  photosMark: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    borderRadius: radius.full,
+    backgroundColor: color.voileImage,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pinMark: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    width: 20,
+    height: 20,
+    borderRadius: radius.full,
+    backgroundColor: color.voileImage,
     alignItems: "center",
     justifyContent: "center",
   },

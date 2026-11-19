@@ -1,4 +1,6 @@
 import type {
+  AddPostMediaResponse,
+  PostExtrasStatus,
   ApiErrorBody,
   AppNotification,
   BlockedUser,
@@ -67,7 +69,12 @@ import type {
   WishCollections,
   UserProfile,
   CommentsPage,
+  CreateCommentRequest,
+  LikeCommentRequest,
+  LikeCommentResponse,
+  MentionsFrom,
   PostComment,
+  UpdateMentionsFromRequest,
   VideoMoment,
   StockReportRequest,
   UpdateWishAlertRequest,
@@ -79,8 +86,18 @@ import type {
   VideoLinkAnalysisRequest,
   VideoLookupResponse,
   VideoSpotRequest,
+  FollowResponse,
+  MemberPage,
+  UpdatePrivateAccountRequest,
+  SavePostRequest,
+  SavePostResponse,
+  SavedPostsPage,
+  PinPostRequest,
+  PinPostResponse,
+  UserPostsPage,
 } from "@monapp/shared-types";
 import { CLIENT_LEVEL, COMPLEMENT_DEFERRED, CONSENT_VERSIONS, parseSearchCapacity, parseVideoMomentsResponse, type SearchCapacityStatus } from "@monapp/shared-types";
+import { CLIENT_LEVEL_QUERY, parseFollowResponse } from "./follow-state";
 import { supabase } from "./supabase";
 import { setAnalyticsConsent, track } from "./analytics";
 import { acceptLanguage, t } from "../i18n";
@@ -96,6 +113,7 @@ import { readMessagesStatus, setMessagesStatus } from "./conversations";
 import { readCollectionsStatus, setCollectionsStatus } from "./collections";
 import { ALERTS_UNAVAILABLE, isAlertsUnavailable, readWishAlertState, readWishAlertStates, readWishAlertsStatus, setWishAlertsStatus } from "./wish-alerts";
 import { createStatusLoader } from "./status-loading";
+import { POST_EXTRAS_UNAVAILABLE, readPostExtrasStatus, setPostExtrasStatus } from "./post-extras";
 import { isDataUri } from "./data-uri";
 import { linkAnalysisEnabled, parseLinkAnalysis, type LinkAnalysis } from "./video-link-analysis";
 
@@ -435,13 +453,59 @@ export async function searchUsers(query: string): Promise<PublicProfile[]> {
   return response.json();
 }
 
-export async function followUser(userId: string, context: "search" | "profile"): Promise<void> {
-  await authorizedFetch(`/api/follows/${userId}`, { method: "POST" });
-  track("follow_added", { context });
+/** S'abonner. Compte public : abonné(e) tout de suite. Compte privé (lot
+ * « vie sociale ») : une demande est envoyée (« requested »), et rien n'est
+ * compté comme un abonnement. Un serveur d'avant ce lot répond sans corps :
+ * abonné(e). */
+export async function followUser(userId: string, context: "search" | "profile" | "list"): Promise<FollowResponse["state"]> {
+  const response = await authorizedFetch(`/api/follows/${userId}?${CLIENT_LEVEL_QUERY}`, { method: "POST" });
+  const state = response.status === 204 ? "following" : parseFollowResponse(await response.json().catch(() => null));
+  if (state === "following") track("follow_added", { context });
+  return state;
+}
+
+/** PUT /api/me/private-account : compte privé ou public. */
+export async function updatePrivateAccount(isPrivate: boolean): Promise<void> {
+  const payload: UpdatePrivateAccountRequest = { isPrivate };
+  await authorizedFetch("/api/me/private-account", { method: "PUT", body: JSON.stringify(payload) });
+}
+
+/** Demandes d'abonnement reçues, les plus récentes d'abord. */
+export async function fetchFollowRequests(cursor?: string): Promise<MemberPage> {
+  const response = await authorizedFetch(`/api/follow-requests${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+  return response.json();
+}
+
+export async function acceptFollowRequest(userId: string): Promise<void> {
+  await authorizedFetch(`/api/follow-requests/${userId}/accept`, { method: "POST" });
+}
+
+/** Refuser : la personne n'est pas prévenue. */
+export async function declineFollowRequest(userId: string): Promise<void> {
+  await authorizedFetch(`/api/follow-requests/${userId}`, { method: "DELETE" });
 }
 
 export async function unfollowUser(userId: string): Promise<void> {
   await authorizedFetch(`/api/follows/${userId}`, { method: "DELETE" });
+}
+
+/** Les abonnés d'un membre, les plus récents d'abord (lot « vie sociale »).
+ * Le serveur décide seul de qui y figure : une page peut être vide alors
+ * qu'il en reste. 403 « private_account » : compte privé, pas abonné(e). */
+export async function fetchFollowers(userId: string, cursor?: string): Promise<MemberPage> {
+  const response = await authorizedFetch(`/api/users/${userId}/followers${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+  return response.json();
+}
+
+/** Les comptes qu'un membre suit, les plus récents d'abord. */
+export async function fetchFollowing(userId: string, cursor?: string): Promise<MemberPage> {
+  const response = await authorizedFetch(`/api/users/${userId}/following${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+  return response.json();
+}
+
+/** Retirer un de ses abonnés : la personne n'est pas prévenue. */
+export async function removeFollower(userId: string): Promise<void> {
+  await authorizedFetch(`/api/followers/${userId}`, { method: "DELETE" });
 }
 
 export async function fetchFeed(cursor?: string): Promise<FeedPage> {
@@ -467,18 +531,39 @@ export async function updatePostPrivacy(id: string, privacy: PrivacyLevel): Prom
   return post;
 }
 
+/** Épingler sa photo en haut de son profil, ou retirer l'épingle (migration
+ * 0049). Un refus arrive en ApiError avec la phrase du serveur (3 au plus,
+ * photos seulement). */
+export async function updatePostPin(id: string, pinned: boolean): Promise<PinPostResponse> {
+  const body: PinPostRequest = { pinned };
+  const response = await authorizedFetch(`/api/posts/${encodeURIComponent(id)}/pin`, { method: "PUT", body: JSON.stringify(body) });
+  return response.json();
+}
+
 export async function deletePost(id: string): Promise<void> {
   await authorizedFetch(`/api/posts/${id}`, { method: "DELETE" });
 }
 
+// « v=2 » (lot « vie sociale ») : cette app sait afficher un fil — les
+// commentaires d'origine, puis leurs réponses chargées à part. Sans ce
+// paramètre (ou sans la migration 0046), le serveur rend la liste à plat.
 export async function fetchComments(postId: string, cursor?: string): Promise<CommentsPage> {
-  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
-  const response = await authorizedFetch(`/api/posts/${postId}/comments${query}`);
+  const query = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
+  const response = await authorizedFetch(`/api/posts/${postId}/comments?${CLIENT_LEVEL_QUERY}${query}`);
   return response.json();
 }
 
-export async function createComment(postId: string, body: string): Promise<PostComment> {
-  const response = await authorizedFetch(`/api/posts/${postId}/comments`, { method: "POST", body: JSON.stringify({ body }) });
+/** Réponses d'un commentaire, les plus anciennes d'abord. */
+export async function fetchReplies(commentId: string, cursor?: string): Promise<CommentsPage> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  const response = await authorizedFetch(`/api/comments/${commentId}/replies${query}`);
+  return response.json();
+}
+
+/** `parentId` : le commentaire auquel on répond. */
+export async function createComment(postId: string, body: string, parentId?: string): Promise<PostComment> {
+  const payload: CreateCommentRequest = parentId ? { body, parentId } : { body };
+  const response = await authorizedFetch(`/api/posts/${postId}/comments`, { method: "POST", body: JSON.stringify(payload) });
   const comment: PostComment = await response.json();
   track("comment_posted");
   return comment;
@@ -488,12 +573,31 @@ export async function deleteComment(commentId: string): Promise<void> {
   await authorizedFetch(`/api/comments/${commentId}`, { method: "DELETE" });
 }
 
+/** Aimer (ou ne plus aimer) un commentaire : l'app dit l'état voulu. */
+export async function likeComment(commentId: string, liked: boolean): Promise<LikeCommentResponse> {
+  const payload: LikeCommentRequest = { liked };
+  const response = await authorizedFetch(`/api/comments/${commentId}/like`, { method: "PUT", body: JSON.stringify(payload) });
+  return response.json();
+}
+
+/** Retirer sa propre mention d'un commentaire (le texte reste, sans lien). */
+export async function removeMyMention(commentId: string): Promise<void> {
+  await authorizedFetch(`/api/comments/${commentId}/mentions/me`, { method: "DELETE" });
+}
+
+/** Réglage « Qui peut me mentionner ». */
+export async function updateMentionsFrom(mentionsFrom: MentionsFrom): Promise<void> {
+  const payload: UpdateMentionsFromRequest = { mentionsFrom };
+  await authorizedFetch("/api/me/mentions-from", { method: "PUT", body: JSON.stringify(payload) });
+}
+
 export async function fetchUserProfile(userId: string): Promise<UserProfile> {
   const response = await authorizedFetch(`/api/users/${userId}`);
   return response.json();
 }
 
-export async function fetchUserPosts(userId: string, cursor?: string): Promise<FeedPage> {
+/** La première page porte aussi ses épinglées (`pinned`, migration 0049). */
+export async function fetchUserPosts(userId: string, cursor?: string): Promise<UserPostsPage> {
   const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
   const response = await authorizedFetch(`/api/users/${userId}/posts${query}`);
   return response.json();
@@ -542,10 +646,11 @@ export async function updatePieceSendsFrom(pieceSendsFrom: PieceSendsFrom): Prom
 // `ensureStatuses` sait ainsi ce qui a déjà une réponse ou une demande en cours.
 // Changement de compte ou déconnexion : ce qui est gardé en mémoire redevient
 // « indisponible », rien du compte précédent n'est montré au suivant.
-const statuses = createStatusLoader({ messages: loadMessagesStatus, collections: loadCollectionsStatus, alerts: loadWishAlertsStatus }, () => {
+const statuses = createStatusLoader({ messages: loadMessagesStatus, collections: loadCollectionsStatus, alerts: loadWishAlertsStatus, posts: loadPostExtrasStatus }, () => {
   setMessagesStatus({ enabled: false, unreadCount: 0, push: false });
   setCollectionsStatus({ enabled: false, reportable: false });
   setWishAlertsStatus(ALERTS_UNAVAILABLE);
+  setPostExtrasStatus(POST_EXTRAS_UNAVAILABLE);
 });
 
 /** S'assure que les disponibilités ont été demandées pour ce compte, quel que
@@ -555,6 +660,30 @@ const statuses = createStatusLoader({ messages: loadMessagesStatus, collections:
  * écrans connectés (lib/use-statuses-loaded.ts). */
 export function ensureStatuses(userId: string | null | undefined): Promise<void> {
   return statuses.ensure(userId);
+}
+
+// ---- Plusieurs photos, identifier des personnes (migration 0047) ----
+
+/** La base sait-elle garder plusieurs photos et des identifications ? Un
+ * serveur sans elles (ou en erreur) vaut « non » : l'app garde une seule
+ * photo et cache « Identifier des personnes ». L'état est partagé avec les
+ * écrans abonnés (lib/post-extras.ts). */
+export function fetchPostExtrasStatus(): Promise<PostExtrasStatus> {
+  return statuses.request("posts");
+}
+
+async function loadPostExtrasStatus(): Promise<PostExtrasStatus> {
+  let status: PostExtrasStatus;
+  try {
+    const response = await authorizedFetch("/api/posts/status");
+    status = readPostExtrasStatus(await response.json().catch(() => null));
+  } catch (e) {
+    // Hors ligne : l'état connu reste affiché.
+    if (e instanceof TypeError) throw e;
+    status = readPostExtrasStatus(null);
+  }
+  setPostExtrasStatus(status);
+  return status;
 }
 
 // ---- Messages privés (lot messages) ----
@@ -873,19 +1002,22 @@ export async function deleteWishlistItem(id: string): Promise<void> {
  * `cursor` = date de la dernière reçue, pour la page suivante. */
 export const NOTIFICATIONS_PAGE_SIZE = 50;
 
+// « v=2 » (lot « vie sociale ») : cette app comprend les nouveaux types de
+// notification (demande d'abonnement, demande acceptée). Sans ce paramètre,
+// le serveur ne les envoie ni ne les compte.
 export async function fetchNotifications(cursor?: string): Promise<AppNotification[]> {
-  const response = await authorizedFetch(`/api/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+  const response = await authorizedFetch(`/api/notifications?${CLIENT_LEVEL_QUERY}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
   return response.json();
 }
 
 export async function fetchUnreadNotificationCount(): Promise<number> {
-  const response = await authorizedFetch("/api/notifications/unread-count");
+  const response = await authorizedFetch(`/api/notifications/unread-count?${CLIENT_LEVEL_QUERY}`);
   const data = (await response.json()) as { count: number };
   return data.count;
 }
 
 export async function markNotificationsRead(): Promise<void> {
-  await authorizedFetch("/api/notifications/read-all", { method: "POST" });
+  await authorizedFetch(`/api/notifications/read-all?${CLIENT_LEVEL_QUERY}`, { method: "POST" });
 }
 
 export async function blockUser(userId: string): Promise<void> {
@@ -956,6 +1088,8 @@ export async function createLifestylePost(params: {
   imageUri: string;
   privacy?: string;
   taggedPieces?: TaggedPieceInput[];
+  /** Membres à identifier (migration 0047) : le serveur ne garde que ceux qui l'acceptent et voient la publication. */
+  peopleTags?: string[];
 }): Promise<Post> {
   const formData = new FormData();
   formData.append("type", "lifestyle");
@@ -964,12 +1098,29 @@ export async function createLifestylePost(params: {
   if (params.taggedPieces && params.taggedPieces.length > 0) {
     formData.append("taggedPieces", JSON.stringify(params.taggedPieces));
   }
+  if (params.peopleTags && params.peopleTags.length > 0) {
+    formData.append("peopleTags", JSON.stringify(params.peopleTags));
+  }
   await appendImageFile(formData, "file", params.imageUri);
 
   const response = await authorizedFetch("/api/posts", { method: "POST", body: formData });
   const post: Post = await response.json();
   track("post_published", { type: "lifestyle", visibility: post.privacy, tagged_count: params.taggedPieces?.length ?? 0 });
   return post;
+}
+
+/** Ajoute une photo (2 à 5) à sa publication, dans les 10 minutes qui suivent
+ * (migration 0047). Rend toutes les photos de la publication. */
+export async function addPostPhoto(postId: string, imageUri: string): Promise<AddPostMediaResponse> {
+  const formData = new FormData();
+  await appendImageFile(formData, "file", imageUri);
+  const response = await authorizedFetch(`/api/posts/${postId}/media`, { method: "POST", body: formData });
+  return response.json();
+}
+
+/** Retire une identification : la sienne, ou une sur sa propre publication (migration 0047). */
+export async function removePeopleTag(postId: string, userId: string): Promise<void> {
+  await authorizedFetch(`/api/posts/${postId}/people-tags/${userId}`, { method: "DELETE" });
 }
 
 export async function sharePurchasePost(vaultItemId: string, privacy: PrivacyLevel, caption?: string): Promise<Post> {
@@ -990,6 +1141,45 @@ export async function reactToPost(postId: string): Promise<ReactToPostResponse> 
   const result: ReactToPostResponse = await response.json();
   if (result.viewerHasReacted) track("like_added");
   return result;
+}
+
+// ---- Publications enregistrées (migration 0048) ----
+
+/** Enregistrer une publication, ou la ranger ailleurs : `collectionId`, une de
+ * ses collections ; null : sans collection ; absent (simple toucher du
+ * signet) : le serveur garde sa collection si elle est déjà enregistrée.
+ * Visible de vous seul. */
+export async function savePost(postId: string, collectionId?: string | null, options: { firstSave?: boolean } = {}): Promise<SavePostResponse> {
+  const body: SavePostRequest = collectionId === undefined ? {} : { collectionId };
+  const response = await authorizedFetch(`/api/posts/${encodeURIComponent(postId)}/save`, { method: "PUT", body: JSON.stringify(body) });
+  const result: SavePostResponse = await response.json();
+  if (options.firstSave) track("post_saved");
+  return result;
+}
+
+/** Retirer une publication de ses enregistrées (toujours permis, même quand on ne la voit plus). */
+export async function unsavePost(postId: string): Promise<void> {
+  await authorizedFetch(`/api/posts/${encodeURIComponent(postId)}/save`, { method: "DELETE" });
+}
+
+/** Ses publications enregistrées encore visibles, les plus récemment
+ * enregistrées d'abord ; `collectionId` : seulement celles d'une de ses
+ * collections. Une page peut être vide alors qu'il en reste (`nextCursor`). */
+export async function fetchSavedPosts(cursor?: string | null, collectionId?: string | null): Promise<SavedPostsPage> {
+  const query = new URLSearchParams();
+  if (cursor) query.set("cursor", cursor);
+  if (collectionId) query.set("collectionId", collectionId);
+  const text = query.toString();
+  const response = await authorizedFetch(`/api/saved-posts${text ? `?${text}` : ""}`);
+  return response.json();
+}
+
+/** « Aimé par » : les membres qui ont aimé une publication, les plus récents
+ * d'abord. Le serveur décide seul de qui y figure : une page peut être vide
+ * alors qu'il en reste. 404 « post_not_found » : publication indisponible. */
+export async function fetchPostLikes(postId: string, cursor?: string): Promise<MemberPage> {
+  const response = await authorizedFetch(`/api/posts/${postId}/likes${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+  return response.json();
 }
 
 export async function fetchConsentStatus(): Promise<ConsentStatus[]> {

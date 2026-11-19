@@ -7,7 +7,10 @@ import type { Post, UserProfile } from "@monapp/shared-types";
 import { ApiError, fetchUserPosts, fetchUserProfile, followUser, unfollowUser } from "@/lib/api";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
-import { MoreIcon } from "@/components/icons";
+import { LockIcon, MoreIcon, PhotosIcon, PinIcon } from "@/components/icons";
+import { hasSeveralPhotos } from "@/lib/post-extras";
+import { appendGridPage, gridCellLabel, profileGrid } from "@/lib/profile-pins";
+import { ProfileLink } from "@/components/profile-link";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { SpotImage } from "@/components/spot-image";
 import { ImageUnavailable } from "@/components/image-unavailable";
@@ -15,8 +18,13 @@ import { ErrorMessage } from "@/components/error-message";
 import { FriendCollections } from "@/components/friend-collections";
 import { useToast } from "@/lib/toast-context";
 import { useMessagesStatus } from "@/lib/use-messages-status";
+import { followActionFor, followButton, followStateOf, showsPrivateShell } from "@/lib/follow-state";
+import { memberListRoute } from "@/lib/member-lists";
 import { themedStyles } from "@/theme/themed-styles";
 import { Avatar } from "@/components/avatar";
+
+/** Entre deux compteurs du profil. */
+const COUNT_SEPARATOR = " · ";
 
 function chunk<T>(items: T[], size: number): T[][] {
   const rows: T[][] = [];
@@ -28,12 +36,19 @@ function chunk<T>(items: T[], size: number): T[][] {
 // compteurs, suivre / ne plus suivre, signaler / bloquer, et ses
 // publications — chacune selon sa propre confidentialité (filtrée par le
 // serveur). JAMAIS son Vault, ni même le nombre de pièces qu'il contient.
+// Compte privé (lot « vie sociale ») : qui n'est pas un abonné accepté ne voit
+// que nom, photo, bio et compteurs, un cadenas et une phrase ; le bouton dit
+// « Suivre », puis « Demandé » (le toucher annule la demande).
+// Épingles et lien en bio (migration 0049) : ses publications épinglées en
+// tête de la grille, avec une marque ; son lien sous la bio (jamais pour un
+// compte privé vu par un inconnu : le serveur ne le donne pas).
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { showToast } = useToast();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [posts, setPosts] = useState<Post[] | null>(null);
+  const [pinnedIds, setPinnedIds] = useState<ReadonlySet<string>>(new Set());
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [state, setState] = useState<"loading" | "ready" | "not_found" | "error">("loading");
@@ -53,7 +68,9 @@ export default function UserProfileScreen() {
         return;
       }
       setProfile(loadedProfile);
-      setPosts(page.posts);
+      const grid = profileGrid(page);
+      setPosts(grid.posts);
+      setPinnedIds(grid.pinnedIds);
       setNextCursor(page.nextCursor);
       setState("ready");
     } catch (e) {
@@ -70,7 +87,8 @@ export default function UserProfileScreen() {
     setLoadingMore(true);
     try {
       const page = await fetchUserPosts(id, nextCursor);
-      setPosts((prev) => [...(prev ?? []), ...page.posts]);
+      // Une épinglée revient à sa place chronologique : jamais deux fois.
+      setPosts((prev) => appendGridPage(prev ?? [], page.posts));
       setNextCursor(page.nextCursor);
     } catch {
       // silencieux : re-scroller relance le chargement
@@ -81,16 +99,20 @@ export default function UserProfileScreen() {
 
   async function handleFollow() {
     if (!profile) return;
-    const wasFollowing = profile.isFollowing;
+    // Abonné(e) : ne plus suivre. Demande en attente : l'annuler. Sinon : suivre
+    // (compte privé : le serveur enregistre une demande).
+    const action = followActionFor(followStateOf(profile));
     setFollowBusy(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
-      if (wasFollowing) await unfollowUser(profile.id);
-      else await followUser(profile.id, "profile");
+      if (action === "follow") await followUser(profile.id, "profile");
+      else await unfollowUser(profile.id);
       // Les publications « abonnés » apparaissent ou disparaissent : on relit.
       const [loadedProfile, page] = await Promise.all([fetchUserProfile(profile.id), fetchUserPosts(profile.id)]);
       setProfile(loadedProfile);
-      setPosts(page.posts);
+      const grid = profileGrid(page);
+      setPosts(grid.posts);
+      setPinnedIds(grid.pinnedIds);
       setNextCursor(page.nextCursor);
     } catch (e) {
       showToast(e instanceof ApiError ? e.message : t.userProfile.followError);
@@ -139,25 +161,61 @@ export default function UserProfileScreen() {
     );
   }
 
+  const isShell = showsPrivateShell(profile);
+  const followState = followStateOf(profile);
+  const follow = followButton(followState, t.userProfile.unfollow);
+
   const header = (
     <View style={styles.header}>
       <Avatar uri={profile.avatarUrl} userId={profile.id} displayName={profile.displayName} username={profile.username} size={88} accessibilityLabel={profile.displayName} />
       <Text style={styles.name} accessibilityRole="header">{profile.displayName}</Text>
       <Text style={styles.handle}>@{profile.username}</Text>
       {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
-      <Text style={styles.counts}>
-        {t.userProfile.posts_count(profile.postsCount)} · {t.userProfile.followers(profile.followersCount)} · {t.userProfile.following(profile.followingCount)}
-      </Text>
+      <ProfileLink url={profile.linkUrl} />
+      {/* Compte privé vu par un inconnu : jamais le nombre de publications, et
+          les deux compteurs restent du texte (ses listes ne s'ouvrent qu'à ses
+          abonnés acceptés). Sinon, chacun ouvre sa liste. */}
+      <View style={styles.counts}>
+        {isShell ? null : <Text style={styles.count}>{`${t.userProfile.posts_count(profile.postsCount)}${COUNT_SEPARATOR}`}</Text>}
+        {isShell ? (
+          <Text style={styles.count}>{t.userProfile.followers(profile.followersCount)}</Text>
+        ) : (
+          <Pressable
+            style={styles.countLink}
+            onPress={() => router.push(memberListRoute("followers", profile.id))}
+            accessibilityRole="link"
+            accessibilityLabel={t.memberLists.openFollowers(profile.followersCount)}
+            testID="ouvrir-abonnes"
+          >
+            <Text style={styles.count}>{t.userProfile.followers(profile.followersCount)}</Text>
+          </Pressable>
+        )}
+        <Text style={styles.count}>{COUNT_SEPARATOR}</Text>
+        {isShell ? (
+          <Text style={styles.count}>{t.userProfile.following(profile.followingCount)}</Text>
+        ) : (
+          <Pressable
+            style={styles.countLink}
+            onPress={() => router.push(memberListRoute("following", profile.id))}
+            accessibilityRole="link"
+            accessibilityLabel={t.memberLists.openFollowing(profile.followingCount)}
+            testID="ouvrir-abonnements"
+          >
+            <Text style={styles.count}>{t.userProfile.following(profile.followingCount)}</Text>
+          </Pressable>
+        )}
+      </View>
       <View style={styles.actions}>
         <Pressable
-          style={[styles.follow, profile.isFollowing ? styles.following : null, followBusy ? styles.busy : null]}
+          style={[styles.follow, follow.primary ? null : styles.following, followBusy ? styles.busy : null]}
           onPress={handleFollow}
           disabled={followBusy}
           accessibilityRole="button"
+          accessibilityLabel={follow.label}
+          accessibilityHint={follow.hint}
+          testID="bouton-suivre"
         >
-          <Text style={[styles.followLabel, profile.isFollowing ? styles.followingLabel : null]}>
-            {profile.isFollowing ? t.userProfile.unfollow : t.userProfile.follow}
-          </Text>
+          <Text style={[styles.followLabel, follow.primary ? null : styles.followingLabel]}>{follow.label}</Text>
         </Pressable>
         {messages.enabled ? (
           <Pressable
@@ -171,9 +229,20 @@ export default function UserProfileScreen() {
           </Pressable>
         ) : null}
       </View>
-      {/* Lot collections : ses collections montrées aux amis (rien pour les autres). */}
-      <FriendCollections userId={profile.id} displayName={profile.displayName} refreshKey={String(profile.isFollowing)} />
-      <Text style={styles.sectionTitle}>{t.userProfile.posts}</Text>
+      {isShell ? (
+        <View style={styles.shell} testID="profil-prive">
+          <View accessible accessibilityLabel={t.privateAccount.lockLabel}>
+            <LockIcon size={28} tint={color.acier} />
+          </View>
+          <Text style={styles.shellText}>{t.privateAccount.shellNotice}</Text>
+        </View>
+      ) : (
+        <>
+          {/* Lot collections : ses collections montrées aux amis (rien pour les autres). */}
+          <FriendCollections userId={profile.id} displayName={profile.displayName} refreshKey={String(profile.isFollowing)} />
+          <Text style={styles.sectionTitle}>{t.userProfile.posts}</Text>
+        </>
+      )}
     </View>
   );
 
@@ -181,7 +250,7 @@ export default function UserProfileScreen() {
     <SafeAreaView style={styles.screen}>
       {nav}
       <FlatList
-        data={chunk(posts ?? [], 3)}
+        data={isShell ? [] : chunk(posts ?? [], 3)}
         keyExtractor={(row) => row.map((post) => post.id).join("-")}
         contentContainerStyle={styles.content}
         ListHeaderComponent={header}
@@ -193,7 +262,7 @@ export default function UserProfileScreen() {
                 style={styles.cell}
                 onPress={() => router.push({ pathname: "/publication", params: { id: post.id } })}
                 accessibilityRole="button"
-                accessibilityLabel={post.caption ?? t.postDetail.title}
+                accessibilityLabel={gridCellLabel(post.caption ?? t.postDetail.title, pinnedIds.has(post.id))}
               >
                 {/* Grille : miniature (480 px) d'une photo publiée ; image HD du
                     marchand pour un « achat » ; repli sur l'image d'origine.
@@ -209,12 +278,25 @@ export default function UserProfileScreen() {
                     recyclingKey={post.id}
                   />
                 )}
+                {/* Plusieurs photos (migration 0047) : une petite marque dans le coin. */}
+                {hasSeveralPhotos(post) ? (
+                  <View style={styles.photosMark} accessible accessibilityLabel={t.carousel.morePhotos}>
+                    <PhotosIcon size={14} />
+                  </View>
+                ) : null}
+                {/* Épinglée (migration 0049) : une punaise dans l'autre coin ;
+                    VoiceOver lit « Épinglée » dans le libellé de la case. */}
+                {pinnedIds.has(post.id) ? (
+                  <View style={styles.pinMark} testID="marque-epinglee">
+                    <PinIcon size={13} />
+                  </View>
+                ) : null}
               </Pressable>
             ))}
           </View>
         )}
-        ListEmptyComponent={<Text style={styles.empty}>{t.userProfile.noPosts}</Text>}
-        onEndReached={handleLoadMore}
+        ListEmptyComponent={isShell ? null : <Text style={styles.empty}>{t.userProfile.noPosts}</Text>}
+        onEndReached={isShell ? undefined : handleLoadMore}
         onEndReachedThreshold={0.4}
         ListFooterComponent={loadingMore ? <ActivityIndicator color={color.encre} style={styles.footer} /> : null}
       />
@@ -244,7 +326,9 @@ const styles = themedStyles(() => ({
   name: { fontFamily: serifFont, fontWeight: "500", fontSize: font.title, lineHeight: serifLineHeight.title, color: color.encre, marginTop: space.md },
   handle: { fontSize: font.secondary, color: color.acier, marginTop: 2 },
   bio: { fontSize: font.secondary, color: color.encre, textAlign: "center", marginTop: space.sm, lineHeight: 20 },
-  counts: { fontSize: font.caption, color: color.acier, marginTop: space.sm },
+  counts: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "center", minHeight: 44 },
+  count: { fontSize: font.caption, color: color.acier },
+  countLink: { minHeight: 44, justifyContent: "center" },
   actions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: space.sm, marginTop: space.md },
   follow: { minHeight: 44, minWidth: 130, paddingHorizontal: space.lg, borderRadius: radius.md, backgroundColor: color.vert, alignItems: "center", justifyContent: "center" },
   following: { backgroundColor: "transparent", borderWidth: 1, borderColor: color.filet },
@@ -252,8 +336,12 @@ const styles = themedStyles(() => ({
   followLabel: { color: color.blanc, fontSize: font.secondary, fontWeight: "600" },
   followingLabel: { color: color.encre },
   sectionTitle: { alignSelf: "flex-start", fontSize: font.body, fontWeight: "600", color: color.encre, marginTop: space.xl },
+  shell: { alignItems: "center", gap: space.sm, marginTop: space.xl, paddingHorizontal: space.lg },
+  shellText: { fontSize: font.secondary, color: color.acier, textAlign: "center", lineHeight: 20 },
   gridRow: { flexDirection: "row", gap: space.sm, marginBottom: space.sm },
   cell: { width: "32%", aspectRatio: 1, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
+  photosMark: { position: "absolute", top: 6, right: 6, width: 22, height: 22, borderRadius: radius.full, backgroundColor: color.voileImage, alignItems: "center", justifyContent: "center" },
+  pinMark: { position: "absolute", top: 6, left: 6, width: 22, height: 22, borderRadius: radius.full, backgroundColor: color.voileImage, alignItems: "center", justifyContent: "center" },
   empty: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginTop: space.md },
   footer: { paddingVertical: space.lg },
 }));

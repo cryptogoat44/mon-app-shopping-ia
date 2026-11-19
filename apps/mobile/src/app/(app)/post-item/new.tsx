@@ -1,11 +1,30 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import type { PrivacyLevel, VaultItem } from "@monapp/shared-types";
+import { PEOPLE_TAGS_MAX, POST_PHOTOS_MAX, type PrivacyLevel, type PublicProfile, type VaultItem } from "@monapp/shared-types";
 import { useAuth } from "@/lib/auth-context";
-import { ApiError, createLifestylePost, fetchVault, sharePurchasePost } from "@/lib/api";
+import { ApiError, addPostPhoto, createLifestylePost, fetchVault, searchUsers, sharePurchasePost } from "@/lib/api";
+import { usePostExtrasStatus } from "@/lib/use-post-extras-status";
+import {
+  UPLOAD_IDLE,
+  isRetryableUploadError,
+  mergePicked,
+  photoAdded,
+  photoFailed,
+  postCreated,
+  remainingSlots,
+  removePhotoAt,
+  retryPhoto,
+  skipPhoto,
+  startUpload,
+  uploadBusy,
+  uploadMessage,
+  type UploadState,
+} from "@/lib/post-upload";
+import { Avatar } from "@/components/avatar";
+import { PrivateAccountNote } from "@/components/private-account-note";
 import { SpotImage } from "@/components/spot-image";
 import { PRIVACY_LEVELS } from "@/lib/vault-labels";
 import { color, font, radius, space } from "@/theme/tokens";
@@ -17,10 +36,28 @@ import { useToast } from "@/lib/toast-context";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
 
+// iPhone : pendant l'envoi (la publication, puis les photos 2 à 5), la
+// feuille ne se ferme pas non plus en la glissant vers le bas, comme
+// « Annuler » (vault-item/new.tsx fait de même). Deux objets fixes : les
+// options de l'écran ne changent qu'au début et à la fin d'un envoi.
+const SHEET_OPEN = { gestureEnabled: true };
+const SHEET_LOCKED = { gestureEnabled: false };
+
 export default function NewPostScreen() {
   const router = useRouter();
   const { profile } = useAuth();
   const { showToast } = useToast();
+  // Feuille quittée pendant l'envoi (retour du navigateur, sur le site) :
+  // l'envoi va au bout sans elle. À la fin, un message flottant, sans
+  // naviguer (on retirerait l'écran ouvert entre-temps) ; une photo manquée
+  // arrête la suite, et le message le dit.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   function safeBack() {
     if (router.canGoBack()) router.back();
@@ -28,7 +65,17 @@ export default function NewPostScreen() {
   }
   const [caption, setCaption] = useState("");
   const [privacy, setPrivacy] = useState<PrivacyLevel>(profile?.defaultPrivacy ?? "followers");
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  // Plusieurs photos et identifications (migration 0047), seulement si le serveur sait les garder.
+  const extras = usePostExtrasStatus();
+  const [photos, setPhotos] = useState<string[]>([]);
+  const imageUri = photos[0] ?? null;
+  const [people, setPeople] = useState<PublicProfile[]>([]);
+  const [peopleOpen, setPeopleOpen] = useState(false);
+  const [peopleQuery, setPeopleQuery] = useState("");
+  const [peopleResults, setPeopleResults] = useState<PublicProfile[] | null>(null);
+  const [upload, setUpload] = useState<UploadState>(UPLOAD_IDLE);
+  // Les photos de l'envoi en cours, figées au moment de « Publier ».
+  const sending = useRef<string[]>([]);
   const [pieces, setPieces] = useState<Piece[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [recentPieces, setRecentPieces] = useState<Piece[] | null>(null);
@@ -54,10 +101,83 @@ export default function NewPostScreen() {
   }
 
   async function handlePickPhoto() {
-    // Aucune autorisation demandée : le sélecteur ne remet que la photo choisie.
+    // Aucune autorisation demandée : le sélecteur ne remet que les photos choisies.
+    if (extras.carousel) {
+      const slots = remainingSlots(photos);
+      if (slots === 0) return;
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.8,
+        allowsMultipleSelection: true,
+        selectionLimit: slots,
+        orderedSelection: true,
+      });
+      if (result.canceled) return;
+      setPhotos((current) => mergePicked(current, result.assets.map((asset) => asset.uri)));
+      return;
+    }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
     if (result.canceled || !result.assets[0]) return;
-    setImageUri(result.assets[0].uri);
+    setPhotos([result.assets[0].uri]);
+  }
+
+  // Identifier des personnes : la recherche de membres, après une courte pause de frappe.
+  useEffect(() => {
+    if (!peopleOpen) return;
+    const query = peopleQuery.trim();
+    if (query.length < 2) {
+      setPeopleResults(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      searchUsers(query)
+        .then((found) => {
+          if (!cancelled) setPeopleResults(found);
+        })
+        .catch(() => {
+          if (!cancelled) setPeopleResults([]);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [peopleQuery, peopleOpen]);
+
+  function addPerson(person: PublicProfile) {
+    setPeople((current) => (current.some((p) => p.id === person.id) || current.length >= PEOPLE_TAGS_MAX ? current : [...current, person]));
+    setPeopleOpen(false);
+    setPeopleQuery("");
+    setPeopleResults(null);
+  }
+
+  function removePerson(id: string) {
+    setPeople((current) => current.filter((p) => p.id !== id));
+  }
+
+  function finishPublishing() {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    showToast(t.publish.published);
+    setUpload(UPLOAD_IDLE);
+    if (mountedRef.current) safeBack();
+  }
+
+  /** Les photos 2 à 5, l'une après l'autre ; s'arrête sur une photo manquée (l'écran propose alors la suite). */
+  async function continueUpload(start: UploadState) {
+    let state = start;
+    while (state.step === "adding") {
+      try {
+        await addPostPhoto(state.postId, sending.current[state.index - 1]!);
+        state = photoAdded(state);
+      } catch (e) {
+        state = photoFailed(state, isRetryableUploadError(e));
+      }
+      setUpload(state);
+    }
+    if (state.step === "done") finishPublishing();
+    // Plus d'écran pour proposer « Réessayer » : la publication reste avec les photos déjà envoyées.
+    else if (state.step === "failed" && !mountedRef.current) showToast(t.carousel.uploadStopped);
   }
 
   function openPicker() {
@@ -90,9 +210,11 @@ export default function NewPostScreen() {
         await sharePurchasePost(vaultItemId, privacy, caption.trim() || undefined);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         showToast(t.publish.published);
-        safeBack();
+        if (mountedRef.current) safeBack();
       } catch (e) {
-        setError(e instanceof ApiError ? e.message : t.publish.error);
+        const message = e instanceof ApiError ? e.message : t.publish.error;
+        if (!mountedRef.current) showToast(message);
+        else setError(message);
       } finally {
         setSubmitting(false);
       }
@@ -103,47 +225,101 @@ export default function NewPostScreen() {
       return;
     }
 
-    setSubmitting(true);
+    // La publication part avec la photo 1, exactement comme avant ; les
+    // photos 2 à 5 lui sont ajoutées ensuite, une par une (lib/post-upload.ts).
+    sending.current = extras.carousel ? photos.slice(0, POST_PHOTOS_MAX) : [imageUri];
+    const creating = startUpload(sending.current.length);
+    setUpload(creating);
+    let postId: string;
     try {
       // Les pièces de ce picker proviennent toujours d'une recherche
       // récente (getRecentlySpotted), jamais du Vault — voir
       // docs/points-de-vigilance.md pour le sélecteur Vault, pas encore
       // ajouté à cette étape.
       const taggedPieces = pieces.map((piece) => ({ productMatchId: piece.id }));
-      await createLifestylePost({ caption: caption.trim(), imageUri, privacy, taggedPieces });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      showToast(t.publish.published);
-      safeBack();
+      const peopleTags = extras.peopleTags ? people.map((person) => person.id) : [];
+      postId = (await createLifestylePost({ caption: caption.trim(), imageUri, privacy, taggedPieces, peopleTags })).id;
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : t.publish.error);
-    } finally {
-      setSubmitting(false);
+      const message = e instanceof ApiError ? e.message : t.publish.error;
+      if (!mountedRef.current) return showToast(message);
+      setUpload(UPLOAD_IDLE);
+      setError(message);
+      return;
     }
+    const next = postCreated(creating, postId);
+    setUpload(next);
+    await continueUpload(next);
   }
+
+  function retryUpload() {
+    const next = retryPhoto(upload);
+    setUpload(next);
+    void continueUpload(next);
+  }
+
+  function skipUpload() {
+    const next = skipPhoto(upload);
+    setUpload(next);
+    if (next.step === "done") finishPublishing();
+    else void continueUpload(next);
+  }
+
+  const busy = submitting || uploadBusy(upload);
+  const progress = uploadMessage(upload);
+  // Ni soi-même, ni une personne déjà choisie.
+  const peopleCandidates = peopleResults?.filter((person) => person.id !== profile?.id && !people.some((chosen) => chosen.id === person.id)) ?? null;
 
   return (
     <View style={styles.sheet}>
+      <Stack.Screen options={busy ? SHEET_LOCKED : SHEET_OPEN} />
       <View style={styles.handle} />
       <View style={styles.nav}>
-        <Pressable accessibilityRole="button" onPress={safeBack} hitSlop={12} style={styles.navSide}>
-          <Text style={styles.cancel}>{t.publish.cancel}</Text>
+        <Pressable accessibilityRole="button" onPress={safeBack} disabled={busy} hitSlop={12} style={styles.navSide} accessibilityState={{ disabled: busy }}>
+          <Text style={[styles.cancel, busy ? styles.publishLabelDisabled : null]}>{t.publish.cancel}</Text>
         </Pressable>
         <Text style={styles.navTitle} accessibilityRole="header">{t.publish.title}</Text>
         <Pressable
           onPress={handleSubmit}
-          disabled={submitting || (mode === "photo" ? !imageUri : !vaultItemId)}
+          disabled={busy || (mode === "photo" ? !imageUri : !vaultItemId)}
           hitSlop={12}
           style={[styles.navSide, styles.navSideRight]}
           accessibilityRole="button"
-          accessibilityLabel={submitting ? t.publish.publishing : t.publish.publish}
+          accessibilityLabel={busy ? t.publish.publishing : t.publish.publish}
         >
-          <Text style={[styles.publishLabel, (submitting || (mode === "photo" ? !imageUri : !vaultItemId)) ? styles.publishLabelDisabled : null]}>
-            {submitting ? "…" : t.publish.publish}
+          <Text style={[styles.publishLabel, (busy || (mode === "photo" ? !imageUri : !vaultItemId)) ? styles.publishLabelDisabled : null]}>
+            {busy ? "…" : t.publish.publish}
           </Text>
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+      {/* Envoi des photos 2 à 5 : l'écran reste ouvert jusqu'à la dernière (lib/post-upload.ts). */}
+      {progress ? (
+        <View style={styles.progress} accessibilityLiveRegion="polite" testID="envoi-photos">
+          <View style={styles.progressLine}>
+            {upload.step === "failed" ? null : <ActivityIndicator color={color.encre} />}
+            <Text style={styles.progressText}>{progress}</Text>
+          </View>
+          {upload.step === "failed" ? (
+            <View style={styles.progressActions}>
+              {upload.retryable ? (
+                <Pressable style={styles.progressButton} onPress={retryUpload} accessibilityRole="button">
+                  <Text style={styles.progressButtonLabel}>{t.common.retry}</Text>
+                </Pressable>
+              ) : null}
+              <Pressable style={styles.progressButton} onPress={skipUpload} accessibilityRole="button">
+                <Text style={styles.progressButtonLabel}>{t.carousel.publishWithout}</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      <ScrollView
+        contentContainerStyle={styles.body}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        pointerEvents={busy ? "none" : "auto"}
+      >
         {error ? <ErrorMessage style={styles.error}>{error}</ErrorMessage> : null}
 
         <View style={styles.modes} accessibilityRole="radiogroup">
@@ -190,21 +366,48 @@ export default function NewPostScreen() {
             )}
           </>
         ) : (
+        <>
         <Pressable
           style={styles.photo}
           onPress={handlePickPhoto}
+          disabled={extras.carousel && remainingSlots(photos) === 0}
           accessibilityRole="button"
-          accessibilityLabel={imageUri ? t.publish.changePhoto : t.publish.addPhoto}
+          accessibilityLabel={extras.carousel ? (imageUri ? t.carousel.addMorePhotos : t.carousel.addPhotos) : imageUri ? t.publish.changePhoto : t.publish.addPhoto}
         >
           {imageUri ? (
             <Image source={{ uri: imageUri }} style={styles.photoPreview} accessibilityLabel={t.publish.selectedPhoto} />
           ) : (
             <>
               <CameraIcon size={30} tint={color.acier} />
-              <Text style={styles.photoLabel}>{t.publish.addPhoto}</Text>
+              <Text style={styles.photoLabel}>{extras.carousel ? t.carousel.addPhotos : t.publish.addPhoto}</Text>
             </>
           )}
         </Pressable>
+        {/* Plusieurs photos (migration 0047) : la bande des photos choisies, dans l'ordre, chacune retirable. */}
+        {extras.carousel && photos.length > 0 ? (
+          <View style={styles.strip}>
+            {photos.map((uri, index) => (
+              <View key={uri} style={styles.stripCell}>
+                <Image source={{ uri }} style={styles.photoPreview} accessibilityLabel={t.carousel.position(index + 1, photos.length)} />
+                <Pressable
+                  style={styles.stripRemove}
+                  onPress={() => setPhotos((current) => removePhotoAt(current, index))}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel={t.carousel.removePhoto(index + 1)}
+                >
+                  <Text style={styles.stripRemoveLabel}>×</Text>
+                </Pressable>
+              </View>
+            ))}
+            {remainingSlots(photos) > 0 ? (
+              <Pressable style={[styles.stripCell, styles.stripAdd]} onPress={handlePickPhoto} accessibilityRole="button" accessibilityLabel={t.carousel.addMorePhotos}>
+                <Text style={styles.stripAddLabel}>+</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+        </>
         )}
 
         <TextInput
@@ -240,6 +443,29 @@ export default function NewPostScreen() {
             <Text style={styles.addTagLabel}>+ {t.publish.addPiece}</Text>
           </Pressable>
         </View>
+        {/* Identifier des personnes (migration 0047) : le serveur ne garde que celles qui l'acceptent et voient la publication. */}
+        {extras.peopleTags ? (
+          <>
+            <Text style={styles.label}>{t.carousel.tagPeople}</Text>
+            <View style={styles.tags}>
+              {people.map((person) => (
+                <View key={person.id} style={styles.tag}>
+                  <Avatar uri={person.avatarUrl} userId={person.id} displayName={person.displayName} username={person.username} size={20} />
+                  <Text style={styles.tagLabel}>{person.displayName}</Text>
+                  <Pressable onPress={() => removePerson(person.id)} hitSlop={12} accessibilityRole="button" accessibilityLabel={t.carousel.removePerson(person.displayName)}>
+                    <Text style={styles.tagRemove}>×</Text>
+                  </Pressable>
+                </View>
+              ))}
+              {people.length < PEOPLE_TAGS_MAX ? (
+                <Pressable accessibilityRole="button" style={styles.addTag} onPress={() => setPeopleOpen(true)} testID="identifier-des-personnes">
+                  <Text style={styles.addTagLabel}>+ {t.carousel.tagPeople}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            <Text style={styles.peopleNote}>{t.carousel.peopleNote}</Text>
+          </>
+        ) : null}
         </>
         ) : null}
 
@@ -258,6 +484,8 @@ export default function NewPostScreen() {
             </Pressable>
           ))}
         </View>
+        {/* Compte privé : « Public » ne veut alors dire que « mes abonnés ». */}
+        <PrivateAccountNote style={styles.privateAccountNote} />
       </ScrollView>
 
       <Modal visible={pickerOpen} animationType="slide" transparent onRequestClose={() => setPickerOpen(false)}>
@@ -287,6 +515,44 @@ export default function NewPostScreen() {
               </Pressable>
             ))
           )}
+        </View>
+      </Modal>
+
+      <Modal visible={peopleOpen} animationType="slide" transparent onRequestClose={() => setPeopleOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setPeopleOpen(false)} accessibilityRole="button" accessibilityLabel={t.common.close} />
+        <View style={styles.modalSheet}>
+          <View style={styles.modalNav}>
+            <Text style={styles.navTitle} accessibilityRole="header">{t.carousel.tagPeople}</Text>
+            <Pressable accessibilityRole="button" onPress={() => setPeopleOpen(false)} hitSlop={12}>
+              <Text style={styles.cancel}>{t.publish.closePicker}</Text>
+            </Pressable>
+          </View>
+          <TextInput
+            style={styles.peopleSearch}
+            placeholder={t.carousel.searchPeople}
+            placeholderTextColor={color.acier}
+            value={peopleQuery}
+            onChangeText={setPeopleQuery}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoFocus
+            accessibilityLabel={t.carousel.searchPeople}
+          />
+          <ScrollView keyboardShouldPersistTaps="handled">
+            {peopleCandidates?.length === 0 ? (
+              <Text style={styles.emptyPicker}>{t.carousel.noPeopleFound}</Text>
+            ) : (
+              peopleCandidates?.map((person) => (
+                  <Pressable accessibilityRole="button" key={person.id} style={styles.pickerRow} onPress={() => addPerson(person)} accessibilityLabel={t.carousel.addPerson(person.displayName)}>
+                    <Avatar uri={person.avatarUrl} userId={person.id} displayName={person.displayName} username={person.username} size={32} />
+                    <View>
+                      <Text style={styles.pickerRowName}>{person.displayName}</Text>
+                      <Text style={styles.pickerRowMaterial}>@{person.username}</Text>
+                    </View>
+                  </Pressable>
+                ))
+            )}
+          </ScrollView>
         </View>
       </Modal>
     </View>
@@ -329,6 +595,7 @@ const styles = themedStyles(() => ({
   tagRemove: { fontSize: font.caption, color: color.acier, marginLeft: 2 },
   addTag: { borderWidth: 1, borderColor: color.filet, borderStyle: "dashed", borderRadius: radius.full, paddingVertical: 6, paddingHorizontal: 12 },
   addTagLabel: { fontSize: font.caption, color: color.acier },
+  privateAccountNote: { marginTop: space.sm },
   privacyPill: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.full, paddingVertical: 6, paddingHorizontal: 12 },
   privacyPillActive: { backgroundColor: color.vert, borderColor: color.vert },
   privacyLabel: { fontSize: font.caption, color: color.acier },
@@ -340,4 +607,19 @@ const styles = themedStyles(() => ({
   pickerRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: space.md, paddingVertical: space.md, borderBottomWidth: 1, borderBottomColor: color.filet },
   pickerRowName: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   pickerRowMaterial: { fontSize: font.caption, color: color.acier, marginTop: 2 },
+  // Plusieurs photos, identifications (migration 0047).
+  progress: { marginHorizontal: space.md, marginTop: space.xs, padding: space.md, borderRadius: radius.md, backgroundColor: color.plinthe, gap: space.sm },
+  progressLine: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  progressText: { flexShrink: 1, fontSize: font.secondary, color: color.encre },
+  progressActions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
+  progressButton: { minHeight: 44, paddingHorizontal: space.md, borderRadius: radius.full, borderWidth: 1, borderColor: color.filet, justifyContent: "center" },
+  progressButtonLabel: { fontSize: font.caption, fontWeight: "600", color: color.encre },
+  strip: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: space.sm },
+  stripCell: { width: 60, height: 60, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
+  stripRemove: { position: "absolute", top: 2, right: 2, width: 22, height: 22, borderRadius: radius.full, backgroundColor: color.voileImage, alignItems: "center", justifyContent: "center" },
+  stripRemoveLabel: { fontSize: font.caption, color: color.surImage, fontWeight: "700", lineHeight: 15 },
+  stripAdd: { borderWidth: 1, borderColor: color.filet, borderStyle: "dashed", alignItems: "center", justifyContent: "center", backgroundColor: "transparent" },
+  stripAddLabel: { fontSize: font.title, color: color.acier },
+  peopleNote: { fontSize: font.caption, color: color.acier, marginTop: space.sm, lineHeight: 18 },
+  peopleSearch: { margin: space.md, minHeight: 44, borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, paddingHorizontal: space.md, fontSize: font.secondary, color: color.encre },
 }));

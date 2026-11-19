@@ -71,6 +71,8 @@ export function fixture(): ExportData {
       updated_at: "2026-10-01T08:00:00+00:00",
       piece_sends_from: "following",
       messages_from: "everyone",
+      // Lien en bio (migration 0049).
+      link_url: "https://camille.example.com/lookbook?saison=hiver",
     },
     productSearches: [
       {
@@ -163,6 +165,8 @@ export function fixture(): ExportData {
         media_thumb_url: own("post-media", "photo-mini.jpg"),
         hidden_at: null,
         wishlist_item_id: null,
+        // Épinglée sur le profil (migration 0049).
+        pinned_at: "2026-10-05T10:00:00+00:00",
       },
       {
         id: "90000000-0000-4000-8000-000000000009",
@@ -437,6 +441,33 @@ export function fixture(): ExportData {
     videoConfirmations: [{ canonical_url: "https://www.tiktok.com/@/video/7412345678901234567", product: "Veste <b>reperee</b>", created_at: "2026-10-10T09:00:00+00:00" }],
     // Messages, plus de confort (migration 0044) : un « j'aime » sur un message de l'ami.
     messageReactions: [{ message_id: "d0200000-0000-4000-8000-000000000001", conversation_id: CONVERSATION, other_user_id: FRIEND, created_at: "2026-10-20T08:40:00+00:00" }],
+    // Compte privé (migration 0045) : une demande envoyée, une reçue.
+    followRequestsSent: [{ target_id: FRIEND, created_at: "2026-10-11T09:00:00+00:00" }],
+    followRequestsReceived: [{ requester_id: FRIEND, created_at: "2026-10-12T09:00:00+00:00" }],
+    // Commentaires, suite (migration 0046) : un commentaire aimé, une mention reçue, une écrite.
+    commentReactionsGiven: [{ comment_id: "c0000000-0000-4000-8000-000000000002", created_at: "2026-10-13T09:00:00+00:00" }],
+    mentionsReceived: [{ comment_id: "c0000000-0000-4000-8000-000000000002", author_id: FRIEND, handle: "camille", created_at: "2026-10-13T10:00:00+00:00" }],
+    mentionsMade: [{ comment_id: "c0000000-0000-4000-8000-000000000001", user_id: FRIEND, handle: "alexis", created_at: "2026-10-13T11:00:00+00:00" }],
+    // Plusieurs photos, identifications (migration 0047) : deux photos de plus,
+    // une personne identifiée, deux identifications reçues (dont une sur une
+    // publication que la personne ne peut plus voir).
+    postMedia: [
+      { id: "0d000000-0000-4000-8000-000000000002", post_id: OWN_POST, position: 2, media_url: own("post-media", "photo-3.jpg"), media_thumb_url: own("post-media", "photo-3-mini.jpg"), created_at: "2026-09-14T10:01:00+00:00" },
+      { id: "0d000000-0000-4000-8000-000000000001", post_id: OWN_POST, position: 1, media_url: own("post-media", "photo-2.jpg"), media_thumb_url: own("post-media", "photo-2-mini.jpg"), created_at: "2026-09-14T10:00:30+00:00" },
+    ],
+    peopleTagsMade: [{ post_id: OWN_POST, user_id: FRIEND, created_at: "2026-10-14T09:00:00+00:00" }],
+    peopleTagsReceived: [
+      { post_id: FRIEND_POST, author_id: FRIEND, created_at: "2026-10-14T10:00:00+00:00", post_available: true },
+      { post_id: "0e000000-0000-4000-8000-000000000001", author_id: FRIEND, created_at: "2026-10-14T11:00:00+00:00", post_available: false },
+    ],
+    // Publications enregistrées (migration 0048) : une de l'ami rangée dans une
+    // collection, une que la personne ne peut plus voir (sans auteur), et une
+    // du compte qui l'a bloquée (jamais nommé : indisponible, sans auteur).
+    savedPosts: [
+      { post_id: FRIEND_POST, collection_id: COLLECTION_FRIENDS, collection_name: "Cadeaux pour Noel", author_id: FRIEND, post_available: true, created_at: "2026-10-15T09:00:00+00:00" },
+      { post_id: "0e000000-0000-4000-8000-000000000002", collection_id: null, collection_name: null, author_id: null, post_available: false, created_at: "2026-10-15T10:00:00+00:00" },
+      { post_id: BLOCKER_POST, collection_id: null, collection_name: null, author_id: null, post_available: false, created_at: "2026-10-15T11:00:00+00:00" },
+    ],
     // Quotas par membre (migration 0053) : un abonnement et les compteurs du mois.
     memberEntitlements: [{ entitlement: "miroir", expires_at: "2026-12-06T18:00:00+00:00", source: "revenuecat", updated_at: "2026-11-06T18:00:00+00:00" }],
     monthlyQuota: { month: "2026-11", searches_counted: 37, tryon_free_used: 2, tryon_bonus_remaining: 4 },

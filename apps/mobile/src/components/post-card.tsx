@@ -1,12 +1,13 @@
-import { useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { Animated, Pressable, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import type { Post } from "@monapp/shared-types";
-import { reactToPost } from "@/lib/api";
+import type { CollectionSummary, Post } from "@monapp/shared-types";
+import { ApiError, reactToPost, savePost, unsavePost } from "@/lib/api";
+import { likeCountOpensList, likesListRoute } from "@/lib/member-lists";
 import { openMerchantLink } from "@/lib/merchant-links";
 import { color, font, radius, space } from "@/theme/tokens";
-import { CommentIcon, HeartIcon, MoreIcon, SendIcon, ShareIcon, VerifiedIcon } from "@/components/icons";
+import { BookmarkIcon, CommentIcon, HeartIcon, MoreIcon, SendIcon, ShareIcon, TaggedPeopleIcon, VerifiedIcon } from "@/components/icons";
 import { sharePost } from "@/lib/share-post";
 import { sendPostHref } from "@/lib/send-post";
 import { useMessagesStatus } from "@/lib/use-messages-status";
@@ -21,6 +22,12 @@ import { MerchantLinkButton } from "@/components/merchant-link-button";
 import { AffiliateMention } from "@/components/affiliate-mention";
 import { themedStyles } from "@/theme/themed-styles";
 import { Avatar } from "@/components/avatar";
+import { PostCarousel } from "@/components/post-carousel";
+import { TaggedPeopleSheet } from "@/components/tagged-people-sheet";
+import { peopleShown, photosOf } from "@/lib/post-extras";
+import { useAuth } from "@/lib/auth-context";
+import { SavePostSheet } from "@/components/save-post-sheet";
+import { bookmarkA11y, bookmarkShown, bookmarkTapAction, filedMessage, saveReducer, saveRequestCollection, saveStateOf, type SaveState } from "@/lib/saved-posts";
 
 const DOUBLE_TAP_DELAY_MS = 300;
 
@@ -67,6 +74,33 @@ export function PostCard({
   const [busy, setBusy] = useState(false);
   const lastTapRef = useRef(0);
   const heartPop = useRef(new Animated.Value(0)).current;
+  // Plusieurs photos, personnes identifiées (migration 0047) : absents d'un serveur sans elles.
+  const { session } = useAuth();
+  const photos = photosOf(post);
+  // Les personnes se relisent dans la publication à chaque affichage (fil
+  // relu, visibilité changée : le serveur a pu en retirer) ; seuls les
+  // retraits faits ici restent en mémoire. Une identification retirée ne
+  // revient jamais du serveur.
+  const [removedIds, setRemovedIds] = useState<string[]>([]);
+  const people = peopleShown(post, removedIds);
+  const [peopleOpen, setPeopleOpen] = useState(false);
+  // Publications enregistrées (migration 0048) : le signet, absent d'un serveur sans elles.
+  const withBookmark = bookmarkShown(post);
+  const [saveState, dispatchSave] = useReducer(saveReducer, post, saveStateOf);
+  const [saveSheetOpen, setSaveSheetOpen] = useState(false);
+  const [saveBusy, setSaveBusy] = useState(false);
+  // La carte reste à l'écran quand le fil se relit (même clé) : le signet se
+  // recale sur ce que le serveur dit maintenant (enregistrée ou rangée sur un
+  // autre écran), sauf pendant une demande, dont la réponse fait foi.
+  useEffect(() => {
+    if (!saveBusy) dispatchSave({ type: "synced", state: saveStateOf(post) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.viewerHasSaved, post.viewerSavedCollectionId]);
+
+  /** Trop de « j'aime » en peu de temps (429) : le serveur le dit, l'app le répète. */
+  function tooManyLikes(e: unknown) {
+    if (e instanceof ApiError && e.status === 429) showToast(e.message);
+  }
 
   async function like() {
     if (reacted) return;
@@ -77,9 +111,10 @@ export function PostCard({
       const result = await reactToPost(post.id);
       setReacted(result.viewerHasReacted);
       setReactionCount(result.reactionCount);
-    } catch {
+    } catch (e) {
       setReacted(false);
       setReactionCount((c) => c - 1);
+      tooManyLikes(e);
     }
   }
 
@@ -92,12 +127,46 @@ export function PostCard({
       const result = await reactToPost(post.id);
       setReacted(result.viewerHasReacted);
       setReactionCount(result.reactionCount);
-    } catch {
+    } catch (e) {
       setReacted(post.viewerHasReacted);
       setReactionCount(post.reactionCount);
+      tooManyLikes(e);
     } finally {
       setBusy(false);
     }
+  }
+
+  /** Un geste sur le signet : affiché tout de suite, confirmé par le serveur,
+   * annulé (avec la phrase du serveur) s'il refuse. */
+  async function changeSave(action: "save" | "unsave" | { collectionId: string | null }, collections: readonly CollectionSummary[] | null = null) {
+    if (saveBusy) return;
+    const before: SaveState = saveState;
+    setSaveBusy(true);
+    if (action === "save") dispatchSave({ type: "save" });
+    else if (action === "unsave") dispatchSave({ type: "unsave" });
+    else dispatchSave({ type: "file", collectionId: action.collectionId });
+    if (action !== "unsave") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    try {
+      if (action === "unsave") {
+        await unsavePost(post.id);
+        showToast(t.savedPosts.removed);
+      } else {
+        const result = await savePost(post.id, saveRequestCollection(action), { firstSave: !before.saved });
+        dispatchSave({ type: "confirmed", state: { saved: true, collectionId: result.collectionId } });
+        showToast(action === "save" ? t.savedPosts.saved : filedMessage(result.collectionId, collections));
+      }
+      setSaveSheetOpen(false);
+    } catch (e) {
+      dispatchSave({ type: "rollback", state: before });
+      showToast(e instanceof ApiError ? e.message : action === "unsave" ? t.savedPosts.unsaveError : t.savedPosts.saveError);
+    } finally {
+      setSaveBusy(false);
+    }
+  }
+
+  function handleBookmarkPress() {
+    if (bookmarkTapAction(saveState) === "openSheet") setSaveSheetOpen(true);
+    else void changeSave("save");
   }
 
   function handleMediaPress() {
@@ -136,12 +205,18 @@ export function PostCard({
         ) : null}
       </View>
 
+      <View>
+      {photos.length > 1 ? (
+        <PostCarousel photos={photos} label={mediaLabel(post)} recyclingKey={post.id} onPress={handleMediaPress} />
+      ) : (
       <Pressable
         onPress={handleMediaPress}
         accessibilityRole="image"
         accessibilityLabel={mediaLabel(post)}
       >
         <PostMedia post={post} />
+      </Pressable>
+      )}
         <Animated.View
           pointerEvents="none"
           style={[
@@ -154,7 +229,21 @@ export function PostCard({
         >
           <HeartIcon size={64} tint={color.surImage} filled />
         </Animated.View>
-      </Pressable>
+        {/* Personnes identifiées : une icône posée sur la photo, qui ouvre la liste (la rangée des actions ne change pas). */}
+        {people.length > 0 ? (
+          <Pressable
+            onPress={() => setPeopleOpen(true)}
+            style={styles.peopleButton}
+            accessibilityRole="button"
+            accessibilityLabel={t.carousel.showPeople(people.length)}
+            testID="personnes-identifiees"
+          >
+            <View style={styles.peopleBadge}>
+              <TaggedPeopleIcon size={15} />
+            </View>
+          </Pressable>
+        ) : null}
+      </View>
 
       {post.caption ? <Text style={styles.caption}>{post.caption}</Text> : null}
 
@@ -220,17 +309,33 @@ export function PostCard({
       ) : null}
 
       <View style={styles.actions}>
-        <Pressable
-          onPress={handleReactButton}
-          disabled={busy}
-          style={styles.reactRow}
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel={reacted ? t.post.unlike : t.post.like}
-        >
-          <HeartIcon size={19} tint={reacted ? color.encre : color.acier} filled={reacted} />
-          <Text style={styles.reactCount}>{reactionCount}</Text>
-        </Pressable>
+        {/* Le cœur aime ou n'aime plus ; le nombre, à côté, ouvre la liste
+            « Aimé par » (lot « vie sociale »). À zéro : un simple texte, dans
+            le bouton du cœur — le toucher aime, comme avant. */}
+        <View style={styles.likeGroup}>
+          <Pressable
+            onPress={handleReactButton}
+            disabled={busy}
+            style={[styles.likeButton, likeCountOpensList(reactionCount) ? styles.likeButtonBeforeCount : styles.likeButtonAlone]}
+            accessibilityRole="button"
+            accessibilityLabel={reacted ? t.post.unlike : t.post.like}
+            testID="bouton-jaime"
+          >
+            <HeartIcon size={19} tint={reacted ? color.encre : color.acier} filled={reacted} />
+            {likeCountOpensList(reactionCount) ? null : <Text style={styles.reactCount}>{reactionCount}</Text>}
+          </Pressable>
+          {likeCountOpensList(reactionCount) ? (
+            <Pressable
+              onPress={() => router.push(likesListRoute(post.id, reactionCount))}
+              style={styles.likeCount}
+              accessibilityRole="link"
+              accessibilityLabel={t.memberLists.openLikes(reactionCount)}
+              testID="nombre-jaime"
+            >
+              <Text style={styles.reactCount}>{reactionCount}</Text>
+            </Pressable>
+          ) : null}
+        </View>
         <Pressable
           onPress={onOpenComments}
           disabled={!onOpenComments}
@@ -270,7 +375,50 @@ export function PostCard({
             <SendIcon size={19} />
           </Pressable>
         ) : null}
+        {/* Publications enregistrées (migration 0048) : le signet, au bout de la
+            rangée. Pas enregistrée : le toucher l'enregistre ; enregistrée : il
+            ouvre les choix (ranger, retirer). L'appui long les ouvre aussi (iPhone). */}
+        {withBookmark ? (
+          <Pressable
+            onPress={handleBookmarkPress}
+            onLongPress={() => setSaveSheetOpen(true)}
+            disabled={saveBusy}
+            style={styles.bookmarkButton}
+            accessibilityRole="button"
+            accessibilityLabel={bookmarkA11y(saveState).label}
+            accessibilityHint={bookmarkA11y(saveState).hint}
+            accessibilityState={{ selected: saveState.saved, disabled: saveBusy }}
+            // VoiceOver : « Ranger » ouvre les choix, comme l'appui long, même avant d'enregistrer.
+            accessibilityActions={[{ name: "file", label: t.savedPosts.file }]}
+            onAccessibilityAction={(event) => {
+              if (event.nativeEvent.actionName === "file") setSaveSheetOpen(true);
+            }}
+            testID="bouton-enregistrer"
+          >
+            <BookmarkIcon size={19} tint={saveState.saved ? color.encre : color.acier} filled={saveState.saved} />
+          </Pressable>
+        ) : null}
       </View>
+      {withBookmark ? (
+        <SavePostSheet
+          visible={saveSheetOpen}
+          state={saveState}
+          busy={saveBusy}
+          onClose={() => setSaveSheetOpen(false)}
+          onChoose={(collectionId, collections) => void changeSave({ collectionId }, collections)}
+          onRemove={() => void changeSave("unsave")}
+        />
+      ) : null}
+      {people.length > 0 ? (
+        <TaggedPeopleSheet
+          postId={post.id}
+          people={people}
+          visible={peopleOpen}
+          viewerId={session?.user.id ?? null}
+          onClose={() => setPeopleOpen(false)}
+          onRemoved={(userId) => setRemovedIds((ids) => [...ids, userId])}
+        />
+      ) : null}
     </View>
   );
 }
@@ -283,6 +431,9 @@ const styles = themedStyles(() => ({
   moreButton: { marginLeft: space.xs, padding: 2 },
   media: { width: "100%", aspectRatio: 1, backgroundColor: color.plinthe, borderRadius: radius.sm },
   heartOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
+  // Cible de 44 points, l'icône de 28 dans le coin bas gauche de la photo.
+  peopleButton: { position: "absolute", left: 0, bottom: 0, width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  peopleBadge: { width: 28, height: 28, borderRadius: radius.full, backgroundColor: color.voileImage, alignItems: "center", justifyContent: "center" },
   caption: { fontSize: 14.5, color: color.encre, marginTop: 12, lineHeight: 20 },
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
   wishBox: { marginTop: 12, gap: 2 },
@@ -293,7 +444,23 @@ const styles = themedStyles(() => ({
   tagChipLabel: { fontSize: font.caption, color: color.encre },
   actions: { flexDirection: "row", alignItems: "center", gap: space.lg, marginTop: 12 },
   reactRow: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 32 },
+  likeGroup: { flexDirection: "row", alignItems: "center" },
+  // Le cœur : une cible de 44 points au moins, par le remplissage (pas par
+  // « hitSlop », que le site ignore). Elle s'étend vers la gauche, dans la
+  // marge de la publication (24), et couvre les 6 points jusqu'au nombre :
+  // 19 + 19 (l'icône) + 6 = 44. Les marges négatives gardent l'icône, la
+  // rangée (32 de haut) et les écarts à leur place.
+  likeButton: { flexDirection: "row", alignItems: "center", minHeight: 44, minWidth: 44, paddingLeft: 19, marginLeft: -19, marginVertical: -6 },
+  likeButtonBeforeCount: { paddingRight: 6 },
+  // À zéro, le nombre est dans le bouton : le toucher aime.
+  likeButtonAlone: { gap: 6, paddingRight: 12, marginRight: -12 },
+  // Cible de 44 points de haut par le remplissage, sans grossir le texte.
+  likeCount: { minHeight: 44, paddingRight: 12, marginVertical: -6, marginRight: -12, justifyContent: "center" },
   shareButton: { marginLeft: "auto" },
+  // Le signet : une cible de 44 points par le remplissage (le site ignore
+  // « hitSlop »), qui déborde dans la marge de droite de la publication ; les
+  // marges négatives gardent l'icône et la rangée à leur place.
+  bookmarkButton: { minHeight: 44, minWidth: 44, alignItems: "flex-end", justifyContent: "center", paddingRight: 12, marginRight: -12, marginVertical: -6, marginLeft: -space.sm },
   reactCount: { fontSize: font.secondary, color: color.acier },
   authorLink: { flexDirection: "row", alignItems: "center", gap: 10, flexShrink: 1 },
 }));

@@ -86,6 +86,36 @@ const videoProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROL
 const VIDEO_SECTIONS = videoProbe.error || typeof videoProbe.data !== "number" || videoProbe.data < 1 ? [] : (["videoSpots", "videoConfirmations"] as const);
 const VIDEO_KEY = `74${Date.now()}`.padEnd(19, "1").slice(0, 19);
 
+// Compte privé (lot « vie sociale ») : une demande d'abonnement envoyée et
+// une reçue, seulement une fois la migration 0045 appliquée sur la base des
+// tests (sans elle, sections vides).
+const followRequestsProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("follow_requests").select("requester_id").limit(0);
+const FOLLOW_REQUEST_SECTIONS = followRequestsProbe.error ? [] : (["followRequestsSent", "followRequestsReceived"] as const);
+
+// Commentaires, suite (lot « vie sociale ») : un commentaire aimé, une mention
+// reçue et une écrite, seulement une fois la migration 0046 appliquée sur la
+// base des tests (sans elle, sections vides).
+const commentThreadsProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("comment_mentions").select("comment_id, author_id").limit(0);
+const COMMENT_THREAD_SECTIONS = commentThreadsProbe.error ? [] : (["commentReactionsGiven", "mentionsReceived", "mentionsMade"] as const);
+
+// Plusieurs photos, identifications (lot « vie sociale ») : une photo de plus,
+// une identification faite et une reçue, seulement une fois la migration 0047
+// appliquée sur la base des tests (sans elle, sections vides).
+const postExtrasProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("post_people_tags").select("post_id, author_id").limit(0);
+const POST_EXTRA_SECTIONS = postExtrasProbe.error ? [] : (["postMedia", "peopleTagsMade", "peopleTagsReceived"] as const);
+
+// Publications enregistrées (lot « vie sociale ») : la publication de l'ami
+// enregistrée, seulement une fois la migration 0048 appliquée sur la base des
+// tests (sans elle, section vide).
+const savedPostsProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("saved_posts").select("user_id, post_id").limit(0);
+const SAVED_POST_SECTIONS = savedPostsProbe.error ? [] : (["savedPosts"] as const);
+
+// Épingles et lien en bio (lot « vie sociale ») : une publication épinglée et
+// un lien sur le profil, seulement une fois la migration 0049 appliquée sur la
+// base des tests (sans elle, ni l'une ni l'autre colonne n'existe).
+const profileExtrasProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("profiles").select("link_url").limit(0);
+const PROFILE_EXTRAS_MIGRATED = !profileExtrasProbe.error;
+
 // Quotas par membre : un droit d'abonnement et les compteurs du mois,
 // seulement une fois la migration 0053 appliquée sur la base des tests (sans
 // elle, section vide et compteurs absents). Le droit est écrit directement :
@@ -157,6 +187,19 @@ const JSON_KEYS = [
   "videoConfirmations",
   // Messages, plus de confort (migration 0044), de même.
   "messageReactions",
+  // Compte privé (migration 0045), de même.
+  "followRequestsSent",
+  "followRequestsReceived",
+  // Commentaires, suite (migration 0046), de même.
+  "commentReactionsGiven",
+  "mentionsReceived",
+  "mentionsMade",
+  // Plusieurs photos, identifications (migration 0047), de même.
+  "postMedia",
+  "peopleTagsMade",
+  "peopleTagsReceived",
+  // Publications enregistrées (migration 0048), de même.
+  "savedPosts",
   // Quotas par membre (migration 0053), de même.
   "memberEntitlements",
   "monthlyQuota",
@@ -207,6 +250,17 @@ describe("export RGPD complet", () => {
       .select("id")
       .single();
     await app.supabaseAdmin.from("affiliate_links").insert({ product_match_id: match!.id, network: "direct", affiliate_url: "https://example.com/p" });
+    // Compte privé : une demande reçue (de l'ami) et une demande envoyée (à
+    // lui), écrites directement. Jamais l'administratrice de test : elle ne
+    // doit être nommée nulle part dans l'export. Jamais l'inconnu non plus :
+    // il est bloqué plus bas, ses demandes seraient donc écartées.
+    if (FOLLOW_REQUEST_SECTIONS.length > 0) {
+      const requests = await app.supabaseAdmin.from("follow_requests").insert([
+        { requester_id: friend.id, target_id: user.id },
+        { requester_id: user.id, target_id: friend.id },
+      ]);
+      if (requests.error) throw requests.error;
+    }
     // Mémoire des vidéos : un spot de cette recherche et une confirmation, insérés directement.
     if (VIDEO_SECTIONS.length > 0) {
       const { data: video, error: videoError } = await app.supabaseAdmin
@@ -254,6 +308,15 @@ describe("export RGPD complet", () => {
     );
     postId = (await app.inject({ method: "POST", url: "/api/posts", headers: { ...authHeaders(user.token), ...post.headers }, payload: post.payload })).json().id;
 
+    // Épingles et lien en bio (migration 0049) : sa publication épinglée (avant
+    // la suspension, plus bas), et un lien sur son profil.
+    if (PROFILE_EXTRAS_MIGRATED) {
+      const pinned = await app.inject({ method: "PUT", url: `/api/posts/${postId}/pin`, headers: authHeaders(user.token), payload: { pinned: true } });
+      if (pinned.statusCode !== 200) throw new Error(`Épingle de test refusée (${pinned.statusCode}).`);
+      const linked = await app.supabaseAdmin.from("profiles").update({ link_url: "https://exemple.com/lookbook" }).eq("id", user.id);
+      if (linked.error) throw linked.error;
+    }
+
     // J'aime donné sur la publication d'un ami.
     const friendPost = buildMultipart({ type: "lifestyle", privacy: "public" }, { fieldname: "file", filename: "b.png", contentType: "image/png", data: PNG });
     const friendPostId = (
@@ -262,6 +325,48 @@ describe("export RGPD complet", () => {
     await app.inject({ method: "POST", url: `/api/posts/${friendPostId}/react`, headers: authHeaders(user.token) });
     // Commentaire sur la publication de l'ami (Lot F).
     await app.inject({ method: "POST", url: `/api/posts/${friendPostId}/comments`, headers: authHeaders(user.token), payload: { body: "Superbe" } });
+    // Commentaires, suite (migration 0046) : l'ami répond en mentionnant la
+    // personne, elle aime cette réponse, et son propre commentaire mentionne
+    // l'ami. Lignes écrites directement : le réglage de départ (« les comptes
+    // que je suis ») écarterait ces mentions entre deux comptes qui ne se suivent pas.
+    if (COMMENT_THREAD_SECTIONS.length > 0) {
+      const mine = await app.supabaseAdmin.from("comments").select("id").eq("user_id", user.id).eq("post_id", friendPostId).single();
+      if (mine.error || !mine.data) throw mine.error ?? new Error("Commentaire de test introuvable.");
+      const theirs = await app.supabaseAdmin
+        .from("comments")
+        .insert({ post_id: friendPostId, user_id: friend.id, body: `Merci @${user.username}`, parent_id: mine.data.id })
+        .select("id")
+        .single();
+      if (theirs.error || !theirs.data) throw theirs.error ?? new Error("Réponse de test non créée.");
+      const mentions = await app.supabaseAdmin.from("comment_mentions").insert([
+        { comment_id: theirs.data.id, user_id: user.id, author_id: friend.id, handle: user.username },
+        { comment_id: mine.data.id, user_id: friend.id, author_id: user.id, handle: friend.username },
+      ]);
+      if (mentions.error) throw mentions.error;
+      const liked = await app.inject({ method: "PUT", url: `/api/comments/${theirs.data.id}/like`, headers: authHeaders(user.token), payload: { liked: true } });
+      if (liked.statusCode !== 200) throw new Error(`« J'aime » de test refusé (${liked.statusCode}).`);
+    }
+
+    // Plusieurs photos, identifications (migration 0047) : une photo de plus sur
+    // sa publication, l'ami identifié dessus, et elle identifiée sur celle de
+    // l'ami. Lignes écrites directement : le réglage de départ (« les comptes
+    // que je suis ») écarterait ces identifications entre deux comptes qui ne se suivent pas.
+    if (POST_EXTRA_SECTIONS.length > 0) {
+      const extras = await Promise.all([
+        app.supabaseAdmin.from("post_media").insert({ user_id: user.id, post_id: postId, position: 1, media_url: "https://example.com/p2.jpg", media_thumb_url: "https://example.com/p2-mini.jpg" }),
+        app.supabaseAdmin.from("post_people_tags").insert([
+          { post_id: postId, user_id: friend.id, author_id: user.id },
+          { post_id: friendPostId, user_id: user.id, author_id: friend.id },
+        ]),
+      ]);
+      for (const written of extras) if (written.error) throw written.error;
+    }
+
+    // Publications enregistrées (migration 0048) : la publication de l'ami, sans collection.
+    if (SAVED_POST_SECTIONS.length > 0) {
+      const saved = await app.inject({ method: "PUT", url: `/api/posts/${friendPostId}/save`, headers: authHeaders(user.token), payload: {} });
+      if (saved.statusCode !== 200) throw new Error(`Publication enregistrée de test refusée (${saved.statusCode}).`);
+    }
 
     // Vault, Envie, blocage, signalement, consentement.
     await app.supabaseAdmin.from("vault_items").insert({ user_id: user.id, title: "Montre", image_url: "https://example.com/m.jpg", category: "watches" });
@@ -411,11 +516,54 @@ describe("export RGPD complet", () => {
     const body = res.json();
 
     expect(body.profile.id).toBe(user.id);
-    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...MESSAGE_REACTION_SECTIONS, ...COLLECTION_SECTIONS, ...PUSH_SECTIONS, ...ALERT_SECTIONS, ...TRYON_SECTIONS, ...VIDEO_SECTIONS, ...QUOTA_SECTIONS]) {
+    for (const section of [
+      ...NON_EMPTY_SECTIONS,
+      ...MESSAGE_SECTIONS,
+      ...MESSAGE_REACTION_SECTIONS,
+      ...COLLECTION_SECTIONS,
+      ...PUSH_SECTIONS,
+      ...ALERT_SECTIONS,
+      ...TRYON_SECTIONS,
+      ...VIDEO_SECTIONS,
+      ...FOLLOW_REQUEST_SECTIONS,
+      ...COMMENT_THREAD_SECTIONS,
+      ...POST_EXTRA_SECTIONS,
+      ...SAVED_POST_SECTIONS,
+      ...QUOTA_SECTIONS,
+    ]) {
       expect(Array.isArray(body[section]), section).toBe(true);
       expect(body[section].length, section).toBeGreaterThan(0);
     }
     expect(body.adminRole).toEqual({ created_at: expect.any(String) });
+    // Les demandes d'abonnement nomment l'ami, jamais l'administratrice de test.
+    if (FOLLOW_REQUEST_SECTIONS.length > 0) {
+      expect(body.followRequestsSent.map((row: { target_id: string }) => row.target_id)).toEqual([friend.id]);
+      expect(body.followRequestsReceived.map((row: { requester_id: string }) => row.requester_id)).toEqual([friend.id]);
+      expect(JSON.stringify(body)).not.toContain(admin.id);
+    }
+    // Commentaires, suite : le commentaire aimé, la mention reçue de l'ami et celle écrite pour lui.
+    if (COMMENT_THREAD_SECTIONS.length > 0) {
+      expect(Object.keys(body.commentReactionsGiven[0]).sort()).toEqual(["comment_id", "created_at"]);
+      expect(body.mentionsReceived.map((row: { author_id: string; handle: string }) => [row.author_id, row.handle])).toEqual([[friend.id, user.username]]);
+      expect(body.mentionsMade.map((row: { user_id: string; handle: string }) => [row.user_id, row.handle])).toEqual([[friend.id, friend.username]]);
+      expect(body.profile.mentions_from).toBe("following");
+    }
+    // Plusieurs photos, identifications : la photo de plus, l'ami identifié, la publication de l'ami où elle l'est (visible).
+    if (POST_EXTRA_SECTIONS.length > 0) {
+      expect(Object.keys(body.postMedia[0]).sort()).toEqual(["created_at", "id", "media_thumb_url", "media_url", "position", "post_id"]);
+      expect(body.peopleTagsMade.map((row: { post_id: string; user_id: string }) => [row.post_id, row.user_id])).toEqual([[postId, friend.id]]);
+      expect(body.peopleTagsReceived.map((row: { author_id: string; post_available: boolean }) => [row.author_id, row.post_available])).toEqual([[friend.id, true]]);
+    }
+    // Publications enregistrées : celle de l'ami, encore visible, avec son auteur ; rien de la publication elle-même.
+    if (SAVED_POST_SECTIONS.length > 0) {
+      expect(Object.keys(body.savedPosts[0]).sort()).toEqual(["author_id", "collection_id", "collection_name", "created_at", "post_available", "post_id"]);
+      expect(body.savedPosts.map((row: { author_id: string; post_available: boolean; collection_id: string | null }) => [row.author_id, row.post_available, row.collection_id])).toEqual([[friend.id, true, null]]);
+    }
+    // Épingles et lien en bio (migration 0049) : le lien du profil et la date de l'épingle.
+    if (PROFILE_EXTRAS_MIGRATED) {
+      expect(body.profile.link_url).toBe("https://exemple.com/lookbook");
+      expect(body.posts.find((row: { id: string }) => row.id === postId)?.pinned_at).toEqual(expect.any(String));
+    }
     expect(body.suspension).toMatchObject({ moderation_action_id: expect.any(String) });
     // Un appareil : son système et ses dates (avec 0036 : s'il reçoit les messages, les alertes), jamais son jeton.
     const deviceColumns = ALERT_SECTIONS.length > 0 ? ["created_at", "notify_alerts", "notify_messages", "platform", "updated_at"] : ["created_at", "platform", "updated_at"];

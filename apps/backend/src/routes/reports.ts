@@ -7,6 +7,7 @@ import { autoHideIfReported } from "../lib/autoHide.js";
 import { captureModerationEvent } from "../lib/sentry.js";
 import { MESSAGES_UNAVAILABLE, messagesReady } from "../lib/messaging.js";
 import { COLLECTION_MODERATION_UNAVAILABLE, canReportCollection, collectionModerationReady } from "../lib/collectionModeration.js";
+import { replyRootShownTo } from "../lib/comments.js";
 
 // Lot 5 : une pièce reçue (« piece ») se signale aussi ; lot messages : un
 // message reçu (« message ») ; lot modération des collections : une
@@ -52,6 +53,16 @@ export default async function reportsRoutes(fastify: FastifyInstance) {
         if (!(await canReportMessage(fastify, reporterId, body.targetId))) {
           return reply.code(404).send(TARGET_NOT_FOUND);
         }
+      }
+
+      // Une réponse à un commentaire (migration 0046) ne se signale que si son
+      // commentaire d'origine est montré à la personne, comme dans son fil
+      // (lib/comments.ts) : sinon 404 « Contenu introuvable », sans rien
+      // enregistrer ni masquer. Le commentaire lui-même relève de
+      // canReportComment (lot « corrections en ligne », qui entre dans main
+      // avant ce lot).
+      if (body.targetType === "comment" && !(await replyRootShownTo(fastify, reporterId, body.targetId))) {
+        return reply.code(404).send(TARGET_NOT_FOUND);
       }
 
       // Une collection ne se signale que si on la voit vraiment (ami de son

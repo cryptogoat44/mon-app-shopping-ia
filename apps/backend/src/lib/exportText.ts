@@ -5,6 +5,7 @@ import {
   type ConsentType,
   type MatchFeedbackReason,
   type MatchOrigin,
+  type MentionsFrom,
   type MerchantLinkContext,
   type MessagesFrom,
   type ModerationActionType,
@@ -128,6 +129,12 @@ export const EXPORT_COLUMNS = {
     price_alerts_enabled: shown("Alertes prix et stock", "Price and stock alerts"),
     // Nouvelle version des alertes (migration 0041).
     help_others: shown("Aider les autres membres", "Help other members"),
+    // Compte privé (migration 0045).
+    is_private: shown("Compte privé", "Private account"),
+    // Mentions (migration 0046).
+    mentions_from: shown("Qui peut vous mentionner", "Who can mention you"),
+    // Lien en bio (migration 0049).
+    link_url: shown("Lien affiché sur votre profil", "Link shown on your profile"),
     created_at: shown("Compte créé le", "Account created on"),
     updated_at: shown("Profil modifié le", "Profile updated on"),
   },
@@ -257,6 +264,8 @@ export const EXPORT_COLUMNS = {
     mux_playback_id: technical("Identifiant de lecture vidéo", "Video playback identifier"),
     privacy: shown("Visible par", "Visible to"),
     hidden_at: shown("Masquée par la modération le", "Hidden by moderation on"),
+    // Épingles (migration 0049).
+    pinned_at: shown("Épinglée le", "Pinned on"),
     created_at: shown("Publiée le", "Posted on"),
   },
   postTaggedPieces: {
@@ -299,6 +308,8 @@ export const EXPORT_COLUMNS = {
     user_id: USER_ID,
     post_id: shown("Sur", "On"),
     body: shown("Commentaire", "Comment"),
+    // Réponses (migration 0046) : le commentaire auquel celui-ci répond.
+    parent_id: shown("Réponse à un autre commentaire", "Reply to another comment"),
     hidden_at: shown("Masqué par la modération le", "Hidden by moderation on"),
     created_at: shown("Écrit le", "Written on"),
   },
@@ -556,6 +567,61 @@ export const EXPORT_COLUMNS = {
     product: shown("Pièce", "Piece"),
     created_at: shown("Confirmée le", "Confirmed on"),
   },
+  // Compte privé (lot « vie sociale », migration 0045).
+  followRequestsSent: {
+    target_id: shown("Compte", "Account"),
+    created_at: shown("Demandé le", "Requested on"),
+  },
+  followRequestsReceived: {
+    requester_id: shown("Compte", "Account"),
+    created_at: shown("Reçue le", "Received on"),
+  },
+  // Commentaires, suite (lot « vie sociale », migration 0046).
+  commentReactionsGiven: {
+    comment_id: technical("Commentaire", "Comment"),
+    created_at: shown("Aimé le", "Liked on"),
+  },
+  mentionsReceived: {
+    comment_id: technical("Commentaire", "Comment"),
+    author_id: shown("Par", "By"),
+    handle: shown("Pseudo écrit", "Username as written"),
+    created_at: shown("Mentionné(e) le", "Mentioned on"),
+  },
+  mentionsMade: {
+    comment_id: technical("Commentaire", "Comment"),
+    user_id: shown("Compte mentionné", "Account mentioned"),
+    handle: shown("Pseudo écrit", "Username as written"),
+    created_at: shown("Écrite le", "Written on"),
+  },
+  // Plusieurs photos, identifier des personnes (lot « vie sociale », migration 0047).
+  postMedia: {
+    id: ID,
+    post_id: technical("Publication", "Post"),
+    position: shown("Place après la première photo", "Place after the first photo"),
+    media_url: shown("Photo", "Photo"),
+    media_thumb_url: shown("Miniature", "Thumbnail"),
+    created_at: shown("Ajoutée le", "Added on"),
+  },
+  peopleTagsMade: {
+    post_id: shown("Sur", "On"),
+    user_id: shown("Compte identifié", "Account tagged"),
+    created_at: shown("Identifié(e) le", "Tagged on"),
+  },
+  peopleTagsReceived: {
+    post_id: shown("Sur", "On"),
+    author_id: shown("Par", "By"),
+    created_at: shown("Identifié(e) le", "Tagged on"),
+    post_available: shown("Vous pouvez encore voir la publication", "You can still see the post"),
+  },
+  // Publications enregistrées (lot « vie sociale », migration 0048).
+  savedPosts: {
+    post_id: technical("Publication", "Post"),
+    collection_id: technical("Collection", "Collection"),
+    collection_name: shown("Rangée dans", "In"),
+    author_id: shown("Publication de", "Post by"),
+    post_available: shown("Vous pouvez encore voir la publication", "You can still see the post"),
+    created_at: shown("Enregistrée le", "Saved on"),
+  },
   // Quotas par membre (migration 0053) : vos droits d'abonnement…
   memberEntitlements: {
     entitlement: shown("Abonnement", "Subscription"),
@@ -647,7 +713,7 @@ export const EXPORT_SECTIONS = {
       fr: "Ce que vous avez publié sur votre profil, et qui peut le voir.",
       en: "What you posted on your profile, and who can see it.",
     },
-    keys: ["posts", "postTaggedPieces"],
+    keys: ["posts", "postTaggedPieces", "postMedia"],
   },
   comments: {
     title: { fr: "Vos commentaires", en: "Your comments" },
@@ -656,8 +722,32 @@ export const EXPORT_SECTIONS = {
   },
   likes: {
     title: { fr: "Vos « j'aime »", en: "Your likes" },
-    intro: { fr: "Les publications que vous avez aimées.", en: "The posts you liked." },
-    keys: ["reactionsGiven"],
+    intro: { fr: "Les publications et les commentaires que vous avez aimés.", en: "The posts and comments you liked." },
+    keys: ["reactionsGiven", "commentReactionsGiven"],
+  },
+  mentions: {
+    title: { fr: "Mentions", en: "Mentions" },
+    intro: {
+      fr: "Les mentions « @pseudo » dans les commentaires : celles où d'autres membres vous mentionnent, et celles que vous avez écrites. Une mention retirée par le membre mentionné, ou effacée par un blocage, n'est plus conservée.",
+      en: "The “@username” mentions in comments: the ones where other members mention you, and the ones you wrote. A mention removed by the mentioned member, or erased by a block, is no longer kept.",
+    },
+    keys: ["mentionsReceived", "mentionsMade"],
+  },
+  peopleTags: {
+    title: { fr: "Personnes identifiées", en: "Tagged people" },
+    intro: {
+      fr: "Les membres que vous avez identifiés sur vos publications, et les publications des autres où l'on vous a identifié(e). Une identification retirée, ou perdue avec l'accès à la publication (ou par un blocage), n'est plus conservée.",
+      en: "The members you tagged in your posts, and other members' posts you are tagged in. A tag that was removed, or lost along with access to the post (or through a block), is no longer kept.",
+    },
+    keys: ["peopleTagsMade", "peopleTagsReceived"],
+  },
+  savedPosts: {
+    title: { fr: "Publications enregistrées", en: "Saved posts" },
+    intro: {
+      fr: "Les publications que vous avez enregistrées pour les retrouver, et la collection où vous les avez rangées. Elles ne sont visibles que par vous : ni leur auteur ni vos amis ne les voient. Une publication que vous ne pouvez plus voir est indiquée « une publication indisponible », sans son auteur.",
+      en: "The posts you saved to find them again, and the collection you added them to. Only you can see them: neither their author nor your friends can. A post you can no longer see is shown as “an unavailable post”, without its author.",
+    },
+    keys: ["savedPosts"],
   },
   following: {
     title: { fr: "Comptes que vous suivez", en: "Accounts you follow" },
@@ -668,6 +758,14 @@ export const EXPORT_SECTIONS = {
     title: { fr: "Vos abonnés", en: "Your followers" },
     intro: { fr: "Les comptes qui suivent vos publications.", en: "The accounts that follow your posts." },
     keys: ["followers"],
+  },
+  followRequests: {
+    title: { fr: "Demandes d'abonnement", en: "Follow requests" },
+    intro: {
+      fr: "Les demandes d'abonnement encore en attente : celles que vous avez envoyées à un compte privé, et celles que vous avez reçues. Une demande acceptée, refusée ou annulée n'est plus conservée.",
+      en: "The follow requests still pending: the ones you sent to a private account, and the ones you received. A request that was accepted, declined or cancelled is no longer kept.",
+    },
+    keys: ["followRequestsSent", "followRequestsReceived"],
   },
   blocked: {
     title: { fr: "Comptes bloqués", en: "Blocked accounts" },
@@ -764,6 +862,13 @@ export const PIECE_SENDS_FROM_LABELS: Record<PieceSendsFrom, Bilingual> = {
   following: { fr: "Les comptes que vous suivez", en: "Accounts you follow" },
   everyone: { fr: "Tout le monde", en: "Everyone" },
   nobody: { fr: "Personne", en: "Nobody" },
+};
+
+/** « Qui peut me mentionner » (migration 0046). */
+export const MENTIONS_FROM_LABELS: Record<MentionsFrom, Bilingual> = {
+  everyone: { fr: "Tout le monde", en: "Everyone" },
+  following: { fr: "Les comptes que vous suivez", en: "Accounts you follow" },
+  nobody: { fr: "Personne", en: "No one" },
 };
 
 /** « Qui peut m'écrire » (lot messages) : vos amis peuvent toujours vous écrire. */
@@ -983,6 +1088,14 @@ export const NOTIFICATION_LABELS: Record<NotificationType, Bilingual> = {
   moderation: { fr: "a pris une décision qui vous concerne.", en: "made a decision about you." },
   report_handled: { fr: "a traité votre signalement.", en: "handled your report." },
   piece_received: { fr: "vous a envoyé une pièce.", en: "sent you a piece." },
+  // Compte privé (migration 0045).
+  follow_request: { fr: "demande à vous suivre.", en: "asked to follow you." },
+  follow_accepted: { fr: "a accepté votre demande d'abonnement.", en: "accepted your follow request." },
+  // Commentaires : réponses et mentions (migration 0046).
+  reply: { fr: "a répondu à votre commentaire.", en: "replied to your comment." },
+  mention: { fr: "vous a mentionné(e) dans un commentaire.", en: "mentioned you in a comment." },
+  // Identifications sur une publication (migration 0047).
+  tag: { fr: "vous a identifié(e) dans une publication.", en: "tagged you in a post." },
 };
 
 export const REPORT_TARGET_LABELS: Record<ReportTargetType, Bilingual> = {
@@ -1183,6 +1296,22 @@ export const EXPORT_TEXT = {
   // Mémoire des vidéos (migrations 0038 et 0039).
   videoSpotsTitle: { fr: "Vidéos spottées ({count})", en: "Spotted videos ({count})" },
   videoConfirmationsTitle: { fr: "Pièces confirmées ({count})", en: "Confirmed pieces ({count})" },
+  // Compte privé (migration 0045).
+  followRequestsSentTitle: { fr: "Demandes envoyées ({count})", en: "Requests sent ({count})" },
+  followRequestsReceivedTitle: { fr: "Demandes reçues ({count})", en: "Requests received ({count})" },
+  // Commentaires, suite (migration 0046).
+  likedPostsTitle: { fr: "Publications aimées ({count})", en: "Liked posts ({count})" },
+  likedCommentsTitle: { fr: "Commentaires aimés ({count})", en: "Liked comments ({count})" },
+  likedComment: { fr: "Un commentaire", en: "A comment" },
+  mentionsReceivedTitle: { fr: "Mentions de vous ({count})", en: "Mentions of you ({count})" },
+  mentionsMadeTitle: { fr: "Mentions que vous avez écrites ({count})", en: "Mentions you wrote ({count})" },
+  // Plusieurs photos, identifier des personnes (migration 0047).
+  morePhotos: { fr: "Autres photos", en: "Other photos" },
+  peopleTagsMadeTitle: { fr: "Personnes que vous avez identifiées ({count})", en: "People you tagged ({count})" },
+  peopleTagsReceivedTitle: { fr: "Publications où l'on vous a identifié(e) ({count})", en: "Posts you are tagged in ({count})" },
+  postUnavailable: { fr: "une publication indisponible", en: "an unavailable post" },
+  // Publications enregistrées (migration 0048).
+  savedNoCollection: { fr: "Sans collection", en: "No collection" },
   videoTiktok: { fr: "Vidéo TikTok", en: "TikTok video" },
   videoInstagram: { fr: "Vidéo Instagram", en: "Instagram video" },
   videoMoment: { fr: "à {minutes} min {seconds} s", en: "at {minutes} min {seconds} s" },

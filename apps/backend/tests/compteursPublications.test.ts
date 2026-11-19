@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Post } from "@monapp/shared-types";
 import rateLimitPlugin from "../src/plugins/rateLimit.js";
 import moderationPlugin from "../src/plugins/moderation.js";
 import postsRoutes from "../src/routes/posts.js";
 import usersRoutes from "../src/routes/users.js";
 import { fetchPostCounts } from "../src/lib/postCounts.js";
+import { resetCommentThreadsProbe } from "../src/lib/comments.js";
+import { resetPrivateAccountsProbe } from "../src/lib/audience.js";
 import { fakeSupabase, type FakeDbOptions, type Row } from "./fakeSupabase.js";
 
 // Compteurs des publications au-delà de 1 000 lignes (lot « corrections en
@@ -220,5 +222,142 @@ describe("nombre de requêtes pour une page de 20 publications", () => {
     expect(counts.reactionCount.get(postId(140))).toBe(1);
     expect([...counts.viewerReacted]).toEqual([postId(140)]);
     expect(tables.length).toBeLessThanOrEqual(10);
+  });
+});
+
+// Assemblage avec le lot « vie sociale » : les nombres restent exacts au-delà
+// de 1 000 lignes ET suivent ce que les listes montrent — ni les « j'aime » ni
+// les commentaires des comptes en blocage avec le lecteur (dans un sens ou
+// dans l'autre), ni les réponses à un commentaire masqué ou écrit par un tel
+// compte (migration 0046). Les deux règles s'appliquent dans la base, avec le
+// même comptage par paquets (lib/postCounts.ts).
+describe("au-delà de 1 000 lignes, sans les comptes en blocage ni les réponses à un commentaire non montré", () => {
+  const OTHER = "c0000000-0000-4000-8000-000000000003";
+  /** 20 comptes bloqués par le lecteur, 20 qui l'ont bloqué. */
+  const blockedByViewer = Array.from({ length: 20 }, (_, i) => `d0000000-0000-4000-8000-${String(i).padStart(12, "0")}`);
+  const blockingViewer = Array.from({ length: 20 }, (_, i) => `d1000000-0000-4000-8000-${String(i).padStart(12, "0")}`);
+  const blockedAccounts = [...blockedByViewer, ...blockingViewer];
+
+  function withBlocks(postCount: number) {
+    const fake = seeded(postCount);
+    fake.table("profiles").push(profile(OTHER, "autre"));
+    for (const id of blockedByViewer) fake.table("blocks").push({ blocker_id: VIEWER, blocked_id: id, created_at: "2026-11-01T12:00:00Z" });
+    for (const id of blockingViewer) fake.table("blocks").push({ blocker_id: id, blocked_id: VIEWER, created_at: "2026-11-01T12:00:00Z" });
+    return fake;
+  }
+  const likesBy = (i: number, users: readonly string[]): Row[] => users.map((user_id) => ({ post_id: postId(i), user_id, created_at: "2026-11-01T12:00:00Z" }));
+  function comment(i: number, options: { user?: string; hidden?: boolean; parent?: string } = {}): Row {
+    return {
+      id: randomUUID(),
+      post_id: postId(i),
+      user_id: options.user ?? randomUUID(),
+      body: "Très belle veste",
+      hidden_at: options.hidden ? "2026-11-02T12:00:00Z" : null,
+      parent_id: options.parent ?? null,
+      created_at: "2026-11-01T12:00:00Z",
+    };
+  }
+  const repliesTo = (i: number, parent: Row, n: number, user?: (k: number) => string): Row[] => Array.from({ length: n }, (_, k) => comment(i, { parent: String(parent.id), user: user?.(k) }));
+  async function pageFor(db: unknown, viewer: string): Promise<Post[]> {
+    const target = await postsApp(db);
+    const res = await target.inject({ method: "GET", url: `/api/users/${AUTHOR}/posts`, headers: { "x-test-user": viewer } });
+    expect(res.statusCode, res.body).toBe(200);
+    return (res.json() as { posts: Post[] }).posts;
+  }
+
+  beforeEach(() => {
+    resetCommentThreadsProbe();
+    resetPrivateAccountsProbe();
+  });
+
+  it("« j'aime » : exacts au-delà du plafond, sans ceux des comptes en blocage ; « vous avez aimé » juste", async () => {
+    const fake = withBlocks(18);
+    // 2 184 lignes : la lecture est coupée, les comptes en blocage sont écartés par la base.
+    fake.table("post_reactions").push(
+      ...likes(2, 1500),
+      ...likesBy(2, blockedAccounts),
+      ...likes(9, 600),
+      ...likesBy(9, blockedAccounts),
+      { post_id: postId(9), user_id: VIEWER, created_at: "2026-11-03T12:00:00Z" },
+      ...likesBy(15, blockedAccounts.slice(0, 3))
+    );
+    const posts = await pageFor(fake.db, VIEWER);
+    expect(byId(posts, 2)).toMatchObject({ reactionCount: 1500, viewerHasReacted: false });
+    expect(byId(posts, 9)).toMatchObject({ reactionCount: 601, viewerHasReacted: true });
+    expect(byId(posts, 15).reactionCount).toBe(0);
+
+    // Permis : un lecteur sans blocage les compte tous.
+    await app?.close();
+    const all = await pageFor(fake.db, OTHER);
+    expect(byId(all, 2).reactionCount).toBe(1540);
+    expect(byId(all, 9)).toMatchObject({ reactionCount: 641, viewerHasReacted: false });
+    expect(byId(all, 15).reactionCount).toBe(3);
+  });
+
+  it("commentaires : exacts au-delà du plafond, sans ceux des comptes en blocage ni les réponses à un commentaire masqué ou écrit par un tel compte", async () => {
+    const fake = withBlocks(18);
+    const shownRoot = comment(4);
+    const hiddenRoot = comment(4, { hidden: true });
+    const blockedRoot = comment(4, { user: blockedByViewer[0] });
+    fake.table("comments").push(
+      ...Array.from({ length: 700 }, () => comment(4)),
+      shownRoot,
+      ...repliesTo(4, shownRoot, 150),
+      // Réponses d'un compte en blocage à un commentaire montré.
+      ...repliesTo(4, shownRoot, 10, (k) => blockingViewer[k]!),
+      // 1 200 réponses à un commentaire masqué : le retrait lui-même dépasse le plafond.
+      hiddenRoot,
+      ...repliesTo(4, hiddenRoot, 1200),
+      blockedRoot,
+      ...repliesTo(4, blockedRoot, 30),
+      ...Array.from({ length: 25 }, (_, k) => comment(4, { user: blockedAccounts[k]! })),
+      ...Array.from({ length: 3 }, () => comment(11))
+    );
+    const posts = await pageFor(fake.db, VIEWER);
+    // 700 + le commentaire montré et ses 150 réponses.
+    expect(byId(posts, 4).commentCount).toBe(851);
+    expect(byId(posts, 11).commentCount).toBe(3);
+    expect(byId(posts, 0).commentCount).toBe(0);
+
+    // Permis : sans blocage, tout compte sauf le commentaire masqué et ses réponses.
+    await app?.close();
+    const all = await pageFor(fake.db, OTHER);
+    expect(byId(all, 4).commentCount).toBe(851 + 10 + 1 + 30 + 25);
+    expect(byId(all, 11).commentCount).toBe(3);
+  });
+
+  it("base sans les réponses (avant 0046) : commentaires à plat, toujours sans ceux des comptes en blocage", async () => {
+    const fake = fakeSupabase({ maxRows: MAX_ROWS, missingColumns: { comments: ["parent_id"] } });
+    fake.table("profiles").push(profile(AUTHOR, "autrice"), profile(VIEWER, "lecteur"));
+    for (let i = 0; i < 3; i++) fake.table("posts").push(post(i));
+    for (const id of blockedByViewer) fake.table("blocks").push({ blocker_id: VIEWER, blocked_id: id, created_at: "2026-11-01T12:00:00Z" });
+    fake.table("comments").push(...comments(1, 1100), ...comments(1, 5, true), ...blockedByViewer.map((user) => ({ ...comments(1, 1)[0]!, user_id: user })));
+    const posts = await profilePage(fake.db);
+    expect(byId(posts, 1).commentCount).toBe(1100);
+  });
+
+  it("nombre de requêtes : fixe par page, jamais une par ligne ni par compte bloqué", async () => {
+    const twenty = Array.from({ length: 20 }, (_, i) => postId(i));
+    const fake = withBlocks(20);
+    const hiddenRoot = comment(7, { hidden: true });
+    fake.table("post_reactions").push(...likes(0, 300), ...likesBy(0, blockedAccounts));
+    fake.table("comments").push(...comments(7, 40), hiddenRoot, ...repliesTo(7, hiddenRoot, 5));
+    const rules = { blocked: new Set(blockedAccounts), threads: true };
+
+    const withHidden = counted(fake.db);
+    const counts = await fetchPostCounts({ supabaseAdmin: withHidden.db as unknown as FastifyInstance["supabaseAdmin"], log: silentLog }, twenty, VIEWER, rules);
+    expect(counts.reactionCount.get(postId(0))).toBe(300);
+    expect(counts.commentCount.get(postId(7))).toBe(40);
+    // « j'aime » : 1 ; « vous avez aimé » : 1 ; commentaires : 1, puis les
+    // commentaires d'origine masqués (1) et ceux des comptes en blocage (1),
+    // puis les réponses à retirer (1).
+    expect(withHidden.tables.sort()).toEqual(["comments", "comments", "comments", "comments", "post_reactions", "post_reactions"]);
+
+    // Sans commentaire d'origine à écarter, ni compte bloqué : une lecture de plus que sans les règles.
+    const plain = withBlocks(20);
+    plain.table("comments").push(...comments(7, 40));
+    const noBlocks = counted(plain.db);
+    await fetchPostCounts({ supabaseAdmin: noBlocks.db as unknown as FastifyInstance["supabaseAdmin"], log: silentLog }, twenty, VIEWER, { blocked: new Set(), threads: true });
+    expect(noBlocks.tables.sort()).toEqual(["comments", "comments", "post_reactions", "post_reactions"]);
   });
 });

@@ -124,7 +124,8 @@ const T = {
   annuler: "Annuler",
   confirmerRetrait: "Confirmer le retrait",
   bioRetiree: "Bio retirée.",
-  bioRetireeMembre: "Votre bio a été retirée par la modération.",
+  // Même phrase que `notifications.moderationBioRemoved` (apps/mobile/src/i18n/fr.ts) : le lien du profil part avec la bio (0049).
+  bioRetireeMembre: "Votre bio a été retirée par la modération, avec le lien de votre profil s'il y en avait un.",
 };
 
 interface Donnees {
@@ -466,7 +467,7 @@ async function moderationDesProfils(p: Parcours, d: Donnees, telephones: Telepho
 
   // Zoé est prévenue dans son Activité, avec le motif, sans le nom de l'administratrice.
   const membre = await telephones.connecter(zoe);
-  await aller(p, membre, "/activite", "« Votre bio a été retirée par la modération. » dans l'Activité de Zoé", texte(membre, T.bioRetireeMembre));
+  await aller(p, membre, "/activite", `« ${T.bioRetireeMembre} » dans l'Activité de Zoé`, texte(membre, T.bioRetireeMembre));
   await photographier(p, membre, "g-05-activite-bio-retiree");
 }
 

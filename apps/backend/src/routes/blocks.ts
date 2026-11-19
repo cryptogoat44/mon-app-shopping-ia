@@ -2,6 +2,10 @@ import type { FastifyInstance } from "fastify";
 import type { BlockedUser } from "@monapp/shared-types";
 import { INVALID_ID, parseInput, userIdParamsSchema } from "../lib/validation.js";
 import { withoutSuspendedFaces } from "../lib/profileModeration.js";
+import { privateAccountsReady } from "../lib/audience.js";
+import { commentThreadsReady } from "../lib/comments.js";
+import { postExtrasReady } from "../lib/postExtras.js";
+import { dropTagsBetween } from "../lib/peopleTags.js";
 
 interface ProfileRow {
   id: string;
@@ -41,6 +45,35 @@ export default async function blocksRoutes(fastify: FastifyInstance) {
     // backend, même si ici les deux ids viennent du serveur, pas de l'utilisateur).
     await fastify.supabaseAdmin.from("follows").delete().eq("follower_id", blockerId).eq("followee_id", blockedId);
     await fastify.supabaseAdmin.from("follows").delete().eq("follower_id", blockedId).eq("followee_id", blockerId);
+
+    // Compte privé (migration 0045) : les demandes d'abonnement en attente
+    // entre les deux comptes disparaissent aussi, dans les deux sens (leurs
+    // notifications partent avec celles effacées ci-dessous).
+    if (await privateAccountsReady(fastify)) {
+      await fastify.supabaseAdmin.from("follow_requests").delete().eq("requester_id", blockerId).eq("target_id", blockedId);
+      await fastify.supabaseAdmin.from("follow_requests").delete().eq("requester_id", blockedId).eq("target_id", blockerId);
+    }
+
+    // Mentions (migration 0046) : les liens « @pseudo » entre les deux comptes
+    // disparaissent aussi, dans les deux sens (commentaires de l'un qui
+    // mentionnent l'autre). Le texte reste, sans lien : la personne qui bloque
+    // ne mène plus à son profil sous les commentaires de l'autre, pour aucun
+    // lecteur. Leurs notifications partent avec celles effacées ci-dessous.
+    // Sonde illisible : rien à retirer ici, et la lecture des commentaires ne
+    // renvoie de toute façon jamais la mention d'un compte en blocage.
+    if (await commentThreadsReady(fastify).catch(() => false)) {
+      await fastify.supabaseAdmin.from("comment_mentions").delete().eq("author_id", blockerId).eq("user_id", blockedId);
+      await fastify.supabaseAdmin.from("comment_mentions").delete().eq("author_id", blockedId).eq("user_id", blockerId);
+    }
+
+    // Identifications (migration 0047) : celles de l'un sur les publications
+    // de l'autre disparaissent, dans les deux sens (leurs notifications partent
+    // avec celles effacées ci-dessous). Échec ou sonde illisible : journalisé ;
+    // la lecture des publications ne montre de toute façon jamais un compte en
+    // blocage avec le lecteur.
+    if (await postExtrasReady(fastify).catch(() => false)) {
+      await dropTagsBetween(fastify, blockerId, blockedId).catch(() => request.log.warn("Blocage : identifications non retirées"));
+    }
 
     // Et efface les notifications échangées entre les deux comptes : un
     // compte bloqué ne doit plus apparaître nulle part (audit Lot Q, SEC-04 —

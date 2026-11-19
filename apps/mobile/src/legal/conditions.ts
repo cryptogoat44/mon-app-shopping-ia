@@ -73,6 +73,7 @@ export const termsOfUse: LegalDocument = {
           "des contenus qui portent atteinte aux droits d'autrui (droit d'auteur, marques, image) ;",
           "du spam, des arnaques ou de la publicité non sollicitée.",
         ],
+        "Ces règles valent aussi pour le lien que vous affichez sur votre profil, comme pour votre bio.",
         `Il est également interdit d'utiliser ${BRAND} de façon automatisée (robots, collecte massive de données) ou de tenter d'en contourner les protections.`,
       ],
     },

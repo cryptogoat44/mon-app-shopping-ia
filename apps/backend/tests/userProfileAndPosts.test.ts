@@ -1,7 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import sharp from "sharp";
+import { createClient } from "@supabase/supabase-js";
+import { env } from "../src/env.js";
 import { authHeaders, buildMultipart, buildTestApp, createTestUser, deleteTestUser, type TestUser } from "./helpers.js";
+
+// Épingles et lien en bio (lot « vie sociale ») : `linkUrl` s'ajoute au
+// profil vu par un abonné une fois la migration 0049 appliquée sur la base
+// des tests (sonde comme exportCompleteness.test.ts ; sans elle, pas de clé).
+const linkProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("profiles").select("link_url").limit(0);
+const HAS_LINK = !linkProbe.error;
 
 // Lot Q, bloc 3 — décision 6 : profil d'un autre utilisateur et
 // suppression d'une publication.
@@ -51,8 +59,15 @@ describe("profil d'un autre utilisateur", () => {
     const profile = res.json();
     expect(profile).toMatchObject({ id: author.id, followersCount: 1, followingCount: 0, isFollowing: true, isMe: false });
     expect(Object.keys(profile).sort()).toEqual(
-      ["avatarUrl", "bio", "displayName", "followersCount", "followingCount", "id", "isFollowing", "isMe", "postsCount", "username"].sort()
+      // « isPrivate » et « followState » : compte privé (lot « vie sociale »), toujours présents.
+      // « linkUrl » : avec 0049 seulement (vide ici : l'auteur n'a pas mis de lien).
+      [
+        ...["avatarUrl", "bio", "displayName", "followState", "followersCount", "followingCount", "id", "isFollowing", "isMe", "isPrivate", "postsCount", "username"],
+        ...(HAS_LINK ? ["linkUrl"] : []),
+      ].sort()
     );
+    expect(profile).toMatchObject({ isPrivate: false, followState: "following" });
+    if (HAS_LINK) expect(profile.linkUrl).toBeNull();
     expect(JSON.stringify(profile)).not.toMatch(/vault|Montre secrète/i);
   });
 

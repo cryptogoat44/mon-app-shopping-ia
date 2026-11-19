@@ -174,11 +174,13 @@ describe("écran ouvert directement par son adresse, ou rechargé (appels du ser
     "/api/messages/status": { enabled: true, unreadCount: 2, push: false },
     "/api/collections/status": { enabled: true, reportable: true },
     "/api/alerts/status": { available: true, enabled: false, push: false },
+    "/api/posts/status": { carousel: true, peopleTags: true },
   };
   const INDISPONIBLE: Record<string, unknown> = {
     "/api/messages/status": { enabled: false, unreadCount: 0 },
     "/api/collections/status": { enabled: false },
     "/api/alerts/status": { available: false },
+    "/api/posts/status": { carousel: false, peopleTags: false },
   };
 
   /** Serveur simulé : note chaque adresse demandée ; `porte` : la réponse attend qu'on l'ouvre. */
@@ -201,10 +203,12 @@ describe("écran ouvert directement par son adresse, ou rechargé (appels du ser
     const { messagesStatus } = await import("../src/lib/conversations");
     const { collectionsStatus, friendSectionVisible } = await import("../src/lib/collections");
     const { wishAlertsStatus } = await import("../src/lib/wish-alerts");
+    const { postExtrasStatus } = await import("../src/lib/post-extras");
     return {
       messagesStatus,
       collectionsStatus,
       wishAlertsStatus,
+      postExtrasStatus,
       friendSectionVisible,
       /** Mise en page commune aux écrans connectés, app/(app)/_layout.tsx : les alertes pour le jeton (use-push-notifications.ts), puis tout le reste. */
       miseEnPage: (userId: string | null) => {
@@ -227,7 +231,9 @@ describe("écran ouvert directement par son adresse, ou rechargé (appels du ser
     };
   }
 
-  const TOUTES_UNE_FOIS = ["/api/alerts/status", "/api/collections/status", "/api/messages/status"];
+  // Plusieurs photos et identifications (migration 0047) : une disponibilité de plus, demandée de même.
+  const TOUTES_UNE_FOIS = ["/api/alerts/status", "/api/collections/status", "/api/messages/status", "/api/posts/status"];
+  const trie = (list: string[]) => [...list].sort();
   const UNE_COLLECTION = [{ id: "c1", name: "Week-end", itemCount: 2, coverUrls: [] }] as never;
 
   // Écrans (hors barre d'onglets) qui ne lisaient que l'état en mémoire, et ce qu'ils cachaient.
@@ -237,6 +243,8 @@ describe("écran ouvert directement par son adresse, ou rechargé (appels du ser
     { ecran: "app/(app)/collection-ami.tsx", lit: ["const messages = useMessagesStatus();", "const collections = useCollectionsStatus();", "canTalk={messages.enabled}"], cachait: "« En parler » et « Signaler cette collection »" },
     { ecran: "app/(app)/envie.tsx", lit: ["const messages = useMessagesStatus();", "const collections = useCollectionsStatus();", "{collections.enabled ? (", "{messages.enabled ? ("], cachait: "« Ajouter à une collection » et l'envoi dans une conversation" },
     { ecran: "app/(app)/settings.tsx", lit: ["<MessagesFromSetting />", "<MessagePushSetting />"], cachait: "« Qui peut m'écrire »" },
+    // Migration 0047 : la nouvelle publication ne demande rien elle-même non plus.
+    { ecran: "app/(app)/post-item/new.tsx", lit: ["const extras = usePostExtrasStatus();", "{extras.peopleTags ? ("], cachait: "le choix de plusieurs photos et « Identifier des personnes »" },
   ];
 
   beforeEach(() => {
@@ -250,12 +258,13 @@ describe("écran ouvert directement par son adresse, ou rechargé (appels du ser
     // L'écran ne lit que l'état en mémoire, et ne demande rien lui-même…
     const texte = source(ecran);
     for (const lecture of lit) expect(texte).toContain(lecture);
-    expect(texte).not.toMatch(/fetch(Messages|Collections)Status/);
+    expect(texte).not.toMatch(/fetch(Messages|Collections|PostExtras)Status/);
     // … c'est la mise en page au-dessus de lui (et de la barre d'onglets) qui s'en assure.
     const { demandees } = serveur(DISPONIBLE);
-    const { miseEnPage, messagesStatus, collectionsStatus, wishAlertsStatus, friendSectionVisible } = await app();
+    const { miseEnPage, messagesStatus, collectionsStatus, wishAlertsStatus, postExtrasStatus, friendSectionVisible } = await app();
     await miseEnPage(LOUISE);
     expect(demandees()).toEqual(TOUTES_UNE_FOIS);
+    expect(postExtrasStatus()).toEqual({ carousel: true, peopleTags: true });
     expect(messagesStatus()).toEqual({ enabled: true, unreadCount: 2, push: false, actions: false });
     expect(collectionsStatus()).toEqual({ enabled: true, reportable: true });
     expect(wishAlertsStatus().available).toBe(true);
@@ -282,8 +291,9 @@ describe("écran ouvert directement par son adresse, ou rechargé (appels du ser
 
   it("le serveur dit « indisponible » : tout reste caché, et un deuxième écran ne redemande rien", async () => {
     const { demandees } = serveur(INDISPONIBLE);
-    const { miseEnPage, messagesStatus, collectionsStatus, wishAlertsStatus, friendSectionVisible } = await app();
+    const { miseEnPage, messagesStatus, collectionsStatus, wishAlertsStatus, postExtrasStatus, friendSectionVisible } = await app();
     await miseEnPage(LOUISE);
+    expect(postExtrasStatus()).toEqual({ carousel: false, peopleTags: false });
     expect(messagesStatus().enabled).toBe(false);
     expect(friendSectionVisible(collectionsStatus(), UNE_COLLECTION)).toBe(false);
     expect(wishAlertsStatus().available).toBe(false);
@@ -323,11 +333,11 @@ describe("écran ouvert directement par son adresse, ou rechargé (appels du ser
     expect(collectionsStatus().enabled).toBe(true);
     // Changement d'écran : les messages non lus sont relus, les collections (connues) non.
     await barreOnglets();
-    expect(demandees()).toEqual([...TOUTES_UNE_FOIS, "/api/messages/status"]);
+    expect(demandees()).toEqual(trie([...TOUTES_UNE_FOIS, "/api/messages/status"]));
     // Puis un profil ouvert depuis le fil : rien de plus.
     const { ensureStatuses } = await import("../src/lib/api");
     await ensureStatuses(LOUISE);
-    expect(demandees()).toEqual([...TOUTES_UNE_FOIS, "/api/messages/status"]);
+    expect(demandees()).toEqual(trie([...TOUTES_UNE_FOIS, "/api/messages/status"]));
   });
 
   it("profil ouvert par son adresse, puis retour aux onglets : seule la relecture habituelle des messages part", async () => {
@@ -335,7 +345,7 @@ describe("écran ouvert directement par son adresse, ou rechargé (appels du ser
     const { miseEnPage, barreOnglets } = await app();
     await miseEnPage(LOUISE);
     await barreOnglets();
-    expect(demandees()).toEqual([...TOUTES_UNE_FOIS, "/api/messages/status"]);
+    expect(demandees()).toEqual(trie([...TOUTES_UNE_FOIS, "/api/messages/status"]));
   });
 
   it("l'écran des résultats, qui lisait déjà lui-même, n'est pas doublé", async () => {
@@ -345,7 +355,7 @@ describe("écran ouvert directement par son adresse, ou rechargé (appels du ser
     await miseEnPage(LOUISE);
     await ecran;
     // Les alertes : une fois par l'écran, une fois pour le jeton — comme avant.
-    expect(demandees()).toEqual(["/api/alerts/status", ...TOUTES_UNE_FOIS]);
+    expect(demandees()).toEqual(trie(["/api/alerts/status", ...TOUTES_UNE_FOIS]));
   });
 });
 
@@ -363,22 +373,30 @@ describe("branchement dans l'app", () => {
 
   it("chaque demande de disponibilité passe par le même suivi", () => {
     const api = source("lib/api.ts");
-    expect(api).toContain("const statuses = createStatusLoader({ messages: loadMessagesStatus, collections: loadCollectionsStatus, alerts: loadWishAlertsStatus }, () => {");
-    // Changement de compte : les trois états en mémoire redeviennent « indisponible ».
-    for (const reset of ["setMessagesStatus({ enabled: false, unreadCount: 0, push: false });", "setCollectionsStatus({ enabled: false, reportable: false });", "setWishAlertsStatus(ALERTS_UNAVAILABLE);"]) expect(api).toContain(reset);
-    for (const kind of ["messages", "collections", "alerts"]) expect(api).toContain(`return statuses.request("${kind}");`);
+    expect(api).toContain(
+      "const statuses = createStatusLoader({ messages: loadMessagesStatus, collections: loadCollectionsStatus, alerts: loadWishAlertsStatus, posts: loadPostExtrasStatus }, () => {"
+    );
+    // Changement de compte : les quatre états en mémoire redeviennent « indisponible ».
+    for (const reset of [
+      "setMessagesStatus({ enabled: false, unreadCount: 0, push: false });",
+      "setCollectionsStatus({ enabled: false, reportable: false });",
+      "setWishAlertsStatus(ALERTS_UNAVAILABLE);",
+      "setPostExtrasStatus(POST_EXTRAS_UNAVAILABLE);",
+    ])
+      expect(api).toContain(reset);
+    for (const kind of ["messages", "collections", "alerts", "posts"]) expect(api).toContain(`return statuses.request("${kind}");`);
     expect(api).toContain("return statuses.ensure(userId);");
     // Une seule lecture de chaque adresse dans tout le code de l'app.
-    for (const chemin of ["/api/messages/status", "/api/collections/status", "/api/alerts/status"]) {
+    for (const chemin of ["/api/messages/status", "/api/collections/status", "/api/alerts/status", "/api/posts/status"]) {
       expect(api.split(`authorizedFetch("${chemin}")`)).toHaveLength(2);
     }
   });
 
   it("tout écran qui lit une disponibilité est sous cette mise en page", () => {
     const lecteurs = files(join(SRC, "app"))
-      .filter((path) => /use(Messages|Collections|WishAlerts)Status\(\)/.test(readFileSync(path, "utf8")))
+      .filter((path) => /use(Messages|Collections|WishAlerts|PostExtras)Status\(\)/.test(readFileSync(path, "utf8")))
       .map((path) => relative(SRC, path).split("\\").join("/"));
-    expect(lecteurs).toEqual(expect.arrayContaining(["app/(app)/profil.tsx", "app/(app)/collection-ami.tsx", "app/(app)/envie.tsx", "app/(app)/spot/result.tsx"]));
+    expect(lecteurs).toEqual(expect.arrayContaining(["app/(app)/profil.tsx", "app/(app)/collection-ami.tsx", "app/(app)/envie.tsx", "app/(app)/spot/result.tsx", "app/(app)/post-item/new.tsx"]));
     for (const ecran of lecteurs) expect(ecran.startsWith("app/(app)/")).toBe(true);
   });
 

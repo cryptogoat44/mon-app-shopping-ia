@@ -169,9 +169,13 @@ describe("l'app dit au serveur qu'elle comprend la part du mois (v=2)", () => {
 
 describe("textes FR et EN", () => {
   it("la section est ajoutée à la fin des deux catalogues, après celle du lot précédent, avec les mêmes clés, au vouvoiement", () => {
-    expect(Object.keys(fr).at(-1)).toBe("monthlyQuota");
-    expect(Object.keys(en).at(-1)).toBe("monthlyQuota");
-    expect(Object.keys(fr).indexOf("monthlyQuota")).toBeGreaterThan(Object.keys(fr).indexOf("messageActions"));
+    // Juste après celle du lot précédent (« messages, plus de confort »), dans les deux catalogues ;
+    // les sections des lots fusionnés après elle (vie sociale, découverte) viennent à sa suite.
+    for (const catalog of [fr, en]) {
+      const keys = Object.keys(catalog);
+      expect(keys.indexOf("monthlyQuota")).toBe(keys.indexOf("messageActions") + 1);
+    }
+    expect(Object.keys(en)).toEqual(Object.keys(fr));
     expect(Object.keys(en.monthlyQuota).sort()).toEqual(Object.keys(fr.monthlyQuota).sort());
     const texts = [fr.monthlyQuota.remaining(3), fr.monthlyQuota.usedUp(100, "novembre"), fr.monthlyQuota.usedUpUnknown, fr.monthlyQuota.backOn("1er décembre"), fr.monthlyQuota.backSoon];
     for (const text of texts) expect(text).not.toMatch(/\b(tu|toi|ton|ta|tes)\b/i);

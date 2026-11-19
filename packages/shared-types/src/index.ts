@@ -34,6 +34,15 @@ export interface Profile {
    * confirmations de lecture (migration 0043 absente, ou serveur plus ancien) ;
    * l'app ne montre alors pas le réglage. */
   readReceipts?: boolean;
+  /** Compte privé (migration 0045) ; absent tant que la migration manque :
+   * l'app cache alors le réglage. */
+  isPrivate?: boolean;
+  /** Demandes d'abonnement reçues, en attente (migration 0045). */
+  followRequestsCount?: number;
+  /** Qui peut vous mentionner (migration 0046) ; absent tant que la migration manque : l'app cache alors le réglage. */
+  mentionsFrom?: MentionsFrom;
+  /** Le lien affiché sous votre bio, ou null (migration 0049) ; absent tant que la migration manque : l'app cache alors le champ. */
+  linkUrl?: string | null;
 }
 
 /** Réglage « Qui peut m'envoyer des pièces » : les comptes que je suis (par
@@ -100,6 +109,8 @@ export interface UpdateMeRequest {
   username: string;
   displayName: string;
   bio?: string;
+  /** Lien en bio (migration 0049) : absent, le lien ne change pas ; null ou "" le retire. */
+  linkUrl?: string | null;
 }
 
 // Bio du profil (lot « profil et icône des réglages ») : 160 caractères et
@@ -726,6 +737,10 @@ export interface PublicProfile {
   displayName: string;
   avatarUrl: string | null;
   isFollowing: boolean;
+  /** Compte privé (migration 0045) ; absent d'un serveur plus ancien. */
+  isPrivate?: boolean;
+  /** Suivre / Demandé / Abonné(e) (migration 0045) ; absent d'un serveur plus ancien. */
+  followState?: FollowState;
 }
 
 /** Profil d'un autre utilisateur (Lot Q, décision 6). Jamais son Vault,
@@ -743,6 +758,15 @@ export interface UserProfile {
   isFollowing: boolean;
   /** true quand c'est le profil de la personne connectée elle-même. */
   isMe: boolean;
+  /** Compte privé (migration 0045). Pour un visiteur qui n'est pas un abonné
+   * accepté, le profil ne montre alors que nom, photo, bio et compteurs. */
+  isPrivate?: boolean;
+  /** Suivre / Demandé / Abonné(e) (migration 0045). */
+  followState?: FollowState;
+  /** Son lien en bio (migration 0049) : null s'il n'en a pas ou s'il est
+   * suspendu ; absent sans 0049, et pour qui n'est pas un abonné accepté de
+   * son compte privé (qui ne reçoit que nom, photo, bio et compteurs). */
+  linkUrl?: string | null;
 }
 
 /** « wish » (lot 5) : une envie republiée sur son profil — jamais un achat,
@@ -823,6 +847,17 @@ export interface Post {
   viewerHasReacted: boolean;
   /** Commentaires visibles (Lot F). */
   commentCount: number;
+  /** Toutes les photos, la première comprise, quand il y en a au moins deux (migration 0047). */
+  media?: PostPhoto[];
+  /** Membres identifiés que ce lecteur peut voir (migration 0047) ; absent quand il n'y en a aucun. */
+  people?: PostAuthor[];
+  /** Le lecteur a enregistré cette publication (migration 0048) ; absent sans 0048 : l'app cache le signet. */
+  viewerHasSaved?: boolean;
+  /** Sa collection où elle est rangée, ou null (migration 0048) : vu de lui seul. */
+  viewerSavedCollectionId?: string | null;
+  /** Épinglée sur le profil depuis cette date, ou null (migration 0049) : sur
+   * ses propres publications seulement ; absent sans 0049 (l'app cache l'entrée). */
+  pinnedAt?: string | null;
 }
 
 // Commentaires (Lot F, section 5.A du programme) : à plat, 1 000 caractères
@@ -837,6 +872,15 @@ export interface PostComment {
   author: PostAuthor;
   /** Son propre commentaire, ou un commentaire sous sa propre publication. */
   canDelete: boolean;
+  /** Réponse : le commentaire d'origine (migration 0046). Absent ou null : commentaire ordinaire. */
+  parentId?: string | null;
+  /** « J'aime » du commentaire, sans les comptes en blocage avec le lecteur (migration 0046, « v=2 »). */
+  likeCount?: number;
+  viewerHasLiked?: boolean;
+  /** Mentions à transformer en liens ; tout autre « @pseudo » reste un simple texte. */
+  mentions?: CommentMention[];
+  /** Réponses montrées à ce lecteur (commentaire d'origine seulement). */
+  replyCount?: number;
 }
 
 export interface CommentsPage {
@@ -1015,9 +1059,36 @@ export interface RecordConsentsRequest {
   consents: ConsentInput[];
 }
 
-/** « piece_received » (lot 5) : une personne vous a envoyé une pièce (in-app, jamais push). */
-export type NotificationType = "follow" | "like" | "comment" | "moderation" | "report_handled" | "piece_received";
-export const NOTIFICATION_TYPES = ["follow", "like", "comment", "moderation", "report_handled", "piece_received"] as const satisfies readonly NotificationType[];
+/** « piece_received » (lot 5) : une personne vous a envoyé une pièce (in-app, jamais push).
+ * « follow_request » et « follow_accepted » (compte privé, migration 0045),
+ * « reply » et « mention » (commentaires, migration 0046), « tag » (identification
+ * sur une publication, migration 0047) :
+ * envoyés seulement à une app qui les demande (LEGACY_NOTIFICATION_TYPES, en fin de fichier). */
+export type NotificationType =
+  | "follow"
+  | "like"
+  | "comment"
+  | "moderation"
+  | "report_handled"
+  | "piece_received"
+  | "follow_request"
+  | "follow_accepted"
+  | "reply"
+  | "mention"
+  | "tag";
+export const NOTIFICATION_TYPES = [
+  "follow",
+  "like",
+  "comment",
+  "moderation",
+  "report_handled",
+  "piece_received",
+  "follow_request",
+  "follow_accepted",
+  "reply",
+  "mention",
+  "tag",
+] as const satisfies readonly NotificationType[];
 
 export interface AppNotification {
   id: string;
@@ -1098,9 +1169,17 @@ export type ModerationPreview =
       privacy: PrivacyLevel;
       createdAt: string;
       hidden: boolean;
+      /** Toutes les photos (miniatures), la première comprise, quand il y en a au moins deux (migration 0047). */
+      images?: string[];
     }
   | { kind: "comment"; author: ModerationAuthor; body: string; postId: string; createdAt: string; hidden: boolean }
-  | { kind: "user"; author: ModerationAuthor; bio: string | null }
+  | {
+      kind: "user";
+      author: ModerationAuthor;
+      bio: string | null;
+      /** Lien en bio (migration 0049), en texte : « Retirer la bio » le retire aussi. Absent sans lien ou sans 0049. */
+      linkUrl?: string;
+    }
   | { kind: "piece"; author: ModerationAuthor; title: string; imageUrl: string | null; imageRemoved: boolean; createdAt: string; hidden: boolean }
   | {
       kind: "message";
@@ -1201,7 +1280,8 @@ export interface ModerationItem {
    * pièce envoyée), encore en place — elle peut être retirée. */
   canRemoveImage: boolean;
   /** Lot modération des profils (migration 0037) : profil signalé dont la bio
-   * peut être retirée (il en a une, et la base a la migration). */
+   * peut être retirée (il en a une, ou un lien en bio avec 0049, que ce
+   * retrait emporte aussi ; et la base a la migration). */
   canRemoveBio: boolean;
   /** Idem pour sa photo de profil. */
   canRemoveAvatar: boolean;
@@ -1547,6 +1627,9 @@ export interface CollectionsStatus {
    * ami peut être signalée. Faux (ou absent : ancien serveur) : l'app cache
    * « Signaler ». Le serveur l'envoie toujours. */
   reportable?: boolean;
+  /** Publications enregistrées (migration 0048) : signet et liste « Publications
+   * enregistrées ». Faux ou absent (ancien serveur) : l'app les cache. */
+  savedPosts?: boolean;
 }
 
 /** Codes d'erreur propres aux collections. */
@@ -2391,4 +2474,307 @@ export function parseSearchMonthlyQuotaError(body: unknown): { resumesOn: string
   if (fieldOf(body, "error") !== SEARCH_MONTHLY_QUOTA_ERROR) return null;
   const resumesOn = fieldOf(body, "resumesOn");
   return { resumesOn: isCalendarDay(resumesOn) ? resumesOn : null };
+}
+
+// ---- Compte privé et demandes d'abonnement (lot « vie sociale », migration 0045) ----
+
+/** Ce que le bouton d'abonnement montre : « Suivre », « Demandé » (demande en
+ * attente auprès d'un compte privé) ou « Abonné(e) ». */
+export type FollowState = "none" | "following" | "requested";
+export const FOLLOW_STATES = ["none", "following", "requested"] as const satisfies readonly FollowState[];
+
+/** Types de notification compris par les apps d'avant le lot « vie sociale ».
+ * Une app qui n'envoie pas « v=2 » ne reçoit que ceux-là : elle afficherait
+ * tout autre type comme un « j'aime ». */
+export const LEGACY_NOTIFICATION_TYPES = ["follow", "like", "comment", "moderation", "report_handled", "piece_received"] as const satisfies readonly NotificationType[];
+
+/** Paramètre d'adresse par lequel l'app dit qu'elle comprend le nouveau
+ * vocabulaire (nouveaux types de notification, réponse de l'abonnement) ; sa
+ * valeur est CLIENT_LEVEL (section « Messages, plus de confort »). */
+export const CLIENT_LEVEL_PARAM = "v";
+
+/** PUT /api/me/private-account. */
+export interface UpdatePrivateAccountRequest {
+  isPrivate: boolean;
+}
+
+/** POST /api/follows/:userId?v=2 : abonné(e) tout de suite (compte public),
+ * ou demande envoyée (compte privé). */
+export interface FollowResponse {
+  state: Exclude<FollowState, "none">;
+}
+
+/** Une ligne d'une liste de membres (demandes reçues ; plus tard abonnés,
+ * abonnements, « Aimé par »…). Jamais de date : la liste ne dit pas quand. */
+export interface MemberRow extends PublicProfile {
+  isPrivate: boolean;
+  followState: FollowState;
+  isMe: boolean;
+}
+
+/** Une page d'une liste de membres. Une page peut être plus courte que
+ * prévu, ou vide, alors qu'il en reste : seul `nextCursor` dit s'il y a une suite. */
+export interface MemberPage {
+  members: MemberRow[];
+  nextCursor: string | null;
+}
+
+/** Codes d'erreur du compte privé (champ « error »). */
+export const PRIVATE_ACCOUNTS_UNAVAILABLE_ERROR = "private_accounts_unavailable";
+export const PRIVATE_ACCOUNT_UPDATE_REQUIRED_ERROR = "private_account_update_required";
+export const FOLLOW_REQUEST_LIMIT_ERROR = "follow_request_limit";
+
+// ---- Listes des abonnés et des abonnements (lot « vie sociale », sans migration) ----
+
+/** Lignes LUES par page d'une liste de membres (GET /api/users/:id/followers
+ * et /following). Une page en montre parfois moins : voir MemberPage. */
+export const MEMBER_LIST_PAGE_SIZE = 30;
+
+/** 403 : les listes d'un compte privé ne s'ouvrent qu'à ses abonnés acceptés. */
+export const PRIVATE_ACCOUNT_ERROR = "private_account";
+/** 429 : trop de listes ouvertes en une heure. */
+export const MEMBER_LIST_LIMIT_ERROR = "member_list_limit";
+
+// ---- Liste « Aimé par » (lot « vie sociale », sans migration) ----
+
+/** 429 : trop de « j'aime » posés ou retirés en une heure (POST /api/posts/:id/react). */
+export const POST_REACT_LIMIT_ERROR = "post_react_limit";
+
+// ---- Commentaires : réponses, « j'aime », mentions (lot « vie sociale », migration 0046) ----
+
+/** Réglage « Qui peut me mentionner » (dans un commentaire, plus tard sur une
+ * photo) : tout le monde, les comptes que je suis, ou personne. */
+export type MentionsFrom = "everyone" | "following" | "nobody";
+export const MENTIONS_FROM = ["everyone", "following", "nobody"] as const satisfies readonly MentionsFrom[];
+/** Valeur de départ (migration 0046) : seuls les comptes que vous suivez. */
+export const DEFAULT_MENTIONS_FROM: MentionsFrom = "following";
+
+/** Mentions prises en compte dans un même texte ; les suivantes restent un simple texte. */
+export const MENTION_MAX_PER_TEXT = 5;
+
+/** Un « @pseudo » trouvé dans un texte : le pseudo en minuscules, et sa place
+ * (de l'arobase à la fin du pseudo). */
+export interface MentionSpan {
+  handle: string;
+  start: number;
+  end: number;
+}
+
+// Un « @ » compte seulement en début de texte ou après un caractère qui n'est
+// ni une lettre, ni un chiffre, ni « _ », « . » ou « @ » : une adresse e-mail
+// n'est jamais une mention. Le pseudo fait 3 à 20 caractères (comme à
+// l'inscription) et s'arrête là : un mot plus long n'est pas une mention.
+const MENTION_PATTERN = /(^|[^a-z0-9_.@])@([a-z0-9_]{3,20})(?![a-z0-9_])/gi;
+
+/** Tous les « @pseudo » d'un texte, dans l'ordre, doublons compris. */
+export function findMentions(text: string): MentionSpan[] {
+  const spans: MentionSpan[] = [];
+  for (const match of text.matchAll(MENTION_PATTERN)) {
+    const start = (match.index ?? 0) + (match[1] ?? "").length;
+    const handle = (match[2] ?? "").toLowerCase();
+    spans.push({ handle, start, end: start + 1 + handle.length });
+  }
+  return spans;
+}
+
+/** Les pseudos mentionnés dans un texte : en minuscules, sans doublon, les
+ * MENTION_MAX_PER_TEXT premiers seulement. */
+export function extractMentions(text: string): string[] {
+  const handles: string[] = [];
+  for (const span of findMentions(text)) {
+    if (handles.includes(span.handle)) continue;
+    handles.push(span.handle);
+    if (handles.length >= MENTION_MAX_PER_TEXT) break;
+  }
+  return handles;
+}
+
+/** Une mention acceptée : le pseudo tel qu'il est écrit, et le compte. */
+export interface CommentMention {
+  handle: string;
+  userId: string;
+}
+
+/** POST /api/posts/:id/comments. `parentId` : le commentaire auquel on répond. */
+export interface CreateCommentRequest {
+  body: string;
+  parentId?: string;
+}
+
+/** PUT /api/comments/:id/like. */
+export interface LikeCommentRequest {
+  liked: boolean;
+}
+export interface LikeCommentResponse {
+  likeCount: number;
+  viewerHasLiked: boolean;
+}
+
+/** PUT /api/me/mentions-from. */
+export interface UpdateMentionsFromRequest {
+  mentionsFrom: MentionsFrom;
+}
+
+/** 404 : réponses, « j'aime » des commentaires et réglage des mentions pas encore disponibles (migration 0046 absente). */
+export const COMMENT_THREADS_UNAVAILABLE_ERROR = "comment_threads_unavailable";
+/** 429 : trop de « j'aime » posés ou retirés sur des commentaires en une heure. */
+export const COMMENT_LIKE_LIMIT_ERROR = "comment_like_limit";
+
+// ---- Plusieurs photos, identifier des personnes (lot « vie sociale », migration 0047) ----
+
+/** Photos d'une publication « Une photo », la première comprise. */
+export const POST_PHOTOS_MAX = 5;
+/** Membres identifiés sur une publication, au plus. */
+export const PEOPLE_TAGS_MAX = 5;
+/** Les photos 2 à 5 s'ajoutent dans les minutes qui suivent la publication, plus après. */
+export const POST_MEDIA_WINDOW_MIN = 10;
+
+/** Une photo d'une publication : la version d'affichage et sa miniature. */
+export interface PostPhoto {
+  url: string;
+  thumbUrl: string;
+}
+
+/** GET /api/posts/status : la base sait-elle garder plusieurs photos et des identifications ? */
+export interface PostExtrasStatus {
+  carousel: boolean;
+  peopleTags: boolean;
+}
+
+/** POST /api/posts/:id/media (201) : toutes les photos de la publication, la première comprise. */
+export interface AddPostMediaResponse {
+  media: PostPhoto[];
+}
+
+/** 404 : plusieurs photos et identifications pas encore disponibles (migration 0047 absente). */
+export const POST_EXTRAS_UNAVAILABLE_ERROR = "post_extras_unavailable";
+/** 409 : plus de 10 minutes après la publication, elle ne reçoit plus de photo. */
+export const POST_MEDIA_CLOSED_ERROR = "post_media_closed";
+/** 409 : la publication a déjà ses 5 photos. */
+export const POST_MEDIA_FULL_ERROR = "post_media_full";
+/** 409 : une autre photo de la même publication arrivait au même moment. */
+export const POST_MEDIA_CONFLICT_ERROR = "post_media_conflict";
+/** 429 : trop de photos ajoutées en une heure. */
+export const POST_MEDIA_LIMIT_ERROR = "post_media_limit";
+/** 404 : identification introuvable (ou pas la vôtre). */
+export const PEOPLE_TAG_NOT_FOUND_ERROR = "people_tag_not_found";
+
+// ---- Publications enregistrées (lot « vie sociale », migration 0048) ----
+
+/** Publications enregistrées par membre, au plus. */
+export const SAVED_POSTS_MAX = 1000;
+/** Lignes LUES par page de GET /api/saved-posts. Une page en montre parfois
+ * moins, ou aucune, alors qu'il en reste : seul `nextCursor` dit s'il y a une suite. */
+export const SAVED_POSTS_PAGE_SIZE = 18;
+
+/** PUT /api/posts/:id/save : enregistrer, ou ranger ailleurs. `collectionId` :
+ * une de vos collections ; null : sans collection ; absent : la collection
+ * actuelle reste si la publication est déjà enregistrée (sans collection sinon). */
+export interface SavePostRequest {
+  collectionId?: string | null;
+}
+export interface SavePostResponse {
+  saved: true;
+  collectionId: string | null;
+}
+
+/** GET /api/saved-posts?cursor=&collectionId= : vos publications enregistrées
+ * que vous pouvez encore voir, les plus récemment enregistrées d'abord. */
+export interface SavedPostsPage {
+  posts: Post[];
+  nextCursor: string | null;
+}
+
+/** 404 : publications enregistrées pas encore disponibles (migration 0048 absente). */
+export const SAVED_POSTS_UNAVAILABLE_ERROR = "saved_posts_unavailable";
+/** 409 : SAVED_POSTS_MAX publications enregistrées déjà. */
+export const SAVED_POSTS_FULL_ERROR = "saved_posts_full";
+/** 429 : trop de publications enregistrées en une heure. */
+export const SAVE_POST_LIMIT_ERROR = "save_post_limit";
+
+// ---- Épingles et lien en bio (lot « vie sociale », migration 0049) ----
+
+/** Publications épinglées en haut d'un profil, au plus (des photos seulement). */
+export const PINNED_POSTS_MAX = 3;
+/** Longueur maximale d'un lien en bio, une fois mis en forme (la base la vérifie aussi). */
+export const BIO_LINK_MAX_LENGTH = 200;
+
+/** PUT /api/posts/:id/pin : épingler (true) ou retirer l'épingle (false). */
+export interface PinPostRequest {
+  pinned: boolean;
+}
+export interface PinPostResponse {
+  pinnedAt: string | null;
+}
+
+/** GET /api/users/:userId/posts : la première page porte aussi `pinned` (au
+ * plus PINNED_POSTS_MAX, les plus récemment épinglées d'abord, filtrées comme
+ * la page) ; ces publications restent aussi à leur place dans `posts`. Absent
+ * sans 0049, sur les pages suivantes, et pour qui n'est pas un abonné accepté
+ * d'un compte privé (la page entière est alors vide). */
+export interface UserPostsPage extends FeedPage {
+  pinned?: Post[];
+}
+
+/** 404 : épingles pas encore disponibles (migration 0049 absente). */
+export const PINS_UNAVAILABLE_ERROR = "pins_unavailable";
+/** 400 : seule une publication « Une photo » s'épingle. */
+export const PIN_NOT_ALLOWED_ERROR = "pin_not_allowed";
+/** 409 : déjà PINNED_POSTS_MAX publications épinglées. */
+export const PIN_LIMIT_ERROR = "pin_limit";
+/** 404 : lien en bio pas encore disponible (migration 0049 absente) ; rien du profil n'est enregistré. */
+export const PROFILE_LINK_UNAVAILABLE_ERROR = "profile_link_unavailable";
+/** 400 : lien refusé (voir checkBioLink). */
+export const LINK_INVALID_ERROR = "link_invalid";
+/** 400 : lien de plus de BIO_LINK_MAX_LENGTH caractères. */
+export const LINK_TOO_LONG_ERROR = "link_too_long";
+/** 429 : trop de changements de lien en 24 heures. */
+export const PROFILE_LINK_LIMIT_ERROR = "profile_link_limit";
+
+export type BioLinkProblem = "too_long" | "invalid";
+/** `url` : l'adresse à enregistrer, mise en forme (null : pas de lien). */
+export type BioLinkCheck = { ok: true; url: string | null } | { ok: false; problem: BioLinkProblem };
+
+// Espaces (y compris insécables) et caractères de contrôle, n'importe où :
+// refusés, jamais nettoyés (un navigateur les retire en silence).
+const BIO_LINK_FORBIDDEN = /[\s\u0000-\u001f\u007f-\u009f]/u;
+const BIO_LINK_LABEL = /^[a-z0-9-]+$/;
+
+/** Le lien en bio : LA règle, la même au serveur (seul juge) et dans l'app
+ * (pour prévenir tout de suite). Après avoir retiré les espaces autour : vide
+ * = pas de lien ; sinon une adresse qui commence par « https:// » suivi du nom
+ * d'un site, 200 caractères au plus, sans espace ni caractère de contrôle,
+ * sans nom ni mot de passe (« nom@site »), sans autre port que 443. Le nom du
+ * site : des lettres sans accent, des chiffres, des points et des tirets
+ * seulement, au moins un point, ni adresse IP, ni « localhost » (ni « .local ») ;
+ * un nom de site internationalisé est refusé sous ses deux formes (caractères
+ * non ASCII, ou partie « xn-- » une fois lu), car un sosie d'une marque connue
+ * ne se distingue pas sur un écran de téléphone. Rendu tel que le lit le
+ * parseur d'URL standard (WHATWG). */
+export function checkBioLink(input: string): BioLinkCheck {
+  const invalid: BioLinkCheck = { ok: false, problem: "invalid" };
+  const value = input.trim();
+  if (value === "") return { ok: true, url: null };
+  if (value.length > BIO_LINK_MAX_LENGTH) return { ok: false, problem: "too_long" };
+  if (BIO_LINK_FORBIDDEN.test(value) || !/^https:\/\/[^/\\]/i.test(value)) return invalid;
+  // Le nom du site tel qu'il est écrit, avant toute conversion : ASCII visible, sans « @ ».
+  const authority = value.slice("https://".length).split(/[/\\?#]/, 1)[0] ?? "";
+  if (!/^[\x21-\x7e]+$/.test(authority) || authority.includes("@")) return invalid;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return invalid;
+  }
+  if (url.protocol !== "https:" || url.username !== "" || url.password !== "" || url.port !== "") return invalid;
+  const host = url.hostname;
+  const labels = host.split(".");
+  if (labels.length < 2 || labels.some((label) => !BIO_LINK_LABEL.test(label) || label.startsWith("xn--"))) return invalid;
+  // Une extension en lettres : ni adresse IP (127.0.0.1, 0x7f.1…), ni extension en chiffres.
+  if (!/^[a-z]{2,63}$/.test(labels[labels.length - 1] ?? "")) return invalid;
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) return invalid;
+  const stored = url.href;
+  if (stored.length > BIO_LINK_MAX_LENGTH) return { ok: false, problem: "too_long" };
+  if (!stored.startsWith("https://") || BIO_LINK_FORBIDDEN.test(stored)) return invalid;
+  return { ok: true, url: stored };
 }

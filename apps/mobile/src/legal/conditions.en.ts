@@ -71,6 +71,7 @@ export const termsOfUseEn: LegalDocument = {
           "content that infringes the rights of others (copyright, trademarks, image rights);",
           "spam, scams or unsolicited advertising.",
         ],
+        "These rules also apply to the link you display on your profile, as they do to your bio.",
         `You may also not use ${BRAND} in an automated way (bots, mass data collection) or attempt to circumvent its protections.`,
       ],
     },

@@ -5,7 +5,9 @@ import { z } from "zod";
 import {
   APP_LOCALES,
   AVATAR_MAX_BYTES,
+  DEFAULT_MENTIONS_FROM,
   DEFAULT_MESSAGES_FROM,
+  MENTIONS_FROM,
   MESSAGES_FROM,
   PIECE_SENDS_FROM,
   PRIVACY_LEVELS,
@@ -14,7 +16,12 @@ import {
   singleLine,
   type Profile,
 } from "@monapp/shared-types";
-import { DatabaseReadError, parseInput } from "../lib/validation.js";
+import { DatabaseReadError, WEB_URL_MAX_LENGTH, parseDbRows, parseInput } from "../lib/validation.js";
+import { PRIVATE_ACCOUNTS_UNAVAILABLE, privateAccountsReady } from "../lib/audience.js";
+import { toMemberRows } from "../lib/memberRows.js";
+import { COMMENT_THREADS_UNAVAILABLE, commentThreadsReady } from "../lib/comments.js";
+import { postExtrasReady } from "../lib/postExtras.js";
+import { dropUnseeableTags } from "../lib/peopleTags.js";
 import { isFileTooLargeError, isTooManyPartsError } from "../lib/multipartErrors.js";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { isAdmin } from "../lib/moderation.js";
@@ -23,6 +30,10 @@ import { MESSAGES_UNAVAILABLE, messagesReady } from "../lib/messaging.js";
 import { READ_RECEIPTS_UNAVAILABLE, readReceiptsReady, saveReadReceipts } from "../lib/readReceipts.js";
 import { emptyUserFolder, extractOwnedStoragePath, removeOwnedFiles } from "../lib/storage.js";
 import { AVATAR_BUCKET } from "../lib/profileModeration.js";
+import { PROFILE_LINK_UNAVAILABLE, profileExtrasReady, profileExtrasShown } from "../lib/profileExtras.js";
+import { LINK_INVALID, LINK_TOO_LONG, bioLinkProblem, bioLinkTexts } from "../lib/bioLink.js";
+import { RATE_LIMITS } from "../lib/rateLimits.js";
+import { consumeRateLimit } from "../plugins/rateLimit.js";
 
 /** Comptes dont une photo de profil est en cours d'envoi (un seul envoi à la fois par compte). */
 const avatarUploads = new Set<string>();
@@ -49,6 +60,9 @@ const updateMeSchema = z.object({
   // Bio : normalisée puis contrôlée dans la route (160 caractères, 3 lignes :
   // normalizeBio, bioProblem). Ici, seul un texte démesuré est écarté d'emblée.
   bio: z.string().max(BIO_RAW_MAX_LENGTH).nullable().optional(),
+  // Lien en bio (migration 0049) : absent = inchangé ; null ou "" = retiré.
+  // Contrôlé dans la route (lib/bioLink.ts) ; ici, seul un texte démesuré est écarté.
+  linkUrl: z.string().max(WEB_URL_MAX_LENGTH).nullable().optional(),
 });
 
 const updateLocaleSchema = z.object({ locale: z.enum(APP_LOCALES) });
@@ -56,6 +70,8 @@ const updatePieceSendsFromSchema = z.object({ pieceSendsFrom: z.enum(PIECE_SENDS
 const updateMessagesFromSchema = z.object({ messagesFrom: z.enum(MESSAGES_FROM) });
 // Un vrai oui ou non : ni « true » en texte, ni 1.
 const updateReadReceiptsSchema = z.object({ readReceipts: z.boolean() });
+const updatePrivateAccountSchema = z.object({ isPrivate: z.boolean() });
+const updateMentionsFromSchema = z.object({ mentionsFrom: z.enum(MENTIONS_FROM) });
 
 // Ligne brute de la table `profiles` (colonnes en snake_case, cf. schema.sql), relue sans lui faire confiance.
 const profileRowSchema = z.object({
@@ -72,6 +88,12 @@ const profileRowSchema = z.object({
   messages_from: z.enum(MESSAGES_FROM).default(DEFAULT_MESSAGES_FROM),
   // Lot « messages vus » (migration 0043) ; absente tant que la colonne n'existe pas.
   read_receipts: z.boolean().nullable().optional(),
+  // Compte privé (migration 0045) ; public tant que la colonne n'existe pas.
+  is_private: z.boolean().default(false),
+  // Mentions (migration 0046) ; valeur de départ tant que la colonne n'existe pas.
+  mentions_from: z.enum(MENTIONS_FROM).default(DEFAULT_MENTIONS_FROM),
+  // Lien en bio (migration 0049) ; absent tant que la colonne n'existe pas.
+  link_url: z.string().nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -82,10 +104,75 @@ interface ProfileCounts {
   postsCount: number;
 }
 
+/** Compte privé (migration 0045) : ce que le profil en dit ; null tant que la
+ * migration manque (l'app cache alors le réglage). */
+interface PrivateAccountInfo {
+  followRequestsCount: number;
+}
+
+/** Au-delà, les demandes en attente ne sont plus comptées : le nombre annoncé plafonne à 100. */
+const FOLLOW_REQUESTS_COUNT_MAX = 100;
+const REQUESTER_ROWS = z.array(z.object({ requester_id: z.guid() }));
+
+/** Nombre de demandes d'abonnement en attente, telles que la liste les
+ * montre (jamais un compte en blocage, suspendu ou sans nom d'utilisateur :
+ * lib/memberRows.ts) ; null sans la migration 0045. Une seule lecture quand
+ * il n'y en a aucune. */
+async function readPrivateAccountInfo(fastify: FastifyInstance, userId: string): Promise<PrivateAccountInfo | null> {
+  try {
+    if (!(await privateAccountsReady(fastify))) return null;
+  } catch {
+    // Schéma illisible : le profil reste lisible, sans le réglage (l'app le cache).
+    return null;
+  }
+  try {
+    return { followRequestsCount: await countFollowRequests(fastify, userId) };
+  } catch {
+    // Le profil reste lisible : seul le compteur des demandes manque.
+    fastify.log.warn("Demandes d'abonnement en attente : compteur illisible");
+    return { followRequestsCount: 0 };
+  }
+}
+
+async function countFollowRequests(fastify: FastifyInstance, userId: string): Promise<number> {
+  const pending = parseDbRows(
+    REQUESTER_ROWS,
+    await fastify.supabaseAdmin.from("follow_requests").select("requester_id").eq("target_id", userId).limit(FOLLOW_REQUESTS_COUNT_MAX),
+    "Demandes d'abonnement en attente"
+  );
+  if (pending.length === 0) return 0;
+  const shown = await toMemberRows(
+    fastify,
+    userId,
+    pending.map((row) => row.requester_id),
+    { contextOwnerId: userId }
+  );
+  return shown.length;
+}
+
+/** Réglage « Qui peut me mentionner » : proposé seulement avec la migration
+ * 0046. Schéma illisible : le profil reste lisible, sans le réglage. */
+async function mentionsSettingShown(fastify: FastifyInstance): Promise<boolean> {
+  try {
+    return await commentThreadsReady(fastify);
+  } catch {
+    return false;
+  }
+}
+
 /** Profil renvoyé à l'app ; null si la ligne lue n'a pas la forme attendue.
+ * `withLink` : la base a la migration 0049 (sinon, pas de `linkUrl` : l'app cache le champ).
  * `receipts` : la base a la migration 0043 ; sans elle, le réglage
  * « Confirmations de lecture » n'est pas renvoyé (l'app ne le propose pas). */
-function toProfile(row: unknown, counts: ProfileCounts, admin: boolean, receipts: boolean): Profile | null {
+function toProfile(
+  row: unknown,
+  counts: ProfileCounts,
+  admin: boolean,
+  privateAccount: PrivateAccountInfo | null,
+  withMentions: boolean,
+  withLink: boolean,
+  receipts: boolean
+): Profile | null {
   const parsed = profileRowSchema.safeParse(row);
   if (!parsed.success) return null;
   const profile = parsed.data;
@@ -104,6 +191,9 @@ function toProfile(row: unknown, counts: ProfileCounts, admin: boolean, receipts
     pieceSendsFrom: profile.piece_sends_from,
     messagesFrom: profile.messages_from,
     ...(receipts && typeof profile.read_receipts === "boolean" ? { readReceipts: profile.read_receipts } : {}),
+    ...(privateAccount ? { isPrivate: profile.is_private, followRequestsCount: privateAccount.followRequestsCount } : {}),
+    ...(withMentions ? { mentionsFrom: profile.mentions_from } : {}),
+    ...(withLink ? { linkUrl: profile.link_url ?? null } : {}),
   };
 }
 
@@ -126,6 +216,15 @@ async function readAvatarUrl(fastify: FastifyInstance, userId: string): Promise<
   return row.success ? (row.data?.avatar_url ?? null) : null;
 }
 
+/** Lien en bio actuel (migration 0049 ; null : aucun). Lecture impossible : DatabaseReadError. */
+async function readLinkUrl(fastify: FastifyInstance, userId: string): Promise<string | null> {
+  const { data, error } = await fastify.supabaseAdmin.from("profiles").select("link_url").eq("id", userId).maybeSingle();
+  if (error) throw new DatabaseReadError("Lecture du lien du profil impossible");
+  const row = z.object({ link_url: z.string().nullable() }).nullable().safeParse(data);
+  if (!row.success) throw new DatabaseReadError("Lien du profil illisible");
+  return row.data?.link_url ?? null;
+}
+
 const PROFILE_UNREADABLE = { error: "internal_error", message: GENERIC_SERVER_ERROR } as const;
 
 export default async function meRoutes(fastify: FastifyInstance) {
@@ -133,10 +232,11 @@ export default async function meRoutes(fastify: FastifyInstance) {
     const userId = request.user!.id;
 
     // Rôle administrateur illisible : la requête échoue (500), jamais « non administrateur » par défaut.
-    const [{ data, error }, counts, admin] = await Promise.all([
+    const [{ data, error }, counts, admin, privateAccount] = await Promise.all([
       fastify.supabaseAdmin.from("profiles").select("*").eq("id", userId).single(),
       fetchFollowCounts(fastify, userId),
       isAdmin(fastify, userId),
+      readPrivateAccountInfo(fastify, userId),
     ]);
 
     if (error || !data) {
@@ -144,7 +244,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "profile_not_found", message: "Profil introuvable." });
     }
 
-    const profile = toProfile(data, counts, admin, await readReceiptsReady(fastify));
+    const profile = toProfile(data, counts, admin, privateAccount, await mentionsSettingShown(fastify), await profileExtrasShown(fastify), await readReceiptsReady(fastify));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -247,7 +347,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       if (cleanup.failed > 0) request.log.warn({ bucket: AVATAR_BUCKET, failed: cleanup.failed }, "Ancienne photo de profil restée dans le stockage");
     }
 
-    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readReceiptsReady(fastify));
+    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify), await profileExtrasShown(fastify), await readReceiptsReady(fastify));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -282,7 +382,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readReceiptsReady(fastify));
+    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify), await profileExtrasShown(fastify), await readReceiptsReady(fastify));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -294,7 +394,9 @@ export default async function meRoutes(fastify: FastifyInstance) {
     const parsed = updateMeSchema.safeParse(request.body);
 
     if (!parsed.success) {
-      const field = parsed.error.issues[0]?.path[0];
+      const issue = parsed.error.issues[0];
+      const field = issue?.path[0];
+      if (field === "linkUrl") return reply.code(400).send(issue?.code === "too_big" ? LINK_TOO_LONG : LINK_INVALID);
       return reply.code(400).send({
         error: "invalid_body",
         message: (typeof field === "string" ? UPDATE_ME_MESSAGES[field] : undefined) ?? "Requête invalide.",
@@ -303,6 +405,18 @@ export default async function meRoutes(fastify: FastifyInstance) {
 
     const userId = request.user!.id;
     const { username, displayName } = parsed.data;
+    // Lien en bio (lot « vie sociale », migration 0049). Absent : inchangé
+    // (une ancienne app qui enregistre le profil ne l'efface jamais). Sans la
+    // migration, rien du profil n'est enregistré : l'app ne croit jamais le
+    // lien gardé. Le lien n'est jamais journalisé.
+    const linkAsked = parsed.data.linkUrl !== undefined;
+    let linkUrl: string | null = null;
+    if (linkAsked) {
+      if (!(await profileExtrasReady(fastify))) return reply.code(404).send(PROFILE_LINK_UNAVAILABLE);
+      const link = bioLinkProblem(parsed.data.linkUrl ?? null);
+      if (!link.ok) return reply.code(400).send(link.refusal);
+      linkUrl = link.url;
+    }
     // Bio (lot « profil et icône des réglages ») : lignes vides en trop et
     // espaces retirés, puis 160 caractères et 3 lignes au plus. Le texte de
     // la bio n'est jamais journalisé.
@@ -310,14 +424,21 @@ export default async function meRoutes(fastify: FastifyInstance) {
     const problem = bioProblem(bio);
     if (problem === "too_long") return reply.code(400).send({ error: "bio_too_long", message: "La bio est trop longue (160 caractères maximum)." });
     if (problem === "too_many_lines") return reply.code(400).send({ error: "bio_too_many_lines", message: "La bio ne peut pas dépasser 3 lignes." });
-    // Filtre des mots interdits (chantier 3, règle 1.2 d'Apple) : noms et bio sont vus des autres.
-    if (firstBannedText(username, displayName, bio) !== null) return reply.code(400).send(CONTENT_NOT_ALLOWED);
+    // Filtre des mots interdits (chantier 3, règle 1.2 d'Apple) : noms, bio et lien sont vus des autres.
+    const linkTexts = linkAsked ? bioLinkTexts(parsed.data.linkUrl ?? null, linkUrl) : [];
+    if (firstBannedText(username, displayName, bio, ...linkTexts) !== null) return reply.code(400).send(CONTENT_NOT_ALLOWED);
     // Lu avant toute écriture : une lecture impossible n'enregistre rien.
     const admin = await isAdmin(fastify, userId);
+    // Changer le lien (pas le retirer, ni le renvoyer tel quel) : 10 fois par
+    // 24 heures. Le lien actuel est lu avant toute écriture.
+    if (linkAsked && linkUrl !== null && (await readLinkUrl(fastify, userId)) !== linkUrl && !consumeRateLimit(request, "profileLink")) {
+      const rule = RATE_LIMITS.profileLink;
+      return reply.code(429).send({ error: rule.error, message: rule.message });
+    }
 
     const { data, error } = await fastify.supabaseAdmin
       .from("profiles")
-      .update({ username, display_name: displayName, bio: bio === "" ? null : bio, updated_at: new Date().toISOString() })
+      .update({ username, display_name: displayName, bio: bio === "" ? null : bio, ...(linkAsked ? { link_url: linkUrl } : {}), updated_at: new Date().toISOString() })
       .eq("id", userId)
       .select("*")
       .single();
@@ -327,6 +448,8 @@ export default async function meRoutes(fastify: FastifyInstance) {
       if (error.code === "23505") {
         return reply.code(409).send({ error: "username_taken", message: "Ce nom d'utilisateur est déjà pris." });
       }
+      // Contrainte du lien (migration 0049) : la base a refusé ce que le serveur avait accepté.
+      if (error.code === "23514" && linkAsked) return reply.code(400).send(LINK_INVALID);
       request.log.error({ error }, "Échec de mise à jour du profil");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
@@ -334,7 +457,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
     // Un profil qu'on vient de compléter n'a par construction encore
     // aucun abonné, abonnement ni publication — pas besoin de requêter les
     // compteurs ici.
-    const profile = toProfile(data, { followersCount: 0, followingCount: 0, postsCount: 0 }, admin, await readReceiptsReady(fastify));
+    const profile = toProfile(data, { followersCount: 0, followingCount: 0, postsCount: 0 }, admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify), await profileExtrasShown(fastify), await readReceiptsReady(fastify));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -392,6 +515,67 @@ export default async function meRoutes(fastify: FastifyInstance) {
     if (error) {
       request.log.error({ error }, "Échec de mise à jour du réglage des confirmations de lecture");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+    return reply.code(204).send();
+  });
+
+  // « Qui peut me mentionner » (lot « vie sociale », migration 0046) : tout le
+  // monde, les comptes que je suis (valeur de départ) ou personne. Un réglage
+  // de confidentialité : modifiable même par un compte suspendu. Il vaut pour
+  // les mentions à venir : celles déjà faites restent, tant que le membre ne
+  // les retire pas (DELETE /api/comments/:id/mentions/me). Sans la migration :
+  // indisponible.
+  fastify.put("/api/me/mentions-from", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    if (!(await commentThreadsReady(fastify))) return reply.code(404).send(COMMENT_THREADS_UNAVAILABLE);
+    const body = parseInput(updateMentionsFromSchema, request.body, reply, { error: "invalid_body", message: "Réglage invalide." });
+    if (!body) return;
+    const { error } = await fastify.supabaseAdmin
+      .from("profiles")
+      .update({ mentions_from: body.mentionsFrom, updated_at: new Date().toISOString() })
+      .eq("id", request.user!.id);
+    if (error) {
+      request.log.error({ error }, "Échec de mise à jour du réglage des mentions");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+    return reply.code(204).send();
+  });
+
+  // « Compte privé » (lot « vie sociale », migration 0045). Un réglage de
+  // confidentialité : modifiable même par un compte suspendu. Passer en privé
+  // ne change aucune ligne d'autre : les abonnés actuels restent abonnés, et
+  // la visibilité enregistrée de chaque publication ne bouge pas. Repasser en
+  // public efface D'ABORD les demandes en attente et leurs notifications :
+  // personne ne devient abonné sans une décision du propriétaire (les
+  // personnes concernées revoient « Suivre »). Sans la migration : indisponible.
+  fastify.put("/api/me/private-account", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    if (!(await privateAccountsReady(fastify))) return reply.code(404).send(PRIVATE_ACCOUNTS_UNAVAILABLE);
+    const body = parseInput(updatePrivateAccountSchema, request.body, reply, { error: "invalid_body", message: "Réglage invalide." });
+    if (!body) return;
+    const userId = request.user!.id;
+    const failed = () => reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+
+    if (!body.isPrivate) {
+      const requests = await fastify.supabaseAdmin.from("follow_requests").delete().eq("target_id", userId);
+      const notices = await fastify.supabaseAdmin.from("notifications").delete().eq("user_id", userId).eq("type", "follow_request");
+      if (requests.error || notices.error) {
+        // Rien n'est changé : le compte reste privé tant que ses demandes ne sont pas effacées.
+        request.log.error({ error: requests.error ?? notices.error }, "Échec de l'effacement des demandes d'abonnement");
+        return failed();
+      }
+    }
+    const { error } = await fastify.supabaseAdmin
+      .from("profiles")
+      .update({ is_private: body.isPrivate, updated_at: new Date().toISOString() })
+      .eq("id", userId);
+    if (error) {
+      request.log.error({ error }, "Échec de mise à jour du réglage « compte privé »");
+      return failed();
+    }
+    // Identifications (migration 0047) : en passant en privé, un membre qui
+    // n'est pas un abonné accepté ne voit plus aucune publication du compte ;
+    // il y perd ses identifications. Échec : journalisé, le compte est déjà privé.
+    if (body.isPrivate && (await postExtrasReady(fastify).catch(() => false))) {
+      await dropUnseeableTags(fastify, { authorId: userId }).catch(() => request.log.warn("Compte passé en privé : identifications non relues"));
     }
     return reply.code(204).send();
   });

@@ -25,7 +25,8 @@ export function FeedIcon({ size = 24, tint = color.encre, strokeWidth = 1.4 }: I
   );
 }
 
-export function BookmarkIcon({ size = 24, tint = color.encre, strokeWidth = 1.4 }: IconProps) {
+/** `filled` : signet plein (publication enregistrée, migration 0048). */
+export function BookmarkIcon({ size = 24, tint = color.encre, strokeWidth = 1.4, filled = false }: IconProps & { filled?: boolean }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
@@ -33,6 +34,7 @@ export function BookmarkIcon({ size = 24, tint = color.encre, strokeWidth = 1.4 
         stroke={tint}
         strokeWidth={strokeWidth}
         strokeLinejoin="round"
+        fill={filled ? tint : "none"}
       />
     </Svg>
   );
@@ -273,6 +275,47 @@ export function SendIcon({ size = 19, tint = color.acier, strokeWidth = 1.4 }: I
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M20.5 3.5L3.5 10.5l6.5 3 3 6.5 7.5-16.5z" stroke={tint} strokeWidth={strokeWidth} strokeLinejoin="round" />
       <Path d="M10 13.5l10.5-10" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** Cadenas : compte privé (lot « vie sociale »). */
+export function LockIcon({ size = 24, tint = color.acier, strokeWidth = 1.4 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x={5} y={10.5} width={14} height={9.5} rx={2} stroke={tint} strokeWidth={strokeWidth} />
+      <Path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** Deux cadres superposés : une publication de plusieurs photos (migration 0047). */
+export function PhotosIcon({ size = 16, tint = color.surImage, strokeWidth = 1.6 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x={7.5} y={3.5} width={13} height={13} rx={2} stroke={tint} strokeWidth={strokeWidth} />
+      <Path d="M16.5 20.5h-11a2 2 0 0 1-2-2v-11" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** Deux silhouettes : les personnes identifiées sur une publication (migration 0047). Jamais à la place d'une photo de profil. */
+export function TaggedPeopleIcon({ size = 16, tint = color.surImage, strokeWidth = 1.6 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={9} cy={8.5} r={3} stroke={tint} strokeWidth={strokeWidth} />
+      <Path d="M3.5 19c1-3.2 3.1-4.7 5.5-4.7s4.5 1.5 5.5 4.7" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" />
+      <Path d="M15.5 5.8a3 3 0 0 1 0 5.4M17.5 14.6c1.4.6 2.4 2 3 4.4" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** Une punaise : une publication épinglée en haut d'un profil (migration 0049). */
+export function PinIcon({ size = 16, tint = color.surImage, strokeWidth = 1.6 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M9 3.5h6l-1 5.5 3.5 3.5v1.5h-11V12.5L10 9 9 3.5z" stroke={tint} strokeWidth={strokeWidth} strokeLinejoin="round" />
+      <Path d="M12 14v6.5" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" />
     </Svg>
   );
 }

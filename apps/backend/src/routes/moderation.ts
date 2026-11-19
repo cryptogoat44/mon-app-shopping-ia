@@ -27,6 +27,8 @@ import { buildModerationItems, QUEUE_ROWS } from "../lib/moderationQueue.js";
 import { eraseCollectionCopy, eraseCopiedImage, type ImageErasureRefusal } from "../lib/imageRemoval.js";
 import { collectionModerationReady } from "../lib/collectionModeration.js";
 import { AVATAR_BUCKET, moveSuspendedAvatar, profileModerationReady } from "../lib/profileModeration.js";
+import { postExtrasReady } from "../lib/postExtras.js";
+import { profileExtrasReady, profileExtrasShown } from "../lib/profileExtras.js";
 import { emptyUserFolder } from "../lib/storage.js";
 
 const PAGE_SIZE = 20;
@@ -125,7 +127,13 @@ export default async function moderationRoutes(fastify: FastifyInstance) {
     const pageRows = rows.data.slice(0, PAGE_SIZE);
     let items: ModerationItem[];
     try {
-      items = await buildModerationItems(fastify, pageRows, { profileModeration: await profileModerationReady(fastify) });
+      // Photos 2 à 5 (migration 0047) : sonde illisible, une erreur — jamais une publication signalée montrée sans toutes ses photos.
+      // Lien en bio (migration 0049) : base illisible, sans le lien (le profil reste montré).
+      items = await buildModerationItems(fastify, pageRows, {
+        profileModeration: await profileModerationReady(fastify),
+        postExtras: await postExtrasReady(fastify),
+        profileExtras: await profileExtrasShown(fastify),
+      });
     } catch (buildError) {
       request.log.error({ buildError }, "Aperçus de modération illisibles");
       return reply.code(500).send({ error: "internal_error", message: GENERIC_SERVER_ERROR });
@@ -230,8 +238,34 @@ export default async function moderationRoutes(fastify: FastifyInstance) {
       p_reason: body.reason,
       p_note: body.note || null,
     });
+    // Lien en bio (migration 0049) : retirer la bio le retire aussi. La
+    // fonction recréée par 0049 vide la bio et le lien dans la même
+    // transaction (et accepte un profil qui n'a qu'un lien). Ce qui suit n'est
+    // qu'un filet, pour une base où 0037 aurait été relancée après 0049 (sa
+    // fonction oublie le lien) : le serveur vide le lien lui-même. Journal
+    // sans l'adresse. Échec (deux essais) : la décision est enregistrée, mais
+    // l'administrateur l'apprend (500) ; suspendre le compte cache le lien.
+    // Seule une base qui dit « pas de 0049 » dispense d'effacer : une sonde
+    // illisible n'est jamais lue comme « pas de lien », on essaie quand même.
+    const removed = OUTCOME.safeParse(data);
+    const bioRemoved = body.part === "bio" && !error && removed.success && removed.data[0]!.outcome === "ok";
+    if (bioRemoved && (await profileExtrasReady(fastify).catch(() => null)) !== false) {
+      if (!(await clearProfileLink(body.userId))) {
+        request.log.error("Retrait d'une bio : le lien du profil n'a pas pu être retiré");
+        return reply.code(500).send({ error: "internal_error", message: GENERIC_SERVER_ERROR });
+      }
+    }
     return sendOutcome(request.log, reply, data, error, body.part === "bio" ? "Retrait d'une bio" : "Retrait d'une photo de profil");
   });
+
+  /** Vide le lien en bio d'un profil (deux essais). Vrai si c'est fait. */
+  async function clearProfileLink(userId: string): Promise<boolean> {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const { error } = await fastify.supabaseAdmin.from("profiles").update({ link_url: null, updated_at: new Date().toISOString() }).eq("id", userId);
+      if (!error) return true;
+    }
+    return false;
+  }
 }
 
 function sendRefusal(reply: FastifyReply, outcome: string) {

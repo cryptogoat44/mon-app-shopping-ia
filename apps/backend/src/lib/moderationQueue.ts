@@ -21,6 +21,12 @@
 // Lot « conformité Apple » (migration 0037) : pour un profil signalé,
 // « Retirer la bio » et « Retirer la photo de profil » sont proposés s'il en
 // a une et si la base a la migration (sinon : jamais).
+// Lot « vie sociale » (migration 0047) : une publication signalée montre
+// TOUTES ses photos (la photo en cause peut être la troisième). La masquer
+// les cache toutes, comme la première.
+// Lot « vie sociale » (migration 0049) : un profil signalé montre aussi son
+// lien en bio, en texte (jamais un lien qui s'ouvre) : « Retirer la bio » le
+// retire avec elle.
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
@@ -117,9 +123,19 @@ const MESSAGE_COLUMNS = "id, conversation_id, sender_id, body, wish_title, creat
 /** Avec la migration 0044 : la date de suppression, et « portait une publication ». */
 const messageColumns = (actions: boolean) => (actions ? `${MESSAGE_COLUMNS}, deleted_at, shared_post` : MESSAGE_COLUMNS);
 const PROFILE_ROWS = z.array(
-  z.object({ id: ID, username: z.string().nullable(), display_name: z.string(), avatar_url: z.string().nullable(), bio: z.string().nullable() })
+  z.object({
+    id: ID,
+    username: z.string().nullable(),
+    display_name: z.string(),
+    avatar_url: z.string().nullable(),
+    bio: z.string().nullable(),
+    // Lien en bio (migration 0049) : lu seulement quand la base l'a.
+    link_url: z.string().nullable().optional(),
+  })
 );
 const SUSPENSION_ROWS = z.array(z.object({ user_id: ID, moderation_action_id: ID }));
+/** Photos 2 à 5 d'une publication (migration 0047), miniatures. */
+const POST_MEDIA_ROWS = z.array(z.object({ post_id: ID, position: z.number().int(), media_thumb_url: z.string() }));
 const ACTION_ROWS = z.array(
   z.object({
     id: ID,
@@ -140,6 +156,8 @@ type ActionRow = z.infer<typeof ACTION_ROWS>[number];
 
 interface Loaded {
   posts: Map<string, z.infer<typeof POST_ROWS>[number]>;
+  /** Publication → miniatures de ses photos 2 à 5, dans l'ordre (migration 0047). */
+  postMedia: Map<string, string[]>;
   comments: Map<string, z.infer<typeof COMMENT_ROWS>[number]>;
   /** Pièces envoyées signalées (lot 5, 5.C). */
   pieces: Map<string, z.infer<typeof PIECE_ROWS>[number]>;
@@ -164,14 +182,14 @@ function idsOf(rows: QueueRow[], type: QueueRow["target_type"]): string[] {
 }
 
 /** Publications, commentaires, pièces envoyées et messages signalés, et les décisions déjà prises sur ces contenus. */
-async function loadTargets(fastify: FastifyInstance, rows: QueueRow[], messageActions: boolean) {
+async function loadTargets(fastify: FastifyInstance, rows: QueueRow[], options: QueueOptions, messageActions: boolean) {
   const db = fastify.supabaseAdmin;
   const postIds = idsOf(rows, "post");
   const commentIds = idsOf(rows, "comment");
   const pieceIds = idsOf(rows, "piece");
   const messageIds = idsOf(rows, "message");
   const collectionIds = idsOf(rows, "collection");
-  const [posts, comments, pieces, messages, collections, actions] = await Promise.all([
+  const [posts, comments, pieces, messages, collections, actions, postMedia] = await Promise.all([
     postIds.length > 0
       ? db
           .from("posts")
@@ -193,9 +211,13 @@ async function loadTargets(fastify: FastifyInstance, rows: QueueRow[], messageAc
       .in("target_id", [...new Set(rows.map((row) => row.target_id))])
       .order("created_at", { ascending: false })
       .limit(ACTIONS_READ_LIMIT),
+    options.postExtras && postIds.length > 0
+      ? db.from("post_media").select("post_id, position, media_thumb_url").in("post_id", postIds).order("position", { ascending: true })
+      : NO_ROWS,
   ]);
   return {
     posts: parseDbRows(POST_ROWS, posts, "Publications signalées"),
+    postMedia: parseDbRows(POST_MEDIA_ROWS, postMedia, "Photos des publications signalées"),
     comments: parseDbRows(COMMENT_ROWS, comments, "Commentaires signalés"),
     pieces: parseDbRows(PIECE_ROWS, pieces, "Pièces envoyées signalées"),
     messages: parseDbRows(MESSAGE_ROWS, messages, "Messages signalés"),
@@ -273,11 +295,11 @@ async function loadCollectionPreviews(fastify: FastifyInstance, collections: Col
 }
 
 /** Profils (comptes signalés, auteurs des contenus, administrateurs du journal) et suspensions en vigueur. */
-async function loadPeople(fastify: FastifyInstance, userIds: string[]) {
+async function loadPeople(fastify: FastifyInstance, userIds: string[], withLink: boolean) {
   if (userIds.length === 0) return { profiles: [], suspensions: [] };
   const db = fastify.supabaseAdmin;
   const [profiles, suspensions] = await Promise.all([
-    db.from("profiles").select("id, username, display_name, avatar_url, bio").in("id", userIds),
+    db.from("profiles").select(withLink ? "id, username, display_name, avatar_url, bio, link_url" : "id, username, display_name, avatar_url, bio").in("id", userIds),
     db.from("suspensions").select("user_id, moderation_action_id").in("user_id", userIds),
   ]);
   return {
@@ -286,10 +308,10 @@ async function loadPeople(fastify: FastifyInstance, userIds: string[]) {
   };
 }
 
-async function loadAll(fastify: FastifyInstance, rows: QueueRow[]): Promise<Loaded> {
+async function loadAll(fastify: FastifyInstance, rows: QueueRow[], options: QueueOptions): Promise<Loaded> {
   // Sans la migration 0044, ses colonnes ne sont jamais nommées.
   const messageActions = rows.some((row) => row.target_type === "message") && (await messageActionsReady(fastify));
-  const targets = await loadTargets(fastify, rows, messageActions);
+  const targets = await loadTargets(fastify, rows, options, messageActions);
   const userIds = new Set<string>(idsOf(rows, "user"));
   for (const post of targets.posts) userIds.add(post.user_id);
   for (const comment of targets.comments) userIds.add(comment.user_id);
@@ -301,9 +323,14 @@ async function loadAll(fastify: FastifyInstance, rows: QueueRow[]): Promise<Load
   ]);
   for (const extract of messageContext.values()) for (const message of extract) userIds.add(message.sender_id);
   for (const action of targets.actions) if (action.admin_id) userIds.add(action.admin_id);
-  const people = await loadPeople(fastify, [...userIds]);
+  const people = await loadPeople(fastify, [...userIds], options.profileExtras === true);
+  const postMedia = new Map<string, string[]>();
+  for (const photo of [...targets.postMedia].sort((a, b) => a.position - b.position)) {
+    postMedia.set(photo.post_id, [...(postMedia.get(photo.post_id) ?? []), photo.media_thumb_url]);
+  }
   return {
     posts: new Map(targets.posts.map((post) => [post.id, post])),
+    postMedia,
     comments: new Map(targets.comments.map((comment) => [comment.id, comment])),
     pieces: new Map(targets.pieces.map((piece) => [piece.id, piece])),
     messages: new Map(targets.messages.map((message) => [message.id, message])),
@@ -334,15 +361,19 @@ function previewOf(row: QueueRow, data: Loaded): ModerationPreview {
     const post = data.posts.get(row.target_id);
     const author = post ? authorOf(post.user_id, data) : null;
     if (!post || !author) return MISSING;
+    const first = post.media_thumb_url ?? post.media_url;
+    const more = data.postMedia.get(post.id) ?? [];
     return {
       kind: "post",
       author,
       caption: post.caption,
-      imageUrl: post.media_thumb_url ?? post.media_url,
+      imageUrl: first,
       imageRemoved: post.media_removed_at !== null,
       privacy: post.privacy,
       createdAt: post.created_at,
       hidden: post.hidden_at !== null,
+      // Toutes les photos, quand il y en a plusieurs.
+      ...(more.length > 0 ? { images: [...(first !== null ? [first] : []), ...more] } : {}),
     };
   }
   if (row.target_type === "comment") {
@@ -415,7 +446,9 @@ function previewOf(row: QueueRow, data: Loaded): ModerationPreview {
     };
   }
   const author = authorOf(row.target_id, data);
-  return author ? { kind: "user", author, bio: data.profiles.get(row.target_id)?.bio ?? null } : MISSING;
+  const profile = data.profiles.get(row.target_id);
+  if (!author) return MISSING;
+  return { kind: "user", author, bio: profile?.bio ?? null, ...(profile?.link_url ? { linkUrl: profile.link_url } : {}) };
 }
 
 /** L'image est une copie faite par Spotto (publication « envie », pièce
@@ -449,6 +482,10 @@ function toLogEntry(action: ActionRow, data: Loaded): ModerationLogEntry {
 export interface QueueOptions {
   /** Migration 0037 : retirer la bio ou la photo d'un profil. */
   profileModeration: boolean;
+  /** Migration 0047 : les photos 2 à 5 des publications signalées. */
+  postExtras?: boolean;
+  /** Migration 0049 : le lien en bio d'un profil signalé. */
+  profileExtras?: boolean;
 }
 
 function toItem(row: QueueRow, data: Loaded, options: QueueOptions): ModerationItem {
@@ -471,7 +508,9 @@ function toItem(row: QueueRow, data: Loaded, options: QueueOptions): ModerationI
     activeHideAutomatic: hide?.automatic ?? false,
     activeSuspendActionId: preview.kind === "missing" ? null : (data.suspensions.get(preview.author.id) ?? null),
     canRemoveImage: canRemoveImage(row, preview, data),
-    canRemoveBio: reportedProfile !== null && (reportedProfile.bio ?? "").trim() !== "",
+    // « Retirer la bio » retire aussi le lien (fonction recréée par 0049) :
+    // proposé aussi pour un profil qui n'a qu'un lien, sans bio.
+    canRemoveBio: reportedProfile !== null && ((reportedProfile.bio ?? "").trim() !== "" || (options.profileExtras === true && !!reportedProfile.linkUrl)),
     canRemoveAvatar: reportedProfile !== null && reportedProfile.author.avatarUrl !== null,
     history: history.slice(0, HISTORY_LIMIT).map((action) => toLogEntry(action, data)),
   };
@@ -484,6 +523,6 @@ export async function buildModerationItems(
   options: QueueOptions = { profileModeration: false }
 ): Promise<ModerationItem[]> {
   if (rows.length === 0) return [];
-  const data = await loadAll(fastify, rows);
+  const data = await loadAll(fastify, rows, options);
   return rows.map((row) => toItem(row, data, options));
 }

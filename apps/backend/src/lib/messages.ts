@@ -298,6 +298,41 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
     "This conversation isn't open yet: you'll be able to like a message once it is.",
   "Vous avez aimé beaucoup de messages en peu de temps. Réessayez dans un moment.": "You've liked a lot of messages in a short time. Please try again in a moment.",
   "Réaction invalide.": "Invalid reaction.",
+  // Compte privé et demandes d'abonnement (lot « vie sociale », migration 0045).
+  "Le compte privé n'est pas encore disponible.": "Private accounts aren't available yet.",
+  "Ce compte est privé. Mettez à jour l'app pour demander à le suivre.": "This account is private. Update the app to ask to follow it.",
+  "Vous avez déjà demandé à suivre ce compte récemment. Réessayez plus tard.": "You've already asked to follow this account recently. Please try again later.",
+  "Demande introuvable.": "Request not found.",
+  // Listes des abonnés et des abonnements (lot « vie sociale »).
+  "Ce compte est privé.": "This account is private.",
+  "Trop de listes ouvertes. Réessayez dans un moment.": "Too many lists opened. Please try again in a moment.",
+  // « Aimé par » (lot « vie sociale ») : limite des « j'aime ».
+  "Trop de j'aime en peu de temps. Réessayez dans un moment.": "Too many likes in a short time. Please try again in a moment.",
+  // Commentaires : réponses, « j'aime », mentions (lot « vie sociale », migration 0046).
+  "Les réponses et les mentions ne sont pas encore disponibles.": "Replies and mentions aren't available yet.",
+  // Plusieurs photos, identifier des personnes (lot « vie sociale », migration 0047).
+  "Les photos multiples et les identifications ne sont pas encore disponibles.": "Multiple photos and tags aren't available yet.",
+  "Cette publication ne peut plus recevoir de photo.": "This post can no longer receive photos.",
+  "Cette publication a déjà ses 5 photos.": "This post already has its 5 photos.",
+  "Une autre photo de cette publication arrivait au même moment. Réessayez.": "Another photo of this post was arriving at the same time. Please try again.",
+  "Vous avez ajouté beaucoup de photos en peu de temps. Réessayez dans un moment.": "You've added a lot of photos in a short time. Please try again in a moment.",
+  "Identifications invalides.": "Invalid tags.",
+  "Seule une publication « Une photo » peut identifier des personnes.": "Only a photo post can tag people.",
+  "Identification introuvable.": "Tag not found.",
+  // Publications enregistrées (lot « vie sociale », migration 0048).
+  "Les publications enregistrées ne sont pas encore disponibles.": "Saved posts aren't available yet.",
+  "Vous avez atteint la limite de publications enregistrées.": "You've reached the limit of saved posts.",
+  "Vous avez enregistré beaucoup de publications en peu de temps. Réessayez dans un moment.": "You've saved a lot of posts in a short time. Please try again in a moment.",
+  "Enregistrement invalide.": "Invalid save request.",
+  // Épingles et lien en bio (lot « vie sociale », migration 0049).
+  "Les publications épinglées ne sont pas encore disponibles.": "Pinned posts aren't available yet.",
+  "Le lien du profil n'est pas encore disponible.": "Profile links aren't available yet.",
+  "Seules vos photos peuvent être épinglées.": "Only your photos can be pinned.",
+  "Vous pouvez épingler 3 publications au plus. Retirez-en une d'abord.": "You can pin up to 3 posts. Unpin one first.",
+  "Le lien doit commencer par https:// et mener à un site web.": "The link must start with https:// and lead to a website.",
+  "Le lien est trop long (200 caractères maximum).": "The link is too long (200 characters maximum).",
+  "Vous avez changé de lien trop souvent. Réessayez demain.": "You've changed your link too often. Please try again tomorrow.",
+  "Épinglage invalide.": "Invalid pin request.",
 };
 
 /** Message dans la langue voulue. Un message inconnu (par exemple un texte

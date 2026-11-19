@@ -9,22 +9,19 @@ import { unreadChanged } from "@/lib/unread-notifications";
 import { NOTIFICATIONS_PAGE_SIZE, fetchMessagesStatus, fetchNotifications, markNotificationsRead } from "@/lib/api";
 import { messagesEntry } from "@/lib/conversations";
 import { useMessagesStatus } from "@/lib/use-messages-status";
+import { useAuth } from "@/lib/auth-context";
+import { knownNotifications, notificationActionText, notificationTarget, pendingRequestsCount } from "@/lib/follow-state";
 import { loadErrorMessage } from "@/lib/load-error";
 import { systemNotificationLines } from "@/lib/moderation-labels";
 import { timeAgo } from "@/lib/format";
-import { BellIcon, CommentIcon } from "@/components/icons";
+import { BellIcon, CommentIcon, LockIcon } from "@/components/icons";
 import { Skeleton } from "@/components/skeleton";
 import { ErrorMessage } from "@/components/error-message";
 import { LoadFailure } from "@/components/load-failure";
 import { themedStyles } from "@/theme/themed-styles";
 import { Avatar } from "@/components/avatar";
 
-function actionText(notification: AppNotification): string {
-  if (notification.type === "follow") return t.notifications.follow;
-  if (notification.type === "comment") return t.notifications.comment;
-  if (notification.type === "piece_received") return t.notifications.pieceReceived;
-  return t.notifications.like;
-}
+const actionText = (notification: AppNotification): string => notificationActionText(notification.type);
 
 function NotificationRow({ notification, actor, onPress }: { notification: AppNotification; actor: PostAuthor; onPress: () => void }) {
   return (
@@ -64,6 +61,21 @@ function MessagesEntry({ label, badge, onPress }: { label: string; badge: string
   );
 }
 
+/** Compte privé (lot « vie sociale ») : l'entrée « Demandes d'abonnement (n) »,
+ * seulement quand il y en a. */
+function RequestsEntry({ count, onPress }: { count: number; onPress: () => void }) {
+  const label = t.privateAccount.requestsEntry(count);
+  return (
+    <Pressable onPress={onPress} style={styles.messagesEntry} accessibilityRole="button" accessibilityLabel={label} testID="entree-demandes">
+      <View style={styles.avatar}>
+        <LockIcon size={18} tint={color.encre} />
+      </View>
+      <Text style={styles.messagesLabel}>{label}</Text>
+      <Text style={styles.chevron}>›</Text>
+    </Pressable>
+  );
+}
+
 /** Modération et signalement traité (lot 5) : aucun auteur affiché, rien à ouvrir. */
 function SystemNotificationRow({ notification, lines }: { notification: AppNotification; lines: string[] }) {
   const [first, ...details] = lines;
@@ -96,7 +108,8 @@ function useNotifications() {
     () =>
       fetchNotifications()
         .then((data) => {
-          setNotifications(data);
+          // Un type que cette version ne connaît pas n'est pas affiché (lib/follow-state.ts).
+          setNotifications(knownNotifications(data));
           setHasMore(data.length === NOTIFICATIONS_PAGE_SIZE);
           setError(null);
           setMoreError(null);
@@ -112,7 +125,7 @@ function useNotifications() {
     setMoreError(null);
     try {
       const older = await fetchNotifications(last.createdAt);
-      setNotifications((current) => [...(current ?? []), ...older]);
+      setNotifications((current) => [...(current ?? []), ...knownNotifications(older)]);
       setHasMore(older.length === NOTIFICATIONS_PAGE_SIZE);
     } catch (e) {
       setMoreError(loadErrorMessage(e, t.notifications.loadMoreError));
@@ -145,21 +158,25 @@ export default function NotificationsScreen() {
   const { notifications, error, hasMore, loadingMore, moreError, load, loadMore } = useNotifications();
   const [refreshing, setRefreshing] = useState(false);
   const entry = messagesEntry(useMessagesStatus());
+  // Compte privé : nombre de demandes d'abonnement en attente, relu à chaque retour sur l'onglet.
+  const { profile, refreshProfile } = useAuth();
+  const requestsCount = pendingRequestsCount(profile);
 
   useFocusEffect(
     useCallback(() => {
       fetchMessagesStatus().catch(() => {});
+      refreshProfile().catch(() => {});
       load().then(() =>
         markNotificationsRead()
           .then(unreadChanged)
           .catch(() => {})
       );
-    }, [load])
+    }, [load, refreshProfile])
   );
 
   async function handleRefresh() {
     setRefreshing(true);
-    await Promise.all([load(), fetchMessagesStatus().catch(() => {})]);
+    await Promise.all([load(), fetchMessagesStatus().catch(() => {}), refreshProfile().catch(() => {})]);
     setRefreshing(false);
   }
 
@@ -167,14 +184,18 @@ export default function NotificationsScreen() {
     const lines = systemNotificationLines(notification);
     const actor = notification.actor;
     if (lines || !actor) return <SystemNotificationRow key={notification.id} notification={notification} lines={lines ?? [t.notifications.moderationOther]} />;
-    // « J'aime » et commentaire : la publication ; abonnement : le profil.
-    // Pièce reçue (lot 5) : la liste des pièces reçues.
+    // « J'aime » et commentaire : la publication ; abonnement et demande
+    // acceptée : le profil. Pièce reçue (lot 5) : la liste des pièces reçues.
+    // Demande d'abonnement : la liste des demandes (lib/follow-state.ts).
+    const target = notificationTarget(notification, actor.id);
     const open = () =>
-      notification.type === "piece_received"
+      target.screen === "pieces"
         ? router.push("/pieces-recues")
-        : notification.postId
-          ? router.push({ pathname: "/publication", params: { id: notification.postId } })
-          : router.push({ pathname: "/profil", params: { id: actor.id } });
+        : target.screen === "requests"
+          ? router.push({ pathname: "/membres", params: { kind: "requests" } })
+          : target.screen === "post"
+            ? router.push({ pathname: "/publication", params: { id: target.id } })
+            : router.push({ pathname: "/profil", params: { id: target.id } });
     return <NotificationRow key={notification.id} notification={notification} actor={actor} onPress={open} />;
   }
 
@@ -190,6 +211,11 @@ export default function NotificationsScreen() {
       {entry ? (
         <View style={styles.entryWrap}>
           <MessagesEntry label={entry.label} badge={entry.badge} onPress={() => router.push("/messages")} />
+        </View>
+      ) : null}
+      {requestsCount > 0 ? (
+        <View style={styles.entryWrap}>
+          <RequestsEntry count={requestsCount} onPress={() => router.push({ pathname: "/membres", params: { kind: "requests" } })} />
         </View>
       ) : null}
 

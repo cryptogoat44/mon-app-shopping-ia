@@ -13,7 +13,8 @@ import { bellVisible } from "@/lib/wish-alerts";
 import { collectionChips, collectionState, selectedCollection } from "@/lib/collections";
 import { useCollectionsStatus } from "@/lib/use-collections-status";
 import { useToast } from "@/lib/toast-context";
-import { ClockIcon, PlusIcon } from "@/components/icons";
+import { BookmarkIcon, ClockIcon, PlusIcon } from "@/components/icons";
+import { savedListRoute } from "@/lib/saved-posts";
 import { CollectionNameSheet } from "@/components/collection-name-sheet";
 import { CollectionSettingsSheet } from "@/components/collection-settings-sheet";
 import { Skeleton } from "@/components/skeleton";
@@ -239,6 +240,14 @@ function MyWishlist() {
   return (
     <>
       <Text style={styles.privateNote}>{collectionsAvailable.enabled ? t.wishlist.privateNoteCollections : t.wishlist.privateNote}</Text>
+      {/* Publications enregistrées (migration 0048) : l'entrée de leur liste, cachée sans elles sur le serveur. */}
+      {collectionsAvailable.savedPosts ? (
+        <Pressable style={styles.savedEntry} onPress={() => router.push(savedListRoute())} accessibilityRole="link" testID="entree-enregistrees">
+          <BookmarkIcon size={17} tint={color.encre} />
+          <Text style={styles.savedEntryLabel}>{t.savedPosts.listTitle}</Text>
+          <Text style={styles.savedEntryChevron}>›</Text>
+        </Pressable>
+      ) : null}
       {chips ? (
         <View style={styles.chipsWrap}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} accessibilityRole="tablist" accessibilityLabel={t.collections.chipsLabel}>
@@ -269,6 +278,18 @@ function MyWishlist() {
           {selected ? (
             <View style={styles.selectedRow}>
               <Text style={styles.selectedState}>{collectionState(selected)}</Text>
+              {/* Les publications enregistrées rangées dans cette collection (vous seul les voyez). */}
+              {collectionsAvailable.savedPosts ? (
+                <Pressable
+                  onPress={() => router.push(savedListRoute(selected.id))}
+                  hitSlop={10}
+                  accessibilityRole="link"
+                  accessibilityLabel={t.savedPosts.collectionTabLabel(selected.name)}
+                  testID="publications-de-la-collection"
+                >
+                  <Text style={styles.manage}>{t.savedPosts.collectionTab}</Text>
+                </Pressable>
+              ) : null}
               <Pressable onPress={() => setManaging(selected)} hitSlop={10} accessibilityRole="button" accessibilityLabel={t.collections.manageLabel(selected.name)} testID="gerer-collection">
                 <Text style={styles.manage}>{t.collections.manage}</Text>
               </Pressable>
@@ -405,6 +426,9 @@ const styles = themedStyles(() => ({
   switcher: { paddingHorizontal: space.lg, paddingTop: space.sm, maxWidth: 640, alignSelf: "center", width: "100%" },
   privateNote: { fontSize: font.caption, color: color.acier, paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.xs, maxWidth: 640, alignSelf: "center", width: "100%" },
   chipsWrap: { maxWidth: 640, alignSelf: "center", width: "100%", paddingBottom: space.xs },
+  savedEntry: { flexDirection: "row", alignItems: "center", gap: space.sm, minHeight: 44, paddingHorizontal: space.lg, maxWidth: 640, alignSelf: "center", width: "100%" },
+  savedEntryLabel: { flex: 1, fontSize: font.secondary, fontWeight: "600", color: color.encre },
+  savedEntryChevron: { fontSize: 20, color: color.acier },
   chips: { paddingHorizontal: space.lg, gap: space.xs, alignItems: "center" },
   chip: { minHeight: 36, maxWidth: 220, paddingHorizontal: space.md, borderRadius: radius.full, borderWidth: 1, borderColor: color.filet, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 4 },
   chipActive: { backgroundColor: color.vert, borderColor: color.vert },
