@@ -270,6 +270,19 @@ describe("épingler : l'entrée, et les épinglées en tête sans doublon", () =
     expect(read("components/icons.tsx")).toContain("export function PinIcon(");
   });
 
+  it("épingle et visibilité en même temps : jamais l'ancienne visibilité remise à l'écran par la réponse de l'épingle", () => {
+    const publication = read("app/(app)/publication.tsx");
+    // La réponse de l'épingle ne change que la date de l'épingle, sur la publication telle qu'elle est à la réponse.
+    expect(publication).toContain("setPost((current) => (current ? { ...current, pinnedAt } : current));");
+    expect(publication).not.toContain("setPost({ ...post, pinnedAt })");
+    // Une seule demande à la fois : les pastilles de visibilité et l'épingle attendent l'une l'autre.
+    expect(publication).toContain("const ownerBusy = changingPrivacy || pinning;");
+    expect(publication).toContain("if (!post || post.privacy === privacy || ownerBusy) return;");
+    expect(publication).toContain("if (!post || ownerBusy) return;");
+    expect(publication.match(/disabled=\{ownerBusy\}/g)).toHaveLength(2);
+    expect(publication).not.toMatch(/disabled=\{(changingPrivacy|pinning)\}/);
+  });
+
   it("VoiceOver : « Épinglée » est lu dans le libellé de la case, jamais par une marque cachée dans la case", () => {
     expect(gridCellLabel("Robe verte", true)).toBe("Robe verte, Épinglée");
     expect(gridCellLabel("Robe verte", false)).toBe("Robe verte");

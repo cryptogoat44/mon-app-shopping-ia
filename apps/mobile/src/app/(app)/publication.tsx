@@ -69,8 +69,14 @@ export default function PostDetailScreen() {
     else router.replace("/profile");
   }
 
+  // Visibilité et épingle : une seule demande à la fois. Chaque réponse rend
+  // la publication entière ou une partie ; deux demandes croisées pouvaient
+  // remettre à l'écran l'ancienne visibilité (ou l'ancienne épingle) alors que
+  // le serveur gardait la nouvelle.
+  const ownerBusy = changingPrivacy || pinning;
+
   async function handlePrivacy(privacy: PrivacyLevel) {
-    if (!post || post.privacy === privacy) return;
+    if (!post || post.privacy === privacy || ownerBusy) return;
     setChangingPrivacy(true);
     setError(null);
     try {
@@ -85,15 +91,16 @@ export default function PostDetailScreen() {
   }
 
   // Épingler sur son profil (migration 0049) : la réponse du serveur fait
-  // foi ; un refus (3 au plus) montre sa phrase.
+  // foi ; un refus (3 au plus) montre sa phrase. Seule la date de l'épingle
+  // change, sur la publication telle qu'elle est À LA RÉPONSE.
   async function handlePin() {
-    if (!post || pinning) return;
+    if (!post || ownerBusy) return;
     const action = pinActionOf(post);
     setPinning(true);
     setError(null);
     try {
       const { pinnedAt } = await updatePostPin(post.id, action === "pin");
-      setPost({ ...post, pinnedAt });
+      setPost((current) => (current ? { ...current, pinnedAt } : current));
       showToast(pinnedAt === null ? t.profilePins.unpinned : t.profilePins.pinned);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : t.profilePins.pinError);
@@ -166,9 +173,9 @@ export default function PostDetailScreen() {
                     hitSlop={{ top: 8, bottom: 8, left: 2, right: 2 }}
                     style={[styles.pill, post.privacy === level ? styles.pillActive : null]}
                     onPress={() => handlePrivacy(level)}
-                    disabled={changingPrivacy}
+                    disabled={ownerBusy}
                     accessibilityRole="radio"
-                    accessibilityState={{ selected: post.privacy === level }}
+                    accessibilityState={{ selected: post.privacy === level, disabled: ownerBusy }}
                   >
                     <Text style={[styles.pillLabel, post.privacy === level ? styles.pillLabelActive : null]}>{t.vaultLabels.privacy[level]}</Text>
                   </Pressable>
@@ -178,12 +185,12 @@ export default function PostDetailScreen() {
               {pinEntryShown(post, isMine) ? (
                 <Pressable
                   onPress={handlePin}
-                  disabled={pinning}
+                  disabled={ownerBusy}
                   hitSlop={8}
-                  style={[styles.pinRow, pinning ? styles.busy : null]}
+                  style={[styles.pinRow, ownerBusy ? styles.busy : null]}
                   accessibilityRole="button"
                   accessibilityHint={t.profilePins.pinHint}
-                  accessibilityState={{ disabled: pinning }}
+                  accessibilityState={{ disabled: ownerBusy }}
                   testID="epingler"
                 >
                   <PinIcon size={16} tint={color.encre} />
