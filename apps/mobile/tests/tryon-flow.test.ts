@@ -454,3 +454,38 @@ describe("signalement : aucune image, un motif, un commentaire facultatif borné
     expect(buildReport(ITEM, "spam" as never, "")).toBeNull();
   });
 });
+
+describe("quotas par membre (lot quotas) : 5 essais par mois pour un compte gratuit, aucune limite du mois pour un abonné", () => {
+  const LIMITED = { ...REMAINING, monthlyLimit: 5 };
+  const UNLIMITED = { ...REMAINING, free: 0, bonus: 0, monthlyLimit: null };
+
+  it("la limite du mois est lue (nombre ou null) ; absente d'un serveur plus ancien, ou illisible : laissée de côté", () => {
+    const status = (remaining: unknown) => readTryonStatus({ enabled: true, ageGate: "adult", consent: { required: false, version: "2026-11-v1" }, remaining });
+    expect(status(LIMITED)).toMatchObject({ remaining: { monthlyLimit: 5 } });
+    expect(status(UNLIMITED)).toMatchObject({ remaining: { monthlyLimit: null } });
+    expect(status(REMAINING)).toEqual(ON);
+    expect(status({ ...REMAINING, monthlyLimit: "5" })).toEqual(ON);
+  });
+
+  it("sans limite du mois : toujours des essais, aucun compteur affiché", () => {
+    expect(hasTriesLeft(UNLIMITED)).toBe(true);
+    expect(remainingText(UNLIMITED)).toBeNull();
+    expect(remainingText(LIMITED)).toBe("Il vous reste 3 essais ce mois-ci (+5 offerts)");
+  });
+
+  it("plus aucun essai : « Vous avez utilisé vos 5 essais de novembre. Ils reviennent le 1er décembre. », en français et en anglais", () => {
+    const used = { ...ON, remaining: { ...LIMITED, free: 0, bonus: 0 } };
+    expect(quotaMessage(used, "fr")).toBe("Vous avez utilisé vos 5 essais de novembre. Ils reviennent le 1er décembre.");
+    setActiveLocale("en");
+    expect(quotaMessage(used, "en")).toBe("You've used your 5 try-ons for November. They'll be back on December 1.");
+    setActiveLocale("fr");
+    // Avril : « d'avril » ; serveur plus ancien (sans limite) : le texte d'avant.
+    expect(quotaMessage({ ...ON, remaining: { ...LIMITED, free: 0, bonus: 0, nextReset: "2027-04-30T22:00:00.000Z" } }, "fr")).toBe("Vous avez utilisé vos 5 essais d'avril. Ils reviennent le 1er mai.");
+    expect(quotaMessage({ ...ON, remaining: { ...REMAINING, free: 0, bonus: 0 } }, "fr")).toBe(tryonFr.remaining.none("1er décembre"));
+  });
+
+  it("aucun prix, aucune mention d'abonnement", () => {
+    const texts = [tryonFr.remaining.noneMonth(5, "novembre", "1er décembre"), tryonEn.remaining.noneMonth(5, "November", "December 1")];
+    for (const text of texts) expect(text).not.toMatch(/abonn|subscri|€|\$|prix|price|premium/i);
+  });
+});

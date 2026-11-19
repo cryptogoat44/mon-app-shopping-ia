@@ -111,6 +111,9 @@ export const tryonFr = {
     count: (free: number, bonus: number) => `Il vous reste ${free} essai${free > 1 ? "s" : ""} ce mois-ci${bonus > 0 ? ` (+${bonus} offert${bonus > 1 ? "s" : ""})` : ""}`,
     none: (day: string) => `Vous avez utilisé tous vos essais de ce mois-ci. Les prochains seront disponibles le ${day}.`,
     noneUndated: "Vous avez utilisé tous vos essais de ce mois-ci.",
+    // Lot quotas : la limite du mois et son mois (« de novembre », « d'avril »).
+    noneMonth: (limit: number, month: string, day: string) =>
+      `Vous avez utilisé ${limit === 1 ? "votre essai" : `vos ${limit} essais`} ${/^[aeiouâéè]/i.test(month) ? "d'" : "de "}${month}. ${limit === 1 ? "Il revient" : "Ils reviennent"} le ${day}.`,
   },
   report: {
     title: "Signaler ce résultat",

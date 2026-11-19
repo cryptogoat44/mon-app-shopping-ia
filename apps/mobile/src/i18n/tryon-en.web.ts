@@ -96,6 +96,8 @@ export const tryonEn: TryonCatalog = {
     count: (free: number, bonus: number) => `You have ${free} try-on${free === 1 ? "" : "s"} left this month${bonus > 0 ? ` (+${bonus} bonus)` : ""}`,
     none: (day: string) => `You've used all your try-ons for this month. New ones will be available on ${day}.`,
     noneUndated: "You've used all your try-ons for this month.",
+    noneMonth: (limit: number, month: string, day: string) =>
+      `You've used ${limit === 1 ? "your try-on" : `your ${limit} try-ons`} for ${month}. ${limit === 1 ? "It'll be" : "They'll be"} back on ${day}.`,
   },
   report: {
     title: "Report this result",
