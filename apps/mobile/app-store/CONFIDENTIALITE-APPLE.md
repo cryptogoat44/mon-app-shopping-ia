@@ -61,7 +61,7 @@ Rien à cocher : aucune donnée de ce genre dans le code. Aucun paiement dans l'
 | Données audio | — | | | Micro coupé : `apps/mobile/app.json:92` (`"microphonePermission": false`) ; la vidéo reste sur l'iPhone (`apps/mobile/src/i18n/fr.ts:139`) |
 | Contenu de jeu | — | | | — |
 | Service client (*Customer Support*) | — | | | Pas de formulaire dans l'app : « Nous contacter » ouvre votre messagerie (`apps/mobile/src/lib/contact.ts:31-33`) ; les e-mails reçus sont hors de l'app |
-| **Autre contenu de l'utilisateur** (*Other User Content*) | ✅ | Oui | Fonctionnalité de l'app | Légendes `posts.ts:478-483`, commentaires `apps/backend/src/routes/comments.ts:106-120`, bio `me.ts:172-185`, titres des pièces du Vault et des Envies `vault.ts:198`, `apps/backend/src/routes/wishlist.ts:111`, noms des collections d'envies (`apps/backend/src/routes/collections.ts`), précisions d'un signalement `apps/backend/src/routes/reports.ts:41-49`, description d'une vidéo envoyée à Anthropic (avec accord) `videoMoments.ts:143-145` ; voie C allumée : les mots de « Que cherchez-vous ? », envoyés à SerpApi puis Google sans être enregistrés (`searches.ts:715-718`) |
+| **Autre contenu de l'utilisateur** (*Other User Content*) | ✅ | Oui | Fonctionnalité de l'app | Légendes `posts.ts:478-483`, commentaires `apps/backend/src/routes/comments.ts:106-120`, bio `me.ts:172-185`, lien affiché sur le profil (lot « vie sociale », migration 0049 : `apps/backend/src/routes/me.ts`, `apps/backend/src/lib/bioLink.ts`), titres des pièces du Vault et des Envies `vault.ts:198`, `apps/backend/src/routes/wishlist.ts:111`, noms des collections d'envies (`apps/backend/src/routes/collections.ts`), précisions d'un signalement `apps/backend/src/routes/reports.ts:41-49`, description d'une vidéo envoyée à Anthropic (avec accord) `videoMoments.ts:143-145` ; voie C allumée : les mots de « Que cherchez-vous ? », envoyés à SerpApi puis Google sans être enregistrés (`searches.ts:715-718`) |
 
 ### Historique de navigation (*Browsing History*)
 
@@ -184,6 +184,7 @@ Avant chaque build envoyé à Apple, si l'un de ces changements est entré dans 
 - tout nouveau prestataire, toute nouvelle autorisation, tout nouvel événement de statistiques ;
 - les **notifications** (`PUSH_ENABLED`) et les **alertes prix et stock** : dès qu'elles sont allumées en production, la ligne « Expo, puis Apple » (partie 4) et le brouillon de la partie 7 s'appliquent ;
 - un **écran d'accord pour la photo envoyée à Google Lens**, s'il est décidé : il ne change pas les types de données, mais la politique et les notes pour Apple.
+- le **lien en bio** (lot « vie sociale », migration 0049) : c'est du « Contenu de l'utilisateur », comme la bio (ligne « Autre contenu de l'utilisateur » ci-dessus) ; aucun type nouveau. L'app n'enregistre aucun clic sur ce lien et ne le réécrit pas (pas d'affiliation) : rien à ajouter en « Historique de navigation » ni en « Interaction avec le produit ». À revoir si un jour des statistiques de clics ou un aperçu des liens étaient ajoutés.
 
 ---
 
