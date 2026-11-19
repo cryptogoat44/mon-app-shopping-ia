@@ -1016,3 +1016,42 @@ describe("export lisible : publications enregistrées (migration 0048)", () => {
     expect(visibleText(sectionHtml(render({}, none), "savedPosts"))).toContain(EXPORT_TEXT.noData.fr);
   });
 });
+
+describe("export lisible : épingles et lien en bio (migration 0049)", () => {
+  const ws = (text: string) => spaces(text).replace(/\s+/g, " ");
+
+  it("le profil montre le lien affiché, en texte (jamais un lien qui s'ouvre depuis le fichier) ; rien sans lien ou sans la colonne", () => {
+    const base = fixture();
+    const section = sectionHtml(render({ timeZone: "UTC" }), "account");
+    expect(ws(visibleText(section))).toContain("Lien affiché sur votre profil https://camille.example.com/lookbook?saison=hiver");
+    expect(section).not.toContain('href="https://camille.example.com');
+    expect(ws(visibleText(sectionHtml(render({ locale: "en" }), "account")))).toContain("Link shown on your profile https://camille.example.com/lookbook?saison=hiver");
+    const { link_url: _ignored, ...withoutColumn } = base.profile!;
+    for (const profile of [{ ...base.profile!, link_url: null }, withoutColumn]) {
+      expect(visibleText(sectionHtml(render({}, { ...base, profile }), "account"))).not.toContain("Lien affiché sur votre profil");
+    }
+  });
+
+  it("une adresse piégée reste du texte échappé", () => {
+    const base = fixture();
+    const section = sectionHtml(render({}, { ...base, profile: { ...base.profile!, link_url: 'https://exemple.com/"><script>alert(1)</script>' } }), "account");
+    expect(section).not.toContain("<script>alert(1)");
+    expect(section).toContain("&lt;script&gt;");
+  });
+
+  it("une publication épinglée le dit, avec la date ; une publication qui ne l'est pas ne dit rien", () => {
+    const page = render({ timeZone: "UTC" });
+    const section = ws(visibleText(sectionHtml(page, "posts")));
+    expect(section).toContain("Épinglée le 5 octobre 2026");
+    expect(section.match(/Épinglée le/g)).toHaveLength(1);
+    expect(ws(visibleText(sectionHtml(render({ locale: "en", timeZone: "UTC" }), "posts")))).toContain("Pinned on");
+  });
+
+  it("les deux colonnes ont leur libellé : aucune « colonne inconnue »", () => {
+    expect(EXPORT_COLUMNS.profile.link_url.label).toEqual({ fr: "Lien affiché sur votre profil", en: "Link shown on your profile" });
+    expect(EXPORT_COLUMNS.posts.pinned_at.label).toEqual({ fr: "Épinglée le", en: "Pinned on" });
+    const onUnknownColumn = vi.fn();
+    render({ onUnknownColumn });
+    expect(onUnknownColumn).not.toHaveBeenCalled();
+  });
+});

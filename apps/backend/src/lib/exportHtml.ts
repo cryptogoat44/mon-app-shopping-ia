@@ -386,6 +386,8 @@ function accountSection(ctx: Ctx): Html {
     .field("display_name")
     .field("avatar_url", imageOrLink(ctx, row.avatar_url, (site) => tr(ctx, EXPORT_TEXT.viewImage, { site })))
     .field("bio", multiline(row.bio))
+    // Lien en bio (migration 0049) : l'adresse en texte, jamais un lien qui s'ouvre depuis le fichier.
+    .field("link_url", multiline(row.link_url))
     .field("locale", enumLabel(ctx, APP_LOCALE_LABELS, row.locale))
     .field("default_privacy", enumLabel(ctx, PRIVACY_LABELS, row.default_privacy))
     .field("piece_sends_from", enumLabel(ctx, PIECE_SENDS_FROM_LABELS, row.piece_sends_from))
@@ -606,6 +608,7 @@ function postsSection(ctx: Ctx): Html {
       .field("media_kind", enumLabel(ctx, MEDIA_KIND_LABELS, row.media_kind))
       .line(tr(ctx, EXPORT_TEXT.shownPiece), shownPiece)
       .field("hidden_at")
+      .field("pinned_at")
       .render(
         tr(ctx, EXPORT_TEXT.postTitle, { type, date: plainDate(ctx, row.created_at) }),
         tagged.length > 0 ? html`<h4>${tr(ctx, EXPORT_TEXT.taggedTitle, { count: String(tagged.length) })}</h4>${tagged.map((t) => taggedCard(ctx, t))}` : null

@@ -71,6 +71,8 @@ export function fixture(): ExportData {
       updated_at: "2026-10-01T08:00:00+00:00",
       piece_sends_from: "following",
       messages_from: "everyone",
+      // Lien en bio (migration 0049).
+      link_url: "https://camille.example.com/lookbook?saison=hiver",
     },
     productSearches: [
       {
@@ -163,6 +165,8 @@ export function fixture(): ExportData {
         media_thumb_url: own("post-media", "photo-mini.jpg"),
         hidden_at: null,
         wishlist_item_id: null,
+        // Épinglée sur le profil (migration 0049).
+        pinned_at: "2026-10-05T10:00:00+00:00",
       },
       {
         id: "90000000-0000-4000-8000-000000000009",

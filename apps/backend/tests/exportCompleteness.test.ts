@@ -105,6 +105,12 @@ const POST_EXTRA_SECTIONS = postExtrasProbe.error ? [] : (["postMedia", "peopleT
 const savedPostsProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("saved_posts").select("user_id, post_id").limit(0);
 const SAVED_POST_SECTIONS = savedPostsProbe.error ? [] : (["savedPosts"] as const);
 
+// Épingles et lien en bio (lot « vie sociale ») : une publication épinglée et
+// un lien sur le profil, seulement une fois la migration 0049 appliquée sur la
+// base des tests (sans elle, ni l'une ni l'autre colonne n'existe).
+const profileExtrasProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("profiles").select("link_url").limit(0);
+const PROFILE_EXTRAS_MIGRATED = !profileExtrasProbe.error;
+
 // Sections qui sont un objet (ou null), pas une liste.
 const OBJECT_SECTIONS = ["account", "profile", "adminRole", "suspension", ...(TRYON_MIGRATED ? (["tryonProfile"] as const) : [])] as const;
 
@@ -276,6 +282,15 @@ describe("export RGPD complet", () => {
       { fieldname: "file", filename: "a.png", contentType: "image/png", data: PNG }
     );
     postId = (await app.inject({ method: "POST", url: "/api/posts", headers: { ...authHeaders(user.token), ...post.headers }, payload: post.payload })).json().id;
+
+    // Épingles et lien en bio (migration 0049) : sa publication épinglée (avant
+    // la suspension, plus bas), et un lien sur son profil.
+    if (PROFILE_EXTRAS_MIGRATED) {
+      const pinned = await app.inject({ method: "PUT", url: `/api/posts/${postId}/pin`, headers: authHeaders(user.token), payload: { pinned: true } });
+      if (pinned.statusCode !== 200) throw new Error(`Épingle de test refusée (${pinned.statusCode}).`);
+      const linked = await app.supabaseAdmin.from("profiles").update({ link_url: "https://exemple.com/lookbook" }).eq("id", user.id);
+      if (linked.error) throw linked.error;
+    }
 
     // J'aime donné sur la publication d'un ami.
     const friendPost = buildMultipart({ type: "lifestyle", privacy: "public" }, { fieldname: "file", filename: "b.png", contentType: "image/png", data: PNG });
@@ -487,6 +502,11 @@ describe("export RGPD complet", () => {
     if (SAVED_POST_SECTIONS.length > 0) {
       expect(Object.keys(body.savedPosts[0]).sort()).toEqual(["author_id", "collection_id", "collection_name", "created_at", "post_available", "post_id"]);
       expect(body.savedPosts.map((row: { author_id: string; post_available: boolean; collection_id: string | null }) => [row.author_id, row.post_available, row.collection_id])).toEqual([[friend.id, true, null]]);
+    }
+    // Épingles et lien en bio (migration 0049) : le lien du profil et la date de l'épingle.
+    if (PROFILE_EXTRAS_MIGRATED) {
+      expect(body.profile.link_url).toBe("https://exemple.com/lookbook");
+      expect(body.posts.find((row: { id: string }) => row.id === postId)?.pinned_at).toEqual(expect.any(String));
     }
     expect(body.suspension).toMatchObject({ moderation_action_id: expect.any(String) });
     // Un appareil : son système et ses dates (avec 0036 : s'il reçoit les messages, les alertes), jamais son jeton.

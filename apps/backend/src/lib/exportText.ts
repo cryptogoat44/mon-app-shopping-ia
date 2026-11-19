@@ -128,6 +128,8 @@ export const EXPORT_COLUMNS = {
     is_private: shown("Compte privé", "Private account"),
     // Mentions (migration 0046).
     mentions_from: shown("Qui peut vous mentionner", "Who can mention you"),
+    // Lien en bio (migration 0049).
+    link_url: shown("Lien affiché sur votre profil", "Link shown on your profile"),
     created_at: shown("Compte créé le", "Account created on"),
     updated_at: shown("Profil modifié le", "Profile updated on"),
   },
@@ -257,6 +259,8 @@ export const EXPORT_COLUMNS = {
     mux_playback_id: technical("Identifiant de lecture vidéo", "Video playback identifier"),
     privacy: shown("Visible par", "Visible to"),
     hidden_at: shown("Masquée par la modération le", "Hidden by moderation on"),
+    // Épingles (migration 0049).
+    pinned_at: shown("Épinglée le", "Pinned on"),
     created_at: shown("Publiée le", "Posted on"),
   },
   postTaggedPieces: {
