@@ -188,8 +188,19 @@ function ItemPreview({
         <MessageExtract preview={preview} />
       ) : preview.kind === "collection" ? (
         <CollectionExtract preview={preview} busy={busy} onRemoveImage={onRemoveItemImage} />
-      ) : preview.bio ? (
-        <Text style={styles.body}>{preview.bio}</Text>
+      ) : preview.bio || preview.linkUrl ? (
+        <>
+          {preview.bio ? <Text style={styles.body}>{preview.bio}</Text> : null}
+          {/* Lien en bio (migration 0049) : en texte, jamais un lien qui s'ouvre ; « Retirer la bio » le retire aussi. */}
+          {preview.linkUrl ? (
+            <View style={styles.profileLink} testID="lien-du-profil-signale">
+              <Text style={styles.meta}>{t.profilePins.moderationLink}</Text>
+              <Text style={styles.body} selectable>
+                {preview.linkUrl}
+              </Text>
+            </View>
+          ) : null}
+        </>
       ) : null}
       <Badges
         hidden={preview.kind !== "user" && preview.hidden}
@@ -457,6 +468,7 @@ const styles = themedStyles(() => ({
   postImage: { width: 72, height: 72, borderRadius: radius.sm, backgroundColor: color.plinthe },
   postText: { flex: 1, gap: space.xs },
   body: { fontSize: font.secondary, color: color.encre, lineHeight: 20 },
+  profileLink: { marginTop: 6 },
   badge: { fontSize: font.caption, fontWeight: "600", color: color.danger },
   missing: { fontSize: font.secondary, color: color.acier, marginTop: space.md },
   section: { marginTop: space.md },

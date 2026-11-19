@@ -3,7 +3,9 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { Post, PrivacyLevel } from "@monapp/shared-types";
-import { ApiError, deletePost, fetchPost, updatePostPrivacy } from "@/lib/api";
+import { ApiError, deletePost, fetchPost, updatePostPin, updatePostPrivacy } from "@/lib/api";
+import { pinActionOf, pinEntryShown } from "@/lib/profile-pins";
+import { PinIcon } from "@/components/icons";
 import { PRIVACY_LEVELS } from "@/lib/vault-labels";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
@@ -32,6 +34,7 @@ export default function PostDetailScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [commentCount, setCommentCount] = useState<number | null>(null);
   const [changingPrivacy, setChangingPrivacy] = useState(false);
+  const [pinning, setPinning] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -78,6 +81,24 @@ export default function PostDetailScreen() {
       setError(e instanceof ApiError ? e.message : t.postDetail.visibilityError);
     } finally {
       setChangingPrivacy(false);
+    }
+  }
+
+  // Épingler sur son profil (migration 0049) : la réponse du serveur fait
+  // foi ; un refus (3 au plus) montre sa phrase.
+  async function handlePin() {
+    if (!post || pinning) return;
+    const action = pinActionOf(post);
+    setPinning(true);
+    setError(null);
+    try {
+      const { pinnedAt } = await updatePostPin(post.id, action === "pin");
+      setPost({ ...post, pinnedAt });
+      showToast(pinnedAt === null ? t.profilePins.unpinned : t.profilePins.pinned);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : t.profilePins.pinError);
+    } finally {
+      setPinning(false);
     }
   }
 
@@ -153,6 +174,22 @@ export default function PostDetailScreen() {
                   </Pressable>
                 ))}
               </View>
+              {/* Épingler sur mon profil (migration 0049) : ses photos seulement ; caché sans 0049. */}
+              {pinEntryShown(post, isMine) ? (
+                <Pressable
+                  onPress={handlePin}
+                  disabled={pinning}
+                  hitSlop={8}
+                  style={[styles.pinRow, pinning ? styles.busy : null]}
+                  accessibilityRole="button"
+                  accessibilityHint={t.profilePins.pinHint}
+                  accessibilityState={{ disabled: pinning }}
+                  testID="epingler"
+                >
+                  <PinIcon size={16} tint={color.encre} />
+                  <Text style={styles.pinLabel}>{pinActionOf(post) === "pin" ? t.profilePins.pin : t.profilePins.unpin}</Text>
+                </Pressable>
+              ) : null}
               {error ? <ErrorMessage style={styles.message}>{error}</ErrorMessage> : null}
               {!confirming ? (
                 <Pressable onPress={() => setConfirming(true)} hitSlop={12} style={styles.deleteRow} accessibilityRole="button">
@@ -216,6 +253,9 @@ const styles = themedStyles(() => ({
   pillActive: { backgroundColor: color.vert, borderColor: color.vert },
   pillLabel: { fontSize: font.caption, color: color.acier },
   pillLabelActive: { color: color.blanc, fontWeight: "600" },
+  pinRow: { flexDirection: "row", alignItems: "center", gap: space.xs, minHeight: 44, marginBottom: space.sm },
+  pinLabel: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
+  busy: { opacity: 0.6 },
   deleteRow: { alignItems: "center", minHeight: 44, justifyContent: "center" },
   deleteLabel: { color: color.danger, fontSize: font.secondary, fontWeight: "600" },
   confirm: { backgroundColor: color.plinthe, borderRadius: radius.md, padding: space.md },

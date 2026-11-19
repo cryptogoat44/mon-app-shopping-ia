@@ -10,8 +10,10 @@ import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, fetchMyLifestylePosts, fetchVault } from "@/lib/api";
 import type { Post, VaultItem } from "@monapp/shared-types";
-import { CameraIcon, ClockIcon, PhotosIcon, PlusIcon, SettingsIcon, TagIcon, VerifiedIcon } from "@/components/icons";
+import { CameraIcon, ClockIcon, PhotosIcon, PinIcon, PlusIcon, SettingsIcon, TagIcon, VerifiedIcon } from "@/components/icons";
 import { hasSeveralPhotos } from "@/lib/post-extras";
+import { pinnedFirst } from "@/lib/profile-pins";
+import { ProfileLink } from "@/components/profile-link";
 import { Avatar } from "@/components/avatar";
 import { AvatarPhotoFlow } from "@/components/avatar-photo-flow";
 import { onVaultChanged } from "@/lib/vault-changes";
@@ -119,6 +121,8 @@ export default function ProfileScreen() {
     }
   }
 
+  // Épingles (migration 0049) : ses photos épinglées en tête, avec une marque.
+  const lifestyleGrid = pinnedFirst(lifestylePosts);
   const isEmptyVault = segment === "vault" && !vaultError && items.length === 0;
   const isEmptyLifestyle = segment === "lifestyle" && !lifestyleError && lifestylePosts.length === 0;
 
@@ -147,6 +151,8 @@ export default function ProfileScreen() {
         <View style={styles.who}>
           <Text style={styles.name} accessibilityRole="header">{profile?.displayName}</Text>
           {profile?.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
+          {/* Lien en bio (migration 0049) : le même écran d'avertissement que pour les autres. */}
+          <ProfileLink url={profile?.linkUrl} align="start" />
           <Pressable
             onPress={() => router.push("/edit-profile")}
             hitSlop={{ top: 4, bottom: 4 }}
@@ -313,7 +319,7 @@ export default function ProfileScreen() {
               </Pressable>
             </View>
           ) : (
-            lifestylePosts.map((post) => (
+            lifestyleGrid.posts.map((post) => (
               <Pressable
                 key={post.id}
                 style={styles.piece}
@@ -344,6 +350,12 @@ export default function ProfileScreen() {
                 {hasSeveralPhotos(post) ? (
                   <View style={styles.photosMark} accessible accessibilityLabel={t.carousel.morePhotos}>
                     <PhotosIcon size={12} />
+                  </View>
+                ) : null}
+                {/* Épinglée (migration 0049) : une punaise dans le coin opposé. */}
+                {lifestyleGrid.pinnedIds.has(post.id) ? (
+                  <View style={styles.pinMark} accessible accessibilityLabel={t.profilePins.pinnedMark} testID="marque-epinglee">
+                    <PinIcon size={12} />
                   </View>
                 ) : null}
               </Pressable>
@@ -465,6 +477,17 @@ const styles = themedStyles(() => ({
     position: "absolute",
     top: 8,
     right: 8,
+    width: 20,
+    height: 20,
+    borderRadius: radius.full,
+    backgroundColor: color.voileImage,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pinMark: {
+    position: "absolute",
+    top: 8,
+    left: 8,
     width: 20,
     height: 20,
     borderRadius: radius.full,

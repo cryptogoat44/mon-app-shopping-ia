@@ -299,3 +299,13 @@ export function TaggedPeopleIcon({ size = 16, tint = color.surImage, strokeWidth
     </Svg>
   );
 }
+
+/** Une punaise : une publication épinglée en haut d'un profil (migration 0049). */
+export function PinIcon({ size = 16, tint = color.surImage, strokeWidth = 1.6 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M9 3.5h6l-1 5.5 3.5 3.5v1.5h-11V12.5L10 9 9 3.5z" stroke={tint} strokeWidth={strokeWidth} strokeLinejoin="round" />
+      <Path d="M12 14v6.5" stroke={tint} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}

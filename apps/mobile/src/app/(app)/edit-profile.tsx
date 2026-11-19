@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { BIO_MAX_LENGTH, BIO_MAX_LINES, normalizeBio } from "@monapp/shared-types";
+import { BIO_LINK_MAX_LENGTH, BIO_MAX_LENGTH, BIO_MAX_LINES, normalizeBio } from "@monapp/shared-types";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, updateMyProfile } from "@/lib/api";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
@@ -12,6 +12,7 @@ import { ErrorMessage } from "@/components/error-message";
 import { Avatar } from "@/components/avatar";
 import { AvatarPhotoFlow } from "@/components/avatar-photo-flow";
 import { bioCounter, bioError, nextBioInput } from "@/lib/bio-input";
+import { bioLinkError, linkToSend } from "@/lib/bio-link";
 import { themedStyles } from "@/theme/themed-styles";
 
 const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
@@ -30,6 +31,13 @@ export default function EditProfileScreen() {
   const [photoOpen, setPhotoOpen] = useState(false);
   const counter = bioCounter(bio);
   const bioIssue = bioError(bio);
+  // Lien en bio (migration 0049) : le champ n'existe que si le serveur connaît
+  // les liens (`linkUrl` dans le profil). Vérifié tout de suite avec la règle
+  // du serveur, qui reste seul juge ; envoyé seulement s'il change.
+  const linkShown = profile?.linkUrl !== undefined;
+  const [link, setLink] = useState(profile?.linkUrl ?? "");
+  const linkIssue = linkShown ? bioLinkError(link) : null;
+  const blocked = bioIssue !== null || linkIssue !== null;
 
   function safeBack() {
     if (router.canGoBack()) router.back();
@@ -52,13 +60,19 @@ export default function EditProfileScreen() {
       setError(bioIssue);
       return;
     }
+    if (linkIssue) {
+      setError(linkIssue);
+      return;
+    }
 
     setSubmitting(true);
     try {
+      const linkUrl = linkToSend(profile?.linkUrl, link);
       await updateMyProfile({
         username: normalizedUsername,
         displayName: displayName.trim(),
         bio: normalizeBio(bio),
+        ...(linkUrl !== undefined ? { linkUrl } : {}),
       });
       await refreshProfile();
       showToast(t.editProfile.saved);
@@ -142,15 +156,38 @@ export default function EditProfileScreen() {
             />
             {bioIssue ? <ErrorMessage style={styles.fieldError}>{bioIssue}</ErrorMessage> : <Text style={styles.hint}>{t.editProfile.bioHint(BIO_MAX_LENGTH, BIO_MAX_LINES)}</Text>}
           </View>
+          {linkShown ? (
+            <View style={styles.field}>
+              <Text style={styles.label}>{t.profilePins.linkLabel}</Text>
+              <TextInput
+                style={styles.input}
+                placeholderTextColor={color.acier}
+                placeholder="https://"
+                value={link}
+                onChangeText={setLink}
+                keyboardType="url"
+                inputMode="url"
+                textContentType="URL"
+                autoCapitalize="none"
+                autoCorrect={false}
+                spellCheck={false}
+                maxLength={BIO_LINK_MAX_LENGTH + 20}
+                accessibilityLabel={t.profilePins.linkLabel}
+                accessibilityHint={t.profilePins.linkHelp}
+                testID="champ-lien"
+              />
+              {linkIssue ? <ErrorMessage style={styles.fieldError}>{linkIssue}</ErrorMessage> : <Text style={styles.hint}>{t.profilePins.linkHelp}</Text>}
+            </View>
+          ) : null}
 
           <Pressable
-            style={[styles.cta, submitting || !username || !displayName || bioIssue ? styles.ctaDisabled : null]}
+            style={[styles.cta, submitting || !username || !displayName || blocked ? styles.ctaDisabled : null]}
             onPress={handleSubmit}
-            disabled={submitting || !username || !displayName || bioIssue !== null}
+            disabled={submitting || !username || !displayName || blocked}
             accessibilityRole="button"
             accessibilityLabel={t.editProfile.save}
           >
-            <Text style={[styles.ctaLabel, submitting || !username || !displayName || bioIssue ? styles.ctaLabelDisabled : null]}>
+            <Text style={[styles.ctaLabel, submitting || !username || !displayName || blocked ? styles.ctaLabelDisabled : null]}>
               {submitting ? t.editProfile.saving : t.editProfile.save}
             </Text>
           </Pressable>

@@ -7,8 +7,10 @@ import type { Post, UserProfile } from "@monapp/shared-types";
 import { ApiError, fetchUserPosts, fetchUserProfile, followUser, unfollowUser } from "@/lib/api";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
-import { LockIcon, MoreIcon, PhotosIcon } from "@/components/icons";
+import { LockIcon, MoreIcon, PhotosIcon, PinIcon } from "@/components/icons";
 import { hasSeveralPhotos } from "@/lib/post-extras";
+import { appendGridPage, profileGrid } from "@/lib/profile-pins";
+import { ProfileLink } from "@/components/profile-link";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { SpotImage } from "@/components/spot-image";
 import { ImageUnavailable } from "@/components/image-unavailable";
@@ -37,12 +39,16 @@ function chunk<T>(items: T[], size: number): T[][] {
 // Compte privé (lot « vie sociale ») : qui n'est pas un abonné accepté ne voit
 // que nom, photo, bio et compteurs, un cadenas et une phrase ; le bouton dit
 // « Suivre », puis « Demandé » (le toucher annule la demande).
+// Épingles et lien en bio (migration 0049) : ses publications épinglées en
+// tête de la grille, avec une marque ; son lien sous la bio (jamais pour un
+// compte privé vu par un inconnu : le serveur ne le donne pas).
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { showToast } = useToast();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [posts, setPosts] = useState<Post[] | null>(null);
+  const [pinnedIds, setPinnedIds] = useState<ReadonlySet<string>>(new Set());
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [state, setState] = useState<"loading" | "ready" | "not_found" | "error">("loading");
@@ -62,7 +68,9 @@ export default function UserProfileScreen() {
         return;
       }
       setProfile(loadedProfile);
-      setPosts(page.posts);
+      const grid = profileGrid(page);
+      setPosts(grid.posts);
+      setPinnedIds(grid.pinnedIds);
       setNextCursor(page.nextCursor);
       setState("ready");
     } catch (e) {
@@ -79,7 +87,8 @@ export default function UserProfileScreen() {
     setLoadingMore(true);
     try {
       const page = await fetchUserPosts(id, nextCursor);
-      setPosts((prev) => [...(prev ?? []), ...page.posts]);
+      // Une épinglée revient à sa place chronologique : jamais deux fois.
+      setPosts((prev) => appendGridPage(prev ?? [], page.posts));
       setNextCursor(page.nextCursor);
     } catch {
       // silencieux : re-scroller relance le chargement
@@ -101,7 +110,9 @@ export default function UserProfileScreen() {
       // Les publications « abonnés » apparaissent ou disparaissent : on relit.
       const [loadedProfile, page] = await Promise.all([fetchUserProfile(profile.id), fetchUserPosts(profile.id)]);
       setProfile(loadedProfile);
-      setPosts(page.posts);
+      const grid = profileGrid(page);
+      setPosts(grid.posts);
+      setPinnedIds(grid.pinnedIds);
       setNextCursor(page.nextCursor);
     } catch (e) {
       showToast(e instanceof ApiError ? e.message : t.userProfile.followError);
@@ -160,6 +171,7 @@ export default function UserProfileScreen() {
       <Text style={styles.name} accessibilityRole="header">{profile.displayName}</Text>
       <Text style={styles.handle}>@{profile.username}</Text>
       {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
+      <ProfileLink url={profile.linkUrl} />
       {/* Compte privé vu par un inconnu : jamais le nombre de publications, et
           les deux compteurs restent du texte (ses listes ne s'ouvrent qu'à ses
           abonnés acceptés). Sinon, chacun ouvre sa liste. */}
@@ -272,6 +284,12 @@ export default function UserProfileScreen() {
                     <PhotosIcon size={14} />
                   </View>
                 ) : null}
+                {/* Épinglée (migration 0049) : une punaise dans l'autre coin. */}
+                {pinnedIds.has(post.id) ? (
+                  <View style={styles.pinMark} accessible accessibilityLabel={t.profilePins.pinnedMark} testID="marque-epinglee">
+                    <PinIcon size={13} />
+                  </View>
+                ) : null}
               </Pressable>
             ))}
           </View>
@@ -322,6 +340,7 @@ const styles = themedStyles(() => ({
   gridRow: { flexDirection: "row", gap: space.sm, marginBottom: space.sm },
   cell: { width: "32%", aspectRatio: 1, borderRadius: radius.sm, overflow: "hidden", backgroundColor: color.plinthe },
   photosMark: { position: "absolute", top: 6, right: 6, width: 22, height: 22, borderRadius: radius.full, backgroundColor: color.voileImage, alignItems: "center", justifyContent: "center" },
+  pinMark: { position: "absolute", top: 6, left: 6, width: 22, height: 22, borderRadius: radius.full, backgroundColor: color.voileImage, alignItems: "center", justifyContent: "center" },
   empty: { fontSize: font.secondary, color: color.acier, textAlign: "center", marginTop: space.md },
   footer: { paddingVertical: space.lg },
 }));
