@@ -70,7 +70,7 @@ describe("appels au serveur (contrat partagé)", () => {
     const analysis = await analyzeVideoLink({ url: TIKTOK, query: "veste en cuir" }, signal);
     expect(analysis.moments[0]?.size).toEqual({ width: 720, height: 1280 });
     const [url, init] = fetchMock.mock.calls[0]!;
-    expect(url).toBe("https://api.exemple.test/api/video-links/analyze");
+    expect(url).toBe("https://api.exemple.test/api/video-links/analyze?v=2");
     expect(init?.method).toBe("POST");
     expect(JSON.parse(init?.body as string)).toEqual({ url: TIKTOK, query: "veste en cuir" });
     expect((init?.headers as Record<string, string>)["Content-Type"]).toBe("application/json");

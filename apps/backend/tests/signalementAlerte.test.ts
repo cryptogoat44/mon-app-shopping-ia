@@ -22,9 +22,11 @@ vi.mock("@sentry/node", async (importOriginal) => {
 import * as Sentry from "@sentry/node";
 import { initSentry, moderationEventTags } from "../src/lib/sentry.js";
 import reportsRoutes from "../src/routes/reports.js";
+import { fakeSupabase } from "./fakeSupabase.js";
 
 const REPORTER = "99999999-9999-4999-8999-999999999999";
 const TARGET = "11111111-1111-4111-8111-111111111111";
+const AUTHOR = "22222222-2222-4222-8222-222222222222";
 type Mock = ReturnType<typeof vi.fn>;
 const scope = (Sentry as unknown as { __scope: { setTags: Mock; setTag: Mock; setUser: Mock; setFingerprint: Mock } }).__scope;
 const captureMessage = vi.mocked(Sentry.captureMessage);
@@ -40,10 +42,11 @@ describe("signalement : une seule alerte, rien sur la personne qui signale", () 
       request.user = { id: REPORTER } as never;
     });
     app.decorate("rateLimit", () => async () => {});
-    app.decorate("supabaseAdmin", {
-      from: () => ({ insert: async () => ({ error: null }) }),
-      rpc: async () => ({ data: [{ outcome: autoHideOutcome, action_id: null }], error: null }),
-    } as never);
+    // Lot « corrections en ligne » : une publication ne se signale que si on
+    // la voit ; celle-ci est publique, d'un autre compte.
+    const fake = fakeSupabase({ rpc: async () => ({ data: [{ outcome: autoHideOutcome, action_id: null }], error: null }) });
+    fake.table("posts").push({ id: TARGET, user_id: AUTHOR, type: "lifestyle", privacy: "public", hidden_at: null, created_at: "2026-11-01T12:00:00Z" });
+    app.decorate("supabaseAdmin", fake.db as never);
     await app.register(reportsRoutes);
     await app.ready();
   });

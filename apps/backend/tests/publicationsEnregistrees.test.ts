@@ -801,7 +801,11 @@ describe("export des données", () => {
     const target = await savedApp(fake.db);
 
     const body = (await as(target, BRUNO).get("/api/me/export")).json();
-    expect(Object.keys(body).at(-1)).toBe("savedPosts");
+    // Ajoutée à la suite des clés de la migration 0047 ; après elle, seulement
+    // celles d'une migration plus récente (quotas par membre, 0053).
+    const keys = Object.keys(body);
+    expect(keys.indexOf("savedPosts")).toBe(keys.indexOf("peopleTagsReceived") + 1);
+    expect(keys.slice(keys.indexOf("savedPosts") + 1)).toEqual(["memberEntitlements", "monthlyQuota"]);
     expect(body.savedPosts.map((row: Row) => [row.post_id, row.collection_name, row.author_id, row.post_available])).toEqual([
       [ANNA_PUBLIC, "Été", ANNA, true],
       [BRUNO_OWN, null, BRUNO, true],

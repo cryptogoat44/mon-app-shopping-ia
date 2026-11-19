@@ -1,9 +1,10 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildApp } from "../src/app.js";
 import { env } from "../src/env.js";
 import { MAX_CALLS_PER_PHOTO } from "../src/lib/deadline.js";
+import { resetMemberQuotasProbe } from "../src/lib/memberQuotas.js";
 import { RATE_LIMITS } from "../src/lib/rateLimits.js";
 import { readSearchCounts, SearchCapacityError, type QuotaRow, type SearchCaps } from "../src/lib/searchCapacity.js";
 import { callsPerPhoto, capacityStatus, nextParisMidnight, parisMidnight } from "../src/lib/searchCapacityStatus.js";
@@ -11,7 +12,14 @@ import searchCapacityRoutes, { CAPACITY_UNREADABLE } from "../src/routes/searchC
 
 // Lot limites annoncées : le compteur lu AVANT l'effort, sans base ni réseau.
 // La route elle-même, contre la base de développement, est vérifiée par
-// searchCapacityRoute.test.ts (sur le Mac).
+// searchCapacityRoute.test.ts (sur le Mac). Ici, la base n'a pas la
+// migration 0053 (sonde member_quotas_version absente) : la lecture est celle
+// d'avant ; avec 0053, voir quotasMembres.test.ts.
+
+/** Sonde des quotas par membre (0053) : absente ici. */
+const PROBE = "member_quotas_version";
+const PROBE_ABSENT = { data: null, error: { code: "PGRST202", message: "absente" } };
+beforeEach(() => resetMemberQuotasProbe());
 
 const CAPS: SearchCaps = { daily: 25, monthly: 225, userDaily: 8, renewalDay: 3 };
 // 13 h à Paris, un jour d'hiver.
@@ -98,11 +106,11 @@ describe("état du compteur montré par l'app", () => {
   });
 });
 
-/** Un serveur réduit à ce que la lecture utilise : serpapi_quota, et un journal espionné. */
+/** Un serveur réduit à ce que la lecture utilise : serpapi_quota (base sans 0053), et un journal espionné. */
 function fakeServer(answer: { data: unknown; error: unknown }) {
-  const rpc = vi.fn(async (_name: string, _params: Record<string, unknown>) => answer);
+  const rpc = vi.fn(async (name: string, _params?: Record<string, unknown>) => (name === PROBE ? PROBE_ABSENT : answer));
   const log = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
-  const fastify = { supabaseAdmin: { rpc } } as unknown as FastifyInstance;
+  const fastify = { supabaseAdmin: { rpc }, log } as unknown as FastifyInstance;
   return { fastify, rpc, log: log as unknown as FastifyInstance["log"], spies: log };
 }
 
@@ -111,8 +119,9 @@ describe("lecture pour l'app : rien n'est réservé, rien n'est journalisé", ()
     const refused = { ...row({ day: 25, month: 40, user: 2 }), allowed: false, refused_by: "day" };
     const { fastify, rpc, log, spies } = fakeServer({ data: [refused], error: null });
     const counts = await readSearchCounts(fastify, log, "personne-1");
-    expect(rpc).toHaveBeenCalledOnce();
-    expect(rpc.mock.calls[0]).toEqual([
+    // La sonde de 0053, puis la même lecture qu'avant.
+    expect(rpc.mock.calls.map(([name]) => name)).toEqual([PROBE, "serpapi_quota"]);
+    expect(rpc.mock.calls[1]).toEqual([
       "serpapi_quota",
       {
         p_daily_cap: env.SERPAPI_DAILY_CAP,
@@ -126,6 +135,7 @@ describe("lecture pour l'app : rien n'est réservé, rien n'est journalisé", ()
     ]);
     expect(counts.row).toMatchObject({ allowed: false, refused_by: "day", day_count: 25 });
     expect(counts.caps).toEqual({ daily: env.SERPAPI_DAILY_CAP, monthly: env.SERPAPI_MONTHLY_CAP, userDaily: env.SERPAPI_USER_DAILY_CAP, renewalDay: env.SERPAPI_RENEWAL_DAY });
+    expect(counts.tier).toBeNull();
     expect(spies.info).not.toHaveBeenCalled();
   });
 
@@ -151,7 +161,7 @@ describe("route GET /api/searches/capacity", () => {
   async function routeWith(answer: { data: unknown; error: unknown }, signedIn = true) {
     const app = Fastify({ logger: false });
     apps.push(app);
-    const rpc = vi.fn(async (_name: string, _params: Record<string, unknown>) => answer);
+    const rpc = vi.fn(async (name: string, _params?: Record<string, unknown>) => (name === PROBE ? PROBE_ABSENT : answer));
     const limits: string[] = [];
     app.decorateRequest("user", null);
     app.decorate("supabaseAdmin", { rpc } as unknown as SupabaseClient);
@@ -177,7 +187,7 @@ describe("route GET /api/searches/capacity", () => {
     const body = response.json();
     expect(Object.keys(body).sort()).toEqual(["remainingToday", "service", "user"]);
     expect(body).toMatchObject({ user: { used: 6, limit: env.SERPAPI_USER_DAILY_CAP }, service: { status: "open" } });
-    expect(rpc.mock.calls[0]![1]).toMatchObject({ p_user_id: "personne-1", p_reserve: false });
+    expect(rpc.mock.calls.find(([name]) => name === "serpapi_quota")![1]).toMatchObject({ p_user_id: "personne-1", p_reserve: false });
     expect(limits).toEqual(["searchCapacityRead"]);
     expect(RATE_LIMITS.searchCapacityRead).toEqual({ max: 30, windowMs: 10 * 60 * 1000 });
   });

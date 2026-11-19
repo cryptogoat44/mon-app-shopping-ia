@@ -2,16 +2,17 @@ import { useEffect } from "react";
 import { AccessibilityInfo, Platform, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { color, font, radius, space } from "@/theme/tokens";
 import { getActiveLocale } from "@/i18n";
-import { noticeText, type LimitsNotice } from "@/lib/search-limits";
+import { isQuietNotice, noticeText, type LimitsNotice } from "@/lib/search-limits";
 import { themedStyles } from "@/theme/themed-styles";
 
 // Lot limites annoncées (2026-11-03) : Spotter en pause ou part du jour
 // épuisée, dit AVANT de choisir une photo (accueil) ou de la cadrer — un
 // encadré annoncé aux lecteurs d'écran, sans couleur d'erreur (rien n'a
-// échoué). Les dernières recherches du jour : une ligne discrète.
+// échoué). Les dernières recherches du jour (ou, lot quotas, du mois) : une
+// ligne discrète.
 export function SearchLimitsNotice({ notice, style }: { notice: LimitsNotice | null; style?: StyleProp<ViewStyle> }) {
   const text = notice ? noticeText(notice, Date.now(), getActiveLocale()) : null;
-  const spoken = text && notice?.kind !== "low" ? [text.title, text.body].filter(Boolean).join(" ") : null;
+  const spoken = text && !isQuietNotice(notice) ? [text.title, text.body].filter(Boolean).join(" ") : null;
 
   // VoiceOver ignore les zones annoncées (Android seulement) : dit une fois, à l'apparition.
   useEffect(() => {
@@ -21,7 +22,7 @@ export function SearchLimitsNotice({ notice, style }: { notice: LimitsNotice | n
   if (!notice || !text) return null;
   // Le style reçu (marges, place dans l'écran) est un style de bloc : il va sur
   // un conteneur, jamais sur le texte (la CI, avec les types de routes Expo, le refuse).
-  if (notice.kind === "low")
+  if (isQuietNotice(notice))
     return (
       <View style={style}>
         <Text style={styles.low}>{text.title}</Text>

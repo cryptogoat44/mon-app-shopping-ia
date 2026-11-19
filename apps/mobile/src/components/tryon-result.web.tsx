@@ -57,7 +57,7 @@ export function ResultStep({
         )}
       </View>
       <Paragraph>{tryonText.result.aiNotice}</Paragraph>
-      <Text style={styles.counter}>{remainingText(remaining)}</Text>
+      {remainingText(remaining) ? <Text style={styles.counter}>{remainingText(remaining)}</Text> : null}
       <PrimaryButton label={tryonText.result.save} onPress={onSave} disabled={imageFailed} />
       {reporting ? (
         <ReportForm

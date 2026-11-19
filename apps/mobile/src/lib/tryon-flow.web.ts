@@ -13,7 +13,7 @@ import type { TryonRemaining, TryonStatus } from "@monapp/shared-types";
 import { tryonText } from "../i18n/tryon.web";
 import { TRYON_CONSENT_TEXT_VERSION, type TryonServerCode } from "../i18n/tryon-fr.web";
 import { ApiError } from "./api-error";
-import { formatDayMonth } from "./format";
+import { formatDayMonth, formatMonthName } from "./format";
 import { isNetworkError } from "./network-error";
 import type { Locale } from "./preferences";
 import { PHOTO_SOURCE_MAX_BYTES, PHOTO_UPLOAD_MAX_BYTES, type PhotoRefusal } from "./tryon-photo.web";
@@ -189,18 +189,36 @@ export function resetDay(nextReset: string, locale: Locale): string | null {
 
 // ---- Essais restants ----
 
+/** Lot quotas : aucune limite du mois (monthlyLimit null, un abonné). */
+function unlimited(remaining: TryonRemaining): boolean {
+  return remaining.monthlyLimit === null;
+}
+
 export function hasTriesLeft(remaining: TryonRemaining): boolean {
-  return remaining.free + remaining.bonus > 0;
+  return unlimited(remaining) || remaining.free + remaining.bonus > 0;
 }
 
-/** « Il vous reste X essais ce mois-ci (+Y offerts) ». */
-export function remainingText(remaining: TryonRemaining): string {
-  return tryonText.remaining.count(remaining.free, remaining.bonus);
+/** « Il vous reste X essais ce mois-ci (+Y offerts) » ; rien sans limite du mois. */
+export function remainingText(remaining: TryonRemaining): string | null {
+  return unlimited(remaining) ? null : tryonText.remaining.count(remaining.free, remaining.bonus);
 }
 
-/** Plus aucun essai : la date des prochains, quand le statut la donne. */
+/** Le mois qui finit à la remise à zéro (« novembre ») ; null si illisible. */
+function endingMonth(nextReset: string, locale: Locale): string | null {
+  const at = Date.parse(nextReset);
+  if (Number.isNaN(at)) return null;
+  return formatMonthName(parisDay(new Date(at - 12 * 3_600_000)), locale);
+}
+
+/** Plus aucun essai : « Vous avez utilisé vos 5 essais de novembre. Ils
+ * reviennent le 1er décembre. » quand le statut donne la limite ; sinon la
+ * date des prochains, quand il la donne. */
 export function quotaMessage(status: TryonStatus, locale: Locale): string {
-  const day = status.enabled ? resetDay(status.remaining.nextReset, locale) : null;
+  if (!status.enabled) return tryonText.remaining.noneUndated;
+  const day = resetDay(status.remaining.nextReset, locale);
+  const month = endingMonth(status.remaining.nextReset, locale);
+  const limit = status.remaining.monthlyLimit;
+  if (day && month && typeof limit === "number" && limit > 0) return tryonText.remaining.noneMonth(limit, month, day);
   return day ? tryonText.remaining.none(day) : tryonText.remaining.noneUndated;
 }
 

@@ -23,7 +23,7 @@ import { ApiError } from "./api-error";
 import { readJpegDataUri, type PixelSize } from "./data-uri";
 import { containsLink } from "./link-detection";
 import { isNetworkError } from "./network-error";
-import { capacityFailure, capacityMonthTip, type CapacityFailure } from "./spot-capacity";
+import { capacityFailure, capacityMonthTip, monthlyQuotaCopy, type CapacityFailure } from "./spot-capacity";
 import type { Locale } from "./preferences";
 import type { LinkAiFailure } from "./video-link-failures";
 
@@ -185,6 +185,7 @@ const RETRYABLE: readonly LinkAiFailure[] = ["unavailable", "timeout", "busy", "
 function capacityMessage(capacity: CapacityFailure, locale: Locale): string {
   if (capacity.reason === "capacity_month") return `${t.result.capacityMonthTitle} ${capacityMonthTip(capacity.resumesOn, locale)}`;
   if (capacity.reason === "capacity_user") return `${t.result.capacityUserTitle} ${t.result.capacityUserTip}`;
+  if (capacity.reason === "capacity_user_month") return monthlyQuotaCopy(null, capacity.resumesOn, locale).join(" ");
   return `${t.result.capacityDayTitle} ${t.result.capacityDayTip}`;
 }
 

@@ -24,7 +24,7 @@ import sharp from "sharp";
 import type { Parcours } from "../boite-a-outils.js";
 import { genererVideosEssai } from "../../lib/videos-essai.js";
 import { COMBOS, type Combo } from "./lot-3.js";
-import { attendreBoutonActif, check, choisirFichier, ouvrirSpotter, suivreRequetes, visible, type Envoi, type Suivi } from "./spotter-outils.js";
+import { attendreBoutonActif, check, choisirFichier, ouvrirSpotter, ROUTE_LANCEMENT, suivreRequetes, visible, type Envoi, type Suivi } from "./spotter-outils.js";
 import { aucunChamp, capteur, champPhotoVide, champPret, entourerPiece, nouveauCompte, simulerResultats, TEXTES, zoneEnvoyee, type Textes } from "./lot-4-ter-outils.js";
 
 export const name = "Petit lot 2 — les mots d'une photo trient les propositions (site)";
@@ -32,7 +32,7 @@ export const outputDir = "petit-lot-2-captures";
 export const buildEnv = { EXPO_PUBLIC_POSTHOG_KEY: "phc_parcoursEcranFausseCle000000000", EXPO_PUBLIC_ENVIRONMENT: "development" };
 export const simulatedAi = true;
 
-const RUN = "**/api/searches/*/run";
+const RUN = ROUTE_LANCEMENT;
 
 /** Le lancement (multipart) porte les mots dans le champ « query ». */
 const avecMots = (lancement: string, mots: string): boolean => /name="query"/.test(lancement) && lancement.includes(mots);

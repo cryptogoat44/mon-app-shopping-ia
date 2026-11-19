@@ -452,11 +452,16 @@ describe("textes FR / EN (fiche)", () => {
   });
 
   it("la section est ajoutée à la fin des deux catalogues, avec les mêmes clés", () => {
-    // Puis seulement les sections du lot « vie sociale » (migrations 0045 à 0049), fusionné après,
+    // Ajoutée à la fin (règle du plan) ; les sections des lots suivants viennent après elle, dans le même ordre des deux côtés.
+    const frKeys = Object.keys(fr);
+    expect(Object.keys(en)).toEqual(frKeys);
+    expect(frKeys.indexOf("messageActions")).toBeGreaterThan(frKeys.indexOf("robotCheck"));
+    // Puis seulement la section du lot « quotas » (migration 0053, fusionné le premier sur main),
+    // celles du lot « vie sociale » (migrations 0045 à 0049), fusionné après,
     // et celles du lot « découverte » (« Pour vous », 0050 ; notifications d'activité, 0051).
     for (const catalog of [fr, en]) {
       const keys = Object.keys(catalog);
-      expect(keys.slice(keys.indexOf("messageActions") + 1)).toEqual(["privateAccount", "memberLists", "commentThreads", "carousel", "savedPosts", "profilePins", "forYou", "activityPush"]);
+      expect(keys.slice(keys.indexOf("messageActions") + 1)).toEqual(["monthlyQuota", "privateAccount", "memberLists", "commentThreads", "carousel", "savedPosts", "profilePins", "forYou", "activityPush"]);
     }
     expect(Object.keys(en.messageActions).sort()).toEqual(Object.keys(fr.messageActions).sort());
     for (const value of Object.values(fr.messageActions)) {

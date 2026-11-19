@@ -485,6 +485,8 @@ export interface SearchCapacityStatus {
   user: { used: number; limit: number; remaining: number; resetsAt: string };
   service: { status: "open" } | { status: "paused"; reason: Exclude<SearchCapacityLimit, "user">; reopensAt: string };
   remainingToday: number;
+  /** Part du mois (lot quotas, 0053) : absente d'un serveur sans elle ; null : aucune part du mois pour vous. */
+  monthlyQuota?: SearchMonthlyQuota | null;
 }
 
 function fieldOf(value: unknown, key: string): unknown {
@@ -2240,6 +2242,8 @@ export interface TryonRemaining {
   bonus: number;
   /** Début du prochain mois civil à Paris (ISO 8601). */
   nextReset: string;
+  /** Essais par mois (lot quotas) : absent d'un serveur plus ancien ; null : aucune limite du mois. */
+  monthlyLimit?: number | null;
 }
 
 /** Consentement à l'essayage : demandé tant que la version courante n'est pas acceptée. */
@@ -2440,6 +2444,49 @@ export const MESSAGE_ACTIONS_ERRORS = {
   /** La conversation n'est pas ouverte aux deux membres (409). */
   notOpen: "conversation_not_open",
 } as const;
+
+// ---- Quotas par membre (lot quotas, migration 0053) ----
+// Un compte gratuit a une part de recherches par mois civil (du 1er à 0 h,
+// heure de Paris), en plus de la part du jour ; un abonné n'en a pas (sauf
+// garde-fou du serveur). Champs additifs : une app plus ancienne les ignore.
+
+/** Code du refus « part du mois atteinte » (429), à côté de SEARCH_CAPACITY_ERRORS. */
+export const SEARCH_MONTHLY_QUOTA_ERROR = "search_capacity_user_month";
+
+/** Votre part du mois : `resetsOn`, le 1er du mois suivant (« AAAA-MM-JJ »,
+ * date de Paris) ; `resetsAt`, son minuit à Paris (ISO 8601, UTC). */
+export interface SearchMonthlyQuota {
+  limit: number;
+  used: number;
+  remaining: number;
+  resetsOn: string;
+  resetsAt: string;
+}
+
+/** Lit la part du mois sans lui faire confiance : undefined si le serveur
+ * ne l'envoie pas, null si vous n'en avez pas (ou si elle est illisible). */
+export function parseSearchMonthlyQuota(value: unknown): SearchMonthlyQuota | null | undefined {
+  if (value === undefined) return undefined;
+  const [limit, used, remaining, resetsOn, resetsAt] = ["limit", "used", "remaining", "resetsOn", "resetsAt"].map((key) => fieldOf(value, key));
+  if (!isCount(limit) || limit < 1 || !isCount(used) || !isCount(remaining) || !isCalendarDay(resetsOn) || !isInstant(resetsAt)) return null;
+  return { limit, used, remaining, resetsOn, resetsAt };
+}
+
+/** Le compteur des recherches avec la part du mois, quand le serveur l'envoie. */
+export function parseSearchCapacity(value: unknown): SearchCapacityStatus | null {
+  const status = parseSearchCapacityStatus(value);
+  if (!status) return null;
+  const monthlyQuota = parseSearchMonthlyQuota(fieldOf(value, "monthlyQuota"));
+  return monthlyQuota === undefined ? status : { ...status, monthlyQuota };
+}
+
+/** Le corps d'un refus « part du mois atteinte » ; null pour tout autre corps.
+ * `resumesOn` : le 1er du mois suivant, quand le serveur le donne. */
+export function parseSearchMonthlyQuotaError(body: unknown): { resumesOn: string | null } | null {
+  if (fieldOf(body, "error") !== SEARCH_MONTHLY_QUOTA_ERROR) return null;
+  const resumesOn = fieldOf(body, "resumesOn");
+  return { resumesOn: isCalendarDay(resumesOn) ? resumesOn : null };
+}
 
 // ---- Compte privé et demandes d'abonnement (lot « vie sociale », migration 0045) ----
 
