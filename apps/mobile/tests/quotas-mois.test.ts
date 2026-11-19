@@ -1,10 +1,12 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { parseSearchCapacity, parseSearchMonthlyQuota, SEARCH_CAPACITY_ERRORS, SEARCH_MONTHLY_QUOTA_ERROR, type SearchCapacityStatus, type SearchMonthlyQuota } from "@monapp/shared-types";
 import { en } from "../src/i18n/en";
 import { fr } from "../src/i18n/fr";
 import { setActiveLocale } from "../src/i18n";
 import { blocksLaunch, capacityCopy, isQuietNotice, limitsNotice, nextBoundary, noticeText, type LocalClock } from "../src/lib/search-limits";
-import { capacityFailure, monthlyQuotaCopy } from "../src/lib/spot-capacity";
+import { capacityFailure, capacityMonthTip, monthlyQuotaCopy } from "../src/lib/spot-capacity";
 import { failureCorrections } from "../src/lib/spot-corrections";
 import { termsOfUse } from "../src/legal/conditions";
 import { termsOfUseEn } from "../src/legal/conditions.en";
@@ -140,6 +142,28 @@ describe("refus du serveur : part du mois atteinte", () => {
 
   it("aucune correction proposée : un nouvel essai serait refusé", () => {
     expect(failureCorrections("capacity_user_month", { hasDraft: true, hasVideo: true, fromLink: false, remainingMoments: 2 })).toEqual([]);
+  });
+
+  it("une app d'avant ce lot (sans v=2) reçoit le plafond du mois, qu'elle connaît : la bonne date, jamais « par heure »", () => {
+    // Le corps que le serveur envoie à une app qui ne dit pas comprendre la part du mois.
+    const older = capacityFailure({ error: SEARCH_CAPACITY_ERRORS.month, message: "Vous avez utilisé toutes vos recherches de ce mois-ci.", resumesOn: "2026-12-01" });
+    expect(older).toEqual({ reason: "capacity_month", resumesOn: "2026-12-01" });
+    expect(capacityMonthTip(older!.resumesOn, "fr")).toBe("Réessayez à partir du 1er décembre.");
+    expect(failureCorrections(older!.reason, { hasDraft: true, hasVideo: true, fromLink: false, remainingMoments: 2 })).toEqual([]);
+  });
+});
+
+describe("l'app dit au serveur qu'elle comprend la part du mois (v=2)", () => {
+  const api = readFileSync(join(__dirname, "../src/lib/api.ts"), "utf8");
+
+  it("sur les lancements (photo, vos mots, vidéo, lien) et sur le compteur", () => {
+    expect(api).toContain("authorizedFetch(`/api/searches/${searchId}/run?${SPEAKS}`, { method: \"POST\", body: formData, signal })");
+    expect(api).toContain("authorizedFetch(`/api/searches/${searchId}/text?${SPEAKS}`, { method: \"POST\", body: JSON.stringify(payload), signal })");
+    expect(api).toContain("authorizedFetch(`/api/video-moments?${SPEAKS}`, { method: \"POST\", body: formData, signal })");
+    expect(api).toContain("authorizedFetch(`/api/video-links/analyze?${SPEAKS}`, { method: \"POST\", body: JSON.stringify(request), signal })");
+    expect(api).toContain("authorizedFetch(`/api/searches/capacity?${SPEAKS}`)");
+    // Aucune autre forme de ces adresses, sans le paramètre.
+    expect(api).not.toMatch(/authorizedFetch\((["'`])\/api\/(searches\/capacity|video-moments|video-links\/analyze)\1/);
   });
 });
 

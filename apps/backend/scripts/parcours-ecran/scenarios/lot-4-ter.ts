@@ -16,7 +16,7 @@ import sharp from "sharp";
 import type { Parcours } from "../boite-a-outils.js";
 import { genererVideosEssai } from "../../lib/videos-essai.js";
 import { COMBOS, type Combo } from "./lot-3.js";
-import { check, choisirFichier, ouvrirSpotter, suivreRequetes, visible, type Envoi } from "./spotter-outils.js";
+import { check, choisirFichier, ouvrirSpotter, ROUTE_ANALYSE_VIDEO, ROUTE_LANCEMENT, suivreRequetes, visible, type Envoi } from "./spotter-outils.js";
 import { capteur, champPret, controlerResultatsSobres, fermerFeuille, nouveauCompte, ralentir, simulerResultats, TEXTES } from "./lot-4-ter-outils.js";
 import { corrections, identificationReelle, liens, limites, nouvelleVersion, photo, refusEtRetrait, replis, sansResultat } from "./lot-4-ter-etapes.js";
 
@@ -55,7 +55,7 @@ async function premierUsage(p: Parcours, page: Page, combo: Combo, video: string
   const avantAccord = suivi.analyses;
   check(avantAccord === 0, "aucune image envoyée avant l'accord");
   await capture("04-accord");
-  await ralentir(page, "**/api/video-moments");
+  await ralentir(page, ROUTE_ANALYSE_VIDEO);
   await simulerResultats(page, T.description);
   await page.getByRole("button", { name: T.accepter, exact: true }).filter({ visible: true }).click();
   actions.push(`toucher « ${T.accepter} » (premier usage seulement)`);
@@ -147,8 +147,8 @@ export async function run(p: Parcours): Promise<void> {
         comptages.push({ combo: combo.id, premierUsage: premier, ensuite });
         if (combo.id === "fr-clair") {
           // Fin des réponses fabriquées : l'interception des statistiques, elle, reste en place.
-          await page.unroute("**/api/searches/*/run");
-          await page.unroute("**/api/video-moments");
+          await page.unroute(ROUTE_LANCEMENT);
+          await page.unroute(ROUTE_ANALYSE_VIDEO);
           await identificationReelle(p, page, compte, videos.courte, problemes);
           await replis(p, page, videos.courte, problemes);
           await liens(p, page, videos.courte, problemes);
