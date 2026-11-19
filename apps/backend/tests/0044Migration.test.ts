@@ -153,8 +153,8 @@ describe("vérification et registre", () => {
     expect(VERIFICATION).toContain("true | true | true | true | true | true | true");
   });
 
-  it("le registre cite 0044 « à appliquer », son fichier de vérification, et ce qui se passe sans elle", () => {
-    expect(REGISTRY).toMatch(/^\| 0044 \| Messages, plus de confort[^|]*\| \*\*à appliquer\*\* \(sur spotto-dev-2 d'abord ; demande 0032, déjà en production ; ne dépend pas de 0043 : l'une fonctionne sans l'autre\) \| — \|$/m);
+  it("le registre cite 0044 appliquée en production le 19 novembre 2026, son fichier de vérification, et ce qui se passe sans elle", () => {
+    expect(REGISTRY).toMatch(/^\| 0044 \| Messages, plus de confort[^|]*\| appliquée en production \(le fichier de la migration, après une copie de secours complète, juste après 0043 ; vérification juste, sept `true`\) \| 19 nov\. 2026 \|$/m);
     expect(REGISTRY).toContain("| 0044 | le fichier de la migration lui-même (**après 0032**) | `supabase/verifications/0044-verification.sql` (une ligne, sept `true`) |");
     expect(REGISTRY).toContain("Sans 0044, la messagerie fonctionne comme avant, et l'app ne propose ni « Aimer », ni « Répondre », ni « Supprimer », ni l'envoi d'une publication dans un message.");
     expect(REGISTRY.match(/^\| 0044 \|/gm)).toHaveLength(2);
