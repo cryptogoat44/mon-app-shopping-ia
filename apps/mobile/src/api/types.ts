@@ -41,7 +41,8 @@ export type SpotStatus = "success" | "failed";
  * capture. "rate_limited" : trop d'identifications en peu de temps (429).
  * "capacity_day", "capacity_month", "capacity_user" : plafond des recherches
  * atteint — du jour ou du mois pour tout le service, ou part de la
- * personne pour la journée (429, lot 4 quater). "running" : recherche relue
+ * personne pour la journée (429, lot 4 quater) ; "capacity_user_month" : part
+ * du mois de la personne (lot quotas, 0053). "running" : recherche relue
  * encore en cours côté serveur, jamais « rien trouvé » (lot recherche coupée).
  * "paused" : recherche en pause, le fournisseur est en panne (disjoncteur,
  * 503 « search_paused », lot garde-fous) ; rien n'a été compté. */

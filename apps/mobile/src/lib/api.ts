@@ -80,7 +80,7 @@ import type {
   VideoLookupResponse,
   VideoSpotRequest,
 } from "@monapp/shared-types";
-import { CLIENT_LEVEL, COMPLEMENT_DEFERRED, CONSENT_VERSIONS, parseSearchCapacityStatus, parseVideoMomentsResponse, type SearchCapacityStatus } from "@monapp/shared-types";
+import { CLIENT_LEVEL, COMPLEMENT_DEFERRED, CONSENT_VERSIONS, parseSearchCapacity, parseVideoMomentsResponse, type SearchCapacityStatus } from "@monapp/shared-types";
 import { supabase } from "./supabase";
 import { setAnalyticsConsent, track } from "./analytics";
 import { acceptLanguage, t } from "../i18n";
@@ -341,7 +341,8 @@ export async function trackProductMatchClick(
  * (gratuit, aucune recherche lancée) ; null si la réponse est illisible. */
 export async function fetchSearchCapacity(): Promise<SearchCapacityStatus | null> {
   const response = await authorizedFetch("/api/searches/capacity");
-  return parseSearchCapacityStatus(await response.json());
+  // Avec la part du mois quand le serveur l'envoie (lot quotas, 0053).
+  return parseSearchCapacity(await response.json());
 }
 
 export async function fetchVault(cursor?: string): Promise<VaultPage> {

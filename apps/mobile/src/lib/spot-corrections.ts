@@ -41,7 +41,7 @@ export function successSheetActions(corrections: Correction[], withoutPriceCount
   return ["show_without_price", ...corrections];
 }
 
-const LIMIT_REASONS: readonly SpotFailReason[] = ["rate_limited", "capacity_day", "capacity_month", "capacity_user"];
+const LIMIT_REASONS: readonly SpotFailReason[] = ["rate_limited", "capacity_day", "capacity_month", "capacity_user", "capacity_user_month"];
 
 /** Après une recherche sans résultat ou qui n'a pas abouti. */
 export function failureCorrections(reason: SpotFailReason, context: CorrectionContext): Correction[] {
