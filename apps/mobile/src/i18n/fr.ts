@@ -1810,5 +1810,10 @@ export const fr = {
     linkA11y: (host: string) => `Lien vers ${host}, s'ouvre hors de ${BRAND}`,
     moderationLink: "Lien du profil",
     removeBioAlsoLink: "Le lien du profil sera retiré avec elle.",
+    // Profil signalé sans bio, avec un lien : le même retrait, nommé d'après ce qu'il retire.
+    removeLinkOnly: "Retirer le lien",
+    removeLinkOnlyWarning:
+      "Retirer le lien de ce profil ? Il sera effacé : cette décision ne s'annule pas. La personne sera prévenue, avec le motif choisi. Elle pourra en mettre un autre, sauf si son compte est suspendu.",
+    linkRemovedSaved: "Lien retiré.",
   },
 } as const;

@@ -191,7 +191,8 @@ function ItemPreview({
       ) : preview.bio || preview.linkUrl ? (
         <>
           {preview.bio ? <Text style={styles.body}>{preview.bio}</Text> : null}
-          {/* Lien en bio (migration 0049) : en texte, jamais un lien qui s'ouvre ; « Retirer la bio » le retire aussi. */}
+          {/* Lien en bio (migration 0049) : en texte, jamais un lien qui s'ouvre. « Retirer la bio » le
+              retire aussi ; sans bio, le bouton s'appelle « Retirer le lien » (profileRemovalActions). */}
           {preview.linkUrl ? (
             <View style={styles.profileLink} testID="lien-du-profil-signale">
               <Text style={styles.meta}>{t.profilePins.moderationLink}</Text>

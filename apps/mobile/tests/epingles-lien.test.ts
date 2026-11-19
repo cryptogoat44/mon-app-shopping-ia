@@ -314,6 +314,27 @@ describe("modération : retirer la bio retire aussi le lien, et chacun le sait",
     expect(plain?.warning).not.toContain("lien");
   });
 
+  it("un lien sans bio : le serveur propose le retrait, le bouton s'appelle « Retirer le lien » (jamais la suspension seule)", () => {
+    const linkOnly: ModerationPreview = { kind: "user", author, bio: null, linkUrl: "https://exemple.com/connexion" };
+    const [link] = profileRemovalActions({ preview: linkOnly, canRemoveBio: true, canRemoveAvatar: false });
+    // La même décision côté serveur (partie « bio »), nommée d'après ce qu'elle retire.
+    expect(link).toEqual({
+      part: "bio",
+      label: "Retirer le lien",
+      warning: "Retirer le lien de ce profil ? Il sera effacé : cette décision ne s'annule pas. La personne sera prévenue, avec le motif choisi. Elle pourra en mettre un autre, sauf si son compte est suspendu.",
+      saved: "Lien retiré.",
+    });
+    // Une bio faite d'espaces compte comme vide.
+    expect(profileRemovalActions({ preview: { ...linkOnly, bio: "   " }, canRemoveBio: true, canRemoveAvatar: false })[0]?.label).toBe("Retirer le lien");
+    // Bio et lien : « Retirer la bio », qui dit que le lien part aussi.
+    expect(profileRemovalActions({ preview: withLink, canRemoveBio: true, canRemoveAvatar: false })[0]?.label).toBe("Retirer la bio");
+    // Un serveur qui ne le propose pas (ancien, ou sans 0049) : rien.
+    expect(profileRemovalActions({ preview: linkOnly, canRemoveBio: false, canRemoveAvatar: false })).toEqual([]);
+    expect(profileRemovalActions({ preview: linkOnly })).toEqual([]);
+    setActiveLocale("en");
+    expect(profileRemovalActions({ preview: linkOnly, canRemoveBio: true, canRemoveAvatar: false })[0]).toMatchObject({ label: "Remove the link", saved: "Link removed." });
+  });
+
   it("la personne concernée apprend que son lien part avec sa bio", () => {
     expect(moderationNoticeLines({ action: "remove_bio", targetType: "user", reason: "spam", note: null })[0]).toBe(
       "Votre bio a été retirée par la modération, avec le lien de votre profil s'il y en avait un."

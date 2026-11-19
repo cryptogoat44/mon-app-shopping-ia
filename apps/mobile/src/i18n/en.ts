@@ -1690,5 +1690,9 @@ export const en: Catalog = {
     linkA11y: (host: string) => `Link to ${host}, opens outside ${BRAND}`,
     moderationLink: "Profile link",
     removeBioAlsoLink: "The profile link will be removed with it.",
+    removeLinkOnly: "Remove the link",
+    removeLinkOnlyWarning:
+      "Remove this profile's link? It will be erased: this decision cannot be undone. The person will be notified, with the reason you choose. They can add another one, unless their account is suspended.",
+    linkRemovedSaved: "Link removed.",
   },
 };
