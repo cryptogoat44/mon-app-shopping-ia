@@ -73,6 +73,13 @@ describe("publications enregistrées, sur la base de développement", () => {
     expect(seen.viewerSavedCollectionId).toBe(summer.id);
     expect(await list(saver)).toEqual([created.id]);
     expect(await list(saver, `?collectionId=${summer.id}`)).toEqual([created.id]);
+    // Un simple toucher (sans `collectionId`, écran resté en retard) : la vraie
+    // base garde la collection (la colonne n'est pas écrite) ; null la retire.
+    expect((await request(saver, "PUT", `/api/posts/${created.id}/save`, {})).json()).toEqual({ saved: true, collectionId: summer.id });
+    expect((await savedRows(saver.id)).find((row) => row.post_id === created.id)).toEqual({ post_id: created.id, collection_id: summer.id });
+    expect((await request(saver, "PUT", `/api/posts/${created.id}/save`, { collectionId: null })).json()).toEqual({ saved: true, collectionId: null });
+    expect((await savedRows(saver.id)).find((row) => row.post_id === created.id)).toEqual({ post_id: created.id, collection_id: null });
+    await request(saver, "PUT", `/api/posts/${created.id}/save`, { collectionId: summer.id });
     // L'autrice : son propre signet est vide, rien ne dit qui a enregistré.
     const own: Post = (await request(author, "GET", `/api/posts/${created.id}`)).json();
     expect(own.viewerHasSaved).toBe(false);

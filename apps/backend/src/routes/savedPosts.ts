@@ -55,12 +55,15 @@ export default async function savedPostsRoutes(fastify: FastifyInstance) {
       // Masquée, bloquée, hors de sa visibilité, compte privé : 404, sans dire pourquoi.
       const post = await findViewablePost(fastify, userId, params.id);
       if (!post) return reply.code(404).send(POST_NOT_FOUND);
+      // `collectionId` absent (simple toucher du signet) : la collection
+      // actuelle reste ; null : sans collection. Seule une collection envoyée
+      // est vérifiée (la ligne gardée est déjà la sienne).
       const collectionId = body.collectionId ?? null;
       // La collection d'un autre, ou inconnue : la même réponse.
       if (collectionId !== null && !(await readOwnCollection(fastify, userId, collectionId))) return reply.code(404).send(COLLECTION_NOT_FOUND);
 
       const db = fastify.supabaseAdmin;
-      const existing = await db.from("saved_posts").select("post_id").eq("user_id", userId).eq("post_id", post.id).maybeSingle();
+      const existing = await db.from("saved_posts").select("post_id, collection_id").eq("user_id", userId).eq("post_id", post.id).maybeSingle();
       if (existing.error) {
         request.log.error({ code: (existing.error as { code?: string }).code ?? null }, "Publication enregistrée illisible");
         return reply.code(500).send(SERVER_ERROR);
@@ -68,9 +71,17 @@ export default async function savedPostsRoutes(fastify: FastifyInstance) {
       // Plafond : seulement pour une nouvelle publication (ranger ailleurs reste permis).
       if (!existing.data && (await savedPostsFull(fastify, userId))) return reply.code(409).send(SAVED_POSTS_FULL);
 
+      // Déjà enregistrée, sans collection demandée : la colonne n'est pas
+      // écrite, la base garde la collection actuelle (un écran resté en
+      // retard ne sort jamais une publication de sa collection).
+      const keepsCollection = body.collectionId === undefined && existing.data !== null;
+      const kept = existing.data as { collection_id?: unknown } | null;
+      const answered = keepsCollection && typeof kept?.collection_id === "string" ? kept.collection_id : collectionId;
       // La date d'enregistrement n'est jamais réécrite : ranger ailleurs ne
       // change pas la place dans la liste.
-      const { error } = await db.from("saved_posts").upsert({ user_id: userId, post_id: post.id, collection_id: collectionId }, { onConflict: "user_id,post_id" });
+      const { error } = await db
+        .from("saved_posts")
+        .upsert(keepsCollection ? { user_id: userId, post_id: post.id } : { user_id: userId, post_id: post.id, collection_id: collectionId }, { onConflict: "user_id,post_id" });
       if (error) {
         const code = (error as { code?: string }).code ?? null;
         // 23503 : la publication vient d'être supprimée, ou la collection (la
@@ -82,7 +93,7 @@ export default async function savedPostsRoutes(fastify: FastifyInstance) {
         request.log.error({ code }, "Échec de l'enregistrement d'une publication");
         return reply.code(500).send(SERVER_ERROR);
       }
-      return reply.send({ saved: true, collectionId } satisfies SavePostResponse);
+      return reply.send({ saved: true, collectionId: answered } satisfies SavePostResponse);
     }
   );
 

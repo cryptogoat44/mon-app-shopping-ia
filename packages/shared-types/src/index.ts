@@ -2477,7 +2477,8 @@ export const SAVED_POSTS_MAX = 1000;
 export const SAVED_POSTS_PAGE_SIZE = 18;
 
 /** PUT /api/posts/:id/save : enregistrer, ou ranger ailleurs. `collectionId` :
- * une de vos collections ; null ou absent : sans collection. */
+ * une de vos collections ; null : sans collection ; absent : la collection
+ * actuelle reste si la publication est déjà enregistrée (sans collection sinon). */
 export interface SavePostRequest {
   collectionId?: string | null;
 }

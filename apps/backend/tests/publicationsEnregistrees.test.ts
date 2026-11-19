@@ -661,6 +661,38 @@ describe("règle 6 : seulement une de ses collections", () => {
     expect(fake.table("saved_posts")).toHaveLength(2);
   });
 
+  it("un simple toucher (sans `collectionId`) ne sort jamais une publication de sa collection ; null la range sans collection", async () => {
+    const fake = seeded({ saved: [[BRUNO, ANNA_PUBLIC, BRUNO_SUMMER]] });
+    const target = await savedApp(fake.db);
+    const createdAt = fake.table("saved_posts")[0]!.created_at;
+    // Un écran resté en retard (signet vide) : la collection reste, et la réponse la dit.
+    const kept = await as(target, BRUNO).save(ANNA_PUBLIC);
+    expect(kept.statusCode).toBe(200);
+    expect(kept.json()).toEqual({ saved: true, collectionId: BRUNO_SUMMER });
+    expect(rows(fake)).toEqual([key(BRUNO, ANNA_PUBLIC, BRUNO_SUMMER)]);
+    expect(fake.table("saved_posts")[0]!.created_at).toBe(createdAt);
+    expect(await savedIds(target, BRUNO, `?collectionId=${BRUNO_SUMMER}`)).toEqual([ANNA_PUBLIC]);
+    // Pas encore enregistrée : sans collection.
+    expect((await as(target, BRUNO).save(ANNA_OTHER)).json()).toEqual({ saved: true, collectionId: null });
+    expect(rows(fake)).toEqual([key(BRUNO, ANNA_OTHER), key(BRUNO, ANNA_PUBLIC, BRUNO_SUMMER)].sort());
+    // null, envoyé exprès : sans collection.
+    expect((await as(target, BRUNO).save(ANNA_PUBLIC, null)).json()).toEqual({ saved: true, collectionId: null });
+    expect(rows(fake)).toEqual([key(BRUNO, ANNA_OTHER), key(BRUNO, ANNA_PUBLIC)].sort());
+    // La ligne gardée n'est jamais celle d'un autre : le toucher de Carl crée la sienne, sans collection.
+    expect((await as(target, CARL).save(ANNA_PUBLIC)).json()).toEqual({ saved: true, collectionId: null });
+    expect(rows(fake)).toEqual([key(BRUNO, ANNA_OTHER), key(BRUNO, ANNA_PUBLIC), key(CARL, ANNA_PUBLIC)].sort());
+  });
+
+  it("un simple toucher sur une publication qu'on ne voit plus : 404, la ligne et sa collection restent telles quelles", async () => {
+    const fake = seeded({ saved: [[BRUNO, ANNA_PUBLIC, BRUNO_SUMMER]] });
+    const target = await savedApp(fake.db);
+    fake.table("posts").find((row) => row.id === ANNA_PUBLIC)!.privacy = "private";
+    const response = await as(target, BRUNO).save(ANNA_PUBLIC);
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual(POST_NOT_FOUND);
+    expect(rows(fake)).toEqual([key(BRUNO, ANNA_PUBLIC, BRUNO_SUMMER)]);
+  });
+
   it("supprimer une collection garde ses publications enregistrées, sans collection", async () => {
     const fake = seeded({ saved: [[BRUNO, ANNA_PUBLIC, BRUNO_WINTER]] });
     const target = await savedApp(fake.db);
