@@ -1,4 +1,5 @@
 import { PINNED_POSTS_MAX, type Post, type UserPostsPage } from "@monapp/shared-types";
+import { t } from "../i18n";
 
 // Publications épinglées (lot « vie sociale », migration 0049), côté app : la
 // logique sans écran, testée à part (tests/epingles-lien.test.ts). Un serveur
@@ -42,4 +43,13 @@ export function profileGrid(page: Pick<UserPostsPage, "posts" | "pinned">): { po
 export function appendGridPage(shown: readonly Post[], next: readonly Post[]): Post[] {
   const seen = new Set(shown.map((post) => post.id));
   return [...shown, ...next.filter((post) => !seen.has(post.id))];
+}
+
+/** Ce que VoiceOver lit pour une case de la grille d'un profil : sa légende
+ * (ou son repli), suivie de « Épinglée » pour une épinglée. La case est un
+ * seul élément touchable : une marque posée dedans n'est jamais lue à part
+ * (iPhone : les enfants d'un élément accessible sont ignorés ; site : le nom
+ * d'un bouton est son aria-label). Lu dans la langue active à l'appel. */
+export function gridCellLabel(label: string, pinned: boolean): string {
+  return pinned ? `${label}, ${t.profilePins.pinnedMark}` : label;
 }

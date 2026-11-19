@@ -12,7 +12,7 @@ import { ApiError, fetchMyLifestylePosts, fetchVault } from "@/lib/api";
 import type { Post, VaultItem } from "@monapp/shared-types";
 import { CameraIcon, ClockIcon, PhotosIcon, PinIcon, PlusIcon, SettingsIcon, TagIcon, VerifiedIcon } from "@/components/icons";
 import { hasSeveralPhotos } from "@/lib/post-extras";
-import { pinnedFirst } from "@/lib/profile-pins";
+import { gridCellLabel, pinnedFirst } from "@/lib/profile-pins";
 import { ProfileLink } from "@/components/profile-link";
 import { Avatar } from "@/components/avatar";
 import { AvatarPhotoFlow } from "@/components/avatar-photo-flow";
@@ -325,7 +325,7 @@ export default function ProfileScreen() {
                 style={styles.piece}
                 onPress={() => router.push({ pathname: "/publication", params: { id: post.id } })}
                 accessibilityRole="button"
-                accessibilityLabel={post.caption ?? t.profile.lifestylePhoto}
+                accessibilityLabel={gridCellLabel(post.caption ?? t.profile.lifestylePhoto, lifestyleGrid.pinnedIds.has(post.id))}
               >
                 <View style={styles.thumb}>
                   {post.mediaUrl === null ? (
@@ -352,9 +352,10 @@ export default function ProfileScreen() {
                     <PhotosIcon size={12} />
                   </View>
                 ) : null}
-                {/* Épinglée (migration 0049) : une punaise dans le coin opposé. */}
+                {/* Épinglée (migration 0049) : une punaise dans le coin opposé ;
+                    VoiceOver lit « Épinglée » dans le libellé de la case. */}
                 {lifestyleGrid.pinnedIds.has(post.id) ? (
-                  <View style={styles.pinMark} accessible accessibilityLabel={t.profilePins.pinnedMark} testID="marque-epinglee">
+                  <View style={styles.pinMark} testID="marque-epinglee">
                     <PinIcon size={12} />
                   </View>
                 ) : null}

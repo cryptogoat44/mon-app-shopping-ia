@@ -9,7 +9,7 @@ import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/
 import { t } from "@/i18n";
 import { LockIcon, MoreIcon, PhotosIcon, PinIcon } from "@/components/icons";
 import { hasSeveralPhotos } from "@/lib/post-extras";
-import { appendGridPage, profileGrid } from "@/lib/profile-pins";
+import { appendGridPage, gridCellLabel, profileGrid } from "@/lib/profile-pins";
 import { ProfileLink } from "@/components/profile-link";
 import { ReportBlockMenu } from "@/components/report-block-menu";
 import { SpotImage } from "@/components/spot-image";
@@ -262,7 +262,7 @@ export default function UserProfileScreen() {
                 style={styles.cell}
                 onPress={() => router.push({ pathname: "/publication", params: { id: post.id } })}
                 accessibilityRole="button"
-                accessibilityLabel={post.caption ?? t.postDetail.title}
+                accessibilityLabel={gridCellLabel(post.caption ?? t.postDetail.title, pinnedIds.has(post.id))}
               >
                 {/* Grille : miniature (480 px) d'une photo publiée ; image HD du
                     marchand pour un « achat » ; repli sur l'image d'origine.
@@ -284,9 +284,10 @@ export default function UserProfileScreen() {
                     <PhotosIcon size={14} />
                   </View>
                 ) : null}
-                {/* Épinglée (migration 0049) : une punaise dans l'autre coin. */}
+                {/* Épinglée (migration 0049) : une punaise dans l'autre coin ;
+                    VoiceOver lit « Épinglée » dans le libellé de la case. */}
                 {pinnedIds.has(post.id) ? (
-                  <View style={styles.pinMark} accessible accessibilityLabel={t.profilePins.pinnedMark} testID="marque-epinglee">
+                  <View style={styles.pinMark} testID="marque-epinglee">
                     <PinIcon size={13} />
                   </View>
                 ) : null}

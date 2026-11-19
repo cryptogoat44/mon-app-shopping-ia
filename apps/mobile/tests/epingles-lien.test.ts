@@ -25,7 +25,7 @@ import { termsOfUse } from "../src/legal/conditions";
 import { termsOfUseEn } from "../src/legal/conditions.en";
 import { ApiError } from "../src/lib/api-error";
 import { bioLinkError, httpsParts, linkDisplay, linkToSend } from "../src/lib/bio-link";
-import { appendGridPage, pinActionOf, pinEntryShown, pinnedFirst, profileGrid } from "../src/lib/profile-pins";
+import { appendGridPage, gridCellLabel, pinActionOf, pinEntryShown, pinnedFirst, profileGrid } from "../src/lib/profile-pins";
 import { moderationNoticeLines, profileRemovalActions } from "../src/lib/moderation-labels";
 
 const read = (path: string) => readFileSync(join(__dirname, "../src", path), "utf8");
@@ -264,12 +264,28 @@ describe("épingler : l'entrée, et les épinglées en tête sans doublon", () =
     expect(publication).toContain("setError(e instanceof ApiError ? e.message : t.profilePins.pinError);");
     const own = read("app/(app)/(tabs)/profile/index.tsx");
     expect(own).toContain("const lifestyleGrid = pinnedFirst(lifestylePosts);");
-    expect(own).toContain("accessibilityLabel={t.profilePins.pinnedMark}");
     const other = read("app/(app)/profil.tsx");
     expect(other.match(/const grid = profileGrid\(page\);/g)).toHaveLength(2);
     expect(other).toContain("setPosts((prev) => appendGridPage(prev ?? [], page.posts));");
-    expect(other).toContain("accessibilityLabel={t.profilePins.pinnedMark}");
     expect(read("components/icons.tsx")).toContain("export function PinIcon(");
+  });
+
+  it("VoiceOver : « Épinglée » est lu dans le libellé de la case, jamais par une marque cachée dans la case", () => {
+    expect(gridCellLabel("Robe verte", true)).toBe("Robe verte, Épinglée");
+    expect(gridCellLabel("Robe verte", false)).toBe("Robe verte");
+    setActiveLocale("en");
+    expect(gridCellLabel("Green dress", true)).toBe("Green dress, Pinned");
+    setActiveLocale("fr");
+    // Les deux grilles : le libellé de la case touchable porte l'épingle ; la
+    // marque n'est plus un élément accessible à part (jamais atteint).
+    const own = read("app/(app)/(tabs)/profile/index.tsx");
+    expect(own).toContain("accessibilityLabel={gridCellLabel(post.caption ?? t.profile.lifestylePhoto, lifestyleGrid.pinnedIds.has(post.id))}");
+    const other = read("app/(app)/profil.tsx");
+    expect(other).toContain("accessibilityLabel={gridCellLabel(post.caption ?? t.postDetail.title, pinnedIds.has(post.id))}");
+    for (const [screen, source] of [["profil", other], ["profile/index", own]] as const) {
+      expect(source, screen).toContain('<View style={styles.pinMark} testID="marque-epinglee">');
+      expect(source, screen).not.toContain("accessibilityLabel={t.profilePins.pinnedMark}");
+    }
   });
 });
 
