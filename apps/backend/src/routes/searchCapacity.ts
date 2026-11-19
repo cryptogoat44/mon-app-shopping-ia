@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { voieCEnabled } from "../lib/aiSwitches.js";
+import { logQuotaSettings } from "../lib/memberQuotas.js";
 import { readSearchCounts } from "../lib/searchCapacity.js";
 import { callsPerPhoto, capacityStatus } from "../lib/searchCapacityStatus.js";
 
@@ -9,6 +10,8 @@ import { callsPerPhoto, capacityStatus } from "../lib/searchCapacityStatus.js";
 // aucune place réservée, aucun appel au fournisseur, aucun coût. Ne renvoie
 // que la part de la personne qui demande et l'état du service, jamais les
 // compteurs du service ni rien sur les autres comptes.
+// Lot quotas (0053) : aussi sa part du mois (monthlyQuota ; null quand elle
+// n'en a pas : abonné sans garde-fou), jamais rien de son droit d'abonnement.
 
 export const CAPACITY_UNREADABLE = {
   error: "search_capacity_unreadable",
@@ -16,6 +19,8 @@ export const CAPACITY_UNREADABLE = {
 } as const;
 
 export default async function searchCapacityRoutes(fastify: FastifyInstance) {
+  // Réglages des quotas lus une fois au démarrage : une valeur invalide est ignorée, et dite ici.
+  logQuotaSettings(fastify.log);
   fastify.get(
     "/api/searches/capacity",
     {
@@ -28,7 +33,7 @@ export default async function searchCapacityRoutes(fastify: FastifyInstance) {
       if (!counts) return reply.code(503).send(CAPACITY_UNREADABLE);
       // Le compteur change à chaque recherche : jamais servi depuis un cache.
       reply.header("Cache-Control", "no-store");
-      return reply.send(capacityStatus(counts.row, counts.caps, callsPerPhoto(voieCEnabled()), new Date()));
+      return reply.send(capacityStatus(counts.row, counts.caps, callsPerPhoto(voieCEnabled()), new Date(), counts.tier));
     }
   );
 }

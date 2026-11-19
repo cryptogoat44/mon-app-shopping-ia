@@ -163,6 +163,23 @@ const envSchema = z.object({
   TRYON_PRICE_PER_CREDIT_USD: z.string().optional(),
   TRYON_MIN_FASHN_CREDITS: z.string().optional(),
   TRYON_TIMEZONE: z.string().optional(),
+  // Quotas par membre (lot quotas, migration 0053). Lus et vérifiés par
+  // lib/memberQuotas.ts ; une valeur invalide est ignorée avec un
+  // avertissement dans le journal, jamais un arrêt du serveur.
+  // - SUBSCRIPTIONS_ENABLED : les abonnements, COUPÉS par défaut (seule la
+  //   valeur exacte "true" les allume, même règle que la voie C). Coupés :
+  //   personne n'est abonné, et la réserve des abonnés vaut 0.
+  SUBSCRIPTIONS_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "true"),
+  // - SUBSCRIBER_MONTHLY_SEARCH_CAP : garde-fou facultatif, recherches par
+  //   mois d'un abonné (entier, 1 au moins). Absent : aucune limite du mois
+  //   pour un abonné (seulement celle du jour).
+  SUBSCRIBER_MONTHLY_SEARCH_CAP: z.string().optional(),
+  // - SUBSCRIBER_RESERVE_PERCENT : part des plafonds SerpApi du jour et du
+  //   mois gardée pour les abonnés (0 à 90, 30 par défaut).
+  SUBSCRIBER_RESERVE_PERCENT: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

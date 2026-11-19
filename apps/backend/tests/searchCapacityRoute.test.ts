@@ -92,17 +92,22 @@ describe("compteur des recherches lu par l'app (lot limites annoncées)", () => 
     const first = await read(user.token);
     expect(first.statusCode).toBe(200);
     expect(first.headers["cache-control"]).toBe("no-store");
-    expect(first.json()).toEqual({
+    // Avec 0053 : la part du mois en plus (100 pour un compte gratuit).
+    const { monthlyQuota, ...firstBody } = first.json();
+    expect(firstBody).toEqual({
       user: { used: 2, limit: 3, remaining: 1, resetsAt: nextParisMidnight(new Date()).toISOString() },
       service: { status: "open" },
       remainingToday: 1,
     });
+    if (monthlyQuota !== undefined) expect(monthlyQuota).toMatchObject({ limit: 100, used: 2, remaining: 98 });
     // Relire ne change rien : aucune place prise.
     expect((await read(user.token)).json()).toMatchObject({ user: { used: 2, remaining: 1 }, remainingToday: 1 });
     expect(await searchCount(user)).toBe(before);
-    expect(rpc.mock.calls.length).toBeGreaterThanOrEqual(2);
-    for (const [name, params] of rpc.mock.calls) {
-      expect(name).toBe("serpapi_quota");
+    // Avec 0053 sur la base : la sonde des quotas par membre, puis serpapi_quota_v2 ; sans elle, serpapi_quota.
+    const quotaCalls = rpc.mock.calls.filter(([name]) => name !== "member_quotas_version");
+    expect(quotaCalls.length).toBeGreaterThanOrEqual(2);
+    for (const [name, params] of quotaCalls) {
+      expect(["serpapi_quota", "serpapi_quota_v2"]).toContain(name);
       expect(params).toMatchObject({ p_reserve: false, p_exclude_search: null, p_user_id: user.id });
     }
 

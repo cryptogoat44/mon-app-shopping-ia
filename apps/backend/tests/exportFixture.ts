@@ -437,6 +437,9 @@ export function fixture(): ExportData {
     videoConfirmations: [{ canonical_url: "https://www.tiktok.com/@/video/7412345678901234567", product: "Veste <b>reperee</b>", created_at: "2026-10-10T09:00:00+00:00" }],
     // Messages, plus de confort (migration 0044) : un « j'aime » sur un message de l'ami.
     messageReactions: [{ message_id: "d0200000-0000-4000-8000-000000000001", conversation_id: CONVERSATION, other_user_id: FRIEND, created_at: "2026-10-20T08:40:00+00:00" }],
+    // Quotas par membre (migration 0053) : un abonnement et les compteurs du mois.
+    memberEntitlements: [{ entitlement: "miroir", expires_at: "2026-12-06T18:00:00+00:00", source: "revenuecat", updated_at: "2026-11-06T18:00:00+00:00" }],
+    monthlyQuota: { month: "2026-11", searches_counted: 37, tryon_free_used: 2, tryon_bonus_remaining: 4 },
   };
 }
 

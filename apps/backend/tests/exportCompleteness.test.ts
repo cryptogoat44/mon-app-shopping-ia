@@ -86,8 +86,23 @@ const videoProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROL
 const VIDEO_SECTIONS = videoProbe.error || typeof videoProbe.data !== "number" || videoProbe.data < 1 ? [] : (["videoSpots", "videoConfirmations"] as const);
 const VIDEO_KEY = `74${Date.now()}`.padEnd(19, "1").slice(0, 19);
 
+// Quotas par membre : un droit d'abonnement et les compteurs du mois,
+// seulement une fois la migration 0053 appliquée sur la base des tests (sans
+// elle, section vide et compteurs absents). Le droit est écrit directement :
+// aucune route ne permet à un membre d'en écrire un.
+const quotasProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).rpc("member_quotas_version");
+const QUOTAS_MIGRATED = !quotasProbe.error && quotasProbe.data === 1;
+const QUOTA_SECTIONS = QUOTAS_MIGRATED ? (["memberEntitlements"] as const) : [];
+
 // Sections qui sont un objet (ou null), pas une liste.
-const OBJECT_SECTIONS = ["account", "profile", "adminRole", "suspension", ...(TRYON_MIGRATED ? (["tryonProfile"] as const) : [])] as const;
+const OBJECT_SECTIONS = [
+  "account",
+  "profile",
+  "adminRole",
+  "suspension",
+  ...(TRYON_MIGRATED ? (["tryonProfile"] as const) : []),
+  ...(QUOTAS_MIGRATED ? (["monthlyQuota"] as const) : []),
+] as const;
 
 // Clés du JSON, dans l'ordre : celles d'avant (anciennes versions de l'app
 // iPhone, qui lisent ce JSON) et `account`, la seule ajoutée.
@@ -142,6 +157,9 @@ const JSON_KEYS = [
   "videoConfirmations",
   // Messages, plus de confort (migration 0044), de même.
   "messageReactions",
+  // Quotas par membre (migration 0053), de même.
+  "memberEntitlements",
+  "monthlyQuota",
 ];
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
@@ -299,6 +317,14 @@ describe("export RGPD complet", () => {
       expect(placed.statusCode).toBe(200);
     }
 
+    // Quotas par membre (0053) : un droit « miroir » jusqu'à une date, écrit directement.
+    if (QUOTA_SECTIONS.length > 0) {
+      const { error: entitlementError } = await app.supabaseAdmin
+        .from("member_entitlements")
+        .insert({ user_id: user.id, entitlement: "miroir", expires_at: "2027-01-01T00:00:00+00:00", source: "revenuecat" });
+      if (entitlementError) throw entitlementError;
+    }
+
     // Notifications (lot notifications) : un appareil, inséré directement
     // (l'interrupteur PUSH_ENABLED peut être coupé sur ce serveur de tests).
     if (PUSH_SECTIONS.length > 0) {
@@ -385,7 +411,7 @@ describe("export RGPD complet", () => {
     const body = res.json();
 
     expect(body.profile.id).toBe(user.id);
-    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...MESSAGE_REACTION_SECTIONS, ...COLLECTION_SECTIONS, ...PUSH_SECTIONS, ...ALERT_SECTIONS, ...TRYON_SECTIONS, ...VIDEO_SECTIONS]) {
+    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...MESSAGE_REACTION_SECTIONS, ...COLLECTION_SECTIONS, ...PUSH_SECTIONS, ...ALERT_SECTIONS, ...TRYON_SECTIONS, ...VIDEO_SECTIONS, ...QUOTA_SECTIONS]) {
       expect(Array.isArray(body[section]), section).toBe(true);
       expect(body[section].length, section).toBeGreaterThan(0);
     }
@@ -408,6 +434,14 @@ describe("export RGPD complet", () => {
       expect(body.tryonProfile).toMatchObject({ age_status: "adult", consent_version: "2026-11-v1", consent_withdrawn_at: null });
       expect(Object.keys(body.tryonProfile).sort()).toEqual(["age_checked_at", "age_status", "consent_accepted_at", "consent_version", "consent_withdrawn_at"]);
       expect(JSON.stringify([body.tryonProfile, body.tryonEvents, body.tryonReports])).not.toMatch(/base64|data:image|birth/i);
+    }
+    // Quotas par membre : le droit (type, fin, source, mise à jour ; jamais le compte), les compteurs du mois.
+    if (QUOTAS_MIGRATED) {
+      expect(body.memberEntitlements).toEqual([{ entitlement: "miroir", expires_at: "2027-01-01T00:00:00+00:00", source: "revenuecat", updated_at: expect.any(String) }]);
+      expect(body.monthlyQuota).toMatchObject({ month: expect.stringMatching(/^\d{4}-\d{2}$/), searches_counted: expect.any(Number) });
+    } else {
+      expect(body.memberEntitlements).toEqual([]);
+      expect(body.monthlyQuota).toBeNull();
     }
     if (VIDEO_SECTIONS.length > 0) {
       expect(body.videoSpots).toEqual([{ canonical_url: `https://www.tiktok.com/@/video/${VIDEO_KEY}`, source: "tiktok_player", moment_seconds: 12, created_at: expect.any(String), search_id: expect.any(String) }]);

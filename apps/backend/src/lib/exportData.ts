@@ -7,6 +7,7 @@ import { pushReady } from "./push.js";
 import { wishAlertsSchemaState, wishAlertsSchemaVersion } from "./wishAlertsSchema.js";
 import { tryonSchemaReady } from "./tryon/schema.js";
 import { videoMemoryStored } from "./videoMemory.js";
+import { memberQuotasReady } from "./memberQuotas.js";
 
 // Export RGPD (droit d'accès et de portabilité) : lecture de TOUTES les
 // données personnelles d'un compte. Toute nouvelle table contenant des
@@ -98,6 +99,13 @@ export interface ExportData {
    * messages — la date, la conversation et l'autre membre (son identifiant ;
    * le fichier lisible ne nomme jamais un compte en relation de blocage). */
   messageReactions: ExportRow[];
+  /** Quotas par membre (migration 0053) : vos droits d'abonnement (le type,
+   * la date de fin, d'où vient l'information, la dernière mise à jour)… */
+  memberEntitlements: ExportRow[];
+  /** … et vos compteurs du mois civil (heure de Paris) : recherches
+   * comptées dans la part du mois, essais gratuits utilisés, essais offerts
+   * restants. Calculés à partir des données ci-dessus ; null sans 0053. */
+  monthlyQuota: ExportRow | null;
 }
 
 /** Sections de l'export (toutes les clés sauf la date de l'export). */
@@ -218,6 +226,38 @@ export const TRYON_PROFILE_EXPORT_COLUMNS = "age_status, age_checked_at, consent
 export const TRYON_EVENT_EXPORT_COLUMNS = "id, item_id, status, credits_used, quota_source, bonus_grant_id, error_code, duration_ms, month, created_at, finished_at";
 export const TRYON_BONUS_GRANT_EXPORT_COLUMNS = "id, order_ref, quantity, remaining, expires_at, created_at";
 export const TRYON_REPORT_EXPORT_COLUMNS = "id, item_id, reason, comment, created_at";
+
+// Quotas par membre (migration 0053).
+export const MEMBER_ENTITLEMENT_EXPORT_COLUMNS = "entitlement, expires_at, source, updated_at";
+
+const PARIS_MONTH = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit" });
+
+/** Le mois civil de cet instant à Paris (« AAAA-MM »). */
+function parisMonth(at: Date): string {
+  return PARIS_MONTH.format(at).slice(0, 7);
+}
+
+/** Les compteurs du mois en cours (heure de Paris), calculés à partir des
+ * lignes déjà lues, avec les règles de la base : une recherche compte dans
+ * la part du mois si elle a été lancée (en cours, aboutie ou sans résultat),
+ * sans panne et sans être servie par le cache (serpapi_quota_v2, 0053) ; un
+ * essai gratuit, s'il a réussi sur le gratuit du mois (0042) ; un essai
+ * offert reste tant qu'il n'a pas expiré. */
+export function monthlyQuotaForExport(searches: readonly ExportRow[], tryonEvents: readonly ExportRow[], tryonGrants: readonly ExportRow[], withTryon: boolean, now: Date): ExportRow {
+  const month = parisMonth(now);
+  const inMonth = (value: unknown) => typeof value === "string" && !Number.isNaN(Date.parse(value)) && parisMonth(new Date(value)) === month;
+  const searchesCounted = searches.filter(
+    (row) => ["processing", "completed", "failed"].includes(String(row.status)) && (row.failure_kind ?? null) === null && row.served_from_cache !== true && inMonth(row.created_at)
+  ).length;
+  return {
+    month,
+    searches_counted: searchesCounted,
+    tryon_free_used: withTryon ? tryonEvents.filter((row) => row.status === "succeeded" && row.quota_source === "free" && row.month === month).length : null,
+    tryon_bonus_remaining: withTryon
+      ? tryonGrants.filter((row) => typeof row.expires_at === "string" && Date.parse(row.expires_at) > now.getTime()).reduce((sum, row) => sum + (typeof row.remaining === "number" ? row.remaining : 0), 0)
+      : null,
+  };
+}
 
 /** Ajoute le titre de l'envie à chaque ligne (lisible sans l'identifiant). */
 function withWishTitles(rows: readonly ExportRow[], wishlistItems: readonly ExportRow[]): ExportRow[] {
@@ -539,6 +579,15 @@ export async function collectExport(
   const withMessageActions = withMessages && (await messageActionsReady(fastify));
   const messageReactions = await section("messageReactions", () => (withMessageActions ? listMessageReactions(db, userId, messages, conversations) : Promise.resolve(none)), none);
 
+  // Quotas par membre : sans la migration 0053, aucun droit et aucun compteur du mois.
+  const withQuotas = await memberQuotasReady(fastify);
+  const memberEntitlements = await section(
+    "memberEntitlements",
+    () => (withQuotas ? listWhere(db, "member_entitlements", MEMBER_ENTITLEMENT_EXPORT_COLUMNS, "user_id", userId, ["entitlement"]) : Promise.resolve(none)),
+    none
+  );
+  const monthlyQuota = withQuotas ? monthlyQuotaForExport(productSearches, tryonEvents, tryonBonusGrants, withTryon, new Date()) : null;
+
   const data: ExportData = {
     exportedAt: new Date().toISOString(),
     account: { email },
@@ -583,6 +632,8 @@ export async function collectExport(
     videoSpots,
     videoConfirmations,
     messageReactions,
+    memberEntitlements,
+    monthlyQuota,
   };
   return { data, failures };
 }

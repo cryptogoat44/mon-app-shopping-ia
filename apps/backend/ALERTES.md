@@ -12,7 +12,7 @@ Chaque alerte écrit une ligne `Alerte` dans le journal de Render et, si
 | Tag `alerte` | Quand | Combien de fois |
 | --- | --- | --- |
 | `disjoncteur` | la recherche par image se met en pause (6 recherches mauvaises sur les 10 dernières) | une par heure au plus |
-| `plafond_recherches` | plafond du jour ou du mois atteint : Spotter fermé à tous | une par jour (le jour), une par cycle (le mois) |
+| `plafond_recherches` | plafond du jour ou du mois atteint : Spotter fermé à tous (`plafond` = `day` ou `month`) ; ou, abonnements allumés, les comptes gratuits arrêtés par la réserve des abonnés, 70 % du plafond atteints (`plafond` = `reserve_day` ou `reserve_month` : seuls les abonnés cherchent encore ; réglage `SUBSCRIBER_RESERVE_PERCENT`) | une par jour (le jour), une par cycle (le mois), pour chacune |
 | `plafond_ia` | 300 analyses de l'IA dans la journée | une par jour |
 | `echecs_repetes` | 5 échecs en 15 minutes de l'IA (vidéo, voie C), de Google Shopping ou du service vidéo (`source` = `service_video` : service injoignable ou trop lent, bloqué par TikTok ou Instagram, secret différent des deux côtés ; pour couper l'analyse des liens : `VIDEO_LINK_ANALYSIS_ENABLED`) | une par heure au plus |
 | `signalement` | un nouveau signalement attend la modération | une par contenu signalé (les signalements suivants du même contenu se regroupent) |

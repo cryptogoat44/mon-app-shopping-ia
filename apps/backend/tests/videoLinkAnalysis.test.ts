@@ -484,7 +484,8 @@ describe("limites de l'IA et plafond des recherches (comme POST /api/video-momen
       { kind: "video", userId: ALICE, reserve: false },
       { kind: "video", userId: ALICE, reserve: true },
     ]);
-    expect(rpcCalls).toEqual(["serpapi_quota"]);
+    // La sonde des quotas par membre (0053, absente ici) peut précéder, une fois.
+    expect(rpcCalls.filter((fn) => fn !== "member_quotas_version")).toEqual(["serpapi_quota"]);
   });
 
   it("limite de l'IA déjà atteinte (personne ou service) : 429 avec Retry-After, le service vidéo n'est pas appelé", async () => {
