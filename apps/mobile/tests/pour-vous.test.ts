@@ -317,11 +317,11 @@ describe("politique de confidentialité et conditions", () => {
     const section = (doc: typeof privacyPolicy, title: string) => doc.sections.find((s) => s.title.startsWith(title))!.blocks.flat().join("\n");
     const frWho = section(privacyPolicy, "Qui peut voir quoi");
     expect(frWho).toContain(
-      "Vos publications publiques peuvent être proposées dans le fil « Pour vous » à des membres qui ne vous suivent pas, et votre compte peut leur être suggéré, sauf si votre compte est privé ou si vous éteignez le réglage « Proposer mon compte aux autres membres ». Ce fil classe les publications publiques des 14 derniers jours selon leur date et leur nombre de j'aime et de commentaires ; le classement est le même pour tous et ne repose sur aucun profil de vos centres d'intérêt. Les suggestions de comptes s'appuient sur les comptes suivis par vos abonnements."
+      "Vos publications publiques peuvent être proposées dans le fil « Pour vous » à des membres qui ne vous suivent pas, et votre compte peut leur être suggéré, sauf si votre compte est privé ou si vous éteignez le réglage « Proposer mon compte aux autres membres ». Ce fil classe les publications publiques des 14 derniers jours selon leur date et leur nombre de j'aime et de commentaires ; le classement est le même pour tous et ne repose sur aucun profil de vos centres d'intérêt. Les suggestions de comptes s'appuient sur les comptes suivis par vos abonnements, puis sur les comptes publics les plus actifs du fil « Pour vous »."
     );
     const enWho = section(privacyPolicyEn, "Who can see what");
     expect(enWho).toContain(
-      "Your public posts may be shown in the “For you” feed to members who do not follow you, and your account may be suggested to them, unless your account is private or you turn off the setting “Suggest my account to other members”. This feed ranks public posts from the last 14 days by date and by number of likes and comments; the ranking is the same for everyone and uses no profile of your interests. Account suggestions rely on the accounts followed by the people you follow."
+      "Your public posts may be shown in the “For you” feed to members who do not follow you, and your account may be suggested to them, unless your account is private or you turn off the setting “Suggest my account to other members”. This feed ranks public posts from the last 14 days by date and by number of likes and comments; the ranking is the same for everyone and uses no profile of your interests. Account suggestions rely on the accounts followed by the people you follow, then on the most active public accounts of the “For you” feed."
     );
   });
 
@@ -331,6 +331,11 @@ describe("politique de confidentialité et conditions", () => {
     expect(text(termsOfUse)).toContain("Le classement est le même pour tous les membres et ne repose sur aucun profil de vos centres d'intérêt.");
     expect(text(termsOfUse)).toContain("article 27");
     expect(text(termsOfUseEn)).toContain("The ranking is the same for all members and uses no profile of your interests.");
+    // Les deux sources des suggestions, comme dans les conditions et l'app : la politique ne décrit pas seulement la première.
+    expect(text(privacyPolicy)).not.toContain("s'appuient sur les comptes suivis par vos abonnements.");
+    expect(text(privacyPolicyEn)).not.toContain("rely on the accounts followed by the people you follow.");
+    expect(text(termsOfUse)).toContain("puis les comptes publics les plus actifs");
+    expect(text(termsOfUseEn)).toContain("then the most active public accounts");
   });
 
   it(`les ${FOR_YOU_DAYS} jours des textes sont ceux du serveur (constante partagée) : l'explication et le code ne divergent pas`, () => {
