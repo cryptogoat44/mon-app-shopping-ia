@@ -21,6 +21,10 @@
 // La photo et l'image produite ne quittent jamais la mémoire : ni base, ni
 // stockage, ni disque, ni journal, ni Sentry ; leurs octets sont effacés dès
 // la réponse.
+// Quotas par membre (lot quotas) : un compte gratuit a ses essais du mois
+// (TRYON_FREE_PER_MONTH, 5), puis ses essais offerts ; un abonné n'a pas de
+// limite du mois (lib/memberQuotas.ts), mais garde les limites horaires et
+// quotidiennes, le budget du mois du service et un essai à la fois.
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type {
   TryonAgeGateResponse,
@@ -36,6 +40,7 @@ import { env } from "../env.js";
 import { ImageSourceError } from "../lib/imageProcessing.js";
 import { ImageQueueFullError } from "../lib/imageSafety.js";
 import { requestLocale, type Locale } from "../lib/locale.js";
+import { isSubscriber } from "../lib/memberQuotas.js";
 import { GENERIC_CLIENT_ERROR } from "../lib/messages.js";
 import { isFileTooLargeError, isTooManyPartsError } from "../lib/multipartErrors.js";
 import { findOwnMatchWithLinks } from "../lib/ownMatches.js";
@@ -139,6 +144,17 @@ export const TRYON_TRY_DEADLINE_MS = 100_000;
  * (10 s au plus, lib/publicImage.ts) et d'un second essai. */
 export const TRYON_FALLBACK_MIN_MS = 25_000;
 
+/** Abonné (lot quotas) : aucune limite du mois. La base (0042) compte les
+ * essais gratuits du mois jusqu'à ce nombre, jamais atteint : ses essais
+ * sont notés « gratuits », et ses essais offerts restent intacts. */
+export const UNLIMITED_TRIES_PER_MONTH = 1_000_000;
+
+/** Les réglages de l'essayage pour ce membre : un abonné n'a pas de limite
+ * du mois (monthlyLimit null) ; un compte gratuit a TRYON_FREE_PER_MONTH. */
+export function tryonQuotaFor(config: TryonConfig, subscriber: boolean): { config: TryonConfig; monthlyLimit: number | null } {
+  return subscriber ? { config: { ...config, freePerMonth: UNLIMITED_TRIES_PER_MONTH }, monthlyLimit: null } : { config, monthlyLimit: config.freePerMonth };
+}
+
 /** Motifs d'un signalement (contrat partagé, types seulement côté app). */
 export const TRYON_REPORT_REASONS = ["inappropriate", "wrong_piece", "poor_quality", "other"] as const satisfies readonly TryonReportReason[];
 // Vérifié à la compilation : chaque motif du contrat est dans la liste.
@@ -236,6 +252,11 @@ export default async function tryonRoutes(fastify: FastifyInstance, options: Try
 
   /** Les réglages si les deux interrupteurs sont allumés, sinon null. */
   const active = () => activeTryonConfig(configState, flag);
+
+  /** Les réglages pour ce membre, selon qu'il est abonné (lecture impossible : compte gratuit). */
+  async function memberQuota(log: FastifyBaseLogger, userId: string, config: TryonConfig) {
+    return tryonQuotaFor(config, await isSubscriber(fastify, log, userId, now()));
+  }
 
   /** Une alerte nouvelle (une seule par période) part au point d'accroche. */
   async function raiseAlert(log: FastifyBaseLogger, kind: TryonAlertKind, period: string, details: Record<string, string | number>): Promise<void> {
@@ -385,12 +406,13 @@ export default async function tryonRoutes(fastify: FastifyInstance, options: Try
       if (!config) return reply.send(off);
       const userId = request.user!.id;
       try {
-        const [profile, remaining] = await Promise.all([readTryonProfile(db, userId), readRemaining(db, userId, config)]);
+        const quota = await memberQuota(request.log, userId, config);
+        const [profile, remaining] = await Promise.all([readTryonProfile(db, userId), readRemaining(db, userId, quota.config)]);
         const status: TryonStatus = {
           enabled: true,
           ageGate: ageGateOf(profile),
           consent: consentStateOf(profile, TRYON_CONSENT_VERSION),
-          remaining: { ...remaining, nextReset: nextMonthStart(now(), config.timeZone).toISOString() },
+          remaining: { ...remaining, nextReset: nextMonthStart(now(), config.timeZone).toISOString(), monthlyLimit: quota.monthlyLimit },
         };
         return reply.send(status);
       } catch (error) {
@@ -525,8 +547,10 @@ export default async function tryonRoutes(fastify: FastifyInstance, options: Try
         const garmentUrls = tryonGarmentUrls(match, config.requireBuyLink);
         if (!garmentUrls) return reply.code(422).send(ITEM_NOT_ELIGIBLE);
 
-        // 3. Réservation atomique dans la base : quota, un essai à la fois, budget.
-        const reservation = await reserveTry(db, userId, itemId.data, config);
+        // 3. Réservation atomique dans la base : quota (aucune limite du mois
+        // pour un abonné), un essai à la fois, budget.
+        const quota = await memberQuota(request.log, userId, config);
+        const reservation = await reserveTry(db, userId, itemId.data, quota.config);
         if (reservation.status !== "reserved") return await refusedReservation(request, reply, reservation.status, config);
         // Un seul délai pour tout l'appel au fournisseur, à partir d'ici.
         const deadline = now().getTime() + TRYON_TRY_DEADLINE_MS;
@@ -546,7 +570,7 @@ export default async function tryonRoutes(fastify: FastifyInstance, options: Try
           buffers.push(banded);
 
           const durationMs = Date.now() - startedAt;
-          const completion = await recordSuccess(request.log, reservation.eventId, userId, output.creditsUsed, durationMs, config);
+          const completion = await recordSuccess(request.log, reservation.eventId, userId, output.creditsUsed, durationMs, quota.config);
           if (completion?.status === "completed") {
             for (const kind of completion.newAlerts) {
               notifyTryonAlert(request.log, kind, { periode: monthKeyAt(now(), config.timeZone), budget_usd: config.monthlyBudgetUsd });
@@ -562,7 +586,7 @@ export default async function tryonRoutes(fastify: FastifyInstance, options: Try
           );
           const response: TryonRunResponse = {
             image: jpegDataUri(banded),
-            remaining: { ...remaining, nextReset: nextMonthStart(now(), config.timeZone).toISOString() },
+            remaining: { ...remaining, nextReset: nextMonthStart(now(), config.timeZone).toISOString(), monthlyLimit: quota.monthlyLimit },
           };
           return reply.header("Cache-Control", "no-store").send(response);
         } catch (error) {

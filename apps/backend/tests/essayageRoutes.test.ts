@@ -5,7 +5,10 @@ import multipart from "@fastify/multipart";
 import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TryonRunResponse, TryonStatus } from "@monapp/shared-types";
-import tryonRoutes, { TRYON_FALLBACK_MIN_MS, TRYON_TRY_DEADLINE_MS } from "../src/routes/tryon.js";
+import tryonRoutes, { TRYON_FALLBACK_MIN_MS, TRYON_TRY_DEADLINE_MS, UNLIMITED_TRIES_PER_MONTH, tryonQuotaFor } from "../src/routes/tryon.js";
+import { env } from "../src/env.js";
+import { resetMemberQuotasProbe } from "../src/lib/memberQuotas.js";
+import { grantTryonBonus, TryonStoreError } from "../src/lib/tryon/store.js";
 import rateLimitPlugin from "../src/plugins/rateLimit.js";
 import { RATE_LIMITS } from "../src/lib/rateLimits.js";
 import { MULTIPART_LIMITS } from "../src/lib/multipartErrors.js";
@@ -301,7 +304,7 @@ describe("statut : âge, consentement, essais restants", () => {
       enabled: true,
       ageGate: "unknown",
       consent: { required: true, version: TRYON_CONSENT_VERSION },
-      remaining: { free: 5, bonus: 0, nextReset: NEXT_RESET },
+      remaining: { free: 5, bonus: 0, nextReset: NEXT_RESET, monthlyLimit: 5 },
     });
   });
 
@@ -401,7 +404,7 @@ describe("un essai réussi", () => {
     expect(response.statusCode).toBe(200);
     expect(response.headers["cache-control"]).toBe("no-store");
     const body = response.json() as TryonRunResponse;
-    expect(body.remaining).toEqual({ free: 4, bonus: 0, nextReset: NEXT_RESET });
+    expect(body.remaining).toEqual({ free: 4, bonus: 0, nextReset: NEXT_RESET, monthlyLimit: 5 });
     expect(body.image.startsWith("data:image/jpeg;base64,")).toBe(true);
     const image = Buffer.from(body.image.slice("data:image/jpeg;base64,".length), "base64");
     const metadata = await sharp(image).metadata();
@@ -603,7 +606,7 @@ describe("échecs que le fournisseur a pu facturer : jamais pris sur le quota, c
     const target = await tryonApp(fake, { provider });
     const response = await run(target);
     expect(response.statusCode).toBe(200);
-    expect((response.json() as TryonRunResponse).remaining).toEqual({ free: 5, bonus: 0, nextReset: NEXT_RESET });
+    expect((response.json() as TryonRunResponse).remaining).toEqual({ free: 5, bonus: 0, nextReset: NEXT_RESET, monthlyLimit: 5 });
     expect(events(fake)[0]).toMatchObject({ status: "succeeded", quota_source: null, credits_used: 1 });
     expect(fake.table("tryon_usage_months")).toEqual([{ month: "2026-11", credits_used: 1, tries_succeeded: 1 }]);
     expect(await status(target)).toMatchObject({ remaining: { free: 5 } });
@@ -864,5 +867,100 @@ describe("limites par membre (rallumées le temps du test)", () => {
     expect(limited.json().error).toBe("tryon_rate_limited");
     expect(RATE_LIMITS.tryonRunUserDaily.max).toBe(30);
     expect(RATE_LIMITS.tryonRunGlobal.scope).toBe("global");
+  });
+});
+
+describe("quotas par membre (lot quotas) : 5 essais par mois pour un compte gratuit, aucun pour un abonné", () => {
+  const subscriptions = env.SUBSCRIPTIONS_ENABLED;
+  beforeEach(() => resetMemberQuotasProbe());
+  afterEach(() => {
+    env.SUBSCRIPTIONS_ENABLED = subscriptions;
+    resetMemberQuotasProbe();
+  });
+
+  /** La fausse base, avec la migration 0053 (sonde) et, au besoin, un droit d'abonnement du membre. */
+  function withQuotas(fake: Fake, entitlement: Row | null): Fake {
+    const rpc = fake.db.rpc;
+    fake.db.rpc = (async (fn: string, args: Record<string, unknown> = {}) => (fn === "member_quotas_version" ? { data: 1, error: null } : rpc(fn, args))) as typeof fake.db.rpc;
+    if (entitlement) fake.table("member_entitlements").push({ user_id: USER, source: "revenuecat", updated_at: NOW.toISOString(), ...entitlement });
+    return fake;
+  }
+  const db = (fake: Fake) => fake.db as unknown as FastifyInstance["supabaseAdmin"];
+
+  it("6e essai refusé ; 5 essais offerts ajoutés par grantTryonBonus (la fonction du serveur) : le 6e passe, pris sur eux", async () => {
+    const fake = database();
+    const target = await tryonApp(fake);
+    for (let index = 0; index < 5; index += 1) expect((await run(target)).statusCode).toBe(200);
+    expect((await run(target)).statusCode).toBe(429);
+    expect(await grantTryonBonus(db(fake), USER, 5, "achat-123")).toEqual({ granted: true, expiresAt: expect.any(String) });
+    expect(await status(target)).toMatchObject({ remaining: { free: 0, bonus: 5, monthlyLimit: 5 } });
+    const sixth = await run(target);
+    expect(sixth.statusCode).toBe(200);
+    expect(sixth.json().remaining).toMatchObject({ free: 0, bonus: 4, monthlyLimit: 5 });
+    expect(events(fake).at(-1)).toMatchObject({ quota_source: "bonus" });
+  });
+
+  it("grantTryonBonus : un achat n'ajoute qu'une fois ; la référence d'un autre membre n'ajoute rien ; paramètres invalides refusés avant la base", async () => {
+    const fake = database();
+    expect((await grantTryonBonus(db(fake), USER, 5, "achat-1")).granted).toBe(true);
+    expect(await grantTryonBonus(db(fake), USER, 5, "achat-1")).toEqual({ granted: false, expiresAt: expect.any(String) });
+    expect(await grantTryonBonus(db(fake), OTHER, 5, "achat-1")).toEqual({ granted: false, expiresAt: null });
+    expect(fake.table("tryon_bonus_grants")).toHaveLength(1);
+    for (const [user, quantity, order] of [
+      ["pas-un-identifiant", 5, "achat-2"],
+      [USER, 0, "achat-2"],
+      [USER, 101, "achat-2"],
+      [USER, 2.5, "achat-2"],
+      [USER, 5, ""],
+      [USER, 5, " achat-2"],
+    ] as const) {
+      await expect(grantTryonBonus(db(fake), user, quantity, order), `${user} ${quantity} ${order}`).rejects.toBeInstanceOf(TryonStoreError);
+    }
+    expect(fake.table("tryon_bonus_grants")).toHaveLength(1);
+  });
+
+  it("aucune route n'ajoute d'essais offerts : seul le serveur, par grantTryonBonus", () => {
+    const routes = readFileSync(join(__dirname, "../src/routes/tryon.ts"), "utf8");
+    expect(routes).not.toMatch(/grantTryonBonus|tryon_grant_bonus/);
+  });
+
+  it("abonné (abonnements allumés, droit « miroir » en cours) : le 6e essai du mois passe, aucune limite du mois annoncée, ses essais offerts restent intacts", async () => {
+    env.SUBSCRIPTIONS_ENABLED = true;
+    const fake = withQuotas(database(), { entitlement: "miroir", expires_at: null });
+    await grantTryonBonus(db(fake), USER, 5, "achat-abonne");
+    const target = await tryonApp(fake);
+    expect(await status(target)).toMatchObject({ remaining: { bonus: 5, monthlyLimit: null } });
+    for (let index = 0; index < 6; index += 1) expect((await run(target)).statusCode, String(index)).toBe(200);
+    expect(fake.table("tryon_bonus_grants")[0]).toMatchObject({ remaining: 5 });
+    expect(events(fake).every((row) => row.quota_source === "free")).toBe(true);
+  });
+
+  it("droit expiré, ou abonnements coupés : règles d'un compte gratuit (le 6e est refusé)", async () => {
+    env.SUBSCRIPTIONS_ENABLED = true;
+    const expired = withQuotas(database(), { entitlement: "video", expires_at: "2026-11-01T00:00:00+00:00" });
+    const target = await tryonApp(expired);
+    for (let index = 0; index < 5; index += 1) expect((await run(target)).statusCode).toBe(200);
+    expect((await run(target)).statusCode).toBe(429);
+    await app?.close();
+    app = null;
+    env.SUBSCRIPTIONS_ENABLED = false;
+    resetMemberQuotasProbe();
+    const off = withQuotas(database(), { entitlement: "video", expires_at: null });
+    expect(await status(await tryonApp(off))).toMatchObject({ remaining: { free: 5, monthlyLimit: 5 } });
+  });
+
+  it("lecture des droits en échec : règles d'un compte gratuit, jamais une erreur pour le membre", async () => {
+    env.SUBSCRIPTIONS_ENABLED = true;
+    const fake = withQuotas(database({ db: { missing: ["member_entitlements"] } }), null);
+    const target = await tryonApp(fake);
+    expect(await status(target)).toMatchObject({ enabled: true, remaining: { free: 5, monthlyLimit: 5 } });
+    expect((await run(target)).statusCode).toBe(200);
+    expect(lines.some((line) => line.includes("Droits d'abonnement illisibles"))).toBe(true);
+    expect(lines.join("\n")).not.toContain(USER);
+  });
+
+  it("la règle : un abonné n'a pas de limite du mois ; un compte gratuit a TRYON_FREE_PER_MONTH", () => {
+    expect(tryonQuotaFor(CONFIG, false)).toEqual({ config: CONFIG, monthlyLimit: 5 });
+    expect(tryonQuotaFor(CONFIG, true)).toEqual({ config: { ...CONFIG, freePerMonth: UNLIMITED_TRIES_PER_MONTH }, monthlyLimit: null });
   });
 });

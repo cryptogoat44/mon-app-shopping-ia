@@ -90,7 +90,7 @@ describe("runTextSearch (voie B)", () => {
     expect(found).toEqual(replied);
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, init] = fetchMock.mock.calls[0]!;
-    expect(url).toBe("https://api.exemple.test/api/searches/s1/text");
+    expect(url).toBe("https://api.exemple.test/api/searches/s1/text?v=2");
     expect(init?.method).toBe("POST");
     expect(JSON.parse(String(init?.body))).toEqual({ words: WORDS });
     expect(init?.signal).toBe(controller.signal);

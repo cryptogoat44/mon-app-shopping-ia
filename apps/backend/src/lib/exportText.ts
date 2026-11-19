@@ -556,6 +556,20 @@ export const EXPORT_COLUMNS = {
     product: shown("Pièce", "Piece"),
     created_at: shown("Confirmée le", "Confirmed on"),
   },
+  // Quotas par membre (migration 0053) : vos droits d'abonnement…
+  memberEntitlements: {
+    entitlement: shown("Abonnement", "Subscription"),
+    expires_at: shown("Jusqu'au", "Until"),
+    source: technical("Information reçue de", "Information received from"),
+    updated_at: technical("Mis à jour le", "Updated on"),
+  },
+  // … et vos compteurs du mois.
+  monthlyQuota: {
+    month: shown("Mois", "Month"),
+    searches_counted: shown("Recherches comptées ce mois-ci", "Searches counted this month"),
+    tryon_free_used: shown("Essais du mois utilisés", "Monthly try-ons used"),
+    tryon_bonus_remaining: shown("Essais offerts restants", "Free try-ons remaining"),
+  },
 } as const satisfies Record<ExportDataKey, Record<string, ExportColumn>>;
 
 export type ExportColumnName<K extends ExportDataKey> = keyof (typeof EXPORT_COLUMNS)[K] & string;
@@ -566,10 +580,10 @@ export const EXPORT_SECTIONS = {
   account: {
     title: { fr: "Votre compte et votre profil", en: "Your account and profile" },
     intro: {
-      fr: "Les informations de votre compte, et ce que les autres membres voient sur votre profil.",
-      en: "Your account details, and what other members see on your profile.",
+      fr: "Les informations de votre compte, ce que les autres membres voient sur votre profil, votre abonnement s'il y en a un, et vos compteurs du mois.",
+      en: "Your account details, what other members see on your profile, your subscription if you have one, and your counters for the month.",
     },
-    keys: ["account", "profile"],
+    keys: ["account", "profile", "memberEntitlements", "monthlyQuota"],
   },
   searches: {
     title: { fr: "Vos recherches", en: "Your searches" },
@@ -811,6 +825,12 @@ export const TRYON_EVENT_STATUS_LABELS: Record<"pending" | "succeeded" | "failed
 };
 
 /** D'où vient un essai réussi. */
+/** Droits d'abonnement (migration 0053). */
+export const ENTITLEMENT_LABELS: Record<"video" | "miroir", Bilingual> = {
+  video: { fr: `${BRAND} Vidéo`, en: `${BRAND} Video` },
+  miroir: { fr: `${BRAND} Miroir`, en: `${BRAND} Miroir` },
+};
+
 export const TRYON_QUOTA_SOURCE_LABELS: Record<"free" | "bonus", Bilingual> = {
   free: { fr: "Essais gratuits du mois", en: "Free try-ons for the month" },
   bonus: { fr: "Essais offerts", en: "Free try-ons granted" },
@@ -1175,6 +1195,10 @@ export const EXPORT_TEXT = {
   tryonGrantsTitle: { fr: "Essais offerts ({count})", en: "Free try-ons granted ({count})" },
   tryonGrantTitle: { fr: "{count} essais offerts", en: "{count} free try-ons" },
   tryonReportsTitle: { fr: "Signalements de résultats ({count})", en: "Result reports ({count})" },
+  // Quotas par membre (migration 0053).
+  entitlementsTitle: { fr: "Votre abonnement", en: "Your subscription" },
+  entitlementNoEnd: { fr: "Sans date de fin", en: "No end date" },
+  monthlyQuotaTitle: { fr: "Vos compteurs du mois", en: "Your counters for the month" },
   // Signalements.
   followUp: { fr: "Suivi", en: "Follow-up" },
   handledOn: { fr: "Traité le {date}", en: "Handled on {date}" },

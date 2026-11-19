@@ -64,7 +64,10 @@ export function isIsoDate(value: unknown): value is string {
 
 export function readRemaining(value: unknown): TryonRemaining | null {
   if (!isRecord(value) || !isCount(value.free) || !isCount(value.bonus) || !isIsoDate(value.nextReset)) return null;
-  return { free: value.free, bonus: value.bonus, nextReset: value.nextReset };
+  const remaining: TryonRemaining = { free: value.free, bonus: value.bonus, nextReset: value.nextReset };
+  // Lot quotas : la limite du mois (null : aucune) ; absente d'un serveur plus ancien, ou illisible.
+  if (value.monthlyLimit === null || isCount(value.monthlyLimit)) remaining.monthlyLimit = value.monthlyLimit;
+  return remaining;
 }
 
 export function readConsentState(value: unknown): TryonConsentState | null {

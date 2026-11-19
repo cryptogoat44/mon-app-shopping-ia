@@ -19,6 +19,11 @@ export function formatDayMonth(isoDay: string, locale: Locale): string {
   return locale === "fr" && date.getDate() === 1 ? text.replace(/^1 /, "1er ") : text;
 }
 
+/** Le mois d'une date, en toutes lettres : « novembre » ; « November ». Lu à midi. */
+export function formatMonthName(isoDay: string, locale: Locale): string {
+  return new Date(`${isoDay}T12:00:00`).toLocaleDateString(INTL[locale], { month: "long" });
+}
+
 /** Prix dans sa devise d'origine ; code devise inconnu : nombre suivi du code. */
 export function formatPrice(amount: number, currency: string | null, locale: Locale): string {
   const digits = { minimumFractionDigits: Number.isInteger(amount) ? 0 : 2, maximumFractionDigits: 2 };

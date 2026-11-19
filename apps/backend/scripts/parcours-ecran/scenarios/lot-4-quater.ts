@@ -21,7 +21,7 @@ import { SEARCH_CAPACITY_ERRORS, type SearchCapacityErrorBody, type SearchCapaci
 import type { Parcours } from "../boite-a-outils.js";
 import { genererVideosEssai } from "../../lib/videos-essai.js";
 import { COMBOS, type Combo } from "./lot-3.js";
-import { check, choisirFichier, ouvrirSpotter, suivreRequetes, visible, type Envoi } from "./spotter-outils.js";
+import { check, choisirFichier, ouvrirSpotter, ROUTE_ANALYSE_VIDEO, ROUTE_COMPTEUR, ROUTE_LANCEMENT, suivreRequetes, visible, type Envoi } from "./spotter-outils.js";
 import { capteur, lancerPhoto, lancerVideo, nouveauCompte, TEXTES } from "./lot-4-ter-outils.js";
 
 export const name = "Lot 4 quater — plafond des recherches (site)";
@@ -65,7 +65,7 @@ async function compteurOuvert(page: Page): Promise<void> {
   const minuit = new Date();
   minuit.setHours(24, 0, 0, 0);
   const body: SearchCapacityStatus = { user: { used: 2, limit: 8, remaining: 6, resetsAt: minuit.toISOString() }, service: { status: "open" }, remainingToday: 6 };
-  await page.route("**/api/searches/capacity", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) }));
+  await page.route(ROUTE_COMPTEUR, (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) }));
 }
 
 /** Le message du plafond, seul : ni « trop de recherches d'un coup », ni année ou code technique, ni correction à tenter, et le retour à Spotter. */
@@ -86,13 +86,13 @@ async function controlerMessage(page: Page, combo: Combo, limit: SearchCapacityL
 /** Photo, « Lancer » : le lancement reçoit « plafond atteint » ; aucun réessai automatique. */
 async function photoPlafond(p: Parcours, page: Page, combo: Combo, fichier: string, limit: SearchCapacityLimit, ecran: string, problemes: string[]): Promise<void> {
   const suivi = suivreRequetes(page);
-  await plafondAtteint(page, "**/api/searches/*/run", limit);
+  await plafondAtteint(page, ROUTE_LANCEMENT, limit);
   await lancerPhoto(p, page, TEXTES[combo.locale], fichier);
   await controlerMessage(page, combo, limit, ecran);
   await page.waitForTimeout(2000);
   check(suivi.lancements.length === 1, `${ecran} : un seul lancement, aucun réessai automatique (${suivi.lancements.length})`);
   await capteur(p, page, combo, problemes)(ecran);
-  await page.unroute("**/api/searches/*/run");
+  await page.unroute(ROUTE_LANCEMENT);
 }
 
 /** Vidéo, mots, « Lancer », accord (premier usage) : l'analyse reçoit « plafond atteint » ; aucune identification. */
@@ -100,7 +100,7 @@ async function videoPlafond(p: Parcours, page: Page, combo: Combo, video: string
   const T = TEXTES[combo.locale];
   const ecran = "04-video-plafond-jour";
   const suivi = suivreRequetes(page);
-  await plafondAtteint(page, "**/api/video-moments", "day");
+  await plafondAtteint(page, ROUTE_ANALYSE_VIDEO, "day");
   await page.goto(`${p.siteUrl}/`);
   await visible(page, T.ajouterVideo).waitFor({ timeout: 30_000 });
   await lancerVideo(page, T, T.description, video, choisirFichier);
@@ -110,7 +110,7 @@ async function videoPlafond(p: Parcours, page: Page, combo: Combo, video: string
   check((await visible(page, T.interrompue).count()) === 0, `${ecran} : pas « ${T.interrompue} »`);
   check(suivi.analyses === 1 && suivi.recherches === 0, `${ecran} : une analyse demandée, aucune identification (${suivi.analyses} / ${suivi.recherches})`);
   await capteur(p, page, combo, problemes)(ecran);
-  await page.unroute("**/api/video-moments");
+  await page.unroute(ROUTE_ANALYSE_VIDEO);
 }
 
 export async function run(p: Parcours): Promise<void> {

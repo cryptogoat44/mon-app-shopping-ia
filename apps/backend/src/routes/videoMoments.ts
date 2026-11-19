@@ -7,6 +7,7 @@ import { isFileTooLargeError, isTooManyPartsError } from "../lib/multipartErrors
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { optimizePhotoWithSize } from "../lib/photos.js";
 import { searchCapacityForVideoAi, sendCapacityReached } from "../lib/searchCapacity.js";
+import { speaksV2 } from "../lib/clientLevel.js";
 import { aiQuotaFor, type AiQuotaDecision } from "../lib/aiQuota.js";
 import { noteFailure } from "../lib/alerts.js";
 import { RATE_LIMITS } from "../lib/rateLimits.js";
@@ -131,7 +132,7 @@ export default async function videoMomentsRoutes(fastify: FastifyInstance) {
       // dépense. Plafond illisible : pas d'analyse non plus.
       const capacity = await searchCapacityForVideoAi(fastify, request.log, userId).catch(() => null);
       if (!capacity) return reply.code(503).send(UNAVAILABLE);
-      if (!capacity.allowed) return sendCapacityReached(reply, capacity);
+      if (!capacity.allowed) return sendCapacityReached(reply, capacity, speaksV2(request));
       if (!request.isMultipart()) return reply.code(400).send(INVALID_FRAMES);
 
       const upload = await readUpload(request);

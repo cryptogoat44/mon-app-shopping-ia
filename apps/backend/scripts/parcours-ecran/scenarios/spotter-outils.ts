@@ -104,13 +104,22 @@ export interface Suivi {
   lancements: string[];
 }
 
+/** Adresses interceptées par les parcours. L'app y ajoute `?v=2` (lot
+ * quotas : elle comprend la part du mois) : chaque motif accepte l'adresse
+ * avec ou sans paramètres. */
+export const ROUTE_LANCEMENT = "**/api/searches/*/run{,?*}";
+export const ROUTE_ANALYSE_VIDEO = "**/api/video-moments{,?*}";
+export const ROUTE_COMPTEUR = "**/api/searches/capacity{,?*}";
+
 export function suivreRequetes(page: Page): Suivi {
   const suivi: Suivi = { analyses: 0, recherches: 0, lancements: [] };
   page.on("request", (requete) => {
     if (requete.method() !== "POST") return;
-    if (requete.url().endsWith("/api/video-moments")) suivi.analyses += 1;
-    if (requete.url().includes("/api/searches")) suivi.recherches += 1;
-    if (/\/api\/searches\/[^/]+\/run$/.test(requete.url())) suivi.lancements.push(requete.postDataBuffer()?.toString("latin1") ?? "");
+    // Le chemin seul : l'app ajoute `?v=2` à certaines adresses.
+    const chemin = new URL(requete.url()).pathname;
+    if (chemin.endsWith("/api/video-moments")) suivi.analyses += 1;
+    if (chemin.includes("/api/searches")) suivi.recherches += 1;
+    if (/\/api\/searches\/[^/]+\/run$/.test(chemin)) suivi.lancements.push(requete.postDataBuffer()?.toString("latin1") ?? "");
   });
   return suivi;
 }

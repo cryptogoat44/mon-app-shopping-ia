@@ -22,7 +22,7 @@ import { z } from "zod";
 import type { Parcours, TestAccount } from "../boite-a-outils.js";
 import { genererVideosEssai } from "../../lib/videos-essai.js";
 import { COMBOS, type Combo } from "./lot-3.js";
-import { attendreBoutonActif, attendreEnvoi, check, choisirFichier, ouvrirSpotter, suivreRequetes, visible, type Envoi } from "./spotter-outils.js";
+import { attendreBoutonActif, attendreEnvoi, check, choisirFichier, ouvrirSpotter, ROUTE_ANALYSE_VIDEO, ROUTE_LANCEMENT, suivreRequetes, visible, type Envoi } from "./spotter-outils.js";
 import { aucunChamp, capteur, champPhotoVide, champPret, lancerPhoto, nouveauCompte, ralentir, simulerResultats, TEXTES } from "./lot-4-ter-outils.js";
 
 export const name = "Petit lot — les mots ne partent plus avec l'image ; message « aucun prix » (site)";
@@ -30,7 +30,7 @@ export const outputDir = "petit-lot-captures";
 export const buildEnv = { EXPO_PUBLIC_POSTHOG_KEY: "phc_parcoursEcranFausseCle000000000", EXPO_PUBLIC_ENVIRONMENT: "development" };
 export const simulatedAi = true;
 
-const RUN = "**/api/searches/*/run";
+const RUN = ROUTE_LANCEMENT;
 
 /** Le corps du lancement (multipart) ne contient aucun champ « query ». */
 const sansMots = (lancement: string): boolean => lancement.length > 0 && !/name="query"/.test(lancement);
@@ -100,7 +100,7 @@ async function videoAvecIa(p: Parcours, page: Page, combo: Combo, video: string,
   await simulerResultats(page, T.description);
   await page.getByRole("button", { name: T.lancer, exact: true }).filter({ visible: true }).click();
   await visible(page, T.accord).waitFor({ timeout: 15_000 });
-  await ralentir(page, "**/api/video-moments");
+  await ralentir(page, ROUTE_ANALYSE_VIDEO);
   await page.getByRole("button", { name: T.accepter, exact: true }).filter({ visible: true }).click();
   await visible(page, T.attenteVideo).waitFor({ timeout: 15_000 });
   await visible(page, T.attenteBoutiques).waitFor({ timeout: 30_000 });
@@ -112,7 +112,7 @@ async function videoAvecIa(p: Parcours, page: Page, combo: Combo, video: string,
   check((await page.getByText(T.description, { exact: false }).filter({ visible: true }).count()) === 0, "résultats : le nombre de propositions sans les mots");
   await capture("07-video-resultats");
   await page.unroute(RUN);
-  await page.unroute("**/api/video-moments");
+  await page.unroute(ROUTE_ANALYSE_VIDEO);
 }
 
 /** Vidéo sans l'IA (accord retiré dans Réglages) : titre « Votre vidéo », aucun champ. */

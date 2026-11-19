@@ -807,3 +807,51 @@ describe("lien vidéo sans prix : la recherche avec la description, sans invitat
     expect(paidCalls()).toEqual({ ai: 0, shopping: 0, shoppingReservations: 0 });
   });
 });
+
+// Lot quotas (0053) : la part du mois atteinte. Une app d'avant ce lot (sans
+// `v=2`) ne connaît pas son code et l'expliquerait par « 10 identifications
+// par heure… un peu plus tard » : elle reçoit le plafond du mois, qu'elle
+// connaît, avec le 1er du mois suivant. L'app qui le dit (`v=2`) reçoit le
+// nouveau code.
+describe("part du mois atteinte : chaque app reçoit un refus qu'elle comprend", () => {
+  const MONTH_REFUSAL = { allowed: false, limit: "user_month", resumesOn: "2026-12-01" } as const;
+  const OLDER_BODY = { error: "search_capacity_month", message: "Vous avez utilisé toutes vos recherches de ce mois-ci.", resumesOn: "2026-12-01" };
+  const NEWER_BODY = { error: "search_capacity_user_month", message: "Vous avez utilisé toutes vos recherches de ce mois-ci.", resumesOn: "2026-12-01" };
+
+  function launchAs(target: FastifyInstance, id: string, query: string) {
+    return target.inject({ method: "POST", url: `/api/searches/${id}/run${query}`, ...form({ complement: "deferred" }) });
+  }
+
+  for (const voieC of [true, false]) {
+    it(`lancement d'une photo (voie C ${voieC ? "allumée" : "coupée"}) : sans v=2, le plafond du mois et le 1er ; avec v=2, la part du mois ; rien n'est envoyé à Lens`, async () => {
+      env.VOIE_C_ENABLED = voieC;
+      const target = await buildApp();
+      for (const [query, body] of [["", OLDER_BODY], ["?v=2", NEWER_BODY]] as const) {
+        const id = preparedSearch();
+        reserveMock.mockResolvedValueOnce(MONTH_REFUSAL);
+        const res = await launchAs(target, id, query);
+        expect(res.statusCode, query).toBe(429);
+        expect(res.json(), query).toEqual(body);
+        // La recherche redevient lançable, comme pour tout plafond.
+        expect(searchRow(id).status, query).toBe("pending");
+      }
+      expect(lensMock).not.toHaveBeenCalled();
+    });
+  }
+
+  it("« Que cherchez-vous ? » : même chose, le verrou est remis, rien n'est envoyé à Google Shopping", async () => {
+    env.VOIE_C_AI_ENABLED = false;
+    lensMock.mockResolvedValue({ matches: LENS.map((match) => ({ ...match, priceValue: null, currency: null })), measure: { ...LENS_MEASURE, keptWithPrice: 0 }, addedRanks: [], statusCode: 200 });
+    const target = await buildApp();
+    const id = preparedSearch();
+    await launch(target, id, { complement: "deferred" });
+    for (const [query, body] of [["", OLDER_BODY], ["?v=2", NEWER_BODY]] as const) {
+      reserveMock.mockResolvedValueOnce(MONTH_REFUSAL);
+      const res = await target.inject({ method: "POST", url: `/api/searches/${id}/text${query}`, headers: { "accept-language": "fr-FR" }, payload: { words: "veste en cuir beige" } });
+      expect(res.statusCode, query).toBe(429);
+      expect(res.json(), query).toEqual(body);
+      expect(searchRow(id).text_requested_at ?? null, query).toBeNull();
+    }
+    expect(shoppingMock).not.toHaveBeenCalled();
+  });
+});

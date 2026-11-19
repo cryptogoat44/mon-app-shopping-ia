@@ -82,6 +82,7 @@ export function buildPrivacyPolicyEn(extra: PrivacyExtra): LegalDocument {
           "Error reports: when an error occurs in the app or on our server, a technical report is created (type of error, screen or feature concerned, browser type, or phone model and system version) together with the internal identifier of your account — never your name, email address, content, or the parameters of the addresses you visited. If the iPhone app closes unexpectedly (crash), the report also contains a pseudonymous installation identifier: a code specific to your phone and the app, which contains neither your name nor your email address.",
           "Usage statistics, ONLY if you agree (optional box, unticked by default): the actions you take in the app (for example starting a search, adding a piece, publishing, commenting, following an account), with only the internal identifier of your account and a few predefined details (category, chosen visibility, number of results…). Never your name, email address, the words you type, the text of your comments or captions, or the addresses of your images.",
           "The photos you send are resized and stripped of their metadata, including any GPS location recorded by your phone.",
+          `Your search counters and your subscription status: to apply your search limits (see the terms of use), ${BRAND} counts your searches for the day and the calendar month from your search history; no other counter is stored. If you have a subscription, ${BRAND} keeps its type, its end date, where the information came from and the date it was last updated, only to know which limits apply to your account. Your subscription status and your counters for the month are included in your data export.`,
         ],
       },
       {
@@ -205,6 +206,7 @@ export function buildPrivacyPolicyEn(extra: PrivacyExtra): LegalDocument {
             "Error reports (Sentry) and usage statistics (PostHog): [To be verified: retention periods of these services for our plan, and the period to retain].",
           ],
           "When you delete your account, your data and photos are erased immediately and permanently: profile, searches, Vault, Wishlist, collections, posts, comments, likes, follows, notifications, alerts and “No longer available” reports, links between your searches and videos, “That's the piece” votes, clicks to retailers, consents. Cached answers, which are linked to no account, are not affected: they are deleted on their own (see above). A video's record, which contains nothing about you, also remains.",
+          "Your subscription status: kept for as long as your account exists, updated whenever it changes, and erased with your account. Your search counters are not stored: they are recalculated from your search history.",
         ],
       },
       {

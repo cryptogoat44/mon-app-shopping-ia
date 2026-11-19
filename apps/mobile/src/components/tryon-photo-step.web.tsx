@@ -42,6 +42,8 @@ export function PhotoStep({
   onLaunch: () => void;
 }) {
   const triesLeft = remaining === null || hasTriesLeft(remaining);
+  // Sans limite du mois (lot quotas) : aucun compteur.
+  const counter = remaining ? (triesLeft ? remainingText(remaining) : quotaText) : null;
   const canLaunch = photoUrl !== null && attested && triesLeft && !preparing;
   const chooseLabel = preparing ? tryonText.photo.preparing : photoUrl ? tryonText.photo.chooseAnother : tryonText.photo.choose;
   return (
@@ -67,7 +69,7 @@ export function PhotoStep({
       <SecondaryButton label={chooseLabel} onPress={onChoose} busy={preparing} />
       {refusal ? <ErrorMessage style={styles.error}>{refusal}</ErrorMessage> : null}
       {photoUrl ? <CheckboxRow label={tryonText.photo.attest} checked={attested} onToggle={onToggleAttest} style={styles.attest} /> : null}
-      {remaining ? <Text style={styles.counter}>{triesLeft ? remainingText(remaining) : quotaText}</Text> : null}
+      {counter ? <Text style={styles.counter}>{counter}</Text> : null}
       <PrimaryButton label={tryonText.photo.launch} onPress={onLaunch} disabled={!canLaunch} testID="lancer-essai" />
     </View>
   );

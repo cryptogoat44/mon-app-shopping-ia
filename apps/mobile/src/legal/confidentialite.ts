@@ -95,6 +95,7 @@ export function buildPrivacyPolicy(extra: PrivacyExtra): LegalDocument {
           "Des rapports d'erreur : quand une erreur survient dans l'app ou sur notre serveur, un rapport technique est créé (nature de l'erreur, écran ou fonction concernée, type de navigateur, ou modèle de téléphone et version du système), avec l'identifiant interne de votre compte — jamais votre nom, votre e-mail, vos contenus, ni les paramètres des adresses consultées. Si l'app iPhone se ferme brutalement (plantage), le rapport contient aussi un identifiant d'installation pseudonyme : un code propre à votre téléphone et à l'app, qui ne contient ni votre nom ni votre e-mail.",
           "Des statistiques d'usage, SEULEMENT si vous l'acceptez (case facultative, décochée par défaut) : les actions que vous faites dans l'app (par exemple lancer une recherche, ajouter une pièce, publier, commenter, suivre un compte), avec le seul identifiant interne de votre compte et quelques précisions choisies à l'avance (catégorie, visibilité choisie, nombre de résultats…). Jamais votre nom, votre e-mail, les mots que vous tapez, le texte de vos commentaires ou légendes, ni les adresses de vos images.",
           "Les photos que vous envoyez sont réduites et débarrassées de leurs métadonnées, y compris la position GPS éventuellement enregistrée par votre téléphone.",
+          `Vos compteurs de recherches et votre statut d'abonnement : pour appliquer vos limites de recherche (voir les conditions d'utilisation), ${BRAND} compte vos recherches du jour et du mois civil à partir de l'historique de vos recherches ; aucun compteur de plus n'est enregistré. Si vous avez un abonnement, ${BRAND} conserve son type, sa date de fin, d'où vient l'information et la date de sa dernière mise à jour, seulement pour savoir quelles limites s'appliquent à votre compte. Votre statut d'abonnement et vos compteurs du mois figurent dans l'export de vos données.`,
         ],
       },
       {
@@ -218,6 +219,7 @@ export function buildPrivacyPolicy(extra: PrivacyExtra): LegalDocument {
             "Les rapports d'erreur (Sentry) et les statistiques d'usage (PostHog) : [À vérifier : durées de conservation de ces services pour notre offre, et durée à retenir].",
           ],
           "Quand vous supprimez votre compte, vos données et vos photos sont effacées immédiatement et définitivement : profil, recherches, Vault, Envies, collections, publications, commentaires, « j'aime », abonnements, notifications, alertes et signalements « Plus disponible », liens entre vos recherches et les vidéos, « C'est bien cette pièce », clics vers les marchands, consentements. Les réponses du cache, qui ne sont reliées à aucun compte, ne sont pas concernées : elles s'effacent d'elles-mêmes (voir ci-dessus). La fiche d'une vidéo, qui ne contient rien sur vous, reste aussi.",
+          "Votre statut d'abonnement : gardé tant que votre compte existe, mis à jour à chaque changement, et effacé avec votre compte. Vos compteurs de recherches ne sont pas enregistrés : ils sont recalculés à partir de l'historique de vos recherches.",
         ],
       },
       {

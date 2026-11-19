@@ -80,7 +80,7 @@ import type {
   VideoLookupResponse,
   VideoSpotRequest,
 } from "@monapp/shared-types";
-import { CLIENT_LEVEL, COMPLEMENT_DEFERRED, CONSENT_VERSIONS, parseSearchCapacityStatus, parseVideoMomentsResponse, type SearchCapacityStatus } from "@monapp/shared-types";
+import { CLIENT_LEVEL, COMPLEMENT_DEFERRED, CONSENT_VERSIONS, parseSearchCapacity, parseVideoMomentsResponse, type SearchCapacityStatus } from "@monapp/shared-types";
 import { supabase } from "./supabase";
 import { setAnalyticsConsent, track } from "./analytics";
 import { acceptLanguage, t } from "../i18n";
@@ -234,7 +234,7 @@ export async function runSearch(
   // l'ancienne zone par défaut (lots « premier essai » et « entourer la pièce ») ;
   // la zone trouvée par l'IA compte toujours, même si c'est l'image entière.
   track("spot_launched", { zone_adjusted: params.zoneByAi === true || isAdjustedCrop(params.crop), image_imported: params.imageUri !== null });
-  const response = await authorizedFetch(`/api/searches/${searchId}/run`, { method: "POST", body: formData, signal });
+  const response = await authorizedFetch(`/api/searches/${searchId}/run?${SPEAKS}`, { method: "POST", body: formData, signal });
   const search: ProductSearch = await response.json();
   if (search.complement?.pending) {
     // spot_completed attend l'issue des boutiques, pour la compter une fois.
@@ -284,7 +284,7 @@ export async function runTextSearch(searchId: string, words: string, signal?: Ab
   const payload: RunTextSearchRequest = { words };
   track("text_search_launched");
   try {
-    const response = await authorizedFetch(`/api/searches/${searchId}/text`, { method: "POST", body: JSON.stringify(payload), signal });
+    const response = await authorizedFetch(`/api/searches/${searchId}/text?${SPEAKS}`, { method: "POST", body: JSON.stringify(payload), signal });
     const search: ProductSearch = await response.json();
     track("text_search_completed", {
       outcome: search.complement?.textStatus ?? "failed",
@@ -340,8 +340,9 @@ export async function trackProductMatchClick(
 /** Lot limites annoncées : le compteur des recherches, lu sans rien réserver
  * (gratuit, aucune recherche lancée) ; null si la réponse est illisible. */
 export async function fetchSearchCapacity(): Promise<SearchCapacityStatus | null> {
-  const response = await authorizedFetch("/api/searches/capacity");
-  return parseSearchCapacityStatus(await response.json());
+  const response = await authorizedFetch(`/api/searches/capacity?${SPEAKS}`);
+  // Avec la part du mois quand le serveur l'envoie (lot quotas, 0053).
+  return parseSearchCapacity(await response.json());
 }
 
 export async function fetchVault(cursor?: string): Promise<VaultPage> {
@@ -581,7 +582,10 @@ async function loadMessagesStatus(): Promise<MessagesStatus> {
 
 /** Lot « messages, plus de confort » : cette app comprend les messages
  * aimés, cités, supprimés et les publications envoyées. Le serveur ne les
- * envoie qu'à une app qui le dit ; un serveur plus ancien ignore ce paramètre. */
+ * envoie qu'à une app qui le dit ; un serveur plus ancien ignore ce paramètre.
+ * Lot quotas (0053) : aussi la part du mois, sur les lancements (photo, vos
+ * mots, vidéo, lien) et le compteur ; sans lui, le serveur la dit dans
+ * l'ancien vocabulaire (plafond du mois, reprise le 1er). */
 const SPEAKS = `v=${CLIENT_LEVEL}`;
 
 export async function fetchConversations(cursor?: string | null): Promise<ConversationsPage> {
@@ -1069,7 +1073,7 @@ export async function findVideoMoments(frameUris: readonly string[], query: stri
   const formData = new FormData();
   formData.append("query", query.trim());
   for (const uri of frameUris) await appendImageFile(formData, "frame", uri);
-  const response = await authorizedFetch("/api/video-moments", { method: "POST", body: formData, signal });
+  const response = await authorizedFetch(`/api/video-moments?${SPEAKS}`, { method: "POST", body: formData, signal });
   const moments = parseVideoMomentsResponse(await response.json(), frameUris.length);
   if (!moments) throw new ApiError(502, { error: "video_ai_unavailable", message: t.common.unknownServerError });
   return moments;
@@ -1091,7 +1095,7 @@ export async function fetchVideoLinkAnalysisStatus(signal?: AbortSignal): Promis
  * vérifiés ici (jamais de confiance aveugle dans le réseau). Erreur du
  * serveur ({ error, message }) : ApiError ; réponse illisible : panne. */
 export async function analyzeVideoLink(request: VideoLinkAnalysisRequest, signal?: AbortSignal): Promise<LinkAnalysis> {
-  const response = await authorizedFetch("/api/video-links/analyze", { method: "POST", body: JSON.stringify(request), signal });
+  const response = await authorizedFetch(`/api/video-links/analyze?${SPEAKS}`, { method: "POST", body: JSON.stringify(request), signal });
   const analysis = parseLinkAnalysis(await response.json().catch(() => null));
   if (!analysis) throw new ApiError(502, { error: "video_unavailable", message: t.common.unknownServerError });
   return analysis;

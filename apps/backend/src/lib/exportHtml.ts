@@ -19,6 +19,7 @@ import {
   APP_LOCALE_LABELS,
   CONSENT_TYPE_LABELS,
   CONVERSION_STATUS_LABELS,
+  ENTITLEMENT_LABELS,
   EXPORT_COLUMNS,
   EXPORT_SECTIONS,
   EXPORT_STATUS_LABELS,
@@ -376,10 +377,29 @@ function subsection(ctx: Ctx, title: string, intro: string | null, body: Part): 
   return html`<h3 class="sub">${title}</h3>${intro ? html`<p class="lead">${intro}</p>` : null}${content}`;
 }
 
+/** Quotas par membre (migration 0053) : vos droits d'abonnement, puis vos
+ * compteurs du mois. Rien sans 0053 (sections vides des exports d'avant). */
+function quotaParts(ctx: Ctx): Html[] {
+  const entitlements = (ctx.data.memberEntitlements ?? []).map((row) =>
+    new Card(ctx, "memberEntitlements", row)
+      .use("entitlement")
+      .field("expires_at", row.expires_at === null ? tr(ctx, EXPORT_TEXT.entitlementNoEnd) : undefined)
+      .render(enumLabel(ctx, ENTITLEMENT_LABELS, row.entitlement))
+  );
+  const parts: Html[] = [];
+  if (entitlements.length > 0) parts.push(subsection(ctx, tr(ctx, EXPORT_TEXT.entitlementsTitle), null, entitlements));
+  const quota = ctx.data.monthlyQuota ?? null;
+  if (quota) {
+    const card = new Card(ctx, "monthlyQuota", quota).field("month").field("searches_counted").field("tryon_free_used").field("tryon_bonus_remaining");
+    parts.push(subsection(ctx, tr(ctx, EXPORT_TEXT.monthlyQuotaTitle), null, card.render()));
+  }
+  return parts;
+}
+
 function accountSection(ctx: Ctx): Html {
   const account = new Card(ctx, "account", ctx.data.account).field("email");
   const row = ctx.data.profile;
-  if (!row) return section(ctx, "account", article(null, account.rows()));
+  if (!row) return section(ctx, "account", [article(null, account.rows()), ...quotaParts(ctx)]);
   const profile = new Card(ctx, "profile", row)
     .field("username", str(row.username) ? `@${row.username as string}` : null)
     .field("display_name")
@@ -395,7 +415,7 @@ function accountSection(ctx: Ctx): Html {
     .field("help_others")
     .field("created_at")
     .field("updated_at");
-  return section(ctx, "account", article(null, account.rows(), profile.rows()));
+  return section(ctx, "account", [article(null, account.rows(), profile.rows()), ...quotaParts(ctx)]);
 }
 
 function failureReason(ctx: Ctx, value: unknown): string | null {

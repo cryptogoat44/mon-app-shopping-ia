@@ -8,11 +8,14 @@ import type { SearchCapacityStatus } from "@monapp/shared-types";
 import { t } from "../i18n";
 import { formatDayMonth } from "./format";
 import type { Locale } from "./preferences";
-import { capacityMonthTip, type CapacityFailReason } from "./spot-capacity";
+import { capacityMonthTip, monthlyQuotaCopy, type CapacityFailReason } from "./spot-capacity";
 
 /** Le reste n'est annoncé qu'à 3 ou moins : un compteur toujours affiché
  * rappellerait la rareté à chaque visite. */
 export const LOW_REMAINING = 3;
+
+/** Lot quotas : la part du mois n'est annoncée qu'à 20 ou moins (pas en permanence). */
+export const MONTH_LOW_REMAINING = 20;
 
 /** Un compteur plus récent que 20 s n'est pas relu (onglets ouverts tour à tour). */
 export const FRESH_MS = 20_000;
@@ -22,30 +25,47 @@ const DAY_MS = 24 * 3_600_000;
 export type LimitsNotice =
   | { kind: "paused"; reason: "day" | "month"; reopensAt: string }
   | { kind: "used_up"; limit: number; resetsAt: string }
-  | { kind: "low"; remaining: number };
+  | { kind: "low"; remaining: number }
+  // Lot quotas (0053) : la part du mois épuisée (jusqu'au 1er), ou bientôt.
+  | { kind: "month_used_up"; limit: number; resetsOn: string }
+  | { kind: "month_low"; remaining: number };
 
 /** Ce qu'il faut annoncer maintenant, d'après le dernier compteur lu ; null :
- * rien (compteur inconnu, reste confortable, ou reprise déjà passée). */
+ * rien (compteur inconnu, reste confortable, ou reprise déjà passée). La part
+ * du mois, quand le serveur l'envoie : épuisée, elle passe avant la part du
+ * jour ; à 20 ou moins, une ligne discrète, sauf si la part du jour, plus
+ * petite, est déjà annoncée. */
 export function limitsNotice(status: SearchCapacityStatus | null, now: number): LimitsNotice | null {
   if (!status) return null;
   const { service, user } = status;
   if (service.status === "paused" && Date.parse(service.reopensAt) > now) return { kind: "paused", reason: service.reason, reopensAt: service.reopensAt };
+  const month = status.monthlyQuota && Date.parse(status.monthlyQuota.resetsAt) > now ? status.monthlyQuota : null;
+  if (month && month.remaining === 0) return { kind: "month_used_up", limit: month.limit, resetsOn: month.resetsOn };
   // Minuit est passé depuis la lecture : la part est repartie de zéro.
   if (Date.parse(user.resetsAt) <= now) return null;
   if (user.remaining === 0) return { kind: "used_up", limit: user.limit, resetsAt: user.resetsAt };
-  if (service.status === "open" && status.remainingToday >= 1 && status.remainingToday <= LOW_REMAINING) return { kind: "low", remaining: status.remainingToday };
+  if (service.status !== "open") return null;
+  const today = status.remainingToday;
+  const monthLow = month !== null && month.remaining <= MONTH_LOW_REMAINING;
+  if (today >= 1 && today <= LOW_REMAINING && !(monthLow && month.remaining <= today)) return { kind: "low", remaining: today };
+  if (monthLow) return { kind: "month_low", remaining: month.remaining };
   return null;
 }
 
-/** « Lancer » ne peut pas aboutir (Spotter en pause, ou part du jour épuisée) : le serveur refuserait. */
+/** « Lancer » ne peut pas aboutir (Spotter en pause, part du jour ou du mois épuisée) : le serveur refuserait. */
 export function blocksLaunch(notice: LimitsNotice | null): boolean {
-  return notice?.kind === "paused" || notice?.kind === "used_up";
+  return notice?.kind === "paused" || notice?.kind === "used_up" || notice?.kind === "month_used_up";
 }
 
-/** Prochain instant où l'annonce change d'elle-même (minuit, renouvellement) ; null : aucun. */
+/** Une ligne discrète (le reste), plutôt qu'un encadré. */
+export function isQuietNotice(notice: LimitsNotice | null): boolean {
+  return notice?.kind === "low" || notice?.kind === "month_low";
+}
+
+/** Prochain instant où l'annonce change d'elle-même (minuit, renouvellement, 1er du mois) ; null : aucun. */
 export function nextBoundary(status: SearchCapacityStatus | null, now: number): number | null {
   if (!status) return null;
-  const instants = [status.user.resetsAt, status.service.status === "paused" ? status.service.reopensAt : null];
+  const instants = [status.user.resetsAt, status.service.status === "paused" ? status.service.reopensAt : null, status.monthlyQuota?.resetsAt ?? null];
   const future = instants.map((instant) => (instant ? Date.parse(instant) : Number.NaN)).filter((ms) => ms > now);
   return future.length > 0 ? Math.min(...future) : null;
 }
@@ -134,6 +154,12 @@ export function noticeText(notice: LimitsNotice, now: number, locale: Locale, cl
       return { title: t.searchLimits.usedUpTitle(notice.limit), body: retryFrom(notice.resetsAt, now, locale, clock) };
     case "low":
       return { title: t.searchLimits.remaining(notice.remaining), body: null };
+    case "month_used_up": {
+      const [title, body] = monthlyQuotaCopy(notice.limit, notice.resetsOn, locale);
+      return { title, body };
+    }
+    case "month_low":
+      return { title: t.monthlyQuota.remaining(notice.remaining), body: null };
   }
 }
 
@@ -157,6 +183,8 @@ export function capacityCopy(
       return [t.result.capacityDayTitle, retry ?? t.result.capacityDayTip];
     case "capacity_month":
       return [t.result.capacityMonthTitle, capacityMonthTip(resumesOn, locale)];
+    case "capacity_user_month":
+      return monthlyQuotaCopy(known?.monthlyQuota?.limit ?? null, resumesOn ?? known?.monthlyQuota?.resetsOn ?? null, locale);
   }
 }
 
@@ -188,7 +216,11 @@ export interface LimitsStore {
 
 function boundaryPassed(status: SearchCapacityStatus | null, now: number): boolean {
   if (!status) return false;
-  return Date.parse(status.user.resetsAt) <= now || (status.service.status === "paused" && Date.parse(status.service.reopensAt) <= now);
+  return (
+    Date.parse(status.user.resetsAt) <= now ||
+    (status.service.status === "paused" && Date.parse(status.service.reopensAt) <= now) ||
+    (status.monthlyQuota != null && Date.parse(status.monthlyQuota.resetsAt) <= now)
+  );
 }
 
 export function createLimitsStore(read: () => Promise<SearchCapacityStatus | null>, now: () => number = Date.now): LimitsStore {

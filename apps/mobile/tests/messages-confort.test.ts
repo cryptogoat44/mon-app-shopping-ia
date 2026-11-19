@@ -452,8 +452,10 @@ describe("textes FR / EN (fiche)", () => {
   });
 
   it("la section est ajoutée à la fin des deux catalogues, avec les mêmes clés", () => {
-    expect(Object.keys(fr).at(-1)).toBe("messageActions");
-    expect(Object.keys(en).at(-1)).toBe("messageActions");
+    // Ajoutée à la fin (règle du plan) ; les sections des lots suivants viennent après elle, dans le même ordre des deux côtés.
+    const frKeys = Object.keys(fr);
+    expect(Object.keys(en)).toEqual(frKeys);
+    expect(frKeys.indexOf("messageActions")).toBeGreaterThan(frKeys.indexOf("robotCheck"));
     expect(Object.keys(en.messageActions).sort()).toEqual(Object.keys(fr.messageActions).sort());
     for (const value of Object.values(fr.messageActions)) {
       const text = typeof value === "function" ? value("Alexis") : value;

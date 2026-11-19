@@ -26,6 +26,7 @@ import { RATE_LIMITS } from "../src/lib/rateLimits.js";
 import { resetShortLinkCache } from "../src/lib/videoLinks.js";
 import { VIDEO_WORKER_ERROR_CODES, type VideoWorkerConfigState, type VideoWorkerErrorCode, type VideoWorkerFetch } from "../src/lib/videoWorker.js";
 import { resetAlertsForTests } from "../src/lib/alerts.js";
+import { resetMemberQuotasProbe } from "../src/lib/memberQuotas.js";
 import { hasCurrentConsent } from "../src/lib/consents.js";
 import { MASKED_DATA, scrubLogLine } from "../src/lib/logPrivacy.js";
 import { scrubEvent } from "../src/lib/sentry.js";
@@ -86,6 +87,8 @@ let workerReply: (init: RequestInit) => Response | Promise<Response>;
 let suspended = false;
 let capacityRow: Row;
 let capacityError = false;
+/** Base avec la migration 0053 (quotas par membre) : serpapi_quota_v2 répond. */
+let quotasMigration = false;
 let rpcCalls: string[] = [];
 let logs: string[] = [];
 let aiFramesSeen: FrameForAi[] = [];
@@ -127,6 +130,8 @@ async function buildApp(options: Partial<VideoLinkAnalysisOptions> = {}, db: { m
     rpc: async (fn) => {
       rpcCalls.push(fn);
       if (fn === "serpapi_quota") return capacityError ? { data: null, error: { message: "panne" } } : { data: [capacityRow], error: null };
+      if (quotasMigration && fn === "member_quotas_version") return { data: 1, error: null };
+      if (quotasMigration && fn === "serpapi_quota_v2") return { data: [capacityRow], error: null };
       if (fn === "ai_quota") return { data: [{ allowed: true, refused_by: null, day_count: 1, user_day_count: 1 }], error: null };
       return { data: null, error: { code: "PGRST202", message: "absente" } };
     },
@@ -182,6 +187,8 @@ beforeEach(() => {
   suspended = false;
   capacityRow = { allowed: true, refused_by: null, reservation_id: null, day_count: 3, month_count: 40, user_day_count: 1, next_renewal: "2026-12-03" };
   capacityError = false;
+  quotasMigration = false;
+  resetMemberQuotasProbe();
   rpcCalls = [];
   logs = [];
   aiFramesSeen = [];
@@ -484,7 +491,8 @@ describe("limites de l'IA et plafond des recherches (comme POST /api/video-momen
       { kind: "video", userId: ALICE, reserve: false },
       { kind: "video", userId: ALICE, reserve: true },
     ]);
-    expect(rpcCalls).toEqual(["serpapi_quota"]);
+    // La sonde des quotas par membre (0053, absente ici) peut précéder, une fois.
+    expect(rpcCalls.filter((fn) => fn !== "member_quotas_version")).toEqual(["serpapi_quota"]);
   });
 
   it("limite de l'IA déjà atteinte (personne ou service) : 429 avec Retry-After, le service vidéo n'est pas appelé", async () => {
@@ -527,6 +535,21 @@ describe("limites de l'IA et plafond des recherches (comme POST /api/video-momen
     const broken = await analyze(target, { url: SHARED_TEXT, query: QUERY });
     expect(broken.statusCode).toBe(503);
     expect(broken.json().error).toBe("video_unavailable");
+    expect(workerCalls).toEqual([]);
+  });
+
+  it("part du mois atteinte (0053) : sans v=2, le plafond du mois et le 1er, qu'une app plus ancienne comprend ; avec v=2, la part du mois ; le service vidéo n'est pas appelé", async () => {
+    quotasMigration = true;
+    capacityRow = { ...capacityRow, allowed: false, refused_by: "user_month", user_month_count: 100, month_resets_on: "2026-12-01" };
+    const target = await buildApp();
+    const message = "Vous avez utilisé toutes vos recherches de ce mois-ci.";
+    const older = await analyze(target, { url: SHARED_TEXT, query: QUERY });
+    expect(older.statusCode).toBe(429);
+    expect(older.json()).toEqual({ error: "search_capacity_month", message, resumesOn: "2026-12-01" });
+    const newer = await target.inject({ method: "POST", url: "/api/video-links/analyze?v=2", headers: headersOf(ALICE), payload: { url: SHARED_TEXT, query: QUERY } });
+    expect(newer.statusCode).toBe(429);
+    expect(newer.json()).toEqual({ error: "search_capacity_user_month", message, resumesOn: "2026-12-01" });
+    expect(rpcCalls.filter((fn) => fn === "serpapi_quota_v2")).toHaveLength(2);
     expect(workerCalls).toEqual([]);
   });
 

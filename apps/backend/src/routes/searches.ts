@@ -82,6 +82,7 @@ import {
   lensInGoogleOrder,
 } from "../lib/deferredComplement.js";
 import { consumeRateLimit, RATE_LIMITED_MESSAGE } from "../plugins/rateLimit.js";
+import { speaksV2 } from "../lib/clientLevel.js";
 import { aiQuotaFor } from "../lib/aiQuota.js";
 import { noteFailure } from "../lib/alerts.js";
 import { observeResults, type ObservationSource, type ObservedRow } from "../lib/wishObserve.js";
@@ -488,7 +489,7 @@ async function callLens(
 }
 
 /** Réponse d'un lancement arrêté avant l'appel (rien n'a été consommé). */
-function sendWithoutCall(reply: FastifyReply, call: Exclude<LensCall, { kind: "searched" }>): FastifyReply | undefined {
+function sendWithoutCall(request: FastifyRequest, reply: FastifyReply, call: Exclude<LensCall, { kind: "searched" }>): FastifyReply | undefined {
   switch (call.kind) {
     case "upload_failed":
       return reply.code(500).send({ error: "upload_failed", message: "L'envoi de l'image a échoué, réessayez." });
@@ -496,7 +497,7 @@ function sendWithoutCall(reply: FastifyReply, call: Exclude<LensCall, { kind: "s
       // La connexion est déjà coupée : aucune réponse à envoyer.
       return undefined;
     case "capacity":
-      if (call.reservation) return sendCapacityReached(reply, call.reservation);
+      if (call.reservation) return sendCapacityReached(reply, call.reservation, speaksV2(request));
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue, réessayez." });
   }
 }
@@ -751,7 +752,7 @@ async function launchWithVoieC(fastify: FastifyInstance, request: FastifyRequest
     searched = outcomeFromCache(lens.answer);
   } else {
     const call = lens.result;
-    if (call.kind !== "searched") return sendWithoutCall(reply, call);
+    if (call.kind !== "searched") return sendWithoutCall(request, reply, call);
     searched = call.outcome;
   }
 
@@ -1394,7 +1395,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       }
 
       const call = await callLens(fastify, request, { id, userId, image: prepared.image });
-      if (call.kind !== "searched") return sendWithoutCall(reply, call);
+      if (call.kind !== "searched") return sendWithoutCall(request, reply, call);
       // Les mots remontent en tête les propositions dont le nom les contient ; rien n'est retiré.
       const byWords = sortByWords(call.outcome.matches, form.input.query);
       const outcome = { ...call.outcome, matches: byWords.matches };
@@ -1467,7 +1468,7 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       const reservation = await reserveSearch(fastify, request.log, userId, id, "shopping").catch(() => null);
       if (!reservation || !reservation.allowed) {
         await unlockTextSearch(fastify, row);
-        if (reservation) return sendCapacityReached(reply, reservation);
+        if (reservation) return sendCapacityReached(reply, reservation, speaksV2(request));
         return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue, réessayez." });
       }
       // Minuit (heure de Paris) passé entre le contrôle et la réservation : la
