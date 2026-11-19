@@ -111,6 +111,11 @@ const SAVED_POST_SECTIONS = savedPostsProbe.error ? [] : (["savedPosts"] as cons
 const profileExtrasProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("profiles").select("link_url").limit(0);
 const PROFILE_EXTRAS_MIGRATED = !profileExtrasProbe.error;
 
+// Fil « Pour vous » (lot « découverte ») : le réglage « Proposer mon compte aux
+// autres membres », seulement une fois la migration 0050 appliquée.
+const discoveryProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("profiles").select("discoverable").limit(0);
+const DISCOVERY_MIGRATED = !discoveryProbe.error;
+
 // Sections qui sont un objet (ou null), pas une liste.
 const OBJECT_SECTIONS = ["account", "profile", "adminRole", "suspension", ...(TRYON_MIGRATED ? (["tryonProfile"] as const) : [])] as const;
 
@@ -290,6 +295,12 @@ describe("export RGPD complet", () => {
       if (pinned.statusCode !== 200) throw new Error(`Épingle de test refusée (${pinned.statusCode}).`);
       const linked = await app.supabaseAdmin.from("profiles").update({ link_url: "https://exemple.com/lookbook" }).eq("id", user.id);
       if (linked.error) throw linked.error;
+    }
+
+    // Fil « Pour vous » (migration 0050) : le réglage éteint, par sa route (avant la suspension, plus bas).
+    if (DISCOVERY_MIGRATED) {
+      const off = await app.inject({ method: "PUT", url: "/api/me/discoverable", headers: authHeaders(user.token), payload: { discoverable: false } });
+      if (off.statusCode !== 204) throw new Error(`Réglage « Proposer mon compte » refusé (${off.statusCode}).`);
     }
 
     // J'aime donné sur la publication d'un ami.
@@ -508,6 +519,9 @@ describe("export RGPD complet", () => {
       expect(body.profile.link_url).toBe("https://exemple.com/lookbook");
       expect(body.posts.find((row: { id: string }) => row.id === postId)?.pinned_at).toEqual(expect.any(String));
     }
+    // Fil « Pour vous » (migration 0050) : le réglage, tel que la personne l'a laissé.
+    if (DISCOVERY_MIGRATED) expect(body.profile.discoverable).toBe(false);
+    else expect("discoverable" in body.profile).toBe(false);
     expect(body.suspension).toMatchObject({ moderation_action_id: expect.any(String) });
     // Un appareil : son système et ses dates (avec 0036 : s'il reçoit les messages, les alertes), jamais son jeton.
     const deviceColumns = ALERT_SECTIONS.length > 0 ? ["created_at", "notify_alerts", "notify_messages", "platform", "updated_at"] : ["created_at", "platform", "updated_at"];

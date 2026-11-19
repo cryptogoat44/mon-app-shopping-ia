@@ -73,6 +73,8 @@ export function fixture(): ExportData {
       messages_from: "everyone",
       // Lien en bio (migration 0049).
       link_url: "https://camille.example.com/lookbook?saison=hiver",
+      // Fil « Pour vous » (migration 0050) : réglage éteint.
+      discoverable: false,
     },
     productSearches: [
       {

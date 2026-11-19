@@ -130,6 +130,8 @@ export const EXPORT_COLUMNS = {
     mentions_from: shown("Qui peut vous mentionner", "Who can mention you"),
     // Lien en bio (migration 0049).
     link_url: shown("Lien affiché sur votre profil", "Link shown on your profile"),
+    // Fil « Pour vous » (migration 0050) : oui / non.
+    discoverable: shown("Compte proposé aux autres membres", "Account suggested to other members"),
     created_at: shown("Compte créé le", "Account created on"),
     updated_at: shown("Profil modifié le", "Profile updated on"),
   },

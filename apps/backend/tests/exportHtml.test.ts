@@ -1055,3 +1055,23 @@ describe("export lisible : épingles et lien en bio (migration 0049)", () => {
     expect(onUnknownColumn).not.toHaveBeenCalled();
   });
 });
+
+describe("export lisible : réglage « Proposer mon compte aux autres membres » (migration 0050)", () => {
+  const ws = (text: string) => spaces(text).replace(/\s+/g, " ");
+
+  it("le profil dit oui ou non, en français et en anglais ; rien sans la colonne", () => {
+    const base = fixture();
+    expect(ws(visibleText(sectionHtml(render({ timeZone: "UTC" }), "account")))).toContain("Compte proposé aux autres membres Non");
+    expect(ws(visibleText(sectionHtml(render({ locale: "en" }), "account")))).toContain("Account suggested to other members No");
+    expect(ws(visibleText(sectionHtml(render({}, { ...base, profile: { ...base.profile!, discoverable: true } }), "account")))).toContain("Compte proposé aux autres membres Oui");
+    const { discoverable: _ignored, ...withoutColumn } = base.profile!;
+    expect(visibleText(sectionHtml(render({}, { ...base, profile: withoutColumn }), "account"))).not.toContain("Compte proposé aux autres membres");
+  });
+
+  it("la colonne a son libellé : aucune « colonne inconnue »", () => {
+    expect(EXPORT_COLUMNS.profile.discoverable.label).toEqual({ fr: "Compte proposé aux autres membres", en: "Account suggested to other members" });
+    const onUnknownColumn = vi.fn();
+    render({ onUnknownColumn });
+    expect(onUnknownColumn).not.toHaveBeenCalled();
+  });
+});

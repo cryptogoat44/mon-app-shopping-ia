@@ -396,6 +396,8 @@ function accountSection(ctx: Ctx): Html {
     .field("help_others")
     .field("is_private")
     .field("mentions_from", enumLabel(ctx, MENTIONS_FROM_LABELS, row.mentions_from))
+    // Fil « Pour vous » (migration 0050) : oui / non ; rien sans la colonne.
+    .field("discoverable")
     .field("created_at")
     .field("updated_at");
   return section(ctx, "account", article(null, account.rows(), profile.rows()));
