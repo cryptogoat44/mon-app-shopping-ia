@@ -23,6 +23,7 @@ import { PrivateAccountSetting } from "@/components/private-account-setting";
 import { MentionsFromSetting } from "@/components/mentions-from-setting";
 import { DiscoverableSetting } from "@/components/discoverable-setting";
 import { MessagesFromSetting } from "@/components/messages-from-setting";
+import { ReadReceiptsSetting } from "@/components/read-receipts-setting";
 import { MessagePushSetting } from "@/components/message-push-setting";
 import { WishAlertsSetting } from "@/components/wish-alerts-setting";
 import { DeleteAccountSection } from "@/components/delete-account-section";
@@ -209,6 +210,8 @@ export default function SettingsScreen() {
         <DiscoverableSetting />
         <PieceSendsSetting />
         <MessagesFromSetting />
+        {/* Lot « messages vus » : « Confirmations de lecture », caché tant que le serveur ne le propose pas. */}
+        <ReadReceiptsSetting />
         {/* Lot notifications : caché sur le site et tant que le serveur ne les propose pas. */}
         <MessagePushSetting />
         {/* Lot 2 : « Alertes prix et stock », caché tant que le serveur n'a pas les alertes (site compris). */}

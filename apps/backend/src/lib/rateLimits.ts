@@ -301,6 +301,14 @@ export const RATE_LIMITS = {
     error: "tryon_rate_limited",
     message: "Vous avez envoyé beaucoup de signalements en peu de temps. Réessayez dans une heure.",
   },
+  // Lot « messages, plus de confort » : aimer un message, ou ne plus
+  // l'aimer. Large (un double appui par message), bloque un script.
+  messageReact: {
+    max: 300,
+    windowMs: HOUR,
+    error: "message_react_limit",
+    message: "Vous avez aimé beaucoup de messages en peu de temps. Réessayez dans un moment.",
+  },
 
   // ---- Limite large, appliquée automatiquement à toutes les autres routes ----
   // Sert de simple filet anti-script — je préfère être trop permissif que

@@ -392,6 +392,8 @@ function accountSection(ctx: Ctx): Html {
     .field("default_privacy", enumLabel(ctx, PRIVACY_LABELS, row.default_privacy))
     .field("piece_sends_from", enumLabel(ctx, PIECE_SENDS_FROM_LABELS, row.piece_sends_from))
     .field("messages_from", enumLabel(ctx, MESSAGES_FROM_LABELS, row.messages_from))
+    .field("read_receipts")
+    .field("read_receipts_since")
     .field("price_alerts_enabled")
     .field("help_others")
     .field("is_private")
@@ -851,7 +853,26 @@ function messageCard(ctx: Ctx, row: ExportRow): Html {
     );
   if (mine) card.field("hidden_at");
   else card.use("hidden_at");
+  // Lot « messages, plus de confort » (migration 0044). Un message supprimé :
+  // la date ; pour le vôtre, si son contenu est resté dans la base (il avait
+  // été signalé avant), la mention le dit. Celui de l'autre membre arrive
+  // déjà sans contenu (lib/exportData.ts, messagesForExport).
+  const deleted = str(row.deleted_at) !== null;
+  const kept = deleted && mine && (str(row.body) !== null || str(row.wish_title) !== null || row.shared_post === true);
+  card
+    .field("reply_to_id", str(row.reply_to_id) !== null ? tr(ctx, EXPORT_TEXT.yes) : null)
+    .field("shared_post", row.shared_post === true ? tr(ctx, EXPORT_TEXT.yes) : null)
+    .field("deleted_at");
+  if (kept) card.note(tr(ctx, EXPORT_TEXT.messageDeletedKept));
+  else if (deleted) card.note(tr(ctx, EXPORT_TEXT.messageDeleted));
   return card.render(plainDate(ctx, row.created_at));
+}
+
+/** Un « j'aime » sur un message (migration 0044) : dans quelle conversation,
+ * et quand. L'autre membre n'est jamais nommé s'il est en relation de
+ * blocage avec vous (« un compte Spotto »). */
+function messageReactionCard(ctx: Ctx, row: ExportRow): Html {
+  return new Card(ctx, "messageReactions", row).field("other_user_id", capitalize(person(ctx, row.other_user_id))).field("created_at").render();
 }
 
 /** Du plus ancien au plus récent : une conversation se lit dans l'ordre. */
@@ -884,9 +905,13 @@ function messagesSection(ctx: Ctx): Html {
     ctx.data.messages.filter((row) => !known.has(String(row.conversation_id))),
     "created_at"
   );
+  const reactions = newestFirst(ctx.data.messageReactions ?? [], "created_at");
   return section(ctx, "messages", [
     cards,
     orphans.length > 0 ? html`<h3 class="sub">${tr(ctx, EXPORT_TEXT.orphanMessages)}</h3>${orphans.map((row) => messageCard(ctx, row))}` : null,
+    reactions.length > 0
+      ? html`<h3 class="sub">${tr(ctx, EXPORT_TEXT.messageReactionsTitle, { count: String(reactions.length) })}</h3>${reactions.map((row) => messageReactionCard(ctx, row))}`
+      : null,
   ]);
 }
 

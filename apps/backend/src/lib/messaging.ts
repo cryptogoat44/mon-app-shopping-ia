@@ -46,6 +46,18 @@ export const MESSAGE_EMPTY = { error: "invalid_body", message: "Le message est v
 export const MESSAGE_TOO_LONG = { error: "invalid_body", message: `Le message est trop long (${MESSAGE_MAX_LENGTH} caractères maximum).` } as const;
 export const INVALID_MESSAGE = { error: "invalid_body", message: "Message invalide." } as const;
 export const SELF_MESSAGE = { error: "invalid_body", message: "Vous ne pouvez pas vous écrire." } as const;
+// Lot « messages, plus de confort » (migration 0044).
+export const MESSAGE_ACTIONS_UNAVAILABLE = {
+  error: "message_actions_unavailable",
+  message: "Cette action sur les messages n'est pas encore disponible.",
+} as const;
+/** Même réponse pour un message inexistant, d'une autre conversation, masqué,
+ * signalé par la personne, ou d'une conversation refusée ou en blocage. */
+export const MESSAGE_NOT_FOUND = { error: "message_not_found", message: "Message introuvable." } as const;
+export const CONVERSATION_NOT_OPEN = {
+  error: "conversation_not_open",
+  message: "Cette conversation n'est pas encore ouverte : vous pourrez aimer un message quand elle le sera.",
+} as const;
 
 // ---- États (conversation_participants.invitation) ----
 
@@ -90,8 +102,20 @@ export const MESSAGE_ROWS = z.array(
     wish_currency: z.string().nullable(),
     hidden_at: TIMESTAMP.nullable(),
     created_at: TIMESTAMP,
+    // Lot « messages, plus de confort » : absentes d'une base sans 0044 (jamais demandées alors).
+    reply_to_id: ID.nullable().optional(),
+    post_id: ID.nullable().optional(),
+    shared_post: z.boolean().nullable().optional(),
+    deleted_at: TIMESTAMP.nullable().optional(),
+    updated_at: TIMESTAMP.nullable().optional(),
   })
 );
+/** Les colonnes de la migration 0044 (lot « messages, plus de confort »). */
+export const MESSAGE_ACTION_COLUMNS = "reply_to_id, post_id, shared_post, deleted_at, updated_at";
+/** Colonnes lues pour un message : celles de 0032, et celles de 0044 quand la base les a. */
+export function messageColumns(actions: boolean): string {
+  return actions ? `${MESSAGE_COLUMNS}, ${MESSAGE_ACTION_COLUMNS}` : MESSAGE_COLUMNS;
+}
 export type MessageRow = z.infer<typeof MESSAGE_ROWS>[number];
 
 /** Les deux membres d'une conversation, dans l'ordre de la base (user_low < user_high). */
@@ -245,7 +269,7 @@ export interface AttachedCard {
 }
 
 /** Coupe sans laisser une moitié d'émoji à la fin. */
-function clip(text: string, max: number): string {
+export function clip(text: string, max: number): string {
   const cut = text.slice(0, max);
   return /[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut;
 }
@@ -403,4 +427,55 @@ export function resetMessagesProbe(): void {
   schemaReadyAt = null;
   schemaMissingAt = null;
   schemaProbe = null;
+}
+
+// ---- Schéma de la base (migration 0044, lot « messages, plus de confort ») ----
+
+let actionsReadyAt: number | null = null;
+let actionsMissingAt: number | null = null;
+let actionsProbe: Promise<boolean> | null = null;
+
+async function probeActions(fastify: Pick<FastifyInstance, "supabaseAdmin" | "log">): Promise<boolean> {
+  try {
+    const db = fastify.supabaseAdmin;
+    const checks = await Promise.all([
+      db.from("messages").select(MESSAGE_ACTION_COLUMNS).limit(0),
+      db.from("message_reactions").select("message_id, user_id, created_at").limit(0),
+    ]);
+    const failed = checks.find((check) => check.error);
+    if (!failed) return true;
+    fastify.log.warn({ code: failed.error?.code ?? null }, "Aimer, répondre, supprimer, envoyer une publication : coupés, migration 0044 absente");
+  } catch {
+    fastify.log.warn({ code: null }, "Aimer, répondre, supprimer, envoyer une publication : coupés, schéma illisible");
+  }
+  return false;
+}
+
+/** La base a-t-elle la migration 0044 ? Même sonde que pour les messages
+ * (messagesReady), indépendante de celle des confirmations de lecture
+ * (0043) : mémorisée une fois vue ; absente, un avertissement, puis la sonde
+ * n'est refaite qu'au bout de 5 minutes. Sans elle : la messagerie lit ses
+ * colonnes d'avant, les nouvelles routes répondent « indisponible », et l'app
+ * ne propose ni « Aimer », ni « Répondre », ni « Supprimer », ni l'envoi
+ * d'une publication. */
+export async function messageActionsReady(fastify: Pick<FastifyInstance, "supabaseAdmin" | "log">, now: () => number = Date.now): Promise<boolean> {
+  if (actionsReadyAt !== null) return true;
+  if (actionsMissingAt !== null && now() - actionsMissingAt < SCHEMA_RETRY_MS) return false;
+  actionsProbe ??= probeActions(fastify)
+    .then((ready) => {
+      if (ready) actionsReadyAt = now();
+      else actionsMissingAt = now();
+      return ready;
+    })
+    .finally(() => {
+      actionsProbe = null;
+    });
+  return actionsProbe;
+}
+
+/** Tests seulement : oublie la sonde. */
+export function resetMessageActionsProbe(): void {
+  actionsReadyAt = null;
+  actionsMissingAt = null;
+  actionsProbe = null;
 }

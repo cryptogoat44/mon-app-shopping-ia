@@ -72,7 +72,7 @@ describe("quand proposer les notifications", () => {
     expect(readMessagesStatus({ enabled: true, unreadCount: 2 }).push).toBe(false);
     expect(readMessagesStatus({ enabled: true, unreadCount: 2, push: "true" }).push).toBe(false);
     expect(readMessagesStatus({ enabled: false, unreadCount: 0, push: true }).push).toBe(false);
-    expect(readMessagesStatus({ enabled: true, unreadCount: 2, push: true })).toEqual({ enabled: true, unreadCount: 2, push: true });
+    expect(readMessagesStatus({ enabled: true, unreadCount: 2, push: true })).toEqual({ enabled: true, unreadCount: 2, push: true, actions: false });
   });
 
   it("la feuille d'explication : une seule fois (aucune réponse encore), et pas si iOS les a déjà refusées", () => {
@@ -182,13 +182,18 @@ describe("l'explication d'abord", () => {
     expect(setting).toContain("else await disablePush(userId);");
   });
 
-  it("dans les Réglages, juste sous « Qui peut m'écrire »", () => {
+  // Lot « messages vus » : « Confirmations de lecture » s'est glissé entre les
+  // deux ; les réglages des messages se suivent toujours, sans rien d'autre.
+  it("dans les Réglages, juste sous « Qui peut m'écrire » et « Confirmations de lecture »", () => {
     const settings = read("app/(app)/settings.tsx");
     const from = settings.indexOf("<MessagesFromSetting />");
+    const receipts = settings.indexOf("<ReadReceiptsSetting />");
     const push = settings.indexOf("<MessagePushSetting />");
     expect(from).toBeGreaterThan(-1);
-    expect(push).toBeGreaterThan(from);
-    expect(settings.slice(from + "<MessagesFromSetting />".length, push)).not.toMatch(/<[A-Z]\w+ /);
+    expect(receipts).toBeGreaterThan(from);
+    expect(push).toBeGreaterThan(receipts);
+    const between = settings.slice(from + "<MessagesFromSetting />".length, push);
+    expect(between.match(/<[A-Z]\w+ /g)).toEqual(["<ReadReceiptsSetting "]);
   });
 });
 

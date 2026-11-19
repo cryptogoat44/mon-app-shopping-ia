@@ -49,6 +49,11 @@ const NON_EMPTY_SECTIONS = [
 const messagesProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("messages").select("id").limit(0);
 const MESSAGE_SECTIONS = messagesProbe.error ? [] : (["conversations", "messages"] as const);
 
+// Messages, plus de confort : un « j'aime » sur un message, seulement une fois
+// la migration 0044 appliquée sur la base des tests (sans elle, section vide).
+const reactionsProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("message_reactions").select("message_id").limit(0);
+const MESSAGE_REACTION_SECTIONS = messagesProbe.error || reactionsProbe.error ? [] : (["messageReactions"] as const);
+
 // Lot collections : collections et envies rangées, seulement une fois la
 // migration 0033 appliquée sur la base des tests (sans elle, sections vides).
 const collectionsProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("collections").select("id").limit(0);
@@ -170,6 +175,8 @@ const JSON_KEYS = [
   // Mémoire des vidéos, de même.
   "videoSpots",
   "videoConfirmations",
+  // Messages, plus de confort (migration 0044), de même.
+  "messageReactions",
   // Compte privé (migration 0045), de même.
   "followRequestsSent",
   "followRequestsReceived",
@@ -387,6 +394,15 @@ describe("export RGPD complet", () => {
     if (MESSAGE_SECTIONS.length > 0) {
       const sent = await app.inject({ method: "POST", url: "/api/messages", headers: authHeaders(friend.token), payload: { recipientId: user.id, text: "Bonjour" } });
       expect(sent.statusCode).toBe(201);
+      // Messages, plus de confort (migration 0044) : la personne aime ce message.
+      if (MESSAGE_REACTION_SECTIONS.length > 0) {
+        const liked = await app.inject({ method: "PUT", url: `/api/messages/${sent.json().message.id}/reaction`, headers: authHeaders(user.token), payload: { liked: true } });
+        // Un compte suspendu ne peut plus aimer : le « j'aime » est écrit directement.
+        if (liked.statusCode !== 200) {
+          const { error: likeError } = await app.supabaseAdmin.from("message_reactions").insert({ message_id: sent.json().message.id, user_id: user.id });
+          if (likeError) throw likeError;
+        }
+      }
     }
 
     // Collections (lot collections) : une collection privée, avec l'Envie
@@ -485,7 +501,20 @@ describe("export RGPD complet", () => {
     const body = res.json();
 
     expect(body.profile.id).toBe(user.id);
-    for (const section of [...NON_EMPTY_SECTIONS, ...MESSAGE_SECTIONS, ...COLLECTION_SECTIONS, ...PUSH_SECTIONS, ...ALERT_SECTIONS, ...TRYON_SECTIONS, ...VIDEO_SECTIONS, ...FOLLOW_REQUEST_SECTIONS, ...COMMENT_THREAD_SECTIONS, ...POST_EXTRA_SECTIONS, ...SAVED_POST_SECTIONS]) {
+    for (const section of [
+      ...NON_EMPTY_SECTIONS,
+      ...MESSAGE_SECTIONS,
+      ...MESSAGE_REACTION_SECTIONS,
+      ...COLLECTION_SECTIONS,
+      ...PUSH_SECTIONS,
+      ...ALERT_SECTIONS,
+      ...TRYON_SECTIONS,
+      ...VIDEO_SECTIONS,
+      ...FOLLOW_REQUEST_SECTIONS,
+      ...COMMENT_THREAD_SECTIONS,
+      ...POST_EXTRA_SECTIONS,
+      ...SAVED_POST_SECTIONS,
+    ]) {
       expect(Array.isArray(body[section]), section).toBe(true);
       expect(body[section].length, section).toBeGreaterThan(0);
     }

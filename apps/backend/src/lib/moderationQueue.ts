@@ -8,6 +8,12 @@
 // Lot messages : un message signalé est montré avec quelques messages
 // autour (MODERATION_MESSAGE_CONTEXT avant et après), jamais toute la
 // conversation.
+// Lot « messages, plus de confort » (migration 0044) : un message supprimé
+// par son auteur garde son contenu dans la base s'il avait été signalé avant.
+// La modération, et elle seule, le lit alors, avec la date de la suppression.
+// Supprimé avant d'être signalé, il n'a plus de contenu : la modération voit
+// qui l'a envoyé, quand, et quand il a été supprimé. Les messages AUTOUR du
+// message signalé qui ont été supprimés ne montrent jamais leur contenu.
 // Lot modération des collections : une collection signalée est montrée avec
 // son nom, son auteur et ses dernières envies (titre et copie de l'image,
 // comme les amis les voient), chacune avec « Retirer l'image » si une copie
@@ -39,6 +45,7 @@ import {
   type ModerationPreview,
 } from "@monapp/shared-types";
 import { COLLECTION_ROWS, ITEM_COLUMNS, ITEM_ROWS, isRemovedCopy, ownCopyUrl, readCopies, type CollectionRow } from "./collections.js";
+import { messageActionsReady } from "./messaging.js";
 import { DatabaseReadError, parseDbRows } from "./validation.js";
 
 /** Décisions affichées par contenu (les plus récentes). */
@@ -105,11 +112,16 @@ const MESSAGE_ROWS = z.array(
     wish_title: z.string().nullable(),
     created_at: TIMESTAMP,
     hidden_at: TIMESTAMP.nullable(),
+    // Migration 0044 : absentes d'une base qui ne l'a pas (jamais demandées alors).
+    deleted_at: TIMESTAMP.nullable().optional(),
+    shared_post: z.boolean().nullable().optional(),
   })
 );
 type MessageRow = z.infer<typeof MESSAGE_ROWS>[number];
 const WISH_TITLE_ROWS = z.array(z.object({ id: ID, title: z.string() }));
 const MESSAGE_COLUMNS = "id, conversation_id, sender_id, body, wish_title, created_at, hidden_at";
+/** Avec la migration 0044 : la date de suppression, et « portait une publication ». */
+const messageColumns = (actions: boolean) => (actions ? `${MESSAGE_COLUMNS}, deleted_at, shared_post` : MESSAGE_COLUMNS);
 const PROFILE_ROWS = z.array(
   z.object({
     id: ID,
@@ -170,7 +182,7 @@ function idsOf(rows: QueueRow[], type: QueueRow["target_type"]): string[] {
 }
 
 /** Publications, commentaires, pièces envoyées et messages signalés, et les décisions déjà prises sur ces contenus. */
-async function loadTargets(fastify: FastifyInstance, rows: QueueRow[], options: QueueOptions) {
+async function loadTargets(fastify: FastifyInstance, rows: QueueRow[], options: QueueOptions, messageActions: boolean) {
   const db = fastify.supabaseAdmin;
   const postIds = idsOf(rows, "post");
   const commentIds = idsOf(rows, "comment");
@@ -188,7 +200,7 @@ async function loadTargets(fastify: FastifyInstance, rows: QueueRow[], options: 
     pieceIds.length > 0
       ? db.from("piece_sends").select("id, sender_id, title, image_url, image_thumb_url, image_removed_at, created_at, hidden_at").in("id", pieceIds)
       : NO_ROWS,
-    messageIds.length > 0 ? db.from("messages").select(MESSAGE_COLUMNS).in("id", messageIds) : NO_ROWS,
+    messageIds.length > 0 ? db.from("messages").select(messageColumns(messageActions)).in("id", messageIds) : NO_ROWS,
     // Toutes les colonnes, comme lib/collections.ts (hidden_at vient de 0034).
     collectionIds.length > 0 ? db.from("collections").select("*").in("id", collectionIds) : NO_ROWS,
     db
@@ -216,10 +228,10 @@ async function loadTargets(fastify: FastifyInstance, rows: QueueRow[], options: 
 
 /** Quelques messages avant et après chaque message signalé, dans sa
  * conversation : rien d'autre de la conversation n'est lu. */
-async function loadMessageContext(fastify: FastifyInstance, messages: MessageRow[]): Promise<Map<string, MessageRow[]>> {
+async function loadMessageContext(fastify: FastifyInstance, messages: MessageRow[], messageActions: boolean): Promise<Map<string, MessageRow[]>> {
   const db = fastify.supabaseAdmin;
   const around = (message: MessageRow, direction: "before" | "after") => {
-    const base = db.from("messages").select(MESSAGE_COLUMNS).eq("conversation_id", message.conversation_id);
+    const base = db.from("messages").select(messageColumns(messageActions)).eq("conversation_id", message.conversation_id);
     const query =
       direction === "before"
         ? base.lt("created_at", message.created_at).order("created_at", { ascending: false })
@@ -297,14 +309,16 @@ async function loadPeople(fastify: FastifyInstance, userIds: string[], withLink:
 }
 
 async function loadAll(fastify: FastifyInstance, rows: QueueRow[], options: QueueOptions): Promise<Loaded> {
-  const targets = await loadTargets(fastify, rows, options);
+  // Sans la migration 0044, ses colonnes ne sont jamais nommées.
+  const messageActions = rows.some((row) => row.target_type === "message") && (await messageActionsReady(fastify));
+  const targets = await loadTargets(fastify, rows, options, messageActions);
   const userIds = new Set<string>(idsOf(rows, "user"));
   for (const post of targets.posts) userIds.add(post.user_id);
   for (const comment of targets.comments) userIds.add(comment.user_id);
   for (const piece of targets.pieces) userIds.add(piece.sender_id);
   for (const collection of targets.collections) userIds.add(collection.user_id);
   const [messageContext, collectionPreviews] = await Promise.all([
-    loadMessageContext(fastify, targets.messages),
+    loadMessageContext(fastify, targets.messages, messageActions),
     loadCollectionPreviews(fastify, targets.collections),
   ]);
   for (const extract of messageContext.values()) for (const message of extract) userIds.add(message.sender_id);
@@ -386,22 +400,33 @@ function previewOf(row: QueueRow, data: Loaded): ModerationPreview {
     const message = data.messages.get(row.target_id);
     const author = message ? authorOf(message.sender_id, data) : null;
     if (!message || !author) return MISSING;
-    const context: ModerationMessageContext[] = (data.messageContext.get(message.id) ?? [message]).map((entry) => ({
-      authorUsername: data.profiles.get(entry.sender_id)?.username ?? "",
-      text: entry.body,
-      wishTitle: entry.wish_title,
-      createdAt: entry.created_at,
-      reported: entry.id === message.id,
-      hidden: entry.hidden_at !== null,
-    }));
+    const context: ModerationMessageContext[] = (data.messageContext.get(message.id) ?? [message]).map((entry) => {
+      const reported = entry.id === message.id;
+      const deleted = typeof entry.deleted_at === "string";
+      // Un message supprimé autour du message signalé : « Message supprimé », jamais son contenu.
+      const shown = reported || !deleted;
+      return {
+        authorUsername: data.profiles.get(entry.sender_id)?.username ?? "",
+        text: shown ? entry.body : null,
+        wishTitle: shown ? entry.wish_title : null,
+        createdAt: entry.created_at,
+        reported,
+        hidden: entry.hidden_at !== null,
+        ...(deleted ? { deleted: true } : {}),
+        ...(shown && entry.shared_post === true ? { sharedPost: true } : {}),
+      };
+    });
     return {
       kind: "message",
       author,
+      // Le message signalé lui-même : son contenu, conservé s'il a été supprimé après le signalement.
       text: message.body,
       wishTitle: message.wish_title,
       createdAt: message.created_at,
       hidden: message.hidden_at !== null,
       context,
+      ...(typeof message.deleted_at === "string" ? { deletedAt: message.deleted_at } : {}),
+      ...(message.shared_post === true ? { sharedPost: true } : {}),
     };
   }
   if (row.target_type === "collection") {

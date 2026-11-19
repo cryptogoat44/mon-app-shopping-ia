@@ -13,7 +13,7 @@ import type {
 } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
-import { timeAgo } from "@/lib/format";
+import { formatLongDate, timeAgo } from "@/lib/format";
 import { applyModerationDecision, removeCopiedImage, removeProfilePart, undoModerationDecision } from "@/lib/api";
 import { loadErrorMessage } from "@/lib/load-error";
 import {
@@ -227,6 +227,15 @@ function MessageExtract({ preview }: { preview: Extract<ModerationPreview, { kin
           </Text>
           {entry.text ? <Text style={styles.body}>{t.common.quoted(entry.text)}</Text> : null}
           {entry.wishTitle ? <Text style={styles.meta}>{t.moderationQueue.messageWish(entry.wishTitle)}</Text> : null}
+          {/* Lot « messages, plus de confort » : une publication envoyée n'est jamais décrite ici ;
+              un message supprimé par son auteur le dit. Le message signalé garde son contenu s'il
+              avait été signalé avant d'être supprimé ; les messages autour ne le montrent jamais. */}
+          {entry.sharedPost ? <Text style={styles.meta}>{t.messageActions.previewPost}</Text> : null}
+          {entry.deleted ? (
+            <Text style={styles.meta}>
+              {entry.reported && preview.deletedAt ? t.messageActions.deletedByAuthorOn(formatLongDate(preview.deletedAt, getActiveLocale())) : t.messageActions.deleted}
+            </Text>
+          ) : null}
         </View>
       ))}
     </View>

@@ -44,14 +44,18 @@ import type {
   WishlistPage,
   PieceSendsFrom,
   MessagesFrom,
+  UpdateReadReceiptsRequest,
   MessagesStatus,
   PushPlatform,
   RegisterPushTokenRequest,
   DeletePushTokenRequest,
   ConversationsPage,
   ConversationThread,
+  ChatMessage,
   SendMessageRequest,
   SendMessageResponse,
+  MessageReactionRequest,
+  MessageReactionResponse,
   ReceivedPiecesPage,
   CollectionSummary,
   CollectionsList,
@@ -95,7 +99,7 @@ import type {
   SuggestionsResponse,
   UpdateDiscoverableRequest,
 } from "@monapp/shared-types";
-import { COMPLEMENT_DEFERRED, CONSENT_VERSIONS, parseSearchCapacityStatus, parseVideoMomentsResponse, type SearchCapacityStatus } from "@monapp/shared-types";
+import { CLIENT_LEVEL, COMPLEMENT_DEFERRED, CONSENT_VERSIONS, parseSearchCapacityStatus, parseVideoMomentsResponse, type SearchCapacityStatus } from "@monapp/shared-types";
 import { CLIENT_LEVEL_QUERY, parseFollowResponse } from "./follow-state";
 import { supabase } from "./supabase";
 import { setAnalyticsConsent, track } from "./analytics";
@@ -728,28 +732,51 @@ async function loadMessagesStatus(): Promise<MessagesStatus> {
   return status;
 }
 
+/** Lot « messages, plus de confort » : cette app comprend les messages
+ * aimés, cités, supprimés et les publications envoyées. Le serveur ne les
+ * envoie qu'à une app qui le dit ; un serveur plus ancien ignore ce paramètre. */
+const SPEAKS = `v=${CLIENT_LEVEL}`;
+
 export async function fetchConversations(cursor?: string | null): Promise<ConversationsPage> {
-  const response = await authorizedFetch(`/api/conversations${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+  const response = await authorizedFetch(`/api/conversations?${SPEAKS}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
   return response.json();
 }
 
 /** Une conversation : les derniers messages, ou seulement les nouveaux
- * depuis `after` (relecture), ou les plus anciens avant `before`. */
-export async function fetchConversation(id: string, options: { after?: string | null; before?: string | null } = {}): Promise<ConversationThread> {
-  const query = options.after ? `?after=${encodeURIComponent(options.after)}` : options.before ? `?before=${encodeURIComponent(options.before)}` : "";
-  const response = await authorizedFetch(`/api/conversations/${encodeURIComponent(id)}${query}`);
+ * depuis `after` (relecture), ou les plus anciens avant `before`.
+ * `changedSince` (la date `syncedAt` de la lecture précédente) : le serveur
+ * renvoie aussi les messages aimés ou supprimés depuis. */
+export async function fetchConversation(
+  id: string,
+  options: { after?: string | null; before?: string | null; changedSince?: string | null } = {}
+): Promise<ConversationThread> {
+  const page = options.after ? `&after=${encodeURIComponent(options.after)}` : options.before ? `&before=${encodeURIComponent(options.before)}` : "";
+  const changed = options.changedSince ? `&changedSince=${encodeURIComponent(options.changedSince)}` : "";
+  const response = await authorizedFetch(`/api/conversations/${encodeURIComponent(id)}?${SPEAKS}${page}${changed}`);
   return response.json();
 }
 
 /** La conversation avec une personne (bouton « Message » d'un profil). */
 export async function fetchConversationWith(userId: string): Promise<ConversationThread> {
-  const response = await authorizedFetch(`/api/conversations/with/${encodeURIComponent(userId)}`);
+  const response = await authorizedFetch(`/api/conversations/with/${encodeURIComponent(userId)}?${SPEAKS}`);
   return response.json();
 }
 
 export async function sendMessage(payload: SendMessageRequest): Promise<SendMessageResponse> {
-  const response = await authorizedFetch("/api/messages", { method: "POST", body: JSON.stringify(payload) });
+  const response = await authorizedFetch(`/api/messages?${SPEAKS}`, { method: "POST", body: JSON.stringify(payload) });
   return response.json();
+}
+
+/** Aimer un message, ou ne plus l'aimer : le serveur renvoie le message tel qu'il est maintenant. */
+export async function setMessageReaction(messageId: string, liked: boolean): Promise<ChatMessage> {
+  const payload: MessageReactionRequest = { liked };
+  const response = await authorizedFetch(`/api/messages/${encodeURIComponent(messageId)}/reaction`, { method: "PUT", body: JSON.stringify(payload) });
+  return ((await response.json()) as MessageReactionResponse).message;
+}
+
+/** Supprimer un de ses messages, pour les deux membres. */
+export async function deleteMessage(messageId: string): Promise<void> {
+  await authorizedFetch(`/api/messages/${encodeURIComponent(messageId)}`, { method: "DELETE" });
 }
 
 export async function markConversationRead(id: string): Promise<void> {
@@ -767,6 +794,12 @@ export async function declineInvitation(id: string): Promise<void> {
 /** Réglage « Qui peut m'écrire ». */
 export async function updateMessagesFrom(messagesFrom: MessagesFrom): Promise<void> {
   await authorizedFetch("/api/me/messages-from", { method: "PUT", body: JSON.stringify({ messagesFrom }) });
+}
+
+/** Réglage « Confirmations de lecture » (lot « messages vus »). */
+export async function updateReadReceipts(readReceipts: boolean): Promise<void> {
+  const payload: UpdateReadReceiptsRequest = { readReceipts };
+  await authorizedFetch("/api/me/read-receipts", { method: "PUT", body: JSON.stringify(payload) });
 }
 
 // ---- Notifications des nouveaux messages sur le téléphone (lot notifications) ----

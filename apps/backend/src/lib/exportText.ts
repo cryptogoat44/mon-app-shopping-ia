@@ -120,6 +120,11 @@ export const EXPORT_COLUMNS = {
     piece_sends_from: shown("Qui peut vous envoyer des pièces", "Who can send you pieces"),
     // Lot messages (migration 0032).
     messages_from: shown("Qui peut vous écrire", "Who can write to you"),
+    // Lot « messages vus » (migration 0043).
+    read_receipts: shown("Confirmations de lecture", "Read receipts"),
+    // Depuis quand vos lectures peuvent être montrées (« Vu ») : la migration
+    // ou la création du profil, puis chaque fois que vous rallumez le réglage.
+    read_receipts_since: shown("Confirmations de lecture activées pour la dernière fois le", "Read receipts last turned on"),
     // Lot alertes prix et stock (migration 0036).
     price_alerts_enabled: shown("Alertes prix et stock", "Price and stock alerts"),
     // Nouvelle version des alertes (migration 0041).
@@ -409,6 +414,19 @@ export const EXPORT_COLUMNS = {
     ...MESSAGE_WISH_COLUMNS,
     hidden_at: shown("Masqué par la modération le", "Hidden by moderation on"),
     created_at: shown("Envoyé le", "Sent on"),
+    // Lot « messages, plus de confort » (migration 0044).
+    reply_to_id: shown("En réponse à un autre message", "In reply to another message"),
+    post_id: technical("Publication envoyée", "Post sent"),
+    shared_post: shown("Publication envoyée dans ce message", "Post sent in this message"),
+    deleted_at: shown("Supprimé le", "Deleted on"),
+    updated_at: technical("Aimé ou supprimé pour la dernière fois le", "Last liked or deleted on"),
+  },
+  // … et vos « j'aime » sur des messages (migration 0044).
+  messageReactions: {
+    message_id: technical("Message aimé", "Liked message"),
+    conversation_id: technical("Conversation", "Conversation"),
+    other_user_id: shown("Dans votre conversation avec", "In your conversation with"),
+    created_at: shown("Aimé le", "Liked on"),
   },
   // Lot collections (migration 0033) : vos collections…
   collections: {
@@ -761,10 +779,10 @@ export const EXPORT_SECTIONS = {
   messages: {
     title: { fr: "Vos messages", en: "Your messages" },
     intro: {
-      fr: "Vos conversations privées avec d'autres membres : les messages que vous avez envoyés et ceux que vous avez reçus.",
-      en: "Your private conversations with other members: the messages you sent and the ones you received.",
+      fr: "Vos conversations privées avec d'autres membres : les messages que vous avez envoyés et ceux que vous avez reçus, et les messages que vous avez aimés. Un message supprimé par l'autre membre n'a plus de contenu ici.",
+      en: "Your private conversations with other members: the messages you sent and the ones you received, and the messages you liked. A message deleted by the other member no longer has any content here.",
     },
-    keys: ["conversations", "messages"],
+    keys: ["conversations", "messages", "messageReactions"],
   },
   devices: {
     title: { fr: "Vos appareils pour les notifications", en: "Your devices for notifications" },
@@ -1245,6 +1263,10 @@ export const EXPORT_TEXT = {
   conversationWith: { fr: "Conversation avec {person}", en: "Conversation with {person}" },
   messagesTitle: { fr: "Messages échangés ({count})", en: "Messages exchanged ({count})" },
   orphanMessages: { fr: "Messages d'une conversation introuvable", en: "Messages from a conversation that could not be found" },
+  // Messages, plus de confort (migration 0044).
+  messageDeleted: { fr: "Message supprimé", en: "Message deleted" },
+  messageDeletedKept: { fr: "Supprimé par vous, conservé pour la modération", en: "Deleted by you, kept for moderation" },
+  messageReactionsTitle: { fr: "Messages que vous avez aimés ({count})", en: "Messages you liked ({count})" },
   // Collections (lot collections).
   collectionItemsTitle: { fr: "Envies rangées ({count})", en: "Saved wishes ({count})" },
   // Alertes prix et stock (lot 2).

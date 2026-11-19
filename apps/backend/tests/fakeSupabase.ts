@@ -67,7 +67,15 @@ const DEFAULTS: Record<string, () => Row> = {
     wish_currency: null,
     hidden_at: null,
     created_at: nextTimestamp(),
+    // Lot « messages, plus de confort » (migration 0044) ; base sans elle : `missingColumns`.
+    reply_to_id: null,
+    post_id: null,
+    shared_post: false,
+    deleted_at: null,
+    updated_at: null,
   }),
+  // « J'aime » d'un message (migration 0044).
+  message_reactions: () => ({ created_at: nextTimestamp() }),
   reports: () => ({ id: randomUUID(), note: null, handled_at: null, moderation_action_id: null, created_at: new Date().toISOString() }),
   // Lot collections (migration 0033).
   collections: () => ({ id: randomUUID(), visibility: "private", visibility_changed_at: null, created_at: nextTimestamp(), updated_at: nextTimestamp() }),
@@ -103,6 +111,7 @@ const DEFAULTS: Record<string, () => Row> = {
 /** Clés uniques imitées (doublon : erreur 23505, comme Postgres). */
 const UNIQUE: Record<string, string[][]> = {
   conversations: [["user_low", "user_high"]],
+  message_reactions: [["message_id", "user_id"]],
   collection_items: [["collection_id", "wishlist_item_id"]],
   collection_image_copies: [["wishlist_item_id"]],
   // Lot alertes prix et stock (0036) : un suivi et une cloche par envie.
@@ -127,6 +136,8 @@ const CASCADES: Record<string, { table: string; column: string }[]> = {
     { table: "conversation_participants", column: "conversation_id" },
     { table: "messages", column: "conversation_id" },
   ],
+  // Migration 0044 : les « j'aime » partent avec le message.
+  messages: [{ table: "message_reactions", column: "message_id" }],
   collections: [{ table: "collection_items", column: "collection_id" }],
   wishlist_items: [
     { table: "collection_items", column: "wishlist_item_id" },
@@ -434,16 +445,18 @@ export function fakeSupabase(options: FakeDbOptions = {}) {
         filters.push((row) => typeof row[column] === "string" && regex.test(row[column] as string));
         return chain;
       },
+      // Comme Postgres : une valeur vide n'est ni plus grande ni plus petite qu'une autre.
       gt(column: string, value: string) {
-        filters.push((row) => String(row[column]) > value);
+        named.push(column);
+        filters.push((row) => row[column] != null && String(row[column]) > value);
         return chain;
       },
       gte(column: string, value: string) {
-        filters.push((row) => String(row[column]) >= value);
+        filters.push((row) => row[column] != null && String(row[column]) >= value);
         return chain;
       },
       lt(column: string, value: string) {
-        filters.push((row) => String(row[column]) < value);
+        filters.push((row) => row[column] != null && String(row[column]) < value);
         return chain;
       },
       order(column: string, opts?: { ascending?: boolean }) {

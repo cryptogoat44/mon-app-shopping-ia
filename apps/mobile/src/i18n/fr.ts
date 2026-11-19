@@ -745,6 +745,13 @@ export const fr = {
     notFound: "Cette conversation n'est pas disponible.",
     loadOlder: "Afficher les messages précédents",
     emptyThread: "Aucun message pour l'instant.",
+    // Lot « messages vus » : sous votre dernier message d'une conversation
+    // ouverte. « Vu » : l'autre membre a ouvert la conversation depuis.
+    receiptSeen: "Vu",
+    receiptSent: "Envoyé",
+    // Lus par VoiceOver à la place de « Vu » et « Envoyé ».
+    receiptSeenLabel: (name: string) => `Votre dernier message a été vu par ${name}`,
+    receiptSentLabel: "Votre dernier message est envoyé",
     messageOptions: "Options pour ce message",
     // Lu par VoiceOver après le nom du bouton « ••• » d'un message reçu.
     messageOptionsHint: "Signaler ce message ou bloquer cette personne",
@@ -1219,6 +1226,12 @@ export const fr = {
     messagesFromHint:
       "Vos amis (vous vous suivez l'un l'autre) peuvent toujours vous écrire. Les autres vous envoient une seule invitation, que vous acceptez ou refusez. Un compte bloqué ne peut jamais vous écrire.",
     messagesFromError: "Ce réglage n'a pas pu être enregistré. Réessayez.",
+    // Lot « messages vus » : « Confirmations de lecture » (réciproque).
+    readReceiptsTitle: "Confirmations de lecture",
+    readReceiptsSwitchLabel: "Montrer quand j'ai lu un message, et voir quand les miens sont lus",
+    readReceiptsHint:
+      "Dans une conversation, « Vu » s'affiche sous le dernier message envoyé quand l'autre membre l'a lu. Si vous désactivez ce réglage, l'autre membre ne voit plus « Vu » pour vos lectures, et vous ne voyez plus les siennes. Ce que vous lisez pendant qu'il est désactivé n'est jamais montré ensuite, même si vous le réactivez.",
+    readReceiptsError: "Ce réglage n'a pas pu être enregistré. Réessayez.",
     exporting: "Préparation de l'export…",
     exportError: "L'export a échoué, réessayez.",
     // Lot 5 : le format se choisit à chaque export (fichier lisible ou JSON).
@@ -1652,6 +1665,42 @@ export const fr = {
     retry: "Réessayer",
     rejected: "La vérification anti-robots a échoué : réessayez.",
     frameTitle: "Vérification anti-robots",
+  },
+  // Lot « messages, plus de confort » (migration 0044) : aimer un message, y
+  // répondre, le supprimer, envoyer une publication dans une conversation.
+  messageActions: {
+    like: "Aimer",
+    unlike: "Ne plus aimer",
+    reply: "Répondre",
+    delete: "Supprimer",
+    report: "Signaler",
+    block: "Bloquer",
+    deleteConfirm: "Supprimer ce message pour vous deux ?",
+    deleted: "Message supprimé",
+    replyingTo: (name: string) => `Réponse à ${name}`,
+    replyingToSelf: "Réponse à votre message",
+    cancelReply: "Annuler la réponse",
+    quoteUnavailable: "Message indisponible",
+    postUnavailable: "Publication indisponible",
+    sendPost: "Envoyer dans un message",
+    previewPost: "Publication partagée",
+    // Ce que VoiceOver lit, et le reste de l'écran.
+    optionsHint: "Aimer ce message, y répondre, le supprimer ou le signaler",
+    quoteFromYou: "Vous",
+    likedByYou: "Aimé par vous",
+    likedBy: (name: string) => `Aimé par ${name}`,
+    likedByBoth: (name: string) => `Aimé par vous et ${name}`,
+    likeError: "Votre « j'aime » n'a pas pu être enregistré. Réessayez.",
+    deleteError: "Ce message n'a pas pu être supprimé. Réessayez.",
+    attachedPost: "Publication jointe",
+    attachedPostBy: (name: string) => `Publication de ${name}`,
+    removePost: "Retirer la publication",
+    openPost: (name: string) => `Voir la publication de ${name}`,
+    chooseHintPost: "La publication sera jointe à votre message, vous pourrez ajouter un mot. La personne ne la verra que si elle a le droit de la voir.",
+    // File de modération : un message supprimé par son auteur.
+    deletedByAuthorOn: (date: string) => `Supprimé par son auteur le ${date}`,
+    // Feuille des actions : ouvrir la publication reçue (VoiceOver).
+    viewPost: "Voir la publication",
   },
   // Compte privé et demandes d'abonnement (lot « vie sociale », migration 0045).
   privateAccount: {
