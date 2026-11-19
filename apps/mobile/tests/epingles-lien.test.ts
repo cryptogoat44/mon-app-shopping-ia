@@ -170,6 +170,23 @@ describe("« Vous allez quitter Spotto » : rien ne s'ouvre sans confirmation, n
     expect(sheet).toContain("accessibilityViewIsModal");
   });
 
+  it("une adresse longue ou un grand texte : tout défile dans la feuille, « Ouvrir le lien » reste atteignable, après l'adresse", () => {
+    // La feuille est bornée (80 % de l'écran) : son contenu doit défiler, sinon les boutons sortent de l'écran.
+    expect(sheet).toMatch(/sheet: \{[^}]*maxHeight: "80%"/);
+    const scrollStart = sheet.indexOf("<ScrollView style={styles.scroll}");
+    const scrollEnd = sheet.indexOf("</ScrollView>");
+    expect(scrollStart).toBeGreaterThan(sheet.indexOf("<View style={styles.handle} />"));
+    // Le titre, la phrase, l'adresse et les deux boutons sont DANS la zone qui défile, dans cet ordre.
+    const order = ["t.profilePins.leaveTitle", "t.profilePins.leaveBody", "{parts.host}", 'testID="ouvrir-le-lien"', 'testID="annuler-le-lien"'].map((marker) => sheet.indexOf(marker));
+    for (const position of order) {
+      expect(position).toBeGreaterThan(scrollStart);
+      expect(position).toBeLessThan(scrollEnd);
+    }
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // La zone qui défile rétrécit dans la feuille au lieu de la faire déborder.
+    expect(sheet).toMatch(/scroll: \{[^}]*flexShrink: 1/);
+  });
+
   it("sur le profil : le toucher ouvre la feuille, jamais le lien directement ; rôle « lien » et sa description", () => {
     expect(profileLink).not.toContain("Linking");
     expect(profileLink).not.toContain("window.open");
