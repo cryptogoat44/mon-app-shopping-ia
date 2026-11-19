@@ -852,7 +852,7 @@ describe("politique de confidentialité et App Privacy (brouillons « à vérifi
     expect(section(privacyPolicyEn, "Why, and on what basis")).toContain("(“Help other members” setting, on by default, which you can turn off): our legitimate interest");
   });
 
-  it("Expo et Apple (sous-traitants) : les notifications des messages ET des alertes, une notification d'alerte générique, et l'adresse de l'appareil gardée tant que l'une des deux est activée", () => {
+  it("Expo et Apple (sous-traitants) : les notifications des messages ET des alertes (et de l'activité, lot « découverte »), une notification d'alerte générique, et l'adresse de l'appareil gardée tant que l'une est activée", () => {
     const frExpo = all(privacyPolicy).split("\n").find((line) => line.startsWith("Expo (650 Industries, Inc., États-Unis) :"))!;
     for (const sentence of [
       "les notifications de messages ou celles des alertes prix et stock",
@@ -861,8 +861,8 @@ describe("politique de confidentialité et App Privacy (brouillons « à vérifi
       "Une notification d'alerte est générique (« Baisse de prix sur l'une de vos Envies »",
       "elle ne contient ni le titre de la pièce, ni la boutique, ni le prix, seulement un identifiant de l'Envie (aucun pour une notification groupée)",
       "jamais qui a cherché ou signalé la pièce",
-      "tant que les notifications de messages ou celles des alertes y sont activées",
-      "elle est effacée quand vous coupez les deux",
+      "tant que l'une de ces notifications y est activée",
+      "elle est effacée quand vous les coupez toutes",
       "[À vérifier :",
     ]) {
       expect(frExpo).toContain(sentence);
@@ -873,7 +873,7 @@ describe("politique de confidentialité et App Privacy (brouillons « à vérifi
       "message notifications or price and stock alert notifications",
       "An alert notification is generic (“Price drop on one of your Wishes”",
       "it contains neither the title of the piece, nor the shop, nor the price, only an identifier of the wish (none for a grouped notification)",
-      "it is deleted when you turn both off",
+      "it is deleted when you turn them all off",
       "[To be verified:",
     ]) {
       expect(enExpo).toContain(sentence);
