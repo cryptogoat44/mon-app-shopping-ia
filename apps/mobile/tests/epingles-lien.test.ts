@@ -397,7 +397,7 @@ describe("textes", () => {
     // Puis seulement les sections des fiches suivantes (« Pour vous », migration 0050).
     for (const catalog of [fr, en]) {
       const keys = Object.keys(catalog);
-      expect(keys.slice(keys.indexOf("profilePins") + 1)).toEqual(["forYou"]);
+      expect(keys.slice(keys.indexOf("profilePins") + 1)).toEqual(["forYou", "activityPush"]);
     }
     expect(Object.keys(en.profilePins)).toEqual(Object.keys(fr.profilePins));
     const expected: [keyof typeof fr.profilePins, string, string][] = [

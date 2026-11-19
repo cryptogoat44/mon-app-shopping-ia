@@ -170,11 +170,15 @@ export function hasNewFromOther(before: readonly ChatMessage[], after: readonly 
  * exactement ; absent (serveur plus ancien) ou illisible, les notifications
  * ne sont jamais proposées. */
 export function readMessagesStatus(body: unknown): MessagesStatus {
-  if (typeof body !== "object" || body === null) return { enabled: false, unreadCount: 0, push: false, actions: false };
-  const { enabled, unreadCount, push, actions } = body as Record<string, unknown>;
+  if (typeof body !== "object" || body === null) return { enabled: false, unreadCount: 0, push: false, actions: false, activityPush: false };
+  const { enabled, unreadCount, push, actions, activityPush } = body as Record<string, unknown>;
   const count = typeof unreadCount === "number" && Number.isInteger(unreadCount) && unreadCount > 0 ? unreadCount : 0;
+  // `activityPush` (lot « découverte ») : vrai seulement si le serveur le dit exactement, avec ou sans la messagerie.
+  const activity = activityPush === true;
   // `actions` (lot « messages, plus de confort ») : comme `push`, vrai seulement si le serveur le dit exactement.
-  return enabled === true ? { enabled: true, unreadCount: count, push: push === true, actions: actions === true } : { enabled: false, unreadCount: 0, push: false, actions: false };
+  return enabled === true
+    ? { enabled: true, unreadCount: count, push: push === true, actions: actions === true, activityPush: activity }
+    : { enabled: false, unreadCount: 0, push: false, actions: false, activityPush: activity };
 }
 
 /** Pastille de l'onglet Activité : notifications ou messages non lus. */
@@ -265,7 +269,7 @@ export function wishCardPrice(card: Pick<MessageWishCard, "priceMin" | "currency
 
 // ---- Disponibilité et non-lus, partagés entre les écrans ----
 
-let current: MessagesStatus = { enabled: false, unreadCount: 0, push: false, actions: false };
+let current: MessagesStatus = { enabled: false, unreadCount: 0, push: false, actions: false, activityPush: false };
 const listeners = new Set<(status: MessagesStatus) => void>();
 
 export function messagesStatus(): MessagesStatus {
@@ -278,7 +282,8 @@ export function setMessagesStatus(next: MessagesStatus): void {
     next.enabled === current.enabled &&
     next.unreadCount === current.unreadCount &&
     (next.push === true) === (current.push === true) &&
-    (next.actions === true) === (current.actions === true)
+    (next.actions === true) === (current.actions === true) &&
+    (next.activityPush === true) === (current.activityPush === true)
   )
     return;
   current = next;

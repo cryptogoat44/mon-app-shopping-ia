@@ -47,6 +47,7 @@ import type {
   UpdateReadReceiptsRequest,
   MessagesStatus,
   PushPlatform,
+  ActivityPushKind,
   RegisterPushTokenRequest,
   DeletePushTokenRequest,
   ConversationsPage,
@@ -807,9 +808,11 @@ export async function updateReadReceipts(readReceipts: boolean): Promise<void> {
 
 /** Enregistre (ou rafraîchit) cet appareil pour les notifications.
  * Lot alertes prix : `messages` et `alerts` disent ce qu'il reçoit (messages
- * coupés, alertes acceptées : gardé pour les seules alertes). */
-export async function registerPushToken(token: string, platform: PushPlatform, messages: boolean, alerts: boolean): Promise<void> {
-  const payload: RegisterPushTokenRequest = { token, platform, messages, alerts };
+ * coupés, alertes acceptées : gardé pour les seules alertes). Lot
+ * « découverte » : `activity`, chacune des quatre sortes d'activité (un
+ * serveur sans la migration 0051 les ignore). */
+export async function registerPushToken(token: string, platform: PushPlatform, messages: boolean, alerts: boolean, activity: Record<ActivityPushKind, boolean>): Promise<void> {
+  const payload: RegisterPushTokenRequest = { token, platform, messages, alerts, ...activity };
   await authorizedFetch("/api/me/push-token", { method: "PUT", body: JSON.stringify(payload) });
 }
 

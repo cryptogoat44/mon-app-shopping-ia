@@ -1882,4 +1882,18 @@ export const fr = {
       "Vos publications publiques peuvent apparaître dans « Pour vous » et votre compte dans les suggestions. Éteint : seuls vos abonnés et les visiteurs de votre profil les voient.",
     settingError: "Le réglage n'a pas pu être enregistré. Réessayez.",
   },
+  // Notifications d'activité sur le téléphone (lot « découverte », migration 0051).
+  activityPush: {
+    title: "Notifications d'activité",
+    help: "Sur cet iPhone. Elles disent seulement qui a fait quoi, jamais le contenu.",
+    likes: "J'aime",
+    comments: "Commentaires et réponses",
+    follows: "Abonnés et demandes d'abonnement",
+    mentions: "Mentions et identifications",
+    offerTitle: "Être prévenu(e) sur votre iPhone ?",
+    offerBody: "Recevez une notification quand quelqu'un aime, commente, s'abonne ou vous mentionne. Vous pourrez choisir dans les Réglages.",
+    enable: "Activer",
+    later: "Plus tard",
+    denied: `Les notifications sont refusées pour ${BRAND} dans les Réglages de l'iPhone.`,
+  },
 } as const;

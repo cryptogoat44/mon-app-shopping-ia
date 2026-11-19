@@ -453,10 +453,10 @@ describe("textes FR / EN (fiche)", () => {
 
   it("la section est ajoutée à la fin des deux catalogues, avec les mêmes clés", () => {
     // Puis seulement les sections du lot « vie sociale » (migrations 0045 à 0049), fusionné après,
-    // et celle du lot « découverte » (« Pour vous », migration 0050).
+    // et celles du lot « découverte » (« Pour vous », 0050 ; notifications d'activité, 0051).
     for (const catalog of [fr, en]) {
       const keys = Object.keys(catalog);
-      expect(keys.slice(keys.indexOf("messageActions") + 1)).toEqual(["privateAccount", "memberLists", "commentThreads", "carousel", "savedPosts", "profilePins", "forYou"]);
+      expect(keys.slice(keys.indexOf("messageActions") + 1)).toEqual(["privateAccount", "memberLists", "commentThreads", "carousel", "savedPosts", "profilePins", "forYou", "activityPush"]);
     }
     expect(Object.keys(en.messageActions).sort()).toEqual(Object.keys(fr.messageActions).sort());
     for (const value of Object.values(fr.messageActions)) {

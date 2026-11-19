@@ -527,9 +527,10 @@ describe("l'appareil reste enregistré tant que les messages OU les alertes sont
     expect(disable).toContain("if (!registration.keep) return forgetPushToken();");
     expect(disable).toContain("await registerAgain(registration);");
     expect(disable).toContain("} catch {\n    await forgetPushToken();");
-    // Le jeton part toujours avec `messages` ET `alerts` (contrat du serveur, migration 0036).
-    expect(push).toContain('await registerPushToken(data, "ios", kinds.messages, kinds.alerts);');
-    expect(api).toContain("const payload: RegisterPushTokenRequest = { token, platform, messages, alerts };");
+    // Le jeton part toujours avec `messages` ET `alerts` (contrat du serveur, migration 0036), et
+    // (lot « découverte », migration 0051) les quatre réponses de l'activité.
+    expect(push).toContain('await registerPushToken(data, "ios", kinds.messages, kinds.alerts, activity);');
+    expect(api).toContain("const payload: RegisterPushTokenRequest = { token, platform, messages, alerts, ...activity };");
     // Accepter une sorte ne rallume jamais l'autre si elle est coupée.
     const enable = body(push, "export async function enablePush(", "/** « Plus tard »");
     expect(enable).toContain('messages: kind === "messages" || messagesDecision === "on",');
@@ -544,7 +545,7 @@ describe("l'appareil reste enregistré tant que les messages OU les alertes sont
     // À l'ouverture : rafraîchi pour les messages OU les alertes.
     const hook = read("lib/use-push-notifications.ts");
     expect(hook).toContain("const alertsPush = alerts.available && alerts.enabled && alerts.push;");
-    expect(hook).toContain("(!messagesPush && !alertsPush)) return;");
+    expect(hook).toContain("(!messagesPush && !alertsPush && !activityOn)) return;");
     // La déconnexion oublie toujours l'appareil (inchangé).
     expect(read("lib/auth-context.tsx")).toContain("await forgetPushToken().catch(() => {});");
   });

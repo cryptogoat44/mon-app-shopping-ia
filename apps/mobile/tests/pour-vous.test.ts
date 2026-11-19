@@ -276,8 +276,8 @@ describe("appels au serveur et statistiques", () => {
 
 describe("textes", () => {
   it("la section « forYou » est ajoutée à la fin des deux catalogues, mêmes clés, avec les textes de la fiche", () => {
-    expect(Object.keys(fr).at(-1)).toBe("forYou");
-    expect(Object.keys(en).at(-1)).toBe("forYou");
+    // Puis seulement celle des notifications d'activité (migration 0051), du même lot.
+    for (const catalog of [fr, en]) expect(Object.keys(catalog).slice(-2)).toEqual(["forYou", "activityPush"]);
     expect(Object.keys(en.forYou)).toEqual(Object.keys(fr.forYou));
     const expected: [keyof typeof fr.forYou, string, string][] = [
       ["tabFollowing", "Abonnements", "Following"],

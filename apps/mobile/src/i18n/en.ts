@@ -1756,4 +1756,17 @@ export const en: Catalog = {
       "Your public posts may appear in “For you” and your account in suggestions. Off: only your followers and visitors of your profile see them.",
     settingError: "The setting could not be saved. Please try again.",
   },
+  activityPush: {
+    title: "Activity notifications",
+    help: "On this iPhone. They only say who did what, never the content.",
+    likes: "Likes",
+    comments: "Comments and replies",
+    follows: "Followers and follow requests",
+    mentions: "Mentions and tags",
+    offerTitle: "Get notified on your iPhone?",
+    offerBody: "Get a notification when someone likes, comments, follows or mentions you. You can choose in Settings.",
+    enable: "Turn on",
+    later: "Later",
+    denied: `Notifications are turned off for ${BRAND} in iPhone Settings.`,
+  },
 };

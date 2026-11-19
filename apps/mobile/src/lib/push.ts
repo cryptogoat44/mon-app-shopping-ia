@@ -13,16 +13,22 @@
 // Lot « durcissement des alertes » : un appareil dont la session se termine
 // (déconnexion forcée, oubli échoué hors réseau) est oublié par son seul
 // jeton, à la prochaine occasion (push-forget.ts).
+// Lot « découverte » (migration 0051) : quatre réponses de plus, une par
+// sorte d'activité (« j'aime », commentaires, abonnés, mentions), dites au
+// serveur à chaque enregistrement ; l'appareil reste aussi enregistré tant
+// que l'une d'elles est allumée et que le serveur propose l'activité.
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { requireOptionalNativeModule } from "expo";
-import { isExpoPushToken } from "@monapp/shared-types";
+import { ACTIVITY_PUSH_KINDS, isExpoPushToken, type ActivityPushKind } from "@monapp/shared-types";
 import { deletePushToken, forgetPushTokenWithoutSession, registerPushToken } from "./api";
+import { messagesStatus } from "./conversations";
 import { clearForget, createSerialQueue, flushForget, rememberForget } from "./push-forget";
 import { withTimeout } from "./retry";
 import {
   PUSH_TOKEN_KEY,
+  activityRegistration,
   deviceRegistration,
   firstTimeHandled,
   notificationTarget,
@@ -30,11 +36,14 @@ import {
   permissionFrom,
   pushDecisionKey,
   readProjectId,
+  selectionKinds,
   shouldShowBanner,
+  type ActivityDecisions,
   type NotificationTarget,
   type PushDecision,
   type PushKind,
   type PushPermission,
+  type PushSelection,
 } from "./push-state";
 import { alertsKeepDevice, wishAlertsStatus } from "./wish-alerts";
 
@@ -82,32 +91,43 @@ export async function loadPushDecision(userId: string, kind: PushKind = "message
   return parsePushDecision(await AsyncStorage.getItem(pushDecisionKey(userId, kind)));
 }
 
-export async function savePushDecision(userId: string, decision: PushDecision, kind: PushKind = "messages"): Promise<void> {
-  await AsyncStorage.setItem(pushDecisionKey(userId, kind), decision);
+/** `kind` : une sorte, ou « activity » pour les quatre de l'activité à la fois. */
+export async function savePushDecision(userId: string, decision: PushDecision, kind: PushSelection = "messages"): Promise<void> {
+  await Promise.all(selectionKinds(kind).map((one) => AsyncStorage.setItem(pushDecisionKey(userId, one), decision)));
 }
 
-/** Les réponses de cet appareil (messages, alertes) et ce que le serveur doit
- * en garder : l'appareil tant que l'une des deux est allumée. */
-async function currentRegistration(userId: string): Promise<{ keep: boolean; messages: boolean; alerts: boolean }> {
-  const [messages, alerts] = await Promise.all([loadPushDecision(userId, "messages"), loadPushDecision(userId, "alerts")]);
-  return deviceRegistration({ messages, alerts }, alertsKeepDevice(wishAlertsStatus()));
+/** Les réponses de cet appareil pour les quatre sortes d'activité (lot « découverte »). */
+export async function loadActivityDecisions(userId: string): Promise<ActivityDecisions> {
+  const [likes, comments, follows, mentions] = await Promise.all(ACTIVITY_PUSH_KINDS.map((kind) => loadPushDecision(userId, kind)));
+  return { likes: likes ?? null, comments: comments ?? null, follows: follows ?? null, mentions: mentions ?? null };
+}
+
+/** Les réponses de cet appareil (messages, alertes, activité) et ce que le
+ * serveur doit en garder : l'appareil tant que l'une est allumée (les alertes
+ * avec leur interrupteur, l'activité quand le serveur la propose). */
+async function currentRegistration(userId: string): Promise<DeviceKinds & { keep: boolean }> {
+  const [messages, alerts, activity] = await Promise.all([loadPushDecision(userId, "messages"), loadPushDecision(userId, "alerts"), loadActivityDecisions(userId)]);
+  const base = deviceRegistration({ messages, alerts }, alertsKeepDevice(wishAlertsStatus()));
+  const extra = activityRegistration(activity, messagesStatus().activityPush === true);
+  return { ...base, ...extra.kinds, keep: base.keep || extra.keep };
 }
 
 /** Ce que reçoit cet appareil, dit au serveur à chaque enregistrement. */
-type DeviceKinds = { messages: boolean; alerts: boolean };
+type DeviceKinds = { messages: boolean; alerts: boolean } & Record<ActivityPushKind, boolean>;
 
 /** Jeton d'Expo de cet appareil, enregistré sur le serveur, avec ce qu'il
- * reçoit : les messages, les alertes prix et stock (chacune selon la réponse
- * donnée pour elle sur cet appareil). */
+ * reçoit : les messages, les alertes prix et stock, et chaque sorte
+ * d'activité (chacune selon la réponse donnée pour elle sur cet appareil). */
 async function registerThisDevice(notifications: NotificationsModule, kinds: DeviceKinds): Promise<void> {
   const id = projectId();
   if (!id) throw new Error("push_unavailable");
   const { data } = await notifications.getExpoPushTokenAsync({ projectId: id });
   if (!isExpoPushToken(data)) throw new Error("push_token_invalid");
+  const activity = { likes: kinds.likes, comments: kinds.comments, follows: kinds.follows, mentions: kinds.mentions };
   await serial(async () => {
     // Un oubli en attente passe AVANT le nouvel enregistrement (jamais après : il l'effacerait).
     await flushPendingForgetNow();
-    await registerPushToken(data, "ios", kinds.messages, kinds.alerts);
+    await registerPushToken(data, "ios", kinds.messages, kinds.alerts, activity);
     await AsyncStorage.setItem(PUSH_TOKEN_KEY, data);
     // Ce même jeton vient d'être enregistré : plus rien à oublier pour lui.
     await clearForget(AsyncStorage, data);
@@ -116,8 +136,9 @@ async function registerThisDevice(notifications: NotificationsModule, kinds: Dev
 
 /** La personne a touché « Activer » : la SEULE fonction qui demande
  * l'autorisation à iOS (une fois ; ensuite, iOS ne la redemande plus).
- * `kind` : la sorte de notifications acceptée (messages par défaut). */
-export async function enablePush(userId: string, kind: PushKind = "messages"): Promise<PushPermission> {
+ * `kind` : la sorte de notifications acceptée (messages par défaut), ou
+ * « activity » pour les quatre de l'activité (leur feuille d'explication). */
+export async function enablePush(userId: string, kind: PushSelection = "messages"): Promise<PushPermission> {
   const notifications = await loadNotifications();
   if (!notifications) throw new Error("push_unavailable");
   let permission = permissionFrom(await notifications.getPermissionsAsync());
@@ -128,23 +149,30 @@ export async function enablePush(userId: string, kind: PushKind = "messages"): P
     await savePushDecision(userId, "off", kind);
     return permission;
   }
-  // Accepter une sorte ne rallume jamais l'autre si elle est coupée.
-  const [messagesDecision, alertsDecision] = await Promise.all([loadPushDecision(userId, "messages"), loadPushDecision(userId, "alerts")]);
+  // Accepter une sorte ne rallume jamais une autre si elle est coupée.
+  const accepted = selectionKinds(kind);
+  const [messagesDecision, alertsDecision, activity] = await Promise.all([loadPushDecision(userId, "messages"), loadPushDecision(userId, "alerts"), loadActivityDecisions(userId)]);
+  const activityOn = (one: ActivityPushKind) => accepted.includes(one) || activity[one] === "on";
   await registerThisDevice(notifications, {
     messages: kind === "messages" || messagesDecision === "on",
     alerts: kind === "alerts" || alertsDecision === "on",
+    likes: activityOn("likes"),
+    comments: activityOn("comments"),
+    follows: activityOn("follows"),
+    mentions: activityOn("mentions"),
   });
   await savePushDecision(userId, "on", kind);
   return permission;
 }
 
-/** « Plus tard » ou interrupteur coupé, pour une sorte : l'appareil est
- * oublié sur le serveur, sauf si l'autre sorte est allumée — il y reste
- * alors, pour elle seule (réenregistré avec `messages: false`, ou
- * `alerts: false`). Si ce réenregistrement échoue, l'appareil est oublié
- * plutôt que de garder des notifications coupées ; il revient à la prochaine
- * ouverture de l'app (refreshPushToken). */
-export async function disablePush(userId: string, kind: PushKind = "messages"): Promise<void> {
+/** « Plus tard » ou interrupteur coupé, pour une sorte (ou les quatre de
+ * l'activité) : l'appareil est oublié sur le serveur, sauf si une autre sorte
+ * est allumée — il y reste alors, pour elle seule (réenregistré avec
+ * `messages: false`, `alerts: false`, `likes: false`…). Si ce
+ * réenregistrement échoue, l'appareil est oublié plutôt que de garder des
+ * notifications coupées ; il revient à la prochaine ouverture de l'app
+ * (refreshPushToken). */
+export async function disablePush(userId: string, kind: PushSelection = "messages"): Promise<void> {
   await savePushDecision(userId, "off", kind);
   const registration = await currentRegistration(userId);
   if (!registration.keep) return forgetPushToken();
@@ -230,8 +258,9 @@ async function forgetNotedToken(): Promise<void> {
 }
 
 /** À l'ouverture (connecté, notifications allumées sur le serveur) : le jeton
- * est rafraîchi si la personne a dit oui (messages, ou alertes avec
- * l'interrupteur allumé) et que iOS le permet déjà. Ne demande jamais rien. */
+ * est rafraîchi si la personne a dit oui (messages, alertes avec
+ * l'interrupteur allumé, ou une sorte d'activité proposée par le serveur) et
+ * que iOS le permet déjà. Ne demande jamais rien. */
 export async function refreshPushToken(userId: string): Promise<void> {
   const notifications = await loadNotifications();
   if (!notifications || !projectId()) return;
