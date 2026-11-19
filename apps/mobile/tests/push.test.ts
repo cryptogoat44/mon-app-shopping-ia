@@ -672,6 +672,21 @@ describe("notifications d'activité : textes en français et en anglais", () => 
     expect(enPolicy).toContain("An activity notification only contains “${BRAND}”, the member's username and a fixed sentence");
   });
 
+  it("l'identifiant de la publication ou du membre, aucun pour une demande d'abonnement : la politique et la fiche Apple le disent", () => {
+    // Le serveur : une demande d'abonnement n'ouvre que la liste des demandes, sans identifiant.
+    expect(readFileSync(join(__dirname, "../../backend/src/lib/push.ts"), "utf8")).toContain('if (type === "follow_request") return { screen: "requests" };');
+    const frPolicy = read("legal/confidentialite.ts");
+    expect(frPolicy).toContain("avec l'identifiant de la publication ou du membre concerné (aucun pour une demande d'abonnement, qui ouvre la liste des demandes) : jamais le texte d'un commentaire");
+    expect(frPolicy).not.toMatch(/l'identifiant de la publication ou du membre concerné(?! \(aucun)/);
+    const enPolicy = read("legal/confidentialite.en.ts");
+    expect(enPolicy).toContain("with an identifier of the post or member concerned (none for a follow request, which opens the list of requests): never the text of a comment");
+    expect(enPolicy).not.toMatch(/identifier of the post or member concerned(?! \(none)/);
+    const apple = readFileSync(join(__dirname, "../app-store/CONFIDENTIALITE-APPLE.md"), "utf8");
+    expect(apple).toContain("et l'identifiant de la publication ou du membre (aucun pour une demande d'abonnement, qui ouvre la liste des demandes) ; **jamais**");
+    expect(apple).toContain("une phrase fixe et l'identifiant de la publication ou du membre (aucun pour une demande d'abonnement).");
+    expect(apple).not.toMatch(/l'identifiant de la publication ou du membre(?! \(aucun)/);
+  });
+
   it("les notes pour Apple : la version française dit, comme l'anglaise, quand iOS demande l'autorisation (feuille ou interrupteur des Réglages)", () => {
     const notes = readFileSync(join(__dirname, "../app-store/NOTES-VALIDATION.md"), "utf8");
     const part = (title: string) => {
