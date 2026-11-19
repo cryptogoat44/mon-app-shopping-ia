@@ -9,7 +9,8 @@ import { authHeaders, buildMultipart, buildTestApp, createTestUser, deleteTestUs
 // une vraie base prouve — la contrainte du lien (https, sans espace, 200
 // caractères), la quatrième épingle refusée sur de vraies lignes, le lien d'un
 // compte suspendu caché aux autres, et la bio retirée par la modération qui
-// emporte le lien (fonction de 0037, puis la mise à jour du serveur).
+// emporte le lien (fonction de 0037 recréée par 0049 : dans la même
+// transaction, et même pour un profil qui n'a qu'un lien).
 // Sans la migration 0049, chaque test est passé (« skip »).
 // Les règles, cas par cas : epinglesLien.test.ts (hors base).
 
@@ -122,5 +123,18 @@ describe("épingles et lien en bio, sur la base de développement", () => {
     expect(response.statusCode).toBe(200);
     expect(await storedLink(author.id)).toBeNull();
     expect(((await request(author, "GET", "/api/me")).json() as Profile)).toMatchObject({ bio: null, linkUrl: null });
+  });
+
+  it("un lien sans bio : la fonction de la base le retire elle-même (0049), sans suspendre le compte", async (context) => {
+    if (!migrated || !withProfileModeration) return context.skip();
+    expect((await request(visitor, "PATCH", "/api/me", { username: visitor.username, displayName: visitor.username, bio: "", linkUrl: "https://exemple.com/connexion" })).statusCode).toBe(200);
+    expect(await storedLink(visitor.id)).toBe("https://exemple.com/connexion");
+    // La fonction seule, sans le filet du serveur : la bio est vide, le lien part quand même.
+    const { data, error } = await app.supabaseAdmin.rpc("moderation_remove_profile_part", { p_admin_id: admin.id, p_user_id: visitor.id, p_part: "bio", p_reason: "spam", p_note: null });
+    expect(error).toBeNull();
+    expect((data as { outcome: string }[])[0]?.outcome).toBe("ok");
+    expect(await storedLink(visitor.id)).toBeNull();
+    // Plus ni bio ni lien : « rien à retirer ».
+    expect((await request(admin, "POST", ROUTE, { userId: visitor.id, part: "bio", reason: "spam" })).statusCode).toBe(409);
   });
 });

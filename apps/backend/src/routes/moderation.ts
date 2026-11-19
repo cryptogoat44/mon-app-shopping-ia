@@ -238,8 +238,11 @@ export default async function moderationRoutes(fastify: FastifyInstance) {
       p_reason: body.reason,
       p_note: body.note || null,
     });
-    // Lien en bio (migration 0049) : retirer la bio le retire aussi, une fois
-    // la décision enregistrée (la fonction de 0037 n'est pas recréée). Journal
+    // Lien en bio (migration 0049) : retirer la bio le retire aussi. La
+    // fonction recréée par 0049 vide la bio et le lien dans la même
+    // transaction (et accepte un profil qui n'a qu'un lien). Ce qui suit n'est
+    // qu'un filet, pour une base où 0037 aurait été relancée après 0049 (sa
+    // fonction oublie le lien) : le serveur vide le lien lui-même. Journal
     // sans l'adresse. Échec (deux essais) : la décision est enregistrée, mais
     // l'administrateur l'apprend (500) ; suspendre le compte cache le lien.
     // Seule une base qui dit « pas de 0049 » dispense d'effacer : une sonde

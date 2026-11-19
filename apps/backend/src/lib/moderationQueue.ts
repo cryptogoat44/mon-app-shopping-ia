@@ -483,7 +483,9 @@ function toItem(row: QueueRow, data: Loaded, options: QueueOptions): ModerationI
     activeHideAutomatic: hide?.automatic ?? false,
     activeSuspendActionId: preview.kind === "missing" ? null : (data.suspensions.get(preview.author.id) ?? null),
     canRemoveImage: canRemoveImage(row, preview, data),
-    canRemoveBio: reportedProfile !== null && (reportedProfile.bio ?? "").trim() !== "",
+    // « Retirer la bio » retire aussi le lien (fonction recréée par 0049) :
+    // proposé aussi pour un profil qui n'a qu'un lien, sans bio.
+    canRemoveBio: reportedProfile !== null && ((reportedProfile.bio ?? "").trim() !== "" || (options.profileExtras === true && !!reportedProfile.linkUrl)),
     canRemoveAvatar: reportedProfile !== null && reportedProfile.author.avatarUrl !== null,
     history: history.slice(0, HISTORY_LIMIT).map((action) => toLogEntry(action, data)),
   };

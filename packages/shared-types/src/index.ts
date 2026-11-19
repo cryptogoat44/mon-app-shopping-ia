@@ -1257,7 +1257,8 @@ export interface ModerationItem {
    * pièce envoyée), encore en place — elle peut être retirée. */
   canRemoveImage: boolean;
   /** Lot modération des profils (migration 0037) : profil signalé dont la bio
-   * peut être retirée (il en a une, et la base a la migration). */
+   * peut être retirée (il en a une, ou un lien en bio avec 0049, que ce
+   * retrait emporte aussi ; et la base a la migration). */
   canRemoveBio: boolean;
   /** Idem pour sa photo de profil. */
   canRemoveAvatar: boolean;

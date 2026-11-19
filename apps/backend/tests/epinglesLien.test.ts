@@ -130,6 +130,8 @@ interface Seed {
   pinned?: Record<string, string>;
   /** [membre, publication] signalées. */
   reported?: [string, string][];
+  /** 0037 relancée après 0049 : sa fonction (celle de 0037) oublie le lien. */
+  stale0037?: boolean;
 }
 
 type Fake = ReturnType<typeof fakeSupabase>;
@@ -141,9 +143,11 @@ function stamp(): string {
   return new Date(Date.now() + tick * 1000).toISOString();
 }
 
-/** La file de modération et la fonction de 0037 (retirer une bio ou une
- * photo de profil), imitées au plus près du SQL (comme moderationProfil.test.ts). */
-function moderationRpc(getFake: () => Fake) {
+/** La file de modération et la fonction qui retire une bio ou une photo de
+ * profil, imitées au plus près du SQL (comme moderationProfil.test.ts) : celle
+ * recréée par 0049 quand la colonne du lien existe (bio et lien vidés
+ * ensemble, un lien seul n'est pas « rien à retirer »), sinon celle de 0037. */
+function moderationRpc(getFake: () => Fake, stale0037 = false) {
   const t = (name: string) => getFake().table(name);
   const refuse = (outcome: string) => ({ data: [{ outcome, action_id: null }], error: null });
   return async (fn: string, args: Record<string, unknown>) => {
@@ -168,11 +172,15 @@ function moderationRpc(getFake: () => Fake) {
       const row = t("profiles").find((p) => p.id === user);
       if (!row) return refuse("target_not_found");
       const bio = typeof row.bio === "string" ? row.bio.trim() : "";
-      if ((part === "bio" && bio === "") || (part === "avatar" && (row.avatar_url ?? null) === null)) return refuse("nothing_to_remove");
+      const with0049 = "link_url" in row && !stale0037;
+      const link = with0049 ? (row.link_url ?? null) : null;
+      if ((part === "bio" && bio === "" && link === null) || (part === "avatar" && (row.avatar_url ?? null) === null)) return refuse("nothing_to_remove");
       const actionId = randomUUID();
       t("moderation_actions").push({ id: actionId, admin_id: admin, action: part === "bio" ? "remove_bio" : "remove_avatar", target_type: "user", target_id: user, target_user_id: user, reason, note: null, undoes_action_id: null, automatic: false, created_at: stamp() });
-      if (part === "bio") row.bio = null;
-      else row.avatar_url = null;
+      if (part === "bio") {
+        row.bio = null;
+        if (with0049) row.link_url = null;
+      } else row.avatar_url = null;
       for (const report of t("reports")) if (report.target_type === "user" && report.target_id === user && report.handled_at === null) Object.assign(report, { handled_at: stamp(), moderation_action_id: actionId });
       return { data: [{ outcome: "ok", action_id: actionId }], error: null };
     }
@@ -182,7 +190,7 @@ function moderationRpc(getFake: () => Fake) {
 
 function seeded(seed: Seed = {}, options: FakeDbOptions = {}) {
   let fake: Fake | null = null;
-  fake = fakeSupabase({ rpc: moderationRpc(() => fake!), ...options });
+  fake = fakeSupabase({ rpc: moderationRpc(() => fake!, seed.stale0037 === true), ...options });
   const without = options.missingColumns?.profiles?.includes("link_url") === true;
   const people = [
     profile(ANNA, "anna", { bio: "Mode et voyages", link_url: ANNA_LINK }),
@@ -878,20 +886,55 @@ describe("modération", () => {
     expect(lines.join("\n")).not.toContain("anna-boutique");
   });
 
-  it("retirer la photo ne touche pas au lien ; une bio déjà vide (« rien à retirer ») non plus", async () => {
+  it("retirer la photo ne touche pas au lien ; un profil sans bio ni lien : « rien à retirer »", async () => {
     const fake = seeded();
     row(fake, "profiles", ANNA).avatar_url = `${STORAGE_ORIGIN}/storage/v1/object/public/avatars/${ANNA}/avatar-1.jpg`;
     fake.files.set(`avatars/${ANNA}/avatar-1.jpg`, Buffer.from("photo"));
     const target = await pinsApp(fake.db);
     expect((await as(target, ADMIN).post("/api/admin/moderation/remove-profile-part", { userId: ANNA, part: "avatar", reason: "inappropriate" })).statusCode).toBe(200);
     expect(row(fake, "profiles", ANNA).link_url).toBe(ANNA_LINK);
-    const nothing = await as(target, ADMIN).post("/api/admin/moderation/remove-profile-part", { userId: PAULA, part: "bio", reason: "inappropriate" });
+    const nothing = await as(target, ADMIN).post("/api/admin/moderation/remove-profile-part", { userId: BRUNO, part: "bio", reason: "inappropriate" });
     expect(nothing.statusCode).toBe(409);
-    expect(row(fake, "profiles", PAULA).link_url).toBe(PAULA_LINK);
+    expect(fake.table("moderation_actions").map((action) => action.action)).toEqual(["remove_avatar"]);
   });
 
-  it("le lien ne s'efface pas après la décision : l'administrateur l'apprend (500), la décision reste enregistrée", async () => {
-    const fake = seeded({}, { failWrite: (table, action, values) => (table === "profiles" && action === "update" && typeof values === "object" && values !== null && "link_url" in values ? { code: "57014", message: "délai dépassé" } : null) });
+  it("un lien sans bio : la file propose « Retirer la bio », qui retire le lien, sans suspendre le compte", async () => {
+    // Paula n'a pas de bio, seulement un lien (un site d'hameçonnage, par exemple).
+    const fake = seeded();
+    reportUser(fake, PAULA);
+    reportUser(fake, BRUNO);
+    const target = await pinsApp(fake.db);
+    expect(await queueItem(target, PAULA)).toMatchObject({ canRemoveBio: true, preview: { kind: "user", bio: null, linkUrl: PAULA_LINK } });
+    // Ni bio ni lien : rien à proposer.
+    expect(await queueItem(target, BRUNO)).toMatchObject({ canRemoveBio: false });
+    const response = await as(target, ADMIN).post("/api/admin/moderation/remove-profile-part", { userId: PAULA, part: "bio", reason: "spam" });
+    expect(response.statusCode).toBe(200);
+    expect(row(fake, "profiles", PAULA)).toMatchObject({ bio: null, link_url: null });
+    expect(fake.table("moderation_actions").map((action) => action.action)).toEqual(["remove_bio"]);
+    expect(fake.table("suspensions").map((entry) => entry.user_id)).not.toContain(PAULA);
+    expect(lines.join("\n")).not.toContain("paula.example");
+    // Une seconde fois : plus rien à retirer.
+    expect((await as(target, ADMIN).post("/api/admin/moderation/remove-profile-part", { userId: PAULA, part: "bio", reason: "spam" })).statusCode).toBe(409);
+  });
+
+  it("un lien sans bio, base sans 0049 : rien à proposer (ni lien, ni « Retirer la bio »)", async () => {
+    const without = seeded({}, WITHOUT_0049);
+    reportUser(without, PAULA);
+    const old = await pinsApp(without.db);
+    expect(await queueItem(old, PAULA)).toMatchObject({ canRemoveBio: false });
+  });
+
+  it("0037 relancée après 0049 (sa fonction oublie le lien) : le serveur vide le lien lui-même", async () => {
+    const fake = seeded({ stale0037: true });
+    const target = await pinsApp(fake.db);
+    const response = await as(target, ADMIN).post("/api/admin/moderation/remove-profile-part", { userId: ANNA, part: "bio", reason: "inappropriate" });
+    expect(response.statusCode).toBe(200);
+    expect(row(fake, "profiles", ANNA)).toMatchObject({ bio: null, link_url: null });
+    expect(lines.join("\n")).not.toContain("anna-boutique");
+  });
+
+  it("0037 relancée après 0049, et le lien ne s'efface pas : l'administrateur l'apprend (500), la décision reste enregistrée", async () => {
+    const fake = seeded({ stale0037: true }, { failWrite: (table, action, values) => (table === "profiles" && action === "update" && typeof values === "object" && values !== null && "link_url" in values ? { code: "57014", message: "délai dépassé" } : null) });
     const target = await pinsApp(fake.db);
     const response = await as(target, ADMIN).post("/api/admin/moderation/remove-profile-part", { userId: ANNA, part: "bio", reason: "inappropriate" });
     expect(response.statusCode).toBe(500);
