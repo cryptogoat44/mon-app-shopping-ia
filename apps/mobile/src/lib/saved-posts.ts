@@ -40,6 +40,10 @@ export type SaveAction =
   | { type: "unsave" }
   /** La réponse du serveur : son état fait foi. */
   | { type: "confirmed"; state: SaveState }
+  /** La publication relue par l'écran (fil revenu, publication enregistrée ou
+   * rangée ailleurs entre-temps) : son état fait foi ; rien ne change s'il est
+   * le même. */
+  | { type: "synced"; state: SaveState }
   /** Le serveur a refusé : retour à l'état d'avant le geste. */
   | { type: "rollback"; state: SaveState };
 
@@ -55,12 +59,22 @@ export function saveReducer(state: SaveState, action: SaveAction): SaveState {
     case "confirmed":
     case "rollback":
       return action.state;
+    case "synced":
+      return state.saved === action.state.saved && state.collectionId === action.state.collectionId ? state : action.state;
   }
 }
 
 /** Ce que fait un toucher du signet : enregistrer, ou ouvrir les choix. */
 export function bookmarkTapAction(state: SaveState): "save" | "openSheet" {
   return state.saved ? "openSheet" : "save";
+}
+
+/** La collection envoyée au serveur : un choix de la feuille l'envoie (null :
+ * sans collection) ; un simple toucher n'en envoie aucune, et le serveur garde
+ * celle de la publication si elle est déjà enregistrée — un signet resté en
+ * retard ne la sort jamais de sa collection. */
+export function saveRequestCollection(action: "save" | { collectionId: string | null }): string | null | undefined {
+  return action === "save" ? undefined : action.collectionId;
 }
 
 /** Le bouton du signet pour les lecteurs d'écran : son état dans le libellé,

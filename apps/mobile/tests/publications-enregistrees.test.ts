@@ -33,6 +33,7 @@ import {
   filedMessage,
   parseSavedListParams,
   saveReducer,
+  saveRequestCollection,
   saveSheetOptions,
   saveStateOf,
   savedListEmptyText,
@@ -89,6 +90,32 @@ describe("l'état du signet : affiché tout de suite, confirmé par le serveur, 
     const optimistic = saveReducer(before, { type: "unsave" });
     expect(saveReducer(optimistic, { type: "rollback", state: before })).toEqual(before);
     expect(saveReducer({ saved: true, collectionId: null }, { type: "confirmed", state: { saved: true, collectionId: WINTER } })).toEqual({ saved: true, collectionId: WINTER });
+  });
+
+  it("la publication relue fait foi : le signet se recale (enregistrée ou rangée ailleurs) ; rien ne change si l'état est le même", () => {
+    const current: SaveState = { saved: true, collectionId: SUMMER };
+    expect(saveReducer(current, { type: "synced", state: { saved: true, collectionId: SUMMER } })).toBe(current);
+    expect(saveReducer(NOT_SAVED, { type: "synced", state: { saved: true, collectionId: SUMMER } })).toEqual({ saved: true, collectionId: SUMMER });
+    expect(saveReducer(current, { type: "synced", state: { saved: true, collectionId: WINTER } })).toEqual({ saved: true, collectionId: WINTER });
+    expect(saveReducer(current, { type: "synced", state: NOT_SAVED })).toEqual(NOT_SAVED);
+  });
+
+  it("un signet resté en retard ne sort jamais une publication de sa collection", () => {
+    // Le fil : P n'est pas enregistrée. Sur l'écran de la publication, le membre la range dans « Été » ;
+    // au retour, le fil relu dit « enregistrée, dans Été » à la même carte.
+    const shown = saveStateOf({ viewerHasSaved: false });
+    const reread = saveStateOf({ viewerHasSaved: true, viewerSavedCollectionId: SUMMER });
+    // Recalée, la carte montre le signet plein : le toucher ouvre les choix, rien n'est envoyé.
+    expect(bookmarkTapAction(saveReducer(shown, { type: "synced", state: reread }))).toBe("openSheet");
+    // Même encore en retard (signet vide) : le toucher enregistre SANS collection envoyée,
+    // et le serveur garde « Été » (la réponse le dit, la carte le confirme).
+    expect(bookmarkTapAction(shown)).toBe("save");
+    expect(saveRequestCollection("save")).toBeUndefined();
+    const optimistic = saveReducer(shown, { type: "save" });
+    expect(saveReducer(optimistic, { type: "confirmed", state: { saved: true, collectionId: SUMMER } })).toEqual(reread);
+    // Un choix de la feuille envoie la collection, ou null pour « Sans collection ».
+    expect(saveRequestCollection({ collectionId: WINTER })).toBe(WINTER);
+    expect(saveRequestCollection({ collectionId: null })).toBeNull();
   });
 
   it("le toucher enregistre une publication qui ne l'est pas, et ouvre les choix d'une publication enregistrée (le même chemin sur le site)", () => {
@@ -169,6 +196,14 @@ describe("la carte d'une publication", () => {
     // L'auteur n'apprend rien : aucun compteur d'enregistrements n'est affiché.
     expect(card).not.toMatch(/saveCount|savedCount/);
   });
+
+  it("le signet suit la publication relue (même carte, fil relu), jamais pendant une demande ; un simple toucher n'envoie aucune collection", () => {
+    expect(card).toContain('if (!saveBusy) dispatchSave({ type: "synced", state: saveStateOf(post) });');
+    expect(card).toContain("}, [post.viewerHasSaved, post.viewerSavedCollectionId]);");
+    expect(card).toContain("await savePost(post.id, saveRequestCollection(action), { firstSave: !before.saved });");
+    // L'ancien calcul renvoyait null depuis un signet en retard, et sortait la publication de sa collection.
+    expect(card).not.toContain("before.saved ? before.collectionId : null");
+  });
 });
 
 describe("la liste « Publications enregistrées »", () => {
@@ -233,14 +268,18 @@ describe("appels au serveur", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("enregistrer : PUT avec la collection (null : sans) ; l'événement « post_saved » seulement au premier enregistrement, sans rien d'autre", async () => {
+  it("enregistrer : PUT avec la collection (null : sans ; absente pour un simple toucher) ; l'événement « post_saved » seulement au premier enregistrement, sans rien d'autre", async () => {
     const { savePost } = await import("../src/lib/api");
     const demandes = serveur({ saved: true, collectionId: SUMMER });
     expect(await savePost(POST, SUMMER, { firstSave: true })).toEqual({ saved: true, collectionId: SUMMER });
     await savePost(POST, null);
+    await savePost(POST);
+    await savePost(POST, undefined);
     expect(demandes).toEqual([
       { method: "PUT", chemin: `/api/posts/${POST}/save`, corps: { collectionId: SUMMER } },
       { method: "PUT", chemin: `/api/posts/${POST}/save`, corps: { collectionId: null } },
+      { method: "PUT", chemin: `/api/posts/${POST}/save`, corps: {} },
+      { method: "PUT", chemin: `/api/posts/${POST}/save`, corps: {} },
     ]);
     expect(tracked).toEqual(["post_saved"]);
     expect(ANALYTICS_EVENTS.post_saved).toEqual({});

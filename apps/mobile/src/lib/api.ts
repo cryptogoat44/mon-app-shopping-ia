@@ -1096,9 +1096,11 @@ export async function reactToPost(postId: string): Promise<ReactToPostResponse> 
 // ---- Publications enregistrées (migration 0048) ----
 
 /** Enregistrer une publication, ou la ranger ailleurs : `collectionId`, une de
- * ses collections ; null : sans collection. Visible de vous seul. */
-export async function savePost(postId: string, collectionId: string | null = null, options: { firstSave?: boolean } = {}): Promise<SavePostResponse> {
-  const body: SavePostRequest = { collectionId };
+ * ses collections ; null : sans collection ; absent (simple toucher du
+ * signet) : le serveur garde sa collection si elle est déjà enregistrée.
+ * Visible de vous seul. */
+export async function savePost(postId: string, collectionId?: string | null, options: { firstSave?: boolean } = {}): Promise<SavePostResponse> {
+  const body: SavePostRequest = collectionId === undefined ? {} : { collectionId };
   const response = await authorizedFetch(`/api/posts/${encodeURIComponent(postId)}/save`, { method: "PUT", body: JSON.stringify(body) });
   const result: SavePostResponse = await response.json();
   if (options.firstSave) track("post_saved");

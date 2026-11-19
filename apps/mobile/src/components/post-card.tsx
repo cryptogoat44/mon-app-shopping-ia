@@ -1,4 +1,4 @@
-import { useReducer, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { Animated, Pressable, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
@@ -25,7 +25,7 @@ import { TaggedPeopleSheet } from "@/components/tagged-people-sheet";
 import { peopleShown, photosOf } from "@/lib/post-extras";
 import { useAuth } from "@/lib/auth-context";
 import { SavePostSheet } from "@/components/save-post-sheet";
-import { bookmarkA11y, bookmarkShown, bookmarkTapAction, filedMessage, saveReducer, saveStateOf, type SaveState } from "@/lib/saved-posts";
+import { bookmarkA11y, bookmarkShown, bookmarkTapAction, filedMessage, saveReducer, saveRequestCollection, saveStateOf, type SaveState } from "@/lib/saved-posts";
 
 const DOUBLE_TAP_DELAY_MS = 300;
 
@@ -84,6 +84,13 @@ export function PostCard({
   const [saveState, dispatchSave] = useReducer(saveReducer, post, saveStateOf);
   const [saveSheetOpen, setSaveSheetOpen] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
+  // La carte reste à l'écran quand le fil se relit (même clé) : le signet se
+  // recale sur ce que le serveur dit maintenant (enregistrée ou rangée sur un
+  // autre écran), sauf pendant une demande, dont la réponse fait foi.
+  useEffect(() => {
+    if (!saveBusy) dispatchSave({ type: "synced", state: saveStateOf(post) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.viewerHasSaved, post.viewerSavedCollectionId]);
 
   /** Trop de « j'aime » en peu de temps (429) : le serveur le dit, l'app le répète. */
   function tooManyLikes(e: unknown) {
@@ -139,8 +146,7 @@ export function PostCard({
         await unsavePost(post.id);
         showToast(t.savedPosts.removed);
       } else {
-        const collectionId = action === "save" ? (before.saved ? before.collectionId : null) : action.collectionId;
-        const result = await savePost(post.id, collectionId, { firstSave: !before.saved });
+        const result = await savePost(post.id, saveRequestCollection(action), { firstSave: !before.saved });
         dispatchSave({ type: "confirmed", state: { saved: true, collectionId: result.collectionId } });
         showToast(action === "save" ? t.savedPosts.saved : filedMessage(result.collectionId, collections));
       }
