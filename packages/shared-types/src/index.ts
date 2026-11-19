@@ -35,6 +35,8 @@ export interface Profile {
   mentionsFrom?: MentionsFrom;
   /** Le lien affiché sous votre bio, ou null (migration 0049) ; absent tant que la migration manque : l'app cache alors le champ. */
   linkUrl?: string | null;
+  /** « Proposer mon compte aux autres membres » (migration 0050) ; absent tant que la migration manque : l'app cache alors le réglage. */
+  discoverable?: boolean;
 }
 
 /** Réglage « Qui peut m'envoyer des pièces » : les comptes que je suis (par
@@ -2605,3 +2607,49 @@ export function checkBioLink(input: string): BioLinkCheck {
   if (!stored.startsWith("https://") || BIO_LINK_FORBIDDEN.test(stored)) return invalid;
   return { ok: true, url: stored };
 }
+
+// ---- Fil « Pour vous » et suggestions de comptes (lot « découverte », migration 0050) ----
+
+/** « Pour vous » : les publications publiques des FOR_YOU_DAYS derniers jours. */
+export const FOR_YOU_DAYS = 14;
+/** Publications lues, les plus récentes d'abord, avant le classement (le même pour tous). */
+export const FOR_YOU_CANDIDATES = 200;
+/** Le classement est gardé en mémoire par le serveur, puis refait. */
+export const FOR_YOU_CACHE_MS = 5 * 60_000;
+/** Publications proposées à un membre, au plus (après ses propres exclusions). */
+export const FOR_YOU_MAX = 60;
+/** Publications d'un même auteur dans la liste d'un membre, au plus. */
+export const FOR_YOU_PER_AUTHOR = 2;
+/** Publications par page de GET /api/feed/for-you. */
+export const FOR_YOU_PAGE_SIZE = 15;
+/** Les seules positions acceptées (paramètre `offset`) : une page de la liste de FOR_YOU_MAX. */
+export const FOR_YOU_OFFSETS = [0, 15, 30, 45] as const;
+/** Un compte plus jeune que cela n'est proposé à personne qui ne le suit pas. */
+export const FOR_YOU_MIN_ACCOUNT_AGE_HOURS = 24;
+/** Comptes suggérés par GET /api/users/suggestions, au plus. */
+export const SUGGESTIONS_MAX = 10;
+
+/** GET /api/feed/for-you?offset= : une page de la liste du membre. Une page
+ * peut être plus courte que FOR_YOU_PAGE_SIZE, ou vide, alors qu'il en reste
+ * (une publication devenue invisible depuis le classement est retirée) : seul
+ * `nextOffset` dit s'il y a une suite. Une publication peut revenir d'une page
+ * à l'autre si le classement a été refait entre-temps : l'app retire les doublons. */
+export interface ForYouPage {
+  posts: Post[];
+  nextOffset: number | null;
+}
+
+/** GET /api/users/suggestions : les comptes à découvrir (SUGGESTIONS_MAX au plus). */
+export interface SuggestionsResponse {
+  members: MemberRow[];
+}
+
+/** PUT /api/me/discoverable. */
+export interface UpdateDiscoverableRequest {
+  discoverable: boolean;
+}
+
+/** 404 : le réglage « Proposer mon compte aux autres membres » n'est pas encore disponible (migration 0050 absente). */
+export const DISCOVERY_SETTING_UNAVAILABLE_ERROR = "discovery_setting_unavailable";
+/** 429 : trop de pages de « Pour vous » lues en une heure. */
+export const FOR_YOU_LIMIT_ERROR = "for_you_limit";

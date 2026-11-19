@@ -322,6 +322,9 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Le lien est trop long (200 caractères maximum).": "The link is too long (200 characters maximum).",
   "Vous avez changé de lien trop souvent. Réessayez demain.": "You've changed your link too often. Please try again tomorrow.",
   "Épinglage invalide.": "Invalid pin request.",
+  // Fil « Pour vous » et suggestions de comptes (lot « découverte », migration 0050).
+  "Le réglage « Proposer mon compte aux autres membres » n'est pas encore disponible.": "The setting “Suggest my account to other members” isn't available yet.",
+  "Trop de pages « Pour vous » en peu de temps. Réessayez dans un moment.": "Too many “For you” pages in a short time. Please try again in a moment.",
 };
 
 /** Message dans la langue voulue. Un message inconnu (par exemple un texte

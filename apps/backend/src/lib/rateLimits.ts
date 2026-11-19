@@ -388,6 +388,17 @@ export const RATE_LIMITS = {
     error: "profile_link_limit",
     message: "Vous avez changé de lien trop souvent. Réessayez demain.",
   },
+
+  // Pages du fil « Pour vous » (lot « découverte », migration 0050) : une page
+  // relit quelques lignes par auteur du classement commun. 120 par heure
+  // laisse 30 visites complètes (4 pages chacune), et arrête un script qui
+  // relirait le fil en boucle.
+  forYou: {
+    max: 120,
+    windowMs: HOUR,
+    error: "for_you_limit",
+    message: "Trop de pages « Pour vous » en peu de temps. Réessayez dans un moment.",
+  },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

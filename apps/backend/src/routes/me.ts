@@ -31,6 +31,7 @@ import { emptyUserFolder, extractOwnedStoragePath, removeOwnedFiles } from "../l
 import { AVATAR_BUCKET } from "../lib/profileModeration.js";
 import { PROFILE_LINK_UNAVAILABLE, profileExtrasReady, profileExtrasShown } from "../lib/profileExtras.js";
 import { LINK_INVALID, LINK_TOO_LONG, bioLinkProblem, bioLinkTexts } from "../lib/bioLink.js";
+import { DISCOVERY_SETTING_UNAVAILABLE, discoveryReady, discoveryShown } from "../lib/forYou.js";
 import { RATE_LIMITS } from "../lib/rateLimits.js";
 import { consumeRateLimit } from "../plugins/rateLimit.js";
 
@@ -69,6 +70,7 @@ const updatePieceSendsFromSchema = z.object({ pieceSendsFrom: z.enum(PIECE_SENDS
 const updateMessagesFromSchema = z.object({ messagesFrom: z.enum(MESSAGES_FROM) });
 const updatePrivateAccountSchema = z.object({ isPrivate: z.boolean() });
 const updateMentionsFromSchema = z.object({ mentionsFrom: z.enum(MENTIONS_FROM) });
+const updateDiscoverableSchema = z.object({ discoverable: z.boolean() });
 
 // Ligne brute de la table `profiles` (colonnes en snake_case, cf. schema.sql), relue sans lui faire confiance.
 const profileRowSchema = z.object({
@@ -89,6 +91,8 @@ const profileRowSchema = z.object({
   mentions_from: z.enum(MENTIONS_FROM).default(DEFAULT_MENTIONS_FROM),
   // Lien en bio (migration 0049) ; absent tant que la colonne n'existe pas.
   link_url: z.string().nullable().optional(),
+  // « Proposer mon compte aux autres membres » (migration 0050) ; proposé tant que la colonne n'existe pas.
+  discoverable: z.boolean().optional(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -156,8 +160,17 @@ async function mentionsSettingShown(fastify: FastifyInstance): Promise<boolean> 
 }
 
 /** Profil renvoyé à l'app ; null si la ligne lue n'a pas la forme attendue.
- * `withLink` : la base a la migration 0049 (sinon, pas de `linkUrl` : l'app cache le champ). */
-function toProfile(row: unknown, counts: ProfileCounts, admin: boolean, privateAccount: PrivateAccountInfo | null, withMentions: boolean, withLink: boolean): Profile | null {
+ * `withLink` : la base a la migration 0049 (sinon, pas de `linkUrl` : l'app cache le champ).
+ * `withDiscovery` : la base a la migration 0050 (sinon, pas de `discoverable` : l'app cache le réglage). */
+function toProfile(
+  row: unknown,
+  counts: ProfileCounts,
+  admin: boolean,
+  privateAccount: PrivateAccountInfo | null,
+  withMentions: boolean,
+  withLink: boolean,
+  withDiscovery: boolean
+): Profile | null {
   const parsed = profileRowSchema.safeParse(row);
   if (!parsed.success) return null;
   const profile = parsed.data;
@@ -178,6 +191,7 @@ function toProfile(row: unknown, counts: ProfileCounts, admin: boolean, privateA
     ...(privateAccount ? { isPrivate: profile.is_private, followRequestsCount: privateAccount.followRequestsCount } : {}),
     ...(withMentions ? { mentionsFrom: profile.mentions_from } : {}),
     ...(withLink ? { linkUrl: profile.link_url ?? null } : {}),
+    ...(withDiscovery ? { discoverable: profile.discoverable !== false } : {}),
   };
 }
 
@@ -228,7 +242,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: "profile_not_found", message: "Profil introuvable." });
     }
 
-    const profile = toProfile(data, counts, admin, privateAccount, await mentionsSettingShown(fastify), await profileExtrasShown(fastify));
+    const profile = toProfile(data, counts, admin, privateAccount, await mentionsSettingShown(fastify), await profileExtrasShown(fastify), await discoveryShown(fastify));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -331,7 +345,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       if (cleanup.failed > 0) request.log.warn({ bucket: AVATAR_BUCKET, failed: cleanup.failed }, "Ancienne photo de profil restée dans le stockage");
     }
 
-    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify), await profileExtrasShown(fastify));
+    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify), await profileExtrasShown(fastify), await discoveryShown(fastify));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -366,7 +380,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
 
-    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify), await profileExtrasShown(fastify));
+    const profile = toProfile(updated, await fetchFollowCounts(fastify, userId), admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify), await profileExtrasShown(fastify), await discoveryShown(fastify));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -441,7 +455,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
     // Un profil qu'on vient de compléter n'a par construction encore
     // aucun abonné, abonnement ni publication — pas besoin de requêter les
     // compteurs ici.
-    const profile = toProfile(data, { followersCount: 0, followingCount: 0, postsCount: 0 }, admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify), await profileExtrasShown(fastify));
+    const profile = toProfile(data, { followersCount: 0, followingCount: 0, postsCount: 0 }, admin, await readPrivateAccountInfo(fastify, userId), await mentionsSettingShown(fastify), await profileExtrasShown(fastify), await discoveryShown(fastify));
     if (!profile) {
       request.log.error("Profil illisible");
       return reply.code(500).send(PROFILE_UNREADABLE);
@@ -500,6 +514,27 @@ export default async function meRoutes(fastify: FastifyInstance) {
       .eq("id", request.user!.id);
     if (error) {
       request.log.error({ error }, "Échec de mise à jour du réglage des mentions");
+      return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
+    }
+    return reply.code(204).send();
+  });
+
+  // « Proposer mon compte aux autres membres » (lot « découverte », migration
+  // 0050) : allumé au départ. Éteint, ni les publications publiques ni le
+  // compte ne sont proposés aux membres qui ne vous suivent pas (« Pour vous »,
+  // suggestions) ; vos abonnés et les visiteurs de votre profil les voient
+  // comme avant. Un réglage de confidentialité : modifiable même par un compte
+  // suspendu. Sans la migration : indisponible.
+  fastify.put("/api/me/discoverable", { preHandler: fastify.requireAuth }, async (request, reply) => {
+    if (!(await discoveryReady(fastify))) return reply.code(404).send(DISCOVERY_SETTING_UNAVAILABLE);
+    const body = parseInput(updateDiscoverableSchema, request.body, reply, { error: "invalid_body", message: "Réglage invalide." });
+    if (!body) return;
+    const { error } = await fastify.supabaseAdmin
+      .from("profiles")
+      .update({ discoverable: body.discoverable, updated_at: new Date().toISOString() })
+      .eq("id", request.user!.id);
+    if (error) {
+      request.log.error({ error }, "Échec de mise à jour du réglage « Proposer mon compte »");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
     return reply.code(204).send();

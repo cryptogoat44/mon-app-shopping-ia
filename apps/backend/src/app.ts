@@ -30,6 +30,7 @@ import appVersionRoutes from "./routes/appVersion.js";
 import conversationsRoutes from "./routes/conversations.js";
 import collectionsRoutes from "./routes/collections.js";
 import savedPostsRoutes from "./routes/savedPosts.js";
+import forYouRoutes from "./routes/forYou.js";
 import pushTokensRoutes from "./routes/pushTokens.js";
 import wishAlertsRoutes from "./routes/wishAlerts.js";
 import tryonRoutes from "./routes/tryon.js";
@@ -185,6 +186,7 @@ export async function buildApp(options: { logger?: LoggerOption } = {}): Promise
   await fastify.register(conversationsRoutes);
   await fastify.register(collectionsRoutes);
   await fastify.register(savedPostsRoutes);
+  await fastify.register(forYouRoutes);
   await fastify.register(pushTokensRoutes);
   await fastify.register(wishAlertsRoutes);
   // Essayage virtuel photo (lot « essayage virtuel »), éteint par défaut :
