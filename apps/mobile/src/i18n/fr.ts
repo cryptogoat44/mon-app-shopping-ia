@@ -1395,7 +1395,7 @@ export const fr = {
     moderationRestoredCollection: "Une de vos collections n'est plus masquée par la modération.",
     moderationImageRemovedCollection: "L'image d'une envie de votre collection a été retirée par la modération. Vos amis voient l'envie sans son image.",
     // Lot « conformité Apple » (migration 0037) : la bio ou la photo du profil.
-    moderationBioRemoved: "Votre bio a été retirée par la modération.",
+    moderationBioRemoved: "Votre bio a été retirée par la modération, avec le lien de votre profil s'il y en avait un.",
     moderationAvatarRemoved: "Votre photo de profil a été retirée par la modération : son fichier est effacé.",
     moderationOther: "Une décision de la modération vous concerne.",
     moderationReason: (reason: string) => `Motif : ${reason}`,

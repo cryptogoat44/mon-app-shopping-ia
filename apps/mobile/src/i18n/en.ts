@@ -1291,7 +1291,7 @@ export const en: Catalog = {
     moderationHiddenCollection: "One of your collections was hidden by moderation: your friends can no longer see it.",
     moderationRestoredCollection: "One of your collections is no longer hidden by moderation.",
     moderationImageRemovedCollection: "The image of a wish in your collection was removed by moderation. Your friends see the wish without its image.",
-    moderationBioRemoved: "Your bio was removed by moderation.",
+    moderationBioRemoved: "Your bio was removed by moderation, along with your profile link if you had one.",
     moderationAvatarRemoved: "Your profile photo was removed by moderation: its file has been deleted.",
     moderationOther: "A moderation decision concerns you.",
     moderationReason: (reason: string) => `Reason: ${reason}`,

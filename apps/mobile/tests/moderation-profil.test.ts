@@ -23,7 +23,7 @@ const commentPreview: ModerationPreview = { kind: "comment", author, body: "Un c
 describe("ce que la personne concernée apprend", () => {
   it("bio retirée, photo retirée : la décision, le motif choisi et la précision, jamais qui l'a prise", () => {
     expect(moderationNoticeLines({ action: "remove_bio", targetType: "user", reason: "harassment", note: "Propos visant une personne." })).toEqual([
-      "Votre bio a été retirée par la modération.",
+      "Votre bio a été retirée par la modération, avec le lien de votre profil s'il y en avait un.",
       "Motif : Harcèlement",
       "Précision : « Propos visant une personne. »",
     ]);
@@ -35,7 +35,7 @@ describe("ce que la personne concernée apprend", () => {
 
   it("en anglais", () => {
     setActiveLocale("en");
-    expect(moderationNoticeLines({ action: "remove_bio", targetType: "user", reason: "spam", note: null })[0]).toBe("Your bio was removed by moderation.");
+    expect(moderationNoticeLines({ action: "remove_bio", targetType: "user", reason: "spam", note: null })[0]).toBe("Your bio was removed by moderation, along with your profile link if you had one.");
     expect(moderationNoticeLines({ action: "remove_avatar", targetType: "user", reason: "spam", note: null })[0]).toBe(
       "Your profile photo was removed by moderation: its file has been deleted."
     );
