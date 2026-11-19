@@ -166,11 +166,13 @@ export default function NotificationsScreen() {
   // Lot « découverte » (migration 0051) : la première fois que l'onglet montre
   // une activité, la feuille des notifications d'activité est proposée une fois
   // (iPhone seulement, si le serveur les propose et que rien n'a été répondu).
+  // Relancé aussi quand l'état du serveur arrive après les notifications.
   const activityPushOffer = usePushOffer("activity");
   const offerActivityPush = activityPushOffer.offer;
+  const activityPushOn = useMessagesStatus().activityPush === true;
   useEffect(() => {
-    if (notifications && showsActivity(notifications)) offerActivityPush();
-  }, [notifications, offerActivityPush]);
+    if (activityPushOn && notifications && showsActivity(notifications)) offerActivityPush();
+  }, [activityPushOn, notifications, offerActivityPush]);
 
   useFocusEffect(
     useCallback(() => {

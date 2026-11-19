@@ -459,7 +459,9 @@ describe("notifications d'activité : quand les proposer", () => {
     expect(showsActivity([])).toBe(false);
     const screen = read("app/(app)/(tabs)/activite.tsx");
     expect(screen).toContain('const activityPushOffer = usePushOffer("activity");');
-    expect(screen).toContain("if (notifications && showsActivity(notifications)) offerActivityPush();");
+    expect(screen).toContain("const activityPushOn = useMessagesStatus().activityPush === true;");
+    expect(screen).toContain("if (activityPushOn && notifications && showsActivity(notifications)) offerActivityPush();");
+    expect(screen).toContain("}, [activityPushOn, notifications, offerActivityPush]);");
     expect(screen).toContain("{activityPushOffer.sheet}");
     const sheet = read("components/push-offer-sheet.tsx");
     const offer = sheet.slice(sheet.indexOf("export function usePushOffer("));

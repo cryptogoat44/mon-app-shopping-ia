@@ -158,7 +158,7 @@ export function usePushOffer(kind: "messages" | "activity" = "messages"): { offe
   const [visible, setVisible] = useState(false);
   const offered = useRef(false);
 
-  // Stable (ne dépend que du compte) : l'écran peut l'appeler depuis ses relectures.
+  // Stable (ne dépend que du compte et de la sorte) : l'écran peut l'appeler depuis ses relectures.
   const offer = useCallback(() => {
     const current = statusRef.current;
     if (offered.current || !userId || Platform.OS !== "ios") return;
