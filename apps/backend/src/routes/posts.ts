@@ -12,6 +12,7 @@ import { deleteOwnedStorageFile, extractOwnedStoragePath } from "../lib/storage.
 import { CONTENT_NOT_ALLOWED, containsBannedWords } from "../lib/contentFilter.js";
 import { notInFilter, reportedIdsFor } from "../lib/reportedByViewer.js";
 import { withoutSuspendedFaces } from "../lib/profileModeration.js";
+import { fetchPostCounts } from "../lib/postCounts.js";
 
 // Une publication ne peut pas devenir une liste sans fin de tags — reste
 // large pour un usage légitime (plusieurs pièces sur une même tenue) sans
@@ -222,36 +223,25 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
   const vaultItemIds = [...new Set(rows.map((r) => r.vault_item_id).filter((id): id is string => !!id))];
   const postIds = rows.map((r) => r.id);
 
-  const [{ data: storedProfiles }, { data: vaultItems }, { data: reactions }, { data: tagRows }, { data: commentRows }] = await Promise.all([
+  // Compteurs (« j'aime », commentaires, « vous avez aimé ») : lib/postCounts.ts,
+  // justes au-delà de 1 000 lignes (lot « corrections en ligne »).
+  const [{ data: storedProfiles }, { data: vaultItems }, counts, { data: tagRows }] = await Promise.all([
     fastify.supabaseAdmin.from("profiles").select("id, username, display_name, avatar_url").in("id", authorIds),
     vaultItemIds.length > 0
       ? fastify.supabaseAdmin.from("vault_items").select("id, title, verified, image_url, product_match_id").in("id", vaultItemIds)
       : Promise.resolve({ data: [] as VaultItemRow[] }),
-    fastify.supabaseAdmin.from("post_reactions").select("post_id, user_id").in("post_id", postIds),
+    fetchPostCounts(fastify, postIds, viewerId),
     fastify.supabaseAdmin
       .from("post_tagged_pieces")
       .select("id, post_id, vault_item_id, product_match_id, position")
       .in("post_id", postIds)
       .order("position", { ascending: true }),
-    fastify.supabaseAdmin.from("comments").select("post_id").in("post_id", postIds).is("hidden_at", null),
   ]);
-
-  const commentCountByPost = new Map<string, number>();
-  for (const c of (commentRows as { post_id: string }[]) ?? []) {
-    commentCountByPost.set(c.post_id, (commentCountByPost.get(c.post_id) ?? 0) + 1);
-  }
 
   // Lot « conformité Apple » : la photo d'un auteur suspendu n'est plus montrée aux autres.
   const profiles = await withoutSuspendedFaces(fastify, (storedProfiles as ProfileRow[]) ?? [], viewerId);
   const profileById = new Map(profiles.map((p) => [p.id, p]));
   const vaultItemById = new Map(((vaultItems as VaultItemRow[]) ?? []).map((v) => [v.id, v]));
-
-  const reactionCountByPost = new Map<string, number>();
-  const viewerReactedPosts = new Set<string>();
-  for (const r of (reactions as { post_id: string; user_id: string }[]) ?? []) {
-    reactionCountByPost.set(r.post_id, (reactionCountByPost.get(r.post_id) ?? 0) + 1);
-    if (r.user_id === viewerId) viewerReactedPosts.add(r.post_id);
-  }
 
   const tags = (tagRows as PostTaggedPieceRow[]) ?? [];
   const taggedVaultItemIds = [...new Set(tags.map((t) => t.vault_item_id).filter((id): id is string => !!id))];
@@ -353,9 +343,9 @@ export async function hydratePosts(fastify: FastifyInstance, rows: PostRow[], vi
       vaultItem: vaultItem ? { id: vaultItem.id, title: vaultItem.title, verified: vaultItem.verified } : null,
       wish: row.type === "wish" && row.wishlist_item_id ? (wishByItem.get(row.wishlist_item_id) ?? null) : null,
       taggedPieces: taggedPiecesByPost.get(row.id) ?? [],
-      reactionCount: reactionCountByPost.get(row.id) ?? 0,
-      viewerHasReacted: viewerReactedPosts.has(row.id),
-      commentCount: commentCountByPost.get(row.id) ?? 0,
+      reactionCount: counts.reactionCount.get(row.id) ?? 0,
+      viewerHasReacted: counts.viewerReacted.has(row.id),
+      commentCount: counts.commentCount.get(row.id) ?? 0,
     };
   });
 }
