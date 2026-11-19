@@ -149,13 +149,16 @@ async function canReportComment(fastify: FastifyInstance, reporterId: string, co
   return !(await isBlockedEitherWay(fastify, reporterId, comment.user_id));
 }
 
-/** Le compte a une page de profil (nom d'utilisateur choisi : la règle de
- * GET /api/users/:userId). Un blocage, dans un sens ou dans l'autre,
- * n'empêche PAS de le signaler : l'app permet de bloquer puis de signaler, et
- * une personne bloquée par celui qui la harcèle doit pouvoir le signaler. Un
- * profil ne se masque jamais automatiquement (lib/autoHide.ts). */
+/** Le compte existe (une ligne `profiles`), même sans nom d'utilisateur : le
+ * serveur n'empêche pas un compte sans nom d'envoyer une invitation à écrire
+ * (POST /api/messages ne vérifie que le destinataire), et la personne qui la
+ * reçoit doit pouvoir signaler ce compte depuis « Bloquer » ou le menu de la
+ * conversation. Un blocage, dans un sens ou dans l'autre, n'empêche PAS de le
+ * signaler : l'app permet de bloquer puis de signaler, et une personne bloquée
+ * par celui qui la harcèle doit pouvoir le signaler. Un profil ne se masque
+ * jamais automatiquement (lib/autoHide.ts). */
 async function canReportUser(fastify: FastifyInstance, userId: string): Promise<boolean> {
-  const { data, error } = await fastify.supabaseAdmin.from("profiles").select("username").eq("id", userId).maybeSingle();
+  const { data, error } = await fastify.supabaseAdmin.from("profiles").select("id").eq("id", userId).maybeSingle();
   if (error) throw new DatabaseReadError("Lecture d'un profil impossible");
-  return Boolean((data as { username: string | null } | null)?.username);
+  return data !== null;
 }

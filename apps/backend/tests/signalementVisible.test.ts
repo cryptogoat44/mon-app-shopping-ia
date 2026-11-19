@@ -18,10 +18,11 @@ const REPORTER = "b0000000-0000-4000-8000-000000000002";
 const FOLLOWER = "c0000000-0000-4000-8000-000000000003"; // suit l'autrice
 const BLOCKER = "d0000000-0000-4000-8000-000000000004"; // a bloqué REPORTER
 const BLOCKED = "d1000000-0000-4000-8000-000000000005"; // bloqué par REPORTER
-const NO_NAME = "e0000000-0000-4000-8000-000000000006"; // profil pas encore complété
+const NO_NAME = "e0000000-0000-4000-8000-000000000006"; // profil pas encore complété (sans nom d'utilisateur)
 const THIRD = "f0000000-0000-4000-8000-000000000007";
 const FOURTH = "f1000000-0000-4000-8000-000000000008";
 const UNKNOWN = "99999999-9999-4999-8999-999999999999";
+const GONE = "98888888-8888-4888-8888-888888888888"; // aucun profil
 
 const id = (prefix: string, n: number) => `${prefix}0000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const POST = {
@@ -183,10 +184,24 @@ describe("signaler un commentaire", () => {
 });
 
 describe("signaler un compte", () => {
-  it("refusé si le profil n'existe pas ou n'a pas encore de page (sans nom d'utilisateur)", async () => {
+  it("refusé seulement si le profil n'existe pas", async () => {
     const fake = seeded();
     const target = await reportsApp(fake);
-    await expectRefused(fake, target, REPORTER, "user", NO_NAME);
+    await expectRefused(fake, target, REPORTER, "user", GONE);
+  });
+
+  it("permis pour un compte sans nom d'utilisateur : il peut envoyer une invitation à écrire, on doit pouvoir le signaler", async () => {
+    const fake = seeded();
+    const target = await reportsApp(fake);
+    await expectAccepted(fake, target, REPORTER, "user", NO_NAME);
+    expect(fake.rpcCalls).toEqual([]);
+  });
+
+  it("lecture du profil impossible : une erreur, rien d'enregistré (jamais « introuvable » à tort)", async () => {
+    const fake = seeded({ missing: ["profiles"] });
+    const target = await reportsApp(fake);
+    expect((await report(target, REPORTER, "user", NO_NAME)).statusCode).toBe(500);
+    expect(fake.table("reports")).toEqual([]);
   });
 
   it("permis pour un compte existant, même en blocage : bloquer puis signaler reste possible, et l'on peut signaler qui vous a bloqué", async () => {
