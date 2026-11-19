@@ -146,3 +146,21 @@ export async function findShownComment(fastify: FastifyInstance, log: FastifyBas
   }
   return { comment, rootId: root.id, rootAuthorId: root.user_id, post, blocked, reported };
 }
+
+/** Signaler une réponse (routes/reports.ts) : son commentaire d'origine
+ * est-il montré à ce lecteur ? La règle de findShownComment pour le
+ * commentaire d'origine : il existe, sous la même publication, n'est pas
+ * masqué, et son auteur n'est pas en blocage avec le lecteur. Sans la partie
+ * « signalé par lui » : signaler deux fois, ou signaler une réponse après son
+ * commentaire d'origine, reste permis comme avant. Vrai pour tout ce qui n'est
+ * pas une réponse (commentaire d'origine, identifiant inconnu, base sans 0046
+ * où tout est à plat) : le commentaire lui-même se vérifie à part. Lecture
+ * impossible : une erreur, jamais « montré ». */
+export async function replyRootShownTo(fastify: FastifyInstance, viewerId: string, commentId: string): Promise<boolean> {
+  if (!(await commentThreadsReady(fastify))) return true;
+  const comment = await readThreadComment(fastify, commentId);
+  if (comment === null || comment.parent_id === null) return true;
+  const root = await readThreadComment(fastify, comment.parent_id);
+  if (root === null || root.post_id !== comment.post_id || root.hidden_at !== null) return false;
+  return !(await fetchBlockedUserIds(fastify, viewerId)).has(root.user_id);
+}
