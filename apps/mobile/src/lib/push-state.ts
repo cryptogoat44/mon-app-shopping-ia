@@ -206,6 +206,16 @@ export function activityRegistration(decisions: ActivityDecisions, activityActiv
   return { keep: activityActive && ACTIVITY_PUSH_KINDS.some((kind) => kinds[kind]), kinds };
 }
 
+/** Un interrupteur d'activité dont l'enregistrement a échoué, relu sur
+ * l'iPhone : revient-il en arrière ? Alors seulement le message « n'a pas pu
+ * être enregistré ». Couper hors réseau garde « off » sur l'iPhone, et
+ * l'oubli de l'appareil, noté, attend le retour du réseau (push-forget.ts) :
+ * l'interrupteur reste coupé, sans message. Rien de relu : le message, par
+ * prudence. */
+export function switchRolledBack(wanted: boolean, saved: { decision: PushDecision | null; permission: PushPermission } | null): boolean {
+  return saved === null || pushSwitchValue(saved.decision, saved.permission) !== wanted;
+}
+
 /** Réponse d'iOS → autorisation. « Provisoire » (3) et « éphémère » (4)
  * permettent de recevoir : comptées comme accordées. */
 export function permissionFrom(response: { granted: boolean; status: string; ios?: { status?: number } | null }): PushPermission {

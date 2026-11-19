@@ -6,7 +6,7 @@ import { color, font, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { useAuth } from "@/lib/auth-context";
 import { disablePush, enablePush, loadActivityDecisions, pushPermission, pushSupported } from "@/lib/push";
-import { activityPushPossible, pushSwitchValue, type ActivityDecisions, type PushPermission } from "@/lib/push-state";
+import { activityPushPossible, pushSwitchValue, switchRolledBack, type ActivityDecisions, type PushPermission } from "@/lib/push-state";
 import { useMessagesStatus } from "@/lib/use-messages-status";
 import { useToast } from "@/lib/toast-context";
 import { themedStyles } from "@/theme/themed-styles";
@@ -21,7 +21,9 @@ type Device = { supported: boolean; decisions: ActivityDecisions; permission: Pu
 // build n'a pas le module. Allumer une sorte : si iOS n'a encore rien
 // demandé, sa fenêtre (seulement à ce geste, jamais au lancement). Couper :
 // le serveur ne l'envoie plus ; l'appareil est oublié s'il ne reçoit plus
-// rien. Un interrupteur qui n'a pas pu être enregistré revient en arrière,
+// rien. Hors réseau, couper reste fait : « off » est gardé sur l'iPhone et le
+// serveur l'apprend au retour du réseau (push-forget.ts), sans message. Un
+// interrupteur qui revient en arrière (rien n'a pu être enregistré) le dit,
 // avec un message. iOS les refuse : on dit où les autoriser.
 export function ActivityPushSetting() {
   const { session } = useAuth();
@@ -32,13 +34,16 @@ export function ActivityPushSetting() {
   // La sorte en cours d'enregistrement, et la valeur montrée pendant ce temps.
   const [pending, setPending] = useState<{ kind: ActivityPushKind; on: boolean } | null>(null);
 
-  const reload = useCallback(async () => {
-    if (Platform.OS !== "ios" || !userId) return;
+  const reload = useCallback(async (): Promise<Device | null> => {
+    if (Platform.OS !== "ios" || !userId) return null;
     try {
       const [supported, decisions, permission] = await Promise.all([pushSupported(), loadActivityDecisions(userId), pushPermission()]);
-      setDevice({ supported, decisions, permission });
+      const read: Device = { supported, decisions, permission };
+      setDevice(read);
+      return read;
     } catch {
       setDevice(null);
+      return null;
     }
   }, [userId]);
   useFocusEffect(
@@ -50,15 +55,18 @@ export function ActivityPushSetting() {
   async function toggle(kind: ActivityPushKind, on: boolean) {
     if (!userId || !device || pending) return;
     setPending({ kind, on });
+    let failed = false;
     try {
       if (!on) await disablePush(userId, kind);
       else if ((await enablePush(userId, kind)) !== "granted") showToast(t.activityPush.denied);
     } catch {
-      showToast(t.push.settingFailed);
+      failed = true;
     } finally {
       setPending(null);
       // Relu sur l'appareil : la valeur enregistrée, ou l'ancienne si rien n'a pu l'être.
-      await reload();
+      const saved = await reload();
+      // Le message seulement si l'interrupteur revient en arrière (couper hors réseau : « off » reste gardé).
+      if (failed && switchRolledBack(on, saved && { decision: saved.decisions[kind], permission: saved.permission })) showToast(t.push.settingFailed);
     }
   }
 

@@ -28,6 +28,7 @@ import {
   shouldRefreshToken,
   shouldShowBanner,
   showsActivity,
+  switchRolledBack,
   type ActivityDecisions,
   type ActivityPushContext,
   type PushContext,
@@ -586,7 +587,7 @@ describe("notifications d'activité : le réglage", () => {
 
   it("caché sur le site, sans le module natif, et tant que le serveur ne les propose pas", () => {
     expect(setting).toContain("if (!activityPushPossible({ platform: Platform.OS, status, supported: device?.supported ?? false })) return null;");
-    expect(setting).toContain('if (Platform.OS !== "ios" || !userId) return;');
+    expect(setting).toContain('if (Platform.OS !== "ios" || !userId) return null;');
   });
 
   it("un titre, une ligne d'explication, quatre interrupteurs nommés (VoiceOver), éteints tant que rien n'est accepté", () => {
@@ -600,16 +601,33 @@ describe("notifications d'activité : le réglage", () => {
     expect(pushSwitchValue("on", "denied")).toBe(false);
   });
 
-  it("allumer demande à iOS seulement à ce geste ; couper fait oublier la sorte ; un échec revient en arrière, avec un message", () => {
+  it("allumer demande à iOS seulement à ce geste ; couper fait oublier la sorte ; un échec qui revient en arrière le dit, avec un message", () => {
     const toggle = setting.slice(setting.indexOf("async function toggle("), setting.indexOf("if (!activityPushPossible("));
     expect(toggle).toContain("if (!on) await disablePush(userId, kind);");
     expect(toggle).toContain('else if ((await enablePush(userId, kind)) !== "granted") showToast(t.activityPush.denied);');
-    expect(toggle).toContain("showToast(t.push.settingFailed);");
+    expect(toggle).toContain("} catch {\n      failed = true;\n    }");
     expect(toggle).toContain("setPending(null);");
-    expect(toggle).toContain("await reload();");
+    expect(toggle).toContain("const saved = await reload();");
+    // Le message, une seule fois : seulement si l'interrupteur relu revient en arrière.
+    expect(toggle).toContain("if (failed && switchRolledBack(on, saved && { decision: saved.decisions[kind], permission: saved.permission })) showToast(t.push.settingFailed);");
+    expect(toggle.match(/showToast\(t\.push\.settingFailed\)/g)).toHaveLength(1);
     // iOS les refuse : on dit où les autoriser.
     expect(setting).toContain("{t.activityPush.denied}");
     expect(setting).toContain("Linking.openSettings()");
+  });
+
+  it("couper hors réseau : l'interrupteur reste coupé, sans message ; rien d'enregistré : il revient en arrière, avec un message", () => {
+    // Couper hors réseau : « off » est gardé sur l'iPhone, l'oubli attend le réseau (tests/push-hors-ligne.test.ts).
+    expect(switchRolledBack(false, { decision: "off", permission: "granted" })).toBe(false);
+    // Couper sans rien pouvoir garder sur l'iPhone : l'interrupteur se rallume, le message le dit.
+    expect(switchRolledBack(false, { decision: "on", permission: "granted" })).toBe(true);
+    // Allumer qui échoue (réseau, serveur) : rien n'est gardé, l'interrupteur se recoupe, avec le message.
+    expect(switchRolledBack(true, { decision: null, permission: "granted" })).toBe(true);
+    expect(switchRolledBack(true, { decision: "off", permission: "granted" })).toBe(true);
+    expect(switchRolledBack(true, { decision: "on", permission: "granted" })).toBe(false);
+    // Rien de relu sur l'iPhone : le message, par prudence.
+    expect(switchRolledBack(false, null)).toBe(true);
+    expect(switchRolledBack(true, null)).toBe(true);
   });
 });
 
