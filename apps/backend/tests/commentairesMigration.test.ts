@@ -133,8 +133,8 @@ describe("0046 : retour en arrière, vérification, registre", () => {
     }
   });
 
-  it("le registre cite 0046 « à appliquer », son fichier de vérification, et ce qui se passe sans elle", () => {
-    expect(REGISTRY).toMatch(/\| 0046 \| Commentaires, suite[^|]*\| \*\*à appliquer\*\* \(après 0045/);
+  it("le registre cite 0046 appliquée en production le 20 novembre 2026, son fichier de vérification, et ce qui se passe sans elle", () => {
+    expect(REGISTRY).toMatch(/\| 0046 \| Commentaires, suite[^|]*\| appliquée en production \(après 0045/);
     expect(REGISTRY).toContain("`supabase/verifications/0046-verification.sql` (une ligne, sept `true`)");
     expect(REGISTRY).toContain("Sans 0046, les commentaires restent à plat comme avant");
   });

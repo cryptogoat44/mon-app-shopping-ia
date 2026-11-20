@@ -116,8 +116,8 @@ describe("0045 : retour en arrière, vérification, registre", () => {
     }
   });
 
-  it("le registre cite 0045 « à appliquer », son fichier de vérification, et ce qui se passe sans elle", () => {
-    expect(REGISTRY).toMatch(/\| 0045 \| Compte privé et demandes d'abonnement[^|]*\| \*\*à appliquer\*\* \(après 0024/);
+  it("le registre cite 0045 appliquée en production le 20 novembre 2026, son fichier de vérification, et ce qui se passe sans elle", () => {
+    expect(REGISTRY).toMatch(/\| 0045 \| Compte privé et demandes d'abonnement[^|]*\| appliquée en production \(après 0024/);
     expect(REGISTRY).toContain("`supabase/verifications/0045-verification.sql` (une ligne, six `true`)");
     expect(REGISTRY).toContain("Sans 0045, tous les comptes restent publics");
   });

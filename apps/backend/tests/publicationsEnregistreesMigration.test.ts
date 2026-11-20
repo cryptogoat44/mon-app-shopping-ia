@@ -116,8 +116,8 @@ describe("0048 : retour en arrière, vérification, registre", () => {
     expect(VERIFICATION).toContain("false | false | false | false");
   });
 
-  it("le registre cite 0048 « à appliquer », son fichier de vérification, et ce qui se passe sans elle", () => {
-    expect(REGISTRY).toMatch(/\| 0048 \| Publications enregistrées[^|]*\| \*\*à appliquer\*\* \(après 0033/);
+  it("le registre cite 0048 appliquée en production le 20 novembre 2026, son fichier de vérification, et ce qui se passe sans elle", () => {
+    expect(REGISTRY).toMatch(/\| 0048 \| Publications enregistrées[^|]*\| appliquée en production \(après 0033/);
     expect(REGISTRY).toContain("`supabase/verifications/0048-verification.sql` (une ligne, quatre `true`");
     expect(REGISTRY).toContain("Sans 0048, personne ne peut enregistrer de publication");
     // Les lignes du tableau restent dans l'ordre des numéros.

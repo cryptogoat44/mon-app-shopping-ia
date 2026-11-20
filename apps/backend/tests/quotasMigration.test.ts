@@ -177,7 +177,7 @@ describe("vérification et registre de 0053", () => {
   });
 
   it("le registre a sa ligne « à appliquer », ses fichiers, et ce que fait le serveur sans elle", () => {
-    expect(REGISTRY).toMatch(/\| 0053 \| Quotas par membre[^\n]*\| \*\*à appliquer\*\* \(sur spotto-dev-2 d'abord ; demande 0028 et 0029/);
+    expect(REGISTRY).toMatch(/\| 0053 \| Quotas par membre[^\n]*\| appliquée en production \(demande 0028 et 0029/);
     expect(REGISTRY).toContain("| 0053 | le fichier de la migration lui-même (**après 0029**) | `supabase/verifications/0053-verification.sql` (une ligne, six `true`)");
     expect(REGISTRY).toContain("Sans 0053, les recherches fonctionnent exactement comme avant");
     // Rangée après 0044 (les numéros 0045 à 0052 sont réservés aux lots sociaux).
