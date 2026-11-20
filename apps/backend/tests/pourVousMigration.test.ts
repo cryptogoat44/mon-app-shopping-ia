@@ -88,12 +88,12 @@ describe("0050 : retour en arrière, vérification, registre", () => {
     expect(VERIFICATION).toContain("Avant la migration (ou sans elle) : false | false | true, sans erreur");
   });
 
-  it("le registre cite 0050 « à appliquer », son fichier de vérification, et ce qui se passe sans elle", () => {
-    expect(REGISTRY).toMatch(/\| 0050 \| Fil « Pour vous » et suggestions de comptes[^|]*\| \*\*à appliquer\*\* \(après 0001/);
+  it("le registre cite 0050 appliquée en production le 20 novembre 2026, son fichier de vérification, et ce qui se passe sans elle", () => {
+    expect(REGISTRY).toMatch(/\| 0050 \| Fil « Pour vous » et suggestions de comptes[^|]*\| appliquée en production \(après 0001/);
     expect(REGISTRY).toContain("`supabase/verifications/0050-verification.sql` (une ligne, trois `true`");
     expect(REGISTRY).toContain("Sans 0050, le fil « Pour vous » et les suggestions de comptes sont cachés, comme le réglage « Proposer mon compte aux autres membres » : personne n'y est proposé sans pouvoir refuser");
     expect(REGISTRY).not.toContain("tous les comptes publics y sont proposés");
     expect(REGISTRY.indexOf("| 0049 | Épingles et lien en bio")).toBeLessThan(REGISTRY.indexOf("| 0050 | Fil « Pour vous »"));
-    expect(REGISTRY).toContain("État au 19 novembre 2026.");
+    expect(REGISTRY).toContain("État au 20 novembre 2026.");
   });
 });

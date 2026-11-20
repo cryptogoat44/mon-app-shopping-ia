@@ -167,6 +167,10 @@ function settings(values: Partial<Record<(typeof SETTINGS_KEYS)[number], unknown
 }
 
 beforeEach(() => {
+  // Le serveur calcule « minuit, heure de Paris » et « le 1er du mois » avec l'heure courante :
+  // on la fixe à NOW, l'heure de la fausse base, sinon ces attentes ne tiennent qu'un seul jour.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(NOW);
   resetMemberQuotasProbe();
   resetAlertsForTests();
   settings({ ...CAPS, SUBSCRIPTIONS_ENABLED: false, SUBSCRIBER_MONTHLY_SEARCH_CAP: undefined, SUBSCRIBER_RESERVE_PERCENT: undefined });
@@ -175,6 +179,7 @@ beforeEach(() => {
 afterEach(() => {
   Object.assign(env, saved);
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe("réglages : lecture tolérante, jamais un arrêt du serveur", () => {

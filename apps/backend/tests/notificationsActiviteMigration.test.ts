@@ -98,8 +98,8 @@ describe("0051 : retour en arrière, vérification, registre", () => {
     expect(VERIFICATION).toContain("Avant la migration (ou sans elle), sur une base qui a 0035 (déjà en\n-- production) : false | false | true, sans erreur");
   });
 
-  it("le registre cite 0051 « à appliquer » après 0036, son fichier de vérification, et ce qui se passe sans elle", () => {
-    expect(REGISTRY).toMatch(/\| 0051 \| Notifications d'activité sur le téléphone[^|]*éteintes au départ[^|]*\| \*\*à appliquer\*\* \(après 0036/);
+  it("le registre cite 0051 appliquée en production le 20 novembre 2026 après 0036, son fichier de vérification, et ce qui se passe sans elle", () => {
+    expect(REGISTRY).toMatch(/\| 0051 \| Notifications d'activité sur le téléphone[^|]*éteintes au départ[^|]*\| appliquée en production \(après 0036/);
     expect(REGISTRY).toContain("`supabase/verifications/0051-verification.sql` (une ligne, trois `true`");
     expect(REGISTRY).toContain(
       "Sans 0051, aucune notification d'activité (« j'aime », commentaires, abonnés, mentions) n'est envoyée, même avec `PUSH_ENABLED=true` : le serveur ignore ces réponses et l'app cache leurs quatre interrupteurs"

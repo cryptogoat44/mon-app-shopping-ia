@@ -122,8 +122,8 @@ describe("0047 : retour en arrière, vérification, registre", () => {
     expect(statements).toContain("case when to_regclass('public.post_media') is null or to_regclass('public.post_people_tags') is null then false else");
   });
 
-  it("le registre cite 0047 « à appliquer », son fichier de vérification, et ce qui se passe sans elle", () => {
-    expect(REGISTRY).toMatch(/\| 0047 \| Plusieurs photos par publication[^|]*\| \*\*à appliquer\*\* \(après 0046/);
+  it("le registre cite 0047 appliquée en production le 20 novembre 2026, son fichier de vérification, et ce qui se passe sans elle", () => {
+    expect(REGISTRY).toMatch(/\| 0047 \| Plusieurs photos par publication[^|]*\| appliquée en production \(après 0046/);
     expect(REGISTRY).toContain("`supabase/verifications/0047-verification.sql` (une ligne, cinq `true`)");
     expect(REGISTRY).toContain("Sans 0047, une publication garde une seule photo comme avant");
     // Les lignes du tableau restent dans l'ordre des numéros.

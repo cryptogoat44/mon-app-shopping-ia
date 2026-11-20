@@ -143,11 +143,11 @@ describe("0049 : retour en arrière, vérification, registre", () => {
     expect(VERIFICATION).toContain("0037 a été relancée, relancez 0049");
   });
 
-  it("le registre cite 0049 « à appliquer », son fichier de vérification, et ce qui se passe sans elle", () => {
-    expect(REGISTRY).toMatch(/\| 0049 \| Épingles et lien en bio[^|]*\| \*\*à appliquer\*\* \(après 0037/);
+  it("le registre cite 0049 appliquée en production le 20 novembre 2026, son fichier de vérification, et ce qui se passe sans elle", () => {
+    expect(REGISTRY).toMatch(/\| 0049 \| Épingles et lien en bio[^|]*\| appliquée en production \(après 0037/);
     expect(REGISTRY).toContain("`supabase/verifications/0049-verification.sql` (une ligne, six `true`");
     expect(REGISTRY).toContain("Sans 0049, personne ne peut épingler de publication ni afficher de lien sur son profil");
     expect(REGISTRY.indexOf("| 0048 | Publications enregistrées")).toBeLessThan(REGISTRY.indexOf("| 0049 | Épingles et lien en bio"));
-    expect(REGISTRY).toContain("État au 19 novembre 2026.");
+    expect(REGISTRY).toContain("État au 20 novembre 2026.");
   });
 });
