@@ -35,6 +35,7 @@ import {
   VIDEO_LINK_INPUT_MAX_LENGTH,
   parseVideoLink,
   type VideoLinkAnalysisErrorCode,
+  type VideoLinkFailureCause,
   type VideoLinkAnalysisResponse,
   type VideoLinkAnalysisStatus,
   type VideoLinkMoment,
@@ -87,7 +88,9 @@ const BODY_LIMIT = 16 * 1024;
 const querySchema = z.string().trim().min(VIDEO_AI.queryMinLength).max(SEARCH_QUERY_MAX_LENGTH);
 const urlField = z.string().min(1).max(VIDEO_LINK_INPUT_MAX_LENGTH);
 
-type ErrorBody = { error: VideoLinkAnalysisErrorCode; message: string };
+/** `cause` (plan B en un geste, champ additif) : pourquoi la vidéo n'a pas pu
+ * être récupérée, quand le service vidéo le sait ; une app plus ancienne l'ignore. */
+type ErrorBody = { error: VideoLinkAnalysisErrorCode; message: string; cause?: VideoLinkFailureCause };
 
 // Messages : la capture d'écran est toujours proposée en repli (il n'y a pas
 // de curseur pour une vidéo qui n'est pas sur l'appareil).
@@ -108,6 +111,22 @@ const UNAVAILABLE: ErrorBody = {
 const PRIVATE: ErrorBody = {
   error: "video_private",
   message: "Cette vidéo est privée ou réservée à certains comptes. Faites une capture de la vidéo.",
+  cause: "private_or_removed",
+};
+// Plan B en un geste (lot « recherche confiance ») : mêmes codes et statuts
+// qu'avant (une app plus ancienne garde son message), avec la cause.
+// Vidéo supprimée ou introuvable : 422, rien à signaler.
+const REMOVED: ErrorBody = {
+  error: "video_unavailable",
+  message: "Cette vidéo est privée ou a été supprimée. Faites une capture de la vidéo si vous la voyez encore.",
+  cause: "private_or_removed",
+};
+// TikTok ou Instagram a refusé la demande du service vidéo (connexion exigée,
+// accès bloqué) : 502, compté comme une panne du service (alerte « échecs répétés »).
+const REFUSED: ErrorBody = {
+  error: "video_unavailable",
+  message: "TikTok ou Instagram a refusé de nous transmettre cette vidéo. Faites une capture de la vidéo.",
+  cause: "refused",
 };
 const TOO_LONG: ErrorBody = {
   error: "video_too_long",
@@ -142,9 +161,9 @@ export const WORKER_FAILURE_REPLIES: Readonly<Record<VideoWorkerFailure, { statu
   too_long: { status: 422, body: TOO_LONG },
   busy: { status: 503, body: BUSY },
   timeout: { status: 504, body: TIMEOUT },
-  not_found: { status: 422, body: UNAVAILABLE },
+  not_found: { status: 422, body: REMOVED },
   unsupported: { status: 422, body: UNAVAILABLE },
-  blocked: { status: 502, body: UNAVAILABLE },
+  blocked: { status: 502, body: REFUSED },
   unavailable: { status: 502, body: UNAVAILABLE },
   bad_request: { status: 502, body: UNAVAILABLE },
   unauthorized: { status: 502, body: UNAVAILABLE },

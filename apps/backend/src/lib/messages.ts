@@ -245,6 +245,11 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
     "This video couldn't be analyzed. Take a screenshot of the video at the right moment instead.",
   "Cette vidéo est privée ou réservée à certains comptes. Faites une capture de la vidéo.":
     "This video is private or restricted to certain accounts. Take a screenshot of the video instead.",
+  // Plan B en un geste (lot « recherche confiance ») : vidéo supprimée, ou refus de la plateforme.
+  "Cette vidéo est privée ou a été supprimée. Faites une capture de la vidéo si vous la voyez encore.":
+    "This video is private or has been removed. Take a screenshot of the video if you can still see it.",
+  "TikTok ou Instagram a refusé de nous transmettre cette vidéo. Faites une capture de la vidéo.":
+    "TikTok or Instagram refused to send us this video. Take a screenshot of the video instead.",
   "Cette vidéo est trop longue pour l'analyse automatique (90 secondes au plus). Faites une capture de la vidéo.":
     "This video is too long for automatic analysis (90 seconds maximum). Take a screenshot of the video instead.",
   "La pièce décrite n'a pas été repérée dans cette vidéo. Précisez votre description, ou faites une capture de la vidéo.":

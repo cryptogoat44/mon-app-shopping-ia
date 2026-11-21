@@ -2399,6 +2399,18 @@ export type VideoLinkAnalysisErrorCode =
   | "video_ai_user_limit"
   | "video_ai_global_limit";
 
+/** Plan B en un geste (lot « recherche confiance ») : pourquoi la vidéo n'a
+ * pas pu être récupérée, quand le service vidéo le sait (champ « cause » de
+ * l'erreur, additif : une app plus ancienne l'ignore et garde son message).
+ * - private_or_removed : vidéo privée, réservée à certains comptes ou
+ *   supprimée (« video_private », et « video_unavailable » en 422) ;
+ * - refused : TikTok ou Instagram a refusé la demande de notre service
+ *   (connexion exigée, accès bloqué : « video_unavailable » en 502).
+ * Dans les deux cas, la capture d'écran est le bon chemin : réessayer ne
+ * changerait rien. */
+export const VIDEO_LINK_FAILURE_CAUSES = ["private_or_removed", "refused"] as const;
+export type VideoLinkFailureCause = (typeof VIDEO_LINK_FAILURE_CAUSES)[number];
+
 // ---- Messages, plus de confort (lot messages confort, migration 0044) ----
 // Dans une conversation : aimer un message (❤️), répondre à un message
 // précis, supprimer un de ses messages, envoyer une publication du fil.
