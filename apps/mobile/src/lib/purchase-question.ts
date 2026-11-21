@@ -188,11 +188,28 @@ export interface ShopWatcher {
   stop(): void;
 }
 
+/** Le même délai que lib/merchant-links.ts (DEBOUNCE_MS, non exporté) : un
+ * second toucher sur la même pièce moins de 2 s après le précédent n'ouvre
+ * rien (ni boutique, ni merchant_link_opened). Il n'est donc pas une visite. */
+export const SAME_PIECE_DEBOUNCE_MS = 2_000;
+
 /** Horloge et plateforme injectées (tests). */
 export function createShopWatcher(platform: WatchPlatform, now: () => number, onReturn: (back: ShopReturn) => void): ShopWatcher {
   type Visit = { target: QuestionTarget; context: PurchaseContext; startedAt: number; hiddenAt: number | null };
   let visit: Visit | null = null;
   let stopped = false;
+  // Début de la dernière ouverture, par pièce (comme openMerchantLink, par matchId).
+  const lastOpened = new Map<string, number>();
+
+  /** Ce toucher ouvrira-t-il quelque chose ? Non dans les 2 s qui suivent le
+   * précédent sur la même pièce ; sinon, son début est noté. */
+  function opens(target: QuestionTarget): boolean {
+    const at = now();
+    const last = lastOpened.get(target.matchId);
+    if (last !== undefined && at - last < SAME_PIECE_DEBOUNCE_MS) return false;
+    lastOpened.set(target.matchId, at);
+    return true;
+  }
 
   async function openOnIphone(target: QuestionTarget, context: PurchaseContext, open: () => Promise<OpenMerchantLinkResult>): Promise<OpenMerchantLinkResult> {
     // Une visite en cours : ce toucher n'ouvre rien (double toucher, fenêtre déjà ouverte).
@@ -225,7 +242,7 @@ export function createShopWatcher(platform: WatchPlatform, now: () => number, on
 
   return {
     open(target, context, open) {
-      if (stopped || !target || !context || platform === "other") return open();
+      if (stopped || !target || !context || platform === "other" || !opens(target)) return open();
       return platform === "ios" ? openOnIphone(target, context, open) : openOnWeb(target, context, open);
     },
     appStateChanged(state) {

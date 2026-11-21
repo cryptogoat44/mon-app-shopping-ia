@@ -40,6 +40,7 @@ import {
   QUESTIONS_PER_DAY,
   questionDue,
   readQuestionMemory,
+  SAME_PIECE_DEBOUNCE_MS,
   targetOfPiece,
   targetOfWish,
   vaultItemRoute,
@@ -340,6 +341,20 @@ describe("6. Le retour sur l'iPhone", () => {
     close();
     await first;
     expect(returns.map((back) => back.awayMs)).toEqual([45_000]);
+    // Fenêtre refermée aussitôt, puis la même pièce retouchée dans les 2 s :
+    // openMerchantLink n'ouvre rien (même délai, lib/merchant-links.ts), ce n'est pas un retour.
+    let quickClock = 0;
+    const quick: ShopReturn[] = [];
+    const quickWatcher = createShopWatcher("ios", () => quickClock, (back) => quick.push(back));
+    await quickWatcher.open(target, "result", async () => {
+      quickClock += 800;
+      return { blocked: false };
+    });
+    quickClock += 500;
+    await quickWatcher.open(target, "result", async () => ({ blocked: false }));
+    expect(quick.map((back) => back.awayMs)).toEqual([800]);
+    expect(SAME_PIECE_DEBOUNCE_MS).toBe(2_000);
+    expect(read("lib/merchant-links.ts")).toContain("const DEBOUNCE_MS = 2000;");
     // Android : la fenêtre rend la main tout de suite, rien n'est guetté.
     const android: ShopReturn[] = [];
     const other = createShopWatcher("other", () => clock, (back) => android.push(back));
