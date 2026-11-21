@@ -129,12 +129,29 @@ describe("écran « vidéo partagée » : l'analyse d'abord, quand le serveur l'
     expect(screen).toContain("{t.videoLink.webInstruction}");
   });
 
-  it("chaque échec garde la capture d'écran juste dessous (jamais d'impasse)", () => {
+  it("plan B en un geste (lot « recherche confiance ») : chaque échec mène à la capture d'écran par un seul bouton, lien et description gardés (app et site)", () => {
     const failed = screen.slice(screen.indexOf('phase.kind === "failed"'), screen.indexOf("} else {", screen.indexOf('phase.kind === "failed"')));
     expect(failed).toContain("<LinkFailureView");
-    expect(failed).toContain("{captureBlock}");
+    expect(failed).toContain("onCapture={showCapture}");
+    expect(failed).toContain("platformName={name || undefined}");
+    // Plus d'empilement de boutons sous l'échec : la capture s'ouvre par le bouton.
+    expect(failed).not.toContain("{captureBlock}");
+    // Le bouton : la capture d'écran (iPhone : les trois gestes ; site : glisser-déposer ou coller), le lien remis en attente 10 minutes.
+    const capture = screen.slice(screen.indexOf("function showCapture()"), screen.indexOf("function backToAuto()"));
+    expect(capture).toContain("void pendingVideoLinks.hold({ url: link?.canonicalUrl ?? url, platform, creatorHandle: handle });");
+    expect(capture).toContain('setStage({ kind: Platform.OS === "web" ? "web" : "capture" });');
     expect(screen).toContain("webBox(t.videoLinkAuto.capture)");
     expect(screen).toContain("<VideoFallback title={t.videoLinkAuto.capture}");
+    // La description écrite pour l'analyse est reprise sous la capture choisie ou déposée, et l'écran le dit.
+    const picked = screen.slice(screen.indexOf("async function openPicked("), screen.indexOf("async function addScreenshot("));
+    expect(picked.indexOf("keepDescriptionInDraft(queryRef.current);")).toBeGreaterThan(picked.indexOf("await beginPhotoSearch("));
+    expect(screen).toContain("queryRef.current = auto.query;");
+    expect(screen.match(/\{keptNote\}/g)).toHaveLength(2);
+    // Retour à l'analyse après un échec : la question, pas le même échec.
+    expect(screen).toContain('if (auto.phase.kind === "failed") auto.editQuery();');
+    const view = code("src/components/video-link-analysis.tsx");
+    expect(view).toContain("<ActionButtons primary={actionOf(view.primary)} />");
+    expect(view).not.toMatch(/<ActionButtons primary=\{actionOf\(view\.primary\)\} secondary=/);
   });
 
   it("accord manquant ou donné sur l'ancien texte : l'accord « analyse_video_ia », avec le texte commun (une seule version enregistrée)", () => {

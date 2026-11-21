@@ -72,6 +72,18 @@ function draftWords(words: string): string | null {
   return clean === "" ? null : clean;
 }
 
+/** Plan B en un geste (lot « recherche confiance ») : la capture d'écran
+ * ajoutée après un échec de l'analyse reprend la description, comme les mots
+ * tapés sous une photo — elle trie les propositions, sans partir avec l'image
+ * vers Google Lens, et n'est jamais enregistrée. Jamais de recherche de plus
+ * (textSearchIfNoPrice n'est pas posé : aucun appel payant ajouté). Le lien,
+ * lui, suit par le lien en attente (lib/pending-video-link.ts). null : aucun
+ * brouillon, ou rien à reprendre. */
+export function keepDescriptionInDraft(words: string): SpotDraft | null {
+  const kept = draftWords(words);
+  return kept === null ? null : updateDraft({ words: kept });
+}
+
 /** « Lancer la recherche » : l'image du moment et la zone choisie sur
  * l'écran des moments (le cadre de l'IA, ou la pièce entourée par la
  * personne) deviennent le brouillon de la recherche habituelle (1 crédit au

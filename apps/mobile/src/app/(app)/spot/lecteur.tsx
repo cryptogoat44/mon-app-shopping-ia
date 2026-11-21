@@ -56,6 +56,8 @@ import { beginFromPhoto } from "@/lib/spot-flow";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { useVideoImport } from "@/lib/use-video-import";
 import { useVideoLinkAnalysis } from "@/lib/use-video-link-analysis";
+import { cleanQuery } from "@/lib/video-link-analysis";
+import { keepDescriptionInDraft } from "@/lib/video-link-run";
 import { beginPhotoSearch, pendingVideoLinks } from "@/lib/video-context";
 import { discardLocalFile } from "@/lib/video-frames";
 import { themedStyles } from "@/theme/themed-styles";
@@ -153,6 +155,10 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     origin: Platform.OS === "web" ? "web" : "app",
     onDeclined: () => showCapture(),
   });
+  // La description, lue par une photo choisie ou déposée (le dépôt garde la fonction de son premier rendu).
+  const queryRef = useRef("");
+  queryRef.current = auto.query;
+  const keptQuery = cleanQuery(auto.query);
 
   useEffect(
     () => () => {
@@ -245,15 +251,20 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     void decide(lookup);
   }
 
-  /** La capture d'écran à la place de l'analyse : sur le site, la consigne d'avant ; sur iPhone, les trois gestes. */
+  /** La capture d'écran à la place de l'analyse : sur le site, la consigne d'avant ; sur iPhone, les trois gestes.
+   * Plan B en un geste (lot « recherche confiance ») : le lien repart pour 10 minutes d'attente (la capture
+   * ajoutée lui sera associée, même après une longue analyse), et la description sera reprise (openPicked). */
   function showCapture() {
     if (!alive.current) return;
     setMessage(null);
+    if (platform) void pendingVideoLinks.hold({ url: link?.canonicalUrl ?? url, platform, creatorHandle: handle });
     setStage({ kind: Platform.OS === "web" ? "web" : "capture" });
   }
 
   function backToAuto() {
     setMessage(null);
+    // Après un échec : la question de nouveau, la description gardée (jamais le même échec réaffiché).
+    if (auto.phase.kind === "failed") auto.editQuery();
     setStage({ kind: "auto" });
   }
 
@@ -334,11 +345,13 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     if (openUrl) void Linking.openURL(openUrl).catch(() => {});
   }
 
-  /** Photo prête (choisie, ou déposée sur le site) : « Entourez la pièce », associée au lien en attente. */
+  /** Photo prête (choisie, ou déposée sur le site) : « Entourez la pièce », associée au lien en attente.
+   * La description écrite pour l'analyse est reprise sous la photo (plan B en un geste). */
   async function openPicked(picked: ImportResult) {
     if (picked.kind === "unavailable") return setMessage(t.common.photoUnavailable);
     if (picked.kind !== "picked") return;
     await beginPhotoSearch(picked, Platform.OS === "web" ? "web" : "app");
+    keepDescriptionInDraft(queryRef.current);
     if (alive.current) router.push({ pathname: "/spot/lancer", params: { source: "photo" } });
   }
 
@@ -455,7 +468,9 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
       ) : null}
     </View>
   );
-  /** La capture d'écran, à la place de l'analyse ou sous son échec : jamais d'impasse. */
+  // Plan B en un geste : la description écrite pour l'analyse sera reprise sous la capture.
+  const keptNote = keptQuery ? <Text style={styles.keptNote}>{t.videoLinkAuto.planB.keptQuery(keptQuery)}</Text> : null;
+  /** La capture d'écran, à la place de l'analyse (ou après son échec, par son bouton) : jamais d'impasse. */
   const captureBlock =
     Platform.OS === "web" ? (
       webBox(t.videoLinkAuto.capture)
@@ -515,12 +530,9 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
         </>
       );
     } else if (phase.kind === "failed") {
-      autoBody = (
-        <>
-          <LinkFailureView info={phase.info} onRetry={auto.retry} onEditQuery={auto.editQuery} />
-          <View style={styles.fallbackBlock}>{captureBlock}</View>
-        </>
-      );
+      // Plan B en un geste (lot « recherche confiance ») : une phrase calme et un seul bouton, la capture
+      // d'écran (lien gardé, description reprise) ; jamais d'impasse.
+      autoBody = <LinkFailureView info={phase.info} platformName={name || undefined} onRetry={auto.retry} onEditQuery={auto.editQuery} onCapture={showCapture} />;
     } else {
       autoBody = (
         <>
@@ -551,6 +563,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     body = (
       <View style={styles.content}>
         {captureBlock}
+        {keptNote}
         {autoLink}
         {errorLine}
         {memory}
@@ -584,6 +597,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
       <View style={styles.content}>
         {memory}
         {webBox()}
+        {keptNote}
         {autoLink}
         {errorLine}
       </View>
@@ -662,7 +676,6 @@ const styles = themedStyles(() => ({
   body: { fontSize: font.secondary, color: color.acier, lineHeight: 21 },
   box: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, gap: space.sm, alignSelf: "stretch", marginTop: space.md },
   boxTitle: { fontFamily: serifFont, fontWeight: "500", fontSize: font.body, lineHeight: serifLineHeight.body, color: color.encre },
-  fallbackBlock: { marginTop: space.lg, gap: space.sm },
   discreet: { minHeight: 44, alignItems: "center", justifyContent: "center", alignSelf: "stretch" },
   discreetLabel: { fontSize: font.secondary, color: color.acier, textDecorationLine: "underline", textAlign: "center" },
   captionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.sm, alignSelf: "stretch", minHeight: 44 },
@@ -677,4 +690,5 @@ const styles = themedStyles(() => ({
   secondaryLabel: { color: color.encre, fontSize: font.body, fontWeight: "500" },
   message: { fontSize: font.caption, lineHeight: 18, alignSelf: "stretch" },
   privacy: { fontSize: font.caption, color: color.acier, lineHeight: 18, textAlign: "center" },
+  keptNote: { fontSize: font.caption, color: color.acier, lineHeight: 18, alignSelf: "stretch" },
 }));

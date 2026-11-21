@@ -4,7 +4,7 @@
 // Les images des moments restent en mémoire (« data: ») : expo-image ne les
 // met dans aucun cache (cachePolicy « none »), rien n'est écrit sur l'appareil.
 import { useEffect, useState } from "react";
-import { AccessibilityInfo, ActivityIndicator, Pressable, Text, View, useWindowDimensions } from "react-native";
+import { AccessibilityInfo, ActivityIndicator, Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 import { VIDEO_AI } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
@@ -21,6 +21,7 @@ import {
   momentClock,
   queryProblemMessage,
   type LinkAnalysis,
+  type LinkFailureAction,
   type LinkFailureInfo,
   type LinkMoment,
   type QueryProblem,
@@ -211,21 +212,58 @@ export function LinkMomentsView({
   );
 }
 
-/** Échec : un titre, le message, « Réessayer » ou « Modifier la description »
- * quand c'est utile. La capture d'écran est affichée juste dessous par l'écran. */
-export function LinkFailureView({ info, onRetry, onEditQuery }: { info: LinkFailureInfo; onRetry: () => void; onEditQuery: () => void }) {
-  const view = linkFailureView(info, getActiveLocale());
-  const actions: Action[] = [];
-  if (view.retry) actions.push({ label: t.common.retry, onPress: onRetry });
-  if (view.editQuery) actions.push({ label: t.videoLinkAuto.moments.editQuery, onPress: onEditQuery });
-  const [primary, ...secondary] = actions;
+/** Un constat (vidéo privée, refus de la plateforme, pièce non repérée) : pas
+ * en rouge, mais annoncé comme un message d'erreur (VoiceOver, lecteurs du site). */
+function CalmMessage({ children }: { children: string }) {
+  useEffect(() => {
+    if (Platform.OS === "ios") AccessibilityInfo.announceForAccessibility(children);
+  }, [children]);
+  return (
+    <Text style={styles.body} accessibilityLiveRegion="polite">
+      {children}
+    </Text>
+  );
+}
+
+/** Échec, plan B en un geste (lot « recherche confiance ») : un titre, une
+ * phrase calme, UN bouton — la capture d'écran le plus souvent, le lien et la
+ * description gardés (l'écran s'en charge, `onCapture`) — et au plus un lien
+ * discret (« Réessayer », ou la capture quand le bouton est un autre geste).
+ * La capture est toujours proposée : jamais d'impasse. `platformName` :
+ * « TikTok » ou « Instagram », pour dire qui a refusé. */
+export function LinkFailureView({
+  info,
+  platformName,
+  onRetry,
+  onEditQuery,
+  onCapture,
+}: {
+  info: LinkFailureInfo;
+  platformName?: string;
+  onRetry: () => void;
+  onEditQuery: () => void;
+  onCapture: () => void;
+}) {
+  const view = linkFailureView(info, getActiveLocale(), platformName);
+  const actionOf = (action: LinkFailureAction): Action => {
+    if (action === "capture") return { label: t.videoLinkAuto.planB.capture, onPress: onCapture };
+    if (action === "retry") return { label: t.common.retry, onPress: onRetry };
+    return { label: t.videoLinkAuto.moments.editQuery, onPress: onEditQuery };
+  };
+  const secondary = view.secondary ? actionOf(view.secondary) : null;
   return (
     <>
       <Text style={styles.title} accessibilityRole="header">
         {view.title}
       </Text>
-      {view.isError ? <ErrorMessage style={styles.message}>{view.message}</ErrorMessage> : <Text style={styles.body}>{view.message}</Text>}
-      {primary ? <ActionButtons primary={primary} secondary={secondary} /> : null}
+      {view.isError ? <ErrorMessage style={styles.message}>{view.message}</ErrorMessage> : <CalmMessage>{view.message}</CalmMessage>}
+      <ActionButtons primary={actionOf(view.primary)} />
+      {view.primary === "capture" ? <Text style={styles.note}>{t.videoLinkAuto.planB.kept}</Text> : null}
+      {secondary ? (
+        <Pressable onPress={secondary.onPress} style={styles.discreet} accessibilityRole="button">
+          <Text style={styles.discreetLabel}>{secondary.label}</Text>
+        </Pressable>
+      ) : null}
     </>
   );
 }
@@ -258,4 +296,6 @@ const styles = themedStyles(() => ({
   thumbActive: { borderColor: color.vert },
   thumbTime: { fontSize: font.caption, color: color.acier, fontVariant: ["tabular-nums"] },
   thumbTimeActive: { color: color.encre, fontWeight: "600" },
+  discreet: { minHeight: 44, alignItems: "center", justifyContent: "center", alignSelf: "stretch", marginTop: space.xs },
+  discreetLabel: { fontSize: font.secondary, color: color.acier, textDecorationLine: "underline", textAlign: "center" },
 }));

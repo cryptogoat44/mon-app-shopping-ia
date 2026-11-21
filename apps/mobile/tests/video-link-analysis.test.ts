@@ -175,36 +175,81 @@ describe("chaque échec : un message clair, et la capture d'écran toujours prop
   it("iPhone hors ligne : l'erreur d'expo/fetch (« fetch failed: … ») est un problème de connexion, pas une vidéo indisponible", () => {
     const offline = linkAiFailure(new Error("fetch failed: The Internet connection appears to be offline."));
     expect(offline).toEqual({ failure: "network", capacity: null });
-    expect(linkFailureView(offline, "fr")).toMatchObject({ retry: true, message: fr.videoLinkAuto.failure.network });
+    expect(linkFailureView(offline, "fr")).toMatchObject({ primary: "retry", secondary: "capture", message: fr.videoLinkAuto.failure.network });
   });
 
-  it("échec définitif (vidéo supprimée, publication sans vidéo : 422 ; compte suspendu : 403) : jamais « Réessayer »", () => {
+  it("échec définitif (publication sans vidéo, direct, serveur plus ancien : 422 ; compte suspendu : 403) : jamais « Réessayer »", () => {
     const gone = linkAiFailure(new ApiError(422, { error: "video_unavailable", message: "x" }));
     expect(gone).toEqual({ failure: "invalid_link", capacity: null });
-    expect(linkFailureView(gone, "fr")).toMatchObject({ retry: false, message: fr.videoLinkAuto.failure.invalid_link });
+    expect(linkFailureView(gone, "fr")).toMatchObject({ primary: "capture", secondary: null, message: fr.videoLinkAuto.failure.invalid_link });
     const suspended = linkAiFailure(new ApiError(403, { error: "account_suspended", message: "x" }));
     expect(suspended.failure).toBe("disabled");
-    expect(linkFailureView(suspended, "fr").retry).toBe(false);
-    // Une panne du service vidéo (502) ou de l'IA (503) reste « réessayable ».
+    expect(linkFailureView(suspended, "fr")).toMatchObject({ primary: "capture", secondary: null });
+    // Une panne du service vidéo (502) ou de l'IA (503) sans cause : la capture d'abord, « Réessayer » en lien discret.
     for (const status of [502, 503]) {
       const outage = linkAiFailure(new ApiError(status, { error: "video_unavailable", message: "x" }));
       expect(outage.failure, String(status)).toBe("unavailable");
-      expect(linkFailureView(outage, "fr").retry, String(status)).toBe(true);
+      expect(linkFailureView(outage, "fr"), String(status)).toMatchObject({ primary: "capture", secondary: "retry" });
     }
   });
 
-  it("« Réessayer » seulement quand un nouvel essai peut aboutir ; « Modifier la description » quand les mots comptent", () => {
-    const view = (failure: LinkAiFailure) => linkFailureView({ failure, capacity: null }, "fr");
-    for (const failure of ["unavailable", "timeout", "busy", "network"] as const) expect(view(failure).retry, failure).toBe(true);
-    for (const failure of ["private", "too_long", "invalid_link", "disabled", "user_limit", "global_limit", "search_limit", "rate_limited", "no_moment"] as const) {
-      expect(view(failure).retry, failure).toBe(false);
-    }
-    expect(view("no_moment")).toMatchObject({ editQuery: true, isError: false, title: fr.videoLinkAuto.notFoundTitle });
-    expect(view("invalid_query")).toMatchObject({ editQuery: true, isError: true });
-    expect(view("private")).toMatchObject({ editQuery: false, isError: true, title: fr.videoLinkAuto.failedTitle, message: fr.videoLinkAuto.failure.private });
+  describe("plan B en un geste (lot « recherche confiance »), selon l'échec", () => {
+    const cause = (status: number, error: string, value?: string) => linkAiFailure(new ApiError(status, { error, message: "x", ...(value ? { cause: value } : {}) } as never));
+
+    it("vidéo privée ou supprimée : la même explication, calme, et un seul bouton, la capture d'écran", () => {
+      for (const info of [cause(422, "video_private"), cause(422, "video_private", "private_or_removed"), cause(422, "video_unavailable", "private_or_removed")]) {
+        expect(info).toEqual({ failure: "private", capacity: null });
+        expect(linkFailureView(info, "fr", "Instagram")).toEqual({
+          title: "Vidéo privée ou supprimée",
+          message: fr.videoLinkAuto.failure.private,
+          isError: false,
+          primary: "capture",
+          secondary: null,
+        });
+      }
+    });
+
+    it("refus de TikTok ou d'Instagram (connexion exigée, accès bloqué) : dit qui a refusé, sans détail technique, un seul bouton", () => {
+      const info = cause(502, "video_unavailable", "refused");
+      expect(info).toEqual({ failure: "refused", capacity: null });
+      expect(linkFailureView(info, "fr", "Instagram")).toEqual({
+        title: "Instagram a refusé l'accès",
+        message: fr.videoLinkAuto.refused.message("Instagram"),
+        isError: false,
+        primary: "capture",
+        secondary: null,
+      });
+      expect(fr.videoLinkAuto.refused.message("Instagram")).toMatch(/^Instagram n'a pas laissé .+ récupérer cette vidéo, comme cela arrive parfois : une capture d'écran fera aussi bien l'affaire\.$/);
+      setActiveLocale("en");
+      expect(linkFailureView(info, "en", "TikTok")).toMatchObject({ title: "TikTok refused access", primary: "capture" });
+      setActiveLocale("fr");
+      // Plateforme inconnue : les deux noms.
+      expect(linkFailureView(info, "fr").title).toBe("TikTok ou Instagram a refusé l'accès");
+    });
+
+    it("une cause inconnue, ou sur un autre code, ne change rien (serveur plus récent, réponse inattendue)", () => {
+      expect(cause(502, "video_unavailable", "autre_chose").failure).toBe("unavailable");
+      expect(cause(422, "video_too_long", "refused").failure).toBe("too_long");
+    });
+
+    it("chaque échec : un seul bouton ; la capture d'écran toujours proposée, en bouton ou en lien (jamais d'impasse) ; « Réessayer » seulement s'il peut aboutir", () => {
+      const view = (failure: LinkAiFailure) => linkFailureView({ failure, capacity: null }, "fr");
+      for (const failure of LINK_AI_FAILURES) {
+        const { primary, secondary } = view(failure);
+        expect([primary, secondary], failure).toContain("capture");
+        expect(primary, failure).not.toBe(secondary);
+      }
+      for (const failure of ["unavailable", "timeout", "busy"] as const) expect(view(failure), failure).toMatchObject({ primary: "capture", secondary: "retry" });
+      for (const failure of ["private", "refused", "too_long", "invalid_link", "disabled", "user_limit", "global_limit", "search_limit", "rate_limited"] as const) {
+        expect(view(failure), failure).toMatchObject({ primary: "capture", secondary: null });
+      }
+      expect(view("network")).toMatchObject({ primary: "retry", secondary: "capture", isError: true });
+      expect(view("no_moment")).toMatchObject({ primary: "edit_query", secondary: "capture", isError: false, title: fr.videoLinkAuto.notFoundTitle });
+      expect(view("invalid_query")).toMatchObject({ primary: "edit_query", secondary: "capture", isError: true });
+    });
   });
 
-  it("chaque échec a son message en français et en anglais, qui renvoie à la capture quand l'analyse ne peut pas aboutir", () => {
+  it("chaque échec a son message en français et en anglais : une seule phrase, qui renvoie à la capture quand l'analyse ne peut pas aboutir", () => {
     for (const failure of LINK_AI_FAILURES) {
       const french = linkFailureView({ failure, capacity: null }, "fr").message;
       setActiveLocale("en");
@@ -213,11 +258,15 @@ describe("chaque échec : un message clair, et la capture d'écran toujours prop
       expect(french.length, failure).toBeGreaterThan(10);
       expect(english.length, failure).toBeGreaterThan(10);
       expect(english, failure).not.toBe(french);
+      // Une phrase : un seul point final, aucun autre au milieu (les deux-points enchaînent).
+      if (failure !== "search_limit") expect(french.replace(/\.$/, ""), failure).not.toMatch(/[.!?]\s/);
     }
     for (const failure of ["disabled", "invalid_link", "unavailable", "private", "too_long", "timeout", "busy", "no_moment", "user_limit", "global_limit", "rate_limited"] as const) {
-      expect(fr.videoLinkAuto.failure[failure], failure).toMatch(/capture à la place/);
-      expect(en.videoLinkAuto.failure[failure], failure).toMatch(/screenshot instead/);
+      expect(fr.videoLinkAuto.failure[failure], failure).toMatch(/capture d'écran/);
+      expect(en.videoLinkAuto.failure[failure], failure).toMatch(/screenshot/);
     }
+    expect(fr.videoLinkAuto.planB).toMatchObject({ capture: "Faire une capture d'écran", kept: "Votre lien et votre description sont gardés." });
+    expect(en.videoLinkAuto.planB).toMatchObject({ capture: "Take a screenshot", kept: "Your link and your description are kept." });
   });
 
   it("plafond des recherches : le message du résultat (jour, mois avec la date de reprise, part de la personne)", () => {

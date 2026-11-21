@@ -9,7 +9,10 @@ export const LINK_AI_FAILURES = [
   "invalid_link",
   "invalid_query",
   "unavailable",
+  // Vidéo privée, réservée à certains comptes ou supprimée (lot « recherche confiance » : supprimée aussi).
   "private",
+  // TikTok ou Instagram a refusé la demande du service vidéo (connexion exigée, accès bloqué).
+  "refused",
   "too_long",
   "timeout",
   "busy",
