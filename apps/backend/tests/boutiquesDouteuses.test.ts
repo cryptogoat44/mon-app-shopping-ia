@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { OfferMark } from "@monapp/shared-types";
 import type { ProviderVisualMatch } from "../src/services/searchProvider.js";
 
 // Boutiques douteuses (lot « recherche confiance ») : listes du fondateur,
@@ -20,6 +21,7 @@ import {
   isOfficialShop,
   looksLikeFakeShop,
   reviewOffers,
+  sectionOrder,
   trustOrder,
   withoutDubiousOffers,
   type TrustOffer,
@@ -152,11 +154,12 @@ describe("règles, offre par offre", () => {
     expect(reviews[3]).toEqual({ dropped: false, dropReason: null, mark: "official_shop", demoted: false, boosted: true });
   });
 
-  it("ordre : le site officiel de la marque passe en tête de sa section, avant les revendeurs connus, dans son ordre", () => {
+  it("ordre, « Cette pièce dans d'autres boutiques » (shopping) : le site officiel de la marque passe en tête, avant les revendeurs connus, dans son ordre", () => {
     const review = (mark: "official_shop" | "known_shop" | null, demoted = false) => ({ dropped: false, dropReason: null, mark, demoted, boosted: mark !== null });
     const items = ["a", "b-connue", "c", "d-officielle", "e", "f-officielle", "g-signalee"];
     const reviews = [review(null), review("known_shop"), review(null), review("official_shop"), review(null), review("official_shop"), { ...review(null, true), mark: "unusual_price" as const }];
-    expect(trustOrder(items, reviews)).toEqual(["d-officielle", "f-officielle", "b-connue", "a", "c", "e", "g-signalee"]);
+    expect(sectionOrder("shopping", items, reviews)).toEqual(["d-officielle", "f-officielle", "b-connue", "a", "c", "e", "g-signalee"]);
+    expect(trustOrder(items, reviews)).toEqual(sectionOrder("shopping", items, reviews));
   });
 
   it("jamais les seuls résultats : si les règles écartaient tout, les offres sont gardées, signalées et rangées plus bas", () => {
@@ -178,14 +181,31 @@ describe("règles, offre par offre", () => {
     expect({ hidden: result.hidden, suspicious: result.suspicious }).toEqual({ hidden: 1, suspicious: 1 });
   });
 
-  it("ordre : une boutique connue remonte de 2 places au plus, les offres signalées passent en fin de section, le reste garde son ordre", () => {
+  it("ordre, « Cette pièce dans d'autres boutiques » (shopping) : une boutique connue remonte de 2 places au plus, les offres signalées passent en fin de section, le reste garde son ordre", () => {
     const review = (boosted: boolean, demoted: boolean) => ({ dropped: false, dropReason: null, mark: null, demoted, boosted });
     const items = ["a", "b", "c", "d-connue", "e-signalee", "f"];
     const reviews = [review(false, false), review(false, false), review(false, false), review(true, false), review(false, true), review(false, false)];
     expect(KNOWN_SHOP_BOOST).toBe(2);
-    expect(trustOrder(items, reviews)).toEqual(["a", "d-connue", "b", "c", "f", "e-signalee"]);
+    expect(sectionOrder("shopping", items, reviews)).toEqual(["a", "d-connue", "b", "c", "f", "e-signalee"]);
     // Déjà en tête : rien ne bouge ; retirée : absente.
-    expect(trustOrder(["x", "y"], [review(true, false), { ...review(false, false), dropped: true }])).toEqual(["x"]);
+    expect(sectionOrder("shopping", ["x", "y"], [review(true, false), { ...review(false, false), dropped: true }])).toEqual(["x"]);
+  });
+
+  it("ordre, recherche visuelle (lens) et « Résultats pour vos mots » (words) : chaque offre garde son rang reçu — aucune boutique officielle ou connue remontée, aucune offre signalée descendue ; seules les offres retirées manquent", () => {
+    const review = (mark: OfferMark | null, flags: { demoted?: boolean; dropped?: boolean } = {}) => ({
+      dropped: flags.dropped === true,
+      dropReason: flags.dropped === true ? ("hidden" as const) : null,
+      mark,
+      demoted: flags.demoted === true,
+      boosted: mark === "official_shop" || mark === "known_shop",
+    });
+    const items = ["a", "b-signalee", "c-connue", "d", "e-officielle", "f-retiree", "g-adresse-douteuse"];
+    const reviews = [review(null), review("unusual_price", { demoted: true }), review("known_shop"), review(null), review("official_shop"), review(null, { dropped: true }), review(null, { demoted: true })];
+    for (const origin of ["lens", "words"] as const) {
+      expect(sectionOrder(origin, items, reviews), origin).toEqual(["a", "b-signalee", "c-connue", "d", "e-officielle", "g-adresse-douteuse"]);
+    }
+    // Contrôle : les mêmes offres dans « Cette pièce dans d'autres boutiques » sont rangées par leur mention.
+    expect(sectionOrder("shopping", items, reviews)).toEqual(["e-officielle", "c-connue", "a", "d", "b-signalee", "g-adresse-douteuse"]);
   });
 });
 
@@ -256,9 +276,9 @@ describe("relecture d'une recherche (toProductSearch)", () => {
     expect("offerMark" in byId.get("p1")!).toBe(false);
   });
 
-  it("ordre : chaque section reste à part ; boutique connue remontée, offre signalée en fin de sa section ; liens et rangs intacts", () => {
-    // Lens : p4 (connue) gagne 2 places une fois p3 (signalée) passée en fin de section ; boutiques : p9 (connue) devant p7.
-    expect(search.matches.map((match) => match.id)).toEqual(["p4", "p1", "p2", "p6", "p3", "p9", "p7"]);
+  it("ordre : chaque section reste à part ; la recherche visuelle garde l'ordre reçu (boutique connue et offre signalée à leur rang) ; dans « Cette pièce dans d'autres boutiques », la boutique connue remonte ; liens et rangs intacts", () => {
+    // Lens : l'ordre reçu, sans p5 (retirée) ; boutiques : p9 (connue) devant p7.
+    expect(search.matches.map((match) => match.id)).toEqual(["p1", "p2", "p3", "p4", "p6", "p9", "p7"]);
     expect(search.matches.slice(0, 5).every((match) => match.origin === undefined)).toBe(true);
     expect(search.matches.slice(5).every((match) => match.origin === "shopping")).toBe(true);
     for (const match of search.matches) {
@@ -269,6 +289,70 @@ describe("relecture d'une recherche (toProductSearch)", () => {
 
   it("historique : jamais la vignette d'une offre qu'on ne montrerait plus", () => {
     expect(keptMatchRows([row(1, "https://replica-veste.fr/1", 90), row(2, "https://boutique-a.fr/2", 120)]).map((match) => match.id)).toEqual(["p2"]);
+  });
+});
+
+// Ordre des boutiques (décision du fondateur, 21 novembre 2026 : « Je ne veux
+// mettre aucune marque en avant ») : la boutique officielle de la marque passe
+// en tête pour la même pièce seulement (« Cette pièce dans d'autres
+// boutiques ») ; ailleurs, chaque proposition garde sa place reçue. Les
+// mentions restent partout ; les offres très douteuses sont retirées partout.
+describe("ordre des boutiques : la boutique officielle en tête pour la même pièce seulement", () => {
+  const rows = [
+    // Recherche visuelle (Lens).
+    row(1, "https://boutique-a.fr/1", 120),
+    row(2, "https://petite-boutique-exemple.fr/2", 25), // prix inhabituellement bas
+    row(3, "https://www.zalando.fr/3", 125), // boutique connue
+    row(4, "https://moncler-outlet.shop/4", 118), // adresse douteuse seule : gardée, sans mention
+    row(5, "https://www.nike.com/fr/5", 140), // boutique officielle de la marque
+    row(6, "https://replica-veste.fr/6", 99), // boutique masquée : retirée
+    row(7, "https://boutique-b.fr/7", 110),
+    // Cette pièce dans d'autres boutiques.
+    row(8, "https://boutique-c.fr/s1", 115, { origin: "shopping" }),
+    row(9, "https://petite-boutique-exemple.fr/s2", 30, { origin: "shopping" }), // prix inhabituellement bas
+    row(10, "https://boutique-d.fr/s3", 122, { origin: "shopping" }),
+    row(11, "https://boutique-e.fr/s4", 119, { origin: "shopping" }),
+    row(12, "https://www.asos.com/s5", 117, { origin: "shopping" }), // boutique connue
+    row(13, "https://www.nike.com/fr/s6", 135, { origin: "shopping" }), // boutique officielle de la marque
+    row(14, "https://moncler-outlet.shop/s7", 15, { origin: "shopping" }), // prix très bas ET adresse douteuse : retirée
+    // Résultats pour vos mots.
+    row(15, "https://boutique-f.fr/w1", 112, { origin: "words" }),
+    row(16, "https://petite-boutique-exemple.fr/w2", 20, { origin: "words" }), // prix inhabituellement bas
+    row(17, "https://www.zalando.fr/w3", 121, { origin: "words" }), // boutique connue
+    row(18, "https://www.nike.com/fr/w4", 128, { origin: "words" }), // boutique officielle de la marque
+    row(19, "https://cheap-nike.xyz/w5", 12, { origin: "words" }), // prix très bas ET adresse douteuse : retirée
+    row(20, "https://replica-sac.fr/w6", 90, { origin: "words" }), // boutique masquée : retirée
+  ];
+  const search = toProductSearch(SEARCH, rows, new Map(), new Map());
+  /** Les identifiants d'une section, dans l'ordre envoyé (Lens : origine absente). */
+  const section = (origin?: "shopping" | "words") => search.matches.filter((match) => match.origin === origin).map((match) => match.id);
+  const markOf = (id: string) => search.matches.find((match) => match.id === id)?.offerMark ?? null;
+
+  it("« Cette pièce dans d'autres boutiques » : la boutique officielle de la marque en tête, la boutique connue remontée de 2 places au plus, l'offre « Prix inhabituellement bas » en fin de section", () => {
+    expect(section("shopping")).toEqual(["p13", "p8", "p12", "p10", "p11", "p9"]);
+    expect([markOf("p13"), markOf("p12"), markOf("p9")]).toEqual(["official_shop", "known_shop", "unusual_price"]);
+  });
+
+  it("recherche visuelle : la boutique officielle, la boutique connue et l'offre signalée restent à leur rang reçu, avec leur mention ; la grande carte reste la première reçue", () => {
+    expect(section()).toEqual(["p1", "p2", "p3", "p4", "p5", "p7"]);
+    expect(search.matches[0]!.id).toBe("p1");
+    expect([markOf("p2"), markOf("p3"), markOf("p5")]).toEqual(["unusual_price", "known_shop", "official_shop"]);
+    // Adresse douteuse seule : à sa place, sans mention (rien n'est dit d'une adresse).
+    expect(markOf("p4")).toBeNull();
+    expect("offerMark" in search.matches.find((match) => match.id === "p1")!).toBe(false);
+  });
+
+  it("« Résultats pour vos mots » : la boutique officielle, la boutique connue et l'offre signalée restent à leur rang reçu, avec leur mention", () => {
+    expect(section("words")).toEqual(["p15", "p16", "p17", "p18"]);
+    expect([markOf("p16"), markOf("p17"), markOf("p18")]).toEqual(["unusual_price", "known_shop", "official_shop"]);
+  });
+
+  it("une offre très douteuse (boutique masquée, ou prix très bas ET adresse douteuse) est retirée dans toutes les sections ; les sections restent dans leur ordre, rangs intacts", () => {
+    const ids = search.matches.map((match) => match.id);
+    for (const dropped of ["p6", "p14", "p19", "p20"]) expect(ids).not.toContain(dropped);
+    expect(ids).toHaveLength(16);
+    expect(search.matches.map((match) => match.origin ?? "lens")).toEqual([...Array(6).fill("lens"), ...Array(6).fill("shopping"), ...Array(4).fill("words")]);
+    for (const match of search.matches) expect(match.rank).toBe(Number(match.id.slice(1)));
   });
 });
 

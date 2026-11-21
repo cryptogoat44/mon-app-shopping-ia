@@ -18,7 +18,7 @@ import {
 import { deferredPending, deferredStateOf } from "./deferredComplement.js";
 import { parisDayStart } from "./matchFeedback.js";
 import { FAILURE_KINDS } from "./searchMeasure.js";
-import { reviewOffers, trustOrder, type TrustOffer } from "./shopTrust.js";
+import { reviewOffers, sectionOrder, type TrustOffer } from "./shopTrust.js";
 
 export const SEARCH_ROW = z.object({
   id: z.string(),
@@ -125,8 +125,12 @@ export function keptMatchRows<T extends Pick<MatchRow, "merchant_url" | "price_m
 /** Boutiques douteuses, à chaque relecture (lib/shopTrust.ts) : les règles
  * jugent toutes les propositions de la recherche ensemble (les prix se
  * comparent d'une section à l'autre) ; chaque section (Lens, boutiques, vos
- * mots) garde sa place et ses propositions, sans les retirées, avec les
- * boutiques connues un peu remontées et les offres signalées à la fin. */
+ * mots) garde sa place et ses propositions, sans les retirées, avec leurs
+ * mentions. L'ordre dans chaque section (sectionOrder) : seule « Cette pièce
+ * dans d'autres boutiques » est rangée par les mentions (boutiques
+ * officielles des marques en tête, boutiques connues un peu remontées,
+ * offres signalées à la fin) ; la recherche visuelle et vos mots gardent
+ * l'ordre reçu. */
 function trustedMatches(matches: readonly MatchRow[]): { match: MatchRow; mark: OfferMark | null }[] {
   const sorted = [...matches].sort((a, b) => a.rank - b.rank);
   const reviews = reviewOffers(sorted.map(trustOfferOf));
@@ -135,8 +139,9 @@ function trustedMatches(matches: readonly MatchRow[]): { match: MatchRow; mark: 
     const origin = match.origin ?? "lens";
     sections.set(origin, [...(sections.get(origin) ?? []), index]);
   });
-  return [...sections.values()].flatMap((indices) =>
-    trustOrder(
+  return [...sections].flatMap(([origin, indices]) =>
+    sectionOrder(
+      origin,
       indices,
       indices.map((index) => reviews[index]!)
     ).map((index) => ({ match: sorted[index]!, mark: reviews[index]!.mark }))
@@ -240,7 +245,7 @@ export function toProductSearch(
     // Refus du fournisseur dont la place a été rendue dans les trois plafonds.
     notCounted: row.failure_kind === "provider_refused",
     ...(complement ? { complement } : {}),
-    // Boutiques douteuses (lib/shopTrust.ts) : retirées, mentions, ordre.
+    // Boutiques douteuses (lib/shopTrust.ts) : retirées, mentions, ordre (rangé par les mentions dans « shopping » seulement).
     matches: trustedMatches(matches).map(({ match: m, mark }) => ({
         id: m.id,
         rank: m.rank,
@@ -262,7 +267,7 @@ export function toProductSearch(
         // Alertes prix et stock (lot 2) : « Plus disponible ? » seulement sur
         // une pièce qui a une clé (même calcul que la route du signalement).
         ...(alertKeyString(m.merchant_url, m.merchant_name) !== null ? { alertTrackable: true as const } : {}),
-        // Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas » (absente sinon).
+        // Boutiques douteuses : « Boutique officielle de la marque », « Boutique connue » ou « Prix inhabituellement bas » (absente sinon).
         ...(mark ? { offerMark: mark } : {}),
       })),
   };

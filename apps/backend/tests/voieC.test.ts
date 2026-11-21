@@ -1121,7 +1121,7 @@ describe("recherches relues : origine et complément (lib/searchRows.ts)", () =>
       { ...MATCH, id: "00000000-0000-4000-8000-000000000014", rank: 5, merchant_url: "https://www.google.fr/search?prds=productid:123", merchant_name: "eBay - vendeur" },
     ])!;
     const search = toProductSearch(parseSearchRow(BASE_ROW)!, matches, new Map(), new Map());
-    // Lues par rang : Amazon, boutique connue, remonte en tête (lot « recherche confiance »).
+    // Lues par rang : seule la clé de chaque pièce compte ici, pas l'ordre de la réponse.
     const byRank = [...search.matches].sort((a, b) => a.rank - b.rank);
     expect(byRank.map((match) => match.alertTrackable ?? false)).toEqual([true, false, false, false, false]);
     expect(byRank[1]).not.toHaveProperty("alertTrackable");
