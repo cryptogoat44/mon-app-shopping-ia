@@ -556,7 +556,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
             onFind={auto.find}
             problem={phase.problem}
             checking={auto.checking}
-            onPieces={piecesEnabled ? auto.findPieces : undefined}
+            onPieces={auto.piecesAvailable ? auto.findPieces : undefined}
             checkingMode={auto.checkingMode}
             focusQuery={auto.focusQuery}
           />

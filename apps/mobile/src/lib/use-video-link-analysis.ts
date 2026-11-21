@@ -62,6 +62,8 @@ export function useVideoLinkAnalysis({ active, pieces = false, url, platform, or
   const [checking, setChecking] = useState<LinkMode | null>(null);
   // « Décrire la pièce autrement » : le champ prend le focus à son retour.
   const [focusQuery, setFocusQuery] = useState(false);
+  // Propositions refusées par le serveur (interrupteur coupé entre-temps : 400 « invalid_query ») : le bouton disparaît pour ce lien.
+  const [piecesRefused, setPiecesRefused] = useState(false);
   const [saving, setSaving] = useState(false);
   const [consentError, setConsentError] = useState<string | null>(null);
   // Accord lu en arrière-plan dès l'ouverture : « Trouver la pièce » n'attend pas.
@@ -136,6 +138,7 @@ export function useVideoLinkAnalysis({ active, pieces = false, url, platform, or
       pendingMode.current = mode;
       return setPhase({ kind: "consent" });
     }
+    if (mode === "pieces" && outcome.info.failure === "invalid_query") setPiecesRefused(true);
     setPhase({ kind: "failed", info: outcome.info, mode });
   }
 
@@ -170,7 +173,7 @@ export function useVideoLinkAnalysis({ active, pieces = false, url, platform, or
   /** « Voir les propositions de l'IA » : les propositions déjà reçues pour ce
    * lien, sans nouvel appel ; sinon l'accord, puis l'analyse sans les mots. */
   async function findPieces() {
-    if (!pieces) return;
+    if (!pieces || piecesRefused) return;
     const cached = cachedPieces();
     if (cached) {
       setFocusQuery(false);
@@ -259,6 +262,8 @@ export function useVideoLinkAnalysis({ active, pieces = false, url, platform, or
       setQuery(value);
       if (phase.kind === "ask" && phase.problem) setPhase({ kind: "ask", problem: null });
     },
+    // « Voir les propositions de l'IA » à montrer : permis par le serveur, et pas refusé depuis.
+    piecesAvailable: pieces && !piecesRefused,
     checking: checking !== null,
     checkingMode: checking,
     focusQuery,

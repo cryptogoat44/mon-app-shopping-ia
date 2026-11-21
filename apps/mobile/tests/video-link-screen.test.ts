@@ -296,8 +296,12 @@ describe("écran « vidéo partagée » : les propositions de l'IA", () => {
   it("le bouton n'apparaît que si l'état du serveur contient `pieces` (valeur exacte `true`, lue par linkAnalysisStatus) ; sinon l'écran d'avant", () => {
     expect(screen).toContain("setPiecesEnabled(status.pieces);");
     expect(screen).toContain("const [piecesEnabled, setPiecesEnabled] = useState(false);");
-    expect(screen).toContain("onPieces={piecesEnabled ? auto.findPieces : undefined}");
+    expect(screen).toContain("onPieces={auto.piecesAvailable ? auto.findPieces : undefined}");
     expect(screen).toContain("pieces: piecesEnabled,");
+    // Interrupteur coupé entre-temps (400 « invalid_query » en mode « pièces ») : le bouton disparaît pour ce lien, sans boucle.
+    expect(hook).toContain("piecesAvailable: pieces && !piecesRefused,");
+    expect(hook).toContain('if (mode === "pieces" && outcome.info.failure === "invalid_query") setPiecesRefused(true);');
+    expect(hook).toContain("if (!pieces || piecesRefused) return;");
     // Le bouton n'existe que dans la version avec les propositions.
     expect(view).toContain("if (onPieces) return <LinkAskWithPieces");
     const plain = between(view, "export function LinkAskView(", "function LinkAskWithPieces(");
