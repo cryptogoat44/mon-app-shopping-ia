@@ -49,9 +49,12 @@ vous verrez dans PostHog.
 - **`server_first_response`** (nouveau) : une fois par ouverture comptée, le
   temps de la **première réponse du serveur**. `wait_ms` = l'attente en
   millisecondes, `context` = `launch` ou `resume`, `ok` = oui si le serveur a
-  bien répondu, non en cas d'échec (réseau, erreur). Il montre combien de
-  membres tombent sur le **serveur endormi** (offre gratuite de Render :
-  jusqu'à environ une minute au réveil). Une requête annulée ne compte pas.
+  bien répondu, non en cas d'échec (réseau, erreur) ou quand **l'app a cessé
+  d'attendre** (par exemple au bout de 15 secondes pour le profil) : `wait_ms`
+  est alors la durée de cette attente, et le membre a attendu plus longtemps.
+  Il montre combien de membres tombent sur le **serveur endormi** (offre
+  gratuite de Render : jusqu'à environ une minute au réveil). Une requête
+  annulée par le membre (« Annuler », écran quitté) ne compte pas.
 
 ### 2. Commencer une recherche
 
@@ -222,7 +225,10 @@ Au-dessus de **10 secondes**, le serveur dormait presque sûrement.
    tombées sur le serveur endormi.
 
 Répartition utile : par `context` (lancement ou retour dans l'app). La part
-de `ok` = non montre les ouvertures où le serveur n'a pas répondu du tout.
+de `ok` = non montre les ouvertures où le serveur n'a pas répondu à temps :
+erreur, panne du réseau, ou l'app qui a cessé d'attendre (15 secondes pour
+le profil). Pour celles-là, `wait_ms` est la durée de l'attente de l'app :
+le membre a attendu plus longtemps.
 
 ## Les limites
 
@@ -244,8 +250,9 @@ de `ok` = non montre les ouvertures où le serveur n'a pas répondu du tout.
   ils comprennent son réseau (un mauvais réseau allonge l'attente).
 - **`server_first_response`** suit les requêtes faites avec le compte du
   membre ; au lancement, la toute première est souvent la lecture de son
-  accord aux statistiques. Une requête annulée ne compte pas : c'est la
-  suivante qui compte. Une déconnexion ou un changement de compte efface la
+  accord aux statistiques. Une requête annulée par le membre ne compte pas :
+  c'est la suivante qui compte. Une requête que l'app cesse d'attendre
+  compte, avec `ok` = non. Une déconnexion ou un changement de compte efface la
   mesure qui attend : jamais la durée d'un compte sous un autre, ni celle
   d'un compte qui n'a pas donné son accord.
 - **Les nouveaux chiffres ne commencent qu'avec la version** de l'app et du

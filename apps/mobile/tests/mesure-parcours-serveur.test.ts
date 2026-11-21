@@ -13,10 +13,14 @@ vi.hoisted(() => {
 vi.mock("../src/lib/supabase", () => ({ supabase: { auth: { getSession: async () => ({ data: { session: { access_token: "jeton-factice" } } }) } } }));
 vi.mock("../src/lib/image-file", () => ({ imageFileFromUri: vi.fn() }));
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { deleteMyAccount, fetchConsentStatus, fetchMyProfile, fetchSearch, recordAnalyticsChoice } from "../src/lib/api";
 import { __setAnalyticsTestHooks, isAnalyticsActive, setAnalyticsConsent, setAnalyticsUser } from "../src/lib/analytics";
 import { ANALYTICS_EVENTS, sanitizeProps } from "../src/lib/analytics-events";
 import { RESUME_GAP_MS, __resetAppOpening, trackAppOpened } from "../src/lib/app-opening";
+import { abortForTimeout, wasTimedOut } from "../src/lib/app-timeout";
+import { AttemptTimeoutError, withTimeout } from "../src/lib/retry";
 import { __resetServerFirstResponse, createFirstResponseMeter, forgetServerFirstResponse, type FirstResponse } from "../src/lib/server-first-response";
 import { __setWaitClock } from "../src/lib/wait-clock";
 
@@ -56,7 +60,7 @@ describe("la logique seule : une mesure par ouverture comptée", () => {
     expect(sent).toEqual([{ wait_ms: 1_200, context: "launch", ok: false }]);
   });
 
-  it("requête abandonnée (« Annuler », essai trop long) : rien ; la suivante qui aboutit ou échoue compte", () => {
+  it("requête annulée par la personne (« Annuler », écran quitté) : rien ; la suivante qui aboutit ou échoue compte", () => {
     const m = meter();
     m.openingCounted("launch");
     const cancelled = m.requestStarted();
@@ -69,7 +73,19 @@ describe("la logique seule : une mesure par ouverture comptée", () => {
     expect(sent).toEqual([{ wait_ms: 52_000, context: "launch", ok: true }]);
   });
 
-  it("toutes les requêtes abandonnées, ou ouverture jamais comptée (pas d'accord) : rien", () => {
+  it("essai trop long que l'app cesse d'attendre (15 s) : un échec, compté à 15 s ; la réponse plus tardive d'une autre requête ne compte plus", () => {
+    const m = meter();
+    m.openingCounted("launch");
+    const timedOut = m.requestStarted();
+    const answered = m.requestStarted();
+    now = 15_000;
+    timedOut("failed");
+    now = 40_000;
+    answered("ok");
+    expect(sent).toEqual([{ wait_ms: 15_000, context: "launch", ok: false }]);
+  });
+
+  it("toutes les requêtes annulées, ou ouverture jamais comptée (pas d'accord) : rien", () => {
     const cancelledOnly = meter();
     cancelledOnly.openingCounted("launch");
     cancelledOnly.requestStarted()("cancelled");
@@ -238,6 +254,24 @@ describe("le vrai chemin : authorizedFetch, app_opened, puis l'envoi (avec accor
     expect(firstResponses()).toEqual([expect.objectContaining({ wait_ms: 60_000, context: "launch", ok: false })]);
   });
 
+  it("essai du profil que l'app cesse d'attendre (serveur endormi) : un échec compté à la durée de l'attente, pas une annulation", async () => {
+    setAnalyticsUser("u-1", true);
+    expect(trackAppOpened("launch")).toBe(true);
+    fetchMock.mockImplementationOnce(
+      (_url, init) =>
+        new Promise((_resolve, reject) =>
+          init?.signal?.addEventListener("abort", () => {
+            now += 15_000;
+            reject(new DOMException("Aborted", "AbortError"));
+          })
+        )
+    );
+    // Comme auth-context.tsx (PROFILE_ATTEMPT_TIMEOUT_MS, ici raccourci).
+    await expect(withTimeout(20, (signal) => fetchMyProfile(signal))).rejects.toBeInstanceOf(AttemptTimeoutError);
+    await vi.waitFor(() => expect(firstResponses()).toHaveLength(1));
+    expect(firstResponses()).toEqual([expect.objectContaining({ wait_ms: 15_000, context: "launch", ok: false })]);
+  });
+
   it("retour dans l'app après 30 minutes : une nouvelle mesure, sur la première requête partie après", async () => {
     setAnalyticsUser("u-1", true);
     const opened = 1_000_000;
@@ -374,5 +408,39 @@ describe("le retrait coupe la collecte avant l'envoi au serveur", () => {
     fetchMock.mockImplementationOnce(answersAfter(100, {}));
     await recordAnalyticsChoice(true);
     expect(isAnalyticsActive()).toBe(true);
+  });
+});
+
+describe("délais de l'app : leur abandon est marqué, celui de la personne non", () => {
+  it("abortForTimeout abandonne et marque ; un abandon ordinaire (« Annuler », écran quitté) n'est pas marqué", () => {
+    const timedOut = new AbortController();
+    abortForTimeout(timedOut);
+    expect(timedOut.signal.aborted).toBe(true);
+    expect(wasTimedOut(timedOut.signal)).toBe(true);
+    const cancelled = new AbortController();
+    cancelled.abort();
+    expect(wasTimedOut(cancelled.signal)).toBe(false);
+  });
+
+  it("withTimeout : marqué au délai dépassé, pas quand la réponse arrive à temps", async () => {
+    let late: AbortSignal | null = null;
+    const neverAnswers = (signal: AbortSignal) => {
+      late = signal;
+      return new Promise<never>(() => {});
+    };
+    await expect(withTimeout(20, neverAnswers)).rejects.toBeInstanceOf(AttemptTimeoutError);
+    expect(wasTimedOut(late!)).toBe(true);
+    let onTime: AbortSignal | null = null;
+    await withTimeout(1_000, async (signal) => {
+      onTime = signal;
+      return "profil";
+    });
+    expect(wasTimedOut(onTime!)).toBe(false);
+  });
+
+  it("le délai de l'essayage du site passe aussi par abortForTimeout", () => {
+    const sheet = readFileSync(join(__dirname, "../src/components/tryon-sheet.web.tsx"), "utf8");
+    expect(sheet).toContain("setTimeout(() => abortForTimeout(controller), CLIENT_TIMEOUT_MS)");
+    expect(sheet).not.toContain("setTimeout(() => controller.abort()");
   });
 });

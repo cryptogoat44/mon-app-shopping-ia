@@ -39,6 +39,7 @@ vi.mock("../src/lib/video-frames", () => ({ discardLocalFile }));
 vi.mock("../src/lib/image-import", () => ({ SPOTTER_IMAGE_MAX_EDGE: 1600 }));
 
 import { ApiError } from "../src/lib/api-error";
+import { wasTimedOut } from "../src/lib/app-timeout";
 import { clearDraft, getDraft, leaveLaunchScreen } from "../src/lib/spot-draft";
 import { launchPhoto, photoCrop } from "../src/lib/spot-launch";
 import { beginFromPhoto } from "../src/lib/spot-flow";
@@ -107,29 +108,38 @@ describe("la demande d'analyse", () => {
   });
 
   it("« Annuler » : la demande est abandonnée, rien n'est affiché ensuite", async () => {
-    analyzeVideoLink.mockImplementation((_request, signal: AbortSignal) => new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(new Error("aborted")))));
+    let sentSignal: AbortSignal | null = null;
+    analyzeVideoLink.mockImplementation((_request, signal: AbortSignal) => {
+      sentSignal = signal;
+      return new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(new Error("aborted"))));
+    });
     const controller = new AbortController();
     const pending = runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", controller.signal);
     controller.abort();
     expect(await pending).toEqual({ kind: "cancelled" });
     expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "cancelled", moments_count: 0, wait_ms: expect.any(Number), link_platform: "tiktok" });
+    // Abandon par la personne : pas un délai de l'app (server_first_response n'en compte rien).
+    expect(wasTimedOut(sentSignal!)).toBe(false);
     expect(await runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", controller.signal)).toEqual({ kind: "cancelled" });
   });
 
   it("serveur muet au-delà du délai de l'app : l'attente s'arrête sur « délai dépassé »", async () => {
     let aborted = false;
-    analyzeVideoLink.mockImplementation(
-      (_request, signal: AbortSignal) =>
-        new Promise((_resolve, reject) =>
-          signal.addEventListener("abort", () => {
-            aborted = true;
-            reject(new Error("aborted"));
-          })
-        )
-    );
+    let sentSignal: AbortSignal | null = null;
+    analyzeVideoLink.mockImplementation((_request, signal: AbortSignal) => {
+      sentSignal = signal;
+      return new Promise((_resolve, reject) =>
+        signal.addEventListener("abort", () => {
+          aborted = true;
+          reject(new Error("aborted"));
+        })
+      );
+    });
     const outcome = await runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", new AbortController().signal, 20);
     expect(aborted).toBe(true);
     expect(outcome).toEqual({ kind: "failed", info: { failure: "timeout", capacity: null } });
+    // Délai de l'app : la requête est un échec pour server_first_response, pas une annulation.
+    expect(wasTimedOut(sentSignal!)).toBe(true);
   });
 });
 

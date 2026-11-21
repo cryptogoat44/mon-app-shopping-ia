@@ -9,6 +9,7 @@ import type { ProductSearch } from "@monapp/shared-types";
 import type { SpotFailReason, SpotResult } from "../api/types";
 import { setLastSpotResult } from "../api/spotSession";
 import { ApiError, fetchSearch, runSearch } from "./api";
+import { abortForTimeout } from "./app-timeout";
 import { reportUnexpectedError } from "./error-tracking";
 import { capacityFailure } from "./spot-capacity";
 import { freshSearchId, markSearchUsed, settleLaunch } from "./spot-flow";
@@ -61,13 +62,14 @@ export type IdentifyOutcome =
   | { kind: "cancelled" };
 
 /** Relectures réelles (GET /api/searches/:id, gratuit), chacune abandonnée
- * au bout de 10 s ou avec « Annuler » ; attentes interrompues par « Annuler ». */
+ * au bout de 10 s ou avec « Annuler » ; attentes interrompues par « Annuler ».
+ * Les 10 s sont un délai de l'app (app-timeout.ts) : un échec, pas une annulation. */
 const ports: RecoveryPorts = {
   read: (searchId, signal) => {
     const attempt = new AbortController();
     const stop = () => attempt.abort();
     signal.addEventListener("abort", stop);
-    const timer = setTimeout(stop, READ_TIMEOUT_MS);
+    const timer = setTimeout(() => abortForTimeout(attempt), READ_TIMEOUT_MS);
     return fetchSearch(searchId, attempt.signal).finally(() => {
       clearTimeout(timer);
       signal.removeEventListener("abort", stop);

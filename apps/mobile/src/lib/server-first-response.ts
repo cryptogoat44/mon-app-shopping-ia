@@ -14,15 +14,17 @@
 // même si l'accord arrive ensuite.
 // Mesurée dans authorizedFetch (api.ts), point commun des requêtes au
 // serveur, du départ de la requête à sa réponse ou à son échec (réseau). Une
-// requête abandonnée (« Annuler », écran quitté, essai trop long relancé) ne
-// compte pas : la première suivante qui aboutit ou échoue la remplace. Une
-// seule mesure par ouverture : la durée, l'ouverture et un oui/non, rien
-// d'autre. Horloge injectable (tests). Imports relatifs : vitest.
+// requête annulée par la personne (« Annuler », écran quitté) ne compte pas :
+// la première suivante qui aboutit ou échoue la remplace. Une requête que
+// l'app cesse d'attendre (délai dépassé, essai trop long relancé :
+// app-timeout.ts) est un échec, à la durée de cette attente. Une seule
+// mesure par ouverture : la durée, l'ouverture et un oui/non, rien d'autre.
+// Horloge injectable (tests). Imports relatifs : vitest.
 import { track } from "./analytics";
 import { waitNow } from "./wait-clock";
 
 export type OpeningContext = "launch" | "resume";
-/** Issue d'une requête : réponse 2xx, échec (réseau, réponse en erreur) ou abandon. */
+/** Issue d'une requête : réponse 2xx, échec (réseau, réponse en erreur, délai de l'app dépassé) ou annulation par la personne. */
 export type RequestOutcome = "ok" | "failed" | "cancelled";
 
 export interface FirstResponse {
@@ -68,7 +70,7 @@ export function createFirstResponseMeter(now: () => number, send: (event: FirstR
       const startedAt = now();
       const during = opening;
       return (outcome) => {
-        // Partie avant cette ouverture, ouverture déjà mesurée, ou requête abandonnée : rien.
+        // Partie avant cette ouverture, ouverture déjà mesurée, ou requête annulée par la personne : rien.
         if (opening !== during || during.first || outcome === "cancelled") return;
         during.first = { waitMs: now() - startedAt, ok: outcome === "ok" };
         flush();

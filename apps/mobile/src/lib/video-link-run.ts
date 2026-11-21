@@ -8,6 +8,7 @@
 import { SEARCH_QUERY_MAX_LENGTH, type CropRect, type VideoLinkAnalysisRequest, type VideoPlatform, type VideoSpotSource } from "@monapp/shared-types";
 import { analyzeVideoLink } from "./api";
 import { track } from "./analytics";
+import { abortForTimeout } from "./app-timeout";
 import { momentSeconds } from "./player-state";
 import { beginFromPhoto } from "./spot-flow";
 import { updateDraft, type DraftVideoContext, type SpotDraft } from "./spot-draft";
@@ -41,7 +42,8 @@ export async function runLinkAnalysis(
   let timedOut = false;
   const timer = setTimeout(() => {
     timedOut = true;
-    controller.abort();
+    // Délai de l'app : un échec pour server_first_response, pas une annulation.
+    abortForTimeout(controller);
   }, timeoutMs);
   const stop = () => controller.abort();
   signal.addEventListener("abort", stop);

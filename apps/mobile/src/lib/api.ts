@@ -122,6 +122,7 @@ import { isDataUri } from "./data-uri";
 import { linkAnalysisEnabled, parseLinkAnalysis, type LinkAnalysis } from "./video-link-analysis";
 import { waitNow, waitSince } from "./wait-clock";
 import { serverRequestStarted } from "./server-first-response";
+import { wasTimedOut } from "./app-timeout";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -161,13 +162,15 @@ export async function authorizedFetch(path: string, init?: RequestInit): Promise
 
   // Mesure du parcours : la durée de la requête seule, pour la première
   // réponse du serveur de chaque ouverture (server-first-response.ts) ;
-  // abandonnée (signal), elle ne compte pas.
+  // abandonnée par la personne (signal), elle ne compte pas ; abandonnée
+  // par un délai de l'app (app-timeout.ts), c'est un échec.
   const settled = serverRequestStarted();
   let response: Response;
   try {
     response = await fetch(`${apiUrl}${path}`, request);
   } catch (error) {
-    settled(init?.signal?.aborted ? "cancelled" : "failed");
+    const signal = init?.signal;
+    settled(signal?.aborted && !wasTimedOut(signal) ? "cancelled" : "failed");
     throw error;
   }
   settled(response.ok ? "ok" : "failed");
