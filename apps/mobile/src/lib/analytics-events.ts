@@ -46,6 +46,10 @@ export const ANALYTICS_EVENTS = {
   // les gens reviennent (rétention J1, J7). « launch » : au lancement, une
   // fois ; « resume » : retour dans l'app après 30 minutes au moins (app-opening.ts).
   app_opened: { context: oneOf(["launch", "resume"]) },
+  // Lot « mesure du parcours » : une fois par ouverture comptée par app_opened,
+  // la durée de la première requête au serveur qui aboutit (ok) ou échoue ;
+  // au-dessus de 10 s, le serveur dormait (server-first-response.ts).
+  server_first_response: { wait_ms: duration, context: oneOf(["launch", "resume"]), ok: bool },
   signup_completed: { locale: oneOf(["fr", "en"]) },
   spot_started: { source: oneOf(["link", "photo"]), platform: oneOf(["tiktok", "instagram", "pinterest", "photo", "other"]) },
   // Ciblage : zone recadrée, capture importée. Plus de texte depuis le petit lot (2026-10-25) : les mots ne partent plus avec l'image.

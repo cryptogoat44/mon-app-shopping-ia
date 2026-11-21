@@ -6,8 +6,11 @@
 // - « resume » : retour dans l'app (iPhone : après une autre app ; site :
 //   onglet de nouveau visible), si la dernière ouverture comptée date d'au
 //   moins 30 minutes — aller voir TikTok et revenir n'est pas une ouverture.
+// Lot « mesure du parcours » : chaque ouverture comptée attend sa première
+// réponse du serveur (server-first-response.ts).
 // Logique pure et testée ; imports relatifs (vitest).
 import { isAnalyticsActive, track } from "./analytics";
+import { serverOpeningCounted } from "./server-first-response";
 
 /** Écart minimal entre deux ouvertures comptées (la « session » de PostHog). */
 export const RESUME_GAP_MS = 30 * 60_000;
@@ -21,6 +24,7 @@ export function trackAppOpened(context: "launch" | "resume", now: number = Date.
   if (context === "resume" && lastOpenedAt !== null && now - lastOpenedAt < RESUME_GAP_MS) return false;
   lastOpenedAt = now;
   track("app_opened", { context });
+  serverOpeningCounted(context);
   return true;
 }
 

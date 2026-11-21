@@ -121,6 +121,7 @@ import { POST_EXTRAS_UNAVAILABLE, readPostExtrasStatus, setPostExtrasStatus } fr
 import { isDataUri } from "./data-uri";
 import { linkAnalysisEnabled, parseLinkAnalysis, type LinkAnalysis } from "./video-link-analysis";
 import { waitNow, waitSince } from "./wait-clock";
+import { serverRequestStarted } from "./server-first-response";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -146,7 +147,7 @@ export async function authorizedFetch(path: string, init?: RequestInit): Promise
   // refuse un JSON body parser sur une requête vide (ex. POST sans body).
   const hasJsonBody = !isFormData && init?.body !== undefined;
 
-  const response = await fetch(`${apiUrl}${path}`, {
+  const request: RequestInit = {
     ...init,
     headers: {
       ...(hasJsonBody ? { "Content-Type": "application/json" } : {}),
@@ -156,7 +157,20 @@ export async function authorizedFetch(path: string, init?: RequestInit): Promise
       "Accept-Language": acceptLanguage(),
       Authorization: `Bearer ${token}`,
     },
-  });
+  };
+
+  // Mesure du parcours : la durée de la requête seule, pour la première
+  // réponse du serveur de chaque ouverture (server-first-response.ts) ;
+  // abandonnée (signal), elle ne compte pas.
+  const settled = serverRequestStarted();
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl}${path}`, request);
+  } catch (error) {
+    settled(init?.signal?.aborted ? "cancelled" : "failed");
+    throw error;
+  }
+  settled(response.ok ? "ok" : "failed");
 
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as ApiErrorBody | null;
