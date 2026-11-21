@@ -16,6 +16,7 @@ import { updateDraft, type SpotDraft } from "./spot-draft";
 import { discardLocalFile } from "./video-frames";
 import { candidateTimes, differenceHash, SCORING_EDGE, selectFrames, sharpness, type FrameCandidate } from "./video-stage1";
 import { durationSeconds, type FrameFile, type OpenedVideo } from "./video-timeline";
+import { waitNow, waitSince } from "./wait-clock";
 
 export interface AutoMoment {
   timeMs: number;
@@ -83,6 +84,8 @@ export async function analyzeVideo(
   onStep: (step: AutoStep) => void,
   signal?: AbortSignal
 ): Promise<AutoOutcome> {
+  // Mesure du parcours : l'attente part du début de l'analyse (images sur l'appareil comprises).
+  const startedAt = waitNow();
   session = null;
   let times: number[];
   try {
@@ -101,7 +104,7 @@ export async function analyzeVideo(
       query,
       signal
     );
-    track("video_ai_result", { outcome: moments.length > 0 ? "found" : "not_found", moments_count: moments.length });
+    track("video_ai_result", { outcome: moments.length > 0 ? "found" : "not_found", moments_count: moments.length, wait_ms: waitSince(startedAt) });
     if (moments.length === 0) return { kind: "not_found" };
     session = { video, moments: moments.map((moment) => ({ timeMs: times[moment.frame]!, box: moment.box })), tried: [] };
     return { kind: "found" };
@@ -110,11 +113,11 @@ export async function analyzeVideo(
     if (signal?.aborted) return { kind: "cancelled" };
     const capacity = error instanceof ApiError ? capacityFailure(error.body) : null;
     if (capacity) {
-      track("video_ai_result", { outcome: "limit", moments_count: 0 });
+      track("video_ai_result", { outcome: "limit", moments_count: 0, wait_ms: waitSince(startedAt) });
       return { kind: "capacity", failure: capacity };
     }
     const reason = failureOf(error);
-    track("video_ai_result", { outcome: reason === "user_limit" || reason === "global_limit" ? "limit" : "unavailable", moments_count: 0 });
+    track("video_ai_result", { outcome: reason === "user_limit" || reason === "global_limit" ? "limit" : "unavailable", moments_count: 0, wait_ms: waitSince(startedAt) });
     return { kind: "failed", reason };
   } finally {
     for (const file of files) discardLocalFile(file.uri);

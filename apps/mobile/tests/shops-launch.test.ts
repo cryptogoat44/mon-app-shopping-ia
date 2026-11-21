@@ -82,7 +82,7 @@ describe("boutiques ensuite : le lancement, puis la demande des boutiques", () =
     // L'écran Résultat retrouve la même demande : aucun second appel.
     expect(await requestShops("s1", () => Promise.reject(new Error("jamais appelé")))).toMatchObject({ kind: "added" });
     await vi.waitFor(() => expect(completedEvents()).toHaveLength(1));
-    expect(completedEvents()[0]).toEqual({ outcome: "results", results_count: 2, complement: "shown", complement_count: 1 });
+    expect(completedEvents()[0]).toEqual({ outcome: "results", results_count: 2, complement: "shown", complement_count: 1, wait_ms: expect.any(Number), shops_wait_ms: expect.any(Number) });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -91,13 +91,13 @@ describe("boutiques ensuite : le lancement, puis la demande des boutiques", () =
     await runSearch("s1", { crop: null, imageUri: null });
     expect(await requestShops("s1", () => Promise.reject(new Error("jamais appelé")))).toEqual({ kind: "none" });
     await vi.waitFor(() => expect(completedEvents()).toHaveLength(1));
-    expect(completedEvents()[0]).toEqual({ outcome: "results", results_count: 2, complement: "unknown", complement_count: 0 });
+    expect(completedEvents()[0]).toEqual({ outcome: "results", results_count: 2, complement: "unknown", complement_count: 0, wait_ms: expect.any(Number) });
   });
 
   it("serveur d'avant (ou voie C coupée) : tout arrive en une fois, spot_completed tout de suite, aucune seconde demande", async () => {
     fetchMock.mockResolvedValueOnce(json(SHOPS));
     await runSearch("s1", { crop: null, imageUri: null });
-    expect(completedEvents()).toEqual([{ outcome: "results", results_count: 2, complement: "shown", complement_count: 1 }]);
+    expect(completedEvents()).toEqual([{ outcome: "results", results_count: 2, complement: "shown", complement_count: 1, wait_ms: expect.any(Number), shops_wait_ms: expect.any(Number) }]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

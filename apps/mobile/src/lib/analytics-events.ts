@@ -1,9 +1,14 @@
 // Catalogue FERMÉ des événements de statistiques d'usage (lot 2, annexe B du
 // programme, adaptée aux fonctions actuelles). Chaque propriété n'accepte
-// qu'une liste de valeurs, un nombre ou un oui/non : aucun texte libre ne
-// peut passer — donc jamais d'e-mail, de nom d'utilisateur, de commentaire,
-// de légende ni d'adresse d'image. Toute propriété absente du catalogue est
-// supprimée avant l'envoi. Imports relatifs : fichier testé par vitest.
+// qu'une liste de valeurs, un nombre, une durée ou un oui/non : aucun texte
+// libre ne peut passer — donc jamais d'e-mail, de nom d'utilisateur, de
+// commentaire, de légende ni d'adresse d'image. Toute propriété absente du
+// catalogue est supprimée avant l'envoi. Imports relatifs : fichier testé
+// par vitest.
+// ATTENTION : jamais de nouvelle propriété « platform » — analytics.ts la
+// remplace par celle de l'appareil (web, ios). Celles d'avant (spot_started,
+// player_*, video_link_*) n'arrivent donc pas chez PostHog : la plateforme
+// d'un lien s'appelle « link_platform » (lot « mesure du parcours »).
 import {
   COMPLEMENT_STATUSES,
   MERCHANT_LINK_CONTEXTS,
@@ -17,11 +22,17 @@ import { RESULT_SORTS } from "./result-sort";
 import { WISHLIST_SORTS } from "./wishlist-view";
 import { LINK_AI_FAILURES } from "./video-link-failures";
 
-type Rule = { kind: "enum"; values: readonly string[] } | { kind: "count" } | { kind: "bool" };
+type Rule = { kind: "enum"; values: readonly string[] } | { kind: "count" } | { kind: "bool" } | { kind: "duration" };
+
+/** Temps d'attente le plus long envoyé (10 minutes) : au-delà, 10 minutes. */
+export const DURATION_MAX_MS = 600_000;
 
 const oneOf = (values: readonly string[]): Rule => ({ kind: "enum", values });
 const count: Rule = { kind: "count" };
 const bool: Rule = { kind: "bool" };
+// Lot « mesure du parcours » : un temps d'attente en millisecondes, arrondi à
+// 100 ms et borné entre 0 et 10 minutes (la règle « count » s'arrête à 1 000).
+const duration: Rule = { kind: "duration" };
 const VISIBILITY = oneOf(PRIVACY_LEVELS);
 // Lot 4 : vidéo importée dans le Spotter — photothèque (app iPhone) ou fichier (site) ;
 // lot 4 ter : dernière vidéo de la galerie, proposée sur l'accueil (app iPhone) ;
@@ -45,15 +56,21 @@ export const ANALYTICS_EVENTS = {
   // Boutiques ensuite (2026-11-08) : envoyé quand l'issue des boutiques est
   // connue, quelques secondes après l'affichage ; « unknown » quand l'app ne
   // l'a pas reçue (réseau, délai dépassé, refus du serveur).
+  // Mesure du parcours : wait_ms, du lancement (runSearch) à la réponse qui
+  // porte les premiers résultats ; shops_wait_ms, du lancement à l'issue des
+  // boutiques (absente quand elle est « unknown »).
   spot_completed: {
     outcome: oneOf(["results", "none", "failed"]),
     results_count: count,
     complement: oneOf([...COMPLEMENT_STATUSES, "none", "unknown"]),
     complement_count: count,
+    wait_ms: duration,
+    shops_wait_ms: duration,
   },
   // Voie C (lot c) : recherche par les mots — l'issue et un nombre, jamais les mots ni la requête.
+  // Mesure du parcours : wait_ms, du départ de la recherche à son issue.
   text_search_launched: {},
-  text_search_completed: { outcome: oneOf([...TEXT_SEARCH_STATUSES, "failed"]), results_count: count },
+  text_search_completed: { outcome: oneOf([...TEXT_SEARCH_STATUSES, "failed"]), results_count: count, wait_ms: duration },
   // « Voir plus » sous « Autres propositions ». ATTENTION, changement de sens
   // avec le lot « prix d'abord » (2026-11-03) : quand une proposition a un
   // prix, cette section ne montre plus que celles avec prix (les autres sont
@@ -126,7 +143,8 @@ export const ANALYTICS_EVENTS = {
   // Lot 4, temps 1 bis : analyse automatique — des nombres et des choix, jamais le contenu.
   video_ai_consent: { decision: oneOf(["granted", "declined", "withdrawn"]), context: oneOf(["first_use", "settings"]) },
   video_ai_frames_sent: { frames_count: count, duration_s: count },
-  video_ai_result: { outcome: oneOf(["found", "not_found", "unavailable", "limit"]), moments_count: count },
+  // Mesure du parcours : wait_ms, du départ de l'analyse (images sur l'appareil comprises) à son issue.
+  video_ai_result: { outcome: oneOf(["found", "not_found", "unavailable", "limit"]), moments_count: count, wait_ms: duration },
   // Moment essayé parmi les 3 proposés (1 = le meilleur).
   video_ai_moment_tried: { rank: count },
   // Lot « lecteur intégré » (app iPhone) : la plateforme et l'origine du lien
@@ -144,12 +162,15 @@ export const ANALYTICS_EVENTS = {
   // Lot « vidéo auto » : analyse d'une vidéo à partir de son lien — la
   // plateforme, l'issue, la cause d'un échec et des nombres ; jamais le lien,
   // les mots, la vidéo ni ses images.
+  // Mesure du parcours : wait_ms, du départ de l'analyse à son issue
+  // (« Annuler » compris : le temps d'attente avant d'abandonner).
   video_link_ai_started: { platform: PLAYER_PLATFORM },
   video_link_ai_result: {
     platform: PLAYER_PLATFORM,
     outcome: oneOf(["found", "not_found", "failed", "cancelled"]),
     reason: oneOf(LINK_AI_FAILURES),
     moments_count: count,
+    wait_ms: duration,
   },
   // Moment choisi parmi ceux proposés (1 = le meilleur) avant la recherche habituelle.
   video_link_ai_moment_chosen: { platform: PLAYER_PLATFORM, rank: count, moments_count: count },
@@ -167,6 +188,7 @@ export function sanitizeProps(event: AnalyticsEvent, props: AnalyticsProps = {})
     if (rule.kind === "enum" && typeof value === "string" && rule.values.includes(value)) clean[key] = value;
     if (rule.kind === "bool" && typeof value === "boolean") clean[key] = value;
     if (rule.kind === "count" && typeof value === "number" && Number.isFinite(value)) clean[key] = Math.max(0, Math.min(1000, Math.round(value)));
+    if (rule.kind === "duration" && typeof value === "number" && Number.isFinite(value)) clean[key] = Math.max(0, Math.min(DURATION_MAX_MS, Math.round(value / 100) * 100));
   }
   return clean;
 }

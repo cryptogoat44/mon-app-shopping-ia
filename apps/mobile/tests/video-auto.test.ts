@@ -50,7 +50,7 @@ describe("analyse automatique — étages 1 et 2", () => {
     expect(video.frameFile.mock.calls.every(([, maxEdge]) => maxEdge === 512)).toBe(true);
     expect(discardLocalFile.mock.calls.map(([uri]) => uri)).toEqual(uris);
     expect(track).toHaveBeenCalledWith("video_ai_frames_sent", { frames_count: 3, duration_s: 12 });
-    expect(track).toHaveBeenCalledWith("video_ai_result", { outcome: "found", moments_count: 2 });
+    expect(track).toHaveBeenCalledWith("video_ai_result", { outcome: "found", moments_count: 2, wait_ms: expect.any(Number) });
     expect(remainingMoments(video)).toEqual([0, 1]);
   });
 
@@ -61,7 +61,7 @@ describe("analyse automatique — étages 1 et 2", () => {
     expect(remainingMoments(video)).toEqual([]);
     expect(lastTriedMoment(video)).toBeNull();
     expect(beginFromPhoto).not.toHaveBeenCalled();
-    expect(track).toHaveBeenCalledWith("video_ai_result", { outcome: "not_found", moments_count: 0 });
+    expect(track).toHaveBeenCalledWith("video_ai_result", { outcome: "not_found", moments_count: 0, wait_ms: expect.any(Number) });
     expect(discardLocalFile).toHaveBeenCalledTimes(3);
   });
 
@@ -81,7 +81,7 @@ describe("analyse automatique — étages 1 et 2", () => {
   it("plafond des recherches atteint (lot 4 quater) : ni moment ni repli, le plafond en cause ; images tout de même effacées", async () => {
     findVideoMoments.mockRejectedValue(new ApiError(429, { error: "search_capacity_user", message: "…" }));
     expect(await analyzeVideo(fakeVideo(), "veste", onStep)).toEqual({ kind: "capacity", failure: { reason: "capacity_user", resumesOn: null } });
-    expect(track).toHaveBeenCalledWith("video_ai_result", { outcome: "limit", moments_count: 0 });
+    expect(track).toHaveBeenCalledWith("video_ai_result", { outcome: "limit", moments_count: 0, wait_ms: expect.any(Number) });
     expect(discardLocalFile).toHaveBeenCalledTimes(3);
   });
 

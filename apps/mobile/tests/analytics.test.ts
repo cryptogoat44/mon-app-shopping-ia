@@ -76,7 +76,7 @@ describe("statistiques d'usage (PostHog UE)", () => {
 
   it("le catalogue n'admet aucun texte libre", () => {
     for (const rules of Object.values(ANALYTICS_EVENTS)) {
-      for (const rule of Object.values(rules) as { kind: string }[]) expect(["enum", "count", "bool"]).toContain(rule.kind);
+      for (const rule of Object.values(rules) as { kind: string }[]) expect(["enum", "count", "bool", "duration"]).toContain(rule.kind);
     }
   });
 

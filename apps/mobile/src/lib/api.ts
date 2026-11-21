@@ -120,6 +120,7 @@ import { createStatusLoader } from "./status-loading";
 import { POST_EXTRAS_UNAVAILABLE, readPostExtrasStatus, setPostExtrasStatus } from "./post-extras";
 import { isDataUri } from "./data-uri";
 import { linkAnalysisEnabled, parseLinkAnalysis, type LinkAnalysis } from "./video-link-analysis";
+import { waitNow, waitSince } from "./wait-clock";
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -241,6 +242,8 @@ export async function runSearch(
   params: { crop: CropRect | null; imageUri: string | null; words?: string | null; zoneByAi?: boolean },
   signal?: AbortSignal
 ): Promise<ProductSearch> {
+  // Mesure du parcours : l'attente part du lancement (image jointe comprise).
+  const startedAt = waitNow();
   searchLaunched();
   const formData = new FormData();
   if (params.crop) formData.append("crop", JSON.stringify(params.crop));
@@ -258,13 +261,14 @@ export async function runSearch(
   track("spot_launched", { zone_adjusted: params.zoneByAi === true || isAdjustedCrop(params.crop), image_imported: params.imageUri !== null });
   const response = await authorizedFetch(`/api/searches/${searchId}/run?${SPEAKS}`, { method: "POST", body: formData, signal });
   const search: ProductSearch = await response.json();
+  const waitMs = waitSince(startedAt);
   if (search.complement?.pending) {
     // spot_completed attend l'issue des boutiques, pour la compter une fois.
     void requestShops(search.id, (shopsSignal) => fetchShops(search.id, shopsSignal)).then((outcome) =>
-      trackSpotCompleted(search, outcome.kind === "added" ? outcome.search : null)
+      trackSpotCompleted(search, outcome.kind === "added" ? outcome.search : null, { waitMs, shopsWaitMs: waitSince(startedAt) })
     );
   } else {
-    trackSpotCompleted(search, search);
+    trackSpotCompleted(search, search, { waitMs, shopsWaitMs: waitMs });
   }
   return search;
 }
@@ -275,13 +279,17 @@ const isLensMatch = (match: ProductSearch["matches"][number]) => match.origin ==
  * reste celui de la recherche visuelle (réponse du lancement) ; le complément
  * a son issue et son nombre (jamais la requête). Boutiques ensuite : compté
  * quand l'issue des boutiques est connue (`final`) ; « unknown » quand l'app
- * ne l'a pas reçue (réseau, délai, refus). */
-function trackSpotCompleted(launched: ProductSearch, final: ProductSearch | null): void {
+ * ne l'a pas reçue (réseau, délai, refus). Mesure du parcours : les deux
+ * attentes depuis le lancement ; celle des boutiques seulement quand leur
+ * issue est connue. */
+function trackSpotCompleted(launched: ProductSearch, final: ProductSearch | null, waits: { waitMs: number; shopsWaitMs: number }): void {
   track("spot_completed", {
     outcome: launched.status === "failed" ? "failed" : launched.matches.length > 0 ? "results" : "none",
     results_count: launched.matches.filter(isLensMatch).length,
     complement: final ? (final.complement?.status ?? "none") : "unknown",
     complement_count: final ? final.matches.filter((match) => !isLensMatch(match)).length : 0,
+    wait_ms: waits.waitMs,
+    ...(final ? { shops_wait_ms: waits.shopsWaitMs } : {}),
   });
 }
 
@@ -302,6 +310,8 @@ export async function fetchShops(searchId: string, signal?: AbortSignal): Promis
  * entière, avec les propositions ajoutées (origine « words »). `signal` :
  * bouton « Annuler ». */
 export async function runTextSearch(searchId: string, words: string, signal?: AbortSignal): Promise<ProductSearch> {
+  // Mesure du parcours : l'attente, du départ de la recherche à son issue.
+  const startedAt = waitNow();
   searchLaunched();
   const payload: RunTextSearchRequest = { words };
   track("text_search_launched");
@@ -311,6 +321,7 @@ export async function runTextSearch(searchId: string, words: string, signal?: Ab
     track("text_search_completed", {
       outcome: search.complement?.textStatus ?? "failed",
       results_count: search.matches.filter((match) => match.origin === "words").length,
+      wait_ms: waitSince(startedAt),
     });
     return search;
   } catch (error) {
@@ -318,7 +329,7 @@ export async function runTextSearch(searchId: string, words: string, signal?: Ab
     // ou un refus avant toute recherche (mots refusés, plafond ou trop de
     // recherches d'un coup, fonction coupée, recherche non admissible ou déjà
     // lancée) : pas d'issue à compter, comme au lancement.
-    if (!signal?.aborted && textSearchFailure(error).kind === "technical") track("text_search_completed", { outcome: "failed", results_count: 0 });
+    if (!signal?.aborted && textSearchFailure(error).kind === "technical") track("text_search_completed", { outcome: "failed", results_count: 0, wait_ms: waitSince(startedAt) });
     throw error;
   }
 }

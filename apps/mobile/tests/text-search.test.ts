@@ -100,7 +100,7 @@ describe("runTextSearch (voie B)", () => {
   it("statistiques : le lancement puis l'issue et un nombre — jamais les mots", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, search({ matches: [match("l1"), match("w1", "words")], complement: { status: "shown", suggestText: false, textStatus: "shown" } })));
     await runTextSearch("s1", WORDS);
-    expect(track.mock.calls).toEqual([["text_search_launched"], ["text_search_completed", { outcome: "shown", results_count: 1 }]]);
+    expect(track.mock.calls).toEqual([["text_search_launched"], ["text_search_completed", { outcome: "shown", results_count: 1, wait_ms: expect.any(Number) }]]);
     expect(JSON.stringify(track.mock.calls)).not.toContain("daim");
   });
 
@@ -142,11 +142,11 @@ describe("runTextSearch (voie B)", () => {
   it("panne du réseau ou du serveur : l'issue « failed »", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(500, { error: "internal_error", message: "" }));
     await expect(runTextSearch("s1", WORDS)).rejects.toBeInstanceOf(ApiError);
-    expect(track.mock.calls).toEqual([["text_search_launched"], ["text_search_completed", { outcome: "failed", results_count: 0 }]]);
+    expect(track.mock.calls).toEqual([["text_search_launched"], ["text_search_completed", { outcome: "failed", results_count: 0, wait_ms: expect.any(Number) }]]);
     track.mockReset();
     fetchMock.mockRejectedValueOnce(new TypeError("Network request failed"));
     await expect(runTextSearch("s1", WORDS)).rejects.toBeInstanceOf(TypeError);
-    expect(track.mock.calls).toEqual([["text_search_launched"], ["text_search_completed", { outcome: "failed", results_count: 0 }]]);
+    expect(track.mock.calls).toEqual([["text_search_launched"], ["text_search_completed", { outcome: "failed", results_count: 0, wait_ms: expect.any(Number) }]]);
   });
 
   it("mots refusés avant toute recherche (400) : une ApiError, sans issue « failed » comptée", async () => {

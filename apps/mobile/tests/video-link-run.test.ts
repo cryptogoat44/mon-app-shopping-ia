@@ -83,7 +83,7 @@ describe("la demande d'analyse", () => {
     expect(outcome).toEqual({ kind: "found", analysis: analysis() });
     expect(analyzeVideoLink).toHaveBeenCalledWith({ url: TIKTOK, query: QUERY }, expect.any(AbortSignal));
     expect(track).toHaveBeenCalledWith("video_link_ai_started", { platform: "tiktok" });
-    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "found", moments_count: 2 });
+    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "found", moments_count: 2, wait_ms: expect.any(Number) });
     expect(tracked()).not.toContain("tiktok.com");
     expect(tracked()).not.toContain("veste");
   });
@@ -92,7 +92,7 @@ describe("la demande d'analyse", () => {
     analyzeVideoLink.mockResolvedValue({ ...analysis(), moments: [] });
     const outcome = await runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", new AbortController().signal);
     expect(outcome).toEqual({ kind: "failed", info: { failure: "no_moment", capacity: null } });
-    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "not_found", reason: "no_moment", moments_count: 0 });
+    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "not_found", reason: "no_moment", moments_count: 0, wait_ms: expect.any(Number) });
   });
 
   it("vidéo privée, service vidéo occupé, accord manquant : l'échec du serveur est traduit", async () => {
@@ -102,7 +102,7 @@ describe("la demande d'analyse", () => {
     expect(await runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", new AbortController().signal)).toMatchObject({ info: { failure: "busy" } });
     analyzeVideoLink.mockRejectedValueOnce(new ApiError(403, { error: "video_ai_consent_required", message: "x" }));
     expect(await runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", new AbortController().signal)).toMatchObject({ info: { failure: "consent" } });
-    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "instagram", outcome: "failed", reason: "private", moments_count: 0 });
+    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "instagram", outcome: "failed", reason: "private", moments_count: 0, wait_ms: expect.any(Number) });
   });
 
   it("« Annuler » : la demande est abandonnée, rien n'est affiché ensuite", async () => {
@@ -111,7 +111,7 @@ describe("la demande d'analyse", () => {
     const pending = runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", controller.signal);
     controller.abort();
     expect(await pending).toEqual({ kind: "cancelled" });
-    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "cancelled", moments_count: 0 });
+    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "cancelled", moments_count: 0, wait_ms: expect.any(Number) });
     expect(await runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", controller.signal)).toEqual({ kind: "cancelled" });
   });
 
