@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 // ne doit pas changer ces tests. Variables factices, aucune clé réelle.
 vi.mock("dotenv/config", () => ({}));
 
-const SWITCHES = ["VOIE_C_ENABLED", "VOIE_C_AI_ENABLED", "ANTHROPIC_PHOTO_ENABLED", "ANTHROPIC_API_KEY"] as const;
+const SWITCHES = ["VOIE_C_ENABLED", "VOIE_C_AI_ENABLED", "ANTHROPIC_PHOTO_ENABLED", "ANTHROPIC_API_KEY", "VIDEO_PIECES_ENABLED"] as const;
 const REQUIRED = { SUPABASE_URL: "https://exemple.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "faux", SERPAPI_KEY: "faux" };
 const saved: Record<string, string | undefined> = {};
 
@@ -77,5 +77,27 @@ describe("interrupteurs de la voie C", () => {
   it("photo allumée (décision future du fondateur) : la garde laisse passer", async () => {
     const switches = await load({ ANTHROPIC_PHOTO_ENABLED: "true" });
     expect(() => switches.assertNoUserImage({ messages: [{ role: "user", content: [{ type: "image" }] }] })).not.toThrow();
+  });
+});
+
+// Lot « propositions » (Parcours 2) : « Voir les propositions de l'IA ».
+describe("interrupteur des propositions de l'IA (VIDEO_PIECES_ENABLED)", () => {
+  it("permis : « true » exact l'allume", async () => {
+    expect((await load({ VIDEO_PIECES_ENABLED: "true" })).videoPiecesEnabled()).toBe(true);
+  });
+
+  it("refusé : absent, vide, « TRUE », « 1 », « false », « true » avec une espace, « yes » le laissent coupé, sans jamais arrêter le serveur", async () => {
+    expect((await load({})).videoPiecesEnabled()).toBe(false);
+    for (const value of ["", "TRUE", "1", "false", " true", "true ", "yes"]) {
+      expect((await load({ VIDEO_PIECES_ENABLED: value })).videoPiecesEnabled(), JSON.stringify(value)).toBe(false);
+    }
+    expect(exit).not.toHaveBeenCalled();
+  });
+
+  it("indépendant de la voie C et de la photo : allumé seul, il n'allume rien d'autre, et l'inverse", async () => {
+    const pieces = await load({ VIDEO_PIECES_ENABLED: "true" });
+    expect([pieces.voieCEnabled(), pieces.voieCAiEnabled(), pieces.userPhotoToAnthropicAllowed()]).toEqual([false, false, false]);
+    const others = await load({ VOIE_C_ENABLED: "true", VOIE_C_AI_ENABLED: "true", ANTHROPIC_PHOTO_ENABLED: "true", ANTHROPIC_API_KEY: "cle-factice" });
+    expect(others.videoPiecesEnabled()).toBe(false);
   });
 });
