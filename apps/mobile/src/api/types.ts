@@ -28,6 +28,10 @@ export interface Piece {
   /** Voie C (lot c) : d'où vient la proposition (résultats d'une recherche
    * seulement). Absente = « lens », la recherche visuelle. */
   origin?: MatchOrigin;
+  /** Rang envoyé par le serveur (résultats d'une recherche seulement) : la
+   * place reçue du fournisseur, avant tout rangement par les mentions. La
+   * grande carte prise dans le complément en dépend (lib/price-first.ts). */
+  rank?: number;
   /** Alertes prix et stock (lot 2) : le serveur reconnaît la pièce (même
    * boutique, même produit) ; seulement alors « Plus disponible ? ». */
   alertTrackable?: boolean;

@@ -7,7 +7,8 @@ import { fr } from "../src/i18n/fr";
 import { en } from "../src/i18n/en";
 import { termsOfUse } from "../src/legal/conditions";
 import { termsOfUseEn } from "../src/legal/conditions.en";
-import { bestProposalIndex, priceFirstSections } from "../src/lib/price-first";
+import { bestProposalIndex, bigCardLabel, noPriceNoticeShown, priceFirstSections, startProposalIndex } from "../src/lib/price-first";
+import { allPieces } from "../src/lib/result-sections";
 import { cheapestIndex, priceSortedList, priceSummary } from "../src/lib/result-sort";
 import { matchToPiece, toSpotResult } from "../src/lib/spot-result";
 
@@ -100,6 +101,45 @@ describe("mentions des boutiques : ce que l'app reçoit et affiche", () => {
     expect(unusualFirst.pieces[0]!.offerMark).toBe("unusual_price");
     const markedLater = result([match("p1", 120), match("p2", 110, { offerMark: "official_shop" }), match("p3", 100, { offerMark: "known_shop" })]);
     expect(bestProposalIndex(markedLater, "fr")).toBe(0);
+  });
+
+  it("grande carte prise dans le complément (aucun prix dans la recherche visuelle, au rechargement du site comme à l'ouverture) : la première REÇUE de « Cette pièce dans d'autres boutiques », jamais la boutique officielle ou connue que le serveur y remonte", () => {
+    const lens = [match("p1", null), match("p2", null), match("p3", null)];
+    // Refusé : nike.com, reçue 8ᵉ, envoyée en tête de la section (boutique officielle de la marque).
+    const official = result([
+      ...lens,
+      match("p8", 135, { origin: "shopping", offerMark: "official_shop", merchantUrl: "https://www.nike.com/fr/p8" }),
+      match("p4", 115, { origin: "shopping", merchantUrl: "https://boutique-c.fr/p4" }),
+      match("p5", 122, { origin: "shopping", merchantUrl: "https://boutique-d.fr/p5" }),
+    ]);
+    const best = bestProposalIndex(official, "fr");
+    // Permis : la première reçue avec un prix, boutique-c.fr (rang 4), libellé « Meilleure proposition avec prix ».
+    expect(allPieces(official)[best]!.id).toBe("p4");
+    const start = startProposalIndex(official, { country: "fr" });
+    expect(start).toBe(best);
+    expect(bigCardLabel(start, best)).toBe("bestWithPrice");
+    expect(noPriceNoticeShown(official, start)).toBe(false);
+    // Refusé : une boutique connue reçue 3ᵉ, remontée de 2 places par le serveur.
+    const known = result([
+      ...lens,
+      match("p6", 119, { origin: "shopping", offerMark: "known_shop", merchantUrl: "https://www.zalando.fr/p6" }),
+      match("p4", 115, { origin: "shopping" }),
+      match("p5", 122, { origin: "shopping" }),
+    ]);
+    expect(allPieces(known)[bestProposalIndex(known, "fr")]!.id).toBe("p4");
+    // La première reçue sans prix : la première proposition Lens, comme avant (jamais la boutique remontée).
+    const firstWithoutPrice = result([...lens, match("p8", 135, { origin: "shopping", offerMark: "official_shop" }), match("p4", null, { origin: "shopping" })]);
+    expect(bestProposalIndex(firstWithoutPrice, "fr")).toBe(0);
+    // Un prix dans la recherche visuelle : rien ne change.
+    const lensPriced = result([match("p1", null), match("p2", 99), match("p8", 135, { origin: "shopping", offerMark: "official_shop" }), match("p4", 115, { origin: "shopping" })]);
+    expect(allPieces(lensPriced)[bestProposalIndex(lensPriced, "fr")]!.id).toBe("p2");
+  });
+
+  it("le rang envoyé par le serveur suit la proposition ; illisible, il manque, et l'app reprend l'ordre affiché", () => {
+    expect(matchToPiece(match("p7", 10)).rank).toBe(7);
+    expect(matchToPiece(match("p7", 10, { rank: Number.NaN }))).not.toHaveProperty("rank");
+    const withoutRank = result([match("p1", null), match("p9", 50, { origin: "shopping", rank: Number.NaN }), match("p4", 40, { origin: "shopping" })]);
+    expect(allPieces(withoutRank)[bestProposalIndex(withoutRank, "fr")]!.id).toBe("p9");
   });
 
   it("« Pertinence » suit l'ordre du serveur, section par section : l'app ne range rien d'après les mentions", () => {
