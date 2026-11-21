@@ -2357,12 +2357,20 @@ export type TryonErrorCode =
 // exactement comme pour une vidéo du téléphone (image du moment + cadre →
 // recherche habituelle). La capture d'écran reste la roue de secours.
 
-/** POST /api/video-links/analyze : le lien partagé et ce que le membre cherche. */
-export interface VideoLinkAnalysisRequest {
-  url: string;
-  /** Quelques mots (VIDEO_AI.queryMinLength à SEARCH_QUERY_MAX_LENGTH caractères). */
-  query: string;
-}
+/** POST /api/video-links/analyze : le lien partagé et ce que le membre cherche ;
+ * ou (lot « propositions », interrupteur VIDEO_PIECES_ENABLED) le lien seul,
+ * en mode « pièces » : l'IA propose les pièces qu'elle voit (VIDEO_PIECES). */
+export type VideoLinkAnalysisRequest =
+  | {
+      url: string;
+      /** Quelques mots (VIDEO_AI.queryMinLength à SEARCH_QUERY_MAX_LENGTH caractères). */
+      query: string;
+    }
+  | {
+      url: string;
+      /** Aucun texte du membre ne part : pas même un `query` vide (sinon 400 « invalid_query »). */
+      mode: "pieces";
+    };
 
 /** Un moment trouvé par l'IA dans la vidéo du lien. */
 export interface VideoLinkMoment {
@@ -2378,11 +2386,20 @@ export interface VideoLinkMoment {
 export interface VideoLinkAnalysisResponse {
   video: VideoLink;
   moments: VideoLinkMoment[];
+  /** Mode « pièces » seulement (lot « propositions », champ additif) : le nom
+   * de chaque pièce proposée par l'IA, dans l'ordre de `moments` (une image
+   * par pièce, la plus visible d'abord), relu par pieceLabel. Absent quand le
+   * membre a écrit. */
+  labels?: string[];
 }
 
-/** GET /api/video-links/analyze/status : l'analyse d'un lien est-elle possible ? */
+/** GET /api/video-links/analyze/status : l'analyse d'un lien est-elle possible ?
+ * `pieces` (lot « propositions », champ additif) : présent, et seulement à
+ * `true`, quand l'analyse des liens ET l'interrupteur VIDEO_PIECES_ENABLED
+ * sont allumés ; une app plus ancienne l'ignore. */
 export interface VideoLinkAnalysisStatus {
   enabled: boolean;
+  pieces?: true;
 }
 
 /** Codes d'erreur de l'analyse d'un lien (champ « error »). Toute erreur
@@ -2412,6 +2429,100 @@ export type VideoLinkAnalysisErrorCode =
  * changerait rien. */
 export const VIDEO_LINK_FAILURE_CAUSES = ["private_or_removed", "refused"] as const;
 export type VideoLinkFailureCause = (typeof VIDEO_LINK_FAILURE_CAUSES)[number];
+
+// ---- Propositions de l'IA (Parcours 2, lot « propositions », 21 novembre 2026) ----
+// Décision du fondateur : pour un lien TikTok ou Instagram, « Voir les
+// propositions de l'IA » évite d'écrire (écrire reste possible). Le même
+// appel à l'IA (mêmes images, même modèle, mêmes plafonds), en mode
+// « pièces », sans aucun texte du membre, nomme jusqu'à 3 pièces visibles,
+// chacune avec sa meilleure image et son cadre. Les noms ne sont gardés nulle
+// part (ni base, ni journaux, ni statistiques, ni mémoire collective) et ne
+// sont montrés qu'au membre qui a demandé.
+
+/** Pièces proposées au plus, et bornes d'un nom (« Le manteau camel »). */
+export const VIDEO_PIECES = { max: 3, labelMaxLength: 28, labelMaxWords: 5 } as const;
+
+/** Mots qui désignent une personne (ou ce qui la montre : visage, cheveux,
+ * tatouage), comparés sans majuscules ni accents, tels quels et sans leur s
+ * ou x final : un nom qui en contient un est écarté (« Le sac des filles »,
+ * "The woman's coat"). */
+const PIECE_LABEL_PERSON_WORDS: ReadonlySet<string> = new Set([
+  "fille",
+  "femme",
+  "homme",
+  "garcon",
+  "enfant",
+  "bebe",
+  "dame",
+  "monsieur",
+  "madame",
+  "personne",
+  "mannequin",
+  "influenceuse",
+  "influenceur",
+  "visage",
+  "cheveux",
+  "tatouage",
+  "girl",
+  "woman",
+  "women",
+  "man",
+  "men",
+  "boy",
+  "child",
+  "children",
+  "kid",
+  "baby",
+  "babies",
+  "lady",
+  "ladies",
+  "person",
+  "people",
+  "model",
+  "influencer",
+  "face",
+  "hair",
+  "tattoo",
+]);
+
+/** Une lettre (toutes langues) d'abord, puis des lettres, espaces,
+ * apostrophes (' ’) et traits d'union : ni chiffre, ni « @ », ni point,
+ * donc ni lien ni pseudo. */
+const PIECE_LABEL_SHAPE = /^\p{L}[\p{L} '’-]*$/u;
+
+/** Un texte sans majuscules ni accents. */
+function foldPieceText(text: string): string {
+  return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+/** Nom d'une pièce proposée par l'IA, relu — par le serveur (filtre de la
+ * réponse de l'IA) et par l'app (revérification de la réponse du serveur) :
+ * en forme NFC, espaces réduits. null s'il est refusé : moins de 2 ou plus de
+ * 28 caractères, plus de 5 mots (coupés aux espaces), un caractère autre que
+ * des lettres, des espaces, des apostrophes ou des traits d'union (et une
+ * lettre en premier), ou un mot qui désigne une personne (mots coupés aux
+ * espaces, apostrophes et traits d'union). Une marque ou un mot lu dans la
+ * vidéo ne se filtre pas à coup sûr : la consigne de l'IA les interdit, et
+ * l'interrupteur VIDEO_PIECES_ENABLED reste coupé jusqu'à l'essai du fondateur. */
+export function pieceLabel(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const label = value.normalize("NFC").replace(/\s+/g, " ").trim();
+  if (label.length < 2 || label.length > VIDEO_PIECES.labelMaxLength) return null;
+  if (!PIECE_LABEL_SHAPE.test(label)) return null;
+  if (label.split(" ").length > VIDEO_PIECES.labelMaxWords) return null;
+  for (const word of label.split(/[ '’-]+/)) {
+    if (word === "") continue;
+    const folded = foldPieceText(word);
+    if (PIECE_LABEL_PERSON_WORDS.has(folded) || PIECE_LABEL_PERSON_WORDS.has(folded.replace(/[sx]$/, ""))) return null;
+  }
+  return label;
+}
+
+/** Clé d'un nom pour repérer un doublon (« Le Sac noir » = « le sac noir ») :
+ * sans majuscules ni accents, espaces réduits. */
+export function pieceLabelKey(label: string): string {
+  return foldPieceText(label.normalize("NFC").replace(/\s+/g, " ").trim());
+}
 
 // ---- Messages, plus de confort (lot messages confort, migration 0044) ----
 // Dans une conversation : aimer un message (❤️), répondre à un message
