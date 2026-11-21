@@ -146,6 +146,9 @@ describe("écran « vidéo partagée » : l'analyse d'abord, quand le serveur l'
     const picked = screen.slice(screen.indexOf("async function openPicked("), screen.indexOf("async function addScreenshot("));
     expect(picked.indexOf("keepDescriptionInDraft(queryRef.current);")).toBeGreaterThan(picked.indexOf("await beginPhotoSearch("));
     expect(screen).toContain("queryRef.current = auto.query;");
+    // Même chose pour l'instantané du lecteur officiel (iPhone), proposé à côté de la capture.
+    const spot = screen.slice(screen.indexOf("async function spotMoment()"), screen.indexOf("async function acceptConsent()"));
+    expect(spot.indexOf("keepDescriptionInDraft(queryRef.current);")).toBeGreaterThan(spot.indexOf("beginFromPhoto("));
     expect(screen.match(/\{keptNote\}/g)).toHaveLength(2);
     // Retour à l'analyse après un échec : la question, pas le même échec.
     expect(screen).toContain('if (auto.phase.kind === "failed") auto.editQuery();');

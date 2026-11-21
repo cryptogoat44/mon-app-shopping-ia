@@ -406,6 +406,8 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
           discardImageAfterSearch: true,
         }
       );
+      // Plan B en un geste : la description écrite pour l'analyse suit aussi l'instantané du lecteur.
+      keepDescriptionInDraft(queryRef.current);
       router.push({ pathname: "/spot/lancer", params: { source: "photo" } });
     } finally {
       if (alive.current) setBusy(null);
