@@ -10,6 +10,7 @@ import { merchantContextFor, opensOfferPage } from "@/lib/result-sections";
 import type { ClickPlacement } from "@/lib/price-first";
 import { SpotImage } from "@/components/spot-image";
 import { ForeignShopNote } from "@/components/foreign-shop-note";
+import { OfferMarkNote } from "@/components/offer-mark";
 import { SendToFriendLink } from "@/components/send-to-friend-link";
 import { StockReportLink } from "@/components/stock-report-sheet";
 import { isAffiliateLink } from "@/lib/affiliate-link";
@@ -77,8 +78,10 @@ export function ProposalCard({
             <ForeignShopNote piece={piece} compact />
           </View>
         </Pressable>
-        {piece.merchantUrl || onSend || onReportGone ? (
+        {piece.merchantUrl || onSend || onReportGone || piece.offerMark ? (
           <View style={styles.rowLink}>
+            {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas », touchable à part. */}
+            <OfferMarkNote piece={piece} />
             {piece.merchantUrl ? <ShopLink piece={piece} placement={placement} /> : null}
             {onSend ? <SendToFriendLink pieceName={piece.name} onPress={onSend} /> : null}
             {onReportGone ? <StockReportLink pieceName={piece.name} onPress={onReportGone} /> : null}
@@ -104,6 +107,8 @@ export function ProposalCard({
         {/* Lot premier essai : prix dans la devise d'un autre pays que celui de la recherche. */}
         <ForeignShopNote piece={piece} compact />
       </Pressable>
+      {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas », touchable à part. */}
+      <OfferMarkNote piece={piece} />
       {piece.merchantUrl ? <ShopLink piece={piece} placement={placement} /> : null}
       {onSend ? <SendToFriendLink pieceName={piece.name} onPress={onSend} /> : null}
       {onReportGone ? <StockReportLink pieceName={piece.name} onPress={onReportGone} /> : null}

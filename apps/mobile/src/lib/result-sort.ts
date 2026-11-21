@@ -163,9 +163,15 @@ export interface PriceSummary {
 /** Ligne « N offres · à partir de X € » : offres avec un prix dans la devise
  * dominante, et la moins chère. null sans aucun prix. Comptée sur toutes les
  * propositions, quel que soit le mode : elle change quand les boutiques
- * arrivent, jamais la grande carte. */
+ * arrivent, jamais la grande carte. Boutiques douteuses (lot « recherche
+ * confiance ») : une offre « Prix inhabituellement bas » n'y compte pas —
+ * jamais « à partir de » ni « Le moins cher » sur elle ; elle reste dans la
+ * liste triée, à sa place, avec sa mention. */
 export function priceSummary(result: ResultLists, country?: string): PriceSummary | null {
-  const group = currencyGroups(indexed(result), country)[0];
+  const group = currencyGroups(
+    indexed(result).filter(({ piece }) => piece.offerMark !== "unusual_price"),
+    country
+  )[0];
   if (!group) return null;
   const cheapest = group.items.reduce((best, item) => ((item.piece.priceFrom ?? 0) < (best.piece.priceFrom ?? 0) ? item : best));
   return { count: group.items.length, cheapest };

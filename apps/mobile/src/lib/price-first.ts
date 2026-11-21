@@ -23,9 +23,11 @@ export function hasPrice(piece: Pick<Piece, "priceFrom">): boolean {
 
 /** Un prix qui peut mettre une proposition en grand d'office. Un prix à 0
  * (donnée douteuse) reste affiché tel quel, avec les propositions qui ont un
- * prix, mais ne la fait pas passer devant les autres (relecture, ORD-8). */
-function promotable(piece: Pick<Piece, "priceFrom">): boolean {
-  return piece.priceFrom !== null && piece.priceFrom > 0;
+ * prix, mais ne la fait pas passer devant les autres (relecture, ORD-8). De
+ * même, un prix signalé « Prix inhabituellement bas » (boutiques douteuses,
+ * lot « recherche confiance ») : jamais mise en grand d'office. */
+function promotable(piece: Pick<Piece, "priceFrom" | "offerMark">): boolean {
+  return piece.priceFrom !== null && piece.priceFrom > 0 && piece.offerMark !== "unusual_price";
 }
 
 /** Aucune proposition n'a de prix, nulle part (recherche visuelle et

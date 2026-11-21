@@ -1,4 +1,4 @@
-import { SEARCH_FAILURE_MESSAGES, TEXT_SEARCH_ERRORS, type ProductMatch, type ProductSearch } from "@monapp/shared-types";
+import { OFFER_MARKS, SEARCH_FAILURE_MESSAGES, TEXT_SEARCH_ERRORS, type OfferMark, type ProductMatch, type ProductSearch } from "@monapp/shared-types";
 import type { Piece, SpotComplement, SpotResult } from "@/api/types";
 import { ApiError } from "./api-error";
 import { capacityFailure, type CapacityFailReason } from "./spot-capacity";
@@ -22,7 +22,13 @@ export function matchToPiece(match: ProductMatch): Piece {
     ...(match.origin ? { origin: match.origin } : {}),
     // Alertes prix (lot 2) : la pièce a une clé (« Plus disponible ? »).
     ...(match.alertTrackable === true ? { alertTrackable: true } : {}),
+    // Boutiques douteuses : seulement une mention connue de cette app (un serveur plus récent pourrait en ajouter).
+    ...(isOfferMark(match.offerMark) ? { offerMark: match.offerMark } : {}),
   };
+}
+
+function isOfferMark(value: unknown): value is OfferMark {
+  return typeof value === "string" && (OFFER_MARKS as readonly string[]).includes(value);
 }
 
 const PIECE_TITLE_MAX = 120;

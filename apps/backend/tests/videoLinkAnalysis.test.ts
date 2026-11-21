@@ -601,6 +601,21 @@ describe("échecs du service vidéo : chacun ramène à la capture d'écran", ()
     expect(askMock).not.toHaveBeenCalled();
   });
 
+  it("plan B en un geste : la cause, en plus du code et du statut d'avant (une app plus ancienne l'ignore) — vidéo privée ou supprimée, ou refus de la plateforme", async () => {
+    const target = await buildApp();
+    const CAUSES: Partial<Record<VideoWorkerErrorCode, [number, string]>> = { private: [404, "private_or_removed"], not_found: [404, "private_or_removed"], blocked: [451, "refused"] };
+    for (const code of VIDEO_WORKER_ERROR_CODES) {
+      const [status, cause] = CAUSES[code] ?? [502, undefined];
+      workerReply = () => jsonResponse(status, { error: code });
+      const res = await analyze(target, { url: SHARED_TEXT, query: QUERY });
+      expect(res.json().cause, code).toBe(cause);
+      expect([res.statusCode, res.json().error], code).toEqual(EXPECTED[code]);
+    }
+    // Les détails de la plateforme (connexion exigée, adresse bloquée) restent dans le service vidéo : le membre lit une phrase calme.
+    expect(WORKER_FAILURE_REPLIES.blocked.body.message).toBe("TikTok ou Instagram a refusé de nous transmettre cette vidéo. Faites une capture de la vidéo.");
+    expect(WORKER_FAILURE_REPLIES.not_found.body.message).toBe("Cette vidéo est privée ou a été supprimée. Faites une capture de la vidéo si vous la voyez encore.");
+  });
+
   it("service injoignable, réponse hors contrat (JSON invalide, image illisible) : 502 « video_unavailable »", async () => {
     const target = await buildApp();
     const truncated = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 7)]);

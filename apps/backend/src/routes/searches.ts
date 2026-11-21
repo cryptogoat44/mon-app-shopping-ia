@@ -19,7 +19,19 @@ import { ProviderFailure, type TextSearchProvider } from "../services/searchProv
 import { serpApiTextProvider } from "../services/serpapi.js";
 import { aiInputKey, askShoppingQuery } from "../services/shoppingQueryAi.js";
 import type { ShoppingMatch } from "../services/textSearch.js";
-import { isInterrupted, noPriceTextSearchAllowed, parseMatchRows, parseSearchRow, parseSearchRows, textSearchCountable, toProductSearch, type MatchRow, type SearchRow } from "../lib/searchRows.js";
+import {
+  isInterrupted,
+  keptMatchRows,
+  noPriceTextSearchAllowed,
+  parseMatchRows,
+  parseSearchRow,
+  parseSearchRows,
+  textSearchCountable,
+  toProductSearch,
+  trustOfferOf,
+  type MatchRow,
+  type SearchRow,
+} from "../lib/searchRows.js";
 import {
   COMPLEMENT_LOG_MESSAGE,
   complementLogLine,
@@ -1236,9 +1248,14 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       request.log.error("Meilleurs résultats de l'historique illisibles");
       return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
     }
+    // Boutiques douteuses (lib/shopTrust.ts) : jamais la vignette d'une offre
+    // qui ne serait plus montrée (boutique masquée depuis, offre très suspecte).
+    const matchesBySearch = new Map<string, MatchRow[]>();
+    for (const match of matches) matchesBySearch.set(match.search_id, [...(matchesBySearch.get(match.search_id) ?? []), match]);
     const topMatchBySearch = new Map<string, MatchRow>();
-    for (const match of matches) {
-      if (!topMatchBySearch.has(match.search_id)) topMatchBySearch.set(match.search_id, match);
+    for (const [searchId, searchMatches] of matchesBySearch) {
+      const top = keptMatchRows(searchMatches)[0];
+      if (top) topMatchBySearch.set(searchId, top);
     }
 
     const topMatchIds = Array.from(topMatchBySearch.values()).map((m) => m.id);
@@ -1453,7 +1470,8 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       // Déjà demandée d'abord : la seconde demande dit « déjà lancée », même si
       // le budget de la photo est maintenant épuisé.
       if (row.text_requested_at) return sendTextRefusal(reply, "alreadyUsed");
-      if (!textSearchAllowed(row, existing)) return sendTextRefusal(reply, "notAllowed");
+      // Les propositions encore montrées (boutiques douteuses) : « aucun prix », c'est ce que la personne voit.
+      if (!textSearchAllowed(row, keptMatchRows(existing))) return sendTextRefusal(reply, "notAllowed");
       if (!(await lockTextSearch(fastify, id))) return sendTextRefusal(reply, "alreadyUsed");
 
       // « Annuler » avant l'appel : rien n'est consommé, le verrou est remis.
@@ -1484,7 +1502,8 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
 
       const text = await runTextComplement(textComplementPorts(fastify, request), {
         words,
-        existing: existing.map((m) => ({ merchantUrl: m.merchant_url })),
+        // Lien (pages déjà proposées) et prix (boutiques douteuses : les prix se comparent à ceux déjà trouvés).
+        existing: existing.map(trustOfferOf),
         locale: searchLocaleFor(request),
         deadline: startDeadline(t0, VOIE_C_BUDGET.totalMs),
         reservationId: reservation.reservationId,

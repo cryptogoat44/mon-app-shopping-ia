@@ -12,11 +12,13 @@
 import {
   SEARCH_QUERY_MAX_LENGTH,
   VIDEO_AI,
+  VIDEO_LINK_FAILURE_CAUSES,
   normalizeVideoLink,
   type CropRect,
   type VideoLink,
   type VideoLinkAnalysisErrorCode,
   type VideoLinkAnalysisRequest,
+  type VideoLinkFailureCause,
 } from "@monapp/shared-types";
 import { t } from "../i18n";
 import { ApiError } from "./api-error";
@@ -143,6 +145,13 @@ export interface LinkFailureInfo {
   capacity: CapacityFailure | null;
 }
 
+/** Cause précise d'une vidéo indisponible (champ « cause », lot « recherche
+ * confiance ») ; un serveur plus ancien ne l'envoie pas : null. */
+function failureCause(body: unknown): VideoLinkFailureCause | null {
+  const cause = typeof body === "object" && body !== null ? (body as Record<string, unknown>).cause : undefined;
+  return typeof cause === "string" && (VIDEO_LINK_FAILURE_CAUSES as readonly string[]).includes(cause) ? (cause as VideoLinkFailureCause) : null;
+}
+
 /** Erreur reçue (ou délai dépassé côté app) → échec à montrer. */
 export function linkAiFailure(error: unknown, timedOut = false): LinkFailureInfo {
   if (timedOut) return { failure: "timeout", capacity: null };
@@ -150,9 +159,15 @@ export function linkAiFailure(error: unknown, timedOut = false): LinkFailureInfo
     const capacity = capacityFailure(error.body);
     if (capacity) return { failure: "search_limit", capacity };
     const code = typeof error.body?.error === "string" ? error.body.error : "";
-    // Vidéo introuvable ou sans vidéo (supprimée, publication de photos,
-    // direct) : le serveur l'envoie en 422, jamais pour une panne (5xx).
-    // Un nouvel essai échouerait pareil : message non « réessayable ».
+    // Plan B en un geste : vidéo privée ou supprimée, ou refus de TikTok ou
+    // d'Instagram (le serveur le dit depuis le lot « recherche confiance ») :
+    // réessayer ne changerait rien, la capture d'écran est le bon chemin.
+    const cause = code === "video_unavailable" || code === "video_private" ? failureCause(error.body) : null;
+    if (cause === "private_or_removed") return { failure: "private", capacity: null };
+    if (cause === "refused") return { failure: "refused", capacity: null };
+    // Vidéo introuvable ou sans vidéo (supprimée — serveur plus ancien —,
+    // publication de photos, direct) : le serveur l'envoie en 422, jamais
+    // pour une panne (5xx). Un nouvel essai échouerait pareil.
     if (code === "video_unavailable" && error.status === 422) return { failure: "invalid_link", capacity: null };
     if (isContractCode(code)) return { failure: FAILURE_BY_CODE[code], capacity: null };
     // Codes voisins (analyse des vidéos du téléphone, limites par minute).
@@ -169,18 +184,32 @@ export function linkAiFailure(error: unknown, timedOut = false): LinkFailureInfo
   return { failure: isNetworkError(error) ? "network" : "unavailable", capacity: null };
 }
 
+/** Les gestes d'un échec : « capture », la capture d'écran avec le lien et la
+ * description gardés (plan B) ; « retry », réessayer ; « edit_query »,
+ * modifier la description. */
+export type LinkFailureAction = "capture" | "retry" | "edit_query";
+
 export interface LinkFailureView {
   title: string;
+  /** Une phrase, calme et sans détail technique. */
   message: string;
-  /** Une panne (annoncée comme une erreur) ; « pièce non repérée » est un vrai résultat. */
+  /** Une panne (annoncée comme une erreur) ; « pièce non repérée », une vidéo
+   * privée ou refusée par la plateforme sont des constats, dits calmement. */
   isError: boolean;
-  /** « Réessayer » : seulement quand un nouvel essai peut aboutir tout de suite. */
-  retry: boolean;
-  /** « Modifier la description » : les mots peuvent tout changer. */
-  editQuery: boolean;
+  /** Le seul bouton (plan B en un geste) : la capture d'écran, sauf quand un
+   * autre geste aboutit d'abord (connexion à rétablir, description à préciser). */
+  primary: LinkFailureAction;
+  /** Un lien discret sous le bouton (jamais un second bouton), ou rien.
+   * « Réessayer » seulement quand un nouvel essai peut aboutir tout de suite. */
+  secondary: LinkFailureAction | null;
 }
 
-const RETRYABLE: readonly LinkAiFailure[] = ["unavailable", "timeout", "busy", "network"];
+// Un nouvel essai peut aboutir tout de suite (panne passagère) : « Réessayer » en lien discret.
+const RETRYABLE: readonly LinkAiFailure[] = ["unavailable", "timeout", "busy"];
+// Des constats sur la vidéo, pas des pannes : dits calmement, jamais en rouge.
+const CALM: readonly LinkAiFailure[] = ["no_moment", "private", "refused", "invalid_link", "too_long"];
+// Les mots peuvent tout changer : « Modifier la description » d'abord, la capture en lien.
+const QUERY_FIRST: readonly LinkAiFailure[] = ["no_moment", "invalid_query"];
 
 function capacityMessage(capacity: CapacityFailure, locale: Locale): string {
   if (capacity.reason === "capacity_month") return `${t.result.capacityMonthTitle} ${capacityMonthTip(capacity.resumesOn, locale)}`;
@@ -189,22 +218,42 @@ function capacityMessage(capacity: CapacityFailure, locale: Locale): string {
   return `${t.result.capacityDayTitle} ${t.result.capacityDayTip}`;
 }
 
-function failureMessage({ failure, capacity }: LinkFailureInfo, locale: Locale): string {
+function failureMessage({ failure, capacity }: LinkFailureInfo, locale: Locale, platform: string): string {
   if (failure === "search_limit") return capacity ? capacityMessage(capacity, locale) : t.videoLinkAuto.failure.global_limit;
   // Jamais affiché : un accord manquant ouvre l'écran d'accord.
   if (failure === "consent") return t.videoLinkAuto.failure.unavailable;
+  if (failure === "refused") return t.videoLinkAuto.refused.message(platform);
   return t.videoLinkAuto.failure[failure];
 }
 
-/** Message et gestes d'un échec. La capture d'écran est toujours affichée en dessous (jamais d'impasse). */
-export function linkFailureView(info: LinkFailureInfo, locale: Locale): LinkFailureView {
-  const notFound = info.failure === "no_moment";
+function failureTitle(failure: LinkAiFailure, platform: string): string {
+  if (failure === "no_moment") return t.videoLinkAuto.notFoundTitle;
+  if (failure === "private") return t.videoLinkAuto.privateTitle;
+  if (failure === "refused") return t.videoLinkAuto.refused.title(platform);
+  return t.videoLinkAuto.failedTitle;
+}
+
+function primaryAction(failure: LinkAiFailure): LinkFailureAction {
+  if (failure === "network") return "retry";
+  return QUERY_FIRST.includes(failure) ? "edit_query" : "capture";
+}
+
+function secondaryAction(failure: LinkAiFailure): LinkFailureAction | null {
+  if (failure === "network" || QUERY_FIRST.includes(failure)) return "capture";
+  return RETRYABLE.includes(failure) ? "retry" : null;
+}
+
+/** Message et gestes d'un échec (plan B en un geste) : une phrase calme et un
+ * seul bouton, la capture d'écran le plus souvent ; elle est toujours
+ * proposée, en bouton ou en lien (jamais d'impasse). `platform` : « TikTok »
+ * ou « Instagram », pour dire qui a refusé. */
+export function linkFailureView(info: LinkFailureInfo, locale: Locale, platform: string = t.videoLinkAuto.platformFallback): LinkFailureView {
   return {
-    title: notFound ? t.videoLinkAuto.notFoundTitle : t.videoLinkAuto.failedTitle,
-    message: failureMessage(info, locale),
-    isError: !notFound,
-    retry: RETRYABLE.includes(info.failure),
-    editQuery: notFound || info.failure === "invalid_query",
+    title: failureTitle(info.failure, platform),
+    message: failureMessage(info, locale, platform),
+    isError: !CALM.includes(info.failure),
+    primary: primaryAction(info.failure),
+    secondary: secondaryAction(info.failure),
   };
 }
 

@@ -282,7 +282,22 @@ export interface ProductMatch {
    * s'affiche sur sa carte. Envoyée seulement quand elle est vraie ; absente
    * (ancien serveur, place de marché, page de liste…) = non. */
   alertTrackable?: true;
+  /** Boutiques douteuses (lot « recherche confiance ») : une mention neutre
+   * sur la carte (OFFER_MARKS). Absente (aucune mention, ancien serveur) :
+   * rien à afficher. Une app plus ancienne l'ignore. */
+  offerMark?: OfferMark;
 }
+
+/** Mentions d'une offre, calculées par le serveur (apps/backend/src/lib/shopTrust.ts) :
+ * - official_shop : site officiel de la marque (« Boutique officielle de la
+ *   marque »), en tête de sa section ;
+ * - known_shop : boutique de la liste des boutiques connues (« Boutique connue ») ;
+ * - unusual_price : prix très inférieur à ceux des autres offres de la même
+ *   recherche (« Prix inhabituellement bas »), un constat, jamais une accusation.
+ * Les offres des boutiques masquées, et celles qui cumulent un prix très bas
+ * et une adresse douteuse, ne sont jamais envoyées. */
+export const OFFER_MARKS = ["official_shop", "known_shop", "unusual_price"] as const;
+export type OfferMark = (typeof OFFER_MARKS)[number];
 
 // ---- Bouton « Résultat incohérent » (fiabilité des résultats, 2026-10-15) ----
 
@@ -2385,6 +2400,18 @@ export type VideoLinkAnalysisErrorCode =
   | "video_timeout"
   | "video_ai_user_limit"
   | "video_ai_global_limit";
+
+/** Plan B en un geste (lot « recherche confiance ») : pourquoi la vidéo n'a
+ * pas pu être récupérée, quand le service vidéo le sait (champ « cause » de
+ * l'erreur, additif : une app plus ancienne l'ignore et garde son message).
+ * - private_or_removed : vidéo privée, réservée à certains comptes ou
+ *   supprimée (« video_private », et « video_unavailable » en 422) ;
+ * - refused : TikTok ou Instagram a refusé la demande de notre service
+ *   (connexion exigée, accès bloqué : « video_unavailable » en 502).
+ * Dans les deux cas, la capture d'écran est le bon chemin : réessayer ne
+ * changerait rien. */
+export const VIDEO_LINK_FAILURE_CAUSES = ["private_or_removed", "refused"] as const;
+export type VideoLinkFailureCause = (typeof VIDEO_LINK_FAILURE_CAUSES)[number];
 
 // ---- Messages, plus de confort (lot messages confort, migration 0044) ----
 // Dans une conversation : aimer un message (❤️), répondre à un message

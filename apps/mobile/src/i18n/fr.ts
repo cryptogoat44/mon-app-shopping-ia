@@ -408,20 +408,34 @@ export const fr = {
     },
     failedTitle: "La vidéo n'a pas pu être analysée",
     notFoundTitle: "Pièce non repérée",
+    // Plan B en un geste (lot « recherche confiance ») : une phrase calme, sans
+    // détail technique, puis un seul bouton : la capture d'écran, avec le lien
+    // et la description gardés.
+    privateTitle: "Vidéo privée ou supprimée",
+    refused: {
+      title: (platform: string) => `${platform} a refusé l'accès`,
+      message: (platform: string) => `${platform} n'a pas laissé ${BRAND} récupérer cette vidéo, comme cela arrive parfois : une capture d'écran fera aussi bien l'affaire.`,
+    },
+    platformFallback: "TikTok ou Instagram",
+    planB: {
+      capture: "Faire une capture d'écran",
+      kept: "Votre lien et votre description sont gardés.",
+      keptQuery: (query: string) => `Votre description sera reprise avec la capture : « ${query} »`,
+    },
     failure: {
-      disabled: "L'analyse automatique des liens n'est pas disponible pour le moment. Faites une capture à la place.",
-      invalid_link: `Ce lien ne mène pas à une vidéo que ${BRAND} peut analyser. Faites une capture à la place.`,
+      disabled: "L'analyse automatique des liens n'est pas disponible pour le moment : une capture d'écran fera l'affaire.",
+      invalid_link: `Ce lien ne mène pas à une vidéo que ${BRAND} peut analyser : une capture d'écran fera l'affaire.`,
       invalid_query: `Décrivez la pièce en quelques mots, sans lien (${SEARCH_QUERY_MAX_LENGTH} caractères au plus).`,
-      unavailable: "Cette vidéo n'a pas pu être récupérée pour le moment. Réessayez, ou faites une capture à la place.",
-      private: `Cette vidéo est privée ou réservée à certains comptes : ${BRAND} ne peut pas la récupérer. Faites une capture à la place.`,
-      too_long: "Cette vidéo est trop longue pour l'analyse automatique. Faites une capture à la place.",
-      timeout: "La vidéo a mis trop de temps à arriver. Réessayez, ou faites une capture à la place.",
-      busy: "L'analyse automatique est très demandée en ce moment. Réessayez dans un instant, ou faites une capture à la place.",
-      no_moment: "La pièce n'a pas été repérée dans la vidéo. Précisez votre description, ou faites une capture à la place.",
-      user_limit: "Vous avez atteint la limite quotidienne d'analyses automatiques. Faites une capture à la place, ou réessayez demain.",
-      global_limit: "L'analyse automatique est très demandée aujourd'hui et momentanément indisponible. Faites une capture à la place.",
-      rate_limited: "Trop de demandes d'un coup. Réessayez dans quelques minutes, ou faites une capture à la place.",
-      network: "Connexion impossible. Vérifiez votre connexion, puis réessayez.",
+      unavailable: "Cette vidéo n'a pas pu être récupérée pour le moment : une capture d'écran fera l'affaire.",
+      private: `Cette vidéo est privée, réservée à certains comptes ou supprimée : ${BRAND} ne peut pas l'ouvrir, mais une capture d'écran suffit si vous la voyez encore.`,
+      too_long: "Cette vidéo est trop longue pour l'analyse automatique : une capture d'écran du bon moment fera l'affaire.",
+      timeout: "La vidéo a mis trop de temps à arriver : une capture d'écran fera l'affaire.",
+      busy: "L'analyse automatique est très demandée en ce moment : une capture d'écran fera l'affaire.",
+      no_moment: "La pièce n'a pas été repérée dans la vidéo : précisez votre description, ou faites une capture d'écran.",
+      user_limit: "Vous avez atteint la limite quotidienne d'analyses automatiques : une capture d'écran fera l'affaire.",
+      global_limit: "L'analyse automatique est très demandée aujourd'hui : une capture d'écran fera l'affaire.",
+      rate_limited: "Trop de demandes d'un coup : une capture d'écran fera l'affaire, ou réessayez dans quelques minutes.",
+      network: "Connexion impossible : vérifiez votre connexion, puis réessayez.",
     },
   },
   // Recherche d'image d'iOS (iOS 26 et suivants) : carte montrée une fois.
@@ -429,6 +443,17 @@ export const fr = {
     title: "Astuce",
     body: `Dans n'importe quelle app, faites une capture, touchez Recherche d'image, puis ${BRAND} (iPhone compatibles).`,
     dismiss: "J'ai compris",
+  },
+  // Guide de la première recherche (lot « recherche confiance ») : trois étapes, une seule fois par appareil.
+  firstRunGuide: {
+    title: `Bienvenue sur ${BRAND}`,
+    stepOf: (step: number, total: number) => `Étape ${step} sur ${total}`,
+    steps: ["Partagez la vidéo depuis TikTok ou Instagram, ou collez son lien", "Entourez la pièce", "Comparez les boutiques et les prix, créez une alerte"],
+    next: "Suivant",
+    skip: "Passer",
+    skipLabel: "Passer le guide",
+    start: "Lancer ma première recherche",
+    startHint: "Choisissez une capture d'écran ou une photo de la pièce.",
   },
   // Étapes de la capture d'écran (aide d'un lien collé ou partagé, lecteur) et
   // messages d'un parcours qui n'existe plus (page rechargée).
@@ -625,6 +650,16 @@ export const fr = {
     // Offres avec un prix dans la devise la plus fréquente ; le prix le plus bas, sans conversion.
     offersSummary: (n: number, price: string) => (n > 1 ? `${n} offres · à partir de ${price}` : `1 offre · ${price}`),
     cheapestBadge: "Le moins cher",
+    // Boutiques douteuses (lot « recherche confiance ») : mentions neutres et factuelles,
+    // jamais une accusation ; touchées, une phrase d'explication.
+    offerMark: {
+      official_shop: "Boutique officielle de la marque",
+      known_shop: "Boutique connue",
+      unusual_price: "Prix inhabituellement bas",
+      hint: "Explique cette mention.",
+      explanation: `${BRAND} met en avant les boutiques officielles des marques et les boutiques connues, et signale les prix inhabituellement bas ; vérifiez toujours la boutique avant de payer.`,
+      close: "J'ai compris",
+    },
     // « Avec prix seulement » et aucune proposition avec prix : retirer le filtre.
     showAllProposals: "Afficher aussi les propositions sans prix",
     // Proposition sans lien direct vers le marchand : le lien ouvre la page produit de Google.

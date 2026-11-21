@@ -68,6 +68,7 @@ import { YourPiece } from "@/components/your-piece";
 import { yourPieceImage } from "@/lib/your-piece";
 import { useHeroReveal } from "@/lib/use-hero-reveal";
 import { ForeignShopNote } from "@/components/foreign-shop-note";
+import { OfferMarkNote } from "@/components/offer-mark";
 import { KeptNotice } from "@/components/kept-notice";
 import { SendToFriendLink } from "@/components/send-to-friend-link";
 import { StockReportLink, StockReportSheet } from "@/components/stock-report-sheet";
@@ -714,6 +715,8 @@ export default function ResultScreen() {
             </Text>
             {selectedIndex === cheapest ? <CheapestBadge /> : null}
             <ForeignShopNote piece={piece} />
+            {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas » (components/offer-mark.tsx). */}
+            <OfferMarkNote piece={piece} />
             {/* Juste sous la proposition, visible sans défilement (décision du fondateur, lot 4 ter). */}
             {sheetActions.length > 0 ? <CorrectionsLink style={styles.notRight} onPress={() => setCorrectionsOpen(true)} /> : null}
 

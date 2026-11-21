@@ -245,6 +245,19 @@ describe("runComplement — le chemin normal", () => {
     expect(result.matches).toEqual([]);
   });
 
+  it("boutiques douteuses (lot « recherche confiance ») : très suspecte face aux prix de Lens, ou masquée — retirée ; rien d'autre : « empty »", async () => {
+    const dubious = [
+      { ...shoppingItem(1, "Exemplor veste Nuage 07", "https://moncler-outlet.shop/1"), price: "9,99 €", extracted_price: 9.99 },
+      shoppingItem(2, "Exemplor veste Nuage 07", "https://replica-veste.fr/2"),
+    ];
+    const { ports, input } = setup({ ports: { searchText: vi.fn(async (): Promise<TextSearchResponse> => ({ items: dubious, received: 2, statusCode: 200 })) } });
+    const result = await runComplement(ports, input());
+    expect(result.matches).toEqual([]);
+    expect(result.columns.complement_status).toBe("empty");
+    const mixed = setup({ ports: { searchText: vi.fn(async (): Promise<TextSearchResponse> => ({ items: [...dubious, shoppingItem(3, "Exemplor veste Nuage 07", "https://boutique-a.fr/3")], received: 3, statusCode: 200 })) } });
+    expect((await runComplement(mixed.ports, mixed.input())).matches.map((match) => match.merchantUrl)).toEqual(["https://boutique-a.fr/3"]);
+  });
+
   it("20 au plus, après le tri léger", async () => {
     const items = Array.from({ length: 30 }, (_, index) => shoppingItem(index + 1, index >= 25 ? "Exemplor veste Nuage 07" : "Veste bleue", `https://boutique-${index}.fr/p`));
     const { ports, input } = setup({ ports: { searchText: vi.fn(async (): Promise<TextSearchResponse> => ({ items, received: 30, statusCode: 200 })) } });
@@ -893,6 +906,25 @@ describe("runTextComplement — « Que cherchez-vous ? »", () => {
     expect(withLens.matches.map((match) => match.merchantUrl)).not.toContain("https://www.lens-exemple.fr/a");
   });
 
+  it("boutiques douteuses (lot « recherche confiance ») : masquée ou très suspecte — prix jugé avec ceux déjà trouvés — jamais rangée", async () => {
+    const dubious: TextSearchResponse = {
+      items: [
+        shoppingItem(1, "Exemplor veste Nuage 07", "https://boutique-a.fr/1"),
+        { ...shoppingItem(2, "Exemplor veste Nuage 07", "https://exemplor-outlet.shop/2"), price: "9,99 €", extracted_price: 9.99 },
+        shoppingItem(3, "Exemplor veste Nuage 07", "https://replica-veste.fr/3"),
+      ],
+      received: 3,
+      statusCode: 200,
+    };
+    // « exemplor » n'est pas une marque imitée connue : seule la boutique masquée part.
+    const plain = await runTextComplement(textSetup({ searchText: vi.fn(async () => dubious) }).ports, { words: "veste nuage", existing: LENS, locale: FR, deadline: textSetup().deadline, reservationId: 7 });
+    expect(plain.matches.map((match) => match.merchantUrl)).toEqual(["https://boutique-a.fr/1", "https://exemplor-outlet.shop/2"]);
+    const imitated: TextSearchResponse = { ...dubious, items: dubious.items.map((item) => ({ ...item, link: item.link?.replace("exemplor-outlet", "moncler-outlet") })) };
+    const result = await runTextComplement(textSetup({ searchText: vi.fn(async () => imitated) }).ports, { words: "veste nuage", existing: LENS, locale: FR, deadline: textSetup().deadline, reservationId: 7 });
+    expect(result.matches.map((match) => match.merchantUrl)).toEqual(["https://boutique-a.fr/1"]);
+    expect(result.textStatus).toBe("shown");
+  });
+
   it("rien de gardé : « empty » ; refus non facturé : place rendue une fois ; délai dépassé : place gardée", async () => {
     const empty = textSetup({ searchText: vi.fn(async (): Promise<TextSearchResponse> => ({ items: [], received: 0, statusCode: 200 })) });
     expect((await runTextComplement(empty.ports, { words: "veste", existing: [], locale: FR, deadline: empty.deadline, reservationId: 7 })).textStatus).toBe("empty");
@@ -1089,8 +1121,10 @@ describe("recherches relues : origine et complément (lib/searchRows.ts)", () =>
       { ...MATCH, id: "00000000-0000-4000-8000-000000000014", rank: 5, merchant_url: "https://www.google.fr/search?prds=productid:123", merchant_name: "eBay - vendeur" },
     ])!;
     const search = toProductSearch(parseSearchRow(BASE_ROW)!, matches, new Map(), new Map());
-    expect(search.matches.map((match) => match.alertTrackable ?? false)).toEqual([true, false, false, false, false]);
-    expect(search.matches[1]).not.toHaveProperty("alertTrackable");
+    // Lues par rang : Amazon, boutique connue, remonte en tête (lot « recherche confiance »).
+    const byRank = [...search.matches].sort((a, b) => a.rank - b.rank);
+    expect(byRank.map((match) => match.alertTrackable ?? false)).toEqual([true, false, false, false, false]);
+    expect(byRank[1]).not.toHaveProperty("alertTrackable");
   });
 
   it("voie C lancée : origine des propositions des boutiques et de vos mots, complément relu ; l'invitation disparaît une fois vos mots lancés ; jamais la requête", async () => {

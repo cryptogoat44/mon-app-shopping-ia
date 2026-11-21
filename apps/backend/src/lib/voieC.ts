@@ -33,6 +33,7 @@ import { MAX_MATCHES, MAX_PRICED_ADDITIONS, type VisualMatch } from "../services
 import { voieCEnabled } from "./aiSwitches.js";
 import { photoCallsLeft, VOIE_C_BUDGET, type Deadline } from "./deadline.js";
 import type { SearchReservation } from "./searchCapacity.js";
+import { withoutDubiousOffers, type TrustOffer } from "./shopTrust.js";
 import { AI_ERROR_KINDS, NO_QUERY_REASONS, totalSeconds, type AiErrorKind, type ComplementMeasure, type NoQueryReason } from "./searchMeasure.js";
 import { singleFlight } from "./singleFlight.js";
 import { sortByWords } from "./wordSort.js";
@@ -690,9 +691,10 @@ export async function runComplement(ports: ComplementPorts, input: ComplementInp
     if (shopping.kind === "stop") return finish(state, input, shopping.status, [], false);
     if (shopping.kind === "cached") state.measure.shoppingFromCache = true;
 
-    // e. Pages déjà proposées par Lens, tri léger par marque et modèle, puis 20 au plus.
+    // e. Pages déjà proposées par Lens, boutiques douteuses (lib/shopTrust.ts :
+    // prix comparés à ceux de Lens), tri léger par marque et modèle, puis 20 au plus.
     const reference = { brand: query.brand, model: query.model };
-    const fresh = withoutKnownPages(shopping.filtered.matches, input.lens).matches;
+    const fresh = withoutDubiousOffers(withoutKnownPages(shopping.filtered.matches, input.lens).matches, (match) => match, input.lens).kept;
     const sorted = ports.sortShopping(fresh, reference);
     const shown = keepShown(sorted.items, shopping.filtered);
     Object.assign(state.measure, {
@@ -755,8 +757,9 @@ export interface TextComplementPorts {
 export interface TextComplementInput {
   /** Vos mots, déjà passés par sanitizeShoppingQuery (non vides). */
   words: string;
-  /** Propositions déjà rangées (Lens, boutiques) : leurs pages ne reviennent pas. */
-  existing: readonly { merchantUrl: string }[];
+  /** Propositions déjà rangées (Lens, boutiques) : leurs pages ne reviennent
+   * pas, et leurs prix servent à juger ceux des nouvelles (boutiques douteuses). */
+  existing: readonly TrustOffer[];
   locale: SearchLocale;
   /** Budget depuis le début de la requête (startDeadline(T0, VOIE_C_BUDGET.totalMs)). */
   deadline: Deadline;
@@ -809,7 +812,7 @@ export async function runTextComplement(ports: TextComplementPorts, input: TextC
     }
     measure.shoppingMs = ports.now() - started;
     const filtered = filterShoppingItems(response, input.locale.country);
-    const fresh = withoutKnownPages(filtered.matches, input.existing).matches;
+    const fresh = withoutDubiousOffers(withoutKnownPages(filtered.matches, input.existing).matches, (match) => match, input.existing).kept;
     const shown = keepShown(sortByWords(fresh, input.words).matches, filtered);
     Object.assign(measure, {
       received: shown.measure.received,

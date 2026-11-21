@@ -42,9 +42,9 @@ import { ApiError } from "../src/lib/api-error";
 import { clearDraft, getDraft, leaveLaunchScreen } from "../src/lib/spot-draft";
 import { launchPhoto, photoCrop } from "../src/lib/spot-launch";
 import { beginFromPhoto } from "../src/lib/spot-flow";
-import "../src/lib/video-context";
+import { beginPhotoSearch, pendingVideoLinks } from "../src/lib/video-context";
 import { parseLinkAnalysis, type LinkAnalysis } from "../src/lib/video-link-analysis";
-import { momentVideoContext, runLinkAnalysis, startMomentSearch } from "../src/lib/video-link-run";
+import { keepDescriptionInDraft, momentVideoContext, runLinkAnalysis, startMomentSearch } from "../src/lib/video-link-run";
 import { jpegDataUri } from "./fake-jpeg";
 
 const TIKTOK = "https://www.tiktok.com/@lea.style/video/7312345678901234567";
@@ -129,6 +129,24 @@ describe("la demande d'analyse", () => {
     const outcome = await runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", new AbortController().signal, 20);
     expect(aborted).toBe(true);
     expect(outcome).toEqual({ kind: "failed", info: { failure: "timeout", capacity: null } });
+  });
+});
+
+describe("plan B en un geste (lot « recherche confiance ») : la capture d'écran après un échec de l'analyse", () => {
+  it("la capture choisie est associée au lien en attente et reprend la description (pour trier), sans aucune recherche de plus", async () => {
+    await pendingVideoLinks.hold({ url: TIKTOK, platform: "tiktok", creatorHandle: "lea.style" });
+    await beginPhotoSearch({ uri: "file:///capture.jpg", width: 1170, height: 2532 }, "app");
+    const draft = keepDescriptionInDraft(`  ${QUERY.replace(" en ", "   en ")}  `)!;
+    expect(draft.words).toBe(QUERY);
+    expect(draft.video).toMatchObject({ url: TIKTOK, platform: "tiktok", creatorHandle: "lea.style", source: "app" });
+    // Jamais la recherche automatique « Que cherchez-vous ? » (un appel payant de plus) pour une capture.
+    expect(draft.textSearchIfNoPrice).toBeUndefined();
+    // Rien à reprendre : le brouillon reste tel quel ; aucun brouillon : rien.
+    expect(keepDescriptionInDraft("   ")).toBeNull();
+    expect(getDraft()?.words).toBe(QUERY);
+    clearDraft();
+    expect(keepDescriptionInDraft(QUERY)).toBeNull();
+    expect(tracked()).not.toContain("veste");
   });
 });
 
