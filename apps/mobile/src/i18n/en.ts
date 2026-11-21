@@ -412,6 +412,23 @@ export const en: Catalog = {
       rate_limited: "Too many requests at once: a screenshot will do, or try again in a few minutes.",
       network: "Unable to connect: check your connection, then try again.",
     },
+    // Suggestions lot (journey 2, 2026-11-21): "See the AI's suggestions" — the
+    // AI names the pieces it sees, without your words (VIDEO_PIECES_ENABLED).
+    pieces: {
+      lead: "The AI can suggest the pieces it sees in the video.",
+      show: "See the AI's suggestions",
+      or: "or describe the piece:",
+      title: (count: number) => (count > 1 ? "Which piece are you looking for?" : "One piece suggested"),
+      hint: (count: number) => (count > 1 ? "The AI suggests these pieces. Tap the one you're looking for." : "Check that the frame surrounds the piece."),
+      // Name of the group of pills, read by VoiceOver and screen readers on the website.
+      group: "Pieces suggested by the AI",
+      describe: "Describe the piece instead",
+      noneTitle: "No piece suggested",
+      noneMessage: "The AI didn't see any clear piece in this video: describe the one you're looking for, or take a screenshot.",
+      waitingSteps: ["Fetching the video…", "The AI is looking at the pieces…"],
+      // Under the screenshot offered after a failure, when nothing was written.
+      keptLink: "Your link is kept.",
+    },
   },
   visualSearchTip: {
     title: "Tip",

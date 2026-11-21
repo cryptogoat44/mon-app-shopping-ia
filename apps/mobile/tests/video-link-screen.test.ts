@@ -51,12 +51,13 @@ afterEach(() => vi.unstubAllGlobals());
 describe("appels au serveur (contrat partagé)", () => {
   it("état : GET /api/video-links/analyze/status avec la session ; seule la valeur exacte `true` allume", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { enabled: true }));
-    expect(await fetchVideoLinkAnalysisStatus()).toBe(true);
+    // Lot « propositions » : l'état dit aussi `pieces` (coupé ici : le serveur ne l'a pas dit).
+    expect(await fetchVideoLinkAnalysisStatus()).toEqual({ enabled: true, pieces: false });
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("https://api.exemple.test/api/video-links/analyze/status");
     expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer jeton-factice");
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { enabled: "yes" }));
-    expect(await fetchVideoLinkAnalysisStatus()).toBe(false);
+    expect(await fetchVideoLinkAnalysisStatus()).toEqual({ enabled: false, pieces: false });
     // Serveur plus ancien (route absente) : une erreur, que l'écran traduit par « coupée ».
     fetchMock.mockResolvedValueOnce(jsonResponse(404, { error: "not_found", message: "Not Found" }));
     await expect(fetchVideoLinkAnalysisStatus()).rejects.toBeInstanceOf(ApiError);
@@ -75,6 +76,27 @@ describe("appels au serveur (contrat partagé)", () => {
     expect(JSON.parse(init?.body as string)).toEqual({ url: TIKTOK, query: "veste en cuir" });
     expect((init?.headers as Record<string, string>)["Content-Type"]).toBe("application/json");
     expect(init?.signal).toBe(signal);
+  });
+
+  it("lot « propositions » : `pieces` allumé seulement par la valeur exacte `true` ; la demande sans mots part en { url, mode }, la réponse est relue avec ses noms", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { enabled: true, pieces: true }));
+    expect(await fetchVideoLinkAnalysisStatus()).toEqual({ enabled: true, pieces: true });
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { enabled: true, pieces: "true" }));
+    expect(await fetchVideoLinkAnalysisStatus()).toEqual({ enabled: true, pieces: false });
+    const video = { platform: "tiktok", videoKey: "7312345678901234567", canonicalUrl: TIKTOK, creatorHandle: "lea.style" };
+    const moments = [{ timeSeconds: 3, image: jpegDataUri(720, 1280), box: { x: 0, y: 0, width: 1, height: 1 } }];
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { video, moments, labels: ["Le manteau camel"] }));
+    const analysis = await analyzeVideoLink({ url: TIKTOK, mode: "pieces" });
+    expect(analysis.labels).toEqual(["Le manteau camel"]);
+    expect(JSON.parse(fetchMock.mock.calls.at(-1)![1]?.body as string)).toEqual({ url: TIKTOK, mode: "pieces" });
+    // Mode « pièces » sans noms, ou avec un nom refusé : illisible, donc panne.
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { video, moments }));
+    await expect(analyzeVideoLink({ url: TIKTOK, mode: "pieces" })).rejects.toMatchObject({ status: 502, body: { error: "video_unavailable" } });
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { video, moments, labels: ["Le sac de la fille"] }));
+    await expect(analyzeVideoLink({ url: TIKTOK, mode: "pieces" })).rejects.toMatchObject({ status: 502 });
+    // Avec des mots, des noms éventuels sont ignorés.
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { video, moments, labels: ["Le manteau camel"] }));
+    expect(await analyzeVideoLink({ url: TIKTOK, query: "veste" })).not.toHaveProperty("labels");
   });
 
   it("erreur { error, message } : ApiError avec son code ; réponse illisible : panne « video_unavailable »", async () => {
@@ -112,7 +134,8 @@ describe("écran « vidéo partagée » : l'analyse d'abord, quand le serveur l'
   const screen = code("src/app/(app)/spot/lecteur.tsx");
 
   it("état et vidéo demandés ensemble ; état illisible ou en erreur : coupé, l'écran d'avant", () => {
-    expect(screen).toContain("fetchVideoLinkAnalysisStatus().catch(() => false)");
+    // Lot « propositions » : en cas d'erreur, tout coupé (l'analyse et ses propositions).
+    expect(screen).toContain("fetchVideoLinkAnalysisStatus().catch(() => LINK_ANALYSIS_OFF)");
     expect(screen).toContain("setAnalysisEnabled(enabled);");
     expect(screen.match(/if \(enabled\) return setStage\(\{ kind: "auto" \}\);/g)).toHaveLength(2);
     // Sans l'analyse, la décision d'avant (lecteur, écran de secours, site).

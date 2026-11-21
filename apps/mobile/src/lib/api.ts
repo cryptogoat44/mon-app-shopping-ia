@@ -119,7 +119,7 @@ import { ALERTS_UNAVAILABLE, isAlertsUnavailable, readWishAlertState, readWishAl
 import { createStatusLoader } from "./status-loading";
 import { POST_EXTRAS_UNAVAILABLE, readPostExtrasStatus, setPostExtrasStatus } from "./post-extras";
 import { isDataUri } from "./data-uri";
-import { linkAnalysisEnabled, parseLinkAnalysis, type LinkAnalysis } from "./video-link-analysis";
+import { linkAnalysisStatus, linkModeOf, parseLinkAnalysis, type LinkAnalysis, type LinkAnalysisStatus } from "./video-link-analysis";
 import { waitNow, waitSince } from "./wait-clock";
 import { serverRequestStarted } from "./server-first-response";
 import { wasTimedOut } from "./app-timeout";
@@ -1334,18 +1334,22 @@ export async function findVideoMoments(frameUris: readonly string[], query: stri
 // l'image de chacun (« data: », gardée en mémoire, jamais écrite sur
 // l'appareil) et le cadre de la pièce. L'app ne télécharge rien elle-même.
 
-/** L'analyse d'un lien est-elle allumée sur le serveur ? Seule la valeur exacte `true` compte. */
-export async function fetchVideoLinkAnalysisStatus(signal?: AbortSignal): Promise<boolean> {
+/** L'analyse d'un lien est-elle allumée sur le serveur, et « Voir les
+ * propositions de l'IA » (lot « propositions ») ? Pour chacun, seule la
+ * valeur exacte `true` compte. */
+export async function fetchVideoLinkAnalysisStatus(signal?: AbortSignal): Promise<LinkAnalysisStatus> {
   const response = await authorizedFetch("/api/video-links/analyze/status", signal ? { signal } : undefined);
-  return linkAnalysisEnabled(await response.json().catch(() => null));
+  return linkAnalysisStatus(await response.json().catch(() => null));
 }
 
-/** Le lien et les mots de la personne → la vidéo reconnue et ses moments,
- * vérifiés ici (jamais de confiance aveugle dans le réseau). Erreur du
- * serveur ({ error, message }) : ApiError ; réponse illisible : panne. */
+/** Le lien et les mots de la personne (ou, en mode « pièces », le lien seul)
+ * → la vidéo reconnue et ses moments (et, en mode « pièces », le nom de
+ * chaque pièce), vérifiés ici selon le mode demandé (jamais de confiance
+ * aveugle dans le réseau). Erreur du serveur ({ error, message }) :
+ * ApiError ; réponse illisible : panne. */
 export async function analyzeVideoLink(request: VideoLinkAnalysisRequest, signal?: AbortSignal): Promise<LinkAnalysis> {
   const response = await authorizedFetch(`/api/video-links/analyze?${SPEAKS}`, { method: "POST", body: JSON.stringify(request), signal });
-  const analysis = parseLinkAnalysis(await response.json().catch(() => null));
+  const analysis = parseLinkAnalysis(await response.json().catch(() => null), linkModeOf(request));
   if (!analysis) throw new ApiError(502, { error: "video_unavailable", message: t.common.unknownServerError });
   return analysis;
 }

@@ -57,7 +57,7 @@ import { beginFromPhoto } from "@/lib/spot-flow";
 import { closeSpotter } from "@/lib/spot-navigation";
 import { useVideoImport } from "@/lib/use-video-import";
 import { useVideoLinkAnalysis } from "@/lib/use-video-link-analysis";
-import { cleanQuery } from "@/lib/video-link-analysis";
+import { LINK_ANALYSIS_OFF, cleanQuery } from "@/lib/video-link-analysis";
 import { keepDescriptionInDraft } from "@/lib/video-link-run";
 import { beginPhotoSearch, pendingVideoLinks } from "@/lib/video-context";
 import { discardLocalFile } from "@/lib/video-frames";
@@ -225,9 +225,10 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     setStage({ kind: "loading" });
     setMessage(null);
     if (!linkPlatform) return setStage({ kind: "unknown" });
-    // Analyse d'un lien : seule la valeur exacte `true` l'allume ; erreur, serveur plus ancien : l'écran d'avant.
-    const [response, enabled] = await Promise.all([lookupVideoLink(url).catch(() => null), fetchVideoLinkAnalysisStatus().catch(() => false)]);
+    // Analyse d'un lien (et ses propositions) : seule la valeur exacte `true` allume ; erreur, serveur plus ancien : tout coupé, l'écran d'avant.
+    const [response, status] = await Promise.all([lookupVideoLink(url).catch(() => null), fetchVideoLinkAnalysisStatus().catch(() => LINK_ANALYSIS_OFF)]);
     if (!alive.current) return;
+    const enabled = status.enabled;
     setLookup(response);
     setAnalysisEnabled(enabled);
     if (response?.link) {
