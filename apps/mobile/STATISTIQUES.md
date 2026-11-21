@@ -142,7 +142,10 @@ vous verrez dans PostHog.
   pas reçu cette fin ; égale à `wait_ms` quand cette recherche n'a pas eu
   lieu : aucun résultat, ou IA coupée, `complement` = `skipped`).
 - **`text_search_launched`** puis **`text_search_completed`** : « Que
-  cherchez-vous ? ». `wait_ms` (nouveau) = l'attente jusqu'à l'issue.
+  cherchez-vous ? ». `outcome` = `shown` (des résultats), `empty` (aucun),
+  `shopping_failed` (la recherche en ligne a échoué) ou `failed` (panne du
+  réseau ou du serveur, souvent immédiate sans réseau). `wait_ms` (nouveau)
+  = l'attente jusqu'à l'issue.
 
 ### 5. La boutique
 
@@ -253,6 +256,7 @@ Les temps sont en **millisecondes**, arrondis à 100 ms : `12300` veut dire
    - `spot_completed` : `outcome` = `results` ; pour `shops_wait_ms`, en
      plus `complement` **is not** `skipped` (IA coupée : aucune recherche
      dans d'autres boutiques, la valeur vaut alors `wait_ms`) ;
+   - `text_search_completed` : `outcome` = `shown` ;
    - `video_link_ai_result` et `video_ai_result` : `outcome` = `found`.
 3. À la place de **Total count**, choisissez **Property value** → `wait_ms`
    (ou `shops_wait_ms`), puis **Median** (médiane), puis ajoutez la même

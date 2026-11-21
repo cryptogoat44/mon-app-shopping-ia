@@ -87,6 +87,23 @@ describe("STATISTIQUES.md : les recettes de lecture", () => {
     expect(ANALYTICS_EVENTS.spot_completed.complement).toEqual({ kind: "enum", values: expect.arrayContaining(["skipped"]) });
   });
 
+  it("refusé : aucun événement proposé à l'étape 1 sans son filtre sur l'issue à l'étape 2 (« Que cherchez-vous ? » compris)", () => {
+    const recipe = part("Lire les temps d'attente");
+    const step1 = recipe.slice(recipe.indexOf("1. **New insight**"), recipe.indexOf("2. Filtrez sur l'issue"));
+    const step2 = flat(recipe.slice(recipe.indexOf("2. Filtrez sur l'issue"), recipe.indexOf("3. À la place")));
+    const events = [...step1.matchAll(/`([a-z_]+)`/g)].map((found) => found[1]!);
+    expect(events).toEqual(["spot_completed", "text_search_completed", "video_link_ai_result", "video_ai_result"]);
+    for (const event of events) expect(step2, event).toMatch(new RegExp(`\`${event}\`[^;.]*: \`outcome\` = \``));
+  });
+
+  it("permis : « Que cherchez-vous ? » filtré sur `shown`, une issue du catalogue ; toutes ses issues sont décrites avec l'événement", () => {
+    expect(flat(part("Lire les temps d'attente"))).toContain("`text_search_completed` : `outcome` = `shown` ;");
+    expect(ANALYTICS_EVENTS.text_search_completed.outcome).toEqual({ kind: "enum", values: ["shown", "empty", "shopping_failed", "failed"] });
+    expect(flat(guide)).toContain(
+      "`outcome` = `shown` (des résultats), `empty` (aucun), `shopping_failed` (la recherche en ligne a échoué) ou `failed` (panne du réseau ou du serveur, souvent immédiate sans réseau)"
+    );
+  });
+
   it("mark : « is set » dans la recette ; les cartes « Pièces déjà repérées » (sans mention) sont nommées", () => {
     const text = flat(guide);
     expect(text).toContain("**et le filtre `mark` is set**");
