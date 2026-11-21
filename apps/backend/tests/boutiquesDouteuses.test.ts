@@ -17,6 +17,7 @@ import { BOUTIQUES_OFFICIELLES } from "../src/listes/boutiquesOfficielles.js";
 import {
   KNOWN_SHOP_BOOST,
   MIN_TITLES_WITH_BRAND,
+  isBrandShop,
   isHiddenShop,
   isKnownShop,
   isOfficialShop,
@@ -446,6 +447,36 @@ describe("« Cette pièce dans d'autres boutiques » : seule la boutique officie
       ["https://www.zalando.fr/k5", "Zara - Top satiné"],
     ]);
     expect(section.hosts).toEqual(["boutique-c.fr", "boutique-d.fr", "www.zalando.fr", "boutique-e.fr", "www2.hm.com"]);
+  });
+});
+
+// Ordre des boutiques : la boutique officielle de la marque de la pièce est
+// reconnue à l'enregistrement, où la marque est connue (celle de la requête,
+// vérifiée par le serveur dans les titres Lens) ; la ligne en garde un oui.
+describe("à l'enregistrement : la boutique officielle de la marque de la pièce (isBrandShop)", () => {
+  it("permis : la marque écrite comme son adresse, en un mot (« H&M », « The North Face », « ba&sh », « Hermès », pluriel « Levi's »), sur tous ses sous-domaines", () => {
+    expect(isBrandShop("https://www.zara.com/fr/fr/top-p1.html", "Zara")).toBe(true);
+    expect(isBrandShop("https://www2.hm.com/fr_fr/productpage.1.html", "H&M")).toBe(true);
+    expect(isBrandShop("https://www.thenorthface.fr/veste", "The North Face")).toBe(true);
+    expect(isBrandShop("https://www.ba-sh.com/robe", "ba&sh")).toBe(true);
+    expect(isBrandShop("https://www.hermes.com/fr/fr/carre", "Hermès")).toBe(true);
+    expect(isBrandShop("https://www.levi.com/FR/fr_FR/501", "Levi's")).toBe(true);
+  });
+
+  it("refusé : un mot de la marque, du modèle ou d'une autre marque ne suffit jamais (Jules & Jenn, Tommy Bahama, Mango dans une section Zara) ; une marque écrite autrement que son adresse, une marque vide, un revendeur ou une imitation non plus", () => {
+    expect(isBrandShop("https://www.jules.com/fr-fr/sac", "Jules & Jenn")).toBe(false);
+    expect(isBrandShop("https://fr.tommy.com/chemise", "Tommy Bahama")).toBe(false);
+    expect(isBrandShop("https://shop.mango.com/fr/top", "Zara")).toBe(false);
+    expect(isBrandShop("https://www2.hm.com/fr_fr/top", "Zara")).toBe(false);
+    expect(isBrandShop("https://www.nike.com/fr/court-vision", "Saye")).toBe(false);
+    expect(isBrandShop("https://www.petit-bateau.fr/pyjama", "Tape à l'œil")).toBe(false);
+    // Accepté (décision « jamais une marque en avant par erreur ») : « Saint Laurent » n'est pas ysl.com.
+    expect(isBrandShop("https://www.ysl.com/fr-fr/sac", "Saint Laurent")).toBe(false);
+    expect(isBrandShop("https://www.zara.com/fr/top", "")).toBe(false);
+    expect(isBrandShop("https://www.zara.com/fr/top", " & ")).toBe(false);
+    expect(isBrandShop("https://www.zalando.fr/zara-top", "Zara")).toBe(false);
+    expect(isBrandShop("https://nike-outlet.shop/air-max", "Nike")).toBe(false);
+    expect(isBrandShop("pas une adresse", "Zara")).toBe(false);
   });
 });
 

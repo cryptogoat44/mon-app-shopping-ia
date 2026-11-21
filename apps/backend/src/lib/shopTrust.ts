@@ -130,6 +130,23 @@ function officialBrandOf(url: string): string | null {
   return domain === undefined ? null : domain.split(".")[0]!.replace(/-/g, "");
 }
 
+/** À l'enregistrement de « Cette pièce dans d'autres boutiques » (lib/voieC.ts,
+ * seul moment où la marque de la pièce est connue) : l'offre est-elle la
+ * boutique officielle de cette marque ? `brand` : la marque de la requête de
+ * l'IA, vérifiée par le serveur dans au moins deux titres de la recherche
+ * visuelle (services/shoppingQueryAi.ts). La marque de la boutique
+ * (officialBrandOf) doit être exactement celle-ci, ses mots collés (pluriel
+ * toléré, comme le tri léger : « Levi's » pour levi.com) : « Jules & Jenn »
+ * n'est pas jules.com, ni « Tommy Bahama » tommy.com, et la boutique d'une
+ * autre marque ne l'est jamais, même nommée dans les titres. Une marque
+ * écrite autrement que son adresse (« Saint Laurent » pour ysl.com) laisse
+ * la boutique à sa place : jamais une marque en avant par erreur. */
+export function isBrandShop(url: string, brand: string): boolean {
+  const shop = officialBrandOf(url);
+  const key = wordsOf(brand).join("");
+  return shop !== null && key !== "" && sameToken(shop, key);
+}
+
 /** Le titre nomme-t-il la marque : en un mot (pluriel toléré, comme le tri
  * léger), ou en deux ou trois mots collés (« H&M » → « hm », « The North
  * Face » → « thenorthface ») ? */

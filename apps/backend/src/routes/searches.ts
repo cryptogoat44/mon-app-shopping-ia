@@ -66,6 +66,7 @@ import { sortByWords } from "../lib/wordSort.js";
 import { assertNoUserImage, voieCAiEnabled } from "../lib/aiSwitches.js";
 import { photoCallsLeft, startDeadline, VOIE_C_BUDGET } from "../lib/deadline.js";
 import { lightSort } from "../lib/lightSort.js";
+import { brandShopColumnReady } from "../lib/brandShopColumn.js";
 import { cacheKey, imageHash, purgeExpiredCache, readCache, writeCache } from "../lib/searchCache.js";
 import {
   complementAfterSaveFailure,
@@ -252,7 +253,11 @@ async function saveMatches(
  * identifiants, puis leurs liens pour ces seules lignes. Les propositions Lens,
  * déjà rangées par saveMatches (inchangé), ne sont jamais touchées. Renvoie le
  * nombre rangé ; null : insertion refusée ou illisible (journalisée sans
- * contenu : ni titre, ni adresse, ni identifiant). */
+ * contenu : ni titre, ni adresse, ni identifiant). Ordre des boutiques
+ * (0054) : dans « shopping », la boutique officielle de la marque de la
+ * pièce, reconnue par le complément (lib/voieC.ts), porte un oui sur sa
+ * ligne, seulement une fois la colonne vue (lib/brandShopColumn.ts) ; sans
+ * elle, rien n'est noté et la boutique garde sa place reçue. */
 async function saveComplementRows(
   fastify: FastifyInstance,
   searchId: string,
@@ -261,9 +266,12 @@ async function saveComplementRows(
   afterRank: number
 ): Promise<number | null> {
   if (matches.length === 0) return 0;
+  const brandShops = origin === "shopping" && matches.some((m) => m.brandShop === true) && (await brandShopColumnReady(fastify));
   const { data, error } = await fastify.supabaseAdmin
     .from("product_matches")
-    .insert(matches.map((m, index) => ({ ...toMatchRow(searchId, m, afterRank + index + 1), origin })))
+    .insert(
+      matches.map((m, index) => ({ ...toMatchRow(searchId, m, afterRank + index + 1), origin, ...(brandShops && m.brandShop === true ? { brand_shop: true } : {}) }))
+    )
     .select("id, merchant_url");
   const inserted = INSERTED_MATCH_ROWS.safeParse(data);
   if (error || !inserted.success) {
