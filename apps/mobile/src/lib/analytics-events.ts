@@ -13,6 +13,7 @@ import {
   COMPLEMENT_STATUSES,
   MERCHANT_LINK_CONTEXTS,
   MODERATION_DECISIONS,
+  OFFER_MARKS,
   PIECE_SENDS_FROM,
   PRIVACY_LEVELS,
   REPORT_TARGET_TYPES,
@@ -114,7 +115,11 @@ export const ANALYTICS_EVENTS = {
   // propositions de vos mots y prennent leur place), et la carte mise en grand
   // garde la place où elle l'a trouvée (relecture, ORD-6, F6). Ailleurs
   // (Envies, Vault, publication…) : le contexte seul.
-  merchant_link_opened: { context: oneOf(MERCHANT_LINK_CONTEXTS), rank: count, displayed_position: count, in_no_price_section: bool },
+  // Mesure du parcours : `mark`, la mention de l'offre sur l'écran Résultat
+  // (OFFER_MARKS, lot « recherche confiance » ; « none » : aucune mention),
+  // pour savoir si les boutiques officielles sont davantage choisies. Absente
+  // ailleurs (pas d'offre, ou pièces déjà repérées d'une vidéo).
+  merchant_link_opened: { context: oneOf(MERCHANT_LINK_CONTEXTS), rank: count, displayed_position: count, in_no_price_section: bool, mark: oneOf([...OFFER_MARKS, "none"]) },
   post_published: { type: oneOf(["lifestyle", "purchase"]), visibility: VISIBILITY, tagged_count: count },
   post_visibility_changed: { visibility: VISIBILITY },
   post_shared: { method: oneOf(["native", "copy"]) },

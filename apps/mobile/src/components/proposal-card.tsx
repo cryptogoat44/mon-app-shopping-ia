@@ -6,7 +6,7 @@ import { color, font, radius, size, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { formatPrice } from "@/lib/format";
 import { openMerchantLink } from "@/lib/merchant-links";
-import { merchantContextFor, opensOfferPage } from "@/lib/result-sections";
+import { merchantContextFor, merchantMarkFor, opensOfferPage } from "@/lib/result-sections";
 import type { ClickPlacement } from "@/lib/price-first";
 import { SpotImage } from "@/components/spot-image";
 import { ForeignShopNote } from "@/components/foreign-shop-note";
@@ -144,7 +144,7 @@ function ShopLink({ piece, placement }: { piece: Piece; placement?: ClickPlaceme
     const url = piece.affiliateUrl ?? piece.merchantUrl;
     if (!url) return;
     setBlockedUrl(null);
-    const outcome = await openMerchantLink({ matchId: piece.real ? piece.id : null, url, context: merchantContextFor(piece), placement });
+    const outcome = await openMerchantLink({ matchId: piece.real ? piece.id : null, url, context: merchantContextFor(piece), placement, mark: merchantMarkFor(piece) });
     if (outcome.blocked) setBlockedUrl(outcome.url);
   }
 
