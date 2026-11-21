@@ -3,8 +3,10 @@
 // À quoi elle sert : le site officiel d'une marque (nike.com, sezane.com,
 // dior.com…) porte la mention « Boutique officielle de la marque », partout
 // dans les résultats. Il passe en tête, avant les revendeurs, seulement dans
-// « Cette pièce dans d'autres boutiques » : la même pièce, vendue dans
-// plusieurs boutiques. Ailleurs (recherche visuelle, « Résultats pour vos
+// « Cette pièce dans d'autres boutiques » (la même pièce, vendue dans
+// plusieurs boutiques), et seulement quand les autres offres de cette
+// section nomment sa marque : la boutique officielle d'une autre marque y
+// garde sa place. Ailleurs (recherche visuelle, « Résultats pour vos
 // mots »), il garde sa place : aucune marque n'est mise en avant (décision
 // du fondateur, 21 novembre 2026). Comme les boutiques connues, les sites de
 // cette liste ne sont jamais signalés « Prix inhabituellement bas ». Cette

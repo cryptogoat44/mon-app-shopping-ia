@@ -127,10 +127,10 @@ export function keptMatchRows<T extends Pick<MatchRow, "merchant_url" | "price_m
  * comparent d'une section à l'autre) ; chaque section (Lens, boutiques, vos
  * mots) garde sa place et ses propositions, sans les retirées, avec leurs
  * mentions. L'ordre dans chaque section (sectionOrder) : seule « Cette pièce
- * dans d'autres boutiques » est rangée par les mentions (boutiques
- * officielles des marques en tête, boutiques connues un peu remontées,
- * offres signalées à la fin) ; la recherche visuelle et vos mots gardent
- * l'ordre reçu. */
+ * dans d'autres boutiques » est rangée par les mentions (la boutique
+ * officielle de la marque de la section en tête, d'après les titres des
+ * autres offres ; boutiques connues un peu remontées ; offres signalées à la
+ * fin) ; la recherche visuelle et vos mots gardent l'ordre reçu. */
 function trustedMatches(matches: readonly MatchRow[]): { match: MatchRow; mark: OfferMark | null }[] {
   const sorted = [...matches].sort((a, b) => a.rank - b.rank);
   const reviews = reviewOffers(sorted.map(trustOfferOf));
@@ -143,7 +143,8 @@ function trustedMatches(matches: readonly MatchRow[]): { match: MatchRow; mark: 
     sectionOrder(
       origin,
       indices,
-      indices.map((index) => reviews[index]!)
+      indices.map((index) => reviews[index]!),
+      indices.map((index) => ({ merchantUrl: sorted[index]!.merchant_url, title: sorted[index]!.product_name }))
     ).map((index) => ({ match: sorted[index]!, mark: reviews[index]!.mark }))
   );
 }
