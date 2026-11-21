@@ -6,13 +6,14 @@
 
 ## 1. Les tailles exigées par Apple
 
-⚠️ **À vérifier dans App Store Connect le jour de l'envoi** : Apple change ces règles. Ce qui suit vient de la page officielle, lue le 6 novembre 2026 : https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/. Elle n'est pas limpide ; la page « Captures d'écran » de la version, dans App Store Connect, dit elle-même quelles tailles manquent.
+⚠️ **À vérifier dans App Store Connect le jour de l'envoi** : Apple change ces règles. Ce qui suit vient de la page officielle, lue le 6 novembre 2026 et relue le 21 novembre 2026 (rien n'a changé pour Spotto) : https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/. Elle n'est pas limpide ; la page « Captures d'écran » de la version, dans App Store Connect, dit elle-même quelles tailles manquent.
 
 - **iPhone seulement** : l'app n'est pas faite pour l'iPad (`apps/mobile/app.json:20`, `"supportsTablet": false`). Aucune capture iPad.
 - **De 1 à 10 captures par taille**, au format PNG ou JPEG, **sans transparence**.
 - **Obligatoire** : la taille « iPhone avec Dynamic Island, écran moyen » : **1206 × 2622** ou **1179 × 2556** pixels, en portrait.
 - **Conseillé en plus** : la grande taille, « iPhone avec Dynamic Island, grand écran » : **1320 × 2868** (ou 1290 × 2796, 1260 × 2736). La page la dit remplacée, à défaut, par l'ancienne taille de 6,5 pouces (1284 × 2778 ou 1242 × 2688), elle-même obligatoire si la grande manque. Le plus simple : fournir 1320 × 2868 **et** 1206 × 2622.
 - Apple réduit lui-même ces captures pour les iPhone plus petits.
+- Une case « iPhone Duo » apparaît aussi : pas exigée aujourd'hui (Apple : « Starting in April 2027, screenshots will be required for any app using the iOS 27.1 SDK or later »).
 
 | iPhone qui fait la capture | Taille obtenue | Case d'App Store Connect |
 |---|---|---|
@@ -27,26 +28,27 @@
 
 ## 2. Les écrans à capturer, dans l'ordre
 
-La **première** capture compte le plus : c'est elle qu'on voit dans les résultats de recherche de l'App Store. Les légendes sont facultatives : à écrire en haut de l'image si vous la retouchez (Keynote, Canva…), sinon ne rien ajouter. Faites la série en français, puis la même en anglais (Réglages de Spotto → Langue).
+La **première** capture compte le plus : c'est elle qu'on voit dans les résultats de recherche de l'App Store. Les légendes sont facultatives : à écrire en haut de l'image si vous la retouchez (Keynote, Canva…), de préférence dans la police des titres de l'app, Bodoni Moda (gratuite, licence SIL OFL), pour rester dans la marque ; sinon ne rien ajouter. Faites la série en français, puis la même en anglais (Réglages de Spotto → Langue).
 
 | # | Écran | Ce qu'on doit y voir | Légende FR | Légende EN |
 |---|---|---|---|---|
 | 1 | **Spotter** (accueil) | les boutons « Ajouter une vidéo », « Ajouter une photo », « Prendre une photo », et des pièces dans « Récemment spottées » | Vue dans une vidéo ? Retrouvez-la. | Saw it in a video? Find it. |
 | 2 | **Entourez la pièce** | une capture d'écran de vidéo, la pièce entourée au doigt | Entourez la pièce, c'est tout. | Just circle the piece. |
 | 3 | **Résultats** | « Meilleure proposition avec prix », avec le prix et « Voir chez … » | Où l'acheter, prix en tête. | Where to buy it, prices first. |
-| 4 | **Partager vers Spotto** | la feuille de partage d'iOS ouverte sur une photo, avec l'icône « Spotto » | Partagez vers Spotto depuis Photos. | Share to Spotto from Photos. |
+| 4 | **Partager vers Spotto** | la feuille de partage d'iOS ouverte sur une photo, avec l'icône de Spotto (le « S » or pâle sur fond vert) | Partagez vers Spotto depuis Photos. | Share to Spotto from Photos. |
 | 5 | **Vidéo** | « Votre dernière vidéo » ou le choix du moment dans une vidéo | Vos vidéos, au bon moment. | Your videos, at the right moment. |
 | 6 | **Envies** | quelques pièces gardées | Gardez vos coups de cœur. | Save the pieces you love. |
 | 7 | **Vault** (Profil) | des pièces possédées, avec leur photo | Votre dressing, dans le Vault. | Your wardrobe, in the Vault. |
-| 8 | **Fil** | deux ou trois publications, avec j'aime et commentaires | Partagez votre style. | Share your style. |
-| 9 (facultatif) | **Réglages → Vos données** | les interrupteurs « statistiques d'usage » et « analyse automatique des vidéos » | Vos données, vos choix. | Your data, your choices. |
+| 8 | **Fil** | l'onglet « Abonnements » ou « Pour vous », avec une publication à plusieurs photos, des j'aime et des commentaires | Partagez votre style. | Share your style. |
+| 9 (facultatif) | **Messages** | la conversation avec le compte ami : une envie jointe, un cœur sur un message, « Vu » sous le dernier | Parlez mode entre amis. | Talk fashion with friends. |
+| 10 (facultatif) | **Réglages → Vos données** | les interrupteurs « statistiques d'usage » et « analyse automatique des vidéos » | Vos données, vos choix. | Your data, your choices. |
 
 **Règles à respecter** (règles 2.3.3 et 2.3.8 d'Apple, et prudence) :
 - montrer l'app **en marche**, pas seulement l'écran d'accueil, de connexion ou de démarrage ;
 - tout doit convenir à un public de **4 ans** : pas de maillot de bain, de lingerie ni de tenue suggestive, même si l'app est classée 13+ ;
 - du **vrai contenu**, celui du compte de démonstration, jamais de texte « [À compléter] » ;
 - évitez les visages de personnes qui n'ont pas donné leur accord, et les grands logos de marques en gros plan ;
-- ne montrez « Cette pièce dans d'autres boutiques » ou « Pas tout à fait ça ? » (voie C) **que si** la voie C est allumée le jour de l'envoi ; ne montrez jamais le lecteur intégré TikTok / Instagram tant qu'il n'est pas dans le build ;
+- ne montrez « Cette pièce dans d'autres boutiques » ou « Pas tout à fait ça ? » (voie C) **que si** la voie C est allumée le jour de l'envoi, ni « Trouver la pièce » (analyse d'un lien) si elle est coupée ; ne montrez le lecteur officiel TikTok / Instagram que s'il est dans le build envoyé, et alors sans la vidéo d'un créateur qui n'a pas donné son accord (c'est son contenu, sous la marque d'une autre société) ;
 - une barre d'état propre (heure, batterie pleine) : voir partie 4 ;
 - le **thème clair** pour toute la série (ou le sombre pour toute la série), pas un mélange.
 
