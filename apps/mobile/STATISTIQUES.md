@@ -26,8 +26,9 @@ décider où rendre l'app plus fluide.
 - **La clé PostHog doit être réglée à la construction**, sinon rien n'est
   mesuré, sans aucun message d'erreur :
   - pour le **site** : la variable `EXPO_PUBLIC_POSTHOG_KEY` du service
-    « site » chez Render (puis un déploiement **en vidant le cache**, sinon
-    l'ancienne valeur peut rester) ;
+    **mon-app-shopping-ia-web** chez Render (le site, pas spotto-api), puis
+    un déploiement **en vidant le cache**, sinon l'ancienne valeur peut
+    rester ;
   - pour l'**app iPhone** : la même variable dans les variables
     d'environnement d'EAS, pour « preview » et « production »
     (voir `apps/mobile/BUILD-IPHONE.md`).
@@ -127,14 +128,16 @@ vous verrez dans PostHog.
   automatique).
 - **`spot_completed`** : envoyé quand la recherche « dans d'autres
   boutiques » est finie, jusqu'à 40 secondes après l'affichage des résultats
-  (tout de suite quand elle arrive avec eux ou n'a pas lieu). Les résultats, eux, sont déjà à
-  l'écran et cliquables : le membre a souvent ouvert une boutique ou gardé
-  une pièce avant. Une recherche retrouvée après une réponse perdue (réseau
-  coupé, retour sur TikTok) ne l'envoie pas. `outcome` = `results` (des
-  résultats), `none` ou `failed`. Nouveaux : `wait_ms` = l'attente, du
-  lancement aux premiers résultats (même si l'événement part plus tard) ;
-  `shops_wait_ms` = l'attente, du lancement à la fin de la recherche « dans
-  d'autres boutiques » (absente quand l'app n'a pas reçu cette fin).
+  (tout de suite quand elle arrive avec eux ou n'a pas lieu). Les résultats,
+  eux, sont déjà à l'écran et cliquables : le membre a souvent ouvert une
+  boutique ou gardé une pièce avant. Une recherche retrouvée après une
+  réponse perdue (réseau coupé, retour sur TikTok) ne l'envoie pas.
+  `outcome` = `results` (des résultats), `none` ou `failed`. Nouveaux :
+  `wait_ms` = l'attente, du lancement aux premiers résultats (même si
+  l'événement part plus tard) ; `shops_wait_ms` = l'attente, du lancement à
+  la fin de la recherche « dans d'autres boutiques » (absente quand l'app n'a
+  pas reçu cette fin ; égale à `wait_ms` quand cette recherche n'a pas eu
+  lieu : aucun résultat, ou IA coupée, `complement` = `skipped`).
 - **`text_search_launched`** puis **`text_search_completed`** : « Que
   cherchez-vous ? ». `wait_ms` (nouveau) = l'attente jusqu'à l'issue.
 
@@ -144,10 +147,15 @@ vous verrez dans PostHog.
   l'écran Résultat : `mark` = la mention de l'offre —
   `official_shop` (« Boutique officielle de la marque »), `known_shop`
   (« Boutique connue »), `unusual_price` (« Prix inhabituellement bas ») ou
-  `none` (aucune mention). Ailleurs (Envies, Vault, publications…), pas de
-  `mark`. Pour savoir si les boutiques officielles sont davantage choisies :
-  répartition de `merchant_link_opened` par `mark`, avec `context` = `result`
-  ou `similar`.
+  `none` (aucune mention). Pas de `mark` ailleurs (Envies, Vault,
+  publications…), ni sur les cartes « Pièces déjà repérées » de l'écran
+  « vidéo partagée », ni depuis les versions de l'app d'avant ce lot. Pour
+  savoir si les boutiques officielles sont davantage choisies : répartition
+  de `merchant_link_opened` par `mark`, avec `context` = `result` ou
+  `similar` **et le filtre `mark` is set** (« est renseignée »). Sans ce
+  filtre, une case vide (« None » ou « (empty) ») s'ajoute à côté de `none` :
+  ce sont les clics sans mention connue, à ne pas compter avec « aucune
+  mention ».
 
 ### 6. Enregistrer
 
@@ -236,10 +244,17 @@ Les temps sont en **millisecondes**, arrondis à 100 ms : `12300` veut dire
 
 1. **New insight** → **Trends**, événement `spot_completed` (ou
    `text_search_completed`, `video_link_ai_result`, `video_ai_result`).
-2. À la place de **Total count**, choisissez **Property value** → `wait_ms`
+2. Filtrez sur l'issue, pour ne pas mélanger les vraies attentes avec les
+   annulations, les échecs rapides (vidéo privée…) et les recherches sans
+   résultat :
+   - `spot_completed` : `outcome` = `results` ; pour `shops_wait_ms`, en
+     plus `complement` **is not** `skipped` (IA coupée : aucune recherche
+     dans d'autres boutiques, la valeur vaut alors `wait_ms`) ;
+   - `video_link_ai_result` et `video_ai_result` : `outcome` = `found`.
+3. À la place de **Total count**, choisissez **Property value** → `wait_ms`
    (ou `shops_wait_ms`), puis **Median** (médiane), puis ajoutez la même
    série avec **90th percentile** (90e centile).
-3. Lecture :
+4. Lecture :
    - la **médiane** : la moitié des membres attendent moins que ce temps ;
    - le **90e centile** : 9 membres sur 10 attendent moins ; le dixième,
      celui qui attend le plus, attend davantage. C'est souvent là que des

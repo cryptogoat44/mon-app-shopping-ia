@@ -73,3 +73,34 @@ describe("STATISTIQUES.md : les entonnoirs", () => {
     expect(flat(guide)).not.toContain("la réponse est là");
   });
 });
+
+describe("STATISTIQUES.md : les recettes de lecture", () => {
+  it("temps d'attente : filtrés sur l'issue avant la médiane ; shops_wait_ms sans les recherches où l'IA est coupée", () => {
+    const recipe = flat(part("Lire les temps d'attente"));
+    expect(recipe).toContain("2. Filtrez sur l'issue");
+    expect(recipe.indexOf("2. Filtrez sur l'issue")).toBeLessThan(recipe.indexOf("**Property value**"));
+    expect(recipe).toContain("`spot_completed` : `outcome` = `results` ; pour `shops_wait_ms`, en plus `complement` **is not** `skipped`");
+    expect(recipe).toContain("`video_link_ai_result` et `video_ai_result` : `outcome` = `found`");
+    // Le cas mélangé est dit là où l'événement est décrit.
+    expect(flat(guide)).toContain("égale à `wait_ms` quand cette recherche n'a pas eu lieu : aucun résultat, ou IA coupée, `complement` = `skipped`");
+    expect(ANALYTICS_EVENTS.spot_completed.complement).toEqual({ kind: "enum", values: expect.arrayContaining(["skipped"]) });
+  });
+
+  it("mark : « is set » dans la recette ; les cartes « Pièces déjà repérées » (sans mention) sont nommées", () => {
+    const text = flat(guide);
+    expect(text).toContain("**et le filtre `mark` is set**");
+    expect(text).toContain("ni sur les cartes « Pièces déjà repérées » de l'écran « vidéo partagée », ni depuis les versions de l'app d'avant ce lot");
+    expect(text).not.toContain("Ailleurs (Envies, Vault, publications…), pas de `mark`.");
+    // Ce que dit la recette est bien ce que fait l'app : ces cartes ouvrent la boutique en « result », sans mention.
+    const cards = readFileSync(join(__dirname, "../src/components/video-products.tsx"), "utf8");
+    expect(cards).toMatch(/<MerchantLinkButton [^>]*context="result"[^>]*\/>/);
+    expect(cards).not.toMatch(/<MerchantLinkButton [^>]*mark=/);
+  });
+
+  it("la clé PostHog du site : le vrai nom du service chez Render, pas un surnom", () => {
+    const check = flat(part("⚠️ À vérifier avant de lire les chiffres"));
+    expect(check).toContain("la variable `EXPO_PUBLIC_POSTHOG_KEY` du service **mon-app-shopping-ia-web** chez Render (le site, pas spotto-api)");
+    expect(check).not.toContain("« site » chez Render");
+    expect(readFileSync(join(__dirname, "../../../MISE-EN-LIGNE.md"), "utf8")).toContain("Render, service **mon-app-shopping-ia-web**");
+  });
+});
