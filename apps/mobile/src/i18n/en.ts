@@ -418,6 +418,16 @@ export const en: Catalog = {
     body: `In any app, take a screenshot, tap Image Search, then ${BRAND} (compatible iPhones).`,
     dismiss: "Got it",
   },
+  firstRunGuide: {
+    title: `Welcome to ${BRAND}`,
+    stepOf: (step: number, total: number) => `Step ${step} of ${total}`,
+    steps: ["Share the video from TikTok or Instagram, or paste its link", "Circle the piece", "Compare shops and prices, create an alert"],
+    next: "Next",
+    skip: "Skip",
+    skipLabel: "Skip the guide",
+    start: "Start my first search",
+    startHint: "Choose a screenshot or a photo of the piece.",
+  },
   preview: {
     captureSteps: (platform: string, shortcut: string) => [
       `Open the video in ${platform}.`,

@@ -444,6 +444,17 @@ export const fr = {
     body: `Dans n'importe quelle app, faites une capture, touchez Recherche d'image, puis ${BRAND} (iPhone compatibles).`,
     dismiss: "J'ai compris",
   },
+  // Guide de la première recherche (lot « recherche confiance ») : trois étapes, une seule fois par appareil.
+  firstRunGuide: {
+    title: `Bienvenue sur ${BRAND}`,
+    stepOf: (step: number, total: number) => `Étape ${step} sur ${total}`,
+    steps: ["Partagez la vidéo depuis TikTok ou Instagram, ou collez son lien", "Entourez la pièce", "Comparez les boutiques et les prix, créez une alerte"],
+    next: "Suivant",
+    skip: "Passer",
+    skipLabel: "Passer le guide",
+    start: "Lancer ma première recherche",
+    startHint: "Choisissez une capture d'écran ou une photo de la pièce.",
+  },
   // Étapes de la capture d'écran (aide d'un lien collé ou partagé, lecteur) et
   // messages d'un parcours qui n'existe plus (page rechargée).
   preview: {

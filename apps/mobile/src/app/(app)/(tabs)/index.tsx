@@ -9,6 +9,7 @@ import { clearLastSpotResult } from "@/api/spotSession";
 import type { Piece } from "@/api/types";
 import { ClockIcon } from "@/components/icons";
 import { ErrorMessage } from "@/components/error-message";
+import { FirstRunGuide } from "@/components/first-run-guide";
 import { HowItWorksCard } from "@/components/how-it-works";
 import { LinkEntry } from "@/components/link-entry";
 import { SeeAllRecentLink } from "@/components/recent-searches";
@@ -32,6 +33,7 @@ import { useVideoImport } from "@/lib/use-video-import";
 import { discardLocalFile } from "@/lib/video-frames";
 import { moveIntoCaptureCache } from "@/lib/visual-search-intake";
 import { useSearchLimits } from "@/lib/use-search-limits";
+import { useFirstRunGuide } from "@/lib/use-first-run-guide";
 import { themedStyles } from "@/theme/themed-styles";
 
 /** Dernière vidéo de la galerie (app iPhone, en option), relue à chaque retour
@@ -271,6 +273,8 @@ export default function SpotterScreen() {
   const limits = useSearchLimits();
   // Lot « partager vers Spotto » : l'élément partagé s'ouvre ici, Spotter affiché et libre.
   useSharedItemOpener(entries.openShared, entries.busy === null);
+  // Lot « recherche confiance » : le guide de la première recherche, une seule fois par appareil, pour un historique vide.
+  const guide = useFirstRunGuide(recentLoaded ? recent.length === 0 : null);
 
   const loadRecent = useCallback(() => getRecentSearches(RECENT_SEARCHES_LIMIT).then(setRecent).then(() => setRecentLoaded(true)).catch(() => {}), []);
   useFocusEffect(
@@ -299,8 +303,19 @@ export default function SpotterScreen() {
           {t.spotter.title}
         </Text>
         <Text style={styles.lead}>{t.spotter.lead}</Text>
+        {guide.state === "shown" ? (
+          <FirstRunGuide
+            onClose={guide.close}
+            onStart={() => {
+              // La dernière étape lance une vraie recherche : le choix d'une capture ou d'une photo.
+              guide.close();
+              entries.addPhoto();
+            }}
+          />
+        ) : null}
         <SearchLimitsNotice notice={limits.notice} />
-        <VisualSearchTip />
+        {/* L'astuce (iPhone, iOS 26) attend la décision du guide : jamais les deux cartes à la fois. */}
+        {guide.state === "hidden" ? <VisualSearchTip /> : null}
         {entries.linkHelp ? (
           <View style={styles.sharedHelp}>
             <ScreenshotHelp onAddScreenshot={entries.addPhoto} onAddVideo={entries.addVideo} busy={entries.importing} />
@@ -329,7 +344,7 @@ export default function SpotterScreen() {
         {Platform.OS === "web" ? <Text style={styles.dropHint}>{t.videoLink.dropHint}</Text> : null}
         <LinkHelp onHelp={entries.showLinkHelp} />
         <RecentRow recent={recent} />
-        {recentLoaded && recent.length === 0 ? <HowItWorksCard /> : null}
+        {recentLoaded && recent.length === 0 && guide.state !== "shown" ? <HowItWorksCard /> : null}
       </ScrollView>
     </SafeAreaView>
   );
