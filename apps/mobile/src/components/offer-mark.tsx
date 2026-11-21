@@ -9,7 +9,7 @@ import { themedStyles } from "@/theme/themed-styles";
 
 // Boutiques douteuses (lot « recherche confiance ») : la mention d'une offre,
 // décidée par le serveur (apps/backend/src/lib/shopTrust.ts) — « Boutique
-// connue », ou « Prix inhabituellement bas », un constat, jamais une
+// officielle de la marque », « Boutique connue », ou « Prix inhabituellement bas », un constat, jamais une
 // accusation. Discrète, sous la proposition ; touchée, une feuille d'une
 // phrase dit ce que fait Spotto. Zone à part, jamais dans celle qui met la
 // carte en grand (VoiceOver la lit juste après la carte). Sans mention
@@ -20,7 +20,7 @@ export function OfferMarkNote({ piece }: { piece: Pick<Piece, "offerMark"> }) {
   const mark = piece.offerMark;
   if (!mark) return null;
   const label = t.result.offerMark[mark];
-  const known = mark === "known_shop";
+  const known = mark === "known_shop" || mark === "official_shop";
   return (
     <>
       <Pressable

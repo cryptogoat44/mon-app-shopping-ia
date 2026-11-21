@@ -2,6 +2,9 @@
 // membres ne doivent pas être envoyés vers de fausses boutiques. Sans aucun
 // appel ni service : deux listes tenues par le fondateur (src/listes/) et
 // deux signaux prudents, testés (tests/boutiquesDouteuses.test.ts).
+// - Boutique officielle de la marque (liste) : mention « Boutique officielle
+//   de la marque », EN TÊTE de sa section, avant les revendeurs (décision du
+//   fondateur, 21 novembre 2026) ; jamais signalée pour son prix.
 // - Boutique connue (liste) : mention « Boutique connue », remontée de
 //   KNOWN_SHOP_BOOST places au plus dans sa section ; jamais signalée pour
 //   son prix.
@@ -24,6 +27,7 @@
 // Fonctions pures : ni réseau, ni base, ni journal.
 import { alertCurrency, type OfferMark } from "@monapp/shared-types";
 import { BOUTIQUES_CONNUES } from "../listes/boutiquesConnues.js";
+import { BOUTIQUES_OFFICIELLES } from "../listes/boutiquesOfficielles.js";
 import { BOUTIQUES_MASQUEES, MOTS_MASQUES } from "../listes/boutiquesMasquees.js";
 
 /** Ce qu'il faut d'une offre : son lien, et son prix s'il est connu. */
@@ -87,10 +91,17 @@ function nameOf(host: string): string {
     .join("-");
 }
 
-/** Boutique de la liste des boutiques connues (src/listes/boutiquesConnues.ts). */
+/** Site officiel d'une marque (src/listes/boutiquesOfficielles.ts). */
+export function isOfficialShop(url: string): boolean {
+  const host = hostOf(url);
+  return host !== null && BOUTIQUES_OFFICIELLES.some((domain) => onDomain(host, domain));
+}
+
+/** Boutique sûre : un revendeur connu (src/listes/boutiquesConnues.ts) ou le
+ * site officiel d'une marque. Jamais signalée pour son prix. */
 export function isKnownShop(url: string): boolean {
   const host = hostOf(url);
-  return host !== null && BOUTIQUES_CONNUES.some((domain) => onDomain(host, domain));
+  return host !== null && (BOUTIQUES_CONNUES.some((domain) => onDomain(host, domain)) || isOfficialShop(url));
 }
 
 /** Boutique masquée : dans la liste, ou un mot évident dans son adresse
@@ -196,7 +207,13 @@ export function reviewOffers(offers: readonly TrustOffer[], context: readonly Tr
   return offers.map((_, index): OfferReview => {
     if (hidden[index]) return { dropped: true, dropReason: "hidden", mark: null, demoted: false, boosted: false };
     if (strong[index] && somethingLeft) return { dropped: true, dropReason: "suspicious", mark: null, demoted: false, boosted: false };
-    const mark: OfferMark | null = known[index] ? "known_shop" : lowPrice[index] ? "unusual_price" : null;
+    const mark: OfferMark | null = known[index]
+      ? isOfficialShop(offers[index]!.merchantUrl)
+        ? "official_shop"
+        : "known_shop"
+      : lowPrice[index]
+        ? "unusual_price"
+        : null;
     return { dropped: false, dropReason: null, mark, demoted: lowPrice[index]! || fakeLooking[index]!, boosted: known[index]! };
   });
 }
@@ -217,13 +234,18 @@ export function withoutDubiousOffers<T>(
 }
 
 /** L'ordre d'une section, à la relecture : les offres retirées en moins ;
- * les boutiques connues remontées de KNOWN_SHOP_BOOST places au plus ; les
+ * les boutiques officielles des marques en tête (dans leur ordre) ; les
+ * boutiques connues remontées de KNOWN_SHOP_BOOST places au plus ; les
  * offres signalées (un signal) en fin de section ; sinon l'ordre reçu. */
 export function trustOrder<T>(items: readonly T[], reviews: readonly OfferReview[]): T[] {
   const kept = items.map((item, index) => ({ item, review: reviews[index]! })).filter(({ review }) => !review.dropped);
   const ranked = kept
     .filter(({ review }) => !review.demoted)
-    .map((entry, position) => ({ ...entry, position, key: position - (entry.review.boosted ? KNOWN_SHOP_BOOST : 0) }))
+    .map((entry, position) => ({
+      ...entry,
+      position,
+      key: entry.review.mark === "official_shop" ? position - items.length - KNOWN_SHOP_BOOST : position - (entry.review.boosted ? KNOWN_SHOP_BOOST : 0),
+    }))
     .sort((a, b) => a.key - b.key || Number(b.review.boosted) - Number(a.review.boosted) || a.position - b.position);
   const demoted = kept.filter(({ review }) => review.demoted);
   return [...ranked, ...demoted].map(({ item }) => item);

@@ -2,7 +2,8 @@
 //
 // À quoi elle sert : dans les résultats, les offres de ces boutiques portent
 // la mention discrète « Boutique connue » et remontent un peu (2 places au
-// plus dans leur section). Elles ne sont jamais signalées « Prix
+// plus dans leur section). Les sites officiels des marques sont dans une
+// autre liste, mis en avant plus fort : src/listes/boutiquesOfficielles.ts. Elles ne sont jamais signalées « Prix
 // inhabituellement bas » : un prix bas chez elles est une vraie promotion, ou
 // une pièce voisine moins chère. La règle est dans src/lib/shopTrust.ts.
 //
@@ -73,72 +74,10 @@ export const BOUTIQUES_CONNUES: readonly string[] = [
   "luisaviaroma.com",
   "brownsfashion.com",
 
-  // Enseignes de mode (sites officiels)
-  "zara.com",
-  "hm.com",
-  "mango.com",
-  "uniqlo.com",
-  "cos.com",
-  "arket.com",
-  "stories.com",
-  "massimodutti.com",
-  "bershka.com",
-  "pullandbear.com",
-  "stradivarius.com",
-  "oysho.com",
-  "primark.com",
-  "kiabi.com",
-  "celio.com",
-  "jules.com",
-  "promod.fr",
-  "etam.com",
-  "sezane.com",
-  "ba-sh.com",
-  "maje.com",
-  "sandro-paris.com",
-  "claudiepierlot.com",
-  "isabelmarant.com",
-  "jacquemus.com",
-  "rouje.com",
-  "petit-bateau.fr",
-  "lacoste.com",
-  "levi.com",
-  "ralphlauren.fr",
-  "tommy.com",
-  "calvinklein.fr",
-
-  // Sport (sites officiels et grandes enseignes)
-  "nike.com",
-  "adidas.fr",
-  "adidas.com",
+  // Sport (grandes enseignes)
   "decathlon.fr",
-  "puma.com",
-  "newbalance.fr",
-  "converse.com",
-  "vans.fr",
-  "asics.com",
-  "salomon.com",
-  "thenorthface.fr",
-  "thenorthface.com",
-  "patagonia.com",
   "jdsports.fr",
   "courir.com",
   "footlocker.fr",
   "intersport.fr",
-
-  // Maisons de luxe (sites officiels)
-  "dior.com",
-  "chanel.com",
-  "louisvuitton.com",
-  "hermes.com",
-  "gucci.com",
-  "prada.com",
-  "balenciaga.com",
-  "ysl.com",
-  "celine.com",
-  "burberry.com",
-  "versace.com",
-  "moncler.com",
-  "stoneisland.com",
-  "canadagoose.com",
 ];

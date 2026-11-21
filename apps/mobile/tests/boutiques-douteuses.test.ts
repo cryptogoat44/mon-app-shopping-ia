@@ -49,26 +49,29 @@ function result(matches: ProductMatch[]): Pick<SpotResult, "pieces" | "complemen
 
 describe("mentions des boutiques : textes", () => {
   it("français et anglais, neutres et factuels — jamais une accusation", () => {
+    expect(fr.result.offerMark.official_shop).toBe("Boutique officielle de la marque");
     expect(fr.result.offerMark.known_shop).toBe("Boutique connue");
     expect(fr.result.offerMark.unusual_price).toBe("Prix inhabituellement bas");
-    expect(fr.result.offerMark.explanation).toMatch(/^.+ met en avant les boutiques connues et signale les prix inhabituellement bas ; vérifiez toujours la boutique avant de payer\.$/);
+    expect(fr.result.offerMark.explanation).toMatch(/^.+ met en avant les boutiques officielles des marques et les boutiques connues, et signale les prix inhabituellement bas ; vérifiez toujours la boutique avant de payer\.$/);
+    expect(en.result.offerMark.official_shop).toBe("Official brand store");
     expect(en.result.offerMark.known_shop).toBe("Well-known shop");
     expect(en.result.offerMark.unusual_price).toBe("Unusually low price");
-    expect(en.result.offerMark.explanation).toMatch(/highlights well-known shops and flags unusually low prices; always check the shop before you pay\.$/);
+    expect(en.result.offerMark.explanation).toMatch(/highlights official brand stores and well-known shops, and flags unusually low prices; always check the shop before you pay\.$/);
     const all = JSON.stringify([fr.result.offerMark, en.result.offerMark]).toLowerCase();
     for (const word of ["arnaque", "escroc", "fraude", "faux", "fausse", "scam", "fraud", "fake"]) expect(all).not.toContain(word);
   });
 
   it("conditions d'utilisation : une phrase dit que Spotto peut masquer ou signaler des offres (français et anglais)", () => {
     const blocks = (doc: typeof termsOfUse) => doc.sections.flatMap((section) => section.blocks.flat()).join("\n");
-    expect(blocks(termsOfUse)).toMatch(/peut ne pas afficher certaines offres, en signaler d'autres \(« Prix inhabituellement bas »\) et mettre en avant des boutiques connues/);
-    expect(blocks(termsOfUseEn)).toMatch(/may not show some offers, may flag others \(“Unusually low price”\) and may highlight well-known shops/);
+    expect(blocks(termsOfUse)).toMatch(/peut ne pas afficher certaines offres, en signaler d'autres \(« Prix inhabituellement bas »\) et mettre en avant les boutiques officielles des marques et des boutiques connues/);
+    expect(blocks(termsOfUseEn)).toMatch(/may not show some offers, may flag others \(“Unusually low price”\) and may highlight official brand stores and well-known shops/);
   });
 });
 
 describe("mentions des boutiques : ce que l'app reçoit et affiche", () => {
   it("la mention suit la proposition ; une valeur inconnue (serveur plus récent) ou absente (ancien serveur) : rien", () => {
     expect(matchToPiece(match("p1", 10, { offerMark: "known_shop" })).offerMark).toBe("known_shop");
+    expect(matchToPiece(match("p1", 10, { offerMark: "official_shop" })).offerMark).toBe("official_shop");
     expect(matchToPiece(match("p2", 10, { offerMark: "unusual_price" })).offerMark).toBe("unusual_price");
     expect(matchToPiece(match("p3", 10, { offerMark: "autre" as never }))).not.toHaveProperty("offerMark");
     expect(matchToPiece(match("p4", 10))).not.toHaveProperty("offerMark");

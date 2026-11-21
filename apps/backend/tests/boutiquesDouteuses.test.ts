@@ -12,10 +12,12 @@ vi.mock("../src/listes/boutiquesMasquees.js", async (importOriginal) => {
 });
 
 import { BOUTIQUES_CONNUES } from "../src/listes/boutiquesConnues.js";
+import { BOUTIQUES_OFFICIELLES } from "../src/listes/boutiquesOfficielles.js";
 import {
   KNOWN_SHOP_BOOST,
   isHiddenShop,
   isKnownShop,
+  isOfficialShop,
   looksLikeFakeShop,
   reviewOffers,
   trustOrder,
@@ -30,10 +32,15 @@ const offer = (merchantUrl: string, priceValue: number | null = null, currency: 
 describe("les deux listes du fondateur", () => {
   it("chaque adresse est écrite comme il faut : minuscules, sans « https:// » ni « www. », avec son extension, sans doublon", async () => {
     const actual = await vi.importActual<typeof import("../src/listes/boutiquesMasquees.js")>("../src/listes/boutiquesMasquees.js");
-    for (const domain of [...BOUTIQUES_CONNUES, ...actual.BOUTIQUES_MASQUEES]) {
+    for (const domain of [...BOUTIQUES_CONNUES, ...BOUTIQUES_OFFICIELLES, ...actual.BOUTIQUES_MASQUEES]) {
       expect(domain, domain).toMatch(/^(?!www\.)[a-z0-9-]+(\.[a-z0-9-]+)+$/);
     }
     expect(new Set(BOUTIQUES_CONNUES).size).toBe(BOUTIQUES_CONNUES.length);
+    expect(new Set(BOUTIQUES_OFFICIELLES).size).toBe(BOUTIQUES_OFFICIELLES.length);
+    // Une adresse est soit un revendeur connu, soit le site officiel d'une marque, jamais les deux ; jamais masquée.
+    expect(BOUTIQUES_OFFICIELLES.filter((domain) => BOUTIQUES_CONNUES.includes(domain))).toEqual([]);
+    expect(actual.BOUTIQUES_MASQUEES.filter((domain) => BOUTIQUES_OFFICIELLES.includes(domain))).toEqual([]);
+    expect(BOUTIQUES_OFFICIELLES.filter((domain) => isHiddenShop(`https://${domain}/`))).toEqual([]);
     expect(actual.BOUTIQUES_MASQUEES.filter((domain) => BOUTIQUES_CONNUES.includes(domain))).toEqual([]);
     // Masquées : vide, ou des copies avérées seulement (mots évidents).
     expect(actual.BOUTIQUES_MASQUEES).toEqual([]);
@@ -132,6 +139,24 @@ describe("règles, offre par offre", () => {
   it("boutique connue : mention « Boutique connue », remontée, jamais signalée pour son prix", () => {
     const reviews = reviewOffers([offer(LEGIT[0]!, 120), offer(LEGIT[1]!, 110), offer(LEGIT[2]!, 130), offer("https://www.zalando.fr/veste", 19)]);
     expect(reviews[3]).toEqual({ dropped: false, dropReason: null, mark: "known_shop", demoted: false, boosted: true });
+  });
+
+  it("site officiel de la marque : mention « Boutique officielle de la marque », jamais signalée pour son prix ; un revendeur reste « Boutique connue »", () => {
+    expect(isOfficialShop("https://www.nike.com/fr/t/air-max-90")).toBe(true);
+    expect(isOfficialShop("https://www2.hm.com/fr_fr/productpage.123.html")).toBe(true);
+    expect(isOfficialShop("https://www.zalando.fr/nike-air-max")).toBe(false);
+    expect(isOfficialShop("https://nike-outlet.shop/air-max")).toBe(false);
+    expect(isKnownShop("https://www.nike.com/fr/t/air-max-90")).toBe(true);
+    const reviews = reviewOffers([offer(LEGIT[0]!, 120), offer(LEGIT[1]!, 110), offer("https://www.zalando.fr/nike-air-max", 125), offer("https://www.nike.com/fr/t/air-max-90", 19)]);
+    expect(reviews[2]).toEqual({ dropped: false, dropReason: null, mark: "known_shop", demoted: false, boosted: true });
+    expect(reviews[3]).toEqual({ dropped: false, dropReason: null, mark: "official_shop", demoted: false, boosted: true });
+  });
+
+  it("ordre : le site officiel de la marque passe en tête de sa section, avant les revendeurs connus, dans son ordre", () => {
+    const review = (mark: "official_shop" | "known_shop" | null, demoted = false) => ({ dropped: false, dropReason: null, mark, demoted, boosted: mark !== null });
+    const items = ["a", "b-connue", "c", "d-officielle", "e", "f-officielle", "g-signalee"];
+    const reviews = [review(null), review("known_shop"), review(null), review("official_shop"), review(null), review("official_shop"), { ...review(null, true), mark: "unusual_price" as const }];
+    expect(trustOrder(items, reviews)).toEqual(["d-officielle", "f-officielle", "b-connue", "a", "c", "e", "g-signalee"]);
   });
 
   it("jamais les seuls résultats : si les règles écartaient tout, les offres sont gardées, signalées et rangées plus bas", () => {

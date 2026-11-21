@@ -590,10 +590,11 @@ export const en: Catalog = {
     offersSummary: (n: number, price: string) => (n > 1 ? `${n} offers · from ${price}` : `1 offer · ${price}`),
     cheapestBadge: "Lowest price",
     offerMark: {
+      official_shop: "Official brand store",
       known_shop: "Well-known shop",
       unusual_price: "Unusually low price",
       hint: "Explains this note.",
-      explanation: `${BRAND} highlights well-known shops and flags unusually low prices; always check the shop before you pay.`,
+      explanation: `${BRAND} highlights official brand stores and well-known shops, and flags unusually low prices; always check the shop before you pay.`,
       close: "Got it",
     },
     showAllProposals: "Also show suggestions without a price",

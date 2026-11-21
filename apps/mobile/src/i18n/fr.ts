@@ -653,10 +653,11 @@ export const fr = {
     // Boutiques douteuses (lot « recherche confiance ») : mentions neutres et factuelles,
     // jamais une accusation ; touchées, une phrase d'explication.
     offerMark: {
+      official_shop: "Boutique officielle de la marque",
       known_shop: "Boutique connue",
       unusual_price: "Prix inhabituellement bas",
       hint: "Explique cette mention.",
-      explanation: `${BRAND} met en avant les boutiques connues et signale les prix inhabituellement bas ; vérifiez toujours la boutique avant de payer.`,
+      explanation: `${BRAND} met en avant les boutiques officielles des marques et les boutiques connues, et signale les prix inhabituellement bas ; vérifiez toujours la boutique avant de payer.`,
       close: "J'ai compris",
     },
     // « Avec prix seulement » et aucune proposition avec prix : retirer le filtre.
