@@ -13,8 +13,8 @@ vi.hoisted(() => {
 vi.mock("../src/lib/supabase", () => ({ supabase: { auth: { getSession: async () => ({ data: { session: { access_token: "jeton-factice" } } }) } } }));
 vi.mock("../src/lib/image-file", () => ({ imageFileFromUri: vi.fn() }));
 
-import { fetchConsentStatus, fetchMyProfile, fetchSearch } from "../src/lib/api";
-import { __setAnalyticsTestHooks, setAnalyticsConsent, setAnalyticsUser } from "../src/lib/analytics";
+import { deleteMyAccount, fetchConsentStatus, fetchMyProfile, fetchSearch, recordAnalyticsChoice } from "../src/lib/api";
+import { __setAnalyticsTestHooks, isAnalyticsActive, setAnalyticsConsent, setAnalyticsUser } from "../src/lib/analytics";
 import { ANALYTICS_EVENTS, sanitizeProps } from "../src/lib/analytics-events";
 import { RESUME_GAP_MS, __resetAppOpening, trackAppOpened } from "../src/lib/app-opening";
 import { __resetServerFirstResponse, createFirstResponseMeter, forgetServerFirstResponse, type FirstResponse } from "../src/lib/server-first-response";
@@ -303,5 +303,76 @@ describe("le vrai chemin : authorizedFetch, app_opened, puis l'envoi (avec accor
     fetchMock.mockImplementationOnce(answersAfter(300, {}));
     await fetchSearch("s1");
     expect(posthog.map((item) => item.event)).toEqual(["app_opened"]);
+  });
+});
+
+describe("le retrait coupe la collecte avant l'envoi au serveur", () => {
+  const fetchMock = vi.fn<typeof fetch>();
+  const posthog: { event: string; properties: Record<string, unknown> }[] = [];
+  let now = 0;
+  const answersAfter = (ms: number, body: unknown, status = 200) => async () => {
+    now += ms;
+    return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  };
+  const opened = 1_000_000;
+
+  beforeEach(async () => {
+    now = 0;
+    posthog.length = 0;
+    __setWaitClock(() => now);
+    __resetServerFirstResponse();
+    __resetAppOpening();
+    __setAnalyticsTestHooks({ apiKey: "phc_test", platform: "ios", sender: (_url, body) => posthog.push(JSON.parse(body)) });
+    vi.stubGlobal("fetch", fetchMock);
+    // Un membre avec accord : lancement mesuré, puis retour dans l'app 30 minutes plus tard, en attente de sa première réponse.
+    setAnalyticsUser("u-1", true);
+    trackAppOpened("launch", opened);
+    fetchMock.mockImplementationOnce(answersAfter(400, []));
+    await fetchConsentStatus();
+    expect(trackAppOpened("resume", opened + RESUME_GAP_MS)).toBe(true);
+    posthog.length = 0;
+  });
+
+  afterEach(() => {
+    fetchMock.mockReset();
+    __setWaitClock(null);
+    vi.unstubAllGlobals();
+  });
+
+  it("retrait de l'accord (Réglages), première requête du retour : rien ne part, même la réponse du serveur", async () => {
+    fetchMock.mockImplementationOnce(answersAfter(1_500, {}));
+    await recordAnalyticsChoice(false);
+    expect(posthog).toEqual([]);
+    expect(isAnalyticsActive()).toBe(false);
+  });
+
+  it("retrait dont l'envoi échoue : la collecte reste coupée pour la session", async () => {
+    fetchMock.mockImplementationOnce(async () => {
+      throw new TypeError("Network request failed");
+    });
+    await expect(recordAnalyticsChoice(false)).rejects.toBeInstanceOf(TypeError);
+    expect(posthog).toEqual([]);
+    expect(isAnalyticsActive()).toBe(false);
+  });
+
+  it("suppression du compte, première requête du retour : rien ne part sous ce compte", async () => {
+    fetchMock.mockImplementationOnce(answersAfter(2_000, {}));
+    await deleteMyAccount("SUPPRIMER");
+    expect(posthog).toEqual([]);
+    expect(isAnalyticsActive()).toBe(false);
+  });
+
+  it("permis : une autre requête du retour part avec sa durée ; l'accord ne s'allume qu'une fois enregistré par le serveur", async () => {
+    fetchMock.mockImplementationOnce(answersAfter(1_200, {}));
+    await fetchSearch("s1");
+    expect(posthog.map((item) => [item.event, item.properties.wait_ms, item.properties.context])).toEqual([["server_first_response", 1_200, "resume"]]);
+    // Accord donné de nouveau : refusé par le serveur, rien ne s'allume ; enregistré, la collecte reprend.
+    setAnalyticsConsent(false);
+    fetchMock.mockImplementationOnce(answersAfter(100, { error: "internal_error", message: "x" }, 503));
+    await expect(recordAnalyticsChoice(true)).rejects.toMatchObject({ status: 503 });
+    expect(isAnalyticsActive()).toBe(false);
+    fetchMock.mockImplementationOnce(answersAfter(100, {}));
+    await recordAnalyticsChoice(true);
+    expect(isAnalyticsActive()).toBe(true);
   });
 });

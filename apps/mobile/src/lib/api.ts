@@ -1247,9 +1247,13 @@ export async function acceptConsents(types: VersionedConsentType[]): Promise<voi
   await authorizedFetch("/api/consents", { method: "POST", body: JSON.stringify(body) });
 }
 
-/** Accord (true) ou refus / retrait (false) des statistiques d'usage ; effet
- * immédiat sur la collecte dès que le serveur a enregistré le choix. */
+/** Accord (true) ou refus / retrait (false) des statistiques d'usage. Le
+ * refus coupe la collecte AVANT l'envoi au serveur : rien ne part pendant
+ * l'enregistrement, pas même la première réponse du serveur
+ * (server-first-response.ts) ; envoi raté : coupée pour la session. L'accord
+ * n'allume la collecte qu'une fois enregistré par le serveur. */
 export async function recordAnalyticsChoice(granted: boolean): Promise<void> {
+  if (!granted) setAnalyticsConsent(false);
   const body: RecordConsentsRequest = { consents: [{ type: "analytics", version: CONSENT_VERSIONS.analytics, granted }] };
   await authorizedFetch("/api/consents", { method: "POST", body: JSON.stringify(body) });
   setAnalyticsConsent(granted);
@@ -1356,8 +1360,11 @@ export async function exportMyData(format: ExportFormat): Promise<ExportResponse
 }
 
 /** Supprime son compte : `confirmation` est le mot tapé par la personne,
- * revérifié par le serveur (lot 5). */
+ * revérifié par le serveur (lot 5). Les statistiques sont coupées d'abord :
+ * rien ne part sous ce compte pendant la suppression (même ratée : coupées
+ * pour la session). */
 export async function deleteMyAccount(confirmation: string): Promise<void> {
+  setAnalyticsConsent(false);
   const body: DeleteAccountRequest = { confirmation };
   await authorizedFetch("/api/me", { method: "DELETE", body: JSON.stringify(body) });
 }
