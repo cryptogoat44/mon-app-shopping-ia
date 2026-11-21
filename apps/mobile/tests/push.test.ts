@@ -693,7 +693,11 @@ describe("notifications d'activité : textes en français et en anglais", () => 
       const start = notes.indexOf("```text", notes.indexOf(title));
       return notes.slice(start, notes.indexOf("\n```\n", start));
     };
-    expect(part("## 3. Version anglaise")).toContain('iOS permission is asked only after "Enable notifications" on an explanation sheet, or when the person turns on a switch in Settings, never at launch.');
+    // Le libellé anglais des feuilles : « Turn on notifications » (messages, alertes) ou « Turn on » (activité).
+    expect(part("## 3. Version anglaise")).toContain('iOS permission is asked only after "Turn on" on an explanation sheet, or when the person turns on a switch in Settings, never at launch.');
+    expect(notes).not.toContain('"Enable notifications"');
+    expect(en.activityPush.enable).toBe("Turn on");
+    expect(en.push.offerAccept).toMatch(/^Turn on /);
     expect(part("## 2. Version française")).toContain(
       "Autorisation d'iOS demandée seulement après « Activer » sur une feuille d'explication, ou quand la personne allume un interrupteur dans les Réglages, jamais au lancement."
     );
