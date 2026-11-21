@@ -11,14 +11,20 @@ import { track } from "./analytics";
 import { momentSeconds } from "./player-state";
 import { beginFromPhoto } from "./spot-flow";
 import { updateDraft, type DraftVideoContext, type SpotDraft } from "./spot-draft";
-import { cleanQuery, LINK_ANALYSIS_TIMEOUT_MS, linkAiFailure, type LinkAnalysis, type LinkFailureInfo, type LinkMoment } from "./video-link-analysis";
+import { cleanQuery, LINK_ANALYSIS_TIMEOUT_MS, linkAiFailure, type LinkAiFailure, type LinkAnalysis, type LinkFailureInfo, type LinkMoment } from "./video-link-analysis";
 import { waitNow, waitSince } from "./wait-clock";
 
 export type LinkRunOutcome = { kind: "found"; analysis: LinkAnalysis } | { kind: "failed"; info: LinkFailureInfo } | { kind: "cancelled" };
 
-/** `startedAt` : départ de l'analyse (waitNow), pour le temps d'attente. */
+/** video_link_ai_result : l'issue, l'attente depuis le départ (`startedAt`,
+ * waitNow) et la plateforme, aussi en link_platform — la seule des deux qui
+ * arrive chez PostHog (mesure du parcours, analytics-events.ts). */
+function trackResult(platform: VideoPlatform, startedAt: number, issue: { outcome: "found" | "not_found" | "failed" | "cancelled"; reason?: LinkAiFailure; moments_count: number }): void {
+  track("video_link_ai_result", { platform, ...issue, wait_ms: waitSince(startedAt), link_platform: platform });
+}
+
 function failed(platform: VideoPlatform, info: LinkFailureInfo, startedAt: number): LinkRunOutcome {
-  track("video_link_ai_result", { platform, outcome: info.failure === "no_moment" ? "not_found" : "failed", reason: info.failure, moments_count: 0, wait_ms: waitSince(startedAt) });
+  trackResult(platform, startedAt, { outcome: info.failure === "no_moment" ? "not_found" : "failed", reason: info.failure, moments_count: 0 });
   return { kind: "failed", info };
 }
 
@@ -46,11 +52,11 @@ export async function runLinkAnalysis(
     const analysis = await analyzeVideoLink(request, controller.signal);
     if (signal.aborted) throw new Error("cancelled");
     if (analysis.moments.length === 0) return failed(platform, { failure: "no_moment", capacity: null }, startedAt);
-    track("video_link_ai_result", { platform, outcome: "found", moments_count: analysis.moments.length, wait_ms: waitSince(startedAt) });
+    trackResult(platform, startedAt, { outcome: "found", moments_count: analysis.moments.length });
     return { kind: "found", analysis };
   } catch (error) {
     if (signal.aborted && !timedOut) {
-      track("video_link_ai_result", { platform, outcome: "cancelled", moments_count: 0, wait_ms: waitSince(startedAt) });
+      trackResult(platform, startedAt, { outcome: "cancelled", moments_count: 0 });
       return { kind: "cancelled" };
     }
     return failed(platform, linkAiFailure(error, timedOut), startedAt);

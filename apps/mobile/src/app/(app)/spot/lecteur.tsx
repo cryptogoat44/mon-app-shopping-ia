@@ -535,8 +535,8 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
       );
     } else if (phase.kind === "failed") {
       // Plan B en un geste (lot « recherche confiance ») : une phrase calme et un seul bouton, la capture
-      // d'écran (lien gardé, description reprise) ; jamais d'impasse.
-      autoBody = <LinkFailureView info={phase.info} platformName={name || undefined} onRetry={auto.retry} onEditQuery={auto.editQuery} onCapture={showCapture} />;
+      // d'écran (lien gardé, description reprise) ; jamais d'impasse. `platform` : statistiques du plan B.
+      autoBody = <LinkFailureView info={phase.info} platformName={name || undefined} platform={platform} onRetry={auto.retry} onEditQuery={auto.editQuery} onCapture={showCapture} />;
     } else {
       autoBody = (
         <>

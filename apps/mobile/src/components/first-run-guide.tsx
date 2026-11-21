@@ -3,7 +3,7 @@ import { AccessibilityInfo, Animated, Platform, Pressable, Text, View } from "re
 import Svg, { Path, Rect } from "react-native-svg";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { t } from "@/i18n";
-import { FIRST_RUN_GUIDE_STEPS, nextGuideStep } from "@/lib/first-run-guide";
+import { FIRST_RUN_GUIDE_STEPS, nextGuideStep, trackFirstRunGuide } from "@/lib/first-run-guide";
 import { useReduceMotion } from "@/lib/use-hero-reveal";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -110,17 +110,26 @@ export function FirstRunGuide({ onClose, onStart }: { onClose: () => void; onSta
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
+  // Mesure du parcours : l'étape où la personne termine ou passe (lib/first-run-guide.ts).
   function next() {
     const following = nextGuideStep(step);
-    if (following === null) return onStart();
+    if (following === null) {
+      trackFirstRunGuide("finished", step);
+      return onStart();
+    }
     setStep(following);
+  }
+
+  function skip() {
+    trackFirstRunGuide("skipped", step);
+    onClose();
   }
 
   return (
     <View style={styles.card} testID="guide-premiere-recherche">
       <View style={styles.header}>
         <Text style={styles.stepOf}>{stepLabel}</Text>
-        <Pressable onPress={onClose} hitSlop={8} style={styles.skip} accessibilityRole="button" accessibilityLabel={t.firstRunGuide.skipLabel}>
+        <Pressable onPress={skip} hitSlop={8} style={styles.skip} accessibilityRole="button" accessibilityLabel={t.firstRunGuide.skipLabel}>
           <Text style={styles.skipLabel}>{t.firstRunGuide.skip}</Text>
         </Pressable>
       </View>

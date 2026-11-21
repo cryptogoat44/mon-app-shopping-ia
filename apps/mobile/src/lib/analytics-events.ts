@@ -18,6 +18,7 @@ import {
   PRIVACY_LEVELS,
   REPORT_TARGET_TYPES,
   TEXT_SEARCH_STATUSES,
+  VIDEO_LINK_FAILURE_CAUSES,
 } from "@monapp/shared-types";
 import { RESULT_SORTS } from "./result-sort";
 import { WISHLIST_SORTS } from "./wishlist-view";
@@ -180,7 +181,10 @@ export const ANALYTICS_EVENTS = {
   // plateforme, l'issue, la cause d'un échec et des nombres ; jamais le lien,
   // les mots, la vidéo ni ses images.
   // Mesure du parcours : wait_ms, du départ de l'analyse à son issue
-  // (« Annuler » compris : le temps d'attente avant d'abandonner).
+  // (« Annuler » compris : le temps d'attente avant d'abandonner) ;
+  // link_platform, la plateforme (« platform » n'arrive pas chez PostHog, voir
+  // l'en-tête). Plan B montré (une seule capture proposée) = issue « failed »,
+  // reason « private » (vidéo privée ou supprimée) ou « refused ».
   video_link_ai_started: { platform: PLAYER_PLATFORM },
   video_link_ai_result: {
     platform: PLAYER_PLATFORM,
@@ -188,9 +192,18 @@ export const ANALYTICS_EVENTS = {
     reason: oneOf(LINK_AI_FAILURES),
     moments_count: count,
     wait_ms: duration,
+    link_platform: PLAYER_PLATFORM,
   },
   // Moment choisi parmi ceux proposés (1 = le meilleur) avant la recherche habituelle.
   video_link_ai_moment_chosen: { platform: PLAYER_PLATFORM, rank: count, moments_count: count },
+  // Mesure du parcours, plan B (lot « recherche confiance ») : « Faire une
+  // capture d'écran » touché après une vidéo privée ou supprimée
+  // (private_or_removed) ou refusée par la plateforme (refused).
+  plan_b_screenshot_chosen: { link_platform: PLAYER_PLATFORM, cause: oneOf(VIDEO_LINK_FAILURE_CAUSES) },
+  // Mesure du parcours : guide de la première recherche (lib/first-run-guide.ts)
+  // montré, passé (« Passer ») ou terminé (dernière étape) ; step : l'étape
+  // (1 à 3) où la personne passe ou termine (absente pour « shown »).
+  first_search_guide: { action: oneOf(["shown", "skipped", "finished"]), step: count },
 } as const satisfies Record<string, Record<string, Rule>>;
 
 export type AnalyticsEvent = keyof typeof ANALYTICS_EVENTS;

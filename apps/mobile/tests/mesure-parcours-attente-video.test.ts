@@ -40,7 +40,7 @@ describe("analyse d'un lien : video_link_ai_result dit l'attente depuis le dépa
       return FOUND;
     });
     await runLinkAnalysis(REQUEST, "tiktok", new AbortController().signal);
-    expect(results("video_link_ai_result")).toEqual([{ platform: "tiktok", outcome: "found", moments_count: 2, wait_ms: 25_400 }]);
+    expect(results("video_link_ai_result")).toEqual([{ platform: "tiktok", outcome: "found", moments_count: 2, wait_ms: 25_400, link_platform: "tiktok" }]);
   });
 
   it("vidéo privée (plan B) : l'échec et son attente", async () => {
@@ -49,7 +49,7 @@ describe("analyse d'un lien : video_link_ai_result dit l'attente depuis le dépa
       throw new ApiError(422, { error: "video_unavailable", message: "x", cause: "private_or_removed" } as never);
     });
     await runLinkAnalysis(REQUEST, "instagram", new AbortController().signal);
-    expect(results("video_link_ai_result")).toEqual([{ platform: "instagram", outcome: "failed", reason: "private", moments_count: 0, wait_ms: 4_000 }]);
+    expect(results("video_link_ai_result")).toEqual([{ platform: "instagram", outcome: "failed", reason: "private", moments_count: 0, wait_ms: 4_000, link_platform: "instagram" }]);
   });
 
   it("« Annuler » : le temps d'attente avant d'abandonner", async () => {
@@ -59,7 +59,7 @@ describe("analyse d'un lien : video_link_ai_result dit l'attente depuis le dépa
     now += 9_000;
     controller.abort();
     await pending;
-    expect(results("video_link_ai_result")).toEqual([{ platform: "tiktok", outcome: "cancelled", moments_count: 0, wait_ms: 9_000 }]);
+    expect(results("video_link_ai_result")).toEqual([{ platform: "tiktok", outcome: "cancelled", moments_count: 0, wait_ms: 9_000, link_platform: "tiktok" }]);
   });
 
   it("délai de l'app dépassé : « timeout », avec toute l'attente", async () => {
@@ -73,7 +73,7 @@ describe("analyse d'un lien : video_link_ai_result dit l'attente depuis le dépa
         )
     );
     await runLinkAnalysis(REQUEST, "tiktok", new AbortController().signal, 5);
-    expect(results("video_link_ai_result")).toEqual([{ platform: "tiktok", outcome: "failed", reason: "timeout", moments_count: 0, wait_ms: 90_000 }]);
+    expect(results("video_link_ai_result")).toEqual([{ platform: "tiktok", outcome: "failed", reason: "timeout", moments_count: 0, wait_ms: 90_000, link_platform: "tiktok" }]);
   });
 
   it("refusée avant le départ (déjà annulée) : ni départ ni issue", async () => {
