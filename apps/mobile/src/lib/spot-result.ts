@@ -26,6 +26,8 @@ export function matchToPiece(match: ProductMatch): Piece {
     ...(match.alertTrackable === true ? { alertTrackable: true } : {}),
     // Boutiques douteuses : seulement une mention connue de cette app (un serveur plus récent pourrait en ajouter).
     ...(isOfferMark(match.offerMark) ? { offerMark: match.offerMark } : {}),
+    // Rangée en fin de « Cette pièce dans d'autres boutiques » : jamais la grande carte (lib/price-first.ts).
+    ...(match.demoted === true ? { demoted: true as const } : {}),
   };
 }
 

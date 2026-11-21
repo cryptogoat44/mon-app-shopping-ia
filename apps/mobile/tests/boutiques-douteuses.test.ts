@@ -153,6 +153,41 @@ describe("mentions des boutiques : ce que l'app reçoit et affiche", () => {
     expect(allPieces(lensPriced)[bestProposalIndex(lensPriced, "fr")]!.id).toBe("p2");
   });
 
+  it("grande carte prise dans le complément : jamais une offre que le serveur range en fin de section (adresse douteuse, sans mention ; prix inhabituellement bas), même reçue la première", () => {
+    const lens = [match("p1", null), match("p2", null)];
+    // Dans l'ordre envoyé : la boutique de la marque de la pièce, la boutique connue remontée, puis l'adresse douteuse en dernier.
+    const dubiousFirst = result([
+      ...lens,
+      match("p6", 1250, { origin: "shopping", offerMark: "official_shop", merchantUrl: "https://www.moncler.com/fr/p6" }),
+      match("p5", 650, { origin: "shopping", offerMark: "known_shop", merchantUrl: "https://www.zalando.fr/p5" }),
+      match("p4", 640, { origin: "shopping", merchantUrl: "https://boutique-c.fr/p4" }),
+      match("p7", 660, { origin: "shopping", merchantUrl: "https://boutique-d.fr/p7" }),
+      match("p3", 610, { origin: "shopping", demoted: true, merchantUrl: "https://moncler-outlet.shop/p3" }),
+    ]);
+    const best = bestProposalIndex(dubiousFirst, "fr");
+    // Permis : boutique-c.fr (rang 4), la première reçue que le serveur ne range pas en fin de section.
+    expect(allPieces(dubiousFirst)[best]!.id).toBe("p4");
+    expect(bigCardLabel(startProposalIndex(dubiousFirst, { country: "fr" }), best)).toBe("bestWithPrice");
+    // Refusé : moncler-outlet.shop (rang 3, sans mention) n'est pas « Meilleure proposition avec prix » ; elle reste dans sa section.
+    expect(priceFirstSections(dubiousFirst, best).shopping.map(({ piece }) => piece.id)).toEqual(["p6", "p5", "p7", "p3"]);
+    // Refusé : un prix inhabituellement bas reçu le premier, avec sa mention, ne passe pas non plus en grand.
+    const unusualFirst = result([
+      ...lens,
+      match("p4", 80, { origin: "shopping" }),
+      match("p5", 85, { origin: "shopping" }),
+      match("p6", 90, { origin: "shopping" }),
+      match("p3", 20, { origin: "shopping", offerMark: "unusual_price", demoted: true }),
+    ]);
+    expect(allPieces(unusualFirst)[bestProposalIndex(unusualFirst, "fr")]!.id).toBe("p4");
+    // Toutes rangées en fin de section : la première reçue, comme avant.
+    const allDemoted = result([...lens, match("p4", 70, { origin: "shopping", demoted: true }), match("p3", 75, { origin: "shopping", demoted: true })]);
+    expect(allPieces(allDemoted)[bestProposalIndex(allDemoted, "fr")]!.id).toBe("p3");
+    // Le signal suit la proposition, seulement quand il est vrai (un ancien serveur ne l'envoie jamais).
+    expect(matchToPiece(match("p3", 10, { origin: "shopping", demoted: true })).demoted).toBe(true);
+    expect(matchToPiece(match("p4", 10, { origin: "shopping" }))).not.toHaveProperty("demoted");
+    expect(matchToPiece(match("p5", 10, { origin: "shopping", demoted: "oui" as never }))).not.toHaveProperty("demoted");
+  });
+
   it("le rang envoyé par le serveur suit la proposition ; illisible, il manque, et l'app reprend l'ordre affiché", () => {
     expect(matchToPiece(match("p7", 10)).rank).toBe(7);
     expect(matchToPiece(match("p7", 10, { rank: Number.NaN }))).not.toHaveProperty("rank");

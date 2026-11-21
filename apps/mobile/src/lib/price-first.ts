@@ -30,7 +30,8 @@ export function hasPrice(piece: Pick<Piece, "priceFrom">): boolean {
  * recherche visuelle, la première avec un prix ; prise dans le complément,
  * la première reçue (firstReceivedComplementIndex), pas la boutique
  * officielle ou connue que le serveur remonte dans « Cette pièce dans
- * d'autres boutiques ». Une offre « Prix inhabituellement bas » n'est pas
+ * d'autres boutiques », ni une offre qu'il y range en fin de section. Dans
+ * la recherche visuelle, une offre « Prix inhabituellement bas » n'est pas
  * sautée : elle garde sa mention, et jamais « Le moins cher » ni « à partir
  * de » (lib/result-sort.ts). */
 function promotable(piece: Pick<Piece, "priceFrom">): boolean {
@@ -40,16 +41,21 @@ function promotable(piece: Pick<Piece, "priceFrom">): boolean {
 /** La première proposition REÇUE du complément, par indice dans allPieces
  * (-1 sans complément) : dans « Cette pièce dans d'autres boutiques », celle
  * de plus petit rang, pas la première affichée — le serveur y range les
- * offres par leurs mentions (boutique officielle de la marque en tête,
- * boutiques connues remontées, prix inhabituellement bas en fin) ; sans
- * rang lisible sur chacune, la première affichée. Sans boutiques, la
- * première de « Résultats pour vos mots », dont l'ordre n'est pas touché. */
+ * offres par leurs mentions (boutique officielle de la marque de la pièce en
+ * tête, boutiques connues remontées, prix inhabituellement bas et adresses
+ * douteuses en fin) — parmi les offres qu'il ne range pas en fin de section
+ * (`demoted`, que rien n'affiche : une adresse douteuse n'a pas de mention) ;
+ * si toutes le sont, la plus petite de toutes ; sans rang lisible sur
+ * chacune, la première affichée. Sans boutiques, la première de « Résultats
+ * pour vos mots », dont l'ordre n'est pas touché. */
 function firstReceivedComplementIndex(result: ResultLists): number {
   const shopping = result.complement?.shopping ?? [];
   const offset = result.pieces.length;
   if (shopping.length === 0) return (result.complement?.words ?? []).length > 0 ? offset : -1;
   if (!shopping.every((piece) => typeof piece.rank === "number")) return offset;
-  return offset + shopping.reduce((first, piece, position) => (piece.rank! < shopping[first]!.rank! ? position : first), 0);
+  const candidates = shopping.some((piece) => piece.demoted !== true) ? shopping.filter((piece) => piece.demoted !== true) : shopping;
+  const first = candidates.reduce((best, piece) => (piece.rank! < best.rank! ? piece : best));
+  return offset + shopping.indexOf(first);
 }
 
 /** Aucune proposition n'a de prix, nulle part (recherche visuelle et
