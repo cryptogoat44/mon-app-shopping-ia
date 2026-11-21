@@ -163,8 +163,10 @@ export async function authorizedFetch(path: string, init?: RequestInit): Promise
   // Mesure du parcours : la durée de la requête seule, pour la première
   // réponse du serveur de chaque ouverture (server-first-response.ts) ;
   // abandonnée par la personne (signal), elle ne compte pas ; abandonnée
-  // par un délai de l'app (app-timeout.ts), c'est un échec.
-  const settled = serverRequestStarted();
+  // par un délai de l'app (app-timeout.ts), c'est un échec. Abandonnée avant
+  // même de partir (délai écoulé pendant la lecture de la session, qui peut
+  // attendre le renouvellement du jeton) : rien n'est parti, rien ne compte.
+  const settled = init?.signal?.aborted ? () => {} : serverRequestStarted();
   let response: Response;
   try {
     response = await fetch(`${apiUrl}${path}`, request);

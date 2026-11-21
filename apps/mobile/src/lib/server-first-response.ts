@@ -17,8 +17,10 @@
 // requête annulée par la personne (« Annuler », écran quitté) ne compte pas :
 // la première suivante qui aboutit ou échoue la remplace. Une requête que
 // l'app cesse d'attendre (délai dépassé, essai trop long relancé :
-// app-timeout.ts) est un échec, à la durée de cette attente. Une seule
-// mesure par ouverture : la durée, l'ouverture et un oui/non, rien d'autre.
+// app-timeout.ts) est un échec, à la durée de cette attente ; abandonnée
+// avant même de partir (délai écoulé pendant la lecture de la session), elle
+// ne compte pas, comme une annulation. Une seule mesure par ouverture : la
+// durée, l'ouverture et un oui/non, rien d'autre.
 // Horloge injectable (tests). Imports relatifs : vitest.
 import { track } from "./analytics";
 import { waitNow } from "./wait-clock";
