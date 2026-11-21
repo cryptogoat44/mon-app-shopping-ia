@@ -69,6 +69,12 @@ export function PurchaseQuestionSheet({ question, actions, onClose }: { question
   const [step, setStep] = useState<Step>({ kind: "ask" });
   // La dernière question, gardée pendant que la feuille se referme.
   const [shown, setShown] = useState<PendingQuestion | null>(question);
+  // Une nouvelle question repart de la première étape dès son premier
+  // affichage (jamais l'étape de la précédente, même un instant).
+  if (question && question !== shown) {
+    setShown(question);
+    setStep({ kind: "ask" });
+  }
   // Une seule réponse comptée par question ; `run` : la question en cours
   // (une réponse du serveur arrivée pour une autre est ignorée).
   const answered = useRef(false);
@@ -81,8 +87,6 @@ export function PurchaseQuestionSheet({ question, actions, onClose }: { question
     if (!question) return;
     run.current += 1;
     answered.current = false;
-    setShown(question);
-    setStep({ kind: "ask" });
     // La question est annoncée par VoiceOver (iPhone), après ce qu'il lit déjà.
     if (Platform.OS === "ios") AccessibilityInfo.announceForAccessibilityWithOptions(t.result.purchaseQuestion.announcement(question.target.title), { queue: true });
   }, [question]);
