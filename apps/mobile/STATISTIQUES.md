@@ -85,7 +85,6 @@ vous verrez dans PostHog.
     liens d'un coup.
   - `link_platform` = `tiktok`, `instagram`, ou `none` quand il n'y a pas de
     lien (vidéo ou photo).
-- **`spot_started`** : une recherche est préparée (gratuit). Inchangé.
 
 ### 3a. Depuis un lien TikTok ou Instagram
 
@@ -122,13 +121,20 @@ vous verrez dans PostHog.
 
 ### 4. La recherche et ses résultats
 
+- **`spot_started`** : la recherche est préparée (gratuit), au moment de
+  « Lancer », juste avant `spot_launched`. Inchangé.
 - **`spot_launched`** : la recherche part (bouton « Lancer », ou lancement
   automatique).
-- **`spot_completed`** : la réponse est là. `outcome` = `results` (des
+- **`spot_completed`** : envoyé quand la recherche « dans d'autres
+  boutiques » est finie, jusqu'à 40 secondes après l'affichage des résultats
+  (tout de suite quand elle arrive avec eux ou n'a pas lieu). Les résultats, eux, sont déjà à
+  l'écran et cliquables : le membre a souvent ouvert une boutique ou gardé
+  une pièce avant. Une recherche retrouvée après une réponse perdue (réseau
+  coupé, retour sur TikTok) ne l'envoie pas. `outcome` = `results` (des
   résultats), `none` ou `failed`. Nouveaux : `wait_ms` = l'attente, du
-  lancement aux premiers résultats ; `shops_wait_ms` = l'attente, du
-  lancement à la fin de la recherche « dans d'autres boutiques » (absente
-  quand l'app n'a pas reçu cette fin).
+  lancement aux premiers résultats (même si l'événement part plus tard) ;
+  `shops_wait_ms` = l'attente, du lancement à la fin de la recherche « dans
+  d'autres boutiques » (absente quand l'app n'a pas reçu cette fin).
 - **`text_search_launched`** puis **`text_search_completed`** : « Que
   cherchez-vous ? ». `wait_ms` (nouveau) = l'attente jusqu'à l'issue.
 
@@ -179,23 +185,49 @@ ils s'arrêtent.
 
 1. `journey_started` avec `entry` contient `link`
 2. `video_link_ai_result` avec `outcome` = `found`
-3. `spot_completed` avec `outcome` = `results`
+3. `spot_launched`
 4. `merchant_link_opened`
 5. `wishlist_item_added`
+
+L'étape 2 ne compte que le chemin de l'**analyse par l'IA**, et seulement
+quand cette analyse est allumée sur le serveur (réglage
+`VIDEO_LINK_ANALYSIS_ENABLED` chez Render, coupé par défaut : coupée,
+personne ne passe l'étape 2). Les membres qui continuent autrement
+s'arrêtent à l'étape 1 dans cet entonnoir : « Spotter ce moment » dans le
+lecteur officiel (`player_spot`, app iPhone) ou une capture d'écran. Pour
+les voir, faites aussi l'entonnoir **sans l'IA** :
+
+1. `journey_started` avec `entry` contient `link`
+2. `spot_launched`
+3. `merchant_link_opened`
+4. `wishlist_item_added`
+
+Et lisez la réussite de l'IA à part : **Trends** sur `video_link_ai_result`,
+**Breakdown** par `outcome`. Une boutique ouverte depuis « Pièces déjà
+repérées », sous la vidéo, saute la recherche (pas de `spot_launched`) : elle
+n'avance dans aucun de ces entonnoirs.
 
 **Entonnoir « depuis une photo »**
 
 1. `journey_started` avec `entry` contient `photo`
 2. `spot_launched`
-3. `spot_completed`
-4. `merchant_link_opened`
-5. `wishlist_item_added`
+3. `merchant_link_opened`
+4. `wishlist_item_added`
+
+**Pourquoi `spot_completed` n'est dans aucun entonnoir** : il part quand la
+recherche « dans d'autres boutiques » est finie, souvent après le clic vers
+une boutique ou « Garder », car les résultats sont déjà à l'écran. Un
+entonnoir compte les étapes dans l'ordre : il compterait ces membres, les
+plus rapides, comme arrêtés. Lisez « avec résultats » à part : **Trends** sur
+`spot_completed`, **Breakdown** par `outcome`.
 
 Pour comparer, utilisez **Breakdown** (répartition) : par `link_platform`
 (TikTok ou Instagram) pour le premier, par `entry` pour le second, ou par
 `platform` pour comparer l'app iPhone (`ios`) et le site (`web`). Le même
 modèle marche pour les vidéos du téléphone (`entry` contient `video`, puis
-`video_ai_result` avec `outcome` = `found`).
+`video_ai_result` avec `outcome` = `found`), avec la même limite : une image
+choisie à la main (`video_frame_chosen`) ne passe pas par
+`video_ai_result` ; faites aussi l'entonnoir sans cette étape.
 
 ## Lire les temps d'attente
 
