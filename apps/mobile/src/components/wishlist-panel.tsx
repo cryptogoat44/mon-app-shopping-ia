@@ -9,7 +9,7 @@ import { getCollectionWishlist, getWishlist } from "@/api/client";
 import type { Piece, WishlistItem } from "@/api/types";
 import { ApiError, fetchCollections, fetchWishAlertStates, fetchWishAlertsStatus } from "@/lib/api";
 import { useWishAlertsStatus } from "@/lib/use-wish-alerts-status";
-import { bellVisible } from "@/lib/wish-alerts";
+import { bellVisible, priceDropPrices, trackPriceDropsShown } from "@/lib/wish-alerts";
 import { collectionChips, collectionState, selectedCollection } from "@/lib/collections";
 import { useCollectionsStatus } from "@/lib/use-collections-status";
 import { useToast } from "@/lib/toast-context";
@@ -224,6 +224,17 @@ function MyWishlist() {
         ? { text: t.wishlist.totalLoading, label: t.wishlist.totalLoading }
         : wishlistTotalText(view.total, wishlistScope(query, inCollection), getActiveLocale());
   const partialNote = list && hasItems && !complete && !readingNext ? t.wishlist.partialNote(list.items.length) : null;
+  // Parcours 3 : « Baisse de prix · 89 € » sous le prix des Envies dont le
+  // dernier prix vu passe sous le seuil, même interrupteur « Alertes prix et
+  // stock » coupé (lib/wish-alerts.ts) ; lu avec la vignette par VoiceOver.
+  const drops = priceDropPrices(view.visible, alertStates, alerts, searchCountryFrom(acceptLanguage()), getActiveLocale());
+  const dropLabel = (id: string) => {
+    const price = drops.get(id);
+    return price ? t.wishAlerts.priceDropAt(price) : null;
+  };
+  useEffect(() => {
+    trackPriceDropsShown(drops.size);
+  }, [drops.size]);
 
   function choose(collectionId: string | null) {
     if (collectionId === selectedId) return;
@@ -353,7 +364,7 @@ function MyWishlist() {
                   <Pressable
                     onPress={() => router.push({ pathname: "/envie", params: { id: item.id } })}
                     accessibilityRole="button"
-                    accessibilityLabel={item.name}
+                    accessibilityLabel={[item.name, dropLabel(item.id)].filter(Boolean).join(", ")}
                   >
                     <View style={styles.thumb}>
                       {item.imageUrl ? (
@@ -366,6 +377,7 @@ function MyWishlist() {
                       {item.name}
                     </Text>
                     {displayPrice(item) ? <Text style={styles.price}>{displayPrice(item)}</Text> : null}
+                    {dropLabel(item.id) ? <Text style={styles.priceDrop}>{dropLabel(item.id)}</Text> : null}
                   </Pressable>
                   {/* Lot 2 : la cloche, sur le coin de la vignette — zone à part, jamais dans celle qui ouvre la fiche. */}
                   {bellVisible(alerts, alertStates.get(item.id)) ? (
@@ -469,5 +481,7 @@ const styles = themedStyles(() => ({
   thumbImage: { width: "100%", height: "100%" },
   name: { fontSize: font.caption, color: color.encre },
   price: { fontSize: 11, color: color.acier, marginTop: 2 },
+  // Parcours 3 : « Baisse de prix · 89 € », en vert (le seul accent).
+  priceDrop: { fontSize: 11, color: color.vert, fontWeight: "600", marginTop: 2 },
   footerLoader: { paddingVertical: space.lg },
 }));
