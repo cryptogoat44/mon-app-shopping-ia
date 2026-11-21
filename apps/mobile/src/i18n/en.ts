@@ -281,6 +281,12 @@ export const en: Catalog = {
       resendIn: (seconds: number) => `Resend the email in ${seconds} s`,
       resent: "Email sent again. Remember to check your spam folder too.",
     },
+    // Journey 3 (founder's decision A1): "Save" turns on the piece's price-drop
+    // alert; the drop shows in the Wishlist, even with the "Price and stock
+    // alerts" switch off.
+    keptWithAlert: "Added to your Wishlist. If its price drops, you'll see it in your Wishlist.",
+    turnOffAlert: "Turn off alert",
+    alertTurnedOff: "Alert turned off.",
   },
   // "Video links" mission: the shared or pasted TikTok or Instagram video
   // opens in its official player (iPhone app); "Spot this moment" takes a
@@ -609,6 +615,25 @@ export const en: Catalog = {
     textSearchFailed: "The search with your words didn't go through.",
     textSearchError: "The search didn't go through. Check your connection, then try again.",
     textSearchInvalidWords: "Describe the piece in a few words.",
+    // Journey 3 (founder's decision B1): "Did you buy it?" on returning from the
+    // shop, after at least 30 s; a single sheet whose content changes step by
+    // step (components/purchase-question-sheet.tsx).
+    purchaseQuestion: {
+      title: "Did you buy it?",
+      // Read by VoiceOver when the sheet opens (iPhone).
+      announcement: (name: string) => `Did you buy it? ${name}`,
+      yes: "Yes, I bought it",
+      no: "Not yet",
+      later: "Later",
+      shareTitle: "Share it in your feed?",
+      share: "Share…",
+      keepAndFollow: "Save it and follow its price?",
+      // No alert possible: no mention of the price.
+      keepOnly: "Save it?",
+      noThanks: "No thanks",
+      follow: "Follow its price? A drop will show in your Wishlist.",
+      turnOnAlert: "Turn on alert",
+    },
   },
   wishlistItem: {
     back: "Wishlist",
@@ -830,6 +855,10 @@ export const en: Catalog = {
     reportNotTrackable: "This piece can't be reported: its shop or product isn't recognized.",
     reportNotFound: "This piece can't be found.",
     reportError: "The report couldn't be sent. Check your connection, then try again.",
+    // Journey 3: the price drop shows in the app (Wishlist grid, wish page),
+    // even with the "Price and stock alerts" switch off.
+    priceDrop: "Price drop",
+    priceDropAt: (price: string) => `Price drop · ${price}`,
   },
   // Collections lot: wish collections, private or shown to friends.
   collections: {
