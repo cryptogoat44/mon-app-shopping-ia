@@ -1,11 +1,18 @@
 // BOUTIQUES OFFICIELLES DES MARQUES — liste que le fondateur peut modifier lui-même.
 //
 // À quoi elle sert : le site officiel d'une marque (nike.com, sezane.com,
-// dior.com…) passe EN TÊTE de sa section dans les résultats, avant les
-// revendeurs, avec la mention « Boutique officielle de la marque » (décision
-// du fondateur, 21 novembre 2026 : privilégier les boutiques des marques
-// elles-mêmes). Comme les boutiques connues, elles ne sont jamais signalées
-// « Prix inhabituellement bas ». La règle est dans src/lib/shopTrust.ts.
+// dior.com…) porte la mention « Boutique officielle de la marque », partout
+// dans les résultats. Il passe en tête, avant les revendeurs, seulement dans
+// « Cette pièce dans d'autres boutiques » (la même pièce, vendue dans
+// plusieurs boutiques), et seulement quand les autres offres de cette
+// section nomment sa marque : la boutique officielle d'une autre marque y
+// garde sa place. Ailleurs (recherche visuelle, « Résultats pour vos
+// mots »), il garde sa place : aucune marque n'est mise en avant (décision
+// du fondateur, 21 novembre 2026). Comme les boutiques connues, les sites de
+// cette liste ne sont jamais signalés « Prix inhabituellement bas ». Cette
+// liste ne limite pas les résultats : les boutiques et les marques qui n'y
+// sont pas sont proposées comme les autres. La règle est dans
+// src/lib/shopTrust.ts.
 // Les revendeurs (Zalando, Galeries Lafayette, Farfetch, Amazon, Vinted…)
 // sont dans src/listes/boutiquesConnues.ts.
 //

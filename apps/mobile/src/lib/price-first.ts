@@ -23,11 +23,33 @@ export function hasPrice(piece: Pick<Piece, "priceFrom">): boolean {
 
 /** Un prix qui peut mettre une proposition en grand d'office. Un prix à 0
  * (donnée douteuse) reste affiché tel quel, avec les propositions qui ont un
- * prix, mais ne la fait pas passer devant les autres (relecture, ORD-8). De
- * même, un prix signalé « Prix inhabituellement bas » (boutiques douteuses,
- * lot « recherche confiance ») : jamais mise en grand d'office. */
-function promotable(piece: Pick<Piece, "priceFrom" | "offerMark">): boolean {
-  return piece.priceFrom !== null && piece.priceFrom > 0 && piece.offerMark !== "unusual_price";
+ * prix, mais ne la fait pas passer devant les autres (relecture, ORD-8).
+ * Ordre des boutiques (décision du fondateur, 21 novembre 2026 : « Je ne veux
+ * mettre aucune marque en avant ») : aucune mention ne compte ici. La grande
+ * carte suit l'ordre reçu, jamais le rangement par les mentions : dans la
+ * recherche visuelle, la première avec un prix ; prise dans le complément,
+ * la première reçue (firstReceivedComplementIndex), pas la boutique
+ * officielle ou connue que le serveur remonte dans « Cette pièce dans
+ * d'autres boutiques ». Une offre « Prix inhabituellement bas » n'est pas
+ * sautée : elle garde sa mention, et jamais « Le moins cher » ni « à partir
+ * de » (lib/result-sort.ts). */
+function promotable(piece: Pick<Piece, "priceFrom">): boolean {
+  return piece.priceFrom !== null && piece.priceFrom > 0;
+}
+
+/** La première proposition REÇUE du complément, par indice dans allPieces
+ * (-1 sans complément) : dans « Cette pièce dans d'autres boutiques », celle
+ * de plus petit rang, pas la première affichée — le serveur y range les
+ * offres par leurs mentions (boutique officielle de la marque en tête,
+ * boutiques connues remontées, prix inhabituellement bas en fin) ; sans
+ * rang lisible sur chacune, la première affichée. Sans boutiques, la
+ * première de « Résultats pour vos mots », dont l'ordre n'est pas touché. */
+function firstReceivedComplementIndex(result: ResultLists): number {
+  const shopping = result.complement?.shopping ?? [];
+  const offset = result.pieces.length;
+  if (shopping.length === 0) return (result.complement?.words ?? []).length > 0 ? offset : -1;
+  if (!shopping.every((piece) => typeof piece.rank === "number")) return offset;
+  return offset + shopping.reduce((first, piece, position) => (piece.rank! < shopping[first]!.rank! ? position : first), 0);
 }
 
 /** Aucune proposition n'a de prix, nulle part (recherche visuelle et
@@ -42,9 +64,11 @@ export function noPriceAnywhere(result: ResultLists): boolean {
 /** La proposition que « prix d'abord » met en grand d'office : la mieux
  * classée des propositions de la recherche visuelle avec un prix dans la
  * devise du pays de la recherche ; sinon avec un prix dans une autre devise
- * (« Boutique à l'étranger ») ; sinon la première du complément affiché
- * (« boutiques », puis « vos mots »), si elle a un prix ; sinon la première
- * proposition, comme avant. `country` : pays de la recherche
+ * (« Boutique à l'étranger ») ; sinon la première reçue du complément
+ * (« boutiques », sinon « vos mots » : firstReceivedComplementIndex), si
+ * elle a un prix ; sinon la première proposition, comme avant. Une app plus
+ * ancienne garde l'ancien repli : la première affichée du complément.
+ * `country` : pays de la recherche
  * (lib/foreign-shop.ts) — le serveur garde les 6 premières de Google à leur
  * place, même avec un prix en $MX, et ne remonte les prix en euros qu'après
  * elles (relecture, ORD-4). Sans pays, ou pour un pays dont la devise n'est
@@ -57,8 +81,9 @@ export function bestProposalIndex(result: ResultLists, country?: string): number
   const lensWithPrice = result.pieces.findIndex(promotable);
   if (lensWithPrice !== -1) return lensWithPrice;
   if (result.complement?.late && result.pieces.length > 0) return 0;
-  const firstComplement = allPieces(result)[result.pieces.length];
-  return firstComplement && promotable(firstComplement) ? result.pieces.length : 0;
+  const firstComplement = firstReceivedComplementIndex(result);
+  const piece = allPieces(result)[firstComplement];
+  return piece && promotable(piece) ? firstComplement : 0;
 }
 
 export interface StartOptions {

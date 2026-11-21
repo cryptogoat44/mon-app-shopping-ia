@@ -20,6 +20,8 @@ export function matchToPiece(match: ProductMatch): Piece {
     feedbackReason: match.feedbackReason ?? null,
     // Voie C (lot c) : absente = « lens » ; un ancien serveur ne l'envoie jamais.
     ...(match.origin ? { origin: match.origin } : {}),
+    // Ordre des boutiques : la place reçue, pour la grande carte prise dans le complément (lib/price-first.ts).
+    ...(typeof match.rank === "number" && Number.isFinite(match.rank) ? { rank: match.rank } : {}),
     // Alertes prix (lot 2) : la pièce a une clé (« Plus disponible ? »).
     ...(match.alertTrackable === true ? { alertTrackable: true } : {}),
     // Boutiques douteuses : seulement une mention connue de cette app (un serveur plus récent pourrait en ajouter).

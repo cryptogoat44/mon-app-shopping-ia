@@ -3,11 +3,9 @@
 // appel ni service : deux listes tenues par le fondateur (src/listes/) et
 // deux signaux prudents, testés (tests/boutiquesDouteuses.test.ts).
 // - Boutique officielle de la marque (liste) : mention « Boutique officielle
-//   de la marque », EN TÊTE de sa section, avant les revendeurs (décision du
-//   fondateur, 21 novembre 2026) ; jamais signalée pour son prix.
-// - Boutique connue (liste) : mention « Boutique connue », remontée de
-//   KNOWN_SHOP_BOOST places au plus dans sa section ; jamais signalée pour
-//   son prix.
+//   de la marque » ; jamais signalée pour son prix.
+// - Boutique connue (liste) : mention « Boutique connue » ; jamais signalée
+//   pour son prix.
 // - Boutique masquée (liste, ou mot évident dans l'adresse : « replica »…) :
 //   l'offre est retirée, toujours.
 // - Prix inhabituellement bas : au moins 3 offres avec un prix dans la même
@@ -18,17 +16,29 @@
 //   (.shop, .top, .xyz…), les trois ensemble.
 // - Les deux signaux à la fois : offre retirée — sauf si plus rien ne
 //   resterait (jamais les seuls résultats) : gardée, avec la mention. Un seul
-//   signal : gardée, rangée en fin de section ; la mention « Prix
-//   inhabituellement bas » seulement quand le prix l'est (un constat,
-//   jamais une accusation : rien n'est dit d'une adresse).
+//   signal : gardée ; la mention « Prix inhabituellement bas » seulement
+//   quand le prix l'est (un constat, jamais une accusation : rien n'est dit
+//   d'une adresse).
+// - L'ordre (décision du fondateur, 21 novembre 2026 : « Je ne veux mettre
+//   aucune marque en avant ») : seule la section « Cette pièce dans d'autres
+//   boutiques » (origine « shopping » : la même pièce, aucune marque n'y passe
+//   devant une autre) est rangée par les mentions — la boutique officielle de
+//   la marque de la section en tête (celle d'une autre marque garde sa
+//   place : sectionBrandShop), boutiques connues remontées de
+//   KNOWN_SHOP_BOOST places au plus, offres signalées (un signal) en fin de
+//   section. Partout ailleurs (recherche visuelle, « Résultats pour vos
+//   mots » : des pièces qui se ressemblent seulement), chaque offre garde sa
+//   place reçue, avec sa mention (sectionOrder).
 // Le serveur s'en sert en deux temps : à l'enregistrement (une offre retirée
 // n'est jamais rangée, observée pour les alertes ni retenue pour une vidéo)
 // et à chaque relecture (mentions, ordre, et listes modifiées depuis).
 // Fonctions pures : ni réseau, ni base, ni journal.
-import { alertCurrency, type OfferMark } from "@monapp/shared-types";
+import { alertCurrency, type MatchOrigin, type OfferMark } from "@monapp/shared-types";
 import { BOUTIQUES_CONNUES } from "../listes/boutiquesConnues.js";
 import { BOUTIQUES_OFFICIELLES } from "../listes/boutiquesOfficielles.js";
 import { BOUTIQUES_MASQUEES, MOTS_MASQUES } from "../listes/boutiquesMasquees.js";
+import { sameToken } from "./lightSort.js";
+import { wordsOf } from "./wordSort.js";
 
 /** Ce qu'il faut d'une offre : son lien, et son prix s'il est connu. */
 export interface TrustOffer {
@@ -37,8 +47,21 @@ export interface TrustOffer {
   currency?: string | null;
 }
 
-/** Places gagnées au plus par une boutique connue, dans sa section. */
+/** Une offre d'une section, telle que l'ordre la lit : son lien et son titre. */
+export interface SectionOffer {
+  merchantUrl: string;
+  title: string;
+}
+
+/** Places gagnées au plus par une boutique connue, dans « Cette pièce dans
+ * d'autres boutiques » (sectionOrder ; ailleurs, aucune). */
 export const KNOWN_SHOP_BOOST = 2;
+/** Titres d'offres d'autres boutiques qui doivent nommer une marque pour que
+ * sa boutique officielle passe en tête de « Cette pièce dans d'autres
+ * boutiques » (sectionBrandShop). Même seuil que la marque de la requête de
+ * la voie C (services/shoppingQueryAi.ts) : un seul titre, qui pourrait être
+ * piégé, ne suffit jamais. */
+export const MIN_TITLES_WITH_BRAND = 2;
 /** Un prix sous cette part de la médiane est « inhabituellement bas ». */
 export const LOW_PRICE_RATIO = 1 / 3;
 /** Offres avec un prix (même devise) nécessaires pour juger un prix. */
@@ -95,6 +118,27 @@ function nameOf(host: string): string {
 export function isOfficialShop(url: string): boolean {
   const host = hostOf(url);
   return host !== null && BOUTIQUES_OFFICIELLES.some((domain) => onDomain(host, domain));
+}
+
+/** La marque d'une boutique officielle, telle qu'un titre l'écrit : son
+ * adresse dans la liste, sans extension ni tiret (« hm.com » → « hm »,
+ * « thenorthface.fr » → « thenorthface », « ba-sh.com » → « bash ») ;
+ * null : pas une boutique officielle. */
+function officialBrandOf(url: string): string | null {
+  const host = hostOf(url);
+  const domain = host === null ? undefined : BOUTIQUES_OFFICIELLES.find((entry) => onDomain(host, entry));
+  return domain === undefined ? null : domain.split(".")[0]!.replace(/-/g, "");
+}
+
+/** Le titre nomme-t-il la marque : en un mot (pluriel toléré, comme le tri
+ * léger), ou en deux ou trois mots collés (« H&M » → « hm », « The North
+ * Face » → « thenorthface ») ? */
+function namesBrand(title: string, brand: string): boolean {
+  const words = wordsOf(title);
+  return words.some(
+    (word, start) =>
+      sameToken(word, brand) || [2, 3].some((size) => start + size <= words.length && words.slice(start, start + size).join("") === brand)
+  );
 }
 
 /** Boutique sûre : un revendeur connu (src/listes/boutiquesConnues.ts) ou le
@@ -176,9 +220,11 @@ export interface OfferReview {
   dropReason: "hidden" | "suspicious" | null;
   /** La mention de la carte. */
   mark: OfferMark | null;
-  /** Rangée en fin de sa section : un signal (ou les deux, gardée faute d'autre offre). */
+  /** Un signal (ou les deux, gardée faute d'autre offre) : rangée en fin de
+   * section dans « Cette pièce dans d'autres boutiques » seulement (sectionOrder). */
   demoted: boolean;
-  /** Boutique connue : remontée de KNOWN_SHOP_BOOST places au plus. */
+  /** Boutique connue : remontée de KNOWN_SHOP_BOOST places au plus dans
+   * « Cette pièce dans d'autres boutiques » seulement (sectionOrder). */
   boosted: boolean;
 }
 
@@ -187,8 +233,9 @@ export interface OfferReview {
  * les boutiques) ; elles comptent pour juger les prix et comme résultats
  * restants, mais ne sont pas jugées ici. Jamais tout retirer pour les deux
  * signaux : quand plus rien ne resterait (ni ici, ni dans `context`), les
- * offres très suspectes sont gardées, rangées en fin de section, avec la
- * mention « Prix inhabituellement bas ». Avec la médiane (l'offre comprise),
+ * offres très suspectes sont gardées, avec la mention « Prix
+ * inhabituellement bas » (et rangées en fin de section là où les mentions
+ * comptent pour l'ordre : sectionOrder). Avec la médiane (l'offre comprise),
  * cela n'arrive pas aujourd'hui : c'est un filet, si le seuil changeait un
  * jour (`lowPriceRatio`, LOW_PRICE_RATIO par défaut). */
 export function reviewOffers(offers: readonly TrustOffer[], context: readonly TrustOffer[] = [], lowPriceRatio: number = LOW_PRICE_RATIO): OfferReview[] {
@@ -233,10 +280,12 @@ export function withoutDubiousOffers<T>(
   };
 }
 
-/** L'ordre d'une section, à la relecture : les offres retirées en moins ;
- * les boutiques officielles des marques en tête (dans leur ordre) ; les
- * boutiques connues remontées de KNOWN_SHOP_BOOST places au plus ; les
- * offres signalées (un signal) en fin de section ; sinon l'ordre reçu. */
+/** L'ordre de « Cette pièce dans d'autres boutiques », à la relecture
+ * (sectionOrder, qui ne lui présente comme boutique officielle que celle de
+ * la marque de la section) : les offres retirées en moins ; les boutiques
+ * officielles en tête (dans leur ordre) ; les boutiques connues remontées de
+ * KNOWN_SHOP_BOOST places au plus ; les offres signalées (un signal) en fin
+ * de section ; sinon l'ordre reçu. */
 export function trustOrder<T>(items: readonly T[], reviews: readonly OfferReview[]): T[] {
   const kept = items.map((item, index) => ({ item, review: reviews[index]! })).filter(({ review }) => !review.dropped);
   const ranked = kept
@@ -249,4 +298,45 @@ export function trustOrder<T>(items: readonly T[], reviews: readonly OfferReview
     .sort((a, b) => a.key - b.key || Number(b.review.boosted) - Number(a.review.boosted) || a.position - b.position);
   const demoted = kept.filter(({ review }) => review.demoted);
   return [...ranked, ...demoted].map(({ item }) => item);
+}
+
+/** Dans « Cette pièce dans d'autres boutiques », la boutique officielle de
+ * l'offre `index` est-elle celle de la marque de la section ? Rien ne
+ * garantit que la section ne montre que la pièce : le tri léger y garde des
+ * pièces d'autres marques, rangées après celles dont le titre nomme la
+ * marque ou le modèle de la pièce (lib/lightSort.ts). La marque de la
+ * boutique doit donc être nommée par l'offre d'une autre boutique que la
+ * section place en premier, et par au moins MIN_TITLES_WITH_BRAND titres
+ * d'offres d'autres boutiques. Autres boutiques : toutes sauf les sites
+ * officiels de la même marque ; les offres retirées ne comptent pas. Une
+ * marque que les titres écrivent autrement (« Saint Laurent » pour ysl.com)
+ * laisse la boutique à sa place : jamais une marque en avant par erreur. */
+function sectionBrandShop(index: number, offers: readonly SectionOffer[], reviews: readonly OfferReview[]): boolean {
+  const brand = officialBrandOf(offers[index]!.merchantUrl);
+  if (brand === null) return false;
+  const others = offers.filter((offer, other) => !reviews[other]!.dropped && officialBrandOf(offer.merchantUrl) !== brand);
+  const naming = others.filter((offer) => namesBrand(offer.title, brand));
+  return naming.length >= MIN_TITLES_WITH_BRAND && naming[0] === others[0];
+}
+
+/** L'ordre d'une section, à la relecture (décision du fondateur, 21 novembre
+ * 2026 : « Je ne veux mettre aucune marque en avant ») :
+ * - « Cette pièce dans d'autres boutiques » (origine « shopping ») : la même
+ *   pièce dans plusieurs boutiques, aucune marque n'y passe devant une
+ *   autre — rangée par les mentions (trustOrder). Seule la boutique
+ *   officielle de la marque de la section passe en tête (sectionBrandShop) ;
+ *   celle d'une autre marque garde sa place reçue, sans remonter, avec sa
+ *   mention ;
+ * - partout ailleurs (recherche visuelle, « Résultats pour vos mots » : des
+ *   pièces qui se ressemblent seulement) : l'ordre reçu, les offres retirées
+ *   en moins ; aucune boutique officielle ou connue remontée, aucune offre
+ *   signalée descendue. Les mentions, elles, restent partout.
+ * `offers` : le lien et le titre de chaque offre, dans le même ordre que
+ * `items` et `reviews`. */
+export function sectionOrder<T>(origin: MatchOrigin, items: readonly T[], reviews: readonly OfferReview[], offers: readonly SectionOffer[]): T[] {
+  if (origin !== "shopping") return items.filter((_, index) => !reviews[index]!.dropped);
+  const forOrder = reviews.map((review, index) =>
+    review.mark === "official_shop" && !sectionBrandShop(index, offers, reviews) ? { ...review, mark: null, boosted: false } : review
+  );
+  return trustOrder(items, forOrder);
 }

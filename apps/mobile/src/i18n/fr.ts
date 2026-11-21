@@ -651,13 +651,16 @@ export const fr = {
     offersSummary: (n: number, price: string) => (n > 1 ? `${n} offres · à partir de ${price}` : `1 offre · ${price}`),
     cheapestBadge: "Le moins cher",
     // Boutiques douteuses (lot « recherche confiance ») : mentions neutres et factuelles,
-    // jamais une accusation ; touchées, une phrase d'explication.
+    // jamais une accusation ; touchées, une explication courte. Ordre des boutiques
+    // (décision du fondateur, 21 novembre 2026) : aucune marque mise en avant ; seule la
+    // section « Cette pièce dans d'autres boutiques » est rangée par les mentions, et la
+    // feuille le dit (elle s'ouvre aussi depuis les autres sections).
     offerMark: {
       official_shop: "Boutique officielle de la marque",
       known_shop: "Boutique connue",
       unusual_price: "Prix inhabituellement bas",
       hint: "Explique cette mention.",
-      explanation: `${BRAND} met en avant les boutiques officielles des marques et les boutiques connues, et signale les prix inhabituellement bas ; vérifiez toujours la boutique avant de payer.`,
+      explanation: `${BRAND} signale les boutiques officielles des marques, les boutiques connues et les prix inhabituellement bas. Dans « Cette pièce dans d'autres boutiques », la boutique officielle de la marque passe en premier, les boutiques connues remontent un peu et les prix inhabituellement bas passent en dernier. Vérifiez toujours la boutique avant de payer.`,
       close: "J'ai compris",
     },
     // « Avec prix seulement » et aucune proposition avec prix : retirer le filtre.

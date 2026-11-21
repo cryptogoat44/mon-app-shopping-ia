@@ -1,11 +1,16 @@
 // BOUTIQUES CONNUES — liste que le fondateur peut modifier lui-même.
 //
 // À quoi elle sert : dans les résultats, les offres de ces boutiques portent
-// la mention discrète « Boutique connue » et remontent un peu (2 places au
-// plus dans leur section). Les sites officiels des marques sont dans une
-// autre liste, mis en avant plus fort : src/listes/boutiquesOfficielles.ts. Elles ne sont jamais signalées « Prix
+// la mention discrète « Boutique connue », partout. Elles remontent un peu
+// (2 places au plus) seulement dans « Cette pièce dans d'autres boutiques »
+// (la même pièce, vendue dans plusieurs boutiques) ; ailleurs, elles gardent
+// leur place (décision du fondateur, 21 novembre 2026). Les sites officiels
+// des marques sont dans une autre liste : src/listes/boutiquesOfficielles.ts.
+// Les boutiques de cette liste ne sont jamais signalées « Prix
 // inhabituellement bas » : un prix bas chez elles est une vraie promotion, ou
-// une pièce voisine moins chère. La règle est dans src/lib/shopTrust.ts.
+// une pièce voisine moins chère. Cette liste ne limite pas les résultats :
+// les boutiques qui n'y sont pas sont proposées comme les autres. La règle
+// est dans src/lib/shopTrust.ts.
 //
 // Comment ajouter ou retirer une boutique :
 // 1. Une boutique par ligne : son adresse, sans « https:// » ni « www. »,
