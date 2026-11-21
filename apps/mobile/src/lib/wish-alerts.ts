@@ -22,6 +22,7 @@
 //   « Alertes prix et stock » (coupé par défaut) ;
 // - sur le site : les cloches se règlent, aucune notification n'y arrive.
 import {
+  alertCurrency,
   MAX_TARGET_PRICE,
   SOLD_OUT_ALERTS_VISIBLE,
   STOCK_STATES,
@@ -35,6 +36,7 @@ import {
 } from "@monapp/shared-types";
 import type { Piece } from "../api/types";
 import { t } from "../i18n";
+import { track } from "./analytics";
 import { ApiError } from "./api-error";
 import { formatPrice } from "./format";
 import type { Locale } from "./preferences";
@@ -346,4 +348,73 @@ export function onWishAlertsStatus(listener: (status: WishAlertsStatus) => void)
  * interrupteur allumé (le choix de l'appareil est vu dans push-state.ts). */
 export function alertsKeepDevice(status: WishAlertsStatus): boolean {
   return status.available && status.enabled;
+}
+
+// ---- « Baisse de prix » dans l'app (Parcours 3) ----
+// Décision A1 du fondateur : tant que les notifications ne partent pas, la
+// baisse se voit dans l'app (grille des Envies, fiche d'une Envie), même
+// interrupteur « Alertes prix et stock » coupé (il ne commande que l'envoi
+// des alertes). Aucune requête de plus : la cloche est déjà lue
+// (GET /api/alerts/wishes, GET /api/wishlist/:id/alerts).
+
+/** En centimes : des prix comparés sans erreur d'arrondi. */
+function cents(value: number): number {
+  return Math.round(value * 100);
+}
+
+/** « Baisse de prix » : alertes disponibles ; cloche « Baisse de prix »
+ * allumée ; pièce ni achetée (`bought`, ou `inVault` sur la fiche) ni
+ * épuisée ; dernier prix vu et seuil connus, dans la même devise ; dernier
+ * prix sous le seuil ; et, si le prix au moment de garder (`priceMin` de
+ * l'Envie) est connu dans cette devise, sous ce prix aussi : un seuil remonté
+ * au-dessus du prix ne montre pas de fausse baisse. La devise de l'Envie se
+ * lit avec alertCurrency : un symbole (« € »), ou « EUR » mis d'office par le
+ * serveur. `country` : pays de la recherche (un « $ » seul n'est le dollar
+ * américain que pour les États-Unis). */
+export function priceDropNow(
+  status: Pick<WishAlertsStatus, "available">,
+  state: Pick<WishAlertState, "priceDrop" | "bought" | "stock" | "targetPrice" | "targetCurrency" | "lastPrice" | "lastCurrency"> | null | undefined,
+  wish: { priceFrom: number | null; currency: string | null },
+  options: { country: string; inVault?: boolean }
+): boolean {
+  if (!status.available || !state || state.priceDrop !== true || state.bought || options.inVault === true || state.stock === "sold_out") return false;
+  const { lastPrice, lastCurrency, targetPrice, targetCurrency } = state;
+  if (lastPrice === null || targetPrice === null || !lastCurrency || lastCurrency !== targetCurrency) return false;
+  if (cents(lastPrice) >= cents(targetPrice)) return false;
+  const keptCurrency = alertCurrency(wish.currency, options.country);
+  return wish.priceFrom === null || keptCurrency !== lastCurrency || cents(lastPrice) < cents(wish.priceFrom);
+}
+
+/** Les Envies de la liste qui montrent « Baisse de prix », avec le dernier
+ * prix vu écrit dans la langue de l'app (« 89 € »). */
+export function priceDropPrices(
+  items: readonly { id: string; priceFrom: number | null; currency: string | null }[],
+  states: ReadonlyMap<string, WishAlertState>,
+  status: Pick<WishAlertsStatus, "available">,
+  country: string,
+  locale: Locale
+): Map<string, string> {
+  const drops = new Map<string, string>();
+  for (const item of items) {
+    const state = states.get(item.id);
+    if (!state || state.lastPrice === null || !state.lastCurrency || !priceDropNow(status, state, item, { country })) continue;
+    drops.set(item.id, formatPrice(state.lastPrice, state.lastCurrency, locale));
+  }
+  return drops;
+}
+
+let priceDropsTracked = false;
+
+/** « price_drop_shown » : la grille des Envies montre au moins une « Baisse
+ * de prix ». Une fois au plus tant que l'app reste ouverte (mémoire de l'app,
+ * rien sur l'appareil) ; `count` : combien. */
+export function trackPriceDropsShown(count: number): void {
+  if (count <= 0 || priceDropsTracked) return;
+  priceDropsTracked = true;
+  track("price_drop_shown", { count });
+}
+
+/** Tests seulement : comme une app rouverte. */
+export function resetPriceDropsShownForTests(): void {
+  priceDropsTracked = false;
 }
