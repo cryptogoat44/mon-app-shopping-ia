@@ -44,6 +44,7 @@ import { fetchInstagramEmbed, fetchVideoLinkAnalysisStatus, lookupVideoLink } fr
 import { features } from "@/lib/features";
 import { importPhotoForSpotter, type ImportResult } from "@/lib/image-import";
 import { useImageDrop } from "@/lib/image-drop";
+import { photoPickerEntry, type PhotoJourneyEntry } from "@/lib/journey-entries";
 import { detectLink } from "@/lib/link-detection";
 import { grantPlayerConsent, readPlayerConsent } from "@/lib/player-access";
 import { decidePlayer, playerOffered, type FallbackReason } from "@/lib/player-decision";
@@ -346,11 +347,12 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   }
 
   /** Photo prête (choisie, ou déposée sur le site) : « Entourez la pièce », associée au lien en attente.
-   * La description écrite pour l'analyse est reprise sous la photo (plan B en un geste). */
-  async function openPicked(picked: ImportResult) {
+   * La description écrite pour l'analyse est reprise sous la photo (plan B en un geste).
+   * `entry` : d'où vient la photo (mesure du parcours : un nouveau parcours, celui d'une photo). */
+  async function openPicked(picked: ImportResult, entry: PhotoJourneyEntry) {
     if (picked.kind === "unavailable") return setMessage(t.common.photoUnavailable);
     if (picked.kind !== "picked") return;
-    await beginPhotoSearch(picked, Platform.OS === "web" ? "web" : "app");
+    await beginPhotoSearch(picked, Platform.OS === "web" ? "web" : "app", { entry });
     keepDescriptionInDraft(queryRef.current);
     if (alive.current) router.push({ pathname: "/spot/lancer", params: { source: "photo" } });
   }
@@ -360,14 +362,14 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     setBusy("photo");
     if (platform) track("player_fallback", { platform, choice: "screenshot" });
     try {
-      await openPicked(await importPhotoForSpotter());
+      await openPicked(await importPhotoForSpotter(), photoPickerEntry(Platform.OS));
     } finally {
       if (alive.current) setBusy(null);
     }
   }
 
   useImageDrop(
-    useCallback((picked: ImportResult) => void openPicked(picked), []),
+    useCallback((picked: ImportResult) => void openPicked(picked, "photo_drop"), []),
     useCallback(() => setMessage(t.videoLink.notAnImage), [])
   );
 

@@ -21,6 +21,7 @@ import {
 import { RESULT_SORTS } from "./result-sort";
 import { WISHLIST_SORTS } from "./wishlist-view";
 import { LINK_AI_FAILURES } from "./video-link-failures";
+import { JOURNEY_ENTRIES } from "./journey-entries";
 
 type Rule = { kind: "enum"; values: readonly string[] } | { kind: "count" } | { kind: "bool" } | { kind: "duration" };
 
@@ -40,6 +41,9 @@ const VISIBILITY = oneOf(PRIVACY_LEVELS);
 const VIDEO_SOURCE = oneOf(["library", "file", "latest", "share"]);
 // Lot « lecteur intégré » (app iPhone) : la plateforme du lecteur officiel.
 const PLAYER_PLATFORM = oneOf(["tiktok", "instagram"]);
+// Lot « mesure du parcours » : la plateforme d'un lien de vidéo, ou « none »
+// (pas de lien). Jamais nommée « platform » (voir l'en-tête).
+const LINK_PLATFORM = oneOf(["tiktok", "instagram", "none"]);
 
 export const ANALYTICS_EVENTS = {
   // Lot « app iPhone prête » (point 21) : ouverture de l'app, pour savoir si
@@ -51,6 +55,10 @@ export const ANALYTICS_EVENTS = {
   // au-dessus de 10 s, le serveur dormait (server-first-response.ts).
   server_first_response: { wait_ms: duration, context: oneOf(["launch", "resume"]), ok: bool },
   signup_completed: { locale: oneOf(["fr", "en"]) },
+  // Lot « mesure du parcours » : où commence un parcours (journey-entries.ts),
+  // une fois, dès que l'app accepte l'entrée (lien reconnu, fichier lisible),
+  // avant toute analyse — jamais le lien ni le fichier.
+  journey_started: { entry: oneOf(JOURNEY_ENTRIES), link_platform: LINK_PLATFORM },
   spot_started: { source: oneOf(["link", "photo"]), platform: oneOf(["tiktok", "instagram", "pinterest", "photo", "other"]) },
   // Ciblage : zone recadrée, capture importée. Plus de texte depuis le petit lot (2026-10-25) : les mots ne partent plus avec l'image.
   spot_launched: { zone_adjusted: bool, image_imported: bool },

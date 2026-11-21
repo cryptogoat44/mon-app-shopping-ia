@@ -26,6 +26,7 @@ import { RECENT_SEARCHES_LIMIT, reopenParams } from "@/lib/recent-searches";
 import { sharedRefusalMessage, type SharedItem } from "@/lib/shared-item";
 import { useImageDrop } from "@/lib/image-drop";
 import { beginPhotoSearch, type PhotoOrigin } from "@/lib/video-context";
+import { photoPickerEntry, type PhotoJourneyEntry } from "@/lib/journey-entries";
 import { adoptSpotVideo, videoImportMessage } from "@/lib/spot-video";
 import { useLinkEntry } from "@/lib/use-link-entry";
 import { useSharedItemOpener } from "@/lib/use-shared-item";
@@ -146,8 +147,9 @@ function useSpotterEntries(reveal: () => void) {
   useFocusEffect(useCallback(() => () => setLinkHelp(false), []));
 
   /** Photo prête, choisie, partagée ou déposée : l'écran « Entourez la pièce ».
-   * Un lien de vidéo en attente (10 minutes) lui est associé (lib/video-context.ts). */
-  async function openPhoto(picked: ImportResult, unavailable: string, origin: PhotoOrigin, options: { discardImageAfterSearch?: boolean } = {}) {
+   * Un lien de vidéo en attente (10 minutes) lui est associé (lib/video-context.ts).
+   * `entry` : d'où vient la photo (mesure du parcours, journey_started). */
+  async function openPhoto(picked: ImportResult, unavailable: string, origin: PhotoOrigin, options: { entry: PhotoJourneyEntry; discardImageAfterSearch?: boolean }) {
     if (picked.kind === "unavailable") return setMessage(unavailable);
     if (picked.kind !== "picked") return;
     await beginPhotoSearch(picked, origin, options);
@@ -158,14 +160,14 @@ function useSpotterEntries(reveal: () => void) {
 
   async function addPhoto() {
     setMessage(null);
-    await openPhoto(await importPhotoForSpotter(), t.common.photoUnavailable, photoOrigin);
+    await openPhoto(await importPhotoForSpotter(), t.common.photoUnavailable, photoOrigin, { entry: photoPickerEntry(Platform.OS) });
   }
 
   // Site : une image glissée-déposée sur la page, ou collée (Ctrl+V / ⌘V).
   useImageDrop(
     useCallback((picked: ImportResult) => {
       setMessage(null);
-      void openPhoto(picked, t.common.photoUnavailable, "web");
+      void openPhoto(picked, t.common.photoUnavailable, "web", { entry: "photo_drop" });
       // openPhoto ne dépend que de setters stables et du routeur.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []),
@@ -180,7 +182,7 @@ function useSpotterEntries(reveal: () => void) {
     try {
       const taken = await takePhotoForSpotter();
       if (taken.kind === "denied") return setMessage(t.cameraCapture.denied);
-      await openPhoto(taken, t.cameraCapture.unavailable(t.spotter.addPhoto), "app");
+      await openPhoto(taken, t.cameraCapture.unavailable(t.spotter.addPhoto), "app", { entry: "photo_camera" });
     } finally {
       setBusy(null);
     }
@@ -213,7 +215,10 @@ function useSpotterEntries(reveal: () => void) {
       // rangée dans « recherche-image/ » du cache, vidé à chaque lancement (app fermée en plein parcours).
       const visual = item.origin === "visual_intelligence";
       const ready = visual && prepared.kind === "picked" ? { ...prepared, uri: await moveIntoCaptureCache(prepared.uri) } : prepared;
-      await openPhoto(ready, t.share.imageUnreadable(t.spotter.addPhoto), visual ? "visual_intelligence" : "share", { discardImageAfterSearch: visual });
+      await openPhoto(ready, t.share.imageUnreadable(t.spotter.addPhoto), visual ? "visual_intelligence" : "share", {
+        discardImageAfterSearch: visual,
+        entry: visual ? "photo_visual_search" : "photo_share",
+      });
     } finally {
       setBusy(null);
     }
