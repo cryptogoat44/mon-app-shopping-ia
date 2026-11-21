@@ -295,9 +295,9 @@ export interface ProductMatch {
  * - unusual_price : prix très inférieur à ceux des autres offres de la même
  *   recherche (« Prix inhabituellement bas »), un constat, jamais une accusation.
  * Les mentions ne rangent que « Cette pièce dans d'autres boutiques » (origine
- * « shopping ») : boutique officielle de la marque de la section en tête
- * (celle d'une autre marque garde sa place), boutiques connues un peu
- * remontées, prix inhabituellement bas en fin. Ailleurs, chaque proposition
+ * « shopping ») : boutique officielle de la marque de la pièce en tête, quand
+ * le serveur la reconnaît (toute autre garde sa place), boutiques connues un
+ * peu remontées, prix inhabituellement bas en fin. Ailleurs, chaque proposition
  * garde sa place, avec sa mention (décision du fondateur, 21 novembre 2026).
  * Les offres des boutiques masquées, et celles qui cumulent un prix très bas
  * et une adresse douteuse, ne sont jamais envoyées. */

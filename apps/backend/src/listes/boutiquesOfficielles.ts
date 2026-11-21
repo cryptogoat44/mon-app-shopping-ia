@@ -4,15 +4,18 @@
 // dior.com…) porte la mention « Boutique officielle de la marque », partout
 // dans les résultats. Il passe en tête, avant les revendeurs, seulement dans
 // « Cette pièce dans d'autres boutiques » (la même pièce, vendue dans
-// plusieurs boutiques), et seulement quand les autres offres de cette
-// section nomment sa marque : la boutique officielle d'une autre marque y
-// garde sa place. Ailleurs (recherche visuelle, « Résultats pour vos
-// mots »), il garde sa place : aucune marque n'est mise en avant (décision
-// du fondateur, 21 novembre 2026). Comme les boutiques connues, les sites de
-// cette liste ne sont jamais signalés « Prix inhabituellement bas ». Cette
-// liste ne limite pas les résultats : les boutiques et les marques qui n'y
-// sont pas sont proposées comme les autres. La règle est dans
-// src/lib/shopTrust.ts.
+// plusieurs boutiques), et seulement quand sa marque est celle de la pièce,
+// reconnue par le serveur : l'adresse, sans extension ni tiret, doit être
+// la marque écrite en un mot (« zara.com » pour Zara, « hm.com » pour H&M,
+// « thenorthface.fr » pour The North Face). Une marque écrite autrement
+// (« Saint Laurent » pour ysl.com) et la boutique officielle d'une autre
+// marque y gardent leur place. Ailleurs (recherche visuelle, « Résultats
+// pour vos mots »), il garde sa place : aucune marque n'est mise en avant
+// (décision du fondateur, 21 novembre 2026). Comme les boutiques connues,
+// les sites de cette liste ne sont jamais signalés « Prix inhabituellement
+// bas ». Cette liste ne limite pas les résultats : les boutiques et les
+// marques qui n'y sont pas sont proposées comme les autres. La règle est
+// dans src/lib/shopTrust.ts.
 // Les revendeurs (Zalando, Galeries Lafayette, Farfetch, Amazon, Vinted…)
 // sont dans src/listes/boutiquesConnues.ts.
 //

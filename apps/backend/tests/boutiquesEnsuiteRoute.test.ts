@@ -705,15 +705,23 @@ describe("ordre des boutiques : un oui sur la ligne de la boutique officielle de
     matchRows(id)
       .filter((row) => row.origin === "shopping")
       .sort((a, b) => Number(a.rank) - Number(b.rank));
+  /** Les boutiques d'une réponse, dans l'ordre envoyé à l'app. */
+  const shoppingHosts = (body: { matches: { origin?: string; merchantUrl: string }[] }) =>
+    body.matches.filter((match) => match.origin === "shopping").map((match) => new URL(match.merchantUrl).hostname);
 
-  it("permis : au lancement (apps déjà installées) comme aux boutiques ensuite, seule la ligne de zara.com porte le oui ; ni la marque ni la requête ne sont rangées", async () => {
+  it("permis : au lancement (apps déjà installées) comme aux boutiques ensuite, seule la ligne de zara.com porte le oui, et zara.com passe en tête de la réponse ; ni la marque ni la requête ne sont rangées", async () => {
     aiMock.mockResolvedValue(ZARA_ANSWER);
     shoppingMock.mockResolvedValue(ZARA_SHOPPING);
     const target = await buildApp();
     const launched = preparedSearch();
-    expect((await launch(target, launched)).json().complement.status).toBe("shown");
+    const first = (await launch(target, launched)).json();
+    expect(first.complement.status).toBe("shown");
     const deferred = await deferredLaunch(target);
-    expect((await complement(target, deferred)).json().complement.status).toBe("shown");
+    const later = (await complement(target, deferred)).json();
+    expect(later.complement.status).toBe("shown");
+    for (const body of [first, later, (await target.inject({ method: "GET", url: `/api/searches/${launched}` })).json()]) {
+      expect(shoppingHosts(body)).toEqual(["www.zara.com", "boutique-d.fr", "boutique-e.fr", "boutique-c.fr", "shop.mango.com"]);
+    }
     for (const id of [launched, deferred]) {
       const rows = shoppingRows(id);
       // L'ordre enregistré reste celui du tri léger : les titres qui nomment Zara d'abord.
@@ -739,6 +747,9 @@ describe("ordre des boutiques : un oui sur la ligne de la boutique officielle de
     const rows = shoppingRows(id);
     expect(rows).toHaveLength(5);
     expect(rows.some((row) => "brand_shop" in row)).toBe(false);
+    // zara.com garde sa place reçue, avec sa mention : aucune marque en avant.
+    expect(shoppingHosts(res.json())).toEqual(["boutique-d.fr", "boutique-e.fr", "boutique-c.fr", "www.zara.com", "shop.mango.com"]);
+    expect(res.json().matches.find((match: { merchantUrl: string }) => match.merchantUrl.includes("zara.com")).offerMark).toBe("official_shop");
     const warnings = logs.map((line) => JSON.parse(line) as Record<string, unknown>).filter((line) => String(line.msg).startsWith("Boutique de la marque non notée"));
     expect(warnings).toEqual([expect.objectContaining({ code: "42703" })]);
     expect(JSON.stringify(warnings)).not.toMatch(/zara|mango/i);
