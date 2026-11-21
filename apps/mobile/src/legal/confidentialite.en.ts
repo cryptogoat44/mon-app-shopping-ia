@@ -22,6 +22,10 @@
 // started from a video link, when no result shows a price, the description
 // written for the analysis is sent automatically, once, to SerpApi and then
 // Google Shopping ("What are you looking for?" started by the app).
+// Journey measurement lot (2026-11-21, branch lot-mesure-parcours), still
+// WITHOUT changing LEGAL_DOCUMENT_VERSIONS: same fact as the French text —
+// usage statistics also cover the steps of the journey and waiting times
+// ("The data we use"); nothing else changes.
 // Website-only features are added by src/legal-extra (.web version), never
 // written here (this file also ships in the iPhone app).
 import { APP_NAME_DISPLAY as BRAND } from "../constants/brand";
@@ -80,7 +84,7 @@ export function buildPrivacyPolicyEn(extra: PrivacyExtra): LegalDocument {
           "Your consents: the date and version of the documents you accepted, your declaration that you are at least 15 years old, and your choices (consent, refusal or withdrawal) for usage statistics and automatic video analysis, each with its date and the version of the text shown to you.",
           "Technical data: like any web server, ours receives your IP address and technical information with each request; they appear in its logs, used for security and to fix errors.",
           "Error reports: when an error occurs in the app or on our server, a technical report is created (type of error, screen or feature concerned, browser type, or phone model and system version) together with the internal identifier of your account — never your name, email address, content, or the parameters of the addresses you visited. If the iPhone app closes unexpectedly (crash), the report also contains a pseudonymous installation identifier: a code specific to your phone and the app, which contains neither your name nor your email address.",
-          "Usage statistics, ONLY if you agree (optional box, unticked by default): the actions you take in the app (for example starting a search, adding a piece, publishing, commenting, following an account), with only the internal identifier of your account and a few predefined details (category, chosen visibility, number of results…). Never your name, email address, the words you type, the text of your comments or captions, or the addresses of your images.",
+          "Usage statistics, ONLY if you agree (optional box, unticked by default): the actions you take in the app (for example starting a search, adding a piece, publishing, commenting, following an account), the steps of the journey and waiting times, with only the internal identifier of your account and a few predefined details (category, chosen visibility, number of results…). Never your name, email address, the words you type, the text of your comments or captions, or the addresses of your images.",
           "The photos you send are resized and stripped of their metadata, including any GPS location recorded by your phone.",
           `Your search counters and your subscription status: to apply your search limits (see the terms of use), ${BRAND} counts your searches for the day and the calendar month from your search history; no other counter is stored. If you have a subscription, ${BRAND} keeps its type, its end date, where the information came from and the date it was last updated, only to know which limits apply to your account. Your subscription status and your counters for the month are included in your data export.`,
         ],

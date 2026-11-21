@@ -37,6 +37,10 @@
 // (« Que cherchez-vous ? » lancé par l'app ; décision du fondateur
 // « Automatique (Recommandé) ») : En bref, données, bases, section
 // « Vidéos », prestataires, transferts et durées.
+// Lot mesure du parcours (2026-11-21, branche lot-mesure-parcours), toujours
+// SANS changer LEGAL_DOCUMENT_VERSIONS : les statistiques d'usage disent
+// aussi les étapes du parcours et les temps d'attente (« Les données que
+// nous utilisons ») ; rien d'autre ne change.
 import { APP_NAME_DISPLAY as BRAND } from "../constants/brand";
 import { privacyExtraFr } from "../legal-extra/confidentialite-extra";
 import { PUBLISHER } from "./publisher";
@@ -93,7 +97,7 @@ export function buildPrivacyPolicy(extra: PrivacyExtra): LegalDocument {
           "Vos consentements : la date et la version des documents que vous avez acceptés, votre déclaration d'avoir au moins 15 ans, et vos choix (accord, refus ou retrait) pour les statistiques d'usage et l'analyse automatique des vidéos, chacun avec sa date et la version du texte qui vous a été présenté.",
           "Des données techniques : comme tout serveur web, le nôtre reçoit votre adresse IP et des informations techniques à chaque requête ; elles figurent dans ses journaux, utilisés pour la sécurité et la correction des erreurs.",
           "Des rapports d'erreur : quand une erreur survient dans l'app ou sur notre serveur, un rapport technique est créé (nature de l'erreur, écran ou fonction concernée, type de navigateur, ou modèle de téléphone et version du système), avec l'identifiant interne de votre compte — jamais votre nom, votre e-mail, vos contenus, ni les paramètres des adresses consultées. Si l'app iPhone se ferme brutalement (plantage), le rapport contient aussi un identifiant d'installation pseudonyme : un code propre à votre téléphone et à l'app, qui ne contient ni votre nom ni votre e-mail.",
-          "Des statistiques d'usage, SEULEMENT si vous l'acceptez (case facultative, décochée par défaut) : les actions que vous faites dans l'app (par exemple lancer une recherche, ajouter une pièce, publier, commenter, suivre un compte), avec le seul identifiant interne de votre compte et quelques précisions choisies à l'avance (catégorie, visibilité choisie, nombre de résultats…). Jamais votre nom, votre e-mail, les mots que vous tapez, le texte de vos commentaires ou légendes, ni les adresses de vos images.",
+          "Des statistiques d'usage, SEULEMENT si vous l'acceptez (case facultative, décochée par défaut) : les actions que vous faites dans l'app (par exemple lancer une recherche, ajouter une pièce, publier, commenter, suivre un compte), les étapes du parcours et les temps d'attente, avec le seul identifiant interne de votre compte et quelques précisions choisies à l'avance (catégorie, visibilité choisie, nombre de résultats…). Jamais votre nom, votre e-mail, les mots que vous tapez, le texte de vos commentaires ou légendes, ni les adresses de vos images.",
           "Les photos que vous envoyez sont réduites et débarrassées de leurs métadonnées, y compris la position GPS éventuellement enregistrée par votre téléphone.",
           `Vos compteurs de recherches et votre statut d'abonnement : pour appliquer vos limites de recherche (voir les conditions d'utilisation), ${BRAND} compte vos recherches du jour et du mois civil à partir de l'historique de vos recherches ; aucun compteur de plus n'est enregistré. Si vous avez un abonnement, ${BRAND} conserve son type, sa date de fin, d'où vient l'information et la date de sa dernière mise à jour, seulement pour savoir quelles limites s'appliquent à votre compte. Votre statut d'abonnement et vos compteurs du mois figurent dans l'export de vos données.`,
         ],
