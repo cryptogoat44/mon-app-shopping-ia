@@ -103,7 +103,7 @@ import type {
 import { CLIENT_LEVEL, COMPLEMENT_DEFERRED, CONSENT_VERSIONS, parseSearchCapacity, parseVideoMomentsResponse, type SearchCapacityStatus } from "@monapp/shared-types";
 import { CLIENT_LEVEL_QUERY, parseFollowResponse } from "./follow-state";
 import { supabase } from "./supabase";
-import { setAnalyticsConsent, track } from "./analytics";
+import { analyticsAccount, setAnalyticsConsent, track } from "./analytics";
 import { acceptLanguage, t } from "../i18n";
 import { imageFileFromUri } from "./image-file";
 import { ApiError } from "./api-error";
@@ -259,8 +259,13 @@ export async function runSearch(
   params: { crop: CropRect | null; imageUri: string | null; words?: string | null; zoneByAi?: boolean },
   signal?: AbortSignal
 ): Promise<ProductSearch> {
-  // Mesure du parcours : l'attente part du lancement (image jointe comprise).
+  // Mesure du parcours : l'attente part du lancement (image jointe comprise),
+  // pour le compte qui lance. spot_completed ne part que sous ce compte, et
+  // s'il avait donné son accord au lancement : jamais sous un autre compte
+  // connecté entre-temps, même 40 s plus tard (boutiques ensuite).
   const startedAt = waitNow();
+  const launchedBy = analyticsAccount();
+  const sameAccount = () => launchedBy !== null && analyticsAccount() === launchedBy;
   searchLaunched();
   const formData = new FormData();
   if (params.crop) formData.append("crop", JSON.stringify(params.crop));
@@ -281,10 +286,10 @@ export async function runSearch(
   const waitMs = waitSince(startedAt);
   if (search.complement?.pending) {
     // spot_completed attend l'issue des boutiques, pour la compter une fois.
-    void requestShops(search.id, (shopsSignal) => fetchShops(search.id, shopsSignal)).then((outcome) =>
-      trackSpotCompleted(search, outcome.kind === "added" ? outcome.search : null, { waitMs, shopsWaitMs: waitSince(startedAt) })
-    );
-  } else {
+    void requestShops(search.id, (shopsSignal) => fetchShops(search.id, shopsSignal)).then((outcome) => {
+      if (sameAccount()) trackSpotCompleted(search, outcome.kind === "added" ? outcome.search : null, { waitMs, shopsWaitMs: waitSince(startedAt) });
+    });
+  } else if (sameAccount()) {
     trackSpotCompleted(search, search, { waitMs, shopsWaitMs: waitMs });
   }
   return search;

@@ -131,7 +131,9 @@ vous verrez dans PostHog.
   (tout de suite quand elle arrive avec eux ou n'a pas lieu). Les résultats,
   eux, sont déjà à l'écran et cliquables : le membre a souvent ouvert une
   boutique ou gardé une pièce avant. Une recherche retrouvée après une
-  réponse perdue (réseau coupé, retour sur TikTok) ne l'envoie pas.
+  réponse perdue (réseau coupé, retour sur TikTok) ne l'envoie pas. Il part
+  seulement sous le compte qui a lancé la recherche, s'il avait donné son
+  accord à ce moment-là : jamais sous un autre compte connecté entre-temps.
   `outcome` = `results` (des résultats), `none` ou `failed`. Nouveaux :
   `wait_ms` = l'attente, du lancement aux premiers résultats (même si
   l'événement part plus tard) ; `shops_wait_ms` = l'attente, du lancement à
