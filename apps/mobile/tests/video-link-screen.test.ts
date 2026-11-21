@@ -284,3 +284,124 @@ describe("statistiques : jamais le lien, les mots ni les images", () => {
     expect(LINK_AI_FAILURES).toContain("search_limit");
   });
 });
+
+// Lot « propositions » (Parcours 2, 21 novembre 2026) : « Voir les propositions
+// de l'IA » sur l'écran « vidéo partagée » — ces tests lisent le code des écrans.
+describe("écran « vidéo partagée » : les propositions de l'IA", () => {
+  const screen = code("src/app/(app)/spot/lecteur.tsx");
+  const view = code("src/components/video-link-analysis.tsx");
+  const hook = code("src/lib/use-video-link-analysis.ts");
+  const between = (text: string, start: string, end: string) => text.slice(text.indexOf(start), text.indexOf(end, text.indexOf(start)));
+
+  it("le bouton n'apparaît que si l'état du serveur contient `pieces` (valeur exacte `true`, lue par linkAnalysisStatus) ; sinon l'écran d'avant", () => {
+    expect(screen).toContain("setPiecesEnabled(status.pieces);");
+    expect(screen).toContain("const [piecesEnabled, setPiecesEnabled] = useState(false);");
+    expect(screen).toContain("onPieces={piecesEnabled ? auto.findPieces : undefined}");
+    expect(screen).toContain("pieces: piecesEnabled,");
+    // Le bouton n'existe que dans la version avec les propositions.
+    expect(view).toContain("if (onPieces) return <LinkAskWithPieces");
+    const plain = between(view, "export function LinkAskView(", "function LinkAskWithPieces(");
+    const withPieces = between(view, "function LinkAskWithPieces(", "function useElapsed(");
+    expect(plain).not.toContain("video-link-pieces");
+    expect(withPieces).toContain('testID="video-link-pieces"');
+    expect(withPieces).toContain("{t.videoLinkAuto.pieces.show}");
+    // Dans l'ordre : la phrase, le bouton principal, « ou décrivez la pièce : », le champ, « Trouver la pièce », la phrase de confidentialité.
+    const order = ["t.videoLinkAuto.pieces.lead", 'testID="video-link-pieces"', "t.videoLinkAuto.pieces.or", "<QueryInput", "{t.videoLinkAuto.find}", "{t.videoLinkAuto.privacy}"].map((part) => withPieces.indexOf(part));
+    expect(order.every((index) => index > 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // Occupé pendant la vérification de l'accord ; « Trouver la pièce » actif dès 2 caractères.
+    expect(withPieces).toContain("accessibilityState={{ disabled: checking, busy: piecesBusy }}");
+    expect(withPieces).toContain("const findDisabled = cleanQuery(query).length < VIDEO_AI.queryMinLength || checking;");
+  });
+
+  it("refusé : le champ prend le focus d'office avec les propositions (le clavier cacherait le bouton) ; permis : il le garde sans elles", () => {
+    const plain = between(view, "export function LinkAskView(", "function LinkAskWithPieces(");
+    const withPieces = between(view, "function LinkAskWithPieces(", "function useElapsed(");
+    const input = (part: string) => part.slice(part.indexOf("<QueryInput"), part.indexOf("/>", part.indexOf("<QueryInput")));
+    expect(input(plain)).toMatch(/^\s*autoFocus$/m);
+    expect(input(withPieces)).not.toMatch(/^\s*autoFocus$/m);
+    // Seulement au retour par « Décrire la pièce autrement ».
+    expect(input(withPieces)).toContain("autoFocus={focusQuery}");
+    expect(hook).toContain("setFocusQuery(true);");
+  });
+
+  it("« Réessayer » refait le dernier mode, pas toujours celui des mots ; l'accord reprend le mode demandé", () => {
+    expect(hook).toContain('retry: () => (phase.kind === "failed" && phase.mode === "pieces" ? void findPieces() : void find()),');
+    expect(hook).not.toContain("retry: () => void find(),");
+    expect(hook).toContain("if (alive.current) void analyze(pendingMode.current);");
+    expect(hook.match(/pendingMode\.current = mode;/g)).toHaveLength(2);
+    // Chaque échec garde son mode.
+    expect(hook).toContain('setPhase({ kind: "failed", info: outcome.info, mode });');
+  });
+
+  it("les propositions déjà reçues pour ce lien servent sans nouvel appel, tant que l'écran est ouvert (en mémoire seulement)", () => {
+    expect(hook).toContain("const piecesCache = useRef<LinkAnalysis | null>(null);");
+    expect(hook).toContain('if (mode === "pieces") piecesCache.current = outcome.analysis;');
+    const findPieces = between(hook, "async function findPieces()", "async function accept()");
+    expect(findPieces.indexOf("const cached = cachedPieces();")).toBeGreaterThan(0);
+    expect(findPieces.indexOf("return setPhase(cached);")).toBeLessThan(findPieces.indexOf('await consentThenAnalyze("pieces");'));
+    // Un lien par écran (clé = le lien) : un autre lien repart de zéro.
+    expect(screen).toContain("return <SharedVideo key={url} url={url} platform={platform} />;");
+  });
+
+  it("le texte déjà tapé ne part pas en mode « pièces » : il reste dans le champ, et l'attente ne l'affiche pas", () => {
+    const analyzeFn = between(hook, "async function analyze(mode: LinkMode)", "async function consentThenAnalyze(");
+    expect(analyzeFn).toContain("request = linkPiecesRequest(url);");
+    expect(analyzeFn).not.toContain("setQuery(");
+    expect(code("src/lib/video-link-analysis.ts")).toContain('return { url: url.trim(), mode: "pieces" };');
+    expect(view).toContain('const shownQuery = mode === "words" ? cleanQuery(query) : "";');
+    expect(view).toContain("const steps = linkWaitingSteps(mode);");
+    expect(screen).toContain("<LinkWaitingView startedAt={phase.startedAt} query={auto.query} mode={phase.mode} onCancel={auto.cancel} />");
+  });
+
+  it("« Décrire la pièce autrement » ramène au champ, vide ; la capture depuis les pièces ne reprend que le texte tapé, jamais un nom proposé", () => {
+    const describe = between(hook, "function describeInstead()", "function search()");
+    expect(describe).toContain('setQuery("");');
+    expect(describe).toContain('setPhase({ kind: "ask", problem: null });');
+    // Sur l'écran des pièces et sur l'échec d'un essai « pièces ».
+    expect(screen.match(/onDescribe=\{auto\.describeInstead\}/g)).toHaveLength(2);
+    // Le nom choisi ne va que dans le brouillon de la recherche (startMomentSearch), jamais dans le champ ni sous la capture.
+    expect(hook).not.toMatch(/setQuery\([^)]*label/);
+    expect(screen).toContain("queryRef.current = auto.query;");
+    expect(screen).not.toMatch(/labels\[/);
+  });
+
+  it("l'écran des moments : les pastilles (SegmentedChoice) si l'IA a nommé les pièces, les vignettes sinon ; le titre annoncé à VoiceOver sur iPhone", () => {
+    const moments = between(view, "export function LinkMomentsView(", "function CalmMessage(");
+    expect(moments).toContain("const labels = analysis.labels;");
+    const piecesPart = between(moments, "if (labels) {", "{count > 1 ? (");
+    expect(piecesPart).toContain("<SegmentedChoice label={t.videoLinkAuto.pieces.group} options={options} value={String(selected)} onChange={(value) => onSelect(Number(value))} />");
+    expect(piecesPart).toContain("<PiecesTitle>{t.videoLinkAuto.pieces.title(count)}</PiecesTitle>");
+    expect(piecesPart).toContain("{t.videoLinkAuto.pieces.hint(count)}");
+    expect(piecesPart).toContain("{photo}");
+    expect(piecesPart).toContain("secondary={[{ label: t.videoLinkAuto.pieces.describe, onPress: onDescribe ?? onEditQuery }]}");
+    expect(piecesPart).not.toContain("styles.thumbs");
+    // Sans noms : les vignettes d'avant, « Modifier la description ».
+    const wordsPart = moments.slice(moments.indexOf("{count > 1 ? ("));
+    expect(wordsPart).toContain("styles.thumbs");
+    expect(wordsPart).not.toContain("SegmentedChoice");
+    expect(wordsPart).toContain("t.videoLinkAuto.moments.editQuery");
+    const title = between(view, "function PiecesTitle(", "export function LinkMomentsView(");
+    expect(title).toContain('if (Platform.OS === "ios") AccessibilityInfo.announceForAccessibility(children);');
+    expect(title).toContain('accessibilityRole="header"');
+  });
+
+  it("l'échec : en mode « pièces », le geste « décrire » s'appelle « Décrire la pièce autrement » ; rien d'écrit, la capture dit « Votre lien est gardé. »", () => {
+    const failure = between(view, "export function LinkFailureView(", "const styles = themedStyles(");
+    expect(failure).toContain("const view = linkFailureView(info, getActiveLocale(), platformName, mode);");
+    expect(failure).toContain('if (mode === "pieces") return { label: t.videoLinkAuto.pieces.describe, onPress: onDescribe ?? onEditQuery };');
+    expect(failure).toContain("return { label: t.videoLinkAuto.moments.editQuery, onPress: onEditQuery };");
+    expect(failure).toContain("{keptDescription ? t.videoLinkAuto.planB.kept : t.videoLinkAuto.pieces.keptLink}");
+    expect(screen).toContain("mode={phase.mode}");
+    expect(screen).toContain('keptDescription={keptQuery !== ""}');
+  });
+
+  it("la pastille de SegmentedChoice ne dépasse jamais la largeur de l'écran : un long nom passe à la ligne (320 pt, texte agrandi)", () => {
+    const segmented = code("src/components/segmented-choice.tsx");
+    const pill = between(segmented, "pill: {", "},");
+    expect(pill).toContain('maxWidth: "100%",');
+    expect(pill).toContain("minHeight: 44,");
+    expect(segmented).toContain('pillLabel: { fontSize: font.secondary, color: color.encre, textAlign: "center" },');
+    expect(segmented).toContain("aria-checked={selected}");
+  });
+});

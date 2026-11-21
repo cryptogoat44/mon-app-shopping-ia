@@ -20,6 +20,9 @@
 // (lib/use-video-link-analysis.ts). Le lecteur officiel (iPhone) et la
 // capture d'écran restent proposés, et la capture s'affiche à chaque échec.
 // Analyse coupée, ou serveur muet : l'écran reste exactement celui d'avant.
+// Lot « propositions » (Parcours 2, 21 novembre 2026) : si le serveur dit
+// aussi `pieces` (valeur exacte `true`), la question propose d'abord « Voir
+// les propositions de l'IA » ; sinon elle reste celle d'avant.
 // L'app ne télécharge rien elle-même : les images des moments arrivent du
 // serveur et restent en mémoire. Le lien reste en attente 10 minutes
 // (lib/pending-video-link.ts).
@@ -131,6 +134,8 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   const [busy, setBusy] = useState<"spot" | "photo" | null>(null);
   // Lot « vidéo auto » : analyse d'un lien allumée sur le serveur (faux tant qu'il ne l'a pas dit).
   const [analysisEnabled, setAnalysisEnabled] = useState(false);
+  // Lot « propositions » : « Voir les propositions de l'IA » permis par le serveur (faux tant qu'il ne l'a pas dit).
+  const [piecesEnabled, setPiecesEnabled] = useState(false);
   const { importing, importVideo } = useVideoImport(setMessage);
   const webRef = useRef<WebView>(null);
   const frameRef = useRef<View>(null);
@@ -151,6 +156,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   const withPlayer = platform !== null && link !== null && playerOffered({ platform, os: Platform.OS, build: features, server: lookup?.players ?? null, snapshotReady: snapshotAvailable });
   const auto = useVideoLinkAnalysis({
     active: analysisEnabled,
+    pieces: piecesEnabled,
     url: link?.canonicalUrl ?? url,
     platform,
     origin: Platform.OS === "web" ? "web" : "app",
@@ -231,6 +237,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     const enabled = status.enabled;
     setLookup(response);
     setAnalysisEnabled(enabled);
+    setPiecesEnabled(status.pieces);
     if (response?.link) {
       setHandle(response.link.creatorHandle);
       void pendingVideoLinks.learn(url, { url: response.link.canonicalUrl, creatorHandle: response.link.creatorHandle });
@@ -516,7 +523,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
         />
       );
     } else if (phase.kind === "working") {
-      autoBody = <LinkWaitingView startedAt={phase.startedAt} query={auto.query} onCancel={auto.cancel} />;
+      autoBody = <LinkWaitingView startedAt={phase.startedAt} query={auto.query} mode={phase.mode} onCancel={auto.cancel} />;
     } else if (phase.kind === "moments") {
       autoBody = (
         <>
@@ -530,6 +537,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
             onDragChange={setDragging}
             onSearch={auto.search}
             onEditQuery={auto.editQuery}
+            onDescribe={auto.describeInstead}
           />
           {captureLink}
         </>
@@ -537,11 +545,21 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
     } else if (phase.kind === "failed") {
       // Plan B en un geste (lot « recherche confiance ») : une phrase calme et un seul bouton, la capture
       // d'écran (lien gardé, description reprise) ; jamais d'impasse. `platform` : statistiques du plan B.
-      autoBody = <LinkFailureView info={phase.info} platformName={name || undefined} platform={platform} onRetry={auto.retry} onEditQuery={auto.editQuery} onCapture={showCapture} />;
+      // Lot « propositions » : le geste « décrire » suit le mode de l'essai manqué (onDescribe) ; rien d'écrit, « Votre lien est gardé ».
+      autoBody = <LinkFailureView info={phase.info} mode={phase.mode} keptDescription={keptQuery !== ""} onDescribe={auto.describeInstead} platformName={name || undefined} platform={platform} onRetry={auto.retry} onEditQuery={auto.editQuery} onCapture={showCapture} />;
     } else {
       autoBody = (
         <>
-          <LinkAskView query={auto.query} onQuery={auto.onQuery} onFind={auto.find} problem={phase.problem} checking={auto.checking} />
+          <LinkAskView
+            query={auto.query}
+            onQuery={auto.onQuery}
+            onFind={auto.find}
+            problem={phase.problem}
+            checking={auto.checking}
+            onPieces={piecesEnabled ? auto.findPieces : undefined}
+            checkingMode={auto.checkingMode}
+            focusQuery={auto.focusQuery}
+          />
           {playerButton}
           {captureLink}
         </>
