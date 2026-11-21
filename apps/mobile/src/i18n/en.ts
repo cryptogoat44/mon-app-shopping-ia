@@ -594,7 +594,7 @@ export const en: Catalog = {
       known_shop: "Well-known shop",
       unusual_price: "Unusually low price",
       hint: "Explains this note.",
-      explanation: `${BRAND} labels official brand stores, well-known shops and unusually low prices. When the same piece is sold by several shops, the official brand store comes first. Always check the shop before you pay.`,
+      explanation: `${BRAND} labels official brand stores, well-known shops and unusually low prices. In “This piece at other shops”, the official brand store comes first, well-known shops move up a little and unusually low prices come last. Always check the shop before you pay.`,
       close: "Got it",
     },
     showAllProposals: "Also show suggestions without a price",

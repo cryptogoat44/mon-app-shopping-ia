@@ -53,30 +53,40 @@ describe("mentions des boutiques : textes", () => {
     expect(fr.result.offerMark.official_shop).toBe("Boutique officielle de la marque");
     expect(fr.result.offerMark.known_shop).toBe("Boutique connue");
     expect(fr.result.offerMark.unusual_price).toBe("Prix inhabituellement bas");
-    // Ordre des boutiques (décision du fondateur, 21 novembre 2026) : aucune marque mise en avant ; la boutique officielle en premier pour la même pièce seulement.
+    // Ordre des boutiques (décision du fondateur, 21 novembre 2026) : aucune marque mise en avant ; seule la section
+    // « Cette pièce dans d'autres boutiques » est rangée par les mentions, et la feuille (ouverte depuis n'importe
+    // quelle carte) le dit, avec les trois effets.
     expect(fr.result.offerMark.explanation).toMatch(
-      /^.+ signale les boutiques officielles des marques, les boutiques connues et les prix inhabituellement bas\. Pour une même pièce vendue dans plusieurs boutiques, la boutique officielle de la marque passe en premier\. Vérifiez toujours la boutique avant de payer\.$/
+      /^.+ signale les boutiques officielles des marques, les boutiques connues et les prix inhabituellement bas\. Dans « Cette pièce dans d'autres boutiques », la boutique officielle de la marque passe en premier, les boutiques connues remontent un peu et les prix inhabituellement bas passent en dernier\. Vérifiez toujours la boutique avant de payer\.$/
     );
+    expect(fr.result.offerMark.explanation).toContain(`« ${fr.result.complementTitleAi} »`);
     expect(en.result.offerMark.official_shop).toBe("Official brand store");
     expect(en.result.offerMark.known_shop).toBe("Well-known shop");
     expect(en.result.offerMark.unusual_price).toBe("Unusually low price");
     expect(en.result.offerMark.explanation).toMatch(
-      /^.+ labels official brand stores, well-known shops and unusually low prices\. When the same piece is sold by several shops, the official brand store comes first\. Always check the shop before you pay\.$/
+      /^.+ labels official brand stores, well-known shops and unusually low prices\. In “This piece at other shops”, the official brand store comes first, well-known shops move up a little and unusually low prices come last\. Always check the shop before you pay\.$/
     );
+    expect(en.result.offerMark.explanation).toContain(`“${en.result.complementTitleAi}”`);
     for (const text of [fr.result.offerMark.explanation, en.result.offerMark.explanation]) expect(text).not.toMatch(/met en avant|highlight/i);
+    // Refusé : la règle sans sa section (fausse dans la recherche visuelle et « Résultats pour vos mots »).
+    expect(fr.result.offerMark.explanation).not.toMatch(/Pour une même pièce vendue dans plusieurs boutiques/);
+    expect(en.result.offerMark.explanation).not.toMatch(/When the same piece is sold by several shops/);
     const all = JSON.stringify([fr.result.offerMark, en.result.offerMark]).toLowerCase();
     for (const word of ["arnaque", "escroc", "fraude", "faux", "fausse", "scam", "fraud", "fake"]) expect(all).not.toContain(word);
   });
 
-  it("conditions d'utilisation : une phrase dit que Spotto peut masquer des offres, les signale, et ce qui passe en premier — la même chose que la feuille (français et anglais)", () => {
+  it("conditions d'utilisation : une phrase dit que Spotto peut masquer des offres, les signale, et comment « Cette pièce dans d'autres boutiques » est rangée — comme la feuille, avec aussi les adresses douteuses (français et anglais)", () => {
     const blocks = (doc: typeof termsOfUse) => doc.sections.flatMap((section) => section.blocks.flat()).join("\n");
     expect(blocks(termsOfUse)).toMatch(
-      /peut ne pas afficher certaines offres, et signale les boutiques officielles des marques, les boutiques connues et les prix inhabituellement bas ; pour une même pièce vendue dans plusieurs boutiques, la boutique officielle de la marque passe en premier\. Ce n'est pas une garantie : vérifiez toujours la boutique avant de payer\./
+      /peut ne pas afficher certaines offres, et signale les boutiques officielles des marques, les boutiques connues et les prix inhabituellement bas ; dans « Cette pièce dans d'autres boutiques », la boutique officielle de la marque passe en premier, les boutiques connues remontent un peu et les offres à prix inhabituellement bas ou à l'adresse douteuse passent en dernier\. Ce n'est pas une garantie : vérifiez toujours la boutique avant de payer\./
     );
     expect(blocks(termsOfUseEn)).toMatch(
-      /may not show some offers, and labels official brand stores, well-known shops and unusually low prices; when the same piece is sold by several shops, the official brand store comes first\. This is not a guarantee: always check the shop before you pay\./
+      /may not show some offers, and labels official brand stores, well-known shops and unusually low prices; in “This piece at other shops”, the official brand store comes first, well-known shops move up a little and offers with an unusually low price or a dubious address come last\. This is not a guarantee: always check the shop before you pay\./
     );
     for (const text of [blocks(termsOfUse), blocks(termsOfUseEn)]) expect(text).not.toMatch(/mettre en avant les boutiques|highlight official/i);
+    // Refusé : la règle sans sa section.
+    expect(blocks(termsOfUse)).not.toMatch(/pour une même pièce vendue dans plusieurs boutiques/i);
+    expect(blocks(termsOfUseEn)).not.toMatch(/when the same piece is sold by several shops/i);
   });
 });
 

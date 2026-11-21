@@ -652,14 +652,15 @@ export const fr = {
     cheapestBadge: "Le moins cher",
     // Boutiques douteuses (lot « recherche confiance ») : mentions neutres et factuelles,
     // jamais une accusation ; touchées, une explication courte. Ordre des boutiques
-    // (décision du fondateur, 21 novembre 2026) : aucune marque mise en avant ; la
-    // boutique officielle passe en premier pour la même pièce seulement.
+    // (décision du fondateur, 21 novembre 2026) : aucune marque mise en avant ; seule la
+    // section « Cette pièce dans d'autres boutiques » est rangée par les mentions, et la
+    // feuille le dit (elle s'ouvre aussi depuis les autres sections).
     offerMark: {
       official_shop: "Boutique officielle de la marque",
       known_shop: "Boutique connue",
       unusual_price: "Prix inhabituellement bas",
       hint: "Explique cette mention.",
-      explanation: `${BRAND} signale les boutiques officielles des marques, les boutiques connues et les prix inhabituellement bas. Pour une même pièce vendue dans plusieurs boutiques, la boutique officielle de la marque passe en premier. Vérifiez toujours la boutique avant de payer.`,
+      explanation: `${BRAND} signale les boutiques officielles des marques, les boutiques connues et les prix inhabituellement bas. Dans « Cette pièce dans d'autres boutiques », la boutique officielle de la marque passe en premier, les boutiques connues remontent un peu et les prix inhabituellement bas passent en dernier. Vérifiez toujours la boutique avant de payer.`,
       close: "J'ai compris",
     },
     // « Avec prix seulement » et aucune proposition avec prix : retirer le filtre.
