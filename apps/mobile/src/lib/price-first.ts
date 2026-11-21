@@ -23,11 +23,15 @@ export function hasPrice(piece: Pick<Piece, "priceFrom">): boolean {
 
 /** Un prix qui peut mettre une proposition en grand d'office. Un prix à 0
  * (donnée douteuse) reste affiché tel quel, avec les propositions qui ont un
- * prix, mais ne la fait pas passer devant les autres (relecture, ORD-8). De
- * même, un prix signalé « Prix inhabituellement bas » (boutiques douteuses,
- * lot « recherche confiance ») : jamais mise en grand d'office. */
-function promotable(piece: Pick<Piece, "priceFrom" | "offerMark">): boolean {
-  return piece.priceFrom !== null && piece.priceFrom > 0 && piece.offerMark !== "unusual_price";
+ * prix, mais ne la fait pas passer devant les autres (relecture, ORD-8).
+ * Ordre des boutiques (décision du fondateur, 21 novembre 2026 : « Je ne veux
+ * mettre aucune marque en avant ») : aucune mention ne compte ici. La grande
+ * carte est la première reçue avec un prix, comme pour toute la recherche
+ * visuelle : ni une boutique officielle ou connue remontée, ni une offre
+ * « Prix inhabituellement bas » sautée — elle garde sa mention, et jamais
+ * « Le moins cher » ni « à partir de » (lib/result-sort.ts). */
+function promotable(piece: Pick<Piece, "priceFrom">): boolean {
+  return piece.priceFrom !== null && piece.priceFrom > 0;
 }
 
 /** Aucune proposition n'a de prix, nulle part (recherche visuelle et

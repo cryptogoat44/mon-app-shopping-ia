@@ -7,7 +7,7 @@ import { fr } from "../src/i18n/fr";
 import { en } from "../src/i18n/en";
 import { termsOfUse } from "../src/legal/conditions";
 import { termsOfUseEn } from "../src/legal/conditions.en";
-import { bestProposalIndex } from "../src/lib/price-first";
+import { bestProposalIndex, priceFirstSections } from "../src/lib/price-first";
 import { cheapestIndex, priceSortedList, priceSummary } from "../src/lib/result-sort";
 import { matchToPiece, toSpotResult } from "../src/lib/spot-result";
 
@@ -77,12 +77,35 @@ describe("mentions des boutiques : ce que l'app reçoit et affiche", () => {
     expect(matchToPiece(match("p4", 10))).not.toHaveProperty("offerMark");
   });
 
-  it("« Prix inhabituellement bas » : jamais « Le moins cher », ni « à partir de », ni la grande carte d'office", () => {
+  it("« Prix inhabituellement bas » : jamais « Le moins cher », ni « à partir de »", () => {
     const lists = result([match("p1", 120), match("p2", 110), match("p3", 25, { offerMark: "unusual_price" }), match("p4", 130)]);
     expect(cheapestIndex(lists, "fr")).toBe(1);
     expect(priceSummary(lists, "fr")).toMatchObject({ count: 3, cheapest: { index: 1 } });
+  });
+
+  it("grande carte d'office (ordre des boutiques, 21 novembre 2026) : la première reçue avec un prix, quelle que soit sa mention — une offre « Prix inhabituellement bas » n'est plus sautée et garde sa mention ; une boutique officielle ou connue plus bas ne passe pas devant", () => {
     const unusualFirst = result([match("p1", 25, { offerMark: "unusual_price" }), match("p2", 110), match("p3", null)]);
-    expect(bestProposalIndex(unusualFirst, "fr")).toBe(1);
+    expect(bestProposalIndex(unusualFirst, "fr")).toBe(0);
+    expect(unusualFirst.pieces[0]!.offerMark).toBe("unusual_price");
+    const markedLater = result([match("p1", 120), match("p2", 110, { offerMark: "official_shop" }), match("p3", 100, { offerMark: "known_shop" })]);
+    expect(bestProposalIndex(markedLater, "fr")).toBe(0);
+  });
+
+  it("« Pertinence » suit l'ordre du serveur, section par section : l'app ne range rien d'après les mentions", () => {
+    const lists = result([
+      match("p1", 120),
+      match("p2", 110, { offerMark: "official_shop" }),
+      match("p3", 30, { offerMark: "unusual_price" }),
+      match("p4", 135, { origin: "shopping", offerMark: "official_shop" }),
+      match("p5", 115, { origin: "shopping" }),
+      match("p6", 112, { origin: "words" }),
+      match("p7", 121, { origin: "words", offerMark: "known_shop" }),
+    ]);
+    const sections = priceFirstSections(lists, bestProposalIndex(lists, "fr"));
+    expect(bestProposalIndex(lists, "fr")).toBe(0);
+    expect(sections.others.map(({ piece }) => piece.id)).toEqual(["p2", "p3"]);
+    expect(sections.shopping.map(({ piece }) => piece.id)).toEqual(["p4", "p5"]);
+    expect(sections.words.map(({ piece }) => piece.id)).toEqual(["p6", "p7"]);
   });
 
   it("« Trier par prix » trie ce que le serveur envoie, rien de plus : les offres retirées n'y reviennent jamais ; une offre signalée garde sa place et sa mention", () => {
