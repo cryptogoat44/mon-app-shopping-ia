@@ -23,7 +23,7 @@ export function useLinkEntry(): (text: string, source: PlayerLinkSource) => Prom
     await pendingVideoLinks.hold({ url: step.url, platform: step.platform, creatorHandle: normalizeVideoLink(step.url)?.creatorHandle ?? null });
     const entry: JourneyEntry = `link_${source}`;
     track("journey_started", { entry, link_platform: step.platform });
-    track("player_opened", { platform: step.platform, source });
+    track("player_opened", { platform: step.platform, source, link_platform: step.platform });
     router.push({ pathname: "/spot/lecteur", params: { url: step.url } });
     return { kind: "opened" };
   };

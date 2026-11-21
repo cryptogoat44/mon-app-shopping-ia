@@ -170,7 +170,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
 
   function fallback(reason: FallbackReason) {
     if (!alive.current) return;
-    if (platform) track("player_unavailable", { platform, reason });
+    if (platform) track("player_unavailable", { platform, reason, link_platform: platform });
     setStage({ kind: "fallback", reason });
   }
 
@@ -337,7 +337,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
 
   function openVideo() {
     if (!openUrl || !platform) return;
-    track("player_fallback", { platform, choice: "open_app" });
+    track("player_fallback", { platform, choice: "open_app", link_platform: platform });
     void Linking.openURL(openUrl).catch(() => {});
   }
 
@@ -360,7 +360,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   async function addScreenshot() {
     setMessage(null);
     setBusy("photo");
-    if (platform) track("player_fallback", { platform, choice: "screenshot" });
+    if (platform) track("player_fallback", { platform, choice: "screenshot", link_platform: platform });
     try {
       await openPicked(await importPhotoForSpotter(), photoPickerEntry(Platform.OS));
     } finally {
@@ -392,7 +392,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
         return fallback("snapshot_failed");
       }
       if (!alive.current) return discardLocalFile(shot.uri);
-      track("player_spot", { platform });
+      track("player_spot", { platform, link_platform: platform });
       beginFromPhoto(
         shot.uri,
         { width: shot.width, height: shot.height },
@@ -418,14 +418,14 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
 
   async function acceptConsent() {
     if (!platform) return;
-    track("player_consent", { platform, choice: "play" });
+    track("player_consent", { platform, choice: "play", link_platform: platform });
     await grantPlayerConsent(platform);
     if (alive.current) void decide(lookup, true);
   }
 
   function refuseConsent() {
     if (!platform) return;
-    track("player_consent", { platform, choice: "refuse" });
+    track("player_consent", { platform, choice: "refuse", link_platform: platform });
     void decide(lookup, "refused");
   }
 

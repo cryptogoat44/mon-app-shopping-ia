@@ -79,8 +79,12 @@ describe("lien collé ou partagé", () => {
       { entry: "link_paste", link_platform: "tiktok" },
       { entry: "link_share", link_platform: "instagram" },
     ]);
-    // L'événement d'avant ne change pas, juste après.
+    // L'événement d'avant suit, sa « platform » inchangée, la même plateforme en link_platform en plus.
     expect(events()).toEqual(["journey_started", "player_opened", "journey_started", "player_opened"]);
+    expect(track.mock.calls.filter(([event]) => event === "player_opened").map(([, props]) => props)).toEqual([
+      { platform: "tiktok", source: "paste", link_platform: "tiktok" },
+      { platform: "instagram", source: "share", link_platform: "instagram" },
+    ]);
     expect(JSON.stringify(track.mock.calls)).not.toMatch(/tiktok\.com|instagram\.com|lea\.style|Regarde/);
     expect(push).toHaveBeenCalledTimes(2);
   });

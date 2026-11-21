@@ -82,7 +82,8 @@ describe("la demande d'analyse", () => {
     const outcome = await runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", new AbortController().signal);
     expect(outcome).toEqual({ kind: "found", analysis: analysis() });
     expect(analyzeVideoLink).toHaveBeenCalledWith({ url: TIKTOK, query: QUERY }, expect.any(AbortSignal));
-    expect(track).toHaveBeenCalledWith("video_link_ai_started", { platform: "tiktok" });
+    // Mesure du parcours : la plateforme aussi en link_platform (« platform » devient l'appareil chez PostHog).
+    expect(track).toHaveBeenCalledWith("video_link_ai_started", { platform: "tiktok", link_platform: "tiktok" });
     expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "found", moments_count: 2, wait_ms: expect.any(Number), link_platform: "tiktok" });
     expect(tracked()).not.toContain("tiktok.com");
     expect(tracked()).not.toContain("veste");
@@ -161,7 +162,7 @@ describe("« Choisir ce moment » : comme un moment d'une vidéo du téléphone"
     expect(draft.video).toEqual({ url: TIKTOK, platform: "tiktok", creatorHandle: "lea.style", source: "web", momentSeconds: 12 });
     // Rien à effacer de l'appareil : l'image n'y a jamais été écrite.
     expect(draft.discardImageAfterSearch).toBe(false);
-    expect(track).toHaveBeenCalledWith("video_link_ai_moment_chosen", { platform: "tiktok", rank: 2, moments_count: 2 });
+    expect(track).toHaveBeenCalledWith("video_link_ai_moment_chosen", { platform: "tiktok", rank: 2, moments_count: 2, link_platform: "tiktok" });
     expect(tracked()).not.toContain("data:");
   });
 

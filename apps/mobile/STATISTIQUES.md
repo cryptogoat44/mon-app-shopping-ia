@@ -86,7 +86,9 @@ vous verrez dans PostHog.
 
 ### 3a. Depuis un lien TikTok ou Instagram
 
-- **`player_opened`** : l'écran « vidéo partagée » s'ouvre.
+- **`player_opened`** : l'écran « vidéo partagée » s'ouvre. `link_platform`
+  (nouveau) = `tiktok` ou `instagram`, comme dans tous les événements du
+  lecteur (`player_…`) et de l'analyse d'un lien (`video_link_ai_…`).
 - **`video_link_ai_started`** puis **`video_link_ai_result`** : l'IA cherche
   la pièce dans la vidéo. `outcome` = `found` (trouvée), `not_found`,
   `failed` ou `cancelled` (le membre a annulé). `reason` = la cause d'un
@@ -232,9 +234,12 @@ de `ok` = non montre les ouvertures où le serveur n'a pas répondu du tout.
   comptent que les membres qui l'ont donné.
 - **`platform` est toujours l'appareil** (`ios`, `web`), même dans les
   événements d'avant qui avaient une `platform` TikTok ou Instagram : PostHog
-  ne reçoit que celle de l'appareil. Pour TikTok ou Instagram, utilisez
-  `link_platform` (seulement dans `journey_started`, `video_link_ai_result`
-  et `plan_b_screenshot_chosen`).
+  ne reçoit que celle de l'appareil. Dans `player_opened`,
+  `player_unavailable`, `player_fallback`, `player_consent`, `player_spot`,
+  `video_link_ai_started` et `video_link_ai_moment_chosen`, l'ancienne
+  propriété `platform` montre donc l'appareil : pour TikTok ou Instagram,
+  utilisez `link_platform` (nouveau), comme dans `journey_started`,
+  `video_link_ai_result` et `plan_b_screenshot_chosen`.
 - **Les temps sont mesurés sur le téléphone ou l'ordinateur du membre** :
   ils comprennent son réseau (un mauvais réseau allonge l'attente).
 - **`server_first_response`** suit les requêtes faites avec le compte du

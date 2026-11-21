@@ -45,7 +45,7 @@ export async function runLinkAnalysis(
   }, timeoutMs);
   const stop = () => controller.abort();
   signal.addEventListener("abort", stop);
-  track("video_link_ai_started", { platform });
+  track("video_link_ai_started", { platform, link_platform: platform });
   // Mesure du parcours : chaque issue dit l'attente depuis ce départ.
   const startedAt = waitNow();
   try {
@@ -115,6 +115,6 @@ export function startMomentSearch(
   const moment = analysis.moments[rank];
   if (!moment) return null;
   const started = beginFromPhoto(moment.image, moment.size, { video: momentVideoContext(analysis, moment, origin) });
-  track("video_link_ai_moment_chosen", { platform: analysis.video.platform, rank: rank + 1, moments_count: analysis.moments.length });
+  track("video_link_ai_moment_chosen", { platform: analysis.video.platform, rank: rank + 1, moments_count: analysis.moments.length, link_platform: analysis.video.platform });
   return updateDraft({ crop: zone ? { ...zone.crop } : moment.box, zoneByAi: zone ? zone.byAi : true, words: draftWords(words), textSearchIfNoPrice: true }) ?? started;
 }

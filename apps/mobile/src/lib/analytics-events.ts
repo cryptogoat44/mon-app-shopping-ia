@@ -169,23 +169,28 @@ export const ANALYTICS_EVENTS = {
   // (collé ou partagé) — jamais le lien, la vidéo ni l'image. L'événement de
   // la capture (« player_capture ») est parti avec le module natif de capture
   // (lot « nettoyage avant le premier build »).
-  player_opened: { platform: PLAYER_PLATFORM, source: oneOf(["paste", "share"]) },
+  // Mesure du parcours : link_platform, la même plateforme, la seule des deux
+  // qui arrive chez PostHog (voir l'en-tête) ; « platform » reste, inchangée,
+  // pour les séries existantes.
+  player_opened: { platform: PLAYER_PLATFORM, source: oneOf(["paste", "share"]), link_platform: PLAYER_PLATFORM },
   player_unavailable: {
     platform: PLAYER_PLATFORM,
     reason: oneOf(["build_off", "server_off", "server_unknown", "not_ios", "no_snapshot", "consent_refused", "embed_unavailable", "player_error", "no_answer", "webview_error", "snapshot_failed"]),
+    link_platform: PLAYER_PLATFORM,
   },
-  player_fallback: { platform: PLAYER_PLATFORM, choice: oneOf(["screenshot", "open_app"]) },
-  player_consent: { platform: PLAYER_PLATFORM, choice: oneOf(["play", "refuse"]) },
-  player_spot: { platform: PLAYER_PLATFORM },
+  player_fallback: { platform: PLAYER_PLATFORM, choice: oneOf(["screenshot", "open_app"]), link_platform: PLAYER_PLATFORM },
+  player_consent: { platform: PLAYER_PLATFORM, choice: oneOf(["play", "refuse"]), link_platform: PLAYER_PLATFORM },
+  player_spot: { platform: PLAYER_PLATFORM, link_platform: PLAYER_PLATFORM },
   // Lot « vidéo auto » : analyse d'une vidéo à partir de son lien — la
   // plateforme, l'issue, la cause d'un échec et des nombres ; jamais le lien,
   // les mots, la vidéo ni ses images.
   // Mesure du parcours : wait_ms, du départ de l'analyse à son issue
   // (« Annuler » compris : le temps d'attente avant d'abandonner) ;
   // link_platform, la plateforme (« platform » n'arrive pas chez PostHog, voir
-  // l'en-tête). Plan B montré (une seule capture proposée) = issue « failed »,
-  // reason « private » (vidéo privée ou supprimée) ou « refused ».
-  video_link_ai_started: { platform: PLAYER_PLATFORM },
+  // l'en-tête), aussi au départ et au moment choisi. Plan B montré (une seule
+  // capture proposée) = issue « failed », reason « private » (vidéo privée ou
+  // supprimée) ou « refused ».
+  video_link_ai_started: { platform: PLAYER_PLATFORM, link_platform: PLAYER_PLATFORM },
   video_link_ai_result: {
     platform: PLAYER_PLATFORM,
     outcome: oneOf(["found", "not_found", "failed", "cancelled"]),
@@ -195,7 +200,7 @@ export const ANALYTICS_EVENTS = {
     link_platform: PLAYER_PLATFORM,
   },
   // Moment choisi parmi ceux proposés (1 = le meilleur) avant la recherche habituelle.
-  video_link_ai_moment_chosen: { platform: PLAYER_PLATFORM, rank: count, moments_count: count },
+  video_link_ai_moment_chosen: { platform: PLAYER_PLATFORM, rank: count, moments_count: count, link_platform: PLAYER_PLATFORM },
   // Mesure du parcours, plan B (lot « recherche confiance ») : « Faire une
   // capture d'écran » touché après une vidéo privée ou supprimée
   // (private_or_removed) ou refusée par la plateforme (refused).
