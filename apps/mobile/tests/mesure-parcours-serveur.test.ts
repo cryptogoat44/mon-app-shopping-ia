@@ -17,7 +17,7 @@ import { fetchConsentStatus, fetchMyProfile, fetchSearch } from "../src/lib/api"
 import { __setAnalyticsTestHooks, setAnalyticsConsent, setAnalyticsUser } from "../src/lib/analytics";
 import { ANALYTICS_EVENTS, sanitizeProps } from "../src/lib/analytics-events";
 import { RESUME_GAP_MS, __resetAppOpening, trackAppOpened } from "../src/lib/app-opening";
-import { __resetServerFirstResponse, createFirstResponseMeter, type FirstResponse } from "../src/lib/server-first-response";
+import { __resetServerFirstResponse, createFirstResponseMeter, forgetServerFirstResponse, type FirstResponse } from "../src/lib/server-first-response";
 import { __setWaitClock } from "../src/lib/wait-clock";
 
 describe("la logique seule : une mesure par ouverture comptée", () => {
@@ -104,11 +104,66 @@ describe("la logique seule : une mesure par ouverture comptée", () => {
     expect(sanitizeProps("server_first_response", { wait_ms: 41_234, context: "launch", ok: true, path: "/api/consents", status: 200 })).toEqual({ wait_ms: 41_200, context: "launch", ok: true });
     expect(sanitizeProps("server_first_response", { wait_ms: 900_000, context: "reveil", ok: "oui" })).toEqual({ wait_ms: 600_000 });
   });
+
+  it("déconnexion ou autre compte (forget) : la mesure en attente est oubliée, une requête encore en route aussi ; la suivante compte", () => {
+    const m = meter();
+    // Compte A : lancement mesuré (30 s), jamais compté ; une autre requête encore en route.
+    const a = m.requestStarted();
+    now = 30_000;
+    a("ok");
+    const aStillRunning = m.requestStarted();
+    m.forget();
+    // Compte B : sa propre requête, puis son lancement compté.
+    const b = m.requestStarted();
+    now = 30_200;
+    aStillRunning("ok");
+    now = 30_700;
+    b("ok");
+    m.openingCounted("launch");
+    expect(sent).toEqual([{ wait_ms: 700, context: "launch", ok: true }]);
+  });
+
+  it("déconnexion pendant un retour compté : la réponse arrivée ensuite ne part pas", () => {
+    const m = meter();
+    m.openingCounted("resume");
+    const a = m.requestStarted();
+    m.forget();
+    now = 2_000;
+    a("ok");
+    expect(sent).toEqual([]);
+  });
+
+  it("lancement refusé faute d'accord : sa mesure ne part jamais, même comptée plus tard ; après un changement de compte, une nouvelle part", () => {
+    const m = meter();
+    const a = m.requestStarted();
+    now = 25_000;
+    a("ok");
+    m.launchRefused();
+    m.openingCounted("launch");
+    m.requestStarted()("ok");
+    expect(sent).toEqual([]);
+    m.forget();
+    const b = m.requestStarted();
+    now = 25_400;
+    b("ok");
+    m.openingCounted("launch");
+    expect(sent).toEqual([{ wait_ms: 400, context: "launch", ok: true }]);
+  });
+
+  it("lancement refusé : sans effet sur un retour déjà compté", () => {
+    const m = meter();
+    m.openingCounted("resume");
+    m.launchRefused();
+    const settled = m.requestStarted();
+    now = 900;
+    settled("ok");
+    expect(sent).toEqual([{ wait_ms: 900, context: "resume", ok: true }]);
+  });
 });
 
 describe("le vrai chemin : authorizedFetch, app_opened, puis l'envoi (avec accord seulement)", () => {
   const fetchMock = vi.fn<typeof fetch>();
-  const posthog: { event: string; properties: Record<string, unknown> }[] = [];
+  const posthog: { event: string; distinct_id: string; properties: Record<string, unknown> }[] = [];
   let now = 0;
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
   const answersAfter = (ms: number, body: unknown, status = 200) => async () => {
@@ -216,6 +271,36 @@ describe("le vrai chemin : authorizedFetch, app_opened, puis l'envoi (avec accor
       now += 2_000;
       return json({});
     });
+    await fetchSearch("s1");
+    expect(posthog.map((item) => item.event)).toEqual(["app_opened"]);
+  });
+
+  it("compte A sans accord, déconnexion, puis compte B avec accord dans la même app : la durée de B, jamais celle de A", async () => {
+    // A : sa lecture des accords attend le réveil du serveur (35 s) ; pas d'accord.
+    fetchMock.mockImplementationOnce(answersAfter(35_000, []));
+    await fetchConsentStatus();
+    setAnalyticsUser("u-a", false);
+    expect(trackAppOpened("launch")).toBe(false);
+    // Déconnexion : le nettoyage de components/analytics-session.tsx (le site ne se recharge pas).
+    setAnalyticsUser(null, false);
+    forgetServerFirstResponse();
+    // B : sa propre lecture des accords, puis son lancement compté.
+    fetchMock.mockImplementationOnce(answersAfter(700, []));
+    await fetchConsentStatus();
+    setAnalyticsUser("u-b", true);
+    expect(trackAppOpened("launch")).toBe(true);
+    expect(firstResponses()).toEqual([expect.objectContaining({ wait_ms: 700, context: "launch", ok: true })]);
+    expect(posthog.map((item) => item.distinct_id)).toEqual(["u-b", "u-b"]);
+  });
+
+  it("compte sans accord : la mesure de son lancement ne part jamais, même si l'accord arrive ensuite et qu'un lancement est compté", async () => {
+    fetchMock.mockImplementationOnce(answersAfter(25_000, []));
+    await fetchConsentStatus();
+    setAnalyticsUser("u-1", false);
+    expect(trackAppOpened("launch")).toBe(false);
+    setAnalyticsConsent(true);
+    expect(trackAppOpened("launch")).toBe(true);
+    fetchMock.mockImplementationOnce(answersAfter(300, {}));
     await fetchSearch("s1");
     expect(posthog.map((item) => item.event)).toEqual(["app_opened"]);
   });

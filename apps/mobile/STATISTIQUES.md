@@ -245,7 +245,9 @@ de `ok` = non montre les ouvertures où le serveur n'a pas répondu du tout.
 - **`server_first_response`** suit les requêtes faites avec le compte du
   membre ; au lancement, la toute première est souvent la lecture de son
   accord aux statistiques. Une requête annulée ne compte pas : c'est la
-  suivante qui compte.
+  suivante qui compte. Une déconnexion ou un changement de compte efface la
+  mesure qui attend : jamais la durée d'un compte sous un autre, ni celle
+  d'un compte qui n'a pas donné son accord.
 - **Les nouveaux chiffres ne commencent qu'avec la version** de l'app et du
   site qui les contient : rien avant.
 

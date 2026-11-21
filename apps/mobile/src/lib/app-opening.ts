@@ -7,10 +7,11 @@
 //   onglet de nouveau visible), si la dernière ouverture comptée date d'au
 //   moins 30 minutes — aller voir TikTok et revenir n'est pas une ouverture.
 // Lot « mesure du parcours » : chaque ouverture comptée attend sa première
-// réponse du serveur (server-first-response.ts).
+// réponse du serveur (server-first-response.ts) ; un lancement refusé faute
+// d'accord ne fera jamais partir la sienne.
 // Logique pure et testée ; imports relatifs (vitest).
 import { isAnalyticsActive, track } from "./analytics";
-import { serverOpeningCounted } from "./server-first-response";
+import { serverLaunchRefused, serverOpeningCounted } from "./server-first-response";
 
 /** Écart minimal entre deux ouvertures comptées (la « session » de PostHog). */
 export const RESUME_GAP_MS = 30 * 60_000;
@@ -19,7 +20,10 @@ let lastOpenedAt: number | null = null;
 
 /** Compte une ouverture si elle est admise ; rend vrai si l'événement est parti. */
 export function trackAppOpened(context: "launch" | "resume", now: number = Date.now()): boolean {
-  if (!isAnalyticsActive()) return false;
+  if (!isAnalyticsActive()) {
+    if (context === "launch") serverLaunchRefused();
+    return false;
+  }
   if (context === "launch" && lastOpenedAt !== null) return false;
   if (context === "resume" && lastOpenedAt !== null && now - lastOpenedAt < RESUME_GAP_MS) return false;
   lastOpenedAt = now;

@@ -6,6 +6,7 @@ import { setErrorTrackingUser } from "@/lib/error-tracking";
 import { useAuth } from "@/lib/auth-context";
 import { hasAnalyticsConsent } from "@/lib/policy-notice";
 import { trackAppOpened } from "@/lib/app-opening";
+import { forgetServerFirstResponse } from "@/lib/server-first-response";
 import { useForegroundReturn } from "@/lib/use-foreground-return";
 
 // Compte suivi par les statistiques d'usage et par Sentry : selon le
@@ -39,6 +40,9 @@ export function AnalyticsSession() {
     return () => {
       cancelled = true;
       setAnalyticsUser(null, false);
+      // Déconnexion ou autre compte : la première réponse du serveur qui
+      // attend en mémoire ne part jamais sous le compte suivant.
+      forgetServerFirstResponse();
       setErrorTrackingUser(null);
     };
   }, [userId]);

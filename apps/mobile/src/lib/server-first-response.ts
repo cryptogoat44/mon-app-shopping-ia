@@ -7,6 +7,11 @@
 //   mémoire, et ne part qu'une fois « app_opened » compté, par track (même
 //   accord que tout le reste) ;
 // - au retour dans l'app, la première partie après « app_opened ».
+// Jamais la durée d'un compte sous un autre, ni celle d'un compte sans
+// accord : déconnexion ou changement de compte (components/analytics-session.tsx)
+// oublient ce qui attend, requêtes encore en route comprises ; un lancement
+// refusé faute d'accord (app-opening.ts) ne fera jamais partir sa mesure,
+// même si l'accord arrive ensuite.
 // Mesurée dans authorizedFetch (api.ts), point commun des requêtes au
 // serveur, du départ de la requête à sa réponse ou à son échec (réseau). Une
 // requête abandonnée (« Annuler », écran quitté, essai trop long relancé) ne
@@ -31,6 +36,7 @@ interface Opening {
   /** Comptée par app_opened. */
   counted: boolean;
   first: { waitMs: number; ok: boolean } | null;
+  /** Partie, ou à ne jamais envoyer (lancement refusé faute d'accord). */
   sent: boolean;
 }
 
@@ -39,11 +45,17 @@ export interface FirstResponseMeter {
   requestStarted(): (outcome: RequestOutcome) => void;
   /** Ouverture comptée par app_opened. */
   openingCounted(context: OpeningContext): void;
+  /** Lancement refusé faute d'accord (ou de clé) : sa mesure ne partira jamais. */
+  launchRefused(): void;
+  /** Déconnexion ou autre compte : ce qui attend est oublié, requêtes en route comprises. */
+  forget(): void;
 }
 
+/** Le lancement : toutes les requêtes depuis le démarrage de l'app, ou depuis le dernier changement de compte. */
+const launchOpening = (): Opening => ({ context: "launch", counted: false, first: null, sent: false });
+
 export function createFirstResponseMeter(now: () => number, send: (event: FirstResponse) => void): FirstResponseMeter {
-  // Au lancement : toutes les requêtes depuis le démarrage de l'app.
-  let opening: Opening = { context: "launch", counted: false, first: null, sent: false };
+  let opening: Opening = launchOpening();
 
   function flush(): void {
     if (!opening.counted || !opening.first || opening.sent) return;
@@ -68,6 +80,14 @@ export function createFirstResponseMeter(now: () => number, send: (event: FirstR
       else if (opening.context === "launch") opening.counted = true;
       flush();
     },
+    launchRefused() {
+      // Compte sans accord : ni la durée déjà mesurée, ni une suivante, même compté plus tard.
+      if (opening.context === "launch" && !opening.counted) opening.sent = true;
+    },
+    forget() {
+      // Les requêtes parties avant restent liées à l'ancienne ouverture : ignorées (opening !== during).
+      opening = launchOpening();
+    },
   };
 }
 
@@ -82,6 +102,16 @@ export function serverRequestStarted(): (outcome: RequestOutcome) => void {
 /** app-opening.ts : une ouverture vient d'être comptée par app_opened. */
 export function serverOpeningCounted(context: OpeningContext): void {
   meter.openingCounted(context);
+}
+
+/** app-opening.ts : lancement refusé, statistiques inactives (pas d'accord, ou pas de clé). */
+export function serverLaunchRefused(): void {
+  meter.launchRefused();
+}
+
+/** components/analytics-session.tsx : compte déconnecté ou changé. */
+export function forgetServerFirstResponse(): void {
+  meter.forget();
 }
 
 /** Tests uniquement : comme au démarrage de l'app. */
