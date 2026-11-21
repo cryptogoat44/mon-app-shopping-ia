@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ANALYTICS_EVENTS } from "../src/lib/analytics-events";
+import { ANALYTICS_EVENTS, sanitizeProps } from "../src/lib/analytics-events";
+import { READ_TIMEOUT_MS } from "../src/lib/spot-recovery";
 
 // Lot « mesure du parcours » : le mode d'emploi du fondateur
 // (apps/mobile/STATISTIQUES.md) doit mener aux bons chiffres. Ses entonnoirs
@@ -95,6 +96,28 @@ describe("STATISTIQUES.md : les recettes de lecture", () => {
     const cards = readFileSync(join(__dirname, "../src/components/video-products.tsx"), "utf8");
     expect(cards).toMatch(/<MerchantLinkButton [^>]*context="result"[^>]*\/>/);
     expect(cards).not.toMatch(/<MerchantLinkButton [^>]*mark=/);
+  });
+
+  describe("serveur endormi : la série B, à partir de 10 secondes", () => {
+    const sleeping = flat(part("Le serveur endormi : `server_first_response`"));
+    /** wait_ms tel que PostHog le reçoit (arrondi à 100 ms) : la série B le compte-t-elle ? */
+    const inSeriesB = (ms: number) => (sanitizeProps("server_first_response", { wait_ms: ms }).wait_ms as number) > 9_900;
+
+    it("refusé : pas de « greater than 10000 », qui laisse de côté 10000 tout rond ; une attente sous 10 s n'entre pas", () => {
+      expect(sleeping).not.toContain("**greater than** `10000`");
+      expect(sleeping).not.toContain("Au-dessus de **10 secondes**");
+      expect(inSeriesB(9_849)).toBe(false);
+    });
+
+    it("permis : la relecture d'une recherche que l'app abandonne au bout de 10 s (10000 une fois arrondie) entre, et elle est nommée avec ok = non", () => {
+      expect(sleeping).toContain("À partir de **10 secondes**");
+      expect(sleeping).toContain("Série B : `server_first_response` avec le filtre `wait_ms` **greater than** `9900` (c'est-à-dire 10 secondes ou plus");
+      // Mesurée après la lecture de la session (quelques ms), minuterie un peu en retard : toujours 10000.
+      expect(inSeriesB(READ_TIMEOUT_MS - 4 + 16)).toBe(true);
+      expect(inSeriesB(READ_TIMEOUT_MS)).toBe(true);
+      expect(sleeping).toContain("10 secondes pour relire une recherche au retour dans l'app, avec `wait_ms` autour de `10000`");
+      expect(flat(guide)).toContain("(par exemple au bout de 15 secondes pour le profil, ou de 10 secondes pour relire une recherche au retour dans l'app)");
+    });
   });
 
   it("la clé PostHog du site : le vrai nom du service chez Render, pas un surnom", () => {

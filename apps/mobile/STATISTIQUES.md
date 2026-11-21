@@ -51,8 +51,9 @@ vous verrez dans PostHog.
   temps de la **première réponse du serveur**. `wait_ms` = l'attente en
   millisecondes, `context` = `launch` ou `resume`, `ok` = oui si le serveur a
   bien répondu, non en cas d'échec (réseau, erreur) ou quand **l'app a cessé
-  d'attendre** (par exemple au bout de 15 secondes pour le profil) : `wait_ms`
-  est alors la durée de cette attente, et le membre a attendu plus longtemps.
+  d'attendre** (par exemple au bout de 15 secondes pour le profil, ou de 10
+  secondes pour relire une recherche au retour dans l'app) : `wait_ms` est
+  alors la durée de cette attente, et le membre a attendu plus longtemps.
   Il montre combien de membres tombent sur le **serveur endormi** (offre
   gratuite de Render : jusqu'à environ une minute au réveil). Une requête
   annulée par le membre (« Annuler », écran quitté) ne compte pas.
@@ -264,20 +265,23 @@ Les temps sont en **millisecondes**, arrondis à 100 ms : `12300` veut dire
 
 ## Le serveur endormi : `server_first_response`
 
-Au-dessus de **10 secondes**, le serveur dormait presque sûrement.
+À partir de **10 secondes**, le serveur dormait presque sûrement.
 
 1. **New insight** → **Trends**.
 2. Série A : `server_first_response`, **Total count**.
 3. Série B : `server_first_response` avec le filtre `wait_ms` **greater
-   than** `10000`.
+   than** `9900` (c'est-à-dire 10 secondes ou plus, puisque les temps sont
+   arrondis à 100 ms).
 4. **Formula** : `B / A * 100` = la part (en %) des ouvertures qui sont
    tombées sur le serveur endormi.
 
 Répartition utile : par `context` (lancement ou retour dans l'app). La part
 de `ok` = non montre les ouvertures où le serveur n'a pas répondu à temps :
 erreur, panne du réseau, ou l'app qui a cessé d'attendre (15 secondes pour
-le profil). Pour celles-là, `wait_ms` est la durée de l'attente de l'app :
-le membre a attendu plus longtemps.
+le profil ; 10 secondes pour relire une recherche au retour dans l'app, avec
+`wait_ms` autour de `10000` : souvent le serveur endormi). Pour celles-là,
+`wait_ms` est la durée de l'attente de l'app : le membre a attendu plus
+longtemps.
 
 ## Les limites
 
