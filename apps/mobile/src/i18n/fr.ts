@@ -654,13 +654,14 @@ export const fr = {
     // jamais une accusation ; touchées, une explication courte. Ordre des boutiques
     // (décision du fondateur, 21 novembre 2026) : aucune marque mise en avant ; seule la
     // section « Cette pièce dans d'autres boutiques » est rangée par les mentions, et la
-    // feuille le dit (elle s'ouvre aussi depuis les autres sections).
+    // feuille le dit (elle s'ouvre aussi depuis les autres sections) : seule la boutique de
+    // la marque de la pièce y passe en premier, quand le serveur reconnaît cette marque.
     offerMark: {
       official_shop: "Boutique officielle de la marque",
       known_shop: "Boutique connue",
       unusual_price: "Prix inhabituellement bas",
       hint: "Explique cette mention.",
-      explanation: `${BRAND} signale les boutiques officielles des marques, les boutiques connues et les prix inhabituellement bas. Dans « Cette pièce dans d'autres boutiques », la boutique officielle de la marque passe en premier, les boutiques connues remontent un peu et les prix inhabituellement bas passent en dernier. Vérifiez toujours la boutique avant de payer.`,
+      explanation: `${BRAND} signale les boutiques officielles des marques, les boutiques connues et les prix inhabituellement bas. Dans « Cette pièce dans d'autres boutiques », la boutique officielle de la marque de la pièce passe en premier quand ${BRAND} reconnaît cette marque, les boutiques connues remontent un peu et les prix inhabituellement bas passent en dernier. Vérifiez toujours la boutique avant de payer.`,
       close: "J'ai compris",
     },
     // « Avec prix seulement » et aucune proposition avec prix : retirer le filtre.
