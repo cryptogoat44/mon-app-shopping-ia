@@ -625,6 +625,15 @@ export const fr = {
     // Offres avec un prix dans la devise la plus fréquente ; le prix le plus bas, sans conversion.
     offersSummary: (n: number, price: string) => (n > 1 ? `${n} offres · à partir de ${price}` : `1 offre · ${price}`),
     cheapestBadge: "Le moins cher",
+    // Boutiques douteuses (lot « recherche confiance ») : mentions neutres et factuelles,
+    // jamais une accusation ; touchées, une phrase d'explication.
+    offerMark: {
+      known_shop: "Boutique connue",
+      unusual_price: "Prix inhabituellement bas",
+      hint: "Explique cette mention.",
+      explanation: `${BRAND} met en avant les boutiques connues et signale les prix inhabituellement bas ; vérifiez toujours la boutique avant de payer.`,
+      close: "J'ai compris",
+    },
     // « Avec prix seulement » et aucune proposition avec prix : retirer le filtre.
     showAllProposals: "Afficher aussi les propositions sans prix",
     // Proposition sans lien direct vers le marchand : le lien ouvre la page produit de Google.

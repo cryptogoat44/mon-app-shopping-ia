@@ -1,4 +1,4 @@
-import type { ComplementStatus, MatchFeedbackReason, MatchOrigin, TextSearchStatus } from "@monapp/shared-types";
+import type { ComplementStatus, MatchFeedbackReason, MatchOrigin, OfferMark, TextSearchStatus } from "@monapp/shared-types";
 import type { CapacityFailReason } from "../lib/spot-capacity";
 
 export interface Piece {
@@ -31,6 +31,10 @@ export interface Piece {
   /** Alertes prix et stock (lot 2) : le serveur reconnaît la pièce (même
    * boutique, même produit) ; seulement alors « Plus disponible ? ». */
   alertTrackable?: boolean;
+  /** Boutiques douteuses (lot « recherche confiance ») : « Boutique connue »
+   * ou « Prix inhabituellement bas », calculée par le serveur ; absente :
+   * aucune mention (components/offer-mark.tsx). */
+  offerMark?: OfferMark;
 }
 
 export type SpotStatus = "success" | "failed";
