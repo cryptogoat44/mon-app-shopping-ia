@@ -214,11 +214,13 @@ describe("textes : ce qui est dit à la personne avant que sa description parte"
   it("sous la description d'un lien (écran « vidéo partagée ») : l'envoi à Google Shopping par SerpApi si rien n'a de prix, en français comme en anglais", async () => {
     const { fr } = await import("../src/i18n/fr");
     const { en } = await import("../src/i18n/en");
-    expect(fr.videoLinkAuto.privacy).toContain("Si les résultats n'affichent aucun prix, votre description est aussi envoyée à Google Shopping par notre prestataire SerpApi pour trouver des boutiques.");
-    expect(en.videoLinkAuto.privacy).toContain("If the results show no price, your description is also sent to Google Shopping through our provider SerpApi to find shops.");
+    // Lot « propositions » (2026-11-21) : le nom de la pièce choisie suit le même chemin.
+    expect(fr.videoLinkAuto.privacy).toContain("Si les résultats n'affichent aucun prix, votre description (ou le nom de la pièce choisie) est aussi envoyée à Google Shopping par notre prestataire SerpApi pour trouver des boutiques.");
+    expect(en.videoLinkAuto.privacy).toContain("If the results show no price, your description (or the name of the piece you chose) is also sent to Google Shopping through our provider SerpApi to find shops.");
     // L'analyse elle-même est toujours dite.
-    expect(fr.videoLinkAuto.privacy).toContain("quelques images et votre description sont analysées par une IA");
-    expect(en.videoLinkAuto.privacy).toContain("a few frames and your description are analyzed by an AI");
+    // Lot « propositions » : la description devient facultative.
+    expect(fr.videoLinkAuto.privacy).toContain("quelques images, et votre description si vous en écrivez une, sont analysées par une IA");
+    expect(en.videoLinkAuto.privacy).toContain("a few frames, and your description if you write one, are analyzed by an AI");
   });
 
   it("sur l'écran de lancement d'un moment de lien : la phrase des photos (« que si vous lancez vous-même ») est remplacée par celle de la description", async () => {

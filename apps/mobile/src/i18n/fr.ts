@@ -380,7 +380,8 @@ export const fr = {
     help: "Décrivez la pièce et, si besoin, où elle se trouve : l'IA s'en sert pour la retrouver dans la vidéo.",
     find: "Trouver la pièce",
     // Lien vidéo sans prix (17 novembre 2026) : la description peut aussi partir vers Google Shopping.
-    privacy: `${BRAND} récupère la vidéo publique le temps de l'analyse, sans la conserver. Avec votre accord, quelques images et votre description sont analysées par une IA. Si les résultats n'affichent aucun prix, votre description est aussi envoyée à Google Shopping par notre prestataire SerpApi pour trouver des boutiques.`,
+    // Lot « propositions » (21 novembre 2026) : la description devient facultative, et le nom de la pièce choisie suit le même chemin.
+    privacy: `${BRAND} récupère la vidéo publique le temps de l'analyse, sans la conserver. Avec votre accord, quelques images, et votre description si vous en écrivez une, sont analysées par une IA. Si les résultats n'affichent aucun prix, votre description (ou le nom de la pièce choisie) est aussi envoyée à Google Shopping par notre prestataire SerpApi pour trouver des boutiques.`,
     query: {
       too_short: "Décrivez la pièce en quelques mots.",
       too_long: `Votre description est trop longue : ${SEARCH_QUERY_MAX_LENGTH} caractères au plus.`,

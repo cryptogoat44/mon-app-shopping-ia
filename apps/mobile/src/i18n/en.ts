@@ -358,7 +358,8 @@ export const en: Catalog = {
     help: "Describe the piece and, if needed, where it appears: the AI uses your words to find it in the video.",
     find: "Find the piece",
     // Video link without a price (2026-11-17): the description may also go to Google Shopping.
-    privacy: `${BRAND} fetches the public video for the analysis only, without keeping it. With your consent, a few frames and your description are analyzed by an AI. If the results show no price, your description is also sent to Google Shopping through our provider SerpApi to find shops.`,
+    // Suggestions lot (2026-11-21): the description becomes optional, and the name of the chosen piece follows the same path.
+    privacy: `${BRAND} fetches the public video for the analysis only, without keeping it. With your consent, a few frames, and your description if you write one, are analyzed by an AI. If the results show no price, your description (or the name of the piece you chose) is also sent to Google Shopping through our provider SerpApi to find shops.`,
     query: {
       too_short: "Describe the piece in a few words.",
       too_long: `Your description is too long: ${SEARCH_QUERY_MAX_LENGTH} characters at most.`,
