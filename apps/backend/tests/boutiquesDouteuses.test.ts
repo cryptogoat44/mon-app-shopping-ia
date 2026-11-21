@@ -365,6 +365,32 @@ describe("ordre des boutiques : la boutique officielle en tête pour la même pi
     expect(search.matches.map((match) => match.origin ?? "lens")).toEqual([...Array(6).fill("lens"), ...Array(6).fill("shopping"), ...Array(4).fill("words")]);
     for (const match of search.matches) expect(match.rank).toBe(Number(match.id.slice(1)));
   });
+
+  // Grande carte prise dans le complément (app) : jamais une offre que le serveur range en fin de section. Une
+  // adresse douteuse n'a pas de mention : l'app ne la reconnaît que par ce signal, jamais affiché.
+  it("permis : dans « Cette pièce dans d'autres boutiques », l'offre rangée en fin de section est dite « demoted » ; refusé : jamais ailleurs (recherche visuelle, vos mots), ni pour une autre offre", () => {
+    expect(search.matches.filter((match) => match.demoted === true).map((match) => match.id)).toEqual(["p9"]);
+    // p2 et p16 (prix inhabituellement bas) et p4 (adresse douteuse) gardent leur place reçue : rien n'est dit.
+    for (const id of ["p2", "p4", "p16", "p8", "p12", "p13"]) expect("demoted" in search.matches.find((match) => match.id === id)!, id).toBe(false);
+    // Une adresse douteuse au prix ordinaire, reçue la première : rangée en dernier, sans mention, dite « demoted ».
+    const shopping = toProductSearch(
+      SEARCH,
+      [
+        row(1, "https://boutique-lens.fr/1", null),
+        row(2, "https://boutique-lens2.fr/2", null),
+        row(3, "https://moncler-outlet.shop/s1", 610, { origin: "shopping" }),
+        row(4, "https://boutique-c.fr/s2", 640, { origin: "shopping" }),
+        row(5, "https://www.zalando.fr/s3", 650, { origin: "shopping" }),
+        row(6, "https://www.moncler.com/fr/s4", 1250, { origin: "shopping", brand_shop: true }),
+        row(7, "https://boutique-d.fr/s5", 660, { origin: "shopping" }),
+      ],
+      new Map(),
+      new Map()
+    ).matches.filter((match) => match.origin === "shopping");
+    expect(shopping.map((match) => match.id)).toEqual(["p6", "p5", "p4", "p7", "p3"]);
+    expect(shopping.map((match) => match.demoted ?? false)).toEqual([false, false, false, false, true]);
+    expect("offerMark" in shopping.at(-1)!).toBe(false);
+  });
 });
 
 // « Cette pièce dans d'autres boutiques » vient de Google Shopping, sur la
