@@ -52,19 +52,30 @@ describe("mentions des boutiques : textes", () => {
     expect(fr.result.offerMark.official_shop).toBe("Boutique officielle de la marque");
     expect(fr.result.offerMark.known_shop).toBe("Boutique connue");
     expect(fr.result.offerMark.unusual_price).toBe("Prix inhabituellement bas");
-    expect(fr.result.offerMark.explanation).toMatch(/^.+ met en avant les boutiques officielles des marques et les boutiques connues, et signale les prix inhabituellement bas ; vérifiez toujours la boutique avant de payer\.$/);
+    // Ordre des boutiques (décision du fondateur, 21 novembre 2026) : aucune marque mise en avant ; la boutique officielle en premier pour la même pièce seulement.
+    expect(fr.result.offerMark.explanation).toMatch(
+      /^.+ signale les boutiques officielles des marques, les boutiques connues et les prix inhabituellement bas\. Pour une même pièce vendue dans plusieurs boutiques, la boutique officielle de la marque passe en premier\. Vérifiez toujours la boutique avant de payer\.$/
+    );
     expect(en.result.offerMark.official_shop).toBe("Official brand store");
     expect(en.result.offerMark.known_shop).toBe("Well-known shop");
     expect(en.result.offerMark.unusual_price).toBe("Unusually low price");
-    expect(en.result.offerMark.explanation).toMatch(/highlights official brand stores and well-known shops, and flags unusually low prices; always check the shop before you pay\.$/);
+    expect(en.result.offerMark.explanation).toMatch(
+      /^.+ labels official brand stores, well-known shops and unusually low prices\. When the same piece is sold by several shops, the official brand store comes first\. Always check the shop before you pay\.$/
+    );
+    for (const text of [fr.result.offerMark.explanation, en.result.offerMark.explanation]) expect(text).not.toMatch(/met en avant|highlight/i);
     const all = JSON.stringify([fr.result.offerMark, en.result.offerMark]).toLowerCase();
     for (const word of ["arnaque", "escroc", "fraude", "faux", "fausse", "scam", "fraud", "fake"]) expect(all).not.toContain(word);
   });
 
-  it("conditions d'utilisation : une phrase dit que Spotto peut masquer ou signaler des offres (français et anglais)", () => {
+  it("conditions d'utilisation : une phrase dit que Spotto peut masquer des offres, les signale, et ce qui passe en premier — la même chose que la feuille (français et anglais)", () => {
     const blocks = (doc: typeof termsOfUse) => doc.sections.flatMap((section) => section.blocks.flat()).join("\n");
-    expect(blocks(termsOfUse)).toMatch(/peut ne pas afficher certaines offres, en signaler d'autres \(« Prix inhabituellement bas »\) et mettre en avant les boutiques officielles des marques et des boutiques connues/);
-    expect(blocks(termsOfUseEn)).toMatch(/may not show some offers, may flag others \(“Unusually low price”\) and may highlight official brand stores and well-known shops/);
+    expect(blocks(termsOfUse)).toMatch(
+      /peut ne pas afficher certaines offres, et signale les boutiques officielles des marques, les boutiques connues et les prix inhabituellement bas ; pour une même pièce vendue dans plusieurs boutiques, la boutique officielle de la marque passe en premier\. Ce n'est pas une garantie : vérifiez toujours la boutique avant de payer\./
+    );
+    expect(blocks(termsOfUseEn)).toMatch(
+      /may not show some offers, and labels official brand stores, well-known shops and unusually low prices; when the same piece is sold by several shops, the official brand store comes first\. This is not a guarantee: always check the shop before you pay\./
+    );
+    for (const text of [blocks(termsOfUse), blocks(termsOfUseEn)]) expect(text).not.toMatch(/mettre en avant les boutiques|highlight official/i);
   });
 });
 
