@@ -277,6 +277,105 @@ erreur, panne du réseau, ou l'app qui a cessé d'attendre (15 secondes pour
 le profil). Pour celles-là, `wait_ms` est la durée de l'attente de l'app :
 le membre a attendu plus longtemps.
 
+## Après la boutique : « Vous l'avez achetée ? » et l'alerte de prix
+
+Nouveau (Parcours 3), avec le même accord « statistiques d'usage ». Sur le
+site, comme le reste, rien n'est mesuré sans `EXPO_PUBLIC_POSTHOG_KEY` au
+moment de la construction (voir « À vérifier avant de lire les chiffres »).
+
+### Les événements
+
+- **`shop_returned`** : le membre revient de la boutique, depuis l'écran
+  Résultat ou la fiche d'une Envie. Envoyé à **chaque retour repéré**, que la
+  question soit posée ou non, même après moins de 30 secondes.
+  - `context` = `result` (grande carte, ou carte de la recherche visuelle),
+    `similar` (« Cette pièce dans d'autres boutiques », résultats pour vos
+    mots), `wishlist` (fiche d'une Envie) ou `price_alert` (fiche ouverte
+    par une alerte).
+  - `away_ms` = le temps passé dans la boutique, du clic au retour, en
+    millisecondes (arrondi à 100 ms ; `600000` au-delà de 10 minutes).
+  - Repéré sur l'app iPhone quand le membre ferme la fenêtre de la boutique ;
+    sur le site, quand il revient sur l'onglet de Spotto après que la
+    boutique s'est ouverte dans un autre onglet. Une boutique ouverte dans une
+    fenêtre à part, une ouverture bloquée par le navigateur, la grille des
+    Envies, le Vault, les publications et les messages ne l'envoient pas.
+- **`purchase_question`** : la question « Vous l'avez achetée ? ».
+  `action` = `shown` (montrée, une fois), puis une seule réponse : `yes`
+  (« Oui, je l'ai achetée »), `no` (« Non, pas encore ») ou `later`
+  (« Plus tard », le fond ou le geste de retour). `context` : comme
+  `shop_returned`. La question n'est posée qu'après au moins 30 secondes
+  dans la boutique, une fois par pièce et par jour, 2 fois par jour au plus,
+  et jamais pour une pièce déjà dans le Vault.
+- **`price_alert_changed`** : l'alerte de baisse de prix d'une pièce.
+  `origin` = `save` (allumée par « Garder »), `undo` (« Couper l'alerte »)
+  ou `question` (allumée depuis la question : « Garder » ou « Activer
+  l'alerte »). Une cloche réglée à la main ne l'envoie pas.
+- **`price_drop_shown`** : la grille des Envies montre au moins une
+  « Baisse de prix ». Une fois au plus tant que l'app reste ouverte ;
+  `count` = combien.
+- Inchangés : « Oui » envoie le même `vault_item_added` (`source` =
+  `spotter`) que « Je l'ai achetée » (rien quand la pièce y était déjà) ;
+  « Garder » depuis la question envoie le même `wishlist_item_added`
+  (`context` = `result`) ; « Partager… » ouvre seulement la fiche de la
+  pièce : `post_published` (`type` = `purchase`) ne part qu'avec « Partager
+  dans mon fil ».
+
+### Entonnoir « Retour de boutique »
+
+Mêmes réglages que les entonnoirs plus haut (**Unique users**, **1 hour**,
+`environment` = `production`) :
+
+1. `merchant_link_opened`
+2. `shop_returned`
+3. `purchase_question` avec `action` = `shown`
+4. `purchase_question` avec `action` = `yes`
+5. `vault_item_added`
+6. `post_published` avec `type` = `purchase`
+
+À savoir pour le lire :
+- entre les étapes 2 et 3, la chute est normale : retours de moins de
+  30 secondes, pièce déjà demandée aujourd'hui, 2 questions déjà posées, pièce
+  déjà dans le Vault ;
+- l'étape 1 compte aussi les clics d'où rien n'est guetté (grille des Envies,
+  Vault, publications…). Pour ne garder que l'écran Résultat, filtrez
+  l'étape 1 sur `context` = `result` ou `similar` (la grille des Envies a,
+  elle aussi, `context` = `wishlist`) ;
+- l'étape 6 peut venir plus tard que l'heure de l'entonnoir : un membre
+  publie souvent son achat après l'avoir reçu.
+
+### Entonnoir « Alerte »
+
+1. `wishlist_item_added`
+2. `price_alert_changed` avec `origin` = `save`
+
+Une pièce qui ne peut pas être suivie (boutique ou produit non reconnus,
+prix dans une autre devise) s'arrête à l'étape 1 : c'est attendu. **Part des
+alertes coupées** : **Trends** sur `price_alert_changed`, **Breakdown** par
+`origin` ; la part de `undo` sur `save` + `question` dit combien de membres
+ne veulent pas de l'alerte allumée d'office.
+
+Puis, pour savoir si la baisse fait revenir à la boutique :
+
+1. `price_drop_shown`
+2. `merchant_link_opened` avec `context` = `wishlist`
+
+`price_drop_shown` ne part qu'une fois par ouverture de l'app : l'entonnoir
+compte des personnes, pas chaque baisse.
+
+### Lire `away_ms` (pour régler les 30 secondes)
+
+1. **New insight** → **Trends**, événement `shop_returned`.
+2. À la place de **Total count** : **Property value** → `away_ms` →
+   **Median**, puis la même série avec **90th percentile**.
+3. **Part des retours sous 30 secondes** : série A, `shop_returned`, **Total
+   count** ; série B, `shop_returned` avec le filtre `away_ms` **less than**
+   `30000` ; **Formula** : `B / A * 100`.
+
+Si la plupart des retours durent moins de 30 secondes, la question est
+rarement posée ; si la médiane est bien au-dessus, les 30 secondes laissent
+passer la plupart des vraies visites. Changer ce seuil est un changement de
+code (`MIN_AWAY_MS`, `apps/mobile/src/lib/purchase-question.ts`).
+
 ## Les limites
 
 - **Un parcours n'a pas d'identifiant à lui** : les entonnoirs se font par
