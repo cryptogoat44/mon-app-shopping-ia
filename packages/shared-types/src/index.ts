@@ -282,7 +282,20 @@ export interface ProductMatch {
    * s'affiche sur sa carte. Envoyée seulement quand elle est vraie ; absente
    * (ancien serveur, place de marché, page de liste…) = non. */
   alertTrackable?: true;
+  /** Boutiques douteuses (lot « recherche confiance ») : une mention neutre
+   * sur la carte (OFFER_MARKS). Absente (aucune mention, ancien serveur) :
+   * rien à afficher. Une app plus ancienne l'ignore. */
+  offerMark?: OfferMark;
 }
+
+/** Mentions d'une offre, calculées par le serveur (apps/backend/src/lib/shopTrust.ts) :
+ * - known_shop : boutique de la liste des boutiques connues (« Boutique connue ») ;
+ * - unusual_price : prix très inférieur à ceux des autres offres de la même
+ *   recherche (« Prix inhabituellement bas »), un constat, jamais une accusation.
+ * Les offres des boutiques masquées, et celles qui cumulent un prix très bas
+ * et une adresse douteuse, ne sont jamais envoyées. */
+export const OFFER_MARKS = ["known_shop", "unusual_price"] as const;
+export type OfferMark = (typeof OFFER_MARKS)[number];
 
 // ---- Bouton « Résultat incohérent » (fiabilité des résultats, 2026-10-15) ----
 

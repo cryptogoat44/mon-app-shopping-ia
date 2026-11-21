@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { exclusionReason, isCountryOrEuSite, withoutDuplicates } from "./matchFilters.js";
+import { withoutDubiousOffers } from "../lib/shopTrust.js";
 import { isLocalCurrency, measureLens, type FilterCounts, type LensMeasure } from "./lensMeasure.js";
 import { DEFAULT_LOCALE, type SearchLocale } from "./lensSettings.js";
 import { serpApiProvider } from "./serpapi.js";
@@ -114,14 +115,20 @@ function byProximity(matches: UsableMatch[], country: string): UsableMatch[] {
 export function filterVisualMatches(
   response: Pick<ImageSearchResponse, "matches" | "received">,
   country: string
-): { matches: VisualMatch[]; counts: FilterCounts; addedRanks: number[] } {
+): { matches: VisualMatch[]; counts: FilterCounts; addedRanks: number[]; dubious: { hidden: number; suspicious: number } } {
   const complete = response.matches.map(withCleanTexts).filter(isComplete);
   const reasons = complete.map((match) => exclusionReason(match.link));
   const buyable = complete.filter((_, index) => reasons[index] === null);
   const unique = withoutDuplicates(buyable, country);
-  const added = unique.slice(MAX_MATCHES).filter((match) => storablePrice(match.price).priceValue !== null).slice(0, MAX_PRICED_ADDITIONS);
+  // Boutiques douteuses (lib/shopTrust.ts) : boutique masquée, ou prix très
+  // bas ET adresse douteuse — jamais rangées, ni gardées dans le cache ; elles
+  // ne prennent la place d'aucune autre. Comptées à part (hors mesure : un
+  // compteur de plus demanderait une migration).
+  const dubious = withoutDubiousOffers(unique, (match) => ({ merchantUrl: match.link, ...storablePrice(match.price) }));
+  const trusted = dubious.kept;
+  const added = trusted.slice(MAX_MATCHES).filter((match) => storablePrice(match.price).priceValue !== null).slice(0, MAX_PRICED_ADDITIONS);
   return {
-    matches: byProximity([...unique.slice(0, MAX_MATCHES), ...added], country).map(toVisualMatch),
+    matches: byProximity([...trusted.slice(0, MAX_MATCHES), ...added], country).map(toVisualMatch),
     counts: {
       removedIncomplete: response.received - complete.length,
       // Pages sans vente : écartées comme les réseaux sociaux et comptées avec
@@ -131,6 +138,7 @@ export function filterVisualMatches(
       removedDuplicates: buyable.length - unique.length,
     },
     addedRanks: added.flatMap((match) => (match.position === undefined ? [] : [match.position])),
+    dubious: { hidden: dubious.hidden, suspicious: dubious.suspicious },
   };
 }
 
@@ -174,7 +182,9 @@ export async function searchProductsByImageUrl(
   const response = options.signal
     ? await IMAGE_SEARCH_PROVIDER.searchByImage(imageUrl, locale, options.signal)
     : await IMAGE_SEARCH_PROVIDER.searchByImage(imageUrl, locale);
-  const { matches, counts, addedRanks } = filterVisualMatches(response, locale.country);
+  const { matches, counts, addedRanks, dubious } = filterVisualMatches(response, locale.country);
+  // Des nombres seulement : jamais une adresse ni un titre.
+  if (dubious.hidden + dubious.suspicious > 0) fastify.log.info({ provider: IMAGE_SEARCH_PROVIDER.name, ...dubious }, "Offres douteuses écartées");
   if (matches.length === 0) {
     fastify.log.info({ provider: IMAGE_SEARCH_PROVIDER.name }, "Recherche visuelle sans résultat");
   }
