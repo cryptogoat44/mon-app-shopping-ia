@@ -306,7 +306,7 @@ moment de la construction (voir « À vérifier avant de lire les chiffres »).
   `shop_returned`. La question n'est posée qu'après au moins 30 secondes
   dans la boutique, une fois par pièce et par jour, 2 fois par jour au plus,
   et jamais pour une pièce déjà dans le Vault.
-- **`price_alert_changed`** : l'alerte de baisse de prix d'une pièce.
+- **`price_watch_changed`** : l'alerte de baisse de prix d'une pièce.
   `origin` = `save` (allumée par « Garder »), `undo` (« Couper l'alerte »)
   ou `question` (allumée depuis la question : « Garder » ou « Activer
   l'alerte »). Une cloche réglée à la main ne l'envoie pas.
@@ -346,11 +346,11 @@ Mêmes réglages que les entonnoirs plus haut (**Unique users**, **1 hour**,
 ### Entonnoir « Alerte »
 
 1. `wishlist_item_added`
-2. `price_alert_changed` avec `origin` = `save`
+2. `price_watch_changed` avec `origin` = `save`
 
 Une pièce qui ne peut pas être suivie (boutique ou produit non reconnus,
 prix dans une autre devise) s'arrête à l'étape 1 : c'est attendu. **Part des
-alertes coupées** : **Trends** sur `price_alert_changed`, **Breakdown** par
+alertes coupées** : **Trends** sur `price_watch_changed`, **Breakdown** par
 `origin` ; la part de `undo` sur `save` + `question` dit combien de membres
 ne veulent pas de l'alerte allumée d'office.
 

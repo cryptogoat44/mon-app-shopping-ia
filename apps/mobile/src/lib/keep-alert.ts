@@ -92,7 +92,7 @@ export async function turnOnKeepAlert(wishId: string, piece: KeepAlertPiece, con
   try {
     const state = await updateWishAlert(wishId, keepAlertOnRequest());
     if (state?.priceDrop !== true) return null;
-    track("price_alert_changed", { origin });
+    track("price_watch_changed", { origin });
     return state;
   } catch {
     return null;
@@ -104,7 +104,7 @@ export async function turnOnKeepAlert(wishId: string, piece: KeepAlertPiece, con
 export async function turnOffKeepAlert(wishId: string): Promise<boolean> {
   try {
     await updateWishAlert(wishId, keepAlertOffRequest());
-    track("price_alert_changed", { origin: "undo" });
+    track("price_watch_changed", { origin: "undo" });
     return true;
   } catch {
     return false;

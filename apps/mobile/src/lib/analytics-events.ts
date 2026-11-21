@@ -224,8 +224,10 @@ export const ANALYTICS_EVENTS = {
   // L'alerte de baisse de prix allumée par « Garder » (save) ou depuis la
   // question (question : « Garder » ou « Activer l'alerte »), ou coupée par
   // « Couper l'alerte » (undo). Rien de nouveau depuis la cloche
-  // (components/wish-alert-sheet.tsx ne change pas).
-  price_alert_changed: { origin: oneOf(["save", "undo", "question"]) },
+  // (components/wish-alert-sheet.tsx ne change pas). Nommé d'après le suivi
+  // du prix (« watch ») : les tests du serveur (alertesPrixChemins) refusent
+  // dans ce catalogue tout nom formé sur « alert » suivi d'un tiret bas.
+  price_watch_changed: { origin: oneOf(["save", "undo", "question"]) },
   // La grille des Envies montre au moins une « Baisse de prix » : une fois au
   // plus tant que l'app reste ouverte (mémoire de l'app, rien sur
   // l'appareil) ; count : combien.

@@ -233,7 +233,7 @@ describe("4. « Couper l'alerte »", () => {
     expect(await turnOffKeepAlert(WISH)).toBe(true);
     expect(updateWishAlert.mock.calls).toEqual([[WISH, { priceDrop: false, restock: false }]]);
     expect(keepAlertOffRequest()).toEqual({ priceDrop: false, restock: false });
-    expect(track.mock.calls).toEqual([["price_alert_changed", { origin: "undo" }]]);
+    expect(track.mock.calls).toEqual([["price_watch_changed", { origin: "undo" }]]);
     expect(fr.firstTry.alertTurnedOff).toBe("Alerte coupée.");
     expect(en.firstTry.alertTurnedOff).toBe("Alert turned off.");
     expect(code("app/(app)/spot/result.tsx")).toContain('if (off) setKeptWishes((prev) => new Map(prev).set(target.id, { wishId, alert: "off" }));');
@@ -631,7 +631,7 @@ describe("16. Statistiques (catalogue fermé, ajout seulement)", () => {
     expect(sanitizeProps("shop_returned", { context: "result", away_ms: 12_345 })).toEqual({ context: "result", away_ms: 12_300 });
     expect(sanitizeProps("shop_returned", { context: "wishlist", away_ms: 3_600_000 })).toEqual({ context: "wishlist", away_ms: DURATION_MAX_MS });
     for (const action of ["shown", "yes", "no", "later"]) expect(sanitizeProps("purchase_question", { action, context: "price_alert" })).toEqual({ action, context: "price_alert" });
-    for (const origin of ["save", "undo", "question"]) expect(sanitizeProps("price_alert_changed", { origin })).toEqual({ origin });
+    for (const origin of ["save", "undo", "question"]) expect(sanitizeProps("price_watch_changed", { origin })).toEqual({ origin });
     expect(sanitizeProps("price_drop_shown", { count: 3 })).toEqual({ count: 3 });
     // Chaque retour repéré est compté avant de décider de la question.
     const hook = code("lib/use-purchase-question.ts");
@@ -646,7 +646,7 @@ describe("16. Statistiques (catalogue fermé, ajout seulement)", () => {
     trackPriceDropsShown(5);
     expect(track.mock.calls).toEqual([["price_drop_shown", { count: 2 }]]);
     // Les quatre événements sont à la fin du catalogue (ajout seulement).
-    expect(Object.keys(ANALYTICS_EVENTS).slice(-4)).toEqual(["shop_returned", "purchase_question", "price_alert_changed", "price_drop_shown"]);
+    expect(Object.keys(ANALYTICS_EVENTS).slice(-4)).toEqual(["shop_returned", "purchase_question", "price_watch_changed", "price_drop_shown"]);
   });
 
   it("refusé : rien sans consentement ; jamais de propriété platform, ni pièce, ni boutique, ni prix", async () => {
@@ -661,11 +661,13 @@ describe("16. Statistiques (catalogue fermé, ajout seulement)", () => {
     real.track("purchase_question", { action: "yes", context: "result", matchId: "m-1", title: "Veste", merchant: "Boutique", price: 89 });
     expect(JSON.parse(sent[0]!).properties).toEqual({ action: "yes", context: "result", environment: "development", platform: "ios", $geoip_disable: true, $process_person_profile: false });
     real.setAnalyticsUser(null, false);
-    for (const event of ["shop_returned", "purchase_question", "price_alert_changed", "price_drop_shown"] as const) {
+    for (const event of ["shop_returned", "purchase_question", "price_watch_changed", "price_drop_shown"] as const) {
       expect(Object.keys(ANALYTICS_EVENTS[event]), event).not.toContain("platform");
       for (const forbidden of ["matchId", "match_id", "url", "merchant", "price", "title", "wishlist_item_id"]) expect(Object.keys(ANALYTICS_EVENTS[event]), event).not.toContain(forbidden);
     }
     expect(sanitizeProps("shop_returned", { context: "vault", away_ms: "longtemps", platform: "tiktok" })).toEqual({});
+    // Même règle que les tests du serveur (alertesPrixChemins) : aucun événement qui porte une envie, un membre, une alerte ou un signalement.
+    expect(read("lib/analytics-events.ts")).not.toMatch(/wishlistItemId|wishlist_item_id|user_id|userId|stock_report|wish_alert|alert_/);
   });
 });
 
@@ -744,7 +746,7 @@ describe("Mode d'emploi et fiche Apple", () => {
   it("STATISTIQUES.md : les entonnoirs « Retour de boutique » et « Alerte », et la lecture de away_ms, avec des événements du catalogue", () => {
     const guide = readFileSync(join(__dirname, "../STATISTIQUES.md"), "utf8");
     const part = guide.slice(guide.indexOf("## Après la boutique"), guide.indexOf("## Les limites"));
-    for (const step of ["merchant_link_opened", "shop_returned", "purchase_question", "vault_item_added", "post_published", "wishlist_item_added", "price_alert_changed", "price_drop_shown"]) {
+    for (const step of ["merchant_link_opened", "shop_returned", "purchase_question", "vault_item_added", "post_published", "wishlist_item_added", "price_watch_changed", "price_drop_shown"]) {
       expect(part, step).toContain(`\`${step}\``);
       expect(Object.keys(ANALYTICS_EVENTS)).toContain(step);
     }
@@ -757,7 +759,7 @@ describe("Mode d'emploi et fiche Apple", () => {
   it("CONFIDENTIALITE-APPLE.md : les nouveaux événements en « Interaction avec le produit », rien de nouveau à cocher", () => {
     const apple = readFileSync(join(__dirname, "../app-store/CONFIDENTIALITE-APPLE.md"), "utf8");
     const interaction = apple.split("\n").find((line) => line.startsWith("| **Interaction avec le produit**"))!;
-    for (const event of ["shop_returned", "purchase_question", "price_alert_changed", "price_drop_shown"]) expect(interaction, event).toContain(`\`${event}\``);
+    for (const event of ["shop_returned", "purchase_question", "price_watch_changed", "price_drop_shown"]) expect(interaction, event).toContain(`\`${event}\``);
     const review = apple.slice(apple.indexOf("## 6. Quand revoir ces réponses"), apple.indexOf("## 7. BROUILLON"));
     expect(review).toContain("le **Parcours 3**");
     expect(review).toContain("Aucun type de donnée nouveau, rien en « Suivi »");
