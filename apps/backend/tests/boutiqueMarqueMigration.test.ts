@@ -55,7 +55,13 @@ describe("0054 : vérification et registre", () => {
   it("le registre a sa ligne « à appliquer », ses fichiers, et ce que fait le serveur sans elle", () => {
     expect(REGISTRY).toMatch(/\| 0054 \| Ordre des boutiques : [^\n]*\| \*\*à appliquer\*\* \(sur spotto-dev-2 d'abord ; ne demande que 0001/);
     expect(REGISTRY).toContain("| 0054 | le fichier de la migration lui-même | `supabase/verifications/0054-verification.sql` (une ligne, deux `true`) | en tête du fichier de la migration |");
-    expect(REGISTRY).toContain("Sans 0054, aucune boutique officielle ne passe en tête de « Cette pièce dans d'autres boutiques » : chacune garde sa place reçue, avec sa mention");
+    expect(REGISTRY).toContain("Sans 0054, aucune boutique officielle ne passe en tête de « Cette pièce dans d'autres boutiques » : chacune y est rangée comme une boutique connue (remontée de 2 places au plus), avec sa mention");
+    // La ligne du tableau dit, en clair, qu'elle est facultative, et ce qui change pour les membres avant et après.
+    const line = REGISTRY.split("\n").find((text) => text.startsWith("| 0054 | Ordre des boutiques"))!;
+    for (const words of ["**Facultative**", "le serveur marche sans elle", "Pour les membres, avant elle : aucune boutique officielle n'est reconnue ni mise en tête", "Après elle :", "quand le serveur l'a reconnue", "les recherches d'avant ne changent pas"]) {
+      expect(line, words).toContain(words);
+    }
+    expect(line).not.toMatch(/garde sa place reçue/);
     expect(REGISTRY.indexOf("| 0054 | Ordre des boutiques")).toBeGreaterThan(REGISTRY.indexOf("| 0053 | Quotas"));
   });
 });
