@@ -13,7 +13,8 @@
 // Un mot à l'intérieur d'un nom plus long ne suffit jamais : « Sandro
 // Ferrone » n'est pas sandro-paris.com, ni « Tommy Bahama » tommy.com.
 // Une boutique officielle non reconnue (une autre marque, une marque
-// écrite autrement, ou sans 0054) y garde sa place. Ailleurs
+// écrite autrement, ou sans 0054) y est rangée comme une boutique connue :
+// remontée de 2 places au plus, jamais en tête d'office. Ailleurs
 // (recherche visuelle, « Résultats pour vos mots »), il garde sa place :
 // aucune marque n'est mise en avant (décision du fondateur, 21 novembre
 // 2026). Comme les boutiques connues, les sites de cette liste ne sont
@@ -39,7 +40,8 @@
 //    être exactement celui de la pièce (majuscules, accents, espaces et
 //    signes comme « & » ou « ' » ne comptent pas). Jamais un mot courant
 //    (« Polo », « Jeans », « Paris ») ni le nom d'une autre marque : en cas
-//    de doute, ne rien ajouter (la boutique garde alors sa place).
+//    de doute, ne rien ajouter (la boutique reste alors à sa place, comme
+//    une boutique connue).
 // Les tests (pnpm run test:hors-base, dans apps/backend) vérifient
 // l'écriture de chaque adresse, qu'aucune n'est aussi dans l'autre liste,
 // et qu'un autre nom ne désigne jamais la boutique d'une autre marque.

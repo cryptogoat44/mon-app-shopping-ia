@@ -720,7 +720,8 @@ describe("ordre des boutiques : un oui sur la ligne de la boutique officielle de
     const later = (await complement(target, deferred)).json();
     expect(later.complement.status).toBe("shown");
     for (const body of [first, later, (await target.inject({ method: "GET", url: `/api/searches/${launched}` })).json()]) {
-      expect(shoppingHosts(body)).toEqual(["www.zara.com", "boutique-d.fr", "boutique-e.fr", "boutique-c.fr", "shop.mango.com"]);
+      // mango.com (une autre marque) : remontée de 2 places au plus, comme une boutique connue.
+      expect(shoppingHosts(body)).toEqual(["www.zara.com", "boutique-d.fr", "boutique-e.fr", "shop.mango.com", "boutique-c.fr"]);
     }
     for (const id of [launched, deferred]) {
       const rows = shoppingRows(id);
@@ -747,8 +748,8 @@ describe("ordre des boutiques : un oui sur la ligne de la boutique officielle de
     const rows = shoppingRows(id);
     expect(rows).toHaveLength(5);
     expect(rows.some((row) => "brand_shop" in row)).toBe(false);
-    // zara.com garde sa place reçue, avec sa mention : aucune marque en avant.
-    expect(shoppingHosts(res.json())).toEqual(["boutique-d.fr", "boutique-e.fr", "boutique-c.fr", "www.zara.com", "shop.mango.com"]);
+    // zara.com n'est pas mise en tête : rangée comme une boutique connue (2 places au plus), avec sa mention.
+    expect(shoppingHosts(res.json())).toEqual(["boutique-d.fr", "www.zara.com", "boutique-e.fr", "shop.mango.com", "boutique-c.fr"]);
     expect(res.json().matches.find((match: { merchantUrl: string }) => match.merchantUrl.includes("zara.com")).offerMark).toBe("official_shop");
     const warnings = logs.map((line) => JSON.parse(line) as Record<string, unknown>).filter((line) => String(line.msg).startsWith("Boutique de la marque non notée"));
     expect(warnings).toEqual([expect.objectContaining({ code: "42703" })]);

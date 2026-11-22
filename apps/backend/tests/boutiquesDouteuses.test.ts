@@ -166,9 +166,11 @@ describe("règles, offre par offre", () => {
     const offers = items.map((item) => ({ brandShop: item.endsWith("-officielle") }));
     expect(sectionOrder("shopping", items, reviews, offers)).toEqual(["d-officielle", "f-officielle", "b-connue", "a", "c", "e", "g-signalee"]);
     expect(trustOrder(items, reviews)).toEqual(sectionOrder("shopping", items, reviews, offers));
-    // Refusé : sans la note de l'enregistrement, aucune boutique officielle ne passe devant, ni ne remonte comme une
-    // boutique connue (le revendeur connu, lui, remonte toujours de 2 places au plus).
-    expect(sectionOrder("shopping", items, reviews, plainOffers(items))).toEqual(["b-connue", "a", "c", "d-officielle", "e", "f-officielle", "g-signalee"]);
+    // Refusé : sans la note de l'enregistrement, aucune boutique officielle ne passe en tête ; chacune est rangée
+    // exactement comme une boutique connue (remontée de 2 places au plus), jamais derrière un revendeur connu.
+    expect(sectionOrder("shopping", items, reviews, plainOffers(items))).toEqual(["b-connue", "a", "d-officielle", "c", "f-officielle", "e", "g-signalee"]);
+    const asKnown = reviews.map((review) => (review.mark === "official_shop" ? { ...review, mark: "known_shop" as const } : review));
+    expect(sectionOrder("shopping", items, reviews, plainOffers(items))).toEqual(sectionOrder("shopping", items, asKnown, plainOffers(items)));
   });
 
   it("jamais les seuls résultats : si les règles écartaient tout, les offres sont gardées, signalées et rangées plus bas", () => {
@@ -398,8 +400,10 @@ describe("ordre des boutiques : la boutique officielle en tête pour la même pi
 // marque ou le modèle de la pièce, et y garde des pièces d'autres marques
 // (lib/lightSort.ts). La liste des boutiques officielles compte 56 marques :
 // seule celle de la marque de la pièce, reconnue à l'enregistrement
-// (isBrandShop, lib/voieC.ts), passe en tête ; toute autre garde sa place
-// reçue, avec sa mention (« je ne veux mettre aucune marque en avant »).
+// (isBrandShop, lib/voieC.ts), passe en tête ; toute autre est rangée
+// exactement comme une boutique connue (remontée de 2 places au plus), avec
+// sa mention (« je ne veux mettre aucune marque en avant » : ni en avant,
+// ni en arrière d'un revendeur).
 describe("« Cette pièce dans d'autres boutiques » : seule la boutique officielle de la marque de la pièce passe en tête", () => {
   /** Une section rangée comme à l'enregistrement (tri léger par la marque et le modèle de la requête, un oui sur la
    * boutique de la marque ; aucun oui pour une ligne d'avant 0054), sous une proposition Lens, puis relue : les
@@ -433,10 +437,12 @@ describe("« Cette pièce dans d'autres boutiques » : seule la boutique officie
   ];
   const ZARA_PIECE = { brand: "Zara", model: "" };
 
-  it("permis : la boutique de la marque de la pièce en tête (Zara ; H&M, même quand aucun titre ne dit « H&M » ; The North Face) ; les autres boutiques officielles à leur place, avec leur mention", () => {
+  it("permis : la boutique de la marque de la pièce en tête (Zara ; H&M, même quand aucun titre ne dit « H&M » ; The North Face) ; les autres boutiques officielles rangées comme des boutiques connues, avec leur mention", () => {
     const zara = savedSection(ZARA_PIECE, ZARA);
-    expect(zara.hosts).toEqual(["www.zara.com", "boutique-c.fr", "boutique-d.fr", "boutique-e.fr", "www2.hm.com", "shop.mango.com"]);
-    expect(zara.marks).toEqual(["official_shop", null, null, null, "official_shop", "official_shop"]);
+    expect(zara.saved).toEqual(["boutique-c.fr", "boutique-d.fr", "www.zara.com", "boutique-e.fr", "www2.hm.com", "shop.mango.com"]);
+    // hm.com et mango.com : remontées de 2 places au plus, comme un revendeur connu, jamais en tête.
+    expect(zara.hosts).toEqual(["www.zara.com", "boutique-c.fr", "boutique-d.fr", "www2.hm.com", "shop.mango.com", "boutique-e.fr"]);
+    expect(zara.marks).toEqual(["official_shop", null, null, "official_shop", "official_shop", null]);
     const hm = savedSection({ brand: "H&M", model: "" }, [
       ["https://boutique-c.fr/h1", "H&M robe lin"],
       ["https://boutique-d.fr/h2", "Robe en lin H&M taille 38"],
@@ -476,15 +482,16 @@ describe("« Cette pièce dans d'autres boutiques » : seule la boutique officie
       ["https://www2.hm.com/fr_fr/d", "Top en satin"],
       ["https://shop.mango.com/fr/e", "Top satiné"],
     ]);
-    expect(mango.hosts).toEqual(["www.zalando.fr", "www.laredoute.fr", "boutique-e.fr", "www2.hm.com", "shop.mango.com"]);
-    expect(mango.marks).toEqual(["known_shop", "known_shop", null, "official_shop", "official_shop"]);
+    // hm.com et mango.com remontent de 2 places au plus, comme les revendeurs connus ; aucune ne passe devant eux.
+    expect(mango.hosts).toEqual(["www.zalando.fr", "www.laredoute.fr", "www2.hm.com", "shop.mango.com", "boutique-e.fr"]);
+    expect(mango.marks).toEqual(["known_shop", "known_shop", "official_shop", "official_shop", null]);
     const nike = savedSection({ brand: "Saye", model: "Modelo 89" }, [
       ["https://www.zalando.fr/a", "Nike Sportswear - COURT VISION - Baskets basses - white"],
       ["https://www.courir.com/b", "Nike Court Vision Low Next Nature blanc"],
       ["https://boutique-x.fr/c", "Baskets blanches cuir"],
       ["https://www.nike.com/fr/d", "Chaussure Nike Court Vision Low Next Nature pour homme"],
     ]);
-    expect(nike.hosts).toEqual(["www.zalando.fr", "www.courir.com", "boutique-x.fr", "www.nike.com"]);
+    expect(nike.hosts).toEqual(["www.zalando.fr", "www.courir.com", "www.nike.com", "boutique-x.fr"]);
   });
 
   it("refusé : un mot de la marque, du modèle ou de la description qui est aussi une marque de la liste (Jules & Jenn, blouse Sézane « Jules », Tommy Bahama, motif « petit bateau ») ne fait jamais passer sa boutique devant", () => {
@@ -494,8 +501,8 @@ describe("« Cette pièce dans d'autres boutiques » : seule la boutique officie
       ["https://boutique-x.fr/c", "Sac seau cuir camel"],
       ["https://www.jules.com/fr-fr/d", "Sac bandoulière homme"],
     ]);
-    expect(julesJenn.hosts).toEqual(["www.spartoo.com", "www.galerieslafayette.com", "boutique-x.fr", "www.jules.com"]);
-    expect(julesJenn.marks.at(-1)).toBe("official_shop");
+    expect(julesJenn.hosts).toEqual(["www.spartoo.com", "www.galerieslafayette.com", "www.jules.com", "boutique-x.fr"]);
+    expect(julesJenn.marks[2]).toBe("official_shop");
     const sezane = savedSection({ brand: "Sézane", model: "Jules" }, [
       ["https://www.vestiairecollective.com/a", "Sézane Blouse Jules écru"],
       ["https://www.vinted.fr/b", "Blouse Jules Sezane T38"],
@@ -508,30 +515,34 @@ describe("« Cette pièce dans d'autres boutiques » : seule la boutique officie
       ["https://boutique-c.fr/c", "Chemise lin"],
       ["https://fr.tommy.com/d", "Chemise en lin coupe droite"],
     ]);
-    expect(tommy.hosts).toEqual(["boutique-a.fr", "boutique-b.fr", "boutique-c.fr", "fr.tommy.com"]);
+    // Remontée de 2 places au plus, comme une boutique connue : jamais en tête devant la première offre reçue.
+    expect(tommy.hosts).toEqual(["boutique-a.fr", "fr.tommy.com", "boutique-b.fr", "boutique-c.fr"]);
     const pyjama = savedSection({ brand: "Tape à l'œil", model: "" }, [
       ["https://boutique-a.fr/p1", "Pyjama Tape à l'œil motif petit bateau"],
       ["https://boutique-b.fr/p2", "Tape à l'œil pyjama petit bateau"],
       ["https://www.petit-bateau.fr/p3", "Pyjama enfant"],
     ]);
-    expect(pyjama.hosts).toEqual(["boutique-a.fr", "boutique-b.fr", "www.petit-bateau.fr"]);
+    // Comme un revendeur connu à la même place : remontée de 2 places, ni plus ni moins.
+    expect(pyjama.hosts).toEqual(["www.petit-bateau.fr", "boutique-a.fr", "boutique-b.fr"]);
   });
 
-  it("refusé : une ligne d'avant 0054 (aucun oui), ou une marque écrite autrement que son adresse et ses autres noms (« Saint Laurent Paris », ysl.com) — la boutique garde sa place reçue, avec sa mention", () => {
+  it("refusé : une ligne d'avant 0054 (aucun oui), ou une marque écrite autrement que son adresse et ses autres noms (« Saint Laurent Paris », ysl.com) — la boutique n'est pas mise en tête : rangée comme une boutique connue, avec sa mention", () => {
     const before = savedSection(ZARA_PIECE, ZARA, { before0054: true });
-    expect(before.hosts).toEqual(before.saved);
-    expect(before.marks[2]).toBe("official_shop");
+    expect(before.saved).toEqual(["boutique-c.fr", "boutique-d.fr", "www.zara.com", "boutique-e.fr", "www2.hm.com", "shop.mango.com"]);
+    // Chaque boutique officielle remonte de 2 places au plus (zara.com, 3e reçue, arrive 1re comme le ferait un revendeur connu).
+    expect(before.hosts).toEqual(["www.zara.com", "boutique-c.fr", "boutique-d.fr", "www2.hm.com", "shop.mango.com", "boutique-e.fr"]);
+    expect(before.marks[0]).toBe("official_shop");
     const ysl = savedSection({ brand: "Saint Laurent Paris", model: "Le 5 à 7" }, [
       ["https://www.mytheresa.com/a", "Saint Laurent Sac Le 5 à 7"],
       ["https://boutique-c.fr/b", "Sac porté épaule Le 5 à 7 Saint Laurent"],
       ["https://www.ysl.com/fr-fr/c", "Sac Le 5 à 7 en cuir lisse"],
       ["https://boutique-d.fr/d", "Sac cuir"],
     ]);
-    expect(ysl.hosts).toEqual(["www.mytheresa.com", "boutique-c.fr", "www.ysl.com", "boutique-d.fr"]);
-    expect(ysl.marks[2]).toBe("official_shop");
+    expect(ysl.hosts).toEqual(["www.mytheresa.com", "www.ysl.com", "boutique-c.fr", "boutique-d.fr"]);
+    expect(ysl.marks[1]).toBe("official_shop");
   });
 
-  it("une boutique officielle d'une autre marque ne remonte pas non plus comme une boutique connue ; un revendeur connu, lui, remonte toujours de 2 places au plus", () => {
+  it("une boutique officielle d'une autre marque remonte comme une boutique connue, de 2 places au plus, ni plus ni moins qu'un revendeur connu", () => {
     const section = savedSection(ZARA_PIECE, [
       ["https://boutique-c.fr/k1", "Top satiné Zara noir"],
       ["https://boutique-d.fr/k2", "Zara top satin"],
@@ -540,7 +551,17 @@ describe("« Cette pièce dans d'autres boutiques » : seule la boutique officie
       ["https://www.zalando.fr/k5", "Zara - Top satiné"],
     ]);
     expect(section.saved).toEqual(["boutique-c.fr", "boutique-d.fr", "www.zalando.fr", "boutique-e.fr", "www2.hm.com"]);
-    expect(section.hosts).toEqual(["www.zalando.fr", "boutique-c.fr", "boutique-d.fr", "boutique-e.fr", "www2.hm.com"]);
+    expect(section.hosts).toEqual(["www.zalando.fr", "boutique-c.fr", "boutique-d.fr", "www2.hm.com", "boutique-e.fr"]);
+    // Refusé : jamais derrière un revendeur connu reçu à la même place (hm.com et zalando.fr échangés : même ordre).
+    const swapped = savedSection(ZARA_PIECE, [
+      ["https://boutique-c.fr/k1", "Top satiné Zara noir"],
+      ["https://boutique-d.fr/k2", "Zara top satin"],
+      ["https://boutique-e.fr/k3", "Top satiné"],
+      ["https://www.zalando.fr/k4", "Top en satin"],
+      ["https://www2.hm.com/fr_fr/k5", "Zara - Top satiné"],
+    ]);
+    expect(swapped.saved).toEqual(["boutique-c.fr", "boutique-d.fr", "www2.hm.com", "boutique-e.fr", "www.zalando.fr"]);
+    expect(swapped.hosts).toEqual(["www2.hm.com", "boutique-c.fr", "boutique-d.fr", "www.zalando.fr", "boutique-e.fr"]);
   });
 });
 

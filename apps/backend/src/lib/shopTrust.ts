@@ -24,9 +24,9 @@
 //   boutiques » (origine « shopping » : la même pièce, aucune marque n'y passe
 //   devant une autre) est rangée par les mentions — la boutique officielle de
 //   la marque de la pièce en tête, reconnue à l'enregistrement (isBrandShop ;
-//   toute autre boutique officielle garde sa place), boutiques connues
-//   remontées de KNOWN_SHOP_BOOST places au plus, offres signalées (un
-//   signal) en fin de section. Partout ailleurs (recherche visuelle,
+//   toute autre boutique officielle est rangée comme une boutique connue),
+//   boutiques connues remontées de KNOWN_SHOP_BOOST places au plus, offres
+//   signalées (un signal) en fin de section. Partout ailleurs (recherche visuelle,
 //   « Résultats pour vos mots » : des pièces qui se ressemblent seulement),
 //   chaque offre garde sa place reçue, avec sa mention (sectionOrder).
 // Le serveur s'en sert en deux temps : à l'enregistrement (une offre retirée
@@ -140,8 +140,8 @@ function officialBrandsOf(url: string): string[] {
  * pour levi.com) : « Jules & Jenn » n'est pas jules.com, ni « Tommy Bahama »
  * tommy.com, ni « Sandro Ferrone » sandro-paris.com, et la boutique d'une
  * autre marque ne l'est jamais, même nommée dans les titres. Une marque
- * écrite autrement que l'adresse et ses autres noms laisse la boutique à
- * sa place : jamais une marque en avant par erreur. */
+ * écrite autrement que l'adresse et ses autres noms laisse la boutique
+ * rangée comme une boutique connue : jamais une marque en tête par erreur. */
 export function isBrandShop(url: string, brand: string): boolean {
   const key = wordsOf(brand).join("");
   return key !== "" && officialBrandsOf(url).some((name) => sameToken(name, key));
@@ -317,8 +317,11 @@ export function trustOrder<T>(items: readonly T[], reviews: readonly OfferReview
  *   description (« jules » d'un sac Jules & Jenn), ou les pièces d'autres
  *   marques que le tri léger garde (Mango dans une section Zara), ne
  *   disent pas la marque de la pièce. Toute autre boutique officielle (une
- *   autre marque, une marque non reconnue, une ligne d'avant 0054) garde sa
- *   place reçue, sans remonter, avec sa mention ;
+ *   autre marque, une marque non reconnue, une ligne d'avant 0054, toutes
+ *   sans 0054) est rangée exactement comme une boutique connue : remontée
+ *   de KNOWN_SHOP_BOOST places au plus, jamais derrière un revendeur connu
+ *   à cause de sa mention, avec sa mention (aucune marque en avant, aucune
+ *   en arrière) ;
  * - partout ailleurs (recherche visuelle, « Résultats pour vos mots » : des
  *   pièces qui se ressemblent seulement) : l'ordre reçu, les offres retirées
  *   en moins ; aucune boutique officielle ou connue remontée, aucune offre
@@ -328,7 +331,7 @@ export function trustOrder<T>(items: readonly T[], reviews: readonly OfferReview
 export function sectionOrder<T>(origin: MatchOrigin, items: readonly T[], reviews: readonly OfferReview[], offers: readonly SectionOffer[]): T[] {
   if (origin !== "shopping") return items.filter((_, index) => !reviews[index]!.dropped);
   const forOrder = reviews.map((review, index) =>
-    review.mark === "official_shop" && offers[index]?.brandShop !== true ? { ...review, mark: null, boosted: false } : review
+    review.mark === "official_shop" && offers[index]?.brandShop !== true ? { ...review, mark: "known_shop" as const } : review
   );
   return trustOrder(items, forOrder);
 }

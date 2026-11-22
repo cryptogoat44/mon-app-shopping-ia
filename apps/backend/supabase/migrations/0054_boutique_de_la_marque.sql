@@ -19,8 +19,8 @@
 --   (jamais false : vérifié par la base).
 --
 -- Facultative pour le serveur : sans elle, rien n'est noté, et chaque
--- boutique officielle garde sa place reçue, avec sa mention (sonde du
--- schéma, lib/brandShopColumn.ts). Un serveur plus ancien fonctionne aussi
+-- boutique officielle est rangée comme une boutique connue, avec sa
+-- mention (sonde du schéma, lib/brandShopColumn.ts). Un serveur plus ancien fonctionne aussi
 -- sur une base qui l'a (valeur par défaut : null). À appliquer à la main par
 -- le fondateur, d'abord sur spotto-dev-2 (migrer-dev), puis sur spotto-prod.
 -- Rejouable sans effet (if not exists) ; ne supprime ni ne modifie aucune

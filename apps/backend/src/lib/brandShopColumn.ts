@@ -5,8 +5,11 @@
 // (product_matches.brand_shop) ; seule elle passe en tête de la section à la
 // relecture (lib/shopTrust.ts, sectionOrder). Ce oui n'est écrit qu'une fois
 // la colonne vue par cette sonde : sans 0054, rien n'est noté, l'insertion
-// n'est jamais refusée, et chaque boutique officielle garde sa place reçue,
-// avec sa mention (aucune marque en avant). Même sonde que pour 0028 et 0031.
+// n'est jamais refusée, et chaque boutique officielle est rangée comme une
+// boutique connue, avec sa mention (aucune marque en avant). Même sonde que
+// pour 0028 et 0031. Si l'insertion avec le oui est refusée malgré la sonde
+// (colonne retirée depuis, cache du schéma), routes/searches.ts la refait
+// une fois sans le oui : les boutiques sont toujours rangées.
 import type { FastifyInstance } from "fastify";
 
 /** Sonde refaite au plus toutes les 5 minutes tant que 0054 manque. */
@@ -20,9 +23,9 @@ async function probeSchema(fastify: Pick<FastifyInstance, "supabaseAdmin" | "log
   try {
     const { error } = await fastify.supabaseAdmin.from("product_matches").select("brand_shop").limit(0);
     if (!error) return true;
-    fastify.log.warn({ code: error.code ?? null }, "Boutique de la marque non notée : migration 0054 absente, chaque boutique officielle garde sa place reçue");
+    fastify.log.warn({ code: error.code ?? null }, "Boutique de la marque non notée : migration 0054 absente, chaque boutique officielle rangée comme une boutique connue");
   } catch {
-    fastify.log.warn({ code: null }, "Boutique de la marque non notée : schéma illisible, chaque boutique officielle garde sa place reçue");
+    fastify.log.warn({ code: null }, "Boutique de la marque non notée : schéma illisible, chaque boutique officielle rangée comme une boutique connue");
   }
   return false;
 }
