@@ -82,7 +82,8 @@ export const MATCH_ROW = z.object({
   // absente sans 0056.
   in_stock: z.boolean().nullable().optional(),
   // Le verdict (0055) : palier du titre (0 marque et modèle, 1 marque sans le
-  // modèle, 2 pas la marque ; lib/lightSort.ts, verdictTier), noté à l'enregistrement de
+  // modèle, 2 tout le reste : marque absente du titre, non donnée ou trop
+  // courte pour être reconnue ; lib/lightSort.ts, verdictTier), noté à l'enregistrement de
   // « Cette pièce dans d'autres boutiques » ; vide ailleurs et sur les lignes
   // d'avant ; absente sans 0055 (lib/verdict.ts n'affirme alors rien).
   title_tier: z.number().int().min(0).max(2).nullable().optional(),

@@ -587,8 +587,8 @@ describe("colonne de la migration 0055 (verdict), décrite d'avance", () => {
   it("permis : un libellé en français et en anglais qui dit ce que veut dire chaque palier, dans la version JSON seulement", () => {
     expect(EXPORT_COLUMNS.productMatches.title_tier).toMatchObject({
       label: {
-        fr: "Le titre de l'offre nomme la marque et le modèle de la pièce (0), la marque sans le modèle (1), ou pas la marque (2) (« Cette pièce dans d'autres boutiques »)",
-        en: "The offer's title names the piece's brand and model (0), the brand without the model (1), or not the brand (2) (“This piece at other shops”)",
+        fr: "Le titre de l'offre nomme la marque et le modèle de la pièce (0), la marque sans le modèle (1), sinon (2) : marque absente du titre, non donnée ou trop courte pour être reconnue (« Cette pièce dans d'autres boutiques »)",
+        en: "The offer's title names the piece's brand and model (0), the brand without the model (1), otherwise (2): brand not in the title, not given or too short to be recognised (“This piece at other shops”)",
       },
       technical: true,
     });
@@ -599,6 +599,16 @@ describe("colonne de la migration 0055 (verdict), décrite d'avance", () => {
     const label = EXPORT_COLUMNS.productMatches.title_tier!.label;
     expect(label.fr).not.toMatch(/aucun|ni l'un|rien|seule/);
     expect(label.en).not.toMatch(/neither|nothing|none|only/);
+  });
+
+  it("refusé : le palier 2 n'est jamais dit « pas la marque » / \"not the brand\" — une marque faite de petits mots (« On ») ou vide donne aussi 2, même nommée dans le titre", () => {
+    expect(verdictTier("On Cloud 5 chaussures", { brand: "On", model: "Cloud 5" })).toBe(2);
+    expect(verdictTier("On Cloud 5 chaussures", { brand: "", model: "Cloud 5" })).toBe(2);
+    const label = EXPORT_COLUMNS.productMatches.title_tier!.label;
+    expect(label.fr).not.toContain("pas la marque");
+    expect(label.en).not.toContain("not the brand");
+    expect(label.fr).toContain("trop courte pour être reconnue");
+    expect(label.en).toContain("too short to be recognised");
   });
 
   it("refusé : jamais dans la page lisible ni comme colonne inconnue, vide (lignes d'avant, autres sections) comme noté", () => {

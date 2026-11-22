@@ -15,8 +15,9 @@
 --
 -- Colonne :
 -- product_matches.title_tier : 0 (le titre nomme la marque et le modèle),
---   1 (la marque sans le modèle), 2 (pas la marque, même s'il nomme le
---   modèle), dans « Cette pièce dans
+--   1 (la marque sans le modèle), 2 (tout le reste : marque absente du
+--   titre, non donnée ou trop courte pour être reconnue, comme « On », même
+--   s'il nomme le modèle), dans « Cette pièce dans
 --   d'autres boutiques » seulement ; null partout ailleurs, et sur toutes les
 --   lignes d'avant (vérifié par la base : 0, 1, 2 ou rien).
 --
