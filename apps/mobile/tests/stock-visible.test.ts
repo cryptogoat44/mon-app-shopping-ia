@@ -170,6 +170,16 @@ describe("tri par vos mots : le texte dit l'ordre de l'écran", () => {
     expect(wordsSortNote(result, start)).toBeNull();
   });
 
+  it("refusé : rien n'a de prix, la première est épuisée — pas « Avec prix d'abord » au-dessus d'une carte sans prix", () => {
+    const result = { ...lists([piece("l1", null, false), piece("l2", null)]), sortedByWords: true };
+    const start = bestProposalIndex(result, "fr");
+    expect(start).toBe(1);
+    expect(wordsSortNote(result, start)).toBeNull();
+    // Une boutique sans prix non plus : toujours aucun texte d'ordre.
+    const withShop = { ...lists([piece("l1", null, false), piece("l2", null)], [piece("b1", null)]), sortedByWords: true };
+    expect(wordsSortNote(withShop, bestProposalIndex(withShop, "fr"))).toBeNull();
+  });
+
   it("permis : les premières n'ont pas de prix — « Avec prix d'abord, puis selon vos mots », comme avant", () => {
     const result = { ...lists([piece("l1", null), piece("l2", null, false), piece("l3", 25)]), sortedByWords: true };
     expect(wordsSortNote(result, bestProposalIndex(result, "fr"))).toBe("priceThenWords");

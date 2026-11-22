@@ -187,11 +187,17 @@ export function noPriceNoticeShown(result: ResultLists, startIndex: number): boo
  * mots » ne décrirait plus l'écran, le texte dit l'ordre réel (relecture, F4).
  * « Avec prix d'abord » seulement quand les propositions de la recherche
  * visuelle placées avant la grande carte n'ont pas de prix ; si l'une en a un
- * (sautée parce qu'épuisée), aucun texte : il décrirait un autre ordre. */
-export function wordsSortNote(result: Pick<SpotResult, "sortedByWords"> & Partial<Pick<SpotResult, "pieces">>, startIndex: number): "words" | "priceThenWords" | null {
+ * (sautée parce qu'épuisée), aucun texte : il décrirait un autre ordre ; et
+ * seulement quand la grande carte a elle-même un prix. */
+export function wordsSortNote(result: Pick<SpotResult, "sortedByWords"> & Partial<ResultLists>, startIndex: number): "words" | "priceThenWords" | null {
   if (!result.sortedByWords) return null;
   if (startIndex === 0) return "words";
-  return (result.pieces ?? []).slice(0, startIndex).every((piece) => !hasPrice(piece)) ? "priceThenWords" : null;
+  const pieces = result.pieces ?? [];
+  // La grande carte elle-même doit avoir un prix : sinon elle n'a pas été
+  // mise devant pour son prix (mais parce que la première est épuisée), et
+  // « Avec prix d'abord » contredirait « Aucune de ces propositions n'affiche de prix ».
+  const start = allPieces({ pieces, complement: result.complement })[startIndex];
+  return start !== undefined && hasPrice(start) && pieces.slice(0, startIndex).every((piece) => !hasPrice(piece)) ? "priceThenWords" : null;
 }
 
 export interface PriceFirstSections {
