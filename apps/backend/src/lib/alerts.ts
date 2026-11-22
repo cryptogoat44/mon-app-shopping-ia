@@ -8,6 +8,8 @@
 // Les alertes :
 // - disjoncteur : la recherche par image est en pause (pannes du fournisseur) ;
 // - plafond_recherches : plafond du jour ou du mois atteint, Spotter fermé à tous ;
+// - seuil_recherches : 80 % (SERPAPI_WARN_PERCENT) du plafond du jour ou du
+//   mois atteints, Spotter encore ouvert (lot « compteurs quota ») ;
 // - plafond_ia : plafond du jour de l'IA d'Anthropic atteint ;
 // - echecs_repetes : 5 échecs ou plus en 15 minutes chez un fournisseur
 //   (IA de l'analyse vidéo, IA de la voie C, Google Shopping).
@@ -19,7 +21,7 @@
 import { randomUUID } from "node:crypto";
 import { captureAlert } from "./sentry.js";
 
-export type AlertKind = "disjoncteur" | "plafond_recherches" | "plafond_ia" | "echecs_repetes";
+export type AlertKind = "disjoncteur" | "plafond_recherches" | "seuil_recherches" | "plafond_ia" | "echecs_repetes";
 
 export const ALERT_LOG_MESSAGE = "Alerte";
 

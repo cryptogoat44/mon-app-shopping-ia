@@ -20,6 +20,11 @@ const envSchema = z.object({
   // Part de chaque personne, par jour : qu'une seule personne ne puisse pas
   // épuiser la journée des autres (8 sur 25 : un tiers au plus).
   SERPAPI_USER_DAILY_CAP: z.coerce.number().int().min(1).default(8),
+  // Seuil d'avertissement des plafonds du jour et du mois (lot « compteurs
+  // quota »), en pourcentage (50 à 99, 80 par défaut). Reste du texte ici :
+  // lib/searchCapacity.ts le vérifie ; une valeur invalide est ignorée avec un
+  // avertissement dans le journal, jamais un arrêt du serveur.
+  SERPAPI_WARN_PERCENT: z.string().optional(),
   // Analyse automatique des vidéos (lot 4, temps 1 bis) : clé secrète
   // d'Anthropic, saisie par le fondateur dans Render. Absente : la fonction se
   // désactive proprement et l'app propose le curseur manuel.
