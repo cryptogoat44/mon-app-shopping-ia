@@ -69,6 +69,12 @@ où un e-mail est branché, il part d'un seul endroit : `notifyTryonAlert`
 ## La sonde extérieure
 
 `https://spotto-api.onrender.com/health/deep` répond 200 quand le serveur et la
-base répondent, 503 sinon. Un service de surveillance (Sentry « Uptime », ou
-UptimeRobot, gratuit) l'interroge toutes les 5 minutes et prévient en cas
-d'échec. `/health` (sans la base) reste celle de Render.
+base répondent, 503 sinon. `/health` (sans la base) reste celle de Render.
+
+Ne pas la faire interroger automatiquement toutes les quelques minutes tant
+que le service est sur l'offre gratuite de Render : garder éveillé un service
+gratuit par des appels automatiques y est considéré comme un abus. Ouvrez-la
+à la main quand vous voulez vérifier (le premier appel peut prendre une
+minute si le service dormait), ou, au plus, faites-la interroger rarement
+(une ou deux fois par jour). Une surveillance fréquente (Sentry « Uptime »,
+UptimeRobot) n'a sa place qu'avec une offre payante de Render.
