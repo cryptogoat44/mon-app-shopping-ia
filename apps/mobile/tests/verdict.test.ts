@@ -206,6 +206,23 @@ describe("l'écran : la phrase en tête, annoncée, touchable, sans rien déplac
     expect(component).toContain("}, [sentence]);");
   });
 
+  it("permis : trié par prix sur iPhone, la place du verdict est déjà la première, même vide, et jamais aplatie (la phrase grandit vers le bas, visible)", () => {
+    const screen = read("src/app/(app)/spot/result.tsx");
+    const scroll = screen.indexOf("maintainVisibleContentPosition={priceSort");
+    expect(scroll).toBeGreaterThan(-1);
+    const afterScrollOpen = screen.slice(screen.indexOf(">\n", scroll) + 2);
+    // Premier enfant (après le commentaire) : la boîte toujours rendue, qui contient la phrase.
+    const firstChild = afterScrollOpen.replace(/^\s*\{\/\*[\s\S]*?\*\/\}\s*/, "");
+    expect(firstChild.startsWith('<View collapsable={false} testID="verdict-place">\n          <VerdictLine verdict={result.verdict} />\n        </View>')).toBe(true);
+  });
+
+  it("refusé : jamais la phrase seule (ou sous condition) en premier enfant de la liste, qui n'existerait qu'à l'arrivée des boutiques", () => {
+    const screen = read("src/app/(app)/spot/result.tsx");
+    expect(screen).not.toMatch(/\{result\.verdict \? <VerdictLine/);
+    expect(screen).not.toMatch(/\*\/\}\s*\n\s*<VerdictLine verdict=\{result\.verdict\} \/>/);
+    expect(screen.match(/<VerdictLine /g)).toHaveLength(1);
+  });
+
   it("la feuille : même forme que celles des mentions, ses deux paragraphes, « J'ai compris » ; tient en grand texte", () => {
     const component = read("src/components/verdict-line.tsx");
     for (const words of ["accessibilityViewIsModal", 'animationType={reduceMotion ? "none" : "slide"}', "{t.result.verdict.how}", "{t.result.verdict.limits}", "{t.result.verdict.closeButton}", "<ScrollView"]) {
