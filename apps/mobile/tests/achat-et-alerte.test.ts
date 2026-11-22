@@ -782,6 +782,40 @@ describe("19. Relecture : l'état de « Couper l'alerte » reste à sa pièce", 
   });
 });
 
+describe("20. Relecture : « Vous l'avez achetée ? » défile sur un petit écran", () => {
+  /** La feuille est plafonnée et toutes ses étapes (pièce, question, catégories…) sont dans une zone qui défile. */
+  const scrolls = (source: string) => {
+    const open = source.indexOf("<ScrollView");
+    const close = source.indexOf("</ScrollView>");
+    const sheetStyle = body(source, "  sheet: {", "},");
+    return (
+      /maxHeight: "\d+%"/.test(sheetStyle) &&
+      open !== -1 &&
+      open > source.indexOf("<View style={styles.grab} />") &&
+      ['{target ? (', '{step.kind === "ask" ? (', '{step.kind === "category" ? (', '{step.kind === "done" ? ('].every((part) => {
+        const at = source.indexOf(part);
+        return at > open && at < close;
+      })
+    );
+  };
+
+  it("permis : feuille à 90 % de l'écran au plus, et les étapes sous la poignée défilent, sans rebond", () => {
+    const sheet = code("components/purchase-question-sheet.tsx");
+    expect(scrolls(sheet)).toBe(true);
+    expect(body(sheet, "  sheet: {", "},")).toContain('maxHeight: "90%",');
+    expect(sheet).toContain('<ScrollView style={styles.scroll} bounces={false} testID="vous-l-avez-achetee-defilement">');
+    expect(sheet).toContain("scroll: { flexGrow: 0, flexShrink: 1 },");
+  });
+
+  it("refusé : sans plafond, ou la catégorie hors de la zone qui défile (les dernières catégories hors de l'écran)", () => {
+    const sheet = code("components/purchase-question-sheet.tsx");
+    expect(scrolls(sheet.replace('maxHeight: "90%",', ""))).toBe(false);
+    expect(scrolls(sheet.replace("<ScrollView", "<View").replace("</ScrollView>", "</View>"))).toBe(false);
+    const categoryOutside = sheet.replace('{step.kind === "category" ? (', "").replace("</ScrollView>", '</ScrollView>{step.kind === "category" ? (');
+    expect(scrolls(categoryOutside)).toBe(false);
+  });
+});
+
 describe("Mode d'emploi et fiche Apple", () => {
   it("STATISTIQUES.md : les entonnoirs « Retour de boutique » et « Alerte », et la lecture de away_ms, avec des événements du catalogue", () => {
     const guide = readFileSync(join(__dirname, "../STATISTIQUES.md"), "utf8");

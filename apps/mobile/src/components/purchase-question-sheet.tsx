@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AccessibilityInfo, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { AccessibilityInfo, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import type { VaultCategory } from "@monapp/shared-types";
@@ -167,144 +167,147 @@ export function PurchaseQuestionSheet({ question, actions, onClose }: { question
       <Pressable style={styles.backdrop} onPress={dismiss} accessibilityRole="button" accessibilityLabel={t.common.close} />
       <View style={[styles.sheet, { paddingBottom: space.xl + insets.bottom }]} accessibilityViewIsModal testID="vous-l-avez-achetee">
         <View style={styles.grab} />
-        {target ? (
-          <View style={styles.piece}>
-            <View style={styles.thumb}>
-              <SpotImage hdUri={target.imageHdUrl} fallbackUri={target.imageUrl} style={styles.fill} fit="cover" size="small" />
+        {/* Défile quand tout ne tient pas (petit iPhone, très grand texte) : les sept catégories restent à portée. */}
+        <ScrollView style={styles.scroll} bounces={false} testID="vous-l-avez-achetee-defilement">
+          {target ? (
+            <View style={styles.piece}>
+              <View style={styles.thumb}>
+                <SpotImage hdUri={target.imageHdUrl} fallbackUri={target.imageUrl} style={styles.fill} fit="cover" size="small" />
+              </View>
+              <Text style={styles.pieceName} numberOfLines={2}>
+                {target.title}
+              </Text>
             </View>
-            <Text style={styles.pieceName} numberOfLines={2}>
-              {target.title}
-            </Text>
-          </View>
-        ) : null}
+          ) : null}
 
-        {step.kind === "ask" ? (
-          <>
-            <Text style={styles.title} accessibilityRole="header">
-              {t.result.purchaseQuestion.title}
-            </Text>
-            <Pressable style={styles.primary} onPress={sayYes} accessibilityRole="button">
-              <Text style={styles.primaryLabel}>{t.result.purchaseQuestion.yes}</Text>
-            </Pressable>
-            <Pressable style={styles.secondary} onPress={sayNo} accessibilityRole="button">
-              <Text style={styles.secondaryLabel}>{t.result.purchaseQuestion.no}</Text>
-            </Pressable>
-            <Pressable style={styles.textButton} onPress={dismiss} accessibilityRole="button">
-              <Text style={styles.textButtonLabel}>{t.result.purchaseQuestion.later}</Text>
-            </Pressable>
-          </>
-        ) : null}
-
-        {step.kind === "category" ? (
-          <>
-            <Text style={styles.title} accessibilityRole="header">
-              {t.result.categoryTitle}
-            </Text>
-            {VAULT_CATEGORIES.map((category) => (
-              <Pressable key={category} style={styles.row} onPress={() => void addToVault(category)} accessibilityRole="button">
-                <Text style={styles.rowLabel}>{t.vaultLabels.categories[category]}</Text>
+          {step.kind === "ask" ? (
+            <>
+              <Text style={styles.title} accessibilityRole="header">
+                {t.result.purchaseQuestion.title}
+              </Text>
+              <Pressable style={styles.primary} onPress={sayYes} accessibilityRole="button">
+                <Text style={styles.primaryLabel}>{t.result.purchaseQuestion.yes}</Text>
               </Pressable>
-            ))}
-          </>
-        ) : null}
+              <Pressable style={styles.secondary} onPress={sayNo} accessibilityRole="button">
+                <Text style={styles.secondaryLabel}>{t.result.purchaseQuestion.no}</Text>
+              </Pressable>
+              <Pressable style={styles.textButton} onPress={dismiss} accessibilityRole="button">
+                <Text style={styles.textButtonLabel}>{t.result.purchaseQuestion.later}</Text>
+              </Pressable>
+            </>
+          ) : null}
 
-        {step.kind === "adding" ? (
-          <Text style={styles.status} accessibilityLiveRegion="polite">
-            {t.vaultForm.submitting}
-          </Text>
-        ) : null}
+          {step.kind === "category" ? (
+            <>
+              <Text style={styles.title} accessibilityRole="header">
+                {t.result.categoryTitle}
+              </Text>
+              {VAULT_CATEGORIES.map((category) => (
+                <Pressable key={category} style={styles.row} onPress={() => void addToVault(category)} accessibilityRole="button">
+                  <Text style={styles.rowLabel}>{t.vaultLabels.categories[category]}</Text>
+                </Pressable>
+              ))}
+            </>
+          ) : null}
 
-        {step.kind === "addFailed" ? (
-          <>
-            <ErrorMessage style={styles.error}>{t.result.boughtError}</ErrorMessage>
-            <Pressable style={styles.primary} onPress={() => void addToVault(step.category)} accessibilityRole="button">
-              <Text style={styles.primaryLabel}>{t.common.retry}</Text>
-            </Pressable>
-            <Pressable style={styles.secondary} onPress={onClose} accessibilityRole="button">
-              <Text style={styles.secondaryLabel}>{t.common.close}</Text>
-            </Pressable>
-          </>
-        ) : null}
-
-        {step.kind === "added" ? (
-          <>
+          {step.kind === "adding" ? (
             <Text style={styles.status} accessibilityLiveRegion="polite">
-              {step.alreadyInVault ? t.retrouverPieces.alreadyInVault : t.result.boughtToast}
+              {t.vaultForm.submitting}
             </Text>
-            <Text style={styles.title} accessibilityRole="header">
-              {t.result.purchaseQuestion.shareTitle}
-            </Text>
-            <Pressable style={styles.primary} onPress={() => share(step.vaultItemId)} accessibilityRole="button">
-              <Text style={styles.primaryLabel}>{t.result.purchaseQuestion.share}</Text>
-            </Pressable>
-            <Pressable style={styles.secondary} onPress={onClose} accessibilityRole="button">
-              <Text style={styles.secondaryLabel}>{t.result.purchaseQuestion.later}</Text>
-            </Pressable>
-          </>
-        ) : null}
+          ) : null}
 
-        {step.kind === "offerKeep" ? (
-          <>
-            <Text style={styles.title} accessibilityRole="header">
-              {step.withAlert ? t.result.purchaseQuestion.keepAndFollow : t.result.purchaseQuestion.keepOnly}
-            </Text>
-            {step.failed ? <ErrorMessage style={styles.error}>{t.result.keepError}</ErrorMessage> : null}
-            <Pressable
-              style={styles.primary}
-              onPress={() => void keep(step.withAlert)}
-              disabled={step.busy}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: step.busy, busy: step.busy }}
-            >
-              <Text style={styles.primaryLabel}>{t.result.keep}</Text>
-            </Pressable>
-            <Pressable style={styles.secondary} onPress={onClose} disabled={step.busy} accessibilityRole="button">
-              <Text style={styles.secondaryLabel}>{t.result.purchaseQuestion.noThanks}</Text>
-            </Pressable>
-          </>
-        ) : null}
+          {step.kind === "addFailed" ? (
+            <>
+              <ErrorMessage style={styles.error}>{t.result.boughtError}</ErrorMessage>
+              <Pressable style={styles.primary} onPress={() => void addToVault(step.category)} accessibilityRole="button">
+                <Text style={styles.primaryLabel}>{t.common.retry}</Text>
+              </Pressable>
+              <Pressable style={styles.secondary} onPress={onClose} accessibilityRole="button">
+                <Text style={styles.secondaryLabel}>{t.common.close}</Text>
+              </Pressable>
+            </>
+          ) : null}
 
-        {step.kind === "offerFollow" ? (
-          <>
-            <Text style={styles.title} accessibilityRole="header">
-              {t.result.purchaseQuestion.follow}
-            </Text>
-            {step.failed ? <ErrorMessage style={styles.error}>{t.wishAlerts.saveError}</ErrorMessage> : null}
-            <Pressable
-              style={styles.primary}
-              onPress={() => void follow()}
-              disabled={step.busy}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: step.busy, busy: step.busy }}
-            >
-              <Text style={styles.primaryLabel}>{t.result.purchaseQuestion.turnOnAlert}</Text>
-            </Pressable>
-            <Pressable style={styles.secondary} onPress={onClose} disabled={step.busy} accessibilityRole="button">
-              <Text style={styles.secondaryLabel}>{t.result.purchaseQuestion.noThanks}</Text>
-            </Pressable>
-          </>
-        ) : null}
+          {step.kind === "added" ? (
+            <>
+              <Text style={styles.status} accessibilityLiveRegion="polite">
+                {step.alreadyInVault ? t.retrouverPieces.alreadyInVault : t.result.boughtToast}
+              </Text>
+              <Text style={styles.title} accessibilityRole="header">
+                {t.result.purchaseQuestion.shareTitle}
+              </Text>
+              <Pressable style={styles.primary} onPress={() => share(step.vaultItemId)} accessibilityRole="button">
+                <Text style={styles.primaryLabel}>{t.result.purchaseQuestion.share}</Text>
+              </Pressable>
+              <Pressable style={styles.secondary} onPress={onClose} accessibilityRole="button">
+                <Text style={styles.secondaryLabel}>{t.result.purchaseQuestion.later}</Text>
+              </Pressable>
+            </>
+          ) : null}
 
-        {step.kind === "done" ? (
-          <>
-            <DoneLine text={doneText(step.message)} />
-            {step.failed ? <ErrorMessage style={styles.error}>{t.wishAlerts.saveError}</ErrorMessage> : null}
-            {step.message === "keptWithAlert" || step.message === "alertOn" ? (
+          {step.kind === "offerKeep" ? (
+            <>
+              <Text style={styles.title} accessibilityRole="header">
+                {step.withAlert ? t.result.purchaseQuestion.keepAndFollow : t.result.purchaseQuestion.keepOnly}
+              </Text>
+              {step.failed ? <ErrorMessage style={styles.error}>{t.result.keepError}</ErrorMessage> : null}
               <Pressable
-                style={styles.secondary}
-                onPress={() => void turnOff(step.message)}
+                style={styles.primary}
+                onPress={() => void keep(step.withAlert)}
                 disabled={step.busy}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: step.busy, busy: step.busy }}
               >
-                <Text style={styles.secondaryLabel}>{t.firstTry.turnOffAlert}</Text>
+                <Text style={styles.primaryLabel}>{t.result.keep}</Text>
               </Pressable>
-            ) : null}
-            <Pressable style={styles.primary} onPress={onClose} disabled={step.busy} accessibilityRole="button">
-              <Text style={styles.primaryLabel}>{t.common.close}</Text>
-            </Pressable>
-          </>
-        ) : null}
+              <Pressable style={styles.secondary} onPress={onClose} disabled={step.busy} accessibilityRole="button">
+                <Text style={styles.secondaryLabel}>{t.result.purchaseQuestion.noThanks}</Text>
+              </Pressable>
+            </>
+          ) : null}
+
+          {step.kind === "offerFollow" ? (
+            <>
+              <Text style={styles.title} accessibilityRole="header">
+                {t.result.purchaseQuestion.follow}
+              </Text>
+              {step.failed ? <ErrorMessage style={styles.error}>{t.wishAlerts.saveError}</ErrorMessage> : null}
+              <Pressable
+                style={styles.primary}
+                onPress={() => void follow()}
+                disabled={step.busy}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: step.busy, busy: step.busy }}
+              >
+                <Text style={styles.primaryLabel}>{t.result.purchaseQuestion.turnOnAlert}</Text>
+              </Pressable>
+              <Pressable style={styles.secondary} onPress={onClose} disabled={step.busy} accessibilityRole="button">
+                <Text style={styles.secondaryLabel}>{t.result.purchaseQuestion.noThanks}</Text>
+              </Pressable>
+            </>
+          ) : null}
+
+          {step.kind === "done" ? (
+            <>
+              <DoneLine text={doneText(step.message)} />
+              {step.failed ? <ErrorMessage style={styles.error}>{t.wishAlerts.saveError}</ErrorMessage> : null}
+              {step.message === "keptWithAlert" || step.message === "alertOn" ? (
+                <Pressable
+                  style={styles.secondary}
+                  onPress={() => void turnOff(step.message)}
+                  disabled={step.busy}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: step.busy, busy: step.busy }}
+                >
+                  <Text style={styles.secondaryLabel}>{t.firstTry.turnOffAlert}</Text>
+                </Pressable>
+              ) : null}
+              <Pressable style={styles.primary} onPress={onClose} disabled={step.busy} accessibilityRole="button">
+                <Text style={styles.primaryLabel}>{t.common.close}</Text>
+              </Pressable>
+            </>
+          ) : null}
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -331,10 +334,13 @@ const styles = themedStyles(() => ({
     borderTopRightRadius: radius.lg,
     paddingHorizontal: space.lg,
     paddingTop: 10,
+    maxHeight: "90%",
     width: "100%",
     maxWidth: size.contentMaxWidth,
     alignSelf: "center",
   },
+  // Rétrécit dans les 90 % de la feuille (hauteur naturelle quand tout tient), comme components/external-link-sheet.tsx.
+  scroll: { flexGrow: 0, flexShrink: 1 },
   grab: { width: size.sheetHandle.width, height: size.sheetHandle.height, borderRadius: radius.full, backgroundColor: color.filet, alignSelf: "center", marginBottom: space.md },
   piece: { flexDirection: "row", alignItems: "center", gap: space.md, marginBottom: space.md },
   thumb: { width: 56, aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.sm, overflow: "hidden" },
