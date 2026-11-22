@@ -297,6 +297,12 @@ export const fr = {
       resendIn: (seconds: number) => `Renvoyer l'e-mail dans ${seconds} s`,
       resent: "E-mail renvoyé. Pensez à regarder aussi dans les courriers indésirables.",
     },
+    // Parcours 3 (décision A1 du fondateur) : « Garder » allume l'alerte de
+    // baisse de prix de la pièce ; la baisse se voit dans les Envies, même
+    // interrupteur « Alertes prix et stock » coupé.
+    keptWithAlert: "Ajoutée à vos Envies. Si son prix baisse, vous le verrez dans vos Envies.",
+    turnOffAlert: "Couper l'alerte",
+    alertTurnedOff: "Alerte coupée.",
   },
   // Mission « liens vidéo » : la vidéo TikTok ou Instagram, partagée ou
   // collée, s'ouvre dans son lecteur officiel (app iPhone) ; « Spotter ce
@@ -702,6 +708,25 @@ export const fr = {
     textSearchError: "La recherche n'a pas abouti. Vérifiez votre connexion, puis réessayez.",
     // Mots refusés par le serveur : rien ne reste une fois retirés les opérateurs et la ponctuation.
     textSearchInvalidWords: "Décrivez la pièce en quelques mots.",
+    // Parcours 3 (décision B1 du fondateur) : « Vous l'avez achetée ? » au
+    // retour de la boutique, après au moins 30 s ; une seule feuille, dont le
+    // contenu change d'étape (components/purchase-question-sheet.tsx).
+    purchaseQuestion: {
+      title: "Vous l'avez achetée ?",
+      // Annoncé par VoiceOver à l'ouverture de la feuille (iPhone).
+      announcement: (name: string) => `Vous l'avez achetée ? ${name}`,
+      yes: "Oui, je l'ai achetée",
+      no: "Non, pas encore",
+      later: "Plus tard",
+      shareTitle: "La partager dans votre fil ?",
+      share: "Partager…",
+      keepAndFollow: "Garder la pièce et suivre son prix ?",
+      // Sans alerte possible : sans parler de prix.
+      keepOnly: "Garder la pièce ?",
+      noThanks: "Non merci",
+      follow: "Suivre son prix ? Une baisse s'affichera dans vos Envies.",
+      turnOnAlert: "Activer l'alerte",
+    },
   },
   wishlistItem: {
     back: "Envies",
@@ -945,6 +970,10 @@ export const fr = {
     reportNotTrackable: "Cette pièce ne peut pas être signalée : sa boutique ou son produit n'est pas reconnu.",
     reportNotFound: "Cette pièce est introuvable.",
     reportError: "Le signalement n'a pas pu être envoyé. Vérifiez votre connexion, puis réessayez.",
+    // Parcours 3 : la baisse de prix se voit dans l'app (grille des Envies,
+    // fiche d'une Envie), même interrupteur « Alertes prix et stock » coupé.
+    priceDrop: "Baisse de prix",
+    priceDropAt: (price: string) => `Baisse de prix · ${price}`,
   },
   // Lot collections : collections d'envies, privées ou montrées aux amis
   // (puces de l'écran Envies, « Ajouter à une collection », profil d'un ami).

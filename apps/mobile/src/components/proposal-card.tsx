@@ -6,6 +6,7 @@ import { color, font, radius, size, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { formatPrice } from "@/lib/format";
 import { openMerchantLink } from "@/lib/merchant-links";
+import { useShopWatch } from "@/lib/use-purchase-question";
 import { merchantContextFor, merchantMarkFor, opensOfferPage } from "@/lib/result-sections";
 import type { ClickPlacement } from "@/lib/price-first";
 import { SpotImage } from "@/components/spot-image";
@@ -134,9 +135,14 @@ export function CheapestBadge() {
  * Le lien de secours, si le navigateur bloque l'ouverture, est celui
  * qu'openMerchantLink renvoie, donc déjà vérifié. La mention « Lien
  * affilié » est écrite sous le lien (et lue avec lui par VoiceOver) ; ce
- * qu'elle signifie se lit sur la grande carte, en touchant la pièce. */
+ * qu'elle signifie se lit sur la grande carte, en touchant la pièce.
+ * Parcours 3 : l'écran Résultat guette le retour de la boutique pour CETTE
+ * pièce (« Vous l'avez achetée ? », lib/use-purchase-question.ts) ; l'appel
+ * openMerchantLink lui est confié tel quel. Sans écran qui guette, rien ne
+ * change. */
 function ShopLink({ piece, placement }: { piece: Piece; placement?: ClickPlacement }) {
   const [blockedUrl, setBlockedUrl] = useState<string | null>(null);
+  const shop = useShopWatch();
   const label = opensOfferPage(piece) ? t.result.viewOffer : t.result.viewAt(piece.merchantName ?? "");
   const isAffiliate = isAffiliateLink(piece);
 
@@ -144,7 +150,11 @@ function ShopLink({ piece, placement }: { piece: Piece; placement?: ClickPlaceme
     const url = piece.affiliateUrl ?? piece.merchantUrl;
     if (!url) return;
     setBlockedUrl(null);
-    const outcome = await openMerchantLink({ matchId: piece.real ? piece.id : null, url, context: merchantContextFor(piece), placement, mark: merchantMarkFor(piece) });
+    const outcome = await shop.open(
+      merchantContextFor(piece),
+      () => openMerchantLink({ matchId: piece.real ? piece.id : null, url, context: merchantContextFor(piece), placement, mark: merchantMarkFor(piece) }),
+      piece
+    );
     if (outcome.blocked) setBlockedUrl(outcome.url);
   }
 
