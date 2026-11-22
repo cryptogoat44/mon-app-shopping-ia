@@ -7,13 +7,14 @@ import { fr } from "../src/i18n/fr";
 import { en } from "../src/i18n/en";
 import { sanitizeProps } from "../src/lib/analytics-events";
 import { matchToPiece } from "../src/lib/spot-result";
-import { bestProposalIndex, bigCardLabel, firstAvailableIndex, isSoldOut, priceFirstSections } from "../src/lib/price-first";
+import { bestProposalIndex, bigCardLabel, firstAvailableIndex, isSoldOut, priceFirstSections, wordsSortNote } from "../src/lib/price-first";
 import {
   bigCardShown,
   DEFAULT_RESULT_VIEW,
   nothingWithFilters,
   parseResultView,
   priceSortedList,
+  priceSummary,
   resultLayout,
   resultViewChangeProps,
   serializeResultView,
@@ -120,6 +121,62 @@ describe("la grande carte d'office : jamais une offre épuisée quand une autre 
   });
 });
 
+describe("tout est épuisé dans la recherche visuelle : l'ordre reçu, jamais l'ordre affiché des boutiques (aucune marque mise en avant)", () => {
+  /** Une boutique du complément, avec son rang reçu de Google. */
+  const shop = (id: string, price: number | null, rank: number, extra: Partial<Piece> = {}): Piece => ({ ...piece(id, price), rank, ...extra });
+
+  it("refusé : la boutique de la marque, remontée en tête de « Cette pièce dans d'autres boutiques », n'est ni la grande carte d'office ni « Meilleure proposition »", () => {
+    // Affichée en premier : la boutique de la marque (rang 12) ; reçue en premier : s1 (rang 11), sans prix.
+    const noPrice = lists([piece("l1", 30, false), piece("l2", 40, false)], [shop("brand", null, 12, { offerMark: "official_shop" }), shop("s1", null, 11)]);
+    expect(bestProposalIndex(noPrice, "fr")).toBe(3);
+    expect(firstAvailableIndex(noPrice)).toBe(3);
+    expect(bigCardLabel(2, bestProposalIndex(noPrice, "fr"), firstAvailableIndex(noPrice), noPrice.complement!.shopping[0])).toBe("other");
+    // s1 a un prix : la grande carte d'office ; touchée, la boutique de la marque reste « Autre proposition ».
+    const priced = lists([piece("l1", 30, false)], [shop("brand", 50, 12, { offerMark: "official_shop" }), shop("s1", 40, 11)]);
+    const best = bestProposalIndex(priced, "fr");
+    expect(best).toBe(2);
+    expect(bigCardLabel(1, best, firstAvailableIndex(priced), priced.complement!.shopping[0])).toBe("other");
+    expect(bigCardLabel(best, best, firstAvailableIndex(priced), priced.complement!.shopping[1])).toBe("best");
+  });
+
+  it("permis : sans stock connu, ou une offre visuelle disponible, rien ne change ; la première reçue épuisée : la première de l'écran, comme avant", () => {
+    expect(firstAvailableIndex(lists([piece("l1", 30)], [shop("brand", 50, 12), shop("s1", 40, 11)]))).toBe(0);
+    expect(firstAvailableIndex(lists([piece("l1", 30, false), piece("l2", null)], [shop("brand", 50, 12)]))).toBe(1);
+    expect(firstAvailableIndex(lists([piece("l1", 30, false)], [shop("brand", 50, 12), shop("s1", 40, 11, { inStock: false })]))).toBe(0);
+  });
+
+  it("refusé : boutiques arrivées après le premier affichage — la grande carte épuisée sans prix n'est jamais « … avec prix »", () => {
+    const late = { ...lists([piece("l1", null, false)], [piece("s1", 30)]), complement: { ...lists([], [piece("s1", 30)]).complement!, late: true } };
+    const best = bestProposalIndex(late, "fr");
+    expect(best).toBe(0);
+    expect(firstAvailableIndex(late)).toBe(0);
+    expect(bigCardLabel(best, best, firstAvailableIndex(late), late.pieces[0])).toBe("best");
+    // Même hors de ce cas, « … avec prix » demande un vrai prix et une offre disponible.
+    expect(bigCardLabel(2, 2, 0, piece("x", null))).toBe("other");
+    expect(bigCardLabel(2, 2, 0, piece("x", 30, false))).toBe("other");
+  });
+
+  it("permis : « … avec prix » sur une offre avec prix, disponible, mise en grand d'office", () => {
+    expect(bigCardLabel(2, 2, 0, piece("x", 30))).toBe("bestWithPrice");
+    expect(bigCardLabel(2, 2, 0, piece("x", 30, true))).toBe("bestWithPrice");
+  });
+});
+
+describe("tri par vos mots : le texte dit l'ordre de l'écran", () => {
+  it("refusé : la première a un prix mais est épuisée — pas « Avec prix d'abord, puis selon vos mots »", () => {
+    const result = { ...lists([piece("l1", 20, false), piece("l2", 25)]), sortedByWords: true };
+    const start = bestProposalIndex(result, "fr");
+    expect(start).toBe(1);
+    expect(wordsSortNote(result, start)).toBeNull();
+  });
+
+  it("permis : les premières n'ont pas de prix — « Avec prix d'abord, puis selon vos mots », comme avant", () => {
+    const result = { ...lists([piece("l1", null), piece("l2", null, false), piece("l3", 25)]), sortedByWords: true };
+    expect(wordsSortNote(result, bestProposalIndex(result, "fr"))).toBe("priceThenWords");
+    expect(wordsSortNote(result, 0)).toBe("words");
+  });
+});
+
 describe("« En stock seulement » : les épuisées retirées, les inconnues gardées", () => {
   const result = lists([piece("l1", 30, true), piece("l2", 40, false), piece("l3", null), piece("l4", null, false)], [piece("s1", 25, false), piece("s2", 35)]);
 
@@ -149,6 +206,23 @@ describe("« En stock seulement » : les épuisées retirées, les inconnues gar
     expect(resultLayout(lists([piece("l1", null, true), piece("l2", 30, false)]), { ...STOCK_ONLY, withPriceOnly: true }, { selectedIndex: 0, pickedInPriceList: false })).toMatchObject({ emptyWithStockFilter: true, emptyWithFilter: false });
     expect(nothingWithFilters(lists([piece("l1", 30, false), piece("l2", null)]), STOCK_ONLY)).toBe(false);
     expect(nothingWithFilters(soldOut, DEFAULT_RESULT_VIEW)).toBe(false);
+  });
+
+  it("refusé : avec le filtre, ni « à partir de » ni « Le moins cher » sur une offre épuisée cachée", () => {
+    const offers = lists([piece("a", 30, false), piece("b", 45, true), piece("c", 50)]);
+    const layout = resultLayout(offers, { ...STOCK_ONLY, sort: "price_asc" }, { selectedIndex: 1, pickedInPriceList: false, country: "fr" });
+    expect(layout.summary).toMatchObject({ count: 2, cheapest: { index: 1 } });
+    expect(layout.cheapest).toBe(1);
+    expect(priceSummary(offers, "fr", { inStockOnly: true })?.cheapest.piece.priceFrom).toBe(45);
+    expect(resultLayout(lists([piece("a", 30, false), piece("b", 45)]), STOCK_ONLY, { selectedIndex: 1, pickedInPriceList: false, country: "fr" }).cheapest).toBeNull();
+  });
+
+  it("permis : filtre éteint, le résumé compte toutes les offres, comme avant (l'épuisée reste visible, avec sa mention)", () => {
+    const offers = lists([piece("a", 30, false), piece("b", 45, true), piece("c", 50)]);
+    const layout = resultLayout(offers, DEFAULT_RESULT_VIEW, { selectedIndex: 1, pickedInPriceList: false, country: "fr" });
+    expect(layout.summary).toEqual(priceSummary(offers, "fr"));
+    expect(layout.summary).toMatchObject({ count: 3, cheapest: { index: 0 } });
+    expect(layout.cheapest).toBe(0);
   });
 
   it("proposé seulement quand une offre dit son stock, ou quand il est déjà choisi (pour le retirer)", () => {
@@ -233,7 +307,7 @@ describe("les textes et l'accessibilité", () => {
     expect(card.match(/<OfferMarkNote piece=\{piece\} \/>\n\s*\{\/\*[^\n]*\*\/\}\n\s*<StockNote piece=\{piece\} \/>/g)).toHaveLength(2);
     const screen = read("src/app/(app)/spot/result.tsx");
     expect(screen.indexOf("<StockNote piece={piece} />")).toBeGreaterThan(screen.indexOf("<OfferMarkNote piece={piece} />"));
-    expect(screen).toContain("bigCardLabel(selectedIndex, bestIndex, firstAvailableIndex(result))");
+    expect(screen).toContain("bigCardLabel(selectedIndex, bestIndex, firstAvailableIndex(result), allPieces(result)[selectedIndex])");
   });
 
   it("le filtre : un interrupteur, avec son libellé et ce qu'il fait, juste sous la barre de tri", () => {
