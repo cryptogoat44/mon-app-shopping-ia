@@ -84,8 +84,8 @@ describe("la demande d'analyse", () => {
     expect(outcome).toEqual({ kind: "found", analysis: analysis() });
     expect(analyzeVideoLink).toHaveBeenCalledWith({ url: TIKTOK, query: QUERY }, expect.any(AbortSignal));
     // Mesure du parcours : la plateforme aussi en link_platform (« platform » devient l'appareil chez PostHog).
-    expect(track).toHaveBeenCalledWith("video_link_ai_started", { platform: "tiktok", link_platform: "tiktok" });
-    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "found", moments_count: 2, wait_ms: expect.any(Number), link_platform: "tiktok" });
+    expect(track).toHaveBeenCalledWith("video_link_ai_started", { platform: "tiktok", link_platform: "tiktok", mode: "words" });
+    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "found", moments_count: 2, wait_ms: expect.any(Number), link_platform: "tiktok", mode: "words" });
     expect(tracked()).not.toContain("tiktok.com");
     expect(tracked()).not.toContain("veste");
   });
@@ -94,7 +94,7 @@ describe("la demande d'analyse", () => {
     analyzeVideoLink.mockResolvedValue({ ...analysis(), moments: [] });
     const outcome = await runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", new AbortController().signal);
     expect(outcome).toEqual({ kind: "failed", info: { failure: "no_moment", capacity: null } });
-    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "not_found", reason: "no_moment", moments_count: 0, wait_ms: expect.any(Number), link_platform: "tiktok" });
+    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "not_found", reason: "no_moment", moments_count: 0, wait_ms: expect.any(Number), link_platform: "tiktok", mode: "words" });
   });
 
   it("vidéo privée, service vidéo occupé, accord manquant : l'échec du serveur est traduit", async () => {
@@ -104,7 +104,7 @@ describe("la demande d'analyse", () => {
     expect(await runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", new AbortController().signal)).toMatchObject({ info: { failure: "busy" } });
     analyzeVideoLink.mockRejectedValueOnce(new ApiError(403, { error: "video_ai_consent_required", message: "x" }));
     expect(await runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", new AbortController().signal)).toMatchObject({ info: { failure: "consent" } });
-    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "instagram", outcome: "failed", reason: "private", moments_count: 0, wait_ms: expect.any(Number), link_platform: "instagram" });
+    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "instagram", outcome: "failed", reason: "private", moments_count: 0, wait_ms: expect.any(Number), link_platform: "instagram", mode: "words" });
   });
 
   it("« Annuler » : la demande est abandonnée, rien n'est affiché ensuite", async () => {
@@ -117,7 +117,7 @@ describe("la demande d'analyse", () => {
     const pending = runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", controller.signal);
     controller.abort();
     expect(await pending).toEqual({ kind: "cancelled" });
-    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "cancelled", moments_count: 0, wait_ms: expect.any(Number), link_platform: "tiktok" });
+    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "cancelled", moments_count: 0, wait_ms: expect.any(Number), link_platform: "tiktok", mode: "words" });
     // Abandon par la personne : pas un délai de l'app (server_first_response n'en compte rien).
     expect(wasTimedOut(sentSignal!)).toBe(false);
     expect(await runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", controller.signal)).toEqual({ kind: "cancelled" });
@@ -172,7 +172,7 @@ describe("« Choisir ce moment » : comme un moment d'une vidéo du téléphone"
     expect(draft.video).toEqual({ url: TIKTOK, platform: "tiktok", creatorHandle: "lea.style", source: "web", momentSeconds: 12 });
     // Rien à effacer de l'appareil : l'image n'y a jamais été écrite.
     expect(draft.discardImageAfterSearch).toBe(false);
-    expect(track).toHaveBeenCalledWith("video_link_ai_moment_chosen", { platform: "tiktok", rank: 2, moments_count: 2, link_platform: "tiktok" });
+    expect(track).toHaveBeenCalledWith("video_link_ai_moment_chosen", { platform: "tiktok", rank: 2, moments_count: 2, link_platform: "tiktok", mode: "words" });
     expect(tracked()).not.toContain("data:");
   });
 
@@ -239,5 +239,73 @@ describe("« Choisir ce moment » : comme un moment d'une vidéo du téléphone"
     leaveLaunchScreen();
     clearDraft();
     expect(getDraft()).toBeNull();
+  });
+});
+
+// Lot « propositions » (Parcours 2, 21 novembre 2026) : « Voir les propositions
+// de l'IA ». La demande sans mots, puis la pièce choisie, dont le nom sert
+// comme des mots tapés (décision du fondateur, ARRÊT 3 A) — jamais dans les
+// statistiques.
+describe("propositions de l'IA : la demande sans mots et le brouillon d'une pièce", () => {
+  const LABELS = ["Le manteau camel", "Les baskets blanches"];
+  function piecesAnalysis(): LinkAnalysis {
+    return parseLinkAnalysis(
+      {
+        video: { platform: "tiktok", videoKey: "7312345678901234567", canonicalUrl: TIKTOK, creatorHandle: "lea.style" },
+        moments: [
+          { timeSeconds: 4.2, image: IMAGE_BEST, box: BEST },
+          { timeSeconds: 12.8, image: IMAGE_OTHER, box: OTHER },
+        ],
+        labels: LABELS,
+      },
+      "pieces"
+    )!;
+  }
+
+  it("permis : la demande part sans aucun texte ; les statistiques disent le mode « pieces », jamais un nom ni le lien", async () => {
+    analyzeVideoLink.mockResolvedValue(piecesAnalysis());
+    const outcome = await runLinkAnalysis({ url: TIKTOK, mode: "pieces" }, "tiktok", new AbortController().signal);
+    expect(outcome).toEqual({ kind: "found", analysis: piecesAnalysis() });
+    expect(analyzeVideoLink).toHaveBeenCalledWith({ url: TIKTOK, mode: "pieces" }, expect.any(AbortSignal));
+    expect(track).toHaveBeenCalledWith("video_link_ai_started", { platform: "tiktok", link_platform: "tiktok", mode: "pieces" });
+    // moments_count : les pièces proposées (une image chacune).
+    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "found", moments_count: 2, wait_ms: expect.any(Number), link_platform: "tiktok", mode: "pieces" });
+    for (const secret of ["manteau", "baskets", "tiktok.com", "data:"]) expect(tracked()).not.toContain(secret);
+  });
+
+  it("« Aucune pièce proposée » (422 video_no_moment) : not_found en mode « pieces », mesuré sans nouvel événement", async () => {
+    analyzeVideoLink.mockRejectedValueOnce(new ApiError(422, { error: "video_no_moment", message: "x" }));
+    expect(await runLinkAnalysis({ url: TIKTOK, mode: "pieces" }, "instagram", new AbortController().signal)).toEqual({ kind: "failed", info: { failure: "no_moment", capacity: null } });
+    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "instagram", outcome: "not_found", reason: "no_moment", moments_count: 0, wait_ms: expect.any(Number), link_platform: "instagram", mode: "pieces" });
+  });
+
+  it("pièce choisie : son nom part dans le brouillon comme des mots tapés (tri, recherche automatique si rien n'a de prix) ; le texte tapé avant ne part pas", () => {
+    const draft = startMomentSearch(piecesAnalysis(), 1, "app", { crop: OTHER, byAi: true }, "un texte tapé avant")!;
+    expect(draft.words).toBe("Les baskets blanches");
+    expect(draft.textSearchIfNoPrice).toBe(true);
+    expect(draft.localImageUri).toBe(IMAGE_OTHER);
+    expect(draft.crop).toEqual(OTHER);
+    expect(draft.video).toEqual({ url: TIKTOK, platform: "tiktok", creatorHandle: "lea.style", source: "app", momentSeconds: 12 });
+    // rank : la pièce lancée (1 = la première, présélectionnée).
+    expect(track).toHaveBeenCalledWith("video_link_ai_moment_chosen", { platform: "tiktok", rank: 2, moments_count: 2, link_platform: "tiktok", mode: "pieces" });
+    for (const secret of ["baskets", "texte tapé"]) expect(tracked()).not.toContain(secret);
+  });
+
+  it("refusé : sans propositions (des mots), le nom n'intervient pas — la description tapée reste celle du brouillon", () => {
+    expect(startMomentSearch(analysis(), 0, "web", undefined, QUERY)!.words).toBe(QUERY);
+    expect(startMomentSearch(piecesAnalysis(), 0, "web", undefined, QUERY)!.words).toBe("Le manteau camel");
+  });
+
+  it("lancée : le nom part à part, pour trier, jamais avec l'image vers la recherche visuelle ; aucune recherche de plus", async () => {
+    startMomentSearch(piecesAnalysis(), 0, "app");
+    prepareSearch.mockResolvedValueOnce({ id: "s-44" });
+    runSearch.mockResolvedValueOnce(search("s-44"));
+    const draft = getDraft()!;
+    expect(await launchPhoto(draft, new AbortController().signal, photoCrop(draft), draft.words ?? "")).toEqual({ kind: "result", searchId: "s-44" });
+    expect(runSearch).toHaveBeenCalledTimes(1);
+    expect(runSearch).toHaveBeenCalledWith("s-44", { crop: BEST, imageUri: IMAGE_BEST, words: "Le manteau camel", zoneByAi: true }, expect.any(AbortSignal));
+    // La mémoire collective note le spot sans les mots.
+    expect(recordVideoSpot).toHaveBeenCalledWith({ url: TIKTOK, searchId: "s-44", source: "app", momentSeconds: 4 });
+    expect(JSON.stringify(recordVideoSpot.mock.calls)).not.toContain("manteau");
   });
 });

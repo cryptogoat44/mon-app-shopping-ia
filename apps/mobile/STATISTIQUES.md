@@ -111,6 +111,13 @@ vous verrez dans PostHog.
     (`journey_started` avec une entrée `photo_…`).
 - **`video_link_ai_moment_chosen`** : le membre a choisi un moment de la vidéo
   pour lancer la recherche.
+- **`mode`** (nouveau, lot « propositions ») sur `video_link_ai_started`,
+  `video_link_ai_result` et `video_link_ai_moment_chosen` : `words` quand le
+  membre a écrit ce qu'il cherche, `pieces` quand il a touché « Voir les
+  propositions de l'IA ». En mode `pieces`, `moments_count` compte les pièces
+  proposées (une image chacune) et `rank` désigne la pièce lancée (1 = la
+  première, déjà choisie). Une valeur absente vient des versions d'avant :
+  elle veut dire `words`. Détail plus bas, « Les propositions de l'IA ».
 
 ### 3b. Depuis une vidéo du téléphone
 
@@ -243,6 +250,38 @@ modèle marche pour les vidéos du téléphone (`entry` contient `video`, puis
 choisie à la main (`video_frame_chosen`) ne passe pas par
 `video_ai_result` ; faites aussi l'entonnoir sans cette étape.
 
+## Les propositions de l'IA (lien vidéo) : `mode`
+
+Lot « propositions » : sur l'écran d'un lien TikTok ou Instagram, le membre
+peut toucher « Voir les propositions de l'IA » au lieu d'écrire. Visible
+seulement si le réglage `VIDEO_PIECES_ENABLED` est allumé chez Render (coupé
+par défaut) **et** l'analyse des liens aussi. Les trois événements de
+l'analyse d'un lien disent alors `mode` = `pieces`.
+
+- **L'entonnoir « depuis un lien de vidéo »** (plus haut) reste valable dans
+  les deux modes : son étape 2 compte aussi les propositions reçues.
+- **Comparer les deux modes** : **Breakdown** par `mode` sur
+  `video_link_ai_result` (avec `outcome` = `found`), ou sur
+  `video_link_ai_moment_chosen`.
+- **« Aucune pièce proposée »** : `video_link_ai_result` avec `mode` =
+  `pieces` et `outcome` = `not_found`. Pas d'événement à part.
+- **Quelle pièce est lancée** : `rank` de `video_link_ai_moment_chosen` avec
+  `mode` = `pieces` (1 = la première, déjà choisie à l'écran).
+
+**Entonnoir « essais manqués »** : la pièce cherchée n'était pas dans les
+propositions, et le membre l'a décrite ensuite (une seconde analyse par
+l'IA). Mêmes réglages que les entonnoirs plus haut (**Unique users**,
+**1 hour**, `environment` = `production`) :
+
+1. `video_link_ai_result` avec `mode` = `pieces` et `outcome` = `found`
+2. `video_link_ai_started` avec `mode` = `words`
+
+La part qui passe l'étape 2 = la part des essais manqués. Chacun coûte une
+analyse de plus (deux sur les 10 du jour du membre). Un membre qui revient au
+champ sans rien relancer s'arrête à l'étape 1.
+
+Jamais un nom proposé ni le texte du champ : seulement `words` ou `pieces`.
+
 ## Lire les temps d'attente
 
 Les temps sont en **millisecondes**, arrondis à 100 ms : `12300` veut dire
@@ -323,7 +362,8 @@ attendu plus longtemps.
 
 ## Ce qui ne part jamais
 
-Ni lien, ni texte tapé (description, « Que cherchez-vous ? »), ni nom ou
+Ni lien, ni texte tapé (description, « Que cherchez-vous ? »), ni nom d'une
+pièce proposée par l'IA, ni nom ou
 adresse de boutique, ni identifiant de recherche ou de pièce, ni image, ni
 nom de fichier, ni e-mail, ni nom d'utilisateur. Le catalogue fermé de l'app
 (`apps/mobile/src/lib/analytics-events.ts`) retire tout le reste avant

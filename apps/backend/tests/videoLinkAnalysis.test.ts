@@ -18,10 +18,17 @@ vi.mock("../src/lib/aiQuota.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/lib/aiQuota.js")>();
   return { ...original, aiQuotaFor: vi.fn(original.aiQuotaFor) };
 });
+// Lot « propositions » : le réencodage des images (lib/photos.ts), le vrai,
+// observé pour compter les images des moments réencodées.
+vi.mock("../src/lib/photos.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/lib/photos.js")>();
+  return { ...original, optimizePhotoWithSize: vi.fn(original.optimizePhotoWithSize) };
+});
 
 import { ACCEPTED_CONSENT_VERSIONS, CONSENT_VERSIONS, VIDEO_LINK_CONSENT_VERSIONS, type ConsentStatus, type CropRect, type VideoLinkAnalysisResponse } from "@monapp/shared-types";
 import { env } from "../src/env.js";
 import { aiQuotaFor } from "../src/lib/aiQuota.js";
+import { optimizePhotoWithSize } from "../src/lib/photos.js";
 import { RATE_LIMITS } from "../src/lib/rateLimits.js";
 import { resetShortLinkCache } from "../src/lib/videoLinks.js";
 import { VIDEO_WORKER_ERROR_CODES, type VideoWorkerConfigState, type VideoWorkerErrorCode, type VideoWorkerFetch } from "../src/lib/videoWorker.js";
@@ -32,8 +39,8 @@ import { MASKED_DATA, scrubLogLine } from "../src/lib/logPrivacy.js";
 import { scrubEvent } from "../src/lib/sentry.js";
 import rateLimitPlugin, { registerHit } from "../src/plugins/rateLimit.js";
 import accountRoutes from "../src/routes/account.js";
-import videoLinkAnalysisRoutes, { MAX_PARALLEL_ANALYSES, WORKER_FAILURE_REPLIES, type VideoLinkAnalysisOptions } from "../src/routes/videoLinkAnalysis.js";
-import { VideoAiError, type askVideoMoments, type FrameForAi } from "../src/services/videoMoments.js";
+import videoLinkAnalysisRoutes, { MAX_PARALLEL_ANALYSES, VIDEO_LINK_MOMENT_EDGE, WORKER_FAILURE_REPLIES, type VideoLinkAnalysisOptions } from "../src/routes/videoLinkAnalysis.js";
+import { VideoAiError, type askVideoMoments, type askVideoPieces, type FrameForAi } from "../src/services/videoMoments.js";
 import { fakeSupabase, type Row } from "./fakeSupabase.js";
 
 const aiQuotaMock = vi.mocked(aiQuotaFor);
@@ -100,6 +107,29 @@ const workerFetch: VideoWorkerFetch = async (url, init) => {
 };
 
 const askMock = vi.fn<typeof askVideoMoments>();
+/** Lot « propositions » : la fausse IA du mode « pièces » (aucun appel à Anthropic). */
+const piecesMock = vi.fn<typeof askVideoPieces>();
+const LABELS = ["Le manteau camel", "Les baskets blanches"] as const;
+
+function defaultPieces(): void {
+  piecesMock.mockReset();
+  piecesMock.mockImplementation(async (aiFrames) => {
+    aiFramesSeen = [...aiFrames];
+    return {
+      pieces: [
+        { label: LABELS[0], frame: 2, box: BOX_A },
+        { label: LABELS[1], frame: 0, box: BOX_B },
+      ],
+      candidates: [
+        { label: LABELS[0], frame: 2, box: BOX_A, confidence: 0.92 },
+        { label: LABELS[1], frame: 0, box: BOX_B, confidence: 0.81 },
+        { label: "Le sac noir", frame: 1, box: BOX_B, confidence: 0.4 },
+      ],
+      refusedLabels: 1,
+      usage: { inputTokens: 880, outputTokens: 75 },
+    };
+  });
+}
 
 function defaultAsk(): void {
   askMock.mockReset();
@@ -157,7 +187,7 @@ async function buildApp(options: Partial<VideoLinkAnalysisOptions> = {}, db: { m
     if (suspended) return reply.code(403).send({ error: "account_suspended", message: "Votre compte est suspendu : cette action n'est plus possible." });
   });
   await app.register(rateLimitPlugin);
-  await app.register(videoLinkAnalysisRoutes, { workerConfig: READY, workerFetch, askMoments: askMock, ...options });
+  await app.register(videoLinkAnalysisRoutes, { workerConfig: READY, workerFetch, askMoments: askMock, askPieces: piecesMock, ...options });
   if (db.withAccountRoutes) await app.register(accountRoutes);
   await app.ready();
   return app;
@@ -194,7 +224,10 @@ beforeEach(() => {
   aiFramesSeen = [];
   shortLinkFetches = [];
   env.ANTHROPIC_API_KEY = "cle-factice-des-tests";
+  env.VIDEO_PIECES_ENABLED = false;
   defaultAsk();
+  defaultPieces();
+  vi.mocked(optimizePhotoWithSize).mockClear();
   aiQuotaMock.mockClear();
   resetShortLinkCache();
   resetAlertsForTests();
@@ -762,5 +795,211 @@ describe("rien n'est gardé ni journalisé", () => {
     expect(res.statusCode).toBe(413);
     expect(workerCalls).toEqual([]);
     expect(rpcCalls).toEqual([]);
+  });
+});
+
+// Lot « propositions » (Parcours 2, 21 novembre 2026) : « Voir les propositions
+// de l'IA » — le mode « pièces » de la même analyse, sans aucun texte du
+// membre, derrière l'interrupteur VIDEO_PIECES_ENABLED (coupé par défaut).
+describe("propositions de l'IA (mode « pièces »)", () => {
+  const PIECES = { url: SHARED_TEXT, mode: "pieces" };
+  const momentEncodings = () => vi.mocked(optimizePhotoWithSize).mock.calls.filter((call) => call[1] === VIDEO_LINK_MOMENT_EDGE).length;
+
+  it("statut : interrupteur coupé, { enabled: true } comme avant ; allumé, { enabled: true, pieces: true } ; analyse des liens coupée, { enabled: false } même interrupteur allumé", async () => {
+    const target = await buildApp();
+    expect((await status(target)).json()).toEqual({ enabled: true });
+    env.VIDEO_PIECES_ENABLED = true;
+    expect((await status(target)).json()).toEqual({ enabled: true, pieces: true });
+    env.ANTHROPIC_API_KEY = undefined;
+    expect((await status(target)).json()).toEqual({ enabled: false });
+    await app!.close();
+    env.ANTHROPIC_API_KEY = "cle-factice-des-tests";
+    const off = await buildApp({ workerConfig: { state: "off" } });
+    expect((await status(off)).json()).toEqual({ enabled: false });
+  });
+
+  it("permis : sans mots, 200 — exactement la vidéo, les moments et les noms ; un nom par moment ; l'IA ne reçoit que les images et la langue", async () => {
+    env.VIDEO_PIECES_ENABLED = true;
+    const target = await buildApp();
+    const res = await analyze(target, PIECES);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["cache-control"]).toBe("no-store");
+    const body = res.json<VideoLinkAnalysisResponse>();
+    expect(Object.keys(body).sort()).toEqual(["labels", "moments", "video"]);
+    expect(Object.keys(body.moments[0]!).sort()).toEqual(["box", "image", "timeSeconds"]);
+    expect(body.video).toEqual(TIKTOK_LINK);
+    expect(body.labels).toEqual([...LABELS]);
+    expect(body.labels).toHaveLength(body.moments.length);
+    expect(body.moments.map((moment) => [moment.timeSeconds, moment.box])).toEqual([
+      [9, BOX_A],
+      [1.5, BOX_B],
+    ]);
+    // L'IA : les images réduites, la langue de l'app (français par défaut), les réglages de l'analyse ; aucun texte du membre.
+    expect(piecesMock).toHaveBeenCalledTimes(1);
+    const [aiFrames, locale, settings] = piecesMock.mock.calls[0]!;
+    expect(aiFrames.map((frame) => [frame.width, frame.height])).toEqual([
+      [288, 512],
+      [288, 512],
+      [288, 512],
+    ]);
+    expect(locale).toBe("fr");
+    expect(settings).toEqual({ apiKey: "cle-factice-des-tests", model: "claude-sonnet-5-5", lowEffort: true });
+    expect(piecesMock.mock.calls[0]!).toHaveLength(3);
+    expect(askMock).not.toHaveBeenCalled();
+    // Le service vidéo reçoit la même demande qu'avec des mots ; les images sont effacées dès la réponse.
+    expect(workerCalls.map((call) => call.body)).toEqual([{ url: CANONICAL, platform: "tiktok" }]);
+    expect(aiFramesSeen.every((frame) => frame.data.every((byte) => byte === 0))).toBe(true);
+  });
+
+  it("langue des noms : celle de l'app (en-tête Accept-Language), anglais pour une app en anglais", async () => {
+    env.VIDEO_PIECES_ENABLED = true;
+    const target = await buildApp();
+    const res = await target.inject({ method: "POST", url: "/api/video-links/analyze", headers: { ...headersOf(ALICE), "accept-language": "en-GB" }, payload: PIECES });
+    expect(res.statusCode).toBe(200);
+    expect(piecesMock.mock.calls[0]![1]).toBe("en");
+  });
+
+  it("deux pièces sur la même image : l'image n'est réencodée qu'une fois, et part en face de chaque nom", async () => {
+    env.VIDEO_PIECES_ENABLED = true;
+    piecesMock.mockResolvedValueOnce({
+      pieces: [
+        { label: "Le manteau camel", frame: 1, box: BOX_A },
+        { label: "Le sac noir", frame: 1, box: BOX_B },
+      ],
+      candidates: [],
+      refusedLabels: 0,
+      usage: { inputTokens: 880, outputTokens: 60 },
+    });
+    const target = await buildApp();
+    const body = (await analyze(target, PIECES)).json<VideoLinkAnalysisResponse>();
+    expect(body.labels).toEqual(["Le manteau camel", "Le sac noir"]);
+    expect(body.moments[0]!.image).toBe(body.moments[1]!.image);
+    expect(body.moments.map((moment) => moment.box)).toEqual([BOX_A, BOX_B]);
+    expect(momentEncodings()).toBe(1);
+  });
+
+  it("refusés avant tout appel (service vidéo, IA, compteur) : 400 « invalid_query » — mode « pièces » avec un texte (même vide), un autre mode, interrupteur coupé", async () => {
+    env.VIDEO_PIECES_ENABLED = true;
+    const target = await buildApp();
+    const refused: unknown[] = [
+      { url: SHARED_TEXT, mode: "pieces", query: QUERY },
+      { url: SHARED_TEXT, mode: "pieces", query: "" },
+      { url: SHARED_TEXT, mode: "pieces", query: null },
+      { url: SHARED_TEXT, mode: "autre" },
+      { url: SHARED_TEXT, mode: "words", query: QUERY },
+      { url: SHARED_TEXT, mode: null, query: QUERY },
+      { url: SHARED_TEXT, mode: ["pieces"] },
+    ];
+    for (const payload of refused) {
+      const res = await analyze(target, payload);
+      expect(res.statusCode, JSON.stringify(payload)).toBe(400);
+      expect(res.json()).toEqual({ error: "invalid_query", message: "Décrivez la pièce en quelques mots." });
+    }
+    env.VIDEO_PIECES_ENABLED = false;
+    const off = await analyze(target, PIECES);
+    expect(off.statusCode).toBe(400);
+    expect(off.json().error).toBe("invalid_query");
+    expect(workerCalls).toEqual([]);
+    expect(piecesMock).not.toHaveBeenCalled();
+    expect(askMock).not.toHaveBeenCalled();
+    expect(aiQuotaMock).not.toHaveBeenCalled();
+    expect(rpcCalls).toEqual([]);
+  });
+
+  it("mêmes garde-fous qu'avec des mots : sans accord, 403 et rien ne part", async () => {
+    env.VIDEO_PIECES_ENABLED = true;
+    const target = await buildApp();
+    for (const user of [BOB, CAROL, ERIN]) expect((await analyze(target, PIECES, user)).statusCode, user).toBe(403);
+    expect(workerCalls).toEqual([]);
+    expect(piecesMock).not.toHaveBeenCalled();
+  });
+
+  it("mêmes garde-fous : plafond de l'IA atteint, 429 avec Retry-After ; plafond des recherches, 429 ; le service vidéo n'est pas appelé", async () => {
+    env.VIDEO_PIECES_ENABLED = true;
+    const target = await buildApp();
+    aiQuotaMock.mockResolvedValueOnce({ allowed: false, refusedBy: "user" });
+    const limited = await analyze(target, PIECES);
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json().error).toBe("video_ai_user_limit");
+    expect(Number(limited.headers["retry-after"])).toBeGreaterThan(0);
+    capacityRow = { ...capacityRow, allowed: false, refused_by: "day" };
+    const capacity = await analyze(target, PIECES);
+    expect(capacity.statusCode).toBe(429);
+    expect(capacity.json().error).toBe("search_capacity_day");
+    expect(workerCalls).toEqual([]);
+    expect(piecesMock).not.toHaveBeenCalled();
+  });
+
+  it("une seule place de l'IA réservée par analyse, juste avant l'appel ; aucune recherche comptée", async () => {
+    env.VIDEO_PIECES_ENABLED = true;
+    const target = await buildApp();
+    expect((await analyze(target, PIECES)).statusCode).toBe(200);
+    expect(aiQuotaMock.mock.calls.map((call) => call[2])).toEqual([
+      { kind: "video", userId: ALICE, reserve: false },
+      { kind: "video", userId: ALICE, reserve: true },
+    ]);
+    expect(piecesMock).toHaveBeenCalledTimes(1);
+    // Le plafond des recherches est lu, jamais réservé : la recherche lancée ensuite comptera 1 crédit, comme aujourd'hui.
+    expect(rpcCalls.filter((fn) => fn !== "member_quotas_version")).toEqual(["serpapi_quota"]);
+    // Place refusée entre-temps : l'IA n'est pas appelée.
+    aiQuotaMock.mockResolvedValueOnce({ allowed: true }).mockResolvedValueOnce({ allowed: false, refusedBy: "global" });
+    const late = await analyze(target, PIECES);
+    expect(late.statusCode).toBe(429);
+    expect(piecesMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("aucune pièce : 422 « video_no_moment », mêmes code et message (l'app choisit son texte) ; IA en échec : 503", async () => {
+    env.VIDEO_PIECES_ENABLED = true;
+    const target = await buildApp();
+    piecesMock.mockResolvedValueOnce({ pieces: [], candidates: [], refusedLabels: 2, usage: { inputTokens: 880, outputTokens: 20 } });
+    const none = await analyze(target, PIECES);
+    expect(none.statusCode).toBe(422);
+    expect(none.json()).toEqual({
+      error: "video_no_moment",
+      message: "La pièce décrite n'a pas été repérée dans cette vidéo. Précisez votre description, ou faites une capture de la vidéo.",
+    });
+    piecesMock.mockRejectedValueOnce(new VideoAiError("refused"));
+    const failed = await analyze(target, PIECES);
+    expect(failed.statusCode).toBe(503);
+    expect(failed.json().error).toBe("video_unavailable");
+  });
+
+  it("journal : des compteurs seulement, avec le mode et les noms refusés comptés ; jamais un nom proposé", async () => {
+    env.VIDEO_PIECES_ENABLED = true;
+    const target = await buildApp();
+    expect((await analyze(target, PIECES)).statusCode).toBe(200);
+    piecesMock.mockResolvedValueOnce({ pieces: [], candidates: [], refusedLabels: 3, usage: { inputTokens: 880, outputTokens: 20 } });
+    await analyze(target, PIECES);
+    piecesMock.mockRejectedValueOnce(new VideoAiError("invalid_output"));
+    await analyze(target, PIECES);
+
+    const text = logs.join("\n");
+    for (const secretText of [...LABELS, "Le sac noir", "manteau", "baskets", ID, "scout2015", "tiktok.com", "data:image"]) expect(text, secretText).not.toContain(secretText);
+    const lines = logs.map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(lines.find((line) => line.msg === "Analyse d'un lien vidéo")).toMatchObject({
+      platform: "tiktok",
+      mode: "pieces",
+      frames: 3,
+      candidates: 3,
+      moments: 2,
+      refusedLabels: 1,
+      inputTokens: 880,
+      outputTokens: 75,
+    });
+    expect(lines.find((line) => line.msg === "Analyse d'un lien vidéo : aucun moment")).toMatchObject({ mode: "pieces", moments: 0, refusedLabels: 3 });
+    expect(lines.find((line) => line.msg === "Analyse d'un lien vidéo : IA sans résultat")).toMatchObject({ mode: "pieces", kind: "invalid_output" });
+  });
+
+  it("avec des mots, rien ne change même interrupteur allumé : réponse sans noms, journal sans mode, l'IA des mots appelée", async () => {
+    env.VIDEO_PIECES_ENABLED = true;
+    const target = await buildApp();
+    const res = await analyze(target, { url: SHARED_TEXT, query: QUERY });
+    expect(res.statusCode).toBe(200);
+    expect(Object.keys(res.json()).sort()).toEqual(["moments", "video"]);
+    expect(askMock).toHaveBeenCalledTimes(1);
+    expect(piecesMock).not.toHaveBeenCalled();
+    const done = logs.map((line) => JSON.parse(line) as Record<string, unknown>).find((line) => line.msg === "Analyse d'un lien vidéo");
+    expect(done).not.toHaveProperty("mode");
+    expect(done).not.toHaveProperty("refusedLabels");
   });
 });

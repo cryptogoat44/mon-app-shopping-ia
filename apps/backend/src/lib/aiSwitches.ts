@@ -16,6 +16,11 @@
 // de l'image) devra vérifier cet interrupteur ET, côté serveur, avant de
 // traiter l'image, un consentement à jour d'une nouvelle version validée par
 // la juriste — version qui n'est PAS ajoutée à ACCEPTED_CONSENT_VERSIONS ici.
+// Lot « propositions » (Parcours 2, 21 novembre 2026) : VIDEO_PIECES_ENABLED
+// est lu ici aussi, même règle (coupé sauf "true" exact, réglé à la main dans
+// Render). Il ne change rien à ce qui précède : les propositions viennent du
+// même appel que l'analyse d'un lien (images d'une vidéo publique, même
+// consentement), qu'ANTHROPIC_PHOTO_ENABLED ne couvre toujours pas.
 import { env } from "../env.js";
 
 /** Toute la voie C : complément « boutiques » au lancement et route « Que cherchez-vous ? ». */
@@ -31,6 +36,13 @@ export function voieCAiEnabled(): boolean {
 /** Envoi d'une photo d'un utilisateur à Anthropic : coupé par défaut. */
 export function userPhotoToAnthropicAllowed(): boolean {
   return env.ANTHROPIC_PHOTO_ENABLED;
+}
+
+/** « Voir les propositions de l'IA » (mode « pièces » de l'analyse d'un lien) :
+ * coupé par défaut. Ne sert qu'avec l'analyse des liens prête
+ * (routes/videoLinkAnalysis.ts vérifie les deux). */
+export function videoPiecesEnabled(): boolean {
+  return env.VIDEO_PIECES_ENABLED;
 }
 
 /** Bloc image refusé : le message ne contient jamais de contenu. */

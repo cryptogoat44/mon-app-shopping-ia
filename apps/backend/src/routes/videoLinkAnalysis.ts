@@ -26,6 +26,14 @@
 // limites de l'IA lues sans réserver, puis plafond des recherches, comme
 // POST /api/video-moments ; capacité du service vidéo ; images demandées
 // avec l'adresse canonique ; place de l'IA réservée juste avant l'appel.
+//
+// Lot « propositions » (Parcours 2, décision du fondateur du 21 novembre
+// 2026) : avec l'interrupteur VIDEO_PIECES_ENABLED, l'app peut demander le
+// mode « pièces » ({ url, mode: "pieces" }, sans aucun texte) au geste « Voir
+// les propositions de l'IA ». Mêmes conditions, même ordre, mêmes plafonds :
+// seul l'appel à l'IA change (askVideoPieces, dans la langue de l'app), et la
+// réponse porte en plus le nom de chaque pièce (labels), jamais gardé ni
+// journalisé. Toujours une seule analyse comptée par demande.
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
@@ -43,9 +51,11 @@ import {
 } from "@monapp/shared-types";
 import { env } from "../env.js";
 import { aiQuotaFor, type AiQuotaDecision } from "../lib/aiQuota.js";
+import { videoPiecesEnabled } from "../lib/aiSwitches.js";
 import { noteFailure } from "../lib/alerts.js";
 import { ConsentLookupError, hasCurrentConsent } from "../lib/consents.js";
 import { ImageQueueFullError } from "../lib/imageSafety.js";
+import { requestLocale } from "../lib/locale.js";
 import { GENERIC_SERVER_ERROR } from "../lib/messages.js";
 import { optimizePhotoWithSize } from "../lib/photos.js";
 import { searchCapacityForVideoAi, sendCapacityReached } from "../lib/searchCapacity.js";
@@ -66,7 +76,7 @@ import {
   type WorkerFrame,
 } from "../lib/videoWorker.js";
 import { consumeRateLimit } from "../plugins/rateLimit.js";
-import { askVideoMoments, VIDEO_AI_SETTINGS, VideoAiError, type FrameForAi } from "../services/videoMoments.js";
+import { askVideoMoments, askVideoPieces, VIDEO_AI_SETTINGS, VideoAiError, type FrameForAi } from "../services/videoMoments.js";
 import { videoAiApiKey } from "./videoMoments.js";
 
 /** Grand côté de l'image d'un moment renvoyée à l'app (contrat partagé). */
@@ -201,6 +211,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** Ce que le membre demande : la pièce qu'il décrit (ses mots, comme
+ * toujours), ou les pièces que l'IA voit (lot « propositions »). */
+type Asked = { mode: "words"; query: string } | { mode: "pieces" };
+
+const hasKey = (body: Record<string, unknown>, key: string) => Object.prototype.hasOwnProperty.call(body, key);
+
+/** Le corps relu : sans `mode`, les mots restent obligatoires ; `mode:
+ * "pieces"` exige l'interrupteur allumé et aucun `query`, pas même vide (rien
+ * de tapé ne part dans ce mode). Tout autre cas : null (400 « invalid_query »,
+ * l'app ramène au champ). */
+function readAsked(body: Record<string, unknown>): Asked | null {
+  if (!hasKey(body, "mode")) {
+    const query = querySchema.safeParse(body.query);
+    return query.success ? { mode: "words", query: query.data } : null;
+  }
+  return body.mode === "pieces" && videoPiecesEnabled() && !hasKey(body, "query") ? { mode: "pieces" } : null;
+}
+
 /** Une image du service vidéo, réduite pour l'IA (512 px, sans métadonnées),
  * dans la file des traitements d'images (un à la fois dans le serveur). */
 async function frameForAi(frame: WorkerFrame): Promise<FrameForAi> {
@@ -244,6 +272,8 @@ export interface VideoLinkAnalysisOptions {
   workerTimeoutMs?: number;
   /** Étage 2 (tests : un faux, aucun appel à Anthropic) ; sinon askVideoMoments. */
   askMoments?: typeof askVideoMoments;
+  /** Mode « pièces » (tests : un faux, aucun appel à Anthropic) ; sinon askVideoPieces. */
+  askPieces?: typeof askVideoPieces;
 }
 
 export default async function videoLinkAnalysisRoutes(fastify: FastifyInstance, options: VideoLinkAnalysisOptions) {
@@ -252,6 +282,7 @@ export default async function videoLinkAnalysisRoutes(fastify: FastifyInstance, 
   const configState = options.workerConfig ?? readVideoWorkerConfig(env);
   logVideoWorkerConfigState(configState, videoAiApiKey() !== null, fastify.log);
   const askMoments = options.askMoments ?? askVideoMoments;
+  const askPieces = options.askPieces ?? askVideoPieces;
   let running = 0;
 
   /** Le service vidéo et la clé d'Anthropic si l'analyse est possible, sinon null. */
@@ -271,10 +302,12 @@ export default async function videoLinkAnalysisRoutes(fastify: FastifyInstance, 
   }
 
   // L'app demande d'abord si l'analyse d'un lien est possible, pour ne pas la
-  // proposer (ni demander de consentement) quand elle ne l'est pas.
+  // proposer (ni demander de consentement) quand elle ne l'est pas ; `pieces`
+  // (lot « propositions ») seulement si l'interrupteur est allumé aussi.
   fastify.get("/api/video-links/analyze/status", { preHandler: fastify.requireAuth }, async (_request, reply) => {
     reply.header("Cache-Control", "no-store");
-    const status: VideoLinkAnalysisStatus = { enabled: ready() !== null };
+    const enabled = ready() !== null;
+    const status: VideoLinkAnalysisStatus = enabled && videoPiecesEnabled() ? { enabled, pieces: true } : { enabled };
     return reply.send(status);
   });
 
@@ -303,8 +336,10 @@ export default async function videoLinkAnalysisRoutes(fastify: FastifyInstance, 
       }
 
       const body = isRecord(request.body) ? request.body : {};
-      const query = querySchema.safeParse(body.query);
-      if (!query.success) return reply.code(400).send(INVALID_QUERY);
+      // Les mots, ou le mode « pièces » (interrupteur allumé, aucun texte) :
+      // sinon 400, avant tout appel au service vidéo, à l'IA ou au compteur.
+      const asked = readAsked(body);
+      if (!asked) return reply.code(400).send(INVALID_QUERY);
       const input = urlField.safeParse(body.url);
       // Reconnu dans l'adresse elle-même, sans aucun appel : vidéo TikTok ou
       // Instagram, ou lien court TikTok. Un profil, un autre site : refusé.
@@ -353,7 +388,43 @@ export default async function videoLinkAnalysisRoutes(fastify: FastifyInstance, 
         const reserved = await aiQuotaFor(fastify, log, { kind: "video", userId, reserve: true }).catch(() => null);
         if (!reserved) return reply.code(503).send(UNAVAILABLE);
         if (!reserved.allowed) return sendAiLimitReached(reply, reserved);
-        const result = await askMoments(aiFrames, query.data, { apiKey: service.apiKey, ...VIDEO_AI_SETTINGS });
+        if (asked.mode === "pieces") {
+          const found = await askPieces(aiFrames, requestLocale(request), { apiKey: service.apiKey, ...VIDEO_AI_SETTINGS });
+          // Compteurs seulement : jamais un nom proposé, l'adresse, les images ni la réponse du modèle.
+          const counters = {
+            platform: link.platform,
+            mode: "pieces",
+            frames: aiFrames.length,
+            candidates: found.candidates.length,
+            moments: found.pieces.length,
+            refusedLabels: found.refusedLabels,
+            inputTokens: found.usage.inputTokens,
+            outputTokens: found.usage.outputTokens,
+            workerMs,
+          };
+          if (found.pieces.length === 0) {
+            log.info(counters, "Analyse d'un lien vidéo : aucun moment");
+            return reply.code(422).send(NO_MOMENT);
+          }
+          // Une image par pièce, le nom en face ; une image partagée par deux
+          // pièces n'est réencodée qu'une fois.
+          const images = new Map<number, string>();
+          const moments: VideoLinkMoment[] = [];
+          const labels: string[] = [];
+          for (const piece of found.pieces) {
+            const frame = workerFrames[piece.frame];
+            if (!frame) continue;
+            const image = images.get(piece.frame) ?? (await momentImage(frame));
+            images.set(piece.frame, image);
+            moments.push({ timeSeconds: frame.timeSeconds, image, box: piece.box });
+            labels.push(piece.label);
+          }
+          if (moments.length === 0) return reply.code(422).send(NO_MOMENT);
+          log.info({ ...counters, totalMs: Date.now() - startedAt }, "Analyse d'un lien vidéo");
+          const response: VideoLinkAnalysisResponse = { video: link, moments, labels };
+          return reply.send(response);
+        }
+        const result = await askMoments(aiFrames, asked.query, { apiKey: service.apiKey, ...VIDEO_AI_SETTINGS });
         // Compteurs seulement : jamais l'adresse, le texte, les images ni la réponse du modèle.
         const counters = {
           platform: link.platform,
@@ -388,7 +459,8 @@ export default async function videoLinkAnalysisRoutes(fastify: FastifyInstance, 
           return reply.code(failure.status).send(failure.body);
         }
         if (error instanceof VideoAiError) {
-          log.warn({ platform: link.platform, frames: aiFrames.length, kind: error.kind, status: error.status }, "Analyse d'un lien vidéo : IA sans résultat");
+          const mode = asked.mode === "pieces" ? { mode: "pieces" } : {};
+          log.warn({ platform: link.platform, ...mode, frames: aiFrames.length, kind: error.kind, status: error.status }, "Analyse d'un lien vidéo : IA sans résultat");
           noteFailure(log, "ia_video");
           return reply.code(503).send(UNAVAILABLE);
         }

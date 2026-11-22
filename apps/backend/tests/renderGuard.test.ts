@@ -70,3 +70,17 @@ describe("garde-fou de l'accès à l'API de Render", () => {
     expect(source).toMatch(/\/env-vars\/\$\{variable\.key\}/);
   });
 });
+
+// Lot « propositions » (Parcours 2) : l'interrupteur des propositions de l'IA
+// se règle à la main dans Render, jamais par ces outils.
+describe("garde-fou de Render : VIDEO_PIECES_ENABLED", () => {
+  it("refusé : aucun outil ne peut l'allumer ni le couper, sur aucun service", () => {
+    for (const service of ["spotto-api", "site"] as const) {
+      for (const value of ["true", "false"]) expect(() => assertEditableVariable(service, "VIDEO_PIECES_ENABLED", value), `${service} ${value}`).toThrow(/refusée/);
+    }
+  });
+
+  it("permis : les variables déjà autorisées le restent (SENTRY_ENVIRONMENT sur spotto-api)", () => {
+    expect(assertEditableVariable("spotto-api", "SENTRY_ENVIRONMENT", "production")).toEqual({ key: "SENTRY_ENVIRONMENT", value: "production", mustExist: false });
+  });
+});
