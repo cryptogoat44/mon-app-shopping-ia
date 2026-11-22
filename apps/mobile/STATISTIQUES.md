@@ -160,6 +160,27 @@ vous verrez dans PostHog.
   seulement »). Nouveau aussi : `in_stock_only` = « En stock seulement »
   allumé ou non (absent dans les versions d'avant). Ce filtre n'est proposé
   que si une offre de l'écran dit son stock : il est donc rare au début.
+- **`verdict_shown`** (nouveau) : la phrase de tête de l'écran Résultat
+  (le verdict) est montrée. `level` = `identified` (« Pièce identifiée,
+  d'après les titres des boutiques »), `close` (« Pièce probablement
+  trouvée ») ou `lookalikes` (« Pas de pièce exacte trouvée »). Une fois par
+  résultat affiché, et de nouveau si le niveau change quand les boutiques
+  arrivent quelques secondes plus tard. Absent quand le serveur ne sait pas
+  (migration 0055 pas encore appliquée, boutiques en échec) : il sera donc
+  rare tant que 0055 n'est pas en production. Jamais la pièce, la marque,
+  une boutique, un prix ni le nombre de boutiques.
+  **Comment le lire.** Clics vers une boutique selon le niveau : dans
+  PostHog, un entonnoir `verdict_shown` → `merchant_link_opened` (avec
+  `context` = `result`), découpé par `level` (« Breakdown » sur `level` de la
+  première étape) : la part des personnes qui ouvrent une boutique après
+  chaque niveau. On attend plus de clics après `identified` qu'après
+  `lookalikes`. Signalements « Ce n'est pas la bonne pièce » : ils ne
+  passent pas par PostHog (ils sont dans la base, table `match_feedback`,
+  raison `wrong_item`). Pour les lire selon le niveau, comptez-les sur les
+  offres des boutiques dont le titre nommait la marque et le modèle
+  (`product_matches.title_tier` = 0) et sur les autres : beaucoup de
+  signalements sur les premières voudraient dire que « Pièce identifiée »
+  se trompe, et qu'il faut durcir la règle avant tout le reste.
 
 ### 5. La boutique
 

@@ -664,6 +664,19 @@ export const en: Catalog = {
     inStockOnlyHint: "Hides offers Google listed as sold out at the time of the search. Offers with unknown stock stay.",
     filtersEmpty: "No suggestions match these filters for now.",
     showAllWithoutFilters: "Show all suggestions",
+    verdict: {
+      identified: (shops: number) => `Piece identified, based on the shops' listing titles: ${shops} shops.`,
+      identifiedWithPrices: (shops: number, low: string, high: string) =>
+        `Piece identified, based on the shops' listing titles: ${shops} shops, from ${low} to ${high} at the time of the search.`,
+      identifiedOnePrice: (shops: number, price: string) => `Piece identified, based on the shops' listing titles: ${shops} shops, all at ${price} at the time of the search.`,
+      close: "Piece probably found, based on the shops' listing titles: check the model before you buy.",
+      lookalikes: "No exact piece found: here are the closest ones.",
+      hint: `Explains how ${BRAND} decides.`,
+      sheetTitle: "Based on the shops' listing titles",
+      how: `${BRAND} reads the titles of the offers in “This piece at other shops”. “Piece identified”: at least two different well-known shops or official brand stores name the same brand and the same model there. “Piece probably found”: the brand matches, but not the model, or in too few well-known shops. Otherwise, the suggestions are only pieces that look alike.`,
+      limits: `${BRAND} checks neither whether a piece is an original nor its condition, and this sentence does not change the order of the suggestions. Prices are those shown by the shops at the time of the search. Always check before you buy.`,
+      closeButton: "Got it",
+    },
   },
   wishlistItem: {
     back: "Wishlist",

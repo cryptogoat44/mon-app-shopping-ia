@@ -2,6 +2,7 @@ import { OFFER_MARKS, SEARCH_FAILURE_MESSAGES, TEXT_SEARCH_ERRORS, type OfferMar
 import type { Piece, SpotComplement, SpotResult } from "@/api/types";
 import { ApiError } from "./api-error";
 import { capacityFailure, type CapacityFailReason } from "./spot-capacity";
+import { parseVerdict } from "./verdict";
 
 export function matchToPiece(match: ProductMatch): Piece {
   return {
@@ -97,6 +98,8 @@ export function toSpotResult(search: ProductSearch): SpotResult {
             : "no_match";
     return { searchId: search.id, query: search.query, sourceUrl: search.sourceUrl, status: "failed", pieces: [], similarPieces: [], failReason, ...withComplement };
   }
+  // Le verdict (lot « verdict ») : seulement sous une forme connue (lib/verdict.ts).
+  const verdict = parseVerdict(search.verdict);
   return {
     searchId: search.id,
     query: search.query,
@@ -106,6 +109,7 @@ export function toSpotResult(search: ProductSearch): SpotResult {
     similarPieces: [],
     sortedByWords: search.sortedByWords === true,
     ...withComplement,
+    ...(verdict ? { verdict } : {}),
   };
 }
 
