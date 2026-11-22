@@ -115,24 +115,28 @@ describe("STATISTIQUES.md : les recettes de lecture", () => {
     expect(cards).not.toMatch(/<MerchantLinkButton [^>]*mark=/);
   });
 
-  describe("serveur endormi : la série B, à partir de 10 secondes", () => {
+  describe("serveur endormi : la série B, à partir de 9 secondes", () => {
     const sleeping = flat(part("Le serveur endormi : `server_first_response`"));
     /** wait_ms tel que PostHog le reçoit (arrondi à 100 ms) : la série B le compte-t-elle ? */
-    const inSeriesB = (ms: number) => (sanitizeProps("server_first_response", { wait_ms: ms }).wait_ms as number) > 9_900;
+    const inSeriesB = (ms: number) => (sanitizeProps("server_first_response", { wait_ms: ms }).wait_ms as number) > 8_900;
 
-    it("refusé : pas de « greater than 10000 », qui laisse de côté 10000 tout rond ; une attente sous 10 s n'entre pas", () => {
+    it("refusé : ni « greater than 10000 » ni « 9900 », qui laissent de côté une relecture abandonnée mesurée un peu sous 10 s ; une attente sous 9 s n'entre pas", () => {
       expect(sleeping).not.toContain("**greater than** `10000`");
-      expect(sleeping).not.toContain("Au-dessus de **10 secondes**");
-      expect(inSeriesB(9_849)).toBe(false);
+      expect(sleeping).not.toContain("**greater than** `9900`");
+      expect(sleeping).not.toContain("À partir de **10 secondes**");
+      expect(inSeriesB(8_849)).toBe(false);
     });
 
-    it("permis : la relecture d'une recherche que l'app abandonne au bout de 10 s (10000 une fois arrondie) entre, et elle est nommée avec ok = non", () => {
-      expect(sleeping).toContain("À partir de **10 secondes**");
-      expect(sleeping).toContain("Série B : `server_first_response` avec le filtre `wait_ms` **greater than** `9900` (c'est-à-dire 10 secondes ou plus");
-      // Mesurée après la lecture de la session (quelques ms), minuterie un peu en retard : toujours 10000.
+    it("permis : la relecture d'une recherche que l'app abandonne au bout de 10 s entre, même après un renouvellement de la connexion, et elle est nommée avec ok = non", () => {
+      expect(sleeping).toContain("À partir de **9 secondes**");
+      expect(sleeping).toContain("Série B : `server_first_response` avec le filtre `wait_ms` **greater than** `8900` (c'est-à-dire 9 secondes ou plus");
+      // Mesurée après la lecture de la session : 10000 moins le temps de cette lecture.
       expect(inSeriesB(READ_TIMEOUT_MS - 4 + 16)).toBe(true);
       expect(inSeriesB(READ_TIMEOUT_MS)).toBe(true);
-      expect(sleeping).toContain("10 secondes pour relire une recherche au retour dans l'app, avec `wait_ms` autour de `10000`");
+      // Valeur produite par tests/mesure-parcours-serveur.test.ts (connexion renouvelée d'abord, 400 ms).
+      expect(inSeriesB(9_600)).toBe(true);
+      expect(inSeriesB(READ_TIMEOUT_MS - 1_000)).toBe(true);
+      expect(sleeping).toContain("10 secondes pour relire une recherche au retour dans l'app, avec `wait_ms` autour de `10000`, ou un peu moins quand l'app a d'abord renouvelé la connexion du membre");
       expect(flat(guide)).toContain("(par exemple au bout de 15 secondes pour le profil, ou de 10 secondes pour relire une recherche au retour dans l'app)");
     });
   });
