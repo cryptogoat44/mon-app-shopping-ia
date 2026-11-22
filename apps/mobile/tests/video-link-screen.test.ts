@@ -243,7 +243,7 @@ describe("rien n'est écrit sur l'appareil ni dans le navigateur", () => {
 describe("statistiques : jamais le lien, les mots ni les images", () => {
   it("seuls des choix et des nombres ; tout le reste est retiré", () => {
     for (const event of ["video_link_ai_started", "video_link_ai_result", "video_link_ai_moment_chosen"] as const) {
-      for (const rule of Object.values(ANALYTICS_EVENTS[event]) as { kind: string }[]) expect(["enum", "count"]).toContain(rule.kind);
+      for (const rule of Object.values(ANALYTICS_EVENTS[event]) as { kind: string }[]) expect(["enum", "count", "duration"]).toContain(rule.kind);
     }
     expect(sanitizeProps("video_link_ai_result", { platform: "tiktok", outcome: "failed", reason: "private", moments_count: 0, url: TIKTOK, query: "veste" })).toEqual({
       platform: "tiktok",

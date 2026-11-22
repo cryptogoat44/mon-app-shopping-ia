@@ -39,6 +39,7 @@ vi.mock("../src/lib/video-frames", () => ({ discardLocalFile }));
 vi.mock("../src/lib/image-import", () => ({ SPOTTER_IMAGE_MAX_EDGE: 1600 }));
 
 import { ApiError } from "../src/lib/api-error";
+import { wasTimedOut } from "../src/lib/app-timeout";
 import { clearDraft, getDraft, leaveLaunchScreen } from "../src/lib/spot-draft";
 import { launchPhoto, photoCrop } from "../src/lib/spot-launch";
 import { beginFromPhoto } from "../src/lib/spot-flow";
@@ -82,8 +83,9 @@ describe("la demande d'analyse", () => {
     const outcome = await runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", new AbortController().signal);
     expect(outcome).toEqual({ kind: "found", analysis: analysis() });
     expect(analyzeVideoLink).toHaveBeenCalledWith({ url: TIKTOK, query: QUERY }, expect.any(AbortSignal));
-    expect(track).toHaveBeenCalledWith("video_link_ai_started", { platform: "tiktok" });
-    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "found", moments_count: 2 });
+    // Mesure du parcours : la plateforme aussi en link_platform (« platform » devient l'appareil chez PostHog).
+    expect(track).toHaveBeenCalledWith("video_link_ai_started", { platform: "tiktok", link_platform: "tiktok" });
+    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "found", moments_count: 2, wait_ms: expect.any(Number), link_platform: "tiktok" });
     expect(tracked()).not.toContain("tiktok.com");
     expect(tracked()).not.toContain("veste");
   });
@@ -92,7 +94,7 @@ describe("la demande d'analyse", () => {
     analyzeVideoLink.mockResolvedValue({ ...analysis(), moments: [] });
     const outcome = await runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", new AbortController().signal);
     expect(outcome).toEqual({ kind: "failed", info: { failure: "no_moment", capacity: null } });
-    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "not_found", reason: "no_moment", moments_count: 0 });
+    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "not_found", reason: "no_moment", moments_count: 0, wait_ms: expect.any(Number), link_platform: "tiktok" });
   });
 
   it("vidéo privée, service vidéo occupé, accord manquant : l'échec du serveur est traduit", async () => {
@@ -102,33 +104,42 @@ describe("la demande d'analyse", () => {
     expect(await runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", new AbortController().signal)).toMatchObject({ info: { failure: "busy" } });
     analyzeVideoLink.mockRejectedValueOnce(new ApiError(403, { error: "video_ai_consent_required", message: "x" }));
     expect(await runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", new AbortController().signal)).toMatchObject({ info: { failure: "consent" } });
-    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "instagram", outcome: "failed", reason: "private", moments_count: 0 });
+    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "instagram", outcome: "failed", reason: "private", moments_count: 0, wait_ms: expect.any(Number), link_platform: "instagram" });
   });
 
   it("« Annuler » : la demande est abandonnée, rien n'est affiché ensuite", async () => {
-    analyzeVideoLink.mockImplementation((_request, signal: AbortSignal) => new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(new Error("aborted")))));
+    let sentSignal: AbortSignal | null = null;
+    analyzeVideoLink.mockImplementation((_request, signal: AbortSignal) => {
+      sentSignal = signal;
+      return new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(new Error("aborted"))));
+    });
     const controller = new AbortController();
     const pending = runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", controller.signal);
     controller.abort();
     expect(await pending).toEqual({ kind: "cancelled" });
-    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "cancelled", moments_count: 0 });
+    expect(track).toHaveBeenCalledWith("video_link_ai_result", { platform: "tiktok", outcome: "cancelled", moments_count: 0, wait_ms: expect.any(Number), link_platform: "tiktok" });
+    // Abandon par la personne : pas un délai de l'app (server_first_response n'en compte rien).
+    expect(wasTimedOut(sentSignal!)).toBe(false);
     expect(await runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", controller.signal)).toEqual({ kind: "cancelled" });
   });
 
   it("serveur muet au-delà du délai de l'app : l'attente s'arrête sur « délai dépassé »", async () => {
     let aborted = false;
-    analyzeVideoLink.mockImplementation(
-      (_request, signal: AbortSignal) =>
-        new Promise((_resolve, reject) =>
-          signal.addEventListener("abort", () => {
-            aborted = true;
-            reject(new Error("aborted"));
-          })
-        )
-    );
+    let sentSignal: AbortSignal | null = null;
+    analyzeVideoLink.mockImplementation((_request, signal: AbortSignal) => {
+      sentSignal = signal;
+      return new Promise((_resolve, reject) =>
+        signal.addEventListener("abort", () => {
+          aborted = true;
+          reject(new Error("aborted"));
+        })
+      );
+    });
     const outcome = await runLinkAnalysis({ url: TIKTOK, query: QUERY }, "tiktok", new AbortController().signal, 20);
     expect(aborted).toBe(true);
     expect(outcome).toEqual({ kind: "failed", info: { failure: "timeout", capacity: null } });
+    // Délai de l'app : la requête est un échec pour server_first_response, pas une annulation.
+    expect(wasTimedOut(sentSignal!)).toBe(true);
   });
 });
 
@@ -161,7 +172,7 @@ describe("« Choisir ce moment » : comme un moment d'une vidéo du téléphone"
     expect(draft.video).toEqual({ url: TIKTOK, platform: "tiktok", creatorHandle: "lea.style", source: "web", momentSeconds: 12 });
     // Rien à effacer de l'appareil : l'image n'y a jamais été écrite.
     expect(draft.discardImageAfterSearch).toBe(false);
-    expect(track).toHaveBeenCalledWith("video_link_ai_moment_chosen", { platform: "tiktok", rank: 2, moments_count: 2 });
+    expect(track).toHaveBeenCalledWith("video_link_ai_moment_chosen", { platform: "tiktok", rank: 2, moments_count: 2, link_platform: "tiktok" });
     expect(tracked()).not.toContain("data:");
   });
 

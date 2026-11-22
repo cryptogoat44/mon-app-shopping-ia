@@ -8,6 +8,7 @@ import * as ImagePicker from "expo-image-picker";
 import { t } from "../i18n";
 import { track } from "./analytics";
 import { SPOTTER_IMAGE_MAX_EDGE } from "./image-import";
+import type { JourneyEntry } from "./journey-entries";
 import { beginFromPhoto } from "./spot-flow";
 import type { SpotDraft } from "./spot-draft";
 import { discardLocalFile, openVideo } from "./video-frames";
@@ -73,7 +74,8 @@ function rejected(reason: VideoRejection, durationMs: number | null, sizeBytes: 
 
 /** Contrôle des limites (60 s, 100 Mo) et ouverture de la vidéo, qui devient
  * celle du Spotter. La copie faite par le sélecteur est effacée dès qu'elle
- * ne sert plus ; la vidéo de la galerie, elle, n'est jamais touchée. */
+ * ne sert plus ; la vidéo de la galerie, elle, n'est jamais touchée. Mesure
+ * du parcours : une vidéo acceptée ouvre un parcours (refusée : video_rejected seul). */
 export async function adoptSpotVideo(uri: string, sizeBytes: number | null, source: VideoSource): Promise<VideoImport> {
   const keepFile = source === "latest";
   const discard = () => {
@@ -98,6 +100,8 @@ export async function adoptSpotVideo(uri: string, sizeBytes: number | null, sour
   releaseSpotVideo();
   current = video;
   currentSource = source;
+  const entry: JourneyEntry = `video_${source}`;
+  track("journey_started", { entry, link_platform: "none" });
   track("video_imported", { duration_s: durationSeconds(video.durationMs), source });
   return { kind: "ready" };
 }

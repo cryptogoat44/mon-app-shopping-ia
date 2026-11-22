@@ -44,6 +44,7 @@ import { fetchInstagramEmbed, fetchVideoLinkAnalysisStatus, lookupVideoLink } fr
 import { features } from "@/lib/features";
 import { importPhotoForSpotter, type ImportResult } from "@/lib/image-import";
 import { useImageDrop } from "@/lib/image-drop";
+import { photoPickerEntry, type PhotoJourneyEntry } from "@/lib/journey-entries";
 import { detectLink } from "@/lib/link-detection";
 import { grantPlayerConsent, readPlayerConsent } from "@/lib/player-access";
 import { decidePlayer, playerOffered, type FallbackReason } from "@/lib/player-decision";
@@ -169,7 +170,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
 
   function fallback(reason: FallbackReason) {
     if (!alive.current) return;
-    if (platform) track("player_unavailable", { platform, reason });
+    if (platform) track("player_unavailable", { platform, reason, link_platform: platform });
     setStage({ kind: "fallback", reason });
   }
 
@@ -336,7 +337,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
 
   function openVideo() {
     if (!openUrl || !platform) return;
-    track("player_fallback", { platform, choice: "open_app" });
+    track("player_fallback", { platform, choice: "open_app", link_platform: platform });
     void Linking.openURL(openUrl).catch(() => {});
   }
 
@@ -346,11 +347,12 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   }
 
   /** Photo prête (choisie, ou déposée sur le site) : « Entourez la pièce », associée au lien en attente.
-   * La description écrite pour l'analyse est reprise sous la photo (plan B en un geste). */
-  async function openPicked(picked: ImportResult) {
+   * La description écrite pour l'analyse est reprise sous la photo (plan B en un geste).
+   * `entry` : d'où vient la photo (mesure du parcours : un nouveau parcours, celui d'une photo). */
+  async function openPicked(picked: ImportResult, entry: PhotoJourneyEntry) {
     if (picked.kind === "unavailable") return setMessage(t.common.photoUnavailable);
     if (picked.kind !== "picked") return;
-    await beginPhotoSearch(picked, Platform.OS === "web" ? "web" : "app");
+    await beginPhotoSearch(picked, Platform.OS === "web" ? "web" : "app", { entry });
     keepDescriptionInDraft(queryRef.current);
     if (alive.current) router.push({ pathname: "/spot/lancer", params: { source: "photo" } });
   }
@@ -358,16 +360,16 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
   async function addScreenshot() {
     setMessage(null);
     setBusy("photo");
-    if (platform) track("player_fallback", { platform, choice: "screenshot" });
+    if (platform) track("player_fallback", { platform, choice: "screenshot", link_platform: platform });
     try {
-      await openPicked(await importPhotoForSpotter());
+      await openPicked(await importPhotoForSpotter(), photoPickerEntry(Platform.OS));
     } finally {
       if (alive.current) setBusy(null);
     }
   }
 
   useImageDrop(
-    useCallback((picked: ImportResult) => void openPicked(picked), []),
+    useCallback((picked: ImportResult) => void openPicked(picked, "photo_drop"), []),
     useCallback(() => setMessage(t.videoLink.notAnImage), [])
   );
 
@@ -390,7 +392,7 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
         return fallback("snapshot_failed");
       }
       if (!alive.current) return discardLocalFile(shot.uri);
-      track("player_spot", { platform });
+      track("player_spot", { platform, link_platform: platform });
       beginFromPhoto(
         shot.uri,
         { width: shot.width, height: shot.height },
@@ -416,14 +418,14 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
 
   async function acceptConsent() {
     if (!platform) return;
-    track("player_consent", { platform, choice: "play" });
+    track("player_consent", { platform, choice: "play", link_platform: platform });
     await grantPlayerConsent(platform);
     if (alive.current) void decide(lookup, true);
   }
 
   function refuseConsent() {
     if (!platform) return;
-    track("player_consent", { platform, choice: "refuse" });
+    track("player_consent", { platform, choice: "refuse", link_platform: platform });
     void decide(lookup, "refused");
   }
 
@@ -533,8 +535,8 @@ function SharedVideo({ url, platform: linkPlatform }: { url: string; platform: P
       );
     } else if (phase.kind === "failed") {
       // Plan B en un geste (lot « recherche confiance ») : une phrase calme et un seul bouton, la capture
-      // d'écran (lien gardé, description reprise) ; jamais d'impasse.
-      autoBody = <LinkFailureView info={phase.info} platformName={name || undefined} onRetry={auto.retry} onEditQuery={auto.editQuery} onCapture={showCapture} />;
+      // d'écran (lien gardé, description reprise) ; jamais d'impasse. `platform` : statistiques du plan B.
+      autoBody = <LinkFailureView info={phase.info} platformName={name || undefined} platform={platform} onRetry={auto.retry} onEditQuery={auto.editQuery} onCapture={showCapture} />;
     } else {
       autoBody = (
         <>

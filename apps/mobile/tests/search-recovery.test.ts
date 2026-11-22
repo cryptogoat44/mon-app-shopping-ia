@@ -18,12 +18,14 @@ vi.mock("../src/lib/error-tracking", () => ({ reportUnexpectedError }));
 
 import { getLastSpotResult } from "../src/api/spotSession";
 import { ApiError } from "../src/lib/api-error";
+import { wasTimedOut } from "../src/lib/app-timeout";
 import { failureCorrections } from "../src/lib/spot-corrections";
 import { getDraft, updateDraft } from "../src/lib/spot-draft";
 import { beginFromPhoto } from "../src/lib/spot-flow";
 import { checkSearch, identifyDraft } from "../src/lib/spot-identify";
 import {
   READ_ATTEMPTS,
+  READ_TIMEOUT_MS,
   RECHECK_INTERVAL_MS,
   RUNNING_LIMIT_MS,
   launchOutcomeUnknown,
@@ -321,6 +323,39 @@ describe("identification d'une photo coupée en route", () => {
     fetchSearch.mockResolvedValue(search("pending"));
     expect(await finish(checkSearch("recherche-1", new AbortController().signal))).toEqual({ kind: "unsettled", searchId: "recherche-1", state: "not_started" });
     expect(runSearch).not.toHaveBeenCalled();
+  });
+
+  /** Des relectures sans réponse, qui ne s'arrêtent qu'abandonnées ; leurs signaux. */
+  function hangingReads() {
+    const signals: AbortSignal[] = [];
+    fetchSearch.mockImplementation(
+      (_id: string, signal: AbortSignal) =>
+        new Promise((_resolve, reject) => {
+          signals.push(signal);
+          signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+        })
+    );
+    return signals;
+  }
+
+  it("relecture sans réponse au bout de 10 s : abandonnée par le délai de l'app, un échec pour la mesure du parcours", async () => {
+    const signals = hangingReads();
+    const pending = checkSearch("recherche-1", new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS);
+    expect(signals[0]!.aborted).toBe(true);
+    expect(wasTimedOut(signals[0]!)).toBe(true);
+    expect(await finish(pending)).toEqual({ kind: "unsettled", searchId: "recherche-1", state: "unreachable" });
+  });
+
+  it("relecture abandonnée par « Annuler » : pas un délai de l'app", async () => {
+    const signals = hangingReads();
+    const abort = new AbortController();
+    const pending = checkSearch("recherche-1", abort.signal);
+    await vi.advanceTimersByTimeAsync(0);
+    abort.abort();
+    await finish(pending);
+    expect(signals[0]!.aborted).toBe(true);
+    expect(wasTimedOut(signals[0]!)).toBe(false);
   });
 
   it("refus avant tout appel (part du jour atteinte) : montré tel quel, sans relecture", async () => {

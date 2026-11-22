@@ -14,6 +14,7 @@ import { color, font, size, space } from "@/theme/tokens";
 import { themedStyles } from "@/theme/themed-styles";
 import { getActiveLocale } from "@/i18n";
 import { tryonText } from "@/i18n/tryon.web";
+import { abortForTimeout } from "@/lib/app-timeout";
 import { useAuth } from "@/lib/auth-context";
 import { acceptTryonConsent, runTryon, submitBirthDate } from "@/lib/tryon-api.web";
 import {
@@ -200,7 +201,8 @@ export function TryonSheet({ itemId, title, onClose }: { itemId: string; title: 
     dispatch({ type: "run" });
     const controller = new AbortController();
     running.current = controller;
-    const timer = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
+    // Délai du site (lib/app-timeout.ts) : un échec pour les statistiques, pas une annulation.
+    const timer = setTimeout(() => abortForTimeout(controller), CLIENT_TIMEOUT_MS);
     try {
       const result = await runTryon({ itemId, photo: chosen.blob, attestSelf: true, signal: controller.signal });
       if (!mounted.current) return;

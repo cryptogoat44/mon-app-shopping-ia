@@ -8,15 +8,24 @@
 import { SEARCH_QUERY_MAX_LENGTH, type CropRect, type VideoLinkAnalysisRequest, type VideoPlatform, type VideoSpotSource } from "@monapp/shared-types";
 import { analyzeVideoLink } from "./api";
 import { track } from "./analytics";
+import { abortForTimeout } from "./app-timeout";
 import { momentSeconds } from "./player-state";
 import { beginFromPhoto } from "./spot-flow";
 import { updateDraft, type DraftVideoContext, type SpotDraft } from "./spot-draft";
-import { cleanQuery, LINK_ANALYSIS_TIMEOUT_MS, linkAiFailure, type LinkAnalysis, type LinkFailureInfo, type LinkMoment } from "./video-link-analysis";
+import { cleanQuery, LINK_ANALYSIS_TIMEOUT_MS, linkAiFailure, type LinkAiFailure, type LinkAnalysis, type LinkFailureInfo, type LinkMoment } from "./video-link-analysis";
+import { waitNow, waitSince } from "./wait-clock";
 
 export type LinkRunOutcome = { kind: "found"; analysis: LinkAnalysis } | { kind: "failed"; info: LinkFailureInfo } | { kind: "cancelled" };
 
-function failed(platform: VideoPlatform, info: LinkFailureInfo): LinkRunOutcome {
-  track("video_link_ai_result", { platform, outcome: info.failure === "no_moment" ? "not_found" : "failed", reason: info.failure, moments_count: 0 });
+/** video_link_ai_result : l'issue, l'attente depuis le départ (`startedAt`,
+ * waitNow) et la plateforme, aussi en link_platform — la seule des deux qui
+ * arrive chez PostHog (mesure du parcours, analytics-events.ts). */
+function trackResult(platform: VideoPlatform, startedAt: number, issue: { outcome: "found" | "not_found" | "failed" | "cancelled"; reason?: LinkAiFailure; moments_count: number }): void {
+  track("video_link_ai_result", { platform, ...issue, wait_ms: waitSince(startedAt), link_platform: platform });
+}
+
+function failed(platform: VideoPlatform, info: LinkFailureInfo, startedAt: number): LinkRunOutcome {
+  trackResult(platform, startedAt, { outcome: info.failure === "no_moment" ? "not_found" : "failed", reason: info.failure, moments_count: 0 });
   return { kind: "failed", info };
 }
 
@@ -33,23 +42,26 @@ export async function runLinkAnalysis(
   let timedOut = false;
   const timer = setTimeout(() => {
     timedOut = true;
-    controller.abort();
+    // Délai de l'app : un échec pour server_first_response, pas une annulation.
+    abortForTimeout(controller);
   }, timeoutMs);
   const stop = () => controller.abort();
   signal.addEventListener("abort", stop);
-  track("video_link_ai_started", { platform });
+  track("video_link_ai_started", { platform, link_platform: platform });
+  // Mesure du parcours : chaque issue dit l'attente depuis ce départ.
+  const startedAt = waitNow();
   try {
     const analysis = await analyzeVideoLink(request, controller.signal);
     if (signal.aborted) throw new Error("cancelled");
-    if (analysis.moments.length === 0) return failed(platform, { failure: "no_moment", capacity: null });
-    track("video_link_ai_result", { platform, outcome: "found", moments_count: analysis.moments.length });
+    if (analysis.moments.length === 0) return failed(platform, { failure: "no_moment", capacity: null }, startedAt);
+    trackResult(platform, startedAt, { outcome: "found", moments_count: analysis.moments.length });
     return { kind: "found", analysis };
   } catch (error) {
     if (signal.aborted && !timedOut) {
-      track("video_link_ai_result", { platform, outcome: "cancelled", moments_count: 0 });
+      trackResult(platform, startedAt, { outcome: "cancelled", moments_count: 0 });
       return { kind: "cancelled" };
     }
-    return failed(platform, linkAiFailure(error, timedOut));
+    return failed(platform, linkAiFailure(error, timedOut), startedAt);
   } finally {
     clearTimeout(timer);
     signal.removeEventListener("abort", stop);
@@ -105,6 +117,6 @@ export function startMomentSearch(
   const moment = analysis.moments[rank];
   if (!moment) return null;
   const started = beginFromPhoto(moment.image, moment.size, { video: momentVideoContext(analysis, moment, origin) });
-  track("video_link_ai_moment_chosen", { platform: analysis.video.platform, rank: rank + 1, moments_count: analysis.moments.length });
+  track("video_link_ai_moment_chosen", { platform: analysis.video.platform, rank: rank + 1, moments_count: analysis.moments.length, link_platform: analysis.video.platform });
   return updateDraft({ crop: zone ? { ...zone.crop } : moment.box, zoneByAi: zone ? zone.byAi : true, words: draftWords(words), textSearchIfNoPrice: true }) ?? started;
 }

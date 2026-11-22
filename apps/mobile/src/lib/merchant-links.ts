@@ -1,6 +1,6 @@
 import { Platform } from "react-native";
 import * as WebBrowser from "expo-web-browser";
-import type { MerchantLinkContext } from "@monapp/shared-types";
+import type { MerchantLinkContext, OfferMark } from "@monapp/shared-types";
 import { trackProductMatchClick } from "./api";
 import { track } from "./analytics";
 import type { ClickPlacement } from "./price-first";
@@ -39,6 +39,10 @@ export interface OpenMerchantLinkOptions {
    * clic enregistré par le serveur, lui, reste celui de la proposition
    * (matchId), donc de son rang d'origine. */
   placement?: ClickPlacement;
+  /** Écran Résultat seulement (mesure du parcours) : la mention de l'offre
+   * (« Boutique officielle de la marque »…, « none » sans mention), ajoutée
+   * aux statistiques d'usage du clic ; absente ailleurs (aucune offre). */
+  mark?: OfferMark | "none";
 }
 
 /** `blocked` est vrai si le navigateur a malgré tout bloqué l'ouverture (web
@@ -108,7 +112,7 @@ export async function openMerchantLink(options: OpenMerchantLinkOptions): Promis
   const debounceKey = options.matchId ?? options.url;
   if (isDebounced(debounceKey)) return NOT_BLOCKED;
   lastOpenedAt.set(debounceKey, Date.now());
-  track("merchant_link_opened", { context: options.context, ...options.placement });
+  track("merchant_link_opened", { context: options.context, ...options.placement, ...(options.mark ? { mark: options.mark } : {}) });
 
   if (Platform.OS === "web") return openMerchantLinkWeb(options);
 

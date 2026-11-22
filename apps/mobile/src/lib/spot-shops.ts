@@ -13,6 +13,7 @@
 // Logique pure, testée. Imports relatifs : fichier testé par vitest.
 import type { ProductSearch } from "@monapp/shared-types";
 import type { SpotResult } from "../api/types";
+import { abortForTimeout } from "./app-timeout";
 import { toSpotResult } from "./spot-result";
 
 /** Au-delà, l'app n'attend plus les boutiques : la ligne disparaît. Le
@@ -87,7 +88,8 @@ export function requestShops(searchId: string, fetchShops: (signal: AbortSignal)
   const known = requests.get(searchId);
   if (known) return known;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  // Délai de l'app (app-timeout.ts) : un échec, pas une annulation.
+  const timer = setTimeout(() => abortForTimeout(controller), timeoutMs);
   const request = Promise.resolve()
     .then(() => fetchShops(controller.signal))
     .then(shopsOutcomeOf, () => NONE)
