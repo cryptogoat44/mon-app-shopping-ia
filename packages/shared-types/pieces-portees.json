@@ -1,13 +1,15 @@
 {
-  "_lisezMoi": "Mots qui disent si une pièce se porte sur le corps (lot « garde-fou de l'essayage », 22 novembre 2026). Lus par le serveur (apps/backend/src/lib/tryon/wornPiece.ts) et par le site seulement (apps/mobile/src/lib/tryon-read.web.ts), jamais par l'app iPhone. Minuscules, sans accents ; un mot compte tel quel ou au pluriel (-s, -es, -x) ; une expression de plusieurs mots, mot à mot. Une pièce n'est refusée que si son nom contient un mot de « nonPortees » et aucun de « vetements » : dans le doute, elle passe.",
+  "_lisezMoi": "Mots qui disent si une pièce se porte sur le corps (lot « garde-fou de l'essayage », 22 novembre 2026). Lus par le serveur (apps/backend/src/lib/tryon/wornPiece.ts) et par le site seulement (apps/mobile/src/lib/tryon-read.web.ts), jamais par l'app iPhone. Minuscules, sans accents ; un mot compte tel quel ou au pluriel (-s, -es, -x) ; une expression de plusieurs mots, mot à mot. Une pièce n'est refusée que si son nom contient un mot de « nonPortees » et aucun de « vetements » : dans le doute, elle passe. « vetementsEnTete » : mots qui ne disent un vêtement qu'en PREMIER mot du nom (« Haut col bijou », « Body col bijou »), pas ailleurs (« Baskets hautes », « Cross body bag »). « nonPorteesToujours » : expressions toujours refusées, même avec un mot de vêtement (« Body chain dorée »).",
   "vetements": [
     "veste", "jacket", "blazer", "blouson", "bomber", "manteau", "coat", "doudoune", "puffer", "parka", "trench", "impermeable", "raincoat",
     "pull", "sweater", "jumper", "pullover", "gilet", "cardigan", "vest", "sweat", "sweatshirt", "hoodie",
     "chemise", "shirt", "tshirt", "tee", "top", "chemisier", "blouse", "debardeur", "tank", "polo", "tunique", "tunic",
     "robe", "dress", "gown", "jupe", "skirt", "pantalon", "trousers", "pants", "jeans", "chino", "short", "legging", "jogging", "jogger",
     "combinaison", "jumpsuit", "salopette", "overall", "costume", "tailleur", "suit", "kimono", "poncho", "pyjama", "survetement", "tracksuit", "bodysuit",
-    "jean", "haut", "body", "maillot", "jersey", "bermuda", "pantacourt", "pant", "trouser", "combishort", "caban", "cape", "saharienne", "bustier", "brassiere", "corset"
+    "jean", "maillot", "jersey", "bermuda", "pantacourt", "pant", "trouser", "combishort", "caban", "cape", "saharienne", "bustier", "brassiere", "corset"
   ],
+  "vetementsEnTete": ["haut", "body"],
+  "nonPorteesToujours": ["body chain", "chaine de corps", "chaine corporelle"],
   "nonPortees": [
     "chaussure", "shoe", "basket", "sneaker", "trainer", "botte", "bottine", "boot", "sandale", "sandal", "escarpin", "pump", "heel",
     "mocassin", "loafer", "espadrille", "mule", "ballerine", "slipper", "chausson", "tong", "sabot", "clog",

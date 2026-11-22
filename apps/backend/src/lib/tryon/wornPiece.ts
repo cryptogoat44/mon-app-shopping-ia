@@ -34,11 +34,23 @@ function mentions(name: readonly string[], expressions: readonly (readonly strin
 
 const GARMENTS = words.vetements.map(wordsOf);
 const NOT_WORN = words.nonPortees.map(wordsOf);
+// Mots de vêtement seulement en tête du nom (« Haut col bijou ») : ailleurs,
+// ce sont des adjectifs (« Baskets hautes », « Cross body bag »).
+const HEAD_GARMENTS = (words.vetementsEnTete ?? []).map(wordsOf);
+// Expressions toujours refusées, même avec un mot de vêtement (« Body chain »).
+const ALWAYS_NOT_WORN = (words.nonPorteesToujours ?? []).map(wordsOf);
+
+/** Le nom dit-il un vêtement : un mot de vêtement n'importe où, ou un mot
+ * « en tête » comme premier mot ? */
+function namesGarment(name: readonly string[]): boolean {
+  return mentions(name, GARMENTS) || (name.length > 0 && HEAD_GARMENTS.some((expression) => expression.length === 1 && sameWord(name[0]!, expression[0]!)));
+}
 
 /** Faux seulement quand le nom dit sûrement une pièce qui ne se porte pas
  * sur le corps (chaussure, sac, bijou, montre, lunettes, chapeau, ceinture,
  * accessoire, objet de maison) ; dans le doute, vrai. */
 export function isWornPiece(title: string | null | undefined): boolean {
   const name = wordsOf(title ?? "");
-  return !mentions(name, NOT_WORN) || mentions(name, GARMENTS);
+  if (mentions(name, ALWAYS_NOT_WORN)) return false;
+  return !mentions(name, NOT_WORN) || namesGarment(name);
 }

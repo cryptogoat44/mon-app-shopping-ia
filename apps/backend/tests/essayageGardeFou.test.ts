@@ -76,6 +76,15 @@ describe("vêtements, et pièces dans le doute : permis, comme avant", () => {
     for (const title of ["Ceinture tressée", "Bottes coupe boot", "Collier bijou", "Bracelet jonc"]) expect(isWornPiece(title), title).toBe(false);
   });
 
+  it("« haut » et « body » ne disent un vêtement qu'en premier mot ; « body chain » est toujours refusé", () => {
+    for (const title of ["Baskets hautes", "Bottes hautes en cuir", "Sandales à talons hauts", "Cross body bag", "Body chain dorée", "Chaîne de corps", "Sac haut de gamme"]) {
+      expect(isWornPiece(title), title).toBe(false);
+    }
+    for (const title of ["Haut col bijou", "Body col bijou", "Hauts à bretelles", "Jean taille haute", "Veste haut col"]) {
+      expect(isWornPiece(title), title).toBe(true);
+    }
+  });
+
   it("nom vide, absent ou sans mot reconnu : la pièce passe", () => {
     for (const title of ["", "   ", null, undefined, "Nouvelle collection", "Article 12345", "Zara"]) expect(isWornPiece(title), String(title)).toBe(true);
   });
@@ -87,7 +96,7 @@ describe("vêtements, et pièces dans le doute : permis, comme avant", () => {
 
 describe("la liste des mots", () => {
   it("minuscules, sans accents, sans doublon, aucun mot dans les deux listes", () => {
-    const all = [...words.vetements, ...words.nonPortees];
+    const all = [...words.vetements, ...words.vetementsEnTete, ...words.nonPortees, ...words.nonPorteesToujours];
     for (const word of all) expect(word, word).toMatch(/^[a-z0-9]+(?: [a-z0-9]+)*$/);
     expect(new Set(all).size).toBe(all.length);
   });

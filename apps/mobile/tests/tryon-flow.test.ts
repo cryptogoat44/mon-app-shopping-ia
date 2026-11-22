@@ -210,6 +210,18 @@ describe("garde-fou : pas de bouton « Essayer » pour une pièce qui ne se port
     }
   });
 
+  it("« haut » et « body » ne disent un vêtement qu'en premier mot ; « body chain » : refusé ; « Haut col bijou » : permis", () => {
+    for (const title of ["Baskets hautes", "Bottes hautes en cuir", "Cross body bag", "Body chain dorée", "Sac haut de gamme"]) {
+      expect(isWornPiece(title), title).toBe(false);
+      expect(tryonItemId({ ...piece, title }), title).toBeNull();
+      expect(entryItemId(ON, { ...piece, title }), title).toBeNull();
+    }
+    for (const title of ["Haut col bijou", "Body col bijou", "Jean taille haute"]) {
+      expect(isWornPiece(title), title).toBe(true);
+      expect(tryonItemId({ ...piece, title }), title).toBe(ITEM);
+    }
+  });
+
   it("refus du serveur (le site ne le savait pas) : une phrase claire, en français et en anglais ; l'étape reste, aucun essai à relire", () => {
     const refusal = server("tryon_item_not_wearable", "Message du serveur.");
     setActiveLocale("fr");
