@@ -404,22 +404,38 @@ export function priceDropPrices(
 }
 
 let priceDropsTracked = false;
+/** Le nombre de « Baisse de prix » vu pendant que la collecte était coupée
+ * (accord pas encore lu), à envoyer quand elle s'active ; 0 : rien. */
+let priceDropsPending = 0;
 
 /** « price_drop_shown » : la grille des Envies montre au moins une « Baisse
  * de prix ». Une fois au plus tant que l'app reste ouverte et que le même
  * compte est connecté (mémoire de l'app, rien sur l'appareil) ; `count` :
  * combien. Compté comme envoyé seulement si la collecte est active (accord
- * lu) : sans accord, rien ne part et l'événement reste à envoyer. */
+ * lu) : sans accord, rien ne part et le nombre est gardé en mémoire
+ * (sendPendingPriceDrops l'envoie dès que la collecte s'active). */
 export function trackPriceDropsShown(count: number): void {
+  if (count > 0 && !priceDropsTracked && !isAnalyticsActive()) priceDropsPending = count;
   if (count <= 0 || priceDropsTracked || !isAnalyticsActive()) return;
   priceDropsTracked = true;
+  priceDropsPending = 0;
   track("price_drop_shown", { count });
 }
 
+/** Accord lu (components/analytics-session.tsx, juste après avoir allumé la
+ * collecte) : la grille montrait déjà des « Baisse de prix » avant, et ne
+ * rappellera pas trackPriceDropsShown tant que leur nombre ne change pas.
+ * Rien sans collecte active, rien si l'événement est déjà parti. */
+export function sendPendingPriceDrops(): void {
+  if (priceDropsPending > 0) trackPriceDropsShown(priceDropsPending);
+}
+
 /** Déconnexion ou autre compte (components/analytics-session.tsx) : le
- * compte suivant peut envoyer le sien. */
+ * compte suivant peut envoyer le sien, et le nombre en attente du compte
+ * précédent n'est jamais envoyé sous un autre compte. */
 export function forgetPriceDropsShown(): void {
   priceDropsTracked = false;
+  priceDropsPending = 0;
 }
 
 /** Tests seulement : comme une app rouverte. */

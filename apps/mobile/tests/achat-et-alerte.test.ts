@@ -48,7 +48,7 @@ import {
   WEB_HIDE_WINDOW_MS,
   type ShopReturn,
 } from "../src/lib/purchase-question";
-import { ALERTS_UNAVAILABLE, forgetPriceDropsShown, priceDropNow, priceDropPrices, resetPriceDropsShownForTests, setWishAlertsStatus, trackPriceDropsShown } from "../src/lib/wish-alerts";
+import { ALERTS_UNAVAILABLE, forgetPriceDropsShown, priceDropNow, priceDropPrices, resetPriceDropsShownForTests, sendPendingPriceDrops, setWishAlertsStatus, trackPriceDropsShown } from "../src/lib/wish-alerts";
 
 const SRC = join(__dirname, "../src");
 const read = (path: string) => readFileSync(join(SRC, path), "utf8");
@@ -854,6 +854,43 @@ describe("21. Relecture : « price_drop_shown » une fois par ouverture et par c
     expect(body(code("lib/wish-alerts.ts"), "export function trackPriceDropsShown(", "export function forgetPriceDropsShown(")).toContain(
       "if (count <= 0 || priceDropsTracked || !isAnalyticsActive()) return;\n  priceDropsTracked = true;"
     );
+  });
+});
+
+describe("22. Relecture : « price_drop_shown » vu avant l'accord part quand la collecte s'active", () => {
+  beforeEach(() => resetPriceDropsShownForTests());
+
+  it("permis : la grille montre 2 baisses avant que l'accord soit lu, l'accord arrive → envoyé une fois, avec ce nombre", () => {
+    isAnalyticsActive.mockReturnValue(false);
+    trackPriceDropsShown(2);
+    expect(track).not.toHaveBeenCalled();
+    // components/analytics-session.tsx : la collecte s'allume, puis le nombre en attente part.
+    isAnalyticsActive.mockReturnValue(true);
+    sendPendingPriceDrops();
+    sendPendingPriceDrops();
+    trackPriceDropsShown(2);
+    expect(track.mock.calls).toEqual([["price_drop_shown", { count: 2 }]]);
+    const session = code("components/analytics-session.tsx");
+    // Juste après avoir allumé la collecte, dans la lecture de l'accord (commentaires retirés par code()).
+    const consentRead = body(session, "fetchConsentStatus()", ".catch(");
+    expect(consentRead.indexOf("sendPendingPriceDrops();")).toBeGreaterThan(consentRead.indexOf("setAnalyticsUser(userId, hasAnalyticsConsent(statuses));"));
+    expect(consentRead.indexOf("setAnalyticsUser(userId, hasAnalyticsConsent(statuses));")).toBeGreaterThan(-1);
+  });
+
+  it("refusé : accord refusé → rien ; autre compte avant l'accord → rien pour le nombre du compte précédent", () => {
+    isAnalyticsActive.mockReturnValue(false);
+    trackPriceDropsShown(3);
+    // Accord lu mais refusé : la collecte reste coupée.
+    sendPendingPriceDrops();
+    expect(track).not.toHaveBeenCalled();
+    // Déconnexion ou autre compte (nettoyage d'analytics-session), puis le compte suivant accepte.
+    forgetPriceDropsShown();
+    isAnalyticsActive.mockReturnValue(true);
+    sendPendingPriceDrops();
+    expect(track).not.toHaveBeenCalled();
+    // Le compte suivant envoie le sien quand sa grille en montre.
+    trackPriceDropsShown(1);
+    expect(track.mock.calls).toEqual([["price_drop_shown", { count: 1 }]]);
   });
 });
 
