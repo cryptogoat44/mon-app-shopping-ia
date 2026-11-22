@@ -59,10 +59,23 @@ describe("0055 : vérification et registre", () => {
     expect(REGISTRY).toContain("| 0055 | le fichier de la migration lui-même | `supabase/verifications/0055-verification.sql` (une ligne, trois `true`) | en tête du fichier de la migration |");
     expect(REGISTRY).toContain("Sans 0055, aucune phrase de verdict n'est montrée en tête des résultats (sonde du schéma, lib/verdictColumn.ts).");
     const line = REGISTRY.split("\n").find((text) => text.startsWith("| 0055 | Verdict"))!;
-    for (const words of ["**Facultative**", "le serveur marche sans elle", "ni la marque ni le modèle ne sont enregistrés", "Pour les membres, avant elle : aucune phrase de verdict", "Après elle :", "les recherches d'avant n'en ont pas"]) {
+    for (const words of ["**Facultative**", "le serveur marche sans elle", "ni la marque ni le modèle ne sont enregistrés", "Pour les membres, avant elle : aucune phrase de verdict", "Après elle :"]) {
       expect(line, words).toContain(words);
     }
     expect(REGISTRY.indexOf("| 0055 | Verdict")).toBeGreaterThan(REGISTRY.indexOf("| 0054 | Ordre des boutiques"));
     expect(REGISTRY.indexOf("| 0055 | Verdict")).toBeLessThan(REGISTRY.indexOf("| 0056 | Stock affiché"));
+  });
+  it("permis : le registre et l'en-tête disent que les recherches d'avant sans boutiques cherchées ou sans rien trouvé montrent « Pas de pièce exacte trouvée » (lib/verdict.ts), et que les autres n'ont aucune phrase", () => {
+    const line = REGISTRY.split("\n").find((text) => text.startsWith("| 0055 | Verdict"))!;
+    const header = SQL.split("\n").filter((text) => text.startsWith("--")).map((text) => text.replace(/^-- ?/, "")).join(" ").replace(/\s+/g, " ");
+    for (const text of [line, header]) {
+      expect(text).toContain("les recherches d'avant où les autres boutiques n'avaient pas été cherchées (pièce sans marque reconnue, IA coupée) ou n'avaient rien renvoyé montrent aussi « Pas de pièce exacte trouvée » ; celles dont les offres dans d'autres boutiques ont été montrées sans palier n'ont aucune phrase");
+    }
+  });
+
+  it("refusé : jamais « les recherches d'avant n'en ont pas » ni « n'ont jamais de verdict » seuls, qui laisseraient croire que rien ne change pour elles", () => {
+    const line = REGISTRY.split("\n").find((text) => text.startsWith("| 0055 | Verdict"))!;
+    expect(line).not.toContain("les recherches d'avant n'en ont pas");
+    expect(SQL).not.toContain("n'ont jamais de verdict");
   });
 });

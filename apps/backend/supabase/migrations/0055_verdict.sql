@@ -22,8 +22,11 @@
 --
 -- Facultative pour le serveur : sans elle, rien n'est noté, et aucun verdict
 -- n'est montré, comme aujourd'hui (sonde du schéma, lib/verdictColumn.ts).
--- Les recherches d'avant n'ont jamais de verdict quand leurs offres dans
--- d'autres boutiques n'ont pas de palier. Un serveur plus ancien fonctionne
+-- Avec elle, les recherches d'avant où les autres boutiques n'avaient pas
+-- été cherchées (pièce sans marque reconnue, IA coupée) ou n'avaient rien
+-- renvoyé montrent aussi « Pas de pièce exacte trouvée » ; celles dont les
+-- offres dans d'autres boutiques ont été montrées sans palier n'ont aucune
+-- phrase. Un serveur plus ancien fonctionne
 -- aussi sur une base qui l'a (valeur par défaut : null). À appliquer à la
 -- main par le fondateur, d'abord sur spotto-dev-2 (migrer-dev), puis sur
 -- spotto-prod. Ne demande que 0001 (vérifié ci-dessous). Rejouable sans effet
