@@ -567,11 +567,17 @@ describe("politique de confidentialité : propositions de l'IA (lot du 2026-11-2
 
   it("section « Vidéos » : les propositions sans rien écrire — mêmes images sans texte, 3 noms au plus, jamais une personne, rien de gardé", () => {
     expect(section(privacyPolicy, VIDEOS)).toContain(
-      "Vous pouvez aussi, sans rien écrire, demander à l'IA de vous proposer les pièces qu'elle voit : Anthropic reçoit alors les mêmes images, sans aucun texte de votre part, et renvoie le nom de 3 pièces visibles au plus (par exemple « Le manteau camel »), avec pour chacune la meilleure image et son emplacement. L'IA a pour consigne de ne jamais désigner une personne, et Spotto écarte les noms qui contiennent un mot désignant une personne (comme « fille » ou « homme »). Spotto ne conserve pas ces noms."
+      "Vous pouvez aussi, sans rien écrire, demander à l'IA de vous proposer les pièces qu'elle voit : Anthropic reçoit alors les mêmes images et la langue de l'app, sans aucun texte de votre part, et renvoie le nom de 3 pièces visibles au plus (par exemple « Le manteau camel »), avec pour chacune la meilleure image et son emplacement. L'IA a pour consigne de ne jamais désigner une personne, et Spotto écarte les noms qui contiennent certains mots désignant une personne (comme « fille » ou « homme »). Spotto ne conserve pas ces noms."
     );
     expect(section(privacyPolicyEn, VIDEOS_EN)).toContain(
-      "You can also, without writing anything, ask the AI to suggest the pieces it sees: Anthropic then receives the same frames, without any text from you, and returns the names of up to 3 visible pieces (for example “The camel coat”), each with the best frame and where it is. The AI is instructed never to refer to a person, and Spotto discards names that contain a word referring to a person (such as “girl” or “man”). Spotto does not keep these names."
+      "You can also, without writing anything, ask the AI to suggest the pieces it sees: Anthropic then receives the same frames and the app's language, without any text from you, and returns the names of up to 3 visible pieces (for example “The camel coat”), each with the best frame and where it is. The AI is instructed never to refer to a person, and Spotto discards names that contain certain words referring to a person (such as “girl” or “man”). Spotto does not keep these names."
     );
+    // Refusé : le filtre ne lit qu'une liste fixe de mots ; plus aucune phrase qui promet d'écarter tout nom désignant une personne.
+    expect(JSON.stringify(privacyPolicy)).not.toContain("écarte les noms qui contiennent un mot désignant une personne");
+    expect(JSON.stringify(privacyPolicyEn)).not.toContain("discards names that contain a word referring to a person");
+    // Refusé : Anthropic reçoit la langue de l'app ; plus « les mêmes images, sans aucun texte » seules.
+    expect(JSON.stringify(privacyPolicy)).not.toContain("les mêmes images, sans aucun texte de votre part");
+    expect(JSON.stringify(privacyPolicyEn)).not.toContain("the same frames, without any text from you");
   });
 
   it("ce que vous écrivez devient facultatif (5 passages) ; pour Anthropic, le nom et l'emplacement de quelques pièces visibles", () => {
@@ -582,14 +588,14 @@ describe("politique de confidentialité : propositions de l'IA (lot du 2026-11-2
       [
         "Nos prestataires et les services tiers",
         "Our providers and third-party services",
-        "et, le cas échéant, votre description, et indique les meilleurs moments et l'emplacement de la pièce ou, si vous le demandez, le nom et l'emplacement de quelques pièces visibles.",
-        "and, where applicable, your description, and indicates the best moments and where the piece is or, if you ask for it, the name and location of a few visible pieces.",
+        "et, le cas échéant, votre description (et, pour les propositions de l'IA, la langue de l'app, pour écrire les noms), et indique les meilleurs moments et l'emplacement de la pièce ou, si vous le demandez, le nom et l'emplacement de quelques pièces visibles.",
+        "and, where applicable, your description (and, for the AI's suggestions, the app's language, to write the names), and indicates the best moments and where the piece is or, if you ask for it, the name and location of a few visible pieces.",
       ],
       [
         "Transferts hors de l'Union européenne",
         "Transfers outside the European Union",
-        "(d'une vidéo de votre téléphone ou d'un lien TikTok ou Instagram) et, le cas échéant, votre description, envoyées à Anthropic",
-        "(from a video from your phone or from a TikTok or Instagram link) and, where applicable, your description, sent to Anthropic",
+        "(d'une vidéo de votre téléphone ou d'un lien TikTok ou Instagram) et, le cas échéant, votre description (et, pour les propositions de l'IA, la langue de l'app, pour écrire les noms), envoyées à Anthropic",
+        "(from a video from your phone or from a TikTok or Instagram link) and, where applicable, your description (and, for the AI's suggestions, the app's language, to write the names), sent to Anthropic",
       ],
     ];
     for (const [titleFr, titleEn, fr, en] of expected) {
@@ -598,6 +604,11 @@ describe("politique de confidentialité : propositions de l'IA (lot du 2026-11-2
     }
     // Plus aucune phrase qui rendrait la description obligatoire pour Anthropic.
     expect(JSON.stringify(privacyPolicy)).not.toContain("avec ce que vous avez écrit, à Anthropic");
+    // Refusé : pour la vidéo, plus aucune liste d'Anthropic qui tait la langue de l'app.
+    expect(JSON.stringify(privacyPolicy)).not.toContain("le cas échéant, votre description, et indique");
+    expect(JSON.stringify(privacyPolicy)).not.toContain("TikTok ou Instagram) et, le cas échéant, votre description, envoyées à Anthropic");
+    expect(JSON.stringify(privacyPolicyEn)).not.toContain("where applicable, your description, and indicates");
+    expect(JSON.stringify(privacyPolicyEn)).not.toContain("TikTok or Instagram link) and, where applicable, your description, sent to Anthropic");
     expect(JSON.stringify(privacyPolicyEn)).not.toContain("with what you wrote, to Anthropic");
   });
 

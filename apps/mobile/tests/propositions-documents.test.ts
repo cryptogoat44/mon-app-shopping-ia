@@ -67,5 +67,8 @@ describe("l'interrupteur VIDEO_PIECES_ENABLED : mise en place et notes pour Appl
     const review = apple.slice(apple.indexOf("## 6. Quand revoir ces réponses"), apple.indexOf("## 7. BROUILLON"));
     expect(review).toContain("- les **propositions de l'IA** (`VIDEO_PIECES_ENABLED`, coupées par défaut, lot « propositions ») : **aucun type de donnée nouveau**.");
     expect(review).toContain("une propriété de plus, `mode` (`words` ou `pieces`), dans « Interaction avec le produit » (Analyses), jamais un nom");
+    // Anthropic reçoit la langue de l'app pour écrire les noms : jamais « les images seules ».
+    expect(apple).toContain("(`VIDEO_PIECES_ENABLED` : les images et la langue de l'app ;");
+    expect(apple).not.toContain("les images seules");
   });
 });
