@@ -727,6 +727,24 @@ export const fr = {
       follow: "Suivre son prix ? Une baisse s'affichera dans vos Envies.",
       turnOnAlert: "Activer l'alerte",
     },
+    // Stock affiché (lot « stock visible ») : ce que Google disait au moment de
+    // la recherche, sur les cartes (components/stock-note.tsx) ; rien quand
+    // c'est inconnu. Le filtre « En stock seulement » garde les offres au stock
+    // inconnu (components/result-sort-bar.tsx).
+    stock: {
+      inStock: "En stock",
+      soldOut: "Épuisée",
+      // Lu par VoiceOver après « En stock » ou « Épuisée ».
+      source: "d'après Google, au moment de la recherche",
+      hint: "Explique d'où vient cette information.",
+      explanation: "D'après Google, au moment de la recherche. Le stock a pu changer depuis : vérifiez-le sur le site de la boutique avant d'acheter.",
+      close: "J'ai compris",
+    },
+    inStockOnly: "En stock seulement",
+    inStockOnlyHint: "Masque les offres que Google disait épuisées au moment de la recherche. Celles dont le stock est inconnu restent.",
+    // « En stock seulement » choisi et plus rien à montrer : retirer les filtres.
+    filtersEmpty: "Aucune proposition ne correspond à ces filtres pour l'instant.",
+    showAllWithoutFilters: "Afficher toutes les propositions",
   },
   wishlistItem: {
     back: "Envies",

@@ -652,6 +652,18 @@ export const en: Catalog = {
       follow: "Follow its price? A drop will show in your Wishlist.",
       turnOnAlert: "Turn on alert",
     },
+    stock: {
+      inStock: "In stock",
+      soldOut: "Sold out",
+      source: "according to Google, at the time of the search",
+      hint: "Explains where this information comes from.",
+      explanation: "According to Google, at the time of the search. Stock may have changed since then: check it on the shop's website before you buy.",
+      close: "Got it",
+    },
+    inStockOnly: "In stock only",
+    inStockOnlyHint: "Hides offers Google listed as sold out at the time of the search. Offers with unknown stock stay.",
+    filtersEmpty: "No suggestions match these filters for now.",
+    showAllWithoutFilters: "Show all suggestions",
   },
   wishlistItem: {
     back: "Wishlist",
