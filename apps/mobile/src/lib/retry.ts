@@ -1,3 +1,5 @@
+import { abortForTimeout } from "./app-timeout";
+
 /** Délais entre deux essais de chargement du profil au démarrage. Leur
  * somme (~1 min) couvre le réveil du backend sur l'offre gratuite de
  * Render, qui peut prendre jusqu'à une minute. */
@@ -15,7 +17,8 @@ export class AttemptTimeoutError extends Error {
 }
 
 /** Lance `task` avec un signal d'abandon, et relève AttemptTimeoutError au
- * bout de `ms`, même si `task` ignore le signal. */
+ * bout de `ms`, même si `task` ignore le signal. L'abandon est celui d'un
+ * délai de l'app (app-timeout.ts) : un échec, jamais une annulation. */
 export async function withTimeout<T>(ms: number, task: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -23,7 +26,7 @@ export async function withTimeout<T>(ms: number, task: (signal: AbortSignal) => 
     timer = setTimeout(() => {
       // Le délai l'emporte d'abord : l'abandon qui suit ne change plus l'erreur.
       reject(new AttemptTimeoutError(ms));
-      controller.abort();
+      abortForTimeout(controller);
     }, ms);
   });
   try {

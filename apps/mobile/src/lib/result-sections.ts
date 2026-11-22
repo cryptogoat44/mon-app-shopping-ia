@@ -6,7 +6,7 @@
 // actions ne changent pas. Prix d'abord (2026-11-03) : l'ordre affiché, avec
 // la section repliée « Sans prix », est décidé dans lib/price-first.ts.
 // Logique pure, testée. Imports relatifs : fichier testé par vitest.
-import type { MerchantLinkContext } from "@monapp/shared-types";
+import type { MerchantLinkContext, OfferMark } from "@monapp/shared-types";
 import type { Piece, SpotResult } from "../api/types";
 
 /** Propositions d'une section du complément montrées d'emblée, avant son propre « Voir plus ». */
@@ -53,6 +53,12 @@ export function firstShown<T>(others: readonly T[], showAll: boolean, first: num
  * la recherche visuelle, comme aujourd'hui. */
 export function merchantContextFor(piece: Pick<Piece, "origin">): MerchantLinkContext {
   return piece.origin === "shopping" || piece.origin === "words" ? "similar" : "result";
+}
+
+/** Mention de l'offre pour la statistique du clic (mesure du parcours) :
+ * celle de la carte (components/offer-mark.tsx), « none » sans mention. */
+export function merchantMarkFor(piece: Pick<Piece, "offerMark">): OfferMark | "none" {
+  return piece.offerMark ?? "none";
 }
 
 /** Proposition du complément sans lien direct vers le marchand : le lien

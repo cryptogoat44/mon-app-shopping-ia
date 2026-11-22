@@ -4,6 +4,7 @@ import type { SpotResult } from "../src/api/types";
 import { fr } from "../src/i18n/fr";
 import { en } from "../src/i18n/en";
 import { sanitizeProps } from "../src/lib/analytics-events";
+import { wasTimedOut } from "../src/lib/app-timeout";
 import { allPieces } from "../src/lib/result-sections";
 import { bestProposalIndex, chooseCard, noPriceNoticeShown, priceFirstSections, startIndexOf, startProposalIndex, NO_CHOICE, wordsArrivalReveal } from "../src/lib/price-first";
 import { toSpotResult, withTextSearch } from "../src/lib/spot-result";
@@ -188,12 +189,14 @@ describe("la grande carte ne change pas quand les boutiques arrivent", () => {
 
 describe("une seule demande des boutiques par recherche, jamais d'erreur", () => {
   it("la demande partie avec le lancement est celle que l'écran retrouve", async () => {
-    const fetchShops = vi.fn(async () => withShopsReply([59], [45]));
+    const fetchShops = vi.fn(async (_signal: AbortSignal) => withShopsReply([59], [45]));
     const first = requestShops("s1", fetchShops);
     const second = requestShops("s1", fetchShops);
     expect(second).toBe(first);
     expect(await second).toMatchObject({ kind: "added" });
     expect(fetchShops).toHaveBeenCalledTimes(1);
+    // Réponse à temps : aucun délai de l'app (mesure du parcours).
+    expect(wasTimedOut(fetchShops.mock.calls[0]![0])).toBe(false);
   });
 
   it("panne ou refus du serveur : « rien », sans erreur", async () => {
@@ -210,6 +213,8 @@ describe("une seule demande des boutiques par recherche, jamais d'erreur", () =>
     await vi.advanceTimersByTimeAsync(SHOPS_TIMEOUT_MS);
     expect(await outcome).toEqual({ kind: "none" });
     expect(seen!.aborted).toBe(true);
+    // Délai de l'app : un échec pour server_first_response, pas une annulation.
+    expect(wasTimedOut(seen!)).toBe(true);
   });
 });
 

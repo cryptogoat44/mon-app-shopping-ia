@@ -19,6 +19,7 @@ import {
   type VideoLinkAnalysisErrorCode,
   type VideoLinkAnalysisRequest,
   type VideoLinkFailureCause,
+  type VideoPlatform,
 } from "@monapp/shared-types";
 import { t } from "../i18n";
 import { ApiError } from "./api-error";
@@ -255,6 +256,18 @@ export function linkFailureView(info: LinkFailureInfo, locale: Locale, platform:
     primary: primaryAction(info.failure),
     secondary: secondaryAction(info.failure),
   };
+}
+
+/** Plan B, pour les statistiques (mesure du parcours) : la capture choisie
+ * après une vidéo privée ou supprimée (« private »), ou refusée par la
+ * plateforme (« refused ») — sa cause et la plateforme du lien. null pour
+ * tout autre échec : la capture y reste proposée, mais ce n'est pas le plan B.
+ * Le plan B montré, lui, se lit déjà dans video_link_ai_result (`reason`). */
+export function planBChoice(info: LinkFailureInfo, platform: VideoPlatform | null): { link_platform: VideoPlatform; cause: VideoLinkFailureCause } | null {
+  if (!platform) return null;
+  if (info.failure === "private") return { link_platform: platform, cause: "private_or_removed" };
+  if (info.failure === "refused") return { link_platform: platform, cause: "refused" };
+  return null;
 }
 
 /** Étapes de l'attente : la récupération de la vidéo, puis l'IA. Le serveur

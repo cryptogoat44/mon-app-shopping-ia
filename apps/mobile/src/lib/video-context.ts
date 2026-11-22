@@ -11,7 +11,9 @@
 //   d'image d'iOS) est effacée dès que la recherche est partie, ou quand le
 //   parcours est abandonné (règle n° 4 : jamais gardée sur l'appareil).
 import type { ProductSearch, VideoSpotSource } from "@monapp/shared-types";
+import { track } from "./analytics";
 import { recordVideoSpot } from "./api";
+import type { PhotoJourneyEntry } from "./journey-entries";
 import type { PendingVideoLink } from "./pending-video-link";
 import { pendingVideoLinks } from "./pending-video-link-store";
 import { beginFromPhoto } from "./spot-flow";
@@ -30,17 +32,21 @@ export function contextFromPending(pending: PendingVideoLink, source: VideoSpotS
 
 /** Image prête (photo choisie, image partagée, capture de la recherche
  * d'image d'iOS, image déposée sur le site) : le brouillon, associé au lien
- * en attente s'il y en a un. */
+ * en attente s'il y en a un. `entry` (mesure du parcours) : d'où vient
+ * l'image, pour « journey_started » — chaque écran qui en ouvre une le dit
+ * (sans lien à cette entrée : « none », même associée à un lien en attente). */
 export async function beginPhotoSearch(
   picked: { uri: string; width: number; height: number },
   origin: PhotoOrigin,
-  options: { discardImageAfterSearch?: boolean } = {}
+  options: { discardImageAfterSearch?: boolean; entry?: PhotoJourneyEntry } = {}
 ): Promise<SpotDraft> {
   const pending = await pendingVideoLinks.read();
-  return beginFromPhoto(picked.uri, { width: picked.width, height: picked.height }, {
+  const draft = beginFromPhoto(picked.uri, { width: picked.width, height: picked.height }, {
     video: pending ? contextFromPending(pending, origin) : null,
     discardImageAfterSearch: options.discardImageAfterSearch ?? false,
   });
+  if (options.entry) track("journey_started", { entry: options.entry, link_platform: "none" });
+  return draft;
 }
 
 /** La croix de « Associée à la vidéo… » : la recherche n'est plus associée, et le lien est oublié. */

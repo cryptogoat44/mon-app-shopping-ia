@@ -6,11 +6,12 @@
 import { useEffect, useState } from "react";
 import { AccessibilityInfo, ActivityIndicator, Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
-import { VIDEO_AI } from "@monapp/shared-types";
+import { VIDEO_AI, type VideoPlatform } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { ErrorMessage } from "@/components/error-message";
 import { ActionButtons, PhotoFrame, QueryInput, type Action } from "@/components/spot-launch-views";
+import { track } from "@/lib/analytics";
 import { containBox, cropToBox } from "@/lib/crop-geometry";
 import type { PieceZone } from "@/lib/piece-trace";
 import {
@@ -19,6 +20,7 @@ import {
   linkFailureView,
   linkWaitingStep,
   momentClock,
+  planBChoice,
   queryProblemMessage,
   type LinkAnalysis,
   type LinkFailureAction,
@@ -230,23 +232,32 @@ function CalmMessage({ children }: { children: string }) {
  * description gardés (l'écran s'en charge, `onCapture`) — et au plus un lien
  * discret (« Réessayer », ou la capture quand le bouton est un autre geste).
  * La capture est toujours proposée : jamais d'impasse. `platformName` :
- * « TikTok » ou « Instagram », pour dire qui a refusé. */
+ * « TikTok » ou « Instagram », pour dire qui a refusé ; `platform` : la même,
+ * pour les statistiques du plan B (mesure du parcours). */
 export function LinkFailureView({
   info,
   platformName,
+  platform = null,
   onRetry,
   onEditQuery,
   onCapture,
 }: {
   info: LinkFailureInfo;
   platformName?: string;
+  platform?: VideoPlatform | null;
   onRetry: () => void;
   onEditQuery: () => void;
   onCapture: () => void;
 }) {
   const view = linkFailureView(info, getActiveLocale(), platformName);
+  // Vidéo privée, supprimée ou refusée : la capture choisie est comptée, avec sa cause.
+  const planB = planBChoice(info, platform);
+  const capture = () => {
+    if (planB) track("plan_b_screenshot_chosen", planB);
+    onCapture();
+  };
   const actionOf = (action: LinkFailureAction): Action => {
-    if (action === "capture") return { label: t.videoLinkAuto.planB.capture, onPress: onCapture };
+    if (action === "capture") return { label: t.videoLinkAuto.planB.capture, onPress: capture };
     if (action === "retry") return { label: t.common.retry, onPress: onRetry };
     return { label: t.videoLinkAuto.moments.editQuery, onPress: onEditQuery };
   };

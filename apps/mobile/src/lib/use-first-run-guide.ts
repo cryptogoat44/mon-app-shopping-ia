@@ -4,7 +4,7 @@
 // par ouverture de Spotter.
 import { useEffect, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { claimFirstRunGuide, skipFirstRunGuide } from "./first-run-guide";
+import { claimFirstRunGuide, skipFirstRunGuide, trackFirstRunGuide } from "./first-run-guide";
 
 export type FirstRunGuideState = "unknown" | "shown" | "hidden";
 
@@ -28,7 +28,10 @@ export function useFirstRunGuide(eligible: boolean | null): { state: FirstRunGui
       return;
     }
     void claimFirstRunGuide(AsyncStorage).then((claimed) => {
-      if (mounted.current) setState(claimed ? "shown" : "hidden");
+      if (!mounted.current) return;
+      setState(claimed ? "shown" : "hidden");
+      // Mesure du parcours : montré, donc une seule fois par appareil (la marque est rangée).
+      if (claimed) trackFirstRunGuide("shown");
     });
   }, [eligible]);
   return { state, close: () => setState("hidden") };

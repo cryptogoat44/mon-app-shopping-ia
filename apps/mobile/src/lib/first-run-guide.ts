@@ -7,6 +7,7 @@
 // indisponible : il n'est pas montré, plutôt que de revenir sans fin.
 // Logique pure, testée : le stockage est passé en paramètre. Imports
 // relatifs : fichier testé par vitest.
+import { track } from "./analytics";
 
 export const FIRST_RUN_GUIDE_KEY = "spotto.guide-premiere-recherche";
 /** Partager ou coller le lien, entourer la pièce, comparer et créer une alerte. */
@@ -43,4 +44,13 @@ export async function skipFirstRunGuide(store: GuideStore): Promise<void> {
 /** L'étape suivante ; null après la dernière (le bouton lance alors une vraie recherche). */
 export function nextGuideStep(step: number): number | null {
   return step + 1 < FIRST_RUN_GUIDE_STEPS ? step + 1 : null;
+}
+
+/** Mesure du parcours (« first_search_guide ») : le guide montré, passé
+ * (« Passer ») ou terminé (la dernière étape lance la recherche). `step` :
+ * l'étape où la personne passe ou termine (0 = la première, envoyée 1). */
+export function trackFirstRunGuide(action: "shown"): void;
+export function trackFirstRunGuide(action: "skipped" | "finished", step: number): void;
+export function trackFirstRunGuide(action: "shown" | "skipped" | "finished", step?: number): void {
+  track("first_search_guide", step === undefined ? { action } : { action, step: step + 1 });
 }

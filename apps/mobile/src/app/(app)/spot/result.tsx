@@ -17,7 +17,7 @@ import { addVaultItemFromMatch, fetchMessagesStatus, fetchShops, fetchWishAlerts
 import { openMerchantLink } from "@/lib/merchant-links";
 import { chooseInitialResult, pieceTitle, withoutTextPrompt, withTextSearch, type InitialResultState } from "@/lib/spot-result";
 import { afterShops, requestShops, shopsPending } from "@/lib/spot-shops";
-import { allPieces, merchantContextFor, opensOfferPage } from "@/lib/result-sections";
+import { allPieces, merchantContextFor, merchantMarkFor, opensOfferPage } from "@/lib/result-sections";
 import {
   bestProposalIndex,
   bigCardLabel,
@@ -310,7 +310,7 @@ export default function ResultScreen() {
     setBlockedMerchantUrl(null);
     // Où la personne l'a trouvée : la place notée quand elle l'a touchée, sinon la grande carte d'office.
     const placement = choice.placement ?? placements.get(selectedIndex);
-    const outcome = await openMerchantLink({ matchId: piece.real ? piece.id : null, url, context: merchantContextFor(piece), placement });
+    const outcome = await openMerchantLink({ matchId: piece.real ? piece.id : null, url, context: merchantContextFor(piece), placement, mark: merchantMarkFor(piece) });
     if (outcome.blocked) setBlockedMerchantUrl(outcome.url ?? url);
   }
 
