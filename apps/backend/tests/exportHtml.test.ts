@@ -561,6 +561,27 @@ describe("colonne de la migration 0054 (ordre des boutiques), décrite d'avance"
   });
 });
 
+describe("colonne de la migration 0056 (stock affiché), décrite d'avance", () => {
+  it("permis : un libellé en français et en anglais qui dit d'où et de quand vient le stock, dans la version JSON seulement", () => {
+    expect(EXPORT_COLUMNS.productMatches.in_stock).toMatchObject({
+      label: { fr: "En stock d'après Google, au moment de la recherche", en: "In stock according to Google, at the time of the search" },
+      technical: true,
+    });
+  });
+
+  it("refusé : jamais dans la page lisible ni comme colonne inconnue, vide (inconnu, lignes d'avant), oui ou non", () => {
+    for (const value of [null, true, false]) {
+      const migrated = fixture();
+      for (const row of migrated.productMatches) Object.assign(row, { in_stock: value });
+      for (const locale of ["fr", "en"] as const) {
+        const onUnknownColumn = vi.fn();
+        expect(visibleText(render({ locale, onUnknownColumn }, migrated))).toBe(visibleText(render({ locale })));
+        expect(onUnknownColumn).not.toHaveBeenCalled();
+      }
+    }
+  });
+});
+
 describe("colonne de la migration 0028 (voie C) : origine des pièces proposées", () => {
   /** Le jeu de données, avec une origine par pièce (dans l'ordre des rangs). */
   const withOrigins = (origins: readonly string[]) => {

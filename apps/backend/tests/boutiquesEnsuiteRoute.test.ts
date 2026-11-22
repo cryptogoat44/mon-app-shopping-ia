@@ -57,6 +57,7 @@ import { assertNoUserImage } from "../src/lib/aiSwitches.js";
 import { resetVoieCSchemaProbe } from "../src/lib/voieC.js";
 import { COMPLEMENT_PENDING_MAX_MS, COMPLEMENT_RUNNING_MAX_MS, resetDeferredSchemaProbe } from "../src/lib/deferredComplement.js";
 import { brandShopColumnReady, resetBrandShopColumnProbe } from "../src/lib/brandShopColumn.js";
+import { resetStockColumnProbe, stockColumnReady } from "../src/lib/stockColumn.js";
 import type { LensMeasure } from "../src/services/lensMeasure.js";
 import type { TextSearchResponse } from "../src/services/searchProvider.js";
 
@@ -981,5 +982,83 @@ describe("part du mois atteinte : chaque app reçoit un refus qu'elle comprend",
       expect(searchRow(id).text_requested_at ?? null, query).toBeNull();
     }
     expect(shoppingMock).not.toHaveBeenCalled();
+  });
+});
+
+// Stock affiché (lot « stock visible », migration 0056) : le « en stock » ou
+// « épuisée » que Google Lens annonce est rangé sur la ligne de la
+// proposition, puis renvoyé à l'app (inStock), seulement une fois la colonne
+// vue (lib/stockColumn.ts). Ajouté ici pour reprendre la même fausse base.
+describe("stock affiché (0056) : rangé avec la proposition Lens, renvoyé à l'app", () => {
+  beforeEach(() => {
+    resetStockColumnProbe();
+    // 1ʳᵉ en stock, 2ᵉ épuisée, 3ᵉ sans rien dit par Google (inconnu).
+    lensMock.mockResolvedValue({
+      matches: [{ ...LENS[0]!, inStock: true }, { ...LENS[1]!, inStock: false }, structuredClone(LENS[2]!)],
+      measure: LENS_MEASURE,
+      addedRanks: [],
+      statusCode: 200,
+    });
+  });
+
+  const lensRows = (id: string) => matchRows(id).filter((row) => row.origin === "lens").sort((a, b) => Number(a.rank) - Number(b.rank));
+  const lensStock = (body: { matches: { origin?: string; inStock?: boolean }[] }) =>
+    body.matches.filter((match) => match.origin === undefined).map((match) => ("inStock" in match ? match.inStock : "inconnu"));
+
+  it("permis : avec 0056, oui, non ou rien sur chaque ligne Lens, et la même chose dans la réponse du lancement comme à la relecture ; rien sur les boutiques", async () => {
+    const target = await buildApp();
+    const id = preparedSearch();
+    const res = await launch(target, id);
+    expect(res.statusCode).toBe(200);
+    expect(lensRows(id).map((row) => ("in_stock" in row ? row.in_stock : "absent"))).toEqual([true, false, "absent"]);
+    expect(matchRows(id).filter((row) => row.origin === "shopping").some((row) => "in_stock" in row)).toBe(false);
+    const reread = (await target.inject({ method: "GET", url: `/api/searches/${id}` })).json();
+    for (const body of [res.json(), reread]) {
+      expect(lensStock(body)).toEqual([true, false, "inconnu"]);
+      expect(body.matches.filter((match: { origin?: string }) => match.origin === "shopping").some((match: object) => "inStock" in match)).toBe(false);
+    }
+    expect(logs.join("\n")).not.toContain("Stock non noté");
+  });
+
+  it("refusé : base sans 0056, aucun stock écrit ni renvoyé (une insertion qui le nommerait serait refusée) ; la recherche aboutit comme avant, et le journal le dit sans contenu", async () => {
+    db.missingColumns.add("in_stock");
+    const target = await buildApp();
+    const id = preparedSearch();
+    const res = await launch(target, id);
+    expect(res.statusCode).toBe(200);
+    expect(searchRow(id)).toMatchObject({ status: "completed" });
+    expect(lensRows(id)).toHaveLength(3);
+    expect(matchRows(id).some((row) => "in_stock" in row)).toBe(false);
+    expect(lensStock(res.json())).toEqual(["inconnu", "inconnu", "inconnu"]);
+    const warnings = logs.map((line) => JSON.parse(line) as Record<string, unknown>).filter((line) => String(line.msg).startsWith("Stock non noté"));
+    expect(warnings).toEqual([expect.objectContaining({ code: "42703" })]);
+    expect(JSON.stringify(warnings)).not.toMatch(/lens-exemple|Nuage/);
+  });
+
+  it("permis : la sonde a vu la colonne, puis l'insertion avec le stock est refusée (colonne retirée depuis) — refaite une fois sans lui : les propositions sont rangées", async () => {
+    const target = await buildApp();
+    expect(await stockColumnReady(target)).toBe(true);
+    db.missingColumns.add("in_stock");
+    const id = preparedSearch();
+    const res = await launch(target, id);
+    expect(res.statusCode).toBe(200);
+    const lensInserts = db.matchInserts.filter((list) => list.every((row) => row.origin === undefined));
+    expect(lensInserts.map((list) => list.some((row) => "in_stock" in row))).toEqual([true, false]);
+    expect(lensRows(id)).toHaveLength(3);
+    expect(lensStock(res.json())).toEqual(["inconnu", "inconnu", "inconnu"]);
+    expect(logs.filter((line) => line.includes("Stock non noté : insertion refusée avec le stock, refaite sans lui"))).toHaveLength(1);
+  });
+
+  it("refusé : Google ne dit rien du stock — ni sonde ni colonne nommée, une seule insertion, aucune reprise", async () => {
+    lensMock.mockResolvedValue({ matches: structuredClone(LENS), measure: LENS_MEASURE, addedRanks: [], statusCode: 200 });
+    db.missingColumns.add("in_stock");
+    const target = await buildApp();
+    const id = preparedSearch();
+    const res = await launch(target, id);
+    expect(res.statusCode).toBe(200);
+    const lensInserts = db.matchInserts.filter((list) => list.every((row) => row.origin === undefined));
+    expect(lensInserts).toHaveLength(1);
+    expect(lensInserts[0]!.some((row) => "in_stock" in row)).toBe(false);
+    expect(logs.join("\n")).not.toContain("Stock non noté");
   });
 });

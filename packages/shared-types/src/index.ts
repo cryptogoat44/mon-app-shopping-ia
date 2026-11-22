@@ -293,6 +293,11 @@ export interface ProductMatch {
    * pas. Envoyé seulement quand il est vrai ; absent (ancien serveur, autres
    * sections) = non. Une app plus ancienne l'ignore. */
   demoted?: true;
+  /** Stock affiché (lot « stock visible », migration 0056) : ce que Google
+   * disait au moment de la recherche — true « En stock », false « Épuisée ».
+   * Absent : inconnu (Google n'a rien dit, recherche d'avant 0056, base
+   * sans 0056, ancien serveur). Une app plus ancienne l'ignore. */
+  inStock?: boolean;
 }
 
 /** Mentions d'une offre, calculées par le serveur (apps/backend/src/lib/shopTrust.ts) :

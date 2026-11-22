@@ -67,6 +67,7 @@ import { assertNoUserImage, voieCAiEnabled } from "../lib/aiSwitches.js";
 import { photoCallsLeft, startDeadline, VOIE_C_BUDGET } from "../lib/deadline.js";
 import { lightSort } from "../lib/lightSort.js";
 import { brandShopColumnReady } from "../lib/brandShopColumn.js";
+import { stockColumnReady } from "../lib/stockColumn.js";
 import { cacheKey, imageHash, purgeExpiredCache, readCache, writeCache } from "../lib/searchCache.js";
 import {
   complementAfterSaveFailure,
@@ -166,9 +167,13 @@ const INSERTED_MATCH_ROWS = z.array(z.object({ id: z.string(), merchant_url: z.s
  * mots (ordre de Google), quand les mots l'ont changé ; null sinon. */
 type LensRanks = ReadonlyMap<VisualMatch, number> | null;
 
-function toMatchRow(searchId: string, m: VisualMatch, rank: number, lensRanks: LensRanks = null) {
+/** `withStock` : la colonne in_stock (0056) est vue (lib/stockColumn.ts) ;
+ * le stock annoncé par Google n'est écrit qu'alors, et seulement quand il
+ * l'annonce (true ou false ; rien quand il ne dit rien). */
+function toMatchRow(searchId: string, m: VisualMatch, rank: number, lensRanks: LensRanks = null, withStock = false) {
   const lensRank = lensRanks?.get(m);
   return {
+    ...(withStock && typeof m.inStock === "boolean" ? { in_stock: m.inStock } : {}),
     search_id: searchId,
     rank,
     // Seulement avec 0031 et des mots qui ont changé l'ordre (lancement « boutiques ensuite »).
@@ -191,8 +196,18 @@ function toMatchRow(searchId: string, m: VisualMatch, rank: number, lensRanks: L
  * résultats, 2026-10-15). 0 : rien n'a pu être rangé. */
 async function insertMatches(fastify: FastifyInstance, searchId: string, matches: VisualMatch[], lensRanks: LensRanks): Promise<number> {
   const table = () => fastify.supabaseAdmin.from("product_matches");
-  const { error } = await table().insert(matches.map((m, index) => toMatchRow(searchId, m, index + 1, lensRanks)));
+  // Stock affiché (0056) : écrit seulement une fois la colonne vue.
+  const withStock = matches.some((m) => typeof m.inStock === "boolean") && (await stockColumnReady(fastify));
+  let { error } = await table().insert(matches.map((m, index) => toMatchRow(searchId, m, index + 1, lensRanks, withStock)));
   if (!error) return matches.length;
+  // Refusée avec le stock malgré la sonde (colonne retirée depuis, cache du
+  // schéma) : refaite une fois sans lui, comme avant 0056 (insertion unique :
+  // rien n'a été rangé). La reprise une par une, ensuite, se fait sans lui.
+  if (withStock) {
+    fastify.log.warn({ code: error.code ?? null }, "Stock non noté : insertion refusée avec le stock, refaite sans lui");
+    ({ error } = await table().insert(matches.map((m, index) => toMatchRow(searchId, m, index + 1, lensRanks))));
+    if (!error) return matches.length;
+  }
 
   let saved = 0;
   for (const match of matches) {
