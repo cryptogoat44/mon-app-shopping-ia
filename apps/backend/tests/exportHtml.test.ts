@@ -582,6 +582,30 @@ describe("colonne de la migration 0056 (stock affiché), décrite d'avance", () 
   });
 });
 
+describe("colonne de la migration 0055 (verdict), décrite d'avance", () => {
+  it("permis : un libellé en français et en anglais qui dit ce que veut dire chaque palier, dans la version JSON seulement", () => {
+    expect(EXPORT_COLUMNS.productMatches.title_tier).toMatchObject({
+      label: {
+        fr: "Le titre de l'offre nomme la marque et le modèle de la pièce (0), la marque seule (1) ou aucun (2) (« Cette pièce dans d'autres boutiques »)",
+        en: "The offer's title names the piece's brand and model (0), the brand only (1) or neither (2) (“This piece at other shops”)",
+      },
+      technical: true,
+    });
+  });
+
+  it("refusé : jamais dans la page lisible ni comme colonne inconnue, vide (lignes d'avant, autres sections) comme noté", () => {
+    for (const value of [null, 0, 1, 2]) {
+      const migrated = fixture();
+      for (const row of migrated.productMatches) Object.assign(row, { title_tier: value });
+      for (const locale of ["fr", "en"] as const) {
+        const onUnknownColumn = vi.fn();
+        expect(visibleText(render({ locale, onUnknownColumn }, migrated))).toBe(visibleText(render({ locale })));
+        expect(onUnknownColumn).not.toHaveBeenCalled();
+      }
+    }
+  });
+});
+
 describe("colonne de la migration 0028 (voie C) : origine des pièces proposées", () => {
   /** Le jeu de données, avec une origine par pièce (dans l'ordre des rangs). */
   const withOrigins = (origins: readonly string[]) => {

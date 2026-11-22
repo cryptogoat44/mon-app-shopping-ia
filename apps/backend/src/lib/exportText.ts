@@ -226,6 +226,9 @@ export const EXPORT_COLUMNS = {
     // Colonne de la migration 0056 (stock affiché), décrite d'avance : en
     // stock (oui) ou épuisée (non) d'après Google, au moment de la recherche.
     in_stock: technical("En stock d'après Google, au moment de la recherche", "In stock according to Google, at the time of the search"),
+    // Colonne de la migration 0055 (verdict), décrite d'avance : le palier du
+    // titre de l'offre (0 marque et modèle, 1 marque seule, 2 aucun).
+    title_tier: technical("Le titre de l'offre nomme la marque et le modèle de la pièce (0), la marque seule (1) ou aucun (2) (« Cette pièce dans d'autres boutiques »)", "The offer's title names the piece's brand and model (0), the brand only (1) or neither (2) (“This piece at other shops”)"),
   },
   resultFeedback: {
     id: ID,

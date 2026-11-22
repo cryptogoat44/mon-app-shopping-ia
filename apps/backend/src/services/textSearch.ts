@@ -23,6 +23,7 @@ import { exclusionReason, isGoogleLink, pageKey, withoutDuplicates } from "./mat
 import type { SearchLocale } from "./lensSettings.js";
 import type { ProviderShoppingItem, TextSearchProvider, TextSearchResponse } from "./searchProvider.js";
 import { storablePrice, type VisualMatch } from "./visualSearch.js";
+import type { TitleTier } from "../lib/lightSort.js";
 
 /** Propositions montrées au plus, par section (boutiques, ou vos mots). */
 export const MAX_TEXT_MATCHES = 20;
@@ -36,8 +37,12 @@ const MAX_SHOPPING_CANDIDATES = 60;
  * dans le journal des alertes prix, jamais rangé).
  * `brandShop` : « Cette pièce dans d'autres boutiques » seulement, la boutique
  * officielle de la marque de la pièce (lib/voieC.ts, après le tri léger ;
- * jamais dans le cache), notée sur sa ligne (product_matches.brand_shop, 0054). */
-export type ShoppingMatch = VisualMatch & { priceHidden: boolean; hasProductId?: true; brandShop?: true };
+ * jamais dans le cache), notée sur sa ligne (product_matches.brand_shop, 0054).
+ * `titleTier` : « Cette pièce dans d'autres boutiques » seulement, le palier
+ * du verdict de son titre (lib/lightSort.ts, verdictTier ; lib/voieC.ts, au
+ * même moment ; jamais dans le cache), noté sur sa ligne
+ * (product_matches.title_tier, 0055). */
+export type ShoppingMatch = VisualMatch & { priceHidden: boolean; hasProductId?: true; brandShop?: true; titleTier?: TitleTier };
 
 /** Ce que les filtres gardent d'une réponse (avant les pages Lens, le tri et
  * la coupe à 20) : c'est ce qui va dans le cache, pour une requête de l'IA. */
