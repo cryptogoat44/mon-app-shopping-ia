@@ -761,6 +761,27 @@ describe("18. Relecture : le message sous la grande carte", () => {
   });
 });
 
+describe("19. Relecture : l'état de « Couper l'alerte » reste à sa pièce", () => {
+  /** Les rendus de KeptNotice sans clé : React y garderait l'état (en cours, en échec) d'une autre pièce. */
+  const withoutKey = (source: string) => (source.match(/<KeptNotice\b[\s\S]*?\/>/g) ?? []).filter((tag) => !/\bkey=\{piece\.id\}/.test(tag));
+
+  it("permis : le message sous la grande carte a une clé par pièce", () => {
+    const screen = code("app/(app)/spot/result.tsx");
+    expect(screen).toContain("<KeptNotice key={piece.id} ");
+    expect(withoutKey(screen)).toEqual([]);
+    // L'état « en cours » et « en échec » est propre à chaque instance du message.
+    const notice = code("components/kept-notice.tsx");
+    expect(notice).toContain("const [busy, setBusy] = useState(false);");
+    expect(notice).toContain("const [failed, setFailed] = useState(false);");
+  });
+
+  it("refusé : un message sans clé (l'erreur de la pièce A s'afficherait sous la pièce B) est repéré", () => {
+    expect(withoutKey("<KeptNotice onOpen={open} alert={alert} onTurnOff={off} />")).toHaveLength(1);
+    expect(withoutKey("<KeptNotice key={other.id} onOpen={open} />")).toHaveLength(1);
+    for (const { name, text } of sources) if (text.includes("<KeptNotice")) expect(withoutKey(text), name).toEqual([]);
+  });
+});
+
 describe("Mode d'emploi et fiche Apple", () => {
   it("STATISTIQUES.md : les entonnoirs « Retour de boutique » et « Alerte », et la lecture de away_ms, avec des événements du catalogue", () => {
     const guide = readFileSync(join(__dirname, "../STATISTIQUES.md"), "utf8");
