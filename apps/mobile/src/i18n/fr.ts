@@ -760,7 +760,7 @@ export const fr = {
       lookalikes: "Pas de pièce exacte trouvée : voici les plus proches.",
       hint: `Explique comment ${BRAND} décide.`,
       sheetTitle: "D'après les titres des boutiques",
-      how: `${BRAND} lit les titres des offres de « Cette pièce dans d'autres boutiques ». « Pièce identifiée » : au moins deux boutiques connues ou sites officiels de marques, différents, y nomment la même marque et le même modèle. « Pièce probablement trouvée » : la marque concorde, mais pas le modèle, ou dans trop peu de boutiques connues. Sinon, les propositions sont seulement des pièces qui se ressemblent.`,
+      how: `${BRAND} lit les titres des offres de « Cette pièce dans d'autres boutiques ». Seuls comptent les boutiques connues et les sites officiels des marques, sans les places de marché ni les sites de revente, où chaque vendeur écrit son titre. « Pièce identifiée » : au moins deux de ces boutiques, différentes, y nomment la même marque et le même modèle. « Pièce probablement trouvée » : une seule le fait. Sinon, les propositions sont seulement des pièces qui se ressemblent.`,
       limits: `${BRAND} ne vérifie ni qu'une pièce est d'origine, ni son état, et cette phrase ne change pas l'ordre des propositions. Les prix sont ceux affichés par les boutiques au moment de la recherche. Vérifiez toujours avant d'acheter.`,
       closeButton: "J'ai compris",
     },

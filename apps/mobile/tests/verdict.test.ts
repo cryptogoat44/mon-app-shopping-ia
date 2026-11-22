@@ -106,13 +106,13 @@ describe("les phrases, mot pour mot, en français et en anglais", () => {
     expect(fr.result.verdict.sheetTitle).toBe("D'après les titres des boutiques");
     expect(en.result.verdict.sheetTitle).toBe("Based on the shops' listing titles");
     expect(fr.result.verdict.how).toBe(
-      `${BRAND} lit les titres des offres de « Cette pièce dans d'autres boutiques ». « Pièce identifiée » : au moins deux boutiques connues ou sites officiels de marques, différents, y nomment la même marque et le même modèle. « Pièce probablement trouvée » : la marque concorde, mais pas le modèle, ou dans trop peu de boutiques connues. Sinon, les propositions sont seulement des pièces qui se ressemblent.`
+      `${BRAND} lit les titres des offres de « Cette pièce dans d'autres boutiques ». Seuls comptent les boutiques connues et les sites officiels des marques, sans les places de marché ni les sites de revente, où chaque vendeur écrit son titre. « Pièce identifiée » : au moins deux de ces boutiques, différentes, y nomment la même marque et le même modèle. « Pièce probablement trouvée » : une seule le fait. Sinon, les propositions sont seulement des pièces qui se ressemblent.`
     );
     expect(fr.result.verdict.limits).toBe(
       `${BRAND} ne vérifie ni qu'une pièce est d'origine, ni son état, et cette phrase ne change pas l'ordre des propositions. Les prix sont ceux affichés par les boutiques au moment de la recherche. Vérifiez toujours avant d'acheter.`
     );
     expect(en.result.verdict.how).toBe(
-      `${BRAND} reads the titles of the offers in “This piece at other shops”. “Piece identified”: at least two different well-known shops or official brand stores name the same brand and the same model there. “Piece probably found”: the brand matches, but not the model, or in too few well-known shops. Otherwise, the suggestions are only pieces that look alike.`
+      `${BRAND} reads the titles of the offers in “This piece at other shops”. Only well-known shops and official brand stores count, not marketplaces or resale sites, where each seller writes their own title. “Piece identified”: at least two different shops among them name the same brand and the same model there. “Piece probably found”: only one of them does. Otherwise, the suggestions are only pieces that look alike.`
     );
     expect(en.result.verdict.limits).toBe(
       `${BRAND} checks neither whether a piece is an original nor its condition, and this sentence does not change the order of the suggestions. Prices are those shown by the shops at the time of the search. Always check before you buy.`
@@ -222,10 +222,10 @@ describe("conditions d'utilisation : le verdict est indicatif", () => {
 
   it("permis : une phrase en français et en anglais, d'après les titres des offres, sans garantie, sans effet sur l'ordre", () => {
     expect(section(termsOfUse, `Ce que fait ${BRAND}`)).toContain(
-      "En tête des résultats, une phrase peut dire si la même pièce semble trouvée dans plusieurs boutiques (« Pièce identifiée »), probablement trouvée (« Pièce probablement trouvée »), ou si les propositions sont seulement des pièces qui se ressemblent. Elle est indicative : elle se fonde uniquement sur les titres des offres de « Cette pièce dans d'autres boutiques » (pour « Pièce identifiée », au moins deux boutiques connues ou sites officiels de marques, différents, qui nomment la même marque et le même modèle), ne garantit ni que la pièce est la bonne, ni qu'elle est d'origine, ni son état, et ne change pas l'ordre des propositions."
+      "En tête des résultats, une phrase peut dire si la même pièce semble trouvée dans plusieurs boutiques (« Pièce identifiée »), probablement trouvée (« Pièce probablement trouvée »), ou si les propositions sont seulement des pièces qui se ressemblent. Elle est indicative : elle se fonde uniquement sur les titres des offres de « Cette pièce dans d'autres boutiques » (pour « Pièce identifiée », au moins deux boutiques connues ou sites officiels de marques, différents, hors places de marché et sites de revente, qui nomment la même marque et le même modèle), ne garantit ni que la pièce est la bonne, ni qu'elle est d'origine, ni son état, et ne change pas l'ordre des propositions."
     );
     expect(section(termsOfUseEn, `What ${BRAND} does`)).toContain(
-      "At the top of the results, a sentence may say whether the same piece seems to have been found at several shops (“Piece identified”), probably found (“Piece probably found”), or whether the suggestions are only pieces that look alike. It is indicative only: it is based solely on the titles of the offers in “This piece at other shops” (for “Piece identified”, at least two different well-known shops or official brand stores naming the same brand and the same model), guarantees neither that the piece is the right one, nor that it is an original, nor its condition, and does not change the order of the suggestions."
+      "At the top of the results, a sentence may say whether the same piece seems to have been found at several shops (“Piece identified”), probably found (“Piece probably found”), or whether the suggestions are only pieces that look alike. It is indicative only: it is based solely on the titles of the offers in “This piece at other shops” (for “Piece identified”, at least two different well-known shops or official brand stores, excluding marketplaces and resale sites, naming the same brand and the same model), guarantees neither that the piece is the right one, nor that it is an original, nor its condition, and does not change the order of the suggestions."
     );
   });
 

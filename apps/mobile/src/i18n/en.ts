@@ -673,7 +673,7 @@ export const en: Catalog = {
       lookalikes: "No exact piece found: here are the closest ones.",
       hint: `Explains how ${BRAND} decides.`,
       sheetTitle: "Based on the shops' listing titles",
-      how: `${BRAND} reads the titles of the offers in “This piece at other shops”. “Piece identified”: at least two different well-known shops or official brand stores name the same brand and the same model there. “Piece probably found”: the brand matches, but not the model, or in too few well-known shops. Otherwise, the suggestions are only pieces that look alike.`,
+      how: `${BRAND} reads the titles of the offers in “This piece at other shops”. Only well-known shops and official brand stores count, not marketplaces or resale sites, where each seller writes their own title. “Piece identified”: at least two different shops among them name the same brand and the same model there. “Piece probably found”: only one of them does. Otherwise, the suggestions are only pieces that look alike.`,
       limits: `${BRAND} checks neither whether a piece is an original nor its condition, and this sentence does not change the order of the suggestions. Prices are those shown by the shops at the time of the search. Always check before you buy.`,
       closeButton: "Got it",
     },
