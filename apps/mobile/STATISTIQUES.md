@@ -276,7 +276,9 @@ Les temps sont en **millisecondes**, arrondis à 100 ms : `12300` veut dire
 3. Série B : `server_first_response` avec le filtre `wait_ms` **greater
    than** `8900` (c'est-à-dire 9 secondes ou plus, puisque les temps sont
    arrondis à 100 ms : ainsi une relecture abandonnée au bout de 10 secondes
-   entre aussi, même mesurée un peu sous `10000`).
+   entre aussi, même mesurée un peu sous `10000`, sauf si l'app a d'abord dû
+   renouveler la connexion du membre pendant plus d'environ 1 seconde : voir
+   plus bas).
 4. **Formula** : `B / A * 100` = la part (en %) des ouvertures qui sont
    tombées sur le serveur endormi.
 
@@ -284,10 +286,12 @@ Répartition utile : par `context` (lancement ou retour dans l'app). La part
 de `ok` = non montre les ouvertures où le serveur n'a pas répondu à temps :
 erreur, panne du réseau, ou l'app qui a cessé d'attendre (15 secondes pour
 le profil ; 10 secondes pour relire une recherche au retour dans l'app, avec
-`wait_ms` autour de `10000`, ou un peu moins quand l'app a d'abord renouvelé
-la connexion du membre : souvent le serveur endormi). Pour celles-là,
-`wait_ms` est la durée de l'attente de l'app : le membre a attendu plus
-longtemps.
+`wait_ms` autour de `10000`, ou nettement moins quand l'app a d'abord
+renouvelé la connexion du membre, car seul le temps après ce renouvellement
+est mesuré : ces ouvertures peuvent alors manquer à la série B et
+n'apparaître que dans la part de `ok` = non ; souvent le serveur endormi).
+Pour celles-là, `wait_ms` est la durée de l'attente de l'app : le membre a
+attendu plus longtemps.
 
 ## Les limites
 

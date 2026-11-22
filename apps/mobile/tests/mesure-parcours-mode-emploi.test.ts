@@ -127,7 +127,7 @@ describe("STATISTIQUES.md : les recettes de lecture", () => {
       expect(inSeriesB(8_849)).toBe(false);
     });
 
-    it("permis : la relecture d'une recherche que l'app abandonne au bout de 10 s entre, même après un renouvellement de la connexion, et elle est nommée avec ok = non", () => {
+    it("permis : la relecture d'une recherche que l'app abandonne au bout de 10 s entre, même après un court renouvellement de la connexion (moins d'environ 1 s), et elle est nommée avec ok = non", () => {
       expect(sleeping).toContain("À partir de **9 secondes**");
       expect(sleeping).toContain("Série B : `server_first_response` avec le filtre `wait_ms` **greater than** `8900` (c'est-à-dire 9 secondes ou plus");
       // Mesurée après la lecture de la session : 10000 moins le temps de cette lecture.
@@ -136,8 +136,17 @@ describe("STATISTIQUES.md : les recettes de lecture", () => {
       // Valeur produite par tests/mesure-parcours-serveur.test.ts (connexion renouvelée d'abord, 400 ms).
       expect(inSeriesB(9_600)).toBe(true);
       expect(inSeriesB(READ_TIMEOUT_MS - 1_000)).toBe(true);
-      expect(sleeping).toContain("10 secondes pour relire une recherche au retour dans l'app, avec `wait_ms` autour de `10000`, ou un peu moins quand l'app a d'abord renouvelé la connexion du membre");
+      expect(sleeping).toContain("10 secondes pour relire une recherche au retour dans l'app, avec `wait_ms` autour de `10000`, ou nettement moins quand l'app a d'abord renouvelé la connexion du membre, car seul le temps après ce renouvellement est mesuré");
       expect(flat(guide)).toContain("(par exemple au bout de 15 secondes pour le profil, ou de 10 secondes pour relire une recherche au retour dans l'app)");
+    });
+
+    it("refusé : le guide ne promet pas toute relecture abandonnée à la série B ; après un renouvellement de plus d'environ 1 s, elle n'y entre pas et il le dit", () => {
+      // Le chrono démarre après le renouvellement : 10 s moins 2 s de renouvellement = 8000, hors série B.
+      expect(inSeriesB(READ_TIMEOUT_MS - 2_000)).toBe(false);
+      expect(sleeping).not.toContain("ou un peu moins quand l'app a d'abord renouvelé la connexion du membre");
+      expect(sleeping).not.toMatch(/entre aussi, même mesurée un peu sous `10000`\)/);
+      expect(sleeping).toContain("sauf si l'app a d'abord dû renouveler la connexion du membre pendant plus d'environ 1 seconde");
+      expect(sleeping).toContain("ces ouvertures peuvent alors manquer à la série B et n'apparaître que dans la part de `ok` = non");
     });
   });
 
