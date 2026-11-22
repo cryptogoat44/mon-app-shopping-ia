@@ -739,7 +739,8 @@ describe("ordre des boutiques : un oui sur la ligne de la boutique officielle de
       expect(keys(rows[3]!)).toEqual([...keys(rows[0]!), "brand_shop"].sort());
       expect(rows.every((row) => row.brand === null)).toBe(true);
     }
-    expect(logs.join("\n")).not.toContain("0054");
+    // Le message exact, pas les chiffres « 0054 » : le journal brut porte des heures et des identifiants au hasard.
+    expect(logs.join("\n")).not.toContain("migration 0054 absente");
   });
 
   it("refusé : base sans 0054, aucun oui n'est écrit (une insertion qui le nommerait serait refusée) ; les boutiques sont enregistrées quand même, et le journal le dit sans contenu", async () => {
