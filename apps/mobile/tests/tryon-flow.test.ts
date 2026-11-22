@@ -304,6 +304,7 @@ describe("erreurs : chaque code du serveur a son message, en français et en ang
     tryon_attest_required: true,
     tryon_item_not_found: true,
     tryon_item_not_eligible: true,
+    tryon_item_not_wearable: true,
     tryon_photo_invalid: true,
     tryon_in_progress: true,
     tryon_quota_exhausted: true,

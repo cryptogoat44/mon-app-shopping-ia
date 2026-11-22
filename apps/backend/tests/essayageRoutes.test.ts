@@ -964,3 +964,95 @@ describe("quotas par membre (lot quotas) : 5 essais par mois pour un compte grat
     expect(tryonQuotaFor(CONFIG, true)).toEqual({ config: { ...CONFIG, freePerMonth: UNLIMITED_TRIES_PER_MONTH }, monthlyLimit: null });
   });
 });
+
+describe("garde-fou : une pièce qui ne se porte pas sur le corps est refusée avant toute dépense", () => {
+  const SHOES_MATCH = "11000000-0000-4000-8000-000000000011";
+  const BAG_MATCH = "11000000-0000-4000-8000-000000000012";
+  const DRESS_MATCH = "11000000-0000-4000-8000-000000000013";
+  const UNNAMED_MATCH = "11000000-0000-4000-8000-000000000014";
+  const NOT_WEARABLE_FR = {
+    error: "tryon_item_not_wearable",
+    message: "L'essayage ne fonctionne que pour les vêtements. Les chaussures, sacs, bijoux et accessoires ne peuvent pas être essayés.",
+  };
+  const NOT_WEARABLE_EN = { error: "tryon_item_not_wearable", message: "Try-on only works for clothes. Shoes, bags, jewellery and accessories can't be tried on." };
+
+  /** La fausse base, avec des pièces nommées de la recherche du membre. */
+  function withPieces(fake: Fake): Fake {
+    const piece = (id: string, productName: string) => ({ id, search_id: OWN_SEARCH, image_url: THUMB_URL, image_hd_url: HD_URL, merchant_url: "https://boutique.example/piece", product_name: productName });
+    fake.table("product_matches").push(piece(SHOES_MATCH, "Baskets en cuir blanc"), piece(BAG_MATCH, "Mini tote bag"), piece(DRESS_MATCH, "Robe avec ceinture"), piece(UNNAMED_MATCH, ""));
+    return fake;
+  }
+
+  /** Les fonctions de la base appelées (réservation, décompte…), dans l'ordre. */
+  function rpcCalls(fake: Fake): string[] {
+    const calls: string[] = [];
+    const rpc = fake.db.rpc;
+    fake.db.rpc = (async (fn: string, args: Record<string, unknown> = {}) => {
+      calls.push(fn);
+      return rpc(fn, args);
+    }) as typeof fake.db.rpc;
+    return calls;
+  }
+
+  /** Un fournisseur qui note tout appel (essai ou solde) : il ne doit jamais servir. */
+  function watchedProvider() {
+    let balanceReads = 0;
+    const provider = new ScriptedProvider([], async () => {
+      balanceReads += 1;
+      return 1000;
+    });
+    return { provider, balanceReads: () => balanceReads };
+  }
+
+  it("refusé : 422 « tryon_item_not_wearable » (français, anglais) ; ni essai du mois, ni budget, ni appel au fournisseur", async () => {
+    const fake = withPieces(database());
+    const calls = rpcCalls(fake);
+    const { provider, balanceReads } = watchedProvider();
+    const target = await tryonApp(fake, { provider });
+    for (const itemId of [SHOES_MATCH, BAG_MATCH]) {
+      const french = await run(target, { itemId });
+      expect(french.statusCode).toBe(422);
+      expect(french.json()).toEqual(NOT_WEARABLE_FR);
+      const english = await run(target, { itemId }, undefined, { "accept-language": "en" });
+      expect(english.statusCode).toBe(422);
+      expect(english.json()).toEqual(NOT_WEARABLE_EN);
+    }
+    // Aucune réservation, aucun décompte, aucune dépense, aucun appel au fournisseur.
+    expect(calls).toEqual([]);
+    expect(events(fake)).toEqual([]);
+    expect(fake.table("tryon_usage_months")).toEqual([]);
+    expect(provider.timesLeft).toEqual([]);
+    expect(balanceReads()).toBe(0);
+    expect(await status(target)).toMatchObject({ remaining: { free: 5, bonus: 0 } });
+  });
+
+  it("refusé avant le quota et le budget : quota épuisé ou budget atteint, c'est le refus de la pièce qui répond (aucune alerte)", async () => {
+    const fake = withPieces(database());
+    fake.table("tryon_usage_months").push({ month: "2026-11", credits_used: 1333, tries_succeeded: 1333 });
+    for (let index = 0; index < 5; index += 1) {
+      events(fake).push({ id: `e100000${index}-0000-4000-8000-000000000000`, user_id: USER, item_id: MATCH, status: "succeeded", quota_source: "free", credits_used: 1, month: "2026-11", created_at: NOW.toISOString() });
+    }
+    const target = await tryonApp(fake);
+    const response = await run(target, { itemId: SHOES_MATCH });
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toEqual(NOT_WEARABLE_FR);
+    expect(events(fake)).toHaveLength(5);
+    expect(fake.table("tryon_usage_months")).toEqual([{ month: "2026-11", credits_used: 1333, tries_succeeded: 1333 }]);
+    expect(fake.table("tryon_alerts")).toEqual([]);
+  });
+
+  it("permis : un vêtement (même nommé avec un accessoire), un nom vide ou absent passent, comme avant", async () => {
+    const fake = withPieces(database());
+    const target = await tryonApp(fake);
+    for (const itemId of [DRESS_MATCH, UNNAMED_MATCH, MATCH]) {
+      const response = await run(target, { itemId });
+      expect(response.statusCode, itemId).toBe(200);
+    }
+    expect(events(fake).map((row) => [row.item_id, row.status])).toEqual([
+      [DRESS_MATCH, "succeeded"],
+      [UNNAMED_MATCH, "succeeded"],
+      [MATCH, "succeeded"],
+    ]);
+    expect(await status(target)).toMatchObject({ remaining: { free: 2 } });
+  });
+});

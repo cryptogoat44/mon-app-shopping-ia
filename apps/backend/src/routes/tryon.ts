@@ -12,6 +12,8 @@
 // (jamais une adresse venue de l'app), réservation atomique dans la base
 // (quota, un essai à la fois, budget), solde de crédits, photo ré-encodée en
 // mémoire, appel au fournisseur, bandeau « Image générée par IA », décompte.
+// Une pièce qui ne se porte pas sur le corps (chaussure, sac, bijou…) est
+// refusée avant la réservation : ni essai du mois, ni budget, ni fournisseur.
 // Dès la réservation, un seul délai pour tout l'appel au fournisseur (solde,
 // premier envoi, téléchargement de la pièce, second envoi) : 100 s, sous les
 // 120 s du site et loin des 3 minutes après lesquelles la base libère un
@@ -73,6 +75,7 @@ import {
   type Completion,
 } from "../lib/tryon/store.js";
 import { activeTryonConfig } from "../lib/tryon/switch.js";
+import { isWornPiece } from "../lib/tryon/wornPiece.js";
 
 type TryonErrorBody = { error: TryonErrorCode | "invalid_request" | "file_too_large" | "server_busy" | "internal_error"; message: string };
 
@@ -91,6 +94,10 @@ const ACCESS_REFUSALS: Record<TryonAccessRefusal, TryonErrorBody> = {
 const ATTEST_REQUIRED: TryonErrorBody = { error: "tryon_attest_required", message: "Confirmez que cette photo est la vôtre." };
 const ITEM_NOT_FOUND: TryonErrorBody = { error: "tryon_item_not_found", message: "Pièce introuvable." };
 const ITEM_NOT_ELIGIBLE: TryonErrorBody = { error: "tryon_item_not_eligible", message: "Cette pièce ne peut pas être essayée." };
+const ITEM_NOT_WEARABLE: TryonErrorBody = {
+  error: "tryon_item_not_wearable",
+  message: "L'essayage ne fonctionne que pour les vêtements. Les chaussures, sacs, bijoux et accessoires ne peuvent pas être essayés.",
+};
 const PHOTO_INVALID: TryonErrorBody = { error: "tryon_photo_invalid", message: "Cette photo n'a pas pu être lue. Choisissez une photo JPEG, PNG ou WebP." };
 const FILE_TOO_LARGE: TryonErrorBody = { error: "file_too_large", message: "Le fichier est trop volumineux (10 Mo maximum)." };
 const IN_PROGRESS: TryonErrorBody = { error: "tryon_in_progress", message: "Un essai est déjà en cours. Patientez quelques secondes." };
@@ -546,6 +553,10 @@ export default async function tryonRoutes(fastify: FastifyInstance, options: Try
         if (!match) return reply.code(404).send(ITEM_NOT_FOUND);
         const garmentUrls = tryonGarmentUrls(match, config.requireBuyLink);
         if (!garmentUrls) return reply.code(422).send(ITEM_NOT_ELIGIBLE);
+        // Garde-fou : une pièce qui ne se porte pas sur le corps (chaussure, sac,
+        // bijou…) est refusée ici, avant quota, budget et fournisseur (rien de
+        // consommé). Dans le doute, elle passe (lib/tryon/wornPiece.ts).
+        if (!isWornPiece(match.productName)) return reply.code(422).send(ITEM_NOT_WEARABLE);
 
         // 3. Réservation atomique dans la base : quota (aucune limite du mois
         // pour un abonné), un essai à la fois, budget.
