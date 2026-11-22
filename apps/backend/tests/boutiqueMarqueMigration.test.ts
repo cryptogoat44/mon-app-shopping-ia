@@ -7,7 +7,9 @@ import { describe, expect, it } from "vitest";
 // laissée vide, « oui » et vide acceptés, « non » refusé par la base, retour
 // en arrière puis de nouveau ; vérification « false | false » sans erreur
 // avant la migration, « true | true » après) a été essayé sur une base
-// PostgreSQL 16 locale et jetable (jamais Supabase).
+// PostgreSQL 16 locale et jetable (jamais Supabase). Sur la vraie base de
+// développement (le oui écrit par le serveur, la relecture, « non » refusé) :
+// boutiqueMarqueBase.test.ts (sur le Mac, sauté sans 0054).
 
 const SQL = readFileSync(join(__dirname, "../supabase/migrations/0054_boutique_de_la_marque.sql"), "utf8");
 const VERIFICATION = readFileSync(join(__dirname, "../supabase/verifications/0054-verification.sql"), "utf8");
