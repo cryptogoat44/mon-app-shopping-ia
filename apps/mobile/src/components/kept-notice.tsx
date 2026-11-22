@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Platform, Pressable, Text, View } from "react-native";
 import { color, font, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import type { KeptAlert } from "@/lib/keep-alert";
+import { keptNoticeAnnounces, TURN_OFF_IDLE, turnOffFinished, turnOffStarted, turnOffStateFor, type AnnouncedNotice } from "@/lib/kept-notice-state";
 import { ErrorMessage } from "@/components/error-message";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -12,22 +13,27 @@ import { themedStyles } from "@/theme/themed-styles";
  * Parcours 3 : l'alerte de baisse de prix allumée par « Garder » (`alert`
  * « on ») le dit, avec « Couper l'alerte » (`onTurnOff`) ; coupée, « Alerte
  * coupée. » ; jamais allumée (« none »), le message d'avant. En échec, le
- * message d'erreur s'affiche et la ligne reste. */
-export function KeptNotice({ onOpen, alert = "none", onTurnOff }: { onOpen: () => void; alert?: KeptAlert; onTurnOff?: () => Promise<boolean> }) {
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+ * message d'erreur s'affiche et la ligne reste. `pieceId` : la pièce de la
+ * grande carte ; « en cours » et « en échec » restent à leur pièce
+ * (lib/kept-notice-state.ts), sans remonter le message, qui n'est donc pas
+ * relu quand la grande carte passe d'une pièce gardée à une autre. */
+export function KeptNotice({ pieceId, onOpen, alert = "none", onTurnOff }: { pieceId: string; onOpen: () => void; alert?: KeptAlert; onTurnOff?: () => Promise<boolean> }) {
+  const [turnOffState, setTurnOffState] = useState(TURN_OFF_IDLE);
+  const { busy, failed } = turnOffStateFor(turnOffState, pieceId);
   const text = alert === "on" ? t.firstTry.keptWithAlert : alert === "off" ? t.firstTry.alertTurnedOff : t.firstTry.kept;
+  const announced = useRef<AnnouncedNotice | null>(null);
   useEffect(() => {
-    if (Platform.OS === "ios") AccessibilityInfo.announceForAccessibility(text);
-  }, [text]);
+    const next = { pieceId, text };
+    if (keptNoticeAnnounces(announced.current, next) && Platform.OS === "ios") AccessibilityInfo.announceForAccessibility(text);
+    announced.current = next;
+  }, [pieceId, text]);
 
   async function turnOff() {
     if (!onTurnOff || busy) return;
-    setBusy(true);
-    setFailed(false);
+    const piece = pieceId;
+    setTurnOffState(turnOffStarted(piece));
     const off = await onTurnOff();
-    setBusy(false);
-    setFailed(!off);
+    setTurnOffState((prev) => turnOffFinished(prev, piece, off));
   }
 
   return (

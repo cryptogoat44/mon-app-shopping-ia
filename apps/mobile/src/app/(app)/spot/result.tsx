@@ -852,9 +852,9 @@ export default function ResultScreen() {
             />
             {canSendToFriend(piece, messages) ? <SendToFriendLink style={styles.sendToFriend} pieceName={piece.name} onPress={handleSendToFriend} /> : null}
             {canReportResult(alerts, piece) ? <StockReportLink style={styles.sendToFriend} pieceName={piece.name} onPress={handleStockReport} /> : null}
-            {/* Une clé par pièce : « Couper l'alerte » en cours ou en échec reste à sa pièce quand la grande carte change. */}
+            {/* Sans clé (VoiceOver ne relit pas le message à chaque pièce) : « Couper l'alerte » en cours ou en échec reste à sa pièce par `pieceId`. */}
             {keptSaved.has(piece.id) ? (
-              <KeptNotice key={piece.id} onOpen={() => openWishlistFromSpotter(router)} alert={keptNoticeAlert(keptWishes.get(piece.id), bought.has(piece.id))} onTurnOff={() => turnOffAlertFor(piece)} />
+              <KeptNotice pieceId={piece.id} onOpen={() => openWishlistFromSpotter(router)} alert={keptNoticeAlert(keptWishes.get(piece.id), bought.has(piece.id))} onTurnOff={() => turnOffAlertFor(piece)} />
             ) : null}
             {piece.real && reported ? <ReportedLine reason={reported} onPress={openReport} /> : null}
             {actionError ? <ErrorMessage style={styles.actionError}>{actionError}</ErrorMessage> : null}

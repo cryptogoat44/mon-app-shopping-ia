@@ -27,6 +27,7 @@ import type { LegalDocument } from "../src/legal/types";
 import { afterSheetClose, SHEET_CLOSE_FALLBACK_MS } from "../src/lib/after-sheet-close";
 import { ANALYTICS_EVENTS, DURATION_MAX_MS, sanitizeProps } from "../src/lib/analytics-events";
 import { ApiError } from "../src/lib/api-error";
+import { keptNoticeAnnounces, TURN_OFF_IDLE, turnOffFinished, turnOffStarted, turnOffStateFor } from "../src/lib/kept-notice-state";
 import { keepAlertAllowed, keepAlertOffRequest, keepAlertOnRequest, keepAlertPossible, keptNoticeAlert, turnOffKeepAlert, turnOnKeepAlert } from "../src/lib/keep-alert";
 import {
   addToVaultFromQuestion,
@@ -764,24 +765,38 @@ describe("18. Relecture : le message sous la grande carte", () => {
   });
 });
 
-describe("19. Relecture : l'état de « Couper l'alerte » reste à sa pièce", () => {
-  /** Les rendus de KeptNotice sans clé : React y garderait l'état (en cours, en échec) d'une autre pièce. */
-  const withoutKey = (source: string) => (source.match(/<KeptNotice\b[\s\S]*?\/>/g) ?? []).filter((tag) => !/\bkey=\{piece\.id\}/.test(tag));
-
-  it("permis : le message sous la grande carte a une clé par pièce", () => {
+describe("19. Relecture : l'état de « Couper l'alerte » reste à sa pièce, sans relire le message", () => {
+  it("permis : « en cours » et « en échec » de la pièce A sous la pièce A ; annonce à l'apparition et quand l'alerte est coupée", () => {
+    let state = turnOffStarted("A");
+    expect(turnOffStateFor(state, "A")).toEqual({ busy: true, failed: false });
+    state = turnOffFinished(state, "A", false);
+    expect(turnOffStateFor(state, "A")).toEqual({ busy: false, failed: true });
+    expect(turnOffStateFor(turnOffFinished(turnOffStarted("A"), "A", true), "A")).toEqual({ busy: false, failed: false });
+    expect(turnOffStateFor(TURN_OFF_IDLE, "A")).toEqual({ busy: false, failed: false });
+    // Première annonce quand la pièce est gardée, puis « Alerte coupée. » pour la même pièce.
+    expect(keptNoticeAnnounces(null, { pieceId: "A", text: fr.firstTry.keptWithAlert })).toBe(true);
+    expect(keptNoticeAnnounces({ pieceId: "A", text: fr.firstTry.keptWithAlert }, { pieceId: "A", text: fr.firstTry.alertTurnedOff })).toBe(true);
+    // Le message passe par ces décisions, avec la pièce de la grande carte et sans clé.
     const screen = code("app/(app)/spot/result.tsx");
-    expect(screen).toContain("<KeptNotice key={piece.id} ");
-    expect(withoutKey(screen)).toEqual([]);
-    // L'état « en cours » et « en échec » est propre à chaque instance du message.
+    expect(screen).toContain("<KeptNotice pieceId={piece.id} onOpen=");
     const notice = code("components/kept-notice.tsx");
-    expect(notice).toContain("const [busy, setBusy] = useState(false);");
-    expect(notice).toContain("const [failed, setFailed] = useState(false);");
+    expect(notice).toContain("const { busy, failed } = turnOffStateFor(turnOffState, pieceId);");
+    expect(notice).toContain('if (keptNoticeAnnounces(announced.current, next) && Platform.OS === "ios") AccessibilityInfo.announceForAccessibility(text);');
+    expect(notice).toContain("setTurnOffState((prev) => turnOffFinished(prev, piece, off));");
   });
 
-  it("refusé : un message sans clé (l'erreur de la pièce A s'afficherait sous la pièce B) est repéré", () => {
-    expect(withoutKey("<KeptNotice onOpen={open} alert={alert} onTurnOff={off} />")).toHaveLength(1);
-    expect(withoutKey("<KeptNotice key={other.id} onOpen={open} />")).toHaveLength(1);
-    for (const { name, text } of sources) if (text.includes("<KeptNotice")) expect(withoutKey(text), name).toEqual([]);
+  it("refusé : l'état de A sous la pièce B ; la réponse de A qui écrase celle de B ; le message relu quand la grande carte passe de A à B", () => {
+    expect(turnOffStateFor(turnOffStarted("A"), "B")).toEqual({ busy: false, failed: false });
+    expect(turnOffStateFor(turnOffFinished(turnOffStarted("A"), "A", false), "B")).toEqual({ busy: false, failed: false });
+    // B a lancé « Couper l'alerte » pendant que A attendait : la réponse de A ne touche pas B.
+    const b = turnOffStarted("B");
+    expect(turnOffFinished(b, "A", false)).toBe(b);
+    // Passage d'une pièce gardée à une autre, même texte ou non : pas d'annonce.
+    expect(keptNoticeAnnounces({ pieceId: "A", text: fr.firstTry.keptWithAlert }, { pieceId: "B", text: fr.firstTry.keptWithAlert })).toBe(false);
+    expect(keptNoticeAnnounces({ pieceId: "A", text: fr.firstTry.keptWithAlert }, { pieceId: "B", text: fr.firstTry.alertTurnedOff })).toBe(false);
+    expect(keptNoticeAnnounces({ pieceId: "A", text: fr.firstTry.kept }, { pieceId: "A", text: fr.firstTry.kept })).toBe(false);
+    // Une clé remonterait le message à chaque pièce (et le ferait relire) : aucune.
+    for (const { name, text } of sources) for (const tag of text.match(/<KeptNotice\b[\s\S]*?\/>/g) ?? []) expect(tag, name).not.toMatch(/\bkey=/);
   });
 });
 
