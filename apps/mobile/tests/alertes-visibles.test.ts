@@ -287,7 +287,11 @@ describe("6. Politique de confidentialité", () => {
     expect(enAlerts).not.toContain("nothing more is sent");
     expect(frAlerts).toContain("ces identifiants ne sont ni envoyés à Spotto ni gardés par notre serveur. Si vous acceptez les statistiques d'usage, elles comptent seulement le nombre de nouveautés affichées et la sorte de celle que vous ouvrez");
     expect(enAlerts).toContain("these identifiers are neither sent to Spotto nor kept by our server. If you accept usage statistics, they only count the number of updates shown and the kind of the one you open");
-    expect(frAlerts).toContain("les rapports d'erreur ou les statistiques d'usage. Seule exception, si vous les acceptez : les statistiques d'usage comptent le nombre de nouveautés affichées en tête de vos Envies et la sorte de celle que vous ouvrez.");
-    expect(enAlerts).toContain("error reports or usage statistics. The only exception, if you accept them: usage statistics count the number of updates shown at the top of your Wishlist and the kind of the one you open.");
+    // Refusé : « Seule exception » serait faux (une fiche ouverte par une
+    // notification compte « price_alert ») ; permis : les deux cas nommés.
+    expect(frAlerts).not.toContain("Seule exception");
+    expect(enAlerts).not.toContain("The only exception");
+    expect(frAlerts).toContain("les rapports d'erreur ou les statistiques d'usage. Exceptions, si vous les acceptez : les statistiques d'usage comptent le nombre de nouveautés affichées en tête de vos Envies et la sorte de celle que vous ouvrez ; et, pour une fiche ouverte depuis une notification d'alerte, le clic vers la boutique qui suit, le retour de la boutique et la question « Vous l'avez achetée ? » sont comptés comme venant d'une alerte, sans la pièce, la boutique ni le prix.");
+    expect(enAlerts).toContain("error reports or usage statistics. The exceptions, if you accept them: usage statistics count the number of updates shown at the top of your Wishlist and the kind of the one you open; and, for a wish page opened from an alert notification, the shop click that follows, the return from the shop and the “Did you buy it?” question are counted as coming from an alert, without the piece, the shop or the price.");
   });
 });
