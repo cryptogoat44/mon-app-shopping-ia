@@ -11,13 +11,16 @@
 //   viennent après, chacune triée à part ; les propositions sans prix en
 //   dernier, dans l'ordre de la recherche.
 // - « Avec prix seulement » masque les propositions sans prix, dans tous les modes.
+// - « En stock seulement » (lot « stock visible ») masque les offres que Google
+//   disait épuisées au moment de la recherche, dans tous les modes ; celles
+//   dont le stock est inconnu restent.
 // - Les indices restent ceux de la liste complète de l'écran (allPieces) :
 //   chaque carte et ses boutons visent toujours sa propre pièce.
 // Logique pure, testée. Imports relatifs : fichier testé par vitest.
 import { alertCurrency, COUNTRY_CURRENCIES } from "@monapp/shared-types";
 import type { Piece, SpotResult } from "../api/types";
 import { allPieces, type IndexedPiece } from "./result-sections";
-import { hasPrice, priceFirstSections, type PriceFirstSections } from "./price-first";
+import { hasPrice, isSoldOut, priceFirstSections, type PriceFirstSections } from "./price-first";
 
 type ResultLists = Pick<SpotResult, "pieces" | "complement">;
 
@@ -29,6 +32,9 @@ export type PriceSort = Exclude<ResultSort, "relevance">;
 export interface ResultView {
   sort: ResultSort;
   withPriceOnly: boolean;
+  /** « En stock seulement » (lot « stock visible »). Absent : non (choix
+   * gardé avant ce lot, ou jamais touché). */
+  inStockOnly?: boolean;
 }
 
 export const DEFAULT_RESULT_VIEW: ResultView = { sort: "relevance", withPriceOnly: false };
@@ -45,10 +51,11 @@ export function parseResultView(raw: unknown): ResultView {
   try {
     const value: unknown = JSON.parse(raw);
     if (!value || typeof value !== "object") return DEFAULT_RESULT_VIEW;
-    const { sort, withPriceOnly } = value as { sort?: unknown; withPriceOnly?: unknown };
+    const { sort, withPriceOnly, inStockOnly } = value as { sort?: unknown; withPriceOnly?: unknown; inStockOnly?: unknown };
     return {
       sort: typeof sort === "string" && (RESULT_SORTS as readonly string[]).includes(sort) ? (sort as ResultSort) : "relevance",
       withPriceOnly: withPriceOnly === true,
+      ...(inStockOnly === true ? { inStockOnly: true } : {}),
     };
   } catch {
     return DEFAULT_RESULT_VIEW;
@@ -56,7 +63,7 @@ export function parseResultView(raw: unknown): ResultView {
 }
 
 export function serializeResultView(view: ResultView): string {
-  return JSON.stringify({ sort: view.sort, withPriceOnly: view.withPriceOnly });
+  return JSON.stringify({ sort: view.sort, withPriceOnly: view.withPriceOnly, ...(view.inStockOnly === true ? { inStockOnly: true } : {}) });
 }
 
 // ---- Devises ----
@@ -131,8 +138,8 @@ export function dominantCurrency(result: ResultLists, country?: string): string 
  *    « Avec prix seulement ».
  * À prix égal, l'ordre de la recherche décide. Des boutiques arrivées après
  * le premier affichage prennent simplement leur place dans le tri. */
-export function priceSortedList(result: ResultLists, sort: PriceSort, options: { country?: string; withPriceOnly?: boolean } = {}): IndexedPiece[] {
-  const items = indexed(result);
+export function priceSortedList(result: ResultLists, sort: PriceSort, options: { country?: string; withPriceOnly?: boolean; inStockOnly?: boolean } = {}): IndexedPiece[] {
+  const items = options.inStockOnly ? indexed(result).filter(({ piece }) => !isSoldOut(piece)) : indexed(result);
   const direction = sort === "price_asc" ? 1 : -1;
   const amount = (item: IndexedPiece) => item.piece.priceFrom ?? 0;
   const sorted = currencyGroups(items, options.country).flatMap((group) =>
@@ -162,14 +169,16 @@ export interface PriceSummary {
 
 /** Ligne « N offres · à partir de X € » : offres avec un prix dans la devise
  * dominante, et la moins chère. null sans aucun prix. Comptée sur toutes les
- * propositions, quel que soit le mode : elle change quand les boutiques
+ * propositions, quel que soit le tri : elle change quand les boutiques
  * arrivent, jamais la grande carte. Boutiques douteuses (lot « recherche
  * confiance ») : une offre « Prix inhabituellement bas » n'y compte pas —
  * jamais « à partir de » ni « Le moins cher » sur elle ; elle reste dans la
- * liste triée, à sa place, avec sa mention. */
-export function priceSummary(result: ResultLists, country?: string): PriceSummary | null {
+ * liste triée, à sa place, avec sa mention. « En stock seulement »
+ * (`inStockOnly`) : les offres épuisées, cachées, n'y comptent pas — jamais
+ * un « à partir de » ni un « Le moins cher » sur une carte absente de l'écran. */
+export function priceSummary(result: ResultLists, country?: string, options: { inStockOnly?: boolean } = {}): PriceSummary | null {
   const group = currencyGroups(
-    indexed(result).filter(({ piece }) => piece.offerMark !== "unusual_price"),
+    indexed(result).filter(({ piece }) => piece.offerMark !== "unusual_price" && !(options.inStockOnly && isSoldOut(piece))),
     country
   )[0];
   if (!group) return null;
@@ -180,8 +189,11 @@ export function priceSummary(result: ResultLists, country?: string): PriceSummar
 /** Indice de la proposition marquée « Le moins cher » : la moins chère de la
  * devise dominante, s'il y a au moins deux offres à comparer dans cette
  * devise ; null sinon. Elle peut être la grande carte en mode « Pertinence ». */
-export function cheapestIndex(result: ResultLists, country?: string): number | null {
-  const summary = priceSummary(result, country);
+export function cheapestIndex(result: ResultLists, country?: string, options: { inStockOnly?: boolean } = {}): number | null {
+  return cheapestOf(priceSummary(result, country, options));
+}
+
+function cheapestOf(summary: PriceSummary | null): number | null {
   return summary && summary.count >= 2 ? summary.cheapest.index : null;
 }
 
@@ -192,14 +204,23 @@ export function sectionsWithPriceOnly(sections: PriceFirstSections): PriceFirstS
   return { others: priced(sections.others), shopping: priced(sections.shopping), words: priced(sections.words), withoutPrice: [] };
 }
 
+/** « En stock seulement » : les mêmes sections, dans le même ordre, sans les
+ * offres épuisées (les inconnues restent). */
+export function sectionsInStockOnly(sections: PriceFirstSections): PriceFirstSections {
+  const available = (list: IndexedPiece[]) => list.filter(({ piece }) => !isSoldOut(piece));
+  return { others: available(sections.others), shopping: available(sections.shopping), words: available(sections.words), withoutPrice: available(sections.withoutPrice) };
+}
+
 /** La grande carte est-elle montrée ?
  * - « Pertinence » : oui, toujours la même (lib/price-first.ts) ;
  * - tri par prix : seulement quand la personne a touché une carte de la
  *   liste triée (elle passe en grand, avec ses boutons) ;
  * - « Avec prix seulement » : pas une grande carte sans prix. Elle est
  *   seulement masquée : elle ne change pas, et revient le filtre retiré. */
-export function bigCardShown(view: ResultView, bigCard: Pick<Piece, "priceFrom">, pickedInPriceList: boolean): boolean {
+export function bigCardShown(view: ResultView, bigCard: Pick<Piece, "priceFrom" | "inStock">, pickedInPriceList: boolean): boolean {
   if (view.withPriceOnly && !hasPrice(bigCard)) return false;
+  // « En stock seulement » : pas une grande carte épuisée (masquée seulement, comme ci-dessus).
+  if (view.inStockOnly && isSoldOut(bigCard)) return false;
   return view.sort === "relevance" || pickedInPriceList;
 }
 
@@ -207,6 +228,21 @@ export function bigCardShown(view: ResultView, bigCard: Pick<Piece, "priceFrom">
  * dit, avec un bouton pour retirer le filtre, au lieu d'une page vide. */
 export function nothingWithPrice(result: ResultLists, view: ResultView): boolean {
   return view.withPriceOnly && !allPieces(result).some(hasPrice);
+}
+
+/** Plus aucune proposition à montrer avec les filtres choisis (« Avec prix
+ * seulement », « En stock seulement », ou les deux) : l'écran le dit, avec un
+ * bouton pour retirer les filtres. */
+export function nothingWithFilters(result: ResultLists, view: ResultView): boolean {
+  if (!view.withPriceOnly && !view.inStockOnly) return false;
+  return !allPieces(result).some((piece) => (!view.withPriceOnly || hasPrice(piece)) && (!view.inStockOnly || !isSoldOut(piece)));
+}
+
+/** Les offres de l'écran disent-elles quelque chose du stock ? Sinon le
+ * filtre « En stock seulement » n'est pas proposé (il ne retirerait rien),
+ * sauf s'il est déjà choisi : il reste alors visible pour pouvoir le retirer. */
+export function stockFilterShown(result: ResultLists, view: ResultView): boolean {
+  return view.inStockOnly === true || allPieces(result).some((piece) => typeof piece.inStock === "boolean");
 }
 
 /** Ce que l'écran Résultat affiche pour un tri et un filtre donnés. */
@@ -221,6 +257,8 @@ export interface ResultLayout {
   cheapest: number | null;
   /** « Avec prix seulement » et rien avec un prix : le dire, avec de quoi retirer le filtre. */
   emptyWithFilter: boolean;
+  /** « En stock seulement » choisi et plus rien à montrer (avec ou sans « Avec prix seulement ») : le dire, avec de quoi retirer les filtres. */
+  emptyWithStockFilter: boolean;
 }
 
 /** La disposition de l'écran. `selectedIndex` : la grande carte de l'écran
@@ -233,20 +271,33 @@ export function resultLayout(result: ResultLists, view: ResultView, options: { s
   const bigCard = allPieces(result)[selectedIndex];
   const shown = bigCard !== undefined && bigCardShown(view, bigCard, pickedInPriceList);
   const sections = priceFirstSections(result, selectedIndex);
+  const priced = view.withPriceOnly ? sectionsWithPriceOnly(sections) : sections;
+  const priceOptions = { country, withPriceOnly: view.withPriceOnly, ...(view.inStockOnly ? { inStockOnly: true } : {}) };
+  // « En stock seulement » vide l'écran : un seul message, celui des filtres (jamais les deux).
+  const emptyWithStockFilter = view.inStockOnly === true && nothingWithFilters(result, view);
+  const summary = priceSummary(result, country, { inStockOnly: view.inStockOnly === true });
   return {
     bigCard: shown ? selectedIndex : null,
-    sections: view.withPriceOnly ? sectionsWithPriceOnly(sections) : sections,
-    priceList: isPriceSort(view.sort) ? priceListShown(priceSortedList(result, view.sort, { country, withPriceOnly: view.withPriceOnly }), shown ? selectedIndex : null) : null,
-    summary: priceSummary(result, country),
-    cheapest: cheapestIndex(result, country),
-    emptyWithFilter: nothingWithPrice(result, view),
+    sections: view.inStockOnly ? sectionsInStockOnly(priced) : priced,
+    priceList: isPriceSort(view.sort) ? priceListShown(priceSortedList(result, view.sort, priceOptions), shown ? selectedIndex : null) : null,
+    summary,
+    cheapest: cheapestOf(summary),
+    emptyWithFilter: !emptyWithStockFilter && nothingWithPrice(result, view),
+    emptyWithStockFilter,
   };
 }
 
 /** Propriétés de l'événement « result_view_changed » (analytics-events.ts) :
  * le nouveau choix et ce qui a changé, des valeurs fermées seulement. */
-export function resultViewChangeProps(previous: ResultView, next: ResultView): { sort: ResultSort; with_price_only: boolean; change: "sort" | "filter" } | null {
-  if (previous.sort !== next.sort) return { sort: next.sort, with_price_only: next.withPriceOnly, change: "sort" };
-  if (previous.withPriceOnly !== next.withPriceOnly) return { sort: next.sort, with_price_only: next.withPriceOnly, change: "filter" };
+export function resultViewChangeProps(
+  previous: ResultView,
+  next: ResultView
+): { sort: ResultSort; with_price_only: boolean; in_stock_only: boolean; change: "sort" | "filter" | "stock_filter" } | null {
+  // Stock affiché : « filter » garde son sens (« Avec prix seulement ») ;
+  // « stock_filter » est « En stock seulement », in_stock_only son nouvel état.
+  const props = { sort: next.sort, with_price_only: next.withPriceOnly, in_stock_only: next.inStockOnly === true };
+  if (previous.sort !== next.sort) return { ...props, change: "sort" };
+  if (previous.withPriceOnly !== next.withPriceOnly) return { ...props, change: "filter" };
+  if ((previous.inStockOnly === true) !== (next.inStockOnly === true)) return { ...props, change: "stock_filter" };
   return null;
 }

@@ -75,6 +75,11 @@ export const MATCH_ROW = z.object({
   // pièce, reconnue à l'enregistrement de « Cette pièce dans d'autres
   // boutiques » (true seulement) ; vide ailleurs, absente sans 0054.
   brand_shop: z.boolean().nullable().optional(),
+  // Stock affiché (0056) : ce que Google Lens disait au moment de la
+  // recherche (true en stock, false épuisée) ; vide quand il ne disait rien,
+  // ailleurs que dans la recherche visuelle et sur les lignes d'avant ;
+  // absente sans 0056.
+  in_stock: z.boolean().nullable().optional(),
 });
 export type MatchRow = z.infer<typeof MATCH_ROW>;
 
@@ -278,6 +283,8 @@ export function toProductSearch(
         ...(mark ? { offerMark: mark } : {}),
         // « shopping » seulement : rangée en fin de section (jamais affiché ; la grande carte prise dans la section ne la choisit pas).
         ...(demoted ? { demoted: true as const } : {}),
+        // Stock affiché (0056) : seulement quand Google l'a dit (absent : inconnu).
+        ...(typeof m.in_stock === "boolean" ? { inStock: m.in_stock } : {}),
       })),
   };
 }

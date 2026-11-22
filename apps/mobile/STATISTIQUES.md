@@ -153,6 +153,13 @@ vous verrez dans PostHog.
   `shopping_failed` (la recherche en ligne a échoué) ou `failed` (panne du
   réseau ou du serveur, souvent immédiate sans réseau). `wait_ms` (nouveau)
   = l'attente jusqu'à l'issue.
+- **`result_view_changed`** : le tri ou un filtre de l'écran Résultat a
+  changé. `sort` = le tri choisi, `with_price_only` = « Avec prix seulement »
+  allumé ou non, `change` = ce qui a changé : `sort` (le tri), `filter`
+  (« Avec prix seulement », inchangé) ou, nouveau, `stock_filter` (« En stock
+  seulement »). Nouveau aussi : `in_stock_only` = « En stock seulement »
+  allumé ou non (absent dans les versions d'avant). Ce filtre n'est proposé
+  que si une offre de l'écran dit son stock : il est donc rare au début.
 
 ### 5. La boutique
 

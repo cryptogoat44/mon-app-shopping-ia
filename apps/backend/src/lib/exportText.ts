@@ -223,6 +223,9 @@ export const EXPORT_COLUMNS = {
     // un oui sur la boutique officielle de la marque de la pièce, dans
     // « Cette pièce dans d'autres boutiques » (la seule qui y passe en tête).
     brand_shop: technical("Boutique officielle de la marque de la pièce (« Cette pièce dans d'autres boutiques »)", "Official store of the piece's brand (“This piece at other shops”)"),
+    // Colonne de la migration 0056 (stock affiché), décrite d'avance : en
+    // stock (oui) ou épuisée (non) d'après Google, au moment de la recherche.
+    in_stock: technical("En stock d'après Google, au moment de la recherche", "In stock according to Google, at the time of the search"),
   },
   resultFeedback: {
     id: ID,

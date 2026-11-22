@@ -21,6 +21,7 @@ import { allPieces, merchantContextFor, merchantMarkFor, opensOfferPage } from "
 import {
   bestProposalIndex,
   bigCardLabel,
+  firstAvailableIndex,
   chooseCard,
   clickPlacements,
   hasPrice,
@@ -36,7 +37,7 @@ import {
   type ClickPlacement,
   type StartOptions,
 } from "@/lib/price-first";
-import { isPriceSort, resultLayout, type ResultView } from "@/lib/result-sort";
+import { isPriceSort, resultLayout, stockFilterShown, type ResultView } from "@/lib/result-sort";
 import { usePreferences } from "@/lib/preferences-context";
 import { searchCountryFrom } from "@/lib/foreign-shop";
 import { getDraft } from "@/lib/spot-draft";
@@ -61,7 +62,7 @@ import { ReportedLine, ResultFeedbackButton, ResultFeedbackSheet } from "@/compo
 import { ResultComplement, ShopsPending, textSearchStatusNote } from "@/components/result-complement";
 import { TextSearchAlreadyUsed, TextSearchPrompt } from "@/components/text-search-prompt";
 import { CheapestBadge, ProposalCard } from "@/components/proposal-card";
-import { ResultSortBar, WithPriceOnlyEmpty } from "@/components/result-sort-bar";
+import { FiltersEmpty, InStockOnlyToggle, ResultSortBar, WithPriceOnlyEmpty } from "@/components/result-sort-bar";
 import { PriceSortedList } from "@/components/price-sorted-list";
 import { NoPriceSection } from "@/components/no-price-section";
 import { YourPiece } from "@/components/your-piece";
@@ -69,6 +70,7 @@ import { yourPieceImage } from "@/lib/your-piece";
 import { useHeroReveal } from "@/lib/use-hero-reveal";
 import { ForeignShopNote } from "@/components/foreign-shop-note";
 import { OfferMarkNote } from "@/components/offer-mark";
+import { StockNote } from "@/components/stock-note";
 import { KeptNotice } from "@/components/kept-notice";
 import { PurchaseQuestionSheet, type PurchaseQuestionActions } from "@/components/purchase-question-sheet";
 import { SendToFriendLink } from "@/components/send-to-friend-link";
@@ -786,7 +788,11 @@ export default function ResultScreen() {
         {wordsNote && !priceSort ? <Text style={styles.count}>{wordsNote === "words" ? t.result.sortedByWords : t.result.sortedByWordsPriceFirst}</Text> : null}
         {/* Tri des résultats : en haut de la liste, la ligne des prix avec. */}
         <ResultSortBar view={view} onChange={changeView} summary={summaryText} />
+        {/* Stock affiché : « En stock seulement », juste sous « Avec prix seulement », quand une offre dit son stock (ou qu'il est déjà choisi). */}
+        {stockFilterShown(result, view) ? <InStockOnlyToggle view={view} onChange={changeView} /> : null}
         {layout.emptyWithFilter ? <WithPriceOnlyEmpty onShowAll={() => changeView({ ...view, withPriceOnly: false })} /> : null}
+        {/* Stock affiché : « En stock seulement » ne laisse plus rien ; un seul geste retire les deux filtres. */}
+        {layout.emptyWithStockFilter ? <FiltersEmpty onShowAll={() => changeView({ ...view, withPriceOnly: false, inStockOnly: false })} /> : null}
         {noPriceNotice ? <NoPriceNotice /> : null}
 
         {yourPiece ? <YourPiece image={yourPiece} /> : null}
@@ -797,7 +803,7 @@ export default function ResultScreen() {
               <SpotImage hdUri={piece.imageHdUrl} fallbackUri={piece.imageUrl} style={styles.fill} accessibilityLabel={piece.name} />
             </View>
 
-            <Text style={styles.rankLabel}>{bigCardLabelText(bigCardLabel(selectedIndex, bestIndex))}</Text>
+            <Text style={styles.rankLabel}>{bigCardLabelText(bigCardLabel(selectedIndex, bestIndex, firstAvailableIndex(result), allPieces(result)[selectedIndex]))}</Text>
             <Text style={styles.name} accessibilityRole="header">
               {piece.name}
             </Text>
@@ -808,6 +814,8 @@ export default function ResultScreen() {
             <ForeignShopNote piece={piece} />
             {/* Boutiques douteuses : « Boutique connue » ou « Prix inhabituellement bas » (components/offer-mark.tsx). */}
             <OfferMarkNote piece={piece} />
+            {/* Stock affiché : « En stock » ou « Épuisée » d'après Google, au moment de la recherche (components/stock-note.tsx). */}
+            <StockNote piece={piece} />
             {/* Juste sous la proposition, visible sans défilement (décision du fondateur, lot 4 ter). */}
             {sheetActions.length > 0 ? <CorrectionsLink style={styles.notRight} onPress={() => setCorrectionsOpen(true)} /> : null}
 

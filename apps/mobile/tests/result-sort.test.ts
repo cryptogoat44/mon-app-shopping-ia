@@ -399,8 +399,8 @@ describe("choix gardé sur l'appareil", () => {
 
 describe("statistiques : un événement à valeurs fermées", () => {
   it("le nouveau tri ou filtre et ce qui a changé ; rien si rien n'a changé", () => {
-    expect(resultViewChangeProps(DEFAULT_RESULT_VIEW, PRICE_ASC)).toEqual({ sort: "price_asc", with_price_only: false, change: "sort" });
-    expect(resultViewChangeProps(PRICE_ASC, { sort: "price_asc", withPriceOnly: true })).toEqual({ sort: "price_asc", with_price_only: true, change: "filter" });
+    expect(resultViewChangeProps(DEFAULT_RESULT_VIEW, PRICE_ASC)).toEqual({ sort: "price_asc", with_price_only: false, in_stock_only: false, change: "sort" });
+    expect(resultViewChangeProps(PRICE_ASC, { sort: "price_asc", withPriceOnly: true })).toEqual({ sort: "price_asc", with_price_only: true, in_stock_only: false, change: "filter" });
     expect(resultViewChangeProps(PRICE_ASC, PRICE_ASC)).toBeNull();
   });
 
