@@ -1011,6 +1011,19 @@ export const fr = {
     // fiche d'une Envie), même interrupteur « Alertes prix et stock » coupé.
     priceDrop: "Baisse de prix",
     priceDropAt: (price: string) => `Baisse de prix · ${price}`,
+    // Lot « alertes visibles » : les nouveautés en tête de vos Envies. Chaque
+    // ligne dit le prix vu, son jour et sa boutique ; l'écart est celui avec
+    // votre seuil (jamais « promotion » ni prix barré).
+    newsTitle: (count: number) => (count === 1 ? "1 nouveauté" : `${count} nouveautés`),
+    newsSource: `Repérées dans les recherches faites dans ${BRAND}.`,
+    newsPriceDrop: (title: string, price: string, gap: string, day: string, shop: string | null) =>
+      shop ? `${title} : ${price}, ${gap} sous votre seuil · prix vu le ${day} chez ${shop}` : `${title} : ${price}, ${gap} sous votre seuil · prix vu le ${day}`,
+    newsRestock: (title: string, day: string, shop: string | null) =>
+      shop ? `De nouveau disponible : ${title} · vu le ${day} chez ${shop}` : `De nouveau disponible : ${title} · vu le ${day}`,
+    newsOpenHint: "Ouvre cette envie",
+    newsHide: "Masquer",
+    newsHideLabel: "Masquer les nouveautés",
+    newsTabLabel: (tab: string) => `${tab}, avec des nouveautés`,
   },
   // Lot collections : collections d'envies, privées ou montrées aux amis
   // (puces de l'écran Envies, « Ajouter à une collection », profil d'un ami).

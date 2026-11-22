@@ -45,7 +45,7 @@
 // Journal : des codes, jamais un compte, un titre ni une adresse.
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { z } from "zod";
-import { alertCurrency, COUNTRY_CURRENCIES, SEARCH_COUNTRIES, WISH_ALERT_RULES, STOCK_STATES, type WishAlertState, type WishAlertsStatus } from "@monapp/shared-types";
+import { alertCurrency, COUNTRY_CURRENCIES, SEARCH_COUNTRIES, WISH_ALERT_RULES, STOCK_STATES, type WishAlertNews, type WishAlertState, type WishAlertsStatus } from "@monapp/shared-types";
 import { ALERT_KEY_VERSION, trackingKeyOf, type TrackingKey } from "./alertKeys.js";
 import { keptMatchIds } from "./keptPieces.js";
 import { forgetAlertsOnlyDevices, pushAvailable } from "./push.js";
@@ -499,6 +499,128 @@ export async function saveWatch(fastify: Db, userId: string, wishId: string, cho
   // Deux demandes simultanées : la base n'en garde qu'une.
   if (inserted.error?.code === "23505" && (await refresh())) return;
   if (inserted.error) throw new WishAlertsStoreError("Cloche non enregistrée");
+}
+
+// ---- Nouveautés dans l'app (lot « alertes visibles ») ----
+// Les alertes de la personne des 30 derniers jours, montrées en tête de ses
+// Envies. Une simple lecture : rien n'est écrit (ce qui est « vu » est gardé
+// sur l'appareil). L'expiration du 3e jour (wish_alerts_claim) ne fait que
+// passer l'alerte « expirée » pour l'ENVOI : la ligne reste jusqu'à la purge
+// des 30 jours, et l'app la montre. Seules les siennes (user_id), seulement
+// baisse de prix et retour en stock (« Épuisé » est caché dans l'app), jamais
+// une alerte périmée, désactivée ou limitée ; et seulement si elle est encore
+// vraie aujourd'hui, comme la revérification de l'envoi : cloche de cette
+// sorte allumée, pièce pas achetée, prix toujours sous le seuil et pièce pas
+// épuisée (baisse ; le seuil renvoyé est celui d'aujourd'hui, pas celui du
+// jour de l'alerte), pièce en stock (retour). Une seule ligne par envie et par
+// sorte (la plus récente). Ainsi la mention « Baisse de prix » de la grille et
+// le bandeau ne se contredisent jamais.
+
+/** Au plus ce nombre de nouveautés renvoyées. */
+export const MAX_WISH_ALERT_NEWS = 20;
+/** Au plus ce nombre d'alertes lues avant le tri (bornée). */
+const NEWS_READ_LIMIT = 200;
+/** États montrés : en attente, envoyée, expirée (envoi seulement). */
+const NEWS_STATUSES = ["pending", "sent", "expired"] as const;
+const NEWS_KINDS = ["price_drop", "restock"] as const;
+
+const NEWS_EVENT_ROW = z.object({
+  id: z.guid(),
+  wishlist_item_id: z.guid(),
+  kind: z.enum(NEWS_KINDS),
+  old_price: AMOUNT.nullable(),
+  new_price: AMOUNT.nullable(),
+  currency: z.string().nullable(),
+  created_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+const NEWS_WISH_ROW = z.object({ id: z.guid(), title: z.string(), merchant_name: z.string().nullable() });
+const NEWS_TRACKING_ROW = z.object({ wishlist_item_id: z.guid(), stock_state: z.enum(STOCK_STATES), bought_on: z.string().nullable() });
+const NEWS_WATCH_ROW = z.object({
+  wishlist_item_id: z.guid(),
+  notify_price_drop: z.boolean(),
+  notify_restock: z.boolean(),
+  below_target: z.boolean().nullable(),
+  target_price: AMOUNT.nullable(),
+  target_currency: z.string().nullable(),
+});
+
+/** Le jour (Paris) `days` jours avant `today` (« AAAA-MM-JJ »). */
+function daysBefore(today: string, days: number): string {
+  const date = new Date(`${today}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - days);
+  return date.toISOString().slice(0, 10);
+}
+
+/** Les nouveautés de la personne (au plus MAX_WISH_ALERT_NEWS, les plus
+ * récentes d'abord). Sans 0041 : aucune. `now` : pour les tests seulement. */
+export async function readWishAlertNews(fastify: Db, userId: string, now: Date = new Date()): Promise<WishAlertNews[]> {
+  if (!(await wishAlertsReady(fastify))) return [];
+  const today = parisDay(now);
+  if (today === null) return [];
+  const db = fastify.supabaseAdmin;
+  const events = parseDbRows(
+    z.array(NEWS_EVENT_ROW),
+    await db
+      .from("wish_alert_events")
+      .select("id, wishlist_item_id, kind, old_price, new_price, currency, created_on")
+      .eq("user_id", userId)
+      .in("kind", [...NEWS_KINDS])
+      .in("status", [...NEWS_STATUSES])
+      .gte("created_on", daysBefore(today, WISH_ALERT_RULES.retentionDays))
+      .order("created_on", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(NEWS_READ_LIMIT),
+    "Nouveautés des envies"
+  );
+  // La plus récente par envie et par sorte.
+  const latest = new Map<string, z.infer<typeof NEWS_EVENT_ROW>>();
+  for (const event of events) {
+    if (event.created_on > today) continue;
+    const key = `${event.wishlist_item_id}:${event.kind}`;
+    if (!latest.has(key)) latest.set(key, event);
+  }
+  const ids = [...new Set([...latest.values()].map((event) => event.wishlist_item_id))];
+  if (ids.length === 0) return [];
+  const [wishes, trackings, watches, boughtByMatch] = await Promise.all([
+    db.from("wishlist_items").select("id, title, merchant_name").eq("user_id", userId).in("id", ids).then((result) => parseDbRows(z.array(NEWS_WISH_ROW), result, "Envies des nouveautés")),
+    db.from("wish_tracking").select("wishlist_item_id, stock_state, bought_on").eq("user_id", userId).in("wishlist_item_id", ids).then((result) => parseDbRows(z.array(NEWS_TRACKING_ROW), result, "Suivi des nouveautés")),
+    db.from("wish_watches").select("wishlist_item_id, notify_price_drop, notify_restock, below_target, target_price, target_currency").eq("user_id", userId).in("wishlist_item_id", ids).then((result) => parseDbRows(z.array(NEWS_WATCH_ROW), result, "Cloches des nouveautés")),
+    boughtWishIds(fastify, userId, ids),
+  ]);
+  const wishById = new Map(wishes.map((row) => [row.id, row]));
+  const trackingById = new Map(trackings.map((row) => [row.wishlist_item_id, row]));
+  const watchById = new Map(watches.map((row) => [row.wishlist_item_id, row]));
+  const news: WishAlertNews[] = [];
+  for (const event of latest.values()) {
+    const wish = wishById.get(event.wishlist_item_id);
+    const tracking = trackingById.get(event.wishlist_item_id);
+    const watch = watchById.get(event.wishlist_item_id);
+    if (!wish || !tracking || !watch || tracking.bought_on || boughtByMatch.has(event.wishlist_item_id)) continue;
+    if (event.kind === "price_drop") {
+      const priced = event.old_price !== null && event.new_price !== null && event.currency !== null && /^[A-Z]{3}$/.test(event.currency) && event.new_price < event.old_price;
+      if (!priced || !watch.notify_price_drop || watch.below_target !== true || tracking.stock_state === "sold_out") continue;
+      // L'écart se mesure avec le seuil d'AUJOURD'HUI (celui de la cloche),
+      // pas celui du jour de l'alerte : seuil changé depuis, même devise et
+      // prix vu toujours dessous, sinon la ligne n'est pas montrée.
+      const threshold = watch.target_price;
+      if (threshold === null || !(threshold > 0) || watch.target_currency !== event.currency || Math.round(event.new_price! * 100) >= Math.round(threshold * 100)) continue;
+    } else if (!watch.notify_restock || tracking.stock_state !== "in_stock") {
+      continue;
+    }
+    news.push({
+      id: event.id,
+      wishlistItemId: event.wishlist_item_id,
+      kind: event.kind,
+      title: wish.title,
+      merchantName: wish.merchant_name,
+      price: event.kind === "price_drop" ? event.new_price : null,
+      threshold: event.kind === "price_drop" ? watch.target_price : null,
+      currency: event.kind === "price_drop" ? event.currency : null,
+      seenOn: event.created_on,
+    });
+    if (news.length >= MAX_WISH_ALERT_NEWS) break;
+  }
+  return news;
 }
 
 // ---- « Plus disponible » (stock_reports) ----

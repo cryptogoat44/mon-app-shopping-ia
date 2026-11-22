@@ -459,6 +459,29 @@ rarement posée ; si la médiane est bien au-dessus, les 30 secondes laissent
 passer la plupart des vraies visites. Changer ce seuil est un changement de
 code (`MIN_AWAY_MS`, `apps/mobile/src/lib/purchase-question.ts`).
 
+## Les nouveautés des Envies (lot « alertes visibles »)
+
+Le bandeau « 2 nouveautés » en tête des Envies (onglet Envies du Profil)
+montre les baisses de prix et les retours en stock des 30 derniers jours,
+encore vrais.
+
+- **`news_banner_shown`** : le bandeau affiche des nouveautés pas encore vues
+  sur cet appareil ; `count` = combien. Une fois par nouveauté : affichée,
+  elle est notée « vue » sur l'appareil.
+- **`news_line_opened`** : une ligne du bandeau touchée (l'Envie s'ouvre) ;
+  `kind` = `price_drop` (baisse de prix) ou `restock` (retour en stock).
+  Ni la pièce, ni la boutique, ni le prix, ni le jour.
+- Ouverte depuis le bandeau, la fiche de l'Envie compte le clic vers la
+  boutique avec `context` = `wishlist`, comme une fiche ouverte depuis la
+  liste (jamais `price_alert`, réservé à une fiche ouverte par une
+  notification) : la confidentialité promet que, pour les nouveautés, les
+  statistiques comptent seulement leur nombre et la sorte ouverte.
+
+**Part des membres qui ouvrent une nouveauté** : entonnoir (**Unique
+users**, **1 day**) `news_banner_shown` → `news_line_opened`. Le clic vers
+la boutique qui suit ne se distingue pas d'un clic depuis la liste des
+Envies.
+
 ## Les limites
 
 - **Un parcours n'a pas d'identifiant à lui** : les entonnoirs se font par
