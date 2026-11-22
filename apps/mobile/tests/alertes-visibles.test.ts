@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const { track } = vi.hoisted(() => ({ track: vi.fn() }));
 vi.mock("../src/lib/analytics", () => ({ track, isAnalyticsActive: () => true }));
 
-import type { WishAlertNews } from "@monapp/shared-types";
+import { LEGAL_DOCUMENT_VERSIONS, type WishAlertNews } from "@monapp/shared-types";
 import { fr } from "../src/i18n/fr";
 import { en } from "../src/i18n/en";
 import { setActiveLocale } from "../src/i18n";
@@ -262,5 +262,23 @@ describe("6. Politique de confidentialité", () => {
     const enAlerts = section(privacyPolicyEn, "Price and stock alerts");
     expect(enAlerts).toContain("Updates in the app: at the top of your Wishlist,");
     expect(enAlerts).toContain("What you have already seen is noted only on your device, for your account");
+  });
+
+  it("permis : les deux comptages des nouveautés sont dits (FR et EN), sans nouvelle version ; refusé : « rien de plus n'est envoyé » et « membres prévenus … statistiques d'usage » sans exception", () => {
+    expect(LEGAL_DOCUMENT_VERSIONS.privacy_policy).toBe("projet-2026-11-05");
+    const dataFr = privacyPolicy.sections.find((s) => s.title === "Les données que nous utilisons")!.blocks as string[];
+    const statsFr = dataFr.findIndex((block) => block.startsWith("Des statistiques d'usage, SEULEMENT si vous l'acceptez"));
+    expect(dataFr[statsFr + 2]).toBe("Si vous les acceptez, les statistiques d'usage comptent aussi le nombre de nouveautés affichées en tête de vos Envies et la sorte (baisse de prix ou retour en stock) de celle que vous ouvrez ; jamais la pièce, la boutique, le prix ni le jour.");
+    const dataEn = privacyPolicyEn.sections.find((s) => s.title === "The data we use")!.blocks as string[];
+    const statsEn = dataEn.findIndex((block) => block.startsWith("Usage statistics, ONLY if you agree"));
+    expect(dataEn[statsEn + 2]).toBe("If you accept them, usage statistics also count the number of updates shown at the top of your Wishlist and the kind (price drop or return to stock) of the one you open; never the piece, the shop, the price or the day.");
+    const frAlerts = section(privacyPolicy, "Alertes prix et stock");
+    const enAlerts = section(privacyPolicyEn, "Price and stock alerts");
+    expect(frAlerts).not.toContain("rien de plus n'est envoyé");
+    expect(enAlerts).not.toContain("nothing more is sent");
+    expect(frAlerts).toContain("ces identifiants ne sont ni envoyés à Spotto ni gardés par notre serveur. Si vous acceptez les statistiques d'usage, elles comptent seulement le nombre de nouveautés affichées et la sorte de celle que vous ouvrez");
+    expect(enAlerts).toContain("these identifiers are neither sent to Spotto nor kept by our server. If you accept usage statistics, they only count the number of updates shown and the kind of the one you open");
+    expect(frAlerts).toContain("les rapports d'erreur ou les statistiques d'usage. Seule exception, si vous les acceptez : les statistiques d'usage comptent le nombre de nouveautés affichées en tête de vos Envies et la sorte de celle que vous ouvrez.");
+    expect(enAlerts).toContain("error reports or usage statistics. The only exception, if you accept them: usage statistics count the number of updates shown at the top of your Wishlist and the kind of the one you open.");
   });
 });
