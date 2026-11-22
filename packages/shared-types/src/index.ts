@@ -2404,6 +2404,8 @@ export type TryonErrorCode =
   | "tryon_attest_required"
   | "tryon_item_not_found"
   | "tryon_item_not_eligible"
+  /** La pièce ne se porte pas sur le corps (chaussure, sac, bijou…) : refusée avant toute dépense. */
+  | "tryon_item_not_wearable"
   | "tryon_photo_invalid"
   | "tryon_in_progress"
   | "tryon_quota_exhausted"
