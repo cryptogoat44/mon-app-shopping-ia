@@ -199,6 +199,17 @@ describe("garde-fou : pas de bouton « Essayer » pour une pièce qui ne se port
     expect(tryonItemId({ ...piece, title: "Veste", category: null })).toBe(ITEM);
   });
 
+  it("permis : vêtements courants nommés avec une coupe, une encolure ou un détail d'accessoire ; refusé : l'accessoire seul", () => {
+    for (const title of ["Jean droit avec ceinture", "Jean ceinturé", "Haut col bijou", "Body col bijou", "Combishort ceinturé", "Capri pant with belt"]) {
+      expect(isWornPiece(title), title).toBe(true);
+      expect(tryonItemId({ ...piece, title }), title).toBe(ITEM);
+    }
+    for (const title of ["Ceinture tressée", "Collier bijou"]) {
+      expect(isWornPiece(title), title).toBe(false);
+      expect(tryonItemId({ ...piece, title }), title).toBeNull();
+    }
+  });
+
   it("refus du serveur (le site ne le savait pas) : une phrase claire, en français et en anglais ; l'étape reste, aucun essai à relire", () => {
     const refusal = server("tryon_item_not_wearable", "Message du serveur.");
     setActiveLocale("fr");

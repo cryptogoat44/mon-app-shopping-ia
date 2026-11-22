@@ -51,6 +51,31 @@ describe("vêtements, et pièces dans le doute : permis, comme avant", () => {
     for (const title of ["Robe avec ceinture", "Trench-coat ceinturé à boucle", "Belted wool coat", "Chemise à motif sacs"]) expect(isWornPiece(title), title).toBe(true);
   });
 
+  it("vêtements courants nommés avec une coupe, une encolure ou un détail d'accessoire (« jean coupe boot », « col bijou ») : permis", () => {
+    const allowed = [
+      "Jean coupe boot",
+      "Jean droit avec ceinture",
+      "Jean ceinturé",
+      "Mom jean paper bag",
+      "Haut col bijou",
+      "Haut manches bracelet",
+      "Body col bijou",
+      "Bustier col bijou",
+      "Maillot de basket Lakers",
+      "Bermuda à ceinture",
+      "Caban ceinturé",
+      "Combishort ceinturé",
+      "Corset ceinture",
+      "Cape à capuche et ceinture",
+      "Capri pant with belt",
+    ];
+    for (const title of allowed) expect(isWornPiece(title), title).toBe(true);
+  });
+
+  it("les mêmes accessoires sans nom de vêtement : toujours refusés", () => {
+    for (const title of ["Ceinture tressée", "Bottes coupe boot", "Collier bijou", "Bracelet jonc"]) expect(isWornPiece(title), title).toBe(false);
+  });
+
   it("nom vide, absent ou sans mot reconnu : la pièce passe", () => {
     for (const title of ["", "   ", null, undefined, "Nouvelle collection", "Article 12345", "Zara"]) expect(isWornPiece(title), String(title)).toBe(true);
   });

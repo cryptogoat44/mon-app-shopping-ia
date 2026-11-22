@@ -5,7 +5,8 @@
     "pull", "sweater", "jumper", "pullover", "gilet", "cardigan", "vest", "sweat", "sweatshirt", "hoodie",
     "chemise", "shirt", "tshirt", "tee", "top", "chemisier", "blouse", "debardeur", "tank", "polo", "tunique", "tunic",
     "robe", "dress", "gown", "jupe", "skirt", "pantalon", "trousers", "pants", "jeans", "chino", "short", "legging", "jogging", "jogger",
-    "combinaison", "jumpsuit", "salopette", "overall", "costume", "tailleur", "suit", "kimono", "poncho", "pyjama", "survetement", "tracksuit", "bodysuit"
+    "combinaison", "jumpsuit", "salopette", "overall", "costume", "tailleur", "suit", "kimono", "poncho", "pyjama", "survetement", "tracksuit", "bodysuit",
+    "jean", "haut", "body", "maillot", "jersey", "bermuda", "pantacourt", "pant", "trouser", "combishort", "caban", "cape", "saharienne", "bustier", "brassiere", "corset"
   ],
   "nonPortees": [
     "chaussure", "shoe", "basket", "sneaker", "trainer", "botte", "bottine", "boot", "sandale", "sandal", "escarpin", "pump", "heel",
