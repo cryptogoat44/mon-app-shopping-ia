@@ -36,7 +36,7 @@ import {
 } from "@monapp/shared-types";
 import type { Piece } from "../api/types";
 import { t } from "../i18n";
-import { track } from "./analytics";
+import { isAnalyticsActive, track } from "./analytics";
 import { ApiError } from "./api-error";
 import { formatPrice } from "./format";
 import type { Locale } from "./preferences";
@@ -406,15 +406,23 @@ export function priceDropPrices(
 let priceDropsTracked = false;
 
 /** « price_drop_shown » : la grille des Envies montre au moins une « Baisse
- * de prix ». Une fois au plus tant que l'app reste ouverte (mémoire de l'app,
- * rien sur l'appareil) ; `count` : combien. */
+ * de prix ». Une fois au plus tant que l'app reste ouverte et que le même
+ * compte est connecté (mémoire de l'app, rien sur l'appareil) ; `count` :
+ * combien. Compté comme envoyé seulement si la collecte est active (accord
+ * lu) : sans accord, rien ne part et l'événement reste à envoyer. */
 export function trackPriceDropsShown(count: number): void {
-  if (count <= 0 || priceDropsTracked) return;
+  if (count <= 0 || priceDropsTracked || !isAnalyticsActive()) return;
   priceDropsTracked = true;
   track("price_drop_shown", { count });
 }
 
+/** Déconnexion ou autre compte (components/analytics-session.tsx) : le
+ * compte suivant peut envoyer le sien. */
+export function forgetPriceDropsShown(): void {
+  priceDropsTracked = false;
+}
+
 /** Tests seulement : comme une app rouverte. */
 export function resetPriceDropsShownForTests(): void {
-  priceDropsTracked = false;
+  forgetPriceDropsShown();
 }

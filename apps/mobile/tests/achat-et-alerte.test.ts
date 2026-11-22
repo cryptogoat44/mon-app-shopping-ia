@@ -8,13 +8,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // lecture des sources, comme les autres tests de l'app (pas de rendu de
 // composants, vitest.config.ts). api.ts et les statistiques sont remplacés :
 // rien ne part.
-const { track, updateWishAlert, fetchWishAlertsStatus } = vi.hoisted(() => ({
+const { track, isAnalyticsActive, updateWishAlert, fetchWishAlertsStatus } = vi.hoisted(() => ({
   track: vi.fn(),
+  isAnalyticsActive: vi.fn(() => true),
   updateWishAlert: vi.fn(),
   fetchWishAlertsStatus: vi.fn(),
 }));
 vi.mock("../src/lib/api", () => ({ updateWishAlert, fetchWishAlertsStatus }));
-vi.mock("../src/lib/analytics", () => ({ track }));
+vi.mock("../src/lib/analytics", () => ({ track, isAnalyticsActive }));
 
 import { LEGAL_DOCUMENT_VERSIONS, type WishAlertState, type WishAlertsStatus } from "@monapp/shared-types";
 import type { Piece } from "../src/api/types";
@@ -47,7 +48,7 @@ import {
   WEB_HIDE_WINDOW_MS,
   type ShopReturn,
 } from "../src/lib/purchase-question";
-import { ALERTS_UNAVAILABLE, priceDropNow, priceDropPrices, resetPriceDropsShownForTests, setWishAlertsStatus, trackPriceDropsShown } from "../src/lib/wish-alerts";
+import { ALERTS_UNAVAILABLE, forgetPriceDropsShown, priceDropNow, priceDropPrices, resetPriceDropsShownForTests, setWishAlertsStatus, trackPriceDropsShown } from "../src/lib/wish-alerts";
 
 const SRC = join(__dirname, "../src");
 const read = (path: string) => readFileSync(join(SRC, path), "utf8");
@@ -107,6 +108,8 @@ const FR_CONTEXT = { country: "fr", bought: false };
 
 beforeEach(() => {
   track.mockReset();
+  isAnalyticsActive.mockReset();
+  isAnalyticsActive.mockReturnValue(true);
   updateWishAlert.mockReset();
   fetchWishAlertsStatus.mockReset();
   setWishAlertsStatus(AVAILABLE_SWITCH_OFF);
@@ -813,6 +816,44 @@ describe("20. Relecture : « Vous l'avez achetée ? » défile sur un petit écr
     expect(scrolls(sheet.replace("<ScrollView", "<View").replace("</ScrollView>", "</View>"))).toBe(false);
     const categoryOutside = sheet.replace('{step.kind === "category" ? (', "").replace("</ScrollView>", '</ScrollView>{step.kind === "category" ? (');
     expect(scrolls(categoryOutside)).toBe(false);
+  });
+});
+
+describe("21. Relecture : « price_drop_shown » une fois par ouverture et par compte, envoyé pour de vrai", () => {
+  beforeEach(() => resetPriceDropsShownForTests());
+
+  it("permis : sans accord rien ne part et l'événement reste à envoyer ; l'accord lu, il part une fois ; un autre compte envoie le sien", () => {
+    isAnalyticsActive.mockReturnValue(false);
+    trackPriceDropsShown(2);
+    expect(track).not.toHaveBeenCalled();
+    isAnalyticsActive.mockReturnValue(true);
+    trackPriceDropsShown(3);
+    expect(track.mock.calls).toEqual([["price_drop_shown", { count: 3 }]]);
+    // Déconnexion, puis un autre compte qui a accepté les statistiques.
+    forgetPriceDropsShown();
+    trackPriceDropsShown(1);
+    expect(track.mock.calls).toEqual([
+      ["price_drop_shown", { count: 3 }],
+      ["price_drop_shown", { count: 1 }],
+    ]);
+    // Le nettoyage du compte (déconnexion ou autre compte) oublie l'envoi.
+    const session = code("components/analytics-session.tsx");
+    expect(body(session, "return () => {", "}, [userId]);")).toContain("forgetPriceDropsShown();");
+  });
+
+  it("refusé : une seconde fois pour le même compte pendant l'ouverture ; aucune « Baisse de prix » ; jamais sans passer par la collecte active", () => {
+    trackPriceDropsShown(2);
+    trackPriceDropsShown(4);
+    trackPriceDropsShown(0);
+    expect(track.mock.calls).toEqual([["price_drop_shown", { count: 2 }]]);
+    forgetPriceDropsShown();
+    trackPriceDropsShown(0);
+    isAnalyticsActive.mockReturnValue(false);
+    trackPriceDropsShown(5);
+    expect(track).toHaveBeenCalledTimes(1);
+    expect(body(code("lib/wish-alerts.ts"), "export function trackPriceDropsShown(", "export function forgetPriceDropsShown(")).toContain(
+      "if (count <= 0 || priceDropsTracked || !isAnalyticsActive()) return;\n  priceDropsTracked = true;"
+    );
   });
 });
 
