@@ -4,6 +4,7 @@ import type { ExportDataKey } from "../src/lib/exportData.js";
 import { formatPrice, localDay, resolveTimeZone, summarizeUserAgent } from "../src/lib/exportFormat.js";
 import { EXPORT_APPENDIX_ID, escapeHtml, renderExportHtml, type ExportHtmlOptions } from "../src/lib/exportHtml.js";
 import { EXPORT_COLUMNS, EXPORT_SECTIONS, EXPORT_TEXT, MODERATION_ACTION_LABELS, REPORT_HANDLED_LABELS, type Bilingual } from "../src/lib/exportText.js";
+import { verdictTier } from "../src/lib/lightSort.js";
 import { chunks, readAll, type PagedQuery, type PageResult } from "../src/lib/pagedReads.js";
 import { BLOCKED, BLOCKER, FRIEND, GOOGLE_THUMB, SELF, STORAGE, decodeHtml, fixture, lookups, own, sectionHtml, visibleText } from "./exportFixture.js";
 
@@ -586,11 +587,18 @@ describe("colonne de la migration 0055 (verdict), décrite d'avance", () => {
   it("permis : un libellé en français et en anglais qui dit ce que veut dire chaque palier, dans la version JSON seulement", () => {
     expect(EXPORT_COLUMNS.productMatches.title_tier).toMatchObject({
       label: {
-        fr: "Le titre de l'offre nomme la marque et le modèle de la pièce (0), la marque seule (1) ou aucun (2) (« Cette pièce dans d'autres boutiques »)",
-        en: "The offer's title names the piece's brand and model (0), the brand only (1) or neither (2) (“This piece at other shops”)",
+        fr: "Le titre de l'offre nomme la marque et le modèle de la pièce (0), la marque sans le modèle (1), ou pas la marque (2) (« Cette pièce dans d'autres boutiques »)",
+        en: "The offer's title names the piece's brand and model (0), the brand without the model (1), or not the brand (2) (“This piece at other shops”)",
       },
       technical: true,
     });
+  });
+
+  it("refusé : le palier 2 n'est jamais dit « aucun » / \"neither\" — un titre qui nomme le modèle sans la marque est aussi au palier 2", () => {
+    expect(verdictTier("Air Max 90 baskets blanches", { brand: "Nike", model: "Air Max 90" })).toBe(2);
+    const label = EXPORT_COLUMNS.productMatches.title_tier!.label;
+    expect(label.fr).not.toMatch(/aucun|ni l'un|rien|seule/);
+    expect(label.en).not.toMatch(/neither|nothing|none|only/);
   });
 
   it("refusé : jamais dans la page lisible ni comme colonne inconnue, vide (lignes d'avant, autres sections) comme noté", () => {
