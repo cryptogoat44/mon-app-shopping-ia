@@ -374,9 +374,11 @@ export interface ProductSearch {
 
 /** Niveaux du verdict, du plus affirmé au plus modeste :
  * - identified : au moins deux boutiques connues ou sites officiels de marque,
- *   distincts, nomment dans leur titre la marque ET le modèle de la pièce ;
- * - close : la marque concorde dans un titre au moins, sans aller jusque-là ;
- * - lookalikes : rien de tel (pièce sans marque, IA coupée, aucun accord). */
+ *   distincts (places de marché et revente exclues), nomment dans leur titre
+ *   la marque ET le modèle de la pièce ;
+ * - close : une seule de ces boutiques le fait ;
+ * - lookalikes : rien de tel (marque seule, boutiques inconnues seulement,
+ *   pièce sans marque, IA coupée, aucun accord). */
 export const VERDICT_LEVELS = ["identified", "close", "lookalikes"] as const;
 export type VerdictLevel = (typeof VERDICT_LEVELS)[number];
 

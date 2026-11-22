@@ -1107,6 +1107,12 @@ describe("verdict (0055) : le palier noté avec les boutiques, la phrase renvoy�
   });
 
   it("permis : boutiques ensuite — aucun verdict au lancement (boutiques attendues), puis le verdict avec les boutiques, et à la relecture", async () => {
+    // Une seule enseigne connue nomme la marque et le modèle, une boutique inconnue aussi : « close ».
+    shoppingMock.mockResolvedValue({
+      items: [shoppingItem(1, "Exemplor veste Nuage 07", "https://boutique-a.fr/1"), shoppingItem(2, "Veste Exemplor Nuage 07", "https://www.zalando.fr/2")],
+      received: 2,
+      statusCode: 200,
+    });
     const target = await buildApp();
     const id = preparedSearch();
     const first = await launch(target, id, { complement: "deferred" });
@@ -1114,11 +1120,20 @@ describe("verdict (0055) : le palier noté avec les boutiques, la phrase renvoy�
     expect(first.json().complement.pending).toBe(true);
     expect("verdict" in first.json()).toBe(false);
     expect("verdict" in (await reread(target, id))).toBe(false);
-    // Boutiques par défaut : boutique-a.fr (inconnue) nomme la marque et le modèle, boutique-b.fr rien.
     const later = await complement(target, id);
     expect(later.json().complement.status).toBe("shown");
     expect(later.json().verdict).toEqual({ level: "close" });
     expect((await reread(target, id)).verdict).toEqual({ level: "close" });
+  });
+
+  it("refusé : seule une boutique inconnue nomme la marque et le modèle (boutiques par défaut) — « lookalikes », jamais « close »", async () => {
+    const target = await buildApp();
+    const id = preparedSearch();
+    const res = await launch(target, id);
+    expect(res.json().complement.status).toBe("shown");
+    expect(shoppingTiers(id)).toEqual([0, 2]);
+    expect(res.json().verdict).toEqual({ level: "lookalikes" });
+    expect((await reread(target, id)).verdict).toEqual({ level: "lookalikes" });
   });
 
   it("permis : pièce sans marque reconnue (l'IA ne propose aucune requête) — « lookalikes », sans aucune recherche dans les boutiques", async () => {

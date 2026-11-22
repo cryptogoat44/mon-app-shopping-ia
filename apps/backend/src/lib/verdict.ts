@@ -8,30 +8,37 @@
 //
 // Règle d'or : la prudence. Annoncer « la même pièce » à tort serait
 // trompeur ; dans le doute, le verdict est le plus modeste, et quand on ne
-// sait pas, il n'y en a pas du tout. Les seuils :
-// - « identified » : au moins VERDICT_MIN_SHOPS (2) boutiques DISTINCTES de
-//   « Cette pièce dans d'autres boutiques » nomment dans leur titre la marque
-//   ET le modèle de la pièce (palier 0, lib/lightSort.ts, verdictTier), et ne
-//   comptent que les boutiques connues et les sites officiels des marques
-//   (listes du fondateur, src/listes/) : sur Google Shopping, des titres
-//   « bourrés de marques » de boutiques inconnues suffiraient sinon. Deux
-//   offres d'une même enseigne (même adresse, ou deux pays de la même
-//   enseigne : zalando.fr et zalando.be) comptent pour une. Une offre signalée
-//   (prix inhabituellement bas ou adresse douteuse : rangée en fin de
-//   section) ne compte jamais, ni une offre retirée.
-// - « close » : sinon, une offre gardée et non signalée au moins nomme la
-//   marque dans son titre (palier 0 ou 1) — modèle absent, une seule
-//   boutique, ou seulement des boutiques inconnues.
-// - « lookalikes » : rien de tel, ou pas de recherche dans les boutiques
-//   parce que la pièce n'a pas de marque reconnue (« no_query »), que les
-//   boutiques n'ont rien renvoyé (« empty ») ou que l'IA est coupée
-//   (« skipped »).
+// sait pas, il n'y en a pas du tout.
+//
+// Pourquoi seules certaines boutiques comptent : la requête envoyée à Google
+// Shopping contient TOUJOURS la marque, et le modèle quand il est donné
+// (services/shoppingQueryAi.ts, checkShoppingQuery). Presque chaque titre de
+// la section les répète donc : un titre qui nomme la marque n'est que l'écho
+// de notre propre requête, et les titres « bourrés de marques » des
+// boutiques inconnues aussi. Ne comptent ici que les « boutiques comptées » :
+// les boutiques connues et les sites officiels des marques (listes du
+// fondateur, src/listes/), SAUF les places de marché et sites de revente où
+// chaque vendeur écrit lui-même son titre (SELLER_TITLED_SHOPS). Deux offres
+// d'une même enseigne (même adresse, ou deux pays de la même enseigne :
+// zalando.fr et zalando.be) comptent pour une. Une offre signalée (prix
+// inhabituellement bas ou adresse douteuse : rangée en fin de section) ne
+// compte jamais, ni une offre retirée. Les seuils :
+// - « identified » : au moins VERDICT_MIN_SHOPS (2) boutiques comptées
+//   DISTINCTES de « Cette pièce dans d'autres boutiques » nomment dans leur
+//   titre la marque ET le modèle de la pièce (palier 0, lib/lightSort.ts,
+//   verdictTier ; un modèle non donné ne fait jamais un palier 0).
+// - « close » : une seule boutique comptée le fait.
+// - « lookalikes » : rien de tel — la marque seule (palier 1, sans le
+//   modèle), ou seulement des boutiques inconnues ou des places de marché,
+//   ou pas de recherche dans les boutiques parce que la pièce n'a pas de
+//   marque reconnue (« no_query »), que les boutiques n'ont rien renvoyé
+//   (« empty ») ou que l'IA est coupée (« skipped »).
 // - Aucun verdict (on ne sait pas) : base sans 0055 (la route ne le demande
-//   alors pas : sonde lib/verdictColumn.ts), recherche ou ligne des boutiques d'avant 0055 (palier vide),
-//   boutiques encore attendues (« pending », « running ») ou étape non
-//   terminée, étape en échec (« ai_failed », « shopping_failed », « no_time »,
-//   « no_capacity », « error »), voie C qui n'a pas tourné, recherche non
-//   terminée ou sans proposition montrée.
+//   alors pas : sonde lib/verdictColumn.ts), recherche ou ligne des boutiques
+//   d'avant 0055 (palier vide), boutiques encore attendues (« pending »,
+//   « running ») ou étape non terminée, étape en échec (« ai_failed »,
+//   « shopping_failed », « no_time », « no_capacity », « error »), voie C qui
+//   n'a pas tourné, recherche non terminée ou sans proposition montrée.
 // Avec « identified » seulement : le nombre de boutiques comptées, et la
 // fourchette de leurs prix quand au moins deux d'entre elles en affichaient
 // un, tous dans la même devise reconnue (jamais converti ni mélangé).
@@ -44,6 +51,21 @@ import { knownShopName } from "./shopTrust.js";
 export const VERDICT_MIN_SHOPS = 2;
 /** Prix (de boutiques distinctes) nécessaires pour la fourchette. */
 export const VERDICT_MIN_PRICES = 2;
+
+/** Places de marché et sites de revente de la liste des boutiques connues
+ * (src/listes/boutiquesConnues.ts, « Grandes places de marché et revente ») :
+ * chaque vendeur y écrit lui-même son titre, qui ne dit donc rien de plus que
+ * celui d'une boutique inconnue. Jamais comptées pour le verdict (elles
+ * gardent leur mention et leur place). Noms tels que knownShopName les donne ;
+ * un test vérifie que chacun est encore dans la liste. */
+export const SELLER_TITLED_SHOPS: readonly string[] = ["amazon", "vinted", "vestiairecollective", "stockx"];
+
+/** Le nom de la boutique comptée pour le verdict, ou null (inconnue, place
+ * de marché ou revente). */
+export function countedShopName(url: string): string | null {
+  const name = knownShopName(url);
+  return name === null || SELLER_TITLED_SHOPS.includes(name) ? null : name;
+}
 
 /** Une proposition montrée, telle que la relecture la met en forme
  * (lib/searchRows.ts, trustedMatches) : sa ligne, sa mention, et si elle est
@@ -102,7 +124,7 @@ export function searchVerdict(
   const counted = shopping.filter(({ demoted }) => !demoted);
 
   const agreeing = counted.flatMap(({ match, mark }) => {
-    const shop = match.title_tier === 0 && (mark === "known_shop" || mark === "official_shop") ? knownShopName(match.merchant_url) : null;
+    const shop = match.title_tier === 0 && (mark === "known_shop" || mark === "official_shop") ? countedShopName(match.merchant_url) : null;
     return shop === null ? [] : [{ shop, match }];
   });
   const shopCount = new Set(agreeing.map(({ shop }) => shop)).size;
@@ -110,6 +132,6 @@ export function searchVerdict(
     const priceRange = priceRangeOf(agreeing);
     return { level: "identified", shopCount, ...(priceRange ? { priceRange } : {}) };
   }
-  if (counted.some(({ match }) => match.title_tier === 0 || match.title_tier === 1)) return { level: "close" };
+  if (shopCount === 1) return { level: "close" };
   return { level: "lookalikes" };
 }

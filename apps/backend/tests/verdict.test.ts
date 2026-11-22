@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { verdictTier } from "../src/lib/lightSort.js";
 import { parseMatchRows, parseSearchRow, toProductSearch, type MatchRow } from "../src/lib/searchRows.js";
 import { knownShopName } from "../src/lib/shopTrust.js";
-import { searchVerdict, VERDICT_MIN_PRICES, VERDICT_MIN_SHOPS } from "../src/lib/verdict.js";
+import { BOUTIQUES_CONNUES } from "../src/listes/boutiquesConnues.js";
+import { countedShopName, searchVerdict, SELLER_TITLED_SHOPS, VERDICT_MIN_PRICES, VERDICT_MIN_SHOPS } from "../src/lib/verdict.js";
 
 // Le verdict (lot « verdict », migration 0055), sans base : le palier noté à
 // l'enregistrement (lightSort.ts, verdictTier) et la phrase calculée à la
@@ -43,6 +44,25 @@ describe("le nom d'une boutique comptée (knownShopName)", () => {
     expect(knownShopName("https://boutique-a.fr/1")).toBeNull();
     expect(knownShopName("https://zalando-outlet.shop/1")).toBeNull();
     expect(knownShopName("pas une adresse")).toBeNull();
+  });
+});
+
+describe("les boutiques comptées pour le verdict (countedShopName)", () => {
+  it("permis : une enseigne connue ou un site officiel de marque", () => {
+    expect(countedShopName("https://www.zalando.fr/veste")).toBe("zalando");
+    expect(countedShopName("https://www.asos.com/veste")).toBe("asos");
+  });
+
+  it("refusé : une place de marché ou un site de revente, où chaque vendeur écrit son titre ; une boutique inconnue", () => {
+    expect(countedShopName("https://www.amazon.fr/veste")).toBeNull();
+    expect(countedShopName("https://www.vinted.fr/items/1")).toBeNull();
+    expect(countedShopName("https://fr.vestiairecollective.com/veste")).toBeNull();
+    expect(countedShopName("https://stockx.com/veste")).toBeNull();
+    expect(countedShopName("https://boutique-a.fr/1")).toBeNull();
+  });
+
+  it("chaque place de marché exclue est encore dans la liste du fondateur (un renommage ne la ferait pas compter en silence)", () => {
+    for (const name of SELLER_TITLED_SHOPS) expect(BOUTIQUES_CONNUES.some((domain) => domain.split(".")[0] === name), name).toBe(true);
   });
 });
 
@@ -126,8 +146,19 @@ describe("« identified » : au moins deux boutiques connues distinctes nomment 
     expect(verdictOf([lens("https://lens-a.fr/1"), offer("https://www.zalando.fr/a", 0), offer("https://www.zalando.be/b", 0)])).toEqual({ level: "close" });
   });
 
-  it("refusé : des boutiques inconnues ne comptent pas, même nombreuses (titres « bourrés de marques ») ; c'est « close »", () => {
-    expect(verdictOf([offer("https://boutique-a.fr/1", 0), offer("https://boutique-b.fr/2", 0), offer("https://boutique-c.fr/3", 0)])).toEqual({ level: "close" });
+  it("refusé : des boutiques inconnues ne comptent pas, même nombreuses (titres « bourrés de marques ») ; c'est « lookalikes »", () => {
+    expect(verdictOf([offer("https://boutique-a.fr/1", 0), offer("https://boutique-b.fr/2", 0), offer("https://boutique-c.fr/3", 0)])).toEqual({ level: "lookalikes" });
+    // Avec une enseigne connue : une seule boutique comptée, « close ».
+    expect(verdictOf([offer("https://boutique-a.fr/1", 0), offer("https://boutique-b.fr/2", 0), offer("https://www.zalando.fr/a", 0)])).toEqual({ level: "close" });
+  });
+
+  it("refusé : places de marché et revente ne comptent pas — une enseigne connue avec Amazon et Vinted reste « close », Amazon et Vinted seuls « lookalikes »", () => {
+    expect(verdictOf([offer("https://www.zalando.fr/a", 0), offer("https://www.amazon.fr/b", 0), offer("https://www.vinted.fr/c", 0)])).toEqual({ level: "close" });
+    expect(verdictOf([offer("https://www.amazon.fr/b", 0), offer("https://www.vinted.fr/c", 0)])).toEqual({ level: "lookalikes" });
+  });
+
+  it("permis : un site officiel de marque et une enseigne connue comptent pour deux", () => {
+    expect(verdictOf([offer("https://www.adidas.fr/a", 0, 100), offer("https://www.zalando.fr/b", 0, 90)])).toEqual({ level: "identified", shopCount: 2, priceRange: { min: 90, max: 100, currency: "EUR" } });
   });
 
   it("refusé : une offre retirée (boutique masquée) ne compte pas", () => {
@@ -163,9 +194,13 @@ describe("la fourchette : jamais avec un seul prix, jamais en mélangeant deux d
   });
 });
 
-describe("« close » : la marque concorde, sans aller jusqu'à « identified »", () => {
-  it("permis : une boutique inconnue nomme la marque seule", () => {
-    expect(verdictOf([lens("https://lens-a.fr/1"), offer("https://boutique-a.fr/1", 1), offer("https://boutique-b.fr/2", 2)])).toEqual({ level: "close" });
+describe("« close » : une seule boutique comptée nomme la marque et le modèle", () => {
+  it("permis : une enseigne connue au palier 0, les autres boutiques inconnues ou sans le modèle", () => {
+    expect(verdictOf([lens("https://lens-a.fr/1"), offer("https://www.zalando.fr/a", 0), offer("https://boutique-a.fr/1", 1), offer("https://www.asos.com/b", 1)])).toEqual({ level: "close" });
+  });
+
+  it("refusé : la marque seule (palier 1), même chez des enseignes connues — la requête contient toujours la marque : « lookalikes »", () => {
+    expect(verdictOf([lens("https://lens-a.fr/1"), offer("https://www.zalando.fr/a", 1), offer("https://www.asos.com/b", 1), offer("https://boutique-a.fr/1", 1)])).toEqual({ level: "lookalikes" });
   });
 
   it("refusé : seule une offre signalée (prix inhabituellement bas) nomme la marque — elle ne compte pas : « lookalikes »", () => {
