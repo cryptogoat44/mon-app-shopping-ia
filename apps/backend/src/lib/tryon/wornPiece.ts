@@ -27,23 +27,36 @@ function sameWord(nameWord: string, word: string): boolean {
   return nameWord === word || nameWord === `${word}s` || nameWord === `${word}es` || nameWord === `${word}x`;
 }
 
+/** Une de ces expressions commence-t-elle au mot `start` du nom ? */
+function startsAt(name: readonly string[], start: number, expressions: readonly (readonly string[])[]): boolean {
+  return expressions.some((expression) => expression.every((word, offset) => start + offset < name.length && sameWord(name[start + offset]!, word)));
+}
+
 /** Le nom contient-il une de ces expressions (un ou plusieurs mots, à la suite) ? */
 function mentions(name: readonly string[], expressions: readonly (readonly string[])[]): boolean {
-  return expressions.some((expression) => name.some((_, start) => expression.every((word, offset) => start + offset < name.length && sameWord(name[start + offset]!, word))));
+  return name.some((_, start) => startsAt(name, start, expressions));
 }
 
 const GARMENTS = words.vetements.map(wordsOf);
 const NOT_WORN = words.nonPortees.map(wordsOf);
-// Mots de vêtement seulement en tête du nom (« Haut col bijou ») : ailleurs,
-// ce sont des adjectifs (« Baskets hautes », « Cross body bag »).
+// Mots de vêtement seulement avant tout mot de pièce non portée, et pas
+// suivis d'un tel mot (« Zara Body col bijou », « Petit haut col bijou ») :
+// sinon, ce sont des adjectifs (« Baskets hautes », « Cross body bag »).
 const HEAD_GARMENTS = (words.vetementsEnTete ?? []).map(wordsOf);
 // Expressions toujours refusées, même avec un mot de vêtement (« Body chain »).
 const ALWAYS_NOT_WORN = (words.nonPorteesToujours ?? []).map(wordsOf);
 
 /** Le nom dit-il un vêtement : un mot de vêtement n'importe où, ou un mot
- * « en tête » comme premier mot ? */
+ * « en tête » (« haut », « body ») placé avant tout mot de pièce non portée
+ * et pas suivi d'un tel mot (sinon il qualifie la pièce : « Sac haut de
+ * gamme », « Cross body bag ») ? */
 function namesGarment(name: readonly string[]): boolean {
-  return mentions(name, GARMENTS) || (name.length > 0 && HEAD_GARMENTS.some((expression) => expression.length === 1 && sameWord(name[0]!, expression[0]!)));
+  if (mentions(name, GARMENTS)) return true;
+  for (let index = 0; index < name.length; index++) {
+    if (startsAt(name, index, NOT_WORN)) return false;
+    if (HEAD_GARMENTS.some((expression) => expression.length === 1 && sameWord(name[index]!, expression[0]!)) && !startsAt(name, index + 1, NOT_WORN)) return true;
+  }
+  return false;
 }
 
 /** Faux seulement quand le nom dit sûrement une pièce qui ne se porte pas

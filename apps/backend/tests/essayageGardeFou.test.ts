@@ -85,6 +85,15 @@ describe("vêtements, et pièces dans le doute : permis, comme avant", () => {
     }
   });
 
+  it("« haut » et « body » après une marque ou un adjectif : permis ; suivis d'une pièce non portée : refusé", () => {
+    for (const title of ["Zara Body col bijou", "H&M - Haut col bijou en maille", "Petit haut col bijou", "Mango haut à ceinture"]) {
+      expect(isWornPiece(title), title).toBe(true);
+    }
+    for (const title of ["Zara body bag", "Petit sac haut de gamme", "Mango baskets hautes", "Body bag en cuir"]) {
+      expect(isWornPiece(title), title).toBe(false);
+    }
+  });
+
   it("nom vide, absent ou sans mot reconnu : la pièce passe", () => {
     for (const title of ["", "   ", null, undefined, "Nouvelle collection", "Article 12345", "Zara"]) expect(isWornPiece(title), String(title)).toBe(true);
   });

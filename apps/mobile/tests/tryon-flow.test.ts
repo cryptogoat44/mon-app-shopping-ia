@@ -222,6 +222,18 @@ describe("garde-fou : pas de bouton « Essayer » pour une pièce qui ne se port
     }
   });
 
+  it("« haut » et « body » après une marque ou un adjectif : permis ; suivis d'une pièce non portée : refusé", () => {
+    for (const title of ["Zara Body col bijou", "H&M - Haut col bijou en maille", "Petit haut col bijou", "Mango haut à ceinture"]) {
+      expect(isWornPiece(title), title).toBe(true);
+      expect(tryonItemId({ ...piece, title }), title).toBe(ITEM);
+    }
+    for (const title of ["Zara body bag", "Petit sac haut de gamme", "Mango baskets hautes"]) {
+      expect(isWornPiece(title), title).toBe(false);
+      expect(tryonItemId({ ...piece, title }), title).toBeNull();
+      expect(entryItemId(ON, { ...piece, title }), title).toBeNull();
+    }
+  });
+
   it("refus du serveur (le site ne le savait pas) : une phrase claire, en français et en anglais ; l'étape reste, aucun essai à relire", () => {
     const refusal = server("tryon_item_not_wearable", "Message du serveur.");
     setActiveLocale("fr");
