@@ -32,7 +32,6 @@ import { WishAlertBell, WishAlertSheet } from "@/components/wish-alert-sheet";
 import { WishAlertNewsBanner } from "@/components/wish-alert-news-banner";
 import { bannerItems, trackNewsOpened, trackNewsShown, unseenItems } from "@/lib/wish-alert-news";
 import type { WishAlertNewsState } from "@/lib/use-wish-alert-news";
-import { FROM_ALERT } from "@/lib/push-state";
 import { themedStyles } from "@/theme/themed-styles";
 
 function displayPrice(item: Piece): string | null {
@@ -429,8 +428,10 @@ function MyWishlist({ news }: { news: WishAlertNewsState }) {
                 items={newsBanner}
                 onOpen={(item) => {
                   trackNewsOpened(item);
-                  // Ouverte depuis une nouveauté : le clic vers la boutique est compté « price_alert ».
-                  router.push({ pathname: "/envie", params: { id: item.wishlistItemId, from: FROM_ALERT } });
+                  // Ouverte sans « from » : le clic vers la boutique reste compté « wishlist »,
+                  // jamais « price_alert » (la confidentialité promet que les statistiques ne
+                  // comptent, pour les nouveautés, que leur nombre et la sorte ouverte).
+                  router.push({ pathname: "/envie", params: { id: item.wishlistItemId } });
                 }}
                 onHide={() => setNewsShown(new Set())}
               />

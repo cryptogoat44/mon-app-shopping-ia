@@ -444,13 +444,15 @@ encore vrais.
   `kind` = `price_drop` (baisse de prix) ou `restock` (retour en stock).
   Ni la pièce, ni la boutique, ni le prix, ni le jour.
 - Ouverte depuis le bandeau, la fiche de l'Envie compte le clic vers la
-  boutique avec `context` = `price_alert` (`merchant_link_opened`, puis
-  `shop_returned` et `purchase_question`), comme une fiche ouverte par une
-  notification.
+  boutique avec `context` = `wishlist`, comme une fiche ouverte depuis la
+  liste (jamais `price_alert`, réservé à une fiche ouverte par une
+  notification) : la confidentialité promet que, pour les nouveautés, les
+  statistiques comptent seulement leur nombre et la sorte ouverte.
 
 **Part des membres qui ouvrent une nouveauté** : entonnoir (**Unique
-users**, **1 day**) `news_banner_shown` → `news_line_opened` →
-`merchant_link_opened` avec `context` = `price_alert`.
+users**, **1 day**) `news_banner_shown` → `news_line_opened`. Le clic vers
+la boutique qui suit ne se distingue pas d'un clic depuis la liste des
+Envies.
 
 ## Les limites
 

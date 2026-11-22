@@ -17,6 +17,7 @@ import { setActiveLocale } from "../src/i18n";
 import { privacyPolicy } from "../src/legal/confidentialite";
 import { privacyPolicyEn } from "../src/legal/confidentialite.en";
 import { ANALYTICS_EVENTS, sanitizeProps } from "../src/lib/analytics-events";
+import { FROM_ALERT, notificationHref } from "../src/lib/push-state";
 import {
   bannerItems,
   loadSeenNews,
@@ -186,14 +187,22 @@ describe("4. Bandeau et pastille", () => {
     expect(bannerItems(items, new Set(), new Set())).toEqual(items);
   });
 
-  it("la grille : « vu » seulement une fois la grille affichée ; la ligne ouvre l'Envie avec le contexte « alerte » ; « Masquer » vide le bandeau", () => {
+  it("la grille : « vu » seulement une fois la grille affichée ; la ligne ouvre l'Envie sans contexte « alerte » ; « Masquer » vide le bandeau", () => {
     const panel = code("components/wishlist-panel.tsx");
     expect(panel).toContain("if (!gridShown) return;");
     expect(panel.indexOf("if (!gridShown) return;")).toBeLessThan(panel.indexOf("markNewsSeen(fresh);"));
-    expect(panel).toContain('router.push({ pathname: "/envie", params: { id: item.wishlistItemId, from: FROM_ALERT } })');
+    expect(panel).toContain('router.push({ pathname: "/envie", params: { id: item.wishlistItemId } })');
     expect(panel).toContain("onHide={() => setNewsShown(new Set())}");
     // Le bandeau est en tête de la liste (il défile avec elle : jamais un écran bouché).
     expect(panel.indexOf("<WishAlertNewsBanner")).toBeLessThan(panel.indexOf("<WishlistTools"));
+  });
+
+  it("refusé : une ligne du bandeau n'ouvre jamais l'Envie en « price_alert » (la confidentialité dit « seulement » le nombre et la sorte) ; permis : la fiche ouverte par une notification, elle, garde « price_alert »", () => {
+    const panel = code("components/wishlist-panel.tsx");
+    expect(panel).not.toMatch(/from:\s*FROM_ALERT/);
+    expect(panel).not.toContain("FROM_ALERT");
+    expect(notificationHref({ kind: "wish", id: "w1" })).toEqual({ pathname: "/envie", params: { id: "w1", from: FROM_ALERT } });
+    expect(code("app/(app)/envie.tsx")).toContain('context={from === FROM_ALERT ? "price_alert" : "wishlist"}');
   });
 
   it("le Profil : pastille et libellé VoiceOver seulement s'il reste du non-vu ; nouveautés relues à chaque retour", () => {
