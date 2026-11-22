@@ -26,7 +26,7 @@ import type { LegalDocument } from "../src/legal/types";
 import { afterSheetClose, SHEET_CLOSE_FALLBACK_MS } from "../src/lib/after-sheet-close";
 import { ANALYTICS_EVENTS, DURATION_MAX_MS, sanitizeProps } from "../src/lib/analytics-events";
 import { ApiError } from "../src/lib/api-error";
-import { keepAlertAllowed, keepAlertOffRequest, keepAlertOnRequest, keepAlertPossible, turnOffKeepAlert, turnOnKeepAlert } from "../src/lib/keep-alert";
+import { keepAlertAllowed, keepAlertOffRequest, keepAlertOnRequest, keepAlertPossible, keptNoticeAlert, turnOffKeepAlert, turnOnKeepAlert } from "../src/lib/keep-alert";
 import {
   addToVaultFromQuestion,
   claimPurchaseQuestion,
@@ -739,6 +739,25 @@ describe("17. Textes (FR avec « vous », EN), juridiques compris", () => {
     expect(alertsFr).toContain("l'interrupteur « Alertes prix et stock » des Réglages est coupé par défaut");
     expect(alertsFr).not.toMatch(/Garder[^.]*allume[^.]*interrupteur/);
     expect(alertsFr).toContain("un achat n'est montré aux autres que si vous choisissez de le publier");
+  });
+});
+
+describe("18. Relecture : le message sous la grande carte", () => {
+  it("permis : pièce gardée, pas achetée → le message garde l'état de son alerte (allumée, coupée)", () => {
+    expect(keptNoticeAlert({ wishId: WISH, alert: "on" }, false)).toBe("on");
+    expect(keptNoticeAlert({ wishId: WISH, alert: "off" }, false)).toBe("off");
+    expect(keptNoticeAlert(undefined, false)).toBe("none");
+  });
+
+  it("refusé : pièce achetée (« Je l'ai achetée » ou « Oui ») → plus de promesse de baisse ni de « Couper l'alerte »", () => {
+    expect(keptNoticeAlert({ wishId: WISH, alert: "on" }, true)).toBe("none");
+    expect(keptNoticeAlert({ wishId: WISH, alert: "off" }, true)).toBe("none");
+    // L'écran passe par cette décision, avec les pièces achetées pendant la visite (les deux chemins remplissent `bought`).
+    const screen = code("app/(app)/spot/result.tsx");
+    expect(screen).toContain("alert={keptNoticeAlert(keptWishes.get(piece.id), bought.has(piece.id))}");
+    expect(screen).not.toContain('alert={keptWishes.get(piece.id)?.alert ?? "none"}');
+    expect(body(screen, "async function handleBought(", "async function turnOnAlertFor(")).toContain("setBought((prev) => new Set(prev).add(target.id));");
+    expect(body(screen, "addToVault: async (category) => {", "noStep: () =>")).toContain('if (outcome.kind === "added") {\n          setBought((prev) => new Set(prev).add(touched.id));');
   });
 });
 

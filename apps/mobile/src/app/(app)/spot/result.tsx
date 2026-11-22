@@ -74,7 +74,7 @@ import { PurchaseQuestionSheet, type PurchaseQuestionActions } from "@/component
 import { SendToFriendLink } from "@/components/send-to-friend-link";
 import { StockReportLink, StockReportSheet } from "@/components/stock-report-sheet";
 import { useAuth } from "@/lib/auth-context";
-import { keepAlertAllowed, turnOffKeepAlert, turnOnKeepAlert, type KeepAlertOrigin, type KeptWish } from "@/lib/keep-alert";
+import { keepAlertAllowed, keptNoticeAlert, turnOffKeepAlert, turnOnKeepAlert, type KeepAlertOrigin, type KeptWish } from "@/lib/keep-alert";
 import { addToVaultFromQuestion, noStepFor, type QuestionTarget } from "@/lib/purchase-question";
 import { ShopWatchContext, usePurchaseQuestion } from "@/lib/use-purchase-question";
 import { vaultChanged } from "@/lib/vault-changes";
@@ -853,7 +853,7 @@ export default function ResultScreen() {
             {canSendToFriend(piece, messages) ? <SendToFriendLink style={styles.sendToFriend} pieceName={piece.name} onPress={handleSendToFriend} /> : null}
             {canReportResult(alerts, piece) ? <StockReportLink style={styles.sendToFriend} pieceName={piece.name} onPress={handleStockReport} /> : null}
             {keptSaved.has(piece.id) ? (
-              <KeptNotice onOpen={() => openWishlistFromSpotter(router)} alert={keptWishes.get(piece.id)?.alert ?? "none"} onTurnOff={() => turnOffAlertFor(piece)} />
+              <KeptNotice onOpen={() => openWishlistFromSpotter(router)} alert={keptNoticeAlert(keptWishes.get(piece.id), bought.has(piece.id))} onTurnOff={() => turnOffAlertFor(piece)} />
             ) : null}
             {piece.real && reported ? <ReportedLine reason={reported} onPress={openReport} /> : null}
             {actionError ? <ErrorMessage style={styles.actionError}>{actionError}</ErrorMessage> : null}

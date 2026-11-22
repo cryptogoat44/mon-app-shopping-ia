@@ -33,6 +33,15 @@ export interface KeptWish {
   alert: KeptAlert;
 }
 
+/** Ce que dit le message sous la grande carte. Une pièce achetée pendant la
+ * visite (« Je l'ai achetée », ou « Oui » à la question) n'a plus d'alerte :
+ * le serveur la retire en l'ajoutant au Vault, et « Baisse de prix » ne
+ * s'affiche jamais pour une pièce achetée. Le message ne promet donc plus de
+ * baisse et ne propose plus « Couper l'alerte ». */
+export function keptNoticeAlert(kept: KeptWish | undefined, bought: boolean): KeptAlert {
+  return bought ? "none" : (kept?.alert ?? "none");
+}
+
 /** Ce que la décision lit de la pièce (proposition, ou Envie et sa cloche). */
 export type KeepAlertPiece = Pick<Piece, "real" | "alertTrackable" | "priceFrom" | "currency">;
 
