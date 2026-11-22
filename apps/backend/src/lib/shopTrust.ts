@@ -35,7 +35,7 @@
 // Fonctions pures : ni réseau, ni base, ni journal.
 import { alertCurrency, type MatchOrigin, type OfferMark } from "@monapp/shared-types";
 import { BOUTIQUES_CONNUES } from "../listes/boutiquesConnues.js";
-import { BOUTIQUES_OFFICIELLES } from "../listes/boutiquesOfficielles.js";
+import { AUTRES_NOMS_DES_MARQUES, BOUTIQUES_OFFICIELLES } from "../listes/boutiquesOfficielles.js";
 import { BOUTIQUES_MASQUEES, MOTS_MASQUES } from "../listes/boutiquesMasquees.js";
 import { sameToken } from "./lightSort.js";
 import { wordsOf } from "./wordSort.js";
@@ -117,31 +117,34 @@ export function isOfficialShop(url: string): boolean {
   return host !== null && BOUTIQUES_OFFICIELLES.some((domain) => onDomain(host, domain));
 }
 
-/** La marque d'une boutique officielle, écrite en un mot : son adresse dans
- * la liste, sans extension ni tiret (« hm.com » → « hm », « thenorthface.fr »
- * → « thenorthface », « ba-sh.com » → « bash ») ; null : pas une boutique
- * officielle. */
-function officialBrandOf(url: string): string | null {
+/** Les noms de la marque d'une boutique officielle, écrits en un mot : son
+ * adresse dans la liste, sans extension ni tiret (« hm.com » → « hm »,
+ * « thenorthface.fr » → « thenorthface », « ba-sh.com » → « bash »), et
+ * ses autres noms exacts (« aussi » : « Saint Laurent » → « saintlaurent »
+ * pour ysl.com) ; vide : pas une boutique officielle. */
+function officialBrandsOf(url: string): string[] {
   const host = hostOf(url);
   const domain = host === null ? undefined : BOUTIQUES_OFFICIELLES.find((entry) => onDomain(host, entry));
-  return domain === undefined ? null : domain.split(".")[0]!.replace(/-/g, "");
+  if (domain === undefined) return [];
+  const aliases = (AUTRES_NOMS_DES_MARQUES.get(domain) ?? []).map((name) => wordsOf(name).join(""));
+  return [domain.split(".")[0]!.replace(/-/g, ""), ...aliases].filter((name) => name !== "");
 }
 
 /** À l'enregistrement de « Cette pièce dans d'autres boutiques » (lib/voieC.ts,
  * seul moment où la marque de la pièce est connue) : l'offre est-elle la
  * boutique officielle de cette marque ? `brand` : la marque de la requête de
  * l'IA, vérifiée par le serveur dans au moins deux titres de la recherche
- * visuelle (services/shoppingQueryAi.ts). La marque de la boutique
- * (officialBrandOf) doit être exactement celle-ci, ses mots collés (pluriel
- * toléré, comme le tri léger : « Levi's » pour levi.com) : « Jules & Jenn »
- * n'est pas jules.com, ni « Tommy Bahama » tommy.com, et la boutique d'une
+ * visuelle (services/shoppingQueryAi.ts). La marque entière, ses mots collés,
+ * doit être exactement un nom de la boutique (officialBrandsOf : son adresse
+ * ou un de ses autres noms, pluriel toléré, comme le tri léger : « Levi's »
+ * pour levi.com) : « Jules & Jenn » n'est pas jules.com, ni « Tommy Bahama »
+ * tommy.com, ni « Sandro Ferrone » sandro-paris.com, et la boutique d'une
  * autre marque ne l'est jamais, même nommée dans les titres. Une marque
- * écrite autrement que son adresse (« Saint Laurent » pour ysl.com) laisse
- * la boutique à sa place : jamais une marque en avant par erreur. */
+ * écrite autrement que l'adresse et ses autres noms laisse la boutique à
+ * sa place : jamais une marque en avant par erreur. */
 export function isBrandShop(url: string, brand: string): boolean {
-  const shop = officialBrandOf(url);
   const key = wordsOf(brand).join("");
-  return shop !== null && key !== "" && sameToken(shop, key);
+  return key !== "" && officialBrandsOf(url).some((name) => sameToken(name, key));
 }
 
 /** Boutique sûre : un revendeur connu (src/listes/boutiquesConnues.ts) ou le

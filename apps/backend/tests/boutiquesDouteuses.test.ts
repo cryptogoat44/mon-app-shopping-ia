@@ -13,7 +13,7 @@ vi.mock("../src/listes/boutiquesMasquees.js", async (importOriginal) => {
 });
 
 import { BOUTIQUES_CONNUES } from "../src/listes/boutiquesConnues.js";
-import { BOUTIQUES_OFFICIELLES } from "../src/listes/boutiquesOfficielles.js";
+import { AUTRES_NOMS_DES_MARQUES, BOUTIQUES_OFFICIELLES } from "../src/listes/boutiquesOfficielles.js";
 import {
   KNOWN_SHOP_BOOST,
   isBrandShop,
@@ -458,6 +458,14 @@ describe("« Cette pièce dans d'autres boutiques » : seule la boutique officie
       ["https://www.thenorthface.fr/t3", "Veste 1996 Retro Nuptse pour homme"],
     ]);
     expect(tnf.hosts).toEqual(["www.thenorthface.fr", "boutique-c.fr", "boutique-d.fr"]);
+    // Un autre nom exact de la liste : « Saint Laurent » pour ysl.com.
+    const ysl = savedSection({ brand: "Saint Laurent", model: "Le 5 à 7" }, [
+      ["https://www.mytheresa.com/y1", "Saint Laurent Sac Le 5 à 7"],
+      ["https://boutique-c.fr/y2", "Sac porté épaule Le 5 à 7 Saint Laurent"],
+      ["https://www.ysl.com/fr-fr/y3", "Sac Le 5 à 7 en cuir lisse"],
+    ]);
+    expect(ysl.hosts[0]).toBe("www.ysl.com");
+    expect(ysl.marks[0]).toBe("official_shop");
   });
 
   it("refusé : aucune offre ne nomme la marque de la pièce — la boutique officielle d'une marque revendue ne passe jamais devant (avant : Mango en tête d'une section Zara, nike.com pour des baskets Saye)", () => {
@@ -509,11 +517,11 @@ describe("« Cette pièce dans d'autres boutiques » : seule la boutique officie
     expect(pyjama.hosts).toEqual(["boutique-a.fr", "boutique-b.fr", "www.petit-bateau.fr"]);
   });
 
-  it("refusé : une ligne d'avant 0054 (aucun oui), ou une marque écrite autrement que son adresse (« Saint Laurent », ysl.com) — la boutique garde sa place reçue, avec sa mention", () => {
+  it("refusé : une ligne d'avant 0054 (aucun oui), ou une marque écrite autrement que son adresse et ses autres noms (« Saint Laurent Paris », ysl.com) — la boutique garde sa place reçue, avec sa mention", () => {
     const before = savedSection(ZARA_PIECE, ZARA, { before0054: true });
     expect(before.hosts).toEqual(before.saved);
     expect(before.marks[2]).toBe("official_shop");
-    const ysl = savedSection({ brand: "Saint Laurent", model: "Le 5 à 7" }, [
+    const ysl = savedSection({ brand: "Saint Laurent Paris", model: "Le 5 à 7" }, [
       ["https://www.mytheresa.com/a", "Saint Laurent Sac Le 5 à 7"],
       ["https://boutique-c.fr/b", "Sac porté épaule Le 5 à 7 Saint Laurent"],
       ["https://www.ysl.com/fr-fr/c", "Sac Le 5 à 7 en cuir lisse"],
@@ -549,20 +557,91 @@ describe("à l'enregistrement : la boutique officielle de la marque de la pièce
     expect(isBrandShop("https://www.levi.com/FR/fr_FR/501", "Levi's")).toBe(true);
   });
 
-  it("refusé : un mot de la marque, du modèle ou d'une autre marque ne suffit jamais (Jules & Jenn, Tommy Bahama, Mango dans une section Zara) ; une marque écrite autrement que son adresse, une marque vide, un revendeur ou une imitation non plus", () => {
+  it("refusé : un mot de la marque, du modèle ou d'une autre marque ne suffit jamais (Jules & Jenn, Tommy Bahama, Mango dans une section Zara) ; une marque écrite autrement que son adresse et ses autres noms, une marque vide, un revendeur ou une imitation non plus", () => {
     expect(isBrandShop("https://www.jules.com/fr-fr/sac", "Jules & Jenn")).toBe(false);
     expect(isBrandShop("https://fr.tommy.com/chemise", "Tommy Bahama")).toBe(false);
     expect(isBrandShop("https://shop.mango.com/fr/top", "Zara")).toBe(false);
     expect(isBrandShop("https://www2.hm.com/fr_fr/top", "Zara")).toBe(false);
     expect(isBrandShop("https://www.nike.com/fr/court-vision", "Saye")).toBe(false);
     expect(isBrandShop("https://www.petit-bateau.fr/pyjama", "Tape à l'œil")).toBe(false);
-    // Accepté (décision « jamais une marque en avant par erreur ») : « Saint Laurent » n'est pas ysl.com.
-    expect(isBrandShop("https://www.ysl.com/fr-fr/sac", "Saint Laurent")).toBe(false);
+    // Ni l'adresse ni un autre nom de ysl.com : « Saint Laurent Paris » reste rangée comme une boutique connue.
+    expect(isBrandShop("https://www.ysl.com/fr-fr/sac", "Saint Laurent Paris")).toBe(false);
     expect(isBrandShop("https://www.zara.com/fr/top", "")).toBe(false);
     expect(isBrandShop("https://www.zara.com/fr/top", " & ")).toBe(false);
     expect(isBrandShop("https://www.zalando.fr/zara-top", "Zara")).toBe(false);
     expect(isBrandShop("https://nike-outlet.shop/air-max", "Nike")).toBe(false);
     expect(isBrandShop("pas une adresse", "Zara")).toBe(false);
+  });
+});
+
+// Autres noms exacts (« aussi », src/listes/boutiquesOfficielles.ts) : pour
+// une boutique dont l'adresse n'écrit pas la marque (ysl.com, Saint Laurent).
+// Même comparaison que l'adresse : le nom entier, jamais un mot d'un nom plus long.
+describe("à l'enregistrement : les autres noms exacts d'une boutique officielle", () => {
+  it("la liste : chaque autre nom est écrit, et n'appartient qu'aux adresses d'une seule marque (jamais celle d'une autre boutique de la liste)", () => {
+    const key = (name: string) => name.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+    const brandOf = (domain: string) => domain.split(".")[0]!.replace(/-/g, "");
+    for (const [domain, names] of AUTRES_NOMS_DES_MARQUES) {
+      expect(BOUTIQUES_OFFICIELLES, domain).toContain(domain);
+      for (const name of names) {
+        expect(key(name).length, `${domain} : ${name}`).toBeGreaterThan(1);
+        const owners = BOUTIQUES_OFFICIELLES.filter((other) => brandOf(other) === key(name) || (AUTRES_NOMS_DES_MARQUES.get(other) ?? []).some((alias) => key(alias) === key(name)));
+        expect(new Set(owners.map(brandOf)), `${domain} : ${name}`).toEqual(new Set([brandOf(domain)]));
+      }
+    }
+  });
+
+  it("permis : une famille par boutique, sur ses sous-domaines (ysl.com, tommy.com, sandro-paris.com, pullandbear.com, stories.com, ralphlauren.fr, dior.com, levi.com, hm.com, thenorthface.fr et .com, calvinklein.fr, adidas)", () => {
+    const allowed: [string, string[]][] = [
+      ["https://www.ysl.com/fr-fr/sac", ["Saint Laurent", "Yves Saint Laurent", "YSL", "saint-laurent"]],
+      ["https://fr.tommy.com/chemise", ["Tommy Hilfiger", "Tommy Jeans", "TOMMY HILFIGER"]],
+      ["https://www.sandro-paris.com/fr/robe", ["Sandro", "SANDRO"]],
+      ["https://www.pullandbear.com/fr/jean", ["Pull&Bear", "Pull & Bear", "Pull and Bear"]],
+      ["https://www.stories.com/fr/robe", ["& Other Stories", "Other Stories"]],
+      ["https://www.ralphlauren.fr/polo", ["Ralph Lauren", "Polo Ralph Lauren", "Lauren Ralph Lauren"]],
+      ["https://www.dior.com/fr_fr/sac", ["Dior", "Christian Dior"]],
+      ["https://www.levi.com/FR/fr_FR/501", ["Levi's", "Levis", "LEVI'S®"]],
+      ["https://www2.hm.com/fr_fr/robe", ["H&M", "H & M"]],
+      ["https://www.thenorthface.fr/veste", ["The North Face", "North Face"]],
+      ["https://www.thenorthface.com/en-us/jacket", ["North Face"]],
+      ["https://www.calvinklein.fr/jean", ["Calvin Klein Jeans"]],
+      ["https://www.adidas.fr/samba", ["adidas Originals"]],
+      ["https://www.adidas.com/us/samba", ["Adidas Originals"]],
+    ];
+    for (const [url, brands] of allowed) for (const brand of brands) expect(isBrandShop(url, brand), `${url} ${brand}`).toBe(true);
+  });
+
+  it("refusé : un autre nom à l'intérieur d'un nom plus long, l'autre nom d'une autre boutique, une autre marque, un mot courant", () => {
+    const refused: [string, string][] = [
+      // Un nom plus long, une autre maison (jamais un mot à l'intérieur).
+      ["https://www.sandro-paris.com/fr/robe", "Sandro Ferrone"],
+      ["https://www.ysl.com/fr-fr/parfum", "Yves Saint Laurent Beauté"],
+      ["https://fr.tommy.com/chemise", "Tommy Hilfiger Bahama"],
+      ["https://www.stories.com/fr/robe", "Other Stories Vintage"],
+      ["https://www.dior.com/fr_fr/sac", "Christian Dior Couture Archive"],
+      ["https://www.thenorthface.fr/veste", "North Face Outlet"],
+      ["https://www.pullandbear.com/fr/jean", "Pull&Bear Kids Club"],
+      // L'autre nom d'une autre boutique de la liste.
+      ["https://www.dior.com/fr_fr/sac", "Saint Laurent"],
+      ["https://www.ralphlauren.fr/polo", "Tommy Hilfiger"],
+      ["https://www.stories.com/fr/robe", "H&M"],
+      ["https://www.levi.com/FR/fr_FR/501", "Calvin Klein Jeans"],
+      // Une autre marque au nom voisin.
+      ["https://www.ysl.com/fr-fr/sac", "Saint James"],
+      ["https://www.dior.com/fr_fr/sac", "Christian Louboutin"],
+      ["https://www.ralphlauren.fr/polo", "Lauren Moshi"],
+      // Des mots courants.
+      ["https://www.ralphlauren.fr/polo", "Polo"],
+      ["https://fr.tommy.com/chemise", "Jeans"],
+      ["https://www.sandro-paris.com/fr/robe", "Paris"],
+      ["https://www.stories.com/fr/robe", "Other"],
+      ["https://www.pullandbear.com/fr/jean", "Bear"],
+      ["https://www.thenorthface.fr/veste", "Face"],
+      // Une boutique qui n'est pas dans la liste, même nommée comme une marque.
+      ["https://www.yslbeauty.fr/parfum", "Yves Saint Laurent"],
+      ["https://www.zalando.fr/tommy-hilfiger", "Tommy Hilfiger"],
+    ];
+    for (const [url, brand] of refused) expect(isBrandShop(url, brand), `${url} ${brand}`).toBe(false);
   });
 });
 
