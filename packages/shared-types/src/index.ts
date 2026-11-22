@@ -1929,6 +1929,30 @@ export interface WishAlertStatesList {
   items: WishAlertState[];
 }
 
+/** Une nouveauté montrée en tête de vos Envies (lot « alertes visibles ») :
+ * une alerte des 30 derniers jours, encore vraie aujourd'hui. `id` : celui de
+ * l'alerte (l'app note sur l'appareil, par compte, celles déjà vues).
+ * `seenOn` : le jour où le prix ou le stock a été vu (« AAAA-MM-JJ », heure de
+ * Paris). Baisse de prix : `price` est le prix vu, `threshold` votre seuil
+ * (jamais un « ancien prix »), dans `currency` ; retour en stock : les trois à
+ * null. `merchantName` : la boutique de l'Envie. */
+export interface WishAlertNews {
+  id: string;
+  wishlistItemId: string;
+  kind: "price_drop" | "restock";
+  title: string;
+  merchantName: string | null;
+  price: number | null;
+  threshold: number | null;
+  currency: string | null;
+  seenOn: string;
+}
+
+/** GET /api/alerts/news : vos nouveautés (vide sans les alertes sur le serveur). */
+export interface WishAlertNewsList {
+  items: WishAlertNews[];
+}
+
 /** Plus haut seuil accepté pour une baisse de prix. */
 export const MAX_TARGET_PRICE = 99_999_999.99;
 
