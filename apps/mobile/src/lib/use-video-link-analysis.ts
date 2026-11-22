@@ -129,6 +129,8 @@ export function useVideoLinkAnalysis({ active, pieces = false, url, platform, or
     if (outcome.kind === "found") {
       if (mode === "pieces") piecesCache.current = outcome.analysis;
       const found = momentsPhase(outcome.analysis, 0);
+      // Aucune pièce proposée : une réponse, gardée pour ce lien (pas de nouvel appel payant).
+      if (!found && mode === "pieces") setPiecesRefused(true);
       return setPhase(found ?? { kind: "failed", info: { failure: "no_moment", capacity: null }, mode });
     }
     // Accord retiré entre-temps (sur un autre appareil, par exemple), ou
@@ -138,7 +140,10 @@ export function useVideoLinkAnalysis({ active, pieces = false, url, platform, or
       pendingMode.current = mode;
       return setPhase({ kind: "consent" });
     }
-    if (mode === "pieces" && outcome.info.failure === "invalid_query") setPiecesRefused(true);
+    // Interrupteur coupé entre-temps (« invalid_query ») ou aucune pièce proposée
+    // (« no_moment ») : le bouton disparaît pour ce lien ; un nouveau geste ne
+    // relancerait pas une analyse payante de la même vidéo.
+    if (mode === "pieces" && (outcome.info.failure === "invalid_query" || outcome.info.failure === "no_moment")) setPiecesRefused(true);
     setPhase({ kind: "failed", info: outcome.info, mode });
   }
 

@@ -300,7 +300,7 @@ describe("écran « vidéo partagée » : les propositions de l'IA", () => {
     expect(screen).toContain("pieces: piecesEnabled,");
     // Interrupteur coupé entre-temps (400 « invalid_query » en mode « pièces ») : le bouton disparaît pour ce lien, sans boucle.
     expect(hook).toContain("piecesAvailable: pieces && !piecesRefused,");
-    expect(hook).toContain('if (mode === "pieces" && outcome.info.failure === "invalid_query") setPiecesRefused(true);');
+    expect(hook).toContain('if (mode === "pieces" && (outcome.info.failure === "invalid_query" || outcome.info.failure === "no_moment")) setPiecesRefused(true);');
     expect(hook).toContain("if (!pieces || piecesRefused) return;");
     // Le bouton n'existe que dans la version avec les propositions.
     expect(view).toContain("if (onPieces) return <LinkAskWithPieces");
@@ -346,6 +346,25 @@ describe("écran « vidéo partagée » : les propositions de l'IA", () => {
     expect(findPieces.indexOf("return setPhase(cached);")).toBeLessThan(findPieces.indexOf('await consentThenAnalyze("pieces");'));
     // Un lien par écran (clé = le lien) : un autre lien repart de zéro.
     expect(screen).toContain("return <SharedVideo key={url} url={url} platform={platform} />;");
+  });
+
+  it("refusé : « Aucune pièce proposée » est gardé pour ce lien — un nouveau geste ne relance aucune analyse payante ; permis : un échec en mode « mots » garde le bouton", () => {
+    const analyze = between(hook, "async function analyze(mode: LinkMode)", "async function consentThenAnalyze(");
+    // Réponse 422 « video_no_moment » en mode « pièces », ou réponse lue sans aucune pièce : le bouton disparaît.
+    expect(analyze).toContain('outcome.info.failure === "no_moment"');
+    expect(analyze).toContain('if (!found && mode === "pieces") setPiecesRefused(true);');
+    // Avant l'écran d'échec, pour que « Décrire la pièce autrement » ne montre plus le bouton.
+    expect(analyze.indexOf("setPiecesRefused(true);")).toBeLessThan(analyze.indexOf('setPhase(found ?? { kind: "failed"'));
+    expect(analyze.lastIndexOf("setPiecesRefused(true);")).toBeLessThan(analyze.indexOf('setPhase({ kind: "failed", info: outcome.info, mode });'));
+    // Le geste suivant s'arrête avant tout appel (ni accord, ni analyse).
+    const findPieces = between(hook, "async function findPieces()", "async function accept()");
+    expect(findPieces.indexOf("if (!pieces || piecesRefused) return;")).toBeLessThan(findPieces.indexOf('await consentThenAnalyze("pieces");'));
+    expect(findPieces.indexOf("if (!pieces || piecesRefused) return;")).toBeLessThan(findPieces.indexOf("cachedPieces()"));
+    // Permis : seulement en mode « pièces » ; un échec avec les mots ne retire jamais le bouton.
+    expect(analyze.match(/setPiecesRefused\(true\)/g)).toHaveLength(2);
+    for (const line of analyze.split("\n").filter((l) => l.includes("setPiecesRefused(true)"))) expect(line).toContain('mode === "pieces"');
+    // « Aucune pièce » n'offre jamais « Réessayer » : rien de perdu.
+    expect(code("src/lib/video-link-analysis.ts")).toContain('const QUERY_FIRST: readonly LinkAiFailure[] = ["no_moment", "invalid_query"];');
   });
 
   it("le texte déjà tapé ne part pas en mode « pièces » : il reste dans le champ, et l'attente ne l'affiche pas", () => {
