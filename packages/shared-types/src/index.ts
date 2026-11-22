@@ -363,6 +363,33 @@ export interface ProductSearch {
    * Absents ailleurs, et d'un ancien serveur. */
   wishlistMatchIds?: string[];
   vaultMatchIds?: string[];
+  /** Le verdict (lot « verdict », migration facultative 0055) : la phrase de
+   * tête de l'écran Résultat, calculée par le serveur à chaque relecture à
+   * partir des propositions réellement montrées (apps/backend/src/lib/verdict.ts).
+   * Absent quand on ne sait pas : base sans 0055, recherche d'avant 0055,
+   * boutiques encore attendues ou en échec, historique, ancien serveur.
+   * Une app plus ancienne l'ignore. */
+  verdict?: SearchVerdict;
+}
+
+/** Niveaux du verdict, du plus affirmé au plus modeste :
+ * - identified : au moins deux boutiques connues ou sites officiels de marque,
+ *   distincts (places de marché et revente exclues), nomment dans leur titre
+ *   la marque ET le modèle de la pièce ;
+ * - close : une seule de ces boutiques le fait ;
+ * - lookalikes : rien de tel (marque seule, boutiques inconnues seulement,
+ *   pièce sans marque, IA coupée, aucun accord). */
+export const VERDICT_LEVELS = ["identified", "close", "lookalikes"] as const;
+export type VerdictLevel = (typeof VERDICT_LEVELS)[number];
+
+export interface SearchVerdict {
+  level: VerdictLevel;
+  /** « identified » seulement : le nombre de boutiques distinctes qui s'accordent (2 au moins). */
+  shopCount?: number;
+  /** « identified » seulement, et seulement quand au moins deux de ces
+   * boutiques affichaient un prix, tous dans la même devise (code ISO, jamais
+   * converti) : le plus bas et le plus haut, au moment de la recherche. */
+  priceRange?: { min: number; max: number; currency: string };
 }
 
 /** Complément d'une recherche (voie C, lot c). */

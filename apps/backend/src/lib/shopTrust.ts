@@ -154,6 +154,18 @@ export function isKnownShop(url: string): boolean {
   return host !== null && (BOUTIQUES_CONNUES.some((domain) => onDomain(host, domain)) || isOfficialShop(url));
 }
 
+/** Le verdict (lib/verdict.ts) : le nom d'une boutique connue ou d'un site
+ * officiel, tiré de son adresse dans la liste, sans extension
+ * (« zalando.fr » et « zalando.be » → « zalando », « amazon.com.be » →
+ * « amazon ») : deux pays d'une même enseigne ne comptent que pour une
+ * boutique. null : ni connue ni officielle (jamais comptée). */
+export function knownShopName(url: string): string | null {
+  const host = hostOf(url);
+  if (host === null) return null;
+  const domain = [...BOUTIQUES_CONNUES, ...BOUTIQUES_OFFICIELLES].find((entry) => onDomain(host, entry));
+  return domain === undefined ? null : domain.split(".")[0]!;
+}
+
 /** Boutique masquée : dans la liste, ou un mot évident dans son adresse
  * (src/listes/boutiquesMasquees.ts). */
 export function isHiddenShop(url: string): boolean {

@@ -226,6 +226,11 @@ export const EXPORT_COLUMNS = {
     // Colonne de la migration 0056 (stock affiché), décrite d'avance : en
     // stock (oui) ou épuisée (non) d'après Google, au moment de la recherche.
     in_stock: technical("En stock d'après Google, au moment de la recherche", "In stock according to Google, at the time of the search"),
+    // Colonne de la migration 0055 (verdict), décrite d'avance : le palier du
+    // titre de l'offre (0 marque et modèle, 1 marque sans le modèle, 2 tout le
+    // reste : marque absente du titre, non donnée ou faite de petits mots comme
+    // « On », même si le modèle y est : lib/lightSort.ts, verdictTier).
+    title_tier: technical("Le titre de l'offre nomme la marque et le modèle de la pièce (0), la marque sans le modèle (1), sinon (2) : marque absente du titre, non donnée ou trop courte pour être reconnue (« Cette pièce dans d'autres boutiques »)", "The offer's title names the piece's brand and model (0), the brand without the model (1), otherwise (2): brand not in the title, not given or too short to be recognised (“This piece at other shops”)"),
   },
   resultFeedback: {
     id: ID,

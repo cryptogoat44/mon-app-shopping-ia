@@ -68,6 +68,7 @@ import { photoCallsLeft, startDeadline, VOIE_C_BUDGET } from "../lib/deadline.js
 import { lightSort } from "../lib/lightSort.js";
 import { brandShopColumnReady } from "../lib/brandShopColumn.js";
 import { stockColumnReady } from "../lib/stockColumn.js";
+import { verdictColumnReady } from "../lib/verdictColumn.js";
 import { cacheKey, imageHash, purgeExpiredCache, readCache, writeCache } from "../lib/searchCache.js";
 import {
   complementAfterSaveFailure,
@@ -277,8 +278,12 @@ async function saveMatches(
  * pièce, reconnue par le complément (lib/voieC.ts), porte un oui sur sa
  * ligne, seulement une fois la colonne vue (lib/brandShopColumn.ts) ; sans
  * elle, rien n'est noté et la boutique est rangée comme une boutique connue.
- * Insertion avec ce oui refusée malgré la sonde : refaite une fois sans lui
- * (la section n'est jamais perdue pour un oui). */
+ * Le verdict (0055) : dans « shopping », le palier du titre de chaque
+ * proposition (lib/voieC.ts), seulement une fois la colonne vue
+ * (lib/verdictColumn.ts) ; sans elle, rien n'est noté et aucun verdict n'est
+ * montré. Insertion avec ce oui refusée malgré la sonde, ou avec ce palier
+ * refusé pour une colonne inconnue : refaite une fois sans eux (la section
+ * n'est jamais perdue pour eux). */
 async function saveComplementRows(
   fastify: FastifyInstance,
   searchId: string,
@@ -288,19 +293,34 @@ async function saveComplementRows(
 ): Promise<number | null> {
   if (matches.length === 0) return 0;
   const brandShops = origin === "shopping" && matches.some((m) => m.brandShop === true) && (await brandShopColumnReady(fastify));
-  const insertRows = (withBrandShop: boolean) =>
+  // Le verdict (0055) : le palier de chaque proposition, seulement quand
+  // toutes en ont un (sinon aucun : le verdict ne se calcule jamais sur une
+  // partie de la section) et une fois la colonne vue (lib/verdictColumn.ts).
+  const titleTiers = origin === "shopping" && matches.every((m) => m.titleTier !== undefined) && (await verdictColumnReady(fastify));
+  const insertRows = (withBrandShop: boolean, withTitleTier: boolean) =>
     fastify.supabaseAdmin
       .from("product_matches")
       .insert(
-        matches.map((m, index) => ({ ...toMatchRow(searchId, m, afterRank + index + 1), origin, ...(withBrandShop && m.brandShop === true ? { brand_shop: true } : {}) }))
+        matches.map((m, index) => ({
+          ...toMatchRow(searchId, m, afterRank + index + 1),
+          origin,
+          ...(withBrandShop && m.brandShop === true ? { brand_shop: true } : {}),
+          ...(withTitleTier && m.titleTier !== undefined ? { title_tier: m.titleTier } : {}),
+        }))
       )
       .select("id, merchant_url");
-  let { data, error } = await insertRows(brandShops);
+  let { data, error } = await insertRows(brandShops, titleTiers);
   // Seulement un refus de la base (insertion unique : rien n'a été rangé) ;
   // jamais une réponse illisible, où les lignes sont peut-être déjà là.
-  if (brandShops && error) {
-    fastify.log.warn({ origin, code: error?.code ?? null }, "Boutique de la marque non notée : insertion refusée avec le oui, refaite sans lui");
-    ({ data, error } = await insertRows(false));
+  // Refaite UNE fois, sans le oui ni le palier (colonnes facultatives) : pour
+  // le oui, après tout refus (comme avant) ; pour le palier, seulement quand
+  // la base dit ne pas connaître une colonne (PGRST204, 42703) — un autre
+  // refus échouerait de même sans lui.
+  const columnRefused = error?.code === "PGRST204" || error?.code === "42703";
+  if (error && (brandShops || (titleTiers && columnRefused))) {
+    if (brandShops) fastify.log.warn({ origin, code: error?.code ?? null }, "Boutique de la marque non notée : insertion refusée avec le oui, refaite sans lui");
+    if (titleTiers) fastify.log.warn({ origin, code: error?.code ?? null }, "Verdict non noté : insertion refusée, refaite sans le palier");
+    ({ data, error } = await insertRows(false, false));
   }
   const inserted = INSERTED_MATCH_ROWS.safeParse(data);
   if (error || !inserted.success) {
@@ -579,7 +599,8 @@ async function writeOutcome(fastify: FastifyInstance, request: FastifyRequest, i
   }
   const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, matches.map((m) => m.id));
   // Recherche toute neuve : aucune proposition n'a encore pu être signalée.
-  return toProductSearch(search, matches, affiliateUrlByMatchId, new Map());
+  // Toutes ses propositions sont là : le verdict est calculé (lib/verdict.ts), sur une base qui a 0055.
+  return toProductSearch(search, matches, affiliateUrlByMatchId, new Map(), false, { verdict: await verdictColumnReady(fastify) });
 }
 
 /** Enregistre l'issue de l'appel et sa mesure, et renvoie la recherche
@@ -939,7 +960,7 @@ async function readSearchForReply(fastify: FastifyInstance, request: FastifyRequ
   const matchIds = matches.map((m) => m.id);
   const affiliateUrlByMatchId = await fetchAffiliateUrls(fastify, matchIds);
   const feedbackByMatchId = await fetchFeedbackReasons(fastify, userId, matchIds);
-  return toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, true);
+  return toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, true, { verdict: await verdictColumnReady(fastify) });
 }
 
 // ---- Boutiques ensuite (POST /api/searches/:id/complement, 0031) ----
@@ -1644,7 +1665,9 @@ export default async function searchesRoutes(fastify: FastifyInstance) {
       keptMatchIds(fastify, "wishlist_items", userId, matchIds),
       keptMatchIds(fastify, "vault_items", userId, matchIds),
     ]);
-    const reread: ProductSearch = { ...toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, textSearchOn), wishlistMatchIds, vaultMatchIds };
+    // Le verdict (lib/verdict.ts), seulement sur une base qui a 0055.
+    const verdict = await verdictColumnReady(fastify);
+    const reread: ProductSearch = { ...toProductSearch(row, matches, affiliateUrlByMatchId, feedbackByMatchId, textSearchOn, { verdict }), wishlistMatchIds, vaultMatchIds };
 
     return reply.send(reread);
   });

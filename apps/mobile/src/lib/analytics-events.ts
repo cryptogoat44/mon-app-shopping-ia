@@ -18,6 +18,7 @@ import {
   PRIVACY_LEVELS,
   REPORT_TARGET_TYPES,
   TEXT_SEARCH_STATUSES,
+  VERDICT_LEVELS,
   VIDEO_LINK_FAILURE_CAUSES,
 } from "@monapp/shared-types";
 import { RESULT_SORTS } from "./result-sort";
@@ -220,6 +221,13 @@ export const ANALYTICS_EVENTS = {
   // montré, passé (« Passer ») ou terminé (dernière étape) ; step : l'étape
   // (1 à 3) où la personne passe ou termine (absente pour « shown »).
   first_search_guide: { action: oneOf(["shown", "skipped", "finished"]), step: count },
+  // Le verdict (lot « verdict », lib/verdict.ts ; rangé avant les quatre
+  // événements du Parcours 3, que leurs tests veulent en fin de catalogue) :
+  // la phrase de tête de l'écran Résultat montrée, et son niveau
+  // (identified, close, lookalikes), une fois par résultat affiché, et de
+  // nouveau si le niveau change quand les boutiques arrivent. Jamais la
+  // pièce, la marque, une boutique, un prix ni le nombre de boutiques.
+  verdict_shown: { level: oneOf(VERDICT_LEVELS) },
   // Parcours 3 (« Vous l'avez achetée ? », lib/purchase-question.ts) : un
   // retour de la boutique repéré, depuis l'écran Résultat (result, similar)
   // ou la fiche d'une Envie (wishlist, price_alert), question posée ou non,
