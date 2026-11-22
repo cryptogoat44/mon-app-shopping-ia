@@ -56,7 +56,7 @@ import { aiQuotaFor } from "../src/lib/aiQuota.js";
 import { assertNoUserImage } from "../src/lib/aiSwitches.js";
 import { resetVoieCSchemaProbe } from "../src/lib/voieC.js";
 import { COMPLEMENT_PENDING_MAX_MS, COMPLEMENT_RUNNING_MAX_MS, resetDeferredSchemaProbe } from "../src/lib/deferredComplement.js";
-import { resetBrandShopColumnProbe } from "../src/lib/brandShopColumn.js";
+import { brandShopColumnReady, resetBrandShopColumnProbe } from "../src/lib/brandShopColumn.js";
 import type { LensMeasure } from "../src/services/lensMeasure.js";
 import type { TextSearchResponse } from "../src/services/searchProvider.js";
 
@@ -96,6 +96,10 @@ class FakeDb {
   readonly tables = new Map<string, Row[]>();
   /** Colonnes absentes (base sans 0031) : une lecture qui les nomme échoue. */
   missingColumns = new Set<string>();
+  /** Insertions refusées par la base (contrainte, panne) : `true` pour les refuser. */
+  refuseInsert: ((table: string, rows: Row[]) => boolean) | null = null;
+  /** Chaque insertion tentée dans product_matches (lignes envoyées). */
+  readonly matchInserts: Row[][] = [];
 
   rows(table: string): Row[] {
     if (!this.tables.has(table)) this.tables.set(table, []);
@@ -204,6 +208,8 @@ class FakeQuery implements PromiseLike<Result> {
     let affected: Row[];
     if (this.action === "insert") {
       const list = (Array.isArray(this.values) ? this.values : [this.values]) as Row[];
+      if (this.table === "product_matches") this.db.matchInserts.push(list.map((values) => ({ ...values })));
+      if (this.db.refuseInsert?.(this.table, list)) return { data: null, error: { code: "23514", message: "insertion refusée" } };
       // Comme PostgREST : une colonne absente fait refuser toute l'insertion.
       if (list.some((values) => Object.keys(values).some((column) => this.db.missingColumns.has(column)))) return { data: null, error: { code: "PGRST204", message: "colonne absente" } };
       affected = list.map((values) => ({ ...(DEFAULTS[this.table]?.() ?? {}), ...values }));
@@ -754,6 +760,48 @@ describe("ordre des boutiques : un oui sur la ligne de la boutique officielle de
     const warnings = logs.map((line) => JSON.parse(line) as Record<string, unknown>).filter((line) => String(line.msg).startsWith("Boutique de la marque non notée"));
     expect(warnings).toEqual([expect.objectContaining({ code: "42703" })]);
     expect(JSON.stringify(warnings)).not.toMatch(/zara|mango/i);
+  });
+
+  it("permis : la sonde a vu la colonne, mais l'insertion avec le oui est refusée (colonne retirée depuis) — refaite une fois sans le oui : les boutiques sont enregistrées, la section est montrée", async () => {
+    aiMock.mockResolvedValue(ZARA_ANSWER);
+    shoppingMock.mockResolvedValue(ZARA_SHOPPING);
+    const target = await buildApp();
+    // La sonde voit la colonne (mémorisée), puis la colonne disparaît.
+    expect(await brandShopColumnReady(target)).toBe(true);
+    db.missingColumns.add("brand_shop");
+    const id = preparedSearch();
+    const res = await launch(target, id);
+    expect(res.json().complement.status).toBe("shown");
+    expect(searchRow(id)).toMatchObject({ status: "completed", complement_status: "shown" });
+    const shoppingInserts = db.matchInserts.filter((list) => list.every((row) => row.origin === "shopping"));
+    expect(shoppingInserts.map((list) => list.some((row) => "brand_shop" in row))).toEqual([true, false]);
+    const rows = shoppingRows(id);
+    expect(rows).toHaveLength(5);
+    expect(rows.some((row) => "brand_shop" in row)).toBe(false);
+    expect(shoppingHosts(res.json())).toEqual(["boutique-d.fr", "www.zara.com", "boutique-e.fr", "shop.mango.com", "boutique-c.fr"]);
+    const warnings = logs.map((line) => JSON.parse(line) as Record<string, unknown>).filter((line) => String(line.msg).includes("refaite sans lui"));
+    expect(warnings).toEqual([expect.objectContaining({ origin: "shopping", code: "PGRST204" })]);
+    expect(JSON.stringify(warnings)).not.toMatch(/zara|mango/i);
+  });
+
+  it("refusé : jamais plus d'une reprise (la base refuse aussi sans le oui : deux essais, aucune ligne), et aucune reprise quand aucun oui n'était envoyé", async () => {
+    aiMock.mockResolvedValue(ZARA_ANSWER);
+    shoppingMock.mockResolvedValue(ZARA_SHOPPING);
+    db.refuseInsert = (table, rows) => table === "product_matches" && rows.every((row) => row.origin === "shopping");
+    const target = await buildApp();
+    const id = preparedSearch();
+    await launch(target, id);
+    const shoppingInserts = () => db.matchInserts.filter((list) => list.every((row) => row.origin === "shopping"));
+    expect(shoppingInserts().map((list) => list.some((row) => "brand_shop" in row))).toEqual([true, false]);
+    expect(shoppingRows(id)).toHaveLength(0);
+    // Une pièce d'une marque sans boutique dans la section : aucun oui envoyé, un seul essai.
+    db.matchInserts.length = 0;
+    aiMock.mockResolvedValue({ ...ZARA_ANSWER, value: { ...ZARA_ANSWER.value, brand: "Exemplor" } });
+    const other = preparedSearch();
+    await launch(target, other);
+    expect(shoppingInserts().map((list) => list.some((row) => "brand_shop" in row))).toEqual([false]);
+    expect(logs.some((line) => line.includes("refaite sans lui"))).toBe(true);
+    expect(logs.filter((line) => line.includes("refaite sans lui"))).toHaveLength(1);
   });
 });
 
