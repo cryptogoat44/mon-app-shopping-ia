@@ -239,6 +239,14 @@ export const ANALYTICS_EVENTS = {
   // plus tant que l'app reste ouverte (mémoire de l'app, rien sur
   // l'appareil) ; count : combien.
   price_drop_shown: { count },
+  // Lot « alertes visibles » : le bandeau des nouveautés en tête des Envies
+  // affiche des nouveautés pas encore vues (count : combien), puis une ligne
+  // touchée (kind : baisse de prix ou retour en stock). Jamais la pièce, la
+  // boutique, le prix, le jour ni un identifiant. Nommés d'après le bandeau :
+  // les tests du serveur (alertesPrixChemins) refusent « wish » ou « alert »
+  // dans un appel de statistiques des écrans des alertes.
+  news_banner_shown: { count },
+  news_line_opened: { kind: oneOf(["price_drop", "restock"]) },
 } as const satisfies Record<string, Record<string, Rule>>;
 
 export type AnalyticsEvent = keyof typeof ANALYTICS_EVENTS;

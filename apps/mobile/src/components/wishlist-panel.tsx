@@ -29,6 +29,10 @@ import { usePreferences } from "@/lib/preferences-context";
 import { appendPage, loadAllPages, WISHLIST_LOAD_MAX, wishlistScope, wishlistTotalText, wishlistView, type WishlistPageOf, type WishlistSort } from "@/lib/wishlist-view";
 import { WishlistSearchEmpty, WishlistTools } from "@/components/wishlist-tools";
 import { WishAlertBell, WishAlertSheet } from "@/components/wish-alert-sheet";
+import { WishAlertNewsBanner } from "@/components/wish-alert-news-banner";
+import { bannerItems, trackNewsOpened, trackNewsShown, unseenItems } from "@/lib/wish-alert-news";
+import type { WishAlertNewsState } from "@/lib/use-wish-alert-news";
+import { FROM_ALERT } from "@/lib/push-state";
 import { themedStyles } from "@/theme/themed-styles";
 
 function displayPrice(item: Piece): string | null {
@@ -55,7 +59,10 @@ function chunk<T>(items: T[], size: number): T[][] {
 // Lot 2 (alertes prix et stock) : une cloche sur chaque envie que le serveur
 // reconnaît (dans « Toutes » comme dans vos collections), cachée sans les
 // alertes sur le serveur ; elle ouvre la feuille de la cloche.
-export function WishlistPanel() {
+// Lot « alertes visibles » : en tête de la grille, le bandeau des nouveautés
+// (`news`, lues par le Profil) ; affichées, elles deviennent « vues » sur
+// l'appareil et restent dans le bandeau tant que la grille reste ouverte.
+export function WishlistPanel({ news }: { news: WishAlertNewsState }) {
   const [view, setView] = useState<"mine" | "received">("mine");
   return (
     <>
@@ -71,7 +78,7 @@ export function WishlistPanel() {
         />
       </View>
       {view === "mine" ? (
-        <MyWishlist />
+        <MyWishlist news={news} />
       ) : (
         <ScrollView>
           <ReceivedPieces />
@@ -81,7 +88,7 @@ export function WishlistPanel() {
   );
 }
 
-function MyWishlist() {
+function MyWishlist({ news }: { news: WishAlertNewsState }) {
   const router = useRouter();
   const { showToast } = useToast();
   // Envies lues pour la puce choisie, dans l'ordre récent, et le curseur de
@@ -183,10 +190,27 @@ function MyWishlist() {
     }, [loadAlerts])
   );
 
+  // Lot « alertes visibles » : les nouveautés déjà affichées pendant cette
+  // visite restent dans le bandeau ; « Masquer » le vide.
+  const [newsShown, setNewsShown] = useState<ReadonlySet<string>>(new Set());
+  const { items: newsItems, seen: newsSeen, markSeen: markNewsSeen } = news;
+  const newsBanner = bannerItems(newsItems, newsSeen, newsShown);
+  const gridShown = list !== null;
+  // Affichées (la grille est là) : vues, sur l'appareil, pour ce compte.
+  useEffect(() => {
+    if (!gridShown) return;
+    const fresh = unseenItems(newsItems, newsSeen).map((item) => item.id);
+    if (fresh.length === 0) return;
+    setNewsShown((current) => new Set([...current, ...fresh]));
+    markNewsSeen(fresh);
+    trackNewsShown(fresh.length);
+  }, [gridShown, newsItems, newsSeen, markNewsSeen]);
+
   async function handleRefresh() {
     setRefreshing(true);
     loadCollections();
     loadAlerts();
+    news.refresh();
     await load();
     setRefreshing(false);
   }
@@ -401,6 +425,15 @@ function MyWishlist() {
           )}
           ListHeaderComponent={
             <>
+              <WishAlertNewsBanner
+                items={newsBanner}
+                onOpen={(item) => {
+                  trackNewsOpened(item);
+                  // Ouverte depuis une nouveauté : le clic vers la boutique est compté « price_alert ».
+                  router.push({ pathname: "/envie", params: { id: item.wishlistItemId, from: FROM_ALERT } });
+                }}
+                onHide={() => setNewsShown(new Set())}
+              />
               {error ? <ErrorMessage style={styles.emptyText}>{error}</ErrorMessage> : null}
               {/* Recherche, tri et total : seulement quand il y a des envies à chercher. */}
               {hasItems ? <WishlistTools query={query} onQueryChange={setQuery} sort={sort} onSortChange={changeSort} total={totalLine} note={partialNote} /> : null}

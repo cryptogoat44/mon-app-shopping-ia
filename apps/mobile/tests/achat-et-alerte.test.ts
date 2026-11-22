@@ -649,8 +649,11 @@ describe("16. Statistiques (catalogue fermé, ajout seulement)", () => {
     trackPriceDropsShown(2);
     trackPriceDropsShown(5);
     expect(track.mock.calls).toEqual([["price_drop_shown", { count: 2 }]]);
-    // Les quatre événements sont à la fin du catalogue (ajout seulement).
-    expect(Object.keys(ANALYTICS_EVENTS).slice(-4)).toEqual(["shop_returned", "purchase_question", "price_watch_changed", "price_drop_shown"]);
+    // Les quatre événements sont à la fin du catalogue (ajout seulement),
+    // suivis seulement de ceux du lot « alertes visibles », ajoutés après.
+    const keys = Object.keys(ANALYTICS_EVENTS);
+    expect(keys.slice(-6, -2)).toEqual(["shop_returned", "purchase_question", "price_watch_changed", "price_drop_shown"]);
+    expect(keys.slice(-2)).toEqual(["news_banner_shown", "news_line_opened"]);
   });
 
   it("refusé : rien sans consentement ; jamais de propriété platform, ni pièce, ni boutique, ni prix", async () => {
