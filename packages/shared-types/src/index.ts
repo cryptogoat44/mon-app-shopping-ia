@@ -1934,7 +1934,7 @@ export interface WishAlertStatesList {
  * l'alerte (l'app note sur l'appareil, par compte, celles déjà vues).
  * `seenOn` : le jour où le prix ou le stock a été vu (« AAAA-MM-JJ », heure de
  * Paris). Baisse de prix : `price` est le prix vu, `threshold` votre seuil
- * (jamais un « ancien prix »), dans `currency` ; retour en stock : les trois à
+ * d'aujourd'hui (jamais un « ancien prix »), dans `currency` ; retour en stock : les trois à
  * null. `merchantName` : la boutique de l'Envie. */
 export interface WishAlertNews {
   id: string;

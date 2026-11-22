@@ -41,6 +41,9 @@ interface WishSetup {
   priceDrop?: boolean;
   restock?: boolean;
   below?: boolean;
+  /** Seuil actuel de la cloche (défaut « 89.00 » EUR, celui des alertes). */
+  target?: string | null;
+  targetCurrency?: string | null;
   productMatchId?: string | null;
   watch?: boolean;
 }
@@ -85,6 +88,8 @@ function seeded(options: { version?: number | null } = {}) {
         notify_restock: setup.restock ?? true,
         notify_sold_out: false,
         below_target: setup.below ?? true,
+        target_price: setup.target === undefined ? "89.00" : setup.target,
+        target_currency: setup.targetCurrency === undefined ? "EUR" : setup.targetCurrency,
       });
     }
     return id;
@@ -302,6 +307,19 @@ describe("encore vraie aujourd'hui (aucune contradiction avec « Baisse de prix 
     const shown = alert(wish({ priceDrop: true }));
     const target = await newsApp(fake.db);
     expect((await newsOf(target, ALICE)).map((item) => item.id)).toEqual([shown]);
+  });
+
+  it("seuil changé depuis l'alerte : l'écart se mesure avec le seuil d'AUJOURD'HUI (89 → 100 : seuil 100, écart 31 €) ; seuil baissé sous le prix vu, sans seuil ou dans une autre devise → cachée", async () => {
+    const { fake, wish, alert } = seeded();
+    const raised = alert(wish({ target: "100.00" }), { old_price: "89.00", new_price: "69.00" });
+    alert(wish({ target: "65.00" }), { old_price: "89.00", new_price: "69.00" });
+    alert(wish({ target: "69.00" }), { old_price: "89.00", new_price: "69.00" });
+    alert(wish({ target: null, targetCurrency: null }), { old_price: "89.00", new_price: "69.00" });
+    alert(wish({ targetCurrency: "GBP" }), { old_price: "89.00", new_price: "69.00" });
+    const target = await newsApp(fake.db);
+    const news = await newsOf(target, ALICE);
+    expect(news.map((item) => item.id)).toEqual([raised]);
+    expect(news[0]).toMatchObject({ price: 69, threshold: 100, currency: "EUR" });
   });
 
   it("une baisse sans prix complet ni devise lisible → cachée ; complète → montrée", async () => {

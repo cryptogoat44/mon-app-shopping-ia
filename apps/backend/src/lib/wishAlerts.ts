@@ -511,7 +511,8 @@ export async function saveWatch(fastify: Db, userId: string, wishId: string, cho
 // une alerte périmée, désactivée ou limitée ; et seulement si elle est encore
 // vraie aujourd'hui, comme la revérification de l'envoi : cloche de cette
 // sorte allumée, pièce pas achetée, prix toujours sous le seuil et pièce pas
-// épuisée (baisse), pièce en stock (retour). Une seule ligne par envie et par
+// épuisée (baisse ; le seuil renvoyé est celui d'aujourd'hui, pas celui du
+// jour de l'alerte), pièce en stock (retour). Une seule ligne par envie et par
 // sorte (la plus récente). Ainsi la mention « Baisse de prix » de la grille et
 // le bandeau ne se contredisent jamais.
 
@@ -539,6 +540,8 @@ const NEWS_WATCH_ROW = z.object({
   notify_price_drop: z.boolean(),
   notify_restock: z.boolean(),
   below_target: z.boolean().nullable(),
+  target_price: AMOUNT.nullable(),
+  target_currency: z.string().nullable(),
 });
 
 /** Le jour (Paris) `days` jours avant `today` (« AAAA-MM-JJ »). */
@@ -581,7 +584,7 @@ export async function readWishAlertNews(fastify: Db, userId: string, now: Date =
   const [wishes, trackings, watches, boughtByMatch] = await Promise.all([
     db.from("wishlist_items").select("id, title, merchant_name").eq("user_id", userId).in("id", ids).then((result) => parseDbRows(z.array(NEWS_WISH_ROW), result, "Envies des nouveautés")),
     db.from("wish_tracking").select("wishlist_item_id, stock_state, bought_on").eq("user_id", userId).in("wishlist_item_id", ids).then((result) => parseDbRows(z.array(NEWS_TRACKING_ROW), result, "Suivi des nouveautés")),
-    db.from("wish_watches").select("wishlist_item_id, notify_price_drop, notify_restock, below_target").eq("user_id", userId).in("wishlist_item_id", ids).then((result) => parseDbRows(z.array(NEWS_WATCH_ROW), result, "Cloches des nouveautés")),
+    db.from("wish_watches").select("wishlist_item_id, notify_price_drop, notify_restock, below_target, target_price, target_currency").eq("user_id", userId).in("wishlist_item_id", ids).then((result) => parseDbRows(z.array(NEWS_WATCH_ROW), result, "Cloches des nouveautés")),
     boughtWishIds(fastify, userId, ids),
   ]);
   const wishById = new Map(wishes.map((row) => [row.id, row]));
@@ -596,6 +599,11 @@ export async function readWishAlertNews(fastify: Db, userId: string, now: Date =
     if (event.kind === "price_drop") {
       const priced = event.old_price !== null && event.new_price !== null && event.currency !== null && /^[A-Z]{3}$/.test(event.currency) && event.new_price < event.old_price;
       if (!priced || !watch.notify_price_drop || watch.below_target !== true || tracking.stock_state === "sold_out") continue;
+      // L'écart se mesure avec le seuil d'AUJOURD'HUI (celui de la cloche),
+      // pas celui du jour de l'alerte : seuil changé depuis, même devise et
+      // prix vu toujours dessous, sinon la ligne n'est pas montrée.
+      const threshold = watch.target_price;
+      if (threshold === null || !(threshold > 0) || watch.target_currency !== event.currency || Math.round(event.new_price! * 100) >= Math.round(threshold * 100)) continue;
     } else if (!watch.notify_restock || tracking.stock_state !== "in_stock") {
       continue;
     }
@@ -606,7 +614,7 @@ export async function readWishAlertNews(fastify: Db, userId: string, now: Date =
       title: wish.title,
       merchantName: wish.merchant_name,
       price: event.kind === "price_drop" ? event.new_price : null,
-      threshold: event.kind === "price_drop" ? event.old_price : null,
+      threshold: event.kind === "price_drop" ? watch.target_price : null,
       currency: event.kind === "price_drop" ? event.currency : null,
       seenOn: event.created_on,
     });
