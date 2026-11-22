@@ -38,6 +38,27 @@ function promotable(piece: Pick<Piece, "priceFrom">): boolean {
   return piece.priceFrom !== null && piece.priceFrom > 0;
 }
 
+/** Stock affiché (lot « stock visible ») : Google disait l'offre épuisée au
+ * moment de la recherche. Inconnu (rien dit, ancien serveur) : non. */
+export function isSoldOut(piece: Pick<Piece, "inStock">): boolean {
+  return piece.inStock === false;
+}
+
+/** Une offre qui peut être mise en grand d'office : avec un prix (promotable)
+ * et pas épuisée. Une offre épuisée n'est jamais la grande carte d'office
+ * quand une autre existe ; elle garde sa place dans sa section. */
+function promotableInStock(piece: Pick<Piece, "priceFrom" | "inStock">): boolean {
+  return promotable(piece) && !isSoldOut(piece);
+}
+
+/** La première proposition de l'écran (allPieces) qui n'est pas épuisée ;
+ * 0 si toutes le sont (ou s'il n'y en a aucune). Sans stock connu : 0, comme
+ * avant. */
+export function firstAvailableIndex(result: ResultLists): number {
+  const index = allPieces(result).findIndex((piece) => !isSoldOut(piece));
+  return index === -1 ? 0 : index;
+}
+
 /** La première proposition REÇUE du complément, par indice dans allPieces
  * (-1 sans complément) : dans « Cette pièce dans d'autres boutiques », celle
  * de plus petit rang, pas la première affichée — le serveur y range les
@@ -82,14 +103,16 @@ export function noPriceAnywhere(result: ResultLists): boolean {
  * premier affichage (`late`) : jamais en grand d'office — sans prix dans la
  * recherche visuelle, la grande carte reste sa première proposition. */
 export function bestProposalIndex(result: ResultLists, country?: string): number {
-  const local = country === undefined ? -1 : result.pieces.findIndex((piece) => promotable(piece) && !isForeignPrice(piece.priceFrom, piece.currency, country));
+  const local = country === undefined ? -1 : result.pieces.findIndex((piece) => promotableInStock(piece) && !isForeignPrice(piece.priceFrom, piece.currency, country));
   if (local !== -1) return local;
-  const lensWithPrice = result.pieces.findIndex(promotable);
+  const lensWithPrice = result.pieces.findIndex(promotableInStock);
   if (lensWithPrice !== -1) return lensWithPrice;
-  if (result.complement?.late && result.pieces.length > 0) return 0;
+  // Stock affiché : à chaque repli, la première qui n'est pas épuisée (0 sans stock connu, comme avant).
+  const firstLensAvailable = Math.max(0, result.pieces.findIndex((piece) => !isSoldOut(piece)));
+  if (result.complement?.late && result.pieces.length > 0) return firstLensAvailable;
   const firstComplement = firstReceivedComplementIndex(result);
   const piece = allPieces(result)[firstComplement];
-  return piece && promotable(piece) ? firstComplement : 0;
+  return piece && promotableInStock(piece) ? firstComplement : firstAvailableIndex(result);
 }
 
 export interface StartOptions {
@@ -128,8 +151,10 @@ export type BigCardLabel = "best" | "bestWithPrice" | "other";
  *   grand quand ce n'est pas la première — des propositions mieux classées
  *   sont alors plus bas, souvent repliées sans prix ;
  * - « Autre proposition » sinon. */
-export function bigCardLabel(selectedIndex: number, bestIndex: number): BigCardLabel {
-  if (selectedIndex === 0) return "best";
+export function bigCardLabel(selectedIndex: number, bestIndex: number, firstAvailable = 0): BigCardLabel {
+  // Stock affiché : « Meilleure proposition » va à la première qui n'est pas
+  // épuisée (firstAvailableIndex) ; une offre épuisée ne l'est jamais quand une autre existe.
+  if (selectedIndex === firstAvailable) return "best";
   return selectedIndex === bestIndex ? "bestWithPrice" : "other";
 }
 

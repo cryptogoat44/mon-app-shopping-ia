@@ -44,6 +44,10 @@ export interface Piece {
    * douteuse, sans mention). Jamais affiché : la grande carte prise dans
    * cette section ne la choisit pas (lib/price-first.ts). Absent : non. */
   demoted?: true;
+  /** Stock affiché (lot « stock visible ») : ce que Google disait au moment
+   * de la recherche — true « En stock », false « Épuisée » (components/stock-note.tsx).
+   * Absent : inconnu, rien n'est affiché. */
+  inStock?: boolean;
 }
 
 export type SpotStatus = "success" | "failed";
