@@ -797,8 +797,10 @@ export default function ResultScreen() {
       >
         {/* Le verdict : la phrase de tête, d'après les titres des boutiques ; rien quand le serveur ne sait pas (components/verdict-line.tsx).
             Sa boîte est toujours là, même vide (collapsable={false} : jamais aplatie), en premier : trié par prix sur
-            iPhone, la phrase arrivée avec les boutiques grandit vers le bas, visible, au lieu de passer au-dessus de l'écran. */}
-        <View collapsable={false} testID="verdict-place">
+            iPhone, la phrase arrivée avec les boutiques grandit vers le bas, visible, au lieu de passer au-dessus de l'écran.
+            minHeight 1 : vide, une boîte de hauteur 0 en haut de la liste n'est pas « visible » pour iOS ni Android
+            (y + hauteur > défilement), qui prendraient alors la ligne d'après comme repère et cacheraient la phrase. */}
+        <View collapsable={false} testID="verdict-place" style={styles.verdictPlace}>
           <VerdictLine verdict={result.verdict} />
         </View>
         {/* Voie C : le décompte, le tri et l'absence de prix parlent de la recherche visuelle seule.
@@ -1101,6 +1103,7 @@ const styles = themedStyles(() => ({
   navTitle: { fontSize: font.caption, color: color.acier },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   count: { fontSize: font.caption, color: color.acier, marginBottom: space.sm },
+  verdictPlace: { minHeight: 1 },
   hero: { width: "100%", aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.sm, overflow: "hidden" },
   fill: { width: "100%", height: "100%" },
   rankLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600", marginTop: space.md },

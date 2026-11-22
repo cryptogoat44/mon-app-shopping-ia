@@ -213,7 +213,18 @@ describe("l'écran : la phrase en tête, annoncée, touchable, sans rien déplac
     const afterScrollOpen = screen.slice(screen.indexOf(">\n", scroll) + 2);
     // Premier enfant (après le commentaire) : la boîte toujours rendue, qui contient la phrase.
     const firstChild = afterScrollOpen.replace(/^\s*\{\/\*[\s\S]*?\*\/\}\s*/, "");
-    expect(firstChild.startsWith('<View collapsable={false} testID="verdict-place">\n          <VerdictLine verdict={result.verdict} />\n        </View>')).toBe(true);
+    expect(firstChild.startsWith('<View collapsable={false} testID="verdict-place" style={styles.verdictPlace}>\n          <VerdictLine verdict={result.verdict} />\n        </View>')).toBe(true);
+    // Vide, elle a une hauteur (au moins 1) : iOS et Android la prennent pour repère dès le haut de la liste.
+    expect(screen).toMatch(/\n  verdictPlace: \{ minHeight: 1 \},\n/);
+  });
+
+  it("refusé : la place du verdict n'est jamais de hauteur 0 quand elle est vide (sinon, en haut de la liste, le repère serait la ligne d'après et la phrase passerait au-dessus de l'écran)", () => {
+    const screen = read("src/app/(app)/spot/result.tsx");
+    expect(screen).not.toContain('<View collapsable={false} testID="verdict-place">');
+    const style = screen.match(/\n  verdictPlace: \{([^}]*)\}/);
+    expect(style).not.toBeNull();
+    expect(style![1]).not.toMatch(/minHeight: 0\b|height: 0\b/);
+    expect(style![1]).toMatch(/minHeight: [1-9]/);
   });
 
   it("refusé : jamais la phrase seule (ou sous condition) en premier enfant de la liste, qui n'existerait qu'à l'arrivée des boutiques", () => {
