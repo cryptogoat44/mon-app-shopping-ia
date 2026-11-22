@@ -19,12 +19,14 @@ Chaque alerte écrit une ligne `Alerte` dans le journal de Render et, si
 | `signalement` | un nouveau signalement attend la modération | une par contenu signalé (les signalements suivants du même contenu se regroupent) |
 | `masquage_auto` | un contenu signalé par 3 personnes différentes vient d'être masqué | une par contenu |
 
-Une même alerte n'est pas répétée (mémoire du serveur). Après un redémarrage
-(mise en veille de l'offre gratuite de Render, déploiement), elle peut
-réapparaître dans le journal, une fois par redémarrage ; dans Sentry, elle
-rejoint le même problème (même empreinte) : la règle « nouveau problème » ne
-vous prévient qu'une fois par jour ou par cycle (tant que vous ne marquez pas
-ce problème comme résolu).
+Une alerte passée par la mémoire du serveur (toutes sauf `signalement` et
+`masquage_auto`) n'est pas répétée pendant la période indiquée dans la
+dernière colonne. Après un redémarrage (mise en veille de l'offre gratuite de
+Render, déploiement), elle peut réapparaître dans le journal, une fois par
+redémarrage ; dans Sentry, elle rejoint le même problème (même empreinte) : la
+règle « nouveau problème » vous prévient au plus une fois par période de la
+dernière colonne (heure, jour ou cycle). Un problème marqué résolu qui revient
+ne vous prévient pas avec cette règle.
 
 Jamais de compte, d'adresse ni de contenu : le type, et des valeurs comme
 « post » ou « spam ». Rien sur la personne qui signale. Les deux dernières
