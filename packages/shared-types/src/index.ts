@@ -303,8 +303,8 @@ export interface ProductMatch {
  *   recherche (« Prix inhabituellement bas »), un constat, jamais une accusation.
  * Les mentions ne rangent que « Cette pièce dans d'autres boutiques » (origine
  * « shopping ») : boutique officielle de la marque de la pièce en tête, quand
- * le serveur la reconnaît (toute autre garde sa place), boutiques connues un
- * peu remontées, prix inhabituellement bas en fin. Ailleurs, chaque proposition
+ * le serveur l'a reconnue (toute autre est rangée comme une boutique
+ * connue), boutiques connues un peu remontées, prix inhabituellement bas en fin. Ailleurs, chaque proposition
  * garde sa place, avec sa mention (décision du fondateur, 21 novembre 2026).
  * Les offres des boutiques masquées, et celles qui cumulent un prix très bas
  * et une adresse douteuse, ne sont jamais envoyées. */
