@@ -100,8 +100,11 @@ export const ANALYTICS_EVENTS = {
   no_price_results_opened: { results_count: count, context: oneOf(["section", "not_right"]) },
   // Tri des résultats (2026-11-08, lib/result-sort.ts) : tri ou filtre « Avec
   // prix seulement » changé sur l'écran Résultat — le nouveau choix et ce qui
-  // a changé, jamais la recherche ni les pièces.
-  result_view_changed: { sort: oneOf(RESULT_SORTS), with_price_only: bool, change: oneOf(["sort", "filter"]) },
+  // a changé, jamais la recherche ni les pièces. Stock affiché (lot « stock
+  // visible ») : in_stock_only, l'état de « En stock seulement », et la
+  // valeur « stock_filter » quand c'est lui qui change ; « filter » reste
+  // « Avec prix seulement ».
+  result_view_changed: { sort: oneOf(RESULT_SORTS), with_price_only: bool, change: oneOf(["sort", "filter", "stock_filter"]), in_stock_only: bool },
   // Écran Envies (2026-11-09, lib/wishlist-view.ts) : tri changé — le nouveau
   // tri et s'il est choisi dans une collection, jamais la recherche tapée.
   wishlist_sort_changed: { sort: oneOf(WISHLIST_SORTS), in_collection: bool },

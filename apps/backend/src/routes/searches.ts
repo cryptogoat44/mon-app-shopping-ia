@@ -67,6 +67,7 @@ import { assertNoUserImage, voieCAiEnabled } from "../lib/aiSwitches.js";
 import { photoCallsLeft, startDeadline, VOIE_C_BUDGET } from "../lib/deadline.js";
 import { lightSort } from "../lib/lightSort.js";
 import { brandShopColumnReady } from "../lib/brandShopColumn.js";
+import { stockColumnReady } from "../lib/stockColumn.js";
 import { cacheKey, imageHash, purgeExpiredCache, readCache, writeCache } from "../lib/searchCache.js";
 import {
   complementAfterSaveFailure,
@@ -166,9 +167,13 @@ const INSERTED_MATCH_ROWS = z.array(z.object({ id: z.string(), merchant_url: z.s
  * mots (ordre de Google), quand les mots l'ont changé ; null sinon. */
 type LensRanks = ReadonlyMap<VisualMatch, number> | null;
 
-function toMatchRow(searchId: string, m: VisualMatch, rank: number, lensRanks: LensRanks = null) {
+/** `withStock` : la colonne in_stock (0056) est vue (lib/stockColumn.ts) ;
+ * le stock annoncé par Google n'est écrit qu'alors, et seulement quand il
+ * l'annonce (true ou false ; rien quand il ne dit rien). */
+function toMatchRow(searchId: string, m: VisualMatch, rank: number, lensRanks: LensRanks = null, withStock = false) {
   const lensRank = lensRanks?.get(m);
   return {
+    ...(withStock && typeof m.inStock === "boolean" ? { in_stock: m.inStock } : {}),
     search_id: searchId,
     rank,
     // Seulement avec 0031 et des mots qui ont changé l'ordre (lancement « boutiques ensuite »).
@@ -188,11 +193,25 @@ function toMatchRow(searchId: string, m: VisualMatch, rank: number, lensRanks: L
 /** Range les propositions et renvoie leur nombre. Une proposition que la
  * base refuse (valeur inattendue) est écartée seule, jamais les autres : on
  * reprend alors une par une, rangs renumérotés sans trou (fiabilité des
- * résultats, 2026-10-15). 0 : rien n'a pu être rangé. */
-async function insertMatches(fastify: FastifyInstance, searchId: string, matches: VisualMatch[], lensRanks: LensRanks): Promise<number> {
+ * résultats, 2026-10-15). 0 : rien n'a pu être rangé. `freshStock` : la
+ * réponse vient d'un vrai appel à Google pour cette recherche ; rejouée par
+ * le cache de 24 h (ou un appel identique en cours, peut-être d'un autre
+ * membre), son stock n'est jamais écrit — l'app dirait « au moment de la
+ * recherche » d'un stock dit jusqu'à 24 h plus tôt. */
+async function insertMatches(fastify: FastifyInstance, searchId: string, matches: VisualMatch[], lensRanks: LensRanks, freshStock: boolean): Promise<number> {
   const table = () => fastify.supabaseAdmin.from("product_matches");
-  const { error } = await table().insert(matches.map((m, index) => toMatchRow(searchId, m, index + 1, lensRanks)));
+  // Stock affiché (0056) : écrit seulement une fois la colonne vue, et seulement d'un appel frais.
+  const withStock = freshStock && matches.some((m) => typeof m.inStock === "boolean") && (await stockColumnReady(fastify));
+  let { error } = await table().insert(matches.map((m, index) => toMatchRow(searchId, m, index + 1, lensRanks, withStock)));
   if (!error) return matches.length;
+  // Refusée avec le stock malgré la sonde (colonne retirée depuis, cache du
+  // schéma) : refaite une fois sans lui, comme avant 0056 (insertion unique :
+  // rien n'a été rangé). La reprise une par une, ensuite, se fait sans lui.
+  if (withStock) {
+    fastify.log.warn({ code: error.code ?? null }, "Stock non noté : insertion refusée avec le stock, refaite sans lui");
+    ({ error } = await table().insert(matches.map((m, index) => toMatchRow(searchId, m, index + 1, lensRanks))));
+    if (!error) return matches.length;
+  }
 
   let saved = 0;
   for (const match of matches) {
@@ -211,10 +230,10 @@ async function saveMatches(
   fastify: FastifyInstance,
   searchId: string,
   matches: VisualMatch[],
-  lensRanks: LensRanks = null
+  options: { lensRanks?: LensRanks; freshStock: boolean }
 ): Promise<boolean> {
   if (matches.length === 0) return true;
-  if ((await insertMatches(fastify, searchId, matches, lensRanks)) === 0) return false;
+  if ((await insertMatches(fastify, searchId, matches, options.lensRanks ?? null, options.freshStock)) === 0) return false;
 
   // Un lien affilié par produit identifié. Pour l'instant "direct" (aucun
   // réseau d'affiliation rejoint) : le lien pointe tel quel vers le
@@ -573,7 +592,8 @@ async function saveOutcome(
   outcome: SearchOutcome,
   cropPct: number
 ): Promise<{ search: ProductSearch | null; saved: boolean }> {
-  const saved = await saveMatches(fastify, id, outcome.matches);
+  // Chemin d'avant la voie C : toujours un vrai appel à Lens (aucun cache).
+  const saved = await saveMatches(fastify, id, outcome.matches, { freshStock: true });
   const measure = saved ? outcome.measure : failedColumns("save_failed", outcome.measure.call_seconds);
   const reply = { provider: IMAGE_SEARCH_PROVIDER.name, statusCode: outcome.providerStatusCode };
   // Journal racine (sans le contexte de la requête) : ni identifiant de requête, ni chemin, ni compte.
@@ -704,7 +724,7 @@ async function saveVoieCOutcome(
   outcome: SearchOutcome,
   run: { lensFromCache: boolean; complement: ComplementResult; deferred?: { lensRanks: LensRanks } }
 ): Promise<{ search: ProductSearch | null; complement: ComplementResult; lensSaved: boolean }> {
-  const saved = await saveMatches(fastify, launch.id, outcome.matches, run.deferred?.lensRanks ?? null);
+  const saved = await saveMatches(fastify, launch.id, outcome.matches, { lensRanks: run.deferred?.lensRanks ?? null, freshStock: !run.lensFromCache });
   const pending = run.deferred !== undefined && saved;
   let complement = run.complement;
   let complementSaved = 0;

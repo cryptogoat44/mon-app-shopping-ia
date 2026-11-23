@@ -28,6 +28,8 @@ export function matchToPiece(match: ProductMatch): Piece {
     ...(isOfferMark(match.offerMark) ? { offerMark: match.offerMark } : {}),
     // Rangée en fin de « Cette pièce dans d'autres boutiques » : jamais la grande carte (lib/price-first.ts).
     ...(match.demoted === true ? { demoted: true as const } : {}),
+    // Stock affiché : seulement un vrai oui ou non du serveur (absent : inconnu, rien d'affiché).
+    ...(typeof match.inStock === "boolean" ? { inStock: match.inStock } : {}),
   };
 }
 
