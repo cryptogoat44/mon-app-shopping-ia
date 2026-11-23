@@ -278,7 +278,7 @@ export default function LaunchScreen() {
     <SafeAreaView style={styles.screen}>
       <View style={styles.nav}>
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.navSide} accessibilityRole="button" accessibilityLabel={t.common.back}>
-          <Text style={styles.back}>‹</Text>
+          <Text style={styles.back}>‹ {t.common.back}</Text>
         </Pressable>
         <Pressable onPress={flow.close} hitSlop={12} style={[styles.navSide, styles.navRight]} accessibilityRole="button">
           <Text style={styles.close}>{t.spotter.close}</Text>
@@ -318,7 +318,8 @@ const styles = themedStyles(() => ({
   navSide: { minWidth: 44, height: 44, justifyContent: "center" },
   navRight: { alignItems: "flex-end" },
   close: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
-  back: { fontSize: 26, color: color.encre },
+  // « ‹ Retour » écrit en toutes lettres : sur cet écran, le geste « glisser pour revenir » est coupé.
+  back: { fontSize: font.secondary, color: color.encre, fontWeight: "600" },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   limits: { marginTop: 0, marginBottom: space.md },
   lead: { fontSize: font.secondary, color: color.acier, lineHeight: 21 },
