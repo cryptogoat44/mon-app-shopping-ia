@@ -2,7 +2,7 @@
 # avec le recadrage d'iOS, photo d'une pièce du Vault,
 # lien marchand d'une Envie), réglages (anglais et sombre, puis retour),
 # export des données (feuille de partage d'iOS refermée).
-appId: com.spottoapp.ios
+appId: com.spottoshop.app
 ---
 - tapOn: "Fermer"
 - extendedWaitUntil:

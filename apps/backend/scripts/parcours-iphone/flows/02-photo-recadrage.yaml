@@ -5,7 +5,7 @@
 # « Recadrer » et nouvelle identification. Lot entourer la pièce : plus de
 # cadre à poignées ; Maestro ne trace que des lignes droites (un trait n'est
 # pas retenu), donc « Utiliser toute l'image » avant de lancer.
-appId: com.spottoapp.ios
+appId: com.spottoshop.app
 ---
 - tapOn: "Ajouter une photo"
 - extendedWaitUntil:

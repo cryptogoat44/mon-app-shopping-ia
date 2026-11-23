@@ -29,7 +29,7 @@ describe("extension de partage (app.json)", () => {
   });
 
   it("groupe d'apps et identifiant cohérents avec l'app ; Android non concerné", () => {
-    expect(expo.ios.bundleIdentifier).toBe("com.spottoapp.ios");
+    expect(expo.ios.bundleIdentifier).toBe("com.spottoshop.app");
     expect(options.iosAppGroupIdentifier).toBe(`group.${expo.ios.bundleIdentifier}`);
     expect(options.iosAppGroupIdentifier).toBe(APP_GROUP);
     expect(options.iosShareExtensionBundleIdentifier).toBe(`${expo.ios.bundleIdentifier}.share-extension`);

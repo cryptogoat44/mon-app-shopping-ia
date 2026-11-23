@@ -1,7 +1,7 @@
 # Après l'ouverture d'un lien par l'outil (Maestro ne voit jamais les jetons) :
 # confirmation d'iOS « Ouvrir dans Spotto ? », puis écran attendu. Lot 4 ter :
 # la demande d'accès aux photos d'iOS, si elle s'affiche, est accordée.
-appId: com.spottoapp.ios
+appId: com.spottoshop.app
 ---
 - extendedWaitUntil:
     visible: "Ouvrir|Autoriser l.accès complet|${ATTENDRE}"

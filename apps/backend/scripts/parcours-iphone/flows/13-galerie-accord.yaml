@@ -3,7 +3,7 @@
 # d'accès d'iOS (l'outil a remis l'autorisation à zéro avant ce parcours).
 # « Oui, me la proposer » → demande d'iOS (texte : app.json et locales/*.json)
 # → accès complet → la dernière vidéo apparaît.
-appId: com.spottoapp.ios
+appId: com.spottoshop.app
 ---
 - extendedWaitUntil:
     visible: "Proposer automatiquement ma dernière vidéo \\?"

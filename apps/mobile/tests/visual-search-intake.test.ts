@@ -100,7 +100,7 @@ vi.mock("expo-linking", () => ({ getLinkingURL: linking.getLinkingURL, addEventL
 vi.mock("expo-file-system", () => ({
   File: disk.File,
   Directory: disk.Directory,
-  Paths: { cache: new disk.Directory(disk.CACHE), appleSharedContainers: { "group.com.spottoapp.ios": new disk.Directory(disk.GROUP) } },
+  Paths: { cache: new disk.Directory(disk.CACHE), appleSharedContainers: { "group.com.spottoshop.app": new disk.Directory(disk.GROUP) } },
 }));
 
 import { redirectSystemPath } from "../src/app/+native-intent";

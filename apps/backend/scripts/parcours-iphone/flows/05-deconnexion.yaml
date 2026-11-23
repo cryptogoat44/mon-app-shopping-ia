@@ -1,6 +1,6 @@
 # Déconnexion, puis écran de connexion (rien n'y est saisi : la saisie réelle
 # de l'identifiant et du mot de passe se vérifie sur un vrai iPhone).
-appId: com.spottoapp.ios
+appId: com.spottoshop.app
 ---
 - tapOn: "Se déconnecter"
 - extendedWaitUntil:

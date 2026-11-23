@@ -3,7 +3,7 @@
 # l'analyse par IA (simulée), attente, résultats (SerpApi simulée : aucun
 # crédit), corrections derrière « Ce n'est pas la bonne pièce ? ». Puis une
 # relance, sans accord. Textes : expressions régulières (« ? » échappé).
-appId: com.spottoapp.ios
+appId: com.spottoshop.app
 ---
 - extendedWaitUntil:
     visible: ${DERNIERE}
