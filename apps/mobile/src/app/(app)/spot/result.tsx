@@ -6,7 +6,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
 import * as Haptics from "expo-haptics";
-import type { MatchFeedbackReason, ProductSearch, VaultCategory } from "@monapp/shared-types";
+import type { MatchFeedbackReason, ProductSearch, VaultCategory, VerdictLevel } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { acceptLanguage, getActiveLocale, t } from "@/i18n";
 import { closeSpotter } from "@/lib/spot-navigation";
@@ -71,6 +71,8 @@ import { useHeroReveal } from "@/lib/use-hero-reveal";
 import { ForeignShopNote } from "@/components/foreign-shop-note";
 import { OfferMarkNote } from "@/components/offer-mark";
 import { StockNote } from "@/components/stock-note";
+import { VerdictLine } from "@/components/verdict-line";
+import { verdictToTrack } from "@/lib/verdict";
 import { KeptNotice } from "@/components/kept-notice";
 import { PurchaseQuestionSheet, type PurchaseQuestionActions } from "@/components/purchase-question-sheet";
 import { SendToFriendLink } from "@/components/send-to-friend-link";
@@ -284,6 +286,18 @@ export default function ResultScreen() {
     if (!autoTextSearchId) return;
     setAutoText(claimAutoTextSearch(autoTextSearchId) ? "running" : "done");
   }, [autoTextSearchId]);
+
+  // Le verdict (lot « verdict », lib/verdict.ts) : verdict_shown une fois par
+  // résultat affiché, et de nouveau si son niveau change (boutiques arrivées ensuite).
+  const verdictTracked = useRef<{ searchId: string | null; level: VerdictLevel } | null>(null);
+  const verdictLevel = result?.verdict?.level ?? null;
+  const verdictSearchId = result?.searchId ?? null;
+  useEffect(() => {
+    const next = verdictToTrack(verdictSearchId, result?.verdict, verdictTracked.current);
+    if (!next) return;
+    verdictTracked.current = next;
+    track("verdict_shown", { level: next.level });
+  }, [verdictSearchId, verdictLevel]);
 
   useScrollToEndOnKeyboard(scrollRef, result?.complement?.suggestText === true);
 
@@ -781,6 +795,14 @@ export default function ResultScreen() {
         // (iPhone ; le navigateur le fait de lui-même). « Pertinence » : inchangé.
         maintainVisibleContentPosition={priceSort && Platform.OS !== "web" ? { minIndexForVisible: 0 } : undefined}
       >
+        {/* Le verdict : la phrase de tête, d'après les titres des boutiques ; rien quand le serveur ne sait pas (components/verdict-line.tsx).
+            Sa boîte est toujours là, même vide (collapsable={false} : jamais aplatie), en premier : trié par prix sur
+            iPhone, la phrase arrivée avec les boutiques grandit vers le bas, visible, au lieu de passer au-dessus de l'écran.
+            minHeight 1 : vide, une boîte de hauteur 0 en haut de la liste n'est pas « visible » pour iOS ni Android
+            (y + hauteur > défilement), qui prendraient alors la ligne d'après comme repère et cacheraient la phrase. */}
+        <View collapsable={false} testID="verdict-place" style={styles.verdictPlace}>
+          <VerdictLine verdict={result.verdict} />
+        </View>
         {/* Voie C : le décompte, le tri et l'absence de prix parlent de la recherche visuelle seule.
             Prix d'abord : « aucun prix » quand la recherche visuelle n'en a aucun et que la grande carte
             d'office n'en a pas non plus (sinon elles sont toutes repliées en bas, avec le même texte). */}
@@ -1081,6 +1103,7 @@ const styles = themedStyles(() => ({
   navTitle: { fontSize: font.caption, color: color.acier },
   content: { paddingHorizontal: space.lg, paddingBottom: space.xxl, maxWidth: 480, alignSelf: "center", width: "100%" },
   count: { fontSize: font.caption, color: color.acier, marginBottom: space.sm },
+  verdictPlace: { minHeight: 1 },
   hero: { width: "100%", aspectRatio: 4 / 5, backgroundColor: color.plinthe, borderRadius: radius.sm, overflow: "hidden" },
   fill: { width: "100%", height: "100%" },
   rankLabel: { fontSize: font.caption, color: color.acier, fontWeight: "600", marginTop: space.md },

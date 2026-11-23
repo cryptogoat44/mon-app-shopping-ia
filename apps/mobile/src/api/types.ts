@@ -1,4 +1,4 @@
-import type { ComplementStatus, MatchFeedbackReason, MatchOrigin, OfferMark, TextSearchStatus } from "@monapp/shared-types";
+import type { ComplementStatus, MatchFeedbackReason, MatchOrigin, OfferMark, SearchVerdict, TextSearchStatus } from "@monapp/shared-types";
 import type { CapacityFailReason } from "../lib/spot-capacity";
 
 export interface Piece {
@@ -90,6 +90,10 @@ export interface SpotResult {
   /** Résultat relu sur le serveur seulement : propositions déjà gardées
    * (Envies) ou achetées (Vault) par la personne (lib/owned-marks.ts). */
   owned?: { kept: string[]; bought: string[] };
+  /** Le verdict (lot « verdict ») : la phrase de tête, décidée par le serveur
+   * d'après les titres des boutiques (lib/verdict.ts). Absent : rien
+   * d'affiché (ancien serveur, base sans 0055, boutiques attendues ou en échec). */
+  verdict?: SearchVerdict;
 }
 
 /** Complément des propositions de la recherche visuelle (voie C, lot c) :

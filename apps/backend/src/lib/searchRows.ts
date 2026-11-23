@@ -19,6 +19,7 @@ import { deferredPending, deferredStateOf } from "./deferredComplement.js";
 import { parisDayStart } from "./matchFeedback.js";
 import { FAILURE_KINDS } from "./searchMeasure.js";
 import { reviewOffers, sectionOrder, type TrustOffer } from "./shopTrust.js";
+import { searchVerdict } from "./verdict.js";
 
 export const SEARCH_ROW = z.object({
   id: z.string(),
@@ -80,6 +81,12 @@ export const MATCH_ROW = z.object({
   // ailleurs que dans la recherche visuelle et sur les lignes d'avant ;
   // absente sans 0056.
   in_stock: z.boolean().nullable().optional(),
+  // Le verdict (0055) : palier du titre (0 marque et modèle, 1 marque sans le
+  // modèle, 2 tout le reste : marque absente du titre, non donnée ou trop
+  // courte pour être reconnue ; lib/lightSort.ts, verdictTier), noté à l'enregistrement de
+  // « Cette pièce dans d'autres boutiques » ; vide ailleurs et sur les lignes
+  // d'avant ; absente sans 0055 (lib/verdict.ts n'affirme alors rien).
+  title_tier: z.number().int().min(0).max(2).nullable().optional(),
 });
 export type MatchRow = z.infer<typeof MATCH_ROW>;
 
@@ -236,15 +243,23 @@ export function complementOf(row: SearchRow, textSearchOn: boolean, now: Date = 
 }
 
 /** `textSearchOn` : « Que cherchez-vous ? » peut être lancé maintenant (voie
- * C en service) ; faux par défaut, l'invitation n'est alors jamais annoncée. */
+ * C en service) ; faux par défaut, l'invitation n'est alors jamais annoncée.
+ * `options.verdict` : le verdict (lib/verdict.ts) est calculé — à passer vrai
+ * seulement quand la base a 0055 (sonde lib/verdictColumn.ts) et que
+ * `matches` porte TOUTES les propositions de la recherche (lancement,
+ * boutiques ensuite, relecture) ; jamais pour l'historique, qui n'en lit
+ * qu'une. Faux par défaut : aucun verdict. */
 export function toProductSearch(
   row: SearchRow,
   matches: MatchRow[],
   affiliateUrlByMatchId: Map<string, string>,
   feedbackByMatchId: Map<string, MatchFeedbackReason>,
-  textSearchOn = false
+  textSearchOn = false,
+  options: { verdict?: boolean } = {}
 ): ProductSearch {
   const complement = complementOf(row, textSearchOn);
+  const shown = trustedMatches(matches);
+  const verdict = options.verdict === true ? searchVerdict(row, shown) : undefined;
   return {
     id: row.id,
     sourceUrl: row.source_url,
@@ -258,7 +273,9 @@ export function toProductSearch(
     notCounted: row.failure_kind === "provider_refused",
     ...(complement ? { complement } : {}),
     // Boutiques douteuses (lib/shopTrust.ts) : retirées, mentions, ordre (rangé par les mentions dans « shopping » seulement).
-    matches: trustedMatches(matches).map(({ match: m, mark, demoted }) => ({
+    // Le verdict (0055) : seulement quand il est connu (absent : rien n'est affirmé).
+    ...(verdict ? { verdict } : {}),
+    matches: shown.map(({ match: m, mark, demoted }) => ({
         id: m.id,
         rank: m.rank,
         productName: m.product_name,
