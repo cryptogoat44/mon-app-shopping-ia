@@ -44,8 +44,10 @@
 // l'ordre montré), à défaut celui de la première boutique connue qui nomme
 // M ; les mots dans leur écriture d'origine, sans signes (sauf « ' », « - »
 // et « & »), sans petits mots courants, sans référence (5 chiffres ou plus),
-// sans prix (un nombre collé à une devise, ou égal au prix d'une offre
-// montrée) ni nom d'une boutique ; les 8 premiers ; le nom de M en tête
+// sans prix (un nombre collé à une devise, symbole ou code comme « 1250EUR »,
+// ou égal au prix d'une offre montrée) ni nom d'une boutique montrée (aussi
+// en plusieurs mots ou avec des tirets : « NET-A-PORTER », « MR PORTER »,
+// « Galeries Lafayette », « THE OUTNET ») ; les 8 premiers ; le nom de M en tête
 // s'il n'y est pas ; 80 caractères au plus, coupés sur une fin de mot.
 // Jamais les mots du membre (query, description d'une vidéo, requête de
 // l'IA) : ils ne sont pas lus ici.
@@ -159,6 +161,8 @@ function sourceTitle(house: MaisonDeLuxe, offers: readonly LuxuryShownMatch[]): 
 const CURRENCY_SYMBOL = /[€$£¥]/u;
 const CURRENCY_WORDS: ReadonlySet<string> = new Set(["eur", "euro", "euros", "usd", "gbp", "chf", "dollar", "dollars"]);
 const NUMBERISH = /^[\d.,'  ]*\d[\d.,'  ]*$/u;
+/** Un nombre collé à un code de devise (« 1250EUR », « CHF1250 »). */
+const GLUED_CURRENCY_CODE = /^(?:\d[\d.,']*(?:eur|euros?|usd|gbp|chf)|(?:eur|usd|gbp|chf)\d[\d.,']*)$/iu;
 
 function isCurrencyToken(token: string): boolean {
   const bare = token.replace(/^[^\p{L}\p{N}€$£¥]+|[^\p{L}\p{N}€$£¥]+$/gu, "");
@@ -184,18 +188,24 @@ export function searchWordsOf(title: string, house: MaisonDeLuxe, shown: readonl
   const dropped = raw.map(() => false);
   raw.forEach((token, index) => {
     const currency = isCurrencyToken(token);
-    const glued = !currency && CURRENCY_SYMBOL.test(token) && /\d/.test(token);
+    const bare = token.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+    const glued = !currency && ((CURRENCY_SYMBOL.test(token) && /\d/.test(token)) || GLUED_CURRENCY_CODE.test(bare));
     if (!currency && !glued) return;
     dropped[index] = true;
     for (let before = index - 1; before >= 0 && NUMBERISH.test(raw[before]!); before -= 1) dropped[before] = true;
     if (currency) for (let after = index + 1; after < raw.length && NUMBERISH.test(raw[after]!); after += 1) dropped[after] = true;
   });
   const prices = priceNumbers(shown);
+  // Les noms des boutiques montrées, en lettres et chiffres seulement
+  // (« net-a-porter » → « netaporter »), et aussi sans « the » en tête
+  // (« theoutnet » → « outnet »).
   const shops = new Set(shown.flatMap(({ match }) => {
     const name = retailerName(match.merchant_url);
-    return name === null ? [] : [name];
+    if (name === null) return [];
+    const plain = name.replace(/[^a-z0-9]/g, "");
+    return plain.startsWith("the") && plain.length > 3 ? [plain, plain.slice(3)] : [plain];
   }));
-  const kept = raw
+  const filtered = raw
     .filter((_, index) => !dropped[index])
     .flatMap((token) => token.replace(/[^\p{L}\p{N}'\-& ]/gu, " ").split(" "))
     .map((token) => token.replace(/^['\-&]+|['\-&]+$/g, ""))
@@ -207,8 +217,19 @@ export function searchWordsOf(title: string, house: MaisonDeLuxe, shown: readonl
       if (/^\d+$/u.test(token) && prices.has(String(Number(token)))) return false;
       if (shops.has(words.join(""))) return false;
       return true;
-    })
-    .slice(0, LUXURY_MAX_WORDS);
+    });
+  // Un nom de boutique écrit en 2 ou 3 mots (« MR PORTER », « Galeries Lafayette »).
+  const kept: string[] = [];
+  for (let index = 0; index < filtered.length; ) {
+    const run = [3, 2].find((size) => index + size <= filtered.length && shops.has(filtered.slice(index, index + size).flatMap(wordsOf).join("")));
+    if (run !== undefined) {
+      index += run;
+      continue;
+    }
+    kept.push(filtered[index]!);
+    index += 1;
+  }
+  kept.splice(LUXURY_MAX_WORDS);
   const named = houseNames(house).some((name) => containsSequence(wordsOf(kept.join(" ")), name));
   const all = named ? kept : [house.nom, ...kept];
   let words = "";

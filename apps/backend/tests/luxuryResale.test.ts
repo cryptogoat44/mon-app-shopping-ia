@@ -277,11 +277,36 @@ describe("les mots de la recherche", () => {
     expect(searchWordsOf("Sac Dior Saddle 3500", dior, shownWith([3500]))).toBe("Sac Dior Saddle");
     // Un nombre de modèle qui n'est pas un prix reste (« Dior 30 Montaigne »).
     expect(searchWordsOf("Sac Dior 30 Montaigne", dior, shownWith([3500]))).toBe("Sac Dior 30 Montaigne");
+    // Un nombre collé à un code de devise.
+    expect(searchWordsOf("Dior B23 sneaker 1250EUR noir", dior, [])).toBe("Dior B23 sneaker noir");
+    expect(searchWordsOf("Dior CHF1250", dior, [])).toBe("Dior");
+    expect(searchWordsOf("Dior Saddle 1.250,00EUR, 3 500 euros", dior, [])).toBe("Dior Saddle");
+    // Permis : un code de modèle qui n'est pas un prix (« B23 », « EUR » dans un mot) reste.
+    expect(searchWordsOf("Dior B23 Europa", dior, [])).toBe("Dior B23 Europa");
   });
 
   it("jamais le nom d'une boutique connue montrée", () => {
     const shown = parseMatchRows([offer("https://www.farfetch.com/a", "x")])!.map((match) => ({ match, mark: null, demoted: false }));
     expect(searchWordsOf("Dior Saddle - Farfetch", dior, shown)).toBe("Dior Saddle");
+  });
+
+  it("jamais le nom d'une boutique en plusieurs mots ou avec des tirets (« NET-A-PORTER », « MR PORTER », « Galeries Lafayette », « THE OUTNET »)", () => {
+    const shownAt = (url: string) => parseMatchRows([offer(url, "x")])!.map((match) => ({ match, mark: null, demoted: false }));
+    expect(searchWordsOf("Saddle leather shoulder bag | DIOR | NET-A-PORTER", dior, shownAt("https://www.net-a-porter.com/a"))).toBe("Saddle leather shoulder bag DIOR");
+    expect(searchWordsOf("B23 sneakers | Dior | MR PORTER", dior, shownAt("https://www.mrporter.com/a"))).toBe("B23 sneakers Dior");
+    expect(searchWordsOf("Sac Lady Dior - Dior | Galeries Lafayette", dior, shownAt("https://www.galerieslafayette.com/a"))).toBe("Sac Lady Dior Dior");
+    expect(searchWordsOf("Dior Saddle | THE OUTNET", dior, shownAt("https://www.theoutnet.com/a"))).toBe("Dior Saddle");
+  });
+
+  it("permis : les mêmes mots restent quand la boutique n'est pas montrée (« Porter » n'est pas une boutique à lui seul)", () => {
+    expect(searchWordsOf("Dior Saddle Porter strap", dior, parseMatchRows([offer("https://www.mrporter.com/a", "x")])!.map((match) => ({ match, mark: null, demoted: false })))).toBe("Dior Saddle Porter strap");
+    expect(searchWordsOf("Dior Saddle | MR PORTER", dior, [])).toBe("Dior Saddle MR PORTER");
+  });
+
+  it("de bout en bout : net-a-porter + mytheresa — le nom de la boutique n'est ni dans les mots ni dans l'adresse", () => {
+    const resale = resaleOf([offer("https://www.net-a-porter.com/a", "Saddle leather shoulder bag | DIOR | NET-A-PORTER"), offer("https://www.mytheresa.com/b", "Dior Saddle bag")]);
+    expect(resale?.words).toBe("Saddle leather shoulder bag DIOR");
+    for (const site of resale!.sites) expect(site.url.toLowerCase()).not.toMatch(/porter/);
   });
 
   it("80 caractères au plus, coupés sur une fin de mot", () => {
