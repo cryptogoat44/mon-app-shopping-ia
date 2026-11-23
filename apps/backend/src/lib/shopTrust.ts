@@ -23,19 +23,19 @@
 //   aucune marque en avant ») : seule la section « Cette pièce dans d'autres
 //   boutiques » (origine « shopping » : la même pièce, aucune marque n'y passe
 //   devant une autre) est rangée par les mentions — la boutique officielle de
-//   la marque de la section en tête (celle d'une autre marque garde sa
-//   place : sectionBrandShop), boutiques connues remontées de
-//   KNOWN_SHOP_BOOST places au plus, offres signalées (un signal) en fin de
-//   section. Partout ailleurs (recherche visuelle, « Résultats pour vos
-//   mots » : des pièces qui se ressemblent seulement), chaque offre garde sa
-//   place reçue, avec sa mention (sectionOrder).
+//   la marque de la pièce en tête, reconnue à l'enregistrement (isBrandShop ;
+//   toute autre boutique officielle est rangée comme une boutique connue),
+//   boutiques connues remontées de KNOWN_SHOP_BOOST places au plus, offres
+//   signalées (un signal) en fin de section. Partout ailleurs (recherche visuelle,
+//   « Résultats pour vos mots » : des pièces qui se ressemblent seulement),
+//   chaque offre garde sa place reçue, avec sa mention (sectionOrder).
 // Le serveur s'en sert en deux temps : à l'enregistrement (une offre retirée
 // n'est jamais rangée, observée pour les alertes ni retenue pour une vidéo)
 // et à chaque relecture (mentions, ordre, et listes modifiées depuis).
 // Fonctions pures : ni réseau, ni base, ni journal.
 import { alertCurrency, type MatchOrigin, type OfferMark } from "@monapp/shared-types";
 import { BOUTIQUES_CONNUES } from "../listes/boutiquesConnues.js";
-import { BOUTIQUES_OFFICIELLES } from "../listes/boutiquesOfficielles.js";
+import { AUTRES_NOMS_DES_MARQUES, BOUTIQUES_OFFICIELLES } from "../listes/boutiquesOfficielles.js";
 import { BOUTIQUES_MASQUEES, MOTS_MASQUES } from "../listes/boutiquesMasquees.js";
 import { sameToken } from "./lightSort.js";
 import { wordsOf } from "./wordSort.js";
@@ -47,21 +47,18 @@ export interface TrustOffer {
   currency?: string | null;
 }
 
-/** Une offre d'une section, telle que l'ordre la lit : son lien et son titre. */
+/** Une offre d'une section, telle que l'ordre la lit. */
 export interface SectionOffer {
-  merchantUrl: string;
-  title: string;
+  /** La boutique officielle de la marque de la pièce, reconnue à
+   * l'enregistrement de « Cette pièce dans d'autres boutiques » (isBrandShop ;
+   * product_matches.brand_shop, migration 0054). Faux pour toute autre offre,
+   * pour les lignes d'avant, et partout sans 0054. */
+  brandShop: boolean;
 }
 
 /** Places gagnées au plus par une boutique connue, dans « Cette pièce dans
  * d'autres boutiques » (sectionOrder ; ailleurs, aucune). */
 export const KNOWN_SHOP_BOOST = 2;
-/** Titres d'offres d'autres boutiques qui doivent nommer une marque pour que
- * sa boutique officielle passe en tête de « Cette pièce dans d'autres
- * boutiques » (sectionBrandShop). Même seuil que la marque de la requête de
- * la voie C (services/shoppingQueryAi.ts) : un seul titre, qui pourrait être
- * piégé, ne suffit jamais. */
-export const MIN_TITLES_WITH_BRAND = 2;
 /** Un prix sous cette part de la médiane est « inhabituellement bas ». */
 export const LOW_PRICE_RATIO = 1 / 3;
 /** Offres avec un prix (même devise) nécessaires pour juger un prix. */
@@ -120,25 +117,34 @@ export function isOfficialShop(url: string): boolean {
   return host !== null && BOUTIQUES_OFFICIELLES.some((domain) => onDomain(host, domain));
 }
 
-/** La marque d'une boutique officielle, telle qu'un titre l'écrit : son
+/** Les noms de la marque d'une boutique officielle, écrits en un mot : son
  * adresse dans la liste, sans extension ni tiret (« hm.com » → « hm »,
- * « thenorthface.fr » → « thenorthface », « ba-sh.com » → « bash ») ;
- * null : pas une boutique officielle. */
-function officialBrandOf(url: string): string | null {
+ * « thenorthface.fr » → « thenorthface », « ba-sh.com » → « bash »), et
+ * ses autres noms exacts (« aussi » : « Saint Laurent » → « saintlaurent »
+ * pour ysl.com) ; vide : pas une boutique officielle. */
+function officialBrandsOf(url: string): string[] {
   const host = hostOf(url);
   const domain = host === null ? undefined : BOUTIQUES_OFFICIELLES.find((entry) => onDomain(host, entry));
-  return domain === undefined ? null : domain.split(".")[0]!.replace(/-/g, "");
+  if (domain === undefined) return [];
+  const aliases = (AUTRES_NOMS_DES_MARQUES.get(domain) ?? []).map((name) => wordsOf(name).join(""));
+  return [domain.split(".")[0]!.replace(/-/g, ""), ...aliases].filter((name) => name !== "");
 }
 
-/** Le titre nomme-t-il la marque : en un mot (pluriel toléré, comme le tri
- * léger), ou en deux ou trois mots collés (« H&M » → « hm », « The North
- * Face » → « thenorthface ») ? */
-function namesBrand(title: string, brand: string): boolean {
-  const words = wordsOf(title);
-  return words.some(
-    (word, start) =>
-      sameToken(word, brand) || [2, 3].some((size) => start + size <= words.length && words.slice(start, start + size).join("") === brand)
-  );
+/** À l'enregistrement de « Cette pièce dans d'autres boutiques » (lib/voieC.ts,
+ * seul moment où la marque de la pièce est connue) : l'offre est-elle la
+ * boutique officielle de cette marque ? `brand` : la marque de la requête de
+ * l'IA, vérifiée par le serveur dans au moins deux titres de la recherche
+ * visuelle (services/shoppingQueryAi.ts). La marque entière, ses mots collés,
+ * doit être exactement un nom de la boutique (officialBrandsOf : son adresse
+ * ou un de ses autres noms, pluriel toléré, comme le tri léger : « Levi's »
+ * pour levi.com) : « Jules & Jenn » n'est pas jules.com, ni « Tommy Bahama »
+ * tommy.com, ni « Sandro Ferrone » sandro-paris.com, et la boutique d'une
+ * autre marque ne l'est jamais, même nommée dans les titres. Une marque
+ * écrite autrement que l'adresse et ses autres noms laisse la boutique
+ * rangée comme une boutique connue : jamais une marque en tête par erreur. */
+export function isBrandShop(url: string, brand: string): boolean {
+  const key = wordsOf(brand).join("");
+  return key !== "" && officialBrandsOf(url).some((name) => sameToken(name, key));
 }
 
 /** Boutique sûre : un revendeur connu (src/listes/boutiquesConnues.ts) ou le
@@ -282,10 +288,10 @@ export function withoutDubiousOffers<T>(
 
 /** L'ordre de « Cette pièce dans d'autres boutiques », à la relecture
  * (sectionOrder, qui ne lui présente comme boutique officielle que celle de
- * la marque de la section) : les offres retirées en moins ; les boutiques
- * officielles en tête (dans leur ordre) ; les boutiques connues remontées de
- * KNOWN_SHOP_BOOST places au plus ; les offres signalées (un signal) en fin
- * de section ; sinon l'ordre reçu. */
+ * la marque de la pièce, reconnue à l'enregistrement) : les offres retirées
+ * en moins ; les boutiques officielles en tête (dans leur ordre) ; les
+ * boutiques connues remontées de KNOWN_SHOP_BOOST places au plus ; les
+ * offres signalées (un signal) en fin de section ; sinon l'ordre reçu. */
 export function trustOrder<T>(items: readonly T[], reviews: readonly OfferReview[]): T[] {
   const kept = items.map((item, index) => ({ item, review: reviews[index]! })).filter(({ review }) => !review.dropped);
   const ranked = kept
@@ -300,43 +306,32 @@ export function trustOrder<T>(items: readonly T[], reviews: readonly OfferReview
   return [...ranked, ...demoted].map(({ item }) => item);
 }
 
-/** Dans « Cette pièce dans d'autres boutiques », la boutique officielle de
- * l'offre `index` est-elle celle de la marque de la section ? Rien ne
- * garantit que la section ne montre que la pièce : le tri léger y garde des
- * pièces d'autres marques, rangées après celles dont le titre nomme la
- * marque ou le modèle de la pièce (lib/lightSort.ts). La marque de la
- * boutique doit donc être nommée par l'offre d'une autre boutique que la
- * section place en premier, et par au moins MIN_TITLES_WITH_BRAND titres
- * d'offres d'autres boutiques. Autres boutiques : toutes sauf les sites
- * officiels de la même marque ; les offres retirées ne comptent pas. Une
- * marque que les titres écrivent autrement (« Saint Laurent » pour ysl.com)
- * laisse la boutique à sa place : jamais une marque en avant par erreur. */
-function sectionBrandShop(index: number, offers: readonly SectionOffer[], reviews: readonly OfferReview[]): boolean {
-  const brand = officialBrandOf(offers[index]!.merchantUrl);
-  if (brand === null) return false;
-  const others = offers.filter((offer, other) => !reviews[other]!.dropped && officialBrandOf(offer.merchantUrl) !== brand);
-  const naming = others.filter((offer) => namesBrand(offer.title, brand));
-  return naming.length >= MIN_TITLES_WITH_BRAND && naming[0] === others[0];
-}
-
 /** L'ordre d'une section, à la relecture (décision du fondateur, 21 novembre
  * 2026 : « Je ne veux mettre aucune marque en avant ») :
  * - « Cette pièce dans d'autres boutiques » (origine « shopping ») : la même
  *   pièce dans plusieurs boutiques, aucune marque n'y passe devant une
  *   autre — rangée par les mentions (trustOrder). Seule la boutique
- *   officielle de la marque de la section passe en tête (sectionBrandShop) ;
- *   celle d'une autre marque garde sa place reçue, sans remonter, avec sa
- *   mention ;
+ *   officielle de la marque de la pièce, reconnue à l'enregistrement (là où
+ *   la marque est connue : isBrandShop), passe en tête. Les titres n'y
+ *   suffisent jamais : un mot d'une autre marque, du modèle ou de la
+ *   description (« jules » d'un sac Jules & Jenn), ou les pièces d'autres
+ *   marques que le tri léger garde (Mango dans une section Zara), ne
+ *   disent pas la marque de la pièce. Toute autre boutique officielle (une
+ *   autre marque, une marque non reconnue, une ligne d'avant 0054, toutes
+ *   sans 0054) est rangée exactement comme une boutique connue : remontée
+ *   de KNOWN_SHOP_BOOST places au plus, jamais derrière un revendeur connu
+ *   à cause de sa mention, avec sa mention (aucune marque en avant, aucune
+ *   en arrière) ;
  * - partout ailleurs (recherche visuelle, « Résultats pour vos mots » : des
  *   pièces qui se ressemblent seulement) : l'ordre reçu, les offres retirées
  *   en moins ; aucune boutique officielle ou connue remontée, aucune offre
  *   signalée descendue. Les mentions, elles, restent partout.
- * `offers` : le lien et le titre de chaque offre, dans le même ordre que
- * `items` et `reviews`. */
+ * `offers` : ce que l'enregistrement a noté de chaque offre, dans le même
+ * ordre que `items` et `reviews`. */
 export function sectionOrder<T>(origin: MatchOrigin, items: readonly T[], reviews: readonly OfferReview[], offers: readonly SectionOffer[]): T[] {
   if (origin !== "shopping") return items.filter((_, index) => !reviews[index]!.dropped);
   const forOrder = reviews.map((review, index) =>
-    review.mark === "official_shop" && !sectionBrandShop(index, offers, reviews) ? { ...review, mark: null, boosted: false } : review
+    review.mark === "official_shop" && offers[index]?.brandShop !== true ? { ...review, mark: "known_shop" as const } : review
   );
   return trustOrder(items, forOrder);
 }

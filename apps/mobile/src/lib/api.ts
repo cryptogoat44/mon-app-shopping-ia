@@ -103,7 +103,7 @@ import type {
 import { CLIENT_LEVEL, COMPLEMENT_DEFERRED, CONSENT_VERSIONS, parseSearchCapacity, parseVideoMomentsResponse, type SearchCapacityStatus } from "@monapp/shared-types";
 import { CLIENT_LEVEL_QUERY, parseFollowResponse } from "./follow-state";
 import { supabase } from "./supabase";
-import { setAnalyticsConsent, track } from "./analytics";
+import { analyticsAccount, setAnalyticsConsent, track } from "./analytics";
 import { acceptLanguage, t } from "../i18n";
 import { imageFileFromUri } from "./image-file";
 import { ApiError } from "./api-error";
@@ -119,7 +119,7 @@ import { ALERTS_UNAVAILABLE, isAlertsUnavailable, readWishAlertState, readWishAl
 import { createStatusLoader } from "./status-loading";
 import { POST_EXTRAS_UNAVAILABLE, readPostExtrasStatus, setPostExtrasStatus } from "./post-extras";
 import { isDataUri } from "./data-uri";
-import { linkAnalysisEnabled, parseLinkAnalysis, type LinkAnalysis } from "./video-link-analysis";
+import { linkAnalysisStatus, linkModeOf, parseLinkAnalysis, type LinkAnalysis, type LinkAnalysisStatus } from "./video-link-analysis";
 import { waitNow, waitSince } from "./wait-clock";
 import { serverRequestStarted } from "./server-first-response";
 import { wasTimedOut } from "./app-timeout";
@@ -163,8 +163,10 @@ export async function authorizedFetch(path: string, init?: RequestInit): Promise
   // Mesure du parcours : la durée de la requête seule, pour la première
   // réponse du serveur de chaque ouverture (server-first-response.ts) ;
   // abandonnée par la personne (signal), elle ne compte pas ; abandonnée
-  // par un délai de l'app (app-timeout.ts), c'est un échec.
-  const settled = serverRequestStarted();
+  // par un délai de l'app (app-timeout.ts), c'est un échec. Abandonnée avant
+  // même de partir (délai écoulé pendant la lecture de la session, qui peut
+  // attendre le renouvellement du jeton) : rien n'est parti, rien ne compte.
+  const settled = init?.signal?.aborted ? () => {} : serverRequestStarted();
   let response: Response;
   try {
     response = await fetch(`${apiUrl}${path}`, request);
@@ -259,8 +261,13 @@ export async function runSearch(
   params: { crop: CropRect | null; imageUri: string | null; words?: string | null; zoneByAi?: boolean },
   signal?: AbortSignal
 ): Promise<ProductSearch> {
-  // Mesure du parcours : l'attente part du lancement (image jointe comprise).
+  // Mesure du parcours : l'attente part du lancement (image jointe comprise),
+  // pour le compte qui lance. spot_completed ne part que sous ce compte, et
+  // s'il avait donné son accord au lancement : jamais sous un autre compte
+  // connecté entre-temps, même 40 s plus tard (boutiques ensuite).
   const startedAt = waitNow();
+  const launchedBy = analyticsAccount();
+  const sameAccount = () => launchedBy !== null && analyticsAccount() === launchedBy;
   searchLaunched();
   const formData = new FormData();
   if (params.crop) formData.append("crop", JSON.stringify(params.crop));
@@ -281,10 +288,10 @@ export async function runSearch(
   const waitMs = waitSince(startedAt);
   if (search.complement?.pending) {
     // spot_completed attend l'issue des boutiques, pour la compter une fois.
-    void requestShops(search.id, (shopsSignal) => fetchShops(search.id, shopsSignal)).then((outcome) =>
-      trackSpotCompleted(search, outcome.kind === "added" ? outcome.search : null, { waitMs, shopsWaitMs: waitSince(startedAt) })
-    );
-  } else {
+    void requestShops(search.id, (shopsSignal) => fetchShops(search.id, shopsSignal)).then((outcome) => {
+      if (sameAccount()) trackSpotCompleted(search, outcome.kind === "added" ? outcome.search : null, { waitMs, shopsWaitMs: waitSince(startedAt) });
+    });
+  } else if (sameAccount()) {
     trackSpotCompleted(search, search, { waitMs, shopsWaitMs: waitMs });
   }
   return search;
@@ -1334,18 +1341,22 @@ export async function findVideoMoments(frameUris: readonly string[], query: stri
 // l'image de chacun (« data: », gardée en mémoire, jamais écrite sur
 // l'appareil) et le cadre de la pièce. L'app ne télécharge rien elle-même.
 
-/** L'analyse d'un lien est-elle allumée sur le serveur ? Seule la valeur exacte `true` compte. */
-export async function fetchVideoLinkAnalysisStatus(signal?: AbortSignal): Promise<boolean> {
+/** L'analyse d'un lien est-elle allumée sur le serveur, et « Voir les
+ * propositions de l'IA » (lot « propositions ») ? Pour chacun, seule la
+ * valeur exacte `true` compte. */
+export async function fetchVideoLinkAnalysisStatus(signal?: AbortSignal): Promise<LinkAnalysisStatus> {
   const response = await authorizedFetch("/api/video-links/analyze/status", signal ? { signal } : undefined);
-  return linkAnalysisEnabled(await response.json().catch(() => null));
+  return linkAnalysisStatus(await response.json().catch(() => null));
 }
 
-/** Le lien et les mots de la personne → la vidéo reconnue et ses moments,
- * vérifiés ici (jamais de confiance aveugle dans le réseau). Erreur du
- * serveur ({ error, message }) : ApiError ; réponse illisible : panne. */
+/** Le lien et les mots de la personne (ou, en mode « pièces », le lien seul)
+ * → la vidéo reconnue et ses moments (et, en mode « pièces », le nom de
+ * chaque pièce), vérifiés ici selon le mode demandé (jamais de confiance
+ * aveugle dans le réseau). Erreur du serveur ({ error, message }) :
+ * ApiError ; réponse illisible : panne. */
 export async function analyzeVideoLink(request: VideoLinkAnalysisRequest, signal?: AbortSignal): Promise<LinkAnalysis> {
   const response = await authorizedFetch(`/api/video-links/analyze?${SPEAKS}`, { method: "POST", body: JSON.stringify(request), signal });
-  const analysis = parseLinkAnalysis(await response.json().catch(() => null));
+  const analysis = parseLinkAnalysis(await response.json().catch(() => null), linkModeOf(request));
   if (!analysis) throw new ApiError(502, { error: "video_unavailable", message: t.common.unknownServerError });
   return analysis;
 }

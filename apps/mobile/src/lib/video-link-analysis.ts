@@ -8,12 +8,18 @@
 // Ce fichier : la décision d'afficher l'analyse, la demande, la lecture de la
 // réponse (jamais de confiance aveugle dans le réseau), et chaque échec
 // traduit en message et en gestes possibles. Logique pure, testée.
+// Lot « propositions » (Parcours 2, 21 novembre 2026) : un second mode,
+// « pièces » — sans écrire, la personne demande à l'IA les pièces qu'elle
+// voit (« Voir les propositions de l'IA »), quand le serveur le permet.
 // Imports relatifs : fichier testé par vitest.
 import {
   SEARCH_QUERY_MAX_LENGTH,
   VIDEO_AI,
   VIDEO_LINK_FAILURE_CAUSES,
+  VIDEO_PIECES,
   normalizeVideoLink,
+  pieceLabel,
+  pieceLabelKey,
   type CropRect,
   type VideoLink,
   type VideoLinkAnalysisErrorCode,
@@ -42,13 +48,36 @@ export interface LinkAnalysis {
   video: VideoLink;
   /** Le meilleur d'abord ; vide : la pièce n'a pas été repérée. */
   moments: LinkMoment[];
+  /** Mode « pièces » (lot « propositions ») : le nom de chaque pièce proposée
+   * par l'IA, dans l'ordre des moments (une image par pièce). Absent avec des mots. */
+  labels?: string[];
 }
+
+/** Lot « propositions » : avec les mots de la personne (comme avant), ou les
+ * pièces que l'IA voit, sans aucun texte. */
+export type LinkMode = "words" | "pieces";
 
 /** GET /api/video-links/analyze/status : seule la valeur exacte `true` allume
  * l'analyse. Réponse illisible, serveur plus ancien (404) ou injoignable :
  * l'écran reste exactement celui d'avant. */
 export function linkAnalysisEnabled(body: unknown): boolean {
   return typeof body === "object" && body !== null && "enabled" in body && body.enabled === true;
+}
+
+/** L'analyse d'un lien, et « Voir les propositions de l'IA » (lot « propositions »). */
+export interface LinkAnalysisStatus {
+  enabled: boolean;
+  pieces: boolean;
+}
+
+/** Repli : tout coupé (erreur, serveur plus ancien ou injoignable). */
+export const LINK_ANALYSIS_OFF: LinkAnalysisStatus = { enabled: false, pieces: false };
+
+/** Pour chacun, seule la valeur exacte `true` compte ; les propositions ne
+ * valent qu'avec l'analyse allumée. */
+export function linkAnalysisStatus(body: unknown): LinkAnalysisStatus {
+  const enabled = linkAnalysisEnabled(body);
+  return { enabled, pieces: enabled && (body as Record<string, unknown>).pieces === true };
 }
 
 export type QueryProblem = "too_short" | "too_long" | "link";
@@ -69,6 +98,16 @@ export function linkAnalysisRequest(url: string, query: string): { request: Vide
 
 export function queryProblemMessage(problem: QueryProblem): string {
   return t.videoLinkAuto.query[problem];
+}
+
+/** Mode « pièces » : le lien seul — le texte déjà tapé reste dans le champ, il ne part pas. */
+export function linkPiecesRequest(url: string): VideoLinkAnalysisRequest {
+  return { url: url.trim(), mode: "pieces" };
+}
+
+/** Le mode d'une demande : « pièces » si elle le dit, sinon les mots. */
+export function linkModeOf(request: VideoLinkAnalysisRequest): LinkMode {
+  return "mode" in request && request.mode === "pieces" ? "pieces" : "words";
 }
 
 const isProportion = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
@@ -103,10 +142,27 @@ function readVideo(value: unknown): VideoLink | null {
   return { ...link, creatorHandle: link.creatorHandle ?? (typeof creatorHandle === "string" && /^[\w.]{1,64}$/.test(creatorHandle) ? creatorHandle : null) };
 }
 
-/** Réponse du serveur → analyse vérifiée ; null si elle est illisible (traitée comme une panne). */
-export function parseLinkAnalysis(body: unknown): LinkAnalysis | null {
+/** Les noms du mode « pièces », revérifiés : un par moment (1 à 3), chacun
+ * tel que pieceLabel le rend (lettres seulement, aucun mot de personne), sans
+ * doublon ; null sinon. */
+function readLabels(value: unknown, count: number): string[] | null {
+  if (!Array.isArray(value) || value.length !== count || count < 1 || count > VIDEO_PIECES.max) return null;
+  const keys = new Set<string>();
+  const labels: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string" || pieceLabel(item) !== item || keys.has(pieceLabelKey(item))) return null;
+    keys.add(pieceLabelKey(item));
+    labels.push(item);
+  }
+  return labels;
+}
+
+/** Réponse du serveur → analyse vérifiée ; null si elle est illisible (traitée
+ * comme une panne). Avec des mots, rien ne change (`labels` est ignoré) ; en
+ * mode « pièces », les noms sont obligatoires et revérifiés. */
+export function parseLinkAnalysis(body: unknown, mode: LinkMode = "words"): LinkAnalysis | null {
   if (typeof body !== "object" || body === null) return null;
-  const { video, moments } = body as Record<string, unknown>;
+  const { video, moments, labels } = body as Record<string, unknown>;
   const link = readVideo(video);
   if (!link || !Array.isArray(moments) || moments.length > VIDEO_AI.moments) return null;
   const read: LinkMoment[] = [];
@@ -115,7 +171,9 @@ export function parseLinkAnalysis(body: unknown): LinkAnalysis | null {
     if (!moment) return null;
     read.push(moment);
   }
-  return { video: link, moments: read };
+  if (mode === "words") return { video: link, moments: read };
+  const names = readLabels(labels, read.length);
+  return names ? { video: link, moments: read, labels: names } : null;
 }
 
 export type { LinkAiFailure };
@@ -247,11 +305,14 @@ function secondaryAction(failure: LinkAiFailure): LinkFailureAction | null {
 /** Message et gestes d'un échec (plan B en un geste) : une phrase calme et un
  * seul bouton, la capture d'écran le plus souvent ; elle est toujours
  * proposée, en bouton ou en lien (jamais d'impasse). `platform` : « TikTok »
- * ou « Instagram », pour dire qui a refusé. */
-export function linkFailureView(info: LinkFailureInfo, locale: Locale, platform: string = t.videoLinkAuto.platformFallback): LinkFailureView {
+ * ou « Instagram », pour dire qui a refusé. `mode` (lot « propositions ») :
+ * en mode « pièces », « aucune pièce proposée » a son titre et sa phrase ; le
+ * geste « décrire » reste le bouton (son libellé suit le mode, à l'écran). */
+export function linkFailureView(info: LinkFailureInfo, locale: Locale, platform: string = t.videoLinkAuto.platformFallback, mode: LinkMode = "words"): LinkFailureView {
+  const noPiece = mode === "pieces" && info.failure === "no_moment";
   return {
-    title: failureTitle(info.failure, platform),
-    message: failureMessage(info, locale, platform),
+    title: noPiece ? t.videoLinkAuto.pieces.noneTitle : failureTitle(info.failure, platform),
+    message: noPiece ? t.videoLinkAuto.pieces.noneMessage : failureMessage(info, locale, platform),
     isError: !CALM.includes(info.failure),
     primary: primaryAction(info.failure),
     secondary: secondaryAction(info.failure),
@@ -281,6 +342,11 @@ export const LINK_ANALYSIS_TIMEOUT_MS = 90_000;
 
 export function linkWaitingStep(elapsedMs: number): 0 | 1 {
   return elapsedMs < LINK_FETCH_STEP_MS ? 0 : 1;
+}
+
+/** Les deux étapes montrées ; en mode « pièces », l'IA regarde les pièces (lot « propositions »). */
+export function linkWaitingSteps(mode: LinkMode): readonly string[] {
+  return mode === "pieces" ? t.videoLinkAuto.pieces.waitingSteps : t.videoLinkAuto.waiting.steps;
 }
 
 /** Instant lisible d'un moment (« 0:12 »). */

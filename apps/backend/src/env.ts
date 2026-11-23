@@ -98,6 +98,18 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((value) => value?.trim() || undefined),
+  // Propositions de l'IA (Parcours 2, lot « propositions », décision du
+  // fondateur du 21 novembre 2026) : « Voir les propositions de l'IA » sur
+  // l'écran d'un lien, l'IA nommant jusqu'à 3 pièces visibles sans les mots
+  // du membre. COUPÉ par défaut : seule la valeur exacte "true" l'allume, et
+  // il ne sert qu'avec l'analyse des liens allumée et prête (ci-dessus). Lu
+  // seulement par lib/aiSwitches.ts. Hors de la liste des variables
+  // modifiables par les outils (render-guard) : le fondateur seul le règle,
+  // à la main, dans Render.
+  VIDEO_PIECES_ENABLED: z
+    .string()
+    .optional()
+    .transform((value) => value === "true"),
   // Facultatif : jeton d'accès d'Expo, seulement si la « sécurité renforcée
   // des notifications » est activée dans le compte Expo. Absent : les
   // notifications partent sans jeton (le service d'Expo est gratuit). Une

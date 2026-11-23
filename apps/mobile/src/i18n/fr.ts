@@ -386,7 +386,8 @@ export const fr = {
     help: "Décrivez la pièce et, si besoin, où elle se trouve : l'IA s'en sert pour la retrouver dans la vidéo.",
     find: "Trouver la pièce",
     // Lien vidéo sans prix (17 novembre 2026) : la description peut aussi partir vers Google Shopping.
-    privacy: `${BRAND} récupère la vidéo publique le temps de l'analyse, sans la conserver. Avec votre accord, quelques images et votre description sont analysées par une IA. Si les résultats n'affichent aucun prix, votre description est aussi envoyée à Google Shopping par notre prestataire SerpApi pour trouver des boutiques.`,
+    // Lot « propositions » (21 novembre 2026) : la description devient facultative, et le nom de la pièce choisie suit le même chemin.
+    privacy: `${BRAND} récupère la vidéo publique le temps de l'analyse, sans la conserver. Avec votre accord, quelques images, et votre description si vous en écrivez une, sont analysées par une IA. Si les résultats n'affichent aucun prix, votre description (ou le nom de la pièce choisie) est aussi envoyée à Google Shopping par notre prestataire SerpApi pour trouver des boutiques.`,
     query: {
       too_short: "Décrivez la pièce en quelques mots.",
       too_long: `Votre description est trop longue : ${SEARCH_QUERY_MAX_LENGTH} caractères au plus.`,
@@ -442,6 +443,25 @@ export const fr = {
       global_limit: "L'analyse automatique est très demandée aujourd'hui : une capture d'écran fera l'affaire.",
       rate_limited: "Trop de demandes d'un coup : une capture d'écran fera l'affaire, ou réessayez dans quelques minutes.",
       network: "Connexion impossible : vérifiez votre connexion, puis réessayez.",
+    },
+    // Lot « propositions » (Parcours 2, 21 novembre 2026) : « Voir les
+    // propositions de l'IA » — l'IA nomme les pièces qu'elle voit, sans vos
+    // mots (interrupteur VIDEO_PIECES_ENABLED). « Repérée » est évité : sous
+    // l'analyse, « Pièces déjà repérées » désigne la mémoire collective.
+    pieces: {
+      lead: "L'IA peut vous proposer les pièces qu'elle voit dans la vidéo.",
+      show: "Voir les propositions de l'IA",
+      or: "ou décrivez la pièce :",
+      title: (count: number) => (count > 1 ? "Quelle pièce cherchez-vous ?" : "Une pièce proposée"),
+      hint: (count: number) => (count > 1 ? "L'IA propose ces pièces. Touchez celle que vous cherchez." : "Vérifiez que le cadre entoure bien la pièce."),
+      // Nom du groupe de pastilles, lu par VoiceOver et les lecteurs d'écran du site.
+      group: "Pièces proposées par l'IA",
+      describe: "Décrire la pièce autrement",
+      noneTitle: "Aucune pièce proposée",
+      noneMessage: "L'IA n'a vu aucune pièce nette dans cette vidéo : décrivez celle que vous cherchez, ou faites une capture d'écran.",
+      waitingSteps: ["On récupère la vidéo…", "L'IA regarde les pièces…"],
+      // Sous la capture proposée après un échec, quand rien n'a été écrit.
+      keptLink: "Votre lien est gardé.",
     },
   },
   // Recherche d'image d'iOS (iOS 26 et suivants) : carte montrée une fois.
@@ -660,13 +680,16 @@ export const fr = {
     // jamais une accusation ; touchées, une explication courte. Ordre des boutiques
     // (décision du fondateur, 21 novembre 2026) : aucune marque mise en avant ; seule la
     // section « Cette pièce dans d'autres boutiques » est rangée par les mentions, et la
-    // feuille le dit (elle s'ouvre aussi depuis les autres sections).
+    // feuille le dit (elle s'ouvre aussi depuis les autres sections) : seule la boutique de
+    // la marque de la pièce y passe en premier, seulement quand le serveur a vérifié qu'elle
+    // est celle de la marque de cette pièce (jamais sans la migration 0054) : la mention seule
+    // ne suffit pas, et la phrase le dit.
     offerMark: {
       official_shop: "Boutique officielle de la marque",
       known_shop: "Boutique connue",
       unusual_price: "Prix inhabituellement bas",
       hint: "Explique cette mention.",
-      explanation: `${BRAND} signale les boutiques officielles des marques, les boutiques connues et les prix inhabituellement bas. Dans « Cette pièce dans d'autres boutiques », la boutique officielle de la marque passe en premier, les boutiques connues remontent un peu et les prix inhabituellement bas passent en dernier. Vérifiez toujours la boutique avant de payer.`,
+      explanation: `${BRAND} signale les boutiques officielles des marques, les boutiques connues et les prix inhabituellement bas. Dans « Cette pièce dans d'autres boutiques », la boutique officielle de la marque de la pièce passe en premier seulement quand ${BRAND} a pu vérifier qu'elle est bien celle de la marque de cette pièce, ce qui n'est pas toujours le cas, même quand elle porte la mention ; les autres boutiques officielles et les boutiques connues remontent un peu, et les prix inhabituellement bas passent en dernier. Vérifiez toujours la boutique avant de payer.`,
       close: "J'ai compris",
     },
     // « Avec prix seulement » et aucune proposition avec prix : retirer le filtre.

@@ -191,7 +191,13 @@ export const ANALYTICS_EVENTS = {
   // l'en-tête), aussi au départ et au moment choisi. Plan B montré (une seule
   // capture proposée) = issue « failed », reason « private » (vidéo privée ou
   // supprimée) ou « refused ».
-  video_link_ai_started: { platform: PLAYER_PLATFORM, link_platform: PLAYER_PLATFORM },
+  // Lot « propositions » (Parcours 2) : `mode`, « words » (avec les mots de
+  // la personne) ou « pieces » (« Voir les propositions de l'IA ») ; absent,
+  // il vient d'une version d'avant et veut dire « words ». En mode « pieces »,
+  // moments_count compte les pièces proposées (une image chacune) et rank
+  // désigne la pièce lancée (1 = la première, présélectionnée). Jamais un nom
+  // proposé ni le texte du champ.
+  video_link_ai_started: { platform: PLAYER_PLATFORM, link_platform: PLAYER_PLATFORM, mode: oneOf(["words", "pieces"]) },
   video_link_ai_result: {
     platform: PLAYER_PLATFORM,
     outcome: oneOf(["found", "not_found", "failed", "cancelled"]),
@@ -199,9 +205,10 @@ export const ANALYTICS_EVENTS = {
     moments_count: count,
     wait_ms: duration,
     link_platform: PLAYER_PLATFORM,
+    mode: oneOf(["words", "pieces"]),
   },
   // Moment choisi parmi ceux proposés (1 = le meilleur) avant la recherche habituelle.
-  video_link_ai_moment_chosen: { platform: PLAYER_PLATFORM, rank: count, moments_count: count, link_platform: PLAYER_PLATFORM },
+  video_link_ai_moment_chosen: { platform: PLAYER_PLATFORM, rank: count, moments_count: count, link_platform: PLAYER_PLATFORM, mode: oneOf(["words", "pieces"]) },
   // Mesure du parcours, plan B (lot « recherche confiance ») : « Faire une
   // capture d'écran » touché après une vidéo privée ou supprimée
   // (private_or_removed) ou refusée par la plateforme (refused).

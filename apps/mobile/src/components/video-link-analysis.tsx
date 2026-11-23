@@ -3,6 +3,10 @@
 // deux étapes, les moments trouvés (image et cadre de la pièce), l'échec.
 // Les images des moments restent en mémoire (« data: ») : expo-image ne les
 // met dans aucun cache (cachePolicy « none »), rien n'est écrit sur l'appareil.
+// Lot « propositions » (Parcours 2, 21 novembre 2026) : « Voir les
+// propositions de l'IA » sur la question, puis les pièces proposées en
+// pastilles (SegmentedChoice) à la place des vignettes ; les noms viennent de
+// l'IA, et l'écran le dit.
 import { useEffect, useState } from "react";
 import { AccessibilityInfo, ActivityIndicator, Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
@@ -10,6 +14,7 @@ import { VIDEO_AI, type VideoPlatform } from "@monapp/shared-types";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
 import { getActiveLocale, t } from "@/i18n";
 import { ErrorMessage } from "@/components/error-message";
+import { SegmentedChoice } from "@/components/segmented-choice";
 import { ActionButtons, PhotoFrame, QueryInput, type Action } from "@/components/spot-launch-views";
 import { track } from "@/lib/analytics";
 import { containBox, cropToBox } from "@/lib/crop-geometry";
@@ -19,24 +24,34 @@ import {
   cleanQuery,
   linkFailureView,
   linkWaitingStep,
+  linkWaitingSteps,
   momentClock,
   planBChoice,
   queryProblemMessage,
   type LinkAnalysis,
   type LinkFailureAction,
   type LinkFailureInfo,
+  type LinkMode,
   type LinkMoment,
   type QueryProblem,
 } from "@/lib/video-link-analysis";
 import { themedStyles } from "@/theme/themed-styles";
 
-/** « Que cherchez-vous dans cette vidéo ? », puis « Trouver la pièce ». */
+/** « Que cherchez-vous dans cette vidéo ? », puis « Trouver la pièce ».
+ * Lot « propositions » : avec `onPieces` (donné seulement si le serveur le
+ * permet), une phrase, puis « Voir les propositions de l'IA » en bouton
+ * principal, puis « ou décrivez la pièce : », le champ SANS focus d'office
+ * (sur iPhone, le clavier cacherait le bouton) et « Trouver la pièce » en
+ * bouton secondaire. Sans `onPieces`, l'écran d'avant, à l'identique. */
 export function LinkAskView({
   query,
   onQuery,
   onFind,
   problem,
   checking,
+  onPieces,
+  checkingMode = null,
+  focusQuery = false,
 }: {
   query: string;
   onQuery: (value: string) => void;
@@ -44,7 +59,14 @@ export function LinkAskView({
   problem: QueryProblem | null;
   /** Accord en cours de vérification (réseau lent). */
   checking: boolean;
+  /** « Voir les propositions de l'IA » (lot « propositions ») ; absent : l'écran d'avant. */
+  onPieces?: () => void;
+  /** Le geste dont l'accord est en cours de vérification : son bouton est occupé. */
+  checkingMode?: LinkMode | null;
+  /** Retour par « Décrire la pièce autrement » : le champ prend le focus. */
+  focusQuery?: boolean;
 }) {
+  if (onPieces) return <LinkAskWithPieces {...{ query, onQuery, onFind, problem, checking, onPieces, checkingMode, focusQuery }} />;
   const disabled = cleanQuery(query).length < VIDEO_AI.queryMinLength || checking;
   return (
     <>
@@ -77,6 +99,71 @@ export function LinkAskView({
   );
 }
 
+/** La question avec « Voir les propositions de l'IA » d'abord (lot « propositions »). */
+function LinkAskWithPieces({
+  query,
+  onQuery,
+  onFind,
+  problem,
+  checking,
+  onPieces,
+  checkingMode,
+  focusQuery,
+}: {
+  query: string;
+  onQuery: (value: string) => void;
+  onFind: () => void;
+  problem: QueryProblem | null;
+  checking: boolean;
+  onPieces: () => void;
+  checkingMode: LinkMode | null;
+  focusQuery: boolean;
+}) {
+  const findDisabled = cleanQuery(query).length < VIDEO_AI.queryMinLength || checking;
+  const piecesBusy = checkingMode === "pieces";
+  return (
+    <>
+      <Text style={styles.title} accessibilityRole="header">
+        {t.videoLinkAuto.title}
+      </Text>
+      <Text style={styles.help}>{t.videoLinkAuto.pieces.lead}</Text>
+      <Pressable
+        style={styles.primary}
+        onPress={onPieces}
+        disabled={checking}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: checking, busy: piecesBusy }}
+        testID="video-link-pieces"
+      >
+        {piecesBusy ? <ActivityIndicator color={color.blanc} /> : null}
+        <Text style={styles.primaryLabel}>{t.videoLinkAuto.pieces.show}</Text>
+      </Pressable>
+      <Text style={styles.or}>{t.videoLinkAuto.pieces.or}</Text>
+      <QueryInput
+        value={query}
+        onChangeText={onQuery}
+        onSubmit={() => !findDisabled && onFind()}
+        autoFocus={focusQuery}
+        testID="video-link-query"
+        placeholder={t.videoLinkAuto.placeholder}
+        label={t.videoLinkAuto.title}
+      />
+      {problem ? <ErrorMessage style={styles.message}>{queryProblemMessage(problem)}</ErrorMessage> : null}
+      <Pressable
+        style={[styles.secondary, findDisabled ? styles.secondaryDisabled : null]}
+        onPress={onFind}
+        disabled={findDisabled}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: findDisabled, busy: checkingMode === "words" }}
+      >
+        {checkingMode === "words" ? <ActivityIndicator color={color.encre} /> : null}
+        <Text style={[styles.secondaryLabel, findDisabled ? styles.secondaryLabelDisabled : null]}>{t.videoLinkAuto.find}</Text>
+      </Pressable>
+      <Text style={styles.note}>{t.videoLinkAuto.privacy}</Text>
+    </>
+  );
+}
+
 function useElapsed(startedAt: number): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -86,12 +173,15 @@ function useElapsed(startedAt: number): number {
   return Math.max(0, now - startedAt);
 }
 
-/** Attente : les deux étapes (la récupération de la vidéo, puis l'IA), la durée habituelle, « Annuler ». */
-export function LinkWaitingView({ startedAt, query, onCancel }: { startedAt: number; query: string; onCancel: () => void }) {
+/** Attente : les deux étapes (la récupération de la vidéo, puis l'IA), la durée habituelle, « Annuler ».
+ * Mode « pièces » (lot « propositions ») : « L'IA regarde les pièces… », et pas
+ * de description (le texte resté dans le champ ne part pas). */
+export function LinkWaitingView({ startedAt, query, mode = "words", onCancel }: { startedAt: number; query: string; mode?: LinkMode; onCancel: () => void }) {
   const elapsed = useElapsed(startedAt);
   const step = linkWaitingStep(elapsed);
   const slow = elapsed >= LINK_SLOW_MS;
-  const steps = t.videoLinkAuto.waiting.steps;
+  const steps = linkWaitingSteps(mode);
+  const shownQuery = mode === "words" ? cleanQuery(query) : "";
   useEffect(() => {
     const label = steps[step];
     if (label) AccessibilityInfo.announceForAccessibility(label);
@@ -101,7 +191,7 @@ export function LinkWaitingView({ startedAt, query, onCancel }: { startedAt: num
       <Text style={styles.title} accessibilityRole="header">
         {t.videoLinkAuto.waiting.title}
       </Text>
-      {cleanQuery(query) ? <Text style={styles.query}>{t.common.quoted(cleanQuery(query))}</Text> : null}
+      {shownQuery ? <Text style={styles.query}>{t.common.quoted(shownQuery)}</Text> : null}
       <View style={styles.steps}>
         {steps.map((label, index) => {
           const current = index === step;
@@ -143,10 +233,27 @@ function MomentImage({ moment, maxWidth, maxHeight, label }: { moment: LinkMomen
 
 const THUMB = { width: 88, height: 112 };
 
+/** Titre des propositions, annoncé à VoiceOver sur iPhone (comme CalmMessage) :
+ * l'écran change sans que la personne ait touché le titre. */
+function PiecesTitle({ children }: { children: string }) {
+  useEffect(() => {
+    if (Platform.OS === "ios") AccessibilityInfo.announceForAccessibility(children);
+  }, [children]);
+  return (
+    <Text style={styles.title} accessibilityRole="header">
+      {children}
+    </Text>
+  );
+}
+
 /** Les moments trouvés, sur un seul écran (demande du fondateur, 17 novembre
  * 2026 : le moins d'étapes possible) : les vignettes pour choisir le moment
  * (le meilleur présélectionné), puis « Entourez la pièce » directement sur son
- * image, le cadre de l'IA déjà tracé ; « Lancer la recherche » part aussitôt. */
+ * image, le cadre de l'IA déjà tracé ; « Lancer la recherche » part aussitôt.
+ * Lot « propositions » : avec `analysis.labels`, les pièces proposées par
+ * l'IA en pastilles (la première présélectionnée) à la place des vignettes ;
+ * l'image et le cadre suivent la pièce choisie, et le second geste devient
+ * « Décrire la pièce autrement » (`onDescribe`). */
 export function LinkMomentsView({
   analysis,
   selected,
@@ -157,6 +264,7 @@ export function LinkMomentsView({
   onDragChange,
   onSearch,
   onEditQuery,
+  onDescribe,
 }: {
   analysis: LinkAnalysis;
   selected: number;
@@ -167,12 +275,41 @@ export function LinkMomentsView({
   onDragChange: (dragging: boolean) => void;
   onSearch: () => void;
   onEditQuery: () => void;
+  /** Mode « pièces » : retour au champ, vide (sinon « Modifier la description »). */
+  onDescribe?: () => void;
 }) {
   const { height: windowHeight } = useWindowDimensions();
   const moment = analysis.moments[selected] ?? analysis.moments[0];
   if (!moment) return null;
   const count = analysis.moments.length;
   const frameHeight = Math.min(Math.max(windowHeight * 0.45, 240), 440);
+  const labels = analysis.labels;
+  const photo = (
+    // Une image par moment : le tracé repart du cadre de l'IA à chaque changement de moment.
+    <PhotoFrame
+      key={`${selected}-${moment.timeSeconds}`}
+      uri={moment.image}
+      zone={zone}
+      onChange={onZone}
+      onDragChange={onDragChange}
+      height={frameHeight}
+      caption={zoneFromAi ? t.targeting.aiCaption : t.targeting.caption}
+    />
+  );
+  if (labels) {
+    const options = labels.map((label, rank) => ({ value: String(rank), label }));
+    return (
+      <>
+        <PiecesTitle>{t.videoLinkAuto.pieces.title(count)}</PiecesTitle>
+        <Text style={styles.help}>{t.videoLinkAuto.pieces.hint(count)}</Text>
+        <View style={styles.pieces}>
+          <SegmentedChoice label={t.videoLinkAuto.pieces.group} options={options} value={String(selected)} onChange={(value) => onSelect(Number(value))} />
+        </View>
+        {photo}
+        <ActionButtons primary={{ label: t.videoLinkAuto.moments.search, onPress: onSearch }} secondary={[{ label: t.videoLinkAuto.pieces.describe, onPress: onDescribe ?? onEditQuery }]} />
+      </>
+    );
+  }
   return (
     <>
       <Text style={styles.title} accessibilityRole="header">
@@ -199,16 +336,7 @@ export function LinkMomentsView({
           })}
         </View>
       ) : null}
-      {/* Une image par moment : le tracé repart du cadre de l'IA à chaque changement de moment. */}
-      <PhotoFrame
-        key={`${selected}-${moment.timeSeconds}`}
-        uri={moment.image}
-        zone={zone}
-        onChange={onZone}
-        onDragChange={onDragChange}
-        height={frameHeight}
-        caption={zoneFromAi ? t.targeting.aiCaption : t.targeting.caption}
-      />
+      {photo}
       <ActionButtons primary={{ label: t.videoLinkAuto.moments.search, onPress: onSearch }} secondary={[{ label: t.videoLinkAuto.moments.editQuery, onPress: onEditQuery }]} />
     </>
   );
@@ -233,23 +361,34 @@ function CalmMessage({ children }: { children: string }) {
  * discret (« Réessayer », ou la capture quand le bouton est un autre geste).
  * La capture est toujours proposée : jamais d'impasse. `platformName` :
  * « TikTok » ou « Instagram », pour dire qui a refusé ; `platform` : la même,
- * pour les statistiques du plan B (mesure du parcours). */
+ * pour les statistiques du plan B (mesure du parcours). `mode` (lot
+ * « propositions ») : en mode « pièces », « Aucune pièce proposée » et le
+ * geste « Décrire la pièce autrement » (`onDescribe` : le champ, vide) ;
+ * `keptDescription` : faux quand rien n'a été écrit (« Votre lien est
+ * gardé. », sans parler de description). */
 export function LinkFailureView({
   info,
   platformName,
   platform = null,
+  mode = "words",
+  keptDescription = true,
   onRetry,
   onEditQuery,
+  onDescribe,
   onCapture,
 }: {
   info: LinkFailureInfo;
   platformName?: string;
   platform?: VideoPlatform | null;
+  mode?: LinkMode;
+  keptDescription?: boolean;
   onRetry: () => void;
   onEditQuery: () => void;
+  /** Mode « pièces » : « Décrire la pièce autrement » (sinon « Modifier la description », onEditQuery). */
+  onDescribe?: () => void;
   onCapture: () => void;
 }) {
-  const view = linkFailureView(info, getActiveLocale(), platformName);
+  const view = linkFailureView(info, getActiveLocale(), platformName, mode);
   // Vidéo privée, supprimée ou refusée : la capture choisie est comptée, avec sa cause.
   const planB = planBChoice(info, platform);
   const capture = () => {
@@ -259,6 +398,8 @@ export function LinkFailureView({
   const actionOf = (action: LinkFailureAction): Action => {
     if (action === "capture") return { label: t.videoLinkAuto.planB.capture, onPress: capture };
     if (action === "retry") return { label: t.common.retry, onPress: onRetry };
+    // Le geste « décrire » suit le mode : « Décrire la pièce autrement » après les propositions de l'IA.
+    if (mode === "pieces") return { label: t.videoLinkAuto.pieces.describe, onPress: onDescribe ?? onEditQuery };
     return { label: t.videoLinkAuto.moments.editQuery, onPress: onEditQuery };
   };
   const secondary = view.secondary ? actionOf(view.secondary) : null;
@@ -269,7 +410,7 @@ export function LinkFailureView({
       </Text>
       {view.isError ? <ErrorMessage style={styles.message}>{view.message}</ErrorMessage> : <CalmMessage>{view.message}</CalmMessage>}
       <ActionButtons primary={actionOf(view.primary)} />
-      {view.primary === "capture" ? <Text style={styles.note}>{t.videoLinkAuto.planB.kept}</Text> : null}
+      {view.primary === "capture" ? <Text style={styles.note}>{keptDescription ? t.videoLinkAuto.planB.kept : t.videoLinkAuto.pieces.keptLink}</Text> : null}
       {secondary ? (
         <Pressable onPress={secondary.onPress} style={styles.discreet} accessibilityRole="button">
           <Text style={styles.discreetLabel}>{secondary.label}</Text>
@@ -309,4 +450,23 @@ const styles = themedStyles(() => ({
   thumbTimeActive: { color: color.encre, fontWeight: "600" },
   discreet: { minHeight: 44, alignItems: "center", justifyContent: "center", alignSelf: "stretch", marginTop: space.xs },
   discreetLabel: { fontSize: font.secondary, color: color.acier, textDecorationLine: "underline", textAlign: "center" },
+  // Lot « propositions » : « ou décrivez la pièce : », « Trouver la pièce » en
+  // bouton secondaire (couleurs existantes), les pastilles des pièces.
+  or: { fontSize: font.secondary, color: color.acier, marginTop: space.lg, lineHeight: 21 },
+  secondary: {
+    borderWidth: 1,
+    borderColor: color.filet,
+    borderRadius: radius.md,
+    minHeight: 48,
+    flexDirection: "row",
+    gap: space.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: space.md,
+    marginTop: space.md,
+  },
+  secondaryDisabled: { backgroundColor: color.inactif, borderColor: color.inactif },
+  secondaryLabel: { color: color.encre, fontSize: font.body, fontWeight: "500", textAlign: "center", flexShrink: 1 },
+  secondaryLabelDisabled: { color: color.surInactif },
+  pieces: { marginTop: space.md },
 }));

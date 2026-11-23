@@ -39,6 +39,11 @@ export interface Piece {
    * ou « Prix inhabituellement bas », calculée par le serveur ; absente :
    * aucune mention (components/offer-mark.tsx). */
   offerMark?: OfferMark;
+  /** « Cette pièce dans d'autres boutiques » seulement : le serveur range
+   * l'offre en fin de section (prix inhabituellement bas, ou adresse
+   * douteuse, sans mention). Jamais affiché : la grande carte prise dans
+   * cette section ne la choisit pas (lib/price-first.ts). Absent : non. */
+  demoted?: true;
 }
 
 export type SpotStatus = "success" | "failed";

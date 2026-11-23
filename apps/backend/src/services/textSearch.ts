@@ -33,8 +33,11 @@ const MAX_SHOPPING_CANDIDATES = 60;
 /** Une proposition de Google Shopping, rangée comme une proposition Lens.
  * `priceHidden` : un prix existait, dans une autre devise (caché, pour la mesure).
  * `hasProductId` : SerpApi donnait un identifiant produit (seulement compté
- * dans le journal des alertes prix, jamais rangé). */
-export type ShoppingMatch = VisualMatch & { priceHidden: boolean; hasProductId?: true };
+ * dans le journal des alertes prix, jamais rangé).
+ * `brandShop` : « Cette pièce dans d'autres boutiques » seulement, la boutique
+ * officielle de la marque de la pièce (lib/voieC.ts, après le tri léger ;
+ * jamais dans le cache), notée sur sa ligne (product_matches.brand_shop, 0054). */
+export type ShoppingMatch = VisualMatch & { priceHidden: boolean; hasProductId?: true; brandShop?: true };
 
 /** Ce que les filtres gardent d'une réponse (avant les pages Lens, le tri et
  * la coupe à 20) : c'est ce qui va dans le cache, pour une requête de l'IA. */

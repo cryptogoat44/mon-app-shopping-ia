@@ -56,6 +56,7 @@ import { aiQuotaFor } from "../src/lib/aiQuota.js";
 import { assertNoUserImage } from "../src/lib/aiSwitches.js";
 import { resetVoieCSchemaProbe } from "../src/lib/voieC.js";
 import { COMPLEMENT_PENDING_MAX_MS, COMPLEMENT_RUNNING_MAX_MS, resetDeferredSchemaProbe } from "../src/lib/deferredComplement.js";
+import { brandShopColumnReady, resetBrandShopColumnProbe } from "../src/lib/brandShopColumn.js";
 import type { LensMeasure } from "../src/services/lensMeasure.js";
 import type { TextSearchResponse } from "../src/services/searchProvider.js";
 
@@ -95,6 +96,10 @@ class FakeDb {
   readonly tables = new Map<string, Row[]>();
   /** Colonnes absentes (base sans 0031) : une lecture qui les nomme échoue. */
   missingColumns = new Set<string>();
+  /** Insertions refusées par la base (contrainte, panne) : `true` pour les refuser. */
+  refuseInsert: ((table: string, rows: Row[]) => boolean) | null = null;
+  /** Chaque insertion tentée dans product_matches (lignes envoyées). */
+  readonly matchInserts: Row[][] = [];
 
   rows(table: string): Row[] {
     if (!this.tables.has(table)) this.tables.set(table, []);
@@ -203,6 +208,10 @@ class FakeQuery implements PromiseLike<Result> {
     let affected: Row[];
     if (this.action === "insert") {
       const list = (Array.isArray(this.values) ? this.values : [this.values]) as Row[];
+      if (this.table === "product_matches") this.db.matchInserts.push(list.map((values) => ({ ...values })));
+      if (this.db.refuseInsert?.(this.table, list)) return { data: null, error: { code: "23514", message: "insertion refusée" } };
+      // Comme PostgREST : une colonne absente fait refuser toute l'insertion.
+      if (list.some((values) => Object.keys(values).some((column) => this.db.missingColumns.has(column)))) return { data: null, error: { code: "PGRST204", message: "colonne absente" } };
       affected = list.map((values) => ({ ...(DEFAULTS[this.table]?.() ?? {}), ...values }));
       table.push(...affected);
       if (!this.returning) return { data: null, error: null };
@@ -292,6 +301,7 @@ beforeEach(() => {
   Object.assign(env, { VOIE_C_ENABLED: true, VOIE_C_AI_ENABLED: true });
   resetVoieCSchemaProbe();
   resetDeferredSchemaProbe();
+  resetBrandShopColumnProbe();
   db = new FakeDb();
   logs = [];
   rateHits = [];
@@ -675,6 +685,124 @@ describe("« Que cherchez-vous ? » : proposé au même moment qu'avant, après 
     await complement(target, id);
     expect(rateHits).toEqual(["searchCreate"]);
     expect(searchRow(id)).toMatchObject({ served_from_cache: false, shopping_calls: 1 });
+  });
+});
+
+// Ordre des boutiques (décision du fondateur, 21 novembre 2026, migration
+// 0054) : la boutique officielle de la marque de la pièce est reconnue quand
+// les boutiques sont cherchées (la marque de la requête de l'IA) ; sa ligne
+// en garde un oui, la marque jamais. Sans 0054, rien n'est noté, et
+// l'enregistrement des boutiques n'échoue jamais pour autant.
+describe("ordre des boutiques : un oui sur la ligne de la boutique officielle de la marque de la pièce (0054)", () => {
+  const ZARA_ANSWER = { kind: "query" as const, value: { query: "Zara top satiné", brand: "Zara", model: "" }, usage: { inputTokens: 900, outputTokens: 40 } };
+  // Google Shopping : deux revendeurs nomment Zara (le tri léger les met en tête), puis zara.com et mango.com.
+  const ZARA_SHOPPING: TextSearchResponse = {
+    items: [
+      shoppingItem(1, "Top satiné noir", "https://boutique-c.fr/1"),
+      shoppingItem(2, "TOP SATINÉ - Noir", "https://www.zara.com/fr/2"),
+      shoppingItem(3, "Zara top satiné noir", "https://boutique-d.fr/3"),
+      shoppingItem(4, "Blouse satinée", "https://shop.mango.com/fr/4"),
+      shoppingItem(5, "Top satiné Zara", "https://boutique-e.fr/5"),
+    ],
+    received: 5,
+    statusCode: 200,
+  };
+  const shoppingRows = (id: string) =>
+    matchRows(id)
+      .filter((row) => row.origin === "shopping")
+      .sort((a, b) => Number(a.rank) - Number(b.rank));
+  /** Les boutiques d'une réponse, dans l'ordre envoyé à l'app. */
+  const shoppingHosts = (body: { matches: { origin?: string; merchantUrl: string }[] }) =>
+    body.matches.filter((match) => match.origin === "shopping").map((match) => new URL(match.merchantUrl).hostname);
+
+  it("permis : au lancement (apps déjà installées) comme aux boutiques ensuite, seule la ligne de zara.com porte le oui, et zara.com passe en tête de la réponse ; ni la marque ni la requête ne sont rangées", async () => {
+    aiMock.mockResolvedValue(ZARA_ANSWER);
+    shoppingMock.mockResolvedValue(ZARA_SHOPPING);
+    const target = await buildApp();
+    const launched = preparedSearch();
+    const first = (await launch(target, launched)).json();
+    expect(first.complement.status).toBe("shown");
+    const deferred = await deferredLaunch(target);
+    const later = (await complement(target, deferred)).json();
+    expect(later.complement.status).toBe("shown");
+    for (const body of [first, later, (await target.inject({ method: "GET", url: `/api/searches/${launched}` })).json()]) {
+      // mango.com (une autre marque) : remontée de 2 places au plus, comme une boutique connue.
+      expect(shoppingHosts(body)).toEqual(["www.zara.com", "boutique-d.fr", "boutique-e.fr", "shop.mango.com", "boutique-c.fr"]);
+    }
+    for (const id of [launched, deferred]) {
+      const rows = shoppingRows(id);
+      // L'ordre enregistré reste celui du tri léger : les titres qui nomment Zara d'abord.
+      expect(rows.map((row) => new URL(String(row.merchant_url)).hostname)).toEqual(["boutique-d.fr", "boutique-e.fr", "boutique-c.fr", "www.zara.com", "shop.mango.com"]);
+      expect(rows.map((row) => row.brand_shop ?? null)).toEqual([null, null, null, true, null]);
+      // Rien d'autre de plus sur la ligne : la marque n'est rangée nulle part.
+      const keys = (row: Row) => Object.keys(row).sort();
+      expect(keys(rows[3]!)).toEqual([...keys(rows[0]!), "brand_shop"].sort());
+      expect(rows.every((row) => row.brand === null)).toBe(true);
+    }
+    // Le message exact, pas les chiffres « 0054 » : le journal brut porte des heures et des identifiants au hasard.
+    expect(logs.join("\n")).not.toContain("migration 0054 absente");
+  });
+
+  it("refusé : base sans 0054, aucun oui n'est écrit (une insertion qui le nommerait serait refusée) ; les boutiques sont enregistrées quand même, et le journal le dit sans contenu", async () => {
+    db.missingColumns.add("brand_shop");
+    aiMock.mockResolvedValue(ZARA_ANSWER);
+    shoppingMock.mockResolvedValue(ZARA_SHOPPING);
+    const target = await buildApp();
+    const id = preparedSearch();
+    const res = await launch(target, id);
+    expect(res.json().complement.status).toBe("shown");
+    expect(searchRow(id)).toMatchObject({ status: "completed", complement_status: "shown" });
+    const rows = shoppingRows(id);
+    expect(rows).toHaveLength(5);
+    expect(rows.some((row) => "brand_shop" in row)).toBe(false);
+    // zara.com n'est pas mise en tête : rangée comme une boutique connue (2 places au plus), avec sa mention.
+    expect(shoppingHosts(res.json())).toEqual(["boutique-d.fr", "www.zara.com", "boutique-e.fr", "shop.mango.com", "boutique-c.fr"]);
+    expect(res.json().matches.find((match: { merchantUrl: string }) => match.merchantUrl.includes("zara.com")).offerMark).toBe("official_shop");
+    const warnings = logs.map((line) => JSON.parse(line) as Record<string, unknown>).filter((line) => String(line.msg).startsWith("Boutique de la marque non notée"));
+    expect(warnings).toEqual([expect.objectContaining({ code: "42703" })]);
+    expect(JSON.stringify(warnings)).not.toMatch(/zara|mango/i);
+  });
+
+  it("permis : la sonde a vu la colonne, mais l'insertion avec le oui est refusée (colonne retirée depuis) — refaite une fois sans le oui : les boutiques sont enregistrées, la section est montrée", async () => {
+    aiMock.mockResolvedValue(ZARA_ANSWER);
+    shoppingMock.mockResolvedValue(ZARA_SHOPPING);
+    const target = await buildApp();
+    // La sonde voit la colonne (mémorisée), puis la colonne disparaît.
+    expect(await brandShopColumnReady(target)).toBe(true);
+    db.missingColumns.add("brand_shop");
+    const id = preparedSearch();
+    const res = await launch(target, id);
+    expect(res.json().complement.status).toBe("shown");
+    expect(searchRow(id)).toMatchObject({ status: "completed", complement_status: "shown" });
+    const shoppingInserts = db.matchInserts.filter((list) => list.every((row) => row.origin === "shopping"));
+    expect(shoppingInserts.map((list) => list.some((row) => "brand_shop" in row))).toEqual([true, false]);
+    const rows = shoppingRows(id);
+    expect(rows).toHaveLength(5);
+    expect(rows.some((row) => "brand_shop" in row)).toBe(false);
+    expect(shoppingHosts(res.json())).toEqual(["boutique-d.fr", "www.zara.com", "boutique-e.fr", "shop.mango.com", "boutique-c.fr"]);
+    const warnings = logs.map((line) => JSON.parse(line) as Record<string, unknown>).filter((line) => String(line.msg).includes("refaite sans lui"));
+    expect(warnings).toEqual([expect.objectContaining({ origin: "shopping", code: "PGRST204" })]);
+    expect(JSON.stringify(warnings)).not.toMatch(/zara|mango/i);
+  });
+
+  it("refusé : jamais plus d'une reprise (la base refuse aussi sans le oui : deux essais, aucune ligne), et aucune reprise quand aucun oui n'était envoyé", async () => {
+    aiMock.mockResolvedValue(ZARA_ANSWER);
+    shoppingMock.mockResolvedValue(ZARA_SHOPPING);
+    db.refuseInsert = (table, rows) => table === "product_matches" && rows.every((row) => row.origin === "shopping");
+    const target = await buildApp();
+    const id = preparedSearch();
+    await launch(target, id);
+    const shoppingInserts = () => db.matchInserts.filter((list) => list.every((row) => row.origin === "shopping"));
+    expect(shoppingInserts().map((list) => list.some((row) => "brand_shop" in row))).toEqual([true, false]);
+    expect(shoppingRows(id)).toHaveLength(0);
+    // Une pièce d'une marque sans boutique dans la section : aucun oui envoyé, un seul essai.
+    db.matchInserts.length = 0;
+    aiMock.mockResolvedValue({ ...ZARA_ANSWER, value: { ...ZARA_ANSWER.value, brand: "Exemplor" } });
+    const other = preparedSearch();
+    await launch(target, other);
+    expect(shoppingInserts().map((list) => list.some((row) => "brand_shop" in row))).toEqual([false]);
+    expect(logs.some((line) => line.includes("refaite sans lui"))).toBe(true);
+    expect(logs.filter((line) => line.includes("refaite sans lui"))).toHaveLength(1);
   });
 });
 

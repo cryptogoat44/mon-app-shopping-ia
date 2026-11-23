@@ -71,6 +71,10 @@ export const MATCH_ROW = z.object({
   // Boutiques ensuite (0031) : place dans la réponse Lens avant le tri par
   // les mots, gardée seulement jusqu'au début de l'étape des boutiques.
   lens_rank: z.number().int().positive().nullable().optional(),
+  // Ordre des boutiques (0054) : la boutique officielle de la marque de la
+  // pièce, reconnue à l'enregistrement de « Cette pièce dans d'autres
+  // boutiques » (true seulement) ; vide ailleurs, absente sans 0054.
+  brand_shop: z.boolean().nullable().optional(),
 });
 export type MatchRow = z.infer<typeof MATCH_ROW>;
 
@@ -128,10 +132,12 @@ export function keptMatchRows<T extends Pick<MatchRow, "merchant_url" | "price_m
  * mots) garde sa place et ses propositions, sans les retirées, avec leurs
  * mentions. L'ordre dans chaque section (sectionOrder) : seule « Cette pièce
  * dans d'autres boutiques » est rangée par les mentions (la boutique
- * officielle de la marque de la section en tête, d'après les titres des
- * autres offres ; boutiques connues un peu remontées ; offres signalées à la
- * fin) ; la recherche visuelle et vos mots gardent l'ordre reçu. */
-function trustedMatches(matches: readonly MatchRow[]): { match: MatchRow; mark: OfferMark | null }[] {
+ * officielle de la marque de la pièce en tête, notée à l'enregistrement :
+ * brand_shop ; boutiques connues un peu remontées ; offres signalées à la
+ * fin) ; la recherche visuelle et vos mots gardent l'ordre reçu. `demoted` :
+ * l'offre est rangée en fin de section, là où les mentions rangent
+ * seulement (« shopping »). */
+function trustedMatches(matches: readonly MatchRow[]): { match: MatchRow; mark: OfferMark | null; demoted: boolean }[] {
   const sorted = [...matches].sort((a, b) => a.rank - b.rank);
   const reviews = reviewOffers(sorted.map(trustOfferOf));
   const sections = new Map<MatchOrigin, number[]>();
@@ -144,8 +150,8 @@ function trustedMatches(matches: readonly MatchRow[]): { match: MatchRow; mark: 
       origin,
       indices,
       indices.map((index) => reviews[index]!),
-      indices.map((index) => ({ merchantUrl: sorted[index]!.merchant_url, title: sorted[index]!.product_name }))
-    ).map((index) => ({ match: sorted[index]!, mark: reviews[index]!.mark }))
+      indices.map((index) => ({ brandShop: sorted[index]!.brand_shop === true }))
+    ).map((index) => ({ match: sorted[index]!, mark: reviews[index]!.mark, demoted: origin === "shopping" && reviews[index]!.demoted }))
   );
 }
 
@@ -247,7 +253,7 @@ export function toProductSearch(
     notCounted: row.failure_kind === "provider_refused",
     ...(complement ? { complement } : {}),
     // Boutiques douteuses (lib/shopTrust.ts) : retirées, mentions, ordre (rangé par les mentions dans « shopping » seulement).
-    matches: trustedMatches(matches).map(({ match: m, mark }) => ({
+    matches: trustedMatches(matches).map(({ match: m, mark, demoted }) => ({
         id: m.id,
         rank: m.rank,
         productName: m.product_name,
@@ -270,6 +276,8 @@ export function toProductSearch(
         ...(alertKeyString(m.merchant_url, m.merchant_name) !== null ? { alertTrackable: true as const } : {}),
         // Boutiques douteuses : « Boutique officielle de la marque », « Boutique connue » ou « Prix inhabituellement bas » (absente sinon).
         ...(mark ? { offerMark: mark } : {}),
+        // « shopping » seulement : rangée en fin de section (jamais affiché ; la grande carte prise dans la section ne la choisit pas).
+        ...(demoted ? { demoted: true as const } : {}),
       })),
   };
 }

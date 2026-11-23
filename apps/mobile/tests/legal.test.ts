@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ACCEPTED_CONSENT_VERSIONS, CONSENT_VERSIONS, LEGAL_DOCUMENT_VERSIONS } from "@monapp/shared-types";
+import { ACCEPTED_CONSENT_VERSIONS, CONSENT_VERSIONS, LEGAL_DOCUMENT_VERSIONS, VIDEO_LINK_CONSENT_VERSIONS } from "@monapp/shared-types";
 import { consentFor, parseLegalVersion, pendingConsents, splitPlaceholders } from "../src/lib/legal";
 import { termsOfUse } from "../src/legal/conditions";
 import { buildPrivacyPolicy, privacyPolicy } from "../src/legal/confidentialite";
@@ -265,7 +265,8 @@ describe("politique de confidentialité : vidéos, lien analysé, fonctions du s
       "sans garder la vidéo",
       "TikTok ou Meta reçoivent cette demande de notre service, avec l'adresse de la vidéo : jamais votre identité ni votre adresse IP",
       "16 au plus, 512 pixels de côté",
-      "avec ce que vous avez écrit, à Anthropic",
+      // Lot « propositions » : ce que vous écrivez devient facultatif.
+      "avec, le cas échéant, ce que vous avez écrit, à Anthropic",
       "Ni la vidéo, ni ces images, ni ce que vous avez écrit ne sont conservés par Spotto",
       "ni dans notre base de données, ni dans les journaux du serveur, ni dans les rapports d'erreur",
       "cette note est effacée après 2 jours",
@@ -466,26 +467,27 @@ describe("politique de confidentialité : description d'un lien vidéo envoyée 
       [
         "En bref",
         "In short",
-        "Si les résultats de la recherche qui suit n'affichent aucun prix, ce que vous avez écrit est aussi envoyé automatiquement à notre prestataire SerpApi, qui interroge Google Shopping, pour trouver des boutiques, sans votre nom ni votre e-mail.",
-        "If the results of the search that follows show no price, what you wrote is also sent automatically to our provider SerpApi, which queries Google Shopping, to find shops, without your name or email address.",
+        // Lot « propositions » : le nom de la pièce choisie suit le même chemin (ARRÊT 3 A).
+        "Si les résultats de la recherche qui suit n'affichent aucun prix, ce que vous avez écrit, ou le nom de la pièce choisie parmi les propositions de l'IA, est aussi envoyé automatiquement à notre prestataire SerpApi, qui interroge Google Shopping, pour trouver des boutiques, sans votre nom ni votre e-mail.",
+        "If the results of the search that follows show no price, what you wrote, or the name of the piece you chose among the AI's suggestions, is also sent automatically to our provider SerpApi, which queries Google Shopping, to find shops, without your name or email address.",
       ],
       [
         "En bref",
         "In short",
-        "Pour une recherche lancée depuis le lien d'une vidéo, quand aucun résultat n'affiche de prix, la description que vous avez écrite est envoyée automatiquement à ce moteur de recherche, de la même façon.",
-        "For a search started from a video link, when no result shows a price, the description you wrote is sent automatically to that search engine, in the same way.",
+        "Pour une recherche lancée depuis le lien d'une vidéo, quand aucun résultat n'affiche de prix, la description que vous avez écrite (ou le nom de la pièce choisie parmi les propositions de l'IA) est envoyée automatiquement à ce moteur de recherche, de la même façon.",
+        "For a search started from a video link, when no result shows a price, the description you wrote (or the name of the piece you chose among the AI's suggestions) is sent automatically to that search engine, in the same way.",
       ],
       [
         "Les données que nous utilisons",
         "The data we use",
-        "${BRAND} lance cette recherche de lui-même, une seule fois, avec la description que vous avez écrite pour l'analyse de la vidéo : elle est envoyée de la même façon, sans votre nom ni votre e-mail",
-        "${BRAND} starts this search by itself, once, with the description you wrote for the analysis of the video: it is sent in the same way, without your name or email address",
+        "${BRAND} lance cette recherche de lui-même, une seule fois, avec la description que vous avez écrite pour l'analyse de la vidéo (ou le nom de la pièce choisie parmi les propositions de l'IA) : elle est envoyée de la même façon, sans votre nom ni votre e-mail",
+        "${BRAND} starts this search by itself, once, with the description you wrote for the analysis of the video (or the name of the piece you chose among the AI's suggestions): it is sent in the same way, without your name or email address",
       ],
       [
         "Pourquoi, et sur quelle base",
         "Why, and on what basis",
-        "Chercher avec la description écrite pour le lien d'une vidéo, lancée automatiquement quand aucun résultat n'affiche de prix : exécution du contrat qui nous lie (la recherche de la pièce que vous avez demandée). [À vérifier : base retenue.]",
-        "Searching with the description written for a video link, started automatically when no result shows a price: performance of the contract between us (the search for the piece that you asked for). [To be verified: basis retained.]",
+        "Chercher avec la description écrite pour le lien d'une vidéo (ou le nom de la pièce choisie parmi les propositions de l'IA), lancée automatiquement quand aucun résultat n'affiche de prix : exécution du contrat qui nous lie (la recherche de la pièce que vous avez demandée). [À vérifier : base retenue.]",
+        "Searching with the description written for a video link (or the name of the piece chosen among the AI's suggestions), started automatically when no result shows a price: performance of the contract between us (the search for the piece that you asked for). [To be verified: basis retained.]",
       ],
       [
         VIDEOS,
@@ -496,20 +498,20 @@ describe("politique de confidentialité : description d'un lien vidéo envoyée 
       [
         "Nos prestataires et les services tiers",
         "Our providers and third-party services",
-        "(pour une recherche lancée depuis le lien d'une vidéo dont aucun résultat n'affiche de prix, automatiquement, avec la description que vous avez écrite), vos mots ; il les transmet à Google Shopping",
-        "(for a search started from a video link where no result shows a price, automatically, with the description you wrote), your words; it passes them to Google Shopping",
+        "(pour une recherche lancée depuis le lien d'une vidéo dont aucun résultat n'affiche de prix, automatiquement, avec la description que vous avez écrite ou le nom de la pièce choisie parmi les propositions de l'IA), vos mots ; il les transmet à Google Shopping",
+        "(for a search started from a video link where no result shows a price, automatically, with the description you wrote or the name of the piece you chose among the AI's suggestions), your words; it passes them to Google Shopping",
       ],
       [
         "Transferts hors de l'Union européenne",
         "Transfers outside the European Union",
-        "vos mots (ou, pour une recherche lancée depuis le lien d'une vidéo dont aucun résultat n'affiche de prix, automatiquement, la description que vous avez écrite), avec le pays et la langue de la recherche : envoyés à SerpApi puis à Google (Google Shopping)",
-        "your words (or, for a search started from a video link where no result shows a price, automatically, the description you wrote), with the country and language of the search: sent to SerpApi and then to Google (Google Shopping)",
+        "vos mots (ou, pour une recherche lancée depuis le lien d'une vidéo dont aucun résultat n'affiche de prix, automatiquement, la description que vous avez écrite ou le nom de la pièce choisie parmi les propositions de l'IA), avec le pays et la langue de la recherche : envoyés à SerpApi puis à Google (Google Shopping)",
+        "your words (or, for a search started from a video link where no result shows a price, automatically, the description you wrote or the name of the piece you chose among the AI's suggestions), with the country and language of the search: sent to SerpApi and then to Google (Google Shopping)",
       ],
       [
         "Combien de temps",
         "How long",
-        "Les mots de « Que cherchez-vous ? », y compris la description d'un lien vidéo envoyée automatiquement quand aucun résultat n'affiche de prix : jamais enregistrés par ${BRAND}",
-        "The words of “What are you looking for?”, including the description of a video link sent automatically when no result shows a price: never saved by ${BRAND}",
+        "Les mots de « Que cherchez-vous ? », y compris la description d'un lien vidéo ou le nom de la pièce choisie parmi les propositions de l'IA, envoyés automatiquement quand aucun résultat n'affiche de prix : jamais enregistrés par ${BRAND}",
+        "The words of “What are you looking for?”, including the description of a video link or the name of the piece chosen among the AI's suggestions, sent automatically when no result shows a price: never saved by ${BRAND}",
       ],
     ];
     for (const [titleFr, titleEn, sentenceFr, sentenceEn] of expected) {
@@ -523,8 +525,8 @@ describe("politique de confidentialité : description d'un lien vidéo envoyée 
     const en = section(privacyPolicyEn, VIDEOS_EN);
     expect(fr).toContain("Ni la vidéo, ni ces images, ni ce que vous avez écrit ne sont conservés par Spotto");
     expect(en).toContain("Neither the video, nor these frames, nor what you wrote are kept by Spotto");
-    expect(fr).toContain("Ce que vous avez écrit sert aussi à la recherche qui suit, sans jamais partir avec l'image vers la recherche visuelle");
-    expect(en).toContain("What you wrote is also used for the search that follows, never sent with the image to the visual search");
+    expect(fr).toContain("Ce que vous avez écrit, ou le nom de la pièce choisie parmi les propositions de l'IA, sert aussi à la recherche qui suit, sans jamais partir avec l'image vers la recherche visuelle");
+    expect(en).toContain("What you wrote, or the name of the piece you chose among the AI's suggestions, is also used for the search that follows, never sent with the image to the visual search");
     expect(fr).toContain("Là non plus, Spotto ne l'enregistre pas.");
     expect(en).toContain("There too, Spotto does not save it.");
     expect(section(privacyPolicy, "Les données que nous utilisons")).toContain(
@@ -533,5 +535,112 @@ describe("politique de confidentialité : description d'un lien vidéo envoyée 
     expect(section(privacyPolicyEn, "The data we use")).toContain(
       "Under a photo, the words you type are only used to sort the suggestions: our server does not send them with the image to the visual search, and does not save them."
     );
+  });
+});
+
+// Lot propositions (Parcours 2, 2026-11-21, branche lot-propositions-pieces ;
+// décisions du fondateur, ARRÊT 1 A, 2 A, 3 A) : pour le lien d'une vidéo,
+// l'IA peut proposer, sans rien d'écrit, le nom de 3 pièces visibles au plus ;
+// ce que vous écrivez devient facultatif, et le nom de la pièce choisie suit
+// le chemin de la description. Chaque passage le dit, en français et en
+// anglais ; ni nouvelle version de la politique, ni nouvelle version du
+// consentement « analyse_video_ia ».
+describe("politique de confidentialité : propositions de l'IA (lot du 2026-11-21)", () => {
+  const section = (doc: LegalDocument, title: string) => {
+    const found = doc.sections.find((s) => s.title === title);
+    expect(found, title).toBeDefined();
+    return found!.blocks.flat().join("\n");
+  };
+  const VIDEOS = "Vidéos de votre téléphone, de TikTok et d'Instagram";
+  const VIDEOS_EN = "Videos from your phone, TikTok and Instagram";
+  const CHOSEN = "ou le nom de la pièce choisie parmi les propositions de l'IA";
+  const CHOSEN_EN = "or the name of the piece you chose among the AI's suggestions";
+
+  it("ni nouvelle version de la politique ni nouveau texte d'accord ; l'en-tête des deux fichiers dit le lot", () => {
+    expect(LEGAL_DOCUMENT_VERSIONS.privacy_policy).toBe("projet-2026-11-05");
+    expect(ACCEPTED_CONSENT_VERSIONS.privacy_policy.at(-1)).toBe("projet-2026-11-05");
+    expect(CONSENT_VERSIONS.analyse_video_ia).toBe("analyse-video-ia-2026-11-15");
+    const read = (path: string) => readFileSync(join(__dirname, "../src/legal", path), "utf8");
+    expect(read("confidentialite.ts")).toContain("// Lot propositions (2026-11-21, branche lot-propositions-pieces), toujours\n// SANS changer LEGAL_DOCUMENT_VERSIONS");
+    expect(read("confidentialite.en.ts")).toContain("// Suggestions lot (2026-11-21, branch lot-propositions-pieces), still WITHOUT\n// changing LEGAL_DOCUMENT_VERSIONS");
+  });
+
+  it("section « Vidéos » : les propositions sans rien écrire — mêmes images sans texte, 3 noms au plus, jamais une personne, rien de gardé", () => {
+    expect(section(privacyPolicy, VIDEOS)).toContain(
+      "Vous pouvez aussi, sans rien écrire, demander à l'IA de vous proposer les pièces qu'elle voit : Anthropic reçoit alors les mêmes images et la langue de l'app, sans aucun texte de votre part, et renvoie le nom de 3 pièces visibles au plus (par exemple « Le manteau camel »), avec pour chacune la meilleure image et son emplacement. L'IA a pour consigne de ne jamais désigner une personne, et Spotto écarte les noms qui contiennent certains mots désignant une personne (comme « fille » ou « homme »). Spotto ne conserve pas ces noms."
+    );
+    expect(section(privacyPolicyEn, VIDEOS_EN)).toContain(
+      "You can also, without writing anything, ask the AI to suggest the pieces it sees: Anthropic then receives the same frames and the app's language, without any text from you, and returns the names of up to 3 visible pieces (for example “The camel coat”), each with the best frame and where it is. The AI is instructed never to refer to a person, and Spotto discards names that contain certain words referring to a person (such as “girl” or “man”). Spotto does not keep these names."
+    );
+    // Refusé : le filtre ne lit qu'une liste fixe de mots ; plus aucune phrase qui promet d'écarter tout nom désignant une personne.
+    expect(JSON.stringify(privacyPolicy)).not.toContain("écarte les noms qui contiennent un mot désignant une personne");
+    expect(JSON.stringify(privacyPolicyEn)).not.toContain("discards names that contain a word referring to a person");
+    // Refusé : Anthropic reçoit la langue de l'app ; plus « les mêmes images, sans aucun texte » seules.
+    expect(JSON.stringify(privacyPolicy)).not.toContain("les mêmes images, sans aucun texte de votre part");
+    expect(JSON.stringify(privacyPolicyEn)).not.toContain("the same frames, without any text from you");
+  });
+
+  it("ce que vous écrivez devient facultatif (5 passages) ; pour Anthropic, le nom et l'emplacement de quelques pièces visibles", () => {
+    const expected: [string, string, string, string][] = [
+      ["En bref", "In short", "analysées par une IA avec, le cas échéant, ce que vous avez écrit.", "analyzed by an AI together with, where applicable, what you wrote."],
+      ["Pourquoi, et sur quelle base", "Why, and on what basis", "(quelques images réduites et, le cas échéant, votre description, envoyées à Anthropic)", "(a few reduced frames and, where applicable, your description, sent to Anthropic)"],
+      [VIDEOS, VIDEOS_EN, "les transmet, avec, le cas échéant, ce que vous avez écrit, à Anthropic", "passes them on, with, where applicable, what you wrote, to Anthropic"],
+      [
+        "Nos prestataires et les services tiers",
+        "Our providers and third-party services",
+        "et, le cas échéant, votre description (et, pour les propositions de l'IA, la langue de l'app, pour écrire les noms), et indique les meilleurs moments et l'emplacement de la pièce ou, si vous le demandez, le nom et l'emplacement de quelques pièces visibles.",
+        "and, where applicable, your description (and, for the AI's suggestions, the app's language, to write the names), and indicates the best moments and where the piece is or, if you ask for it, the name and location of a few visible pieces.",
+      ],
+      [
+        "Transferts hors de l'Union européenne",
+        "Transfers outside the European Union",
+        "(d'une vidéo de votre téléphone ou d'un lien TikTok ou Instagram) et, le cas échéant, votre description (et, pour les propositions de l'IA, la langue de l'app, pour écrire les noms), envoyées à Anthropic",
+        "(from a video from your phone or from a TikTok or Instagram link) and, where applicable, your description (and, for the AI's suggestions, the app's language, to write the names), sent to Anthropic",
+      ],
+    ];
+    for (const [titleFr, titleEn, fr, en] of expected) {
+      expect(section(privacyPolicy, titleFr), titleFr).toContain(fr);
+      expect(section(privacyPolicyEn, titleEn), titleEn).toContain(en);
+    }
+    // Plus aucune phrase qui rendrait la description obligatoire pour Anthropic.
+    expect(JSON.stringify(privacyPolicy)).not.toContain("avec ce que vous avez écrit, à Anthropic");
+    // Refusé : pour la vidéo, plus aucune liste d'Anthropic qui tait la langue de l'app.
+    expect(JSON.stringify(privacyPolicy)).not.toContain("le cas échéant, votre description, et indique");
+    expect(JSON.stringify(privacyPolicy)).not.toContain("TikTok ou Instagram) et, le cas échéant, votre description, envoyées à Anthropic");
+    expect(JSON.stringify(privacyPolicyEn)).not.toContain("where applicable, your description, and indicates");
+    expect(JSON.stringify(privacyPolicyEn)).not.toContain("TikTok or Instagram link) and, where applicable, your description, sent to Anthropic");
+    expect(JSON.stringify(privacyPolicyEn)).not.toContain("with what you wrote, to Anthropic");
+  });
+
+  it("le nom de la pièce choisie suit le chemin de la description : les 8 passages qui disent le tri ou l'envoi à SerpApi et Google Shopping", () => {
+    const EN_CHOSEN = /or the name of the piece (you chose|chosen) among the AI's suggestions/g;
+    const sections: [string, string, number][] = [
+      ["En bref", "In short", 2],
+      ["Les données que nous utilisons", "The data we use", 1],
+      ["Pourquoi, et sur quelle base", "Why, and on what basis", 1],
+      [VIDEOS, VIDEOS_EN, 1],
+      ["Nos prestataires et les services tiers", "Our providers and third-party services", 1],
+      ["Transferts hors de l'Union européenne", "Transfers outside the European Union", 1],
+      ["Combien de temps", "How long", 1],
+    ];
+    for (const [titleFr, titleEn, count] of sections) {
+      expect(section(privacyPolicy, titleFr).split(CHOSEN).length - 1, titleFr).toBe(count);
+      expect(section(privacyPolicyEn, titleEn).match(EN_CHOSEN)?.length ?? 0, titleEn).toBe(count);
+    }
+    expect(JSON.stringify(privacyPolicy).split(CHOSEN).length - 1).toBe(8);
+    expect(JSON.stringify(privacyPolicyEn).match(EN_CHOSEN)).toHaveLength(8);
+    expect(section(privacyPolicyEn, "In short")).toContain(CHOSEN_EN);
+    expect(section(privacyPolicy, "Combien de temps")).toContain("y compris la description d'un lien vidéo " + CHOSEN + ", envoyés automatiquement");
+    expect(section(privacyPolicyEn, "How long")).toContain("including the description of a video link or the name of the piece chosen among the AI's suggestions, sent automatically");
+  });
+
+  it("refusé : l'écran d'accord ne change pas (même texte, même version) — ce qui part reste les images, et même moins (aucun texte) en mode « pièces »", () => {
+    expect(fr.videoAuto.consentBody).toHaveLength(5);
+    expect(fr.videoAuto.consentBody[0]).toBe(
+      "Pour trouver la pièce à votre place, Spotto envoie quelques images réduites de la vidéo et votre description à un prestataire d'intelligence artificielle, Anthropic, situé aux États-Unis."
+    );
+    expect(fr.videoAuto.consentBody[3]).toContain("Ces images servent uniquement à repérer la pièce.");
+    expect(en.videoAuto.consentBody).toHaveLength(5);
+    expect(VIDEO_LINK_CONSENT_VERSIONS).toEqual([CONSENT_VERSIONS.analyse_video_ia]);
   });
 });

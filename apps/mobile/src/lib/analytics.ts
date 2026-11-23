@@ -57,6 +57,14 @@ export function isAnalyticsActive(): boolean {
   return state.apiKey !== null && state.userId !== null && state.consent;
 }
 
+/** Le compte dont les statistiques partent en ce moment ; null sans compte,
+ * sans accord ou sans clé. Une mesure envoyée plus tard (spot_completed,
+ * api.ts) le retient à son départ et ne part que sous ce même compte : jamais
+ * sous un autre, ni pour un départ sans accord. */
+export function analyticsAccount(): string | null {
+  return isAnalyticsActive() ? state.userId : null;
+}
+
 /** Corps exact envoyé à PostHog (fonction pure, testée). */
 export function buildCapturePayload(
   event: AnalyticsEvent,

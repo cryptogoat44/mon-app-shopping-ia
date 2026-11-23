@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { ProductMatch, ProductSearch } from "@monapp/shared-types";
 import type { SpotResult } from "../src/api/types";
+import { APP_NAME_DISPLAY as BRAND } from "../src/constants/brand";
 import { fr } from "../src/i18n/fr";
 import { en } from "../src/i18n/en";
 import { termsOfUse } from "../src/legal/conditions";
@@ -55,38 +56,66 @@ describe("mentions des boutiques : textes", () => {
     expect(fr.result.offerMark.unusual_price).toBe("Prix inhabituellement bas");
     // Ordre des boutiques (décision du fondateur, 21 novembre 2026) : aucune marque mise en avant ; seule la section
     // « Cette pièce dans d'autres boutiques » est rangée par les mentions, et la feuille (ouverte depuis n'importe
-    // quelle carte) le dit, avec les trois effets.
-    expect(fr.result.offerMark.explanation).toMatch(
-      /^.+ signale les boutiques officielles des marques, les boutiques connues et les prix inhabituellement bas\. Dans « Cette pièce dans d'autres boutiques », la boutique officielle de la marque passe en premier, les boutiques connues remontent un peu et les prix inhabituellement bas passent en dernier\. Vérifiez toujours la boutique avant de payer\.$/
+    // quelle carte) le dit, avec les trois effets : seule la boutique de la marque de la pièce y passe en premier,
+    // seulement quand le serveur a vérifié qu'elle est celle de la marque de cette pièce — ce qui n'arrive jamais sans
+    // 0054 : la condition porte sur le lien avec la pièce, jamais sur la marque ni sur la seule mention, et la phrase
+    // dit que ce n'est pas toujours le cas, même quand la boutique porte la mention.
+    expect(fr.result.offerMark.explanation).toBe(
+      `${BRAND} signale les boutiques officielles des marques, les boutiques connues et les prix inhabituellement bas. Dans « Cette pièce dans d'autres boutiques », la boutique officielle de la marque de la pièce passe en premier seulement quand ${BRAND} a pu vérifier qu'elle est bien celle de la marque de cette pièce, ce qui n'est pas toujours le cas, même quand elle porte la mention ; les autres boutiques officielles et les boutiques connues remontent un peu, et les prix inhabituellement bas passent en dernier. Vérifiez toujours la boutique avant de payer.`
     );
     expect(fr.result.offerMark.explanation).toContain(`« ${fr.result.complementTitleAi} »`);
     expect(en.result.offerMark.official_shop).toBe("Official brand store");
     expect(en.result.offerMark.known_shop).toBe("Well-known shop");
     expect(en.result.offerMark.unusual_price).toBe("Unusually low price");
-    expect(en.result.offerMark.explanation).toMatch(
-      /^.+ labels official brand stores, well-known shops and unusually low prices\. In “This piece at other shops”, the official brand store comes first, well-known shops move up a little and unusually low prices come last\. Always check the shop before you pay\.$/
+    expect(en.result.offerMark.explanation).toBe(
+      `${BRAND} labels official brand stores, well-known shops and unusually low prices. In “This piece at other shops”, the official store of the piece's brand comes first only when ${BRAND} could confirm it is the store of this piece's brand, which is not always the case, even when it carries the label; other official brand stores and well-known shops move up a little, and unusually low prices come last. Always check the shop before you pay.`
     );
     expect(en.result.offerMark.explanation).toContain(`“${en.result.complementTitleAi}”`);
     for (const text of [fr.result.offerMark.explanation, en.result.offerMark.explanation]) expect(text).not.toMatch(/met en avant|highlight/i);
     // Refusé : la règle sans sa section (fausse dans la recherche visuelle et « Résultats pour vos mots »).
     expect(fr.result.offerMark.explanation).not.toMatch(/Pour une même pièce vendue dans plusieurs boutiques/);
     expect(en.result.offerMark.explanation).not.toMatch(/When the same piece is sold by several shops/);
+    // Refusé : la règle sans condition, qui disait passer en premier toute boutique officielle (celle d'une autre
+    // marque, ou non reconnue, est rangée comme une boutique connue), ou une condition sur la marque (« reconnaît
+    // cette marque » : sans 0054, aucune boutique n'est reconnue, même pour une marque reconnue).
+    expect(fr.result.offerMark.explanation).not.toMatch(/la boutique officielle de la marque passe en premier/);
+    expect(en.result.offerMark.explanation).not.toMatch(/the official brand store comes first/);
+    expect(fr.result.offerMark.explanation).not.toMatch(/reconnaît cette marque|passe en premier quand/);
+    expect(en.result.offerMark.explanation).not.toMatch(/recognizes that brand|comes first when/);
+    // Refusé : la condition « a reconnu cette boutique », démentie par la mention affichée sur la même carte (sans
+    // 0054, une boutique officielle porte la mention sans passer en premier).
+    expect(fr.result.offerMark.explanation).not.toMatch(/a reconnu cette boutique/);
+    expect(en.result.offerMark.explanation).not.toMatch(/has recognized that store/);
+    expect(fr.result.offerMark.explanation).toContain("même quand elle porte la mention");
+    expect(en.result.offerMark.explanation).toContain("even when it carries the label");
     const all = JSON.stringify([fr.result.offerMark, en.result.offerMark]).toLowerCase();
     for (const word of ["arnaque", "escroc", "fraude", "faux", "fausse", "scam", "fraud", "fake"]) expect(all).not.toContain(word);
   });
 
   it("conditions d'utilisation : une phrase dit que Spotto peut masquer des offres, les signale, et comment « Cette pièce dans d'autres boutiques » est rangée — comme la feuille, avec aussi les adresses douteuses (français et anglais)", () => {
     const blocks = (doc: typeof termsOfUse) => doc.sections.flatMap((section) => section.blocks.flat()).join("\n");
-    expect(blocks(termsOfUse)).toMatch(
-      /peut ne pas afficher certaines offres, et signale les boutiques officielles des marques, les boutiques connues et les prix inhabituellement bas ; dans « Cette pièce dans d'autres boutiques », la boutique officielle de la marque passe en premier, les boutiques connues remontent un peu et les offres à prix inhabituellement bas ou à l'adresse douteuse passent en dernier\. Ce n'est pas une garantie : vérifiez toujours la boutique avant de payer\./
+    expect(blocks(termsOfUse)).toContain(
+      `peut ne pas afficher certaines offres, et signale les boutiques officielles des marques, les boutiques connues et les prix inhabituellement bas ; dans « Cette pièce dans d'autres boutiques », la boutique officielle de la marque de la pièce passe en premier seulement quand ${BRAND} a pu vérifier qu'elle est bien celle de la marque de cette pièce, ce qui n'est pas toujours le cas, même quand elle porte la mention ; les autres boutiques officielles et les boutiques connues remontent un peu, et les offres à prix inhabituellement bas ou à l'adresse douteuse passent en dernier. Ce n'est pas une garantie : vérifiez toujours la boutique avant de payer.`
     );
-    expect(blocks(termsOfUseEn)).toMatch(
-      /may not show some offers, and labels official brand stores, well-known shops and unusually low prices; in “This piece at other shops”, the official brand store comes first, well-known shops move up a little and offers with an unusually low price or a dubious address come last\. This is not a guarantee: always check the shop before you pay\./
+    expect(blocks(termsOfUseEn)).toContain(
+      `may not show some offers, and labels official brand stores, well-known shops and unusually low prices; in “This piece at other shops”, the official store of the piece's brand comes first only when ${BRAND} could confirm it is the store of this piece's brand, which is not always the case, even when it carries the label; other official brand stores and well-known shops move up a little, and offers with an unusually low price or a dubious address come last. This is not a guarantee: always check the shop before you pay.`
     );
     for (const text of [blocks(termsOfUse), blocks(termsOfUseEn)]) expect(text).not.toMatch(/mettre en avant les boutiques|highlight official/i);
-    // Refusé : la règle sans sa section.
+    // Refusé : la règle sans sa section, ou sans condition (toute boutique officielle en premier).
     expect(blocks(termsOfUse)).not.toMatch(/pour une même pièce vendue dans plusieurs boutiques/i);
     expect(blocks(termsOfUseEn)).not.toMatch(/when the same piece is sold by several shops/i);
+    expect(blocks(termsOfUse)).not.toMatch(/la boutique officielle de la marque passe en premier/);
+    expect(blocks(termsOfUseEn)).not.toMatch(/the official brand store comes first/);
+    // Refusé : la condition sur la marque, ou sans « pas toujours ».
+    expect(blocks(termsOfUse)).not.toMatch(/la reconnaît, passe en premier|reconnaît cette marque/);
+    expect(blocks(termsOfUseEn)).not.toMatch(/when \S+ recognizes it|recognizes that brand/);
+    expect(blocks(termsOfUse)).toContain("ce qui n'est pas toujours le cas");
+    // Refusé : la condition sur la boutique reconnue (démentie par la mention) ; permis : celle sur la pièce.
+    expect(blocks(termsOfUse)).not.toMatch(/a reconnu cette boutique/);
+    expect(blocks(termsOfUseEn)).not.toMatch(/has recognized that store/);
+    expect(blocks(termsOfUse)).toContain("même quand elle porte la mention");
+    expect(blocks(termsOfUseEn)).toContain("even when it carries the label");
+    expect(blocks(termsOfUseEn)).toContain("which is not always the case");
   });
 });
 
@@ -143,6 +172,41 @@ describe("mentions des boutiques : ce que l'app reçoit et affiche", () => {
     // Un prix dans la recherche visuelle : rien ne change.
     const lensPriced = result([match("p1", null), match("p2", 99), match("p8", 135, { origin: "shopping", offerMark: "official_shop" }), match("p4", 115, { origin: "shopping" })]);
     expect(allPieces(lensPriced)[bestProposalIndex(lensPriced, "fr")]!.id).toBe("p2");
+  });
+
+  it("grande carte prise dans le complément : jamais une offre que le serveur range en fin de section (adresse douteuse, sans mention ; prix inhabituellement bas), même reçue la première", () => {
+    const lens = [match("p1", null), match("p2", null)];
+    // Dans l'ordre envoyé : la boutique de la marque de la pièce, la boutique connue remontée, puis l'adresse douteuse en dernier.
+    const dubiousFirst = result([
+      ...lens,
+      match("p6", 1250, { origin: "shopping", offerMark: "official_shop", merchantUrl: "https://www.moncler.com/fr/p6" }),
+      match("p5", 650, { origin: "shopping", offerMark: "known_shop", merchantUrl: "https://www.zalando.fr/p5" }),
+      match("p4", 640, { origin: "shopping", merchantUrl: "https://boutique-c.fr/p4" }),
+      match("p7", 660, { origin: "shopping", merchantUrl: "https://boutique-d.fr/p7" }),
+      match("p3", 610, { origin: "shopping", demoted: true, merchantUrl: "https://moncler-outlet.shop/p3" }),
+    ]);
+    const best = bestProposalIndex(dubiousFirst, "fr");
+    // Permis : boutique-c.fr (rang 4), la première reçue que le serveur ne range pas en fin de section.
+    expect(allPieces(dubiousFirst)[best]!.id).toBe("p4");
+    expect(bigCardLabel(startProposalIndex(dubiousFirst, { country: "fr" }), best)).toBe("bestWithPrice");
+    // Refusé : moncler-outlet.shop (rang 3, sans mention) n'est pas « Meilleure proposition avec prix » ; elle reste dans sa section.
+    expect(priceFirstSections(dubiousFirst, best).shopping.map(({ piece }) => piece.id)).toEqual(["p6", "p5", "p7", "p3"]);
+    // Refusé : un prix inhabituellement bas reçu le premier, avec sa mention, ne passe pas non plus en grand.
+    const unusualFirst = result([
+      ...lens,
+      match("p4", 80, { origin: "shopping" }),
+      match("p5", 85, { origin: "shopping" }),
+      match("p6", 90, { origin: "shopping" }),
+      match("p3", 20, { origin: "shopping", offerMark: "unusual_price", demoted: true }),
+    ]);
+    expect(allPieces(unusualFirst)[bestProposalIndex(unusualFirst, "fr")]!.id).toBe("p4");
+    // Toutes rangées en fin de section : la première reçue, comme avant.
+    const allDemoted = result([...lens, match("p4", 70, { origin: "shopping", demoted: true }), match("p3", 75, { origin: "shopping", demoted: true })]);
+    expect(allPieces(allDemoted)[bestProposalIndex(allDemoted, "fr")]!.id).toBe("p3");
+    // Le signal suit la proposition, seulement quand il est vrai (un ancien serveur ne l'envoie jamais).
+    expect(matchToPiece(match("p3", 10, { origin: "shopping", demoted: true })).demoted).toBe(true);
+    expect(matchToPiece(match("p4", 10, { origin: "shopping" }))).not.toHaveProperty("demoted");
+    expect(matchToPiece(match("p5", 10, { origin: "shopping", demoted: "oui" as never }))).not.toHaveProperty("demoted");
   });
 
   it("le rang envoyé par le serveur suit la proposition ; illisible, il manque, et l'app reprend l'ordre affiché", () => {

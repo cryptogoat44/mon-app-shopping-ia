@@ -7,13 +7,18 @@ import { ApiError } from "../src/lib/api-error";
 import { MAX_DATA_URI_LENGTH, decodeBase64, inMemoryImagePart, jpegSize, parseImageDataUri, readJpegDataUri } from "../src/lib/data-uri";
 import { LINK_AI_FAILURES, type LinkAiFailure } from "../src/lib/video-link-failures";
 import {
+  LINK_ANALYSIS_OFF,
   LINK_FETCH_STEP_MS,
   cleanQuery,
   linkAiFailure,
   linkAnalysisEnabled,
   linkAnalysisRequest,
+  linkAnalysisStatus,
   linkFailureView,
+  linkModeOf,
+  linkPiecesRequest,
   linkWaitingStep,
+  linkWaitingSteps,
   momentClock,
   parseLinkAnalysis,
   queryProblemMessage,
@@ -345,5 +350,121 @@ describe("textes : français avec « vous », anglais à l'identique", () => {
     // Plus de texte propre aux liens : une seule version enregistrée pour les deux écrans.
     expect("consentBody" in fr.videoLinkAuto).toBe(false);
     expect("consentBody" in en.videoLinkAuto).toBe(false);
+  });
+});
+
+// Lot « propositions » (Parcours 2, 21 novembre 2026) : « Voir les propositions
+// de l'IA » — l'état, la demande sans mots, la lecture des noms (jamais de
+// confiance aveugle dans le réseau), l'échec « aucune pièce » et les textes.
+describe("propositions de l'IA (mode « pièces »)", () => {
+  const moment = (patch: Record<string, unknown> = {}) => ({ timeSeconds: 12.4, image: jpegDataUri(720, 1280), box: BOX, ...patch });
+  const withLabels = (labels: unknown, count = 2) => ({ ...body(Array.from({ length: count }, (_, index) => moment({ timeSeconds: index }))), labels });
+
+  it("état : `pieces` compte seulement s'il vaut exactement `true`, et seulement avec l'analyse allumée", () => {
+    expect(linkAnalysisStatus({ enabled: true, pieces: true })).toEqual({ enabled: true, pieces: true });
+    expect(linkAnalysisStatus({ enabled: true })).toEqual({ enabled: true, pieces: false });
+    for (const value of ["true", 1, false, null, [true], {}]) expect(linkAnalysisStatus({ enabled: true, pieces: value }), JSON.stringify(value)).toEqual({ enabled: true, pieces: false });
+    expect(linkAnalysisStatus({ enabled: false, pieces: true })).toEqual({ enabled: false, pieces: false });
+    expect(linkAnalysisStatus({ enabled: "true", pieces: true })).toEqual({ enabled: false, pieces: false });
+    for (const value of [null, undefined, "true", [true]]) expect(linkAnalysisStatus(value)).toEqual(LINK_ANALYSIS_OFF);
+    expect(LINK_ANALYSIS_OFF).toEqual({ enabled: false, pieces: false });
+  });
+
+  it("demande : le lien seul, aucun texte ; le mode se lit dans la demande", () => {
+    expect(linkPiecesRequest(` ${TIKTOK} `)).toEqual({ url: TIKTOK, mode: "pieces" });
+    expect(linkModeOf({ url: TIKTOK, mode: "pieces" })).toBe("pieces");
+    expect(linkModeOf({ url: TIKTOK, query: "la veste" })).toBe("words");
+  });
+
+  it("lecture permise : un nom par moment, dans l'ordre, revérifié", () => {
+    const analysis = parseLinkAnalysis(withLabels(["Le manteau camel", "L'écharpe à carreaux"]), "pieces")!;
+    expect(analysis.labels).toEqual(["Le manteau camel", "L'écharpe à carreaux"]);
+    expect(analysis.moments).toHaveLength(2);
+    expect(parseLinkAnalysis(withLabels(["The white sneakers"], 1), "pieces")?.labels).toEqual(["The white sneakers"]);
+  });
+
+  it("lecture refusée (traitée comme illisible) : noms manquants, longueurs différentes, chiffre, mot de personne, doublon, 4 pièces, pas du texte, nom non relu", () => {
+    for (const [name, value] of [
+      ["sans noms", withLabels(undefined)],
+      ["noms en texte", withLabels("Le manteau camel")],
+      ["un nom pour deux moments", withLabels(["Le manteau camel"])],
+      ["trois noms pour deux moments", withLabels(["Le manteau camel", "Le sac noir", "La casquette"])],
+      ["un chiffre", withLabels(["Le jean 501", "Le sac noir"])],
+      ["un mot de personne", withLabels(["Le sac de la fille", "Le sac noir"])],
+      ["un doublon", withLabels(["Le sac noir", "le Sac noir"])],
+      ["un nom qui n'est pas du texte", withLabels([42, "Le sac noir"])],
+      ["un nom non normalisé", withLabels(["  Le sac noir", "Le manteau"])],
+      ["aucune pièce", withLabels([], 0)],
+    ] as const) {
+      expect(parseLinkAnalysis(value, "pieces"), name).toBeNull();
+    }
+    const four = { ...body([moment(), moment(), moment(), moment()]), labels: ["Le sac noir", "Le manteau", "La casquette", "Le pull"] };
+    expect(parseLinkAnalysis(four, "pieces")).toBeNull();
+  });
+
+  it("avec des mots, `labels` est ignoré (rien ne change)", () => {
+    const words = parseLinkAnalysis(withLabels(["Le manteau camel", "Le sac noir"]))!;
+    expect(words).not.toHaveProperty("labels");
+    expect(parseLinkAnalysis(withLabels(["Le jean 501"]), "words")?.moments).toHaveLength(2);
+    expect(parseLinkAnalysis(body([]), "words")?.moments).toEqual([]);
+  });
+
+  it("échec « aucune pièce » : « Aucune pièce proposée », sa phrase, le geste « décrire » en bouton et la capture en lien", () => {
+    const none = { failure: "no_moment", capacity: null } as const;
+    expect(linkFailureView(none, "fr", undefined, "pieces")).toEqual({
+      title: "Aucune pièce proposée",
+      message: "L'IA n'a vu aucune pièce nette dans cette vidéo : décrivez celle que vous cherchez, ou faites une capture d'écran.",
+      isError: false,
+      primary: "edit_query",
+      secondary: "capture",
+    });
+    setActiveLocale("en");
+    expect(linkFailureView(none, "en", undefined, "pieces")).toMatchObject({ title: "No piece suggested", message: en.videoLinkAuto.pieces.noneMessage, primary: "edit_query" });
+    setActiveLocale("fr");
+    // Avec des mots, l'échec d'avant ; en mode « pièces », les autres échecs gardent leur message.
+    expect(linkFailureView(none, "fr")).toMatchObject({ title: fr.videoLinkAuto.notFoundTitle, message: fr.videoLinkAuto.failure.no_moment });
+    for (const failure of LINK_AI_FAILURES.filter((item) => item !== "no_moment")) {
+      expect(linkFailureView({ failure, capacity: null }, "fr", undefined, "pieces"), failure).toEqual(linkFailureView({ failure, capacity: null }, "fr"));
+    }
+    expect(fr.videoLinkAuto.pieces.describe).toBe("Décrire la pièce autrement");
+    expect(en.videoLinkAuto.pieces.describe).toBe("Describe the piece instead");
+  });
+
+  it("attente : en mode « pièces », « L'IA regarde les pièces… » ; avec des mots, les étapes d'avant", () => {
+    expect(linkWaitingSteps("pieces")).toEqual(["On récupère la vidéo…", "L'IA regarde les pièces…"]);
+    expect(linkWaitingSteps("words")).toEqual(fr.videoLinkAuto.waiting.steps);
+    expect(en.videoLinkAuto.pieces.waitingSteps).toEqual(["Fetching the video…", "The AI is looking at the pieces…"]);
+  });
+
+  it("les textes demandés, en français avec « vous » et en anglais ; jamais « repérée » (la mémoire collective)", () => {
+    const pieces = fr.videoLinkAuto.pieces;
+    expect([pieces.lead, pieces.show, pieces.or, pieces.group, pieces.noneTitle]).toEqual([
+      "L'IA peut vous proposer les pièces qu'elle voit dans la vidéo.",
+      "Voir les propositions de l'IA",
+      "ou décrivez la pièce :",
+      "Pièces proposées par l'IA",
+      "Aucune pièce proposée",
+    ]);
+    expect([pieces.title(3), pieces.title(1), pieces.hint(2), pieces.hint(1)]).toEqual([
+      "Quelle pièce cherchez-vous ?",
+      "Une pièce proposée",
+      "L'IA propose ces pièces. Touchez celle que vous cherchez.",
+      "Vérifiez que le cadre entoure bien la pièce.",
+    ]);
+    const english = en.videoLinkAuto.pieces;
+    expect([english.lead, english.show, english.or, english.group, english.noneTitle, english.title(2), english.title(1), english.hint(3), english.hint(1)]).toEqual([
+      "The AI can suggest the pieces it sees in the video.",
+      "See the AI's suggestions",
+      "or describe the piece:",
+      "Pieces suggested by the AI",
+      "No piece suggested",
+      "Which piece are you looking for?",
+      "One piece suggested",
+      "The AI suggests these pieces. Tap the one you're looking for.",
+      "Check that the frame surrounds the piece.",
+    ]);
+    const french = JSON.stringify([pieces.lead, pieces.show, pieces.or, pieces.title(2), pieces.title(1), pieces.hint(2), pieces.hint(1), pieces.group, pieces.describe, pieces.noneTitle, pieces.noneMessage, pieces.waitingSteps, pieces.keptLink]);
+    expect(french).not.toMatch(/repér/i);
+    expect(french).not.toMatch(/\b(tu|ton|ta|tes|toi|te)\b/i);
   });
 });

@@ -219,6 +219,10 @@ export const EXPORT_COLUMNS = {
     // place dans la réponse de la recherche visuelle avant le tri par vos
     // mots, effacée dès que la recherche dans d'autres boutiques démarre.
     lens_rank: technical("Place dans la réponse de la recherche visuelle (avant le tri par vos mots)", "Place in the visual search answer (before sorting by your words)"),
+    // Colonne de la migration 0054 (ordre des boutiques), décrite d'avance :
+    // un oui sur la boutique officielle de la marque de la pièce, dans
+    // « Cette pièce dans d'autres boutiques » (la seule qui y passe en tête).
+    brand_shop: technical("Boutique officielle de la marque de la pièce (« Cette pièce dans d'autres boutiques »)", "Official store of the piece's brand (“This piece at other shops”)"),
   },
   resultFeedback: {
     id: ID,

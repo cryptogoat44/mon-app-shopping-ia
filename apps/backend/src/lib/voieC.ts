@@ -33,7 +33,7 @@ import { MAX_MATCHES, MAX_PRICED_ADDITIONS, type VisualMatch } from "../services
 import { voieCEnabled } from "./aiSwitches.js";
 import { photoCallsLeft, VOIE_C_BUDGET, type Deadline } from "./deadline.js";
 import type { SearchReservation } from "./searchCapacity.js";
-import { withoutDubiousOffers, type TrustOffer } from "./shopTrust.js";
+import { isBrandShop, withoutDubiousOffers, type TrustOffer } from "./shopTrust.js";
 import { AI_ERROR_KINDS, NO_QUERY_REASONS, totalSeconds, type AiErrorKind, type ComplementMeasure, type NoQueryReason } from "./searchMeasure.js";
 import { singleFlight } from "./singleFlight.js";
 import { sortByWords } from "./wordSort.js";
@@ -659,6 +659,16 @@ async function callShoppingOnce(ports: ComplementPorts, input: ComplementInput, 
   }
 }
 
+/** Ordre des boutiques (décision du fondateur, 21 novembre 2026) : la
+ * boutique officielle de la marque de la pièce est reconnue ici, où cette
+ * marque est connue (lib/shopTrust.ts, isBrandShop) ; seule elle passera en
+ * tête de « Cette pièce dans d'autres boutiques » à la relecture. Un oui sur
+ * sa ligne, rien d'autre : la marque, comme la requête, n'est jamais
+ * enregistrée. De nouveaux objets : ceux du cache ne sont jamais touchés. */
+function withBrandShop(matches: readonly ShoppingMatch[], brand: string): ShoppingMatch[] {
+  return matches.map((match) => (isBrandShop(match.merchantUrl, brand) ? { ...match, brandShop: true } : match));
+}
+
 /** Boutiques ensuite : le complément aura-t-il besoin d'un appel (cache, IA
  * ou Google Shopping) ? Faux : runComplement répond tout de suite, sans aucun
  * port (Lens en panne, aucune proposition Lens, IA coupée) ; le lancement
@@ -711,7 +721,7 @@ export async function runComplement(ports: ComplementPorts, input: ComplementInp
     if (shown.matches.length === 0) return finish(state, input, "empty", [], true);
     const lensTier0 = ports.sortShopping([...input.lens], reference).tierCounts[0] ?? 0;
     const reliable = (state.measure.tier0 ?? 0) > 0 || lensTier0 > 0;
-    return finish(state, input, "shown", shown.matches, !reliable);
+    return finish(state, input, "shown", withBrandShop(shown.matches, query.brand), !reliable);
   } catch (error) {
     // g. Exception inattendue : « error » (distincte de « skipped »), journalisée sans contenu.
     ports.log.error({ step: "complement", errorName: errorName(error) }, "Complément de la voie C : exception inattendue, résultats Lens seuls");
