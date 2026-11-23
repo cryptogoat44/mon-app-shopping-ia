@@ -355,6 +355,7 @@ export const EN_MESSAGES: Readonly<Record<string, string>> = {
   "Les liens de partage sont très demandés aujourd'hui. Réessayez demain.": "Share links are in high demand today. Please try again tomorrow.",
   "Trop de demandes en ce moment. Réessayez dans un instant.": "Too many requests right now. Please try again in a moment.",
   "Lien de page look invalide.": "Invalid look page link.",
+  "Le lien n'a pas pu être créé pour l'instant. Réessayez plus tard.": "The link couldn't be created right now. Please try again later.",
 };
 
 /** Message dans la langue voulue. Un message inconnu (par exemple un texte
