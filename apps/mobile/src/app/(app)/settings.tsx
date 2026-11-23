@@ -33,6 +33,7 @@ import { CONTACT_EMAIL } from "@/lib/contact";
 import { consentFor, pendingConsents } from "@/lib/legal";
 import { formatLongDate } from "@/lib/format";
 import { themedStyles } from "@/theme/themed-styles";
+import { useLookPagesStatus } from "@/lib/look-pages";
 
 // Le site ne garde le lien du fichier que le temps que le navigateur lance le
 // téléchargement.
@@ -73,6 +74,7 @@ export default function SettingsScreen() {
   const { locale, themePreference, chooseLocale, chooseTheme } = usePreferences();
   const { signOut, profile } = useAuth();
   const { showToast } = useToast();
+  const lookStatus = useLookPagesStatus();
   const [consents, setConsents] = useState<ConsentStatus[] | null>(null);
   const [consentsFailed, setConsentsFailed] = useState(false);
   // Export : le format se choisit à chaque fois ; seul le choix touché
@@ -247,6 +249,12 @@ export default function SettingsScreen() {
           <PlayerConsentSetting />
           {/* Lignes propres au site, rien sur iPhone (components/extra-data-settings). */}
           <ExtraDataSettings />
+          {/* Lot « page look » : « Pages look partagées », caché tant que le serveur n'a pas la migration 0057. */}
+          {lookStatus?.manage ? (
+            <Pressable accessibilityRole="button" onPress={() => router.push("/looks-partages")} hitSlop={12} style={styles.secondLink}>
+              <Text style={styles.link}>{t.look.settingsEntry}</Text>
+            </Pressable>
+          ) : null}
           {!choosingExport ? (
             <Pressable accessibilityRole="button" onPress={() => setChoosingExport(true)} hitSlop={12} style={styles.secondLink}>
               <Text style={styles.link}>{t.settings.exportData}</Text>
