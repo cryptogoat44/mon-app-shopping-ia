@@ -647,6 +647,45 @@ describe("la copie publique ne survit pas à sa page", () => {
     expect(fake.table("shared_looks")).toEqual([]);
   });
 
+  it("refusé : page arrêtée pendant que le stockage refuse, la même pièce repartagée → 503 « réessayez plus tard » (jamais 500), aucune nouvelle copie, l'ancienne copie gardée avec sa ligne", async () => {
+    const fake = seeded({}, { failStorageRemove: () => true });
+    await withImages();
+    const target = await looksApp(fake.db);
+    const { body } = await share(target);
+    const copy = fake.uploads[0]!;
+    expect((await as(target, ALICE).del(`/api/looks/${body.id}`)).statusCode).toBe(204);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const again = await share(target);
+      expect(again.res.statusCode).toBe(503);
+      expect(again.body).toMatchObject({ error: "look_retry_later" });
+    }
+    expect(fake.uploads).toEqual([copy]);
+    expect(fake.table("shared_looks")).toHaveLength(1);
+    expect(fake.files.has(copy)).toBe(true);
+    expect((await visit(target, tokenOf(body.url))).statusCode).toBe(404);
+  });
+
+  it("permis : page arrêtée pendant que le stockage refusait, puis le stockage accepte au moment du repartage → l'ancienne copie et sa ligne partent, nouvelle page (201)", async () => {
+    let refusals = 1;
+    const fake = seeded({}, { failStorageRemove: () => refusals-- > 0 });
+    await withImages();
+    const target = await looksApp(fake.db);
+    const { body } = await share(target);
+    const copy = fake.uploads[0]!;
+    expect((await as(target, ALICE).del(`/api/looks/${body.id}`)).statusCode).toBe(204);
+    expect(fake.table("shared_looks")).toHaveLength(1);
+    // La purge du repartage est encore refusée, l'essai suivant (la place de la pièce) passe.
+    refusals = 1;
+    const again = await share(target);
+    expect(again.res.statusCode).toBe(201);
+    expect(again.body.created).toBe(true);
+    expect(again.body.url).not.toBe(body.url);
+    expect(fake.files.has(copy)).toBe(false);
+    expect(fake.table("shared_looks")).toHaveLength(1);
+    expect((await visit(target, tokenOf(body.url))).statusCode).toBe(404);
+    expect((await visit(target, tokenOf(again.body.url))).statusCode).toBe(200);
+  });
+
   it("modération, stockage qui refuse : la page s'arrête quand même", async () => {
     const fake = seeded({}, { failStorageRemove: () => true });
     await withImages();

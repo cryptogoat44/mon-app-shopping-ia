@@ -65,6 +65,7 @@ const READ_FAILED = { error: "look_unavailable", message: "La page n'a pas pu ê
 const UNAVAILABLE = { error: LOOK_PAGES_UNAVAILABLE_ERROR, message: "Les pages look ne sont pas disponibles." } as const;
 const LIMIT = { error: LOOK_LIMIT_ERROR, message: "Vous avez déjà 30 pages partagées : arrêtez-en une dans Réglages → Vos données." } as const;
 const INVALID_LINK = { error: "invalid_request", message: "Lien de page look invalide." } as const;
+const RETRY_LATER = { error: "look_retry_later", message: "Le lien n'a pas pu être créé pour l'instant. Réessayez plus tard." } as const;
 
 const createSchema = z.object({ matchId: z.guid() });
 const stopSchema = z.object({ link: z.string().min(1).max(2048) });
@@ -227,6 +228,11 @@ export default async function looksRoutes(fastify: FastifyInstance) {
         return reply.code(200).send({ id: existing.id, url: lookUrl(existing.token), expiresAt: existing.expires_at, created: false } satisfies CreateLookResponse);
       }
       if (active.length >= LOOK_ACTIVE_MAX) return reply.code(409).send(LIMIT);
+      // Page arrêtée ou expirée de la même pièce, gardée parce que le stockage
+      // refusait d'effacer sa copie (elle occupe la place membre + pièce) :
+      // elle part maintenant si le stockage l'accepte ; sinon, réessayer plus
+      // tard, sans faire de nouvelle copie.
+      if (!(await clearStaleLook(fastify, userId, own.id))) return reply.code(503).send(RETRY_LATER);
 
       // 4. La copie de l'image (480 px) ; échec : page sans image.
       const imagePath = await copyLookImage(fastify, request.log, { id: own.id, image_url: own.image_url });
@@ -245,6 +251,11 @@ export default async function looksRoutes(fastify: FastifyInstance) {
         // Deux demandes en même temps pour la même pièce : la première a gagné.
         const raced = insertError?.code === "23505" ? await findExistingLook(fastify, userId, own.id) : null;
         if (raced) return reply.code(200).send({ id: raced.id, url: lookUrl(raced.token), expiresAt: raced.expires_at, created: false } satisfies CreateLookResponse);
+        // L'ancienne page de cette pièce ne peut pas encore partir (stockage qui refuse) : réessayer plus tard, pas une erreur du serveur.
+        if (insertError?.code === "23505") {
+          request.log.warn("Page look : ancienne page de la pièce pas encore effacée");
+          return reply.code(503).send(RETRY_LATER);
+        }
         request.log.error({ code: insertError?.code ?? null }, "Page look : enregistrement impossible");
         return reply.code(500).send({ error: "internal_error", message: "Une erreur est survenue." });
       }
@@ -344,6 +355,27 @@ export default async function looksRoutes(fastify: FastifyInstance) {
 }
 
 const EXISTING_ROWS = z.array(z.object({ id: ID, token: z.string(), expires_at: z.string() }));
+
+const STALE_ROWS = z.array(z.object({ id: ID, image_path: z.string().nullable(), expires_at: z.string() }));
+
+/** Libère la place (membre, pièce) avant une nouvelle page : sa page arrêtée
+ * ou expirée pour cette pièce, restée parce que le stockage refusait
+ * d'effacer sa copie, part (la copie d'abord, puis la ligne). true : la place
+ * est libre. Stockage qui refuse encore : rien n'est effacé (la copie
+ * publique ne survit jamais à sa ligne), false. */
+async function clearStaleLook(fastify: FastifyInstance, userId: string, matchId: string): Promise<boolean> {
+  const rows = parseDbRows(
+    STALE_ROWS,
+    await fastify.supabaseAdmin.from("shared_looks").select("id, image_path, expires_at").eq("user_id", userId).eq("match_id", matchId).limit(1),
+    "Ancienne page look d'une pièce"
+  );
+  const stale = rows[0];
+  // Une page encore active n'est jamais effacée ici (créée entre-temps : l'enregistrement la retrouvera).
+  if (!stale || !(Date.parse(stale.expires_at) <= Date.now())) return true;
+  if (!(await removeLookImages(fastify, [stale.image_path]))) return false;
+  const { error } = await fastify.supabaseAdmin.from("shared_looks").delete().eq("id", stale.id).eq("user_id", userId).lt("expires_at", new Date(Date.now() + 1).toISOString());
+  return !error;
+}
 
 /** Sa page encore active pour cette pièce, s'il y en a une. */
 async function findExistingLook(fastify: FastifyInstance, userId: string, matchId: string) {
