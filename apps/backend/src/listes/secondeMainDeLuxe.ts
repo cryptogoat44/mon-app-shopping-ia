@@ -63,12 +63,12 @@ export interface SiteDeRevente {
 }
 
 export const SITES_DE_REVENTE: readonly SiteDeRevente[] = [
-  // À VÉRIFIER PAR LE FONDATEUR avant la mise en ligne : ouvrir une fois
-  // cette adresse dans votre navigateur, avec « Dior Saddle » à la place de
-  // {mots} (https://fr.vestiairecollective.com/search/?q=Dior%20Saddle), et
-  // vérifier que la recherche de Vestiaire Collective s'ouvre bien remplie.
-  // Adresse relevée chez un outil tiers (version « us. »), pas encore
-  // essayée dans un navigateur. Si elle ne marche pas, retirer la ligne.
+  // VÉRIFIÉE PAR LE FONDATEUR le 23 novembre 2026 : ouverte sur son
+  // téléphone avec « Dior Saddle » à la place de {mots}
+  // (https://fr.vestiairecollective.com/search/?q=Dior%20Saddle), la
+  // recherche de Vestiaire Collective s'ouvre bien remplie. À rouvrir une
+  // fois si Vestiaire Collective change son site ; si elle ne marche plus,
+  // retirer la ligne. Tout nouveau site : même essai avant de l'ajouter.
   { nom: "Vestiaire Collective", recherche: "https://fr.vestiairecollective.com/search/?q={mots}" },
 ];
 

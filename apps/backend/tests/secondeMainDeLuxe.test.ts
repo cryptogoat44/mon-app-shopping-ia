@@ -54,10 +54,13 @@ describe("les sites de revente : adresses de recherche", () => {
     expect(siteListFaults([{ nom: "A", recherche: "https://www.exemple.com:8443/?q={mots}" }])).not.toEqual([]);
   });
 
-  it("l'adresse de Vestiaire Collective, à vérifier par le fondateur, est dans le fichier avec la note qui le dit", () => {
+  it("l'adresse de Vestiaire Collective, vérifiée par le fondateur, est dans le fichier avec la note qui le dit", () => {
     expect(SITES_DE_REVENTE).toEqual([{ nom: "Vestiaire Collective", recherche: "https://fr.vestiairecollective.com/search/?q={mots}" }]);
     const file = readFileSync(join(__dirname, "../src/listes/secondeMainDeLuxe.ts"), "utf8");
-    expect(file).toContain("À VÉRIFIER PAR LE FONDATEUR avant la mise en ligne");
+    expect(file).toContain("VÉRIFIÉE PAR LE FONDATEUR le 23 novembre 2026");
+    // Refusé : la note d'avant l'essai, qui dirait encore que personne ne l'a ouverte.
+    expect(file).not.toContain("pas encore\n  // essayée dans un navigateur");
+    expect(file).not.toContain("À VÉRIFIER PAR LE FONDATEUR avant la mise en ligne");
     expect(file).toContain("https://fr.vestiairecollective.com/search/?q=Dior%20Saddle");
   });
 });
