@@ -313,7 +313,7 @@ describe("textes", () => {
     // Puis seulement les sections des fiches suivantes (épingles, migration 0049 ; « Pour vous », 0050).
     for (const catalog of [fr, en]) {
       const keys = Object.keys(catalog);
-      expect(keys.slice(keys.indexOf("savedPosts") + 1)).toEqual(["profilePins", "forYou", "activityPush"]);
+      expect(keys.slice(keys.indexOf("savedPosts") + 1)).toEqual(["profilePins", "forYou", "activityPush", "look"]);
     }
     const expected: [keyof typeof fr.savedPosts, string, string][] = [
       ["save", "Enregistrer", "Save"],

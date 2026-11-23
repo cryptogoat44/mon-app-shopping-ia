@@ -90,6 +90,10 @@ export interface SpotResult {
   /** Résultat relu sur le serveur seulement : propositions déjà gardées
    * (Envies) ou achetées (Vault) par la personne (lib/owned-marks.ts). */
   owned?: { kept: string[]; bought: string[] };
+  /** Date de la recherche (réponse du serveur) : la page look ne se crée que
+   * pour une recherche de moins de 30 jours (lib/look-page.ts). Absente :
+   * bouton « Partager le look » caché. */
+  createdAt?: string;
   /** Le verdict (lot « verdict ») : la phrase de tête, décidée par le serveur
    * d'après les titres des boutiques (lib/verdict.ts). Absent : rien
    * d'affiché (ancien serveur, base sans 0055, boutiques attendues ou en échec). */

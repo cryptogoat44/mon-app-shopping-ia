@@ -1,6 +1,7 @@
 import type { Profile } from "@monapp/shared-types";
 import { isProfileComplete } from "@monapp/shared-types";
 import { RECOVERY_PATH } from "./password-recovery";
+import { LOOK_PATH } from "./look-page";
 
 /** État du chargement du profil de la personne connectée.
  * - "idle" : pas de session, rien à charger ;
@@ -42,10 +43,13 @@ export function resolveRootRoute(input: {
  * passe, ouvert par le lien de l'e-mail. La session qu'il ouvre fait
  * recharger le profil ; retirer la navigation à ce moment ramenait à
  * l'accueil de l'app, sans le formulaire (constaté sur iPhone, lot 3bis).
- * Cet écran est hors des groupes protégés : il reste affiché. */
+ * Cet écran est hors des groupes protégés : il reste affiché. Même exception
+ * pour la page look (lot « page look ») : un visiteur connecté n'attend pas le
+ * chargement de son profil (donc le réveil du serveur) pour la voir ; elle
+ * est aussi hors des groupes protégés et ne lit rien du compte. */
 export function showsNavigator(route: RootRoute, pathname: string, fontsReady: boolean): boolean {
   if (!fontsReady) return false;
-  return route !== "splash" || pathname === RECOVERY_PATH;
+  return route !== "splash" || pathname === RECOVERY_PATH || pathname === LOOK_PATH;
 }
 
 /** Après ce délai d'attente au démarrage, l'écran dit honnêtement que le
