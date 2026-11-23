@@ -902,6 +902,19 @@ export const en: Catalog = {
     // even with the "Price and stock alerts" switch off.
     priceDrop: "Price drop",
     priceDropAt: (price: string) => `Price drop · ${price}`,
+    // "Visible alerts" lot: updates at the top of your Wishlist. Each line
+    // gives the price seen, its day and its shop; the gap is with your
+    // threshold (never "sale" or a crossed-out price).
+    newsTitle: (count: number) => (count === 1 ? "1 update" : `${count} updates`),
+    newsSource: `Spotted in searches made in ${BRAND}.`,
+    newsPriceDrop: (title: string, price: string, gap: string, day: string, shop: string | null) =>
+      shop ? `${title}: ${price}, ${gap} below your threshold · price seen on ${day} at ${shop}` : `${title}: ${price}, ${gap} below your threshold · price seen on ${day}`,
+    newsRestock: (title: string, day: string, shop: string | null) =>
+      shop ? `Available again: ${title} · seen on ${day} at ${shop}` : `Available again: ${title} · seen on ${day}`,
+    newsOpenHint: "Opens this wish",
+    newsHide: "Hide",
+    newsHideLabel: "Hide updates",
+    newsTabLabel: (tab: string) => `${tab}, with updates`,
   },
   // Collections lot: wish collections, private or shown to friends.
   collections: {

@@ -80,6 +80,7 @@ import type {
   StockReportRequest,
   UpdateWishAlertRequest,
   UpdateWishAlertsSettingsRequest,
+  WishAlertNews,
   WishAlertState,
   WishAlertsStatus,
   InstagramEmbedResponse,
@@ -115,6 +116,7 @@ import { searchLaunched } from "./search-limits";
 import { appBuildHeaders, isUpdateRequiredResponse, markUpdateRequired, parseStoreUrl, readAppVersionInfo } from "./app-update";
 import { readMessagesStatus, setMessagesStatus } from "./conversations";
 import { readCollectionsStatus, setCollectionsStatus } from "./collections";
+import { readNewsList } from "./wish-alert-news";
 import { ALERTS_UNAVAILABLE, isAlertsUnavailable, readWishAlertState, readWishAlertStates, readWishAlertsStatus, setWishAlertsStatus } from "./wish-alerts";
 import { createStatusLoader } from "./status-loading";
 import { POST_EXTRAS_UNAVAILABLE, readPostExtrasStatus, setPostExtrasStatus } from "./post-extras";
@@ -931,6 +933,19 @@ export async function fetchWishAlertStates(): Promise<Map<string, WishAlertState
     return readWishAlertStates(await response.json().catch(() => null));
   } catch (e) {
     return forgetAlertsOn(e);
+  }
+}
+
+/** Vos nouveautés (lot « alertes visibles ») : vos alertes des 30 derniers
+ * jours encore vraies. Aucune sans les alertes, avec un serveur plus ancien
+ * (route inconnue : 404) ou une réponse illisible ; hors ligne : l'erreur. */
+export async function fetchWishAlertNews(): Promise<WishAlertNews[]> {
+  try {
+    const response = await authorizedFetch("/api/alerts/news");
+    return readNewsList(await response.json().catch(() => null));
+  } catch (e) {
+    if (e instanceof ApiError) return [];
+    throw e;
   }
 }
 
