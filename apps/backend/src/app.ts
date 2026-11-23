@@ -36,6 +36,7 @@ import wishAlertsRoutes from "./routes/wishAlerts.js";
 import tryonRoutes from "./routes/tryon.js";
 import videoLinksRoutes from "./routes/videoLinks.js";
 import videoLinkAnalysisRoutes from "./routes/videoLinkAnalysis.js";
+import looksRoutes from "./routes/looks.js";
 import { flushAfterResponse } from "./lib/wishAlertsSend.js";
 import { MULTIPART_LIMITS, isTooManyPartsError } from "./lib/multipartErrors.js";
 import { ImageQueueFullError } from "./lib/imageSafety.js";
@@ -197,6 +198,10 @@ export async function buildApp(options: { logger?: LoggerOption } = {}): Promise
   // coupée par défaut : VIDEO_LINK_ANALYSIS_ENABLED et les réglages du
   // service vidéo séparé (routes/videoLinkAnalysis.ts, lib/videoWorker.ts).
   await fastify.register(videoLinkAnalysisRoutes);
+  // La page look (lot « page look », migration 0057) : création coupée par
+  // défaut (LOOK_PAGES_ENABLED) ; la seule route sans compte d'un visiteur
+  // est GET /api/looks/public/:token (routes/looks.ts).
+  await fastify.register(looksRoutes);
 
   // Exclue du filet anti-abus "default" : les sondes de disponibilité de
   // Render l'appellent très régulièrement, ça n'a rien à voir avec un abus.
