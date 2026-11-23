@@ -70,8 +70,14 @@ import { useHeroReveal } from "@/lib/use-hero-reveal";
 import { ForeignShopNote } from "@/components/foreign-shop-note";
 import { OfferMarkNote } from "@/components/offer-mark";
 import { KeptNotice } from "@/components/kept-notice";
+import { PurchaseQuestionSheet, type PurchaseQuestionActions } from "@/components/purchase-question-sheet";
 import { SendToFriendLink } from "@/components/send-to-friend-link";
 import { StockReportLink, StockReportSheet } from "@/components/stock-report-sheet";
+import { useAuth } from "@/lib/auth-context";
+import { keepAlertAllowed, keptNoticeAlert, turnOffKeepAlert, turnOnKeepAlert, type KeepAlertOrigin, type KeptWish } from "@/lib/keep-alert";
+import { addToVaultFromQuestion, noStepFor, type QuestionTarget } from "@/lib/purchase-question";
+import { ShopWatchContext, usePurchaseQuestion } from "@/lib/use-purchase-question";
+import { vaultChanged } from "@/lib/vault-changes";
 import { track } from "@/lib/analytics";
 import { openWishlistFromSpotter } from "@/lib/wishlist-link";
 import { isAffiliateLink } from "@/lib/affiliate-link";
@@ -114,6 +120,9 @@ export default function ResultScreen() {
   const [kept, setKept] = useState<Set<string>>(new Set());
   // Ajout aux Envies confirmé par le serveur : « Ajoutée à vos Envies · Voir mes Envies » (lot « premier essai »).
   const [keptSaved, setKeptSaved] = useState<Set<string>>(new Set());
+  // Parcours 3 : par proposition gardée pendant cette visite, son Envie et
+  // l'état de son alerte de baisse de prix (lib/keep-alert.ts).
+  const [keptWishes, setKeptWishes] = useState<ReadonlyMap<string, KeptWish>>(new Map());
   const [bought, setBought] = useState<Set<string>>(new Set());
   const [categoryOpen, setCategoryOpen] = useState(false);
   // Proposition visée par la feuille ouverte (« Je l'ai achetée », « … ») :
@@ -167,6 +176,17 @@ export default function ResultScreen() {
   // Lot 2 : « Plus disponible ? » (lib/wish-alerts.ts), seulement avec les alertes du serveur.
   const alerts = useWishAlertsStatus();
   const [stockReport, setStockReport] = useState<StockReportTarget | null>(null);
+  const { session } = useAuth();
+  // Parcours 3 : « Vous l'avez achetée ? » au retour de la boutique, pour la
+  // grande carte et tous les « Voir chez … » des cartes (lib/use-purchase-question.ts) ;
+  // jamais pour une pièce déjà au Vault, ni par-dessus une autre feuille.
+  const purchase = usePurchaseQuestion({
+    userId: session?.user.id ?? null,
+    owned: (target) => bought.has(target.matchId),
+    sheetOpen: categoryOpen || reportOpen || correctionsOpen || stockReport !== null,
+  });
+  // Pays de la recherche, pour l'alerte de baisse de prix de « Garder » (lib/keep-alert.ts).
+  const keepAlertCountry = searchCountryFrom(acceptLanguage());
 
   const result = state.kind === "ready" ? state.result : null;
   // Voie C (lot c) : l'indice désigne toutes les propositions de l'écran —
@@ -310,7 +330,12 @@ export default function ResultScreen() {
     setBlockedMerchantUrl(null);
     // Où la personne l'a trouvée : la place notée quand elle l'a touchée, sinon la grande carte d'office.
     const placement = choice.placement ?? placements.get(selectedIndex);
-    const outcome = await openMerchantLink({ matchId: piece.real ? piece.id : null, url, context: merchantContextFor(piece), placement, mark: merchantMarkFor(piece) });
+    // Parcours 3 : le retour de la boutique est guetté pour CETTE pièce (« Vous l'avez achetée ? »).
+    const outcome = await purchase.watch.open(
+      merchantContextFor(piece),
+      () => openMerchantLink({ matchId: piece.real ? piece.id : null, url, context: merchantContextFor(piece), placement, mark: merchantMarkFor(piece) }),
+      piece
+    );
     if (outcome.blocked) setBlockedMerchantUrl(outcome.url ?? url);
   }
 
@@ -318,18 +343,33 @@ export default function ResultScreen() {
     if (!piece || kept.has(piece.id)) return;
     holdPiece();
     setActionError(null);
-    setKept((prev) => new Set(prev).add(piece.id));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    if (!(await keepPiece(piece, "save"))) setActionError(t.result.keepError);
+  }
+
+  /** Garder `piece` : la grande carte (« Garder »), ou la pièce visée par
+   * « Vous l'avez achetée ? », sans toucher à la grande carte. Une fois
+   * l'Envie créée, son alerte de baisse de prix s'allume si la pièce le
+   * permet (Parcours 3, lib/keep-alert.ts : jamais l'interrupteur des
+   * Réglages) ; un refus de l'alerte ne défait jamais « Garder », et le
+   * message s'affiche ensuite une seule fois (VoiceOver). null : l'Envie n'a
+   * pas pu être créée. */
+  async function keepPiece(piece: Piece, origin: KeepAlertOrigin): Promise<KeptWish | null> {
+    setKept((prev) => new Set(prev).add(piece.id));
     try {
-      await addToWishlist(piece);
+      const wish = await addToWishlist(piece);
+      const alert = wish ? await turnOnKeepAlert(wish.id, piece, { country: keepAlertCountry, bought: bought.has(piece.id) }, origin).catch(() => null) : null;
+      const saved: KeptWish = { wishId: wish?.id ?? null, alert: alert ? "on" : "none" };
+      setKeptWishes((prev) => new Map(prev).set(piece.id, saved));
       setKeptSaved((prev) => new Set(prev).add(piece.id));
+      return saved;
     } catch {
       setKept((prev) => {
         const next = new Set(prev);
         next.delete(piece.id);
         return next;
       });
-      setActionError(t.result.keepError);
+      return null;
     }
   }
 
@@ -347,13 +387,64 @@ export default function ResultScreen() {
     if (!target || bought.has(target.id)) return;
     setActionError(null);
     try {
-      await addVaultItemFromMatch({ title: pieceTitle(target.name), imageUrl: target.imageUrl, category, productMatchId: target.id });
+      const added = await addVaultItemFromMatch({ title: pieceTitle(target.name), imageUrl: target.imageUrl, category, productMatchId: target.id });
       setBought((prev) => new Set(prev).add(target.id));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      showToast(t.result.boughtToast);
+      // Parcours 3 (correction au passage) : déjà là, le serveur le dit ; le Vault est prévenu, comme depuis la fiche d'une Envie.
+      showToast(added.alreadyInVault === true ? t.retrouverPieces.alreadyInVault : t.result.boughtToast);
+      vaultChanged();
     } catch {
       setActionError(t.result.boughtError);
     }
+  }
+
+  /** Parcours 3 : « Activer l'alerte » (question) pour une pièce gardée pendant cette visite. */
+  async function turnOnAlertFor(target: Piece): Promise<boolean> {
+    const wishId = keptWishes.get(target.id)?.wishId;
+    if (!wishId) return false;
+    const on = await turnOnKeepAlert(wishId, target, { country: keepAlertCountry, bought: bought.has(target.id) }, "question");
+    if (on) setKeptWishes((prev) => new Map(prev).set(target.id, { wishId, alert: "on" }));
+    return on !== null;
+  }
+
+  /** Parcours 3 : « Couper l'alerte », sous la grande carte ou dans la question. */
+  async function turnOffAlertFor(target: Piece): Promise<boolean> {
+    const wishId = keptWishes.get(target.id)?.wishId;
+    if (!wishId) return false;
+    const off = await turnOffKeepAlert(wishId);
+    if (off) setKeptWishes((prev) => new Map(prev).set(target.id, { wishId, alert: "off" }));
+    return off;
+  }
+
+  /** Parcours 3 : ce que « Vous l'avez achetée ? » fait pour la pièce visée —
+   * celle de la carte touchée, jamais la grande carte affichée au retour. */
+  function questionActionsFor(target: QuestionTarget): PurchaseQuestionActions | null {
+    const touched = target.piece;
+    if (!touched) return null;
+    const keptWish = keptWishes.get(touched.id);
+    return {
+      addToVault: async (category) => {
+        const outcome = await addToVaultFromQuestion({ matchId: touched.id, title: pieceTitle(touched.name), imageUrl: touched.imageUrl }, category, { add: addVaultItemFromMatch, changed: vaultChanged });
+        if (outcome.kind === "added") {
+          setBought((prev) => new Set(prev).add(touched.id));
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        }
+        return outcome;
+      },
+      noStep: () =>
+        noStepFor({
+          kept: kept.has(touched.id),
+          wishKnown: Boolean(keptWish?.wishId),
+          alertPossible: keepAlertAllowed(alerts, touched, { country: keepAlertCountry, bought: bought.has(touched.id) }),
+          alertOn: keptWish?.alert === "on",
+        }),
+      keep: async () => {
+        const saved = await keepPiece(touched, "question");
+        return saved ? saved.alert === "on" : null;
+      },
+      turnOnAlert: () => turnOnAlertFor(touched),
+      turnOffAlert: () => turnOffAlertFor(touched),
+    };
   }
 
   /** « … » et la ligne « Signalé : … » : la feuille vise la grande carte de ce moment. */
@@ -672,7 +763,7 @@ export default function ResultScreen() {
     setTimeout(runAfterCorrectionsSheet, 80);
   }
 
-  return (
+  const screen = (
     <SafeAreaView style={styles.screen}>
       {nav}
       {/* Voie B : le champ « Que cherchez-vous ? » est en bas de la liste. */}
@@ -761,7 +852,10 @@ export default function ResultScreen() {
             />
             {canSendToFriend(piece, messages) ? <SendToFriendLink style={styles.sendToFriend} pieceName={piece.name} onPress={handleSendToFriend} /> : null}
             {canReportResult(alerts, piece) ? <StockReportLink style={styles.sendToFriend} pieceName={piece.name} onPress={handleStockReport} /> : null}
-            {keptSaved.has(piece.id) ? <KeptNotice onOpen={() => openWishlistFromSpotter(router)} /> : null}
+            {/* Sans clé (VoiceOver ne relit pas le message à chaque pièce) : « Couper l'alerte » en cours ou en échec reste à sa pièce par `pieceId`. */}
+            {keptSaved.has(piece.id) ? (
+              <KeptNotice pieceId={piece.id} onOpen={() => openWishlistFromSpotter(router)} alert={keptNoticeAlert(keptWishes.get(piece.id), bought.has(piece.id))} onTurnOff={() => turnOffAlertFor(piece)} />
+            ) : null}
             {piece.real && reported ? <ReportedLine reason={reported} onPress={openReport} /> : null}
             {actionError ? <ErrorMessage style={styles.actionError}>{actionError}</ErrorMessage> : null}
           </>
@@ -883,8 +977,15 @@ export default function ResultScreen() {
           ))}
         </View>
       </Modal>
+
+      {/* Parcours 3 : « Vous l'avez achetée ? » au retour de la boutique. */}
+      <PurchaseQuestionSheet question={purchase.question} actions={purchase.question ? questionActionsFor(purchase.question.target) : null} onClose={purchase.close} />
     </SafeAreaView>
   );
+  // Parcours 3 : les « Voir chez … » des cartes (sections, complément, « Sans
+  // prix », liste triée) guettent le retour de la boutique par ce contexte
+  // (components/proposal-card.tsx, ShopLink).
+  return <ShopWatchContext.Provider value={purchase.watch}>{screen}</ShopWatchContext.Provider>;
 }
 
 /** Voie B (lot c) : « Que cherchez-vous ? » est en bas de la liste ; au

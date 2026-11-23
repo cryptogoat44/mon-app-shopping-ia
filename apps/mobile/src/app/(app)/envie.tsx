@@ -5,17 +5,22 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { PRIVACY_LEVELS, type PrivacyLevel, type WishAlertState, type WishlistItemDetail } from "@monapp/shared-types";
-import { ApiError, deleteWishlistItem, fetchWishAlert, fetchWishAlertsStatus, fetchWishlistItem, republishWish } from "@/lib/api";
+import { ApiError, addVaultItemFromMatch, deleteWishlistItem, fetchWishAlert, fetchWishAlertsStatus, fetchWishlistItem, republishWish } from "@/lib/api";
 import { useToast } from "@/lib/toast-context";
 import { useAuth } from "@/lib/auth-context";
 import { useMessagesStatus } from "@/lib/use-messages-status";
 import { useCollectionsStatus } from "@/lib/use-collections-status";
 import { useWishAlertsStatus } from "@/lib/use-wish-alerts-status";
-import { alertDetails, bellVisible, canReportWish, type StockReportTarget } from "@/lib/wish-alerts";
+import { alertDetails, bellOn, bellVisible, canReportWish, priceDropNow, type StockReportTarget } from "@/lib/wish-alerts";
+import { searchCountryFrom } from "@/lib/foreign-shop";
+import { keepAlertAllowed, turnOffKeepAlert, turnOnKeepAlert } from "@/lib/keep-alert";
+import { addToVaultFromQuestion, noStepFor, targetOfWish } from "@/lib/purchase-question";
+import { ShopWatchContext, usePurchaseQuestion } from "@/lib/use-purchase-question";
+import { vaultChanged } from "@/lib/vault-changes";
 import { FROM_ALERT } from "@/lib/push-state";
 import { shareWishOutside } from "@/lib/share-wish";
 import { color, font, radius, serifFont, serifLineHeight, space } from "@/theme/tokens";
-import { getActiveLocale, t } from "@/i18n";
+import { acceptLanguage, getActiveLocale, t } from "@/i18n";
 import { PrivateAccountNote } from "@/components/private-account-note";
 import { ProductFrame } from "@/components/product-frame";
 import { MerchantLinkButton } from "@/components/merchant-link-button";
@@ -25,6 +30,7 @@ import { PieceExtraActions } from "@/components/piece-extra-actions";
 import { AddToCollectionSheet } from "@/components/add-to-collection-sheet";
 import { WishAlertButton, WishAlertSheet } from "@/components/wish-alert-sheet";
 import { StockReportLink, StockReportSheet } from "@/components/stock-report-sheet";
+import { PurchaseQuestionSheet, type PurchaseQuestionActions } from "@/components/purchase-question-sheet";
 import { isAffiliateLink } from "@/lib/affiliate-link";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -54,7 +60,7 @@ export default function WishlistItemScreen() {
   const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
   const router = useRouter();
   const { showToast } = useToast();
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const [item, setItem] = useState<WishlistItemDetail | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "not_found" | "error">("loading");
   const [confirming, setConfirming] = useState(false);
@@ -72,6 +78,18 @@ export default function WishlistItemScreen() {
   const [alertState, setAlertState] = useState<WishAlertState | null>(null);
   const [alertSheet, setAlertSheet] = useState(false);
   const [stockReport, setStockReport] = useState<StockReportTarget | null>(null);
+  // Parcours 3 : « Vous l'avez achetée ? » au retour de la boutique, depuis le
+  // bouton principal d'une Envie qui a sa proposition d'origine
+  // (lib/use-purchase-question.ts) ; jamais pour une pièce déjà au Vault
+  // (`inVault`, ou cloche « achetée » : la même pièce achetée depuis un autre
+  // résultat), ni par-dessus une autre feuille.
+  const country = searchCountryFrom(acceptLanguage());
+  const purchase = usePurchaseQuestion({
+    userId: session?.user.id ?? null,
+    screenTarget: item ? targetOfWish(item) : null,
+    owned: () => item?.inVault === true || alertState?.bought === true,
+    sheetOpen: alertSheet || collectionSheet || stockReport !== null,
+  });
 
   const loadAlert = useCallback(async () => {
     if (!id) return;
@@ -144,7 +162,37 @@ export default function WishlistItemScreen() {
     }
   }
 
-  return (
+  /** Parcours 3 : ce que « Vous l'avez achetée ? » fait pour cette Envie
+   * (gardée, et son Envie connue : « Non » propose seulement de suivre son prix). */
+  function questionActions(wish: WishlistItemDetail, matchId: string): PurchaseQuestionActions {
+    const piece = { real: true, alertTrackable: alertState?.trackable === true, priceFrom: wish.priceMin, currency: wish.currency };
+    const context = { country, bought: wish.inVault === true || alertState?.bought === true };
+    return {
+      addToVault: async (category) => {
+        const outcome = await addToVaultFromQuestion({ matchId, title: wish.title, imageUrl: wish.imageUrl }, category, { add: addVaultItemFromMatch, changed: vaultChanged });
+        if (outcome.kind === "added") {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+          setItem((current) => (current ? { ...current, inVault: true } : current));
+        }
+        return outcome;
+      },
+      noStep: () => noStepFor({ kept: true, wishKnown: true, alertPossible: keepAlertAllowed(alerts, piece, context), alertOn: bellOn(alertState) }),
+      // Déjà gardée : « Garder » n'est jamais proposé ici.
+      keep: async () => null,
+      turnOnAlert: async () => {
+        const saved = await turnOnKeepAlert(wish.id, piece, context, "question");
+        if (saved) setAlertState(saved);
+        return saved !== null;
+      },
+      turnOffAlert: async () => {
+        const off = await turnOffKeepAlert(wish.id);
+        if (off) void loadAlert();
+        return off;
+      },
+    };
+  }
+
+  const screen = (
     <SafeAreaView style={styles.screen}>
       <View style={styles.nav}>
         <Pressable onPress={goBack} hitSlop={12} style={styles.navBack} accessibilityRole="button" accessibilityLabel={t.wishlistItem.backLabel}>
@@ -175,8 +223,15 @@ export default function WishlistItemScreen() {
           {(() => {
             const details = alertDetails(alertState, getActiveLocale());
             if (!details.lastPrice && !details.stock) return null;
+            // Parcours 3 : « Baisse de prix » au-dessus du dernier prix vu, même interrupteur coupé (lib/wish-alerts.ts).
+            const drop = priceDropNow(alerts, alertState, { priceFrom: item.priceMin, currency: item.currency }, { country, inVault: item.inVault === true });
             return (
               <View style={styles.alertDetails}>
+                {drop ? (
+                  <Text style={styles.priceDrop} testID="baisse-de-prix">
+                    {t.wishAlerts.priceDrop}
+                  </Text>
+                ) : null}
                 {details.lastPrice ? (
                   <Text style={styles.alertDetail} testID="dernier-prix-vu">
                     {details.lastPrice}
@@ -338,8 +393,16 @@ export default function WishlistItemScreen() {
           ) : null}
         </ScrollView>
       )}
+      {/* Parcours 3 : « Vous l'avez achetée ? » au retour de la boutique. */}
+      <PurchaseQuestionSheet
+        question={purchase.question}
+        actions={purchase.question && item?.productMatchId ? questionActions(item, item.productMatchId) : null}
+        onClose={purchase.close}
+      />
     </SafeAreaView>
   );
+  // Parcours 3 : le bouton principal (« Voir chez … », components/merchant-link-button.tsx) guette le retour par ce contexte.
+  return <ShopWatchContext.Provider value={purchase.watch}>{screen}</ShopWatchContext.Provider>;
 }
 
 const styles = themedStyles(() => ({
@@ -357,6 +420,8 @@ const styles = themedStyles(() => ({
   alertDetails: { marginTop: -space.md, marginBottom: space.lg, gap: 2 },
   alertDetail: { fontSize: font.secondary, color: color.encre },
   alertSoldOut: { fontWeight: "600" },
+  // Parcours 3 : « Baisse de prix », en vert (le seul accent).
+  priceDrop: { fontSize: font.secondary, color: color.vert, fontWeight: "600" },
   merchant: { marginBottom: space.lg },
   extraActions: { marginTop: space.sm },
   alerts: { marginBottom: space.lg },

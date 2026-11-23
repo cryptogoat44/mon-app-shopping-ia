@@ -5,6 +5,7 @@ import type { MerchantLinkContext } from "@monapp/shared-types";
 import { color, font, radius, space } from "@/theme/tokens";
 import { t } from "@/i18n";
 import { openMerchantLink } from "@/lib/merchant-links";
+import { useShopWatch } from "@/lib/use-purchase-question";
 import { AffiliateMention } from "@/components/affiliate-mention";
 import { themedStyles } from "@/theme/themed-styles";
 
@@ -39,11 +40,16 @@ export function MerchantLinkButton({
   explain?: boolean;
 }) {
   const [blockedUrl, setBlockedUrl] = useState<string | null>(null);
+  // Parcours 3 : la fiche d'une Envie guette le retour de la boutique
+  // (« Vous l'avez achetée ? », lib/use-purchase-question.ts) ; ailleurs
+  // (grille des Envies, Vault, publications…), aucun écran ne guette : rien
+  // ne change.
+  const shop = useShopWatch();
   const label = t.merchant.viewAt(merchantName);
 
   async function handlePress() {
     setBlockedUrl(null);
-    const outcome = await openMerchantLink({ matchId, url, context });
+    const outcome = await shop.open(context, () => openMerchantLink({ matchId, url, context }));
     if (outcome.blocked) setBlockedUrl(outcome.url);
   }
 

@@ -87,13 +87,17 @@ export async function getMyProfile(): Promise<Profile> {
   notImplemented();
 }
 
-export async function addToWishlist(piece: Piece): Promise<void> {
+// Parcours 3 : l'Envie créée est rendue (son identifiant sert à allumer son
+// alerte de baisse de prix, lib/keep-alert.ts) ; null pour une pièce de
+// démonstration, qui n'en a pas.
+export async function addToWishlist(piece: Piece): Promise<RemoteWishlistItem | null> {
   if (!piece.real) {
     // Pièce de démonstration (catalogue mock) : pas de vraie pièce à
     // référencer, l'ajout reste local/factice.
-    return mock.addToWishlist(piece);
+    await mock.addToWishlist(piece);
+    return null;
   }
-  await addWishlistItem({
+  return await addWishlistItem({
     title: pieceTitle(piece.name),
     imageUrl: piece.imageUrl,
     reference: piece.reference,

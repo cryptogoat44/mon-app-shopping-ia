@@ -24,6 +24,7 @@ import { RESULT_SORTS } from "./result-sort";
 import { WISHLIST_SORTS } from "./wishlist-view";
 import { LINK_AI_FAILURES } from "./video-link-failures";
 import { JOURNEY_ENTRIES } from "./journey-entries";
+import { PURCHASE_CONTEXTS } from "./purchase-question";
 
 type Rule = { kind: "enum"; values: readonly string[] } | { kind: "count" } | { kind: "bool" } | { kind: "duration" };
 
@@ -216,6 +217,28 @@ export const ANALYTICS_EVENTS = {
   // montré, passé (« Passer ») ou terminé (dernière étape) ; step : l'étape
   // (1 à 3) où la personne passe ou termine (absente pour « shown »).
   first_search_guide: { action: oneOf(["shown", "skipped", "finished"]), step: count },
+  // Parcours 3 (« Vous l'avez achetée ? », lib/purchase-question.ts) : un
+  // retour de la boutique repéré, depuis l'écran Résultat (result, similar)
+  // ou la fiche d'une Envie (wishlist, price_alert), question posée ou non,
+  // sous 30 s compris ; away_ms : le temps passé dans la boutique, du clic au
+  // retour (règle « durée »). Jamais la pièce, la boutique, le prix ni un
+  // identifiant.
+  shop_returned: { context: oneOf(PURCHASE_CONTEXTS), away_ms: duration },
+  // La question montrée (shown, une fois), puis une seule réponse : « Oui,
+  // je l'ai achetée » (yes), « Non, pas encore » (no), ou la feuille fermée
+  // (later : le fond, « Fermer », le geste de retour).
+  purchase_question: { action: oneOf(["shown", "yes", "no", "later"]), context: oneOf(PURCHASE_CONTEXTS) },
+  // L'alerte de baisse de prix allumée par « Garder » (save) ou depuis la
+  // question (question : « Garder » ou « Activer l'alerte »), ou coupée par
+  // « Couper l'alerte » (undo). Rien de nouveau depuis la cloche
+  // (components/wish-alert-sheet.tsx ne change pas). Nommé d'après le suivi
+  // du prix (« watch ») : les tests du serveur (alertesPrixChemins) refusent
+  // dans ce catalogue tout nom formé sur « alert » suivi d'un tiret bas.
+  price_watch_changed: { origin: oneOf(["save", "undo", "question"]) },
+  // La grille des Envies montre au moins une « Baisse de prix » : une fois au
+  // plus tant que l'app reste ouverte (mémoire de l'app, rien sur
+  // l'appareil) ; count : combien.
+  price_drop_shown: { count },
 } as const satisfies Record<string, Record<string, Rule>>;
 
 export type AnalyticsEvent = keyof typeof ANALYTICS_EVENTS;

@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { hasAnalyticsConsent } from "@/lib/policy-notice";
 import { trackAppOpened } from "@/lib/app-opening";
 import { forgetServerFirstResponse } from "@/lib/server-first-response";
+import { forgetPriceDropsShown, sendPendingPriceDrops } from "@/lib/wish-alerts";
 import { useForegroundReturn } from "@/lib/use-foreground-return";
 
 // Compte suivi par les statistiques d'usage et par Sentry : selon le
@@ -31,6 +32,8 @@ export function AnalyticsSession() {
       .then((statuses) => {
         if (cancelled) return;
         setAnalyticsUser(userId, hasAnalyticsConsent(statuses));
+        // « price_drop_shown » vu avant que l'accord soit lu : il part maintenant (rien sans accord).
+        sendPendingPriceDrops();
         // Lancement : une fois, dès que l'accord est lu (rien sans accord).
         trackAppOpened("launch");
       })
@@ -43,6 +46,8 @@ export function AnalyticsSession() {
       // Déconnexion ou autre compte : la première réponse du serveur qui
       // attend en mémoire ne part jamais sous le compte suivant.
       forgetServerFirstResponse();
+      // « price_drop_shown » : une fois par ouverture et par compte.
+      forgetPriceDropsShown();
       setErrorTrackingUser(null);
     };
   }, [userId]);

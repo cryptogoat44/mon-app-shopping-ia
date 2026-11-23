@@ -22,6 +22,7 @@
 //   « Alertes prix et stock » (coupé par défaut) ;
 // - sur le site : les cloches se règlent, aucune notification n'y arrive.
 import {
+  alertCurrency,
   MAX_TARGET_PRICE,
   SOLD_OUT_ALERTS_VISIBLE,
   STOCK_STATES,
@@ -35,6 +36,7 @@ import {
 } from "@monapp/shared-types";
 import type { Piece } from "../api/types";
 import { t } from "../i18n";
+import { isAnalyticsActive, track } from "./analytics";
 import { ApiError } from "./api-error";
 import { formatPrice } from "./format";
 import type { Locale } from "./preferences";
@@ -346,4 +348,97 @@ export function onWishAlertsStatus(listener: (status: WishAlertsStatus) => void)
  * interrupteur allumé (le choix de l'appareil est vu dans push-state.ts). */
 export function alertsKeepDevice(status: WishAlertsStatus): boolean {
   return status.available && status.enabled;
+}
+
+// ---- « Baisse de prix » dans l'app (Parcours 3) ----
+// Décision A1 du fondateur : tant que les notifications ne partent pas, la
+// baisse se voit dans l'app (grille des Envies, fiche d'une Envie), même
+// interrupteur « Alertes prix et stock » coupé (il ne commande que l'envoi
+// des alertes). Aucune requête de plus : la cloche est déjà lue
+// (GET /api/alerts/wishes, GET /api/wishlist/:id/alerts).
+
+/** En centimes : des prix comparés sans erreur d'arrondi. */
+function cents(value: number): number {
+  return Math.round(value * 100);
+}
+
+/** « Baisse de prix » : alertes disponibles ; cloche « Baisse de prix »
+ * allumée ; pièce ni achetée (`bought`, ou `inVault` sur la fiche) ni
+ * épuisée ; dernier prix vu et seuil connus, dans la même devise ; dernier
+ * prix sous le seuil ; et, si le prix au moment de garder (`priceMin` de
+ * l'Envie) est connu dans cette devise, sous ce prix aussi : un seuil remonté
+ * au-dessus du prix ne montre pas de fausse baisse. La devise de l'Envie se
+ * lit avec alertCurrency : un symbole (« € »), ou « EUR » mis d'office par le
+ * serveur. `country` : pays de la recherche (un « $ » seul n'est le dollar
+ * américain que pour les États-Unis). */
+export function priceDropNow(
+  status: Pick<WishAlertsStatus, "available">,
+  state: Pick<WishAlertState, "priceDrop" | "bought" | "stock" | "targetPrice" | "targetCurrency" | "lastPrice" | "lastCurrency"> | null | undefined,
+  wish: { priceFrom: number | null; currency: string | null },
+  options: { country: string; inVault?: boolean }
+): boolean {
+  if (!status.available || !state || state.priceDrop !== true || state.bought || options.inVault === true || state.stock === "sold_out") return false;
+  const { lastPrice, lastCurrency, targetPrice, targetCurrency } = state;
+  if (lastPrice === null || targetPrice === null || !lastCurrency || lastCurrency !== targetCurrency) return false;
+  if (cents(lastPrice) >= cents(targetPrice)) return false;
+  const keptCurrency = alertCurrency(wish.currency, options.country);
+  return wish.priceFrom === null || keptCurrency !== lastCurrency || cents(lastPrice) < cents(wish.priceFrom);
+}
+
+/** Les Envies de la liste qui montrent « Baisse de prix », avec le dernier
+ * prix vu écrit dans la langue de l'app (« 89 € »). */
+export function priceDropPrices(
+  items: readonly { id: string; priceFrom: number | null; currency: string | null }[],
+  states: ReadonlyMap<string, WishAlertState>,
+  status: Pick<WishAlertsStatus, "available">,
+  country: string,
+  locale: Locale
+): Map<string, string> {
+  const drops = new Map<string, string>();
+  for (const item of items) {
+    const state = states.get(item.id);
+    if (!state || state.lastPrice === null || !state.lastCurrency || !priceDropNow(status, state, item, { country })) continue;
+    drops.set(item.id, formatPrice(state.lastPrice, state.lastCurrency, locale));
+  }
+  return drops;
+}
+
+let priceDropsTracked = false;
+/** Le nombre de « Baisse de prix » vu pendant que la collecte était coupée
+ * (accord pas encore lu), à envoyer quand elle s'active ; 0 : rien. */
+let priceDropsPending = 0;
+
+/** « price_drop_shown » : la grille des Envies montre au moins une « Baisse
+ * de prix ». Une fois au plus tant que l'app reste ouverte et que le même
+ * compte est connecté (mémoire de l'app, rien sur l'appareil) ; `count` :
+ * combien. Compté comme envoyé seulement si la collecte est active (accord
+ * lu) : sans accord, rien ne part et le nombre est gardé en mémoire
+ * (sendPendingPriceDrops l'envoie dès que la collecte s'active). */
+export function trackPriceDropsShown(count: number): void {
+  if (count > 0 && !priceDropsTracked && !isAnalyticsActive()) priceDropsPending = count;
+  if (count <= 0 || priceDropsTracked || !isAnalyticsActive()) return;
+  priceDropsTracked = true;
+  priceDropsPending = 0;
+  track("price_drop_shown", { count });
+}
+
+/** Accord lu (components/analytics-session.tsx, juste après avoir allumé la
+ * collecte) : la grille montrait déjà des « Baisse de prix » avant, et ne
+ * rappellera pas trackPriceDropsShown tant que leur nombre ne change pas.
+ * Rien sans collecte active, rien si l'événement est déjà parti. */
+export function sendPendingPriceDrops(): void {
+  if (priceDropsPending > 0) trackPriceDropsShown(priceDropsPending);
+}
+
+/** Déconnexion ou autre compte (components/analytics-session.tsx) : le
+ * compte suivant peut envoyer le sien, et le nombre en attente du compte
+ * précédent n'est jamais envoyé sous un autre compte. */
+export function forgetPriceDropsShown(): void {
+  priceDropsTracked = false;
+  priceDropsPending = 0;
+}
+
+/** Tests seulement : comme une app rouverte. */
+export function resetPriceDropsShownForTests(): void {
+  forgetPriceDropsShown();
 }
