@@ -4,7 +4,7 @@
 # « Entourez la pièce » (option B du fondateur) : « Utiliser toute l'image »
 # (Maestro ne trace que des lignes droites, lot entourer la pièce), mots,
 # « Lancer ».
-appId: com.spottoapp.ios
+appId: com.spottoshop.app
 ---
 - tapOn: "Choisir une autre vidéo"
 - extendedWaitUntil:

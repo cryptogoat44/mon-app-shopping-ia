@@ -3,7 +3,7 @@
 # iOS a déjà donné l'accès à l'app), « Ajouter une vidéo » reste là. Réglages :
 # option désactivée, accès restant signalé ; réactivée d'un geste, la
 # dernière vidéo revient sur Spotter.
-appId: com.spottoapp.ios
+appId: com.spottoshop.app
 ---
 - extendedWaitUntil:
     visible: "Proposer automatiquement ma dernière vidéo \\?"
