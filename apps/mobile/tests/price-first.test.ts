@@ -500,12 +500,12 @@ describe("relecture F3 et ORD-7 : le message « aucun prix » suit la grande car
 describe("relecture F4 : le texte du tri par les mots dit l'ordre réel", () => {
   it("grande carte d'office = la 1re de l'écran : « Triées selon vos mots » ; une autre : prix d'abord, puis vos mots", () => {
     expect(wordsSortNote({ sortedByWords: true }, 0)).toBe("words");
-    expect(wordsSortNote({ sortedByWords: true }, 2)).toBe("priceThenWords");
+    expect(wordsSortNote({ ...lists("--€"), sortedByWords: true }, 2)).toBe("priceThenWords");
     expect(wordsSortNote({ sortedByWords: false }, 2)).toBeNull();
     expect(wordsSortNote({}, 0)).toBeNull();
     // Vestes sans prix remontées par « veste », blouson à 79 € : le blouson en grand.
     const vestes: Lists = { pieces: [piece("veste-1", null), piece("veste-2", null), piece("blouson", 79)] };
-    expect(wordsSortNote({ sortedByWords: true }, bestProposalIndex(vestes, "fr"))).toBe("priceThenWords");
+    expect(wordsSortNote({ ...vestes, sortedByWords: true }, bestProposalIndex(vestes, "fr"))).toBe("priceThenWords");
   });
 });
 

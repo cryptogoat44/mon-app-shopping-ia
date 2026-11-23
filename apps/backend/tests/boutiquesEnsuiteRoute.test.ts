@@ -54,7 +54,8 @@ import { askShoppingQuery } from "../src/services/shoppingQueryAi.js";
 import { reserveSearch, releaseReservation, searchCapacityBeforeComplementAi } from "../src/lib/searchCapacity.js";
 import { aiQuotaFor } from "../src/lib/aiQuota.js";
 import { assertNoUserImage } from "../src/lib/aiSwitches.js";
-import { resetVoieCSchemaProbe } from "../src/lib/voieC.js";
+import { LENS_CACHE_PAYLOAD, resetVoieCSchemaProbe, type LensAnswer } from "../src/lib/voieC.js";
+import { readCache } from "../src/lib/searchCache.js";
 import { COMPLEMENT_PENDING_MAX_MS, COMPLEMENT_RUNNING_MAX_MS, resetDeferredSchemaProbe } from "../src/lib/deferredComplement.js";
 import { brandShopColumnReady, resetBrandShopColumnProbe } from "../src/lib/brandShopColumn.js";
 import { resetStockColumnProbe, stockColumnReady } from "../src/lib/stockColumn.js";
@@ -1048,6 +1049,34 @@ describe("stock affiché (0056) : rangé avec la proposition Lens, renvoyé à l
     expect(lensRows(id)).toHaveLength(3);
     expect(lensStock(res.json())).toEqual(["inconnu", "inconnu", "inconnu"]);
     expect(logs.filter((line) => line.includes("Stock non noté : insertion refusée avec le stock, refaite sans lui"))).toHaveLength(1);
+  });
+
+  // Le cache de 24 h n'a pas de compte : sa réponse a pu être donnée à un autre membre, jusqu'à 24 h plus tôt.
+  it("refusé : réponse de Lens rejouée par le cache de 24 h — aucun stock écrit ni renvoyé (« au moment de la recherche » serait faux)", async () => {
+    const answer: LensAnswer = { matches: [{ ...LENS[0]!, inStock: true }, { ...LENS[1]!, inStock: false }, structuredClone(LENS[2]!)], measure: LENS_MEASURE, addedRanks: [] };
+    vi.mocked(readCache).mockImplementation((async (_db: unknown, _key: string, schema: unknown) => (schema === LENS_CACHE_PAYLOAD ? answer : null)) as typeof readCache);
+    try {
+      const target = await buildApp();
+      const id = preparedSearch();
+      const res = await launch(target, id);
+      expect(res.statusCode).toBe(200);
+      expect(lensMock).not.toHaveBeenCalled();
+      expect(lensRows(id)).toHaveLength(3);
+      expect(matchRows(id).some((row) => "in_stock" in row)).toBe(false);
+      expect(lensStock(res.json())).toEqual(["inconnu", "inconnu", "inconnu"]);
+      const reread = (await target.inject({ method: "GET", url: `/api/searches/${id}` })).json();
+      expect(lensStock(reread)).toEqual(["inconnu", "inconnu", "inconnu"]);
+    } finally {
+      vi.mocked(readCache).mockImplementation(async () => null);
+    }
+  });
+
+  it("permis : sans cache, la même réponse vient d'un vrai appel à Lens — son stock est écrit", async () => {
+    const target = await buildApp();
+    const id = preparedSearch();
+    expect((await launch(target, id)).statusCode).toBe(200);
+    expect(lensMock).toHaveBeenCalledTimes(1);
+    expect(lensRows(id).map((row) => ("in_stock" in row ? row.in_stock : "absent"))).toEqual([true, false, "absent"]);
   });
 
   it("refusé : Google ne dit rien du stock — ni sonde ni colonne nommée, une seule insertion, aucune reprise", async () => {

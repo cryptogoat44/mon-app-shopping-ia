@@ -169,14 +169,16 @@ export interface PriceSummary {
 
 /** Ligne « N offres · à partir de X € » : offres avec un prix dans la devise
  * dominante, et la moins chère. null sans aucun prix. Comptée sur toutes les
- * propositions, quel que soit le mode : elle change quand les boutiques
+ * propositions, quel que soit le tri : elle change quand les boutiques
  * arrivent, jamais la grande carte. Boutiques douteuses (lot « recherche
  * confiance ») : une offre « Prix inhabituellement bas » n'y compte pas —
  * jamais « à partir de » ni « Le moins cher » sur elle ; elle reste dans la
- * liste triée, à sa place, avec sa mention. */
-export function priceSummary(result: ResultLists, country?: string): PriceSummary | null {
+ * liste triée, à sa place, avec sa mention. « En stock seulement »
+ * (`inStockOnly`) : les offres épuisées, cachées, n'y comptent pas — jamais
+ * un « à partir de » ni un « Le moins cher » sur une carte absente de l'écran. */
+export function priceSummary(result: ResultLists, country?: string, options: { inStockOnly?: boolean } = {}): PriceSummary | null {
   const group = currencyGroups(
-    indexed(result).filter(({ piece }) => piece.offerMark !== "unusual_price"),
+    indexed(result).filter(({ piece }) => piece.offerMark !== "unusual_price" && !(options.inStockOnly && isSoldOut(piece))),
     country
   )[0];
   if (!group) return null;
@@ -187,8 +189,11 @@ export function priceSummary(result: ResultLists, country?: string): PriceSummar
 /** Indice de la proposition marquée « Le moins cher » : la moins chère de la
  * devise dominante, s'il y a au moins deux offres à comparer dans cette
  * devise ; null sinon. Elle peut être la grande carte en mode « Pertinence ». */
-export function cheapestIndex(result: ResultLists, country?: string): number | null {
-  const summary = priceSummary(result, country);
+export function cheapestIndex(result: ResultLists, country?: string, options: { inStockOnly?: boolean } = {}): number | null {
+  return cheapestOf(priceSummary(result, country, options));
+}
+
+function cheapestOf(summary: PriceSummary | null): number | null {
   return summary && summary.count >= 2 ? summary.cheapest.index : null;
 }
 
@@ -270,12 +275,13 @@ export function resultLayout(result: ResultLists, view: ResultView, options: { s
   const priceOptions = { country, withPriceOnly: view.withPriceOnly, ...(view.inStockOnly ? { inStockOnly: true } : {}) };
   // « En stock seulement » vide l'écran : un seul message, celui des filtres (jamais les deux).
   const emptyWithStockFilter = view.inStockOnly === true && nothingWithFilters(result, view);
+  const summary = priceSummary(result, country, { inStockOnly: view.inStockOnly === true });
   return {
     bigCard: shown ? selectedIndex : null,
     sections: view.inStockOnly ? sectionsInStockOnly(priced) : priced,
     priceList: isPriceSort(view.sort) ? priceListShown(priceSortedList(result, view.sort, priceOptions), shown ? selectedIndex : null) : null,
-    summary: priceSummary(result, country),
-    cheapest: cheapestIndex(result, country),
+    summary,
+    cheapest: cheapestOf(summary),
     emptyWithFilter: !emptyWithStockFilter && nothingWithPrice(result, view),
     emptyWithStockFilter,
   };

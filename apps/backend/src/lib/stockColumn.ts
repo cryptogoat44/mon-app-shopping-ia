@@ -1,7 +1,9 @@
 // Stock affiché (lot « stock visible », migration 0056) : quand Google Lens
 // dit qu'une offre est en stock ou épuisée (services/visualSearch.ts,
 // inStock), ce oui ou ce non est rangé sur sa ligne (product_matches.in_stock)
-// et renvoyé à l'app avec la proposition. Il n'est écrit qu'une fois la
+// et renvoyé à l'app avec la proposition, seulement d'un vrai appel à Google
+// pour cette recherche (jamais d'une réponse rejouée par le cache de 24 h,
+// routes/searches.ts, insertMatches). Il n'est écrit qu'une fois la
 // colonne vue par cette sonde : sans 0056, rien n'est noté, l'insertion n'est
 // jamais refusée, et aucune carte ne montre de stock (comportement d'avant).
 // Même sonde que pour 0054 (lib/brandShopColumn.ts). Si l'insertion avec le
