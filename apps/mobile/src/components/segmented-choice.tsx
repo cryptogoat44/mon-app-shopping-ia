@@ -7,6 +7,8 @@ import { themedStyles } from "@/theme/themed-styles";
 // Lot 2 (Vault) : `value` à null tant que rien n'est choisi (catégorie d'une
 // pièce à ajouter) ; `disabled` pendant un envoi. Sur le site, l'état coché
 // passe par aria-checked : react-native-web ignore accessibilityState.
+// Lot « propositions » : une pastille ne dépasse jamais la largeur de l'écran
+// (maxWidth) ; un long libellé (nom d'une pièce, texte agrandi) passe à la ligne.
 export function SegmentedChoice<V extends string>({
   label,
   options,
@@ -48,7 +50,9 @@ const styles = themedStyles(() => ({
   pill: {
     minHeight: 44,
     minWidth: 44,
+    maxWidth: "100%",
     paddingHorizontal: space.md,
+    paddingVertical: space.xs,
     borderRadius: radius.full,
     borderWidth: 1,
     borderColor: color.filet,
@@ -56,6 +60,6 @@ const styles = themedStyles(() => ({
     justifyContent: "center",
   },
   pillActive: { backgroundColor: color.vert, borderColor: color.vert },
-  pillLabel: { fontSize: font.secondary, color: color.encre },
+  pillLabel: { fontSize: font.secondary, color: color.encre, textAlign: "center" },
   pillLabelActive: { color: color.blanc, fontWeight: "600" },
 }));

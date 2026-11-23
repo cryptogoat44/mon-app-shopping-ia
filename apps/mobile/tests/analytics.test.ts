@@ -203,3 +203,40 @@ describe("prix d'abord, relecture : séries comparables et origine de l'ouvertur
     expect(sanitizeProps("no_price_results_opened", { results_count: 7, context: "ailleurs" })).toEqual({ results_count: 7 });
   });
 });
+
+// Lot « propositions » (Parcours 2, 21 novembre 2026) : le mode de l'analyse
+// d'un lien (avec les mots, ou les pièces proposées par l'IA), jamais un nom
+// proposé ni le texte du champ.
+describe("propositions de l'IA : la propriété « mode », jamais un nom", () => {
+  const EVENTS = ["video_link_ai_started", "video_link_ai_result", "video_link_ai_moment_chosen"] as const;
+
+  it("admis : « words » et « pieces » sur les trois événements de l'analyse d'un lien", () => {
+    for (const event of EVENTS) {
+      expect(ANALYTICS_EVENTS[event].mode, event).toEqual({ kind: "enum", values: ["words", "pieces"] });
+      expect(sanitizeProps(event, { mode: "pieces" }), event).toEqual({ mode: "pieces" });
+      expect(sanitizeProps(event, { mode: "words" }), event).toEqual({ mode: "words" });
+    }
+    expect(sanitizeProps("video_link_ai_moment_chosen", { platform: "tiktok", rank: 1, moments_count: 3, link_platform: "tiktok", mode: "pieces" })).toEqual({
+      platform: "tiktok",
+      rank: 1,
+      moments_count: 3,
+      link_platform: "tiktok",
+      mode: "pieces",
+    });
+  });
+
+  it("refusé : toute autre valeur du mode est retirée", () => {
+    for (const event of EVENTS) {
+      for (const value of ["Pieces", "photo", "Le manteau camel", "", 1, true, null]) expect(sanitizeProps(event, { mode: value as never }), `${event} ${String(value)}`).toEqual({});
+    }
+  });
+
+  it("un nom proposé ou le texte du champ, passés par erreur, sont retirés", () => {
+    expect(
+      sanitizeProps("video_link_ai_moment_chosen", { platform: "instagram", rank: 2, moments_count: 2, link_platform: "instagram", mode: "pieces", label: "Le manteau camel", labels: "Le sac noir", query: "veste" })
+    ).toEqual({ platform: "instagram", rank: 2, moments_count: 2, link_platform: "instagram", mode: "pieces" });
+    expect(sanitizeProps("video_link_ai_result", { outcome: "found", moments_count: 3, mode: "pieces", label: "Les baskets blanches" })).toEqual({ outcome: "found", moments_count: 3, mode: "pieces" });
+    // Jamais de nouvelle propriété « platform » : le mode est à côté de link_platform.
+    for (const event of EVENTS) expect(Object.keys(ANALYTICS_EVENTS[event]).filter((key) => key.includes("platform")).sort(), event).toEqual(["link_platform", "platform"]);
+  });
+});
