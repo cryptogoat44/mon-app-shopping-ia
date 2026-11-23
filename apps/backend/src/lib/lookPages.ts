@@ -37,7 +37,7 @@ import { env } from "../env.js";
 import { isAffiliateLink } from "./affiliateLinks.js";
 import { PUBLIC_SITE_URL } from "./brand.js";
 import { bestSharedCopy, WISH_COPY_BUCKET } from "./wishShare.js";
-import { isWebUrl } from "./validation.js";
+import { isWebUrl, WEB_URL_MAX_LENGTH } from "./validation.js";
 
 // ---- Schéma de la base (migration 0057) ----
 
@@ -147,11 +147,13 @@ function priceOf(value: number | null): number | null {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
 }
 
-/** Une offre de la page, champ par champ ; null si son lien n'est pas un lien web ordinaire. */
+/** Une offre de la page, champ par champ ; null si son lien n'est pas un
+ * lien web ordinaire de 2 048 caractères au plus (la règle de la lecture,
+ * STORED_OFFER : un lien plus long rendrait toute la page illisible). */
 function offerOf(match: ProductMatch, section: LookOffer["section"]): LookOffer | null {
   const url = match.affiliateUrl;
   const shop = shopOf(match);
-  if (!isWebUrl(url) || shop === null) return null;
+  if (!isWebUrl(url) || url.length > WEB_URL_MAX_LENGTH || shop === null) return null;
   const price = priceOf(match.priceMin);
   const currency = price === null ? null : (match.currency?.trim().slice(0, CURRENCY_MAX) || null);
   return {
@@ -166,8 +168,17 @@ function offerOf(match: ProductMatch, section: LookOffer["section"]): LookOffer 
   };
 }
 
-/** Pourquoi une recherche ne peut pas (encore) être partagée. */
-export type LookNotReady = "not_completed" | "shops_pending" | "too_old";
+/** Pourquoi une recherche ne peut pas (encore) être partagée ; « words_piece » :
+ * la pièce vient de « Résultats pour vos mots », qui ne se partage pas. */
+export type LookNotReady = "not_completed" | "shops_pending" | "too_old" | "words_piece";
+
+/** Une pièce de « Résultats pour vos mots » ne se partage pas : ses
+ * boutiques et le verdict décrivent une autre pièce (celle identifiée sur la
+ * photo), et la recherche par les mots a pu être lancée bien après la
+ * recherche, dont le jour serait affiché comme « vu le ». */
+export function isWordsPiece(search: Pick<ProductSearch, "matches">, matchId: string): boolean {
+  return search.matches.find((match) => match.id === matchId)?.origin === "words";
+}
 
 /** La recherche relue peut-elle être partagée maintenant ? */
 export function lookReadiness(search: Pick<ProductSearch, "status" | "createdAt" | "complement">, shopsPending: boolean, now: number = Date.now()): LookNotReady | null {
@@ -178,29 +189,42 @@ export function lookReadiness(search: Pick<ProductSearch, "status" | "createdAt"
   return null;
 }
 
+/** Taille de la page gardée sous la règle de la table (pg_column_size(content)
+ * <= 16384) avec de la marge : au-delà, les dernières boutiques sont retirées. */
+export const LOOK_CONTENT_MAX_BYTES = 15_000;
+
 /** La page de la pièce `matchId`, depuis la recherche relue comme l'écran la
  * montre (toProductSearch) ; null si la pièce n'y est plus (boutique
- * masquée depuis) ou n'a pas de lien web. La pièce partagée d'abord, puis
- * « Cette pièce dans d'autres boutiques » dans le même ordre, sans elle,
- * 9 au plus, et aucune autre section (ce sont des pièces qui se ressemblent). */
+ * masquée depuis), n'a pas de lien web, ou vient de « Résultats pour vos
+ * mots ». La pièce partagée d'abord ; puis, seulement si c'est la pièce
+ * identifiée (la première de la recherche visuelle, ou une de « Cette pièce
+ * dans d'autres boutiques »), ces boutiques dans le même ordre, sans elle,
+ * 9 au plus, et le verdict. Une autre proposition visuelle est une pièce qui
+ * se ressemble : elle est montrée seule, sans boutiques ni verdict. */
 export function buildLookContent(search: ProductSearch, matchId: string): LookContent | null {
   const shared = search.matches.find((match) => match.id === matchId);
   const searchedOn = parisDayOf(search.createdAt);
-  if (!shared || searchedOn === null) return null;
+  if (!shared || searchedOn === null || shared.origin === "words") return null;
   const head = offerOf(shared, "shared");
   if (!head) return null;
-  const others = search.matches
-    .filter((match) => match.origin === "shopping" && match.id !== matchId)
-    .flatMap((match) => offerOf(match, "shopping") ?? [])
-    .slice(0, LOOK_OFFERS_MAX - 1);
+  const firstLens = search.matches.find((match) => (match.origin ?? "lens") === "lens");
+  const identified = shared.origin === "shopping" || shared.id === firstLens?.id;
+  const others = identified
+    ? search.matches
+        .filter((match) => match.origin === "shopping" && match.id !== matchId)
+        .flatMap((match) => offerOf(match, "shopping") ?? [])
+        .slice(0, LOOK_OFFERS_MAX - 1)
+    : [];
   const brand = shared.brand?.trim();
-  return {
+  const content: LookContent = {
     v: 1,
     searchedOn,
     piece: { name: shared.productName.trim().slice(0, NAME_MAX) || head.shop, brand: brand ? brand.slice(0, BRAND_MAX) : null },
-    verdict: search.verdict ? verdictOf(search.verdict) : null,
+    verdict: identified && search.verdict ? verdictOf(search.verdict) : null,
     offers: [head, ...others],
   };
+  while (content.offers.length > 1 && Buffer.byteLength(JSON.stringify(content)) > LOOK_CONTENT_MAX_BYTES) content.offers.pop();
+  return content;
 }
 
 function verdictOf(verdict: SearchVerdict): SearchVerdict {

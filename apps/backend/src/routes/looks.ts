@@ -42,6 +42,7 @@ import {
   buildLookContent,
   copyLookImage,
   isLookToken,
+  isWordsPiece,
   lookPagesReady,
   lookPagesSwitchOn,
   lookReadiness,
@@ -50,6 +51,7 @@ import {
   newLookToken,
   publicLookOf,
   removeLookImages,
+  type LookNotReady,
 } from "../lib/lookPages.js";
 import { isSuspended } from "../lib/moderation.js";
 import { PRODUCT_MATCH_NOT_FOUND, findOwnMatchRow } from "../lib/ownMatches.js";
@@ -183,6 +185,8 @@ export default async function looksRoutes(fastify: FastifyInstance) {
       const search = toProductSearch(row, matches, affiliateUrlByMatchId, new Map(), false, { verdict: await verdictColumnReady(fastify) });
       const notReady = lookReadiness(search, deferredPending(deferredStateOf(row, now.getTime())), now.getTime());
       if (notReady) return reply.code(409).send({ error: LOOK_NOT_READY_ERROR, message: "Ce résultat ne peut pas être partagé pour l'instant.", reason: notReady });
+      // « Résultats pour vos mots » : jamais partagée (ses boutiques et le verdict seraient ceux d'une autre pièce).
+      if (isWordsPiece(search, own.id)) return reply.code(409).send({ error: LOOK_NOT_READY_ERROR, message: "Cette pièce ne peut pas être partagée.", reason: "words_piece" satisfies LookNotReady });
       const content = buildLookContent(search, own.id);
       // Retirée depuis (boutique masquée), ou sans lien web : rien à montrer.
       if (!content) return reply.code(404).send(PRODUCT_MATCH_NOT_FOUND);

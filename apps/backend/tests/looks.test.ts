@@ -764,6 +764,71 @@ describe("la page montre exactement ce que le membre voyait", () => {
     expect(content.offers.slice(1).map((offer) => offer.url)).toEqual(search.matches.filter((m) => m.origin === "shopping").slice(0, 9).map((m) => m.affiliateUrl));
   });
 
+  it("pièce identifiée (première visuelle) : permis, ses boutiques et le verdict ; autre proposition visuelle : refusé, ni boutiques ni verdict", async () => {
+    const fake = seeded();
+    const target = await looksApp(fake.db);
+    const identified = (await visit(target, tokenOf((await share(target)).body.url))).json() as PublicLook;
+    expect(identified.offers.length).toBeGreaterThan(1);
+    expect(identified.verdict).not.toBeNull();
+    const lookalike = await share(target, ALICE, "e0000000-0000-4000-8000-000000000002");
+    expect(lookalike.res.statusCode).toBe(201);
+    const page = (await visit(target, tokenOf(lookalike.body.url))).json() as PublicLook;
+    expect(page.offers).toEqual([expect.objectContaining({ shop: "Autre visuelle", section: "shared" })]);
+    expect(page.verdict).toBeNull();
+  });
+
+  it("pièce de « Cette pièce dans d'autres boutiques » : permis, les autres boutiques et le verdict", async () => {
+    const fake = seeded();
+    const target = await looksApp(fake.db);
+    const { res, body } = await share(target, ALICE, "e0000000-0000-4000-8000-000000000011");
+    expect(res.statusCode).toBe(201);
+    const page = (await visit(target, tokenOf(body.url))).json() as PublicLook;
+    expect(page.offers[0]).toMatchObject({ shop: "Zalando", section: "shared" });
+    expect(page.offers.slice(1).map((offer) => offer.shop)).not.toContain("Zalando");
+    expect(page.offers.length).toBeGreaterThan(1);
+    expect(page.verdict).not.toBeNull();
+  });
+
+  it("refusé : une pièce de « Résultats pour vos mots » ne se partage pas (409 words_piece), rien n'est écrit", async () => {
+    const fake = seeded();
+    const target = await looksApp(fake.db);
+    const { res, body } = await share(target, ALICE, "e0000000-0000-4000-8000-000000000020");
+    expect(res.statusCode).toBe(409);
+    expect(body).toMatchObject({ error: "look_not_ready", reason: "words_piece" });
+    expect(fake.table("shared_looks")).toEqual([]);
+    expect(fake.uploads).toEqual([]);
+  });
+
+  it("liens de plus de 2 048 caractères : refusé, l'offre est écartée (la pièce partagée : pas de page) ; permis, le reste de la page se lit", async () => {
+    const long = `https://longue.example/robe?${"x".repeat(2100)}`;
+    const fake = seeded();
+    fake.table("product_matches").push(match("e0000000-0000-4000-8000-000000000030", SEARCH, long, "shopping", 58, { merchant_name: "Lien long" }));
+    const target = await looksApp(fake.db);
+    const { res, body } = await share(target);
+    expect(res.statusCode).toBe(201);
+    const visited = await visit(target, tokenOf(body.url));
+    expect(visited.statusCode).toBe(200);
+    expect((visited.json() as PublicLook).offers.map((offer) => offer.shop)).not.toContain("Lien long");
+    // La pièce partagée elle-même : pas de page plutôt qu'une page que personne ne pourrait ouvrir.
+    const row = parseSearchRow(searchRow(SEARCH, ALICE))!;
+    const search = toProductSearch(row, parseMatchRows([match(SHARED, SEARCH, long, "lens", 40, { merchant_name: "Lien long" })])!, new Map(), new Map());
+    expect(buildLookContent(search, SHARED)).toBeNull();
+  });
+
+  it("page trop lourde pour la base (16 Ko) : refusé, les dernières boutiques sont retirées ; permis, la page reste lisible", () => {
+    const row = parseSearchRow(searchRow(SEARCH, ALICE))!;
+    const heavy = Array.from({ length: 9 }, (_, index) =>
+      match(`e0000000-0000-4000-8000-2000000000${String(index).padStart(2, "0")}`, SEARCH, `https://shop-${index}.example/robe?${"y".repeat(2000)}`, "shopping", 50 + index)
+    );
+    const search = toProductSearch(row, parseMatchRows([...aliceMatches().slice(0, 1), ...heavy])!, new Map(), new Map());
+    const content = buildLookContent(search, SHARED)!;
+    expect(Buffer.byteLength(JSON.stringify(content))).toBeLessThanOrEqual(15_000);
+    expect(content.offers.length).toBeGreaterThan(1);
+    expect(content.offers.length).toBeLessThan(10);
+    expect(content.offers[0]!.section).toBe("shared");
+    expect(publicLookOf({ user_id: ALICE, content, image_path: null, expires_at: new Date(NOW + 86_400_000).toISOString() }, (path) => path)).not.toBeNull();
+  });
+
   it("permis : la phrase du verdict est celle de l'écran ; refusé : pas de verdict quand l'écran n'en a pas (base sans 0055)", async () => {
     const withVerdict = await created();
     const screen = screenOf(withVerdict.fake, true);
