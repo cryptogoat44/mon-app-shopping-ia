@@ -43,6 +43,7 @@ import {
   copyLookImage,
   isLookToken,
   isWordsPiece,
+  lookImagePath,
   lookPagesReady,
   lookPagesSwitchOn,
   lookReadiness,
@@ -94,32 +95,55 @@ function titleOf(content: unknown): string {
   return typeof piece?.name === "string" ? piece.name : "";
 }
 
-/** Efface les pages expirées du membre (lignes, puis copies), comme
- * lib/searchRetention.ts le fait pour les recherches : à chaque action du
- * membre sur ses pages (création, liste). Jamais à la lecture publique. */
-async function purgeExpired(fastify: FastifyInstance, userId: string, now: Date): Promise<void> {
-  const expired = parseDbRows(
+/** Pages expirées de tous les membres effacées à chaque passage, au plus. */
+const EXPIRED_BATCH = 50;
+
+/** Efface les pages expirées (copies, puis lignes), comme
+ * lib/searchRetention.ts le fait pour les recherches : toutes celles du
+ * membre, plus un lot de celles des autres membres (un membre qui ne revient
+ * jamais ne garde ni sa ligne ni sa copie publique au-delà des 30 jours).
+ * Stockage qui refuse : les lignes qui ont une copie restent (expirées donc
+ * invisibles) pour réessayer au passage suivant. À chaque action d'un membre
+ * sur ses pages (création, liste) et à la lecture du statut. Jamais à la
+ * lecture publique. */
+async function purgeExpired(fastify: FastifyInstance, userId: string | null, now: Date): Promise<void> {
+  const cutoff = now.toISOString();
+  const own = userId === null ? [] : parseDbRows(EXPIRED_ROWS, await fastify.supabaseAdmin.from("shared_looks").select("id, image_path").eq("user_id", userId).lt("expires_at", cutoff), "Pages look expirées");
+  const others = parseDbRows(
     EXPIRED_ROWS,
-    await fastify.supabaseAdmin.from("shared_looks").select("id, image_path").eq("user_id", userId).lt("expires_at", now.toISOString()),
-    "Pages look expirées"
+    await fastify.supabaseAdmin.from("shared_looks").select("id, image_path").lt("expires_at", cutoff).order("expires_at", { ascending: true }).limit(EXPIRED_BATCH),
+    "Pages look expirées (tous les membres)"
   );
+  const expired = [...new Map([...own, ...others].map((row) => [row.id, row])).values()];
   if (expired.length === 0) return;
-  const { error } = await fastify.supabaseAdmin
-    .from("shared_looks")
-    .delete()
-    .eq("user_id", userId)
-    .in(
-      "id",
-      expired.map((row) => row.id)
-    );
-  if (error) {
-    fastify.log.warn("Pages look expirées : effacement remis à plus tard");
-    return;
-  }
-  await removeLookImages(
+  const removed = await removeLookImages(
     fastify,
     expired.map((row) => row.image_path)
   );
+  const gone = removed ? expired : expired.filter((row) => lookImagePath(row.image_path) === null);
+  if (gone.length === 0) return;
+  const { error } = await fastify.supabaseAdmin
+    .from("shared_looks")
+    .delete()
+    .lt("expires_at", cutoff)
+    .in(
+      "id",
+      gone.map((row) => row.id)
+    );
+  if (error) fastify.log.warn("Pages look expirées : effacement remis à plus tard");
+}
+
+/** Arrête une page (le membre, ou la modération) : sa copie d'abord, puis la
+ * ligne. Stockage qui refuse : la page expire tout de suite (invisible pour
+ * tous dès maintenant) et purgeExpired réessaiera d'effacer la copie ; si
+ * même cela échoue, la ligne part quand même (l'arrêt d'abord). */
+async function stopLookRow(fastify: FastifyInstance, row: { id: string; image_path: string | null }): Promise<void> {
+  if (!(await removeLookImages(fastify, [row.image_path]))) {
+    const { error: expireError } = await fastify.supabaseAdmin.from("shared_looks").update({ expires_at: new Date().toISOString() }).eq("id", row.id);
+    if (!expireError) return;
+  }
+  const { error } = await fastify.supabaseAdmin.from("shared_looks").delete().eq("id", row.id);
+  if (error) throw new Error("Arrêt d'une page look impossible");
 }
 
 /** Ses pages actives (non expirées), les plus récentes d'abord. */
@@ -146,6 +170,8 @@ export default async function looksRoutes(fastify: FastifyInstance) {
   fastify.get("/api/looks/status", { preHandler: fastify.requireAuth }, async (_request, reply) => {
     reply.header("Cache-Control", "no-store");
     const manage = await lookPagesReady(fastify);
+    // Le passage le plus fréquent d'un membre : les pages expirées de tous partent, sans faire attendre la réponse.
+    if (manage) void purgeExpired(fastify, null, new Date()).catch(() => fastify.log.warn("Pages look expirées : effacement remis à plus tard"));
     return reply.send({ enabled: manage && lookPagesSwitchOn(), manage } satisfies LookPagesStatus);
   });
 
@@ -246,16 +272,14 @@ export default async function looksRoutes(fastify: FastifyInstance) {
     if (!params) return;
     const userId = request.user!.id;
     // Seulement SA page : celle d'un autre membre répond comme une inexistante, et reste en ligne.
-    const deleted = parseDbRows(
+    const found = parseDbRows(
       DELETED_ROWS,
-      await fastify.supabaseAdmin.from("shared_looks").delete().eq("id", params.id).eq("user_id", userId).select("id, user_id, image_path"),
+      await fastify.supabaseAdmin.from("shared_looks").select("id, user_id, image_path").eq("id", params.id).eq("user_id", userId).limit(1),
       "Arrêt d'une page look"
     );
-    if (deleted.length === 0) return reply.code(404).send(NOT_FOUND);
-    await removeLookImages(
-      fastify,
-      deleted.map((row) => row.image_path)
-    );
+    const look = found[0];
+    if (!look) return reply.code(404).send(NOT_FOUND);
+    await stopLookRow(fastify, look);
     return reply.code(204).send();
   });
 
@@ -267,14 +291,14 @@ export default async function looksRoutes(fastify: FastifyInstance) {
     if (!body) return;
     const token = lookTokenFromLink(body.link);
     if (!token) return reply.code(400).send(INVALID_LINK);
-    const deleted = parseDbRows(
+    const found = parseDbRows(
       DELETED_ROWS,
-      await fastify.supabaseAdmin.from("shared_looks").delete().eq("token", token).select("id, user_id, image_path"),
+      await fastify.supabaseAdmin.from("shared_looks").select("id, user_id, image_path").eq("token", token).limit(1),
       "Arrêt d'une page look (modération)"
     );
-    const stopped = deleted[0];
+    const stopped = found[0];
     if (!stopped) return reply.code(404).send(NOT_FOUND);
-    await removeLookImages(fastify, [stopped.image_path]);
+    await stopLookRow(fastify, stopped);
     request.log.info({ lookId: stopped.id }, "Page look arrêtée par la modération");
     return reply.code(204).send();
   });

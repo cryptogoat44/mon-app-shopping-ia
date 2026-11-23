@@ -608,6 +608,55 @@ describe("arrêter et lister : seulement ses propres pages", () => {
   });
 });
 
+describe("la copie publique ne survit pas à sa page", () => {
+  it("permis : les pages expirées d'un autre membre (qui ne revient pas) partent avec leur copie quand un membre liste ou ouvre le statut ; refusé : sa page active reste", async () => {
+    const fake = seeded();
+    const target = await looksApp(fake.db);
+    const bobPath = "looks/0b0b0b0b-0b0b-4b0b-8b0b-0b0b0b0b0b0b.jpg";
+    const bobExpired = storedLook(fake, { user_id: BOB, search_id: BOB_SEARCH, match_id: BOB_MATCH, image_path: bobPath, expires_at: new Date(Date.now() - 1000).toISOString() });
+    const bobActive = storedLook(fake, { user_id: BOB, search_id: BOB_SEARCH, match_id: SHARED });
+    fake.files.set(`post-media/${bobPath}`, Buffer.alloc(1));
+    expect((await as(target, ALICE).get("/api/looks")).statusCode).toBe(200);
+    expect(fake.table("shared_looks").map((row) => row.token)).toEqual([bobActive]);
+    expect(fake.removed).toContain(`post-media/${bobPath}`);
+    expect(fake.table("shared_looks").some((row) => row.token === bobExpired)).toBe(false);
+    // Le statut aussi (sans faire attendre sa réponse).
+    const later = storedLook(fake, { user_id: BOB, search_id: BOB_SEARCH, match_id: BOB_MATCH, expires_at: new Date(Date.now() - 1000).toISOString() });
+    expect((await as(target, ALICE).get("/api/looks/status")).statusCode).toBe(200);
+    await vi.waitFor(() => expect(fake.table("shared_looks").some((row) => row.token === later)).toBe(false));
+    expect(fake.table("shared_looks").map((row) => row.token)).toEqual([bobActive]);
+  });
+
+  it("stockage qui refuse : permis, la page s'arrête quand même tout de suite ; refusé, la copie n'est pas oubliée : elle est effacée au passage suivant", async () => {
+    let storageDown = true;
+    const fake = seeded({}, { failStorageRemove: () => storageDown });
+    await withImages();
+    const target = await looksApp(fake.db);
+    const { body } = await share(target);
+    const token = tokenOf(body.url);
+    const copy = fake.uploads[0]!;
+    expect((await as(target, ALICE).del(`/api/looks/${body.id}`)).statusCode).toBe(204);
+    expect((await visit(target, token)).statusCode).toBe(404);
+    expect((await as(target, ALICE).get("/api/looks")).json()).toEqual({ looks: [] });
+    // La ligne reste, expirée, tant que la copie n'est pas effacée.
+    expect(fake.table("shared_looks")).toHaveLength(1);
+    expect(fake.files.has(copy)).toBe(true);
+    storageDown = false;
+    expect((await as(target, BOB).get("/api/looks")).statusCode).toBe(200);
+    expect(fake.files.has(copy)).toBe(false);
+    expect(fake.table("shared_looks")).toEqual([]);
+  });
+
+  it("modération, stockage qui refuse : la page s'arrête quand même", async () => {
+    const fake = seeded({}, { failStorageRemove: () => true });
+    await withImages();
+    const target = await looksApp(fake.db);
+    const { body } = await share(target);
+    expect((await as(target, ADMIN).post("/api/admin/looks/stop", { link: body.url })).statusCode).toBe(204);
+    expect((await visit(target, tokenOf(body.url))).statusCode).toBe(404);
+  });
+});
+
 describe("aucun appel payant, et la lecture n'écrit rien", () => {
   it("créer, lister, lire, arrêter : zéro appel à SerpApi, Google, l'IA ; aucune requête réseau hors de l'image copiée", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");

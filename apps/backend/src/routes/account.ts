@@ -308,18 +308,18 @@ export default async function accountRoutes(fastify: FastifyInstance) {
     // stockage (une image de boutique sous un nom aléatoire, reliée à rien),
     // comptées au journal avec les autres fichiers restés.
     let lookImages: string[] = [];
-    let lookImagesUnread = false;
+    let lookCopiesLeft = false;
     try {
       lookImages = await lookImagesOf(fastify, userId);
     } catch {
-      lookImagesUnread = true;
+      lookCopiesLeft = true;
       request.log.warn("Suppression de compte : pages look illisibles, laissées à la cascade (copies d'images restées)");
     }
     if (await lookPagesReady(fastify)) {
       const { error: looksError } = await fastify.supabaseAdmin.from("shared_looks").delete().eq("user_id", userId);
       if (looksError) request.log.warn("Suppression de compte : pages look laissées à la cascade");
     }
-    await removeLookImages(fastify, lookImages);
+    if (!(await removeLookImages(fastify, lookImages))) lookCopiesLeft = true;
 
     const receivedCopies = await removeOwnedFiles(fastify, WISH_COPY_BUCKET, [
       ...received.flatMap((piece) => [piece.image_url, piece.image_thumb_url].flatMap((url) => (url ? [{ ownerId: piece.sender_id, url }] : []))),
@@ -331,7 +331,7 @@ export default async function accountRoutes(fastify: FastifyInstance) {
     // (décision du fondateur, 2026-10-15) : un fichier qui refuse de
     // s'effacer est compté et signalé au journal — des nombres, jamais un
     // identifiant —, puis le compte est supprimé quand même.
-    const lookCopiesUnread: StorageCleanup[] = lookImagesUnread ? [{ bucket: LOOK_IMAGE_BUCKET, removed: 0, failed: 0, unreadable: true }] : [];
+    const lookCopiesUnread: StorageCleanup[] = lookCopiesLeft ? [{ bucket: LOOK_IMAGE_BUCKET, removed: 0, failed: 0, unreadable: true }] : [];
     const leftovers = storageLeftovers([receivedCopies, ...lookCopiesUnread, ...(await deleteUserStorageFiles(fastify, userId))]);
     if (leftovers.length > 0) request.log.warn({ leftovers }, "Suppression de compte : fichiers restés dans le stockage, à nettoyer");
 

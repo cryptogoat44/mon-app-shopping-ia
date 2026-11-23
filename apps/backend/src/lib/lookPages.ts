@@ -343,16 +343,22 @@ export async function copyLookImage(fastify: FastifyInstance, log: FastifyBaseLo
   }
 }
 
-/** Efface des copies (seulement des chemins de la forme looks/<uuid>.jpg) ; ne lève jamais. */
-export async function removeLookImages(fastify: FastifyInstance, paths: (string | null)[]): Promise<void> {
+/** Efface des copies (seulement des chemins de la forme looks/<uuid>.jpg) ;
+ * ne lève jamais. Vrai quand plus aucune ne reste (ou qu'il n'y en avait
+ * pas) ; faux si le stockage refuse : l'appelant garde alors de quoi
+ * réessayer (pages arrêtées ou expirées : la ligne, invisible, reste
+ * jusqu'au prochain passage de purgeExpired). */
+export async function removeLookImages(fastify: FastifyInstance, paths: (string | null)[]): Promise<boolean> {
   const own = paths.flatMap((path) => lookImagePath(path) ?? []);
-  if (own.length === 0) return;
+  if (own.length === 0) return true;
   try {
     const { error } = await fastify.supabaseAdmin.storage.from(LOOK_IMAGE_BUCKET).remove(own);
-    if (error) fastify.log.warn({ count: own.length }, "Page look : copie d'image restée dans le stockage");
+    if (!error) return true;
   } catch {
-    fastify.log.warn({ count: own.length }, "Page look : copie d'image restée dans le stockage");
+    // Compté ci-dessous comme un refus.
   }
+  fastify.log.warn({ count: own.length }, "Page look : copie d'image restée dans le stockage");
+  return false;
 }
 
 const IMAGE_ROWS = z.array(z.object({ image_path: z.string().nullable() }));
