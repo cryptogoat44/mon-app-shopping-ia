@@ -149,26 +149,36 @@ export function lookReportMailto(email: string | null, pageUrl: string, texts: P
 /** « Partager le look » à la place de « Partager » ? Seulement quand le
  * serveur le permet (statut lu, 0057 et l'interrupteur), pour une vraie
  * proposition (jamais une pièce de démonstration), d'une recherche terminée
- * dont les boutiques sont arrivées, de moins de 30 jours. Sinon : le bouton
- * d'aujourd'hui, inchangé. */
+ * dont les boutiques sont arrivées, de moins de 30 jours. Jamais pour une
+ * pièce de « Résultats pour vos mots » (le serveur la refuse aussi : les
+ * boutiques et le verdict de la page seraient ceux d'une autre pièce).
+ * Sinon : le bouton d'aujourd'hui, inchangé. */
 export function lookShareAllowed(
   status: LookPagesStatus | null,
-  piece: Pick<Piece, "real"> | null,
+  piece: Pick<Piece, "real" | "origin"> | null,
   result: Pick<SpotResult, "searchId" | "status" | "complement" | "createdAt"> | null,
   now: number = Date.now()
 ): boolean {
-  if (status?.enabled !== true || piece?.real !== true || !result?.searchId || result.status !== "success") return false;
+  if (status?.enabled !== true || piece?.real !== true || piece.origin === "words" || !result?.searchId || result.status !== "success") return false;
   if (result.complement?.pending === true) return false;
   const createdAt = Date.parse(result.createdAt ?? "");
   return Number.isFinite(createdAt) && now - createdAt <= LOOK_SEARCH_MAX_AGE_MS;
 }
 
-/** Jour (« AAAA-MM-JJ ») d'une date, pour la feuille de confirmation. */
+/** Jour (« AAAA-MM-JJ ») d'une date, à l'heure de Paris comme le jour que
+ * la page affiche (serveur : parisDayOf), pour la feuille de confirmation.
+ * Appareil sans fuseaux horaires : le jour de l'appareil. */
 export function dayOf(iso: string | undefined): string | null {
   if (!iso) return null;
   const time = Date.parse(iso);
   if (!Number.isFinite(time)) return null;
   const date = new Date(time);
+  try {
+    const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(day)) return day;
+  } catch {
+    // Pas de fuseau « Europe/Paris » sur cet appareil : le jour local, ci-dessous.
+  }
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 

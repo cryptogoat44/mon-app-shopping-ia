@@ -2057,7 +2057,7 @@ export const fr = {
     creating: "Création du lien…",
     sheetTitle: "Créer un lien vers cette pièce ?",
     sheetBody: (date: string) =>
-      `Toute personne qui a le lien verra la pièce, les boutiques et les prix vus le ${date}, sans compte. Jamais votre photo, ni votre nom, ni vos recherches. Le lien disparaît dans 30 jours ; vous pouvez l'arrêter avant dans Réglages → Vos données.`,
+      `Toute personne qui a le lien verra la pièce, les boutiques et les prix vus le ${date}, sans compte. Jamais votre photo, ni votre nom, ni vos recherches. Le lien disparaît au plus tard 30 jours après sa création ; vous pouvez l'arrêter avant dans Réglages → Vos données.`,
     confirm: "Créer le lien",
     cancel: "Annuler",
     shareMessage: (piece: string) => `Regardez ce que j'ai trouvé avec ${BRAND} : ${piece}`,
@@ -2097,5 +2097,7 @@ export const fr = {
     empty: "Aucune page look partagée.",
     moderationField: "Arrêter une page look (collez le lien)",
     moderationStopped: "Page arrêtée.",
+    // Site : le navigateur a refusé le partage après l'attente de la création du lien.
+    tapToShare: "Le lien est créé : touchez « Partager le look » pour l'envoyer.",
   },
 } as const;

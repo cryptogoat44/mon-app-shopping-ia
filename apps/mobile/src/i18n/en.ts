@@ -1895,7 +1895,7 @@ export const en: Catalog = {
     creating: "Creating the link…",
     sheetTitle: "Create a link to this piece?",
     sheetBody: (date: string) =>
-      `Anyone with the link will see the piece, the shops and the prices seen on ${date}, without an account. Never your photo, your name or your searches. The link disappears in 30 days; you can stop it sooner in Settings → Your data.`,
+      `Anyone with the link will see the piece, the shops and the prices seen on ${date}, without an account. Never your photo, your name or your searches. The link disappears no later than 30 days after it was created; you can stop it sooner in Settings → Your data.`,
     confirm: "Create the link",
     cancel: "Cancel",
     shareMessage: (piece: string) => `Look what I found with ${BRAND}: ${piece}`,
@@ -1931,5 +1931,6 @@ export const en: Catalog = {
     empty: "No shared look pages.",
     moderationField: "Stop a look page (paste the link)",
     moderationStopped: "Page stopped.",
+    tapToShare: "The link is ready: tap “Share the look” to send it.",
   },
 };

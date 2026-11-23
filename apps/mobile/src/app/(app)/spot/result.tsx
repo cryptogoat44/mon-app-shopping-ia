@@ -545,7 +545,10 @@ export default function ResultScreen() {
   }
 
   async function shareLook(target: Piece, url: string, reused: boolean) {
-    if ((await shareLookLink(target.name, url, reused)) === "copied") showToast(t.look.linkCopied);
+    const outcome = await shareLookLink(target.name, url, reused);
+    if (outcome === "copied") showToast(t.look.linkCopied);
+    // Site : le navigateur a refusé après l'attente de la création ; le lien est gardé, un nouveau toucher le partage.
+    else if (outcome === "needs_tap") showToast(t.look.tapToShare);
   }
 
   /** « Plus disponible ? » de la grande carte : sa pièce, retenue comme pour

@@ -106,8 +106,11 @@ export async function stopLookAsAdmin(link: string): Promise<void> {
 }
 
 /** Partage du lien d'une page : feuille de partage du téléphone ; sur un
- * navigateur sans partage, copie du message (comme lib/share-post.ts). */
-export async function shareLookLink(pieceName: string, url: string, reused: boolean): Promise<"shared" | "copied" | "cancelled"> {
+ * navigateur sans partage, copie du message (comme lib/share-post.ts).
+ * « needs_tap » : le navigateur a refusé le partage ou la copie parce que le
+ * toucher était trop ancien (après l'attente de la création du lien) ; le
+ * lien est gardé (rememberLookUrl) et un nouveau toucher le partage. */
+export async function shareLookLink(pieceName: string, url: string, reused: boolean): Promise<"shared" | "copied" | "cancelled" | "needs_tap"> {
   const message = lookShareMessage(pieceName, url, t.look);
   try {
     if (Platform.OS === "web") {
@@ -116,7 +119,8 @@ export async function shareLookLink(pieceName: string, url: string, reused: bool
         track("look_shared", { method: "native", reused });
         return "shared";
       }
-      await Clipboard.setStringAsync(message);
+      // La copie de secours d'expo-clipboard rend false au lieu de lever : rien n'a été copié.
+      if (!(await Clipboard.setStringAsync(message))) return "needs_tap";
       track("look_shared", { method: "copy", reused });
       return "copied";
     }
@@ -124,7 +128,13 @@ export async function shareLookLink(pieceName: string, url: string, reused: bool
     if (action !== Share.sharedAction) return "cancelled";
     track("look_shared", { method: "native", reused });
     return "shared";
-  } catch {
-    return "cancelled";
+  } catch (error) {
+    return shareRefusal(error);
   }
+}
+
+/** Le navigateur refuse un partage sans toucher récent (NotAllowedError) ;
+ * toute autre erreur (feuille fermée : AbortError) est une annulation. */
+export function shareRefusal(error: unknown): "needs_tap" | "cancelled" {
+  return typeof error === "object" && error !== null && (error as { name?: unknown }).name === "NotAllowedError" ? "needs_tap" : "cancelled";
 }

@@ -7,6 +7,7 @@ import { en } from "../src/i18n/en";
 import { showsNavigator, rootContent } from "../src/lib/root-route";
 import {
   LOOK_PATH,
+  dayOf,
   lookDateNote,
   lookImagePrefix,
   lookPriceText,
@@ -260,6 +261,29 @@ describe("le bouton « Partager le look »", () => {
   it("permis : statut allumé, vraie proposition, recherche terminée de moins de 30 jours", () => {
     expect(lookShareAllowed(ON, real, recent)).toBe(true);
     expect(lookShareAllowed(ON, real, { ...recent, createdAt: new Date(Date.now() - 29 * 86_400_000).toISOString() })).toBe(true);
+  });
+
+  it("pièce de « Résultats pour vos mots » : refusé (bouton d'aujourd'hui) ; permis : recherche visuelle et « Cette pièce dans d'autres boutiques »", () => {
+    expect(lookShareAllowed(ON, { real: true, origin: "words" }, recent)).toBe(false);
+    expect(lookShareAllowed(ON, { real: true, origin: "shopping" }, recent)).toBe(true);
+    expect(lookShareAllowed(ON, { real: true, origin: "lens" }, recent)).toBe(true);
+    expect(lookShareAllowed(ON, { real: true }, recent)).toBe(true);
+  });
+
+  it("le jour de la feuille est celui de Paris, comme sur la page : refusé, le jour local d'un autre fuseau ; permis, le jour de Paris", () => {
+    // 21 h le 22 novembre en Martinique = 2 h le 23 novembre à Paris.
+    expect(dayOf("2026-11-23T01:00:00.000Z")).toBe("2026-11-23");
+    expect(dayOf("2026-11-22T22:30:00.000Z")).toBe("2026-11-22");
+    expect(dayOf("2026-11-22T23:30:00.000Z")).toBe("2026-11-23");
+    expect(dayOf(undefined)).toBeNull();
+    expect(dayOf("pas une date")).toBeNull();
+  });
+
+  it("la feuille ne promet pas 30 jours pleins (un lien repris peut disparaître plus tôt)", () => {
+    expect(fr.look.sheetBody("22 novembre 2026")).toContain("Le lien disparaît au plus tard 30 jours après sa création");
+    expect(en.look.sheetBody("November 22, 2026")).toContain("The link disappears no later than 30 days after it was created");
+    expect(fr.look.sheetBody("x")).not.toContain("disparaît dans 30 jours");
+    expect(en.look.sheetBody("x")).not.toContain("disappears in 30 days");
   });
 
   it("le statut : seule une forme connue allume quelque chose", () => {
