@@ -57,6 +57,7 @@ export const termsOfUse: LegalDocument = {
       blocks: [
         `Les liens marqués « Lien affilié » peuvent, à l'avenir, rapporter une commission à ${BRAND} lorsque vous achetez, sans aucun surcoût pour vous. À la date de cette version, aucun programme d'affiliation n'est actif : ${BRAND} ne perçoit aucune commission.`,
         `Pour une pièce qui semble venir d'une maison de luxe, ${BRAND} peut proposer « Seconde main de luxe » : des liens qui ouvrent, dans votre navigateur, la page de recherche de sites de revente, déjà remplie avec des mots tirés du titre d'une offre trouvée. La liste de ces sites est un choix de ${BRAND} ; ils sont présentés par ordre alphabétique et, à la date de cette version, aucun ne rémunère ${BRAND}. ${BRAND} ne voit pas les pièces proposées par ces sites, ni leur prix, ni leur état : c'est le site de revente qui les présente et en répond, selon ses propres conditions.`,
+        "Une page look montre des prix et des stocks vus dans les boutiques le jour de la recherche ; ils ont pu changer. Les pages look peuvent être signalées et arrêtées par l'équipe de modération.",
       ],
     },
     {

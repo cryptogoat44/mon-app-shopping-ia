@@ -122,6 +122,29 @@ export async function copyWishImage(
   userId: string,
   wish: ImageCopySource
 ): Promise<{ url: string; thumbUrl: string }> {
+  const copy = await bestSharedCopy(fastify, log, wish);
+  const base = `${userId}/${randomUUID()}`;
+  const bucket = fastify.supabaseAdmin.storage.from(WISH_COPY_BUCKET);
+  const [displayUpload, thumbUpload] = await Promise.all([
+    bucket.upload(`${base}.jpg`, copy.display, { contentType: "image/jpeg", upsert: false }),
+    bucket.upload(`${base}-mini.jpg`, copy.thumb, { contentType: "image/jpeg", upsert: false }),
+  ]);
+  if (displayUpload.error || thumbUpload.error) {
+    await bucket.remove([`${base}.jpg`, `${base}-mini.jpg`]);
+    throw new Error("Échec de l'enregistrement de la copie de l'image");
+  }
+  return {
+    url: bucket.getPublicUrl(`${base}.jpg`).data.publicUrl,
+    thumbUrl: bucket.getPublicUrl(`${base}-mini.jpg`).data.publicUrl,
+  };
+}
+
+/** La copie (deux tailles, JPEG sans métadonnées) de la meilleure image
+ * reçue, sans rien ranger : choix décrit pour copyWishImage. Partagée avec
+ * la page look (lib/lookPages.ts), qui n'en range que la petite taille.
+ * `subject` : ce qui est copié, pour le journal (« d'une envie »). Aucune
+ * copie possible : WishImageError. */
+export async function bestSharedCopy(fastify: FastifyInstance, log: FastifyBaseLogger, wish: ImageCopySource, subject = "d'une envie"): Promise<SharedCopy> {
   const discard = (source: ImageSource, error: unknown) =>
     log.warn(
       {
@@ -130,7 +153,7 @@ export async function copyWishImage(
         status: error instanceof PublicImageError ? error.status : undefined,
         reason: reasonOf(error),
       },
-      "Copie de l'image d'une envie : source écartée"
+      `Copie de l'image ${subject} : source écartée`
     );
 
   // Téléchargements en parallèle, chacun sous les garde-fous de publicImage.ts.
@@ -168,31 +191,18 @@ export async function copyWishImage(
   if (!copy || !kept) throw new WishImageError("Image de l'envie irrécupérable");
   log.info(
     { source: kept.source.kind, host: hostOf(kept.source.url), width: kept.width, height: kept.height, bytes: copy.display.length },
-    "Copie de l'image d'une envie : source retenue"
+    `Copie de l'image ${subject} : source retenue`
   );
   // Les autres, lisibles mais pas plus grandes : leurs dimensions disent si la
   // « haute définition » du marchand n'était qu'une petite version.
   for (const other of candidates.slice(keptIndex + 1)) {
     log.info(
       { source: other.source.kind, host: hostOf(other.source.url), width: other.width, height: other.height },
-      "Copie de l'image d'une envie : autre source, non retenue"
+      `Copie de l'image ${subject} : autre source, non retenue`
     );
   }
 
-  const base = `${userId}/${randomUUID()}`;
-  const bucket = fastify.supabaseAdmin.storage.from(WISH_COPY_BUCKET);
-  const [displayUpload, thumbUpload] = await Promise.all([
-    bucket.upload(`${base}.jpg`, copy.display, { contentType: "image/jpeg", upsert: false }),
-    bucket.upload(`${base}-mini.jpg`, copy.thumb, { contentType: "image/jpeg", upsert: false }),
-  ]);
-  if (displayUpload.error || thumbUpload.error) {
-    await bucket.remove([`${base}.jpg`, `${base}-mini.jpg`]);
-    throw new Error("Échec de l'enregistrement de la copie de l'image");
-  }
-  return {
-    url: bucket.getPublicUrl(`${base}.jpg`).data.publicUrl,
-    thumbUrl: bucket.getPublicUrl(`${base}-mini.jpg`).data.publicUrl,
-  };
+  return copy;
 }
 
 /** Supprime une copie (deux tailles), seulement dans le dossier de `ownerId`. */

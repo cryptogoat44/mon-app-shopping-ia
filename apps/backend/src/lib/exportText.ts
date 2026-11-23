@@ -641,6 +641,15 @@ export const EXPORT_COLUMNS = {
     post_available: shown("Vous pouvez encore voir la publication", "You can still see the post"),
     created_at: shown("Enregistrée le", "Saved on"),
   },
+  // Pages look partagées (lot « page look », migration 0057).
+  sharedLooks: {
+    id: ID,
+    url: shown("Lien de la page", "Page link"),
+    content: shown("Ce que montre la page", "What the page shows"),
+    image_url: shown(`Copie de l'image faite par ${BRAND}`, `Copy of the image made by ${BRAND}`),
+    created_at: shown("Créée le", "Created on"),
+    expires_at: shown("Disparaît le", "Disappears on"),
+  },
   // Quotas par membre (migration 0053) : vos droits d'abonnement…
   memberEntitlements: {
     entitlement: shown("Abonnement", "Subscription"),
@@ -767,6 +776,14 @@ export const EXPORT_SECTIONS = {
       en: "The posts you saved to find them again, and the collection you added them to. Only you can see them: neither their author nor your friends can. A post you can no longer see is shown as “an unavailable post”, without its author.",
     },
     keys: ["savedPosts"],
+  },
+  sharedLooks: {
+    title: { fr: "Vos pages look partagées", en: "Your shared look pages" },
+    intro: {
+      fr: `Les pages que vous avez créées avec « Partager le look » : toute personne qui a le lien peut les voir, même sans compte. Elles montrent le nom de la pièce, les boutiques, les prix et le stock vus le jour de la recherche, et une copie de l'image faite par ${BRAND} ; jamais votre photo, votre nom, vos mots ni le lien d'une vidéo. Une page disparaît 30 jours après sa création, ou dès que vous arrêtez le partage.`,
+      en: `The pages you created with “Share the look”: anyone with the link can see them, even without an account. They show the piece's name, the shops, the prices and stock seen on the day of the search, and a copy of the image made by ${BRAND}; never your photo, your name, your words or a video link. A page disappears 30 days after it is created, or as soon as you stop sharing it.`,
+    },
+    keys: ["sharedLooks"],
   },
   following: {
     title: { fr: "Comptes que vous suivez", en: "Accounts you follow" },

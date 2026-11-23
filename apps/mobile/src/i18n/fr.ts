@@ -2066,4 +2066,55 @@ export const fr = {
     later: "Plus tard",
     denied: `Les notifications sont refusées pour ${BRAND} dans les Réglages de l'iPhone.`,
   },
+  // La page look (lot « page look », migration 0057, décisions du fondateur du
+  // 23 novembre 2026) : « Partager le look » crée un lien vers une page en
+  // lecture seule, visible sans compte (app/look.tsx). Jamais le nom du membre.
+  look: {
+    share: "Partager le look",
+    creating: "Création du lien…",
+    sheetTitle: "Créer un lien vers cette pièce ?",
+    sheetBody: (date: string) =>
+      `Toute personne qui a le lien verra la pièce, les boutiques et les prix vus le ${date}, sans compte. Jamais votre photo, ni votre nom, ni vos recherches. Le lien disparaît au plus tard 30 jours après sa création ; vous pouvez l'arrêter avant dans Réglages → Vos données.`,
+    confirm: "Créer le lien",
+    cancel: "Annuler",
+    shareMessage: (piece: string) => `Regardez ce que j'ai trouvé avec ${BRAND} : ${piece}`,
+    linkCopied: "Lien copié.",
+    createError: "Le lien n'a pas pu être créé. Réessayez.",
+    shopsPending: "Les boutiques arrivent encore : réessayez dans un instant.",
+    limitReached: "Vous avez déjà 30 pages partagées : arrêtez-en une dans Réglages → Vos données.",
+    pageTitle: `Une pièce trouvée avec ${BRAND}`,
+    priceSeen: (price: string, date: string) => `${price} · vu le ${date}`,
+    dateNote: (date: string) => `Prix et stock vus dans les boutiques le ${date}. Ils ont pu changer depuis : vérifiez sur le site de la boutique.`,
+    inStock: (date: string) => `En stock, d'après Google le ${date}`,
+    soldOut: (date: string) => `Épuisée, d'après Google le ${date}`,
+    // Le verdict avec la date à la place de « au moment de la recherche » ; les autres phrases restent celles du résultat.
+    verdictIdentifiedWithPrices: (shops: number, low: string, high: string, date: string) =>
+      `Pièce identifiée, d'après les titres des boutiques : ${shops} boutiques, de ${low} à ${high} le ${date}.`,
+    verdictIdentifiedOnePrice: (shops: number, price: string, date: string) => `Pièce identifiée, d'après les titres des boutiques : ${shops} boutiques, toutes à ${price} le ${date}.`,
+    // Lu par VoiceOver sur chaque lien de boutique.
+    shopLinkLabel: (shop: string, price: string, date: string) => `Voir chez ${shop}, ${price}, vu le ${date}`,
+    shopLinkLabelNoPrice: (shop: string) => `Voir chez ${shop}, prix à vérifier chez le marchand`,
+    findMine: "Trouver la mienne",
+    findMineHint: `Créez un compte ${BRAND} pour retrouver une pièce vue en vidéo ou en photo.`,
+    findMineExplain: `${BRAND} retrouve une pièce vue dans une vidéo ou sur une photo, et les boutiques qui la vendent.`,
+    footer: (date: string) => `Page partagée par un membre de ${BRAND}. Elle disparaît au plus tard le ${date}.`,
+    report: "Signaler cette page",
+    // Objet de l'e-mail du signalement (« Signaler cette page »).
+    reportSubject: "Signalement d'une page look",
+    goneTitle: "Cette page n'est plus disponible",
+    goneBody: "Le lien a expiré ou son auteur a arrêté le partage.",
+    discover: `Découvrir ${BRAND}`,
+    loading: "Chargement de la page…",
+    loadError: "La page n'a pas pu être chargée.",
+    settingsEntry: "Pages look partagées",
+    createdExpires: (created: string, expires: string) => `Créée le ${created} · disparaît le ${expires}`,
+    copyLink: "Copier le lien",
+    stop: "Arrêter le partage",
+    stopConfirm: "Arrêter ce partage ? Le lien ne marchera plus pour personne.",
+    empty: "Aucune page look partagée.",
+    moderationField: "Arrêter une page look (collez le lien)",
+    moderationStopped: "Page arrêtée.",
+    // Site : le navigateur a refusé le partage après l'attente de la création du lien.
+    tapToShare: "Le lien est créé : touchez « Partager le look » pour l'envoyer.",
+  },
 } as const;

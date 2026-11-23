@@ -107,6 +107,7 @@ export function buildPrivacyPolicyEn(extra: PrivacyExtra): LegalDocument {
           "If you accept them, usage statistics also count the number of updates shown at the top of your Wishlist and the kind (price drop or return to stock) of the one you open; never the piece, the shop, the price or the day.",
           "The photos you send are resized and stripped of their metadata, including any GPS location recorded by your phone.",
           `Your search counters and your subscription status: to apply your search limits (see the terms of use), ${BRAND} counts your searches for the day and the calendar month from your search history; no other counter is stored. If you have a subscription, ${BRAND} keeps its type, its end date, where the information came from and the date it was last updated, only to know which limits apply to your account. Your subscription status and your counters for the month are included in your data export.`,
+          `Your look pages: if you share the look of a piece, the page that anyone with the link sees (the piece's name, shops, prices and stock seen on the day of the search, a copy of the image made by ${BRAND}), its creation and expiry dates.`,
         ],
       },
       {
@@ -154,6 +155,7 @@ export function buildPrivacyPolicyEn(extra: PrivacyExtra): LegalDocument {
           "You can save a post to find it again, and add it to one of your collections. Your saved posts are visible only to you: neither their author nor your friends can see them. A saved post disappears from your list if you are no longer allowed to see it.",
           `You can pin up to 3 posts at the top of your profile and display a link to a website. This link is visible to members who can see your profile (only your approved followers, if your account is private). Sites that members link to are outside ${BRAND}'s control; a screen warns you before you leave the app.`,
           "Your public posts may be shown in the “For you” feed to members who do not follow you, and your account may be suggested to them, unless your account is private or you turn off the setting “Suggest my account to other members”. This feed ranks public posts from the last 14 days by date and by number of likes and comments; the ranking is the same for everyone and uses no profile of your interests. Account suggestions rely on the accounts followed by the people you follow, then on the most active public accounts of the “For you” feed.",
+          "A look page can be seen by anyone who has its link, even without an account. It never shows your photo, your name, your words or a video link. Its address is long and random, impossible to guess, and it is not offered to search engines; but someone who has the link can pass it on. You can stop sharing at any time (Settings → Your data); the page then disappears for everyone.",
           "In a conversation you can like a message, reply to it, send a post and delete your own messages. A deleted message is erased for both of you; only the line “Message deleted” remains. The other member may have read it before. If it had been reported before being deleted, its content is kept for moderation: the other member can no longer read it, and you will find it in your data export. A post you send is shown to the other member only if they are allowed to see it, at the time they look.",
         ],
       },
@@ -236,6 +238,7 @@ export function buildPrivacyPolicyEn(extra: PrivacyExtra): LegalDocument {
             `Videos: the link between one of your searches and a video goes with that search; your “That's the piece” votes, with your account; a video's record, which contains nothing about you, has no time limit (see “${VIDEOS}”).`,
             `Price and stock alerts: alerts and your “No longer available” reports are deleted after 30 days; an alert that could not go out expires on the 3rd day; what is kept to follow a wish, until you remove it; your price threshold, until you turn off the bell or remove the wish (see “${ALERTS}”).`,
             ...extra.retention,
+            "A look page disappears 30 days after it is created, as soon as you stop sharing it, with the search it comes from, or with your account.",
             "Your account and everything attached to it: for as long as your account exists.",
             "An account with no sign-in for 3 years is deleted, with all its data. An email warns you before deletion.",
             "The server's technical logs: [To be verified: retention period at our hosting provider].",

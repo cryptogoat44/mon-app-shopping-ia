@@ -514,6 +514,44 @@ enregistrés par le serveur (`trackProductMatchClick`) : un site de revente
 n'est pas une offre trouvée. Le serveur, lui, n'enregistre rien de cette
 entrée.
 
+## La page look (lot « page look »)
+
+« Partager le look » crée un lien vers une page visible sans compte.
+Décision du fondateur (23 novembre 2026) : **rien n'est compté chez le
+visiteur** — ni vue, ni clic, ni inscription commencée, et rien n'est déposé
+sur son appareil. Le serveur ne compte pas non plus les lectures d'une page.
+Seuls les membres qui ont accepté les statistiques envoient :
+
+- **`look_shared`** : un lien partagé depuis la grande carte ; `method` =
+  `native` (feuille de partage du téléphone ou du navigateur) ou `copy`
+  (lien copié, navigateur sans partage) ; `reused` = oui quand la page
+  existait déjà pour cette pièce (même lien). Fermer la feuille de partage
+  sur iPhone sans choisir d'app n'est pas compté. Une page créée à l'instant
+  mais pas encore partagée (sur le site, « touchez Partager le look » après
+  l'attente ; ou feuille fermée puis rouverte) garde `reused` = non à son
+  premier partage réussi.
+- **`look_stopped`** : une page arrêtée depuis Réglages → Vos données →
+  « Pages look partagées » (`from` = `settings`). Une page arrêtée par la
+  modération ou expirée n'est pas comptée.
+- **`look_signup`** : envoyé juste après `signup_completed` quand
+  l'inscription est partie de « Trouver la mienne » **dans la même session
+  de l'onglet** (drapeau gardé en mémoire seulement, jamais sur l'appareil ni
+  dans l'adresse). Il **sous-compte** : lien de confirmation de l'e-mail
+  ouvert dans un autre onglet ou sur un autre appareil, onglet fermé entre
+  les deux, ou inscrit qui refuse les statistiques — tous ceux-là ne sont pas
+  comptés.
+
+Jamais la pièce, la boutique, le prix, le lien ni un identifiant.
+
+**Lire « pages créées → inscriptions venues d'une page »** : dans PostHog,
+un graphique **Trends** avec deux séries, `look_shared` (filtre `reused` =
+false, pour ne compter qu'une fois chaque page) et `look_signup`, par
+semaine. Le rapport des deux donne un ordre de grandeur (au plus bas, voir
+ci-dessus), pas une conversion exacte : un `look_signup` n'est relié à
+aucune page en particulier. **Les vues ne sont pas comptées** : on ne sait
+pas combien de personnes ouvrent un lien (décision n° 3, rien n'est
+enregistré sur des inconnus).
+
 ## Les limites
 
 - **Un parcours n'a pas d'identifiant à lui** : les entonnoirs se font par

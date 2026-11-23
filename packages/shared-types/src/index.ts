@@ -3095,3 +3095,105 @@ export function parseActivityPushData(data: unknown): ActivityPushData | null {
   if (key === "userId") return { userId: value };
   return null;
 }
+
+// ---- La page look (lot « page look », migration facultative 0057) ----
+// « Partager le look » crée un lien vers une page en lecture seule, visible
+// sans compte, qui rejoue un résultat déjà payé et enregistré : la pièce, ses
+// boutiques et leurs prix vus le jour de la recherche. Décisions du fondateur
+// du 23 novembre 2026 : jamais le nom du membre, 30 jours au plus, rien
+// compté chez le visiteur, page servie par une route du serveur sans compte
+// (aucune porte de la base ouverte au public). Rien de personnel : ni la
+// photo ou la capture du membre, ni le lien de la vidéo, ni ses mots, ni un
+// identifiant interne (apps/backend/src/lib/lookPages.ts, liste fixe).
+
+/** Le seul identifiant public d'une page : 16 octets aléatoires en base64url (22 signes). */
+export const LOOK_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/;
+/** Durée de vie d'une page, en jours (décision du fondateur n° 2). */
+export const LOOK_LIFETIME_DAYS = 30;
+/** Pages actives au plus par membre. */
+export const LOOK_ACTIVE_MAX = 30;
+/** Offres au plus sur une page : la pièce partagée, puis 9 boutiques. */
+export const LOOK_OFFERS_MAX = 10;
+/** D'où vient une offre de la page : la pièce partagée, ou « Cette pièce dans d'autres boutiques ». */
+export const LOOK_SECTIONS = ["shared", "shopping"] as const;
+export type LookSection = (typeof LOOK_SECTIONS)[number];
+
+/** Une offre de la page, telle que le membre la voyait (même ordre, même mention, même stock). */
+export interface LookOffer {
+  /** Nom de la boutique, ou à défaut son nom de site. */
+  shop: string;
+  /** Lien à ouvrir (http ou https seulement). */
+  url: string;
+  /** Le lien est affilié (règle unique : il diffère du lien du marchand). */
+  affiliate: boolean;
+  /** Prix vu le jour de la recherche, dans sa propre devise (jamais converti). */
+  price: number | null;
+  currency: string | null;
+  mark: OfferMark | null;
+  /** Ce que Google disait le jour de la recherche ; null : inconnu. */
+  inStock: boolean | null;
+  section: LookSection;
+}
+
+/** Ce que la page montre, copié à la création (version 1). */
+export interface LookContent {
+  v: 1;
+  /** Jour de la recherche (heure de Paris), « AAAA-MM-JJ » : jamais l'heure. */
+  searchedOn: string;
+  piece: { name: string; brand: string | null };
+  /** La phrase du verdict que le membre voyait, ou null. */
+  verdict: SearchVerdict | null;
+  /** La pièce partagée d'abord, puis « Cette pièce dans d'autres boutiques ». */
+  offers: LookOffer[];
+}
+
+/** Réponse de GET /api/looks/public/:token : la page, et rien d'autre. */
+export interface PublicLook extends Omit<LookContent, "piece"> {
+  piece: { name: string; brand: string | null; image: string | null };
+  /** Dernier jour où la page est visible (heure de Paris), « AAAA-MM-JJ ». */
+  expiresOn: string;
+}
+
+/** GET /api/looks/status. `enabled` : on peut créer une page (0057 et
+ * LOOK_PAGES_ENABLED) ; `manage` : on peut lister et arrêter ses pages (0057). */
+export interface LookPagesStatus {
+  enabled: boolean;
+  manage: boolean;
+}
+
+export interface CreateLookRequest {
+  matchId: string;
+}
+
+/** 201 (nouvelle page) ou 200 (page encore active pour cette pièce : le même lien). */
+export interface CreateLookResponse {
+  id: string;
+  url: string;
+  expiresAt: string;
+  created: boolean;
+}
+
+export interface SharedLookSummary {
+  id: string;
+  url: string;
+  title: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface SharedLooksList {
+  looks: SharedLookSummary[];
+}
+
+export interface StopLookRequest {
+  link: string;
+}
+
+/** 404 : page inconnue, arrêtée, expirée, compte suspendu ou supprimé (une seule réponse). */
+export const LOOK_NOT_FOUND_ERROR = "look_not_found";
+/** 409 : recherche pas terminée, boutiques encore attendues, ou plus de 30 jours. */
+export const LOOK_NOT_READY_ERROR = "look_not_ready";
+/** 409 : déjà LOOK_ACTIVE_MAX pages actives. */
+export const LOOK_LIMIT_ERROR = "look_limit";
+/** 503 (création) ou 404 (liste, arrêt) : pages look indisponibles (0057 absente ou interrupteur coupé). */
+export const LOOK_PAGES_UNAVAILABLE_ERROR = "look_pages_unavailable";

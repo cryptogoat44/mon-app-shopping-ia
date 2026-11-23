@@ -11,6 +11,7 @@ import { privateAccountsReady } from "./audience.js";
 import { commentThreadsReady } from "./comments.js";
 import { postExtrasReady } from "./postExtras.js";
 import { savedPostsReady } from "./savedPosts.js";
+import { LOOK_IMAGE_BUCKET, lookImagePath, lookPagesReady, lookUrl } from "./lookPages.js";
 import { postVisibleTo, readAudience, type Audience } from "./audience.js";
 import { memberQuotasReady } from "./memberQuotas.js";
 
@@ -136,6 +137,13 @@ export interface ExportData {
    * sinon ni auteur ni lien (« publication indisponible »), jamais le nom
    * d'un compte en blocage avec vous. Rien de la publication elle-même. */
   savedPosts: ExportRow[];
+  /** Pages look partagées (lot « page look », migration 0057) : ce que voit
+   * toute personne qui a le lien (la page copiée à la création : nom de la
+   * pièce, boutiques, prix, mentions, stock, jour de la recherche), le lien,
+   * l'adresse de la copie de l'image faite par le serveur, les dates de
+   * création et d'expiration. Seulement les pages encore gardées : une page
+   * arrêtée ou expirée est effacée. */
+  sharedLooks: ExportRow[];
   /** Quotas par membre (migration 0053) : vos droits d'abonnement (le type,
    * la date de fin, d'où vient l'information, la dernière mise à jour)… */
   memberEntitlements: ExportRow[];
@@ -543,6 +551,24 @@ async function listSavedPosts(fastify: FastifyInstance, userId: string): Promise
   });
 }
 
+/** Ses pages look (migration 0057) : la page copiée, le lien, la copie de
+ * l'image (adresse publique de notre stockage), les dates. Jamais
+ * l'identifiant de la recherche ni de la proposition (internes). */
+async function listSharedLooks(fastify: FastifyInstance, userId: string): Promise<ExportRow[]> {
+  const rows = await listWhere(fastify.supabaseAdmin, "shared_looks", "id, token, content, image_path, created_at, expires_at", "user_id", userId, BY_DATE);
+  return rows.map((row) => {
+    const path = lookImagePath(typeof row.image_path === "string" ? row.image_path : null);
+    return {
+      id: row.id,
+      url: typeof row.token === "string" ? lookUrl(row.token) : null,
+      content: row.content,
+      image_url: path === null ? null : fastify.supabaseAdmin.storage.from(LOOK_IMAGE_BUCKET).getPublicUrl(path).data.publicUrl,
+      created_at: row.created_at,
+      expires_at: row.expires_at,
+    };
+  });
+}
+
 export async function collectExport(
   fastify: FastifyInstance,
   userId: string,
@@ -775,6 +801,10 @@ export async function collectExport(
   const withSavedPosts = await savedPostsReady(fastify);
   const savedPosts = await section("savedPosts", () => (withSavedPosts ? listSavedPosts(fastify, userId) : Promise.resolve(none)), none);
 
+  // Pages look : sans la migration 0057, section vide.
+  const withLooks = await lookPagesReady(fastify);
+  const sharedLooks = await section("sharedLooks", () => (withLooks ? listSharedLooks(fastify, userId) : Promise.resolve(none)), none);
+
   // Quotas par membre : sans la migration 0053, aucun droit et aucun compteur du mois.
   const withQuotas = await memberQuotasReady(fastify);
   const memberEntitlements = await section(
@@ -839,6 +869,7 @@ export async function collectExport(
     savedPosts,
     memberEntitlements,
     monthlyQuota,
+    sharedLooks,
   };
   return { data, failures };
 }

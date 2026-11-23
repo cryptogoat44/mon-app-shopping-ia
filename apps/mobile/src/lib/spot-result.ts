@@ -108,6 +108,7 @@ export function toSpotResult(search: ProductSearch): SpotResult {
     query: search.query,
     sourceUrl: search.sourceUrl,
     status: "success",
+    createdAt: search.createdAt,
     pieces: all.filter((piece) => piece.origin === undefined || piece.origin === "lens"),
     similarPieces: [],
     sortedByWords: search.sortedByWords === true,

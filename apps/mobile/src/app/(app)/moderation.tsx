@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import type { ModerationPage, ModerationStatus } from "@monapp/shared-types";
@@ -13,6 +13,8 @@ import { LoadFailure } from "@/components/load-failure";
 import { ErrorMessage } from "@/components/error-message";
 import { ModerationItemCard } from "@/components/moderation-item";
 import { themedStyles } from "@/theme/themed-styles";
+import { ApiError } from "@/lib/api-error";
+import { stopLookAsAdmin, useLookPagesStatus } from "@/lib/look-pages";
 
 // Modération (lot 5, section 5.B) : réservée aux administrateurs — l'entrée
 // des Réglages ne s'affiche que pour eux, et le serveur revérifie le rôle à
@@ -77,6 +79,55 @@ function QueueSkeleton() {
   );
 }
 
+/** Lot « page look » : arrêter une page signalée, à partir du lien collé (le serveur revérifie le rôle). */
+function StopLookField() {
+  const status = useLookPagesStatus();
+  const [link, setLink] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  if (!status?.manage) return null;
+
+  async function stop() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      await stopLookAsAdmin(link.trim());
+      setLink("");
+      setMessage({ ok: true, text: t.look.moderationStopped });
+    } catch (e) {
+      setMessage({ ok: false, text: e instanceof ApiError ? e.message : t.common.genericError });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <View style={styles.lookField}>
+      <Text style={styles.lookLabel} nativeID="look-stop-label">
+        {t.look.moderationField}
+      </Text>
+      <TextInput
+        value={link}
+        onChangeText={setLink}
+        autoCapitalize="none"
+        autoCorrect={false}
+        inputMode="url"
+        style={styles.lookInput}
+        accessibilityLabel={t.look.moderationField}
+        accessibilityLabelledBy="look-stop-label"
+      />
+      <Pressable style={styles.secondaryButton} onPress={stop} disabled={busy || link.trim() === ""} accessibilityRole="button" accessibilityState={{ disabled: busy || link.trim() === "", busy }}>
+        <Text style={styles.secondaryLabel}>{t.look.stop}</Text>
+      </Pressable>
+      {message ? (
+        <Text accessibilityLiveRegion="polite" style={message.ok ? styles.lookOk : styles.lookError}>
+          {message.text}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 export default function ModerationScreen() {
   const router = useRouter();
   const [status, setStatus] = useState<ModerationStatus>("open");
@@ -103,6 +154,7 @@ export default function ModerationScreen() {
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title} accessibilityRole="header">{t.moderationQueue.title}</Text>
+        <StopLookField />
         <View style={styles.tabs}>
           <SegmentedChoice
             label={t.moderationQueue.tabs}
@@ -172,4 +224,9 @@ const styles = themedStyles(() => ({
     justifyContent: "center",
   },
   secondaryLabel: { fontSize: font.secondary, fontWeight: "600", color: color.vert },
+  lookField: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.md, padding: space.md, marginBottom: space.lg, gap: space.sm },
+  lookLabel: { fontSize: font.secondary, fontWeight: "600", color: color.encre },
+  lookInput: { borderWidth: 1, borderColor: color.filet, borderRadius: radius.sm, minHeight: 44, paddingHorizontal: space.sm, fontSize: font.secondary, color: color.encre },
+  lookOk: { fontSize: font.secondary, color: color.vert },
+  lookError: { fontSize: font.secondary, color: color.encre },
 }));

@@ -37,6 +37,11 @@ function withoutBinary(value: unknown, depth = 0): unknown {
   return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, withoutBinary(item, depth + 1)]));
 }
 
+/** Page look : le jeton dans le chemin (/api/looks/public/<jeton>) devient « :token ». */
+function withoutLookToken(url: string): string {
+  return url.replace(/\/api\/looks\/public\/[^/?#]+/g, "/api/looks/public/:token");
+}
+
 /** Retire tout ce qui pourrait contenir une donnée personnelle (fonction pure, testée). */
 export function scrubEvent(event: ErrorEvent): ErrorEvent {
   if (typeof event.message === "string") event.message = scrubBinaryText(event.message);
@@ -47,14 +52,14 @@ export function scrubEvent(event: ErrorEvent): ErrorEvent {
   if (event.contexts) event.contexts = withoutBinary(event.contexts) as typeof event.contexts;
   if (event.tags) event.tags = withoutBinary(event.tags) as typeof event.tags;
   if (event.request) {
-    const url = event.request.url ? event.request.url.split("?")[0] : undefined;
+    const url = event.request.url ? withoutLookToken(event.request.url.split("?")[0]!) : undefined;
     event.request = { method: event.request.method, url };
   }
   const id = typeof event.user?.id === "string" ? event.user.id : undefined;
   event.user = id ? { id } : undefined;
   if (event.breadcrumbs) {
     event.breadcrumbs = event.breadcrumbs.map((crumb) => {
-      const data = crumb.data && typeof crumb.data.url === "string" ? { ...crumb.data, url: crumb.data.url.split("?")[0] } : crumb.data;
+      const data = crumb.data && typeof crumb.data.url === "string" ? { ...crumb.data, url: withoutLookToken(crumb.data.url.split("?")[0]!) } : crumb.data;
       const message = typeof crumb.message === "string" ? scrubBinaryText(crumb.message) : crumb.message;
       return { ...crumb, message, data: data ? (withoutBinary(data) as typeof data) : data };
     });

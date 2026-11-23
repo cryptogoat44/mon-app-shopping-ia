@@ -104,6 +104,8 @@ function RootNavigator() {
           <Stack.Screen name="confidentialite" />
           {/* Aide et contact (chantier 3) : lisible par tous, adresse d'assistance de l'App Store. */}
           <Stack.Screen name="aide" />
+          {/* La page look (lot « page look ») : lisible par tous, sans compte, en lecture seule. */}
+          <Stack.Screen name="look" />
         </Stack>
       </View>
     </ThemeProvider>

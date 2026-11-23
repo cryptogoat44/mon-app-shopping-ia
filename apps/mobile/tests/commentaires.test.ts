@@ -455,7 +455,7 @@ describe("textes", () => {
     for (const catalog of [fr, en]) {
       const keys = Object.keys(catalog);
       expect(keys.indexOf("commentThreads")).toBe(keys.indexOf("memberLists") + 1);
-      expect(keys.slice(keys.indexOf("commentThreads") + 1)).toEqual(["carousel", "savedPosts", "profilePins", "forYou", "activityPush"]);
+      expect(keys.slice(keys.indexOf("commentThreads") + 1)).toEqual(["carousel", "savedPosts", "profilePins", "forYou", "activityPush", "look"]);
     }
   });
 
