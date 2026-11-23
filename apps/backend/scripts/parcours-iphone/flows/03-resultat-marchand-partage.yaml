@@ -1,6 +1,6 @@
 # Résultat d'une recherche (préparée sans SerpApi) : lien marchand dans le
 # navigateur intégré, puis feuille de partage d'iOS refermée sans partager.
-appId: com.spottoapp.ios
+appId: com.spottoshop.app
 ---
 - tapOn: "Retour à Spotter"
 - extendedWaitUntil:

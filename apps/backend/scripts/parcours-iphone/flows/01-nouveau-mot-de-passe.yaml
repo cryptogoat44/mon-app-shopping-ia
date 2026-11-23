@@ -2,7 +2,7 @@
 # réel) : le formulaire doit s'afficher, puis RESTER affiché une fois la
 # session ouverte et le profil chargé (défaut corrigé au lot 3bis : l'app
 # partait sur l'accueil, sans formulaire).
-appId: com.spottoapp.ios
+appId: com.spottoshop.app
 ---
 - extendedWaitUntil:
     visible: "Ouvrir|Choisissez un mot de passe.*"

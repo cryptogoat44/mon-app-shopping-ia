@@ -1,6 +1,6 @@
 # Lot 4 : langue et thème de l'app pour une combinaison (les libellés de départ
 # sont ceux de la langue en cours, ceux d'arrivée ceux de la nouvelle langue).
-appId: com.spottoapp.ios
+appId: com.spottoshop.app
 ---
 - tapOn: ${PROFIL}
 - tapOn: ${REGLAGES}
