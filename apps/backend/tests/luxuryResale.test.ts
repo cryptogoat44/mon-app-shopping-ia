@@ -294,9 +294,15 @@ describe("les mots de la recherche", () => {
     expect(searchWordsOf("Dior Marmont Prix.2900EUR", dior, [])).toBe("Dior Marmont Prix");
     expect(searchWordsOf("Dior Marmont Prix-2900 €", dior, [])).toBe("Dior Marmont Prix");
     expect(searchWordsOf("Dior Saddle 2900EUR-noir", dior, [])).toBe("Dior Saddle");
+    // Refusé : un tiret seul entre le prix et la devise (« 2.900,- € », « 2.900.- CHF », « 2900 - EUR »).
+    expect(searchWordsOf("Dior Saddle 2.900,- €", dior, shownWith([3100]))).toBe("Dior Saddle");
+    expect(searchWordsOf("Dior Saddle 2.900.- CHF", dior, shownWith([3100]))).toBe("Dior Saddle");
+    expect(searchWordsOf("Dior Saddle 2900 - EUR", dior, shownWith([3100]))).toBe("Dior Saddle");
     // Permis : un nombre de modèle collé par un signe, sans devise, reste (« Dior 30 Montaigne », « B23 »).
     expect(searchWordsOf("Dior—30 Montaigne", dior, [])).toBe("Dior 30 Montaigne");
     expect(searchWordsOf("Dior Saddle:B23 1.250,00", dior, [])).toBe("Dior Saddle B23 1 250 00");
+    // Permis : un tiret seul sans devise derrière ne retire rien (« Dior 30 - Montaigne »).
+    expect(searchWordsOf("Dior 30 - Montaigne", dior, shownWith([3100]))).toBe("Dior 30 Montaigne");
   });
 
   it("jamais le nom d'une boutique connue montrée", () => {

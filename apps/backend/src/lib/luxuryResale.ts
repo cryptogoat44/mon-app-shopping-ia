@@ -195,7 +195,9 @@ export function searchWordsOf(title: string, house: MaisonDeLuxe, shown: readonl
     .replace(/(?<=\d)-|-(?=\d)/gu, " ")
     .replace(/[^\p{L}\p{M}\p{N}.,'\-&€$£¥\s]/gu, " ")
     .split(/\s+/u)
-    .filter(Boolean);
+    // Un signe seul (« - » de « 2.900,- € », « & ») part ici : sinon il
+    // arrêterait la recherche des nombres qui touchent la devise.
+    .filter((token) => /[\p{L}\p{N}€$£¥]/u.test(token));
   // Prix : la devise, et les nombres qui la touchent (« 1 250,00 € », « €1250 », « 1250 EUR »).
   const dropped = raw.map(() => false);
   raw.forEach((token, index) => {
