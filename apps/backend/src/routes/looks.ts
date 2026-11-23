@@ -108,7 +108,12 @@ const EXPIRED_BATCH = 50;
  * sur ses pages (création, liste) et à la lecture du statut. Jamais à la
  * lecture publique. */
 async function purgeExpired(fastify: FastifyInstance, userId: string | null, now: Date): Promise<void> {
-  const cutoff = now.toISOString();
+  // Une page est expirée dès l'instant de son expiration : la lecture publique
+  // la refuse (expires_at <= maintenant) et la liste ne la montre plus
+  // (expires_at > maintenant exigé). La purge suit la même règle : une page
+  // arrêtée à l'instant (expires_at = maintenant, stockage qui a refusé) est
+  // reprise par un passage qui tombe dans la même milliseconde.
+  const cutoff = new Date(now.getTime() + 1).toISOString();
   const own = userId === null ? [] : parseDbRows(EXPIRED_ROWS, await fastify.supabaseAdmin.from("shared_looks").select("id, image_path").eq("user_id", userId).lt("expires_at", cutoff), "Pages look expirées");
   const others = parseDbRows(
     EXPIRED_ROWS,
