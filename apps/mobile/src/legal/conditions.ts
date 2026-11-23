@@ -56,6 +56,7 @@ export const termsOfUse: LegalDocument = {
       title: "Liens vers les marchands",
       blocks: [
         `Les liens marqués « Lien affilié » peuvent, à l'avenir, rapporter une commission à ${BRAND} lorsque vous achetez, sans aucun surcoût pour vous. À la date de cette version, aucun programme d'affiliation n'est actif : ${BRAND} ne perçoit aucune commission.`,
+        "Une page look montre des prix et des stocks vus dans les boutiques le jour de la recherche ; ils ont pu changer. Les pages look peuvent être signalées et arrêtées par l'équipe de modération.",
       ],
     },
     {

@@ -54,6 +54,7 @@ export const termsOfUseEn: LegalDocument = {
       title: "Links to retailers",
       blocks: [
         `Links marked “Affiliate link” may, in the future, earn ${BRAND} a commission when you make a purchase, at no extra cost to you. As of this version, no affiliate program is active: ${BRAND} receives no commission.`,
+        "A look page shows prices and stock seen in the shops on the day of the search; they may have changed. Look pages can be reported and stopped by the moderation team.",
       ],
     },
     {
