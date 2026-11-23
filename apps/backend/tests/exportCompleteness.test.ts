@@ -134,6 +134,11 @@ const quotasProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_RO
 const QUOTAS_MIGRATED = !quotasProbe.error && quotasProbe.data === 1;
 const QUOTA_SECTIONS = QUOTAS_MIGRATED ? (["memberEntitlements"] as const) : [];
 
+// Pages look (lot « page look ») : une page partagée, seulement une fois la
+// migration 0057 appliquée sur la base des tests (sans elle, section vide).
+const sharedLooksProbe = await createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).from("shared_looks").select("id").limit(0);
+const SHARED_LOOK_SECTIONS = sharedLooksProbe.error ? [] : (["sharedLooks"] as const);
+
 // Sections qui sont un objet (ou null), pas une liste.
 const OBJECT_SECTIONS = [
   "account",
@@ -213,6 +218,8 @@ const JSON_KEYS = [
   // Quotas par membre (migration 0053), de même.
   "memberEntitlements",
   "monthlyQuota",
+  // Pages look (migration 0057), de même.
+  "sharedLooks",
 ];
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
@@ -260,6 +267,18 @@ describe("export RGPD complet", () => {
       .select("id")
       .single();
     await app.supabaseAdmin.from("affiliate_links").insert({ product_match_id: match!.id, network: "direct", affiliate_url: "https://example.com/p" });
+    // Pages look (0057) : une page de ce résultat, insérée directement (aucune copie d'image ici).
+    if (SHARED_LOOK_SECTIONS.length > 0) {
+      const look = await app.supabaseAdmin.from("shared_looks").insert({
+        user_id: user.id,
+        search_id: search!.id,
+        match_id: match!.id,
+        token: `export${user.id.replace(/-/g, "").slice(0, 16)}`,
+        content: { v: 1, searchedOn: "2026-11-20", piece: { name: "Sac", brand: null }, verdict: null, offers: [] },
+        expires_at: new Date(Date.now() + 24 * 3_600_000).toISOString(),
+      });
+      if (look.error) throw look.error;
+    }
     // Compte privé : une demande reçue (de l'ami) et une demande envoyée (à
     // lui), écrites directement. Jamais l'administratrice de test : elle ne
     // doit être nommée nulle part dans l'export. Jamais l'inconnu non plus :
@@ -546,6 +565,7 @@ describe("export RGPD complet", () => {
       ...POST_EXTRA_SECTIONS,
       ...SAVED_POST_SECTIONS,
       ...QUOTA_SECTIONS,
+      ...SHARED_LOOK_SECTIONS,
     ]) {
       expect(Array.isArray(body[section]), section).toBe(true);
       expect(body[section].length, section).toBeGreaterThan(0);
@@ -574,6 +594,12 @@ describe("export RGPD complet", () => {
     if (SAVED_POST_SECTIONS.length > 0) {
       expect(Object.keys(body.savedPosts[0]).sort()).toEqual(["author_id", "collection_id", "collection_name", "created_at", "post_available", "post_id"]);
       expect(body.savedPosts.map((row: { author_id: string; post_available: boolean; collection_id: string | null }) => [row.author_id, row.post_available, row.collection_id])).toEqual([[friend.id, true, null]]);
+    }
+    // Pages look : la page, son lien, ses dates ; jamais l'identifiant de la recherche ni de la proposition.
+    if (SHARED_LOOK_SECTIONS.length > 0) {
+      expect(Object.keys(body.sharedLooks[0]).sort()).toEqual(["content", "created_at", "expires_at", "id", "image_url", "url"]);
+      expect(body.sharedLooks[0].url).toMatch(/\/look\?l=export[0-9a-f]{16}$/);
+      expect(JSON.stringify(body.sharedLooks)).not.toMatch(/search_id|match_id|user_id/);
     }
     // Épingles et lien en bio (migration 0049) : le lien du profil et la date de l'épingle.
     if (PROFILE_EXTRAS_MIGRATED) {

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { chunks } from "./pagedReads.js";
+import { lookImagesOf, removeLookImages } from "./lookPages.js";
 
 // Conservation de l'historique des recherches (décision du fondateur,
 // 2026-09-25) : 12 mois, puis suppression. Pas de tâche programmée : à
@@ -66,6 +67,18 @@ export async function purgeExpiredSearches(fastify: FastifyInstance, userId: str
   }
   const keptSearches = new Set([...keptMatches].map((matchId) => matchesBySearch.get(matchId)));
   const toDelete = expiredIds.filter((id) => !keptSearches.has(id));
+
+  // Page look (migration 0057) : les pages de ces recherches partent avec
+  // elles (cascade en base) ; les copies de leurs images, rangées hors du
+  // dossier du membre, sont effacées ici. Lecture impossible : la purge
+  // continue (une copie restée n'est liée à rien et ne dit rien du membre).
+  for (const part of chunks(toDelete)) {
+    try {
+      await removeLookImages(fastify, await lookImagesOf(fastify, userId, part));
+    } catch {
+      fastify.log.warn("Purge des recherches : copies d'images des pages look laissées dans le stockage");
+    }
+  }
 
   for (const part of chunks(toDelete)) {
     const { error: deleteError } = await db.from("product_searches").delete().eq("user_id", userId).in("id", part);

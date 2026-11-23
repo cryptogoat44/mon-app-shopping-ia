@@ -25,6 +25,7 @@ import { WISH_COPY_BUCKET } from "../lib/wishShare.js";
 import { messagesReady, otherMembersMessageCopies } from "../lib/messaging.js";
 import { allOwnCopies, collectionsReady } from "../lib/collections.js";
 import { deleteAllPushTokens, pushReady } from "../lib/push.js";
+import { lookImagesOf, lookPagesReady, removeLookImages } from "../lib/lookPages.js";
 
 /** Corps de DELETE /api/me : le mot tapé par la personne (revérifié ici). */
 const deleteAccountSchema = z.object({ confirmation: z.string().max(40).refine((value) => isAccountDeletionWord(value)) });
@@ -297,6 +298,24 @@ export default async function accountRoutes(fastify: FastifyInstance) {
         return reply.code(500).send({ error: "internal_error", message: "La suppression a échoué." });
       }
     }
+    // Page look (migration 0057) : ses pages partent avec le compte (cascade
+    // en base), et tout de suite ici, pour qu'aucun visiteur ne les voie
+    // pendant la suppression ; les copies de leurs images, rangées hors de
+    // son dossier (post-media/looks/, sans son identifiant), sont effacées
+    // une à une. Sans 0057, il n'y a rien à effacer.
+    let lookImages: string[] = [];
+    try {
+      lookImages = await lookImagesOf(fastify, userId);
+    } catch {
+      request.log.error("Lecture des pages look impossible avant suppression du compte");
+      return reply.code(500).send({ error: "internal_error", message: "La suppression a échoué." });
+    }
+    if (await lookPagesReady(fastify)) {
+      const { error: looksError } = await fastify.supabaseAdmin.from("shared_looks").delete().eq("user_id", userId);
+      if (looksError) request.log.warn("Suppression de compte : pages look laissées à la cascade");
+    }
+    await removeLookImages(fastify, lookImages);
+
     const receivedCopies = await removeOwnedFiles(fastify, WISH_COPY_BUCKET, [
       ...received.flatMap((piece) => [piece.image_url, piece.image_thumb_url].flatMap((url) => (url ? [{ ownerId: piece.sender_id, url }] : []))),
       ...messageCopies,

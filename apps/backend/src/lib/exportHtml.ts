@@ -745,6 +745,29 @@ function savedPostsSection(ctx: Ctx): Html {
   return section(ctx, "savedPosts", cards);
 }
 
+/** Pages look partagées (migration 0057) : le nom de la pièce, le lien, les
+ * boutiques et leurs prix tels que la page les montre, la copie de l'image,
+ * les dates. */
+function sharedLooksSection(ctx: Ctx): Html {
+  const cards = newestFirst(ctx.data.sharedLooks ?? [], "created_at").map((row) => {
+    const content = (typeof row.content === "object" && row.content !== null ? row.content : {}) as { piece?: { name?: unknown }; offers?: unknown };
+    const offers = Array.isArray(content.offers) ? (content.offers as { shop?: unknown; price?: unknown; currency?: unknown }[]) : [];
+    const shops = offers
+      .map((offer) => [str(offer.shop), price(ctx, offer.price, offer.price, offer.currency)].filter((part): part is string => typeof part === "string" && part !== "").join(" · "))
+      .filter((line) => line !== "")
+      .join(" ; ");
+    return new Card(ctx, "sharedLooks", row)
+      .use("id")
+      .field("url", link(ctx, row.url, (site) => tr(ctx, EXPORT_TEXT.openLink, { site })))
+      .field("content", shops === "" ? null : shops)
+      .field("image_url", imageOrLink(ctx, row.image_url, (site) => tr(ctx, EXPORT_TEXT.viewImage, { site })))
+      .field("created_at")
+      .field("expires_at")
+      .render(str(content.piece?.name) ?? tr(ctx, EXPORT_SECTIONS.sharedLooks.title));
+  });
+  return section(ctx, "sharedLooks", cards);
+}
+
 function followingSection(ctx: Ctx): Html {
   const cards = newestFirst(ctx.data.following, "created_at").map((row) =>
     new Card(ctx, "following", row).use("followee_id").field("created_at").render(person(ctx, row.followee_id))
@@ -1292,6 +1315,7 @@ function sectionCount(data: ExportData, id: ExportSectionId): number | null {
     mentions: data.mentionsReceived.length + data.mentionsMade.length,
     peopleTags: data.peopleTagsMade.length + data.peopleTagsReceived.length,
     savedPosts: data.savedPosts.length,
+    sharedLooks: (data.sharedLooks ?? []).length,
     following: data.following.length,
     followers: data.followers.length,
     followRequests: data.followRequestsSent.length + data.followRequestsReceived.length,
@@ -1325,6 +1349,7 @@ const SECTION_RENDERERS: Record<ExportSectionId, (ctx: Ctx) => Html> = {
   mentions: mentionsSection,
   peopleTags: peopleTagsSection,
   savedPosts: savedPostsSection,
+  sharedLooks: sharedLooksSection,
   following: followingSection,
   followers: followersSection,
   followRequests: followRequestsSection,
