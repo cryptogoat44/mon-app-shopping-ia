@@ -652,8 +652,10 @@ describe("16. Statistiques (catalogue fermé, ajout seulement)", () => {
     // Les quatre événements sont à la fin du catalogue (ajout seulement),
     // suivis seulement de ceux du lot « alertes visibles », ajoutés après.
     const keys = Object.keys(ANALYTICS_EVENTS);
-    expect(keys.slice(-6, -2)).toEqual(["shop_returned", "purchase_question", "price_watch_changed", "price_drop_shown"]);
-    expect(keys.slice(-2)).toEqual(["news_banner_shown", "news_line_opened"]);
+    expect(keys.slice(-9, -5)).toEqual(["shop_returned", "purchase_question", "price_watch_changed", "price_drop_shown"]);
+    expect(keys.slice(-5, -3)).toEqual(["news_banner_shown", "news_line_opened"]);
+    // Puis ceux de la page look (lot « page look »).
+    expect(keys.slice(-3)).toEqual(["look_shared", "look_stopped", "look_signup"]);
   });
 
   it("refusé : rien sans consentement ; jamais de propriété platform, ni pièce, ni boutique, ni prix", async () => {

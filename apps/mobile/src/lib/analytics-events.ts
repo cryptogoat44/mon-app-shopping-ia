@@ -258,6 +258,16 @@ export const ANALYTICS_EVENTS = {
   // dans un appel de statistiques des écrans des alertes.
   news_banner_shown: { count },
   news_line_opened: { kind: oneOf(["price_drop", "restock"]) },
+  // La page look (lot « page look », décision du fondateur n° 3) : rien n'est
+  // compté chez le visiteur. Chez le membre qui a accepté les statistiques :
+  // un lien partagé (feuille du téléphone ou lien copié ; reused : la page
+  // existait déjà pour cette pièce), une page arrêtée depuis les Réglages, et
+  // une inscription partie de « Trouver la mienne » dans la même session de
+  // l'onglet (drapeau en mémoire seulement). Jamais la pièce, la boutique, le
+  // prix, le lien ni un identifiant.
+  look_shared: { method: oneOf(["native", "copy"]), reused: bool },
+  look_stopped: { from: oneOf(["settings"]) },
+  look_signup: {},
 } as const satisfies Record<string, Record<string, Rule>>;
 
 export type AnalyticsEvent = keyof typeof ANALYTICS_EVENTS;

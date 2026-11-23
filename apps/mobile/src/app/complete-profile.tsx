@@ -11,6 +11,7 @@ import { color, font, radius, serifDisplayLetterSpacing, serifFont, serifLineHei
 import { ErrorMessage } from "@/components/error-message";
 import { CHECKBOX_SIZE, CheckboxRow } from "@/components/checkbox-row";
 import { themedStyles } from "@/theme/themed-styles";
+import { takeSignupFromLook } from "@/lib/look-page";
 
 const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
 
@@ -66,6 +67,8 @@ export default function CompleteProfileScreen() {
       if (session?.user.id) {
         setAnalyticsUser(session.user.id, analyticsChecked);
         track("signup_completed", { locale: getActiveLocale() });
+        // Inscription partie de « Trouver la mienne » (page look) dans cette session de l'onglet.
+        if (takeSignupFromLook()) track("look_signup", {});
       }
       await refreshProfile();
       // Le layout racine redirige automatiquement vers (app) une fois le profil complet.
