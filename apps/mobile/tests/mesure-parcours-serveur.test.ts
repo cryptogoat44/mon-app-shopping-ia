@@ -10,7 +10,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.hoisted(() => {
   process.env.EXPO_PUBLIC_API_URL = "https://api.exemple.test";
 });
-vi.mock("../src/lib/supabase", () => ({ supabase: { auth: { getSession: async () => ({ data: { session: { access_token: "jeton-factice" } } }) } } }));
+// La lecture de la session peut être retenue (jeton qui se renouvelle sur un réseau lent).
+const session = vi.hoisted(() => ({ held: null as Promise<void> | null }));
+vi.mock("../src/lib/supabase", () => ({
+  supabase: {
+    auth: {
+      getSession: async () => {
+        if (session.held) await session.held;
+        return { data: { session: { access_token: "jeton-factice" } } };
+      },
+    },
+  },
+}));
 vi.mock("../src/lib/image-file", () => ({ imageFileFromUri: vi.fn() }));
 
 import { readFileSync } from "node:fs";
@@ -270,6 +281,60 @@ describe("le vrai chemin : authorizedFetch, app_opened, puis l'envoi (avec accor
     await expect(withTimeout(20, (signal) => fetchMyProfile(signal))).rejects.toBeInstanceOf(AttemptTimeoutError);
     await vi.waitFor(() => expect(firstResponses()).toHaveLength(1));
     expect(firstResponses()).toEqual([expect.objectContaining({ wait_ms: 15_000, context: "launch", ok: false })]);
+  });
+
+  describe("délai de l'app et lecture de la session (jeton qui se renouvelle)", () => {
+    /** Comme fetch : un signal déjà abandonné, rien ne part ; sinon, pas de réponse jusqu'à l'abandon. */
+    const answersOnlyAbort: typeof fetch = (_url, init) =>
+      new Promise((_resolve, reject) => {
+        const abort = () => reject(new DOMException("Aborted", "AbortError"));
+        if (init?.signal?.aborted) abort();
+        else init?.signal?.addEventListener("abort", abort);
+      });
+    let release: () => void = () => {};
+
+    beforeEach(() => {
+      session.held = new Promise<void>((resolve) => (release = resolve));
+      setAnalyticsUser("u-1", true);
+      expect(trackAppOpened("launch")).toBe(true);
+    });
+
+    afterEach(() => {
+      session.held = null;
+      release();
+    });
+
+    it("refusé : délai écoulé pendant la lecture de la session : la requête n'est jamais partie, rien n'est mesuré ; la suivante compte", async () => {
+      fetchMock.mockImplementationOnce(answersOnlyAbort);
+      const attempt = new AbortController();
+      const request = fetchSearch("s1", attempt.signal);
+      // La relecture d'une recherche (10 s) ou l'essai du profil (15 s) cesse d'attendre avant que la session soit lue.
+      now += 10_000;
+      abortForTimeout(attempt);
+      session.held = null;
+      release();
+      await expect(request).rejects.toBeInstanceOf(DOMException);
+      expect(fetchMock.mock.calls[0]![1]?.signal?.aborted).toBe(true);
+      expect(firstResponses()).toEqual([]);
+      fetchMock.mockImplementationOnce(answersAfter(3_000, {}));
+      await fetchSearch("s1");
+      expect(firstResponses()).toEqual([expect.objectContaining({ wait_ms: 3_000, context: "launch", ok: true })]);
+    });
+
+    it("permis : délai écoulé une fois la requête partie : un échec, à la durée de l'attente depuis son départ", async () => {
+      fetchMock.mockImplementationOnce(answersOnlyAbort);
+      const attempt = new AbortController();
+      const request = fetchSearch("s1", attempt.signal);
+      // La session est lue au bout de 400 ms, puis le serveur endormi ne répond pas : l'app cesse d'attendre.
+      now += 400;
+      session.held = null;
+      release();
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      now += 9_600;
+      abortForTimeout(attempt);
+      await expect(request).rejects.toBeInstanceOf(DOMException);
+      expect(firstResponses()).toEqual([expect.objectContaining({ wait_ms: 9_600, context: "launch", ok: false })]);
+    });
   });
 
   it("retour dans l'app après 30 minutes : une nouvelle mesure, sur la première requête partie après", async () => {

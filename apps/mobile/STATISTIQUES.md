@@ -51,8 +51,9 @@ vous verrez dans PostHog.
   temps de la **première réponse du serveur**. `wait_ms` = l'attente en
   millisecondes, `context` = `launch` ou `resume`, `ok` = oui si le serveur a
   bien répondu, non en cas d'échec (réseau, erreur) ou quand **l'app a cessé
-  d'attendre** (par exemple au bout de 15 secondes pour le profil) : `wait_ms`
-  est alors la durée de cette attente, et le membre a attendu plus longtemps.
+  d'attendre** (par exemple au bout de 15 secondes pour le profil, ou de 10
+  secondes pour relire une recherche au retour dans l'app) : `wait_ms` est
+  alors la durée de cette attente, et le membre a attendu plus longtemps.
   Il montre combien de membres tombent sur le **serveur endormi** (offre
   gratuite de Render : jusqu'à environ une minute au réveil). Une requête
   annulée par le membre (« Annuler », écran quitté) ne compte pas.
@@ -138,7 +139,9 @@ vous verrez dans PostHog.
   (tout de suite quand elle arrive avec eux ou n'a pas lieu). Les résultats,
   eux, sont déjà à l'écran et cliquables : le membre a souvent ouvert une
   boutique ou gardé une pièce avant. Une recherche retrouvée après une
-  réponse perdue (réseau coupé, retour sur TikTok) ne l'envoie pas.
+  réponse perdue (réseau coupé, retour sur TikTok) ne l'envoie pas. Il part
+  seulement sous le compte qui a lancé la recherche, s'il avait donné son
+  accord à ce moment-là : jamais sous un autre compte connecté entre-temps.
   `outcome` = `results` (des résultats), `none` ou `failed`. Nouveaux :
   `wait_ms` = l'attente, du lancement aux premiers résultats (même si
   l'événement part plus tard) ; `shops_wait_ms` = l'attente, du lancement à
@@ -146,7 +149,10 @@ vous verrez dans PostHog.
   pas reçu cette fin ; égale à `wait_ms` quand cette recherche n'a pas eu
   lieu : aucun résultat, ou IA coupée, `complement` = `skipped`).
 - **`text_search_launched`** puis **`text_search_completed`** : « Que
-  cherchez-vous ? ». `wait_ms` (nouveau) = l'attente jusqu'à l'issue.
+  cherchez-vous ? ». `outcome` = `shown` (des résultats), `empty` (aucun),
+  `shopping_failed` (la recherche en ligne a échoué) ou `failed` (panne du
+  réseau ou du serveur, souvent immédiate sans réseau). `wait_ms` (nouveau)
+  = l'attente jusqu'à l'issue.
 
 ### 5. La boutique
 
@@ -289,6 +295,7 @@ Les temps sont en **millisecondes**, arrondis à 100 ms : `12300` veut dire
    - `spot_completed` : `outcome` = `results` ; pour `shops_wait_ms`, en
      plus `complement` **is not** `skipped` (IA coupée : aucune recherche
      dans d'autres boutiques, la valeur vaut alors `wait_ms`) ;
+   - `text_search_completed` : `outcome` = `shown` ;
    - `video_link_ai_result` et `video_ai_result` : `outcome` = `found`.
 3. À la place de **Total count**, choisissez **Property value** → `wait_ms`
    (ou `shops_wait_ms`), puis **Median** (médiane), puis ajoutez la même
@@ -301,20 +308,29 @@ Les temps sont en **millisecondes**, arrondis à 100 ms : `12300` veut dire
 
 ## Le serveur endormi : `server_first_response`
 
-Au-dessus de **10 secondes**, le serveur dormait presque sûrement.
+À partir de **9 secondes**, le serveur dormait presque sûrement.
 
 1. **New insight** → **Trends**.
 2. Série A : `server_first_response`, **Total count**.
 3. Série B : `server_first_response` avec le filtre `wait_ms` **greater
-   than** `10000`.
+   than** `8900` (c'est-à-dire 9 secondes ou plus, puisque les temps sont
+   arrondis à 100 ms : ainsi une relecture abandonnée au bout de 10 secondes
+   entre aussi, même mesurée un peu sous `10000`, sauf si l'app a d'abord dû
+   renouveler la connexion du membre pendant plus d'environ 1 seconde : voir
+   plus bas).
 4. **Formula** : `B / A * 100` = la part (en %) des ouvertures qui sont
    tombées sur le serveur endormi.
 
 Répartition utile : par `context` (lancement ou retour dans l'app). La part
 de `ok` = non montre les ouvertures où le serveur n'a pas répondu à temps :
 erreur, panne du réseau, ou l'app qui a cessé d'attendre (15 secondes pour
-le profil). Pour celles-là, `wait_ms` est la durée de l'attente de l'app :
-le membre a attendu plus longtemps.
+le profil ; 10 secondes pour relire une recherche au retour dans l'app, avec
+`wait_ms` autour de `10000`, ou nettement moins quand l'app a d'abord
+renouvelé la connexion du membre, car seul le temps après ce renouvellement
+est mesuré : ces ouvertures peuvent alors manquer à la série B et
+n'apparaître que dans la part de `ok` = non ; souvent le serveur endormi).
+Pour celles-là, `wait_ms` est la durée de l'attente de l'app : le membre a
+attendu plus longtemps.
 
 ## Les limites
 

@@ -12,7 +12,7 @@ const { track } = vi.hoisted(() => {
   return { track: vi.fn() };
 });
 vi.mock("../src/lib/supabase", () => ({ supabase: { auth: { getSession: async () => ({ data: { session: { access_token: "jeton-factice" } } }) } } }));
-vi.mock("../src/lib/analytics", () => ({ track, setAnalyticsConsent: vi.fn() }));
+vi.mock("../src/lib/analytics", () => ({ track, setAnalyticsConsent: vi.fn(), analyticsAccount: () => "u-1" }));
 vi.mock("../src/lib/image-file", () => ({ imageFileFromUri: vi.fn() }));
 
 import { runSearch, runTextSearch } from "../src/lib/api";

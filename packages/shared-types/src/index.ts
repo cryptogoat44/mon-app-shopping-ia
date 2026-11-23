@@ -286,14 +286,26 @@ export interface ProductMatch {
    * sur la carte (OFFER_MARKS). Absente (aucune mention, ancien serveur) :
    * rien à afficher. Une app plus ancienne l'ignore. */
   offerMark?: OfferMark;
+  /** « Cette pièce dans d'autres boutiques » (origine « shopping »)
+   * seulement : le serveur a rangé l'offre en fin de section (prix
+   * inhabituellement bas, ou adresse douteuse, qui n'a pas de mention).
+   * Jamais affiché : la grande carte prise dans cette section ne la choisit
+   * pas. Envoyé seulement quand il est vrai ; absent (ancien serveur, autres
+   * sections) = non. Une app plus ancienne l'ignore. */
+  demoted?: true;
 }
 
 /** Mentions d'une offre, calculées par le serveur (apps/backend/src/lib/shopTrust.ts) :
  * - official_shop : site officiel de la marque (« Boutique officielle de la
- *   marque »), en tête de sa section ;
+ *   marque ») ;
  * - known_shop : boutique de la liste des boutiques connues (« Boutique connue ») ;
  * - unusual_price : prix très inférieur à ceux des autres offres de la même
  *   recherche (« Prix inhabituellement bas »), un constat, jamais une accusation.
+ * Les mentions ne rangent que « Cette pièce dans d'autres boutiques » (origine
+ * « shopping ») : boutique officielle de la marque de la pièce en tête, quand
+ * le serveur l'a reconnue (toute autre est rangée comme une boutique
+ * connue), boutiques connues un peu remontées, prix inhabituellement bas en fin. Ailleurs, chaque proposition
+ * garde sa place, avec sa mention (décision du fondateur, 21 novembre 2026).
  * Les offres des boutiques masquées, et celles qui cumulent un prix très bas
  * et une adresse douteuse, ne sont jamais envoyées. */
 export const OFFER_MARKS = ["official_shop", "known_shop", "unusual_price"] as const;

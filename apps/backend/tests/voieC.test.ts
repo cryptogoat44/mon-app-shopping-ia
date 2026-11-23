@@ -258,6 +258,29 @@ describe("runComplement — le chemin normal", () => {
     expect((await runComplement(mixed.ports, mixed.input())).matches.map((match) => match.merchantUrl)).toEqual(["https://boutique-a.fr/3"]);
   });
 
+  it("ordre des boutiques : seule la boutique officielle de la marque de la requête est reconnue (un oui sur sa proposition) ; celles d'autres marques non, même nommées dans les titres ; jamais dans le cache", async () => {
+    const answer: ShoppingQueryAnswer = { kind: "query", value: { query: "Zara top satiné", brand: "Zara", model: "" }, usage: { inputTokens: 900, outputTokens: 40 } };
+    const items = [
+      shoppingItem(1, "Mango - Top satiné - noir", "https://www.zalando.fr/a"),
+      shoppingItem(2, "Top satiné col V MANGO", "https://www.laredoute.fr/b"),
+      shoppingItem(3, "Top en satin", "https://www2.hm.com/fr_fr/c"),
+      shoppingItem(4, "Top satiné", "https://shop.mango.com/fr/d"),
+      shoppingItem(5, "TOP SATINÉ - Noir", "https://www.zara.com/fr/e"),
+    ];
+    const cache = fakeCache();
+    const { ports, input } = setup({ cache, ports: { askQuery: vi.fn(async () => answer), searchText: vi.fn(async (): Promise<TextSearchResponse> => ({ items, received: 5, statusCode: 200 })) } });
+    const result = await runComplement(ports, input());
+    // Permis : zara.com, la boutique de la marque de la pièce ; refusé : H&M et Mango, avec ou sans titres qui les nomment.
+    expect(result.matches.filter((match) => match.brandShop === true).map((match) => match.merchantUrl)).toEqual(["https://www.zara.com/fr/e"]);
+    expect(result.matches.filter((match) => "brandShop" in match)).toHaveLength(1);
+    // L'ordre reçu ne change pas ici : seule la relecture range (lib/shopTrust.ts).
+    expect(result.matches.map((match) => match.rank)).toEqual([1, 2, 3, 4, 5]);
+    expect(JSON.stringify([...cache.entries.values()])).not.toContain("brandShop");
+    // Une marque sans boutique officielle (Exemplor) : aucun oui.
+    const plain = setup();
+    expect((await runComplement(plain.ports, plain.input())).matches.some((match) => "brandShop" in match)).toBe(false);
+  });
+
   it("20 au plus, après le tri léger", async () => {
     const items = Array.from({ length: 30 }, (_, index) => shoppingItem(index + 1, index >= 25 ? "Exemplor veste Nuage 07" : "Veste bleue", `https://boutique-${index}.fr/p`));
     const { ports, input } = setup({ ports: { searchText: vi.fn(async (): Promise<TextSearchResponse> => ({ items, received: 30, statusCode: 200 })) } });
@@ -1121,7 +1144,7 @@ describe("recherches relues : origine et complément (lib/searchRows.ts)", () =>
       { ...MATCH, id: "00000000-0000-4000-8000-000000000014", rank: 5, merchant_url: "https://www.google.fr/search?prds=productid:123", merchant_name: "eBay - vendeur" },
     ])!;
     const search = toProductSearch(parseSearchRow(BASE_ROW)!, matches, new Map(), new Map());
-    // Lues par rang : Amazon, boutique connue, remonte en tête (lot « recherche confiance »).
+    // Lues par rang : seule la clé de chaque pièce compte ici, pas l'ordre de la réponse.
     const byRank = [...search.matches].sort((a, b) => a.rank - b.rank);
     expect(byRank.map((match) => match.alertTrackable ?? false)).toEqual([true, false, false, false, false]);
     expect(byRank[1]).not.toHaveProperty("alertTrackable");

@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ANALYTICS_EVENTS } from "../src/lib/analytics-events";
+import { ANALYTICS_EVENTS, sanitizeProps } from "../src/lib/analytics-events";
+import { READ_TIMEOUT_MS } from "../src/lib/spot-recovery";
 
 // Lot « mesure du parcours » : le mode d'emploi du fondateur
 // (apps/mobile/STATISTIQUES.md) doit mener aux bons chiffres. Ses entonnoirs
@@ -86,6 +87,23 @@ describe("STATISTIQUES.md : les recettes de lecture", () => {
     expect(ANALYTICS_EVENTS.spot_completed.complement).toEqual({ kind: "enum", values: expect.arrayContaining(["skipped"]) });
   });
 
+  it("refusé : aucun événement proposé à l'étape 1 sans son filtre sur l'issue à l'étape 2 (« Que cherchez-vous ? » compris)", () => {
+    const recipe = part("Lire les temps d'attente");
+    const step1 = recipe.slice(recipe.indexOf("1. **New insight**"), recipe.indexOf("2. Filtrez sur l'issue"));
+    const step2 = flat(recipe.slice(recipe.indexOf("2. Filtrez sur l'issue"), recipe.indexOf("3. À la place")));
+    const events = [...step1.matchAll(/`([a-z_]+)`/g)].map((found) => found[1]!);
+    expect(events).toEqual(["spot_completed", "text_search_completed", "video_link_ai_result", "video_ai_result"]);
+    for (const event of events) expect(step2, event).toMatch(new RegExp(`\`${event}\`[^;.]*: \`outcome\` = \``));
+  });
+
+  it("permis : « Que cherchez-vous ? » filtré sur `shown`, une issue du catalogue ; toutes ses issues sont décrites avec l'événement", () => {
+    expect(flat(part("Lire les temps d'attente"))).toContain("`text_search_completed` : `outcome` = `shown` ;");
+    expect(ANALYTICS_EVENTS.text_search_completed.outcome).toEqual({ kind: "enum", values: ["shown", "empty", "shopping_failed", "failed"] });
+    expect(flat(guide)).toContain(
+      "`outcome` = `shown` (des résultats), `empty` (aucun), `shopping_failed` (la recherche en ligne a échoué) ou `failed` (panne du réseau ou du serveur, souvent immédiate sans réseau)"
+    );
+  });
+
   it("mark : « is set » dans la recette ; les cartes « Pièces déjà repérées » (sans mention) sont nommées", () => {
     const text = flat(guide);
     expect(text).toContain("**et le filtre `mark` is set**");
@@ -95,6 +113,41 @@ describe("STATISTIQUES.md : les recettes de lecture", () => {
     const cards = readFileSync(join(__dirname, "../src/components/video-products.tsx"), "utf8");
     expect(cards).toMatch(/<MerchantLinkButton [^>]*context="result"[^>]*\/>/);
     expect(cards).not.toMatch(/<MerchantLinkButton [^>]*mark=/);
+  });
+
+  describe("serveur endormi : la série B, à partir de 9 secondes", () => {
+    const sleeping = flat(part("Le serveur endormi : `server_first_response`"));
+    /** wait_ms tel que PostHog le reçoit (arrondi à 100 ms) : la série B le compte-t-elle ? */
+    const inSeriesB = (ms: number) => (sanitizeProps("server_first_response", { wait_ms: ms }).wait_ms as number) > 8_900;
+
+    it("refusé : ni « greater than 10000 » ni « 9900 », qui laissent de côté une relecture abandonnée mesurée un peu sous 10 s ; une attente sous 9 s n'entre pas", () => {
+      expect(sleeping).not.toContain("**greater than** `10000`");
+      expect(sleeping).not.toContain("**greater than** `9900`");
+      expect(sleeping).not.toContain("À partir de **10 secondes**");
+      expect(inSeriesB(8_849)).toBe(false);
+    });
+
+    it("permis : la relecture d'une recherche que l'app abandonne au bout de 10 s entre, même après un court renouvellement de la connexion (moins d'environ 1 s), et elle est nommée avec ok = non", () => {
+      expect(sleeping).toContain("À partir de **9 secondes**");
+      expect(sleeping).toContain("Série B : `server_first_response` avec le filtre `wait_ms` **greater than** `8900` (c'est-à-dire 9 secondes ou plus");
+      // Mesurée après la lecture de la session : 10000 moins le temps de cette lecture.
+      expect(inSeriesB(READ_TIMEOUT_MS - 4 + 16)).toBe(true);
+      expect(inSeriesB(READ_TIMEOUT_MS)).toBe(true);
+      // Valeur produite par tests/mesure-parcours-serveur.test.ts (connexion renouvelée d'abord, 400 ms).
+      expect(inSeriesB(9_600)).toBe(true);
+      expect(inSeriesB(READ_TIMEOUT_MS - 1_000)).toBe(true);
+      expect(sleeping).toContain("10 secondes pour relire une recherche au retour dans l'app, avec `wait_ms` autour de `10000`, ou nettement moins quand l'app a d'abord renouvelé la connexion du membre, car seul le temps après ce renouvellement est mesuré");
+      expect(flat(guide)).toContain("(par exemple au bout de 15 secondes pour le profil, ou de 10 secondes pour relire une recherche au retour dans l'app)");
+    });
+
+    it("refusé : le guide ne promet pas toute relecture abandonnée à la série B ; après un renouvellement de plus d'environ 1 s, elle n'y entre pas et il le dit", () => {
+      // Le chrono démarre après le renouvellement : 10 s moins 2 s de renouvellement = 8000, hors série B.
+      expect(inSeriesB(READ_TIMEOUT_MS - 2_000)).toBe(false);
+      expect(sleeping).not.toContain("ou un peu moins quand l'app a d'abord renouvelé la connexion du membre");
+      expect(sleeping).not.toMatch(/entre aussi, même mesurée un peu sous `10000`\)/);
+      expect(sleeping).toContain("sauf si l'app a d'abord dû renouveler la connexion du membre pendant plus d'environ 1 seconde");
+      expect(sleeping).toContain("ces ouvertures peuvent alors manquer à la série B et n'apparaître que dans la part de `ok` = non");
+    });
   });
 
   it("la clé PostHog du site : le vrai nom du service chez Render, pas un surnom", () => {

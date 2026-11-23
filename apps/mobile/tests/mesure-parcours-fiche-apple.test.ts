@@ -33,12 +33,39 @@ describe("fiche Apple : les temps d'attente en « Données de performances »", 
     expect(linked).toBe("Oui");
     expect(purposes).toContain("Analyses");
     expect(proof).toContain("avec accord seulement");
-    expect(proof).toContain("l'identifiant interne du compte (`apps/mobile/src/lib/analytics.ts:69`), jamais pour le suivi");
+    expect(proof).toContain("l'identifiant interne du compte (`apps/mobile/src/lib/analytics.ts`, `distinct_id` dans `buildCapturePayload`), jamais pour le suivi");
     expect(durations.length).toBeGreaterThanOrEqual(6);
     for (const [event, property] of durations) {
       expect(proof, event).toContain(`\`${event}\``);
       expect(proof, property).toContain(`\`${property}\``);
     }
+  });
+
+  describe("les preuves citent un nom qui existe dans le code, pas un numéro de ligne qui glisse", () => {
+    const analytics = readFileSync(join(__dirname, "../src/lib/analytics.ts"), "utf8");
+    const merchantLinks = readFileSync(join(__dirname, "../src/lib/merchant-links.ts"), "utf8");
+    /** Le corps d'une fonction exportée ou non, jusqu'à la suivante. */
+    const body = (source: string, name: string) => {
+      const start = source.search(new RegExp(`function ${name}\\(`));
+      expect(start, name).toBeGreaterThanOrEqual(0);
+      const next = source.slice(start + 1).search(/\nfunction |\nexport function |\nasync function |\nexport async function /);
+      return next < 0 ? source.slice(start) : source.slice(start, start + 1 + next);
+    };
+
+    it("refusé : plus de « analytics.ts:69 », « analytics.ts:76 » ni « merchant-links.ts:90-93 »", () => {
+      expect(apple).not.toContain("analytics.ts:69");
+      expect(apple).not.toContain("analytics.ts:76");
+      expect(apple).not.toContain("merchant-links.ts:90-93");
+    });
+
+    it("permis : chaque nom cité est bien là où la fiche le dit", () => {
+      expect(row("Identifiant utilisateur")[4]).toContain("(`apps/mobile/src/lib/analytics.ts`, `distinct_id` dans `buildCapturePayload`)");
+      expect(row("Position approximative")[2]).toContain("`apps/mobile/src/lib/analytics.ts` (`$geoip_disable` dans `buildCapturePayload`)");
+      expect(row("Historique de navigation")[2]).toContain("(`apps/mobile/src/lib/merchant-links.ts`, `WebBrowser.openBrowserAsync` dans `openMerchantLinkNative`)");
+      expect(body(analytics, "buildCapturePayload")).toContain("distinct_id: context.userId");
+      expect(body(analytics, "buildCapturePayload")).toContain("$geoip_disable: true");
+      expect(body(merchantLinks, "openMerchantLinkNative")).toContain("WebBrowser.openBrowserAsync(url)");
+    });
   });
 
   it("refusé : plus de ligne « non cochée » justifiée par la seule mesure coupée de Sentry (gardée en note)", () => {
