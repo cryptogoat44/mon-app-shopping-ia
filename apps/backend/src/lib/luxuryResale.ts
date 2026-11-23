@@ -23,6 +23,10 @@
 //       comptent pas ; un mot plus long ou un pluriel ne compte pas), sans
 //       nommer une autre marque qui contient le nom de M (« sauf ») ; nommée
 //       par countedShopName (zalando.fr et zalando.be : une seule source) ;
+//     pour une maison marquée « siteRequis » (son nom est aussi un prénom ou
+//     celui d'une autre ligne : Valentino, Celine, Chloé), au moins une des
+//     sources doit être son site officiel : des titres de boutiques seuls ne
+//     suffisent pas ;
 // (B) ou une offre de « Cette pièce dans d'autres boutiques » porte
 //     brand_shop (0054 : la boutique de la marque de la pièce, vérifiée par
 //     le serveur) et son adresse est l'une de celles de M. Sans 0054, ce cas
@@ -127,16 +131,19 @@ function retailerName(url: string): string | null {
 /** La maison est-elle retenue (règle A ou B) ? */
 function houseRetained(house: MaisonDeLuxe, offers: readonly LuxuryShownMatch[]): boolean {
   const sources = new Set<string>();
+  let fromHouseSite = false;
   for (const { match } of offers) {
     if ((match.origin ?? "lens") === "shopping" && match.brand_shop === true && isHouseSite(match.merchant_url, house)) return true;
     if (isHouseSite(match.merchant_url, house)) {
       const host = hostOf(match.merchant_url)!;
       sources.add(house.adresses.find((domain) => onDomain(host, domain))!);
+      fromHouseSite = true;
       continue;
     }
     const retailer = retailerName(match.merchant_url);
     if (retailer !== null && namesHouse(match.product_name, house)) sources.add(retailer);
   }
+  if (house.siteRequis === true && !fromHouseSite) return false;
   return sources.size >= LUXURY_MIN_SOURCES;
 }
 

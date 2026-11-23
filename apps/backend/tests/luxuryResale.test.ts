@@ -107,7 +107,37 @@ describe("le titre d'une autre marque ne compte pas", () => {
   it("refusé : le nom d'une autre marque qui contient celui de la maison (« See by Chloé », « Red Valentino ») ; permis : la maison elle-même", () => {
     expect(houseOf([offer("https://www.farfetch.com/a", "See by Chloé sandales Lyna"), offer("https://www.mytheresa.com/b", "Sandales See By Chloe")])).toBeUndefined();
     expect(houseOf([offer("https://www.farfetch.com/a", "Red Valentino robe"), offer("https://www.24s.com/b", "Robe RED Valentino")])).toBeUndefined();
-    expect(houseOf([offer("https://www.farfetch.com/a", "Chloé sandales Lauren"), offer("https://www.mytheresa.com/b", "Sandales Lauren Chloe")])).toBe("Chloé");
+    // Chloé demande son site officiel (siteRequis, voir plus bas) : chloe.com + une boutique connue.
+    expect(houseOf([offer("https://www.chloe.com/fr/sandales-lauren", "Sandales Lauren"), offer("https://www.mytheresa.com/b", "Sandales Lauren Chloe")])).toBe("Chloé");
+  });
+});
+
+describe("maisons dont le nom est aussi un prénom ou une autre ligne (siteRequis : Valentino, Celine, Chloé)", () => {
+  it("refusé : la ligne Mario Valentino vendue « Valentino Bags » (Zalando) ou « VALENTINO » (About You)", () => {
+    expect(houseOf([offer("https://www.zalando.fr/a", "Valentino Bags ZERO RE - Sac à main - noir"), offer("https://www.aboutyou.fr/b", "VALENTINO Sac à bandoulière 'Zero Re' en noir")])).toBeUndefined();
+  });
+
+  it("refusé : « Céline » prénom d'un modèle sur deux boutiques connues (La Redoute, bonprix)", () => {
+    expect(houseOf([offer("https://www.laredoute.fr/a", "Blouse Céline imprimée"), offer("https://www.bonprix.fr/b", "Blouse Céline à fleurs")])).toBeUndefined();
+  });
+
+  it("refusé : deux grandes boutiques de luxe sans le site de la maison (Chloé, Valentino)", () => {
+    expect(houseOf([offer("https://www.farfetch.com/a", "Chloé sandales Lauren"), offer("https://www.mytheresa.com/b", "Sandales Lauren Chloe")])).toBeUndefined();
+    expect(houseOf([offer("https://www.farfetch.com/a", "Valentino Garavani Rockstud"), offer("https://www.24s.com/b", "Escarpins Rockstud Valentino")])).toBeUndefined();
+  });
+
+  it("permis : le site de la maison + une boutique connue qui la nomme", () => {
+    expect(houseOf([offer("https://www.valentino.com/fr-fr/rockstud", "Escarpins Rockstud"), offer("https://www.24s.com/b", "Escarpins Rockstud Valentino Garavani")])).toBe("Valentino");
+    expect(houseOf([offer("https://www.celine.com/a", "Blouse en soie"), offer("https://www.laredoute.fr/b", "Blouse Celine soie")])).toBe("Celine");
+  });
+
+  it("refusé : « Valentino Bags » ne compte jamais, même avec le site de la maison (une seule source) ; permis : (B) brand_shop sur valentino.com", () => {
+    expect(houseOf([offer("https://www.valentino.com/a", "Sac Rockstud"), offer("https://www.zalando.fr/b", "Valentino Bags Sac Rockstud")])).toBeUndefined();
+    expect(houseOf([shopping("https://www.valentino.com/a", "Sac Rockstud", { brand_shop: true })])).toBe("Valentino");
+  });
+
+  it("permis : une maison sans siteRequis garde la règle (A) par deux boutiques connues (Gucci)", () => {
+    expect(houseOf([offer("https://www.laredoute.fr/a", "Gucci ceinture GG"), offer("https://www.bonprix.fr/b", "Ceinture Gucci GG")])).toBe("Gucci");
   });
 });
 

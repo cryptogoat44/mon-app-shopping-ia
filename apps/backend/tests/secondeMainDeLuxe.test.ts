@@ -139,4 +139,10 @@ describe("les maisons", () => {
       }
     }
   });
+
+  it("« siteRequis » : Valentino, Celine et Chloé (noms aussi prénoms ou autres lignes) demandent leur site officiel ; permis : les autres maisons s'en passent", () => {
+    const required = MAISONS_DE_LUXE.filter((house) => house.siteRequis === true).map((house) => house.nom);
+    expect(required.sort()).toEqual(["Celine", "Chloé", "Valentino"]);
+    expect(MAISONS_DE_LUXE.find((house) => house.nom === "Valentino")!.sauf).toContain("Valentino Bags");
+  });
 });

@@ -44,6 +44,10 @@
 // - « sauf » (facultatif) : les noms d'AUTRES marques qui contiennent le nom
 //   de la maison (« See by Chloé » pour Chloé) ; un titre qui en nomme une
 //   ne compte jamais pour la maison.
+// - « siteRequis: true » (facultatif) : pour une maison dont le nom est aussi
+//   un prénom ou le nom d'une autre ligne (Valentino, Celine, Chloé), des
+//   titres de boutiques seuls ne suffisent pas : il faut au moins une offre
+//   de son site officiel.
 // - Ces maisons servent seulement à cette entrée : aucune mention
 //   « Boutique officielle », aucun effet sur l'ordre des résultats.
 //
@@ -75,6 +79,8 @@ export interface MaisonDeLuxe {
   adresses: readonly string[];
   aussi?: readonly string[];
   sauf?: readonly string[];
+  /** Au moins une offre de son site officiel est nécessaire (voir plus haut). */
+  siteRequis?: boolean;
 }
 
 export const MAISONS_DE_LUXE: readonly MaisonDeLuxe[] = [
@@ -87,7 +93,7 @@ export const MAISONS_DE_LUXE: readonly MaisonDeLuxe[] = [
   { nom: "Prada", adresses: ["prada.com"] },
   { nom: "Balenciaga", adresses: ["balenciaga.com"] },
   { nom: "Saint Laurent", adresses: ["ysl.com"], aussi: ["Yves Saint Laurent", "YSL"] },
-  { nom: "Celine", adresses: ["celine.com"] },
+  { nom: "Celine", adresses: ["celine.com"], siteRequis: true },
   { nom: "Burberry", adresses: ["burberry.com"] },
   { nom: "Versace", adresses: ["versace.com"], sauf: ["Versus Versace"] },
   { nom: "Moncler", adresses: ["moncler.com"] },
@@ -96,11 +102,11 @@ export const MAISONS_DE_LUXE: readonly MaisonDeLuxe[] = [
   // Ajoutées pour cette entrée seulement (décision du fondateur, 23 novembre 2026).
   { nom: "Fendi", adresses: ["fendi.com"] },
   { nom: "Givenchy", adresses: ["givenchy.com"] },
-  { nom: "Valentino", adresses: ["valentino.com"], sauf: ["Mario Valentino", "Red Valentino", "Valentino Orlandi"] },
+  { nom: "Valentino", adresses: ["valentino.com"], sauf: ["Mario Valentino", "Valentino Bags", "Red Valentino", "Valentino Orlandi"], siteRequis: true },
   { nom: "Bottega Veneta", adresses: ["bottegaveneta.com"] },
   { nom: "Loewe", adresses: ["loewe.com"] },
   { nom: "Miu Miu", adresses: ["miumiu.com"] },
-  { nom: "Chloé", adresses: ["chloe.com"], sauf: ["See by Chloé"] },
+  { nom: "Chloé", adresses: ["chloe.com"], sauf: ["See by Chloé"], siteRequis: true },
   { nom: "Balmain", adresses: ["balmain.com"], sauf: ["Pierre Balmain"] },
   { nom: "Goyard", adresses: ["goyard.com"] },
 ];
