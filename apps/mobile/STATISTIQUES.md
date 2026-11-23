@@ -482,6 +482,38 @@ users**, **1 day**) `news_banner_shown` → `news_line_opened`. Le clic vers
 la boutique qui suit ne se distingue pas d'un clic depuis la liste des
 Envies.
 
+## Seconde main de luxe (lot « seconde main de luxe »)
+
+Sous une pièce qui semble venir d'une maison de luxe, l'écran Résultat
+propose « Seconde main de luxe » : une feuille avec un bouton par site de
+revente de la liste du fondateur (`apps/backend/src/listes/secondeMainDeLuxe.ts`).
+
+- **`luxury_resale_shown`** : l'entrée est montrée ; une fois par résultat
+  affiché, et quand elle apparaît avec les boutiques arrivées ensuite.
+  `sites_count` = combien de sites dans la feuille.
+- **`luxury_resale_opened`** : la feuille est ouverte ; `sites_count` aussi.
+- **`luxury_resale_site_opened`** : un bouton de site touché, et l'adresse
+  ouverte ; `position` = sa place dans la feuille (1 à 5, dans l'ordre
+  alphabétique affiché), `sites_count` aussi. Rien n'est envoyé si
+  l'adresse est refusée.
+- Jamais la maison, les mots de la recherche, la pièce, une boutique, un
+  prix ni le nom d'un site.
+
+**Entonnoir** (**Unique users**, **1 day**) : `luxury_resale_shown` →
+`luxury_resale_opened` → `luxury_resale_site_opened`. La première étape dit
+combien de membres voient l'entrée, la deuxième combien l'ouvrent, la
+troisième combien partent vers un site de revente.
+
+**Traduire `position` en site** : avec la liste **en vigueur ce jour-là**
+(l'historique du fichier `secondeMainDeLuxe.ts`, rangée par ordre
+alphabétique des noms). Aujourd'hui, un seul site : `position` = 1 est
+Vestiaire Collective.
+
+Ces clics ne sont **pas** dans `merchant_link_opened`, ni dans les clics
+enregistrés par le serveur (`trackProductMatchClick`) : un site de revente
+n'est pas une offre trouvée. Le serveur, lui, n'enregistre rien de cette
+entrée.
+
 ## Les limites
 
 - **Un parcours n'a pas d'identifiant à lui** : les entonnoirs se font par

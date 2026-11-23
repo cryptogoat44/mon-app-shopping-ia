@@ -2,6 +2,7 @@ import { OFFER_MARKS, SEARCH_FAILURE_MESSAGES, TEXT_SEARCH_ERRORS, type OfferMar
 import type { Piece, SpotComplement, SpotResult } from "@/api/types";
 import { ApiError } from "./api-error";
 import { capacityFailure, type CapacityFailReason } from "./spot-capacity";
+import { parseLuxuryResale } from "./luxury-resale";
 import { parseVerdict } from "./verdict";
 
 export function matchToPiece(match: ProductMatch): Piece {
@@ -100,6 +101,8 @@ export function toSpotResult(search: ProductSearch): SpotResult {
   }
   // Le verdict (lot « verdict ») : seulement sous une forme connue (lib/verdict.ts).
   const verdict = parseVerdict(search.verdict);
+  // Seconde main de luxe : seulement sous une forme connue (lib/luxury-resale.ts).
+  const luxuryResale = parseLuxuryResale(search.luxuryResale);
   return {
     searchId: search.id,
     query: search.query,
@@ -110,6 +113,7 @@ export function toSpotResult(search: ProductSearch): SpotResult {
     sortedByWords: search.sortedByWords === true,
     ...withComplement,
     ...(verdict ? { verdict } : {}),
+    ...(luxuryResale ? { luxuryResale } : {}),
   };
 }
 
