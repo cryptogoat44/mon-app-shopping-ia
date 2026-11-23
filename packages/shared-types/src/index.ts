@@ -370,6 +370,25 @@ export interface ProductSearch {
    * boutiques encore attendues ou en échec, historique, ancien serveur.
    * Une app plus ancienne l'ignore. */
   verdict?: SearchVerdict;
+  /** Seconde main de luxe (lot « seconde main de luxe », sans migration) :
+   * la pièce semble venir d'une seule maison de luxe, d'après les
+   * propositions montrées (apps/backend/src/lib/luxuryResale.ts), recalculé
+   * à chaque relecture. Absent : aucune entrée (dans le doute, historique,
+   * ancien serveur). Une app plus ancienne l'ignore. */
+  luxuryResale?: LuxuryResale;
+}
+
+/** Seconde main de luxe : la maison retenue et les liens vers la recherche
+ * publique des sites de revente choisis par le fondateur
+ * (apps/backend/src/listes/secondeMainDeLuxe.ts). Aucun prix : le serveur
+ * n'appelle jamais ces sites. */
+export interface LuxuryResale {
+  /** Le nom de la maison retenue, tel qu'écrit dans la liste (« Dior »). */
+  house: string;
+  /** Les mots déjà mis dans chaque adresse (tirés du titre d'une offre montrée, jamais des mots du membre). */
+  words: string;
+  /** Les sites de revente, par ordre alphabétique de leur nom ; 1 à 5. */
+  sites: { name: string; url: string }[];
 }
 
 /** Niveaux du verdict, du plus affirmé au plus modeste :
