@@ -5,7 +5,12 @@
 import type { Breadcrumb as WebBreadcrumb, ErrorEvent as WebErrorEvent } from "@sentry/react";
 import type { Breadcrumb as NativeBreadcrumb, ErrorEvent as NativeErrorEvent } from "@sentry/react-native";
 
-const withoutQuery = (url: string) => url.split("?")[0]!.split("#")[0]!;
+// Page look : le jeton de la page est dans le CHEMIN de l'appel au serveur
+// (/api/looks/public/<jeton>) : remplacé par « :token », pour qu'aucun lien
+// valable ni aucune visite ne parte dans un rapport d'erreur.
+const LOOK_TOKEN_SEGMENT = /\/api\/looks\/public\/[^/?#]+/g;
+const withoutLookToken = (url: string) => url.replace(LOOK_TOKEN_SEGMENT, "/api/looks/public/:token");
+const withoutQuery = (url: string) => withoutLookToken(url.split("?")[0]!.split("#")[0]!);
 
 // Lot « lecteur intégré » : le lien d'une vidéo (lien court TikTok, lien de
 // partage Instagram) suivi par l'app ne doit pas partir dans une trace réseau :

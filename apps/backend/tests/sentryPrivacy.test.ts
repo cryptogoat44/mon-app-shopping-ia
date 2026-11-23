@@ -26,6 +26,21 @@ describe("Sentry côté serveur : protection des données", () => {
     expect(JSON.stringify(event)).not.toMatch(/camille|Bearer|1\.2\.3\.4|commentaire/);
   });
 
+  it("page look : le jeton dans le chemin devient « :token » ; les autres chemins restent", () => {
+    const token = "AbCdEfGhIjKlMnOpQrStUv";
+    const event = scrubEvent({
+      type: undefined,
+      request: { method: "GET", url: `https://spotto-api.onrender.com/api/looks/public/${token}?a=1` },
+      breadcrumbs: [
+        { category: "http", data: { url: `https://spotto-api.onrender.com/api/looks/public/${token}`, method: "GET" } },
+        { category: "http", data: { url: "https://spotto-api.onrender.com/api/looks/status", method: "GET" } },
+      ],
+    } as ErrorEvent);
+    expect(JSON.stringify(event)).not.toContain(token);
+    expect(event.request).toEqual({ method: "GET", url: "https://spotto-api.onrender.com/api/looks/public/:token" });
+    expect(event.breadcrumbs![1]!.data).toEqual({ url: "https://spotto-api.onrender.com/api/looks/status", method: "GET" });
+  });
+
   it("sans identifiant, aucun utilisateur n'est joint", () => {
     expect(scrubEvent({ type: undefined, user: { email: "x@example.com" } } as ErrorEvent).user).toBeUndefined();
   });
