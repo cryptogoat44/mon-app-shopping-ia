@@ -66,6 +66,7 @@ import { sortByWords } from "../lib/wordSort.js";
 import { assertNoUserImage, voieCAiEnabled } from "../lib/aiSwitches.js";
 import { photoCallsLeft, startDeadline, VOIE_C_BUDGET } from "../lib/deadline.js";
 import { lightSort } from "../lib/lightSort.js";
+import { brandShopColumnReady } from "../lib/brandShopColumn.js";
 import { cacheKey, imageHash, purgeExpiredCache, readCache, writeCache } from "../lib/searchCache.js";
 import {
   complementAfterSaveFailure,
@@ -252,7 +253,13 @@ async function saveMatches(
  * identifiants, puis leurs liens pour ces seules lignes. Les propositions Lens,
  * déjà rangées par saveMatches (inchangé), ne sont jamais touchées. Renvoie le
  * nombre rangé ; null : insertion refusée ou illisible (journalisée sans
- * contenu : ni titre, ni adresse, ni identifiant). */
+ * contenu : ni titre, ni adresse, ni identifiant). Ordre des boutiques
+ * (0054) : dans « shopping », la boutique officielle de la marque de la
+ * pièce, reconnue par le complément (lib/voieC.ts), porte un oui sur sa
+ * ligne, seulement une fois la colonne vue (lib/brandShopColumn.ts) ; sans
+ * elle, rien n'est noté et la boutique est rangée comme une boutique connue.
+ * Insertion avec ce oui refusée malgré la sonde : refaite une fois sans lui
+ * (la section n'est jamais perdue pour un oui). */
 async function saveComplementRows(
   fastify: FastifyInstance,
   searchId: string,
@@ -261,10 +268,21 @@ async function saveComplementRows(
   afterRank: number
 ): Promise<number | null> {
   if (matches.length === 0) return 0;
-  const { data, error } = await fastify.supabaseAdmin
-    .from("product_matches")
-    .insert(matches.map((m, index) => ({ ...toMatchRow(searchId, m, afterRank + index + 1), origin })))
-    .select("id, merchant_url");
+  const brandShops = origin === "shopping" && matches.some((m) => m.brandShop === true) && (await brandShopColumnReady(fastify));
+  const insertRows = (withBrandShop: boolean) =>
+    fastify.supabaseAdmin
+      .from("product_matches")
+      .insert(
+        matches.map((m, index) => ({ ...toMatchRow(searchId, m, afterRank + index + 1), origin, ...(withBrandShop && m.brandShop === true ? { brand_shop: true } : {}) }))
+      )
+      .select("id, merchant_url");
+  let { data, error } = await insertRows(brandShops);
+  // Seulement un refus de la base (insertion unique : rien n'a été rangé) ;
+  // jamais une réponse illisible, où les lignes sont peut-être déjà là.
+  if (brandShops && error) {
+    fastify.log.warn({ origin, code: error?.code ?? null }, "Boutique de la marque non notée : insertion refusée avec le oui, refaite sans lui");
+    ({ data, error } = await insertRows(false));
+  }
   const inserted = INSERTED_MATCH_ROWS.safeParse(data);
   if (error || !inserted.success) {
     fastify.log.error({ origin, code: error?.code ?? null }, "Échec d'enregistrement des propositions du complément");
