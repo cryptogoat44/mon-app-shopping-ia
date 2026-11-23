@@ -674,6 +674,8 @@ describe("la copie publique ne survit pas à sa page", () => {
     const copy = fake.uploads[0]!;
     expect((await as(target, ALICE).del(`/api/looks/${body.id}`)).statusCode).toBe(204);
     expect(fake.table("shared_looks")).toHaveLength(1);
+    // Arrêtée une seconde plus tôt (pas dans la même milliseconde que le repartage : la purge la voit expirée).
+    fake.table("shared_looks")[0]!.expires_at = new Date(Date.now() - 1000).toISOString();
     // La purge du repartage est encore refusée, l'essai suivant (la place de la pièce) passe.
     refusals = 1;
     const again = await share(target);
