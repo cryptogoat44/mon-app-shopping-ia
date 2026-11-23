@@ -3,6 +3,7 @@ import { ACCEPTED_CONSENT_VERSIONS, LEGAL_DOCUMENT_VERSIONS } from "@monapp/shar
 import { privacyPolicy } from "../src/legal/confidentialite";
 import { privacyPolicyEn } from "../src/legal/confidentialite.en";
 import type { LegalDocument } from "../src/legal/types";
+import { APP_NAME_DISPLAY as BRAND } from "../src/constants/brand";
 
 // Lot « e-mails » : les e-mails du compte (confirmation, mot de passe oublié,
 // changement d'adresse) partent par Gmail, réglé dans Supabase (SMTP). La
@@ -14,8 +15,8 @@ const section = (doc: LegalDocument, title: string) => {
   return found!.blocks.flat();
 };
 
-const GMAIL_FR = "Gmail (Google LLC, États-Unis) : les e-mails liés à votre compte (confirmation de l'inscription, mot de passe oublié, changement d'adresse) sont envoyés par le service Gmail de Google, qui reçoit pour cela votre adresse e-mail et le contenu du message.";
-const GMAIL_EN = "Gmail (Google LLC, United States): emails about your account (sign-up confirmation, forgotten password, change of address) are sent through Google's Gmail service, which receives for this your email address and the content of the message.";
+const GMAIL_FR = "Gmail (Google Ireland Limited, Irlande) : les e-mails liés à votre compte (confirmation de l'inscription, mot de passe oublié, changement d'adresse) sont envoyés par le service Gmail de Google, qui reçoit pour cela votre adresse e-mail et le contenu du message.";
+const GMAIL_EN = "Gmail (Google Ireland Limited, Ireland): emails about your account (sign-up confirmation, forgotten password, change of address) are sent through Google's Gmail service, which receives for this your email address and the content of the message.";
 
 describe("politique de confidentialité : e-mails du compte envoyés par Gmail", () => {
   it("ni nouvelle version ni nouvelle acceptation", () => {
@@ -41,10 +42,38 @@ describe("politique de confidentialité : e-mails du compte envoyés par Gmail",
     for (const doc of [privacyPolicy, privacyPolicyEn]) {
       const all = doc.sections.flatMap((s) => s.blocks.flat());
       const gmail = all.filter((b) => b.includes("Gmail"));
-      expect(gmail).toHaveLength(2);
+      expect(gmail).toHaveLength(3);
       for (const b of gmail) {
         expect(b).not.toMatch(/mot de passe de votre compte|your account password|photos?|images?|recherches|searches|messages privés|private messages/i);
       }
+    }
+  });
+
+  it("refusé : la société de Google n'est plus donnée comme Google LLC aux États-Unis", () => {
+    for (const doc of [privacyPolicy, privacyPolicyEn]) {
+      const all = doc.sections.flatMap((s) => s.blocks.flat());
+      expect(all.filter((b) => /^Gmail \(Google LLC/.test(b))).toHaveLength(0);
+    }
+  });
+
+  it("permis : la copie gardée dans les messages envoyés de Gmail a sa ligne dans les durées de conservation, avec une réserve", () => {
+    const cases = [
+      { doc: privacyPolicy, title: "Combien de temps", start: "Les e-mails liés à votre compte (", text: `reste dans les messages envoyés du compte Gmail d'envoi de ${BRAND}, y compris après la suppression de votre compte`, marker: "[À vérifier : durée retenue" },
+      { doc: privacyPolicyEn, title: "How long", start: "Emails about your account (", text: `stays in the sent mail of ${BRAND}'s Gmail sending account, including after your account is deleted`, marker: "[To be verified: period retained" },
+    ];
+    for (const c of cases) {
+      const lines = section(c.doc, c.title).filter((b) => b.startsWith(c.start));
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain(c.text);
+      expect(lines[0]).toContain(c.marker);
+    }
+  });
+
+  it("refusé : aucune durée de conservation de la copie Gmail n'est donnée comme un fait sans réserve", () => {
+    for (const [doc, title] of [[privacyPolicy, "Combien de temps"], [privacyPolicyEn, "How long"]] as const) {
+      const lines = section(doc, title).filter((b) => b.includes("Gmail"));
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toMatch(/\[(À vérifier|To be verified)[^\]]*30 (jours|days)\]/);
     }
   });
 });
